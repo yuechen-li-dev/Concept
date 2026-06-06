@@ -511,6 +511,7 @@ pub const Parser = struct {
         if (self.current().kind == .match) return try self.parseMatchStmt(allocator);
         if (self.current().kind == .left_brace) return .{ .block_stmt = try self.parseBlockAfterOpenBrace(allocator) };
         if (self.isLocalDeclStart()) return try self.parseLocalDeclStmt(allocator);
+        if (self.isAssignmentStmtStart()) return try self.parseAssignmentStmt(allocator);
 
         try self.report(.UnexpectedToken, "unsupported statement in function body", self.current().span);
         self.recoverStatement();
@@ -726,6 +727,48 @@ pub const Parser = struct {
             .name = name,
             .initializer = initializer,
             .span = ast.spanFromBounds(type_name.span.start, spanEnd(end_span)),
+        } };
+    }
+
+    fn parseAssignmentStmt(self: *Parser, allocator: std.mem.Allocator) !ast.Stmt {
+        const target_token = self.advance();
+        const target = ast.NameSegment{ .text = target_token.lexeme, .span = target_token.span };
+
+        if (self.match(.equal) == null) {
+            try self.report(.UnexpectedToken, "expected '=' in assignment statement", self.current().span);
+            self.recoverStatement();
+            const fallback = try allocator.create(ast.Expr);
+            fallback.* = .{ .int_literal = .{ .text = "0", .span = target.span } };
+            return .{ .assignment = .{
+                .target = target,
+                .value = fallback,
+                .span = ast.spanFromBounds(target.span.start, spanEnd(target.span)),
+            } };
+        }
+
+        var value = self.parseExpr(allocator) catch |err| switch (err) {
+            error.OutOfMemory => return err,
+            error.ParseFailed => blk: {
+                const fallback = try allocator.create(ast.Expr);
+                fallback.* = .{ .int_literal = .{ .text = "0", .span = self.current().span } };
+                break :blk fallback;
+            },
+        };
+        errdefer {
+            value.deinit(allocator);
+            allocator.destroy(value);
+        }
+
+        const end_span = if (self.match(.semicolon)) |semicolon| semicolon.span else blk: {
+            try self.report(.UnexpectedToken, "expected ';' after assignment statement", self.current().span);
+            self.recoverStatement();
+            break :blk value.span();
+        };
+
+        return .{ .assignment = .{
+            .target = target,
+            .value = value,
+            .span = ast.spanFromBounds(target.span.start, spanEnd(end_span)),
         } };
     }
 
@@ -1567,6 +1610,11 @@ pub const Parser = struct {
         while (self.current().kind != .eof and self.current().kind != .comma and self.current().kind != .right_paren and self.current().kind != .semicolon and self.current().kind != .right_brace) self.advance();
     }
 
+    fn isAssignmentStmtStart(self: Parser) bool {
+        return self.current().kind == .identifier and
+            (self.peek(1).kind == .equal or self.peek(1).kind == .semicolon);
+    }
+
     fn isLocalDeclStart(self: Parser) bool {
         if (self.current().kind != .identifier) return false;
         var offset: usize = 1;
@@ -1719,6 +1767,7 @@ pub const Parser = struct {
 fn stmtSpan(stmt: ast.Stmt) SourceSpan {
     return switch (stmt) {
         .local_decl => |local_decl| local_decl.span,
+        .assignment => |assignment| assignment.span,
         .return_stmt => |return_stmt| return_stmt.span,
         .if_stmt => |if_stmt| if_stmt.span,
         .match_stmt => |match_stmt| match_stmt.span,
@@ -3388,11 +3437,100 @@ test "unsupported statement recovery" {
     var diagnostics = DiagnosticBag.init(std.testing.allocator);
     defer diagnostics.deinit();
 
-    const unit = try parseTestSource("module Main; int main() { x = 1; return 0; }", &diagnostics);
+    const unit = try parseTestSource("module Main; int main() { foo(); return 0; }", &diagnostics);
     defer unit.deinit(std.testing.allocator);
 
     try std.testing.expectEqual(@as(usize, 1), diagnostics.count());
     try std.testing.expectEqual(@as(usize, 1), expectFunctionDecl(unit, 0).body.?.block.?.statements.len);
+}
+
+test "parses assignment statement" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { int x = 1; x = 2; return x; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const assignment = switch (expectFunctionDecl(unit, 0).body.?.block.?.statements[1]) {
+        .assignment => |assignment| assignment,
+        else => return error.ExpectedAssignment,
+    };
+    try std.testing.expectEqualStrings("x", assignment.target.text);
+    _ = switch (assignment.value.*) {
+        .int_literal => |literal| literal,
+        else => return error.ExpectedIntLiteral,
+    };
+}
+
+test "parses assignment using binary expression" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { int x = 1; x = x + 2; return x; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const assignment = switch (expectFunctionDecl(unit, 0).body.?.block.?.statements[1]) {
+        .assignment => |assignment| assignment,
+        else => return error.ExpectedAssignment,
+    };
+    _ = switch (assignment.value.*) {
+        .binary => |binary| binary,
+        else => return error.ExpectedBinaryExpr,
+    };
+}
+
+test "parses assignment to bool local" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { bool ok = true; ok = !ok; return 0; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const assignment = switch (expectFunctionDecl(unit, 0).body.?.block.?.statements[1]) {
+        .assignment => |assignment| assignment,
+        else => return error.ExpectedAssignment,
+    };
+    try std.testing.expectEqualStrings("ok", assignment.target.text);
+    _ = switch (assignment.value.*) {
+        .unary => |unary| unary,
+        else => return error.ExpectedUnaryExpr,
+    };
+}
+
+test "assignment missing equal diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { int x = 1; x; return x; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.count());
+    try std.testing.expectEqualStrings("expected '=' in assignment statement", diagnostics.diagnostics.items[0].message);
+}
+
+test "assignment missing expression diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { int x = 1; x = ; return x; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.count());
+    try std.testing.expectEqualStrings("expected expression", diagnostics.diagnostics.items[0].message);
+}
+
+test "assignment missing semicolon diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { int x = 1; x = 2 return x; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.count());
+    try std.testing.expectEqualStrings("expected ';' after assignment statement", diagnostics.diagnostics.items[0].message);
 }
 
 test "parses local int declaration" {

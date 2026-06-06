@@ -83,6 +83,13 @@ fn emitStmt(writer: anytype, stmt: ast_model.Stmt, depth: usize) !void {
             try emitExpr(writer, local_decl.initializer.*);
             try writer.writeAll(";\n");
         },
+        .assignment => |assignment| {
+            try emitIndent(writer, depth);
+            try writer.writeAll(assignment.target.text);
+            try writer.writeAll(" = ");
+            try emitExpr(writer, assignment.value.*);
+            try writer.writeAll(";\n");
+        },
         .return_stmt => |return_stmt| {
             try emitIndent(writer, depth);
             try writer.writeAll("return ");
@@ -129,6 +136,10 @@ fn emitStmt(writer: anytype, stmt: ast_model.Stmt, depth: usize) !void {
                     },
                 }
                 try emitStmt(writer, arm.body, depth + 2);
+                if (!stmtAlwaysExits(arm.body)) {
+                    try emitIndent(writer, depth + 2);
+                    try writer.writeAll("break;\n");
+                }
             }
             try emitIndent(writer, depth);
             try writer.writeAll("}\n");
@@ -141,6 +152,13 @@ fn emitStmt(writer: anytype, stmt: ast_model.Stmt, depth: usize) !void {
             try writer.writeAll("}\n");
         },
     }
+}
+
+fn stmtAlwaysExits(stmt: ast_model.Stmt) bool {
+    return switch (stmt) {
+        .return_stmt => true,
+        else => false,
+    };
 }
 
 fn emitExpr(writer: anytype, expr: ast_model.Expr) !void {
@@ -309,10 +327,45 @@ test "Phase 2 C snapshot: arithmetic return" {
     );
 }
 
+test "C backend emits assignment statement" {
+    try expectEmit(
+        "module Main; int main() { int x = 1; x = 2; return x; }",
+        "int main(void) {\n    int x = 1;\n    x = 2;\n    return x;\n}\n",
+    );
+}
+
+test "C backend emits assignment with expression" {
+    try expectEmit(
+        "module Main; int main() { int x = 1; x = x + 2; return x; }",
+        "int main(void) {\n    int x = 1;\n    x = (x + 2);\n    return x;\n}\n",
+    );
+}
+
+test "C backend emits assignment inside if block" {
+    try expectEmit(
+        "module Main; int main() { int x = 1; if (true) { x = 3; } return x; }",
+        "int main(void) {\n    int x = 1;\n    if (1) {\n        x = 3;\n    }\n    return x;\n}\n",
+    );
+}
+
+test "C backend emits assignment inside match arm" {
+    try expectEmit(
+        "module Main; int main() { int x = 1; match (x) { 1 => x = 3; _ => x = 0; } return x; }",
+        "int main(void) {\n    int x = 1;\n    switch (x) {\n        case 1:\n            x = 3;\n            break;\n        default:\n            x = 0;\n            break;\n    }\n    return x;\n}\n",
+    );
+}
+
 test "Phase 2 C snapshot: local arithmetic return" {
     try expectCorpusC(
         "../../tests/corpus/phase2/local_arithmetic_return.concept",
         "../../tests/corpus/phase2/local_arithmetic_return.c.expected",
+    );
+}
+
+test "Phase 2 C snapshot: assignment local int" {
+    try expectCorpusC(
+        "../../tests/corpus/phase2/assignment_local_int.concept",
+        "../../tests/corpus/phase2/assignment_local_int.c.expected",
     );
 }
 

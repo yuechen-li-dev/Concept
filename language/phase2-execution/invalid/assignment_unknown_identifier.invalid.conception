@@ -1,0 +1,11 @@
+# name: phase2 assignment unknown identifier
+# phase: check
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    x = 1;
+    return 0;
+}

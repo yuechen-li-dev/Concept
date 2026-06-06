@@ -1,0 +1,12 @@
+# name: phase2 assignment missing semicolon
+# phase: parse
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    int x = 1;
+    x = 2
+    return x;
+}

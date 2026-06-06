@@ -570,6 +570,46 @@ test "language check fixture: phase2 match duplicate wildcard" {
     try expectCheckFixture("../../../language/phase2-execution/invalid/match_duplicate_wildcard.invalid.conception");
 }
 
+test "language run fixture: phase2 assignment local int" {
+    try expectRunFixture("../../../language/phase2-execution/valid/assignment_local_int.valid.conception");
+}
+
+test "language run fixture: phase2 assignment local bool" {
+    try expectRunFixture("../../../language/phase2-execution/valid/assignment_local_bool.valid.conception");
+}
+
+test "language run fixture: phase2 assignment parameter" {
+    try expectRunFixture("../../../language/phase2-execution/valid/assignment_parameter.valid.conception");
+}
+
+test "language run fixture: phase2 assignment in if" {
+    try expectRunFixture("../../../language/phase2-execution/valid/assignment_in_if.valid.conception");
+}
+
+test "language run fixture: phase2 assignment in match" {
+    try expectRunFixture("../../../language/phase2-execution/valid/assignment_in_match.valid.conception");
+}
+
+test "language check fixture: phase2 assignment unknown identifier" {
+    try expectCheckFixture("../../../language/phase2-execution/invalid/assignment_unknown_identifier.invalid.conception");
+}
+
+test "language check fixture: phase2 assignment type mismatch" {
+    try expectCheckFixture("../../../language/phase2-execution/invalid/assignment_type_mismatch.invalid.conception");
+}
+
+test "language check fixture: phase2 assignment inner scope local" {
+    try expectCheckFixture("../../../language/phase2-execution/invalid/assignment_inner_scope_local.invalid.conception");
+}
+
+test "language parse fixture: phase2 assignment missing expression" {
+    try expectParseFixture("../../../language/phase2-execution/invalid/assignment_missing_expression.invalid.conception");
+}
+
+test "language parse fixture: phase2 assignment missing semicolon" {
+    try expectParseFixture("../../../language/phase2-execution/invalid/assignment_missing_semicolon.invalid.conception");
+}
+
 test "language run fixture: phase2 match int return" {
     try expectRunFixture("../../../language/phase2-execution/valid/match_int_return.valid.conception");
 }
