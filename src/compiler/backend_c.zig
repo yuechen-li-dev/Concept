@@ -32,6 +32,15 @@ fn emitMain(writer: anytype, main: ast_model.FunctionDecl) !void {
 
 fn emitStmt(writer: anytype, stmt: ast_model.Stmt) !void {
     switch (stmt) {
+        .local_decl => |local_decl| {
+            try writer.writeAll("    ");
+            try emitLocalType(writer, local_decl.type_name);
+            try writer.writeByte(' ');
+            try writer.writeAll(local_decl.name.text);
+            try writer.writeAll(" = ");
+            try emitExpr(writer, local_decl.initializer.*);
+            try writer.writeAll(";\n");
+        },
         .return_stmt => |return_stmt| {
             try writer.writeAll("    return ");
             try emitExpr(writer, return_stmt.value.?.*);
@@ -44,6 +53,7 @@ fn emitExpr(writer: anytype, expr: ast_model.Expr) !void {
     switch (expr) {
         .int_literal => |literal| try writer.writeAll(literal.text),
         .bool_literal => |literal| try writer.writeAll(if (literal.value) "1" else "0"),
+        .identifier => |identifier| try writer.writeAll(identifier.name.text),
         .group => |group| {
             try writer.writeByte('(');
             try emitExpr(writer, group.inner.*);
@@ -63,6 +73,11 @@ fn emitExpr(writer: anytype, expr: ast_model.Expr) !void {
             try writer.writeByte(')');
         },
     }
+}
+
+fn emitLocalType(writer: anytype, type_name: ast_model.TypeName) !void {
+    _ = type_name;
+    try writer.writeAll("int");
 }
 
 const parser_model = @import("parser.zig");
@@ -174,5 +189,40 @@ test "Phase 2 C snapshot: arithmetic return" {
     try expectCorpusC(
         "../../tests/corpus/phase2/arithmetic_return.concept",
         "../../tests/corpus/phase2/arithmetic_return.c.expected",
+    );
+}
+
+test "Phase 2 C snapshot: local arithmetic return" {
+    try expectCorpusC(
+        "../../tests/corpus/phase2/local_arithmetic_return.concept",
+        "../../tests/corpus/phase2/local_arithmetic_return.c.expected",
+    );
+}
+
+test "C backend emits int local declaration" {
+    try expectEmit(
+        "module Main; int main() { int x = 1; return x; }",
+        "int main(void) {\n    int x = 1;\n    return x;\n}\n",
+    );
+}
+
+test "C backend emits bool local as int" {
+    try expectEmit(
+        "module Main; int main() { bool ok = true; return ok; }",
+        "int main(void) {\n    int ok = 1;\n    return ok;\n}\n",
+    );
+}
+
+test "C backend emits identifier expression" {
+    try expectEmit(
+        "module Main; int main() { int x = 4; return x + 1; }",
+        "int main(void) {\n    int x = 4;\n    return (x + 1);\n}\n",
+    );
+}
+
+test "C backend emits local arithmetic return" {
+    try expectEmit(
+        "module Main; int main() { int x = 1 + 2; return x * 3; }",
+        "int main(void) {\n    int x = (1 + 2);\n    return (x * 3);\n}\n",
     );
 }

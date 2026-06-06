@@ -444,3 +444,15 @@ test "language run fixture: phase2 arithmetic return" {
 test "language run fixture: phase2 bool return" {
     try expectRunFixture("../../../language/phase2-execution/valid/bool_return_run.valid.conception");
 }
+
+test "language run fixture: phase2 local int return" {
+    try expectRunFixture("../../../language/phase2-execution/valid/local_int_return.valid.conception");
+}
+
+test "language run fixture: phase2 local arithmetic return" {
+    try expectRunFixture("../../../language/phase2-execution/valid/local_arithmetic_return.valid.conception");
+}
+
+test "language run fixture: phase2 local bool return" {
+    try expectRunFixture("../../../language/phase2-execution/valid/local_bool_return.valid.conception");
+}

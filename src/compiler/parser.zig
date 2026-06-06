@@ -474,9 +474,11 @@ pub const Parser = struct {
         while (self.current().kind != .eof and self.current().kind != .right_brace) {
             if (self.current().kind == .@"return") {
                 const stmt = try self.parseReturnStmt(allocator);
-                last_span = switch (stmt) {
-                    .return_stmt => |return_stmt| return_stmt.span,
-                };
+                last_span = stmtSpan(stmt);
+                try statements.append(stmt);
+            } else if (self.isLocalDeclStart()) {
+                const stmt = try self.parseLocalDeclStmt(allocator);
+                last_span = stmtSpan(stmt);
                 try statements.append(stmt);
             } else {
                 try self.report(.UnexpectedToken, "unsupported statement in function body", self.current().span);
@@ -497,6 +499,56 @@ pub const Parser = struct {
                 .span = span,
             },
         };
+    }
+
+    fn parseLocalDeclStmt(self: *Parser, allocator: std.mem.Allocator) !ast.Stmt {
+        var type_name = try self.parseTypeName(allocator);
+        errdefer type_name.deinit(allocator);
+
+        const name_token = try self.expect(.identifier, "expected local variable name", .UnexpectedToken);
+        const name = if (name_token) |identifier|
+            ast.NameSegment{ .text = identifier.lexeme, .span = identifier.span }
+        else
+            ast.NameSegment{ .text = "", .span = self.current().span };
+
+        if (self.match(.equal) == null) {
+            try self.report(.UnexpectedToken, "expected '=' and initializer in local declaration", self.current().span);
+            self.recoverStatement();
+            const fallback = try allocator.create(ast.Expr);
+            fallback.* = .{ .int_literal = .{ .text = "0", .span = name.span } };
+            return .{ .local_decl = .{
+                .type_name = type_name,
+                .name = name,
+                .initializer = fallback,
+                .span = ast.spanFromBounds(type_name.span.start, spanEnd(name.span)),
+            } };
+        }
+
+        var initializer = self.parseExpr(allocator) catch |err| switch (err) {
+            error.OutOfMemory => return err,
+            error.ParseFailed => blk: {
+                const fallback = try allocator.create(ast.Expr);
+                fallback.* = .{ .int_literal = .{ .text = "0", .span = self.current().span } };
+                break :blk fallback;
+            },
+        };
+        errdefer {
+            initializer.deinit(allocator);
+            allocator.destroy(initializer);
+        }
+
+        const end_span = if (self.match(.semicolon)) |semicolon| semicolon.span else blk: {
+            try self.report(.UnexpectedToken, "expected ';' after local declaration", self.current().span);
+            self.recoverStatement();
+            break :blk initializer.span();
+        };
+
+        return .{ .local_decl = .{
+            .type_name = type_name,
+            .name = name,
+            .initializer = initializer,
+            .span = ast.spanFromBounds(type_name.span.start, spanEnd(end_span)),
+        } };
     }
 
     fn parseReturnStmt(self: *Parser, allocator: std.mem.Allocator) !ast.Stmt {
@@ -592,6 +644,15 @@ pub const Parser = struct {
                 _ = self.advance();
                 const node = try allocator.create(ast.Expr);
                 node.* = .{ .bool_literal = .{ .value = token.kind == .true, .span = token.span } };
+                return node;
+            },
+            .identifier => {
+                _ = self.advance();
+                const node = try allocator.create(ast.Expr);
+                node.* = .{ .identifier = .{
+                    .name = .{ .text = token.lexeme, .span = token.span },
+                    .span = token.span,
+                } };
                 return node;
             },
             .left_paren => {
@@ -1218,6 +1279,17 @@ pub const Parser = struct {
         while (self.current().kind != .eof and self.current().kind != .comma and self.current().kind != .right_paren and self.current().kind != .semicolon and self.current().kind != .right_brace) self.advance();
     }
 
+    fn isLocalDeclStart(self: Parser) bool {
+        if (self.current().kind != .identifier) return false;
+        var offset: usize = 1;
+        while (self.peek(offset).kind == .dot and self.peek(offset + 1).kind == .identifier) {
+            offset += 2;
+        }
+        if (self.peek(offset).kind != .identifier) return false;
+        const after_name = self.peek(offset + 1).kind;
+        return after_name == .equal or after_name == .semicolon;
+    }
+
     fn parseTypeName(self: *Parser, allocator: std.mem.Allocator) !ast.TypeName {
         const mut_token = self.match(.mut);
         const start_span = if (mut_token) |token| token.span else self.current().span;
@@ -1355,6 +1427,13 @@ pub const Parser = struct {
         try self.diagnostics.append(diagnostics_model.makeDiagnostic(code, .@"error", message, span));
     }
 };
+
+fn stmtSpan(stmt: ast.Stmt) SourceSpan {
+    return switch (stmt) {
+        .local_decl => |local_decl| local_decl.span,
+        .return_stmt => |return_stmt| return_stmt.span,
+    };
+}
 
 fn deinitAttributes(attributes: []ast.Attribute, allocator: std.mem.Allocator) void {
     for (attributes) |attribute| attribute.deinit(allocator);
@@ -3018,9 +3097,87 @@ test "unsupported statement recovery" {
     var diagnostics = DiagnosticBag.init(std.testing.allocator);
     defer diagnostics.deinit();
 
-    const unit = try parseTestSource("module Main; int main() { int x; return 0; }", &diagnostics);
+    const unit = try parseTestSource("module Main; int main() { x = 1; return 0; }", &diagnostics);
     defer unit.deinit(std.testing.allocator);
 
     try std.testing.expectEqual(@as(usize, 1), diagnostics.count());
     try std.testing.expectEqual(@as(usize, 1), expectFunctionDecl(unit, 0).body.?.block.?.statements.len);
+}
+
+test "parses local int declaration" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { int x = 1 + 2; return x; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const stmt = expectFunctionDecl(unit, 0).body.?.block.?.statements[0];
+    const local_decl = switch (stmt) {
+        .local_decl => |local_decl| local_decl,
+        else => return error.ExpectedLocalDecl,
+    };
+    try std.testing.expectEqualStrings("int", local_decl.type_name.name.parts[0].text);
+    try std.testing.expectEqualStrings("x", local_decl.name.text);
+}
+
+test "parses local bool declaration" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { bool ok = true; return ok; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const local_decl = switch (expectFunctionDecl(unit, 0).body.?.block.?.statements[0]) {
+        .local_decl => |local_decl| local_decl,
+        else => return error.ExpectedLocalDecl,
+    };
+    try std.testing.expectEqualStrings("bool", local_decl.type_name.name.parts[0].text);
+    try std.testing.expectEqualStrings("ok", local_decl.name.text);
+}
+
+test "parses return identifier" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { return x + 1; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const return_stmt = switch (expectFunctionDecl(unit, 0).body.?.block.?.statements[0]) {
+        .return_stmt => |return_stmt| return_stmt,
+        else => return error.ExpectedReturnStmt,
+    };
+    const binary = switch (return_stmt.value.?.*) {
+        .binary => |binary| binary,
+        else => return error.ExpectedBinaryExpr,
+    };
+    const identifier = switch (binary.left.*) {
+        .identifier => |identifier| identifier,
+        else => return error.ExpectedIdentifierExpr,
+    };
+    try std.testing.expectEqualStrings("x", identifier.name.text);
+}
+
+test "local declaration missing initializer diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { int x; return 0; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.count());
+    try std.testing.expectEqual(DiagnosticCode.UnexpectedToken, diagnostics.diagnostics.items[0].code);
+}
+
+test "local declaration missing semicolon diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { int x = 1 return x; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.count());
+    try std.testing.expectEqual(DiagnosticCode.UnexpectedToken, diagnostics.diagnostics.items[0].code);
 }

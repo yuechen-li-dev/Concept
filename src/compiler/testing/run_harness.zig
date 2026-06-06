@@ -124,3 +124,21 @@ test "run harness reports checker backend failures" {
         expectExitCode(std.testing.allocator, "module Main; int main() { return; }", 0),
     );
 }
+
+test "run harness compiles and runs local arithmetic return" {
+    const result = try expectExitCode(
+        std.testing.allocator,
+        "module Main; int main() { int x = 1 + 2; return x * 3; }",
+        9,
+    );
+    try std.testing.expectEqual(@as(u8, 9), result.actual_exit_code);
+}
+
+test "run harness compiles and runs bool local return" {
+    const result = try expectExitCode(
+        std.testing.allocator,
+        "module Main; int main() { bool ok = true; return ok; }",
+        1,
+    );
+    try std.testing.expectEqual(@as(u8, 1), result.actual_exit_code);
+}

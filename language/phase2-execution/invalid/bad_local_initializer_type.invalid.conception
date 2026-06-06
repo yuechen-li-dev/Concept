@@ -1,0 +1,11 @@
+# name: phase2 bad local initializer type
+# phase: check
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    int x = true;
+    return x;
+}

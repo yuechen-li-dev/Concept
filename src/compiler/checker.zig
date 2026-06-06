@@ -5,7 +5,15 @@ const diagnostics_model = @import("diagnostics.zig");
 
 pub const ast = ast_model;
 pub const DiagnosticBag = diagnostics_model.DiagnosticBag;
-pub const CheckError = error{InvalidExecutable};
+pub const CheckError = error{ InvalidExecutable, OutOfMemory };
+
+const ExprType = enum { int, bool };
+
+const LocalSymbol = struct {
+    name: []const u8,
+    type: ExprType,
+    span: ast.SourceSpan,
+};
 
 pub const Executable = struct {
     main: *const ast.FunctionDecl,
@@ -37,8 +45,10 @@ pub fn validateExecutable(unit: ast.CompilationUnit, diagnostics: ?*DiagnosticBa
         return error.InvalidExecutable;
     };
 
+    var locals = std.ArrayList(LocalSymbol).init(std.heap.page_allocator);
+    defer locals.deinit();
     for (block.statements) |stmt| {
-        try validateStmt(stmt, diagnostics);
+        try validateStmt(stmt, &locals, diagnostics);
     }
 
     return .{ .main = main };
@@ -60,33 +70,94 @@ fn findMain(unit: ast.CompilationUnit) ?*const ast.FunctionDecl {
     return null;
 }
 
-fn validateStmt(stmt: ast.Stmt, diagnostics: ?*DiagnosticBag) !void {
+fn validateStmt(stmt: ast.Stmt, locals: *std.ArrayList(LocalSymbol), diagnostics: ?*DiagnosticBag) !void {
     switch (stmt) {
+        .local_decl => |local_decl| {
+            const local_type = executableLocalType(local_decl.type_name) orelse {
+                try report(diagnostics, "unsupported local type in executable subset", local_decl.type_name.span);
+                return error.InvalidExecutable;
+            };
+            for (locals.items) |local| {
+                if (std.mem.eql(u8, local.name, local_decl.name.text)) {
+                    try report(diagnostics, "duplicate local variable name", local_decl.name.span);
+                    return error.InvalidExecutable;
+                }
+            }
+            const initializer_type = try validateExpr(local_decl.initializer.*, locals, diagnostics);
+            if (initializer_type != local_type) {
+                try report(diagnostics, "local initializer type does not match declared type", local_decl.initializer.span());
+                return error.InvalidExecutable;
+            }
+            try locals.append(.{ .name = local_decl.name.text, .type = local_type, .span = local_decl.name.span });
+        },
         .return_stmt => |return_stmt| {
             const value = return_stmt.value orelse {
                 try report(diagnostics, "P2-M2 C backend requires return statements to have an expression", return_stmt.span);
                 return error.InvalidExecutable;
             };
-            try validateExpr(value.*, diagnostics);
+            _ = try validateExpr(value.*, locals, diagnostics);
         },
     }
 }
 
-fn validateExpr(expr: ast.Expr, diagnostics: ?*DiagnosticBag) !void {
+fn validateExpr(expr: ast.Expr, locals: *const std.ArrayList(LocalSymbol), diagnostics: ?*DiagnosticBag) !ExprType {
     switch (expr) {
-        .int_literal, .bool_literal => {},
-        .group => |group| try validateExpr(group.inner.*, diagnostics),
-        .unary => |unary| {
-            switch (unary.op) {
-                .negate, .logical_not => {},
+        .int_literal => return .int,
+        .bool_literal => return .bool,
+        .identifier => |identifier| {
+            for (locals.items) |local| {
+                if (std.mem.eql(u8, local.name, identifier.name.text)) return local.type;
             }
-            try validateExpr(unary.operand.*, diagnostics);
+            try report(diagnostics, "unknown identifier in executable subset", identifier.span);
+            return error.InvalidExecutable;
+        },
+        .group => |group| return validateExpr(group.inner.*, locals, diagnostics),
+        .unary => |unary| {
+            const operand_type = try validateExpr(unary.operand.*, locals, diagnostics);
+            switch (unary.op) {
+                .negate => if (operand_type == .int) return .int else {
+                    try report(diagnostics, "arithmetic unary operator requires int operand", unary.span);
+                    return error.InvalidExecutable;
+                },
+                .logical_not => if (operand_type == .bool) return .bool else {
+                    try report(diagnostics, "logical unary operator requires bool operand", unary.span);
+                    return error.InvalidExecutable;
+                },
+            }
         },
         .binary => |binary| {
-            try validateExpr(binary.left.*, diagnostics);
-            try validateExpr(binary.right.*, diagnostics);
+            const left_type = try validateExpr(binary.left.*, locals, diagnostics);
+            const right_type = try validateExpr(binary.right.*, locals, diagnostics);
+            switch (binary.op) {
+                .add, .subtract, .multiply, .divide, .modulo => {
+                    if (left_type == .int and right_type == .int) return .int;
+                    try report(diagnostics, "arithmetic binary operator requires int operands", binary.span);
+                    return error.InvalidExecutable;
+                },
+                .less, .less_equal, .greater, .greater_equal => {
+                    if (left_type == .int and right_type == .int) return .bool;
+                    try report(diagnostics, "comparison operator requires int operands", binary.span);
+                    return error.InvalidExecutable;
+                },
+                .equal_equal, .bang_equal => {
+                    if (left_type == right_type) return .bool;
+                    try report(diagnostics, "equality operator requires matching operand types", binary.span);
+                    return error.InvalidExecutable;
+                },
+                .logical_and, .logical_or => {
+                    if (left_type == .bool and right_type == .bool) return .bool;
+                    try report(diagnostics, "logical binary operator requires bool operands", binary.span);
+                    return error.InvalidExecutable;
+                },
+            }
         },
     }
+}
+
+fn executableLocalType(type_name: ast.TypeName) ?ExprType {
+    if (isExactSimpleType(type_name, "int")) return .int;
+    if (isExactSimpleType(type_name, "bool")) return .bool;
+    return null;
 }
 
 fn isExactSimpleType(type_name: ast.TypeName, expected: []const u8) bool {
@@ -184,5 +255,51 @@ test "checker rejects main parameters for C backend v0" {
     try expectInvalid(
         "module Main; int main(int argc) { return 0; }",
         "P2-M2 C backend requires 'main' to have no parameters",
+    );
+}
+
+test "checker validates local int usage" {
+    try expectValid("module Main; int main() { int x = 1 + 2; return x * 3; }");
+}
+
+test "checker rejects unknown identifier" {
+    try expectInvalid(
+        "module Main; int main() { return x; }",
+        "unknown identifier in executable subset",
+    );
+}
+
+test "checker rejects duplicate local" {
+    try expectInvalid(
+        "module Main; int main() { int x = 1; int x = 2; return x; }",
+        "duplicate local variable name",
+    );
+}
+
+test "checker rejects unsupported local type" {
+    try expectInvalid(
+        "module Main; int main() { String x = 1; return 0; }",
+        "unsupported local type in executable subset",
+    );
+}
+
+test "checker rejects bad initializer type" {
+    try expectInvalid(
+        "module Main; int main() { int x = true; return x; }",
+        "local initializer type does not match declared type",
+    );
+}
+
+test "checker rejects arithmetic operand type mismatch" {
+    try expectInvalid(
+        "module Main; int main() { return true + 1; }",
+        "arithmetic binary operator requires int operands",
+    );
+}
+
+test "checker rejects logical operand type mismatch" {
+    try expectInvalid(
+        "module Main; int main() { return 1 && false; }",
+        "logical binary operator requires bool operands",
     );
 }

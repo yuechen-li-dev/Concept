@@ -325,12 +325,14 @@ pub const BinaryOp = enum {
 pub const Expr = union(enum) {
     int_literal: IntLiteralExpr,
     bool_literal: BoolLiteralExpr,
+    identifier: IdentifierExpr,
     group: GroupExpr,
     unary: UnaryExpr,
     binary: BinaryExpr,
 
     pub const IntLiteralExpr = struct { text: []const u8, span: SourceSpan };
     pub const BoolLiteralExpr = struct { value: bool, span: SourceSpan };
+    pub const IdentifierExpr = struct { name: NameSegment, span: SourceSpan };
     pub const GroupExpr = struct { inner: *Expr, span: SourceSpan };
     pub const UnaryExpr = struct { op: UnaryOp, operand: *Expr, span: SourceSpan };
     pub const BinaryExpr = struct { op: BinaryOp, left: *Expr, right: *Expr, span: SourceSpan };
@@ -339,6 +341,7 @@ pub const Expr = union(enum) {
         return switch (self) {
             .int_literal => |expr| expr.span,
             .bool_literal => |expr| expr.span,
+            .identifier => |expr| expr.span,
             .group => |expr| expr.span,
             .unary => |expr| expr.span,
             .binary => |expr| expr.span,
@@ -361,7 +364,7 @@ pub const Expr = union(enum) {
                 expr.right.deinit(allocator);
                 allocator.destroy(expr.right);
             },
-            .int_literal, .bool_literal => {},
+            .int_literal, .bool_literal, .identifier => {},
         }
     }
 
@@ -376,6 +379,11 @@ pub const Expr = union(enum) {
             .bool_literal => |expr| {
                 try writer.writeAll("Bool ");
                 try writer.writeAll(if (expr.value) "true" else "false");
+                try writer.writeByte('\n');
+            },
+            .identifier => |expr| {
+                try writer.writeAll("Identifier ");
+                try writer.writeAll(expr.name.text);
                 try writer.writeByte('\n');
             },
             .group => |expr| {
@@ -411,17 +419,41 @@ pub const ReturnStmt = struct {
     }
 };
 
+pub const LocalDeclStmt = struct {
+    type_name: TypeName,
+    name: NameSegment,
+    initializer: *Expr,
+    span: SourceSpan,
+
+    pub fn deinit(self: LocalDeclStmt, allocator: std.mem.Allocator) void {
+        self.type_name.deinit(allocator);
+        self.initializer.deinit(allocator);
+        allocator.destroy(self.initializer);
+    }
+};
+
 pub const Stmt = union(enum) {
+    local_decl: LocalDeclStmt,
     return_stmt: ReturnStmt,
 
     pub fn deinit(self: Stmt, allocator: std.mem.Allocator) void {
         switch (self) {
+            .local_decl => |stmt| stmt.deinit(allocator),
             .return_stmt => |stmt| stmt.deinit(allocator),
         }
     }
 
     pub fn writeDebug(self: Stmt, writer: anytype, depth: usize) !void {
         switch (self) {
+            .local_decl => |stmt| {
+                try writeIndent(writer, depth);
+                try writer.writeAll("LocalDecl ");
+                try stmt.type_name.write(writer);
+                try writer.writeByte(' ');
+                try writer.writeAll(stmt.name.text);
+                try writer.writeByte('\n');
+                try stmt.initializer.writeDebug(writer, depth + 1);
+            },
             .return_stmt => |stmt| {
                 try writeIndent(writer, depth);
                 try writer.writeAll("Return\n");
