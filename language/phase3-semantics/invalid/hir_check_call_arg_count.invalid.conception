@@ -1,0 +1,17 @@
+# name: phase3 hir checker call arg count
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+int add(int a, int b) {
+    return a + b;
+}
+
+int main() {
+    return add(1);
+}
+
+=== diagnostics ===
+CON0033 error: function call argument count mismatch

@@ -1,0 +1,18 @@
+# name: phase3 hir checker match duplicate wildcard
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+int main() {
+    int x = 0;
+    match x {
+        _ => x = 1;
+        _ => x = 2;
+    }
+    return x;
+}
+
+=== diagnostics ===
+CON0029 error: duplicate wildcard match pattern

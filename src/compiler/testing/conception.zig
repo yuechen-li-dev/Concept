@@ -4,6 +4,7 @@ const parser_model = @import("../parser.zig");
 const source_model = @import("../source.zig");
 const checker_model = @import("../checker.zig");
 const semantics_model = @import("../semantics.zig");
+const hir_checker_model = @import("../hir_checker.zig");
 const run_harness = @import("run_harness.zig");
 
 pub const Phase = enum {
@@ -452,17 +453,33 @@ fn expectSemanticCheckFixture(comptime path: []const u8, fixture: ConceptionFixt
     defer unit.deinit(std.testing.allocator);
     try std.testing.expectEqual(@as(usize, 0), parse_diagnostics.count());
 
+    const use_hir_checker = std.mem.indexOf(u8, path, "hir_check_") != null;
+
     switch (fixture.expect) {
         .pass => {
             var module = try semantics_model.collectTopLevelDeclarations(std.testing.allocator, unit, &semantic_diagnostics);
             defer module.deinit();
+            if (use_hir_checker) {
+                try hir_checker_model.checkExecutable(std.testing.allocator, &module, &semantic_diagnostics);
+            }
             try std.testing.expectEqual(@as(usize, 0), semantic_diagnostics.count());
         },
         .fail => {
-            try std.testing.expectError(
-                error.InvalidSemanticModule,
-                semantics_model.collectTopLevelDeclarations(std.testing.allocator, unit, &semantic_diagnostics),
-            );
+            var maybe_module = semantics_model.collectTopLevelDeclarations(std.testing.allocator, unit, &semantic_diagnostics) catch |err| switch (err) {
+                error.InvalidSemanticModule => null,
+                else => return err,
+            };
+            defer if (maybe_module) |*module| module.deinit();
+            if (maybe_module) |*module| {
+                if (use_hir_checker) {
+                    try std.testing.expectError(
+                        error.InvalidSemanticModule,
+                        hir_checker_model.checkExecutable(std.testing.allocator, module, &semantic_diagnostics),
+                    );
+                } else {
+                    return error.ExpectedSemanticDiagnostic;
+                }
+            }
             const expected_codes = try fixture.diagnosticCodes(std.testing.allocator);
             defer std.testing.allocator.free(expected_codes);
             try std.testing.expectEqual(expected_codes.len, semantic_diagnostics.count());
@@ -598,6 +615,70 @@ test "language check fixture: phase3 HIR body duplicate local" {
 
 test "language check fixture: phase3 HIR body inner scope leak" {
     try expectCheckFixture("../../../language/phase3-semantics/invalid/hir_body_inner_scope_leak.invalid.conception");
+}
+
+test "language check fixture: phase3 HIR checker return int" {
+    try expectCheckFixture("../../../language/phase3-semantics/valid/hir_check_return_int.valid.conception");
+}
+
+test "language check fixture: phase3 HIR checker locals assignments" {
+    try expectCheckFixture("../../../language/phase3-semantics/valid/hir_check_locals_assignments.valid.conception");
+}
+
+test "language check fixture: phase3 HIR checker function calls" {
+    try expectCheckFixture("../../../language/phase3-semantics/valid/hir_check_function_calls.valid.conception");
+}
+
+test "language check fixture: phase3 HIR checker if match while" {
+    try expectCheckFixture("../../../language/phase3-semantics/valid/hir_check_if_match_while.valid.conception");
+}
+
+test "language check fixture: phase3 HIR checker missing main" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/hir_check_missing_main.invalid.conception");
+}
+
+test "language check fixture: phase3 HIR checker bad main signature" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/hir_check_bad_main_signature.invalid.conception");
+}
+
+test "language check fixture: phase3 HIR checker return mismatch" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/hir_check_return_type_mismatch.invalid.conception");
+}
+
+test "language check fixture: phase3 HIR checker local initializer mismatch" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/hir_check_local_initializer_type_mismatch.invalid.conception");
+}
+
+test "language check fixture: phase3 HIR checker assignment mismatch" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/hir_check_assignment_type_mismatch.invalid.conception");
+}
+
+test "language check fixture: phase3 HIR checker if condition" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/hir_check_if_condition_not_bool.invalid.conception");
+}
+
+test "language check fixture: phase3 HIR checker while condition" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/hir_check_while_condition_not_bool.invalid.conception");
+}
+
+test "language check fixture: phase3 HIR checker call arg count" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/hir_check_call_arg_count.invalid.conception");
+}
+
+test "language check fixture: phase3 HIR checker call arg type" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/hir_check_call_arg_type.invalid.conception");
+}
+
+test "language check fixture: phase3 HIR checker match pattern mismatch" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/hir_check_match_pattern_type_mismatch.invalid.conception");
+}
+
+test "language check fixture: phase3 HIR checker match duplicate pattern" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/hir_check_match_duplicate_pattern.invalid.conception");
+}
+
+test "language check fixture: phase3 HIR checker match duplicate wildcard" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/hir_check_match_duplicate_wildcard.invalid.conception");
 }
 
 fn expectRunFixture(comptime path: []const u8) !void {

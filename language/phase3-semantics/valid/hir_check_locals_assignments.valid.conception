@@ -1,0 +1,17 @@
+# name: phase3 hir checker locals assignments
+# phase: check
+# expect: pass
+
+=== source ===
+module Example;
+
+int main() {
+    int x = 1;
+    bool ready = true;
+    x = x + 2;
+    ready = !ready;
+    if (ready == false) {
+        x = x + 1;
+    }
+    return x;
+}

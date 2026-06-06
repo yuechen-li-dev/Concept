@@ -1,0 +1,22 @@
+# name: phase3 hir checker function calls
+# phase: check
+# expect: pass
+
+=== source ===
+module Example;
+
+int add(int a, int b) {
+    return a + b;
+}
+
+bool lessThan(int a, int b) {
+    return a < b;
+}
+
+int main() {
+    int x = add(1, 2);
+    if (lessThan(x, 4)) {
+        x = add(x, 1);
+    }
+    return x;
+}

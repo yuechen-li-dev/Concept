@@ -1,0 +1,17 @@
+# name: phase3 hir checker call arg type
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+int id(int value) {
+    return value;
+}
+
+int main() {
+    return id(true);
+}
+
+=== diagnostics ===
+CON0033 error: function call argument type mismatch

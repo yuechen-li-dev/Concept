@@ -1,0 +1,18 @@
+# name: phase3 hir checker match duplicate pattern
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+int main() {
+    int x = 0;
+    match x {
+        1 => x = 1;
+        1 => x = 2;
+    }
+    return x;
+}
+
+=== diagnostics ===
+CON0029 error: duplicate literal match pattern

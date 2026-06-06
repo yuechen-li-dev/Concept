@@ -1,0 +1,13 @@
+# name: phase3 hir checker missing main
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+int helper() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0031 error: expected top-level 'main' function

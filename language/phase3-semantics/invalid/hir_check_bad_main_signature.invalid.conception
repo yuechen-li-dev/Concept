@@ -1,0 +1,13 @@
+# name: phase3 hir checker bad main signature
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+bool main() {
+    return true;
+}
+
+=== diagnostics ===
+CON0030 error: main must return int

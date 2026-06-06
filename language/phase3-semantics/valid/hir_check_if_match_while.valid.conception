@@ -1,0 +1,26 @@
+# name: phase3 hir checker if match while
+# phase: check
+# expect: pass
+
+=== source ===
+module Example;
+
+int main() {
+    int x = 0;
+    while (x < 3) {
+        x = x + 1;
+    }
+    if (x == 3) {
+        match x {
+            1 => x = 10;
+            3 => x = 7;
+            _ => x = 0;
+        }
+    } else {
+        match false {
+            true => x = 1;
+            false => x = 2;
+        }
+    }
+    return x;
+}
