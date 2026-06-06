@@ -772,3 +772,29 @@ No hidden build scripts.
 No mandatory lock files.
 Manifests are explicit package/build law.
 ```
+
+## P4a-M1 implementation note
+
+P4a-M1 adds the initial Stage 0 manifest parser and data model skeleton in `src/compiler/manifest.zig`.
+
+Implemented in this milestone:
+
+* package and registry manifest kind representation
+* `concept-manifest-v0` and `concept-registry-v0` format representation
+* deterministic `# kind:` and `# format:` header parsing and kind/format validation
+* section parsing with source-order retention and duplicate-section rejection
+* minimal package identity parsing for `package`, optional `version`, and optional `license` statements
+
+Still deferred to later Phase 4a milestones:
+
+* module roots
+* targets
+* dependencies
+* registries beyond header/section representation
+* resolution policy
+* lock files
+* package-driver/build-plan integration
+* git/network fetching
+* template expansion
+* concept solving
+* comptime build execution

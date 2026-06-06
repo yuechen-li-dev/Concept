@@ -7,6 +7,7 @@ pub const hir = @import("hir.zig");
 pub const mir = @import("mir.zig");
 pub const mir_lowering = @import("mir_lowering.zig");
 pub const mir_validator = @import("mir_validator.zig");
+pub const manifest = @import("manifest.zig");
 pub const types = @import("types.zig");
 pub const semantics = @import("semantics.zig");
 pub const hir_checker = @import("hir_checker.zig");
@@ -26,6 +27,7 @@ test {
     _ = mir;
     _ = mir_lowering;
     _ = mir_validator;
+    _ = manifest;
     _ = types;
     _ = semantics;
     _ = hir_checker;
