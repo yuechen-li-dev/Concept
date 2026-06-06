@@ -42,6 +42,37 @@ pub const ImportDecl = struct {
     }
 };
 
+pub const AttributeArguments = struct {
+    text: []const u8,
+    span: SourceSpan,
+
+    pub fn deinit(self: AttributeArguments, allocator: std.mem.Allocator) void {
+        allocator.free(self.text);
+    }
+};
+
+pub const Attribute = struct {
+    name: QualifiedName,
+    arguments: ?AttributeArguments = null,
+    span: SourceSpan,
+
+    pub fn deinit(self: Attribute, allocator: std.mem.Allocator) void {
+        self.name.deinit(allocator);
+        if (self.arguments) |arguments| arguments.deinit(allocator);
+    }
+
+    pub fn writeDebug(self: Attribute, writer: anytype) !void {
+        try writer.writeAll("  Attribute ");
+        try self.name.write(writer);
+        if (self.arguments) |arguments| {
+            try writer.writeByte('(');
+            try writer.writeAll(arguments.text);
+            try writer.writeByte(')');
+        }
+        try writer.writeByte('\n');
+    }
+};
+
 pub const TypeName = struct {
     name: QualifiedName,
     generic_args: []TypeName = &.{},
@@ -138,12 +169,15 @@ pub const FieldDecl = struct {
 };
 
 pub const StructDecl = struct {
+    attributes: []Attribute = &.{},
     is_export: bool,
     name: NameSegment,
     fields: []FieldDecl,
     span: SourceSpan,
 
     pub fn deinit(self: StructDecl, allocator: std.mem.Allocator) void {
+        for (self.attributes) |attribute| attribute.deinit(allocator);
+        allocator.free(self.attributes);
         for (self.fields) |field| {
             field.deinit(allocator);
         }
@@ -175,12 +209,15 @@ pub const EnumVariant = struct {
 };
 
 pub const EnumDecl = struct {
+    attributes: []Attribute = &.{},
     is_export: bool,
     name: NameSegment,
     variants: []EnumVariant,
     span: SourceSpan,
 
     pub fn deinit(self: EnumDecl, allocator: std.mem.Allocator) void {
+        for (self.attributes) |attribute| attribute.deinit(allocator);
+        allocator.free(self.attributes);
         for (self.variants) |variant| {
             variant.deinit(allocator);
         }
@@ -189,12 +226,15 @@ pub const EnumDecl = struct {
 };
 
 pub const ConceptDecl = struct {
+    attributes: []Attribute = &.{},
     name: NameSegment,
     generic_params: []GenericParam,
     signatures: []SignatureDecl,
     span: SourceSpan,
 
     pub fn deinit(self: ConceptDecl, allocator: std.mem.Allocator) void {
+        for (self.attributes) |attribute| attribute.deinit(allocator);
+        allocator.free(self.attributes);
         allocator.free(self.generic_params);
         for (self.signatures) |signature| {
             signature.deinit(allocator);
@@ -204,11 +244,14 @@ pub const ConceptDecl = struct {
 };
 
 pub const InterfaceDecl = struct {
+    attributes: []Attribute = &.{},
     name: NameSegment,
     signatures: []SignatureDecl,
     span: SourceSpan,
 
     pub fn deinit(self: InterfaceDecl, allocator: std.mem.Allocator) void {
+        for (self.attributes) |attribute| attribute.deinit(allocator);
+        allocator.free(self.attributes);
         for (self.signatures) |signature| {
             signature.deinit(allocator);
         }
@@ -217,11 +260,14 @@ pub const InterfaceDecl = struct {
 };
 
 pub const ImplDecl = struct {
+    attributes: []Attribute = &.{},
     target: TypeName,
     signatures: []SignatureDecl,
     span: SourceSpan,
 
     pub fn deinit(self: ImplDecl, allocator: std.mem.Allocator) void {
+        for (self.attributes) |attribute| attribute.deinit(allocator);
+        allocator.free(self.attributes);
         self.target.deinit(allocator);
         for (self.signatures) |signature| {
             signature.deinit(allocator);
@@ -235,12 +281,15 @@ pub const FunctionBody = struct {
 };
 
 pub const FunctionDecl = struct {
+    attributes: []Attribute = &.{},
     is_export: bool,
     signature: SignatureDecl,
     body: ?FunctionBody,
     span: SourceSpan,
 
     pub fn deinit(self: FunctionDecl, allocator: std.mem.Allocator) void {
+        for (self.attributes) |attribute| attribute.deinit(allocator);
+        allocator.free(self.attributes);
         self.signature.deinit(allocator);
     }
 };
@@ -267,6 +316,7 @@ pub const Item = union(enum) {
     pub fn writeDebug(self: Item, writer: anytype) !void {
         switch (self) {
             .function_decl => |function_decl| {
+                try writeAttributesDebug(function_decl.attributes, writer);
                 if (function_decl.is_export) {
                     try writer.writeAll("  Export Function ");
                 } else {
@@ -288,6 +338,7 @@ pub const Item = union(enum) {
                 }
             },
             .struct_decl => |struct_decl| {
+                try writeAttributesDebug(struct_decl.attributes, writer);
                 if (struct_decl.is_export) {
                     try writer.writeAll("  Export Struct ");
                 } else {
@@ -305,6 +356,7 @@ pub const Item = union(enum) {
                 }
             },
             .enum_decl => |enum_decl| {
+                try writeAttributesDebug(enum_decl.attributes, writer);
                 if (enum_decl.is_export) {
                     try writer.writeAll("  Export Enum ");
                 } else {
@@ -328,6 +380,7 @@ pub const Item = union(enum) {
                 }
             },
             .concept_decl => |concept_decl| {
+                try writeAttributesDebug(concept_decl.attributes, writer);
                 try writer.writeAll("  Concept ");
                 try writer.writeAll(concept_decl.name.text);
                 if (concept_decl.generic_params.len != 0) {
@@ -344,6 +397,7 @@ pub const Item = union(enum) {
                 }
             },
             .interface_decl => |interface_decl| {
+                try writeAttributesDebug(interface_decl.attributes, writer);
                 try writer.writeAll("  Interface ");
                 try writer.writeAll(interface_decl.name.text);
                 try writer.writeByte('\n');
@@ -352,6 +406,7 @@ pub const Item = union(enum) {
                 }
             },
             .impl_decl => |impl_decl| {
+                try writeAttributesDebug(impl_decl.attributes, writer);
                 try writer.writeAll("  Impl ");
                 try impl_decl.target.write(writer);
                 try writer.writeByte('\n');
@@ -362,6 +417,12 @@ pub const Item = union(enum) {
         }
     }
 };
+
+fn writeAttributesDebug(attributes: []const Attribute, writer: anytype) !void {
+    for (attributes) |attribute| {
+        try attribute.writeDebug(writer);
+    }
+}
 
 pub const CompilationUnit = struct {
     span: SourceSpan,

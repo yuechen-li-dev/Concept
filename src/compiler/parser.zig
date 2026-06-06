@@ -17,12 +17,21 @@ pub const TokenKind = token_model.TokenKind;
 pub const Parser = struct {
     tokens: []const Token,
     diagnostics: *DiagnosticBag,
+    source_text: ?[]const u8 = null,
     index: usize = 0,
 
     pub fn init(tokens: []const Token, diagnostics: *DiagnosticBag) Parser {
         return .{
             .tokens = tokens,
             .diagnostics = diagnostics,
+        };
+    }
+
+    pub fn initWithSource(tokens: []const Token, diagnostics: *DiagnosticBag, source_text: []const u8) Parser {
+        return .{
+            .tokens = tokens,
+            .diagnostics = diagnostics,
+            .source_text = source_text,
         };
     }
 
@@ -50,55 +59,80 @@ pub const Parser = struct {
         }
 
         while (self.current().kind != .eof) {
+            var attributes = try self.parseAttributes(allocator);
+            errdefer deinitAttributes(attributes, allocator);
+
             switch (self.current().kind) {
                 .module => {
+                    try self.rejectAttributesBeforeUnsupportedItem(attributes, allocator);
+                    attributes = &.{};
                     try self.reportDuplicateModule();
                     const duplicate = try self.parseModuleDecl(allocator);
                     duplicate.deinit(allocator);
                 },
                 .@"struct" => {
-                    try items.append(try self.parseStructItem(allocator));
+                    try items.append(try self.parseStructItem(allocator, attributes));
+                    attributes = &.{};
                 },
                 .identifier, .mut => {
-                    if (try self.parseFunctionItem(allocator)) |item| {
+                    if (try self.parseFunctionItem(allocator, attributes)) |item| {
                         try items.append(item);
+                        attributes = &.{};
                     }
                 },
                 .@"enum" => {
-                    try items.append(try self.parseEnumItem(allocator));
+                    try items.append(try self.parseEnumItem(allocator, attributes));
+                    attributes = &.{};
                 },
                 .concept => {
-                    try items.append(try self.parseConceptItem(allocator));
+                    try items.append(try self.parseConceptItem(allocator, attributes));
+                    attributes = &.{};
                 },
                 .interface => {
-                    try items.append(try self.parseInterfaceItem(allocator));
+                    try items.append(try self.parseInterfaceItem(allocator, attributes));
+                    attributes = &.{};
                 },
                 .impl => {
-                    try items.append(try self.parseImplItem(allocator));
+                    try items.append(try self.parseImplItem(allocator, attributes));
+                    attributes = &.{};
                 },
                 .@"export" => {
                     if (self.peek(1).kind == .@"struct") {
-                        try items.append(try self.parseStructItem(allocator));
+                        try items.append(try self.parseStructItem(allocator, attributes));
+                        attributes = &.{};
                     } else if (self.peek(1).kind == .@"enum") {
-                        try items.append(try self.parseEnumItem(allocator));
+                        try items.append(try self.parseEnumItem(allocator, attributes));
+                        attributes = &.{};
                     } else if (self.peek(1).kind == .identifier or self.peek(1).kind == .mut) {
-                        if (try self.parseFunctionItem(allocator)) |item| {
+                        if (try self.parseFunctionItem(allocator, attributes)) |item| {
                             try items.append(item);
+                            attributes = &.{};
                         }
                     } else {
+                        try self.rejectAttributesBeforeUnsupportedItem(attributes, allocator);
+                        attributes = &.{};
                         try self.reportExpectedItem("expected item declaration", self.current().span);
                         self.advance();
                     }
                 },
                 .import => {
+                    try self.rejectAttributesBeforeUnsupportedItem(attributes, allocator);
+                    attributes = &.{};
                     try self.reportExpectedItem("expected item declaration", self.current().span);
                     self.advance();
                 },
                 else => {
-                    try self.reportExpectedItem("expected item declaration", self.current().span);
+                    if (attributes.len != 0) {
+                        try self.reportExpectedItem("expected item declaration after attribute", self.current().span);
+                        deinitAttributes(attributes, allocator);
+                        attributes = &.{};
+                    } else {
+                        try self.reportExpectedItem("expected item declaration", self.current().span);
+                    }
                     self.advance();
                 },
             }
+            deinitAttributes(attributes, allocator);
         }
 
         const eof_span = self.current().span;
@@ -156,6 +190,113 @@ pub const Parser = struct {
         return null;
     }
 
+    fn parseAttributes(self: *Parser, allocator: std.mem.Allocator) ![]ast.Attribute {
+        var attributes = std.ArrayList(ast.Attribute).init(allocator);
+        errdefer {
+            for (attributes.items) |attribute| attribute.deinit(allocator);
+            attributes.deinit();
+        }
+
+        while (self.current().kind == .left_bracket) {
+            try attributes.append(try self.parseAttribute(allocator));
+        }
+
+        return attributes.toOwnedSlice();
+    }
+
+    fn parseAttribute(self: *Parser, allocator: std.mem.Allocator) !ast.Attribute {
+        const left_bracket = self.advance();
+        const name_start_span = self.current().span;
+        var name = try self.parseAttributeName(allocator);
+        errdefer name.deinit(allocator);
+
+        var arguments: ?ast.AttributeArguments = null;
+        errdefer if (arguments) |argument_list| argument_list.deinit(allocator);
+
+        if (self.match(.left_paren)) |left_paren| {
+            arguments = try self.parseAttributeArguments(allocator, left_paren.span);
+        }
+
+        const end_span = if (self.match(.right_bracket)) |right_bracket| right_bracket.span else blk: {
+            try self.report(.UnexpectedToken, "expected ']' after attribute", self.current().span);
+            self.recoverAttributeAfterMissingBracket();
+            if (self.match(.right_bracket)) |right_bracket| break :blk right_bracket.span;
+            break :blk if (arguments) |argument_list| argument_list.span else name_start_span;
+        };
+
+        return .{
+            .name = name,
+            .arguments = arguments,
+            .span = ast.spanFromBounds(left_bracket.span.start, spanEnd(end_span)),
+        };
+    }
+
+    fn parseAttributeName(self: *Parser, allocator: std.mem.Allocator) !ast.QualifiedName {
+        if (self.current().kind != .identifier) {
+            try self.report(.UnexpectedToken, "expected attribute name", self.current().span);
+            const parts = try allocator.alloc(ast.NameSegment, 0);
+            return .{ .parts = parts, .span = self.current().span };
+        }
+        return self.parseDottedName(allocator);
+    }
+
+    fn parseAttributeArguments(self: *Parser, allocator: std.mem.Allocator, left_paren_span: SourceSpan) !ast.AttributeArguments {
+        const args_start = self.current().span.start;
+        var args_end = args_start;
+        var depth: usize = 1;
+        var last_span = left_paren_span;
+        while (self.current().kind != .eof and self.current().kind != .right_bracket) {
+            const token = self.advance();
+            last_span = token.span;
+            switch (token.kind) {
+                .left_paren => depth += 1,
+                .right_paren => {
+                    depth -= 1;
+                    if (depth == 0) {
+                        args_end = token.span.start;
+                        const raw_text = try self.attributeArgumentText(allocator, args_start, args_end);
+                        return .{
+                            .text = raw_text,
+                            .span = ast.spanFromBounds(left_paren_span.start, spanEnd(token.span)),
+                        };
+                    }
+                },
+                else => {},
+            }
+        }
+
+        try self.report(.UnexpectedToken, "unterminated attribute argument list", self.current().span);
+        const raw_end = if (last_span.start >= args_start) spanEnd(last_span) else args_start;
+        const raw_text = try self.attributeArgumentText(allocator, args_start, raw_end);
+        return .{
+            .text = raw_text,
+            .span = ast.spanFromBounds(left_paren_span.start, raw_end),
+        };
+    }
+
+    fn attributeArgumentText(self: Parser, allocator: std.mem.Allocator, start: usize, end: usize) ![]const u8 {
+        if (self.source_text) |source_text| {
+            if (start <= end and end <= source_text.len) return allocator.dupe(u8, source_text[start..end]);
+        }
+        return allocator.dupe(u8, "");
+    }
+
+    fn recoverAttributeAfterMissingBracket(self: *Parser) void {
+        while (self.current().kind != .eof) {
+            switch (self.current().kind) {
+                .right_bracket => return,
+                .@"struct", .@"enum", .concept, .interface, .impl, .@"export", .identifier, .mut, .module, .import => return,
+                else => self.advance(),
+            }
+        }
+    }
+
+    fn rejectAttributesBeforeUnsupportedItem(self: *Parser, attributes: []ast.Attribute, allocator: std.mem.Allocator) !void {
+        if (attributes.len == 0) return;
+        try self.reportExpectedItem("expected item declaration after attribute", self.current().span);
+        deinitAttributes(attributes, allocator);
+    }
+
     fn parseModuleDecl(self: *Parser, allocator: std.mem.Allocator) !ast.ModuleDecl {
         const module_token = self.advance();
         var name = try self.parseDottedName(allocator);
@@ -178,34 +319,49 @@ pub const Parser = struct {
         };
     }
 
-    fn parseFunctionItem(self: *Parser, allocator: std.mem.Allocator) !?ast.Item {
-        if (try self.parseFunctionDecl(allocator)) |function_decl| {
+    fn parseFunctionItem(self: *Parser, allocator: std.mem.Allocator, attributes: []ast.Attribute) !?ast.Item {
+        if (try self.parseFunctionDecl(allocator, attributes)) |function_decl| {
             return .{ .function_decl = function_decl };
         }
         return null;
     }
 
-    fn parseStructItem(self: *Parser, allocator: std.mem.Allocator) !ast.Item {
-        return .{ .struct_decl = try self.parseStructDecl(allocator) };
+    fn parseStructItem(self: *Parser, allocator: std.mem.Allocator, attributes: []ast.Attribute) !ast.Item {
+        var decl = try self.parseStructDecl(allocator);
+        decl.attributes = attributes;
+        decl.span = ast.spanFromBounds(itemStartWithAttributes(attributes, decl.span), spanEnd(decl.span));
+        return .{ .struct_decl = decl };
     }
 
-    fn parseEnumItem(self: *Parser, allocator: std.mem.Allocator) !ast.Item {
-        return .{ .enum_decl = try self.parseEnumDecl(allocator) };
+    fn parseEnumItem(self: *Parser, allocator: std.mem.Allocator, attributes: []ast.Attribute) !ast.Item {
+        var decl = try self.parseEnumDecl(allocator);
+        decl.attributes = attributes;
+        decl.span = ast.spanFromBounds(itemStartWithAttributes(attributes, decl.span), spanEnd(decl.span));
+        return .{ .enum_decl = decl };
     }
 
-    fn parseConceptItem(self: *Parser, allocator: std.mem.Allocator) !ast.Item {
-        return .{ .concept_decl = try self.parseConceptDecl(allocator) };
+    fn parseConceptItem(self: *Parser, allocator: std.mem.Allocator, attributes: []ast.Attribute) !ast.Item {
+        var decl = try self.parseConceptDecl(allocator);
+        decl.attributes = attributes;
+        decl.span = ast.spanFromBounds(itemStartWithAttributes(attributes, decl.span), spanEnd(decl.span));
+        return .{ .concept_decl = decl };
     }
 
-    fn parseInterfaceItem(self: *Parser, allocator: std.mem.Allocator) !ast.Item {
-        return .{ .interface_decl = try self.parseInterfaceDecl(allocator) };
+    fn parseInterfaceItem(self: *Parser, allocator: std.mem.Allocator, attributes: []ast.Attribute) !ast.Item {
+        var decl = try self.parseInterfaceDecl(allocator);
+        decl.attributes = attributes;
+        decl.span = ast.spanFromBounds(itemStartWithAttributes(attributes, decl.span), spanEnd(decl.span));
+        return .{ .interface_decl = decl };
     }
 
-    fn parseImplItem(self: *Parser, allocator: std.mem.Allocator) !ast.Item {
-        return .{ .impl_decl = try self.parseImplDecl(allocator) };
+    fn parseImplItem(self: *Parser, allocator: std.mem.Allocator, attributes: []ast.Attribute) !ast.Item {
+        var decl = try self.parseImplDecl(allocator);
+        decl.attributes = attributes;
+        decl.span = ast.spanFromBounds(itemStartWithAttributes(attributes, decl.span), spanEnd(decl.span));
+        return .{ .impl_decl = decl };
     }
 
-    fn parseFunctionDecl(self: *Parser, allocator: std.mem.Allocator) !?ast.FunctionDecl {
+    fn parseFunctionDecl(self: *Parser, allocator: std.mem.Allocator, attributes: []ast.Attribute) !?ast.FunctionDecl {
         const export_token = self.match(.@"export");
         const start_span = if (export_token) |token| token.span else self.current().span;
 
@@ -271,6 +427,7 @@ pub const Parser = struct {
         };
 
         return .{
+            .attributes = attributes,
             .is_export = export_token != null,
             .signature = .{
                 .return_type = return_type,
@@ -279,7 +436,7 @@ pub const Parser = struct {
                 .span = ast.spanFromBounds(start_span.start, spanEnd(last_span)),
             },
             .body = body,
-            .span = ast.spanFromBounds(start_span.start, spanEnd(end_span)),
+            .span = ast.spanFromBounds(itemStartWithAttributes(attributes, start_span), spanEnd(end_span)),
         };
     }
 
@@ -1031,6 +1188,16 @@ pub const Parser = struct {
     }
 };
 
+fn deinitAttributes(attributes: []ast.Attribute, allocator: std.mem.Allocator) void {
+    for (attributes) |attribute| attribute.deinit(allocator);
+    allocator.free(attributes);
+}
+
+fn itemStartWithAttributes(attributes: []const ast.Attribute, item_span: SourceSpan) usize {
+    if (attributes.len == 0) return item_span.start;
+    return attributes[0].span.start;
+}
+
 pub fn parseTokens(allocator: std.mem.Allocator, tokens: []const Token, diagnostics: *DiagnosticBag) !ast.CompilationUnit {
     var parser = Parser.init(tokens, diagnostics);
     return parser.parseCompilationUnit(allocator);
@@ -1039,7 +1206,8 @@ pub fn parseTokens(allocator: std.mem.Allocator, tokens: []const Token, diagnost
 pub fn parseSource(allocator: std.mem.Allocator, source_file: SourceFile, diagnostics: *DiagnosticBag) !ast.CompilationUnit {
     const tokens = try lexer_model.lexAll(allocator, source_file, diagnostics);
     defer allocator.free(tokens);
-    return parseTokens(allocator, tokens, diagnostics);
+    var parser = Parser.initWithSource(tokens, diagnostics, source_file.text);
+    return parser.parseCompilationUnit(allocator);
 }
 
 fn spanEnd(span: SourceSpan) usize {
@@ -2210,4 +2378,192 @@ test "unknown top-level identifier recovery still works" {
         else => unreachable,
     };
     try std.testing.expectEqualStrings("StillParsed", struct_decl.name.text);
+}
+
+test "parses single attribute before function" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; [Fact] void AddsIntegers() { return; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const function_decl = expectFunctionDecl(unit, 0);
+    try std.testing.expectEqual(@as(usize, 1), function_decl.attributes.len);
+    try std.testing.expectEqualStrings("Fact", function_decl.attributes[0].name.parts[0].text);
+    try std.testing.expect(function_decl.attributes[0].arguments == null);
+}
+
+test "parses multiple attributes before function" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; [Theory] [InlineData] void AddsValues();", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const function_decl = expectFunctionDecl(unit, 0);
+    try std.testing.expectEqual(@as(usize, 2), function_decl.attributes.len);
+    try std.testing.expectEqualStrings("Theory", function_decl.attributes[0].name.parts[0].text);
+    try std.testing.expectEqualStrings("InlineData", function_decl.attributes[1].name.parts[0].text);
+}
+
+test "parses attribute with argument tokens" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; [InlineData(1, value, (2 + 3))] void AddsValues();", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const function_decl = expectFunctionDecl(unit, 0);
+    try std.testing.expectEqual(@as(usize, 1), function_decl.attributes.len);
+    try std.testing.expect(function_decl.attributes[0].arguments != null);
+    try std.testing.expectEqualStrings("1, value, (2 + 3)", function_decl.attributes[0].arguments.?.text);
+}
+
+test "parses multiple InlineData attributes" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource(
+        \\module Example;
+        \\[Theory]
+        \\[InlineData(1, 2, 3)]
+        \\[InlineData(10, 20, 30)]
+        \\void AddsValues(int a, int b, int expected) { return; }
+    , &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const function_decl = expectFunctionDecl(unit, 0);
+    try std.testing.expectEqual(@as(usize, 3), function_decl.attributes.len);
+    try std.testing.expectEqualStrings("1, 2, 3", function_decl.attributes[1].arguments.?.text);
+    try std.testing.expectEqualStrings("10, 20, 30", function_decl.attributes[2].arguments.?.text);
+}
+
+test "Fact Theory and InlineData remain identifiers" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const source_file = try SourceFile.init(std.testing.allocator, "test.con", "Fact Theory InlineData");
+    defer source_file.deinit(std.testing.allocator);
+    const tokens = try lexer_model.lexAll(std.testing.allocator, source_file, &diagnostics);
+    defer std.testing.allocator.free(tokens);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    try std.testing.expectEqual(TokenKind.identifier, tokens[0].kind);
+    try std.testing.expectEqual(TokenKind.identifier, tokens[1].kind);
+    try std.testing.expectEqual(TokenKind.identifier, tokens[2].kind);
+}
+
+test "parses attribute before struct" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; [SomeMetadata] struct Thing {};", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const struct_decl = switch (unit.items[0]) {
+        .struct_decl => |struct_decl| struct_decl,
+        else => unreachable,
+    };
+    try std.testing.expectEqual(@as(usize, 1), struct_decl.attributes.len);
+    try std.testing.expectEqualStrings("SomeMetadata", struct_decl.attributes[0].name.parts[0].text);
+}
+
+test "AST snapshot debug output for Fact function is stable" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example.Tests; [Fact] void AddsIntegers() { return; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+
+    try std.testing.expectEqualStrings(
+        \\CompilationUnit
+        \\  Module Example.Tests
+        \\  Attribute Fact
+        \\  Function void AddsIntegers()
+        \\    Body
+        \\
+    , snapshot);
+}
+
+test "AST snapshot debug output for Theory InlineData function is stable" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource(
+        \\module Example.Tests;
+        \\[Theory]
+        \\[InlineData(1, 2, 3)]
+        \\[InlineData(10, 20, 30)]
+        \\void AddsValues(int a, int b, int expected) { return; }
+    , &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+
+    try std.testing.expectEqualStrings(
+        \\CompilationUnit
+        \\  Module Example.Tests
+        \\  Attribute Theory
+        \\  Attribute InlineData(1, 2, 3)
+        \\  Attribute InlineData(10, 20, 30)
+        \\  Function void AddsValues(int a, int b, int expected)
+        \\    Body
+        \\
+    , snapshot);
+}
+
+test "missing attribute name diagnostic" {
+    try expectSingleDiagnostic("module Example; [] void Test();", .UnexpectedToken);
+}
+
+test "missing closing attribute bracket diagnostic" {
+    try expectSingleDiagnostic("module Example; [Fact void Test();", .UnexpectedToken);
+}
+
+test "unterminated attribute argument list diagnostic" {
+    try expectSingleDiagnostic("module Example; [InlineData(1, 2] void Test();", .UnexpectedToken);
+}
+
+test "attribute with no following item diagnostic" {
+    try expectSingleDiagnostic("module Example; [Fact]", .ExpectedItem);
+}
+
+test "malformed attribute recovery followed by valid item" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; [Fact struct StillParsed {};", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.count());
+    try std.testing.expectEqual(@as(usize, 1), unit.items.len);
+    const struct_decl = switch (unit.items[0]) {
+        .struct_decl => |struct_decl| struct_decl,
+        else => unreachable,
+    };
+    try std.testing.expectEqualStrings("StillParsed", struct_decl.name.text);
+    try std.testing.expectEqual(@as(usize, 1), struct_decl.attributes.len);
+}
+
+test "parses dotted attribute name" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; [Test.Fact] void Test();", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const function_decl = expectFunctionDecl(unit, 0);
+    try std.testing.expectEqual(@as(usize, 2), function_decl.attributes[0].name.parts.len);
+    try std.testing.expectEqualStrings("Test", function_decl.attributes[0].name.parts[0].text);
+    try std.testing.expectEqualStrings("Fact", function_decl.attributes[0].name.parts[1].text);
 }
