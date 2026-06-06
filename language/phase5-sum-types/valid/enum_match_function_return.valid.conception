@@ -1,0 +1,26 @@
+# name: phase5 enum match function return
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+enum Status {
+    Ok,
+    Err,
+};
+
+Status make() {
+    return Status::Err;
+}
+
+int main() {
+    Status status = make();
+    match (status) {
+        Status::Ok => return 1;
+        Status::Err => return 6;
+    }
+}
+
+=== run ===
+exit_code: 6

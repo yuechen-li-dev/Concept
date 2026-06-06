@@ -503,16 +503,24 @@ pub const WhileStmt = struct {
     }
 };
 
+pub const EnumVariantPattern = struct {
+    enum_name: NameSegment,
+    variant_name: NameSegment,
+    span: SourceSpan,
+};
+
 pub const MatchPattern = union(enum) {
     int_literal: Expr.IntLiteralExpr,
     bool_literal: Expr.BoolLiteralExpr,
     wildcard: SourceSpan,
+    enum_variant: EnumVariantPattern,
 
     pub fn span(self: MatchPattern) SourceSpan {
         return switch (self) {
             .int_literal => |pattern| pattern.span,
             .bool_literal => |pattern| pattern.span,
             .wildcard => |pattern_span| pattern_span,
+            .enum_variant => |pattern| pattern.span,
         };
     }
 
@@ -521,6 +529,7 @@ pub const MatchPattern = union(enum) {
             .int_literal => |pattern| try writer.writeAll(pattern.text),
             .bool_literal => |pattern| try writer.writeAll(if (pattern.value) "true" else "false"),
             .wildcard => try writer.writeByte('_'),
+            .enum_variant => |pattern| try writer.print("{s}::{s}", .{ pattern.enum_name.text, pattern.variant_name.text }),
         }
     }
 };

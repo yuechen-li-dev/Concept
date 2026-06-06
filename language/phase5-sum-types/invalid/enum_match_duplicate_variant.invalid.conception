@@ -1,0 +1,23 @@
+# name: phase5 enum match duplicate variant
+# phase: check
+# expect: fail
+
+=== source ===
+module Main;
+
+enum Status {
+    Ok,
+    Err,
+};
+
+int main() {
+    Status status = Status::Ok;
+    match (status) {
+        Status::Ok => return 1;
+        Status::Ok => return 2;
+        _ => return 0;
+    }
+}
+
+=== diagnostics ===
+CON0039

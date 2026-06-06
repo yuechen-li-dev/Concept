@@ -1,0 +1,22 @@
+# name: phase5 enum match payload without binding
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+enum ParseResult {
+    Ok(int value),
+    Err(int code),
+};
+
+int main() {
+    ParseResult result = ParseResult::Err(5);
+    match (result) {
+        ParseResult::Ok => return 1;
+        ParseResult::Err => return 9;
+    }
+}
+
+=== run ===
+exit_code: 9

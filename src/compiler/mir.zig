@@ -135,6 +135,7 @@ pub const MirRvalue = union(enum) {
         variant_id: hir.VariantId,
         args: []MirOperand,
     },
+    enum_tag: MirOperand,
 
     pub fn use_(operand: MirOperand) MirRvalue {
         return .{ .use = operand };
@@ -158,6 +159,10 @@ pub const MirRvalue = union(enum) {
         return .{ .enum_constructor = .{ .enum_id = enum_id, .variant_id = variant_id, .args = owned_args } };
     }
 
+    pub fn enumTag(operand: MirOperand) MirRvalue {
+        return .{ .enum_tag = operand };
+    }
+
     fn clone(self: MirRvalue, allocator: std.mem.Allocator) !MirRvalue {
         return switch (self) {
             .use => |operand| MirRvalue.use_(try operand.clone(allocator)),
@@ -169,6 +174,7 @@ pub const MirRvalue = union(enum) {
             ),
             .call => |call_rvalue| try MirRvalue.callFunction(allocator, call_rvalue.function, call_rvalue.args),
             .enum_constructor => |constructor| try MirRvalue.enumConstructor(allocator, constructor.enum_id, constructor.variant_id, constructor.args),
+            .enum_tag => |operand| MirRvalue.enumTag(try operand.clone(allocator)),
         };
     }
 
@@ -188,6 +194,7 @@ pub const MirRvalue = union(enum) {
                 deinitOperands(allocator, constructor.args);
                 if (constructor.args.len > 0) allocator.free(constructor.args);
             },
+            .enum_tag => |operand| operand.deinit(allocator),
         }
     }
 };
@@ -644,6 +651,11 @@ fn writeRvalueDebug(writer: *std.Io.Writer, rvalue: MirRvalue) !void {
                 if (index != 0) try writer.writeAll(", ");
                 try writeOperandDebug(writer, arg);
             }
+            try writer.writeByte(')');
+        },
+        .enum_tag => |operand| {
+            try writer.writeAll("EnumTag(");
+            try writeOperandDebug(writer, operand);
             try writer.writeByte(')');
         },
     }

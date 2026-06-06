@@ -498,6 +498,25 @@ fn lowerPattern(self: *BodyLowerer, pattern: ast.MatchPattern) !hir.HirMatchPatt
         .int_literal => |lit| .{ .int_literal = try self.collector.allocator.dupe(u8, lit.text) },
         .bool_literal => |lit| .{ .bool_literal = lit.value },
         .wildcard => .wildcard,
+        .enum_variant => |variant_pattern| blk: {
+            const enum_symbol = try self.collector.module.interner.intern(variant_pattern.enum_name.text);
+            const enum_id = switch (self.collector.top_level_decls.get(enum_symbol) orelse {
+                try self.collector.diagnostics.append(diagnostics.unknownEnumPattern(variant_pattern.enum_name.span));
+                break :blk .wildcard;
+            }) {
+                .enum_ => |entry| entry.id,
+                else => {
+                    try self.collector.diagnostics.append(diagnostics.unknownEnumPattern(variant_pattern.enum_name.span));
+                    break :blk .wildcard;
+                },
+            };
+            const variant_symbol = try self.collector.module.interner.intern(variant_pattern.variant_name.text);
+            const variant_id = self.findVariant(enum_id, variant_symbol) orelse {
+                try self.collector.diagnostics.append(diagnostics.unknownEnumPattern(variant_pattern.variant_name.span));
+                break :blk .wildcard;
+            };
+            break :blk .{ .enum_variant = .{ .enum_id = enum_id, .variant_id = variant_id } };
+        },
     };
 }
 

@@ -50,6 +50,8 @@ pub const DiagnosticCode = enum {
     UnknownEnumVariant,
     EnumConstructorArityMismatch,
     EnumConstructorTypeMismatch,
+    UnknownEnumPattern,
+    EnumPatternTypeMismatch,
     InvalidMirBlock,
     InvalidMirLocal,
     MissingTerminator,
@@ -87,6 +89,8 @@ pub const DiagnosticCode = enum {
             .UnknownEnumVariant => "CON0035",
             .EnumConstructorArityMismatch => "CON0036",
             .EnumConstructorTypeMismatch => "CON0037",
+            .UnknownEnumPattern => "CON0038",
+            .EnumPatternTypeMismatch => "CON0039",
             .InvalidMirBlock => "CON0040",
             .InvalidMirLocal => "CON0041",
             .MissingTerminator => "CON0042",
@@ -514,6 +518,24 @@ pub fn unknownEnumVariant(span: SourceSpan) Diagnostic {
         "unknown enum variant",
         span,
     ).withHelp("qualified enum constructors must name a variant declared by that enum");
+}
+
+pub fn unknownEnumPattern(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .UnknownEnumPattern,
+        .@"error",
+        "unknown enum pattern",
+        span,
+    ).withHelp("enum variant patterns must use a top-level enum and one of its declared variants");
+}
+
+pub fn enumPatternTypeMismatch(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .EnumPatternTypeMismatch,
+        .@"error",
+        "enum pattern type does not match match scrutinee",
+        span,
+    );
 }
 
 pub fn enumConstructorArityMismatch(span: SourceSpan) Diagnostic {

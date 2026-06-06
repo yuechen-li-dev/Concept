@@ -1,0 +1,27 @@
+# name: phase5 enum match enum mismatch
+# phase: check
+# expect: fail
+
+=== source ===
+module Main;
+
+enum Status {
+    Ok,
+    Err,
+};
+
+enum Other {
+    Ok,
+    Err,
+};
+
+int main() {
+    Status status = Status::Ok;
+    match (status) {
+        Other::Ok => return 1;
+        _ => return 0;
+    }
+}
+
+=== diagnostics ===
+CON0039

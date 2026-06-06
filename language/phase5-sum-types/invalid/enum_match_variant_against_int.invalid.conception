@@ -1,0 +1,22 @@
+# name: phase5 enum match variant against int
+# phase: check
+# expect: fail
+
+=== source ===
+module Main;
+
+enum Status {
+    Ok,
+    Err,
+};
+
+int main() {
+    int value = 0;
+    match (value) {
+        Status::Ok => return 1;
+        _ => return 0;
+    }
+}
+
+=== diagnostics ===
+CON0039

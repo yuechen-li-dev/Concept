@@ -191,6 +191,14 @@ const FunctionLowerer = struct {
             try self.terminateBlock(block_id, stmt.span, try self.lowerBoolMatchTerminator(scrutinee, match_stmt.arms, arm_blocks, join_block));
         } else if (sameType(scrutinee_type, self.semantic_module.types.intType())) {
             try self.terminateBlock(block_id, stmt.span, try self.lowerIntMatchTerminator(scrutinee, match_stmt.arms, arm_blocks, join_block));
+        } else if (self.semantic_module.types.kind(scrutinee_type) == .enum_type) {
+            const tag_temp = try self.addTemp(self.semantic_module.types.intType());
+            try self.store.appendStatement(block_id, .{
+                .span = stmt.span,
+                .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(tag_temp), mir.MirRvalue.enumTag(scrutinee)),
+            });
+            const tag_operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(tag_temp));
+            try self.terminateBlock(block_id, stmt.span, try self.lowerEnumMatchTerminator(tag_operand, match_stmt.arms, arm_blocks, join_block));
         } else {
             return error.UnsupportedControlFlow;
         }
@@ -230,7 +238,7 @@ const FunctionLowerer = struct {
                     false_target = arm_blocks[index];
                 },
                 .wildcard => wildcard_target = arm_blocks[index],
-                .int_literal => return error.UnsupportedControlFlow,
+                .int_literal, .enum_variant => return error.UnsupportedControlFlow,
             }
         }
 
@@ -253,11 +261,47 @@ const FunctionLowerer = struct {
             switch (arm.pattern) {
                 .int_literal => |text| try cases.append(self.allocator, .{ .value = text, .target = arm_blocks[index] }),
                 .wildcard => fallback = arm_blocks[index],
-                .bool_literal => return error.UnsupportedControlFlow,
+                .bool_literal, .enum_variant => return error.UnsupportedControlFlow,
             }
         }
 
         return try mir.MirTerminatorKind.switchInt(self.allocator, scrutinee, cases.items, fallback);
+    }
+
+    fn lowerEnumMatchTerminator(
+        self: *FunctionLowerer,
+        tag_operand: mir.MirOperand,
+        arms: []const hir.HirMatchArm,
+        arm_blocks: []const mir.MirBlockId,
+        default_target: mir.MirBlockId,
+    ) LoweringError!mir.MirTerminatorKind {
+        var cases = std.ArrayList(mir.MirSwitchIntCase).empty;
+        defer {
+            for (cases.items) |case| self.allocator.free(case.value);
+            cases.deinit(self.allocator);
+        }
+        var fallback = default_target;
+
+        for (arms, 0..) |arm, index| {
+            switch (arm.pattern) {
+                .enum_variant => |pattern| {
+                    const tag_value = try std.fmt.allocPrint(self.allocator, "{d}", .{try self.variantTag(pattern.enum_id, pattern.variant_id)});
+                    try cases.append(self.allocator, .{ .value = tag_value, .target = arm_blocks[index] });
+                },
+                .wildcard => fallback = arm_blocks[index],
+                .int_literal, .bool_literal => return error.UnsupportedControlFlow,
+            }
+        }
+
+        return try mir.MirTerminatorKind.switchInt(self.allocator, tag_operand, cases.items, fallback);
+    }
+
+    fn variantTag(self: *FunctionLowerer, enum_id: hir.EnumId, variant_id: hir.VariantId) LoweringError!usize {
+        const enum_decl = self.semantic_module.hir.getEnum(enum_id);
+        for (enum_decl.variants, 0..) |candidate, index| {
+            if (candidate.index == variant_id.index) return index;
+        }
+        return error.UnsupportedControlFlow;
     }
 
     fn joinIsDefaultTarget(self: *FunctionLowerer, switch_block: mir.MirBlockId, join_block: mir.MirBlockId) bool {
@@ -473,6 +517,60 @@ fn deinitOperand(allocator: std.mem.Allocator, operand: mir.MirOperand) void {
 fn deinitInitializedOperands(allocator: std.mem.Allocator, operands: []mir.MirOperand, initialized: usize) void {
     for (operands[0..initialized]) |operand| deinitOperand(allocator, operand);
     if (operands.len > 0) allocator.free(operands);
+}
+
+test "MIR lowering debug snapshot includes enum tag switch" {
+    var module = try newModule();
+    defer module.deinit();
+    const enum_id = try module.hir.addEnum(try intern(&module, "Status"));
+    const enum_type = try module.types.addEnumType(enum_id);
+    const ok = try module.hir.addVariant(enum_id, try intern(&module, "Ok"), hir.synthetic_span);
+    const err = try module.hir.addVariant(enum_id, try intern(&module, "Err"), hir.synthetic_span);
+    const main = try addFunction(&module, "main", module.types.intType(), false);
+    const status = try addLocal(&module, main, "status", enum_type);
+    const status_init = try module.hir.addExpr(.{ .enum_constructor = .{ .enum_id = enum_id, .variant_id = ok, .args = &.{} } }, hir.synthetic_span);
+    const decl = try module.hir.addStmt(.{ .local_decl = .{ .local = status, .initializer = status_init } }, hir.synthetic_span);
+    const arms = try std.testing.allocator.alloc(hir.HirMatchArm, 2);
+    arms[0] = .{ .pattern = .{ .enum_variant = .{ .enum_id = enum_id, .variant_id = ok } }, .pattern_span = hir.synthetic_span, .body = try blockStmt(&module, &.{try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "7") }, hir.synthetic_span)}) };
+    arms[1] = .{ .pattern = .{ .enum_variant = .{ .enum_id = enum_id, .variant_id = err } }, .pattern_span = hir.synthetic_span, .body = try blockStmt(&module, &.{try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "1") }, hir.synthetic_span)}) };
+    const match_stmt = try module.hir.addStmt(.{ .match_stmt = .{ .scrutinee = try module.hir.addExpr(.{ .local_ref = status }, hir.synthetic_span), .arms = arms } }, hir.synthetic_span);
+    try setBody(&module, main, &.{ decl, match_stmt });
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "EnumTag(Copy(MirLocalId(0)))") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "SwitchInt Copy(") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "[0: MirBlockId") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "1: MirBlockId") != null);
+}
+
+test "MIR lowering debug snapshot routes enum wildcard as default" {
+    var module = try newModule();
+    defer module.deinit();
+    const enum_id = try module.hir.addEnum(try intern(&module, "Status"));
+    const enum_type = try module.types.addEnumType(enum_id);
+    const ok = try module.hir.addVariant(enum_id, try intern(&module, "Ok"), hir.synthetic_span);
+    _ = try module.hir.addVariant(enum_id, try intern(&module, "Err"), hir.synthetic_span);
+    const main = try addFunction(&module, "main", module.types.intType(), false);
+    const status = try addLocal(&module, main, "status", enum_type);
+    const decl = try module.hir.addStmt(.{ .local_decl = .{ .local = status, .initializer = try module.hir.addExpr(.{ .enum_constructor = .{ .enum_id = enum_id, .variant_id = ok, .args = &.{} } }, hir.synthetic_span) } }, hir.synthetic_span);
+    const arms = try std.testing.allocator.alloc(hir.HirMatchArm, 2);
+    arms[0] = .{ .pattern = .{ .enum_variant = .{ .enum_id = enum_id, .variant_id = ok } }, .pattern_span = hir.synthetic_span, .body = try blockStmt(&module, &.{try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "7") }, hir.synthetic_span)}) };
+    arms[1] = .{ .pattern = .wildcard, .pattern_span = hir.synthetic_span, .body = try blockStmt(&module, &.{try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "0") }, hir.synthetic_span)}) };
+    const match_stmt = try module.hir.addStmt(.{ .match_stmt = .{ .scrutinee = try module.hir.addExpr(.{ .local_ref = status }, hir.synthetic_span), .arms = arms } }, hir.synthetic_span);
+    try setBody(&module, main, &.{ decl, match_stmt });
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "SwitchInt Copy(") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "[0: MirBlockId") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "] default: MirBlockId") != null);
 }
 
 fn newModule() !semantics.SemanticModule {
