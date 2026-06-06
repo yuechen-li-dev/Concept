@@ -100,6 +100,10 @@ pub const TypeStore = struct {
         return self.types.items[index];
     }
 
+    pub fn contains(self: TypeStore, id: TypeId) bool {
+        return id.index < self.types.items.len;
+    }
+
     pub fn count(self: TypeStore) usize {
         return self.types.items.len;
     }
@@ -159,6 +163,10 @@ test "builtin TypeIds are stable and distinct" {
     try std.testing.expectEqual(@as(u32, 2), store.boolType().index);
     try std.testing.expect(store.intType().index != store.boolType().index);
     try std.testing.expectEqual(@as(usize, 3), store.count());
+    try std.testing.expect(store.contains(store.voidType()));
+    try std.testing.expect(store.contains(store.intType()));
+    try std.testing.expect(store.contains(store.boolType()));
+    try std.testing.expect(!store.contains(.{ .index = 99 }));
 }
 
 test "builtin kind lookup works" {

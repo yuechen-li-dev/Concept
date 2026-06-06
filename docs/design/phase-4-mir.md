@@ -18,6 +18,11 @@ P4-M3 adds straight-line HIR-to-MIR lowering for function bodies with parameters
 
 P4-M4s extends HIR-to-MIR lowering from straight-line bodies to structured control flow. `if`/`else` now lowers to `SwitchBool` plus branch and join blocks, `while` lowers to explicit entry/condition/body/exit blocks with a back edge, and `match` over checked bool/int scrutinees lowers to `SwitchBool` or `SwitchInt` with one block per arm and a join/default target. This sweep intentionally does not add `break`, `continue`, payload enum matching, guards, destructuring, exhaustiveness checking, MIR validation, or backend migration.
 
+
+## P4-M7 implementation note
+
+P4-M7 adds `src/compiler/mir_validator.zig`, a MIR validation pass for the current lowered representation. The pass checks structural references for functions, locals, and blocks, requires block terminators, and verifies simple `TypeId` consistency across places, operands, rvalues, assignments, returns, switches, and calls. This is deliberately a MIR sanity pass only: it is not borrow checking, move checking, drop elaboration, optimization, backend legalization, or storage live/dead analysis. Backend migration remains future P4-M8 work.
+
 ## Thesis
 
 ```text

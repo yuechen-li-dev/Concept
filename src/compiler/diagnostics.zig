@@ -46,6 +46,11 @@ pub const DiagnosticCode = enum {
     MissingMain,
     InvalidConditionType,
     InvalidCall,
+    InvalidMirBlock,
+    InvalidMirLocal,
+    MissingTerminator,
+    InvalidMirType,
+    InvalidMirOperand,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -73,6 +78,11 @@ pub const DiagnosticCode = enum {
             .MissingMain => "CON0031",
             .InvalidConditionType => "CON0032",
             .InvalidCall => "CON0033",
+            .InvalidMirBlock => "CON0040",
+            .InvalidMirLocal => "CON0041",
+            .MissingTerminator => "CON0042",
+            .InvalidMirType => "CON0043",
+            .InvalidMirOperand => "CON0044",
         };
     }
 };
@@ -356,6 +366,11 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0007", DiagnosticCode.UnterminatedChar.format());
     try std.testing.expectEqualStrings("CON0008", DiagnosticCode.EmptyCharLiteral.format());
     try std.testing.expectEqualStrings("CON0009", DiagnosticCode.InvalidEscapeSequence.format());
+    try std.testing.expectEqualStrings("CON0040", DiagnosticCode.InvalidMirBlock.format());
+    try std.testing.expectEqualStrings("CON0041", DiagnosticCode.InvalidMirLocal.format());
+    try std.testing.expectEqualStrings("CON0042", DiagnosticCode.MissingTerminator.format());
+    try std.testing.expectEqualStrings("CON0043", DiagnosticCode.InvalidMirType.format());
+    try std.testing.expectEqualStrings("CON0044", DiagnosticCode.InvalidMirOperand.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {
@@ -480,4 +495,24 @@ pub fn duplicateLocalName(span: SourceSpan) Diagnostic {
         "duplicate local variable name",
         span,
     ).withHelp("Phase 3 rejects local names that duplicate any visible parameter or local");
+}
+
+pub fn invalidMirBlock(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.InvalidMirBlock, .@"error", "invalid MIR block", span);
+}
+
+pub fn invalidMirLocal(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.InvalidMirLocal, .@"error", "invalid MIR local", span);
+}
+
+pub fn missingMirTerminator(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.MissingTerminator, .@"error", "MIR block is missing terminator", span);
+}
+
+pub fn invalidMirType(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.InvalidMirType, .@"error", "invalid MIR type", span);
+}
+
+pub fn invalidMirOperand(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.InvalidMirOperand, .@"error", "invalid MIR operand", span);
 }
