@@ -1,0 +1,23 @@
+# name: phase2 parenthesized return
+# phase: parse
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    return (1 + 2) * 3;
+}
+
+=== ast ===
+CompilationUnit
+  Module Main
+  Function int main()
+    Body
+      Return
+        Binary *
+          Group
+            Binary +
+              Int 1
+              Int 2
+          Int 3

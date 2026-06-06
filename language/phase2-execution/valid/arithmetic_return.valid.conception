@@ -1,0 +1,22 @@
+# name: phase2 arithmetic return
+# phase: parse
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    return 1 + 2 * 3;
+}
+
+=== ast ===
+CompilationUnit
+  Module Main
+  Function int main()
+    Body
+      Return
+        Binary +
+          Int 1
+          Binary *
+            Int 2
+            Int 3

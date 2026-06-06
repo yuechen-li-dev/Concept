@@ -342,3 +342,35 @@ test "language parse fixture: missing module" {
 test "language parse fixture: malformed enum" {
     try expectParseFixture("../../../language/phase1-surface/invalid/malformed_enum.invalid.conception");
 }
+
+test "language parse fixture: phase2 return zero" {
+    try expectParseFixture("../../../language/phase2-execution/valid/return_zero.valid.conception");
+}
+
+test "language parse fixture: phase2 arithmetic return" {
+    try expectParseFixture("../../../language/phase2-execution/valid/arithmetic_return.valid.conception");
+}
+
+test "language parse fixture: phase2 parenthesized return" {
+    try expectParseFixture("../../../language/phase2-execution/valid/parenthesized_return.valid.conception");
+}
+
+test "language parse fixture: phase2 boolean return" {
+    try expectParseFixture("../../../language/phase2-execution/valid/boolean_return.valid.conception");
+}
+
+test "language parse fixture: phase2 missing return semicolon" {
+    try expectParseFixture("../../../language/phase2-execution/invalid/missing_return_semicolon.invalid.conception");
+}
+
+test "language parse fixture: phase2 bad expression" {
+    try expectParseFixture("../../../language/phase2-execution/invalid/bad_expression.invalid.conception");
+}
+
+test "language parse fixture: phase2 missing paren" {
+    try expectParseFixture("../../../language/phase2-execution/invalid/missing_paren.invalid.conception");
+}
+
+test "language parse fixture: phase2 unsupported statement" {
+    try expectParseFixture("../../../language/phase2-execution/invalid/unsupported_statement.invalid.conception");
+}

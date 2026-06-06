@@ -1,0 +1,13 @@
+# name: phase2 missing return semicolon
+# phase: parse
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    return 0
+}
+
+=== diagnostics ===
+CON0003

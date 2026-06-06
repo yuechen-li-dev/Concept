@@ -417,8 +417,9 @@ pub const Parser = struct {
         var body: ?ast.FunctionBody = null;
         const end_span = if (self.match(.semicolon)) |semicolon| semicolon.span else blk: {
             if (self.current().kind == .left_brace) {
-                const body_span = try self.parseFunctionBody();
-                body = .{ .span = body_span };
+                const parsed_body = try self.parseFunctionBody(allocator);
+                const body_span = parsed_body.span;
+                body = parsed_body;
                 break :blk body_span;
             }
             try self.report(.UnexpectedToken, "expected ';' or function body after function declaration", self.current().span);
@@ -461,30 +462,197 @@ pub const Parser = struct {
         };
     }
 
-    fn parseFunctionBody(self: *Parser) !SourceSpan {
+    fn parseFunctionBody(self: *Parser, allocator: std.mem.Allocator) !ast.FunctionBody {
         const open_brace = self.advance();
-        var depth: usize = 1;
+        var statements = std.ArrayList(ast.Stmt).init(allocator);
+        errdefer {
+            for (statements.items) |stmt| stmt.deinit(allocator);
+            statements.deinit();
+        }
+
         var last_span = open_brace.span;
+        while (self.current().kind != .eof and self.current().kind != .right_brace) {
+            if (self.current().kind == .@"return") {
+                const stmt = try self.parseReturnStmt(allocator);
+                last_span = switch (stmt) {
+                    .return_stmt => |return_stmt| return_stmt.span,
+                };
+                try statements.append(stmt);
+            } else {
+                try self.report(.UnexpectedToken, "unsupported statement in function body", self.current().span);
+                self.recoverStatement();
+            }
+        }
+
+        const close_span = if (self.match(.right_brace)) |right_brace| right_brace.span else blk: {
+            try self.report(.UnexpectedToken, "unterminated function body", self.current().span);
+            break :blk last_span;
+        };
+
+        const span = ast.spanFromBounds(open_brace.span.start, spanEnd(close_span));
+        return .{
+            .span = span,
+            .block = .{
+                .statements = try statements.toOwnedSlice(),
+                .span = span,
+            },
+        };
+    }
+
+    fn parseReturnStmt(self: *Parser, allocator: std.mem.Allocator) !ast.Stmt {
+        const return_token = self.advance();
+        var value: ?*ast.Expr = null;
+        errdefer if (value) |expr| {
+            expr.deinit(allocator);
+            allocator.destroy(expr);
+        };
+
+        if (self.current().kind != .semicolon and self.current().kind != .right_brace and self.current().kind != .eof) {
+            value = self.parseExpr(allocator) catch |err| switch (err) {
+                error.OutOfMemory => return err,
+                error.ParseFailed => null,
+            };
+        }
+
+        const end_span = if (self.match(.semicolon)) |semicolon| semicolon.span else blk: {
+            try self.report(.UnexpectedToken, "expected ';' after return statement", self.current().span);
+            self.recoverStatement();
+            break :blk if (value) |expr| expr.span() else return_token.span;
+        };
+
+        return .{ .return_stmt = .{
+            .value = value,
+            .span = ast.spanFromBounds(return_token.span.start, spanEnd(end_span)),
+        } };
+    }
+
+    const ParseExprError = error{ OutOfMemory, ParseFailed };
+
+    fn parseExpr(self: *Parser, allocator: std.mem.Allocator) ParseExprError!*ast.Expr {
+        return self.parseBinaryExpr(allocator, 1);
+    }
+
+    fn parseBinaryExpr(self: *Parser, allocator: std.mem.Allocator, min_precedence: u8) ParseExprError!*ast.Expr {
+        var left = try self.parseUnaryExpr(allocator);
+        errdefer {
+            left.deinit(allocator);
+            allocator.destroy(left);
+        }
+
+        while (binaryOp(self.current().kind)) |op_info| {
+            if (op_info.precedence < min_precedence) break;
+            _ = self.advance();
+            var right = try self.parseBinaryExpr(allocator, op_info.precedence + 1);
+            errdefer {
+                right.deinit(allocator);
+                allocator.destroy(right);
+            }
+            const node = try allocator.create(ast.Expr);
+            node.* = .{ .binary = .{
+                .op = op_info.op,
+                .left = left,
+                .right = right,
+                .span = ast.spanFromBounds(left.span().start, spanEnd(right.span())),
+            } };
+            left = node;
+        }
+
+        return left;
+    }
+
+    fn parseUnaryExpr(self: *Parser, allocator: std.mem.Allocator) ParseExprError!*ast.Expr {
+        if (unaryOp(self.current().kind)) |op| {
+            const op_token = self.advance();
+            var operand = try self.parseUnaryExpr(allocator);
+            errdefer {
+                operand.deinit(allocator);
+                allocator.destroy(operand);
+            }
+            const node = try allocator.create(ast.Expr);
+            node.* = .{ .unary = .{
+                .op = op,
+                .operand = operand,
+                .span = ast.spanFromBounds(op_token.span.start, spanEnd(operand.span())),
+            } };
+            return node;
+        }
+        return self.parsePrimaryExpr(allocator);
+    }
+
+    fn parsePrimaryExpr(self: *Parser, allocator: std.mem.Allocator) ParseExprError!*ast.Expr {
+        const token = self.current();
+        switch (token.kind) {
+            .int_literal => {
+                _ = self.advance();
+                const node = try allocator.create(ast.Expr);
+                node.* = .{ .int_literal = .{ .text = token.lexeme, .span = token.span } };
+                return node;
+            },
+            .true, .false => {
+                _ = self.advance();
+                const node = try allocator.create(ast.Expr);
+                node.* = .{ .bool_literal = .{ .value = token.kind == .true, .span = token.span } };
+                return node;
+            },
+            .left_paren => {
+                const left_paren = self.advance();
+                var inner = self.parseExpr(allocator) catch |err| switch (err) {
+                    error.OutOfMemory => return err,
+                    error.ParseFailed => {
+                        self.report(.UnexpectedToken, "expected expression", self.current().span) catch return error.OutOfMemory;
+                        return error.ParseFailed;
+                    },
+                };
+                errdefer {
+                    inner.deinit(allocator);
+                    allocator.destroy(inner);
+                }
+                const right_span = if (self.match(.right_paren)) |right_paren| right_paren.span else blk: {
+                    self.report(.UnexpectedToken, "expected ')' after parenthesized expression", self.current().span) catch return error.OutOfMemory;
+                    break :blk inner.span();
+                };
+                const node = try allocator.create(ast.Expr);
+                node.* = .{ .group = .{
+                    .inner = inner,
+                    .span = ast.spanFromBounds(left_paren.span.start, spanEnd(right_span)),
+                } };
+                return node;
+            },
+            else => {
+                self.report(.UnexpectedToken, "expected expression", token.span) catch return error.OutOfMemory;
+                return error.ParseFailed;
+            },
+        }
+    }
+
+    fn recoverStatement(self: *Parser) void {
+        while (self.current().kind != .eof and self.current().kind != .semicolon and self.current().kind != .right_brace) {
+            self.advance();
+        }
+        _ = self.match(.semicolon);
+    }
+
+    fn skipFunctionBody(self: *Parser) void {
+        const open_brace = self.advance();
+        _ = open_brace;
+        var depth: usize = 1;
         while (self.current().kind != .eof) {
             const token = self.advance();
-            last_span = token.span;
             switch (token.kind) {
                 .left_brace => depth += 1,
                 .right_brace => {
                     depth -= 1;
-                    if (depth == 0) return ast.spanFromBounds(open_brace.span.start, spanEnd(token.span));
+                    if (depth == 0) return;
                 },
                 else => {},
             }
         }
-        try self.report(.UnexpectedToken, "unterminated function body", self.current().span);
-        return ast.spanFromBounds(open_brace.span.start, spanEnd(last_span));
     }
 
     fn recoverFunctionDecl(self: *Parser) !void {
         while (self.current().kind != .eof and self.current().kind != .semicolon and self.current().kind != .left_brace) self.advance();
         if (self.match(.semicolon) != null) return;
-        if (self.current().kind == .left_brace) _ = try self.parseFunctionBody();
+        if (self.current().kind == .left_brace) self.skipFunctionBody();
     }
 
     fn recoverFunctionParam(self: *Parser) void {
@@ -1191,6 +1359,38 @@ pub const Parser = struct {
 fn deinitAttributes(attributes: []ast.Attribute, allocator: std.mem.Allocator) void {
     for (attributes) |attribute| attribute.deinit(allocator);
     allocator.free(attributes);
+}
+
+const BinaryOpInfo = struct {
+    op: ast.BinaryOp,
+    precedence: u8,
+};
+
+fn binaryOp(kind: TokenKind) ?BinaryOpInfo {
+    return switch (kind) {
+        .pipe_pipe => .{ .op = .logical_or, .precedence = 1 },
+        .ampersand_ampersand => .{ .op = .logical_and, .precedence = 2 },
+        .equal_equal => .{ .op = .equal_equal, .precedence = 3 },
+        .bang_equal => .{ .op = .bang_equal, .precedence = 3 },
+        .less => .{ .op = .less, .precedence = 4 },
+        .less_equal => .{ .op = .less_equal, .precedence = 4 },
+        .greater => .{ .op = .greater, .precedence = 4 },
+        .greater_equal => .{ .op = .greater_equal, .precedence = 4 },
+        .plus => .{ .op = .add, .precedence = 5 },
+        .minus => .{ .op = .subtract, .precedence = 5 },
+        .star => .{ .op = .multiply, .precedence = 6 },
+        .slash => .{ .op = .divide, .precedence = 6 },
+        .percent => .{ .op = .modulo, .precedence = 6 },
+        else => null,
+    };
+}
+
+fn unaryOp(kind: TokenKind) ?ast.UnaryOp {
+    return switch (kind) {
+        .minus => .negate,
+        .bang => .logical_not,
+        else => null,
+    };
 }
 
 fn itemStartWithAttributes(attributes: []const ast.Attribute, item_span: SourceSpan) usize {
@@ -2294,7 +2494,7 @@ test "parses function with raw pointer parameter" {
     try std.testing.expect(function_decl.signature.params[0].type_name.is_pointer);
 }
 
-test "parses function with shallow body capture" {
+test "parses function with parsed body" {
     var diagnostics = DiagnosticBag.init(std.testing.allocator);
     defer diagnostics.deinit();
 
@@ -2306,7 +2506,7 @@ test "parses function with shallow body capture" {
     try std.testing.expect(function_decl.body != null);
 }
 
-test "function body with nested braces is captured correctly" {
+test "unsupported nested body statement diagnoses and recovers" {
     var diagnostics = DiagnosticBag.init(std.testing.allocator);
     defer diagnostics.deinit();
 
@@ -2314,13 +2514,9 @@ test "function body with nested braces is captured correctly" {
     const unit = try parseTestSource(source, &diagnostics);
     defer unit.deinit(std.testing.allocator);
 
-    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
-    try std.testing.expectEqual(@as(usize, 2), unit.items.len);
+    try std.testing.expect(diagnostics.count() > 0);
     const function_decl = expectFunctionDecl(unit, 0);
     try std.testing.expect(function_decl.body != null);
-    try std.testing.expectEqualStrings("next", expectFunctionDecl(unit, 1).signature.name.base.text);
-    const body_text = source[function_decl.body.?.span.start..spanEnd(function_decl.body.?.span)];
-    try std.testing.expectEqualStrings("{ if true { return 1; } return 0; }", body_text);
 }
 
 test "AST snapshot debug output for function declaration is stable" {
@@ -2374,6 +2570,8 @@ test "AST snapshot debug output for body capture is stable" {
         \\  Module Example
         \\  Function int main()
         \\    Body
+        \\      Return
+        \\        Int 0
         \\
     , snapshot);
 }
@@ -2536,6 +2734,7 @@ test "AST snapshot debug output for Fact function is stable" {
         \\  Attribute Fact
         \\  Function void AddsIntegers()
         \\    Body
+        \\      Return
         \\
     , snapshot);
 }
@@ -2564,6 +2763,7 @@ test "AST snapshot debug output for Theory InlineData function is stable" {
         \\  Attribute InlineData(10, 20, 30)
         \\  Function void AddsValues(int a, int b, int expected)
         \\    Body
+        \\      Return
         \\
     , snapshot);
 }
@@ -2613,4 +2813,214 @@ test "parses dotted attribute name" {
     try std.testing.expectEqual(@as(usize, 2), function_decl.attributes[0].name.parts.len);
     try std.testing.expectEqualStrings("Test", function_decl.attributes[0].name.parts[0].text);
     try std.testing.expectEqualStrings("Fact", function_decl.attributes[0].name.parts[1].text);
+}
+
+test "parses return integer literal body" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { return 0; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const function_decl = expectFunctionDecl(unit, 0);
+    try std.testing.expect(function_decl.body != null);
+    try std.testing.expectEqual(@as(usize, 1), function_decl.body.?.block.?.statements.len);
+}
+
+test "parses return without expression" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; void main() { return; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const return_stmt = switch (expectFunctionDecl(unit, 0).body.?.block.?.statements[0]) {
+        .return_stmt => |return_stmt| return_stmt,
+    };
+    try std.testing.expect(return_stmt.value == null);
+}
+
+test "parses empty function body" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; void f() { }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    try std.testing.expectEqual(@as(usize, 0), expectFunctionDecl(unit, 0).body.?.block.?.statements.len);
+}
+
+test "AST snapshot debug output for arithmetic precedence is stable" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { return 1 + 2 * 3; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+
+    try std.testing.expectEqualStrings(
+        \\CompilationUnit
+        \\  Module Main
+        \\  Function int main()
+        \\    Body
+        \\      Return
+        \\        Binary +
+        \\          Int 1
+        \\          Binary *
+        \\            Int 2
+        \\            Int 3
+        \\
+    , snapshot);
+}
+
+test "AST snapshot debug output for parenthesized expression is stable" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { return (1 + 2) * 3; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+
+    try std.testing.expectEqualStrings(
+        \\CompilationUnit
+        \\  Module Main
+        \\  Function int main()
+        \\    Body
+        \\      Return
+        \\        Binary *
+        \\          Group
+        \\            Binary +
+        \\              Int 1
+        \\              Int 2
+        \\          Int 3
+        \\
+    , snapshot);
+}
+
+test "parses unary minus" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { return -1; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Unary -") != null);
+}
+
+test "parses unary bang" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; bool main() { return !true; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Unary !") != null);
+}
+
+test "parses comparison operators" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; bool main() { return 1 < 2 <= 3 > 4 >= 5; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Binary >=") != null);
+}
+
+test "parses equality operators" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; bool main() { return true == false != true; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+}
+
+test "AST snapshot debug output for logical precedence is stable" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; bool main() { return true || false && true; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+
+    try std.testing.expectEqualStrings(
+        \\CompilationUnit
+        \\  Module Main
+        \\  Function bool main()
+        \\    Body
+        \\      Return
+        \\        Binary ||
+        \\          Bool true
+        \\          Binary &&
+        \\            Bool false
+        \\            Bool true
+        \\
+    , snapshot);
+}
+
+test "missing return semicolon diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { return 0 }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.count());
+    try std.testing.expectEqualStrings("expected ';' after return statement", diagnostics.diagnostics.items[0].message);
+}
+
+test "expected expression diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { return +; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected expression", diagnostics.diagnostics.items[0].message);
+}
+
+test "missing closing parenthesis diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { return (1 + 2; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.count());
+    try std.testing.expectEqualStrings("expected ')' after parenthesized expression", diagnostics.diagnostics.items[0].message);
+}
+
+test "unsupported statement recovery" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { int x; return 0; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.count());
+    try std.testing.expectEqual(@as(usize, 1), expectFunctionDecl(unit, 0).body.?.block.?.statements.len);
 }

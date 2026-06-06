@@ -1,0 +1,14 @@
+# name: phase2 bad expression
+# phase: parse
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    return +;
+}
+
+=== diagnostics ===
+CON0003
+CON0003

@@ -1,0 +1,13 @@
+# name: phase2 missing paren
+# phase: parse
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    return (1 + 2;
+}
+
+=== diagnostics ===
+CON0003
