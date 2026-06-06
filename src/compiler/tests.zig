@@ -5,6 +5,7 @@ pub const diagnostics = @import("diagnostics.zig");
 pub const interner = @import("interner.zig");
 pub const hir = @import("hir.zig");
 pub const mir = @import("mir.zig");
+pub const mir_lowering = @import("mir_lowering.zig");
 pub const types = @import("types.zig");
 pub const semantics = @import("semantics.zig");
 pub const hir_checker = @import("hir_checker.zig");
@@ -21,6 +22,7 @@ test {
     _ = interner;
     _ = hir;
     _ = mir;
+    _ = mir_lowering;
     _ = types;
     _ = semantics;
     _ = hir_checker;

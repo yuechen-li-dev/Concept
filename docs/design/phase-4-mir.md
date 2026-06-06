@@ -10,6 +10,10 @@ P4-M1 adds the standalone MIR skeleton in `src/compiler/mir.zig`: compact MIR ID
 
 P4-M2 adds the core MIR computation and control-flow vocabulary for manual construction: local places, literal/copy operands, use/unary/binary/call rvalues, assignment statements, and goto/return/switch/unreachable terminators. HIR-to-MIR lowering, MIR validation, and backend migration remain future work.
 
+## P4-M3 implementation note
+
+P4-M3 adds straight-line HIR-to-MIR lowering for function bodies with parameters, local declarations, assignments, returns, literals, references, grouping, unary/binary expressions, and calls. Structured `if`/`while`/`match` lowering, MIR validation, MIR fixture running, and backend migration remain future work. Straight-line bodies that fall through receive an `Unreachable` terminator.
+
 ## Thesis
 
 ```text
