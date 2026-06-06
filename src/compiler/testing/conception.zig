@@ -472,3 +472,19 @@ test "language run fixture: phase2 function call with local" {
 test "language run fixture: phase2 forward function call" {
     try expectRunFixture("../../../language/phase2-execution/valid/forward_function_call.valid.conception");
 }
+
+test "language run fixture: phase2 if true return" {
+    try expectRunFixture("../../../language/phase2-execution/valid/if_true_return.valid.conception");
+}
+
+test "language run fixture: phase2 if false else return" {
+    try expectRunFixture("../../../language/phase2-execution/valid/if_false_else_return.valid.conception");
+}
+
+test "language run fixture: phase2 if compare function" {
+    try expectRunFixture("../../../language/phase2-execution/valid/if_compare_function.valid.conception");
+}
+
+test "language run fixture: phase2 if with outer local" {
+    try expectRunFixture("../../../language/phase2-execution/valid/if_with_outer_local.valid.conception");
+}

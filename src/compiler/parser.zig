@@ -463,6 +463,23 @@ pub const Parser = struct {
     }
 
     fn parseFunctionBody(self: *Parser, allocator: std.mem.Allocator) !ast.FunctionBody {
+        const block = try self.parseRequiredBlock(allocator, "function body");
+        return .{
+            .span = block.span,
+            .block = block,
+        };
+    }
+
+    fn parseRequiredBlock(self: *Parser, allocator: std.mem.Allocator, context: []const u8) !ast.BlockStmt {
+        _ = context;
+        if (self.current().kind != .left_brace) {
+            try self.report(.UnexpectedToken, "expected braced block", self.current().span);
+            return .{ .statements = try allocator.alloc(ast.Stmt, 0), .span = self.current().span };
+        }
+        return self.parseBlockAfterOpenBrace(allocator);
+    }
+
+    fn parseBlockAfterOpenBrace(self: *Parser, allocator: std.mem.Allocator) !ast.BlockStmt {
         const open_brace = self.advance();
         var statements = std.ArrayList(ast.Stmt).init(allocator);
         errdefer {
@@ -472,33 +489,87 @@ pub const Parser = struct {
 
         var last_span = open_brace.span;
         while (self.current().kind != .eof and self.current().kind != .right_brace) {
-            if (self.current().kind == .@"return") {
-                const stmt = try self.parseReturnStmt(allocator);
-                last_span = stmtSpan(stmt);
-                try statements.append(stmt);
-            } else if (self.isLocalDeclStart()) {
-                const stmt = try self.parseLocalDeclStmt(allocator);
-                last_span = stmtSpan(stmt);
-                try statements.append(stmt);
-            } else {
-                try self.report(.UnexpectedToken, "unsupported statement in function body", self.current().span);
-                self.recoverStatement();
-            }
+            const stmt = (try self.parseStmt(allocator)) orelse continue;
+            last_span = stmtSpan(stmt);
+            try statements.append(stmt);
         }
 
         const close_span = if (self.match(.right_brace)) |right_brace| right_brace.span else blk: {
-            try self.report(.UnexpectedToken, "unterminated function body", self.current().span);
+            try self.report(.UnexpectedToken, "unterminated block", self.current().span);
             break :blk last_span;
         };
 
-        const span = ast.spanFromBounds(open_brace.span.start, spanEnd(close_span));
         return .{
-            .span = span,
-            .block = .{
-                .statements = try statements.toOwnedSlice(),
-                .span = span,
+            .statements = try statements.toOwnedSlice(),
+            .span = ast.spanFromBounds(open_brace.span.start, spanEnd(close_span)),
+        };
+    }
+
+    fn parseStmt(self: *Parser, allocator: std.mem.Allocator) !?ast.Stmt {
+        if (self.current().kind == .@"return") return try self.parseReturnStmt(allocator);
+        if (self.current().kind == .@"if") return try self.parseIfStmt(allocator);
+        if (self.current().kind == .left_brace) return .{ .block_stmt = try self.parseBlockAfterOpenBrace(allocator) };
+        if (self.isLocalDeclStart()) return try self.parseLocalDeclStmt(allocator);
+
+        try self.report(.UnexpectedToken, "unsupported statement in function body", self.current().span);
+        self.recoverStatement();
+        return null;
+    }
+
+    fn parseIfStmt(self: *Parser, allocator: std.mem.Allocator) !ast.Stmt {
+        const if_token = self.advance();
+
+        if (self.match(.left_paren) == null) {
+            try self.report(.UnexpectedToken, "expected '(' after 'if'", self.current().span);
+        }
+
+        var condition = self.parseExpr(allocator) catch |err| switch (err) {
+            error.OutOfMemory => return err,
+            error.ParseFailed => blk: {
+                const fallback = try allocator.create(ast.Expr);
+                fallback.* = .{ .bool_literal = .{ .value = false, .span = self.current().span } };
+                break :blk fallback;
             },
         };
+        errdefer {
+            condition.deinit(allocator);
+            allocator.destroy(condition);
+        }
+
+        if (self.match(.right_paren) == null) {
+            try self.report(.UnexpectedToken, "expected ')' after if condition", self.current().span);
+            self.recoverIfCondition();
+            _ = self.match(.right_paren);
+        }
+
+        var then_block = if (self.current().kind == .left_brace)
+            try self.parseBlockAfterOpenBrace(allocator)
+        else blk: {
+            try self.report(.UnexpectedToken, "expected braced block after if condition", self.current().span);
+            break :blk ast.BlockStmt{ .statements = try allocator.alloc(ast.Stmt, 0), .span = self.current().span };
+        };
+        errdefer then_block.deinit(allocator);
+
+        var else_block: ?ast.BlockStmt = null;
+        errdefer if (else_block) |block| block.deinit(allocator);
+
+        var end_span = then_block.span;
+        if (self.match(.@"else")) |else_token| {
+            if (self.current().kind == .left_brace) {
+                else_block = try self.parseBlockAfterOpenBrace(allocator);
+                end_span = else_block.?.span;
+            } else {
+                try self.report(.UnexpectedToken, "expected braced block after else", self.current().span);
+                end_span = else_token.span;
+            }
+        }
+
+        return .{ .if_stmt = .{
+            .condition = condition,
+            .then_block = then_block,
+            .else_block = else_block,
+            .span = ast.spanFromBounds(if_token.span.start, spanEnd(end_span)),
+        } };
     }
 
     fn parseLocalDeclStmt(self: *Parser, allocator: std.mem.Allocator) !ast.Stmt {
@@ -759,6 +830,17 @@ pub const Parser = struct {
             self.advance();
         }
         _ = self.match(.semicolon);
+    }
+
+    fn recoverIfCondition(self: *Parser) void {
+        while (self.current().kind != .eof and
+            self.current().kind != .right_paren and
+            self.current().kind != .left_brace and
+            self.current().kind != .right_brace and
+            self.current().kind != .semicolon)
+        {
+            self.advance();
+        }
     }
 
     fn recoverCallArgument(self: *Parser) void {
@@ -1510,6 +1592,8 @@ fn stmtSpan(stmt: ast.Stmt) SourceSpan {
     return switch (stmt) {
         .local_decl => |local_decl| local_decl.span,
         .return_stmt => |return_stmt| return_stmt.span,
+        .if_stmt => |if_stmt| if_stmt.span,
+        .block_stmt => |block_stmt| block_stmt.span,
     };
 }
 
@@ -3236,6 +3320,89 @@ test "parses return identifier" {
         else => return error.ExpectedIdentifierExpr,
     };
     try std.testing.expectEqualStrings("x", identifier.name.text);
+}
+
+test "parses if without else" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { if (true) { return 1; } return 0; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const if_stmt = switch (expectFunctionDecl(unit, 0).body.?.block.?.statements[0]) {
+        .if_stmt => |if_stmt| if_stmt,
+        else => return error.ExpectedIfStmt,
+    };
+    try std.testing.expect(if_stmt.else_block == null);
+    try std.testing.expectEqual(@as(usize, 1), if_stmt.then_block.statements.len);
+}
+
+test "parses if with else" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { if (false) { return 1; } else { return 0; } }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const if_stmt = switch (expectFunctionDecl(unit, 0).body.?.block.?.statements[0]) {
+        .if_stmt => |if_stmt| if_stmt,
+        else => return error.ExpectedIfStmt,
+    };
+    try std.testing.expect(if_stmt.else_block != null);
+    try std.testing.expectEqual(@as(usize, 1), if_stmt.else_block.?.statements.len);
+}
+
+test "parses nested if" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { if (true) { if (false) { return 1; } } return 0; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const outer = switch (expectFunctionDecl(unit, 0).body.?.block.?.statements[0]) {
+        .if_stmt => |if_stmt| if_stmt,
+        else => return error.ExpectedIfStmt,
+    };
+    _ = switch (outer.then_block.statements[0]) {
+        .if_stmt => |inner| inner,
+        else => return error.ExpectedIfStmt,
+    };
+}
+
+test "if missing paren diagnostics" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { if true) { return 1; } return 0; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected '(' after 'if'", diagnostics.diagnostics.items[0].message);
+}
+
+test "if missing then block diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { if (true) return 1; return 0; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected braced block after if condition", diagnostics.diagnostics.items[0].message);
+}
+
+test "malformed else recovery" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { if (false) { return 1; } else return 0; int next(); }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected braced block after else", diagnostics.diagnostics.items[0].message);
 }
 
 test "local declaration missing initializer diagnostic" {
