@@ -1,0 +1,11 @@
+# name: phase2 while missing body
+# phase: parse
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    while (true)
+        return 0;
+}

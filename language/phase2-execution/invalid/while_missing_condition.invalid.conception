@@ -1,0 +1,12 @@
+# name: phase2 while missing condition
+# phase: parse
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    while () {
+        return 0;
+    }
+}

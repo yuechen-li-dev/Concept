@@ -203,6 +203,14 @@ fn validateStmt(stmt: ast.Stmt, return_type: ExprType, locals: *std.ArrayList(Lo
                 try validateBlock(else_block, return_type, locals, functions, diagnostics, true);
             }
         },
+        .while_stmt => |while_stmt| {
+            const condition_type = try validateExpr(while_stmt.condition.*, locals, functions, diagnostics);
+            if (condition_type != .bool) {
+                try report(diagnostics, "while condition must be bool", while_stmt.condition.span());
+                return error.InvalidExecutable;
+            }
+            try validateBlock(while_stmt.body, return_type, locals, functions, diagnostics, true);
+        },
         .match_stmt => |match_stmt| {
             const scrutinee_type = try validateExpr(match_stmt.scrutinee.*, locals, functions, diagnostics);
             var seen_wildcard = false;
@@ -648,5 +656,42 @@ test "checker checks match arm statements" {
     try expectInvalid(
         "module Main; int main() { int x = 1; match (x) { 1 => return true; } return 0; }",
         "return expression type does not match function return type",
+    );
+}
+
+test "checker accepts bool while condition" {
+    try expectValid("module Main; int main() { while (true) { return 0; } return 1; }");
+}
+
+test "checker accepts comparison while condition" {
+    try expectValid("module Main; int main() { int x = 0; while (x < 7) { x = x + 1; } return x; }");
+}
+
+test "checker rejects int while condition" {
+    try expectInvalid(
+        "module Main; int main() { int x = 0; while (x) { x = x + 1; } return x; }",
+        "while condition must be bool",
+    );
+}
+
+test "checker allows outer local inside while" {
+    try expectValid("module Main; int main() { int x = 0; while (x < 1) { return x; } return 1; }");
+}
+
+test "checker allows assignment to outer local inside while" {
+    try expectValid("module Main; int main() { int x = 0; while (x < 1) { x = 1; } return x; }");
+}
+
+test "checker rejects while body local after loop" {
+    try expectInvalid(
+        "module Main; int main() { while (true) { int x = 1; } return x; }",
+        "unknown identifier in executable subset",
+    );
+}
+
+test "checker rejects duplicate local in visible while scope" {
+    try expectInvalid(
+        "module Main; int main() { int x = 0; while (true) { int x = 1; } return x; }",
+        "duplicate local variable name",
     );
 }

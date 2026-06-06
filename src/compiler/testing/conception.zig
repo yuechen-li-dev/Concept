@@ -629,3 +629,35 @@ test "language run fixture: phase2 nested if explicit else block" {
 test "language run fixture: phase2 explicit nested if in else" {
     try expectRunFixture("../../../language/phase2-execution/valid/explicit_nested_if_in_else.valid.conception");
 }
+
+test "language run fixture: phase2 while count to seven" {
+    try expectRunFixture("../../../language/phase2-execution/valid/while_count_to_seven.valid.conception");
+}
+
+test "language run fixture: phase2 while zero iterations" {
+    try expectRunFixture("../../../language/phase2-execution/valid/while_zero_iterations.valid.conception");
+}
+
+test "language run fixture: phase2 while with if" {
+    try expectRunFixture("../../../language/phase2-execution/valid/while_with_if.valid.conception");
+}
+
+test "language run fixture: phase2 nested while" {
+    try expectRunFixture("../../../language/phase2-execution/valid/nested_while.valid.conception");
+}
+
+test "language check fixture: phase2 while condition not bool" {
+    try expectCheckFixture("../../../language/phase2-execution/invalid/while_condition_not_bool.invalid.conception");
+}
+
+test "language check fixture: phase2 while inner local not visible" {
+    try expectCheckFixture("../../../language/phase2-execution/invalid/while_inner_local_not_visible.invalid.conception");
+}
+
+test "language parse fixture: phase2 while missing condition" {
+    try expectParseFixture("../../../language/phase2-execution/invalid/while_missing_condition.invalid.conception");
+}
+
+test "language parse fixture: phase2 while missing body" {
+    try expectParseFixture("../../../language/phase2-execution/invalid/while_missing_body.invalid.conception");
+}

@@ -1,0 +1,17 @@
+# name: phase2 while inner local not visible
+# phase: check
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    while (true) {
+        int x = 1;
+    }
+
+    return x;
+}
+
+=== diagnostics ===
+CON0010

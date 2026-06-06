@@ -508,6 +508,7 @@ pub const Parser = struct {
     fn parseStmt(self: *Parser, allocator: std.mem.Allocator) !?ast.Stmt {
         if (self.current().kind == .@"return") return try self.parseReturnStmt(allocator);
         if (self.current().kind == .@"if") return try self.parseIfStmt(allocator);
+        if (self.current().kind == .@"while") return try self.parseWhileStmt(allocator);
         if (self.current().kind == .match) return try self.parseMatchStmt(allocator);
         if (self.current().kind == .left_brace) return .{ .block_stmt = try self.parseBlockAfterOpenBrace(allocator) };
         if (self.isLocalDeclStart()) return try self.parseLocalDeclStmt(allocator);
@@ -574,6 +575,52 @@ pub const Parser = struct {
             .then_block = then_block,
             .else_block = else_block,
             .span = ast.spanFromBounds(if_token.span.start, spanEnd(end_span)),
+        } };
+    }
+
+    fn parseWhileStmt(self: *Parser, allocator: std.mem.Allocator) !ast.Stmt {
+        const while_token = self.advance();
+
+        if (self.match(.left_paren) == null) {
+            try self.report(.UnexpectedToken, "expected '(' after 'while'", self.current().span);
+        }
+
+        var condition = if (self.current().kind == .right_paren or self.current().kind == .left_brace) blk: {
+            try self.report(.UnexpectedToken, "expected while condition", self.current().span);
+            const fallback = try allocator.create(ast.Expr);
+            fallback.* = .{ .bool_literal = .{ .value = false, .span = self.current().span } };
+            break :blk fallback;
+        } else self.parseExpr(allocator) catch |err| switch (err) {
+            error.OutOfMemory => return err,
+            error.ParseFailed => blk: {
+                const fallback = try allocator.create(ast.Expr);
+                fallback.* = .{ .bool_literal = .{ .value = false, .span = self.current().span } };
+                break :blk fallback;
+            },
+        };
+        errdefer {
+            condition.deinit(allocator);
+            allocator.destroy(condition);
+        }
+
+        if (self.match(.right_paren) == null) {
+            try self.report(.UnexpectedToken, "expected ')' after while condition", self.current().span);
+            self.recoverWhileCondition();
+            _ = self.match(.right_paren);
+        }
+
+        var body = if (self.current().kind == .left_brace)
+            try self.parseBlockAfterOpenBrace(allocator)
+        else blk: {
+            try self.report(.UnexpectedToken, "expected braced block after while condition", self.current().span);
+            break :blk ast.BlockStmt{ .statements = try allocator.alloc(ast.Stmt, 0), .span = self.current().span };
+        };
+        errdefer body.deinit(allocator);
+
+        return .{ .while_stmt = .{
+            .condition = condition,
+            .body = body,
+            .span = ast.spanFromBounds(while_token.span.start, spanEnd(body.span)),
         } };
     }
 
@@ -1001,6 +1048,10 @@ pub const Parser = struct {
             self.advance();
         }
         _ = self.match(.semicolon);
+    }
+
+    fn recoverWhileCondition(self: *Parser) void {
+        self.recoverIfCondition();
     }
 
     fn recoverIfCondition(self: *Parser) void {
@@ -1770,6 +1821,7 @@ fn stmtSpan(stmt: ast.Stmt) SourceSpan {
         .assignment => |assignment| assignment.span,
         .return_stmt => |return_stmt| return_stmt.span,
         .if_stmt => |if_stmt| if_stmt.span,
+        .while_stmt => |while_stmt| while_stmt.span,
         .match_stmt => |match_stmt| match_stmt.span,
         .block_stmt => |block_stmt| block_stmt.span,
     };
@@ -3884,4 +3936,85 @@ test "explicit nested if in else block remains valid" {
     const unit = try parseTestSource("module Main; int main() { if (true) { return 1; } else { if (false) { return 2; } } return 0; }", &diagnostics);
     defer unit.deinit(std.testing.allocator);
     try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+}
+
+test "parses while loop" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+    const unit = try parseTestSource("module Main; int main() { while (true) { return 0; } }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const while_stmt = switch (expectFunctionDecl(unit, 0).body.?.block.?.statements[0]) {
+        .while_stmt => |while_stmt| while_stmt,
+        else => return error.ExpectedWhileStmt,
+    };
+    try std.testing.expectEqual(@as(usize, 1), while_stmt.body.statements.len);
+}
+
+test "parses while loop with assignment body" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+    const unit = try parseTestSource("module Main; int main() { int x = 0; while (x < 7) { x = x + 1; } return x; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const while_stmt = switch (expectFunctionDecl(unit, 0).body.?.block.?.statements[1]) {
+        .while_stmt => |while_stmt| while_stmt,
+        else => return error.ExpectedWhileStmt,
+    };
+    _ = switch (while_stmt.body.statements[0]) {
+        .assignment => |assignment| assignment,
+        else => return error.ExpectedAssignment,
+    };
+}
+
+test "parses nested while loops" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+    const unit = try parseTestSource("module Main; int main() { while (true) { while (false) { return 0; } } return 1; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const outer = switch (expectFunctionDecl(unit, 0).body.?.block.?.statements[0]) {
+        .while_stmt => |while_stmt| while_stmt,
+        else => return error.ExpectedWhileStmt,
+    };
+    _ = switch (outer.body.statements[0]) {
+        .while_stmt => |while_stmt| while_stmt,
+        else => return error.ExpectedWhileStmt,
+    };
+}
+
+test "while missing opening paren diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+    const unit = try parseTestSource("module Main; int main() { while true) { return 0; } }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected '(' after 'while'", diagnostics.diagnostics.items[0].message);
+}
+
+test "while missing condition diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+    const unit = try parseTestSource("module Main; int main() { while () { return 0; } }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected while condition", diagnostics.diagnostics.items[0].message);
+}
+
+test "while missing closing paren diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+    const unit = try parseTestSource("module Main; int main() { while (true { return 0; } }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected ')' after while condition", diagnostics.diagnostics.items[0].message);
+}
+
+test "while missing body diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+    const unit = try parseTestSource("module Main; int main() { while (true) return 0; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected braced block after while condition", diagnostics.diagnostics.items[0].message);
 }
