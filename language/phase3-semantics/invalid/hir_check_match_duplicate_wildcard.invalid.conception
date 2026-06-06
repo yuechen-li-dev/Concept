@@ -1,5 +1,6 @@
 # name: phase3 hir checker match duplicate wildcard
 # phase: check
+# check: hir
 # expect: fail
 
 === source ===

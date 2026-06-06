@@ -36,6 +36,13 @@ Required headers:
 - `# phase: lex | parse | run | check | mir | backend-c`
 - `# expect: pass | fail`
 
+Optional `phase: check` header:
+
+- `# check: declarations`
+- `# check: hir`
+
+The `check` header is valid only with `# phase: check`. If a check fixture omits it, the fixture runner defaults to `check: declarations`.
+
 Sections are introduced with `=== section-name ===` on a line by itself. The initial reserved section names are:
 
 - `source`
@@ -47,7 +54,7 @@ Sections are introduced with `=== section-name ===` on a line by itself. The ini
 Implemented fixture phases:
 
 - `phase: parse` fixtures pass `source` to the real parser path. Passing parse fixtures compare `ast` against the stable AST debug output; failing parse fixtures compare diagnostic codes listed in `diagnostics`. Full rendered diagnostic snapshot matching is reserved for later.
-- `phase: check` fixtures pass `source` through parse and the semantic check path. Phase 3 check fixtures exercise semantic collection, type-name resolution, HIR lowering, and the HIR executable checker when the fixture is for the executable subset. Failing check fixtures match stable diagnostic codes from `diagnostics`; full rendered diagnostic matching remains reserved for later.
+- `phase: check` fixtures pass `source` through parse and an explicit semantic check mode. `check: declarations` runs semantic declaration collection, declaration/type-name checks, and HIR lowering without invoking the HIR executable checker. `check: hir` runs semantic collection / HIR lowering and then invokes the HIR executable checker for executable-subset validation. When `phase: check` omits `check`, the default is `check: declarations`. Failing check fixtures still match stable diagnostic codes from `diagnostics`; full rendered diagnostic matching remains reserved for later.
 - `phase: run` fixtures pass `source` through parse, semantic collection / HIR lowering, the HIR executable checker, HIR-backed C emission, `zig cc`, and native process execution. For now run fixtures support only `expect: pass` and a `=== run ===` section containing `exit_code: N`. Stdout and stderr matching are not implemented yet and are reserved for later.
 
 Example:
@@ -74,6 +81,26 @@ CompilationUnit
     Variant End
 ```
 
+## Check fixture example
+
+```text
+# name: executable type check
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    return false;
+}
+
+=== diagnostics ===
+CON0029 error: return expression type does not match function return type
+```
+
+Diagnostic matching for check fixtures remains code-based: the fixture harness compares the leading diagnostic codes in `=== diagnostics ===` and does not yet require rendered spans or complete diagnostic text snapshots.
 
 ## Run fixture example
 

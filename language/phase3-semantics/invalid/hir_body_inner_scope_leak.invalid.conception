@@ -1,5 +1,6 @@
 # name: phase3 hir body inner scope leak
 # phase: check
+# check: declarations
 # expect: fail
 
 === source ===

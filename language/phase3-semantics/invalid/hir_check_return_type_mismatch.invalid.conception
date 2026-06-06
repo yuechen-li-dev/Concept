@@ -1,5 +1,6 @@
 # name: phase3 hir checker return type mismatch
 # phase: check
+# check: hir
 # expect: fail
 
 === source ===

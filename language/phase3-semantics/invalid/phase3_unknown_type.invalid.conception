@@ -1,5 +1,6 @@
 # name: phase3 unknown type closeout
 # phase: check
+# check: declarations
 # expect: fail
 
 === source ===

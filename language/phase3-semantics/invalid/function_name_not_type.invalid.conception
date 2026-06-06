@@ -1,5 +1,6 @@
 # name: phase3 function name not type
 # phase: check
+# check: declarations
 # expect: fail
 
 === source ===

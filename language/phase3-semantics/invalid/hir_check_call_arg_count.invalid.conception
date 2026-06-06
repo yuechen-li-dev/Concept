@@ -1,5 +1,6 @@
 # name: phase3 hir checker call arg count
 # phase: check
+# check: hir
 # expect: fail
 
 === source ===

@@ -1,5 +1,6 @@
 # name: phase3 top-level declarations
 # phase: check
+# check: declarations
 # expect: pass
 
 === source ===

@@ -1,5 +1,6 @@
 # name: phase3 hir body function call
 # phase: check
+# check: declarations
 # expect: pass
 
 === source ===

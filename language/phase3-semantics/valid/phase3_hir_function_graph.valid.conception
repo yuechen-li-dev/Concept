@@ -1,5 +1,6 @@
 # name: phase3 hir function graph
 # phase: check
+# check: hir
 # expect: pass
 
 === source ===

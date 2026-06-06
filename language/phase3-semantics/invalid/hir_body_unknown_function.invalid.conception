@@ -1,5 +1,6 @@
 # name: phase3 hir body unknown function
 # phase: check
+# check: declarations
 # expect: fail
 
 === source ===

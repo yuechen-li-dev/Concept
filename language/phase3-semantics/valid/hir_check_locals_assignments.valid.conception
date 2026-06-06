@@ -1,5 +1,6 @@
 # name: phase3 hir checker locals assignments
 # phase: check
+# check: hir
 # expect: pass
 
 === source ===

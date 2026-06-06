@@ -26,6 +26,17 @@ pub const Phase = enum {
     }
 };
 
+pub const CheckMode = enum {
+    declarations,
+    hir,
+
+    pub fn parse(value: []const u8) ?CheckMode {
+        if (std.mem.eql(u8, value, "declarations")) return .declarations;
+        if (std.mem.eql(u8, value, "hir")) return .hir;
+        return null;
+    }
+};
+
 pub const Expectation = enum {
     pass,
     fail,
@@ -46,7 +57,12 @@ pub const ConceptionFixture = struct {
     name: []const u8,
     phase: Phase,
     expect: Expectation,
+    check: ?CheckMode = null,
     sections: []const Section,
+
+    pub fn checkMode(self: ConceptionFixture) CheckMode {
+        return self.check orelse .declarations;
+    }
 
     pub fn source(self: ConceptionFixture) ?[]const u8 {
         return self.section("source");
@@ -117,6 +133,7 @@ pub fn parse(allocator: std.mem.Allocator, text: []const u8, options: ParseOptio
     var name: ?[]const u8 = null;
     var phase: ?Phase = null;
     var expect: ?Expectation = null;
+    var check: ?CheckMode = null;
     var sections = std.ArrayList(Section).init(allocator);
     errdefer sections.deinit();
 
@@ -146,7 +163,7 @@ pub fn parse(allocator: std.mem.Allocator, text: []const u8, options: ParseOptio
             const trimmed = std.mem.trim(u8, line, " \t");
             if (trimmed.len == 0) continue;
             if (!std.mem.startsWith(u8, trimmed, "#")) return error.ExpectedHeaderOrSection;
-            try parseHeader(trimmed, &name, &phase, &expect);
+            try parseHeader(trimmed, &name, &phase, &expect, &check);
         }
     }
 
@@ -158,6 +175,7 @@ pub fn parse(allocator: std.mem.Allocator, text: []const u8, options: ParseOptio
         .name = name orelse return error.MissingName,
         .phase = phase orelse return error.MissingPhase,
         .expect = expect orelse return error.MissingExpectation,
+        .check = check,
         .sections = try sections.toOwnedSlice(),
     };
     errdefer parsed.deinit(allocator);
@@ -166,7 +184,7 @@ pub fn parse(allocator: std.mem.Allocator, text: []const u8, options: ParseOptio
     return parsed;
 }
 
-fn parseHeader(line: []const u8, name: *?[]const u8, phase: *?Phase, expect: *?Expectation) !void {
+fn parseHeader(line: []const u8, name: *?[]const u8, phase: *?Phase, expect: *?Expectation, check: *?CheckMode) !void {
     const without_hash = std.mem.trim(u8, line[1..], " \t");
     const colon = std.mem.indexOfScalar(u8, without_hash, ':') orelse return error.InvalidHeader;
     const key = std.mem.trim(u8, without_hash[0..colon], " \t");
@@ -179,11 +197,15 @@ fn parseHeader(line: []const u8, name: *?[]const u8, phase: *?Phase, expect: *?E
         phase.* = Phase.fromString(value) orelse return error.InvalidPhase;
     } else if (std.mem.eql(u8, key, "expect")) {
         expect.* = Expectation.parse(value) orelse return error.InvalidExpectation;
+    } else if (std.mem.eql(u8, key, "check")) {
+        check.* = CheckMode.parse(value) orelse return error.InvalidCheckMode;
     }
 }
 
 fn validate(fixture: ConceptionFixture, options: ParseOptions) !void {
     if (fixture.source() == null) return error.MissingSource;
+
+    if (fixture.check != null and fixture.phase != .check) return error.CheckModeOnNonCheckPhase;
 
     switch (fixture.phase) {
         .parse => switch (fixture.expect) {
@@ -306,6 +328,101 @@ test "conception parser parses run exit code" {
 
     try std.testing.expectEqual(Phase.run, fixture.phase);
     try std.testing.expectEqual(@as(u8, 7), try fixture.expectedExitCode());
+}
+
+test "conception parser parses declarations check mode" {
+    const text =
+        \\# name: declarations check
+        \\# phase: check
+        \\# check: declarations
+        \\# expect: pass
+        \\
+        \\=== source ===
+        \\module Example;
+    ;
+    const fixture = try expectFixture(text);
+    defer fixture.deinit(std.testing.allocator);
+    try std.testing.expectEqual(CheckMode.declarations, fixture.checkMode());
+}
+
+test "conception parser parses hir check mode" {
+    const text =
+        \\# name: hir check
+        \\# phase: check
+        \\# check: hir
+        \\# expect: pass
+        \\
+        \\=== source ===
+        \\module Example;
+    ;
+    const fixture = try expectFixture(text);
+    defer fixture.deinit(std.testing.allocator);
+    try std.testing.expectEqual(CheckMode.hir, fixture.checkMode());
+}
+
+test "conception parser rejects invalid check mode" {
+    const text =
+        \\# name: invalid check
+        \\# phase: check
+        \\# check: runtime
+        \\# expect: pass
+        \\
+        \\=== source ===
+        \\module Example;
+    ;
+    try std.testing.expectError(error.InvalidCheckMode, expectFixture(text));
+}
+
+test "conception parser rejects check mode on non-check phase" {
+    const text =
+        \\# name: parse with check
+        \\# phase: parse
+        \\# check: declarations
+        \\# expect: fail
+        \\
+        \\=== source ===
+        \\module Example;
+        \\
+        \\=== diagnostics ===
+        \\CON0004
+    ;
+    try std.testing.expectError(error.CheckModeOnNonCheckPhase, expectFixture(text));
+}
+
+test "conception parser defaults check phase to declarations" {
+    const text =
+        \\# name: default check
+        \\# phase: check
+        \\# expect: pass
+        \\
+        \\=== source ===
+        \\module Example;
+    ;
+    const fixture = try expectFixture(text);
+    defer fixture.deinit(std.testing.allocator);
+    try std.testing.expectEqual(CheckMode.declarations, fixture.checkMode());
+}
+
+test "language check fixture execution uses check metadata not filename" {
+    const text =
+        \\# name: metadata selected hir check
+        \\# phase: check
+        \\# check: hir
+        \\# expect: fail
+        \\
+        \\=== source ===
+        \\module Example;
+        \\
+        \\int helper() {
+        \\    return 0;
+        \\}
+        \\
+        \\=== diagnostics ===
+        \\CON0031 error: expected top-level 'main' function
+    ;
+    const fixture = try expectFixture(text);
+    defer fixture.deinit(std.testing.allocator);
+    try expectSemanticCheckFixture("metadata_selected.invalid.conception", fixture);
 }
 
 test "conception parser rejects missing source" {
@@ -453,7 +570,7 @@ fn expectSemanticCheckFixture(comptime path: []const u8, fixture: ConceptionFixt
     defer unit.deinit(std.testing.allocator);
     try std.testing.expectEqual(@as(usize, 0), parse_diagnostics.count());
 
-    const use_hir_checker = std.mem.indexOf(u8, path, "hir_check_") != null or std.mem.indexOf(u8, path, "phase3_hir_") != null;
+    const use_hir_checker = fixture.checkMode() == .hir;
 
     switch (fixture.expect) {
         .pass => {
