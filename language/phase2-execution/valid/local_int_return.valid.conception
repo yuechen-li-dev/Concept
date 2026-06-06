@@ -1,0 +1,14 @@
+# name: phase2 local int return
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    int x = 9;
+    return x;
+}
+
+=== run ===
+exit_code: 9
