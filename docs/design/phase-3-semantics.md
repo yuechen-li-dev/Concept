@@ -368,3 +368,9 @@ P3-M4 adds AST-to-semantic declaration collection for one-file modules. The pass
 P3-M7 adds a HIR-based executable checker for the closed Phase 2 subset. The checker walks lowered HIR statements and expressions, compares `TypeId` values from `TypeStore`, validates `main`, function calls, returns, locals, assignments, `if`, `while`, `match`, unary operators, and binary operators, and reports Phase 3 semantic diagnostic codes for executable type failures.
 
 The older AST-shaped executable checker remains in place as a transitional compatibility path for the Phase 2 C backend and run fixtures. P3-M7 deliberately does not migrate C emission, introduce MIR, or expand the language subset. P3-M8 remains the milestone that moves C backend emission to HIR or a HIR-backed executable representation.
+
+## P3-M8 note: HIR-backed C backend
+
+P3-M8 moves executable C emission onto the semantic path: Concept source is parsed, collected and lowered into `SemanticModule` / HIR, checked by the HIR executable checker, emitted as C from HIR functions/statements/expressions, compiled with `zig cc`, and then executed by the run harness. Phase 2 run fixtures now exercise that HIR-backed path instead of the old AST checker/backend default.
+
+The old AST-shaped executable checker and AST C emitter remain in the tree only as transitional compatibility code for legacy tests and comparison. They are no longer the authoritative run path. This milestone does not add MIR; MIR remains deferred to Phase 4.

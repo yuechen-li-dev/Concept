@@ -7,6 +7,8 @@ pub const ast = ast_model;
 pub const DiagnosticBag = diagnostics_model.DiagnosticBag;
 pub const CheckError = error{ InvalidExecutable, OutOfMemory };
 
+// Transitional AST executable checker retained for legacy tests.
+// Phase 3 run execution now uses HIR lowering plus hir_checker.zig.
 pub const ExprType = enum { int, bool };
 
 const LocalSymbol = struct {
@@ -418,7 +420,6 @@ fn expectInvalid(source_text: []const u8, message: []const u8) !void {
     try std.testing.expectEqual(@as(usize, 1), check_diagnostics.count());
     try std.testing.expectEqualStrings(message, check_diagnostics.diagnostics.items[0].message);
 }
-
 
 test "checker validateExecutable metadata is caller-owned" {
     var parse_diagnostics = DiagnosticBag.init(std.testing.allocator);

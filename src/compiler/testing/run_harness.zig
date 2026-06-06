@@ -4,6 +4,7 @@ const builtin = @import("builtin");
 const backend_c = @import("../backend_c.zig");
 const diagnostics_model = @import("../diagnostics.zig");
 const parser_model = @import("../parser.zig");
+const semantics_model = @import("../semantics.zig");
 const source_model = @import("../source.zig");
 
 pub const RunError = error{
@@ -41,7 +42,13 @@ pub fn runSource(allocator: std.mem.Allocator, source_text: []const u8) RunError
     defer unit.deinit(allocator);
     if (parse_diagnostics.count() != 0) return error.ParseFailed;
 
-    const c_source = backend_c.emitExecutable(allocator, unit, &check_diagnostics) catch |err| switch (err) {
+    var module = semantics_model.collectTopLevelDeclarations(allocator, unit, &check_diagnostics) catch |err| switch (err) {
+        error.InvalidSemanticModule => return error.CheckOrBackendFailed,
+        error.OutOfMemory => return error.OutOfMemory,
+    };
+    defer module.deinit();
+
+    const c_source = backend_c.emitExecutableFromHir(allocator, &module, &check_diagnostics) catch |err| switch (err) {
         error.InvalidExecutable => return error.CheckOrBackendFailed,
         error.OutOfMemory => return error.OutOfMemory,
     };
@@ -118,7 +125,7 @@ test "run harness compiles and runs bool literal return" {
     try std.testing.expectEqual(@as(u8, 1), result.actual_exit_code);
 }
 
-test "run harness reports checker backend failures" {
+test "run harness reports HIR checker backend failures" {
     try std.testing.expectError(
         error.CheckOrBackendFailed,
         expectExitCode(std.testing.allocator, "module Main; int main() { return; }", 0),
