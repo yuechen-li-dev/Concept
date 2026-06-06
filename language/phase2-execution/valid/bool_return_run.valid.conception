@@ -1,0 +1,13 @@
+# name: phase2 bool return run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    return true;
+}
+
+=== run ===
+exit_code: 1

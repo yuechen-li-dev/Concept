@@ -2,6 +2,7 @@ const std = @import("std");
 
 const parser_model = @import("../parser.zig");
 const source_model = @import("../source.zig");
+const run_harness = @import("run_harness.zig");
 
 pub const Phase = enum {
     lex,
@@ -54,6 +55,26 @@ pub const ConceptionFixture = struct {
 
     pub fn diagnostics(self: ConceptionFixture) ?[]const u8 {
         return self.section("diagnostics");
+    }
+
+    pub fn run(self: ConceptionFixture) ?[]const u8 {
+        return self.section("run");
+    }
+
+    pub fn expectedExitCode(self: ConceptionFixture) !u8 {
+        const text = self.run() orelse return error.MissingRun;
+        var lines = std.mem.splitScalar(u8, text, '\n');
+        while (lines.next()) |line| {
+            const trimmed = std.mem.trim(u8, line, " \t\r");
+            if (trimmed.len == 0) continue;
+            if (trimmed[0] == '#') continue;
+            const colon = std.mem.indexOfScalar(u8, trimmed, ':') orelse return error.InvalidRunExpectation;
+            const key = std.mem.trim(u8, trimmed[0..colon], " \t");
+            const value = std.mem.trim(u8, trimmed[colon + 1 ..], " \t");
+            if (!std.mem.eql(u8, key, "exit_code")) return error.InvalidRunExpectation;
+            return std.fmt.parseInt(u8, value, 10) catch return error.InvalidRunExpectation;
+        }
+        return error.MissingRunExitCode;
     }
 
     pub fn section(self: ConceptionFixture, name: []const u8) ?[]const u8 {
@@ -166,6 +187,10 @@ fn validate(fixture: ConceptionFixture, options: ParseOptions) !void {
             .pass => if (fixture.ast() == null) return error.MissingAst,
             .fail => if (fixture.diagnostics() == null) return error.MissingDiagnostics,
         },
+        .run => {
+            if (fixture.expect != .pass) return error.UnsupportedRunExpectation;
+            _ = try fixture.expectedExitCode();
+        },
         else => {},
     }
 
@@ -255,6 +280,29 @@ test "conception parser parses diagnostics section" {
     defer std.testing.allocator.free(codes);
     try std.testing.expectEqual(@as(usize, 1), codes.len);
     try std.testing.expectEqualStrings("CON0004", codes[0]);
+}
+
+test "conception parser parses run exit code" {
+    const text =
+        \\# name: arithmetic return
+        \\# phase: run
+        \\# expect: pass
+        \\
+        \\=== source ===
+        \\module Main;
+        \\
+        \\int main() {
+        \\    return 1 + 2 * 3;
+        \\}
+        \\
+        \\=== run ===
+        \\exit_code: 7
+    ;
+    const fixture = try expectFixture(text);
+    defer fixture.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(Phase.run, fixture.phase);
+    try std.testing.expectEqual(@as(u8, 7), try fixture.expectedExitCode());
 }
 
 test "conception parser rejects missing source" {
@@ -373,4 +421,26 @@ test "language parse fixture: phase2 missing paren" {
 
 test "language parse fixture: phase2 unsupported statement" {
     try expectParseFixture("../../../language/phase2-execution/invalid/unsupported_statement.invalid.conception");
+}
+
+fn expectRunFixture(comptime path: []const u8) !void {
+    const text = @embedFile(path);
+    const fixture = try parse(std.testing.allocator, text, .{ .path = path });
+    defer fixture.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(Phase.run, fixture.phase);
+    try std.testing.expectEqual(Expectation.pass, fixture.expect);
+    _ = try run_harness.expectExitCode(std.testing.allocator, fixture.source().?, try fixture.expectedExitCode());
+}
+
+test "language run fixture: phase2 return zero" {
+    try expectRunFixture("../../../language/phase2-execution/valid/return_zero_run.valid.conception");
+}
+
+test "language run fixture: phase2 arithmetic return" {
+    try expectRunFixture("../../../language/phase2-execution/valid/arithmetic_return_run.valid.conception");
+}
+
+test "language run fixture: phase2 bool return" {
+    try expectRunFixture("../../../language/phase2-execution/valid/bool_return_run.valid.conception");
 }

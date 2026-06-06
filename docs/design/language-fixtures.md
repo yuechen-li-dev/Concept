@@ -40,13 +40,12 @@ Sections are introduced with `=== section-name ===` on a line by itself. The ini
 - `tokens` (reserved for later)
 - `ast`
 - `diagnostics`
-- `run` (reserved for later)
+- `run`
 
-For M0a, the runner implements parse-phase fixtures only:
+Implemented fixture phases:
 
-- `source` provides the Concept source text passed to the real parser path.
-- `ast` provides the expected stable AST debug output for passing parse fixtures.
-- `diagnostics` provides expected diagnostic codes for failing parse fixtures. Full rendered diagnostic snapshot matching is reserved for later.
+- `phase: parse` fixtures pass `source` to the real parser path. Passing parse fixtures compare `ast` against the stable AST debug output; failing parse fixtures compare diagnostic codes listed in `diagnostics`. Full rendered diagnostic snapshot matching is reserved for later.
+- `phase: run` fixtures pass `source` through parse, executable validation, C emission, `zig cc`, and native process execution. For now run fixtures support only `expect: pass` and a `run` section containing `exit_code: N`. Stdout and stderr matching are reserved for later.
 
 Example:
 
@@ -70,4 +69,23 @@ CompilationUnit
     Variant Identifier
       Payload StringView name
     Variant End
+```
+
+
+## Run fixture example
+
+```text
+# name: arithmetic return
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    return 1 + 2 * 3;
+}
+
+=== run ===
+exit_code: 7
 ```

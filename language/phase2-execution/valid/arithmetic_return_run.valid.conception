@@ -1,0 +1,13 @@
+# name: phase2 arithmetic return run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    return 1 + 2 * 3;
+}
+
+=== run ===
+exit_code: 7
