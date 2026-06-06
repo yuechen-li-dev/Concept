@@ -524,6 +524,54 @@ test "language check fixture: phase3 duplicate struct enum" {
     try expectCheckFixture("../../../language/phase3-semantics/invalid/duplicate_struct_enum.invalid.conception");
 }
 
+test "language check fixture: phase3 builtin function types" {
+    try expectCheckFixture("../../../language/phase3-semantics/valid/builtin_function_types.valid.conception");
+}
+
+test "language check fixture: phase3 struct field types" {
+    try expectCheckFixture("../../../language/phase3-semantics/valid/struct_field_types.valid.conception");
+}
+
+test "language check fixture: phase3 enum payload types" {
+    try expectCheckFixture("../../../language/phase3-semantics/valid/enum_payload_types.valid.conception");
+}
+
+test "language check fixture: phase3 user type references" {
+    try expectCheckFixture("../../../language/phase3-semantics/valid/user_type_references.valid.conception");
+}
+
+test "language check fixture: phase3 unknown function return type" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/unknown_function_return_type.invalid.conception");
+}
+
+test "language check fixture: phase3 unknown parameter type" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/unknown_parameter_type.invalid.conception");
+}
+
+test "language check fixture: phase3 unknown struct field type" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/unknown_struct_field_type.invalid.conception");
+}
+
+test "language check fixture: phase3 unknown enum payload type" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/unknown_enum_payload_type.invalid.conception");
+}
+
+test "language check fixture: phase3 duplicate struct field" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/duplicate_struct_field.invalid.conception");
+}
+
+test "language check fixture: phase3 duplicate enum variant" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/duplicate_enum_variant.invalid.conception");
+}
+
+test "language check fixture: phase3 function name not type" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/function_name_not_type.invalid.conception");
+}
+
+test "language check fixture: phase3 unsupported pointer type" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/unsupported_pointer_type.invalid.conception");
+}
+
 fn expectRunFixture(comptime path: []const u8) !void {
     const text = @embedFile(path);
     const fixture = try parse(std.testing.allocator, text, .{ .path = path });

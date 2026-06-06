@@ -1,0 +1,13 @@
+# name: phase3 unknown parameter type
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+int use(Missing value) {
+    return 0;
+}
+
+=== diagnostics ===
+CON0021

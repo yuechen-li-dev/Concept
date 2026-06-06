@@ -1,0 +1,19 @@
+# name: phase3 user type references
+# phase: check
+# expect: pass
+
+=== source ===
+module Example;
+
+struct Vec2 {
+    int x;
+    int y;
+};
+
+enum Kind {
+    Point(Vec2 value);
+};
+
+Vec2 makePoint(Kind kind) {
+    return 0;
+}

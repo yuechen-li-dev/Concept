@@ -1,0 +1,13 @@
+# name: phase3 unknown struct field type
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+struct Box {
+    Missing value;
+};
+
+=== diagnostics ===
+CON0021

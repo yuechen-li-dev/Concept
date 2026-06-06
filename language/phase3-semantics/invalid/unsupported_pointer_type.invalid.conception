@@ -1,0 +1,13 @@
+# name: phase3 unsupported pointer type
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+struct PtrBox {
+    int* value;
+};
+
+=== diagnostics ===
+CON0024

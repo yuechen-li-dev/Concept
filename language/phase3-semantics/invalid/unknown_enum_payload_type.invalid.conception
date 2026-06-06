@@ -1,0 +1,13 @@
+# name: phase3 unknown enum payload type
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+enum Token {
+    Identifier(Missing value);
+};
+
+=== diagnostics ===
+CON0021

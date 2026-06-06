@@ -1,0 +1,11 @@
+# name: phase3 enum payload types
+# phase: check
+# expect: pass
+
+=== source ===
+module Example;
+
+enum Token {
+    Identifier(int offset, bool interned);
+    End;
+};

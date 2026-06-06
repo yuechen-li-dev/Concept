@@ -1,0 +1,17 @@
+# name: phase3 function name not type
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+int Helper() {
+    return 0;
+}
+
+struct UsesFunction {
+    Helper value;
+};
+
+=== diagnostics ===
+CON0021

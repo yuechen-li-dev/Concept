@@ -1,0 +1,12 @@
+# name: phase3 builtin function types
+# phase: check
+# expect: pass
+
+=== source ===
+module Example;
+
+bool acceptsBuiltins(int count, bool enabled) {
+    return enabled;
+}
+
+void done() {}
