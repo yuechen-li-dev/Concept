@@ -456,3 +456,19 @@ test "language run fixture: phase2 local arithmetic return" {
 test "language run fixture: phase2 local bool return" {
     try expectRunFixture("../../../language/phase2-execution/valid/local_bool_return.valid.conception");
 }
+
+test "language run fixture: phase2 function call add" {
+    try expectRunFixture("../../../language/phase2-execution/valid/function_call_add.valid.conception");
+}
+
+test "language run fixture: phase2 no-argument function call" {
+    try expectRunFixture("../../../language/phase2-execution/valid/function_call_no_args.valid.conception");
+}
+
+test "language run fixture: phase2 function call with local" {
+    try expectRunFixture("../../../language/phase2-execution/valid/function_call_with_local.valid.conception");
+}
+
+test "language run fixture: phase2 forward function call" {
+    try expectRunFixture("../../../language/phase2-execution/valid/forward_function_call.valid.conception");
+}

@@ -1,0 +1,17 @@
+# name: phase2 no argument function call
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int three() {
+    return 3;
+}
+
+int main() {
+    return three();
+}
+
+=== run ===
+exit_code: 3

@@ -14,15 +14,49 @@ pub fn emitExecutable(allocator: std.mem.Allocator, unit: ast_model.CompilationU
 
     var output = std.ArrayList(u8).init(allocator);
     errdefer output.deinit();
-    try emitMain(output.writer(), executable.main.*);
+    const writer = output.writer();
+
+    var body_count: usize = 0;
+    for (executable.functions) |function| {
+        if (function.has_body) body_count += 1;
+    }
+    if (body_count > 1) {
+        for (executable.functions) |function| {
+            if (!function.has_body) continue;
+            try emitPrototype(writer, function.decl.*);
+        }
+        try writer.writeByte('\n');
+    }
+
+    var emitted_any = false;
+    for (executable.functions) |function| {
+        if (!function.has_body) continue;
+        if (emitted_any) try writer.writeByte('\n');
+        try emitFunction(writer, function.decl.*);
+        emitted_any = true;
+    }
     return output.toOwnedSlice();
 }
 
-fn emitMain(writer: anytype, main: ast_model.FunctionDecl) !void {
-    try writer.writeAll("int main(void) {");
+fn emitPrototype(writer: anytype, function: ast_model.FunctionDecl) !void {
+    try emitCType(writer, function.signature.return_type);
+    try writer.writeByte(' ');
+    try writer.writeAll(function.signature.name.base.text);
+    try writer.writeByte('(');
+    try emitParamList(writer, function.signature.params, std.mem.eql(u8, function.signature.name.base.text, "main"));
+    try writer.writeAll(");\n");
+}
+
+fn emitFunction(writer: anytype, function: ast_model.FunctionDecl) !void {
+    try emitCType(writer, function.signature.return_type);
+    try writer.writeByte(' ');
+    try writer.writeAll(function.signature.name.base.text);
+    try writer.writeByte('(');
+    try emitParamList(writer, function.signature.params, std.mem.eql(u8, function.signature.name.base.text, "main"));
+    try writer.writeAll(") {");
     try writer.writeByte('\n');
 
-    const block = main.body.?.block.?;
+    const block = function.body.?.block.?;
     for (block.statements) |stmt| {
         try emitStmt(writer, stmt);
     }
@@ -34,7 +68,7 @@ fn emitStmt(writer: anytype, stmt: ast_model.Stmt) !void {
     switch (stmt) {
         .local_decl => |local_decl| {
             try writer.writeAll("    ");
-            try emitLocalType(writer, local_decl.type_name);
+            try emitCType(writer, local_decl.type_name);
             try writer.writeByte(' ');
             try writer.writeAll(local_decl.name.text);
             try writer.writeAll(" = ");
@@ -72,10 +106,33 @@ fn emitExpr(writer: anytype, expr: ast_model.Expr) !void {
             try emitExpr(writer, binary.right.*);
             try writer.writeByte(')');
         },
+        .call => |call| {
+            try writer.writeAll(call.callee.text);
+            try writer.writeByte('(');
+            for (call.args, 0..) |arg, index| {
+                if (index != 0) try writer.writeAll(", ");
+                try emitExpr(writer, arg.*);
+            }
+            try writer.writeByte(')');
+        },
     }
 }
 
-fn emitLocalType(writer: anytype, type_name: ast_model.TypeName) !void {
+fn emitParamList(writer: anytype, params: []const ast_model.ParamDecl, is_main: bool) !void {
+    _ = is_main;
+    if (params.len == 0) {
+        try writer.writeAll("void");
+        return;
+    }
+    for (params, 0..) |param, index| {
+        if (index != 0) try writer.writeAll(", ");
+        try emitCType(writer, param.type_name);
+        try writer.writeByte(' ');
+        try writer.writeAll(param.name.text);
+    }
+}
+
+fn emitCType(writer: anytype, type_name: ast_model.TypeName) !void {
     _ = type_name;
     try writer.writeAll("int");
 }
@@ -224,5 +281,33 @@ test "C backend emits local arithmetic return" {
     try expectEmit(
         "module Main; int main() { int x = 1 + 2; return x * 3; }",
         "int main(void) {\n    int x = (1 + 2);\n    return (x * 3);\n}\n",
+    );
+}
+
+test "C backend emits multiple functions parameters calls and prototypes" {
+    try expectEmit(
+        "module Main; int add(int a, int b) { return a + b; } int main() { return add(1, 2); }",
+        "int add(int a, int b);\nint main(void);\n\nint add(int a, int b) {\n    return (a + b);\n}\n\nint main(void) {\n    return add(1, 2);\n}\n",
+    );
+}
+
+test "C backend emits bool parameters and returns as int" {
+    try expectEmit(
+        "module Main; bool same(bool a, bool b) { return a == b; } int main() { return same(true, true); }",
+        "int same(int a, int b);\nint main(void);\n\nint same(int a, int b) {\n    return (a == b);\n}\n\nint main(void) {\n    return same(1, 1);\n}\n",
+    );
+}
+
+test "C backend emits forward call prototypes" {
+    try expectEmit(
+        "module Main; int main() { return later(); } int later() { return 3; }",
+        "int main(void);\nint later(void);\n\nint main(void) {\n    return later();\n}\n\nint later(void) {\n    return 3;\n}\n",
+    );
+}
+
+test "Phase 2 C snapshot: function call add" {
+    try expectCorpusC(
+        "../../tests/corpus/phase2/function_call_add.concept",
+        "../../tests/corpus/phase2/function_call_add.c.expected",
     );
 }

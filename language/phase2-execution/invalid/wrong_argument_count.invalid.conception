@@ -1,0 +1,14 @@
+# name: phase2 wrong argument count
+# phase: check
+# expect: fail
+
+=== source ===
+module Main;
+
+int add(int a, int b) {
+    return a + b;
+}
+
+int main() {
+    return add(1);
+}

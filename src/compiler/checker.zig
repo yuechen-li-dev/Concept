@@ -7,7 +7,7 @@ pub const ast = ast_model;
 pub const DiagnosticBag = diagnostics_model.DiagnosticBag;
 pub const CheckError = error{ InvalidExecutable, OutOfMemory };
 
-const ExprType = enum { int, bool };
+pub const ExprType = enum { int, bool };
 
 const LocalSymbol = struct {
     name: []const u8,
@@ -15,65 +15,125 @@ const LocalSymbol = struct {
     span: ast.SourceSpan,
 };
 
+pub const FunctionInfo = struct {
+    decl: *const ast.FunctionDecl,
+    name: []const u8,
+    return_type: ExprType,
+    param_types: []ExprType,
+    has_body: bool,
+};
+
 pub const Executable = struct {
     main: *const ast.FunctionDecl,
+    functions: []FunctionInfo,
 };
 
 pub fn validateExecutable(unit: ast.CompilationUnit, diagnostics: ?*DiagnosticBag) !Executable {
-    const main = findMain(unit) orelse {
+    var functions = std.ArrayList(FunctionInfo).init(std.heap.page_allocator);
+    errdefer {
+        for (functions.items) |function| std.heap.page_allocator.free(function.param_types);
+        functions.deinit();
+    }
+
+    try collectFunctions(unit, &functions, diagnostics);
+
+    const main_info = findFunction(functions.items, "main") orelse {
         try report(diagnostics, "expected top-level 'main' function", unit.span);
         return error.InvalidExecutable;
     };
 
-    if (!isExactSimpleType(main.signature.return_type, "int")) {
-        try report(diagnostics, "P2-M2 requires 'main' to return exactly 'int'", main.signature.return_type.span);
+    if (main_info.return_type != .int) {
+        try report(diagnostics, "P2-M2 requires 'main' to return exactly 'int'", main_info.decl.signature.return_type.span);
         return error.InvalidExecutable;
     }
 
-    if (main.signature.params.len != 0) {
-        try report(diagnostics, "P2-M2 C backend requires 'main' to have no parameters", main.signature.span);
+    if (main_info.param_types.len != 0) {
+        try report(diagnostics, "P2-M5 C backend requires 'main' to have no parameters", main_info.decl.signature.span);
         return error.InvalidExecutable;
     }
 
-    const body = main.body orelse {
-        try report(diagnostics, "P2-M2 requires 'main' to have a parsed body", main.signature.span);
+    if (!main_info.has_body) {
+        try report(diagnostics, "P2-M2 requires 'main' to have a parsed body", main_info.decl.signature.span);
         return error.InvalidExecutable;
+    }
+
+    for (functions.items) |function| {
+        if (!function.has_body) continue;
+        try validateFunction(function, functions.items, diagnostics);
+    }
+
+    return .{ .main = main_info.decl, .functions = try functions.toOwnedSlice() };
+}
+
+fn collectFunctions(unit: ast.CompilationUnit, functions: *std.ArrayList(FunctionInfo), diagnostics: ?*DiagnosticBag) !void {
+    for (unit.items) |*item| switch (item.*) {
+        .function_decl => |*function_decl| {
+            if (function_decl.signature.name.operator_suffix != null) continue;
+            const name = function_decl.signature.name.base.text;
+            if (findFunction(functions.items, name) != null) {
+                try report(diagnostics, "duplicate top-level function name", function_decl.signature.name.base.span);
+                return error.InvalidExecutable;
+            }
+            const return_type = executableType(function_decl.signature.return_type) orelse {
+                try report(diagnostics, "unsupported function return type in executable subset", function_decl.signature.return_type.span);
+                return error.InvalidExecutable;
+            };
+            const param_types = try std.heap.page_allocator.alloc(ExprType, function_decl.signature.params.len);
+            errdefer std.heap.page_allocator.free(param_types);
+            for (function_decl.signature.params, 0..) |param, index| {
+                param_types[index] = executableType(param.type_name) orelse {
+                    try report(diagnostics, "unsupported parameter type in executable subset", param.type_name.span);
+                    return error.InvalidExecutable;
+                };
+            }
+            try functions.append(.{
+                .decl = function_decl,
+                .name = name,
+                .return_type = return_type,
+                .param_types = param_types,
+                .has_body = function_decl.body != null,
+            });
+        },
+        else => {},
     };
+}
 
+fn validateFunction(function: FunctionInfo, functions: []const FunctionInfo, diagnostics: ?*DiagnosticBag) !void {
+    const body = function.decl.body orelse return;
     const block = body.block orelse {
-        try report(diagnostics, "P2-M2 requires 'main' to have a block body", body.span);
+        try report(diagnostics, "P2-M2 requires function to have a block body", body.span);
         return error.InvalidExecutable;
     };
 
     var locals = std.ArrayList(LocalSymbol).init(std.heap.page_allocator);
     defer locals.deinit();
-    for (block.statements) |stmt| {
-        try validateStmt(stmt, &locals, diagnostics);
+
+    for (function.decl.signature.params, 0..) |param, index| {
+        for (locals.items) |local| {
+            if (std.mem.eql(u8, local.name, param.name.text)) {
+                try report(diagnostics, "duplicate parameter name", param.name.span);
+                return error.InvalidExecutable;
+            }
+        }
+        try locals.append(.{ .name = param.name.text, .type = function.param_types[index], .span = param.name.span });
     }
 
-    return .{ .main = main };
+    for (block.statements) |stmt| {
+        try validateStmt(stmt, function.return_type, &locals, functions, diagnostics);
+    }
 }
 
-fn findMain(unit: ast.CompilationUnit) ?*const ast.FunctionDecl {
-    for (unit.items) |*item| {
-        switch (item.*) {
-            .function_decl => |*function_decl| {
-                if (function_decl.signature.name.operator_suffix == null and
-                    std.mem.eql(u8, function_decl.signature.name.base.text, "main"))
-                {
-                    return function_decl;
-                }
-            },
-            else => {},
-        }
+fn findFunction(functions: []const FunctionInfo, name: []const u8) ?FunctionInfo {
+    for (functions) |function| {
+        if (std.mem.eql(u8, function.name, name)) return function;
     }
     return null;
 }
 
-fn validateStmt(stmt: ast.Stmt, locals: *std.ArrayList(LocalSymbol), diagnostics: ?*DiagnosticBag) !void {
+fn validateStmt(stmt: ast.Stmt, return_type: ExprType, locals: *std.ArrayList(LocalSymbol), functions: []const FunctionInfo, diagnostics: ?*DiagnosticBag) !void {
     switch (stmt) {
         .local_decl => |local_decl| {
-            const local_type = executableLocalType(local_decl.type_name) orelse {
+            const local_type = executableType(local_decl.type_name) orelse {
                 try report(diagnostics, "unsupported local type in executable subset", local_decl.type_name.span);
                 return error.InvalidExecutable;
             };
@@ -83,7 +143,7 @@ fn validateStmt(stmt: ast.Stmt, locals: *std.ArrayList(LocalSymbol), diagnostics
                     return error.InvalidExecutable;
                 }
             }
-            const initializer_type = try validateExpr(local_decl.initializer.*, locals, diagnostics);
+            const initializer_type = try validateExpr(local_decl.initializer.*, locals, functions, diagnostics);
             if (initializer_type != local_type) {
                 try report(diagnostics, "local initializer type does not match declared type", local_decl.initializer.span());
                 return error.InvalidExecutable;
@@ -95,12 +155,16 @@ fn validateStmt(stmt: ast.Stmt, locals: *std.ArrayList(LocalSymbol), diagnostics
                 try report(diagnostics, "P2-M2 C backend requires return statements to have an expression", return_stmt.span);
                 return error.InvalidExecutable;
             };
-            _ = try validateExpr(value.*, locals, diagnostics);
+            const value_type = try validateExpr(value.*, locals, functions, diagnostics);
+            if (value_type != return_type) {
+                try report(diagnostics, "return expression type does not match function return type", value.span());
+                return error.InvalidExecutable;
+            }
         },
     }
 }
 
-fn validateExpr(expr: ast.Expr, locals: *const std.ArrayList(LocalSymbol), diagnostics: ?*DiagnosticBag) !ExprType {
+fn validateExpr(expr: ast.Expr, locals: *const std.ArrayList(LocalSymbol), functions: []const FunctionInfo, diagnostics: ?*DiagnosticBag) !ExprType {
     switch (expr) {
         .int_literal => return .int,
         .bool_literal => return .bool,
@@ -111,9 +175,31 @@ fn validateExpr(expr: ast.Expr, locals: *const std.ArrayList(LocalSymbol), diagn
             try report(diagnostics, "unknown identifier in executable subset", identifier.span);
             return error.InvalidExecutable;
         },
-        .group => |group| return validateExpr(group.inner.*, locals, diagnostics),
+        .call => |call| {
+            const callee = findFunction(functions, call.callee.text) orelse {
+                try report(diagnostics, "unknown function in executable subset", call.callee.span);
+                return error.InvalidExecutable;
+            };
+            if (!callee.has_body) {
+                try report(diagnostics, "cannot call function without body in executable subset", call.callee.span);
+                return error.InvalidExecutable;
+            }
+            if (call.args.len != callee.param_types.len) {
+                try report(diagnostics, "function call argument count mismatch", call.span);
+                return error.InvalidExecutable;
+            }
+            for (call.args, 0..) |arg, index| {
+                const arg_type = try validateExpr(arg.*, locals, functions, diagnostics);
+                if (arg_type != callee.param_types[index]) {
+                    try report(diagnostics, "function call argument type mismatch", arg.span());
+                    return error.InvalidExecutable;
+                }
+            }
+            return callee.return_type;
+        },
+        .group => |group| return validateExpr(group.inner.*, locals, functions, diagnostics),
         .unary => |unary| {
-            const operand_type = try validateExpr(unary.operand.*, locals, diagnostics);
+            const operand_type = try validateExpr(unary.operand.*, locals, functions, diagnostics);
             switch (unary.op) {
                 .negate => if (operand_type == .int) return .int else {
                     try report(diagnostics, "arithmetic unary operator requires int operand", unary.span);
@@ -126,8 +212,8 @@ fn validateExpr(expr: ast.Expr, locals: *const std.ArrayList(LocalSymbol), diagn
             }
         },
         .binary => |binary| {
-            const left_type = try validateExpr(binary.left.*, locals, diagnostics);
-            const right_type = try validateExpr(binary.right.*, locals, diagnostics);
+            const left_type = try validateExpr(binary.left.*, locals, functions, diagnostics);
+            const right_type = try validateExpr(binary.right.*, locals, functions, diagnostics);
             switch (binary.op) {
                 .add, .subtract, .multiply, .divide, .modulo => {
                     if (left_type == .int and right_type == .int) return .int;
@@ -154,7 +240,7 @@ fn validateExpr(expr: ast.Expr, locals: *const std.ArrayList(LocalSymbol), diagn
     }
 }
 
-fn executableLocalType(type_name: ast.TypeName) ?ExprType {
+fn executableType(type_name: ast.TypeName) ?ExprType {
     if (isExactSimpleType(type_name, "int")) return .int;
     if (isExactSimpleType(type_name, "bool")) return .bool;
     return null;
@@ -254,7 +340,7 @@ test "checker rejects unsupported return without expression" {
 test "checker rejects main parameters for C backend v0" {
     try expectInvalid(
         "module Main; int main(int argc) { return 0; }",
-        "P2-M2 C backend requires 'main' to have no parameters",
+        "P2-M5 C backend requires 'main' to have no parameters",
     );
 }
 
@@ -301,5 +387,52 @@ test "checker rejects logical operand type mismatch" {
     try expectInvalid(
         "module Main; int main() { return 1 && false; }",
         "logical binary operator requires bool operands",
+    );
+}
+
+test "checker validates call to known function" {
+    try expectValid("module Main; int add(int a, int b) { return a + b; } int main() { return add(1, 2); }");
+}
+
+test "checker validates parameter identifiers in function body" {
+    try expectValid("module Main; int id(int x) { return x; } int main() { return id(3); }");
+}
+
+test "checker validates locals and parameters in function body" {
+    try expectValid("module Main; int add_local(int x) { int y = 2; return x + y; } int main() { return add_local(1); }");
+}
+
+test "checker rejects duplicate top-level function" {
+    try expectInvalid(
+        "module Main; int f() { return 0; } int f() { return 1; } int main() { return f(); }",
+        "duplicate top-level function name",
+    );
+}
+
+test "checker rejects unknown function call" {
+    try expectInvalid(
+        "module Main; int main() { return missing(); }",
+        "unknown function in executable subset",
+    );
+}
+
+test "checker rejects wrong argument count" {
+    try expectInvalid(
+        "module Main; int add(int a, int b) { return a + b; } int main() { return add(1); }",
+        "function call argument count mismatch",
+    );
+}
+
+test "checker rejects wrong argument type" {
+    try expectInvalid(
+        "module Main; int id(int x) { return x; } int main() { return id(true); }",
+        "function call argument type mismatch",
+    );
+}
+
+test "checker rejects duplicate local colliding with parameter" {
+    try expectInvalid(
+        "module Main; int f(int x) { int x = 1; return x; } int main() { return f(0); }",
+        "duplicate local variable name",
     );
 }

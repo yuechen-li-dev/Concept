@@ -1,0 +1,10 @@
+# name: phase2 unknown function
+# phase: check
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    return missing();
+}
