@@ -478,3 +478,13 @@ Bindings are positional only: named payload binding, nested/destructuring patter
 The MIR path now represents compiler-generated enum payload extraction after the enum tag switch, and the MIR-backed C backend emits extraction through the Phase 5 layout form `.payload.<variant>.<field>`. This is not user field access syntax and does not define a final ABI.
 
 P5-M4 still does not implement Result-shaped enum conventions, `try`, `must_use`, `discard`, generic `Result<T, E>`, templates, concepts, drop/move/borrow checking, unsafe/raw pointers, user field access syntax, struct runtime layout, or final ABI mangling.
+
+### P5-M5 must_use and discard checkpoint
+
+P5-M5 adds the first explicit ignored-value semantics for Phase 5 enum values. Enum declarations may be prefixed with `must_use`, for example `must_use enum ParseResult { Ok(int value), Err(int code), };`. The modifier is carried through AST and HIR enum metadata and is intentionally limited to enum declarations in this checkpoint; `must_use struct` is diagnosed as unsupported rather than generalized to all nominal types.
+
+A `discard expression;` statement is now available inside executable blocks anywhere other statements are accepted. Discard evaluates the expression through the normal expression path, performs ordinary type checking, and then explicitly ignores the result. Discard is allowed for both must-use and non-must-use values because its purpose is to make intentional ignoring visible in source.
+
+Plain expression statements are now the ignored-value path. If such a statement produces a must-use enum type, the HIR executable checker emits `CON0049 IgnoredMustUseValue` and tells the programmer to use `discard` when the ignore is intentional. Locals, assignments, return expressions, match scrutinees, and call arguments remain normal uses and do not trigger ignored-value diagnostics.
+
+This milestone does not add a Result-shaped enum convention, `try` propagation, generic `Result<T, E>`, templates/concepts, Drop/move/borrow checking, unsafe/raw pointers, storage liveness, user field access, or final ABI mangling. Those remain future Phase 5 or later work.

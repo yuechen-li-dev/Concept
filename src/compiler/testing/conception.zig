@@ -1252,3 +1252,23 @@ test "language parse fixture: phase5 enum match payload named binding" {
 test "language check fixture: phase5 enum match unknown enum" {
     try expectCheckFixture("../../../language/phase5-sum-types/invalid/enum_match_unknown_enum.invalid.conception");
 }
+
+test "language run fixture: phase5 must_use enum local init" {
+    try expectRunFixture("../../../language/phase5-sum-types/valid/must_use_enum_local_init.valid.conception");
+}
+
+test "language run fixture: phase5 discard must_use constructor" {
+    try expectRunFixture("../../../language/phase5-sum-types/valid/discard_must_use_constructor.valid.conception");
+}
+
+test "language run fixture: phase5 discard must_use call" {
+    try expectRunFixture("../../../language/phase5-sum-types/valid/discard_must_use_call.valid.conception");
+}
+
+test "language check fixture: phase5 ignored must_use constructor" {
+    try expectCheckFixture("../../../language/phase5-sum-types/invalid/ignored_must_use_constructor.invalid.conception");
+}
+
+test "language check fixture: phase5 ignored must_use call" {
+    try expectCheckFixture("../../../language/phase5-sum-types/invalid/ignored_must_use_call.invalid.conception");
+}

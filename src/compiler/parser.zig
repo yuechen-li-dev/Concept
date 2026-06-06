@@ -80,7 +80,14 @@ pub const Parser = struct {
                         attributes = &.{};
                     }
                 },
-                .@"enum" => {
+                .@"enum", .must_use => {
+                    if (self.current().kind == .must_use and self.peek(1).kind == .@"struct") {
+                        try self.rejectAttributesBeforeUnsupportedItem(attributes, allocator);
+                        attributes = &.{};
+                        try self.report(.UnexpectedToken, "must_use is only supported on enum declarations", self.current().span);
+                        self.advance();
+                        continue;
+                    }
                     try items.append(try self.parseEnumItem(allocator, attributes));
                     attributes = &.{};
                 },
@@ -100,7 +107,7 @@ pub const Parser = struct {
                     if (self.peek(1).kind == .@"struct") {
                         try items.append(try self.parseStructItem(allocator, attributes));
                         attributes = &.{};
-                    } else if (self.peek(1).kind == .@"enum") {
+                    } else if (self.peek(1).kind == .@"enum" or self.peek(1).kind == .must_use) {
                         try items.append(try self.parseEnumItem(allocator, attributes));
                         attributes = &.{};
                     } else if (self.peek(1).kind == .identifier or self.peek(1).kind == .mut) {
@@ -510,13 +517,79 @@ pub const Parser = struct {
         if (self.current().kind == .@"if") return try self.parseIfStmt(allocator);
         if (self.current().kind == .@"while") return try self.parseWhileStmt(allocator);
         if (self.current().kind == .match) return try self.parseMatchStmt(allocator);
+        if (self.current().kind == .discard) return try self.parseDiscardStmt(allocator);
         if (self.current().kind == .left_brace) return .{ .block_stmt = try self.parseBlockAfterOpenBrace(allocator) };
         if (self.isLocalDeclStart()) return try self.parseLocalDeclStmt(allocator);
         if (self.isAssignmentStmtStart()) return try self.parseAssignmentStmt(allocator);
+        if (self.isExprStmtStart()) return try self.parseExprStmt(allocator);
 
         try self.report(.UnexpectedToken, "unsupported statement in function body", self.current().span);
         self.recoverStatement();
         return null;
+    }
+
+    fn parseDiscardStmt(self: *Parser, allocator: std.mem.Allocator) !ast.Stmt {
+        const discard_token = self.advance();
+        var value: *ast.Expr = undefined;
+        var have_value = true;
+        if (self.current().kind == .semicolon or self.current().kind == .right_brace or self.current().kind == .eof) {
+            try self.report(.UnexpectedToken, "expected expression after discard", self.current().span);
+            value = try allocator.create(ast.Expr);
+            value.* = .{ .int_literal = .{ .text = "0", .span = discard_token.span } };
+            have_value = false;
+        } else {
+            value = self.parseExpr(allocator) catch |err| switch (err) {
+                error.OutOfMemory => return err,
+                error.ParseFailed => blk: {
+                    try self.report(.UnexpectedToken, "expected expression after discard", self.current().span);
+                    const fallback = try allocator.create(ast.Expr);
+                    fallback.* = .{ .int_literal = .{ .text = "0", .span = discard_token.span } };
+                    have_value = false;
+                    break :blk fallback;
+                },
+            };
+        }
+        errdefer {
+            value.deinit(allocator);
+            allocator.destroy(value);
+        }
+
+        const end_span = if (self.match(.semicolon)) |semicolon| semicolon.span else blk: {
+            try self.report(.UnexpectedToken, "expected ';' after discard statement", self.current().span);
+            self.recoverStatement();
+            break :blk if (have_value) value.span() else discard_token.span;
+        };
+
+        return .{ .discard_stmt = .{
+            .value = value,
+            .span = ast.spanFromBounds(discard_token.span.start, spanEnd(end_span)),
+        } };
+    }
+
+    fn parseExprStmt(self: *Parser, allocator: std.mem.Allocator) !?ast.Stmt {
+        var value = self.parseExpr(allocator) catch |err| switch (err) {
+            error.OutOfMemory => return err,
+            error.ParseFailed => {
+                try self.report(.UnexpectedToken, "expected expression", self.current().span);
+                self.recoverStatement();
+                return null;
+            },
+        };
+        errdefer {
+            value.deinit(allocator);
+            allocator.destroy(value);
+        }
+
+        const end_span = if (self.match(.semicolon)) |semicolon| semicolon.span else blk: {
+            try self.report(.UnexpectedToken, "expected ';' after expression statement", self.current().span);
+            self.recoverStatement();
+            break :blk value.span();
+        };
+
+        return .{ .expr_stmt = .{
+            .value = value,
+            .span = ast.spanFromBounds(value.span().start, spanEnd(end_span)),
+        } };
     }
 
     fn parseIfStmt(self: *Parser, allocator: std.mem.Allocator) !ast.Stmt {
@@ -1331,9 +1404,14 @@ pub const Parser = struct {
     }
 
     fn parseEnumDecl(self: *Parser, allocator: std.mem.Allocator) !ast.EnumDecl {
-        const start_token = if (self.match(.@"export")) |export_token| export_token else null;
-        const enum_token = (try self.expect(.@"enum", "expected 'enum' after export", .ExpectedItem)) orelse start_token.?;
-        const start_span = if (start_token) |export_token| export_token.span else enum_token.span;
+        const export_token = if (self.match(.@"export")) |token| token else null;
+        const must_use_token = if (self.match(.must_use)) |token| token else null;
+        if (must_use_token != null and self.current().kind == .must_use) {
+            try self.report(.UnexpectedToken, "duplicate must_use modifier", self.current().span);
+            _ = self.advance();
+        }
+        const enum_token = (try self.expect(.@"enum", if (must_use_token != null) "expected 'enum' after must_use" else "expected 'enum' after export", .ExpectedItem)) orelse (must_use_token orelse export_token).?;
+        const start_span = if (export_token) |token| token.span else if (must_use_token) |token| token.span else enum_token.span;
 
         const name_token = try self.expect(.identifier, "expected enum name", .UnexpectedToken);
         const name = if (name_token) |identifier|
@@ -1355,7 +1433,8 @@ pub const Parser = struct {
             if (self.match(.left_brace) == null) {
                 const end_span = try self.expectTrailingEnumSemicolon();
                 return .{
-                    .is_export = start_token != null,
+                    .is_export = export_token != null,
+                    .is_must_use = must_use_token != null,
                     .name = name,
                     .variants = try variants.toOwnedSlice(),
                     .span = ast.spanFromBounds(start_span.start, spanEnd(end_span)),
@@ -1377,7 +1456,8 @@ pub const Parser = struct {
         };
 
         return .{
-            .is_export = start_token != null,
+            .is_export = export_token != null,
+            .is_must_use = must_use_token != null,
             .name = name,
             .variants = try variants.toOwnedSlice(),
             .span = ast.spanFromBounds(start_span.start, spanEnd(end_span)),
@@ -1783,6 +1863,13 @@ pub const Parser = struct {
             (self.peek(1).kind == .equal or self.peek(1).kind == .semicolon);
     }
 
+    fn isExprStmtStart(self: Parser) bool {
+        return switch (self.current().kind) {
+            .identifier, .int_literal, .true, .false, .left_paren, .minus, .bang => true,
+            else => false,
+        };
+    }
+
     fn isLocalDeclStart(self: Parser) bool {
         if (self.current().kind != .identifier) return false;
         var offset: usize = 1;
@@ -1936,6 +2023,8 @@ fn stmtSpan(stmt: ast.Stmt) SourceSpan {
     return switch (stmt) {
         .local_decl => |local_decl| local_decl.span,
         .assignment => |assignment| assignment.span,
+        .expr_stmt => |expr_stmt| expr_stmt.span,
+        .discard_stmt => |discard_stmt| discard_stmt.span,
         .return_stmt => |return_stmt| return_stmt.span,
         .if_stmt => |if_stmt| if_stmt.span,
         .while_stmt => |while_stmt| while_stmt.span,
@@ -4237,4 +4326,96 @@ test "enum constructor malformed arguments diagnostic" {
 
     try std.testing.expect(diagnostics.count() >= 1);
     try std.testing.expectEqualStrings("expected expression", diagnostics.diagnostics.items[0].message);
+}
+
+test "parses must_use enum declaration and debug output" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource(
+        \\module Example;
+        \\must_use enum ParseResult {
+        \\    Ok(int value),
+        \\    Err(int code),
+        \\};
+    , &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const enum_decl = switch (unit.items[0]) {
+        .enum_decl => |enum_decl| enum_decl,
+        else => return error.ExpectedEnumDecl,
+    };
+    try std.testing.expect(enum_decl.is_must_use);
+
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "MustUse Enum ParseResult") != null);
+}
+
+test "must_use struct is rejected" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; must_use struct Box { int value; };", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("must_use is only supported on enum declarations", diagnostics.diagnostics.items[0].message);
+}
+
+test "duplicate must_use enum modifier is rejected" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; must_use must_use enum ParseResult { Ok, };", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("duplicate must_use modifier", diagnostics.diagnostics.items[0].message);
+}
+
+test "parses discard statements" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; enum Status { Ok, }; int make(); int main() { discard make(); discard Status::Ok; return 0; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const statements = expectFunctionDecl(unit, 2).body.?.block.?.statements;
+    _ = switch (statements[0]) {
+        .discard_stmt => |discard_stmt| discard_stmt,
+        else => return error.ExpectedDiscardStmt,
+    };
+    _ = switch (statements[1]) {
+        .discard_stmt => |discard_stmt| discard_stmt,
+        else => return error.ExpectedDiscardStmt,
+    };
+}
+
+test "discard missing expression diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { discard; return 0; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected expression after discard", diagnostics.diagnostics.items[0].message);
+}
+
+test "discard missing semicolon diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { discard 1 return 0; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected ';' after discard statement", diagnostics.diagnostics.items[0].message);
+}
+
+test "discarded remains an identifier in local declaration" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { int discarded = 1; return discarded; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
 }

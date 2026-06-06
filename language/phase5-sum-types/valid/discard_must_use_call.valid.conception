@@ -1,0 +1,23 @@
+# name: phase5 discard must use call
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+must_use enum ParseResult {
+    Ok(int value),
+    Err(int code),
+};
+
+ParseResult parseInt(int value) {
+    return ParseResult::Ok(value);
+}
+
+int main() {
+    discard parseInt(123);
+    return 0;
+}
+
+=== run ===
+exit_code: 0

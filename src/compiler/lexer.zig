@@ -56,7 +56,7 @@ pub const Lexer = struct {
         const invalid_byte = self.advance().?;
         const invalid_span = SourceSpan{ .start = start, .length = 1 };
         try self.diagnostics.append(try diagnostics_model.invalidCharacter(
-            self.diagnostics.diagnostics.allocator,
+            self.diagnostics.allocator,
             invalid_span,
             invalid_byte,
         ));
@@ -318,16 +318,16 @@ pub const Lexer = struct {
 
 pub fn lexAll(allocator: std.mem.Allocator, source_file: SourceFile, diagnostics: *DiagnosticBag) ![]Token {
     var lexer = Lexer.init(source_file, diagnostics);
-    var tokens = std.ArrayList(Token).init(allocator);
-    errdefer tokens.deinit();
+    var tokens = std.ArrayList(Token).empty;
+    errdefer tokens.deinit(allocator);
 
     while (true) {
         const token = try lexer.nextToken();
-        try tokens.append(token);
+        try tokens.append(allocator, token);
         if (token.kind == .eof) break;
     }
 
-    return tokens.toOwnedSlice();
+    return tokens.toOwnedSlice(allocator);
 }
 
 fn isWhitespace(byte: u8) bool {
@@ -397,14 +397,19 @@ test "module declaration tokenizes correctly" {
 }
 
 test "keywords tokenize as keyword kinds" {
-    const source_text = "module import export struct enum concept interface impl marker unsafe mut const return match when if else while for machine state transition yield run true false";
-    const expected = [_]TokenKind{ .module, .import, .@"export", .@"struct", .@"enum", .concept, .interface, .impl, .marker, .unsafe, .mut, .@"const", .@"return", .match, .when, .@"if", .@"else", .@"while", .@"for", .machine, .state, .transition, .yield, .run, .true, .false, .eof };
+    const source_text = "module import export struct enum concept interface impl marker unsafe mut const return must_use discard match when if else while for machine state transition yield run true false";
+    const expected = [_]TokenKind{ .module, .import, .@"export", .@"struct", .@"enum", .concept, .interface, .impl, .marker, .unsafe, .mut, .@"const", .@"return", .must_use, .discard, .match, .when, .@"if", .@"else", .@"while", .@"for", .machine, .state, .transition, .yield, .run, .true, .false, .eof };
     try expectLexedKinds(source_text, &expected);
 }
 
 test "library and attribute names tokenize as identifiers" {
     const expected = [_]TokenKind{ .identifier, .identifier, .identifier, .identifier, .eof };
     try expectLexedKinds("Result Drop Fact InlineData", &expected);
+}
+
+test "must_use and discard keywords do not consume nearby identifiers" {
+    const expected = [_]TokenKind{ .must_use, .discard, .identifier, .identifier, .eof };
+    try expectLexedKinds("must_use discard must_useful discarded", &expected);
 }
 
 test "line comments are skipped" {

@@ -128,7 +128,7 @@ const Collector = struct {
 
     fn declareEnum(self: *Collector, enum_decl: ast.EnumDecl) !void {
         const name = try self.internFreshTopLevelName(enum_decl.name.text, enum_decl.name.span) orelse return;
-        const enum_id = try self.module.hir.addEnum(name);
+        const enum_id = try self.module.hir.addEnum(name, enum_decl.is_must_use);
         const type_id = try self.module.types.addEnumType(enum_id);
         try self.top_level_decls.put(name, .{ .enum_ = .{ .id = enum_id, .type_id = type_id } });
     }
@@ -353,6 +353,14 @@ const BodyLowerer = struct {
                 const local_id = try self.collector.module.hir.addLocal(self.function_id, local_symbol, type_id, local_decl.span);
                 try self.bindings.append(self.collector.allocator, .{ .name = local_symbol, .binding = .{ .local = local_id }, .depth = self.depth });
                 return try self.collector.module.hir.addStmt(.{ .local_decl = .{ .local = local_id, .initializer = initializer } }, local_decl.span);
+            },
+            .expr_stmt => |expr_stmt| {
+                const value = (try self.lowerExpr(expr_stmt.value.*)) orelse return null;
+                return try self.collector.module.hir.addStmt(.{ .expr_stmt = value }, expr_stmt.span);
+            },
+            .discard_stmt => |discard_stmt| {
+                const value = (try self.lowerExpr(discard_stmt.value.*)) orelse return null;
+                return try self.collector.module.hir.addStmt(.{ .discard_stmt = value }, discard_stmt.span);
             },
             .assignment => |assignment| {
                 const target_symbol = try self.collector.module.interner.intern(assignment.target.text);

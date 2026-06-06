@@ -69,6 +69,8 @@ pub const HirStmtKind = union(enum) {
     return_stmt: ?ExprId,
     local_decl: struct { local: LocalId, initializer: ExprId },
     assignment: struct { target: AssignTarget, value: ExprId },
+    expr_stmt: ExprId,
+    discard_stmt: ExprId,
     if_stmt: struct { condition: ExprId, then_block: StmtId, else_block: ?StmtId },
     while_stmt: struct { condition: ExprId, body: StmtId },
     match_stmt: struct { scrutinee: ExprId, arms: []HirMatchArm },
@@ -179,6 +181,7 @@ pub const HirEnum = struct {
     item: ItemId,
     name: SymbolId,
     variants: []VariantId,
+    is_must_use: bool = false,
 };
 
 pub const HirField = struct {
@@ -327,7 +330,7 @@ pub const HirStore = struct {
         return id;
     }
 
-    pub fn addEnum(self: *HirStore, name: SymbolId) !EnumId {
+    pub fn addEnum(self: *HirStore, name: SymbolId, is_must_use: bool) !EnumId {
         const id = EnumId{ .index = try nextIndex(self.enums.items.len, error.TooManyEnums) };
         const item = try self.addItem(.{ .enum_ = id });
         errdefer _ = self.items.pop();
@@ -335,6 +338,7 @@ pub const HirStore = struct {
             .item = item,
             .name = name,
             .variants = &.{},
+            .is_must_use = is_must_use,
         });
         return id;
     }
@@ -544,7 +548,7 @@ pub const HirStore = struct {
                 },
                 .enum_ => |id| {
                     const enum_decl = self.getEnum(id);
-                    try writer.print("  Enum {s}\n", .{interner.text(enum_decl.name)});
+                    try writer.print("  {s}Enum {s}\n", .{ if (enum_decl.is_must_use) "MustUse " else "", interner.text(enum_decl.name) });
                     for (enum_decl.variants) |variant_id| {
                         const variant = self.getVariant(variant_id);
                         try writer.print("    Variant {s}\n", .{interner.text(variant.name)});
@@ -580,6 +584,14 @@ pub const HirStore = struct {
                 try writeAssignTarget(writer, assignment.target);
                 try writer.writeByte('\n');
                 try self.writeExprDebug(writer, assignment.value, depth + 1);
+            },
+            .expr_stmt => |expr_id| {
+                try writer.writeAll("ExprStmt\n");
+                try self.writeExprDebug(writer, expr_id, depth + 1);
+            },
+            .discard_stmt => |expr_id| {
+                try writer.writeAll("Discard\n");
+                try self.writeExprDebug(writer, expr_id, depth + 1);
             },
             .if_stmt => |stmt| {
                 try writer.writeAll("If\n");
@@ -744,7 +756,7 @@ test "add enum with variants and lookup by ID" {
     var store = HirStore.init(std.testing.allocator);
     defer store.deinit();
 
-    const token_id = try store.addEnum(try interner.intern("Token"));
+    const token_id = try store.addEnum(try interner.intern("Token"), false);
     const identifier_id = try store.addVariant(token_id, try interner.intern("Identifier"), synthetic_span);
     const end_id = try store.addVariant(token_id, try interner.intern("End"), synthetic_span);
     const token = store.getEnum(token_id);
@@ -767,7 +779,7 @@ test "HIR debug formatting uses interned names" {
     _ = try module.store.addField(vec3_id, try interner.intern("x"), .{ .index = 1 }, synthetic_span);
     _ = try module.store.addField(vec3_id, try interner.intern("y"), .{ .index = 1 }, synthetic_span);
     _ = try module.store.addField(vec3_id, try interner.intern("z"), .{ .index = 1 }, synthetic_span);
-    const token_id = try module.store.addEnum(try interner.intern("Token"));
+    const token_id = try module.store.addEnum(try interner.intern("Token"), false);
     _ = try module.store.addVariant(token_id, try interner.intern("Identifier"), synthetic_span);
     _ = try module.store.addVariant(token_id, try interner.intern("End"), synthetic_span);
 

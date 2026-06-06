@@ -211,6 +211,7 @@ pub const EnumVariant = struct {
 pub const EnumDecl = struct {
     attributes: []Attribute = &.{},
     is_export: bool,
+    is_must_use: bool = false,
     name: NameSegment,
     variants: []EnumVariant,
     span: SourceSpan,
@@ -477,6 +478,26 @@ pub const AssignmentStmt = struct {
     }
 };
 
+pub const ExprStmt = struct {
+    value: *Expr,
+    span: SourceSpan,
+
+    pub fn deinit(self: ExprStmt, allocator: std.mem.Allocator) void {
+        self.value.deinit(allocator);
+        allocator.destroy(self.value);
+    }
+};
+
+pub const DiscardStmt = struct {
+    value: *Expr,
+    span: SourceSpan,
+
+    pub fn deinit(self: DiscardStmt, allocator: std.mem.Allocator) void {
+        self.value.deinit(allocator);
+        allocator.destroy(self.value);
+    }
+};
+
 pub const IfStmt = struct {
     condition: *Expr,
     then_block: BlockStmt,
@@ -583,6 +604,8 @@ pub const MatchStmt = struct {
 pub const Stmt = union(enum) {
     local_decl: LocalDeclStmt,
     assignment: AssignmentStmt,
+    expr_stmt: ExprStmt,
+    discard_stmt: DiscardStmt,
     return_stmt: ReturnStmt,
     if_stmt: IfStmt,
     while_stmt: WhileStmt,
@@ -593,6 +616,8 @@ pub const Stmt = union(enum) {
         switch (self) {
             .local_decl => |stmt| stmt.deinit(allocator),
             .assignment => |stmt| stmt.deinit(allocator),
+            .expr_stmt => |stmt| stmt.deinit(allocator),
+            .discard_stmt => |stmt| stmt.deinit(allocator),
             .return_stmt => |stmt| stmt.deinit(allocator),
             .if_stmt => |stmt| stmt.deinit(allocator),
             .while_stmt => |stmt| stmt.deinit(allocator),
@@ -617,6 +642,16 @@ pub const Stmt = union(enum) {
                 try writer.writeAll("Assignment ");
                 try writer.writeAll(stmt.target.text);
                 try writer.writeByte('\n');
+                try stmt.value.writeDebug(writer, depth + 1);
+            },
+            .expr_stmt => |stmt| {
+                try writeIndent(writer, depth);
+                try writer.writeAll("ExprStmt\n");
+                try stmt.value.writeDebug(writer, depth + 1);
+            },
+            .discard_stmt => |stmt| {
+                try writeIndent(writer, depth);
+                try writer.writeAll("Discard\n");
                 try stmt.value.writeDebug(writer, depth + 1);
             },
             .return_stmt => |stmt| {
@@ -776,8 +811,12 @@ pub const Item = union(enum) {
             },
             .enum_decl => |enum_decl| {
                 try writeAttributesDebug(enum_decl.attributes, writer);
-                if (enum_decl.is_export) {
+                if (enum_decl.is_export and enum_decl.is_must_use) {
+                    try writer.writeAll("  Export MustUse Enum ");
+                } else if (enum_decl.is_export) {
                     try writer.writeAll("  Export Enum ");
+                } else if (enum_decl.is_must_use) {
+                    try writer.writeAll("  MustUse Enum ");
                 } else {
                     try writer.writeAll("  Enum ");
                 }

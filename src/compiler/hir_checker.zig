@@ -74,6 +74,16 @@ const Checker = struct {
                 const init_type = try self.checkExpr(decl.initializer);
                 try self.requireSame(init_type, local.type_id, "local initializer type does not match declared type", self.exprSpan(decl.initializer));
             },
+            .expr_stmt => |expr_id| {
+                const value_type = try self.checkExpr(expr_id);
+                if (self.isMustUseType(value_type)) {
+                    try self.reportAt(.IgnoredMustUseValue, "value must be used; use discard to ignore intentionally", self.exprSpan(expr_id));
+                    return error.InvalidSemanticModule;
+                }
+            },
+            .discard_stmt => |expr_id| {
+                _ = try self.checkExpr(expr_id);
+            },
             .assignment => |assignment| {
                 const target_type = switch (assignment.target) {
                     .local => |id| self.module.hir.getLocal(id).type_id,
@@ -288,6 +298,12 @@ const Checker = struct {
 
     fn isBool(self: *Checker, actual: types.TypeId) bool {
         return sameType(actual, self.module.types.boolType());
+    }
+
+    fn isMustUseType(self: *Checker, actual: types.TypeId) bool {
+        const kind = self.module.types.kind(actual);
+        if (kind != .enum_type) return false;
+        return self.module.hir.getEnum(kind.enum_type).is_must_use;
     }
 
     fn exprSpan(self: *Checker, expr_id: hir.ExprId) diagnostics.SourceSpan {
@@ -623,4 +639,57 @@ test "HIR checker accepts Phase 2-style lowered program" {
     const if_stmt = try addTestStmt(&tm.module.hir, .{ .if_stmt = .{ .condition = condition, .then_block = try tm.block(&.{match_stmt}), .else_block = try tm.block(&.{try tm.ret(try tm.int("0"))}) } });
     tm.setBody(main_id, try tm.block(&.{ decl, if_stmt }));
     try tm.checkPass();
+}
+
+test "HIR checker accepts discard and explicit uses of must_use enum values" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+
+    const enum_id = try tm.module.hir.addEnum(try tm.name("ParseResult"), true);
+    const enum_type = try tm.module.types.addEnumType(enum_id);
+    const ok_variant = try tm.module.hir.addVariant(enum_id, try tm.name("Ok"), synthetic_span);
+    _ = try tm.module.hir.addEnumPayloadField(ok_variant, try tm.name("value"), tm.module.types.intType(), synthetic_span);
+
+    const make = try tm.function("make", enum_type);
+    _ = try tm.module.hir.addParam(make, try tm.name("value"), tm.module.types.intType(), synthetic_span);
+    const make_return_arg = try tm.int("1");
+    const make_args = try std.testing.allocator.dupe(hir.ExprId, &.{make_return_arg});
+    const make_value = try addTestExpr(&tm.module.hir, .{ .enum_constructor = .{ .enum_id = enum_id, .variant_id = ok_variant, .args = make_args } });
+    const make_return = try tm.ret(make_value);
+    tm.setBody(make, try tm.block(&.{make_return}));
+
+    const main = try tm.function("main", tm.module.types.intType());
+    const constructor_arg = try tm.int("2");
+    const constructor_args = try std.testing.allocator.dupe(hir.ExprId, &.{constructor_arg});
+    const constructor = try addTestExpr(&tm.module.hir, .{ .enum_constructor = .{ .enum_id = enum_id, .variant_id = ok_variant, .args = constructor_args } });
+    const local = try tm.local(main, "result", enum_type);
+    const local_decl = try addTestStmt(&tm.module.hir, .{ .local_decl = .{ .local = local, .initializer = constructor } });
+    const call_arg = try tm.int("3");
+    const call_args = try std.testing.allocator.dupe(hir.ExprId, &.{call_arg});
+    const call = try addTestExpr(&tm.module.hir, .{ .call = .{ .function = make, .args = call_args } });
+    const discard_call = try addTestStmt(&tm.module.hir, .{ .discard_stmt = call });
+    const non_must_use = try tm.int("4");
+    const discard_int = try addTestStmt(&tm.module.hir, .{ .discard_stmt = non_must_use });
+    const ret = try tm.ret(try tm.int("0"));
+    tm.setBody(main, try tm.block(&.{ local_decl, discard_call, discard_int, ret }));
+
+    try tm.checkPass();
+}
+
+test "HIR checker rejects ignored must_use expression statement" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+
+    const enum_id = try tm.module.hir.addEnum(try tm.name("ParseResult"), true);
+    _ = try tm.module.types.addEnumType(enum_id);
+    const ok_variant = try tm.module.hir.addVariant(enum_id, try tm.name("Ok"), synthetic_span);
+
+    const main = try tm.function("main", tm.module.types.intType());
+    const empty_args = try std.testing.allocator.dupe(hir.ExprId, &.{});
+    const constructor = try addTestExpr(&tm.module.hir, .{ .enum_constructor = .{ .enum_id = enum_id, .variant_id = ok_variant, .args = empty_args } });
+    const ignored = try addTestStmt(&tm.module.hir, .{ .expr_stmt = constructor });
+    const ret = try tm.ret(try tm.int("0"));
+    tm.setBody(main, try tm.block(&.{ ignored, ret }));
+
+    try tm.checkFail(.IgnoredMustUseValue);
 }

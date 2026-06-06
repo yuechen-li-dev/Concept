@@ -1,0 +1,22 @@
+# name: phase5 ignored must use call
+# phase: check
+# check: hir
+# expect: fail
+# diagnostics: CON0049
+
+=== source ===
+module Main;
+
+must_use enum ParseResult {
+    Ok(int value),
+    Err(int code),
+};
+
+ParseResult parseInt(int value) {
+    return ParseResult::Ok(value);
+}
+
+int main() {
+    parseInt(123);
+    return 0;
+}

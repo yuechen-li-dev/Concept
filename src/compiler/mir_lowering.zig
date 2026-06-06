@@ -114,6 +114,14 @@ const FunctionLowerer = struct {
                 });
                 return block_id;
             },
+            .expr_stmt => |expr_id| {
+                _ = try self.lowerExprToOperand(expr_id, block_id);
+                return block_id;
+            },
+            .discard_stmt => |expr_id| {
+                _ = try self.lowerExprToOperand(expr_id, block_id);
+                return block_id;
+            },
             .assignment => |assignment| {
                 const local_id = try self.resolveAssignTarget(assignment.target);
                 const value = try self.lowerExprToOperand(assignment.value, block_id);
@@ -545,7 +553,7 @@ fn deinitInitializedOperands(allocator: std.mem.Allocator, operands: []mir.MirOp
 test "MIR lowering debug snapshot includes enum tag switch" {
     var module = try newModule();
     defer module.deinit();
-    const enum_id = try module.hir.addEnum(try intern(&module, "Status"));
+    const enum_id = try module.hir.addEnum(try intern(&module, "Status"), false);
     const enum_type = try module.types.addEnumType(enum_id);
     const ok = try module.hir.addVariant(enum_id, try intern(&module, "Ok"), hir.synthetic_span);
     const err = try module.hir.addVariant(enum_id, try intern(&module, "Err"), hir.synthetic_span);
@@ -573,7 +581,7 @@ test "MIR lowering debug snapshot includes enum tag switch" {
 test "MIR lowering debug snapshot routes enum wildcard as default" {
     var module = try newModule();
     defer module.deinit();
-    const enum_id = try module.hir.addEnum(try intern(&module, "Status"));
+    const enum_id = try module.hir.addEnum(try intern(&module, "Status"), false);
     const enum_type = try module.types.addEnumType(enum_id);
     const ok = try module.hir.addVariant(enum_id, try intern(&module, "Ok"), hir.synthetic_span);
     _ = try module.hir.addVariant(enum_id, try intern(&module, "Err"), hir.synthetic_span);
@@ -599,7 +607,7 @@ test "MIR lowering debug snapshot routes enum wildcard as default" {
 test "MIR lowering debug snapshot includes enum payload extraction" {
     var module = try newModule();
     defer module.deinit();
-    const enum_id = try module.hir.addEnum(try intern(&module, "ParseResult"));
+    const enum_id = try module.hir.addEnum(try intern(&module, "ParseResult"), false);
     const enum_type = try module.types.addEnumType(enum_id);
     const ok = try module.hir.addVariant(enum_id, try intern(&module, "Ok"), hir.synthetic_span);
     const value_field = try module.hir.addEnumPayloadField(ok, try intern(&module, "value"), module.types.intType(), hir.synthetic_span);

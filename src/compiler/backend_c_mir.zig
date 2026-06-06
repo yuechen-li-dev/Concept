@@ -668,7 +668,7 @@ test "MIR C backend emits tag-only enum layout" {
     var module = try newTestModule();
     defer module.deinit();
 
-    const enum_id = try module.hir.addEnum(try internForTest(&module, "TokenKind"));
+    const enum_id = try module.hir.addEnum(try internForTest(&module, "TokenKind"), false);
     _ = try module.types.addEnumType(enum_id);
     _ = try module.hir.addVariant(enum_id, try internForTest(&module, "Identifier"), hir.synthetic_span);
     _ = try module.hir.addVariant(enum_id, try internForTest(&module, "End"), hir.synthetic_span);
@@ -689,7 +689,7 @@ test "MIR C backend emits payload enum layout with int fields" {
     var module = try newTestModule();
     defer module.deinit();
 
-    const enum_id = try module.hir.addEnum(try internForTest(&module, "ParseResult"));
+    const enum_id = try module.hir.addEnum(try internForTest(&module, "ParseResult"), false);
     _ = try module.types.addEnumType(enum_id);
     const ok = try module.hir.addVariant(enum_id, try internForTest(&module, "Ok"), hir.synthetic_span);
     _ = try module.hir.addEnumPayloadField(ok, try internForTest(&module, "value"), module.types.intType(), hir.synthetic_span);
@@ -712,7 +712,7 @@ test "MIR C backend emits payload enum layout with bool fields" {
     var module = try newTestModule();
     defer module.deinit();
 
-    const enum_id = try module.hir.addEnum(try internForTest(&module, "Check"));
+    const enum_id = try module.hir.addEnum(try internForTest(&module, "Check"), false);
     _ = try module.types.addEnumType(enum_id);
     const done = try module.hir.addVariant(enum_id, try internForTest(&module, "Done"), hir.synthetic_span);
     _ = try module.hir.addEnumPayloadField(done, try internForTest(&module, "ok"), module.types.boolType(), hir.synthetic_span);
@@ -733,7 +733,7 @@ test "MIR C backend emits mixed enum layout with backend-owned escaped names" {
     var module = try newTestModule();
     defer module.deinit();
 
-    const enum_id = try module.hir.addEnum(try internForTest(&module, "enum"));
+    const enum_id = try module.hir.addEnum(try internForTest(&module, "enum"), false);
     _ = try module.types.addEnumType(enum_id);
     _ = try module.hir.addVariant(enum_id, try internForTest(&module, "None"), hir.synthetic_span);
     const some = try module.hir.addVariant(enum_id, try internForTest(&module, "some-value"), hir.synthetic_span);
@@ -756,7 +756,7 @@ test "MIR C backend renders enum TypeId in function signatures and copies" {
     var module = try newTestModule();
     defer module.deinit();
 
-    const enum_id = try module.hir.addEnum(try internForTest(&module, "Status"));
+    const enum_id = try module.hir.addEnum(try internForTest(&module, "Status"), false);
     const enum_type = try module.types.addEnumType(enum_id);
     _ = try module.hir.addVariant(enum_id, try internForTest(&module, "Ok"), hir.synthetic_span);
     _ = try module.hir.addVariant(enum_id, try internForTest(&module, "Err"), hir.synthetic_span);
@@ -783,7 +783,7 @@ test "MIR C backend rejects empty enum layout" {
     var module = try newTestModule();
     defer module.deinit();
 
-    const enum_id = try module.hir.addEnum(try internForTest(&module, "Never"));
+    const enum_id = try module.hir.addEnum(try internForTest(&module, "Never"), false);
     _ = try module.types.addEnumType(enum_id);
 
     var mir_module = mir.MirModule.init(std.testing.allocator);
@@ -803,7 +803,7 @@ test "MIR C backend rejects enum payload fields with unsupported struct type" {
 
     const struct_id = try module.hir.addStruct(try internForTest(&module, "Payload"));
     const struct_type = try module.types.addStructType(struct_id);
-    const enum_id = try module.hir.addEnum(try internForTest(&module, "Box"));
+    const enum_id = try module.hir.addEnum(try internForTest(&module, "Box"), false);
     _ = try module.types.addEnumType(enum_id);
     const boxed = try module.hir.addVariant(enum_id, try internForTest(&module, "Boxed"), hir.synthetic_span);
     _ = try module.hir.addEnumPayloadField(boxed, try internForTest(&module, "payload"), struct_type, hir.synthetic_span);

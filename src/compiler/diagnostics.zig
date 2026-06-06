@@ -61,6 +61,7 @@ pub const DiagnosticCode = enum {
     EnumPayloadBindingArityMismatch,
     DuplicatePatternBinding,
     InvalidPatternBinding,
+    IgnoredMustUseValue,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -103,6 +104,7 @@ pub const DiagnosticCode = enum {
             .EnumPayloadBindingArityMismatch => "CON0046",
             .DuplicatePatternBinding => "CON0047",
             .InvalidPatternBinding => "CON0048",
+            .IgnoredMustUseValue => "CON0049",
         };
     }
 };
@@ -391,6 +393,7 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0042", DiagnosticCode.MissingTerminator.format());
     try std.testing.expectEqualStrings("CON0043", DiagnosticCode.InvalidMirType.format());
     try std.testing.expectEqualStrings("CON0044", DiagnosticCode.InvalidMirOperand.format());
+    try std.testing.expectEqualStrings("CON0049", DiagnosticCode.IgnoredMustUseValue.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {
