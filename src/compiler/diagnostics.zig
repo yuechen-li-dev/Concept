@@ -33,6 +33,11 @@ pub const DiagnosticCode = enum {
     InvalidEscapeSequence,
     InvalidExecutableSubset,
     DuplicateTopLevelName,
+    UnknownTypeName,
+    DuplicateStructField,
+    DuplicateEnumVariant,
+    UnsupportedTypeSyntax,
+    DuplicateParameterName,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -47,6 +52,11 @@ pub const DiagnosticCode = enum {
             .InvalidEscapeSequence => "CON0009",
             .InvalidExecutableSubset => "CON0010",
             .DuplicateTopLevelName => "CON0020",
+            .UnknownTypeName => "CON0021",
+            .DuplicateStructField => "CON0022",
+            .DuplicateEnumVariant => "CON0023",
+            .UnsupportedTypeSyntax => "CON0024",
+            .DuplicateParameterName => "CON0025",
         };
     }
 };
@@ -201,6 +211,51 @@ pub fn duplicateTopLevelName(span: SourceSpan) Diagnostic {
         "duplicate top-level declaration name",
         span,
     ).withHelp("top-level functions, structs, and enums share one namespace in Phase 3");
+}
+
+pub fn unknownTypeName(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .UnknownTypeName,
+        .@"error",
+        "unknown type name",
+        span,
+    ).withHelp("Phase 3 declaration types can name void, int, bool, top-level structs, or top-level enums");
+}
+
+pub fn duplicateStructField(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .DuplicateStructField,
+        .@"error",
+        "duplicate struct field name",
+        span,
+    ).withHelp("field names must be unique within a struct");
+}
+
+pub fn duplicateEnumVariant(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .DuplicateEnumVariant,
+        .@"error",
+        "duplicate enum variant name",
+        span,
+    ).withHelp("variant names must be unique within an enum");
+}
+
+pub fn unsupportedTypeSyntax(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .UnsupportedTypeSyntax,
+        .@"error",
+        "unsupported declaration type syntax",
+        span,
+    ).withHelp("Phase 3 supports only simple, non-generic, non-reference, non-pointer declaration type names");
+}
+
+pub fn duplicateParameterName(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .DuplicateParameterName,
+        .@"error",
+        "duplicate function parameter name",
+        span,
+    ).withHelp("parameter names must be unique within a function declaration");
 }
 
 pub fn render(writer: anytype, source: SourceFile, diagnostic: Diagnostic) !void {

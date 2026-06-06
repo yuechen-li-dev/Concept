@@ -1,0 +1,11 @@
+# name: phase3 unknown function return type
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+Missing make() {}
+
+=== diagnostics ===
+CON0021

@@ -1,0 +1,11 @@
+# name: phase3 struct field types
+# phase: check
+# expect: pass
+
+=== source ===
+module Example;
+
+struct Flags {
+    int count;
+    bool enabled;
+};

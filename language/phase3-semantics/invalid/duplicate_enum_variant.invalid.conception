@@ -1,0 +1,14 @@
+# name: phase3 duplicate enum variant
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+enum Token {
+    Identifier;
+    Identifier;
+};
+
+=== diagnostics ===
+CON0023

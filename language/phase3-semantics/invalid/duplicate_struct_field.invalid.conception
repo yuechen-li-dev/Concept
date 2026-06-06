@@ -1,0 +1,14 @@
+# name: phase3 duplicate struct field
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+struct Vec2 {
+    int x;
+    bool x;
+};
+
+=== diagnostics ===
+CON0022

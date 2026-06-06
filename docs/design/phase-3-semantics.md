@@ -158,6 +158,8 @@ P3-M1 introduces the standalone `Interner` and compact `SymbolId` value used by 
 
 P3-M2 introduces the standalone HIR skeleton and compact semantic ID values for declarations and declaration children. It provides manual HIR store construction only; AST lowering, type checking, and backend migration remain future milestones.
 
+P3-M5 extends declaration HIR with resolved `TypeId`s for function returns and parameters, struct fields, and enum variant payload fields. Declaration type-name resolution now accepts `void`, `int`, `bool`, and nominal top-level struct and enum names, while rejecting unknown type names, function names used as types, and unsupported syntax such as dotted, generic, pointer, or reference type forms. It also adds declaration-level duplicate checks for struct fields, enum variants, and function parameters. Function body lowering remains deliberately deferred.
+
 This is especially important before introducing richer module summaries and imports. A one-file Phase 3 module can still use the same discipline that later multi-file resolution needs.
 
 ## TypeStore plan
