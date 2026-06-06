@@ -263,13 +263,14 @@ Meaning:
 
 Phase 5 does not implement generics/templates, so it must not introduce a generic `Result<T, E>`. Instead, Phase 5 defines a concrete convention that later templates and concepts can generalize.
 
-An enum is Result-shaped when:
+An enum is Result-shaped in v0 when:
 
-- It has a success variant named `Ok`.
-- It has an error variant named `Err`.
+- It has exactly two variants.
+- The success variant is named `Ok`.
+- The error variant is named `Err`.
 - `Ok` has exactly one payload field.
 - `Err` has exactly one payload field.
-- It may be marked `must_use`.
+- It may be marked `must_use`, but `must_use` is not required for shape detection.
 
 Example:
 
@@ -280,7 +281,7 @@ must_use enum ParseIntResult {
 };
 ```
 
-Result-shaped metadata should be derived from the enum declaration during semantic analysis. Later, templates and concepts can generalize this convention into `Result<T, E>` and a `Tryable` concept. Phase 5 should keep the convention intentionally concrete.
+Result-shaped metadata should be derived from the enum declaration during semantic analysis. The metadata records the `Ok` variant, `Err` variant, their payload field IDs, and their payload types. Enums with only one of `Ok`/`Err`, with the wrong payload arity, or with extra variants remain ordinary valid enums and do not receive Result-shaped metadata. Later, templates and concepts can generalize this convention into `Result<T, E>` and a `Tryable` concept. Phase 5 should keep the convention intentionally concrete.
 
 ## `try` propagation v0
 
@@ -488,3 +489,11 @@ A `discard expression;` statement is now available inside executable blocks anyw
 Plain expression statements are now the ignored-value path. If such a statement produces a must-use enum type, the HIR executable checker emits `CON0049 IgnoredMustUseValue` and tells the programmer to use `discard` when the ignore is intentional. Locals, assignments, return expressions, match scrutinees, and call arguments remain normal uses and do not trigger ignored-value diagnostics.
 
 This milestone does not add a Result-shaped enum convention, `try` propagation, generic `Result<T, E>`, templates/concepts, Drop/move/borrow checking, unsafe/raw pointers, storage liveness, user field access, or final ABI mangling. Those remain future Phase 5 or later work.
+
+### P5-M6 Result-shaped enum convention checkpoint
+
+P5-M6 derives Result-shaped metadata for concrete enum declarations during semantic resolution. The v0 convention is intentionally strict: exactly two variants named `Ok` and `Err`, and each variant must have exactly one payload field. The derived HIR metadata stores the success and error variant IDs, the corresponding payload field IDs, and the success and error payload `TypeId`s.
+
+Shape detection does not require `must_use`; both `must_use enum ParseIntResult { Ok(int value), Err(int code), };` and the same enum without `must_use` are Result-shaped. Non-shapes are still ordinary enums: missing `Ok`/`Err`, zero-payload variants, multi-payload variants, and extra variants do not produce diagnostics solely because they resemble but do not satisfy the convention.
+
+P5-M6 does not implement `try`, generic `Result<T, E>`, templates/concepts, new must-use diagnostics, enum layout changes, constructor changes, match changes, payload-binding changes, Drop/move/borrow checking, unsafe/raw pointers, or final ABI mangling. `try` remains the P5-M7 milestone.

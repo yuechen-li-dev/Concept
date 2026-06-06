@@ -1,0 +1,16 @@
+# name: phase5 result shape must use
+# phase: check
+# check: declarations
+# expect: pass
+
+=== source ===
+module Main;
+
+must_use enum ParseIntResult {
+    Ok(int value),
+    Err(int code),
+};
+
+int main() {
+    return 0;
+}

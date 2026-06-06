@@ -1,0 +1,17 @@
+# name: phase5 not result shape extra variant
+# phase: check
+# check: declarations
+# expect: pass
+
+=== source ===
+module Main;
+
+enum ParseStatus {
+    Ok(int value),
+    Err(int code),
+    Pending,
+};
+
+int main() {
+    return 0;
+}

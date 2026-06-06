@@ -1,0 +1,16 @@
+# name: phase5 not result shape bad ok arity
+# phase: check
+# check: declarations
+# expect: pass
+
+=== source ===
+module Main;
+
+enum ParseStatus {
+    Ok(int value, bool rounded),
+    Err(int code),
+};
+
+int main() {
+    return 0;
+}
