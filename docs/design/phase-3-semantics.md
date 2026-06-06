@@ -155,6 +155,8 @@ The interner should be shared by the semantic session for one compilation. When 
 
 P3-M1 introduces the standalone `Interner` and compact `SymbolId` value used by later semantic milestones. Parser integration and semantic consumers remain future work.
 
+P3-M2 introduces the standalone HIR skeleton and compact semantic ID values for declarations and declaration children. It provides manual HIR store construction only; AST lowering, type checking, and backend migration remain future milestones.
+
 This is especially important before introducing richer module summaries and imports. A one-file Phase 3 module can still use the same discipline that later multi-file resolution needs.
 
 ## TypeStore plan
