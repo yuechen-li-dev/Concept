@@ -1,0 +1,13 @@
+# name: malformed enum missing closing brace
+# phase: parse
+# expect: fail
+
+=== source ===
+module Example;
+
+enum Token {
+    Identifier,
+    Number;
+
+=== diagnostics ===
+CON0003
