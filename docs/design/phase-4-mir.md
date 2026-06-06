@@ -730,6 +730,26 @@ The MIR C backend validates the MIR module before emitting C, so backend entry p
 
 The older HIR-backed C backend remains in the repository as transitional snapshot and compatibility coverage, but it is no longer the default run-fixture path. MIR fixture corpus expansion and Phase 4 closeout remain P4-M9 work.
 
+## P4-Fix1 backend naming and type guardrails
+
+P4-Fix1 hardens the MIR-backed C backend without defining the final Concept ABI or linkage model.
+Generated C now uses deterministic backend-owned names for emitted symbols and labels:
+
+- Concept `main` remains the C entry point and emits as `main`.
+- Non-main functions emit with a `cpt_f_` backend prefix plus an escaped source-symbol component.
+- Parameters, user locals, temporaries, and basic-block labels emit with backend-owned `cpt_p_`, `cpt_l_`, `cpt_t_`, and `cpt_bb_` forms.
+- Source-symbol components are minimally escaped for C identifier safety, including byte escapes for invalid identifier characters and keyword suffixing for common C keywords.
+
+This is a Phase 4 v0 backend-local naming policy only. Full ABI/linkage design, module-aware mangling, overload/generic mangling, extern/export attributes, and C header policy remain future work.
+
+P4-Fix1 also makes C type rendering explicit. The MIR C backend v0 only renders:
+
+- `void` as C `void`
+- `int` as C `int`
+- `bool` as C `int`
+
+Any valid nominal/user type that reaches C emission is now a backend error with a backend diagnostic rather than silently lowering to `int`. Invalid `TypeId` values remain rejected before rendering through MIR validation. Runtime struct/enum layout and nominal-value backend support remain future work.
+
 ## P4-M0 close criteria
 
 P4-M0 is complete when:
