@@ -12,3 +12,9 @@ Planned test roots:
 - `tests/diagnostics/` — diagnostic rendering and message cases.
 
 These directories are placeholders only in M0. They do not imply lexer or parser behavior yet.
+
+Phase 2 adds execution-target scaffolding before run tests are enforced:
+
+- `tests/corpus/phase2/` — executable-language target fixtures that may be ahead of implementation.
+- `tests/run/pass/` — future programs expected to compile, run, and match `// run-exit-code: N`.
+- `tests/run/fail/` — future negative run cases for compile, setup, or exit-code failures.

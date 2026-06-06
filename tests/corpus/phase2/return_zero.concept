@@ -1,0 +1,7 @@
+// run-exit-code: 0
+
+module Main;
+
+int main() {
+    return 0;
+}
