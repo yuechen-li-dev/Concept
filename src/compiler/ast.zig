@@ -329,6 +329,7 @@ pub const Expr = union(enum) {
     group: GroupExpr,
     unary: UnaryExpr,
     binary: BinaryExpr,
+    call: CallExpr,
 
     pub const IntLiteralExpr = struct { text: []const u8, span: SourceSpan };
     pub const BoolLiteralExpr = struct { value: bool, span: SourceSpan };
@@ -336,6 +337,7 @@ pub const Expr = union(enum) {
     pub const GroupExpr = struct { inner: *Expr, span: SourceSpan };
     pub const UnaryExpr = struct { op: UnaryOp, operand: *Expr, span: SourceSpan };
     pub const BinaryExpr = struct { op: BinaryOp, left: *Expr, right: *Expr, span: SourceSpan };
+    pub const CallExpr = struct { callee: NameSegment, args: []*Expr, span: SourceSpan };
 
     pub fn span(self: Expr) SourceSpan {
         return switch (self) {
@@ -345,6 +347,7 @@ pub const Expr = union(enum) {
             .group => |expr| expr.span,
             .unary => |expr| expr.span,
             .binary => |expr| expr.span,
+            .call => |expr| expr.span,
         };
     }
 
@@ -363,6 +366,13 @@ pub const Expr = union(enum) {
                 allocator.destroy(expr.left);
                 expr.right.deinit(allocator);
                 allocator.destroy(expr.right);
+            },
+            .call => |expr| {
+                for (expr.args) |arg| {
+                    arg.deinit(allocator);
+                    allocator.destroy(arg);
+                }
+                allocator.free(expr.args);
             },
             .int_literal, .bool_literal, .identifier => {},
         }
@@ -402,6 +412,12 @@ pub const Expr = union(enum) {
                 try writer.writeByte('\n');
                 try expr.left.writeDebug(writer, depth + 1);
                 try expr.right.writeDebug(writer, depth + 1);
+            },
+            .call => |expr| {
+                try writer.writeAll("Call ");
+                try writer.writeAll(expr.callee.text);
+                try writer.writeByte('\n');
+                for (expr.args) |arg| try arg.writeDebug(writer, depth + 1);
             },
         }
     }

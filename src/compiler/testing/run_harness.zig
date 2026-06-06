@@ -142,3 +142,39 @@ test "run harness compiles and runs bool local return" {
     );
     try std.testing.expectEqual(@as(u8, 1), result.actual_exit_code);
 }
+
+test "run harness compiles and runs function call add" {
+    const result = try expectExitCode(
+        std.testing.allocator,
+        "module Main; int add(int a, int b) { return a + b; } int main() { return add(1, 2); }",
+        3,
+    );
+    try std.testing.expectEqual(@as(u8, 3), result.actual_exit_code);
+}
+
+test "run harness compiles and runs function call using local" {
+    const result = try expectExitCode(
+        std.testing.allocator,
+        "module Main; int add_one(int x) { return x + 1; } int main() { int y = 2; return add_one(y); }",
+        3,
+    );
+    try std.testing.expectEqual(@as(u8, 3), result.actual_exit_code);
+}
+
+test "run harness compiles and runs no-argument function call" {
+    const result = try expectExitCode(
+        std.testing.allocator,
+        "module Main; int three() { return 3; } int main() { return three(); }",
+        3,
+    );
+    try std.testing.expectEqual(@as(u8, 3), result.actual_exit_code);
+}
+
+test "run harness compiles and runs forward function call" {
+    const result = try expectExitCode(
+        std.testing.allocator,
+        "module Main; int main() { return later(); } int later() { return 3; }",
+        3,
+    );
+    try std.testing.expectEqual(@as(u8, 3), result.actual_exit_code);
+}

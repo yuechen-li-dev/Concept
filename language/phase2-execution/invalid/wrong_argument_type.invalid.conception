@@ -1,0 +1,14 @@
+# name: phase2 wrong argument type
+# phase: check
+# expect: fail
+
+=== source ===
+module Main;
+
+int id(int x) {
+    return x;
+}
+
+int main() {
+    return id(true);
+}

@@ -628,7 +628,75 @@ pub const Parser = struct {
             } };
             return node;
         }
-        return self.parsePrimaryExpr(allocator);
+        return self.parsePostfixExpr(allocator);
+    }
+
+    fn parsePostfixExpr(self: *Parser, allocator: std.mem.Allocator) ParseExprError!*ast.Expr {
+        var expr = try self.parsePrimaryExpr(allocator);
+        errdefer {
+            expr.deinit(allocator);
+            allocator.destroy(expr);
+        }
+
+        while (self.current().kind == .left_paren) {
+            const identifier = switch (expr.*) {
+                .identifier => |identifier| identifier,
+                else => break,
+            };
+            expr = try self.finishCallExpr(allocator, expr, identifier);
+        }
+        return expr;
+    }
+
+    fn finishCallExpr(self: *Parser, allocator: std.mem.Allocator, callee_expr: *ast.Expr, identifier: ast.Expr.IdentifierExpr) ParseExprError!*ast.Expr {
+        const left_paren = self.advance();
+        _ = left_paren;
+        var args = std.ArrayList(*ast.Expr).init(allocator);
+        errdefer {
+            for (args.items) |arg| {
+                arg.deinit(allocator);
+                allocator.destroy(arg);
+            }
+            args.deinit();
+        }
+
+        var last_span = identifier.span;
+        if (self.current().kind != .right_paren) {
+            while (self.current().kind != .eof and self.current().kind != .right_paren and self.current().kind != .semicolon) {
+                const arg = self.parseExpr(allocator) catch |err| switch (err) {
+                    error.OutOfMemory => return err,
+                    error.ParseFailed => {
+                        self.recoverCallArgument();
+                        if (self.match(.comma) != null) continue;
+                        break;
+                    },
+                };
+                last_span = arg.span();
+                try args.append(arg);
+                if (self.match(.comma) == null) break;
+                if (self.current().kind == .right_paren) {
+                    self.report(.UnexpectedToken, "expected expression", self.current().span) catch return error.OutOfMemory;
+                    break;
+                }
+            }
+        }
+
+        const end_span = if (self.match(.right_paren)) |right_paren| right_paren.span else blk: {
+            self.report(.UnexpectedToken, "expected ')' after call arguments", self.current().span) catch return error.OutOfMemory;
+            self.recoverCallArgument();
+            break :blk last_span;
+        };
+
+        const owned_args = try args.toOwnedSlice();
+        const node = try allocator.create(ast.Expr);
+        callee_expr.deinit(allocator);
+        allocator.destroy(callee_expr);
+        node.* = .{ .call = .{
+            .callee = identifier.name,
+            .args = owned_args,
+            .span = ast.spanFromBounds(identifier.span.start, spanEnd(end_span)),
+        } };
+        return node;
     }
 
     fn parsePrimaryExpr(self: *Parser, allocator: std.mem.Allocator) ParseExprError!*ast.Expr {
@@ -691,6 +759,16 @@ pub const Parser = struct {
             self.advance();
         }
         _ = self.match(.semicolon);
+    }
+
+    fn recoverCallArgument(self: *Parser) void {
+        while (self.current().kind != .eof and
+            self.current().kind != .comma and
+            self.current().kind != .right_paren and
+            self.current().kind != .semicolon)
+        {
+            self.advance();
+        }
     }
 
     fn skipFunctionBody(self: *Parser) void {
@@ -3180,4 +3258,91 @@ test "local declaration missing semicolon diagnostic" {
 
     try std.testing.expectEqual(@as(usize, 1), diagnostics.count());
     try std.testing.expectEqual(DiagnosticCode.UnexpectedToken, diagnostics.diagnostics.items[0].code);
+}
+
+test "parses call expression with no args" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { return add(); }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Call add") != null);
+}
+
+test "parses call expression with one arg" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { return add(1); }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const call = switch (expectFunctionDecl(unit, 0).body.?.block.?.statements[0]) {
+        .return_stmt => |return_stmt| switch (return_stmt.value.?.*) {
+            .call => |call| call,
+            else => return error.ExpectedCallExpr,
+        },
+        else => return error.ExpectedReturnStmt,
+    };
+    try std.testing.expectEqualStrings("add", call.callee.text);
+    try std.testing.expectEqual(@as(usize, 1), call.args.len);
+}
+
+test "parses call expression with multiple args" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { return add(1, 2); }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const call = switch (expectFunctionDecl(unit, 0).body.?.block.?.statements[0]) {
+        .return_stmt => |return_stmt| switch (return_stmt.value.?.*) {
+            .call => |call| call,
+            else => return error.ExpectedCallExpr,
+        },
+        else => return error.ExpectedReturnStmt,
+    };
+    try std.testing.expectEqual(@as(usize, 2), call.args.len);
+}
+
+test "parses call nested in binary expression" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { return add(1, 2) + 3; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Binary +") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Call add") != null);
+}
+
+test "call expression missing closing paren diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { return add(1, 2; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected ')' after call arguments", diagnostics.diagnostics.items[0].message);
+}
+
+test "call expression malformed argument recovery" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { return add(1, +, 2); }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected expression", diagnostics.diagnostics.items[0].message);
+    try std.testing.expectEqual(@as(usize, 1), expectFunctionDecl(unit, 0).body.?.block.?.statements.len);
 }

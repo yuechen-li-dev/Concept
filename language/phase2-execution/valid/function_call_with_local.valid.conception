@@ -1,0 +1,18 @@
+# name: phase2 function call with local
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int add_one(int x) {
+    return x + 1;
+}
+
+int main() {
+    int y = 2;
+    return add_one(y);
+}
+
+=== run ===
+exit_code: 3

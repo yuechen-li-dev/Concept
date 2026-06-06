@@ -1,0 +1,17 @@
+# name: phase2 forward function call
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    return later();
+}
+
+int later() {
+    return 3;
+}
+
+=== run ===
+exit_code: 3
