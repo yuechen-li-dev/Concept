@@ -23,4 +23,3 @@ Any partial work must leave the codebase in a cleaner, more legible, and more di
 ## Reporting
 
 Run `zig build test` before reporting completion. Keep changes small and report implemented changes, tests added, known limitations, and commands run.
-Do not commit changes unless the user explicitly asks you to commit.
