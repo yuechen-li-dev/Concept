@@ -42,8 +42,74 @@ pub const ImportDecl = struct {
     }
 };
 
-/// Placeholder for future top-level declarations.
-pub const Item = union(enum) {};
+pub const TypeName = struct {
+    name: QualifiedName,
+    span: SourceSpan,
+
+    pub fn deinit(self: TypeName, allocator: std.mem.Allocator) void {
+        self.name.deinit(allocator);
+    }
+
+    pub fn write(self: TypeName, writer: anytype) !void {
+        try self.name.write(writer);
+    }
+};
+
+pub const FieldDecl = struct {
+    type_name: TypeName,
+    name: NameSegment,
+    span: SourceSpan,
+
+    pub fn deinit(self: FieldDecl, allocator: std.mem.Allocator) void {
+        self.type_name.deinit(allocator);
+    }
+};
+
+pub const StructDecl = struct {
+    is_export: bool,
+    name: NameSegment,
+    fields: []FieldDecl,
+    span: SourceSpan,
+
+    pub fn deinit(self: StructDecl, allocator: std.mem.Allocator) void {
+        for (self.fields) |field| {
+            field.deinit(allocator);
+        }
+        allocator.free(self.fields);
+    }
+};
+
+pub const Item = union(enum) {
+    struct_decl: StructDecl,
+
+    pub fn deinit(self: Item, allocator: std.mem.Allocator) void {
+        switch (self) {
+            .struct_decl => |struct_decl| struct_decl.deinit(allocator),
+        }
+    }
+
+    pub fn writeDebug(self: Item, writer: anytype) !void {
+        switch (self) {
+            .struct_decl => |struct_decl| {
+                if (struct_decl.is_export) {
+                    try writer.writeAll("  Export Struct ");
+                } else {
+                    try writer.writeAll("  Struct ");
+                }
+                try writer.writeAll(struct_decl.name.text);
+                try writer.writeByte('\n');
+
+                for (struct_decl.fields) |field| {
+                    try writer.writeAll("    Field ");
+                    try field.type_name.write(writer);
+                    try writer.writeByte(' ');
+                    try writer.writeAll(field.name.text);
+                    try writer.writeByte('\n');
+                }
+            },
+        }
+    }
+};
 
 pub const CompilationUnit = struct {
     span: SourceSpan,
@@ -57,6 +123,9 @@ pub const CompilationUnit = struct {
             import_decl.deinit(allocator);
         }
         allocator.free(self.imports);
+        for (self.items) |item| {
+            item.deinit(allocator);
+        }
         allocator.free(self.items);
     }
 
@@ -71,6 +140,9 @@ pub const CompilationUnit = struct {
             try writer.writeAll("  Import ");
             try import_decl.name.write(writer);
             try writer.writeByte('\n');
+        }
+        for (self.items) |item| {
+            try item.writeDebug(writer);
         }
     }
 

@@ -35,6 +35,7 @@ pub const Parser = struct {
             if (module_decl) |module| module.deinit(allocator);
             for (imports.items) |import_decl| import_decl.deinit(allocator);
             imports.deinit();
+            for (items.items) |item| item.deinit(allocator);
             items.deinit();
         }
 
@@ -55,10 +56,18 @@ pub const Parser = struct {
                     const duplicate = try self.parseModuleDecl(allocator);
                     duplicate.deinit(allocator);
                 },
+                .@"struct" => {
+                    try items.append(try self.parseStructItem(allocator));
+                },
+                .@"export" => {
+                    if (self.peek(1).kind == .@"struct") {
+                        try items.append(try self.parseStructItem(allocator));
+                    } else {
+                        try self.reportExpectedItem("expected item declaration", self.current().span);
+                        self.advance();
+                    }
+                },
                 .import => {
-                    // M6 only accepts imports in the initial import block. Once
-                    // future item parsing exists this can become an item-ordering
-                    // diagnostic instead of treating the token as unexpected.
                     try self.reportExpectedItem("expected item declaration", self.current().span);
                     self.advance();
                 },
@@ -75,12 +84,17 @@ pub const Parser = struct {
             for (owned_imports) |import_decl| import_decl.deinit(allocator);
             allocator.free(owned_imports);
         }
+        const owned_items = try items.toOwnedSlice();
+        errdefer {
+            for (owned_items) |item| item.deinit(allocator);
+            allocator.free(owned_items);
+        }
 
         return .{
             .span = ast.spanFromBounds(start, eof_span.start),
             .module = module_decl,
             .imports = owned_imports,
-            .items = try items.toOwnedSlice(),
+            .items = owned_items,
         };
     }
 
@@ -139,6 +153,118 @@ pub const Parser = struct {
             .name = name,
             .span = ast.spanFromBounds(import_token.span.start, spanEnd(end_span)),
         };
+    }
+
+    fn parseStructItem(self: *Parser, allocator: std.mem.Allocator) !ast.Item {
+        return .{ .struct_decl = try self.parseStructDecl(allocator) };
+    }
+
+    fn parseStructDecl(self: *Parser, allocator: std.mem.Allocator) !ast.StructDecl {
+        const start_token = if (self.match(.@"export")) |export_token| export_token else null;
+        const struct_token = (try self.expect(.@"struct", "expected 'struct' after export", .ExpectedItem)) orelse start_token.?;
+        const start_span = if (start_token) |export_token| export_token.span else struct_token.span;
+
+        const name_token = try self.expect(.identifier, "expected struct name", .UnexpectedToken);
+        const name = if (name_token) |identifier|
+            ast.NameSegment{ .text = identifier.lexeme, .span = identifier.span }
+        else
+            ast.NameSegment{ .text = "", .span = self.current().span };
+
+        var fields = std.ArrayList(ast.FieldDecl).init(allocator);
+        errdefer {
+            for (fields.items) |field| field.deinit(allocator);
+            fields.deinit();
+        }
+
+        if (self.match(.left_brace) == null) {
+            try self.report(.UnexpectedToken, "expected '{' in struct declaration", self.current().span);
+            while (self.current().kind != .eof and self.current().kind != .semicolon and self.current().kind != .left_brace) {
+                self.advance();
+            }
+            if (self.match(.left_brace) == null) {
+                const end_span = try self.expectTrailingStructSemicolon();
+                return .{
+                    .is_export = start_token != null,
+                    .name = name,
+                    .fields = try fields.toOwnedSlice(),
+                    .span = ast.spanFromBounds(start_span.start, spanEnd(end_span)),
+                };
+            }
+        }
+
+        const close_span = try self.parseStructBody(allocator, &fields);
+        const end_span = if (self.match(.right_brace)) |right_brace| blk: {
+            _ = close_span;
+            break :blk try self.expectTrailingStructSemicolonAfterBrace(right_brace.span);
+        } else blk: {
+            const diagnostic_span = self.current().span;
+            try self.report(.UnexpectedToken, "expected '}' to close struct declaration", diagnostic_span);
+            if (self.match(.semicolon)) |semicolon| {
+                break :blk semicolon.span;
+            }
+            break :blk diagnostic_span;
+        };
+
+        return .{
+            .is_export = start_token != null,
+            .name = name,
+            .fields = try fields.toOwnedSlice(),
+            .span = ast.spanFromBounds(start_span.start, spanEnd(end_span)),
+        };
+    }
+
+    fn parseStructBody(self: *Parser, allocator: std.mem.Allocator, fields: *std.ArrayList(ast.FieldDecl)) !SourceSpan {
+        while (self.current().kind != .eof and self.current().kind != .right_brace) {
+            switch (self.current().kind) {
+                .identifier => try fields.append(try self.parseFieldDecl(allocator)),
+                .semicolon => return self.current().span,
+                else => {
+                    try self.report(.UnexpectedToken, "unexpected token in struct body", self.current().span);
+                    self.advance();
+                },
+            }
+        }
+        return self.current().span;
+    }
+
+    fn parseFieldDecl(self: *Parser, allocator: std.mem.Allocator) !ast.FieldDecl {
+        var type_name = ast.TypeName{ .name = try self.parseDottedName(allocator), .span = undefined };
+        type_name.span = type_name.name.span;
+        errdefer type_name.deinit(allocator);
+
+        const name_token = try self.expect(.identifier, "expected field name", .UnexpectedToken);
+        const name = if (name_token) |identifier|
+            ast.NameSegment{ .text = identifier.lexeme, .span = identifier.span }
+        else
+            ast.NameSegment{ .text = "", .span = self.current().span };
+
+        const end_span = try self.expectFieldSemicolon("expected ';' after field declaration");
+        return .{
+            .type_name = type_name,
+            .name = name,
+            .span = ast.spanFromBounds(type_name.span.start, spanEnd(end_span)),
+        };
+    }
+
+    fn expectFieldSemicolon(self: *Parser, message: []const u8) !SourceSpan {
+        if (self.match(.semicolon)) |semicolon| return semicolon.span;
+
+        const diagnostic_span = self.current().span;
+        try self.report(.UnexpectedToken, message, diagnostic_span);
+        return diagnostic_span;
+    }
+
+    fn expectTrailingStructSemicolonAfterBrace(self: *Parser, right_brace_span: SourceSpan) !SourceSpan {
+        if (self.match(.semicolon)) |semicolon| return semicolon.span;
+
+        try self.report(.UnexpectedToken, "expected ';' after struct declaration", self.current().span);
+        return right_brace_span;
+    }
+
+    fn expectTrailingStructSemicolon(self: *Parser) !SourceSpan {
+        if (self.match(.semicolon)) |semicolon| return semicolon.span;
+        try self.report(.UnexpectedToken, "expected ';' after struct declaration", self.current().span);
+        return self.current().span;
     }
 
     fn parseDottedName(self: *Parser, allocator: std.mem.Allocator) !ast.QualifiedName {
@@ -333,4 +459,166 @@ test "AST snapshot debug output is stable" {
         \\  Import Core.Diagnostics
         \\
     , snapshot);
+}
+
+test "parses empty struct" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; struct Empty {};", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    try std.testing.expectEqual(@as(usize, 1), unit.items.len);
+    const struct_decl = switch (unit.items[0]) {
+        .struct_decl => |struct_decl| struct_decl,
+    };
+    try std.testing.expectEqualStrings("Empty", struct_decl.name.text);
+    try std.testing.expectEqual(@as(usize, 0), struct_decl.fields.len);
+}
+
+test "parses struct with one field" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; struct Vec1 { float x; };", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const struct_decl = switch (unit.items[0]) {
+        .struct_decl => |struct_decl| struct_decl,
+    };
+    try std.testing.expectEqual(@as(usize, 1), struct_decl.fields.len);
+    try std.testing.expectEqualStrings("float", struct_decl.fields[0].type_name.name.parts[0].text);
+    try std.testing.expectEqualStrings("x", struct_decl.fields[0].name.text);
+}
+
+test "parses struct with multiple fields" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource(
+        \\module Example;
+        \\struct Vec3 {
+        \\    float x;
+        \\    float y;
+        \\    float z;
+        \\};
+    , &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const struct_decl = switch (unit.items[0]) {
+        .struct_decl => |struct_decl| struct_decl,
+    };
+    try std.testing.expectEqual(@as(usize, 3), struct_decl.fields.len);
+    try std.testing.expectEqualStrings("z", struct_decl.fields[2].name.text);
+}
+
+test "parses export struct" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; export struct SourceSpan { int start; int length; };", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const struct_decl = switch (unit.items[0]) {
+        .struct_decl => |struct_decl| struct_decl,
+    };
+    try std.testing.expect(struct_decl.is_export);
+    try std.testing.expectEqualStrings("SourceSpan", struct_decl.name.text);
+    try std.testing.expectEqual(@as(usize, 2), struct_decl.fields.len);
+}
+
+test "parses dotted field type" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; struct Holder { Qualified.Type value; };", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const struct_decl = switch (unit.items[0]) {
+        .struct_decl => |struct_decl| struct_decl,
+    };
+    try std.testing.expectEqual(@as(usize, 2), struct_decl.fields[0].type_name.name.parts.len);
+    try std.testing.expectEqualStrings("Qualified", struct_decl.fields[0].type_name.name.parts[0].text);
+    try std.testing.expectEqualStrings("Type", struct_decl.fields[0].type_name.name.parts[1].text);
+}
+
+test "AST snapshot debug output includes structs" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource(
+        \\module Example;
+        \\struct Vec3 {
+        \\    float x;
+        \\    float y;
+        \\    float z;
+        \\};
+    , &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+
+    try std.testing.expectEqualStrings(
+        \\CompilationUnit
+        \\  Module Example
+        \\  Struct Vec3
+        \\    Field float x
+        \\    Field float y
+        \\    Field float z
+        \\
+    , snapshot);
+}
+
+test "missing struct name produces diagnostic" {
+    try expectSingleDiagnostic("module Example; struct { int x; };", .UnexpectedToken);
+}
+
+test "missing opening brace produces diagnostic" {
+    try expectSingleDiagnostic("module Example; struct Vec3 int x;", .UnexpectedToken);
+}
+
+test "missing field semicolon produces diagnostic and continues parsing fields" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; struct Vec2 { float x float y; };", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.count());
+    try std.testing.expectEqual(DiagnosticCode.UnexpectedToken, diagnostics.diagnostics.items[0].code);
+    const struct_decl = switch (unit.items[0]) {
+        .struct_decl => |struct_decl| struct_decl,
+    };
+    try std.testing.expectEqual(@as(usize, 2), struct_decl.fields.len);
+    try std.testing.expectEqualStrings("y", struct_decl.fields[1].name.text);
+}
+
+test "missing closing brace produces diagnostic" {
+    try expectSingleDiagnostic("module Example; struct Vec1 { float x;", .UnexpectedToken);
+}
+
+test "missing trailing struct semicolon produces diagnostic" {
+    try expectSingleDiagnostic("module Example; struct Vec1 { float x; }", .UnexpectedToken);
+}
+
+test "unexpected token inside struct body recovers" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; struct Vec1 { 123 float x; };", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.count());
+    try std.testing.expectEqual(DiagnosticCode.UnexpectedToken, diagnostics.diagnostics.items[0].code);
+    const struct_decl = switch (unit.items[0]) {
+        .struct_decl => |struct_decl| struct_decl,
+    };
+    try std.testing.expectEqual(@as(usize, 1), struct_decl.fields.len);
+    try std.testing.expectEqualStrings("x", struct_decl.fields[0].name.text);
 }
