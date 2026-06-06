@@ -306,6 +306,43 @@ mode pinned;
 
 This example is illustrative. Phase 4a v0 should implement only a small model, not every section immediately.
 
+## P4a-M2 package modules and targets
+
+P4a-M2 extends the restricted `Concept.manifest.conception` parser for package manifests with deterministic, manifest-local declarations for module roots and build targets.
+
+Implemented in this milestone:
+
+```text
+=== modules ===
+module Compiler.Source {
+    root "src/compiler/source";
+}
+
+=== targets ===
+target Cathedral {
+    kind executable;
+    module Compiler.Main;
+}
+
+target CompilerTests {
+    kind tests;
+    modules [
+        Compiler.Source.Tests,
+        Compiler.Parser.Tests
+    ];
+}
+```
+
+The supported target kinds are:
+
+```text
+executable
+library
+tests
+```
+
+Module and target references are validated only against declarations in the same manifest. This is intentionally local metadata validation, not build planning. P4a-M2 does **not** add filesystem scanning, dependency resolution, registry lookup, lock files, package driver integration, native linker settings, workspaces, or arbitrary build scripting.
+
 ## Dependency resolution policy
 
 Concept should support reproducibility without requiring lock files.
