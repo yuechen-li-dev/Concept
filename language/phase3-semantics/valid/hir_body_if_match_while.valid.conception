@@ -1,0 +1,25 @@
+# name: phase3 hir body if match while
+# phase: check
+# expect: pass
+
+=== source ===
+module Example;
+
+int main() {
+    int x = 0;
+    if (true) {
+        int y = 1;
+        x = y;
+    } else {
+        x = 2;
+    }
+    while (false) {
+        int z = 3;
+        x = z;
+    }
+    match x {
+        0 => x = 1;
+        _ => x = 2;
+    }
+    return x;
+}

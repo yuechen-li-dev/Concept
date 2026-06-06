@@ -572,6 +572,34 @@ test "language check fixture: phase3 unsupported pointer type" {
     try expectCheckFixture("../../../language/phase3-semantics/invalid/unsupported_pointer_type.invalid.conception");
 }
 
+test "language check fixture: phase3 HIR body local return" {
+    try expectCheckFixture("../../../language/phase3-semantics/valid/hir_body_local_return.valid.conception");
+}
+
+test "language check fixture: phase3 HIR body function call" {
+    try expectCheckFixture("../../../language/phase3-semantics/valid/hir_body_function_call.valid.conception");
+}
+
+test "language check fixture: phase3 HIR body if match while" {
+    try expectCheckFixture("../../../language/phase3-semantics/valid/hir_body_if_match_while.valid.conception");
+}
+
+test "language check fixture: phase3 HIR body unknown identifier" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/hir_body_unknown_identifier.invalid.conception");
+}
+
+test "language check fixture: phase3 HIR body unknown function" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/hir_body_unknown_function.invalid.conception");
+}
+
+test "language check fixture: phase3 HIR body duplicate local" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/hir_body_duplicate_local.invalid.conception");
+}
+
+test "language check fixture: phase3 HIR body inner scope leak" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/hir_body_inner_scope_leak.invalid.conception");
+}
+
 fn expectRunFixture(comptime path: []const u8) !void {
     const text = @embedFile(path);
     const fixture = try parse(std.testing.allocator, text, .{ .path = path });

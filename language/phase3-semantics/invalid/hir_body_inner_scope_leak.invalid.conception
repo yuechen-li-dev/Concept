@@ -1,0 +1,16 @@
+# name: phase3 hir body inner scope leak
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+int main() {
+    if (true) {
+        int x = 1;
+    }
+    return x;
+}
+
+=== diagnostics ===
+CON0026

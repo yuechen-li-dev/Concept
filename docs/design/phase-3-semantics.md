@@ -160,6 +160,8 @@ P3-M2 introduces the standalone HIR skeleton and compact semantic ID values for 
 
 P3-M5 extends declaration HIR with resolved `TypeId`s for function returns and parameters, struct fields, and enum variant payload fields. Declaration type-name resolution now accepts `void`, `int`, `bool`, and nominal top-level struct and enum names, while rejecting unknown type names, function names used as types, and unsupported syntax such as dotted, generic, pointer, or reference type forms. It also adds declaration-level duplicate checks for struct fields, enum variants, and function parameters. Function body lowering remains deliberately deferred.
 
+P3-M6 lowers parsed function bodies into HIR statement and expression nodes. Parameters and locals now have semantic IDs, body identifier references resolve to visible `ParamId` or `LocalId` bindings, simple function calls resolve to top-level `FunctionId`s, and the debug renderer can snapshot lowered bodies. HIR-based type checking and backend migration remain future milestones.
+
 This is especially important before introducing richer module summaries and imports. A one-file Phase 3 module can still use the same discipline that later multi-file resolution needs.
 
 ## TypeStore plan

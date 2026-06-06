@@ -13,6 +13,8 @@ pub const FieldId = SemanticId("FieldId");
 pub const VariantId = SemanticId("VariantId");
 pub const LocalId = SemanticId("LocalId");
 pub const ParamId = SemanticId("ParamId");
+pub const StmtId = SemanticId("StmtId");
+pub const ExprId = SemanticId("ExprId");
 pub const EnumPayloadFieldId = SemanticId("EnumPayloadFieldId");
 
 fn SemanticId(comptime label: []const u8) type {
@@ -37,6 +39,96 @@ pub const HirFunction = struct {
     return_type: types.TypeId,
     params: []ParamId,
     locals: []LocalId,
+    body: ?StmtId = null,
+};
+
+pub const HirLocal = struct {
+    parent: FunctionId,
+    name: SymbolId,
+    type_id: types.TypeId,
+};
+
+pub const AssignTarget = union(enum) {
+    local: LocalId,
+    param: ParamId,
+};
+
+pub const HirStmt = union(enum) {
+    block: []StmtId,
+    return_stmt: ?ExprId,
+    local_decl: struct { local: LocalId, initializer: ExprId },
+    assignment: struct { target: AssignTarget, value: ExprId },
+    if_stmt: struct { condition: ExprId, then_block: StmtId, else_block: ?StmtId },
+    while_stmt: struct { condition: ExprId, body: StmtId },
+    match_stmt: struct { scrutinee: ExprId, arms: []HirMatchArm },
+};
+
+pub const HirMatchPattern = union(enum) {
+    int_literal: []const u8,
+    bool_literal: bool,
+    wildcard,
+};
+
+pub const HirMatchArm = struct {
+    pattern: HirMatchPattern,
+    body: StmtId,
+};
+
+pub const HirExpr = union(enum) {
+    int_literal: []const u8,
+    bool_literal: bool,
+    local_ref: LocalId,
+    param_ref: ParamId,
+    call: struct { function: FunctionId, args: []ExprId },
+    group: ExprId,
+    unary: struct { op: UnaryOp, operand: ExprId },
+    binary: struct { op: BinaryOp, left: ExprId, right: ExprId },
+};
+
+pub const UnaryOp = enum {
+    negate,
+    logical_not,
+
+    pub fn lexeme(self: UnaryOp) []const u8 {
+        return switch (self) {
+            .negate => "-",
+            .logical_not => "!",
+        };
+    }
+};
+
+pub const BinaryOp = enum {
+    multiply,
+    divide,
+    modulo,
+    add,
+    subtract,
+    less,
+    less_equal,
+    greater,
+    greater_equal,
+    equal_equal,
+    bang_equal,
+    logical_and,
+    logical_or,
+
+    pub fn lexeme(self: BinaryOp) []const u8 {
+        return switch (self) {
+            .multiply => "*",
+            .divide => "/",
+            .modulo => "%",
+            .add => "+",
+            .subtract => "-",
+            .less => "<",
+            .less_equal => "<=",
+            .greater => ">",
+            .greater_equal => ">=",
+            .equal_equal => "==",
+            .bang_equal => "!=",
+            .logical_and => "&&",
+            .logical_or => "||",
+        };
+    }
 };
 
 pub const HirParam = struct {
@@ -93,6 +185,9 @@ pub const HirStore = struct {
     items: std.ArrayList(HirItem),
     functions: std.ArrayList(HirFunction),
     params: std.ArrayList(HirParam),
+    locals: std.ArrayList(HirLocal),
+    stmts: std.ArrayList(HirStmt),
+    exprs: std.ArrayList(HirExpr),
     structs: std.ArrayList(HirStruct),
     enums: std.ArrayList(HirEnum),
     fields: std.ArrayList(HirField),
@@ -105,6 +200,9 @@ pub const HirStore = struct {
             .items = std.ArrayList(HirItem).empty,
             .functions = std.ArrayList(HirFunction).empty,
             .params = std.ArrayList(HirParam).empty,
+            .locals = std.ArrayList(HirLocal).empty,
+            .stmts = std.ArrayList(HirStmt).empty,
+            .exprs = std.ArrayList(HirExpr).empty,
             .structs = std.ArrayList(HirStruct).empty,
             .enums = std.ArrayList(HirEnum).empty,
             .fields = std.ArrayList(HirField).empty,
@@ -117,6 +215,28 @@ pub const HirStore = struct {
         for (self.functions.items) |function| {
             if (function.params.len > 0) self.allocator.free(function.params);
             if (function.locals.len > 0) self.allocator.free(function.locals);
+        }
+        for (self.stmts.items) |stmt| {
+            switch (stmt) {
+                .block => |children| if (children.len > 0) self.allocator.free(children),
+                .match_stmt => |match_stmt| if (match_stmt.arms.len > 0) {
+                    for (match_stmt.arms) |arm| {
+                        switch (arm.pattern) {
+                            .int_literal => |text| self.allocator.free(text),
+                            else => {},
+                        }
+                    }
+                    self.allocator.free(match_stmt.arms);
+                },
+                else => {},
+            }
+        }
+        for (self.exprs.items) |expr| {
+            switch (expr) {
+                .int_literal => |text| self.allocator.free(text),
+                .call => |call| if (call.args.len > 0) self.allocator.free(call.args),
+                else => {},
+            }
         }
         for (self.structs.items) |struct_decl| {
             if (struct_decl.fields.len > 0) self.allocator.free(struct_decl.fields);
@@ -133,6 +253,9 @@ pub const HirStore = struct {
         self.fields.deinit(self.allocator);
         self.enums.deinit(self.allocator);
         self.structs.deinit(self.allocator);
+        self.exprs.deinit(self.allocator);
+        self.stmts.deinit(self.allocator);
+        self.locals.deinit(self.allocator);
         self.params.deinit(self.allocator);
         self.functions.deinit(self.allocator);
         self.items.deinit(self.allocator);
@@ -149,6 +272,7 @@ pub const HirStore = struct {
             .return_type = return_type,
             .params = &.{},
             .locals = &.{},
+            .body = null,
         });
         return id;
     }
@@ -186,6 +310,33 @@ pub const HirStore = struct {
         const function_decl = self.getFunctionMut(parent);
         function_decl.params = try appendId(self.allocator, ParamId, function_decl.params, id);
         return id;
+    }
+
+    pub fn addLocal(self: *HirStore, parent: FunctionId, name: SymbolId, type_id: types.TypeId) !LocalId {
+        _ = self.getFunction(parent);
+        const id = LocalId{ .index = try nextIndex(self.locals.items.len, error.TooManyLocals) };
+        try self.locals.append(self.allocator, .{ .parent = parent, .name = name, .type_id = type_id });
+        errdefer _ = self.locals.pop();
+
+        const function_decl = self.getFunctionMut(parent);
+        function_decl.locals = try appendId(self.allocator, LocalId, function_decl.locals, id);
+        return id;
+    }
+
+    pub fn addStmt(self: *HirStore, stmt: HirStmt) !StmtId {
+        const id = StmtId{ .index = try nextIndex(self.stmts.items.len, error.TooManyStmts) };
+        try self.stmts.append(self.allocator, stmt);
+        return id;
+    }
+
+    pub fn addExpr(self: *HirStore, expr: HirExpr) !ExprId {
+        const id = ExprId{ .index = try nextIndex(self.exprs.items.len, error.TooManyExprs) };
+        try self.exprs.append(self.allocator, expr);
+        return id;
+    }
+
+    pub fn setFunctionBody(self: *HirStore, id: FunctionId, body: StmtId) void {
+        self.getFunctionMut(id).body = body;
     }
 
     pub fn setFunctionReturnType(self: *HirStore, id: FunctionId, type_id: types.TypeId) void {
@@ -241,6 +392,24 @@ pub const HirStore = struct {
         const index: usize = id.index;
         std.debug.assert(index < self.params.items.len);
         return &self.params.items[index];
+    }
+
+    pub fn getLocal(self: *const HirStore, id: LocalId) *const HirLocal {
+        const index: usize = id.index;
+        std.debug.assert(index < self.locals.items.len);
+        return &self.locals.items[index];
+    }
+
+    pub fn getStmt(self: *const HirStore, id: StmtId) *const HirStmt {
+        const index: usize = id.index;
+        std.debug.assert(index < self.stmts.items.len);
+        return &self.stmts.items[index];
+    }
+
+    pub fn getExpr(self: *const HirStore, id: ExprId) *const HirExpr {
+        const index: usize = id.index;
+        std.debug.assert(index < self.exprs.items.len);
+        return &self.exprs.items[index];
     }
 
     pub fn getStruct(self: *const HirStore, id: StructId) *const HirStruct {
@@ -308,9 +477,23 @@ pub const HirStore = struct {
                 .function => |id| {
                     const function = self.getFunction(id);
                     try writer.print("  Function {s} -> {f}\n", .{ interner.text(function.name), function.return_type });
-                    for (function.params) |param_id| {
-                        const param = self.getParam(param_id);
-                        try writer.print("    Param {s}: {f}\n", .{ interner.text(param.name), param.type_id });
+                    if (function.params.len != 0) {
+                        try writer.writeAll("    Params\n");
+                        for (function.params) |param_id| {
+                            const param = self.getParam(param_id);
+                            try writer.print("      {f} {s}: {f}\n", .{ param_id, interner.text(param.name), param.type_id });
+                        }
+                    }
+                    if (function.locals.len != 0) {
+                        try writer.writeAll("    Locals\n");
+                        for (function.locals) |local_id| {
+                            const local = self.getLocal(local_id);
+                            try writer.print("      {f} {s}: {f}\n", .{ local_id, interner.text(local.name), local.type_id });
+                        }
+                    }
+                    if (function.body) |body| {
+                        try writer.writeAll("    Body\n");
+                        try self.writeStmtDebug(writer, body, 3);
                     }
                 },
                 .struct_ => |id| {
@@ -337,6 +520,93 @@ pub const HirStore = struct {
         }
 
         return try buffer.toOwnedSlice();
+    }
+
+    fn writeStmtDebug(self: *const HirStore, writer: *std.Io.Writer, id: StmtId, depth: usize) !void {
+        try writeIndent(writer, depth);
+        switch (self.getStmt(id).*) {
+            .block => |children| {
+                try writer.writeAll("Block\n");
+                for (children) |child| try self.writeStmtDebug(writer, child, depth + 1);
+            },
+            .return_stmt => |maybe_value| {
+                try writer.writeAll("Return\n");
+                if (maybe_value) |value| try self.writeExprDebug(writer, value, depth + 1);
+            },
+            .local_decl => |decl| {
+                try writer.print("LocalDecl {f}\n", .{decl.local});
+                try self.writeExprDebug(writer, decl.initializer, depth + 1);
+            },
+            .assignment => |assignment| {
+                try writer.writeAll("Assignment ");
+                try writeAssignTarget(writer, assignment.target);
+                try writer.writeByte('\n');
+                try self.writeExprDebug(writer, assignment.value, depth + 1);
+            },
+            .if_stmt => |stmt| {
+                try writer.writeAll("If\n");
+                try writeIndent(writer, depth + 1);
+                try writer.writeAll("Condition\n");
+                try self.writeExprDebug(writer, stmt.condition, depth + 2);
+                try writeIndent(writer, depth + 1);
+                try writer.writeAll("Then\n");
+                try self.writeStmtDebug(writer, stmt.then_block, depth + 2);
+                if (stmt.else_block) |else_block| {
+                    try writeIndent(writer, depth + 1);
+                    try writer.writeAll("Else\n");
+                    try self.writeStmtDebug(writer, else_block, depth + 2);
+                }
+            },
+            .while_stmt => |stmt| {
+                try writer.writeAll("While\n");
+                try writeIndent(writer, depth + 1);
+                try writer.writeAll("Condition\n");
+                try self.writeExprDebug(writer, stmt.condition, depth + 2);
+                try writeIndent(writer, depth + 1);
+                try writer.writeAll("Body\n");
+                try self.writeStmtDebug(writer, stmt.body, depth + 2);
+            },
+            .match_stmt => |stmt| {
+                try writer.writeAll("Match\n");
+                try writeIndent(writer, depth + 1);
+                try writer.writeAll("Scrutinee\n");
+                try self.writeExprDebug(writer, stmt.scrutinee, depth + 2);
+                for (stmt.arms) |arm| {
+                    try writeIndent(writer, depth + 1);
+                    try writer.writeAll("Arm ");
+                    try writePattern(writer, arm.pattern);
+                    try writer.writeByte('\n');
+                    try self.writeStmtDebug(writer, arm.body, depth + 2);
+                }
+            },
+        }
+    }
+
+    fn writeExprDebug(self: *const HirStore, writer: *std.Io.Writer, id: ExprId, depth: usize) !void {
+        try writeIndent(writer, depth);
+        switch (self.getExpr(id).*) {
+            .int_literal => |text| try writer.print("Int {s}\n", .{text}),
+            .bool_literal => |value| try writer.print("Bool {s}\n", .{if (value) "true" else "false"}),
+            .local_ref => |local| try writer.print("LocalRef {f}\n", .{local}),
+            .param_ref => |param| try writer.print("ParamRef {f}\n", .{param}),
+            .call => |call| {
+                try writer.print("Call {f}\n", .{call.function});
+                for (call.args) |arg| try self.writeExprDebug(writer, arg, depth + 1);
+            },
+            .group => |inner| {
+                try writer.writeAll("Group\n");
+                try self.writeExprDebug(writer, inner, depth + 1);
+            },
+            .unary => |unary| {
+                try writer.print("Unary {s}\n", .{unary.op.lexeme()});
+                try self.writeExprDebug(writer, unary.operand, depth + 1);
+            },
+            .binary => |binary| {
+                try writer.print("Binary {s}\n", .{binary.op.lexeme()});
+                try self.writeExprDebug(writer, binary.left, depth + 1);
+                try self.writeExprDebug(writer, binary.right, depth + 1);
+            },
+        }
     }
 
     fn addItem(self: *HirStore, item: HirItem) !ItemId {
@@ -474,4 +744,23 @@ test "HIR debug formatting uses interned names" {
         \\    Variant End
         \\
     , rendered);
+}
+
+fn writeIndent(writer: *std.Io.Writer, depth: usize) !void {
+    for (0..depth) |_| try writer.writeAll("  ");
+}
+
+fn writeAssignTarget(writer: *std.Io.Writer, target: AssignTarget) !void {
+    switch (target) {
+        .local => |id| try writer.print("LocalRef {f}", .{id}),
+        .param => |id| try writer.print("ParamRef {f}", .{id}),
+    }
+}
+
+fn writePattern(writer: *std.Io.Writer, pattern: HirMatchPattern) !void {
+    switch (pattern) {
+        .int_literal => |text| try writer.writeAll(text),
+        .bool_literal => |value| try writer.writeAll(if (value) "true" else "false"),
+        .wildcard => try writer.writeByte('_'),
+    }
 }
