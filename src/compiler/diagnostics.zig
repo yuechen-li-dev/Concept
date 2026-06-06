@@ -525,5 +525,5 @@ pub fn unsupportedCBackendType(span: SourceSpan) Diagnostic {
         .@"error",
         "unsupported type in MIR C backend",
         span,
-    ).withHelp("Phase 4 C backend v0 only renders void, int, and bool");
+    ).withHelp("Phase 5 C backend v0 renders void, int, bool, and supported non-empty enums with int/bool payload fields");
 }

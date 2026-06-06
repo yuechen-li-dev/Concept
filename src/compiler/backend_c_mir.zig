@@ -37,6 +37,9 @@ pub fn emitExecutableFromMir(
         .diagnostic_bag = diagnostic_bag,
     };
 
+    const emitted_enum_layouts = try emitEnumLayouts(writer, &ctx);
+    if (emitted_enum_layouts and mir_module.store.functions.items.len > 0) try writer.writeByte('\n');
+
     if (mir_module.store.functions.items.len > 1) {
         for (mir_module.store.functions.items, 0..) |function, index| {
             try emitPrototype(writer, &ctx, .{ .index = @intCast(index) }, function);
@@ -49,6 +52,91 @@ pub fn emitExecutableFromMir(
         try emitFunction(writer, &ctx, .{ .index = @intCast(index) }, function);
     }
     return output.toOwnedSlice();
+}
+
+fn emitEnumLayouts(writer: anytype, ctx: *const BackendContext) EmitError!bool {
+    var emitted_any = false;
+    for (ctx.module.hir.enums.items, 0..) |enum_decl, index| {
+        if (emitted_any) try writer.writeByte('\n');
+        try emitEnumLayout(writer, ctx, .{ .index = @intCast(index) }, enum_decl);
+        emitted_any = true;
+    }
+    return emitted_any;
+}
+
+/// P5-M1 enum layout emission is backend-local and intentionally not ABI-stable.
+/// The MIR C backend renders every collected enum as `tag` plus payload union only
+/// when the enum is non-empty and all payload fields are backend v0 scalar types
+/// (`int` or `bool`, both emitted as C `int`). Struct payloads, invalid TypeIds,
+/// empty enums, and other nominal payloads report CON0045 when layout is attempted.
+fn emitEnumLayout(writer: anytype, ctx: *const BackendContext, enum_id: hir.EnumId, enum_decl: hir.HirEnum) EmitError!void {
+    try requireSupportedEnumLayout(ctx, enum_id, null);
+
+    const has_payload = enumHasPayload(ctx, enum_decl);
+    try writer.writeAll("typedef struct {\n");
+    try writer.writeAll("    int tag;\n");
+    if (has_payload) {
+        try writer.writeAll("    union {\n");
+        for (enum_decl.variants, 0..) |variant_id, variant_index| {
+            const variant = ctx.module.hir.getVariant(variant_id);
+            if (variant.payload_fields.len == 0) continue;
+            try writer.writeAll("        struct {\n");
+            for (variant.payload_fields, 0..) |payload_id, payload_index| {
+                const payload_field = ctx.module.hir.getEnumPayloadField(payload_id);
+                try writer.writeAll("            ");
+                try emitCType(writer, ctx, payload_field.type_id, payload_field.span);
+                try writer.writeByte(' ');
+                try emitEnumPayloadFieldName(writer, ctx.module, payload_field.name, payload_index);
+                try writer.writeAll(";\n");
+            }
+            try writer.writeAll("        } ");
+            try emitEnumVariantPayloadName(writer, ctx.module, variant.name, variant_index);
+            try writer.writeAll(";\n");
+        }
+        try writer.writeAll("    } payload;\n");
+    }
+    try writer.writeAll("} ");
+    try emitEnumTypeName(writer, ctx.module, enum_decl.name);
+    try writer.writeAll(";\n");
+}
+
+fn enumHasPayload(ctx: *const BackendContext, enum_decl: hir.HirEnum) bool {
+    for (enum_decl.variants) |variant_id| {
+        if (ctx.module.hir.getVariant(variant_id).payload_fields.len != 0) return true;
+    }
+    return false;
+}
+
+fn requireSupportedEnumLayout(ctx: *const BackendContext, enum_id: hir.EnumId, span: ?diagnostics.SourceSpan) EmitError!void {
+    if (enum_id.index >= ctx.module.hir.enums.items.len) {
+        try reportUnsupportedCType(ctx, span);
+        return error.InvalidExecutable;
+    }
+
+    const enum_decl = ctx.module.hir.getEnum(enum_id);
+    if (enum_decl.variants.len == 0) {
+        try reportUnsupportedCType(ctx, span);
+        return error.InvalidExecutable;
+    }
+
+    for (enum_decl.variants) |variant_id| {
+        const variant = ctx.module.hir.getVariant(variant_id);
+        for (variant.payload_fields) |payload_id| {
+            const payload_field = ctx.module.hir.getEnumPayloadField(payload_id);
+            if (!isSupportedEnumPayloadType(ctx, payload_field.type_id)) {
+                try reportUnsupportedCType(ctx, payload_field.span);
+                return error.InvalidExecutable;
+            }
+        }
+    }
+}
+
+fn isSupportedEnumPayloadType(ctx: *const BackendContext, type_id: types.TypeId) bool {
+    if (!ctx.module.types.contains(type_id)) return false;
+    return switch (ctx.module.types.kind(type_id)) {
+        .int, .bool => true,
+        .void, .struct_type, .enum_type => false,
+    };
 }
 
 fn emitPrototype(writer: anytype, ctx: *const BackendContext, function_id: mir.MirFunctionId, function: mir.MirFunction) EmitError!void {
@@ -221,7 +309,11 @@ fn emitCType(writer: anytype, ctx: *const BackendContext, type_id: types.TypeId,
     switch (ctx.module.types.kind(type_id)) {
         .void => try writer.writeAll("void"),
         .int, .bool => try writer.writeAll("int"),
-        .struct_type, .enum_type => {
+        .enum_type => |enum_id| {
+            try requireSupportedEnumLayout(ctx, enum_id, span);
+            try emitEnumTypeName(writer, ctx.module, ctx.module.hir.getEnum(enum_id).name);
+        },
+        .struct_type => {
             try reportUnsupportedCType(ctx, span);
             return error.InvalidExecutable;
         },
@@ -232,6 +324,23 @@ fn reportUnsupportedCType(ctx: *const BackendContext, span: ?diagnostics.SourceS
     if (ctx.diagnostic_bag) |bag| {
         try bag.append(diagnostics.unsupportedCBackendType(span orelse hir.synthetic_span));
     }
+}
+
+fn emitEnumTypeName(writer: anytype, module: *const semantics.SemanticModule, symbol: hir.SymbolId) !void {
+    try writer.writeAll("cpt_enum_");
+    try emitEscapedIdentifierComponent(writer, module.interner.text(symbol));
+}
+
+fn emitEnumVariantPayloadName(writer: anytype, module: *const semantics.SemanticModule, symbol: hir.SymbolId, variant_index: usize) !void {
+    try writer.writeAll("cpt_v_");
+    try emitEscapedIdentifierComponent(writer, module.interner.text(symbol));
+    try writer.print("_{d}", .{variant_index});
+}
+
+fn emitEnumPayloadFieldName(writer: anytype, module: *const semantics.SemanticModule, symbol: hir.SymbolId, payload_index: usize) !void {
+    try writer.writeAll("cpt_pf_");
+    try emitEscapedIdentifierComponent(writer, module.interner.text(symbol));
+    try writer.print("_{d}", .{payload_index});
 }
 
 fn emitFunctionName(writer: anytype, module: *const semantics.SemanticModule, symbol: hir.SymbolId) !void {
@@ -424,6 +533,22 @@ fn addHirFunctionForTest(module: *semantics.SemanticModule, name: []const u8, re
     return module.hir.addFunction(try internForTest(module, name), return_type, hir.synthetic_span);
 }
 
+fn addVoidMainMirForTest(module: *semantics.SemanticModule, mir_module: *mir.MirModule) !void {
+    const main_hir = try addHirFunctionForTest(module, "main", module.types.voidType());
+    const main_mir = try mir_module.store.addFunction(main_hir, try internForTest(module, "main"), module.types.voidType(), hir.synthetic_span);
+    const block = try mir_module.store.addBlock(main_mir, hir.synthetic_span);
+    try mir_module.store.setTerminator(block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(null) });
+}
+
+fn emitManualModuleForTest(module: *semantics.SemanticModule, mir_module: *const mir.MirModule) ![]const u8 {
+    var diagnostic_bag = diagnostics.DiagnosticBag.init(std.testing.allocator);
+    defer diagnostic_bag.deinit();
+    const c_source = try emitExecutableFromMir(std.testing.allocator, module, mir_module, &diagnostic_bag);
+    errdefer std.testing.allocator.free(c_source);
+    try std.testing.expectEqual(@as(usize, 0), diagnostic_bag.count());
+    return c_source;
+}
+
 test "MIR C backend corpus snapshot: phase4 sum loop" {
     try expectEmitCorpus("../../tests/corpus/phase4/mir_c_sum_loop.concept", "../../tests/corpus/phase4/mir_c_sum_loop.c.expected");
 }
@@ -475,6 +600,161 @@ test "MIR C backend escapes keywords and invalid identifier bytes in backend nam
         "int cpt_f_int_(int cpt_p_a_x2D_b_0);\nint main(void);\n\nint cpt_f_int_(int cpt_p_a_x2D_b_0) {\n    int cpt_l_return__1;\n    int cpt_t_2;\n\ncpt_bb_0:\n    cpt_l_return__1 = cpt_p_a_x2D_b_0;\n    cpt_t_2 = (cpt_l_return__1 + 1);\n    return cpt_t_2;\n}\n\nint main(void) {\n    int cpt_t_3;\n\ncpt_bb_1:\n    cpt_t_3 = cpt_f_int_(2);\n    return cpt_t_3;\n}\n",
         c_source,
     );
+}
+
+test "MIR C backend emits tag-only enum layout" {
+    var module = try newTestModule();
+    defer module.deinit();
+
+    const enum_id = try module.hir.addEnum(try internForTest(&module, "TokenKind"));
+    _ = try module.types.addEnumType(enum_id);
+    _ = try module.hir.addVariant(enum_id, try internForTest(&module, "Identifier"), hir.synthetic_span);
+    _ = try module.hir.addVariant(enum_id, try internForTest(&module, "End"), hir.synthetic_span);
+
+    var mir_module = mir.MirModule.init(std.testing.allocator);
+    defer mir_module.deinit();
+    try addVoidMainMirForTest(&module, &mir_module);
+
+    const c_source = try emitManualModuleForTest(&module, &mir_module);
+    defer std.testing.allocator.free(c_source);
+    try std.testing.expectEqualStrings(
+        "typedef struct {\n    int tag;\n} cpt_enum_TokenKind;\n\nvoid main(void) {\ncpt_bb_0:\n    return;\n}\n",
+        c_source,
+    );
+}
+
+test "MIR C backend emits payload enum layout with int fields" {
+    var module = try newTestModule();
+    defer module.deinit();
+
+    const enum_id = try module.hir.addEnum(try internForTest(&module, "ParseResult"));
+    _ = try module.types.addEnumType(enum_id);
+    const ok = try module.hir.addVariant(enum_id, try internForTest(&module, "Ok"), hir.synthetic_span);
+    _ = try module.hir.addEnumPayloadField(ok, try internForTest(&module, "value"), module.types.intType(), hir.synthetic_span);
+    const err = try module.hir.addVariant(enum_id, try internForTest(&module, "Err"), hir.synthetic_span);
+    _ = try module.hir.addEnumPayloadField(err, try internForTest(&module, "code"), module.types.intType(), hir.synthetic_span);
+
+    var mir_module = mir.MirModule.init(std.testing.allocator);
+    defer mir_module.deinit();
+    try addVoidMainMirForTest(&module, &mir_module);
+
+    const c_source = try emitManualModuleForTest(&module, &mir_module);
+    defer std.testing.allocator.free(c_source);
+    try std.testing.expectEqualStrings(
+        "typedef struct {\n    int tag;\n    union {\n        struct {\n            int cpt_pf_value_0;\n        } cpt_v_Ok_0;\n        struct {\n            int cpt_pf_code_0;\n        } cpt_v_Err_1;\n    } payload;\n} cpt_enum_ParseResult;\n\nvoid main(void) {\ncpt_bb_0:\n    return;\n}\n",
+        c_source,
+    );
+}
+
+test "MIR C backend emits payload enum layout with bool fields" {
+    var module = try newTestModule();
+    defer module.deinit();
+
+    const enum_id = try module.hir.addEnum(try internForTest(&module, "Check"));
+    _ = try module.types.addEnumType(enum_id);
+    const done = try module.hir.addVariant(enum_id, try internForTest(&module, "Done"), hir.synthetic_span);
+    _ = try module.hir.addEnumPayloadField(done, try internForTest(&module, "ok"), module.types.boolType(), hir.synthetic_span);
+
+    var mir_module = mir.MirModule.init(std.testing.allocator);
+    defer mir_module.deinit();
+    try addVoidMainMirForTest(&module, &mir_module);
+
+    const c_source = try emitManualModuleForTest(&module, &mir_module);
+    defer std.testing.allocator.free(c_source);
+    try std.testing.expectEqualStrings(
+        "typedef struct {\n    int tag;\n    union {\n        struct {\n            int cpt_pf_ok_0;\n        } cpt_v_Done_0;\n    } payload;\n} cpt_enum_Check;\n\nvoid main(void) {\ncpt_bb_0:\n    return;\n}\n",
+        c_source,
+    );
+}
+
+test "MIR C backend emits mixed enum layout with backend-owned escaped names" {
+    var module = try newTestModule();
+    defer module.deinit();
+
+    const enum_id = try module.hir.addEnum(try internForTest(&module, "enum"));
+    _ = try module.types.addEnumType(enum_id);
+    _ = try module.hir.addVariant(enum_id, try internForTest(&module, "None"), hir.synthetic_span);
+    const some = try module.hir.addVariant(enum_id, try internForTest(&module, "some-value"), hir.synthetic_span);
+    _ = try module.hir.addEnumPayloadField(some, try internForTest(&module, "return"), module.types.intType(), hir.synthetic_span);
+    _ = try module.hir.addEnumPayloadField(some, try internForTest(&module, "flag?"), module.types.boolType(), hir.synthetic_span);
+
+    var mir_module = mir.MirModule.init(std.testing.allocator);
+    defer mir_module.deinit();
+    try addVoidMainMirForTest(&module, &mir_module);
+
+    const c_source = try emitManualModuleForTest(&module, &mir_module);
+    defer std.testing.allocator.free(c_source);
+    try std.testing.expectEqualStrings(
+        "typedef struct {\n    int tag;\n    union {\n        struct {\n            int cpt_pf_return__0;\n            int cpt_pf_flag_x3F_1;\n        } cpt_v_some_x2D_value_1;\n    } payload;\n} cpt_enum_enum_;\n\nvoid main(void) {\ncpt_bb_0:\n    return;\n}\n",
+        c_source,
+    );
+}
+
+test "MIR C backend renders enum TypeId in function signatures and copies" {
+    var module = try newTestModule();
+    defer module.deinit();
+
+    const enum_id = try module.hir.addEnum(try internForTest(&module, "Status"));
+    const enum_type = try module.types.addEnumType(enum_id);
+    _ = try module.hir.addVariant(enum_id, try internForTest(&module, "Ok"), hir.synthetic_span);
+    _ = try module.hir.addVariant(enum_id, try internForTest(&module, "Err"), hir.synthetic_span);
+
+    const identity_hir = try addHirFunctionForTest(&module, "identity", enum_type);
+    _ = try module.hir.addParam(identity_hir, try internForTest(&module, "value"), enum_type, hir.synthetic_span);
+
+    var mir_module = mir.MirModule.init(std.testing.allocator);
+    defer mir_module.deinit();
+    const identity_mir = try mir_module.store.addFunction(identity_hir, try internForTest(&module, "identity"), enum_type, hir.synthetic_span);
+    const value = try mir_module.store.addLocal(identity_mir, try internForTest(&module, "value"), .param, enum_type, hir.synthetic_span);
+    const block = try mir_module.store.addBlock(identity_mir, hir.synthetic_span);
+    try mir_module.store.setTerminator(block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(mir.MirOperand.copyPlace(.{ .local = value })) });
+
+    const c_source = try emitManualModuleForTest(&module, &mir_module);
+    defer std.testing.allocator.free(c_source);
+    try std.testing.expectEqualStrings(
+        "typedef struct {\n    int tag;\n} cpt_enum_Status;\n\ncpt_enum_Status cpt_f_identity(cpt_enum_Status cpt_p_value_0) {\ncpt_bb_0:\n    return cpt_p_value_0;\n}\n",
+        c_source,
+    );
+}
+
+test "MIR C backend rejects empty enum layout" {
+    var module = try newTestModule();
+    defer module.deinit();
+
+    const enum_id = try module.hir.addEnum(try internForTest(&module, "Never"));
+    _ = try module.types.addEnumType(enum_id);
+
+    var mir_module = mir.MirModule.init(std.testing.allocator);
+    defer mir_module.deinit();
+    try addVoidMainMirForTest(&module, &mir_module);
+
+    var diagnostic_bag = diagnostics.DiagnosticBag.init(std.testing.allocator);
+    defer diagnostic_bag.deinit();
+    try std.testing.expectError(error.InvalidExecutable, emitExecutableFromMir(std.testing.allocator, &module, &mir_module, &diagnostic_bag));
+    try std.testing.expectEqual(@as(usize, 1), diagnostic_bag.count());
+    try std.testing.expectEqual(diagnostics.DiagnosticCode.UnsupportedCBackendType, diagnostic_bag.diagnostics.items[0].code);
+}
+
+test "MIR C backend rejects enum payload fields with unsupported struct type" {
+    var module = try newTestModule();
+    defer module.deinit();
+
+    const struct_id = try module.hir.addStruct(try internForTest(&module, "Payload"));
+    const struct_type = try module.types.addStructType(struct_id);
+    const enum_id = try module.hir.addEnum(try internForTest(&module, "Box"));
+    _ = try module.types.addEnumType(enum_id);
+    const boxed = try module.hir.addVariant(enum_id, try internForTest(&module, "Boxed"), hir.synthetic_span);
+    _ = try module.hir.addEnumPayloadField(boxed, try internForTest(&module, "payload"), struct_type, hir.synthetic_span);
+
+    var mir_module = mir.MirModule.init(std.testing.allocator);
+    defer mir_module.deinit();
+    try addVoidMainMirForTest(&module, &mir_module);
+
+    var diagnostic_bag = diagnostics.DiagnosticBag.init(std.testing.allocator);
+    defer diagnostic_bag.deinit();
+    try std.testing.expectError(error.InvalidExecutable, emitExecutableFromMir(std.testing.allocator, &module, &mir_module, &diagnostic_bag));
+    try std.testing.expectEqual(@as(usize, 1), diagnostic_bag.count());
+    try std.testing.expectEqual(diagnostics.DiagnosticCode.UnsupportedCBackendType, diagnostic_bag.diagnostics.items[0].code);
 }
 
 test "MIR C backend rejects nominal types with backend diagnostic" {
