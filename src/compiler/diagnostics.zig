@@ -24,6 +24,7 @@ pub const Severity = enum {
 pub const DiagnosticCode = enum {
     InvalidCharacter,
     UnterminatedString,
+    UnterminatedBlockComment,
     UnexpectedToken,
     ExpectedItem,
     DuplicateModuleDeclaration,
@@ -32,6 +33,7 @@ pub const DiagnosticCode = enum {
         return switch (self) {
             .InvalidCharacter => "CON0001",
             .UnterminatedString => "CON0002",
+            .UnterminatedBlockComment => "CON0006",
             .UnexpectedToken => "CON0003",
             .ExpectedItem => "CON0004",
             .DuplicateModuleDeclaration => "CON0005",
@@ -143,6 +145,15 @@ pub fn unterminatedString(span: SourceSpan) Diagnostic {
         "unterminated string literal",
         span,
     ).withHelp("add a closing quote before the end of the line or file");
+}
+
+pub fn unterminatedBlockComment(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .UnterminatedBlockComment,
+        .@"error",
+        "unterminated block comment",
+        span,
+    ).withHelp("add a closing */ before the end of the file");
 }
 
 pub fn render(writer: anytype, source: SourceFile, diagnostic: Diagnostic) !void {
