@@ -54,11 +54,11 @@ const ModuleLowerer = struct {
         }
 
         const entry = try self.mir_module.store.addBlock(function_id, function.span);
-        if (function.body) |body| try function_lowerer.lowerStmt(body, entry);
+        const exit = if (function.body) |body| try function_lowerer.lowerStmt(body, entry) else entry;
 
-        const block = self.mir_module.store.getBlock(entry);
+        const block = self.mir_module.store.getBlock(exit);
         if (block.terminator == null) {
-            try self.mir_module.store.setTerminator(entry, .{ .span = function.span, .kind = .@"unreachable" });
+            try self.mir_module.store.setTerminator(exit, .{ .span = function.span, .kind = .@"unreachable" });
         }
     }
 };
@@ -92,16 +92,18 @@ const FunctionLowerer = struct {
         self.local_map.deinit();
     }
 
-    fn lowerStmt(self: *FunctionLowerer, stmt_id: hir.StmtId, block_id: mir.MirBlockId) LoweringError!void {
-        if (self.isTerminated(block_id)) return;
+    fn lowerStmt(self: *FunctionLowerer, stmt_id: hir.StmtId, block_id: mir.MirBlockId) LoweringError!mir.MirBlockId {
+        if (self.isTerminated(block_id)) return block_id;
 
         const stmt = self.semantic_module.hir.getStmt(stmt_id).*;
         switch (stmt.kind) {
             .block => |children| {
+                var current = block_id;
                 for (children) |child| {
-                    if (self.isTerminated(block_id)) return;
-                    try self.lowerStmt(child, block_id);
+                    if (self.isTerminated(current)) return current;
+                    current = try self.lowerStmt(child, current);
                 }
+                return current;
             },
             .local_decl => |decl| {
                 const local_id = try self.ensureLocal(decl.local);
@@ -110,6 +112,7 @@ const FunctionLowerer = struct {
                     .span = stmt.span,
                     .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(local_id), mir.MirRvalue.use_(value)),
                 });
+                return block_id;
             },
             .assignment => |assignment| {
                 const local_id = try self.resolveAssignTarget(assignment.target);
@@ -118,13 +121,152 @@ const FunctionLowerer = struct {
                     .span = stmt.span,
                     .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(local_id), mir.MirRvalue.use_(value)),
                 });
+                return block_id;
             },
             .return_stmt => |maybe_value| {
                 const value = if (maybe_value) |expr_id| try self.lowerExprToOperand(expr_id, block_id) else null;
-                try self.store.setTerminator(block_id, .{ .span = stmt.span, .kind = mir.MirTerminatorKind.returnValue(value) });
+                try self.terminateBlock(block_id, stmt.span, mir.MirTerminatorKind.returnValue(value));
+                return block_id;
             },
-            .if_stmt, .while_stmt, .match_stmt => return error.UnsupportedControlFlow,
+            .if_stmt => |if_stmt| return self.lowerIf(stmt, if_stmt, block_id),
+            .while_stmt => |while_stmt| return self.lowerWhile(stmt, while_stmt, block_id),
+            .match_stmt => |match_stmt| return self.lowerMatch(stmt, match_stmt, block_id),
         }
+    }
+
+    fn lowerIf(self: *FunctionLowerer, stmt: hir.HirStmt, if_stmt: anytype, block_id: mir.MirBlockId) LoweringError!mir.MirBlockId {
+        const condition = try self.lowerExprToOperand(if_stmt.condition, block_id);
+        const then_block = try self.newBlock(stmt.span);
+        const join_block = try self.newBlock(stmt.span);
+        const else_block = if (if_stmt.else_block != null) try self.newBlock(stmt.span) else join_block;
+
+        try self.terminateBlock(block_id, stmt.span, mir.MirTerminatorKind.switchBool(condition, then_block, else_block));
+
+        const then_end = try self.lowerStmt(if_stmt.then_block, then_block);
+        const then_falls_through = !self.isTerminated(then_end);
+        try self.ensureGotoTo(then_end, join_block, stmt.span);
+
+        var has_fallthrough = then_falls_through or if_stmt.else_block == null;
+        if (if_stmt.else_block) |else_stmt_id| {
+            const else_end = try self.lowerStmt(else_stmt_id, else_block);
+            const else_falls_through = !self.isTerminated(else_end);
+            try self.ensureGotoTo(else_end, join_block, stmt.span);
+            has_fallthrough = has_fallthrough or else_falls_through;
+        }
+
+        if (!has_fallthrough) {
+            try self.terminateBlock(join_block, stmt.span, .@"unreachable");
+        }
+        return join_block;
+    }
+
+    fn lowerWhile(self: *FunctionLowerer, stmt: hir.HirStmt, while_stmt: anytype, block_id: mir.MirBlockId) LoweringError!mir.MirBlockId {
+        const condition_block = try self.newBlock(stmt.span);
+        const body_block = try self.newBlock(stmt.span);
+        const exit_block = try self.newBlock(stmt.span);
+
+        try self.terminateBlock(block_id, stmt.span, mir.MirTerminatorKind.gotoBlock(condition_block));
+
+        const condition = try self.lowerExprToOperand(while_stmt.condition, condition_block);
+        try self.terminateBlock(condition_block, stmt.span, mir.MirTerminatorKind.switchBool(condition, body_block, exit_block));
+
+        const body_end = try self.lowerStmt(while_stmt.body, body_block);
+        try self.ensureGotoTo(body_end, condition_block, stmt.span);
+
+        return exit_block;
+    }
+
+    fn lowerMatch(self: *FunctionLowerer, stmt: hir.HirStmt, match_stmt: anytype, block_id: mir.MirBlockId) LoweringError!mir.MirBlockId {
+        const scrutinee = try self.lowerExprToOperand(match_stmt.scrutinee, block_id);
+        const scrutinee_type = try self.inferExprType(match_stmt.scrutinee);
+        const join_block = try self.newBlock(stmt.span);
+        const arm_blocks = try self.allocator.alloc(mir.MirBlockId, match_stmt.arms.len);
+        defer self.allocator.free(arm_blocks);
+
+        for (match_stmt.arms, 0..) |_, index| {
+            arm_blocks[index] = try self.newBlock(stmt.span);
+        }
+
+        if (sameType(scrutinee_type, self.semantic_module.types.boolType())) {
+            try self.terminateBlock(block_id, stmt.span, try self.lowerBoolMatchTerminator(scrutinee, match_stmt.arms, arm_blocks, join_block));
+        } else if (sameType(scrutinee_type, self.semantic_module.types.intType())) {
+            try self.terminateBlock(block_id, stmt.span, try self.lowerIntMatchTerminator(scrutinee, match_stmt.arms, arm_blocks, join_block));
+        } else {
+            return error.UnsupportedControlFlow;
+        }
+
+        var has_fallthrough = false;
+        for (match_stmt.arms, 0..) |arm, index| {
+            const arm_end = try self.lowerStmt(arm.body, arm_blocks[index]);
+            if (!self.isTerminated(arm_end)) {
+                has_fallthrough = true;
+                try self.ensureGotoTo(arm_end, join_block, stmt.span);
+            }
+        }
+
+        if (!has_fallthrough and !self.joinIsDefaultTarget(block_id, join_block)) {
+            try self.terminateBlock(join_block, stmt.span, .@"unreachable");
+        }
+        return join_block;
+    }
+
+    fn lowerBoolMatchTerminator(
+        self: *FunctionLowerer,
+        scrutinee: mir.MirOperand,
+        arms: []const hir.HirMatchArm,
+        arm_blocks: []const mir.MirBlockId,
+        default_target: mir.MirBlockId,
+    ) LoweringError!mir.MirTerminatorKind {
+        _ = self;
+        var true_target: ?mir.MirBlockId = null;
+        var false_target: ?mir.MirBlockId = null;
+        var wildcard_target: ?mir.MirBlockId = null;
+
+        for (arms, 0..) |arm, index| {
+            switch (arm.pattern) {
+                .bool_literal => |value| if (value) {
+                    true_target = arm_blocks[index];
+                } else {
+                    false_target = arm_blocks[index];
+                },
+                .wildcard => wildcard_target = arm_blocks[index],
+                .int_literal => return error.UnsupportedControlFlow,
+            }
+        }
+
+        const fallback = wildcard_target orelse default_target;
+        return mir.MirTerminatorKind.switchBool(scrutinee, true_target orelse fallback, false_target orelse fallback);
+    }
+
+    fn lowerIntMatchTerminator(
+        self: *FunctionLowerer,
+        scrutinee: mir.MirOperand,
+        arms: []const hir.HirMatchArm,
+        arm_blocks: []const mir.MirBlockId,
+        default_target: mir.MirBlockId,
+    ) LoweringError!mir.MirTerminatorKind {
+        var cases = std.ArrayList(mir.MirSwitchIntCase).empty;
+        defer cases.deinit(self.allocator);
+        var fallback = default_target;
+
+        for (arms, 0..) |arm, index| {
+            switch (arm.pattern) {
+                .int_literal => |text| try cases.append(self.allocator, .{ .value = text, .target = arm_blocks[index] }),
+                .wildcard => fallback = arm_blocks[index],
+                .bool_literal => return error.UnsupportedControlFlow,
+            }
+        }
+
+        return try mir.MirTerminatorKind.switchInt(self.allocator, scrutinee, cases.items, fallback);
+    }
+
+    fn joinIsDefaultTarget(self: *FunctionLowerer, switch_block: mir.MirBlockId, join_block: mir.MirBlockId) bool {
+        const terminator = self.store.getBlock(switch_block).terminator orelse return false;
+        return switch (terminator.kind) {
+            .switch_bool => |switch_bool| switch_bool.true_target.index == join_block.index or switch_bool.false_target.index == join_block.index,
+            .switch_int => |switch_int| switch_int.default_target.index == join_block.index,
+            else => false,
+        };
     }
 
     fn lowerExprToOperand(self: *FunctionLowerer, expr_id: hir.ExprId, block_id: mir.MirBlockId) LoweringError!mir.MirOperand {
@@ -241,6 +383,20 @@ const FunctionLowerer = struct {
         return self.store.addLocal(self.function_id, null, .temp, type_id, null);
     }
 
+    fn newBlock(self: *FunctionLowerer, span: ?hir.SourceSpan) LoweringError!mir.MirBlockId {
+        return self.store.addBlock(self.function_id, span);
+    }
+
+    fn terminateBlock(self: *FunctionLowerer, block_id: mir.MirBlockId, span: ?hir.SourceSpan, kind: mir.MirTerminatorKind) LoweringError!void {
+        try self.store.setTerminator(block_id, .{ .span = span, .kind = kind });
+    }
+
+    fn ensureGotoTo(self: *FunctionLowerer, block_id: mir.MirBlockId, target: mir.MirBlockId, span: ?hir.SourceSpan) LoweringError!void {
+        if (!self.isTerminated(block_id)) {
+            try self.terminateBlock(block_id, span, mir.MirTerminatorKind.gotoBlock(target));
+        }
+    }
+
     fn isTerminated(self: *FunctionLowerer, block_id: mir.MirBlockId) bool {
         return self.store.getBlock(block_id).terminator != null;
     }
@@ -269,6 +425,10 @@ fn lowerBinaryOp(op: hir.BinaryOp) mir.MirBinaryOp {
         .logical_and => .logical_and,
         .logical_or => .logical_or,
     };
+}
+
+fn sameType(left: types.TypeId, right: types.TypeId) bool {
+    return left.index == right.index;
 }
 
 fn deinitOperand(allocator: std.mem.Allocator, operand: mir.MirOperand) void {
@@ -513,33 +673,110 @@ test "MIR lowering lowers function call temp" {
     try std.testing.expectEqual(main_function.locals[0], block.terminator.?.kind.return_.?.copy.local);
 }
 
-test "MIR lowering rejects unsupported control flow" {
+test "MIR lowering lowers if without else" {
+    var module = try newModule();
+    defer module.deinit();
+    const main = try addFunction(&module, "main", module.types.intType(), false);
+    const x = try addLocal(&module, main, "x", module.types.intType());
+    const assign = try module.hir.addStmt(.{ .assignment = .{ .target = .{ .local = x }, .value = try intExpr(&module, "1") } }, hir.synthetic_span);
+    const then_block = try blockStmt(&module, &.{assign});
+    const if_stmt = try module.hir.addStmt(.{ .if_stmt = .{ .condition = try boolExpr(&module, true), .then_block = then_block, .else_block = null } }, hir.synthetic_span);
+    const ret = try module.hir.addStmt(.{ .return_stmt = try module.hir.addExpr(.{ .local_ref = x }, hir.synthetic_span) }, hir.synthetic_span);
+    try setBody(&module, main, &.{ try module.hir.addStmt(.{ .local_decl = .{ .local = x, .initializer = try intExpr(&module, "0") } }, hir.synthetic_span), if_stmt, ret });
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+
+    const function = mir_module.store.functions.items[0];
+    try std.testing.expectEqual(@as(usize, 3), function.blocks.len);
+    try std.testing.expectEqual(mir.MirTerminatorKind.switch_bool, std.meta.activeTag(mir_module.store.getBlock(function.blocks[0]).terminator.?.kind));
+    try std.testing.expectEqual(mir.MirTerminatorKind.goto, std.meta.activeTag(mir_module.store.getBlock(function.blocks[1]).terminator.?.kind));
+    try std.testing.expectEqual(mir.MirTerminatorKind.return_, std.meta.activeTag(mir_module.store.getBlock(function.blocks[2]).terminator.?.kind));
+}
+
+test "MIR lowering lowers if else with branch return" {
+    var module = try newModule();
+    defer module.deinit();
+    const main = try addFunction(&module, "main", module.types.intType(), false);
+    const x = try addLocal(&module, main, "x", module.types.intType());
+    const then_block = try blockStmt(&module, &.{try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "1") }, hir.synthetic_span)});
+    const assign_else = try module.hir.addStmt(.{ .assignment = .{ .target = .{ .local = x }, .value = try intExpr(&module, "2") } }, hir.synthetic_span);
+    const else_block = try blockStmt(&module, &.{assign_else});
+    const if_stmt = try module.hir.addStmt(.{ .if_stmt = .{ .condition = try boolExpr(&module, false), .then_block = then_block, .else_block = else_block } }, hir.synthetic_span);
+    const ret = try module.hir.addStmt(.{ .return_stmt = try module.hir.addExpr(.{ .local_ref = x }, hir.synthetic_span) }, hir.synthetic_span);
+    try setBody(&module, main, &.{ try module.hir.addStmt(.{ .local_decl = .{ .local = x, .initializer = try intExpr(&module, "0") } }, hir.synthetic_span), if_stmt, ret });
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+
+    const function = mir_module.store.functions.items[0];
+    try std.testing.expectEqual(@as(usize, 4), function.blocks.len);
+    try std.testing.expectEqual(mir.MirTerminatorKind.return_, std.meta.activeTag(mir_module.store.getBlock(function.blocks[1]).terminator.?.kind));
+    try std.testing.expectEqual(mir.MirTerminatorKind.goto, std.meta.activeTag(mir_module.store.getBlock(function.blocks[3]).terminator.?.kind));
+    try std.testing.expectEqual(mir.MirTerminatorKind.return_, std.meta.activeTag(mir_module.store.getBlock(function.blocks[2]).terminator.?.kind));
+}
+
+test "MIR lowering lowers if else when both branches return" {
     var module = try newModule();
     defer module.deinit();
     const main = try addFunction(&module, "main", module.types.intType(), false);
     const then_block = try blockStmt(&module, &.{try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "1") }, hir.synthetic_span)});
-    const if_stmt = try module.hir.addStmt(.{ .if_stmt = .{ .condition = try boolExpr(&module, true), .then_block = then_block, .else_block = null } }, hir.synthetic_span);
-    const ret = try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "0") }, hir.synthetic_span);
-    try setBody(&module, main, &.{ if_stmt, ret });
+    const else_block = try blockStmt(&module, &.{try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "2") }, hir.synthetic_span)});
+    const if_stmt = try module.hir.addStmt(.{ .if_stmt = .{ .condition = try boolExpr(&module, true), .then_block = then_block, .else_block = else_block } }, hir.synthetic_span);
+    const dead = try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "3") }, hir.synthetic_span);
+    try setBody(&module, main, &.{ if_stmt, dead });
 
-    try std.testing.expectError(error.UnsupportedControlFlow, lowerModule(std.testing.allocator, &module));
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
 
-    var while_module = try newModule();
-    defer while_module.deinit();
-    const while_main = try addFunction(&while_module, "main", while_module.types.intType(), false);
-    const while_body = try blockStmt(&while_module, &.{});
-    const while_stmt = try while_module.hir.addStmt(.{ .while_stmt = .{ .condition = try boolExpr(&while_module, true), .body = while_body } }, hir.synthetic_span);
-    try setBody(&while_module, while_main, &.{while_stmt});
-    try std.testing.expectError(error.UnsupportedControlFlow, lowerModule(std.testing.allocator, &while_module));
+    const function = mir_module.store.functions.items[0];
+    try std.testing.expectEqual(mir.MirTerminatorKind.@"unreachable", mir_module.store.getBlock(function.blocks[2]).terminator.?.kind);
+}
 
-    var match_module = try newModule();
-    defer match_module.deinit();
-    const match_main = try addFunction(&match_module, "main", match_module.types.intType(), false);
-    const arms = try std.testing.allocator.alloc(hir.HirMatchArm, 1);
-    arms[0] = .{ .pattern = .wildcard, .pattern_span = hir.synthetic_span, .body = try blockStmt(&match_module, &.{}) };
-    const match_stmt = try match_module.hir.addStmt(.{ .match_stmt = .{ .scrutinee = try intExpr(&match_module, "1"), .arms = arms } }, hir.synthetic_span);
-    try setBody(&match_module, match_main, &.{match_stmt});
-    try std.testing.expectError(error.UnsupportedControlFlow, lowerModule(std.testing.allocator, &match_module));
+test "MIR lowering lowers while with assignment back edge" {
+    var module = try newModule();
+    defer module.deinit();
+    const main = try addFunction(&module, "main", module.types.intType(), false);
+    const x = try addLocal(&module, main, "x", module.types.intType());
+    const condition = try module.hir.addExpr(.{ .binary = .{ .op = .less, .left = try module.hir.addExpr(.{ .local_ref = x }, hir.synthetic_span), .right = try intExpr(&module, "3") } }, hir.synthetic_span);
+    const increment = try module.hir.addExpr(.{ .binary = .{ .op = .add, .left = try module.hir.addExpr(.{ .local_ref = x }, hir.synthetic_span), .right = try intExpr(&module, "1") } }, hir.synthetic_span);
+    const assign = try module.hir.addStmt(.{ .assignment = .{ .target = .{ .local = x }, .value = increment } }, hir.synthetic_span);
+    const while_stmt = try module.hir.addStmt(.{ .while_stmt = .{ .condition = condition, .body = try blockStmt(&module, &.{assign}) } }, hir.synthetic_span);
+    const ret = try module.hir.addStmt(.{ .return_stmt = try module.hir.addExpr(.{ .local_ref = x }, hir.synthetic_span) }, hir.synthetic_span);
+    try setBody(&module, main, &.{ try module.hir.addStmt(.{ .local_decl = .{ .local = x, .initializer = try intExpr(&module, "0") } }, hir.synthetic_span), while_stmt, ret });
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+
+    const function = mir_module.store.functions.items[0];
+    try std.testing.expectEqual(@as(usize, 4), function.blocks.len);
+    try std.testing.expectEqual(function.blocks[1], mir_module.store.getBlock(function.blocks[0]).terminator.?.kind.goto);
+    try std.testing.expectEqual(mir.MirTerminatorKind.switch_bool, std.meta.activeTag(mir_module.store.getBlock(function.blocks[1]).terminator.?.kind));
+    try std.testing.expectEqual(function.blocks[1], mir_module.store.getBlock(function.blocks[2]).terminator.?.kind.goto);
+}
+
+test "MIR lowering lowers match int default and bool" {
+    var module = try newModule();
+    defer module.deinit();
+    const main = try addFunction(&module, "main", module.types.intType(), false);
+    const x = try addLocal(&module, main, "x", module.types.intType());
+    const int_arms = try std.testing.allocator.alloc(hir.HirMatchArm, 2);
+    int_arms[0] = .{ .pattern = .{ .int_literal = try std.testing.allocator.dupe(u8, "1") }, .pattern_span = hir.synthetic_span, .body = try blockStmt(&module, &.{try module.hir.addStmt(.{ .assignment = .{ .target = .{ .local = x }, .value = try intExpr(&module, "2") } }, hir.synthetic_span)}) };
+    int_arms[1] = .{ .pattern = .wildcard, .pattern_span = hir.synthetic_span, .body = try blockStmt(&module, &.{try module.hir.addStmt(.{ .assignment = .{ .target = .{ .local = x }, .value = try intExpr(&module, "3") } }, hir.synthetic_span)}) };
+    const int_match = try module.hir.addStmt(.{ .match_stmt = .{ .scrutinee = try intExpr(&module, "1"), .arms = int_arms } }, hir.synthetic_span);
+    const bool_arms = try std.testing.allocator.alloc(hir.HirMatchArm, 2);
+    bool_arms[0] = .{ .pattern = .{ .bool_literal = true }, .pattern_span = hir.synthetic_span, .body = try blockStmt(&module, &.{try module.hir.addStmt(.{ .assignment = .{ .target = .{ .local = x }, .value = try intExpr(&module, "4") } }, hir.synthetic_span)}) };
+    bool_arms[1] = .{ .pattern = .wildcard, .pattern_span = hir.synthetic_span, .body = try blockStmt(&module, &.{try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "5") }, hir.synthetic_span)}) };
+    const bool_match = try module.hir.addStmt(.{ .match_stmt = .{ .scrutinee = try boolExpr(&module, false), .arms = bool_arms } }, hir.synthetic_span);
+    const ret = try module.hir.addStmt(.{ .return_stmt = try module.hir.addExpr(.{ .local_ref = x }, hir.synthetic_span) }, hir.synthetic_span);
+    try setBody(&module, main, &.{ try module.hir.addStmt(.{ .local_decl = .{ .local = x, .initializer = try intExpr(&module, "0") } }, hir.synthetic_span), int_match, bool_match, ret });
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+
+    const function = mir_module.store.functions.items[0];
+    try std.testing.expectEqual(mir.MirTerminatorKind.switch_int, std.meta.activeTag(mir_module.store.getBlock(function.blocks[0]).terminator.?.kind));
+    try std.testing.expectEqual(mir.MirTerminatorKind.switch_bool, std.meta.activeTag(mir_module.store.getBlock(function.blocks[1]).terminator.?.kind));
 }
 
 test "MIR lowering adds unreachable for unterminated straight-line body" {
@@ -602,6 +839,203 @@ test "MIR lowering debug snapshot is stable for straight-line function" {
         \\        MirLocalId(1) = Binary + Int 1, Int 2
         \\        MirLocalId(0) = Use(Copy(MirLocalId(1)))
         \\        Return Copy(MirLocalId(0))
+        \\
+    , snapshot);
+}
+
+test "MIR lowering debug snapshot is stable for if without else" {
+    var module = try newModule();
+    defer module.deinit();
+    const main = try addFunction(&module, "main", module.types.intType(), false);
+    const x = try addLocal(&module, main, "x", module.types.intType());
+    const decl = try module.hir.addStmt(.{ .local_decl = .{ .local = x, .initializer = try intExpr(&module, "0") } }, hir.synthetic_span);
+    const assign = try module.hir.addStmt(.{ .assignment = .{ .target = .{ .local = x }, .value = try intExpr(&module, "1") } }, hir.synthetic_span);
+    const if_stmt = try module.hir.addStmt(.{ .if_stmt = .{ .condition = try boolExpr(&module, true), .then_block = try blockStmt(&module, &.{assign}), .else_block = null } }, hir.synthetic_span);
+    const ret = try module.hir.addStmt(.{ .return_stmt = try module.hir.addExpr(.{ .local_ref = x }, hir.synthetic_span) }, hir.synthetic_span);
+    try setBody(&module, main, &.{ decl, if_stmt, ret });
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+
+    try std.testing.expectEqualStrings(
+        \\MirModule
+        \\  Function main -> TypeId(1)
+        \\    Locals
+        \\      MirLocalId(0) user x: TypeId(1)
+        \\    Blocks
+        \\      MirBlockId(0)
+        \\        MirLocalId(0) = Use(Int 0)
+        \\        SwitchBool Bool true true: MirBlockId(1), false: MirBlockId(2)
+        \\      MirBlockId(1)
+        \\        MirLocalId(0) = Use(Int 1)
+        \\        Goto MirBlockId(2)
+        \\      MirBlockId(2)
+        \\        Return Copy(MirLocalId(0))
+        \\
+    , snapshot);
+}
+
+test "MIR lowering debug snapshot is stable for while count loop" {
+    var module = try newModule();
+    defer module.deinit();
+    const main = try addFunction(&module, "main", module.types.intType(), false);
+    const x = try addLocal(&module, main, "x", module.types.intType());
+    const decl = try module.hir.addStmt(.{ .local_decl = .{ .local = x, .initializer = try intExpr(&module, "0") } }, hir.synthetic_span);
+    const condition = try module.hir.addExpr(.{ .binary = .{ .op = .less, .left = try module.hir.addExpr(.{ .local_ref = x }, hir.synthetic_span), .right = try intExpr(&module, "3") } }, hir.synthetic_span);
+    const increment = try module.hir.addExpr(.{ .binary = .{ .op = .add, .left = try module.hir.addExpr(.{ .local_ref = x }, hir.synthetic_span), .right = try intExpr(&module, "1") } }, hir.synthetic_span);
+    const assign = try module.hir.addStmt(.{ .assignment = .{ .target = .{ .local = x }, .value = increment } }, hir.synthetic_span);
+    const while_stmt = try module.hir.addStmt(.{ .while_stmt = .{ .condition = condition, .body = try blockStmt(&module, &.{assign}) } }, hir.synthetic_span);
+    const ret = try module.hir.addStmt(.{ .return_stmt = try module.hir.addExpr(.{ .local_ref = x }, hir.synthetic_span) }, hir.synthetic_span);
+    try setBody(&module, main, &.{ decl, while_stmt, ret });
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+
+    try std.testing.expectEqualStrings(
+        \\MirModule
+        \\  Function main -> TypeId(1)
+        \\    Locals
+        \\      MirLocalId(0) user x: TypeId(1)
+        \\      MirLocalId(1) temp <temp>: TypeId(2)
+        \\      MirLocalId(2) temp <temp>: TypeId(1)
+        \\    Blocks
+        \\      MirBlockId(0)
+        \\        MirLocalId(0) = Use(Int 0)
+        \\        Goto MirBlockId(1)
+        \\      MirBlockId(1)
+        \\        MirLocalId(1) = Binary < Copy(MirLocalId(0)), Int 3
+        \\        SwitchBool Copy(MirLocalId(1)) true: MirBlockId(2), false: MirBlockId(3)
+        \\      MirBlockId(2)
+        \\        MirLocalId(2) = Binary + Copy(MirLocalId(0)), Int 1
+        \\        MirLocalId(0) = Use(Copy(MirLocalId(2)))
+        \\        Goto MirBlockId(1)
+        \\      MirBlockId(3)
+        \\        Return Copy(MirLocalId(0))
+        \\
+    , snapshot);
+}
+
+test "MIR lowering debug snapshot is stable for match int default" {
+    var module = try newModule();
+    defer module.deinit();
+    const main = try addFunction(&module, "main", module.types.intType(), false);
+    const x = try addLocal(&module, main, "x", module.types.intType());
+    const decl = try module.hir.addStmt(.{ .local_decl = .{ .local = x, .initializer = try intExpr(&module, "0") } }, hir.synthetic_span);
+    const arms = try std.testing.allocator.alloc(hir.HirMatchArm, 2);
+    arms[0] = .{ .pattern = .{ .int_literal = try std.testing.allocator.dupe(u8, "1") }, .pattern_span = hir.synthetic_span, .body = try blockStmt(&module, &.{try module.hir.addStmt(.{ .assignment = .{ .target = .{ .local = x }, .value = try intExpr(&module, "2") } }, hir.synthetic_span)}) };
+    arms[1] = .{ .pattern = .wildcard, .pattern_span = hir.synthetic_span, .body = try blockStmt(&module, &.{try module.hir.addStmt(.{ .assignment = .{ .target = .{ .local = x }, .value = try intExpr(&module, "3") } }, hir.synthetic_span)}) };
+    const match_stmt = try module.hir.addStmt(.{ .match_stmt = .{ .scrutinee = try intExpr(&module, "1"), .arms = arms } }, hir.synthetic_span);
+    const ret = try module.hir.addStmt(.{ .return_stmt = try module.hir.addExpr(.{ .local_ref = x }, hir.synthetic_span) }, hir.synthetic_span);
+    try setBody(&module, main, &.{ decl, match_stmt, ret });
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+
+    try std.testing.expectEqualStrings(
+        \\MirModule
+        \\  Function main -> TypeId(1)
+        \\    Locals
+        \\      MirLocalId(0) user x: TypeId(1)
+        \\    Blocks
+        \\      MirBlockId(0)
+        \\        MirLocalId(0) = Use(Int 0)
+        \\        SwitchInt Int 1 [1: MirBlockId(2)] default: MirBlockId(3)
+        \\      MirBlockId(1)
+        \\        Return Copy(MirLocalId(0))
+        \\      MirBlockId(2)
+        \\        MirLocalId(0) = Use(Int 2)
+        \\        Goto MirBlockId(1)
+        \\      MirBlockId(3)
+        \\        MirLocalId(0) = Use(Int 3)
+        \\        Goto MirBlockId(1)
+        \\
+    , snapshot);
+}
+
+test "MIR lowering debug snapshot is stable for if else join" {
+    var module = try newModule();
+    defer module.deinit();
+    const main = try addFunction(&module, "main", module.types.intType(), false);
+    const x = try addLocal(&module, main, "x", module.types.intType());
+    const decl = try module.hir.addStmt(.{ .local_decl = .{ .local = x, .initializer = try intExpr(&module, "0") } }, hir.synthetic_span);
+    const then_assign = try module.hir.addStmt(.{ .assignment = .{ .target = .{ .local = x }, .value = try intExpr(&module, "1") } }, hir.synthetic_span);
+    const else_assign = try module.hir.addStmt(.{ .assignment = .{ .target = .{ .local = x }, .value = try intExpr(&module, "2") } }, hir.synthetic_span);
+    const if_stmt = try module.hir.addStmt(.{ .if_stmt = .{ .condition = try boolExpr(&module, false), .then_block = try blockStmt(&module, &.{then_assign}), .else_block = try blockStmt(&module, &.{else_assign}) } }, hir.synthetic_span);
+    const ret = try module.hir.addStmt(.{ .return_stmt = try module.hir.addExpr(.{ .local_ref = x }, hir.synthetic_span) }, hir.synthetic_span);
+    try setBody(&module, main, &.{ decl, if_stmt, ret });
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+
+    try std.testing.expectEqualStrings(
+        \\MirModule
+        \\  Function main -> TypeId(1)
+        \\    Locals
+        \\      MirLocalId(0) user x: TypeId(1)
+        \\    Blocks
+        \\      MirBlockId(0)
+        \\        MirLocalId(0) = Use(Int 0)
+        \\        SwitchBool Bool false true: MirBlockId(1), false: MirBlockId(3)
+        \\      MirBlockId(1)
+        \\        MirLocalId(0) = Use(Int 1)
+        \\        Goto MirBlockId(2)
+        \\      MirBlockId(2)
+        \\        Return Copy(MirLocalId(0))
+        \\      MirBlockId(3)
+        \\        MirLocalId(0) = Use(Int 2)
+        \\        Goto MirBlockId(2)
+        \\
+    , snapshot);
+}
+
+test "MIR lowering debug snapshot is stable for match bool" {
+    var module = try newModule();
+    defer module.deinit();
+    const main = try addFunction(&module, "main", module.types.intType(), false);
+    const x = try addLocal(&module, main, "x", module.types.intType());
+    const decl = try module.hir.addStmt(.{ .local_decl = .{ .local = x, .initializer = try intExpr(&module, "0") } }, hir.synthetic_span);
+    const arms = try std.testing.allocator.alloc(hir.HirMatchArm, 2);
+    arms[0] = .{ .pattern = .{ .bool_literal = true }, .pattern_span = hir.synthetic_span, .body = try blockStmt(&module, &.{try module.hir.addStmt(.{ .assignment = .{ .target = .{ .local = x }, .value = try intExpr(&module, "1") } }, hir.synthetic_span)}) };
+    arms[1] = .{ .pattern = .wildcard, .pattern_span = hir.synthetic_span, .body = try blockStmt(&module, &.{try module.hir.addStmt(.{ .assignment = .{ .target = .{ .local = x }, .value = try intExpr(&module, "2") } }, hir.synthetic_span)}) };
+    const match_stmt = try module.hir.addStmt(.{ .match_stmt = .{ .scrutinee = try boolExpr(&module, true), .arms = arms } }, hir.synthetic_span);
+    const ret = try module.hir.addStmt(.{ .return_stmt = try module.hir.addExpr(.{ .local_ref = x }, hir.synthetic_span) }, hir.synthetic_span);
+    try setBody(&module, main, &.{ decl, match_stmt, ret });
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+
+    try std.testing.expectEqualStrings(
+        \\MirModule
+        \\  Function main -> TypeId(1)
+        \\    Locals
+        \\      MirLocalId(0) user x: TypeId(1)
+        \\    Blocks
+        \\      MirBlockId(0)
+        \\        MirLocalId(0) = Use(Int 0)
+        \\        SwitchBool Bool true true: MirBlockId(2), false: MirBlockId(3)
+        \\      MirBlockId(1)
+        \\        Return Copy(MirLocalId(0))
+        \\      MirBlockId(2)
+        \\        MirLocalId(0) = Use(Int 1)
+        \\        Goto MirBlockId(1)
+        \\      MirBlockId(3)
+        \\        MirLocalId(0) = Use(Int 2)
+        \\        Goto MirBlockId(1)
         \\
     , snapshot);
 }

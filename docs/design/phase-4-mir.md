@@ -14,6 +14,10 @@ P4-M2 adds the core MIR computation and control-flow vocabulary for manual const
 
 P4-M3 adds straight-line HIR-to-MIR lowering for function bodies with parameters, local declarations, assignments, returns, literals, references, grouping, unary/binary expressions, and calls. Structured `if`/`while`/`match` lowering, MIR validation, MIR fixture running, and backend migration remain future work. Straight-line bodies that fall through receive an `Unreachable` terminator.
 
+## P4-M4s implementation note
+
+P4-M4s extends HIR-to-MIR lowering from straight-line bodies to structured control flow. `if`/`else` now lowers to `SwitchBool` plus branch and join blocks, `while` lowers to explicit entry/condition/body/exit blocks with a back edge, and `match` over checked bool/int scrutinees lowers to `SwitchBool` or `SwitchInt` with one block per arm and a join/default target. This sweep intentionally does not add `break`, `continue`, payload enum matching, guards, destructuring, exhaustiveness checking, MIR validation, or backend migration.
+
 ## Thesis
 
 ```text
