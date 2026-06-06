@@ -661,3 +661,39 @@ test "language parse fixture: phase2 while missing condition" {
 test "language parse fixture: phase2 while missing body" {
     try expectParseFixture("../../../language/phase2-execution/invalid/while_missing_body.invalid.conception");
 }
+
+test "language run fixture: phase2 closeout sum loop" {
+    try expectRunFixture("../../../language/phase2-execution/valid/phase2_sum_loop.valid.conception");
+}
+
+test "language run fixture: phase2 closeout function call loop" {
+    try expectRunFixture("../../../language/phase2-execution/valid/phase2_function_call_loop.valid.conception");
+}
+
+test "language run fixture: phase2 closeout if match mix" {
+    try expectRunFixture("../../../language/phase2-execution/valid/phase2_if_match_mix.valid.conception");
+}
+
+test "language run fixture: phase2 closeout nested control flow" {
+    try expectRunFixture("../../../language/phase2-execution/valid/phase2_nested_control_flow.valid.conception");
+}
+
+test "language parse fixture: phase2 closeout else if rejected" {
+    try expectParseFixture("../../../language/phase2-execution/invalid/phase2_else_if_rejected.invalid.conception");
+}
+
+test "language check fixture: phase2 closeout unknown identifier" {
+    try expectCheckFixture("../../../language/phase2-execution/invalid/phase2_unknown_identifier.invalid.conception");
+}
+
+test "language check fixture: phase2 closeout bad call" {
+    try expectCheckFixture("../../../language/phase2-execution/invalid/phase2_bad_call.invalid.conception");
+}
+
+test "language check fixture: phase2 closeout bad while condition" {
+    try expectCheckFixture("../../../language/phase2-execution/invalid/phase2_bad_while_condition.invalid.conception");
+}
+
+test "language check fixture: phase2 closeout match duplicate pattern" {
+    try expectCheckFixture("../../../language/phase2-execution/invalid/phase2_match_duplicate_pattern.invalid.conception");
+}

@@ -1,0 +1,13 @@
+module Main;
+
+int main() {
+    int i = 1;
+    int total = 0;
+
+    while (i <= 5) {
+        total = total + i;
+        i = i + 1;
+    }
+
+    return total;
+}

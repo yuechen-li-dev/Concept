@@ -1,0 +1,15 @@
+module Main;
+
+int main() {
+    int value = 2;
+
+    if (value > 0) {
+        match (value) {
+            1 => return 10;
+            2 => return 20;
+            _ => return 1;
+        }
+    } else {
+        return 0;
+    }
+}
