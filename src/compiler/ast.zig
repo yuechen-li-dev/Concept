@@ -44,14 +44,86 @@ pub const ImportDecl = struct {
 
 pub const TypeName = struct {
     name: QualifiedName,
+    generic_args: []TypeName = &.{},
+    is_mut: bool = false,
+    is_reference: bool = false,
+    is_pointer: bool = false,
     span: SourceSpan,
 
     pub fn deinit(self: TypeName, allocator: std.mem.Allocator) void {
         self.name.deinit(allocator);
+        for (self.generic_args) |generic_arg| {
+            generic_arg.deinit(allocator);
+        }
+        allocator.free(self.generic_args);
     }
 
     pub fn write(self: TypeName, writer: anytype) !void {
+        if (self.is_mut) try writer.writeAll("mut ");
         try self.name.write(writer);
+        if (self.generic_args.len != 0) {
+            try writer.writeByte('<');
+            for (self.generic_args, 0..) |generic_arg, index| {
+                if (index != 0) try writer.writeAll(", ");
+                try generic_arg.write(writer);
+            }
+            try writer.writeByte('>');
+        }
+        if (self.is_reference) try writer.writeByte('&');
+        if (self.is_pointer) try writer.writeByte('*');
+    }
+};
+
+pub const GenericParam = NameSegment;
+
+pub const SignatureName = struct {
+    base: NameSegment,
+    operator_suffix: ?NameSegment = null,
+    span: SourceSpan,
+
+    pub fn write(self: SignatureName, writer: anytype) !void {
+        try writer.writeAll(self.base.text);
+        if (self.operator_suffix) |suffix| try writer.writeAll(suffix.text);
+    }
+};
+
+pub const ParamDecl = struct {
+    type_name: TypeName,
+    name: NameSegment,
+    span: SourceSpan,
+
+    pub fn deinit(self: ParamDecl, allocator: std.mem.Allocator) void {
+        self.type_name.deinit(allocator);
+    }
+};
+
+pub const SignatureDecl = struct {
+    return_type: TypeName,
+    name: SignatureName,
+    params: []ParamDecl,
+    span: SourceSpan,
+
+    pub fn deinit(self: SignatureDecl, allocator: std.mem.Allocator) void {
+        self.return_type.deinit(allocator);
+        for (self.params) |param| {
+            param.deinit(allocator);
+        }
+        allocator.free(self.params);
+    }
+
+    pub fn writeDebug(self: SignatureDecl, writer: anytype) !void {
+        try writer.writeAll("    Signature ");
+        try self.return_type.write(writer);
+        try writer.writeByte(' ');
+        try self.name.write(writer);
+        try writer.writeByte('(');
+        for (self.params, 0..) |param, index| {
+            if (index != 0) try writer.writeAll(", ");
+            try param.type_name.write(writer);
+            try writer.writeByte(' ');
+            try writer.writeAll(param.name.text);
+        }
+        try writer.writeAll(")\n");
     }
 };
 
@@ -116,14 +188,62 @@ pub const EnumDecl = struct {
     }
 };
 
+pub const ConceptDecl = struct {
+    name: NameSegment,
+    generic_params: []GenericParam,
+    signatures: []SignatureDecl,
+    span: SourceSpan,
+
+    pub fn deinit(self: ConceptDecl, allocator: std.mem.Allocator) void {
+        allocator.free(self.generic_params);
+        for (self.signatures) |signature| {
+            signature.deinit(allocator);
+        }
+        allocator.free(self.signatures);
+    }
+};
+
+pub const InterfaceDecl = struct {
+    name: NameSegment,
+    signatures: []SignatureDecl,
+    span: SourceSpan,
+
+    pub fn deinit(self: InterfaceDecl, allocator: std.mem.Allocator) void {
+        for (self.signatures) |signature| {
+            signature.deinit(allocator);
+        }
+        allocator.free(self.signatures);
+    }
+};
+
+pub const ImplDecl = struct {
+    target: TypeName,
+    signatures: []SignatureDecl,
+    span: SourceSpan,
+
+    pub fn deinit(self: ImplDecl, allocator: std.mem.Allocator) void {
+        self.target.deinit(allocator);
+        for (self.signatures) |signature| {
+            signature.deinit(allocator);
+        }
+        allocator.free(self.signatures);
+    }
+};
+
 pub const Item = union(enum) {
     struct_decl: StructDecl,
     enum_decl: EnumDecl,
+    concept_decl: ConceptDecl,
+    interface_decl: InterfaceDecl,
+    impl_decl: ImplDecl,
 
     pub fn deinit(self: Item, allocator: std.mem.Allocator) void {
         switch (self) {
             .struct_decl => |struct_decl| struct_decl.deinit(allocator),
             .enum_decl => |enum_decl| enum_decl.deinit(allocator),
+            .concept_decl => |concept_decl| concept_decl.deinit(allocator),
+            .interface_decl => |interface_decl| interface_decl.deinit(allocator),
+            .impl_decl => |impl_decl| impl_decl.deinit(allocator),
         }
     }
 
@@ -167,6 +287,38 @@ pub const Item = union(enum) {
                         try writer.writeAll(field.name.text);
                         try writer.writeByte('\n');
                     }
+                }
+            },
+            .concept_decl => |concept_decl| {
+                try writer.writeAll("  Concept ");
+                try writer.writeAll(concept_decl.name.text);
+                if (concept_decl.generic_params.len != 0) {
+                    try writer.writeByte('<');
+                    for (concept_decl.generic_params, 0..) |generic_param, index| {
+                        if (index != 0) try writer.writeAll(", ");
+                        try writer.writeAll(generic_param.text);
+                    }
+                    try writer.writeByte('>');
+                }
+                try writer.writeByte('\n');
+                for (concept_decl.signatures) |signature| {
+                    try signature.writeDebug(writer);
+                }
+            },
+            .interface_decl => |interface_decl| {
+                try writer.writeAll("  Interface ");
+                try writer.writeAll(interface_decl.name.text);
+                try writer.writeByte('\n');
+                for (interface_decl.signatures) |signature| {
+                    try signature.writeDebug(writer);
+                }
+            },
+            .impl_decl => |impl_decl| {
+                try writer.writeAll("  Impl ");
+                try impl_decl.target.write(writer);
+                try writer.writeByte('\n');
+                for (impl_decl.signatures) |signature| {
+                    try signature.writeDebug(writer);
                 }
             },
         }
