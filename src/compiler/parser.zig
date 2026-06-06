@@ -508,6 +508,7 @@ pub const Parser = struct {
     fn parseStmt(self: *Parser, allocator: std.mem.Allocator) !?ast.Stmt {
         if (self.current().kind == .@"return") return try self.parseReturnStmt(allocator);
         if (self.current().kind == .@"if") return try self.parseIfStmt(allocator);
+        if (self.current().kind == .match) return try self.parseMatchStmt(allocator);
         if (self.current().kind == .left_brace) return .{ .block_stmt = try self.parseBlockAfterOpenBrace(allocator) };
         if (self.isLocalDeclStart()) return try self.parseLocalDeclStmt(allocator);
 
@@ -555,7 +556,10 @@ pub const Parser = struct {
 
         var end_span = then_block.span;
         if (self.match(.@"else")) |else_token| {
-            if (self.current().kind == .left_brace) {
+            if (self.current().kind == .@"if") {
+                try self.report(.UnexpectedToken, "else if ladders are not supported; use match for multi-way branching", self.current().span);
+                end_span = else_token.span;
+            } else if (self.current().kind == .left_brace) {
                 else_block = try self.parseBlockAfterOpenBrace(allocator);
                 end_span = else_block.?.span;
             } else {
@@ -570,6 +574,109 @@ pub const Parser = struct {
             .else_block = else_block,
             .span = ast.spanFromBounds(if_token.span.start, spanEnd(end_span)),
         } };
+    }
+
+    fn parseMatchStmt(self: *Parser, allocator: std.mem.Allocator) !ast.Stmt {
+        const match_token = self.advance();
+
+        if (self.match(.left_paren) == null) {
+            try self.report(.UnexpectedToken, "expected '(' after 'match'", self.current().span);
+        }
+
+        var scrutinee = self.parseExpr(allocator) catch |err| switch (err) {
+            error.OutOfMemory => return err,
+            error.ParseFailed => blk: {
+                const fallback = try allocator.create(ast.Expr);
+                fallback.* = .{ .int_literal = .{ .text = "0", .span = self.current().span } };
+                break :blk fallback;
+            },
+        };
+        errdefer {
+            scrutinee.deinit(allocator);
+            allocator.destroy(scrutinee);
+        }
+
+        if (self.match(.right_paren) == null) {
+            try self.report(.UnexpectedToken, "expected ')' after match scrutinee", self.current().span);
+            self.recoverMatchHeader();
+            _ = self.match(.right_paren);
+        }
+
+        if (self.match(.left_brace) == null) {
+            try self.report(.UnexpectedToken, "expected '{' after match scrutinee", self.current().span);
+            return .{ .match_stmt = .{
+                .scrutinee = scrutinee,
+                .arms = try allocator.alloc(ast.MatchArm, 0),
+                .span = ast.spanFromBounds(match_token.span.start, spanEnd(scrutinee.span())),
+            } };
+        }
+
+        var arms = std.ArrayList(ast.MatchArm).init(allocator);
+        errdefer {
+            for (arms.items) |arm| arm.deinit(allocator);
+            arms.deinit();
+        }
+
+        var last_span = scrutinee.span();
+        while (self.current().kind != .eof and self.current().kind != .right_brace) {
+            if (try self.parseMatchArm(allocator)) |arm| {
+                last_span = arm.span;
+                try arms.append(arm);
+            }
+        }
+
+        const close_span = if (self.match(.right_brace)) |right_brace| right_brace.span else blk: {
+            try self.report(.UnexpectedToken, "unterminated match statement", self.current().span);
+            break :blk last_span;
+        };
+
+        return .{ .match_stmt = .{
+            .scrutinee = scrutinee,
+            .arms = try arms.toOwnedSlice(),
+            .span = ast.spanFromBounds(match_token.span.start, spanEnd(close_span)),
+        } };
+    }
+
+    fn parseMatchArm(self: *Parser, allocator: std.mem.Allocator) !?ast.MatchArm {
+        const pattern = (try self.parseMatchPattern()) orelse {
+            self.recoverMatchArm();
+            return null;
+        };
+
+        if (self.match(.fat_arrow) == null) {
+            try self.report(.UnexpectedToken, "expected '=>' after match pattern", self.current().span);
+            self.recoverMatchArm();
+            return null;
+        }
+
+        const body = (try self.parseStmt(allocator)) orelse {
+            try self.report(.UnexpectedToken, "expected statement after match arm '=>'", self.current().span);
+            self.recoverMatchArm();
+            return null;
+        };
+
+        return .{ .pattern = pattern, .body = body, .span = ast.spanFromBounds(pattern.span().start, spanEnd(stmtSpan(body))) };
+    }
+
+    fn parseMatchPattern(self: *Parser) !?ast.MatchPattern {
+        const token = self.current();
+        switch (token.kind) {
+            .int_literal => {
+                _ = self.advance();
+                return .{ .int_literal = .{ .text = token.lexeme, .span = token.span } };
+            },
+            .true, .false => {
+                _ = self.advance();
+                return .{ .bool_literal = .{ .value = token.kind == .true, .span = token.span } };
+            },
+            .identifier => if (std.mem.eql(u8, token.lexeme, "_")) {
+                _ = self.advance();
+                return .{ .wildcard = token.span };
+            },
+            else => {},
+        }
+        try self.report(.UnexpectedToken, "expected match pattern", token.span);
+        return null;
     }
 
     fn parseLocalDeclStmt(self: *Parser, allocator: std.mem.Allocator) !ast.Stmt {
@@ -827,6 +934,27 @@ pub const Parser = struct {
 
     fn recoverStatement(self: *Parser) void {
         while (self.current().kind != .eof and self.current().kind != .semicolon and self.current().kind != .right_brace) {
+            self.advance();
+        }
+        _ = self.match(.semicolon);
+    }
+
+    fn recoverMatchHeader(self: *Parser) void {
+        while (self.current().kind != .eof and
+            self.current().kind != .right_paren and
+            self.current().kind != .left_brace and
+            self.current().kind != .right_brace and
+            self.current().kind != .semicolon)
+        {
+            self.advance();
+        }
+    }
+
+    fn recoverMatchArm(self: *Parser) void {
+        while (self.current().kind != .eof and
+            self.current().kind != .semicolon and
+            self.current().kind != .right_brace)
+        {
             self.advance();
         }
         _ = self.match(.semicolon);
@@ -1593,6 +1721,7 @@ fn stmtSpan(stmt: ast.Stmt) SourceSpan {
         .local_decl => |local_decl| local_decl.span,
         .return_stmt => |return_stmt| return_stmt.span,
         .if_stmt => |if_stmt| if_stmt.span,
+        .match_stmt => |match_stmt| match_stmt.span,
         .block_stmt => |block_stmt| block_stmt.span,
     };
 }
@@ -3512,4 +3641,89 @@ test "call expression malformed argument recovery" {
     try std.testing.expect(diagnostics.count() >= 1);
     try std.testing.expectEqualStrings("expected expression", diagnostics.diagnostics.items[0].message);
     try std.testing.expectEqual(@as(usize, 1), expectFunctionDecl(unit, 0).body.?.block.?.statements.len);
+}
+
+test "parses match with int literal arms" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+    const unit = try parseTestSource("module Main; int main() { match (1) { 1 => return 10; 2 => return 7; } }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const match_stmt = switch (expectFunctionDecl(unit, 0).body.?.block.?.statements[0]) {
+        .match_stmt => |match_stmt| match_stmt,
+        else => return error.ExpectedMatchStmt,
+    };
+    try std.testing.expectEqual(@as(usize, 2), match_stmt.arms.len);
+    _ = switch (match_stmt.arms[0].pattern) {
+        .int_literal => |literal| literal,
+        else => return error.ExpectedIntPattern,
+    };
+}
+
+test "parses match with bool literal arms" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+    const unit = try parseTestSource("module Main; int main() { match (true) { true => return 1; false => return 0; } }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const match_stmt = switch (expectFunctionDecl(unit, 0).body.?.block.?.statements[0]) {
+        .match_stmt => |match_stmt| match_stmt,
+        else => return error.ExpectedMatchStmt,
+    };
+    try std.testing.expectEqual(@as(usize, 2), match_stmt.arms.len);
+    _ = switch (match_stmt.arms[0].pattern) {
+        .bool_literal => |literal| literal,
+        else => return error.ExpectedBoolPattern,
+    };
+}
+
+test "parses match with wildcard arm" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+    const unit = try parseTestSource("module Main; int main() { match (2) { _ => return 0; } }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const match_stmt = switch (expectFunctionDecl(unit, 0).body.?.block.?.statements[0]) {
+        .match_stmt => |match_stmt| match_stmt,
+        else => return error.ExpectedMatchStmt,
+    };
+    _ = switch (match_stmt.arms[0].pattern) {
+        .wildcard => |span| span,
+        else => return error.ExpectedWildcardPattern,
+    };
+}
+
+test "match missing fat arrow diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+    const unit = try parseTestSource("module Main; int main() { match (1) { 1 return 0; } }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected '=>' after match pattern", diagnostics.diagnostics.items[0].message);
+}
+
+test "match malformed pattern diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+    const unit = try parseTestSource("module Main; int main() { match (1) { + => return 0; } }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected match pattern", diagnostics.diagnostics.items[0].message);
+}
+
+test "direct else-if is rejected" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+    const unit = try parseTestSource("module Main; int main() { if (true) { return 1; } else if (false) { return 2; } return 0; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("else if ladders are not supported; use match for multi-way branching", diagnostics.diagnostics.items[0].message);
+}
+
+test "explicit nested if in else block remains valid" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+    const unit = try parseTestSource("module Main; int main() { if (true) { return 1; } else { if (false) { return 2; } } return 0; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
 }

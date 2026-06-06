@@ -1,0 +1,20 @@
+# name: phase2 match duplicate wildcard
+# phase: check
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    int x = 1;
+
+    match (x) {
+        _ => return 1;
+        _ => return 2;
+    }
+
+    return 0;
+}
+
+=== diagnostics ===
+CON0010

@@ -57,6 +57,7 @@ pub const TokenKind = enum {
     colon,
     colon_colon,
     arrow,
+    fat_arrow,
     ampersand,
     plus,
     minus,
@@ -124,6 +125,7 @@ pub const TokenKind = enum {
             .colon => "colon",
             .colon_colon => "colon_colon",
             .arrow => "arrow",
+            .fat_arrow => "fat_arrow",
             .ampersand => "ampersand",
             .plus => "plus",
             .minus => "minus",
@@ -197,6 +199,7 @@ pub const TokenKind = enum {
             .colon => ":",
             .colon_colon => "::",
             .arrow => "->",
+            .fat_arrow => "=>",
             .ampersand => "&",
             .plus => "+",
             .minus => "-",
@@ -276,6 +279,7 @@ pub fn punctuationKind(lexeme: []const u8) ?TokenKind {
     if (std.mem.eql(u8, lexeme, ":")) return .colon;
     if (std.mem.eql(u8, lexeme, "::")) return .colon_colon;
     if (std.mem.eql(u8, lexeme, "->")) return .arrow;
+    if (std.mem.eql(u8, lexeme, "=>")) return .fat_arrow;
     if (std.mem.eql(u8, lexeme, "&")) return .ampersand;
     if (std.mem.eql(u8, lexeme, "+")) return .plus;
     if (std.mem.eql(u8, lexeme, "-")) return .minus;
@@ -348,6 +352,7 @@ const punctuation_cases = [_]PunctuationCase{
     .{ .text = ":", .kind = .colon },
     .{ .text = "::", .kind = .colon_colon },
     .{ .text = "->", .kind = .arrow },
+    .{ .text = "=>", .kind = .fat_arrow },
     .{ .text = "&", .kind = .ampersand },
     .{ .text = "+", .kind = .plus },
     .{ .text = "-", .kind = .minus },

@@ -1,0 +1,20 @@
+# name: phase2 else if ladder rejected
+# phase: parse
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    if (true) {
+        return 1;
+    } else if (false) {
+        return 2;
+    }
+
+    return 0;
+}
+
+=== diagnostics ===
+CON0003
+CON0003

@@ -1,0 +1,21 @@
+# name: phase2 nested if explicit else block
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    if (false) {
+        return 1;
+    } else {
+        if (true) {
+            return 7;
+        }
+    }
+
+    return 0;
+}
+
+=== run ===
+exit_code: 7
