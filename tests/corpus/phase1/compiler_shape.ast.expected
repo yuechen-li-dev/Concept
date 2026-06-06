@@ -1,0 +1,27 @@
+CompilationUnit
+  Module Concept.Compiler
+  Import Core.Memory
+  Import Core.Diagnostics
+  Struct SourceSpan
+    Field usize start
+    Field usize length
+  Enum Token
+    Variant Identifier
+      Payload SourceSpan span
+    Variant Keyword
+      Payload SourceSpan span
+    Variant IntLiteral
+      Payload SourceSpan span
+      Payload int value
+    Variant EndOfFile
+      Payload SourceSpan span
+  Struct Parser
+    Field Core.Memory.Span tokens
+    Field usize index
+  Concept Droppable<T>
+    Signature void drop(mut T& value)
+  Impl Droppable<Parser>
+    Signature void drop(mut Parser& parser)
+  Export Function Result<Parser, Diagnostic> createParser(Core.Memory.Span& tokens)
+  Function Token peek(Parser& parser)
+    Body

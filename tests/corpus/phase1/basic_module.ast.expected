@@ -1,0 +1,12 @@
+CompilationUnit
+  Module Core.Collections
+  Import Core.Memory
+  Import Core.Diagnostics
+  Struct Point
+    Field int x
+    Field int y
+  Enum Status
+    Variant Ok
+    Variant Error
+      Payload int code
+  Function int distance(Point a, Point b)

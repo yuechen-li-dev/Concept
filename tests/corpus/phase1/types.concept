@@ -1,0 +1,24 @@
+module Core.Types;
+
+import Core.Result;
+import Core.IO;
+
+struct BufferView {
+    Core.Memory.Span bytes;
+    Core.Text.Encoding encoding;
+};
+
+concept Formatter<T> {
+    Result<Core.Text.String, FormatError> format(T value);
+};
+
+interface Writer {
+    Result<int, IOError> write(Core.Memory.Span& bytes);
+    void flush(mut Core.IO.Stream& stream);
+};
+
+impl Formatter<BufferView> {
+    Result<Core.Text.String, FormatError> format(BufferView view);
+};
+
+Result<Core.Text.String, FormatError> render(mut BufferView& view, byte* scratch);

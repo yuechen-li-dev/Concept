@@ -1,0 +1,16 @@
+module Concept.Compiler.Tests;
+
+import Core.Test;
+import Concept.Compiler;
+
+[Fact]
+void ParsesEmptyModule() {
+    return;
+}
+
+[Theory]
+[InlineData(1, 2, 3)]
+[InlineData(10, 20, 30)]
+void AddsValues(int left, int right, int expected) {
+    return;
+}

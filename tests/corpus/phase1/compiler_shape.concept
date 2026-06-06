@@ -1,0 +1,35 @@
+module Concept.Compiler;
+
+import Core.Memory;
+import Core.Diagnostics;
+
+struct SourceSpan {
+    usize start;
+    usize length;
+};
+
+enum Token {
+    Identifier(SourceSpan span),
+    Keyword(SourceSpan span),
+    IntLiteral(SourceSpan span, int value),
+    EndOfFile(SourceSpan span),
+};
+
+struct Parser {
+    Core.Memory.Span tokens;
+    usize index;
+};
+
+concept Droppable<T> {
+    void drop(mut T& value);
+};
+
+impl Droppable<Parser> {
+    void drop(mut Parser& parser);
+};
+
+export Result<Parser, Diagnostic> createParser(Core.Memory.Span& tokens);
+
+Token peek(Parser& parser) {
+    return parser.tokens;
+}

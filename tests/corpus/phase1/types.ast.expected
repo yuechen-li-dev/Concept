@@ -1,0 +1,15 @@
+CompilationUnit
+  Module Core.Types
+  Import Core.Result
+  Import Core.IO
+  Struct BufferView
+    Field Core.Memory.Span bytes
+    Field Core.Text.Encoding encoding
+  Concept Formatter<T>
+    Signature Result<Core.Text.String, FormatError> format(T value)
+  Interface Writer
+    Signature Result<int, IOError> write(Core.Memory.Span& bytes)
+    Signature void flush(mut Core.IO.Stream& stream)
+  Impl Formatter<BufferView>
+    Signature Result<Core.Text.String, FormatError> format(BufferView view)
+  Function Result<Core.Text.String, FormatError> render(mut BufferView& view, byte* scratch)
