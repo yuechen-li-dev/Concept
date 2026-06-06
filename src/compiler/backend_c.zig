@@ -3,9 +3,14 @@ const std = @import("std");
 const ast_model = @import("ast.zig");
 const checker = @import("checker.zig");
 const diagnostics_model = @import("diagnostics.zig");
+const hir = @import("hir.zig");
+const hir_checker = @import("hir_checker.zig");
+const semantics = @import("semantics.zig");
 
 pub const EmitError = error{InvalidExecutable} || std.mem.Allocator.Error;
 
+// Transitional AST-backed entry point retained for legacy checker/backend tests.
+// The authoritative run path for Phase 3 emits through emitExecutableFromHir.
 pub fn emitExecutable(allocator: std.mem.Allocator, unit: ast_model.CompilationUnit, diagnostics: ?*diagnostics_model.DiagnosticBag) EmitError![]const u8 {
     const executable = checker.validateExecutable(allocator, unit, diagnostics) catch |err| switch (err) {
         error.InvalidExecutable => return error.InvalidExecutable,
@@ -37,6 +42,242 @@ pub fn emitExecutable(allocator: std.mem.Allocator, unit: ast_model.CompilationU
         emitted_any = true;
     }
     return output.toOwnedSlice();
+}
+
+pub fn emitExecutableFromHir(
+    allocator: std.mem.Allocator,
+    module: *semantics.SemanticModule,
+    diagnostics: ?*diagnostics_model.DiagnosticBag,
+) EmitError![]const u8 {
+    hir_checker.checkExecutable(allocator, module, diagnostics) catch |err| switch (err) {
+        error.InvalidSemanticModule => return error.InvalidExecutable,
+        error.OutOfMemory => return error.OutOfMemory,
+    };
+
+    var output = std.Io.Writer.Allocating.init(allocator);
+    errdefer output.deinit();
+    const writer = &output.writer;
+
+    var body_count: usize = 0;
+    for (module.hir.functions.items) |function| {
+        if (function.body != null) body_count += 1;
+    }
+    if (body_count > 1) {
+        for (module.hir.functions.items, 0..) |function, index| {
+            if (function.body == null) continue;
+            try emitHirPrototype(writer, module, .{ .index = @intCast(index) }, function);
+        }
+        try writer.writeByte('\n');
+    }
+
+    var emitted_any = false;
+    for (module.hir.functions.items, 0..) |function, index| {
+        if (function.body == null) continue;
+        if (emitted_any) try writer.writeByte('\n');
+        try emitHirFunction(writer, module, .{ .index = @intCast(index) }, function);
+        emitted_any = true;
+    }
+    return output.toOwnedSlice();
+}
+
+fn emitHirPrototype(writer: anytype, module: *const semantics.SemanticModule, function_id: hir.FunctionId, function: hir.HirFunction) !void {
+    _ = function_id;
+    try emitHirCType(writer, function.return_type);
+    try writer.writeByte(' ');
+    try emitSymbolName(writer, module, function.name);
+    try writer.writeByte('(');
+    try emitHirParamList(writer, module, function.params);
+    try writer.writeAll(");\n");
+}
+
+fn emitHirFunction(writer: anytype, module: *const semantics.SemanticModule, function_id: hir.FunctionId, function: hir.HirFunction) !void {
+    _ = function_id;
+    try emitHirCType(writer, function.return_type);
+    try writer.writeByte(' ');
+    try emitSymbolName(writer, module, function.name);
+    try writer.writeByte('(');
+    try emitHirParamList(writer, module, function.params);
+    try writer.writeAll(") {\n");
+
+    try emitHirBlockContents(writer, module, function.body.?, 1);
+
+    try writer.writeAll("}\n");
+}
+
+fn emitHirBlockContents(writer: anytype, module: *const semantics.SemanticModule, block_id: hir.StmtId, depth: usize) !void {
+    const block = module.hir.getStmt(block_id).*;
+    std.debug.assert(block == .block);
+    for (block.block) |stmt_id| {
+        try emitHirStmt(writer, module, stmt_id, depth);
+    }
+}
+
+fn emitHirStmt(writer: anytype, module: *const semantics.SemanticModule, stmt_id: hir.StmtId, depth: usize) !void {
+    const stmt = module.hir.getStmt(stmt_id).*;
+    switch (stmt) {
+        .block => {
+            try emitIndent(writer, depth);
+            try writer.writeAll("{\n");
+            try emitHirBlockContents(writer, module, stmt_id, depth + 1);
+            try emitIndent(writer, depth);
+            try writer.writeAll("}\n");
+        },
+        .return_stmt => |maybe_value| {
+            try emitIndent(writer, depth);
+            try writer.writeAll("return ");
+            try emitHirExpr(writer, module, maybe_value.?);
+            try writer.writeAll(";\n");
+        },
+        .local_decl => |local_decl| {
+            const local = module.hir.getLocal(local_decl.local);
+            try emitIndent(writer, depth);
+            try emitHirCType(writer, local.type_id);
+            try writer.writeByte(' ');
+            try emitSymbolName(writer, module, local.name);
+            try writer.writeAll(" = ");
+            try emitHirExpr(writer, module, local_decl.initializer);
+            try writer.writeAll(";\n");
+        },
+        .assignment => |assignment| {
+            try emitIndent(writer, depth);
+            try emitHirAssignTarget(writer, module, assignment.target);
+            try writer.writeAll(" = ");
+            try emitHirExpr(writer, module, assignment.value);
+            try writer.writeAll(";\n");
+        },
+        .if_stmt => |if_stmt| {
+            try emitIndent(writer, depth);
+            try writer.writeAll("if (");
+            try emitHirExpr(writer, module, if_stmt.condition);
+            try writer.writeAll(") {\n");
+            try emitHirBlockContents(writer, module, if_stmt.then_block, depth + 1);
+            try emitIndent(writer, depth);
+            try writer.writeByte('}');
+            if (if_stmt.else_block) |else_block| {
+                try writer.writeAll(" else {\n");
+                try emitHirBlockContents(writer, module, else_block, depth + 1);
+                try emitIndent(writer, depth);
+                try writer.writeAll("}\n");
+            } else {
+                try writer.writeByte('\n');
+            }
+        },
+        .while_stmt => |while_stmt| {
+            try emitIndent(writer, depth);
+            try writer.writeAll("while (");
+            try emitHirExpr(writer, module, while_stmt.condition);
+            try writer.writeAll(") {\n");
+            try emitHirBlockContents(writer, module, while_stmt.body, depth + 1);
+            try emitIndent(writer, depth);
+            try writer.writeAll("}\n");
+        },
+        .match_stmt => |match_stmt| {
+            try emitIndent(writer, depth);
+            try writer.writeAll("switch (");
+            try emitHirExpr(writer, module, match_stmt.scrutinee);
+            try writer.writeAll(") {\n");
+            for (match_stmt.arms) |arm| {
+                try emitIndent(writer, depth + 1);
+                switch (arm.pattern) {
+                    .int_literal => |text| {
+                        try writer.writeAll("case ");
+                        try writer.writeAll(text);
+                        try writer.writeAll(":\n");
+                    },
+                    .bool_literal => |value| {
+                        try writer.writeAll("case ");
+                        try writer.writeAll(if (value) "1" else "0");
+                        try writer.writeAll(":\n");
+                    },
+                    .wildcard => try writer.writeAll("default:\n"),
+                }
+                try emitHirStmt(writer, module, arm.body, depth + 2);
+                if (!hirStmtAlwaysExits(module, arm.body)) {
+                    try emitIndent(writer, depth + 2);
+                    try writer.writeAll("break;\n");
+                }
+            }
+            try emitIndent(writer, depth);
+            try writer.writeAll("}\n");
+        },
+    }
+}
+
+fn hirStmtAlwaysExits(module: *const semantics.SemanticModule, stmt_id: hir.StmtId) bool {
+    return switch (module.hir.getStmt(stmt_id).*) {
+        .return_stmt => true,
+        else => false,
+    };
+}
+
+fn emitHirExpr(writer: anytype, module: *const semantics.SemanticModule, expr_id: hir.ExprId) !void {
+    const expr = module.hir.getExpr(expr_id).*;
+    switch (expr) {
+        .int_literal => |text| try writer.writeAll(text),
+        .bool_literal => |value| try writer.writeAll(if (value) "1" else "0"),
+        .local_ref => |id| try emitSymbolName(writer, module, module.hir.getLocal(id).name),
+        .param_ref => |id| try emitSymbolName(writer, module, module.hir.getParam(id).name),
+        .call => |call| {
+            try emitSymbolName(writer, module, module.hir.getFunction(call.function).name);
+            try writer.writeByte('(');
+            for (call.args, 0..) |arg, index| {
+                if (index != 0) try writer.writeAll(", ");
+                try emitHirExpr(writer, module, arg);
+            }
+            try writer.writeByte(')');
+        },
+        .group => |inner| {
+            try writer.writeByte('(');
+            try emitHirExpr(writer, module, inner);
+            try writer.writeByte(')');
+        },
+        .unary => |unary| {
+            try writer.writeAll(unary.op.lexeme());
+            try emitHirExpr(writer, module, unary.operand);
+        },
+        .binary => |binary| {
+            try writer.writeByte('(');
+            try emitHirExpr(writer, module, binary.left);
+            try writer.writeByte(' ');
+            try writer.writeAll(binary.op.lexeme());
+            try writer.writeByte(' ');
+            try emitHirExpr(writer, module, binary.right);
+            try writer.writeByte(')');
+        },
+    }
+}
+
+fn emitHirAssignTarget(writer: anytype, module: *const semantics.SemanticModule, target: hir.AssignTarget) !void {
+    switch (target) {
+        .local => |id| try emitSymbolName(writer, module, module.hir.getLocal(id).name),
+        .param => |id| try emitSymbolName(writer, module, module.hir.getParam(id).name),
+    }
+}
+
+fn emitHirParamList(writer: anytype, module: *const semantics.SemanticModule, params: []const hir.ParamId) !void {
+    if (params.len == 0) {
+        try writer.writeAll("void");
+        return;
+    }
+    for (params, 0..) |param_id, index| {
+        const param = module.hir.getParam(param_id);
+        if (index != 0) try writer.writeAll(", ");
+        try emitHirCType(writer, param.type_id);
+        try writer.writeByte(' ');
+        try emitSymbolName(writer, module, param.name);
+    }
+}
+
+fn emitHirCType(writer: anytype, type_id: @import("types.zig").TypeId) !void {
+    // Backend v0 lowers Concept `int` and `bool` to C `int` after HIR checking.
+    // Additional type lowering is intentionally deferred until later milestones.
+    _ = type_id;
+    try writer.writeAll("int");
+}
+
+fn emitSymbolName(writer: anytype, module: *const semantics.SemanticModule, symbol: hir.SymbolId) !void {
+    // TODO(P3): add proper C identifier mangling. Phase 2 fixtures use simple C-compatible names.
+    try writer.writeAll(module.interner.text(symbol));
 }
 
 fn emitPrototype(writer: anytype, function: ast_model.FunctionDecl) !void {
@@ -244,7 +485,10 @@ fn emitForTest(source_text: []const u8) ![]const u8 {
     defer unit.deinit(std.testing.allocator);
     try std.testing.expectEqual(@as(usize, 0), parse_diagnostics.count());
 
-    const c_source = try emitExecutable(std.testing.allocator, unit, &check_diagnostics);
+    var module = try semantics.collectTopLevelDeclarations(std.testing.allocator, unit, &check_diagnostics);
+    defer module.deinit();
+
+    const c_source = try emitExecutableFromHir(std.testing.allocator, &module, &check_diagnostics);
     errdefer std.testing.allocator.free(c_source);
     try std.testing.expectEqual(@as(usize, 0), check_diagnostics.count());
     return c_source;
@@ -256,14 +500,14 @@ fn expectEmit(source_text: []const u8, expected: []const u8) !void {
     try std.testing.expectEqualStrings(expected, c_source);
 }
 
-test "C backend emits return zero" {
+test "HIR C backend emits return zero" {
     try expectEmit(
         "module Main; int main() { return 0; }",
         "int main(void) {\n    return 0;\n}\n",
     );
 }
 
-test "C backend emits arithmetic with precedence parentheses" {
+test "HIR C backend emits arithmetic with precedence parentheses" {
     try expectEmit(
         "module Main; int main() { return 1 + 2 * 3; }",
         "int main(void) {\n    return (1 + (2 * 3));\n}\n",
@@ -291,7 +535,7 @@ test "C backend emits unary expressions" {
     );
 }
 
-test "C backend reports checker errors" {
+test "HIR C backend reports checker diagnostics" {
     var parse_diagnostics = diagnostics_model.DiagnosticBag.init(std.testing.allocator);
     defer parse_diagnostics.deinit();
     var check_diagnostics = diagnostics_model.DiagnosticBag.init(std.testing.allocator);
@@ -302,7 +546,10 @@ test "C backend reports checker errors" {
     const unit = try parser_model.parseSource(std.testing.allocator, source_file, &parse_diagnostics);
     defer unit.deinit(std.testing.allocator);
 
-    try std.testing.expectError(error.InvalidExecutable, emitExecutable(std.testing.allocator, unit, &check_diagnostics));
+    var module = try semantics.collectTopLevelDeclarations(std.testing.allocator, unit, &check_diagnostics);
+    defer module.deinit();
+
+    try std.testing.expectError(error.InvalidExecutable, emitExecutableFromHir(std.testing.allocator, &module, &check_diagnostics));
     try std.testing.expectEqual(@as(usize, 1), check_diagnostics.count());
 }
 
@@ -320,7 +567,10 @@ fn expectCorpusC(comptime source_path: []const u8, comptime expected_path: []con
     defer unit.deinit(std.testing.allocator);
     try std.testing.expectEqual(@as(usize, 0), parse_diagnostics.count());
 
-    const c_source = try emitExecutable(std.testing.allocator, unit, &check_diagnostics);
+    var module = try semantics.collectTopLevelDeclarations(std.testing.allocator, unit, &check_diagnostics);
+    defer module.deinit();
+
+    const c_source = try emitExecutableFromHir(std.testing.allocator, &module, &check_diagnostics);
     defer std.testing.allocator.free(c_source);
     try std.testing.expectEqual(@as(usize, 0), check_diagnostics.count());
     try std.testing.expectEqualStrings(@embedFile(expected_path), c_source);
@@ -340,7 +590,7 @@ test "Phase 2 C snapshot: arithmetic return" {
     );
 }
 
-test "C backend emits assignment statement" {
+test "HIR C backend emits locals and assignment statement" {
     try expectEmit(
         "module Main; int main() { int x = 1; x = 2; return x; }",
         "int main(void) {\n    int x = 1;\n    x = 2;\n    return x;\n}\n",
@@ -410,7 +660,7 @@ test "C backend emits local arithmetic return" {
     );
 }
 
-test "C backend emits multiple functions parameters calls and prototypes" {
+test "HIR C backend emits function calls and prototypes" {
     try expectEmit(
         "module Main; int add(int a, int b) { return a + b; } int main() { return add(1, 2); }",
         "int add(int a, int b);\nint main(void);\n\nint add(int a, int b) {\n    return (a + b);\n}\n\nint main(void) {\n    return add(1, 2);\n}\n",
@@ -445,7 +695,7 @@ test "C backend emits if without else" {
     );
 }
 
-test "C backend emits if with else" {
+test "HIR C backend emits if with else" {
     try expectEmit(
         "module Main; int main() { if (false) { return 1; } else { return 7; } }",
         "int main(void) {\n    if (0) {\n        return 1;\n    } else {\n        return 7;\n    }\n}\n",
@@ -480,7 +730,7 @@ test "Phase 2 C snapshot: if else return" {
     );
 }
 
-test "C backend emits switch for int match" {
+test "HIR C backend emits match switch default" {
     try expectEmit(
         "module Main; int main() { int x = 2; match (x) { 1 => return 10; 2 => return 7; _ => return 0; } }",
         "int main(void) {\n    int x = 2;\n    switch (x) {\n        case 1:\n            return 10;\n        case 2:\n            return 7;\n        default:\n            return 0;\n    }\n}\n",
@@ -501,7 +751,7 @@ test "Phase 2 C snapshot: match int return" {
     );
 }
 
-test "C backend emits while loop" {
+test "HIR C backend emits while loop" {
     try expectEmit(
         "module Main; int main() { int x = 0; while (x < 7) { x = x + 1; } return x; }",
         "int main(void) {\n    int x = 0;\n    while ((x < 7)) {\n        x = (x + 1);\n    }\n    return x;\n}\n",
