@@ -2,6 +2,10 @@
 
 Phase 4 starts the compiler's explicit control-flow layer. It is a design and implementation phase for MIR, but **P4-M0 is documentation only**: no compiler code, fixture runner behavior, backend migration, or language feature expansion is part of this milestone.
 
+## P4-M1 implementation note
+
+P4-M1 adds the standalone MIR skeleton in `src/compiler/mir.zig`: compact MIR IDs, functions, locals, blocks, allocator-owned storage, manual construction APIs, lookup helpers, and debug snapshot rendering. Places, operands, rvalues, statements, terminators, validation, and HIR-to-MIR lowering remain future Phase 4 milestones.
+
 ## Thesis
 
 ```text
