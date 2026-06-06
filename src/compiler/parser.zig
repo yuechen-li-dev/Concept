@@ -59,6 +59,11 @@ pub const Parser = struct {
                 .@"struct" => {
                     try items.append(try self.parseStructItem(allocator));
                 },
+                .identifier, .mut => {
+                    if (try self.parseFunctionItem(allocator)) |item| {
+                        try items.append(item);
+                    }
+                },
                 .@"enum" => {
                     try items.append(try self.parseEnumItem(allocator));
                 },
@@ -76,6 +81,10 @@ pub const Parser = struct {
                         try items.append(try self.parseStructItem(allocator));
                     } else if (self.peek(1).kind == .@"enum") {
                         try items.append(try self.parseEnumItem(allocator));
+                    } else if (self.peek(1).kind == .identifier or self.peek(1).kind == .mut) {
+                        if (try self.parseFunctionItem(allocator)) |item| {
+                            try items.append(item);
+                        }
                     } else {
                         try self.reportExpectedItem("expected item declaration", self.current().span);
                         self.advance();
@@ -169,6 +178,13 @@ pub const Parser = struct {
         };
     }
 
+    fn parseFunctionItem(self: *Parser, allocator: std.mem.Allocator) !?ast.Item {
+        if (try self.parseFunctionDecl(allocator)) |function_decl| {
+            return .{ .function_decl = function_decl };
+        }
+        return null;
+    }
+
     fn parseStructItem(self: *Parser, allocator: std.mem.Allocator) !ast.Item {
         return .{ .struct_decl = try self.parseStructDecl(allocator) };
     }
@@ -187,6 +203,139 @@ pub const Parser = struct {
 
     fn parseImplItem(self: *Parser, allocator: std.mem.Allocator) !ast.Item {
         return .{ .impl_decl = try self.parseImplDecl(allocator) };
+    }
+
+    fn parseFunctionDecl(self: *Parser, allocator: std.mem.Allocator) !?ast.FunctionDecl {
+        const export_token = self.match(.@"export");
+        const start_span = if (export_token) |token| token.span else self.current().span;
+
+        var return_type = self.parseTypeName(allocator) catch |err| switch (err) {
+            error.OutOfMemory => return err,
+            else => unreachable,
+        };
+        errdefer return_type.deinit(allocator);
+
+        const name = try self.parseSignatureName();
+        if (name == null) {
+            try self.report(.UnexpectedToken, "expected function name", self.current().span);
+            try self.recoverFunctionDecl();
+            return_type.deinit(allocator);
+            return null;
+        }
+
+        if (self.match(.left_paren) == null) {
+            try self.report(.UnexpectedToken, "expected '(' after function name", self.current().span);
+            try self.recoverFunctionDecl();
+            return_type.deinit(allocator);
+            return null;
+        }
+
+        var params = std.ArrayList(ast.ParamDecl).init(allocator);
+        errdefer {
+            for (params.items) |param| param.deinit(allocator);
+            params.deinit();
+        }
+        var last_span = name.?.span;
+        while (self.current().kind != .eof and self.current().kind != .right_paren and self.current().kind != .left_brace and self.current().kind != .semicolon) {
+            if (try self.parseFunctionParamDecl(allocator)) |param| {
+                last_span = param.span;
+                try params.append(param);
+            }
+            if (self.match(.comma)) |comma| {
+                last_span = comma.span;
+                continue;
+            }
+            if (self.current().kind == .right_paren or self.current().kind == .left_brace or self.current().kind == .semicolon) break;
+            try self.report(.UnexpectedToken, "expected ',' between function parameters", self.current().span);
+            self.recoverFunctionParam();
+            _ = self.match(.comma);
+        }
+
+        if (self.match(.right_paren)) |right_paren| {
+            last_span = right_paren.span;
+        } else {
+            try self.report(.UnexpectedToken, "expected ')' after function parameter list", self.current().span);
+            self.recoverFunctionAfterMissingRightParen();
+        }
+
+        var body: ?ast.FunctionBody = null;
+        const end_span = if (self.match(.semicolon)) |semicolon| semicolon.span else blk: {
+            if (self.current().kind == .left_brace) {
+                const body_span = try self.parseFunctionBody();
+                body = .{ .span = body_span };
+                break :blk body_span;
+            }
+            try self.report(.UnexpectedToken, "expected ';' or function body after function declaration", self.current().span);
+            try self.recoverFunctionDecl();
+            break :blk last_span;
+        };
+
+        return .{
+            .is_export = export_token != null,
+            .signature = .{
+                .return_type = return_type,
+                .name = name.?,
+                .params = try params.toOwnedSlice(),
+                .span = ast.spanFromBounds(start_span.start, spanEnd(last_span)),
+            },
+            .body = body,
+            .span = ast.spanFromBounds(start_span.start, spanEnd(end_span)),
+        };
+    }
+
+    fn parseFunctionParamDecl(self: *Parser, allocator: std.mem.Allocator) !?ast.ParamDecl {
+        if (self.current().kind != .identifier and self.current().kind != .mut) {
+            try self.report(.UnexpectedToken, "malformed function parameter", self.current().span);
+            self.recoverFunctionParam();
+            return null;
+        }
+        var type_name = try self.parseTypeName(allocator);
+        errdefer type_name.deinit(allocator);
+        const name_token = try self.expect(.identifier, "expected parameter name", .UnexpectedToken);
+        if (name_token == null) {
+            type_name.deinit(allocator);
+            self.recoverFunctionParam();
+            return null;
+        }
+        return .{
+            .type_name = type_name,
+            .name = .{ .text = name_token.?.lexeme, .span = name_token.?.span },
+            .span = ast.spanFromBounds(type_name.span.start, spanEnd(name_token.?.span)),
+        };
+    }
+
+    fn parseFunctionBody(self: *Parser) !SourceSpan {
+        const open_brace = self.advance();
+        var depth: usize = 1;
+        var last_span = open_brace.span;
+        while (self.current().kind != .eof) {
+            const token = self.advance();
+            last_span = token.span;
+            switch (token.kind) {
+                .left_brace => depth += 1,
+                .right_brace => {
+                    depth -= 1;
+                    if (depth == 0) return ast.spanFromBounds(open_brace.span.start, spanEnd(token.span));
+                },
+                else => {},
+            }
+        }
+        try self.report(.UnexpectedToken, "unterminated function body", self.current().span);
+        return ast.spanFromBounds(open_brace.span.start, spanEnd(last_span));
+    }
+
+    fn recoverFunctionDecl(self: *Parser) !void {
+        while (self.current().kind != .eof and self.current().kind != .semicolon and self.current().kind != .left_brace) self.advance();
+        if (self.match(.semicolon) != null) return;
+        if (self.current().kind == .left_brace) _ = try self.parseFunctionBody();
+    }
+
+    fn recoverFunctionParam(self: *Parser) void {
+        while (self.current().kind != .eof and self.current().kind != .comma and self.current().kind != .right_paren and self.current().kind != .left_brace and self.current().kind != .semicolon) self.advance();
+    }
+
+    fn recoverFunctionAfterMissingRightParen(self: *Parser) void {
+        while (self.current().kind != .eof and self.current().kind != .semicolon and self.current().kind != .left_brace) self.advance();
     }
 
     fn parseStructDecl(self: *Parser, allocator: std.mem.Allocator) !ast.StructDecl {
@@ -1024,6 +1173,7 @@ test "parses empty struct" {
     try std.testing.expectEqual(@as(usize, 1), unit.items.len);
     const struct_decl = switch (unit.items[0]) {
         .struct_decl => |struct_decl| struct_decl,
+        else => unreachable,
     };
     try std.testing.expectEqualStrings("Empty", struct_decl.name.text);
     try std.testing.expectEqual(@as(usize, 0), struct_decl.fields.len);
@@ -1039,6 +1189,7 @@ test "parses struct with one field" {
     try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
     const struct_decl = switch (unit.items[0]) {
         .struct_decl => |struct_decl| struct_decl,
+        else => unreachable,
     };
     try std.testing.expectEqual(@as(usize, 1), struct_decl.fields.len);
     try std.testing.expectEqualStrings("float", struct_decl.fields[0].type_name.name.parts[0].text);
@@ -1062,6 +1213,7 @@ test "parses struct with multiple fields" {
     try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
     const struct_decl = switch (unit.items[0]) {
         .struct_decl => |struct_decl| struct_decl,
+        else => unreachable,
     };
     try std.testing.expectEqual(@as(usize, 3), struct_decl.fields.len);
     try std.testing.expectEqualStrings("z", struct_decl.fields[2].name.text);
@@ -1077,6 +1229,7 @@ test "parses export struct" {
     try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
     const struct_decl = switch (unit.items[0]) {
         .struct_decl => |struct_decl| struct_decl,
+        else => unreachable,
     };
     try std.testing.expect(struct_decl.is_export);
     try std.testing.expectEqualStrings("SourceSpan", struct_decl.name.text);
@@ -1093,6 +1246,7 @@ test "parses dotted field type" {
     try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
     const struct_decl = switch (unit.items[0]) {
         .struct_decl => |struct_decl| struct_decl,
+        else => unreachable,
     };
     try std.testing.expectEqual(@as(usize, 2), struct_decl.fields[0].type_name.name.parts.len);
     try std.testing.expectEqualStrings("Qualified", struct_decl.fields[0].type_name.name.parts[0].text);
@@ -1146,6 +1300,7 @@ test "missing field semicolon produces diagnostic and continues parsing fields" 
     try std.testing.expectEqual(DiagnosticCode.UnexpectedToken, diagnostics.diagnostics.items[0].code);
     const struct_decl = switch (unit.items[0]) {
         .struct_decl => |struct_decl| struct_decl,
+        else => unreachable,
     };
     try std.testing.expectEqual(@as(usize, 2), struct_decl.fields.len);
     try std.testing.expectEqualStrings("y", struct_decl.fields[1].name.text);
@@ -1170,6 +1325,7 @@ test "unexpected token inside struct body recovers" {
     try std.testing.expectEqual(DiagnosticCode.UnexpectedToken, diagnostics.diagnostics.items[0].code);
     const struct_decl = switch (unit.items[0]) {
         .struct_decl => |struct_decl| struct_decl,
+        else => unreachable,
     };
     try std.testing.expectEqual(@as(usize, 1), struct_decl.fields.len);
     try std.testing.expectEqualStrings("x", struct_decl.fields[0].name.text);
@@ -1807,4 +1963,251 @@ test "unexpected token inside declaration block recovers" {
     };
     try std.testing.expectEqual(@as(usize, 1), concept_decl.signatures.len);
     try std.testing.expectEqualStrings("hash", concept_decl.signatures[0].name.base.text);
+}
+
+fn expectFunctionDecl(unit: ast.CompilationUnit, index: usize) ast.FunctionDecl {
+    return switch (unit.items[index]) {
+        .function_decl => |function_decl| function_decl,
+        else => unreachable,
+    };
+}
+
+test "parses top-level function declaration" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; int add(int a, int b);", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const function_decl = expectFunctionDecl(unit, 0);
+    try std.testing.expect(!function_decl.is_export);
+    try std.testing.expect(function_decl.body == null);
+    try std.testing.expectEqualStrings("int", function_decl.signature.return_type.name.parts[0].text);
+    try std.testing.expectEqualStrings("add", function_decl.signature.name.base.text);
+    try std.testing.expectEqual(@as(usize, 2), function_decl.signature.params.len);
+}
+
+test "parses exported function declaration" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; export Result<Token, LexError> nextToken(mut Lexer& lexer);", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const function_decl = expectFunctionDecl(unit, 0);
+    try std.testing.expect(function_decl.is_export);
+    try std.testing.expectEqualStrings("Result", function_decl.signature.return_type.name.parts[0].text);
+    try std.testing.expectEqual(@as(usize, 2), function_decl.signature.return_type.generic_args.len);
+    try std.testing.expect(function_decl.signature.params[0].type_name.is_mut);
+    try std.testing.expect(function_decl.signature.params[0].type_name.is_reference);
+}
+
+test "parses function with no parameters" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; int main();", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const function_decl = expectFunctionDecl(unit, 0);
+    try std.testing.expectEqual(@as(usize, 0), function_decl.signature.params.len);
+}
+
+test "parses function with multiple parameters" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; int add(int a, int b);", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const function_decl = expectFunctionDecl(unit, 0);
+    try std.testing.expectEqual(@as(usize, 2), function_decl.signature.params.len);
+    try std.testing.expectEqualStrings("a", function_decl.signature.params[0].name.text);
+    try std.testing.expectEqualStrings("b", function_decl.signature.params[1].name.text);
+}
+
+test "parses function with generic return type" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; Result<Token, LexError> nextToken(Lexer lexer);", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const function_decl = expectFunctionDecl(unit, 0);
+    try std.testing.expectEqual(@as(usize, 2), function_decl.signature.return_type.generic_args.len);
+}
+
+test "parses function with reference parameter" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; void draw(Mesh& mesh);", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const function_decl = expectFunctionDecl(unit, 0);
+    try std.testing.expect(function_decl.signature.params[0].type_name.is_reference);
+}
+
+test "parses function with mutable reference parameter" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; Token nextToken(mut Lexer& lexer);", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const function_decl = expectFunctionDecl(unit, 0);
+    try std.testing.expect(function_decl.signature.params[0].type_name.is_mut);
+    try std.testing.expect(function_decl.signature.params[0].type_name.is_reference);
+}
+
+test "parses function with raw pointer parameter" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; void fill(byte* buffer);", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const function_decl = expectFunctionDecl(unit, 0);
+    try std.testing.expect(function_decl.signature.params[0].type_name.is_pointer);
+}
+
+test "parses function with shallow body capture" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; int main() { return 0; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const function_decl = expectFunctionDecl(unit, 0);
+    try std.testing.expect(function_decl.body != null);
+}
+
+test "function body with nested braces is captured correctly" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const source = "module Example; int main() { if true { return 1; } return 0; } int next();";
+    const unit = try parseTestSource(source, &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    try std.testing.expectEqual(@as(usize, 2), unit.items.len);
+    const function_decl = expectFunctionDecl(unit, 0);
+    try std.testing.expect(function_decl.body != null);
+    try std.testing.expectEqualStrings("next", expectFunctionDecl(unit, 1).signature.name.base.text);
+    const body_text = source[function_decl.body.?.span.start..spanEnd(function_decl.body.?.span)];
+    try std.testing.expectEqualStrings("{ if true { return 1; } return 0; }", body_text);
+}
+
+test "AST snapshot debug output for function declaration is stable" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; int add(int a, int b);", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+
+    try std.testing.expectEqualStrings(
+        \\CompilationUnit
+        \\  Module Example
+        \\  Function int add(int a, int b)
+        \\
+    , snapshot);
+}
+
+test "AST snapshot debug output for exported function declaration is stable" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; export Result<Token, LexError> nextToken(mut Lexer& lexer);", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+
+    try std.testing.expectEqualStrings(
+        \\CompilationUnit
+        \\  Module Example
+        \\  Export Function Result<Token, LexError> nextToken(mut Lexer& lexer)
+        \\
+    , snapshot);
+}
+
+test "AST snapshot debug output for body capture is stable" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; int main() { return 0; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+
+    try std.testing.expectEqualStrings(
+        \\CompilationUnit
+        \\  Module Example
+        \\  Function int main()
+        \\    Body
+        \\
+    , snapshot);
+}
+
+test "missing function name diagnostic" {
+    try expectSingleDiagnostic("module Example; int ();", .UnexpectedToken);
+}
+
+test "missing function opening paren diagnostic" {
+    try expectSingleDiagnostic("module Example; int add;", .UnexpectedToken);
+}
+
+test "malformed function parameter recovery" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; int add(int, int b);", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.count());
+    const function_decl = expectFunctionDecl(unit, 0);
+    try std.testing.expectEqual(@as(usize, 1), function_decl.signature.params.len);
+    try std.testing.expectEqualStrings("b", function_decl.signature.params[0].name.text);
+}
+
+test "missing function closing paren diagnostic" {
+    try expectSingleDiagnostic("module Example; int add(int a;", .UnexpectedToken);
+}
+
+test "missing function semicolon or body diagnostic" {
+    try expectSingleDiagnostic("module Example; int add() export", .UnexpectedToken);
+}
+
+test "unterminated function body diagnostic" {
+    try expectSingleDiagnostic("module Example; int main() { return 0;", .UnexpectedToken);
+}
+
+test "unknown top-level identifier recovery still works" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; unknown; struct StillParsed {};", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.count());
+    try std.testing.expectEqual(@as(usize, 1), unit.items.len);
+    const struct_decl = switch (unit.items[0]) {
+        .struct_decl => |struct_decl| struct_decl,
+        else => unreachable,
+    };
+    try std.testing.expectEqualStrings("StillParsed", struct_decl.name.text);
 }
