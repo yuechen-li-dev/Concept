@@ -445,11 +445,12 @@ fn expectCheckFixture(comptime path: []const u8) !void {
 
     switch (fixture.expect) {
         .pass => {
-            _ = try checker_model.validateExecutable(unit, &check_diagnostics);
+            const executable = try checker_model.validateExecutable(std.testing.allocator, unit, &check_diagnostics);
+            defer executable.deinit(std.testing.allocator);
             try std.testing.expectEqual(@as(usize, 0), check_diagnostics.count());
         },
         .fail => {
-            try std.testing.expectError(error.InvalidExecutable, checker_model.validateExecutable(unit, &check_diagnostics));
+            try std.testing.expectError(error.InvalidExecutable, checker_model.validateExecutable(std.testing.allocator, unit, &check_diagnostics));
             const expected_codes = try fixture.diagnosticCodes(std.testing.allocator);
             defer std.testing.allocator.free(expected_codes);
             try std.testing.expectEqual(expected_codes.len, check_diagnostics.count());

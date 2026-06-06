@@ -26,16 +26,23 @@ pub const FunctionInfo = struct {
 pub const Executable = struct {
     main: *const ast.FunctionDecl,
     functions: []FunctionInfo,
+
+    pub fn deinit(self: Executable, allocator: std.mem.Allocator) void {
+        for (self.functions) |function| {
+            allocator.free(function.param_types);
+        }
+        allocator.free(self.functions);
+    }
 };
 
-pub fn validateExecutable(unit: ast.CompilationUnit, diagnostics: ?*DiagnosticBag) !Executable {
-    var functions = std.ArrayList(FunctionInfo).init(std.heap.page_allocator);
+pub fn validateExecutable(allocator: std.mem.Allocator, unit: ast.CompilationUnit, diagnostics: ?*DiagnosticBag) CheckError!Executable {
+    var functions = std.array_list.Managed(FunctionInfo).init(allocator);
     errdefer {
-        for (functions.items) |function| std.heap.page_allocator.free(function.param_types);
+        for (functions.items) |function| allocator.free(function.param_types);
         functions.deinit();
     }
 
-    try collectFunctions(unit, &functions, diagnostics);
+    try collectFunctions(allocator, unit, &functions, diagnostics);
 
     const main_info = findFunction(functions.items, "main") orelse {
         try report(diagnostics, "expected top-level 'main' function", unit.span);
@@ -59,13 +66,13 @@ pub fn validateExecutable(unit: ast.CompilationUnit, diagnostics: ?*DiagnosticBa
 
     for (functions.items) |function| {
         if (!function.has_body) continue;
-        try validateFunction(function, functions.items, diagnostics);
+        try validateFunction(allocator, function, functions.items, diagnostics);
     }
 
     return .{ .main = main_info.decl, .functions = try functions.toOwnedSlice() };
 }
 
-fn collectFunctions(unit: ast.CompilationUnit, functions: *std.ArrayList(FunctionInfo), diagnostics: ?*DiagnosticBag) !void {
+fn collectFunctions(allocator: std.mem.Allocator, unit: ast.CompilationUnit, functions: *std.array_list.Managed(FunctionInfo), diagnostics: ?*DiagnosticBag) CheckError!void {
     for (unit.items) |*item| switch (item.*) {
         .function_decl => |*function_decl| {
             if (function_decl.signature.name.operator_suffix != null) continue;
@@ -78,8 +85,8 @@ fn collectFunctions(unit: ast.CompilationUnit, functions: *std.ArrayList(Functio
                 try report(diagnostics, "unsupported function return type in executable subset", function_decl.signature.return_type.span);
                 return error.InvalidExecutable;
             };
-            const param_types = try std.heap.page_allocator.alloc(ExprType, function_decl.signature.params.len);
-            errdefer std.heap.page_allocator.free(param_types);
+            const param_types = try allocator.alloc(ExprType, function_decl.signature.params.len);
+            errdefer allocator.free(param_types);
             for (function_decl.signature.params, 0..) |param, index| {
                 param_types[index] = executableType(param.type_name) orelse {
                     try report(diagnostics, "unsupported parameter type in executable subset", param.type_name.span);
@@ -98,14 +105,14 @@ fn collectFunctions(unit: ast.CompilationUnit, functions: *std.ArrayList(Functio
     };
 }
 
-fn validateFunction(function: FunctionInfo, functions: []const FunctionInfo, diagnostics: ?*DiagnosticBag) !void {
+fn validateFunction(allocator: std.mem.Allocator, function: FunctionInfo, functions: []const FunctionInfo, diagnostics: ?*DiagnosticBag) CheckError!void {
     const body = function.decl.body orelse return;
     const block = body.block orelse {
         try report(diagnostics, "P2-M2 requires function to have a block body", body.span);
         return error.InvalidExecutable;
     };
 
-    var locals = std.ArrayList(LocalSymbol).init(std.heap.page_allocator);
+    var locals = std.array_list.Managed(LocalSymbol).init(allocator);
     defer locals.deinit();
 
     for (function.decl.signature.params, 0..) |param, index| {
@@ -118,7 +125,7 @@ fn validateFunction(function: FunctionInfo, functions: []const FunctionInfo, dia
         try locals.append(.{ .name = param.name.text, .type = function.param_types[index], .span = param.name.span });
     }
 
-    try validateBlock(block, function.return_type, &locals, functions, diagnostics, false);
+    try validateBlock(allocator, block, function.return_type, &locals, functions, diagnostics, false);
 }
 
 fn findFunction(functions: []const FunctionInfo, name: []const u8) ?FunctionInfo {
@@ -137,16 +144,16 @@ fn findLocal(locals: []const LocalSymbol, name: []const u8) ?ExprType {
     return null;
 }
 
-fn validateBlock(block: ast.BlockStmt, return_type: ExprType, locals: *std.ArrayList(LocalSymbol), functions: []const FunctionInfo, diagnostics: ?*DiagnosticBag, creates_scope: bool) !void {
+fn validateBlock(allocator: std.mem.Allocator, block: ast.BlockStmt, return_type: ExprType, locals: *std.array_list.Managed(LocalSymbol), functions: []const FunctionInfo, diagnostics: ?*DiagnosticBag, creates_scope: bool) CheckError!void {
     const local_start = locals.items.len;
     defer if (creates_scope) locals.shrinkRetainingCapacity(local_start);
 
     for (block.statements) |stmt| {
-        try validateStmt(stmt, return_type, locals, functions, diagnostics);
+        try validateStmt(allocator, stmt, return_type, locals, functions, diagnostics);
     }
 }
 
-fn validateStmt(stmt: ast.Stmt, return_type: ExprType, locals: *std.ArrayList(LocalSymbol), functions: []const FunctionInfo, diagnostics: ?*DiagnosticBag) !void {
+fn validateStmt(allocator: std.mem.Allocator, stmt: ast.Stmt, return_type: ExprType, locals: *std.array_list.Managed(LocalSymbol), functions: []const FunctionInfo, diagnostics: ?*DiagnosticBag) CheckError!void {
     switch (stmt) {
         .local_decl => |local_decl| {
             const local_type = executableType(local_decl.type_name) orelse {
@@ -198,9 +205,9 @@ fn validateStmt(stmt: ast.Stmt, return_type: ExprType, locals: *std.ArrayList(Lo
                 try report(diagnostics, "if condition must be bool", if_stmt.condition.span());
                 return error.InvalidExecutable;
             }
-            try validateBlock(if_stmt.then_block, return_type, locals, functions, diagnostics, true);
+            try validateBlock(allocator, if_stmt.then_block, return_type, locals, functions, diagnostics, true);
             if (if_stmt.else_block) |else_block| {
-                try validateBlock(else_block, return_type, locals, functions, diagnostics, true);
+                try validateBlock(allocator, else_block, return_type, locals, functions, diagnostics, true);
             }
         },
         .while_stmt => |while_stmt| {
@@ -209,12 +216,12 @@ fn validateStmt(stmt: ast.Stmt, return_type: ExprType, locals: *std.ArrayList(Lo
                 try report(diagnostics, "while condition must be bool", while_stmt.condition.span());
                 return error.InvalidExecutable;
             }
-            try validateBlock(while_stmt.body, return_type, locals, functions, diagnostics, true);
+            try validateBlock(allocator, while_stmt.body, return_type, locals, functions, diagnostics, true);
         },
         .match_stmt => |match_stmt| {
             const scrutinee_type = try validateExpr(match_stmt.scrutinee.*, locals, functions, diagnostics);
             var seen_wildcard = false;
-            var int_patterns = std.ArrayList([]const u8).init(std.heap.page_allocator);
+            var int_patterns = std.array_list.Managed([]const u8).init(allocator);
             defer int_patterns.deinit();
             var seen_true = false;
             var seen_false = false;
@@ -264,15 +271,15 @@ fn validateStmt(stmt: ast.Stmt, return_type: ExprType, locals: *std.ArrayList(Lo
                 {
                     const arm_local_start = locals.items.len;
                     defer locals.shrinkRetainingCapacity(arm_local_start);
-                    try validateStmt(arm.body, return_type, locals, functions, diagnostics);
+                    try validateStmt(allocator, arm.body, return_type, locals, functions, diagnostics);
                 }
             }
         },
-        .block_stmt => |block_stmt| try validateBlock(block_stmt, return_type, locals, functions, diagnostics, true),
+        .block_stmt => |block_stmt| try validateBlock(allocator, block_stmt, return_type, locals, functions, diagnostics, true),
     }
 }
 
-fn validateExpr(expr: ast.Expr, locals: *const std.ArrayList(LocalSymbol), functions: []const FunctionInfo, diagnostics: ?*DiagnosticBag) !ExprType {
+fn validateExpr(expr: ast.Expr, locals: *const std.array_list.Managed(LocalSymbol), functions: []const FunctionInfo, diagnostics: ?*DiagnosticBag) CheckError!ExprType {
     switch (expr) {
         .int_literal => return .int,
         .bool_literal => return .bool,
@@ -361,7 +368,7 @@ fn isExactSimpleType(type_name: ast.TypeName, expected: []const u8) bool {
         std.mem.eql(u8, type_name.name.parts[0].text, expected);
 }
 
-fn report(diagnostics: ?*DiagnosticBag, message: []const u8, span: ast.SourceSpan) !void {
+fn report(diagnostics: ?*DiagnosticBag, message: []const u8, span: ast.SourceSpan) CheckError!void {
     if (diagnostics) |bag| {
         try bag.append(diagnostics_model.makeDiagnostic(
             .InvalidExecutableSubset,
@@ -391,7 +398,8 @@ fn expectValid(source_text: []const u8) !void {
     defer unit.deinit(std.testing.allocator);
     try std.testing.expectEqual(@as(usize, 0), parse_diagnostics.count());
 
-    const executable = try validateExecutable(unit, &check_diagnostics);
+    const executable = try validateExecutable(std.testing.allocator, unit, &check_diagnostics);
+    defer executable.deinit(std.testing.allocator);
     try std.testing.expectEqual(@as(usize, 0), check_diagnostics.count());
     try std.testing.expectEqualStrings("main", executable.main.signature.name.base.text);
 }
@@ -406,9 +414,37 @@ fn expectInvalid(source_text: []const u8, message: []const u8) !void {
     defer unit.deinit(std.testing.allocator);
     try std.testing.expectEqual(@as(usize, 0), parse_diagnostics.count());
 
-    try std.testing.expectError(error.InvalidExecutable, validateExecutable(unit, &check_diagnostics));
+    try std.testing.expectError(error.InvalidExecutable, validateExecutable(std.testing.allocator, unit, &check_diagnostics));
     try std.testing.expectEqual(@as(usize, 1), check_diagnostics.count());
     try std.testing.expectEqualStrings(message, check_diagnostics.diagnostics.items[0].message);
+}
+
+
+test "checker validateExecutable metadata is caller-owned" {
+    var parse_diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer parse_diagnostics.deinit();
+    var check_diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer check_diagnostics.deinit();
+
+    const unit = try parseForTest(
+        "module Main; int add(int a, int b) { return a + b; } bool positive(int x) { return x > 0; } int main() { if (positive(add(1, 2))) { return add(3, 4); } return 0; }",
+        &parse_diagnostics,
+    );
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), parse_diagnostics.count());
+
+    const executable = try validateExecutable(std.testing.allocator, unit, &check_diagnostics);
+    defer executable.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), check_diagnostics.count());
+    try std.testing.expectEqual(@as(usize, 3), executable.functions.len);
+    const add = findFunction(executable.functions, "add") orelse return error.TestExpectedEqual;
+    try std.testing.expectEqual(@as(usize, 2), add.param_types.len);
+    try std.testing.expectEqual(ExprType.int, add.param_types[0]);
+    try std.testing.expectEqual(ExprType.int, add.param_types[1]);
+    const positive = findFunction(executable.functions, "positive") orelse return error.TestExpectedEqual;
+    try std.testing.expectEqual(@as(usize, 1), positive.param_types.len);
+    try std.testing.expectEqual(ExprType.int, positive.param_types[0]);
 }
 
 test "checker validates minimal int main" {

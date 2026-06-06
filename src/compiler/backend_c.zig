@@ -7,14 +7,15 @@ const diagnostics_model = @import("diagnostics.zig");
 pub const EmitError = error{InvalidExecutable} || std.mem.Allocator.Error;
 
 pub fn emitExecutable(allocator: std.mem.Allocator, unit: ast_model.CompilationUnit, diagnostics: ?*diagnostics_model.DiagnosticBag) EmitError![]const u8 {
-    const executable = checker.validateExecutable(unit, diagnostics) catch |err| switch (err) {
+    const executable = checker.validateExecutable(allocator, unit, diagnostics) catch |err| switch (err) {
         error.InvalidExecutable => return error.InvalidExecutable,
         error.OutOfMemory => return error.OutOfMemory,
     };
+    defer executable.deinit(allocator);
 
-    var output = std.ArrayList(u8).init(allocator);
+    var output = std.Io.Writer.Allocating.init(allocator);
     errdefer output.deinit();
-    const writer = output.writer();
+    const writer = &output.writer;
 
     var body_count: usize = 0;
     for (executable.functions) |function| {
@@ -220,6 +221,9 @@ fn emitParamList(writer: anytype, params: []const ast_model.ParamDecl, is_main: 
 }
 
 fn emitCType(writer: anytype, type_name: ast_model.TypeName) !void {
+    // C backend v0 only receives the executable subset after checker validation.
+    // That subset currently supports only Concept `int` and `bool`, and both lower
+    // to C `int` until real type lowering replaces this temporary mapping.
     _ = type_name;
     try writer.writeAll("int");
 }
