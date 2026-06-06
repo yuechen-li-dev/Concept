@@ -58,6 +58,9 @@ pub const DiagnosticCode = enum {
     InvalidMirType,
     InvalidMirOperand,
     UnsupportedCBackendType,
+    EnumPayloadBindingArityMismatch,
+    DuplicatePatternBinding,
+    InvalidPatternBinding,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -97,6 +100,9 @@ pub const DiagnosticCode = enum {
             .InvalidMirType => "CON0043",
             .InvalidMirOperand => "CON0044",
             .UnsupportedCBackendType => "CON0045",
+            .EnumPayloadBindingArityMismatch => "CON0046",
+            .DuplicatePatternBinding => "CON0047",
+            .InvalidPatternBinding => "CON0048",
         };
     }
 };
@@ -552,6 +558,33 @@ pub fn enumConstructorTypeMismatch(span: SourceSpan) Diagnostic {
         .EnumConstructorTypeMismatch,
         .@"error",
         "enum constructor argument type mismatch",
+        span,
+    );
+}
+
+pub fn enumPayloadBindingArityMismatch(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .EnumPayloadBindingArityMismatch,
+        .@"error",
+        "enum payload binding count does not match variant payload",
+        span,
+    ).withHelp("bind either no payload fields or exactly one name per payload field");
+}
+
+pub fn duplicatePatternBinding(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .DuplicatePatternBinding,
+        .@"error",
+        "duplicate pattern binding name",
+        span,
+    );
+}
+
+pub fn invalidPatternBinding(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .InvalidPatternBinding,
+        .@"error",
+        "invalid pattern binding",
         span,
     );
 }

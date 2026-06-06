@@ -283,6 +283,22 @@ const Validator = struct {
                 }
                 break :blk self.semantic_module.types.intType();
             },
+            .enum_payload_field => |payload| blk: {
+                if (payload.payload_field.index >= self.semantic_module.hir.enum_payload_fields.items.len) {
+                    try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
+                    break :blk null;
+                }
+                const field = self.semantic_module.hir.getEnumPayloadField(payload.payload_field);
+                const variant = self.semantic_module.hir.getVariant(field.parent);
+                const operand_type = try self.operandType(function_id, payload.enum_operand, span);
+                if (operand_type) |type_id| {
+                    const kind = self.semantic_module.types.kind(type_id);
+                    if (kind != .enum_type or kind.enum_type.index != variant.parent.index) {
+                        try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                    }
+                }
+                break :blk field.type_id;
+            },
         };
     }
 

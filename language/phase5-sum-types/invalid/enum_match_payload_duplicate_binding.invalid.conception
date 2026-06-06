@@ -1,0 +1,19 @@
+# name: phase5 enum match payload duplicate binding
+# phase: check
+# expect: fail
+
+=== source ===
+module Main;
+
+enum PairResult { Ok(int left, int right), Err(int code), };
+
+int main() {
+    PairResult pair = PairResult::Ok(1, 2);
+    match (pair) {
+        PairResult::Ok(value, value) => return value;
+        _ => return 0;
+    }
+}
+
+=== diagnostics ===
+CON0047

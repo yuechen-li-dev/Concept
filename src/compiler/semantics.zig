@@ -326,10 +326,12 @@ const BodyLowerer = struct {
         return try self.collector.module.hir.addStmt(.{ .block = owned }, block.span);
     }
 
-    fn lowerArmBody(self: *BodyLowerer, stmt: ast.Stmt) anyerror!?hir.StmtId {
+    fn lowerArm(self: *BodyLowerer, arm: ast.MatchArm) anyerror!?hir.HirMatchArm {
         self.pushScope();
         defer self.popScope();
-        return self.lowerStmt(stmt);
+        const pattern = (try self.lowerPattern(arm.pattern)) orelse return null;
+        const body = (try self.lowerStmt(arm.body)) orelse return null;
+        return .{ .pattern = pattern, .pattern_span = arm.pattern.span(), .body = body };
     }
 
     fn lowerStmt(self: *BodyLowerer, stmt: ast.Stmt) anyerror!?hir.StmtId {
@@ -378,8 +380,9 @@ const BodyLowerer = struct {
                 var arms = std.ArrayList(hir.HirMatchArm).empty;
                 defer arms.deinit(self.collector.allocator);
                 for (match_stmt.arms) |arm| {
-                    const body = (try self.lowerArmBody(arm.body)) orelse return null;
-                    try arms.append(self.collector.allocator, .{ .pattern = try lowerPattern(self, arm.pattern), .pattern_span = arm.pattern.span(), .body = body });
+                    if (try self.lowerArm(arm)) |lowered_arm| {
+                        try arms.append(self.collector.allocator, lowered_arm);
+                    } else return null;
                 }
                 const owned = try self.collector.allocator.alloc(hir.HirMatchArm, arms.items.len);
                 @memcpy(owned, arms.items);
@@ -473,6 +476,60 @@ const BodyLowerer = struct {
         }
     }
 
+    fn lowerPattern(self: *BodyLowerer, pattern: ast.MatchPattern) !?hir.HirMatchPattern {
+        return switch (pattern) {
+            .int_literal => |lit| .{ .int_literal = try self.collector.allocator.dupe(u8, lit.text) },
+            .bool_literal => |lit| .{ .bool_literal = lit.value },
+            .wildcard => .wildcard,
+            .enum_variant => |variant_pattern| try self.lowerEnumVariantPattern(variant_pattern),
+        };
+    }
+
+    fn lowerEnumVariantPattern(self: *BodyLowerer, variant_pattern: ast.EnumVariantPattern) !?hir.HirMatchPattern {
+        const enum_symbol = try self.collector.module.interner.intern(variant_pattern.enum_name.text);
+        const enum_id = switch (self.collector.top_level_decls.get(enum_symbol) orelse {
+            try self.collector.diagnostics.append(diagnostics.unknownEnumPattern(variant_pattern.enum_name.span));
+            return null;
+        }) {
+            .enum_ => |entry| entry.id,
+            else => {
+                try self.collector.diagnostics.append(diagnostics.unknownEnumPattern(variant_pattern.enum_name.span));
+                return null;
+            },
+        };
+        const variant_symbol = try self.collector.module.interner.intern(variant_pattern.variant_name.text);
+        const variant_id = self.findVariant(enum_id, variant_symbol) orelse {
+            try self.collector.diagnostics.append(diagnostics.unknownEnumPattern(variant_pattern.variant_name.span));
+            return null;
+        };
+        const variant = self.collector.module.hir.getVariant(variant_id);
+        if (variant_pattern.bindings.len != 0 and variant_pattern.bindings.len != variant.payload_fields.len) {
+            try self.collector.diagnostics.append(diagnostics.enumPayloadBindingArityMismatch(variant_pattern.span));
+            return null;
+        }
+        var bindings = std.ArrayList(hir.HirPatternBinding).empty;
+        errdefer bindings.deinit(self.collector.allocator);
+        for (variant_pattern.bindings, 0..) |binding, index| {
+            const symbol = try self.collector.module.interner.intern(binding.name.text);
+            for (bindings.items) |existing| {
+                if (existing.name.index == symbol.index) {
+                    try self.collector.diagnostics.append(diagnostics.duplicatePatternBinding(binding.name.span));
+                    return null;
+                }
+            }
+            if (self.lookup(symbol) != null) {
+                try self.collector.diagnostics.append(diagnostics.duplicateLocalName(binding.name.span));
+                return null;
+            }
+            const payload_id = variant.payload_fields[index];
+            const payload = self.collector.module.hir.getEnumPayloadField(payload_id);
+            const local_id = try self.collector.module.hir.addLocal(self.function_id, symbol, payload.type_id, binding.name.span);
+            try self.bindings.append(self.collector.allocator, .{ .name = symbol, .binding = .{ .local = local_id }, .depth = self.depth });
+            try bindings.append(self.collector.allocator, .{ .name = symbol, .local = local_id, .payload_field = payload_id, .type_id = payload.type_id, .span = binding.name.span });
+        }
+        return .{ .enum_variant = .{ .enum_id = enum_id, .variant_id = variant_id, .bindings = try bindings.toOwnedSlice(self.collector.allocator) } };
+    }
+
     fn findVariant(self: *BodyLowerer, enum_id: hir.EnumId, variant_symbol: interner.SymbolId) ?hir.VariantId {
         const enum_decl = self.collector.module.hir.getEnum(enum_id);
         for (enum_decl.variants) |variant_id| {
@@ -492,33 +549,6 @@ const BodyLowerer = struct {
         return null;
     }
 };
-
-fn lowerPattern(self: *BodyLowerer, pattern: ast.MatchPattern) !hir.HirMatchPattern {
-    return switch (pattern) {
-        .int_literal => |lit| .{ .int_literal = try self.collector.allocator.dupe(u8, lit.text) },
-        .bool_literal => |lit| .{ .bool_literal = lit.value },
-        .wildcard => .wildcard,
-        .enum_variant => |variant_pattern| blk: {
-            const enum_symbol = try self.collector.module.interner.intern(variant_pattern.enum_name.text);
-            const enum_id = switch (self.collector.top_level_decls.get(enum_symbol) orelse {
-                try self.collector.diagnostics.append(diagnostics.unknownEnumPattern(variant_pattern.enum_name.span));
-                break :blk .wildcard;
-            }) {
-                .enum_ => |entry| entry.id,
-                else => {
-                    try self.collector.diagnostics.append(diagnostics.unknownEnumPattern(variant_pattern.enum_name.span));
-                    break :blk .wildcard;
-                },
-            };
-            const variant_symbol = try self.collector.module.interner.intern(variant_pattern.variant_name.text);
-            const variant_id = self.findVariant(enum_id, variant_symbol) orelse {
-                try self.collector.diagnostics.append(diagnostics.unknownEnumPattern(variant_pattern.variant_name.span));
-                break :blk .wildcard;
-            };
-            break :blk .{ .enum_variant = .{ .enum_id = enum_id, .variant_id = variant_id } };
-        },
-    };
-}
 
 fn lowerUnaryOp(op: ast.UnaryOp) hir.UnaryOp {
     return switch (op) {

@@ -53,7 +53,7 @@ pub const MirOperand = union(enum) {
         return .{ .copy = place };
     }
 
-    fn clone(self: MirOperand, allocator: std.mem.Allocator) !MirOperand {
+    pub fn clone(self: MirOperand, allocator: std.mem.Allocator) !MirOperand {
         return switch (self) {
             .int_literal => |text| try MirOperand.intLiteral(allocator, text),
             .bool_literal => |value| MirOperand.boolLiteral(value),
@@ -136,6 +136,10 @@ pub const MirRvalue = union(enum) {
         args: []MirOperand,
     },
     enum_tag: MirOperand,
+    enum_payload_field: struct {
+        enum_operand: MirOperand,
+        payload_field: hir.EnumPayloadFieldId,
+    },
 
     pub fn use_(operand: MirOperand) MirRvalue {
         return .{ .use = operand };
@@ -163,6 +167,10 @@ pub const MirRvalue = union(enum) {
         return .{ .enum_tag = operand };
     }
 
+    pub fn enumPayloadField(operand: MirOperand, payload_field: hir.EnumPayloadFieldId) MirRvalue {
+        return .{ .enum_payload_field = .{ .enum_operand = operand, .payload_field = payload_field } };
+    }
+
     fn clone(self: MirRvalue, allocator: std.mem.Allocator) !MirRvalue {
         return switch (self) {
             .use => |operand| MirRvalue.use_(try operand.clone(allocator)),
@@ -175,6 +183,7 @@ pub const MirRvalue = union(enum) {
             .call => |call_rvalue| try MirRvalue.callFunction(allocator, call_rvalue.function, call_rvalue.args),
             .enum_constructor => |constructor| try MirRvalue.enumConstructor(allocator, constructor.enum_id, constructor.variant_id, constructor.args),
             .enum_tag => |operand| MirRvalue.enumTag(try operand.clone(allocator)),
+            .enum_payload_field => |payload| MirRvalue.enumPayloadField(try payload.enum_operand.clone(allocator), payload.payload_field),
         };
     }
 
@@ -195,6 +204,7 @@ pub const MirRvalue = union(enum) {
                 if (constructor.args.len > 0) allocator.free(constructor.args);
             },
             .enum_tag => |operand| operand.deinit(allocator),
+            .enum_payload_field => |payload| payload.enum_operand.deinit(allocator),
         }
     }
 };
@@ -657,6 +667,11 @@ fn writeRvalueDebug(writer: *std.Io.Writer, rvalue: MirRvalue) !void {
             try writer.writeAll("EnumTag(");
             try writeOperandDebug(writer, operand);
             try writer.writeByte(')');
+        },
+        .enum_payload_field => |payload| {
+            try writer.writeAll("EnumPayloadField(");
+            try writeOperandDebug(writer, payload.enum_operand);
+            try writer.print(", {f})", .{payload.payload_field});
         },
     }
 }

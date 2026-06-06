@@ -187,11 +187,13 @@ const FunctionLowerer = struct {
             arm_blocks[index] = try self.newBlock(stmt.span);
         }
 
+        var payload_scrutinee: ?mir.MirOperand = null;
         if (sameType(scrutinee_type, self.semantic_module.types.boolType())) {
             try self.terminateBlock(block_id, stmt.span, try self.lowerBoolMatchTerminator(scrutinee, match_stmt.arms, arm_blocks, join_block));
         } else if (sameType(scrutinee_type, self.semantic_module.types.intType())) {
             try self.terminateBlock(block_id, stmt.span, try self.lowerIntMatchTerminator(scrutinee, match_stmt.arms, arm_blocks, join_block));
         } else if (self.semantic_module.types.kind(scrutinee_type) == .enum_type) {
+            payload_scrutinee = try scrutinee.clone(self.allocator);
             const tag_temp = try self.addTemp(self.semantic_module.types.intType());
             try self.store.appendStatement(block_id, .{
                 .span = stmt.span,
@@ -205,6 +207,7 @@ const FunctionLowerer = struct {
 
         var has_fallthrough = false;
         for (match_stmt.arms, 0..) |arm, index| {
+            try self.lowerPatternBindings(arm.pattern, payload_scrutinee, arm_blocks[index], stmt.span);
             const arm_end = try self.lowerStmt(arm.body, arm_blocks[index]);
             if (!self.isTerminated(arm_end)) {
                 has_fallthrough = true;
@@ -216,6 +219,26 @@ const FunctionLowerer = struct {
             try self.terminateBlock(join_block, stmt.span, .@"unreachable");
         }
         return join_block;
+    }
+
+    fn lowerPatternBindings(self: *FunctionLowerer, pattern: hir.HirMatchPattern, maybe_scrutinee: ?mir.MirOperand, block_id: mir.MirBlockId, span: ?hir.SourceSpan) LoweringError!void {
+        switch (pattern) {
+            .enum_variant => |enum_variant| {
+                if (enum_variant.bindings.len == 0) return;
+                const scrutinee = maybe_scrutinee orelse return error.UnsupportedControlFlow;
+                for (enum_variant.bindings) |binding| {
+                    const mapped = try self.ensureLocal(binding.local);
+                    try self.store.appendStatement(block_id, .{
+                        .span = span,
+                        .kind = mir.MirStatementKind.assignTo(
+                            mir.MirPlace.localPlace(mapped),
+                            mir.MirRvalue.enumPayloadField(try scrutinee.clone(self.allocator), binding.payload_field),
+                        ),
+                    });
+                }
+            },
+            else => {},
+        }
     }
 
     fn lowerBoolMatchTerminator(
@@ -531,8 +554,8 @@ test "MIR lowering debug snapshot includes enum tag switch" {
     const status_init = try module.hir.addExpr(.{ .enum_constructor = .{ .enum_id = enum_id, .variant_id = ok, .args = &.{} } }, hir.synthetic_span);
     const decl = try module.hir.addStmt(.{ .local_decl = .{ .local = status, .initializer = status_init } }, hir.synthetic_span);
     const arms = try std.testing.allocator.alloc(hir.HirMatchArm, 2);
-    arms[0] = .{ .pattern = .{ .enum_variant = .{ .enum_id = enum_id, .variant_id = ok } }, .pattern_span = hir.synthetic_span, .body = try blockStmt(&module, &.{try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "7") }, hir.synthetic_span)}) };
-    arms[1] = .{ .pattern = .{ .enum_variant = .{ .enum_id = enum_id, .variant_id = err } }, .pattern_span = hir.synthetic_span, .body = try blockStmt(&module, &.{try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "1") }, hir.synthetic_span)}) };
+    arms[0] = .{ .pattern = .{ .enum_variant = .{ .enum_id = enum_id, .variant_id = ok, .bindings = &.{} } }, .pattern_span = hir.synthetic_span, .body = try blockStmt(&module, &.{try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "7") }, hir.synthetic_span)}) };
+    arms[1] = .{ .pattern = .{ .enum_variant = .{ .enum_id = enum_id, .variant_id = err, .bindings = &.{} } }, .pattern_span = hir.synthetic_span, .body = try blockStmt(&module, &.{try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "1") }, hir.synthetic_span)}) };
     const match_stmt = try module.hir.addStmt(.{ .match_stmt = .{ .scrutinee = try module.hir.addExpr(.{ .local_ref = status }, hir.synthetic_span), .arms = arms } }, hir.synthetic_span);
     try setBody(&module, main, &.{ decl, match_stmt });
 
@@ -558,7 +581,7 @@ test "MIR lowering debug snapshot routes enum wildcard as default" {
     const status = try addLocal(&module, main, "status", enum_type);
     const decl = try module.hir.addStmt(.{ .local_decl = .{ .local = status, .initializer = try module.hir.addExpr(.{ .enum_constructor = .{ .enum_id = enum_id, .variant_id = ok, .args = &.{} } }, hir.synthetic_span) } }, hir.synthetic_span);
     const arms = try std.testing.allocator.alloc(hir.HirMatchArm, 2);
-    arms[0] = .{ .pattern = .{ .enum_variant = .{ .enum_id = enum_id, .variant_id = ok } }, .pattern_span = hir.synthetic_span, .body = try blockStmt(&module, &.{try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "7") }, hir.synthetic_span)}) };
+    arms[0] = .{ .pattern = .{ .enum_variant = .{ .enum_id = enum_id, .variant_id = ok, .bindings = &.{} } }, .pattern_span = hir.synthetic_span, .body = try blockStmt(&module, &.{try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "7") }, hir.synthetic_span)}) };
     arms[1] = .{ .pattern = .wildcard, .pattern_span = hir.synthetic_span, .body = try blockStmt(&module, &.{try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "0") }, hir.synthetic_span)}) };
     const match_stmt = try module.hir.addStmt(.{ .match_stmt = .{ .scrutinee = try module.hir.addExpr(.{ .local_ref = status }, hir.synthetic_span), .arms = arms } }, hir.synthetic_span);
     try setBody(&module, main, &.{ decl, match_stmt });
@@ -571,6 +594,38 @@ test "MIR lowering debug snapshot routes enum wildcard as default" {
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "SwitchInt Copy(") != null);
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "[0: MirBlockId") != null);
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "] default: MirBlockId") != null);
+}
+
+test "MIR lowering debug snapshot includes enum payload extraction" {
+    var module = try newModule();
+    defer module.deinit();
+    const enum_id = try module.hir.addEnum(try intern(&module, "ParseResult"));
+    const enum_type = try module.types.addEnumType(enum_id);
+    const ok = try module.hir.addVariant(enum_id, try intern(&module, "Ok"), hir.synthetic_span);
+    const value_field = try module.hir.addEnumPayloadField(ok, try intern(&module, "value"), module.types.intType(), hir.synthetic_span);
+    const err = try module.hir.addVariant(enum_id, try intern(&module, "Err"), hir.synthetic_span);
+    _ = try module.hir.addEnumPayloadField(err, try intern(&module, "code"), module.types.intType(), hir.synthetic_span);
+    const main = try addFunction(&module, "main", module.types.intType(), false);
+    const result = try addLocal(&module, main, "result", enum_type);
+    const ctor_arg = try intExpr(&module, "7");
+    const ctor_args = try std.testing.allocator.alloc(hir.ExprId, 1);
+    ctor_args[0] = ctor_arg;
+    const decl = try module.hir.addStmt(.{ .local_decl = .{ .local = result, .initializer = try module.hir.addExpr(.{ .enum_constructor = .{ .enum_id = enum_id, .variant_id = ok, .args = ctor_args } }, hir.synthetic_span) } }, hir.synthetic_span);
+    const value = try addLocal(&module, main, "value", module.types.intType());
+    const bindings = try std.testing.allocator.alloc(hir.HirPatternBinding, 1);
+    bindings[0] = .{ .name = try intern(&module, "value"), .local = value, .payload_field = value_field, .type_id = module.types.intType(), .span = hir.synthetic_span };
+    const arms = try std.testing.allocator.alloc(hir.HirMatchArm, 2);
+    arms[0] = .{ .pattern = .{ .enum_variant = .{ .enum_id = enum_id, .variant_id = ok, .bindings = bindings } }, .pattern_span = hir.synthetic_span, .body = try blockStmt(&module, &.{try module.hir.addStmt(.{ .return_stmt = try module.hir.addExpr(.{ .local_ref = value }, hir.synthetic_span) }, hir.synthetic_span)}) };
+    arms[1] = .{ .pattern = .wildcard, .pattern_span = hir.synthetic_span, .body = try blockStmt(&module, &.{try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "0") }, hir.synthetic_span)}) };
+    const match_stmt = try module.hir.addStmt(.{ .match_stmt = .{ .scrutinee = try module.hir.addExpr(.{ .local_ref = result }, hir.synthetic_span), .arms = arms } }, hir.synthetic_span);
+    try setBody(&module, main, &.{ decl, match_stmt });
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "EnumPayloadField(Copy(MirLocalId(0)), EnumPayloadFieldId(0))") != null);
 }
 
 fn newModule() !semantics.SemanticModule {

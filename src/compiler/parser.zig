@@ -686,7 +686,7 @@ pub const Parser = struct {
     }
 
     fn parseMatchArm(self: *Parser, allocator: std.mem.Allocator) !?ast.MatchArm {
-        const pattern = (try self.parseMatchPattern()) orelse {
+        const pattern = (try self.parseMatchPattern(allocator)) orelse {
             self.recoverMatchArm();
             return null;
         };
@@ -706,7 +706,7 @@ pub const Parser = struct {
         return .{ .pattern = pattern, .body = body, .span = ast.spanFromBounds(pattern.span().start, spanEnd(stmtSpan(body))) };
     }
 
-    fn parseMatchPattern(self: *Parser) !?ast.MatchPattern {
+    fn parseMatchPattern(self: *Parser, allocator: std.mem.Allocator) !?ast.MatchPattern {
         const token = self.current();
         switch (token.kind) {
             .int_literal => {
@@ -724,15 +724,39 @@ pub const Parser = struct {
                 }
                 if (self.match(.colon_colon) != null) {
                     const variant = (try self.expect(.identifier, "expected enum variant after '::'", .UnexpectedToken)) orelse return null;
-                    const pattern_span = ast.spanFromBounds(token.span.start, spanEnd(variant.span));
-                    if (self.current().kind == .left_paren) {
-                        try self.report(.UnexpectedToken, "enum match payload binding is not supported yet", self.current().span);
-                        self.skipBalancedParens();
+                    var bindings = std.ArrayList(ast.PatternBinding).init(allocator);
+                    errdefer bindings.deinit();
+                    var end_span = variant.span;
+                    if (self.match(.left_paren)) |left_paren| {
+                        end_span = left_paren.span;
+                        while (self.current().kind != .eof and self.current().kind != .right_paren and self.current().kind != .fat_arrow) {
+                            const binding = self.current();
+                            if (binding.kind != .identifier or std.mem.eql(u8, binding.lexeme, "_")) {
+                                try self.report(.UnexpectedToken, "expected payload binding identifier", binding.span);
+                                self.recoverPatternBindingList();
+                                break;
+                            }
+                            _ = self.advance();
+                            try bindings.append(.{ .name = .{ .text = binding.lexeme, .span = binding.span } });
+                            end_span = binding.span;
+                            if (self.match(.comma)) |comma| {
+                                end_span = comma.span;
+                                if (self.current().kind == .right_paren) break;
+                                continue;
+                            }
+                            break;
+                        }
+                        if (self.match(.right_paren)) |right_paren| {
+                            end_span = right_paren.span;
+                        } else {
+                            try self.report(.UnexpectedToken, "expected ')' after payload binding list", self.current().span);
+                        }
                     }
                     return .{ .enum_variant = .{
                         .enum_name = .{ .text = token.lexeme, .span = token.span },
                         .variant_name = .{ .text = variant.lexeme, .span = variant.span },
-                        .span = pattern_span,
+                        .bindings = try bindings.toOwnedSlice(),
+                        .span = ast.spanFromBounds(token.span.start, spanEnd(end_span)),
                     } };
                 }
             },
@@ -740,6 +764,12 @@ pub const Parser = struct {
         }
         try self.report(.UnexpectedToken, "expected match pattern", token.span);
         return null;
+    }
+
+    fn recoverPatternBindingList(self: *Parser) void {
+        while (self.current().kind != .eof and self.current().kind != .right_paren and self.current().kind != .fat_arrow) {
+            _ = self.advance();
+        }
     }
 
     fn skipBalancedParens(self: *Parser) void {
@@ -4008,13 +4038,31 @@ test "enum variant match pattern missing variant diagnostic" {
     try std.testing.expectEqualStrings("expected enum variant after '::'", diagnostics.diagnostics.items[0].message);
 }
 
-test "enum variant match payload binding diagnostic" {
+test "parses enum variant match payload bindings" {
     var diagnostics = DiagnosticBag.init(std.testing.allocator);
     defer diagnostics.deinit();
-    const unit = try parseTestSource("module Main; int main() { match (0) { ParseResult::Ok(value) => return 0; _ => return 1; } }", &diagnostics);
+    const unit = try parseTestSource("module Main; int main() { match (0) { ParseResult::Ok(value, code) => return 0; _ => return 1; } }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const match_stmt = switch (expectFunctionDecl(unit, 0).body.?.block.?.statements[0]) {
+        .match_stmt => |match_stmt| match_stmt,
+        else => return error.ExpectedMatchStmt,
+    };
+    const pattern = switch (match_stmt.arms[0].pattern) {
+        .enum_variant => |pattern| pattern,
+        else => return error.ExpectedEnumVariantPattern,
+    };
+    try std.testing.expectEqual(@as(usize, 2), pattern.bindings.len);
+    try std.testing.expectEqualStrings("value", pattern.bindings[0].name.text);
+}
+
+test "enum variant match payload binding diagnostics" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+    const unit = try parseTestSource("module Main; int main() { match (0) { ParseResult::Ok(1) => return 0; _ => return 1; } }", &diagnostics);
     defer unit.deinit(std.testing.allocator);
     try std.testing.expect(diagnostics.count() >= 1);
-    try std.testing.expectEqualStrings("enum match payload binding is not supported yet", diagnostics.diagnostics.items[0].message);
+    try std.testing.expectEqualStrings("expected payload binding identifier", diagnostics.diagnostics.items[0].message);
 }
 
 test "match missing opening brace diagnostic" {

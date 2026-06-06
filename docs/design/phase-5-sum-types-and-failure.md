@@ -468,3 +468,13 @@ Payload-bearing enum values can be matched by active variant, but their payloads
 Semantic lowering resolves each enum variant pattern to the matched enum and variant IDs. HIR checking allows enum variant patterns only when the scrutinee has the same enum type, rejects int/bool literal patterns against enum scrutinees, rejects variant patterns against int/bool scrutinees, and rejects duplicate concrete enum variant arms. Exhaustiveness checking is still not required in P5-M3.
 
 MIR lowering implements enum matches by assigning an `EnumTag` rvalue to an integer temporary and reusing `SwitchInt` with deterministic variant indexes (`0` for the first declared variant, `1` for the second, and so on). The C backend emits tag extraction through the backend-local `.tag` field from the P5-M1 enum layout and then emits the existing integer `switch` form.
+
+### P5-M4 enum match payload binding checkpoint
+
+P5-M4 extends enum variant match arms from tag-only patterns to positional payload binding patterns. A match arm may now write `EnumName::Variant(name)` or `EnumName::Variant(left, right)` to bind the active variant payload fields as immutable arm-local values, and those bindings are visible only while lowering and checking that arm body. Payload variants may still be matched without bindings (`EnumName::Variant`) to inspect only the tag and ignore the payload.
+
+Bindings are positional only: named payload binding, nested/destructuring patterns, rest patterns, and expression patterns in binding position are not part of this milestone. Binding arity is either zero or exactly the variant payload field count, duplicate binding names in one pattern are rejected, and binding names follow the existing no-shadowing rule for visible locals and parameters.
+
+The MIR path now represents compiler-generated enum payload extraction after the enum tag switch, and the MIR-backed C backend emits extraction through the Phase 5 layout form `.payload.<variant>.<field>`. This is not user field access syntax and does not define a final ABI.
+
+P5-M4 still does not implement Result-shaped enum conventions, `try`, `must_use`, `discard`, generic `Result<T, E>`, templates, concepts, drop/move/borrow checking, unsafe/raw pointers, user field access syntax, struct runtime layout, or final ABI mangling.

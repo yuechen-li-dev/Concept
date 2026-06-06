@@ -74,6 +74,14 @@ pub const HirStmtKind = union(enum) {
     match_stmt: struct { scrutinee: ExprId, arms: []HirMatchArm },
 };
 
+pub const HirPatternBinding = struct {
+    name: SymbolId,
+    local: LocalId,
+    payload_field: EnumPayloadFieldId,
+    type_id: types.TypeId,
+    span: SourceSpan,
+};
+
 pub const HirMatchPattern = union(enum) {
     int_literal: []const u8,
     bool_literal: bool,
@@ -81,6 +89,7 @@ pub const HirMatchPattern = union(enum) {
     enum_variant: struct {
         enum_id: EnumId,
         variant_id: VariantId,
+        bindings: []HirPatternBinding,
     },
 };
 
@@ -249,6 +258,7 @@ pub const HirStore = struct {
                     for (match_stmt.arms) |arm| {
                         switch (arm.pattern) {
                             .int_literal => |text| self.allocator.free(text),
+                            .enum_variant => |pattern| if (pattern.bindings.len > 0) self.allocator.free(pattern.bindings),
                             else => {},
                         }
                     }
@@ -794,6 +804,16 @@ fn writePattern(writer: *std.Io.Writer, pattern: HirMatchPattern) !void {
         .int_literal => |text| try writer.writeAll(text),
         .bool_literal => |value| try writer.writeAll(if (value) "true" else "false"),
         .wildcard => try writer.writeByte('_'),
-        .enum_variant => |enum_variant| try writer.print("EnumVariant {f}::{f}", .{ enum_variant.enum_id, enum_variant.variant_id }),
+        .enum_variant => |enum_variant| {
+            try writer.print("EnumVariant {f}::{f}", .{ enum_variant.enum_id, enum_variant.variant_id });
+            if (enum_variant.bindings.len != 0) {
+                try writer.writeAll("(");
+                for (enum_variant.bindings, 0..) |binding, index| {
+                    if (index != 0) try writer.writeAll(", ");
+                    try writer.print("{f}", .{binding.local});
+                }
+                try writer.writeByte(')');
+            }
+        },
     }
 }
