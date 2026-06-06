@@ -31,6 +31,7 @@ pub const DiagnosticCode = enum {
     UnterminatedChar,
     EmptyCharLiteral,
     InvalidEscapeSequence,
+    InvalidExecutableSubset,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -43,6 +44,7 @@ pub const DiagnosticCode = enum {
             .UnterminatedChar => "CON0007",
             .EmptyCharLiteral => "CON0008",
             .InvalidEscapeSequence => "CON0009",
+            .InvalidExecutableSubset => "CON0010",
         };
     }
 };
