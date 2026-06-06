@@ -230,7 +230,23 @@ pub const ImplDecl = struct {
     }
 };
 
+pub const FunctionBody = struct {
+    span: SourceSpan,
+};
+
+pub const FunctionDecl = struct {
+    is_export: bool,
+    signature: SignatureDecl,
+    body: ?FunctionBody,
+    span: SourceSpan,
+
+    pub fn deinit(self: FunctionDecl, allocator: std.mem.Allocator) void {
+        self.signature.deinit(allocator);
+    }
+};
+
 pub const Item = union(enum) {
+    function_decl: FunctionDecl,
     struct_decl: StructDecl,
     enum_decl: EnumDecl,
     concept_decl: ConceptDecl,
@@ -239,6 +255,7 @@ pub const Item = union(enum) {
 
     pub fn deinit(self: Item, allocator: std.mem.Allocator) void {
         switch (self) {
+            .function_decl => |function_decl| function_decl.deinit(allocator),
             .struct_decl => |struct_decl| struct_decl.deinit(allocator),
             .enum_decl => |enum_decl| enum_decl.deinit(allocator),
             .concept_decl => |concept_decl| concept_decl.deinit(allocator),
@@ -249,6 +266,27 @@ pub const Item = union(enum) {
 
     pub fn writeDebug(self: Item, writer: anytype) !void {
         switch (self) {
+            .function_decl => |function_decl| {
+                if (function_decl.is_export) {
+                    try writer.writeAll("  Export Function ");
+                } else {
+                    try writer.writeAll("  Function ");
+                }
+                try function_decl.signature.return_type.write(writer);
+                try writer.writeByte(' ');
+                try function_decl.signature.name.write(writer);
+                try writer.writeByte('(');
+                for (function_decl.signature.params, 0..) |param, index| {
+                    if (index != 0) try writer.writeAll(", ");
+                    try param.type_name.write(writer);
+                    try writer.writeByte(' ');
+                    try writer.writeAll(param.name.text);
+                }
+                try writer.writeAll(")\n");
+                if (function_decl.body != null) {
+                    try writer.writeAll("    Body\n");
+                }
+            },
             .struct_decl => |struct_decl| {
                 if (struct_decl.is_export) {
                     try writer.writeAll("  Export Struct ");
