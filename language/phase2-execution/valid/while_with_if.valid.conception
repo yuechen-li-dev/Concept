@@ -1,0 +1,23 @@
+# name: phase2 while with if
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    int x = 0;
+    int y = 0;
+
+    while (x < 4) {
+        if (x == 2) {
+            y = 7;
+        }
+        x = x + 1;
+    }
+
+    return y;
+}
+
+=== run ===
+exit_code: 7

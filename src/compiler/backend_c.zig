@@ -113,6 +113,15 @@ fn emitStmt(writer: anytype, stmt: ast_model.Stmt, depth: usize) !void {
                 try writer.writeByte('\n');
             }
         },
+        .while_stmt => |while_stmt| {
+            try emitIndent(writer, depth);
+            try writer.writeAll("while (");
+            try emitExpr(writer, while_stmt.condition.*);
+            try writer.writeAll(") {\n");
+            try emitBlockContents(writer, while_stmt.body, depth + 1);
+            try emitIndent(writer, depth);
+            try writer.writeAll("}\n");
+        },
         .match_stmt => |match_stmt| {
             try emitIndent(writer, depth);
             try writer.writeAll("switch (");
@@ -485,5 +494,26 @@ test "Phase 2 C snapshot: match int return" {
     try expectCorpusC(
         "../../tests/corpus/phase2/match_int_return.concept",
         "../../tests/corpus/phase2/match_int_return.c.expected",
+    );
+}
+
+test "C backend emits while loop" {
+    try expectEmit(
+        "module Main; int main() { int x = 0; while (x < 7) { x = x + 1; } return x; }",
+        "int main(void) {\n    int x = 0;\n    while ((x < 7)) {\n        x = (x + 1);\n    }\n    return x;\n}\n",
+    );
+}
+
+test "C backend emits nested while loops" {
+    try expectEmit(
+        "module Main; int main() { int x = 0; int y = 0; while (x < 2) { while (y < 2) { y = y + 1; } x = x + 1; } return x + y; }",
+        "int main(void) {\n    int x = 0;\n    int y = 0;\n    while ((x < 2)) {\n        while ((y < 2)) {\n            y = (y + 1);\n        }\n        x = (x + 1);\n    }\n    return (x + y);\n}\n",
+    );
+}
+
+test "Phase 2 C snapshot: while count to seven" {
+    try expectCorpusC(
+        "../../tests/corpus/phase2/while_count_to_seven.concept",
+        "../../tests/corpus/phase2/while_count_to_seven.c.expected",
     );
 }

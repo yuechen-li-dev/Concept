@@ -473,6 +473,18 @@ pub const IfStmt = struct {
     }
 };
 
+pub const WhileStmt = struct {
+    condition: *Expr,
+    body: BlockStmt,
+    span: SourceSpan,
+
+    pub fn deinit(self: WhileStmt, allocator: std.mem.Allocator) void {
+        self.condition.deinit(allocator);
+        allocator.destroy(self.condition);
+        self.body.deinit(allocator);
+    }
+};
+
 pub const MatchPattern = union(enum) {
     int_literal: Expr.IntLiteralExpr,
     bool_literal: Expr.BoolLiteralExpr,
@@ -523,6 +535,7 @@ pub const Stmt = union(enum) {
     assignment: AssignmentStmt,
     return_stmt: ReturnStmt,
     if_stmt: IfStmt,
+    while_stmt: WhileStmt,
     match_stmt: MatchStmt,
     block_stmt: BlockStmt,
 
@@ -532,6 +545,7 @@ pub const Stmt = union(enum) {
             .assignment => |stmt| stmt.deinit(allocator),
             .return_stmt => |stmt| stmt.deinit(allocator),
             .if_stmt => |stmt| stmt.deinit(allocator),
+            .while_stmt => |stmt| stmt.deinit(allocator),
             .match_stmt => |stmt| stmt.deinit(allocator),
             .block_stmt => |stmt| stmt.deinit(allocator),
         }
@@ -574,6 +588,16 @@ pub const Stmt = union(enum) {
                     try writer.writeAll("Else\n");
                     for (else_block.statements) |child| try child.writeDebug(writer, depth + 2);
                 }
+            },
+            .while_stmt => |stmt| {
+                try writeIndent(writer, depth);
+                try writer.writeAll("While\n");
+                try writeIndent(writer, depth + 1);
+                try writer.writeAll("Condition\n");
+                try stmt.condition.writeDebug(writer, depth + 2);
+                try writeIndent(writer, depth + 1);
+                try writer.writeAll("Body\n");
+                for (stmt.body.statements) |child| try child.writeDebug(writer, depth + 2);
             },
             .match_stmt => |stmt| {
                 try writeIndent(writer, depth);

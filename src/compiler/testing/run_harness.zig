@@ -277,3 +277,30 @@ test "run harness compiles and runs default match arm" {
     );
     try std.testing.expectEqual(@as(u8, 0), result.actual_exit_code);
 }
+
+test "run harness compiles and runs while count to seven" {
+    const result = try expectExitCode(
+        std.testing.allocator,
+        "module Main; int main() { int x = 0; while (x < 7) { x = x + 1; } return x; }",
+        7,
+    );
+    try std.testing.expectEqual(@as(u8, 7), result.exit_code);
+}
+
+test "run harness compiles and runs while zero iterations" {
+    const result = try expectExitCode(
+        std.testing.allocator,
+        "module Main; int main() { int x = 7; while (x < 7) { x = x + 1; } return x; }",
+        7,
+    );
+    try std.testing.expectEqual(@as(u8, 7), result.exit_code);
+}
+
+test "run harness compiles and runs while with if" {
+    const result = try expectExitCode(
+        std.testing.allocator,
+        "module Main; int main() { int x = 0; int y = 0; while (x < 4) { if (x == 2) { y = 7; } x = x + 1; } return y; }",
+        7,
+    );
+    try std.testing.expectEqual(@as(u8, 7), result.exit_code);
+}
