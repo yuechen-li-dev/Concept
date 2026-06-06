@@ -58,6 +58,32 @@ The planned executable subset is intentionally small and ordered by milestone ri
 
 Anything outside this subset should continue to parse as Phase 1 surface syntax where already supported, but it should not be given runtime meaning in Phase 2.
 
+## Control flow in the current executable subset
+
+`if` is the binary branching construct. The executable subset supports a braced then block and an optional braced `else` block:
+
+```cpp
+if (condition) {
+    return 1;
+} else {
+    return 0;
+}
+```
+
+Direct `else if` ladders are rejected so that multi-way branching has one spelling. Use `match` for multi-way branching. Explicit nesting remains allowed when the nesting is written inside an `else { ... }` block:
+
+```cpp
+if (a) {
+    return 1;
+} else {
+    if (b) {
+        return 2;
+    }
+}
+```
+
+The current statement-form `match` supports integer literal patterns, boolean literal patterns, and `_` wildcard arms, and lowers to a C `switch` in the Stage 0 backend. Payload enum matching, guards, match expressions, and exhaustiveness checking remain future work.
+
 ## C backend v0 shape
 
 The first backend should be an audit/debug C backend:

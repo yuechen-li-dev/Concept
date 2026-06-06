@@ -1,0 +1,9 @@
+module Main;
+
+int main() {
+    if (false) {
+        return 1;
+    } else {
+        return 7;
+    }
+}

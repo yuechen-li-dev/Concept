@@ -3512,6 +3512,17 @@ test "if missing paren diagnostics" {
     try std.testing.expectEqualStrings("expected '(' after 'if'", diagnostics.diagnostics.items[0].message);
 }
 
+test "if missing closing paren diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { if (true { return 1; } return 0; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected ')' after if condition", diagnostics.diagnostics.items[0].message);
+}
+
 test "if missing then block diagnostic" {
     var diagnostics = DiagnosticBag.init(std.testing.allocator);
     defer diagnostics.deinit();
@@ -3691,6 +3702,15 @@ test "parses match with wildcard arm" {
         .wildcard => |span| span,
         else => return error.ExpectedWildcardPattern,
     };
+}
+
+test "match missing opening brace diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+    const unit = try parseTestSource("module Main; int main() { match (1) 1 => return 0; return 0; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected '{' after match scrutinee", diagnostics.diagnostics.items[0].message);
 }
 
 test "match missing fat arrow diagnostic" {

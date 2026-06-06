@@ -546,6 +546,13 @@ test "checker rejects duplicate local in visible outer scope" {
     );
 }
 
+test "checker rejects match arm local after arm" {
+    try expectInvalid(
+        "module Main; int main() { int x = 1; match (x) { 1 => { int y = 7; } _ => return 0; } return y; }",
+        "unknown identifier in executable subset",
+    );
+}
+
 test "checker accepts int match" {
     try expectValid("module Main; int main() { int x = 2; match (x) { 1 => return 10; 2 => return 7; _ => return 0; } return 0; }");
 }

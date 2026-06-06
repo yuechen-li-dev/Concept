@@ -1,0 +1,17 @@
+# name: phase2 if branch local not visible
+# phase: check
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    if (true) {
+        int x = 7;
+    }
+
+    return x;
+}
+
+=== diagnostics ===
+CON0010
