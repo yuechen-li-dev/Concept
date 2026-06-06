@@ -1,0 +1,14 @@
+# name: phase3 hir unknown identifier closeout
+# phase: check
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    int value = 1;
+    return value + missing;
+}
+
+=== diagnostics ===
+CON0026

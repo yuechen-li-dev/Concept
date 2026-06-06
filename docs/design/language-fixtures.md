@@ -22,6 +22,8 @@ language/phase1-surface/valid/
 language/phase1-surface/invalid/
 language/phase2-execution/valid/
 language/phase2-execution/invalid/
+language/phase3-semantics/valid/
+language/phase3-semantics/invalid/
 ```
 
 ## `.conception` format
@@ -45,7 +47,8 @@ Sections are introduced with `=== section-name ===` on a line by itself. The ini
 Implemented fixture phases:
 
 - `phase: parse` fixtures pass `source` to the real parser path. Passing parse fixtures compare `ast` against the stable AST debug output; failing parse fixtures compare diagnostic codes listed in `diagnostics`. Full rendered diagnostic snapshot matching is reserved for later.
-- `phase: run` fixtures pass `source` through parse, executable validation, C emission, `zig cc`, and native process execution. For now run fixtures support only `expect: pass` and a `=== run ===` section containing `exit_code: N`. Stdout and stderr matching are not implemented yet and are reserved for later.
+- `phase: check` fixtures pass `source` through parse and the semantic check path. Phase 3 check fixtures exercise semantic collection, type-name resolution, HIR lowering, and the HIR executable checker when the fixture is for the executable subset. Failing check fixtures match stable diagnostic codes from `diagnostics`; full rendered diagnostic matching remains reserved for later.
+- `phase: run` fixtures pass `source` through parse, semantic collection / HIR lowering, the HIR executable checker, HIR-backed C emission, `zig cc`, and native process execution. For now run fixtures support only `expect: pass` and a `=== run ===` section containing `exit_code: N`. Stdout and stderr matching are not implemented yet and are reserved for later.
 
 Example:
 

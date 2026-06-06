@@ -1,0 +1,25 @@
+# name: phase3 hir control flow
+# phase: check
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    int i = 0;
+    int total = 0;
+
+    while (i < 3) {
+        if (i == 1) {
+            total = total + 2;
+        } else {
+            total = total + 1;
+        }
+        i = i + 1;
+    }
+
+    match (total) {
+        4 => return total;
+        _ => return 0;
+    }
+}

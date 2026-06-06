@@ -1,0 +1,19 @@
+# name: phase3 hir function graph
+# phase: check
+# expect: pass
+
+=== source ===
+module Main;
+
+int add(int a, int b) {
+    return a + b;
+}
+
+int twice(int value) {
+    return add(value, value);
+}
+
+int main() {
+    int seed = 3;
+    return twice(seed);
+}

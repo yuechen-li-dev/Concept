@@ -1,0 +1,17 @@
+# name: phase3 hir call type mismatch closeout
+# phase: check
+# expect: fail
+
+=== source ===
+module Main;
+
+int add_one(int value) {
+    return value + 1;
+}
+
+int main() {
+    return add_one(true);
+}
+
+=== diagnostics ===
+CON0029

@@ -374,3 +374,42 @@ The older AST-shaped executable checker remains in place as a transitional compa
 P3-M8 moves executable C emission onto the semantic path: Concept source is parsed, collected and lowered into `SemanticModule` / HIR, checked by the HIR executable checker, emitted as C from HIR functions/statements/expressions, compiled with `zig cc`, and then executed by the run harness. Phase 2 run fixtures now exercise that HIR-backed path instead of the old AST checker/backend default.
 
 The old AST-shaped executable checker and AST C emitter remain in the tree only as transitional compatibility code for legacy tests and comparison. They are no longer the authoritative run path. This milestone does not add MIR; MIR remains deferred to Phase 4.
+
+## P3-M9 closeout status: semantic spine consolidated
+
+Phase 3 is now closed around the semantic spine needed by later lowering and checking milestones. The Stage 0 implementation provides:
+
+- `SymbolId` values backed by the interner.
+- Stable semantic IDs for items, functions, structs, enums, fields, variants, parameters, locals, statements, and expressions.
+- A `HirStore` that owns semantic items, declarations, function bodies, statements, and expressions separately from the source-shaped AST.
+- `TypeStore` / `TypeId`, including stable builtin type IDs and nominal struct/enum type entries.
+- One-file top-level declaration collection for functions, structs, and enums.
+- Declaration type-name resolution for builtin and user-defined declaration types.
+- Diagnostics for duplicate top-level declarations, duplicate struct fields, duplicate enum variants, and duplicate function parameters.
+- Function body lowering to HIR for the closed Phase 2 executable subset.
+- HIR-based executable checking for the Phase 2 subset.
+- HIR-backed C backend emission for the current executable path.
+- Phase 2 run fixtures executing through parse, semantic collection / HIR lowering, HIR executable checking, HIR-backed C emission, `zig cc`, and native exit-code verification.
+
+The authoritative Stage 0 run path at Phase 3 closeout is therefore:
+
+```text
+Concept source
+  -> parseSource
+  -> semantic collection / HIR lowering
+  -> HIR executable checker
+  -> HIR-backed C backend
+  -> zig cc
+  -> native executable / exit-code fixture
+```
+
+MIR remains a Phase 4 concern. Phase 3 HIR is intentionally not MIR: it carries resolved semantic structure for declaration and executable-subset checking, but does not perform control-flow normalization, dataflow analysis, borrow/move checking, or backend-oriented lowering.
+
+Any remaining AST-based executable checker or AST-backed C backend entry point is transitional legacy support for older tests and comparison. It is not the authoritative run path after Phase 3.
+
+Known closeout limitations are explicit:
+
+- HIR diagnostics may still use synthetic spans where the lowering path does not yet carry precise source spans.
+- C backend v0 still lowers both Concept `int` and `bool` to C `int`.
+- C identifier mangling is still future work; emitted names are currently the interned source names accepted by the Phase 2 executable subset.
+- Payload enum runtime layout, payload enum matching, match exhaustiveness, MIR, borrow/move checking, generics, imports, richer C type lowering, and production backends remain out of scope for Phase 3.

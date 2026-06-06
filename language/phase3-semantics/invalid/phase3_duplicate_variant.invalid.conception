@@ -1,0 +1,15 @@
+# name: phase3 duplicate variant closeout
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+enum State {
+    Ready;
+    Running(int ticks);
+    Ready;
+};
+
+=== diagnostics ===
+CON0023
