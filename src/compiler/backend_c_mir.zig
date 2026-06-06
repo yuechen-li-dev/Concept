@@ -189,13 +189,50 @@ fn emitBlock(writer: anytype, ctx: *const BackendContext, block_id: mir.MirBlock
 fn emitStatement(writer: anytype, ctx: *const BackendContext, statement: mir.MirStatement) EmitError!void {
     switch (statement.kind) {
         .assign => |assignment| {
-            try writer.writeAll("    ");
-            try emitPlace(writer, ctx, assignment.place);
-            try writer.writeAll(" = ");
-            try emitRvalue(writer, ctx, assignment.rvalue);
-            try writer.writeAll(";\n");
+            switch (assignment.rvalue) {
+                .enum_constructor => |constructor| try emitEnumConstructorAssignment(writer, ctx, assignment.place, constructor),
+                else => {
+                    try writer.writeAll("    ");
+                    try emitPlace(writer, ctx, assignment.place);
+                    try writer.writeAll(" = ");
+                    try emitRvalue(writer, ctx, assignment.rvalue);
+                    try writer.writeAll(";\n");
+                },
+            }
         },
     }
+}
+
+fn emitEnumConstructorAssignment(writer: anytype, ctx: *const BackendContext, place: mir.MirPlace, constructor: anytype) EmitError!void {
+    const enum_decl = ctx.module.hir.getEnum(constructor.enum_id);
+    const variant = ctx.module.hir.getVariant(constructor.variant_id);
+    const variant_index = enumVariantIndex(ctx, enum_decl, constructor.variant_id) orelse return error.InvalidExecutable;
+
+    try writer.writeAll("    ");
+    try emitPlace(writer, ctx, place);
+    try writer.writeAll(".tag = ");
+    try writer.print("{d};\n", .{variant_index});
+
+    for (constructor.args, variant.payload_fields, 0..) |arg, payload_id, payload_index| {
+        const payload_field = ctx.module.hir.getEnumPayloadField(payload_id);
+        try writer.writeAll("    ");
+        try emitPlace(writer, ctx, place);
+        try writer.writeAll(".payload.");
+        try emitEnumVariantPayloadName(writer, ctx.module, variant.name, variant_index);
+        try writer.writeByte('.');
+        try emitEnumPayloadFieldName(writer, ctx.module, payload_field.name, payload_index);
+        try writer.writeAll(" = ");
+        try emitOperand(writer, ctx, arg);
+        try writer.writeAll(";\n");
+    }
+}
+
+fn enumVariantIndex(ctx: *const BackendContext, enum_decl: hir.HirEnum, variant_id: hir.VariantId) ?usize {
+    _ = ctx;
+    for (enum_decl.variants, 0..) |candidate, index| {
+        if (candidate.index == variant_id.index) return index;
+    }
+    return null;
 }
 
 fn emitTerminator(writer: anytype, ctx: *const BackendContext, terminator: mir.MirTerminator) EmitError!void {
@@ -268,6 +305,7 @@ fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue
             }
             try writer.writeByte(')');
         },
+        .enum_constructor => unreachable,
     }
 }
 
@@ -797,4 +835,44 @@ test "MIR C backend reports invalid TypeId before type rendering" {
     try std.testing.expectError(error.InvalidExecutable, emitExecutableFromMir(std.testing.allocator, &module, &mir_module, &diagnostic_bag));
     try std.testing.expectEqual(@as(usize, 1), diagnostic_bag.count());
     try std.testing.expectEqual(diagnostics.DiagnosticCode.InvalidMirType, diagnostic_bag.diagnostics.items[0].code);
+}
+
+test "MIR C backend emits enum constructor assignments" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\enum Status { Ok, Err, };
+        \\int main() { Status status = Status::Ok; status = Status::Err; return 0; }
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "typedef struct {\n    int tag;\n} cpt_enum_Status;") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, ".tag = 0;") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, ".tag = 1;") != null);
+}
+
+test "MIR C backend emits payload enum constructor assignment" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\enum ParseResult { Ok(int value), Err(int code), };
+        \\int main() { ParseResult result = ParseResult::Ok(7); return 0; }
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_enum_ParseResult") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, ".tag = 0;") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, ".payload.cpt_v_Ok_0.cpt_pf_value_0 = 7;") != null);
+}
+
+test "MIR C backend returns enum constructor through temp" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\enum Status { Ok, Err, };
+        \\Status make() { return Status::Ok; }
+        \\int main() { Status status = make(); return 0; }
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_enum_Status cpt_f_make(void)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, ".tag = 0;") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "return cpt_t_") != null);
 }

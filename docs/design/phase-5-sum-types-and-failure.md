@@ -444,3 +444,17 @@ P5-M0 is complete when:
 - Phase 5 goals, non-goals, enum representation v0, constructor syntax, enum matching, payload binding, `must_use`, `discard`, Result-shaped enums, `try`, HIR/MIR/C backend impact, fixture strategy, milestone ladder, and close criteria are documented.
 - No compiler implementation code has been added.
 - `zig build test` still passes.
+
+
+## P5-M2 enum variant constructors
+
+P5-M2 adds source-level construction for enum values using qualified variant
+constructor syntax: `EnumName::Variant`, `EnumName::Variant()`, and
+`EnumName::Variant(args)`. The Stage 0 path resolves constructors during
+semantic lowering, checks variant existence and payload arity, verifies payload
+argument types in the HIR executable checker, lowers constructors through MIR,
+and emits backend-owned C assignments for enum tags and payload fields.
+
+Variant matching remains future P5-M3 work, and payload binding remains future
+P5-M4 work. Result-shaped conventions, `try`, `must_use`, and discard checking
+remain out of scope for this milestone.

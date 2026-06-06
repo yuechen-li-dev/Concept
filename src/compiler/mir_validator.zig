@@ -255,7 +255,33 @@ const Validator = struct {
                 }
                 break :blk callee.return_type;
             },
+            .enum_constructor => |constructor| blk: {
+                if (constructor.enum_id.index >= self.semantic_module.hir.enums.items.len or constructor.variant_id.index >= self.semantic_module.hir.variants.items.len) {
+                    try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
+                    break :blk null;
+                }
+                const variant = self.semantic_module.hir.getVariant(constructor.variant_id);
+                if (variant.parent.index != constructor.enum_id.index or constructor.args.len != variant.payload_fields.len) {
+                    try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
+                    break :blk self.enumType(constructor.enum_id);
+                }
+                for (constructor.args, variant.payload_fields) |arg, payload_id| {
+                    const arg_type = try self.operandType(function_id, arg, span);
+                    const payload_type = self.semantic_module.hir.getEnumPayloadField(payload_id).type_id;
+                    if (arg_type != null and !sameType(arg_type.?, payload_type)) {
+                        try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                    }
+                }
+                break :blk self.enumType(constructor.enum_id);
+            },
         };
+    }
+
+    fn enumType(self: *Validator, enum_id: hir.EnumId) ?types.TypeId {
+        for (self.semantic_module.types.types.items, 0..) |kind, index| {
+            if (kind == .enum_type and kind.enum_type.index == enum_id.index) return .{ .index = @intCast(index) };
+        }
+        return null;
     }
 
     fn requireValidType(self: *Validator, type_id: types.TypeId, span: ?diagnostics.SourceSpan) ValidationError!void {

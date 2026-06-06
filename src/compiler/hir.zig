@@ -97,6 +97,7 @@ pub const HirExprKind = union(enum) {
     local_ref: LocalId,
     param_ref: ParamId,
     call: struct { function: FunctionId, args: []ExprId },
+    enum_constructor: struct { enum_id: EnumId, variant_id: VariantId, args: []ExprId },
     group: ExprId,
     unary: struct { op: UnaryOp, operand: ExprId },
     binary: struct { op: BinaryOp, left: ExprId, right: ExprId },
@@ -256,6 +257,7 @@ pub const HirStore = struct {
             switch (expr.kind) {
                 .int_literal => |text| self.allocator.free(text),
                 .call => |call| if (call.args.len > 0) self.allocator.free(call.args),
+                .enum_constructor => |constructor| if (constructor.args.len > 0) self.allocator.free(constructor.args),
                 else => {},
             }
         }
@@ -614,6 +616,10 @@ pub const HirStore = struct {
             .call => |call| {
                 try writer.print("Call {f}\n", .{call.function});
                 for (call.args) |arg| try self.writeExprDebug(writer, arg, depth + 1);
+            },
+            .enum_constructor => |constructor| {
+                try writer.print("EnumConstructor {f}::{f}\n", .{ constructor.enum_id, constructor.variant_id });
+                for (constructor.args) |arg| try self.writeExprDebug(writer, arg, depth + 1);
             },
             .group => |inner| {
                 try writer.writeAll("Group\n");

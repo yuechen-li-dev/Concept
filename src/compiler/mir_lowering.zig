@@ -280,6 +280,7 @@ const FunctionLowerer = struct {
             .unary => |unary| try self.lowerUnary(expr, unary, block_id),
             .binary => |binary| try self.lowerBinary(expr, binary, block_id),
             .call => |call| try self.lowerCall(expr, call, block_id),
+            .enum_constructor => |constructor| try self.lowerEnumConstructor(expr, constructor, block_id),
         };
     }
 
@@ -333,6 +334,29 @@ const FunctionLowerer = struct {
         return mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp));
     }
 
+    fn lowerEnumConstructor(self: *FunctionLowerer, expr: hir.HirExpr, constructor: anytype, block_id: mir.MirBlockId) LoweringError!mir.MirOperand {
+        const args = try self.allocator.alloc(mir.MirOperand, constructor.args.len);
+        var args_owned = true;
+        var initialized: usize = 0;
+        errdefer if (args_owned) deinitInitializedOperands(self.allocator, args, initialized);
+
+        for (constructor.args) |arg_expr| {
+            args[initialized] = try self.lowerExprToOperand(arg_expr, block_id);
+            initialized += 1;
+        }
+
+        const temp = try self.addTemp(try self.inferExprTypeFrom(expr));
+        args_owned = false;
+        try self.store.appendStatement(block_id, .{
+            .span = expr.span,
+            .kind = mir.MirStatementKind.assignTo(
+                mir.MirPlace.localPlace(temp),
+                .{ .enum_constructor = .{ .enum_id = constructor.enum_id, .variant_id = constructor.variant_id, .args = args } },
+            ),
+        });
+        return mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp));
+    }
+
     fn inferExprType(self: *FunctionLowerer, expr_id: hir.ExprId) LoweringError!types.TypeId {
         return self.inferExprTypeFrom(self.semantic_module.hir.getExpr(expr_id).*);
     }
@@ -353,7 +377,15 @@ const FunctionLowerer = struct {
                 .less, .less_equal, .greater, .greater_equal, .equal_equal, .bang_equal, .logical_and, .logical_or => self.semantic_module.types.boolType(),
             },
             .call => |call| self.semantic_module.hir.getFunction(call.function).return_type,
+            .enum_constructor => |constructor| try self.enumType(constructor.enum_id),
         };
+    }
+
+    fn enumType(self: *FunctionLowerer, enum_id: hir.EnumId) LoweringError!types.TypeId {
+        for (self.semantic_module.types.types.items, 0..) |kind, index| {
+            if (kind == .enum_type and kind.enum_type.index == enum_id.index) return .{ .index = @intCast(index) };
+        }
+        return error.MissingEnumType;
     }
 
     fn ensureLocal(self: *FunctionLowerer, local_id: hir.LocalId) LoweringError!mir.MirLocalId {

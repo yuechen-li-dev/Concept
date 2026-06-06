@@ -130,6 +130,11 @@ pub const MirRvalue = union(enum) {
         function: hir.FunctionId,
         args: []MirOperand,
     },
+    enum_constructor: struct {
+        enum_id: hir.EnumId,
+        variant_id: hir.VariantId,
+        args: []MirOperand,
+    },
 
     pub fn use_(operand: MirOperand) MirRvalue {
         return .{ .use = operand };
@@ -148,6 +153,11 @@ pub const MirRvalue = union(enum) {
         return .{ .call = .{ .function = function, .args = owned_args } };
     }
 
+    pub fn enumConstructor(allocator: std.mem.Allocator, enum_id: hir.EnumId, variant_id: hir.VariantId, args: []const MirOperand) !MirRvalue {
+        const owned_args = try cloneOperands(allocator, args);
+        return .{ .enum_constructor = .{ .enum_id = enum_id, .variant_id = variant_id, .args = owned_args } };
+    }
+
     fn clone(self: MirRvalue, allocator: std.mem.Allocator) !MirRvalue {
         return switch (self) {
             .use => |operand| MirRvalue.use_(try operand.clone(allocator)),
@@ -158,6 +168,7 @@ pub const MirRvalue = union(enum) {
                 try binary_rvalue.right.clone(allocator),
             ),
             .call => |call_rvalue| try MirRvalue.callFunction(allocator, call_rvalue.function, call_rvalue.args),
+            .enum_constructor => |constructor| try MirRvalue.enumConstructor(allocator, constructor.enum_id, constructor.variant_id, constructor.args),
         };
     }
 
@@ -172,6 +183,10 @@ pub const MirRvalue = union(enum) {
             .call => |call_rvalue| {
                 deinitOperands(allocator, call_rvalue.args);
                 if (call_rvalue.args.len > 0) allocator.free(call_rvalue.args);
+            },
+            .enum_constructor => |constructor| {
+                deinitOperands(allocator, constructor.args);
+                if (constructor.args.len > 0) allocator.free(constructor.args);
             },
         }
     }
@@ -618,6 +633,14 @@ fn writeRvalueDebug(writer: *std.Io.Writer, rvalue: MirRvalue) !void {
         .call => |call_rvalue| {
             try writer.print("Call {f}(", .{call_rvalue.function});
             for (call_rvalue.args, 0..) |arg, index| {
+                if (index != 0) try writer.writeAll(", ");
+                try writeOperandDebug(writer, arg);
+            }
+            try writer.writeByte(')');
+        },
+        .enum_constructor => |constructor| {
+            try writer.print("EnumConstructor {f}::{f}(", .{ constructor.enum_id, constructor.variant_id });
+            for (constructor.args, 0..) |arg, index| {
                 if (index != 0) try writer.writeAll(", ");
                 try writeOperandDebug(writer, arg);
             }

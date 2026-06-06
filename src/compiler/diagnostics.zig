@@ -46,6 +46,10 @@ pub const DiagnosticCode = enum {
     MissingMain,
     InvalidConditionType,
     InvalidCall,
+    UnknownEnumConstructor,
+    UnknownEnumVariant,
+    EnumConstructorArityMismatch,
+    EnumConstructorTypeMismatch,
     InvalidMirBlock,
     InvalidMirLocal,
     MissingTerminator,
@@ -79,6 +83,10 @@ pub const DiagnosticCode = enum {
             .MissingMain => "CON0031",
             .InvalidConditionType => "CON0032",
             .InvalidCall => "CON0033",
+            .UnknownEnumConstructor => "CON0034",
+            .UnknownEnumVariant => "CON0035",
+            .EnumConstructorArityMismatch => "CON0036",
+            .EnumConstructorTypeMismatch => "CON0037",
             .InvalidMirBlock => "CON0040",
             .InvalidMirLocal => "CON0041",
             .MissingTerminator => "CON0042",
@@ -488,6 +496,42 @@ pub fn unknownFunction(span: SourceSpan) Diagnostic {
         "unknown function",
         span,
     ).withHelp("function calls must name a top-level function");
+}
+
+pub fn unknownEnumConstructor(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .UnknownEnumConstructor,
+        .@"error",
+        "unknown enum constructor",
+        span,
+    ).withHelp("enum constructors must use a top-level enum name");
+}
+
+pub fn unknownEnumVariant(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .UnknownEnumVariant,
+        .@"error",
+        "unknown enum variant",
+        span,
+    ).withHelp("qualified enum constructors must name a variant declared by that enum");
+}
+
+pub fn enumConstructorArityMismatch(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .EnumConstructorArityMismatch,
+        .@"error",
+        "enum constructor argument count mismatch",
+        span,
+    );
+}
+
+pub fn enumConstructorTypeMismatch(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .EnumConstructorTypeMismatch,
+        .@"error",
+        "enum constructor argument type mismatch",
+        span,
+    );
 }
 
 pub fn duplicateLocalName(span: SourceSpan) Diagnostic {

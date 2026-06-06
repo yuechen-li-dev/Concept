@@ -161,6 +161,22 @@ const Checker = struct {
                 }
                 break :blk callee.return_type;
             },
+            .enum_constructor => |constructor| blk: {
+                const variant = self.module.hir.getVariant(constructor.variant_id);
+                if (variant.parent.index != constructor.enum_id.index or constructor.args.len != variant.payload_fields.len) {
+                    try self.reportAt(.EnumConstructorArityMismatch, "enum constructor argument count mismatch", expr.span);
+                    return error.InvalidSemanticModule;
+                }
+                for (constructor.args, variant.payload_fields) |arg, payload_id| {
+                    const arg_type = try self.checkExpr(arg);
+                    const payload_type = self.module.hir.getEnumPayloadField(payload_id).type_id;
+                    if (!sameType(arg_type, payload_type)) {
+                        try self.reportAt(.EnumConstructorTypeMismatch, "enum constructor argument type mismatch", self.exprSpan(arg));
+                        return error.InvalidSemanticModule;
+                    }
+                }
+                break :blk try self.enumType(constructor.enum_id);
+            },
             .unary => |unary| blk: {
                 const operand_type = try self.checkExpr(unary.operand);
                 switch (unary.op) {
@@ -200,6 +216,14 @@ const Checker = struct {
                 }
             },
         };
+    }
+
+    fn enumType(self: *Checker, enum_id: hir.EnumId) CheckError!types.TypeId {
+        for (self.module.types.types.items, 0..) |kind, index| {
+            if (kind == .enum_type and kind.enum_type.index == enum_id.index) return .{ .index = @intCast(index) };
+        }
+        try self.reportAt(.TypeMismatch, "unknown enum constructor type", synthetic_span);
+        return error.InvalidSemanticModule;
     }
 
     fn requireSame(self: *Checker, actual: types.TypeId, expected: types.TypeId, message: []const u8, span: diagnostics.SourceSpan) CheckError!void {

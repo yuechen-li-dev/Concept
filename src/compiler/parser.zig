@@ -967,6 +967,60 @@ pub const Parser = struct {
         return node;
     }
 
+    fn finishEnumConstructorExpr(self: *Parser, allocator: std.mem.Allocator, enum_name: ast.NameSegment) ParseExprError!*ast.Expr {
+        _ = self.advance();
+        const variant_token = if (self.current().kind == .identifier) self.advance() else {
+            self.report(.UnexpectedToken, "expected enum variant after '::'", self.current().span) catch return error.OutOfMemory;
+            return error.ParseFailed;
+        };
+        const variant_name = ast.NameSegment{ .text = variant_token.lexeme, .span = variant_token.span };
+        var args = std.ArrayList(*ast.Expr).init(allocator);
+        errdefer {
+            for (args.items) |arg| {
+                arg.deinit(allocator);
+                allocator.destroy(arg);
+            }
+            args.deinit();
+        }
+
+        var end_span = variant_name.span;
+        if (self.match(.left_paren)) |_| {
+            if (self.current().kind != .right_paren) {
+                while (self.current().kind != .eof and self.current().kind != .right_paren and self.current().kind != .semicolon) {
+                    const arg = self.parseExpr(allocator) catch |err| switch (err) {
+                        error.OutOfMemory => return err,
+                        error.ParseFailed => {
+                            self.recoverCallArgument();
+                            if (self.match(.comma) != null) continue;
+                            break;
+                        },
+                    };
+                    end_span = arg.span();
+                    try args.append(arg);
+                    if (self.match(.comma) == null) break;
+                    if (self.current().kind == .right_paren) {
+                        self.report(.UnexpectedToken, "expected expression", self.current().span) catch return error.OutOfMemory;
+                        break;
+                    }
+                }
+            }
+            end_span = if (self.match(.right_paren)) |right_paren| right_paren.span else blk: {
+                self.report(.UnexpectedToken, "expected ')' after enum constructor arguments", self.current().span) catch return error.OutOfMemory;
+                self.recoverCallArgument();
+                break :blk end_span;
+            };
+        }
+
+        const node = try allocator.create(ast.Expr);
+        node.* = .{ .enum_constructor = .{
+            .enum_name = enum_name,
+            .variant_name = variant_name,
+            .args = try args.toOwnedSlice(),
+            .span = ast.spanFromBounds(enum_name.span.start, spanEnd(end_span)),
+        } };
+        return node;
+    }
+
     fn parsePrimaryExpr(self: *Parser, allocator: std.mem.Allocator) ParseExprError!*ast.Expr {
         const token = self.current();
         switch (token.kind) {
@@ -984,9 +1038,13 @@ pub const Parser = struct {
             },
             .identifier => {
                 _ = self.advance();
+                const name = ast.NameSegment{ .text = token.lexeme, .span = token.span };
+                if (self.current().kind == .colon_colon) {
+                    return self.finishEnumConstructorExpr(allocator, name);
+                }
                 const node = try allocator.create(ast.Expr);
                 node.* = .{ .identifier = .{
-                    .name = .{ .text = token.lexeme, .span = token.span },
+                    .name = name,
                     .span = token.span,
                 } };
                 return node;
@@ -4017,4 +4075,53 @@ test "while missing body diagnostic" {
     defer unit.deinit(std.testing.allocator);
     try std.testing.expect(diagnostics.count() >= 1);
     try std.testing.expectEqualStrings("expected braced block after while condition", diagnostics.diagnostics.items[0].message);
+}
+
+test "parses enum constructor expressions" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; enum Status { Ok, Err, }; Status main() { return Status::Ok; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "EnumConstructor Status::Ok") != null);
+}
+
+test "parses enum constructor arguments" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; enum ParseResult { Ok(int value), Err(int code), }; ParseResult main() { return ParseResult::Ok(7); }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "EnumConstructor ParseResult::Ok") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Int 7") != null);
+}
+
+test "enum constructor missing variant diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { return Status::; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected enum variant after '::'", diagnostics.diagnostics.items[0].message);
+}
+
+test "enum constructor malformed arguments diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { return Status::Ok(1, ); }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected expression", diagnostics.diagnostics.items[0].message);
 }
