@@ -1,0 +1,15 @@
+# name: phase3 duplicate function struct
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+int Foo() {
+    return 0;
+}
+
+struct Foo {};
+
+=== diagnostics ===
+CON0020

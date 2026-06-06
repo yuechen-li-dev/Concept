@@ -96,19 +96,19 @@ pub const SourceFile = struct {
 };
 
 fn computeLineStarts(allocator: std.mem.Allocator, text: []const u8) ![]usize {
-    var starts = std.ArrayList(usize).init(allocator);
-    errdefer starts.deinit();
+    var starts = std.ArrayList(usize).empty;
+    errdefer starts.deinit(allocator);
 
-    try starts.append(0);
+    try starts.append(allocator, 0);
 
     var index: usize = 0;
     while (index < text.len) : (index += 1) {
         if (text[index] == '\n') {
-            try starts.append(index + 1);
+            try starts.append(allocator, index + 1);
         }
     }
 
-    return starts.toOwnedSlice();
+    return starts.toOwnedSlice(allocator);
 }
 
 test "empty source maps EOF to first line and column" {
