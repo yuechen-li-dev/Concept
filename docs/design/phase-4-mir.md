@@ -710,6 +710,26 @@ Phase 4 is complete when:
 
 The convergence requirement for Phase 4 is that the real motivating path improves: existing Concept programs should still parse, check, compile through `zig cc`, and run, but the backend-facing control flow should now be explicit MIR rather than structured HIR.
 
+## P4-M8 implementation note
+
+P4-M8 adds MIR-backed C emission as the authoritative executable backend path. The run harness now follows:
+
+```text
+Concept source
+  -> parseSource
+  -> semantic collection / HIR lowering
+  -> HIR executable checker
+  -> HIR-to-MIR lowering
+  -> MIR validation
+  -> MIR-backed C backend
+  -> zig cc
+  -> executable
+```
+
+The MIR C backend validates the MIR module before emitting C, so backend entry points do not trust unvalidated MIR. Generated C is intentionally direct and boring: basic blocks become `bbN` labels, branches become `goto`, `switch_bool` becomes an `if (...) goto ... else goto ...`, and `switch_int` becomes a C `switch` whose cases jump to MIR block labels. P4-M8 does not reconstruct pretty source-level `if`, `while`, or `match` structures.
+
+The older HIR-backed C backend remains in the repository as transitional snapshot and compatibility coverage, but it is no longer the default run-fixture path. MIR fixture corpus expansion and Phase 4 closeout remain P4-M9 work.
+
 ## P4-M0 close criteria
 
 P4-M0 is complete when:
