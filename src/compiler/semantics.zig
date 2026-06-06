@@ -30,6 +30,13 @@ pub const SemanticModule = struct {
         self.interner.deinit();
         self.* = undefined;
     }
+
+    pub fn resultShapeForType(self: *const SemanticModule, type_id: types.TypeId) ?hir.HirResultShape {
+        return switch (self.types.kind(type_id)) {
+            .enum_type => |enum_id| self.hir.getResultShape(enum_id),
+            else => null,
+        };
+    }
 };
 
 pub fn collectTopLevelDeclarations(
@@ -211,6 +218,49 @@ const Collector = struct {
                 }
             }
         }
+
+        self.module.hir.setEnumResultShape(enum_id, try self.detectResultShape(enum_id));
+    }
+
+    fn detectResultShape(self: *Collector, enum_id: hir.EnumId) !?hir.HirResultShape {
+        const enum_decl = self.module.hir.getEnum(enum_id);
+        if (enum_decl.variants.len != 2) return null;
+
+        const ok_symbol = try self.module.interner.intern("Ok");
+        const err_symbol = try self.module.interner.intern("Err");
+
+        var ok_variant_id: ?hir.VariantId = null;
+        var err_variant_id: ?hir.VariantId = null;
+        for (enum_decl.variants) |variant_id| {
+            const variant = self.module.hir.getVariant(variant_id);
+            if (variant.name.index == ok_symbol.index) {
+                ok_variant_id = variant_id;
+            } else if (variant.name.index == err_symbol.index) {
+                err_variant_id = variant_id;
+            } else {
+                return null;
+            }
+        }
+
+        const ok_id = ok_variant_id orelse return null;
+        const err_id = err_variant_id orelse return null;
+        const ok_variant = self.module.hir.getVariant(ok_id);
+        const err_variant = self.module.hir.getVariant(err_id);
+        if (ok_variant.payload_fields.len != 1 or err_variant.payload_fields.len != 1) return null;
+
+        const ok_payload_id = ok_variant.payload_fields[0];
+        const err_payload_id = err_variant.payload_fields[0];
+        const ok_payload = self.module.hir.getEnumPayloadField(ok_payload_id);
+        const err_payload = self.module.hir.getEnumPayloadField(err_payload_id);
+
+        return .{
+            .ok_variant = ok_id,
+            .err_variant = err_id,
+            .ok_payload = ok_payload_id,
+            .err_payload = err_payload_id,
+            .ok_type = ok_payload.type_id,
+            .err_type = err_payload.type_id,
+        };
     }
 
     fn resolveTypeName(self: *Collector, type_name: ast.TypeName) !?types.TypeId {
@@ -631,6 +681,42 @@ fn enumItem(name: []const u8, start: usize) ast.Item {
     } };
 }
 
+fn enumItemWithVariants(name: []const u8, variants: []ast.EnumVariant, is_must_use: bool, start: usize) ast.Item {
+    return .{ .enum_decl = .{
+        .is_export = false,
+        .is_must_use = is_must_use,
+        .name = nameSegment(name, start + 5),
+        .variants = variants,
+        .span = .{ .start = start, .length = name.len + 8 },
+    } };
+}
+
+fn enumVariant(name: []const u8, payload_fields: []ast.EnumPayloadField, start: usize) ast.EnumVariant {
+    return .{
+        .name = nameSegment(name, start),
+        .payload_fields = payload_fields,
+        .span = .{ .start = start, .length = name.len },
+    };
+}
+
+fn enumPayload(type_name: []const u8, name: []const u8, start: usize) ast.EnumPayloadField {
+    return .{
+        .type_name = typeName(type_name, start),
+        .name = nameSegment(name, start + type_name.len + 1),
+        .span = .{ .start = start, .length = type_name.len + name.len + 1 },
+    };
+}
+
+fn collectSingleEnum(item: ast.Item) !SemanticModule {
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    var module = try collectItems(&.{item}, &diagnostics_bag);
+    errdefer module.deinit();
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
+    return module;
+}
+
 fn conceptItem(name: []const u8, start: usize) ast.Item {
     return .{ .concept_decl = .{
         .name = nameSegment(name, start + 8),
@@ -681,6 +767,147 @@ fn typeName(name: []const u8, start: usize) ast.TypeName {
 
 fn nameSegment(text: []const u8, start: usize) ast.NameSegment {
     return .{ .text = text, .span = .{ .start = start, .length = text.len } };
+}
+
+test "semantic collection detects must_use Result-shaped enum" {
+    var ok_payloads = [_]ast.EnumPayloadField{enumPayload("int", "value", 0)};
+    var err_payloads = [_]ast.EnumPayloadField{enumPayload("int", "code", 10)};
+    var variants = [_]ast.EnumVariant{
+        enumVariant("Ok", ok_payloads[0..], 0),
+        enumVariant("Err", err_payloads[0..], 10),
+    };
+
+    var module = try collectSingleEnum(enumItemWithVariants("ParseIntResult", variants[0..], true, 0));
+    defer module.deinit();
+
+    const shape = module.hir.getResultShape(.{ .index = 0 }).?;
+    try std.testing.expect(module.hir.isResultShapedEnum(.{ .index = 0 }));
+    try std.testing.expectEqual(hir.VariantId{ .index = 0 }, shape.ok_variant);
+    try std.testing.expectEqual(hir.VariantId{ .index = 1 }, shape.err_variant);
+    try std.testing.expectEqual(hir.EnumPayloadFieldId{ .index = 0 }, shape.ok_payload);
+    try std.testing.expectEqual(hir.EnumPayloadFieldId{ .index = 1 }, shape.err_payload);
+    try std.testing.expectEqual(module.types.intType(), shape.ok_type);
+    try std.testing.expectEqual(module.types.intType(), shape.err_type);
+    try std.testing.expectEqual(shape, module.resultShapeForType(.{ .index = 3 }).?);
+}
+
+test "semantic collection detects non-must_use Result-shaped enum" {
+    var ok_payloads = [_]ast.EnumPayloadField{enumPayload("int", "value", 0)};
+    var err_payloads = [_]ast.EnumPayloadField{enumPayload("int", "code", 10)};
+    var variants = [_]ast.EnumVariant{
+        enumVariant("Ok", ok_payloads[0..], 0),
+        enumVariant("Err", err_payloads[0..], 10),
+    };
+
+    var module = try collectSingleEnum(enumItemWithVariants("ParseIntResult", variants[0..], false, 0));
+    defer module.deinit();
+
+    try std.testing.expect(module.hir.getResultShape(.{ .index = 0 }) != null);
+}
+
+test "semantic collection stores Result-shaped payload types" {
+    var ok_payloads = [_]ast.EnumPayloadField{enumPayload("bool", "value", 0)};
+    var err_payloads = [_]ast.EnumPayloadField{enumPayload("int", "code", 10)};
+    var variants = [_]ast.EnumVariant{
+        enumVariant("Ok", ok_payloads[0..], 0),
+        enumVariant("Err", err_payloads[0..], 10),
+    };
+
+    var module = try collectSingleEnum(enumItemWithVariants("BoolResult", variants[0..], false, 0));
+    defer module.deinit();
+
+    const shape = module.hir.getResultShape(.{ .index = 0 }).?;
+    try std.testing.expectEqual(module.types.boolType(), shape.ok_type);
+    try std.testing.expectEqual(module.types.intType(), shape.err_type);
+}
+
+test "semantic collection leaves ordinary enums non-Result-shaped" {
+    {
+        var variants = [_]ast.EnumVariant{enumVariant("Ready", &.{}, 0)};
+        var module = try collectSingleEnum(enumItemWithVariants("Status", variants[0..], false, 0));
+        defer module.deinit();
+        try std.testing.expectEqual(@as(?hir.HirResultShape, null), module.hir.getResultShape(.{ .index = 0 }));
+    }
+    {
+        var ok_payloads = [_]ast.EnumPayloadField{enumPayload("int", "value", 0)};
+        var variants = [_]ast.EnumVariant{enumVariant("Ok", ok_payloads[0..], 0)};
+        var module = try collectSingleEnum(enumItemWithVariants("OnlyOk", variants[0..], false, 0));
+        defer module.deinit();
+        try std.testing.expect(!module.hir.isResultShapedEnum(.{ .index = 0 }));
+    }
+    {
+        var err_payloads = [_]ast.EnumPayloadField{enumPayload("int", "code", 0)};
+        var variants = [_]ast.EnumVariant{enumVariant("Err", err_payloads[0..], 0)};
+        var module = try collectSingleEnum(enumItemWithVariants("OnlyErr", variants[0..], false, 0));
+        defer module.deinit();
+        try std.testing.expect(!module.hir.isResultShapedEnum(.{ .index = 0 }));
+    }
+}
+
+test "semantic collection requires exact Result-shaped arity" {
+    {
+        var err_payloads = [_]ast.EnumPayloadField{enumPayload("int", "code", 10)};
+        var variants = [_]ast.EnumVariant{
+            enumVariant("Ok", &.{}, 0),
+            enumVariant("Err", err_payloads[0..], 10),
+        };
+        var module = try collectSingleEnum(enumItemWithVariants("BadOkZero", variants[0..], false, 0));
+        defer module.deinit();
+        try std.testing.expect(!module.hir.isResultShapedEnum(.{ .index = 0 }));
+    }
+    {
+        var ok_payloads = [_]ast.EnumPayloadField{enumPayload("int", "value", 0)};
+        var variants = [_]ast.EnumVariant{
+            enumVariant("Ok", ok_payloads[0..], 0),
+            enumVariant("Err", &.{}, 10),
+        };
+        var module = try collectSingleEnum(enumItemWithVariants("BadErrZero", variants[0..], false, 0));
+        defer module.deinit();
+        try std.testing.expect(!module.hir.isResultShapedEnum(.{ .index = 0 }));
+    }
+    {
+        var ok_payloads = [_]ast.EnumPayloadField{
+            enumPayload("int", "value", 0),
+            enumPayload("bool", "rounded", 10),
+        };
+        var err_payloads = [_]ast.EnumPayloadField{enumPayload("int", "code", 20)};
+        var variants = [_]ast.EnumVariant{
+            enumVariant("Ok", ok_payloads[0..], 0),
+            enumVariant("Err", err_payloads[0..], 20),
+        };
+        var module = try collectSingleEnum(enumItemWithVariants("BadOkTwo", variants[0..], false, 0));
+        defer module.deinit();
+        try std.testing.expect(!module.hir.isResultShapedEnum(.{ .index = 0 }));
+    }
+    {
+        var ok_payloads = [_]ast.EnumPayloadField{enumPayload("int", "value", 0)};
+        var err_payloads = [_]ast.EnumPayloadField{
+            enumPayload("int", "code", 10),
+            enumPayload("bool", "fatal", 20),
+        };
+        var variants = [_]ast.EnumVariant{
+            enumVariant("Ok", ok_payloads[0..], 0),
+            enumVariant("Err", err_payloads[0..], 10),
+        };
+        var module = try collectSingleEnum(enumItemWithVariants("BadErrTwo", variants[0..], false, 0));
+        defer module.deinit();
+        try std.testing.expect(!module.hir.isResultShapedEnum(.{ .index = 0 }));
+    }
+}
+
+test "semantic collection requires exactly Ok and Err variants for Result shape" {
+    var ok_payloads = [_]ast.EnumPayloadField{enumPayload("int", "value", 0)};
+    var err_payloads = [_]ast.EnumPayloadField{enumPayload("int", "code", 10)};
+    var variants = [_]ast.EnumVariant{
+        enumVariant("Ok", ok_payloads[0..], 0),
+        enumVariant("Err", err_payloads[0..], 10),
+        enumVariant("Pending", &.{}, 20),
+    };
+
+    var module = try collectSingleEnum(enumItemWithVariants("ExtraVariant", variants[0..], false, 0));
+    defer module.deinit();
+
+    try std.testing.expect(!module.hir.isResultShapedEnum(.{ .index = 0 }));
 }
 
 test "semantic collection collects one function" {

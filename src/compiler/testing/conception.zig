@@ -556,7 +556,7 @@ fn expectCheckFixture(comptime path: []const u8) !void {
 
     try std.testing.expectEqual(Phase.check, fixture.phase);
 
-    if (std.mem.indexOf(u8, path, "phase3-semantics") != null) {
+    if (std.mem.indexOf(u8, path, "phase3-semantics") != null or std.mem.indexOf(u8, path, "phase5-sum-types") != null) {
         try expectSemanticCheckFixture(path, fixture);
     } else {
         try expectPhase2CheckFixture(path, fixture);
@@ -1271,4 +1271,24 @@ test "language check fixture: phase5 ignored must_use constructor" {
 
 test "language check fixture: phase5 ignored must_use call" {
     try expectCheckFixture("../../../language/phase5-sum-types/invalid/ignored_must_use_call.invalid.conception");
+}
+
+test "language check fixture: phase5 result shape must_use" {
+    try expectCheckFixture("../../../language/phase5-sum-types/valid/result_shape_must_use.valid.conception");
+}
+
+test "language check fixture: phase5 result shape not must_use" {
+    try expectCheckFixture("../../../language/phase5-sum-types/valid/result_shape_not_must_use.valid.conception");
+}
+
+test "language check fixture: phase5 result shape payload types" {
+    try expectCheckFixture("../../../language/phase5-sum-types/valid/result_shape_payload_types.valid.conception");
+}
+
+test "language check fixture: phase5 not result shape extra variant" {
+    try expectCheckFixture("../../../language/phase5-sum-types/valid/not_result_shape_extra_variant.valid.conception");
+}
+
+test "language check fixture: phase5 not result shape bad ok arity" {
+    try expectCheckFixture("../../../language/phase5-sum-types/valid/not_result_shape_bad_ok_arity.valid.conception");
 }

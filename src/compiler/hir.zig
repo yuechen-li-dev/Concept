@@ -177,11 +177,21 @@ pub const HirStruct = struct {
     fields: []FieldId,
 };
 
+pub const HirResultShape = struct {
+    ok_variant: VariantId,
+    err_variant: VariantId,
+    ok_payload: EnumPayloadFieldId,
+    err_payload: EnumPayloadFieldId,
+    ok_type: types.TypeId,
+    err_type: types.TypeId,
+};
+
 pub const HirEnum = struct {
     item: ItemId,
     name: SymbolId,
     variants: []VariantId,
     is_must_use: bool = false,
+    result_shape: ?HirResultShape = null,
 };
 
 pub const HirField = struct {
@@ -339,6 +349,7 @@ pub const HirStore = struct {
             .name = name,
             .variants = &.{},
             .is_must_use = is_must_use,
+            .result_shape = null,
         });
         return id;
     }
@@ -383,6 +394,10 @@ pub const HirStore = struct {
 
     pub fn setFunctionReturnType(self: *HirStore, id: FunctionId, type_id: types.TypeId) void {
         self.getFunctionMut(id).return_type = type_id;
+    }
+
+    pub fn setEnumResultShape(self: *HirStore, id: EnumId, result_shape: ?HirResultShape) void {
+        self.getEnumMut(id).result_shape = result_shape;
     }
 
     pub fn addField(self: *HirStore, parent: StructId, name: SymbolId, type_id: types.TypeId, span: SourceSpan) !FieldId {
@@ -464,6 +479,14 @@ pub const HirStore = struct {
         const index: usize = id.index;
         std.debug.assert(index < self.enums.items.len);
         return &self.enums.items[index];
+    }
+
+    pub fn getResultShape(self: *const HirStore, id: EnumId) ?HirResultShape {
+        return self.getEnum(id).result_shape;
+    }
+
+    pub fn isResultShapedEnum(self: *const HirStore, id: EnumId) bool {
+        return self.getResultShape(id) != null;
     }
 
     pub fn getField(self: *const HirStore, id: FieldId) *const HirField {
@@ -548,7 +571,7 @@ pub const HirStore = struct {
                 },
                 .enum_ => |id| {
                     const enum_decl = self.getEnum(id);
-                    try writer.print("  {s}Enum {s}\n", .{ if (enum_decl.is_must_use) "MustUse " else "", interner.text(enum_decl.name) });
+                    try writer.print("  {s}Enum {s}{s}\n", .{ if (enum_decl.is_must_use) "MustUse " else "", interner.text(enum_decl.name), if (enum_decl.result_shape != null) " result_shape" else "" });
                     for (enum_decl.variants) |variant_id| {
                         const variant = self.getVariant(variant_id);
                         try writer.print("    Variant {s}\n", .{interner.text(variant.name)});

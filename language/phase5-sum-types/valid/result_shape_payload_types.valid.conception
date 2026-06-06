@@ -1,0 +1,16 @@
+# name: phase5 result shape payload types
+# phase: check
+# check: declarations
+# expect: pass
+
+=== source ===
+module Main;
+
+enum BoolParseResult {
+    Ok(bool value),
+    Err(int code),
+};
+
+int main() {
+    return 0;
+}
