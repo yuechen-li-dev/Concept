@@ -5,6 +5,8 @@ const source_model = @import("../source.zig");
 const checker_model = @import("../checker.zig");
 const semantics_model = @import("../semantics.zig");
 const hir_checker_model = @import("../hir_checker.zig");
+const mir_lowering_model = @import("../mir_lowering.zig");
+const mir_validator_model = @import("../mir_validator.zig");
 const run_harness = @import("run_harness.zig");
 
 pub const Phase = enum {
@@ -78,6 +80,10 @@ pub const ConceptionFixture = struct {
 
     pub fn run(self: ConceptionFixture) ?[]const u8 {
         return self.section("run");
+    }
+
+    pub fn mir(self: ConceptionFixture) ?[]const u8 {
+        return self.section("mir");
     }
 
     pub fn expectedExitCode(self: ConceptionFixture) !u8 {
@@ -832,6 +838,93 @@ test "language check fixture: phase3 HIR checker match duplicate pattern" {
 
 test "language check fixture: phase3 HIR checker match duplicate wildcard" {
     try expectCheckFixture("../../../language/phase3-semantics/invalid/hir_check_match_duplicate_wildcard.invalid.conception");
+}
+
+fn expectMirFixture(comptime path: []const u8) !void {
+    const text = @embedFile(path);
+    const fixture = try parse(std.testing.allocator, text, .{ .path = path });
+    defer fixture.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(Phase.mir, fixture.phase);
+    try std.testing.expectEqual(Expectation.pass, fixture.expect);
+
+    var parse_diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
+    defer parse_diagnostics.deinit();
+    var semantic_diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
+    defer semantic_diagnostics.deinit();
+
+    const source_file = try source_model.SourceFile.init(std.testing.allocator, path, fixture.source().?);
+    defer source_file.deinit(std.testing.allocator);
+
+    const unit = try parser_model.parseSource(std.testing.allocator, source_file, &parse_diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), parse_diagnostics.count());
+
+    var module = try semantics_model.collectTopLevelDeclarations(std.testing.allocator, unit, &semantic_diagnostics);
+    defer module.deinit();
+    try hir_checker_model.checkExecutable(std.testing.allocator, &module, &semantic_diagnostics);
+    try std.testing.expectEqual(@as(usize, 0), semantic_diagnostics.count());
+
+    var mir_module = try mir_lowering_model.lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+    try mir_validator_model.validateModule(std.testing.allocator, &module, &mir_module, &semantic_diagnostics);
+    try std.testing.expectEqual(@as(usize, 0), semantic_diagnostics.count());
+
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expectEqualStrings(fixture.mir().?, snapshot);
+}
+
+fn expectMirCorpus(comptime source_path: []const u8, comptime expected_path: []const u8) !void {
+    var parse_diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
+    defer parse_diagnostics.deinit();
+    var semantic_diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
+    defer semantic_diagnostics.deinit();
+
+    const source_file = try source_model.SourceFile.init(std.testing.allocator, source_path, @embedFile(source_path));
+    defer source_file.deinit(std.testing.allocator);
+
+    const unit = try parser_model.parseSource(std.testing.allocator, source_file, &parse_diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), parse_diagnostics.count());
+
+    var module = try semantics_model.collectTopLevelDeclarations(std.testing.allocator, unit, &semantic_diagnostics);
+    defer module.deinit();
+    try hir_checker_model.checkExecutable(std.testing.allocator, &module, &semantic_diagnostics);
+    try std.testing.expectEqual(@as(usize, 0), semantic_diagnostics.count());
+
+    var mir_module = try mir_lowering_model.lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+    try mir_validator_model.validateModule(std.testing.allocator, &module, &mir_module, &semantic_diagnostics);
+    try std.testing.expectEqual(@as(usize, 0), semantic_diagnostics.count());
+
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expectEqualStrings(@embedFile(expected_path), snapshot);
+}
+
+test "MIR corpus snapshot: phase4 return literal" {
+    try expectMirCorpus("../../../tests/corpus/phase4/mir_return_literal.concept", "../../../tests/corpus/phase4/mir_return_literal.mir.expected");
+}
+
+test "MIR corpus snapshot: phase4 sum loop" {
+    try expectMirCorpus("../../../tests/corpus/phase4/mir_sum_loop.concept", "../../../tests/corpus/phase4/mir_sum_loop.mir.expected");
+}
+
+test "MIR corpus snapshot: phase4 if match" {
+    try expectMirCorpus("../../../tests/corpus/phase4/mir_if_match.concept", "../../../tests/corpus/phase4/mir_if_match.mir.expected");
+}
+
+test "language MIR fixture: phase4 return literal" {
+    try expectMirFixture("../../../language/phase4-mir/valid/mir_return_literal.valid.conception");
+}
+
+test "language MIR fixture: phase4 sum loop" {
+    try expectMirFixture("../../../language/phase4-mir/valid/mir_sum_loop.valid.conception");
+}
+
+test "language MIR fixture: phase4 if match" {
+    try expectMirFixture("../../../language/phase4-mir/valid/mir_if_match.valid.conception");
 }
 
 fn expectRunFixture(comptime path: []const u8) !void {

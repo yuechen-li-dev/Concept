@@ -1,0 +1,18 @@
+int main(void) {
+    int cpt_l_x_0;
+    int cpt_t_1;
+    int cpt_t_2;
+
+cpt_bb_0:
+    cpt_l_x_0 = 0;
+    goto cpt_bb_1;
+cpt_bb_1:
+    cpt_t_1 = (cpt_l_x_0 < 7);
+    if (cpt_t_1) goto cpt_bb_2; else goto cpt_bb_3;
+cpt_bb_2:
+    cpt_t_2 = (cpt_l_x_0 + 1);
+    cpt_l_x_0 = cpt_t_2;
+    goto cpt_bb_1;
+cpt_bb_3:
+    return cpt_l_x_0;
+}

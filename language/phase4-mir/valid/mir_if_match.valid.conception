@@ -1,0 +1,46 @@
+# name: MIR if match
+# phase: mir
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    int x = 0;
+    if (false) {
+        x = 1;
+    } else {
+        x = 2;
+    }
+    match (x) {
+        1 => x = 7;
+        _ => x = 3;
+    }
+    return x;
+}
+
+=== mir ===
+MirModule
+  Function main -> TypeId(1)
+    Locals
+      MirLocalId(0) user x: TypeId(1)
+    Blocks
+      MirBlockId(0)
+        MirLocalId(0) = Use(Int 0)
+        SwitchBool Bool false true: MirBlockId(1), false: MirBlockId(3)
+      MirBlockId(1)
+        MirLocalId(0) = Use(Int 1)
+        Goto MirBlockId(2)
+      MirBlockId(2)
+        SwitchInt Copy(MirLocalId(0)) [1: MirBlockId(5)] default: MirBlockId(6)
+      MirBlockId(3)
+        MirLocalId(0) = Use(Int 2)
+        Goto MirBlockId(2)
+      MirBlockId(4)
+        Return Copy(MirLocalId(0))
+      MirBlockId(5)
+        MirLocalId(0) = Use(Int 7)
+        Goto MirBlockId(4)
+      MirBlockId(6)
+        MirLocalId(0) = Use(Int 3)
+        Goto MirBlockId(4)

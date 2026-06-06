@@ -175,3 +175,7 @@ These boundaries close Phase 2 around the smallest useful executable subset and 
 6. **M5: run harness v0** compiled generated C with `zig cc`, ran the executable, and checked exit codes.
 7. **M6-M8: subset expansion and stabilization** consolidated functions, locals, assignment, `if`, `match`, `while`, diagnostics, C snapshots, and `.conception` fixtures.
 8. **M9: executable subset consolidation and Phase 2 closeout** freezes this documented subset as the Phase 2 result.
+
+## Post-Phase 4 implementation note
+
+The Phase 2 executable subset remains the runnable language slice for Stage 0. After Phase 4, that same subset runs through the MIR-backed implementation path rather than directly through HIR-backed C emission.

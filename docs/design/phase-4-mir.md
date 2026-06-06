@@ -758,3 +758,68 @@ P4-M0 is complete when:
 - The MIR architecture, lowering plan, fixture strategy, milestone ladder, and Phase 4 close criteria are documented.
 - No compiler implementation code has been added for MIR.
 - `zig build test` still passes.
+
+## Phase 4 closeout status
+
+Phase 4 is now closed around MIR as the backend-facing control-flow IR for the Stage 0 executable path. The implemented status is:
+
+- MIR module, function, and basic-block representation exists in `src/compiler/mir.zig`.
+- MIR locals and compiler temporaries exist.
+- MIR places, operands, rvalues, assignment statements, and terminators exist.
+- Checked HIR lowers to MIR for the Phase 2 executable subset.
+- Structured control flow lowers to explicit MIR blocks and terminators:
+  - `if` / `else` lowers through boolean switches, branch blocks, and join blocks when control reaches a join.
+  - `while` lowers through explicit condition, body, exit, and back-edge blocks.
+  - `match` over checked integer and boolean literal patterns plus wildcard lowers to integer or boolean switch terminators and arm blocks.
+- MIR validation exists as a structural and simple `TypeId` consistency pass.
+- MIR-backed C emission exists.
+- Run fixtures execute through the MIR-backed path:
+
+```text
+Concept source
+  -> parseSource
+  -> semantic collection / HIR lowering
+  -> HIR executable checker
+  -> HIR-to-MIR lowering
+  -> MIR validation
+  -> MIR-backed C backend
+  -> zig cc
+  -> native executable / exit-code fixtures
+```
+
+The MIR C backend uses deterministic backend-owned names for generated C:
+
+- `main` remains `main`.
+- Non-main functions use `cpt_f_*`.
+- Parameters use `cpt_p_*`.
+- User locals use `cpt_l_*`.
+- Temporaries use `cpt_t_*`.
+- Basic-block labels use `cpt_bb_*`.
+
+This naming policy is backend-local and deterministic for snapshots. It is not final source/ABI-grade linkage mangling.
+
+The C backend v0 deliberately renders only `void`, `int`, and `bool`/integer-backed booleans. Nominal/user-defined runtime types are backend errors until nominal layout is designed. AST-backed and HIR-backed C emission paths are transitional legacy paths after Phase 4; the MIR-backed C backend is authoritative for executable fixtures.
+
+Known Phase 4 limitations remain explicit:
+
+- C identifier policy is backend-local, not final ABI/linkage mangling.
+- C backend v0 only supports `void`, `int`, and `bool`.
+- Nominal runtime layout is not implemented.
+- MIR validation is structural/simple `TypeId` validation, not borrow, move, drop, or lifetime checking.
+- No optimization or SSA requirement exists.
+- No storage live/dead statements exist.
+- Arrays, runtime strings, chars, and floats are not implemented.
+- Struct values and field access are not implemented.
+- Payload enum layout and payload matching are not implemented.
+- Imports and multi-file modules are not implemented.
+- LLVM, bare-metal, and self-hosting backends are not implemented.
+
+Future work remains outside Phase 4:
+
+- Source/ABI-grade name mangling.
+- Nominal layout.
+- Storage live/dead.
+- Move/drop elaboration and checking.
+- Optimization passes.
+- SSA, if a future phase needs it.
+- Richer backend targets.

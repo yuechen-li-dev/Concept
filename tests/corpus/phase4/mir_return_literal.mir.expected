@@ -1,0 +1,5 @@
+MirModule
+  Function main -> TypeId(1)
+    Blocks
+      MirBlockId(0)
+        Return Int 7

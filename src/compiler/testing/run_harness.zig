@@ -111,6 +111,15 @@ fn runExecutable(cwd: *std.fs.Dir, exe_name: []const u8) RunError!u8 {
     }
 }
 
+test "run harness executes Phase 4 closeout MIR-backed control flow" {
+    const result = try expectExitCode(
+        std.testing.allocator,
+        "module Main; int main() { int x = 0; while (x < 4) { x = x + 1; } match (x) { 4 => return 7; _ => return 1; } }",
+        7,
+    );
+    try std.testing.expectEqual(@as(u8, 7), result.actual_exit_code);
+}
+
 test "run harness compiles and runs return zero" {
     const result = try expectExitCode(
         std.testing.allocator,

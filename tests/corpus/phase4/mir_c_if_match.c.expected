@@ -1,0 +1,26 @@
+int main(void) {
+    int cpt_l_x_0;
+
+cpt_bb_0:
+    cpt_l_x_0 = 0;
+    if (0) goto cpt_bb_1; else goto cpt_bb_3;
+cpt_bb_1:
+    cpt_l_x_0 = 1;
+    goto cpt_bb_2;
+cpt_bb_2:
+    switch (cpt_l_x_0) {
+        case 1: goto cpt_bb_5;
+        default: goto cpt_bb_6;
+    }
+cpt_bb_3:
+    cpt_l_x_0 = 2;
+    goto cpt_bb_2;
+cpt_bb_4:
+    return cpt_l_x_0;
+cpt_bb_5:
+    cpt_l_x_0 = 7;
+    goto cpt_bb_4;
+cpt_bb_6:
+    cpt_l_x_0 = 3;
+    goto cpt_bb_4;
+}
