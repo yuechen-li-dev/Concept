@@ -1,0 +1,21 @@
+# name: phase2 closeout sum loop
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    int i = 1;
+    int total = 0;
+
+    while (i <= 5) {
+        total = total + i;
+        i = i + 1;
+    }
+
+    return total;
+}
+
+=== run ===
+exit_code: 15

@@ -1,0 +1,11 @@
+module Main;
+
+int double(int value) {
+    return value * 2;
+}
+
+int main() {
+    int value = 3;
+    value = double(value);
+    return value;
+}

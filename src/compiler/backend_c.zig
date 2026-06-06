@@ -517,3 +517,17 @@ test "Phase 2 C snapshot: while count to seven" {
         "../../tests/corpus/phase2/while_count_to_seven.c.expected",
     );
 }
+
+test "Phase 2 C snapshot: closeout sum loop" {
+    try expectCorpusC(
+        "../../tests/corpus/phase2/phase2_sum_loop.concept",
+        "../../tests/corpus/phase2/phase2_sum_loop.c.expected",
+    );
+}
+
+test "Phase 2 C snapshot: closeout if match mix" {
+    try expectCorpusC(
+        "../../tests/corpus/phase2/phase2_if_match_mix.concept",
+        "../../tests/corpus/phase2/phase2_if_match_mix.c.expected",
+    );
+}

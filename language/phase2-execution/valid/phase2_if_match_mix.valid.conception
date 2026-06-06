@@ -1,0 +1,23 @@
+# name: phase2 closeout if match mix
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    int x = 4;
+
+    if (x >= 4) {
+        match (x) {
+            3 => return 3;
+            4 => return 9;
+            _ => return 1;
+        }
+    } else {
+        return 0;
+    }
+}
+
+=== run ===
+exit_code: 9

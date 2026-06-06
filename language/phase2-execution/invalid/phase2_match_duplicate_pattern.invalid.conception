@@ -1,0 +1,19 @@
+# name: phase2 closeout match duplicate pattern
+# phase: check
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    bool ok = true;
+
+    match (ok) {
+        true => return 1;
+        true => return 2;
+        _ => return 0;
+    }
+}
+
+=== diagnostics ===
+CON0010

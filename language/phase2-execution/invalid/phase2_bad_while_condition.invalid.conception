@@ -1,0 +1,19 @@
+# name: phase2 closeout bad while condition
+# phase: check
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    int x = 0;
+
+    while (x + 1) {
+        x = x + 1;
+    }
+
+    return x;
+}
+
+=== diagnostics ===
+CON0010

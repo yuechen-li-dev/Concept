@@ -13,7 +13,7 @@ Concept's language behavior is defined over time by an executable fixture corpus
 - Valid fixtures use `*.valid.conception`.
 - Invalid fixtures use `*.invalid.conception`.
 
-The valid or invalid classification is scoped to the fixture's declared phase. A fixture that is valid for `parse` means the parse-phase expectation should pass; it does not necessarily imply that the source is a complete executable program, type-checks, runs, or can be lowered to a backend.
+The valid or invalid classification is scoped to the fixture's declared phase. A fixture that is valid for `parse` means the parse-phase expectation should pass; it does not necessarily imply that the source is a complete executable program, type-checks, runs, or can be lowered to a backend. Likewise, a valid `run` fixture is expected to execute successfully, while an invalid fixture for another phase may still contain syntax that parses successfully before failing in that phase.
 
 ## Suggested corpus layout
 
@@ -45,7 +45,7 @@ Sections are introduced with `=== section-name ===` on a line by itself. The ini
 Implemented fixture phases:
 
 - `phase: parse` fixtures pass `source` to the real parser path. Passing parse fixtures compare `ast` against the stable AST debug output; failing parse fixtures compare diagnostic codes listed in `diagnostics`. Full rendered diagnostic snapshot matching is reserved for later.
-- `phase: run` fixtures pass `source` through parse, executable validation, C emission, `zig cc`, and native process execution. For now run fixtures support only `expect: pass` and a `run` section containing `exit_code: N`. Stdout and stderr matching are reserved for later.
+- `phase: run` fixtures pass `source` through parse, executable validation, C emission, `zig cc`, and native process execution. For now run fixtures support only `expect: pass` and a `=== run ===` section containing `exit_code: N`. Stdout and stderr matching are not implemented yet and are reserved for later.
 
 Example:
 
