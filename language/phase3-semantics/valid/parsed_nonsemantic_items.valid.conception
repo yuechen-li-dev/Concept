@@ -1,0 +1,18 @@
+# name: phase3 parsed nonsemantic items
+# phase: check
+# expect: pass
+
+=== source ===
+module Example;
+
+concept Hashable<T> {
+    uint64 hash(T& value);
+};
+
+interface Renderer {
+    void drawMesh(Mesh& mesh);
+};
+
+impl Drop<Texture> {};
+
+struct Texture {};

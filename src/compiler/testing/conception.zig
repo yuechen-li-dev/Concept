@@ -3,6 +3,7 @@ const std = @import("std");
 const parser_model = @import("../parser.zig");
 const source_model = @import("../source.zig");
 const checker_model = @import("../checker.zig");
+const semantics_model = @import("../semantics.zig");
 const run_harness = @import("run_harness.zig");
 
 pub const Phase = enum {
@@ -431,6 +432,48 @@ fn expectCheckFixture(comptime path: []const u8) !void {
 
     try std.testing.expectEqual(Phase.check, fixture.phase);
 
+    if (std.mem.indexOf(u8, path, "phase3-semantics") != null) {
+        try expectSemanticCheckFixture(path, fixture);
+    } else {
+        try expectPhase2CheckFixture(path, fixture);
+    }
+}
+
+fn expectSemanticCheckFixture(comptime path: []const u8, fixture: ConceptionFixture) !void {
+    var parse_diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
+    defer parse_diagnostics.deinit();
+    var semantic_diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
+    defer semantic_diagnostics.deinit();
+
+    const source_file = try source_model.SourceFile.init(std.testing.allocator, path, fixture.source().?);
+    defer source_file.deinit(std.testing.allocator);
+
+    const unit = try parser_model.parseSource(std.testing.allocator, source_file, &parse_diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), parse_diagnostics.count());
+
+    switch (fixture.expect) {
+        .pass => {
+            var module = try semantics_model.collectTopLevelDeclarations(std.testing.allocator, unit, &semantic_diagnostics);
+            defer module.deinit();
+            try std.testing.expectEqual(@as(usize, 0), semantic_diagnostics.count());
+        },
+        .fail => {
+            try std.testing.expectError(
+                error.InvalidSemanticModule,
+                semantics_model.collectTopLevelDeclarations(std.testing.allocator, unit, &semantic_diagnostics),
+            );
+            const expected_codes = try fixture.diagnosticCodes(std.testing.allocator);
+            defer std.testing.allocator.free(expected_codes);
+            try std.testing.expectEqual(expected_codes.len, semantic_diagnostics.count());
+            for (expected_codes, semantic_diagnostics.diagnostics.items) |expected_code, actual| {
+                try std.testing.expectEqualStrings(expected_code, actual.code.format());
+            }
+        },
+    }
+}
+
+fn expectPhase2CheckFixture(comptime path: []const u8, fixture: ConceptionFixture) !void {
     var parse_diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
     defer parse_diagnostics.deinit();
     var check_diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
@@ -459,6 +502,26 @@ fn expectCheckFixture(comptime path: []const u8) !void {
             }
         },
     }
+}
+
+test "language check fixture: phase3 top-level declarations" {
+    try expectCheckFixture("../../../language/phase3-semantics/valid/top_level_decls.valid.conception");
+}
+
+test "language check fixture: phase3 parsed nonsemantic items" {
+    try expectCheckFixture("../../../language/phase3-semantics/valid/parsed_nonsemantic_items.valid.conception");
+}
+
+test "language check fixture: phase3 duplicate function" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/duplicate_function.invalid.conception");
+}
+
+test "language check fixture: phase3 duplicate function struct" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/duplicate_function_struct.invalid.conception");
+}
+
+test "language check fixture: phase3 duplicate struct enum" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/duplicate_struct_enum.invalid.conception");
 }
 
 fn expectRunFixture(comptime path: []const u8) !void {

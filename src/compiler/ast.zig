@@ -836,10 +836,10 @@ pub const CompilationUnit = struct {
     }
 
     pub fn debugString(self: CompilationUnit, allocator: std.mem.Allocator) ![]u8 {
-        var output = std.ArrayList(u8).init(allocator);
+        var output: std.Io.Writer.Allocating = .init(allocator);
         errdefer output.deinit();
-        try self.writeDebug(output.writer());
-        return output.toOwnedSlice();
+        try self.writeDebug(&output.writer);
+        return try output.toOwnedSlice();
     }
 };
 
@@ -861,9 +861,9 @@ test "qualified name debug writing joins segments with dots" {
     defer std.testing.allocator.free(parts);
 
     const name = QualifiedName{ .parts = parts, .span = .{ .start = 0, .length = 16 } };
-    var output = std.ArrayList(u8).init(std.testing.allocator);
+    var output: std.Io.Writer.Allocating = .init(std.testing.allocator);
     defer output.deinit();
 
-    try name.write(output.writer());
-    try std.testing.expectEqualStrings("Example.Compiler", output.items);
+    try name.write(&output.writer);
+    try std.testing.expectEqualStrings("Example.Compiler", output.written());
 }

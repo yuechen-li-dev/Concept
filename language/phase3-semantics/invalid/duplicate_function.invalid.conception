@@ -1,0 +1,17 @@
+# name: phase3 duplicate function
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+int f() {
+    return 0;
+}
+
+int f() {
+    return 1;
+}
+
+=== diagnostics ===
+CON0020

@@ -1,0 +1,20 @@
+# name: phase3 top-level declarations
+# phase: check
+# expect: pass
+
+=== source ===
+module Example;
+
+int make() {
+    return 1;
+}
+
+struct Vec2 {
+    int x;
+    int y;
+};
+
+enum Token {
+    Identifier;
+    Number;
+};

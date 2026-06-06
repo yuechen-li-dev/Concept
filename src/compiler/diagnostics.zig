@@ -32,6 +32,7 @@ pub const DiagnosticCode = enum {
     EmptyCharLiteral,
     InvalidEscapeSequence,
     InvalidExecutableSubset,
+    DuplicateTopLevelName,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -45,6 +46,7 @@ pub const DiagnosticCode = enum {
             .EmptyCharLiteral => "CON0008",
             .InvalidEscapeSequence => "CON0009",
             .InvalidExecutableSubset => "CON0010",
+            .DuplicateTopLevelName => "CON0020",
         };
     }
 };
@@ -90,21 +92,22 @@ pub const Diagnostic = struct {
 };
 
 pub const DiagnosticBag = struct {
+    allocator: std.mem.Allocator,
     diagnostics: std.ArrayList(Diagnostic),
 
     pub fn init(allocator: std.mem.Allocator) DiagnosticBag {
-        return .{ .diagnostics = std.ArrayList(Diagnostic).init(allocator) };
+        return .{ .allocator = allocator, .diagnostics = std.ArrayList(Diagnostic).empty };
     }
 
     pub fn deinit(self: *DiagnosticBag) void {
         for (self.diagnostics.items) |diagnostic| {
-            diagnostic.deinit(self.diagnostics.allocator);
+            diagnostic.deinit(self.allocator);
         }
-        self.diagnostics.deinit();
+        self.diagnostics.deinit(self.allocator);
     }
 
     pub fn append(self: *DiagnosticBag, diagnostic: Diagnostic) !void {
-        try self.diagnostics.append(diagnostic);
+        try self.diagnostics.append(self.allocator, diagnostic);
     }
 
     pub fn count(self: DiagnosticBag) usize {
@@ -120,7 +123,7 @@ pub const DiagnosticBag = struct {
 
     pub fn clear(self: *DiagnosticBag) void {
         for (self.diagnostics.items) |diagnostic| {
-            diagnostic.deinit(self.diagnostics.allocator);
+            diagnostic.deinit(self.allocator);
         }
         self.diagnostics.clearRetainingCapacity();
     }
@@ -189,6 +192,15 @@ pub fn invalidEscapeSequence(span: SourceSpan) Diagnostic {
         "invalid escape sequence",
         span,
     ).withHelp("use a recognized escape sequence");
+}
+
+pub fn duplicateTopLevelName(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .DuplicateTopLevelName,
+        .@"error",
+        "duplicate top-level declaration name",
+        span,
+    ).withHelp("top-level functions, structs, and enums share one namespace in Phase 3");
 }
 
 pub fn render(writer: anytype, source: SourceFile, diagnostic: Diagnostic) !void {
@@ -318,9 +330,9 @@ test "render single-line diagnostic with caret" {
     const diagnostic = try invalidCharacter(std.testing.allocator, .{ .start = 8, .length = 1 }, '@');
     defer diagnostic.deinit(std.testing.allocator);
 
-    var output = std.ArrayList(u8).init(std.testing.allocator);
+    var output: std.Io.Writer.Allocating = .init(std.testing.allocator);
     defer output.deinit();
-    try render(output.writer(), source, diagnostic);
+    try render(&output.writer, source, diagnostic);
 
     try std.testing.expectEqualStrings(
         \\CON0001 error: unexpected character '@'
@@ -331,7 +343,7 @@ test "render single-line diagnostic with caret" {
         \\|
         \\help: remove this character or use a valid token
         \\
-    , output.items);
+    , output.written());
 }
 
 test "render diagnostic with help text" {
@@ -340,11 +352,11 @@ test "render diagnostic with help text" {
 
     const diagnostic = unterminatedString(.{ .start = 8, .length = 13 });
 
-    var output = std.ArrayList(u8).init(std.testing.allocator);
+    var output: std.Io.Writer.Allocating = .init(std.testing.allocator);
     defer output.deinit();
-    try render(output.writer(), source, diagnostic);
+    try render(&output.writer, source, diagnostic);
 
-    try std.testing.expect(std.mem.indexOf(u8, output.items, "help: add a closing quote before the end of the line or file") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output.written(), "help: add a closing quote before the end of the line or file") != null);
 }
 
 test "render EOF-adjacent span" {
@@ -358,9 +370,9 @@ test "render EOF-adjacent span" {
         .{ .start = source.len(), .length = 0 },
     );
 
-    var output = std.ArrayList(u8).init(std.testing.allocator);
+    var output: std.Io.Writer.Allocating = .init(std.testing.allocator);
     defer output.deinit();
-    try render(output.writer(), source, diagnostic);
+    try render(&output.writer, source, diagnostic);
 
     try std.testing.expectEqualStrings(
         \\CON0003 error: unexpected end of file
@@ -369,5 +381,5 @@ test "render EOF-adjacent span" {
         \\1 | let x = 
         \\|         ^
         \\
-    , output.items);
+    , output.written());
 }

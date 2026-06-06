@@ -354,3 +354,7 @@ Phase 3 is complete when:
 - C backend v0 emits from HIR or a HIR-backed executable representation.
 
 The convergence requirement for Phase 3 is not merely that new code exists. The motivating path must improve: Concept source should still become a native executable for the Phase 2 subset, but the route should now pass through semantic data structures that can support future MIR, richer diagnostics, modules, and real type checking.
+
+## P3-M4 note: top-level declaration collection
+
+P3-M4 adds AST-to-semantic declaration collection for one-file modules. The pass interns top-level function, struct, and enum names; creates stable HIR declaration IDs; registers nominal struct and enum types in `TypeStore`; and reports duplicate top-level names across the shared Phase 3 function/struct/enum namespace. Function bodies, type-name resolution, field checking, enum variant checking, and Phase 2 checker/backend migration remain later milestones.

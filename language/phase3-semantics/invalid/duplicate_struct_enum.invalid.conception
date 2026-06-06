@@ -1,0 +1,15 @@
+# name: phase3 duplicate struct enum
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+struct Token {};
+
+enum Token {
+    End;
+};
+
+=== diagnostics ===
+CON0020
