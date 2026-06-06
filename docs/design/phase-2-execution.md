@@ -4,7 +4,7 @@ Phase 2 turns the Stage 0 compiler from a surface-syntax parser into a small end
 
 ## Phase 2 status
 
-Phase 2 proves Concept can compile and run a small executable subset through the real Stage 0 path. The current pipeline is:
+Phase 2 proved Concept can compile and run a small executable subset through the real Stage 0 path. At Phase 2 closeout that path was AST-shaped:
 
 ```text
 Concept source
@@ -16,9 +16,9 @@ Concept source
   -> exit-code verification
 ```
 
-C backend v0 is an audit/debug backend, not the final compiler architecture. It exists to keep generated output readable and to make Stage 0 execution behavior easy to inspect while the language and compiler seams stabilize.
+Phase 3 preserves the same executable subset, but the implementation path has evolved: run fixtures now pass through semantic collection / HIR lowering, the HIR executable checker, and HIR-backed C emission before `zig cc` and native exit-code verification. The old AST checker/backend path is transitional legacy support, not the authoritative post-Phase-3 run path.
 
-HIR and MIR are intentionally deferred. Phase 2 validates the executable slice without prematurely committing Concept's long-term semantic or lowering architecture.
+C backend v0 is an audit/debug backend, not the final compiler architecture. It exists to keep generated output readable and to make Stage 0 execution behavior easy to inspect while the language and compiler seams stabilize. MIR remained deferred during Phase 2 and remains a Phase 4 concern after the Phase 3 semantic-spine closeout.
 
 ## Supported executable subset
 

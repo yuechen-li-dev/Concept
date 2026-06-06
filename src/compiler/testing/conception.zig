@@ -453,7 +453,7 @@ fn expectSemanticCheckFixture(comptime path: []const u8, fixture: ConceptionFixt
     defer unit.deinit(std.testing.allocator);
     try std.testing.expectEqual(@as(usize, 0), parse_diagnostics.count());
 
-    const use_hir_checker = std.mem.indexOf(u8, path, "hir_check_") != null;
+    const use_hir_checker = std.mem.indexOf(u8, path, "hir_check_") != null or std.mem.indexOf(u8, path, "phase3_hir_") != null;
 
     switch (fixture.expect) {
         .pass => {
@@ -617,6 +617,42 @@ test "language check fixture: phase3 HIR body inner scope leak" {
     try expectCheckFixture("../../../language/phase3-semantics/invalid/hir_body_inner_scope_leak.invalid.conception");
 }
 
+test "language check fixture: phase3 closeout struct enum type graph" {
+    try expectCheckFixture("../../../language/phase3-semantics/valid/phase3_struct_enum_type_graph.valid.conception");
+}
+
+test "language check fixture: phase3 closeout HIR control flow" {
+    try expectCheckFixture("../../../language/phase3-semantics/valid/phase3_hir_control_flow.valid.conception");
+}
+
+test "language check fixture: phase3 closeout HIR function graph" {
+    try expectCheckFixture("../../../language/phase3-semantics/valid/phase3_hir_function_graph.valid.conception");
+}
+
+test "language check fixture: phase3 closeout duplicate top level" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/phase3_duplicate_top_level.invalid.conception");
+}
+
+test "language check fixture: phase3 closeout unknown type" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/phase3_unknown_type.invalid.conception");
+}
+
+test "language check fixture: phase3 closeout duplicate field" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/phase3_duplicate_field.invalid.conception");
+}
+
+test "language check fixture: phase3 closeout duplicate variant" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/phase3_duplicate_variant.invalid.conception");
+}
+
+test "language check fixture: phase3 closeout HIR unknown identifier" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/phase3_hir_unknown_identifier.invalid.conception");
+}
+
+test "language check fixture: phase3 closeout HIR call type mismatch" {
+    try expectCheckFixture("../../../language/phase3-semantics/invalid/phase3_hir_call_type_mismatch.invalid.conception");
+}
+
 test "language check fixture: phase3 HIR checker return int" {
     try expectCheckFixture("../../../language/phase3-semantics/valid/hir_check_return_int.valid.conception");
 }
@@ -689,6 +725,10 @@ fn expectRunFixture(comptime path: []const u8) !void {
     try std.testing.expectEqual(Phase.run, fixture.phase);
     try std.testing.expectEqual(Expectation.pass, fixture.expect);
     _ = try run_harness.expectExitCode(std.testing.allocator, fixture.source().?, try fixture.expectedExitCode());
+}
+
+test "language run fixture: phase3 HIR sum loop" {
+    try expectRunFixture("../../../language/phase3-semantics/valid/phase3_hir_sum_loop_run.valid.conception");
 }
 
 test "language run fixture: phase2 return zero" {

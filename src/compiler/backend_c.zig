@@ -779,6 +779,20 @@ test "Phase 2 C snapshot: closeout sum loop" {
     );
 }
 
+test "Phase 3 HIR C snapshot: sum loop" {
+    try expectCorpusC(
+        "../../tests/corpus/phase3/phase3_hir_sum_loop.concept",
+        "../../tests/corpus/phase3/phase3_hir_sum_loop.c.expected",
+    );
+}
+
+test "Phase 3 HIR C snapshot: if match" {
+    try expectCorpusC(
+        "../../tests/corpus/phase3/phase3_hir_if_match.concept",
+        "../../tests/corpus/phase3/phase3_hir_if_match.c.expected",
+    );
+}
+
 test "Phase 2 C snapshot: closeout if match mix" {
     try expectCorpusC(
         "../../tests/corpus/phase2/phase2_if_match_mix.concept",

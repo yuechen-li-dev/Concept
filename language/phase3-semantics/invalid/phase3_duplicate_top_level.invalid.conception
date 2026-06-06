@@ -1,0 +1,15 @@
+# name: phase3 duplicate top level closeout
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+struct Node {};
+
+enum Node {
+    Empty;
+};
+
+=== diagnostics ===
+CON0020

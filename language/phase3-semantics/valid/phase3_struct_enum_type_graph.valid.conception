@@ -1,0 +1,23 @@
+# name: phase3 struct enum type graph
+# phase: check
+# expect: pass
+
+=== source ===
+module Example;
+
+struct Point {
+    int x;
+    int y;
+};
+
+struct Segment {
+    Point start;
+    Point end;
+    bool visible;
+};
+
+enum Shape {
+    Dot(Point center);
+    Line(Segment segment, bool selected);
+    Empty;
+};

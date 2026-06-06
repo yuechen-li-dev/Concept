@@ -1,0 +1,21 @@
+int choose(int ok, int value);
+int main(void);
+
+int choose(int ok, int value) {
+    if (ok) {
+        return value;
+    } else {
+        switch (value) {
+            case 1:
+                return 10;
+            case 2:
+                return 20;
+            default:
+                return 0;
+        }
+    }
+}
+
+int main(void) {
+    return choose(0, 2);
+}

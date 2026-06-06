@@ -1,0 +1,19 @@
+# name: phase3 unknown type closeout
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+struct Box {
+    Missing value;
+};
+
+enum MaybeBox {
+    Some(Box value);
+    Other(Missing fallback);
+};
+
+=== diagnostics ===
+CON0021
+CON0021

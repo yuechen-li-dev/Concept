@@ -1,0 +1,15 @@
+# name: phase3 duplicate field closeout
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+struct Pair {
+    int left;
+    bool left;
+    int right;
+};
+
+=== diagnostics ===
+CON0022
