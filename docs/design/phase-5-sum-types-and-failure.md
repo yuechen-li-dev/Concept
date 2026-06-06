@@ -109,6 +109,14 @@ typedef struct {
 
 The exact emitted names should follow the deterministic `cpt_*` backend naming policy, but Phase 5 should keep that policy backend-local rather than treating it as source-level ABI.
 
+### P5-M1 enum runtime representation checkpoint
+
+P5-M1 implements the first backend runtime representation for supported enum declarations on the MIR-backed C path. The C backend emits deterministic, backend-owned `typedef struct` layouts for non-empty enums collected in the semantic module before function prototypes and bodies. Each layout contains an integer `tag`; enums with payload variants additionally contain a `payload` union with one struct entry per payload-carrying variant. Tag-only variants do not allocate payload union entries.
+
+This representation is backend v0 only: it is internal to the current C backend, is not ABI-stable, and is not a source-level naming contract. Payload field support is intentionally limited to fields whose semantic types are `int` or `bool`, both rendered as C `int`. Empty enums and enum payloads containing structs, other enums, `void`, or invalid types are rejected by the backend with the existing unsupported-C-backend-type diagnostic if layout emission is attempted.
+
+P5-M1 does not add source-level enum construction, `EnumName::Variant`, matching over enum variants, payload binding, Result-shaped conventions, `try`, `must_use`, or `discard`; those remain future Phase 5 milestones.
+
 ## Enum constructor syntax
 
 Recommended constructor syntax:
