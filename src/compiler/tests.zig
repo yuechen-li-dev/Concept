@@ -17,6 +17,7 @@ pub const token = @import("token.zig");
 pub const testing = @import("testing/harness.zig");
 pub const checker = @import("checker.zig");
 pub const backend_c = @import("backend_c.zig");
+pub const backend_c_mir = @import("backend_c_mir.zig");
 
 test {
     _ = std;

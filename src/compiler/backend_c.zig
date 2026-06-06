@@ -10,7 +10,7 @@ const semantics = @import("semantics.zig");
 pub const EmitError = error{InvalidExecutable} || std.mem.Allocator.Error;
 
 // Transitional AST-backed entry point retained for legacy checker/backend tests.
-// The authoritative run path for Phase 3 emits through emitExecutableFromHir.
+// The authoritative Phase 4 run path emits C from MIR via backend_c_mir.zig.
 pub fn emitExecutable(allocator: std.mem.Allocator, unit: ast_model.CompilationUnit, diagnostics: ?*diagnostics_model.DiagnosticBag) EmitError![]const u8 {
     const executable = checker.validateExecutable(allocator, unit, diagnostics) catch |err| switch (err) {
         error.InvalidExecutable => return error.InvalidExecutable,
@@ -44,6 +44,7 @@ pub fn emitExecutable(allocator: std.mem.Allocator, unit: ast_model.CompilationU
     return output.toOwnedSlice();
 }
 
+// Transitional HIR-backed C backend retained for snapshot coverage while P4-M8 migrates the real run path to MIR.
 pub fn emitExecutableFromHir(
     allocator: std.mem.Allocator,
     module: *semantics.SemanticModule,

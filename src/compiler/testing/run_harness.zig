@@ -1,8 +1,10 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const backend_c = @import("../backend_c.zig");
+const backend_c_mir = @import("../backend_c_mir.zig");
 const diagnostics_model = @import("../diagnostics.zig");
+const hir_checker = @import("../hir_checker.zig");
+const mir_lowering = @import("../mir_lowering.zig");
 const parser_model = @import("../parser.zig");
 const semantics_model = @import("../semantics.zig");
 const source_model = @import("../source.zig");
@@ -48,7 +50,18 @@ pub fn runSource(allocator: std.mem.Allocator, source_text: []const u8) RunError
     };
     defer module.deinit();
 
-    const c_source = backend_c.emitExecutableFromHir(allocator, &module, &check_diagnostics) catch |err| switch (err) {
+    hir_checker.checkExecutable(allocator, &module, &check_diagnostics) catch |err| switch (err) {
+        error.InvalidSemanticModule => return error.CheckOrBackendFailed,
+        error.OutOfMemory => return error.OutOfMemory,
+    };
+
+    var mir_module = mir_lowering.lowerModule(allocator, &module) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => return error.CheckOrBackendFailed,
+    };
+    defer mir_module.deinit();
+
+    const c_source = backend_c_mir.emitExecutableFromMir(allocator, &module, &mir_module, &check_diagnostics) catch |err| switch (err) {
         error.InvalidExecutable => return error.CheckOrBackendFailed,
         error.OutOfMemory => return error.OutOfMemory,
     };
@@ -125,7 +138,7 @@ test "run harness compiles and runs bool literal return" {
     try std.testing.expectEqual(@as(u8, 1), result.actual_exit_code);
 }
 
-test "run harness reports HIR checker backend failures" {
+test "run harness reports checker and MIR backend failures" {
     try std.testing.expectError(
         error.CheckOrBackendFailed,
         expectExitCode(std.testing.allocator, "module Main; int main() { return; }", 0),
