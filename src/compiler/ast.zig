@@ -330,6 +330,7 @@ pub const Expr = union(enum) {
     unary: UnaryExpr,
     binary: BinaryExpr,
     call: CallExpr,
+    enum_constructor: EnumConstructorExpr,
 
     pub const IntLiteralExpr = struct { text: []const u8, span: SourceSpan };
     pub const BoolLiteralExpr = struct { value: bool, span: SourceSpan };
@@ -338,6 +339,7 @@ pub const Expr = union(enum) {
     pub const UnaryExpr = struct { op: UnaryOp, operand: *Expr, span: SourceSpan };
     pub const BinaryExpr = struct { op: BinaryOp, left: *Expr, right: *Expr, span: SourceSpan };
     pub const CallExpr = struct { callee: NameSegment, args: []*Expr, span: SourceSpan };
+    pub const EnumConstructorExpr = struct { enum_name: NameSegment, variant_name: NameSegment, args: []*Expr, span: SourceSpan };
 
     pub fn span(self: Expr) SourceSpan {
         return switch (self) {
@@ -348,6 +350,7 @@ pub const Expr = union(enum) {
             .unary => |expr| expr.span,
             .binary => |expr| expr.span,
             .call => |expr| expr.span,
+            .enum_constructor => |expr| expr.span,
         };
     }
 
@@ -368,6 +371,13 @@ pub const Expr = union(enum) {
                 allocator.destroy(expr.right);
             },
             .call => |expr| {
+                for (expr.args) |arg| {
+                    arg.deinit(allocator);
+                    allocator.destroy(arg);
+                }
+                allocator.free(expr.args);
+            },
+            .enum_constructor => |expr| {
                 for (expr.args) |arg| {
                     arg.deinit(allocator);
                     allocator.destroy(arg);
@@ -416,6 +426,14 @@ pub const Expr = union(enum) {
             .call => |expr| {
                 try writer.writeAll("Call ");
                 try writer.writeAll(expr.callee.text);
+                try writer.writeByte('\n');
+                for (expr.args) |arg| try arg.writeDebug(writer, depth + 1);
+            },
+            .enum_constructor => |expr| {
+                try writer.writeAll("EnumConstructor ");
+                try writer.writeAll(expr.enum_name.text);
+                try writer.writeAll("::");
+                try writer.writeAll(expr.variant_name.text);
                 try writer.writeByte('\n');
                 for (expr.args) |arg| try arg.writeDebug(writer, depth + 1);
             },

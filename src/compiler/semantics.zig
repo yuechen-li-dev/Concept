@@ -425,6 +425,38 @@ const BodyLowerer = struct {
                 @memcpy(owned, args.items);
                 return try self.collector.module.hir.addExpr(.{ .call = .{ .function = function_id, .args = owned } }, call.span);
             },
+            .enum_constructor => |constructor| {
+                const enum_symbol = try self.collector.module.interner.intern(constructor.enum_name.text);
+                const enum_id = switch (self.collector.top_level_decls.get(enum_symbol) orelse {
+                    try self.collector.diagnostics.append(diagnostics.unknownEnumConstructor(constructor.enum_name.span));
+                    return null;
+                }) {
+                    .enum_ => |entry| entry.id,
+                    else => {
+                        try self.collector.diagnostics.append(diagnostics.unknownEnumConstructor(constructor.enum_name.span));
+                        return null;
+                    },
+                };
+                const variant_symbol = try self.collector.module.interner.intern(constructor.variant_name.text);
+                const variant_id = self.findVariant(enum_id, variant_symbol) orelse {
+                    try self.collector.diagnostics.append(diagnostics.unknownEnumVariant(constructor.variant_name.span));
+                    return null;
+                };
+                const variant = self.collector.module.hir.getVariant(variant_id);
+                if (constructor.args.len != variant.payload_fields.len) {
+                    try self.collector.diagnostics.append(diagnostics.enumConstructorArityMismatch(constructor.span));
+                    return null;
+                }
+                var args = std.ArrayList(hir.ExprId).empty;
+                defer args.deinit(self.collector.allocator);
+                for (constructor.args) |arg| {
+                    const arg_id = (try self.lowerExpr(arg.*)) orelse return null;
+                    try args.append(self.collector.allocator, arg_id);
+                }
+                const owned = try self.collector.allocator.alloc(hir.ExprId, args.items.len);
+                @memcpy(owned, args.items);
+                return try self.collector.module.hir.addExpr(.{ .enum_constructor = .{ .enum_id = enum_id, .variant_id = variant_id, .args = owned } }, constructor.span);
+            },
             .group => |group| {
                 const inner = (try self.lowerExpr(group.inner.*)) orelse return null;
                 return try self.collector.module.hir.addExpr(.{ .group = inner }, group.span);
@@ -439,6 +471,15 @@ const BodyLowerer = struct {
                 return try self.collector.module.hir.addExpr(.{ .binary = .{ .op = lowerBinaryOp(binary.op), .left = left, .right = right } }, binary.span);
             },
         }
+    }
+
+    fn findVariant(self: *BodyLowerer, enum_id: hir.EnumId, variant_symbol: interner.SymbolId) ?hir.VariantId {
+        const enum_decl = self.collector.module.hir.getEnum(enum_id);
+        for (enum_decl.variants) |variant_id| {
+            const variant = self.collector.module.hir.getVariant(variant_id);
+            if (variant.name.index == variant_symbol.index) return variant_id;
+        }
+        return null;
     }
 
     fn lookup(self: *BodyLowerer, name: interner.SymbolId) ?hir.AssignTarget {
