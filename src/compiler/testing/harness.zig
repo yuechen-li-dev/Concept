@@ -1,6 +1,7 @@
 const std = @import("std");
 
 pub const golden = @import("golden.zig");
+pub const conception = @import("conception.zig");
 
 pub const TestKind = enum {
     lexer_pass,

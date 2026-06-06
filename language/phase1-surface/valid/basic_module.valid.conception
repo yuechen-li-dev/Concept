@@ -1,0 +1,35 @@
+# name: basic module surface
+# phase: parse
+# expect: pass
+
+=== source ===
+module Core.Collections;
+
+import Core.Memory;
+import Core.Diagnostics;
+
+struct Point {
+    int x;
+    int y;
+};
+
+enum Status {
+    Ok,
+    Error(int code),
+};
+
+int distance(Point a, Point b);
+
+=== ast ===
+CompilationUnit
+  Module Core.Collections
+  Import Core.Memory
+  Import Core.Diagnostics
+  Struct Point
+    Field int x
+    Field int y
+  Enum Status
+    Variant Ok
+    Variant Error
+      Payload int code
+  Function int distance(Point a, Point b)

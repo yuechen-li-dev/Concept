@@ -1,0 +1,9 @@
+# name: missing module declaration
+# phase: parse
+# expect: fail
+
+=== source ===
+import Core.Memory;
+
+=== diagnostics ===
+CON0004

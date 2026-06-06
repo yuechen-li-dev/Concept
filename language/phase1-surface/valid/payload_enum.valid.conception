@@ -1,0 +1,26 @@
+# name: payload enum surface
+# phase: parse
+# expect: pass
+
+=== source ===
+module Example;
+
+enum Token {
+    Identifier(StringView name),
+    Number(double value),
+    Plus,
+    Minus,
+    End,
+};
+
+=== ast ===
+CompilationUnit
+  Module Example
+  Enum Token
+    Variant Identifier
+      Payload StringView name
+    Variant Number
+      Payload double value
+    Variant Plus
+    Variant Minus
+    Variant End

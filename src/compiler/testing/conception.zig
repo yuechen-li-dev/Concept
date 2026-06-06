@@ -1,0 +1,344 @@
+const std = @import("std");
+
+const parser_model = @import("../parser.zig");
+const source_model = @import("../source.zig");
+
+pub const Phase = enum {
+    lex,
+    parse,
+    run,
+    check,
+    mir,
+    backend_c,
+
+    pub fn fromString(value: []const u8) ?Phase {
+        if (std.mem.eql(u8, value, "lex")) return .lex;
+        if (std.mem.eql(u8, value, "parse")) return .parse;
+        if (std.mem.eql(u8, value, "run")) return .run;
+        if (std.mem.eql(u8, value, "check")) return .check;
+        if (std.mem.eql(u8, value, "mir")) return .mir;
+        if (std.mem.eql(u8, value, "backend-c")) return .backend_c;
+        return null;
+    }
+};
+
+pub const Expectation = enum {
+    pass,
+    fail,
+
+    pub fn parse(value: []const u8) ?Expectation {
+        if (std.mem.eql(u8, value, "pass")) return .pass;
+        if (std.mem.eql(u8, value, "fail")) return .fail;
+        return null;
+    }
+};
+
+pub const Section = struct {
+    name: []const u8,
+    body: []const u8,
+};
+
+pub const ConceptionFixture = struct {
+    name: []const u8,
+    phase: Phase,
+    expect: Expectation,
+    sections: []const Section,
+
+    pub fn source(self: ConceptionFixture) ?[]const u8 {
+        return self.section("source");
+    }
+
+    pub fn ast(self: ConceptionFixture) ?[]const u8 {
+        return self.section("ast");
+    }
+
+    pub fn diagnostics(self: ConceptionFixture) ?[]const u8 {
+        return self.section("diagnostics");
+    }
+
+    pub fn section(self: ConceptionFixture, name: []const u8) ?[]const u8 {
+        for (self.sections) |candidate| {
+            if (std.mem.eql(u8, candidate.name, name)) return candidate.body;
+        }
+        return null;
+    }
+
+    pub fn diagnosticCodes(self: ConceptionFixture, allocator: std.mem.Allocator) ![][]const u8 {
+        const text = self.diagnostics() orelse return error.MissingDiagnostics;
+        var codes = std.ArrayList([]const u8).init(allocator);
+        errdefer codes.deinit();
+
+        var lines = std.mem.splitScalar(u8, text, '\n');
+        while (lines.next()) |line| {
+            const trimmed = std.mem.trim(u8, line, " \t\r");
+            if (trimmed.len == 0) continue;
+            if (trimmed[0] == '#') continue;
+            const code = firstWord(trimmed);
+            try codes.append(code);
+        }
+
+        return codes.toOwnedSlice();
+    }
+
+    pub fn deinit(self: ConceptionFixture, allocator: std.mem.Allocator) void {
+        allocator.free(self.sections);
+    }
+};
+
+pub const ParseOptions = struct {
+    path: ?[]const u8 = null,
+};
+
+pub fn parse(allocator: std.mem.Allocator, text: []const u8, options: ParseOptions) !ConceptionFixture {
+    var name: ?[]const u8 = null;
+    var phase: ?Phase = null;
+    var expect: ?Expectation = null;
+    var sections = std.ArrayList(Section).init(allocator);
+    errdefer sections.deinit();
+
+    var cursor: usize = 0;
+    var current_section_name: ?[]const u8 = null;
+    var current_section_start: usize = 0;
+    var saw_section = false;
+
+    while (cursor < text.len) {
+        const line_start = cursor;
+        const newline_index = std.mem.indexOfScalarPos(u8, text, cursor, '\n') orelse text.len;
+        const line_end_without_cr = if (newline_index > line_start and text[newline_index - 1] == '\r') newline_index - 1 else newline_index;
+        const line = text[line_start..line_end_without_cr];
+        cursor = if (newline_index == text.len) text.len else newline_index + 1;
+
+        if (sectionName(line)) |section_name| {
+            if (current_section_name) |previous_name| {
+                try sections.append(.{ .name = previous_name, .body = trimTrailingLineEnding(text[current_section_start..line_start]) });
+            }
+            current_section_name = section_name;
+            current_section_start = cursor;
+            saw_section = true;
+            continue;
+        }
+
+        if (!saw_section) {
+            const trimmed = std.mem.trim(u8, line, " \t");
+            if (trimmed.len == 0) continue;
+            if (!std.mem.startsWith(u8, trimmed, "#")) return error.ExpectedHeaderOrSection;
+            try parseHeader(trimmed, &name, &phase, &expect);
+        }
+    }
+
+    if (current_section_name) |previous_name| {
+        try sections.append(.{ .name = previous_name, .body = trimTrailingLineEnding(text[current_section_start..text.len]) });
+    }
+
+    const parsed = ConceptionFixture{
+        .name = name orelse return error.MissingName,
+        .phase = phase orelse return error.MissingPhase,
+        .expect = expect orelse return error.MissingExpectation,
+        .sections = try sections.toOwnedSlice(),
+    };
+    errdefer parsed.deinit(allocator);
+
+    try validate(parsed, options);
+    return parsed;
+}
+
+fn parseHeader(line: []const u8, name: *?[]const u8, phase: *?Phase, expect: *?Expectation) !void {
+    const without_hash = std.mem.trim(u8, line[1..], " \t");
+    const colon = std.mem.indexOfScalar(u8, without_hash, ':') orelse return error.InvalidHeader;
+    const key = std.mem.trim(u8, without_hash[0..colon], " \t");
+    const value = std.mem.trim(u8, without_hash[colon + 1 ..], " \t");
+
+    if (std.mem.eql(u8, key, "name")) {
+        if (value.len == 0) return error.EmptyName;
+        name.* = value;
+    } else if (std.mem.eql(u8, key, "phase")) {
+        phase.* = Phase.fromString(value) orelse return error.InvalidPhase;
+    } else if (std.mem.eql(u8, key, "expect")) {
+        expect.* = Expectation.parse(value) orelse return error.InvalidExpectation;
+    }
+}
+
+fn validate(fixture: ConceptionFixture, options: ParseOptions) !void {
+    if (fixture.source() == null) return error.MissingSource;
+
+    switch (fixture.phase) {
+        .parse => switch (fixture.expect) {
+            .pass => if (fixture.ast() == null) return error.MissingAst,
+            .fail => if (fixture.diagnostics() == null) return error.MissingDiagnostics,
+        },
+        else => {},
+    }
+
+    if (options.path) |path| {
+        if (std.mem.endsWith(u8, path, ".valid.conception") and fixture.expect != .pass) return error.ExtensionExpectationMismatch;
+        if (std.mem.endsWith(u8, path, ".invalid.conception") and fixture.expect != .fail) return error.ExtensionExpectationMismatch;
+    }
+}
+
+fn sectionName(line: []const u8) ?[]const u8 {
+    const trimmed = std.mem.trim(u8, line, " \t\r");
+    if (!std.mem.startsWith(u8, trimmed, "===")) return null;
+    if (!std.mem.endsWith(u8, trimmed, "===")) return null;
+    const inner = std.mem.trim(u8, trimmed[3 .. trimmed.len - 3], " \t");
+    if (inner.len == 0) return null;
+    return inner;
+}
+
+fn trimTrailingLineEnding(text: []const u8) []const u8 {
+    var end = text.len;
+    if (end > 0 and text[end - 1] == '\n') end -= 1;
+    if (end > 0 and text[end - 1] == '\r') end -= 1;
+    return text[0..end];
+}
+
+fn firstWord(text: []const u8) []const u8 {
+    const index = std.mem.indexOfAny(u8, text, " \t\r") orelse text.len;
+    return text[0..index];
+}
+
+fn expectFixture(text: []const u8) !ConceptionFixture {
+    return parse(std.testing.allocator, text, .{});
+}
+
+const sample_fixture =
+    \\# name: payload enum surface
+    \\# phase: parse
+    \\# expect: pass
+    \\
+    \\=== source ===
+    \\module Example;
+    \\
+    \\=== ast ===
+    \\CompilationUnit
+    \\  Module Example
+;
+
+test "conception parser parses metadata" {
+    const fixture = try expectFixture(sample_fixture);
+    defer fixture.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("payload enum surface", fixture.name);
+    try std.testing.expectEqual(Phase.parse, fixture.phase);
+    try std.testing.expectEqual(Expectation.pass, fixture.expect);
+}
+
+test "conception parser parses source section" {
+    const fixture = try expectFixture(sample_fixture);
+    defer fixture.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("module Example;", fixture.source().?);
+}
+
+test "conception parser parses ast section" {
+    const fixture = try expectFixture(sample_fixture);
+    defer fixture.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("CompilationUnit\n  Module Example", fixture.ast().?);
+}
+
+test "conception parser parses diagnostics section" {
+    const text =
+        \\# name: invalid sample
+        \\# phase: parse
+        \\# expect: fail
+        \\
+        \\=== source ===
+        \\import Core.Memory;
+        \\
+        \\=== diagnostics ===
+        \\CON0004
+    ;
+    const fixture = try expectFixture(text);
+    defer fixture.deinit(std.testing.allocator);
+
+    const codes = try fixture.diagnosticCodes(std.testing.allocator);
+    defer std.testing.allocator.free(codes);
+    try std.testing.expectEqual(@as(usize, 1), codes.len);
+    try std.testing.expectEqualStrings("CON0004", codes[0]);
+}
+
+test "conception parser rejects missing source" {
+    const text =
+        \\# name: no source
+        \\# phase: parse
+        \\# expect: pass
+        \\
+        \\=== ast ===
+        \\CompilationUnit
+    ;
+    try std.testing.expectError(error.MissingSource, expectFixture(text));
+}
+
+test "conception parser rejects invalid expect value" {
+    const text =
+        \\# name: bad expect
+        \\# phase: parse
+        \\# expect: maybe
+        \\
+        \\=== source ===
+        \\module Example;
+    ;
+    try std.testing.expectError(error.InvalidExpectation, expectFixture(text));
+}
+
+test "conception parser detects extension and metadata mismatch" {
+    try std.testing.expectError(
+        error.ExtensionExpectationMismatch,
+        parse(std.testing.allocator, sample_fixture, .{ .path = "language/phase1-surface/invalid/sample.invalid.conception" }),
+    );
+}
+
+fn expectParseFixture(comptime path: []const u8) !void {
+    const text = @embedFile(path);
+    const fixture = try parse(std.testing.allocator, text, .{ .path = path });
+    defer fixture.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(Phase.parse, fixture.phase);
+
+    var diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const source_file = try source_model.SourceFile.init(std.testing.allocator, path, fixture.source().?);
+    defer source_file.deinit(std.testing.allocator);
+
+    const unit = try parser_model.parseSource(std.testing.allocator, source_file, &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    switch (fixture.expect) {
+        .pass => {
+            try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+            const snapshot = try unit.debugString(std.testing.allocator);
+            defer std.testing.allocator.free(snapshot);
+            try std.testing.expectEqualStrings(fixture.ast().?, snapshot);
+        },
+        .fail => {
+            try std.testing.expect(diagnostics.count() > 0);
+            const expected_codes = try fixture.diagnosticCodes(std.testing.allocator);
+            defer std.testing.allocator.free(expected_codes);
+            try std.testing.expectEqual(expected_codes.len, diagnostics.count());
+            for (expected_codes, diagnostics.diagnostics.items) |expected_code, actual| {
+                try std.testing.expectEqualStrings(expected_code, actual.code.format());
+            }
+        },
+    }
+}
+
+test "language parse fixture: basic module" {
+    try expectParseFixture("../../../language/phase1-surface/valid/basic_module.valid.conception");
+}
+
+test "language parse fixture: payload enum" {
+    try expectParseFixture("../../../language/phase1-surface/valid/payload_enum.valid.conception");
+}
+
+test "language parse fixture: test surface" {
+    try expectParseFixture("../../../language/phase1-surface/valid/test_surface.valid.conception");
+}
+
+test "language parse fixture: missing module" {
+    try expectParseFixture("../../../language/phase1-surface/invalid/missing_module.invalid.conception");
+}
+
+test "language parse fixture: malformed enum" {
+    try expectParseFixture("../../../language/phase1-surface/invalid/malformed_enum.invalid.conception");
+}
