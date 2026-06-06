@@ -1,0 +1,11 @@
+# name: phase3 hir body local return
+# phase: check
+# expect: pass
+
+=== source ===
+module Example;
+
+int main() {
+    int x = 1 + 2;
+    return x;
+}

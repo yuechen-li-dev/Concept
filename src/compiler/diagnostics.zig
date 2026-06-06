@@ -38,6 +38,9 @@ pub const DiagnosticCode = enum {
     DuplicateEnumVariant,
     UnsupportedTypeSyntax,
     DuplicateParameterName,
+    UnknownIdentifier,
+    UnknownFunction,
+    DuplicateLocalName,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -57,6 +60,9 @@ pub const DiagnosticCode = enum {
             .DuplicateEnumVariant => "CON0023",
             .UnsupportedTypeSyntax => "CON0024",
             .DuplicateParameterName => "CON0025",
+            .UnknownIdentifier => "CON0026",
+            .UnknownFunction => "CON0027",
+            .DuplicateLocalName => "CON0028",
         };
     }
 };
@@ -437,4 +443,31 @@ test "render EOF-adjacent span" {
         \\|         ^
         \\
     , output.written());
+}
+
+pub fn unknownIdentifier(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .UnknownIdentifier,
+        .@"error",
+        "unknown identifier",
+        span,
+    ).withHelp("function bodies can reference visible parameters and locals");
+}
+
+pub fn unknownFunction(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .UnknownFunction,
+        .@"error",
+        "unknown function",
+        span,
+    ).withHelp("function calls must name a top-level function");
+}
+
+pub fn duplicateLocalName(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .DuplicateLocalName,
+        .@"error",
+        "duplicate local variable name",
+        span,
+    ).withHelp("Phase 3 rejects local names that duplicate any visible parameter or local");
 }

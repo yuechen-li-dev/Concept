@@ -1,0 +1,13 @@
+# name: phase3 hir body unknown function
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+int main() {
+    return missing();
+}
+
+=== diagnostics ===
+CON0027

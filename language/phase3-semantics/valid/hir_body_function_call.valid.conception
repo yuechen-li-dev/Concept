@@ -1,0 +1,14 @@
+# name: phase3 hir body function call
+# phase: check
+# expect: pass
+
+=== source ===
+module Example;
+
+int add(int a, int b) {
+    return a + b;
+}
+
+int main() {
+    return add(1, 2);
+}
