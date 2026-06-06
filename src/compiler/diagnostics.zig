@@ -1,0 +1,323 @@
+const std = @import("std");
+const source_model = @import("source.zig");
+
+pub const SourceFile = source_model.SourceFile;
+pub const SourceLocation = source_model.SourceLocation;
+pub const SourceSpan = source_model.SourceSpan;
+
+pub const Severity = enum {
+    @"error",
+    warning,
+    note,
+    help,
+
+    pub fn format(self: Severity) []const u8 {
+        return switch (self) {
+            .@"error" => "error",
+            .warning => "warning",
+            .note => "note",
+            .help => "help",
+        };
+    }
+};
+
+pub const DiagnosticCode = enum {
+    InvalidCharacter,
+    UnterminatedString,
+    UnexpectedToken,
+    ExpectedItem,
+    DuplicateModuleDeclaration,
+
+    pub fn format(self: DiagnosticCode) []const u8 {
+        return switch (self) {
+            .InvalidCharacter => "CON0001",
+            .UnterminatedString => "CON0002",
+            .UnexpectedToken => "CON0003",
+            .ExpectedItem => "CON0004",
+            .DuplicateModuleDeclaration => "CON0005",
+        };
+    }
+};
+
+pub const DiagnosticNote = struct {
+    message: []const u8,
+};
+
+pub const Diagnostic = struct {
+    code: DiagnosticCode,
+    severity: Severity,
+    message: []const u8,
+    primary_span: SourceSpan,
+    help: ?[]const u8 = null,
+    notes: []const DiagnosticNote = &.{},
+    owns_message: bool = false,
+
+    pub fn init(
+        code: DiagnosticCode,
+        severity: Severity,
+        message: []const u8,
+        primary_span: SourceSpan,
+    ) Diagnostic {
+        return .{
+            .code = code,
+            .severity = severity,
+            .message = message,
+            .primary_span = primary_span,
+        };
+    }
+
+    pub fn withHelp(self: Diagnostic, help: []const u8) Diagnostic {
+        var diagnostic = self;
+        diagnostic.help = help;
+        return diagnostic;
+    }
+
+    pub fn deinit(self: Diagnostic, allocator: std.mem.Allocator) void {
+        if (self.owns_message) {
+            allocator.free(self.message);
+        }
+    }
+};
+
+pub const DiagnosticBag = struct {
+    diagnostics: std.ArrayList(Diagnostic),
+
+    pub fn init(allocator: std.mem.Allocator) DiagnosticBag {
+        return .{ .diagnostics = std.ArrayList(Diagnostic).init(allocator) };
+    }
+
+    pub fn deinit(self: *DiagnosticBag) void {
+        for (self.diagnostics.items) |diagnostic| {
+            diagnostic.deinit(self.diagnostics.allocator);
+        }
+        self.diagnostics.deinit();
+    }
+
+    pub fn append(self: *DiagnosticBag, diagnostic: Diagnostic) !void {
+        try self.diagnostics.append(diagnostic);
+    }
+
+    pub fn count(self: DiagnosticBag) usize {
+        return self.diagnostics.items.len;
+    }
+
+    pub fn hasErrors(self: DiagnosticBag) bool {
+        for (self.diagnostics.items) |diagnostic| {
+            if (diagnostic.severity == .@"error") return true;
+        }
+        return false;
+    }
+
+    pub fn clear(self: *DiagnosticBag) void {
+        for (self.diagnostics.items) |diagnostic| {
+            diagnostic.deinit(self.diagnostics.allocator);
+        }
+        self.diagnostics.clearRetainingCapacity();
+    }
+};
+
+pub fn makeDiagnostic(
+    code: DiagnosticCode,
+    severity: Severity,
+    message: []const u8,
+    span: SourceSpan,
+) Diagnostic {
+    return Diagnostic.init(code, severity, message, span);
+}
+
+pub fn invalidCharacter(allocator: std.mem.Allocator, span: SourceSpan, byte: u8) !Diagnostic {
+    return .{
+        .code = .InvalidCharacter,
+        .severity = .@"error",
+        .message = try std.fmt.allocPrint(allocator, "unexpected character '{c}'", .{byte}),
+        .primary_span = span,
+        .help = "remove this character or use a valid token",
+        .owns_message = true,
+    };
+}
+
+pub fn unterminatedString(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .UnterminatedString,
+        .@"error",
+        "unterminated string literal",
+        span,
+    ).withHelp("add a closing quote before the end of the line or file");
+}
+
+pub fn render(writer: anytype, source: SourceFile, diagnostic: Diagnostic) !void {
+    const location = try source.spanStartLocation(diagnostic.primary_span);
+    const line = lineSlice(source, location.line);
+    const underline_width = underlineWidth(source, diagnostic.primary_span, location, line);
+
+    try writer.print("{s} {s}: {s}\n", .{
+        diagnostic.code.format(),
+        diagnostic.severity.format(),
+        diagnostic.message,
+    });
+    try writer.print("--> {s}:{d}:{d}\n", .{
+        source.display_name,
+        location.line,
+        location.column,
+    });
+    try writer.writeAll("|\n");
+    try writer.print("{d} | {s}\n", .{ location.line, line });
+    try writer.writeAll("| ");
+    try writeRepeatedByte(writer, ' ', location.column - 1);
+    try writeRepeatedByte(writer, '^', underline_width);
+    try writer.writeByte('\n');
+
+    if (diagnostic.help) |help| {
+        try writer.writeAll("|\n");
+        try writer.print("help: {s}\n", .{help});
+    }
+}
+
+fn lineSlice(source: SourceFile, line_number: usize) []const u8 {
+    const line_index = line_number - 1;
+    const line_start = source.line_starts[line_index];
+    const next_line_start = if (line_index + 1 < source.line_starts.len)
+        source.line_starts[line_index + 1]
+    else
+        source.text.len;
+
+    var line_end = next_line_start;
+    if (line_end > line_start and source.text[line_end - 1] == '\n') {
+        line_end -= 1;
+    }
+    if (line_end > line_start and source.text[line_end - 1] == '\r') {
+        line_end -= 1;
+    }
+
+    return source.text[line_start..line_end];
+}
+
+fn underlineWidth(source: SourceFile, span: SourceSpan, location: SourceLocation, line: []const u8) usize {
+    _ = source;
+    const line_remaining = if (location.column - 1 < line.len)
+        line.len - (location.column - 1)
+    else
+        0;
+
+    if (span.length == 0 or line_remaining == 0) return 1;
+    return @max(@as(usize, 1), @min(span.length, line_remaining));
+}
+
+fn writeRepeatedByte(writer: anytype, byte: u8, count: usize) !void {
+    var index: usize = 0;
+    while (index < count) : (index += 1) {
+        try writer.writeByte(byte);
+    }
+}
+
+test "severity has stable string formatting" {
+    try std.testing.expectEqualStrings("error", Severity.@"error".format());
+    try std.testing.expectEqualStrings("warning", Severity.warning.format());
+    try std.testing.expectEqualStrings("note", Severity.note.format());
+    try std.testing.expectEqualStrings("help", Severity.help.format());
+}
+
+test "diagnostic code has stable string formatting" {
+    try std.testing.expectEqualStrings("CON0001", DiagnosticCode.InvalidCharacter.format());
+    try std.testing.expectEqualStrings("CON0002", DiagnosticCode.UnterminatedString.format());
+    try std.testing.expectEqualStrings("CON0003", DiagnosticCode.UnexpectedToken.format());
+    try std.testing.expectEqualStrings("CON0004", DiagnosticCode.ExpectedItem.format());
+    try std.testing.expectEqualStrings("CON0005", DiagnosticCode.DuplicateModuleDeclaration.format());
+}
+
+test "diagnostic bag counts diagnostics and detects errors" {
+    var bag = DiagnosticBag.init(std.testing.allocator);
+    defer bag.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), bag.count());
+    try std.testing.expect(!bag.hasErrors());
+
+    try bag.append(makeDiagnostic(.ExpectedItem, .warning, "expected item", .{ .start = 0, .length = 1 }));
+    try std.testing.expectEqual(@as(usize, 1), bag.count());
+    try std.testing.expect(!bag.hasErrors());
+
+    try bag.append(makeDiagnostic(.UnexpectedToken, .@"error", "unexpected token", .{ .start = 1, .length = 1 }));
+    try std.testing.expectEqual(@as(usize, 2), bag.count());
+    try std.testing.expect(bag.hasErrors());
+
+    bag.clear();
+    try std.testing.expectEqual(@as(usize, 0), bag.count());
+    try std.testing.expect(!bag.hasErrors());
+}
+
+test "construct invalid character diagnostic" {
+    const span = SourceSpan{ .start = 8, .length = 1 };
+    const diagnostic = try invalidCharacter(std.testing.allocator, span, '@');
+    defer diagnostic.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(DiagnosticCode.InvalidCharacter, diagnostic.code);
+    try std.testing.expectEqual(Severity.@"error", diagnostic.severity);
+    try std.testing.expectEqualStrings("unexpected character '@'", diagnostic.message);
+    try std.testing.expectEqual(span, diagnostic.primary_span);
+    try std.testing.expectEqualStrings("remove this character or use a valid token", diagnostic.help.?);
+}
+
+test "render single-line diagnostic with caret" {
+    const source = try SourceFile.init(
+        std.testing.allocator,
+        "tests/diagnostics/invalid_token.concept",
+        "let x = @;\n",
+    );
+    defer source.deinit(std.testing.allocator);
+
+    const diagnostic = try invalidCharacter(std.testing.allocator, .{ .start = 8, .length = 1 }, '@');
+    defer diagnostic.deinit(std.testing.allocator);
+
+    var output = std.ArrayList(u8).init(std.testing.allocator);
+    defer output.deinit();
+    try render(output.writer(), source, diagnostic);
+
+    try std.testing.expectEqualStrings(
+        \\CON0001 error: unexpected character '@'
+        \\--> tests/diagnostics/invalid_token.concept:1:9
+        \\|
+        \\1 | let x = @;
+        \\|         ^
+        \\|
+        \\help: remove this character or use a valid token
+        \\
+    , output.items);
+}
+
+test "render diagnostic with help text" {
+    const source = try SourceFile.init(std.testing.allocator, "string.concept", "let s = \"unterminated");
+    defer source.deinit(std.testing.allocator);
+
+    const diagnostic = unterminatedString(.{ .start = 8, .length = 13 });
+
+    var output = std.ArrayList(u8).init(std.testing.allocator);
+    defer output.deinit();
+    try render(output.writer(), source, diagnostic);
+
+    try std.testing.expect(std.mem.indexOf(u8, output.items, "help: add a closing quote before the end of the line or file") != null);
+}
+
+test "render EOF-adjacent span" {
+    const source = try SourceFile.init(std.testing.allocator, "eof.concept", "let x = ");
+    defer source.deinit(std.testing.allocator);
+
+    const diagnostic = makeDiagnostic(
+        .UnexpectedToken,
+        .@"error",
+        "unexpected end of file",
+        .{ .start = source.len(), .length = 0 },
+    );
+
+    var output = std.ArrayList(u8).init(std.testing.allocator);
+    defer output.deinit();
+    try render(output.writer(), source, diagnostic);
+
+    try std.testing.expectEqualStrings(
+        \\CON0003 error: unexpected end of file
+        \\--> eof.concept:1:9
+        \\|
+        \\1 | let x = 
+        \\|         ^
+        \\
+    , output.items);
+}
