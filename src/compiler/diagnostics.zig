@@ -28,6 +28,9 @@ pub const DiagnosticCode = enum {
     UnexpectedToken,
     ExpectedItem,
     DuplicateModuleDeclaration,
+    UnterminatedChar,
+    EmptyCharLiteral,
+    InvalidEscapeSequence,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -37,6 +40,9 @@ pub const DiagnosticCode = enum {
             .UnexpectedToken => "CON0003",
             .ExpectedItem => "CON0004",
             .DuplicateModuleDeclaration => "CON0005",
+            .UnterminatedChar => "CON0007",
+            .EmptyCharLiteral => "CON0008",
+            .InvalidEscapeSequence => "CON0009",
         };
     }
 };
@@ -156,6 +162,33 @@ pub fn unterminatedBlockComment(span: SourceSpan) Diagnostic {
     ).withHelp("add a closing */ before the end of the file");
 }
 
+pub fn unterminatedChar(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .UnterminatedChar,
+        .@"error",
+        "unterminated char literal",
+        span,
+    ).withHelp("add a closing quote before the end of the line or file");
+}
+
+pub fn emptyCharLiteral(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .EmptyCharLiteral,
+        .@"error",
+        "empty char literal",
+        span,
+    ).withHelp("put one character or escape sequence between the quotes");
+}
+
+pub fn invalidEscapeSequence(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .InvalidEscapeSequence,
+        .@"error",
+        "invalid escape sequence",
+        span,
+    ).withHelp("use a recognized escape sequence");
+}
+
 pub fn render(writer: anytype, source: SourceFile, diagnostic: Diagnostic) !void {
     const location = try source.spanStartLocation(diagnostic.primary_span);
     const line = lineSlice(source, location.line);
@@ -234,6 +267,10 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0003", DiagnosticCode.UnexpectedToken.format());
     try std.testing.expectEqualStrings("CON0004", DiagnosticCode.ExpectedItem.format());
     try std.testing.expectEqualStrings("CON0005", DiagnosticCode.DuplicateModuleDeclaration.format());
+    try std.testing.expectEqualStrings("CON0006", DiagnosticCode.UnterminatedBlockComment.format());
+    try std.testing.expectEqualStrings("CON0007", DiagnosticCode.UnterminatedChar.format());
+    try std.testing.expectEqualStrings("CON0008", DiagnosticCode.EmptyCharLiteral.format());
+    try std.testing.expectEqualStrings("CON0009", DiagnosticCode.InvalidEscapeSequence.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {
