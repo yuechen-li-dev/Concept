@@ -19,3 +19,8 @@ Do not confuse activity with progress.
 A failed attempt is only acceptable if it leaves behind a narrower problem, stronger evidence, or a justified stop.
 
 Any partial work must leave the codebase in a cleaner, more legible, and more diagnosable state than before.
+
+## Reporting
+
+Run `zig build test` before reporting completion. Keep changes small and report implemented changes, tests added, known limitations, and commands run.
+Do not commit changes unless the user explicitly asks you to commit.
