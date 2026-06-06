@@ -65,26 +65,33 @@ The first backend should be an audit/debug C backend:
 - Emit straightforward C source from the supported executable subset.
 - Prefer readable generated C over clever or optimized output.
 - Use C as a temporary execution vehicle, not as the final representation of Concept semantics.
-- Compile the generated C via the system C compiler in a later run harness milestone.
+- Compile the generated C with `zig cc` in the run harness milestone.
 - Keep the backend narrow enough that unsupported Concept constructs fail clearly instead of being partially translated.
 
 The generated C should make it easy to inspect Stage 0 behavior while the parser, checker seam, and run harness are still evolving.
 
 ## Run-test convention
 
-Phase 2 run fixtures use a source comment to declare the expected process exit code:
+Phase 2 run fixtures use `.conception` metadata and a `run` section to declare the expected process exit code:
 
-```cpp
-// run-exit-code: N
+```text
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    return 1 + 2 * 3;
+}
+
+=== run ===
+exit_code: 7
 ```
 
-The planned run-test layout is:
+The run harness v0 uses the real parse path, the Phase 2 executable checker, and the C backend, then writes `main.c` into a temporary directory, compiles it with `zig cc`, runs the host executable, and compares the process exit code. Stdout/stderr assertions, cross-compilation, linker abstraction, headers, and multi-file modules remain outside this milestone.
 
-- `tests/run/pass/` for programs expected to compile, run, and match their declared exit code.
-- `tests/run/fail/` for programs expected to fail compilation, fail execution setup, or intentionally produce a mismatched outcome once negative run tests exist.
-- `tests/corpus/phase2/` for milestone fixtures and snapshots that document target programs before the full run harness is required to execute them.
-
-The initial Phase 2 corpus files are target fixtures. They are allowed to be ahead of the implementation while function bodies are still only shallow-captured by the Phase 1 parser.
+The Phase 2 `.conception` fixtures live under `language/phase2-execution/`. `tests/corpus/phase2/` remains available for small generated-C snapshots.
 
 ## Milestone ladder
 
@@ -106,9 +113,9 @@ The initial Phase 2 corpus files are target fixtures. They are allowed to be ahe
    - Emit readable C for the supported `main` and return-expression subset.
    - Produce clear unsupported-feature diagnostics for declarations that cannot execute yet.
 6. **M5: run harness v0**
-   - Compile generated C with a system C compiler.
-   - Run the executable and compare its exit code with `// run-exit-code: N`.
-   - Wire the initial pass/fail run directories into `zig build test` only when stable.
+   - Compile generated C with `zig cc`.
+   - Run the executable and compare its exit code with `.conception` `=== run ===` / `exit_code: N`.
+   - Wire the initial passing run fixtures into `zig build test`.
 7. **M6: corpus stabilization**
    - Promote Phase 2 fixtures from targets to enforced tests.
    - Add negative fixtures for unsupported executable forms.
