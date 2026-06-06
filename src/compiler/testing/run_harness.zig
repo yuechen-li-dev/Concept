@@ -143,6 +143,42 @@ test "run harness compiles and runs bool local return" {
     try std.testing.expectEqual(@as(u8, 1), result.actual_exit_code);
 }
 
+test "run harness compiles and runs local int assignment" {
+    const result = try expectExitCode(
+        std.testing.allocator,
+        "module Main; int main() { int x = 1; x = x + 2; return x; }",
+        3,
+    );
+    try std.testing.expectEqual(@as(u8, 3), result.exit_code);
+}
+
+test "run harness compiles and runs local bool assignment" {
+    const result = try expectExitCode(
+        std.testing.allocator,
+        "module Main; int main() { bool ok = false; ok = !ok; if (ok) { return 7; } return 0; }",
+        7,
+    );
+    try std.testing.expectEqual(@as(u8, 7), result.exit_code);
+}
+
+test "run harness compiles and runs assignment inside if" {
+    const result = try expectExitCode(
+        std.testing.allocator,
+        "module Main; int main() { int x = 1; if (true) { x = 5; } return x; }",
+        5,
+    );
+    try std.testing.expectEqual(@as(u8, 5), result.exit_code);
+}
+
+test "run harness compiles and runs parameter assignment" {
+    const result = try expectExitCode(
+        std.testing.allocator,
+        "module Main; int bump(int x) { x = x + 1; return x; } int main() { return bump(2); }",
+        3,
+    );
+    try std.testing.expectEqual(@as(u8, 3), result.exit_code);
+}
+
 test "run harness compiles and runs function call add" {
     const result = try expectExitCode(
         std.testing.allocator,

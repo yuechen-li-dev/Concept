@@ -448,6 +448,17 @@ pub const LocalDeclStmt = struct {
     }
 };
 
+pub const AssignmentStmt = struct {
+    target: NameSegment,
+    value: *Expr,
+    span: SourceSpan,
+
+    pub fn deinit(self: AssignmentStmt, allocator: std.mem.Allocator) void {
+        self.value.deinit(allocator);
+        allocator.destroy(self.value);
+    }
+};
+
 pub const IfStmt = struct {
     condition: *Expr,
     then_block: BlockStmt,
@@ -509,6 +520,7 @@ pub const MatchStmt = struct {
 
 pub const Stmt = union(enum) {
     local_decl: LocalDeclStmt,
+    assignment: AssignmentStmt,
     return_stmt: ReturnStmt,
     if_stmt: IfStmt,
     match_stmt: MatchStmt,
@@ -517,6 +529,7 @@ pub const Stmt = union(enum) {
     pub fn deinit(self: Stmt, allocator: std.mem.Allocator) void {
         switch (self) {
             .local_decl => |stmt| stmt.deinit(allocator),
+            .assignment => |stmt| stmt.deinit(allocator),
             .return_stmt => |stmt| stmt.deinit(allocator),
             .if_stmt => |stmt| stmt.deinit(allocator),
             .match_stmt => |stmt| stmt.deinit(allocator),
@@ -534,6 +547,13 @@ pub const Stmt = union(enum) {
                 try writer.writeAll(stmt.name.text);
                 try writer.writeByte('\n');
                 try stmt.initializer.writeDebug(writer, depth + 1);
+            },
+            .assignment => |stmt| {
+                try writeIndent(writer, depth);
+                try writer.writeAll("Assignment ");
+                try writer.writeAll(stmt.target.text);
+                try writer.writeByte('\n');
+                try stmt.value.writeDebug(writer, depth + 1);
             },
             .return_stmt => |stmt| {
                 try writeIndent(writer, depth);

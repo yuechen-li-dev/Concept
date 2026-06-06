@@ -1,0 +1,18 @@
+# name: phase2 assignment local bool
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    bool ok = false;
+    ok = !ok;
+    if (ok) {
+        return 4;
+    }
+    return 0;
+}
+
+=== run ===
+exit_code: 4

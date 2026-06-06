@@ -1,0 +1,12 @@
+# name: phase2 assignment missing expression
+# phase: parse
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    int x = 1;
+    x = ;
+    return x;
+}

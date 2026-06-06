@@ -1,0 +1,14 @@
+# name: phase2 assignment inner scope local
+# phase: check
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    if (true) {
+        int x = 1;
+    }
+    x = 2;
+    return 0;
+}

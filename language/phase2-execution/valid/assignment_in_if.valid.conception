@@ -1,0 +1,17 @@
+# name: phase2 assignment in if
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    int x = 1;
+    if (true) {
+        x = 6;
+    }
+    return x;
+}
+
+=== run ===
+exit_code: 6

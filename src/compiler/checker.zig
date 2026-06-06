@@ -128,6 +128,15 @@ fn findFunction(functions: []const FunctionInfo, name: []const u8) ?FunctionInfo
     return null;
 }
 
+fn findLocal(locals: []const LocalSymbol, name: []const u8) ?ExprType {
+    var index = locals.len;
+    while (index != 0) {
+        index -= 1;
+        if (std.mem.eql(u8, locals[index].name, name)) return locals[index].type;
+    }
+    return null;
+}
+
 fn validateBlock(block: ast.BlockStmt, return_type: ExprType, locals: *std.ArrayList(LocalSymbol), functions: []const FunctionInfo, diagnostics: ?*DiagnosticBag, creates_scope: bool) !void {
     const local_start = locals.items.len;
     defer if (creates_scope) locals.shrinkRetainingCapacity(local_start);
@@ -156,6 +165,21 @@ fn validateStmt(stmt: ast.Stmt, return_type: ExprType, locals: *std.ArrayList(Lo
                 return error.InvalidExecutable;
             }
             try locals.append(.{ .name = local_decl.name.text, .type = local_type, .span = local_decl.name.span });
+        },
+        .assignment => |assignment| {
+            const target_type = findLocal(locals.items, assignment.target.text) orelse {
+                if (findFunction(functions, assignment.target.text) != null) {
+                    try report(diagnostics, "cannot assign to function name", assignment.target.span);
+                } else {
+                    try report(diagnostics, "assignment target is not a visible local or parameter", assignment.target.span);
+                }
+                return error.InvalidExecutable;
+            };
+            const value_type = try validateExpr(assignment.value.*, locals, functions, diagnostics);
+            if (value_type != target_type) {
+                try report(diagnostics, "assignment expression type does not match target type", assignment.value.span());
+                return error.InvalidExecutable;
+            }
         },
         .return_stmt => |return_stmt| {
             const value = return_stmt.value orelse {
@@ -245,9 +269,7 @@ fn validateExpr(expr: ast.Expr, locals: *const std.ArrayList(LocalSymbol), funct
         .int_literal => return .int,
         .bool_literal => return .bool,
         .identifier => |identifier| {
-            for (locals.items) |local| {
-                if (std.mem.eql(u8, local.name, identifier.name.text)) return local.type;
-            }
+            if (findLocal(locals.items, identifier.name.text)) |local_type| return local_type;
             try report(diagnostics, "unknown identifier in executable subset", identifier.span);
             return error.InvalidExecutable;
         },
@@ -463,6 +485,46 @@ test "checker rejects logical operand type mismatch" {
     try expectInvalid(
         "module Main; int main() { return 1 && false; }",
         "logical binary operator requires bool operands",
+    );
+}
+
+test "checker accepts assignment to int local" {
+    try expectValid("module Main; int main() { int x = 1; x = x + 2; return x; }");
+}
+
+test "checker accepts assignment to bool local" {
+    try expectValid("module Main; int main() { bool ok = true; ok = !ok; if (ok) { return 1; } return 0; }");
+}
+
+test "checker rejects assignment to unknown identifier" {
+    try expectInvalid(
+        "module Main; int main() { x = 1; return 0; }",
+        "assignment target is not a visible local or parameter",
+    );
+}
+
+test "checker rejects assignment type mismatch" {
+    try expectInvalid(
+        "module Main; int main() { int x = 1; x = true; return x; }",
+        "assignment expression type does not match target type",
+    );
+}
+
+test "checker rejects assignment to out-of-scope branch local" {
+    try expectInvalid(
+        "module Main; int main() { if (true) { int x = 1; } x = 2; return 0; }",
+        "assignment target is not a visible local or parameter",
+    );
+}
+
+test "checker allows assignment to parameter" {
+    try expectValid("module Main; int bump(int x) { x = x + 1; return x; } int main() { return bump(2); }");
+}
+
+test "checker rejects assignment to function name" {
+    try expectInvalid(
+        "module Main; int f() { return 1; } int main() { f = 2; return 0; }",
+        "cannot assign to function name",
     );
 }
 
