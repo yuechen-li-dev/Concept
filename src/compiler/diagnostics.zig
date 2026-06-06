@@ -51,6 +51,7 @@ pub const DiagnosticCode = enum {
     MissingTerminator,
     InvalidMirType,
     InvalidMirOperand,
+    UnsupportedCBackendType,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -83,6 +84,7 @@ pub const DiagnosticCode = enum {
             .MissingTerminator => "CON0042",
             .InvalidMirType => "CON0043",
             .InvalidMirOperand => "CON0044",
+            .UnsupportedCBackendType => "CON0045",
         };
     }
 };
@@ -515,4 +517,13 @@ pub fn invalidMirType(span: SourceSpan) Diagnostic {
 
 pub fn invalidMirOperand(span: SourceSpan) Diagnostic {
     return Diagnostic.init(.InvalidMirOperand, .@"error", "invalid MIR operand", span);
+}
+
+pub fn unsupportedCBackendType(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .UnsupportedCBackendType,
+        .@"error",
+        "unsupported type in MIR C backend",
+        span,
+    ).withHelp("Phase 4 C backend v0 only renders void, int, and bool");
 }
