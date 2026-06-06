@@ -1,0 +1,19 @@
+# name: phase5 enum match payload named binding
+# phase: parse
+# expect: fail
+
+=== source ===
+module Main;
+
+enum ParseResult { Ok(int value), Err(int code), };
+
+int main() {
+    ParseResult result = ParseResult::Ok(1);
+    match (result) {
+        ParseResult::Ok(value: x) => return x;
+        _ => return 0;
+    }
+}
+
+=== diagnostics ===
+CON0003

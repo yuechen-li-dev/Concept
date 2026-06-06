@@ -1,0 +1,22 @@
+# name: phase5 enum match payload bind bool
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+enum FlagResult {
+    Ok(bool value),
+    Err(int code),
+};
+
+int main() {
+    FlagResult result = FlagResult::Ok(true);
+    match (result) {
+        FlagResult::Ok(value) => if (value) { return 8; } else { return 1; }
+        FlagResult::Err(code) => return code;
+    }
+}
+
+=== run ===
+exit_code: 8

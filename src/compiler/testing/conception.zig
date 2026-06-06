@@ -1205,8 +1205,48 @@ test "language check fixture: phase5 enum match variant against int" {
     try expectCheckFixture("../../../language/phase5-sum-types/invalid/enum_match_variant_against_int.invalid.conception");
 }
 
-test "language parse fixture: phase5 enum match payload binding unsupported" {
-    try expectParseFixture("../../../language/phase5-sum-types/invalid/enum_match_payload_binding.invalid.conception");
+test "language run fixture: phase5 enum match payload bind int" {
+    try expectRunFixture("../../../language/phase5-sum-types/valid/enum_match_payload_bind_int.valid.conception");
+}
+
+test "language run fixture: phase5 enum match payload bind bool" {
+    try expectRunFixture("../../../language/phase5-sum-types/valid/enum_match_payload_bind_bool.valid.conception");
+}
+
+test "language run fixture: phase5 enum match payload bind two" {
+    try expectRunFixture("../../../language/phase5-sum-types/valid/enum_match_payload_bind_two.valid.conception");
+}
+
+test "language check fixture: phase5 enum match payload too few bindings" {
+    try expectCheckFixture("../../../language/phase5-sum-types/invalid/enum_match_payload_too_few_bindings.invalid.conception");
+}
+
+test "language check fixture: phase5 enum match payload too many bindings" {
+    try expectCheckFixture("../../../language/phase5-sum-types/invalid/enum_match_payload_too_many_bindings.invalid.conception");
+}
+
+test "language check fixture: phase5 enum match payload duplicate binding" {
+    try expectCheckFixture("../../../language/phase5-sum-types/invalid/enum_match_payload_duplicate_binding.invalid.conception");
+}
+
+test "language check fixture: phase5 enum match payload binding shadow" {
+    try expectCheckFixture("../../../language/phase5-sum-types/invalid/enum_match_payload_binding_shadow.invalid.conception");
+}
+
+test "language check fixture: phase5 enum match payload binding leak" {
+    try expectCheckFixture("../../../language/phase5-sum-types/invalid/enum_match_payload_binding_leak.invalid.conception");
+}
+
+test "language check fixture: phase5 enum match payload zero variant binding" {
+    try expectCheckFixture("../../../language/phase5-sum-types/invalid/enum_match_payload_zero_variant_binding.invalid.conception");
+}
+
+test "language parse fixture: phase5 enum match payload expression binding" {
+    try expectParseFixture("../../../language/phase5-sum-types/invalid/enum_match_payload_expression_binding.invalid.conception");
+}
+
+test "language parse fixture: phase5 enum match payload named binding" {
+    try expectParseFixture("../../../language/phase5-sum-types/invalid/enum_match_payload_named_binding.invalid.conception");
 }
 
 test "language check fixture: phase5 enum match unknown enum" {

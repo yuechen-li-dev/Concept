@@ -503,10 +503,19 @@ pub const WhileStmt = struct {
     }
 };
 
+pub const PatternBinding = struct {
+    name: NameSegment,
+};
+
 pub const EnumVariantPattern = struct {
     enum_name: NameSegment,
     variant_name: NameSegment,
+    bindings: []PatternBinding,
     span: SourceSpan,
+
+    pub fn deinit(self: EnumVariantPattern, allocator: std.mem.Allocator) void {
+        allocator.free(self.bindings);
+    }
 };
 
 pub const MatchPattern = union(enum) {
@@ -529,7 +538,17 @@ pub const MatchPattern = union(enum) {
             .int_literal => |pattern| try writer.writeAll(pattern.text),
             .bool_literal => |pattern| try writer.writeAll(if (pattern.value) "true" else "false"),
             .wildcard => try writer.writeByte('_'),
-            .enum_variant => |pattern| try writer.print("{s}::{s}", .{ pattern.enum_name.text, pattern.variant_name.text }),
+            .enum_variant => |pattern| {
+                try writer.print("{s}::{s}", .{ pattern.enum_name.text, pattern.variant_name.text });
+                if (pattern.bindings.len != 0) {
+                    try writer.writeByte('(');
+                    for (pattern.bindings, 0..) |binding, index| {
+                        if (index != 0) try writer.writeAll(", ");
+                        try writer.writeAll(binding.name.text);
+                    }
+                    try writer.writeByte(')');
+                }
+            },
         }
     }
 };
@@ -540,6 +559,10 @@ pub const MatchArm = struct {
     span: SourceSpan,
 
     pub fn deinit(self: MatchArm, allocator: std.mem.Allocator) void {
+        switch (self.pattern) {
+            .enum_variant => |pattern| pattern.deinit(allocator),
+            else => {},
+        }
         self.body.deinit(allocator);
     }
 };

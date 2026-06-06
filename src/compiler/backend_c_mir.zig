@@ -235,6 +235,14 @@ fn enumVariantIndex(ctx: *const BackendContext, enum_decl: hir.HirEnum, variant_
     return null;
 }
 
+fn enumPayloadFieldIndex(ctx: *const BackendContext, variant: hir.HirVariant, payload_id: hir.EnumPayloadFieldId) ?usize {
+    _ = ctx;
+    for (variant.payload_fields, 0..) |candidate, index| {
+        if (candidate.index == payload_id.index) return index;
+    }
+    return null;
+}
+
 fn emitTerminator(writer: anytype, ctx: *const BackendContext, terminator: mir.MirTerminator) EmitError!void {
     switch (terminator.kind) {
         .goto => |target| {
@@ -309,6 +317,18 @@ fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue
         .enum_tag => |operand| {
             try emitOperand(writer, ctx, operand);
             try writer.writeAll(".tag");
+        },
+        .enum_payload_field => |payload| {
+            const payload_field = ctx.module.hir.getEnumPayloadField(payload.payload_field);
+            const variant = ctx.module.hir.getVariant(payload_field.parent);
+            const enum_decl = ctx.module.hir.getEnum(variant.parent);
+            const variant_index = enumVariantIndex(ctx, enum_decl.*, payload_field.parent) orelse return error.InvalidExecutable;
+            const payload_index = enumPayloadFieldIndex(ctx, variant.*, payload.payload_field) orelse return error.InvalidExecutable;
+            try emitOperand(writer, ctx, payload.enum_operand);
+            try writer.writeAll(".payload.");
+            try emitEnumVariantPayloadName(writer, ctx.module, variant.name, variant_index);
+            try writer.writeByte('.');
+            try emitEnumPayloadFieldName(writer, ctx.module, payload_field.name, payload_index);
         },
     }
 }
@@ -893,6 +913,29 @@ test "MIR C backend emits enum match tag switch" {
     try std.testing.expect(std.mem.indexOf(u8, c_source, "switch (cpt_t_") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, "case 0: goto") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, "case 1: goto") != null);
+}
+
+test "MIR C backend emits enum match payload extraction" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\enum ParseResult { Ok(int value), Err(int code), };
+        \\int main() { ParseResult result = ParseResult::Ok(7); match (result) { ParseResult::Ok(value) => return value; _ => return 0; } }
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, ".payload.cpt_v_Ok_0.cpt_pf_value_0") != null);
+}
+
+test "MIR C backend emits enum match multiple payload extraction" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\enum PairResult { Ok(int left, int right), Err(int code), };
+        \\int main() { PairResult pair = PairResult::Ok(4, 5); match (pair) { PairResult::Ok(left, right) => return left + right; _ => return 0; } }
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, ".payload.cpt_v_Ok_0.cpt_pf_left_0") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, ".payload.cpt_v_Ok_0.cpt_pf_right_1") != null);
 }
 
 test "MIR C backend emits payload enum match without binding" {

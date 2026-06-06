@@ -1,0 +1,19 @@
+# name: phase5 enum match payload zero variant binding
+# phase: check
+# expect: fail
+
+=== source ===
+module Main;
+
+enum Status { Ok, Err, };
+
+int main() {
+    Status status = Status::Ok;
+    match (status) {
+        Status::Ok(value) => return value;
+        _ => return 0;
+    }
+}
+
+=== diagnostics ===
+CON0046
