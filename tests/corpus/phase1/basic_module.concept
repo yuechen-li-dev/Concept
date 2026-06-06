@@ -1,0 +1,16 @@
+module Core.Collections;
+
+import Core.Memory;
+import Core.Diagnostics;
+
+struct Point {
+    int x;
+    int y;
+};
+
+enum Status {
+    Ok,
+    Error(int code),
+};
+
+int distance(Point a, Point b);

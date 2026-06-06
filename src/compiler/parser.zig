@@ -1231,6 +1231,53 @@ fn expectSingleDiagnostic(source_text: []const u8, code: DiagnosticCode) !void {
     try std.testing.expectEqual(code, diagnostics.diagnostics.items[0].code);
 }
 
+fn expectCorpusSnapshot(comptime source_path: []const u8, comptime expected_path: []const u8) !void {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const source_text = @embedFile(source_path);
+    const source_file = try SourceFile.init(std.testing.allocator, source_path, source_text);
+    defer source_file.deinit(std.testing.allocator);
+
+    const unit = try parseSource(std.testing.allocator, source_file, &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+
+    try std.testing.expectEqualStrings(@embedFile(expected_path), snapshot);
+}
+
+test "Phase 1 corpus snapshot: basic module" {
+    try expectCorpusSnapshot(
+        "../../tests/corpus/phase1/basic_module.concept",
+        "../../tests/corpus/phase1/basic_module.ast.expected",
+    );
+}
+
+test "Phase 1 corpus snapshot: type surface" {
+    try expectCorpusSnapshot(
+        "../../tests/corpus/phase1/types.concept",
+        "../../tests/corpus/phase1/types.ast.expected",
+    );
+}
+
+test "Phase 1 corpus snapshot: compiler shape" {
+    try expectCorpusSnapshot(
+        "../../tests/corpus/phase1/compiler_shape.concept",
+        "../../tests/corpus/phase1/compiler_shape.ast.expected",
+    );
+}
+
+test "Phase 1 corpus snapshot: test surface" {
+    try expectCorpusSnapshot(
+        "../../tests/corpus/phase1/test_surface.con_test",
+        "../../tests/corpus/phase1/test_surface.ast.expected",
+    );
+}
+
 test "parses module declaration" {
     var diagnostics = DiagnosticBag.init(std.testing.allocator);
     defer diagnostics.deinit();

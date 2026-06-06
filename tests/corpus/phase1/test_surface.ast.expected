@@ -1,0 +1,12 @@
+CompilationUnit
+  Module Concept.Compiler.Tests
+  Import Core.Test
+  Import Concept.Compiler
+  Attribute Fact
+  Function void ParsesEmptyModule()
+    Body
+  Attribute Theory
+  Attribute InlineData(1, 2, 3)
+  Attribute InlineData(10, 20, 30)
+  Function void AddsValues(int left, int right, int expected)
+    Body
