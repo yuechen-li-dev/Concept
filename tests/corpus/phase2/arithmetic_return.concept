@@ -1,0 +1,7 @@
+// run-exit-code: 7
+
+module Main;
+
+int main() {
+    return 1 + 2 * 3;
+}
