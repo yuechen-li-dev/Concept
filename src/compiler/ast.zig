@@ -448,14 +448,32 @@ pub const LocalDeclStmt = struct {
     }
 };
 
+pub const IfStmt = struct {
+    condition: *Expr,
+    then_block: BlockStmt,
+    else_block: ?BlockStmt,
+    span: SourceSpan,
+
+    pub fn deinit(self: IfStmt, allocator: std.mem.Allocator) void {
+        self.condition.deinit(allocator);
+        allocator.destroy(self.condition);
+        self.then_block.deinit(allocator);
+        if (self.else_block) |else_block| else_block.deinit(allocator);
+    }
+};
+
 pub const Stmt = union(enum) {
     local_decl: LocalDeclStmt,
     return_stmt: ReturnStmt,
+    if_stmt: IfStmt,
+    block_stmt: BlockStmt,
 
     pub fn deinit(self: Stmt, allocator: std.mem.Allocator) void {
         switch (self) {
             .local_decl => |stmt| stmt.deinit(allocator),
             .return_stmt => |stmt| stmt.deinit(allocator),
+            .if_stmt => |stmt| stmt.deinit(allocator),
+            .block_stmt => |stmt| stmt.deinit(allocator),
         }
     }
 
@@ -474,6 +492,26 @@ pub const Stmt = union(enum) {
                 try writeIndent(writer, depth);
                 try writer.writeAll("Return\n");
                 if (stmt.value) |value| try value.writeDebug(writer, depth + 1);
+            },
+            .if_stmt => |stmt| {
+                try writeIndent(writer, depth);
+                try writer.writeAll("If\n");
+                try writeIndent(writer, depth + 1);
+                try writer.writeAll("Condition\n");
+                try stmt.condition.writeDebug(writer, depth + 2);
+                try writeIndent(writer, depth + 1);
+                try writer.writeAll("Then\n");
+                for (stmt.then_block.statements) |child| try child.writeDebug(writer, depth + 2);
+                if (stmt.else_block) |else_block| {
+                    try writeIndent(writer, depth + 1);
+                    try writer.writeAll("Else\n");
+                    for (else_block.statements) |child| try child.writeDebug(writer, depth + 2);
+                }
+            },
+            .block_stmt => |block| {
+                try writeIndent(writer, depth);
+                try writer.writeAll("Block\n");
+                for (block.statements) |child| try child.writeDebug(writer, depth + 1);
             },
         }
     }

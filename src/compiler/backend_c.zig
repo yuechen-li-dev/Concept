@@ -57,17 +57,25 @@ fn emitFunction(writer: anytype, function: ast_model.FunctionDecl) !void {
     try writer.writeByte('\n');
 
     const block = function.body.?.block.?;
-    for (block.statements) |stmt| {
-        try emitStmt(writer, stmt);
-    }
+    try emitBlockContents(writer, block, 1);
 
     try writer.writeAll("}\n");
 }
 
-fn emitStmt(writer: anytype, stmt: ast_model.Stmt) !void {
+fn emitIndent(writer: anytype, depth: usize) !void {
+    for (0..depth) |_| try writer.writeAll("    ");
+}
+
+fn emitBlockContents(writer: anytype, block: ast_model.BlockStmt, depth: usize) !void {
+    for (block.statements) |stmt| {
+        try emitStmt(writer, stmt, depth);
+    }
+}
+
+fn emitStmt(writer: anytype, stmt: ast_model.Stmt, depth: usize) !void {
     switch (stmt) {
         .local_decl => |local_decl| {
-            try writer.writeAll("    ");
+            try emitIndent(writer, depth);
             try emitCType(writer, local_decl.type_name);
             try writer.writeByte(' ');
             try writer.writeAll(local_decl.name.text);
@@ -76,9 +84,34 @@ fn emitStmt(writer: anytype, stmt: ast_model.Stmt) !void {
             try writer.writeAll(";\n");
         },
         .return_stmt => |return_stmt| {
-            try writer.writeAll("    return ");
+            try emitIndent(writer, depth);
+            try writer.writeAll("return ");
             try emitExpr(writer, return_stmt.value.?.*);
             try writer.writeAll(";\n");
+        },
+        .if_stmt => |if_stmt| {
+            try emitIndent(writer, depth);
+            try writer.writeAll("if (");
+            try emitExpr(writer, if_stmt.condition.*);
+            try writer.writeAll(") {\n");
+            try emitBlockContents(writer, if_stmt.then_block, depth + 1);
+            try emitIndent(writer, depth);
+            try writer.writeByte('}');
+            if (if_stmt.else_block) |else_block| {
+                try writer.writeAll(" else {\n");
+                try emitBlockContents(writer, else_block, depth + 1);
+                try emitIndent(writer, depth);
+                try writer.writeAll("}\n");
+            } else {
+                try writer.writeByte('\n');
+            }
+        },
+        .block_stmt => |block_stmt| {
+            try emitIndent(writer, depth);
+            try writer.writeAll("{\n");
+            try emitBlockContents(writer, block_stmt, depth + 1);
+            try emitIndent(writer, depth);
+            try writer.writeAll("}\n");
         },
     }
 }
@@ -309,5 +342,40 @@ test "Phase 2 C snapshot: function call add" {
     try expectCorpusC(
         "../../tests/corpus/phase2/function_call_add.concept",
         "../../tests/corpus/phase2/function_call_add.c.expected",
+    );
+}
+
+test "C backend emits if without else" {
+    try expectEmit(
+        "module Main; int main() { if (true) { return 7; } return 0; }",
+        "int main(void) {\n    if (1) {\n        return 7;\n    }\n    return 0;\n}\n",
+    );
+}
+
+test "C backend emits if with else" {
+    try expectEmit(
+        "module Main; int main() { if (false) { return 1; } else { return 7; } }",
+        "int main(void) {\n    if (0) {\n        return 1;\n    } else {\n        return 7;\n    }\n}\n",
+    );
+}
+
+test "C backend emits nested blocks" {
+    try expectEmit(
+        "module Main; int main() { { int x = 7; if (true) { return x; } } return 0; }",
+        "int main(void) {\n    {\n        int x = 7;\n        if (1) {\n            return x;\n        }\n    }\n    return 0;\n}\n",
+    );
+}
+
+test "C backend emits if condition expression" {
+    try expectEmit(
+        "module Main; int max(int a, int b) { if (a > b) { return a; } else { return b; } } int main() { return max(3, 7); }",
+        "int max(int a, int b);\nint main(void);\n\nint max(int a, int b) {\n    if ((a > b)) {\n        return a;\n    } else {\n        return b;\n    }\n}\n\nint main(void) {\n    return max(3, 7);\n}\n",
+    );
+}
+
+test "Phase 2 C snapshot: if compare function" {
+    try expectCorpusC(
+        "../../tests/corpus/phase2/if_compare_function.concept",
+        "../../tests/corpus/phase2/if_compare_function.c.expected",
     );
 }

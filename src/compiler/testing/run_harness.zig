@@ -178,3 +178,39 @@ test "run harness compiles and runs forward function call" {
     );
     try std.testing.expectEqual(@as(u8, 3), result.actual_exit_code);
 }
+
+test "run harness compiles and runs if true return" {
+    const result = try expectExitCode(
+        std.testing.allocator,
+        "module Main; int main() { if (true) { return 7; } return 0; }",
+        7,
+    );
+    try std.testing.expectEqual(@as(u8, 7), result.actual_exit_code);
+}
+
+test "run harness compiles and runs if false else return" {
+    const result = try expectExitCode(
+        std.testing.allocator,
+        "module Main; int main() { if (false) { return 1; } else { return 7; } }",
+        7,
+    );
+    try std.testing.expectEqual(@as(u8, 7), result.actual_exit_code);
+}
+
+test "run harness compiles and runs if comparison function" {
+    const result = try expectExitCode(
+        std.testing.allocator,
+        "module Main; int max(int a, int b) { if (a > b) { return a; } return b; } int main() { return max(3, 7); }",
+        7,
+    );
+    try std.testing.expectEqual(@as(u8, 7), result.actual_exit_code);
+}
+
+test "run harness compiles and runs outer local in if" {
+    const result = try expectExitCode(
+        std.testing.allocator,
+        "module Main; int main() { int x = 7; if (true) { return x; } return 0; }",
+        7,
+    );
+    try std.testing.expectEqual(@as(u8, 7), result.actual_exit_code);
+}

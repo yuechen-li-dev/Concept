@@ -118,9 +118,7 @@ fn validateFunction(function: FunctionInfo, functions: []const FunctionInfo, dia
         try locals.append(.{ .name = param.name.text, .type = function.param_types[index], .span = param.name.span });
     }
 
-    for (block.statements) |stmt| {
-        try validateStmt(stmt, function.return_type, &locals, functions, diagnostics);
-    }
+    try validateBlock(block, function.return_type, &locals, functions, diagnostics, false);
 }
 
 fn findFunction(functions: []const FunctionInfo, name: []const u8) ?FunctionInfo {
@@ -128,6 +126,15 @@ fn findFunction(functions: []const FunctionInfo, name: []const u8) ?FunctionInfo
         if (std.mem.eql(u8, function.name, name)) return function;
     }
     return null;
+}
+
+fn validateBlock(block: ast.BlockStmt, return_type: ExprType, locals: *std.ArrayList(LocalSymbol), functions: []const FunctionInfo, diagnostics: ?*DiagnosticBag, creates_scope: bool) !void {
+    const local_start = locals.items.len;
+    defer if (creates_scope) locals.shrinkRetainingCapacity(local_start);
+
+    for (block.statements) |stmt| {
+        try validateStmt(stmt, return_type, locals, functions, diagnostics);
+    }
 }
 
 fn validateStmt(stmt: ast.Stmt, return_type: ExprType, locals: *std.ArrayList(LocalSymbol), functions: []const FunctionInfo, diagnostics: ?*DiagnosticBag) !void {
@@ -161,6 +168,18 @@ fn validateStmt(stmt: ast.Stmt, return_type: ExprType, locals: *std.ArrayList(Lo
                 return error.InvalidExecutable;
             }
         },
+        .if_stmt => |if_stmt| {
+            const condition_type = try validateExpr(if_stmt.condition.*, locals, functions, diagnostics);
+            if (condition_type != .bool) {
+                try report(diagnostics, "if condition must be bool", if_stmt.condition.span());
+                return error.InvalidExecutable;
+            }
+            try validateBlock(if_stmt.then_block, return_type, locals, functions, diagnostics, true);
+            if (if_stmt.else_block) |else_block| {
+                try validateBlock(else_block, return_type, locals, functions, diagnostics, true);
+            }
+        },
+        .block_stmt => |block_stmt| try validateBlock(block_stmt, return_type, locals, functions, diagnostics, true),
     }
 }
 
@@ -433,6 +452,39 @@ test "checker rejects wrong argument type" {
 test "checker rejects duplicate local colliding with parameter" {
     try expectInvalid(
         "module Main; int f(int x) { int x = 1; return x; } int main() { return f(0); }",
+        "duplicate local variable name",
+    );
+}
+
+test "checker accepts bool if condition" {
+    try expectValid("module Main; int main() { if (true) { return 1; } return 0; }");
+}
+
+test "checker accepts comparison if condition" {
+    try expectValid("module Main; int main() { int a = 3; int b = 7; if (a < b) { return b; } return a; }");
+}
+
+test "checker rejects int if condition" {
+    try expectInvalid(
+        "module Main; int main() { if (1) { return 1; } return 0; }",
+        "if condition must be bool",
+    );
+}
+
+test "checker allows outer local inside if" {
+    try expectValid("module Main; int main() { int x = 7; if (true) { return x; } return 0; }");
+}
+
+test "checker rejects branch local after branch" {
+    try expectInvalid(
+        "module Main; int main() { if (true) { int x = 7; } return x; }",
+        "unknown identifier in executable subset",
+    );
+}
+
+test "checker rejects duplicate local in visible outer scope" {
+    try expectInvalid(
+        "module Main; int main() { int x = 1; if (true) { int x = 2; } return x; }",
         "duplicate local variable name",
     );
 }

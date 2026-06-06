@@ -1,0 +1,21 @@
+# name: phase2 if compare function
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int max(int a, int b) {
+    if (a > b) {
+        return a;
+    }
+
+    return b;
+}
+
+int main() {
+    return max(3, 7);
+}
+
+=== run ===
+exit_code: 7
