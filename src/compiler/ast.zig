@@ -79,12 +79,51 @@ pub const StructDecl = struct {
     }
 };
 
+pub const EnumPayloadField = struct {
+    type_name: TypeName,
+    name: NameSegment,
+    span: SourceSpan,
+
+    pub fn deinit(self: EnumPayloadField, allocator: std.mem.Allocator) void {
+        self.type_name.deinit(allocator);
+    }
+};
+
+pub const EnumVariant = struct {
+    name: NameSegment,
+    payload_fields: []EnumPayloadField,
+    span: SourceSpan,
+
+    pub fn deinit(self: EnumVariant, allocator: std.mem.Allocator) void {
+        for (self.payload_fields) |field| {
+            field.deinit(allocator);
+        }
+        allocator.free(self.payload_fields);
+    }
+};
+
+pub const EnumDecl = struct {
+    is_export: bool,
+    name: NameSegment,
+    variants: []EnumVariant,
+    span: SourceSpan,
+
+    pub fn deinit(self: EnumDecl, allocator: std.mem.Allocator) void {
+        for (self.variants) |variant| {
+            variant.deinit(allocator);
+        }
+        allocator.free(self.variants);
+    }
+};
+
 pub const Item = union(enum) {
     struct_decl: StructDecl,
+    enum_decl: EnumDecl,
 
     pub fn deinit(self: Item, allocator: std.mem.Allocator) void {
         switch (self) {
             .struct_decl => |struct_decl| struct_decl.deinit(allocator),
+            .enum_decl => |enum_decl| enum_decl.deinit(allocator),
         }
     }
 
@@ -105,6 +144,29 @@ pub const Item = union(enum) {
                     try writer.writeByte(' ');
                     try writer.writeAll(field.name.text);
                     try writer.writeByte('\n');
+                }
+            },
+            .enum_decl => |enum_decl| {
+                if (enum_decl.is_export) {
+                    try writer.writeAll("  Export Enum ");
+                } else {
+                    try writer.writeAll("  Enum ");
+                }
+                try writer.writeAll(enum_decl.name.text);
+                try writer.writeByte('\n');
+
+                for (enum_decl.variants) |variant| {
+                    try writer.writeAll("    Variant ");
+                    try writer.writeAll(variant.name.text);
+                    try writer.writeByte('\n');
+
+                    for (variant.payload_fields) |field| {
+                        try writer.writeAll("      Payload ");
+                        try field.type_name.write(writer);
+                        try writer.writeByte(' ');
+                        try writer.writeAll(field.name.text);
+                        try writer.writeByte('\n');
+                    }
                 }
             },
         }
