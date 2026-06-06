@@ -419,3 +419,7 @@ Known closeout limitations are explicit:
 - C backend v0 still lowers both Concept `int` and `bool` to C `int`.
 - C identifier mangling is still future work; emitted names are currently the interned source names accepted by the Phase 2 executable subset.
 - Payload enum runtime layout, payload enum matching, match exhaustiveness, MIR, borrow/move checking, generics, imports, richer C type lowering, and production backends remain out of scope for Phase 3.
+
+## Post-Phase 4 note
+
+Phase 4 now consumes checked Phase 3 HIR into MIR before backend emission. The HIR-backed C backend remains a transitional legacy path; executable fixtures now use checked HIR, HIR-to-MIR lowering, MIR validation, and the MIR-backed C backend.

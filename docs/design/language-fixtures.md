@@ -24,6 +24,8 @@ language/phase2-execution/valid/
 language/phase2-execution/invalid/
 language/phase3-semantics/valid/
 language/phase3-semantics/invalid/
+language/phase4-mir/valid/
+language/phase4-mir/invalid/
 ```
 
 ## `.conception` format
@@ -50,17 +52,14 @@ Sections are introduced with `=== section-name ===` on a line by itself. The ini
 - `ast`
 - `diagnostics`
 - `run`
-- `mir` (reserved for Phase 4 raw MIR snapshots)
+- `mir`
 
 Implemented fixture phases:
 
 - `phase: parse` fixtures pass `source` to the real parser path. Passing parse fixtures compare `ast` against the stable AST debug output; failing parse fixtures compare diagnostic codes listed in `diagnostics`. Full rendered diagnostic snapshot matching is reserved for later.
 - `phase: check` fixtures pass `source` through parse and an explicit semantic check mode. `check: declarations` runs semantic declaration collection, declaration/type-name checks, and HIR lowering without invoking the HIR executable checker. `check: hir` runs semantic collection / HIR lowering and then invokes the HIR executable checker for executable-subset validation. When `phase: check` omits `check`, the default is `check: declarations`. Failing check fixtures still match stable diagnostic codes from `diagnostics`; full rendered diagnostic matching remains reserved for later.
-- `phase: run` fixtures pass `source` through parse, semantic collection / HIR lowering, the HIR executable checker, HIR-backed C emission, `zig cc`, and native process execution. For now run fixtures support only `expect: pass` and a `=== run ===` section containing `exit_code: N`. Stdout and stderr matching are not implemented yet and are reserved for later.
-
-Reserved fixture phases:
-
-- `phase: mir` is reserved for Phase 4 raw MIR snapshots. Planned passing fixtures will compare a `=== mir ===` section after parse, semantic collection / HIR lowering, HIR executable checking, HIR-to-MIR lowering, and MIR validation. Planned failing fixtures may compare MIR diagnostic codes in `=== diagnostics ===`. Phase 4 should start with raw MIR snapshots; later optimized MIR can use metadata such as `# mir: raw` or `# mir: optimized`.
+- `phase: run` fixtures pass `source` through parse, semantic collection / HIR lowering, the HIR executable checker, HIR-to-MIR lowering, MIR validation, MIR-backed C emission, `zig cc`, and native process execution. For now run fixtures support only `expect: pass` and a `=== run ===` section containing `exit_code: N`. Stdout and stderr matching are not implemented yet and are reserved for later.
+- `phase: mir` fixtures pass `source` through parse, semantic collection / HIR lowering, HIR executable checking, HIR-to-MIR lowering, MIR validation, and MIR debug snapshot rendering. Passing fixtures compare the raw `=== mir ===` section exactly against the stable MIR debug output. Failing MIR fixtures are reserved for future lowering/validation diagnostics and may use `=== diagnostics ===` when implemented. Phase 4 starts with raw MIR snapshots; later optimized MIR can use metadata such as `# mir: raw` or `# mir: optimized`.
 
 Example:
 
@@ -125,7 +124,7 @@ int main() {
 exit_code: 7
 ```
 
-## MIR fixture example (reserved for Phase 4)
+## MIR fixture example
 
 ```text
 # name: while lowers to mir
@@ -148,5 +147,3 @@ fn main() -> int {
   ...
 }
 ```
-
-`phase: mir` is not implemented yet. The Phase 4 design in `docs/design/phase-4-mir.md` defines the intended MIR snapshot and validation strategy.

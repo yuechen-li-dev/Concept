@@ -1,0 +1,35 @@
+# name: MIR sum loop
+# phase: mir
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    int x = 0;
+    while (x < 7) {
+        x = x + 1;
+    }
+    return x;
+}
+
+=== mir ===
+MirModule
+  Function main -> TypeId(1)
+    Locals
+      MirLocalId(0) user x: TypeId(1)
+      MirLocalId(1) temp <temp>: TypeId(2)
+      MirLocalId(2) temp <temp>: TypeId(1)
+    Blocks
+      MirBlockId(0)
+        MirLocalId(0) = Use(Int 0)
+        Goto MirBlockId(1)
+      MirBlockId(1)
+        MirLocalId(1) = Binary < Copy(MirLocalId(0)), Int 7
+        SwitchBool Copy(MirLocalId(1)) true: MirBlockId(2), false: MirBlockId(3)
+      MirBlockId(2)
+        MirLocalId(2) = Binary + Copy(MirLocalId(0)), Int 1
+        MirLocalId(0) = Use(Copy(MirLocalId(2)))
+        Goto MirBlockId(1)
+      MirBlockId(3)
+        Return Copy(MirLocalId(0))

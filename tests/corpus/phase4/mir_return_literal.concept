@@ -1,0 +1,5 @@
+module Main;
+
+int main() {
+    return 7;
+}

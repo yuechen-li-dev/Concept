@@ -352,6 +352,10 @@ fn expectEmit(source_text: []const u8, expected: []const u8) !void {
     try std.testing.expectEqualStrings(expected, c_source);
 }
 
+fn expectEmitCorpus(comptime source_path: []const u8, comptime expected_path: []const u8) !void {
+    try expectEmit(@embedFile(source_path), @embedFile(expected_path));
+}
+
 test "MIR C backend emits return literal" {
     try expectEmit(
         "module Main; int main() { return 0; }",
@@ -418,6 +422,13 @@ fn internForTest(module: *semantics.SemanticModule, text: []const u8) !hir.Symbo
 
 fn addHirFunctionForTest(module: *semantics.SemanticModule, name: []const u8, return_type: types.TypeId) !hir.FunctionId {
     return module.hir.addFunction(try internForTest(module, name), return_type, hir.synthetic_span);
+}
+
+test "MIR C backend corpus snapshot: phase4 sum loop" {
+    try expectEmitCorpus("../../tests/corpus/phase4/mir_c_sum_loop.concept", "../../tests/corpus/phase4/mir_c_sum_loop.c.expected");
+}
+test "MIR C backend corpus snapshot: phase4 if match" {
+    try expectEmitCorpus("../../tests/corpus/phase4/mir_c_if_match.concept", "../../tests/corpus/phase4/mir_c_if_match.c.expected");
 }
 
 test "MIR C backend emits void helper prototype with backend-owned function name" {

@@ -1,0 +1,15 @@
+module Main;
+
+int main() {
+    int x = 0;
+    if (false) {
+        x = 1;
+    } else {
+        x = 2;
+    }
+    match (x) {
+        1 => x = 7;
+        _ => x = 3;
+    }
+    return x;
+}

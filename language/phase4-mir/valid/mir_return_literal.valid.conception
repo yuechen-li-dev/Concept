@@ -1,0 +1,17 @@
+# name: MIR return literal
+# phase: mir
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    return 7;
+}
+
+=== mir ===
+MirModule
+  Function main -> TypeId(1)
+    Blocks
+      MirBlockId(0)
+        Return Int 7
