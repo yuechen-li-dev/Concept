@@ -1,0 +1,14 @@
+# name: phase2 unsupported statement
+# phase: parse
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    int x;
+    return 0;
+}
+
+=== diagnostics ===
+CON0003

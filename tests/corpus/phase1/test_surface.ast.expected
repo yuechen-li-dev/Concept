@@ -5,8 +5,10 @@ CompilationUnit
   Attribute Fact
   Function void ParsesEmptyModule()
     Body
+      Return
   Attribute Theory
   Attribute InlineData(1, 2, 3)
   Attribute InlineData(10, 20, 30)
   Function void AddsValues(int left, int right, int expected)
     Body
+      Return

@@ -1,0 +1,22 @@
+# name: phase2 boolean return
+# phase: parse
+# expect: pass
+
+=== source ===
+module Main;
+
+bool main() {
+    return true || false && true;
+}
+
+=== ast ===
+CompilationUnit
+  Module Main
+  Function bool main()
+    Body
+      Return
+        Binary ||
+          Bool true
+          Binary &&
+            Bool false
+            Bool true

@@ -276,8 +276,185 @@ pub const ImplDecl = struct {
     }
 };
 
+pub const UnaryOp = enum {
+    negate,
+    logical_not,
+
+    pub fn lexeme(self: UnaryOp) []const u8 {
+        return switch (self) {
+            .negate => "-",
+            .logical_not => "!",
+        };
+    }
+};
+
+pub const BinaryOp = enum {
+    multiply,
+    divide,
+    modulo,
+    add,
+    subtract,
+    less,
+    less_equal,
+    greater,
+    greater_equal,
+    equal_equal,
+    bang_equal,
+    logical_and,
+    logical_or,
+
+    pub fn lexeme(self: BinaryOp) []const u8 {
+        return switch (self) {
+            .multiply => "*",
+            .divide => "/",
+            .modulo => "%",
+            .add => "+",
+            .subtract => "-",
+            .less => "<",
+            .less_equal => "<=",
+            .greater => ">",
+            .greater_equal => ">=",
+            .equal_equal => "==",
+            .bang_equal => "!=",
+            .logical_and => "&&",
+            .logical_or => "||",
+        };
+    }
+};
+
+pub const Expr = union(enum) {
+    int_literal: IntLiteralExpr,
+    bool_literal: BoolLiteralExpr,
+    group: GroupExpr,
+    unary: UnaryExpr,
+    binary: BinaryExpr,
+
+    pub const IntLiteralExpr = struct { text: []const u8, span: SourceSpan };
+    pub const BoolLiteralExpr = struct { value: bool, span: SourceSpan };
+    pub const GroupExpr = struct { inner: *Expr, span: SourceSpan };
+    pub const UnaryExpr = struct { op: UnaryOp, operand: *Expr, span: SourceSpan };
+    pub const BinaryExpr = struct { op: BinaryOp, left: *Expr, right: *Expr, span: SourceSpan };
+
+    pub fn span(self: Expr) SourceSpan {
+        return switch (self) {
+            .int_literal => |expr| expr.span,
+            .bool_literal => |expr| expr.span,
+            .group => |expr| expr.span,
+            .unary => |expr| expr.span,
+            .binary => |expr| expr.span,
+        };
+    }
+
+    pub fn deinit(self: *Expr, allocator: std.mem.Allocator) void {
+        switch (self.*) {
+            .group => |expr| {
+                expr.inner.deinit(allocator);
+                allocator.destroy(expr.inner);
+            },
+            .unary => |expr| {
+                expr.operand.deinit(allocator);
+                allocator.destroy(expr.operand);
+            },
+            .binary => |expr| {
+                expr.left.deinit(allocator);
+                allocator.destroy(expr.left);
+                expr.right.deinit(allocator);
+                allocator.destroy(expr.right);
+            },
+            .int_literal, .bool_literal => {},
+        }
+    }
+
+    pub fn writeDebug(self: Expr, writer: anytype, depth: usize) !void {
+        try writeIndent(writer, depth);
+        switch (self) {
+            .int_literal => |expr| {
+                try writer.writeAll("Int ");
+                try writer.writeAll(expr.text);
+                try writer.writeByte('\n');
+            },
+            .bool_literal => |expr| {
+                try writer.writeAll("Bool ");
+                try writer.writeAll(if (expr.value) "true" else "false");
+                try writer.writeByte('\n');
+            },
+            .group => |expr| {
+                try writer.writeAll("Group\n");
+                try expr.inner.writeDebug(writer, depth + 1);
+            },
+            .unary => |expr| {
+                try writer.writeAll("Unary ");
+                try writer.writeAll(expr.op.lexeme());
+                try writer.writeByte('\n');
+                try expr.operand.writeDebug(writer, depth + 1);
+            },
+            .binary => |expr| {
+                try writer.writeAll("Binary ");
+                try writer.writeAll(expr.op.lexeme());
+                try writer.writeByte('\n');
+                try expr.left.writeDebug(writer, depth + 1);
+                try expr.right.writeDebug(writer, depth + 1);
+            },
+        }
+    }
+};
+
+pub const ReturnStmt = struct {
+    value: ?*Expr,
+    span: SourceSpan,
+
+    pub fn deinit(self: ReturnStmt, allocator: std.mem.Allocator) void {
+        if (self.value) |value| {
+            value.deinit(allocator);
+            allocator.destroy(value);
+        }
+    }
+};
+
+pub const Stmt = union(enum) {
+    return_stmt: ReturnStmt,
+
+    pub fn deinit(self: Stmt, allocator: std.mem.Allocator) void {
+        switch (self) {
+            .return_stmt => |stmt| stmt.deinit(allocator),
+        }
+    }
+
+    pub fn writeDebug(self: Stmt, writer: anytype, depth: usize) !void {
+        switch (self) {
+            .return_stmt => |stmt| {
+                try writeIndent(writer, depth);
+                try writer.writeAll("Return\n");
+                if (stmt.value) |value| try value.writeDebug(writer, depth + 1);
+            },
+        }
+    }
+};
+
+pub const BlockStmt = struct {
+    statements: []Stmt,
+    span: SourceSpan,
+
+    pub fn deinit(self: BlockStmt, allocator: std.mem.Allocator) void {
+        for (self.statements) |stmt| stmt.deinit(allocator);
+        allocator.free(self.statements);
+    }
+};
+
 pub const FunctionBody = struct {
     span: SourceSpan,
+    block: ?BlockStmt = null,
+
+    pub fn deinit(self: FunctionBody, allocator: std.mem.Allocator) void {
+        if (self.block) |block| block.deinit(allocator);
+    }
+
+    pub fn writeDebug(self: FunctionBody, writer: anytype) !void {
+        try writer.writeAll("    Body\n");
+        if (self.block) |block| {
+            for (block.statements) |stmt| try stmt.writeDebug(writer, 3);
+        }
+    }
 };
 
 pub const FunctionDecl = struct {
@@ -291,6 +468,7 @@ pub const FunctionDecl = struct {
         for (self.attributes) |attribute| attribute.deinit(allocator);
         allocator.free(self.attributes);
         self.signature.deinit(allocator);
+        if (self.body) |body| body.deinit(allocator);
     }
 };
 
@@ -333,8 +511,8 @@ pub const Item = union(enum) {
                     try writer.writeAll(param.name.text);
                 }
                 try writer.writeAll(")\n");
-                if (function_decl.body != null) {
-                    try writer.writeAll("    Body\n");
+                if (function_decl.body) |body| {
+                    try body.writeDebug(writer);
                 }
             },
             .struct_decl => |struct_decl| {
@@ -421,6 +599,13 @@ pub const Item = union(enum) {
 fn writeAttributesDebug(attributes: []const Attribute, writer: anytype) !void {
     for (attributes) |attribute| {
         try attribute.writeDebug(writer);
+    }
+}
+
+fn writeIndent(writer: anytype, depth: usize) !void {
+    var index: usize = 0;
+    while (index < depth) : (index += 1) {
+        try writer.writeAll("  ");
     }
 }
 
