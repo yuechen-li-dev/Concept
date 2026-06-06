@@ -41,6 +41,11 @@ pub const DiagnosticCode = enum {
     UnknownIdentifier,
     UnknownFunction,
     DuplicateLocalName,
+    TypeMismatch,
+    InvalidMainSignature,
+    MissingMain,
+    InvalidConditionType,
+    InvalidCall,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -63,6 +68,11 @@ pub const DiagnosticCode = enum {
             .UnknownIdentifier => "CON0026",
             .UnknownFunction => "CON0027",
             .DuplicateLocalName => "CON0028",
+            .TypeMismatch => "CON0029",
+            .InvalidMainSignature => "CON0030",
+            .MissingMain => "CON0031",
+            .InvalidConditionType => "CON0032",
+            .InvalidCall => "CON0033",
         };
     }
 };

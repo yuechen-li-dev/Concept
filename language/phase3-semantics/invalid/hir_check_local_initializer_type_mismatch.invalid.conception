@@ -1,0 +1,14 @@
+# name: phase3 hir checker local initializer type mismatch
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+int main() {
+    int x = false;
+    return x;
+}
+
+=== diagnostics ===
+CON0029 error: local initializer type does not match declared type

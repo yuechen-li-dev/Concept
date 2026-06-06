@@ -362,3 +362,9 @@ The convergence requirement for Phase 3 is not merely that new code exists. The 
 ## P3-M4 note: top-level declaration collection
 
 P3-M4 adds AST-to-semantic declaration collection for one-file modules. The pass interns top-level function, struct, and enum names; creates stable HIR declaration IDs; registers nominal struct and enum types in `TypeStore`; and reports duplicate top-level names across the shared Phase 3 function/struct/enum namespace. Function bodies, type-name resolution, field checking, enum variant checking, and Phase 2 checker/backend migration remain later milestones.
+
+## P3-M7 note: HIR executable checker
+
+P3-M7 adds a HIR-based executable checker for the closed Phase 2 subset. The checker walks lowered HIR statements and expressions, compares `TypeId` values from `TypeStore`, validates `main`, function calls, returns, locals, assignments, `if`, `while`, `match`, unary operators, and binary operators, and reports Phase 3 semantic diagnostic codes for executable type failures.
+
+The older AST-shaped executable checker remains in place as a transitional compatibility path for the Phase 2 C backend and run fixtures. P3-M7 deliberately does not migrate C emission, introduce MIR, or expand the language subset. P3-M8 remains the milestone that moves C backend emission to HIR or a HIR-backed executable representation.

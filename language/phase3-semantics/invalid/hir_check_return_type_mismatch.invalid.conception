@@ -1,0 +1,13 @@
+# name: phase3 hir checker return type mismatch
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+int main() {
+    return true;
+}
+
+=== diagnostics ===
+CON0029 error: return expression type does not match function return type

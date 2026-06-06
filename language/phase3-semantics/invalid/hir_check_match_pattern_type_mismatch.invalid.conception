@@ -1,0 +1,18 @@
+# name: phase3 hir checker match pattern type mismatch
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+int main() {
+    int x = 0;
+    match x {
+        true => x = 1;
+        _ => x = 2;
+    }
+    return x;
+}
+
+=== diagnostics ===
+CON0029 error: match pattern type does not match scrutinee type

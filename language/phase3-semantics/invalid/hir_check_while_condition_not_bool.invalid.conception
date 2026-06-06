@@ -1,0 +1,16 @@
+# name: phase3 hir checker while condition not bool
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+int main() {
+    while (1) {
+        return 1;
+    }
+    return 0;
+}
+
+=== diagnostics ===
+CON0032 error: while condition must be bool
