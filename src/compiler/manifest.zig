@@ -41,14 +41,57 @@ pub const Section = struct {
     body: []const u8,
 };
 
+pub const ModuleDecl = struct {
+    name: []const u8,
+    root: []const u8,
+
+    pub fn deinit(self: ModuleDecl, allocator: std.mem.Allocator) void {
+        allocator.free(self.name);
+        allocator.free(self.root);
+    }
+};
+
+pub const TargetKind = enum {
+    executable,
+    library,
+    tests,
+
+    fn parse(value: []const u8) ?TargetKind {
+        if (std.mem.eql(u8, value, "executable")) return .executable;
+        if (std.mem.eql(u8, value, "library")) return .library;
+        if (std.mem.eql(u8, value, "tests")) return .tests;
+        return null;
+    }
+};
+
+pub const TargetDecl = struct {
+    name: []const u8,
+    kind: TargetKind,
+    module: ?[]const u8 = null,
+    modules: []const []const u8,
+
+    pub fn deinit(self: TargetDecl, allocator: std.mem.Allocator) void {
+        allocator.free(self.name);
+        if (self.module) |module| allocator.free(module);
+        for (self.modules) |module| allocator.free(module);
+        allocator.free(self.modules);
+    }
+};
+
 pub const Manifest = struct {
     kind: ManifestKind,
     format: ManifestFormat,
     package: ?PackageInfo,
+    modules: []ModuleDecl,
+    targets: []TargetDecl,
     sections: []Section,
 
     pub fn deinit(self: Manifest, allocator: std.mem.Allocator) void {
         if (self.package) |package| package.deinit(allocator);
+        for (self.modules) |module| module.deinit(allocator);
+        allocator.free(self.modules);
+        for (self.targets) |target| target.deinit(allocator);
+        allocator.free(self.targets);
         allocator.free(self.sections);
     }
 
@@ -109,6 +152,8 @@ pub fn parse(allocator: std.mem.Allocator, text: []const u8) !Manifest {
         .kind = manifest_kind,
         .format = manifest_format,
         .package = null,
+        .modules = &.{},
+        .targets = &.{},
         .sections = owned_sections,
     };
     errdefer manifest.deinit(allocator);
@@ -117,6 +162,12 @@ pub fn parse(allocator: std.mem.Allocator, text: []const u8) !Manifest {
         .package => {
             const package_section = manifest.section("package") orelse return error.MissingPackageSection;
             manifest.package = try parsePackageSection(allocator, package_section.body);
+            if (manifest.section("modules")) |modules_section| {
+                manifest.modules = try parseModulesSection(allocator, modules_section.body);
+            }
+            if (manifest.section("targets")) |targets_section| {
+                manifest.targets = try parseTargetsSection(allocator, targets_section.body, manifest.modules);
+            }
         },
         .registry => {
             if (manifest.section("registry") == null) return error.MissingRegistrySection;
@@ -217,6 +268,247 @@ fn parseStringLiteral(allocator: std.mem.Allocator, value: []const u8) ![]const 
     return allocator.dupe(u8, inner);
 }
 
+fn parseModulesSection(allocator: std.mem.Allocator, body: []const u8) ![]ModuleDecl {
+    var parser = ManifestBodyParser{ .text = body };
+    var modules = std.ArrayList(ModuleDecl).empty;
+    errdefer {
+        for (modules.items) |module| module.deinit(allocator);
+        modules.deinit(allocator);
+    }
+
+    while (true) {
+        parser.skipWhitespace();
+        if (parser.atEnd()) break;
+        try parser.expectKeyword("module", error.InvalidModuleDeclaration);
+        parser.skipWhitespace();
+        const name_source = try parser.readDottedName();
+        for (modules.items) |existing| {
+            if (std.mem.eql(u8, existing.name, name_source)) return error.DuplicateModule;
+        }
+        const name = try allocator.dupe(u8, name_source);
+        errdefer allocator.free(name);
+
+        parser.skipWhitespace();
+        try parser.expectByte('{', error.InvalidModuleDeclaration);
+        var root: ?[]const u8 = null;
+        errdefer if (root) |owned_root| allocator.free(owned_root);
+
+        while (true) {
+            parser.skipWhitespace();
+            if (parser.consumeByte('}')) break;
+            try parser.expectKeyword("root", error.InvalidModuleDeclaration);
+            if (root != null) return error.DuplicateModuleRoot;
+            parser.skipWhitespace();
+            root = try parser.readStringLiteral(allocator);
+            parser.skipWhitespace();
+            try parser.expectByte(';', error.ExpectedSemicolon);
+        }
+
+        try modules.append(allocator, .{
+            .name = name,
+            .root = root orelse return error.MissingModuleRoot,
+        });
+    }
+
+    return modules.toOwnedSlice(allocator);
+}
+
+fn parseTargetsSection(allocator: std.mem.Allocator, body: []const u8, modules: []const ModuleDecl) ![]TargetDecl {
+    var parser = ManifestBodyParser{ .text = body };
+    var targets = std.ArrayList(TargetDecl).empty;
+    errdefer {
+        for (targets.items) |target| target.deinit(allocator);
+        targets.deinit(allocator);
+    }
+
+    while (true) {
+        parser.skipWhitespace();
+        if (parser.atEnd()) break;
+        try parser.expectKeyword("target", error.InvalidTargetDeclaration);
+        parser.skipWhitespace();
+        const name_source = try parser.readIdentifier(error.InvalidTargetDeclaration);
+        for (targets.items) |existing| {
+            if (std.mem.eql(u8, existing.name, name_source)) return error.DuplicateTarget;
+        }
+        const name = try allocator.dupe(u8, name_source);
+        errdefer allocator.free(name);
+
+        parser.skipWhitespace();
+        try parser.expectByte('{', error.InvalidTargetDeclaration);
+        var kind: ?TargetKind = null;
+        var module: ?[]const u8 = null;
+        var module_list: ?std.ArrayList([]const u8) = null;
+        errdefer {
+            if (module) |owned_module| allocator.free(owned_module);
+            if (module_list) |*list| {
+                for (list.items) |owned_module| allocator.free(owned_module);
+                list.deinit(allocator);
+            }
+        }
+
+        while (true) {
+            parser.skipWhitespace();
+            if (parser.consumeByte('}')) break;
+            const statement = try parser.readIdentifier(error.InvalidTargetDeclaration);
+            parser.skipWhitespace();
+
+            if (std.mem.eql(u8, statement, "kind")) {
+                if (kind != null) return error.DuplicateTargetKind;
+                const kind_name = try parser.readIdentifier(error.InvalidTargetKind);
+                kind = TargetKind.parse(kind_name) orelse return error.InvalidTargetKind;
+                parser.skipWhitespace();
+                try parser.expectByte(';', error.ExpectedSemicolon);
+            } else if (std.mem.eql(u8, statement, "module")) {
+                if (module != null or module_list != null) return error.DuplicateTargetModule;
+                const module_source = try parser.readDottedName();
+                module = try allocator.dupe(u8, module_source);
+                parser.skipWhitespace();
+                try parser.expectByte(';', error.ExpectedSemicolon);
+            } else if (std.mem.eql(u8, statement, "modules")) {
+                if (module != null or module_list != null) return error.DuplicateTargetModule;
+                module_list = try parser.readModuleList(allocator);
+                parser.skipWhitespace();
+                try parser.expectByte(';', error.ExpectedSemicolon);
+            } else {
+                return error.InvalidTargetDeclaration;
+            }
+        }
+
+        const target_kind = kind orelse return error.MissingTargetKind;
+        switch (target_kind) {
+            .executable, .library => {
+                if (module == null or module_list != null) return error.MissingTargetModule;
+                try validateKnownModule(module.?, modules);
+                try targets.append(allocator, .{
+                    .name = name,
+                    .kind = target_kind,
+                    .module = module,
+                    .modules = &.{},
+                });
+                module = null;
+            },
+            .tests => {
+                if (module != null or module_list == null) return error.MissingTargetModule;
+                if (module_list.?.items.len == 0) return error.InvalidModuleList;
+                for (module_list.?.items) |module_name| try validateKnownModule(module_name, modules);
+                const owned_modules = try module_list.?.toOwnedSlice(allocator);
+                errdefer {
+                    for (owned_modules) |owned_module| allocator.free(owned_module);
+                    allocator.free(owned_modules);
+                }
+                module_list = null;
+                try targets.append(allocator, .{
+                    .name = name,
+                    .kind = target_kind,
+                    .module = null,
+                    .modules = owned_modules,
+                });
+            },
+        }
+    }
+
+    return targets.toOwnedSlice(allocator);
+}
+
+fn validateKnownModule(name: []const u8, modules: []const ModuleDecl) !void {
+    for (modules) |module| {
+        if (std.mem.eql(u8, module.name, name)) return;
+    }
+    return error.UnknownTargetModule;
+}
+
+const ManifestBodyParser = struct {
+    text: []const u8,
+    cursor: usize = 0,
+
+    fn atEnd(self: ManifestBodyParser) bool {
+        return self.cursor >= self.text.len;
+    }
+
+    fn skipWhitespace(self: *ManifestBodyParser) void {
+        while (!self.atEnd()) {
+            switch (self.text[self.cursor]) {
+                ' ', '\t', '\r', '\n' => self.cursor += 1,
+                else => return,
+            }
+        }
+    }
+
+    fn consumeByte(self: *ManifestBodyParser, byte: u8) bool {
+        if (!self.atEnd() and self.text[self.cursor] == byte) {
+            self.cursor += 1;
+            return true;
+        }
+        return false;
+    }
+
+    fn expectByte(self: *ManifestBodyParser, byte: u8, parse_error: anyerror) !void {
+        if (!self.consumeByte(byte)) return parse_error;
+    }
+
+    fn expectKeyword(self: *ManifestBodyParser, keyword: []const u8, parse_error: anyerror) !void {
+        const identifier = try self.readIdentifier(parse_error);
+        if (!std.mem.eql(u8, identifier, keyword)) return parse_error;
+    }
+
+    fn readIdentifier(self: *ManifestBodyParser, parse_error: anyerror) ![]const u8 {
+        if (self.atEnd() or !isIdentifierStart(self.text[self.cursor])) return parse_error;
+        const start = self.cursor;
+        self.cursor += 1;
+        while (!self.atEnd() and isIdentifierContinue(self.text[self.cursor])) self.cursor += 1;
+        return self.text[start..self.cursor];
+    }
+
+    fn readDottedName(self: *ManifestBodyParser) ![]const u8 {
+        const start = self.cursor;
+        _ = try self.readIdentifier(error.InvalidDottedName);
+        while (self.consumeByte('.')) {
+            _ = try self.readIdentifier(error.InvalidDottedName);
+        }
+        if (!self.atEnd() and !isDottedNameDelimiter(self.text[self.cursor])) return error.InvalidDottedName;
+        return self.text[start..self.cursor];
+    }
+
+    fn readStringLiteral(self: *ManifestBodyParser, allocator: std.mem.Allocator) ![]const u8 {
+        if (self.atEnd() or self.text[self.cursor] != '"') return error.InvalidStringLiteral;
+        const start = self.cursor;
+        self.cursor += 1;
+        while (!self.atEnd() and self.text[self.cursor] != '"') {
+            if (self.text[self.cursor] == '\\' or self.text[self.cursor] == '\n' or self.text[self.cursor] == '\r') return error.InvalidStringLiteral;
+            self.cursor += 1;
+        }
+        if (self.atEnd()) return error.InvalidStringLiteral;
+        self.cursor += 1;
+        return parseStringLiteral(allocator, self.text[start..self.cursor]);
+    }
+
+    fn readModuleList(self: *ManifestBodyParser, allocator: std.mem.Allocator) !std.ArrayList([]const u8) {
+        var modules = std.ArrayList([]const u8).empty;
+        errdefer {
+            for (modules.items) |module| allocator.free(module);
+            modules.deinit(allocator);
+        }
+
+        self.skipWhitespace();
+        try self.expectByte('[', error.InvalidModuleList);
+        while (true) {
+            self.skipWhitespace();
+            if (self.consumeByte(']')) break;
+            const module_source = self.readDottedName() catch return error.InvalidModuleList;
+            for (modules.items) |existing| {
+                if (std.mem.eql(u8, existing, module_source)) return error.DuplicateTargetModule;
+            }
+            try modules.append(allocator, try allocator.dupe(u8, module_source));
+            self.skipWhitespace();
+            if (self.consumeByte(',')) continue;
+            if (self.consumeByte(']')) break;
+            return error.InvalidModuleList;
+        }
+
+        return modules;
+    }
+};
+
 fn isIdentifier(value: []const u8) bool {
     if (value.len == 0) return false;
     if (!isIdentifierStart(value[0])) return false;
@@ -232,6 +524,13 @@ fn isIdentifierStart(byte: u8) bool {
 
 fn isIdentifierContinue(byte: u8) bool {
     return isIdentifierStart(byte) or (byte >= '0' and byte <= '9');
+}
+
+fn isDottedNameDelimiter(byte: u8) bool {
+    return switch (byte) {
+        ' ', '\t', '\r', '\n', ';', '{', '}', '[', ']', ',' => true,
+        else => false,
+    };
 }
 
 fn sectionName(line: []const u8) ?[]const u8 {
@@ -300,7 +599,9 @@ test "manifest parser stores sections in order" {
         \\package Compiler;
         \\
         \\=== modules ===
-        \\module Compiler.Main;
+        \\module Compiler.Main {
+        \\    root "src/compiler/main";
+        \\}
     ;
     const manifest = try expectManifest(text);
     defer manifest.deinit(std.testing.allocator);
@@ -494,6 +795,510 @@ test "manifest parser rejects missing semicolon" {
         \\
         \\=== package ===
         \\package Compiler
+    ;
+    try std.testing.expectError(error.ExpectedSemicolon, expectManifest(text));
+}
+
+test "manifest parser parses one module" {
+    const text =
+        \\# kind: package
+        \\# format: concept-manifest-v0
+        \\
+        \\=== package ===
+        \\package Compiler;
+        \\
+        \\=== modules ===
+        \\module Compiler.Source {
+        \\    root "src/compiler/source";
+        \\}
+    ;
+    const manifest = try expectManifest(text);
+    defer manifest.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), manifest.modules.len);
+    try std.testing.expectEqualStrings("Compiler.Source", manifest.modules[0].name);
+    try std.testing.expectEqualStrings("src/compiler/source", manifest.modules[0].root);
+}
+
+test "manifest parser parses dotted module name" {
+    const text =
+        \\# kind: package
+        \\# format: concept-manifest-v0
+        \\
+        \\=== package ===
+        \\package Compiler;
+        \\
+        \\=== modules ===
+        \\module Compiler.Source.Tests {
+        \\    root "src/compiler/source/tests";
+        \\}
+    ;
+    const manifest = try expectManifest(text);
+    defer manifest.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("Compiler.Source.Tests", manifest.modules[0].name);
+}
+
+test "manifest parser parses multiple modules" {
+    const text =
+        \\# kind: package
+        \\# format: concept-manifest-v0
+        \\
+        \\=== package ===
+        \\package Compiler;
+        \\
+        \\=== modules ===
+        \\module Compiler.Source {
+        \\    root "src/compiler/source";
+        \\}
+        \\
+        \\module Compiler.Main {
+        \\    root "src/compiler/main";
+        \\}
+    ;
+    const manifest = try expectManifest(text);
+    defer manifest.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 2), manifest.modules.len);
+    try std.testing.expectEqualStrings("Compiler.Source", manifest.modules[0].name);
+    try std.testing.expectEqualStrings("Compiler.Main", manifest.modules[1].name);
+}
+
+test "manifest parser parses executable target with module" {
+    const text =
+        \\# kind: package
+        \\# format: concept-manifest-v0
+        \\
+        \\=== package ===
+        \\package Compiler;
+        \\
+        \\=== modules ===
+        \\module Compiler.Main {
+        \\    root "src/compiler/main";
+        \\}
+        \\
+        \\=== targets ===
+        \\target Cathedral {
+        \\    kind executable;
+        \\    module Compiler.Main;
+        \\}
+    ;
+    const manifest = try expectManifest(text);
+    defer manifest.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), manifest.targets.len);
+    try std.testing.expectEqualStrings("Cathedral", manifest.targets[0].name);
+    try std.testing.expectEqual(TargetKind.executable, manifest.targets[0].kind);
+    try std.testing.expectEqualStrings("Compiler.Main", manifest.targets[0].module.?);
+}
+
+test "manifest parser parses library target with module" {
+    const text =
+        \\# kind: package
+        \\# format: concept-manifest-v0
+        \\
+        \\=== package ===
+        \\package Compiler;
+        \\
+        \\=== modules ===
+        \\module Compiler.Source {
+        \\    root "src/compiler/source";
+        \\}
+        \\
+        \\=== targets ===
+        \\target CompilerLib {
+        \\    kind library;
+        \\    module Compiler.Source;
+        \\}
+    ;
+    const manifest = try expectManifest(text);
+    defer manifest.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(TargetKind.library, manifest.targets[0].kind);
+    try std.testing.expectEqualStrings("Compiler.Source", manifest.targets[0].module.?);
+}
+
+test "manifest parser parses tests target with module list" {
+    const text =
+        \\# kind: package
+        \\# format: concept-manifest-v0
+        \\
+        \\=== package ===
+        \\package Compiler;
+        \\
+        \\=== modules ===
+        \\module Compiler.Source.Tests {
+        \\    root "src/compiler/source/tests";
+        \\}
+        \\module Compiler.Parser.Tests {
+        \\    root "src/compiler/parser/tests";
+        \\}
+        \\
+        \\=== targets ===
+        \\target CompilerTests {
+        \\    kind tests;
+        \\    modules [
+        \\        Compiler.Source.Tests,
+        \\        Compiler.Parser.Tests
+        \\    ];
+        \\}
+    ;
+    const manifest = try expectManifest(text);
+    defer manifest.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(TargetKind.tests, manifest.targets[0].kind);
+    try std.testing.expectEqual(@as(?[]const u8, null), manifest.targets[0].module);
+    try std.testing.expectEqual(@as(usize, 2), manifest.targets[0].modules.len);
+    try std.testing.expectEqualStrings("Compiler.Source.Tests", manifest.targets[0].modules[0]);
+    try std.testing.expectEqualStrings("Compiler.Parser.Tests", manifest.targets[0].modules[1]);
+}
+
+test "manifest parser parses combined package modules and targets manifest" {
+    const text =
+        \\# kind: package
+        \\# format: concept-manifest-v0
+        \\
+        \\=== package ===
+        \\package Compiler;
+        \\version "0.1.0";
+        \\
+        \\=== modules ===
+        \\module Compiler.Source {
+        \\    root "src/compiler/source";
+        \\}
+        \\module Compiler.Main {
+        \\    root "src/compiler/main";
+        \\}
+        \\module Compiler.Source.Tests {
+        \\    root "src/compiler/source/tests";
+        \\}
+        \\
+        \\=== targets ===
+        \\target Cathedral {
+        \\    kind executable;
+        \\    module Compiler.Main;
+        \\}
+        \\target CompilerTests {
+        \\    kind tests;
+        \\    modules [
+        \\        Compiler.Source.Tests,
+        \\    ];
+        \\}
+    ;
+    const manifest = try expectManifest(text);
+    defer manifest.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 3), manifest.modules.len);
+    try std.testing.expectEqual(@as(usize, 2), manifest.targets.len);
+    try std.testing.expectEqualStrings("0.1.0", manifest.package.?.version.?);
+}
+
+test "manifest parser rejects duplicate module name" {
+    const text =
+        \\# kind: package
+        \\# format: concept-manifest-v0
+        \\
+        \\=== package ===
+        \\package Compiler;
+        \\
+        \\=== modules ===
+        \\module Compiler.Source { root "src/compiler/source"; }
+        \\module Compiler.Source { root "src/compiler/source2"; }
+    ;
+    try std.testing.expectError(error.DuplicateModule, expectManifest(text));
+}
+
+test "manifest parser rejects missing module root" {
+    const text =
+        \\# kind: package
+        \\# format: concept-manifest-v0
+        \\
+        \\=== package ===
+        \\package Compiler;
+        \\
+        \\=== modules ===
+        \\module Compiler.Source {
+        \\}
+    ;
+    try std.testing.expectError(error.MissingModuleRoot, expectManifest(text));
+}
+
+test "manifest parser rejects duplicate module root" {
+    const text =
+        \\# kind: package
+        \\# format: concept-manifest-v0
+        \\
+        \\=== package ===
+        \\package Compiler;
+        \\
+        \\=== modules ===
+        \\module Compiler.Source {
+        \\    root "src/compiler/source";
+        \\    root "src/compiler/other";
+        \\}
+    ;
+    try std.testing.expectError(error.DuplicateModuleRoot, expectManifest(text));
+}
+
+test "manifest parser rejects invalid dotted module name" {
+    const text =
+        \\# kind: package
+        \\# format: concept-manifest-v0
+        \\
+        \\=== package ===
+        \\package Compiler;
+        \\
+        \\=== modules ===
+        \\module Compiler..Source {
+        \\    root "src/compiler/source";
+        \\}
+    ;
+    try std.testing.expectError(error.InvalidDottedName, expectManifest(text));
+}
+
+test "manifest parser rejects unknown module-section statement" {
+    const text =
+        \\# kind: package
+        \\# format: concept-manifest-v0
+        \\
+        \\=== package ===
+        \\package Compiler;
+        \\
+        \\=== modules ===
+        \\module Compiler.Source {
+        \\    source "src/compiler/source";
+        \\}
+    ;
+    try std.testing.expectError(error.InvalidModuleDeclaration, expectManifest(text));
+}
+
+test "manifest parser rejects invalid module root string literal" {
+    const text =
+        \\# kind: package
+        \\# format: concept-manifest-v0
+        \\
+        \\=== package ===
+        \\package Compiler;
+        \\
+        \\=== modules ===
+        \\module Compiler.Source {
+        \\    root src/compiler/source;
+        \\}
+    ;
+    try std.testing.expectError(error.InvalidStringLiteral, expectManifest(text));
+}
+
+test "manifest parser rejects missing module root semicolon" {
+    const text =
+        \\# kind: package
+        \\# format: concept-manifest-v0
+        \\
+        \\=== package ===
+        \\package Compiler;
+        \\
+        \\=== modules ===
+        \\module Compiler.Source {
+        \\    root "src/compiler/source"
+        \\}
+    ;
+    try std.testing.expectError(error.ExpectedSemicolon, expectManifest(text));
+}
+
+test "manifest parser rejects duplicate target name" {
+    const text =
+        \\# kind: package
+        \\# format: concept-manifest-v0
+        \\
+        \\=== package ===
+        \\package Compiler;
+        \\
+        \\=== modules ===
+        \\module Compiler.Main { root "src/compiler/main"; }
+        \\
+        \\=== targets ===
+        \\target Cathedral { kind executable; module Compiler.Main; }
+        \\target Cathedral { kind executable; module Compiler.Main; }
+    ;
+    try std.testing.expectError(error.DuplicateTarget, expectManifest(text));
+}
+
+test "manifest parser rejects missing target kind" {
+    const text =
+        \\# kind: package
+        \\# format: concept-manifest-v0
+        \\
+        \\=== package ===
+        \\package Compiler;
+        \\
+        \\=== modules ===
+        \\module Compiler.Main { root "src/compiler/main"; }
+        \\
+        \\=== targets ===
+        \\target Cathedral { module Compiler.Main; }
+    ;
+    try std.testing.expectError(error.MissingTargetKind, expectManifest(text));
+}
+
+test "manifest parser rejects invalid target kind" {
+    const text =
+        \\# kind: package
+        \\# format: concept-manifest-v0
+        \\
+        \\=== package ===
+        \\package Compiler;
+        \\
+        \\=== modules ===
+        \\module Compiler.Main { root "src/compiler/main"; }
+        \\
+        \\=== targets ===
+        \\target Cathedral { kind binary; module Compiler.Main; }
+    ;
+    try std.testing.expectError(error.InvalidTargetKind, expectManifest(text));
+}
+
+test "manifest parser rejects missing module for executable target" {
+    const text =
+        \\# kind: package
+        \\# format: concept-manifest-v0
+        \\
+        \\=== package ===
+        \\package Compiler;
+        \\
+        \\=== targets ===
+        \\target Cathedral { kind executable; }
+    ;
+    try std.testing.expectError(error.MissingTargetModule, expectManifest(text));
+}
+
+test "manifest parser rejects missing modules list for tests target" {
+    const text =
+        \\# kind: package
+        \\# format: concept-manifest-v0
+        \\
+        \\=== package ===
+        \\package Compiler;
+        \\
+        \\=== targets ===
+        \\target CompilerTests { kind tests; }
+    ;
+    try std.testing.expectError(error.MissingTargetModule, expectManifest(text));
+}
+
+test "manifest parser rejects duplicate target kind" {
+    const text =
+        \\# kind: package
+        \\# format: concept-manifest-v0
+        \\
+        \\=== package ===
+        \\package Compiler;
+        \\
+        \\=== modules ===
+        \\module Compiler.Main { root "src/compiler/main"; }
+        \\
+        \\=== targets ===
+        \\target Cathedral {
+        \\    kind executable;
+        \\    kind library;
+        \\    module Compiler.Main;
+        \\}
+    ;
+    try std.testing.expectError(error.DuplicateTargetKind, expectManifest(text));
+}
+
+test "manifest parser rejects duplicate target module field" {
+    const text =
+        \\# kind: package
+        \\# format: concept-manifest-v0
+        \\
+        \\=== package ===
+        \\package Compiler;
+        \\
+        \\=== modules ===
+        \\module Compiler.Main { root "src/compiler/main"; }
+        \\
+        \\=== targets ===
+        \\target Cathedral {
+        \\    kind executable;
+        \\    module Compiler.Main;
+        \\    module Compiler.Main;
+        \\}
+    ;
+    try std.testing.expectError(error.DuplicateTargetModule, expectManifest(text));
+}
+
+test "manifest parser rejects invalid target module list" {
+    const text =
+        \\# kind: package
+        \\# format: concept-manifest-v0
+        \\
+        \\=== package ===
+        \\package Compiler;
+        \\
+        \\=== modules ===
+        \\module Compiler.Source.Tests { root "src/compiler/source/tests"; }
+        \\
+        \\=== targets ===
+        \\target CompilerTests {
+        \\    kind tests;
+        \\    modules [Compiler.Source.Tests Compiler.Parser.Tests];
+        \\}
+    ;
+    try std.testing.expectError(error.InvalidModuleList, expectManifest(text));
+}
+
+test "manifest parser rejects unknown referenced target module" {
+    const text =
+        \\# kind: package
+        \\# format: concept-manifest-v0
+        \\
+        \\=== package ===
+        \\package Compiler;
+        \\
+        \\=== modules ===
+        \\module Compiler.Source { root "src/compiler/source"; }
+        \\
+        \\=== targets ===
+        \\target Cathedral {
+        \\    kind executable;
+        \\    module Compiler.Main;
+        \\}
+    ;
+    try std.testing.expectError(error.UnknownTargetModule, expectManifest(text));
+}
+
+test "manifest parser rejects unknown target-section statement" {
+    const text =
+        \\# kind: package
+        \\# format: concept-manifest-v0
+        \\
+        \\=== package ===
+        \\package Compiler;
+        \\
+        \\=== modules ===
+        \\module Compiler.Main { root "src/compiler/main"; }
+        \\
+        \\=== targets ===
+        \\target Cathedral { kind executable; entry Compiler.Main; }
+    ;
+    try std.testing.expectError(error.InvalidTargetDeclaration, expectManifest(text));
+}
+
+test "manifest parser rejects missing target semicolon" {
+    const text =
+        \\# kind: package
+        \\# format: concept-manifest-v0
+        \\
+        \\=== package ===
+        \\package Compiler;
+        \\
+        \\=== modules ===
+        \\module Compiler.Main { root "src/compiler/main"; }
+        \\
+        \\=== targets ===
+        \\target Cathedral {
+        \\    kind executable
+        \\    module Compiler.Main;
+        \\}
     ;
     try std.testing.expectError(error.ExpectedSemicolon, expectManifest(text));
 }
