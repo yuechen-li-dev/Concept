@@ -39,6 +39,7 @@ Required goals:
   - `TypeId`
 - Introduce HIR separate from AST.
 - Introduce `TypeStore` and a real type model.
+  - P3-M3 starts this as standalone infrastructure: `TypeId` values identify entries in a `TypeStore`, with stable builtin IDs for `void`, `int`, and `bool`, plus nominal struct/enum type entries that reference HIR declaration IDs.
 - Resolve top-level names in one-file modules.
 - Resolve type names for builtins and user declarations.
 - Check duplicate top-level declarations.
