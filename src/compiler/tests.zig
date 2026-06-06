@@ -2,6 +2,7 @@ const std = @import("std");
 
 pub const ast = @import("ast.zig");
 pub const diagnostics = @import("diagnostics.zig");
+pub const interner = @import("interner.zig");
 pub const lexer = @import("lexer.zig");
 pub const parser = @import("parser.zig");
 pub const source = @import("source.zig");
@@ -12,4 +13,5 @@ pub const backend_c = @import("backend_c.zig");
 
 test {
     _ = std;
+    _ = interner;
 }

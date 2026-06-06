@@ -153,6 +153,8 @@ Expected properties:
 
 The interner should be shared by the semantic session for one compilation. When declaration collection sees top-level names, field names, variant names, parameters, locals, and type-name components, it should intern them. Later semantic passes should compare `SymbolId`s instead of repeatedly comparing strings.
 
+P3-M1 introduces the standalone `Interner` and compact `SymbolId` value used by later semantic milestones. Parser integration and semantic consumers remain future work.
+
 This is especially important before introducing richer module summaries and imports. A one-file Phase 3 module can still use the same discipline that later multi-file resolution needs.
 
 ## TypeStore plan
