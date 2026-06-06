@@ -407,6 +407,13 @@ test "Phase 2 C snapshot: if compare function" {
     );
 }
 
+test "Phase 2 C snapshot: if else return" {
+    try expectCorpusC(
+        "../../tests/corpus/phase2/if_else_return.concept",
+        "../../tests/corpus/phase2/if_else_return.c.expected",
+    );
+}
+
 test "C backend emits switch for int match" {
     try expectEmit(
         "module Main; int main() { int x = 2; match (x) { 1 => return 10; 2 => return 7; _ => return 0; } }",

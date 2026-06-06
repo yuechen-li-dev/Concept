@@ -1,0 +1,17 @@
+# name: phase2 if condition not bool
+# phase: check
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    if (1) {
+        return 1;
+    }
+
+    return 0;
+}
+
+=== diagnostics ===
+CON0010

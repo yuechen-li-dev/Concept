@@ -1,0 +1,17 @@
+# name: phase2 if else return
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    if (false) {
+        return 1;
+    } else {
+        return 7;
+    }
+}
+
+=== run ===
+exit_code: 7

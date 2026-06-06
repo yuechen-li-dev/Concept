@@ -518,6 +518,10 @@ test "language run fixture: phase2 if false else return" {
     try expectRunFixture("../../../language/phase2-execution/valid/if_false_else_return.valid.conception");
 }
 
+test "language run fixture: phase2 if else return" {
+    try expectRunFixture("../../../language/phase2-execution/valid/if_else_return.valid.conception");
+}
+
 test "language run fixture: phase2 if compare function" {
     try expectRunFixture("../../../language/phase2-execution/valid/if_compare_function.valid.conception");
 }
@@ -526,8 +530,28 @@ test "language run fixture: phase2 if with outer local" {
     try expectRunFixture("../../../language/phase2-execution/valid/if_with_outer_local.valid.conception");
 }
 
+test "language run fixture: phase2 if outer local" {
+    try expectRunFixture("../../../language/phase2-execution/valid/if_outer_local.valid.conception");
+}
+
 test "language parse fixture: phase2 else if ladder rejected" {
     try expectParseFixture("../../../language/phase2-execution/invalid/else_if_ladder.invalid.conception");
+}
+
+test "language check fixture: phase2 if condition not bool" {
+    try expectCheckFixture("../../../language/phase2-execution/invalid/if_condition_not_bool.invalid.conception");
+}
+
+test "language check fixture: phase2 if branch local not visible" {
+    try expectCheckFixture("../../../language/phase2-execution/invalid/if_branch_local_not_visible.invalid.conception");
+}
+
+test "language parse fixture: phase2 match missing open brace" {
+    try expectParseFixture("../../../language/phase2-execution/invalid/match_missing_open_brace.invalid.conception");
+}
+
+test "language parse fixture: phase2 match malformed pattern" {
+    try expectParseFixture("../../../language/phase2-execution/invalid/match_malformed_pattern.invalid.conception");
 }
 
 test "language parse fixture: phase2 match missing fat arrow" {
@@ -560,4 +584,8 @@ test "language run fixture: phase2 match default return" {
 
 test "language run fixture: phase2 nested if explicit else block" {
     try expectRunFixture("../../../language/phase2-execution/valid/nested_if_explicit_else_block.valid.conception");
+}
+
+test "language run fixture: phase2 explicit nested if in else" {
+    try expectRunFixture("../../../language/phase2-execution/valid/explicit_nested_if_in_else.valid.conception");
 }
