@@ -106,6 +106,33 @@ fn emitStmt(writer: anytype, stmt: ast_model.Stmt, depth: usize) !void {
                 try writer.writeByte('\n');
             }
         },
+        .match_stmt => |match_stmt| {
+            try emitIndent(writer, depth);
+            try writer.writeAll("switch (");
+            try emitExpr(writer, match_stmt.scrutinee.*);
+            try writer.writeAll(") {\n");
+            for (match_stmt.arms) |arm| {
+                try emitIndent(writer, depth + 1);
+                switch (arm.pattern) {
+                    .int_literal => |literal| {
+                        try writer.writeAll("case ");
+                        try writer.writeAll(literal.text);
+                        try writer.writeAll(":\n");
+                    },
+                    .bool_literal => |literal| {
+                        try writer.writeAll("case ");
+                        try writer.writeAll(if (literal.value) "1" else "0");
+                        try writer.writeAll(":\n");
+                    },
+                    .wildcard => {
+                        try writer.writeAll("default:\n");
+                    },
+                }
+                try emitStmt(writer, arm.body, depth + 2);
+            }
+            try emitIndent(writer, depth);
+            try writer.writeAll("}\n");
+        },
         .block_stmt => |block_stmt| {
             try emitIndent(writer, depth);
             try writer.writeAll("{\n");
@@ -377,5 +404,26 @@ test "Phase 2 C snapshot: if compare function" {
     try expectCorpusC(
         "../../tests/corpus/phase2/if_compare_function.concept",
         "../../tests/corpus/phase2/if_compare_function.c.expected",
+    );
+}
+
+test "C backend emits switch for int match" {
+    try expectEmit(
+        "module Main; int main() { int x = 2; match (x) { 1 => return 10; 2 => return 7; _ => return 0; } }",
+        "int main(void) {\n    int x = 2;\n    switch (x) {\n        case 1:\n            return 10;\n        case 2:\n            return 7;\n        default:\n            return 0;\n    }\n}\n",
+    );
+}
+
+test "C backend emits switch for bool match" {
+    try expectEmit(
+        "module Main; int main() { bool ok = false; match (ok) { true => return 1; false => return 7; _ => return 0; } }",
+        "int main(void) {\n    int ok = 0;\n    switch (ok) {\n        case 1:\n            return 1;\n        case 0:\n            return 7;\n        default:\n            return 0;\n    }\n}\n",
+    );
+}
+
+test "Phase 2 C snapshot: match int return" {
+    try expectCorpusC(
+        "../../tests/corpus/phase2/match_int_return.concept",
+        "../../tests/corpus/phase2/match_int_return.c.expected",
     );
 }

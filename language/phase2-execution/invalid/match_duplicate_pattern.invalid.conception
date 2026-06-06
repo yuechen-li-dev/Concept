@@ -1,0 +1,20 @@
+# name: phase2 match duplicate pattern
+# phase: check
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    int x = 1;
+
+    match (x) {
+        1 => return 1;
+        1 => return 2;
+    }
+
+    return 0;
+}
+
+=== diagnostics ===
+CON0010

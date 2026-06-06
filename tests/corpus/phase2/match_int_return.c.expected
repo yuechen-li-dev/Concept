@@ -1,0 +1,11 @@
+int main(void) {
+    int x = 2;
+    switch (x) {
+        case 1:
+            return 10;
+        case 2:
+            return 7;
+        default:
+            return 0;
+    }
+}

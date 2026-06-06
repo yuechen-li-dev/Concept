@@ -1,0 +1,20 @@
+# name: phase2 match bool return
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    bool ok = true;
+
+    match (ok) {
+        true => return 7;
+        false => return 0;
+    }
+
+    return 0;
+}
+
+=== run ===
+exit_code: 7

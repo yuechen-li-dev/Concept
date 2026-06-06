@@ -242,6 +242,7 @@ pub const Lexer = struct {
         const two_char_kinds = [_]struct { lexeme: []const u8, kind: TokenKind }{
             .{ .lexeme = "::", .kind = .colon_colon },
             .{ .lexeme = "->", .kind = .arrow },
+            .{ .lexeme = "=>", .kind = .fat_arrow },
             .{ .lexeme = "==", .kind = .equal_equal },
             .{ .lexeme = "!=", .kind = .bang_equal },
             .{ .lexeme = "<=", .kind = .less_equal },
@@ -417,8 +418,8 @@ test "block comments are skipped" {
 }
 
 test "punctuation operators tokenize with longest match" {
-    const source_text = ":: : -> - == = != ! <= < >= > && & || ( ) { } [ ] ; , . + * / %";
-    const expected = [_]TokenKind{ .colon_colon, .colon, .arrow, .minus, .equal_equal, .equal, .bang_equal, .bang, .less_equal, .less, .greater_equal, .greater, .ampersand_ampersand, .ampersand, .pipe_pipe, .left_paren, .right_paren, .left_brace, .right_brace, .left_bracket, .right_bracket, .semicolon, .comma, .dot, .plus, .star, .slash, .percent, .eof };
+    const source_text = ":: : -> - => = == = != ! <= < >= > && & || ( ) { } [ ] ; , . + * / %";
+    const expected = [_]TokenKind{ .colon_colon, .colon, .arrow, .minus, .fat_arrow, .equal, .equal_equal, .equal, .bang_equal, .bang, .less_equal, .less, .greater_equal, .greater, .ampersand_ampersand, .ampersand, .pipe_pipe, .left_paren, .right_paren, .left_brace, .right_brace, .left_bracket, .right_bracket, .semicolon, .comma, .dot, .plus, .star, .slash, .percent, .eof };
     try expectLexedKinds(source_text, &expected);
 }
 
@@ -720,4 +721,14 @@ test "invalid escape sequence produces diagnostic" {
     try std.testing.expectEqual(diagnostics_model.DiagnosticCode.InvalidEscapeSequence, diagnostics.diagnostics.items[1].code);
     try std.testing.expectEqual(TokenKind.string_literal, tokens[0].kind);
     try std.testing.expectEqual(TokenKind.char_literal, tokens[1].kind);
+}
+
+test "fat arrow tokenizes" {
+    const expected = [_]TokenKind{ .fat_arrow, .eof };
+    try expectLexedKinds("=>", &expected);
+}
+
+test "fat arrow uses longest match before equal" {
+    const expected = [_]TokenKind{ .fat_arrow, .equal, .eof };
+    try expectLexedKinds("=> =", &expected);
 }

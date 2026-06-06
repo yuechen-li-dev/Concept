@@ -1,0 +1,17 @@
+# name: phase2 match missing fat arrow
+# phase: parse
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    match (1) {
+        1 return 0;
+    }
+
+    return 0;
+}
+
+=== diagnostics ===
+CON0003

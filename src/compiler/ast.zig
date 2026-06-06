@@ -462,10 +462,56 @@ pub const IfStmt = struct {
     }
 };
 
+pub const MatchPattern = union(enum) {
+    int_literal: Expr.IntLiteralExpr,
+    bool_literal: Expr.BoolLiteralExpr,
+    wildcard: SourceSpan,
+
+    pub fn span(self: MatchPattern) SourceSpan {
+        return switch (self) {
+            .int_literal => |pattern| pattern.span,
+            .bool_literal => |pattern| pattern.span,
+            .wildcard => |pattern_span| pattern_span,
+        };
+    }
+
+    pub fn writeDebug(self: MatchPattern, writer: anytype) !void {
+        switch (self) {
+            .int_literal => |pattern| try writer.writeAll(pattern.text),
+            .bool_literal => |pattern| try writer.writeAll(if (pattern.value) "true" else "false"),
+            .wildcard => try writer.writeByte('_'),
+        }
+    }
+};
+
+pub const MatchArm = struct {
+    pattern: MatchPattern,
+    body: Stmt,
+    span: SourceSpan,
+
+    pub fn deinit(self: MatchArm, allocator: std.mem.Allocator) void {
+        self.body.deinit(allocator);
+    }
+};
+
+pub const MatchStmt = struct {
+    scrutinee: *Expr,
+    arms: []MatchArm,
+    span: SourceSpan,
+
+    pub fn deinit(self: MatchStmt, allocator: std.mem.Allocator) void {
+        self.scrutinee.deinit(allocator);
+        allocator.destroy(self.scrutinee);
+        for (self.arms) |arm| arm.deinit(allocator);
+        allocator.free(self.arms);
+    }
+};
+
 pub const Stmt = union(enum) {
     local_decl: LocalDeclStmt,
     return_stmt: ReturnStmt,
     if_stmt: IfStmt,
+    match_stmt: MatchStmt,
     block_stmt: BlockStmt,
 
     pub fn deinit(self: Stmt, allocator: std.mem.Allocator) void {
@@ -473,6 +519,7 @@ pub const Stmt = union(enum) {
             .local_decl => |stmt| stmt.deinit(allocator),
             .return_stmt => |stmt| stmt.deinit(allocator),
             .if_stmt => |stmt| stmt.deinit(allocator),
+            .match_stmt => |stmt| stmt.deinit(allocator),
             .block_stmt => |stmt| stmt.deinit(allocator),
         }
     }
@@ -506,6 +553,20 @@ pub const Stmt = union(enum) {
                     try writeIndent(writer, depth + 1);
                     try writer.writeAll("Else\n");
                     for (else_block.statements) |child| try child.writeDebug(writer, depth + 2);
+                }
+            },
+            .match_stmt => |stmt| {
+                try writeIndent(writer, depth);
+                try writer.writeAll("Match\n");
+                try writeIndent(writer, depth + 1);
+                try writer.writeAll("Scrutinee\n");
+                try stmt.scrutinee.writeDebug(writer, depth + 2);
+                for (stmt.arms) |arm| {
+                    try writeIndent(writer, depth + 1);
+                    try writer.writeAll("Arm ");
+                    try arm.pattern.writeDebug(writer);
+                    try writer.writeByte('\n');
+                    try arm.body.writeDebug(writer, depth + 2);
                 }
             },
             .block_stmt => |block| {

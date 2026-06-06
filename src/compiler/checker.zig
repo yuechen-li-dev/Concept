@@ -179,6 +179,63 @@ fn validateStmt(stmt: ast.Stmt, return_type: ExprType, locals: *std.ArrayList(Lo
                 try validateBlock(else_block, return_type, locals, functions, diagnostics, true);
             }
         },
+        .match_stmt => |match_stmt| {
+            const scrutinee_type = try validateExpr(match_stmt.scrutinee.*, locals, functions, diagnostics);
+            var seen_wildcard = false;
+            var int_patterns = std.ArrayList([]const u8).init(std.heap.page_allocator);
+            defer int_patterns.deinit();
+            var seen_true = false;
+            var seen_false = false;
+
+            for (match_stmt.arms) |arm| {
+                switch (arm.pattern) {
+                    .wildcard => |span| {
+                        if (seen_wildcard) {
+                            try report(diagnostics, "duplicate wildcard match pattern", span);
+                            return error.InvalidExecutable;
+                        }
+                        seen_wildcard = true;
+                    },
+                    .int_literal => |literal| {
+                        if (scrutinee_type != .int) {
+                            try report(diagnostics, "match pattern type does not match scrutinee type", literal.span);
+                            return error.InvalidExecutable;
+                        }
+                        for (int_patterns.items) |seen| {
+                            if (std.mem.eql(u8, seen, literal.text)) {
+                                try report(diagnostics, "duplicate literal match pattern", literal.span);
+                                return error.InvalidExecutable;
+                            }
+                        }
+                        try int_patterns.append(literal.text);
+                    },
+                    .bool_literal => |literal| {
+                        if (scrutinee_type != .bool) {
+                            try report(diagnostics, "match pattern type does not match scrutinee type", literal.span);
+                            return error.InvalidExecutable;
+                        }
+                        if (literal.value) {
+                            if (seen_true) {
+                                try report(diagnostics, "duplicate literal match pattern", literal.span);
+                                return error.InvalidExecutable;
+                            }
+                            seen_true = true;
+                        } else {
+                            if (seen_false) {
+                                try report(diagnostics, "duplicate literal match pattern", literal.span);
+                                return error.InvalidExecutable;
+                            }
+                            seen_false = true;
+                        }
+                    },
+                }
+                {
+                    const arm_local_start = locals.items.len;
+                    defer locals.shrinkRetainingCapacity(arm_local_start);
+                    try validateStmt(arm.body, return_type, locals, functions, diagnostics);
+                }
+            }
+        },
         .block_stmt => |block_stmt| try validateBlock(block_stmt, return_type, locals, functions, diagnostics, true),
     }
 }
@@ -486,5 +543,41 @@ test "checker rejects duplicate local in visible outer scope" {
     try expectInvalid(
         "module Main; int main() { int x = 1; if (true) { int x = 2; } return x; }",
         "duplicate local variable name",
+    );
+}
+
+test "checker accepts int match" {
+    try expectValid("module Main; int main() { int x = 2; match (x) { 1 => return 10; 2 => return 7; _ => return 0; } return 0; }");
+}
+
+test "checker accepts bool match" {
+    try expectValid("module Main; int main() { bool ok = true; match (ok) { true => return 7; false => return 0; } return 0; }");
+}
+
+test "checker rejects match pattern type mismatch" {
+    try expectInvalid(
+        "module Main; int main() { int x = 1; match (x) { true => return 1; } return 0; }",
+        "match pattern type does not match scrutinee type",
+    );
+}
+
+test "checker rejects duplicate literal match pattern" {
+    try expectInvalid(
+        "module Main; int main() { int x = 1; match (x) { 1 => return 1; 1 => return 2; } return 0; }",
+        "duplicate literal match pattern",
+    );
+}
+
+test "checker rejects duplicate wildcard match pattern" {
+    try expectInvalid(
+        "module Main; int main() { int x = 1; match (x) { _ => return 1; _ => return 2; } return 0; }",
+        "duplicate wildcard match pattern",
+    );
+}
+
+test "checker checks match arm statements" {
+    try expectInvalid(
+        "module Main; int main() { int x = 1; match (x) { 1 => return true; } return 0; }",
+        "return expression type does not match function return type",
     );
 }

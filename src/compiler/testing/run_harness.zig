@@ -214,3 +214,30 @@ test "run harness compiles and runs outer local in if" {
     );
     try std.testing.expectEqual(@as(u8, 7), result.actual_exit_code);
 }
+
+test "run harness compiles and runs int match" {
+    const result = try expectExitCode(
+        std.testing.allocator,
+        "module Main; int main() { int x = 2; match (x) { 1 => return 10; 2 => return 7; _ => return 0; } }",
+        7,
+    );
+    try std.testing.expectEqual(@as(u8, 7), result.actual_exit_code);
+}
+
+test "run harness compiles and runs bool match" {
+    const result = try expectExitCode(
+        std.testing.allocator,
+        "module Main; int main() { bool ok = true; match (ok) { true => return 7; false => return 0; } return 0; }",
+        7,
+    );
+    try std.testing.expectEqual(@as(u8, 7), result.actual_exit_code);
+}
+
+test "run harness compiles and runs default match arm" {
+    const result = try expectExitCode(
+        std.testing.allocator,
+        "module Main; int main() { int x = 3; match (x) { 1 => return 10; 2 => return 7; _ => return 0; } }",
+        0,
+    );
+    try std.testing.expectEqual(@as(u8, 0), result.actual_exit_code);
+}

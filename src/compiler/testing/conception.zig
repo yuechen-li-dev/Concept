@@ -2,6 +2,7 @@ const std = @import("std");
 
 const parser_model = @import("../parser.zig");
 const source_model = @import("../source.zig");
+const checker_model = @import("../checker.zig");
 const run_harness = @import("run_harness.zig");
 
 pub const Phase = enum {
@@ -423,6 +424,42 @@ test "language parse fixture: phase2 unsupported statement" {
     try expectParseFixture("../../../language/phase2-execution/invalid/unsupported_statement.invalid.conception");
 }
 
+fn expectCheckFixture(comptime path: []const u8) !void {
+    const text = @embedFile(path);
+    const fixture = try parse(std.testing.allocator, text, .{ .path = path });
+    defer fixture.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(Phase.check, fixture.phase);
+
+    var parse_diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
+    defer parse_diagnostics.deinit();
+    var check_diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
+    defer check_diagnostics.deinit();
+
+    const source_file = try source_model.SourceFile.init(std.testing.allocator, path, fixture.source().?);
+    defer source_file.deinit(std.testing.allocator);
+
+    const unit = try parser_model.parseSource(std.testing.allocator, source_file, &parse_diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), parse_diagnostics.count());
+
+    switch (fixture.expect) {
+        .pass => {
+            _ = try checker_model.validateExecutable(unit, &check_diagnostics);
+            try std.testing.expectEqual(@as(usize, 0), check_diagnostics.count());
+        },
+        .fail => {
+            try std.testing.expectError(error.InvalidExecutable, checker_model.validateExecutable(unit, &check_diagnostics));
+            const expected_codes = try fixture.diagnosticCodes(std.testing.allocator);
+            defer std.testing.allocator.free(expected_codes);
+            try std.testing.expectEqual(expected_codes.len, check_diagnostics.count());
+            for (expected_codes, check_diagnostics.diagnostics.items) |expected_code, actual| {
+                try std.testing.expectEqualStrings(expected_code, actual.code.format());
+            }
+        },
+    }
+}
+
 fn expectRunFixture(comptime path: []const u8) !void {
     const text = @embedFile(path);
     const fixture = try parse(std.testing.allocator, text, .{ .path = path });
@@ -487,4 +524,40 @@ test "language run fixture: phase2 if compare function" {
 
 test "language run fixture: phase2 if with outer local" {
     try expectRunFixture("../../../language/phase2-execution/valid/if_with_outer_local.valid.conception");
+}
+
+test "language parse fixture: phase2 else if ladder rejected" {
+    try expectParseFixture("../../../language/phase2-execution/invalid/else_if_ladder.invalid.conception");
+}
+
+test "language parse fixture: phase2 match missing fat arrow" {
+    try expectParseFixture("../../../language/phase2-execution/invalid/match_missing_fat_arrow.invalid.conception");
+}
+
+test "language check fixture: phase2 match pattern type mismatch" {
+    try expectCheckFixture("../../../language/phase2-execution/invalid/match_pattern_type_mismatch.invalid.conception");
+}
+
+test "language check fixture: phase2 match duplicate pattern" {
+    try expectCheckFixture("../../../language/phase2-execution/invalid/match_duplicate_pattern.invalid.conception");
+}
+
+test "language check fixture: phase2 match duplicate wildcard" {
+    try expectCheckFixture("../../../language/phase2-execution/invalid/match_duplicate_wildcard.invalid.conception");
+}
+
+test "language run fixture: phase2 match int return" {
+    try expectRunFixture("../../../language/phase2-execution/valid/match_int_return.valid.conception");
+}
+
+test "language run fixture: phase2 match bool return" {
+    try expectRunFixture("../../../language/phase2-execution/valid/match_bool_return.valid.conception");
+}
+
+test "language run fixture: phase2 match default return" {
+    try expectRunFixture("../../../language/phase2-execution/valid/match_default_return.valid.conception");
+}
+
+test "language run fixture: phase2 nested if explicit else block" {
+    try expectRunFixture("../../../language/phase2-execution/valid/nested_if_explicit_else_block.valid.conception");
 }
