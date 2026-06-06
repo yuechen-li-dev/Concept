@@ -1,0 +1,22 @@
+# name: phase5 enum match wildcard
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+enum Status {
+    Ok,
+    Err,
+};
+
+int main() {
+    Status status = Status::Err;
+    match (status) {
+        Status::Ok => return 1;
+        _ => return 4;
+    }
+}
+
+=== run ===
+exit_code: 4

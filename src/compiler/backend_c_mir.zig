@@ -306,6 +306,10 @@ fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue
             try writer.writeByte(')');
         },
         .enum_constructor => unreachable,
+        .enum_tag => |operand| {
+            try emitOperand(writer, ctx, operand);
+            try writer.writeAll(".tag");
+        },
     }
 }
 
@@ -875,4 +879,32 @@ test "MIR C backend returns enum constructor through temp" {
     try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_enum_Status cpt_f_make(void)") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, ".tag = 0;") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, "return cpt_t_") != null);
+}
+
+test "MIR C backend emits enum match tag switch" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\enum Status { Ok, Err, };
+        \\int main() { Status status = Status::Ok; match (status) { Status::Ok => return 7; Status::Err => return 1; } }
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, ".tag;") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "switch (cpt_t_") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "case 0: goto") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "case 1: goto") != null);
+}
+
+test "MIR C backend emits payload enum match without binding" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\enum ParseResult { Ok(int value), Err(int code), };
+        \\int main() { ParseResult result = ParseResult::Ok(7); match (result) { ParseResult::Ok => return 7; _ => return 0; } }
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_enum_ParseResult") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, ".tag;") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "case 0: goto") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "default: goto") != null);
 }

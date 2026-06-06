@@ -95,12 +95,15 @@ const Checker = struct {
             },
             .match_stmt => |match_stmt| {
                 const scrutinee_type = try self.checkExpr(match_stmt.scrutinee);
-                if (!self.isInt(scrutinee_type) and !self.isBool(scrutinee_type)) {
-                    try self.reportAt(.TypeMismatch, "match scrutinee must be int or bool", self.exprSpan(match_stmt.scrutinee));
+                const scrutinee_kind = self.module.types.kind(scrutinee_type);
+                if (!self.isInt(scrutinee_type) and !self.isBool(scrutinee_type) and scrutinee_kind != .enum_type) {
+                    try self.reportAt(.TypeMismatch, "match scrutinee must be int, bool, or enum", self.exprSpan(match_stmt.scrutinee));
                     return error.InvalidSemanticModule;
                 }
                 var seen_ints = std.StringHashMap(void).init(self.allocator);
                 defer seen_ints.deinit();
+                var seen_variants = std.AutoHashMap(hir.VariantId, void).init(self.allocator);
+                defer seen_variants.deinit();
                 var seen_true = false;
                 var seen_false = false;
                 var seen_wildcard = false;
@@ -121,6 +124,17 @@ const Checker = struct {
                                 return error.InvalidSemanticModule;
                             }
                             if (value) seen_true = true else seen_false = true;
+                        },
+                        .enum_variant => |pattern| {
+                            if (scrutinee_kind != .enum_type or scrutinee_kind.enum_type.index != pattern.enum_id.index) {
+                                try self.reportAt(.EnumPatternTypeMismatch, "enum pattern type does not match match scrutinee", arm.pattern_span);
+                                return error.InvalidSemanticModule;
+                            }
+                            if (seen_variants.contains(pattern.variant_id)) {
+                                try self.reportAt(.EnumPatternTypeMismatch, "duplicate enum variant match pattern", arm.pattern_span);
+                                return error.InvalidSemanticModule;
+                            }
+                            try seen_variants.put(pattern.variant_id, {});
                         },
                         .wildcard => {
                             if (seen_wildcard) {

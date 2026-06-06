@@ -78,6 +78,10 @@ pub const HirMatchPattern = union(enum) {
     int_literal: []const u8,
     bool_literal: bool,
     wildcard,
+    enum_variant: struct {
+        enum_id: EnumId,
+        variant_id: VariantId,
+    },
 };
 
 pub const HirMatchArm = struct {
@@ -790,5 +794,6 @@ fn writePattern(writer: *std.Io.Writer, pattern: HirMatchPattern) !void {
         .int_literal => |text| try writer.writeAll(text),
         .bool_literal => |value| try writer.writeAll(if (value) "true" else "false"),
         .wildcard => try writer.writeByte('_'),
+        .enum_variant => |enum_variant| try writer.print("EnumVariant {f}::{f}", .{ enum_variant.enum_id, enum_variant.variant_id }),
     }
 }

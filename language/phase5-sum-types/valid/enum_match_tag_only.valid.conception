@@ -1,0 +1,22 @@
+# name: phase5 enum match tag only
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+enum Status {
+    Ok,
+    Err,
+};
+
+int main() {
+    Status status = Status::Ok;
+    match (status) {
+        Status::Ok => return 7;
+        Status::Err => return 1;
+    }
+}
+
+=== run ===
+exit_code: 7

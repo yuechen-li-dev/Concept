@@ -717,14 +717,43 @@ pub const Parser = struct {
                 _ = self.advance();
                 return .{ .bool_literal = .{ .value = token.kind == .true, .span = token.span } };
             },
-            .identifier => if (std.mem.eql(u8, token.lexeme, "_")) {
+            .identifier => {
                 _ = self.advance();
-                return .{ .wildcard = token.span };
+                if (std.mem.eql(u8, token.lexeme, "_")) {
+                    return .{ .wildcard = token.span };
+                }
+                if (self.match(.colon_colon) != null) {
+                    const variant = (try self.expect(.identifier, "expected enum variant after '::'", .UnexpectedToken)) orelse return null;
+                    const pattern_span = ast.spanFromBounds(token.span.start, spanEnd(variant.span));
+                    if (self.current().kind == .left_paren) {
+                        try self.report(.UnexpectedToken, "enum match payload binding is not supported yet", self.current().span);
+                        self.skipBalancedParens();
+                    }
+                    return .{ .enum_variant = .{
+                        .enum_name = .{ .text = token.lexeme, .span = token.span },
+                        .variant_name = .{ .text = variant.lexeme, .span = variant.span },
+                        .span = pattern_span,
+                    } };
+                }
             },
             else => {},
         }
         try self.report(.UnexpectedToken, "expected match pattern", token.span);
         return null;
+    }
+
+    fn skipBalancedParens(self: *Parser) void {
+        var depth: usize = 0;
+        while (self.current().kind != .eof) {
+            const kind = self.current().kind;
+            if (kind == .left_paren) depth += 1;
+            _ = self.advance();
+            if (kind == .right_paren) {
+                if (depth == 0) return;
+                depth -= 1;
+                if (depth == 0) return;
+            }
+        }
     }
 
     fn parseLocalDeclStmt(self: *Parser, allocator: std.mem.Allocator) !ast.Stmt {
@@ -3950,6 +3979,42 @@ test "parses match with wildcard arm" {
         .wildcard => |span| span,
         else => return error.ExpectedWildcardPattern,
     };
+}
+
+test "parses enum variant match pattern" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+    const unit = try parseTestSource("module Main; enum Status { Ok, Err, }; int main() { Status status = Status::Ok; match (status) { Status::Ok => return 7; Status::Err => return 1; } }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const match_stmt = switch (expectFunctionDecl(unit, 1).body.?.block.?.statements[1]) {
+        .match_stmt => |match_stmt| match_stmt,
+        else => return error.ExpectedMatchStmt,
+    };
+    const pattern = switch (match_stmt.arms[0].pattern) {
+        .enum_variant => |pattern| pattern,
+        else => return error.ExpectedEnumVariantPattern,
+    };
+    try std.testing.expectEqualStrings("Status", pattern.enum_name.text);
+    try std.testing.expectEqualStrings("Ok", pattern.variant_name.text);
+}
+
+test "enum variant match pattern missing variant diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+    const unit = try parseTestSource("module Main; int main() { match (0) { Status:: => return 0; _ => return 1; } }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected enum variant after '::'", diagnostics.diagnostics.items[0].message);
+}
+
+test "enum variant match payload binding diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+    const unit = try parseTestSource("module Main; int main() { match (0) { ParseResult::Ok(value) => return 0; _ => return 1; } }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("enum match payload binding is not supported yet", diagnostics.diagnostics.items[0].message);
 }
 
 test "match missing opening brace diagnostic" {

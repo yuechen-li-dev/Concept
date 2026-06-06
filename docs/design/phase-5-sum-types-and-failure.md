@@ -458,3 +458,13 @@ and emits backend-owned C assignments for enum tags and payload fields.
 Variant matching remains future P5-M3 work, and payload binding remains future
 P5-M4 work. Result-shaped conventions, `try`, `must_use`, and discard checking
 remain out of scope for this milestone.
+
+### P5-M3 match over enum variants checkpoint
+
+P5-M3 adds executable matching over resolved enum variant patterns in the authoritative MIR-backed path. A `match` arm may now use a qualified, tag-only pattern such as `Status::Ok` or `ParseResult::Err`, and `_` remains available as a wildcard/default arm. Pattern enum names and variant names are simple identifiers in this checkpoint; unqualified variants, dotted names, generic names, and payload-binding forms are deliberately outside this milestone.
+
+Payload-bearing enum values can be matched by active variant, but their payloads are not bound or extracted yet. A pattern like `ParseResult::Ok(value)` is rejected as unsupported payload binding and remains the P5-M4 target.
+
+Semantic lowering resolves each enum variant pattern to the matched enum and variant IDs. HIR checking allows enum variant patterns only when the scrutinee has the same enum type, rejects int/bool literal patterns against enum scrutinees, rejects variant patterns against int/bool scrutinees, and rejects duplicate concrete enum variant arms. Exhaustiveness checking is still not required in P5-M3.
+
+MIR lowering implements enum matches by assigning an `EnumTag` rvalue to an integer temporary and reusing `SwitchInt` with deterministic variant indexes (`0` for the first declared variant, `1` for the second, and so on). The C backend emits tag extraction through the backend-local `.tag` field from the P5-M1 enum layout and then emits the existing integer `switch` form.

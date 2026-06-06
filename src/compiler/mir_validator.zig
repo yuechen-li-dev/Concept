@@ -274,6 +274,15 @@ const Validator = struct {
                 }
                 break :blk self.enumType(constructor.enum_id);
             },
+            .enum_tag => |operand| blk: {
+                const operand_type = try self.operandType(function_id, operand, span);
+                if (operand_type) |type_id| {
+                    if (self.semantic_module.types.kind(type_id) != .enum_type) {
+                        try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                    }
+                }
+                break :blk self.semantic_module.types.intType();
+            },
         };
     }
 
