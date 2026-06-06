@@ -1,5 +1,6 @@
 # name: phase3 duplicate struct enum
 # phase: check
+# check: declarations
 # expect: fail
 
 === source ===

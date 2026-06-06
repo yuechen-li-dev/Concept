@@ -1,5 +1,6 @@
 # name: phase3 unknown struct field type
 # phase: check
+# check: declarations
 # expect: fail
 
 === source ===

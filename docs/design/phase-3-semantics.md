@@ -407,9 +407,15 @@ MIR remains a Phase 4 concern. Phase 3 HIR is intentionally not MIR: it carries 
 
 Any remaining AST-based executable checker or AST-backed C backend entry point is transitional legacy support for older tests and comparison. It is not the authoritative run path after Phase 3.
 
+## P3-Fix1 cleanup note: explicit check modes and HIR spans
+
+Phase 3 check fixtures now select their semantic behavior with fixture metadata instead of filename conventions. `# check: declarations` runs parse plus semantic collection / declaration checks without the HIR executable checker, while `# check: hir` additionally runs executable-subset HIR checking. `phase: check` fixtures default to declaration mode when the header is omitted.
+
+HIR declarations, statements, expressions, and match arms now carry source spans threaded from the AST lowering path. The HIR executable checker reports diagnostics at the relevant HIR span when possible, keeping synthetic spans only for cases with no user construct to point at.
+
 Known closeout limitations are explicit:
 
-- HIR diagnostics may still use synthetic spans where the lowering path does not yet carry precise source spans.
+- HIR nodes now carry source spans from lowering, and the HIR executable checker uses those spans for construct-specific diagnostics where available; synthetic spans remain only for module-level fallbacks such as missing `main`.
 - C backend v0 still lowers both Concept `int` and `bool` to C `int`.
 - C identifier mangling is still future work; emitted names are currently the interned source names accepted by the Phase 2 executable subset.
 - Payload enum runtime layout, payload enum matching, match exhaustiveness, MIR, borrow/move checking, generics, imports, richer C type lowering, and production backends remain out of scope for Phase 3.

@@ -2,6 +2,10 @@ const std = @import("std");
 
 const interner_module = @import("interner.zig");
 const types = @import("types.zig");
+const source = @import("source.zig");
+
+pub const SourceSpan = source.SourceSpan;
+pub const synthetic_span = SourceSpan{ .start = 0, .length = 0 };
 pub const Interner = interner_module.Interner;
 pub const SymbolId = interner_module.SymbolId;
 
@@ -36,6 +40,7 @@ pub const HirItem = union(enum) {
 pub const HirFunction = struct {
     item: ItemId,
     name: SymbolId,
+    span: SourceSpan,
     return_type: types.TypeId,
     params: []ParamId,
     locals: []LocalId,
@@ -45,6 +50,7 @@ pub const HirFunction = struct {
 pub const HirLocal = struct {
     parent: FunctionId,
     name: SymbolId,
+    span: SourceSpan,
     type_id: types.TypeId,
 };
 
@@ -53,7 +59,12 @@ pub const AssignTarget = union(enum) {
     param: ParamId,
 };
 
-pub const HirStmt = union(enum) {
+pub const HirStmt = struct {
+    span: SourceSpan,
+    kind: HirStmtKind,
+};
+
+pub const HirStmtKind = union(enum) {
     block: []StmtId,
     return_stmt: ?ExprId,
     local_decl: struct { local: LocalId, initializer: ExprId },
@@ -71,10 +82,16 @@ pub const HirMatchPattern = union(enum) {
 
 pub const HirMatchArm = struct {
     pattern: HirMatchPattern,
+    pattern_span: SourceSpan,
     body: StmtId,
 };
 
-pub const HirExpr = union(enum) {
+pub const HirExpr = struct {
+    span: SourceSpan,
+    kind: HirExprKind,
+};
+
+pub const HirExprKind = union(enum) {
     int_literal: []const u8,
     bool_literal: bool,
     local_ref: LocalId,
@@ -134,6 +151,7 @@ pub const BinaryOp = enum {
 pub const HirParam = struct {
     parent: FunctionId,
     name: SymbolId,
+    span: SourceSpan,
     type_id: types.TypeId,
 };
 
@@ -152,18 +170,21 @@ pub const HirEnum = struct {
 pub const HirField = struct {
     parent: StructId,
     name: SymbolId,
+    span: SourceSpan,
     type_id: types.TypeId,
 };
 
 pub const HirVariant = struct {
     parent: EnumId,
     name: SymbolId,
+    span: SourceSpan,
     payload_fields: []EnumPayloadFieldId,
 };
 
 pub const HirEnumPayloadField = struct {
     parent: VariantId,
     name: SymbolId,
+    span: SourceSpan,
     type_id: types.TypeId,
 };
 
@@ -217,7 +238,7 @@ pub const HirStore = struct {
             if (function.locals.len > 0) self.allocator.free(function.locals);
         }
         for (self.stmts.items) |stmt| {
-            switch (stmt) {
+            switch (stmt.kind) {
                 .block => |children| if (children.len > 0) self.allocator.free(children),
                 .match_stmt => |match_stmt| if (match_stmt.arms.len > 0) {
                     for (match_stmt.arms) |arm| {
@@ -232,7 +253,7 @@ pub const HirStore = struct {
             }
         }
         for (self.exprs.items) |expr| {
-            switch (expr) {
+            switch (expr.kind) {
                 .int_literal => |text| self.allocator.free(text),
                 .call => |call| if (call.args.len > 0) self.allocator.free(call.args),
                 else => {},
@@ -262,13 +283,14 @@ pub const HirStore = struct {
         self.* = undefined;
     }
 
-    pub fn addFunction(self: *HirStore, name: SymbolId, return_type: types.TypeId) !FunctionId {
+    pub fn addFunction(self: *HirStore, name: SymbolId, return_type: types.TypeId, span: SourceSpan) !FunctionId {
         const id = FunctionId{ .index = try nextIndex(self.functions.items.len, error.TooManyFunctions) };
         const item = try self.addItem(.{ .function = id });
         errdefer _ = self.items.pop();
         try self.functions.append(self.allocator, .{
             .item = item,
             .name = name,
+            .span = span,
             .return_type = return_type,
             .params = &.{},
             .locals = &.{},
@@ -301,10 +323,10 @@ pub const HirStore = struct {
         return id;
     }
 
-    pub fn addParam(self: *HirStore, parent: FunctionId, name: SymbolId, type_id: types.TypeId) !ParamId {
+    pub fn addParam(self: *HirStore, parent: FunctionId, name: SymbolId, type_id: types.TypeId, span: SourceSpan) !ParamId {
         _ = self.getFunction(parent);
         const id = ParamId{ .index = try nextIndex(self.params.items.len, error.TooManyParams) };
-        try self.params.append(self.allocator, .{ .parent = parent, .name = name, .type_id = type_id });
+        try self.params.append(self.allocator, .{ .parent = parent, .name = name, .span = span, .type_id = type_id });
         errdefer _ = self.params.pop();
 
         const function_decl = self.getFunctionMut(parent);
@@ -312,10 +334,10 @@ pub const HirStore = struct {
         return id;
     }
 
-    pub fn addLocal(self: *HirStore, parent: FunctionId, name: SymbolId, type_id: types.TypeId) !LocalId {
+    pub fn addLocal(self: *HirStore, parent: FunctionId, name: SymbolId, type_id: types.TypeId, span: SourceSpan) !LocalId {
         _ = self.getFunction(parent);
         const id = LocalId{ .index = try nextIndex(self.locals.items.len, error.TooManyLocals) };
-        try self.locals.append(self.allocator, .{ .parent = parent, .name = name, .type_id = type_id });
+        try self.locals.append(self.allocator, .{ .parent = parent, .name = name, .span = span, .type_id = type_id });
         errdefer _ = self.locals.pop();
 
         const function_decl = self.getFunctionMut(parent);
@@ -323,15 +345,15 @@ pub const HirStore = struct {
         return id;
     }
 
-    pub fn addStmt(self: *HirStore, stmt: HirStmt) !StmtId {
+    pub fn addStmt(self: *HirStore, kind: HirStmtKind, span: SourceSpan) !StmtId {
         const id = StmtId{ .index = try nextIndex(self.stmts.items.len, error.TooManyStmts) };
-        try self.stmts.append(self.allocator, stmt);
+        try self.stmts.append(self.allocator, .{ .span = span, .kind = kind });
         return id;
     }
 
-    pub fn addExpr(self: *HirStore, expr: HirExpr) !ExprId {
+    pub fn addExpr(self: *HirStore, kind: HirExprKind, span: SourceSpan) !ExprId {
         const id = ExprId{ .index = try nextIndex(self.exprs.items.len, error.TooManyExprs) };
-        try self.exprs.append(self.allocator, expr);
+        try self.exprs.append(self.allocator, .{ .span = span, .kind = kind });
         return id;
     }
 
@@ -343,10 +365,10 @@ pub const HirStore = struct {
         self.getFunctionMut(id).return_type = type_id;
     }
 
-    pub fn addField(self: *HirStore, parent: StructId, name: SymbolId, type_id: types.TypeId) !FieldId {
+    pub fn addField(self: *HirStore, parent: StructId, name: SymbolId, type_id: types.TypeId, span: SourceSpan) !FieldId {
         _ = self.getStruct(parent);
         const id = FieldId{ .index = try nextIndex(self.fields.items.len, error.TooManyFields) };
-        try self.fields.append(self.allocator, .{ .parent = parent, .name = name, .type_id = type_id });
+        try self.fields.append(self.allocator, .{ .parent = parent, .name = name, .span = span, .type_id = type_id });
         errdefer _ = self.fields.pop();
 
         const struct_decl = self.getStructMut(parent);
@@ -354,10 +376,10 @@ pub const HirStore = struct {
         return id;
     }
 
-    pub fn addVariant(self: *HirStore, parent: EnumId, name: SymbolId) !VariantId {
+    pub fn addVariant(self: *HirStore, parent: EnumId, name: SymbolId, span: SourceSpan) !VariantId {
         _ = self.getEnum(parent);
         const id = VariantId{ .index = try nextIndex(self.variants.items.len, error.TooManyVariants) };
-        try self.variants.append(self.allocator, .{ .parent = parent, .name = name, .payload_fields = &.{} });
+        try self.variants.append(self.allocator, .{ .parent = parent, .name = name, .span = span, .payload_fields = &.{} });
         errdefer _ = self.variants.pop();
 
         const enum_decl = self.getEnumMut(parent);
@@ -365,10 +387,10 @@ pub const HirStore = struct {
         return id;
     }
 
-    pub fn addEnumPayloadField(self: *HirStore, parent: VariantId, name: SymbolId, type_id: types.TypeId) !EnumPayloadFieldId {
+    pub fn addEnumPayloadField(self: *HirStore, parent: VariantId, name: SymbolId, type_id: types.TypeId, span: SourceSpan) !EnumPayloadFieldId {
         _ = self.getVariant(parent);
         const id = EnumPayloadFieldId{ .index = try nextIndex(self.enum_payload_fields.items.len, error.TooManyEnumPayloadFields) };
-        try self.enum_payload_fields.append(self.allocator, .{ .parent = parent, .name = name, .type_id = type_id });
+        try self.enum_payload_fields.append(self.allocator, .{ .parent = parent, .name = name, .span = span, .type_id = type_id });
         errdefer _ = self.enum_payload_fields.pop();
 
         const variant = self.getVariantMut(parent);
@@ -524,7 +546,7 @@ pub const HirStore = struct {
 
     fn writeStmtDebug(self: *const HirStore, writer: *std.Io.Writer, id: StmtId, depth: usize) !void {
         try writeIndent(writer, depth);
-        switch (self.getStmt(id).*) {
+        switch (self.getStmt(id).kind) {
             .block => |children| {
                 try writer.writeAll("Block\n");
                 for (children) |child| try self.writeStmtDebug(writer, child, depth + 1);
@@ -584,7 +606,7 @@ pub const HirStore = struct {
 
     fn writeExprDebug(self: *const HirStore, writer: *std.Io.Writer, id: ExprId, depth: usize) !void {
         try writeIndent(writer, depth);
-        switch (self.getExpr(id).*) {
+        switch (self.getExpr(id).kind) {
             .int_literal => |text| try writer.print("Int {s}\n", .{text}),
             .bool_literal => |value| try writer.print("Bool {s}\n", .{if (value) "true" else "false"}),
             .local_ref => |local| try writer.print("LocalRef {f}\n", .{local}),
@@ -664,7 +686,7 @@ test "add function with interned name and lookup by ID" {
     defer store.deinit();
 
     const main_name = try interner.intern("main");
-    const function_id = try store.addFunction(main_name, .{ .index = 1 });
+    const function_id = try store.addFunction(main_name, .{ .index = 1 }, synthetic_span);
     const function = store.getFunction(function_id);
 
     try std.testing.expectEqual(@as(u32, 0), function_id.index);
@@ -683,9 +705,9 @@ test "add struct with fields and lookup by ID" {
     defer store.deinit();
 
     const vec3_id = try store.addStruct(try interner.intern("Vec3"));
-    const x_id = try store.addField(vec3_id, try interner.intern("x"), .{ .index = 1 });
-    const y_id = try store.addField(vec3_id, try interner.intern("y"), .{ .index = 1 });
-    const z_id = try store.addField(vec3_id, try interner.intern("z"), .{ .index = 1 });
+    const x_id = try store.addField(vec3_id, try interner.intern("x"), .{ .index = 1 }, synthetic_span);
+    const y_id = try store.addField(vec3_id, try interner.intern("y"), .{ .index = 1 }, synthetic_span);
+    const z_id = try store.addField(vec3_id, try interner.intern("z"), .{ .index = 1 }, synthetic_span);
     const vec3 = store.getStruct(vec3_id);
 
     try std.testing.expectEqual(@as(usize, 3), vec3.fields.len);
@@ -703,8 +725,8 @@ test "add enum with variants and lookup by ID" {
     defer store.deinit();
 
     const token_id = try store.addEnum(try interner.intern("Token"));
-    const identifier_id = try store.addVariant(token_id, try interner.intern("Identifier"));
-    const end_id = try store.addVariant(token_id, try interner.intern("End"));
+    const identifier_id = try store.addVariant(token_id, try interner.intern("Identifier"), synthetic_span);
+    const end_id = try store.addVariant(token_id, try interner.intern("End"), synthetic_span);
     const token = store.getEnum(token_id);
 
     try std.testing.expectEqual(@as(usize, 2), token.variants.len);
@@ -720,14 +742,14 @@ test "HIR debug formatting uses interned names" {
     var module = HirModule.init(std.testing.allocator);
     defer module.deinit();
 
-    _ = try module.store.addFunction(try interner.intern("main"), .{ .index = 0 });
+    _ = try module.store.addFunction(try interner.intern("main"), .{ .index = 0 }, synthetic_span);
     const vec3_id = try module.store.addStruct(try interner.intern("Vec3"));
-    _ = try module.store.addField(vec3_id, try interner.intern("x"), .{ .index = 1 });
-    _ = try module.store.addField(vec3_id, try interner.intern("y"), .{ .index = 1 });
-    _ = try module.store.addField(vec3_id, try interner.intern("z"), .{ .index = 1 });
+    _ = try module.store.addField(vec3_id, try interner.intern("x"), .{ .index = 1 }, synthetic_span);
+    _ = try module.store.addField(vec3_id, try interner.intern("y"), .{ .index = 1 }, synthetic_span);
+    _ = try module.store.addField(vec3_id, try interner.intern("z"), .{ .index = 1 }, synthetic_span);
     const token_id = try module.store.addEnum(try interner.intern("Token"));
-    _ = try module.store.addVariant(token_id, try interner.intern("Identifier"));
-    _ = try module.store.addVariant(token_id, try interner.intern("End"));
+    _ = try module.store.addVariant(token_id, try interner.intern("Identifier"), synthetic_span);
+    _ = try module.store.addVariant(token_id, try interner.intern("End"), synthetic_span);
 
     const rendered = try module.store.debugString(std.testing.allocator, interner);
     defer std.testing.allocator.free(rendered);

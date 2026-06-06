@@ -106,15 +106,15 @@ fn emitHirFunction(writer: anytype, module: *const semantics.SemanticModule, fun
 
 fn emitHirBlockContents(writer: anytype, module: *const semantics.SemanticModule, block_id: hir.StmtId, depth: usize) !void {
     const block = module.hir.getStmt(block_id).*;
-    std.debug.assert(block == .block);
-    for (block.block) |stmt_id| {
+    std.debug.assert(block.kind == .block);
+    for (block.kind.block) |stmt_id| {
         try emitHirStmt(writer, module, stmt_id, depth);
     }
 }
 
 fn emitHirStmt(writer: anytype, module: *const semantics.SemanticModule, stmt_id: hir.StmtId, depth: usize) !void {
     const stmt = module.hir.getStmt(stmt_id).*;
-    switch (stmt) {
+    switch (stmt.kind) {
         .block => {
             try emitIndent(writer, depth);
             try writer.writeAll("{\n");
@@ -204,7 +204,7 @@ fn emitHirStmt(writer: anytype, module: *const semantics.SemanticModule, stmt_id
 }
 
 fn hirStmtAlwaysExits(module: *const semantics.SemanticModule, stmt_id: hir.StmtId) bool {
-    return switch (module.hir.getStmt(stmt_id).*) {
+    return switch (module.hir.getStmt(stmt_id).kind) {
         .return_stmt => true,
         else => false,
     };
@@ -212,7 +212,7 @@ fn hirStmtAlwaysExits(module: *const semantics.SemanticModule, stmt_id: hir.Stmt
 
 fn emitHirExpr(writer: anytype, module: *const semantics.SemanticModule, expr_id: hir.ExprId) !void {
     const expr = module.hir.getExpr(expr_id).*;
-    switch (expr) {
+    switch (expr.kind) {
         .int_literal => |text| try writer.writeAll(text),
         .bool_literal => |value| try writer.writeAll(if (value) "1" else "0"),
         .local_ref => |id| try emitSymbolName(writer, module, module.hir.getLocal(id).name),
@@ -315,7 +315,7 @@ fn emitBlockContents(writer: anytype, block: ast_model.BlockStmt, depth: usize) 
 }
 
 fn emitStmt(writer: anytype, stmt: ast_model.Stmt, depth: usize) !void {
-    switch (stmt) {
+    switch (stmt.kind) {
         .local_decl => |local_decl| {
             try emitIndent(writer, depth);
             try emitCType(writer, local_decl.type_name);
@@ -406,14 +406,14 @@ fn emitStmt(writer: anytype, stmt: ast_model.Stmt, depth: usize) !void {
 }
 
 fn stmtAlwaysExits(stmt: ast_model.Stmt) bool {
-    return switch (stmt) {
+    return switch (stmt.kind) {
         .return_stmt => true,
         else => false,
     };
 }
 
 fn emitExpr(writer: anytype, expr: ast_model.Expr) !void {
-    switch (expr) {
+    switch (expr.kind) {
         .int_literal => |literal| try writer.writeAll(literal.text),
         .bool_literal => |literal| try writer.writeAll(if (literal.value) "1" else "0"),
         .identifier => |identifier| try writer.writeAll(identifier.name.text),

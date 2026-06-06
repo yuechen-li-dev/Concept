@@ -1,5 +1,6 @@
 # name: phase3 hir call type mismatch closeout
 # phase: check
+# check: hir
 # expect: fail
 
 === source ===

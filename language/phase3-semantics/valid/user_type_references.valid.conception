@@ -1,5 +1,6 @@
 # name: phase3 user type references
 # phase: check
+# check: declarations
 # expect: pass
 
 === source ===

@@ -1,5 +1,6 @@
 # name: phase3 struct enum type graph
 # phase: check
+# check: declarations
 # expect: pass
 
 === source ===

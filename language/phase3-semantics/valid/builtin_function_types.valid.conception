@@ -1,5 +1,6 @@
 # name: phase3 builtin function types
 # phase: check
+# check: declarations
 # expect: pass
 
 === source ===

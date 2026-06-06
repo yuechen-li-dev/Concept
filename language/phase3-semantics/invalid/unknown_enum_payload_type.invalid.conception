@@ -1,5 +1,6 @@
 # name: phase3 unknown enum payload type
 # phase: check
+# check: declarations
 # expect: fail
 
 === source ===

@@ -1,5 +1,6 @@
 # name: phase3 enum payload types
 # phase: check
+# check: declarations
 # expect: pass
 
 === source ===

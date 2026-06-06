@@ -1,5 +1,6 @@
 # name: phase3 hir checker while condition not bool
 # phase: check
+# check: hir
 # expect: fail
 
 === source ===

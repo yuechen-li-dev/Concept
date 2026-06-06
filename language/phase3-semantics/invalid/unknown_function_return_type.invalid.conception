@@ -1,5 +1,6 @@
 # name: phase3 unknown function return type
 # phase: check
+# check: declarations
 # expect: fail
 
 === source ===

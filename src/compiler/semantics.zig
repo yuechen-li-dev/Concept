@@ -115,7 +115,7 @@ const Collector = struct {
             function_decl.signature.name.base.text,
             function_decl.signature.name.base.span,
         ) orelse return;
-        const function_id = try self.module.hir.addFunction(name, self.module.types.voidType());
+        const function_id = try self.module.hir.addFunction(name, self.module.types.voidType(), function_decl.span);
         try self.top_level_decls.put(name, .{ .function = function_id });
     }
 
@@ -156,7 +156,7 @@ const Collector = struct {
             try param_names.put(param_symbol, param.name.span);
 
             if (try self.resolveTypeName(param.type_name)) |type_id| {
-                _ = try self.module.hir.addParam(function_id, param_symbol, type_id);
+                _ = try self.module.hir.addParam(function_id, param_symbol, type_id, param.span);
             }
         }
     }
@@ -180,7 +180,7 @@ const Collector = struct {
             try field_names.put(field_symbol, field.name.span);
 
             if (try self.resolveTypeName(field.type_name)) |type_id| {
-                _ = try self.module.hir.addField(struct_id, field_symbol, type_id);
+                _ = try self.module.hir.addField(struct_id, field_symbol, type_id, field.span);
             }
         }
     }
@@ -203,11 +203,11 @@ const Collector = struct {
             }
             try variant_names.put(variant_symbol, variant.name.span);
 
-            const variant_id = try self.module.hir.addVariant(enum_id, variant_symbol);
+            const variant_id = try self.module.hir.addVariant(enum_id, variant_symbol, variant.span);
             for (variant.payload_fields) |payload_field| {
                 const payload_symbol = try self.module.interner.intern(payload_field.name.text);
                 if (try self.resolveTypeName(payload_field.type_name)) |type_id| {
-                    _ = try self.module.hir.addEnumPayloadField(variant_id, payload_symbol, type_id);
+                    _ = try self.module.hir.addEnumPayloadField(variant_id, payload_symbol, type_id, payload_field.span);
                 }
             }
         }
@@ -323,7 +323,7 @@ const BodyLowerer = struct {
         }
         const owned = try self.collector.allocator.alloc(hir.StmtId, stmt_ids.items.len);
         @memcpy(owned, stmt_ids.items);
-        return try self.collector.module.hir.addStmt(.{ .block = owned });
+        return try self.collector.module.hir.addStmt(.{ .block = owned }, block.span);
     }
 
     fn lowerArmBody(self: *BodyLowerer, stmt: ast.Stmt) anyerror!?hir.StmtId {
@@ -338,7 +338,7 @@ const BodyLowerer = struct {
             .return_stmt => |ret| {
                 const value = if (ret.value) |expr| try self.lowerExpr(expr.*) else null;
                 if (ret.value != null and value == null) return null;
-                return try self.collector.module.hir.addStmt(.{ .return_stmt = value });
+                return try self.collector.module.hir.addStmt(.{ .return_stmt = value }, ret.span);
             },
             .local_decl => |local_decl| {
                 const initializer = (try self.lowerExpr(local_decl.initializer.*)) orelse return null;
@@ -348,9 +348,9 @@ const BodyLowerer = struct {
                     return null;
                 }
                 const type_id = (try self.collector.resolveTypeName(local_decl.type_name)) orelse return null;
-                const local_id = try self.collector.module.hir.addLocal(self.function_id, local_symbol, type_id);
+                const local_id = try self.collector.module.hir.addLocal(self.function_id, local_symbol, type_id, local_decl.span);
                 try self.bindings.append(self.collector.allocator, .{ .name = local_symbol, .binding = .{ .local = local_id }, .depth = self.depth });
-                return try self.collector.module.hir.addStmt(.{ .local_decl = .{ .local = local_id, .initializer = initializer } });
+                return try self.collector.module.hir.addStmt(.{ .local_decl = .{ .local = local_id, .initializer = initializer } }, local_decl.span);
             },
             .assignment => |assignment| {
                 const target_symbol = try self.collector.module.interner.intern(assignment.target.text);
@@ -359,19 +359,19 @@ const BodyLowerer = struct {
                     return null;
                 };
                 const value = (try self.lowerExpr(assignment.value.*)) orelse return null;
-                return try self.collector.module.hir.addStmt(.{ .assignment = .{ .target = target, .value = value } });
+                return try self.collector.module.hir.addStmt(.{ .assignment = .{ .target = target, .value = value } }, assignment.span);
             },
             .if_stmt => |if_stmt| {
                 const condition = (try self.lowerExpr(if_stmt.condition.*)) orelse return null;
                 const then_block = (try self.lowerBlock(if_stmt.then_block)) orelse return null;
                 const else_block = if (if_stmt.else_block) |else_block| try self.lowerBlock(else_block) else null;
                 if (if_stmt.else_block != null and else_block == null) return null;
-                return try self.collector.module.hir.addStmt(.{ .if_stmt = .{ .condition = condition, .then_block = then_block, .else_block = else_block } });
+                return try self.collector.module.hir.addStmt(.{ .if_stmt = .{ .condition = condition, .then_block = then_block, .else_block = else_block } }, if_stmt.span);
             },
             .while_stmt => |while_stmt| {
                 const condition = (try self.lowerExpr(while_stmt.condition.*)) orelse return null;
                 const body = (try self.lowerBlock(while_stmt.body)) orelse return null;
-                return try self.collector.module.hir.addStmt(.{ .while_stmt = .{ .condition = condition, .body = body } });
+                return try self.collector.module.hir.addStmt(.{ .while_stmt = .{ .condition = condition, .body = body } }, while_stmt.span);
             },
             .match_stmt => |match_stmt| {
                 const scrutinee = (try self.lowerExpr(match_stmt.scrutinee.*)) orelse return null;
@@ -379,19 +379,19 @@ const BodyLowerer = struct {
                 defer arms.deinit(self.collector.allocator);
                 for (match_stmt.arms) |arm| {
                     const body = (try self.lowerArmBody(arm.body)) orelse return null;
-                    try arms.append(self.collector.allocator, .{ .pattern = try lowerPattern(self, arm.pattern), .body = body });
+                    try arms.append(self.collector.allocator, .{ .pattern = try lowerPattern(self, arm.pattern), .pattern_span = arm.pattern.span(), .body = body });
                 }
                 const owned = try self.collector.allocator.alloc(hir.HirMatchArm, arms.items.len);
                 @memcpy(owned, arms.items);
-                return try self.collector.module.hir.addStmt(.{ .match_stmt = .{ .scrutinee = scrutinee, .arms = owned } });
+                return try self.collector.module.hir.addStmt(.{ .match_stmt = .{ .scrutinee = scrutinee, .arms = owned } }, match_stmt.span);
             },
         }
     }
 
     fn lowerExpr(self: *BodyLowerer, expr: ast.Expr) anyerror!?hir.ExprId {
         switch (expr) {
-            .int_literal => |lit| return try self.collector.module.hir.addExpr(.{ .int_literal = try self.collector.allocator.dupe(u8, lit.text) }),
-            .bool_literal => |lit| return try self.collector.module.hir.addExpr(.{ .bool_literal = lit.value }),
+            .int_literal => |lit| return try self.collector.module.hir.addExpr(.{ .int_literal = try self.collector.allocator.dupe(u8, lit.text) }, lit.span),
+            .bool_literal => |lit| return try self.collector.module.hir.addExpr(.{ .bool_literal = lit.value }, lit.span),
             .identifier => |ident| {
                 const symbol = try self.collector.module.interner.intern(ident.name.text);
                 const binding = self.lookup(symbol) orelse {
@@ -399,8 +399,8 @@ const BodyLowerer = struct {
                     return null;
                 };
                 return switch (binding) {
-                    .local => |id| try self.collector.module.hir.addExpr(.{ .local_ref = id }),
-                    .param => |id| try self.collector.module.hir.addExpr(.{ .param_ref = id }),
+                    .local => |id| try self.collector.module.hir.addExpr(.{ .local_ref = id }, ident.span),
+                    .param => |id| try self.collector.module.hir.addExpr(.{ .param_ref = id }, ident.span),
                 };
             },
             .call => |call| {
@@ -423,20 +423,20 @@ const BodyLowerer = struct {
                 }
                 const owned = try self.collector.allocator.alloc(hir.ExprId, args.items.len);
                 @memcpy(owned, args.items);
-                return try self.collector.module.hir.addExpr(.{ .call = .{ .function = function_id, .args = owned } });
+                return try self.collector.module.hir.addExpr(.{ .call = .{ .function = function_id, .args = owned } }, call.span);
             },
             .group => |group| {
                 const inner = (try self.lowerExpr(group.inner.*)) orelse return null;
-                return try self.collector.module.hir.addExpr(.{ .group = inner });
+                return try self.collector.module.hir.addExpr(.{ .group = inner }, group.span);
             },
             .unary => |unary| {
                 const operand = (try self.lowerExpr(unary.operand.*)) orelse return null;
-                return try self.collector.module.hir.addExpr(.{ .unary = .{ .op = lowerUnaryOp(unary.op), .operand = operand } });
+                return try self.collector.module.hir.addExpr(.{ .unary = .{ .op = lowerUnaryOp(unary.op), .operand = operand } }, unary.span);
             },
             .binary => |binary| {
                 const left = (try self.lowerExpr(binary.left.*)) orelse return null;
                 const right = (try self.lowerExpr(binary.right.*)) orelse return null;
-                return try self.collector.module.hir.addExpr(.{ .binary = .{ .op = lowerBinaryOp(binary.op), .left = left, .right = right } });
+                return try self.collector.module.hir.addExpr(.{ .binary = .{ .op = lowerBinaryOp(binary.op), .left = left, .right = right } }, binary.span);
             },
         }
     }
@@ -774,9 +774,9 @@ test "body lowering lowers return integer" {
     var module = try collectItems(&.{functionWithBody("main", &.{}, statements)}, &diagnostics_bag);
     defer module.deinit();
 
-    const block = module.hir.getStmt(module.hir.getFunction(.{ .index = 0 }).body.?).block;
-    const ret = module.hir.getStmt(block[0]).return_stmt.?;
-    try std.testing.expectEqualStrings("42", module.hir.getExpr(ret).int_literal);
+    const block = module.hir.getStmt(module.hir.getFunction(.{ .index = 0 }).body.?).kind.block;
+    const ret = module.hir.getStmt(block[0]).kind.return_stmt.?;
+    try std.testing.expectEqualStrings("42", module.hir.getExpr(ret).kind.int_literal);
 }
 
 test "body lowering lowers local declaration and local reference" {
@@ -794,9 +794,9 @@ test "body lowering lowers local declaration and local reference" {
 
     const function = module.hir.getFunction(.{ .index = 0 });
     try std.testing.expectEqual(@as(usize, 1), function.locals.len);
-    const block = module.hir.getStmt(function.body.?).block;
-    try std.testing.expectEqual(hir.LocalId{ .index = 0 }, module.hir.getStmt(block[0]).local_decl.local);
-    try std.testing.expectEqual(hir.HirExpr{ .local_ref = .{ .index = 0 } }, module.hir.getExpr(module.hir.getStmt(block[1]).return_stmt.?).*);
+    const block = module.hir.getStmt(function.body.?).kind.block;
+    try std.testing.expectEqual(hir.LocalId{ .index = 0 }, module.hir.getStmt(block[0]).kind.local_decl.local);
+    try std.testing.expectEqual(hir.HirExprKind{ .local_ref = .{ .index = 0 } }, module.hir.getExpr(module.hir.getStmt(block[1]).kind.return_stmt.?).kind);
 }
 
 test "body lowering resolves parameters and function calls" {
@@ -816,11 +816,11 @@ test "body lowering resolves parameters and function calls" {
     var module = try collectItems(&.{ functionWithBody("add", add_params, add_stmts), functionWithBody("main", &.{}, main_stmts) }, &diagnostics_bag);
     defer module.deinit();
 
-    const add_block = module.hir.getStmt(module.hir.getFunction(.{ .index = 0 }).body.?).block;
-    const add_ret = module.hir.getExpr(module.hir.getStmt(add_block[0]).return_stmt.?).binary;
-    try std.testing.expectEqual(hir.HirExpr{ .param_ref = .{ .index = 0 } }, module.hir.getExpr(add_ret.left).*);
-    const main_block = module.hir.getStmt(module.hir.getFunction(.{ .index = 1 }).body.?).block;
-    try std.testing.expectEqual(hir.FunctionId{ .index = 0 }, module.hir.getExpr(module.hir.getStmt(main_block[0]).return_stmt.?).call.function);
+    const add_block = module.hir.getStmt(module.hir.getFunction(.{ .index = 0 }).body.?).kind.block;
+    const add_ret = module.hir.getExpr(module.hir.getStmt(add_block[0]).kind.return_stmt.?).kind.binary;
+    try std.testing.expectEqual(hir.HirExprKind{ .param_ref = .{ .index = 0 } }, module.hir.getExpr(add_ret.left).kind);
+    const main_block = module.hir.getStmt(module.hir.getFunction(.{ .index = 1 }).body.?).kind.block;
+    try std.testing.expectEqual(hir.FunctionId{ .index = 0 }, module.hir.getExpr(module.hir.getStmt(main_block[0]).kind.return_stmt.?).kind.call.function);
 }
 
 test "body lowering reports unknown and duplicate body names" {
@@ -879,7 +879,7 @@ test "body lowering lowers empty body and reports unknown function" {
     var module = try collectItems(&.{functionWithBody("main", &.{}, empty_statements)}, &diagnostics_bag);
     defer module.deinit();
     try std.testing.expect(module.hir.getFunction(.{ .index = 0 }).body != null);
-    try std.testing.expectEqual(@as(usize, 0), module.hir.getStmt(module.hir.getFunction(.{ .index = 0 }).body.?).block.len);
+    try std.testing.expectEqual(@as(usize, 0), module.hir.getStmt(module.hir.getFunction(.{ .index = 0 }).body.?).kind.block.len);
 
     const bad_statements = try allocator.alloc(ast.Stmt, 1);
     bad_statements[0] = try returnStmt(allocator, try callExpr(allocator, "missing", &.{}));

@@ -1,5 +1,6 @@
 # name: phase3 hir control flow
 # phase: check
+# check: hir
 # expect: pass
 
 === source ===

@@ -1,5 +1,6 @@
 # name: phase3 unsupported pointer type
 # phase: check
+# check: declarations
 # expect: fail
 
 === source ===

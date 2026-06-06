@@ -1,5 +1,6 @@
 # name: phase3 parsed nonsemantic items
 # phase: check
+# check: declarations
 # expect: pass
 
 === source ===

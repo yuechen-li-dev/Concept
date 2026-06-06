@@ -1,5 +1,6 @@
 # name: phase3 duplicate top level closeout
 # phase: check
+# check: declarations
 # expect: fail
 
 === source ===
