@@ -149,7 +149,7 @@ test "run harness compiles and runs local int assignment" {
         "module Main; int main() { int x = 1; x = x + 2; return x; }",
         3,
     );
-    try std.testing.expectEqual(@as(u8, 3), result.exit_code);
+    try std.testing.expectEqual(@as(u8, 3), result.actual_exit_code);
 }
 
 test "run harness compiles and runs local bool assignment" {
@@ -158,7 +158,7 @@ test "run harness compiles and runs local bool assignment" {
         "module Main; int main() { bool ok = false; ok = !ok; if (ok) { return 7; } return 0; }",
         7,
     );
-    try std.testing.expectEqual(@as(u8, 7), result.exit_code);
+    try std.testing.expectEqual(@as(u8, 7), result.actual_exit_code);
 }
 
 test "run harness compiles and runs assignment inside if" {
@@ -167,7 +167,7 @@ test "run harness compiles and runs assignment inside if" {
         "module Main; int main() { int x = 1; if (true) { x = 5; } return x; }",
         5,
     );
-    try std.testing.expectEqual(@as(u8, 5), result.exit_code);
+    try std.testing.expectEqual(@as(u8, 5), result.actual_exit_code);
 }
 
 test "run harness compiles and runs parameter assignment" {
@@ -176,7 +176,7 @@ test "run harness compiles and runs parameter assignment" {
         "module Main; int bump(int x) { x = x + 1; return x; } int main() { return bump(2); }",
         3,
     );
-    try std.testing.expectEqual(@as(u8, 3), result.exit_code);
+    try std.testing.expectEqual(@as(u8, 3), result.actual_exit_code);
 }
 
 test "run harness compiles and runs function call add" {
@@ -284,7 +284,7 @@ test "run harness compiles and runs while count to seven" {
         "module Main; int main() { int x = 0; while (x < 7) { x = x + 1; } return x; }",
         7,
     );
-    try std.testing.expectEqual(@as(u8, 7), result.exit_code);
+    try std.testing.expectEqual(@as(u8, 7), result.actual_exit_code);
 }
 
 test "run harness compiles and runs while zero iterations" {
@@ -293,7 +293,7 @@ test "run harness compiles and runs while zero iterations" {
         "module Main; int main() { int x = 7; while (x < 7) { x = x + 1; } return x; }",
         7,
     );
-    try std.testing.expectEqual(@as(u8, 7), result.exit_code);
+    try std.testing.expectEqual(@as(u8, 7), result.actual_exit_code);
 }
 
 test "run harness compiles and runs while with if" {
@@ -302,5 +302,5 @@ test "run harness compiles and runs while with if" {
         "module Main; int main() { int x = 0; int y = 0; while (x < 4) { if (x == 2) { y = 7; } x = x + 1; } return y; }",
         7,
     );
-    try std.testing.expectEqual(@as(u8, 7), result.exit_code);
+    try std.testing.expectEqual(@as(u8, 7), result.actual_exit_code);
 }
