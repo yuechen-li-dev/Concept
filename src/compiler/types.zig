@@ -14,6 +14,8 @@ pub const TypeId = struct {
     }
 };
 
+pub const TypeStoreError = std.mem.Allocator.Error || error{TooManyTypes};
+
 pub const TypeKind = union(enum) {
     void,
     int,
@@ -78,7 +80,7 @@ pub const TypeStore = struct {
         return bool_type_id;
     }
 
-    pub fn addStructType(self: *TypeStore, struct_id: hir.StructId) !TypeId {
+    pub fn addStructType(self: *TypeStore, struct_id: hir.StructId) TypeStoreError!TypeId {
         if (self.findNominal(.{ .struct_type = struct_id })) |existing| {
             return existing;
         }
@@ -86,7 +88,7 @@ pub const TypeStore = struct {
         return try self.append(.{ .struct_type = struct_id }, error.TooManyTypes);
     }
 
-    pub fn addEnumType(self: *TypeStore, enum_id: hir.EnumId) !TypeId {
+    pub fn addEnumType(self: *TypeStore, enum_id: hir.EnumId) TypeStoreError!TypeId {
         if (self.findNominal(.{ .enum_type = enum_id })) |existing| {
             return existing;
         }
@@ -94,13 +96,18 @@ pub const TypeStore = struct {
         return try self.append(.{ .enum_type = enum_id }, error.TooManyTypes);
     }
 
-    pub fn addPointerType(self: *TypeStore, pointee: TypeId) !TypeId {
+    pub fn addPointerType(self: *TypeStore, pointee: TypeId) TypeStoreError!TypeId {
         std.debug.assert(self.contains(pointee));
         if (self.findPointer(pointee)) |existing| {
             return existing;
         }
 
         return try self.append(.{ .pointer = .{ .pointee = pointee } }, error.TooManyTypes);
+    }
+
+    pub fn pointerType(self: TypeStore, pointee: TypeId) ?TypeId {
+        std.debug.assert(self.contains(pointee));
+        return self.findPointer(pointee);
     }
 
     /// Returns the type kind for a valid type ID.
@@ -121,7 +128,7 @@ pub const TypeStore = struct {
         return self.types.items.len;
     }
 
-    fn append(self: *TypeStore, type_kind: TypeKind, overflow_error: anyerror) !TypeId {
+    fn append(self: *TypeStore, type_kind: TypeKind, overflow_error: TypeStoreError) TypeStoreError!TypeId {
         const id = TypeId{ .index = try nextIndex(self.types.items.len, overflow_error) };
         try self.types.append(self.allocator, type_kind);
         return id;
@@ -164,7 +171,7 @@ pub const TypeStore = struct {
     }
 };
 
-fn nextIndex(len: usize, overflow_error: anyerror) !u32 {
+fn nextIndex(len: usize, overflow_error: TypeStoreError) TypeStoreError!u32 {
     if (len > std.math.maxInt(u32)) return overflow_error;
     return @intCast(len);
 }

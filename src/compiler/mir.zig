@@ -155,7 +155,7 @@ pub const MirRvalue = union(enum) {
         return .{ .address_of = place };
     }
 
-    pub fn deref(operand: MirOperand) MirRvalue {
+    pub fn dereference(operand: MirOperand) MirRvalue {
         return .{ .deref = operand };
     }
 
@@ -186,7 +186,7 @@ pub const MirRvalue = union(enum) {
             .use => |operand| MirRvalue.use_(try operand.clone(allocator)),
             .unary => |unary_rvalue| MirRvalue.unaryOp(unary_rvalue.op, try unary_rvalue.operand.clone(allocator)),
             .address_of => |place| MirRvalue.addressOf(place),
-            .deref => |operand| MirRvalue.deref(try operand.clone(allocator)),
+            .deref => |operand| MirRvalue.dereference(try operand.clone(allocator)),
             .binary => |binary_rvalue| MirRvalue.binaryOp(
                 binary_rvalue.op,
                 try binary_rvalue.left.clone(allocator),

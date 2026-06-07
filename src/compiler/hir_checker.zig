@@ -10,7 +10,7 @@ const semantics = @import("semantics.zig");
 const types = @import("types.zig");
 
 pub const DiagnosticBag = diagnostics.DiagnosticBag;
-pub const CheckError = error{InvalidSemanticModule} || std.mem.Allocator.Error;
+pub const CheckError = error{ InvalidSemanticModule, TooManyTypes } || std.mem.Allocator.Error;
 
 const synthetic_span = hir.synthetic_span;
 
@@ -364,7 +364,6 @@ const Checker = struct {
     // Type helper functions
     // ─────────────────────────────────────────────────────────────────────────────
 
-
     fn addressableExprType(self: *Checker, expr_id: hir.ExprId, span: diagnostics.SourceSpan) CheckError!types.TypeId {
         const expr = self.module.hir.getExpr(expr_id).*;
         return switch (expr.kind) {
@@ -643,8 +642,6 @@ test "HIR checker accepts pointer return local copy and call argument" {
 
     try tm.checkPass();
 }
-
-
 
 test "HIR checker accepts address-of local and param" {
     var tm = try TestModule.init();
