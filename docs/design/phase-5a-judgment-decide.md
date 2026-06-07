@@ -457,3 +457,13 @@ Still future work:
 - runtime fixtures;
 - payload candidate construction;
 - stateful policy wrappers, `judge`, `Judgment<T>`, fallible `decide?`, float scores, generic score concepts, and scheduler/optimizer integration.
+
+## P5a-M3 status: MIR lowering
+
+P5a-M3 lowers checked HIR `decide` expressions to ordinary MIR control flow. There is no dedicated MIR `decide` instruction or backend-specific decide primitive.
+
+The lowering materializes temporary locals for winner tracking (`hasWinner`), the current best score (`bestScore`), and the current best enum value (`bestValue`). Each arm is processed in source order. Conditional arms branch around score evaluation when their `when` condition is false, so scores are evaluated only for eligible arms. Eligible arms update the winner only when there is no prior winner or when the arm score is strictly greater than the current best score; using `>` preserves source-order tie-breaking and allows duplicate variants.
+
+The selected enum value is therefore represented as the final `bestValue` operand and can flow through existing expression positions such as local initializers, assignments, returns, and call arguments. Because the generated MIR uses existing locals, assignments, enum constructors, boolean switches, gotos, unary operations, and integer comparisons, the existing MIR validator and C backend path do not require a dedicated decide feature.
+
+Runtime fixture stabilization remains P5a-M4. P5a-M3 intentionally does not add stateful policy wrappers, `judge`, `Judgment<T>`, payload variant candidates, fallible decide forms, float scores, score normalization, or any new language semantics beyond lowering the already checked v0 `decide` expression.

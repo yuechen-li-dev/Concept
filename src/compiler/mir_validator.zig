@@ -576,15 +576,17 @@ test "MIR validator accepts lowered if while and match MIR" {
     try validateLowered(.if_else);
     try validateLowered(.while_loop);
     try validateLowered(.match_int);
+    try validateLowered(.decide);
 }
 
 test "MIR validator integration covers checked HIR lowering programs" {
     try validateLowered(.arithmetic);
     try validateLowered(.while_loop);
     try validateLowered(.match_int);
+    try validateLowered(.decide);
 }
 
-const LoweredCase = enum { arithmetic, if_else, while_loop, match_int };
+const LoweredCase = enum { arithmetic, if_else, while_loop, match_int, decide };
 
 fn validateLowered(case: LoweredCase) !void {
     var ctx = try TestContext.init();
@@ -623,6 +625,19 @@ fn validateLowered(case: LoweredCase) !void {
             arms[2] = .{ .pattern = .wildcard, .pattern_span = synthetic_span, .body = try blockStmt(&ctx, &.{try returnStmt(&ctx, try intExpr(&ctx, "0"))}) };
             const match_stmt = try addStmt(&ctx, .{ .match_stmt = .{ .scrutinee = try localRef(&ctx, x), .arms = arms } });
             try setBody(&ctx, main, &.{ decl, match_stmt });
+        },
+        .decide => {
+            const enum_id = try ctx.module.hir.addEnum(try ctx.module.interner.intern("Choice"), false);
+            const enum_type = try ctx.module.types.addEnumType(enum_id);
+            const a = try ctx.module.hir.addVariant(enum_id, try ctx.module.interner.intern("A"), synthetic_span);
+            const b = try ctx.module.hir.addVariant(enum_id, try ctx.module.interner.intern("B"), synthetic_span);
+            const selected = try hirLocal(&ctx, main, "selected", enum_type);
+            const arms = try std.testing.allocator.alloc(hir.HirDecideArm, 2);
+            arms[0] = .{ .variant_id = a, .condition = try boolExpr(&ctx, true), .score = try intExpr(&ctx, "4"), .span = synthetic_span };
+            arms[1] = .{ .variant_id = b, .condition = null, .score = try intExpr(&ctx, "0"), .span = synthetic_span };
+            const decide = try addExpr(&ctx, .{ .decide = .{ .enum_type = enum_type, .enum_id = enum_id, .arms = arms } });
+            const decl = try localDecl(&ctx, selected, decide);
+            try setBody(&ctx, main, &.{ decl, try returnStmt(&ctx, try intExpr(&ctx, "0")) });
         },
     }
 

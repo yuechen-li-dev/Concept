@@ -371,7 +371,7 @@ const FunctionLowerer = struct {
             .call => |call| try self.lowerCall(expr, call, block_id),
             .enum_constructor => |constructor| try self.lowerEnumConstructor(expr, constructor, block_id),
             .try_expr => |operand| try self.lowerTry(expr, operand, block_id),
-            .decide => return error.UnsupportedExpression,
+            .decide => |decide| try self.lowerDecide(expr, decide, block_id),
         };
     }
 
@@ -452,6 +452,122 @@ const FunctionLowerer = struct {
             ),
         });
         return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = current };
+    }
+
+    fn lowerDecide(self: *FunctionLowerer, expr: hir.HirExpr, decide: anytype, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const bool_type = self.semantic_module.types.boolType();
+        const int_type = self.semantic_module.types.intType();
+        const has_winner = try self.addNamedTemp("hasWinner", bool_type, expr.span);
+        const best_score = try self.addNamedTemp("bestScore", int_type, expr.span);
+        const best_value = try self.addNamedTemp("bestValue", decide.enum_type, expr.span);
+
+        try self.store.appendStatement(block_id, .{
+            .span = expr.span,
+            .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(has_winner), mir.MirRvalue.use_(mir.MirOperand.boolLiteral(false))),
+        });
+        try self.store.appendStatement(block_id, .{
+            .span = expr.span,
+            .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(best_score), mir.MirRvalue.use_(try mir.MirOperand.intLiteral(self.allocator, "0"))),
+        });
+
+        const initial_variant = self.firstUnconditionalVariant(decide.arms) orelse return error.UnsupportedExpression;
+        try self.store.appendStatement(block_id, .{
+            .span = expr.span,
+            .kind = mir.MirStatementKind.assignTo(
+                mir.MirPlace.localPlace(best_value),
+                .{ .enum_constructor = .{ .enum_id = decide.enum_id, .variant_id = initial_variant, .args = &.{} } },
+            ),
+        });
+
+        var current = block_id;
+        for (decide.arms) |arm| {
+            const score_block = if (arm.condition) |condition_expr| blk: {
+                const condition_lowered = try self.lowerExpr(condition_expr, current);
+                const eligible_block = try self.newBlock(arm.span);
+                const next_arm_block = try self.newBlock(arm.span);
+                try self.terminateBlock(condition_lowered.block, arm.span, mir.MirTerminatorKind.switchBool(condition_lowered.operand, eligible_block, next_arm_block));
+                current = next_arm_block;
+                break :blk eligible_block;
+            } else current;
+
+            const after_arm_block = if (arm.condition == null) try self.newBlock(arm.span) else current;
+            const score_lowered = try self.lowerExpr(arm.score, score_block);
+            const score_temp = try self.addNamedTemp("scoreTemp", int_type, arm.span);
+            try self.store.appendStatement(score_lowered.block, .{
+                .span = arm.span,
+                .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(score_temp), mir.MirRvalue.use_(score_lowered.operand)),
+            });
+
+            const missing_winner = try self.addTemp(bool_type);
+            try self.store.appendStatement(score_lowered.block, .{
+                .span = arm.span,
+                .kind = mir.MirStatementKind.assignTo(
+                    mir.MirPlace.localPlace(missing_winner),
+                    mir.MirRvalue.unaryOp(.logical_not, mir.MirOperand.copyPlace(mir.MirPlace.localPlace(has_winner))),
+                ),
+            });
+            const score_beats_best = try self.addTemp(bool_type);
+            try self.store.appendStatement(score_lowered.block, .{
+                .span = arm.span,
+                .kind = mir.MirStatementKind.assignTo(
+                    mir.MirPlace.localPlace(score_beats_best),
+                    mir.MirRvalue.binaryOp(
+                        .greater,
+                        mir.MirOperand.copyPlace(mir.MirPlace.localPlace(score_temp)),
+                        mir.MirOperand.copyPlace(mir.MirPlace.localPlace(best_score)),
+                    ),
+                ),
+            });
+            const should_update = try self.addNamedTemp("shouldUpdate", bool_type, arm.span);
+            try self.store.appendStatement(score_lowered.block, .{
+                .span = arm.span,
+                .kind = mir.MirStatementKind.assignTo(
+                    mir.MirPlace.localPlace(should_update),
+                    mir.MirRvalue.binaryOp(
+                        .logical_or,
+                        mir.MirOperand.copyPlace(mir.MirPlace.localPlace(missing_winner)),
+                        mir.MirOperand.copyPlace(mir.MirPlace.localPlace(score_beats_best)),
+                    ),
+                ),
+            });
+
+            const update_block = try self.newBlock(arm.span);
+            try self.terminateBlock(score_lowered.block, arm.span, mir.MirTerminatorKind.switchBool(
+                mir.MirOperand.copyPlace(mir.MirPlace.localPlace(should_update)),
+                update_block,
+                after_arm_block,
+            ));
+            try self.store.appendStatement(update_block, .{
+                .span = arm.span,
+                .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(has_winner), mir.MirRvalue.use_(mir.MirOperand.boolLiteral(true))),
+            });
+            try self.store.appendStatement(update_block, .{
+                .span = arm.span,
+                .kind = mir.MirStatementKind.assignTo(
+                    mir.MirPlace.localPlace(best_score),
+                    mir.MirRvalue.use_(mir.MirOperand.copyPlace(mir.MirPlace.localPlace(score_temp))),
+                ),
+            });
+            try self.store.appendStatement(update_block, .{
+                .span = arm.span,
+                .kind = mir.MirStatementKind.assignTo(
+                    mir.MirPlace.localPlace(best_value),
+                    .{ .enum_constructor = .{ .enum_id = decide.enum_id, .variant_id = arm.variant_id, .args = &.{} } },
+                ),
+            });
+            try self.terminateBlock(update_block, arm.span, mir.MirTerminatorKind.gotoBlock(after_arm_block));
+            current = after_arm_block;
+        }
+
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(best_value)), .block = current };
+    }
+
+    fn firstUnconditionalVariant(self: *FunctionLowerer, arms: []const hir.HirDecideArm) ?hir.VariantId {
+        _ = self;
+        for (arms) |arm| {
+            if (arm.condition == null) return arm.variant_id;
+        }
+        return null;
     }
 
     fn lowerTry(self: *FunctionLowerer, expr: hir.HirExpr, operand_expr: hir.ExprId, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
@@ -559,6 +675,10 @@ const FunctionLowerer = struct {
 
     fn addTemp(self: *FunctionLowerer, type_id: types.TypeId) LoweringError!mir.MirLocalId {
         return self.store.addLocal(self.function_id, null, .temp, type_id, null);
+    }
+
+    fn addNamedTemp(self: *FunctionLowerer, name: []const u8, type_id: types.TypeId, span: ?hir.SourceSpan) LoweringError!mir.MirLocalId {
+        return self.store.addLocal(self.function_id, try self.semantic_module.interner.intern(name), .temp, type_id, span);
     }
 
     fn newBlock(self: *FunctionLowerer, span: ?hir.SourceSpan) LoweringError!mir.MirBlockId {
@@ -751,6 +871,138 @@ fn blockStmt(module: *semantics.SemanticModule, statements: []const hir.StmtId) 
     const owned = try std.testing.allocator.alloc(hir.StmtId, statements.len);
     @memcpy(owned, statements);
     return module.hir.addStmt(.{ .block = owned }, hir.synthetic_span);
+}
+
+fn unaryExpr(module: *semantics.SemanticModule, op: hir.UnaryOp, operand: hir.ExprId) !hir.ExprId {
+    return module.hir.addExpr(.{ .unary = .{ .op = op, .operand = operand } }, hir.synthetic_span);
+}
+
+fn binaryExpr(module: *semantics.SemanticModule, op: hir.BinaryOp, left: hir.ExprId, right: hir.ExprId) !hir.ExprId {
+    return module.hir.addExpr(.{ .binary = .{ .op = op, .left = left, .right = right } }, hir.synthetic_span);
+}
+
+fn decideExpr(module: *semantics.SemanticModule, enum_type: types.TypeId, enum_id: hir.EnumId, arms: []const hir.HirDecideArm) !hir.ExprId {
+    const owned = try std.testing.allocator.alloc(hir.HirDecideArm, arms.len);
+    @memcpy(owned, arms);
+    return module.hir.addExpr(.{ .decide = .{ .enum_type = enum_type, .enum_id = enum_id, .arms = owned } }, hir.synthetic_span);
+}
+
+test "MIR lowering debug snapshot lowers decide with one unconditional arm" {
+    var module = try newModule();
+    defer module.deinit();
+    const enum_id = try module.hir.addEnum(try intern(&module, "Mode"), false);
+    const enum_type = try module.types.addEnumType(enum_id);
+    const nominal = try module.hir.addVariant(enum_id, try intern(&module, "Nominal"), hir.synthetic_span);
+    const main = try addFunction(&module, "main", enum_type, false);
+    const selected = try addLocal(&module, main, "selected", enum_type);
+    const decide = try decideExpr(&module, enum_type, enum_id, &.{.{ .variant_id = nominal, .condition = null, .score = try intExpr(&module, "0"), .span = hir.synthetic_span }});
+    const decl = try module.hir.addStmt(.{ .local_decl = .{ .local = selected, .initializer = decide } }, hir.synthetic_span);
+    const ret = try module.hir.addStmt(.{ .return_stmt = try module.hir.addExpr(.{ .local_ref = selected }, hir.synthetic_span) }, hir.synthetic_span);
+    try setBody(&module, main, &.{ decl, ret });
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "temp hasWinner") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "temp bestScore") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "temp bestValue") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "EnumConstructor EnumId(0)::VariantId(0)()") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Binary > Copy") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Return Copy(MirLocalId(0))") != null);
+}
+
+test "MIR lowering debug snapshot lowers decide condition and fallback" {
+    var module = try newModule();
+    defer module.deinit();
+    const enum_id = try module.hir.addEnum(try intern(&module, "Mode"), false);
+    const enum_type = try module.types.addEnumType(enum_id);
+    const hot = try module.hir.addVariant(enum_id, try intern(&module, "Hot"), hir.synthetic_span);
+    const normal = try module.hir.addVariant(enum_id, try intern(&module, "Normal"), hir.synthetic_span);
+    const main = try addFunction(&module, "main", enum_type, false);
+    const decide = try decideExpr(&module, enum_type, enum_id, &.{
+        .{ .variant_id = hot, .condition = try boolExpr(&module, true), .score = try intExpr(&module, "10"), .span = hir.synthetic_span },
+        .{ .variant_id = normal, .condition = null, .score = try intExpr(&module, "0"), .span = hir.synthetic_span },
+    });
+    try setBody(&module, main, &.{try module.hir.addStmt(.{ .return_stmt = decide }, hir.synthetic_span)});
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "SwitchBool Bool true true: MirBlockId") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Use(Int 10)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Use(Int 0)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "EnumConstructor EnumId(0)::VariantId(0)()") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "EnumConstructor EnumId(0)::VariantId(1)()") != null);
+}
+
+test "MIR lowering debug snapshot preserves decide duplicate variants and tie comparison" {
+    var module = try newModule();
+    defer module.deinit();
+    const enum_id = try module.hir.addEnum(try intern(&module, "Choice"), false);
+    const enum_type = try module.types.addEnumType(enum_id);
+    const a = try module.hir.addVariant(enum_id, try intern(&module, "A"), hir.synthetic_span);
+    const b = try module.hir.addVariant(enum_id, try intern(&module, "B"), hir.synthetic_span);
+    const main = try addFunction(&module, "main", enum_type, false);
+    const decide = try decideExpr(&module, enum_type, enum_id, &.{
+        .{ .variant_id = a, .condition = null, .score = try intExpr(&module, "5"), .span = hir.synthetic_span },
+        .{ .variant_id = a, .condition = null, .score = try intExpr(&module, "7"), .span = hir.synthetic_span },
+        .{ .variant_id = b, .condition = null, .score = try intExpr(&module, "7"), .span = hir.synthetic_span },
+    });
+    try setBody(&module, main, &.{try module.hir.addStmt(.{ .return_stmt = decide }, hir.synthetic_span)});
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "EnumConstructor EnumId(0)::VariantId(0)()") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "EnumConstructor EnumId(0)::VariantId(1)()") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Binary > Copy") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Binary >=") == null);
+}
+
+test "MIR lowering debug snapshot lowers decide negative score" {
+    var module = try newModule();
+    defer module.deinit();
+    const enum_id = try module.hir.addEnum(try intern(&module, "Choice"), false);
+    const enum_type = try module.types.addEnumType(enum_id);
+    const low = try module.hir.addVariant(enum_id, try intern(&module, "Low"), hir.synthetic_span);
+    const main = try addFunction(&module, "main", enum_type, false);
+    const negative = try unaryExpr(&module, .negate, try intExpr(&module, "1"));
+    const decide = try decideExpr(&module, enum_type, enum_id, &.{.{ .variant_id = low, .condition = null, .score = negative, .span = hir.synthetic_span }});
+    try setBody(&module, main, &.{try module.hir.addStmt(.{ .return_stmt = decide }, hir.synthetic_span)});
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Unary - Int 1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "temp scoreTemp") != null);
+}
+
+test "MIR lowering debug snapshot lowers decide in call argument" {
+    var module = try newModule();
+    defer module.deinit();
+    const enum_id = try module.hir.addEnum(try intern(&module, "Choice"), false);
+    const enum_type = try module.types.addEnumType(enum_id);
+    const a = try module.hir.addVariant(enum_id, try intern(&module, "A"), hir.synthetic_span);
+    const take = try addFunction(&module, "take", module.types.intType(), false);
+    _ = try addParam(&module, take, "choice", enum_type);
+    try setBody(&module, take, &.{try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "1") }, hir.synthetic_span)});
+    const main = try addFunction(&module, "main", module.types.intType(), false);
+    const decide = try decideExpr(&module, enum_type, enum_id, &.{.{ .variant_id = a, .condition = null, .score = try intExpr(&module, "0"), .span = hir.synthetic_span }});
+    const args = try std.testing.allocator.dupe(hir.ExprId, &.{decide});
+    const call = try module.hir.addExpr(.{ .call = .{ .function = take, .args = args } }, hir.synthetic_span);
+    try setBody(&module, main, &.{try module.hir.addStmt(.{ .return_stmt = call }, hir.synthetic_span)});
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Function main") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "temp bestValue") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Call FunctionId(0)(Copy(") != null);
 }
 
 test "MIR lowering skips function declarations without bodies" {
