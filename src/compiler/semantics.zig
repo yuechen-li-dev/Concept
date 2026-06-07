@@ -626,6 +626,15 @@ const BodyLowerer = struct {
                 const operand = (try self.lowerExpr(try_expr.operand.*)) orelse return null;
                 return try self.collector.module.hir.addExpr(.{ .try_expr = operand }, try_expr.span);
             },
+            .field_access => |field_access| {
+                const receiver = (try self.lowerExpr(field_access.receiver.*)) orelse return null;
+                const field_symbol = try self.collector.module.interner.intern(field_access.field_name.text);
+                return try self.collector.module.hir.addExpr(.{ .field_access = .{
+                    .receiver = receiver,
+                    .field_name = field_symbol,
+                    .field_span = field_access.field_name.span,
+                } }, field_access.span);
+            },
             .decide => |decide| {
                 const target = (try self.resolveDecideEnum(decide.type_name)) orelse return null;
                 var arms = std.ArrayList(hir.HirDecideArm).empty;

@@ -151,6 +151,10 @@ pub const MirRvalue = union(enum) {
         enum_operand: MirOperand,
         payload_field: hir.EnumPayloadFieldId,
     },
+    field_access: struct {
+        receiver: MirOperand,
+        field_id: hir.FieldId,
+    },
 
     pub fn use_(operand: MirOperand) MirRvalue {
         return .{ .use = operand };
@@ -199,6 +203,10 @@ pub const MirRvalue = union(enum) {
         return .{ .enum_payload_field = .{ .enum_operand = operand, .payload_field = payload_field } };
     }
 
+    pub fn fieldAccess(receiver: MirOperand, field_id: hir.FieldId) MirRvalue {
+        return .{ .field_access = .{ .receiver = receiver, .field_id = field_id } };
+    }
+
     fn clone(self: MirRvalue, allocator: std.mem.Allocator) !MirRvalue {
         return switch (self) {
             .use => |operand| MirRvalue.use_(try operand.clone(allocator)),
@@ -215,6 +223,7 @@ pub const MirRvalue = union(enum) {
             .struct_constructor => |constructor| try MirRvalue.structConstructor(allocator, constructor.struct_id, constructor.fields),
             .enum_tag => |operand| MirRvalue.enumTag(try operand.clone(allocator)),
             .enum_payload_field => |payload| MirRvalue.enumPayloadField(try payload.enum_operand.clone(allocator), payload.payload_field),
+            .field_access => |field_access| MirRvalue.fieldAccess(try field_access.receiver.clone(allocator), field_access.field_id),
         };
     }
 
@@ -242,6 +251,7 @@ pub const MirRvalue = union(enum) {
             },
             .enum_tag => |operand| operand.deinit(allocator),
             .enum_payload_field => |payload| payload.enum_operand.deinit(allocator),
+            .field_access => |field_access| field_access.receiver.deinit(allocator),
         }
     }
 };
@@ -728,6 +738,11 @@ fn writeRvalueDebug(writer: *std.Io.Writer, rvalue: MirRvalue) !void {
             try writer.writeAll("EnumPayloadField(");
             try writeOperandDebug(writer, payload.enum_operand);
             try writer.print(", {f})", .{payload.payload_field});
+        },
+        .field_access => |field_access| {
+            try writer.writeAll("FieldAccess(");
+            try writeOperandDebug(writer, field_access.receiver);
+            try writer.print(", {f})", .{field_access.field_id});
         },
     }
 }

@@ -80,6 +80,8 @@ pub const DiagnosticCode = enum {
     DuplicateStructLiteralField,
     MissingStructLiteralField,
     StructFieldInitializerTypeMismatch,
+    FieldAccessNonStruct,
+    UnknownFieldAccess,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -141,6 +143,8 @@ pub const DiagnosticCode = enum {
             .DuplicateStructLiteralField => "CON0076",
             .MissingStructLiteralField => "CON0077",
             .StructFieldInitializerTypeMismatch => "CON0078",
+            .FieldAccessNonStruct => "CON0079",
+            .UnknownFieldAccess => "CON0080",
         };
     }
 };

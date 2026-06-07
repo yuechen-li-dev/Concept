@@ -336,6 +336,7 @@ pub const Expr = union(enum) {
     call: CallExpr,
     enum_constructor: EnumConstructorExpr,
     struct_literal: StructLiteralExpr,
+    field_access: FieldAccessExpr,
     decide: DecideExpr,
 
     pub const IntLiteralExpr = struct { text: []const u8, span: SourceSpan };
@@ -350,6 +351,7 @@ pub const Expr = union(enum) {
     pub const EnumConstructorExpr = struct { enum_name: NameSegment, variant_name: NameSegment, args: []*Expr, span: SourceSpan };
     pub const StructLiteralExpr = struct { type_name: NameSegment, fields: []StructLiteralField, span: SourceSpan };
     pub const StructLiteralField = struct { name: NameSegment, value: *Expr, span: SourceSpan };
+    pub const FieldAccessExpr = struct { receiver: *Expr, field_name: NameSegment, span: SourceSpan };
     pub const DecideExpr = struct { type_name: TypeName, arms: []DecideArm, span: SourceSpan };
     pub const DecideArm = struct {
         variant_name: NameSegment,
@@ -381,6 +383,7 @@ pub const Expr = union(enum) {
             .call => |expr| expr.span,
             .enum_constructor => |expr| expr.span,
             .struct_literal => |expr| expr.span,
+            .field_access => |expr| expr.span,
             .decide => |expr| expr.span,
         };
     }
@@ -425,6 +428,10 @@ pub const Expr = union(enum) {
                     allocator.destroy(field.value);
                 }
                 allocator.free(expr.fields);
+            },
+            .field_access => |expr| {
+                expr.receiver.deinit(allocator);
+                allocator.destroy(expr.receiver);
             },
             .decide => |expr| {
                 expr.type_name.deinit(allocator);
@@ -507,6 +514,12 @@ pub const Expr = union(enum) {
                     try writer.writeByte('\n');
                     try field.value.writeDebug(writer, depth + 2);
                 }
+            },
+            .field_access => |expr| {
+                try writer.writeAll("FieldAccess .");
+                try writer.writeAll(expr.field_name.text);
+                try writer.writeByte('\n');
+                try expr.receiver.writeDebug(writer, depth + 1);
             },
             .decide => |expr| {
                 try writer.writeAll("Decide ");

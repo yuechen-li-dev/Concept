@@ -377,6 +377,14 @@ fn emitEnumConstructorAssignment(writer: anytype, ctx: *const BackendContext, pl
     }
 }
 
+fn structFieldIndex(ctx: *const BackendContext, struct_decl: hir.HirStruct, field_id: hir.FieldId) ?usize {
+    _ = ctx;
+    for (struct_decl.fields, 0..) |candidate, index| {
+        if (candidate.index == field_id.index) return index;
+    }
+    return null;
+}
+
 fn enumVariantIndex(ctx: *const BackendContext, enum_decl: hir.HirEnum, variant_id: hir.VariantId) ?usize {
     _ = ctx;
     for (enum_decl.variants, 0..) |candidate, index| {
@@ -479,6 +487,14 @@ fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue
         .enum_tag => |operand| {
             try emitOperand(writer, ctx, operand);
             try writer.writeAll(".tag");
+        },
+        .field_access => |field_access| {
+            const field = ctx.module.hir.getField(field_access.field_id);
+            const struct_decl = ctx.module.hir.getStruct(field.parent);
+            const field_index = structFieldIndex(ctx, struct_decl.*, field_access.field_id) orelse return error.InvalidExecutable;
+            try emitOperand(writer, ctx, field_access.receiver);
+            try writer.writeByte('.');
+            try emitStructFieldName(writer, ctx.module, field.name, field_index);
         },
         .enum_payload_field => |payload| {
             const payload_field = ctx.module.hir.getEnumPayloadField(payload.payload_field);

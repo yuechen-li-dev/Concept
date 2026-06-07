@@ -264,6 +264,19 @@ const Checker = struct {
                 }
                 break :blk literal.type_id;
             },
+            .field_access => |field_access| blk: {
+                const receiver_type = try self.checkExpr(return_type, field_access.receiver);
+                const receiver_kind = self.module.types.kind(receiver_type);
+                if (receiver_kind != .struct_type) {
+                    try self.reportAt(.FieldAccessNonStruct, "field access receiver must be a struct value", expr.span);
+                    return error.InvalidSemanticModule;
+                }
+                const field_id = self.findField(receiver_kind.struct_type, field_access.field_name) orelse {
+                    try self.reportAt(.UnknownFieldAccess, "unknown field on struct value", field_access.field_span);
+                    return error.InvalidSemanticModule;
+                };
+                break :blk self.module.hir.getField(field_id).type_id;
+            },
             .enum_constructor => |constructor| blk: {
                 const variant = self.module.hir.getVariant(constructor.variant_id);
                 if (variant.parent.index != constructor.enum_id.index or constructor.args.len != variant.payload_fields.len) {
@@ -404,6 +417,15 @@ const Checker = struct {
     // ─────────────────────────────────────────────────────────────────────────────
     // Type helper functions
     // ─────────────────────────────────────────────────────────────────────────────
+
+    fn findField(self: *Checker, struct_id: hir.StructId, field_name: hir.SymbolId) ?hir.FieldId {
+        const struct_decl = self.module.hir.getStruct(struct_id);
+        for (struct_decl.fields) |field_id| {
+            const field = self.module.hir.getField(field_id);
+            if (field.name.index == field_name.index) return field_id;
+        }
+        return null;
+    }
 
     fn addressableExprType(self: *Checker, expr_id: hir.ExprId, span: diagnostics.SourceSpan) CheckError!types.TypeId {
         const expr = self.module.hir.getExpr(expr_id).*;

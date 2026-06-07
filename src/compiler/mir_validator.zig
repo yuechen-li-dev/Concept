@@ -331,6 +331,21 @@ const Validator = struct {
                 }
                 break :blk self.semantic_module.types.intType();
             },
+            .field_access => |field_access| blk: {
+                if (field_access.field_id.index >= self.semantic_module.hir.fields.items.len) {
+                    try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
+                    break :blk null;
+                }
+                const field = self.semantic_module.hir.getField(field_access.field_id);
+                const receiver_type = try self.operandType(function_id, field_access.receiver, span);
+                if (receiver_type) |type_id| {
+                    const kind = self.semantic_module.types.kind(type_id);
+                    if (kind != .struct_type or kind.struct_type.index != field.parent.index) {
+                        try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                    }
+                }
+                break :blk field.type_id;
+            },
             .enum_payload_field => |payload| blk: {
                 if (payload.payload_field.index >= self.semantic_module.hir.enum_payload_fields.items.len) {
                     try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);

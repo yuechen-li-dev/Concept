@@ -1,0 +1,14 @@
+# name: phase7 field access multiple
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+struct Vec2 { int x; int y; };
+
+int main() {
+    Vec2 v = Vec2 { y: 4, x: 3, };
+    return v.x + v.y;
+}

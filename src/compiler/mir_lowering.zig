@@ -402,6 +402,7 @@ const FunctionLowerer = struct {
             .call => |call| try self.lowerCall(expr, call, block_id),
             .enum_constructor => |constructor| try self.lowerEnumConstructor(expr, constructor, block_id),
             .struct_literal => |literal| try self.lowerStructLiteral(expr, literal, block_id),
+            .field_access => |field_access| try self.lowerFieldAccess(expr, field_access, block_id),
             .try_expr => |operand| try self.lowerTry(expr, operand, block_id),
             .decide => |decide| try self.lowerDecide(expr, decide, block_id),
         };
@@ -518,6 +519,20 @@ const FunctionLowerer = struct {
             ),
         });
         return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = current };
+    }
+
+    fn lowerFieldAccess(self: *FunctionLowerer, expr: hir.HirExpr, field_access: anytype, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const lowered = try self.lowerExpr(field_access.receiver, block_id);
+        const field_id = try self.resolveFieldAccess(field_access.receiver, field_access.field_name);
+        const temp = try self.addTemp(self.semantic_module.hir.getField(field_id).type_id);
+        try self.store.appendStatement(lowered.block, .{
+            .span = expr.span,
+            .kind = mir.MirStatementKind.assignTo(
+                mir.MirPlace.localPlace(temp),
+                mir.MirRvalue.fieldAccess(lowered.operand, field_id),
+            ),
+        });
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = lowered.block };
     }
 
     fn lowerStructLiteral(self: *FunctionLowerer, expr: hir.HirExpr, literal: anytype, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
@@ -743,6 +758,7 @@ const FunctionLowerer = struct {
             .call => |call| self.semantic_module.hir.getFunction(call.function).return_type,
             .enum_constructor => |constructor| try self.enumType(constructor.enum_id),
             .struct_literal => |literal| literal.type_id,
+            .field_access => |field_access| self.semantic_module.hir.getField(try self.resolveFieldAccess(field_access.receiver, field_access.field_name)).type_id,
             .decide => |decide| decide.enum_type,
             .try_expr => |operand| blk: {
                 const operand_type = try self.inferExprType(operand);
@@ -750,6 +766,18 @@ const FunctionLowerer = struct {
                 break :blk shape.ok_type;
             },
         };
+    }
+
+    fn resolveFieldAccess(self: *FunctionLowerer, receiver: hir.ExprId, field_name: hir.SymbolId) LoweringError!hir.FieldId {
+        const receiver_type = try self.inferExprType(receiver);
+        const kind = self.semantic_module.types.kind(receiver_type);
+        if (kind != .struct_type) return error.InvalidMirLowering;
+        const struct_decl = self.semantic_module.hir.getStruct(kind.struct_type);
+        for (struct_decl.fields) |field_id| {
+            const field = self.semantic_module.hir.getField(field_id);
+            if (field.name.index == field_name.index) return field_id;
+        }
+        return error.InvalidMirLowering;
     }
 
     fn inferAddressableExprType(self: *FunctionLowerer, expr_id: hir.ExprId) LoweringError!types.TypeId {
