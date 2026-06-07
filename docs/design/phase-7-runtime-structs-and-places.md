@@ -10,6 +10,8 @@ P7-M5 stabilizes the one-level field-place projection introduced for assignment 
 
 P7-M6 allows simple backend-supported struct values to cross function boundaries by value. Function signatures may use supported struct types as parameters and return values, calls may return structs into locals, and struct locals/parameters may be passed to functions or returned when the `TypeId` matches exactly. The C backend renders these flows with backend-local names such as `cpt_struct_Vec2` in prototypes, definitions, locals, assignments, and returns. This is still not a final ABI or `repr(C)` guarantee: methods, associated functions, additional constructors, implicit conversion between distinct struct types, auto field decomposition, struct equality, move/drop/ownership distinctions, pointer auto-deref, and nested unsupported struct layouts remain out of scope.
 
+P7-M7 closes the Phase 7 runtime/backend stabilization pass. The representative end-to-end path now has run fixtures and MIR/C snapshot coverage for struct literals, field reads, field writes, address-of fields rooted in locals/parameters, and by-value struct parameters/returns/calls. This milestone consolidates existing semantics only; it does not add methods, ownership, `repr(C)`, pointer auto-deref, recursive places, or nested by-value struct layout support.
+
 Phase 7 starts after the closed Phase 6 unsafe/raw-pointer slice. Phase 6 intentionally deferred ownership, move, Drop, and `MaybeUninit` until Concept has runtime structs and richer places. This document makes that prerequisite explicit and scopes the next executable-data milestone.
 
 ## Thesis
@@ -566,3 +568,30 @@ int* px = &v.x;
 The address-of result type is pointer-to-field type. HIR addressability and MIR places now share the local, parameter, and one-level field projection shape for assignment and address-of eligibility. Field places are still rooted only in locals or parameters; `&makeVec().x` is rejected because the receiver is a temporary, and `&ptr.x` remains a non-struct field access rather than auto-dereferencing a raw pointer. The C backend renders address-of field places directly, for example `&cpt_l_v_0.cpt_f_x_0`.
 
 P7-M5 deliberately does not add pointer field sugar, `->`, auto-deref, deref places like `&(*ptr).x`, index places, recursive nested field places, assignment through pointer deref, struct methods, move/drop/ownership, or ABI/repr controls.
+
+## P7-M7 runtime/backend closeout
+
+P7-M7 is the stabilization and closeout pass for the implemented Phase 7 struct pipeline. It exercises the real path from AST/HIR through MIR validation and C backend emission instead of adding new language semantics.
+
+Covered behavior:
+
+- struct literal construction into locals;
+- read-only field access from struct locals and parameters;
+- one-level field assignment on local and parameter struct places;
+- address-of fields for local and parameter struct places;
+- by-value struct function parameters, return values, and calls;
+- MIR debug snapshots for struct constructors, field places, address-of-field, deref of field pointers, and by-value call flow;
+- C backend snapshot assertions for `cpt_struct_*` signatures, local declarations, backend-owned field names, direct field writes, and address-of-field emission.
+
+The closeout fixtures intentionally stay within the existing v0 model. Field places remain one-level projections rooted in a local or parameter. Raw pointers are not auto-dereferenced, `->` is not syntax, address-of temporary fields remains invalid, and unsupported nested-by-value struct layouts are still rejected by the backend rather than silently guessed.
+
+Known limitations and future work remain:
+
+- no struct methods or associated functions;
+- no final ABI, custom layout attribute, or `repr(C)` guarantee;
+- no move, Drop, ownership, partial-initialization, or storage-state analysis;
+- no pointer auto-deref, deref places, index places, or recursive/nested place chains;
+- no generic structs, templates, concepts, or comptime integration;
+- no additional array or string layout work beyond the currently supported backend types.
+
+With these limitations explicit, Phase 7 is ready to serve as the executable-data substrate for later phases that need subobject places and user-defined runtime values.

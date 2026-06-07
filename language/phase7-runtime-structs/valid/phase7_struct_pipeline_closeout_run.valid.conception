@@ -1,0 +1,44 @@
+# name: phase7 struct pipeline closeout run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+struct Vec2 {
+    int x;
+    int y;
+};
+
+Vec2 makeVec(int x, int y) {
+    Vec2 v = Vec2 {
+        x: x,
+        y: y,
+    };
+    v.y = 9;
+    return v;
+}
+
+int readX(Vec2 v) {
+    int* px = &v.x;
+    unsafe {
+        return *px;
+    }
+}
+
+int sumAfterBump(Vec2 v) {
+    v.y = 5;
+    return v.x + v.y;
+}
+
+int main() {
+    Vec2 v = makeVec(37, 4);
+    v.x = readX(v) + 1;
+    int* py = &v.y;
+    unsafe {
+        return v.x + *py;
+    }
+}
+
+=== run ===
+exit_code: 47

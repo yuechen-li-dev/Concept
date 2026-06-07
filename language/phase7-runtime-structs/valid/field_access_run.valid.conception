@@ -20,4 +20,4 @@ int main() {
 }
 
 === run ===
-exit: 7
+exit_code: 7

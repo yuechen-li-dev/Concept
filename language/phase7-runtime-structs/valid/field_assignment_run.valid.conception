@@ -22,4 +22,4 @@ int main() {
 }
 
 === run ===
-exit: 11
+exit_code: 11
