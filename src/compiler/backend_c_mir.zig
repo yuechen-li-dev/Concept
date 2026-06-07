@@ -1,3 +1,7 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Imports and public API
+// ─────────────────────────────────────────────────────────────────────────────
+
 const std = @import("std");
 
 const diagnostics = @import("diagnostics.zig");
@@ -10,6 +14,10 @@ const source_model = @import("source.zig");
 const types = @import("types.zig");
 
 pub const EmitError = error{InvalidExecutable} || std.mem.Allocator.Error;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Backend context
+// ─────────────────────────────────────────────────────────────────────────────
 
 const BackendContext = struct {
     module: *const semantics.SemanticModule,
@@ -53,6 +61,10 @@ pub fn emitExecutableFromMir(
     }
     return output.toOwnedSlice();
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Enum layout emission
+// ─────────────────────────────────────────────────────────────────────────────
 
 fn emitEnumLayouts(writer: anytype, ctx: *const BackendContext) EmitError!bool {
     var emitted_any = false;
@@ -139,6 +151,10 @@ fn isSupportedEnumPayloadType(ctx: *const BackendContext, type_id: types.TypeId)
     };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Function/prototype emission
+// ─────────────────────────────────────────────────────────────────────────────
+
 fn emitPrototype(writer: anytype, ctx: *const BackendContext, function_id: mir.MirFunctionId, function: mir.MirFunction) EmitError!void {
     _ = function_id;
     try emitCType(writer, ctx, function.return_type, function.source_span);
@@ -175,6 +191,10 @@ fn emitFunction(writer: anytype, ctx: *const BackendContext, function_id: mir.Mi
     try writer.writeAll("}\n");
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Block/statement/terminator emission
+// ─────────────────────────────────────────────────────────────────────────────
+
 fn emitBlock(writer: anytype, ctx: *const BackendContext, block_id: mir.MirBlockId) EmitError!void {
     try emitBlockLabel(writer, block_id);
     try writer.writeAll(":\n");
@@ -202,6 +222,10 @@ fn emitStatement(writer: anytype, ctx: *const BackendContext, statement: mir.Mir
         },
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Enum constructor/tag/payload emission
+// ─────────────────────────────────────────────────────────────────────────────
 
 fn emitEnumConstructorAssignment(writer: anytype, ctx: *const BackendContext, place: mir.MirPlace, constructor: anytype) EmitError!void {
     const enum_decl = ctx.module.hir.getEnum(constructor.enum_id);
@@ -287,6 +311,10 @@ fn emitTerminator(writer: anytype, ctx: *const BackendContext, terminator: mir.M
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Rvalue/operand/place emission
+// ─────────────────────────────────────────────────────────────────────────────
+
 fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue) EmitError!void {
     switch (rvalue) {
         .use => |operand| try emitOperand(writer, ctx, operand),
@@ -362,6 +390,10 @@ fn emitParamList(writer: anytype, ctx: *const BackendContext, function: mir.MirF
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// C type rendering
+// ─────────────────────────────────────────────────────────────────────────────
+
 fn emitCType(writer: anytype, ctx: *const BackendContext, type_id: types.TypeId, span: ?diagnostics.SourceSpan) EmitError!void {
     if (!ctx.module.types.contains(type_id)) {
         try reportUnsupportedCType(ctx, span);
@@ -382,11 +414,19 @@ fn emitCType(writer: anytype, ctx: *const BackendContext, type_id: types.TypeId,
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Diagnostics
+// ─────────────────────────────────────────────────────────────────────────────
+
 fn reportUnsupportedCType(ctx: *const BackendContext, span: ?diagnostics.SourceSpan) !void {
     if (ctx.diagnostic_bag) |bag| {
         try bag.append(diagnostics.unsupportedCBackendType(span orelse hir.synthetic_span));
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// C name rendering / escaping
+// ─────────────────────────────────────────────────────────────────────────────
 
 fn emitEnumTypeName(writer: anytype, module: *const semantics.SemanticModule, symbol: hir.SymbolId) !void {
     try writer.writeAll("cpt_enum_");
@@ -487,6 +527,10 @@ fn isCKeyword(text: []const u8) bool {
     }
     return false;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tests
+// ─────────────────────────────────────────────────────────────────────────────
 
 fn emitForTest(source_text: []const u8) ![]const u8 {
     var parse_diagnostics = diagnostics.DiagnosticBag.init(std.testing.allocator);

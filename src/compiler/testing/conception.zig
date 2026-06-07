@@ -1,3 +1,7 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Fixture metadata model
+// ─────────────────────────────────────────────────────────────────────────────
+
 const std = @import("std");
 
 const parser_model = @import("../parser.zig");
@@ -135,6 +139,10 @@ pub const ParseOptions = struct {
     path: ?[]const u8 = null,
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Fixture parser
+// ─────────────────────────────────────────────────────────────────────────────
+
 pub fn parse(allocator: std.mem.Allocator, text: []const u8, options: ParseOptions) !ConceptionFixture {
     var name: ?[]const u8 = null;
     var phase: ?Phase = null;
@@ -190,23 +198,37 @@ pub fn parse(allocator: std.mem.Allocator, text: []const u8, options: ParseOptio
     return parsed;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Header parsing
+// ─────────────────────────────────────────────────────────────────────────────
+
 fn parseHeader(line: []const u8, name: *?[]const u8, phase: *?Phase, expect: *?Expectation, check: *?CheckMode) !void {
     const without_hash = std.mem.trim(u8, line[1..], " \t");
-    const colon = std.mem.indexOfScalar(u8, without_hash, ':') orelse return error.InvalidHeader;
+    const colon = std.mem.indexOfScalar(u8, without_hash, ':') orelse return;
     const key = std.mem.trim(u8, without_hash[0..colon], " \t");
     const value = std.mem.trim(u8, without_hash[colon + 1 ..], " \t");
 
     if (std.mem.eql(u8, key, "name")) {
+        if (name.* != null) return error.DuplicateHeader;
         if (value.len == 0) return error.EmptyName;
         name.* = value;
     } else if (std.mem.eql(u8, key, "phase")) {
+        if (phase.* != null) return error.DuplicateHeader;
         phase.* = Phase.fromString(value) orelse return error.InvalidPhase;
     } else if (std.mem.eql(u8, key, "expect")) {
+        if (expect.* != null) return error.DuplicateHeader;
         expect.* = Expectation.parse(value) orelse return error.InvalidExpectation;
     } else if (std.mem.eql(u8, key, "check")) {
+        if (check.* != null) return error.DuplicateHeader;
         check.* = CheckMode.parse(value) orelse return error.InvalidCheckMode;
+    } else {
+        return error.UnknownHeader;
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Validation
+// ─────────────────────────────────────────────────────────────────────────────
 
 fn validate(fixture: ConceptionFixture, options: ParseOptions) !void {
     if (fixture.source() == null) return error.MissingSource;
@@ -231,6 +253,10 @@ fn validate(fixture: ConceptionFixture, options: ParseOptions) !void {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Section parsing
+// ─────────────────────────────────────────────────────────────────────────────
+
 fn sectionName(line: []const u8) ?[]const u8 {
     const trimmed = std.mem.trim(u8, line, " \t\r");
     if (!std.mem.startsWith(u8, trimmed, "===")) return null;
@@ -251,6 +277,10 @@ fn firstWord(text: []const u8) []const u8 {
     const index = std.mem.indexOfAny(u8, text, " \t\r") orelse text.len;
     return text[0..index];
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Parser tests
+// ─────────────────────────────────────────────────────────────────────────────
 
 fn expectFixture(text: []const u8) !ConceptionFixture {
     return parse(std.testing.allocator, text, .{});
@@ -275,6 +305,93 @@ test "conception parser parses metadata" {
 
     try std.testing.expectEqualStrings("payload enum surface", fixture.name);
     try std.testing.expectEqual(Phase.parse, fixture.phase);
+    try std.testing.expectEqual(Expectation.pass, fixture.expect);
+}
+
+test "conception parser rejects unknown header" {
+    const text =
+        \\# name: unknown header
+        \\# phase: parse
+        \\# expectation: pass
+        \\
+        \\=== source ===
+        \\module Example;
+    ;
+    try std.testing.expectError(error.UnknownHeader, expectFixture(text));
+}
+
+test "conception parser rejects duplicate name header" {
+    const text =
+        \\# name: duplicate name
+        \\# name: duplicate name again
+        \\# phase: parse
+        \\# expect: pass
+        \\
+        \\=== source ===
+        \\module Example;
+    ;
+    try std.testing.expectError(error.DuplicateHeader, expectFixture(text));
+}
+
+test "conception parser rejects duplicate phase header" {
+    const text =
+        \\# name: duplicate phase
+        \\# phase: parse
+        \\# phase: check
+        \\# expect: pass
+        \\
+        \\=== source ===
+        \\module Example;
+    ;
+    try std.testing.expectError(error.DuplicateHeader, expectFixture(text));
+}
+
+test "conception parser rejects duplicate expect header" {
+    const text =
+        \\# name: duplicate expect
+        \\# phase: parse
+        \\# expect: pass
+        \\# expect: fail
+        \\
+        \\=== source ===
+        \\module Example;
+    ;
+    try std.testing.expectError(error.DuplicateHeader, expectFixture(text));
+}
+
+test "conception parser rejects duplicate check header" {
+    const text =
+        \\# name: duplicate check
+        \\# phase: check
+        \\# check: declarations
+        \\# check: hir
+        \\# expect: pass
+        \\
+        \\=== source ===
+        \\module Example;
+    ;
+    try std.testing.expectError(error.DuplicateHeader, expectFixture(text));
+}
+
+test "conception parser accepts valid headers and leading comments" {
+    const text =
+        \\# parser smoke comment
+        \\
+        \\# name: valid strict headers
+        \\# phase: check
+        \\# check: hir
+        \\# expect: pass
+        \\# another comment before sections
+        \\
+        \\=== source ===
+        \\module Example;
+    ;
+    const fixture = try expectFixture(text);
+    defer fixture.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("valid strict headers", fixture.name);
+    try std.testing.expectEqual(Phase.check, fixture.phase);
+    try std.testing.expectEqual(CheckMode.hir, fixture.checkMode());
     try std.testing.expectEqual(Expectation.pass, fixture.expect);
 }
 
@@ -409,6 +526,10 @@ test "conception parser defaults check phase to declarations" {
     try std.testing.expectEqual(CheckMode.declarations, fixture.checkMode());
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase/corpus tests
+// ─────────────────────────────────────────────────────────────────────────────
+
 test "language check fixture execution uses check metadata not filename" {
     const text =
         \\# name: metadata selected hir check
@@ -462,6 +583,10 @@ test "conception parser detects extension and metadata mismatch" {
     );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Diagnostic/run helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
 fn expectParseFixture(comptime path: []const u8) !void {
     const text = @embedFile(path);
     const fixture = try parse(std.testing.allocator, text, .{ .path = path });
@@ -496,6 +621,10 @@ fn expectParseFixture(comptime path: []const u8) !void {
         },
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Fixture registration
+// ─────────────────────────────────────────────────────────────────────────────
 
 test "language parse fixture: basic module" {
     try expectParseFixture("../../../language/phase1-surface/valid/basic_module.valid.conception");
@@ -548,6 +677,10 @@ test "language parse fixture: phase2 missing paren" {
 test "language parse fixture: phase2 unsupported statement" {
     try expectParseFixture("../../../language/phase2-execution/invalid/unsupported_statement.invalid.conception");
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase execution helpers
+// ─────────────────────────────────────────────────────────────────────────────
 
 fn expectCheckFixture(comptime path: []const u8) !void {
     const text = @embedFile(path);
@@ -1381,7 +1514,6 @@ test "language check fixture: phase5 try result mismatch" {
     try expectCheckFixture("../../../language/phase5-sum-types/invalid/try_result_mismatch.invalid.conception");
 }
 
-
 test "language check fixture: phase5a decide basic" {
     try expectCheckFixture("../../../language/phase5a-judgment/valid/decide_basic.valid.conception");
 }
@@ -1393,7 +1525,6 @@ test "language check fixture: phase5a decide duplicate variant" {
 test "language check fixture: phase5a decide negative score" {
     try expectCheckFixture("../../../language/phase5a-judgment/valid/decide_negative_score.valid.conception");
 }
-
 
 test "language run fixture: phase5a decide highest score" {
     try expectRunFixture("../../../language/phase5a-judgment/valid/decide_highest_score_run.valid.conception");

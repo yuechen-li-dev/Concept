@@ -1,3 +1,7 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Public API
+// ─────────────────────────────────────────────────────────────────────────────
+
 const std = @import("std");
 
 const diagnostics = @import("diagnostics.zig");
@@ -19,10 +23,18 @@ pub fn checkExecutable(
     try checker.checkModule();
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Checker state
+// ─────────────────────────────────────────────────────────────────────────────
+
 const Checker = struct {
     allocator: std.mem.Allocator,
     module: *semantics.SemanticModule,
     diagnostics: ?*DiagnosticBag,
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Function/main validation
+    // ─────────────────────────────────────────────────────────────────────────────
 
     fn checkModule(self: *Checker) CheckError!void {
         const main_id = self.findMain() orelse {
@@ -56,6 +68,10 @@ const Checker = struct {
         }
         return null;
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Statement checking
+    // ─────────────────────────────────────────────────────────────────────────────
 
     fn checkStmt(self: *Checker, function_id: hir.FunctionId, stmt_id: hir.StmtId, return_type: types.TypeId) CheckError!void {
         const stmt = self.module.hir.getStmt(stmt_id).*;
@@ -160,6 +176,10 @@ const Checker = struct {
         }
     }
 
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Expression checking
+    // ─────────────────────────────────────────────────────────────────────────────
+
     fn checkExpr(self: *Checker, return_type: types.TypeId, expr_id: hir.ExprId) CheckError!types.TypeId {
         const expr = self.module.hir.getExpr(expr_id).*;
         return switch (expr.kind) {
@@ -185,6 +205,10 @@ const Checker = struct {
                 }
                 break :blk callee.return_type;
             },
+            // ─────────────────────────────────────────────────────────────────────────────
+            // Match/enum checking
+            // ─────────────────────────────────────────────────────────────────────────────
+
             .enum_constructor => |constructor| blk: {
                 const variant = self.module.hir.getVariant(constructor.variant_id);
                 if (variant.parent.index != constructor.enum_id.index or constructor.args.len != variant.payload_fields.len) {
@@ -201,6 +225,10 @@ const Checker = struct {
                 }
                 break :blk try self.enumType(constructor.enum_id);
             },
+            // ─────────────────────────────────────────────────────────────────────────────
+            // Decide checking
+            // ─────────────────────────────────────────────────────────────────────────────
+
             .decide => |decide| blk: {
                 if (!sameType(decide.enum_type, try self.enumType(decide.enum_id))) {
                     try self.reportAt(.UnknownDecideEnum, "decide target type must be an enum", expr.span);
@@ -251,6 +279,10 @@ const Checker = struct {
                     },
                 }
             },
+            // ─────────────────────────────────────────────────────────────────────────────
+            // Result/try checking
+            // ─────────────────────────────────────────────────────────────────────────────
+
             .try_expr => |operand| blk: {
                 const operand_type = try self.checkExpr(return_type, operand);
                 const operand_shape = self.module.resultShapeForType(operand_type) orelse {
@@ -294,6 +326,10 @@ const Checker = struct {
             },
         };
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Type helper functions
+    // ─────────────────────────────────────────────────────────────────────────────
 
     fn enumType(self: *Checker, enum_id: hir.EnumId) CheckError!types.TypeId {
         for (self.module.types.types.items, 0..) |kind, index| {
@@ -363,6 +399,10 @@ const Checker = struct {
         return self.module.hir.getExpr(expr_id).span;
     }
 
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Diagnostic helpers
+    // ─────────────────────────────────────────────────────────────────────────────
+
     fn report(self: *Checker, code: diagnostics.DiagnosticCode, message: []const u8) !void {
         try self.reportAt(code, message, synthetic_span);
     }
@@ -375,6 +415,10 @@ const Checker = struct {
 fn sameType(a: types.TypeId, b: types.TypeId) bool {
     return a.index == b.index;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tests
+// ─────────────────────────────────────────────────────────────────────────────
 
 const TestModule = struct {
     module: semantics.SemanticModule,
