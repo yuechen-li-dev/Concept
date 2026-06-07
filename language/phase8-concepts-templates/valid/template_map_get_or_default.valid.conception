@@ -1,0 +1,20 @@
+# name: template map get or default parse
+# phase: parse
+# expect: pass
+
+=== source ===
+module Generics;
+
+template<K, V>
+V getOrDefault(Map<K,V> map, K key, V fallback) {
+    return fallback;
+}
+
+=== ast ===
+CompilationUnit
+  Module Generics
+  Template<K, V>
+    Function V getOrDefault(Map<K, V> map, K key, V fallback)
+    Body
+      Return
+        Identifier fallback

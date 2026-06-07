@@ -74,6 +74,12 @@ pub const Parser = struct {
                     try items.append(try self.parseStructItem(allocator, attributes));
                     attributes = &.{};
                 },
+                .template => {
+                    if (try self.parseTemplateItem(allocator, attributes)) |item| {
+                        try items.append(item);
+                        attributes = &.{};
+                    }
+                },
                 .identifier, .mut, .unsafe => {
                     if (self.current().kind == .unsafe and !(self.peek(1).kind == .identifier or self.peek(1).kind == .mut or self.peek(1).kind == .unsafe)) {
                         try self.rejectAttributesBeforeUnsupportedItem(attributes, allocator);
@@ -111,7 +117,12 @@ pub const Parser = struct {
                     attributes = &.{};
                 },
                 .@"export" => {
-                    if (self.peek(1).kind == .@"struct") {
+                    if (self.peek(1).kind == .template) {
+                        if (try self.parseTemplateItem(allocator, attributes)) |item| {
+                            try items.append(item);
+                            attributes = &.{};
+                        }
+                    } else if (self.peek(1).kind == .@"struct") {
                         try items.append(try self.parseStructItem(allocator, attributes));
                         attributes = &.{};
                     } else if (self.peek(1).kind == .@"enum" or self.peek(1).kind == .must_use) {
@@ -299,7 +310,7 @@ pub const Parser = struct {
         while (self.current().kind != .eof) {
             switch (self.current().kind) {
                 .right_bracket => return,
-                .@"struct", .@"enum", .concept, .interface, .impl, .@"export", .identifier, .mut, .module, .import => return,
+                .@"struct", .@"enum", .concept, .interface, .impl, .template, .@"export", .identifier, .mut, .module, .import => return,
                 else => self.advance(),
             }
         }
@@ -338,6 +349,122 @@ pub const Parser = struct {
             return .{ .function_decl = function_decl };
         }
         return null;
+    }
+
+    fn parseTemplateItem(self: *Parser, allocator: std.mem.Allocator, attributes: []ast.Attribute) !?ast.Item {
+        if (try self.parseTemplateDecl(allocator, attributes)) |template_decl| {
+            return .{ .template_decl = template_decl };
+        }
+        return null;
+    }
+
+    fn parseTemplateDecl(self: *Parser, allocator: std.mem.Allocator, attributes: []ast.Attribute) !?ast.TemplateDecl {
+        const export_token = self.match(.@"export");
+        const template_token = (try self.expect(.template, "expected 'template'", .ExpectedItem)) orelse return null;
+        const start_span = if (export_token) |token| token.span else template_token.span;
+
+        const params = try self.parseTemplateParamList(allocator);
+        errdefer {
+            for (params) |param| param.deinit(allocator);
+            allocator.free(params);
+        }
+
+        if (self.current().kind == .@"struct" or self.current().kind == .@"enum" or self.current().kind == .must_use) {
+            try self.report(.UnexpectedToken, "templates on structs and enums are not supported in P8-M1", self.current().span);
+            try self.recoverTemplateDecl();
+            return null;
+        }
+
+        var function_decl = (try self.parseFunctionDecl(allocator, &.{})) orelse return null;
+        errdefer function_decl.deinit(allocator);
+        function_decl.span = ast.spanFromBounds(start_span.start, spanEnd(function_decl.span));
+
+        return .{
+            .attributes = attributes,
+            .params = params,
+            .body = function_decl,
+            .span = ast.spanFromBounds(itemStartWithAttributes(attributes, start_span), spanEnd(function_decl.span)),
+        };
+    }
+
+    fn parseTemplateParamList(self: *Parser, allocator: std.mem.Allocator) ![]ast.TypeParamDecl {
+        var params = std.ArrayList(ast.TypeParamDecl).init(allocator);
+        errdefer {
+            for (params.items) |param| param.deinit(allocator);
+            params.deinit();
+        }
+
+        if (self.match(.less) == null) {
+            try self.report(.UnexpectedToken, "expected '<' after template", self.current().span);
+            return params.toOwnedSlice();
+        }
+
+        while (self.current().kind != .eof and self.current().kind != .greater and self.current().kind != .left_brace and self.current().kind != .semicolon) {
+            if (self.current().kind != .identifier) {
+                try self.report(.UnexpectedToken, "expected template type parameter name", self.current().span);
+                self.recoverTemplateParam();
+            } else {
+                const name_token = self.advance();
+                var duplicate_name = false;
+                for (params.items) |existing| {
+                    if (std.mem.eql(u8, existing.name.text, name_token.lexeme)) {
+                        try self.report(.UnexpectedToken, "duplicate template type parameter name", name_token.span);
+                        duplicate_name = true;
+                        break;
+                    }
+                }
+                var constraint: ?ast.TypeName = null;
+                errdefer if (constraint) |c| c.deinit(allocator);
+                var last_span = name_token.span;
+                if (self.match(.colon) != null) {
+                    if (self.current().kind != .identifier and self.current().kind != .mut) {
+                        try self.report(.UnexpectedToken, "expected concept constraint after ':'", self.current().span);
+                        self.recoverTemplateParam();
+                    } else {
+                        constraint = try self.parseTypeName(allocator);
+                        last_span = constraint.?.span;
+                    }
+                }
+                if (duplicate_name) {
+                    if (constraint) |c| c.deinit(allocator);
+                } else {
+                    const owned_constraint = constraint;
+                    constraint = null;
+                    try params.append(.{
+                        .name = .{ .text = name_token.lexeme, .span = name_token.span },
+                        .constraint = owned_constraint,
+                        .span = ast.spanFromBounds(name_token.span.start, spanEnd(last_span)),
+                    });
+                }
+            }
+
+            if (self.match(.comma) != null) continue;
+            if (self.current().kind == .greater) break;
+            if (self.current().kind == .eof or self.current().kind == .left_brace or self.current().kind == .semicolon) break;
+            try self.report(.UnexpectedToken, "expected ',' between template type parameters", self.current().span);
+            self.recoverTemplateParam();
+            _ = self.match(.comma);
+        }
+
+        if (params.items.len == 0) {
+            try self.report(.UnexpectedToken, "expected at least one template type parameter", self.current().span);
+        }
+
+        if (self.match(.greater) == null) {
+            try self.report(.UnexpectedToken, "expected '>' after template type parameters", self.current().span);
+        }
+
+        return params.toOwnedSlice();
+    }
+
+    fn recoverTemplateParam(self: *Parser) void {
+        while (self.current().kind != .eof and self.current().kind != .comma and self.current().kind != .greater and self.current().kind != .left_brace and self.current().kind != .semicolon) self.advance();
+    }
+
+    fn recoverTemplateDecl(self: *Parser) !void {
+        while (self.current().kind != .eof and self.current().kind != .semicolon and self.current().kind != .left_brace) self.advance();
+        if (self.match(.semicolon) != null) return;
+        if (self.current().kind == .left_brace) self.skipFunctionBody();
     }
 
     fn parseStructItem(self: *Parser, allocator: std.mem.Allocator, attributes: []ast.Attribute) !ast.Item {
@@ -3384,6 +3511,94 @@ test "unexpected token inside declaration block recovers" {
     };
     try std.testing.expectEqual(@as(usize, 1), concept_decl.signatures.len);
     try std.testing.expectEqualStrings("hash", concept_decl.signatures[0].name.base.text);
+}
+
+fn expectTemplateDecl(unit: ast.CompilationUnit, index: usize) ast.TemplateDecl {
+    return switch (unit.items[index]) {
+        .template_decl => |template_decl| template_decl,
+        else => unreachable,
+    };
+}
+
+test "parses single-type template function declaration" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; template<T> T identity(T value) { return value; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const template_decl = expectTemplateDecl(unit, 0);
+    try std.testing.expectEqual(@as(usize, 1), template_decl.params.len);
+    try std.testing.expectEqualStrings("T", template_decl.params[0].name.text);
+    try std.testing.expect(template_decl.params[0].constraint == null);
+    try std.testing.expectEqualStrings("identity", template_decl.body.signature.name.base.text);
+    try std.testing.expect(template_decl.body.body != null);
+}
+
+test "parses multi-type template function declaration" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; template<K, V> V getOrDefault(Map<K,V> map, K key, V fallback) { return fallback; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const template_decl = expectTemplateDecl(unit, 0);
+    try std.testing.expectEqual(@as(usize, 2), template_decl.params.len);
+    try std.testing.expectEqualStrings("K", template_decl.params[0].name.text);
+    try std.testing.expectEqualStrings("V", template_decl.params[1].name.text);
+    try std.testing.expectEqualStrings("Map", template_decl.body.signature.params[0].type_name.name.parts[0].text);
+    try std.testing.expectEqual(@as(usize, 2), template_decl.body.signature.params[0].type_name.generic_args.len);
+}
+
+test "parses constrained template function declaration" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; template<T: Equatable<T>> bool areEqual(T a, T b) { return true; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const template_decl = expectTemplateDecl(unit, 0);
+    try std.testing.expectEqual(@as(usize, 1), template_decl.params.len);
+    const constraint = template_decl.params[0].constraint.?;
+    try std.testing.expectEqualStrings("Equatable", constraint.name.parts[0].text);
+    try std.testing.expectEqual(@as(usize, 1), constraint.generic_args.len);
+    try std.testing.expectEqualStrings("T", constraint.generic_args[0].name.parts[0].text);
+}
+
+test "AST snapshot debug output includes template params and constraints" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; template<T: Equatable<T>, U> bool compare(T left, U right);", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+
+    try std.testing.expectEqualStrings(
+        \\CompilationUnit
+        \\  Module Example
+        \\  Template<T: Equatable<T>, U>
+        \\    Function bool compare(T left, U right)
+        \\
+    , snapshot);
+}
+
+test "malformed template parameter lists report diagnostics" {
+    try expectSingleDiagnostic("module Example; template T id(T value);", .UnexpectedToken);
+    try expectSingleDiagnostic("module Example; template<T T id(T value);", .UnexpectedToken);
+    try expectSingleDiagnostic("module Example; template<> T id(T value);", .UnexpectedToken);
+    try expectSingleDiagnostic("module Example; template<, T> T id(T value);", .UnexpectedToken);
+    try expectSingleDiagnostic("module Example; template<T: > T id(T value);", .UnexpectedToken);
+    try expectSingleDiagnostic("module Example; template<T, T> T id(T value);", .UnexpectedToken);
+}
+
+test "templates on structs and enums are rejected for P8-M1" {
+    try expectSingleDiagnostic("module Example; template<T> struct Box { T value; };", .UnexpectedToken);
+    try expectSingleDiagnostic("module Example; template<T> enum Maybe { None };", .UnexpectedToken);
 }
 
 fn expectFunctionDecl(unit: ast.CompilationUnit, index: usize) ast.FunctionDecl {

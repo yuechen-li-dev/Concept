@@ -1,6 +1,6 @@
 # Phase 8 concepts and templates
 
-P8-M0 is a documentation-only milestone. It defines Concept's direction for templates, concepts, marker concepts, `impl` coherence, generic checking, and staged monomorphization without implementing compiler code.
+P8-M0 was a documentation-only milestone. It defined Concept's direction for templates, concepts, marker concepts, `impl` coherence, generic checking, and staged monomorphization without implementing compiler code. P8-M1 is now complete for parser-only template function syntax: the front end parses `template<...>` function headers, stores type parameters and optional concept constraints in the AST, rejects malformed parameter lists and duplicate type parameter names, and intentionally performs no instantiation or concept satisfaction checks yet.
 
 Phase 8 starts after the Phase 7 runtime structs and places work. Phase 7 gave Concept real user-defined runtime values, labeled struct literals, field access, field assignment, one-level field places, address-of fields, and by-value struct parameters/returns/calls. That substrate makes generic functions useful for more than primitive scalars.
 
@@ -72,6 +72,12 @@ PoC3-aligned commitments:
 - No substitution-as-control-flow.
 
 This ordering matters. Phase 8 should establish explicit generic constraints before Phase 9 `comptime` work, because PoC3 treats `comptime` as a tool for deterministic static computation rather than as the primary way to express generics.
+
+## Milestone status
+
+- P8-M0: complete as the Phase 8 design baseline.
+- P8-M1: complete for template function syntax parsing only. The parser accepts single and multiple type parameters, optional constraints such as `T: Equatable<T>`, and attaches the following function declaration to a `TemplateDecl` AST node.
+- P8-M1 deliberately does not instantiate templates, lower templates into HIR/MIR, emit backend code for templates, enforce concept satisfaction, or allow templates on structs/enums.
 
 ## Phase 8 v0 scope
 
