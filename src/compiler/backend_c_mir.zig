@@ -943,10 +943,13 @@ test "MIR C backend emits raw pointer params returns and locals" {
     try std.testing.expect(std.mem.indexOf(u8, c_source, "return cpt_l_q_1;") != null);
 }
 
-
 test "MIR C backend emits address-of and deref" {
     const c_source = try emitForTest(
         \\module Main;
+        \\int readParamAddress(int x) {
+        \\    int* p = &x;
+        \\    unsafe { return *p; }
+        \\}
         \\int main() {
         \\    int x = 7;
         \\    int* p = &x;
@@ -955,8 +958,11 @@ test "MIR C backend emits address-of and deref" {
     );
     defer std.testing.allocator.free(c_source);
 
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "int* cpt_l_p_") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, " = &cpt_l_x_") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, " = &cpt_p_x_") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, " = *cpt_l_p_") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "unsafe") == null);
 }
 
 test "MIR C backend emits enum raw pointer params and returns" {

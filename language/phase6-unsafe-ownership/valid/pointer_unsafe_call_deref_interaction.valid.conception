@@ -1,0 +1,25 @@
+# name: pointer unsafe call deref interaction
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+unsafe int read(int* p) {
+    return *p;
+}
+
+int wrapper(int* p) {
+    unsafe {
+        return read(p);
+    }
+}
+
+int main() {
+    int x = 13;
+    int* p = &x;
+    return wrapper(p);
+}
+
+=== run ===
+exit_code: 13
