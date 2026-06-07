@@ -1,0 +1,17 @@
+# name: phase6 unsafe block normal statements
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    int value = 1;
+    unsafe {
+        value = value + 2;
+    }
+    return value;
+}
+
+=== run ===
+exit_code: 3

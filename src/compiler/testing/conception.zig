@@ -1589,3 +1589,19 @@ test "language check fixture: phase5a decide missing unconditional" {
 test "language check fixture: phase5a decide empty arms" {
     try expectCheckFixture("../../../language/phase5a-judgment/invalid/decide_empty_arms.invalid.conception");
 }
+
+test "language run fixture: phase6 unsafe block return" {
+    try expectRunFixture("../../../language/phase6-unsafe-ownership/valid/unsafe_block_return.valid.conception");
+}
+
+test "language run fixture: phase6 unsafe block normal statements" {
+    try expectRunFixture("../../../language/phase6-unsafe-ownership/valid/unsafe_block_normal_statements.valid.conception");
+}
+
+test "language run fixture: phase6 unsafe function call inside unsafe" {
+    try expectRunFixture("../../../language/phase6-unsafe-ownership/valid/unsafe_function_call_inside_unsafe.valid.conception");
+}
+
+test "language check fixture: phase6 unsafe function call outside unsafe" {
+    try expectCheckFixture("../../../language/phase6-unsafe-ownership/invalid/unsafe_function_call_outside_unsafe.invalid.conception");
+}

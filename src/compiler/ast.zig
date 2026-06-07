@@ -577,6 +577,15 @@ pub const WhileStmt = struct {
     }
 };
 
+pub const UnsafeBlockStmt = struct {
+    body: BlockStmt,
+    span: SourceSpan,
+
+    pub fn deinit(self: UnsafeBlockStmt, allocator: std.mem.Allocator) void {
+        self.body.deinit(allocator);
+    }
+};
+
 pub const PatternBinding = struct {
     name: NameSegment,
 };
@@ -662,6 +671,7 @@ pub const Stmt = union(enum) {
     return_stmt: ReturnStmt,
     if_stmt: IfStmt,
     while_stmt: WhileStmt,
+    unsafe_block: UnsafeBlockStmt,
     match_stmt: MatchStmt,
     block_stmt: BlockStmt,
 
@@ -674,6 +684,7 @@ pub const Stmt = union(enum) {
             .return_stmt => |stmt| stmt.deinit(allocator),
             .if_stmt => |stmt| stmt.deinit(allocator),
             .while_stmt => |stmt| stmt.deinit(allocator),
+            .unsafe_block => |stmt| stmt.deinit(allocator),
             .match_stmt => |stmt| stmt.deinit(allocator),
             .block_stmt => |stmt| stmt.deinit(allocator),
         }
@@ -737,6 +748,11 @@ pub const Stmt = union(enum) {
                 try writer.writeAll("Body\n");
                 for (stmt.body.statements) |child| try child.writeDebug(writer, depth + 2);
             },
+            .unsafe_block => |stmt| {
+                try writeIndent(writer, depth);
+                try writer.writeAll("UnsafeBlock\n");
+                for (stmt.body.statements) |child| try child.writeDebug(writer, depth + 1);
+            },
             .match_stmt => |stmt| {
                 try writeIndent(writer, depth);
                 try writer.writeAll("Match\n");
@@ -789,6 +805,7 @@ pub const FunctionBody = struct {
 pub const FunctionDecl = struct {
     attributes: []Attribute = &.{},
     is_export: bool,
+    is_unsafe: bool = false,
     signature: SignatureDecl,
     body: ?FunctionBody,
     span: SourceSpan,
@@ -824,8 +841,12 @@ pub const Item = union(enum) {
         switch (self) {
             .function_decl => |function_decl| {
                 try writeAttributesDebug(function_decl.attributes, writer);
-                if (function_decl.is_export) {
+                if (function_decl.is_export and function_decl.is_unsafe) {
+                    try writer.writeAll("  Export Unsafe Function ");
+                } else if (function_decl.is_export) {
                     try writer.writeAll("  Export Function ");
+                } else if (function_decl.is_unsafe) {
+                    try writer.writeAll("  Unsafe Function ");
                 } else {
                     try writer.writeAll("  Function ");
                 }

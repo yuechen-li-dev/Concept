@@ -31,6 +31,7 @@ const Checker = struct {
     allocator: std.mem.Allocator,
     module: *semantics.SemanticModule,
     diagnostics: ?*DiagnosticBag,
+    unsafe_depth: usize = 0,
 
     // ─────────────────────────────────────────────────────────────────────────────
     // Function/main validation
@@ -57,6 +58,10 @@ const Checker = struct {
 
         for (self.module.hir.functions.items, 0..) |function, index| {
             if (function.body) |body| {
+                if (function.is_unsafe) self.unsafe_depth += 1;
+                defer {
+                    if (function.is_unsafe) self.unsafe_depth -= 1;
+                }
                 try self.checkStmt(.{ .index = @intCast(index) }, body, function.return_type);
             }
         }
@@ -118,6 +123,11 @@ const Checker = struct {
                 const condition_type = try self.checkExpr(return_type, while_stmt.condition);
                 try self.requireBool(condition_type, "while condition must be bool", self.exprSpan(while_stmt.condition));
                 try self.checkStmt(function_id, while_stmt.body, return_type);
+            },
+            .unsafe_block => |body| {
+                self.unsafe_depth += 1;
+                defer self.unsafe_depth -= 1;
+                try self.checkStmt(function_id, body, return_type);
             },
             .match_stmt => |match_stmt| {
                 const scrutinee_type = try self.checkExpr(return_type, match_stmt.scrutinee);
@@ -192,6 +202,10 @@ const Checker = struct {
                 const callee = self.module.hir.getFunction(call.function);
                 if (callee.body == null) {
                     try self.reportAt(.InvalidCall, "cannot call function without body", expr.span);
+                    return error.InvalidSemanticModule;
+                }
+                if (callee.is_unsafe and self.unsafe_depth == 0) {
+                    try self.reportAt(.UnsafeCallRequiresUnsafe, "unsafe function call requires unsafe context", expr.span);
                     return error.InvalidSemanticModule;
                 }
                 if (call.args.len != callee.params.len) {
@@ -437,6 +451,10 @@ const TestModule = struct {
 
     fn function(self: *TestModule, name_text: []const u8, return_type: types.TypeId) !hir.FunctionId {
         return self.module.hir.addFunction(try self.name(name_text), return_type, synthetic_span);
+    }
+
+    fn unsafeFunction(self: *TestModule, name_text: []const u8, return_type: types.TypeId) !hir.FunctionId {
+        return self.module.hir.addFunctionWithSafety(try self.name(name_text), return_type, true, synthetic_span);
     }
 
     fn param(self: *TestModule, function_id: hir.FunctionId, name_text: []const u8, type_id: types.TypeId) !hir.ParamId {
@@ -867,4 +885,36 @@ test "HIR checker rejects mismatched try Result type" {
     const ret_ok = try addTestExpr(&tm.module.hir, .{ .enum_constructor = .{ .enum_id = other.enum_id, .variant_id = other.ok, .args = ret_args } });
     tm.setBody(f, try tm.block(&.{ try addTestStmt(&tm.module.hir, .{ .discard_stmt = tried }), try tm.ret(ret_ok) }));
     try tm.checkFail(.TryResultTypeMismatch);
+}
+
+test "HIR checker accepts unsafe blocks" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+    const main_id = try tm.function("main", tm.module.types.intType());
+    const body = try tm.block(&.{try tm.ret(try tm.int("0"))});
+    const unsafe_stmt = try addTestStmt(&tm.module.hir, .{ .unsafe_block = body });
+    tm.setBody(main_id, try tm.block(&.{unsafe_stmt}));
+    try tm.checkPass();
+}
+
+test "HIR checker enforces unsafe function calls" {
+    var outside = try TestModule.init();
+    defer outside.deinit();
+    const helper = try outside.unsafeFunction("helper", outside.module.types.intType());
+    outside.setBody(helper, try outside.block(&.{try outside.ret(try outside.int("1"))}));
+    const outside_main = try outside.function("main", outside.module.types.intType());
+    const outside_args = try std.testing.allocator.dupe(hir.ExprId, &.{});
+    outside.setBody(outside_main, try outside.block(&.{try outside.ret(try addTestExpr(&outside.module.hir, .{ .call = .{ .function = helper, .args = outside_args } }))}));
+    try outside.checkFail(.UnsafeCallRequiresUnsafe);
+
+    var inside = try TestModule.init();
+    defer inside.deinit();
+    const inside_helper = try inside.unsafeFunction("helper", inside.module.types.intType());
+    inside.setBody(inside_helper, try inside.block(&.{try inside.ret(try inside.int("1"))}));
+    const inside_main = try inside.function("main", inside.module.types.intType());
+    const inside_args = try std.testing.allocator.dupe(hir.ExprId, &.{});
+    const call = try addTestExpr(&inside.module.hir, .{ .call = .{ .function = inside_helper, .args = inside_args } });
+    const unsafe_body = try inside.block(&.{try inside.ret(call)});
+    inside.setBody(inside_main, try inside.block(&.{try addTestStmt(&inside.module.hir, .{ .unsafe_block = unsafe_body })}));
+    try inside.checkPass();
 }

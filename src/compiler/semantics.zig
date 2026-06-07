@@ -134,7 +134,7 @@ const Collector = struct {
             function_decl.signature.name.base.text,
             function_decl.signature.name.base.span,
         ) orelse return;
-        const function_id = try self.module.hir.addFunction(name, self.module.types.voidType(), function_decl.span);
+        const function_id = try self.module.hir.addFunctionWithSafety(name, self.module.types.voidType(), function_decl.is_unsafe, function_decl.span);
         try self.top_level_decls.put(name, .{ .function = function_id });
     }
 
@@ -464,6 +464,10 @@ const BodyLowerer = struct {
                 const condition = (try self.lowerExpr(while_stmt.condition.*)) orelse return null;
                 const body = (try self.lowerBlock(while_stmt.body)) orelse return null;
                 return try self.collector.module.hir.addStmt(.{ .while_stmt = .{ .condition = condition, .body = body } }, while_stmt.span);
+            },
+            .unsafe_block => |unsafe_block| {
+                const body = (try self.lowerBlock(unsafe_block.body)) orelse return null;
+                return try self.collector.module.hir.addStmt(.{ .unsafe_block = body }, unsafe_block.span);
             },
             .match_stmt => |match_stmt| {
                 const scrutinee = (try self.lowerExpr(match_stmt.scrutinee.*)) orelse return null;

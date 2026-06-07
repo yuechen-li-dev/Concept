@@ -74,7 +74,14 @@ pub const Parser = struct {
                     try items.append(try self.parseStructItem(allocator, attributes));
                     attributes = &.{};
                 },
-                .identifier, .mut => {
+                .identifier, .mut, .unsafe => {
+                    if (self.current().kind == .unsafe and !(self.peek(1).kind == .identifier or self.peek(1).kind == .mut or self.peek(1).kind == .unsafe)) {
+                        try self.rejectAttributesBeforeUnsupportedItem(attributes, allocator);
+                        attributes = &.{};
+                        try self.reportExpectedItem("unsafe modifier is only supported on functions", self.current().span);
+                        self.advance();
+                        continue;
+                    }
                     if (try self.parseFunctionItem(allocator, attributes)) |item| {
                         try items.append(item);
                         attributes = &.{};
@@ -110,7 +117,7 @@ pub const Parser = struct {
                     } else if (self.peek(1).kind == .@"enum" or self.peek(1).kind == .must_use) {
                         try items.append(try self.parseEnumItem(allocator, attributes));
                         attributes = &.{};
-                    } else if (self.peek(1).kind == .identifier or self.peek(1).kind == .mut) {
+                    } else if (self.peek(1).kind == .identifier or self.peek(1).kind == .mut or self.peek(1).kind == .unsafe) {
                         if (try self.parseFunctionItem(allocator, attributes)) |item| {
                             try items.append(item);
                             attributes = &.{};
@@ -370,7 +377,11 @@ pub const Parser = struct {
 
     fn parseFunctionDecl(self: *Parser, allocator: std.mem.Allocator, attributes: []ast.Attribute) !?ast.FunctionDecl {
         const export_token = self.match(.@"export");
-        const start_span = if (export_token) |token| token.span else self.current().span;
+        const first_unsafe_token = self.match(.unsafe);
+        const start_span = if (export_token) |token| token.span else if (first_unsafe_token) |token| token.span else self.current().span;
+        while (self.match(.unsafe)) |duplicate| {
+            try self.report(.UnexpectedToken, "duplicate unsafe function modifier", duplicate.span);
+        }
 
         var return_type = self.parseTypeName(allocator) catch |err| switch (err) {
             error.OutOfMemory => return err,
@@ -437,6 +448,7 @@ pub const Parser = struct {
         return .{
             .attributes = attributes,
             .is_export = export_token != null,
+            .is_unsafe = first_unsafe_token != null,
             .signature = .{
                 .return_type = return_type,
                 .name = name.?,
@@ -516,6 +528,7 @@ pub const Parser = struct {
         if (self.current().kind == .@"return") return try self.parseReturnStmt(allocator);
         if (self.current().kind == .@"if") return try self.parseIfStmt(allocator);
         if (self.current().kind == .@"while") return try self.parseWhileStmt(allocator);
+        if (self.current().kind == .unsafe) return try self.parseUnsafeBlockStmt(allocator);
         if (self.current().kind == .match) return try self.parseMatchStmt(allocator);
         if (self.current().kind == .discard) return try self.parseDiscardStmt(allocator);
         if (self.current().kind == .left_brace) return .{ .block_stmt = try self.parseBlockAfterOpenBrace(allocator) };
@@ -694,6 +707,22 @@ pub const Parser = struct {
             .condition = condition,
             .body = body,
             .span = ast.spanFromBounds(while_token.span.start, spanEnd(body.span)),
+        } };
+    }
+
+    fn parseUnsafeBlockStmt(self: *Parser, allocator: std.mem.Allocator) !ast.Stmt {
+        const unsafe_token = self.advance();
+        var body = if (self.current().kind == .left_brace)
+            try self.parseBlockAfterOpenBrace(allocator)
+        else blk: {
+            try self.report(.UnexpectedToken, "expected '{' after unsafe", self.current().span);
+            break :blk ast.BlockStmt{ .statements = try allocator.alloc(ast.Stmt, 0), .span = self.current().span };
+        };
+        errdefer body.deinit(allocator);
+
+        return .{ .unsafe_block = .{
+            .body = body,
+            .span = ast.spanFromBounds(unsafe_token.span.start, spanEnd(body.span)),
         } };
     }
 
@@ -2182,6 +2211,7 @@ fn stmtSpan(stmt: ast.Stmt) SourceSpan {
         .return_stmt => |return_stmt| return_stmt.span,
         .if_stmt => |if_stmt| if_stmt.span,
         .while_stmt => |while_stmt| while_stmt.span,
+        .unsafe_block => |unsafe_block| unsafe_block.span,
         .match_stmt => |match_stmt| match_stmt.span,
         .block_stmt => |block_stmt| block_stmt.span,
     };
@@ -4829,4 +4859,68 @@ test "AST snapshot debug output includes decide expression" {
         \\              Int 0
         \\
     , snapshot);
+}
+
+test "parses unsafe block statement" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; int main() { unsafe { return 0; } }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const stmt = expectFunctionDecl(unit, 0).body.?.block.?.statements[0];
+    const unsafe_block = switch (stmt) {
+        .unsafe_block => |unsafe_block| unsafe_block,
+        else => return error.ExpectedUnsafeBlock,
+    };
+    try std.testing.expectEqual(@as(usize, 1), unsafe_block.body.statements.len);
+}
+
+test "parses nested unsafe blocks and debug output" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; int main() { unsafe { unsafe { return 0; } } }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "UnsafeBlock") != null);
+}
+
+test "unsafe block requires braced block" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; int main() { unsafe return 0; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.count());
+    try std.testing.expectEqual(DiagnosticCode.UnexpectedToken, diagnostics.diagnostics.items[0].code);
+    try std.testing.expectEqualStrings("expected '{' after unsafe", diagnostics.diagnostics.items[0].message);
+}
+
+test "parses unsafe function declaration" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; unsafe int helper() { return 1; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    try std.testing.expect(expectFunctionDecl(unit, 0).is_unsafe);
+}
+
+test "duplicate unsafe function modifier diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; unsafe unsafe int helper() { return 1; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.count());
+    try std.testing.expectEqualStrings("duplicate unsafe function modifier", diagnostics.diagnostics.items[0].message);
 }
