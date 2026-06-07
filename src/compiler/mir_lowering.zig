@@ -1,3 +1,7 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Imports and public API
+// ─────────────────────────────────────────────────────────────────────────────
+
 const std = @import("std");
 
 const hir = @import("hir.zig");
@@ -14,6 +18,10 @@ pub fn lowerModule(
     var lowerer = ModuleLowerer.init(allocator, semantic_module);
     return lowerer.lower();
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Module lowering
+// ─────────────────────────────────────────────────────────────────────────────
 
 const ModuleLowerer = struct {
     allocator: std.mem.Allocator,
@@ -63,6 +71,10 @@ const ModuleLowerer = struct {
     }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Function lowering state
+// ─────────────────────────────────────────────────────────────────────────────
+
 const LoweredExpr = struct {
     operand: mir.MirOperand,
     block: mir.MirBlockId,
@@ -96,6 +108,10 @@ const FunctionLowerer = struct {
         self.param_map.deinit();
         self.local_map.deinit();
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Statement lowering
+    // ─────────────────────────────────────────────────────────────────────────────
 
     fn lowerStmt(self: *FunctionLowerer, stmt_id: hir.StmtId, block_id: mir.MirBlockId) LoweringError!mir.MirBlockId {
         if (self.isTerminated(block_id)) return block_id;
@@ -151,6 +167,10 @@ const FunctionLowerer = struct {
         }
     }
 
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Structured control flow lowering
+    // ─────────────────────────────────────────────────────────────────────────────
+
     fn lowerIf(self: *FunctionLowerer, stmt: hir.HirStmt, if_stmt: anytype, block_id: mir.MirBlockId) LoweringError!mir.MirBlockId {
         const condition_lowered = try self.lowerExpr(if_stmt.condition, block_id);
         const condition = condition_lowered.operand;
@@ -195,6 +215,10 @@ const FunctionLowerer = struct {
 
         return exit_block;
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Match lowering
+    // ─────────────────────────────────────────────────────────────────────────────
 
     fn lowerMatch(self: *FunctionLowerer, stmt: hir.HirStmt, match_stmt: anytype, block_id: mir.MirBlockId) LoweringError!mir.MirBlockId {
         const scrutinee_lowered = try self.lowerExpr(match_stmt.scrutinee, block_id);
@@ -358,6 +382,10 @@ const FunctionLowerer = struct {
         };
     }
 
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Expression lowering
+    // ─────────────────────────────────────────────────────────────────────────────
+
     fn lowerExpr(self: *FunctionLowerer, expr_id: hir.ExprId, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
         const expr = self.semantic_module.hir.getExpr(expr_id).*;
         return switch (expr.kind) {
@@ -428,6 +456,10 @@ const FunctionLowerer = struct {
         return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = current };
     }
 
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Enum / Result / Try lowering
+    // ─────────────────────────────────────────────────────────────────────────────
+
     fn lowerEnumConstructor(self: *FunctionLowerer, expr: hir.HirExpr, constructor: anytype, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
         const args = try self.allocator.alloc(mir.MirOperand, constructor.args.len);
         var args_owned = true;
@@ -453,6 +485,10 @@ const FunctionLowerer = struct {
         });
         return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = current };
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Decide lowering
+    // ─────────────────────────────────────────────────────────────────────────────
 
     fn lowerDecide(self: *FunctionLowerer, expr: hir.HirExpr, decide: anytype, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
         const bool_type = self.semantic_module.types.boolType();
@@ -613,6 +649,10 @@ const FunctionLowerer = struct {
         return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(ok_temp)), .block = cont_block };
     }
 
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Type inference helpers
+    // ─────────────────────────────────────────────────────────────────────────────
+
     fn inferExprType(self: *FunctionLowerer, expr_id: hir.ExprId) LoweringError!types.TypeId {
         return self.inferExprTypeFrom(self.semantic_module.hir.getExpr(expr_id).*);
     }
@@ -650,6 +690,10 @@ const FunctionLowerer = struct {
         return error.MissingEnumType;
     }
 
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Local/parameter resolution helpers
+    // ─────────────────────────────────────────────────────────────────────────────
+
     fn ensureLocal(self: *FunctionLowerer, local_id: hir.LocalId) LoweringError!mir.MirLocalId {
         if (self.local_map.get(local_id)) |mapped| return mapped;
         const local = self.semantic_module.hir.getLocal(local_id);
@@ -672,6 +716,10 @@ const FunctionLowerer = struct {
             .param => |param_id| try self.resolveParam(param_id),
         };
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // MIR construction helpers
+    // ─────────────────────────────────────────────────────────────────────────────
 
     fn addTemp(self: *FunctionLowerer, type_id: types.TypeId) LoweringError!mir.MirLocalId {
         return self.store.addLocal(self.function_id, null, .temp, type_id, null);
@@ -740,6 +788,10 @@ fn deinitInitializedOperands(allocator: std.mem.Allocator, operands: []mir.MirOp
     for (operands[0..initialized]) |operand| deinitOperand(allocator, operand);
     if (operands.len > 0) allocator.free(operands);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tests
+// ─────────────────────────────────────────────────────────────────────────────
 
 test "MIR lowering debug snapshot includes enum tag switch" {
     var module = try newModule();

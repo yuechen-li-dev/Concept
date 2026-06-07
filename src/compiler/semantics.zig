@@ -1,3 +1,7 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Public API / SemanticModule
+// ─────────────────────────────────────────────────────────────────────────────
+
 const std = @import("std");
 
 const ast = @import("ast.zig");
@@ -38,6 +42,10 @@ pub const SemanticModule = struct {
         };
     }
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Top-level collection
+// ─────────────────────────────────────────────────────────────────────────────
 
 pub fn collectTopLevelDeclarations(
     allocator: std.mem.Allocator,
@@ -116,6 +124,10 @@ const Collector = struct {
             }
         }
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Declaration resolution
+    // ─────────────────────────────────────────────────────────────────────────────
 
     fn declareFunction(self: *Collector, function_decl: ast.FunctionDecl) !void {
         const name = try self.internFreshTopLevelName(
@@ -222,6 +234,10 @@ const Collector = struct {
         self.module.hir.setEnumResultShape(enum_id, try self.detectResultShape(enum_id));
     }
 
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Result-shape detection
+    // ─────────────────────────────────────────────────────────────────────────────
+
     fn detectResultShape(self: *Collector, enum_id: hir.EnumId) !?hir.HirResultShape {
         const enum_decl = self.module.hir.getEnum(enum_id);
         if (enum_decl.variants.len != 2) return null;
@@ -263,6 +279,10 @@ const Collector = struct {
         };
     }
 
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Type-name resolution
+    // ─────────────────────────────────────────────────────────────────────────────
+
     fn resolveTypeName(self: *Collector, type_name: ast.TypeName) !?types.TypeId {
         if (type_name.is_mut or type_name.is_reference or type_name.is_pointer or type_name.generic_args.len != 0 or type_name.name.parts.len != 1) {
             try self.diagnostics.append(diagnostics.unsupportedTypeSyntax(type_name.span));
@@ -289,6 +309,10 @@ const Collector = struct {
             },
         };
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Diagnostic helpers
+    // ─────────────────────────────────────────────────────────────────────────────
 
     fn internFreshTopLevelName(self: *Collector, text: []const u8, span: source.SourceSpan) !?interner.SymbolId {
         const symbol = try self.module.interner.intern(text);
@@ -324,6 +348,10 @@ const ScopedBinding = struct {
     binding: Binding,
     depth: usize,
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Body lowering state
+// ─────────────────────────────────────────────────────────────────────────────
 
 const BodyLowerer = struct {
     collector: *Collector,
@@ -361,6 +389,10 @@ const BodyLowerer = struct {
         }
         self.depth -= 1;
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Statement lowering
+    // ─────────────────────────────────────────────────────────────────────────────
 
     fn lowerBlock(self: *BodyLowerer, block: ast.BlockStmt) anyerror!?hir.StmtId {
         self.pushScope();
@@ -448,6 +480,10 @@ const BodyLowerer = struct {
             },
         }
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Expression lowering
+    // ─────────────────────────────────────────────────────────────────────────────
 
     fn lowerExpr(self: *BodyLowerer, expr: ast.Expr) anyerror!?hir.ExprId {
         switch (expr) {
@@ -561,6 +597,10 @@ const BodyLowerer = struct {
         }
     }
 
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Decide lowering
+    // ─────────────────────────────────────────────────────────────────────────────
+
     fn resolveDecideEnum(self: *BodyLowerer, type_name: ast.TypeName) !?struct { type_id: types.TypeId, enum_id: hir.EnumId } {
         if (type_name.is_mut or type_name.is_reference or type_name.is_pointer or type_name.generic_args.len != 0 or type_name.name.parts.len != 1) {
             try self.collector.diagnostics.append(diagnostics.unknownDecideEnum(type_name.span));
@@ -580,6 +620,10 @@ const BodyLowerer = struct {
             },
         };
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Pattern lowering
+    // ─────────────────────────────────────────────────────────────────────────────
 
     fn lowerPattern(self: *BodyLowerer, pattern: ast.MatchPattern) !?hir.HirMatchPattern {
         return switch (pattern) {
@@ -635,6 +679,10 @@ const BodyLowerer = struct {
         return .{ .enum_variant = .{ .enum_id = enum_id, .variant_id = variant_id, .bindings = try bindings.toOwnedSlice(self.collector.allocator) } };
     }
 
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Scope/binding helpers
+    // ─────────────────────────────────────────────────────────────────────────────
+
     fn findVariant(self: *BodyLowerer, enum_id: hir.EnumId, variant_symbol: interner.SymbolId) ?hir.VariantId {
         const enum_decl = self.collector.module.hir.getEnum(enum_id);
         for (enum_decl.variants) |variant_id| {
@@ -654,6 +702,10 @@ const BodyLowerer = struct {
         return null;
     }
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tests
+// ─────────────────────────────────────────────────────────────────────────────
 
 fn lowerUnaryOp(op: ast.UnaryOp) hir.UnaryOp {
     return switch (op) {
