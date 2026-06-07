@@ -352,7 +352,7 @@ const Checker = struct {
                 }
             },
             .address_of => |operand| blk: {
-                const place_type = try self.addressableExprType(operand, expr.span);
+                const place_type = try self.addressableExprType(return_type, operand, expr.span);
                 break :blk try self.module.types.addPointerType(place_type);
             },
             .deref => |operand| blk: {
@@ -459,16 +459,43 @@ const Checker = struct {
         return null;
     }
 
-    fn addressableExprType(self: *Checker, expr_id: hir.ExprId, span: diagnostics.SourceSpan) CheckError!types.TypeId {
+    fn addressableExprType(self: *Checker, return_type: types.TypeId, expr_id: hir.ExprId, span: diagnostics.SourceSpan) CheckError!types.TypeId {
         const expr = self.module.hir.getExpr(expr_id).*;
         return switch (expr.kind) {
             .local_ref => |local_id| self.module.hir.getLocal(local_id).type_id,
             .param_ref => |param_id| self.module.hir.getParam(param_id).type_id,
-            .group => |inner| try self.addressableExprType(inner, span),
+            .group => |inner| try self.addressableExprType(return_type, inner, span),
+            .field_access => |field_access| blk: {
+                const receiver_type = try self.checkExpr(return_type, field_access.receiver);
+                const receiver_kind = self.module.types.kind(receiver_type);
+                if (receiver_kind != .struct_type) {
+                    try self.reportAt(.FieldAccessNonStruct, "field access receiver must be a struct value", expr.span);
+                    return error.InvalidSemanticModule;
+                }
+                const field_id = self.findField(receiver_kind.struct_type, field_access.field_name) orelse {
+                    try self.reportAt(.UnknownFieldAccess, "unknown field on struct value", field_access.field_span);
+                    return error.InvalidSemanticModule;
+                };
+                if (self.addressableBase(field_access.receiver) == null) {
+                    try self.reportAt(.AddressOfRequiresPlace, "address-of requires a local, parameter, or one-level field place", span);
+                    return error.InvalidSemanticModule;
+                }
+                break :blk self.module.hir.getField(field_id).type_id;
+            },
             else => {
-                try self.reportAt(.AddressOfRequiresPlace, "address-of requires a local or parameter place", span);
+                try self.reportAt(.AddressOfRequiresPlace, "address-of requires a local, parameter, or one-level field place", span);
                 return error.InvalidSemanticModule;
             },
+        };
+    }
+
+    fn addressableBase(self: *Checker, expr_id: hir.ExprId) ?hir.AssignBase {
+        const expr = self.module.hir.getExpr(expr_id).*;
+        return switch (expr.kind) {
+            .local_ref => |local_id| .{ .local = local_id },
+            .param_ref => |param_id| .{ .param = param_id },
+            .group => |inner| self.addressableBase(inner),
+            else => null,
         };
     }
 

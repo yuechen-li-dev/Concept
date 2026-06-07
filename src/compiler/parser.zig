@@ -5054,6 +5054,31 @@ test "parses address-of and dereference prefix expressions" {
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "Deref") != null);
 }
 
+test "parses address-of field expression" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; struct Vec2 { int x; int y; }; int main() { Vec2 v = Vec2 { x: 7, y: 4, }; int* px = &v.x; unsafe { return *px; } }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.diagnostics.items.len);
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "AddressOf") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "FieldAccess .x") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Deref") != null);
+}
+
+test "rejects pointer arrow field sugar" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; int main() { return ptr->x; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expect(diagnostics.count() >= 1);
+}
+
 test "parses dereference in multiplicative expression" {
     var diagnostics = DiagnosticBag.init(std.testing.allocator);
     defer diagnostics.deinit();

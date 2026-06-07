@@ -1,0 +1,19 @@
+# name: phase7 field address-of pointer receiver
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+struct Vec2 { int x; int y; };
+
+int main() {
+    Vec2 v = Vec2 { x: 1, y: 2, };
+    Vec2* ptr = &v;
+    int* p = &ptr.x;
+    return 0;
+}
+
+=== diagnostics ===
+CON0079

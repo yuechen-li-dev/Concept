@@ -1,0 +1,16 @@
+# name: phase7 field address-of non struct
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    int v = 1;
+    int* p = &v.x;
+    return 0;
+}
+
+=== diagnostics ===
+CON0079

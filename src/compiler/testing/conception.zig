@@ -1757,3 +1757,31 @@ test "language check fixture: phase7 field assignment non struct" {
 test "language check fixture: phase7 field assignment non place" {
     try expectCheckFixture("../../../language/phase7-runtime-structs/invalid/field_assignment_non_place.invalid.conception");
 }
+
+test "language run fixture: phase7 field address-of run" {
+    try expectRunFixture("../../../language/phase7-runtime-structs/valid/field_address_of_run.valid.conception");
+}
+
+test "language check fixture: phase7 field address-of param" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/valid/field_address_of_param.valid.conception");
+}
+
+test "language run fixture: phase7 field address-of after assignment" {
+    try expectRunFixture("../../../language/phase7-runtime-structs/valid/field_address_of_after_assignment.valid.conception");
+}
+
+test "language check fixture: phase7 field address-of temporary" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/invalid/field_address_of_temporary.invalid.conception");
+}
+
+test "language check fixture: phase7 field address-of unknown" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/invalid/field_address_of_unknown.invalid.conception");
+}
+
+test "language check fixture: phase7 field address-of non struct" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/invalid/field_address_of_non_struct.invalid.conception");
+}
+
+test "language check fixture: phase7 field address-of pointer receiver" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/invalid/field_address_of_pointer_receiver.invalid.conception");
+}
