@@ -49,6 +49,14 @@ Concept should not reproduce C and C++ hazards where a dangerous operation looks
 
 Low-level power is allowed. The requirement is evidence. If a program dereferences a raw pointer, asserts a thread-safety property, depends on a layout property, performs allocation in a constrained profile, or intentionally discards a checked failure, the source and MIR should contain a visible fingerprint.
 
+## P6-M1 unsafe surface
+
+P6-M1 adds the first compiler surface for the `unsafe` permission boundary. The lexer reserves `unsafe`; the parser accepts `unsafe { ... }` wherever a statement is allowed; AST and HIR retain an unsafe-block node; semantic lowering lowers the body with ordinary block scope and ordinary statement/expression rules. The HIR checker tracks unsafe-context depth when it enters an unsafe block, and nested unsafe blocks are valid.
+
+P6-M1 also accepts `unsafe` as a function modifier, for example `unsafe int helper() { return 1; }`. The modifier is copied into HIR function metadata. Unsafe function bodies are checked in unsafe context, and calls to unsafe functions require an unsafe context (`CON0070`) so callers must write an unsafe block or be an unsafe function.
+
+This milestone intentionally enables no dangerous operation. Raw pointer types, address-of, dereference, pointer arithmetic, ownership, move, drop, borrow checking, volatile, atomics, address spaces, and effects remain unimplemented. Unsafe blocks lower through MIR like ordinary blocks for now, and MIR/backend representation is unchanged until future unsafe operations need an explicit region fingerprint.
+
 ## Non-goals
 
 Phase 6 v0 explicitly does not include:

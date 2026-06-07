@@ -1,0 +1,15 @@
+# name: phase6 unsafe block return
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    unsafe {
+        return 0;
+    }
+}
+
+=== run ===
+exit_code: 0

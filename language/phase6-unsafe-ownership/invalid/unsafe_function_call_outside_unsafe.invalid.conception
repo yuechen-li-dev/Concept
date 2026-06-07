@@ -1,0 +1,16 @@
+# name: phase6 unsafe function call outside unsafe
+# phase: check
+# check: hir
+# expect: fail
+# diagnostics: CON0070
+
+=== source ===
+module Main;
+
+unsafe int helper() {
+    return 4;
+}
+
+int main() {
+    return helper();
+}

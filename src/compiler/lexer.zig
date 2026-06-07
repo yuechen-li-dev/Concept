@@ -412,6 +412,11 @@ test "must_use and discard keywords do not consume nearby identifiers" {
     try expectLexedKinds("must_use discard must_useful discarded", &expected);
 }
 
+test "unsafe keyword does not consume nearby identifiers" {
+    const expected = [_]TokenKind{ .unsafe, .identifier, .identifier, .identifier, .eof };
+    try expectLexedKinds("unsafe unsafeValue unsafely unsafe_mode", &expected);
+}
+
 test "decide and when tokenize as keywords while score remains contextual identifier" {
     const expected = [_]TokenKind{ .decide, .when, .identifier, .identifier, .identifier, .identifier, .eof };
     try expectLexedKinds("decide when score scoreValue score_thing highScore", &expected);

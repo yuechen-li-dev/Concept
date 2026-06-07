@@ -1,0 +1,19 @@
+# name: phase6 unsafe function call inside unsafe
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+unsafe int helper() {
+    return 4;
+}
+
+int main() {
+    unsafe {
+        return helper();
+    }
+}
+
+=== run ===
+exit_code: 4

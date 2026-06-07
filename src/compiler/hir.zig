@@ -42,6 +42,7 @@ pub const HirFunction = struct {
     name: SymbolId,
     span: SourceSpan,
     return_type: types.TypeId,
+    is_unsafe: bool = false,
     params: []ParamId,
     locals: []LocalId,
     body: ?StmtId = null,
@@ -73,6 +74,7 @@ pub const HirStmtKind = union(enum) {
     discard_stmt: ExprId,
     if_stmt: struct { condition: ExprId, then_block: StmtId, else_block: ?StmtId },
     while_stmt: struct { condition: ExprId, body: StmtId },
+    unsafe_block: StmtId,
     match_stmt: struct { scrutinee: ExprId, arms: []HirMatchArm },
 };
 
@@ -323,6 +325,10 @@ pub const HirStore = struct {
     }
 
     pub fn addFunction(self: *HirStore, name: SymbolId, return_type: types.TypeId, span: SourceSpan) !FunctionId {
+        return self.addFunctionWithSafety(name, return_type, false, span);
+    }
+
+    pub fn addFunctionWithSafety(self: *HirStore, name: SymbolId, return_type: types.TypeId, is_unsafe: bool, span: SourceSpan) !FunctionId {
         const id = FunctionId{ .index = try nextIndex(self.functions.items.len, error.TooManyFunctions) };
         const item = try self.addItem(.{ .function = id });
         errdefer _ = self.items.pop();
@@ -331,6 +337,7 @@ pub const HirStore = struct {
             .name = name,
             .span = span,
             .return_type = return_type,
+            .is_unsafe = is_unsafe,
             .params = &.{},
             .locals = &.{},
             .body = null,
@@ -551,7 +558,7 @@ pub const HirStore = struct {
             switch (item) {
                 .function => |id| {
                     const function = self.getFunction(id);
-                    try writer.print("  Function {s} -> {f}\n", .{ interner.text(function.name), function.return_type });
+                    try writer.print("  {s}Function {s} -> {f}\n", .{ if (function.is_unsafe) "Unsafe " else "", interner.text(function.name), function.return_type });
                     if (function.params.len != 0) {
                         try writer.writeAll("    Params\n");
                         for (function.params) |param_id| {
@@ -648,6 +655,10 @@ pub const HirStore = struct {
                 try writeIndent(writer, depth + 1);
                 try writer.writeAll("Body\n");
                 try self.writeStmtDebug(writer, stmt.body, depth + 2);
+            },
+            .unsafe_block => |body| {
+                try writer.writeAll("UnsafeBlock\n");
+                try self.writeStmtDebug(writer, body, depth + 1);
             },
             .match_stmt => |stmt| {
                 try writer.writeAll("Match\n");
