@@ -1,0 +1,25 @@
+# name: phase7 struct return local run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+struct Box {
+    int value;
+};
+
+Box makeBox(int value) {
+    Box b = Box {
+        value: value,
+    };
+    return b;
+}
+
+int main() {
+    Box b = makeBox(9);
+    return b.value;
+}
+
+=== run ===
+exit_code: 9

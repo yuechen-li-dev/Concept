@@ -1,0 +1,23 @@
+# name: phase7 struct return local
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+struct Box {
+    int value;
+};
+
+Box makeBox(int value) {
+    Box b = Box {
+        value: value,
+    };
+    return b;
+}
+
+int main() {
+    Box b = makeBox(8);
+    return b.value;
+}

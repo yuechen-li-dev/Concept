@@ -1,0 +1,24 @@
+# name: phase7 struct local initializer mismatch
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+struct Box { int value; };
+struct OtherBox { int value; };
+
+OtherBox makeOther(int value) {
+    return OtherBox {
+        value: value,
+    };
+}
+
+int main() {
+    Box b = makeOther(5);
+    return b.value;
+}
+
+=== diagnostics ===
+CON0029

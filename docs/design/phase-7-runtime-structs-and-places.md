@@ -8,6 +8,8 @@ P7-M3 adds read-only field access expressions for struct values. Source expressi
 
 P7-M5 stabilizes the one-level field-place projection introduced for assignment so address-of can target fields of local and parameter struct places. `&v.x` now has pointer-to-field type, lowers to `address_of(field_place)`, and emits C such as `&cpt_l_v_0.cpt_f_x_0`. This remains deliberately narrow: no address-of temporary fields, no pointer auto-deref, no `->`, no deref/index places, no recursive place model, and no move/drop/ownership semantics.
 
+P7-M6 allows simple backend-supported struct values to cross function boundaries by value. Function signatures may use supported struct types as parameters and return values, calls may return structs into locals, and struct locals/parameters may be passed to functions or returned when the `TypeId` matches exactly. The C backend renders these flows with backend-local names such as `cpt_struct_Vec2` in prototypes, definitions, locals, assignments, and returns. This is still not a final ABI or `repr(C)` guarantee: methods, associated functions, additional constructors, implicit conversion between distinct struct types, auto field decomposition, struct equality, move/drop/ownership distinctions, pointer auto-deref, and nested unsupported struct layouts remain out of scope.
+
 Phase 7 starts after the closed Phase 6 unsafe/raw-pointer slice. Phase 6 intentionally deferred ownership, move, Drop, and `MaybeUninit` until Concept has runtime structs and richer places. This document makes that prerequisite explicit and scopes the next executable-data milestone.
 
 ## Thesis

@@ -1,0 +1,30 @@
+# name: phase7 struct return and call run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+struct Vec2 {
+    int x;
+    int y;
+};
+
+Vec2 makeVec(int x, int y) {
+    return Vec2 {
+        x: x,
+        y: y,
+    };
+}
+
+int sum(Vec2 v) {
+    return v.x + v.y;
+}
+
+int main() {
+    Vec2 v = makeVec(3, 4);
+    return sum(v);
+}
+
+=== run ===
+exit_code: 7
