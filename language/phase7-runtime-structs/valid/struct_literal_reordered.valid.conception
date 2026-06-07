@@ -1,0 +1,20 @@
+# name: phase7 struct literal reordered
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+struct Flags {
+    int count;
+    bool ok;
+};
+
+int main() {
+    Flags flags = Flags {
+        ok: true,
+        count: 7,
+    };
+    return 0;
+}

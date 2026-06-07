@@ -335,6 +335,7 @@ pub const Expr = union(enum) {
     binary: BinaryExpr,
     call: CallExpr,
     enum_constructor: EnumConstructorExpr,
+    struct_literal: StructLiteralExpr,
     decide: DecideExpr,
 
     pub const IntLiteralExpr = struct { text: []const u8, span: SourceSpan };
@@ -347,6 +348,8 @@ pub const Expr = union(enum) {
     pub const BinaryExpr = struct { op: BinaryOp, left: *Expr, right: *Expr, span: SourceSpan };
     pub const CallExpr = struct { callee: NameSegment, args: []*Expr, span: SourceSpan };
     pub const EnumConstructorExpr = struct { enum_name: NameSegment, variant_name: NameSegment, args: []*Expr, span: SourceSpan };
+    pub const StructLiteralExpr = struct { type_name: NameSegment, fields: []StructLiteralField, span: SourceSpan };
+    pub const StructLiteralField = struct { name: NameSegment, value: *Expr, span: SourceSpan };
     pub const DecideExpr = struct { type_name: TypeName, arms: []DecideArm, span: SourceSpan };
     pub const DecideArm = struct {
         variant_name: NameSegment,
@@ -377,6 +380,7 @@ pub const Expr = union(enum) {
             .binary => |expr| expr.span,
             .call => |expr| expr.span,
             .enum_constructor => |expr| expr.span,
+            .struct_literal => |expr| expr.span,
             .decide => |expr| expr.span,
         };
     }
@@ -414,6 +418,13 @@ pub const Expr = union(enum) {
                     allocator.destroy(arg);
                 }
                 allocator.free(expr.args);
+            },
+            .struct_literal => |expr| {
+                for (expr.fields) |field| {
+                    field.value.deinit(allocator);
+                    allocator.destroy(field.value);
+                }
+                allocator.free(expr.fields);
             },
             .decide => |expr| {
                 expr.type_name.deinit(allocator);
@@ -484,6 +495,18 @@ pub const Expr = union(enum) {
                 try writer.writeAll(expr.variant_name.text);
                 try writer.writeByte('\n');
                 for (expr.args) |arg| try arg.writeDebug(writer, depth + 1);
+            },
+            .struct_literal => |expr| {
+                try writer.writeAll("StructLiteral ");
+                try writer.writeAll(expr.type_name.text);
+                try writer.writeByte('\n');
+                for (expr.fields) |field| {
+                    try writeIndent(writer, depth + 1);
+                    try writer.writeAll("Field ");
+                    try writer.writeAll(field.name.text);
+                    try writer.writeByte('\n');
+                    try field.value.writeDebug(writer, depth + 2);
+                }
             },
             .decide => |expr| {
                 try writer.writeAll("Decide ");

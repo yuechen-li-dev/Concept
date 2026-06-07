@@ -75,6 +75,11 @@ pub const DiagnosticCode = enum {
     AddressOfRequiresPlace,
     DerefRequiresPointer,
     DerefRequiresUnsafe,
+    UnknownStructLiteralType,
+    UnknownStructLiteralField,
+    DuplicateStructLiteralField,
+    MissingStructLiteralField,
+    StructFieldInitializerTypeMismatch,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -131,6 +136,11 @@ pub const DiagnosticCode = enum {
             .AddressOfRequiresPlace => "CON0071",
             .DerefRequiresPointer => "CON0072",
             .DerefRequiresUnsafe => "CON0073",
+            .UnknownStructLiteralType => "CON0074",
+            .UnknownStructLiteralField => "CON0075",
+            .DuplicateStructLiteralField => "CON0076",
+            .MissingStructLiteralField => "CON0077",
+            .StructFieldInitializerTypeMismatch => "CON0078",
         };
     }
 };
@@ -433,6 +443,11 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0071", DiagnosticCode.AddressOfRequiresPlace.format());
     try std.testing.expectEqualStrings("CON0072", DiagnosticCode.DerefRequiresPointer.format());
     try std.testing.expectEqualStrings("CON0073", DiagnosticCode.DerefRequiresUnsafe.format());
+    try std.testing.expectEqualStrings("CON0074", DiagnosticCode.UnknownStructLiteralType.format());
+    try std.testing.expectEqualStrings("CON0075", DiagnosticCode.UnknownStructLiteralField.format());
+    try std.testing.expectEqualStrings("CON0076", DiagnosticCode.DuplicateStructLiteralField.format());
+    try std.testing.expectEqualStrings("CON0077", DiagnosticCode.MissingStructLiteralField.format());
+    try std.testing.expectEqualStrings("CON0078", DiagnosticCode.StructFieldInitializerTypeMismatch.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {
@@ -721,4 +736,24 @@ pub fn unsupportedCBackendType(span: SourceSpan) Diagnostic {
         "unsupported type in MIR C backend",
         span,
     ).withHelp("Phase 5 C backend v0 renders void, int, bool, and supported non-empty enums with int/bool payload fields");
+}
+
+pub fn unknownStructLiteralType(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.UnknownStructLiteralType, .@"error", "struct literal type must name a top-level struct", span);
+}
+
+pub fn unknownStructLiteralField(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.UnknownStructLiteralField, .@"error", "unknown struct literal field", span);
+}
+
+pub fn duplicateStructLiteralField(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.DuplicateStructLiteralField, .@"error", "duplicate struct literal field", span);
+}
+
+pub fn missingStructLiteralField(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.MissingStructLiteralField, .@"error", "missing struct literal field", span);
+}
+
+pub fn structFieldInitializerTypeMismatch(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.StructFieldInitializerTypeMismatch, .@"error", "struct field initializer type mismatch", span);
 }

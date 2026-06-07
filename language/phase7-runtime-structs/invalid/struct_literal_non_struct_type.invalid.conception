@@ -1,0 +1,17 @@
+# name: phase7 struct literal non struct type
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+enum Status { Ok, };
+
+int main() {
+    Status s = Status { Ok: 1, };
+    return 0;
+}
+
+=== diagnostics ===
+CON0074

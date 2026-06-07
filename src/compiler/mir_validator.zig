@@ -274,6 +274,35 @@ const Validator = struct {
                 }
                 break :blk callee.return_type;
             },
+            .struct_constructor => |constructor| blk: {
+                if (constructor.struct_id.index >= self.semantic_module.hir.structs.items.len) {
+                    try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
+                    break :blk null;
+                }
+                const struct_decl = self.semantic_module.hir.getStruct(constructor.struct_id);
+                var seen = std.AutoHashMap(hir.FieldId, void).init(self.allocator);
+                defer seen.deinit();
+                for (constructor.fields) |field_value| {
+                    if (field_value.field_id.index >= self.semantic_module.hir.fields.items.len) {
+                        try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
+                        continue;
+                    }
+                    const field = self.semantic_module.hir.getField(field_value.field_id);
+                    if (field.parent.index != constructor.struct_id.index or seen.contains(field_value.field_id)) {
+                        try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
+                        continue;
+                    }
+                    try seen.put(field_value.field_id, {});
+                    const value_type = try self.operandType(function_id, field_value.value, span);
+                    if (value_type != null and !sameType(value_type.?, field.type_id)) {
+                        try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                    }
+                }
+                for (struct_decl.fields) |field_id| {
+                    if (!seen.contains(field_id)) try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
+                }
+                break :blk self.structType(constructor.struct_id);
+            },
             .enum_constructor => |constructor| blk: {
                 if (constructor.enum_id.index >= self.semantic_module.hir.enums.items.len or constructor.variant_id.index >= self.semantic_module.hir.variants.items.len) {
                     try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
@@ -319,6 +348,13 @@ const Validator = struct {
                 break :blk field.type_id;
             },
         };
+    }
+
+    fn structType(self: *Validator, struct_id: hir.StructId) ?types.TypeId {
+        for (self.semantic_module.types.types.items, 0..) |kind, index| {
+            if (kind == .struct_type and kind.struct_type.index == struct_id.index) return .{ .index = @intCast(index) };
+        }
+        return null;
     }
 
     fn enumType(self: *Validator, enum_id: hir.EnumId) ?types.TypeId {

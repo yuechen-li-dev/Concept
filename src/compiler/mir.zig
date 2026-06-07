@@ -115,6 +115,11 @@ pub const MirBinaryOp = enum {
     }
 };
 
+pub const MirStructFieldValue = struct {
+    field_id: hir.FieldId,
+    value: MirOperand,
+};
+
 pub const MirRvalue = union(enum) {
     use: MirOperand,
     unary: struct {
@@ -136,6 +141,10 @@ pub const MirRvalue = union(enum) {
         enum_id: hir.EnumId,
         variant_id: hir.VariantId,
         args: []MirOperand,
+    },
+    struct_constructor: struct {
+        struct_id: hir.StructId,
+        fields: []MirStructFieldValue,
     },
     enum_tag: MirOperand,
     enum_payload_field: struct {
@@ -173,6 +182,15 @@ pub const MirRvalue = union(enum) {
         return .{ .enum_constructor = .{ .enum_id = enum_id, .variant_id = variant_id, .args = owned_args } };
     }
 
+    pub fn structConstructor(allocator: std.mem.Allocator, struct_id: hir.StructId, fields: []const MirStructFieldValue) !MirRvalue {
+        const owned_fields = try allocator.alloc(MirStructFieldValue, fields.len);
+        errdefer allocator.free(owned_fields);
+        for (fields, 0..) |field, index| {
+            owned_fields[index] = .{ .field_id = field.field_id, .value = try field.value.clone(allocator) };
+        }
+        return .{ .struct_constructor = .{ .struct_id = struct_id, .fields = owned_fields } };
+    }
+
     pub fn enumTag(operand: MirOperand) MirRvalue {
         return .{ .enum_tag = operand };
     }
@@ -194,6 +212,7 @@ pub const MirRvalue = union(enum) {
             ),
             .call => |call_rvalue| try MirRvalue.callFunction(allocator, call_rvalue.function, call_rvalue.args),
             .enum_constructor => |constructor| try MirRvalue.enumConstructor(allocator, constructor.enum_id, constructor.variant_id, constructor.args),
+            .struct_constructor => |constructor| try MirRvalue.structConstructor(allocator, constructor.struct_id, constructor.fields),
             .enum_tag => |operand| MirRvalue.enumTag(try operand.clone(allocator)),
             .enum_payload_field => |payload| MirRvalue.enumPayloadField(try payload.enum_operand.clone(allocator), payload.payload_field),
         };
@@ -216,6 +235,10 @@ pub const MirRvalue = union(enum) {
             .enum_constructor => |constructor| {
                 deinitOperands(allocator, constructor.args);
                 if (constructor.args.len > 0) allocator.free(constructor.args);
+            },
+            .struct_constructor => |constructor| {
+                for (constructor.fields) |field| field.value.deinit(allocator);
+                if (constructor.fields.len > 0) allocator.free(constructor.fields);
             },
             .enum_tag => |operand| operand.deinit(allocator),
             .enum_payload_field => |payload| payload.enum_operand.deinit(allocator),
@@ -684,6 +707,15 @@ fn writeRvalueDebug(writer: *std.Io.Writer, rvalue: MirRvalue) !void {
             for (constructor.args, 0..) |arg, index| {
                 if (index != 0) try writer.writeAll(", ");
                 try writeOperandDebug(writer, arg);
+            }
+            try writer.writeByte(')');
+        },
+        .struct_constructor => |constructor| {
+            try writer.print("StructConstructor {f}(", .{constructor.struct_id});
+            for (constructor.fields, 0..) |field, index| {
+                if (index != 0) try writer.writeAll(", ");
+                try writer.print("{f}=", .{field.field_id});
+                try writeOperandDebug(writer, field.value);
             }
             try writer.writeByte(')');
         },

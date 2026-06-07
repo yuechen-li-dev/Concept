@@ -108,6 +108,12 @@ pub const HirExpr = struct {
     kind: HirExprKind,
 };
 
+pub const HirStructLiteralField = struct {
+    field_id: FieldId,
+    value: ExprId,
+    span: SourceSpan,
+};
+
 pub const HirDecideArm = struct {
     variant_id: VariantId,
     condition: ?ExprId,
@@ -122,6 +128,7 @@ pub const HirExprKind = union(enum) {
     param_ref: ParamId,
     call: struct { function: FunctionId, args: []ExprId },
     enum_constructor: struct { enum_id: EnumId, variant_id: VariantId, args: []ExprId },
+    struct_literal: struct { struct_id: StructId, type_id: types.TypeId, fields: []HirStructLiteralField },
     decide: struct { enum_type: types.TypeId, enum_id: EnumId, arms: []HirDecideArm },
     group: ExprId,
     unary: struct { op: UnaryOp, operand: ExprId },
@@ -298,6 +305,7 @@ pub const HirStore = struct {
                 .int_literal => |text| self.allocator.free(text),
                 .call => |call| if (call.args.len > 0) self.allocator.free(call.args),
                 .enum_constructor => |constructor| if (constructor.args.len > 0) self.allocator.free(constructor.args),
+                .struct_literal => |literal| if (literal.fields.len > 0) self.allocator.free(literal.fields),
                 .decide => |decide| if (decide.arms.len > 0) self.allocator.free(decide.arms),
                 else => {},
             }
@@ -692,6 +700,14 @@ pub const HirStore = struct {
             .enum_constructor => |constructor| {
                 try writer.print("EnumConstructor {f}::{f}\n", .{ constructor.enum_id, constructor.variant_id });
                 for (constructor.args) |arg| try self.writeExprDebug(writer, arg, depth + 1);
+            },
+            .struct_literal => |literal| {
+                try writer.print("StructLiteral {f} {f}\n", .{ literal.type_id, literal.struct_id });
+                for (literal.fields) |field| {
+                    try writeIndent(writer, depth + 1);
+                    try writer.print("Field {f}\n", .{field.field_id});
+                    try self.writeExprDebug(writer, field.value, depth + 2);
+                }
             },
             .decide => |decide| {
                 try writer.print("Decide {f} {f}\n", .{ decide.enum_type, decide.enum_id });

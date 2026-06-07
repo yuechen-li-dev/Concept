@@ -507,3 +507,27 @@ This ordering keeps Concept value-oriented and MIR-first while avoiding paperwor
 ## P7-M0 status
 
 P7-M0 adds only this design document. It intentionally does not implement lexer, parser, AST, HIR, MIR, backend, fixture, struct literal, field access, field assignment, C layout, ownership, move, Drop, or `MaybeUninit` changes.
+
+## P7-M2 struct literals / constructors
+
+P7-M2 adds the first runtime construction path for supported struct values. In expression position, a simple top-level struct name followed by a brace-delimited labeled initializer constructs a struct value:
+
+```cpp
+Vec2 v = Vec2 {
+    x: 3,
+    y: 4,
+};
+```
+
+The v0 constructor syntax is intentionally narrow:
+
+- the literal type name must be a simple top-level struct;
+- every initializer is labeled as `fieldName: expression`;
+- source order is arbitrary, while declaration order remains the backend's deterministic layout/write order;
+- every declared field must be initialized exactly once;
+- unknown fields, duplicate fields, missing fields, and initializer type mismatches are rejected with stable diagnostics;
+- optional trailing commas are accepted.
+
+Struct literals lower through HIR with resolved `StructId`, `TypeId`, and `FieldId` values, then through MIR as a dedicated `struct_constructor` rvalue. The C backend emits constructor assignments as deterministic writes to backend-owned field names, so supported struct locals can be constructed and compiled before field reads exist.
+
+P7-M2 still does not add field access (`v.x`), field assignment (`v.x = ...`), general MIR place projections, address-of-field, deref-field access, struct methods, ownership/drop behavior, or ABI/repr controls.
