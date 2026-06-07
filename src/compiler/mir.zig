@@ -30,9 +30,14 @@ pub const MirLocalKind = enum {
 
 pub const MirPlace = union(enum) {
     local: MirLocalId,
+    field: struct { base: MirLocalId, field_id: hir.FieldId },
 
     pub fn localPlace(id: MirLocalId) MirPlace {
         return .{ .local = id };
+    }
+
+    pub fn fieldPlace(base: MirLocalId, field_id: hir.FieldId) MirPlace {
+        return .{ .field = .{ .base = base, .field_id = field_id } };
     }
 };
 
@@ -662,6 +667,7 @@ pub const MirStore = struct {
 fn writePlaceDebug(writer: *std.Io.Writer, place: MirPlace) !void {
     switch (place) {
         .local => |id| try writer.print("{f}", .{id}),
+        .field => |field| try writer.print("Field({f}, {f})", .{ field.base, field.field_id }),
     }
 }
 

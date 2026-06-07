@@ -106,12 +106,16 @@ const Checker = struct {
                 _ = try self.checkExpr(return_type, expr_id);
             },
             .assignment => |assignment| {
-                const target_type = switch (assignment.target) {
-                    .local => |id| self.module.hir.getLocal(id).type_id,
-                    .param => |id| self.module.hir.getParam(id).type_id,
-                };
+                const target_type = try self.placeType(assignment.target, stmt.span);
                 const value_type = try self.checkExpr(return_type, assignment.value);
-                try self.requireSame(value_type, target_type, "assignment expression type does not match target type", self.exprSpan(assignment.value));
+                if (!sameType(value_type, target_type)) {
+                    const code: diagnostics.DiagnosticCode = switch (assignment.target) {
+                        .field => .FieldAssignmentTypeMismatch,
+                        else => .TypeMismatch,
+                    };
+                    try self.reportAt(code, "assignment expression type does not match target type", self.exprSpan(assignment.value));
+                    return error.InvalidSemanticModule;
+                }
             },
             .if_stmt => |if_stmt| {
                 const condition_type = try self.checkExpr(return_type, if_stmt.condition);
@@ -417,6 +421,34 @@ const Checker = struct {
     // ─────────────────────────────────────────────────────────────────────────────
     // Type helper functions
     // ─────────────────────────────────────────────────────────────────────────────
+
+    fn placeType(self: *Checker, target: hir.AssignTarget, span: diagnostics.SourceSpan) CheckError!types.TypeId {
+        return switch (target) {
+            .local => |id| self.module.hir.getLocal(id).type_id,
+            .param => |id| self.module.hir.getParam(id).type_id,
+            .field => |field_place| blk: {
+                const base_type = switch (field_place.base) {
+                    .local => |id| self.module.hir.getLocal(id).type_id,
+                    .param => |id| self.module.hir.getParam(id).type_id,
+                };
+                const base_kind = self.module.types.kind(base_type);
+                if (base_kind != .struct_type) {
+                    try self.reportAt(.FieldAccessNonStruct, "field assignment receiver must be a struct place", span);
+                    return error.InvalidSemanticModule;
+                }
+                if (field_place.field_id.index >= self.module.hir.fields.items.len) {
+                    try self.reportAt(.UnknownFieldAccess, "unknown field on struct value", field_place.field_span);
+                    return error.InvalidSemanticModule;
+                }
+                const field = self.module.hir.getField(field_place.field_id);
+                if (field.parent.index != base_kind.struct_type.index) {
+                    try self.reportAt(.UnknownFieldAccess, "unknown field on struct value", field_place.field_span);
+                    return error.InvalidSemanticModule;
+                }
+                break :blk field.type_id;
+            },
+        };
+    }
 
     fn findField(self: *Checker, struct_id: hir.StructId, field_name: hir.SymbolId) ?hir.FieldId {
         const struct_decl = self.module.hir.getStruct(struct_id);

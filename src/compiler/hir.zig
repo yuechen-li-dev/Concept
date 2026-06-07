@@ -55,9 +55,15 @@ pub const HirLocal = struct {
     type_id: types.TypeId,
 };
 
+pub const AssignBase = union(enum) {
+    local: LocalId,
+    param: ParamId,
+};
+
 pub const AssignTarget = union(enum) {
     local: LocalId,
     param: ParamId,
+    field: struct { base: AssignBase, field_id: FieldId, field_span: SourceSpan },
 };
 
 pub const HirStmt = struct {
@@ -902,6 +908,14 @@ fn writeAssignTarget(writer: *std.Io.Writer, target: AssignTarget) !void {
     switch (target) {
         .local => |id| try writer.print("LocalRef {f}", .{id}),
         .param => |id| try writer.print("ParamRef {f}", .{id}),
+        .field => |field| {
+            try writer.writeAll("FieldPlace ");
+            switch (field.base) {
+                .local => |id| try writer.print("LocalRef {f}", .{id}),
+                .param => |id| try writer.print("ParamRef {f}", .{id}),
+            }
+            try writer.print(".{f}", .{field.field_id});
+        },
     }
 }
 

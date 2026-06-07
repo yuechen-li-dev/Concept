@@ -144,11 +144,11 @@ const FunctionLowerer = struct {
                 return lowered.block;
             },
             .assignment => |assignment| {
-                const local_id = try self.resolveAssignTarget(assignment.target);
+                const place = try self.resolveAssignTarget(assignment.target);
                 const lowered = try self.lowerExpr(assignment.value, block_id);
                 try self.store.appendStatement(lowered.block, .{
                     .span = stmt.span,
-                    .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(local_id), mir.MirRvalue.use_(lowered.operand)),
+                    .kind = mir.MirStatementKind.assignTo(place, mir.MirRvalue.use_(lowered.operand)),
                 });
                 return lowered.block;
             },
@@ -824,8 +824,16 @@ const FunctionLowerer = struct {
         return self.param_map.get(param_id) orelse error.MissingParamMapping;
     }
 
-    fn resolveAssignTarget(self: *FunctionLowerer, target: hir.AssignTarget) LoweringError!mir.MirLocalId {
+    fn resolveAssignTarget(self: *FunctionLowerer, target: hir.AssignTarget) LoweringError!mir.MirPlace {
         return switch (target) {
+            .local => |local_id| mir.MirPlace.localPlace(try self.resolveLocal(local_id)),
+            .param => |param_id| mir.MirPlace.localPlace(try self.resolveParam(param_id)),
+            .field => |field| mir.MirPlace.fieldPlace(try self.resolveAssignBase(field.base), field.field_id),
+        };
+    }
+
+    fn resolveAssignBase(self: *FunctionLowerer, base: hir.AssignBase) LoweringError!mir.MirLocalId {
+        return switch (base) {
             .local => |local_id| try self.resolveLocal(local_id),
             .param => |param_id| try self.resolveParam(param_id),
         };

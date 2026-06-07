@@ -82,6 +82,8 @@ pub const DiagnosticCode = enum {
     StructFieldInitializerTypeMismatch,
     FieldAccessNonStruct,
     UnknownFieldAccess,
+    FieldAssignmentNonPlace,
+    FieldAssignmentTypeMismatch,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -145,6 +147,8 @@ pub const DiagnosticCode = enum {
             .StructFieldInitializerTypeMismatch => "CON0078",
             .FieldAccessNonStruct => "CON0079",
             .UnknownFieldAccess => "CON0080",
+            .FieldAssignmentNonPlace => "CON0081",
+            .FieldAssignmentTypeMismatch => "CON0082",
         };
     }
 };
@@ -452,6 +456,8 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0076", DiagnosticCode.DuplicateStructLiteralField.format());
     try std.testing.expectEqualStrings("CON0077", DiagnosticCode.MissingStructLiteralField.format());
     try std.testing.expectEqualStrings("CON0078", DiagnosticCode.StructFieldInitializerTypeMismatch.format());
+    try std.testing.expectEqualStrings("CON0081", DiagnosticCode.FieldAssignmentNonPlace.format());
+    try std.testing.expectEqualStrings("CON0082", DiagnosticCode.FieldAssignmentTypeMismatch.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {
