@@ -4,7 +4,9 @@ P7-M0 is a documentation-only milestone. It defines Concept's direction for runt
 
 P7-M1 adds the first executable/audit-facing backend step: supported struct declarations now emit deterministic backend-local C layout typedefs. This is not an ABI commitment and does not add struct literals, field access, field assignment, MIR place projections, or runtime construction.
 
-P7-M3 adds read-only field access expressions for struct values. Source expressions of the form `expr.field` are resolved against the receiver's struct type, produce the declared field `TypeId`, lower through MIR as field-read rvalues, and emit backend-local C field names such as `.cpt_f_x_0`. The receiver must be a struct value: raw pointers are not auto-dereferenced, `->` is not supported, and `ptr.x` is rejected rather than implicitly dereferenced. Field assignment, address-of-field, pointer field sugar, and richer place projections remain future Phase 7 work.
+P7-M3 adds read-only field access expressions for struct values. Source expressions of the form `expr.field` are resolved against the receiver's struct type, produce the declared field `TypeId`, lower through MIR as field-read rvalues, and emit backend-local C field names such as `.cpt_f_x_0`. The receiver must be a struct value: raw pointers are not auto-dereferenced, `->` is not supported, and `ptr.x` is rejected rather than implicitly dereferenced.
+
+P7-M5 stabilizes the one-level field-place projection introduced for assignment so address-of can target fields of local and parameter struct places. `&v.x` now has pointer-to-field type, lowers to `address_of(field_place)`, and emits C such as `&cpt_l_v_0.cpt_f_x_0`. This remains deliberately narrow: no address-of temporary fields, no pointer auto-deref, no `->`, no deref/index places, no recursive place model, and no move/drop/ownership semantics.
 
 Phase 7 starts after the closed Phase 6 unsafe/raw-pointer slice. Phase 6 intentionally deferred ownership, move, Drop, and `MaybeUninit` until Concept has runtime structs and richer places. This document makes that prerequisite explicit and scopes the next executable-data milestone.
 
@@ -553,4 +555,12 @@ The v0 rules remain intentionally narrow:
 - assignment to a field of a temporary expression, such as `makeVec().x = 1`, is rejected;
 - read-only field access may still use the existing field-access rvalue path while field writes use MIR places.
 
-P7-M4 deliberately does not add address-of-field (`&v.x`), deref/index places, pointer field sugar, `->`, auto-deref, assignment through pointer deref, nested recursive field places, struct methods, move/drop/ownership, or ABI/repr controls.
+P7-M5 adds address-of-field for the same one-level local/parameter field places that P7-M4 assignment uses:
+
+```cpp
+int* px = &v.x;
+```
+
+The address-of result type is pointer-to-field type. HIR addressability and MIR places now share the local, parameter, and one-level field projection shape for assignment and address-of eligibility. Field places are still rooted only in locals or parameters; `&makeVec().x` is rejected because the receiver is a temporary, and `&ptr.x` remains a non-struct field access rather than auto-dereferencing a raw pointer. The C backend renders address-of field places directly, for example `&cpt_l_v_0.cpt_f_x_0`.
+
+P7-M5 deliberately does not add pointer field sugar, `->`, auto-deref, deref places like `&(*ptr).x`, index places, recursive nested field places, assignment through pointer deref, struct methods, move/drop/ownership, or ABI/repr controls.

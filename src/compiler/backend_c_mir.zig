@@ -841,6 +841,13 @@ test "MIR C backend emits simple struct layout" {
     );
 }
 
+test "MIR C backend emits address-of field place" {
+    const c_source = try emitForTest("module Main; struct Vec2 { int x; int y; }; int main() { Vec2 v = Vec2 { x: 7, y: 4, }; int* px = &v.x; unsafe { return *px; } }");
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "&cpt_l_v_0.cpt_f_x_0") != null);
+}
+
 test "MIR C backend emits struct layout with bool enum and pointer fields" {
     var module = try newTestModule();
     defer module.deinit();

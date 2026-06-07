@@ -1,0 +1,21 @@
+# name: phase7 field address-of temporary
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+struct Vec2 { int x; int y; };
+
+Vec2 makeVec() {
+    return Vec2 { x: 1, y: 2, };
+}
+
+int main() {
+    int* p = &makeVec().x;
+    return 0;
+}
+
+=== diagnostics ===
+CON0071

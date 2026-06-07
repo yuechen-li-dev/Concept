@@ -447,6 +447,17 @@ const FunctionLowerer = struct {
             .local_ref => |local_id| mir.MirPlace.localPlace(try self.resolveLocal(local_id)),
             .param_ref => |param_id| mir.MirPlace.localPlace(try self.resolveParam(param_id)),
             .group => |inner| try self.lowerAddressablePlace(inner),
+            .field_access => |field_access| mir.MirPlace.fieldPlace(try self.lowerAddressableBase(field_access.receiver), try self.resolveFieldAccess(field_access.receiver, field_access.field_name)),
+            else => error.InvalidMirLowering,
+        };
+    }
+
+    fn lowerAddressableBase(self: *FunctionLowerer, expr_id: hir.ExprId) LoweringError!mir.MirLocalId {
+        const expr = self.semantic_module.hir.getExpr(expr_id).*;
+        return switch (expr.kind) {
+            .local_ref => |local_id| try self.resolveLocal(local_id),
+            .param_ref => |param_id| try self.resolveParam(param_id),
+            .group => |inner| try self.lowerAddressableBase(inner),
             else => error.InvalidMirLowering,
         };
     }
@@ -786,6 +797,7 @@ const FunctionLowerer = struct {
             .local_ref => |local_id| self.semantic_module.hir.getLocal(local_id).type_id,
             .param_ref => |param_id| self.semantic_module.hir.getParam(param_id).type_id,
             .group => |inner| try self.inferAddressableExprType(inner),
+            .field_access => |field_access| self.semantic_module.hir.getField(try self.resolveFieldAccess(field_access.receiver, field_access.field_name)).type_id,
             else => error.InvalidMirLowering,
         };
     }
@@ -1044,6 +1056,36 @@ test "MIR lowering lowers address-of param and deref" {
     defer std.testing.allocator.free(snapshot);
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "AddressOf(MirLocalId(0))") != null);
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "Deref(Copy(MirLocalId(1)))") != null);
+}
+
+test "MIR lowering lowers address-of field place" {
+    var module = try newModule();
+    defer module.deinit();
+    const vec_id = try module.hir.addStruct(try intern(&module, "Vec2"));
+    const vec_type = try module.types.addStructType(vec_id);
+    const x_field = try module.hir.addField(vec_id, try intern(&module, "x"), module.types.intType(), hir.synthetic_span);
+    const y_field = try module.hir.addField(vec_id, try intern(&module, "y"), module.types.intType(), hir.synthetic_span);
+    const main = try addFunction(&module, "main", module.types.intType(), false);
+    const int_ptr = try module.types.addPointerType(module.types.intType());
+    const v = try addLocal(&module, main, "v", vec_type);
+    const p = try addLocal(&module, main, "p", int_ptr);
+    const fields = try std.testing.allocator.dupe(hir.HirStructLiteralField, &.{
+        .{ .field_id = x_field, .value = try intExpr(&module, "7"), .span = hir.synthetic_span },
+        .{ .field_id = y_field, .value = try intExpr(&module, "4"), .span = hir.synthetic_span },
+    });
+    const lit = try module.hir.addExpr(.{ .struct_literal = .{ .struct_id = vec_id, .type_id = vec_type, .fields = fields } }, hir.synthetic_span);
+    const decl_v = try module.hir.addStmt(.{ .local_decl = .{ .local = v, .initializer = lit } }, hir.synthetic_span);
+    const access = try module.hir.addExpr(.{ .field_access = .{ .receiver = try module.hir.addExpr(.{ .local_ref = v }, hir.synthetic_span), .field_name = try intern(&module, "x"), .field_span = hir.synthetic_span } }, hir.synthetic_span);
+    const addr = try module.hir.addExpr(.{ .address_of = access }, hir.synthetic_span);
+    const decl_p = try module.hir.addStmt(.{ .local_decl = .{ .local = p, .initializer = addr } }, hir.synthetic_span);
+    try setBody(&module, main, &.{ decl_v, decl_p, try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "0") }, hir.synthetic_span) });
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "AddressOf(Field(MirLocalId(0), FieldId(0)))") != null);
 }
 
 fn newModule() !semantics.SemanticModule {

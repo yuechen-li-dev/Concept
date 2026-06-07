@@ -569,6 +569,23 @@ test "MIR validator accepts address-of and deref MIR" {
     try ctx.validateOk(&built.module);
 }
 
+test "MIR validator accepts address-of field place MIR" {
+    var ctx = try TestContext.init();
+    defer ctx.deinit();
+    const vec_id = try ctx.module.hir.addStruct(try ctx.module.interner.intern("Vec2"));
+    const vec_type = try ctx.module.types.addStructType(vec_id);
+    const x_field = try ctx.module.hir.addField(vec_id, try ctx.module.interner.intern("x"), ctx.module.types.intType(), synthetic_span);
+    _ = try ctx.module.hir.addField(vec_id, try ctx.module.interner.intern("y"), ctx.module.types.intType(), synthetic_span);
+    var built = try validMirFunction(&ctx, ctx.module.types.intType());
+    defer built.module.deinit();
+    const int_ptr = try ctx.module.types.addPointerType(ctx.module.types.intType());
+    const v = try built.module.store.addLocal(built.function, try ctx.module.interner.intern("v"), .user, vec_type, synthetic_span);
+    const p = try built.module.store.addLocal(built.function, try ctx.module.interner.intern("p"), .user, int_ptr, synthetic_span);
+    try built.module.store.appendStatement(built.block, .{ .span = synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = p }, mir.MirRvalue.addressOf(mir.MirPlace.fieldPlace(v, x_field))) });
+    try built.module.store.setTerminator(built.block, .{ .span = synthetic_span, .kind = mir.MirTerminatorKind.returnValue(try mir.MirOperand.intLiteral(std.testing.allocator, "0")) });
+    try ctx.validateOk(&built.module);
+}
+
 test "MIR validator rejects deref non-pointer MIR" {
     var ctx = try TestContext.init();
     defer ctx.deinit();
