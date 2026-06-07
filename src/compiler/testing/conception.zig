@@ -556,7 +556,7 @@ fn expectCheckFixture(comptime path: []const u8) !void {
 
     try std.testing.expectEqual(Phase.check, fixture.phase);
 
-    if (std.mem.indexOf(u8, path, "phase3-semantics") != null or std.mem.indexOf(u8, path, "phase5-sum-types") != null) {
+    if (std.mem.indexOf(u8, path, "phase3-semantics") != null or std.mem.indexOf(u8, path, "phase5-sum-types") != null or std.mem.indexOf(u8, path, "phase5a-judgment") != null) {
         try expectSemanticCheckFixture(path, fixture);
     } else {
         try expectPhase2CheckFixture(path, fixture);
@@ -1379,4 +1379,49 @@ test "language check fixture: phase5 try in int function" {
 
 test "language check fixture: phase5 try result mismatch" {
     try expectCheckFixture("../../../language/phase5-sum-types/invalid/try_result_mismatch.invalid.conception");
+}
+
+
+test "language check fixture: phase5a decide basic" {
+    try expectCheckFixture("../../../language/phase5a-judgment/valid/decide_basic.valid.conception");
+}
+
+test "language check fixture: phase5a decide duplicate variant" {
+    try expectCheckFixture("../../../language/phase5a-judgment/valid/decide_duplicate_variant.valid.conception");
+}
+
+test "language check fixture: phase5a decide negative score" {
+    try expectCheckFixture("../../../language/phase5a-judgment/valid/decide_negative_score.valid.conception");
+}
+
+test "language check fixture: phase5a decide unknown enum" {
+    try expectCheckFixture("../../../language/phase5a-judgment/invalid/decide_unknown_enum.invalid.conception");
+}
+
+test "language check fixture: phase5a decide target not enum" {
+    try expectCheckFixture("../../../language/phase5a-judgment/invalid/decide_target_not_enum.invalid.conception");
+}
+
+test "language check fixture: phase5a decide unknown variant" {
+    try expectCheckFixture("../../../language/phase5a-judgment/invalid/decide_unknown_variant.invalid.conception");
+}
+
+test "language check fixture: phase5a decide payload variant" {
+    try expectCheckFixture("../../../language/phase5a-judgment/invalid/decide_payload_variant.invalid.conception");
+}
+
+test "language check fixture: phase5a decide condition not bool" {
+    try expectCheckFixture("../../../language/phase5a-judgment/invalid/decide_condition_not_bool.invalid.conception");
+}
+
+test "language check fixture: phase5a decide score not int" {
+    try expectCheckFixture("../../../language/phase5a-judgment/invalid/decide_score_not_int.invalid.conception");
+}
+
+test "language check fixture: phase5a decide missing unconditional" {
+    try expectCheckFixture("../../../language/phase5a-judgment/invalid/decide_missing_unconditional.invalid.conception");
+}
+
+test "language check fixture: phase5a decide empty arms" {
+    try expectCheckFixture("../../../language/phase5a-judgment/invalid/decide_empty_arms.invalid.conception");
 }

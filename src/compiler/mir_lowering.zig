@@ -371,6 +371,7 @@ const FunctionLowerer = struct {
             .call => |call| try self.lowerCall(expr, call, block_id),
             .enum_constructor => |constructor| try self.lowerEnumConstructor(expr, constructor, block_id),
             .try_expr => |operand| try self.lowerTry(expr, operand, block_id),
+            .decide => return error.UnsupportedExpression,
         };
     }
 
@@ -517,6 +518,7 @@ const FunctionLowerer = struct {
             },
             .call => |call| self.semantic_module.hir.getFunction(call.function).return_type,
             .enum_constructor => |constructor| try self.enumType(constructor.enum_id),
+            .decide => |decide| decide.enum_type,
             .try_expr => |operand| blk: {
                 const operand_type = try self.inferExprType(operand);
                 const shape = self.semantic_module.resultShapeForType(operand_type) orelse return error.MissingResultShape;

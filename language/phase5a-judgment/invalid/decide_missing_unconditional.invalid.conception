@@ -1,0 +1,23 @@
+# name: decide missing unconditional
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+enum AlertChannel {
+    Critical,
+    Warning,
+}
+
+int main() {
+    AlertChannel channel = decide AlertChannel {
+        Critical when true score 10;
+        Warning when false score 0;
+    };
+    return 0;
+}
+
+=== diagnostics ===
+CON0065

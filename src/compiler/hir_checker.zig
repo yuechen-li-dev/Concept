@@ -201,6 +201,43 @@ const Checker = struct {
                 }
                 break :blk try self.enumType(constructor.enum_id);
             },
+            .decide => |decide| blk: {
+                if (!sameType(decide.enum_type, try self.enumType(decide.enum_id))) {
+                    try self.reportAt(.UnknownDecideEnum, "decide target type must be an enum", expr.span);
+                    return error.InvalidSemanticModule;
+                }
+                var has_unconditional = false;
+                for (decide.arms) |arm| {
+                    const variant = self.module.hir.getVariant(arm.variant_id);
+                    if (variant.parent.index != decide.enum_id.index) {
+                        try self.reportAt(.UnknownDecideVariant, "unknown decide variant", arm.span);
+                        return error.InvalidSemanticModule;
+                    }
+                    if (variant.payload_fields.len != 0) {
+                        try self.reportAt(.DecideVariantHasPayload, "decide candidate variant must not have payload fields", arm.span);
+                        return error.InvalidSemanticModule;
+                    }
+                    if (arm.condition) |condition| {
+                        const condition_type = try self.checkExpr(return_type, condition);
+                        if (!self.isBool(condition_type)) {
+                            try self.reportAt(.DecideConditionNotBool, "decide arm condition must be bool", self.exprSpan(condition));
+                            return error.InvalidSemanticModule;
+                        }
+                    } else {
+                        has_unconditional = true;
+                    }
+                    const score_type = try self.checkExpr(return_type, arm.score);
+                    if (!self.isInt(score_type)) {
+                        try self.reportAt(.DecideScoreNotInt, "decide arm score must be int", self.exprSpan(arm.score));
+                        return error.InvalidSemanticModule;
+                    }
+                }
+                if (!has_unconditional) {
+                    try self.reportAt(.DecideMissingUnconditionalArm, "decide expression requires at least one unconditional arm", expr.span);
+                    return error.InvalidSemanticModule;
+                }
+                break :blk decide.enum_type;
+            },
             .unary => |unary| blk: {
                 const operand_type = try self.checkExpr(return_type, unary.operand);
                 switch (unary.op) {

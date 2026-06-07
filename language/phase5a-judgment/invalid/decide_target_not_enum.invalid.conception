@@ -1,0 +1,17 @@
+# name: decide target not enum
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+struct NotEnum {}
+
+int main() {
+    NotEnum value = decide NotEnum { Nominal score 0; };
+    return 0;
+}
+
+=== diagnostics ===
+CON0060

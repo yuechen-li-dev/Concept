@@ -1,0 +1,35 @@
+# name: decide basic
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+enum AlertChannel {
+    Critical,
+    Warning,
+    Advisory,
+    Nominal,
+}
+
+AlertChannel choose(bool fault, int temperature, int pressure, int threshold) {
+    return decide AlertChannel {
+        Critical when fault && temperature > 900 score 120;
+        Warning when temperature > 750 score 85;
+        Advisory when pressure > threshold score 70;
+        Nominal score 0;
+    };
+}
+
+int use(AlertChannel channel) {
+    return 0;
+}
+
+int main() {
+    AlertChannel channel = decide AlertChannel {
+        Critical when false score 100;
+        Nominal score 0;
+    };
+    return use(decide AlertChannel { Nominal score 0; });
+}
