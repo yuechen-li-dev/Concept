@@ -1,0 +1,23 @@
+# name: phase7 field access run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+struct Vec2 {
+    int x;
+    int y;
+};
+
+int main() {
+    Vec2 v = Vec2 {
+        x: 7,
+        y: 4,
+    };
+
+    return v.x;
+}
+
+=== run ===
+exit: 7

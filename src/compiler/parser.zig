@@ -1109,18 +1109,44 @@ pub const Parser = struct {
             allocator.destroy(expr);
         }
 
-        while (self.current().kind == .left_paren or self.current().kind == .left_brace) {
-            const identifier = switch (expr.*) {
-                .identifier => |identifier| identifier,
+        while (true) {
+            switch (self.current().kind) {
+                .left_paren, .left_brace => {
+                    const identifier = switch (expr.*) {
+                        .identifier => |identifier| identifier,
+                        else => break,
+                    };
+                    if (self.current().kind == .left_paren) {
+                        expr = try self.finishCallExpr(allocator, expr, identifier);
+                    } else {
+                        expr = try self.finishStructLiteralExpr(allocator, expr, identifier);
+                    }
+                },
+                .dot => expr = try self.finishFieldAccessExpr(allocator, expr),
+                .arrow => {
+                    self.report(.UnexpectedToken, "'->' field access is not supported; use '.' on struct values", self.current().span) catch return error.OutOfMemory;
+                    return error.ParseFailed;
+                },
                 else => break,
-            };
-            if (self.current().kind == .left_paren) {
-                expr = try self.finishCallExpr(allocator, expr, identifier);
-            } else {
-                expr = try self.finishStructLiteralExpr(allocator, expr, identifier);
             }
         }
         return expr;
+    }
+
+    fn finishFieldAccessExpr(self: *Parser, allocator: std.mem.Allocator, receiver: *ast.Expr) ParseExprError!*ast.Expr {
+        const dot = self.advance();
+        const field_token = if (self.current().kind == .identifier) self.advance() else {
+            self.report(.UnexpectedToken, "expected field name after '.'", self.current().span) catch return error.OutOfMemory;
+            return error.ParseFailed;
+        };
+        const node = try allocator.create(ast.Expr);
+        node.* = .{ .field_access = .{
+            .receiver = receiver,
+            .field_name = .{ .text = field_token.lexeme, .span = field_token.span },
+            .span = ast.spanFromBounds(receiver.span().start, spanEnd(field_token.span)),
+        } };
+        _ = dot;
+        return node;
     }
 
     fn finishCallExpr(self: *Parser, allocator: std.mem.Allocator, callee_expr: *ast.Expr, identifier: ast.Expr.IdentifierExpr) ParseExprError!*ast.Expr {
@@ -5134,4 +5160,44 @@ test "struct literal missing closing brace diagnostic" {
     defer unit.deinit(std.testing.allocator);
     try std.testing.expect(diagnostics.count() >= 1);
     try std.testing.expectEqualStrings("expected '}' after struct literal fields", diagnostics.diagnostics.items[0].message);
+}
+
+test "parses field access expressions and debug output" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource(
+        \\module Main;
+        \\struct Vec2 { int x; int y; };
+        \\int main() { Vec2 v = Vec2 { x: 3, y: 4, }; return v.x + v.y; }
+    , &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "FieldAccess .x") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "FieldAccess .y") != null);
+}
+
+test "field access missing field name diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { return v.; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected field name after '.'", diagnostics.diagnostics.items[0].message);
+}
+
+test "arrow field access is unsupported diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { return ptr->x; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("'->' field access is not supported; use '.' on struct values", diagnostics.diagnostics.items[0].message);
 }

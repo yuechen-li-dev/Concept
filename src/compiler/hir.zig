@@ -129,6 +129,7 @@ pub const HirExprKind = union(enum) {
     call: struct { function: FunctionId, args: []ExprId },
     enum_constructor: struct { enum_id: EnumId, variant_id: VariantId, args: []ExprId },
     struct_literal: struct { struct_id: StructId, type_id: types.TypeId, fields: []HirStructLiteralField },
+    field_access: struct { receiver: ExprId, field_name: SymbolId, field_span: SourceSpan },
     decide: struct { enum_type: types.TypeId, enum_id: EnumId, arms: []HirDecideArm },
     group: ExprId,
     unary: struct { op: UnaryOp, operand: ExprId },
@@ -708,6 +709,10 @@ pub const HirStore = struct {
                     try writer.print("Field {f}\n", .{field.field_id});
                     try self.writeExprDebug(writer, field.value, depth + 2);
                 }
+            },
+            .field_access => |field_access| {
+                try writer.print("FieldAccess {f}\n", .{field_access.field_name});
+                try self.writeExprDebug(writer, field_access.receiver, depth + 1);
             },
             .decide => |decide| {
                 try writer.print("Decide {f} {f}\n", .{ decide.enum_type, decide.enum_id });

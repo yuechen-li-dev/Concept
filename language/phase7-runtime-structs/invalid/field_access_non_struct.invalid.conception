@@ -1,0 +1,15 @@
+# name: phase7 field access non struct
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    int x = 1;
+    return x.value;
+}
+
+=== diagnostics ===
+CON0079

@@ -4,6 +4,8 @@ P7-M0 is a documentation-only milestone. It defines Concept's direction for runt
 
 P7-M1 adds the first executable/audit-facing backend step: supported struct declarations now emit deterministic backend-local C layout typedefs. This is not an ABI commitment and does not add struct literals, field access, field assignment, MIR place projections, or runtime construction.
 
+P7-M3 adds read-only field access expressions for struct values. Source expressions of the form `expr.field` are resolved against the receiver's struct type, produce the declared field `TypeId`, lower through MIR as field-read rvalues, and emit backend-local C field names such as `.cpt_f_x_0`. The receiver must be a struct value: raw pointers are not auto-dereferenced, `->` is not supported, and `ptr.x` is rejected rather than implicitly dereferenced. Field assignment, address-of-field, pointer field sugar, and richer place projections remain future Phase 7 work.
+
 Phase 7 starts after the closed Phase 6 unsafe/raw-pointer slice. Phase 6 intentionally deferred ownership, move, Drop, and `MaybeUninit` until Concept has runtime structs and richer places. This document makes that prerequisite explicit and scopes the next executable-data milestone.
 
 ## Thesis

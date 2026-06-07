@@ -1701,3 +1701,27 @@ test "language check fixture: phase7 struct literal missing field" {
 test "language check fixture: phase7 struct literal type mismatch" {
     try expectCheckFixture("../../../language/phase7-runtime-structs/invalid/struct_literal_type_mismatch.invalid.conception");
 }
+
+test "language run fixture: phase7 field access run" {
+    try expectRunFixture("../../../language/phase7-runtime-structs/valid/field_access_run.valid.conception");
+}
+
+test "language check fixture: phase7 field access multiple" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/valid/field_access_multiple.valid.conception");
+}
+
+test "language check fixture: phase7 field access bool enum" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/valid/field_access_bool_enum.valid.conception");
+}
+
+test "language check fixture: phase7 field access non struct" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/invalid/field_access_non_struct.invalid.conception");
+}
+
+test "language check fixture: phase7 field access pointer" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/invalid/field_access_pointer.invalid.conception");
+}
+
+test "language check fixture: phase7 field access unknown field" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/invalid/field_access_unknown_field.invalid.conception");
+}
