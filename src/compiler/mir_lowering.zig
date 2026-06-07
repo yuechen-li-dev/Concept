@@ -434,7 +434,7 @@ const FunctionLowerer = struct {
         const temp = try self.addTemp(try self.inferExprTypeFrom(expr));
         try self.store.appendStatement(lowered.block, .{
             .span = expr.span,
-            .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(temp), mir.MirRvalue.deref(lowered.operand)),
+            .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(temp), mir.MirRvalue.dereference(lowered.operand)),
         });
         return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = lowered.block };
     }
@@ -929,8 +929,6 @@ test "MIR lowering debug snapshot includes enum payload extraction" {
     defer std.testing.allocator.free(snapshot);
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "EnumPayloadField(Copy(MirLocalId(0)), EnumPayloadFieldId(0))") != null);
 }
-
-
 
 test "MIR lowering lowers address-of and deref" {
     var module = try newModule();

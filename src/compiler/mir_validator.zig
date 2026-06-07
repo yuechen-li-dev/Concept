@@ -214,7 +214,10 @@ const Validator = struct {
             .address_of => |place| blk: {
                 const place_type = try self.placeType(function_id, place, span);
                 if (place_type == null) break :blk null;
-                break :blk try self.semantic_module.types.addPointerType(place_type.?);
+                break :blk self.semantic_module.types.pointerType(place_type.?) orelse {
+                    try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                    break :blk null;
+                };
             },
             .deref => |operand| blk: {
                 const operand_type = try self.operandType(function_id, operand, span);
@@ -485,8 +488,6 @@ test "MIR validator accepts valid local assignment MIR" {
     try ctx.validateOk(&built.module);
 }
 
-
-
 test "MIR validator accepts address-of and deref MIR" {
     var ctx = try TestContext.init();
     defer ctx.deinit();
@@ -497,7 +498,7 @@ test "MIR validator accepts address-of and deref MIR" {
     const p = try built.module.store.addLocal(built.function, try ctx.module.interner.intern("p"), .user, int_ptr, synthetic_span);
     const temp = try built.module.store.addLocal(built.function, null, .temp, ctx.module.types.intType(), synthetic_span);
     try built.module.store.appendStatement(built.block, .{ .span = synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = p }, mir.MirRvalue.addressOf(.{ .local = x })) });
-    try built.module.store.appendStatement(built.block, .{ .span = synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = temp }, mir.MirRvalue.deref(mir.MirOperand.copyPlace(.{ .local = p }))) });
+    try built.module.store.appendStatement(built.block, .{ .span = synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = temp }, mir.MirRvalue.dereference(mir.MirOperand.copyPlace(.{ .local = p }))) });
     try built.module.store.setTerminator(built.block, .{ .span = synthetic_span, .kind = mir.MirTerminatorKind.returnValue(mir.MirOperand.copyPlace(.{ .local = temp })) });
     try ctx.validateOk(&built.module);
 }
@@ -509,7 +510,7 @@ test "MIR validator rejects deref non-pointer MIR" {
     defer built.module.deinit();
     const x = try built.module.store.addLocal(built.function, try ctx.module.interner.intern("x"), .user, ctx.module.types.intType(), synthetic_span);
     const temp = try built.module.store.addLocal(built.function, null, .temp, ctx.module.types.intType(), synthetic_span);
-    try built.module.store.appendStatement(built.block, .{ .span = synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = temp }, mir.MirRvalue.deref(mir.MirOperand.copyPlace(.{ .local = x }))) });
+    try built.module.store.appendStatement(built.block, .{ .span = synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = temp }, mir.MirRvalue.dereference(mir.MirOperand.copyPlace(.{ .local = x }))) });
     try built.module.store.setTerminator(built.block, .{ .span = synthetic_span, .kind = mir.MirTerminatorKind.returnValue(mir.MirOperand.copyPlace(.{ .local = temp })) });
     try ctx.validateFail(&built.module, .InvalidMirType);
 }
