@@ -531,8 +531,27 @@ const BodyLowerer = struct {
                 return try self.collector.module.hir.addExpr(.{ .try_expr = operand }, try_expr.span);
             },
             .decide => |decide| {
-                try self.collector.diagnostics.append(diagnostics.makeDiagnostic(.UnexpectedToken, .@"error", "decide expressions are not supported by semantic lowering yet", decide.span));
-                return null;
+                const target = (try self.resolveDecideEnum(decide.type_name)) orelse return null;
+                var arms = std.ArrayList(hir.HirDecideArm).empty;
+                defer arms.deinit(self.collector.allocator);
+                for (decide.arms) |arm| {
+                    const variant_symbol = try self.collector.module.interner.intern(arm.variant_name.text);
+                    const variant_id = self.findVariant(target.enum_id, variant_symbol) orelse {
+                        try self.collector.diagnostics.append(diagnostics.unknownDecideVariant(arm.variant_name.span));
+                        return null;
+                    };
+                    const condition = if (arm.condition) |condition_expr| (try self.lowerExpr(condition_expr.*)) orelse return null else null;
+                    const score = (try self.lowerExpr(arm.score.*)) orelse return null;
+                    try arms.append(self.collector.allocator, .{
+                        .variant_id = variant_id,
+                        .condition = condition,
+                        .score = score,
+                        .span = arm.span,
+                    });
+                }
+                const owned = try self.collector.allocator.alloc(hir.HirDecideArm, arms.items.len);
+                @memcpy(owned, arms.items);
+                return try self.collector.module.hir.addExpr(.{ .decide = .{ .enum_type = target.type_id, .enum_id = target.enum_id, .arms = owned } }, decide.span);
             },
             .binary => |binary| {
                 const left = (try self.lowerExpr(binary.left.*)) orelse return null;
@@ -540,6 +559,26 @@ const BodyLowerer = struct {
                 return try self.collector.module.hir.addExpr(.{ .binary = .{ .op = lowerBinaryOp(binary.op), .left = left, .right = right } }, binary.span);
             },
         }
+    }
+
+    fn resolveDecideEnum(self: *BodyLowerer, type_name: ast.TypeName) !?struct { type_id: types.TypeId, enum_id: hir.EnumId } {
+        if (type_name.is_mut or type_name.is_reference or type_name.is_pointer or type_name.generic_args.len != 0 or type_name.name.parts.len != 1) {
+            try self.collector.diagnostics.append(diagnostics.unknownDecideEnum(type_name.span));
+            return null;
+        }
+
+        const part = type_name.name.parts[0];
+        const symbol = try self.collector.module.interner.intern(part.text);
+        return switch (self.collector.top_level_decls.get(symbol) orelse {
+            try self.collector.diagnostics.append(diagnostics.unknownDecideEnum(part.span));
+            return null;
+        }) {
+            .enum_ => |entry| .{ .type_id = entry.type_id, .enum_id = entry.id },
+            else => blk: {
+                try self.collector.diagnostics.append(diagnostics.unknownDecideEnum(part.span));
+                break :blk null;
+            },
+        };
     }
 
     fn lowerPattern(self: *BodyLowerer, pattern: ast.MatchPattern) !?hir.HirMatchPattern {

@@ -65,6 +65,12 @@ pub const DiagnosticCode = enum {
     TryOperandNotResult,
     TryOutsideResultFunction,
     TryResultTypeMismatch,
+    UnknownDecideEnum,
+    UnknownDecideVariant,
+    DecideVariantHasPayload,
+    DecideConditionNotBool,
+    DecideScoreNotInt,
+    DecideMissingUnconditionalArm,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -111,6 +117,12 @@ pub const DiagnosticCode = enum {
             .TryOperandNotResult => "CON0050",
             .TryOutsideResultFunction => "CON0051",
             .TryResultTypeMismatch => "CON0052",
+            .UnknownDecideEnum => "CON0060",
+            .UnknownDecideVariant => "CON0061",
+            .DecideVariantHasPayload => "CON0062",
+            .DecideConditionNotBool => "CON0063",
+            .DecideScoreNotInt => "CON0064",
+            .DecideMissingUnconditionalArm => "CON0065",
         };
     }
 };
@@ -403,6 +415,12 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0050", DiagnosticCode.TryOperandNotResult.format());
     try std.testing.expectEqualStrings("CON0051", DiagnosticCode.TryOutsideResultFunction.format());
     try std.testing.expectEqualStrings("CON0052", DiagnosticCode.TryResultTypeMismatch.format());
+    try std.testing.expectEqualStrings("CON0060", DiagnosticCode.UnknownDecideEnum.format());
+    try std.testing.expectEqualStrings("CON0061", DiagnosticCode.UnknownDecideVariant.format());
+    try std.testing.expectEqualStrings("CON0062", DiagnosticCode.DecideVariantHasPayload.format());
+    try std.testing.expectEqualStrings("CON0063", DiagnosticCode.DecideConditionNotBool.format());
+    try std.testing.expectEqualStrings("CON0064", DiagnosticCode.DecideScoreNotInt.format());
+    try std.testing.expectEqualStrings("CON0065", DiagnosticCode.DecideMissingUnconditionalArm.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {
@@ -500,6 +518,60 @@ test "render EOF-adjacent span" {
         \\|         ^
         \\
     , output.written());
+}
+
+pub fn unknownDecideEnum(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .UnknownDecideEnum,
+        .@"error",
+        "decide target type must be an enum",
+        span,
+    ).withHelp("decide expressions must name a top-level enum type");
+}
+
+pub fn unknownDecideVariant(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .UnknownDecideVariant,
+        .@"error",
+        "unknown decide variant",
+        span,
+    ).withHelp("decide arms must name a variant declared by the target enum");
+}
+
+pub fn decideVariantHasPayload(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .DecideVariantHasPayload,
+        .@"error",
+        "decide candidate variant must not have payload fields",
+        span,
+    );
+}
+
+pub fn decideConditionNotBool(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .DecideConditionNotBool,
+        .@"error",
+        "decide arm condition must be bool",
+        span,
+    );
+}
+
+pub fn decideScoreNotInt(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .DecideScoreNotInt,
+        .@"error",
+        "decide arm score must be int",
+        span,
+    );
+}
+
+pub fn decideMissingUnconditionalArm(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .DecideMissingUnconditionalArm,
+        .@"error",
+        "decide expression requires at least one unconditional arm",
+        span,
+    );
 }
 
 pub fn unknownIdentifier(span: SourceSpan) Diagnostic {

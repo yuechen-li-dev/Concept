@@ -1,0 +1,20 @@
+# name: decide payload variant
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+enum Result {
+    Ok(int value),
+    Err,
+}
+
+int main() {
+    Result result = decide Result { Ok score 10; Err score 0; };
+    return 0;
+}
+
+=== diagnostics ===
+CON0062

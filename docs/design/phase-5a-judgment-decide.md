@@ -432,3 +432,28 @@ P5a-M1 adds parser and AST support for `decide` expressions. The lexer reserves 
 The parser now accepts `decide TypeName { ... }` wherever expressions are parsed, records simple-identifier arm variants, optional `when` conditions, required contextual `score` markers, required score expressions, and semicolon-terminated arms. Empty arm lists are accepted by the parser so later semantic validation can diagnose totality and enum-specific rules in one place.
 
 HIR lowering, type checking, enum/variant resolution, condition and score type checks, unconditional-arm validation, MIR lowering, backend behavior, runtime fixtures, stateful policy wrappers, `judge`, and `Judgment<T>` remain future milestones.
+
+## P5a-M2 status: HIR and type checking
+
+P5a-M2 implements semantic lowering and HIR checking for `decide` expressions, while keeping execution lowering parked for later milestones.
+
+Implemented in this milestone:
+
+- the `decide` target name resolves to a top-level enum type;
+- arm variant names resolve against that target enum;
+- HIR stores the resolved enum type, enum declaration, variant IDs, optional condition expressions, score expressions, and arm spans;
+- candidate variants with payload fields are rejected in v0;
+- `when` conditions must check as `bool`;
+- `score` expressions must check as `int`;
+- negative integer scores are accepted by the existing integer expression rules;
+- at least one unconditional arm is required;
+- duplicate variant arms remain valid and are not diagnosed;
+- a checked `decide` expression has the target enum type and participates in normal expression-use checks, including ignored `must_use` enum values.
+
+Still future work:
+
+- MIR lowering;
+- MIR validation and C backend support;
+- runtime fixtures;
+- payload candidate construction;
+- stateful policy wrappers, `judge`, `Judgment<T>`, fallible `decide?`, float scores, generic score concepts, and scheduler/optimizer integration.

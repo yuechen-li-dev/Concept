@@ -1,0 +1,25 @@
+# name: decide duplicate variant
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+enum Mode {
+    Fast,
+    Slow,
+}
+
+Mode choose(bool hot) {
+    return decide Mode {
+        Fast when hot score 10;
+        Fast score 0;
+        Slow score -1;
+    };
+}
+
+int main() {
+    Mode mode = choose(true);
+    return 0;
+}

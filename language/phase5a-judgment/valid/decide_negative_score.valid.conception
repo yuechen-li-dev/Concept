@@ -1,0 +1,26 @@
+# name: decide negative score
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+enum Channel {
+    Nominal,
+    Advisory,
+}
+
+
+Channel choose(int pressure, int threshold) {
+    return decide Channel {
+        Advisory when pressure > threshold score -1;
+        Nominal score -10;
+    };
+}
+
+int main() {
+    Channel channel = choose(1, 2);
+    int score = 4;
+    return score;
+}

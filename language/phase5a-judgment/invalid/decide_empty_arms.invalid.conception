@@ -1,0 +1,19 @@
+# name: decide empty arms
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+enum AlertChannel {
+    Nominal,
+}
+
+int main() {
+    AlertChannel channel = decide AlertChannel {};
+    return 0;
+}
+
+=== diagnostics ===
+CON0065
