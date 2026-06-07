@@ -568,26 +568,15 @@ Known limitations remain explicit:
 - No struct runtime layout.
 - No final ABI/layout guarantees for the enum backend representation.
 - No import or multi-file module work.
-- No Phase 5a select/judgment expressions yet.
+- No Phase 5a `decide` judgment expressions yet.
 
-### Future work: Phase 5a selection/judgment expressions
+### Future work: Phase 5a judgment expressions
 
-Phase 5a may introduce judgment or utility selection expressions. A possible future syntax is:
-
-```cpp
-AlertChannel channel = select AlertChannel {
-    Critical when fault && temperature > 900 score 120;
-    Warning  when temperature > 750          score 85;
-    Advisory when pressure > threshold       score 70;
-    Nominal                                  score 0;
-};
-```
-
-The intended distinction is:
+Phase 5a introduces the `decide` judgment expression as follow-on design work in `docs/design/phase-5a-judgment-decide.md`. The intended distinction is:
 
 ```text
-match answers: what is this value?
-select answers: which value should win?
+match asks: what is this value?
+decide asks: which value should win?
 ```
 
-Selection/judgment expressions are not part of Phase 5 closeout. Phase 5 closes only the concrete enum, match, payload binding, must-use/discard, Result-shaped convention, and `try` propagation path. Phase 6 remains future unsafe/ownership work rather than part of this closeout.
+Judgment expressions are not part of Phase 5 closeout. Phase 5 closes only the concrete enum, match, payload binding, must-use/discard, Result-shaped convention, and `try` propagation path. Phase 6 remains future unsafe/ownership work rather than part of this closeout.
