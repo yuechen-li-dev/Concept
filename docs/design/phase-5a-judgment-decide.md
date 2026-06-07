@@ -424,3 +424,11 @@ Phase 5a deliberately does not include:
 - Optimizer or scheduler integration.
 - Dominatus runtime integration.
 - Lexer, parser, AST, HIR, MIR, backend, or fixture-runner implementation in P5a-M0.
+
+## P5a-M1 implementation note
+
+P5a-M1 adds parser and AST support for `decide` expressions. The lexer reserves `decide` and continues to reserve `when`; `score` remains contextual and still lexes as an ordinary identifier outside decide arms.
+
+The parser now accepts `decide TypeName { ... }` wherever expressions are parsed, records simple-identifier arm variants, optional `when` conditions, required contextual `score` markers, required score expressions, and semicolon-terminated arms. Empty arm lists are accepted by the parser so later semantic validation can diagnose totality and enum-specific rules in one place.
+
+HIR lowering, type checking, enum/variant resolution, condition and score type checks, unconditional-arm validation, MIR lowering, backend behavior, runtime fixtures, stateful policy wrappers, `judge`, and `Judgment<T>` remain future milestones.

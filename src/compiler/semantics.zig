@@ -530,6 +530,10 @@ const BodyLowerer = struct {
                 const operand = (try self.lowerExpr(try_expr.operand.*)) orelse return null;
                 return try self.collector.module.hir.addExpr(.{ .try_expr = operand }, try_expr.span);
             },
+            .decide => |decide| {
+                try self.collector.diagnostics.append(diagnostics.makeDiagnostic(.UnexpectedToken, .@"error", "decide expressions are not supported by semantic lowering yet", decide.span));
+                return null;
+            },
             .binary => |binary| {
                 const left = (try self.lowerExpr(binary.left.*)) orelse return null;
                 const right = (try self.lowerExpr(binary.right.*)) orelse return null;

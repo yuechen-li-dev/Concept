@@ -397,8 +397,8 @@ test "module declaration tokenizes correctly" {
 }
 
 test "keywords tokenize as keyword kinds" {
-    const source_text = "module import export struct enum concept interface impl marker unsafe mut const return must_use discard match when if else while for machine state transition yield run true false";
-    const expected = [_]TokenKind{ .module, .import, .@"export", .@"struct", .@"enum", .concept, .interface, .impl, .marker, .unsafe, .mut, .@"const", .@"return", .must_use, .discard, .match, .when, .@"if", .@"else", .@"while", .@"for", .machine, .state, .transition, .yield, .run, .true, .false, .eof };
+    const source_text = "module import export struct enum concept interface impl marker unsafe mut const return must_use discard match decide when if else while for machine state transition yield run true false";
+    const expected = [_]TokenKind{ .module, .import, .@"export", .@"struct", .@"enum", .concept, .interface, .impl, .marker, .unsafe, .mut, .@"const", .@"return", .must_use, .discard, .match, .decide, .when, .@"if", .@"else", .@"while", .@"for", .machine, .state, .transition, .yield, .run, .true, .false, .eof };
     try expectLexedKinds(source_text, &expected);
 }
 
@@ -410,6 +410,11 @@ test "library and attribute names tokenize as identifiers" {
 test "must_use and discard keywords do not consume nearby identifiers" {
     const expected = [_]TokenKind{ .must_use, .discard, .identifier, .identifier, .eof };
     try expectLexedKinds("must_use discard must_useful discarded", &expected);
+}
+
+test "decide and when tokenize as keywords while score remains contextual identifier" {
+    const expected = [_]TokenKind{ .decide, .when, .identifier, .identifier, .identifier, .identifier, .eof };
+    try expectLexedKinds("decide when score scoreValue score_thing highScore", &expected);
 }
 
 test "line comments are skipped" {
