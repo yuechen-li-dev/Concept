@@ -1,0 +1,24 @@
+module Main;
+
+must_use enum ParseResult {
+    Ok(int value),
+    Err(int code),
+};
+
+ParseResult parseInt(int value) {
+    if (value < 0) {
+        return ParseResult::Err(1);
+    }
+
+    return ParseResult::Ok(value);
+}
+
+int main() {
+    discard parseInt(-1);
+
+    ParseResult result = parseInt(5);
+    match (result) {
+        ParseResult::Ok(value) => return value;
+        ParseResult::Err(code) => return code;
+    }
+}

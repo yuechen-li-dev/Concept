@@ -1,0 +1,48 @@
+# name: phase5 result try closeout run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+must_use enum ParseIntResult {
+    Ok(int value),
+    Err(int code),
+};
+
+ParseIntResult parseInt(int value) {
+    if (value < 0) {
+        return ParseIntResult::Err(1);
+    }
+
+    return ParseIntResult::Ok(value);
+}
+
+ParseIntResult addParsed(int leftText, int rightText) {
+    int left = try parseInt(leftText);
+    int right = try parseInt(rightText);
+    return ParseIntResult::Ok(left + right);
+}
+
+ParseIntResult exerciseSuccessThenFailure() {
+    ParseIntResult success = addParsed(3, 4);
+    match (success) {
+        ParseIntResult::Ok(value) => if (value == 7) {
+            return addParsed(5, -1);
+        } else {
+            return ParseIntResult::Err(99);
+        }
+        ParseIntResult::Err(code) => return ParseIntResult::Err(code);
+    }
+}
+
+int main() {
+    ParseIntResult result = exerciseSuccessThenFailure();
+    match (result) {
+        ParseIntResult::Ok(value) => return value;
+        ParseIntResult::Err(code) => return code;
+    }
+}
+
+=== run ===
+exit_code: 1

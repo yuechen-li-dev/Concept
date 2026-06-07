@@ -1,6 +1,6 @@
 # Phase 5 sum types and explicit failure
 
-Phase 5 starts Concept's first core systems-language semantics on top of the closed Phase 4 MIR path. P5-M0 is documentation only: no compiler code, parser changes, HIR changes, MIR changes, backend changes, fixture runner changes, runtime layout implementation, `try`, `must_use`, or `discard` implementation is part of this milestone.
+Phase 5 is Concept's first core systems-language semantics layer on top of the closed Phase 4 MIR path. It began with P5-M0 as a documentation-only milestone and is now closed by P5-M9 around concrete sum types and explicit failure.
 
 ## Thesis
 
@@ -13,7 +13,7 @@ Result-shaped enums give Concept concrete checked failure before generics.
 try lowers explicit failure propagation into MIR.
 ```
 
-The authoritative executable path entering Phase 5 is:
+The authoritative executable path at Phase 5 closeout is:
 
 ```text
 Concept source
@@ -27,7 +27,35 @@ Concept source
   -> native executable / exit-code fixtures
 ```
 
-Phase 5 broadens that path only where needed for payload enum values and checked explicit failure. It must preserve the Phase 2 executable subset, the Phase 3 semantic spine, and the Phase 4 MIR-backed run path while adding the first executable nominal sum type behavior.
+Phase 5 broadened that path only where needed for payload enum values and checked explicit failure. It preserves the Phase 2 executable subset, the Phase 3 semantic spine, and the Phase 4 MIR-backed run path while adding the first executable nominal sum type behavior.
+
+## Phase 5 closeout status
+
+P5-M9 closes Phase 5 around concrete sum types and explicit failure. The implemented Stage 0 path now provides:
+
+- Executable enum runtime layout v0 for supported payload enums.
+- Deterministic backend-local enum C layout and backend-owned names; this is intentionally not a final ABI guarantee.
+- Enum constructors in both supported spellings:
+  - `EnumName::Variant` for tag-only variants.
+  - `EnumName::Variant(args)` for payload variants.
+- `match` over enum variants.
+- Positional payload binding in enum match arms.
+- `must_use enum` declarations.
+- `discard expression;` for explicit ignored values.
+- Strict concrete Result-shaped enum detection:
+  - exactly two variants;
+  - exactly `Ok(one payload)` and `Err(one payload)`;
+  - no generics.
+- `try` propagation v0:
+  - the operand must be Result-shaped;
+  - the enclosing function must return the same nominal Result-shaped enum;
+  - the `Ok` payload is unwrapped as the expression value;
+  - the `Err` path returns the original result value.
+- MIR lowering and validation support for enum construction, tag switching, payload extraction, discard, and `try`.
+- MIR-backed C backend support for enum/result layout, construction, matching, payload extraction, and `try` control flow.
+- Representative language fixtures, MIR snapshots, C snapshots, and executable run fixtures for the Phase 5 surface.
+
+Phase 5 is closed as a concrete, nominal mechanism. It does not attempt to generalize failure through templates, concepts, generic `Result<T, E>`, or cross-result conversions.
 
 ## Goals
 
@@ -294,10 +322,9 @@ int value = try parseInt(text);
 Requirements:
 
 - The operand expression type must be a Result-shaped enum.
-- The enclosing function return type must be a compatible Result-shaped enum.
+- The enclosing function return type must be the same nominal Result-shaped enum.
 - The `Ok` payload type becomes the expression type of `try`.
-- The operand `Err` payload type must be compatible with the enclosing function return enum's `Err` payload type.
-- On `Err`, control returns the enclosing enum's `Err(error)`.
+- On `Err`, control returns the original Result-shaped enum value from the enclosing function.
 - On `Ok`, control unwraps the success payload and continues.
 
 Example:
@@ -319,10 +346,10 @@ switch tmp.tag:
     value = tmp.payload.Ok.value
     continue
   Err:
-    return ParseIntResult::Err(tmp.payload.Err.error)
+    return tmp
 ```
 
-The enclosing return enum does not have to be the same nominal enum as the operand if the Phase 5 compatibility rule permits rebuilding the enclosing `Err` from the operand error payload. V0 may choose the stricter rule that the nominal Result-shaped enum must match if that is needed for convergence, but the design target is explicit error-payload compatibility plus construction of the enclosing enum's `Err` variant.
+P5-M7 closed on the stricter nominal rule: the enclosing return enum must be the same Result-shaped enum as the operand. This avoids cross-result conversion and implicit `Err` payload conversion in Phase 5. A later templates/concepts phase may revisit generalized `Tryable` behavior.
 
 ## HIR, MIR, and C backend impact
 
@@ -402,6 +429,8 @@ exit_code: 7
 ```
 
 Fixture growth should follow the milestone ladder. Each new runtime feature should have at least one real run fixture once it reaches the backend path, and each new semantic restriction should have at least one failing check fixture.
+
+At closeout, `language/phase5-sum-types/` contains valid run/check fixtures and invalid check fixtures for tag-only constructors, payload constructors, enum variant matching, payload binding, `must_use`, `discard`, Result-shaped metadata, `try` success/failure propagation, larger `try` expressions, mismatched Result-shaped enums, and non-Result-returning `try` usage. `tests/corpus/phase5/` contains representative MIR and C snapshots for enum constructors, enum match payload extraction, enum/result backend layout, and `try` lowering/output.
 
 ## Milestone ladder
 
@@ -513,3 +542,52 @@ P5-M8 adds stabilization coverage for the existing Phase 5 enum/result/try runti
 The milestone adds explicit corpus snapshots for Phase 5 MIR and MIR-backed C output around enum constructor lowering, payload enum layout, enum tag switching, payload extraction, strict Result-shaped `try` success/failure propagation, and multi-`try` control flow. It also expands valid and invalid `.conception` fixtures so `must_use`/`discard`, Result-shaped metadata, enum constructor diagnostics, enum pattern diagnostics, payload binding diagnostics, and `try` diagnostics are covered by stable fixture names.
 
 No new syntax, generic `Result<T, E>`, cross-result conversion, implicit `Err` conversion, user field access, storage liveness, move/borrow/drop checking, unsafe/raw pointer behavior, struct runtime layout, imports, or final ABI mangling are introduced by P5-M8. Phase 5 closeout remains P5-M9.
+
+
+### P5-M9 Phase 5 closeout checkpoint
+
+P5-M9 consolidates Phase 5 as closed without adding new language semantics. The closeout status is:
+
+- Concrete payload enums are executable through the real Stage 0 path.
+- Constructors, variant matches, and positional payload bindings lower through HIR and MIR into the MIR-backed C backend.
+- `must_use enum` and `discard expression;` make ignored failure values explicit.
+- Strict nominal Result-shaped metadata is derived only for concrete enums with exactly `Ok(one payload)` and `Err(one payload)`.
+- `try` v0 unwraps the `Ok` payload or returns the original same-nominal Result-shaped enum value on `Err`.
+- Representative `.conception` run/check fixtures, MIR snapshots, C snapshots, and examples document the accepted and rejected Phase 5 behavior.
+
+Known limitations remain explicit:
+
+- No generic `Result<T, E>`.
+- No templates or concepts for `Tryable`.
+- No cross-result conversion.
+- No implicit `Err` payload conversion.
+- No unsafe or raw pointers.
+- No Drop, move checking, or borrow checking.
+- No storage live/dead modeling.
+- No user field access syntax.
+- No struct runtime layout.
+- No final ABI/layout guarantees for the enum backend representation.
+- No import or multi-file module work.
+- No Phase 5a select/judgment expressions yet.
+
+### Future work: Phase 5a selection/judgment expressions
+
+Phase 5a may introduce judgment or utility selection expressions. A possible future syntax is:
+
+```cpp
+AlertChannel channel = select AlertChannel {
+    Critical when fault && temperature > 900 score 120;
+    Warning  when temperature > 750          score 85;
+    Advisory when pressure > threshold       score 70;
+    Nominal                                  score 0;
+};
+```
+
+The intended distinction is:
+
+```text
+match answers: what is this value?
+select answers: which value should win?
+```
+
+Selection/judgment expressions are not part of Phase 5 closeout. Phase 5 closes only the concrete enum, match, payload binding, must-use/discard, Result-shaped convention, and `try` propagation path. Phase 6 remains future unsafe/ownership work rather than part of this closeout.

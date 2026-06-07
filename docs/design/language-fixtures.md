@@ -26,7 +26,15 @@ language/phase3-semantics/valid/
 language/phase3-semantics/invalid/
 language/phase4-mir/valid/
 language/phase4-mir/invalid/
+language/phase5-sum-types/valid/
+language/phase5-sum-types/invalid/
 ```
+
+## Phase 5 sum-type fixtures
+
+Phase 5 fixtures live under `language/phase5-sum-types/` and cover the concrete enum/failure surface: enum constructors, enum-variant `match`, payload binding, `must_use`, `discard`, strict Result-shaped metadata, and `try` diagnostics. Valid run fixtures execute through the full parse -> HIR -> MIR -> MIR-backed C -> `zig cc` -> native exit-code path; invalid check fixtures use code-based diagnostic matching.
+
+Representative Phase 5 MIR and C backend snapshots live under `tests/corpus/phase5/`. These snapshots cover enum constructor MIR, enum match/payload-binding MIR, `try` MIR lowering, enum/result C output, and `try` C output.
 
 ## `.conception` format
 
