@@ -504,7 +504,7 @@ Current roadmap direction after this document:
 
 ```text
 Phase 6   closed: unsafe blocks/functions, raw pointers, address-of locals/params, read-only unsafe deref
-Phase 7   planned: runtime structs and places
+Phase 7   closed or in closeout stabilization: runtime structs and places
 Phase 8   planned: concepts/templates over runtime values
 Phase 9   planned: comptime
 Phase 10  planned: ownership, move, Drop, MaybeUninit, and richer storage-state analysis
