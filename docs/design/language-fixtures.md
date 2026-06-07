@@ -30,6 +30,8 @@ language/phase5-sum-types/valid/
 language/phase5-sum-types/invalid/
 language/phase5a-judgment/valid/
 language/phase5a-judgment/invalid/
+language/phase6-unsafe-ownership/valid/
+language/phase6-unsafe-ownership/invalid/
 ```
 
 ## Phase 5 sum-type fixtures
@@ -43,6 +45,13 @@ Representative Phase 5 MIR and C backend snapshots live under `tests/corpus/phas
 Phase 5a judgment fixtures live under `language/phase5a-judgment/` and cover the `decide` expression. Valid check fixtures cover accepted HIR/type-checking forms such as basic decisions, duplicate variants, and negative scores. Valid run fixtures execute through the full MIR-backed executable path and cover highest-score selection, unconditional fallback, first-arm tie-breaking, duplicate variant handling, negative scores, condition-gated scores, local initializers, return expressions, and call arguments. Invalid check fixtures use code-based diagnostic matching for unknown enum targets, non-enum targets, unknown variants, payload variant candidates, non-bool conditions, non-int scores, missing unconditional arms, and empty arm lists.
 
 Phase 5a MIR coverage is currently code-based in the MIR lowering tests rather than file-based corpus snapshots. This keeps the corpus proportional because `decide` lowers to ordinary MIR/control flow and has no dedicated MIR or backend-C primitive.
+
+
+## Phase 6 unsafe/ownership fixtures
+
+Phase 6 fixtures live under `language/phase6-unsafe-ownership/valid/` and `language/phase6-unsafe-ownership/invalid/`. They cover the closed unsafe/raw-pointer slice: unsafe block returns, normal statements inside unsafe blocks, unsafe call enforcement, raw pointer type checking, pointer locals/returns/call arguments, address-of locals and parameters, read-only dereference runtime behavior, dereference in unsafe functions, pointer copies followed by dereference, and MIR-backed C execution for supported pointer reads.
+
+Invalid fixtures cover unsafe calls outside unsafe context, dereference outside unsafe context, dereference of non-pointer values, pointer type mismatches, and address-of temporary/call-result expressions.
 
 ## `.conception` format
 
