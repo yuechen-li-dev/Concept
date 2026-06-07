@@ -71,6 +71,7 @@ const Collector = struct {
 
     const TopLevelDecl = union(enum) {
         function: hir.FunctionId,
+        generic_function: hir.GenericFunctionId,
         struct_: struct {
             id: hir.StructId,
             type_id: types.TypeId,
@@ -98,9 +99,10 @@ const Collector = struct {
         for (unit.items) |item| {
             switch (item) {
                 .function_decl => |function_decl| try self.declareFunction(function_decl),
+                .template_decl => |template_decl| try self.declareGenericFunction(template_decl),
                 .struct_decl => |struct_decl| try self.declareStruct(struct_decl),
                 .enum_decl => |enum_decl| try self.declareEnum(enum_decl),
-                .template_decl, .concept_decl, .interface_decl, .impl_decl => {},
+                .concept_decl, .interface_decl, .impl_decl => {},
             }
         }
 
@@ -109,9 +111,10 @@ const Collector = struct {
         for (unit.items) |item| {
             switch (item) {
                 .function_decl => |function_decl| try self.resolveFunction(function_decl),
+                .template_decl => |template_decl| try self.resolveGenericFunction(template_decl),
                 .struct_decl => |struct_decl| try self.resolveStruct(struct_decl),
                 .enum_decl => |enum_decl| try self.resolveEnum(enum_decl),
-                .template_decl, .concept_decl, .interface_decl, .impl_decl => {},
+                .concept_decl, .interface_decl, .impl_decl => {},
             }
         }
 
@@ -120,7 +123,8 @@ const Collector = struct {
         for (unit.items) |item| {
             switch (item) {
                 .function_decl => |function_decl| try self.lowerFunctionBody(function_decl),
-                .struct_decl, .enum_decl, .template_decl, .concept_decl, .interface_decl, .impl_decl => {},
+                .template_decl => |template_decl| try self.lowerGenericFunctionBody(template_decl),
+                .struct_decl, .enum_decl, .concept_decl, .interface_decl, .impl_decl => {},
             }
         }
     }
@@ -136,6 +140,15 @@ const Collector = struct {
         ) orelse return;
         const function_id = try self.module.hir.addFunctionWithSafety(name, self.module.types.voidType(), function_decl.is_unsafe, function_decl.span);
         try self.top_level_decls.put(name, .{ .function = function_id });
+    }
+
+    fn declareGenericFunction(self: *Collector, template_decl: ast.TemplateDecl) !void {
+        const name = try self.internFreshTopLevelName(
+            template_decl.body.signature.name.base.text,
+            template_decl.body.signature.name.base.span,
+        ) orelse return;
+        const generic_id = try self.module.hir.addGenericFunction(name, template_decl.span);
+        try self.top_level_decls.put(name, .{ .generic_function = generic_id });
     }
 
     fn declareStruct(self: *Collector, struct_decl: ast.StructDecl) !void {
@@ -175,6 +188,62 @@ const Collector = struct {
             try param_names.put(param_symbol, param.name.span);
 
             if (try self.resolveTypeName(param.type_name)) |type_id| {
+                _ = try self.module.hir.addParam(function_id, param_symbol, type_id, param.span);
+            }
+        }
+    }
+
+    fn resolveGenericFunction(self: *Collector, template_decl: ast.TemplateDecl) !void {
+        const function_symbol = try self.module.interner.intern(template_decl.body.signature.name.base.text);
+        const generic_id = switch (self.top_level_decls.get(function_symbol).?) {
+            .generic_function => |id| id,
+            else => unreachable,
+        };
+        const generic = self.module.hir.getGenericFunction(generic_id);
+        const function_id = generic.function;
+        const owner = types.TypeParamOwner{ .kind = .generic_function, .index = generic_id.index };
+
+        var type_scope = TypeParamScope.init(self.allocator);
+        defer type_scope.deinit();
+        var hir_params = std.ArrayList(hir.HirTypeParam).empty;
+        var transferred_type_params = false;
+        defer hir_params.deinit(self.allocator);
+        errdefer if (!transferred_type_params) {
+            for (hir_params.items) |param| if (param.constraint) |constraint| self.allocator.free(constraint.text);
+        };
+
+        for (template_decl.params, 0..) |param, index| {
+            const symbol = try self.module.interner.intern(param.name.text);
+            const type_id = try self.module.types.addTypeParam(owner, @intCast(index), symbol);
+            try type_scope.put(symbol, type_id);
+            const constraint = if (param.constraint) |constraint_type| blk: {
+                break :blk hir.HirTypeConstraint{ .text = try self.renderTypeName(constraint_type), .span = constraint_type.span };
+            } else null;
+            try hir_params.append(self.allocator, .{ .name = symbol, .span = param.span, .type_id = type_id, .constraint = constraint });
+        }
+
+        const owned_type_params = try self.allocator.alloc(hir.HirTypeParam, hir_params.items.len);
+        @memcpy(owned_type_params, hir_params.items);
+        hir_params.clearRetainingCapacity();
+        self.module.hir.setGenericFunctionTypeParams(generic_id, owned_type_params);
+        transferred_type_params = true;
+
+        if (try self.resolveTypeNameScoped(template_decl.body.signature.return_type, &type_scope)) |return_type| {
+            self.module.hir.setFunctionReturnType(function_id, return_type);
+        }
+
+        var param_names = std.AutoHashMap(interner.SymbolId, source.SourceSpan).init(self.allocator);
+        defer param_names.deinit();
+
+        for (template_decl.body.signature.params) |param| {
+            const param_symbol = try self.module.interner.intern(param.name.text);
+            if (param_names.contains(param_symbol)) {
+                try self.diagnostics.append(diagnostics.duplicateParameterName(param.name.span));
+                continue;
+            }
+            try param_names.put(param_symbol, param.name.span);
+
+            if (try self.resolveTypeNameScoped(param.type_name, &type_scope)) |type_id| {
                 _ = try self.module.hir.addParam(function_id, param_symbol, type_id, param.span);
             }
         }
@@ -284,23 +353,30 @@ const Collector = struct {
     // ─────────────────────────────────────────────────────────────────────────────
 
     fn resolveTypeName(self: *Collector, type_name: ast.TypeName) !?types.TypeId {
+        return self.resolveTypeNameScoped(type_name, null);
+    }
+
+    fn resolveTypeNameScoped(self: *Collector, type_name: ast.TypeName, type_scope: ?*TypeParamScope) !?types.TypeId {
         if (type_name.is_mut or type_name.is_reference or type_name.generic_args.len != 0 or type_name.name.parts.len != 1) {
             try self.diagnostics.append(diagnostics.unsupportedTypeSyntax(type_name.span));
             return null;
         }
 
-        const pointee = try self.resolveBaseTypeName(type_name) orelse return null;
+        const pointee = try self.resolveBaseTypeNameScoped(type_name, type_scope) orelse return null;
         if (type_name.is_pointer) return try self.module.types.addPointerType(pointee);
         return pointee;
     }
 
-    fn resolveBaseTypeName(self: *Collector, type_name: ast.TypeName) !?types.TypeId {
+    fn resolveBaseTypeNameScoped(self: *Collector, type_name: ast.TypeName, type_scope: ?*TypeParamScope) !?types.TypeId {
         const part = type_name.name.parts[0];
         if (std.mem.eql(u8, part.text, "void")) return self.module.types.voidType();
         if (std.mem.eql(u8, part.text, "int")) return self.module.types.intType();
         if (std.mem.eql(u8, part.text, "bool")) return self.module.types.boolType();
 
         const symbol = try self.module.interner.intern(part.text);
+        if (type_scope) |scope| {
+            if (scope.get(symbol)) |type_id| return type_id;
+        }
         const decl = self.top_level_decls.get(symbol) orelse {
             try self.diagnostics.append(diagnostics.unknownTypeName(part.span));
             return null;
@@ -309,7 +385,7 @@ const Collector = struct {
         return switch (decl) {
             .struct_ => |entry| entry.type_id,
             .enum_ => |entry| entry.type_id,
-            .function => blk: {
+            .function, .generic_function => blk: {
                 try self.diagnostics.append(diagnostics.unknownTypeName(part.span));
                 break :blk null;
             },
@@ -329,6 +405,31 @@ const Collector = struct {
         return symbol;
     }
 
+    fn renderTypeName(self: *Collector, type_name: ast.TypeName) ![]const u8 {
+        var buffer: std.Io.Writer.Allocating = .init(self.allocator);
+        errdefer buffer.deinit();
+        try type_name.write(&buffer.writer);
+        return buffer.toOwnedSlice();
+    }
+
+    fn lowerGenericFunctionBody(self: *Collector, template_decl: ast.TemplateDecl) !void {
+        const body = template_decl.body.body orelse return;
+        const block = body.block orelse return;
+        const function_symbol = try self.module.interner.intern(template_decl.body.signature.name.base.text);
+        const generic_id = switch (self.top_level_decls.get(function_symbol).?) {
+            .generic_function => |id| id,
+            else => unreachable,
+        };
+        const function_id = self.module.hir.getGenericFunction(generic_id).function;
+
+        var lowerer = BodyLowerer.init(self, function_id);
+        defer lowerer.deinit();
+        try lowerer.seedParams();
+        if (try lowerer.lowerBlock(block)) |body_id| {
+            self.module.hir.setFunctionBody(function_id, body_id);
+        }
+    }
+
     fn lowerFunctionBody(self: *Collector, function_decl: ast.FunctionDecl) !void {
         const body = function_decl.body orelse return;
         const block = body.block orelse return;
@@ -344,6 +445,26 @@ const Collector = struct {
         if (try lowerer.lowerBlock(block)) |body_id| {
             self.module.hir.setFunctionBody(function_id, body_id);
         }
+    }
+};
+
+const TypeParamScope = struct {
+    map: std.AutoHashMap(interner.SymbolId, types.TypeId),
+
+    fn init(allocator: std.mem.Allocator) TypeParamScope {
+        return .{ .map = std.AutoHashMap(interner.SymbolId, types.TypeId).init(allocator) };
+    }
+
+    fn deinit(self: *TypeParamScope) void {
+        self.map.deinit();
+    }
+
+    fn put(self: *TypeParamScope, name: interner.SymbolId, type_id: types.TypeId) !void {
+        try self.map.put(name, type_id);
+    }
+
+    fn get(self: *TypeParamScope, name: interner.SymbolId) ?types.TypeId {
+        return self.map.get(name);
     }
 };
 
@@ -998,6 +1119,114 @@ fn typeName(name: []const u8, start: usize) ast.TypeName {
 
 fn nameSegment(text: []const u8, start: usize) ast.NameSegment {
     return .{ .text = text, .span = .{ .start = start, .length = text.len } };
+}
+
+fn typeNameFromSegment(part: *[1]ast.NameSegment) ast.TypeName {
+    return .{
+        .name = .{ .parts = part[0..], .span = part[0].span },
+        .span = part[0].span,
+    };
+}
+
+fn genericFunctionItem(template_params: []ast.TypeParamDecl, name: []const u8, return_type: ast.TypeName, params: []ast.ParamDecl, statements: []ast.Stmt) ast.Item {
+    return .{ .template_decl = .{
+        .params = template_params,
+        .body = .{
+            .is_export = false,
+            .signature = .{
+                .return_type = return_type,
+                .name = .{ .base = nameSegment(name, 0), .span = .{ .start = 0, .length = name.len } },
+                .params = params,
+                .span = .{ .start = 0, .length = name.len },
+            },
+            .body = .{ .span = .{ .start = 0, .length = 1 }, .block = .{ .statements = statements, .span = .{ .start = 0, .length = 1 } } },
+            .span = .{ .start = 0, .length = name.len },
+        },
+        .span = .{ .start = 0, .length = name.len },
+    } };
+}
+
+test "semantic collection lowers generic identity declaration" {
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    var t_parts = [_]ast.NameSegment{nameSegment("T", 0)};
+    const t_type = typeNameFromSegment(&t_parts);
+    var template_params = [_]ast.TypeParamDecl{.{ .name = nameSegment("T", 0), .span = .{ .start = 0, .length = 1 } }};
+    var params = [_]ast.ParamDecl{.{ .type_name = t_type, .name = nameSegment("value", 0), .span = .{ .start = 0, .length = 1 } }};
+    var value_expr = identExpr("value");
+    var statements = [_]ast.Stmt{.{ .return_stmt = .{ .value = &value_expr, .span = .{ .start = 0, .length = 1 } } }};
+
+    var module = try collectItems(&.{genericFunctionItem(template_params[0..], "identity", t_type, params[0..], statements[0..])}, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
+    try std.testing.expectEqual(@as(usize, 1), module.hir.generic_functions.items.len);
+    try std.testing.expectEqual(@as(usize, 0), module.hir.items.items.len);
+
+    const generic = module.hir.getGenericFunction(.{ .index = 0 });
+    const function = module.hir.getFunction(generic.function);
+    const type_param = generic.type_params[0];
+    try std.testing.expectEqual(type_param.type_id, function.return_type);
+    try std.testing.expectEqual(type_param.type_id, module.hir.getParam(function.params[0]).type_id);
+    try std.testing.expect(function.body != null);
+}
+
+test "semantic collection lowers multiple pointer and constrained generic parameters" {
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    var k_parts = [_]ast.NameSegment{nameSegment("K", 0)};
+    var v_parts = [_]ast.NameSegment{nameSegment("V", 0)};
+    var equatable_parts = [_]ast.NameSegment{nameSegment("Equatable", 0)};
+    const k_type = typeNameFromSegment(&k_parts);
+    const v_type = typeNameFromSegment(&v_parts);
+    var k_ptr_type = k_type;
+    k_ptr_type.is_pointer = true;
+    var constraint_args = [_]ast.TypeName{v_type};
+    const constraint = ast.TypeName{ .name = .{ .parts = equatable_parts[0..], .span = equatable_parts[0].span }, .generic_args = constraint_args[0..], .span = .{ .start = 0, .length = 12 } };
+    var template_params = [_]ast.TypeParamDecl{
+        .{ .name = nameSegment("K", 0), .span = .{ .start = 0, .length = 1 } },
+        .{ .name = nameSegment("V", 0), .constraint = constraint, .span = .{ .start = 0, .length = 1 } },
+    };
+    var params = [_]ast.ParamDecl{
+        .{ .type_name = k_ptr_type, .name = nameSegment("key", 0), .span = .{ .start = 0, .length = 1 } },
+        .{ .type_name = v_type, .name = nameSegment("value", 0), .span = .{ .start = 0, .length = 1 } },
+    };
+    var key_expr = identExpr("key");
+    var deref_expr = ast.Expr{ .deref = .{ .operand = &key_expr, .span = .{ .start = 0, .length = 1 } } };
+    var statements = [_]ast.Stmt{.{ .return_stmt = .{ .value = &deref_expr, .span = .{ .start = 0, .length = 1 } } }};
+
+    var module = try collectItems(&.{genericFunctionItem(template_params[0..], "first", k_type, params[0..], statements[0..])}, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
+    const generic = module.hir.getGenericFunction(.{ .index = 0 });
+    const function = module.hir.getFunction(generic.function);
+    try std.testing.expectEqual(@as(usize, 2), generic.type_params.len);
+    try std.testing.expectEqualStrings("Equatable<V>", generic.type_params[1].constraint.?.text);
+    try std.testing.expectEqual(generic.type_params[0].type_id, function.return_type);
+    try std.testing.expectEqual(types.TypeKind{ .pointer = .{ .pointee = generic.type_params[0].type_id } }, module.types.kind(module.hir.getParam(function.params[0]).type_id));
+    try std.testing.expectEqual(generic.type_params[1].type_id, module.hir.getParam(function.params[1]).type_id);
+}
+
+test "semantic collection rejects duplicate generic and concrete names and hides type params" {
+    var t_parts = [_]ast.NameSegment{nameSegment("T", 0)};
+    const t_type = typeNameFromSegment(&t_parts);
+    var template_params = [_]ast.TypeParamDecl{.{ .name = nameSegment("T", 0), .span = .{ .start = 0, .length = 1 } }};
+    var params = [_]ast.ParamDecl{.{ .type_name = t_type, .name = nameSegment("value", 0), .span = .{ .start = 0, .length = 1 } }};
+    var value_expr = identExpr("value");
+    var statements = [_]ast.Stmt{.{ .return_stmt = .{ .value = &value_expr, .span = .{ .start = 0, .length = 1 } } }};
+
+    var duplicate_diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer duplicate_diagnostics.deinit();
+    try std.testing.expectError(error.InvalidSemanticModule, collectItems(&.{ genericFunctionItem(template_params[0..], "identity", t_type, params[0..], statements[0..]), functionItem("identity", 20) }, &duplicate_diagnostics));
+    try std.testing.expectEqual(DiagnosticCode.DuplicateTopLevelName, duplicate_diagnostics.diagnostics.items[0].code);
+
+    var outside_diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer outside_diagnostics.deinit();
+    try std.testing.expectError(error.InvalidSemanticModule, collectItems(&.{functionWithBody("outside", params[0..], statements[0..])}, &outside_diagnostics));
+    try std.testing.expectEqual(DiagnosticCode.UnknownTypeName, outside_diagnostics.diagnostics.items[0].code);
 }
 
 test "semantic collection detects must_use Result-shaped enum" {

@@ -535,6 +535,14 @@ P8-M2  Type parameter TypeIds and HIR generic declarations
        - generic function HIR storage
        - no execution yet
 
+       Current P8-M2 implementation note:
+       - `TypeStore` has symbolic type-parameter `TypeId`s owned by a generic function owner/index.
+       - Generic function declarations lower to HIR generic-function storage with owned type-parameter records.
+       - Function return and parameter type names resolve against template type parameters while lowering the generic declaration.
+       - Parser-level constraints such as `Equatable<T>` are preserved in HIR as unresolved constraint text for future concept work.
+       - Generic bodies are stored in HIR for declaration-shape cases such as identity, but generic functions are skipped by executable HIR checking, MIR lowering, and backend emission.
+       - Generic calls remain unsupported until P8-M3; ordinary call lookup does not instantiate templates.
+
 P8-M3  Simple generic function instantiation
        - unconstrained identity/choose-style functions
        - monomorphization for concrete calls

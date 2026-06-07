@@ -1,0 +1,19 @@
+# name: template call unsupported check
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module Main;
+
+template<T>
+T identity(T value) {
+    return value;
+}
+
+int main() {
+    return identity(1);
+}
+
+=== diagnostics ===
+CON0027

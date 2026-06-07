@@ -44,6 +44,7 @@ const ModuleLowerer = struct {
         for (self.semantic_module.hir.functions.items, 0..) |function, index| {
             if (function.body == null) continue;
             const hir_function_id = hir.FunctionId{ .index = @intCast(index) };
+            if (self.semantic_module.hir.isGenericFunction(hir_function_id)) continue;
             try self.lowerFunction(hir_function_id, function);
         }
 
@@ -1090,8 +1091,6 @@ test "MIR lowering lowers address-of field place" {
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "AddressOf(Field(MirLocalId(0), FieldId(0)))") != null);
 }
 
-
-
 test "MIR lowering stable snapshot for Phase 7 struct places" {
     var module = try newModule();
     defer module.deinit();
@@ -1151,8 +1150,6 @@ test "MIR lowering stable snapshot for Phase 7 struct places" {
         \\
     , snapshot);
 }
-
-
 
 test "MIR lowering validates Phase 7 struct value params returns and calls" {
     var module = try newModule();

@@ -57,19 +57,23 @@ const Checker = struct {
         }
 
         for (self.module.hir.functions.items, 0..) |function, index| {
+            const function_id = hir.FunctionId{ .index = @intCast(index) };
+            if (self.module.hir.isGenericFunction(function_id)) continue;
             if (function.body) |body| {
                 if (function.is_unsafe) self.unsafe_depth += 1;
                 defer {
                     if (function.is_unsafe) self.unsafe_depth -= 1;
                 }
-                try self.checkStmt(.{ .index = @intCast(index) }, body, function.return_type);
+                try self.checkStmt(function_id, body, function.return_type);
             }
         }
     }
 
     fn findMain(self: *Checker) ?hir.FunctionId {
         for (self.module.hir.functions.items, 0..) |function, index| {
-            if (std.mem.eql(u8, self.module.interner.text(function.name), "main")) return .{ .index = @intCast(index) };
+            const function_id = hir.FunctionId{ .index = @intCast(index) };
+            if (self.module.hir.isGenericFunction(function_id)) continue;
+            if (std.mem.eql(u8, self.module.interner.text(function.name), "main")) return function_id;
         }
         return null;
     }

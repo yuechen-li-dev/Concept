@@ -710,6 +710,42 @@ test "language parse fixture: phase8 template invalid constraint" {
     try expectParseFixture("../../../language/phase8-concepts-templates/invalid/template_invalid_constraint.invalid.conception");
 }
 
+test "language check fixture: phase8 template identity declaration" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/valid/template_identity_decl.valid.conception");
+}
+
+test "language check fixture: phase8 template multi parameter declaration" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/valid/template_multi_param_decl.valid.conception");
+}
+
+test "language check fixture: phase8 template pointer parameter declaration" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/valid/template_pointer_param_decl.valid.conception");
+}
+
+test "language check fixture: phase8 template constrained declaration" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/valid/template_constrained_decl.valid.conception");
+}
+
+test "language check fixture: phase8 template declaration with concrete main" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/valid/template_decl_with_concrete_main.valid.conception");
+}
+
+test "language check fixture: phase8 template call unsupported" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/template_call_unsupported.invalid.conception");
+}
+
+test "language check fixture: phase8 template duplicate concrete name" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/template_duplicate_concrete_name.invalid.conception");
+}
+
+test "language check fixture: phase8 template type parameter outside scope" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/template_type_param_outside_scope.invalid.conception");
+}
+
+test "language check fixture: phase8 generic main not concrete" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/template_generic_main_not_concrete.invalid.conception");
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Phase execution helpers
 // ─────────────────────────────────────────────────────────────────────────────
@@ -721,7 +757,7 @@ fn expectCheckFixture(comptime path: []const u8) !void {
 
     try std.testing.expectEqual(Phase.check, fixture.phase);
 
-    if (std.mem.indexOf(u8, path, "phase3-semantics") != null or std.mem.indexOf(u8, path, "phase5-sum-types") != null or std.mem.indexOf(u8, path, "phase5a-judgment") != null or std.mem.indexOf(u8, path, "phase6-unsafe-ownership") != null or std.mem.indexOf(u8, path, "phase7-runtime-structs") != null) {
+    if (std.mem.indexOf(u8, path, "phase3-semantics") != null or std.mem.indexOf(u8, path, "phase8-concepts-templates") != null or std.mem.indexOf(u8, path, "phase5-sum-types") != null or std.mem.indexOf(u8, path, "phase5a-judgment") != null or std.mem.indexOf(u8, path, "phase6-unsafe-ownership") != null or std.mem.indexOf(u8, path, "phase7-runtime-structs") != null) {
         try expectSemanticCheckFixture(path, fixture);
     } else {
         try expectPhase2CheckFixture(path, fixture);
