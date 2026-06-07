@@ -1,6 +1,5 @@
 # name: phase7 field address-of param
-# phase: check
-# check: hir
+# phase: run
 # expect: pass
 
 === source ===
@@ -19,3 +18,6 @@ int main() {
     Vec2 v = Vec2 { x: 5, y: 9, };
     return readX(v);
 }
+
+=== run ===
+exit_code: 5

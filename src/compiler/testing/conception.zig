@@ -1076,6 +1076,10 @@ test "language MIR fixture: phase4 if match" {
     try expectMirFixture("../../../language/phase4-mir/valid/mir_if_match.valid.conception");
 }
 
+test "language MIR fixture: phase7 struct places snapshot" {
+    try expectMirFixture("../../../language/phase7-runtime-structs/valid/struct_places_mir_snapshot.valid.conception");
+}
+
 fn expectRunFixture(comptime path: []const u8) !void {
     const text = @embedFile(path);
     const fixture = try parse(std.testing.allocator, text, .{ .path = path });
@@ -1824,4 +1828,8 @@ test "language run fixture: phase7 struct return local" {
 
 test "language run fixture: phase7 struct param field assignment" {
     try expectRunFixture("../../../language/phase7-runtime-structs/valid/struct_param_field_assignment_run.valid.conception");
+}
+
+test "language run fixture: phase7 struct pipeline closeout" {
+    try expectRunFixture("../../../language/phase7-runtime-structs/valid/phase7_struct_pipeline_closeout_run.valid.conception");
 }

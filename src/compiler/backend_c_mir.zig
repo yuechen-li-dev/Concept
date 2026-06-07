@@ -356,7 +356,7 @@ fn structConstructorFieldValue(fields: []const mir.MirStructFieldValue, field_id
 fn emitEnumConstructorAssignment(writer: anytype, ctx: *const BackendContext, place: mir.MirPlace, constructor: anytype) EmitError!void {
     const enum_decl = ctx.module.hir.getEnum(constructor.enum_id);
     const variant = ctx.module.hir.getVariant(constructor.variant_id);
-    const variant_index = enumVariantIndex(ctx, enum_decl, constructor.variant_id) orelse return error.InvalidExecutable;
+    const variant_index = enumVariantIndex(ctx, enum_decl.*, constructor.variant_id) orelse return error.InvalidExecutable;
 
     try writer.writeAll("    ");
     try emitPlace(writer, ctx, place);
@@ -1400,4 +1400,30 @@ test "MIR C backend emits payload enum match without binding" {
     try std.testing.expect(std.mem.indexOf(u8, c_source, ".tag;") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, "case 0: goto") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, "default: goto") != null);
+}
+
+test "MIR C backend Phase 7 closeout struct runtime snapshot" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\struct Vec2 { int x; int y; };
+        \\Vec2 makeVec(int x, int y) { return Vec2 { x: x, y: y, }; }
+        \\int sum(Vec2 v) { return v.x + v.y; }
+        \\int main() {
+        \\    Vec2 v = makeVec(3, 4);
+        \\    v.x = 11;
+        \\    int* px = &v.x;
+        \\    return sum(v);
+        \\}
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "typedef struct {\n    int cpt_f_x_0;\n    int cpt_f_y_1;\n} cpt_struct_Vec2;") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_struct_Vec2 cpt_f_makeVec(int cpt_p_x_0, int cpt_p_y_1);") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "int cpt_f_sum(cpt_struct_Vec2 cpt_p_v_2);") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_struct_Vec2 cpt_l_v_") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, ".cpt_f_x_0 = 11;") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "&cpt_l_v_") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, ".cpt_f_x_0") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, " = cpt_f_makeVec(3, 4);") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "return cpt_f_sum(cpt_l_v_") != null);
 }

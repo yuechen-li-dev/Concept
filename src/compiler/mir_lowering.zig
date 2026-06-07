@@ -4,8 +4,10 @@
 
 const std = @import("std");
 
+const diagnostics = @import("diagnostics.zig");
 const hir = @import("hir.zig");
 const mir = @import("mir.zig");
+const mir_validator = @import("mir_validator.zig");
 const semantics = @import("semantics.zig");
 const types = @import("types.zig");
 
@@ -1086,6 +1088,126 @@ test "MIR lowering lowers address-of field place" {
     const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
     defer std.testing.allocator.free(snapshot);
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "AddressOf(Field(MirLocalId(0), FieldId(0)))") != null);
+}
+
+
+
+test "MIR lowering stable snapshot for Phase 7 struct places" {
+    var module = try newModule();
+    defer module.deinit();
+
+    const vec_id = try module.hir.addStruct(try intern(&module, "Vec2"));
+    const vec_type = try module.types.addStructType(vec_id);
+    const x_field = try module.hir.addField(vec_id, try intern(&module, "x"), module.types.intType(), hir.synthetic_span);
+    const y_field = try module.hir.addField(vec_id, try intern(&module, "y"), module.types.intType(), hir.synthetic_span);
+    const int_ptr = try module.types.addPointerType(module.types.intType());
+
+    const main = try addFunction(&module, "main", module.types.intType(), false);
+    const v = try addLocal(&module, main, "v", vec_type);
+    const px = try addLocal(&module, main, "px", int_ptr);
+    const fields = try std.testing.allocator.dupe(hir.HirStructLiteralField, &.{
+        .{ .field_id = x_field, .value = try intExpr(&module, "3"), .span = hir.synthetic_span },
+        .{ .field_id = y_field, .value = try intExpr(&module, "4"), .span = hir.synthetic_span },
+    });
+    const literal = try module.hir.addExpr(.{ .struct_literal = .{ .struct_id = vec_id, .type_id = vec_type, .fields = fields } }, hir.synthetic_span);
+    const decl_v = try module.hir.addStmt(.{ .local_decl = .{ .local = v, .initializer = literal } }, hir.synthetic_span);
+    const assign_x = try module.hir.addStmt(.{ .assignment = .{ .target = .{ .field = .{ .base = .{ .local = v }, .field_id = x_field, .field_span = hir.synthetic_span } }, .value = try intExpr(&module, "11") } }, hir.synthetic_span);
+    const field_access = try module.hir.addExpr(.{ .field_access = .{ .receiver = try module.hir.addExpr(.{ .local_ref = v }, hir.synthetic_span), .field_name = try intern(&module, "x"), .field_span = hir.synthetic_span } }, hir.synthetic_span);
+    const addr = try module.hir.addExpr(.{ .address_of = field_access }, hir.synthetic_span);
+    const decl_px = try module.hir.addStmt(.{ .local_decl = .{ .local = px, .initializer = addr } }, hir.synthetic_span);
+    const deref = try module.hir.addExpr(.{ .deref = try module.hir.addExpr(.{ .local_ref = px }, hir.synthetic_span) }, hir.synthetic_span);
+    const ret = try module.hir.addStmt(.{ .return_stmt = deref }, hir.synthetic_span);
+    try setBody(&module, main, &.{ decl_v, assign_x, decl_px, ret });
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+
+    var diagnostic_bag = diagnostics.DiagnosticBag.init(std.testing.allocator);
+    defer diagnostic_bag.deinit();
+    try mir_validator.validateModule(std.testing.allocator, &module, &mir_module, &diagnostic_bag);
+    try std.testing.expectEqual(@as(usize, 0), diagnostic_bag.count());
+
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+
+    try std.testing.expectEqualStrings(
+        \\MirModule
+        \\  Function main -> TypeId(1)
+        \\    Locals
+        \\      MirLocalId(0) user v: TypeId(3)
+        \\      MirLocalId(1) temp <temp>: TypeId(3)
+        \\      MirLocalId(2) user px: TypeId(4)
+        \\      MirLocalId(3) temp <temp>: TypeId(4)
+        \\      MirLocalId(4) temp <temp>: TypeId(1)
+        \\    Blocks
+        \\      MirBlockId(0)
+        \\        MirLocalId(1) = StructConstructor StructId(0)(FieldId(0)=Int 3, FieldId(1)=Int 4)
+        \\        MirLocalId(0) = Use(Copy(MirLocalId(1)))
+        \\        Field(MirLocalId(0), FieldId(0)) = Use(Int 11)
+        \\        MirLocalId(3) = AddressOf(Field(MirLocalId(0), FieldId(0)))
+        \\        MirLocalId(2) = Use(Copy(MirLocalId(3)))
+        \\        MirLocalId(4) = Deref(Copy(MirLocalId(2)))
+        \\        Return Copy(MirLocalId(4))
+        \\
+    , snapshot);
+}
+
+
+
+test "MIR lowering validates Phase 7 struct value params returns and calls" {
+    var module = try newModule();
+    defer module.deinit();
+
+    const vec_id = try module.hir.addStruct(try intern(&module, "Vec2"));
+    const vec_type = try module.types.addStructType(vec_id);
+    const x_field = try module.hir.addField(vec_id, try intern(&module, "x"), module.types.intType(), hir.synthetic_span);
+    const y_field = try module.hir.addField(vec_id, try intern(&module, "y"), module.types.intType(), hir.synthetic_span);
+
+    const make = try addFunction(&module, "makeVec", vec_type, false);
+    const make_x = try addParam(&module, make, "x", module.types.intType());
+    const make_y = try addParam(&module, make, "y", module.types.intType());
+    const make_fields = try std.testing.allocator.dupe(hir.HirStructLiteralField, &.{
+        .{ .field_id = x_field, .value = try module.hir.addExpr(.{ .param_ref = make_x }, hir.synthetic_span), .span = hir.synthetic_span },
+        .{ .field_id = y_field, .value = try module.hir.addExpr(.{ .param_ref = make_y }, hir.synthetic_span), .span = hir.synthetic_span },
+    });
+    const make_literal = try module.hir.addExpr(.{ .struct_literal = .{ .struct_id = vec_id, .type_id = vec_type, .fields = make_fields } }, hir.synthetic_span);
+    try setBody(&module, make, &.{try module.hir.addStmt(.{ .return_stmt = make_literal }, hir.synthetic_span)});
+
+    const sum = try addFunction(&module, "sum", module.types.intType(), false);
+    const sum_v = try addParam(&module, sum, "v", vec_type);
+    const sum_v_ref_x = try module.hir.addExpr(.{ .param_ref = sum_v }, hir.synthetic_span);
+    const sum_v_ref_y = try module.hir.addExpr(.{ .param_ref = sum_v }, hir.synthetic_span);
+    const sum_x = try module.hir.addExpr(.{ .field_access = .{ .receiver = sum_v_ref_x, .field_name = try intern(&module, "x"), .field_span = hir.synthetic_span } }, hir.synthetic_span);
+    const sum_y = try module.hir.addExpr(.{ .field_access = .{ .receiver = sum_v_ref_y, .field_name = try intern(&module, "y"), .field_span = hir.synthetic_span } }, hir.synthetic_span);
+    const sum_expr = try module.hir.addExpr(.{ .binary = .{ .op = .add, .left = sum_x, .right = sum_y } }, hir.synthetic_span);
+    try setBody(&module, sum, &.{try module.hir.addStmt(.{ .return_stmt = sum_expr }, hir.synthetic_span)});
+
+    const main = try addFunction(&module, "main", module.types.intType(), false);
+    const v = try addLocal(&module, main, "v", vec_type);
+    const make_args = try std.testing.allocator.dupe(hir.ExprId, &.{ try intExpr(&module, "3"), try intExpr(&module, "4") });
+    const make_call = try module.hir.addExpr(.{ .call = .{ .function = make, .args = make_args } }, hir.synthetic_span);
+    const decl_v = try module.hir.addStmt(.{ .local_decl = .{ .local = v, .initializer = make_call } }, hir.synthetic_span);
+    const sum_args = try std.testing.allocator.dupe(hir.ExprId, &.{try module.hir.addExpr(.{ .local_ref = v }, hir.synthetic_span)});
+    const sum_call = try module.hir.addExpr(.{ .call = .{ .function = sum, .args = sum_args } }, hir.synthetic_span);
+    try setBody(&module, main, &.{ decl_v, try module.hir.addStmt(.{ .return_stmt = sum_call }, hir.synthetic_span) });
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+
+    var diagnostic_bag = diagnostics.DiagnosticBag.init(std.testing.allocator);
+    defer diagnostic_bag.deinit();
+    try mir_validator.validateModule(std.testing.allocator, &module, &mir_module, &diagnostic_bag);
+    try std.testing.expectEqual(@as(usize, 0), diagnostic_bag.count());
+
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Function makeVec -> TypeId(3)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "StructConstructor StructId(0)(FieldId(0)=Copy(MirLocalId(0)), FieldId(1)=Copy(MirLocalId(1)))") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Function sum -> TypeId(1)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "FieldAccess(Copy(MirLocalId(3)), FieldId(0))") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "FieldAccess(Copy(MirLocalId(3)), FieldId(1))") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Call FunctionId(0)(Int 3, Int 4)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Call FunctionId(1)(Copy(MirLocalId(") != null);
 }
 
 fn newModule() !semantics.SemanticModule {
