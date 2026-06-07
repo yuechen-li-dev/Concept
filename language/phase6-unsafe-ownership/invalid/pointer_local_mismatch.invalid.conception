@@ -1,0 +1,19 @@
+# name: phase6 pointer local mismatch
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+int helper(bool* p) {
+    int* q = p;
+    return 0;
+}
+
+int main() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0029

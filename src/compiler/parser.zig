@@ -3355,6 +3355,16 @@ test "parses function with raw pointer parameter" {
     try std.testing.expect(function_decl.signature.params[0].type_name.is_pointer);
 }
 
+test "rejects nested raw pointer syntax in type positions for now" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; void fill(int** buffer);", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expect(diagnostics.count() != 0);
+}
+
 test "parses function with parsed body" {
     var diagnostics = DiagnosticBag.init(std.testing.allocator);
     defer diagnostics.deinit();

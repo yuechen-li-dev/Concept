@@ -1,4 +1,4 @@
-# name: phase3 unsupported pointer type
+# name: phase3 unsupported reference type
 # phase: check
 # check: declarations
 # expect: fail
@@ -6,8 +6,8 @@
 === source ===
 module Example;
 
-struct PtrBox {
-    int* value;
+struct RefBox {
+    int& value;
 };
 
 === diagnostics ===

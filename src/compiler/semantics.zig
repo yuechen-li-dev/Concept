@@ -284,11 +284,17 @@ const Collector = struct {
     // ─────────────────────────────────────────────────────────────────────────────
 
     fn resolveTypeName(self: *Collector, type_name: ast.TypeName) !?types.TypeId {
-        if (type_name.is_mut or type_name.is_reference or type_name.is_pointer or type_name.generic_args.len != 0 or type_name.name.parts.len != 1) {
+        if (type_name.is_mut or type_name.is_reference or type_name.generic_args.len != 0 or type_name.name.parts.len != 1) {
             try self.diagnostics.append(diagnostics.unsupportedTypeSyntax(type_name.span));
             return null;
         }
 
+        const pointee = try self.resolveBaseTypeName(type_name) orelse return null;
+        if (type_name.is_pointer) return try self.module.types.addPointerType(pointee);
+        return pointee;
+    }
+
+    fn resolveBaseTypeName(self: *Collector, type_name: ast.TypeName) !?types.TypeId {
         const part = type_name.name.parts[0];
         if (std.mem.eql(u8, part.text, "void")) return self.module.types.voidType();
         if (std.mem.eql(u8, part.text, "int")) return self.module.types.intType();
@@ -1069,6 +1075,73 @@ test "semantic collection adds struct and enum nominal types" {
     try std.testing.expectEqual(@as(usize, 5), module.types.count());
     try std.testing.expectEqual(types.TypeKind{ .struct_type = .{ .index = 0 } }, module.types.kind(.{ .index = 3 }));
     try std.testing.expectEqual(types.TypeKind{ .enum_type = .{ .index = 0 } }, module.types.kind(.{ .index = 4 }));
+}
+
+test "semantic collection resolves raw pointer function return and parameter types" {
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    const int_ptr = ast.TypeName{
+        .name = .{ .parts = @constCast(test_int_type_parts[0..]), .span = .{ .start = 0, .length = 3 } },
+        .is_pointer = true,
+        .span = .{ .start = 0, .length = 4 },
+    };
+    var params = [_]ast.ParamDecl{.{
+        .type_name = int_ptr,
+        .name = nameSegment("p", 5),
+        .span = .{ .start = 0, .length = 6 },
+    }};
+    const item = ast.Item{ .function_decl = .{
+        .is_export = false,
+        .signature = .{
+            .return_type = int_ptr,
+            .name = .{ .base = nameSegment("identity", 7), .span = .{ .start = 7, .length = 8 } },
+            .params = params[0..],
+            .span = .{ .start = 0, .length = 18 },
+        },
+        .body = null,
+        .span = .{ .start = 0, .length = 18 },
+    } };
+
+    var module = try collectItems(&.{item}, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
+    const function = module.hir.getFunction(.{ .index = 0 });
+    const pointer_type = function.return_type;
+    try std.testing.expectEqual(pointer_type, module.hir.getParam(function.params[0]).type_id);
+    try std.testing.expectEqual(types.TypeKind{ .pointer = .{ .pointee = module.types.intType() } }, module.types.kind(pointer_type));
+}
+
+test "semantic collection resolves raw pointer to enum type" {
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    const enum_decl = enumItem("Status", 0);
+    const status_parts = [_]ast.NameSegment{.{ .text = "Status", .span = .{ .start = 20, .length = 6 } }};
+    const status_ptr = ast.TypeName{
+        .name = .{ .parts = @constCast(status_parts[0..]), .span = .{ .start = 20, .length = 6 } },
+        .is_pointer = true,
+        .span = .{ .start = 20, .length = 7 },
+    };
+    const function_decl = ast.Item{ .function_decl = .{
+        .is_export = false,
+        .signature = .{
+            .return_type = status_ptr,
+            .name = .{ .base = nameSegment("current", 28), .span = .{ .start = 28, .length = 7 } },
+            .params = &.{},
+            .span = .{ .start = 20, .length = 17 },
+        },
+        .body = null,
+        .span = .{ .start = 20, .length = 17 },
+    } };
+
+    var module = try collectItems(&.{ enum_decl, function_decl }, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
+    const pointer_type = module.hir.getFunction(.{ .index = 0 }).return_type;
+    try std.testing.expectEqual(types.TypeKind{ .pointer = .{ .pointee = .{ .index = 3 } } }, module.types.kind(pointer_type));
 }
 
 test "semantic collection rejects duplicate function" {

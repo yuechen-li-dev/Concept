@@ -20,6 +20,9 @@ pub const TypeKind = union(enum) {
     bool,
     struct_type: hir.StructId,
     enum_type: hir.EnumId,
+    pointer: struct {
+        pointee: TypeId,
+    },
 
     pub fn format(self: TypeKind, writer: *std.Io.Writer) std.Io.Writer.Error!void {
         switch (self) {
@@ -28,6 +31,7 @@ pub const TypeKind = union(enum) {
             .bool => try writer.writeAll("bool"),
             .struct_type => |id| try writer.print("struct {f}", .{id}),
             .enum_type => |id| try writer.print("enum {f}", .{id}),
+            .pointer => |pointer| try writer.print("{f}*", .{pointer.pointee}),
         }
     }
 };
@@ -90,6 +94,15 @@ pub const TypeStore = struct {
         return try self.append(.{ .enum_type = enum_id }, error.TooManyTypes);
     }
 
+    pub fn addPointerType(self: *TypeStore, pointee: TypeId) !TypeId {
+        std.debug.assert(self.contains(pointee));
+        if (self.findPointer(pointee)) |existing| {
+            return existing;
+        }
+
+        return try self.append(.{ .pointer = .{ .pointee = pointee } }, error.TooManyTypes);
+    }
+
     /// Returns the type kind for a valid type ID.
     ///
     /// Invalid IDs assert. Semantic callers should only carry IDs previously
@@ -114,6 +127,19 @@ pub const TypeStore = struct {
         return id;
     }
 
+    fn findPointer(self: TypeStore, pointee: TypeId) ?TypeId {
+        for (self.types.items, 0..) |candidate, index| {
+            switch (candidate) {
+                .pointer => |pointer| if (pointer.pointee.index == pointee.index) {
+                    return .{ .index = @intCast(index) };
+                },
+                else => {},
+            }
+        }
+
+        return null;
+    }
+
     fn findNominal(self: TypeStore, needle: TypeKind) ?TypeId {
         for (self.types.items, 0..) |candidate, index| {
             switch (needle) {
@@ -129,6 +155,7 @@ pub const TypeStore = struct {
                     },
                     else => {},
                 },
+                .pointer => unreachable,
                 else => unreachable,
             }
         }
@@ -233,6 +260,30 @@ test "distinct nominal declarations get distinct TypeIds" {
     try std.testing.expectEqual(@as(usize, 7), store.count());
 }
 
+test "pointer TypeIds are interned by pointee" {
+    var store = try TypeStore.init(std.testing.allocator);
+    defer store.deinit();
+
+    const int_ptr_first = try store.addPointerType(store.intType());
+    const int_ptr_second = try store.addPointerType(store.intType());
+    const bool_ptr = try store.addPointerType(store.boolType());
+    const void_ptr = try store.addPointerType(store.voidType());
+    const int_ptr_ptr = try store.addPointerType(int_ptr_first);
+
+    try std.testing.expectEqual(int_ptr_first, int_ptr_second);
+    try std.testing.expect(int_ptr_first.index != bool_ptr.index);
+    try std.testing.expectEqual(TypeKind{ .pointer = .{ .pointee = store.intType() } }, store.kind(int_ptr_first));
+    try std.testing.expectEqual(TypeKind{ .pointer = .{ .pointee = store.voidType() } }, store.kind(void_ptr));
+    try std.testing.expectEqual(TypeKind{ .pointer = .{ .pointee = int_ptr_first } }, store.kind(int_ptr_ptr));
+}
+
+test "pointer TypeKind debug formatting is stable" {
+    const rendered = try std.fmt.allocPrint(std.testing.allocator, "{f}", .{TypeKind{ .pointer = .{ .pointee = .{ .index = 1 } } }});
+    defer std.testing.allocator.free(rendered);
+
+    try std.testing.expectEqualStrings("TypeId(1)*", rendered);
+}
+
 test "invalid TypeIds assert by contract" {
     var store = try TypeStore.init(std.testing.allocator);
     defer store.deinit();
@@ -243,14 +294,15 @@ test "invalid TypeIds assert by contract" {
 }
 
 test "TypeKind debug formatting is stable" {
-    const rendered = try std.fmt.allocPrint(std.testing.allocator, "{f} {f} {f} {f} {f}", .{
+    const rendered = try std.fmt.allocPrint(std.testing.allocator, "{f} {f} {f} {f} {f} {f}", .{
         @as(TypeKind, .void),
         @as(TypeKind, .int),
         @as(TypeKind, .bool),
         TypeKind{ .struct_type = .{ .index = 0 } },
         TypeKind{ .enum_type = .{ .index = 0 } },
+        TypeKind{ .pointer = .{ .pointee = .{ .index = 1 } } },
     });
     defer std.testing.allocator.free(rendered);
 
-    try std.testing.expectEqualStrings("void int bool struct StructId(0) enum EnumId(0)", rendered);
+    try std.testing.expectEqualStrings("void int bool struct StructId(0) enum EnumId(0) TypeId(1)*", rendered);
 }

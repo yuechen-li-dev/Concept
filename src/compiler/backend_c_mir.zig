@@ -6,7 +6,9 @@ const std = @import("std");
 
 const diagnostics = @import("diagnostics.zig");
 const hir = @import("hir.zig");
+const hir_checker = @import("hir_checker.zig");
 const mir = @import("mir.zig");
+const mir_lowering = @import("mir_lowering.zig");
 const mir_validator = @import("mir_validator.zig");
 const parser_model = @import("parser.zig");
 const semantics = @import("semantics.zig");
@@ -407,6 +409,10 @@ fn emitCType(writer: anytype, ctx: *const BackendContext, type_id: types.TypeId,
             try requireSupportedEnumLayout(ctx, enum_id, span);
             try emitEnumTypeName(writer, ctx.module, ctx.module.hir.getEnum(enum_id).name);
         },
+        .pointer => |pointer| {
+            try emitCType(writer, ctx, pointer.pointee, span);
+            try writer.writeByte('*');
+        },
         .struct_type => {
             try reportUnsupportedCType(ctx, span);
             return error.InvalidExecutable;
@@ -548,10 +554,8 @@ fn emitForTest(source_text: []const u8) ![]const u8 {
     var module = try semantics.collectTopLevelDeclarations(std.testing.allocator, unit, &check_diagnostics);
     defer module.deinit();
 
-    const hir_checker = @import("hir_checker.zig");
     try hir_checker.checkExecutable(std.testing.allocator, &module, &check_diagnostics);
 
-    const mir_lowering = @import("mir_lowering.zig");
     var mir_module = try mir_lowering.lowerModule(std.testing.allocator, &module);
     defer mir_module.deinit();
 
@@ -915,6 +919,65 @@ test "MIR C backend reports invalid TypeId before type rendering" {
     try std.testing.expectError(error.InvalidExecutable, emitExecutableFromMir(std.testing.allocator, &module, &mir_module, &diagnostic_bag));
     try std.testing.expectEqual(@as(usize, 1), diagnostic_bag.count());
     try std.testing.expectEqual(diagnostics.DiagnosticCode.InvalidMirType, diagnostic_bag.diagnostics.items[0].code);
+}
+
+test "MIR C backend emits raw pointer params returns and locals" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\int* identity(int* p) { int* q = p; return q; }
+        \\int main() { return 0; }
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "int* cpt_f_identity(int* cpt_p_p_0);") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "int* cpt_l_q_1;") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_l_q_1 = cpt_p_p_0;") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "return cpt_l_q_1;") != null);
+}
+
+test "MIR C backend emits enum raw pointer params and returns" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\enum Status { Ok, Err, };
+        \\Status* choose(bool useLeft, Status* left, Status* right) {
+        \\    if (useLeft) { return left; }
+        \\    return right;
+        \\}
+        \\int main() { return 0; }
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_enum_Status* cpt_f_choose(int cpt_p_useLeft_0, cpt_enum_Status* cpt_p_left_1, cpt_enum_Status* cpt_p_right_2);") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "return cpt_p_left_1;") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "return cpt_p_right_2;") != null);
+}
+
+test "MIR C backend rejects struct raw pointer rendering until struct layout is supported" {
+    var parse_diagnostics = diagnostics.DiagnosticBag.init(std.testing.allocator);
+    defer parse_diagnostics.deinit();
+    var diagnostic_bag = diagnostics.DiagnosticBag.init(std.testing.allocator);
+    defer diagnostic_bag.deinit();
+
+    const source_file = try source_model.SourceFile.init(std.testing.allocator, "test.concept",
+        \\module Main;
+        \\struct Box {};
+        \\Box* id(Box* p) { return p; }
+        \\int main() { return 0; }
+    );
+    defer source_file.deinit(std.testing.allocator);
+
+    const unit = try parser_model.parseSource(std.testing.allocator, source_file, &parse_diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), parse_diagnostics.count());
+
+    var module = try semantics.collectTopLevelDeclarations(std.testing.allocator, unit, &diagnostic_bag);
+    defer module.deinit();
+    try hir_checker.checkExecutable(std.testing.allocator, &module, &diagnostic_bag);
+    var mir_module = try mir_lowering.lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+
+    try std.testing.expectError(error.InvalidExecutable, emitExecutableFromMir(std.testing.allocator, &module, &mir_module, &diagnostic_bag));
+    try std.testing.expectEqual(diagnostics.DiagnosticCode.UnsupportedCBackendType, diagnostic_bag.diagnostics.items[0].code);
 }
 
 test "MIR C backend emits enum constructor assignments" {

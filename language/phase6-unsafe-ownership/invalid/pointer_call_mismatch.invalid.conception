@@ -1,0 +1,22 @@
+# name: phase6 pointer call mismatch
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+int takesIntPtr(int* p) {
+    return 1;
+}
+
+int caller(bool* p) {
+    return takesIntPtr(p);
+}
+
+int main() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0033
