@@ -78,6 +78,8 @@ This ordering matters. Phase 8 should establish explicit generic constraints bef
 - P8-M0: complete as the Phase 8 design baseline.
 - P8-M1: complete for template function syntax parsing only. The parser accepts single and multiple type parameters, optional constraints such as `T: Equatable<T>`, and attaches the following function declaration to a `TemplateDecl` AST node.
 - P8-M1 deliberately does not instantiate templates, lower templates into HIR/MIR, emit backend code for templates, enforce concept satisfaction, or allow templates on structs/enums.
+- P8-M2 added symbolic HIR and type-store support for generic function templates: `type_param` TypeIds, generic function storage, unresolved constraint preservation, type-name resolution to type parameters in template scope, pointer-to-type-param representation, and explicit skipping of generic templates during executable checking, MIR lowering, and backend emission.
+- P8-M3 adds simple unconstrained generic function instantiation. Calls to an unconstrained generic function infer type arguments from concrete call arguments, monomorphize a concrete HIR function, cache repeated instantiations, and let the existing HIR checker, MIR lowering, MIR validator, and C backend handle only concrete functions. Generic templates remain non-emitted, constrained generic calls remain unsupported, and generic structs/enums, concepts, concept satisfaction, impl declarations, explicit specialization, and comptime remain out of scope.
 
 ## Phase 8 v0 scope
 
@@ -639,3 +641,20 @@ When implementation begins, keep each milestone convergent:
 - concept declarations before impl satisfaction;
 - constrained calls before broad generic language features;
 - concrete MIR/backend output before any generic MIR ambitions.
+
+## P8-M3 simple generic function instantiation
+
+P8-M3 establishes a deliberately narrow monomorphization path for function templates whose type parameters have no constraints. The generic HIR declaration remains symbolic and is still skipped as executable code. When a concrete function body calls that template, the HIR checker now performs call-site type argument inference from the actual argument types, substitutes those concrete TypeIds through the template signature and body, and creates an ordinary concrete HIR function for the instantiated body.
+
+Supported inference patterns are intentionally small:
+
+- a parameter of type `T` infers `T` from the argument type;
+- a parameter of type `T*` infers `T` from the pointee type of a pointer argument;
+- non-generic parameter positions must match exactly after substitution;
+- all uses of the same type parameter must infer the same concrete type;
+- every type parameter must be inferred from arguments;
+- return types are substituted after inference, with no inference from expected return type.
+
+Instantiated function names are deterministic and include a concrete type suffix, for example `identity__int` or `identity__struct_Vec2`. The existing C backend escaping then emits stable backend symbols such as `cpt_f_identity__int`. An instantiation cache keyed by the generic function and concrete type argument tuple ensures repeated calls such as `identity(3)` and `identity(4)` reuse one concrete function, while calls with different concrete type arguments produce distinct functions.
+
+The MIR path remains concrete-only. Generic template functions are not lowered, and the MIR validator rejects any `type_param` TypeId that reaches executable MIR. Constrained generic calls report `CON0087` until concept declarations and satisfaction are implemented in later milestones. Conflicting type inference reports `CON0088`, uninferred type parameters report `CON0089`, and unsupported generic instantiation patterns report `CON0090`.

@@ -66,6 +66,7 @@ pub const HirFunction = struct {
     params: []ParamId,
     locals: []LocalId,
     body: ?StmtId = null,
+    is_instantiation: bool = false,
 };
 
 pub const HirLocal = struct {
@@ -419,6 +420,7 @@ pub const HirStore = struct {
             .params = &.{},
             .locals = &.{},
             .body = null,
+            .is_instantiation = false,
         });
         return id;
     }
@@ -485,6 +487,10 @@ pub const HirStore = struct {
 
     pub fn setFunctionBody(self: *HirStore, id: FunctionId, body: StmtId) void {
         self.getFunctionMut(id).body = body;
+    }
+
+    pub fn markFunctionInstantiation(self: *HirStore, id: FunctionId) void {
+        self.getFunctionMut(id).is_instantiation = true;
     }
 
     pub fn setFunctionReturnType(self: *HirStore, id: FunctionId, type_id: types.TypeId) void {
@@ -565,6 +571,12 @@ pub const HirStore = struct {
     }
 
     pub fn getExpr(self: *const HirStore, id: ExprId) *const HirExpr {
+        const index: usize = id.index;
+        std.debug.assert(index < self.exprs.items.len);
+        return &self.exprs.items[index];
+    }
+
+    pub fn getExprMut(self: *HirStore, id: ExprId) *HirExpr {
         const index: usize = id.index;
         std.debug.assert(index < self.exprs.items.len);
         return &self.exprs.items[index];

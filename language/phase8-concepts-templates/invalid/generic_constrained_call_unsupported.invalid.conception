@@ -1,4 +1,4 @@
-# name: template call constrained unsupported check
+# name: generic constrained call unsupported
 # phase: check
 # check: hir
 # expect: fail
@@ -7,12 +7,12 @@
 module Main;
 
 template<T: Equatable<T>>
-T identity(T value) {
+T id(T value) {
     return value;
 }
 
 int main() {
-    return identity(1);
+    return id(1);
 }
 
 === diagnostics ===

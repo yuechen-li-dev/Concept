@@ -1,0 +1,22 @@
+# name: generic choose int run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+template<T>
+T choose(bool condition, T left, T right) {
+    if (condition) {
+        return left;
+    }
+
+    return right;
+}
+
+int main() {
+    return choose(true, 7, 9);
+}
+
+=== run ===
+exit_code: 7

@@ -276,6 +276,7 @@ const Validator = struct {
                     break :blk null;
                 }
                 const callee = self.semantic_module.hir.getFunction(call.function);
+                try self.requireValidType(callee.return_type, span);
                 if (call.args.len != callee.params.len) {
                     try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
                     break :blk callee.return_type;
@@ -283,6 +284,7 @@ const Validator = struct {
                 for (call.args, callee.params) |arg, param_id| {
                     const arg_type = try self.operandType(function_id, arg, span);
                     const param_type = self.semantic_module.hir.getParam(param_id).type_id;
+                    try self.requireValidType(param_type, span);
                     if (arg_type != null and !sameType(arg_type.?, param_type)) {
                         try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
                     }
@@ -397,7 +399,19 @@ const Validator = struct {
     fn requireValidType(self: *Validator, type_id: types.TypeId, span: ?diagnostics.SourceSpan) ValidationError!void {
         if (!self.semantic_module.types.contains(type_id)) {
             try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+            return;
         }
+        if (self.containsTypeParam(type_id)) {
+            try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+        }
+    }
+
+    fn containsTypeParam(self: *Validator, type_id: types.TypeId) bool {
+        return switch (self.semantic_module.types.kind(type_id)) {
+            .type_param => true,
+            .pointer => |pointer| self.containsTypeParam(pointer.pointee),
+            else => false,
+        };
     }
 
     fn requireBlockInFunction(self: *Validator, function_id: mir.MirFunctionId, block_id: mir.MirBlockId, span: ?diagnostics.SourceSpan) ValidationError!void {
