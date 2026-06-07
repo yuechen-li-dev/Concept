@@ -1,0 +1,19 @@
+# name: generic uninferred type param
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+template<T>
+int impossible() {
+    return 0;
+}
+
+int main() {
+    return impossible();
+}
+
+=== diagnostics ===
+CON0089

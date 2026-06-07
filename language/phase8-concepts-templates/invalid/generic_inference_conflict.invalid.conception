@@ -1,0 +1,23 @@
+# name: generic inference conflict
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+template<T>
+T choose(bool c, T left, T right) {
+    if (c) {
+        return left;
+    }
+
+    return right;
+}
+
+int main() {
+    return choose(true, 1, false);
+}
+
+=== diagnostics ===
+CON0088

@@ -1,0 +1,20 @@
+# name: generic reuse instantiation run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+template<T>
+T identity(T value) {
+    return value;
+}
+
+int main() {
+    int a = identity(3);
+    int b = identity(4);
+    return a + b;
+}
+
+=== run ===
+exit_code: 7

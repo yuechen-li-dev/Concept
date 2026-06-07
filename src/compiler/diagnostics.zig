@@ -84,6 +84,10 @@ pub const DiagnosticCode = enum {
     UnknownFieldAccess,
     FieldAssignmentNonPlace,
     FieldAssignmentTypeMismatch,
+    ConstrainedGenericInstantiationUnsupported,
+    GenericTypeInferenceConflict,
+    GenericTypeParameterUninferred,
+    UnsupportedGenericInstantiation,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -149,6 +153,10 @@ pub const DiagnosticCode = enum {
             .UnknownFieldAccess => "CON0080",
             .FieldAssignmentNonPlace => "CON0081",
             .FieldAssignmentTypeMismatch => "CON0082",
+            .ConstrainedGenericInstantiationUnsupported => "CON0087",
+            .GenericTypeInferenceConflict => "CON0088",
+            .GenericTypeParameterUninferred => "CON0089",
+            .UnsupportedGenericInstantiation => "CON0090",
         };
     }
 };

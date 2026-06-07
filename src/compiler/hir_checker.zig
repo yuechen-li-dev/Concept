@@ -10,7 +10,7 @@ const semantics = @import("semantics.zig");
 const types = @import("types.zig");
 
 pub const DiagnosticBag = diagnostics.DiagnosticBag;
-pub const CheckError = error{ InvalidSemanticModule, TooManyTypes } || std.mem.Allocator.Error;
+pub const CheckError = anyerror;
 
 const synthetic_span = hir.synthetic_span;
 
@@ -19,7 +19,8 @@ pub fn checkExecutable(
     module: *semantics.SemanticModule,
     diagnostic_bag: ?*DiagnosticBag,
 ) CheckError!void {
-    var checker = Checker{ .allocator = allocator, .module = module, .diagnostics = diagnostic_bag };
+    var checker = Checker.init(allocator, module, diagnostic_bag);
+    defer checker.deinit();
     try checker.checkModule();
 }
 
@@ -32,6 +33,30 @@ const Checker = struct {
     module: *semantics.SemanticModule,
     diagnostics: ?*DiagnosticBag,
     unsafe_depth: usize = 0,
+    instantiations: std.ArrayList(InstantiationEntry),
+    active_instantiation_depth: usize = 0,
+
+    const max_instantiation_depth = 32;
+
+    const InstantiationEntry = struct {
+        generic_id: hir.GenericFunctionId,
+        type_args: []types.TypeId,
+        function: hir.FunctionId,
+    };
+
+    fn init(allocator: std.mem.Allocator, module: *semantics.SemanticModule, diagnostic_bag: ?*DiagnosticBag) Checker {
+        return .{
+            .allocator = allocator,
+            .module = module,
+            .diagnostics = diagnostic_bag,
+            .instantiations = std.ArrayList(InstantiationEntry).empty,
+        };
+    }
+
+    fn deinit(self: *Checker) void {
+        for (self.instantiations.items) |entry| self.allocator.free(entry.type_args);
+        self.instantiations.deinit(self.allocator);
+    }
 
     // ─────────────────────────────────────────────────────────────────────────────
     // Function/main validation
@@ -207,7 +232,20 @@ const Checker = struct {
             .param_ref => |id| self.module.hir.getParam(id).type_id,
             .group => |inner| try self.checkExpr(return_type, inner),
             .call => |call| blk: {
-                const callee = self.module.hir.getFunction(call.function);
+                var arg_types = std.ArrayList(types.TypeId).empty;
+                defer arg_types.deinit(self.allocator);
+                for (call.args) |arg| try arg_types.append(self.allocator, try self.checkExpr(return_type, arg));
+
+                const resolved_function = if (self.genericFunctionFor(call.function)) |generic_id|
+                    try self.instantiateGenericCall(generic_id, call, arg_types.items, expr.span)
+                else
+                    call.function;
+
+                if (resolved_function.index != call.function.index) {
+                    self.module.hir.getExprMut(expr_id).kind.call.function = resolved_function;
+                }
+
+                const callee = self.module.hir.getFunction(resolved_function);
                 if (callee.body == null) {
                     try self.reportAt(.InvalidCall, "cannot call function without body", expr.span);
                     return error.InvalidSemanticModule;
@@ -220,10 +258,9 @@ const Checker = struct {
                     try self.reportAt(.InvalidCall, "function call argument count mismatch", expr.span);
                     return error.InvalidSemanticModule;
                 }
-                for (call.args, callee.params) |arg, param_id| {
-                    const arg_type = try self.checkExpr(return_type, arg);
+                for (arg_types.items, callee.params, call.args) |arg_type, param_id, arg_expr| {
                     const param_type = self.module.hir.getParam(param_id).type_id;
-                    try self.requireCallSame(arg_type, param_type, "function call argument type mismatch", self.exprSpan(arg));
+                    try self.requireCallSame(arg_type, param_type, "function call argument type mismatch", self.exprSpan(arg_expr));
                 }
                 break :blk callee.return_type;
             },
@@ -501,6 +538,338 @@ const Checker = struct {
             .group => |inner| self.addressableBase(inner),
             else => null,
         };
+    }
+
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Generic function instantiation
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    const TypeSubstitution = struct {
+        type_params: []const hir.HirTypeParam,
+        concrete_types: []const types.TypeId,
+    };
+
+    fn genericFunctionFor(self: *Checker, function_id: hir.FunctionId) ?hir.GenericFunctionId {
+        for (self.module.hir.generic_functions.items, 0..) |generic, index| {
+            if (generic.function.index == function_id.index) return .{ .index = @intCast(index) };
+        }
+        return null;
+    }
+
+    fn instantiateGenericCall(self: *Checker, generic_id: hir.GenericFunctionId, call: anytype, arg_types: []const types.TypeId, span: diagnostics.SourceSpan) CheckError!hir.FunctionId {
+        const generic = self.module.hir.getGenericFunction(generic_id).*;
+        for (generic.type_params) |param| {
+            if (param.constraint != null) {
+                try self.reportAt(.ConstrainedGenericInstantiationUnsupported, "constrained generic function instantiation is not supported yet", span);
+                return error.InvalidSemanticModule;
+            }
+        }
+        const generic_function = self.module.hir.getFunction(generic.function);
+        if (call.args.len != generic_function.params.len) {
+            try self.reportAt(.InvalidCall, "function call argument count mismatch", span);
+            return error.InvalidSemanticModule;
+        }
+        if (self.active_instantiation_depth >= max_instantiation_depth) {
+            try self.reportAt(.UnsupportedGenericInstantiation, "generic instantiation depth limit exceeded", span);
+            return error.InvalidSemanticModule;
+        }
+
+        const inferred = try self.allocator.alloc(?types.TypeId, generic.type_params.len);
+        defer self.allocator.free(inferred);
+        @memset(inferred, null);
+
+        for (generic_function.params, arg_types) |param_id, arg_type| {
+            const param_type = self.module.hir.getParam(param_id).type_id;
+            try self.inferType(param_type, arg_type, generic.type_params, inferred, span);
+        }
+
+        var concrete_types = try self.allocator.alloc(types.TypeId, generic.type_params.len);
+        errdefer self.allocator.free(concrete_types);
+        for (inferred, 0..) |maybe_type, index| {
+            concrete_types[index] = maybe_type orelse {
+                try self.reportAt(.GenericTypeParameterUninferred, "generic type parameter could not be inferred from call arguments", span);
+                return error.InvalidSemanticModule;
+            };
+        }
+
+        if (self.findInstantiation(generic_id, concrete_types)) |existing| {
+            self.allocator.free(concrete_types);
+            return existing;
+        }
+
+        const function_id = try self.cloneGenericFunction(generic_id, concrete_types, span);
+        try self.instantiations.append(self.allocator, .{
+            .generic_id = generic_id,
+            .type_args = concrete_types,
+            .function = function_id,
+        });
+
+        self.active_instantiation_depth += 1;
+        defer self.active_instantiation_depth -= 1;
+        const concrete_function = self.module.hir.getFunction(function_id);
+        if (concrete_function.body) |body| try self.checkStmt(function_id, body, concrete_function.return_type);
+        return function_id;
+    }
+
+    fn findInstantiation(self: *Checker, generic_id: hir.GenericFunctionId, concrete_types: []const types.TypeId) ?hir.FunctionId {
+        for (self.instantiations.items) |entry| {
+            if (entry.generic_id.index != generic_id.index or entry.type_args.len != concrete_types.len) continue;
+            var matches = true;
+            for (entry.type_args, concrete_types) |left, right| {
+                if (!sameType(left, right)) {
+                    matches = false;
+                    break;
+                }
+            }
+            if (matches) return entry.function;
+        }
+        return null;
+    }
+
+    fn inferType(self: *Checker, pattern: types.TypeId, actual: types.TypeId, type_params: []const hir.HirTypeParam, inferred: []?types.TypeId, span: diagnostics.SourceSpan) CheckError!void {
+        if (self.typeParamIndex(pattern, type_params)) |index| {
+            try self.recordInference(index, actual, inferred, span);
+            return;
+        }
+        switch (self.module.types.kind(pattern)) {
+            .pointer => |pattern_pointer| {
+                const actual_pointer = switch (self.module.types.kind(actual)) {
+                    .pointer => |pointer| pointer,
+                    else => {
+                        try self.reportAt(.UnsupportedGenericInstantiation, "generic pointer parameter requires pointer argument", span);
+                        return error.InvalidSemanticModule;
+                    },
+                };
+                try self.inferType(pattern_pointer.pointee, actual_pointer.pointee, type_params, inferred, span);
+            },
+            .type_param => {
+                try self.reportAt(.UnsupportedGenericInstantiation, "unsupported generic type parameter pattern", span);
+                return error.InvalidSemanticModule;
+            },
+            else => if (!sameType(pattern, actual)) {
+                try self.reportAt(.InvalidCall, "function call argument type mismatch", span);
+                return error.InvalidSemanticModule;
+            },
+        }
+    }
+
+    fn recordInference(self: *Checker, index: usize, actual: types.TypeId, inferred: []?types.TypeId, span: diagnostics.SourceSpan) CheckError!void {
+        if (inferred[index]) |existing| {
+            if (!sameType(existing, actual)) {
+                try self.reportAt(.GenericTypeInferenceConflict, "generic type inference produced conflicting concrete types", span);
+                return error.InvalidSemanticModule;
+            }
+        } else {
+            inferred[index] = actual;
+        }
+    }
+
+    fn typeParamIndex(self: *Checker, type_id: types.TypeId, type_params: []const hir.HirTypeParam) ?usize {
+        _ = self;
+        for (type_params, 0..) |param, index| {
+            if (sameType(type_id, param.type_id)) return index;
+        }
+        return null;
+    }
+
+    fn cloneGenericFunction(self: *Checker, generic_id: hir.GenericFunctionId, concrete_types: []const types.TypeId, span: diagnostics.SourceSpan) CheckError!hir.FunctionId {
+        const generic = self.module.hir.getGenericFunction(generic_id).*;
+        const source_function = self.module.hir.getFunction(generic.function).*;
+        const subst = TypeSubstitution{ .type_params = generic.type_params, .concrete_types = concrete_types };
+        const generated_name = try self.instantiatedFunctionName(source_function.name, concrete_types);
+        const return_type = try self.substituteType(source_function.return_type, subst, span);
+        const function_id = try self.module.hir.addFunctionWithSafety(generated_name, return_type, source_function.is_unsafe, source_function.span);
+        self.module.hir.markFunctionInstantiation(function_id);
+
+        var param_map = std.AutoHashMap(hir.ParamId, hir.ParamId).init(self.allocator);
+        defer param_map.deinit();
+        var local_map = std.AutoHashMap(hir.LocalId, hir.LocalId).init(self.allocator);
+        defer local_map.deinit();
+
+        for (source_function.params) |old_param_id| {
+            const old_param = self.module.hir.getParam(old_param_id);
+            const new_type = try self.substituteType(old_param.type_id, subst, old_param.span);
+            const new_param = try self.module.hir.addParam(function_id, old_param.name, new_type, old_param.span);
+            try param_map.put(old_param_id, new_param);
+        }
+        for (source_function.locals) |old_local_id| {
+            const old_local = self.module.hir.getLocal(old_local_id);
+            const new_type = try self.substituteType(old_local.type_id, subst, old_local.span);
+            const new_local = try self.module.hir.addLocal(function_id, old_local.name, new_type, old_local.span);
+            try local_map.put(old_local_id, new_local);
+        }
+        if (source_function.body) |body| {
+            const new_body = try self.cloneStmt(body, subst, &param_map, &local_map, function_id, span);
+            self.module.hir.setFunctionBody(function_id, new_body);
+        }
+        return function_id;
+    }
+
+    fn substituteType(self: *Checker, type_id: types.TypeId, subst: TypeSubstitution, span: diagnostics.SourceSpan) CheckError!types.TypeId {
+        if (self.typeParamIndex(type_id, subst.type_params)) |index| return subst.concrete_types[index];
+        return switch (self.module.types.kind(type_id)) {
+            .pointer => |pointer| try self.module.types.addPointerType(try self.substituteType(pointer.pointee, subst, span)),
+            .type_param => {
+                try self.reportAt(.UnsupportedGenericInstantiation, "unsupported type parameter in generic instantiation", span);
+                return error.InvalidSemanticModule;
+            },
+            else => type_id,
+        };
+    }
+
+    fn cloneStmt(self: *Checker, stmt_id: hir.StmtId, subst: TypeSubstitution, param_map: *std.AutoHashMap(hir.ParamId, hir.ParamId), local_map: *std.AutoHashMap(hir.LocalId, hir.LocalId), function_id: hir.FunctionId, span: diagnostics.SourceSpan) CheckError!hir.StmtId {
+        const stmt = self.module.hir.getStmt(stmt_id).*;
+        const kind: hir.HirStmtKind = switch (stmt.kind) {
+            .block => |children| blk: {
+                var new_children = try self.allocator.alloc(hir.StmtId, children.len);
+                errdefer self.allocator.free(new_children);
+                for (children, 0..) |child, index| new_children[index] = try self.cloneStmt(child, subst, param_map, local_map, function_id, span);
+                break :blk .{ .block = new_children };
+            },
+            .return_stmt => |maybe_value| .{ .return_stmt = if (maybe_value) |value| try self.cloneExpr(value, subst, param_map, local_map, span) else null },
+            .local_decl => |decl| .{ .local_decl = .{ .local = local_map.get(decl.local).?, .initializer = try self.cloneExpr(decl.initializer, subst, param_map, local_map, span) } },
+            .assignment => |assignment| .{ .assignment = .{ .target = self.cloneAssignTarget(assignment.target, param_map, local_map), .value = try self.cloneExpr(assignment.value, subst, param_map, local_map, span) } },
+            .expr_stmt => |expr_id| .{ .expr_stmt = try self.cloneExpr(expr_id, subst, param_map, local_map, span) },
+            .discard_stmt => |expr_id| .{ .discard_stmt = try self.cloneExpr(expr_id, subst, param_map, local_map, span) },
+            .if_stmt => |if_stmt| .{ .if_stmt = .{
+                .condition = try self.cloneExpr(if_stmt.condition, subst, param_map, local_map, span),
+                .then_block = try self.cloneStmt(if_stmt.then_block, subst, param_map, local_map, function_id, span),
+                .else_block = if (if_stmt.else_block) |else_block| try self.cloneStmt(else_block, subst, param_map, local_map, function_id, span) else null,
+            } },
+            .while_stmt => |while_stmt| .{ .while_stmt = .{ .condition = try self.cloneExpr(while_stmt.condition, subst, param_map, local_map, span), .body = try self.cloneStmt(while_stmt.body, subst, param_map, local_map, function_id, span) } },
+            .unsafe_block => |body| .{ .unsafe_block = try self.cloneStmt(body, subst, param_map, local_map, function_id, span) },
+            .match_stmt => |match_stmt| blk: {
+                var arms = try self.allocator.alloc(hir.HirMatchArm, match_stmt.arms.len);
+                errdefer self.allocator.free(arms);
+                for (match_stmt.arms, 0..) |arm, index| arms[index] = .{ .pattern = try self.clonePattern(arm.pattern, param_map, local_map), .pattern_span = arm.pattern_span, .body = try self.cloneStmt(arm.body, subst, param_map, local_map, function_id, span) };
+                break :blk .{ .match_stmt = .{ .scrutinee = try self.cloneExpr(match_stmt.scrutinee, subst, param_map, local_map, span), .arms = arms } };
+            },
+        };
+        return self.module.hir.addStmt(kind, stmt.span);
+    }
+
+    fn cloneExpr(self: *Checker, expr_id: hir.ExprId, subst: TypeSubstitution, param_map: *std.AutoHashMap(hir.ParamId, hir.ParamId), local_map: *std.AutoHashMap(hir.LocalId, hir.LocalId), span: diagnostics.SourceSpan) CheckError!hir.ExprId {
+        const expr = self.module.hir.getExpr(expr_id).*;
+        const kind: hir.HirExprKind = switch (expr.kind) {
+            .int_literal => |text| .{ .int_literal = try self.allocator.dupe(u8, text) },
+            .bool_literal => |value| .{ .bool_literal = value },
+            .local_ref => |id| .{ .local_ref = local_map.get(id).? },
+            .param_ref => |id| .{ .param_ref = param_map.get(id).? },
+            .call => |call| blk: {
+                var args = try self.allocator.alloc(hir.ExprId, call.args.len);
+                errdefer self.allocator.free(args);
+                for (call.args, 0..) |arg, index| args[index] = try self.cloneExpr(arg, subst, param_map, local_map, span);
+                break :blk .{ .call = .{ .function = call.function, .args = args } };
+            },
+            .enum_constructor => |constructor| blk: {
+                var args = try self.allocator.alloc(hir.ExprId, constructor.args.len);
+                errdefer self.allocator.free(args);
+                for (constructor.args, 0..) |arg, index| args[index] = try self.cloneExpr(arg, subst, param_map, local_map, span);
+                break :blk .{ .enum_constructor = .{ .enum_id = constructor.enum_id, .variant_id = constructor.variant_id, .args = args } };
+            },
+            .struct_literal => |literal| blk: {
+                var fields = try self.allocator.alloc(hir.HirStructLiteralField, literal.fields.len);
+                errdefer self.allocator.free(fields);
+                for (literal.fields, 0..) |field, index| fields[index] = .{ .field_id = field.field_id, .value = try self.cloneExpr(field.value, subst, param_map, local_map, span), .span = field.span };
+                break :blk .{ .struct_literal = .{ .struct_id = literal.struct_id, .type_id = try self.substituteType(literal.type_id, subst, span), .fields = fields } };
+            },
+            .field_access => |field_access| .{ .field_access = .{ .receiver = try self.cloneExpr(field_access.receiver, subst, param_map, local_map, span), .field_name = field_access.field_name, .field_span = field_access.field_span } },
+            .decide => |decide| blk: {
+                var arms = try self.allocator.alloc(hir.HirDecideArm, decide.arms.len);
+                errdefer self.allocator.free(arms);
+                for (decide.arms, 0..) |arm, index| arms[index] = .{ .variant_id = arm.variant_id, .condition = if (arm.condition) |condition| try self.cloneExpr(condition, subst, param_map, local_map, span) else null, .score = try self.cloneExpr(arm.score, subst, param_map, local_map, span), .span = arm.span };
+                break :blk .{ .decide = .{ .enum_type = try self.substituteType(decide.enum_type, subst, span), .enum_id = decide.enum_id, .arms = arms } };
+            },
+            .group => |inner| .{ .group = try self.cloneExpr(inner, subst, param_map, local_map, span) },
+            .unary => |unary| .{ .unary = .{ .op = unary.op, .operand = try self.cloneExpr(unary.operand, subst, param_map, local_map, span) } },
+            .address_of => |operand| .{ .address_of = try self.cloneExpr(operand, subst, param_map, local_map, span) },
+            .deref => |operand| .{ .deref = try self.cloneExpr(operand, subst, param_map, local_map, span) },
+            .try_expr => |operand| .{ .try_expr = try self.cloneExpr(operand, subst, param_map, local_map, span) },
+            .binary => |binary| .{ .binary = .{ .op = binary.op, .left = try self.cloneExpr(binary.left, subst, param_map, local_map, span), .right = try self.cloneExpr(binary.right, subst, param_map, local_map, span) } },
+        };
+        return self.module.hir.addExpr(kind, expr.span);
+    }
+
+    fn cloneAssignTarget(self: *Checker, target: hir.AssignTarget, param_map: *std.AutoHashMap(hir.ParamId, hir.ParamId), local_map: *std.AutoHashMap(hir.LocalId, hir.LocalId)) hir.AssignTarget {
+        return switch (target) {
+            .local => |id| .{ .local = local_map.get(id).? },
+            .param => |id| .{ .param = param_map.get(id).? },
+            .field => |field| .{ .field = .{ .base = self.cloneAssignBase(field.base, param_map, local_map), .field_id = field.field_id, .field_span = field.field_span } },
+        };
+    }
+
+    fn cloneAssignBase(self: *Checker, base: hir.AssignBase, param_map: *std.AutoHashMap(hir.ParamId, hir.ParamId), local_map: *std.AutoHashMap(hir.LocalId, hir.LocalId)) hir.AssignBase {
+        _ = self;
+        return switch (base) {
+            .local => |id| .{ .local = local_map.get(id).? },
+            .param => |id| .{ .param = param_map.get(id).? },
+        };
+    }
+
+    fn clonePattern(self: *Checker, pattern: hir.HirMatchPattern, param_map: *std.AutoHashMap(hir.ParamId, hir.ParamId), local_map: *std.AutoHashMap(hir.LocalId, hir.LocalId)) CheckError!hir.HirMatchPattern {
+        _ = param_map;
+        return switch (pattern) {
+            .int_literal => |text| .{ .int_literal = try self.allocator.dupe(u8, text) },
+            .bool_literal => |value| .{ .bool_literal = value },
+            .wildcard => .wildcard,
+            .enum_variant => |variant| blk: {
+                var bindings = try self.allocator.alloc(hir.HirPatternBinding, variant.bindings.len);
+                errdefer self.allocator.free(bindings);
+                for (variant.bindings, 0..) |binding, index| {
+                    bindings[index] = binding;
+                    bindings[index].local = local_map.get(binding.local).?;
+                }
+                break :blk .{ .enum_variant = .{ .enum_id = variant.enum_id, .variant_id = variant.variant_id, .bindings = bindings } };
+            },
+        };
+    }
+
+    fn instantiatedFunctionName(self: *Checker, base_name: hir.SymbolId, concrete_types: []const types.TypeId) CheckError!hir.SymbolId {
+        var base_buffer: std.Io.Writer.Allocating = .init(self.allocator);
+        defer base_buffer.deinit();
+        try base_buffer.writer.writeAll(self.module.interner.text(base_name));
+        try base_buffer.writer.writeAll("__");
+        for (concrete_types, 0..) |type_id, index| {
+            if (index != 0) try base_buffer.writer.writeAll("__");
+            try self.writeTypeSuffix(&base_buffer.writer, type_id);
+        }
+
+        const candidate = try self.module.interner.intern(base_buffer.written());
+        if (!self.functionNameExists(candidate)) return candidate;
+
+        var suffix: usize = 0;
+        while (true) : (suffix += 1) {
+            const text = try std.fmt.allocPrint(self.allocator, "{s}__inst{d}", .{ base_buffer.written(), suffix });
+            defer self.allocator.free(text);
+            const suffixed = try self.module.interner.intern(text);
+            if (!self.functionNameExists(suffixed)) return suffixed;
+        }
+    }
+
+    fn functionNameExists(self: *Checker, name: hir.SymbolId) bool {
+        for (self.module.hir.functions.items) |function| {
+            if (function.name.index == name.index) return true;
+        }
+        for (self.module.hir.generic_functions.items) |generic| {
+            if (generic.name.index == name.index) return true;
+        }
+        return false;
+    }
+
+    fn writeTypeSuffix(self: *Checker, writer: *std.Io.Writer, type_id: types.TypeId) CheckError!void {
+        switch (self.module.types.kind(type_id)) {
+            .void => try writer.writeAll("void"),
+            .int => try writer.writeAll("int"),
+            .bool => try writer.writeAll("bool"),
+            .struct_type => |struct_id| try writer.print("struct_{s}", .{self.module.interner.text(self.module.hir.getStruct(struct_id).name)}),
+            .enum_type => |enum_id| try writer.print("enum_{s}", .{self.module.interner.text(self.module.hir.getEnum(enum_id).name)}),
+            .pointer => |pointer| {
+                try self.writeTypeSuffix(writer, pointer.pointee);
+                try writer.writeAll("_ptr");
+            },
+            .type_param => try writer.writeAll("type_param"),
+        }
     }
 
     fn structType(self: *Checker, struct_id: hir.StructId) CheckError!types.TypeId {

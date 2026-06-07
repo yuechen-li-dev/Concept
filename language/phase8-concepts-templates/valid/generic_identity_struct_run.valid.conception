@@ -1,0 +1,28 @@
+# name: generic identity struct run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+struct Vec2 {
+    int x;
+    int y;
+};
+
+template<T>
+T identity(T value) {
+    return value;
+}
+
+int main() {
+    Vec2 v = identity(Vec2 {
+        x: 4,
+        y: 5,
+    });
+
+    return v.x;
+}
+
+=== run ===
+exit_code: 4

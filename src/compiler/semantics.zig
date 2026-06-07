@@ -692,6 +692,7 @@ const BodyLowerer = struct {
                     return null;
                 }) {
                     .function => |id| id,
+                    .generic_function => |id| self.collector.module.hir.getGenericFunction(id).function,
                     else => {
                         try self.collector.diagnostics.append(diagnostics.unknownFunction(call.callee.span));
                         return null;

@@ -746,6 +746,42 @@ test "language check fixture: phase8 generic main not concrete" {
     try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/template_generic_main_not_concrete.invalid.conception");
 }
 
+test "language run fixture: phase8 generic identity int" {
+    try expectRunFixture("../../../language/phase8-concepts-templates/valid/generic_identity_int_run.valid.conception");
+}
+
+test "language run fixture: phase8 generic identity bool" {
+    try expectRunFixture("../../../language/phase8-concepts-templates/valid/generic_identity_bool_run.valid.conception");
+}
+
+test "language run fixture: phase8 generic choose int" {
+    try expectRunFixture("../../../language/phase8-concepts-templates/valid/generic_choose_int_run.valid.conception");
+}
+
+test "language run fixture: phase8 generic identity struct" {
+    try expectRunFixture("../../../language/phase8-concepts-templates/valid/generic_identity_struct_run.valid.conception");
+}
+
+test "language run fixture: phase8 generic reuse instantiation" {
+    try expectRunFixture("../../../language/phase8-concepts-templates/valid/generic_reuse_instantiation_run.valid.conception");
+}
+
+test "language check fixture: phase8 generic call arity mismatch" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/generic_call_arity_mismatch.invalid.conception");
+}
+
+test "language check fixture: phase8 generic inference conflict" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/generic_inference_conflict.invalid.conception");
+}
+
+test "language check fixture: phase8 generic uninferred type param" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/generic_uninferred_type_param.invalid.conception");
+}
+
+test "language check fixture: phase8 generic constrained unsupported" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/generic_constrained_call_unsupported.invalid.conception");
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Phase execution helpers
 // ─────────────────────────────────────────────────────────────────────────────

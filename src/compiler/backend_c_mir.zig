@@ -1427,3 +1427,39 @@ test "MIR C backend Phase 7 closeout struct runtime snapshot" {
     try std.testing.expect(std.mem.indexOf(u8, c_source, " = cpt_f_makeVec(3, 4);") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, "return cpt_f_sum(cpt_l_v_") != null);
 }
+
+test "MIR C backend emits deterministic generic instantiation names" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\
+        \\template<T>
+        \\T identity(T value) {
+        \\    return value;
+        \\}
+        \\
+        \\int main() {
+        \\    int a = identity(3);
+        \\    int b = identity(4);
+        \\    if (identity(true)) {
+        \\        return a + b;
+        \\    }
+        \\    return 0;
+        \\}
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "int cpt_f_identity__int(int cpt_p_value_") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "int cpt_f_identity__bool(int cpt_p_value_") != null);
+    try std.testing.expectEqual(@as(usize, 2), countOccurrences(c_source, "cpt_f_identity__int("));
+    try std.testing.expectEqual(@as(usize, 2), countOccurrences(c_source, "cpt_f_identity__bool("));
+}
+
+fn countOccurrences(haystack: []const u8, needle: []const u8) usize {
+    var count: usize = 0;
+    var start: usize = 0;
+    while (std.mem.indexOf(u8, haystack[start..], needle)) |offset| {
+        count += 1;
+        start += offset + needle.len;
+    }
+    return count;
+}
