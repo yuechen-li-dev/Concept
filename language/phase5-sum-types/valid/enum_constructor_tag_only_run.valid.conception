@@ -1,0 +1,22 @@
+# name: phase5 enum constructor tag only run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+enum Status {
+    Ready,
+    Done,
+};
+
+int main() {
+    Status status = Status::Done;
+    match (status) {
+        Status::Ready => return 1;
+        Status::Done => return 6;
+    }
+}
+
+=== run ===
+exit_code: 6

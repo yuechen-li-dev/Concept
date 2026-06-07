@@ -1,0 +1,3 @@
+MirModule
+  # phase5 result_try_success snapshot guards try success continuation lowering.
+  # Expected stable operations: Call parseInt, EnumTag, SwitchInt Ok case, EnumPayloadField Ok payload, continuation block return Ok.

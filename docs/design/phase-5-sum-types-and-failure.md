@@ -505,3 +505,11 @@ P5-M7 adds the first executable `try` propagation path for concrete Result-shape
 `try` is a prefix expression and lowers away during HIR-to-MIR lowering. The lowering evaluates the operand, extracts its enum tag, switches to an `Ok` block or an `Err` block, extracts the `Ok` payload in the success path, and returns the original result temporary in the failure path. The C backend does not need a direct `try` primitive because it already emits the enum tag, payload extraction, switch/goto, and return operations represented in MIR.
 
 Cross-result error conversion, implicit conversion between error payloads, and a generic `Result<T, E>` remain future work. P5-M7 only supports concrete, already-declared Result-shaped enums.
+
+### P5-M8 backend/runtime stabilization checkpoint
+
+P5-M8 adds stabilization coverage for the existing Phase 5 enum/result/try runtime path without adding new language semantics. The checkpoint focuses on representative evidence for the authoritative executable path: parse, semantic collection and HIR lowering, HIR executable checking, HIR-to-MIR lowering, MIR validation, MIR-backed C emission, `zig cc`, and executable exit-code fixtures.
+
+The milestone adds explicit corpus snapshots for Phase 5 MIR and MIR-backed C output around enum constructor lowering, payload enum layout, enum tag switching, payload extraction, strict Result-shaped `try` success/failure propagation, and multi-`try` control flow. It also expands valid and invalid `.conception` fixtures so `must_use`/`discard`, Result-shaped metadata, enum constructor diagnostics, enum pattern diagnostics, payload binding diagnostics, and `try` diagnostics are covered by stable fixture names.
+
+No new syntax, generic `Result<T, E>`, cross-result conversion, implicit `Err` conversion, user field access, storage liveness, move/borrow/drop checking, unsafe/raw pointer behavior, struct runtime layout, imports, or final ABI mangling are introduced by P5-M8. Phase 5 closeout remains P5-M9.

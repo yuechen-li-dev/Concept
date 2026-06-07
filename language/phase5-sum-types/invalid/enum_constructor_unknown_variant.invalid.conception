@@ -1,0 +1,18 @@
+# name: phase5 enum constructor unknown variant
+# phase: check
+# check: declarations
+# expect: fail
+# diagnostics: CON0035
+
+=== source ===
+module Main;
+
+enum Status {
+    Ok,
+    Err,
+};
+
+int main() {
+    Status status = Status::Missing;
+    return 0;
+}

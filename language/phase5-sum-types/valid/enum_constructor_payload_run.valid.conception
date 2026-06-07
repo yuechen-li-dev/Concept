@@ -1,0 +1,22 @@
+# name: phase5 enum constructor payload run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+enum ParseResult {
+    Value(int value),
+    Missing,
+};
+
+int main() {
+    ParseResult result = ParseResult::Value(11);
+    match (result) {
+        ParseResult::Value(value) => return value;
+        ParseResult::Missing => return 0;
+    }
+}
+
+=== run ===
+exit_code: 11

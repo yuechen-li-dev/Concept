@@ -1,0 +1,18 @@
+# name: phase5 enum constructor arity mismatch
+# phase: check
+# check: declarations
+# expect: fail
+# diagnostics: CON0036
+
+=== source ===
+module Main;
+
+enum ParseResult {
+    Ok(int value),
+    Err(int code),
+};
+
+int main() {
+    ParseResult result = ParseResult::Ok;
+    return 0;
+}

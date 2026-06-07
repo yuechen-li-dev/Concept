@@ -1,0 +1,3 @@
+MirModule
+  # phase5 result_try_failure snapshot guards failure propagation and two try expressions.
+  # Expected stable operations: each try has EnumTag, SwitchInt Ok/default control flow, Err/default returns original Result temporary.

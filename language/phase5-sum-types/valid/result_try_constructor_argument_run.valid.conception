@@ -1,0 +1,30 @@
+# name: phase5 result try constructor argument run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+must_use enum ParseIntResult {
+    Ok(int value),
+    Err(int code),
+};
+
+ParseIntResult parseInt(int value) {
+    return ParseIntResult::Ok(value);
+}
+
+ParseIntResult wrap(int value) {
+    return ParseIntResult::Ok(try parseInt(value));
+}
+
+int main() {
+    ParseIntResult result = wrap(14);
+    match (result) {
+        ParseIntResult::Ok(value) => return value;
+        ParseIntResult::Err(code) => return code;
+    }
+}
+
+=== run ===
+exit_code: 14

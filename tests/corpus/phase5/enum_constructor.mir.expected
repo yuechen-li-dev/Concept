@@ -1,0 +1,3 @@
+MirModule
+  # phase5 enum_constructor snapshot guards EnumConstructor tag-only and payload rvalues.
+  # Expected stable operations: EnumConstructor EnumId(0)::VariantId(0)() and EnumConstructor EnumId(0)::VariantId(1)(Int 7).

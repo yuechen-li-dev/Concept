@@ -1,0 +1,15 @@
+module Main;
+
+enum Status {
+    Ok,
+    Err(int code),
+};
+
+int main() {
+    Status ok = Status::Ok;
+    Status err = Status::Err(7);
+    match (err) {
+        Status::Ok => return 0;
+        Status::Err(code) => return code;
+    }
+}

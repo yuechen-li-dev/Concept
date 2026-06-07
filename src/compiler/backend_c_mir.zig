@@ -618,6 +618,18 @@ test "MIR C backend corpus snapshot: phase4 if match" {
     try expectEmitCorpus("../../tests/corpus/phase4/mir_c_if_match.concept", "../../tests/corpus/phase4/mir_c_if_match.c.expected");
 }
 
+test "MIR C backend corpus snapshot: phase5 enum payload layout" {
+    try expectEmitCorpus("../../tests/corpus/phase5/enum_constructor.concept", "../../tests/corpus/phase5/enum_payload_layout.c.expected");
+}
+
+test "MIR C backend corpus snapshot: phase5 enum match payload" {
+    try expectEmitCorpus("../../tests/corpus/phase5/enum_match_payload.concept", "../../tests/corpus/phase5/enum_match_payload.c.expected");
+}
+
+test "MIR C backend corpus snapshot: phase5 result try" {
+    try expectEmitCorpus("../../tests/corpus/phase5/result_try_failure.concept", "../../tests/corpus/phase5/result_try.c.expected");
+}
+
 test "MIR C backend emits void helper prototype with backend-owned function name" {
     try expectEmit(
         "module Main; void helper() { return; } int main() { return 0; }",

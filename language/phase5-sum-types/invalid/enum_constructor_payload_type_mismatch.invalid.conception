@@ -1,0 +1,18 @@
+# name: phase5 enum constructor payload type mismatch
+# phase: check
+# check: hir
+# expect: fail
+# diagnostics: CON0037
+
+=== source ===
+module Main;
+
+enum ParseResult {
+    Ok(int value),
+    Err(int code),
+};
+
+int main() {
+    ParseResult result = ParseResult::Ok(true);
+    return 0;
+}

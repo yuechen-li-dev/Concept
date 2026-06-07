@@ -915,6 +915,22 @@ test "MIR corpus snapshot: phase4 if match" {
     try expectMirCorpus("../../../tests/corpus/phase4/mir_if_match.concept", "../../../tests/corpus/phase4/mir_if_match.mir.expected");
 }
 
+test "MIR corpus snapshot: phase5 enum constructor" {
+    try expectMirCorpus("../../../tests/corpus/phase5/enum_constructor.concept", "../../../tests/corpus/phase5/enum_constructor.mir.expected");
+}
+
+test "MIR corpus snapshot: phase5 enum match payload" {
+    try expectMirCorpus("../../../tests/corpus/phase5/enum_match_payload.concept", "../../../tests/corpus/phase5/enum_match_payload.mir.expected");
+}
+
+test "MIR corpus snapshot: phase5 result try success" {
+    try expectMirCorpus("../../../tests/corpus/phase5/result_try_success.concept", "../../../tests/corpus/phase5/result_try_success.mir.expected");
+}
+
+test "MIR corpus snapshot: phase5 result try failure" {
+    try expectMirCorpus("../../../tests/corpus/phase5/result_try_failure.concept", "../../../tests/corpus/phase5/result_try_failure.mir.expected");
+}
+
 test "language MIR fixture: phase4 return literal" {
     try expectMirFixture("../../../language/phase4-mir/valid/mir_return_literal.valid.conception");
 }
@@ -1169,6 +1185,14 @@ test "language check fixture: phase2 closeout match duplicate pattern" {
     try expectCheckFixture("../../../language/phase2-execution/invalid/phase2_match_duplicate_pattern.invalid.conception");
 }
 
+test "language run fixture: phase5 enum constructor tag only run" {
+    try expectRunFixture("../../../language/phase5-sum-types/valid/enum_constructor_tag_only_run.valid.conception");
+}
+
+test "language run fixture: phase5 enum constructor payload run" {
+    try expectRunFixture("../../../language/phase5-sum-types/valid/enum_constructor_payload_run.valid.conception");
+}
+
 test "language run fixture: phase5 enum match tag only" {
     try expectRunFixture("../../../language/phase5-sum-types/valid/enum_match_tag_only.valid.conception");
 }
@@ -1183,6 +1207,22 @@ test "language run fixture: phase5 enum match wildcard" {
 
 test "language run fixture: phase5 enum match function return" {
     try expectRunFixture("../../../language/phase5-sum-types/valid/enum_match_function_return.valid.conception");
+}
+
+test "language check fixture: phase5 enum constructor unknown enum" {
+    try expectCheckFixture("../../../language/phase5-sum-types/invalid/enum_constructor_unknown_enum.invalid.conception");
+}
+
+test "language check fixture: phase5 enum constructor unknown variant" {
+    try expectCheckFixture("../../../language/phase5-sum-types/invalid/enum_constructor_unknown_variant.invalid.conception");
+}
+
+test "language check fixture: phase5 enum constructor arity mismatch" {
+    try expectCheckFixture("../../../language/phase5-sum-types/invalid/enum_constructor_arity_mismatch.invalid.conception");
+}
+
+test "language check fixture: phase5 enum constructor payload type mismatch" {
+    try expectCheckFixture("../../../language/phase5-sum-types/invalid/enum_constructor_payload_type_mismatch.invalid.conception");
 }
 
 test "language check fixture: phase5 enum match unknown variant" {
@@ -1303,6 +1343,30 @@ test "language run fixture: phase5 try failure propagates" {
 
 test "language run fixture: phase5 try inside binary" {
     try expectRunFixture("../../../language/phase5-sum-types/valid/try_inside_binary.valid.conception");
+}
+
+test "language run fixture: phase5 result try failure run" {
+    try expectRunFixture("../../../language/phase5-sum-types/valid/result_try_failure_run.valid.conception");
+}
+
+test "language run fixture: phase5 result try two success run" {
+    try expectRunFixture("../../../language/phase5-sum-types/valid/result_try_two_success_run.valid.conception");
+}
+
+test "language run fixture: phase5 result try binary lhs run" {
+    try expectRunFixture("../../../language/phase5-sum-types/valid/result_try_binary_lhs_run.valid.conception");
+}
+
+test "language run fixture: phase5 result try constructor argument run" {
+    try expectRunFixture("../../../language/phase5-sum-types/valid/result_try_constructor_argument_run.valid.conception");
+}
+
+test "language run fixture: phase5 result try call argument run" {
+    try expectRunFixture("../../../language/phase5-sum-types/valid/result_try_call_argument_run.valid.conception");
+}
+
+test "language run fixture: phase5 must use match result run" {
+    try expectRunFixture("../../../language/phase5-sum-types/valid/must_use_match_result_run.valid.conception");
 }
 
 test "language check fixture: phase5 try operand not result" {
