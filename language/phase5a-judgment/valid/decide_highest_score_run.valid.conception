@@ -1,0 +1,35 @@
+# name: phase5a decide highest score run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+enum AlertChannel {
+    Nominal,
+    Advisory,
+    Warning,
+    Critical,
+};
+
+int main() {
+    bool fault = true;
+    int temperature = 800;
+
+    AlertChannel channel = decide AlertChannel {
+        Critical when fault && temperature > 900 score 120;
+        Warning when temperature > 750 score 85;
+        Advisory when temperature > 500 score 70;
+        Nominal score 0;
+    };
+
+    match (channel) {
+        AlertChannel::Critical => return 4;
+        AlertChannel::Warning => return 3;
+        AlertChannel::Advisory => return 2;
+        AlertChannel::Nominal => return 1;
+    }
+}
+
+=== run ===
+exit_code: 3

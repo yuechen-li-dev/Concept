@@ -1,0 +1,29 @@
+# name: phase5a decide negative score run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+enum Channel {
+    Nominal,
+    Advisory,
+    Warning,
+};
+
+int main() {
+    Channel channel = decide Channel {
+        Warning when true score -5;
+        Advisory when true score -10;
+        Nominal score -20;
+    };
+
+    match (channel) {
+        Channel::Warning => return 9;
+        Channel::Advisory => return 8;
+        Channel::Nominal => return 7;
+    }
+}
+
+=== run ===
+exit_code: 9

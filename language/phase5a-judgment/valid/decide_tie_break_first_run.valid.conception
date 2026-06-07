@@ -1,0 +1,29 @@
+# name: phase5a decide tie break first run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+enum Mode {
+    First,
+    Second,
+    Fallback,
+};
+
+int main() {
+    Mode mode = decide Mode {
+        First when true score 42;
+        Second when true score 42;
+        Fallback score 0;
+    };
+
+    match (mode) {
+        Mode::First => return 7;
+        Mode::Second => return 8;
+        Mode::Fallback => return 9;
+    }
+}
+
+=== run ===
+exit_code: 7
