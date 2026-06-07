@@ -86,25 +86,175 @@ P6-M4 adds no new pointer semantics. Pointer arithmetic, assignment through dere
 
 ### Unsafe/raw pointer slice status
 
-P6-M1 through P6-M4 establish the unsafe permission boundary and read-only raw-pointer flow through HIR, MIR, validation, C emission, fixtures, and runtime checks. The next P6 work may move toward initialization and `MaybeUninit`; ownership/drop can be split into a later phase if implementing it would over-expand the current scope.
+P6-M1 through P6-M4 establish the unsafe permission boundary and read-only raw-pointer flow through HIR, MIR, validation, C emission, fixtures, and runtime checks. Phase 6 closes around that implemented slice rather than forcing ownership/drop into an architecture that does not yet have runtime structs or rich places.
 
-## Non-goals
+## Phase 6 closeout status
+
+Phase 6 successfully implemented Concept's first unsafe permission boundary and read-only raw pointer flow. The closed P6 behavior is deliberately narrow: programmers can spell unsafe regions and unsafe functions, raw pointer values can move through ordinary checked code, and actual pointer reads require an explicit unsafe context.
+
+Unsafe blocks are the lexical permission boundary:
+
+```cpp
+unsafe {
+    // checked normally, but permits unsafe operations
+}
+```
+
+Unsafe functions mark a call-site obligation and check their bodies in unsafe context:
+
+```cpp
+unsafe int read(int* p) {
+    return *p;
+}
+```
+
+The implemented unsafe-call rules are:
+
+- Calling unsafe functions requires an unsafe context.
+- Unsafe function bodies are checked in unsafe context.
+- `unsafe` does not disable normal parsing, name resolution, type checking, executable-subset checking, MIR validation, or backend legality checks.
+
+The implemented raw pointer type surface includes builtin, void, and nominal pointees:
+
+```cpp
+int*
+bool*
+void*
+EnumType*
+```
+
+Pointer values now flow through supported checked paths as:
+
+- Function parameters.
+- Function return values.
+- Local declarations.
+- Assignments and local copies.
+- Function-call arguments.
+- MIR locals/operands/rvalues where supported.
+- MIR-backed C output for supported pointer reads.
+
+Address-of v0 supports locals and parameters only:
+
+```cpp
+int* p = &x;
+```
+
+Read-only dereference is implemented as a value expression and requires unsafe context:
+
+```cpp
+unsafe {
+    int value = *p;
+}
+```
+
+The dereference result type is the raw pointer pointee type. Assignment through dereference is intentionally not part of Phase 6.
+
+MIR and backend behavior for the closed slice is:
+
+- Address-of lowers to MIR `AddressOf(...)`.
+- Dereference lowers to MIR `Deref(...)`.
+- MIR validation checks supported address-of and dereference type relationships.
+- The C backend emits ordinary C `&...` and `*...` for supported cases.
+- No dedicated unsafe marker is emitted in generated C for P6 v0.
+
+## Phase 6 known limitations
 
 Phase 6 v0 explicitly does not include:
 
-- Rust-style borrow checking.
-- A region lifetime system.
-- Lifetime parameters.
-- A global proof that dangling references cannot occur.
-- A global proof that data races cannot occur.
-- A full effect system implementation.
-- State machines.
+- Pointer arithmetic.
+- Assignment through dereference.
+- A null literal.
+- Arbitrary address-of.
+- Field address-of.
+- Index address-of.
+- Pointer comparisons.
+- Owning pointer `own T*`.
+- References or borrow checking.
+- `MaybeUninit` implementation.
+- Explicit move implementation.
+- `Drop<T>` implementation.
+- Storage live/dead model.
+- Partial initialization tracking.
+- `unsafe impl`.
+- Volatile operations.
+- Atomics.
+- Address spaces.
+- Struct runtime layout.
+- Struct field access.
+- Templates or concept solving.
 - Comptime or reflection.
-- Templates or concept-solving implementation.
-- Volatile, atomics, or address-space implementation.
-- Struct layout or ABI finalization.
-- An LLVM or native backend.
+- Region lifetime system.
+- Lifetime parameters.
+- Global proof that dangling references cannot occur.
+- Global proof that data races cannot occur.
+- Full effect system implementation.
+- State machines.
+- LLVM or native backend.
 - Self-hosting.
+
+## Ownership prerequisite map
+
+Phase 6 should close before implementing `MaybeUninit`, explicit move, or `Drop<T>` because meaningful ownership/drop needs a richer place model than the compiler currently has. Current executable places are mostly locals and parameters, with only the first read-only pointer operations added in P6.
+
+Real ownership/drop semantics need values and places that can describe more than whole locals:
+
+- Field places such as `value.field`.
+- Deref places such as `*ptr` when write-through and ownership-sensitive operations exist.
+- Later index places such as `array[i]` or slice element places.
+- Runtime struct values with defined layout and construction rules.
+- Field access and field assignment.
+- MIR place projections that preserve the path from an aggregate root to a subplace.
+
+Without runtime structs and place projections, `Drop<T>`, partial initialization, and move semantics are mostly paper machinery: the compiler can describe whole-local states, but it cannot yet express the user-defined aggregate cases that make ownership and deterministic destruction valuable. Forcing ownership/drop into Phase 6 would either overfit to locals or create broad scaffolding with little real runtime behavior. Ownership, drop, move, and `MaybeUninit` should therefore be deferred until runtime structs and places exist.
+
+## Recommended next phase
+
+```text
+Phase 7: Runtime structs and places
+```
+
+Suggested ladder:
+
+```text
+P7-M0  Runtime structs and places design doc
+P7-M1  Struct runtime layout v0
+P7-M2  Struct literals / constructors
+P7-M3  Field access expressions
+P7-M4  Field assignment and place projections
+P7-M5  MIR place projections
+P7-M6  Struct params/returns/calls
+P7-M7  Runtime/backend fixtures and snapshots
+P7-M9  Closeout
+```
+
+This gives Concept real user-defined runtime data instead of only builtin scalars, enums, and raw pointer values. It is the prerequisite for meaningful move/drop semantics because ownership must track aggregate fields, partial initialization, and destruction order. It is also the prerequisite for meaningful concepts/templates over user-defined types: generic constraints become much more valuable once programs can define and pass real runtime structs.
+
+## Concepts/templates/comptime ordering
+
+Recommended order after Phase 6 closeout:
+
+```text
+Phase 7: runtime structs and places
+Phase 8: concepts and templates
+Phase 9: comptime v0
+Phase 10: ownership, move, Drop, MaybeUninit
+```
+
+Concepts and templates are central to Concept's identity and should not be deferred forever. They become much more meaningful after runtime structs/places exist because users can write constraints over real user-defined data rather than only the early scalar/enum subset.
+
+Ownership/drop should benefit from marker concepts before it becomes a full runtime feature. Useful markers include:
+
+- `Copy<T>`
+- `Move<T>`
+- `Trivial<T>`
+- `Relocatable<T>`
+- `Pod<T>`
+
+Comptime should follow concepts/templates because PoC3 treats comptime as not being the primary generic system. Phase 9 comptime should start hermetic and deterministic before any capability-bearing host effects are considered. Ownership, move, `Drop<T>`, and `MaybeUninit` should follow after marker concepts and a richer place model exist.
+
+## Non-goals
+
+The closeout limitations above are the operative Phase 6 non-goals. In short, Phase 6 closes unsafe/raw pointer v0 only; it does not add ownership, runtime structs, concepts/templates, comptime, effects, region lifetimes, or new backend targets.
 
 ## No region lifetime system
 
@@ -425,7 +575,7 @@ err:
 
 This shape makes destruction, error paths, and ownership transfer explicit before code generation. A backend should render pointer types, calls, and storage according to target representation, but it should not invent ownership semantics.
 
-## Proposed Phase 6 milestone ladder
+## Closed Phase 6 milestone ladder
 
 ```text
 P6-M0  Unsafe and ownership design doc
@@ -433,13 +583,12 @@ P6-M0  Unsafe and ownership design doc
 P6-M1  unsafe block/function surface
        - parser/AST/HIR for unsafe blocks/functions
        - unsafe context tracking
-       - no raw pointer deref yet or only guarded stubs
+       - unsafe call enforcement
 
 P6-M2  raw pointer type surface
        - T* type support in HIR/TypeStore
        - pointer locals/params/returns
        - C backend pointer type rendering
-       - no pointer arithmetic yet
 
 P6-M3  address-of and dereference v0
        - &x and *ptr for supported local/parameter places
@@ -450,41 +599,26 @@ P6-M4  pointer runtime fixtures and stabilization
        - C backend/run fixtures for simple pointer flow
        - invalid fixtures for unsafe boundary and unsupported address-of operands
 
-P6-M5  initialization and MaybeUninit design/scaffold
-       - use-before-init direction
-       - MaybeUninit surface/scaffold
-       - partial initialization deferred if too large
-
-P6-M6  explicit move expression
-       - move expr
-       - local use-after-move v0
-       - no full drop insertion yet
-
-P6-M7  Drop<T> surface/scaffold
-       - parse/semantic representation of impl Drop<T>
-       - no full automatic drop insertion unless ready
-
-P6-M8  MIR storage live/dead and drop-point scaffold
-       - explicit MIR storage states
-       - drop point representation
-       - use-before-init/use-after-move groundwork
-
-P6-M9  Phase 6 closeout or split ownership/drop into Phase 7
+P6-M5  closeout and ownership prerequisite map
+       - close unsafe/raw pointer v0
+       - defer ownership/drop/MaybeUninit until runtime structs and richer places exist
+       - recommend Phase 7 runtime structs and places
 ```
 
-Phase 6 may close after unsafe blocks/functions and raw pointers if ownership/drop scope grows too large. In that case, explicit move, Drop, full initialization tracking, and immovable types should move to Phase 7 with the Phase 6 direction preserved.
+The originally-considered ownership implementation milestones are intentionally not part of closed Phase 6. Explicit move, `Drop<T>`, full initialization tracking, storage live/dead states, and immovable types move to a later ownership phase after runtime structs, field places, MIR place projections, marker concepts, and the broader prerequisite map exist.
 
 ## Close criteria
 
-Phase 6 should be considered successful if:
+Phase 6 is considered successful because:
 
-- Unsafe blocks/functions are designed and at least partially implemented.
+- Unsafe blocks/functions are implemented.
+- Unsafe call enforcement is implemented.
 - Raw pointer types exist.
 - Raw pointer dereference requires `unsafe`.
 - Simple pointer programs run through MIR and the C backend.
 - Initialization, move, and Drop direction is documented.
-- At least one ownership scaffold exists, or ownership is explicitly split into Phase 7.
-- MIR storage/drop responsibilities are documented.
+- Ownership is explicitly deferred with prerequisite evidence.
+- MIR storage/drop responsibilities are documented as future work.
 - No region lifetime system is introduced.
 
 ## P6-M0 status

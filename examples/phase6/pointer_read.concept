@@ -1,0 +1,10 @@
+module Main;
+
+int main() {
+    int value = 7;
+    int* ptr = &value;
+
+    unsafe {
+        return *ptr;
+    }
+}

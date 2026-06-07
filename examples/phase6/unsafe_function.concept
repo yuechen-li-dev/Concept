@@ -1,0 +1,14 @@
+module Main;
+
+unsafe int read(int* ptr) {
+    return *ptr;
+}
+
+int main() {
+    int value = 9;
+    int* ptr = &value;
+
+    unsafe {
+        return read(ptr);
+    }
+}
