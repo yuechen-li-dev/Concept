@@ -1785,3 +1785,43 @@ test "language check fixture: phase7 field address-of non struct" {
 test "language check fixture: phase7 field address-of pointer receiver" {
     try expectCheckFixture("../../../language/phase7-runtime-structs/invalid/field_address_of_pointer_receiver.invalid.conception");
 }
+
+test "language check fixture: phase7 struct return literal" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/valid/struct_return_literal.valid.conception");
+}
+
+test "language check fixture: phase7 struct param call" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/valid/struct_param_call.valid.conception");
+}
+
+test "language check fixture: phase7 struct local from call" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/valid/struct_local_from_call.valid.conception");
+}
+
+test "language check fixture: phase7 struct return local" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/valid/struct_return_local.valid.conception");
+}
+
+test "language check fixture: phase7 struct return mismatch" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/invalid/struct_return_mismatch.invalid.conception");
+}
+
+test "language check fixture: phase7 struct call arg mismatch" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/invalid/struct_call_arg_mismatch.invalid.conception");
+}
+
+test "language check fixture: phase7 struct local initializer mismatch" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/invalid/struct_local_initializer_mismatch.invalid.conception");
+}
+
+test "language run fixture: phase7 struct return and call" {
+    try expectRunFixture("../../../language/phase7-runtime-structs/valid/struct_return_and_call_run.valid.conception");
+}
+
+test "language run fixture: phase7 struct return local" {
+    try expectRunFixture("../../../language/phase7-runtime-structs/valid/struct_return_local_run.valid.conception");
+}
+
+test "language run fixture: phase7 struct param field assignment" {
+    try expectRunFixture("../../../language/phase7-runtime-structs/valid/struct_param_field_assignment_run.valid.conception");
+}

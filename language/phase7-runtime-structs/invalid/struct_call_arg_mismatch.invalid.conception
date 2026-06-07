@@ -1,0 +1,25 @@
+# name: phase7 struct call arg mismatch
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+struct Vec2 { int x; int y; };
+struct Other { int x; int y; };
+
+int sum(Vec2 v) {
+    return v.x + v.y;
+}
+
+int main() {
+    Other other = Other {
+        x: 3,
+        y: 4,
+    };
+    return sum(other);
+}
+
+=== diagnostics ===
+CON0033

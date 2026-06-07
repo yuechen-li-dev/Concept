@@ -1,0 +1,25 @@
+# name: phase7 struct param field assignment run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+struct Box {
+    int value;
+};
+
+int bump(Box b) {
+    b.value = 12;
+    return b.value;
+}
+
+int main() {
+    Box b = Box {
+        value: 1,
+    };
+    return bump(b);
+}
+
+=== run ===
+exit_code: 12

@@ -1280,6 +1280,23 @@ test "MIR C backend emits enum raw pointer params and returns" {
     try std.testing.expect(std.mem.indexOf(u8, c_source, "return cpt_p_right_2;") != null);
 }
 
+test "MIR C backend emits struct value params returns and calls" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\struct Vec2 { int x; int y; };
+        \\Vec2 makeVec(int x, int y) { return Vec2 { x: x, y: y, }; }
+        \\int sum(Vec2 v) { return v.x + v.y; }
+        \\int main() { Vec2 v = makeVec(3, 4); return sum(v); }
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_struct_Vec2 cpt_f_makeVec(int cpt_p_x_0, int cpt_p_y_1);") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "int cpt_f_sum(cpt_struct_Vec2 cpt_p_v_2);") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_struct_Vec2 cpt_l_v_") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, " = cpt_f_makeVec(3, 4);") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "return cpt_f_sum(cpt_l_v_") != null);
+}
+
 test "MIR C backend emits supported struct raw pointer params and returns" {
     const c_source = try emitForTest(
         \\module Main;

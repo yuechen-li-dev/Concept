@@ -1,0 +1,24 @@
+# name: phase7 struct param call
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+struct Vec2 {
+    int x;
+    int y;
+};
+
+int sum(Vec2 v) {
+    return v.x + v.y;
+}
+
+int main() {
+    Vec2 v = Vec2 {
+        x: 3,
+        y: 4,
+    };
+    return sum(v);
+}
