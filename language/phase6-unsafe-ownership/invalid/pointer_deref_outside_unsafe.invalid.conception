@@ -1,0 +1,16 @@
+# name: pointer deref outside unsafe
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    int x = 7;
+    int* p = &x;
+    return *p;
+}
+
+=== diagnostics ===
+CON0073

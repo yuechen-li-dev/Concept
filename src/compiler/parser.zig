@@ -1062,6 +1062,28 @@ pub const Parser = struct {
             } };
             return node;
         }
+        if (self.current().kind == .ampersand or self.current().kind == .star) {
+            const op_token = self.advance();
+            var operand = self.parseUnaryExpr(allocator) catch |err| switch (err) {
+                error.OutOfMemory => return err,
+                error.ParseFailed => {
+                    const message = if (op_token.kind == .ampersand) "expected expression after '&'" else "expected expression after '*'";
+                    self.report(.UnexpectedToken, message, self.current().span) catch return error.OutOfMemory;
+                    return error.ParseFailed;
+                },
+            };
+            errdefer {
+                operand.deinit(allocator);
+                allocator.destroy(operand);
+            }
+            const node = try allocator.create(ast.Expr);
+            const node_span = ast.spanFromBounds(op_token.span.start, spanEnd(operand.span()));
+            node.* = if (op_token.kind == .ampersand)
+                .{ .address_of = .{ .operand = operand, .span = node_span } }
+            else
+                .{ .deref = .{ .operand = operand, .span = node_span } };
+            return node;
+        }
         if (unaryOp(self.current().kind)) |op| {
             const op_token = self.advance();
             var operand = try self.parseUnaryExpr(allocator);
@@ -2048,7 +2070,7 @@ pub const Parser = struct {
 
     fn isExprStmtStart(self: Parser) bool {
         return switch (self.current().kind) {
-            .identifier, .int_literal, .true, .false, .left_paren, .minus, .bang, .decide => true,
+            .identifier, .int_literal, .true, .false, .left_paren, .minus, .bang, .ampersand, .star, .decide => true,
             else => false,
         };
     }
@@ -4869,6 +4891,52 @@ test "AST snapshot debug output includes decide expression" {
         \\              Int 0
         \\
     , snapshot);
+}
+
+
+
+test "parses address-of and dereference prefix expressions" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; int main() { int x = 7; int* p = &x; unsafe { return *p; } }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.diagnostics.items.len);
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "AddressOf") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Deref") != null);
+}
+
+test "parses dereference in multiplicative expression" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; int main() { int* p = value; return 1 * *p; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.diagnostics.items.len);
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Binary *") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Deref") != null);
+}
+
+test "address-of and dereference require prefix operands" {
+    var amp_diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer amp_diagnostics.deinit();
+    const amp_unit = try parseTestSource("module Example; int main() { return &; }", &amp_diagnostics);
+    defer amp_unit.deinit(std.testing.allocator);
+    try std.testing.expect(amp_diagnostics.diagnostics.items.len != 0);
+    try std.testing.expectEqualStrings("expected expression after '&'", amp_diagnostics.diagnostics.items[0].message);
+
+    var star_diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer star_diagnostics.deinit();
+    const star_unit = try parseTestSource("module Example; int main() { return *; }", &star_diagnostics);
+    defer star_unit.deinit(std.testing.allocator);
+    try std.testing.expect(star_diagnostics.diagnostics.items.len != 0);
+    try std.testing.expectEqualStrings("expected expression after '*'", star_diagnostics.diagnostics.items[0].message);
 }
 
 test "parses unsafe block statement" {

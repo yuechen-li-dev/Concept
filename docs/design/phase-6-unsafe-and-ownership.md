@@ -470,3 +470,9 @@ Phase 6 should be considered successful if:
 ## P6-M0 status
 
 P6-M0 adds only this design document. It intentionally does not implement lexer, parser, AST, HIR, MIR, backend, fixture, unsafe syntax, pointer type, move, Drop, or ownership-checking changes.
+
+## P6-M3 status: address-of and dereference v0
+
+P6-M3 introduces the first raw pointer value operations. `&local` and `&param` create raw pointers to existing local or parameter storage, and read-only `*ptr` dereferences a raw pointer to produce the pointee value. Dereference is an unsafe operation: it is accepted only inside an `unsafe` block or an unsafe function body.
+
+This milestone deliberately keeps the surface narrow. Address-of does not yet apply to fields, indexes, temporaries, or arbitrary place expressions. Dereference is read-only; assignment through `*ptr` is not part of P6-M3. Pointer arithmetic, null literals, ownership, move/drop, references, borrow checking, MaybeUninit, volatile/atomics, address spaces, and struct runtime layout remain future work.

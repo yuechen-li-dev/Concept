@@ -293,6 +293,25 @@ const Checker = struct {
                     },
                 }
             },
+            .address_of => |operand| blk: {
+                const place_type = try self.addressableExprType(operand, expr.span);
+                break :blk try self.module.types.addPointerType(place_type);
+            },
+            .deref => |operand| blk: {
+                const operand_type = try self.checkExpr(return_type, operand);
+                const pointee = switch (self.module.types.kind(operand_type)) {
+                    .pointer => |pointer| pointer.pointee,
+                    else => {
+                        try self.reportAt(.DerefRequiresPointer, "dereference requires raw pointer operand", expr.span);
+                        return error.InvalidSemanticModule;
+                    },
+                };
+                if (self.unsafe_depth == 0) {
+                    try self.reportAt(.DerefRequiresUnsafe, "raw pointer dereference requires unsafe context", expr.span);
+                    return error.InvalidSemanticModule;
+                }
+                break :blk pointee;
+            },
             // ─────────────────────────────────────────────────────────────────────────────
             // Result/try checking
             // ─────────────────────────────────────────────────────────────────────────────
@@ -344,6 +363,20 @@ const Checker = struct {
     // ─────────────────────────────────────────────────────────────────────────────
     // Type helper functions
     // ─────────────────────────────────────────────────────────────────────────────
+
+
+    fn addressableExprType(self: *Checker, expr_id: hir.ExprId, span: diagnostics.SourceSpan) CheckError!types.TypeId {
+        const expr = self.module.hir.getExpr(expr_id).*;
+        return switch (expr.kind) {
+            .local_ref => |local_id| self.module.hir.getLocal(local_id).type_id,
+            .param_ref => |param_id| self.module.hir.getParam(param_id).type_id,
+            .group => |inner| try self.addressableExprType(inner, span),
+            else => {
+                try self.reportAt(.AddressOfRequiresPlace, "address-of requires a local or parameter place", span);
+                return error.InvalidSemanticModule;
+            },
+        };
+    }
 
     fn enumType(self: *Checker, enum_id: hir.EnumId) CheckError!types.TypeId {
         for (self.module.types.types.items, 0..) |kind, index| {
@@ -609,6 +642,76 @@ test "HIR checker accepts pointer return local copy and call argument" {
     _ = try addMainReturnInt(&tm, "0");
 
     try tm.checkPass();
+}
+
+
+
+test "HIR checker accepts address-of local and param" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+    const int_ptr = try tm.module.types.addPointerType(tm.module.types.intType());
+    const helper_id = try tm.function("helper", int_ptr);
+    const param_id = try tm.param(helper_id, "p", tm.module.types.intType());
+    tm.setBody(helper_id, try tm.block(&.{try tm.ret(try addTestExpr(&tm.module.hir, .{ .address_of = try addTestExpr(&tm.module.hir, .{ .param_ref = param_id }) }))}));
+
+    const main_id = try tm.function("main", tm.module.types.intType());
+    const local_id = try tm.local(main_id, "x", tm.module.types.intType());
+    const ptr_local = try tm.local(main_id, "p", int_ptr);
+    const init_x = try addTestStmt(&tm.module.hir, .{ .local_decl = .{ .local = local_id, .initializer = try tm.int("1") } });
+    const addr = try addTestExpr(&tm.module.hir, .{ .address_of = try addTestExpr(&tm.module.hir, .{ .local_ref = local_id }) });
+    const init_p = try addTestStmt(&tm.module.hir, .{ .local_decl = .{ .local = ptr_local, .initializer = addr } });
+    tm.setBody(main_id, try tm.block(&.{ init_x, init_p, try tm.ret(try tm.int("0")) }));
+    try tm.checkPass();
+}
+
+test "HIR checker accepts deref inside unsafe contexts" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+    const int_ptr = try tm.module.types.addPointerType(tm.module.types.intType());
+    const read_id = try tm.unsafeFunction("read", tm.module.types.intType());
+    const param_id = try tm.param(read_id, "p", int_ptr);
+    const deref_param = try addTestExpr(&tm.module.hir, .{ .deref = try addTestExpr(&tm.module.hir, .{ .param_ref = param_id }) });
+    tm.setBody(read_id, try tm.block(&.{try tm.ret(deref_param)}));
+
+    const main_id = try tm.function("main", tm.module.types.intType());
+    const x = try tm.local(main_id, "x", tm.module.types.intType());
+    const p_local = try tm.local(main_id, "p", int_ptr);
+    const init_x = try addTestStmt(&tm.module.hir, .{ .local_decl = .{ .local = x, .initializer = try tm.int("1") } });
+    const init_p = try addTestStmt(&tm.module.hir, .{ .local_decl = .{ .local = p_local, .initializer = try addTestExpr(&tm.module.hir, .{ .address_of = try addTestExpr(&tm.module.hir, .{ .local_ref = x }) }) } });
+    const deref_local = try addTestExpr(&tm.module.hir, .{ .deref = try addTestExpr(&tm.module.hir, .{ .local_ref = p_local }) });
+    const unsafe_body = try tm.block(&.{try tm.ret(deref_local)});
+    const unsafe_stmt = try addTestStmt(&tm.module.hir, .{ .unsafe_block = unsafe_body });
+    tm.setBody(main_id, try tm.block(&.{ init_x, init_p, unsafe_stmt }));
+    try tm.checkPass();
+}
+
+test "HIR checker rejects invalid pointer operations" {
+    var address_tm = try TestModule.init();
+    defer address_tm.deinit();
+    const int_ptr = try address_tm.module.types.addPointerType(address_tm.module.types.intType());
+    const main_a = try address_tm.function("main", address_tm.module.types.intType());
+    const ptr_local = try address_tm.local(main_a, "p", int_ptr);
+    const bad_addr = try addTestExpr(&address_tm.module.hir, .{ .address_of = try address_tm.int("1") });
+    const init_p = try addTestStmt(&address_tm.module.hir, .{ .local_decl = .{ .local = ptr_local, .initializer = bad_addr } });
+    address_tm.setBody(main_a, try address_tm.block(&.{ init_p, try address_tm.ret(try address_tm.int("0")) }));
+    try address_tm.checkFail(.AddressOfRequiresPlace);
+
+    var nonptr_tm = try TestModule.init();
+    defer nonptr_tm.deinit();
+    const main_b = try nonptr_tm.function("main", nonptr_tm.module.types.intType());
+    const bad_deref = try addTestExpr(&nonptr_tm.module.hir, .{ .deref = try nonptr_tm.int("1") });
+    nonptr_tm.setBody(main_b, try nonptr_tm.block(&.{try nonptr_tm.ret(bad_deref)}));
+    try nonptr_tm.checkFail(.DerefRequiresPointer);
+
+    var unsafe_tm = try TestModule.init();
+    defer unsafe_tm.deinit();
+    const unsafe_ptr = try unsafe_tm.module.types.addPointerType(unsafe_tm.module.types.intType());
+    const main_c = try unsafe_tm.function("main", unsafe_tm.module.types.intType());
+    const p = try unsafe_tm.local(main_c, "p", unsafe_ptr);
+    const bad_unsafe = try addTestExpr(&unsafe_tm.module.hir, .{ .deref = try addTestExpr(&unsafe_tm.module.hir, .{ .local_ref = p }) });
+    const init_ptr = try addTestStmt(&unsafe_tm.module.hir, .{ .local_decl = .{ .local = p, .initializer = try addTestExpr(&unsafe_tm.module.hir, .{ .address_of = try addTestExpr(&unsafe_tm.module.hir, .{ .local_ref = try unsafe_tm.local(main_c, "x", unsafe_tm.module.types.intType()) }) }) } });
+    unsafe_tm.setBody(main_c, try unsafe_tm.block(&.{ init_ptr, try unsafe_tm.ret(bad_unsafe) }));
+    try unsafe_tm.checkFail(.DerefRequiresUnsafe);
 }
 
 test "HIR checker rejects pointer type mismatches" {

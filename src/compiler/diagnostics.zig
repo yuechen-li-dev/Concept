@@ -72,6 +72,9 @@ pub const DiagnosticCode = enum {
     DecideScoreNotInt,
     DecideMissingUnconditionalArm,
     UnsafeCallRequiresUnsafe,
+    AddressOfRequiresPlace,
+    DerefRequiresPointer,
+    DerefRequiresUnsafe,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -125,6 +128,9 @@ pub const DiagnosticCode = enum {
             .DecideScoreNotInt => "CON0064",
             .DecideMissingUnconditionalArm => "CON0065",
             .UnsafeCallRequiresUnsafe => "CON0070",
+            .AddressOfRequiresPlace => "CON0071",
+            .DerefRequiresPointer => "CON0072",
+            .DerefRequiresUnsafe => "CON0073",
         };
     }
 };
@@ -424,6 +430,9 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0064", DiagnosticCode.DecideScoreNotInt.format());
     try std.testing.expectEqualStrings("CON0065", DiagnosticCode.DecideMissingUnconditionalArm.format());
     try std.testing.expectEqualStrings("CON0070", DiagnosticCode.UnsafeCallRequiresUnsafe.format());
+    try std.testing.expectEqualStrings("CON0071", DiagnosticCode.AddressOfRequiresPlace.format());
+    try std.testing.expectEqualStrings("CON0072", DiagnosticCode.DerefRequiresPointer.format());
+    try std.testing.expectEqualStrings("CON0073", DiagnosticCode.DerefRequiresUnsafe.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {

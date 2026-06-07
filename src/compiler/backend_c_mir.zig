@@ -324,6 +324,14 @@ fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue
             try writer.writeAll(unary.op.lexeme());
             try emitOperand(writer, ctx, unary.operand);
         },
+        .address_of => |place| {
+            try writer.writeByte('&');
+            try emitPlace(writer, ctx, place);
+        },
+        .deref => |operand| {
+            try writer.writeByte('*');
+            try emitOperand(writer, ctx, operand);
+        },
         .binary => |binary| {
             try writer.writeByte('(');
             try emitOperand(writer, ctx, binary.left);
@@ -933,6 +941,22 @@ test "MIR C backend emits raw pointer params returns and locals" {
     try std.testing.expect(std.mem.indexOf(u8, c_source, "int* cpt_l_q_1;") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_l_q_1 = cpt_p_p_0;") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, "return cpt_l_q_1;") != null);
+}
+
+
+test "MIR C backend emits address-of and deref" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\int main() {
+        \\    int x = 7;
+        \\    int* p = &x;
+        \\    unsafe { return *p; }
+        \\}
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, " = &cpt_l_x_") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, " = *cpt_l_p_") != null);
 }
 
 test "MIR C backend emits enum raw pointer params and returns" {

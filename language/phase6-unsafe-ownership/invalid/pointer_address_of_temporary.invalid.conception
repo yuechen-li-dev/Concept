@@ -1,0 +1,19 @@
+# name: pointer address of temporary
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+int value() {
+    return 7;
+}
+
+int main() {
+    int* p = &value();
+    return 0;
+}
+
+=== diagnostics ===
+CON0071

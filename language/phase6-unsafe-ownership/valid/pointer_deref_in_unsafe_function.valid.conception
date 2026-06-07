@@ -1,0 +1,22 @@
+# name: pointer deref in unsafe function
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+unsafe int read(int* p) {
+    return *p;
+}
+
+int main() {
+    int x = 9;
+    int* p = &x;
+
+    unsafe {
+        return read(p);
+    }
+}
+
+=== run ===
+exit_code: 9
