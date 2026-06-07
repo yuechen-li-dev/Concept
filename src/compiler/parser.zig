@@ -1109,12 +1109,16 @@ pub const Parser = struct {
             allocator.destroy(expr);
         }
 
-        while (self.current().kind == .left_paren) {
+        while (self.current().kind == .left_paren or self.current().kind == .left_brace) {
             const identifier = switch (expr.*) {
                 .identifier => |identifier| identifier,
                 else => break,
             };
-            expr = try self.finishCallExpr(allocator, expr, identifier);
+            if (self.current().kind == .left_paren) {
+                expr = try self.finishCallExpr(allocator, expr, identifier);
+            } else {
+                expr = try self.finishStructLiteralExpr(allocator, expr, identifier);
+            }
         }
         return expr;
     }
@@ -1168,6 +1172,75 @@ pub const Parser = struct {
             .span = ast.spanFromBounds(identifier.span.start, spanEnd(end_span)),
         } };
         return node;
+    }
+
+    fn finishStructLiteralExpr(self: *Parser, allocator: std.mem.Allocator, type_expr: *ast.Expr, identifier: ast.Expr.IdentifierExpr) ParseExprError!*ast.Expr {
+        _ = self.advance();
+        var fields = std.ArrayList(ast.Expr.StructLiteralField).init(allocator);
+        errdefer {
+            for (fields.items) |field| {
+                field.value.deinit(allocator);
+                allocator.destroy(field.value);
+            }
+            fields.deinit();
+        }
+
+        var end_span = identifier.span;
+        while (self.current().kind != .eof and self.current().kind != .right_brace and self.current().kind != .semicolon) {
+            const name_token = if (self.current().kind == .identifier) self.advance() else {
+                self.report(.UnexpectedToken, "expected struct literal field name", self.current().span) catch return error.OutOfMemory;
+                self.recoverStructLiteralField();
+                if (self.match(.comma) != null) continue;
+                break;
+            };
+            const field_name = ast.NameSegment{ .text = name_token.lexeme, .span = name_token.span };
+            if (self.match(.colon) == null) {
+                self.report(.UnexpectedToken, "expected ':' after struct literal field name", self.current().span) catch return error.OutOfMemory;
+                self.recoverStructLiteralField();
+                if (self.match(.comma) != null) continue;
+                break;
+            }
+            if (self.current().kind == .comma or self.current().kind == .right_brace or self.current().kind == .eof) {
+                self.report(.UnexpectedToken, "expected struct literal field initializer expression", self.current().span) catch return error.OutOfMemory;
+                if (self.match(.comma) != null) continue;
+                break;
+            }
+            const value = self.parseExpr(allocator) catch |err| switch (err) {
+                error.OutOfMemory => return err,
+                error.ParseFailed => {
+                    self.report(.UnexpectedToken, "expected struct literal field initializer expression", self.current().span) catch return error.OutOfMemory;
+                    self.recoverStructLiteralField();
+                    if (self.match(.comma) != null) continue;
+                    break;
+                },
+            };
+            end_span = value.span();
+            try fields.append(.{ .name = field_name, .value = value, .span = ast.spanFromBounds(field_name.span.start, spanEnd(value.span())) });
+            if (self.match(.comma) == null) break;
+        }
+
+        end_span = if (self.match(.right_brace)) |right_brace| right_brace.span else blk: {
+            self.report(.UnexpectedToken, "expected '}' after struct literal fields", self.current().span) catch return error.OutOfMemory;
+            self.recoverStructLiteralField();
+            break :blk end_span;
+        };
+
+        const owned_fields = try fields.toOwnedSlice();
+        const node = try allocator.create(ast.Expr);
+        type_expr.deinit(allocator);
+        allocator.destroy(type_expr);
+        node.* = .{ .struct_literal = .{
+            .type_name = identifier.name,
+            .fields = owned_fields,
+            .span = ast.spanFromBounds(identifier.span.start, spanEnd(end_span)),
+        } };
+        return node;
+    }
+
+    fn recoverStructLiteralField(self: *Parser) void {
+        while (self.current().kind != .eof and self.current().kind != .comma and self.current().kind != .right_brace and self.current().kind != .semicolon) {
+            self.advance();
+        }
     }
 
     fn finishEnumConstructorExpr(self: *Parser, allocator: std.mem.Allocator, enum_name: ast.NameSegment) ParseExprError!*ast.Expr {
@@ -4893,8 +4966,6 @@ test "AST snapshot debug output includes decide expression" {
     , snapshot);
 }
 
-
-
 test "parses address-of and dereference prefix expressions" {
     var diagnostics = DiagnosticBag.init(std.testing.allocator);
     defer diagnostics.deinit();
@@ -5001,4 +5072,66 @@ test "duplicate unsafe function modifier diagnostic" {
 
     try std.testing.expectEqual(@as(usize, 1), diagnostics.count());
     try std.testing.expectEqualStrings("duplicate unsafe function modifier", diagnostics.diagnostics.items[0].message);
+}
+
+test "parses struct literal expression and debug output" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource(
+        \\module Main;
+        \\struct Vec2 { int x; int y; };
+        \\int main() { Vec2 v = Vec2 { x: 3, y: 4, }; return 0; }
+    , &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "StructLiteral Vec2") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Field x") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Field y") != null);
+}
+
+test "parses struct literal fields in reversed source order" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource(
+        \\module Main;
+        \\struct Vec2 { int x; int y; };
+        \\int main() { Vec2 v = Vec2 { y: 4, x: 3 }; return 0; }
+    , &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+}
+
+test "struct literal missing colon diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { Vec2 v = Vec2 { x 3, y: 4, }; return 0; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected ':' after struct literal field name", diagnostics.diagnostics.items[0].message);
+}
+
+test "struct literal missing field expression diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { Vec2 v = Vec2 { x: , y: 4, }; return 0; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected struct literal field initializer expression", diagnostics.diagnostics.items[0].message);
+}
+
+test "struct literal missing closing brace diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { Vec2 v = Vec2 { x: 3, y: 4; return 0; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected '}' after struct literal fields", diagnostics.diagnostics.items[0].message);
 }

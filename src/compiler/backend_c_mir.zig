@@ -314,6 +314,7 @@ fn emitStatement(writer: anytype, ctx: *const BackendContext, statement: mir.Mir
         .assign => |assignment| {
             switch (assignment.rvalue) {
                 .enum_constructor => |constructor| try emitEnumConstructorAssignment(writer, ctx, assignment.place, constructor),
+                .struct_constructor => |constructor| try emitStructConstructorAssignment(writer, ctx, assignment.place, constructor),
                 else => {
                     try writer.writeAll("    ");
                     try emitPlace(writer, ctx, assignment.place);
@@ -327,8 +328,30 @@ fn emitStatement(writer: anytype, ctx: *const BackendContext, statement: mir.Mir
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Enum constructor/tag/payload emission
+// Struct/enum constructor/tag/payload emission
 // ─────────────────────────────────────────────────────────────────────────────
+
+fn emitStructConstructorAssignment(writer: anytype, ctx: *const BackendContext, place: mir.MirPlace, constructor: anytype) EmitError!void {
+    const struct_decl = ctx.module.hir.getStruct(constructor.struct_id);
+    for (struct_decl.fields, 0..) |decl_field_id, field_index| {
+        const value = structConstructorFieldValue(constructor.fields, decl_field_id) orelse return error.InvalidExecutable;
+        const field = ctx.module.hir.getField(decl_field_id);
+        try writer.writeAll("    ");
+        try emitPlace(writer, ctx, place);
+        try writer.writeByte('.');
+        try emitStructFieldName(writer, ctx.module, field.name, field_index);
+        try writer.writeAll(" = ");
+        try emitOperand(writer, ctx, value);
+        try writer.writeAll(";\n");
+    }
+}
+
+fn structConstructorFieldValue(fields: []const mir.MirStructFieldValue, field_id: hir.FieldId) ?mir.MirOperand {
+    for (fields) |field| {
+        if (field.field_id.index == field_id.index) return field.value;
+    }
+    return null;
+}
 
 fn emitEnumConstructorAssignment(writer: anytype, ctx: *const BackendContext, place: mir.MirPlace, constructor: anytype) EmitError!void {
     const enum_decl = ctx.module.hir.getEnum(constructor.enum_id);
@@ -452,7 +475,7 @@ fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue
             }
             try writer.writeByte(')');
         },
-        .enum_constructor => unreachable,
+        .enum_constructor, .struct_constructor => unreachable,
         .enum_tag => |operand| {
             try emitOperand(writer, ctx, operand);
             try writer.writeAll(".tag");

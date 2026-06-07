@@ -401,6 +401,7 @@ const FunctionLowerer = struct {
             .binary => |binary| try self.lowerBinary(expr, binary, block_id),
             .call => |call| try self.lowerCall(expr, call, block_id),
             .enum_constructor => |constructor| try self.lowerEnumConstructor(expr, constructor, block_id),
+            .struct_literal => |literal| try self.lowerStructLiteral(expr, literal, block_id),
             .try_expr => |operand| try self.lowerTry(expr, operand, block_id),
             .decide => |decide| try self.lowerDecide(expr, decide, block_id),
         };
@@ -514,6 +515,32 @@ const FunctionLowerer = struct {
             .kind = mir.MirStatementKind.assignTo(
                 mir.MirPlace.localPlace(temp),
                 .{ .enum_constructor = .{ .enum_id = constructor.enum_id, .variant_id = constructor.variant_id, .args = args } },
+            ),
+        });
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = current };
+    }
+
+    fn lowerStructLiteral(self: *FunctionLowerer, expr: hir.HirExpr, literal: anytype, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const fields = try self.allocator.alloc(mir.MirStructFieldValue, literal.fields.len);
+        var fields_owned = true;
+        var initialized: usize = 0;
+        errdefer if (fields_owned) self.allocator.free(fields);
+
+        var current = block_id;
+        for (literal.fields) |field| {
+            const lowered = try self.lowerExpr(field.value, current);
+            fields[initialized] = .{ .field_id = field.field_id, .value = lowered.operand };
+            initialized += 1;
+            current = lowered.block;
+        }
+
+        const temp = try self.addTemp(try self.inferExprTypeFrom(expr));
+        fields_owned = false;
+        try self.store.appendStatement(current, .{
+            .span = expr.span,
+            .kind = mir.MirStatementKind.assignTo(
+                mir.MirPlace.localPlace(temp),
+                .{ .struct_constructor = .{ .struct_id = literal.struct_id, .fields = fields } },
             ),
         });
         return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = current };
@@ -715,6 +742,7 @@ const FunctionLowerer = struct {
             },
             .call => |call| self.semantic_module.hir.getFunction(call.function).return_type,
             .enum_constructor => |constructor| try self.enumType(constructor.enum_id),
+            .struct_literal => |literal| literal.type_id,
             .decide => |decide| decide.enum_type,
             .try_expr => |operand| blk: {
                 const operand_type = try self.inferExprType(operand);
@@ -732,6 +760,13 @@ const FunctionLowerer = struct {
             .group => |inner| try self.inferAddressableExprType(inner),
             else => error.InvalidMirLowering,
         };
+    }
+
+    fn structType(self: *FunctionLowerer, struct_id: hir.StructId) LoweringError!types.TypeId {
+        for (self.semantic_module.types.types.items, 0..) |kind, index| {
+            if (kind == .struct_type and kind.struct_type.index == struct_id.index) return .{ .index = @intCast(index) };
+        }
+        return error.MissingStructType;
     }
 
     fn enumType(self: *FunctionLowerer, enum_id: hir.EnumId) LoweringError!types.TypeId {

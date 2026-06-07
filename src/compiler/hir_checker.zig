@@ -223,6 +223,47 @@ const Checker = struct {
             // Match/enum checking
             // ─────────────────────────────────────────────────────────────────────────────
 
+            .struct_literal => |literal| blk: {
+                if (literal.struct_id.index >= self.module.hir.structs.items.len) {
+                    try self.reportAt(.UnknownStructLiteralType, "struct literal type must name a top-level struct", expr.span);
+                    return error.InvalidSemanticModule;
+                }
+                if (!sameType(literal.type_id, try self.structType(literal.struct_id))) {
+                    try self.reportAt(.UnknownStructLiteralType, "struct literal type must name a top-level struct", expr.span);
+                    return error.InvalidSemanticModule;
+                }
+                const struct_decl = self.module.hir.getStruct(literal.struct_id);
+                var seen = std.AutoHashMap(hir.FieldId, diagnostics.SourceSpan).init(self.allocator);
+                defer seen.deinit();
+                for (literal.fields) |field_value| {
+                    if (field_value.field_id.index >= self.module.hir.fields.items.len) {
+                        try self.reportAt(.UnknownStructLiteralField, "unknown struct literal field", field_value.span);
+                        return error.InvalidSemanticModule;
+                    }
+                    const field = self.module.hir.getField(field_value.field_id);
+                    if (field.parent.index != literal.struct_id.index) {
+                        try self.reportAt(.UnknownStructLiteralField, "unknown struct literal field", field_value.span);
+                        return error.InvalidSemanticModule;
+                    }
+                    if (seen.contains(field_value.field_id)) {
+                        try self.reportAt(.DuplicateStructLiteralField, "duplicate struct literal field", field_value.span);
+                        return error.InvalidSemanticModule;
+                    }
+                    try seen.put(field_value.field_id, field_value.span);
+                    const value_type = try self.checkExpr(return_type, field_value.value);
+                    if (!sameType(value_type, field.type_id)) {
+                        try self.reportAt(.StructFieldInitializerTypeMismatch, "struct field initializer type mismatch", self.exprSpan(field_value.value));
+                        return error.InvalidSemanticModule;
+                    }
+                }
+                for (struct_decl.fields) |field_id| {
+                    if (!seen.contains(field_id)) {
+                        try self.reportAt(.MissingStructLiteralField, "missing struct literal field", expr.span);
+                        return error.InvalidSemanticModule;
+                    }
+                }
+                break :blk literal.type_id;
+            },
             .enum_constructor => |constructor| blk: {
                 const variant = self.module.hir.getVariant(constructor.variant_id);
                 if (variant.parent.index != constructor.enum_id.index or constructor.args.len != variant.payload_fields.len) {
@@ -375,6 +416,14 @@ const Checker = struct {
                 return error.InvalidSemanticModule;
             },
         };
+    }
+
+    fn structType(self: *Checker, struct_id: hir.StructId) CheckError!types.TypeId {
+        for (self.module.types.types.items, 0..) |kind, index| {
+            if (kind == .struct_type and kind.struct_type.index == struct_id.index) return .{ .index = @intCast(index) };
+        }
+        try self.reportAt(.TypeMismatch, "unknown struct literal type", synthetic_span);
+        return error.InvalidSemanticModule;
     }
 
     fn enumType(self: *Checker, enum_id: hir.EnumId) CheckError!types.TypeId {

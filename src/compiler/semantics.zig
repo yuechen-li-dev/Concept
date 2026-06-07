@@ -532,6 +532,48 @@ const BodyLowerer = struct {
                 @memcpy(owned, args.items);
                 return try self.collector.module.hir.addExpr(.{ .call = .{ .function = function_id, .args = owned } }, call.span);
             },
+            .struct_literal => |literal| {
+                const struct_symbol = try self.collector.module.interner.intern(literal.type_name.text);
+                const target = switch (self.collector.top_level_decls.get(struct_symbol) orelse {
+                    try self.collector.diagnostics.append(diagnostics.unknownStructLiteralType(literal.type_name.span));
+                    return null;
+                }) {
+                    .struct_ => |entry| entry,
+                    else => {
+                        try self.collector.diagnostics.append(diagnostics.unknownStructLiteralType(literal.type_name.span));
+                        return null;
+                    },
+                };
+                const struct_decl = self.collector.module.hir.getStruct(target.id);
+                var seen = std.AutoHashMap(hir.FieldId, source.SourceSpan).init(self.collector.allocator);
+                defer seen.deinit();
+                var fields = std.ArrayList(hir.HirStructLiteralField).empty;
+                defer fields.deinit(self.collector.allocator);
+                for (literal.fields) |field| {
+                    const field_symbol = try self.collector.module.interner.intern(field.name.text);
+                    const field_id = self.findField(target.id, field_symbol) orelse {
+                        try self.collector.diagnostics.append(diagnostics.unknownStructLiteralField(field.name.span));
+                        return null;
+                    };
+                    if (seen.contains(field_id)) {
+                        try self.collector.diagnostics.append(diagnostics.duplicateStructLiteralField(field.name.span));
+                        return null;
+                    }
+                    try seen.put(field_id, field.name.span);
+                    const value = (try self.lowerExpr(field.value.*)) orelse return null;
+                    try fields.append(self.collector.allocator, .{ .field_id = field_id, .value = value, .span = field.span });
+                }
+                for (struct_decl.fields) |field_id| {
+                    if (!seen.contains(field_id)) {
+                        const field = self.collector.module.hir.getField(field_id);
+                        try self.collector.diagnostics.append(diagnostics.missingStructLiteralField(field.span));
+                        return null;
+                    }
+                }
+                const owned = try self.collector.allocator.alloc(hir.HirStructLiteralField, fields.items.len);
+                @memcpy(owned, fields.items);
+                return try self.collector.module.hir.addExpr(.{ .struct_literal = .{ .struct_id = target.id, .type_id = target.type_id, .fields = owned } }, literal.span);
+            },
             .enum_constructor => |constructor| {
                 const enum_symbol = try self.collector.module.interner.intern(constructor.enum_name.text);
                 const enum_id = switch (self.collector.top_level_decls.get(enum_symbol) orelse {
@@ -706,6 +748,15 @@ const BodyLowerer = struct {
         for (enum_decl.variants) |variant_id| {
             const variant = self.collector.module.hir.getVariant(variant_id);
             if (variant.name.index == variant_symbol.index) return variant_id;
+        }
+        return null;
+    }
+
+    fn findField(self: *BodyLowerer, struct_id: hir.StructId, field_symbol: interner.SymbolId) ?hir.FieldId {
+        const struct_decl = self.collector.module.hir.getStruct(struct_id);
+        for (struct_decl.fields) |field_id| {
+            const field = self.collector.module.hir.getField(field_id);
+            if (field.name.index == field_symbol.index) return field_id;
         }
         return null;
     }

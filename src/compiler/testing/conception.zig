@@ -689,7 +689,7 @@ fn expectCheckFixture(comptime path: []const u8) !void {
 
     try std.testing.expectEqual(Phase.check, fixture.phase);
 
-    if (std.mem.indexOf(u8, path, "phase3-semantics") != null or std.mem.indexOf(u8, path, "phase5-sum-types") != null or std.mem.indexOf(u8, path, "phase5a-judgment") != null or std.mem.indexOf(u8, path, "phase6-unsafe-ownership") != null) {
+    if (std.mem.indexOf(u8, path, "phase3-semantics") != null or std.mem.indexOf(u8, path, "phase5-sum-types") != null or std.mem.indexOf(u8, path, "phase5a-judgment") != null or std.mem.indexOf(u8, path, "phase6-unsafe-ownership") != null or std.mem.indexOf(u8, path, "phase7-runtime-structs") != null) {
         try expectSemanticCheckFixture(path, fixture);
     } else {
         try expectPhase2CheckFixture(path, fixture);
@@ -1664,4 +1664,40 @@ test "language check fixture: phase6 pointer deref non pointer" {
 
 test "language check fixture: phase6 pointer address of temporary" {
     try expectCheckFixture("../../../language/phase6-unsafe-ownership/invalid/pointer_address_of_temporary.invalid.conception");
+}
+
+test "language check fixture: phase7 struct literal basic" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/valid/struct_literal_basic.valid.conception");
+}
+
+test "language check fixture: phase7 struct literal reordered" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/valid/struct_literal_reordered.valid.conception");
+}
+
+test "language run fixture: phase7 struct literal run" {
+    try expectRunFixture("../../../language/phase7-runtime-structs/valid/struct_literal_run.valid.conception");
+}
+
+test "language check fixture: phase7 struct literal unknown type" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/invalid/struct_literal_unknown_type.invalid.conception");
+}
+
+test "language check fixture: phase7 struct literal non struct type" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/invalid/struct_literal_non_struct_type.invalid.conception");
+}
+
+test "language check fixture: phase7 struct literal unknown field" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/invalid/struct_literal_unknown_field.invalid.conception");
+}
+
+test "language check fixture: phase7 struct literal duplicate field" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/invalid/struct_literal_duplicate_field.invalid.conception");
+}
+
+test "language check fixture: phase7 struct literal missing field" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/invalid/struct_literal_missing_field.invalid.conception");
+}
+
+test "language check fixture: phase7 struct literal type mismatch" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/invalid/struct_literal_type_mismatch.invalid.conception");
 }
