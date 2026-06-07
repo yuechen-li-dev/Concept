@@ -1,0 +1,18 @@
+# name: phase7 field assignment unknown field
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+struct Vec2 { int x; int y; };
+
+int main() {
+    Vec2 v = Vec2 { x: 1, y: 2, };
+    v.z = 3;
+    return v.x;
+}
+
+=== diagnostics ===
+CON0080

@@ -1,0 +1,16 @@
+# name: phase7 field assignment enum
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+enum Mode { Fast; Slow; };
+struct Header { bool ok; Mode mode; };
+
+int main() {
+    Header h = Header { ok: true, mode: Mode::Fast, };
+    h.mode = Mode::Slow;
+    return 0;
+}

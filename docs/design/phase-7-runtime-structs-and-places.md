@@ -533,3 +533,24 @@ The v0 constructor syntax is intentionally narrow:
 Struct literals lower through HIR with resolved `StructId`, `TypeId`, and `FieldId` values, then through MIR as a dedicated `struct_constructor` rvalue. The C backend emits constructor assignments as deterministic writes to backend-owned field names, so supported struct locals can be constructed and compiled before field reads exist.
 
 P7-M2 still does not add field access (`v.x`), field assignment (`v.x = ...`), general MIR place projections, address-of-field, deref-field access, struct methods, ownership/drop behavior, or ABI/repr controls.
+
+## P7-M4 field assignment / initial places
+
+P7-M4 adds assignment to fields of assignable struct places:
+
+```cpp
+v.x = 10;
+```
+
+The implementation starts the migration from identifier-only assignment targets toward explicit places. HIR assignment targets can now name locals, params, or one-level field projections from a local/param base, and MIR has a matching one-level field place projection for stores. Field assignment is type checked against the declared field type and is emitted by the C backend as a direct write through the backend-owned field name.
+
+The v0 rules remain intentionally narrow:
+
+- the receiver of a field assignment must be an assignable place;
+- the receiver type must be a struct value, with no pointer auto-deref;
+- the field must exist on that struct;
+- the assigned expression type must exactly match the field type;
+- assignment to a field of a temporary expression, such as `makeVec().x = 1`, is rejected;
+- read-only field access may still use the existing field-access rvalue path while field writes use MIR places.
+
+P7-M4 deliberately does not add address-of-field (`&v.x`), deref/index places, pointer field sugar, `->`, auto-deref, assignment through pointer deref, nested recursive field places, struct methods, move/drop/ownership, or ABI/repr controls.

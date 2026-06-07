@@ -1725,3 +1725,35 @@ test "language check fixture: phase7 field access pointer" {
 test "language check fixture: phase7 field access unknown field" {
     try expectCheckFixture("../../../language/phase7-runtime-structs/invalid/field_access_unknown_field.invalid.conception");
 }
+
+test "language check fixture: phase7 field assignment basic" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/valid/field_assignment_basic.valid.conception");
+}
+
+test "language run fixture: phase7 field assignment run" {
+    try expectRunFixture("../../../language/phase7-runtime-structs/valid/field_assignment_run.valid.conception");
+}
+
+test "language check fixture: phase7 field assignment bool" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/valid/field_assignment_bool.valid.conception");
+}
+
+test "language check fixture: phase7 field assignment enum" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/valid/field_assignment_enum.valid.conception");
+}
+
+test "language check fixture: phase7 field assignment type mismatch" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/invalid/field_assignment_type_mismatch.invalid.conception");
+}
+
+test "language check fixture: phase7 field assignment unknown field" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/invalid/field_assignment_unknown_field.invalid.conception");
+}
+
+test "language check fixture: phase7 field assignment non struct" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/invalid/field_assignment_non_struct.invalid.conception");
+}
+
+test "language check fixture: phase7 field assignment non place" {
+    try expectCheckFixture("../../../language/phase7-runtime-structs/invalid/field_assignment_non_place.invalid.conception");
+}

@@ -347,7 +347,7 @@ const Collector = struct {
     }
 };
 
-const Binding = hir.AssignTarget;
+const Binding = hir.AssignBase;
 
 const ScopedBinding = struct {
     name: interner.SymbolId,
@@ -451,11 +451,7 @@ const BodyLowerer = struct {
                 return try self.collector.module.hir.addStmt(.{ .discard_stmt = value }, discard_stmt.span);
             },
             .assignment => |assignment| {
-                const target_symbol = try self.collector.module.interner.intern(assignment.target.text);
-                const target = self.lookup(target_symbol) orelse {
-                    try self.collector.diagnostics.append(diagnostics.unknownIdentifier(assignment.target.span));
-                    return null;
-                };
+                const target = (try self.lowerAssignTarget(assignment.target.*)) orelse return null;
                 const value = (try self.lowerExpr(assignment.value.*)) orelse return null;
                 return try self.collector.module.hir.addStmt(.{ .assignment = .{ .target = target, .value = value } }, assignment.span);
             },
@@ -489,6 +485,64 @@ const BodyLowerer = struct {
                 return try self.collector.module.hir.addStmt(.{ .match_stmt = .{ .scrutinee = scrutinee, .arms = owned } }, match_stmt.span);
             },
         }
+    }
+
+    fn lowerAssignTarget(self: *BodyLowerer, target: ast.Expr) !?hir.AssignTarget {
+        return switch (target) {
+            .identifier => |ident| blk: {
+                const target_symbol = try self.collector.module.interner.intern(ident.name.text);
+                const base = self.lookup(target_symbol) orelse {
+                    try self.collector.diagnostics.append(diagnostics.unknownIdentifier(ident.name.span));
+                    return null;
+                };
+                break :blk switch (base) {
+                    .local => |id| hir.AssignTarget{ .local = id },
+                    .param => |id| hir.AssignTarget{ .param = id },
+                };
+            },
+            .field_access => |field_access| blk: {
+                const base = (try self.lowerAssignBase(field_access.receiver.*)) orelse return null;
+                const base_type = self.assignBaseType(base);
+                const base_kind = self.collector.module.types.kind(base_type);
+                if (base_kind != .struct_type) {
+                    try self.collector.diagnostics.append(diagnostics.Diagnostic.init(.FieldAccessNonStruct, .@"error", "field assignment receiver must be a struct place", field_access.receiver.span()));
+                    return null;
+                }
+                const field_symbol = try self.collector.module.interner.intern(field_access.field_name.text);
+                const field_id = self.findField(base_kind.struct_type, field_symbol) orelse {
+                    try self.collector.diagnostics.append(diagnostics.Diagnostic.init(.UnknownFieldAccess, .@"error", "unknown field on struct value", field_access.field_name.span));
+                    return null;
+                };
+                break :blk hir.AssignTarget{ .field = .{ .base = base, .field_id = field_id, .field_span = field_access.field_name.span } };
+            },
+            else => {
+                try self.collector.diagnostics.append(diagnostics.Diagnostic.init(.FieldAssignmentNonPlace, .@"error", "field assignment target must be an assignable place", target.span()));
+                return null;
+            },
+        };
+    }
+
+    fn lowerAssignBase(self: *BodyLowerer, target: ast.Expr) !?hir.AssignBase {
+        return switch (target) {
+            .identifier => |ident| blk: {
+                const symbol = try self.collector.module.interner.intern(ident.name.text);
+                break :blk self.lookup(symbol) orelse {
+                    try self.collector.diagnostics.append(diagnostics.unknownIdentifier(ident.name.span));
+                    return null;
+                };
+            },
+            else => {
+                try self.collector.diagnostics.append(diagnostics.Diagnostic.init(.FieldAssignmentNonPlace, .@"error", "field assignment receiver must be an assignable place", target.span()));
+                return null;
+            },
+        };
+    }
+
+    fn assignBaseType(self: *BodyLowerer, base: hir.AssignBase) types.TypeId {
+        return switch (base) {
+            .local => |id| self.collector.module.hir.getLocal(id).type_id,
+            .param => |id| self.collector.module.hir.getParam(id).type_id,
+        };
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
@@ -770,7 +824,7 @@ const BodyLowerer = struct {
         return null;
     }
 
-    fn lookup(self: *BodyLowerer, name: interner.SymbolId) ?hir.AssignTarget {
+    fn lookup(self: *BodyLowerer, name: interner.SymbolId) ?hir.AssignBase {
         var index = self.bindings.items.len;
         while (index > 0) {
             index -= 1;

@@ -570,11 +570,13 @@ pub const LocalDeclStmt = struct {
 };
 
 pub const AssignmentStmt = struct {
-    target: NameSegment,
+    target: *Expr,
     value: *Expr,
     span: SourceSpan,
 
     pub fn deinit(self: AssignmentStmt, allocator: std.mem.Allocator) void {
+        self.target.deinit(allocator);
+        allocator.destroy(self.target);
         self.value.deinit(allocator);
         allocator.destroy(self.value);
     }
@@ -752,9 +754,8 @@ pub const Stmt = union(enum) {
             },
             .assignment => |stmt| {
                 try writeIndent(writer, depth);
-                try writer.writeAll("Assignment ");
-                try writer.writeAll(stmt.target.text);
-                try writer.writeByte('\n');
+                try writer.writeAll("Assignment\n");
+                try stmt.target.writeDebug(writer, depth + 1);
                 try stmt.value.writeDebug(writer, depth + 1);
             },
             .expr_stmt => |stmt| {

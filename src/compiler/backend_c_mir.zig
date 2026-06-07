@@ -522,6 +522,14 @@ fn emitOperand(writer: anytype, ctx: *const BackendContext, operand: mir.MirOper
 fn emitPlace(writer: anytype, ctx: *const BackendContext, place: mir.MirPlace) EmitError!void {
     switch (place) {
         .local => |local_id| try emitLocalName(writer, ctx.module, ctx.mir_module, local_id),
+        .field => |field_place| {
+            const field = ctx.module.hir.getField(field_place.field_id);
+            const struct_decl = ctx.module.hir.getStruct(field.parent);
+            const field_index = structFieldIndex(ctx, struct_decl.*, field_place.field_id) orelse return error.InvalidExecutable;
+            try emitLocalName(writer, ctx.module, ctx.mir_module, field_place.base);
+            try writer.writeByte('.');
+            try emitStructFieldName(writer, ctx.module, field.name, field_index);
+        },
     }
 }
 

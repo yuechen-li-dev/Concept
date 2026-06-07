@@ -939,18 +939,28 @@ pub const Parser = struct {
     }
 
     fn parseAssignmentStmt(self: *Parser, allocator: std.mem.Allocator) !ast.Stmt {
-        const target_token = self.advance();
-        const target = ast.NameSegment{ .text = target_token.lexeme, .span = target_token.span };
+        var target = self.parseExpr(allocator) catch |err| switch (err) {
+            error.OutOfMemory => return err,
+            error.ParseFailed => blk: {
+                const fallback = try allocator.create(ast.Expr);
+                fallback.* = .{ .int_literal = .{ .text = "0", .span = self.current().span } };
+                break :blk fallback;
+            },
+        };
+        errdefer {
+            target.deinit(allocator);
+            allocator.destroy(target);
+        }
 
         if (self.match(.equal) == null) {
             try self.report(.UnexpectedToken, "expected '=' in assignment statement", self.current().span);
             self.recoverStatement();
             const fallback = try allocator.create(ast.Expr);
-            fallback.* = .{ .int_literal = .{ .text = "0", .span = target.span } };
+            fallback.* = .{ .int_literal = .{ .text = "0", .span = target.span() } };
             return .{ .assignment = .{
                 .target = target,
                 .value = fallback,
-                .span = ast.spanFromBounds(target.span.start, spanEnd(target.span)),
+                .span = ast.spanFromBounds(target.span().start, spanEnd(target.span())),
             } };
         }
 
@@ -976,7 +986,7 @@ pub const Parser = struct {
         return .{ .assignment = .{
             .target = target,
             .value = value,
-            .span = ast.spanFromBounds(target.span.start, spanEnd(end_span)),
+            .span = ast.spanFromBounds(target.span().start, spanEnd(end_span)),
         } };
     }
 
@@ -2163,8 +2173,22 @@ pub const Parser = struct {
     }
 
     fn isAssignmentStmtStart(self: Parser) bool {
-        return self.current().kind == .identifier and
-            (self.peek(1).kind == .equal or self.peek(1).kind == .semicolon);
+        if (self.current().kind == .identifier and self.peek(1).kind == .semicolon) return true;
+        if (!self.isExprStmtStart()) return false;
+        var offset: usize = 0;
+        var paren_depth: usize = 0;
+        while (true) : (offset += 1) {
+            const kind = self.peek(offset).kind;
+            switch (kind) {
+                .eof, .semicolon, .left_brace, .right_brace => return false,
+                .left_paren => paren_depth += 1,
+                .right_paren => {
+                    if (paren_depth > 0) paren_depth -= 1;
+                },
+                .equal => return paren_depth == 0,
+                else => {},
+            }
+        }
     }
 
     fn isExprStmtStart(self: Parser) bool {
@@ -4029,7 +4053,10 @@ test "parses assignment statement" {
         .assignment => |assignment| assignment,
         else => return error.ExpectedAssignment,
     };
-    try std.testing.expectEqualStrings("x", assignment.target.text);
+    _ = switch (assignment.target.*) {
+        .identifier => |ident| try std.testing.expectEqualStrings("x", ident.name.text),
+        else => return error.ExpectedIdentifierTarget,
+    };
     _ = switch (assignment.value.*) {
         .int_literal => |literal| literal,
         else => return error.ExpectedIntLiteral,
@@ -4054,6 +4081,24 @@ test "parses assignment using binary expression" {
     };
 }
 
+test "parses field assignment statement" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; struct Vec2 { int x; int y; }; int main() { Vec2 v = Vec2 { x: 1, y: 2, }; v.x = 10; return v.x; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const assignment = switch (expectFunctionDecl(unit, 1).body.?.block.?.statements[1]) {
+        .assignment => |assignment| assignment,
+        else => return error.ExpectedAssignment,
+    };
+    _ = switch (assignment.target.*) {
+        .field_access => |field| try std.testing.expectEqualStrings("x", field.field_name.text),
+        else => return error.ExpectedFieldTarget,
+    };
+}
+
 test "parses assignment to bool local" {
     var diagnostics = DiagnosticBag.init(std.testing.allocator);
     defer diagnostics.deinit();
@@ -4066,7 +4111,10 @@ test "parses assignment to bool local" {
         .assignment => |assignment| assignment,
         else => return error.ExpectedAssignment,
     };
-    try std.testing.expectEqualStrings("ok", assignment.target.text);
+    _ = switch (assignment.target.*) {
+        .identifier => |ident| try std.testing.expectEqualStrings("ok", ident.name.text),
+        else => return error.ExpectedIdentifierTarget,
+    };
     _ = switch (assignment.value.*) {
         .unary => |unary| unary,
         else => return error.ExpectedUnaryExpr,

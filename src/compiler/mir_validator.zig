@@ -183,6 +183,21 @@ const Validator = struct {
                 try self.requireValidType(local_value.type_id, span orelse local_value.source_span);
                 break :blk local_value.type_id;
             },
+            .field => |field_place| blk: {
+                const base_type = try self.placeType(function_id, mir.MirPlace.localPlace(field_place.base), span);
+                if (field_place.field_id.index >= self.semantic_module.hir.fields.items.len) {
+                    try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
+                    break :blk null;
+                }
+                const field = self.semantic_module.hir.getField(field_place.field_id);
+                if (base_type) |type_id| {
+                    const kind = self.semantic_module.types.kind(type_id);
+                    if (kind != .struct_type or kind.struct_type.index != field.parent.index) {
+                        try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                    }
+                }
+                break :blk field.type_id;
+            },
         };
     }
 

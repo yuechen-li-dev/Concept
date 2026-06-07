@@ -1,0 +1,16 @@
+# name: phase7 field assignment bool
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+struct Flags { bool ok; int count; };
+
+int main() {
+    Flags f = Flags { ok: false, count: 0, };
+    f.ok = true;
+    if (f.ok) { return 1; }
+    return 0;
+}
