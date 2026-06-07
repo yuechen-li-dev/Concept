@@ -33,6 +33,7 @@ pub const TokenKind = enum {
     must_use,
     discard,
     match,
+    decide,
     when,
     @"if",
     @"else",
@@ -104,6 +105,7 @@ pub const TokenKind = enum {
             .must_use => "must_use",
             .discard => "discard",
             .match => "match",
+            .decide => "decide",
             .when => "when",
             .@"if" => "if",
             .@"else" => "else",
@@ -181,6 +183,7 @@ pub const TokenKind = enum {
             .must_use => "must_use",
             .discard => "discard",
             .match => "match",
+            .decide => "decide",
             .when => "when",
             .@"if" => "if",
             .@"else" => "else",
@@ -260,6 +263,7 @@ pub fn keywordKind(identifier_text: []const u8) ?TokenKind {
     if (std.mem.eql(u8, identifier_text, "must_use")) return .must_use;
     if (std.mem.eql(u8, identifier_text, "discard")) return .discard;
     if (std.mem.eql(u8, identifier_text, "match")) return .match;
+    if (std.mem.eql(u8, identifier_text, "decide")) return .decide;
     if (std.mem.eql(u8, identifier_text, "when")) return .when;
     if (std.mem.eql(u8, identifier_text, "if")) return .@"if";
     if (std.mem.eql(u8, identifier_text, "else")) return .@"else";
@@ -333,6 +337,7 @@ const keyword_cases = [_]KeywordCase{
     .{ .text = "must_use", .kind = .must_use },
     .{ .text = "discard", .kind = .discard },
     .{ .text = "match", .kind = .match },
+    .{ .text = "decide", .kind = .decide },
     .{ .text = "when", .kind = .when },
     .{ .text = "if", .kind = .@"if" },
     .{ .text = "else", .kind = .@"else" },
@@ -402,6 +407,10 @@ test "non-keyword identifiers return null" {
         "must_useful",
         "discarded",
         "trying",
+        "score",
+        "scoreValue",
+        "score_thing",
+        "highScore",
     };
 
     for (identifiers) |identifier| {

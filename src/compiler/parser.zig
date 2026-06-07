@@ -1173,6 +1173,139 @@ pub const Parser = struct {
         return node;
     }
 
+    fn parseDecideExpr(self: *Parser, allocator: std.mem.Allocator) ParseExprError!*ast.Expr {
+        const decide_token = self.advance();
+        var type_name = if (self.current().kind == .identifier or self.current().kind == .mut)
+            self.parseTypeName(allocator) catch |err| switch (err) {
+                error.OutOfMemory => return err,
+            }
+        else blk: {
+            self.report(.UnexpectedToken, "expected decide target type", self.current().span) catch return error.OutOfMemory;
+            break :blk self.emptyTypeName(allocator, self.current().span) catch return error.OutOfMemory;
+        };
+        errdefer type_name.deinit(allocator);
+
+        var arms = std.ArrayList(ast.Expr.DecideArm).init(allocator);
+        errdefer {
+            for (arms.items) |arm| arm.deinit(allocator);
+            arms.deinit();
+        }
+
+        if (self.match(.left_brace) == null) {
+            self.report(.UnexpectedToken, "expected '{' after decide target type", self.current().span) catch return error.OutOfMemory;
+            const node = try allocator.create(ast.Expr);
+            node.* = .{ .decide = .{
+                .type_name = type_name,
+                .arms = try arms.toOwnedSlice(),
+                .span = ast.spanFromBounds(decide_token.span.start, spanEnd(type_name.span)),
+            } };
+            return node;
+        }
+
+        var end_span = type_name.span;
+        while (self.current().kind != .eof and self.current().kind != .right_brace) {
+            if (try self.parseDecideArm(allocator)) |arm| {
+                end_span = arm.span;
+                try arms.append(arm);
+            }
+        }
+
+        if (self.match(.right_brace)) |right_brace| {
+            end_span = right_brace.span;
+        } else {
+            self.report(.UnexpectedToken, "expected '}' after decide arms", self.current().span) catch return error.OutOfMemory;
+        }
+
+        const node = try allocator.create(ast.Expr);
+        node.* = .{ .decide = .{
+            .type_name = type_name,
+            .arms = try arms.toOwnedSlice(),
+            .span = ast.spanFromBounds(decide_token.span.start, spanEnd(end_span)),
+        } };
+        return node;
+    }
+
+    fn parseDecideArm(self: *Parser, allocator: std.mem.Allocator) ParseExprError!?ast.Expr.DecideArm {
+        const variant_token = if (self.current().kind == .identifier) self.advance() else blk: {
+            self.report(.UnexpectedToken, "expected decide arm variant name", self.current().span) catch return error.OutOfMemory;
+            self.recoverDecideArm();
+            break :blk null;
+        };
+        const token = variant_token orelse return null;
+        const variant_name = ast.NameSegment{ .text = token.lexeme, .span = token.span };
+
+        var condition: ?*ast.Expr = null;
+        errdefer if (condition) |condition_expr| {
+            condition_expr.deinit(allocator);
+            allocator.destroy(condition_expr);
+        };
+
+        if (self.match(.when) != null) {
+            if (self.isContextualIdentifier("score") or self.current().kind == .semicolon or self.current().kind == .right_brace or self.current().kind == .eof) {
+                self.report(.UnexpectedToken, "expected decide arm condition after when", self.current().span) catch return error.OutOfMemory;
+            } else {
+                condition = self.parseExpr(allocator) catch |err| switch (err) {
+                    error.OutOfMemory => return err,
+                    error.ParseFailed => null,
+                };
+            }
+        }
+
+        if (self.expectContextualIdentifier("score", "expected 'score' in decide arm") == null) {
+            self.recoverDecideArm();
+            return null;
+        }
+
+        var score = if (self.current().kind == .semicolon or self.current().kind == .right_brace or self.current().kind == .eof) blk: {
+            self.report(.UnexpectedToken, "expected decide arm score expression", self.current().span) catch return error.OutOfMemory;
+            const fallback = try allocator.create(ast.Expr);
+            fallback.* = .{ .int_literal = .{ .text = "0", .span = self.current().span } };
+            break :blk fallback;
+        } else self.parseExpr(allocator) catch |err| switch (err) {
+            error.OutOfMemory => return err,
+            error.ParseFailed => blk: {
+                self.report(.UnexpectedToken, "expected decide arm score expression", self.current().span) catch return error.OutOfMemory;
+                const fallback = try allocator.create(ast.Expr);
+                fallback.* = .{ .int_literal = .{ .text = "0", .span = self.current().span } };
+                break :blk fallback;
+            },
+        };
+        errdefer {
+            score.deinit(allocator);
+            allocator.destroy(score);
+        }
+
+        const end_span = if (self.match(.semicolon)) |semicolon| semicolon.span else blk: {
+            self.report(.UnexpectedToken, "expected ';' after decide arm", self.current().span) catch return error.OutOfMemory;
+            if (self.current().kind != .identifier and self.current().kind != .right_brace and self.current().kind != .eof) self.recoverDecideArm();
+            break :blk score.span();
+        };
+
+        return .{
+            .variant_name = variant_name,
+            .condition = condition,
+            .score = score,
+            .span = ast.spanFromBounds(variant_name.span.start, spanEnd(end_span)),
+        };
+    }
+
+    fn isContextualIdentifier(self: Parser, text: []const u8) bool {
+        return self.current().kind == .identifier and std.mem.eql(u8, self.current().lexeme, text);
+    }
+
+    fn expectContextualIdentifier(self: *Parser, text: []const u8, message: []const u8) !?Token {
+        if (self.isContextualIdentifier(text)) return self.advance();
+        try self.report(.UnexpectedToken, message, self.current().span);
+        return null;
+    }
+
+    fn recoverDecideArm(self: *Parser) void {
+        while (self.current().kind != .eof and self.current().kind != .semicolon and self.current().kind != .right_brace) {
+            self.advance();
+        }
+        _ = self.match(.semicolon);
+    }
+
     fn parsePrimaryExpr(self: *Parser, allocator: std.mem.Allocator) ParseExprError!*ast.Expr {
         const token = self.current();
         switch (token.kind) {
@@ -1201,6 +1334,7 @@ pub const Parser = struct {
                 } };
                 return node;
             },
+            .decide => return self.parseDecideExpr(allocator),
             .left_paren => {
                 const left_paren = self.advance();
                 var inner = self.parseExpr(allocator) catch |err| switch (err) {
@@ -1885,7 +2019,7 @@ pub const Parser = struct {
 
     fn isExprStmtStart(self: Parser) bool {
         return switch (self.current().kind) {
-            .identifier, .int_literal, .true, .false, .left_paren, .minus, .bang => true,
+            .identifier, .int_literal, .true, .false, .left_paren, .minus, .bang, .decide => true,
             else => false,
         };
     }
@@ -4479,4 +4613,220 @@ test "trying remains an identifier" {
     defer unit.deinit(std.testing.allocator);
 
     try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+}
+
+test "parses decide expression with one unconditional arm" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; AlertChannel main() { return decide AlertChannel { Nominal score 0; }; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const stmt = expectFunctionDecl(unit, 0).body.?.block.?.statements[0];
+    const return_stmt = switch (stmt) {
+        .return_stmt => |return_stmt| return_stmt,
+        else => return error.ExpectedReturnStmt,
+    };
+    const decide = switch (return_stmt.value.?.*) {
+        .decide => |decide| decide,
+        else => return error.ExpectedDecideExpr,
+    };
+    try std.testing.expectEqualStrings("AlertChannel", decide.type_name.name.parts[0].text);
+    try std.testing.expectEqual(@as(usize, 1), decide.arms.len);
+    try std.testing.expectEqualStrings("Nominal", decide.arms[0].variant_name.text);
+    try std.testing.expect(decide.arms[0].condition == null);
+}
+
+test "parses decide expression with conditional arm" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; AlertChannel main(bool fault, int temperature) { return decide AlertChannel { Critical when fault && temperature > 900 score 120; Nominal score 0; }; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Decide AlertChannel") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Arm Critical") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "When") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Binary &&") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Score") != null);
+}
+
+test "parses decide expression with multiple arms" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource(
+        \\module Main;
+        \\AlertChannel main(bool fault, int temperature, int pressure, int threshold) {
+        \\    return decide AlertChannel {
+        \\        Critical when fault && temperature > 900 score 120;
+        \\        Warning when temperature > 750 score 85;
+        \\        Advisory when pressure > threshold score 70;
+        \\        Nominal score 0;
+        \\    };
+        \\}
+    , &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const return_stmt = switch (expectFunctionDecl(unit, 0).body.?.block.?.statements[0]) {
+        .return_stmt => |return_stmt| return_stmt,
+        else => return error.ExpectedReturnStmt,
+    };
+    const decide = switch (return_stmt.value.?.*) {
+        .decide => |decide| decide,
+        else => return error.ExpectedDecideExpr,
+    };
+    try std.testing.expectEqual(@as(usize, 4), decide.arms.len);
+    try std.testing.expectEqualStrings("Warning", decide.arms[1].variant_name.text);
+    try std.testing.expectEqualStrings("Nominal", decide.arms[3].variant_name.text);
+}
+
+test "parses decide expression in local initializer" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { AlertChannel channel = decide AlertChannel { Nominal score 0; }; return 0; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const local = switch (expectFunctionDecl(unit, 0).body.?.block.?.statements[0]) {
+        .local_decl => |local| local,
+        else => return error.ExpectedLocalDecl,
+    };
+    _ = switch (local.initializer.*) {
+        .decide => |decide| decide,
+        else => return error.ExpectedDecideExpr,
+    };
+}
+
+test "parses decide expression as function call argument" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int use(AlertChannel channel); int main() { return use(decide AlertChannel { Nominal score 0; }); }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Call use") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Decide AlertChannel") != null);
+}
+
+test "score remains valid identifier outside decide context" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { int score = 0; return score; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+}
+
+test "decide missing score marker diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; AlertChannel main(bool fault) { return decide AlertChannel { Critical when fault 120; Nominal score 0; }; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected 'score' in decide arm", diagnostics.diagnostics.items[0].message);
+}
+
+test "decide missing score expression diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; AlertChannel main() { return decide AlertChannel { Nominal score; }; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected decide arm score expression", diagnostics.diagnostics.items[0].message);
+}
+
+test "decide missing semicolon diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; AlertChannel main() { return decide AlertChannel { Nominal score 0 Critical score 1; }; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected ';' after decide arm", diagnostics.diagnostics.items[0].message);
+}
+
+test "decide malformed arm recovers to following arm" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; AlertChannel main() { return decide AlertChannel { 123 score 9; Nominal score 0; }; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expect(diagnostics.count() >= 1);
+    const return_stmt = switch (expectFunctionDecl(unit, 0).body.?.block.?.statements[0]) {
+        .return_stmt => |return_stmt| return_stmt,
+        else => return error.ExpectedReturnStmt,
+    };
+    const decide = switch (return_stmt.value.?.*) {
+        .decide => |decide| decide,
+        else => return error.ExpectedDecideExpr,
+    };
+    try std.testing.expectEqual(@as(usize, 1), decide.arms.len);
+    try std.testing.expectEqualStrings("Nominal", decide.arms[0].variant_name.text);
+}
+
+test "decide missing closing brace diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; AlertChannel main() { return decide AlertChannel { Nominal score 0; ", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected '}' after decide arms", diagnostics.diagnostics.items[0].message);
+}
+
+test "AST snapshot debug output includes decide expression" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource(
+        \\module Main;
+        \\AlertChannel main(bool fault) {
+        \\    return decide AlertChannel {
+        \\        Critical when fault score 120;
+        \\        Nominal score 0;
+        \\    };
+        \\}
+    , &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+
+    try std.testing.expectEqualStrings(
+        \\CompilationUnit
+        \\  Module Main
+        \\  Function AlertChannel main
+        \\    Param bool fault
+        \\    Body
+        \\      Return
+        \\        Decide AlertChannel
+        \\          Arm Critical
+        \\            When
+        \\              Identifier fault
+        \\            Score
+        \\              Int 120
+        \\          Arm Nominal
+        \\            Score
+        \\              Int 0
+        \\
+    , snapshot);
 }

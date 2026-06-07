@@ -333,6 +333,7 @@ pub const Expr = union(enum) {
     binary: BinaryExpr,
     call: CallExpr,
     enum_constructor: EnumConstructorExpr,
+    decide: DecideExpr,
 
     pub const IntLiteralExpr = struct { text: []const u8, span: SourceSpan };
     pub const BoolLiteralExpr = struct { value: bool, span: SourceSpan };
@@ -343,6 +344,22 @@ pub const Expr = union(enum) {
     pub const BinaryExpr = struct { op: BinaryOp, left: *Expr, right: *Expr, span: SourceSpan };
     pub const CallExpr = struct { callee: NameSegment, args: []*Expr, span: SourceSpan };
     pub const EnumConstructorExpr = struct { enum_name: NameSegment, variant_name: NameSegment, args: []*Expr, span: SourceSpan };
+    pub const DecideExpr = struct { type_name: TypeName, arms: []DecideArm, span: SourceSpan };
+    pub const DecideArm = struct {
+        variant_name: NameSegment,
+        condition: ?*Expr,
+        score: *Expr,
+        span: SourceSpan,
+
+        pub fn deinit(self: DecideArm, allocator: std.mem.Allocator) void {
+            if (self.condition) |condition| {
+                condition.deinit(allocator);
+                allocator.destroy(condition);
+            }
+            self.score.deinit(allocator);
+            allocator.destroy(self.score);
+        }
+    };
 
     pub fn span(self: Expr) SourceSpan {
         return switch (self) {
@@ -355,6 +372,7 @@ pub const Expr = union(enum) {
             .binary => |expr| expr.span,
             .call => |expr| expr.span,
             .enum_constructor => |expr| expr.span,
+            .decide => |expr| expr.span,
         };
     }
 
@@ -391,6 +409,11 @@ pub const Expr = union(enum) {
                     allocator.destroy(arg);
                 }
                 allocator.free(expr.args);
+            },
+            .decide => |expr| {
+                expr.type_name.deinit(allocator);
+                for (expr.arms) |arm| arm.deinit(allocator);
+                allocator.free(expr.arms);
             },
             .int_literal, .bool_literal, .identifier => {},
         }
@@ -448,6 +471,25 @@ pub const Expr = union(enum) {
                 try writer.writeAll(expr.variant_name.text);
                 try writer.writeByte('\n');
                 for (expr.args) |arg| try arg.writeDebug(writer, depth + 1);
+            },
+            .decide => |expr| {
+                try writer.writeAll("Decide ");
+                try expr.type_name.write(writer);
+                try writer.writeByte('\n');
+                for (expr.arms) |arm| {
+                    try writeIndent(writer, depth + 1);
+                    try writer.writeAll("Arm ");
+                    try writer.writeAll(arm.variant_name.text);
+                    try writer.writeByte('\n');
+                    if (arm.condition) |condition| {
+                        try writeIndent(writer, depth + 2);
+                        try writer.writeAll("When\n");
+                        try condition.writeDebug(writer, depth + 3);
+                    }
+                    try writeIndent(writer, depth + 2);
+                    try writer.writeAll("Score\n");
+                    try arm.score.writeDebug(writer, depth + 3);
+                }
             },
         }
     }
