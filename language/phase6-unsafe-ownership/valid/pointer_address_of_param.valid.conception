@@ -1,0 +1,21 @@
+# name: pointer address of param
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int readParamAddress(int x) {
+    int* p = &x;
+
+    unsafe {
+        return *p;
+    }
+}
+
+int main() {
+    return readParamAddress(11);
+}
+
+=== run ===
+exit_code: 11

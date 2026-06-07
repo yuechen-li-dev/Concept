@@ -68,6 +68,26 @@ The MIR C backend renders supported data pointers directly (`int*`, `void*`, and
 
 This milestone intentionally does not add address-of, dereference, pointer arithmetic, null literals, ownership, moves, drops, references, borrow checking, volatile, atomics, or address-space qualifiers. Raw pointer dereference remains planned for P6-M3 and will require an unsafe context. Ownership and nullability refinements remain future work.
 
+## P6-M3 address-of and dereference v0
+
+P6-M3 adds the first raw-pointer operations without expanding beyond read-only pointer flow. Address-of supports local and parameter places, and the operation lowers into MIR as `AddressOf(...)`. Dereference lowers into MIR as `Deref(...)`, requires an unsafe context, and reads through the pointer into a value; assignment through dereference remains future work.
+
+The HIR checker rejects address-of operands that are not supported places, including temporaries and call results, and rejects dereference outside an unsafe block or unsafe function. Dereferencing a non-pointer is also rejected. The MIR validator and C backend understand address-of and read-only dereference so the executable path can emit ordinary C `&` and `*` for the supported v0 cases.
+
+P6-M3 intentionally does not add pointer arithmetic, null literals, pointer comparisons, arbitrary place address-of, field/index address-of, write-through dereference, ownership, move, drop, references, borrow checking, volatile, atomics, or address-space semantics.
+
+## P6-M4 pointer runtime/backend stabilization
+
+P6-M4 is a stabilization and coverage milestone for the unsafe/raw-pointer slice already introduced by P6-M1 through P6-M3. It adds representative run fixtures for address-of locals and parameters, dereference inside unsafe blocks and unsafe functions, unsafe-call plus dereference interaction, and local pointer copies followed by dereference. It also keeps invalid fixtures around the unsafe boundary: unsafe calls outside unsafe context, dereference outside unsafe context, dereference of a non-pointer, and address-of call/temporary results.
+
+The C backend coverage asserts that supported pointer locals render as pointer types, local address-of emits `&` on local storage, parameter address-of emits `&` on parameter storage, dereference emits `*` on the pointer local, and unsafe blocks leave no special C marker in this milestone. MIR debug coverage confirms both `AddressOf(...)` and `Deref(...)`, including address-of a parameter.
+
+P6-M4 adds no new pointer semantics. Pointer arithmetic, assignment through dereference, null literals, arbitrary/field/index address-of, pointer comparisons, owning pointers, references and borrow checking, `MaybeUninit`, move/drop, unsafe impl, volatile/atomics/address spaces, and struct runtime layout remain future work.
+
+### Unsafe/raw pointer slice status
+
+P6-M1 through P6-M4 establish the unsafe permission boundary and read-only raw-pointer flow through HIR, MIR, validation, C emission, fixtures, and runtime checks. The next P6 work may move toward initialization and `MaybeUninit`; ownership/drop can be split into a later phase if implementing it would over-expand the current scope.
+
 ## Non-goals
 
 Phase 6 v0 explicitly does not include:
@@ -422,13 +442,13 @@ P6-M2  raw pointer type surface
        - no pointer arithmetic yet
 
 P6-M3  address-of and dereference v0
-       - &x and *ptr or chosen explicit syntax
-       - dereference requires unsafe
-       - simple pointer read/write if scoped tightly
+       - &x and *ptr for supported local/parameter places
+       - read-only dereference requires unsafe
+       - no pointer write-through or arithmetic
 
 P6-M4  pointer runtime fixtures and stabilization
-       - C backend/run fixtures for simple pointers
-       - invalid fixtures for deref outside unsafe
+       - C backend/run fixtures for simple pointer flow
+       - invalid fixtures for unsafe boundary and unsupported address-of operands
 
 P6-M5  initialization and MaybeUninit design/scaffold
        - use-before-init direction

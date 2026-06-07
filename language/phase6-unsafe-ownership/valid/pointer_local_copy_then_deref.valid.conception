@@ -1,0 +1,19 @@
+# name: pointer local copy then deref
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    int x = 17;
+    int* p = &x;
+    int* q = p;
+
+    unsafe {
+        return *q;
+    }
+}
+
+=== run ===
+exit_code: 17

@@ -1634,13 +1634,24 @@ test "language check fixture: phase6 pointer call mismatch" {
     try expectCheckFixture("../../../language/phase6-unsafe-ownership/invalid/pointer_call_mismatch.invalid.conception");
 }
 
-
 test "language run fixture: phase6 pointer address deref" {
     try expectRunFixture("../../../language/phase6-unsafe-ownership/valid/pointer_address_deref_run.valid.conception");
 }
 
 test "language run fixture: phase6 pointer deref in unsafe function" {
     try expectRunFixture("../../../language/phase6-unsafe-ownership/valid/pointer_deref_in_unsafe_function.valid.conception");
+}
+
+test "language run fixture: phase6 pointer address of param" {
+    try expectRunFixture("../../../language/phase6-unsafe-ownership/valid/pointer_address_of_param.valid.conception");
+}
+
+test "language run fixture: phase6 pointer unsafe call deref interaction" {
+    try expectRunFixture("../../../language/phase6-unsafe-ownership/valid/pointer_unsafe_call_deref_interaction.valid.conception");
+}
+
+test "language run fixture: phase6 pointer local copy then deref" {
+    try expectRunFixture("../../../language/phase6-unsafe-ownership/valid/pointer_local_copy_then_deref.valid.conception");
 }
 
 test "language check fixture: phase6 pointer deref outside unsafe" {

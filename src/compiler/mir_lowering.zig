@@ -953,6 +953,28 @@ test "MIR lowering lowers address-of and deref" {
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "Deref(Copy(MirLocalId(1)))") != null);
 }
 
+test "MIR lowering lowers address-of param and deref" {
+    var module = try newModule();
+    defer module.deinit();
+    const main = try addFunction(&module, "readParamAddress", module.types.intType(), false);
+    const int_ptr = try module.types.addPointerType(module.types.intType());
+    const x = try addParam(&module, main, "x", module.types.intType());
+    const p = try addLocal(&module, main, "p", int_ptr);
+    const addr = try module.hir.addExpr(.{ .address_of = try module.hir.addExpr(.{ .param_ref = x }, hir.synthetic_span) }, hir.synthetic_span);
+    const decl_p = try module.hir.addStmt(.{ .local_decl = .{ .local = p, .initializer = addr } }, hir.synthetic_span);
+    const deref = try module.hir.addExpr(.{ .deref = try module.hir.addExpr(.{ .local_ref = p }, hir.synthetic_span) }, hir.synthetic_span);
+    const ret = try module.hir.addStmt(.{ .return_stmt = deref }, hir.synthetic_span);
+    try setBody(&module, main, &.{ decl_p, ret });
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "AddressOf(MirLocalId(0))") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Deref(Copy(MirLocalId(1)))") != null);
+}
+
 fn newModule() !semantics.SemanticModule {
     return semantics.SemanticModule.init(std.testing.allocator);
 }
