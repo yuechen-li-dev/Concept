@@ -1,0 +1,20 @@
+# name: template constrained equal parse
+# phase: parse
+# expect: pass
+
+=== source ===
+module Generics;
+
+template<T: Equatable<T>>
+bool areEqual(T a, T b) {
+    return true;
+}
+
+=== ast ===
+CompilationUnit
+  Module Generics
+  Template<T: Equatable<T>>
+    Function bool areEqual(T a, T b)
+    Body
+      Return
+        Bool true

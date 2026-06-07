@@ -1,0 +1,11 @@
+# name: template missing close angle parse
+# phase: parse
+# expect: fail
+
+=== source ===
+module Generics;
+
+template<T T identity(T value);
+
+=== diagnostics ===
+CON0003

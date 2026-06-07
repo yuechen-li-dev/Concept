@@ -852,6 +852,31 @@ pub const FunctionBody = struct {
     }
 };
 
+pub const TypeParamDecl = struct {
+    name: NameSegment,
+    constraint: ?TypeName = null,
+    span: SourceSpan,
+
+    pub fn deinit(self: TypeParamDecl, allocator: std.mem.Allocator) void {
+        if (self.constraint) |constraint| constraint.deinit(allocator);
+    }
+};
+
+pub const TemplateDecl = struct {
+    attributes: []Attribute = &.{},
+    params: []TypeParamDecl,
+    body: FunctionDecl,
+    span: SourceSpan,
+
+    pub fn deinit(self: TemplateDecl, allocator: std.mem.Allocator) void {
+        for (self.attributes) |attribute| attribute.deinit(allocator);
+        allocator.free(self.attributes);
+        for (self.params) |param| param.deinit(allocator);
+        allocator.free(self.params);
+        self.body.deinit(allocator);
+    }
+};
+
 pub const FunctionDecl = struct {
     attributes: []Attribute = &.{},
     is_export: bool,
@@ -870,6 +895,7 @@ pub const FunctionDecl = struct {
 
 pub const Item = union(enum) {
     function_decl: FunctionDecl,
+    template_decl: TemplateDecl,
     struct_decl: StructDecl,
     enum_decl: EnumDecl,
     concept_decl: ConceptDecl,
@@ -879,6 +905,7 @@ pub const Item = union(enum) {
     pub fn deinit(self: Item, allocator: std.mem.Allocator) void {
         switch (self) {
             .function_decl => |function_decl| function_decl.deinit(allocator),
+            .template_decl => |template_decl| template_decl.deinit(allocator),
             .struct_decl => |struct_decl| struct_decl.deinit(allocator),
             .enum_decl => |enum_decl| enum_decl.deinit(allocator),
             .concept_decl => |concept_decl| concept_decl.deinit(allocator),
@@ -912,6 +939,34 @@ pub const Item = union(enum) {
                 }
                 try writer.writeAll(")\n");
                 if (function_decl.body) |body| {
+                    try body.writeDebug(writer);
+                }
+            },
+            .template_decl => |template_decl| {
+                try writeAttributesDebug(template_decl.attributes, writer);
+                try writer.writeAll("  Template<");
+                for (template_decl.params, 0..) |param, index| {
+                    if (index != 0) try writer.writeAll(", ");
+                    try writer.writeAll(param.name.text);
+                    if (param.constraint) |constraint| {
+                        try writer.writeAll(": ");
+                        try constraint.write(writer);
+                    }
+                }
+                try writer.writeAll(">\n");
+                try writer.writeAll("    Function ");
+                try template_decl.body.signature.return_type.write(writer);
+                try writer.writeByte(' ');
+                try template_decl.body.signature.name.write(writer);
+                try writer.writeByte('(');
+                for (template_decl.body.signature.params, 0..) |param, index| {
+                    if (index != 0) try writer.writeAll(", ");
+                    try param.type_name.write(writer);
+                    try writer.writeByte(' ');
+                    try writer.writeAll(param.name.text);
+                }
+                try writer.writeAll(")\n");
+                if (template_decl.body.body) |body| {
                     try body.writeDebug(writer);
                 }
             },

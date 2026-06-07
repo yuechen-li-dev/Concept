@@ -1,0 +1,20 @@
+# name: template identity parse
+# phase: parse
+# expect: pass
+
+=== source ===
+module Generics;
+
+template<T>
+T identity(T value) {
+    return value;
+}
+
+=== ast ===
+CompilationUnit
+  Module Generics
+  Template<T>
+    Function T identity(T value)
+    Body
+      Return
+        Identifier value

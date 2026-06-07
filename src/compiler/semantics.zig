@@ -100,7 +100,7 @@ const Collector = struct {
                 .function_decl => |function_decl| try self.declareFunction(function_decl),
                 .struct_decl => |struct_decl| try self.declareStruct(struct_decl),
                 .enum_decl => |enum_decl| try self.declareEnum(enum_decl),
-                .concept_decl, .interface_decl, .impl_decl => {},
+                .template_decl, .concept_decl, .interface_decl, .impl_decl => {},
             }
         }
 
@@ -111,7 +111,7 @@ const Collector = struct {
                 .function_decl => |function_decl| try self.resolveFunction(function_decl),
                 .struct_decl => |struct_decl| try self.resolveStruct(struct_decl),
                 .enum_decl => |enum_decl| try self.resolveEnum(enum_decl),
-                .concept_decl, .interface_decl, .impl_decl => {},
+                .template_decl, .concept_decl, .interface_decl, .impl_decl => {},
             }
         }
 
@@ -120,7 +120,7 @@ const Collector = struct {
         for (unit.items) |item| {
             switch (item) {
                 .function_decl => |function_decl| try self.lowerFunctionBody(function_decl),
-                .struct_decl, .enum_decl, .concept_decl, .interface_decl, .impl_decl => {},
+                .struct_decl, .enum_decl, .template_decl, .concept_decl, .interface_decl, .impl_decl => {},
             }
         }
     }

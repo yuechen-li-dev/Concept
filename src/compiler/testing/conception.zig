@@ -678,6 +678,38 @@ test "language parse fixture: phase2 unsupported statement" {
     try expectParseFixture("../../../language/phase2-execution/invalid/unsupported_statement.invalid.conception");
 }
 
+test "language parse fixture: phase8 template identity" {
+    try expectParseFixture("../../../language/phase8-concepts-templates/valid/template_identity.valid.conception");
+}
+
+test "language parse fixture: phase8 template map get or default" {
+    try expectParseFixture("../../../language/phase8-concepts-templates/valid/template_map_get_or_default.valid.conception");
+}
+
+test "language parse fixture: phase8 constrained template equal" {
+    try expectParseFixture("../../../language/phase8-concepts-templates/valid/template_constrained_equal.valid.conception");
+}
+
+test "language parse fixture: phase8 template missing angle" {
+    try expectParseFixture("../../../language/phase8-concepts-templates/invalid/template_missing_angle.invalid.conception");
+}
+
+test "language parse fixture: phase8 template missing close angle" {
+    try expectParseFixture("../../../language/phase8-concepts-templates/invalid/template_missing_close_angle.invalid.conception");
+}
+
+test "language parse fixture: phase8 template missing parameter identifier" {
+    try expectParseFixture("../../../language/phase8-concepts-templates/invalid/template_missing_param_identifier.invalid.conception");
+}
+
+test "language parse fixture: phase8 template duplicate parameter" {
+    try expectParseFixture("../../../language/phase8-concepts-templates/invalid/template_duplicate_param.invalid.conception");
+}
+
+test "language parse fixture: phase8 template invalid constraint" {
+    try expectParseFixture("../../../language/phase8-concepts-templates/invalid/template_invalid_constraint.invalid.conception");
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Phase execution helpers
 // ─────────────────────────────────────────────────────────────────────────────
