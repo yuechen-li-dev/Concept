@@ -329,6 +329,8 @@ pub const Expr = union(enum) {
     identifier: IdentifierExpr,
     group: GroupExpr,
     unary: UnaryExpr,
+    address_of: PrefixExpr,
+    deref: PrefixExpr,
     try_expr: TryExpr,
     binary: BinaryExpr,
     call: CallExpr,
@@ -340,6 +342,7 @@ pub const Expr = union(enum) {
     pub const IdentifierExpr = struct { name: NameSegment, span: SourceSpan };
     pub const GroupExpr = struct { inner: *Expr, span: SourceSpan };
     pub const UnaryExpr = struct { op: UnaryOp, operand: *Expr, span: SourceSpan };
+    pub const PrefixExpr = struct { operand: *Expr, span: SourceSpan };
     pub const TryExpr = struct { operand: *Expr, span: SourceSpan };
     pub const BinaryExpr = struct { op: BinaryOp, left: *Expr, right: *Expr, span: SourceSpan };
     pub const CallExpr = struct { callee: NameSegment, args: []*Expr, span: SourceSpan };
@@ -368,6 +371,8 @@ pub const Expr = union(enum) {
             .identifier => |expr| expr.span,
             .group => |expr| expr.span,
             .unary => |expr| expr.span,
+            .address_of => |expr| expr.span,
+            .deref => |expr| expr.span,
             .try_expr => |expr| expr.span,
             .binary => |expr| expr.span,
             .call => |expr| expr.span,
@@ -382,7 +387,7 @@ pub const Expr = union(enum) {
                 expr.inner.deinit(allocator);
                 allocator.destroy(expr.inner);
             },
-            .unary => |expr| {
+            .unary, .address_of, .deref => |expr| {
                 expr.operand.deinit(allocator);
                 allocator.destroy(expr.operand);
             },
@@ -445,6 +450,14 @@ pub const Expr = union(enum) {
                 try writer.writeAll("Unary ");
                 try writer.writeAll(expr.op.lexeme());
                 try writer.writeByte('\n');
+                try expr.operand.writeDebug(writer, depth + 1);
+            },
+            .address_of => |expr| {
+                try writer.writeAll("AddressOf\n");
+                try expr.operand.writeDebug(writer, depth + 1);
+            },
+            .deref => |expr| {
+                try writer.writeAll("Deref\n");
                 try expr.operand.writeDebug(writer, depth + 1);
             },
             .try_expr => |expr| {

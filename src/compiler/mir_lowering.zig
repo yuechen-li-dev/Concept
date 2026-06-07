@@ -396,6 +396,8 @@ const FunctionLowerer = struct {
             .param_ref => |param_id| .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(try self.resolveParam(param_id))), .block = block_id },
             .group => |inner| try self.lowerExpr(inner, block_id),
             .unary => |unary| try self.lowerUnary(expr, unary, block_id),
+            .address_of => |operand| try self.lowerAddressOf(expr, operand, block_id),
+            .deref => |operand| try self.lowerDeref(expr, operand, block_id),
             .binary => |binary| try self.lowerBinary(expr, binary, block_id),
             .call => |call| try self.lowerCall(expr, call, block_id),
             .enum_constructor => |constructor| try self.lowerEnumConstructor(expr, constructor, block_id),
@@ -415,6 +417,36 @@ const FunctionLowerer = struct {
             ),
         });
         return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = lowered.block };
+    }
+
+    fn lowerAddressOf(self: *FunctionLowerer, expr: hir.HirExpr, operand: hir.ExprId, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const place = try self.lowerAddressablePlace(operand);
+        const temp = try self.addTemp(try self.inferExprTypeFrom(expr));
+        try self.store.appendStatement(block_id, .{
+            .span = expr.span,
+            .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(temp), mir.MirRvalue.addressOf(place)),
+        });
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = block_id };
+    }
+
+    fn lowerDeref(self: *FunctionLowerer, expr: hir.HirExpr, operand: hir.ExprId, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const lowered = try self.lowerExpr(operand, block_id);
+        const temp = try self.addTemp(try self.inferExprTypeFrom(expr));
+        try self.store.appendStatement(lowered.block, .{
+            .span = expr.span,
+            .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(temp), mir.MirRvalue.deref(lowered.operand)),
+        });
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = lowered.block };
+    }
+
+    fn lowerAddressablePlace(self: *FunctionLowerer, expr_id: hir.ExprId) LoweringError!mir.MirPlace {
+        const expr = self.semantic_module.hir.getExpr(expr_id).*;
+        return switch (expr.kind) {
+            .local_ref => |local_id| mir.MirPlace.localPlace(try self.resolveLocal(local_id)),
+            .param_ref => |param_id| mir.MirPlace.localPlace(try self.resolveParam(param_id)),
+            .group => |inner| try self.lowerAddressablePlace(inner),
+            else => error.InvalidMirLowering,
+        };
     }
 
     fn lowerBinary(self: *FunctionLowerer, expr: hir.HirExpr, binary: anytype, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
@@ -669,6 +701,14 @@ const FunctionLowerer = struct {
                 .negate => self.semantic_module.types.intType(),
                 .logical_not => self.semantic_module.types.boolType(),
             },
+            .address_of => |operand| try self.semantic_module.types.addPointerType(try self.inferAddressableExprType(operand)),
+            .deref => |operand| blk: {
+                const operand_type = try self.inferExprType(operand);
+                break :blk switch (self.semantic_module.types.kind(operand_type)) {
+                    .pointer => |pointer| pointer.pointee,
+                    else => error.InvalidMirLowering,
+                };
+            },
             .binary => |binary| switch (binary.op) {
                 .multiply, .divide, .modulo, .add, .subtract => self.semantic_module.types.intType(),
                 .less, .less_equal, .greater, .greater_equal, .equal_equal, .bang_equal, .logical_and, .logical_or => self.semantic_module.types.boolType(),
@@ -681,6 +721,16 @@ const FunctionLowerer = struct {
                 const shape = self.semantic_module.resultShapeForType(operand_type) orelse return error.MissingResultShape;
                 break :blk shape.ok_type;
             },
+        };
+    }
+
+    fn inferAddressableExprType(self: *FunctionLowerer, expr_id: hir.ExprId) LoweringError!types.TypeId {
+        const expr = self.semantic_module.hir.getExpr(expr_id).*;
+        return switch (expr.kind) {
+            .local_ref => |local_id| self.semantic_module.hir.getLocal(local_id).type_id,
+            .param_ref => |param_id| self.semantic_module.hir.getParam(param_id).type_id,
+            .group => |inner| try self.inferAddressableExprType(inner),
+            else => error.InvalidMirLowering,
         };
     }
 
@@ -878,6 +928,31 @@ test "MIR lowering debug snapshot includes enum payload extraction" {
     const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
     defer std.testing.allocator.free(snapshot);
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "EnumPayloadField(Copy(MirLocalId(0)), EnumPayloadFieldId(0))") != null);
+}
+
+
+
+test "MIR lowering lowers address-of and deref" {
+    var module = try newModule();
+    defer module.deinit();
+    const main = try addFunction(&module, "main", module.types.intType(), false);
+    const int_ptr = try module.types.addPointerType(module.types.intType());
+    const x = try addLocal(&module, main, "x", module.types.intType());
+    const p = try addLocal(&module, main, "p", int_ptr);
+    const decl_x = try module.hir.addStmt(.{ .local_decl = .{ .local = x, .initializer = try intExpr(&module, "7") } }, hir.synthetic_span);
+    const addr = try module.hir.addExpr(.{ .address_of = try module.hir.addExpr(.{ .local_ref = x }, hir.synthetic_span) }, hir.synthetic_span);
+    const decl_p = try module.hir.addStmt(.{ .local_decl = .{ .local = p, .initializer = addr } }, hir.synthetic_span);
+    const deref = try module.hir.addExpr(.{ .deref = try module.hir.addExpr(.{ .local_ref = p }, hir.synthetic_span) }, hir.synthetic_span);
+    const ret = try module.hir.addStmt(.{ .return_stmt = deref }, hir.synthetic_span);
+    try setBody(&module, main, &.{ decl_x, decl_p, ret });
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "AddressOf(MirLocalId(0))") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Deref(Copy(MirLocalId(1)))") != null);
 }
 
 fn newModule() !semantics.SemanticModule {

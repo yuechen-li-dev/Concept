@@ -1,0 +1,17 @@
+# name: pointer deref non pointer
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    int x = 7;
+    unsafe {
+        return *x;
+    }
+}
+
+=== diagnostics ===
+CON0072

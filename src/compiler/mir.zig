@@ -121,6 +121,8 @@ pub const MirRvalue = union(enum) {
         op: MirUnaryOp,
         operand: MirOperand,
     },
+    address_of: MirPlace,
+    deref: MirOperand,
     binary: struct {
         op: MirBinaryOp,
         left: MirOperand,
@@ -149,6 +151,14 @@ pub const MirRvalue = union(enum) {
         return .{ .unary = .{ .op = op, .operand = operand } };
     }
 
+    pub fn addressOf(place: MirPlace) MirRvalue {
+        return .{ .address_of = place };
+    }
+
+    pub fn deref(operand: MirOperand) MirRvalue {
+        return .{ .deref = operand };
+    }
+
     pub fn binaryOp(op: MirBinaryOp, left: MirOperand, right: MirOperand) MirRvalue {
         return .{ .binary = .{ .op = op, .left = left, .right = right } };
     }
@@ -175,6 +185,8 @@ pub const MirRvalue = union(enum) {
         return switch (self) {
             .use => |operand| MirRvalue.use_(try operand.clone(allocator)),
             .unary => |unary_rvalue| MirRvalue.unaryOp(unary_rvalue.op, try unary_rvalue.operand.clone(allocator)),
+            .address_of => |place| MirRvalue.addressOf(place),
+            .deref => |operand| MirRvalue.deref(try operand.clone(allocator)),
             .binary => |binary_rvalue| MirRvalue.binaryOp(
                 binary_rvalue.op,
                 try binary_rvalue.left.clone(allocator),
@@ -191,6 +203,8 @@ pub const MirRvalue = union(enum) {
         switch (self) {
             .use => |operand| operand.deinit(allocator),
             .unary => |unary_rvalue| unary_rvalue.operand.deinit(allocator),
+            .address_of => {},
+            .deref => |operand| operand.deinit(allocator),
             .binary => |binary_rvalue| {
                 binary_rvalue.left.deinit(allocator);
                 binary_rvalue.right.deinit(allocator);
@@ -640,6 +654,16 @@ fn writeRvalueDebug(writer: *std.Io.Writer, rvalue: MirRvalue) !void {
         .unary => |unary_rvalue| {
             try writer.print("Unary {s} ", .{unary_rvalue.op.lexeme()});
             try writeOperandDebug(writer, unary_rvalue.operand);
+        },
+        .address_of => |place| {
+            try writer.writeAll("AddressOf(");
+            try writePlaceDebug(writer, place);
+            try writer.writeByte(')');
+        },
+        .deref => |operand| {
+            try writer.writeAll("Deref(");
+            try writeOperandDebug(writer, operand);
+            try writer.writeByte(')');
         },
         .binary => |binary_rvalue| {
             try writer.print("Binary {s} ", .{binary_rvalue.op.lexeme()});

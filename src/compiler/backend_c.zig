@@ -236,6 +236,14 @@ fn emitHirExpr(writer: anytype, module: *const semantics.SemanticModule, expr_id
             try writer.writeAll(unary.op.lexeme());
             try emitHirExpr(writer, module, unary.operand);
         },
+        .address_of => |operand| {
+            try writer.writeByte('&');
+            try emitHirExpr(writer, module, operand);
+        },
+        .deref => |operand| {
+            try writer.writeByte('*');
+            try emitHirExpr(writer, module, operand);
+        },
         .binary => |binary| {
             try writer.writeByte('(');
             try emitHirExpr(writer, module, binary.left);
@@ -426,6 +434,14 @@ fn emitExpr(writer: anytype, expr: ast_model.Expr) !void {
         .unary => |unary| {
             try writer.writeAll(unary.op.lexeme());
             try emitExpr(writer, unary.operand.*);
+        },
+        .address_of => |address_of| {
+            try writer.writeByte('&');
+            try emitExpr(writer, address_of.operand.*);
+        },
+        .deref => |deref| {
+            try writer.writeByte('*');
+            try emitExpr(writer, deref.operand.*);
         },
         .binary => |binary| {
             try writer.writeByte('(');

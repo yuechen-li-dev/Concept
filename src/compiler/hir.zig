@@ -125,6 +125,8 @@ pub const HirExprKind = union(enum) {
     decide: struct { enum_type: types.TypeId, enum_id: EnumId, arms: []HirDecideArm },
     group: ExprId,
     unary: struct { op: UnaryOp, operand: ExprId },
+    address_of: ExprId,
+    deref: ExprId,
     try_expr: ExprId,
     binary: struct { op: BinaryOp, left: ExprId, right: ExprId },
 };
@@ -713,6 +715,14 @@ pub const HirStore = struct {
             .unary => |unary| {
                 try writer.print("Unary {s}\n", .{unary.op.lexeme()});
                 try self.writeExprDebug(writer, unary.operand, depth + 1);
+            },
+            .address_of => |operand| {
+                try writer.writeAll("AddressOf\n");
+                try self.writeExprDebug(writer, operand, depth + 1);
+            },
+            .deref => |operand| {
+                try writer.writeAll("Deref\n");
+                try self.writeExprDebug(writer, operand, depth + 1);
             },
             .try_expr => |operand| {
                 try writer.writeAll("Try\n");
