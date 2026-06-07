@@ -115,6 +115,7 @@ pub const HirExprKind = union(enum) {
     enum_constructor: struct { enum_id: EnumId, variant_id: VariantId, args: []ExprId },
     group: ExprId,
     unary: struct { op: UnaryOp, operand: ExprId },
+    try_expr: ExprId,
     binary: struct { op: BinaryOp, left: ExprId, right: ExprId },
 };
 
@@ -677,6 +678,10 @@ pub const HirStore = struct {
             .unary => |unary| {
                 try writer.print("Unary {s}\n", .{unary.op.lexeme()});
                 try self.writeExprDebug(writer, unary.operand, depth + 1);
+            },
+            .try_expr => |operand| {
+                try writer.writeAll("Try\n");
+                try self.writeExprDebug(writer, operand, depth + 1);
             },
             .binary => |binary| {
                 try writer.print("Binary {s}\n", .{binary.op.lexeme()});

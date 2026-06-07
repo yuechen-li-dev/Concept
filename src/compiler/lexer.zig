@@ -737,3 +737,15 @@ test "fat arrow uses longest match before equal" {
     const expected = [_]TokenKind{ .fat_arrow, .equal, .eof };
     try expectLexedKinds("=> =", &expected);
 }
+
+test "try tokenizes as keyword and trying as identifier" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+    const source_file = try SourceFile.init(std.testing.allocator, "try.con", "try trying");
+    defer source_file.deinit(std.testing.allocator);
+    const tokens = try lexAll(std.testing.allocator, source_file, &diagnostics);
+    defer std.testing.allocator.free(tokens);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    try std.testing.expectEqual(TokenKind.@"try", tokens[0].kind);
+    try std.testing.expectEqual(TokenKind.identifier, tokens[1].kind);
+}

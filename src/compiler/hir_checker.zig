@@ -66,45 +66,45 @@ const Checker = struct {
                     try self.reportAt(.TypeMismatch, "return statements must have an expression", stmt.span);
                     return error.InvalidSemanticModule;
                 };
-                const value_type = try self.checkExpr(value);
+                const value_type = try self.checkExpr(return_type, value);
                 try self.requireSame(value_type, return_type, "return expression type does not match function return type", self.exprSpan(value));
             },
             .local_decl => |decl| {
                 const local = self.module.hir.getLocal(decl.local);
-                const init_type = try self.checkExpr(decl.initializer);
+                const init_type = try self.checkExpr(return_type, decl.initializer);
                 try self.requireSame(init_type, local.type_id, "local initializer type does not match declared type", self.exprSpan(decl.initializer));
             },
             .expr_stmt => |expr_id| {
-                const value_type = try self.checkExpr(expr_id);
+                const value_type = try self.checkExpr(return_type, expr_id);
                 if (self.isMustUseType(value_type)) {
                     try self.reportAt(.IgnoredMustUseValue, "value must be used; use discard to ignore intentionally", self.exprSpan(expr_id));
                     return error.InvalidSemanticModule;
                 }
             },
             .discard_stmt => |expr_id| {
-                _ = try self.checkExpr(expr_id);
+                _ = try self.checkExpr(return_type, expr_id);
             },
             .assignment => |assignment| {
                 const target_type = switch (assignment.target) {
                     .local => |id| self.module.hir.getLocal(id).type_id,
                     .param => |id| self.module.hir.getParam(id).type_id,
                 };
-                const value_type = try self.checkExpr(assignment.value);
+                const value_type = try self.checkExpr(return_type, assignment.value);
                 try self.requireSame(value_type, target_type, "assignment expression type does not match target type", self.exprSpan(assignment.value));
             },
             .if_stmt => |if_stmt| {
-                const condition_type = try self.checkExpr(if_stmt.condition);
+                const condition_type = try self.checkExpr(return_type, if_stmt.condition);
                 try self.requireBool(condition_type, "if condition must be bool", self.exprSpan(if_stmt.condition));
                 try self.checkStmt(function_id, if_stmt.then_block, return_type);
                 if (if_stmt.else_block) |else_block| try self.checkStmt(function_id, else_block, return_type);
             },
             .while_stmt => |while_stmt| {
-                const condition_type = try self.checkExpr(while_stmt.condition);
+                const condition_type = try self.checkExpr(return_type, while_stmt.condition);
                 try self.requireBool(condition_type, "while condition must be bool", self.exprSpan(while_stmt.condition));
                 try self.checkStmt(function_id, while_stmt.body, return_type);
             },
             .match_stmt => |match_stmt| {
-                const scrutinee_type = try self.checkExpr(match_stmt.scrutinee);
+                const scrutinee_type = try self.checkExpr(return_type, match_stmt.scrutinee);
                 const scrutinee_kind = self.module.types.kind(scrutinee_type);
                 if (!self.isInt(scrutinee_type) and !self.isBool(scrutinee_type) and scrutinee_kind != .enum_type) {
                     try self.reportAt(.TypeMismatch, "match scrutinee must be int, bool, or enum", self.exprSpan(match_stmt.scrutinee));
@@ -160,14 +160,14 @@ const Checker = struct {
         }
     }
 
-    fn checkExpr(self: *Checker, expr_id: hir.ExprId) CheckError!types.TypeId {
+    fn checkExpr(self: *Checker, return_type: types.TypeId, expr_id: hir.ExprId) CheckError!types.TypeId {
         const expr = self.module.hir.getExpr(expr_id).*;
         return switch (expr.kind) {
             .int_literal => self.module.types.intType(),
             .bool_literal => self.module.types.boolType(),
             .local_ref => |id| self.module.hir.getLocal(id).type_id,
             .param_ref => |id| self.module.hir.getParam(id).type_id,
-            .group => |inner| try self.checkExpr(inner),
+            .group => |inner| try self.checkExpr(return_type, inner),
             .call => |call| blk: {
                 const callee = self.module.hir.getFunction(call.function);
                 if (callee.body == null) {
@@ -179,7 +179,7 @@ const Checker = struct {
                     return error.InvalidSemanticModule;
                 }
                 for (call.args, callee.params) |arg, param_id| {
-                    const arg_type = try self.checkExpr(arg);
+                    const arg_type = try self.checkExpr(return_type, arg);
                     const param_type = self.module.hir.getParam(param_id).type_id;
                     try self.requireCallSame(arg_type, param_type, "function call argument type mismatch", self.exprSpan(arg));
                 }
@@ -192,7 +192,7 @@ const Checker = struct {
                     return error.InvalidSemanticModule;
                 }
                 for (constructor.args, variant.payload_fields) |arg, payload_id| {
-                    const arg_type = try self.checkExpr(arg);
+                    const arg_type = try self.checkExpr(return_type, arg);
                     const payload_type = self.module.hir.getEnumPayloadField(payload_id).type_id;
                     if (!sameType(arg_type, payload_type)) {
                         try self.reportAt(.EnumConstructorTypeMismatch, "enum constructor argument type mismatch", self.exprSpan(arg));
@@ -202,7 +202,7 @@ const Checker = struct {
                 break :blk try self.enumType(constructor.enum_id);
             },
             .unary => |unary| blk: {
-                const operand_type = try self.checkExpr(unary.operand);
+                const operand_type = try self.checkExpr(return_type, unary.operand);
                 switch (unary.op) {
                     .negate => {
                         try self.requireInt(operand_type, "arithmetic unary operator requires int operand", expr.span);
@@ -214,9 +214,25 @@ const Checker = struct {
                     },
                 }
             },
+            .try_expr => |operand| blk: {
+                const operand_type = try self.checkExpr(return_type, operand);
+                const operand_shape = self.module.resultShapeForType(operand_type) orelse {
+                    try self.reportAt(.TryOperandNotResult, "try operand must be a Result-shaped enum", expr.span);
+                    return error.InvalidSemanticModule;
+                };
+                if (self.module.resultShapeForType(return_type) == null) {
+                    try self.reportAt(.TryOutsideResultFunction, "try requires the enclosing function to return a Result-shaped enum", expr.span);
+                    return error.InvalidSemanticModule;
+                }
+                if (!sameType(operand_type, return_type)) {
+                    try self.reportAt(.TryResultTypeMismatch, "try operand Result type must match the enclosing function return type", expr.span);
+                    return error.InvalidSemanticModule;
+                }
+                break :blk operand_shape.ok_type;
+            },
             .binary => |binary| blk: {
-                const left_type = try self.checkExpr(binary.left);
-                const right_type = try self.checkExpr(binary.right);
+                const left_type = try self.checkExpr(return_type, binary.left);
+                const right_type = try self.checkExpr(return_type, binary.right);
                 switch (binary.op) {
                     .add, .subtract, .multiply, .divide, .modulo => {
                         try self.requireIntPair(left_type, right_type, "arithmetic binary operator requires int operands", expr.span);
@@ -692,4 +708,82 @@ test "HIR checker rejects ignored must_use expression statement" {
     tm.setBody(main, try tm.block(&.{ ignored, ret }));
 
     try tm.checkFail(.IgnoredMustUseValue);
+}
+
+fn addResultEnum(tm: *TestModule, name: []const u8, must_use: bool) !struct { enum_id: hir.EnumId, type_id: types.TypeId, ok: hir.VariantId, err: hir.VariantId, ok_field: hir.EnumPayloadFieldId, err_field: hir.EnumPayloadFieldId } {
+    const enum_id = try tm.module.hir.addEnum(try tm.name(name), must_use);
+    const type_id = try tm.module.types.addEnumType(enum_id);
+    const ok = try tm.module.hir.addVariant(enum_id, try tm.name("Ok"), synthetic_span);
+    const ok_field = try tm.module.hir.addEnumPayloadField(ok, try tm.name("value"), tm.module.types.intType(), synthetic_span);
+    const err = try tm.module.hir.addVariant(enum_id, try tm.name("Err"), synthetic_span);
+    const err_field = try tm.module.hir.addEnumPayloadField(err, try tm.name("code"), tm.module.types.intType(), synthetic_span);
+    tm.module.hir.setEnumResultShape(enum_id, .{ .ok_variant = ok, .err_variant = err, .ok_payload = ok_field, .err_payload = err_field, .ok_type = tm.module.types.intType(), .err_type = tm.module.types.intType() });
+    return .{ .enum_id = enum_id, .type_id = type_id, .ok = ok, .err = err, .ok_field = ok_field, .err_field = err_field };
+}
+
+test "HIR checker accepts try over same Result-shaped enum" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+    const result = try addResultEnum(&tm, "ParseResult", true);
+    const main = try tm.function("main", tm.module.types.intType());
+    tm.setBody(main, try tm.block(&.{try tm.ret(try tm.int("0"))}));
+    const parse = try tm.function("parse", result.type_id);
+    const arg_expr = try tm.int("1");
+    const args = try std.testing.allocator.dupe(hir.ExprId, &.{arg_expr});
+    const ok_expr = try addTestExpr(&tm.module.hir, .{ .enum_constructor = .{ .enum_id = result.enum_id, .variant_id = result.ok, .args = args } });
+    tm.setBody(parse, try tm.block(&.{try tm.ret(ok_expr)}));
+    const add = try tm.function("add", result.type_id);
+    const call_args = try std.testing.allocator.dupe(hir.ExprId, &.{});
+    const call = try addTestExpr(&tm.module.hir, .{ .call = .{ .function = parse, .args = call_args } });
+    const tried = try addTestExpr(&tm.module.hir, .{ .try_expr = call });
+    const local = try tm.local(add, "value", tm.module.types.intType());
+    const decl = try addTestStmt(&tm.module.hir, .{ .local_decl = .{ .local = local, .initializer = tried } });
+    const local_ref = try addTestExpr(&tm.module.hir, .{ .local_ref = local });
+    const ret_args = try std.testing.allocator.dupe(hir.ExprId, &.{local_ref});
+    const ret_ok = try addTestExpr(&tm.module.hir, .{ .enum_constructor = .{ .enum_id = result.enum_id, .variant_id = result.ok, .args = ret_args } });
+    tm.setBody(add, try tm.block(&.{ decl, try tm.ret(ret_ok) }));
+    try tm.checkPass();
+}
+
+test "HIR checker rejects try operand that is not Result-shaped" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+    const result = try addResultEnum(&tm, "ParseResult", true);
+    const main = try tm.function("main", tm.module.types.intType());
+    tm.setBody(main, try tm.block(&.{try tm.ret(try tm.int("0"))}));
+    const f = try tm.function("bad", result.type_id);
+    tm.setBody(f, try tm.block(&.{try tm.ret(try addTestExpr(&tm.module.hir, .{ .try_expr = try tm.int("1") }))}));
+    try tm.checkFail(.TryOperandNotResult);
+}
+
+test "HIR checker rejects try in non-Result-returning function" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+    const result = try addResultEnum(&tm, "ParseResult", true);
+    const main = try tm.function("main", tm.module.types.intType());
+    const ok_arg = try tm.int("1");
+    const ok_args = try std.testing.allocator.dupe(hir.ExprId, &.{ok_arg});
+    const ok = try addTestExpr(&tm.module.hir, .{ .enum_constructor = .{ .enum_id = result.enum_id, .variant_id = result.ok, .args = ok_args } });
+    const tried = try addTestExpr(&tm.module.hir, .{ .try_expr = ok });
+    tm.setBody(main, try tm.block(&.{ try addTestStmt(&tm.module.hir, .{ .discard_stmt = tried }), try tm.ret(try tm.int("0")) }));
+    try tm.checkFail(.TryOutsideResultFunction);
+}
+
+test "HIR checker rejects mismatched try Result type" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+    const result = try addResultEnum(&tm, "ParseResult", true);
+    const other = try addResultEnum(&tm, "OtherResult", true);
+    const main = try tm.function("main", tm.module.types.intType());
+    tm.setBody(main, try tm.block(&.{try tm.ret(try tm.int("0"))}));
+    const f = try tm.function("bad", other.type_id);
+    const ok_arg = try tm.int("1");
+    const ok_args = try std.testing.allocator.dupe(hir.ExprId, &.{ok_arg});
+    const ok = try addTestExpr(&tm.module.hir, .{ .enum_constructor = .{ .enum_id = result.enum_id, .variant_id = result.ok, .args = ok_args } });
+    const tried = try addTestExpr(&tm.module.hir, .{ .try_expr = ok });
+    const ret_arg = try tm.int("0");
+    const ret_args = try std.testing.allocator.dupe(hir.ExprId, &.{ret_arg});
+    const ret_ok = try addTestExpr(&tm.module.hir, .{ .enum_constructor = .{ .enum_id = other.enum_id, .variant_id = other.ok, .args = ret_args } });
+    tm.setBody(f, try tm.block(&.{ try addTestStmt(&tm.module.hir, .{ .discard_stmt = tried }), try tm.ret(ret_ok) }));
+    try tm.checkFail(.TryResultTypeMismatch);
 }
