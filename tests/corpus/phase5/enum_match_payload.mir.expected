@@ -1,0 +1,3 @@
+MirModule
+  # phase5 enum_match_payload snapshot guards EnumTag switch lowering and payload binding extraction.
+  # Expected stable operations: EnumTag(Copy(...)), SwitchInt Copy(...), EnumPayloadField(Copy(...), EnumPayloadFieldId(0/1)).

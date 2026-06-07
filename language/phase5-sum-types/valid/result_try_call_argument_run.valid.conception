@@ -1,0 +1,34 @@
+# name: phase5 result try call argument run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+must_use enum ParseIntResult {
+    Ok(int value),
+    Err(int code),
+};
+
+int bump(int value) {
+    return value + 1;
+}
+
+ParseIntResult parseInt(int value) {
+    return ParseIntResult::Ok(value);
+}
+
+ParseIntResult parseAndBump(int value) {
+    return ParseIntResult::Ok(bump(try parseInt(value)));
+}
+
+int main() {
+    ParseIntResult result = parseAndBump(14);
+    match (result) {
+        ParseIntResult::Ok(value) => return value;
+        ParseIntResult::Err(code) => return code;
+    }
+}
+
+=== run ===
+exit_code: 15

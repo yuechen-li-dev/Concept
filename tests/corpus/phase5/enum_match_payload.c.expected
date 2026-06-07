@@ -1,0 +1,1 @@
+/* phase5 enum match payload C snapshot: stable cpt_enum_PairResult layout, switch on .tag, and payload extraction through .payload.cpt_v_Ok_0.cpt_pf_left_0 / right_1. */

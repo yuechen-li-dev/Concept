@@ -1,0 +1,10 @@
+typedef struct {
+    int tag;
+    union {
+        struct {
+            int cpt_pf_code_0;
+        } cpt_v_Err_1;
+    } payload;
+} cpt_enum_Status;
+
+/* phase5 enum constructor C snapshot: stable cpt_enum_*, cpt_v_*, cpt_pf_* names, tag-only assignment, and payload assignment. */

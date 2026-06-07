@@ -1,0 +1,32 @@
+# name: phase5 result try two success run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+must_use enum ParseIntResult {
+    Ok(int value),
+    Err(int code),
+};
+
+ParseIntResult parseInt(int value) {
+    return ParseIntResult::Ok(value);
+}
+
+ParseIntResult sumTwo(int left, int right) {
+    int a = try parseInt(left);
+    int b = try parseInt(right);
+    return ParseIntResult::Ok(a + b);
+}
+
+int main() {
+    ParseIntResult result = sumTwo(8, 5);
+    match (result) {
+        ParseIntResult::Ok(value) => return value;
+        ParseIntResult::Err(code) => return code;
+    }
+}
+
+=== run ===
+exit_code: 13

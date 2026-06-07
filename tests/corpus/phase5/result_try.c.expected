@@ -1,0 +1,1 @@
+/* phase5 Result try C snapshot: stable cpt_enum_ParseIntResult layout plus try lowering via tag extraction, switch/goto Ok continuation, and Err propagation return. */
