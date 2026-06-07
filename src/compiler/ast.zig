@@ -329,6 +329,7 @@ pub const Expr = union(enum) {
     identifier: IdentifierExpr,
     group: GroupExpr,
     unary: UnaryExpr,
+    try_expr: TryExpr,
     binary: BinaryExpr,
     call: CallExpr,
     enum_constructor: EnumConstructorExpr,
@@ -338,6 +339,7 @@ pub const Expr = union(enum) {
     pub const IdentifierExpr = struct { name: NameSegment, span: SourceSpan };
     pub const GroupExpr = struct { inner: *Expr, span: SourceSpan };
     pub const UnaryExpr = struct { op: UnaryOp, operand: *Expr, span: SourceSpan };
+    pub const TryExpr = struct { operand: *Expr, span: SourceSpan };
     pub const BinaryExpr = struct { op: BinaryOp, left: *Expr, right: *Expr, span: SourceSpan };
     pub const CallExpr = struct { callee: NameSegment, args: []*Expr, span: SourceSpan };
     pub const EnumConstructorExpr = struct { enum_name: NameSegment, variant_name: NameSegment, args: []*Expr, span: SourceSpan };
@@ -349,6 +351,7 @@ pub const Expr = union(enum) {
             .identifier => |expr| expr.span,
             .group => |expr| expr.span,
             .unary => |expr| expr.span,
+            .try_expr => |expr| expr.span,
             .binary => |expr| expr.span,
             .call => |expr| expr.span,
             .enum_constructor => |expr| expr.span,
@@ -362,6 +365,10 @@ pub const Expr = union(enum) {
                 allocator.destroy(expr.inner);
             },
             .unary => |expr| {
+                expr.operand.deinit(allocator);
+                allocator.destroy(expr.operand);
+            },
+            .try_expr => |expr| {
                 expr.operand.deinit(allocator);
                 allocator.destroy(expr.operand);
             },
@@ -415,6 +422,10 @@ pub const Expr = union(enum) {
                 try writer.writeAll("Unary ");
                 try writer.writeAll(expr.op.lexeme());
                 try writer.writeByte('\n');
+                try expr.operand.writeDebug(writer, depth + 1);
+            },
+            .try_expr => |expr| {
+                try writer.writeAll("Try\n");
                 try expr.operand.writeDebug(writer, depth + 1);
             },
             .binary => |expr| {

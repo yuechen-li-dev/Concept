@@ -497,3 +497,11 @@ P5-M6 derives Result-shaped metadata for concrete enum declarations during seman
 Shape detection does not require `must_use`; both `must_use enum ParseIntResult { Ok(int value), Err(int code), };` and the same enum without `must_use` are Result-shaped. Non-shapes are still ordinary enums: missing `Ok`/`Err`, zero-payload variants, multi-payload variants, and extra variants do not produce diagnostics solely because they resemble but do not satisfy the convention.
 
 P5-M6 does not implement `try`, generic `Result<T, E>`, templates/concepts, new must-use diagnostics, enum layout changes, constructor changes, match changes, payload-binding changes, Drop/move/borrow checking, unsafe/raw pointers, or final ABI mangling. `try` remains the P5-M7 milestone.
+
+### P5-M7 try propagation checkpoint
+
+P5-M7 adds the first executable `try` propagation path for concrete Result-shaped enum values. The v0 rule is intentionally strict and nominal: the `try` operand must have a Result-shaped enum type, and the enclosing function must return the exact same Result-shaped enum type. On the `Ok` variant, `try` evaluates to the single `Ok` payload. On the `Err` variant, `try` returns the original result value from the enclosing function, relying on the same-type rule rather than any conversion.
+
+`try` is a prefix expression and lowers away during HIR-to-MIR lowering. The lowering evaluates the operand, extracts its enum tag, switches to an `Ok` block or an `Err` block, extracts the `Ok` payload in the success path, and returns the original result temporary in the failure path. The C backend does not need a direct `try` primitive because it already emits the enum tag, payload extraction, switch/goto, and return operations represented in MIR.
+
+Cross-result error conversion, implicit conversion between error payloads, and a generic `Result<T, E>` remain future work. P5-M7 only supports concrete, already-declared Result-shaped enums.

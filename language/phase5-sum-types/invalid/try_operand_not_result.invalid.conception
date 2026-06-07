@@ -1,0 +1,22 @@
+# name: phase5 try operand not result
+# phase: check
+# check: hir
+# expect: fail
+# diagnostics: CON0050
+
+=== source ===
+module Main;
+
+must_use enum ParseIntResult {
+    Ok(int value),
+    Err(int code),
+};
+
+ParseIntResult bad() {
+    int value = try 1;
+    return ParseIntResult::Ok(value);
+}
+
+int main() {
+    return 0;
+}

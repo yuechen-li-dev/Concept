@@ -62,6 +62,9 @@ pub const DiagnosticCode = enum {
     DuplicatePatternBinding,
     InvalidPatternBinding,
     IgnoredMustUseValue,
+    TryOperandNotResult,
+    TryOutsideResultFunction,
+    TryResultTypeMismatch,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -105,6 +108,9 @@ pub const DiagnosticCode = enum {
             .DuplicatePatternBinding => "CON0047",
             .InvalidPatternBinding => "CON0048",
             .IgnoredMustUseValue => "CON0049",
+            .TryOperandNotResult => "CON0050",
+            .TryOutsideResultFunction => "CON0051",
+            .TryResultTypeMismatch => "CON0052",
         };
     }
 };
@@ -394,6 +400,9 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0043", DiagnosticCode.InvalidMirType.format());
     try std.testing.expectEqualStrings("CON0044", DiagnosticCode.InvalidMirOperand.format());
     try std.testing.expectEqualStrings("CON0049", DiagnosticCode.IgnoredMustUseValue.format());
+    try std.testing.expectEqualStrings("CON0050", DiagnosticCode.TryOperandNotResult.format());
+    try std.testing.expectEqualStrings("CON0051", DiagnosticCode.TryOutsideResultFunction.format());
+    try std.testing.expectEqualStrings("CON0052", DiagnosticCode.TryResultTypeMismatch.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {

@@ -29,6 +29,7 @@ pub const TokenKind = enum {
     mut,
     @"const",
     @"return",
+    @"try",
     must_use,
     discard,
     match,
@@ -99,6 +100,7 @@ pub const TokenKind = enum {
             .mut => "mut",
             .@"const" => "const",
             .@"return" => "return",
+            .@"try" => "try",
             .must_use => "must_use",
             .discard => "discard",
             .match => "match",
@@ -175,6 +177,7 @@ pub const TokenKind = enum {
             .mut => "mut",
             .@"const" => "const",
             .@"return" => "return",
+            .@"try" => "try",
             .must_use => "must_use",
             .discard => "discard",
             .match => "match",
@@ -253,6 +256,7 @@ pub fn keywordKind(identifier_text: []const u8) ?TokenKind {
     if (std.mem.eql(u8, identifier_text, "mut")) return .mut;
     if (std.mem.eql(u8, identifier_text, "const")) return .@"const";
     if (std.mem.eql(u8, identifier_text, "return")) return .@"return";
+    if (std.mem.eql(u8, identifier_text, "try")) return .@"try";
     if (std.mem.eql(u8, identifier_text, "must_use")) return .must_use;
     if (std.mem.eql(u8, identifier_text, "discard")) return .discard;
     if (std.mem.eql(u8, identifier_text, "match")) return .match;
@@ -325,6 +329,7 @@ const keyword_cases = [_]KeywordCase{
     .{ .text = "mut", .kind = .mut },
     .{ .text = "const", .kind = .@"const" },
     .{ .text = "return", .kind = .@"return" },
+    .{ .text = "try", .kind = .@"try" },
     .{ .text = "must_use", .kind = .must_use },
     .{ .text = "discard", .kind = .discard },
     .{ .text = "match", .kind = .match },
@@ -396,6 +401,7 @@ test "non-keyword identifiers return null" {
         "unsafe_mode",
         "must_useful",
         "discarded",
+        "trying",
     };
 
     for (identifiers) |identifier| {

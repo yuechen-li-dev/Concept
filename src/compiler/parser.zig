@@ -1013,6 +1013,26 @@ pub const Parser = struct {
     }
 
     fn parseUnaryExpr(self: *Parser, allocator: std.mem.Allocator) ParseExprError!*ast.Expr {
+        if (self.current().kind == .@"try") {
+            const try_token = self.advance();
+            var operand = self.parseUnaryExpr(allocator) catch |err| switch (err) {
+                error.OutOfMemory => return err,
+                error.ParseFailed => {
+                    self.report(.UnexpectedToken, "expected expression after try", self.current().span) catch return error.OutOfMemory;
+                    return error.ParseFailed;
+                },
+            };
+            errdefer {
+                operand.deinit(allocator);
+                allocator.destroy(operand);
+            }
+            const node = try allocator.create(ast.Expr);
+            node.* = .{ .try_expr = .{
+                .operand = operand,
+                .span = ast.spanFromBounds(try_token.span.start, spanEnd(operand.span())),
+            } };
+            return node;
+        }
         if (unaryOp(self.current().kind)) |op| {
             const op_token = self.advance();
             var operand = try self.parseUnaryExpr(allocator);
@@ -4417,5 +4437,46 @@ test "discarded remains an identifier in local declaration" {
 
     const unit = try parseTestSource("module Main; int main() { int discarded = 1; return discarded; }", &diagnostics);
     defer unit.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+}
+
+test "parses try expression forms" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource(
+        \\module Main;
+        \\int main() {
+        \\    int value = try parseInt(1);
+        \\    return ParseIntResult::Ok(try parseInt(1 + try parseInt(2)));
+        \\}
+    , &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Try\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Binary +") != null);
+}
+
+test "missing try operand diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { int value = try; return value; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected expression after try", diagnostics.diagnostics.items[0].message);
+}
+
+test "trying remains an identifier" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { int trying = 1; return trying; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
     try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
 }

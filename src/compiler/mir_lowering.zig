@@ -63,6 +63,11 @@ const ModuleLowerer = struct {
     }
 };
 
+const LoweredExpr = struct {
+    operand: mir.MirOperand,
+    block: mir.MirBlockId,
+};
+
 const FunctionLowerer = struct {
     allocator: std.mem.Allocator,
     semantic_module: *semantics.SemanticModule,
@@ -107,33 +112,37 @@ const FunctionLowerer = struct {
             },
             .local_decl => |decl| {
                 const local_id = try self.ensureLocal(decl.local);
-                const value = try self.lowerExprToOperand(decl.initializer, block_id);
-                try self.store.appendStatement(block_id, .{
+                const lowered = try self.lowerExpr(decl.initializer, block_id);
+                try self.store.appendStatement(lowered.block, .{
                     .span = stmt.span,
-                    .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(local_id), mir.MirRvalue.use_(value)),
+                    .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(local_id), mir.MirRvalue.use_(lowered.operand)),
                 });
-                return block_id;
+                return lowered.block;
             },
             .expr_stmt => |expr_id| {
-                _ = try self.lowerExprToOperand(expr_id, block_id);
-                return block_id;
+                const lowered = try self.lowerExpr(expr_id, block_id);
+                return lowered.block;
             },
             .discard_stmt => |expr_id| {
-                _ = try self.lowerExprToOperand(expr_id, block_id);
-                return block_id;
+                const lowered = try self.lowerExpr(expr_id, block_id);
+                return lowered.block;
             },
             .assignment => |assignment| {
                 const local_id = try self.resolveAssignTarget(assignment.target);
-                const value = try self.lowerExprToOperand(assignment.value, block_id);
-                try self.store.appendStatement(block_id, .{
+                const lowered = try self.lowerExpr(assignment.value, block_id);
+                try self.store.appendStatement(lowered.block, .{
                     .span = stmt.span,
-                    .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(local_id), mir.MirRvalue.use_(value)),
+                    .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(local_id), mir.MirRvalue.use_(lowered.operand)),
                 });
-                return block_id;
+                return lowered.block;
             },
             .return_stmt => |maybe_value| {
-                const value = if (maybe_value) |expr_id| try self.lowerExprToOperand(expr_id, block_id) else null;
-                try self.terminateBlock(block_id, stmt.span, mir.MirTerminatorKind.returnValue(value));
+                if (maybe_value) |expr_id| {
+                    const lowered = try self.lowerExpr(expr_id, block_id);
+                    try self.terminateBlock(lowered.block, stmt.span, mir.MirTerminatorKind.returnValue(lowered.operand));
+                    return lowered.block;
+                }
+                try self.terminateBlock(block_id, stmt.span, mir.MirTerminatorKind.returnValue(null));
                 return block_id;
             },
             .if_stmt => |if_stmt| return self.lowerIf(stmt, if_stmt, block_id),
@@ -143,12 +152,14 @@ const FunctionLowerer = struct {
     }
 
     fn lowerIf(self: *FunctionLowerer, stmt: hir.HirStmt, if_stmt: anytype, block_id: mir.MirBlockId) LoweringError!mir.MirBlockId {
-        const condition = try self.lowerExprToOperand(if_stmt.condition, block_id);
+        const condition_lowered = try self.lowerExpr(if_stmt.condition, block_id);
+        const condition = condition_lowered.operand;
+        const switch_block = condition_lowered.block;
         const then_block = try self.newBlock(stmt.span);
         const join_block = try self.newBlock(stmt.span);
         const else_block = if (if_stmt.else_block != null) try self.newBlock(stmt.span) else join_block;
 
-        try self.terminateBlock(block_id, stmt.span, mir.MirTerminatorKind.switchBool(condition, then_block, else_block));
+        try self.terminateBlock(switch_block, stmt.span, mir.MirTerminatorKind.switchBool(condition, then_block, else_block));
 
         const then_end = try self.lowerStmt(if_stmt.then_block, then_block);
         const then_falls_through = !self.isTerminated(then_end);
@@ -175,8 +186,9 @@ const FunctionLowerer = struct {
 
         try self.terminateBlock(block_id, stmt.span, mir.MirTerminatorKind.gotoBlock(condition_block));
 
-        const condition = try self.lowerExprToOperand(while_stmt.condition, condition_block);
-        try self.terminateBlock(condition_block, stmt.span, mir.MirTerminatorKind.switchBool(condition, body_block, exit_block));
+        const condition_lowered = try self.lowerExpr(while_stmt.condition, condition_block);
+        const condition = condition_lowered.operand;
+        try self.terminateBlock(condition_lowered.block, stmt.span, mir.MirTerminatorKind.switchBool(condition, body_block, exit_block));
 
         const body_end = try self.lowerStmt(while_stmt.body, body_block);
         try self.ensureGotoTo(body_end, condition_block, stmt.span);
@@ -185,7 +197,9 @@ const FunctionLowerer = struct {
     }
 
     fn lowerMatch(self: *FunctionLowerer, stmt: hir.HirStmt, match_stmt: anytype, block_id: mir.MirBlockId) LoweringError!mir.MirBlockId {
-        const scrutinee = try self.lowerExprToOperand(match_stmt.scrutinee, block_id);
+        const scrutinee_lowered = try self.lowerExpr(match_stmt.scrutinee, block_id);
+        const scrutinee = scrutinee_lowered.operand;
+        const switch_block = scrutinee_lowered.block;
         const scrutinee_type = try self.inferExprType(match_stmt.scrutinee);
         const join_block = try self.newBlock(stmt.span);
         const arm_blocks = try self.allocator.alloc(mir.MirBlockId, match_stmt.arms.len);
@@ -197,18 +211,18 @@ const FunctionLowerer = struct {
 
         var payload_scrutinee: ?mir.MirOperand = null;
         if (sameType(scrutinee_type, self.semantic_module.types.boolType())) {
-            try self.terminateBlock(block_id, stmt.span, try self.lowerBoolMatchTerminator(scrutinee, match_stmt.arms, arm_blocks, join_block));
+            try self.terminateBlock(switch_block, stmt.span, try self.lowerBoolMatchTerminator(scrutinee, match_stmt.arms, arm_blocks, join_block));
         } else if (sameType(scrutinee_type, self.semantic_module.types.intType())) {
-            try self.terminateBlock(block_id, stmt.span, try self.lowerIntMatchTerminator(scrutinee, match_stmt.arms, arm_blocks, join_block));
+            try self.terminateBlock(switch_block, stmt.span, try self.lowerIntMatchTerminator(scrutinee, match_stmt.arms, arm_blocks, join_block));
         } else if (self.semantic_module.types.kind(scrutinee_type) == .enum_type) {
             payload_scrutinee = try scrutinee.clone(self.allocator);
             const tag_temp = try self.addTemp(self.semantic_module.types.intType());
-            try self.store.appendStatement(block_id, .{
+            try self.store.appendStatement(switch_block, .{
                 .span = stmt.span,
                 .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(tag_temp), mir.MirRvalue.enumTag(scrutinee)),
             });
             const tag_operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(tag_temp));
-            try self.terminateBlock(block_id, stmt.span, try self.lowerEnumMatchTerminator(tag_operand, match_stmt.arms, arm_blocks, join_block));
+            try self.terminateBlock(switch_block, stmt.span, try self.lowerEnumMatchTerminator(tag_operand, match_stmt.arms, arm_blocks, join_block));
         } else {
             return error.UnsupportedControlFlow;
         }
@@ -223,7 +237,7 @@ const FunctionLowerer = struct {
             }
         }
 
-        if (!has_fallthrough and !self.joinIsDefaultTarget(block_id, join_block)) {
+        if (!has_fallthrough and !self.joinIsDefaultTarget(switch_block, join_block)) {
             try self.terminateBlock(join_block, stmt.span, .@"unreachable");
         }
         return join_block;
@@ -344,92 +358,142 @@ const FunctionLowerer = struct {
         };
     }
 
-    fn lowerExprToOperand(self: *FunctionLowerer, expr_id: hir.ExprId, block_id: mir.MirBlockId) LoweringError!mir.MirOperand {
+    fn lowerExpr(self: *FunctionLowerer, expr_id: hir.ExprId, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
         const expr = self.semantic_module.hir.getExpr(expr_id).*;
         return switch (expr.kind) {
-            .int_literal => |text| try mir.MirOperand.intLiteral(self.allocator, text),
-            .bool_literal => |value| mir.MirOperand.boolLiteral(value),
-            .local_ref => |local_id| mir.MirOperand.copyPlace(mir.MirPlace.localPlace(try self.resolveLocal(local_id))),
-            .param_ref => |param_id| mir.MirOperand.copyPlace(mir.MirPlace.localPlace(try self.resolveParam(param_id))),
-            .group => |inner| try self.lowerExprToOperand(inner, block_id),
+            .int_literal => |text| .{ .operand = try mir.MirOperand.intLiteral(self.allocator, text), .block = block_id },
+            .bool_literal => |value| .{ .operand = mir.MirOperand.boolLiteral(value), .block = block_id },
+            .local_ref => |local_id| .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(try self.resolveLocal(local_id))), .block = block_id },
+            .param_ref => |param_id| .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(try self.resolveParam(param_id))), .block = block_id },
+            .group => |inner| try self.lowerExpr(inner, block_id),
             .unary => |unary| try self.lowerUnary(expr, unary, block_id),
             .binary => |binary| try self.lowerBinary(expr, binary, block_id),
             .call => |call| try self.lowerCall(expr, call, block_id),
             .enum_constructor => |constructor| try self.lowerEnumConstructor(expr, constructor, block_id),
+            .try_expr => |operand| try self.lowerTry(expr, operand, block_id),
         };
     }
 
-    fn lowerUnary(self: *FunctionLowerer, expr: hir.HirExpr, unary: anytype, block_id: mir.MirBlockId) LoweringError!mir.MirOperand {
-        const operand = try self.lowerExprToOperand(unary.operand, block_id);
+    fn lowerUnary(self: *FunctionLowerer, expr: hir.HirExpr, unary: anytype, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const lowered = try self.lowerExpr(unary.operand, block_id);
         const temp = try self.addTemp(try self.inferExprTypeFrom(expr));
-        try self.store.appendStatement(block_id, .{
+        try self.store.appendStatement(lowered.block, .{
             .span = expr.span,
             .kind = mir.MirStatementKind.assignTo(
                 mir.MirPlace.localPlace(temp),
-                mir.MirRvalue.unaryOp(lowerUnaryOp(unary.op), operand),
+                mir.MirRvalue.unaryOp(lowerUnaryOp(unary.op), lowered.operand),
             ),
         });
-        return mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp));
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = lowered.block };
     }
 
-    fn lowerBinary(self: *FunctionLowerer, expr: hir.HirExpr, binary: anytype, block_id: mir.MirBlockId) LoweringError!mir.MirOperand {
-        const left = try self.lowerExprToOperand(binary.left, block_id);
-        const right = try self.lowerExprToOperand(binary.right, block_id);
+    fn lowerBinary(self: *FunctionLowerer, expr: hir.HirExpr, binary: anytype, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const left = try self.lowerExpr(binary.left, block_id);
+        const right = try self.lowerExpr(binary.right, left.block);
         const temp = try self.addTemp(try self.inferExprTypeFrom(expr));
-        try self.store.appendStatement(block_id, .{
+        try self.store.appendStatement(right.block, .{
             .span = expr.span,
             .kind = mir.MirStatementKind.assignTo(
                 mir.MirPlace.localPlace(temp),
-                mir.MirRvalue.binaryOp(lowerBinaryOp(binary.op), left, right),
+                mir.MirRvalue.binaryOp(lowerBinaryOp(binary.op), left.operand, right.operand),
             ),
         });
-        return mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp));
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = right.block };
     }
 
-    fn lowerCall(self: *FunctionLowerer, expr: hir.HirExpr, call: anytype, block_id: mir.MirBlockId) LoweringError!mir.MirOperand {
+    fn lowerCall(self: *FunctionLowerer, expr: hir.HirExpr, call: anytype, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
         const args = try self.allocator.alloc(mir.MirOperand, call.args.len);
         var args_owned = true;
         var initialized: usize = 0;
         errdefer if (args_owned) deinitInitializedOperands(self.allocator, args, initialized);
 
+        var current = block_id;
         for (call.args) |arg_expr| {
-            args[initialized] = try self.lowerExprToOperand(arg_expr, block_id);
+            const lowered = try self.lowerExpr(arg_expr, current);
+            args[initialized] = lowered.operand;
             initialized += 1;
+            current = lowered.block;
         }
 
         const temp = try self.addTemp(try self.inferExprTypeFrom(expr));
         args_owned = false;
-        try self.store.appendStatement(block_id, .{
+        try self.store.appendStatement(current, .{
             .span = expr.span,
             .kind = mir.MirStatementKind.assignTo(
                 mir.MirPlace.localPlace(temp),
                 .{ .call = .{ .function = call.function, .args = args } },
             ),
         });
-        return mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp));
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = current };
     }
 
-    fn lowerEnumConstructor(self: *FunctionLowerer, expr: hir.HirExpr, constructor: anytype, block_id: mir.MirBlockId) LoweringError!mir.MirOperand {
+    fn lowerEnumConstructor(self: *FunctionLowerer, expr: hir.HirExpr, constructor: anytype, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
         const args = try self.allocator.alloc(mir.MirOperand, constructor.args.len);
         var args_owned = true;
         var initialized: usize = 0;
         errdefer if (args_owned) deinitInitializedOperands(self.allocator, args, initialized);
 
+        var current = block_id;
         for (constructor.args) |arg_expr| {
-            args[initialized] = try self.lowerExprToOperand(arg_expr, block_id);
+            const lowered = try self.lowerExpr(arg_expr, current);
+            args[initialized] = lowered.operand;
             initialized += 1;
+            current = lowered.block;
         }
 
         const temp = try self.addTemp(try self.inferExprTypeFrom(expr));
         args_owned = false;
-        try self.store.appendStatement(block_id, .{
+        try self.store.appendStatement(current, .{
             .span = expr.span,
             .kind = mir.MirStatementKind.assignTo(
                 mir.MirPlace.localPlace(temp),
                 .{ .enum_constructor = .{ .enum_id = constructor.enum_id, .variant_id = constructor.variant_id, .args = args } },
             ),
         });
-        return mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp));
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = current };
+    }
+
+    fn lowerTry(self: *FunctionLowerer, expr: hir.HirExpr, operand_expr: hir.ExprId, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const operand_lowered = try self.lowerExpr(operand_expr, block_id);
+        const result_type = try self.inferExprType(operand_expr);
+        const shape = self.semantic_module.resultShapeForType(result_type) orelse return error.MissingResultShape;
+        const result_temp = try self.addTemp(result_type);
+        try self.store.appendStatement(operand_lowered.block, .{
+            .span = expr.span,
+            .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(result_temp), mir.MirRvalue.use_(operand_lowered.operand)),
+        });
+        const tag_temp = try self.addTemp(self.semantic_module.types.intType());
+        const result_copy = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(result_temp));
+        try self.store.appendStatement(operand_lowered.block, .{
+            .span = expr.span,
+            .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(tag_temp), mir.MirRvalue.enumTag(result_copy)),
+        });
+
+        const ok_block = try self.newBlock(expr.span);
+        const err_block = try self.newBlock(expr.span);
+        const cont_block = try self.newBlock(expr.span);
+        const ok_tag = try std.fmt.allocPrint(self.allocator, "{d}", .{try self.variantTag(self.semantic_module.types.kind(result_type).enum_type, shape.ok_variant)});
+        defer self.allocator.free(ok_tag);
+        const cases = [_]mir.MirSwitchIntCase{.{ .value = ok_tag, .target = ok_block }};
+        try self.terminateBlock(operand_lowered.block, expr.span, try mir.MirTerminatorKind.switchInt(
+            self.allocator,
+            mir.MirOperand.copyPlace(mir.MirPlace.localPlace(tag_temp)),
+            &cases,
+            err_block,
+        ));
+
+        const ok_temp = try self.addTemp(shape.ok_type);
+        try self.store.appendStatement(ok_block, .{
+            .span = expr.span,
+            .kind = mir.MirStatementKind.assignTo(
+                mir.MirPlace.localPlace(ok_temp),
+                mir.MirRvalue.enumPayloadField(mir.MirOperand.copyPlace(mir.MirPlace.localPlace(result_temp)), shape.ok_payload),
+            ),
+        });
+        try self.terminateBlock(ok_block, expr.span, mir.MirTerminatorKind.gotoBlock(cont_block));
+        try self.terminateBlock(err_block, expr.span, mir.MirTerminatorKind.returnValue(mir.MirOperand.copyPlace(mir.MirPlace.localPlace(result_temp))));
+
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(ok_temp)), .block = cont_block };
     }
 
     fn inferExprType(self: *FunctionLowerer, expr_id: hir.ExprId) LoweringError!types.TypeId {
@@ -453,6 +517,11 @@ const FunctionLowerer = struct {
             },
             .call => |call| self.semantic_module.hir.getFunction(call.function).return_type,
             .enum_constructor => |constructor| try self.enumType(constructor.enum_id),
+            .try_expr => |operand| blk: {
+                const operand_type = try self.inferExprType(operand);
+                const shape = self.semantic_module.resultShapeForType(operand_type) orelse return error.MissingResultShape;
+                break :blk shape.ok_type;
+            },
         };
     }
 
@@ -1231,4 +1300,41 @@ test "MIR lowering debug snapshot is stable for match bool" {
         \\        Goto MirBlockId(1)
         \\
     , snapshot);
+}
+
+test "MIR lowering debug snapshot includes try propagation control flow" {
+    var module = try newModule();
+    defer module.deinit();
+    const enum_id = try module.hir.addEnum(try intern(&module, "ParseResult"), true);
+    const enum_type = try module.types.addEnumType(enum_id);
+    const ok = try module.hir.addVariant(enum_id, try intern(&module, "Ok"), hir.synthetic_span);
+    const ok_field = try module.hir.addEnumPayloadField(ok, try intern(&module, "value"), module.types.intType(), hir.synthetic_span);
+    const err = try module.hir.addVariant(enum_id, try intern(&module, "Err"), hir.synthetic_span);
+    const err_field = try module.hir.addEnumPayloadField(err, try intern(&module, "code"), module.types.intType(), hir.synthetic_span);
+    module.hir.setEnumResultShape(enum_id, .{ .ok_variant = ok, .err_variant = err, .ok_payload = ok_field, .err_payload = err_field, .ok_type = module.types.intType(), .err_type = module.types.intType() });
+
+    const parse = try addFunction(&module, "parse", enum_type, false);
+    _ = try addParam(&module, parse, "value", module.types.intType());
+    const parse_arg = try module.hir.addExpr(.{ .param_ref = .{ .index = 0 } }, hir.synthetic_span);
+    const parse_args = try std.testing.allocator.dupe(hir.ExprId, &.{parse_arg});
+    const parse_ok = try module.hir.addExpr(.{ .enum_constructor = .{ .enum_id = enum_id, .variant_id = ok, .args = parse_args } }, hir.synthetic_span);
+    try setBody(&module, parse, &.{try module.hir.addStmt(.{ .return_stmt = parse_ok }, hir.synthetic_span)});
+
+    const add = try addFunction(&module, "add", enum_type, false);
+    const call_arg = try intExpr(&module, "7");
+    const call_args = try std.testing.allocator.dupe(hir.ExprId, &.{call_arg});
+    const call = try module.hir.addExpr(.{ .call = .{ .function = parse, .args = call_args } }, hir.synthetic_span);
+    const tried = try module.hir.addExpr(.{ .try_expr = call }, hir.synthetic_span);
+    const ret_args = try std.testing.allocator.dupe(hir.ExprId, &.{tried});
+    const ret_ok = try module.hir.addExpr(.{ .enum_constructor = .{ .enum_id = enum_id, .variant_id = ok, .args = ret_args } }, hir.synthetic_span);
+    try setBody(&module, add, &.{try module.hir.addStmt(.{ .return_stmt = ret_ok }, hir.synthetic_span)});
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "EnumTag(Copy(") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "SwitchInt Copy(") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "EnumPayloadField(Copy(") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Return Copy(") != null);
 }

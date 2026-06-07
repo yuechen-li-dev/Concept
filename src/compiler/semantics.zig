@@ -526,6 +526,10 @@ const BodyLowerer = struct {
                 const operand = (try self.lowerExpr(unary.operand.*)) orelse return null;
                 return try self.collector.module.hir.addExpr(.{ .unary = .{ .op = lowerUnaryOp(unary.op), .operand = operand } }, unary.span);
             },
+            .try_expr => |try_expr| {
+                const operand = (try self.lowerExpr(try_expr.operand.*)) orelse return null;
+                return try self.collector.module.hir.addExpr(.{ .try_expr = operand }, try_expr.span);
+            },
             .binary => |binary| {
                 const left = (try self.lowerExpr(binary.left.*)) orelse return null;
                 const right = (try self.lowerExpr(binary.right.*)) orelse return null;

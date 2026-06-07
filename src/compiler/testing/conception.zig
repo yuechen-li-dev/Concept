@@ -1292,3 +1292,27 @@ test "language check fixture: phase5 not result shape extra variant" {
 test "language check fixture: phase5 not result shape bad ok arity" {
     try expectCheckFixture("../../../language/phase5-sum-types/valid/not_result_shape_bad_ok_arity.valid.conception");
 }
+
+test "language run fixture: phase5 try success add" {
+    try expectRunFixture("../../../language/phase5-sum-types/valid/try_success_add.valid.conception");
+}
+
+test "language run fixture: phase5 try failure propagates" {
+    try expectRunFixture("../../../language/phase5-sum-types/valid/try_failure_propagates.valid.conception");
+}
+
+test "language run fixture: phase5 try inside binary" {
+    try expectRunFixture("../../../language/phase5-sum-types/valid/try_inside_binary.valid.conception");
+}
+
+test "language check fixture: phase5 try operand not result" {
+    try expectCheckFixture("../../../language/phase5-sum-types/invalid/try_operand_not_result.invalid.conception");
+}
+
+test "language check fixture: phase5 try in int function" {
+    try expectCheckFixture("../../../language/phase5-sum-types/invalid/try_in_int_function.invalid.conception");
+}
+
+test "language check fixture: phase5 try result mismatch" {
+    try expectCheckFixture("../../../language/phase5-sum-types/invalid/try_result_mismatch.invalid.conception");
+}
