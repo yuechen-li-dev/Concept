@@ -1,0 +1,15 @@
+# name: phase6 pointer identity
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+int* identity(int* p) {
+    return p;
+}
+
+int main() {
+    return 0;
+}

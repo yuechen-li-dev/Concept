@@ -57,6 +57,17 @@ P6-M1 also accepts `unsafe` as a function modifier, for example `unsafe int help
 
 This milestone intentionally enables no dangerous operation. Raw pointer types, address-of, dereference, pointer arithmetic, ownership, move, drop, borrow checking, volatile, atomics, address spaces, and effects remain unimplemented. Unsafe blocks lower through MIR like ordinary blocks for now, and MIR/backend representation is unchanged until future unsafe operations need an explicit region fingerprint.
 
+
+## P6-M2 raw pointer type surface
+
+P6-M2 adds the raw pointer type surface for ordinary type positions. Builtin and nominal pointees can now be written as `int*`, `bool*`, `void*`, and `SomeEnum*`; the semantic type store interns pointer types by pointee so repeated spellings of the same raw pointer share one stable `TypeId`.
+
+Pointer values may flow through the existing checked HIR/MIR path as parameters, return values, local declarations, assignments, and function-call arguments. Type equality remains exact: `int*` and `bool*` are distinct types, and mismatched pointer returns, initializers, assignments, and call arguments are rejected by the existing type-mismatch diagnostics.
+
+The MIR C backend renders supported data pointers directly (`int*`, `void*`, and `cpt_enum_Name*`; `bool*` follows the current bool-as-C-`int` lowering). Struct pointer types may be represented semantically, but C emission still rejects them with the existing unsupported-backend-type diagnostic until struct layout and C naming are completed.
+
+This milestone intentionally does not add address-of, dereference, pointer arithmetic, null literals, ownership, moves, drops, references, borrow checking, volatile, atomics, or address-space qualifiers. Raw pointer dereference remains planned for P6-M3 and will require an unsafe context. Ownership and nullability refinements remain future work.
+
 ## Non-goals
 
 Phase 6 v0 explicitly does not include:

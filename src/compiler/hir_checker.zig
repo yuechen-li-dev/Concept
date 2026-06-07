@@ -588,6 +588,67 @@ test "HIR checker accepts if match while" {
     try tm.checkPass();
 }
 
+test "HIR checker accepts pointer return local copy and call argument" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+    const int_ptr = try tm.module.types.addPointerType(tm.module.types.intType());
+
+    const identity_id = try tm.function("identity", int_ptr);
+    const p = try tm.param(identity_id, "p", int_ptr);
+    const q = try tm.local(identity_id, "q", int_ptr);
+    const init_q = try addTestStmt(&tm.module.hir, .{ .local_decl = .{ .local = q, .initializer = try addTestExpr(&tm.module.hir, .{ .param_ref = p }) } });
+    const ret_q = try tm.ret(try addTestExpr(&tm.module.hir, .{ .local_ref = q }));
+    tm.setBody(identity_id, try tm.block(&.{ init_q, ret_q }));
+
+    const use_id = try tm.function("use", tm.module.types.intType());
+    const input = try tm.param(use_id, "input", int_ptr);
+    const output = try tm.local(use_id, "output", int_ptr);
+    const args = try std.testing.allocator.dupe(hir.ExprId, &.{try addTestExpr(&tm.module.hir, .{ .param_ref = input })});
+    const init_output = try addTestStmt(&tm.module.hir, .{ .local_decl = .{ .local = output, .initializer = try addTestExpr(&tm.module.hir, .{ .call = .{ .function = identity_id, .args = args } }) } });
+    tm.setBody(use_id, try tm.block(&.{ init_output, try tm.ret(try tm.int("0")) }));
+    _ = try addMainReturnInt(&tm, "0");
+
+    try tm.checkPass();
+}
+
+test "HIR checker rejects pointer type mismatches" {
+    var return_mismatch = try TestModule.init();
+    defer return_mismatch.deinit();
+    const int_ptr = try return_mismatch.module.types.addPointerType(return_mismatch.module.types.intType());
+    const bool_ptr = try return_mismatch.module.types.addPointerType(return_mismatch.module.types.boolType());
+    const bad_return = try return_mismatch.function("bad", int_ptr);
+    const bp = try return_mismatch.param(bad_return, "bp", bool_ptr);
+    return_mismatch.setBody(bad_return, try return_mismatch.block(&.{try return_mismatch.ret(try addTestExpr(&return_mismatch.module.hir, .{ .param_ref = bp }))}));
+    _ = try addMainReturnInt(&return_mismatch, "0");
+    try return_mismatch.checkFail(.TypeMismatch);
+
+    var local_mismatch = try TestModule.init();
+    defer local_mismatch.deinit();
+    const local_int_ptr = try local_mismatch.module.types.addPointerType(local_mismatch.module.types.intType());
+    const local_bool_ptr = try local_mismatch.module.types.addPointerType(local_mismatch.module.types.boolType());
+    const local_helper = try local_mismatch.function("localMismatch", local_mismatch.module.types.intType());
+    const source = try local_mismatch.param(local_helper, "source", local_bool_ptr);
+    const target = try local_mismatch.local(local_helper, "target", local_int_ptr);
+    const bad_init = try addTestStmt(&local_mismatch.module.hir, .{ .local_decl = .{ .local = target, .initializer = try addTestExpr(&local_mismatch.module.hir, .{ .param_ref = source }) } });
+    local_mismatch.setBody(local_helper, try local_mismatch.block(&.{ bad_init, try local_mismatch.ret(try local_mismatch.int("0")) }));
+    _ = try addMainReturnInt(&local_mismatch, "0");
+    try local_mismatch.checkFail(.TypeMismatch);
+
+    var call_mismatch = try TestModule.init();
+    defer call_mismatch.deinit();
+    const call_int_ptr = try call_mismatch.module.types.addPointerType(call_mismatch.module.types.intType());
+    const call_bool_ptr = try call_mismatch.module.types.addPointerType(call_mismatch.module.types.boolType());
+    const callee = try call_mismatch.function("takesIntPtr", call_mismatch.module.types.intType());
+    _ = try call_mismatch.param(callee, "p", call_int_ptr);
+    call_mismatch.setBody(callee, try call_mismatch.block(&.{try call_mismatch.ret(try call_mismatch.int("1"))}));
+    const caller = try call_mismatch.function("callMismatch", call_mismatch.module.types.intType());
+    const bool_param = try call_mismatch.param(caller, "bp", call_bool_ptr);
+    const call_args = try std.testing.allocator.dupe(hir.ExprId, &.{try addTestExpr(&call_mismatch.module.hir, .{ .param_ref = bool_param })});
+    call_mismatch.setBody(caller, try call_mismatch.block(&.{try call_mismatch.ret(try addTestExpr(&call_mismatch.module.hir, .{ .call = .{ .function = callee, .args = call_args } }))}));
+    _ = try addMainReturnInt(&call_mismatch, "0");
+    try call_mismatch.checkFail(.InvalidCall);
+}
+
 test "HIR checker rejects missing main" {
     var tm = try TestModule.init();
     defer tm.deinit();

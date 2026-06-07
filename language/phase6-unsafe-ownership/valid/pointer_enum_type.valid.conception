@@ -1,0 +1,17 @@
+# name: phase6 pointer enum type
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+enum Status { Ok, Err, };
+
+Status* identity(Status* p) {
+    return p;
+}
+
+int main() {
+    return 0;
+}

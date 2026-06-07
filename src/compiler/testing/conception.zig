@@ -689,7 +689,7 @@ fn expectCheckFixture(comptime path: []const u8) !void {
 
     try std.testing.expectEqual(Phase.check, fixture.phase);
 
-    if (std.mem.indexOf(u8, path, "phase3-semantics") != null or std.mem.indexOf(u8, path, "phase5-sum-types") != null or std.mem.indexOf(u8, path, "phase5a-judgment") != null) {
+    if (std.mem.indexOf(u8, path, "phase3-semantics") != null or std.mem.indexOf(u8, path, "phase5-sum-types") != null or std.mem.indexOf(u8, path, "phase5a-judgment") != null or std.mem.indexOf(u8, path, "phase6-unsafe-ownership") != null) {
         try expectSemanticCheckFixture(path, fixture);
     } else {
         try expectPhase2CheckFixture(path, fixture);
@@ -841,7 +841,7 @@ test "language check fixture: phase3 function name not type" {
     try expectCheckFixture("../../../language/phase3-semantics/invalid/function_name_not_type.invalid.conception");
 }
 
-test "language check fixture: phase3 unsupported pointer type" {
+test "language check fixture: phase3 unsupported reference type" {
     try expectCheckFixture("../../../language/phase3-semantics/invalid/unsupported_pointer_type.invalid.conception");
 }
 
@@ -1604,4 +1604,32 @@ test "language run fixture: phase6 unsafe function call inside unsafe" {
 
 test "language check fixture: phase6 unsafe function call outside unsafe" {
     try expectCheckFixture("../../../language/phase6-unsafe-ownership/invalid/unsafe_function_call_outside_unsafe.invalid.conception");
+}
+
+test "language check fixture: phase6 pointer identity" {
+    try expectCheckFixture("../../../language/phase6-unsafe-ownership/valid/pointer_identity.valid.conception");
+}
+
+test "language check fixture: phase6 pointer local copy" {
+    try expectCheckFixture("../../../language/phase6-unsafe-ownership/valid/pointer_local_copy.valid.conception");
+}
+
+test "language check fixture: phase6 pointer call argument" {
+    try expectCheckFixture("../../../language/phase6-unsafe-ownership/valid/pointer_call_argument.valid.conception");
+}
+
+test "language check fixture: phase6 pointer enum type" {
+    try expectCheckFixture("../../../language/phase6-unsafe-ownership/valid/pointer_enum_type.valid.conception");
+}
+
+test "language check fixture: phase6 pointer return mismatch" {
+    try expectCheckFixture("../../../language/phase6-unsafe-ownership/invalid/pointer_return_mismatch.invalid.conception");
+}
+
+test "language check fixture: phase6 pointer local mismatch" {
+    try expectCheckFixture("../../../language/phase6-unsafe-ownership/invalid/pointer_local_mismatch.invalid.conception");
+}
+
+test "language check fixture: phase6 pointer call mismatch" {
+    try expectCheckFixture("../../../language/phase6-unsafe-ownership/invalid/pointer_call_mismatch.invalid.conception");
 }

@@ -1,0 +1,20 @@
+# name: phase6 pointer call argument
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+int* identity(int* p) {
+    return p;
+}
+
+int use(int* p) {
+    int* q = identity(p);
+    return 0;
+}
+
+int main() {
+    return 0;
+}

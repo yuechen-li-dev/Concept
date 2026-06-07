@@ -1,0 +1,16 @@
+# name: phase6 pointer local copy
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+int* identity(int* p) {
+    int* q = p;
+    return q;
+}
+
+int main() {
+    return 0;
+}
