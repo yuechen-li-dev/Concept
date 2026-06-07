@@ -1,0 +1,19 @@
+# name: template duplicate concrete name check
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module Main;
+
+template<T>
+T identity(T value) {
+    return value;
+}
+
+int identity() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0020

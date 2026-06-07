@@ -1,0 +1,12 @@
+# name: template constrained declaration check
+# phase: check
+# check: declarations
+# expect: pass
+
+=== source ===
+module Generics;
+
+template<T: Equatable<T>>
+T passthrough(T value) {
+    return value;
+}

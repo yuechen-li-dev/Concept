@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const hir = @import("hir.zig");
+const interner = @import("interner.zig");
 
 /// Stable identity for semantic types owned by a TypeStore.
 ///
@@ -16,6 +17,11 @@ pub const TypeId = struct {
 
 pub const TypeStoreError = std.mem.Allocator.Error || error{TooManyTypes};
 
+pub const TypeParamOwner = struct {
+    kind: enum { generic_function },
+    index: u32,
+};
+
 pub const TypeKind = union(enum) {
     void,
     int,
@@ -24,6 +30,11 @@ pub const TypeKind = union(enum) {
     enum_type: hir.EnumId,
     pointer: struct {
         pointee: TypeId,
+    },
+    type_param: struct {
+        owner: TypeParamOwner,
+        index: u32,
+        name: interner.SymbolId,
     },
 
     pub fn format(self: TypeKind, writer: *std.Io.Writer) std.Io.Writer.Error!void {
@@ -34,6 +45,7 @@ pub const TypeKind = union(enum) {
             .struct_type => |id| try writer.print("struct {f}", .{id}),
             .enum_type => |id| try writer.print("enum {f}", .{id}),
             .pointer => |pointer| try writer.print("{f}*", .{pointer.pointee}),
+            .type_param => |param| try writer.print("type_param({s}:{d}/{d} {f})", .{ @tagName(param.owner.kind), param.owner.index, param.index, param.name }),
         }
     }
 };
@@ -96,6 +108,14 @@ pub const TypeStore = struct {
         return try self.append(.{ .enum_type = enum_id }, error.TooManyTypes);
     }
 
+    pub fn addTypeParam(self: *TypeStore, owner: TypeParamOwner, index: u32, name: interner.SymbolId) TypeStoreError!TypeId {
+        if (self.findTypeParam(owner, index, name)) |existing| {
+            return existing;
+        }
+
+        return try self.append(.{ .type_param = .{ .owner = owner, .index = index, .name = name } }, error.TooManyTypes);
+    }
+
     pub fn addPointerType(self: *TypeStore, pointee: TypeId) TypeStoreError!TypeId {
         std.debug.assert(self.contains(pointee));
         if (self.findPointer(pointee)) |existing| {
@@ -134,6 +154,19 @@ pub const TypeStore = struct {
         return id;
     }
 
+    fn findTypeParam(self: TypeStore, owner: TypeParamOwner, param_index: u32, name: interner.SymbolId) ?TypeId {
+        for (self.types.items, 0..) |candidate, index| {
+            switch (candidate) {
+                .type_param => |param| if (param.owner.kind == owner.kind and param.owner.index == owner.index and param.index == param_index and param.name.index == name.index) {
+                    return .{ .index = @intCast(index) };
+                },
+                else => {},
+            }
+        }
+
+        return null;
+    }
+
     fn findPointer(self: TypeStore, pointee: TypeId) ?TypeId {
         for (self.types.items, 0..) |candidate, index| {
             switch (candidate) {
@@ -162,7 +195,7 @@ pub const TypeStore = struct {
                     },
                     else => {},
                 },
-                .pointer => unreachable,
+                .pointer, .type_param => unreachable,
                 else => unreachable,
             }
         }
@@ -312,4 +345,52 @@ test "TypeKind debug formatting is stable" {
     defer std.testing.allocator.free(rendered);
 
     try std.testing.expectEqualStrings("void int bool struct StructId(0) enum EnumId(0) TypeId(1)*", rendered);
+}
+
+test "type parameter TypeIds are stable and distinct by owner and index" {
+    var symbols = interner.Interner.init(std.testing.allocator);
+    defer symbols.deinit();
+    var store = try TypeStore.init(std.testing.allocator);
+    defer store.deinit();
+
+    const t = try symbols.intern("T");
+    const owner0 = TypeParamOwner{ .kind = .generic_function, .index = 0 };
+    const owner1 = TypeParamOwner{ .kind = .generic_function, .index = 1 };
+
+    const first = try store.addTypeParam(owner0, 0, t);
+    const again = try store.addTypeParam(owner0, 0, t);
+    const other_owner = try store.addTypeParam(owner1, 0, t);
+    const other_index = try store.addTypeParam(owner0, 1, t);
+
+    try std.testing.expectEqual(first, again);
+    try std.testing.expect(first.index != other_owner.index);
+    try std.testing.expect(first.index != other_index.index);
+    try std.testing.expectEqual(TypeKind{ .type_param = .{ .owner = owner0, .index = 0, .name = t } }, store.kind(first));
+}
+
+test "pointer to type parameter is interned" {
+    var symbols = interner.Interner.init(std.testing.allocator);
+    defer symbols.deinit();
+    var store = try TypeStore.init(std.testing.allocator);
+    defer store.deinit();
+
+    const param = try store.addTypeParam(.{ .kind = .generic_function, .index = 0 }, 0, try symbols.intern("T"));
+    const first = try store.addPointerType(param);
+    const second = try store.addPointerType(param);
+
+    try std.testing.expectEqual(first, second);
+    try std.testing.expectEqual(TypeKind{ .pointer = .{ .pointee = param } }, store.kind(first));
+}
+
+test "type parameter debug formatting is stable" {
+    var symbols = interner.Interner.init(std.testing.allocator);
+    defer symbols.deinit();
+    const rendered = try std.fmt.allocPrint(std.testing.allocator, "{f}", .{TypeKind{ .type_param = .{
+        .owner = .{ .kind = .generic_function, .index = 3 },
+        .index = 2,
+        .name = try symbols.intern("T"),
+    } }});
+    defer std.testing.allocator.free(rendered);
+
+    try std.testing.expectEqualStrings("type_param(generic_function:3/2 SymbolId(0))", rendered);
 }

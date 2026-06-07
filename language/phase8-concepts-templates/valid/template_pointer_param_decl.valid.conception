@@ -1,0 +1,12 @@
+# name: template pointer parameter declaration check
+# phase: check
+# check: declarations
+# expect: pass
+
+=== source ===
+module Generics;
+
+template<T>
+T* address(T* value) {
+    return value;
+}

@@ -11,6 +11,7 @@ pub const SymbolId = interner_module.SymbolId;
 
 pub const ItemId = SemanticId("ItemId");
 pub const FunctionId = SemanticId("FunctionId");
+pub const GenericFunctionId = SemanticId("GenericFunctionId");
 pub const StructId = SemanticId("StructId");
 pub const EnumId = SemanticId("EnumId");
 pub const FieldId = SemanticId("FieldId");
@@ -35,6 +36,25 @@ pub const HirItem = union(enum) {
     function: FunctionId,
     struct_: StructId,
     enum_: EnumId,
+};
+
+pub const HirTypeConstraint = struct {
+    text: []const u8,
+    span: SourceSpan,
+};
+
+pub const HirTypeParam = struct {
+    name: SymbolId,
+    span: SourceSpan,
+    type_id: types.TypeId,
+    constraint: ?HirTypeConstraint = null,
+};
+
+pub const HirGenericFunction = struct {
+    name: SymbolId,
+    span: SourceSpan,
+    type_params: []HirTypeParam,
+    function: FunctionId,
 };
 
 pub const HirFunction = struct {
@@ -259,6 +279,7 @@ pub const HirStore = struct {
     allocator: std.mem.Allocator,
     items: std.ArrayList(HirItem),
     functions: std.ArrayList(HirFunction),
+    generic_functions: std.ArrayList(HirGenericFunction),
     params: std.ArrayList(HirParam),
     locals: std.ArrayList(HirLocal),
     stmts: std.ArrayList(HirStmt),
@@ -274,6 +295,7 @@ pub const HirStore = struct {
             .allocator = allocator,
             .items = std.ArrayList(HirItem).empty,
             .functions = std.ArrayList(HirFunction).empty,
+            .generic_functions = std.ArrayList(HirGenericFunction).empty,
             .params = std.ArrayList(HirParam).empty,
             .locals = std.ArrayList(HirLocal).empty,
             .stmts = std.ArrayList(HirStmt).empty,
@@ -287,6 +309,12 @@ pub const HirStore = struct {
     }
 
     pub fn deinit(self: *HirStore) void {
+        for (self.generic_functions.items) |generic_function| {
+            for (generic_function.type_params) |type_param| {
+                if (type_param.constraint) |constraint| self.allocator.free(constraint.text);
+            }
+            if (generic_function.type_params.len > 0) self.allocator.free(generic_function.type_params);
+        }
         for (self.functions.items) |function| {
             if (function.params.len > 0) self.allocator.free(function.params);
             if (function.locals.len > 0) self.allocator.free(function.locals);
@@ -336,9 +364,36 @@ pub const HirStore = struct {
         self.stmts.deinit(self.allocator);
         self.locals.deinit(self.allocator);
         self.params.deinit(self.allocator);
+        self.generic_functions.deinit(self.allocator);
         self.functions.deinit(self.allocator);
         self.items.deinit(self.allocator);
         self.* = undefined;
+    }
+
+    pub fn addGenericFunction(self: *HirStore, name: SymbolId, span: SourceSpan) !GenericFunctionId {
+        const function = try self.addFunctionStorage(name, types.TypeId{ .index = 0 }, false, span);
+        errdefer _ = self.functions.pop();
+        const id = GenericFunctionId{ .index = try nextIndex(self.generic_functions.items.len, error.TooManyFunctions) };
+        try self.generic_functions.append(self.allocator, .{
+            .name = name,
+            .span = span,
+            .type_params = &.{},
+            .function = function,
+        });
+        return id;
+    }
+
+    pub fn setGenericFunctionTypeParams(self: *HirStore, id: GenericFunctionId, type_params: []HirTypeParam) void {
+        const generic = self.getGenericFunctionMut(id);
+        if (generic.type_params.len > 0) self.allocator.free(generic.type_params);
+        generic.type_params = type_params;
+    }
+
+    pub fn isGenericFunction(self: *const HirStore, function_id: FunctionId) bool {
+        for (self.generic_functions.items) |generic| {
+            if (generic.function.index == function_id.index) return true;
+        }
+        return false;
     }
 
     pub fn addFunction(self: *HirStore, name: SymbolId, return_type: types.TypeId, span: SourceSpan) !FunctionId {
@@ -346,11 +401,17 @@ pub const HirStore = struct {
     }
 
     pub fn addFunctionWithSafety(self: *HirStore, name: SymbolId, return_type: types.TypeId, is_unsafe: bool, span: SourceSpan) !FunctionId {
-        const id = FunctionId{ .index = try nextIndex(self.functions.items.len, error.TooManyFunctions) };
+        const id = try self.addFunctionStorage(name, return_type, is_unsafe, span);
         const item = try self.addItem(.{ .function = id });
         errdefer _ = self.items.pop();
+        self.getFunctionMut(id).item = item;
+        return id;
+    }
+
+    fn addFunctionStorage(self: *HirStore, name: SymbolId, return_type: types.TypeId, is_unsafe: bool, span: SourceSpan) !FunctionId {
+        const id = FunctionId{ .index = try nextIndex(self.functions.items.len, error.TooManyFunctions) };
         try self.functions.append(self.allocator, .{
-            .item = item,
+            .item = ItemId{ .index = std.math.maxInt(u32) },
             .name = name,
             .span = span,
             .return_type = return_type,
@@ -473,6 +534,12 @@ pub const HirStore = struct {
         return &self.items.items[index];
     }
 
+    pub fn getGenericFunction(self: *const HirStore, id: GenericFunctionId) *const HirGenericFunction {
+        const index: usize = id.index;
+        std.debug.assert(index < self.generic_functions.items.len);
+        return &self.generic_functions.items[index];
+    }
+
     pub fn getFunction(self: *const HirStore, id: FunctionId) *const HirFunction {
         const index: usize = id.index;
         std.debug.assert(index < self.functions.items.len);
@@ -541,6 +608,12 @@ pub const HirStore = struct {
         return &self.enum_payload_fields.items[index];
     }
 
+    fn getGenericFunctionMut(self: *HirStore, id: GenericFunctionId) *HirGenericFunction {
+        const index: usize = id.index;
+        std.debug.assert(index < self.generic_functions.items.len);
+        return &self.generic_functions.items[index];
+    }
+
     fn getFunctionMut(self: *HirStore, id: FunctionId) *HirFunction {
         const index: usize = id.index;
         std.debug.assert(index < self.functions.items.len);
@@ -571,6 +644,29 @@ pub const HirStore = struct {
         const writer = &buffer.writer;
 
         try writer.writeAll("HirModule\n");
+        for (self.generic_functions.items) |generic_function| {
+            const function = self.getFunction(generic_function.function);
+            try writer.print("  GenericFunction {s} {f} -> {f}\n", .{ interner.text(generic_function.name), generic_function.function, function.return_type });
+            if (generic_function.type_params.len != 0) {
+                try writer.writeAll("    TypeParams\n");
+                for (generic_function.type_params, 0..) |type_param, type_param_index| {
+                    try writer.print("      #{d} {s}: {f}", .{ type_param_index, interner.text(type_param.name), type_param.type_id });
+                    if (type_param.constraint) |constraint| try writer.print(" constraint {s}", .{constraint.text});
+                    try writer.writeByte('\n');
+                }
+            }
+            if (function.params.len != 0) {
+                try writer.writeAll("    Params\n");
+                for (function.params) |param_id| {
+                    const param = self.getParam(param_id);
+                    try writer.print("      {f} {s}: {f}\n", .{ param_id, interner.text(param.name), param.type_id });
+                }
+            }
+            if (function.body) |body| {
+                try writer.writeAll("    Body\n");
+                try self.writeStmtDebug(writer, body, 3);
+            }
+        }
         for (self.items.items) |item| {
             switch (item) {
                 .function => |id| {
@@ -807,6 +903,7 @@ test "empty HIR store" {
 
     try std.testing.expectEqual(@as(usize, 0), store.items.items.len);
     try std.testing.expectEqual(@as(usize, 0), store.functions.items.len);
+    try std.testing.expectEqual(@as(usize, 0), store.generic_functions.items.len);
     try std.testing.expectEqual(@as(usize, 0), store.structs.items.len);
     try std.testing.expectEqual(@as(usize, 0), store.enums.items.len);
 }
@@ -936,4 +1033,40 @@ fn writePattern(writer: *std.Io.Writer, pattern: HirMatchPattern) !void {
             }
         },
     }
+}
+
+test "HIR debug formatting includes generic functions" {
+    var interner = Interner.init(std.testing.allocator);
+    defer interner.deinit();
+    var module = HirModule.init(std.testing.allocator);
+    defer module.deinit();
+
+    const identity_name = try interner.intern("identity");
+    const t_name = try interner.intern("T");
+    const value_name = try interner.intern("value");
+    const generic_id = try module.store.addGenericFunction(identity_name, synthetic_span);
+    const function_id = module.store.getGenericFunction(generic_id).function;
+    const type_param_id = types.TypeId{ .index = 3 };
+    const params = try std.testing.allocator.dupe(HirTypeParam, &.{.{
+        .name = t_name,
+        .span = synthetic_span,
+        .type_id = type_param_id,
+        .constraint = .{ .text = try std.testing.allocator.dupe(u8, "Equatable<T>"), .span = synthetic_span },
+    }});
+    module.store.setGenericFunctionTypeParams(generic_id, params);
+    module.store.setFunctionReturnType(function_id, type_param_id);
+    _ = try module.store.addParam(function_id, value_name, type_param_id, synthetic_span);
+
+    const rendered = try module.store.debugString(std.testing.allocator, interner);
+    defer std.testing.allocator.free(rendered);
+
+    try std.testing.expectEqualStrings(
+        \\HirModule
+        \\  GenericFunction identity FunctionId(0) -> TypeId(3)
+        \\    TypeParams
+        \\      #0 T: TypeId(3) constraint Equatable<T>
+        \\    Params
+        \\      ParamId(0) value: TypeId(3)
+        \\
+    , rendered);
 }

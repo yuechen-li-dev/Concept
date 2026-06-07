@@ -1,0 +1,16 @@
+# name: template declaration with concrete main
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+template<T>
+T identity(T value) {
+    return value;
+}
+
+int main() {
+    return 0;
+}

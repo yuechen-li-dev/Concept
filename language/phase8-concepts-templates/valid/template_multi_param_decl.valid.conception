@@ -1,0 +1,12 @@
+# name: template multi parameter declaration check
+# phase: check
+# check: declarations
+# expect: pass
+
+=== source ===
+module Generics;
+
+template<K, V>
+K chooseKey(K key, V value) {
+    return key;
+}

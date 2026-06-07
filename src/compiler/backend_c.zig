@@ -60,22 +60,28 @@ pub fn emitExecutableFromHir(
     const writer = &output.writer;
 
     var body_count: usize = 0;
-    for (module.hir.functions.items) |function| {
+    for (module.hir.functions.items, 0..) |function, index| {
+        const function_id = hir.FunctionId{ .index = @intCast(index) };
+        if (module.hir.isGenericFunction(function_id)) continue;
         if (function.body != null) body_count += 1;
     }
     if (body_count > 1) {
         for (module.hir.functions.items, 0..) |function, index| {
+            const function_id = hir.FunctionId{ .index = @intCast(index) };
+            if (module.hir.isGenericFunction(function_id)) continue;
             if (function.body == null) continue;
-            try emitHirPrototype(writer, module, .{ .index = @intCast(index) }, function);
+            try emitHirPrototype(writer, module, function_id, function);
         }
         try writer.writeByte('\n');
     }
 
     var emitted_any = false;
     for (module.hir.functions.items, 0..) |function, index| {
+        const function_id = hir.FunctionId{ .index = @intCast(index) };
+        if (module.hir.isGenericFunction(function_id)) continue;
         if (function.body == null) continue;
         if (emitted_any) try writer.writeByte('\n');
-        try emitHirFunction(writer, module, .{ .index = @intCast(index) }, function);
+        try emitHirFunction(writer, module, function_id, function);
         emitted_any = true;
     }
     return output.toOwnedSlice();

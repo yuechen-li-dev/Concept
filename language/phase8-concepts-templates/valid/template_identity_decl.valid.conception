@@ -1,0 +1,12 @@
+# name: template identity declaration check
+# phase: check
+# check: declarations
+# expect: pass
+
+=== source ===
+module Generics;
+
+template<T>
+T identity(T value) {
+    return value;
+}

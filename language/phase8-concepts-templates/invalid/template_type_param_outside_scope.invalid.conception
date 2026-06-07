@@ -1,0 +1,14 @@
+# name: template type parameter outside scope check
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module Main;
+
+T outside(T value) {
+    return value;
+}
+
+=== diagnostics ===
+CON0021
