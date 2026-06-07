@@ -1,0 +1,32 @@
+# name: phase5a decide condition gates score run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+enum Mode {
+    Gated,
+    Fallback,
+};
+
+int expensiveScore() {
+    return 100;
+}
+
+int main() {
+    bool enabled = false;
+
+    Mode mode = decide Mode {
+        Gated when enabled score expensiveScore();
+        Fallback score 1;
+    };
+
+    match (mode) {
+        Mode::Gated => return 2;
+        Mode::Fallback => return 1;
+    }
+}
+
+=== run ===
+exit_code: 1

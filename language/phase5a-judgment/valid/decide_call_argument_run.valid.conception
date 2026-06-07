@@ -1,0 +1,28 @@
+# name: phase5a decide call argument run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+enum Mode {
+    Fast,
+    Slow,
+};
+
+int use(Mode mode) {
+    match (mode) {
+        Mode::Fast => return 11;
+        Mode::Slow => return 12;
+    }
+}
+
+int main() {
+    return use(decide Mode {
+        Fast when false score 20;
+        Slow score 10;
+    });
+}
+
+=== run ===
+exit_code: 12

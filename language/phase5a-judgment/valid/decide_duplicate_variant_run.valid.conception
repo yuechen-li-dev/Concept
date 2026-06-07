@@ -1,0 +1,29 @@
+# name: phase5a decide duplicate variant run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+enum Mode {
+    Fast,
+    Slow,
+};
+
+int main() {
+    bool hot = false;
+
+    Mode mode = decide Mode {
+        Fast when hot score 10;
+        Slow score 1;
+        Fast score 20;
+    };
+
+    match (mode) {
+        Mode::Fast => return 5;
+        Mode::Slow => return 6;
+    }
+}
+
+=== run ===
+exit_code: 5

@@ -1394,6 +1394,39 @@ test "language check fixture: phase5a decide negative score" {
     try expectCheckFixture("../../../language/phase5a-judgment/valid/decide_negative_score.valid.conception");
 }
 
+
+test "language run fixture: phase5a decide highest score" {
+    try expectRunFixture("../../../language/phase5a-judgment/valid/decide_highest_score_run.valid.conception");
+}
+
+test "language run fixture: phase5a decide fallback" {
+    try expectRunFixture("../../../language/phase5a-judgment/valid/decide_fallback_run.valid.conception");
+}
+
+test "language run fixture: phase5a decide tie break first" {
+    try expectRunFixture("../../../language/phase5a-judgment/valid/decide_tie_break_first_run.valid.conception");
+}
+
+test "language run fixture: phase5a decide duplicate variant" {
+    try expectRunFixture("../../../language/phase5a-judgment/valid/decide_duplicate_variant_run.valid.conception");
+}
+
+test "language run fixture: phase5a decide negative score" {
+    try expectRunFixture("../../../language/phase5a-judgment/valid/decide_negative_score_run.valid.conception");
+}
+
+test "language run fixture: phase5a decide condition gates score" {
+    try expectRunFixture("../../../language/phase5a-judgment/valid/decide_condition_gates_score_run.valid.conception");
+}
+
+test "language run fixture: phase5a decide return expression" {
+    try expectRunFixture("../../../language/phase5a-judgment/valid/decide_return_expression_run.valid.conception");
+}
+
+test "language run fixture: phase5a decide call argument" {
+    try expectRunFixture("../../../language/phase5a-judgment/valid/decide_call_argument_run.valid.conception");
+}
+
 test "language check fixture: phase5a decide unknown enum" {
     try expectCheckFixture("../../../language/phase5a-judgment/invalid/decide_unknown_enum.invalid.conception");
 }

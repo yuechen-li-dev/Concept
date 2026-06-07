@@ -1,6 +1,6 @@
 # Phase 5a judgment expressions: `decide`
 
-Phase 5a introduces Concept's first judgment expression: `decide`, a typed, deterministic, stateless utility-scoring expression over enum variants. This milestone is documentation-only. It does not implement lexer, parser, AST, HIR, MIR, backend, or fixture-runner changes.
+Phase 5a introduces Concept's first judgment expression: `decide`, a typed, deterministic, stateless utility-scoring expression over enum variants. As of P5a-M4, the parser, HIR/type checker, MIR lowering, MIR validation, MIR-backed C backend path, and runtime fixtures cover the v0 expression.
 
 ## Thesis
 
@@ -365,9 +365,9 @@ Planned fixtures:
 - Run fixture for highest score.
 - Run fixture for tie-breaking by source order.
 - Run fixture for fallback unconditional arm.
-- Run fixture for score evaluated only when eligible, if observable side effects or testable evaluation hooks exist later.
+- Run fixture for score evaluated only when eligible.
 
-Fixture growth should follow the milestone ladder. Parse and check fixtures can land before runtime support. MIR and run fixtures should land only when the real parse -> HIR -> MIR -> MIR-backed backend path supports the feature.
+Fixture growth followed the milestone ladder. Parse and check fixtures landed before runtime support. P5a-M3 added code-based MIR debug snapshot assertions for simple arms, conditional fallback, duplicate variants with tie comparison, negative scores, and call arguments. P5a-M4 adds run fixtures through the real parse -> HIR -> MIR -> MIR validation -> MIR-backed C -> `zig cc` -> native executable path. File-based MIR and C snapshots are intentionally not expanded for Phase 5a because the `decide` lowering is already covered by targeted in-code MIR snapshots and by executable fixtures, and the C backend has no dedicated `decide` primitive to snapshot.
 
 ## Milestone ladder
 
@@ -376,8 +376,7 @@ P5a-M0  Judgment / decide design doc
 P5a-M1  Parse decide expressions
 P5a-M2  HIR/type checking for decide
 P5a-M3  MIR lowering for decide
-P5a-M4  Runtime fixtures and backend stabilization
-P5a-M5  Phase 5a closeout
+P5a-M4  Runtime fixtures, backend stabilization, and Phase 5a closeout
 ```
 
 Phase 5a should remain compact. The purpose is to add one stateless, typed utility-scoring expression, not a full AI policy framework.
@@ -397,6 +396,61 @@ Phase 5a is complete when:
 - MIR lowering works through existing constructs.
 - Run fixtures prove winner selection.
 - No stateful policy is built into the language primitive.
+
+## P5a-M4 closeout status
+
+Phase 5a is closed as of P5a-M4.
+
+Implemented and verified:
+
+- `decide` parses as an expression and can appear in expression positions supported by the executable subset.
+- HIR lowering and executable type checking exist for `decide`.
+- The target type after `decide` must resolve to an enum.
+- Candidate variants must exist on the target enum.
+- Candidate variants must be zero-payload variants in v0.
+- `when` conditions must have type `bool`.
+- `score` expressions must have type `int`.
+- Duplicate variant arms are allowed.
+- At least one unconditional arm is required, making v0 `decide` total.
+- Scores may be negative.
+- Conditions gate score evaluation: a score expression is lowered only on the eligible arm path.
+- Highest eligible score wins.
+- Ties break by source order because lowering replaces the winner only for a strictly greater score.
+- MIR lowering exists and uses ordinary MIR locals, blocks, assignments, enum constructors, conditionals, integer comparisons, and gotos.
+- MIR validation accepts the lowered form.
+- The MIR-backed C backend needs no dedicated `decide` primitive; it emits the ordinary MIR control flow already used by other executable constructs.
+- Runtime fixtures prove highest-score selection, unconditional fallback, first-arm tie-breaking, duplicate variant handling, negative scores, condition-gated scores, local initializer use, return-expression use, and call-argument use.
+
+No new language semantics were added during closeout. P5a-M4 only consolidates executable-path coverage and documentation for the already defined v0 semantics.
+
+## Known limitations after Phase 5a
+
+Phase 5a deliberately leaves these out of the language primitive:
+
+- no stateful policy wrappers;
+- no hysteresis;
+- no `min_commit` or minimum commit windows;
+- no cooldowns;
+- no `judge` expression;
+- no `Judgment<T>` type;
+- no explanation object;
+- no payload variant candidates;
+- no fallible `decide?`;
+- no float scores;
+- no generic score concepts;
+- no score normalization curves;
+- no scheduler/optimizer integration;
+- no Dominatus runtime integration.
+
+## Future work
+
+Future phases may explore these directions without changing the closed v0 `decide` contract:
+
+- stateful library policy wrappers layered on top of stateless decisions;
+- a richer `judge` expression or library form that returns explanation, selected value, score, and reason data;
+- payload candidate construction once enum payload construction in expression contexts is ready;
+- fallible selection for policies that intentionally lack a static fallback;
+- custom scoring concepts after templates/concepts exist.
 
 ## P5a-M0 close criteria
 
@@ -431,7 +485,7 @@ P5a-M1 adds parser and AST support for `decide` expressions. The lexer reserves 
 
 The parser now accepts `decide TypeName { ... }` wherever expressions are parsed, records simple-identifier arm variants, optional `when` conditions, required contextual `score` markers, required score expressions, and semicolon-terminated arms. Empty arm lists are accepted by the parser so later semantic validation can diagnose totality and enum-specific rules in one place.
 
-HIR lowering, type checking, enum/variant resolution, condition and score type checks, unconditional-arm validation, MIR lowering, backend behavior, runtime fixtures, stateful policy wrappers, `judge`, and `Judgment<T>` remain future milestones.
+P5a-M1 intentionally left HIR lowering, type checking, MIR lowering, backend behavior, runtime fixtures, stateful policy wrappers, `judge`, and `Judgment<T>` for later milestones; those compiler-path items are now complete through P5a-M4 except for the explicitly non-goal stateful/richer judgment work.
 
 ## P5a-M2 status: HIR and type checking
 
@@ -450,13 +504,7 @@ Implemented in this milestone:
 - duplicate variant arms remain valid and are not diagnosed;
 - a checked `decide` expression has the target enum type and participates in normal expression-use checks, including ignored `must_use` enum values.
 
-Still future work:
-
-- MIR lowering;
-- MIR validation and C backend support;
-- runtime fixtures;
-- payload candidate construction;
-- stateful policy wrappers, `judge`, `Judgment<T>`, fallible `decide?`, float scores, generic score concepts, and scheduler/optimizer integration.
+P5a-M2 left execution-path work for later milestones: MIR lowering, MIR validation, C backend support, runtime fixtures, and closeout. Those execution-path items are now complete through P5a-M4. Payload candidate construction, stateful policy wrappers, `judge`, `Judgment<T>`, fallible `decide?`, float scores, generic score concepts, and scheduler/optimizer integration remain non-goals for closed Phase 5a.
 
 ## P5a-M3 status: MIR lowering
 
@@ -466,4 +514,4 @@ The lowering materializes temporary locals for winner tracking (`hasWinner`), th
 
 The selected enum value is therefore represented as the final `bestValue` operand and can flow through existing expression positions such as local initializers, assignments, returns, and call arguments. Because the generated MIR uses existing locals, assignments, enum constructors, boolean switches, gotos, unary operations, and integer comparisons, the existing MIR validator and C backend path do not require a dedicated decide feature.
 
-Runtime fixture stabilization remains P5a-M4. P5a-M3 intentionally does not add stateful policy wrappers, `judge`, `Judgment<T>`, payload variant candidates, fallible decide forms, float scores, score normalization, or any new language semantics beyond lowering the already checked v0 `decide` expression.
+P5a-M3 intentionally did not add stateful policy wrappers, `judge`, `Judgment<T>`, payload variant candidates, fallible decide forms, float scores, score normalization, or any new language semantics beyond lowering the already checked v0 `decide` expression. Runtime fixture stabilization and closeout are complete in P5a-M4.

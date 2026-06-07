@@ -1,0 +1,32 @@
+# name: phase5a decide fallback run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+enum AlertChannel {
+    Nominal,
+    Advisory,
+    Warning,
+};
+
+int main() {
+    bool fault = false;
+    int temperature = 100;
+
+    AlertChannel channel = decide AlertChannel {
+        Warning when fault score 100;
+        Advisory when temperature > 500 score 70;
+        Nominal score 5;
+    };
+
+    match (channel) {
+        AlertChannel::Warning => return 3;
+        AlertChannel::Advisory => return 2;
+        AlertChannel::Nominal => return 1;
+    }
+}
+
+=== run ===
+exit_code: 1
