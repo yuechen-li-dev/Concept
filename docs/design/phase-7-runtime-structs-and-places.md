@@ -2,6 +2,8 @@
 
 P7-M0 is a documentation-only milestone. It defines Concept's direction for runtime struct values, field access, field assignment, and richer place representation without implementing compiler code.
 
+P7-M1 adds the first executable/audit-facing backend step: supported struct declarations now emit deterministic backend-local C layout typedefs. This is not an ABI commitment and does not add struct literals, field access, field assignment, MIR place projections, or runtime construction.
+
 Phase 7 starts after the closed Phase 6 unsafe/raw-pointer slice. Phase 6 intentionally deferred ownership, move, Drop, and `MaybeUninit` until Concept has runtime structs and richer places. This document makes that prerequisite explicit and scopes the next executable-data milestone.
 
 ## Thesis
@@ -114,6 +116,16 @@ Rules:
 - Empty structs may be rejected or represented explicitly; the implementation milestone should choose one behavior and fixture it.
 - Recursive structs by value must be rejected.
 - Recursive references through raw pointers may become possible once struct pointer type rendering is stable, but that is separate from by-value recursion.
+
+P7-M1 chosen behavior:
+
+- The C backend emits enum layouts first, then supported struct layouts, then functions.
+- Supported struct fields are `int`, `bool`, raw pointers to backend-renderable non-struct pointees, and enums with supported backend layouts.
+- Struct type names render as `cpt_struct_<escaped_struct_name>`.
+- Field names render as `cpt_f_<escaped_field_name>_<declaration_order_index>`.
+- Empty structs are rejected with the existing unsupported C backend type diagnostic because portable C has no empty struct value representation and Concept has not defined zero-sized runtime types.
+- Struct fields by value are rejected for now, including otherwise supported structs, so recursive/nested layout ordering remains deferred.
+- Raw pointers to structs can render in function/local type positions after the struct layout is emitted, but struct pointer fields are still rejected in P7-M1 until forward-reference and recursive-reference rules are specified.
 
 This keeps C output auditable without pretending Phase 7 has finalized Concept's ABI story.
 
