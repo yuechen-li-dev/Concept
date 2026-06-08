@@ -1,0 +1,21 @@
+# name: compile-time field access unsupported
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+struct Vec2 {
+    int x;
+    int y;
+}
+
+int main() {
+    Vec2 someStruct = Vec2 { x: 1, y: 2 };
+    int z = comptime someStruct.x;
+    return z;
+}
+
+=== diagnostics ===
+CON0120

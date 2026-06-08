@@ -1,0 +1,17 @@
+# name: compile-time bool logic run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    bool ok = comptime true && !false;
+    if (ok) {
+        return 1;
+    }
+    return 0;
+}
+
+=== run ===
+exit_code: 1

@@ -8,6 +8,7 @@ const diagnostics = @import("diagnostics.zig");
 const hir = @import("hir.zig");
 const semantics = @import("semantics.zig");
 const types = @import("types.zig");
+const compile_time = @import("compile_time.zig");
 
 pub const DiagnosticBag = diagnostics.DiagnosticBag;
 pub const CheckError = anyerror;
@@ -232,6 +233,16 @@ const Checker = struct {
             .local_ref => |id| self.module.hir.getLocal(id).type_id,
             .param_ref => |id| self.module.hir.getParam(id).type_id,
             .group => |inner| try self.checkExpr(return_type, inner),
+            .compile_time => |compile_time_expr| blk: {
+                _ = try self.checkExpr(return_type, compile_time_expr.operand);
+                const evaluator = compile_time.CompileTimeEvaluator.init(self.module);
+                const value = evaluator.evaluateExpr(compile_time_expr.operand) catch |err| {
+                    try self.reportCompileTimeError(err, expr.span);
+                    return error.InvalidSemanticModule;
+                };
+                try self.module.compile_time_values.put(expr_id, value);
+                break :blk value.typeOf(self.module.types);
+            },
             .concept_requirement_call => {
                 try self.reportAt(.InvalidConceptRequirementCall, "concept requirement call was not rewritten before checking", expr.span);
                 return error.InvalidSemanticModule;
@@ -462,6 +473,16 @@ const Checker = struct {
                 }
             },
         };
+    }
+
+    fn reportCompileTimeError(self: *Checker, err: compile_time.CompileTimeError, span: diagnostics.SourceSpan) CheckError!void {
+        switch (err) {
+            error.UnsupportedExpression => try self.reportAt(.CompileTimeUnsupportedExpression, "compile-time expression uses an unsupported expression form", span),
+            error.TypeMismatch => try self.reportAt(.CompileTimeTypeMismatch, "compile-time expression has an unsupported value type mismatch", span),
+            error.DivisionByZero => try self.reportAt(.CompileTimeDivisionByZero, "compile-time expression divides by zero", span),
+            error.Overflow => try self.reportAt(.CompileTimeOverflow, "compile-time expression overflows", span),
+            error.EvaluationFailed => try self.reportAt(.CompileTimeEvaluationFailed, "compile-time expression evaluation failed", span),
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
@@ -853,6 +874,7 @@ const Checker = struct {
             .address_of => |operand| .{ .address_of = try self.cloneExpr(operand, subst, param_map, local_map, span) },
             .deref => |operand| .{ .deref = try self.cloneExpr(operand, subst, param_map, local_map, span) },
             .try_expr => |operand| .{ .try_expr = try self.cloneExpr(operand, subst, param_map, local_map, span) },
+            .compile_time => |compile_time_expr| .{ .compile_time = .{ .operand = try self.cloneExpr(compile_time_expr.operand, subst, param_map, local_map, span), .span = compile_time_expr.span } },
             .binary => |binary| .{ .binary = .{ .op = binary.op, .left = try self.cloneExpr(binary.left, subst, param_map, local_map, span), .right = try self.cloneExpr(binary.right, subst, param_map, local_map, span) } },
         };
         return self.module.hir.addExpr(kind, expr.span);
@@ -1616,6 +1638,54 @@ test "HIR checker rejects mismatched try Result type" {
     const ret_ok = try addTestExpr(&tm.module.hir, .{ .enum_constructor = .{ .enum_id = other.enum_id, .variant_id = other.ok, .args = ret_args } });
     tm.setBody(f, try tm.block(&.{ try addTestStmt(&tm.module.hir, .{ .discard_stmt = tried }), try tm.ret(ret_ok) }));
     try tm.checkFail(.TryResultTypeMismatch);
+}
+
+test "HIR checker evaluates compile-time int and bool expressions" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+
+    const main = try tm.function("main", tm.module.types.intType());
+    const add = try addTestExpr(&tm.module.hir, .{ .binary = .{ .op = .add, .left = try tm.int("40"), .right = try tm.int("2") } });
+    const compile_int = try addTestExpr(&tm.module.hir, .{ .compile_time = .{ .operand = add, .span = synthetic_span } });
+    const comparison = try addTestExpr(&tm.module.hir, .{ .binary = .{ .op = .less, .left = try tm.int("1"), .right = try tm.int("2") } });
+    const compile_bool = try addTestExpr(&tm.module.hir, .{ .compile_time = .{ .operand = comparison, .span = synthetic_span } });
+    const ok = try tm.local(main, "ok", tm.module.types.boolType());
+    const ok_decl = try addTestStmt(&tm.module.hir, .{ .local_decl = .{ .local = ok, .initializer = compile_bool } });
+    tm.setBody(main, try tm.block(&.{ ok_decl, try tm.ret(compile_int) }));
+
+    try tm.checkPass();
+    try std.testing.expect(tm.module.compile_time_values.get(compile_int).?.eql(.{ .int = 42 }));
+    try std.testing.expect(tm.module.compile_time_values.get(compile_bool).?.eql(.{ .bool = true }));
+}
+
+test "HIR checker reports unsupported compile-time expression" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+
+    const main = try tm.function("main", tm.module.types.intType());
+    const local = try tm.local(main, "x", tm.module.types.intType());
+    const local_decl = try addTestStmt(&tm.module.hir, .{ .local_decl = .{ .local = local, .initializer = try tm.int("1") } });
+    const local_ref = try addTestExpr(&tm.module.hir, .{ .local_ref = local });
+    const compile_local = try addTestExpr(&tm.module.hir, .{ .compile_time = .{ .operand = local_ref, .span = synthetic_span } });
+    tm.setBody(main, try tm.block(&.{ local_decl, try tm.ret(compile_local) }));
+
+    try tm.checkFail(.CompileTimeUnsupportedExpression);
+}
+
+test "HIR checker reports compile-time division by zero and overflow" {
+    var div_tm = try TestModule.init();
+    defer div_tm.deinit();
+    const div_main = try div_tm.function("main", div_tm.module.types.intType());
+    const div = try addTestExpr(&div_tm.module.hir, .{ .binary = .{ .op = .divide, .left = try div_tm.int("1"), .right = try div_tm.int("0") } });
+    div_tm.setBody(div_main, try div_tm.block(&.{try div_tm.ret(try addTestExpr(&div_tm.module.hir, .{ .compile_time = .{ .operand = div, .span = synthetic_span } }))}));
+    try div_tm.checkFail(.CompileTimeDivisionByZero);
+
+    var overflow_tm = try TestModule.init();
+    defer overflow_tm.deinit();
+    const overflow_main = try overflow_tm.function("main", overflow_tm.module.types.intType());
+    const overflow = try addTestExpr(&overflow_tm.module.hir, .{ .binary = .{ .op = .add, .left = try overflow_tm.int("9223372036854775807"), .right = try overflow_tm.int("1") } });
+    overflow_tm.setBody(overflow_main, try overflow_tm.block(&.{try overflow_tm.ret(try addTestExpr(&overflow_tm.module.hir, .{ .compile_time = .{ .operand = overflow, .span = synthetic_span } }))}));
+    try overflow_tm.checkFail(.CompileTimeOverflow);
 }
 
 test "HIR checker accepts unsafe blocks" {

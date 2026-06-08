@@ -1,0 +1,20 @@
+# name: compile-time struct literal unsupported
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+struct Vec2 {
+    int x;
+    int y;
+}
+
+int main() {
+    Vec2 v = comptime Vec2 { x: 1, y: 2 };
+    return 0;
+}
+
+=== diagnostics ===
+CON0120

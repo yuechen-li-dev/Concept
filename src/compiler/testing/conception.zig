@@ -966,7 +966,6 @@ test "language check fixture: phase8 generic constrained unsupported" {
     try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/generic_constrained_call_unsupported.invalid.conception");
 }
 
-
 test "language MIR fixture: phase8 concepts templates pipeline uses concrete MIR" {
     const path = "../../../language/phase8-concepts-templates/valid/phase8_concepts_templates_pipeline_run.valid.conception";
     const text = @embedFile(path);
@@ -2158,4 +2157,16 @@ test "language run fixture: phase7 struct param field assignment" {
 
 test "language run fixture: phase7 struct pipeline closeout" {
     try expectRunFixture("../../../language/phase7-runtime-structs/valid/phase7_struct_pipeline_closeout_run.valid.conception");
+
+    try expectRunFixture("../../../language/phase9-compile-time/valid/compile_time_int_arithmetic_run.valid.conception");
+    try expectRunFixture("../../../language/phase9-compile-time/valid/compile_time_bool_logic_run.valid.conception");
+    try expectRunFixture("../../../language/phase9-compile-time/valid/compile_time_comparison_run.valid.conception");
+    try expectRunFixture("../../../language/phase9-compile-time/valid/compile_time_return_run.valid.conception");
+    try expectRunFixture("../../../language/phase9-compile-time/valid/compile_time_grouping_run.valid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_call_unsupported.invalid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_local_unsupported.invalid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_struct_literal_unsupported.invalid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_field_access_unsupported.invalid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_division_by_zero.invalid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_overflow.invalid.conception");
 }

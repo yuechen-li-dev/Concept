@@ -1,0 +1,16 @@
+# name: compile-time local unsupported
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    int someLocal = 1;
+    int y = comptime someLocal;
+    return y;
+}
+
+=== diagnostics ===
+CON0120

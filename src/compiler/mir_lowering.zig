@@ -399,6 +399,7 @@ const FunctionLowerer = struct {
             .local_ref => |local_id| .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(try self.resolveLocal(local_id))), .block = block_id },
             .param_ref => |param_id| .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(try self.resolveParam(param_id))), .block = block_id },
             .group => |inner| try self.lowerExpr(inner, block_id),
+            .compile_time => try self.lowerCompileTime(expr_id, block_id),
             .unary => |unary| try self.lowerUnary(expr, unary, block_id),
             .address_of => |operand| try self.lowerAddressOf(expr, operand, block_id),
             .deref => |operand| try self.lowerDeref(expr, operand, block_id),
@@ -410,6 +411,18 @@ const FunctionLowerer = struct {
             .field_access => |field_access| try self.lowerFieldAccess(expr, field_access, block_id),
             .try_expr => |operand| try self.lowerTry(expr, operand, block_id),
             .decide => |decide| try self.lowerDecide(expr, decide, block_id),
+        };
+    }
+
+    fn lowerCompileTime(self: *FunctionLowerer, expr_id: hir.ExprId, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const value = self.semantic_module.compile_time_values.get(expr_id) orelse return error.InvalidMirLowering;
+        return switch (value) {
+            .int => blk: {
+                const text = try value.toIntLiteral(self.allocator);
+                defer self.allocator.free(text);
+                break :blk .{ .operand = try mir.MirOperand.intLiteral(self.allocator, text), .block = block_id };
+            },
+            .bool => |bool_value| .{ .operand = mir.MirOperand.boolLiteral(bool_value), .block = block_id },
         };
     }
 
@@ -755,6 +768,7 @@ const FunctionLowerer = struct {
             .local_ref => |local_id| self.semantic_module.hir.getLocal(local_id).type_id,
             .param_ref => |param_id| self.semantic_module.hir.getParam(param_id).type_id,
             .group => |inner| try self.inferExprType(inner),
+            .compile_time => |compile_time_expr| try self.inferExprType(compile_time_expr.operand),
             .unary => |unary| switch (unary.op) {
                 .negate => self.semantic_module.types.intType(),
                 .logical_not => self.semantic_module.types.boolType(),
@@ -1400,6 +1414,24 @@ test "MIR lowering skips function declarations without bodies" {
 
     try std.testing.expectEqual(@as(usize, 1), mir_module.store.functions.items.len);
     try std.testing.expectEqualStrings("main", module.interner.text(mir_module.store.functions.items[0].name));
+}
+
+test "MIR lowering lowers compile-time values as ordinary literals" {
+    var module = try newModule();
+    defer module.deinit();
+    const main = try addFunction(&module, "main", module.types.intType(), false);
+    const add = try binaryExpr(&module, .add, try intExpr(&module, "40"), try intExpr(&module, "2"));
+    const compile_int = try module.hir.addExpr(.{ .compile_time = .{ .operand = add, .span = hir.synthetic_span } }, hir.synthetic_span);
+    try module.compile_time_values.put(compile_int, .{ .int = 42 });
+    try setBody(&module, main, &.{try module.hir.addStmt(.{ .return_stmt = compile_int }, hir.synthetic_span)});
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+    const block = mir_module.store.getBlock(mir_module.store.functions.items[0].blocks[0]);
+    try std.testing.expectEqualStrings("42", block.terminator.?.kind.return_.?.int_literal);
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "CompileTime") == null);
 }
 
 test "MIR lowering lowers return int" {

@@ -1,0 +1,15 @@
+# name: compile-time overflow
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    int z = comptime 9223372036854775807 + 1;
+    return z;
+}
+
+=== diagnostics ===
+CON0124

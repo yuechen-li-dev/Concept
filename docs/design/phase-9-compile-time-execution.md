@@ -532,3 +532,34 @@ Phase 10  planned: ownership, move, Drop, MaybeUninit, and richer storage-state 
 ```
 
 Phase 9 should be judged by whether it adds deterministic compile-time computation without weakening the Phase 8 boundary. Templates and concepts remain responsible for generic abstraction; `comptime` computes checked values and, later, explicitly gated static artifacts.
+
+## P9-M2 source-level compile-time expressions
+
+P9-M2 exposes the first source surface for explicit compile-time evaluation:
+
+```cpp
+int answer = comptime 40 + 2;
+```
+
+The source keyword is `comptime`; compiler implementation names continue to use full-English `CompileTime*` forms. The parser represents `comptime expr` as a compile-time prefix expression and the HIR preserves that operand until checking.
+
+Implemented P9-M2 behavior:
+
+- supported operands are the P9-M1 typed-HIR evaluator subset: integer literals, boolean literals, grouping, integer negation, boolean not, checked integer `+`, `-`, `*`, safe `/`, integer comparisons, int/bool equality, and boolean `&&`/`||`;
+- the HIR checker checks the operand normally first, so `comptime` does not suppress type errors;
+- after successful type checking, the HIR checker invokes `CompileTimeEvaluator` and records the resulting `CompileTimeValue` by HIR expression id;
+- evaluated `int` and `bool` values lower as ordinary MIR constants;
+- MIR validation and the C backend see only ordinary concrete values, not unresolved compile-time expression artifacts;
+- unsupported source forms, division by zero, overflow, evaluator type mismatches, and fallback evaluation failures have stable diagnostics.
+
+Still out of scope after P9-M2:
+
+- compile-time function calls;
+- local or parameter value evaluation;
+- struct, enum, pointer, or aggregate `CompileTimeValue` forms;
+- field access evaluation;
+- static assertions;
+- host capabilities or host-visible effects;
+- target metadata queries such as `sizeof` or `alignof`;
+- reflection or generated declarations;
+- constant propagation beyond explicit `comptime expr`.
