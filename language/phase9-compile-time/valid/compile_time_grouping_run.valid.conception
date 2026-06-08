@@ -1,0 +1,14 @@
+# name: compile-time grouping run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    int negative = comptime -(10 + 5);
+    return 0 - negative;
+}
+
+=== run ===
+exit_code: 15

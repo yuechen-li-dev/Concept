@@ -10,6 +10,7 @@ const hir = @import("hir.zig");
 const interner = @import("interner.zig");
 const source = @import("source.zig");
 const types = @import("types.zig");
+const compile_time = @import("compile_time.zig");
 
 pub const DiagnosticBag = diagnostics.DiagnosticBag;
 pub const DiagnosticCode = diagnostics.DiagnosticCode;
@@ -19,16 +20,19 @@ pub const SemanticModule = struct {
     interner: interner.Interner,
     hir: hir.HirStore,
     types: types.TypeStore,
+    compile_time_values: std.AutoHashMap(hir.ExprId, compile_time.CompileTimeValue),
 
     pub fn init(allocator: std.mem.Allocator) !SemanticModule {
         return .{
             .interner = interner.Interner.init(allocator),
             .hir = hir.HirStore.init(allocator),
             .types = try types.TypeStore.init(allocator),
+            .compile_time_values = std.AutoHashMap(hir.ExprId, compile_time.CompileTimeValue).init(allocator),
         };
     }
 
     pub fn deinit(self: *SemanticModule) void {
+        self.compile_time_values.deinit();
         self.types.deinit();
         self.hir.deinit();
         self.interner.deinit();
@@ -1122,6 +1126,10 @@ const BodyLowerer = struct {
             .try_expr => |try_expr| {
                 const operand = (try self.lowerExpr(try_expr.operand.*)) orelse return null;
                 return try self.collector.module.hir.addExpr(.{ .try_expr = operand }, try_expr.span);
+            },
+            .compile_time => |compile_time_expr| {
+                const operand = (try self.lowerExpr(compile_time_expr.operand.*)) orelse return null;
+                return try self.collector.module.hir.addExpr(.{ .compile_time = .{ .operand = operand, .span = compile_time_expr.span } }, compile_time_expr.span);
             },
             .field_access => |field_access| {
                 const receiver = (try self.lowerExpr(field_access.receiver.*)) orelse return null;

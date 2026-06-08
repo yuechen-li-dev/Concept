@@ -31,6 +31,13 @@ pub const CompileTimeValue = union(enum) {
         };
     }
 
+    pub fn toIntLiteral(self: CompileTimeValue, allocator: std.mem.Allocator) ![]const u8 {
+        return switch (self) {
+            .int => |value| try std.fmt.allocPrint(allocator, "{d}", .{value}),
+            .bool => error.NotInt,
+        };
+    }
+
     pub fn format(self: CompileTimeValue, writer: *std.Io.Writer) std.Io.Writer.Error!void {
         switch (self) {
             .int => |value| try writer.print("{d}", .{value}),
@@ -81,6 +88,7 @@ pub const CompileTimeEvaluator = struct {
             .address_of,
             .deref,
             .try_expr,
+            .compile_time,
             => error.UnsupportedExpression,
         };
     }

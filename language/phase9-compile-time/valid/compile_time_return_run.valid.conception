@@ -1,0 +1,13 @@
+# name: compile-time return run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    return comptime 40 + 2;
+}
+
+=== run ===
+exit_code: 42

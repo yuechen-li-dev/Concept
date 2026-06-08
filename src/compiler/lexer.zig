@@ -397,14 +397,19 @@ test "module declaration tokenizes correctly" {
 }
 
 test "keywords tokenize as keyword kinds" {
-    const source_text = "module import export struct enum concept interface impl marker unsafe mut const return must_use discard match decide when if else while for machine state transition yield run true false";
-    const expected = [_]TokenKind{ .module, .import, .@"export", .@"struct", .@"enum", .concept, .interface, .impl, .marker, .unsafe, .mut, .@"const", .@"return", .must_use, .discard, .match, .decide, .when, .@"if", .@"else", .@"while", .@"for", .machine, .state, .transition, .yield, .run, .true, .false, .eof };
+    const source_text = "module import export struct enum concept interface impl marker unsafe mut const return comptime must_use discard match decide when if else while for machine state transition yield run true false";
+    const expected = [_]TokenKind{ .module, .import, .@"export", .@"struct", .@"enum", .concept, .interface, .impl, .marker, .unsafe, .mut, .@"const", .@"return", .@"comptime", .must_use, .discard, .match, .decide, .when, .@"if", .@"else", .@"while", .@"for", .machine, .state, .transition, .yield, .run, .true, .false, .eof };
     try expectLexedKinds(source_text, &expected);
 }
 
 test "library and attribute names tokenize as identifiers" {
     const expected = [_]TokenKind{ .identifier, .identifier, .identifier, .identifier, .eof };
     try expectLexedKinds("Result Drop Fact InlineData", &expected);
+}
+
+test "comptime tokenizes as keyword without consuming nearby identifiers" {
+    const expected = [_]TokenKind{ .@"comptime", .identifier, .identifier, .identifier, .identifier, .eof };
+    try expectLexedKinds("comptime comptimeValue compileTime comptimer comptime_mode", &expected);
 }
 
 test "must_use and discard keywords do not consume nearby identifiers" {

@@ -111,6 +111,11 @@ pub const DiagnosticCode = enum {
     AmbiguousConceptRequirementCall,
     UnknownConceptRequirementCall,
     InvalidConceptRequirementCall,
+    CompileTimeUnsupportedExpression,
+    CompileTimeTypeMismatch,
+    CompileTimeEvaluationFailed,
+    CompileTimeDivisionByZero,
+    CompileTimeOverflow,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -203,6 +208,11 @@ pub const DiagnosticCode = enum {
             .AmbiguousConceptRequirementCall => "CON0113",
             .UnknownConceptRequirementCall => "CON0114",
             .InvalidConceptRequirementCall => "CON0115",
+            .CompileTimeUnsupportedExpression => "CON0120",
+            .CompileTimeTypeMismatch => "CON0121",
+            .CompileTimeEvaluationFailed => "CON0122",
+            .CompileTimeDivisionByZero => "CON0123",
+            .CompileTimeOverflow => "CON0124",
         };
     }
 };
@@ -610,6 +620,11 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0078", DiagnosticCode.StructFieldInitializerTypeMismatch.format());
     try std.testing.expectEqualStrings("CON0081", DiagnosticCode.FieldAssignmentNonPlace.format());
     try std.testing.expectEqualStrings("CON0082", DiagnosticCode.FieldAssignmentTypeMismatch.format());
+    try std.testing.expectEqualStrings("CON0120", DiagnosticCode.CompileTimeUnsupportedExpression.format());
+    try std.testing.expectEqualStrings("CON0121", DiagnosticCode.CompileTimeTypeMismatch.format());
+    try std.testing.expectEqualStrings("CON0122", DiagnosticCode.CompileTimeEvaluationFailed.format());
+    try std.testing.expectEqualStrings("CON0123", DiagnosticCode.CompileTimeDivisionByZero.format());
+    try std.testing.expectEqualStrings("CON0124", DiagnosticCode.CompileTimeOverflow.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {

@@ -1,0 +1,14 @@
+# name: compile-time int arithmetic run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    int answer = comptime 40 + 2;
+    return answer;
+}
+
+=== run ===
+exit_code: 42

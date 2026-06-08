@@ -1189,6 +1189,26 @@ pub const Parser = struct {
     }
 
     fn parseUnaryExpr(self: *Parser, allocator: std.mem.Allocator) ParseExprError!*ast.Expr {
+        if (self.current().kind == .@"comptime") {
+            const compile_time_token = self.advance();
+            var operand = self.parseBinaryExpr(allocator, 1) catch |err| switch (err) {
+                error.OutOfMemory => return err,
+                error.ParseFailed => {
+                    self.report(.UnexpectedToken, "expected expression after comptime", self.current().span) catch return error.OutOfMemory;
+                    return error.ParseFailed;
+                },
+            };
+            errdefer {
+                operand.deinit(allocator);
+                allocator.destroy(operand);
+            }
+            const node = try allocator.create(ast.Expr);
+            node.* = .{ .compile_time = .{
+                .operand = operand,
+                .span = ast.spanFromBounds(compile_time_token.span.start, spanEnd(operand.span())),
+            } };
+            return node;
+        }
         if (self.current().kind == .@"try") {
             const try_token = self.advance();
             var operand = self.parseUnaryExpr(allocator) catch |err| switch (err) {
@@ -2435,7 +2455,7 @@ pub const Parser = struct {
 
     fn isExprStmtStart(self: Parser) bool {
         return switch (self.current().kind) {
-            .identifier, .int_literal, .true, .false, .left_paren, .minus, .bang, .ampersand, .star, .decide => true,
+            .identifier, .int_literal, .true, .false, .left_paren, .minus, .bang, .ampersand, .star, .decide, .@"comptime" => true,
             else => false,
         };
     }
@@ -5506,6 +5526,60 @@ test "duplicate unsafe function modifier diagnostic" {
 
     try std.testing.expectEqual(@as(usize, 1), diagnostics.count());
     try std.testing.expectEqualStrings("duplicate unsafe function modifier", diagnostics.diagnostics.items[0].message);
+}
+
+test "parses compile-time expression in local initializer" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { int answer = comptime 40 + 2; return answer; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "CompileTime") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Binary +") != null);
+}
+
+test "parses compile-time bool comparison return and grouping" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; bool ok() { return comptime 1 < 2; } int main() { int answer = comptime (40 + 2); return answer; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "CompileTime") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Binary <") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Group") != null);
+}
+
+test "parses compile-time expression in return" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { return comptime 40 + 2; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "CompileTime") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Binary +") != null);
+}
+
+test "compile-time expression missing operand diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { return comptime ; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected expression after comptime", diagnostics.diagnostics.items[0].message);
 }
 
 test "parses struct literal expression and debug output" {
