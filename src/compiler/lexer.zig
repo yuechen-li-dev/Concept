@@ -397,8 +397,8 @@ test "module declaration tokenizes correctly" {
 }
 
 test "keywords tokenize as keyword kinds" {
-    const source_text = "module import export struct enum concept interface impl marker unsafe mut const return comptime must_use discard match decide when if else while for machine state transition yield run true false";
-    const expected = [_]TokenKind{ .module, .import, .@"export", .@"struct", .@"enum", .concept, .interface, .impl, .marker, .unsafe, .mut, .@"const", .@"return", .@"comptime", .must_use, .discard, .match, .decide, .when, .@"if", .@"else", .@"while", .@"for", .machine, .state, .transition, .yield, .run, .true, .false, .eof };
+    const source_text = "module import export struct enum concept interface impl marker unsafe mut const return comptime static_assert must_use discard match decide when if else while for machine state transition yield run true false";
+    const expected = [_]TokenKind{ .module, .import, .@"export", .@"struct", .@"enum", .concept, .interface, .impl, .marker, .unsafe, .mut, .@"const", .@"return", .@"comptime", .static_assert, .must_use, .discard, .match, .decide, .when, .@"if", .@"else", .@"while", .@"for", .machine, .state, .transition, .yield, .run, .true, .false, .eof };
     try expectLexedKinds(source_text, &expected);
 }
 
@@ -410,6 +410,11 @@ test "library and attribute names tokenize as identifiers" {
 test "comptime tokenizes as keyword without consuming nearby identifiers" {
     const expected = [_]TokenKind{ .@"comptime", .identifier, .identifier, .identifier, .identifier, .eof };
     try expectLexedKinds("comptime comptimeValue compileTime comptimer comptime_mode", &expected);
+}
+
+test "static_assert tokenizes as keyword without consuming nearby identifiers" {
+    const expected = [_]TokenKind{ .static_assert, .identifier, .identifier, .identifier, .eof };
+    try expectLexedKinds("static_assert static_assertion staticAssert static_assert_value", &expected);
 }
 
 test "must_use and discard keywords do not consume nearby identifiers" {

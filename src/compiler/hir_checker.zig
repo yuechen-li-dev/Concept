@@ -64,6 +64,8 @@ const Checker = struct {
     // ─────────────────────────────────────────────────────────────────────────────
 
     fn checkModule(self: *Checker) CheckError!void {
+        try self.checkStaticAsserts();
+
         const main_id = self.findMain() orelse {
             try self.report(.MissingMain, "expected top-level 'main' function");
             return error.InvalidSemanticModule;
@@ -91,6 +93,29 @@ const Checker = struct {
                     if (function.is_unsafe) self.unsafe_depth -= 1;
                 }
                 try self.checkStmt(function_id, body, function.return_type);
+            }
+        }
+    }
+
+    fn checkStaticAsserts(self: *Checker) CheckError!void {
+        for (self.module.hir.static_asserts.items) |static_assert| {
+            _ = try self.checkExpr(self.module.types.voidType(), static_assert.expr);
+            const evaluator = compile_time.CompileTimeEvaluator.init(self.module);
+            const value = evaluator.evaluateExpr(static_assert.expr) catch |err| {
+                try self.reportCompileTimeError(err, static_assert.span);
+                return error.InvalidSemanticModule;
+            };
+            switch (value) {
+                .bool => |ok| {
+                    if (!ok) {
+                        try self.reportAt(.StaticAssertFailed, "static assertion failed", static_assert.span);
+                        return error.InvalidSemanticModule;
+                    }
+                },
+                else => {
+                    try self.reportAt(.StaticAssertRequiresBool, "static assertion requires bool expression", static_assert.span);
+                    return error.InvalidSemanticModule;
+                },
             }
         }
     }
@@ -1668,6 +1693,47 @@ test "HIR checker reports unsupported compile-time expression" {
     const local_ref = try addTestExpr(&tm.module.hir, .{ .local_ref = local });
     const compile_local = try addTestExpr(&tm.module.hir, .{ .compile_time = .{ .operand = local_ref, .span = synthetic_span } });
     tm.setBody(main, try tm.block(&.{ local_decl, try tm.ret(compile_local) }));
+
+    try tm.checkFail(.CompileTimeUnsupportedExpression);
+}
+
+test "HIR checker evaluates static assertions" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+
+    const main = try tm.function("main", tm.module.types.intType());
+    const comparison = try addTestExpr(&tm.module.hir, .{ .binary = .{ .op = .equal_equal, .left = try tm.int("2"), .right = try tm.int("2") } });
+    try tm.module.hir.addStaticAssert(comparison, synthetic_span);
+    tm.setBody(main, try tm.block(&.{try tm.ret(try tm.int("0"))}));
+
+    try tm.checkPass();
+}
+
+test "HIR checker rejects failing and non-bool static assertions" {
+    var false_tm = try TestModule.init();
+    defer false_tm.deinit();
+    const false_main = try false_tm.function("main", false_tm.module.types.intType());
+    try false_tm.module.hir.addStaticAssert(try false_tm.boolLit(false), synthetic_span);
+    false_tm.setBody(false_main, try false_tm.block(&.{try false_tm.ret(try false_tm.int("0"))}));
+    try false_tm.checkFail(.StaticAssertFailed);
+
+    var int_tm = try TestModule.init();
+    defer int_tm.deinit();
+    const int_main = try int_tm.function("main", int_tm.module.types.intType());
+    try int_tm.module.hir.addStaticAssert(try int_tm.int("42"), synthetic_span);
+    int_tm.setBody(int_main, try int_tm.block(&.{try int_tm.ret(try int_tm.int("0"))}));
+    try int_tm.checkFail(.StaticAssertRequiresBool);
+}
+
+test "HIR checker reports unsupported static assertion expression before main validation" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+    const helper = try tm.function("helper", tm.module.types.intType());
+    tm.setBody(helper, try tm.block(&.{try tm.ret(try tm.int("1"))}));
+    const args = try std.testing.allocator.dupe(hir.ExprId, &.{});
+    const call = try addTestExpr(&tm.module.hir, .{ .call = .{ .function = helper, .args = args } });
+    const comparison = try addTestExpr(&tm.module.hir, .{ .binary = .{ .op = .equal_equal, .left = call, .right = try tm.int("1") } });
+    try tm.module.hir.addStaticAssert(comparison, synthetic_span);
 
     try tm.checkFail(.CompileTimeUnsupportedExpression);
 }

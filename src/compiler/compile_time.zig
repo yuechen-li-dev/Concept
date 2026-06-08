@@ -75,6 +75,7 @@ pub const CompileTimeEvaluator = struct {
             .int_literal => |text| .{ .int = std.fmt.parseInt(i64, text, 10) catch return error.Overflow },
             .bool_literal => |value| .{ .bool = value },
             .group => |inner| try self.evaluateExpr(inner),
+            .compile_time => |compile_time_expr| try self.evaluateExpr(compile_time_expr.operand),
             .unary => |unary| try self.evaluateUnary(unary.op, try self.evaluateExpr(unary.operand)),
             .binary => |binary| try self.evaluateBinary(binary.op, try self.evaluateExpr(binary.left), try self.evaluateExpr(binary.right)),
             .local_ref,
@@ -88,7 +89,6 @@ pub const CompileTimeEvaluator = struct {
             .address_of,
             .deref,
             .try_expr,
-            .compile_time,
             => error.UnsupportedExpression,
         };
     }

@@ -1,0 +1,16 @@
+# name: static assert division by zero
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+static_assert(1 / 0 == 0);
+
+int main() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0123

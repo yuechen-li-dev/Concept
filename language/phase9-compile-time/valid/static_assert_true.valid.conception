@@ -1,0 +1,13 @@
+# name: static assert true
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+static_assert(true);
+
+int main() {
+    return 0;
+}

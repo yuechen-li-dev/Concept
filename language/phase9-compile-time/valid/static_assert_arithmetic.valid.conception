@@ -1,0 +1,13 @@
+# name: static assert arithmetic
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+static_assert(1 + 1 == 2);
+
+int main() {
+    return 0;
+}

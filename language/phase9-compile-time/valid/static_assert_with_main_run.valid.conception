@@ -1,0 +1,15 @@
+# name: static assert with main run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+static_assert(40 + 2 == 42);
+
+int main() {
+    return 7;
+}
+
+=== run ===
+exit_code: 7

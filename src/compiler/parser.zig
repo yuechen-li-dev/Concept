@@ -70,6 +70,11 @@ pub const Parser = struct {
                     const duplicate = try self.parseModuleDecl(allocator);
                     duplicate.deinit(allocator);
                 },
+                .static_assert => {
+                    try self.rejectAttributesBeforeUnsupportedItem(attributes, allocator);
+                    attributes = &.{};
+                    try items.append(try self.parseStaticAssertItem(allocator));
+                },
                 .@"struct" => {
                     try items.append(try self.parseStructItem(allocator, attributes));
                     attributes = &.{};
@@ -351,6 +356,55 @@ pub const Parser = struct {
         return .{
             .name = name,
             .span = ast.spanFromBounds(import_token.span.start, spanEnd(end_span)),
+        };
+    }
+
+    fn parseStaticAssertItem(self: *Parser, allocator: std.mem.Allocator) !ast.Item {
+        const decl = try self.parseStaticAssertDecl(allocator);
+        return .{ .static_assert_decl = decl };
+    }
+
+    fn parseStaticAssertDecl(self: *Parser, allocator: std.mem.Allocator) !ast.StaticAssertDecl {
+        const start_token = (try self.expect(.static_assert, "expected 'static_assert'", .ExpectedItem)) orelse self.current();
+        if (self.match(.left_paren) == null) {
+            try self.report(.UnexpectedToken, "expected '(' after static_assert", self.current().span);
+        }
+
+        var expr: ?*ast.Expr = null;
+        errdefer if (expr) |e| {
+            e.deinit(allocator);
+            allocator.destroy(e);
+        };
+
+        if (self.current().kind == .right_paren or self.current().kind == .semicolon or self.current().kind == .eof) {
+            try self.report(.UnexpectedToken, "expected expression in static_assert", self.current().span);
+        } else {
+            expr = self.parseExpr(allocator) catch |err| switch (err) {
+                error.OutOfMemory => return err,
+                error.ParseFailed => null,
+            };
+        }
+
+        const right_span = if (self.match(.right_paren)) |right_paren| right_paren.span else blk: {
+            try self.report(.UnexpectedToken, "expected ')' after static_assert expression", self.current().span);
+            break :blk if (expr) |e| e.span() else start_token.span;
+        };
+
+        const end_span = if (self.match(.semicolon)) |semicolon| semicolon.span else blk: {
+            try self.report(.UnexpectedToken, "expected ';' after static_assert", self.current().span);
+            self.recoverStatement();
+            break :blk right_span;
+        };
+
+        const final_expr = expr orelse blk: {
+            const node = try allocator.create(ast.Expr);
+            node.* = .{ .bool_literal = .{ .value = false, .span = start_token.span } };
+            break :blk node;
+        };
+
+        return .{
+            .expr = final_expr,
+            .span = ast.spanFromBounds(start_token.span.start, spanEnd(end_span)),
         };
     }
 
@@ -5682,4 +5736,52 @@ test "arrow field access is unsupported diagnostic" {
 
     try std.testing.expect(diagnostics.count() >= 1);
     try std.testing.expectEqualStrings("'->' field access is not supported; use '.' on struct values", diagnostics.diagnostics.items[0].message);
+}
+
+test "parses static_assert declarations and debug output" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; static_assert(1 + 1 == 2); static_assert(true && !false); int main() { return 0; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    try std.testing.expectEqual(@as(usize, 3), unit.items.len);
+    switch (unit.items[0]) {
+        .static_assert_decl => {},
+        else => return error.ExpectedStaticAssert,
+    }
+    switch (unit.items[1]) {
+        .static_assert_decl => {},
+        else => return error.ExpectedStaticAssert,
+    }
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "StaticAssert") != null);
+}
+
+test "static_assert parser diagnostics are stable" {
+    var missing_paren = DiagnosticBag.init(std.testing.allocator);
+    defer missing_paren.deinit();
+    const missing_paren_unit = try parseTestSource("module Main; static_assert true); int main() { return 0; }", &missing_paren);
+    defer missing_paren_unit.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("expected '(' after static_assert", missing_paren.diagnostics.items[0].message);
+
+    var missing_expr = DiagnosticBag.init(std.testing.allocator);
+    defer missing_expr.deinit();
+    const missing_expr_unit = try parseTestSource("module Main; static_assert(); int main() { return 0; }", &missing_expr);
+    defer missing_expr_unit.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("expected expression in static_assert", missing_expr.diagnostics.items[0].message);
+
+    var missing_right = DiagnosticBag.init(std.testing.allocator);
+    defer missing_right.deinit();
+    const missing_right_unit = try parseTestSource("module Main; static_assert(true; int main() { return 0; }", &missing_right);
+    defer missing_right_unit.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("expected ')' after static_assert expression", missing_right.diagnostics.items[0].message);
+
+    var missing_semicolon = DiagnosticBag.init(std.testing.allocator);
+    defer missing_semicolon.deinit();
+    const missing_semicolon_unit = try parseTestSource("module Main; static_assert(true) int main() { return 0; }", &missing_semicolon);
+    defer missing_semicolon_unit.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("expected ';' after static_assert", missing_semicolon.diagnostics.items[0].message);
 }

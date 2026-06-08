@@ -32,6 +32,7 @@ pub const TokenKind = enum {
     @"return",
     @"try",
     @"comptime",
+    static_assert,
     must_use,
     discard,
     match,
@@ -106,6 +107,7 @@ pub const TokenKind = enum {
             .@"return" => "return",
             .@"try" => "try",
             .@"comptime" => "comptime",
+            .static_assert => "static_assert",
             .must_use => "must_use",
             .discard => "discard",
             .match => "match",
@@ -186,6 +188,7 @@ pub const TokenKind = enum {
             .@"return" => "return",
             .@"try" => "try",
             .@"comptime" => "comptime",
+            .static_assert => "static_assert",
             .must_use => "must_use",
             .discard => "discard",
             .match => "match",
@@ -268,6 +271,7 @@ pub fn keywordKind(identifier_text: []const u8) ?TokenKind {
     if (std.mem.eql(u8, identifier_text, "return")) return .@"return";
     if (std.mem.eql(u8, identifier_text, "try")) return .@"try";
     if (std.mem.eql(u8, identifier_text, "comptime")) return .@"comptime";
+    if (std.mem.eql(u8, identifier_text, "static_assert")) return .static_assert;
     if (std.mem.eql(u8, identifier_text, "must_use")) return .must_use;
     if (std.mem.eql(u8, identifier_text, "discard")) return .discard;
     if (std.mem.eql(u8, identifier_text, "match")) return .match;
@@ -344,6 +348,7 @@ const keyword_cases = [_]KeywordCase{
     .{ .text = "return", .kind = .@"return" },
     .{ .text = "try", .kind = .@"try" },
     .{ .text = "comptime", .kind = .@"comptime" },
+    .{ .text = "static_assert", .kind = .static_assert },
     .{ .text = "must_use", .kind = .must_use },
     .{ .text = "discard", .kind = .discard },
     .{ .text = "match", .kind = .match },
@@ -414,6 +419,9 @@ test "non-keyword identifiers return null" {
         "identifier",
         "imports",
         "unsafe_mode",
+        "static_assertion",
+        "staticAssert",
+        "static_assert_value",
         "must_useful",
         "discarded",
         "trying",

@@ -2163,10 +2163,19 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectRunFixture("../../../language/phase9-compile-time/valid/compile_time_comparison_run.valid.conception");
     try expectRunFixture("../../../language/phase9-compile-time/valid/compile_time_return_run.valid.conception");
     try expectRunFixture("../../../language/phase9-compile-time/valid/compile_time_grouping_run.valid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/valid/static_assert_true.valid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/valid/static_assert_arithmetic.valid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/valid/static_assert_bool_logic.valid.conception");
+    try expectRunFixture("../../../language/phase9-compile-time/valid/static_assert_with_main_run.valid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_call_unsupported.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_local_unsupported.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_struct_literal_unsupported.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_field_access_unsupported.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_division_by_zero.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_overflow.invalid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/invalid/static_assert_false.invalid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/invalid/static_assert_requires_bool.invalid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/invalid/static_assert_call_unsupported.invalid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/invalid/static_assert_division_by_zero.invalid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/invalid/static_assert_overflow.invalid.conception");
 }

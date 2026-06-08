@@ -108,7 +108,7 @@ const Collector = struct {
                 .struct_decl => |struct_decl| try self.declareStruct(struct_decl),
                 .enum_decl => |enum_decl| try self.declareEnum(enum_decl),
                 .concept_decl => |concept_decl| try self.declareConcept(concept_decl),
-                .interface_decl, .impl_decl => {},
+                .interface_decl, .impl_decl, .static_assert_decl => {},
             }
         }
 
@@ -127,7 +127,7 @@ const Collector = struct {
                 .template_decl => |template_decl| try self.resolveGenericFunction(template_decl),
                 .struct_decl => |struct_decl| try self.resolveStruct(struct_decl),
                 .enum_decl => |enum_decl| try self.resolveEnum(enum_decl),
-                .concept_decl, .interface_decl => {},
+                .concept_decl, .interface_decl, .static_assert_decl => {},
                 .impl_decl => |impl_decl| try self.resolveImpl(impl_decl),
             }
         }
@@ -140,6 +140,7 @@ const Collector = struct {
                 .template_decl => |template_decl| try self.lowerGenericFunctionBody(template_decl),
                 .struct_decl, .enum_decl, .concept_decl, .interface_decl => {},
                 .impl_decl => |impl_decl| try self.lowerImplFunctionBodies(impl_decl),
+                .static_assert_decl => |static_assert_decl| try self.lowerStaticAssert(static_assert_decl),
             }
         }
     }
@@ -722,6 +723,13 @@ const Collector = struct {
         return buffer.toOwnedSlice();
     }
 
+    fn lowerStaticAssert(self: *Collector, static_assert_decl: ast.StaticAssertDecl) !void {
+        var lowerer = BodyLowerer.initStatic(self);
+        defer lowerer.deinit();
+        const expr = (try lowerer.lowerExpr(static_assert_decl.expr.*)) orelse return;
+        try self.module.hir.addStaticAssert(expr, static_assert_decl.span);
+    }
+
     fn lowerGenericFunctionBody(self: *Collector, template_decl: ast.TemplateDecl) !void {
         const body = template_decl.body.body orelse return;
         const block = body.block orelse return;
@@ -792,7 +800,7 @@ const ScopedBinding = struct {
 
 const BodyLowerer = struct {
     collector: *Collector,
-    function_id: hir.FunctionId,
+    function_id: ?hir.FunctionId,
     bindings: std.ArrayList(ScopedBinding),
     depth: usize = 0,
 
@@ -804,12 +812,20 @@ const BodyLowerer = struct {
         };
     }
 
+    fn initStatic(collector: *Collector) BodyLowerer {
+        return .{
+            .collector = collector,
+            .function_id = null,
+            .bindings = std.ArrayList(ScopedBinding).empty,
+        };
+    }
+
     fn deinit(self: *BodyLowerer) void {
         self.bindings.deinit(self.collector.allocator);
     }
 
     fn seedParams(self: *BodyLowerer) !void {
-        const function = self.collector.module.hir.getFunction(self.function_id);
+        const function = self.collector.module.hir.getFunction(self.function_id.?);
         for (function.params) |param_id| {
             const param = self.collector.module.hir.getParam(param_id);
             try self.bindings.append(self.collector.allocator, .{ .name = param.name, .binding = .{ .param = param_id }, .depth = 0 });
@@ -869,7 +885,7 @@ const BodyLowerer = struct {
                     return null;
                 }
                 const type_id = (try self.collector.resolveTypeName(local_decl.type_name)) orelse return null;
-                const local_id = try self.collector.module.hir.addLocal(self.function_id, local_symbol, type_id, local_decl.span);
+                const local_id = try self.collector.module.hir.addLocal(self.function_id.?, local_symbol, type_id, local_decl.span);
                 try self.bindings.append(self.collector.allocator, .{ .name = local_symbol, .binding = .{ .local = local_id }, .depth = self.depth });
                 return try self.collector.module.hir.addStmt(.{ .local_decl = .{ .local = local_id, .initializer = initializer } }, local_decl.span);
             },
@@ -1246,7 +1262,7 @@ const BodyLowerer = struct {
             }
             const payload_id = variant.payload_fields[index];
             const payload = self.collector.module.hir.getEnumPayloadField(payload_id);
-            const local_id = try self.collector.module.hir.addLocal(self.function_id, symbol, payload.type_id, binding.name.span);
+            const local_id = try self.collector.module.hir.addLocal(self.function_id.?, symbol, payload.type_id, binding.name.span);
             try self.bindings.append(self.collector.allocator, .{ .name = symbol, .binding = .{ .local = local_id }, .depth = self.depth });
             try bindings.append(self.collector.allocator, .{ .name = symbol, .local = local_id, .payload_field = payload_id, .type_id = payload.type_id, .span = binding.name.span });
         }
@@ -1259,7 +1275,7 @@ const BodyLowerer = struct {
     };
 
     fn resolveConceptRequirementCall(self: *BodyLowerer, name: interner.SymbolId, arity: u32, span: source.SourceSpan) !?RequirementCallResolution {
-        const generic_id = self.collector.module.hir.genericFunctionFor(self.function_id) orelse return null;
+        const generic_id = self.collector.module.hir.genericFunctionFor(self.function_id orelse return null) orelse return null;
         const generic = self.collector.module.hir.getGenericFunction(generic_id);
         var found: ?RequirementCallResolution = null;
         var found_name = false;

@@ -1,0 +1,20 @@
+# name: static assert call unsupported
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+int helper() {
+    return 1;
+}
+
+static_assert(helper() == 1);
+
+int main() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0120

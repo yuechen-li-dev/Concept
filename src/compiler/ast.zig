@@ -893,6 +893,16 @@ pub const TemplateDecl = struct {
     }
 };
 
+pub const StaticAssertDecl = struct {
+    expr: *Expr,
+    span: SourceSpan,
+
+    pub fn deinit(self: StaticAssertDecl, allocator: std.mem.Allocator) void {
+        self.expr.deinit(allocator);
+        allocator.destroy(self.expr);
+    }
+};
+
 pub const FunctionDecl = struct {
     attributes: []Attribute = &.{},
     is_export: bool,
@@ -917,6 +927,7 @@ pub const Item = union(enum) {
     concept_decl: ConceptDecl,
     interface_decl: InterfaceDecl,
     impl_decl: ImplDecl,
+    static_assert_decl: StaticAssertDecl,
 
     pub fn deinit(self: Item, allocator: std.mem.Allocator) void {
         switch (self) {
@@ -927,6 +938,7 @@ pub const Item = union(enum) {
             .concept_decl => |concept_decl| concept_decl.deinit(allocator),
             .interface_decl => |interface_decl| interface_decl.deinit(allocator),
             .impl_decl => |impl_decl| impl_decl.deinit(allocator),
+            .static_assert_decl => |static_assert_decl| static_assert_decl.deinit(allocator),
         }
     }
 
@@ -1065,6 +1077,10 @@ pub const Item = union(enum) {
                 for (interface_decl.signatures) |signature| {
                     try signature.writeDebug(writer);
                 }
+            },
+            .static_assert_decl => |static_assert_decl| {
+                try writer.writeAll("  StaticAssert\n");
+                try static_assert_decl.expr.writeDebug(writer, 2);
             },
             .impl_decl => |impl_decl| {
                 try writeAttributesDebug(impl_decl.attributes, writer);
