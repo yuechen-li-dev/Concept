@@ -181,9 +181,7 @@ This keeps eligibility separate from execution and avoids implicit host-side wor
 
 ## Static assertions
 
-Static assertions are future work after or alongside the expression evaluator.
-
-Future syntax direction:
+P9-M3 adds source-level static assertions:
 
 ```cpp
 static_assert(1 + 1 == 2);
@@ -191,13 +189,17 @@ static_assert(1 + 1 == 2);
 
 Rules:
 
-- Static assertion arguments are implicitly compile-time evaluated.
-- The expression must evaluate to `bool`.
-- Failed assertions produce compile-time diagnostics.
-- v0 `static_assert` should not require layout queries.
-- `sizeof` and `alignof` layout assertions remain later work.
+- `static_assert(expr);` implicitly evaluates `expr` at compile time through `CompileTimeEvaluator`.
+- The expression must evaluate to `CompileTimeValue.bool`.
+- `true` succeeds and produces no MIR or backend artifact.
+- `false` reports `StaticAssertFailed` (`CON0125`) with the stable message `static assertion failed`.
+- A successfully evaluated non-bool value reports `StaticAssertRequiresBool` (`CON0126`).
+- Unsupported expression forms use the existing compile-time evaluation diagnostics, such as `CompileTimeUnsupportedExpression`.
+- `static_assert` does not require spelling `comptime` at the call site.
+- No custom user message is supported yet; `static_assert(condition, "message")` is deferred.
+- No layout queries, `sizeof`, `alignof`, compile-time functions, host capabilities, target metadata, reflection, or generated declarations are added by P9-M3.
 
-A minimal `static_assert` can exist before full layout support because boolean expressions over literals and constants do not require final ABI layout.
+A minimal `static_assert` exists before full layout support because boolean expressions over literals and checked compile-time arithmetic do not require final ABI layout.
 
 ## CompileTimeValue
 

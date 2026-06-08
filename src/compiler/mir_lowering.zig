@@ -1434,6 +1434,21 @@ test "MIR lowering lowers compile-time values as ordinary literals" {
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "CompileTime") == null);
 }
 
+test "MIR lowering ignores static assertions" {
+    var module = try newModule();
+    defer module.deinit();
+    const main = try addFunction(&module, "main", module.types.intType(), false);
+    try module.hir.addStaticAssert(try module.hir.addExpr(.{ .bool_literal = true }, hir.synthetic_span), hir.synthetic_span);
+    try setBody(&module, main, &.{try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "0") }, hir.synthetic_span)});
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "StaticAssert") == null);
+}
+
 test "MIR lowering lowers return int" {
     var module = try newModule();
     defer module.deinit();

@@ -116,6 +116,8 @@ pub const DiagnosticCode = enum {
     CompileTimeEvaluationFailed,
     CompileTimeDivisionByZero,
     CompileTimeOverflow,
+    StaticAssertFailed,
+    StaticAssertRequiresBool,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -213,6 +215,8 @@ pub const DiagnosticCode = enum {
             .CompileTimeEvaluationFailed => "CON0122",
             .CompileTimeDivisionByZero => "CON0123",
             .CompileTimeOverflow => "CON0124",
+            .StaticAssertFailed => "CON0125",
+            .StaticAssertRequiresBool => "CON0126",
         };
     }
 };
@@ -625,6 +629,8 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0122", DiagnosticCode.CompileTimeEvaluationFailed.format());
     try std.testing.expectEqualStrings("CON0123", DiagnosticCode.CompileTimeDivisionByZero.format());
     try std.testing.expectEqualStrings("CON0124", DiagnosticCode.CompileTimeOverflow.format());
+    try std.testing.expectEqualStrings("CON0125", DiagnosticCode.StaticAssertFailed.format());
+    try std.testing.expectEqualStrings("CON0126", DiagnosticCode.StaticAssertRequiresBool.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {

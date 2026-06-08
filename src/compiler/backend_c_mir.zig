@@ -749,6 +749,13 @@ test "MIR C backend emits return literal" {
     );
 }
 
+test "MIR C backend omits static assertions" {
+    const c_source = try emitForTest("module Main; static_assert(1 + 1 == 2); int main() { return 0; }");
+    defer std.testing.allocator.free(c_source);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "static_assert") == null);
+    try std.testing.expectEqualStrings("int main(void) {\ncpt_bb_0:\n    return 0;\n}\n", c_source);
+}
+
 test "MIR C backend emits arithmetic" {
     try expectEmit(
         "module Main; int main() { return 1 + 2 * 3; }",

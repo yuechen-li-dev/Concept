@@ -122,6 +122,11 @@ pub const HirConceptImpl = struct {
     span: SourceSpan,
 };
 
+pub const HirStaticAssert = struct {
+    expr: ExprId,
+    span: SourceSpan,
+};
+
 pub const HirFunction = struct {
     item: ItemId,
     name: SymbolId,
@@ -356,6 +361,7 @@ pub const HirStore = struct {
     locals: std.ArrayList(HirLocal),
     stmts: std.ArrayList(HirStmt),
     exprs: std.ArrayList(HirExpr),
+    static_asserts: std.ArrayList(HirStaticAssert),
     structs: std.ArrayList(HirStruct),
     enums: std.ArrayList(HirEnum),
     fields: std.ArrayList(HirField),
@@ -374,6 +380,7 @@ pub const HirStore = struct {
             .locals = std.ArrayList(HirLocal).empty,
             .stmts = std.ArrayList(HirStmt).empty,
             .exprs = std.ArrayList(HirExpr).empty,
+            .static_asserts = std.ArrayList(HirStaticAssert).empty,
             .structs = std.ArrayList(HirStruct).empty,
             .enums = std.ArrayList(HirEnum).empty,
             .fields = std.ArrayList(HirField).empty,
@@ -454,6 +461,7 @@ pub const HirStore = struct {
         self.fields.deinit(self.allocator);
         self.enums.deinit(self.allocator);
         self.structs.deinit(self.allocator);
+        self.static_asserts.deinit(self.allocator);
         self.exprs.deinit(self.allocator);
         self.stmts.deinit(self.allocator);
         self.locals.deinit(self.allocator);
@@ -664,6 +672,10 @@ pub const HirStore = struct {
         return id;
     }
 
+    pub fn addStaticAssert(self: *HirStore, expr: ExprId, span: SourceSpan) !void {
+        try self.static_asserts.append(self.allocator, .{ .expr = expr, .span = span });
+    }
+
     pub fn setFunctionBody(self: *HirStore, id: FunctionId, body: StmtId) void {
         self.getFunctionMut(id).body = body;
     }
@@ -853,6 +865,10 @@ pub const HirStore = struct {
         const writer = &buffer.writer;
 
         try writer.writeAll("HirModule\n");
+        for (self.static_asserts.items) |static_assert| {
+            try writer.writeAll("  StaticAssert\n");
+            try self.writeExprDebug(writer, static_assert.expr, 2);
+        }
         for (self.generic_functions.items) |generic_function| {
             const function = self.getFunction(generic_function.function);
             try writer.print("  GenericFunction {s} {f} -> {f}\n", .{ interner.text(generic_function.name), generic_function.function, function.return_type });

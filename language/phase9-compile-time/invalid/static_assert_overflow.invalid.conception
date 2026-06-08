@@ -1,0 +1,16 @@
+# name: static assert overflow
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+static_assert(9223372036854775807 + 1 == 0);
+
+int main() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0124

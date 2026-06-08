@@ -1,0 +1,16 @@
+# name: static assert requires bool
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+static_assert(42);
+
+int main() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0126
