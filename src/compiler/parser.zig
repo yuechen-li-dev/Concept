@@ -81,6 +81,11 @@ pub const Parser = struct {
                     }
                 },
                 .identifier, .mut, .unsafe => {
+                    if (self.current().kind == .unsafe and self.peek(1).kind == .impl) {
+                        try items.append(try self.parseImplItem(allocator, attributes));
+                        attributes = &.{};
+                        continue;
+                    }
                     if (self.current().kind == .unsafe and self.peek(1).kind == .marker) {
                         try items.append(try self.parseConceptItem(allocator, attributes));
                         attributes = &.{};
@@ -89,7 +94,7 @@ pub const Parser = struct {
                     if (self.current().kind == .unsafe and !(self.peek(1).kind == .identifier or self.peek(1).kind == .mut or self.peek(1).kind == .unsafe)) {
                         try self.rejectAttributesBeforeUnsupportedItem(attributes, allocator);
                         attributes = &.{};
-                        try self.reportExpectedItem("unsafe modifier is only supported on functions", self.current().span);
+                        try self.reportExpectedItem("unsafe modifier is only supported on functions, marker concepts, or impl declarations", self.current().span);
                         self.advance();
                         continue;
                     }
@@ -2139,26 +2144,74 @@ pub const Parser = struct {
     }
 
     fn parseImplDecl(self: *Parser, allocator: std.mem.Allocator) !ast.ImplDecl {
-        const impl_token = self.advance();
-        var target = if (self.current().kind == .identifier)
+        const unsafe_token = self.match(.unsafe);
+        const impl_token = (try self.expect(.impl, "expected 'impl'", .UnexpectedToken)) orelse self.current();
+        const start_span = if (unsafe_token) |token| token.span else impl_token.span;
+
+        var concept_name = if (self.current().kind == .identifier)
             try self.parseTypeName(allocator)
         else blk: {
-            try self.report(.UnexpectedToken, "expected impl target name", self.current().span);
+            try self.report(.UnexpectedToken, "expected impl concept name", self.current().span);
             break :blk try self.emptyTypeName(allocator, self.current().span);
         };
-        errdefer target.deinit(allocator);
+        errdefer concept_name.deinit(allocator);
 
-        var signatures = std.ArrayList(ast.SignatureDecl).init(allocator);
+        var target_types = std.ArrayList(ast.TypeName).init(allocator);
         errdefer {
-            for (signatures.items) |signature| signature.deinit(allocator);
-            signatures.deinit();
+            for (target_types.items) |target_type| target_type.deinit(allocator);
+            target_types.deinit();
         }
 
-        const end_span = try self.parseSignatureBlock(allocator, &signatures, "impl");
+        if (concept_name.generic_args.len == 0) {
+            try self.report(.UnexpectedToken, "expected impl target type argument", concept_name.span);
+        } else {
+            for (concept_name.generic_args) |arg| try target_types.append(arg);
+            concept_name.generic_args = &.{};
+        }
+
+        var functions = std.ArrayList(ast.FunctionDecl).init(allocator);
+        errdefer {
+            for (functions.items) |function| function.deinit(allocator);
+            functions.deinit();
+        }
+
+        var end_span: SourceSpan = concept_name.span;
+        var is_marker_semicolon = false;
+        if (self.match(.semicolon)) |semicolon| {
+            end_span = semicolon.span;
+            is_marker_semicolon = true;
+        } else if (self.match(.left_brace)) |_| {
+            while (self.current().kind != .eof and self.current().kind != .right_brace) {
+                if (self.current().kind == .identifier or self.current().kind == .mut or self.current().kind == .unsafe) {
+                    if (try self.parseFunctionDecl(allocator, &.{})) |function| {
+                        if (function.body == null) {
+                            try self.report(.UnexpectedToken, "impl function must have a body", function.span);
+                        }
+                        try functions.append(function);
+                    }
+                } else {
+                    try self.report(.UnexpectedToken, "expected function declaration inside impl body", self.current().span);
+                    self.advance();
+                }
+            }
+            if (self.match(.right_brace)) |right_brace| {
+                end_span = right_brace.span;
+                _ = self.match(.semicolon);
+            } else {
+                try self.report(.UnexpectedToken, "expected '}' to close impl declaration", self.current().span);
+                end_span = self.current().span;
+            }
+        } else {
+            try self.report(.UnexpectedToken, "expected ';' or '{' after impl target", self.current().span);
+        }
+
         return .{
-            .target = target,
-            .signatures = try signatures.toOwnedSlice(),
-            .span = ast.spanFromBounds(impl_token.span.start, spanEnd(end_span)),
+            .concept_name = concept_name,
+            .target_types = try target_types.toOwnedSlice(),
+            .functions = try functions.toOwnedSlice(),
+            .is_unsafe = unsafe_token != null,
+            .is_marker_semicolon = is_marker_semicolon,
+            .span = ast.spanFromBounds(start_span.start, spanEnd(end_span)),
         };
     }
 
@@ -3492,8 +3545,11 @@ test "AST snapshot debug output includes impl" {
     const unit = try parseTestSource(
         \\module Example;
         \\impl Drop<Texture> {
-        \\    void drop(mut Texture& tex);
-        \\};
+        \\    void drop(mut Texture& tex) {
+        \\        return;
+        \\    }
+        \\}
+        \\unsafe impl ThreadSafe<Texture>;
     , &diagnostics);
     defer unit.deinit(std.testing.allocator);
 
@@ -3504,7 +3560,9 @@ test "AST snapshot debug output includes impl" {
         \\CompilationUnit
         \\  Module Example
         \\  Impl Drop<Texture>
-        \\    Signature void drop(mut Texture& tex)
+        \\    Function void drop(mut Texture& tex)
+        \\      Return
+        \\  Unsafe Impl ThreadSafe<Texture> semicolon
         \\
     , snapshot);
 }

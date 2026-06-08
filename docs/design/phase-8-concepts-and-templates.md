@@ -686,3 +686,18 @@ The Stage 0 front end lowers concepts into HIR concept storage with:
 Requirement signatures are intentionally narrow in this milestone. They support ordinary function-like signatures over types already understood by semantic type-name resolution, including builtin types, nominal struct/enum types, concept type parameters, and raw pointers to those types. Requirement bodies, associated types, where clauses, default implementations, operator requirements beyond the existing parser surface, references in semantic lowering, and concept-provided calls in generic bodies remain deferred.
 
 Concepts have no runtime representation. They are not ordinary functions, are skipped by executable HIR checking, are not lowered to MIR, and are not emitted by the C backend. P8-M4 does not implement `impl` declarations, concept satisfaction, constrained generic execution, marker derivation, interfaces, or dynamic dispatch. Constrained generic calls continue to report unsupported-instantiation diagnostics until later Phase 8 milestones add satisfaction and constrained monomorphization.
+
+## P8-M5 implementation note: concrete concept impl declarations
+
+P8-M5 adds the first concrete concept-satisfaction path for declarations of the form `impl Concept<Type>`. Ordinary concept impls now parse and lower witness functions, store a HIR concept-impl record, and validate each witness signature against the concept requirement after substituting the concept type parameter with the concrete target type. Marker concept impls use the semicolon form, for example `impl Copy<Vec2>;`, and store satisfaction without witness functions.
+
+The implemented v0 is intentionally local and concrete:
+
+- concept names are resolved through the current compilation unit's top-level concept namespace;
+- the supported impl target is one concrete type argument, covering structs/enums and builtins where the existing type store can represent them;
+- duplicate `Concept<Type>` impls in the current compilation unit are rejected;
+- ordinary concepts require every declared requirement, reject duplicate witness names, reject extra witness functions, and reject mismatched return or parameter types;
+- unsafe marker concepts require `unsafe impl`, while `unsafe impl` for safe concepts is rejected;
+- impl witness functions are HIR functions marked as concept witnesses, so they can be body-checked but do not satisfy `main` and are skipped by MIR lowering/backend emission.
+
+P8-M5 does not add constrained generic execution. Calls to constrained generic functions, concept-provided calls from generic bodies, generic structs/enums, associated types, bridge-module coherence/orphan rules, marker derivation, runtime vtables, and ownership/drop integration remain deferred to later milestones.

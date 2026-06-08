@@ -45,6 +45,7 @@ const ModuleLowerer = struct {
             if (function.body == null) continue;
             const hir_function_id = hir.FunctionId{ .index = @intCast(index) };
             if (self.semantic_module.hir.isGenericFunction(hir_function_id)) continue;
+            if (self.semantic_module.hir.isConceptWitnessFunction(hir_function_id)) continue;
             try self.lowerFunction(hir_function_id, function);
         }
 

@@ -1,0 +1,30 @@
+# name: impl multiple requirements
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+concept PairOps<T> {
+    bool equals(T left, T right);
+    int value(T item);
+};
+
+struct Box {
+    int value;
+};
+
+impl PairOps<Box> {
+    bool equals(Box left, Box right) {
+        return left.value == right.value;
+    }
+
+    int value(Box item) {
+        return item.value;
+    }
+}
+
+int main() {
+    return 0;
+}

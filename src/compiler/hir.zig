@@ -13,6 +13,7 @@ pub const ItemId = SemanticId("ItemId");
 pub const FunctionId = SemanticId("FunctionId");
 pub const GenericFunctionId = SemanticId("GenericFunctionId");
 pub const ConceptId = SemanticId("ConceptId");
+pub const ConceptImplId = SemanticId("ConceptImplId");
 pub const StructId = SemanticId("StructId");
 pub const EnumId = SemanticId("EnumId");
 pub const FieldId = SemanticId("FieldId");
@@ -80,6 +81,14 @@ pub const HirConcept = struct {
     is_unsafe: bool = false,
 };
 
+pub const HirConceptImpl = struct {
+    concept_id: ConceptId,
+    target_type: types.TypeId,
+    functions: []FunctionId,
+    is_unsafe: bool = false,
+    span: SourceSpan,
+};
+
 pub const HirFunction = struct {
     item: ItemId,
     name: SymbolId,
@@ -90,6 +99,7 @@ pub const HirFunction = struct {
     locals: []LocalId,
     body: ?StmtId = null,
     is_instantiation: bool = false,
+    is_concept_witness: bool = false,
 };
 
 pub const HirLocal = struct {
@@ -305,6 +315,7 @@ pub const HirStore = struct {
     functions: std.ArrayList(HirFunction),
     generic_functions: std.ArrayList(HirGenericFunction),
     concepts: std.ArrayList(HirConcept),
+    concept_impls: std.ArrayList(HirConceptImpl),
     params: std.ArrayList(HirParam),
     locals: std.ArrayList(HirLocal),
     stmts: std.ArrayList(HirStmt),
@@ -322,6 +333,7 @@ pub const HirStore = struct {
             .functions = std.ArrayList(HirFunction).empty,
             .generic_functions = std.ArrayList(HirGenericFunction).empty,
             .concepts = std.ArrayList(HirConcept).empty,
+            .concept_impls = std.ArrayList(HirConceptImpl).empty,
             .params = std.ArrayList(HirParam).empty,
             .locals = std.ArrayList(HirLocal).empty,
             .stmts = std.ArrayList(HirStmt).empty,
@@ -350,6 +362,9 @@ pub const HirStore = struct {
                 if (requirement.params.len > 0) self.allocator.free(requirement.params);
             }
             if (concept.requirements.len > 0) self.allocator.free(concept.requirements);
+        }
+        for (self.concept_impls.items) |concept_impl| {
+            if (concept_impl.functions.len > 0) self.allocator.free(concept_impl.functions);
         }
         for (self.functions.items) |function| {
             if (function.params.len > 0) self.allocator.free(function.params);
@@ -400,6 +415,7 @@ pub const HirStore = struct {
         self.stmts.deinit(self.allocator);
         self.locals.deinit(self.allocator);
         self.params.deinit(self.allocator);
+        self.concept_impls.deinit(self.allocator);
         self.concepts.deinit(self.allocator);
         self.generic_functions.deinit(self.allocator);
         self.functions.deinit(self.allocator);
@@ -461,6 +477,23 @@ pub const HirStore = struct {
         return false;
     }
 
+    pub fn isConceptWitnessFunction(self: *const HirStore, function_id: FunctionId) bool {
+        return self.getFunction(function_id).is_concept_witness;
+    }
+
+    pub fn hasConceptImpl(self: *const HirStore, concept_id: ConceptId, target_type: types.TypeId) bool {
+        return self.findConceptImpl(concept_id, target_type) != null;
+    }
+
+    pub fn findConceptImpl(self: *const HirStore, concept_id: ConceptId, target_type: types.TypeId) ?ConceptImplId {
+        for (self.concept_impls.items, 0..) |concept_impl, index| {
+            if (concept_impl.concept_id.index == concept_id.index and concept_impl.target_type.index == target_type.index) {
+                return .{ .index = @intCast(index) };
+            }
+        }
+        return null;
+    }
+
     pub fn addFunction(self: *HirStore, name: SymbolId, return_type: types.TypeId, span: SourceSpan) !FunctionId {
         return self.addFunctionWithSafety(name, return_type, false, span);
     }
@@ -470,6 +503,24 @@ pub const HirStore = struct {
         const item = try self.addItem(.{ .function = id });
         errdefer _ = self.items.pop();
         self.getFunctionMut(id).item = item;
+        return id;
+    }
+
+    pub fn addConceptWitnessFunction(self: *HirStore, name: SymbolId, return_type: types.TypeId, is_unsafe: bool, span: SourceSpan) !FunctionId {
+        const id = try self.addFunctionStorage(name, return_type, is_unsafe, span);
+        self.getFunctionMut(id).is_concept_witness = true;
+        return id;
+    }
+
+    pub fn addConceptImpl(self: *HirStore, concept_id: ConceptId, target_type: types.TypeId, functions: []FunctionId, is_unsafe: bool, span: SourceSpan) !ConceptImplId {
+        const id = ConceptImplId{ .index = try nextIndex(self.concept_impls.items.len, error.TooManyConceptImpls) };
+        try self.concept_impls.append(self.allocator, .{
+            .concept_id = concept_id,
+            .target_type = target_type,
+            .functions = functions,
+            .is_unsafe = is_unsafe,
+            .span = span,
+        });
         return id;
     }
 
@@ -485,6 +536,7 @@ pub const HirStore = struct {
             .locals = &.{},
             .body = null,
             .is_instantiation = false,
+            .is_concept_witness = false,
         });
         return id;
     }
@@ -614,6 +666,12 @@ pub const HirStore = struct {
         const index: usize = id.index;
         std.debug.assert(index < self.concepts.items.len);
         return &self.concepts.items[index];
+    }
+
+    pub fn getConceptImpl(self: *const HirStore, id: ConceptImplId) *const HirConceptImpl {
+        const index: usize = id.index;
+        std.debug.assert(index < self.concept_impls.items.len);
+        return &self.concept_impls.items[index];
     }
 
     pub fn getFunction(self: *const HirStore, id: FunctionId) *const HirFunction {
@@ -770,6 +828,17 @@ pub const HirStore = struct {
                     for (requirement.params) |param| {
                         try writer.print("        {s}: {f}\n", .{ interner.text(param.name), param.type_id });
                     }
+                }
+            }
+        }
+        for (self.concept_impls.items, 0..) |concept_impl, index| {
+            const concept = self.getConcept(concept_impl.concept_id);
+            try writer.print("  {s}ConceptImpl #{d} {s} for {f}\n", .{ if (concept_impl.is_unsafe) "Unsafe " else "", index, interner.text(concept.name), concept_impl.target_type });
+            if (concept_impl.functions.len != 0) {
+                try writer.writeAll("    Witnesses\n");
+                for (concept_impl.functions) |function_id| {
+                    const function = self.getFunction(function_id);
+                    try writer.print("      {f} {s} -> {f}\n", .{ function_id, interner.text(function.name), function.return_type });
                 }
             }
         }
@@ -1175,4 +1244,24 @@ test "HIR debug formatting includes generic functions" {
         \\      ParamId(0) value: TypeId(3)
         \\
     , rendered);
+}
+
+test "concept impl storage and lookup helpers" {
+    var module = HirModule.init(std.testing.allocator);
+    defer module.deinit();
+    var interner = Interner.init(std.testing.allocator);
+    defer interner.deinit();
+    var type_store = try types.TypeStore.init(std.testing.allocator);
+    defer type_store.deinit();
+
+    const copy_name = try interner.intern("Copy");
+    const vec_name = try interner.intern("Vec2");
+    const concept_id = try module.store.addConcept(copy_name, true, false, synthetic_span);
+    const struct_id = try module.store.addStruct(vec_name);
+    const target_type = try type_store.addStructType(struct_id);
+
+    try std.testing.expect(!module.store.hasConceptImpl(concept_id, target_type));
+    const impl_id = try module.store.addConceptImpl(concept_id, target_type, &.{}, false, synthetic_span);
+    try std.testing.expect(module.store.hasConceptImpl(concept_id, target_type));
+    try std.testing.expectEqual(impl_id, module.store.findConceptImpl(concept_id, target_type).?);
 }

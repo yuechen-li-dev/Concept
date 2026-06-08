@@ -1,0 +1,18 @@
+# name: impl unsafe impl for safe concept
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+marker concept Copy<T>;
+
+struct Vec2 {
+    int x;
+};
+
+unsafe impl Copy<Vec2>;
+
+=== diagnostics ===
+CON0108

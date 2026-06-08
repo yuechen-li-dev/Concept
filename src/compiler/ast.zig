@@ -264,18 +264,25 @@ pub const InterfaceDecl = struct {
 
 pub const ImplDecl = struct {
     attributes: []Attribute = &.{},
-    target: TypeName,
-    signatures: []SignatureDecl,
+    concept_name: TypeName,
+    target_types: []TypeName,
+    functions: []FunctionDecl,
+    is_unsafe: bool = false,
+    is_marker_semicolon: bool = false,
     span: SourceSpan,
 
     pub fn deinit(self: ImplDecl, allocator: std.mem.Allocator) void {
         for (self.attributes) |attribute| attribute.deinit(allocator);
         allocator.free(self.attributes);
-        self.target.deinit(allocator);
-        for (self.signatures) |signature| {
-            signature.deinit(allocator);
+        self.concept_name.deinit(allocator);
+        for (self.target_types) |target_type| {
+            target_type.deinit(allocator);
         }
-        allocator.free(self.signatures);
+        allocator.free(self.target_types);
+        for (self.functions) |function| {
+            function.deinit(allocator);
+        }
+        allocator.free(self.functions);
     }
 };
 
@@ -1054,11 +1061,34 @@ pub const Item = union(enum) {
             },
             .impl_decl => |impl_decl| {
                 try writeAttributesDebug(impl_decl.attributes, writer);
-                try writer.writeAll("  Impl ");
-                try impl_decl.target.write(writer);
+                if (impl_decl.is_unsafe) {
+                    try writer.writeAll("  Unsafe Impl ");
+                } else {
+                    try writer.writeAll("  Impl ");
+                }
+                try impl_decl.concept_name.write(writer);
+                try writer.writeByte('<');
+                for (impl_decl.target_types, 0..) |target_type, index| {
+                    if (index != 0) try writer.writeAll(", ");
+                    try target_type.write(writer);
+                }
+                try writer.writeByte('>');
+                if (impl_decl.is_marker_semicolon) try writer.writeAll(" semicolon");
                 try writer.writeByte('\n');
-                for (impl_decl.signatures) |signature| {
-                    try signature.writeDebug(writer);
+                for (impl_decl.functions) |function| {
+                    try writer.writeAll("    Function ");
+                    try function.signature.return_type.write(writer);
+                    try writer.writeByte(' ');
+                    try function.signature.name.write(writer);
+                    try writer.writeByte('(');
+                    for (function.signature.params, 0..) |param, index| {
+                        if (index != 0) try writer.writeAll(", ");
+                        try param.type_name.write(writer);
+                        try writer.writeByte(' ');
+                        try writer.writeAll(param.name.text);
+                    }
+                    try writer.writeAll(")\n");
+                    if (function.body) |body| try body.writeDebug(writer);
                 }
             },
         }

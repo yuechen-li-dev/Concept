@@ -710,7 +710,6 @@ test "language parse fixture: phase8 template invalid constraint" {
     try expectParseFixture("../../../language/phase8-concepts-templates/invalid/template_invalid_constraint.invalid.conception");
 }
 
-
 test "language check fixture: phase8 concept equatable declaration" {
     try expectCheckFixture("../../../language/phase8-concepts-templates/valid/concept_equatable_decl.valid.conception");
 }
@@ -757,6 +756,58 @@ test "language check fixture: phase8 concept unknown type in requirement" {
 
 test "language check fixture: phase8 concept duplicate top level name" {
     try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/concept_duplicate_top_level_name.invalid.conception");
+}
+
+test "language check fixture: phase8 impl equatable vec2" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/valid/impl_equatable_vec2.valid.conception");
+}
+
+test "language check fixture: phase8 impl multiple requirements" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/valid/impl_multiple_requirements.valid.conception");
+}
+
+test "language check fixture: phase8 impl marker copy" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/valid/impl_marker_copy.valid.conception");
+}
+
+test "language check fixture: phase8 impl unsafe marker" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/valid/impl_unsafe_marker.valid.conception");
+}
+
+test "language check fixture: phase8 impl unknown concept" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/impl_unknown_concept.invalid.conception");
+}
+
+test "language check fixture: phase8 impl missing requirement" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/impl_missing_requirement.invalid.conception");
+}
+
+test "language check fixture: phase8 impl wrong return type" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/impl_wrong_return_type.invalid.conception");
+}
+
+test "language check fixture: phase8 impl wrong param type" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/impl_wrong_param_type.invalid.conception");
+}
+
+test "language check fixture: phase8 impl extra function" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/impl_extra_function.invalid.conception");
+}
+
+test "language check fixture: phase8 impl duplicate" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/impl_duplicate.invalid.conception");
+}
+
+test "language check fixture: phase8 impl marker with function" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/impl_marker_with_function.invalid.conception");
+}
+
+test "language check fixture: phase8 impl safe impl for unsafe marker" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/impl_safe_impl_for_unsafe_marker.invalid.conception");
+}
+
+test "language check fixture: phase8 impl unsafe impl for safe concept" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/impl_unsafe_impl_for_safe_concept.invalid.conception");
 }
 
 test "language check fixture: phase8 template identity declaration" {

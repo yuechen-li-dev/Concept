@@ -117,7 +117,8 @@ const Collector = struct {
                 .struct_decl => |struct_decl| try self.resolveStruct(struct_decl),
                 .enum_decl => |enum_decl| try self.resolveEnum(enum_decl),
                 .concept_decl => |concept_decl| try self.resolveConcept(concept_decl),
-                .interface_decl, .impl_decl => {},
+                .interface_decl => {},
+                .impl_decl => |impl_decl| try self.resolveImpl(impl_decl),
             }
         }
 
@@ -127,7 +128,8 @@ const Collector = struct {
             switch (item) {
                 .function_decl => |function_decl| try self.lowerFunctionBody(function_decl),
                 .template_decl => |template_decl| try self.lowerGenericFunctionBody(template_decl),
-                .struct_decl, .enum_decl, .concept_decl, .interface_decl, .impl_decl => {},
+                .struct_decl, .enum_decl, .concept_decl, .interface_decl => {},
+                .impl_decl => |impl_decl| try self.lowerImplFunctionBodies(impl_decl),
             }
         }
     }
@@ -374,6 +376,186 @@ const Collector = struct {
         @memcpy(owned_requirements, requirements.items);
         requirements.clearRetainingCapacity();
         self.module.hir.setConceptRequirements(concept_id, owned_requirements);
+    }
+
+    fn resolveImpl(self: *Collector, impl_decl: ast.ImplDecl) !void {
+        const concept_part = if (impl_decl.concept_name.name.parts.len == 1) impl_decl.concept_name.name.parts[0] else {
+            try self.diagnostics.append(diagnostics.unknownConcept(impl_decl.concept_name.span));
+            return;
+        };
+        if (impl_decl.concept_name.is_mut or impl_decl.concept_name.is_reference or impl_decl.concept_name.is_pointer) {
+            try self.diagnostics.append(diagnostics.unknownConcept(impl_decl.concept_name.span));
+            return;
+        }
+        const concept_symbol = try self.module.interner.intern(concept_part.text);
+        const concept_id = switch (self.top_level_decls.get(concept_symbol) orelse {
+            try self.diagnostics.append(diagnostics.unknownConcept(concept_part.span));
+            return;
+        }) {
+            .concept => |id| id,
+            else => {
+                try self.diagnostics.append(diagnostics.unknownConcept(concept_part.span));
+                return;
+            },
+        };
+        const concept = self.module.hir.getConcept(concept_id);
+
+        if (impl_decl.target_types.len != concept.type_params.len or impl_decl.target_types.len != 1) {
+            try self.diagnostics.append(diagnostics.conceptArityMismatch(impl_decl.concept_name.span));
+            return;
+        }
+
+        const target_type = (try self.resolveTypeName(impl_decl.target_types[0])) orelse return;
+        if (self.typeContainsTypeParam(target_type)) {
+            try self.diagnostics.append(diagnostics.invalidImplTarget(impl_decl.target_types[0].span));
+            return;
+        }
+
+        if (self.module.hir.hasConceptImpl(concept_id, target_type)) {
+            try self.diagnostics.append(diagnostics.duplicateImpl(impl_decl.span));
+            return;
+        }
+
+        if (impl_decl.is_unsafe and !concept.is_unsafe) {
+            try self.diagnostics.append(diagnostics.unsafeImplNotAllowed(impl_decl.span));
+            return;
+        }
+        if (concept.is_unsafe and !impl_decl.is_unsafe) {
+            try self.diagnostics.append(diagnostics.unsafeImplRequired(impl_decl.span));
+            return;
+        }
+
+        if (concept.is_marker) {
+            if (impl_decl.functions.len != 0) {
+                try self.diagnostics.append(diagnostics.markerConceptImplCannotHaveFunctions(impl_decl.functions[0].span));
+                return;
+            }
+            _ = try self.module.hir.addConceptImpl(concept_id, target_type, &.{}, impl_decl.is_unsafe, impl_decl.span);
+            return;
+        }
+
+        try self.validateOrdinaryConceptImpl(concept_id, concept.*, target_type, impl_decl);
+    }
+
+    fn validateOrdinaryConceptImpl(self: *Collector, concept_id: hir.ConceptId, concept: hir.HirConcept, target_type: types.TypeId, impl_decl: ast.ImplDecl) !void {
+        var seen = std.AutoHashMap(interner.SymbolId, source.SourceSpan).init(self.allocator);
+        defer seen.deinit();
+        var witness_functions = std.ArrayList(hir.FunctionId).empty;
+        defer witness_functions.deinit(self.allocator);
+
+        for (impl_decl.functions) |function_decl| {
+            const function_symbol = try self.module.interner.intern(function_decl.signature.name.base.text);
+            if (seen.contains(function_symbol)) {
+                try self.diagnostics.append(diagnostics.duplicateConceptImplFunction(function_decl.signature.name.span));
+                continue;
+            }
+            try seen.put(function_symbol, function_decl.signature.name.span);
+
+            const requirement = self.findRequirement(concept, function_symbol) orelse {
+                try self.diagnostics.append(diagnostics.extraConceptImplFunction(function_decl.signature.name.span));
+                continue;
+            };
+            if (function_decl.signature.params.len != requirement.params.len) {
+                try self.diagnostics.append(diagnostics.invalidConceptRequirementImplSignature(function_decl.signature.span));
+                continue;
+            }
+            const return_type = (try self.resolveTypeName(function_decl.signature.return_type)) orelse continue;
+            if (!sameType(return_type, try self.substituteConceptType(requirement.return_type, concept, target_type))) {
+                try self.diagnostics.append(diagnostics.invalidConceptRequirementImplSignature(function_decl.signature.return_type.span));
+                continue;
+            }
+            var param_types_ok = true;
+            for (function_decl.signature.params, 0..) |param, index| {
+                const param_type = (try self.resolveTypeName(param.type_name)) orelse {
+                    param_types_ok = false;
+                    continue;
+                };
+                const expected = try self.substituteConceptType(requirement.params[index].type_id, concept, target_type);
+                if (!sameType(param_type, expected)) {
+                    try self.diagnostics.append(diagnostics.invalidConceptRequirementImplSignature(param.type_name.span));
+                    param_types_ok = false;
+                }
+            }
+            if (!param_types_ok) continue;
+
+            const function_id = try self.module.hir.addConceptWitnessFunction(function_symbol, return_type, function_decl.is_unsafe, function_decl.span);
+            var param_names = std.AutoHashMap(interner.SymbolId, source.SourceSpan).init(self.allocator);
+            defer param_names.deinit();
+            for (function_decl.signature.params) |param| {
+                const param_symbol = try self.module.interner.intern(param.name.text);
+                if (param_names.contains(param_symbol)) {
+                    try self.diagnostics.append(diagnostics.duplicateParameterName(param.name.span));
+                    continue;
+                }
+                try param_names.put(param_symbol, param.name.span);
+                if (try self.resolveTypeName(param.type_name)) |type_id| {
+                    _ = try self.module.hir.addParam(function_id, param_symbol, type_id, param.span);
+                }
+            }
+            try witness_functions.append(self.allocator, function_id);
+        }
+
+        for (concept.requirements) |requirement| {
+            if (!seen.contains(requirement.name)) {
+                try self.diagnostics.append(diagnostics.missingConceptRequirementImpl(impl_decl.span));
+            }
+        }
+        if (self.diagnostics.count() != 0) return;
+
+        const owned = try self.allocator.alloc(hir.FunctionId, witness_functions.items.len);
+        @memcpy(owned, witness_functions.items);
+        witness_functions.clearRetainingCapacity();
+        _ = try self.module.hir.addConceptImpl(concept_id, target_type, owned, impl_decl.is_unsafe, impl_decl.span);
+    }
+
+    fn findRequirement(self: *Collector, concept: hir.HirConcept, name: interner.SymbolId) ?hir.HirConceptRequirement {
+        _ = self;
+        for (concept.requirements) |requirement| {
+            if (requirement.name.index == name.index) return requirement;
+        }
+        return null;
+    }
+
+    fn substituteConceptType(self: *Collector, type_id: types.TypeId, concept: hir.HirConcept, target_type: types.TypeId) !types.TypeId {
+        return switch (self.module.types.kind(type_id)) {
+            .type_param => blk: {
+                for (concept.type_params) |param| {
+                    if (param.type_id.index == type_id.index) break :blk target_type;
+                }
+                break :blk type_id;
+            },
+            .pointer => |pointer| try self.module.types.addPointerType(try self.substituteConceptType(pointer.pointee, concept, target_type)),
+            else => type_id,
+        };
+    }
+
+    fn typeContainsTypeParam(self: *Collector, type_id: types.TypeId) bool {
+        return switch (self.module.types.kind(type_id)) {
+            .type_param => true,
+            .pointer => |pointer| self.typeContainsTypeParam(pointer.pointee),
+            else => false,
+        };
+    }
+
+    fn lowerImplFunctionBodies(self: *Collector, impl_decl: ast.ImplDecl) !void {
+        if (impl_decl.functions.len == 0) return;
+        const concept_part = if (impl_decl.concept_name.name.parts.len == 1) impl_decl.concept_name.name.parts[0] else return;
+        const concept_symbol = try self.module.interner.intern(concept_part.text);
+        const concept_id = switch (self.top_level_decls.get(concept_symbol) orelse return) {
+            .concept => |id| id,
+            else => return,
+        };
+        if (impl_decl.target_types.len != 1) return;
+        const target_type = (try self.resolveTypeName(impl_decl.target_types[0])) orelse return;
+        const impl_id = self.module.hir.findConceptImpl(concept_id, target_type) orelse return;
+        const concept_impl = self.module.hir.getConceptImpl(impl_id);
+        for (impl_decl.functions, concept_impl.functions) |function_decl, function_id| {
+            const body = function_decl.body orelse continue;
+            const block = body.block orelse continue;
+            var lowerer = BodyLowerer.init(self, function_id);
+            defer lowerer.deinit();
+            if (try lowerer.lowerBlock(block)) |body_id| self.module.hir.setFunctionBody(function_id, body_id);
+        }
     }
 
     const RequirementKey = struct {
@@ -1167,8 +1349,9 @@ fn interfaceItem(name: []const u8, start: usize) ast.Item {
 
 fn implItem(start: usize) ast.Item {
     return .{ .impl_decl = .{
-        .target = typeName("Drop", start + 5),
-        .signatures = &.{},
+        .concept_name = typeName("Drop", start + 5),
+        .target_types = &.{},
+        .functions = &.{},
         .span = .{ .start = start, .length = 12 },
     } };
 }
@@ -1608,11 +1791,11 @@ test "semantic collection rejects duplicate struct and enum" {
     try std.testing.expectEqual(DiagnosticCode.DuplicateTopLevelName, diagnostics_bag.diagnostics.items[0].code);
 }
 
-test "semantic collection stores concept and ignores interface and impl executable items" {
+test "semantic collection stores concept and ignores interface executable items" {
     var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
     defer diagnostics_bag.deinit();
 
-    var module = try collectItems(&.{ conceptItem("Hashable", 0), interfaceItem("Renderer", 40), implItem(80), structItem("Texture", 100) }, &diagnostics_bag);
+    var module = try collectItems(&.{ conceptItem("Hashable", 0), interfaceItem("Renderer", 40), structItem("Texture", 100) }, &diagnostics_bag);
     defer module.deinit();
 
     try std.testing.expectEqual(@as(usize, 1), module.hir.items.items.len);
@@ -1858,4 +2041,8 @@ test "body lowering lowers empty body and reports unknown function" {
     const bad_statements = try allocator.alloc(ast.Stmt, 1);
     bad_statements[0] = try returnStmt(allocator, try callExpr(allocator, "missing", &.{}));
     try expectOneSemanticDiagnostic(&.{functionWithBody("bad", &.{}, bad_statements)}, .UnknownFunction);
+}
+
+fn sameType(left: types.TypeId, right: types.TypeId) bool {
+    return left.index == right.index;
 }
