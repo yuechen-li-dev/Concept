@@ -1,0 +1,17 @@
+# name: compile-time function zero arg run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+comptime int answer() {
+    return 42;
+}
+
+int main() {
+    return comptime answer();
+}
+
+=== run ===
+exit_code: 42

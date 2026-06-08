@@ -1,4 +1,4 @@
-# name: static assert call unsupported
+# name: compile-time function runtime call
 # phase: check
 # check: hir
 # expect: fail
@@ -6,14 +6,12 @@
 === source ===
 module Main;
 
-int helper() {
-    return 1;
+comptime int answer() {
+    return 42;
 }
 
-static_assert(helper() == 1);
-
 int main() {
-    return 0;
+    return answer();
 }
 
 === diagnostics ===

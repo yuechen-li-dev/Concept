@@ -156,7 +156,7 @@ In this example the runtime program should behave as if the checked initializer 
 
 ## Compile-time functions
 
-Compile-time functions are future work, not P9 v0.
+Compile-time functions were deferred during P9-M1/P9-M3 and enter the source surface in P9-M4.
 
 Future syntax direction:
 
@@ -168,14 +168,14 @@ comptime int hashSeed(int value) {
 int seed = comptime hashSeed(42);
 ```
 
-Rules:
+General rules:
 
 - A `comptime` function is eligible for compile-time execution.
 - Marking a function `comptime` does not automatically execute it.
 - The call site still uses `comptime expr` or another explicitly compile-time context.
 - `comptime` functions still parse and typecheck normally.
 - Unsupported operations inside a compile-time function are rejected when evaluating or checking for compile-time eligibility.
-- Function calls are not part of P9-M1 unless specifically scoped later.
+- Function calls are not part of P9-M1; P9-M4 scopes straight-line calls explicitly.
 
 This keeps eligibility separate from execution and avoids implicit host-side work during ordinary runtime calls.
 
@@ -200,6 +200,44 @@ Rules:
 - No layout queries, `sizeof`, `alignof`, compile-time functions, host capabilities, target metadata, reflection, or generated declarations are added by P9-M3.
 
 A minimal `static_assert` exists before full layout support because boolean expressions over literals and checked compile-time arithmetic do not require final ABI layout.
+
+## P9-M4 compile-time function surface
+
+P9-M4 adds the first source-level compile-time function surface:
+
+```cpp
+comptime int add(int a, int b) {
+    return a + b;
+}
+
+int main() {
+    return comptime add(20, 22);
+}
+```
+
+Rules implemented in P9-M4:
+
+- A function marked with source keyword `comptime` is eligible for compile-time execution.
+- Marking a function `comptime` does not execute it automatically.
+- Calls still require an explicit compile-time context: `comptime expr` or `static_assert(expr);`.
+- Runtime calls to `comptime` functions are rejected in P9-M4. The function is treated as compile-time-only and is skipped by MIR/backend lowering.
+- Calls to non-`comptime` functions from compile-time contexts are rejected with `CompileTimeFunctionRequired`.
+- Supported signatures are limited to `int` and `bool` parameters and `int` or `bool` return values.
+- Supported bodies are limited to a single braced block containing one `return expr;`.
+- The return expression may use literals, parameters, grouping, supported unary/binary operators, and calls to other compile-time functions.
+- Parameter binding is supported for `int` and `bool` values.
+- Nested compile-time function calls are supported with a small recursion guard; recursion is not intentionally supported.
+- `static_assert` may call compile-time functions without spelling `comptime` at the call site because the assertion expression is already an implicit compile-time context.
+
+Still out of scope after P9-M4:
+
+- local-variable evaluation inside compile-time functions;
+- `if`, `while`, `match`, `try`, `decide`, unsafe blocks, field access, struct literals, pointers, and aggregate values in the evaluator;
+- general compile-time interpretation;
+- host capabilities or host-visible effects;
+- reflection, generated declarations, layout queries, `sizeof`, `alignof`, target metadata, or arbitrary extern C calls.
+
+P9-M4 keeps compile-time functions erased from runtime output unless a later phase deliberately introduces dual-use functions with explicit lowering and tests.
 
 ## CompileTimeValue
 

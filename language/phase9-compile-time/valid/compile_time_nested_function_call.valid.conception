@@ -1,0 +1,21 @@
+# name: compile-time nested function call
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+comptime int one() {
+    return 1;
+}
+
+comptime int addOne(int value) {
+    return value + one();
+}
+
+int main() {
+    return comptime addOne(41);
+}
+
+=== run ===
+exit_code: 42

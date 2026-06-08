@@ -52,21 +52,47 @@ pub const CompileTimeError = error{
     DivisionByZero,
     Overflow,
     EvaluationFailed,
+    FunctionRequired,
+    UnsupportedBody,
+    UnsupportedSignature,
+    RecursionLimit,
+    ArgumentTypeMismatch,
 };
 
 pub const CompileTimeResult = CompileTimeError!CompileTimeValue;
+
+pub const CompileTimeFrame = struct {
+    bindings: []const ParamBinding = &.{},
+
+    pub const ParamBinding = struct {
+        param: hir.ParamId,
+        value: CompileTimeValue,
+    };
+
+    fn lookup(self: CompileTimeFrame, param: hir.ParamId) ?CompileTimeValue {
+        for (self.bindings) |binding| {
+            if (binding.param.index == param.index) return binding.value;
+        }
+        return null;
+    }
+};
 
 /// Small typed-HIR constant evaluator for P9-M1.
 ///
 /// The evaluator assumes expressions have already passed HIR checking, but it
 /// still rejects impossible value/operator pairs instead of coercing them. It is
-/// intentionally not a constant-propagation engine: calls, locals, parameters,
-/// aggregate values, field access, pointers, `try`, and `decide` are future work.
+/// intentionally not a constant-propagation engine: locals, aggregate values,
+/// field access, pointers, `try`, and `decide` are future work.
 pub const CompileTimeEvaluator = struct {
     module: *const semantics.SemanticModule,
+    allocator: std.mem.Allocator,
+    frame: CompileTimeFrame = .{},
+    call_depth: usize = 0,
 
-    pub fn init(module: *const semantics.SemanticModule) CompileTimeEvaluator {
-        return .{ .module = module };
+    const max_call_depth = 32;
+
+    pub fn init(module: *const semantics.SemanticModule, allocator: std.mem.Allocator) CompileTimeEvaluator {
+        return .{ .module = module, .allocator = allocator };
     }
 
     pub fn evaluateExpr(self: CompileTimeEvaluator, expr_id: hir.ExprId) CompileTimeResult {
@@ -78,9 +104,9 @@ pub const CompileTimeEvaluator = struct {
             .compile_time => |compile_time_expr| try self.evaluateExpr(compile_time_expr.operand),
             .unary => |unary| try self.evaluateUnary(unary.op, try self.evaluateExpr(unary.operand)),
             .binary => |binary| try self.evaluateBinary(binary.op, try self.evaluateExpr(binary.left), try self.evaluateExpr(binary.right)),
+            .param_ref => |param| self.frame.lookup(param) orelse error.UnsupportedExpression,
+            .call => |call| try self.evaluateCall(call.function, call.args),
             .local_ref,
-            .param_ref,
-            .call,
             .concept_requirement_call,
             .enum_constructor,
             .struct_literal,
@@ -91,6 +117,59 @@ pub const CompileTimeEvaluator = struct {
             .try_expr,
             => error.UnsupportedExpression,
         };
+    }
+
+    fn evaluateCall(self: CompileTimeEvaluator, function_id: hir.FunctionId, args: []const hir.ExprId) CompileTimeResult {
+        if (self.call_depth >= max_call_depth) return error.RecursionLimit;
+
+        const function = self.module.hir.getFunction(function_id);
+        if (!function.is_compile_time) return error.FunctionRequired;
+        try self.requireSupportedSignature(function);
+        const return_expr = try self.compileTimeReturnExpr(function);
+        if (args.len != function.params.len) return error.ArgumentTypeMismatch;
+
+        const bindings = self.allocator.alloc(CompileTimeFrame.ParamBinding, args.len) catch return error.EvaluationFailed;
+        defer self.allocator.free(bindings);
+        for (args, function.params, 0..) |arg, param_id, index| {
+            const value = try self.evaluateExpr(arg);
+            const param_type = self.module.hir.getParam(param_id).type_id;
+            if (!sameType(value.typeOf(self.module.types), param_type)) return error.ArgumentTypeMismatch;
+            bindings[index] = .{ .param = param_id, .value = value };
+        }
+
+        const nested = CompileTimeEvaluator{
+            .module = self.module,
+            .allocator = self.allocator,
+            .frame = .{ .bindings = bindings },
+            .call_depth = self.call_depth + 1,
+        };
+        return nested.evaluateExpr(return_expr);
+    }
+
+    fn requireSupportedSignature(self: CompileTimeEvaluator, function: *const hir.HirFunction) CompileTimeError!void {
+        if (!self.isSupportedScalarType(function.return_type)) return error.UnsupportedSignature;
+        for (function.params) |param_id| {
+            if (!self.isSupportedScalarType(self.module.hir.getParam(param_id).type_id)) return error.UnsupportedSignature;
+        }
+    }
+
+    fn compileTimeReturnExpr(self: CompileTimeEvaluator, function: *const hir.HirFunction) CompileTimeError!hir.ExprId {
+        const body = function.body orelse return error.UnsupportedBody;
+        const body_stmt = self.module.hir.getStmt(body);
+        const children = switch (body_stmt.kind) {
+            .block => |block| block,
+            else => return error.UnsupportedBody,
+        };
+        if (children.len != 1) return error.UnsupportedBody;
+        const ret = self.module.hir.getStmt(children[0]);
+        return switch (ret.kind) {
+            .return_stmt => |maybe_value| maybe_value orelse error.UnsupportedBody,
+            else => error.UnsupportedBody,
+        };
+    }
+
+    fn isSupportedScalarType(self: CompileTimeEvaluator, type_id: types.TypeId) bool {
+        return sameType(type_id, self.module.types.intType()) or sameType(type_id, self.module.types.boolType());
     }
 
     fn evaluateUnary(self: CompileTimeEvaluator, op: hir.UnaryOp, operand: CompileTimeValue) CompileTimeResult {
@@ -138,6 +217,10 @@ pub const CompileTimeEvaluator = struct {
         };
     }
 };
+
+fn sameType(left: types.TypeId, right: types.TypeId) bool {
+    return left.index == right.index;
+}
 
 fn intArithmetic(left: CompileTimeValue, right: CompileTimeValue, operation: fn (i64, i64) CompileTimeError!i64) CompileTimeResult {
     return switch (left) {
@@ -217,7 +300,7 @@ const TestModule = struct {
     }
 
     fn evaluator(self: *const TestModule) CompileTimeEvaluator {
-        return CompileTimeEvaluator.init(&self.module);
+        return CompileTimeEvaluator.init(&self.module, std.testing.allocator);
     }
 
     fn name(self: *TestModule, text: []const u8) !hir.SymbolId {
@@ -242,6 +325,29 @@ const TestModule = struct {
 
     fn binary(self: *TestModule, op: hir.BinaryOp, left: hir.ExprId, right: hir.ExprId) !hir.ExprId {
         return try self.expr(.{ .binary = .{ .op = op, .left = left, .right = right } });
+    }
+
+    fn compileTimeFunction(self: *TestModule, name_text: []const u8, return_type: types.TypeId) !hir.FunctionId {
+        const function_id = try self.module.hir.addFunction(try self.name(name_text), return_type, hir.synthetic_span);
+        self.module.hir.markFunctionCompileTime(function_id);
+        return function_id;
+    }
+
+    fn param(self: *TestModule, function_id: hir.FunctionId, name_text: []const u8, type_id: types.TypeId) !hir.ParamId {
+        return self.module.hir.addParam(function_id, try self.name(name_text), type_id, hir.synthetic_span);
+    }
+
+    fn block(self: *TestModule, stmts: []const hir.StmtId) !hir.StmtId {
+        const owned = try std.testing.allocator.dupe(hir.StmtId, stmts);
+        return self.module.hir.addStmt(.{ .block = owned }, hir.synthetic_span);
+    }
+
+    fn ret(self: *TestModule, expr_id: hir.ExprId) !hir.StmtId {
+        return self.module.hir.addStmt(.{ .return_stmt = expr_id }, hir.synthetic_span);
+    }
+
+    fn setBody(self: *TestModule, function_id: hir.FunctionId, stmt_id: hir.StmtId) void {
+        self.module.hir.setFunctionBody(function_id, stmt_id);
     }
 };
 
@@ -310,7 +416,7 @@ test "compile-time evaluator rejects unsupported expression forms" {
     const callee = try tm.module.hir.addFunction(try tm.name("callee"), tm.module.types.intType(), hir.synthetic_span);
     const no_args = try std.testing.allocator.dupe(hir.ExprId, &.{});
     const call = try tm.expr(.{ .call = .{ .function = callee, .args = no_args } });
-    try std.testing.expectError(error.UnsupportedExpression, tm.evaluator().evaluateExpr(call));
+    try std.testing.expectError(error.FunctionRequired, tm.evaluator().evaluateExpr(call));
 
     const struct_id = try tm.module.hir.addStruct(try tm.name("Pair"));
     const struct_type = try tm.module.types.addStructType(struct_id);
@@ -321,6 +427,46 @@ test "compile-time evaluator rejects unsupported expression forms" {
 
     const field_access = try tm.expr(.{ .field_access = .{ .receiver = struct_literal, .field_name = try tm.name("value"), .field_span = hir.synthetic_span } });
     try std.testing.expectError(error.UnsupportedExpression, tm.evaluator().evaluateExpr(field_access));
+}
+
+test "compile-time evaluator calls compile-time function with parameter bindings" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+
+    const add = try tm.compileTimeFunction("add", tm.module.types.intType());
+    const a = try tm.param(add, "a", tm.module.types.intType());
+    const b = try tm.param(add, "b", tm.module.types.intType());
+    const a_ref = try tm.expr(.{ .param_ref = a });
+    const b_ref = try tm.expr(.{ .param_ref = b });
+    const sum = try tm.binary(.add, a_ref, b_ref);
+    tm.setBody(add, try tm.block(&.{try tm.ret(sum)}));
+
+    const args = try std.testing.allocator.dupe(hir.ExprId, &.{ try tm.int("20"), try tm.int("22") });
+    const call = try tm.expr(.{ .call = .{ .function = add, .args = args } });
+    try expectValue(tm.evaluator().evaluateExpr(call), .{ .int = 42 });
+}
+
+test "compile-time evaluator supports nested function calls and recursion guard" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+
+    const one = try tm.compileTimeFunction("one", tm.module.types.intType());
+    tm.setBody(one, try tm.block(&.{try tm.ret(try tm.int("1"))}));
+
+    const two = try tm.compileTimeFunction("two", tm.module.types.intType());
+    const no_args = try std.testing.allocator.dupe(hir.ExprId, &.{});
+    const one_call = try tm.expr(.{ .call = .{ .function = one, .args = no_args } });
+    tm.setBody(two, try tm.block(&.{try tm.ret(try tm.binary(.add, one_call, try tm.int("1")))}));
+
+    const two_args = try std.testing.allocator.dupe(hir.ExprId, &.{});
+    const two_call = try tm.expr(.{ .call = .{ .function = two, .args = two_args } });
+    try expectValue(tm.evaluator().evaluateExpr(two_call), .{ .int = 2 });
+
+    const recur = try tm.compileTimeFunction("recur", tm.module.types.intType());
+    const recur_args = try std.testing.allocator.dupe(hir.ExprId, &.{});
+    const recur_call = try tm.expr(.{ .call = .{ .function = recur, .args = recur_args } });
+    tm.setBody(recur, try tm.block(&.{try tm.ret(recur_call)}));
+    try std.testing.expectError(error.RecursionLimit, tm.evaluator().evaluateExpr(recur_call));
 }
 
 test "compile-time evaluator rejects mismatches division by zero overflow and modulo" {

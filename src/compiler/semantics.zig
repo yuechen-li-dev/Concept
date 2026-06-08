@@ -155,6 +155,7 @@ const Collector = struct {
             function_decl.signature.name.base.span,
         ) orelse return;
         const function_id = try self.module.hir.addFunctionWithSafety(name, self.module.types.voidType(), function_decl.is_unsafe, function_decl.span);
+        if (function_decl.is_compile_time) self.module.hir.markFunctionCompileTime(function_id);
         try self.top_level_decls.put(name, .{ .function = function_id });
     }
 
@@ -2016,6 +2017,26 @@ test "semantic collection HIR debug snapshot is stable" {
         \\  Enum Token
         \\
     , snapshot);
+}
+
+test "semantic collection preserves compile-time function metadata" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const statements = try allocator.alloc(ast.Stmt, 1);
+    statements[0] = try returnStmt(allocator, intExpr("42"));
+    var item = functionWithBody("answer", &.{}, statements);
+    item.function_decl.is_compile_time = true;
+
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+    var module = try collectItems(&.{item}, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expect(module.hir.getFunction(.{ .index = 0 }).is_compile_time);
+    const snapshot = try module.hir.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "CompileTime Function answer") != null);
 }
 
 fn allocExpr(allocator: std.mem.Allocator, expr: ast.Expr) !*ast.Expr {

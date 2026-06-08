@@ -34,6 +34,7 @@ const Checker = struct {
     module: *semantics.SemanticModule,
     diagnostics: ?*DiagnosticBag,
     unsafe_depth: usize = 0,
+    compile_time_context_depth: usize = 0,
     instantiations: std.ArrayList(InstantiationEntry),
     active_instantiation_depth: usize = 0,
 
@@ -88,9 +89,14 @@ const Checker = struct {
             const function_id = hir.FunctionId{ .index = @intCast(index) };
             if (self.module.hir.isGenericFunction(function_id)) continue;
             if (function.body) |body| {
+                if (function.is_compile_time) {
+                    try self.checkCompileTimeFunctionEligibility(function);
+                    self.compile_time_context_depth += 1;
+                }
                 if (function.is_unsafe) self.unsafe_depth += 1;
                 defer {
                     if (function.is_unsafe) self.unsafe_depth -= 1;
+                    if (function.is_compile_time) self.compile_time_context_depth -= 1;
                 }
                 try self.checkStmt(function_id, body, function.return_type);
             }
@@ -99,8 +105,10 @@ const Checker = struct {
 
     fn checkStaticAsserts(self: *Checker) CheckError!void {
         for (self.module.hir.static_asserts.items) |static_assert| {
+            self.compile_time_context_depth += 1;
+            defer self.compile_time_context_depth -= 1;
             _ = try self.checkExpr(self.module.types.voidType(), static_assert.expr);
-            const evaluator = compile_time.CompileTimeEvaluator.init(self.module);
+            const evaluator = compile_time.CompileTimeEvaluator.init(self.module, self.allocator);
             const value = evaluator.evaluateExpr(static_assert.expr) catch |err| {
                 try self.reportCompileTimeError(err, static_assert.span);
                 return error.InvalidSemanticModule;
@@ -125,6 +133,7 @@ const Checker = struct {
             const function_id = hir.FunctionId{ .index = @intCast(index) };
             if (self.module.hir.isGenericFunction(function_id)) continue;
             if (self.module.hir.isConceptWitnessFunction(function_id)) continue;
+            if (function.is_compile_time) continue;
             if (std.mem.eql(u8, self.module.interner.text(function.name), "main")) return function_id;
         }
         return null;
@@ -259,8 +268,10 @@ const Checker = struct {
             .param_ref => |id| self.module.hir.getParam(id).type_id,
             .group => |inner| try self.checkExpr(return_type, inner),
             .compile_time => |compile_time_expr| blk: {
+                self.compile_time_context_depth += 1;
+                defer self.compile_time_context_depth -= 1;
                 _ = try self.checkExpr(return_type, compile_time_expr.operand);
-                const evaluator = compile_time.CompileTimeEvaluator.init(self.module);
+                const evaluator = compile_time.CompileTimeEvaluator.init(self.module, self.allocator);
                 const value = evaluator.evaluateExpr(compile_time_expr.operand) catch |err| {
                     try self.reportCompileTimeError(err, expr.span);
                     return error.InvalidSemanticModule;
@@ -287,6 +298,10 @@ const Checker = struct {
                 }
 
                 const callee = self.module.hir.getFunction(resolved_function);
+                if (callee.is_compile_time and self.compile_time_context_depth == 0) {
+                    try self.reportAt(.CompileTimeFunctionRequired, "compile-time function call requires a compile-time context", expr.span);
+                    return error.InvalidSemanticModule;
+                }
                 if (callee.body == null) {
                     try self.reportAt(.InvalidCall, "cannot call function without body", expr.span);
                     return error.InvalidSemanticModule;
@@ -507,7 +522,58 @@ const Checker = struct {
             error.DivisionByZero => try self.reportAt(.CompileTimeDivisionByZero, "compile-time expression divides by zero", span),
             error.Overflow => try self.reportAt(.CompileTimeOverflow, "compile-time expression overflows", span),
             error.EvaluationFailed => try self.reportAt(.CompileTimeEvaluationFailed, "compile-time expression evaluation failed", span),
+            error.FunctionRequired => try self.reportAt(.CompileTimeFunctionRequired, "compile-time call requires a function marked comptime", span),
+            error.UnsupportedBody => try self.reportAt(.CompileTimeFunctionUnsupportedBody, "compile-time function body is unsupported", span),
+            error.UnsupportedSignature => try self.reportAt(.CompileTimeFunctionUnsupportedSignature, "compile-time function signature is unsupported", span),
+            error.RecursionLimit => try self.reportAt(.CompileTimeRecursionLimit, "compile-time function recursion limit exceeded", span),
+            error.ArgumentTypeMismatch => try self.reportAt(.CompileTimeArgumentTypeMismatch, "compile-time function argument type mismatch", span),
         }
+    }
+
+    fn checkCompileTimeFunctionEligibility(self: *Checker, function: hir.HirFunction) CheckError!void {
+        if (!self.isCompileTimeScalar(function.return_type)) {
+            try self.reportAt(.CompileTimeFunctionUnsupportedSignature, "compile-time function signature is unsupported", function.span);
+            return error.InvalidSemanticModule;
+        }
+        for (function.params) |param_id| {
+            const param = self.module.hir.getParam(param_id);
+            if (!self.isCompileTimeScalar(param.type_id)) {
+                try self.reportAt(.CompileTimeFunctionUnsupportedSignature, "compile-time function signature is unsupported", param.span);
+                return error.InvalidSemanticModule;
+            }
+        }
+
+        const body = function.body orelse {
+            try self.reportAt(.CompileTimeFunctionUnsupportedBody, "compile-time function body is unsupported", function.span);
+            return error.InvalidSemanticModule;
+        };
+        const body_stmt = self.module.hir.getStmt(body);
+        const children = switch (body_stmt.kind) {
+            .block => |block| block,
+            else => {
+                try self.reportAt(.CompileTimeFunctionUnsupportedBody, "compile-time function body is unsupported", body_stmt.span);
+                return error.InvalidSemanticModule;
+            },
+        };
+        if (children.len != 1) {
+            try self.reportAt(.CompileTimeFunctionUnsupportedBody, "compile-time function body is unsupported", body_stmt.span);
+            return error.InvalidSemanticModule;
+        }
+        const ret = self.module.hir.getStmt(children[0]);
+        switch (ret.kind) {
+            .return_stmt => |maybe_value| if (maybe_value == null) {
+                try self.reportAt(.CompileTimeFunctionUnsupportedBody, "compile-time function body is unsupported", ret.span);
+                return error.InvalidSemanticModule;
+            },
+            else => {
+                try self.reportAt(.CompileTimeFunctionUnsupportedBody, "compile-time function body is unsupported", ret.span);
+                return error.InvalidSemanticModule;
+            },
+        }
+    }
+
+    fn isCompileTimeScalar(self: *Checker, type_id: types.TypeId) bool {
+        return self.isInt(type_id) or self.isBool(type_id);
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
@@ -1104,6 +1170,12 @@ const TestModule = struct {
 
     fn unsafeFunction(self: *TestModule, name_text: []const u8, return_type: types.TypeId) !hir.FunctionId {
         return self.module.hir.addFunctionWithSafety(try self.name(name_text), return_type, true, synthetic_span);
+    }
+
+    fn compileTimeFunction(self: *TestModule, name_text: []const u8, return_type: types.TypeId) !hir.FunctionId {
+        const function_id = try self.module.hir.addFunction(try self.name(name_text), return_type, synthetic_span);
+        self.module.hir.markFunctionCompileTime(function_id);
+        return function_id;
     }
 
     fn param(self: *TestModule, function_id: hir.FunctionId, name_text: []const u8, type_id: types.TypeId) !hir.ParamId {
@@ -1735,7 +1807,75 @@ test "HIR checker reports unsupported static assertion expression before main va
     const comparison = try addTestExpr(&tm.module.hir, .{ .binary = .{ .op = .equal_equal, .left = call, .right = try tm.int("1") } });
     try tm.module.hir.addStaticAssert(comparison, synthetic_span);
 
-    try tm.checkFail(.CompileTimeUnsupportedExpression);
+    try tm.checkFail(.CompileTimeFunctionRequired);
+}
+
+test "HIR checker evaluates compile-time function calls with arguments" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+
+    const add = try tm.compileTimeFunction("add", tm.module.types.intType());
+    const a = try tm.param(add, "a", tm.module.types.intType());
+    const b = try tm.param(add, "b", tm.module.types.intType());
+    const a_ref = try addTestExpr(&tm.module.hir, .{ .param_ref = a });
+    const b_ref = try addTestExpr(&tm.module.hir, .{ .param_ref = b });
+    const sum = try addTestExpr(&tm.module.hir, .{ .binary = .{ .op = .add, .left = a_ref, .right = b_ref } });
+    tm.setBody(add, try tm.block(&.{try tm.ret(sum)}));
+
+    const main = try tm.function("main", tm.module.types.intType());
+    const args = try std.testing.allocator.dupe(hir.ExprId, &.{ try tm.int("20"), try tm.int("22") });
+    const call = try addTestExpr(&tm.module.hir, .{ .call = .{ .function = add, .args = args } });
+    const compile_call = try addTestExpr(&tm.module.hir, .{ .compile_time = .{ .operand = call, .span = synthetic_span } });
+    tm.setBody(main, try tm.block(&.{try tm.ret(compile_call)}));
+
+    try tm.checkPass();
+    try std.testing.expect(tm.module.compile_time_values.get(compile_call).?.eql(.{ .int = 42 }));
+}
+
+test "HIR checker rejects runtime calls to compile-time functions" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+
+    const answer = try tm.compileTimeFunction("answer", tm.module.types.intType());
+    tm.setBody(answer, try tm.block(&.{try tm.ret(try tm.int("42"))}));
+
+    const main = try tm.function("main", tm.module.types.intType());
+    const args = try std.testing.allocator.dupe(hir.ExprId, &.{});
+    const call = try addTestExpr(&tm.module.hir, .{ .call = .{ .function = answer, .args = args } });
+    tm.setBody(main, try tm.block(&.{try tm.ret(call)}));
+
+    try tm.checkFail(.CompileTimeFunctionRequired);
+}
+
+test "HIR checker rejects non-compile-time function calls from compile-time contexts" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+
+    const helper = try tm.function("helper", tm.module.types.intType());
+    tm.setBody(helper, try tm.block(&.{try tm.ret(try tm.int("1"))}));
+
+    const main = try tm.function("main", tm.module.types.intType());
+    const args = try std.testing.allocator.dupe(hir.ExprId, &.{});
+    const call = try addTestExpr(&tm.module.hir, .{ .call = .{ .function = helper, .args = args } });
+    const compile_call = try addTestExpr(&tm.module.hir, .{ .compile_time = .{ .operand = call, .span = synthetic_span } });
+    tm.setBody(main, try tm.block(&.{try tm.ret(compile_call)}));
+
+    try tm.checkFail(.CompileTimeFunctionRequired);
+}
+
+test "HIR checker rejects unsupported compile-time function body" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+
+    const bad = try tm.compileTimeFunction("bad", tm.module.types.intType());
+    const local = try tm.local(bad, "x", tm.module.types.intType());
+    const decl = try addTestStmt(&tm.module.hir, .{ .local_decl = .{ .local = local, .initializer = try tm.int("1") } });
+    tm.setBody(bad, try tm.block(&.{ decl, try tm.ret(try tm.int("1")) }));
+
+    const main = try tm.function("main", tm.module.types.intType());
+    tm.setBody(main, try tm.block(&.{try tm.ret(try tm.int("0"))}));
+
+    try tm.checkFail(.CompileTimeFunctionUnsupportedBody);
 }
 
 test "HIR checker reports compile-time division by zero and overflow" {

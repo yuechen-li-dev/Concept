@@ -1,0 +1,19 @@
+# name: compile-time function unsupported body local
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+comptime int answer() {
+    int x = 42;
+    return x;
+}
+
+int main() {
+    return comptime answer();
+}
+
+=== diagnostics ===
+CON0128

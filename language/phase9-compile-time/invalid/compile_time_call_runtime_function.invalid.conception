@@ -1,4 +1,4 @@
-# name: compile-time call unsupported
+# name: compile-time call runtime function
 # phase: check
 # check: hir
 # expect: fail
@@ -11,8 +11,7 @@ int identity(int value) {
 }
 
 int main() {
-    int x = comptime identity(1);
-    return x;
+    return comptime identity(42);
 }
 
 === diagnostics ===

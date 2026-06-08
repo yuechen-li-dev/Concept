@@ -1,0 +1,17 @@
+# name: compile-time function args run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+comptime int add(int a, int b) {
+    return a + b;
+}
+
+int main() {
+    return comptime add(20, 22);
+}
+
+=== run ===
+exit_code: 42

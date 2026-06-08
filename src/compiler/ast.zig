@@ -907,6 +907,7 @@ pub const FunctionDecl = struct {
     attributes: []Attribute = &.{},
     is_export: bool,
     is_unsafe: bool = false,
+    is_compile_time: bool = false,
     signature: SignatureDecl,
     body: ?FunctionBody,
     span: SourceSpan,
@@ -946,7 +947,15 @@ pub const Item = union(enum) {
         switch (self) {
             .function_decl => |function_decl| {
                 try writeAttributesDebug(function_decl.attributes, writer);
-                if (function_decl.is_export and function_decl.is_unsafe) {
+                if (function_decl.is_compile_time and function_decl.is_export and function_decl.is_unsafe) {
+                    try writer.writeAll("  CompileTime Export Unsafe Function ");
+                } else if (function_decl.is_compile_time and function_decl.is_export) {
+                    try writer.writeAll("  CompileTime Export Function ");
+                } else if (function_decl.is_compile_time and function_decl.is_unsafe) {
+                    try writer.writeAll("  CompileTime Unsafe Function ");
+                } else if (function_decl.is_compile_time) {
+                    try writer.writeAll("  CompileTime Function ");
+                } else if (function_decl.is_export and function_decl.is_unsafe) {
                     try writer.writeAll("  Export Unsafe Function ");
                 } else if (function_decl.is_export) {
                     try writer.writeAll("  Export Function ");

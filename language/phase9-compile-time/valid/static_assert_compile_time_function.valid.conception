@@ -1,0 +1,17 @@
+# name: static assert compile-time function
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+comptime int add(int a, int b) {
+    return a + b;
+}
+
+static_assert(add(1, 2) == 3);
+
+int main() {
+    return 0;
+}

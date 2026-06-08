@@ -1,0 +1,21 @@
+# name: compile-time function unsupported body if
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+comptime int choose(bool ok) {
+    if (ok) {
+        return 42;
+    }
+    return 1;
+}
+
+int main() {
+    return comptime choose(true);
+}
+
+=== diagnostics ===
+CON0128

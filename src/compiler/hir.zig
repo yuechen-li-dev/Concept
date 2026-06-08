@@ -133,6 +133,7 @@ pub const HirFunction = struct {
     span: SourceSpan,
     return_type: types.TypeId,
     is_unsafe: bool = false,
+    is_compile_time: bool = false,
     params: []ParamId,
     locals: []LocalId,
     body: ?StmtId = null,
@@ -602,6 +603,7 @@ pub const HirStore = struct {
             .span = span,
             .return_type = return_type,
             .is_unsafe = is_unsafe,
+            .is_compile_time = false,
             .params = &.{},
             .locals = &.{},
             .body = null,
@@ -610,6 +612,10 @@ pub const HirStore = struct {
             .is_referenced_concept_witness = false,
         });
         return id;
+    }
+
+    pub fn markFunctionCompileTime(self: *HirStore, function_id: FunctionId) void {
+        self.getFunctionMut(function_id).is_compile_time = true;
     }
 
     pub fn addStruct(self: *HirStore, name: SymbolId) !StructId {
@@ -930,7 +936,7 @@ pub const HirStore = struct {
             switch (item) {
                 .function => |id| {
                     const function = self.getFunction(id);
-                    try writer.print("  {s}Function {s} -> {f}\n", .{ if (function.is_unsafe) "Unsafe " else "", interner.text(function.name), function.return_type });
+                    try writer.print("  {s}{s}Function {s} -> {f}\n", .{ if (function.is_compile_time) "CompileTime " else "", if (function.is_unsafe) "Unsafe " else "", interner.text(function.name), function.return_type });
                     if (function.params.len != 0) {
                         try writer.writeAll("    Params\n");
                         for (function.params) |param_id| {

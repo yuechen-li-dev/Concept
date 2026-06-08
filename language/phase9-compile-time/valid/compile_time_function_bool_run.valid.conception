@@ -1,0 +1,21 @@
+# name: compile-time function bool run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+comptime bool lessThan(int a, int b) {
+    return a < b;
+}
+
+int main() {
+    bool ok = comptime lessThan(1, 2);
+    if (ok) {
+        return 42;
+    }
+    return 1;
+}
+
+=== run ===
+exit_code: 42

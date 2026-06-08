@@ -116,6 +116,11 @@ pub const DiagnosticCode = enum {
     CompileTimeEvaluationFailed,
     CompileTimeDivisionByZero,
     CompileTimeOverflow,
+    CompileTimeFunctionRequired,
+    CompileTimeFunctionUnsupportedBody,
+    CompileTimeFunctionUnsupportedSignature,
+    CompileTimeRecursionLimit,
+    CompileTimeArgumentTypeMismatch,
     StaticAssertFailed,
     StaticAssertRequiresBool,
 
@@ -217,6 +222,11 @@ pub const DiagnosticCode = enum {
             .CompileTimeOverflow => "CON0124",
             .StaticAssertFailed => "CON0125",
             .StaticAssertRequiresBool => "CON0126",
+            .CompileTimeFunctionRequired => "CON0127",
+            .CompileTimeFunctionUnsupportedBody => "CON0128",
+            .CompileTimeFunctionUnsupportedSignature => "CON0129",
+            .CompileTimeRecursionLimit => "CON0130",
+            .CompileTimeArgumentTypeMismatch => "CON0131",
         };
     }
 };
@@ -631,6 +641,11 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0124", DiagnosticCode.CompileTimeOverflow.format());
     try std.testing.expectEqualStrings("CON0125", DiagnosticCode.StaticAssertFailed.format());
     try std.testing.expectEqualStrings("CON0126", DiagnosticCode.StaticAssertRequiresBool.format());
+    try std.testing.expectEqualStrings("CON0127", DiagnosticCode.CompileTimeFunctionRequired.format());
+    try std.testing.expectEqualStrings("CON0128", DiagnosticCode.CompileTimeFunctionUnsupportedBody.format());
+    try std.testing.expectEqualStrings("CON0129", DiagnosticCode.CompileTimeFunctionUnsupportedSignature.format());
+    try std.testing.expectEqualStrings("CON0130", DiagnosticCode.CompileTimeRecursionLimit.format());
+    try std.testing.expectEqualStrings("CON0131", DiagnosticCode.CompileTimeArgumentTypeMismatch.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {

@@ -44,6 +44,7 @@ const ModuleLowerer = struct {
         for (self.semantic_module.hir.functions.items, 0..) |function, index| {
             if (function.body == null) continue;
             const hir_function_id = hir.FunctionId{ .index = @intCast(index) };
+            if (function.is_compile_time) continue;
             if (self.semantic_module.hir.isGenericFunction(hir_function_id)) continue;
             if (self.semantic_module.hir.isConceptWitnessFunction(hir_function_id) and !self.semantic_module.hir.isReferencedConceptWitnessFunction(hir_function_id)) continue;
             try self.lowerFunction(hir_function_id, function);
@@ -1414,6 +1415,24 @@ test "MIR lowering skips function declarations without bodies" {
 
     try std.testing.expectEqual(@as(usize, 1), mir_module.store.functions.items.len);
     try std.testing.expectEqualStrings("main", module.interner.text(mir_module.store.functions.items[0].name));
+}
+
+test "MIR lowering skips compile-time-only functions" {
+    var module = try newModule();
+    defer module.deinit();
+    const answer = try addFunction(&module, "answer", module.types.intType(), true);
+    module.hir.markFunctionCompileTime(answer);
+    try setBody(&module, answer, &.{try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "42") }, hir.synthetic_span)});
+    const main = try addFunction(&module, "main", module.types.intType(), true);
+    try setBody(&module, main, &.{try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "0") }, hir.synthetic_span)});
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), mir_module.store.functions.items.len);
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "answer") == null);
 }
 
 test "MIR lowering lowers compile-time values as ordinary literals" {
