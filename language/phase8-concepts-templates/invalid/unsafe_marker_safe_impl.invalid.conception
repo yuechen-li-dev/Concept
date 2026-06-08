@@ -1,0 +1,20 @@
+# name: unsafe marker safe impl
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+unsafe marker concept ThreadSafe<T>;
+
+struct Queue { int value; };
+
+impl ThreadSafe<Queue>;
+
+int main() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0107

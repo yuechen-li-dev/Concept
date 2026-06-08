@@ -380,6 +380,9 @@ const Collector = struct {
         @memcpy(owned_type_params, hir_params.items);
         hir_params.clearRetainingCapacity();
         self.module.hir.setConceptTypeParams(concept_id, owned_type_params);
+        if (concept_decl.is_marker) {
+            self.module.hir.setConceptKnownMarkerKind(concept_id, hir.MarkerKind.fromDeclaredName(concept_decl.name.text, owned_type_params.len));
+        }
 
         var requirement_keys = std.AutoHashMap(RequirementKey, source.SourceSpan).init(self.allocator);
         defer requirement_keys.deinit();
@@ -1940,6 +1943,34 @@ test "semantic collection lowers concept requirements into HIR debug" {
         \\      equals -> TypeId(2)
         \\        left: TypeId(3)
         \\        right: TypeId(3)
+        \\
+    , snapshot);
+}
+
+test "semantic collection marks compiler-known marker concepts in HIR debug" {
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    var t_parts = [_]ast.GenericParam{nameSegment("T", 0)};
+    var module = try collectItems(&.{.{ .concept_decl = .{
+        .name = nameSegment("Copy", 0),
+        .generic_params = t_parts[0..],
+        .signatures = &.{},
+        .is_marker = true,
+        .span = .{ .start = 0, .length = 1 },
+    } }}, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
+    try std.testing.expectEqual(hir.MarkerKind.copy, module.hir.getConcept(.{ .index = 0 }).known_marker_kind);
+
+    const snapshot = try module.hir.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expectEqualStrings(
+        \\HirModule
+        \\  Marker Concept Copy known_marker=Copy
+        \\    TypeParams
+        \\      #0 T: TypeId(3)
         \\
     , snapshot);
 }

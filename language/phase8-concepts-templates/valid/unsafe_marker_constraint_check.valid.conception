@@ -1,0 +1,27 @@
+# name: unsafe marker constraint check
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+unsafe marker concept ThreadSafe<T>;
+
+struct Queue {
+    int value;
+};
+
+unsafe impl ThreadSafe<Queue>;
+
+template<T: ThreadSafe<T>>
+T audit_pass(T value) {
+    return value;
+}
+
+int main() {
+    Queue q = audit_pass(Queue { value: 9 });
+    return q.value;
+}
+
+=== run ===
+exit_code: 9
