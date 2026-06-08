@@ -61,6 +61,10 @@ Invalid fixtures cover malformed template syntax, type parameters out of scope, 
 
 Phase 8 MIR/backend coverage is intentionally concrete-only: the pipeline run fixture and targeted compiler tests assert that template declarations, concepts, marker concepts, and type-parameter types do not leak into executable MIR or backend C, while deterministic instantiated function names and referenced static witness calls are emitted.
 
+## Phase 9 compile-time execution fixtures
+
+Phase 9 fixtures are planned under `language/phase9-compile-time-execution/` once implementation begins. The first fixture slice should cover valid `comptime` integer arithmetic, valid `comptime` boolean expressions, a runtime fixture returning `comptime 40 + 2`, invalid unsupported expressions, invalid type mismatches, deterministic evaluator snapshots, `static_assert` pass/fail once implemented, future function-call evaluator fixtures, and future capability-denied fixtures. Early run fixtures should prove that evaluated values lower into ordinary MIR/backend constants rather than leaking unresolved compile-time expressions into executable output.
+
 ## `.conception` format
 
 A `.conception` file is a small sectioned text format. Headers appear before any section and use `# key: value` metadata lines.
