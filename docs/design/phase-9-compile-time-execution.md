@@ -110,6 +110,20 @@ Initial v0 scope:
 
 This scope is intentionally smaller than PoC3's eventual `comptime` direction. It proves the evaluator boundary before adding more forms.
 
+## P9-M1 internal evaluator note
+
+P9-M1 adds the first internal compile-time execution implementation without exposing source-level `comptime expr` yet. The source keyword remains reserved for the future user-facing surface, while compiler implementation names use full English `CompileTime*` forms.
+
+Implemented P9-M1 scope:
+
+- `CompileTimeValue` currently represents only `int` and `bool`;
+- `CompileTimeEvaluator` evaluates a small typed HIR expression subset: int literals, bool literals, grouping, integer negation, boolean not, checked integer `+`, `-`, `*`, safe `/`, integer comparisons, int/bool equality, and boolean `&&`/`||`;
+- unsupported expression forms, including calls, locals, parameters, structs, field access, pointers, `try`, `decide`, enum construction, and concept requirement calls, are rejected with internal compile-time errors;
+- division by zero and checked integer overflow are compile-time evaluation errors;
+- no compile-time function calls, static assertions, host capabilities, reflection, generated declarations, local-variable evaluation, or constant propagation are implemented.
+
+The evaluator is hermetic and deterministic by construction: it has no access to filesystem, environment, network, time, random, process spawning, arbitrary extern calls, or other host effects. Source-level `comptime expr` remains future P9 work so MIR/backend continue to see ordinary checked runtime expressions in P9-M1.
+
 ## Compile-time expression syntax
 
 Preferred source syntax:
