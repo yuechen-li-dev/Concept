@@ -104,6 +104,13 @@ pub const DiagnosticCode = enum {
     MarkerConceptImplCannotHaveFunctions,
     UnsafeImplRequired,
     UnsafeImplNotAllowed,
+    UnsatisfiedConceptConstraint,
+    UnknownConceptConstraint,
+    ConceptConstraintArityMismatch,
+    UnsupportedConceptConstraint,
+    AmbiguousConceptRequirementCall,
+    UnknownConceptRequirementCall,
+    InvalidConceptRequirementCall,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -189,6 +196,13 @@ pub const DiagnosticCode = enum {
             .MarkerConceptImplCannotHaveFunctions => "CON0106",
             .UnsafeImplRequired => "CON0107",
             .UnsafeImplNotAllowed => "CON0108",
+            .UnsatisfiedConceptConstraint => "CON0109",
+            .UnknownConceptConstraint => "CON0110",
+            .ConceptConstraintArityMismatch => "CON0111",
+            .UnsupportedConceptConstraint => "CON0112",
+            .AmbiguousConceptRequirementCall => "CON0113",
+            .UnknownConceptRequirementCall => "CON0114",
+            .InvalidConceptRequirementCall => "CON0115",
         };
     }
 };
@@ -398,6 +412,40 @@ pub fn unsafeImplRequired(span: SourceSpan) Diagnostic {
 
 pub fn unsafeImplNotAllowed(span: SourceSpan) Diagnostic {
     return Diagnostic.init(.UnsafeImplNotAllowed, .@"error", "unsafe impl is not allowed for safe concepts", span);
+}
+
+pub fn unsatisfiedConceptConstraint(allocator: std.mem.Allocator, span: SourceSpan, concept_name: []const u8, type_name: []const u8) !Diagnostic {
+    return .{
+        .code = .UnsatisfiedConceptConstraint,
+        .severity = .@"error",
+        .message = try std.fmt.allocPrint(allocator, "type '{s}' does not satisfy concept constraint '{s}'", .{ type_name, concept_name }),
+        .primary_span = span,
+        .owns_message = true,
+    };
+}
+
+pub fn unknownConceptConstraint(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.UnknownConceptConstraint, .@"error", "unknown concept in template constraint", span);
+}
+
+pub fn conceptConstraintArityMismatch(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.ConceptConstraintArityMismatch, .@"error", "concept constraint type argument count does not match concept arity", span);
+}
+
+pub fn unsupportedConceptConstraint(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.UnsupportedConceptConstraint, .@"error", "unsupported concept constraint; expected Concept<T>", span);
+}
+
+pub fn ambiguousConceptRequirementCall(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.AmbiguousConceptRequirementCall, .@"error", "ambiguous concept requirement call", span);
+}
+
+pub fn unknownConceptRequirementCall(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.UnknownConceptRequirementCall, .@"error", "unknown concept requirement call", span);
+}
+
+pub fn invalidConceptRequirementCall(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.InvalidConceptRequirementCall, .@"error", "invalid concept requirement call", span);
 }
 
 pub fn duplicateTopLevelName(span: SourceSpan) Diagnostic {

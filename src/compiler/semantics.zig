@@ -112,12 +112,18 @@ const Collector = struct {
 
         for (unit.items) |item| {
             switch (item) {
+                .concept_decl => |concept_decl| try self.resolveConcept(concept_decl),
+                else => {},
+            }
+        }
+
+        for (unit.items) |item| {
+            switch (item) {
                 .function_decl => |function_decl| try self.resolveFunction(function_decl),
                 .template_decl => |template_decl| try self.resolveGenericFunction(template_decl),
                 .struct_decl => |struct_decl| try self.resolveStruct(struct_decl),
                 .enum_decl => |enum_decl| try self.resolveEnum(enum_decl),
-                .concept_decl => |concept_decl| try self.resolveConcept(concept_decl),
-                .interface_decl => {},
+                .concept_decl, .interface_decl => {},
                 .impl_decl => |impl_decl| try self.resolveImpl(impl_decl),
             }
         }
@@ -227,9 +233,7 @@ const Collector = struct {
             const symbol = try self.module.interner.intern(param.name.text);
             const type_id = try self.module.types.addTypeParam(owner, @intCast(index), symbol);
             try type_scope.put(symbol, type_id);
-            const constraint = if (param.constraint) |constraint_type| blk: {
-                break :blk hir.HirTypeConstraint{ .text = try self.renderTypeName(constraint_type), .span = constraint_type.span };
-            } else null;
+            const constraint = if (param.constraint) |constraint_type| try self.resolveTypeConstraint(constraint_type, &type_scope) else null;
             try hir_params.append(self.allocator, .{ .name = symbol, .span = param.span, .type_id = type_id, .constraint = constraint });
         }
 
@@ -258,6 +262,45 @@ const Collector = struct {
                 _ = try self.module.hir.addParam(function_id, param_symbol, type_id, param.span);
             }
         }
+    }
+
+    fn resolveTypeConstraint(self: *Collector, type_name: ast.TypeName, type_scope: *TypeParamScope) !?hir.HirTypeConstraint {
+        const text = try self.renderTypeName(type_name);
+        var text_owned = true;
+        defer if (text_owned) self.allocator.free(text);
+        if (type_name.is_mut or type_name.is_reference or type_name.is_pointer or type_name.name.parts.len != 1) {
+            try self.diagnostics.append(diagnostics.unsupportedConceptConstraint(type_name.span));
+            return null;
+        }
+        const concept_symbol = try self.module.interner.intern(type_name.name.parts[0].text);
+        const concept_id = switch (self.top_level_decls.get(concept_symbol) orelse {
+            try self.diagnostics.append(diagnostics.unknownConceptConstraint(type_name.name.parts[0].span));
+            return null;
+        }) {
+            .concept => |id| id,
+            else => {
+                try self.diagnostics.append(diagnostics.unknownConceptConstraint(type_name.name.parts[0].span));
+                return null;
+            },
+        };
+        const concept = self.module.hir.getConcept(concept_id);
+        if (type_name.generic_args.len != concept.type_params.len) {
+            try self.diagnostics.append(diagnostics.conceptConstraintArityMismatch(type_name.span));
+            return null;
+        }
+        if (type_name.generic_args.len != 1) {
+            try self.diagnostics.append(diagnostics.unsupportedConceptConstraint(type_name.span));
+            return null;
+        }
+        var type_args = try self.allocator.alloc(types.TypeId, type_name.generic_args.len);
+        var type_args_owned = true;
+        defer if (type_args_owned) self.allocator.free(type_args);
+        for (type_name.generic_args, 0..) |arg, index| {
+            type_args[index] = (try self.resolveTypeNameScoped(arg, type_scope)) orelse return null;
+        }
+        text_owned = false;
+        type_args_owned = false;
+        return hir.HirTypeConstraint{ .text = text, .span = type_name.span, .concept_id = concept_id, .type_args = type_args };
     }
 
     fn resolveStruct(self: *Collector, struct_decl: ast.StructDecl) !void {
@@ -947,17 +990,6 @@ const BodyLowerer = struct {
             },
             .call => |call| {
                 const symbol = try self.collector.module.interner.intern(call.callee.text);
-                const function_id = switch (self.collector.top_level_decls.get(symbol) orelse {
-                    try self.collector.diagnostics.append(diagnostics.unknownFunction(call.callee.span));
-                    return null;
-                }) {
-                    .function => |id| id,
-                    .generic_function => |id| self.collector.module.hir.getGenericFunction(id).function,
-                    else => {
-                        try self.collector.diagnostics.append(diagnostics.unknownFunction(call.callee.span));
-                        return null;
-                    },
-                };
                 var args = std.ArrayList(hir.ExprId).empty;
                 defer args.deinit(self.collector.allocator);
                 for (call.args) |arg| {
@@ -965,8 +997,34 @@ const BodyLowerer = struct {
                     try args.append(self.collector.allocator, arg_id);
                 }
                 const owned = try self.collector.allocator.alloc(hir.ExprId, args.items.len);
+                var owned_args_transferred = false;
+                defer if (!owned_args_transferred and owned.len > 0) self.collector.allocator.free(owned);
                 @memcpy(owned, args.items);
-                return try self.collector.module.hir.addExpr(.{ .call = .{ .function = function_id, .args = owned } }, call.span);
+
+                if (self.collector.top_level_decls.get(symbol)) |decl| {
+                    const function_id = switch (decl) {
+                        .function => |id| id,
+                        .generic_function => |id| self.collector.module.hir.getGenericFunction(id).function,
+                        else => {
+                            try self.collector.diagnostics.append(diagnostics.unknownFunction(call.callee.span));
+                            return null;
+                        },
+                    };
+                    const expr_id = try self.collector.module.hir.addExpr(.{ .call = .{ .function = function_id, .args = owned } }, call.span);
+                    owned_args_transferred = true;
+                    return expr_id;
+                }
+
+                const diagnostic_count_before_requirement_lookup = self.collector.diagnostics.count();
+                if (try self.resolveConceptRequirementCall(symbol, @intCast(call.args.len), call.callee.span)) |requirement_call| {
+                    const expr_id = try self.collector.module.hir.addExpr(.{ .concept_requirement_call = .{ .concept_id = requirement_call.concept_id, .requirement_index = requirement_call.requirement_index, .args = owned } }, call.span);
+                    owned_args_transferred = true;
+                    return expr_id;
+                }
+                if (self.collector.diagnostics.count() != diagnostic_count_before_requirement_lookup) return null;
+
+                try self.collector.diagnostics.append(diagnostics.unknownFunction(call.callee.span));
+                return null;
             },
             .struct_literal => |literal| {
                 const struct_symbol = try self.collector.module.interner.intern(literal.type_name.text);
@@ -1182,6 +1240,38 @@ const BodyLowerer = struct {
             try bindings.append(self.collector.allocator, .{ .name = symbol, .local = local_id, .payload_field = payload_id, .type_id = payload.type_id, .span = binding.name.span });
         }
         return .{ .enum_variant = .{ .enum_id = enum_id, .variant_id = variant_id, .bindings = try bindings.toOwnedSlice(self.collector.allocator) } };
+    }
+
+    const RequirementCallResolution = struct {
+        concept_id: hir.ConceptId,
+        requirement_index: u32,
+    };
+
+    fn resolveConceptRequirementCall(self: *BodyLowerer, name: interner.SymbolId, arity: u32, span: source.SourceSpan) !?RequirementCallResolution {
+        const generic_id = self.collector.module.hir.genericFunctionFor(self.function_id) orelse return null;
+        const generic = self.collector.module.hir.getGenericFunction(generic_id);
+        var found: ?RequirementCallResolution = null;
+        var found_name = false;
+        for (generic.type_params) |type_param| {
+            const constraint = type_param.constraint orelse continue;
+            const concept_id = constraint.concept_id orelse continue;
+            const concept = self.collector.module.hir.getConcept(concept_id);
+            for (concept.requirements, 0..) |requirement, index| {
+                if (requirement.name.index != name.index) continue;
+                found_name = true;
+                if (requirement.params.len == arity) {
+                    if (found != null) {
+                        try self.collector.diagnostics.append(diagnostics.ambiguousConceptRequirementCall(span));
+                        return null;
+                    }
+                    found = .{ .concept_id = concept_id, .requirement_index = @intCast(index) };
+                }
+            }
+        }
+        if (found == null and found_name) {
+            try self.collector.diagnostics.append(diagnostics.invalidConceptRequirementCall(span));
+        }
+        return found;
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
@@ -1458,8 +1548,16 @@ test "semantic collection lowers multiple pointer and constrained generic parame
     var key_expr = identExpr("key");
     var deref_expr = ast.Expr{ .deref = .{ .operand = &key_expr, .span = .{ .start = 0, .length = 1 } } };
     var statements = [_]ast.Stmt{.{ .return_stmt = .{ .value = &deref_expr, .span = .{ .start = 0, .length = 1 } } }};
+    var concept_params = [_]ast.NameSegment{nameSegment("T", 0)};
+    const equatable_concept = ast.Item{ .concept_decl = .{
+        .name = nameSegment("Equatable", 0),
+        .generic_params = concept_params[0..],
+        .signatures = &.{},
+        .is_marker = true,
+        .span = .{ .start = 0, .length = 9 },
+    } };
 
-    var module = try collectItems(&.{genericFunctionItem(template_params[0..], "first", k_type, params[0..], statements[0..])}, &diagnostics_bag);
+    var module = try collectItems(&.{ equatable_concept, genericFunctionItem(template_params[0..], "first", k_type, params[0..], statements[0..]) }, &diagnostics_bag);
     defer module.deinit();
 
     try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());

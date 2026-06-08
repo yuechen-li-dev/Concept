@@ -1,4 +1,4 @@
-# name: generic constrained unknown concept
+# name: constrained arity mismatch
 # phase: check
 # check: hir
 # expect: fail
@@ -6,7 +6,9 @@
 === source ===
 module Main;
 
-template<T: Equatable<T>>
+marker concept Copy<T>;
+
+template<T: Copy<T, T>>
 T id(T value) {
     return value;
 }
@@ -16,4 +18,4 @@ int main() {
 }
 
 === diagnostics ===
-CON0110
+CON0111

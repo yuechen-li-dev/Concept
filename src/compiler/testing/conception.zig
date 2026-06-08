@@ -878,6 +878,46 @@ test "language check fixture: phase8 generic uninferred type param" {
     try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/generic_uninferred_type_param.invalid.conception");
 }
 
+test "language run fixture: phase8 constrained equatable vec2" {
+    try expectRunFixture("../../../language/phase8-concepts-templates/valid/constrained_equatable_vec2_run.valid.conception");
+}
+
+test "language run fixture: phase8 constrained equatable vec2 false" {
+    try expectRunFixture("../../../language/phase8-concepts-templates/valid/constrained_equatable_vec2_false_run.valid.conception");
+}
+
+test "language run fixture: phase8 constrained marker copy" {
+    try expectRunFixture("../../../language/phase8-concepts-templates/valid/constrained_marker_copy_run.valid.conception");
+}
+
+test "language check fixture: phase8 constrained missing impl" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/constrained_missing_impl.invalid.conception");
+}
+
+test "language check fixture: phase8 constrained unknown concept" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/constrained_unknown_concept.invalid.conception");
+}
+
+test "language check fixture: phase8 constrained arity mismatch" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/constrained_arity_mismatch.invalid.conception");
+}
+
+test "language check fixture: phase8 constrained requirement wrong arity" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/constrained_requirement_wrong_arity.invalid.conception");
+}
+
+test "language check fixture: phase8 constrained requirement wrong arg type" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/constrained_requirement_wrong_arg_type.invalid.conception");
+}
+
+test "language check fixture: phase8 constrained requirement ambiguous" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/constrained_requirement_ambiguous.invalid.conception");
+}
+
+test "language check fixture: phase8 constrained marker missing impl" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/constrained_marker_missing_impl.invalid.conception");
+}
+
 test "language check fixture: phase8 generic constrained unsupported" {
     try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/generic_constrained_call_unsupported.invalid.conception");
 }

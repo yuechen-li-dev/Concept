@@ -1,4 +1,4 @@
-# name: generic constrained unknown concept
+# name: constrained unknown concept
 # phase: check
 # check: hir
 # expect: fail
@@ -6,7 +6,7 @@
 === source ===
 module Main;
 
-template<T: Equatable<T>>
+template<T: Missing<T>>
 T id(T value) {
     return value;
 }
