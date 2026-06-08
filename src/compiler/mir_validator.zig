@@ -671,6 +671,43 @@ test "MIR validator rejects manually malformed MIR" {
     try ctx.validateFail(&return_mismatch.module, .InvalidMirType);
 }
 
+
+test "MIR validator rejects type params in executable MIR" {
+    var ctx = try TestContext.init();
+    defer ctx.deinit();
+
+    const type_param = try ctx.module.types.addTypeParam(.{ .kind = .generic_function, .index = 0 }, 0, try ctx.module.interner.intern("T"));
+    const type_param_ptr = try ctx.module.types.addPointerType(type_param);
+
+    var return_type_param = try validMirFunction(&ctx, type_param);
+    defer return_type_param.module.deinit();
+    try return_type_param.module.store.setTerminator(return_type_param.block, .{ .span = synthetic_span, .kind = mir.MirTerminatorKind.returnValue(null) });
+    try ctx.validateFail(&return_type_param.module, .InvalidMirType);
+
+    var local_type_param = try validMirFunction(&ctx, ctx.module.types.intType());
+    defer local_type_param.module.deinit();
+    _ = try local_type_param.module.store.addLocal(local_type_param.function, try ctx.module.interner.intern("value"), .user, type_param, synthetic_span);
+    try local_type_param.module.store.setTerminator(local_type_param.block, .{ .span = synthetic_span, .kind = mir.MirTerminatorKind.returnValue(try mir.MirOperand.intLiteral(std.testing.allocator, "0")) });
+    try ctx.validateFail(&local_type_param.module, .InvalidMirType);
+
+    var pointer_to_type_param = try validMirFunction(&ctx, ctx.module.types.intType());
+    defer pointer_to_type_param.module.deinit();
+    _ = try pointer_to_type_param.module.store.addLocal(pointer_to_type_param.function, try ctx.module.interner.intern("ptr"), .user, type_param_ptr, synthetic_span);
+    try pointer_to_type_param.module.store.setTerminator(pointer_to_type_param.block, .{ .span = synthetic_span, .kind = mir.MirTerminatorKind.returnValue(try mir.MirOperand.intLiteral(std.testing.allocator, "0")) });
+    try ctx.validateFail(&pointer_to_type_param.module, .InvalidMirType);
+
+    const callee = try ctx.function("take_type_param", ctx.module.types.intType(), true);
+    _ = try ctx.param(callee, "value", type_param);
+    var call_type_param = try validMirFunction(&ctx, ctx.module.types.intType());
+    defer call_type_param.module.deinit();
+    const temp = try call_type_param.module.store.addLocal(call_type_param.function, null, .temp, ctx.module.types.intType(), synthetic_span);
+    const args = try std.testing.allocator.alloc(mir.MirOperand, 1);
+    args[0] = try mir.MirOperand.intLiteral(std.testing.allocator, "1");
+    try call_type_param.module.store.appendStatement(call_type_param.block, .{ .span = synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = temp }, .{ .call = .{ .function = callee, .args = args } }) });
+    try call_type_param.module.store.setTerminator(call_type_param.block, .{ .span = synthetic_span, .kind = mir.MirTerminatorKind.returnValue(mir.MirOperand.copyPlace(.{ .local = temp })) });
+    try ctx.validateFail(&call_type_param.module, .InvalidMirType);
+}
+
 test "MIR validator rejects switch and call mismatches" {
     var ctx = try TestContext.init();
     defer ctx.deinit();

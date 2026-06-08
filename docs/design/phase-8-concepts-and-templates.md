@@ -576,33 +576,46 @@ P8-M8  Runtime/backend fixture stabilization
        - C backend instantiated-name snapshots
        - valid/invalid fixture corpus
 
+       Current P8-M8 stabilization note:
+       - Unconstrained generic runtime fixtures pass for scalar and struct instantiations.
+       - Constrained generic runtime fixtures pass for concrete `Equatable<Vec2>` satisfaction.
+       - Marker constraints pass for concrete `Copy<Vec2>` and unsafe marker audit cases.
+       - Concept requirement calls in instantiated generic bodies are rewritten to concrete witness functions.
+       - Witness functions are emitted only when referenced by an instantiated requirement call; unused impl witnesses remain non-executable and non-emitted.
+       - MIR validation and the C backend receive concrete functions only: generic template bodies are skipped, instantiated functions use concrete parameter/return/local types, and `type_param` TypeIds are rejected from executable MIR.
+       - Concepts and marker concepts have no runtime object or backend representation.
+       - No new Phase 8 language semantics were added; this milestone is fixture, MIR, backend, and documentation stabilization only.
+
 P8-M9  Phase 8 closeout
 ```
 
 Milestones can combine if implementation naturally converges that way, but they should not blur the target: generic functions first, concrete MIR/backend output, concepts before `comptime`, and no C++ template pathology.
 
-## Non-goals
+## Non-goals and known limitations
 
 Phase 8 does not implement:
 
 - `comptime` execution;
 - compile-time reflection;
-- generic structs or enums unless explicitly added later;
+- generic structs or enums;
+- generic methods;
+- associated types;
+- `where` clauses;
+- operator requirements or operator overloading;
 - specialization;
 - partial specialization;
 - default type parameters;
 - variadic templates;
 - const generics;
-- associated types;
 - higher-kinded types;
 - interfaces or `dyn` dispatch;
 - overload-set complexity;
 - C++ SFINAE;
 - `enable_if`;
 - template metaprogramming as control flow;
-- full module/bridge coherence;
-- ownership/drop semantics;
-- operator overloading unless specifically scoped.
+- bridge modules or full orphan/coherence checking across modules;
+- ownership/drop semantics or ownership/drop integration;
+- runtime concept objects.
 
 ## Close criteria
 

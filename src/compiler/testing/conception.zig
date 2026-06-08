@@ -922,6 +922,10 @@ test "language run fixture: phase8 unsafe marker constraint check" {
     try expectRunFixture("../../../language/phase8-concepts-templates/valid/unsafe_marker_constraint_check.valid.conception");
 }
 
+test "language run fixture: phase8 concepts templates pipeline closeout" {
+    try expectRunFixture("../../../language/phase8-concepts-templates/valid/phase8_concepts_templates_pipeline_run.valid.conception");
+}
+
 test "language check fixture: phase8 constrained missing impl" {
     try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/constrained_missing_impl.invalid.conception");
 }
@@ -960,6 +964,44 @@ test "language check fixture: phase8 unsafe marker constraint missing impl" {
 
 test "language check fixture: phase8 generic constrained unsupported" {
     try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/generic_constrained_call_unsupported.invalid.conception");
+}
+
+
+test "language MIR fixture: phase8 concepts templates pipeline uses concrete MIR" {
+    const path = "../../../language/phase8-concepts-templates/valid/phase8_concepts_templates_pipeline_run.valid.conception";
+    const text = @embedFile(path);
+    const fixture = try parse(std.testing.allocator, text, .{ .path = path });
+    defer fixture.deinit(std.testing.allocator);
+
+    var parse_diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
+    defer parse_diagnostics.deinit();
+    var semantic_diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
+    defer semantic_diagnostics.deinit();
+
+    const source_file = try source_model.SourceFile.init(std.testing.allocator, path, fixture.source().?);
+    defer source_file.deinit(std.testing.allocator);
+
+    const unit = try parser_model.parseSource(std.testing.allocator, source_file, &parse_diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), parse_diagnostics.count());
+
+    var module = try semantics_model.collectTopLevelDeclarations(std.testing.allocator, unit, &semantic_diagnostics);
+    defer module.deinit();
+    try hir_checker_model.checkExecutable(std.testing.allocator, &module, &semantic_diagnostics);
+    try std.testing.expectEqual(@as(usize, 0), semantic_diagnostics.count());
+
+    var mir_module = try mir_lowering_model.lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+    try mir_validator_model.validateModule(std.testing.allocator, &module, &mir_module, &semantic_diagnostics);
+    try std.testing.expectEqual(@as(usize, 0), semantic_diagnostics.count());
+
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Function identity__int -> TypeId(1)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Function identity__struct_Vec2 -> TypeId(") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Function areEqual__struct_Vec2 -> TypeId(2)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Call equals(") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "type_param") == null);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

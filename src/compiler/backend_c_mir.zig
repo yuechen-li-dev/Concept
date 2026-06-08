@@ -1428,6 +1428,53 @@ test "MIR C backend Phase 7 closeout struct runtime snapshot" {
     try std.testing.expect(std.mem.indexOf(u8, c_source, "return cpt_f_sum(cpt_l_v_") != null);
 }
 
+
+test "MIR C backend stabilizes Phase 8 concrete generic pipeline" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\
+        \\concept Equatable<T> { bool equals(T left, T right); };
+        \\concept Hashable<T> { int hash(T value); };
+        \\marker concept Copy<T>;
+        \\
+        \\struct Vec2 { int x; int y; };
+        \\
+        \\impl Equatable<Vec2> { bool equals(Vec2 left, Vec2 right) { return left.x == right.x && left.y == right.y; } }
+        \\impl Hashable<Vec2> { int hash(Vec2 value) { return value.x; } }
+        \\impl Copy<Vec2>;
+        \\
+        \\template<T> T identity(T value) { return value; }
+        \\template<T: Copy<T>> T pass(T value) { return value; }
+        \\template<T: Equatable<T>> bool areEqual(T left, T right) { return equals(left, right); }
+        \\
+        \\int main() {
+        \\    int a = identity(3);
+        \\    int b = identity(4);
+        \\    Vec2 left = identity(Vec2 { x: a, y: 2, });
+        \\    Vec2 right = pass(Vec2 { x: b + -1, y: 2, });
+        \\    if (areEqual(left, right)) { return 8; }
+        \\    return 1;
+        \\}
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "int cpt_f_identity__int(int cpt_p_value_") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_struct_Vec2 cpt_f_identity__struct_Vec2(cpt_struct_Vec2 cpt_p_value_") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_struct_Vec2 cpt_f_pass__struct_Vec2(cpt_struct_Vec2 cpt_p_value_") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "int cpt_f_areEqual__struct_Vec2(cpt_struct_Vec2 cpt_p_left_") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "int cpt_f_equals(cpt_struct_Vec2 cpt_p_left_") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_f_equals(cpt_p_left_") != null);
+
+    try std.testing.expectEqual(@as(usize, 3), countOccurrences(c_source, "cpt_f_identity__int("));
+    try std.testing.expectEqual(@as(usize, 3), countOccurrences(c_source, "cpt_f_identity__struct_Vec2("));
+    try std.testing.expectEqual(@as(usize, 2), countOccurrences(c_source, "cpt_f_areEqual__struct_Vec2("));
+    try std.testing.expectEqual(@as(usize, 2), countOccurrences(c_source, "cpt_f_equals("));
+    try std.testing.expectEqual(@as(usize, 0), countOccurrences(c_source, "cpt_f_hash("));
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "concept") == null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "template") == null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "type_param") == null);
+}
+
 test "MIR C backend emits deterministic generic instantiation names" {
     const c_source = try emitForTest(
         \\module Main;
