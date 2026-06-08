@@ -80,6 +80,7 @@ const Collector = struct {
             id: hir.EnumId,
             type_id: types.TypeId,
         },
+        concept: hir.ConceptId,
     };
 
     fn init(allocator: std.mem.Allocator, module: *SemanticModule, diagnostic_bag: *DiagnosticBag) Collector {
@@ -102,7 +103,8 @@ const Collector = struct {
                 .template_decl => |template_decl| try self.declareGenericFunction(template_decl),
                 .struct_decl => |struct_decl| try self.declareStruct(struct_decl),
                 .enum_decl => |enum_decl| try self.declareEnum(enum_decl),
-                .concept_decl, .interface_decl, .impl_decl => {},
+                .concept_decl => |concept_decl| try self.declareConcept(concept_decl),
+                .interface_decl, .impl_decl => {},
             }
         }
 
@@ -114,7 +116,8 @@ const Collector = struct {
                 .template_decl => |template_decl| try self.resolveGenericFunction(template_decl),
                 .struct_decl => |struct_decl| try self.resolveStruct(struct_decl),
                 .enum_decl => |enum_decl| try self.resolveEnum(enum_decl),
-                .concept_decl, .interface_decl, .impl_decl => {},
+                .concept_decl => |concept_decl| try self.resolveConcept(concept_decl),
+                .interface_decl, .impl_decl => {},
             }
         }
 
@@ -163,6 +166,12 @@ const Collector = struct {
         const enum_id = try self.module.hir.addEnum(name, enum_decl.is_must_use);
         const type_id = try self.module.types.addEnumType(enum_id);
         try self.top_level_decls.put(name, .{ .enum_ = .{ .id = enum_id, .type_id = type_id } });
+    }
+
+    fn declareConcept(self: *Collector, concept_decl: ast.ConceptDecl) !void {
+        const name = try self.internFreshTopLevelName(concept_decl.name.text, concept_decl.name.span) orelse return;
+        const concept_id = try self.module.hir.addConcept(name, concept_decl.is_marker, concept_decl.is_unsafe, concept_decl.span);
+        try self.top_level_decls.put(name, .{ .concept = concept_id });
     }
 
     fn resolveFunction(self: *Collector, function_decl: ast.FunctionDecl) !void {
@@ -303,6 +312,75 @@ const Collector = struct {
         self.module.hir.setEnumResultShape(enum_id, try self.detectResultShape(enum_id));
     }
 
+    fn resolveConcept(self: *Collector, concept_decl: ast.ConceptDecl) !void {
+        const concept_symbol = try self.module.interner.intern(concept_decl.name.text);
+        const concept_id = switch (self.top_level_decls.get(concept_symbol).?) {
+            .concept => |id| id,
+            else => unreachable,
+        };
+        const owner = types.TypeParamOwner{ .kind = .concept, .index = concept_id.index };
+
+        var type_scope = TypeParamScope.init(self.allocator);
+        defer type_scope.deinit();
+        var hir_params = std.ArrayList(hir.HirTypeParam).empty;
+        defer hir_params.deinit(self.allocator);
+
+        for (concept_decl.generic_params, 0..) |param, index| {
+            const symbol = try self.module.interner.intern(param.text);
+            const type_id = try self.module.types.addTypeParam(owner, @intCast(index), symbol);
+            try type_scope.put(symbol, type_id);
+            try hir_params.append(self.allocator, .{ .name = symbol, .span = param.span, .type_id = type_id });
+        }
+        const owned_type_params = try self.allocator.alloc(hir.HirTypeParam, hir_params.items.len);
+        @memcpy(owned_type_params, hir_params.items);
+        hir_params.clearRetainingCapacity();
+        self.module.hir.setConceptTypeParams(concept_id, owned_type_params);
+
+        var requirement_keys = std.AutoHashMap(RequirementKey, source.SourceSpan).init(self.allocator);
+        defer requirement_keys.deinit();
+        var requirements = std.ArrayList(hir.HirConceptRequirement).empty;
+        defer requirements.deinit(self.allocator);
+        errdefer {
+            for (requirements.items) |requirement| if (requirement.params.len > 0) self.allocator.free(requirement.params);
+        }
+
+        for (concept_decl.signatures) |signature| {
+            const requirement_symbol = try self.module.interner.intern(signature.name.base.text);
+            const key = RequirementKey{ .name = requirement_symbol, .arity = @intCast(signature.params.len) };
+            if (requirement_keys.contains(key)) {
+                try self.diagnostics.append(diagnostics.duplicateConceptRequirement(signature.name.span));
+                continue;
+            }
+            try requirement_keys.put(key, signature.name.span);
+
+            const return_type = (try self.resolveTypeNameScoped(signature.return_type, &type_scope)) orelse continue;
+            var params = std.ArrayList(hir.HirConceptParam).empty;
+            errdefer params.deinit(self.allocator);
+            for (signature.params) |param| {
+                const param_symbol = try self.module.interner.intern(param.name.text);
+                if (try self.resolveTypeNameScoped(param.type_name, &type_scope)) |type_id| {
+                    try params.append(self.allocator, .{ .name = param_symbol, .span = param.span, .type_id = type_id });
+                }
+            }
+            try requirements.append(self.allocator, .{
+                .name = requirement_symbol,
+                .return_type = return_type,
+                .params = try params.toOwnedSlice(self.allocator),
+                .span = signature.span,
+            });
+        }
+
+        const owned_requirements = try self.allocator.alloc(hir.HirConceptRequirement, requirements.items.len);
+        @memcpy(owned_requirements, requirements.items);
+        requirements.clearRetainingCapacity();
+        self.module.hir.setConceptRequirements(concept_id, owned_requirements);
+    }
+
+    const RequirementKey = struct {
+        name: interner.SymbolId,
+        arity: u32,
+    };
+
     // ─────────────────────────────────────────────────────────────────────────────
     // Result-shape detection
     // ─────────────────────────────────────────────────────────────────────────────
@@ -385,7 +463,7 @@ const Collector = struct {
         return switch (decl) {
             .struct_ => |entry| entry.type_id,
             .enum_ => |entry| entry.type_id,
-            .function, .generic_function => blk: {
+            .function, .generic_function, .concept => blk: {
                 try self.diagnostics.append(diagnostics.unknownTypeName(part.span));
                 break :blk null;
             },
@@ -1530,7 +1608,7 @@ test "semantic collection rejects duplicate struct and enum" {
     try std.testing.expectEqual(DiagnosticCode.DuplicateTopLevelName, diagnostics_bag.diagnostics.items[0].code);
 }
 
-test "semantic collection ignores concept interface and impl items" {
+test "semantic collection stores concept and ignores interface and impl executable items" {
     var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
     defer diagnostics_bag.deinit();
 
@@ -1539,7 +1617,50 @@ test "semantic collection ignores concept interface and impl items" {
 
     try std.testing.expectEqual(@as(usize, 1), module.hir.items.items.len);
     try std.testing.expectEqual(@as(usize, 1), module.hir.structs.items.len);
+    try std.testing.expectEqual(@as(usize, 1), module.hir.concepts.items.len);
     try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
+}
+
+test "semantic collection lowers concept requirements into HIR debug" {
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    var t_parts = [_]ast.NameSegment{nameSegment("T", 0)};
+    const t_type = typeNameFromSegment(&t_parts);
+    var concept_params = [_]ast.GenericParam{nameSegment("T", 0)};
+    var requirement_params = [_]ast.ParamDecl{
+        .{ .type_name = t_type, .name = nameSegment("left", 0), .span = .{ .start = 0, .length = 1 } },
+        .{ .type_name = t_type, .name = nameSegment("right", 0), .span = .{ .start = 0, .length = 1 } },
+    };
+    var signatures = [_]ast.SignatureDecl{.{
+        .return_type = typeName("bool", 0),
+        .name = .{ .base = nameSegment("equals", 0), .span = .{ .start = 0, .length = 6 } },
+        .params = requirement_params[0..],
+        .span = .{ .start = 0, .length = 1 },
+    }};
+    var module = try collectItems(&.{.{ .concept_decl = .{
+        .name = nameSegment("Equatable", 0),
+        .generic_params = concept_params[0..],
+        .signatures = signatures[0..],
+        .span = .{ .start = 0, .length = 1 },
+    } }}, &diagnostics_bag);
+    defer module.deinit();
+
+    const snapshot = try module.hir.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
+    try std.testing.expectEqualStrings(
+        \\HirModule
+        \\  Concept Equatable
+        \\    TypeParams
+        \\      #0 T: TypeId(3)
+        \\    Requirements
+        \\      equals -> TypeId(2)
+        \\        left: TypeId(3)
+        \\        right: TypeId(3)
+        \\
+    , snapshot);
 }
 
 test "semantic collection HIR debug snapshot is stable" {

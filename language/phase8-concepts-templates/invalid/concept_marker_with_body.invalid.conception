@@ -1,0 +1,13 @@
+# name: marker concept with body
+# phase: parse
+# expect: fail
+
+=== source ===
+module Concepts;
+
+marker concept Copy<T> {
+    bool clone(T value);
+};
+
+=== diagnostics ===
+CON0094

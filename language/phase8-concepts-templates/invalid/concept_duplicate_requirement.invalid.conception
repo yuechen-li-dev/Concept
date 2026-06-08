@@ -1,0 +1,14 @@
+# name: concept duplicate requirement
+# phase: parse
+# expect: fail
+
+=== source ===
+module Concepts;
+
+concept Bad<T> {
+    bool equals(T left, T right);
+    bool equals(T left, T right);
+};
+
+=== diagnostics ===
+CON0092

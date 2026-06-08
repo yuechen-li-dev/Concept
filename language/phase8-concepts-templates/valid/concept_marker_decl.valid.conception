@@ -1,0 +1,10 @@
+# name: marker concept declaration
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Concepts;
+
+marker concept Copy<T>;
+marker concept Trivial<T>;

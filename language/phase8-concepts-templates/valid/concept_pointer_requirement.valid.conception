@@ -1,0 +1,11 @@
+# name: concept pointer requirement
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Concepts;
+
+concept PointerHash<T> {
+    int hash_ptr(T* value);
+};
