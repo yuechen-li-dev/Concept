@@ -81,6 +81,155 @@ This ordering matters. Phase 8 should establish explicit generic constraints bef
 - P8-M2 added symbolic HIR and type-store support for generic function templates: `type_param` TypeIds, generic function storage, unresolved constraint preservation, type-name resolution to type parameters in template scope, pointer-to-type-param representation, and explicit skipping of generic templates during executable checking, MIR lowering, and backend emission.
 - P8-M3 adds simple unconstrained generic function instantiation. Calls to an unconstrained generic function infer type arguments from concrete call arguments, monomorphize a concrete HIR function, cache repeated instantiations, and let the existing HIR checker, MIR lowering, MIR validator, and C backend handle only concrete functions. Generic templates remain non-emitted, constrained generic calls remain unsupported, and generic structs/enums, concepts, concept satisfaction, impl declarations, explicit specialization, and comptime remain out of scope.
 
+## Phase 8 closeout/status
+
+P8-M9 closes Phase 8 around generic functions, concepts, concrete impls, marker concepts, constrained instantiation, witness calls, and concrete MIR/backend output. The implemented v0 gives Concept real concept-checked generic functions while preserving the Phase 8 boundary: no new language semantics are added in closeout, and `comptime` remains Phase 9 work.
+
+Phase 8 now proves this end-to-end path:
+
+```text
+template source
+  -> AST template/concept/impl declarations
+  -> HIR generic declarations and symbolic type parameters
+  -> call-site inference and concrete instantiation
+  -> concept-impl satisfaction checks
+  -> concept requirement calls rewritten to static witnesses
+  -> concrete MIR
+  -> deterministic C backend output
+```
+
+Implemented v0 behavior:
+
+- **Template parsing**
+  - `template<T>` is accepted for generic function declarations.
+  - `template<K, V>` is accepted for multiple type parameters.
+  - constrained parameter syntax is accepted in the v0 form:
+
+    ```cpp
+    template<T: Concept<T>>
+    ```
+
+  - generic function declarations are the only generic declaration kind implemented.
+  - generic structs, generic enums, and generic methods are deferred.
+- **Type parameters**
+  - template and concept parameters are represented by symbolic type-parameter `TypeId`s.
+  - template-scope type-name resolution resolves names such as `T` before looking for ordinary nominal types.
+  - `T` and pointer-to-`T` (`T*`) are supported where the current type resolver, inference, and lowering paths implement them.
+  - type parameters do not escape template or concept scopes; leaked type-parameter types are rejected before executable MIR.
+- **Generic instantiation**
+  - unconstrained generic functions instantiate from concrete call arguments.
+  - inference supports direct `T` parameters and pointer-to-`T` parameters.
+  - repeated instantiations are cached by generic declaration and concrete type-argument tuple.
+  - generated function names are deterministic, for example `identity__int` and `identity__struct_Vec2` before backend symbol escaping.
+  - expected return types do not participate in type-argument inference.
+  - explicit type arguments are not implemented.
+- **Concepts**
+  - ordinary concept declarations parse and lower to compile-time HIR concept records.
+  - requirements are v0 function signatures.
+  - concepts own their type parameters.
+  - concepts have no runtime representation.
+  - concepts are not interfaces and do not imply vtables, trait objects, or dynamic dispatch.
+- **Impl declarations**
+  - concrete single-target declarations of the form `impl Concept<Type> { ... }` are implemented.
+  - requirement signatures are checked after substituting the concept type parameter with the concrete target type.
+  - duplicate concrete impls are rejected in the current compilation unit.
+  - impl witness functions are static witnesses for concept satisfaction, not ordinary top-level user-callable functions.
+- **Marker concepts**
+  - safe marker declarations are supported:
+
+    ```cpp
+    marker concept Copy<T>;
+    ```
+
+  - unsafe marker declarations are supported:
+
+    ```cpp
+    unsafe marker concept ThreadSafe<T>;
+    ```
+
+  - known-marker metadata is scaffolded for `Copy<T>`, `Move<T>`, `Trivial<T>`, `Relocatable<T>`, and `Pod<T>` when source declares matching one-parameter markers.
+  - marker metadata is non-semantic for now: it does not implement move checking, copy semantics, layout claims, ABI checks, derive, or ownership/drop behavior.
+  - unsafe marker concepts require `unsafe impl`; conversely, safe marker concepts and ordinary safe concepts reject `unsafe impl`.
+- **Constrained generics**
+  - the supported v0 shape is:
+
+    ```cpp
+    template<T: Concept<T>>
+    ```
+
+  - instantiating a constrained generic requires a visible concrete impl for the substituted `Concept<Type>` predicate.
+  - missing impls are rejected during checking.
+  - calls to concept requirements inside constrained generic bodies bind to concrete witness functions during instantiation.
+  - marker constraints participate in the same satisfaction path when backed by visible marker impls.
+  - broader constraint forms remain future work.
+- **MIR/backend**
+  - generic templates are not emitted as executable MIR or C.
+  - concepts are not emitted.
+  - marker concepts are not emitted.
+  - only concrete instantiated functions and referenced concrete witnesses reach MIR and the C backend.
+  - the MIR validator rejects leaked type-parameter types.
+  - the C backend emits deterministic instantiated names and direct witness calls.
+  - no runtime concept objects exist.
+
+### Supported Phase 8 example
+
+```cpp
+module Main;
+
+concept Equatable<T> {
+    bool equals(T left, T right);
+};
+
+marker concept Copy<T>;
+
+struct Vec2 {
+    int x;
+    int y;
+};
+
+impl Equatable<Vec2> {
+    bool equals(Vec2 left, Vec2 right) {
+        return left.x == right.x && left.y == right.y;
+    }
+}
+
+impl Copy<Vec2>;
+
+template<T>
+T identity(T value) {
+    return value;
+}
+
+template<T: Copy<T>>
+T pass(T value) {
+    return value;
+}
+
+template<T: Equatable<T>>
+bool areEqual(T left, T right) {
+    return equals(left, right);
+}
+
+int main() {
+    Vec2 a = identity(Vec2 {
+        x: 5,
+        y: 2,
+    });
+
+    Vec2 b = pass(Vec2 {
+        x: 5,
+        y: 2,
+    });
+
+    if (areEqual(a, b)) {
+        return 8;
+    }
+
+    return 1;
+}
+```
+
+
 ## Phase 8 v0 scope
 
 Phase 8 v0 should focus on generic functions first. Generic functions are enough to prove parsing, type-parameter representation, checking in a symbolic environment, instantiation, and backend integration without immediately redesigning every nominal type declaration.
@@ -142,7 +291,7 @@ V getOrDefault(Map<K, V> map, K key, V fallback) {
 }
 ```
 
-Constraint conjunction uses ordinary boolean-looking syntax over concept predicates:
+Constraint conjunction remains future work and is not implemented in Phase 8 v0. A possible later shape is ordinary boolean-looking syntax over concept predicates:
 
 ```cpp
 template<T: Hashable<T> && Equatable<T>>
@@ -152,7 +301,7 @@ bool contains(HashSet<T> set, T value) {
 }
 ```
 
-A compact postfix function syntax may be considered later:
+A compact postfix function syntax may also be considered later:
 
 ```cpp
 bool contains<T: Hashable<T> && Equatable<T>>(HashSet<T> set, T value) {
@@ -595,27 +744,35 @@ Milestones can combine if implementation naturally converges that way, but they 
 
 Phase 8 does not implement:
 
-- `comptime` execution;
-- compile-time reflection;
-- generic structs or enums;
+- generic structs;
+- generic enums;
 - generic methods;
 - associated types;
 - `where` clauses;
 - operator requirements or operator overloading;
+- default implementations;
+- bridge modules or full orphan/coherence checking across modules;
+- interfaces or `dyn` dispatch;
 - specialization;
 - partial specialization;
 - default type parameters;
 - variadic templates;
 - const generics;
+- explicit type arguments;
+- expected-return-type inference;
+- concept conjunction;
+- `comptime` execution;
+- compile-time reflection;
+- runtime concept objects;
+- ownership/drop semantics or ownership/drop integration;
+- derive or auto-derive;
+- compiler-proven marker inference;
+- `Pod`, `Copy`, or `Move` semantics;
 - higher-kinded types;
-- interfaces or `dyn` dispatch;
 - overload-set complexity;
 - C++ SFINAE;
 - `enable_if`;
-- template metaprogramming as control flow;
-- bridge modules or full orphan/coherence checking across modules;
-- ownership/drop semantics or ownership/drop integration;
-- runtime concept objects.
+- template metaprogramming as control flow.
 
 ## Close criteria
 
@@ -633,20 +790,22 @@ Phase 8 is successful if:
 
 ## Roadmap note
 
-Current roadmap direction after Phase 8 M0:
+Current roadmap direction after Phase 8 closeout:
 
 ```text
 Phase 7   closed or in closeout stabilization: runtime structs and places
-Phase 8   planned: concepts and templates over runtime values
-Phase 9   planned: comptime v0
+Phase 8   closed: concepts and templates over runtime values
+Phase 9: comptime v0
 Phase 10  planned: ownership, move, Drop, MaybeUninit, and richer storage-state analysis
 ```
 
+PoC3 treats `comptime` as static computation, not as Concept's primary generic system. Phase 8 templates and concepts now cover generic programming v0, so Phase 9 can start narrower: hermetic, deterministic compile-time evaluation for constant computation, layout checks, target metadata, reflection scaffolding, and generated declarations. Host-visible capabilities such as `read_fs`, `env`, `network`, `time`, `random`, and `process` remain future gated capabilities rather than default powers. No build-script demon gets unsupervised filesystem access. Little gremlin stays in the jar.
+
 ## Implementation guardrails
 
-P8-M0 is documentation only. It should not add lexer, parser, AST, HIR, MIR, backend, fixture, type-parameter, concept, impl, or monomorphization code.
+P8-M0 was documentation only. P8-M9 is closeout only: it should document, prove, and stabilize the implemented v0 without adding new parser syntax, type inference behavior, concept forms, constraint forms, generic structs/enums, explicit type arguments, concept conjunction, `comptime`, ownership/drop, bridge modules, or runtime concept objects.
 
-When implementation begins, keep each milestone convergent:
+Each milestone should remain convergent:
 
 - parse/store before execution;
 - symbolic type representation before generic body execution;

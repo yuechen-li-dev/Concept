@@ -1,0 +1,22 @@
+module Main;
+
+marker concept Copy<T>;
+
+struct Box {
+    int value;
+};
+
+impl Copy<Box>;
+
+template<T: Copy<T>>
+T pass(T value) {
+    return value;
+}
+
+int main() {
+    Box b = pass(Box {
+        value: 7,
+    });
+
+    return b.value;
+}

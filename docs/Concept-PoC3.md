@@ -1770,6 +1770,8 @@ Build configuration must explicitly grant capabilities.
 
 This prevents third-party compile-time code from silently behaving like an unreviewed build script.
 
+Phase 9 roadmap note: Concept's Phase 8 templates and concepts cover generic programming v0, so `comptime` should begin as hermetic deterministic compile-time evaluation rather than as the primary generic system. Host-visible capabilities such as `read_fs`, `env`, `network`, `time`, `random`, and `process` remain future gated capabilities. No build-script demon gets unsupervised filesystem access. Little gremlin stays in the jar.
+
 ---
 
 # 34. Reflection
