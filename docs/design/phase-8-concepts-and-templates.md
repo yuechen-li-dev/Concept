@@ -701,3 +701,14 @@ The implemented v0 is intentionally local and concrete:
 - impl witness functions are HIR functions marked as concept witnesses, so they can be body-checked but do not satisfy `main` and are skipped by MIR lowering/backend emission.
 
 P8-M5 does not add constrained generic execution. Calls to constrained generic functions, concept-provided calls from generic bodies, generic structs/enums, associated types, bridge-module coherence/orphan rules, marker derivation, runtime vtables, and ownership/drop integration remain deferred to later milestones.
+
+### P8-M6 constrained generic function instantiation
+
+P8-M6 enables the first executable constrained generic function path for the supported constraint form `template<T: Concept<T>>`.
+After ordinary P8-M3 call-argument type inference, the checker substitutes inferred concrete type arguments into each resolved concept constraint and requires a visible `impl Concept<Type>` entry before cloning the generic function body. Missing impls are reported as unsatisfied concept constraints rather than falling through to backend generic output.
+
+Within constrained generic bodies, calls whose name and arity match exactly one active concept requirement are preserved as static concept requirement calls during HIR lowering. When a generic is instantiated, each requirement call is rewritten to the concrete witness function from the selected concept impl, and that witness is marked as referenced so MIR lowering and the C backend emit it alongside the concrete instantiated generic. Concepts still have no runtime representation and no dynamic dispatch/interface object is produced.
+
+Marker concept constraints use the same impl-satisfaction path when represented by the existing marker impl storage, for example `template<T: Copy<T>>` with `impl Copy<Box>;`.
+
+Still deferred: generic structs/enums, generic methods, bridge-module/full coherence, associated types, where clauses, operator requirements, default implementations, specialization, interfaces/dyn dispatch, runtime concept objects, and comptime.

@@ -1,0 +1,33 @@
+# name: constrained requirement wrong arg type
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+concept Equatable<T> {
+    bool equals(T left, T right);
+};
+
+struct Vec2 { int x; int y; };
+
+impl Equatable<Vec2> {
+    bool equals(Vec2 left, Vec2 right) {
+        return true;
+    }
+}
+
+template<T: Equatable<T>>
+bool bad(T value) {
+    return equals(value, true);
+}
+
+int main() {
+    Vec2 a = Vec2 { x: 1, y: 2 };
+    if (bad(a)) { return 1; }
+    return 0;
+}
+
+=== diagnostics ===
+CON0033

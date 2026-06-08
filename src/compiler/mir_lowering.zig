@@ -45,7 +45,7 @@ const ModuleLowerer = struct {
             if (function.body == null) continue;
             const hir_function_id = hir.FunctionId{ .index = @intCast(index) };
             if (self.semantic_module.hir.isGenericFunction(hir_function_id)) continue;
-            if (self.semantic_module.hir.isConceptWitnessFunction(hir_function_id)) continue;
+            if (self.semantic_module.hir.isConceptWitnessFunction(hir_function_id) and !self.semantic_module.hir.isReferencedConceptWitnessFunction(hir_function_id)) continue;
             try self.lowerFunction(hir_function_id, function);
         }
 
@@ -404,6 +404,7 @@ const FunctionLowerer = struct {
             .deref => |operand| try self.lowerDeref(expr, operand, block_id),
             .binary => |binary| try self.lowerBinary(expr, binary, block_id),
             .call => |call| try self.lowerCall(expr, call, block_id),
+            .concept_requirement_call => error.InvalidMirLowering,
             .enum_constructor => |constructor| try self.lowerEnumConstructor(expr, constructor, block_id),
             .struct_literal => |literal| try self.lowerStructLiteral(expr, literal, block_id),
             .field_access => |field_access| try self.lowerFieldAccess(expr, field_access, block_id),
@@ -771,6 +772,7 @@ const FunctionLowerer = struct {
                 .less, .less_equal, .greater, .greater_equal, .equal_equal, .bang_equal, .logical_and, .logical_or => self.semantic_module.types.boolType(),
             },
             .call => |call| self.semantic_module.hir.getFunction(call.function).return_type,
+            .concept_requirement_call => error.InvalidMirLowering,
             .enum_constructor => |constructor| try self.enumType(constructor.enum_id),
             .struct_literal => |literal| literal.type_id,
             .field_access => |field_access| self.semantic_module.hir.getField(try self.resolveFieldAccess(field_access.receiver, field_access.field_name)).type_id,

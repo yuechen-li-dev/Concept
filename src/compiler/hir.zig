@@ -43,6 +43,8 @@ pub const HirItem = union(enum) {
 pub const HirTypeConstraint = struct {
     text: []const u8,
     span: SourceSpan,
+    concept_id: ?ConceptId = null,
+    type_args: []types.TypeId = &.{},
 };
 
 pub const HirTypeParam = struct {
@@ -100,6 +102,7 @@ pub const HirFunction = struct {
     body: ?StmtId = null,
     is_instantiation: bool = false,
     is_concept_witness: bool = false,
+    is_referenced_concept_witness: bool = false,
 };
 
 pub const HirLocal = struct {
@@ -187,6 +190,7 @@ pub const HirExprKind = union(enum) {
     local_ref: LocalId,
     param_ref: ParamId,
     call: struct { function: FunctionId, args: []ExprId },
+    concept_requirement_call: struct { concept_id: ConceptId, requirement_index: u32, args: []ExprId },
     enum_constructor: struct { enum_id: EnumId, variant_id: VariantId, args: []ExprId },
     struct_literal: struct { struct_id: StructId, type_id: types.TypeId, fields: []HirStructLiteralField },
     field_access: struct { receiver: ExprId, field_name: SymbolId, field_span: SourceSpan },
@@ -349,13 +353,19 @@ pub const HirStore = struct {
     pub fn deinit(self: *HirStore) void {
         for (self.generic_functions.items) |generic_function| {
             for (generic_function.type_params) |type_param| {
-                if (type_param.constraint) |constraint| self.allocator.free(constraint.text);
+                if (type_param.constraint) |constraint| {
+                    self.allocator.free(constraint.text);
+                    if (constraint.type_args.len > 0) self.allocator.free(constraint.type_args);
+                }
             }
             if (generic_function.type_params.len > 0) self.allocator.free(generic_function.type_params);
         }
         for (self.concepts.items) |concept| {
             for (concept.type_params) |type_param| {
-                if (type_param.constraint) |constraint| self.allocator.free(constraint.text);
+                if (type_param.constraint) |constraint| {
+                    self.allocator.free(constraint.text);
+                    if (constraint.type_args.len > 0) self.allocator.free(constraint.type_args);
+                }
             }
             if (concept.type_params.len > 0) self.allocator.free(concept.type_params);
             for (concept.requirements) |requirement| {
@@ -390,6 +400,7 @@ pub const HirStore = struct {
             switch (expr.kind) {
                 .int_literal => |text| self.allocator.free(text),
                 .call => |call| if (call.args.len > 0) self.allocator.free(call.args),
+                .concept_requirement_call => |call| if (call.args.len > 0) self.allocator.free(call.args),
                 .enum_constructor => |constructor| if (constructor.args.len > 0) self.allocator.free(constructor.args),
                 .struct_literal => |literal| if (literal.fields.len > 0) self.allocator.free(literal.fields),
                 .decide => |decide| if (decide.arms.len > 0) self.allocator.free(decide.arms),
@@ -470,15 +481,30 @@ pub const HirStore = struct {
         concept.requirements = requirements;
     }
 
-    pub fn isGenericFunction(self: *const HirStore, function_id: FunctionId) bool {
-        for (self.generic_functions.items) |generic| {
-            if (generic.function.index == function_id.index) return true;
+    pub fn genericFunctionFor(self: *const HirStore, function_id: FunctionId) ?GenericFunctionId {
+        for (self.generic_functions.items, 0..) |generic, index| {
+            if (generic.function.index == function_id.index) return .{ .index = @intCast(index) };
         }
-        return false;
+        return null;
+    }
+
+    pub fn isGenericFunction(self: *const HirStore, function_id: FunctionId) bool {
+        return self.genericFunctionFor(function_id) != null;
     }
 
     pub fn isConceptWitnessFunction(self: *const HirStore, function_id: FunctionId) bool {
         return self.getFunction(function_id).is_concept_witness;
+    }
+
+    pub fn isReferencedConceptWitnessFunction(self: *const HirStore, function_id: FunctionId) bool {
+        const function = self.getFunction(function_id);
+        return function.is_concept_witness and function.is_referenced_concept_witness;
+    }
+
+    pub fn markConceptWitnessReferenced(self: *HirStore, function_id: FunctionId) void {
+        const function = self.getFunctionMut(function_id);
+        std.debug.assert(function.is_concept_witness);
+        function.is_referenced_concept_witness = true;
     }
 
     pub fn hasConceptImpl(self: *const HirStore, concept_id: ConceptId, target_type: types.TypeId) bool {
@@ -537,6 +563,7 @@ pub const HirStore = struct {
             .body = null,
             .is_instantiation = false,
             .is_concept_witness = false,
+            .is_referenced_concept_witness = false,
         });
         return id;
     }
@@ -797,7 +824,10 @@ pub const HirStore = struct {
                 try writer.writeAll("    TypeParams\n");
                 for (generic_function.type_params, 0..) |type_param, type_param_index| {
                     try writer.print("      #{d} {s}: {f}", .{ type_param_index, interner.text(type_param.name), type_param.type_id });
-                    if (type_param.constraint) |constraint| try writer.print(" constraint {s}", .{constraint.text});
+                    if (type_param.constraint) |constraint| {
+                        try writer.print(" constraint {s}", .{constraint.text});
+                        if (constraint.concept_id) |concept_id| try writer.print(" resolved {f}", .{concept_id});
+                    }
                     try writer.writeByte('\n');
                 }
             }
@@ -973,6 +1003,10 @@ pub const HirStore = struct {
             .param_ref => |param| try writer.print("ParamRef {f}\n", .{param}),
             .call => |call| {
                 try writer.print("Call {f}\n", .{call.function});
+                for (call.args) |arg| try self.writeExprDebug(writer, arg, depth + 1);
+            },
+            .concept_requirement_call => |call| {
+                try writer.print("ConceptRequirementCall {f} #{d}\n", .{ call.concept_id, call.requirement_index });
                 for (call.args) |arg| try self.writeExprDebug(writer, arg, depth + 1);
             },
             .enum_constructor => |constructor| {

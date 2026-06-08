@@ -232,6 +232,10 @@ const Checker = struct {
             .local_ref => |id| self.module.hir.getLocal(id).type_id,
             .param_ref => |id| self.module.hir.getParam(id).type_id,
             .group => |inner| try self.checkExpr(return_type, inner),
+            .concept_requirement_call => {
+                try self.reportAt(.InvalidConceptRequirementCall, "concept requirement call was not rewritten before checking", expr.span);
+                return error.InvalidSemanticModule;
+            },
             .call => |call| blk: {
                 var arg_types = std.ArrayList(types.TypeId).empty;
                 defer arg_types.deinit(self.allocator);
@@ -559,12 +563,6 @@ const Checker = struct {
 
     fn instantiateGenericCall(self: *Checker, generic_id: hir.GenericFunctionId, call: anytype, arg_types: []const types.TypeId, span: diagnostics.SourceSpan) CheckError!hir.FunctionId {
         const generic = self.module.hir.getGenericFunction(generic_id).*;
-        for (generic.type_params) |param| {
-            if (param.constraint != null) {
-                try self.reportAt(.ConstrainedGenericInstantiationUnsupported, "constrained generic function instantiation is not supported yet", span);
-                return error.InvalidSemanticModule;
-            }
-        }
         const generic_function = self.module.hir.getFunction(generic.function);
         if (call.args.len != generic_function.params.len) {
             try self.reportAt(.InvalidCall, "function call argument count mismatch", span);
@@ -593,6 +591,8 @@ const Checker = struct {
             };
         }
 
+        try self.checkConceptConstraints(generic, concrete_types, span);
+
         if (self.findInstantiation(generic_id, concrete_types)) |existing| {
             self.allocator.free(concrete_types);
             return existing;
@@ -610,6 +610,65 @@ const Checker = struct {
         const concrete_function = self.module.hir.getFunction(function_id);
         if (concrete_function.body) |body| try self.checkStmt(function_id, body, concrete_function.return_type);
         return function_id;
+    }
+
+    fn checkConceptConstraints(self: *Checker, generic: hir.HirGenericFunction, concrete_types: []const types.TypeId, span: diagnostics.SourceSpan) CheckError!void {
+        const subst = TypeSubstitution{ .type_params = generic.type_params, .concrete_types = concrete_types };
+        for (generic.type_params) |param| {
+            const constraint = param.constraint orelse continue;
+            const concept_id = constraint.concept_id orelse {
+                try self.reportAt(.UnsupportedConceptConstraint, "unsupported concept constraint; expected Concept<T>", constraint.span);
+                return error.InvalidSemanticModule;
+            };
+            if (constraint.type_args.len != 1) {
+                try self.reportAt(.UnsupportedConceptConstraint, "unsupported concept constraint; expected Concept<T>", constraint.span);
+                return error.InvalidSemanticModule;
+            }
+            const target_type = try self.substituteType(constraint.type_args[0], subst, span);
+            if (self.module.hir.findConceptImpl(concept_id, target_type) == null) {
+                const concept = self.module.hir.getConcept(concept_id);
+                var type_buffer: std.Io.Writer.Allocating = .init(self.allocator);
+                defer type_buffer.deinit();
+                try self.writeTypeSuffix(&type_buffer.writer, target_type);
+                if (self.diagnostics) |bag| {
+                    try bag.append(try diagnostics.unsatisfiedConceptConstraint(self.allocator, span, self.module.interner.text(concept.name), type_buffer.written()));
+                }
+                return error.InvalidSemanticModule;
+            }
+        }
+    }
+
+    fn resolveWitnessForRequirement(self: *Checker, concept_id: hir.ConceptId, requirement_index: u32, subst: TypeSubstitution, span: diagnostics.SourceSpan) CheckError!hir.FunctionId {
+        const generic_constraint = try self.findConstraintForConcept(concept_id, subst, span);
+        const target_type = try self.substituteType(generic_constraint.type_args[0], subst, span);
+        const impl_id = self.module.hir.findConceptImpl(concept_id, target_type) orelse {
+            try self.reportAt(.UnsatisfiedConceptConstraint, "missing concept impl for requirement call", span);
+            return error.InvalidSemanticModule;
+        };
+        const concept = self.module.hir.getConcept(concept_id);
+        if (requirement_index >= concept.requirements.len) {
+            try self.reportAt(.InvalidConceptRequirementCall, "invalid concept requirement call", span);
+            return error.InvalidSemanticModule;
+        }
+        const requirement = concept.requirements[requirement_index];
+        const concept_impl = self.module.hir.getConceptImpl(impl_id);
+        for (concept_impl.functions) |function_id| {
+            const function = self.module.hir.getFunction(function_id);
+            if (function.name.index == requirement.name.index) return function_id;
+        }
+        try self.reportAt(.InvalidConceptRequirementCall, "concept impl does not provide required witness", span);
+        return error.InvalidSemanticModule;
+    }
+
+    fn findConstraintForConcept(self: *Checker, concept_id: hir.ConceptId, subst: TypeSubstitution, span: diagnostics.SourceSpan) CheckError!hir.HirTypeConstraint {
+        for (subst.type_params) |param| {
+            const constraint = param.constraint orelse continue;
+            if (constraint.concept_id) |candidate| {
+                if (candidate.index == concept_id.index) return constraint;
+            }
+        }
+        try self.reportAt(.InvalidConceptRequirementCall, "concept requirement call is not backed by an active constraint", span);
+        return error.InvalidSemanticModule;
     }
 
     fn findInstantiation(self: *Checker, generic_id: hir.GenericFunctionId, concrete_types: []const types.TypeId) ?hir.FunctionId {
@@ -761,6 +820,14 @@ const Checker = struct {
                 errdefer self.allocator.free(args);
                 for (call.args, 0..) |arg, index| args[index] = try self.cloneExpr(arg, subst, param_map, local_map, span);
                 break :blk .{ .call = .{ .function = call.function, .args = args } };
+            },
+            .concept_requirement_call => |call| blk: {
+                var args = try self.allocator.alloc(hir.ExprId, call.args.len);
+                errdefer self.allocator.free(args);
+                for (call.args, 0..) |arg, index| args[index] = try self.cloneExpr(arg, subst, param_map, local_map, span);
+                const witness = try self.resolveWitnessForRequirement(call.concept_id, call.requirement_index, subst, expr.span);
+                self.module.hir.markConceptWitnessReferenced(witness);
+                break :blk .{ .call = .{ .function = witness, .args = args } };
             },
             .enum_constructor => |constructor| blk: {
                 var args = try self.allocator.alloc(hir.ExprId, constructor.args.len);
