@@ -1,0 +1,11 @@
+# name: concept equatable declaration
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Concepts;
+
+concept Equatable<T> {
+    bool equals(T left, T right);
+};

@@ -1,0 +1,18 @@
+# name: concept duplicate top level name
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module Concepts;
+
+concept Copy<T> {
+    bool copyable(T value);
+};
+
+int Copy() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0020

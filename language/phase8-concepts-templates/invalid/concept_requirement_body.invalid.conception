@@ -1,0 +1,13 @@
+# name: concept requirement body
+# phase: parse
+# expect: fail
+
+=== source ===
+module Concepts;
+
+concept Bad<T> {
+    bool equals(T left, T right) { return true; }
+};
+
+=== diagnostics ===
+CON0093

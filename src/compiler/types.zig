@@ -18,7 +18,7 @@ pub const TypeId = struct {
 pub const TypeStoreError = std.mem.Allocator.Error || error{TooManyTypes};
 
 pub const TypeParamOwner = struct {
-    kind: enum { generic_function },
+    kind: enum { generic_function, concept },
     index: u32,
 };
 
@@ -356,14 +356,17 @@ test "type parameter TypeIds are stable and distinct by owner and index" {
     const t = try symbols.intern("T");
     const owner0 = TypeParamOwner{ .kind = .generic_function, .index = 0 };
     const owner1 = TypeParamOwner{ .kind = .generic_function, .index = 1 };
+    const concept_owner = TypeParamOwner{ .kind = .concept, .index = 0 };
 
     const first = try store.addTypeParam(owner0, 0, t);
     const again = try store.addTypeParam(owner0, 0, t);
     const other_owner = try store.addTypeParam(owner1, 0, t);
+    const other_kind = try store.addTypeParam(concept_owner, 0, t);
     const other_index = try store.addTypeParam(owner0, 1, t);
 
     try std.testing.expectEqual(first, again);
     try std.testing.expect(first.index != other_owner.index);
+    try std.testing.expect(first.index != other_kind.index);
     try std.testing.expect(first.index != other_index.index);
     try std.testing.expectEqual(TypeKind{ .type_param = .{ .owner = owner0, .index = 0, .name = t } }, store.kind(first));
 }

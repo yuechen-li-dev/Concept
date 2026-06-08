@@ -1,0 +1,11 @@
+# name: non-marker concept without body
+# phase: parse
+# expect: fail
+
+=== source ===
+module Concepts;
+
+concept Equatable<T>;
+
+=== diagnostics ===
+CON0095

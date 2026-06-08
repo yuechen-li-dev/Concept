@@ -12,6 +12,7 @@ pub const SymbolId = interner_module.SymbolId;
 pub const ItemId = SemanticId("ItemId");
 pub const FunctionId = SemanticId("FunctionId");
 pub const GenericFunctionId = SemanticId("GenericFunctionId");
+pub const ConceptId = SemanticId("ConceptId");
 pub const StructId = SemanticId("StructId");
 pub const EnumId = SemanticId("EnumId");
 pub const FieldId = SemanticId("FieldId");
@@ -55,6 +56,28 @@ pub const HirGenericFunction = struct {
     span: SourceSpan,
     type_params: []HirTypeParam,
     function: FunctionId,
+};
+
+pub const HirConceptParam = struct {
+    name: SymbolId,
+    span: SourceSpan,
+    type_id: types.TypeId,
+};
+
+pub const HirConceptRequirement = struct {
+    name: SymbolId,
+    return_type: types.TypeId,
+    params: []HirConceptParam,
+    span: SourceSpan,
+};
+
+pub const HirConcept = struct {
+    name: SymbolId,
+    span: SourceSpan,
+    type_params: []HirTypeParam,
+    requirements: []HirConceptRequirement,
+    is_marker: bool = false,
+    is_unsafe: bool = false,
 };
 
 pub const HirFunction = struct {
@@ -281,6 +304,7 @@ pub const HirStore = struct {
     items: std.ArrayList(HirItem),
     functions: std.ArrayList(HirFunction),
     generic_functions: std.ArrayList(HirGenericFunction),
+    concepts: std.ArrayList(HirConcept),
     params: std.ArrayList(HirParam),
     locals: std.ArrayList(HirLocal),
     stmts: std.ArrayList(HirStmt),
@@ -297,6 +321,7 @@ pub const HirStore = struct {
             .items = std.ArrayList(HirItem).empty,
             .functions = std.ArrayList(HirFunction).empty,
             .generic_functions = std.ArrayList(HirGenericFunction).empty,
+            .concepts = std.ArrayList(HirConcept).empty,
             .params = std.ArrayList(HirParam).empty,
             .locals = std.ArrayList(HirLocal).empty,
             .stmts = std.ArrayList(HirStmt).empty,
@@ -315,6 +340,16 @@ pub const HirStore = struct {
                 if (type_param.constraint) |constraint| self.allocator.free(constraint.text);
             }
             if (generic_function.type_params.len > 0) self.allocator.free(generic_function.type_params);
+        }
+        for (self.concepts.items) |concept| {
+            for (concept.type_params) |type_param| {
+                if (type_param.constraint) |constraint| self.allocator.free(constraint.text);
+            }
+            if (concept.type_params.len > 0) self.allocator.free(concept.type_params);
+            for (concept.requirements) |requirement| {
+                if (requirement.params.len > 0) self.allocator.free(requirement.params);
+            }
+            if (concept.requirements.len > 0) self.allocator.free(concept.requirements);
         }
         for (self.functions.items) |function| {
             if (function.params.len > 0) self.allocator.free(function.params);
@@ -365,6 +400,7 @@ pub const HirStore = struct {
         self.stmts.deinit(self.allocator);
         self.locals.deinit(self.allocator);
         self.params.deinit(self.allocator);
+        self.concepts.deinit(self.allocator);
         self.generic_functions.deinit(self.allocator);
         self.functions.deinit(self.allocator);
         self.items.deinit(self.allocator);
@@ -388,6 +424,34 @@ pub const HirStore = struct {
         const generic = self.getGenericFunctionMut(id);
         if (generic.type_params.len > 0) self.allocator.free(generic.type_params);
         generic.type_params = type_params;
+    }
+
+    pub fn addConcept(self: *HirStore, name: SymbolId, is_marker: bool, is_unsafe: bool, span: SourceSpan) !ConceptId {
+        const id = ConceptId{ .index = try nextIndex(self.concepts.items.len, error.TooManyConcepts) };
+        try self.concepts.append(self.allocator, .{
+            .name = name,
+            .span = span,
+            .type_params = &.{},
+            .requirements = &.{},
+            .is_marker = is_marker,
+            .is_unsafe = is_unsafe,
+        });
+        return id;
+    }
+
+    pub fn setConceptTypeParams(self: *HirStore, id: ConceptId, type_params: []HirTypeParam) void {
+        const concept = self.getConceptMut(id);
+        if (concept.type_params.len > 0) self.allocator.free(concept.type_params);
+        concept.type_params = type_params;
+    }
+
+    pub fn setConceptRequirements(self: *HirStore, id: ConceptId, requirements: []HirConceptRequirement) void {
+        const concept = self.getConceptMut(id);
+        for (concept.requirements) |requirement| {
+            if (requirement.params.len > 0) self.allocator.free(requirement.params);
+        }
+        if (concept.requirements.len > 0) self.allocator.free(concept.requirements);
+        concept.requirements = requirements;
     }
 
     pub fn isGenericFunction(self: *const HirStore, function_id: FunctionId) bool {
@@ -546,6 +610,12 @@ pub const HirStore = struct {
         return &self.generic_functions.items[index];
     }
 
+    pub fn getConcept(self: *const HirStore, id: ConceptId) *const HirConcept {
+        const index: usize = id.index;
+        std.debug.assert(index < self.concepts.items.len);
+        return &self.concepts.items[index];
+    }
+
     pub fn getFunction(self: *const HirStore, id: FunctionId) *const HirFunction {
         const index: usize = id.index;
         std.debug.assert(index < self.functions.items.len);
@@ -626,6 +696,12 @@ pub const HirStore = struct {
         return &self.generic_functions.items[index];
     }
 
+    fn getConceptMut(self: *HirStore, id: ConceptId) *HirConcept {
+        const index: usize = id.index;
+        std.debug.assert(index < self.concepts.items.len);
+        return &self.concepts.items[index];
+    }
+
     fn getFunctionMut(self: *HirStore, id: FunctionId) *HirFunction {
         const index: usize = id.index;
         std.debug.assert(index < self.functions.items.len);
@@ -677,6 +753,24 @@ pub const HirStore = struct {
             if (function.body) |body| {
                 try writer.writeAll("    Body\n");
                 try self.writeStmtDebug(writer, body, 3);
+            }
+        }
+        for (self.concepts.items) |concept| {
+            try writer.print("  {s}{s}Concept {s}\n", .{ if (concept.is_unsafe) "Unsafe " else "", if (concept.is_marker) "Marker " else "", interner.text(concept.name) });
+            if (concept.type_params.len != 0) {
+                try writer.writeAll("    TypeParams\n");
+                for (concept.type_params, 0..) |type_param, type_param_index| {
+                    try writer.print("      #{d} {s}: {f}\n", .{ type_param_index, interner.text(type_param.name), type_param.type_id });
+                }
+            }
+            if (concept.requirements.len != 0) {
+                try writer.writeAll("    Requirements\n");
+                for (concept.requirements) |requirement| {
+                    try writer.print("      {s} -> {f}\n", .{ interner.text(requirement.name), requirement.return_type });
+                    for (requirement.params) |param| {
+                        try writer.print("        {s}: {f}\n", .{ interner.text(param.name), param.type_id });
+                    }
+                }
             }
         }
         for (self.items.items) |item| {

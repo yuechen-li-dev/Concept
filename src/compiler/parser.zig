@@ -81,6 +81,11 @@ pub const Parser = struct {
                     }
                 },
                 .identifier, .mut, .unsafe => {
+                    if (self.current().kind == .unsafe and self.peek(1).kind == .marker) {
+                        try items.append(try self.parseConceptItem(allocator, attributes));
+                        attributes = &.{};
+                        continue;
+                    }
                     if (self.current().kind == .unsafe and !(self.peek(1).kind == .identifier or self.peek(1).kind == .mut or self.peek(1).kind == .unsafe)) {
                         try self.rejectAttributesBeforeUnsupportedItem(attributes, allocator);
                         attributes = &.{};
@@ -104,7 +109,7 @@ pub const Parser = struct {
                     try items.append(try self.parseEnumItem(allocator, attributes));
                     attributes = &.{};
                 },
-                .concept => {
+                .concept, .marker => {
                     try items.append(try self.parseConceptItem(allocator, attributes));
                     attributes = &.{};
                 },
@@ -2060,9 +2065,12 @@ pub const Parser = struct {
     }
 
     fn parseConceptDecl(self: *Parser, allocator: std.mem.Allocator) !ast.ConceptDecl {
-        const concept_token = self.advance();
+        const start_token = self.current();
+        const unsafe_token = self.match(.unsafe);
+        const marker_token = self.match(.marker);
+        _ = try self.expect(.concept, "expected 'concept' after marker", .UnexpectedToken) orelse start_token;
         const name = try self.parseRequiredName("expected concept name");
-        const generic_params = try self.parseOptionalGenericParams(allocator);
+        const generic_params = try self.parseRequiredConceptGenericParams(allocator);
         errdefer allocator.free(generic_params);
         var signatures = std.ArrayList(ast.SignatureDecl).init(allocator);
         errdefer {
@@ -2070,13 +2078,47 @@ pub const Parser = struct {
             signatures.deinit();
         }
 
-        const end_span = try self.parseSignatureBlock(allocator, &signatures, "concept");
+        var end_span: SourceSpan = name.span;
+        if (marker_token != null) {
+            if (self.current().kind == .left_brace) {
+                try self.diagnostics.append(diagnostics_model.markerConceptCannotHaveRequirements(self.current().span));
+                end_span = try self.parseSignatureBlock(allocator, &signatures, "concept");
+            } else if (self.match(.semicolon)) |semicolon| {
+                end_span = semicolon.span;
+            } else {
+                try self.report(.UnexpectedToken, "expected ';' after marker concept declaration", self.current().span);
+                end_span = self.current().span;
+            }
+        } else {
+            if (self.current().kind == .semicolon) {
+                try self.diagnostics.append(diagnostics_model.nonMarkerConceptRequiresBody(self.current().span));
+                end_span = self.advance().span;
+            } else {
+                end_span = try self.parseSignatureBlock(allocator, &signatures, "concept");
+            }
+        }
+
+        try self.rejectDuplicateConceptSignatures(signatures.items);
+
         return .{
             .name = name,
             .generic_params = generic_params,
             .signatures = try signatures.toOwnedSlice(),
-            .span = ast.spanFromBounds(concept_token.span.start, spanEnd(end_span)),
+            .is_marker = marker_token != null,
+            .is_unsafe = unsafe_token != null,
+            .span = ast.spanFromBounds(start_token.span.start, spanEnd(end_span)),
         };
+    }
+
+    fn rejectDuplicateConceptSignatures(self: *Parser, signatures: []const ast.SignatureDecl) !void {
+        for (signatures, 0..) |signature, index| {
+            for (signatures[0..index]) |existing| {
+                if (std.mem.eql(u8, existing.name.base.text, signature.name.base.text) and existing.params.len == signature.params.len) {
+                    try self.diagnostics.append(diagnostics_model.duplicateConceptRequirement(signature.name.span));
+                    break;
+                }
+            }
+        }
     }
 
     fn parseInterfaceDecl(self: *Parser, allocator: std.mem.Allocator) !ast.InterfaceDecl {
@@ -2128,6 +2170,14 @@ pub const Parser = struct {
             ast.NameSegment{ .text = "", .span = self.current().span };
     }
 
+    fn parseRequiredConceptGenericParams(self: *Parser, allocator: std.mem.Allocator) ![]ast.GenericParam {
+        const params = try self.parseOptionalGenericParams(allocator);
+        if (params.len == 0) {
+            try self.report(.UnexpectedToken, "expected concept type parameter list", self.current().span);
+        }
+        return params;
+    }
+
     fn parseOptionalGenericParams(self: *Parser, allocator: std.mem.Allocator) ![]ast.GenericParam {
         var params = std.ArrayList(ast.GenericParam).init(allocator);
         errdefer params.deinit();
@@ -2136,7 +2186,15 @@ pub const Parser = struct {
         while (self.current().kind != .eof and self.current().kind != .greater and self.current().kind != .left_brace and self.current().kind != .semicolon) {
             if (self.current().kind == .identifier) {
                 const param = self.advance();
-                try params.append(.{ .text = param.lexeme, .span = param.span });
+                var duplicate = false;
+                for (params.items) |existing| {
+                    if (std.mem.eql(u8, existing.text, param.lexeme)) {
+                        try self.diagnostics.append(diagnostics_model.duplicateConceptTypeParameter(param.span));
+                        duplicate = true;
+                        break;
+                    }
+                }
+                if (!duplicate) try params.append(.{ .text = param.lexeme, .span = param.span });
                 if (self.match(.comma) != null) continue;
                 if (self.current().kind == .greater) break;
                 try self.report(.UnexpectedToken, "expected ',' between generic parameters", self.current().span);
@@ -2235,7 +2293,11 @@ pub const Parser = struct {
             self.recoverSignature();
         }
 
-        const end_span = if (self.match(.semicolon)) |semicolon| semicolon.span else blk: {
+        const end_span = if (self.current().kind == .left_brace) blk: {
+            try self.diagnostics.append(diagnostics_model.invalidConceptRequirement(self.current().span, "concept requirement bodies are not supported"));
+            self.skipFunctionBody();
+            break :blk last_span;
+        } else if (self.match(.semicolon)) |semicolon| semicolon.span else blk: {
             try self.report(.UnexpectedToken, "expected ';' after signature declaration", self.current().span);
             break :blk last_span;
         };

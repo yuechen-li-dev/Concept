@@ -658,3 +658,31 @@ Supported inference patterns are intentionally small:
 Instantiated function names are deterministic and include a concrete type suffix, for example `identity__int` or `identity__struct_Vec2`. The existing C backend escaping then emits stable backend symbols such as `cpt_f_identity__int`. An instantiation cache keyed by the generic function and concrete type argument tuple ensures repeated calls such as `identity(3)` and `identity(4)` reuse one concrete function, while calls with different concrete type arguments produce distinct functions.
 
 The MIR path remains concrete-only. Generic template functions are not lowered, and the MIR validator rejects any `type_param` TypeId that reaches executable MIR. Constrained generic calls report `CON0087` until concept declarations and satisfaction are implemented in later milestones. Conflicting type inference reports `CON0088`, uninferred type parameters report `CON0089`, and unsupported generic instantiation patterns report `CON0090`.
+
+## P8-M4 concept declaration parsing and HIR
+
+P8-M4 establishes concept declarations as a compile-time declaration surface. Ordinary concepts parse as named, generic declarations with a required type-parameter list and a braced list of requirement signatures:
+
+```cpp
+concept Equatable<T> {
+    bool equals(T left, T right);
+};
+```
+
+Marker concepts parse as semicolon-terminated declarations with no requirement body:
+
+```cpp
+marker concept Copy<T>;
+unsafe marker concept ThreadSafe<T>;
+```
+
+The Stage 0 front end lowers concepts into HIR concept storage with:
+
+- concept name and source span;
+- marker and unsafe-marker flags;
+- symbolic concept type parameters backed by `type_param` TypeIds owned by the concept declaration;
+- static requirement signatures containing a return TypeId and typed parameter list.
+
+Requirement signatures are intentionally narrow in this milestone. They support ordinary function-like signatures over types already understood by semantic type-name resolution, including builtin types, nominal struct/enum types, concept type parameters, and raw pointers to those types. Requirement bodies, associated types, where clauses, default implementations, operator requirements beyond the existing parser surface, references in semantic lowering, and concept-provided calls in generic bodies remain deferred.
+
+Concepts have no runtime representation. They are not ordinary functions, are skipped by executable HIR checking, are not lowered to MIR, and are not emitted by the C backend. P8-M4 does not implement `impl` declarations, concept satisfaction, constrained generic execution, marker derivation, interfaces, or dynamic dispatch. Constrained generic calls continue to report unsupported-instantiation diagnostics until later Phase 8 milestones add satisfaction and constrained monomorphization.

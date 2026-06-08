@@ -231,6 +231,8 @@ pub const ConceptDecl = struct {
     name: NameSegment,
     generic_params: []GenericParam,
     signatures: []SignatureDecl,
+    is_marker: bool = false,
+    is_unsafe: bool = false,
     span: SourceSpan,
 
     pub fn deinit(self: ConceptDecl, allocator: std.mem.Allocator) void {
@@ -1018,7 +1020,15 @@ pub const Item = union(enum) {
             },
             .concept_decl => |concept_decl| {
                 try writeAttributesDebug(concept_decl.attributes, writer);
-                try writer.writeAll("  Concept ");
+                if (concept_decl.is_unsafe and concept_decl.is_marker) {
+                    try writer.writeAll("  Unsafe Marker Concept ");
+                } else if (concept_decl.is_marker) {
+                    try writer.writeAll("  Marker Concept ");
+                } else if (concept_decl.is_unsafe) {
+                    try writer.writeAll("  Unsafe Concept ");
+                } else {
+                    try writer.writeAll("  Concept ");
+                }
                 try writer.writeAll(concept_decl.name.text);
                 if (concept_decl.generic_params.len != 0) {
                     try writer.writeByte('<');

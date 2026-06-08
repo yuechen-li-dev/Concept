@@ -1,0 +1,12 @@
+# name: concept multiple requirements
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Concepts;
+
+concept Hashable<T> {
+    bool equals(T left, T right);
+    int hash(T value);
+};

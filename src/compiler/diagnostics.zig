@@ -88,6 +88,11 @@ pub const DiagnosticCode = enum {
     GenericTypeInferenceConflict,
     GenericTypeParameterUninferred,
     UnsupportedGenericInstantiation,
+    DuplicateConceptTypeParameter,
+    DuplicateConceptRequirement,
+    InvalidConceptRequirement,
+    MarkerConceptCannotHaveRequirements,
+    NonMarkerConceptRequiresBody,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -157,6 +162,11 @@ pub const DiagnosticCode = enum {
             .GenericTypeInferenceConflict => "CON0088",
             .GenericTypeParameterUninferred => "CON0089",
             .UnsupportedGenericInstantiation => "CON0090",
+            .DuplicateConceptTypeParameter => "CON0091",
+            .DuplicateConceptRequirement => "CON0092",
+            .InvalidConceptRequirement => "CON0093",
+            .MarkerConceptCannotHaveRequirements => "CON0094",
+            .NonMarkerConceptRequiresBody => "CON0095",
         };
     }
 };
@@ -302,6 +312,26 @@ pub fn invalidEscapeSequence(span: SourceSpan) Diagnostic {
         "invalid escape sequence",
         span,
     ).withHelp("use a recognized escape sequence");
+}
+
+pub fn duplicateConceptTypeParameter(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.DuplicateConceptTypeParameter, .@"error", "duplicate concept type parameter", span);
+}
+
+pub fn duplicateConceptRequirement(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.DuplicateConceptRequirement, .@"error", "duplicate concept requirement", span);
+}
+
+pub fn invalidConceptRequirement(span: SourceSpan, message: []const u8) Diagnostic {
+    return Diagnostic.init(.InvalidConceptRequirement, .@"error", message, span);
+}
+
+pub fn markerConceptCannotHaveRequirements(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.MarkerConceptCannotHaveRequirements, .@"error", "marker concept cannot have requirements", span);
+}
+
+pub fn nonMarkerConceptRequiresBody(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.NonMarkerConceptRequiresBody, .@"error", "non-marker concept requires a requirement body", span);
 }
 
 pub fn duplicateTopLevelName(span: SourceSpan) Diagnostic {

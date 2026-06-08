@@ -710,6 +710,55 @@ test "language parse fixture: phase8 template invalid constraint" {
     try expectParseFixture("../../../language/phase8-concepts-templates/invalid/template_invalid_constraint.invalid.conception");
 }
 
+
+test "language check fixture: phase8 concept equatable declaration" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/valid/concept_equatable_decl.valid.conception");
+}
+
+test "language check fixture: phase8 concept multiple requirements" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/valid/concept_multiple_requirements.valid.conception");
+}
+
+test "language check fixture: phase8 marker concept declaration" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/valid/concept_marker_decl.valid.conception");
+}
+
+test "language check fixture: phase8 unsafe marker concept declaration" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/valid/concept_unsafe_marker_decl.valid.conception");
+}
+
+test "language check fixture: phase8 concept pointer requirement" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/valid/concept_pointer_requirement.valid.conception");
+}
+
+test "language parse fixture: phase8 concept duplicate type parameter" {
+    try expectParseFixture("../../../language/phase8-concepts-templates/invalid/concept_duplicate_type_param.invalid.conception");
+}
+
+test "language parse fixture: phase8 concept duplicate requirement" {
+    try expectParseFixture("../../../language/phase8-concepts-templates/invalid/concept_duplicate_requirement.invalid.conception");
+}
+
+test "language parse fixture: phase8 marker concept with body" {
+    try expectParseFixture("../../../language/phase8-concepts-templates/invalid/concept_marker_with_body.invalid.conception");
+}
+
+test "language parse fixture: phase8 non-marker concept without body" {
+    try expectParseFixture("../../../language/phase8-concepts-templates/invalid/concept_non_marker_without_body.invalid.conception");
+}
+
+test "language parse fixture: phase8 concept requirement body" {
+    try expectParseFixture("../../../language/phase8-concepts-templates/invalid/concept_requirement_body.invalid.conception");
+}
+
+test "language check fixture: phase8 concept unknown type in requirement" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/concept_unknown_type_in_requirement.invalid.conception");
+}
+
+test "language check fixture: phase8 concept duplicate top level name" {
+    try expectCheckFixture("../../../language/phase8-concepts-templates/invalid/concept_duplicate_top_level_name.invalid.conception");
+}
+
 test "language check fixture: phase8 template identity declaration" {
     try expectCheckFixture("../../../language/phase8-concepts-templates/valid/template_identity_decl.valid.conception");
 }

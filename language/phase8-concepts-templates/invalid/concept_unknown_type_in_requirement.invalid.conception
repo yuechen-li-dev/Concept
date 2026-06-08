@@ -1,0 +1,14 @@
+# name: concept unknown type in requirement
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Concepts;
+
+concept Bad<T> {
+    bool test(Unknown value);
+};
+
+=== diagnostics ===
+CON0021
