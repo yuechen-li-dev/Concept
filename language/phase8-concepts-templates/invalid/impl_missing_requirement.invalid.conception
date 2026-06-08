@@ -1,0 +1,21 @@
+# name: impl missing requirement
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+concept Equatable<T> {
+    bool equals(T left, T right);
+};
+
+struct Vec2 {
+    int x;
+};
+
+impl Equatable<Vec2> {
+}
+
+=== diagnostics ===
+CON0102

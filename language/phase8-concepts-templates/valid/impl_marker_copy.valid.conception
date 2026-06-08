@@ -1,0 +1,20 @@
+# name: impl marker copy
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+marker concept Copy<T>;
+
+struct Vec2 {
+    int x;
+    int y;
+};
+
+impl Copy<Vec2>;
+
+int main() {
+    return 0;
+}

@@ -93,6 +93,17 @@ pub const DiagnosticCode = enum {
     InvalidConceptRequirement,
     MarkerConceptCannotHaveRequirements,
     NonMarkerConceptRequiresBody,
+    DuplicateImpl,
+    UnknownConcept,
+    ConceptArityMismatch,
+    InvalidImplTarget,
+    MissingConceptRequirementImpl,
+    InvalidConceptRequirementImplSignature,
+    ExtraConceptImplFunction,
+    DuplicateConceptImplFunction,
+    MarkerConceptImplCannotHaveFunctions,
+    UnsafeImplRequired,
+    UnsafeImplNotAllowed,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -167,6 +178,17 @@ pub const DiagnosticCode = enum {
             .InvalidConceptRequirement => "CON0093",
             .MarkerConceptCannotHaveRequirements => "CON0094",
             .NonMarkerConceptRequiresBody => "CON0095",
+            .DuplicateImpl => "CON0098",
+            .UnknownConcept => "CON0099",
+            .ConceptArityMismatch => "CON0100",
+            .InvalidImplTarget => "CON0101",
+            .MissingConceptRequirementImpl => "CON0102",
+            .InvalidConceptRequirementImplSignature => "CON0103",
+            .ExtraConceptImplFunction => "CON0104",
+            .DuplicateConceptImplFunction => "CON0105",
+            .MarkerConceptImplCannotHaveFunctions => "CON0106",
+            .UnsafeImplRequired => "CON0107",
+            .UnsafeImplNotAllowed => "CON0108",
         };
     }
 };
@@ -332,6 +354,50 @@ pub fn markerConceptCannotHaveRequirements(span: SourceSpan) Diagnostic {
 
 pub fn nonMarkerConceptRequiresBody(span: SourceSpan) Diagnostic {
     return Diagnostic.init(.NonMarkerConceptRequiresBody, .@"error", "non-marker concept requires a requirement body", span);
+}
+
+pub fn duplicateImpl(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.DuplicateImpl, .@"error", "duplicate concept impl", span);
+}
+
+pub fn unknownConcept(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.UnknownConcept, .@"error", "unknown concept", span);
+}
+
+pub fn conceptArityMismatch(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.ConceptArityMismatch, .@"error", "concept impl type argument count does not match concept arity", span);
+}
+
+pub fn invalidImplTarget(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.InvalidImplTarget, .@"error", "invalid concept impl target", span);
+}
+
+pub fn missingConceptRequirementImpl(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.MissingConceptRequirementImpl, .@"error", "missing concept requirement implementation", span);
+}
+
+pub fn invalidConceptRequirementImplSignature(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.InvalidConceptRequirementImplSignature, .@"error", "concept requirement implementation signature does not match", span);
+}
+
+pub fn extraConceptImplFunction(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.ExtraConceptImplFunction, .@"error", "extra function in concept impl", span);
+}
+
+pub fn duplicateConceptImplFunction(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.DuplicateConceptImplFunction, .@"error", "duplicate function in concept impl", span);
+}
+
+pub fn markerConceptImplCannotHaveFunctions(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.MarkerConceptImplCannotHaveFunctions, .@"error", "marker concept impl cannot have functions", span);
+}
+
+pub fn unsafeImplRequired(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.UnsafeImplRequired, .@"error", "unsafe marker concept requires unsafe impl", span);
+}
+
+pub fn unsafeImplNotAllowed(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.UnsafeImplNotAllowed, .@"error", "unsafe impl is not allowed for safe concepts", span);
 }
 
 pub fn duplicateTopLevelName(span: SourceSpan) Diagnostic {

@@ -1,0 +1,28 @@
+# name: impl extra function
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+concept Copyable<T> {
+    bool copyable(T value);
+};
+
+struct Vec2 {
+    int x;
+};
+
+impl Copyable<Vec2> {
+    bool copyable(Vec2 value) {
+        return true;
+    }
+
+    bool extra(Vec2 value) {
+        return true;
+    }
+}
+
+=== diagnostics ===
+CON0104

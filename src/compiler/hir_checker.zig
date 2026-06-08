@@ -98,6 +98,7 @@ const Checker = struct {
         for (self.module.hir.functions.items, 0..) |function, index| {
             const function_id = hir.FunctionId{ .index = @intCast(index) };
             if (self.module.hir.isGenericFunction(function_id)) continue;
+            if (self.module.hir.isConceptWitnessFunction(function_id)) continue;
             if (std.mem.eql(u8, self.module.interner.text(function.name), "main")) return function_id;
         }
         return null;
@@ -539,7 +540,6 @@ const Checker = struct {
             else => null,
         };
     }
-
 
     // ─────────────────────────────────────────────────────────────────────────────
     // Generic function instantiation

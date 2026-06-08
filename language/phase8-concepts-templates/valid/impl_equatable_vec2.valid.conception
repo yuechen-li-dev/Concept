@@ -1,0 +1,26 @@
+# name: impl equatable vec2
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+concept Equatable<T> {
+    bool equals(T left, T right);
+};
+
+struct Vec2 {
+    int x;
+    int y;
+};
+
+impl Equatable<Vec2> {
+    bool equals(Vec2 left, Vec2 right) {
+        return left.x == right.x && left.y == right.y;
+    }
+}
+
+int main() {
+    return 0;
+}
