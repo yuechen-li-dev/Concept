@@ -1,0 +1,20 @@
+# name: safe marker unsafe impl
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+marker concept Copy<T>;
+
+struct Box { int value; };
+
+unsafe impl Copy<Box>;
+
+int main() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0108

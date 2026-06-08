@@ -712,3 +712,40 @@ Within constrained generic bodies, calls whose name and arity match exactly one 
 Marker concept constraints use the same impl-satisfaction path when represented by the existing marker impl storage, for example `template<T: Copy<T>>` with `impl Copy<Box>;`.
 
 Still deferred: generic structs/enums, generic methods, bridge-module/full coherence, associated types, where clauses, operator requirements, default implementations, specialization, interfaces/dyn dispatch, runtime concept objects, and comptime.
+
+
+### P8-M7 marker/audit concept scaffold
+
+P8-M7 stabilizes marker concepts as an explicit audit scaffold rather than as an ownership, layout, or runtime feature. Marker concepts remain compile-time-only declarations with no runtime representation, no generated marker objects, and no MIR/backend output of their own.
+
+Marker categories are now documented as:
+
+- ordinary user marker concepts, declared with `marker concept Name<T>;` and satisfied with safe `impl Name<Type>;`;
+- unsafe marker concepts, declared with `unsafe marker concept Name<T>;`, for human-audited safety, layout, or concurrency claims that must be satisfied with `unsafe impl Name<Type>;`;
+- future compiler-known markers, currently recognized only as metadata when source declares the corresponding one-parameter marker concept.
+
+The Stage 0 HIR stores a non-semantic known-marker metadata field for these source-declared one-parameter marker names:
+
+```text
+Copy<T>        duplicate without ownership transfer
+Move<T>        movable value
+Trivial<T>     trivial construction/destruction behavior
+Relocatable<T> may be relocated without breaking invariants
+Pod<T>         plain-old-data/layout/FFI claim
+```
+
+This recognition has no type-checking, ownership, drop, move-checking, layout, ABI, derive, or auto-derive effect. It exists so debug output and fixtures can make future compiler-known marker intent stable and searchable while source still owns the declaration.
+
+Unsafe audit markers are deliberately searchable. A safe `impl` for an unsafe marker concept is rejected, and `unsafe impl` for a safe marker or ordinary safe concept is rejected. Marker impls cannot provide witness functions. Ordinary non-marker concept impls still provide the declared requirement witnesses.
+
+Marker constraints participate in the P8-M6 constrained-instantiation path when a visible concrete impl satisfies the constraint. This includes unsafe marker constraints after the source has provided the required `unsafe impl`; there is still no runtime marker representation or dynamic dispatch.
+
+Future unsafe audit markers may include:
+
+```text
+ThreadSafe<T>      unsafe human concurrency claim
+InterruptSafe<T>   unsafe interrupt-context claim
+LockFree<T>        unsafe progress/concurrency claim
+```
+
+Still deferred: derive, auto-derive, compiler-proven marker inference, ownership/drop integration, move checking, `Copy` semantics, `Pod` layout semantics, bridge modules/full orphan rules, runtime marker representation, generic structs/enums, associated types, where clauses, interfaces/dyn dispatch, and comptime.

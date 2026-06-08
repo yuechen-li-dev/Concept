@@ -1,0 +1,24 @@
+# name: marker impl with function
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+marker concept Copy<T>;
+
+struct Box { int value; };
+
+impl Copy<Box> {
+    int clone(Box value) {
+        return value.value;
+    }
+};
+
+int main() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0106

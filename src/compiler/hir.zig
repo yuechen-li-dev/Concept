@@ -74,6 +74,36 @@ pub const HirConceptRequirement = struct {
     span: SourceSpan,
 };
 
+pub const MarkerKind = enum {
+    user,
+    copy,
+    move,
+    trivial,
+    relocatable,
+    pod,
+
+    pub fn fromDeclaredName(name: []const u8, arity: usize) MarkerKind {
+        if (arity != 1) return .user;
+        if (std.mem.eql(u8, name, "Copy")) return .copy;
+        if (std.mem.eql(u8, name, "Move")) return .move;
+        if (std.mem.eql(u8, name, "Trivial")) return .trivial;
+        if (std.mem.eql(u8, name, "Relocatable")) return .relocatable;
+        if (std.mem.eql(u8, name, "Pod")) return .pod;
+        return .user;
+    }
+
+    pub fn displayName(self: MarkerKind) []const u8 {
+        return switch (self) {
+            .user => "User",
+            .copy => "Copy",
+            .move => "Move",
+            .trivial => "Trivial",
+            .relocatable => "Relocatable",
+            .pod => "Pod",
+        };
+    }
+};
+
 pub const HirConcept = struct {
     name: SymbolId,
     span: SourceSpan,
@@ -81,6 +111,7 @@ pub const HirConcept = struct {
     requirements: []HirConceptRequirement,
     is_marker: bool = false,
     is_unsafe: bool = false,
+    known_marker_kind: MarkerKind = .user,
 };
 
 pub const HirConceptImpl = struct {
@@ -472,6 +503,10 @@ pub const HirStore = struct {
         concept.type_params = type_params;
     }
 
+    pub fn setConceptKnownMarkerKind(self: *HirStore, id: ConceptId, kind: MarkerKind) void {
+        self.getConceptMut(id).known_marker_kind = kind;
+    }
+
     pub fn setConceptRequirements(self: *HirStore, id: ConceptId, requirements: []HirConceptRequirement) void {
         const concept = self.getConceptMut(id);
         for (concept.requirements) |requirement| {
@@ -844,7 +879,9 @@ pub const HirStore = struct {
             }
         }
         for (self.concepts.items) |concept| {
-            try writer.print("  {s}{s}Concept {s}\n", .{ if (concept.is_unsafe) "Unsafe " else "", if (concept.is_marker) "Marker " else "", interner.text(concept.name) });
+            try writer.print("  {s}{s}Concept {s}", .{ if (concept.is_unsafe) "Unsafe " else "", if (concept.is_marker) "Marker " else "", interner.text(concept.name) });
+            if (concept.known_marker_kind != .user) try writer.print(" known_marker={s}", .{concept.known_marker_kind.displayName()});
+            try writer.writeByte('\n');
             if (concept.type_params.len != 0) {
                 try writer.writeAll("    TypeParams\n");
                 for (concept.type_params, 0..) |type_param, type_param_index| {
@@ -1278,6 +1315,16 @@ test "HIR debug formatting includes generic functions" {
         \\      ParamId(0) value: TypeId(3)
         \\
     , rendered);
+}
+
+test "marker kind registry recognizes known one-parameter markers only" {
+    try std.testing.expectEqual(MarkerKind.copy, MarkerKind.fromDeclaredName("Copy", 1));
+    try std.testing.expectEqual(MarkerKind.move, MarkerKind.fromDeclaredName("Move", 1));
+    try std.testing.expectEqual(MarkerKind.trivial, MarkerKind.fromDeclaredName("Trivial", 1));
+    try std.testing.expectEqual(MarkerKind.relocatable, MarkerKind.fromDeclaredName("Relocatable", 1));
+    try std.testing.expectEqual(MarkerKind.pod, MarkerKind.fromDeclaredName("Pod", 1));
+    try std.testing.expectEqual(MarkerKind.user, MarkerKind.fromDeclaredName("Copy", 2));
+    try std.testing.expectEqual(MarkerKind.user, MarkerKind.fromDeclaredName("ThreadSafe", 1));
 }
 
 test "concept impl storage and lookup helpers" {

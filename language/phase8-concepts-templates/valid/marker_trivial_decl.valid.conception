@@ -1,0 +1,13 @@
+# name: marker trivial declaration
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+marker concept Trivial<T>;
+
+int main() {
+    return 0;
+}
