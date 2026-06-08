@@ -1,0 +1,65 @@
+# name: phase8 concepts templates pipeline run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+concept Equatable<T> {
+    bool equals(T left, T right);
+};
+
+marker concept Copy<T>;
+
+struct Vec2 {
+    int x;
+    int y;
+};
+
+impl Equatable<Vec2> {
+    bool equals(Vec2 left, Vec2 right) {
+        return left.x == right.x && left.y == right.y;
+    }
+}
+
+impl Copy<Vec2>;
+
+template<T>
+T identity(T value) {
+    return value;
+}
+
+template<T: Copy<T>>
+T pass(T value) {
+    return value;
+}
+
+template<T: Equatable<T>>
+bool areEqual(T left, T right) {
+    return equals(left, right);
+}
+
+int main() {
+    int n = identity(5);
+
+    Vec2 a = identity(Vec2 {
+        x: n,
+        y: 2,
+    });
+
+    Vec2 b = pass(Vec2 {
+        x: 5,
+        y: 2,
+    });
+
+    bool same = areEqual(a, b);
+
+    if (same) {
+        return 8;
+    }
+
+    return 1;
+}
+
+=== run ===
+exit_code: 8
