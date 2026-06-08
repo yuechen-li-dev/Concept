@@ -1,0 +1,10 @@
+module Main;
+
+template<T>
+T identity(T value) {
+    return value;
+}
+
+int main() {
+    return identity(7);
+}

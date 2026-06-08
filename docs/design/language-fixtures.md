@@ -53,6 +53,14 @@ Phase 6 fixtures live under `language/phase6-unsafe-ownership/valid/` and `langu
 
 Invalid fixtures cover unsafe calls outside unsafe context, dereference outside unsafe context, dereference of non-pointer values, pointer type mismatches, and address-of temporary/call-result expressions.
 
+## Phase 8 concepts/templates fixtures
+
+Phase 8 fixtures live under `language/phase8-concepts-templates/` and cover the closed concepts/templates v0 surface. Valid fixtures cover template declarations, HIR generic declarations, unconstrained generic instantiation, constrained generic success, marker constraints, impl declarations, unsafe marker declarations/impls, and the comprehensive runtime pipeline that flows through parse, HIR checking, MIR lowering, MIR validation, MIR-backed C emission, `zig cc`, and native execution.
+
+Invalid fixtures cover malformed template syntax, type parameters out of scope, generic inference conflicts, uninferred type parameters, missing concept impls, invalid concept requirements, duplicate impls, unsafe marker audit failures, invalid marker witness bodies, constrained arity mismatches, and unsupported constrained forms outside the v0 shape.
+
+Phase 8 MIR/backend coverage is intentionally concrete-only: the pipeline run fixture and targeted compiler tests assert that template declarations, concepts, marker concepts, and type-parameter types do not leak into executable MIR or backend C, while deterministic instantiated function names and referenced static witness calls are emitted.
+
 ## `.conception` format
 
 A `.conception` file is a small sectioned text format. Headers appear before any section and use `# key: value` metadata lines.
