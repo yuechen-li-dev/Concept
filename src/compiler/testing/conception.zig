@@ -2174,6 +2174,11 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase9-compile-time/valid/compile_time_function_abs_static_assert.valid.conception");
     try expectRunFixture("../../../language/phase9-compile-time/valid/compile_time_function_nested_if.valid.conception");
     try expectRunFixture("../../../language/phase9-compile-time/valid/compile_time_function_local_assignment_run.valid.conception");
+    try expectRunFixture("../../../language/phase9-compile-time/valid/compile_time_function_while_sum_run.valid.conception");
+    try expectRunFixture("../../../language/phase9-compile-time/valid/compile_time_function_while_count_run.valid.conception");
+    try expectRunFixture("../../../language/phase9-compile-time/valid/compile_time_function_while_return.valid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/valid/static_assert_compile_time_while.valid.conception");
+    try expectRunFixture("../../../language/phase9-compile-time/valid/compile_time_function_while_false_fallthrough.valid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/valid/static_assert_true.valid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/valid/static_assert_arithmetic.valid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/valid/static_assert_bool_logic.valid.conception");
@@ -2189,6 +2194,10 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_function_runtime_call.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_function_missing_return.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_function_if_non_bool.invalid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_while_condition_non_bool.invalid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_while_fuel_exhausted.invalid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_while_missing_return.invalid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_while_runtime_call.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_function_while_unsupported.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_function_local_struct_unsupported.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_function_if_unsupported_executed_branch.invalid.conception");

@@ -1,0 +1,23 @@
+# name: static assert compile-time while
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+comptime int countTo(int n) {
+    int i = 0;
+
+    while (i < n) {
+        i = i + 1;
+    }
+
+    return i;
+}
+
+static_assert(countTo(42) == 42);
+
+int main() {
+    return 0;
+}

@@ -108,7 +108,7 @@ const Checker = struct {
             self.compile_time_context_depth += 1;
             defer self.compile_time_context_depth -= 1;
             _ = try self.checkExpr(self.module.types.voidType(), static_assert.expr);
-            const evaluator = compile_time.CompileTimeEvaluator.init(self.module, self.allocator);
+            var evaluator = compile_time.CompileTimeEvaluator.init(self.module, self.allocator);
             const value = evaluator.evaluateExpr(static_assert.expr) catch |err| {
                 try self.reportCompileTimeError(err, static_assert.span);
                 return error.InvalidSemanticModule;
@@ -271,7 +271,7 @@ const Checker = struct {
                 self.compile_time_context_depth += 1;
                 defer self.compile_time_context_depth -= 1;
                 _ = try self.checkExpr(return_type, compile_time_expr.operand);
-                const evaluator = compile_time.CompileTimeEvaluator.init(self.module, self.allocator);
+                var evaluator = compile_time.CompileTimeEvaluator.init(self.module, self.allocator);
                 const value = evaluator.evaluateExpr(compile_time_expr.operand) catch |err| {
                     try self.reportCompileTimeError(err, expr.span);
                     return error.InvalidSemanticModule;
@@ -533,6 +533,8 @@ const Checker = struct {
             error.IfRequiresBool => try self.reportAt(.CompileTimeIfRequiresBool, "compile-time if condition must evaluate to bool", span),
             error.UnboundLocal => try self.reportAt(.CompileTimeUnboundLocal, "compile-time local reference has no active binding", span),
             error.AssignmentTypeMismatch => try self.reportAt(.CompileTimeAssignmentTypeMismatch, "compile-time local assignment type mismatch", span),
+            error.FuelExhausted => try self.reportAt(.CompileTimeFuelExhausted, "compile-time evaluation exceeded its step limit; likely non-terminating or too-expensive compile-time execution", span),
+            error.WhileRequiresBool => try self.reportAt(.CompileTimeWhileRequiresBool, "compile-time while condition must evaluate to bool", span),
         }
     }
 
@@ -1856,8 +1858,8 @@ test "HIR checker rejects unsupported compile-time function body statement" {
     defer tm.deinit();
 
     const bad = try tm.compileTimeFunction("bad", tm.module.types.intType());
-    const while_stmt = try addTestStmt(&tm.module.hir, .{ .while_stmt = .{ .condition = try tm.boolLit(false), .body = try tm.block(&.{}) } });
-    tm.setBody(bad, try tm.block(&.{ while_stmt, try tm.ret(try tm.int("1")) }));
+    const expr_stmt = try addTestStmt(&tm.module.hir, .{ .expr_stmt = try tm.int("0") });
+    tm.setBody(bad, try tm.block(&.{ expr_stmt, try tm.ret(try tm.int("1")) }));
 
     const main = try tm.function("main", tm.module.types.intType());
     const args = try std.testing.allocator.dupe(hir.ExprId, &.{});

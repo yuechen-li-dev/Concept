@@ -1,0 +1,20 @@
+# name: compile-time while missing return
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+comptime int bad(bool flag) {
+    while (flag) {
+        return 1;
+    }
+}
+
+int main() {
+    return comptime bad(false);
+}
+
+=== diagnostics ===
+CON0134

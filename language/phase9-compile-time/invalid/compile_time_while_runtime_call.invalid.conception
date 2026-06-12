@@ -1,4 +1,4 @@
-# name: compile-time function while unsupported body
+# name: compile-time while runtime call
 # phase: check
 # check: hir
 # expect: fail
@@ -6,12 +6,18 @@
 === source ===
 module Main;
 
+int runtimeValue() {
+    return 1;
+}
+
 comptime int bad() {
-    while (true) {
-        discard 0;
+    int i = 0;
+
+    while (i < 1) {
+        i = runtimeValue();
     }
 
-    return 42;
+    return i;
 }
 
 int main() {
@@ -19,4 +25,4 @@ int main() {
 }
 
 === diagnostics ===
-CON0132
+CON0127

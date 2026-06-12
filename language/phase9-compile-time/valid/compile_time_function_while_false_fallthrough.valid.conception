@@ -1,0 +1,21 @@
+# name: compile-time function while false fallthrough
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+comptime int fallthrough() {
+    while (false) {
+        return 1;
+    }
+
+    return 7;
+}
+
+int main() {
+    return comptime fallthrough();
+}
+
+=== run ===
+exit_code: 7
