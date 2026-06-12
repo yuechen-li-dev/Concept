@@ -140,6 +140,8 @@ pub const DiagnosticCode = enum {
     StaticAssertRequiresBool,
     UseBeforeInitialization,
     UseAfterMove,
+    MoveRequiresPlace,
+    PartialMoveUnsupported,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -261,6 +263,8 @@ pub const DiagnosticCode = enum {
             .CompileTimeTargetMetadataUnavailable => "CON0146",
             .UseBeforeInitialization => "CON0150",
             .UseAfterMove => "CON0151",
+            .MoveRequiresPlace => "CON0152",
+            .PartialMoveUnsupported => "CON0153",
         };
     }
 };
@@ -697,6 +701,8 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0146", DiagnosticCode.CompileTimeTargetMetadataUnavailable.format());
     try std.testing.expectEqualStrings("CON0150", DiagnosticCode.UseBeforeInitialization.format());
     try std.testing.expectEqualStrings("CON0151", DiagnosticCode.UseAfterMove.format());
+    try std.testing.expectEqualStrings("CON0152", DiagnosticCode.MoveRequiresPlace.format());
+    try std.testing.expectEqualStrings("CON0153", DiagnosticCode.PartialMoveUnsupported.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {
@@ -984,6 +990,14 @@ pub fn useBeforeInitialization(span: SourceSpan) Diagnostic {
 
 pub fn useAfterMove(span: SourceSpan) Diagnostic {
     return Diagnostic.init(.UseAfterMove, .@"error", "use of moved storage", span);
+}
+
+pub fn moveRequiresPlace(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.MoveRequiresPlace, .@"error", "move requires a whole local or parameter place", span);
+}
+
+pub fn partialMoveUnsupported(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.PartialMoveUnsupported, .@"error", "field and partial moves are not supported yet", span);
 }
 
 pub fn unsupportedCBackendType(span: SourceSpan) Diagnostic {

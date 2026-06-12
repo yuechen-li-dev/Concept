@@ -2233,4 +2233,15 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/static_assert_compile_time_function_false.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/static_assert_division_by_zero.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/static_assert_overflow.invalid.conception");
+
+    try expectRunFixture("../../../language/phase10-ownership/valid/move_struct_local_run.valid.conception");
+    try expectRunFixture("../../../language/phase10-ownership/valid/move_struct_argument_run.valid.conception");
+    try expectRunFixture("../../../language/phase10-ownership/valid/move_int_copy_run.valid.conception");
+    try expectRunFixture("../../../language/phase10-ownership/valid/move_bool_copy_run.valid.conception");
+    try expectCheckFixture("../../../language/phase10-ownership/invalid/use_after_move_local.invalid.conception");
+    try expectCheckFixture("../../../language/phase10-ownership/invalid/use_after_move_argument.invalid.conception");
+    try expectCheckFixture("../../../language/phase10-ownership/invalid/move_temporary_call.invalid.conception");
+    try expectCheckFixture("../../../language/phase10-ownership/invalid/move_struct_literal.invalid.conception");
+    try expectCheckFixture("../../../language/phase10-ownership/invalid/move_field_unsupported.invalid.conception");
+    try expectCheckFixture("../../../language/phase10-ownership/invalid/move_after_move.invalid.conception");
 }

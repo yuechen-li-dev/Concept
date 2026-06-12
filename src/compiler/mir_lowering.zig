@@ -404,6 +404,7 @@ const FunctionLowerer = struct {
             .unary => |unary| try self.lowerUnary(expr, unary, block_id),
             .address_of => |operand| try self.lowerAddressOf(expr, operand, block_id),
             .deref => |operand| try self.lowerDeref(expr, operand, block_id),
+            .move_expr => |operand| try self.lowerMove(expr, operand, block_id),
             .binary => |binary| try self.lowerBinary(expr, binary, block_id),
             .call => |call| try self.lowerCall(expr, call, block_id),
             .concept_requirement_call, .target_metadata => error.InvalidMirLowering,
@@ -458,6 +459,26 @@ const FunctionLowerer = struct {
             .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(temp), mir.MirRvalue.dereference(lowered.operand)),
         });
         return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = lowered.block };
+    }
+
+    fn lowerMove(self: *FunctionLowerer, expr: hir.HirExpr, operand: hir.ExprId, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const place = try self.lowerMovablePlace(operand);
+        const temp = try self.addTemp(try self.inferExprTypeFrom(expr));
+        try self.store.appendStatement(block_id, .{
+            .span = expr.span,
+            .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(temp), mir.MirRvalue.movePlace(place)),
+        });
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = block_id };
+    }
+
+    fn lowerMovablePlace(self: *FunctionLowerer, expr_id: hir.ExprId) LoweringError!mir.MirPlace {
+        const expr = self.semantic_module.hir.getExpr(expr_id).*;
+        return switch (expr.kind) {
+            .local_ref => |local_id| mir.MirPlace.localPlace(try self.resolveLocal(local_id)),
+            .param_ref => |param_id| mir.MirPlace.localPlace(try self.resolveParam(param_id)),
+            .group => |inner| try self.lowerMovablePlace(inner),
+            else => error.InvalidMirLowering,
+        };
     }
 
     fn lowerAddressablePlace(self: *FunctionLowerer, expr_id: hir.ExprId) LoweringError!mir.MirPlace {
@@ -775,6 +796,7 @@ const FunctionLowerer = struct {
                 .logical_not => self.semantic_module.types.boolType(),
             },
             .address_of => |operand| try self.semantic_module.types.addPointerType(try self.inferAddressableExprType(operand)),
+            .move_expr => |operand| try self.inferMovableExprType(operand),
             .deref => |operand| blk: {
                 const operand_type = try self.inferExprType(operand);
                 break :blk switch (self.semantic_module.types.kind(operand_type)) {
@@ -820,6 +842,16 @@ const FunctionLowerer = struct {
             .param_ref => |param_id| self.semantic_module.hir.getParam(param_id).type_id,
             .group => |inner| try self.inferAddressableExprType(inner),
             .field_access => |field_access| self.semantic_module.hir.getField(try self.resolveFieldAccess(field_access.receiver, field_access.field_name)).type_id,
+            else => error.InvalidMirLowering,
+        };
+    }
+
+    fn inferMovableExprType(self: *FunctionLowerer, expr_id: hir.ExprId) LoweringError!types.TypeId {
+        const expr = self.semantic_module.hir.getExpr(expr_id).*;
+        return switch (expr.kind) {
+            .local_ref => |local_id| self.semantic_module.hir.getLocal(local_id).type_id,
+            .param_ref => |param_id| self.semantic_module.hir.getParam(param_id).type_id,
+            .group => |inner| try self.inferMovableExprType(inner),
             else => error.InvalidMirLowering,
         };
     }

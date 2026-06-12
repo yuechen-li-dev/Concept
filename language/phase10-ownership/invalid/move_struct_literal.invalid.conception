@@ -1,0 +1,19 @@
+# name: move struct literal
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+struct Box {
+    int value;
+};
+
+int main() {
+    Box b = move Box { value: 42 };
+    return b.value;
+}
+
+=== diagnostics ===
+CON0152

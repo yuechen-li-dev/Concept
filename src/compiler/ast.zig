@@ -340,6 +340,7 @@ pub const Expr = union(enum) {
     unary: UnaryExpr,
     address_of: PrefixExpr,
     deref: PrefixExpr,
+    move_expr: PrefixExpr,
     try_expr: TryExpr,
     compile_time: CompileTimeExpr,
     binary: BinaryExpr,
@@ -389,6 +390,7 @@ pub const Expr = union(enum) {
             .unary => |expr| expr.span,
             .address_of => |expr| expr.span,
             .deref => |expr| expr.span,
+            .move_expr => |expr| expr.span,
             .try_expr => |expr| expr.span,
             .compile_time => |expr| expr.span,
             .binary => |expr| expr.span,
@@ -406,7 +408,7 @@ pub const Expr = union(enum) {
                 expr.inner.deinit(allocator);
                 allocator.destroy(expr.inner);
             },
-            .unary, .address_of, .deref => |expr| {
+            .unary, .address_of, .deref, .move_expr => |expr| {
                 expr.operand.deinit(allocator);
                 allocator.destroy(expr.operand);
             },
@@ -488,6 +490,10 @@ pub const Expr = union(enum) {
             },
             .deref => |expr| {
                 try writer.writeAll("Deref\n");
+                try expr.operand.writeDebug(writer, depth + 1);
+            },
+            .move_expr => |expr| {
+                try writer.writeAll("Move\n");
                 try expr.operand.writeDebug(writer, depth + 1);
             },
             .try_expr => |expr| {

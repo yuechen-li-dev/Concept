@@ -1,0 +1,22 @@
+# name: move struct argument run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+struct Box {
+    int value;
+};
+
+int take(Box b) {
+    return b.value;
+}
+
+int main() {
+    Box a = Box { value: 42 };
+    return take(move a);
+}
+
+=== run ===
+exit_code: 42

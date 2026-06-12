@@ -250,6 +250,7 @@ fn emitHirExpr(writer: anytype, module: *const semantics.SemanticModule, expr_id
             try writer.writeByte('*');
             try emitHirExpr(writer, module, operand);
         },
+        .move_expr => |operand| try emitHirExpr(writer, module, operand),
         .binary => |binary| {
             try writer.writeByte('(');
             try emitHirExpr(writer, module, binary.left);
@@ -449,6 +450,7 @@ fn emitExpr(writer: anytype, expr: ast_model.Expr) !void {
             try writer.writeByte('*');
             try emitExpr(writer, deref.operand.*);
         },
+        .move_expr => |move_expr| try emitExpr(writer, move_expr.operand.*),
         .binary => |binary| {
             try writer.writeByte('(');
             try emitExpr(writer, binary.left.*);

@@ -26,6 +26,25 @@ Drop insertion, no `MaybeUninit`, no branch maybe-state diagnostics, no partial
 field state, and no Copy marker integration. Field places currently require the
 base local to be usable and are otherwise tracked at whole-local granularity.
 
+P10-M2 adds explicit source-level `move place` expressions. `move` is a reserved
+keyword and parses with prefix-expression precedence, so `move a + b` is parsed
+as `(move a) + b`. The initial supported move sources are whole local places and
+parameter places; moving fields, dereferences, temporaries, calls, literals,
+struct literals, enum constructors, compile-time expressions, and target
+metadata is rejected before MIR lowering. MIR now carries an explicit move
+rvalue, and the storage-state pass treats it as a read of the source place
+followed by consumption for non-Copy storage. For this milestone, `int` and
+`bool` are intrinsic Copy types and remain initialized after `move`; structs are
+non-Copy by default and a successful `move` marks the source local `Moved`.
+Reading that source later produces `CON0151 UseAfterMove`, and moving an
+uninitialized source reports the existing `CON0150 UseBeforeInitialization`.
+
+P10-M2 still intentionally defers Drop, `MaybeUninit`, branch maybe-state
+diagnostics beyond the existing conservative lattice, partial field moves,
+`Copy<T>` marker integration, user-defined move/copy constructors, replacement
+assignment semantics for Drop types, borrow checking, lifetime analysis,
+destructor syntax, and implicit move.
+
 ## Thesis
 
 ```text

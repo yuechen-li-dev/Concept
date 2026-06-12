@@ -1,0 +1,24 @@
+# name: use after move argument
+# phase: check
+# check: mir
+# expect: fail
+
+=== source ===
+module Main;
+
+struct Box {
+    int value;
+};
+
+int take(Box b) {
+    return b.value;
+}
+
+int main() {
+    Box a = Box { value: 42 };
+    int value = take(move a);
+    return a.value + value;
+}
+
+=== diagnostics ===
+CON0151

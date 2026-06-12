@@ -215,6 +215,7 @@ const Analyzer = struct {
     fn readRvalue(self: *Analyzer, states: []StorageState, rvalue: mir.MirRvalue, span: ?source.SourceSpan) AnalysisError!void {
         switch (rvalue) {
             .use => |operand| try self.readOperand(states, operand, span),
+            .move => |place| try self.movePlace(states, place, span),
             .unary => |unary| try self.readOperand(states, unary.operand, span),
             .address_of => |place| try self.readPlace(states, place, span),
             .deref => |operand| try self.readOperand(states, operand, span),
@@ -259,6 +260,22 @@ const Analyzer = struct {
             // the aggregate storage to be initialized before this pass sees them.
             .field => |field| states[field.base.index] = .initialized,
         }
+    }
+
+    fn movePlace(self: *Analyzer, states: []StorageState, place: mir.MirPlace, span: ?source.SourceSpan) AnalysisError!void {
+        try self.readPlace(states, place, span);
+        const local_id = switch (place) {
+            .local => |local_id| local_id,
+            .field => |field| field.base,
+        };
+        if (!self.isCopyLocal(local_id)) {
+            states[local_id.index] = .moved;
+        }
+    }
+
+    fn isCopyLocal(self: *Analyzer, local_id: mir.MirLocalId) bool {
+        const type_id = self.mir_module.store.getLocal(local_id).type_id;
+        return type_id.index == 1 or type_id.index == 2;
     }
 
     fn propagate(
@@ -385,6 +402,46 @@ test "MIR storage marks assigned locals initialized before read" {
     var analysis = try analyzeFunction(std.testing.allocator, &module, function, module.store.getFunction(function).*, null);
     defer analysis.deinit();
     try std.testing.expectEqual(StorageState.initialized, analysis.stateOf(local));
+}
+
+test "MIR storage move marks non-copy local moved" {
+    var interner_value = interner.Interner.init(std.testing.allocator);
+    defer interner_value.deinit();
+    var module = mir.MirModule.init(std.testing.allocator);
+    defer module.deinit();
+
+    const non_copy_type = types.TypeId{ .index = 3 };
+    const function = try module.store.addFunction(.{ .index = 0 }, try interner_value.intern("main"), non_copy_type, hir.synthetic_span);
+    const source_local = try module.store.addLocal(function, try interner_value.intern("a"), .user, non_copy_type, hir.synthetic_span);
+    const dest_local = try module.store.addLocal(function, try interner_value.intern("b"), .user, non_copy_type, hir.synthetic_span);
+    const block = try module.store.addBlock(function, hir.synthetic_span);
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = source_local }, mir.MirRvalue.use_(try mir.MirOperand.intLiteral(std.testing.allocator, "1"))) });
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = dest_local }, mir.MirRvalue.movePlace(.{ .local = source_local })) });
+    try module.store.setTerminator(block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(mir.MirOperand.copyPlace(.{ .local = source_local })) });
+
+    var bag = diagnostics.DiagnosticBag.init(std.testing.allocator);
+    defer bag.deinit();
+    try std.testing.expectError(error.InvalidStorageState, analyzeModule(std.testing.allocator, &module, &bag));
+    try std.testing.expectEqual(diagnostics.DiagnosticCode.UseAfterMove, bag.diagnostics.items[0].code);
+}
+
+test "MIR storage move keeps int local initialized" {
+    var interner_value = interner.Interner.init(std.testing.allocator);
+    defer interner_value.deinit();
+    var module = mir.MirModule.init(std.testing.allocator);
+    defer module.deinit();
+
+    const function = try module.store.addFunction(.{ .index = 0 }, try interner_value.intern("main"), .{ .index = 1 }, hir.synthetic_span);
+    const source_local = try module.store.addLocal(function, try interner_value.intern("a"), .user, .{ .index = 1 }, hir.synthetic_span);
+    const dest_local = try module.store.addLocal(function, try interner_value.intern("b"), .user, .{ .index = 1 }, hir.synthetic_span);
+    const block = try module.store.addBlock(function, hir.synthetic_span);
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = source_local }, mir.MirRvalue.use_(try mir.MirOperand.intLiteral(std.testing.allocator, "1"))) });
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = dest_local }, mir.MirRvalue.movePlace(.{ .local = source_local })) });
+    try module.store.setTerminator(block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(mir.MirOperand.copyPlace(.{ .local = source_local })) });
+
+    var analysis = try analyzeFunction(std.testing.allocator, &module, function, module.store.getFunction(function).*, null);
+    defer analysis.deinit();
+    try std.testing.expectEqual(StorageState.initialized, analysis.stateOf(source_local));
 }
 
 test "MIR storage rejects manually marked moved local read" {

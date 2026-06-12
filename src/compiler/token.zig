@@ -31,6 +31,7 @@ pub const TokenKind = enum {
     @"const",
     @"return",
     @"try",
+    move,
     @"comptime",
     static_assert,
     must_use,
@@ -106,6 +107,7 @@ pub const TokenKind = enum {
             .@"const" => "const",
             .@"return" => "return",
             .@"try" => "try",
+            .move => "move",
             .@"comptime" => "comptime",
             .static_assert => "static_assert",
             .must_use => "must_use",
@@ -187,6 +189,7 @@ pub const TokenKind = enum {
             .@"const" => "const",
             .@"return" => "return",
             .@"try" => "try",
+            .move => "move",
             .@"comptime" => "comptime",
             .static_assert => "static_assert",
             .must_use => "must_use",
@@ -270,6 +273,7 @@ pub fn keywordKind(identifier_text: []const u8) ?TokenKind {
     if (std.mem.eql(u8, identifier_text, "const")) return .@"const";
     if (std.mem.eql(u8, identifier_text, "return")) return .@"return";
     if (std.mem.eql(u8, identifier_text, "try")) return .@"try";
+    if (std.mem.eql(u8, identifier_text, "move")) return .move;
     if (std.mem.eql(u8, identifier_text, "comptime")) return .@"comptime";
     if (std.mem.eql(u8, identifier_text, "static_assert")) return .static_assert;
     if (std.mem.eql(u8, identifier_text, "must_use")) return .must_use;
@@ -347,6 +351,7 @@ const keyword_cases = [_]KeywordCase{
     .{ .text = "const", .kind = .@"const" },
     .{ .text = "return", .kind = .@"return" },
     .{ .text = "try", .kind = .@"try" },
+    .{ .text = "move", .kind = .move },
     .{ .text = "comptime", .kind = .@"comptime" },
     .{ .text = "static_assert", .kind = .static_assert },
     .{ .text = "must_use", .kind = .must_use },
@@ -425,6 +430,10 @@ test "non-keyword identifiers return null" {
         "must_useful",
         "discarded",
         "trying",
+        "moved",
+        "moveValue",
+        "movement",
+        "move_value",
         "score",
         "scoreValue",
         "score_thing",
@@ -492,6 +501,7 @@ test "token kind name output is stable" {
     try std.testing.expectEqualStrings("module", TokenKind.module.name());
     try std.testing.expectEqualStrings("struct", TokenKind.@"struct".name());
     try std.testing.expectEqualStrings("return", TokenKind.@"return".name());
+    try std.testing.expectEqualStrings("move", TokenKind.move.name());
     try std.testing.expectEqualStrings("true", TokenKind.true.name());
     try std.testing.expectEqualStrings("false", TokenKind.false.name());
     try std.testing.expectEqualStrings("pipe_pipe", TokenKind.pipe_pipe.name());

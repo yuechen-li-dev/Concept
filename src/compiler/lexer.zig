@@ -397,8 +397,8 @@ test "module declaration tokenizes correctly" {
 }
 
 test "keywords tokenize as keyword kinds" {
-    const source_text = "module import export struct enum concept interface impl marker unsafe mut const return comptime static_assert must_use discard match decide when if else while for machine state transition yield run true false";
-    const expected = [_]TokenKind{ .module, .import, .@"export", .@"struct", .@"enum", .concept, .interface, .impl, .marker, .unsafe, .mut, .@"const", .@"return", .@"comptime", .static_assert, .must_use, .discard, .match, .decide, .when, .@"if", .@"else", .@"while", .@"for", .machine, .state, .transition, .yield, .run, .true, .false, .eof };
+    const source_text = "module import export struct enum concept interface impl marker unsafe mut const return try move comptime static_assert must_use discard match decide when if else while for machine state transition yield run true false";
+    const expected = [_]TokenKind{ .module, .import, .@"export", .@"struct", .@"enum", .concept, .interface, .impl, .marker, .unsafe, .mut, .@"const", .@"return", .@"try", .move, .@"comptime", .static_assert, .must_use, .discard, .match, .decide, .when, .@"if", .@"else", .@"while", .@"for", .machine, .state, .transition, .yield, .run, .true, .false, .eof };
     try expectLexedKinds(source_text, &expected);
 }
 
@@ -768,4 +768,9 @@ test "try tokenizes as keyword and trying as identifier" {
     try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
     try std.testing.expectEqual(TokenKind.@"try", tokens[0].kind);
     try std.testing.expectEqual(TokenKind.identifier, tokens[1].kind);
+}
+
+test "move tokenizes as keyword without consuming nearby identifiers" {
+    const expected = [_]TokenKind{ .move, .identifier, .identifier, .identifier, .identifier, .eof };
+    try expectLexedKinds("move moved moveValue movement move_value", &expected);
 }

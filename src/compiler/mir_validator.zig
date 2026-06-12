@@ -212,6 +212,7 @@ const Validator = struct {
     fn rvalueType(self: *Validator, function_id: mir.MirFunctionId, rvalue: mir.MirRvalue, span: ?diagnostics.SourceSpan) ValidationError!?types.TypeId {
         return switch (rvalue) {
             .use => |operand| try self.operandType(function_id, operand, span),
+            .move => |place| try self.placeType(function_id, place, span),
             .unary => |unary| blk: {
                 const operand_type = try self.operandType(function_id, unary.operand, span);
                 if (operand_type == null) break :blk null;
@@ -670,7 +671,6 @@ test "MIR validator rejects manually malformed MIR" {
     try return_mismatch.module.store.setTerminator(return_mismatch.block, .{ .span = synthetic_span, .kind = mir.MirTerminatorKind.returnValue(mir.MirOperand.boolLiteral(true)) });
     try ctx.validateFail(&return_mismatch.module, .InvalidMirType);
 }
-
 
 test "MIR validator rejects type params in executable MIR" {
     var ctx = try TestContext.init();

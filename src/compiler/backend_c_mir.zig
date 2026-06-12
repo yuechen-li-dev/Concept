@@ -457,6 +457,7 @@ fn emitTerminator(writer: anytype, ctx: *const BackendContext, terminator: mir.M
 fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue) EmitError!void {
     switch (rvalue) {
         .use => |operand| try emitOperand(writer, ctx, operand),
+        .move => |place| try emitPlace(writer, ctx, place),
         .unary => |unary| {
             try writer.writeAll(unary.op.lexeme());
             try emitOperand(writer, ctx, unary.operand);

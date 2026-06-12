@@ -1341,6 +1341,26 @@ pub const Parser = struct {
             } };
             return node;
         }
+        if (self.current().kind == .move) {
+            const move_token = self.advance();
+            var operand = self.parseUnaryExpr(allocator) catch |err| switch (err) {
+                error.OutOfMemory => return err,
+                error.ParseFailed => {
+                    self.report(.UnexpectedToken, "expected expression after move", self.current().span) catch return error.OutOfMemory;
+                    return error.ParseFailed;
+                },
+            };
+            errdefer {
+                operand.deinit(allocator);
+                allocator.destroy(operand);
+            }
+            const node = try allocator.create(ast.Expr);
+            node.* = .{ .move_expr = .{
+                .operand = operand,
+                .span = ast.spanFromBounds(move_token.span.start, spanEnd(operand.span())),
+            } };
+            return node;
+        }
         if (self.current().kind == .ampersand or self.current().kind == .star) {
             const op_token = self.advance();
             var operand = self.parseUnaryExpr(allocator) catch |err| switch (err) {
@@ -2567,7 +2587,7 @@ pub const Parser = struct {
 
     fn isExprStmtStart(self: Parser) bool {
         return switch (self.current().kind) {
-            .identifier, .int_literal, .true, .false, .left_paren, .minus, .bang, .ampersand, .star, .decide, .@"comptime" => true,
+            .identifier, .int_literal, .true, .false, .left_paren, .minus, .bang, .ampersand, .star, .decide, .move, .@"comptime" => true,
             else => false,
         };
     }
@@ -5783,6 +5803,31 @@ test "compile-time expression missing operand diagnostic" {
 
     try std.testing.expect(diagnostics.count() >= 1);
     try std.testing.expectEqualStrings("expected expression after comptime", diagnostics.diagnostics.items[0].message);
+}
+
+test "parses move expression and debug output" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { int a = 1; int b = move a + 1; return b; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Binary +") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Move") != null);
+}
+
+test "move expression missing operand diagnostic" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { return move ; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected expression after move", diagnostics.diagnostics.items[0].message);
 }
 
 test "parses struct literal expression and debug output" {

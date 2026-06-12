@@ -1,0 +1,21 @@
+# name: move field unsupported
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+struct Pair {
+    int left;
+    int right;
+};
+
+int main() {
+    Pair p = Pair { left: 1, right: 2 };
+    int x = move p.left;
+    return x;
+}
+
+=== diagnostics ===
+CON0153

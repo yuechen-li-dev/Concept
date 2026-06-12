@@ -127,6 +127,7 @@ pub const MirStructFieldValue = struct {
 
 pub const MirRvalue = union(enum) {
     use: MirOperand,
+    move: MirPlace,
     unary: struct {
         op: MirUnaryOp,
         operand: MirOperand,
@@ -163,6 +164,10 @@ pub const MirRvalue = union(enum) {
 
     pub fn use_(operand: MirOperand) MirRvalue {
         return .{ .use = operand };
+    }
+
+    pub fn movePlace(place: MirPlace) MirRvalue {
+        return .{ .move = place };
     }
 
     pub fn unaryOp(op: MirUnaryOp, operand: MirOperand) MirRvalue {
@@ -215,6 +220,7 @@ pub const MirRvalue = union(enum) {
     fn clone(self: MirRvalue, allocator: std.mem.Allocator) !MirRvalue {
         return switch (self) {
             .use => |operand| MirRvalue.use_(try operand.clone(allocator)),
+            .move => |place| MirRvalue.movePlace(place),
             .unary => |unary_rvalue| MirRvalue.unaryOp(unary_rvalue.op, try unary_rvalue.operand.clone(allocator)),
             .address_of => |place| MirRvalue.addressOf(place),
             .deref => |operand| MirRvalue.dereference(try operand.clone(allocator)),
@@ -235,6 +241,7 @@ pub const MirRvalue = union(enum) {
     fn deinit(self: MirRvalue, allocator: std.mem.Allocator) void {
         switch (self) {
             .use => |operand| operand.deinit(allocator),
+            .move => {},
             .unary => |unary_rvalue| unary_rvalue.operand.deinit(allocator),
             .address_of => {},
             .deref => |operand| operand.deinit(allocator),
@@ -688,6 +695,11 @@ fn writeRvalueDebug(writer: *std.Io.Writer, rvalue: MirRvalue) !void {
         .use => |operand| {
             try writer.writeAll("Use(");
             try writeOperandDebug(writer, operand);
+            try writer.writeByte(')');
+        },
+        .move => |place| {
+            try writer.writeAll("Move(");
+            try writePlaceDebug(writer, place);
             try writer.writeByte(')');
         },
         .unary => |unary_rvalue| {

@@ -1,0 +1,20 @@
+# name: move struct local run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+struct Box {
+    int value;
+};
+
+int main() {
+    Box a = Box { value: 42 };
+    Box b = move a;
+
+    return b.value;
+}
+
+=== run ===
+exit_code: 42

@@ -474,6 +474,7 @@ const Checker = struct {
                 }
                 break :blk pointee;
             },
+            .move_expr => |operand| try self.movePlaceExprType(return_type, operand, expr.span),
             // ─────────────────────────────────────────────────────────────────────────────
             // Result/try checking
             // ─────────────────────────────────────────────────────────────────────────────
@@ -663,6 +664,24 @@ const Checker = struct {
             },
             else => {
                 try self.reportAt(.AddressOfRequiresPlace, "address-of requires a local, parameter, or one-level field place", span);
+                return error.InvalidSemanticModule;
+            },
+        };
+    }
+
+    fn movePlaceExprType(self: *Checker, return_type: types.TypeId, expr_id: hir.ExprId, span: diagnostics.SourceSpan) CheckError!types.TypeId {
+        const expr = self.module.hir.getExpr(expr_id).*;
+        return switch (expr.kind) {
+            .local_ref => |local_id| self.module.hir.getLocal(local_id).type_id,
+            .param_ref => |param_id| self.module.hir.getParam(param_id).type_id,
+            .group => |inner| try self.movePlaceExprType(return_type, inner, span),
+            .field_access => |field_access| {
+                _ = try self.checkExpr(return_type, field_access.receiver);
+                try self.reportAt(.PartialMoveUnsupported, "field and partial moves are not supported yet", span);
+                return error.InvalidSemanticModule;
+            },
+            else => {
+                try self.reportAt(.MoveRequiresPlace, "move requires a whole local or parameter place", span);
                 return error.InvalidSemanticModule;
             },
         };
@@ -986,6 +1005,7 @@ const Checker = struct {
             .unary => |unary| .{ .unary = .{ .op = unary.op, .operand = try self.cloneExpr(unary.operand, subst, param_map, local_map, span) } },
             .address_of => |operand| .{ .address_of = try self.cloneExpr(operand, subst, param_map, local_map, span) },
             .deref => |operand| .{ .deref = try self.cloneExpr(operand, subst, param_map, local_map, span) },
+            .move_expr => |operand| .{ .move_expr = try self.cloneExpr(operand, subst, param_map, local_map, span) },
             .try_expr => |operand| .{ .try_expr = try self.cloneExpr(operand, subst, param_map, local_map, span) },
             .compile_time => |compile_time_expr| .{ .compile_time = .{ .operand = try self.cloneExpr(compile_time_expr.operand, subst, param_map, local_map, span), .span = compile_time_expr.span } },
             .binary => |binary| .{ .binary = .{ .op = binary.op, .left = try self.cloneExpr(binary.left, subst, param_map, local_map, span), .right = try self.cloneExpr(binary.right, subst, param_map, local_map, span) } },

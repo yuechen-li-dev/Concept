@@ -194,6 +194,7 @@ pub const CompileTimeEvaluator = struct {
             .decide,
             .address_of,
             .deref,
+            .move_expr,
             .try_expr,
             => error.UnsupportedExpression,
         };
