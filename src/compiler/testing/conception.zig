@@ -2192,6 +2192,10 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase9-compile-time/valid/static_assert_target_pointer_size.valid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/valid/static_assert_target_endian.valid.conception");
     try expectRunFixture("../../../language/phase9-compile-time/valid/compile_time_target_in_if.valid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/valid/compile_time_logical_or_short_circuit_runtime_call.valid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/valid/compile_time_logical_and_short_circuit_runtime_call.valid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/valid/compile_time_logical_or_short_circuit_capability_denied.valid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/valid/compile_time_logical_and_short_circuit_capability_denied.valid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_call_unsupported.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_unknown_capability.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_duplicate_capability.invalid.conception");
@@ -2221,6 +2225,8 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_function_runtime_call_in_branch.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_function_unsupported_signature_struct.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_function_recursion.invalid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_logical_or_evaluates_rhs_runtime_call.invalid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_logical_and_evaluates_rhs_runtime_call.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/static_assert_false.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/static_assert_requires_bool.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/static_assert_call_unsupported.invalid.conception");

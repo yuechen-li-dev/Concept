@@ -1,0 +1,20 @@
+# name: compile-time logical or evaluates rhs runtime call
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+bool runtimeOnly() {
+    return true;
+}
+
+static_assert(false || runtimeOnly());
+
+int main() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0127

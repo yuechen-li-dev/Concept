@@ -882,3 +882,21 @@ generated C.
 
 Ownership, move, Drop, MaybeUninit, and storage-state analysis are Phase 10
 work. Compile-time execution v0 does not implement ownership semantics.
+
+## P9-Fix1 logical short-circuiting
+
+P9-Fix1 fixes compile-time evaluator execution semantics for logical `&&` and
+`||`. Compile-time evaluation now preserves C-family short-circuit behavior:
+
+- `left && right` evaluates `left`, requires a `bool`, and returns `false`
+  without evaluating `right` when `left` is `false`;
+- `left || right` evaluates `left`, requires a `bool`, and returns `true`
+  without evaluating `right` when `left` is `true`;
+- when the left operand does not decide the result, the right operand is
+  evaluated normally and must also produce `bool`.
+
+This is an evaluator execution fix only. HIR checking still checks both operands
+normally before compile-time evaluation, so type-invalid right-hand sides may
+still fail before short-circuit execution matters. No new `CompileTimeValue`
+categories, host effects, capability grants, runtime behavior, or Phase 10
+ownership semantics are added.

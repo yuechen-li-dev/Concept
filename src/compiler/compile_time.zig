@@ -178,7 +178,11 @@ pub const CompileTimeEvaluator = struct {
             .group => |inner| try self.evaluateExpr(inner),
             .compile_time => |compile_time_expr| try self.evaluateExpr(compile_time_expr.operand),
             .unary => |unary| try self.evaluateUnary(unary.op, try self.evaluateExpr(unary.operand)),
-            .binary => |binary| try self.evaluateBinary(binary.op, try self.evaluateExpr(binary.left), try self.evaluateExpr(binary.right)),
+            .binary => |binary| switch (binary.op) {
+                .logical_and => try self.evaluateLogicalAnd(binary.left, binary.right),
+                .logical_or => try self.evaluateLogicalOr(binary.left, binary.right),
+                else => try self.evaluateBinary(binary.op, try self.evaluateExpr(binary.left), try self.evaluateExpr(binary.right)),
+            },
             .param_ref => |param| self.frame.lookupParam(param) orelse error.UnsupportedExpression,
             .local_ref => |local| self.frame.lookupLocal(local) orelse error.UnboundLocal,
             .call => |call| try self.evaluateCall(call.function, call.args),
@@ -343,6 +347,38 @@ pub const CompileTimeEvaluator = struct {
                 .bool => |value| .{ .bool = !value },
             },
         };
+    }
+
+    fn evaluateLogicalAnd(self: *CompileTimeEvaluator, left_id: hir.ExprId, right_id: hir.ExprId) CompileTimeResult {
+        const left = try self.evaluateExpr(left_id);
+        const left_value = switch (left) {
+            .bool => |value| value,
+            .int => return error.TypeMismatch,
+        };
+        if (!left_value) return .{ .bool = false };
+
+        const right = try self.evaluateExpr(right_id);
+        const right_value = switch (right) {
+            .bool => |value| value,
+            .int => return error.TypeMismatch,
+        };
+        return .{ .bool = right_value };
+    }
+
+    fn evaluateLogicalOr(self: *CompileTimeEvaluator, left_id: hir.ExprId, right_id: hir.ExprId) CompileTimeResult {
+        const left = try self.evaluateExpr(left_id);
+        const left_value = switch (left) {
+            .bool => |value| value,
+            .int => return error.TypeMismatch,
+        };
+        if (left_value) return .{ .bool = true };
+
+        const right = try self.evaluateExpr(right_id);
+        const right_value = switch (right) {
+            .bool => |value| value,
+            .int => return error.TypeMismatch,
+        };
+        return .{ .bool = right_value };
     }
 
     fn evaluateBinary(self: *CompileTimeEvaluator, op: hir.BinaryOp, left: CompileTimeValue, right: CompileTimeValue) CompileTimeResult {
@@ -623,6 +659,25 @@ test "compile-time evaluator evaluates comparisons and boolean operators" {
     try expectValue(eval(&tm, try tm.binary(.bang_equal, try tm.boolExpr(true), try tm.boolExpr(false))), .{ .bool = true });
     try expectValue(eval(&tm, try tm.binary(.logical_and, try tm.boolExpr(true), try tm.boolExpr(false))), .{ .bool = false });
     try expectValue(eval(&tm, try tm.binary(.logical_or, try tm.boolExpr(true), try tm.boolExpr(false))), .{ .bool = true });
+}
+
+test "compile-time evaluator short-circuits logical operators" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+
+    const runtime_only = try tm.module.hir.addFunction(try tm.name("runtimeOnly"), tm.module.types.boolType(), hir.synthetic_span);
+
+    const runtime_call_for_or = try tm.expr(.{ .call = .{ .function = runtime_only, .args = try std.testing.allocator.dupe(hir.ExprId, &.{}) } });
+    try expectValue(eval(&tm, try tm.binary(.logical_or, try tm.boolExpr(true), runtime_call_for_or)), .{ .bool = true });
+
+    const runtime_call_for_and = try tm.expr(.{ .call = .{ .function = runtime_only, .args = try std.testing.allocator.dupe(hir.ExprId, &.{}) } });
+    try expectValue(eval(&tm, try tm.binary(.logical_and, try tm.boolExpr(false), runtime_call_for_and)), .{ .bool = false });
+
+    const evaluated_or_rhs = try tm.expr(.{ .call = .{ .function = runtime_only, .args = try std.testing.allocator.dupe(hir.ExprId, &.{}) } });
+    try std.testing.expectError(error.FunctionRequired, eval(&tm, try tm.binary(.logical_or, try tm.boolExpr(false), evaluated_or_rhs)));
+
+    const evaluated_and_rhs = try tm.expr(.{ .call = .{ .function = runtime_only, .args = try std.testing.allocator.dupe(hir.ExprId, &.{}) } });
+    try std.testing.expectError(error.FunctionRequired, eval(&tm, try tm.binary(.logical_and, try tm.boolExpr(true), evaluated_and_rhs)));
 }
 
 test "compile-time evaluator rejects unsupported expression forms" {

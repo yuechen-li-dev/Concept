@@ -1,0 +1,17 @@
+# name: compile-time logical and short-circuits runtime call
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+bool runtimeOnly() {
+    return true;
+}
+
+static_assert(false && runtimeOnly());
+
+int main() {
+    return 0;
+}

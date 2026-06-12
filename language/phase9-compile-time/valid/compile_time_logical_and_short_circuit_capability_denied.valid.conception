@@ -1,0 +1,18 @@
+# name: compile-time logical and short-circuits denied capability call
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+comptime(read_fs)
+bool denied() {
+    return true;
+}
+
+static_assert(false && denied());
+
+int main() {
+    return 0;
+}
