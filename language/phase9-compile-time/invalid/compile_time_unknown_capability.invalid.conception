@@ -1,0 +1,19 @@
+# name: compile-time unknown capability
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+comptime(database)
+int bad() {
+    return 1;
+}
+
+int main() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0140

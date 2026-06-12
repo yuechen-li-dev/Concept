@@ -2184,7 +2184,16 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase9-compile-time/valid/static_assert_bool_logic.valid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/valid/static_assert_compile_time_function.valid.conception");
     try expectRunFixture("../../../language/phase9-compile-time/valid/static_assert_with_main_run.valid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/valid/compile_time_capability_declaration_valid.valid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/valid/compile_time_multiple_capabilities_declaration_valid.valid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/valid/compile_time_plain_function_still_works.valid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_call_unsupported.invalid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_unknown_capability.invalid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_duplicate_capability.invalid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_capability_not_granted_expr.invalid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_capability_not_granted_static_assert.invalid.conception");
+    try expectParseFixture("../../../language/phase9-compile-time/invalid/compile_time_empty_capability_list.invalid.conception");
+    try expectParseFixture("../../../language/phase9-compile-time/invalid/compile_time_capability_on_non_function.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_call_runtime_function.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_local_unsupported.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_struct_literal_unsupported.invalid.conception");

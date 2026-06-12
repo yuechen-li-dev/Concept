@@ -1,0 +1,17 @@
+# name: compile-time plain function still works
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+comptime int answer() {
+    return 42;
+}
+
+static_assert(answer() == 42);
+
+int main() {
+    return comptime answer();
+}

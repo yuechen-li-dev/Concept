@@ -903,11 +903,16 @@ pub const StaticAssertDecl = struct {
     }
 };
 
+pub const CompileTimeCapabilitySyntax = struct {
+    name: NameSegment,
+};
+
 pub const FunctionDecl = struct {
     attributes: []Attribute = &.{},
     is_export: bool,
     is_unsafe: bool = false,
     is_compile_time: bool = false,
+    compile_time_capabilities: []CompileTimeCapabilitySyntax = &.{},
     signature: SignatureDecl,
     body: ?FunctionBody,
     span: SourceSpan,
@@ -915,6 +920,7 @@ pub const FunctionDecl = struct {
     pub fn deinit(self: FunctionDecl, allocator: std.mem.Allocator) void {
         for (self.attributes) |attribute| attribute.deinit(allocator);
         allocator.free(self.attributes);
+        allocator.free(self.compile_time_capabilities);
         self.signature.deinit(allocator);
         if (self.body) |body| body.deinit(allocator);
     }
@@ -963,6 +969,14 @@ pub const Item = union(enum) {
                     try writer.writeAll("  Unsafe Function ");
                 } else {
                     try writer.writeAll("  Function ");
+                }
+                if (function_decl.compile_time_capabilities.len != 0) {
+                    try writer.writeAll("capabilities=[");
+                    for (function_decl.compile_time_capabilities, 0..) |capability, index| {
+                        if (index != 0) try writer.writeAll(", ");
+                        try writer.writeAll(capability.name.text);
+                    }
+                    try writer.writeAll("] ");
                 }
                 try function_decl.signature.return_type.write(writer);
                 try writer.writeByte(' ');

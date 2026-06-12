@@ -1,0 +1,21 @@
+# name: compile-time capability not granted static assert
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+comptime(env)
+bool enabled() {
+    return true;
+}
+
+static_assert(enabled());
+
+int main() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0142

@@ -690,3 +690,59 @@ P9-M6 remains intentionally narrow:
 - `match`, `try`, `decide`, unsafe blocks, host effects, reflection, generated
   declarations, target metadata, and layout queries remain unsupported;
 - the step budget is fixed internally and is not user-configurable yet.
+
+## P9-M7 compile-time capability annotation scaffold
+
+P9-M7 adds source syntax and metadata for future host-visible compile-time
+capability requirements. A compile-time function may remain hermetic with the
+existing modifier form:
+
+```cpp
+comptime int answer() {
+    return 42;
+}
+```
+
+or it may declare requested capabilities with a parenthesized identifier list:
+
+```cpp
+comptime(read_fs, env)
+int loadTable() {
+    return 1;
+}
+```
+
+The known capability names are:
+
+- `read_fs`
+- `write_fs`
+- `env`
+- `network`
+- `time`
+- `random`
+- `process`
+
+Implemented P9-M7 behavior:
+
+- the parser accepts `comptime(capability, ...)` only as a top-level compile-time
+  function modifier;
+- capability names are parsed as capability-list identifiers, not as ordinary
+  runtime identifiers;
+- AST and HIR function metadata store the requested capability list;
+- the HIR checker rejects unknown capability names;
+- the HIR checker rejects duplicate capabilities;
+- capability-bearing compile-time functions are declaration-valid and may be
+  typechecked as functions;
+- evaluating a capability-bearing compile-time function through `comptime expr`
+  or `static_assert` is denied with `CompileTimeCapabilityNotGranted`;
+- plain `comptime` functions without a capability list continue to evaluate with
+  the existing deterministic, hermetic scalar evaluator;
+- compile-time-only functions, including capability-bearing ones, remain absent
+  from MIR and backend output.
+
+P9-M7 intentionally grants no capabilities. It adds no filesystem, environment,
+network, time, random, process, or other host APIs. The future direction is a
+build manifest or build configuration grant model where dependency capability
+requirements are visible and auditable. Until that exists, every non-empty
+compile-time capability set is denied, and default compile-time execution remains
+hermetic and deterministic.

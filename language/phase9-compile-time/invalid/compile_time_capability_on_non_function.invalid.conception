@@ -1,0 +1,13 @@
+# name: compile-time capability on non-function
+# phase: parse
+# expect: fail
+
+=== source ===
+module Main;
+
+comptime(read_fs) struct Bad {
+    int value;
+};
+
+=== diagnostics ===
+CON0004

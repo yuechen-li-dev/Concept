@@ -129,6 +129,10 @@ pub const DiagnosticCode = enum {
     CompileTimeAssignmentTypeMismatch,
     CompileTimeFuelExhausted,
     CompileTimeWhileRequiresBool,
+    CompileTimeUnknownCapability,
+    CompileTimeDuplicateCapability,
+    CompileTimeCapabilityNotGranted,
+    CompileTimeCapabilityListRequiresFunction,
     StaticAssertFailed,
     StaticAssertRequiresBool,
 
@@ -243,6 +247,10 @@ pub const DiagnosticCode = enum {
             .CompileTimeAssignmentTypeMismatch => "CON0137",
             .CompileTimeFuelExhausted => "CON0138",
             .CompileTimeWhileRequiresBool => "CON0139",
+            .CompileTimeUnknownCapability => "CON0140",
+            .CompileTimeDuplicateCapability => "CON0141",
+            .CompileTimeCapabilityNotGranted => "CON0142",
+            .CompileTimeCapabilityListRequiresFunction => "CON0143",
         };
     }
 };
@@ -670,6 +678,9 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0137", DiagnosticCode.CompileTimeAssignmentTypeMismatch.format());
     try std.testing.expectEqualStrings("CON0138", DiagnosticCode.CompileTimeFuelExhausted.format());
     try std.testing.expectEqualStrings("CON0139", DiagnosticCode.CompileTimeWhileRequiresBool.format());
+    try std.testing.expectEqualStrings("CON0140", DiagnosticCode.CompileTimeUnknownCapability.format());
+    try std.testing.expectEqualStrings("CON0141", DiagnosticCode.CompileTimeDuplicateCapability.format());
+    try std.testing.expectEqualStrings("CON0142", DiagnosticCode.CompileTimeCapabilityNotGranted.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {
