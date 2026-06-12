@@ -1,0 +1,25 @@
+# name: compile-time function nested if
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+comptime int classify(int x) {
+    if (x < 0) {
+        return 1;
+    } else {
+        if (x == 0) {
+            return 2;
+        } else {
+            return 42;
+        }
+    }
+}
+
+int main() {
+    return comptime classify(7);
+}
+
+=== run ===
+exit_code: 42

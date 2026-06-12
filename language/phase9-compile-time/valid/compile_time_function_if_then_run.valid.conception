@@ -1,0 +1,21 @@
+# name: compile-time function if then run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+comptime int abs(int x) {
+    if (x < 0) {
+        return -x;
+    }
+
+    return x;
+}
+
+int main() {
+    return comptime abs(-42);
+}
+
+=== run ===
+exit_code: 42

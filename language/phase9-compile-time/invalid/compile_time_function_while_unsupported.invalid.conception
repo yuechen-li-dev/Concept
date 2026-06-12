@@ -1,0 +1,21 @@
+# name: compile-time function while unsupported
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+comptime int bad() {
+    while (false) {
+        return 1;
+    }
+    return 42;
+}
+
+int main() {
+    return comptime bad();
+}
+
+=== diagnostics ===
+CON0132

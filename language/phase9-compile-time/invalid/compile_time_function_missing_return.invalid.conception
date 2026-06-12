@@ -1,4 +1,4 @@
-# name: compile-time function unsupported body if
+# name: compile-time function missing return
 # phase: check
 # check: hir
 # expect: fail
@@ -6,16 +6,15 @@
 === source ===
 module Main;
 
-comptime int choose(bool ok) {
+comptime int bad(bool ok) {
     if (ok) {
         return 42;
     }
-    return 1;
 }
 
 int main() {
-    return comptime choose(true);
+    return comptime bad(false);
 }
 
 === diagnostics ===
-CON0128
+CON0134

@@ -1,0 +1,23 @@
+# name: compile-time function local struct unsupported
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+struct Pair {
+    int value;
+}
+
+comptime int bad() {
+    Pair pair = Pair { value: 42 };
+    return 0;
+}
+
+int main() {
+    return comptime bad();
+}
+
+=== diagnostics ===
+CON0133

@@ -1,0 +1,25 @@
+# name: compile-time function runtime call in branch
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+int runtime() {
+    return 42;
+}
+
+comptime int bad() {
+    if (true) {
+        return runtime();
+    }
+    return 0;
+}
+
+int main() {
+    return comptime bad();
+}
+
+=== diagnostics ===
+CON0127

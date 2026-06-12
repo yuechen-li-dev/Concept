@@ -1,0 +1,19 @@
+# name: compile-time function local assignment run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+comptime int inc(int x) {
+    int y = x;
+    y = y + 1;
+    return y;
+}
+
+int main() {
+    return comptime inc(41);
+}
+
+=== run ===
+exit_code: 42
