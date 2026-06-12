@@ -133,6 +133,9 @@ pub const DiagnosticCode = enum {
     CompileTimeDuplicateCapability,
     CompileTimeCapabilityNotGranted,
     CompileTimeCapabilityListRequiresFunction,
+    CompileTimeUnknownTargetField,
+    CompileTimeTargetMetadataRequiresCompileTime,
+    CompileTimeTargetMetadataUnavailable,
     StaticAssertFailed,
     StaticAssertRequiresBool,
 
@@ -251,6 +254,9 @@ pub const DiagnosticCode = enum {
             .CompileTimeDuplicateCapability => "CON0141",
             .CompileTimeCapabilityNotGranted => "CON0142",
             .CompileTimeCapabilityListRequiresFunction => "CON0143",
+            .CompileTimeUnknownTargetField => "CON0144",
+            .CompileTimeTargetMetadataRequiresCompileTime => "CON0145",
+            .CompileTimeTargetMetadataUnavailable => "CON0146",
         };
     }
 };

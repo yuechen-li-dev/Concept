@@ -3,6 +3,7 @@ const std = @import("std");
 const hir = @import("hir.zig");
 const semantics = @import("semantics.zig");
 const types = @import("types.zig");
+const compile_time_target = @import("compile_time_target.zig");
 
 /// P9-M1 compile-time values are deliberately limited to hermetic scalar
 /// constants. The evaluator below has no access to filesystem, environment,
@@ -74,6 +75,7 @@ pub const CompileTimeError = error{
     FuelExhausted,
     WhileRequiresBool,
     CapabilityNotGranted,
+    TargetMetadataUnavailable,
 };
 
 pub const CompileTimeResult = CompileTimeError!CompileTimeValue;
@@ -180,6 +182,7 @@ pub const CompileTimeEvaluator = struct {
             .param_ref => |param| self.frame.lookupParam(param) orelse error.UnsupportedExpression,
             .local_ref => |local| self.frame.lookupLocal(local) orelse error.UnboundLocal,
             .call => |call| try self.evaluateCall(call.function, call.args),
+            .target_metadata => |metadata| self.evaluateTargetMetadata(metadata.query),
             .concept_requirement_call,
             .enum_constructor,
             .struct_literal,
@@ -223,6 +226,13 @@ pub const CompileTimeEvaluator = struct {
             nested.frame.deinit(self.allocator);
         }
         return nested.evaluateFunctionBody(function);
+    }
+
+    fn evaluateTargetMetadata(self: *CompileTimeEvaluator, query: compile_time_target.CompileTimeTargetQuery) CompileTimeValue {
+        return switch (compile_time_target.queryTargetInfo(self.module.compile_time_target_info, query)) {
+            .int => |value| .{ .int = value },
+            .bool => |value| .{ .bool = value },
+        };
     }
 
     fn requireSupportedSignature(self: *CompileTimeEvaluator, function: *const hir.HirFunction) CompileTimeError!void {
@@ -831,4 +841,13 @@ test "compile-time evaluator rejects missing return unsupported statements and n
     tm.setBody(bad_while, try tm.block(&.{try tm.whileStmt(try tm.int("1"), try tm.block(&.{try tm.ret(try tm.int("1"))}))}));
     const bad_while_args = try std.testing.allocator.dupe(hir.ExprId, &.{});
     try std.testing.expectError(error.WhileRequiresBool, eval(&tm, try tm.expr(.{ .call = .{ .function = bad_while, .args = bad_while_args } })));
+}
+
+test "compile-time evaluator returns configured target metadata values" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+
+    try expectValue(eval(&tm, try tm.expr(.{ .target_metadata = .{ .query = .pointer_size, .field_span = hir.synthetic_span } })), .{ .int = 8 });
+    try expectValue(eval(&tm, try tm.expr(.{ .target_metadata = .{ .query = .is_little_endian, .field_span = hir.synthetic_span } })), .{ .bool = true });
+    try expectValue(eval(&tm, try tm.expr(.{ .target_metadata = .{ .query = .is_big_endian, .field_span = hir.synthetic_span } })), .{ .bool = false });
 }

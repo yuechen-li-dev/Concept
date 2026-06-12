@@ -746,3 +746,68 @@ build manifest or build configuration grant model where dependency capability
 requirements are visible and auditable. Until that exists, every non-empty
 compile-time capability set is denied, and default compile-time execution remains
 hermetic and deterministic.
+
+## P9-M8 deterministic target metadata scaffold
+
+P9-M8 adds a small compiler-owned target metadata scaffold for compile-time
+execution. The source-level metadata root is `target`, and the supported v0
+facts are:
+
+- `target.pointerSize` -> `int`
+- `target.isLittleEndian` -> `bool`
+- `target.isBigEndian` -> `bool`
+
+These facts are configured compiler target facts, not ambient host inspection.
+The Stage 0 compiler does not yet have a complete build-target abstraction, so
+P9-M8 uses a deterministic default target object as a scaffold:
+
+- pointer size: `8`
+- little endian: `true`
+- big endian: `false`
+
+This default matches the current Stage 0 C-backend assumptions and must be
+replaced by explicit build-target configuration when that layer exists. The
+compile-time evaluator still has no filesystem, environment, network, time,
+random, process spawning, host calls, or arbitrary extern-call access. Reading
+configured target metadata does not require `read_fs`, `env`, `time`, or any
+other compile-time capability because it is compiler-owned input, not a host
+side effect.
+
+`target` is contextual metadata root syntax in target metadata expressions, not
+a runtime object. P9-M8 accepts target metadata in explicit compile-time
+contexts:
+
+```cpp
+static_assert(target.pointerSize == 8);
+
+int main() {
+    return comptime target.pointerSize;
+}
+```
+
+and target metadata lowers only after evaluation, as ordinary `int` or `bool`
+constants. `static_assert(target.pointerSize == 8)` emits no MIR/backend artifact,
+and `comptime target.pointerSize` lowers as the same integer constant as any
+other successful `comptime` expression. Runtime use such as
+`return target.pointerSize;` is rejected for now; no runtime target object is
+introduced.
+
+Unknown metadata fields are rejected with a stable compile-time target-field
+diagnostic. String target facts are intentionally not present in P9-M8, so
+queries such as `target.arch == "x86_64"` remain unsupported until
+`CompileTimeValue` grows an intentional string representation and the language
+surface chooses string target metadata.
+
+### Layout-query boundary
+
+P9-M8 deliberately does not implement `sizeof`, `alignof`, language-level struct
+layout queries, ABI finalization, reflection, generated declarations, or
+target-specific conditional declarations. `target.pointerSize` is a configured
+target fact about the target machine model; it is not a general layout query.
+
+`sizeof(T)` and `alignof(T)` require a deliberate Concept language-level layout
+and ABI model. Phase 7 runtime structs currently lower through backend-local
+layout choices, and those choices must not be frozen accidentally as the Concept
+ABI. Future layout queries must specify how Concept types map to size,
+alignment, padding, representation attributes, and target ABI rules before they
+can be exposed to compile-time evaluation.

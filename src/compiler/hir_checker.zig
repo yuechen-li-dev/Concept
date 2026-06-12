@@ -283,6 +283,13 @@ const Checker = struct {
                 try self.reportAt(.InvalidConceptRequirementCall, "concept requirement call was not rewritten before checking", expr.span);
                 return error.InvalidSemanticModule;
             },
+            .target_metadata => |metadata| blk: {
+                if (self.compile_time_context_depth == 0) {
+                    try self.reportAt(.CompileTimeTargetMetadataRequiresCompileTime, "target metadata requires a compile-time context", expr.span);
+                    return error.InvalidSemanticModule;
+                }
+                break :blk metadata.query.typeOf(self.module.types);
+            },
             .call => |call| blk: {
                 var arg_types = std.ArrayList(types.TypeId).empty;
                 defer arg_types.deinit(self.allocator);
@@ -536,6 +543,7 @@ const Checker = struct {
             error.FuelExhausted => try self.reportAt(.CompileTimeFuelExhausted, "compile-time evaluation exceeded its step limit; likely non-terminating or too-expensive compile-time execution", span),
             error.WhileRequiresBool => try self.reportAt(.CompileTimeWhileRequiresBool, "compile-time while condition must evaluate to bool", span),
             error.CapabilityNotGranted => try self.reportAt(.CompileTimeCapabilityNotGranted, "compile-time capability not granted; capability-bearing comptime function cannot be evaluated yet", span),
+            error.TargetMetadataUnavailable => try self.reportAt(.CompileTimeTargetMetadataUnavailable, "compile-time target metadata is unavailable", span),
         }
     }
 
@@ -967,6 +975,7 @@ const Checker = struct {
                 break :blk .{ .struct_literal = .{ .struct_id = literal.struct_id, .type_id = try self.substituteType(literal.type_id, subst, span), .fields = fields } };
             },
             .field_access => |field_access| .{ .field_access = .{ .receiver = try self.cloneExpr(field_access.receiver, subst, param_map, local_map, span), .field_name = field_access.field_name, .field_span = field_access.field_span } },
+            .target_metadata => |metadata| .{ .target_metadata = metadata },
             .decide => |decide| blk: {
                 var arms = try self.allocator.alloc(hir.HirDecideArm, decide.arms.len);
                 errdefer self.allocator.free(arms);

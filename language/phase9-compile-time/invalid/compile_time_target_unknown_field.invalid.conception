@@ -1,0 +1,16 @@
+# name: compile-time target unknown field
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+static_assert(target.nope == 0);
+
+int main() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0144
