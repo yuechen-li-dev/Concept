@@ -1,0 +1,12 @@
+module Main;
+
+// Capability annotations are parsed and stored in Phase 9,
+// but no grants or host effects exist yet.
+comptime(read_fs)
+int futureRead() {
+    return 1;
+}
+
+int main() {
+    return 0;
+}

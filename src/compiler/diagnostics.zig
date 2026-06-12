@@ -687,6 +687,10 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0140", DiagnosticCode.CompileTimeUnknownCapability.format());
     try std.testing.expectEqualStrings("CON0141", DiagnosticCode.CompileTimeDuplicateCapability.format());
     try std.testing.expectEqualStrings("CON0142", DiagnosticCode.CompileTimeCapabilityNotGranted.format());
+    try std.testing.expectEqualStrings("CON0143", DiagnosticCode.CompileTimeCapabilityListRequiresFunction.format());
+    try std.testing.expectEqualStrings("CON0144", DiagnosticCode.CompileTimeUnknownTargetField.format());
+    try std.testing.expectEqualStrings("CON0145", DiagnosticCode.CompileTimeTargetMetadataRequiresCompileTime.format());
+    try std.testing.expectEqualStrings("CON0146", DiagnosticCode.CompileTimeTargetMetadataUnavailable.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {

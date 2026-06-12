@@ -763,6 +763,25 @@ test "MIR C backend lowers target metadata only as constants" {
     try std.testing.expectEqualStrings("int main(void) {\ncpt_bb_0:\n    return 8;\n}\n", c_source);
 }
 
+test "MIR C backend omits compile-time-only functions" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\
+        \\comptime int answer() {
+        \\    return 42;
+        \\}
+        \\
+        \\int main() {
+        \\    return comptime answer();
+        \\}
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "answer") == null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "comptime") == null);
+    try std.testing.expectEqualStrings("int main(void) {\ncpt_bb_0:\n    return 42;\n}\n", c_source);
+}
+
 test "MIR C backend emits arithmetic" {
     try expectEmit(
         "module Main; int main() { return 1 + 2 * 3; }",
