@@ -32,6 +32,12 @@ language/phase5a-judgment/valid/
 language/phase5a-judgment/invalid/
 language/phase6-unsafe-ownership/valid/
 language/phase6-unsafe-ownership/invalid/
+language/phase8-concepts-templates/valid/
+language/phase8-concepts-templates/invalid/
+language/phase9-compile-time/valid/
+language/phase9-compile-time/invalid/
+language/phase10-ownership/valid/    future
+language/phase10-ownership/invalid/  future
 ```
 
 ## Phase 5 sum-type fixtures
@@ -61,7 +67,7 @@ Invalid fixtures cover malformed template syntax, type parameters out of scope, 
 
 Phase 8 MIR/backend coverage is intentionally concrete-only: the pipeline run fixture and targeted compiler tests assert that template declarations, concepts, marker concepts, and type-parameter types do not leak into executable MIR or backend C, while deterministic instantiated function names and referenced static witness calls are emitted.
 
-Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed for compile-time execution v0. Phase 10 is planned for ownership, move, Drop, MaybeUninit, and richer storage-state analysis.
+Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed for compile-time execution v0. Phase 10 is in design for ownership, move, Drop, MaybeUninit, and richer storage-state analysis. P10-M0 adds the design only and does not add fixtures requiring unsupported compiler behavior.
 
 ## Phase 9 compile-time execution fixtures
 
@@ -70,6 +76,12 @@ Phase 9 fixtures live under `language/phase9-compile-time/` and cover the closed
 Invalid fixtures cover unsupported compile-time expressions and statements, runtime calls to compile-time-only functions, compile-time calls to runtime functions, static-assert failure and type requirements, recursion/fuel exhaustion, unsupported local/signature shapes, capability unknown/duplicate/not-granted diagnostics, runtime target metadata use, unknown target fields, and intentionally unsupported string target facts.
 
 Phase 9 MIR/backend coverage asserts that evaluated values lower into ordinary MIR/backend constants: unresolved compile-time expressions, `static_assert`, compile-time-only functions, capability metadata, and the `target` metadata root must not leak into executable output.
+
+## Phase 10 ownership fixtures
+
+Phase 10 ownership fixtures are future. P10-M0 intentionally adds no parser, HIR, MIR, backend, diagnostic, or fixture behavior. When implementation begins, the fixture corpus should separate storage-state analysis milestones from source-syntax milestones: early fixtures may exercise MIR/storage diagnostics indirectly through existing syntax, while `move`, `Drop<T>`, `MaybeUninit<T>`, partial initialization, and branch maybe-state fixtures should appear only after the corresponding compiler behavior exists.
+
+Planned fixture families include valid scalar copy, valid explicit move, invalid use-after-move, invalid maybe-moved use after branch merge, invalid use-before-initialization if ordinary uninitialized locals are later introduced, deterministic drop-order snapshots, and `MaybeUninit<T>` unsafe-boundary checks.
 
 ## `.conception` format
 
