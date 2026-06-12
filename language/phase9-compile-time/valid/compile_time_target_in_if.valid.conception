@@ -1,0 +1,17 @@
+# name: compile-time target in if
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    if (comptime target.isLittleEndian) {
+        return comptime target.pointerSize;
+    }
+
+    return 0;
+}
+
+=== run ===
+exit_code: 8

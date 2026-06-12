@@ -3,6 +3,7 @@ const std = @import("std");
 const interner_module = @import("interner.zig");
 const types = @import("types.zig");
 const compile_time_capability = @import("compile_time_capability.zig");
+const compile_time_target = @import("compile_time_target.zig");
 const source = @import("source.zig");
 
 pub const SourceSpan = source.SourceSpan;
@@ -132,6 +133,7 @@ pub const CompileTimeCapability = compile_time_capability.CompileTimeCapability;
 pub const CompileTimeCapabilitySet = compile_time_capability.CompileTimeCapabilitySet;
 pub const CompileTimeCapabilityList = compile_time_capability.CompileTimeCapabilityList;
 pub const CompileTimeCapabilityRequired = compile_time_capability.CompileTimeCapabilityRequired;
+pub const CompileTimeTargetQuery = compile_time_target.CompileTimeTargetQuery;
 
 pub const HirFunction = struct {
     item: ItemId,
@@ -238,6 +240,7 @@ pub const HirExprKind = union(enum) {
     enum_constructor: struct { enum_id: EnumId, variant_id: VariantId, args: []ExprId },
     struct_literal: struct { struct_id: StructId, type_id: types.TypeId, fields: []HirStructLiteralField },
     field_access: struct { receiver: ExprId, field_name: SymbolId, field_span: SourceSpan },
+    target_metadata: struct { query: CompileTimeTargetQuery, field_span: SourceSpan },
     decide: struct { enum_type: types.TypeId, enum_id: EnumId, arms: []HirDecideArm },
     group: ExprId,
     unary: struct { op: UnaryOp, operand: ExprId },
@@ -1110,6 +1113,9 @@ pub const HirStore = struct {
             .field_access => |field_access| {
                 try writer.print("FieldAccess {f}\n", .{field_access.field_name});
                 try self.writeExprDebug(writer, field_access.receiver, depth + 1);
+            },
+            .target_metadata => |metadata| {
+                try writer.print("TargetMetadata {s}\n", .{metadata.query.sourceName()});
             },
             .decide => |decide| {
                 try writer.print("Decide {f} {f}\n", .{ decide.enum_type, decide.enum_id });

@@ -11,6 +11,7 @@ const interner = @import("interner.zig");
 const source = @import("source.zig");
 const types = @import("types.zig");
 const compile_time = @import("compile_time.zig");
+const compile_time_target = @import("compile_time_target.zig");
 
 pub const DiagnosticBag = diagnostics.DiagnosticBag;
 pub const DiagnosticCode = diagnostics.DiagnosticCode;
@@ -21,6 +22,7 @@ pub const SemanticModule = struct {
     hir: hir.HirStore,
     types: types.TypeStore,
     compile_time_values: std.AutoHashMap(hir.ExprId, compile_time.CompileTimeValue),
+    compile_time_target_info: compile_time_target.CompileTimeTargetInfo,
 
     pub fn init(allocator: std.mem.Allocator) !SemanticModule {
         return .{
@@ -28,6 +30,7 @@ pub const SemanticModule = struct {
             .hir = hir.HirStore.init(allocator),
             .types = try types.TypeStore.init(allocator),
             .compile_time_values = std.AutoHashMap(hir.ExprId, compile_time.CompileTimeValue).init(allocator),
+            .compile_time_target_info = compile_time_target.defaultTargetInfo(),
         };
     }
 
@@ -1168,6 +1171,16 @@ const BodyLowerer = struct {
                 return try self.collector.module.hir.addExpr(.{ .compile_time = .{ .operand = operand, .span = compile_time_expr.span } }, compile_time_expr.span);
             },
             .field_access => |field_access| {
+                if (self.isUnboundTargetRoot(field_access.receiver.*)) {
+                    const query = compile_time_target.lookupTargetQuery(field_access.field_name.text) orelse {
+                        try self.collector.diagnostics.append(diagnostics.Diagnostic.init(.CompileTimeUnknownTargetField, .@"error", "unknown compile-time target metadata field", field_access.field_name.span));
+                        return null;
+                    };
+                    return try self.collector.module.hir.addExpr(.{ .target_metadata = .{
+                        .query = query,
+                        .field_span = field_access.field_name.span,
+                    } }, field_access.span);
+                }
                 const receiver = (try self.lowerExpr(field_access.receiver.*)) orelse return null;
                 const field_symbol = try self.collector.module.interner.intern(field_access.field_name.text);
                 return try self.collector.module.hir.addExpr(.{ .field_access = .{
@@ -1207,6 +1220,16 @@ const BodyLowerer = struct {
         }
     }
 
+    fn isUnboundTargetRoot(self: *BodyLowerer, expr: ast.Expr) bool {
+        return switch (expr) {
+            .identifier => |ident| blk: {
+                if (!std.mem.eql(u8, ident.name.text, "target")) break :blk false;
+                const symbol = self.collector.module.interner.intern(ident.name.text) catch break :blk false;
+                break :blk self.lookup(symbol) == null;
+            },
+            else => false,
+        };
+    }
     // ─────────────────────────────────────────────────────────────────────────────
     // Decide lowering
     // ─────────────────────────────────────────────────────────────────────────────

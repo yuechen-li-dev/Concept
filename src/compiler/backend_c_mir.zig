@@ -756,6 +756,13 @@ test "MIR C backend omits static assertions" {
     try std.testing.expectEqualStrings("int main(void) {\ncpt_bb_0:\n    return 0;\n}\n", c_source);
 }
 
+test "MIR C backend lowers target metadata only as constants" {
+    const c_source = try emitForTest("module Main; static_assert(target.pointerSize == 8); int main() { return comptime target.pointerSize; }");
+    defer std.testing.allocator.free(c_source);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "target") == null);
+    try std.testing.expectEqualStrings("int main(void) {\ncpt_bb_0:\n    return 8;\n}\n", c_source);
+}
+
 test "MIR C backend emits arithmetic" {
     try expectEmit(
         "module Main; int main() { return 1 + 2 * 3; }",
@@ -1434,7 +1441,6 @@ test "MIR C backend Phase 7 closeout struct runtime snapshot" {
     try std.testing.expect(std.mem.indexOf(u8, c_source, " = cpt_f_makeVec(3, 4);") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, "return cpt_f_sum(cpt_l_v_") != null);
 }
-
 
 test "MIR C backend stabilizes Phase 8 concrete generic pipeline" {
     const c_source = try emitForTest(

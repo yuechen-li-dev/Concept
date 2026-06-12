@@ -1,0 +1,14 @@
+# name: compile-time target runtime use
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    return target.pointerSize;
+}
+
+=== diagnostics ===
+CON0145

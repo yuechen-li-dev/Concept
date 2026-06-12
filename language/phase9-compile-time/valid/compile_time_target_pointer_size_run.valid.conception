@@ -1,0 +1,13 @@
+# name: compile-time target pointer size run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    return comptime target.pointerSize;
+}
+
+=== run ===
+exit_code: 8

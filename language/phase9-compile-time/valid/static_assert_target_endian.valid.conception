@@ -1,0 +1,13 @@
+# name: static assert target endian
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+static_assert(target.isLittleEndian || target.isBigEndian);
+
+int main() {
+    return 0;
+}

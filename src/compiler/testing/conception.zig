@@ -2187,6 +2187,11 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase9-compile-time/valid/compile_time_capability_declaration_valid.valid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/valid/compile_time_multiple_capabilities_declaration_valid.valid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/valid/compile_time_plain_function_still_works.valid.conception");
+    try expectRunFixture("../../../language/phase9-compile-time/valid/compile_time_target_pointer_size_run.valid.conception");
+    try expectRunFixture("../../../language/phase9-compile-time/valid/compile_time_target_endian_bool_run.valid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/valid/static_assert_target_pointer_size.valid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/valid/static_assert_target_endian.valid.conception");
+    try expectRunFixture("../../../language/phase9-compile-time/valid/compile_time_target_in_if.valid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_call_unsupported.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_unknown_capability.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_duplicate_capability.invalid.conception");
@@ -2198,6 +2203,9 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_local_unsupported.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_struct_literal_unsupported.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_field_access_unsupported.invalid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_target_unknown_field.invalid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_target_runtime_use.invalid.conception");
+    try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_target_string_field_unsupported.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_division_by_zero.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_overflow.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/compile_time_function_runtime_call.invalid.conception");

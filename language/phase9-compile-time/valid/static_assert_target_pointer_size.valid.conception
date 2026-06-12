@@ -1,0 +1,13 @@
+# name: static assert target pointer size
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+static_assert(target.pointerSize == 8);
+
+int main() {
+    return 0;
+}

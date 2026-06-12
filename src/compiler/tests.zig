@@ -18,6 +18,7 @@ pub const token = @import("token.zig");
 pub const testing = @import("testing/harness.zig");
 pub const checker = @import("checker.zig");
 pub const compile_time = @import("compile_time.zig");
+pub const compile_time_target = @import("compile_time_target.zig");
 pub const backend_c = @import("backend_c.zig");
 pub const backend_c_mir = @import("backend_c_mir.zig");
 
@@ -33,4 +34,5 @@ test {
     _ = semantics;
     _ = hir_checker;
     _ = compile_time;
+    _ = compile_time_target;
 }
