@@ -9,6 +9,7 @@ const hir = @import("hir.zig");
 const hir_checker = @import("hir_checker.zig");
 const mir = @import("mir.zig");
 const mir_lowering = @import("mir_lowering.zig");
+const mir_storage = @import("mir_storage.zig");
 const mir_validator = @import("mir_validator.zig");
 const parser_model = @import("parser.zig");
 const semantics = @import("semantics.zig");
@@ -33,6 +34,10 @@ pub fn emitExecutableFromMir(
     mir_module: *const mir.MirModule,
     diagnostic_bag: ?*diagnostics.DiagnosticBag,
 ) EmitError![]const u8 {
+    mir_storage.analyzeModule(allocator, mir_module, diagnostic_bag) catch |err| switch (err) {
+        error.InvalidStorageState => return error.InvalidExecutable,
+        error.OutOfMemory => return error.OutOfMemory,
+    };
     mir_validator.validateModule(allocator, semantic_module, mir_module, diagnostic_bag) catch |err| switch (err) {
         error.InvalidMirModule => return error.InvalidExecutable,
         error.OutOfMemory => return error.OutOfMemory,

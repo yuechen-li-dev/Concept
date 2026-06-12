@@ -6,6 +6,7 @@ pub const interner = @import("interner.zig");
 pub const hir = @import("hir.zig");
 pub const mir = @import("mir.zig");
 pub const mir_lowering = @import("mir_lowering.zig");
+pub const mir_storage = @import("mir_storage.zig");
 pub const mir_validator = @import("mir_validator.zig");
 pub const manifest = @import("manifest.zig");
 pub const types = @import("types.zig");
@@ -28,6 +29,7 @@ test {
     _ = hir;
     _ = mir;
     _ = mir_lowering;
+    _ = mir_storage;
     _ = mir_validator;
     _ = manifest;
     _ = types;

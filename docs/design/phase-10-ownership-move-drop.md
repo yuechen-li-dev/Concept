@@ -13,6 +13,19 @@ semantics.
 P10-M0 does not implement compiler behavior. It does not add parser, HIR, MIR,
 backend, diagnostic, or fixture changes requiring unsupported language behavior.
 
+P10-M1 adds the first MIR storage-state analysis skeleton. The pass lives in
+`src/compiler/mir_storage.zig`, tracks whole-local `Uninitialized`,
+`Initialized`, and `Moved` states, initializes parameters as live values, marks
+assigned locals initialized, and diagnoses direct reads of uninitialized or moved
+storage in MIR. It is wired into the MIR C backend before MIR validation and is
+covered primarily by MIR unit tests because source `move` and ordinary
+uninitialized local syntax do not exist yet.
+
+P10-M1 remains intentionally conservative: there is no source `move` syntax, no
+Drop insertion, no `MaybeUninit`, no branch maybe-state diagnostics, no partial
+field state, and no Copy marker integration. Field places currently require the
+base local to be usable and are otherwise tracked at whole-local granularity.
+
 ## Thesis
 
 ```text

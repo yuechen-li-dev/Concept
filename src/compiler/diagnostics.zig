@@ -138,6 +138,8 @@ pub const DiagnosticCode = enum {
     CompileTimeTargetMetadataUnavailable,
     StaticAssertFailed,
     StaticAssertRequiresBool,
+    UseBeforeInitialization,
+    UseAfterMove,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -257,6 +259,8 @@ pub const DiagnosticCode = enum {
             .CompileTimeUnknownTargetField => "CON0144",
             .CompileTimeTargetMetadataRequiresCompileTime => "CON0145",
             .CompileTimeTargetMetadataUnavailable => "CON0146",
+            .UseBeforeInitialization => "CON0150",
+            .UseAfterMove => "CON0151",
         };
     }
 };
@@ -691,6 +695,8 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0144", DiagnosticCode.CompileTimeUnknownTargetField.format());
     try std.testing.expectEqualStrings("CON0145", DiagnosticCode.CompileTimeTargetMetadataRequiresCompileTime.format());
     try std.testing.expectEqualStrings("CON0146", DiagnosticCode.CompileTimeTargetMetadataUnavailable.format());
+    try std.testing.expectEqualStrings("CON0150", DiagnosticCode.UseBeforeInitialization.format());
+    try std.testing.expectEqualStrings("CON0151", DiagnosticCode.UseAfterMove.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {
@@ -970,6 +976,14 @@ pub fn invalidMirType(span: SourceSpan) Diagnostic {
 
 pub fn invalidMirOperand(span: SourceSpan) Diagnostic {
     return Diagnostic.init(.InvalidMirOperand, .@"error", "invalid MIR operand", span);
+}
+
+pub fn useBeforeInitialization(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.UseBeforeInitialization, .@"error", "use of uninitialized storage", span);
+}
+
+pub fn useAfterMove(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.UseAfterMove, .@"error", "use of moved storage", span);
 }
 
 pub fn unsupportedCBackendType(span: SourceSpan) Diagnostic {
