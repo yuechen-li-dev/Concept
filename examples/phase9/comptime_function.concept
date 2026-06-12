@@ -1,0 +1,11 @@
+module Main;
+
+comptime int add(int a, int b) {
+    return a + b;
+}
+
+static_assert(add(20, 22) == 42);
+
+int main() {
+    return comptime add(20, 22);
+}

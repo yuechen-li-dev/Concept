@@ -1,0 +1,7 @@
+module Main;
+
+static_assert(1 + 1 == 2);
+
+int main() {
+    return 0;
+}

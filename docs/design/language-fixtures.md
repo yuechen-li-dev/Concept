@@ -61,9 +61,15 @@ Invalid fixtures cover malformed template syntax, type parameters out of scope, 
 
 Phase 8 MIR/backend coverage is intentionally concrete-only: the pipeline run fixture and targeted compiler tests assert that template declarations, concepts, marker concepts, and type-parameter types do not leak into executable MIR or backend C, while deterministic instantiated function names and referenced static witness calls are emitted.
 
+Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed for compile-time execution v0. Phase 10 is planned for ownership, move, Drop, MaybeUninit, and richer storage-state analysis.
+
 ## Phase 9 compile-time execution fixtures
 
-Phase 9 fixtures are planned under `language/phase9-compile-time-execution/` once implementation begins. The first fixture slice should cover valid `comptime` integer arithmetic, valid `comptime` boolean expressions, a runtime fixture returning `comptime 40 + 2`, invalid unsupported expressions, invalid type mismatches, deterministic evaluator snapshots, `static_assert` pass/fail once implemented, future function-call evaluator fixtures, and future capability-denied fixtures. Early run fixtures should prove that evaluated values lower into ordinary MIR/backend constants rather than leaking unresolved compile-time expressions into executable output.
+Phase 9 fixtures live under `language/phase9-compile-time/` and cover the closed compile-time execution v0 surface. Valid fixtures cover `comptime expr` integer arithmetic and boolean logic, `static_assert`, compile-time functions with zero/int/bool arguments, nested compile-time calls, locals, local assignment, scoped blocks, `if` / `else`, `while`, declaration-only capability annotations, and deterministic target metadata for pointer size and endian facts.
+
+Invalid fixtures cover unsupported compile-time expressions and statements, runtime calls to compile-time-only functions, compile-time calls to runtime functions, static-assert failure and type requirements, recursion/fuel exhaustion, unsupported local/signature shapes, capability unknown/duplicate/not-granted diagnostics, runtime target metadata use, unknown target fields, and intentionally unsupported string target facts.
+
+Phase 9 MIR/backend coverage asserts that evaluated values lower into ordinary MIR/backend constants: unresolved compile-time expressions, `static_assert`, compile-time-only functions, capability metadata, and the `target` metadata root must not leak into executable output.
 
 ## `.conception` format
 

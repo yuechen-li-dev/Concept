@@ -1,0 +1,8 @@
+module Main;
+
+static_assert(target.pointerSize == 8);
+static_assert(target.isLittleEndian || target.isBigEndian);
+
+int main() {
+    return comptime target.pointerSize;
+}

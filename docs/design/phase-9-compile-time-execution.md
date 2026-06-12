@@ -811,3 +811,74 @@ layout choices, and those choices must not be frozen accidentally as the Concept
 ABI. Future layout queries must specify how Concept types map to size,
 alignment, padding, representation attributes, and target ABI rules before they
 can be exposed to compile-time evaluation.
+
+## P9-M9 closeout status
+
+Phase 9 v0 is closed as a small, deterministic compile-time execution slice.
+It intentionally stabilizes the evaluator boundary rather than expanding into the
+larger PoC3 compile-time vision.
+
+Implemented Phase 9 v0 support:
+
+- `comptime expr` source expressions;
+- `static_assert(expr);` with no custom message argument;
+- compile-time function declarations and calls from explicit compile-time
+  contexts;
+- `CompileTimeValue` values for `int` and `bool`;
+- `int` and `bool` parameters and locals in compile-time functions;
+- local assignment in compile-time functions;
+- scoped blocks plus `if` / `else`;
+- `while` loops guarded by deterministic fuel/step accounting;
+- nested compile-time calls with recursion/fuel protection;
+- capability annotations as declaration metadata only;
+- deterministic target metadata for:
+  - `target.pointerSize`;
+  - `target.isLittleEndian`;
+  - `target.isBigEndian`.
+
+The closeout invariant is:
+
+```text
+MIR/backend receive ordinary concrete values; unresolved compile-time expressions must not leak into MIR/backend.
+```
+
+Successful `comptime expr` evaluation lowers as ordinary constants,
+`static_assert` emits no MIR/backend artifact, compile-time-only functions are
+skipped by MIR/backend lowering, capability metadata is not emitted, and
+`target` is not a runtime object. The hermetic and deterministic default remains
+intact. The evaluator has no filesystem, environment, network, time, random,
+process, arbitrary host-call, or other host-effect access.
+
+Capability annotations are declaration metadata in Phase 9. They are not grants.
+They do not enable host operations. All non-empty capability sets are denied
+during evaluation until a future build-grant model exists.
+
+Target metadata is deterministic configured compiler data. The current
+implementation uses a deterministic scaffold default. It must not inspect the
+ambient host machine at evaluation time. `target.arch` and string target facts
+are deferred because `CompileTimeValue` has no string value yet.
+
+Intentionally deferred beyond Phase 9 v0:
+
+- host effects and capability grants;
+- filesystem, environment, network, time, random, process, or arbitrary host APIs;
+- reflection and generated declarations;
+- strings, arrays, structs, enums, and pointers as `CompileTimeValue`;
+- field access in compile-time evaluation;
+- raw pointer/address-of/deref evaluation;
+- a runtime `target` object;
+- target string facts such as `target.arch`;
+- `sizeof` and `alignof`;
+- language-level ABI/layout queries;
+- compile-time allocation;
+- `static_assert(expr, "message")`;
+- compile-time `for` loops;
+- ownership, move, Drop, MaybeUninit, and richer storage-state analysis.
+
+`sizeof` and `alignof` remain deferred. Phase 7 struct C layout is a backend
+implementation detail, not yet Concept's language-level ABI. Layout queries
+require a deliberate layout model and must not be inferred accidentally from
+generated C.
+
+Ownership, move, Drop, MaybeUninit, and storage-state analysis are Phase 10
+work. Compile-time execution v0 does not implement ownership semantics.

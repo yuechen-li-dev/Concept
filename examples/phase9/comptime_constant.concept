@@ -1,0 +1,5 @@
+module Main;
+
+int main() {
+    return comptime 40 + 2;
+}
