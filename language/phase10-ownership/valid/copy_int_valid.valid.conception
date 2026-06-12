@@ -1,0 +1,15 @@
+# name: copy int valid
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    int a = 20;
+    int b = a;
+    return b + 22;
+}
+
+=== run ===
+exit_code: 42

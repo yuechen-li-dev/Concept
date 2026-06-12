@@ -45,6 +45,23 @@ diagnostics beyond the existing conservative lattice, partial field moves,
 assignment semantics for Drop types, borrow checking, lifetime analysis,
 destructor syntax, and implicit move.
 
+P10-M3 adds copyability model v0. The central copyability predicate lives on the
+type store: `int`, `bool`, raw pointer values, and enums are Copy; structs are
+non-Copy by default unless a visible marker `impl Copy<StructType>` exists.
+Ordinary MIR `Copy(place)` from initialized local and parameter places is now an
+implicit copy check. If the source type is non-Copy, the storage pass reports
+`CON0154 ImplicitCopyRequiresCopy` at the read and requires either `Copy<T>` or
+an explicit `move`. Explicit `move` remains represented as `Move(place)`: it
+requires initialized storage, consumes non-Copy local/param places, and remains
+non-consuming for Copy types. Fresh values such as struct literals, function
+returns held in temps, enum constructors, and literals are not implicit copies
+from an existing user place.
+
+P10-M3 still intentionally defers Drop, `MaybeUninit`, branch maybe-state
+diagnostics, partial field moves, partial field copyability, replacement
+assignment semantics for Drop types, user-defined copy/move constructors,
+borrow checking, lifetime analysis, and implicit move.
+
 ## Thesis
 
 ```text
@@ -228,8 +245,9 @@ marker concept Copy<T>;
 Eventually, implicit copy of type `T` is allowed when `Copy<T>` holds. Non-Copy
 values require `move`.
 
-P10 early implementation may hardcode `int` and `bool` as copyable. Later
-milestones should integrate marker concept satisfaction for:
+P10-M3 hardcodes scalar, pointer, and enum categories as copyable and recognizes
+visible marker `impl Copy<T>` satisfaction for structs. Later milestones should
+integrate richer marker relationships for:
 
 ```text
 Copy<T>

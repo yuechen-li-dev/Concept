@@ -1,0 +1,18 @@
+# name: copy pointer valid
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    int value = 42;
+    int* p = &value;
+    int* q = p;
+    unsafe {
+        return *q;
+    }
+}
+
+=== run ===
+exit_code: 42

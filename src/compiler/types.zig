@@ -140,6 +140,30 @@ pub const TypeStore = struct {
         return self.types.items[index];
     }
 
+    /// P10-M3 copyability model v0.
+    ///
+    /// Integer and boolean values are intrinsic Copy. Raw pointers and enums are
+    /// Copy for now because existing runtime semantics treat them as ordinary
+    /// scalar/tag value flow. Structs are non-Copy by default until marker
+    /// concept `Copy<T>` satisfaction is integrated deliberately.
+    pub fn isCopyType(self: TypeStore, hir_store: ?*const hir.HirStore, id: TypeId) bool {
+        return switch (self.kind(id)) {
+            .int, .bool, .pointer, .enum_type => true,
+            .struct_type => self.hasCopyMarkerImpl(hir_store, id),
+            .void, .type_param => false,
+        };
+    }
+
+    fn hasCopyMarkerImpl(self: TypeStore, hir_store: ?*const hir.HirStore, id: TypeId) bool {
+        _ = self;
+        const store = hir_store orelse return false;
+        for (store.concepts.items, 0..) |concept, index| {
+            if (!concept.is_marker or concept.known_marker_kind != .copy) continue;
+            if (store.hasConceptImpl(.{ .index = @intCast(index) }, id)) return true;
+        }
+        return false;
+    }
+
     pub fn contains(self: TypeStore, id: TypeId) bool {
         return id.index < self.types.items.len;
     }
@@ -315,6 +339,40 @@ test "pointer TypeIds are interned by pointee" {
     try std.testing.expectEqual(TypeKind{ .pointer = .{ .pointee = store.intType() } }, store.kind(int_ptr_first));
     try std.testing.expectEqual(TypeKind{ .pointer = .{ .pointee = store.voidType() } }, store.kind(void_ptr));
     try std.testing.expectEqual(TypeKind{ .pointer = .{ .pointee = int_ptr_first } }, store.kind(int_ptr_ptr));
+}
+
+test "copyability model v0 marks scalars pointers and enums Copy but structs non-Copy" {
+    var store = try TypeStore.init(std.testing.allocator);
+    defer store.deinit();
+
+    const struct_type = try store.addStructType(.{ .index = 0 });
+    const enum_type = try store.addEnumType(.{ .index = 0 });
+    const pointer_type = try store.addPointerType(store.intType());
+
+    try std.testing.expect(store.isCopyType(null, store.intType()));
+    try std.testing.expect(store.isCopyType(null, store.boolType()));
+    try std.testing.expect(store.isCopyType(null, pointer_type));
+    try std.testing.expect(store.isCopyType(null, enum_type));
+    try std.testing.expect(!store.isCopyType(null, struct_type));
+    try std.testing.expect(!store.isCopyType(null, store.voidType()));
+}
+
+test "copyability model recognizes explicit marker Copy impl for structs" {
+    var symbols = interner.Interner.init(std.testing.allocator);
+    defer symbols.deinit();
+    var hir_module = hir.HirModule.init(std.testing.allocator);
+    defer hir_module.deinit();
+    var store = try TypeStore.init(std.testing.allocator);
+    defer store.deinit();
+
+    const copy_concept = try hir_module.store.addConcept(try symbols.intern("Copy"), true, false, hir.synthetic_span);
+    hir_module.store.setConceptKnownMarkerKind(copy_concept, .copy);
+    const struct_id = try hir_module.store.addStruct(try symbols.intern("Vec2"));
+    const struct_type = try store.addStructType(struct_id);
+
+    try std.testing.expect(!store.isCopyType(&hir_module.store, struct_type));
+    _ = try hir_module.store.addConceptImpl(copy_concept, struct_type, &.{}, false, hir.synthetic_span);
+    try std.testing.expect(store.isCopyType(&hir_module.store, struct_type));
 }
 
 test "pointer TypeKind debug formatting is stable" {

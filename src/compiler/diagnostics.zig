@@ -142,6 +142,7 @@ pub const DiagnosticCode = enum {
     UseAfterMove,
     MoveRequiresPlace,
     PartialMoveUnsupported,
+    ImplicitCopyRequiresCopy,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -265,6 +266,7 @@ pub const DiagnosticCode = enum {
             .UseAfterMove => "CON0151",
             .MoveRequiresPlace => "CON0152",
             .PartialMoveUnsupported => "CON0153",
+            .ImplicitCopyRequiresCopy => "CON0154",
         };
     }
 };
@@ -703,6 +705,7 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0151", DiagnosticCode.UseAfterMove.format());
     try std.testing.expectEqualStrings("CON0152", DiagnosticCode.MoveRequiresPlace.format());
     try std.testing.expectEqualStrings("CON0153", DiagnosticCode.PartialMoveUnsupported.format());
+    try std.testing.expectEqualStrings("CON0154", DiagnosticCode.ImplicitCopyRequiresCopy.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {
@@ -998,6 +1001,10 @@ pub fn moveRequiresPlace(span: SourceSpan) Diagnostic {
 
 pub fn partialMoveUnsupported(span: SourceSpan) Diagnostic {
     return Diagnostic.init(.PartialMoveUnsupported, .@"error", "field and partial moves are not supported yet", span);
+}
+
+pub fn implicitCopyRequiresCopy(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.ImplicitCopyRequiresCopy, .@"error", "implicit copy of non-Copy value requires Copy<T> or explicit move", span);
 }
 
 pub fn unsupportedCBackendType(span: SourceSpan) Diagnostic {

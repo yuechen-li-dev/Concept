@@ -1,0 +1,21 @@
+# name: implicit copy struct assignment
+# phase: backend-c
+# expect: fail
+
+=== source ===
+module Main;
+
+struct Box {
+    int value;
+};
+
+int main() {
+    Box a = Box { value: 42 };
+    Box b = Box { value: 1 };
+    b = a;
+
+    return b.value;
+}
+
+=== diagnostics ===
+CON0154

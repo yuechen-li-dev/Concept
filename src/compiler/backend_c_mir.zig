@@ -34,7 +34,7 @@ pub fn emitExecutableFromMir(
     mir_module: *const mir.MirModule,
     diagnostic_bag: ?*diagnostics.DiagnosticBag,
 ) EmitError![]const u8 {
-    mir_storage.analyzeModule(allocator, mir_module, diagnostic_bag) catch |err| switch (err) {
+    mir_storage.analyzeModule(allocator, semantic_module, mir_module, diagnostic_bag) catch |err| switch (err) {
         error.InvalidStorageState => return error.InvalidExecutable,
         error.OutOfMemory => return error.OutOfMemory,
     };

@@ -1,0 +1,20 @@
+# name: implicit copy struct local
+# phase: backend-c
+# expect: fail
+
+=== source ===
+module Main;
+
+struct Box {
+    int value;
+};
+
+int main() {
+    Box a = Box { value: 42 };
+    Box b = a;
+
+    return b.value;
+}
+
+=== diagnostics ===
+CON0154

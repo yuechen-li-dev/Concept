@@ -11,6 +11,7 @@ const semantics_model = @import("../semantics.zig");
 const hir_checker_model = @import("../hir_checker.zig");
 const mir_lowering_model = @import("../mir_lowering.zig");
 const mir_validator_model = @import("../mir_validator.zig");
+const backend_c_mir_model = @import("../backend_c_mir.zig");
 const run_harness = @import("run_harness.zig");
 
 pub const Phase = enum {
@@ -1333,6 +1334,51 @@ fn expectMirFixture(comptime path: []const u8) !void {
     try std.testing.expectEqualStrings(fixture.mir().?, snapshot);
 }
 
+fn expectBackendCFixture(comptime path: []const u8) !void {
+    const text = @embedFile(path);
+    const fixture = try parse(std.testing.allocator, text, .{ .path = path });
+    defer fixture.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(Phase.backend_c, fixture.phase);
+
+    var parse_diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
+    defer parse_diagnostics.deinit();
+    var diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const source_file = try source_model.SourceFile.init(std.testing.allocator, path, fixture.source().?);
+    defer source_file.deinit(std.testing.allocator);
+
+    const unit = try parser_model.parseSource(std.testing.allocator, source_file, &parse_diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), parse_diagnostics.count());
+
+    var module = try semantics_model.collectTopLevelDeclarations(std.testing.allocator, unit, &diagnostics);
+    defer module.deinit();
+    try hir_checker_model.checkExecutable(std.testing.allocator, &module, &diagnostics);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+
+    var mir_module = try mir_lowering_model.lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+
+    switch (fixture.expect) {
+        .pass => {
+            const c_source = try backend_c_mir_model.emitExecutableFromMir(std.testing.allocator, &module, &mir_module, &diagnostics);
+            defer std.testing.allocator.free(c_source);
+            try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+        },
+        .fail => {
+            try std.testing.expectError(error.InvalidExecutable, backend_c_mir_model.emitExecutableFromMir(std.testing.allocator, &module, &mir_module, &diagnostics));
+            const expected_codes = try fixture.diagnosticCodes(std.testing.allocator);
+            defer std.testing.allocator.free(expected_codes);
+            try std.testing.expectEqual(expected_codes.len, diagnostics.count());
+            for (expected_codes, diagnostics.diagnostics.items) |expected_code, actual| {
+                try std.testing.expectEqualStrings(expected_code, actual.code.format());
+            }
+        },
+    }
+}
+
 fn expectMirCorpus(comptime source_path: []const u8, comptime expected_path: []const u8) !void {
     var parse_diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
     defer parse_diagnostics.deinit();
@@ -2238,10 +2284,21 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectRunFixture("../../../language/phase10-ownership/valid/move_struct_argument_run.valid.conception");
     try expectRunFixture("../../../language/phase10-ownership/valid/move_int_copy_run.valid.conception");
     try expectRunFixture("../../../language/phase10-ownership/valid/move_bool_copy_run.valid.conception");
+    try expectRunFixture("../../../language/phase10-ownership/valid/copy_int_valid.valid.conception");
+    try expectRunFixture("../../../language/phase10-ownership/valid/copy_bool_valid.valid.conception");
+    try expectRunFixture("../../../language/phase10-ownership/valid/move_param_forward_valid.valid.conception");
+    try expectRunFixture("../../../language/phase10-ownership/valid/copy_enum_valid.valid.conception");
+    try expectRunFixture("../../../language/phase10-ownership/valid/copy_pointer_valid.valid.conception");
+    try expectRunFixture("../../../language/phase10-ownership/valid/copy_marker_struct_valid.valid.conception");
     try expectCheckFixture("../../../language/phase10-ownership/invalid/use_after_move_local.invalid.conception");
     try expectCheckFixture("../../../language/phase10-ownership/invalid/use_after_move_argument.invalid.conception");
     try expectCheckFixture("../../../language/phase10-ownership/invalid/move_temporary_call.invalid.conception");
     try expectCheckFixture("../../../language/phase10-ownership/invalid/move_struct_literal.invalid.conception");
     try expectCheckFixture("../../../language/phase10-ownership/invalid/move_field_unsupported.invalid.conception");
     try expectCheckFixture("../../../language/phase10-ownership/invalid/move_after_move.invalid.conception");
+    try expectBackendCFixture("../../../language/phase10-ownership/invalid/implicit_copy_struct_local.invalid.conception");
+    try expectBackendCFixture("../../../language/phase10-ownership/invalid/implicit_copy_struct_argument.invalid.conception");
+    try expectBackendCFixture("../../../language/phase10-ownership/invalid/implicit_copy_struct_return.invalid.conception");
+    try expectBackendCFixture("../../../language/phase10-ownership/invalid/implicit_copy_struct_assignment.invalid.conception");
+    try expectBackendCFixture("../../../language/phase10-ownership/invalid/implicit_copy_param_forward.invalid.conception");
 }

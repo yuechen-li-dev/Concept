@@ -1,0 +1,26 @@
+# name: move param forward valid
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+struct Box {
+    int value;
+};
+
+int take(Box b) {
+    return b.value;
+}
+
+int forward(Box b) {
+    return take(move b);
+}
+
+int main() {
+    Box a = Box { value: 42 };
+    return forward(move a);
+}
+
+=== run ===
+exit_code: 42

@@ -1,0 +1,18 @@
+# name: copy bool valid
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    bool a = true;
+    bool b = a;
+    if (b) {
+        return 42;
+    }
+    return 1;
+}
+
+=== run ===
+exit_code: 42

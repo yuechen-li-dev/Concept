@@ -1,0 +1,24 @@
+# name: copy marker struct valid
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+marker concept Copy<T>;
+
+struct Vec2 {
+    int x;
+    int y;
+};
+
+impl Copy<Vec2>;
+
+int main() {
+    Vec2 a = Vec2 { x: 20, y: 22 };
+    Vec2 b = a;
+    return b.x + b.y;
+}
+
+=== run ===
+exit_code: 42

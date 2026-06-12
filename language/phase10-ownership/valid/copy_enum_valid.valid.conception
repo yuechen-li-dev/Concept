@@ -1,0 +1,23 @@
+# name: copy enum valid
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+enum Status {
+    Ok,
+    Err,
+};
+
+int main() {
+    Status a = Status::Ok;
+    Status b = a;
+    match (b) {
+        Status::Ok => return 42;
+        Status::Err => return 1;
+    }
+}
+
+=== run ===
+exit_code: 42
