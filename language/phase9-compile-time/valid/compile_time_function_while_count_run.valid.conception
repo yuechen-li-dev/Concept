@@ -1,0 +1,23 @@
+# name: compile-time function while count run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+comptime int countToThree() {
+    int i = 0;
+
+    while (i < 3) {
+        i = i + 1;
+    }
+
+    return i;
+}
+
+int main() {
+    return comptime countToThree();
+}
+
+=== run ===
+exit_code: 3

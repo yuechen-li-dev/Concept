@@ -1,0 +1,27 @@
+# name: compile-time function while return
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+comptime int firstPositive() {
+    int i = 0;
+
+    while (true) {
+        if (i == 3) {
+            return i;
+        }
+
+        i = i + 1;
+    }
+
+    return 0;
+}
+
+int main() {
+    return comptime firstPositive();
+}
+
+=== run ===
+exit_code: 3

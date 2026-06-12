@@ -1,4 +1,4 @@
-# name: compile-time function while unsupported body
+# name: compile-time while fuel exhausted
 # phase: check
 # check: hir
 # expect: fail
@@ -8,10 +8,9 @@ module Main;
 
 comptime int bad() {
     while (true) {
-        discard 0;
     }
 
-    return 42;
+    return 0;
 }
 
 int main() {
@@ -19,4 +18,4 @@ int main() {
 }
 
 === diagnostics ===
-CON0132
+CON0138

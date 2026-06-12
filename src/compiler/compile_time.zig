@@ -46,6 +46,14 @@ pub const CompileTimeValue = union(enum) {
     }
 };
 
+pub const CompileTimeBudget = struct {
+    /// P9-M6 default step budget. This is intentionally fixed for now so
+    /// compile-time execution is deterministic and cannot hang the compiler.
+    pub const default_step_limit: usize = 100_000;
+
+    remaining_steps: usize = default_step_limit,
+};
+
 pub const CompileTimeError = error{
     UnsupportedExpression,
     UnsupportedStatement,
@@ -63,6 +71,8 @@ pub const CompileTimeError = error{
     IfRequiresBool,
     UnboundLocal,
     AssignmentTypeMismatch,
+    FuelExhausted,
+    WhileRequiresBool,
 };
 
 pub const CompileTimeResult = CompileTimeError!CompileTimeValue;
@@ -132,13 +142,15 @@ pub const CompileTimeFrame = struct {
 ///
 /// The evaluator assumes expressions have already passed HIR checking, but it
 /// still rejects impossible value/operator pairs instead of coercing them. It is
-/// intentionally not a constant-propagation engine: locals, aggregate values,
-/// field access, pointers, `try`, and `decide` are future work.
+/// intentionally not a constant-propagation engine: aggregate values, field
+/// access, pointers, `try`, `decide`, and unsupported statement forms are
+/// future work.
 pub const CompileTimeEvaluator = struct {
     module: *const semantics.SemanticModule,
     allocator: std.mem.Allocator,
     frame: CompileTimeFrame = .{},
     call_depth: usize = 0,
+    budget: CompileTimeBudget = .{},
 
     const max_call_depth = 32;
 
@@ -146,7 +158,16 @@ pub const CompileTimeEvaluator = struct {
         return .{ .module = module, .allocator = allocator };
     }
 
-    pub fn evaluateExpr(self: CompileTimeEvaluator, expr_id: hir.ExprId) CompileTimeResult {
+    pub fn initWithBudget(module: *const semantics.SemanticModule, allocator: std.mem.Allocator, budget: CompileTimeBudget) CompileTimeEvaluator {
+        return .{ .module = module, .allocator = allocator, .budget = budget };
+    }
+
+    fn consumeFuel(self: *CompileTimeEvaluator) CompileTimeError!void {
+        if (self.budget.remaining_steps == 0) return error.FuelExhausted;
+        self.budget.remaining_steps -= 1;
+    }
+
+    pub fn evaluateExpr(self: *CompileTimeEvaluator, expr_id: hir.ExprId) CompileTimeResult {
         const expr = self.module.hir.getExpr(expr_id).*;
         return switch (expr.kind) {
             .int_literal => |text| .{ .int = std.fmt.parseInt(i64, text, 10) catch return error.Overflow },
@@ -170,7 +191,8 @@ pub const CompileTimeEvaluator = struct {
         };
     }
 
-    fn evaluateCall(self: CompileTimeEvaluator, function_id: hir.FunctionId, args: []const hir.ExprId) CompileTimeResult {
+    fn evaluateCall(self: *CompileTimeEvaluator, function_id: hir.FunctionId, args: []const hir.ExprId) CompileTimeResult {
+        try self.consumeFuel();
         if (self.call_depth >= max_call_depth) return error.RecursionLimit;
 
         const function = self.module.hir.getFunction(function_id);
@@ -192,12 +214,16 @@ pub const CompileTimeEvaluator = struct {
             .allocator = self.allocator,
             .frame = .{ .parameters = bindings },
             .call_depth = self.call_depth + 1,
+            .budget = self.budget,
         };
-        defer nested.frame.deinit(self.allocator);
+        defer {
+            self.budget = nested.budget;
+            nested.frame.deinit(self.allocator);
+        }
         return nested.evaluateFunctionBody(function);
     }
 
-    fn requireSupportedSignature(self: CompileTimeEvaluator, function: *const hir.HirFunction) CompileTimeError!void {
+    fn requireSupportedSignature(self: *CompileTimeEvaluator, function: *const hir.HirFunction) CompileTimeError!void {
         if (!self.isSupportedScalarType(function.return_type)) return error.UnsupportedSignature;
         for (function.params) |param_id| {
             if (!self.isSupportedScalarType(self.module.hir.getParam(param_id).type_id)) return error.UnsupportedSignature;
@@ -221,6 +247,7 @@ pub const CompileTimeEvaluator = struct {
     };
 
     fn executeStmt(self: *CompileTimeEvaluator, stmt_id: hir.StmtId) CompileTimeError!ExecResult {
+        try self.consumeFuel();
         const stmt = self.module.hir.getStmt(stmt_id);
         return switch (stmt.kind) {
             .block => |children| try self.executeBlock(children),
@@ -253,8 +280,26 @@ pub const CompileTimeEvaluator = struct {
                 if (selected) |branch| break :blk try self.executeStmt(branch);
                 break :blk .continue_;
             },
-            .expr_stmt, .discard_stmt, .while_stmt, .unsafe_block, .match_stmt => error.UnsupportedStatement,
+            .while_stmt => |while_stmt| try self.executeWhile(while_stmt.condition, while_stmt.body),
+            .expr_stmt, .discard_stmt, .unsafe_block, .match_stmt => error.UnsupportedStatement,
         };
+    }
+
+    fn executeWhile(self: *CompileTimeEvaluator, condition_id: hir.ExprId, body_id: hir.StmtId) CompileTimeError!ExecResult {
+        while (true) {
+            const condition = try self.evaluateExpr(condition_id);
+            const should_enter = switch (condition) {
+                .bool => |value| value,
+                .int => return error.WhileRequiresBool,
+            };
+            if (!should_enter) return .continue_;
+            try self.consumeFuel();
+            const result = try self.executeStmt(body_id);
+            switch (result) {
+                .continue_ => {},
+                .return_value => return result,
+            }
+        }
     }
 
     fn executeBlock(self: *CompileTimeEvaluator, children: []const hir.StmtId) CompileTimeError!ExecResult {
@@ -270,11 +315,11 @@ pub const CompileTimeEvaluator = struct {
         return .continue_;
     }
 
-    fn isSupportedScalarType(self: CompileTimeEvaluator, type_id: types.TypeId) bool {
+    fn isSupportedScalarType(self: *CompileTimeEvaluator, type_id: types.TypeId) bool {
         return sameType(type_id, self.module.types.intType()) or sameType(type_id, self.module.types.boolType());
     }
 
-    fn evaluateUnary(self: CompileTimeEvaluator, op: hir.UnaryOp, operand: CompileTimeValue) CompileTimeResult {
+    fn evaluateUnary(self: *CompileTimeEvaluator, op: hir.UnaryOp, operand: CompileTimeValue) CompileTimeResult {
         _ = self;
         return switch (op) {
             .negate => switch (operand) {
@@ -288,7 +333,7 @@ pub const CompileTimeEvaluator = struct {
         };
     }
 
-    fn evaluateBinary(self: CompileTimeEvaluator, op: hir.BinaryOp, left: CompileTimeValue, right: CompileTimeValue) CompileTimeResult {
+    fn evaluateBinary(self: *CompileTimeEvaluator, op: hir.BinaryOp, left: CompileTimeValue, right: CompileTimeValue) CompileTimeResult {
         _ = self;
         return switch (op) {
             .add => try intArithmetic(left, right, checkedAdd),
@@ -473,6 +518,16 @@ const TestModule = struct {
     }
 };
 
+fn eval(tm: *const TestModule, expr_id: hir.ExprId) CompileTimeResult {
+    var evaluator = tm.evaluator();
+    return evaluator.evaluateExpr(expr_id);
+}
+
+fn evalWithBudget(tm: *const TestModule, expr_id: hir.ExprId, remaining_steps: usize) CompileTimeResult {
+    var evaluator = CompileTimeEvaluator.initWithBudget(&tm.module, std.testing.allocator, .{ .remaining_steps = remaining_steps });
+    return evaluator.evaluateExpr(expr_id);
+}
+
 fn expectValue(actual: CompileTimeResult, expected: CompileTimeValue) !void {
     try std.testing.expect((try actual).eql(expected));
 }
@@ -517,45 +572,45 @@ test "compile-time evaluator evaluates literals grouping unary and arithmetic" {
     defer tm.deinit();
 
     const int_literal = try tm.int("42");
-    try expectValue(tm.evaluator().evaluateExpr(int_literal), .{ .int = 42 });
+    try expectValue(eval(&tm, int_literal), .{ .int = 42 });
 
     const bool_literal = try tm.boolExpr(true);
-    try expectValue(tm.evaluator().evaluateExpr(bool_literal), .{ .bool = true });
+    try expectValue(eval(&tm, bool_literal), .{ .bool = true });
 
     const grouped = try tm.expr(.{ .group = try tm.int("7") });
-    try expectValue(tm.evaluator().evaluateExpr(grouped), .{ .int = 7 });
+    try expectValue(eval(&tm, grouped), .{ .int = 7 });
 
     const addition = try tm.binary(.add, try tm.int("40"), try tm.int("2"));
-    try expectValue(tm.evaluator().evaluateExpr(addition), .{ .int = 42 });
+    try expectValue(eval(&tm, addition), .{ .int = 42 });
 
     const subtraction = try tm.binary(.subtract, try tm.int("50"), try tm.int("8"));
-    try expectValue(tm.evaluator().evaluateExpr(subtraction), .{ .int = 42 });
+    try expectValue(eval(&tm, subtraction), .{ .int = 42 });
 
     const multiplication = try tm.binary(.multiply, try tm.int("6"), try tm.int("7"));
-    try expectValue(tm.evaluator().evaluateExpr(multiplication), .{ .int = 42 });
+    try expectValue(eval(&tm, multiplication), .{ .int = 42 });
 
     const division = try tm.binary(.divide, try tm.int("84"), try tm.int("2"));
-    try expectValue(tm.evaluator().evaluateExpr(division), .{ .int = 42 });
+    try expectValue(eval(&tm, division), .{ .int = 42 });
 
     const negation = try tm.unary(.negate, try tm.int("42"));
-    try expectValue(tm.evaluator().evaluateExpr(negation), .{ .int = -42 });
+    try expectValue(eval(&tm, negation), .{ .int = -42 });
 }
 
 test "compile-time evaluator evaluates comparisons and boolean operators" {
     var tm = try TestModule.init();
     defer tm.deinit();
 
-    try expectValue(tm.evaluator().evaluateExpr(try tm.binary(.less, try tm.int("1"), try tm.int("2"))), .{ .bool = true });
-    try expectValue(tm.evaluator().evaluateExpr(try tm.binary(.less_equal, try tm.int("2"), try tm.int("2"))), .{ .bool = true });
-    try expectValue(tm.evaluator().evaluateExpr(try tm.binary(.greater, try tm.int("3"), try tm.int("2"))), .{ .bool = true });
-    try expectValue(tm.evaluator().evaluateExpr(try tm.binary(.greater_equal, try tm.int("2"), try tm.int("2"))), .{ .bool = true });
-    try expectValue(tm.evaluator().evaluateExpr(try tm.binary(.equal_equal, try tm.int("2"), try tm.int("2"))), .{ .bool = true });
-    try expectValue(tm.evaluator().evaluateExpr(try tm.binary(.bang_equal, try tm.int("2"), try tm.int("3"))), .{ .bool = true });
-    try expectValue(tm.evaluator().evaluateExpr(try tm.unary(.logical_not, try tm.boolExpr(false))), .{ .bool = true });
-    try expectValue(tm.evaluator().evaluateExpr(try tm.binary(.equal_equal, try tm.boolExpr(true), try tm.boolExpr(true))), .{ .bool = true });
-    try expectValue(tm.evaluator().evaluateExpr(try tm.binary(.bang_equal, try tm.boolExpr(true), try tm.boolExpr(false))), .{ .bool = true });
-    try expectValue(tm.evaluator().evaluateExpr(try tm.binary(.logical_and, try tm.boolExpr(true), try tm.boolExpr(false))), .{ .bool = false });
-    try expectValue(tm.evaluator().evaluateExpr(try tm.binary(.logical_or, try tm.boolExpr(true), try tm.boolExpr(false))), .{ .bool = true });
+    try expectValue(eval(&tm, try tm.binary(.less, try tm.int("1"), try tm.int("2"))), .{ .bool = true });
+    try expectValue(eval(&tm, try tm.binary(.less_equal, try tm.int("2"), try tm.int("2"))), .{ .bool = true });
+    try expectValue(eval(&tm, try tm.binary(.greater, try tm.int("3"), try tm.int("2"))), .{ .bool = true });
+    try expectValue(eval(&tm, try tm.binary(.greater_equal, try tm.int("2"), try tm.int("2"))), .{ .bool = true });
+    try expectValue(eval(&tm, try tm.binary(.equal_equal, try tm.int("2"), try tm.int("2"))), .{ .bool = true });
+    try expectValue(eval(&tm, try tm.binary(.bang_equal, try tm.int("2"), try tm.int("3"))), .{ .bool = true });
+    try expectValue(eval(&tm, try tm.unary(.logical_not, try tm.boolExpr(false))), .{ .bool = true });
+    try expectValue(eval(&tm, try tm.binary(.equal_equal, try tm.boolExpr(true), try tm.boolExpr(true))), .{ .bool = true });
+    try expectValue(eval(&tm, try tm.binary(.bang_equal, try tm.boolExpr(true), try tm.boolExpr(false))), .{ .bool = true });
+    try expectValue(eval(&tm, try tm.binary(.logical_and, try tm.boolExpr(true), try tm.boolExpr(false))), .{ .bool = false });
+    try expectValue(eval(&tm, try tm.binary(.logical_or, try tm.boolExpr(true), try tm.boolExpr(false))), .{ .bool = true });
 }
 
 test "compile-time evaluator rejects unsupported expression forms" {
@@ -565,17 +620,17 @@ test "compile-time evaluator rejects unsupported expression forms" {
     const callee = try tm.module.hir.addFunction(try tm.name("callee"), tm.module.types.intType(), hir.synthetic_span);
     const no_args = try std.testing.allocator.dupe(hir.ExprId, &.{});
     const call = try tm.expr(.{ .call = .{ .function = callee, .args = no_args } });
-    try std.testing.expectError(error.FunctionRequired, tm.evaluator().evaluateExpr(call));
+    try std.testing.expectError(error.FunctionRequired, eval(&tm, call));
 
     const struct_id = try tm.module.hir.addStruct(try tm.name("Pair"));
     const struct_type = try tm.module.types.addStructType(struct_id);
     const field_id = try tm.module.hir.addField(struct_id, try tm.name("value"), tm.module.types.intType(), hir.synthetic_span);
     const fields = try std.testing.allocator.dupe(hir.HirStructLiteralField, &.{.{ .field_id = field_id, .value = try tm.int("1"), .span = hir.synthetic_span }});
     const struct_literal = try tm.expr(.{ .struct_literal = .{ .struct_id = struct_id, .type_id = struct_type, .fields = fields } });
-    try std.testing.expectError(error.UnsupportedExpression, tm.evaluator().evaluateExpr(struct_literal));
+    try std.testing.expectError(error.UnsupportedExpression, eval(&tm, struct_literal));
 
     const field_access = try tm.expr(.{ .field_access = .{ .receiver = struct_literal, .field_name = try tm.name("value"), .field_span = hir.synthetic_span } });
-    try std.testing.expectError(error.UnsupportedExpression, tm.evaluator().evaluateExpr(field_access));
+    try std.testing.expectError(error.UnsupportedExpression, eval(&tm, field_access));
 }
 
 test "compile-time evaluator calls compile-time function with parameter bindings" {
@@ -592,7 +647,7 @@ test "compile-time evaluator calls compile-time function with parameter bindings
 
     const args = try std.testing.allocator.dupe(hir.ExprId, &.{ try tm.int("20"), try tm.int("22") });
     const call = try tm.expr(.{ .call = .{ .function = add, .args = args } });
-    try expectValue(tm.evaluator().evaluateExpr(call), .{ .int = 42 });
+    try expectValue(eval(&tm, call), .{ .int = 42 });
 }
 
 test "compile-time evaluator supports nested function calls and recursion guard" {
@@ -609,13 +664,13 @@ test "compile-time evaluator supports nested function calls and recursion guard"
 
     const two_args = try std.testing.allocator.dupe(hir.ExprId, &.{});
     const two_call = try tm.expr(.{ .call = .{ .function = two, .args = two_args } });
-    try expectValue(tm.evaluator().evaluateExpr(two_call), .{ .int = 2 });
+    try expectValue(eval(&tm, two_call), .{ .int = 2 });
 
     const recur = try tm.compileTimeFunction("recur", tm.module.types.intType());
     const recur_args = try std.testing.allocator.dupe(hir.ExprId, &.{});
     const recur_call = try tm.expr(.{ .call = .{ .function = recur, .args = recur_args } });
     tm.setBody(recur, try tm.block(&.{try tm.ret(recur_call)}));
-    try std.testing.expectError(error.RecursionLimit, tm.evaluator().evaluateExpr(recur_call));
+    try std.testing.expectError(error.RecursionLimit, eval(&tm, recur_call));
 }
 
 test "compile-time evaluator rejects mismatches division by zero overflow and modulo" {
@@ -623,19 +678,19 @@ test "compile-time evaluator rejects mismatches division by zero overflow and mo
     defer tm.deinit();
 
     const mismatch = try tm.binary(.add, try tm.int("1"), try tm.boolExpr(true));
-    try std.testing.expectError(error.TypeMismatch, tm.evaluator().evaluateExpr(mismatch));
+    try std.testing.expectError(error.TypeMismatch, eval(&tm, mismatch));
 
     const divide_by_zero = try tm.binary(.divide, try tm.int("1"), try tm.int("0"));
-    try std.testing.expectError(error.DivisionByZero, tm.evaluator().evaluateExpr(divide_by_zero));
+    try std.testing.expectError(error.DivisionByZero, eval(&tm, divide_by_zero));
 
     const add_overflow = try tm.binary(.add, try tm.int("9223372036854775807"), try tm.int("1"));
-    try std.testing.expectError(error.Overflow, tm.evaluator().evaluateExpr(add_overflow));
+    try std.testing.expectError(error.Overflow, eval(&tm, add_overflow));
 
     const negate_overflow = try tm.unary(.negate, try tm.int("-9223372036854775808"));
-    try std.testing.expectError(error.Overflow, tm.evaluator().evaluateExpr(negate_overflow));
+    try std.testing.expectError(error.Overflow, eval(&tm, negate_overflow));
 
     const modulo = try tm.binary(.modulo, try tm.int("3"), try tm.int("2"));
-    try std.testing.expectError(error.UnsupportedExpression, tm.evaluator().evaluateExpr(modulo));
+    try std.testing.expectError(error.UnsupportedExpression, eval(&tm, modulo));
 }
 
 test "compile-time evaluator supports local declarations references and assignment" {
@@ -655,7 +710,7 @@ test "compile-time evaluator supports local declarations references and assignme
 
     const args = try std.testing.allocator.dupe(hir.ExprId, &.{try tm.int("41")});
     const call = try tm.expr(.{ .call = .{ .function = f, .args = args } });
-    try expectValue(tm.evaluator().evaluateExpr(call), .{ .int = 42 });
+    try expectValue(eval(&tm, call), .{ .int = 42 });
 }
 
 test "compile-time evaluator supports if branches and fallthrough" {
@@ -671,10 +726,10 @@ test "compile-time evaluator supports if branches and fallthrough" {
     tm.setBody(choose, try tm.block(&.{try tm.ifStmt(try tm.expr(.{ .param_ref = condition }), then_block, else_block)}));
 
     const true_args = try std.testing.allocator.dupe(hir.ExprId, &.{ try tm.boolExpr(true), try tm.int("42"), try tm.int("1") });
-    try expectValue(tm.evaluator().evaluateExpr(try tm.expr(.{ .call = .{ .function = choose, .args = true_args } })), .{ .int = 42 });
+    try expectValue(eval(&tm, try tm.expr(.{ .call = .{ .function = choose, .args = true_args } })), .{ .int = 42 });
 
     const false_args = try std.testing.allocator.dupe(hir.ExprId, &.{ try tm.boolExpr(false), try tm.int("1"), try tm.int("42") });
-    try expectValue(tm.evaluator().evaluateExpr(try tm.expr(.{ .call = .{ .function = choose, .args = false_args } })), .{ .int = 42 });
+    try expectValue(eval(&tm, try tm.expr(.{ .call = .{ .function = choose, .args = false_args } })), .{ .int = 42 });
 
     const abs = try tm.compileTimeFunction("abs", tm.module.types.intType());
     const x = try tm.param(abs, "x", tm.module.types.intType());
@@ -685,25 +740,93 @@ test "compile-time evaluator supports if branches and fallthrough" {
         try tm.ret(x_ref),
     }));
     const abs_args = try std.testing.allocator.dupe(hir.ExprId, &.{try tm.int("-42")});
-    try expectValue(tm.evaluator().evaluateExpr(try tm.expr(.{ .call = .{ .function = abs, .args = abs_args } })), .{ .int = 42 });
+    try expectValue(eval(&tm, try tm.expr(.{ .call = .{ .function = abs, .args = abs_args } })), .{ .int = 42 });
 }
 
-test "compile-time evaluator rejects missing return unsupported while and non-bool if" {
+test "compile-time evaluator supports while loops fuel and scoped bodies" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+
+    const sum = try tm.compileTimeFunction("sum", tm.module.types.intType());
+    const n = try tm.param(sum, "n", tm.module.types.intType());
+    const i = try tm.local(sum, "i", tm.module.types.intType());
+    const total = try tm.local(sum, "total", tm.module.types.intType());
+    const n_ref = try tm.expr(.{ .param_ref = n });
+    const i_ref = try tm.expr(.{ .local_ref = i });
+    const total_ref = try tm.expr(.{ .local_ref = total });
+    tm.setBody(sum, try tm.block(&.{
+        try tm.localDecl(i, try tm.int("0")),
+        try tm.localDecl(total, try tm.int("0")),
+        try tm.whileStmt(try tm.binary(.less_equal, i_ref, n_ref), try tm.block(&.{
+            try tm.assignLocal(total, try tm.binary(.add, total_ref, i_ref)),
+            try tm.assignLocal(i, try tm.binary(.add, i_ref, try tm.int("1"))),
+        })),
+        try tm.ret(total_ref),
+    }));
+    const sum_args = try std.testing.allocator.dupe(hir.ExprId, &.{try tm.int("9")});
+    try expectValue(eval(&tm, try tm.expr(.{ .call = .{ .function = sum, .args = sum_args } })), .{ .int = 45 });
+
+    const fallthrough = try tm.compileTimeFunction("fallthrough", tm.module.types.intType());
+    tm.setBody(fallthrough, try tm.block(&.{
+        try tm.whileStmt(try tm.boolExpr(false), try tm.block(&.{try tm.ret(try tm.int("1"))})),
+        try tm.ret(try tm.int("3")),
+    }));
+    const fallthrough_args = try std.testing.allocator.dupe(hir.ExprId, &.{});
+    try expectValue(eval(&tm, try tm.expr(.{ .call = .{ .function = fallthrough, .args = fallthrough_args } })), .{ .int = 3 });
+
+    const first = try tm.compileTimeFunction("first", tm.module.types.intType());
+    const x = try tm.local(first, "x", tm.module.types.intType());
+    const x_ref = try tm.expr(.{ .local_ref = x });
+    tm.setBody(first, try tm.block(&.{
+        try tm.localDecl(x, try tm.int("0")),
+        try tm.whileStmt(try tm.boolExpr(true), try tm.block(&.{
+            try tm.ifStmt(try tm.binary(.equal_equal, x_ref, try tm.int("3")), try tm.block(&.{try tm.ret(x_ref)}), null),
+            try tm.assignLocal(x, try tm.binary(.add, x_ref, try tm.int("1"))),
+        })),
+        try tm.ret(try tm.int("0")),
+    }));
+    const first_args = try std.testing.allocator.dupe(hir.ExprId, &.{});
+    try expectValue(eval(&tm, try tm.expr(.{ .call = .{ .function = first, .args = first_args } })), .{ .int = 3 });
+
+    const leak = try tm.compileTimeFunction("leak", tm.module.types.intType());
+    const inner = try tm.local(leak, "inner", tm.module.types.intType());
+    tm.setBody(leak, try tm.block(&.{
+        try tm.whileStmt(try tm.boolExpr(false), try tm.block(&.{try tm.localDecl(inner, try tm.int("1"))})),
+        try tm.ret(try tm.expr(.{ .local_ref = inner })),
+    }));
+    const leak_args = try std.testing.allocator.dupe(hir.ExprId, &.{});
+    try std.testing.expectError(error.UnboundLocal, eval(&tm, try tm.expr(.{ .call = .{ .function = leak, .args = leak_args } })));
+
+    const infinite = try tm.compileTimeFunction("infinite", tm.module.types.intType());
+    tm.setBody(infinite, try tm.block(&.{
+        try tm.whileStmt(try tm.boolExpr(true), try tm.block(&.{})),
+        try tm.ret(try tm.int("0")),
+    }));
+    const infinite_args = try std.testing.allocator.dupe(hir.ExprId, &.{});
+    try std.testing.expectError(error.FuelExhausted, evalWithBudget(&tm, try tm.expr(.{ .call = .{ .function = infinite, .args = infinite_args } }), 8));
+}
+
+test "compile-time evaluator rejects missing return unsupported statements and non-bool conditions" {
     var tm = try TestModule.init();
     defer tm.deinit();
 
     const missing = try tm.compileTimeFunction("missing", tm.module.types.intType());
     tm.setBody(missing, try tm.block(&.{}));
     const no_args = try std.testing.allocator.dupe(hir.ExprId, &.{});
-    try std.testing.expectError(error.MissingReturn, tm.evaluator().evaluateExpr(try tm.expr(.{ .call = .{ .function = missing, .args = no_args } })));
+    try std.testing.expectError(error.MissingReturn, eval(&tm, try tm.expr(.{ .call = .{ .function = missing, .args = no_args } })));
 
-    const loop = try tm.compileTimeFunction("loop", tm.module.types.intType());
-    tm.setBody(loop, try tm.block(&.{try tm.whileStmt(try tm.boolExpr(false), try tm.block(&.{}))}));
-    const loop_args = try std.testing.allocator.dupe(hir.ExprId, &.{});
-    try std.testing.expectError(error.UnsupportedStatement, tm.evaluator().evaluateExpr(try tm.expr(.{ .call = .{ .function = loop, .args = loop_args } })));
+    const unsupported = try tm.compileTimeFunction("unsupported", tm.module.types.intType());
+    tm.setBody(unsupported, try tm.block(&.{try tm.module.hir.addStmt(.{ .expr_stmt = try tm.int("0") }, hir.synthetic_span)}));
+    const unsupported_args = try std.testing.allocator.dupe(hir.ExprId, &.{});
+    try std.testing.expectError(error.UnsupportedStatement, eval(&tm, try tm.expr(.{ .call = .{ .function = unsupported, .args = unsupported_args } })));
 
     const bad_if = try tm.compileTimeFunction("bad_if", tm.module.types.intType());
     tm.setBody(bad_if, try tm.block(&.{try tm.ifStmt(try tm.int("1"), try tm.block(&.{try tm.ret(try tm.int("1"))}), null)}));
     const bad_if_args = try std.testing.allocator.dupe(hir.ExprId, &.{});
-    try std.testing.expectError(error.IfRequiresBool, tm.evaluator().evaluateExpr(try tm.expr(.{ .call = .{ .function = bad_if, .args = bad_if_args } })));
+    try std.testing.expectError(error.IfRequiresBool, eval(&tm, try tm.expr(.{ .call = .{ .function = bad_if, .args = bad_if_args } })));
+
+    const bad_while = try tm.compileTimeFunction("bad_while", tm.module.types.intType());
+    tm.setBody(bad_while, try tm.block(&.{try tm.whileStmt(try tm.int("1"), try tm.block(&.{try tm.ret(try tm.int("1"))}))}));
+    const bad_while_args = try std.testing.allocator.dupe(hir.ExprId, &.{});
+    try std.testing.expectError(error.WhileRequiresBool, eval(&tm, try tm.expr(.{ .call = .{ .function = bad_while, .args = bad_while_args } })));
 }

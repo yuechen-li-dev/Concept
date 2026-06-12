@@ -644,3 +644,49 @@ P9-M5 remains intentionally narrow:
 - calls from compile-time contexts to runtime functions are still rejected;
 - runtime calls to `comptime` functions are still rejected;
 - reflection and generated declarations remain future work.
+
+## P9-M6 compile-time `while` and evaluation fuel
+
+P9-M6 adds bounded compile-time loop execution for the existing scalar
+compile-time function evaluator. The supported source form is ordinary
+`while (condition) { ... }` inside a function marked `comptime`; there is no
+new loop-specific source keyword.
+
+Implemented P9-M6 behavior:
+
+- compile-time functions may execute `while` statements during
+  `CompileTimeEvaluator` function-body evaluation;
+- each loop condition is evaluated as a `CompileTimeValue` and must be
+  `CompileTimeValue.bool`;
+- a false condition exits the loop and execution continues with following
+  statements;
+- a true condition executes only the loop body for that iteration;
+- assignments to locals declared outside the loop persist across iterations;
+- locals declared inside the loop body are scoped by the body block and do not
+  leak after the iteration or after the loop;
+- `return` inside a loop immediately exits the compile-time function;
+- missing-return diagnostics remain path-sensitive to the actually executed
+  compile-time path;
+- calls from compile-time loop bodies to runtime functions are still rejected;
+- runtime calls to compile-time-only functions remain rejected;
+- compile-time-only functions still emit no MIR or backend artifact, and an
+  explicit `comptime f(...)` loop result lowers as an ordinary scalar literal.
+
+P9-M6 also gives compile-time evaluation a deterministic step budget. Each
+compile-time evaluation starts with a fixed `CompileTimeBudget` default of
+`100_000` steps. Statement execution consumes fuel, loop iterations consume
+fuel, and compile-time function calls consume fuel. Exhaustion reports the
+stable `CompileTimeFuelExhausted` diagnostic instead of allowing an infinite or
+excessively expensive compile-time loop to hang the compiler. The existing
+compile-time recursion-depth guard remains separate from this step budget.
+
+P9-M6 remains intentionally narrow:
+
+- `for` loops are not implemented;
+- this is not a general runtime interpreter;
+- `CompileTimeValue` still supports only `int` and `bool`;
+- arrays, strings, structs, enums, pointers, aggregate values, raw-pointer
+  dereference, address-of evaluation, and field access remain unsupported;
+- `match`, `try`, `decide`, unsafe blocks, host effects, reflection, generated
+  declarations, target metadata, and layout queries remain unsupported;
+- the step budget is fixed internally and is not user-configurable yet.
