@@ -112,6 +112,7 @@ pub const DiagnosticCode = enum {
     UnknownConceptRequirementCall,
     InvalidConceptRequirementCall,
     CompileTimeUnsupportedExpression,
+    CompileTimeUnsupportedStatement,
     CompileTimeTypeMismatch,
     CompileTimeEvaluationFailed,
     CompileTimeDivisionByZero,
@@ -121,6 +122,11 @@ pub const DiagnosticCode = enum {
     CompileTimeFunctionUnsupportedSignature,
     CompileTimeRecursionLimit,
     CompileTimeArgumentTypeMismatch,
+    CompileTimeUnsupportedLocalType,
+    CompileTimeMissingReturn,
+    CompileTimeIfRequiresBool,
+    CompileTimeUnboundLocal,
+    CompileTimeAssignmentTypeMismatch,
     StaticAssertFailed,
     StaticAssertRequiresBool,
 
@@ -227,6 +233,12 @@ pub const DiagnosticCode = enum {
             .CompileTimeFunctionUnsupportedSignature => "CON0129",
             .CompileTimeRecursionLimit => "CON0130",
             .CompileTimeArgumentTypeMismatch => "CON0131",
+            .CompileTimeUnsupportedStatement => "CON0132",
+            .CompileTimeUnsupportedLocalType => "CON0133",
+            .CompileTimeMissingReturn => "CON0134",
+            .CompileTimeIfRequiresBool => "CON0135",
+            .CompileTimeUnboundLocal => "CON0136",
+            .CompileTimeAssignmentTypeMismatch => "CON0137",
         };
     }
 };
@@ -646,6 +658,12 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0129", DiagnosticCode.CompileTimeFunctionUnsupportedSignature.format());
     try std.testing.expectEqualStrings("CON0130", DiagnosticCode.CompileTimeRecursionLimit.format());
     try std.testing.expectEqualStrings("CON0131", DiagnosticCode.CompileTimeArgumentTypeMismatch.format());
+    try std.testing.expectEqualStrings("CON0132", DiagnosticCode.CompileTimeUnsupportedStatement.format());
+    try std.testing.expectEqualStrings("CON0133", DiagnosticCode.CompileTimeUnsupportedLocalType.format());
+    try std.testing.expectEqualStrings("CON0134", DiagnosticCode.CompileTimeMissingReturn.format());
+    try std.testing.expectEqualStrings("CON0135", DiagnosticCode.CompileTimeIfRequiresBool.format());
+    try std.testing.expectEqualStrings("CON0136", DiagnosticCode.CompileTimeUnboundLocal.format());
+    try std.testing.expectEqualStrings("CON0137", DiagnosticCode.CompileTimeAssignmentTypeMismatch.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {

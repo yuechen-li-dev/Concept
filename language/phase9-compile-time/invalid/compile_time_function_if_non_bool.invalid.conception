@@ -1,0 +1,21 @@
+# name: compile-time function if non bool
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+comptime int bad() {
+    if (1) {
+        return 42;
+    }
+    return 0;
+}
+
+int main() {
+    return comptime bad();
+}
+
+=== diagnostics ===
+CON0054

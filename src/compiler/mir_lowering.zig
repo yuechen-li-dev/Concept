@@ -1422,7 +1422,12 @@ test "MIR lowering skips compile-time-only functions" {
     defer module.deinit();
     const answer = try addFunction(&module, "answer", module.types.intType(), true);
     module.hir.markFunctionCompileTime(answer);
-    try setBody(&module, answer, &.{try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "42") }, hir.synthetic_span)});
+    const local = try addLocal(&module, answer, "value", module.types.intType());
+    const local_decl = try module.hir.addStmt(.{ .local_decl = .{ .local = local, .initializer = try intExpr(&module, "42") } }, hir.synthetic_span);
+    const local_ref = try module.hir.addExpr(.{ .local_ref = local }, hir.synthetic_span);
+    const then_block = try blockStmt(&module, &.{try module.hir.addStmt(.{ .return_stmt = local_ref }, hir.synthetic_span)});
+    const if_stmt = try module.hir.addStmt(.{ .if_stmt = .{ .condition = try boolExpr(&module, true), .then_block = then_block, .else_block = null } }, hir.synthetic_span);
+    try setBody(&module, answer, &.{ local_decl, if_stmt, try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "0") }, hir.synthetic_span) });
     const main = try addFunction(&module, "main", module.types.intType(), true);
     try setBody(&module, main, &.{try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "0") }, hir.synthetic_span)});
 

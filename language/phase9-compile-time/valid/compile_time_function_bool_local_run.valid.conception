@@ -1,0 +1,21 @@
+# name: compile-time function bool local run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+comptime int choose(bool input) {
+    bool ok = input;
+    if (ok) {
+        return 42;
+    }
+    return 1;
+}
+
+int main() {
+    return comptime choose(true);
+}
+
+=== run ===
+exit_code: 42

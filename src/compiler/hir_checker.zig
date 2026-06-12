@@ -518,6 +518,7 @@ const Checker = struct {
     fn reportCompileTimeError(self: *Checker, err: compile_time.CompileTimeError, span: diagnostics.SourceSpan) CheckError!void {
         switch (err) {
             error.UnsupportedExpression => try self.reportAt(.CompileTimeUnsupportedExpression, "compile-time expression uses an unsupported expression form", span),
+            error.UnsupportedStatement => try self.reportAt(.CompileTimeUnsupportedStatement, "compile-time function executed an unsupported statement form", span),
             error.TypeMismatch => try self.reportAt(.CompileTimeTypeMismatch, "compile-time expression has an unsupported value type mismatch", span),
             error.DivisionByZero => try self.reportAt(.CompileTimeDivisionByZero, "compile-time expression divides by zero", span),
             error.Overflow => try self.reportAt(.CompileTimeOverflow, "compile-time expression overflows", span),
@@ -527,6 +528,11 @@ const Checker = struct {
             error.UnsupportedSignature => try self.reportAt(.CompileTimeFunctionUnsupportedSignature, "compile-time function signature is unsupported", span),
             error.RecursionLimit => try self.reportAt(.CompileTimeRecursionLimit, "compile-time function recursion limit exceeded", span),
             error.ArgumentTypeMismatch => try self.reportAt(.CompileTimeArgumentTypeMismatch, "compile-time function argument type mismatch", span),
+            error.UnsupportedLocalType => try self.reportAt(.CompileTimeUnsupportedLocalType, "compile-time local type is unsupported", span),
+            error.MissingReturn => try self.reportAt(.CompileTimeMissingReturn, "compile-time function did not return on the executed path", span),
+            error.IfRequiresBool => try self.reportAt(.CompileTimeIfRequiresBool, "compile-time if condition must evaluate to bool", span),
+            error.UnboundLocal => try self.reportAt(.CompileTimeUnboundLocal, "compile-time local reference has no active binding", span),
+            error.AssignmentTypeMismatch => try self.reportAt(.CompileTimeAssignmentTypeMismatch, "compile-time local assignment type mismatch", span),
         }
     }
 
@@ -548,27 +554,9 @@ const Checker = struct {
             return error.InvalidSemanticModule;
         };
         const body_stmt = self.module.hir.getStmt(body);
-        const children = switch (body_stmt.kind) {
-            .block => |block| block,
-            else => {
-                try self.reportAt(.CompileTimeFunctionUnsupportedBody, "compile-time function body is unsupported", body_stmt.span);
-                return error.InvalidSemanticModule;
-            },
-        };
-        if (children.len != 1) {
+        if (body_stmt.kind != .block) {
             try self.reportAt(.CompileTimeFunctionUnsupportedBody, "compile-time function body is unsupported", body_stmt.span);
             return error.InvalidSemanticModule;
-        }
-        const ret = self.module.hir.getStmt(children[0]);
-        switch (ret.kind) {
-            .return_stmt => |maybe_value| if (maybe_value == null) {
-                try self.reportAt(.CompileTimeFunctionUnsupportedBody, "compile-time function body is unsupported", ret.span);
-                return error.InvalidSemanticModule;
-            },
-            else => {
-                try self.reportAt(.CompileTimeFunctionUnsupportedBody, "compile-time function body is unsupported", ret.span);
-                return error.InvalidSemanticModule;
-            },
         }
     }
 
@@ -1766,7 +1754,7 @@ test "HIR checker reports unsupported compile-time expression" {
     const compile_local = try addTestExpr(&tm.module.hir, .{ .compile_time = .{ .operand = local_ref, .span = synthetic_span } });
     tm.setBody(main, try tm.block(&.{ local_decl, try tm.ret(compile_local) }));
 
-    try tm.checkFail(.CompileTimeUnsupportedExpression);
+    try tm.checkFail(.CompileTimeUnboundLocal);
 }
 
 test "HIR checker evaluates static assertions" {
@@ -1863,19 +1851,21 @@ test "HIR checker rejects non-compile-time function calls from compile-time cont
     try tm.checkFail(.CompileTimeFunctionRequired);
 }
 
-test "HIR checker rejects unsupported compile-time function body" {
+test "HIR checker rejects unsupported compile-time function body statement" {
     var tm = try TestModule.init();
     defer tm.deinit();
 
     const bad = try tm.compileTimeFunction("bad", tm.module.types.intType());
-    const local = try tm.local(bad, "x", tm.module.types.intType());
-    const decl = try addTestStmt(&tm.module.hir, .{ .local_decl = .{ .local = local, .initializer = try tm.int("1") } });
-    tm.setBody(bad, try tm.block(&.{ decl, try tm.ret(try tm.int("1")) }));
+    const while_stmt = try addTestStmt(&tm.module.hir, .{ .while_stmt = .{ .condition = try tm.boolLit(false), .body = try tm.block(&.{}) } });
+    tm.setBody(bad, try tm.block(&.{ while_stmt, try tm.ret(try tm.int("1")) }));
 
     const main = try tm.function("main", tm.module.types.intType());
-    tm.setBody(main, try tm.block(&.{try tm.ret(try tm.int("0"))}));
+    const args = try std.testing.allocator.dupe(hir.ExprId, &.{});
+    const call = try addTestExpr(&tm.module.hir, .{ .call = .{ .function = bad, .args = args } });
+    const compile_call = try addTestExpr(&tm.module.hir, .{ .compile_time = .{ .operand = call, .span = synthetic_span } });
+    tm.setBody(main, try tm.block(&.{try tm.ret(compile_call)}));
 
-    try tm.checkFail(.CompileTimeFunctionUnsupportedBody);
+    try tm.checkFail(.CompileTimeUnsupportedStatement);
 }
 
 test "HIR checker reports compile-time division by zero and overflow" {

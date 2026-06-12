@@ -1,0 +1,21 @@
+# name: compile-time function if else run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+comptime int choose(bool condition, int a, int b) {
+    if (condition) {
+        return a;
+    } else {
+        return b;
+    }
+}
+
+int main() {
+    return comptime choose(false, 1, 42);
+}
+
+=== run ===
+exit_code: 42

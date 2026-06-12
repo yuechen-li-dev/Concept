@@ -603,3 +603,44 @@ Still out of scope after P9-M2:
 - target metadata queries such as `sizeof` or `alignof`;
 - reflection or generated declarations;
 - constant propagation beyond explicit `comptime expr`.
+
+## P9-M5 compile-time locals and `if`
+
+P9-M5 extends compile-time function execution from straight-line single-return
+bodies to a deliberately small statement interpreter for checked HIR function
+bodies. Compile-time functions now execute with an explicit `CompileTimeFrame`
+containing parameter bindings, local bindings, and a scope stack for block-local
+lifetime during evaluation.
+
+Implemented P9-M5 behavior:
+
+- compile-time functions may declare initialized `int` and `bool` locals;
+- local initializers are evaluated by `CompileTimeEvaluator` and must match the
+  local HIR type;
+- parameter references and local references resolve through the active
+  `CompileTimeFrame`;
+- simple assignment to local variables is supported for `int` and `bool` values
+  when the assigned value matches the local type;
+- `if` / `else` statements are supported when the condition evaluates to `bool`;
+- only the selected branch is executed by the compile-time evaluator;
+- branches may return or fall through to following statements;
+- multiple return statements are supported through ordinary control-flow branch
+  selection;
+- compile-time-only functions remain skipped by MIR lowering and backend output;
+- explicit `comptime f(...)` expressions still lower to ordinary `int` or `bool`
+  literals after successful evaluation;
+- static assertions continue to evaluate in compile-time context and emit no MIR
+  or backend artifact.
+
+P9-M5 remains intentionally narrow:
+
+- loops are still unsupported in compile-time function evaluation;
+- this is not a general interpreter for arbitrary statements;
+- host effects, allocation, filesystem/process/environment/network access, and
+  target metadata queries are still unavailable;
+- `CompileTimeValue` still has only `int` and `bool` variants;
+- struct, enum, pointer, array, string, and aggregate compile-time values remain
+  unsupported;
+- calls from compile-time contexts to runtime functions are still rejected;
+- runtime calls to `comptime` functions are still rejected;
+- reflection and generated declarations remain future work.

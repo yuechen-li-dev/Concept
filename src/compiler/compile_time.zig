@@ -48,6 +48,7 @@ pub const CompileTimeValue = union(enum) {
 
 pub const CompileTimeError = error{
     UnsupportedExpression,
+    UnsupportedStatement,
     TypeMismatch,
     DivisionByZero,
     Overflow,
@@ -57,21 +58,71 @@ pub const CompileTimeError = error{
     UnsupportedSignature,
     RecursionLimit,
     ArgumentTypeMismatch,
+    UnsupportedLocalType,
+    MissingReturn,
+    IfRequiresBool,
+    UnboundLocal,
+    AssignmentTypeMismatch,
 };
 
 pub const CompileTimeResult = CompileTimeError!CompileTimeValue;
 
 pub const CompileTimeFrame = struct {
-    bindings: []const ParamBinding = &.{},
+    parameters: []const ParamBinding = &.{},
+    locals: std.ArrayList(LocalBinding) = .empty,
+    scope_marks: std.ArrayList(usize) = .empty,
 
     pub const ParamBinding = struct {
         param: hir.ParamId,
         value: CompileTimeValue,
     };
 
-    fn lookup(self: CompileTimeFrame, param: hir.ParamId) ?CompileTimeValue {
-        for (self.bindings) |binding| {
+    pub const LocalBinding = struct {
+        local: hir.LocalId,
+        value: CompileTimeValue,
+    };
+
+    pub fn deinit(self: *CompileTimeFrame, allocator: std.mem.Allocator) void {
+        self.locals.deinit(allocator);
+        self.scope_marks.deinit(allocator);
+    }
+
+    pub fn pushScope(self: *CompileTimeFrame, allocator: std.mem.Allocator) CompileTimeError!void {
+        self.scope_marks.append(allocator, self.locals.items.len) catch return error.EvaluationFailed;
+    }
+
+    pub fn popScope(self: *CompileTimeFrame) void {
+        const mark = self.scope_marks.pop() orelse return;
+        self.locals.shrinkRetainingCapacity(mark);
+    }
+
+    pub fn bindLocal(self: *CompileTimeFrame, allocator: std.mem.Allocator, local: hir.LocalId, value: CompileTimeValue) CompileTimeError!void {
+        if (self.lookupLocalIndex(local)) |_| return error.EvaluationFailed;
+        self.locals.append(allocator, .{ .local = local, .value = value }) catch return error.EvaluationFailed;
+    }
+
+    pub fn assignLocal(self: *CompileTimeFrame, local: hir.LocalId, value: CompileTimeValue) CompileTimeError!void {
+        const index = self.lookupLocalIndex(local) orelse return error.UnboundLocal;
+        self.locals.items[index].value = value;
+    }
+
+    fn lookupParam(self: CompileTimeFrame, param: hir.ParamId) ?CompileTimeValue {
+        for (self.parameters) |binding| {
             if (binding.param.index == param.index) return binding.value;
+        }
+        return null;
+    }
+
+    fn lookupLocal(self: CompileTimeFrame, local: hir.LocalId) ?CompileTimeValue {
+        const index = self.lookupLocalIndex(local) orelse return null;
+        return self.locals.items[index].value;
+    }
+
+    fn lookupLocalIndex(self: CompileTimeFrame, local: hir.LocalId) ?usize {
+        var index = self.locals.items.len;
+        while (index > 0) {
+            index -= 1;
+            if (self.locals.items[index].local.index == local.index) return index;
         }
         return null;
     }
@@ -104,9 +155,9 @@ pub const CompileTimeEvaluator = struct {
             .compile_time => |compile_time_expr| try self.evaluateExpr(compile_time_expr.operand),
             .unary => |unary| try self.evaluateUnary(unary.op, try self.evaluateExpr(unary.operand)),
             .binary => |binary| try self.evaluateBinary(binary.op, try self.evaluateExpr(binary.left), try self.evaluateExpr(binary.right)),
-            .param_ref => |param| self.frame.lookup(param) orelse error.UnsupportedExpression,
+            .param_ref => |param| self.frame.lookupParam(param) orelse error.UnsupportedExpression,
+            .local_ref => |local| self.frame.lookupLocal(local) orelse error.UnboundLocal,
             .call => |call| try self.evaluateCall(call.function, call.args),
-            .local_ref,
             .concept_requirement_call,
             .enum_constructor,
             .struct_literal,
@@ -125,7 +176,6 @@ pub const CompileTimeEvaluator = struct {
         const function = self.module.hir.getFunction(function_id);
         if (!function.is_compile_time) return error.FunctionRequired;
         try self.requireSupportedSignature(function);
-        const return_expr = try self.compileTimeReturnExpr(function);
         if (args.len != function.params.len) return error.ArgumentTypeMismatch;
 
         const bindings = self.allocator.alloc(CompileTimeFrame.ParamBinding, args.len) catch return error.EvaluationFailed;
@@ -137,13 +187,14 @@ pub const CompileTimeEvaluator = struct {
             bindings[index] = .{ .param = param_id, .value = value };
         }
 
-        const nested = CompileTimeEvaluator{
+        var nested = CompileTimeEvaluator{
             .module = self.module,
             .allocator = self.allocator,
-            .frame = .{ .bindings = bindings },
+            .frame = .{ .parameters = bindings },
             .call_depth = self.call_depth + 1,
         };
-        return nested.evaluateExpr(return_expr);
+        defer nested.frame.deinit(self.allocator);
+        return nested.evaluateFunctionBody(function);
     }
 
     fn requireSupportedSignature(self: CompileTimeEvaluator, function: *const hir.HirFunction) CompileTimeError!void {
@@ -153,19 +204,70 @@ pub const CompileTimeEvaluator = struct {
         }
     }
 
-    fn compileTimeReturnExpr(self: CompileTimeEvaluator, function: *const hir.HirFunction) CompileTimeError!hir.ExprId {
+    fn evaluateFunctionBody(self: *CompileTimeEvaluator, function: *const hir.HirFunction) CompileTimeResult {
         const body = function.body orelse return error.UnsupportedBody;
-        const body_stmt = self.module.hir.getStmt(body);
-        const children = switch (body_stmt.kind) {
-            .block => |block| block,
-            else => return error.UnsupportedBody,
+        return switch (try self.executeStmt(body)) {
+            .continue_ => error.MissingReturn,
+            .return_value => |value| blk: {
+                if (!sameType(value.typeOf(self.module.types), function.return_type)) return error.TypeMismatch;
+                break :blk value;
+            },
         };
-        if (children.len != 1) return error.UnsupportedBody;
-        const ret = self.module.hir.getStmt(children[0]);
-        return switch (ret.kind) {
-            .return_stmt => |maybe_value| maybe_value orelse error.UnsupportedBody,
-            else => error.UnsupportedBody,
+    }
+
+    const ExecResult = union(enum) {
+        continue_,
+        return_value: CompileTimeValue,
+    };
+
+    fn executeStmt(self: *CompileTimeEvaluator, stmt_id: hir.StmtId) CompileTimeError!ExecResult {
+        const stmt = self.module.hir.getStmt(stmt_id);
+        return switch (stmt.kind) {
+            .block => |children| try self.executeBlock(children),
+            .return_stmt => |maybe_value| .{ .return_value = try self.evaluateExpr(maybe_value orelse return error.UnsupportedBody) },
+            .local_decl => |decl| blk: {
+                const local = self.module.hir.getLocal(decl.local);
+                if (!self.isSupportedScalarType(local.type_id)) return error.UnsupportedLocalType;
+                const value = try self.evaluateExpr(decl.initializer);
+                if (!sameType(value.typeOf(self.module.types), local.type_id)) return error.TypeMismatch;
+                try self.frame.bindLocal(self.allocator, decl.local, value);
+                break :blk .continue_;
+            },
+            .assignment => |assignment| blk: {
+                const local_id = switch (assignment.target) {
+                    .local => |local| local,
+                    .param, .field => return error.UnsupportedStatement,
+                };
+                const local = self.module.hir.getLocal(local_id);
+                const value = try self.evaluateExpr(assignment.value);
+                if (!sameType(value.typeOf(self.module.types), local.type_id)) return error.AssignmentTypeMismatch;
+                try self.frame.assignLocal(local_id, value);
+                break :blk .continue_;
+            },
+            .if_stmt => |if_stmt| blk: {
+                const condition = try self.evaluateExpr(if_stmt.condition);
+                const selected = switch (condition) {
+                    .bool => |value| if (value) if_stmt.then_block else if_stmt.else_block,
+                    .int => return error.IfRequiresBool,
+                };
+                if (selected) |branch| break :blk try self.executeStmt(branch);
+                break :blk .continue_;
+            },
+            .expr_stmt, .discard_stmt, .while_stmt, .unsafe_block, .match_stmt => error.UnsupportedStatement,
         };
+    }
+
+    fn executeBlock(self: *CompileTimeEvaluator, children: []const hir.StmtId) CompileTimeError!ExecResult {
+        try self.frame.pushScope(self.allocator);
+        defer self.frame.popScope();
+        for (children) |child| {
+            const result = try self.executeStmt(child);
+            switch (result) {
+                .continue_ => {},
+                .return_value => return result,
+            }
+        }
+        return .continue_;
     }
 
     fn isSupportedScalarType(self: CompileTimeEvaluator, type_id: types.TypeId) bool {
@@ -337,6 +439,10 @@ const TestModule = struct {
         return self.module.hir.addParam(function_id, try self.name(name_text), type_id, hir.synthetic_span);
     }
 
+    fn local(self: *TestModule, function_id: hir.FunctionId, name_text: []const u8, type_id: types.TypeId) !hir.LocalId {
+        return self.module.hir.addLocal(function_id, try self.name(name_text), type_id, hir.synthetic_span);
+    }
+
     fn block(self: *TestModule, stmts: []const hir.StmtId) !hir.StmtId {
         const owned = try std.testing.allocator.dupe(hir.StmtId, stmts);
         return self.module.hir.addStmt(.{ .block = owned }, hir.synthetic_span);
@@ -346,6 +452,22 @@ const TestModule = struct {
         return self.module.hir.addStmt(.{ .return_stmt = expr_id }, hir.synthetic_span);
     }
 
+    fn localDecl(self: *TestModule, local_id: hir.LocalId, initializer: hir.ExprId) !hir.StmtId {
+        return self.module.hir.addStmt(.{ .local_decl = .{ .local = local_id, .initializer = initializer } }, hir.synthetic_span);
+    }
+
+    fn assignLocal(self: *TestModule, local_id: hir.LocalId, value: hir.ExprId) !hir.StmtId {
+        return self.module.hir.addStmt(.{ .assignment = .{ .target = .{ .local = local_id }, .value = value } }, hir.synthetic_span);
+    }
+
+    fn ifStmt(self: *TestModule, condition: hir.ExprId, then_block: hir.StmtId, else_block: ?hir.StmtId) !hir.StmtId {
+        return self.module.hir.addStmt(.{ .if_stmt = .{ .condition = condition, .then_block = then_block, .else_block = else_block } }, hir.synthetic_span);
+    }
+
+    fn whileStmt(self: *TestModule, condition: hir.ExprId, body: hir.StmtId) !hir.StmtId {
+        return self.module.hir.addStmt(.{ .while_stmt = .{ .condition = condition, .body = body } }, hir.synthetic_span);
+    }
+
     fn setBody(self: *TestModule, function_id: hir.FunctionId, stmt_id: hir.StmtId) void {
         self.module.hir.setFunctionBody(function_id, stmt_id);
     }
@@ -353,6 +475,33 @@ const TestModule = struct {
 
 fn expectValue(actual: CompileTimeResult, expected: CompileTimeValue) !void {
     try std.testing.expect((try actual).eql(expected));
+}
+
+test "CompileTimeFrame supports parameter local lookup assignment and scopes" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+
+    const function_id = try tm.compileTimeFunction("f", tm.module.types.intType());
+    const param_id = try tm.param(function_id, "x", tm.module.types.intType());
+    const local_id = try tm.local(function_id, "y", tm.module.types.intType());
+
+    var frame = CompileTimeFrame{
+        .parameters = try std.testing.allocator.dupe(CompileTimeFrame.ParamBinding, &.{.{ .param = param_id, .value = .{ .int = 1 } }}),
+    };
+    defer {
+        std.testing.allocator.free(frame.parameters);
+        frame.deinit(std.testing.allocator);
+    }
+
+    try std.testing.expectEqual(CompileTimeValue{ .int = 1 }, frame.lookupParam(param_id).?);
+    try std.testing.expect(frame.lookupLocal(local_id) == null);
+    try frame.pushScope(std.testing.allocator);
+    try frame.bindLocal(std.testing.allocator, local_id, .{ .int = 2 });
+    try std.testing.expectEqual(CompileTimeValue{ .int = 2 }, frame.lookupLocal(local_id).?);
+    try frame.assignLocal(local_id, .{ .int = 3 });
+    try std.testing.expectEqual(CompileTimeValue{ .int = 3 }, frame.lookupLocal(local_id).?);
+    frame.popScope();
+    try std.testing.expect(frame.lookupLocal(local_id) == null);
 }
 
 test "CompileTimeValue reports scalar Concept types" {
@@ -487,4 +636,74 @@ test "compile-time evaluator rejects mismatches division by zero overflow and mo
 
     const modulo = try tm.binary(.modulo, try tm.int("3"), try tm.int("2"));
     try std.testing.expectError(error.UnsupportedExpression, tm.evaluator().evaluateExpr(modulo));
+}
+
+test "compile-time evaluator supports local declarations references and assignment" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+
+    const f = try tm.compileTimeFunction("f", tm.module.types.intType());
+    const x = try tm.param(f, "x", tm.module.types.intType());
+    const y = try tm.local(f, "y", tm.module.types.intType());
+    const y_ref = try tm.expr(.{ .local_ref = y });
+    const x_ref = try tm.expr(.{ .param_ref = x });
+    tm.setBody(f, try tm.block(&.{
+        try tm.localDecl(y, x_ref),
+        try tm.assignLocal(y, try tm.binary(.add, y_ref, try tm.int("1"))),
+        try tm.ret(y_ref),
+    }));
+
+    const args = try std.testing.allocator.dupe(hir.ExprId, &.{try tm.int("41")});
+    const call = try tm.expr(.{ .call = .{ .function = f, .args = args } });
+    try expectValue(tm.evaluator().evaluateExpr(call), .{ .int = 42 });
+}
+
+test "compile-time evaluator supports if branches and fallthrough" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+
+    const choose = try tm.compileTimeFunction("choose", tm.module.types.intType());
+    const condition = try tm.param(choose, "condition", tm.module.types.boolType());
+    const a = try tm.param(choose, "a", tm.module.types.intType());
+    const b = try tm.param(choose, "b", tm.module.types.intType());
+    const then_block = try tm.block(&.{try tm.ret(try tm.expr(.{ .param_ref = a }))});
+    const else_block = try tm.block(&.{try tm.ret(try tm.expr(.{ .param_ref = b }))});
+    tm.setBody(choose, try tm.block(&.{try tm.ifStmt(try tm.expr(.{ .param_ref = condition }), then_block, else_block)}));
+
+    const true_args = try std.testing.allocator.dupe(hir.ExprId, &.{ try tm.boolExpr(true), try tm.int("42"), try tm.int("1") });
+    try expectValue(tm.evaluator().evaluateExpr(try tm.expr(.{ .call = .{ .function = choose, .args = true_args } })), .{ .int = 42 });
+
+    const false_args = try std.testing.allocator.dupe(hir.ExprId, &.{ try tm.boolExpr(false), try tm.int("1"), try tm.int("42") });
+    try expectValue(tm.evaluator().evaluateExpr(try tm.expr(.{ .call = .{ .function = choose, .args = false_args } })), .{ .int = 42 });
+
+    const abs = try tm.compileTimeFunction("abs", tm.module.types.intType());
+    const x = try tm.param(abs, "x", tm.module.types.intType());
+    const x_ref = try tm.expr(.{ .param_ref = x });
+    const abs_then = try tm.block(&.{try tm.ret(try tm.unary(.negate, x_ref))});
+    tm.setBody(abs, try tm.block(&.{
+        try tm.ifStmt(try tm.binary(.less, x_ref, try tm.int("0")), abs_then, null),
+        try tm.ret(x_ref),
+    }));
+    const abs_args = try std.testing.allocator.dupe(hir.ExprId, &.{try tm.int("-42")});
+    try expectValue(tm.evaluator().evaluateExpr(try tm.expr(.{ .call = .{ .function = abs, .args = abs_args } })), .{ .int = 42 });
+}
+
+test "compile-time evaluator rejects missing return unsupported while and non-bool if" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+
+    const missing = try tm.compileTimeFunction("missing", tm.module.types.intType());
+    tm.setBody(missing, try tm.block(&.{}));
+    const no_args = try std.testing.allocator.dupe(hir.ExprId, &.{});
+    try std.testing.expectError(error.MissingReturn, tm.evaluator().evaluateExpr(try tm.expr(.{ .call = .{ .function = missing, .args = no_args } })));
+
+    const loop = try tm.compileTimeFunction("loop", tm.module.types.intType());
+    tm.setBody(loop, try tm.block(&.{try tm.whileStmt(try tm.boolExpr(false), try tm.block(&.{}))}));
+    const loop_args = try std.testing.allocator.dupe(hir.ExprId, &.{});
+    try std.testing.expectError(error.UnsupportedStatement, tm.evaluator().evaluateExpr(try tm.expr(.{ .call = .{ .function = loop, .args = loop_args } })));
+
+    const bad_if = try tm.compileTimeFunction("bad_if", tm.module.types.intType());
+    tm.setBody(bad_if, try tm.block(&.{try tm.ifStmt(try tm.int("1"), try tm.block(&.{try tm.ret(try tm.int("1"))}), null)}));
+    const bad_if_args = try std.testing.allocator.dupe(hir.ExprId, &.{});
+    try std.testing.expectError(error.IfRequiresBool, tm.evaluator().evaluateExpr(try tm.expr(.{ .call = .{ .function = bad_if, .args = bad_if_args } })));
 }

@@ -1,0 +1,22 @@
+# name: compile-time function abs static assert
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+comptime int abs(int x) {
+    if (x < 0) {
+        return -x;
+    }
+
+    return x;
+}
+
+static_assert(abs(-42) == 42);
+static_assert(abs(42) == 42);
+
+int main() {
+    return 0;
+}
