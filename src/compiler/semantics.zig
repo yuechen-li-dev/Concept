@@ -155,8 +155,27 @@ const Collector = struct {
             function_decl.signature.name.base.span,
         ) orelse return;
         const function_id = try self.module.hir.addFunctionWithSafety(name, self.module.types.voidType(), function_decl.is_unsafe, function_decl.span);
-        if (function_decl.is_compile_time) self.module.hir.markFunctionCompileTime(function_id);
+        if (function_decl.is_compile_time) {
+            self.module.hir.markFunctionCompileTime(function_id);
+            try self.copyCompileTimeCapabilities(function_id, function_decl.compile_time_capabilities);
+        }
         try self.top_level_decls.put(name, .{ .function = function_id });
+    }
+
+    fn copyCompileTimeCapabilities(self: *Collector, function_id: hir.FunctionId, capabilities: []const ast.CompileTimeCapabilitySyntax) !void {
+        if (capabilities.len == 0) return;
+        var owned = try self.allocator.alloc(hir.CompileTimeCapabilityRequired, capabilities.len);
+        errdefer self.allocator.free(owned);
+        var initialized: usize = 0;
+        errdefer for (owned[0..initialized]) |capability| self.allocator.free(capability.name);
+        for (capabilities, 0..) |capability, index| {
+            owned[index] = .{
+                .name = try self.allocator.dupe(u8, capability.name.text),
+                .span = capability.name.span,
+            };
+            initialized += 1;
+        }
+        self.module.hir.setFunctionCompileTimeCapabilities(function_id, owned);
     }
 
     fn declareGenericFunction(self: *Collector, template_decl: ast.TemplateDecl) !void {

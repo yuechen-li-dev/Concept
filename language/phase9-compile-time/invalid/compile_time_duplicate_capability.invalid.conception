@@ -1,0 +1,19 @@
+# name: compile-time duplicate capability
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+comptime(read_fs, read_fs)
+int bad() {
+    return 1;
+}
+
+int main() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0141

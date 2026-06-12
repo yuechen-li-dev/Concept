@@ -2,6 +2,7 @@ const std = @import("std");
 
 const interner_module = @import("interner.zig");
 const types = @import("types.zig");
+const compile_time_capability = @import("compile_time_capability.zig");
 const source = @import("source.zig");
 
 pub const SourceSpan = source.SourceSpan;
@@ -127,6 +128,11 @@ pub const HirStaticAssert = struct {
     span: SourceSpan,
 };
 
+pub const CompileTimeCapability = compile_time_capability.CompileTimeCapability;
+pub const CompileTimeCapabilitySet = compile_time_capability.CompileTimeCapabilitySet;
+pub const CompileTimeCapabilityList = compile_time_capability.CompileTimeCapabilityList;
+pub const CompileTimeCapabilityRequired = compile_time_capability.CompileTimeCapabilityRequired;
+
 pub const HirFunction = struct {
     item: ItemId,
     name: SymbolId,
@@ -134,6 +140,7 @@ pub const HirFunction = struct {
     return_type: types.TypeId,
     is_unsafe: bool = false,
     is_compile_time: bool = false,
+    compile_time_capabilities: []CompileTimeCapabilityRequired = &.{},
     params: []ParamId,
     locals: []LocalId,
     body: ?StmtId = null,
@@ -417,6 +424,8 @@ pub const HirStore = struct {
             if (concept_impl.functions.len > 0) self.allocator.free(concept_impl.functions);
         }
         for (self.functions.items) |function| {
+            for (function.compile_time_capabilities) |capability| self.allocator.free(capability.name);
+            if (function.compile_time_capabilities.len > 0) self.allocator.free(function.compile_time_capabilities);
             if (function.params.len > 0) self.allocator.free(function.params);
             if (function.locals.len > 0) self.allocator.free(function.locals);
         }
@@ -604,6 +613,7 @@ pub const HirStore = struct {
             .return_type = return_type,
             .is_unsafe = is_unsafe,
             .is_compile_time = false,
+            .compile_time_capabilities = &.{},
             .params = &.{},
             .locals = &.{},
             .body = null,
@@ -616,6 +626,13 @@ pub const HirStore = struct {
 
     pub fn markFunctionCompileTime(self: *HirStore, function_id: FunctionId) void {
         self.getFunctionMut(function_id).is_compile_time = true;
+    }
+
+    pub fn setFunctionCompileTimeCapabilities(self: *HirStore, function_id: FunctionId, capabilities: []CompileTimeCapabilityRequired) void {
+        const function = self.getFunctionMut(function_id);
+        for (function.compile_time_capabilities) |capability| self.allocator.free(capability.name);
+        if (function.compile_time_capabilities.len > 0) self.allocator.free(function.compile_time_capabilities);
+        function.compile_time_capabilities = capabilities;
     }
 
     pub fn addStruct(self: *HirStore, name: SymbolId) !StructId {
@@ -936,7 +953,16 @@ pub const HirStore = struct {
             switch (item) {
                 .function => |id| {
                     const function = self.getFunction(id);
-                    try writer.print("  {s}{s}Function {s} -> {f}\n", .{ if (function.is_compile_time) "CompileTime " else "", if (function.is_unsafe) "Unsafe " else "", interner.text(function.name), function.return_type });
+                    try writer.print("  {s}{s}Function {s}", .{ if (function.is_compile_time) "CompileTime " else "", if (function.is_unsafe) "Unsafe " else "", interner.text(function.name) });
+                    if (function.compile_time_capabilities.len != 0) {
+                        try writer.writeAll(" capabilities=[");
+                        for (function.compile_time_capabilities, 0..) |capability, capability_index| {
+                            if (capability_index != 0) try writer.writeAll(", ");
+                            try writer.writeAll(capability.name);
+                        }
+                        try writer.writeByte(']');
+                    }
+                    try writer.print(" -> {f}\n", .{function.return_type});
                     if (function.params.len != 0) {
                         try writer.writeAll("    Params\n");
                         for (function.params) |param_id| {

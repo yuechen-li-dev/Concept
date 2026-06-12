@@ -1,0 +1,14 @@
+# name: compile-time empty capability list
+# phase: parse
+# expect: fail
+
+=== source ===
+module Main;
+
+comptime()
+int bad() {
+    return 1;
+}
+
+=== diagnostics ===
+CON0003

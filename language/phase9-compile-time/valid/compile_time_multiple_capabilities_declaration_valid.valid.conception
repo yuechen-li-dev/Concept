@@ -1,0 +1,16 @@
+# name: compile-time multiple capabilities declaration valid
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+comptime(read_fs, env)
+int futureRead() {
+    return 1;
+}
+
+int main() {
+    return 0;
+}

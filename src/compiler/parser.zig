@@ -81,6 +81,9 @@ pub const Parser = struct {
                         try self.report(.UnexpectedToken, "duplicate comptime function modifier", self.current().span);
                         self.advance();
                     }
+                    const compile_time_capabilities = try self.parseCompileTimeCapabilityList(allocator);
+                    var compile_time_capabilities_transferred = false;
+                    defer if (!compile_time_capabilities_transferred) allocator.free(compile_time_capabilities);
                     if (self.current().kind == .@"struct" or self.current().kind == .@"enum" or self.current().kind == .must_use) {
                         try self.rejectAttributesBeforeUnsupportedItem(attributes, allocator);
                         attributes = &.{};
@@ -88,8 +91,9 @@ pub const Parser = struct {
                         self.advance();
                         continue;
                     }
-                    if (try self.parseFunctionItem(allocator, attributes, compile_time_token)) |item| {
+                    if (try self.parseFunctionItem(allocator, attributes, compile_time_token, compile_time_capabilities)) |item| {
                         try items.append(item);
+                        compile_time_capabilities_transferred = true;
                         attributes = &.{};
                     }
                 },
@@ -121,7 +125,7 @@ pub const Parser = struct {
                         self.advance();
                         continue;
                     }
-                    if (try self.parseFunctionItem(allocator, attributes, null)) |item| {
+                    if (try self.parseFunctionItem(allocator, attributes, null, &.{})) |item| {
                         try items.append(item);
                         attributes = &.{};
                     }
@@ -162,7 +166,7 @@ pub const Parser = struct {
                         try items.append(try self.parseEnumItem(allocator, attributes));
                         attributes = &.{};
                     } else if (self.peek(1).kind == .identifier or self.peek(1).kind == .mut or self.peek(1).kind == .unsafe) {
-                        if (try self.parseFunctionItem(allocator, attributes, null)) |item| {
+                        if (try self.parseFunctionItem(allocator, attributes, null, &.{})) |item| {
                             try items.append(item);
                             attributes = &.{};
                         }
@@ -426,8 +430,42 @@ pub const Parser = struct {
         };
     }
 
-    fn parseFunctionItem(self: *Parser, allocator: std.mem.Allocator, attributes: []ast.Attribute, compile_time_token: ?Token) !?ast.Item {
-        if (try self.parseFunctionDecl(allocator, attributes, compile_time_token)) |function_decl| {
+    fn parseCompileTimeCapabilityList(self: *Parser, allocator: std.mem.Allocator) ![]ast.CompileTimeCapabilitySyntax {
+        if (self.match(.left_paren) == null) return &.{};
+
+        var capabilities = std.ArrayList(ast.CompileTimeCapabilitySyntax).init(allocator);
+        errdefer capabilities.deinit();
+
+        if (self.current().kind == .right_paren) {
+            try self.report(.UnexpectedToken, "expected capability name in comptime capability list", self.current().span);
+        }
+
+        while (self.current().kind != .eof and self.current().kind != .right_paren and self.current().kind != .semicolon and self.current().kind != .left_brace) {
+            if (self.current().kind != .identifier) {
+                try self.report(.UnexpectedToken, "expected capability name in comptime capability list", self.current().span);
+                break;
+            }
+            const name_token = self.advance();
+            try capabilities.append(.{ .name = .{ .text = name_token.lexeme, .span = name_token.span } });
+            if (self.match(.comma) != null) {
+                if (self.current().kind == .right_paren) {
+                    try self.report(.UnexpectedToken, "expected capability name after ',' in comptime capability list", self.current().span);
+                    break;
+                }
+                continue;
+            }
+            break;
+        }
+
+        if (self.match(.right_paren) == null) {
+            try self.report(.UnexpectedToken, "expected ')' after comptime capability list", self.current().span);
+        }
+
+        return try capabilities.toOwnedSlice();
+    }
+
+    fn parseFunctionItem(self: *Parser, allocator: std.mem.Allocator, attributes: []ast.Attribute, compile_time_token: ?Token, compile_time_capabilities: []ast.CompileTimeCapabilitySyntax) !?ast.Item {
+        if (try self.parseFunctionDecl(allocator, attributes, compile_time_token, compile_time_capabilities)) |function_decl| {
             return .{ .function_decl = function_decl };
         }
         return null;
@@ -457,7 +495,7 @@ pub const Parser = struct {
             return null;
         }
 
-        var function_decl = (try self.parseFunctionDecl(allocator, &.{}, null)) orelse return null;
+        var function_decl = (try self.parseFunctionDecl(allocator, &.{}, null, &.{})) orelse return null;
         errdefer function_decl.deinit(allocator);
         function_decl.span = ast.spanFromBounds(start_span.start, spanEnd(function_decl.span));
 
@@ -584,7 +622,7 @@ pub const Parser = struct {
         return .{ .impl_decl = decl };
     }
 
-    fn parseFunctionDecl(self: *Parser, allocator: std.mem.Allocator, attributes: []ast.Attribute, compile_time_token: ?Token) !?ast.FunctionDecl {
+    fn parseFunctionDecl(self: *Parser, allocator: std.mem.Allocator, attributes: []ast.Attribute, compile_time_token: ?Token, compile_time_capabilities: []ast.CompileTimeCapabilitySyntax) !?ast.FunctionDecl {
         const export_token = self.match(.@"export");
         const first_unsafe_token = self.match(.unsafe);
         const start_span = if (compile_time_token) |token| token.span else if (export_token) |token| token.span else if (first_unsafe_token) |token| token.span else self.current().span;
@@ -659,6 +697,7 @@ pub const Parser = struct {
             .is_export = export_token != null,
             .is_unsafe = first_unsafe_token != null,
             .is_compile_time = compile_time_token != null,
+            .compile_time_capabilities = compile_time_capabilities,
             .signature = .{
                 .return_type = return_type,
                 .name = name.?,
@@ -2276,7 +2315,7 @@ pub const Parser = struct {
         } else if (self.match(.left_brace)) |_| {
             while (self.current().kind != .eof and self.current().kind != .right_brace) {
                 if (self.current().kind == .identifier or self.current().kind == .mut or self.current().kind == .unsafe) {
-                    if (try self.parseFunctionDecl(allocator, &.{}, null)) |function| {
+                    if (try self.parseFunctionDecl(allocator, &.{}, null, &.{})) |function| {
                         if (function.body == null) {
                             try self.report(.UnexpectedToken, "impl function must have a body", function.span);
                         }
@@ -5627,6 +5666,72 @@ test "parses compile-time function declaration modifier" {
     const snapshot = try unit.debugString(std.testing.allocator);
     defer std.testing.allocator.free(snapshot);
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "CompileTime Function int answer") != null);
+}
+
+test "parses compile-time capability function declaration" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; comptime(read_fs) int futureRead() { return 1; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const function = expectFunctionDecl(unit, 0);
+    try std.testing.expect(function.is_compile_time);
+    try std.testing.expectEqual(@as(usize, 1), function.compile_time_capabilities.len);
+    try std.testing.expectEqualStrings("read_fs", function.compile_time_capabilities[0].name.text);
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "CompileTime Function capabilities=[read_fs] int futureRead") != null);
+}
+
+test "parses multiple compile-time capabilities" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; comptime(read_fs, env) int futureRead() { return 1; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const function = expectFunctionDecl(unit, 0);
+    try std.testing.expectEqual(@as(usize, 2), function.compile_time_capabilities.len);
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "capabilities=[read_fs, env]") != null);
+}
+
+test "compile-time capability parser diagnostics" {
+    var empty_diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer empty_diagnostics.deinit();
+    const empty_unit = try parseTestSource("module Main; comptime() int bad() { return 1; }", &empty_diagnostics);
+    defer empty_unit.deinit(std.testing.allocator);
+    try std.testing.expect(empty_diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected capability name in comptime capability list", empty_diagnostics.diagnostics.items[0].message);
+
+    var missing_name_diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer missing_name_diagnostics.deinit();
+    const missing_name_unit = try parseTestSource("module Main; comptime(read_fs,) int bad() { return 1; }", &missing_name_diagnostics);
+    defer missing_name_unit.deinit(std.testing.allocator);
+    try std.testing.expect(missing_name_diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected capability name after ',' in comptime capability list", missing_name_diagnostics.diagnostics.items[0].message);
+
+    var missing_right_diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer missing_right_diagnostics.deinit();
+    const missing_right_unit = try parseTestSource("module Main; comptime(read_fs int bad() { return 1; }", &missing_right_diagnostics);
+    defer missing_right_unit.deinit(std.testing.allocator);
+    try std.testing.expect(missing_right_diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected ')' after comptime capability list", missing_right_diagnostics.diagnostics.items[0].message);
+}
+
+test "compile-time capability list before non-function is rejected" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; comptime(read_fs) struct Bad { int value; };", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("comptime modifier is only supported on functions", diagnostics.diagnostics.items[0].message);
 }
 
 test "duplicate compile-time function modifier diagnostic" {

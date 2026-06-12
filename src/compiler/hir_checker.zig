@@ -535,10 +535,12 @@ const Checker = struct {
             error.AssignmentTypeMismatch => try self.reportAt(.CompileTimeAssignmentTypeMismatch, "compile-time local assignment type mismatch", span),
             error.FuelExhausted => try self.reportAt(.CompileTimeFuelExhausted, "compile-time evaluation exceeded its step limit; likely non-terminating or too-expensive compile-time execution", span),
             error.WhileRequiresBool => try self.reportAt(.CompileTimeWhileRequiresBool, "compile-time while condition must evaluate to bool", span),
+            error.CapabilityNotGranted => try self.reportAt(.CompileTimeCapabilityNotGranted, "compile-time capability not granted; capability-bearing comptime function cannot be evaluated yet", span),
         }
     }
 
     fn checkCompileTimeFunctionEligibility(self: *Checker, function: hir.HirFunction) CheckError!void {
+        try self.checkCompileTimeCapabilities(function);
         if (!self.isCompileTimeScalar(function.return_type)) {
             try self.reportAt(.CompileTimeFunctionUnsupportedSignature, "compile-time function signature is unsupported", function.span);
             return error.InvalidSemanticModule;
@@ -559,6 +561,27 @@ const Checker = struct {
         if (body_stmt.kind != .block) {
             try self.reportAt(.CompileTimeFunctionUnsupportedBody, "compile-time function body is unsupported", body_stmt.span);
             return error.InvalidSemanticModule;
+        }
+    }
+
+    fn checkCompileTimeCapabilities(self: *Checker, function: hir.HirFunction) CheckError!void {
+        if (function.compile_time_capabilities.len == 0) return;
+        if (!function.is_compile_time) {
+            try self.reportAt(.CompileTimeCapabilityListRequiresFunction, "compile-time capability list requires a comptime function", function.span);
+            return error.InvalidSemanticModule;
+        }
+        for (function.compile_time_capabilities, 0..) |capability, index| {
+            const resolved = hir.CompileTimeCapability.fromName(capability.name) orelse {
+                try self.reportAt(.CompileTimeUnknownCapability, "unknown compile-time capability", capability.span);
+                return error.InvalidSemanticModule;
+            };
+            for (function.compile_time_capabilities[0..index]) |previous| {
+                const previous_resolved = hir.CompileTimeCapability.fromName(previous.name) orelse continue;
+                if (previous_resolved == resolved) {
+                    try self.reportAt(.CompileTimeDuplicateCapability, "duplicate compile-time capability", capability.span);
+                    return error.InvalidSemanticModule;
+                }
+            }
         }
     }
 

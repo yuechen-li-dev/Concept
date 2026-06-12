@@ -73,6 +73,7 @@ pub const CompileTimeError = error{
     AssignmentTypeMismatch,
     FuelExhausted,
     WhileRequiresBool,
+    CapabilityNotGranted,
 };
 
 pub const CompileTimeResult = CompileTimeError!CompileTimeValue;
@@ -197,6 +198,7 @@ pub const CompileTimeEvaluator = struct {
 
         const function = self.module.hir.getFunction(function_id);
         if (!function.is_compile_time) return error.FunctionRequired;
+        if (function.compile_time_capabilities.len != 0) return error.CapabilityNotGranted;
         try self.requireSupportedSignature(function);
         if (args.len != function.params.len) return error.ArgumentTypeMismatch;
 
