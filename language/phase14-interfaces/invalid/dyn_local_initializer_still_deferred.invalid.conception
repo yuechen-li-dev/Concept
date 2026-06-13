@@ -1,0 +1,31 @@
+# name: dyn local initializer still deferred
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+interface Counter {
+    int Value();
+};
+
+struct Box {
+    int value;
+};
+
+impl Counter<Box> {
+    int Value(mut Box& self) {
+        return self.value;
+    }
+}
+
+int main() {
+    Box box = Box { value: 1 };
+    mut dyn Counter& counter = box;
+    return counter.Value();
+}
+
+=== diagnostics ===
+CON0255
+

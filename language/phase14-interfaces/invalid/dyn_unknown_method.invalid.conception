@@ -1,0 +1,19 @@
+# name: dyn unknown method
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+interface Counter {
+    int Value();
+};
+
+void Read(mut dyn Counter& counter) {
+    counter.Missing();
+}
+
+=== diagnostics ===
+CON0251
+

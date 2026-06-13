@@ -73,7 +73,7 @@ Invalid fixtures cover malformed template syntax, type parameters out of scope, 
 
 Phase 8 MIR/backend coverage is intentionally concrete-only: the pipeline run fixture and targeted compiler tests assert that template declarations, concepts, marker concepts, and type-parameter types do not leak into executable MIR or backend C, while deterministic instantiated function names and referenced static witness calls are emitted.
 
-Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed for compile-time execution v0. Phase 10 is closed for ownership/storage-state v0. Phase 11 is closed for first-class testing, attributes, and reasoned expectations v0. Phase 14 M7 now has interface declaration, requirement validation, interface impl conformance, borrowed `dyn Interface&` type-surface fixtures, call-boundary concrete-to-dyn coercion fixtures, dyn method-call HIR/MIR fixtures, C backend vtable/fat-reference lowering fixtures, and executable borrowed dyn dispatch fixtures.
+Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed for compile-time execution v0. Phase 10 is closed for ownership/storage-state v0. Phase 11 is closed for first-class testing, attributes, and reasoned expectations v0. Phase 14 M8 now has interface declaration, requirement validation, interface impl conformance, borrowed `dyn Interface&` type-surface fixtures, call-boundary concrete-to-dyn coercion fixtures, dyn method-call HIR/MIR fixtures, C backend vtable/fat-reference lowering fixtures, executable borrowed dyn dispatch fixtures, examples, mutability hardening fixtures, and backend C-shape assertions for the borrowed dyn subset.
 
 ## Phase 9 compile-time execution fixtures
 
@@ -210,7 +210,7 @@ for the literal-transition subset.
 ## Phase 14 interface/dyn fixtures
 
 Phase 14 fixtures live under `language/phase14-interfaces/` and currently cover
-P14-M7 interface declaration HIR behavior, requirement validation, interface
+P14-M8 interface declaration HIR behavior, requirement validation, interface
 impl conformance, the borrowed dyn interface type surface, call-boundary
 concrete-to-dyn coercion, dyn interface method-call HIR/MIR scaffolding, and C
 backend lowering for the borrowed dyn dispatch subset. Valid
@@ -227,14 +227,19 @@ parameters, mutable dyn parameters, multiple coerced call arguments, exact
 dyn-to-dyn forwarding, and concept/interface separation when both impl kinds
 exist. They also cover void-return dyn calls, value-return dyn calls, multiple
 dyn-call arguments, and dyn calls inside a callee reached through concrete-to-dyn
-coercion. M7 run fixtures execute int-return dispatch, bool-return dispatch,
+coercion. M7/M8 run fixtures execute int-return dispatch, bool-return dispatch,
 void-call dispatch, multiple-argument dispatch, two concrete impls for one
 interface, two interfaces for one concrete type, call-boundary coercion, and
-exact dyn passthrough through the MIR-backed C path. Backend-C fixtures assert
+exact dyn passthrough through the MIR-backed C path. M8 also pins that mutable
+dyn receiver calls remain accepted while immutable dyn receiver calls remain
+rejected. Backend-C fixtures assert
 vtable struct emission, dyn fat-reference struct emission, wrapper/thunk
 emission, per-impl static vtable constants, explicit data/vtable fat-ref
-construction, indirect `.vtable->Slot` calls, and absence of hidden allocation,
-RTTI, dynamic-cast, and scheduler artifacts. Invalid fixtures
+construction, indirect `.vtable->Slot` calls, wrapper `void* self` casts to
+concrete pointers, current hidden impl receiver ABI calls with `*typed`,
+requirement source-order slots, vtable constant reuse, and absence of hidden
+allocation, RTTI, dynamic-cast, reflection, scheduler, async, and
+inheritance-like artifacts. Invalid fixtures
 cover duplicate top-level interface names, empty interfaces, unknown
 requirement return and parameter types, duplicate and overloaded requirement
 names, duplicate requirement parameter names, interface types in requirement
@@ -249,6 +254,13 @@ count as interface impls; non-place coercion sources such as temporaries, call
 results, binary expressions, and `move`; unknown dyn methods, wrong dyn-call
 arity, wrong dyn-call argument types, immutable dyn call receivers, non-dyn
 method-call receivers, and void dyn calls used as values.
+
+Phase 14 examples live under `examples/phase14/` and document the supported
+borrowed dyn subset: no hidden heap allocation, no owning dyn boxes, no RTTI,
+no dynamic casts, no inheritance, explicit `{ data, vtable }` lowering, and the
+current `mut dyn Interface&` method-call rule. Mutation observed through dyn
+dispatch remains deferred because receiver references are not yet first-class
+TypeStore values.
 
 Phase 14 fixtures intentionally do not cover owning dyn boxes, heap boxing,
 dynamic cast, RTTI, reflection, inheritance, interface upcasting, default

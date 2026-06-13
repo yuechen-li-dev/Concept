@@ -994,3 +994,55 @@ stability, unsafe interface methods, broader effect checking through dyn, and
 first-class dyn returns/fields/locals with initializers. Receiver mutability is
 still conservative: M6's rule that dyn calls require `mut dyn Interface&`
 remains in force.
+
+### P14-M8 implementation status
+
+P14-M8 stabilizes the borrowed dyn subset without adding new runtime object
+features. It adds source examples under `examples/phase14/`, strengthens the
+fixture corpus, and pins the generated C shape more tightly.
+
+Implemented in M8:
+
+- examples document int-return dyn dispatch, void-return dyn calls, two
+  concrete impls for one interface, and exact dyn passthrough at a call
+  boundary;
+- the runtime subset remains borrowed dyn references only: concrete-to-dyn
+  coercion builds a `{ data, vtable }` fat reference from an addressable place
+  and a matching interface impl;
+- fixture coverage now pins mutable dyn calls as accepted and immutable dyn
+  calls as rejected with `CON0254 InterfaceCallRequiresMutableDyn`;
+- missing impls, temporaries, dyn locals with initializers, dyn returns, dyn
+  fields, unknown methods, and wrong argument types remain explicitly rejected;
+- backend-C assertions cover vtable structs, dyn fat-reference structs,
+  `void* data`, `const cpt_itf_X_vtable* vtable`, wrapper thunks taking
+  `void* self`, wrapper casts to concrete pointers, hidden impl method calls,
+  static vtable constants, source-order vtable slots, fat-reference
+  `.data = &source_place` / `.vtable = &impl_vtable` construction, indirect
+  `.vtable->Method(.data, ...)` calls, and reuse of one vtable constant across
+  repeated coercions to the same impl;
+- backend assertions also pin the absence of hidden heap allocation, RTTI,
+  dynamic-cast helpers, reflection helpers, scheduler/async helpers, and
+  class/inheritance-like output for the supported dyn path;
+- pure unused interface declarations and unused interface impls still emit no
+  dyn/vtable artifacts.
+
+Receiver ABI limitation:
+
+```text
+Receiver references are not yet first-class TypeStore values.
+
+M8 verifies the current wrapper path:
+    void* self -> ConcreteType* typed -> hidden impl ABI call with *typed
+
+This is enough for read-style dispatch and side-effect-free void calls, but
+mutation observed through dyn dispatch is not hardened yet and remains
+deferred until the reference TypeStore/ABI model is made first-class.
+```
+
+Still unimplemented after P14-M8: owning dyn boxes, heap boxing,
+`Box<dyn Interface>`, dynamic cast, RTTI, reflection, interface inheritance,
+interface upcasting, default methods, associated types, generic interface
+methods, Drop through dyn/destructor vtable slots, cross-module vtable ABI
+stability, unsafe interface methods, broader effect checking through dyn,
+first-class dyn returns/fields/locals with initializers, and the full
+first-class reference TypeStore model needed to harden mutation-through-dyn.

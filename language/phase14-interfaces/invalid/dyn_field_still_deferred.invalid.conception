@@ -1,0 +1,19 @@
+# name: dyn field still deferred
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+interface Counter {
+    int Value();
+};
+
+struct Holder {
+    dyn Counter& counter;
+};
+
+=== diagnostics ===
+CON0255
+

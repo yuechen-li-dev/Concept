@@ -1,0 +1,36 @@
+module Main;
+
+interface Counter {
+    int Value();
+};
+
+struct Left {
+    int value;
+};
+
+struct Right {
+    int value;
+};
+
+impl Counter<Left> {
+    int Value(mut Left& self) {
+        return self.value;
+    }
+}
+
+impl Counter<Right> {
+    int Value(mut Right& self) {
+        return self.value;
+    }
+}
+
+int Read(mut dyn Counter& counter) {
+    return counter.Value();
+}
+
+int main() {
+    Left left = Left { value: 2 };
+    Right right = Right { value: 5 };
+    return Read(left) + Read(right);
+}
+

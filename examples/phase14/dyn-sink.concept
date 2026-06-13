@@ -1,0 +1,27 @@
+module Main;
+
+interface Sink {
+    void Put(int value);
+};
+
+struct NullSink {
+    int value;
+};
+
+impl Sink<NullSink> {
+    void Put(mut NullSink& self, int value) {
+        return;
+    }
+}
+
+void Write(mut dyn Sink& sink) {
+    sink.Put(9);
+    return;
+}
+
+int main() {
+    NullSink sink = NullSink { value: 0 };
+    Write(sink);
+    return 0;
+}
+

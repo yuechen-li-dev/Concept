@@ -1,0 +1,28 @@
+# name: dyn dispatch missing impl
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+interface Counter {
+    int Value();
+};
+
+struct Box {
+    int value;
+};
+
+int Read(mut dyn Counter& counter) {
+    return counter.Value();
+}
+
+int main() {
+    Box box = Box { value: 1 };
+    return Read(box);
+}
+
+=== diagnostics ===
+CON0249
+

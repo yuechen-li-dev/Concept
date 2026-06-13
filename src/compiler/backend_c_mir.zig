@@ -2611,9 +2611,15 @@ test "MIR C backend lowers dyn dispatch to vtable and fat reference" {
     try std.testing.expect(std.mem.indexOf(u8, c_source, ").vtable->Value((") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, ").data") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, "malloc") == null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "calloc") == null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "realloc") == null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "free(") == null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, "RTTI") == null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, "dynamic_cast") == null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "reflection") == null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_scheduler") == null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_async") == null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "class ") == null);
 }
 
 test "MIR C backend lowers void dyn interface calls as statements" {
@@ -2660,6 +2666,52 @@ test "MIR C backend emits distinct dyn vtables for repeated interface shapes" {
     try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_impl_Left_as_Other") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_itf_Counter_vtable") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_itf_Other_vtable") != null);
+}
+
+test "MIR C backend preserves interface requirement slot order" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\interface Pair {
+        \\    int First();
+        \\    int Second(int value);
+        \\};
+        \\struct Box { int value; };
+        \\impl Pair<Box> {
+        \\    int First(mut Box& self) { return self.value; }
+        \\    int Second(mut Box& self, int value) { return self.value + value; }
+        \\}
+        \\int Read(mut dyn Pair& pair) { return pair.First() + pair.Second(3); }
+        \\int main() { Box box = Box { value: 2 }; return Read(box); }
+    );
+    defer std.testing.allocator.free(c_source);
+
+    const slot_first = std.mem.indexOf(u8, c_source, "int (*First)(void* self);") orelse return error.TestExpectedEqual;
+    const slot_second = std.mem.indexOf(u8, c_source, "int (*Second)(void* self, int);") orelse return error.TestExpectedEqual;
+    try std.testing.expect(slot_first < slot_second);
+
+    const table_first = std.mem.indexOf(u8, c_source, ".First = cpt_impl_Box_as_Pair_First_0") orelse return error.TestExpectedEqual;
+    const table_second = std.mem.indexOf(u8, c_source, ".Second = cpt_impl_Box_as_Pair_Second_0") orelse return error.TestExpectedEqual;
+    try std.testing.expect(table_first < table_second);
+}
+
+test "MIR C backend reuses one vtable constant for repeated dyn coercions" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\interface Counter { int Value(); };
+        \\struct Box { int value; };
+        \\impl Counter<Box> {
+        \\    int Value(mut Box& self) { return self.value; }
+        \\}
+        \\int Read(mut dyn Counter& counter) { return counter.Value(); }
+        \\int main() {
+        \\    Box box = Box { value: 3 };
+        \\    return Read(box) + Read(box);
+        \\}
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expectEqual(@as(usize, 1), countOccurrences(c_source, "static const cpt_itf_Counter_vtable cpt_impl_Box_as_Counter"));
+    try std.testing.expectEqual(@as(usize, 2), countOccurrences(c_source, ".vtable = &cpt_impl_Box_as_Counter"));
 }
 
 fn countOccurrences(haystack: []const u8, needle: []const u8) usize {

@@ -1,0 +1,19 @@
+# name: dyn return still deferred
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+interface Counter {
+    int Value();
+};
+
+dyn Counter& Current() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0255
+

@@ -70,9 +70,14 @@ emit wrapper thunks and static const vtables, dyn coercions build fat refs, and
 dyn calls dispatch indirectly through vtable slots. Concepts remain
 compile-time constraints, interfaces are runtime dispatch contracts, empty
 runtime interfaces are rejected, and interface requirements may use ordinary
-resolved types but not interface or dyn runtime types. Owning dyn boxes, heap
-boxing, inheritance, RTTI, dynamic cast, reflection, Drop through dyn, and
-hidden heap allocation remain deferred.
+resolved types but not interface or dyn runtime types. M8 adds examples,
+fixture hardening, stronger backend C-shape assertions, and explicit
+documentation for the current receiver ABI limitation: wrappers cast
+`void* self` to a concrete pointer but still call the hidden impl ABI with
+`*typed`, so mutation observed through dyn dispatch remains deferred until
+references are first-class TypeStore/ABI values. Owning dyn boxes, heap boxing,
+inheritance, RTTI, dynamic cast, reflection, Drop through dyn, and hidden heap
+allocation remain deferred.
 Deferred Phase 12
 work includes
 `Arena.create`, hosted runtime helper implementation, allocation failure
@@ -1323,7 +1328,12 @@ references and vtables. A dyn value is passed by value as `{ data, vtable }`,
 coercion stores the address of existing concrete storage plus a static impl
 vtable, and interface calls lower to indirect slot calls. This does not imply
 inheritance, RTTI, dynamic cast, reflection, heap boxing, owning dyn boxes, or
-Drop through dyn.
+Drop through dyn. Phase 14 M8 adds examples and hardening fixtures for the same
+subset, strengthens backend assertions for vtable/fat-reference shape,
+source-order slots, wrapper receiver casts, vtable reuse, and absence of
+heap/RTTI/inheritance-like helpers, and documents that mutation-through-dyn is
+not yet hardened because receiver references are not first-class TypeStore
+values.
 
 Example concept:
 

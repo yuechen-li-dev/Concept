@@ -1,0 +1,19 @@
+# name: dyn wrong arg type
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+interface Sink {
+    void Put(int value);
+};
+
+void Emit(mut dyn Sink& sink) {
+    sink.Put(false);
+}
+
+=== diagnostics ===
+CON0253
+
