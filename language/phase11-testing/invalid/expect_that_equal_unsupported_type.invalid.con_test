@@ -1,0 +1,17 @@
+# name: expect that equal unsupported type invalid
+# phase: check
+# expect: fail
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+void EqualUnsupportedType() {
+    int value = 1;
+    Expect.That(&value, Is.EqualTo(&value), "pointer equality is not part of relation v0");
+    return;
+}
+
+=== diagnostics ===
+CON0186
+

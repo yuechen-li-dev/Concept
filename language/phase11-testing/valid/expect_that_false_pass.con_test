@@ -1,0 +1,13 @@
+# name: expect that false pass
+# phase: check
+# expect: pass
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+void ExpectThatFalsePass() {
+    Expect.That(false, Is.False(), "false relation should pass for a false boolean actual");
+    return;
+}
+

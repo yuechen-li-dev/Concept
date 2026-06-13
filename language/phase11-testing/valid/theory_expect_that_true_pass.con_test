@@ -1,0 +1,15 @@
+# name: theory expect that true pass
+# phase: check
+# expect: pass
+
+=== source ===
+module Example.Tests;
+
+[Theory]
+[InlineData(1)]
+[InlineData(2)]
+void TheoryExpectThatTruePass(int value) {
+    Expect.That(value > 0, Is.True(), "positive InlineData rows should satisfy the true relation");
+    return;
+}
+

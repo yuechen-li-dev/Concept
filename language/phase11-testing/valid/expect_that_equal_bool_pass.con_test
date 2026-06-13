@@ -1,0 +1,14 @@
+# name: expect that equal bool pass
+# phase: check
+# expect: pass
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+void ExpectThatEqualBoolPass() {
+    bool expected = true;
+    Expect.That(true, Is.EqualTo(expected), "boolean relation should compare the expected bool value");
+    return;
+}
+

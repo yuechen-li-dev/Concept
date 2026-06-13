@@ -1,0 +1,15 @@
+# name: theory expect that equal int pass
+# phase: check
+# expect: pass
+
+=== source ===
+module Example.Tests;
+
+[Theory]
+[InlineData(1, 2, 3)]
+[InlineData(10, 20, 30)]
+void TheoryExpectThatEqualIntPass(int a, int b, int expected) {
+    Expect.That(a + b, Is.EqualTo(expected), "integer theory rows should bind InlineData values before relation comparison");
+    return;
+}
+

@@ -254,6 +254,10 @@ pub const HirTestIntrinsicKind = enum {
     expect_false,
     expect_equal_int,
     expect_equal_bool,
+    expect_that_true,
+    expect_that_false,
+    expect_that_equal_int,
+    expect_that_equal_bool,
 
     pub fn displayName(self: HirTestIntrinsicKind) []const u8 {
         return switch (self) {
@@ -263,6 +267,10 @@ pub const HirTestIntrinsicKind = enum {
             .expect_false => "expect_false",
             .expect_equal_int => "expect_equal_int",
             .expect_equal_bool => "expect_equal_bool",
+            .expect_that_true => "expect_that_true",
+            .expect_that_false => "expect_that_false",
+            .expect_that_equal_int => "expect_that_equal_int",
+            .expect_that_equal_bool => "expect_that_equal_bool",
         };
     }
 };

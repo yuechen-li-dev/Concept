@@ -1,0 +1,13 @@
+# name: expect that equal int pass
+# phase: check
+# expect: pass
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+void ExpectThatEqualIntPass() {
+    Expect.That(2 + 2, Is.EqualTo(4), "integer relation should compare the evaluated actual value");
+    return;
+}
+

@@ -655,6 +655,46 @@ Still deferred:
 - runtime reflection;
 - inline test blocks.
 
+## P11-M7 implementation status
+
+P11-M7 adds the first narrow `Expect.That` relation API scaffold. This is a
+compiler-recognized built-in primitive relation path, not the full future
+`TestRelation<R, T>` model.
+
+Implemented behavior:
+
+- `Expect.That(actual, relation, "reason")` is recognized in `.con_test` files;
+- relation-style failures preserve the source spelling as `Expect.That` in
+  runner output;
+- supported relation constructors are `Is.True()`, `Is.False()`,
+  `Is.EqualTo(int)`, and `Is.EqualTo(bool)`;
+- supported combinations are `bool` actual with `Is.True()`, `bool` actual with
+  `Is.False()`, `int` actual with `Is.EqualTo(int)`, and `bool` actual with
+  `Is.EqualTo(bool)`;
+- reasons remain mandatory through the positional bridge;
+- empty and whitespace-only reasons remain rejected;
+- mismatched actual/relation types are rejected at check time;
+- unsupported relation constructors and unsupported `EqualTo` types are rejected
+  with `CON0186 TestRelationUnsupported`;
+- standalone `Is.*` relation constructors are rejected in `.con_test` files with
+  `CON0187 TestRelationOutsideExpectThat`;
+- `Expect.That` in normal source remains rejected with
+  `CON0182 TestIntrinsicOutsideTestFile`;
+- the HIR-only test runner executes relation intrinsics for facts and theories;
+- `EqualTo` relation failures include expected and actual scalar values.
+
+Still deferred:
+
+- full concept-constrained `TestRelation<R, T>`;
+- custom user-defined relations;
+- generic equality;
+- enum, struct, string, array, and sequence equality;
+- `Has.Diagnostic`, `Is.Ok`, `Is.Err`, and `Is.Approximately`;
+- named `because:` syntax;
+- inline test blocks;
+- generated MIR/C test runner support;
+- filtering, async tests, fixtures/lifecycle hooks, and runtime reflection.
+
 ## P11-M5 implementation status
 
 P11-M5 adds the first executable `[Fact]` runner path. The v0 runner operates on

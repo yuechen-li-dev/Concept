@@ -1177,7 +1177,7 @@ const Checker = struct {
 
     fn checkTestIntrinsic(self: *Checker, return_type: types.TypeId, expr: hir.HirExpr, test_intrinsic: hir.HirTestIntrinsic) CheckError!void {
         switch (test_intrinsic.kind) {
-            .assert_true, .assert_false, .expect_true, .expect_false => {
+            .assert_true, .assert_false, .expect_true, .expect_false, .expect_that_true, .expect_that_false => {
                 if (test_intrinsic.operands.len != 1) {
                     try self.reportAt(.TestIntrinsicArityMismatch, "test intrinsic argument count mismatch", expr.span);
                     return error.InvalidSemanticModule;
@@ -1188,7 +1188,7 @@ const Checker = struct {
                     return error.InvalidSemanticModule;
                 }
             },
-            .expect_equal_int, .expect_equal_bool => {
+            .expect_equal_int, .expect_equal_bool, .expect_that_equal_int, .expect_that_equal_bool => {
                 if (test_intrinsic.operands.len != 2) {
                     try self.reportAt(.TestIntrinsicArityMismatch, "test intrinsic argument count mismatch", expr.span);
                     return error.InvalidSemanticModule;
@@ -1196,8 +1196,8 @@ const Checker = struct {
                 const expected_type = try self.checkExpr(return_type, test_intrinsic.operands[0]);
                 const actual_type = try self.checkExpr(return_type, test_intrinsic.operands[1]);
                 const required_type = switch (test_intrinsic.kind) {
-                    .expect_equal_int => self.module.types.intType(),
-                    .expect_equal_bool => self.module.types.boolType(),
+                    .expect_equal_int, .expect_that_equal_int => self.module.types.intType(),
+                    .expect_equal_bool, .expect_that_equal_bool => self.module.types.boolType(),
                     else => unreachable,
                 };
                 if (!sameType(expected_type, required_type) or !sameType(actual_type, required_type)) {

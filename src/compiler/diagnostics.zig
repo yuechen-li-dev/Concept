@@ -168,6 +168,8 @@ pub const DiagnosticCode = enum {
     TestIntrinsicTypeMismatch,
     ExpectEqualUnsupportedType,
     TestIntrinsicArityMismatch,
+    TestRelationUnsupported,
+    TestRelationOutsideExpectThat,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -317,6 +319,8 @@ pub const DiagnosticCode = enum {
             .TestIntrinsicTypeMismatch => "CON0183",
             .ExpectEqualUnsupportedType => "CON0184",
             .TestIntrinsicArityMismatch => "CON0185",
+            .TestRelationUnsupported => "CON0186",
+            .TestRelationOutsideExpectThat => "CON0187",
         };
     }
 };
@@ -781,6 +785,8 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0183", DiagnosticCode.TestIntrinsicTypeMismatch.format());
     try std.testing.expectEqualStrings("CON0184", DiagnosticCode.ExpectEqualUnsupportedType.format());
     try std.testing.expectEqualStrings("CON0185", DiagnosticCode.TestIntrinsicArityMismatch.format());
+    try std.testing.expectEqualStrings("CON0186", DiagnosticCode.TestRelationUnsupported.format());
+    try std.testing.expectEqualStrings("CON0187", DiagnosticCode.TestRelationOutsideExpectThat.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {
@@ -1176,6 +1182,14 @@ pub fn expectEqualUnsupportedType(span: SourceSpan) Diagnostic {
 
 pub fn testIntrinsicArityMismatch(span: SourceSpan) Diagnostic {
     return Diagnostic.init(.TestIntrinsicArityMismatch, .@"error", "test intrinsic argument count mismatch", span);
+}
+
+pub fn testRelationUnsupported(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.TestRelationUnsupported, .@"error", "unsupported test relation for Phase 11 v0", span);
+}
+
+pub fn testRelationOutsideExpectThat(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.TestRelationOutsideExpectThat, .@"error", "test relation constructors are only supported inside Expect.That in Phase 11 v0", span);
 }
 
 pub fn useOfPartiallyInitializedValue(span: SourceSpan) Diagnostic {

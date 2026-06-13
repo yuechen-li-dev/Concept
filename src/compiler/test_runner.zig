@@ -338,17 +338,17 @@ const Runner = struct {
 
     fn evaluateTestIntrinsic(self: *Runner, span: source.SourceSpan, test_intrinsic: hir.HirTestIntrinsic, frame: *Frame) RunError!void {
         switch (test_intrinsic.kind) {
-            .assert_true, .expect_true => {
+            .assert_true, .expect_true, .expect_that_true => {
                 const actual = try self.evaluateExpr(test_intrinsic.operands[0], frame);
                 const actual_bool = try valueAsBool(actual);
                 if (!actual_bool) try self.recordFailure(span, test_intrinsic, .{ .bool = true }, actual);
             },
-            .assert_false, .expect_false => {
+            .assert_false, .expect_false, .expect_that_false => {
                 const actual = try self.evaluateExpr(test_intrinsic.operands[0], frame);
                 const actual_bool = try valueAsBool(actual);
                 if (actual_bool) try self.recordFailure(span, test_intrinsic, .{ .bool = false }, actual);
             },
-            .expect_equal_int, .expect_equal_bool => {
+            .expect_equal_int, .expect_equal_bool, .expect_that_equal_int, .expect_that_equal_bool => {
                 const expected = try self.evaluateExpr(test_intrinsic.operands[0], frame);
                 const actual = try self.evaluateExpr(test_intrinsic.operands[1], frame);
                 if (!valuesEqual(expected, actual)) try self.recordFailure(span, test_intrinsic, expected, actual);
@@ -452,6 +452,7 @@ fn failureMessageName(kind: hir.HirTestIntrinsicKind) []const u8 {
         .expect_true => "Expect.True",
         .expect_false => "Expect.False",
         .expect_equal_int, .expect_equal_bool => "Expect.Equal",
+        .expect_that_true, .expect_that_false, .expect_that_equal_int, .expect_that_equal_bool => "Expect.That",
     };
 }
 
@@ -565,6 +566,29 @@ test "Fact runner executes passing Assert and Expect intrinsics" {
         try exprStmt(&module, try intrinsic(&module, .expect_false, &.{try binaryExpr(&module, .less, try intExpr(&module, "2"), try intExpr(&module, "1"))}, "comparison should be false")),
         try exprStmt(&module, try intrinsic(&module, .expect_equal_int, &.{ try intExpr(&module, "4"), sum }, "integer equality should compare evaluated operands")),
         try exprStmt(&module, try intrinsic(&module, .expect_equal_bool, &.{ try boolExpr(&module, true), not_false }, "boolean equality should compare evaluated operands")),
+    });
+
+    const result = try runModule(std.testing.allocator, &module, "Test");
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), result.passed_count);
+    try std.testing.expectEqual(@as(usize, 0), result.failed_count);
+    try std.testing.expectEqual(@as(usize, 0), result.failures.len);
+}
+
+test "Fact runner executes passing Expect.That relation intrinsics" {
+    var module = try newTestModule();
+    defer module.deinit();
+    const fact = try addFunction(&module, "RelationPasses");
+    try setAttributes(&module, fact, &.{"Fact"});
+
+    const sum = try binaryExpr(&module, .add, try intExpr(&module, "2"), try intExpr(&module, "2"));
+    const not_false = try unaryExpr(&module, .logical_not, try boolExpr(&module, false));
+    try setBody(&module, fact, &.{
+        try exprStmt(&module, try intrinsic(&module, .expect_that_true, &.{try boolExpr(&module, true)}, "true relation should pass")),
+        try exprStmt(&module, try intrinsic(&module, .expect_that_false, &.{try boolExpr(&module, false)}, "false relation should pass")),
+        try exprStmt(&module, try intrinsic(&module, .expect_that_equal_int, &.{ try intExpr(&module, "4"), sum }, "integer EqualTo relation should compare evaluated operands")),
+        try exprStmt(&module, try intrinsic(&module, .expect_that_equal_bool, &.{ try boolExpr(&module, true), not_false }, "boolean EqualTo relation should compare evaluated operands")),
     });
 
     const result = try runModule(std.testing.allocator, &module, "Test");
@@ -799,6 +823,76 @@ test "Fact runner records Equal int and bool expected actual values" {
     try std.testing.expectEqual(hir.HirTestIntrinsicKind.expect_equal_bool, bool_result.failures[0].intrinsic_kind);
     try std.testing.expectEqualStrings("true", bool_result.failures[0].expected.?);
     try std.testing.expectEqualStrings("false", bool_result.failures[0].actual.?);
+}
+
+test "Fact runner records Expect.That failures with relation-shaped names and values" {
+    var true_module = try newTestModule();
+    defer true_module.deinit();
+    const true_fact = try addFunction(&true_module, "FailsTrue");
+    try setAttributes(&true_module, true_fact, &.{"Fact"});
+    try setBody(&true_module, true_fact, &.{try exprStmt(&true_module, try intrinsic(&true_module, .expect_that_true, &.{try boolExpr(&true_module, false)}, "relation true should fail on false"))});
+    const true_result = try runModule(std.testing.allocator, &true_module, "Test");
+    defer true_result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(hir.HirTestIntrinsicKind.expect_that_true, true_result.failures[0].intrinsic_kind);
+    try std.testing.expectEqualStrings("relation true should fail on false", true_result.failures[0].reason);
+    try std.testing.expectEqualStrings("true", true_result.failures[0].expected.?);
+    try std.testing.expectEqualStrings("false", true_result.failures[0].actual.?);
+    const rendered = try formatFailure(std.testing.allocator, true_result.failures[0]);
+    defer std.testing.allocator.free(rendered);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "Expect.That failed") != null);
+
+    var false_module = try newTestModule();
+    defer false_module.deinit();
+    const false_fact = try addFunction(&false_module, "FailsFalse");
+    try setAttributes(&false_module, false_fact, &.{"Fact"});
+    try setBody(&false_module, false_fact, &.{try exprStmt(&false_module, try intrinsic(&false_module, .expect_that_false, &.{try boolExpr(&false_module, true)}, "relation false should fail on true"))});
+    const false_result = try runModule(std.testing.allocator, &false_module, "Test");
+    defer false_result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(hir.HirTestIntrinsicKind.expect_that_false, false_result.failures[0].intrinsic_kind);
+    try std.testing.expectEqualStrings("false", false_result.failures[0].expected.?);
+    try std.testing.expectEqualStrings("true", false_result.failures[0].actual.?);
+
+    var int_module = try newTestModule();
+    defer int_module.deinit();
+    const int_fact = try addFunction(&int_module, "FailsIntEqual");
+    try setAttributes(&int_module, int_fact, &.{"Fact"});
+    try setBody(&int_module, int_fact, &.{try exprStmt(&int_module, try intrinsic(&int_module, .expect_that_equal_int, &.{ try intExpr(&int_module, "4"), try intExpr(&int_module, "5") }, "integer EqualTo relation should report values"))});
+    const int_result = try runModule(std.testing.allocator, &int_module, "Test");
+    defer int_result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(hir.HirTestIntrinsicKind.expect_that_equal_int, int_result.failures[0].intrinsic_kind);
+    try std.testing.expectEqualStrings("4", int_result.failures[0].expected.?);
+    try std.testing.expectEqualStrings("5", int_result.failures[0].actual.?);
+
+    var bool_module = try newTestModule();
+    defer bool_module.deinit();
+    const bool_fact = try addFunction(&bool_module, "FailsBoolEqual");
+    try setAttributes(&bool_module, bool_fact, &.{"Fact"});
+    try setBody(&bool_module, bool_fact, &.{try exprStmt(&bool_module, try intrinsic(&bool_module, .expect_that_equal_bool, &.{ try boolExpr(&bool_module, true), try boolExpr(&bool_module, false) }, "boolean EqualTo relation should report values"))});
+    const bool_result = try runModule(std.testing.allocator, &bool_module, "Test");
+    defer bool_result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(hir.HirTestIntrinsicKind.expect_that_equal_bool, bool_result.failures[0].intrinsic_kind);
+    try std.testing.expectEqualStrings("true", bool_result.failures[0].expected.?);
+    try std.testing.expectEqualStrings("false", bool_result.failures[0].actual.?);
+}
+
+test "Theory runner executes Expect.That relation intrinsics" {
+    var module = try newTestModule();
+    defer module.deinit();
+    const theory = try addFunction(&module, "RelationTheoryRows");
+    const value = try module.hir.addParam(theory, try intern(&module, "value"), module.types.intType(), hir.synthetic_span);
+    const expected = try module.hir.addParam(theory, try intern(&module, "expected"), module.types.intType(), hir.synthetic_span);
+    try setTheoryInlineDataRows(&module, theory, &.{ &.{ .{ .int_literal = "1" }, .{ .int_literal = "1" } }, &.{ .{ .int_literal = "2" }, .{ .int_literal = "2" } } });
+    try setBody(&module, theory, &.{try exprStmt(&module, try intrinsic(&module, .expect_that_equal_int, &.{ try paramExpr(&module, expected), try paramExpr(&module, value) }, "Expect.That should run for each theory row"))});
+
+    const result = try runModule(std.testing.allocator, &module, "Test");
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 2), result.passed_count);
+    try std.testing.expectEqual(@as(usize, 0), result.failed_count);
 }
 
 test "Fact runner aggregates multiple Facts and aborts each failed Fact on first failure" {

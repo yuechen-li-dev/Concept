@@ -1,0 +1,16 @@
+# name: expect that true non bool invalid
+# phase: check
+# expect: fail
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+void TrueNonBool() {
+    Expect.That(1, Is.True(), "true relation requires a bool actual");
+    return;
+}
+
+=== diagnostics ===
+CON0183
+

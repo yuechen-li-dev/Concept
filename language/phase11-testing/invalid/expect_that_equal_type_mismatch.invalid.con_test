@@ -1,0 +1,16 @@
+# name: expect that equal type mismatch invalid
+# phase: check
+# expect: fail
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+void EqualTypeMismatch() {
+    Expect.That(true, Is.EqualTo(1), "actual and expected relation types should match");
+    return;
+}
+
+=== diagnostics ===
+CON0183
+

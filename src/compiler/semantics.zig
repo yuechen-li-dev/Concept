@@ -1355,6 +1355,14 @@ const BodyLowerer = struct {
                 if (self.maybeTestIntrinsicCall(call)) |intrinsic| {
                     return try self.lowerTestIntrinsic(call, intrinsic);
                 }
+                if (self.maybeTestRelationConstructorCall(call)) {
+                    const diagnostic = if (self.collector.options.source_file_kind == .@"test")
+                        diagnostics.testRelationOutsideExpectThat(call.span)
+                    else
+                        diagnostics.testIntrinsicOutsideTestFile(call.span);
+                    try self.collector.diagnostics.append(diagnostic);
+                    return null;
+                }
                 if (call.qualifier) |qualifier| {
                     try self.collector.diagnostics.append(diagnostics.unknownFunction(qualifier.span));
                     return null;
@@ -1562,12 +1570,24 @@ const BodyLowerer = struct {
         name: []const u8,
     };
 
+    const ParsedTestRelation = struct {
+        kind: enum { is_true, is_false, equal },
+        expected: ?hir.ExprId = null,
+        span: source.SourceSpan,
+    };
+
     fn maybeTestIntrinsicCall(self: *BodyLowerer, call: ast.Expr.CallExpr) ?ParsedTestIntrinsic {
         _ = self;
         const qualifier = call.qualifier orelse return null;
         if (std.mem.eql(u8, qualifier.text, "Assert")) return .{ .family = .assert, .name = call.callee.text };
         if (std.mem.eql(u8, qualifier.text, "Expect")) return .{ .family = .expect, .name = call.callee.text };
         return null;
+    }
+
+    fn maybeTestRelationConstructorCall(self: *BodyLowerer, call: ast.Expr.CallExpr) bool {
+        _ = self;
+        const qualifier = call.qualifier orelse return false;
+        return std.mem.eql(u8, qualifier.text, "Is");
     }
 
     fn lowerTestIntrinsic(self: *BodyLowerer, call: ast.Expr.CallExpr, intrinsic: ParsedTestIntrinsic) !?hir.ExprId {
@@ -1579,6 +1599,8 @@ const BodyLowerer = struct {
         const expected_arity: usize = if (std.mem.eql(u8, intrinsic.name, "True") or std.mem.eql(u8, intrinsic.name, "False"))
             2
         else if (intrinsic.family == .expect and std.mem.eql(u8, intrinsic.name, "Equal"))
+            3
+        else if (intrinsic.family == .expect and std.mem.eql(u8, intrinsic.name, "That"))
             3
         else {
             try self.collector.diagnostics.append(diagnostics.unknownFunction(call.callee.span));
@@ -1606,6 +1628,10 @@ const BodyLowerer = struct {
         if (std.mem.trim(u8, reason_text, " \t\r\n").len == 0) {
             try self.collector.diagnostics.append(diagnostics.testReasonMustBeNonEmpty(reason.span));
             return null;
+        }
+
+        if (intrinsic.family == .expect and std.mem.eql(u8, intrinsic.name, "That")) {
+            return try self.lowerExpectThat(call, reason_text, reason.span);
         }
 
         const operand_count = expected_arity - 1;
@@ -1659,6 +1685,121 @@ const BodyLowerer = struct {
 
         try self.collector.diagnostics.append(diagnostics.unknownFunction(call.callee.span));
         return null;
+    }
+
+    fn lowerExpectThat(self: *BodyLowerer, call: ast.Expr.CallExpr, reason_text: []const u8, reason_span: source.SourceSpan) !?hir.ExprId {
+        const actual = (try self.lowerExpr(call.args[0].*)) orelse return null;
+        const relation = (try self.lowerTestRelation(call.args[1].*)) orelse return null;
+
+        const kind = (try self.resolveExpectThatKind(call, actual, relation)) orelse return null;
+        const operand_count: usize = if (relation.expected == null) 1 else 2;
+        var operands = try self.collector.allocator.alloc(hir.ExprId, operand_count);
+        var operands_transferred = false;
+        defer if (!operands_transferred) self.collector.allocator.free(operands);
+
+        if (relation.expected) |expected| {
+            operands[0] = expected;
+            operands[1] = actual;
+        } else {
+            operands[0] = actual;
+        }
+
+        const owned_reason = try self.collector.allocator.dupe(u8, reason_text);
+        errdefer self.collector.allocator.free(owned_reason);
+
+        const expr_id = try self.collector.module.hir.addExpr(.{ .test_intrinsic = .{
+            .kind = kind,
+            .operands = operands,
+            .reason = owned_reason,
+            .reason_span = reason_span,
+        } }, call.span);
+        operands_transferred = true;
+        return expr_id;
+    }
+
+    fn lowerTestRelation(self: *BodyLowerer, expr: ast.Expr) !?ParsedTestRelation {
+        const call = switch (expr) {
+            .call => |call| call,
+            else => {
+                try self.collector.diagnostics.append(diagnostics.testRelationUnsupported(expr.span()));
+                return null;
+            },
+        };
+        const qualifier = call.qualifier orelse {
+            try self.collector.diagnostics.append(diagnostics.testRelationUnsupported(call.span));
+            return null;
+        };
+        if (!std.mem.eql(u8, qualifier.text, "Is")) {
+            try self.collector.diagnostics.append(diagnostics.testRelationUnsupported(call.span));
+            return null;
+        }
+        if (std.mem.eql(u8, call.callee.text, "True")) {
+            if (call.args.len != 0) {
+                try self.collector.diagnostics.append(diagnostics.testIntrinsicArityMismatch(call.span));
+                return null;
+            }
+            return .{ .kind = .is_true, .span = call.span };
+        }
+        if (std.mem.eql(u8, call.callee.text, "False")) {
+            if (call.args.len != 0) {
+                try self.collector.diagnostics.append(diagnostics.testIntrinsicArityMismatch(call.span));
+                return null;
+            }
+            return .{ .kind = .is_false, .span = call.span };
+        }
+        if (std.mem.eql(u8, call.callee.text, "EqualTo")) {
+            if (call.args.len != 1) {
+                try self.collector.diagnostics.append(diagnostics.testIntrinsicArityMismatch(call.span));
+                return null;
+            }
+            switch (call.args[0].*) {
+                .string_literal, .struct_literal, .enum_constructor => {
+                    try self.collector.diagnostics.append(diagnostics.testRelationUnsupported(call.span));
+                    return null;
+                },
+                else => {},
+            }
+            const expected = (try self.lowerExpr(call.args[0].*)) orelse return null;
+            return .{ .kind = .equal, .expected = expected, .span = call.span };
+        }
+
+        try self.collector.diagnostics.append(diagnostics.testRelationUnsupported(call.span));
+        return null;
+    }
+
+    fn resolveExpectThatKind(self: *BodyLowerer, call: ast.Expr.CallExpr, actual: hir.ExprId, relation: ParsedTestRelation) !?hir.HirTestIntrinsicKind {
+        const actual_type = (try self.inferExprType(actual)) orelse return null;
+        switch (relation.kind) {
+            .is_true => {
+                if (!sameType(actual_type, self.collector.module.types.boolType())) {
+                    try self.collector.diagnostics.append(diagnostics.testIntrinsicTypeMismatch(self.collector.module.hir.getExpr(actual).span));
+                    return null;
+                }
+                return .expect_that_true;
+            },
+            .is_false => {
+                if (!sameType(actual_type, self.collector.module.types.boolType())) {
+                    try self.collector.diagnostics.append(diagnostics.testIntrinsicTypeMismatch(self.collector.module.hir.getExpr(actual).span));
+                    return null;
+                }
+                return .expect_that_false;
+            },
+            .equal => {
+                const expected = relation.expected orelse {
+                    try self.collector.diagnostics.append(diagnostics.testRelationUnsupported(relation.span));
+                    return null;
+                };
+                const expected_type = (try self.inferExprType(expected)) orelse return null;
+                if (!sameType(expected_type, actual_type)) {
+                    try self.collector.diagnostics.append(diagnostics.testIntrinsicTypeMismatch(call.span));
+                    return null;
+                }
+                if (sameType(expected_type, self.collector.module.types.intType())) return .expect_that_equal_int;
+                if (sameType(expected_type, self.collector.module.types.boolType())) return .expect_that_equal_bool;
+                try self.collector.diagnostics.append(diagnostics.testRelationUnsupported(relation.span));
+                return null;
+            },
+        }
     }
 
     fn inferExprType(self: *BodyLowerer, expr_id: hir.ExprId) !?types.TypeId {
@@ -3142,6 +3283,39 @@ test "test intrinsic metadata preserves reason and Assert versus Expect kind" {
     try std.testing.expectEqualStrings("expect reason", expect_intrinsic.reason);
 }
 
+test "Expect.That semantics recognize built-in relation spellings" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const statements = try allocator.alloc(ast.Stmt, 5);
+    statements[0] = try exprStmt(allocator, try qualifiedCallExpr(allocator, "Expect", "That", &.{ boolExpr(true), try qualifiedCallExpr(allocator, "Is", "True", &.{}), stringExpr("\"true relation should check a bool actual\"") }));
+    statements[1] = try exprStmt(allocator, try qualifiedCallExpr(allocator, "Expect", "That", &.{ boolExpr(false), try qualifiedCallExpr(allocator, "Is", "False", &.{}), stringExpr("\"false relation should check a bool actual\"") }));
+    statements[2] = try exprStmt(allocator, try qualifiedCallExpr(allocator, "Expect", "That", &.{ intExpr("4"), try qualifiedCallExpr(allocator, "Is", "EqualTo", &.{intExpr("4")}), stringExpr("\"integer relation should preserve expected value\"") }));
+    statements[3] = try exprStmt(allocator, try qualifiedCallExpr(allocator, "Expect", "That", &.{ boolExpr(true), try qualifiedCallExpr(allocator, "Is", "EqualTo", &.{boolExpr(true)}), stringExpr("\"boolean relation should preserve expected value\"") }));
+    statements[4] = try returnStmt(allocator, intExpr("0"));
+
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+    var module = try collectTestItems(&.{functionWithBody("main", &.{}, statements)}, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
+    const block = module.hir.getStmt(module.hir.getFunction(.{ .index = 0 }).body.?).kind.block;
+    const expected_kinds = [_]hir.HirTestIntrinsicKind{
+        .expect_that_true,
+        .expect_that_false,
+        .expect_that_equal_int,
+        .expect_that_equal_bool,
+    };
+    for (expected_kinds, 0..) |expected_kind, index| {
+        const expr_id = module.hir.getStmt(block[index]).kind.expr_stmt;
+        const test_intrinsic = module.hir.getExpr(expr_id).kind.test_intrinsic;
+        try std.testing.expectEqual(expected_kind, test_intrinsic.kind);
+        try std.testing.expect(test_intrinsic.reason.len != 0);
+    }
+}
+
 fn expectOneTestIntrinsicDiagnostic(expr: ast.Expr, code: DiagnosticCode) !void {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -3160,8 +3334,11 @@ test "test intrinsic semantics reject missing empty and whitespace reasons" {
     try expectOneTestIntrinsicDiagnostic(try qualifiedCallExpr(allocator, "Expect", "True", &.{boolExpr(true)}), .TestExpectationRequiresReason);
     try expectOneTestIntrinsicDiagnostic(try qualifiedCallExpr(allocator, "Assert", "True", &.{boolExpr(true)}), .TestExpectationRequiresReason);
     try expectOneTestIntrinsicDiagnostic(try qualifiedCallExpr(allocator, "Expect", "Equal", &.{ intExpr("1"), intExpr("1") }), .TestExpectationRequiresReason);
+    try expectOneTestIntrinsicDiagnostic(try qualifiedCallExpr(allocator, "Expect", "That", &.{ intExpr("1"), try qualifiedCallExpr(allocator, "Is", "EqualTo", &.{intExpr("1")}) }), .TestExpectationRequiresReason);
     try expectOneTestIntrinsicDiagnostic(try qualifiedCallExpr(allocator, "Expect", "True", &.{ boolExpr(true), stringExpr("\"\"") }), .TestReasonMustBeNonEmpty);
     try expectOneTestIntrinsicDiagnostic(try qualifiedCallExpr(allocator, "Expect", "True", &.{ boolExpr(true), stringExpr("\"   \"") }), .TestReasonMustBeNonEmpty);
+    try expectOneTestIntrinsicDiagnostic(try qualifiedCallExpr(allocator, "Expect", "That", &.{ intExpr("1"), try qualifiedCallExpr(allocator, "Is", "EqualTo", &.{intExpr("1")}), stringExpr("\"\"") }), .TestReasonMustBeNonEmpty);
+    try expectOneTestIntrinsicDiagnostic(try qualifiedCallExpr(allocator, "Expect", "That", &.{ intExpr("1"), try qualifiedCallExpr(allocator, "Is", "EqualTo", &.{intExpr("1")}), stringExpr("\"   \"") }), .TestReasonMustBeNonEmpty);
 }
 
 test "test intrinsic semantics validate primitive operand types" {
@@ -3172,12 +3349,17 @@ test "test intrinsic semantics validate primitive operand types" {
     try expectOneTestIntrinsicDiagnostic(try qualifiedCallExpr(allocator, "Expect", "True", &.{ intExpr("1"), stringExpr("\"needs bool\"") }), .TestIntrinsicTypeMismatch);
     try expectOneTestIntrinsicDiagnostic(try qualifiedCallExpr(allocator, "Assert", "False", &.{ intExpr("1"), stringExpr("\"needs bool\"") }), .TestIntrinsicTypeMismatch);
     try expectOneTestIntrinsicDiagnostic(try qualifiedCallExpr(allocator, "Expect", "Equal", &.{ intExpr("1"), boolExpr(true), stringExpr("\"types should match\"") }), .TestIntrinsicTypeMismatch);
+    try expectOneTestIntrinsicDiagnostic(try qualifiedCallExpr(allocator, "Expect", "That", &.{ intExpr("1"), try qualifiedCallExpr(allocator, "Is", "True", &.{}), stringExpr("\"true relation needs bool actual\"") }), .TestIntrinsicTypeMismatch);
+    try expectOneTestIntrinsicDiagnostic(try qualifiedCallExpr(allocator, "Expect", "That", &.{ boolExpr(true), try qualifiedCallExpr(allocator, "Is", "EqualTo", &.{intExpr("1")}), stringExpr("\"relation expected type should match actual\"") }), .TestIntrinsicTypeMismatch);
+    try expectOneTestIntrinsicDiagnostic(try qualifiedCallExpr(allocator, "Expect", "That", &.{ intExpr("1"), try qualifiedCallExpr(allocator, "Is", "EqualTo", &.{boolExpr(true)}), stringExpr("\"relation expected type should match actual\"") }), .TestIntrinsicTypeMismatch);
 
     const statements = try allocator.alloc(ast.Stmt, 3);
     statements[0] = try localStmt(allocator, "x", intExpr("1"));
     statements[1] = try exprStmt(allocator, try qualifiedCallExpr(allocator, "Expect", "Equal", &.{ .{ .address_of = .{ .operand = try allocExpr(allocator, identExpr("x")), .span = .{ .start = 0, .length = 1 } } }, .{ .address_of = .{ .operand = try allocExpr(allocator, identExpr("x")), .span = .{ .start = 0, .length = 1 } } }, stringExpr("\"pointer equality is not v0\"") }));
     statements[2] = try returnStmt(allocator, intExpr("0"));
     try expectOneTestSemanticDiagnostic(&.{functionWithBody("main", &.{}, statements)}, .ExpectEqualUnsupportedType);
+
+    try expectOneTestIntrinsicDiagnostic(try qualifiedCallExpr(allocator, "Expect", "That", &.{ intExpr("1"), try qualifiedCallExpr(allocator, "Is", "EqualTo", &.{stringExpr("\"text\"")}), stringExpr("\"string equality is not v0\"") }), .TestRelationUnsupported);
 }
 
 test "test intrinsic semantics reject wrong arity and normal source usage" {
@@ -3186,11 +3368,19 @@ test "test intrinsic semantics reject wrong arity and normal source usage" {
     const allocator = arena.allocator();
 
     try expectOneTestIntrinsicDiagnostic(try qualifiedCallExpr(allocator, "Expect", "True", &.{ boolExpr(true), stringExpr("\"reason\""), boolExpr(false) }), .TestIntrinsicArityMismatch);
+    try expectOneTestIntrinsicDiagnostic(try qualifiedCallExpr(allocator, "Expect", "That", &.{ boolExpr(true), try qualifiedCallExpr(allocator, "Is", "True", &.{}), stringExpr("\"reason\""), boolExpr(false) }), .TestIntrinsicArityMismatch);
+    try expectOneTestIntrinsicDiagnostic(try qualifiedCallExpr(allocator, "Expect", "That", &.{ boolExpr(true), try qualifiedCallExpr(allocator, "Unknown", "Relation", &.{}), stringExpr("\"reason\"") }), .TestRelationUnsupported);
+    try expectOneTestIntrinsicDiagnostic(try qualifiedCallExpr(allocator, "Is", "EqualTo", &.{intExpr("1")}), .TestRelationOutsideExpectThat);
 
     const statements = try allocator.alloc(ast.Stmt, 2);
     statements[0] = try exprStmt(allocator, try qualifiedCallExpr(allocator, "Expect", "True", &.{ boolExpr(true), stringExpr("\"reason\"") }));
     statements[1] = try returnStmt(allocator, intExpr("0"));
     try expectOneSemanticDiagnostic(&.{functionWithBody("main", &.{}, statements)}, .TestIntrinsicOutsideTestFile);
+
+    const that_statements = try allocator.alloc(ast.Stmt, 2);
+    that_statements[0] = try exprStmt(allocator, try qualifiedCallExpr(allocator, "Expect", "That", &.{ boolExpr(true), try qualifiedCallExpr(allocator, "Is", "True", &.{}), stringExpr("\"reason\"") }));
+    that_statements[1] = try returnStmt(allocator, intExpr("0"));
+    try expectOneSemanticDiagnostic(&.{functionWithBody("main", &.{}, that_statements)}, .TestIntrinsicOutsideTestFile);
 }
 
 fn sameType(left: types.TypeId, right: types.TypeId) bool {

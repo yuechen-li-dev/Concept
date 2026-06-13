@@ -1,0 +1,13 @@
+# name: expect that true pass
+# phase: check
+# expect: pass
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+void ExpectThatTruePass() {
+    Expect.That(true, Is.True(), "true relation should pass for a true boolean actual");
+    return;
+}
+

@@ -1,0 +1,16 @@
+# name: test relation standalone invalid
+# phase: check
+# expect: fail
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+void StandaloneRelation() {
+    Is.EqualTo(1);
+    return;
+}
+
+=== diagnostics ===
+CON0187
+
