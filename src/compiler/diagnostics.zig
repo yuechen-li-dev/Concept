@@ -510,9 +510,9 @@ pub fn machineSemanticsNotImplemented(span: SourceSpan) Diagnostic {
     return Diagnostic.init(
         .MachineSemanticsNotImplemented,
         .@"error",
-        "executable machine semantics are not implemented yet",
+        "this executable machine form is not implemented yet",
         span,
-    ).withHelp("machine declarations are parsed, validated, and represented in HIR, but executable machine lowering/runtime support is not implemented yet");
+    ).withHelp("literal-transition machines are executable; match/decide transitions and broader machine body forms remain parsed, validated, and represented in HIR but are not lowered to executable C yet");
 }
 
 pub fn machineRequiresState(span: SourceSpan) Diagnostic {

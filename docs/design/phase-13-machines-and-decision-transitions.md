@@ -20,8 +20,8 @@ inside a machine body.
 P13-M1 deliberately does not implement machine HIR/MIR lowering, semantic state
 validation, transition parsing or validation, runtime frames, step/resume
 support, DragonGod features, `board`, stack HFSM, hidden heap behavior,
-implicit scheduling, or new `decide` semantics. A machine that reaches semantic
-declaration collection is rejected with `CON0231
+implicit scheduling, or new `decide` semantics. At P13-M1, a machine that
+reached semantic declaration collection was rejected with `CON0231
 MachineSemanticsNotImplemented` instead of silently disappearing.
 
 P13-M2 adds the first semantic state validation layer. Each machine now has a
@@ -32,10 +32,10 @@ different machines, source order is preserved, and the first declared state is
 recorded as the v0 initial state. The semantic shell preserves machine name,
 parameters, result type, allocation-effect metadata, attributes, ordered
 states, and initial-state metadata for future transition validation. P13-M2
-still does not lower machines to executable HIR/MIR/runtime behavior, does not
-parse or validate transitions, and does not add DragonGod features, stack HFSM,
+still did not lower machines to executable HIR/MIR/runtime behavior, did not
+parse or validate transitions, and did not add DragonGod features, stack HFSM,
 `board`, mailbox, actuator, policy memory, hidden heap, scheduler, or async
-behavior. Otherwise valid machines still report `CON0231
+behavior. At P13-M2, otherwise valid machines still reported `CON0231
 MachineSemanticsNotImplemented`.
 
 P13-M3 adds the first transition statement form:
@@ -52,8 +52,8 @@ machine's local state table: self-transitions, transitions to the initial
 state, and transitions to later states are valid, while unknown or cross-machine
 state targets report `CON0222 UnknownMachineState`. `transition` outside a
 machine state body reports `CON0223 TransitionOutsideMachineState` where the
-parser can encounter it. Otherwise valid machines with valid transitions still
-report `CON0231 MachineSemanticsNotImplemented`.
+parser can encounter it. At P13-M3, otherwise valid machines with valid
+transitions still reported `CON0231 MachineSemanticsNotImplemented`.
 
 P13-M3 deliberately does not implement `transition match`, `transition decide`,
 transition target expressions, reachability/completeness analysis, HIR/MIR
@@ -78,9 +78,9 @@ forms, preserves arm source order, and records each arm's bare state target
 name and span. Semantic collection validates every arm target against the
 containing machine's local state table. Self targets, the initial state, and
 later states are valid; unknown and cross-machine targets report `CON0222
-UnknownMachineState` before the general machine placeholder. Otherwise valid
-machines with literal or match transitions still report `CON0231
-MachineSemanticsNotImplemented`.
+UnknownMachineState` before the general machine placeholder. At P13-M4,
+otherwise valid machines with literal or match transitions still reported
+`CON0231 MachineSemanticsNotImplemented`.
 
 For P13-M4, match arm results are intentionally narrow: each result must be a
 bare machine state name. Arbitrary state-valued expressions, nested `decide`
@@ -106,9 +106,9 @@ name/span, and preserves optional `when` condition expressions plus required
 `score` expressions. Semantic collection validates every decide case target
 against the containing machine's local state table. Self targets, the initial
 state, and later states are valid; unknown and cross-machine targets report
-`CON0222 UnknownMachineState` before the general machine placeholder. Otherwise
-valid machines with literal, match, or decide transitions still report
-`CON0231 MachineSemanticsNotImplemented`.
+`CON0222 UnknownMachineState` before the general machine placeholder. At
+P13-M5, otherwise valid machines with literal, match, or decide transitions
+still reported `CON0231 MachineSemanticsNotImplemented`.
 
 For P13-M5, decide case results are intentionally narrow: each result must be a
 bare machine state name. Arbitrary state-valued expressions, nested `match` or
@@ -130,12 +130,13 @@ resolve to machine-local state indexes while preserving target spans for later
 diagnostics/debugging. HIR debug output exposes the machine, state, and
 transition structure.
 
-P13-M6 deliberately remains non-executable. Otherwise valid machines still
-report `CON0231 MachineSemanticsNotImplemented`, with wording updated to state
-that declarations are parsed, validated, and represented in HIR but executable
-machine lowering/runtime support is not implemented yet. MIR lowering refuses
-machine-containing modules instead of silently dropping them or treating them as
-functions, and the C backend must not emit machine code. P13-M6 does not add
+P13-M6 deliberately remained non-executable. Otherwise valid machines still
+reported `CON0231 MachineSemanticsNotImplemented`, with wording updated to
+state that declarations are parsed, validated, and represented in HIR but
+executable machine lowering/runtime support was not implemented yet. MIR
+lowering refused machine-containing modules instead of silently dropping them
+or treating them as functions, and the C backend did not emit machine code.
+P13-M6 does not add
 runtime frames, resume dispatch, Step/Active/Complete/Result builtins,
 yield/suspend, lifted locals, Drop/lifetime handling, machine effect
 enforcement, DragonGod features, stack HFSM, `board`, mailbox/event buses,
@@ -182,6 +183,49 @@ frame struct, constructor, and step helper shape. P13-M8 does not add
 DragonGod kernel features, a `board` keyword, hidden heap allocation, `malloc`,
 a scheduler, async runtime machinery, stack HFSM, blackboards, mailbox buses,
 actuators, persistence, hysteresis, `min_commit`, or policy memory.
+
+P13-M9 closes Phase 13. The final v0 surface is explicit machines with
+machine-local states, literal/match/decide transition scaffolds, runnable
+literal-transition machine frames, `Step`, `Complete`, `Result`, and C backend
+support for the literal-transition subset. Match/decide transition runtime
+lowering, `Active(machine)`, `yield`, `suspend`, lifted locals, DragonGod
+features, and non-scalar executable machine params/results remain deferred.
+
+## Final P13 v0 supported surface
+
+Closed Phase 13 supports:
+
+- `machine` declarations with parameters, result type, attributes, and
+  allocation-effect metadata preserved.
+- Nested `state` declarations as named control regions.
+- Machine-local state validation: at least one state, no duplicate state names
+  within a machine, same state names allowed across different machines, and
+  cross-machine transition targets rejected.
+- Literal transitions with `transition TargetState;`.
+- Match-driven transition syntax and target validation:
+  `transition match (scrutinee) { pattern => State; _ => State; };`.
+- Decide-driven transition syntax and target validation:
+  `transition decide { State when condition score scoreExpr; Fallback score 0; };`.
+- HIR machine scaffold preserving states and literal/match/decide transition
+  targets as stable machine-local `state_index` values.
+- MIR/backend runnable subset for literal-transition machines.
+- Nominal machine frame value types.
+- `MachineName(...)` frame construction with scalar parameter capture.
+- `Step(machine)`, `Complete(machine)`, and `Result(machine)`.
+- `Result(machine)` before completion lowering to the generated
+  `cpt_machine_result_before_complete()` trap helper.
+- Executable machine params/results limited to scalar `int` and `bool`.
+- Generated C state enum, frame struct, constructor helper, and step helper for
+  each runnable machine.
+- No hidden heap allocation, `malloc`, implicit scheduler, or async runtime
+  machinery in generated machine code.
+
+Literal transitions are runnable. Match/decide transitions are parsed,
+validated, and preserved in HIR, but runtime lowering remains deferred and
+backend execution attempts fail with `CON0231 MachineSemanticsNotImplemented`.
+`Active(machine)`, `yield`, `suspend`, lifted locals, non-scalar executable
+params/results, DragonGod behavior architecture, and a core `board` keyword are
+not implemented in Phase 13 v0.
 
 ## Core doctrine
 
@@ -872,24 +916,30 @@ async runtime helpers.
 
 ## 16. Diagnostics
 
-P13-M0 only reserves a diagnostic inventory:
+Closed Phase 13 uses this implemented diagnostic inventory:
 
 ```text
 CON0220 MachineRequiresState
 CON0221 DuplicateMachineState
 CON0222 UnknownMachineState
 CON0223 TransitionOutsideMachineState
-CON0224 InvalidTransitionTarget
-CON0225 MachineStateUnreachable
-CON0226 MachineStateMissingReturnOrTransition
-CON0227 MachineReturnTypeMismatch
-CON0228 MachineTransitionExpressionTypeMismatch
-CON0229 MachineYieldReferenceEscape
-CON0230 MachineEffectViolation
+CON0231 MachineSemanticsNotImplemented
 ```
 
-Later implementation milestones may adjust numbering if the existing diagnostic
-space changes.
+`CON0220` reports a machine with no states. `CON0221` reports duplicate state
+names within one machine. `CON0222` reports unknown or cross-machine transition
+targets for literal, match, and decide transition forms. `CON0223` reports a
+`transition` statement outside a machine state body where the parser can
+recover that context. `CON0231` reports machine forms outside the current
+executable subset, including match/decide transition runtime lowering and
+broader state-body expression forms that are parsed and represented in HIR but
+not lowered to executable C yet.
+
+Phase 13 deliberately does not list reserved future diagnostics as implemented.
+Future work may add diagnostics for invalid transition target expressions,
+reachability, missing return/transition paths, machine return mismatches,
+transition-expression type mismatches, yield reference escapes, and machine
+effect violations.
 
 ## 17. Non-goals for Phase 13 v0
 
@@ -1028,24 +1078,25 @@ P13-M5  transition target expressions via decide
 P13-M6  HIR/MIR lowering scaffold
 P13-M7  step/resume runtime model v0
 P13-M8  examples, fixtures, runtime hardening, generated C shape assertions
-P13-M9  Closeout
+P13-M9  Closeout, docs/status updates, fixture smoke, and hardening audit
 ```
 
-The ordering starts with syntax and validation, then expands transition
-expressions, then lowers to HIR/MIR and runtime stepping. That keeps the first
-implementation path narrow while preserving the doctrine: explicit machines,
-typed transitions, no hidden heap, no implicit scheduler, and DragonGod outside
-the core language.
+Phase 13 is closed. The implemented path starts with syntax and validation,
+expands transition scaffolds, lowers machines into HIR, and makes the
+literal-transition subset executable through MIR-backed C while preserving the
+doctrine: explicit machines, typed transitions, no hidden heap, no implicit
+scheduler, and DragonGod outside the core language.
 
 ## 20. Docs index / PoC status
 
-Phase 13 should be recorded in the PoC status as a planned/in-progress
-machine-design phase. P13-M0 is docs-only and should not claim parser,
-lowering, runtime, or DragonGod implementation status.
+Phase 13 is recorded in the PoC status as closed: explicit machines,
+machine-local states, literal/match/decide transition scaffolds, runnable
+literal-transition machine frames, `Step`, `Complete`, `Result`, and C backend
+support for the literal-transition subset.
 
 ## 21. Final checks
 
-Even though P13-M0 is docs-only, completion should run:
+Closeout completion should run:
 
 ```bash
 zig version

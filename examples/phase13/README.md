@@ -1,8 +1,8 @@
 # Phase 13 Machines
 
 Phase 13 introduces Concept core machines as compiler-visible control frames.
-The current runnable subset is intentionally small: single-active-state machine
-frames with scalar `int` and `bool` parameters/results, explicit
+The closed v0 runnable subset is intentionally small: single-active-state
+machine frames with scalar `int` and `bool` parameters/results, explicit
 `MachineName(...)` construction, `Step(machine)`, `Complete(machine)`, and
 `Result(machine)`.
 
@@ -22,14 +22,18 @@ valid after completion; the generated C backend traps incomplete result access.
 
 `transition match (...) { ... };` and `transition decide { ... };` are syntax,
 validation, and HIR scaffolds in this milestone. They validate machine-local
-state targets, but runtime lowering remains deferred.
+state targets, but runtime lowering remains deferred. Match examples use the
+current C++-shaped syntax, including `transition match (kind) { ... };`,
+`TokenKind::Identifier`-style enum qualification, and `_ => Target` default
+arms.
 
 Machine frames are explicit value storage. Generated C uses a state enum, frame
 struct, constructor helper, and step helper. There is no hidden heap, `malloc`,
 scheduler, async runtime, stack HFSM, `board` keyword, blackboard, mailbox bus,
 actuator layer, hysteresis, `min_commit`, or policy memory in Concept core v0.
+Boards/blackboards are ordinary structs and library conventions in Concept.
 Those behavior architecture pieces belong above the core language, for example
-in DragonGod.
+in DragonGod, built on top of Concept machines rather than inside core v0.
 
 Files:
 

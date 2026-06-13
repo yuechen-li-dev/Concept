@@ -1,0 +1,51 @@
+# name: phase13 closeout literal machine
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Counter(bool chooseHigh) -> int {
+    state Start {
+        transition Pick;
+    }
+
+    state Pick {
+        if (chooseHigh) {
+            transition High;
+        }
+
+        transition Low;
+    }
+
+    state High {
+        return 7;
+    }
+
+    state Low {
+        return 3;
+    }
+}
+
+int main() {
+    Counter c = Counter(true);
+
+    if (Complete(c)) {
+        return 90;
+    }
+
+    Step(c);
+    Step(c);
+    Step(c);
+
+    if (Complete(c) == false) {
+        return 91;
+    }
+
+    Step(c);
+
+    return Result(c);
+}
+
+=== run ===
+exit_code: 7

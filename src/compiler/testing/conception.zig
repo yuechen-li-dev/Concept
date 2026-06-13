@@ -2577,6 +2577,7 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectRunFixture("../../../language/phase13-machines/valid/machine_two_literal_transitions.valid.conception");
     try expectRunFixture("../../../language/phase13-machines/valid/machine_complete_false_before_return.valid.conception");
     try expectRunFixture("../../../language/phase13-machines/valid/machine_step_completed_noop.valid.conception");
+    try expectRunFixture("../../../language/phase13-machines/valid/phase13_closeout_literal_machine.valid.conception");
     try expectRunFixture("../../../language/phase13-machines/invalid/machine_result_before_complete.invalid.conception");
     try expectBackendCFixture("../../../language/phase13-machines/valid/machine_backend_c_shape.valid.conception");
     try expectBackendCFixture("../../../language/phase13-machines/invalid/machine_match_runtime_unsupported.invalid.conception");

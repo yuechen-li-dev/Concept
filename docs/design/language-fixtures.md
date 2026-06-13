@@ -160,10 +160,10 @@ yet.
 
 ## Phase 13 machine fixtures
 
-Phase 13 fixtures live under `language/phase13-machines/` and cover explicit
-machine/state syntax, machine-local state validation, literal/match/decide
-transition target preservation, and the P13-M8 executable literal-transition
-runtime subset.
+Phase 13 fixtures live under `language/phase13-machines/` and cover the closed
+Phase 13 explicit machine/state syntax, machine-local state validation,
+literal/match/decide transition target preservation, and the P13-M8 executable
+literal-transition runtime subset.
 Valid parse fixtures cover machine declarations, parameters, effects,
 attributes, ordinary state-body statements, literal transitions, match-driven
 transition targets, and decide-driven transition targets. Invalid fixtures cover
@@ -184,6 +184,9 @@ state enum, frame struct, current-state field, completion flag, result storage,
 scalar captured parameter fields, constructor initialization, step dispatch,
 literal transition assignment, return-result storage, completed-step no-op,
 and absence of `malloc`, scheduler helpers, and async runtime helpers.
+A closeout smoke fixture combines scalar bool parameter capture, multiple
+states, conditional literal transitions, `Step`, `Complete`, `Result`, and an
+extra completed `Step` no-op in one run path.
 
 Match and decide transition runtime lowering remains deferred: those forms are
 still parsed, validated, and preserved in HIR, but backend execution attempts
@@ -192,6 +195,11 @@ continue to exclude DragonGod features, `board`, stack HFSM, blackboards,
 mailbox buses, actuators, persistence, hysteresis, `min_commit`, policy memory,
 hidden heap behavior, scheduler behavior, and async behavior from Concept core
 v0.
+
+Phase 13 closed: explicit machines, machine-local states, literal/match/decide
+transition scaffolds, runnable literal-transition machine frames,
+`Step`/`Complete`/`Result`, and C backend support for the literal-transition
+subset.
 
 ## `.conception` format
 

@@ -42,29 +42,12 @@ function-level `alloc`/`noalloc` effects, direct `noalloc` call-edge checks,
 compiler-known `Arena`/`Allocator`/`AllocError` surface types,
 `Arena.alloc<T>(arena)`, `Arena.reset(arena)`, `Arena.destroy(arena)`,
 Drop-hardened arena restrictions, a stable C helper ABI, and ID-based store
-examples. Phase 13 has started explicit machine support: P13-M0 documented the
-machine/state/transition doctrine, P13-M1 begins machine/state parser and AST
-scaffolding, P13-M2 adds machine-local state validation, and P13-M3 adds
-literal `transition TargetState;` parsing plus machine-local target validation.
-P13-M4 adds parser/AST support for deterministic `transition match (...) {
-... };` targets and validates each bare arm target against the containing
-machine's state table. P13-M5 adds parser/AST support for contextual
-`transition decide { ... };` targets and validates each bare decide candidate
-target against the containing machine's state table, while leaving arbitrary
-state-valued transition expressions and transition-decide condition/score
-typing deferred. P13-M6 adds a non-executable HIR machine scaffold that
-preserves states and literal/match/decide transition targets as machine-local
-state indexes. P13-M7 adds the first executable step/resume runtime subset:
-machine declarations define explicit frame value types, `MachineName(...)`
-constructs frames, and `Step`, `Complete`, and `Result` operate on literal
-transition machines through MIR-backed C emission with no hidden heap or
-implicit scheduler. Runtime lowering for match/decide transitions remains
-deferred. P13-M8 adds runnable Phase 13 examples, strengthens fixture coverage
-for `Step`, `Complete`, `Result`, scalar params/results, multi-step literal
-transitions, and completed-step no-ops, pins generated C machine shape, and
-hardens `Result(machine)` before completion with an explicit generated C trap.
-Match/decide transition runtime lowering remains deferred and fails clearly
-during backend emission rather than silently generating unsupported code.
+examples. Phase 13 is closed: explicit machines, machine-local states,
+literal/match/decide transition scaffolds, runnable literal-transition machine
+frames, `Step`, `Complete`, `Result`, and C backend support for the
+literal-transition subset. Match/decide transition runtime lowering remains
+deferred and fails clearly during backend emission rather than silently
+generating unsupported code.
 Deferred Phase 12
 work includes
 `Arena.create`, hosted runtime helper implementation, allocation failure

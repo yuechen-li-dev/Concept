@@ -1,7 +1,41 @@
 module Main;
 
 // This example documents syntax and machine-local target validation. Runtime
-// lowering for match/decide transitions remains deferred after P13-M7.
+// lowering for match/decide transitions remains deferred after Phase 13.
+enum TokenKind {
+    Identifier,
+    Number,
+    End,
+    Other,
+};
+
+machine Lexer(TokenKind kind) -> int {
+    state Start {
+        transition match (kind) {
+            TokenKind::Identifier => Identifier;
+            TokenKind::Number => Number;
+            TokenKind::End => Done;
+            _ => Error;
+        };
+    }
+
+    state Identifier {
+        return 1;
+    }
+
+    state Number {
+        return 2;
+    }
+
+    state Done {
+        return 0;
+    }
+
+    state Error {
+        return 9;
+    }
+}
+
 machine Brain(bool canAttack, int attackScore) -> int {
     state Decide {
         transition decide {
