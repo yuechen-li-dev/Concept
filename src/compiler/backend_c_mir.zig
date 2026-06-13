@@ -61,6 +61,9 @@ pub fn emitExecutableFromMir(
     const emitted_opaque_allocation_decls = try emitOpaqueAllocationForwardDeclarations(writer, &ctx);
     if (emitted_opaque_allocation_decls and mir_module.store.functions.items.len > 0) try writer.writeByte('\n');
 
+    const emitted_arena_alloc_decl = try emitArenaAllocHelperDeclaration(writer, &ctx);
+    if (emitted_arena_alloc_decl and mir_module.store.functions.items.len > 0) try writer.writeByte('\n');
+
     if (mir_module.store.functions.items.len > 1) {
         for (mir_module.store.functions.items, 0..) |function, index| {
             try emitPrototype(writer, &ctx, .{ .index = @intCast(index) }, function);
@@ -275,6 +278,31 @@ fn noteOpaqueAllocationPointee(ctx: *const BackendContext, type_id: types.TypeId
         .pointer => |pointer| noteOpaqueAllocationPointee(ctx, pointer.pointee, needs_arena, needs_allocator),
         else => {},
     }
+}
+
+fn emitArenaAllocHelperDeclaration(writer: anytype, ctx: *const BackendContext) EmitError!bool {
+    if (!mirContainsArenaAlloc(ctx)) return false;
+    try writer.writeAll("void* cpt_arena_alloc(struct cpt_Arena* arena, unsigned long size, unsigned long align);\n");
+    return true;
+}
+
+fn mirContainsArenaAlloc(ctx: *const BackendContext) bool {
+    for (ctx.mir_module.store.blocks.items) |block| {
+        for (block.statements) |statement| {
+            switch (statement.kind) {
+                .assign => |assignment| if (rvalueContainsArenaAlloc(assignment.rvalue)) return true,
+                .drop => {},
+            }
+        }
+    }
+    return false;
+}
+
+fn rvalueContainsArenaAlloc(rvalue: mir.MirRvalue) bool {
+    return switch (rvalue) {
+        .arena_alloc => true,
+        else => false,
+    };
 }
 
 fn isSupportedEnumLayout(ctx: *const BackendContext, enum_id: hir.EnumId) bool {
@@ -540,6 +568,17 @@ fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue
                 try emitOperand(writer, ctx, arg);
             }
             try writer.writeByte(')');
+        },
+        .arena_alloc => |arena_alloc| {
+            try writer.writeByte('(');
+            try emitCType(writer, ctx, arena_alloc.result_type, null);
+            try writer.writeAll(")cpt_arena_alloc(");
+            try emitOperand(writer, ctx, arena_alloc.arena_operand);
+            try writer.writeAll(", sizeof(");
+            try emitCType(writer, ctx, arena_alloc.allocated_type, null);
+            try writer.writeAll("), _Alignof(");
+            try emitCType(writer, ctx, arena_alloc.allocated_type, null);
+            try writer.writeAll("))");
         },
         .enum_constructor, .struct_constructor => unreachable,
         .enum_tag => |operand| {
@@ -1456,6 +1495,21 @@ test "MIR C backend emits opaque allocation handle pointer params" {
     try std.testing.expect(std.mem.indexOf(u8, c_source, "struct cpt_Arena;\nstruct cpt_Allocator;\n") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, "int cpt_f_usesArena(struct cpt_Arena* cpt_p_arena_") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, "int cpt_f_usesAllocator(struct cpt_Allocator* cpt_p_allocator_") != null);
+}
+
+test "MIR C backend emits explicit arena allocation helper call" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\alloc int* make(Arena* arena) {
+        \\    return Arena.alloc<int>(arena);
+        \\}
+        \\int main() { return 0; }
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "void* cpt_arena_alloc(struct cpt_Arena* arena, unsigned long size, unsigned long align);") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "(int*)cpt_arena_alloc(cpt_p_arena_") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, ", sizeof(int), _Alignof(int))") != null);
 }
 
 test "MIR C backend emits AllocError as value placeholder" {

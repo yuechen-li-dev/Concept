@@ -1,0 +1,17 @@
+# name: arena alloc generic
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Example;
+
+template<T>
+alloc T* Make(Arena* arena, T seed) {
+    return Arena.alloc<T>(arena);
+}
+
+alloc int* MakeInt(Arena* arena) {
+    return Make(arena, 1);
+}
+

@@ -1,0 +1,24 @@
+# name: arena alloc drop type
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Example;
+
+struct File {
+    int fd;
+};
+
+impl Drop<File> {
+    void drop(File f) {
+    }
+}
+
+alloc File* Bad(Arena* arena) {
+    return Arena.alloc<File>(arena);
+}
+
+=== diagnostics ===
+CON0194
+

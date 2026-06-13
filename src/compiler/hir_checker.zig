@@ -110,7 +110,6 @@ const Checker = struct {
             try self.checkDropParams(function_id, function);
             if (function.body) |body| {
                 if (function.is_compile_time) {
-                    try self.checkCompileTimeFunctionEligibility(function);
                     self.compile_time_context_depth += 1;
                 }
                 if (function.is_unsafe) self.unsafe_depth += 1;
@@ -119,6 +118,7 @@ const Checker = struct {
                     if (function.is_compile_time) self.compile_time_context_depth -= 1;
                 }
                 try self.checkStmt(function_id, body, function.return_type);
+                if (function.is_compile_time) try self.checkCompileTimeFunctionEligibility(function);
             }
             try self.checkOpaqueAllocationTypeSignature(function);
         }
@@ -382,6 +382,24 @@ const Checker = struct {
                 }
                 try self.checkAllocationEffectCall(current_function_id, callee.*, expr.span);
                 break :blk callee.return_type;
+            },
+            .arena_alloc => |arena_alloc| blk: {
+                const arena_type = try self.checkExpr(current_function_id, return_type, arena_alloc.arena_expr);
+                const expected_arena_pointer = try self.module.types.addPointerType(self.module.types.arenaType());
+                if (!sameType(arena_type, expected_arena_pointer)) {
+                    try self.reportAt(.ArenaAllocRequiresArenaPointer, "Arena.alloc requires an Arena* argument", self.exprSpan(arena_alloc.arena_expr));
+                    return error.InvalidSemanticModule;
+                }
+
+                try self.checkArenaAllocationEffect(current_function_id, expr.span);
+                try self.checkArenaAllocatedType(arena_alloc.allocated_type, expr.span);
+
+                const expected_result = try self.module.types.addPointerType(arena_alloc.allocated_type);
+                if (!sameType(arena_alloc.result_type, expected_result)) {
+                    try self.reportAt(.TypeMismatch, "arena allocation result type must be a raw pointer to the allocated type", expr.span);
+                    return error.InvalidSemanticModule;
+                }
+                break :blk arena_alloc.result_type;
             },
             // ─────────────────────────────────────────────────────────────────────────────
             // Match/enum checking
@@ -669,6 +687,15 @@ const Checker = struct {
     // ─────────────────────────────────────────────────────────────────────────────
     // Type helper functions
     // ─────────────────────────────────────────────────────────────────────────────
+
+    fn containsTypeParam(self: *Checker, type_id: types.TypeId) bool {
+        return switch (self.module.types.kind(type_id)) {
+            .type_param => true,
+            .pointer => |pointer| self.containsTypeParam(pointer.pointee),
+            .manual_init => |manual_init| self.containsTypeParam(manual_init.payload),
+            else => false,
+        };
+    }
 
     fn placeType(self: *Checker, target: hir.AssignTarget, span: diagnostics.SourceSpan) CheckError!types.TypeId {
         return switch (target) {
@@ -1045,6 +1072,11 @@ const Checker = struct {
                 for (call.args, 0..) |arg, index| args[index] = try self.cloneExpr(arg, subst, param_map, local_map, span);
                 break :blk .{ .call = .{ .function = call.function, .args = args } };
             },
+            .arena_alloc => |arena_alloc| .{ .arena_alloc = .{
+                .arena_expr = try self.cloneExpr(arena_alloc.arena_expr, subst, param_map, local_map, span),
+                .allocated_type = try self.substituteType(arena_alloc.allocated_type, subst, span),
+                .result_type = try self.substituteType(arena_alloc.result_type, subst, span),
+            } },
             .concept_requirement_call => |call| blk: {
                 var args = try self.allocator.alloc(hir.ExprId, call.args.len);
                 errdefer self.allocator.free(args);
@@ -1238,6 +1270,41 @@ const Checker = struct {
             });
         }
         return error.InvalidSemanticModule;
+    }
+
+    fn checkArenaAllocationEffect(self: *Checker, current_function_id: ?hir.FunctionId, span: diagnostics.SourceSpan) CheckError!void {
+        const caller_id = current_function_id orelse return;
+        const caller = self.module.hir.getFunction(caller_id);
+        if (caller.is_compile_time or self.compile_time_context_depth != 0) {
+            try self.reportAt(.ArenaAllocationInComptimeUnsupported, "arena allocation is not supported during compile-time execution in Phase 12 v0", span);
+            return error.InvalidSemanticModule;
+        }
+        if (caller.allocation_effect == .noalloc) {
+            try self.reportAt(.AllocationInNoAllocFunction, "noalloc function cannot perform arena allocation", span);
+            return error.InvalidSemanticModule;
+        }
+    }
+
+    fn checkArenaAllocatedType(self: *Checker, allocated_type: types.TypeId, span: diagnostics.SourceSpan) CheckError!void {
+        if (self.containsTypeParam(allocated_type)) {
+            try self.reportAt(.ArenaAllocRequiresConcreteType, "Arena.alloc requires a concrete allocated type", span);
+            return error.InvalidSemanticModule;
+        }
+        switch (self.module.types.kind(allocated_type)) {
+            .void => {
+                try self.reportAt(.ArenaAllocRequiresConcreteType, "Arena.alloc cannot allocate void", span);
+                return error.InvalidSemanticModule;
+            },
+            .arena, .allocator => {
+                try self.reportAt(.OpaqueAllocationTypeByValueUnsupported, "Arena and Allocator are opaque allocation handles and cannot be arena-allocated by value in v0", span);
+                return error.InvalidSemanticModule;
+            },
+            else => {},
+        }
+        if (self.module.hasDrop(allocated_type) != null) {
+            try self.reportAt(.ArenaAllocDropTypeUnsupported, "arena allocation of Drop types is not supported in Phase 12 v0", span);
+            return error.InvalidSemanticModule;
+        }
     }
 
     fn checkTestIntrinsic(self: *Checker, current_function_id: ?hir.FunctionId, return_type: types.TypeId, expr: hir.HirExpr, test_intrinsic: hir.HirTestIntrinsic) CheckError!void {

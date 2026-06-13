@@ -170,10 +170,16 @@ pub const DiagnosticCode = enum {
     TestIntrinsicArityMismatch,
     TestRelationUnsupported,
     TestRelationOutsideExpectThat,
+    AllocationInNoAllocFunction,
     AllocationEffectMismatch,
+    ArenaAllocDropTypeUnsupported,
     DuplicateAllocationEffect,
     AllocationEffectInvalidTarget,
     OpaqueAllocationTypeByValueUnsupported,
+    ArenaAllocArityMismatch,
+    ArenaAllocRequiresArenaPointer,
+    ArenaAllocRequiresConcreteType,
+    ArenaAllocationInComptimeUnsupported,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -325,10 +331,16 @@ pub const DiagnosticCode = enum {
             .TestIntrinsicArityMismatch => "CON0185",
             .TestRelationUnsupported => "CON0186",
             .TestRelationOutsideExpectThat => "CON0187",
+            .AllocationInNoAllocFunction => "CON0190",
             .AllocationEffectMismatch => "CON0191",
+            .ArenaAllocDropTypeUnsupported => "CON0194",
             .DuplicateAllocationEffect => "CON0197",
             .AllocationEffectInvalidTarget => "CON0198",
             .OpaqueAllocationTypeByValueUnsupported => "CON0199",
+            .ArenaAllocArityMismatch => "CON0204",
+            .ArenaAllocRequiresArenaPointer => "CON0202",
+            .ArenaAllocRequiresConcreteType => "CON0203",
+            .ArenaAllocationInComptimeUnsupported => "CON0201",
         };
     }
 };
@@ -795,10 +807,16 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0185", DiagnosticCode.TestIntrinsicArityMismatch.format());
     try std.testing.expectEqualStrings("CON0186", DiagnosticCode.TestRelationUnsupported.format());
     try std.testing.expectEqualStrings("CON0187", DiagnosticCode.TestRelationOutsideExpectThat.format());
+    try std.testing.expectEqualStrings("CON0190", DiagnosticCode.AllocationInNoAllocFunction.format());
     try std.testing.expectEqualStrings("CON0191", DiagnosticCode.AllocationEffectMismatch.format());
+    try std.testing.expectEqualStrings("CON0194", DiagnosticCode.ArenaAllocDropTypeUnsupported.format());
     try std.testing.expectEqualStrings("CON0197", DiagnosticCode.DuplicateAllocationEffect.format());
     try std.testing.expectEqualStrings("CON0198", DiagnosticCode.AllocationEffectInvalidTarget.format());
     try std.testing.expectEqualStrings("CON0199", DiagnosticCode.OpaqueAllocationTypeByValueUnsupported.format());
+    try std.testing.expectEqualStrings("CON0201", DiagnosticCode.ArenaAllocationInComptimeUnsupported.format());
+    try std.testing.expectEqualStrings("CON0202", DiagnosticCode.ArenaAllocRequiresArenaPointer.format());
+    try std.testing.expectEqualStrings("CON0203", DiagnosticCode.ArenaAllocRequiresConcreteType.format());
+    try std.testing.expectEqualStrings("CON0204", DiagnosticCode.ArenaAllocArityMismatch.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {

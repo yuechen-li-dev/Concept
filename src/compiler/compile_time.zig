@@ -187,6 +187,7 @@ pub const CompileTimeEvaluator = struct {
             .local_ref => |local| self.frame.lookupLocal(local) orelse error.UnboundLocal,
             .call => |call| try self.evaluateCall(call.function, call.args),
             .target_metadata => |metadata| self.evaluateTargetMetadata(metadata.query),
+            .arena_alloc,
             .concept_requirement_call,
             .enum_constructor,
             .struct_literal,

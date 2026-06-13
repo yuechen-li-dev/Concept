@@ -2454,6 +2454,11 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase12-allocation/valid/noalloc_uses_arena_pointer.valid.conception");
     try expectCheckFixture("../../../language/phase12-allocation/valid/alloc_uses_allocator_pointer.valid.conception");
     try expectCheckFixture("../../../language/phase12-allocation/valid/generic_function_with_arena_pointer.valid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/valid/arena_alloc_int.valid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/valid/arena_alloc_bool.valid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/valid/arena_alloc_struct.valid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/valid/arena_alloc_in_unspecified_function.valid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/valid/arena_alloc_generic.valid.conception");
     try expectParseFixture("../../../language/phase12-allocation/invalid/function_conflicting_alloc_effects.invalid.conception");
     try expectParseFixture("../../../language/phase12-allocation/invalid/function_duplicate_noalloc.invalid.conception");
     try expectParseFixture("../../../language/phase12-allocation/invalid/function_duplicate_alloc.invalid.conception");
@@ -2469,6 +2474,14 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase12-allocation/invalid/allocator_field_access.invalid.conception");
     try expectCheckFixture("../../../language/phase12-allocation/invalid/arena_by_value_unsupported.invalid.conception");
     try expectCheckFixture("../../../language/phase12-allocation/invalid/allocator_by_value_unsupported.invalid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/invalid/arena_alloc_in_noalloc.invalid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/invalid/arena_alloc_requires_arena_pointer.invalid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/invalid/arena_alloc_missing_type_arg.invalid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/invalid/arena_alloc_wrong_arity.invalid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/invalid/arena_alloc_drop_type.invalid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/invalid/arena_alloc_opaque_arena.invalid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/invalid/arena_alloc_opaque_allocator.invalid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/invalid/arena_alloc_comptime.invalid.conception");
 
     try expectRunFixture("../../../language/phase10-ownership/valid/move_struct_local_run.valid.conception");
     try expectRunFixture("../../../language/phase10-ownership/valid/move_struct_argument_run.valid.conception");

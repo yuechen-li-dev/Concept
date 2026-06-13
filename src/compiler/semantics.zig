@@ -1366,6 +1366,9 @@ const BodyLowerer = struct {
                 };
             },
             .call => |call| {
+                if (self.isArenaAllocCall(call)) {
+                    return try self.lowerArenaAlloc(call);
+                }
                 if (self.maybeTestIntrinsicCall(call)) |intrinsic| {
                     return try self.lowerTestIntrinsic(call, intrinsic);
                 }
@@ -1394,6 +1397,10 @@ const BodyLowerer = struct {
                 @memcpy(owned, args.items);
 
                 if (std.mem.eql(u8, call.callee.text, "manualAssumeInit")) {
+                    if (call.type_args.len != 0) {
+                        try self.collector.diagnostics.append(diagnostics.manualInitInvalidOperation(call.span));
+                        return null;
+                    }
                     if (owned.len != 1) {
                         try self.collector.diagnostics.append(diagnostics.manualInitInvalidOperation(call.span));
                         return null;
@@ -1878,6 +1885,7 @@ const BodyLowerer = struct {
                 }
             },
             .call => |call| self.collector.module.hir.getFunction(call.function).return_type,
+            .arena_alloc => |arena_alloc| arena_alloc.result_type,
             .field_access => |field_access| blk: {
                 const receiver_type = (try self.inferExprType(field_access.receiver)) orelse return null;
                 const receiver_kind = self.collector.module.types.kind(receiver_type);
@@ -1935,6 +1943,56 @@ const BodyLowerer = struct {
             },
             else => false,
         };
+    }
+
+    fn isArenaAllocCall(self: *BodyLowerer, call: ast.Expr.CallExpr) bool {
+        _ = self;
+        const qualifier = call.qualifier orelse return false;
+        return std.mem.eql(u8, qualifier.text, "Arena") and std.mem.eql(u8, call.callee.text, "alloc");
+    }
+
+    fn lowerArenaAlloc(self: *BodyLowerer, call: ast.Expr.CallExpr) !?hir.ExprId {
+        if (call.type_args.len != 1) {
+            try self.collector.diagnostics.append(diagnostics.Diagnostic.init(
+                .ArenaAllocArityMismatch,
+                .@"error",
+                "Arena.alloc requires exactly one type argument",
+                call.span,
+            ));
+            return null;
+        }
+        if (call.args.len != 1) {
+            try self.collector.diagnostics.append(diagnostics.Diagnostic.init(
+                .ArenaAllocArityMismatch,
+                .@"error",
+                "Arena.alloc requires exactly one arena argument",
+                call.span,
+            ));
+            return null;
+        }
+
+        const allocated_type = (try self.resolveTypeNameInCurrentFunction(call.type_args[0])) orelse return null;
+        const arena_expr = (try self.lowerExpr(call.args[0].*)) orelse return null;
+        const result_type = try self.collector.module.types.addPointerType(allocated_type);
+        return try self.collector.module.hir.addExpr(.{ .arena_alloc = .{
+            .arena_expr = arena_expr,
+            .allocated_type = allocated_type,
+            .result_type = result_type,
+        } }, call.span);
+    }
+
+    fn resolveTypeNameInCurrentFunction(self: *BodyLowerer, type_name: ast.TypeName) !?types.TypeId {
+        var scope = TypeParamScope.init(self.collector.allocator);
+        defer scope.deinit();
+        if (self.function_id) |function_id| {
+            if (self.collector.module.hir.genericFunctionFor(function_id)) |generic_id| {
+                const generic = self.collector.module.hir.getGenericFunction(generic_id);
+                for (generic.type_params) |type_param| {
+                    try scope.put(type_param.name, type_param.type_id);
+                }
+            }
+        }
+        return self.collector.resolveTypeNameScoped(type_name, &scope);
     }
     // ─────────────────────────────────────────────────────────────────────────────
     // Decide lowering

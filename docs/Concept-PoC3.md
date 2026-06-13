@@ -38,9 +38,10 @@ Concept is not a full formal specification yet.
 This document is a design constitution: it defines the language identity, core constraints, major semantic commitments, and implementation direction. Future documents should define grammar, MIR format, module layout, ABI details, standard library APIs, package/build tooling, and implementation milestones.
 
 Implementation note: Phase 12 now includes function-level `alloc`/`noalloc`
-syntax, direct `noalloc` call-edge checking, and compiler-known allocation
-surface types. Allocation operations, arena behavior, transitive checking, and
-hidden heap behavior remain unimplemented.
+syntax, direct `noalloc` call-edge checking, compiler-known allocation surface
+types, and a narrow `Arena.alloc<T>(arena)` intrinsic for non-Drop concrete
+types. Arena reset/destroy, allocation failure paths, transitive checking,
+runtime allocation support, and hidden heap behavior remain unimplemented.
 
 ---
 

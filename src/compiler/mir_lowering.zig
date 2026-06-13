@@ -408,6 +408,7 @@ const FunctionLowerer = struct {
             .manual_init_assume => |slot| try self.lowerManualInitAssume(expr, slot, block_id),
             .binary => |binary| try self.lowerBinary(expr, binary, block_id),
             .call => |call| try self.lowerCall(expr, call, block_id),
+            .arena_alloc => |arena_alloc| try self.lowerArenaAlloc(expr, arena_alloc, block_id),
             .concept_requirement_call, .target_metadata, .test_intrinsic => error.InvalidMirLowering,
             .enum_constructor => |constructor| try self.lowerEnumConstructor(expr, constructor, block_id),
             .struct_literal => |literal| try self.lowerStructLiteral(expr, literal, block_id),
@@ -554,6 +555,19 @@ const FunctionLowerer = struct {
             ),
         });
         return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = current };
+    }
+
+    fn lowerArenaAlloc(self: *FunctionLowerer, expr: hir.HirExpr, arena_alloc: anytype, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const arena_lowered = try self.lowerExpr(arena_alloc.arena_expr, block_id);
+        const temp = try self.addTemp(arena_alloc.result_type);
+        try self.store.appendStatement(arena_lowered.block, .{
+            .span = expr.span,
+            .kind = mir.MirStatementKind.assignTo(
+                mir.MirPlace.localPlace(temp),
+                mir.MirRvalue.arenaAlloc(arena_lowered.operand, arena_alloc.allocated_type, arena_alloc.result_type),
+            ),
+        });
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = arena_lowered.block };
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
@@ -827,6 +841,7 @@ const FunctionLowerer = struct {
                 .less, .less_equal, .greater, .greater_equal, .equal_equal, .bang_equal, .logical_and, .logical_or => self.semantic_module.types.boolType(),
             },
             .call => |call| self.semantic_module.hir.getFunction(call.function).return_type,
+            .arena_alloc => |arena_alloc| arena_alloc.result_type,
             .concept_requirement_call, .test_intrinsic => error.InvalidMirLowering,
             .target_metadata => |metadata| metadata.query.typeOf(self.semantic_module.types),
             .enum_constructor => |constructor| try self.enumType(constructor.enum_id),

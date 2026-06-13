@@ -101,7 +101,8 @@ Runtime-failing test examples are not compile-invalid fixtures. A `.con_test` fi
 
 Phase 12 fixtures live under `language/phase12-allocation/` and currently cover
 the P12-M1 allocation-effect syntax and metadata scaffold, P12-M2 direct
-call-edge checking, and P12-M3 compiler-known allocation surface types. Valid parse fixtures cover `alloc`, `noalloc`,
+call-edge checking, P12-M3 compiler-known allocation surface types, and P12-M4
+arena allocation. Valid parse fixtures cover `alloc`, `noalloc`,
 omitted/default effects, and coexistence with `unsafe`, `comptime`, and
 template functions. Valid check fixtures cover `noalloc` callers calling known
 `noalloc` callees, recursive `noalloc` calls, generic `noalloc` calls,
@@ -109,6 +110,8 @@ comptime `noalloc` calls, unsafe/noalloc coexistence, and permissive `alloc` or
 unspecified callers. P12-M3 valid fixtures cover `Arena*` and `Allocator*`
 parameter positions, `AllocError` type positions, allocation surface types in
 `noalloc` functions, `alloc` functions, and generic functions.
+P12-M4 valid fixtures cover `Arena.alloc<T>(arena)` for `int`, `bool`, structs,
+unspecified-effect functions, and generic functions after instantiation.
 
 Invalid fixtures cover conflicting `alloc`/`noalloc` specifiers, duplicate
 effect specifiers, the reachable non-function target diagnostic, and `noalloc`
@@ -116,11 +119,15 @@ callers directly calling `alloc` or unspecified callees, including generic and
 comptime cases. P12-M3 invalid fixtures cover rejected `Arena`/`Allocator`
 struct literals, field access on opaque allocation handles, and by-value
 opaque-handle signatures.
+P12-M4 invalid fixtures cover arena allocation inside `noalloc`, missing type
+arguments, wrong value arity, non-`Arena*` operands, Drop allocated types,
+opaque allocation handles allocated by value, and compile-time allocation
+rejection.
 
-Phase 12 fixtures intentionally do not cover real allocation operations, arena
-allocation, allocator runtime behavior, transitive effect checking, profile
-defaults, region checking, ID stores, or allocation backend lowering because
-those surfaces do not exist yet.
+Phase 12 fixtures intentionally do not execute arena allocation at runtime. They
+do not cover arena reset/destroy, allocator runtime behavior, allocation failure
+paths, transitive effect checking, profile defaults, region checking, ID stores,
+or runtime-backed allocation because those remain future Phase 12 milestones.
 
 ## `.conception` format
 

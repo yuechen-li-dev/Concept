@@ -144,6 +144,11 @@ pub const MirRvalue = union(enum) {
         function: hir.FunctionId,
         args: []MirOperand,
     },
+    arena_alloc: struct {
+        arena_operand: MirOperand,
+        allocated_type: types.TypeId,
+        result_type: types.TypeId,
+    },
     enum_constructor: struct {
         enum_id: hir.EnumId,
         variant_id: hir.VariantId,
@@ -196,6 +201,10 @@ pub const MirRvalue = union(enum) {
         return .{ .call = .{ .function = function, .args = owned_args } };
     }
 
+    pub fn arenaAlloc(arena_operand: MirOperand, allocated_type: types.TypeId, result_type: types.TypeId) MirRvalue {
+        return .{ .arena_alloc = .{ .arena_operand = arena_operand, .allocated_type = allocated_type, .result_type = result_type } };
+    }
+
     pub fn enumConstructor(allocator: std.mem.Allocator, enum_id: hir.EnumId, variant_id: hir.VariantId, args: []const MirOperand) !MirRvalue {
         const owned_args = try cloneOperands(allocator, args);
         return .{ .enum_constructor = .{ .enum_id = enum_id, .variant_id = variant_id, .args = owned_args } };
@@ -236,6 +245,7 @@ pub const MirRvalue = union(enum) {
                 try binary_rvalue.right.clone(allocator),
             ),
             .call => |call_rvalue| try MirRvalue.callFunction(allocator, call_rvalue.function, call_rvalue.args),
+            .arena_alloc => |arena_alloc| MirRvalue.arenaAlloc(try arena_alloc.arena_operand.clone(allocator), arena_alloc.allocated_type, arena_alloc.result_type),
             .enum_constructor => |constructor| try MirRvalue.enumConstructor(allocator, constructor.enum_id, constructor.variant_id, constructor.args),
             .struct_constructor => |constructor| try MirRvalue.structConstructor(allocator, constructor.struct_id, constructor.fields),
             .enum_tag => |operand| MirRvalue.enumTag(try operand.clone(allocator)),
@@ -260,6 +270,7 @@ pub const MirRvalue = union(enum) {
                 deinitOperands(allocator, call_rvalue.args);
                 if (call_rvalue.args.len > 0) allocator.free(call_rvalue.args);
             },
+            .arena_alloc => |arena_alloc| arena_alloc.arena_operand.deinit(allocator),
             .enum_constructor => |constructor| {
                 deinitOperands(allocator, constructor.args);
                 if (constructor.args.len > 0) allocator.free(constructor.args);
@@ -755,6 +766,11 @@ fn writeRvalueDebug(writer: *std.Io.Writer, rvalue: MirRvalue) !void {
                 if (index != 0) try writer.writeAll(", ");
                 try writeOperandDebug(writer, arg);
             }
+            try writer.writeByte(')');
+        },
+        .arena_alloc => |arena_alloc| {
+            try writer.print("ArenaAlloc {f} -> {f}(", .{ arena_alloc.allocated_type, arena_alloc.result_type });
+            try writeOperandDebug(writer, arena_alloc.arena_operand);
             try writer.writeByte(')');
         },
         .enum_constructor => |constructor| {

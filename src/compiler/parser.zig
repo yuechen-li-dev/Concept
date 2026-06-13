@@ -1505,6 +1505,37 @@ pub const Parser = struct {
                         expr = try self.finishStructLiteralExpr(allocator, expr, identifier);
                     }
                 },
+                .less => {
+                    const call_target = switch (expr.*) {
+                        .identifier => |identifier| CallTarget{ .unqualified = identifier },
+                        .field_access => |field_access| blk: {
+                            const receiver = switch (field_access.receiver.*) {
+                                .identifier => |receiver_identifier| receiver_identifier,
+                                else => break,
+                            };
+                            break :blk CallTarget{ .qualified = .{ .qualifier = receiver, .callee = field_access.field_name } };
+                        },
+                        else => break,
+                    };
+                    var type_args = self.parseOptionalGenericTypeArgs(allocator) catch |err| switch (err) {
+                        error.OutOfMemory => return err,
+                    };
+                    errdefer {
+                        for (type_args) |type_arg| type_arg.deinit(allocator);
+                        allocator.free(type_args);
+                    }
+                    if (self.current().kind != .left_paren) {
+                        self.report(.UnexpectedToken, "expected '(' after call type arguments", self.current().span) catch return error.OutOfMemory;
+                        for (type_args) |type_arg| type_arg.deinit(allocator);
+                        allocator.free(type_args);
+                        return error.ParseFailed;
+                    }
+                    expr = switch (call_target) {
+                        .unqualified => |identifier| try self.finishCallExprWithTypeArgs(allocator, expr, identifier, type_args),
+                        .qualified => |qualified| try self.finishQualifiedCallExprWithTypeArgs(allocator, expr, qualified.qualifier, qualified.callee, type_args),
+                    };
+                    type_args = &.{};
+                },
                 .dot => expr = try self.finishFieldAccessExpr(allocator, expr),
                 .arrow => {
                     self.report(.UnexpectedToken, "'->' field access is not supported; use '.' on struct values", self.current().span) catch return error.OutOfMemory;
@@ -1515,6 +1546,14 @@ pub const Parser = struct {
         }
         return expr;
     }
+
+    const CallTarget = union(enum) {
+        unqualified: ast.Expr.IdentifierExpr,
+        qualified: struct {
+            qualifier: ast.Expr.IdentifierExpr,
+            callee: ast.NameSegment,
+        },
+    };
 
     fn finishFieldAccessExpr(self: *Parser, allocator: std.mem.Allocator, receiver: *ast.Expr) ParseExprError!*ast.Expr {
         const dot = self.advance();
@@ -1533,6 +1572,10 @@ pub const Parser = struct {
     }
 
     fn finishCallExpr(self: *Parser, allocator: std.mem.Allocator, callee_expr: *ast.Expr, identifier: ast.Expr.IdentifierExpr) ParseExprError!*ast.Expr {
+        return self.finishCallExprWithTypeArgs(allocator, callee_expr, identifier, &.{});
+    }
+
+    fn finishCallExprWithTypeArgs(self: *Parser, allocator: std.mem.Allocator, callee_expr: *ast.Expr, identifier: ast.Expr.IdentifierExpr, type_args: []ast.TypeName) ParseExprError!*ast.Expr {
         const left_paren = self.advance();
         _ = left_paren;
         var args = std.ArrayList(*ast.Expr).init(allocator);
@@ -1577,6 +1620,7 @@ pub const Parser = struct {
         allocator.destroy(callee_expr);
         node.* = .{ .call = .{
             .callee = identifier.name,
+            .type_args = type_args,
             .args = owned_args,
             .span = ast.spanFromBounds(identifier.span.start, spanEnd(end_span)),
         } };
@@ -1589,6 +1633,17 @@ pub const Parser = struct {
         callee_expr: *ast.Expr,
         qualifier: ast.Expr.IdentifierExpr,
         callee: ast.NameSegment,
+    ) ParseExprError!*ast.Expr {
+        return self.finishQualifiedCallExprWithTypeArgs(allocator, callee_expr, qualifier, callee, &.{});
+    }
+
+    fn finishQualifiedCallExprWithTypeArgs(
+        self: *Parser,
+        allocator: std.mem.Allocator,
+        callee_expr: *ast.Expr,
+        qualifier: ast.Expr.IdentifierExpr,
+        callee: ast.NameSegment,
+        type_args: []ast.TypeName,
     ) ParseExprError!*ast.Expr {
         const left_paren = self.advance();
         _ = left_paren;
@@ -1635,6 +1690,7 @@ pub const Parser = struct {
         node.* = .{ .call = .{
             .qualifier = qualifier.name,
             .callee = callee,
+            .type_args = type_args,
             .args = owned_args,
             .span = ast.spanFromBounds(qualifier.span.start, spanEnd(end_span)),
         } };
@@ -5026,6 +5082,19 @@ test "parses call expression with multiple args" {
         else => return error.ExpectedReturnStmt,
     };
     try std.testing.expectEqual(@as(usize, 2), call.args.len);
+}
+
+test "parses qualified generic call expression" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; alloc int* make(Arena* arena) { return Arena.alloc<int>(arena); }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Call Arena.alloc<int>") != null);
 }
 
 test "parses call nested in binary expression" {

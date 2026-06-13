@@ -316,6 +316,7 @@ const Runner = struct {
             .deref,
             .move_expr,
             .manual_init_assume,
+            .arena_alloc,
             .try_expr,
             .concept_requirement_call,
             .enum_constructor,

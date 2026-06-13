@@ -1,0 +1,15 @@
+# name: arena alloc requires arena pointer
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Example;
+
+alloc int* Bad(int notArena) {
+    return Arena.alloc<int>(notArena);
+}
+
+=== diagnostics ===
+CON0202
+

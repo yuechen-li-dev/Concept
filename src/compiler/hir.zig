@@ -303,6 +303,11 @@ pub const HirExprKind = union(enum) {
     local_ref: LocalId,
     param_ref: ParamId,
     call: struct { function: FunctionId, args: []ExprId },
+    arena_alloc: struct {
+        arena_expr: ExprId,
+        allocated_type: types.TypeId,
+        result_type: types.TypeId,
+    },
     concept_requirement_call: struct { concept_id: ConceptId, requirement_index: u32, args: []ExprId },
     enum_constructor: struct { enum_id: EnumId, variant_id: VariantId, args: []ExprId },
     struct_literal: struct { struct_id: StructId, type_id: types.TypeId, fields: []HirStructLiteralField },
@@ -1237,6 +1242,10 @@ pub const HirStore = struct {
             .call => |call| {
                 try writer.print("Call {f}\n", .{call.function});
                 for (call.args) |arg| try self.writeExprDebug(writer, arg, depth + 1);
+            },
+            .arena_alloc => |arena_alloc| {
+                try writer.print("ArenaAlloc {f} -> {f}\n", .{ arena_alloc.allocated_type, arena_alloc.result_type });
+                try self.writeExprDebug(writer, arena_alloc.arena_expr, depth + 1);
             },
             .concept_requirement_call => |call| {
                 try writer.print("ConceptRequirementCall {f} #{d}\n", .{ call.concept_id, call.requirement_index });

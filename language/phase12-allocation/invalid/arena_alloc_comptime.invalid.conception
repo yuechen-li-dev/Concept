@@ -1,0 +1,14 @@
+# name: arena alloc comptime
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Example;
+
+comptime alloc int* Bad(Arena* arena) {
+    return Arena.alloc<int>(arena);
+}
+
+=== diagnostics ===
+CON0201

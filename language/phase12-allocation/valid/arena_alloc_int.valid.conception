@@ -1,0 +1,13 @@
+# name: arena alloc int
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Example;
+
+alloc int* MakeInt(Arena* arena) {
+    int* value = Arena.alloc<int>(arena);
+    return value;
+}
+

@@ -370,6 +370,7 @@ const Analyzer = struct {
                 try self.readOperand(states, binary.right, span);
             },
             .call => |call| for (call.args) |arg| try self.readOperand(states, arg, span),
+            .arena_alloc => |arena_alloc| try self.readOperand(states, arena_alloc.arena_operand, span),
             .enum_constructor => |constructor| for (constructor.args) |arg| try self.readOperand(states, arg, span),
             .struct_constructor => |constructor| for (constructor.fields) |field| try self.readOperand(states, field.value, span),
             .enum_tag => |operand| try self.readOperand(states, operand, span),

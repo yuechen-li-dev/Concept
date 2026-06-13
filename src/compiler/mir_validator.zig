@@ -319,6 +319,26 @@ const Validator = struct {
                 }
                 break :blk callee.return_type;
             },
+            .arena_alloc => |arena_alloc| blk: {
+                try self.requireValidType(arena_alloc.allocated_type, span);
+                try self.requireValidType(arena_alloc.result_type, span);
+                const arena_operand_type = try self.operandType(function_id, arena_alloc.arena_operand, span);
+                const expected_arena_pointer = self.semantic_module.types.pointerType(self.semantic_module.types.arenaType()) orelse {
+                    try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                    break :blk null;
+                };
+                if (arena_operand_type != null and !sameType(arena_operand_type.?, expected_arena_pointer)) {
+                    try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                }
+                const expected_result = self.semantic_module.types.pointerType(arena_alloc.allocated_type) orelse {
+                    try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                    break :blk null;
+                };
+                if (!sameType(arena_alloc.result_type, expected_result)) {
+                    try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                }
+                break :blk arena_alloc.result_type;
+            },
             .struct_constructor => |constructor| blk: {
                 if (constructor.struct_id.index >= self.semantic_module.hir.structs.items.len) {
                     try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);

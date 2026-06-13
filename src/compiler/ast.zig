@@ -386,7 +386,13 @@ pub const Expr = union(enum) {
     pub const TryExpr = struct { operand: *Expr, span: SourceSpan };
     pub const CompileTimeExpr = struct { operand: *Expr, span: SourceSpan };
     pub const BinaryExpr = struct { op: BinaryOp, left: *Expr, right: *Expr, span: SourceSpan };
-    pub const CallExpr = struct { qualifier: ?NameSegment = null, callee: NameSegment, args: []*Expr, span: SourceSpan };
+    pub const CallExpr = struct {
+        qualifier: ?NameSegment = null,
+        callee: NameSegment,
+        type_args: []TypeName = &.{},
+        args: []*Expr,
+        span: SourceSpan,
+    };
     pub const EnumConstructorExpr = struct { enum_name: NameSegment, variant_name: NameSegment, args: []*Expr, span: SourceSpan };
     pub const StructLiteralExpr = struct { type_name: NameSegment, fields: []StructLiteralField, span: SourceSpan };
     pub const StructLiteralField = struct { name: NameSegment, value: *Expr, span: SourceSpan };
@@ -451,6 +457,10 @@ pub const Expr = union(enum) {
                 allocator.destroy(expr.right);
             },
             .call => |expr| {
+                for (expr.type_args) |type_arg| {
+                    type_arg.deinit(allocator);
+                }
+                if (expr.type_args.len > 0) allocator.free(expr.type_args);
                 for (expr.args) |arg| {
                     arg.deinit(allocator);
                     allocator.destroy(arg);
@@ -551,6 +561,14 @@ pub const Expr = union(enum) {
                     try writer.writeByte('.');
                 }
                 try writer.writeAll(expr.callee.text);
+                if (expr.type_args.len != 0) {
+                    try writer.writeByte('<');
+                    for (expr.type_args, 0..) |type_arg, index| {
+                        if (index != 0) try writer.writeAll(", ");
+                        try type_arg.write(writer);
+                    }
+                    try writer.writeByte('>');
+                }
                 try writer.writeByte('\n');
                 for (expr.args) |arg| try arg.writeDebug(writer, depth + 1);
             },

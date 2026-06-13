@@ -281,7 +281,7 @@ Future operations remain reserved and unimplemented:
 
 ```cpp
 Arena arena = Arena.create();       // future
-T* value = Arena.alloc<T>(arena);   // future P12-M4
+T* value = Arena.alloc<T>(arena);   // P12-M4
 Arena.reset(arena);                 // future P12-M5
 Arena.destroy(arena);               // future P12-M5
 ```
@@ -290,6 +290,55 @@ P12-M3 does not add `Arena.alloc<T>`, `Arena.create`, reset/destroy semantics,
 allocator runtime code, hidden heap behavior, ID stores, MIR allocation
 operations, backend allocation lowering beyond opaque pointer spelling, region
 lifetime checking, arena pointer escape analysis, or Drop-in-arena behavior.
+
+### P12-M4 implementation status
+
+P12-M4 adds a narrow compiler-recognized arena allocation intrinsic with the
+source spelling:
+
+```cpp
+alloc Vec2* MakeVec(Arena* arena) {
+    Vec2* value = Arena.alloc<Vec2>(arena);
+    return value;
+}
+```
+
+`Arena.alloc<T>(arena)` requires exactly one explicit type argument and exactly
+one value argument. The value argument must have type `Arena*`. The result type
+is the raw pointer type `T*`.
+
+Arena allocation is an allocation operation. It is accepted inside functions
+marked `alloc`, accepted inside functions with unspecified allocation effect for
+now, and rejected inside `noalloc` functions with
+`CON0190 AllocationInNoAllocFunction`. This diagnostic is distinct from the
+P12-M2 direct call-edge diagnostic `CON0191 AllocationEffectMismatch`.
+
+P12-M4 v0 supports only concrete non-Drop allocated types. Allocation of a type
+with a `Drop<T>` impl is rejected with
+`CON0194 ArenaAllocDropTypeUnsupported`. Allocation of `Arena` or `Allocator`
+by value is rejected with `CON0199 OpaqueAllocationTypeByValueUnsupported`.
+`AllocError` remains a copyable value placeholder and may be allocated.
+
+The HIR contains a dedicated `arena_alloc` expression carrying the arena
+operand, allocated type, result type, and source span. MIR lowers this to an
+explicit `ArenaAlloc` rvalue. The MIR C backend emits an external helper
+declaration and an auditable helper call:
+
+```c
+void* cpt_arena_alloc(struct cpt_Arena* arena, unsigned long size, unsigned long align);
+(T*)cpt_arena_alloc(arena, sizeof(T), _Alignof(T))
+```
+
+The backend does not provide a runtime implementation and does not silently use
+`malloc`. Hosted runtime support remains future work.
+
+P12-M4 does not add arena create/reset/destroy, allocation failure handling,
+`AllocError` return paths, destructor lists, arena allocation of Drop types,
+`Arena.allocUninit<T>`, `Arena.allocInit<T>`, region lifetime checking, pointer
+escape analysis, pointer field access sugar, `->`, auto-deref, ID stores, or a
+hidden global heap. Arena allocation returns a raw pointer; existing raw pointer
+rules still apply. The pointer value is initialized, but pointed-to storage
+initializedness is not tracked by Phase 12 v0.
 
 ## 4. Profiles and hidden heap policy
 
@@ -711,8 +760,8 @@ P12-M2  direct allocation-effect checking scaffold
 P12-M3  Core allocation surface: AllocError, Arena, allocator placeholders
 P12-M4  Arena allocation intrinsic for non-Drop concrete types
 P12-M5  Arena reset/destroy semantics and invalidation rules
-P12-M6  Drop interaction hardening: reject Drop arena allocation in v0
-P12-M7  MIR allocation/effect representation and C backend v0
+P12-M6  Drop interaction hardening follow-ups
+P12-M7  MIR allocation/effect representation and C backend hardening
 P12-M8  ID-based store design/prototype and examples
 P12-M9  Closeout
 ```

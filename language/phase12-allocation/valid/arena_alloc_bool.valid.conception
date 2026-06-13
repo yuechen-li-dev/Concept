@@ -1,0 +1,13 @@
+# name: arena alloc bool
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Example;
+
+alloc bool* MakeBool(Arena* arena) {
+    bool* value = Arena.alloc<bool>(arena);
+    return value;
+}
+
