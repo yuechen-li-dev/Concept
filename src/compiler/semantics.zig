@@ -954,6 +954,11 @@ const Collector = struct {
         var requirement_names = std.AutoHashMap(interner.SymbolId, source.SourceSpan).init(self.allocator);
         defer requirement_names.deinit();
 
+        if (interface_decl.signatures.len == 0) {
+            try self.diagnostics.append(diagnostics.interfaceRequiresRequirement(interface_decl.span));
+            return;
+        }
+
         for (interface_decl.signatures) |signature| {
             const requirement_symbol = try self.module.interner.intern(signature.name.base.text);
             if (requirement_names.contains(requirement_symbol)) {
@@ -2931,6 +2936,22 @@ fn interfaceItem(name: []const u8, start: usize) ast.Item {
     } };
 }
 
+fn interfaceItemWithOneRequirement(name: []const u8, start: usize) ast.Item {
+    const static = struct {
+        const signatures = [_]ast.SignatureDecl{.{
+            .return_type = typeName("void", 0),
+            .name = .{ .base = nameSegment("Requirement", 0), .span = .{ .start = 0, .length = 11 } },
+            .params = &.{},
+            .span = .{ .start = 0, .length = 20 },
+        }};
+    };
+    return .{ .interface_decl = .{
+        .name = nameSegment(name, start + 10),
+        .signatures = @constCast(static.signatures[0..]),
+        .span = .{ .start = start, .length = name.len + 40 },
+    } };
+}
+
 fn implItem(start: usize) ast.Item {
     return .{ .impl_decl = .{
         .concept_name = typeName("Drop", start + 5),
@@ -3777,7 +3798,7 @@ test "semantic collection stores concept and interface top-level items" {
     var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
     defer diagnostics_bag.deinit();
 
-    var module = try collectItems(&.{ conceptItem("Hashable", 0), interfaceItem("Renderer", 40), structItem("Texture", 100) }, &diagnostics_bag);
+    var module = try collectItems(&.{ conceptItem("Hashable", 0), interfaceItemWithOneRequirement("Renderer", 40), structItem("Texture", 100) }, &diagnostics_bag);
     defer module.deinit();
 
     try std.testing.expectEqual(@as(usize, 2), module.hir.items.items.len);
@@ -3860,7 +3881,11 @@ test "semantic collection lowers interface requirements into HIR debug" {
 }
 
 test "semantic collection rejects duplicate interface top-level name" {
-    try expectOneSemanticDiagnostic(&.{ functionItem("Writer", 0), interfaceItem("Writer", 40) }, .DuplicateTopLevelName);
+    try expectOneSemanticDiagnostic(&.{ functionItem("Writer", 0), interfaceItemWithOneRequirement("Writer", 40) }, .DuplicateTopLevelName);
+}
+
+test "semantic collection rejects empty interface" {
+    try expectOneSemanticDiagnostic(&.{interfaceItem("Marker", 0)}, .InterfaceRequiresRequirement);
 }
 
 test "semantic collection rejects duplicate interface requirement" {
@@ -3883,6 +3908,30 @@ test "semantic collection rejects duplicate interface requirement" {
         .name = nameSegment("Writer", 0),
         .signatures = signatures[0..],
         .span = .{ .start = 0, .length = 60 },
+    } }}, .DuplicateInterfaceRequirement);
+}
+
+test "semantic collection rejects interface requirement overload by arity" {
+    var second_params = [_]ast.ParamDecl{paramDecl("int", "value", 55)};
+    var signatures = [_]ast.SignatureDecl{
+        .{
+            .return_type = typeName("void", 20),
+            .name = .{ .base = nameSegment("Write", 25), .span = .{ .start = 25, .length = 5 } },
+            .params = &.{},
+            .span = .{ .start = 20, .length = 12 },
+        },
+        .{
+            .return_type = typeName("void", 40),
+            .name = .{ .base = nameSegment("Write", 45), .span = .{ .start = 45, .length = 5 } },
+            .params = second_params[0..],
+            .span = .{ .start = 40, .length = 28 },
+        },
+    };
+
+    try expectOneSemanticDiagnostic(&.{.{ .interface_decl = .{
+        .name = nameSegment("Writer", 0),
+        .signatures = signatures[0..],
+        .span = .{ .start = 0, .length = 80 },
     } }}, .DuplicateInterfaceRequirement);
 }
 

@@ -1,0 +1,14 @@
+# name: interface by value interface param
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Interfaces;
+
+interface Writer {
+    void Take(Writer value);
+};
+
+=== diagnostics ===
+CON0255

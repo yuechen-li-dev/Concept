@@ -48,11 +48,14 @@ frames, `Step`, `Complete`, `Result`, and C backend support for the
 literal-transition subset. Match/decide transition runtime lowering remains
 deferred and fails clearly during backend emission rather than silently
 generating unsupported code. Phase 14 has begun: M0 added the design document
-for interfaces and `dyn` dispatch, and M1 preserves interface declarations and
-requirement signatures as top-level HIR declarations. Concepts remain
-compile-time constraints, interfaces are runtime dispatch contracts,
-`dyn Interface&` is a borrowed fat reference, and dyn parsing, vtables, owning
-dyn boxes, inheritance, RTTI, and hidden heap allocation remain deferred.
+for interfaces and `dyn` dispatch, M1 preserves interface declarations and
+requirement signatures as top-level HIR declarations, and M2 validates the v0
+requirement shape. Concepts remain compile-time constraints, interfaces are
+runtime dispatch contracts, empty runtime interfaces are rejected, interface
+requirements may use ordinary resolved types but not interface types, and
+`dyn Interface&` is a borrowed fat reference design target. Dyn parsing,
+vtables, owning dyn boxes, inheritance, RTTI, and hidden heap allocation remain
+deferred.
 Deferred Phase 12
 work includes
 `Arena.create`, hosted runtime helper implementation, allocation failure
@@ -1288,6 +1291,12 @@ interface:
     has representation and ABI concerns
     used behind dyn
 ```
+
+Phase 14 v0 accepts non-empty interface declarations as HIR-only runtime
+contracts. Requirement names and parameter names must be unique, requirement
+types must resolve, overloads are rejected by name, and interface types may not
+be used directly in requirement return or parameter positions before `dyn`
+exists.
 
 Example concept:
 

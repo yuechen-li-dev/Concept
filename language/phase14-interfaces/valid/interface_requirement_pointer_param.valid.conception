@@ -1,0 +1,15 @@
+# name: interface requirement pointer param
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Interfaces;
+
+struct Buffer {
+    int length;
+};
+
+interface Writer {
+    void Write(Buffer* buffer);
+};

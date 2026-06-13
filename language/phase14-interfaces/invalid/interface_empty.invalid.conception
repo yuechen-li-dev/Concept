@@ -1,10 +1,13 @@
 # name: interface empty
 # phase: check
 # check: declarations
-# expect: pass
+# expect: fail
 
 === source ===
 module Interfaces;
 
 interface Marker {
 };
+
+=== diagnostics ===
+CON0241

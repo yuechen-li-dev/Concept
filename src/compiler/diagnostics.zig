@@ -112,6 +112,7 @@ pub const DiagnosticCode = enum {
     UnknownConceptRequirementCall,
     InvalidConceptRequirementCall,
     DuplicateInterfaceRequirement,
+    InterfaceRequiresRequirement,
     InterfaceRuntimeUnsupported,
     CompileTimeUnsupportedExpression,
     CompileTimeUnsupportedStatement,
@@ -284,6 +285,7 @@ pub const DiagnosticCode = enum {
             .UnknownConceptRequirementCall => "CON0114",
             .InvalidConceptRequirementCall => "CON0115",
             .DuplicateInterfaceRequirement => "CON0240",
+            .InterfaceRequiresRequirement => "CON0241",
             .InterfaceRuntimeUnsupported => "CON0255",
             .CompileTimeUnsupportedExpression => "CON0120",
             .CompileTimeTypeMismatch => "CON0121",
@@ -657,13 +659,22 @@ pub fn duplicateInterfaceRequirement(span: SourceSpan) Diagnostic {
     return Diagnostic.init(.DuplicateInterfaceRequirement, .@"error", "duplicate interface requirement", span);
 }
 
+pub fn interfaceRequiresRequirement(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .InterfaceRequiresRequirement,
+        .@"error",
+        "interface requires at least one requirement",
+        span,
+    ).withHelp("Phase 14 v0 rejects empty runtime interfaces; use a marker concept for static marker behavior");
+}
+
 pub fn interfaceRuntimeUnsupported(span: SourceSpan) Diagnostic {
     return Diagnostic.init(
         .InterfaceRuntimeUnsupported,
         .@"error",
         "interface runtime use is not implemented yet",
         span,
-    ).withHelp("Phase 14 M1 preserves interface declarations in HIR, but dyn references, interface values, impl conformance, vtables, and calls remain deferred");
+    ).withHelp("Phase 14 M2 validates interface requirement signatures, but dyn references, interface values, impl conformance, vtables, and calls remain deferred");
 }
 
 pub fn duplicateTopLevelName(span: SourceSpan) Diagnostic {

@@ -1,0 +1,11 @@
+# name: interface requirement scalar params
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Interfaces;
+
+interface Writer {
+    bool Write(int value, bool newline);
+};

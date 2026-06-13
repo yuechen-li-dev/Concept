@@ -1,0 +1,11 @@
+# name: interface requirement void return
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Interfaces;
+
+interface Writer {
+    void Flush();
+};

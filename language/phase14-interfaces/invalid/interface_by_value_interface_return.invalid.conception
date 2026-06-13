@@ -1,0 +1,14 @@
+# name: interface by value interface return
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Interfaces;
+
+interface Writer {
+    Writer Clone();
+};
+
+=== diagnostics ===
+CON0255

@@ -1,0 +1,20 @@
+# name: interface backend c hir only
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+interface Writer {
+    void Write(int value);
+};
+
+int main() {
+    return 0;
+}
+
+=== c ===
+contains: int main(void)
+not_contains: cpt_itf_Writer
+not_contains: cpt_dyn_Writer
+not_contains: vtable

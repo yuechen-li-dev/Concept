@@ -616,7 +616,7 @@ Suggested initial diagnostic inventory:
 
 ```text
 CON0240 DuplicateInterfaceRequirement
-CON0241 InterfaceRequiresBody
+CON0241 InterfaceRequiresRequirement
 CON0242 InterfaceRequirementInvalid
 CON0243 UnknownInterface
 CON0244 InvalidInterfaceImplTarget
@@ -724,3 +724,40 @@ interface method calls, MIR dyn/interface-call lowering, backend C interface or
 vtable emission, owning dyn boxes, heap boxing, dynamic cast, RTTI, reflection,
 Drop through dyn, interface inheritance, default methods, associated types, and
 generic interface methods.
+
+## P14-M2 status
+
+P14-M2 validates the narrow v0 shape of interface requirements while keeping
+interfaces HIR-only. Interface declarations must contain at least one
+requirement; empty runtime interfaces are rejected with
+`CON0241 InterfaceRequiresRequirement` because marker-style static behavior is
+already covered by marker concepts, while empty runtime interfaces would invite
+RTTI/tag-like semantics that Phase 14 v0 explicitly defers.
+
+Requirement signatures are semantically well-formed only when names and types
+stay inside the v0 contract:
+
+- requirement names must be unique within an interface;
+- overloads are rejected by that duplicate-name rule, regardless of arity;
+- requirement parameter names must be unique;
+- requirement return and parameter types must resolve through the ordinary type
+  resolver;
+- ordinary resolved types such as `void`, `int`, `bool`, structs, enums,
+  machine types, and raw pointers to ordinary types are accepted;
+- interface types are rejected in requirement return and parameter positions
+  with `CON0255 InterfaceRuntimeUnsupported`, including raw pointers to
+  interface declarations, until the explicit `dyn Interface&` type surface
+  exists.
+
+Pure interface declarations still do not lower to executable MIR concepts,
+runtime dyn values, vtables, or backend C interface artifacts. A backend path
+containing an otherwise ordinary `main` plus a pure interface declaration emits
+only the ordinary executable code.
+
+Still unimplemented after P14-M2: interface impl conformance, `dyn` type
+syntax, dyn type checking, concrete-to-dyn coercion, dyn method calls, method
+call syntax, vtable representation, backend C vtable/interface emission,
+owning dyn boxes, heap boxing, dynamic cast, RTTI, reflection, interface
+inheritance, default methods, associated types, generic interface methods, Drop
+through dyn, effect checking through dyn, unsafe interface methods, and
+cross-module/orphan interface coherence.

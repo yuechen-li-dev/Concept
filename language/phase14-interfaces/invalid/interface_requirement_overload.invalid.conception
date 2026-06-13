@@ -1,0 +1,15 @@
+# name: interface requirement overload
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module Interfaces;
+
+interface Writer {
+    void Write(int value);
+    void Write(int value, bool newline);
+};
+
+=== diagnostics ===
+CON0240
