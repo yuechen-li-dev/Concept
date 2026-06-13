@@ -1,0 +1,22 @@
+# name: unsafe noalloc function effect
+# phase: parse
+# expect: pass
+
+=== source ===
+module Example;
+
+unsafe noalloc int ReadRaw(int* ptr) {
+    unsafe {
+        return *ptr;
+    }
+}
+
+=== ast ===
+CompilationUnit
+  Module Example
+  Unsafe Function effect=NoAlloc int ReadRaw(int* ptr)
+    Body
+      UnsafeBlock
+        Return
+          Deref
+            Identifier ptr

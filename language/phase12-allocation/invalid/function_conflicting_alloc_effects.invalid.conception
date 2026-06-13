@@ -1,0 +1,13 @@
+# name: conflicting allocation effects
+# phase: parse
+# expect: fail
+
+=== source ===
+module Example;
+
+alloc noalloc int Bad() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0191

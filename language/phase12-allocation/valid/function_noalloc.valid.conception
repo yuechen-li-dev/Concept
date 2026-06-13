@@ -1,0 +1,20 @@
+# name: noalloc function effect
+# phase: parse
+# expect: pass
+
+=== source ===
+module Example;
+
+noalloc int Add(int a, int b) {
+    return a + b;
+}
+
+=== ast ===
+CompilationUnit
+  Module Example
+  Function effect=NoAlloc int Add(int a, int b)
+    Body
+      Return
+        Binary +
+          Identifier a
+          Identifier b

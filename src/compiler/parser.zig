@@ -75,28 +75,6 @@ pub const Parser = struct {
                     attributes = &.{};
                     try items.append(try self.parseStaticAssertItem(allocator));
                 },
-                .@"comptime" => {
-                    const compile_time_token = self.advance();
-                    while (self.current().kind == .@"comptime") {
-                        try self.report(.UnexpectedToken, "duplicate comptime function modifier", self.current().span);
-                        self.advance();
-                    }
-                    const compile_time_capabilities = try self.parseCompileTimeCapabilityList(allocator);
-                    var compile_time_capabilities_transferred = false;
-                    defer if (!compile_time_capabilities_transferred) allocator.free(compile_time_capabilities);
-                    if (self.current().kind == .@"struct" or self.current().kind == .@"enum" or self.current().kind == .must_use) {
-                        try self.rejectAttributesBeforeUnsupportedItem(attributes, allocator);
-                        attributes = &.{};
-                        try self.reportExpectedItem("comptime modifier is only supported on functions", compile_time_token.span);
-                        self.advance();
-                        continue;
-                    }
-                    if (try self.parseFunctionItem(allocator, attributes, compile_time_token, compile_time_capabilities)) |item| {
-                        try items.append(item);
-                        compile_time_capabilities_transferred = true;
-                        attributes = &.{};
-                    }
-                },
                 .@"struct" => {
                     try items.append(try self.parseStructItem(allocator, attributes));
                     attributes = &.{};
@@ -107,7 +85,7 @@ pub const Parser = struct {
                         attributes = &.{};
                     }
                 },
-                .identifier, .mut, .unsafe => {
+                .identifier, .mut, .unsafe, .@"comptime", .alloc, .noalloc => {
                     if (self.current().kind == .unsafe and self.peek(1).kind == .impl) {
                         try items.append(try self.parseImplItem(allocator, attributes));
                         attributes = &.{};
@@ -125,7 +103,7 @@ pub const Parser = struct {
                         self.advance();
                         continue;
                     }
-                    if (try self.parseFunctionItem(allocator, attributes, null, &.{})) |item| {
+                    if (try self.parseFunctionItem(allocator, attributes)) |item| {
                         try items.append(item);
                         attributes = &.{};
                     }
@@ -165,8 +143,8 @@ pub const Parser = struct {
                     } else if (self.peek(1).kind == .@"enum" or self.peek(1).kind == .must_use) {
                         try items.append(try self.parseEnumItem(allocator, attributes));
                         attributes = &.{};
-                    } else if (self.peek(1).kind == .identifier or self.peek(1).kind == .mut or self.peek(1).kind == .unsafe) {
-                        if (try self.parseFunctionItem(allocator, attributes, null, &.{})) |item| {
+                    } else if (self.peek(1).kind == .identifier or self.peek(1).kind == .mut or self.peek(1).kind == .unsafe or self.peek(1).kind == .@"comptime" or self.peek(1).kind == .alloc or self.peek(1).kind == .noalloc) {
+                        if (try self.parseFunctionItem(allocator, attributes)) |item| {
                             try items.append(item);
                             attributes = &.{};
                         }
@@ -503,8 +481,8 @@ pub const Parser = struct {
         return try capabilities.toOwnedSlice();
     }
 
-    fn parseFunctionItem(self: *Parser, allocator: std.mem.Allocator, attributes: []ast.Attribute, compile_time_token: ?Token, compile_time_capabilities: []ast.CompileTimeCapabilitySyntax) !?ast.Item {
-        if (try self.parseFunctionDecl(allocator, attributes, compile_time_token, compile_time_capabilities)) |function_decl| {
+    fn parseFunctionItem(self: *Parser, allocator: std.mem.Allocator, attributes: []ast.Attribute) !?ast.Item {
+        if (try self.parseFunctionDecl(allocator, attributes)) |function_decl| {
             return .{ .function_decl = function_decl };
         }
         return null;
@@ -534,7 +512,7 @@ pub const Parser = struct {
             return null;
         }
 
-        var function_decl = (try self.parseFunctionDecl(allocator, &.{}, null, &.{})) orelse return null;
+        var function_decl = (try self.parseFunctionDecl(allocator, &.{})) orelse return null;
         errdefer function_decl.deinit(allocator);
         function_decl.span = ast.spanFromBounds(start_span.start, spanEnd(function_decl.span));
 
@@ -661,12 +639,63 @@ pub const Parser = struct {
         return .{ .impl_decl = decl };
     }
 
-    fn parseFunctionDecl(self: *Parser, allocator: std.mem.Allocator, attributes: []ast.Attribute, compile_time_token: ?Token, compile_time_capabilities: []ast.CompileTimeCapabilitySyntax) !?ast.FunctionDecl {
+    fn parseFunctionDecl(self: *Parser, allocator: std.mem.Allocator, attributes: []ast.Attribute) !?ast.FunctionDecl {
         const export_token = self.match(.@"export");
-        const first_unsafe_token = self.match(.unsafe);
-        const start_span = if (compile_time_token) |token| token.span else if (export_token) |token| token.span else if (first_unsafe_token) |token| token.span else self.current().span;
-        while (self.match(.unsafe)) |duplicate| {
-            try self.report(.UnexpectedToken, "duplicate unsafe function modifier", duplicate.span);
+        var start_span = if (export_token) |token| token.span else self.current().span;
+        var first_unsafe_token: ?Token = null;
+        var compile_time_token: ?Token = null;
+        var compile_time_capabilities: []ast.CompileTimeCapabilitySyntax = &.{};
+        var compile_time_capabilities_transferred = false;
+        defer if (!compile_time_capabilities_transferred and compile_time_capabilities.len > 0) allocator.free(compile_time_capabilities);
+        var allocation_effect: ast.AllocationEffect = .unspecified;
+
+        while (true) {
+            switch (self.current().kind) {
+                .unsafe => {
+                    const token = self.advance();
+                    if (first_unsafe_token == null and export_token == null) start_span = token.span;
+                    if (first_unsafe_token != null) {
+                        try self.report(.UnexpectedToken, "duplicate unsafe function modifier", token.span);
+                    } else {
+                        first_unsafe_token = token;
+                    }
+                },
+                .@"comptime" => {
+                    const token = self.advance();
+                    if (compile_time_token == null and export_token == null and first_unsafe_token == null) start_span = token.span;
+                    const parsed_capabilities = try self.parseCompileTimeCapabilityList(allocator);
+                    if (compile_time_token != null) {
+                        try self.report(.UnexpectedToken, "duplicate comptime function modifier", token.span);
+                        if (parsed_capabilities.len > 0) allocator.free(parsed_capabilities);
+                    } else {
+                        compile_time_token = token;
+                        compile_time_capabilities = parsed_capabilities;
+                    }
+                },
+                .alloc, .noalloc => {
+                    const token = self.advance();
+                    if (allocation_effect == .unspecified and export_token == null and first_unsafe_token == null and compile_time_token == null) start_span = token.span;
+                    const parsed_effect: ast.AllocationEffect = if (token.kind == .alloc) .alloc else .noalloc;
+                    if (allocation_effect == .unspecified) {
+                        allocation_effect = parsed_effect;
+                    } else if (allocation_effect == parsed_effect) {
+                        try self.report(.DuplicateAllocationEffect, "duplicate allocation effect modifier", token.span);
+                    } else {
+                        try self.report(.AllocationEffectMismatch, "conflicting allocation effect modifiers", token.span);
+                    }
+                },
+                else => break,
+            }
+        }
+
+        if ((compile_time_token != null or allocation_effect != .unspecified) and
+            (self.current().kind == .@"struct" or self.current().kind == .@"enum" or self.current().kind == .must_use))
+        {
+            const code: DiagnosticCode = if (allocation_effect != .unspecified) .AllocationEffectInvalidTarget else .ExpectedItem;
+            const message = if (allocation_effect != .unspecified) "allocation effect modifier is only supported on functions" else "comptime modifier is only supported on functions";
+            try self.report(code, message, self.current().span);
+            try self.recoverFunctionDecl();
+            return null;
         }
 
         var return_type = self.parseTypeName(allocator) catch |err| switch (err) {
@@ -731,11 +760,12 @@ pub const Parser = struct {
             break :blk last_span;
         };
 
-        return .{
+        const result = ast.FunctionDecl{
             .attributes = attributes,
             .is_export = export_token != null,
             .is_unsafe = first_unsafe_token != null,
             .is_compile_time = compile_time_token != null,
+            .allocation_effect = allocation_effect,
             .compile_time_capabilities = compile_time_capabilities,
             .signature = .{
                 .return_type = return_type,
@@ -746,6 +776,8 @@ pub const Parser = struct {
             .body = body,
             .span = ast.spanFromBounds(itemStartWithAttributes(attributes, start_span), spanEnd(end_span)),
         };
+        compile_time_capabilities_transferred = true;
+        return result;
     }
 
     fn parseFunctionParamDecl(self: *Parser, allocator: std.mem.Allocator) !?ast.ParamDecl {
@@ -2450,8 +2482,8 @@ pub const Parser = struct {
             is_marker_semicolon = true;
         } else if (self.match(.left_brace)) |_| {
             while (self.current().kind != .eof and self.current().kind != .right_brace) {
-                if (self.current().kind == .identifier or self.current().kind == .mut or self.current().kind == .unsafe) {
-                    if (try self.parseFunctionDecl(allocator, &.{}, null, &.{})) |function| {
+                if (self.current().kind == .identifier or self.current().kind == .mut or self.current().kind == .unsafe or self.current().kind == .@"comptime" or self.current().kind == .alloc or self.current().kind == .noalloc) {
+                    if (try self.parseFunctionDecl(allocator, &.{})) |function| {
                         if (function.body == null) {
                             try self.report(.UnexpectedToken, "impl function must have a body", function.span);
                         }
@@ -5791,6 +5823,73 @@ test "duplicate unsafe function modifier diagnostic" {
 
     try std.testing.expectEqual(@as(usize, 1), diagnostics.count());
     try std.testing.expectEqualStrings("duplicate unsafe function modifier", diagnostics.diagnostics.items[0].message);
+}
+
+test "parses allocation effect function declarations" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource(
+        \\module Example;
+        \\noalloc int add(int a, int b) { return a + b; }
+        \\alloc int build() { return 42; }
+        \\int plain() { return 0; }
+    , &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    try std.testing.expectEqual(ast.AllocationEffect.noalloc, expectFunctionDecl(unit, 0).allocation_effect);
+    try std.testing.expectEqual(ast.AllocationEffect.alloc, expectFunctionDecl(unit, 1).allocation_effect);
+    try std.testing.expectEqual(ast.AllocationEffect.unspecified, expectFunctionDecl(unit, 2).allocation_effect);
+}
+
+test "allocation effect metadata coexists with unsafe and comptime functions" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource(
+        \\module Example;
+        \\unsafe noalloc int readRaw(int* ptr) { unsafe { return *ptr; } }
+        \\comptime noalloc int addConst(int a, int b) { return a + b; }
+    , &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    try std.testing.expect(expectFunctionDecl(unit, 0).is_unsafe);
+    try std.testing.expectEqual(ast.AllocationEffect.noalloc, expectFunctionDecl(unit, 0).allocation_effect);
+    try std.testing.expect(expectFunctionDecl(unit, 1).is_compile_time);
+    try std.testing.expectEqual(ast.AllocationEffect.noalloc, expectFunctionDecl(unit, 1).allocation_effect);
+}
+
+test "allocation effect metadata coexists with template functions" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; template<T> noalloc T identity(T value) { return value; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const template = switch (unit.items[0]) {
+        .template_decl => |decl| decl,
+        else => return error.ExpectedTemplate,
+    };
+    try std.testing.expectEqual(ast.AllocationEffect.noalloc, template.body.allocation_effect);
+}
+
+test "allocation effect duplicate and conflict diagnostics" {
+    var conflict_diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer conflict_diagnostics.deinit();
+    const conflict_unit = try parseTestSource("module Example; alloc noalloc int bad() { return 0; }", &conflict_diagnostics);
+    defer conflict_unit.deinit(std.testing.allocator);
+    try std.testing.expect(conflict_diagnostics.count() >= 1);
+    try std.testing.expectEqual(DiagnosticCode.AllocationEffectMismatch, conflict_diagnostics.diagnostics.items[0].code);
+
+    var duplicate_diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer duplicate_diagnostics.deinit();
+    const duplicate_unit = try parseTestSource("module Example; noalloc noalloc int bad() { return 0; }", &duplicate_diagnostics);
+    defer duplicate_unit.deinit(std.testing.allocator);
+    try std.testing.expect(duplicate_diagnostics.count() >= 1);
+    try std.testing.expectEqual(DiagnosticCode.DuplicateAllocationEffect, duplicate_diagnostics.diagnostics.items[0].code);
 }
 
 test "parses compile-time expression in local initializer" {

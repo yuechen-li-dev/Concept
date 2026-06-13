@@ -38,6 +38,8 @@ language/phase9-compile-time/valid/
 language/phase9-compile-time/invalid/
 language/phase10-ownership/valid/
 language/phase10-ownership/invalid/
+language/phase12-allocation/valid/
+language/phase12-allocation/invalid/
 ```
 
 ## Phase 5 sum-type fixtures
@@ -94,6 +96,19 @@ Valid `.con_test` check fixtures cover `.con_test` source-kind classification, h
 Invalid fixtures are compile-time parse or semantic invalid cases: test attributes in normal source, invalid test signatures, missing or mismatched InlineData, missing or empty reasons, wrong intrinsic arity, wrong primitive operand types, unsupported equality/relation types, standalone relation constructors, and rejected inline test blocks.
 
 Runtime-failing test examples are not compile-invalid fixtures. A `.con_test` file that type-checks but fails an expectation is a runner failure, not a compiler diagnostic. Current failing runner behavior, including summaries, ordered failures, row-indexed theory names, source spans, reasons, and expected/actual scalar display, is covered by unit tests in `src/compiler/test_runner.zig` rather than by fixture invalid cases.
+
+## Phase 12 allocation fixtures
+
+Phase 12 fixtures live under `language/phase12-allocation/` and currently cover
+the P12-M1 allocation-effect syntax and metadata scaffold. Valid parse fixtures
+cover `alloc`, `noalloc`, omitted/default effects, and coexistence with
+`unsafe`, `comptime`, and template functions. Invalid parse fixtures cover
+conflicting `alloc`/`noalloc` specifiers, duplicate effect specifiers, and the
+reachable non-function target diagnostic.
+
+P12-M1 fixtures intentionally do not cover allocation operations, arenas,
+allocator runtime behavior, direct `noalloc` enforcement, transitive effect
+checking, or backend output changes because those surfaces do not exist yet.
 
 ## `.conception` format
 

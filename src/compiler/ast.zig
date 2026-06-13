@@ -950,11 +950,26 @@ pub const CompileTimeCapabilitySyntax = struct {
     name: NameSegment,
 };
 
+pub const AllocationEffect = enum {
+    unspecified,
+    noalloc,
+    alloc,
+
+    pub fn debugName(self: AllocationEffect) []const u8 {
+        return switch (self) {
+            .unspecified => "Unspecified",
+            .noalloc => "NoAlloc",
+            .alloc => "Alloc",
+        };
+    }
+};
+
 pub const FunctionDecl = struct {
     attributes: []Attribute = &.{},
     is_export: bool,
     is_unsafe: bool = false,
     is_compile_time: bool = false,
+    allocation_effect: AllocationEffect = .unspecified,
     compile_time_capabilities: []CompileTimeCapabilitySyntax = &.{},
     signature: SignatureDecl,
     body: ?FunctionBody,
@@ -1021,6 +1036,11 @@ pub const Item = union(enum) {
                     }
                     try writer.writeAll("] ");
                 }
+                if (function_decl.allocation_effect != .unspecified) {
+                    try writer.writeAll("effect=");
+                    try writer.writeAll(function_decl.allocation_effect.debugName());
+                    try writer.writeByte(' ');
+                }
                 try function_decl.signature.return_type.write(writer);
                 try writer.writeByte(' ');
                 try function_decl.signature.name.write(writer);
@@ -1049,6 +1069,11 @@ pub const Item = union(enum) {
                 }
                 try writer.writeAll(">\n");
                 try writer.writeAll("    Function ");
+                if (template_decl.body.allocation_effect != .unspecified) {
+                    try writer.writeAll("effect=");
+                    try writer.writeAll(template_decl.body.allocation_effect.debugName());
+                    try writer.writeByte(' ');
+                }
                 try template_decl.body.signature.return_type.write(writer);
                 try writer.writeByte(' ');
                 try template_decl.body.signature.name.write(writer);
@@ -1166,6 +1191,11 @@ pub const Item = union(enum) {
                 try writer.writeByte('\n');
                 for (impl_decl.functions) |function| {
                     try writer.writeAll("    Function ");
+                    if (function.allocation_effect != .unspecified) {
+                        try writer.writeAll("effect=");
+                        try writer.writeAll(function.allocation_effect.debugName());
+                        try writer.writeByte(' ');
+                    }
                     try function.signature.return_type.write(writer);
                     try writer.writeByte(' ');
                     try function.signature.name.write(writer);

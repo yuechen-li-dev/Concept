@@ -938,6 +938,7 @@ const Checker = struct {
         const generated_name = try self.instantiatedFunctionName(source_function.name, concrete_types);
         const return_type = try self.substituteType(source_function.return_type, subst, span);
         const function_id = try self.module.hir.addFunctionWithSafety(generated_name, return_type, source_function.is_unsafe, source_function.span);
+        self.module.hir.setFunctionAllocationEffect(function_id, source_function.allocation_effect);
         self.module.hir.markFunctionInstantiation(function_id);
 
         var param_map = std.AutoHashMap(hir.ParamId, hir.ParamId).init(self.allocator);

@@ -151,6 +151,20 @@ pub const CompileTimeCapabilityList = compile_time_capability.CompileTimeCapabil
 pub const CompileTimeCapabilityRequired = compile_time_capability.CompileTimeCapabilityRequired;
 pub const CompileTimeTargetQuery = compile_time_target.CompileTimeTargetQuery;
 
+pub const AllocationEffect = enum {
+    unspecified,
+    noalloc,
+    alloc,
+
+    pub fn debugName(self: AllocationEffect) []const u8 {
+        return switch (self) {
+            .unspecified => "Unspecified",
+            .noalloc => "NoAlloc",
+            .alloc => "Alloc",
+        };
+    }
+};
+
 pub const HirFunction = struct {
     item: ItemId,
     name: SymbolId,
@@ -159,6 +173,7 @@ pub const HirFunction = struct {
     return_type: types.TypeId,
     is_unsafe: bool = false,
     is_compile_time: bool = false,
+    allocation_effect: AllocationEffect = .unspecified,
     compile_time_capabilities: []CompileTimeCapabilityRequired = &.{},
     params: []ParamId,
     locals: []LocalId,
@@ -705,6 +720,7 @@ pub const HirStore = struct {
             .return_type = return_type,
             .is_unsafe = is_unsafe,
             .is_compile_time = false,
+            .allocation_effect = .unspecified,
             .compile_time_capabilities = &.{},
             .params = &.{},
             .locals = &.{},
@@ -718,6 +734,10 @@ pub const HirStore = struct {
 
     pub fn markFunctionCompileTime(self: *HirStore, function_id: FunctionId) void {
         self.getFunctionMut(function_id).is_compile_time = true;
+    }
+
+    pub fn setFunctionAllocationEffect(self: *HirStore, function_id: FunctionId, allocation_effect: AllocationEffect) void {
+        self.getFunctionMut(function_id).allocation_effect = allocation_effect;
     }
 
     pub fn setFunctionAttributes(self: *HirStore, function_id: FunctionId, attributes: []HirAttribute) void {
@@ -1076,6 +1096,9 @@ pub const HirStore = struct {
                     const function = self.getFunction(id);
                     try writeAttributesDebug(writer, function.attributes, interner, 1);
                     try writer.print("  {s}{s}Function {s}", .{ if (function.is_compile_time) "CompileTime " else "", if (function.is_unsafe) "Unsafe " else "", interner.text(function.name) });
+                    if (function.allocation_effect != .unspecified) {
+                        try writer.print(" effect={s}", .{function.allocation_effect.debugName()});
+                    }
                     if (function.compile_time_capabilities.len != 0) {
                         try writer.writeAll(" capabilities=[");
                         for (function.compile_time_capabilities, 0..) |capability, capability_index| {
@@ -1374,9 +1397,23 @@ test "add function with interned name and lookup by ID" {
     try std.testing.expectEqual(main_name, function.name);
     try std.testing.expectEqual(types.TypeId{ .index = 1 }, function.return_type);
     try std.testing.expectEqualStrings("main", interner.text(function.name));
+    try std.testing.expectEqual(AllocationEffect.unspecified, function.allocation_effect);
     try std.testing.expectEqual(@as(usize, 0), function.params.len);
     try std.testing.expectEqual(@as(usize, 0), function.locals.len);
     try std.testing.expectEqual(HirItem{ .function = function_id }, store.getItem(function.item).*);
+}
+
+test "set function allocation effect metadata" {
+    var interner = Interner.init(std.testing.allocator);
+    defer interner.deinit();
+    var store = HirStore.init(std.testing.allocator);
+    defer store.deinit();
+
+    const function_id = try store.addFunction(try interner.intern("build"), .{ .index = 1 }, synthetic_span);
+    store.setFunctionAllocationEffect(function_id, .alloc);
+    try std.testing.expectEqual(AllocationEffect.alloc, store.getFunction(function_id).allocation_effect);
+    store.setFunctionAllocationEffect(function_id, .noalloc);
+    try std.testing.expectEqual(AllocationEffect.noalloc, store.getFunction(function_id).allocation_effect);
 }
 
 test "add struct with fields and lookup by ID" {

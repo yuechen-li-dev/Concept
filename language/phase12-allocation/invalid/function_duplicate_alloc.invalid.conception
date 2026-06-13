@@ -1,0 +1,13 @@
+# name: duplicate alloc effect
+# phase: parse
+# expect: fail
+
+=== source ===
+module Example;
+
+alloc alloc int Bad() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0197

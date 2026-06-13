@@ -37,6 +37,11 @@ Concept is not a full formal specification yet.
 
 This document is a design constitution: it defines the language identity, core constraints, major semantic commitments, and implementation direction. Future documents should define grammar, MIR format, module layout, ABI details, standard library APIs, package/build tooling, and implementation milestones.
 
+Implementation note: Phase 12 M1 adds Stage 0 parser/AST/HIR metadata for
+function-level `alloc` and `noalloc` effects. These effects are syntax and
+metadata only in M1; allocation operations, arenas, direct enforcement,
+transitive checking, and hidden heap behavior remain unimplemented.
+
 ---
 
 # 1. Thesis

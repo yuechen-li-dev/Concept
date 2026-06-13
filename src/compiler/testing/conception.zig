@@ -2372,6 +2372,17 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase11-testing/invalid/expect_that_normal_source_invalid.concept");
     try expectParseFixture("../../../language/phase11-testing/invalid/inline_test_block_rejected.invalid.conception");
 
+    try expectParseFixture("../../../language/phase12-allocation/valid/function_noalloc.valid.conception");
+    try expectParseFixture("../../../language/phase12-allocation/valid/function_alloc.valid.conception");
+    try expectParseFixture("../../../language/phase12-allocation/valid/function_effect_unspecified.valid.conception");
+    try expectParseFixture("../../../language/phase12-allocation/valid/unsafe_noalloc_function.valid.conception");
+    try expectParseFixture("../../../language/phase12-allocation/valid/comptime_noalloc_function.valid.conception");
+    try expectParseFixture("../../../language/phase12-allocation/valid/template_noalloc_function.valid.conception");
+    try expectParseFixture("../../../language/phase12-allocation/invalid/function_conflicting_alloc_effects.invalid.conception");
+    try expectParseFixture("../../../language/phase12-allocation/invalid/function_duplicate_noalloc.invalid.conception");
+    try expectParseFixture("../../../language/phase12-allocation/invalid/function_duplicate_alloc.invalid.conception");
+    try expectParseFixture("../../../language/phase12-allocation/invalid/allocation_effect_invalid_target.invalid.conception");
+
     try expectRunFixture("../../../language/phase10-ownership/valid/move_struct_local_run.valid.conception");
     try expectRunFixture("../../../language/phase10-ownership/valid/move_struct_argument_run.valid.conception");
     try expectRunFixture("../../../language/phase10-ownership/valid/move_int_copy_run.valid.conception");

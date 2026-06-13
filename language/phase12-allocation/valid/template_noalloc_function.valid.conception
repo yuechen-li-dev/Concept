@@ -1,0 +1,20 @@
+# name: template noalloc function effect
+# phase: parse
+# expect: pass
+
+=== source ===
+module Example;
+
+template<T>
+noalloc T Identity(T value) {
+    return value;
+}
+
+=== ast ===
+CompilationUnit
+  Module Example
+  Template<T>
+    Function effect=NoAlloc T Identity(T value)
+    Body
+      Return
+        Identifier value

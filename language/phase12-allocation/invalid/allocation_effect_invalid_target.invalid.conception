@@ -1,0 +1,13 @@
+# name: allocation effect invalid target
+# phase: parse
+# expect: fail
+
+=== source ===
+module Example;
+
+noalloc struct Bad {
+    int x;
+};
+
+=== diagnostics ===
+CON0198

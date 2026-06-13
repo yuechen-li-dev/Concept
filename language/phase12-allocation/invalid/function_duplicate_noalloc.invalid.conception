@@ -1,0 +1,13 @@
+# name: duplicate noalloc effect
+# phase: parse
+# expect: fail
+
+=== source ===
+module Example;
+
+noalloc noalloc int Bad() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0197

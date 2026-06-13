@@ -175,7 +175,43 @@ Suggested future diagnostics:
 ```text
 CON0190 AllocationInNoAllocFunction
 CON0191 AllocationEffectMismatch
+CON0197 DuplicateAllocationEffect
+CON0198 AllocationEffectInvalidTarget
 ```
+
+### P12-M1 implementation status
+
+P12-M1 implements function-level allocation-effect syntax:
+
+```cpp
+noalloc int Add(int a, int b) {
+    return a + b;
+}
+
+alloc int BuildSomething() {
+    return 42;
+}
+```
+
+The Stage 0 lexer reserves `alloc` and `noalloc` as keywords. Function
+declarations store an `AllocationEffect` with the states `unspecified`,
+`noalloc`, and `alloc`; existing functions without an explicit effect default
+to `unspecified`. The effect is preserved from AST function declarations into
+HIR function declarations, including generic/template function bodies and
+generic instantiations.
+
+`unsafe`, `comptime`, and allocation effects are independent metadata axes in
+P12-M1. The parser accepts them as leading function specifiers before the
+return type. Duplicate allocation effects are rejected with
+`CON0197 DuplicateAllocationEffect`, and conflicting `alloc`/`noalloc`
+specifier pairs are rejected with `CON0191 AllocationEffectMismatch`.
+Allocation effects on non-function targets that the parser can reach are
+rejected with `CON0198 AllocationEffectInvalidTarget`.
+
+P12-M1 intentionally does not add allocation operations, arenas, allocator
+runtime code, direct allocation checking, transitive effect checking, call graph
+effect checking, region lifetime checking, generic stores, MIR allocation
+operations, backend allocation lowering, or hidden heap behavior.
 
 ## 4. Profiles and hidden heap policy
 

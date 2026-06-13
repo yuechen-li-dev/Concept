@@ -1,0 +1,18 @@
+# name: unspecified allocation effect function
+# phase: parse
+# expect: pass
+
+=== source ===
+module Example;
+
+int Plain() {
+    return 0;
+}
+
+=== ast ===
+CompilationUnit
+  Module Example
+  Function int Plain()
+    Body
+      Return
+        Int 0

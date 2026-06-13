@@ -1,0 +1,20 @@
+# name: comptime noalloc function effect
+# phase: parse
+# expect: pass
+
+=== source ===
+module Example;
+
+comptime noalloc int AddConst(int a, int b) {
+    return a + b;
+}
+
+=== ast ===
+CompilationUnit
+  Module Example
+  CompileTime Function effect=NoAlloc int AddConst(int a, int b)
+    Body
+      Return
+        Binary +
+          Identifier a
+          Identifier b

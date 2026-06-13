@@ -33,6 +33,8 @@ pub const TokenKind = enum {
     @"try",
     move,
     @"comptime",
+    alloc,
+    noalloc,
     static_assert,
     must_use,
     discard,
@@ -109,6 +111,8 @@ pub const TokenKind = enum {
             .@"try" => "try",
             .move => "move",
             .@"comptime" => "comptime",
+            .alloc => "alloc",
+            .noalloc => "noalloc",
             .static_assert => "static_assert",
             .must_use => "must_use",
             .discard => "discard",
@@ -191,6 +195,8 @@ pub const TokenKind = enum {
             .@"try" => "try",
             .move => "move",
             .@"comptime" => "comptime",
+            .alloc => "alloc",
+            .noalloc => "noalloc",
             .static_assert => "static_assert",
             .must_use => "must_use",
             .discard => "discard",
@@ -275,6 +281,8 @@ pub fn keywordKind(identifier_text: []const u8) ?TokenKind {
     if (std.mem.eql(u8, identifier_text, "try")) return .@"try";
     if (std.mem.eql(u8, identifier_text, "move")) return .move;
     if (std.mem.eql(u8, identifier_text, "comptime")) return .@"comptime";
+    if (std.mem.eql(u8, identifier_text, "alloc")) return .alloc;
+    if (std.mem.eql(u8, identifier_text, "noalloc")) return .noalloc;
     if (std.mem.eql(u8, identifier_text, "static_assert")) return .static_assert;
     if (std.mem.eql(u8, identifier_text, "must_use")) return .must_use;
     if (std.mem.eql(u8, identifier_text, "discard")) return .discard;
@@ -353,6 +361,8 @@ const keyword_cases = [_]KeywordCase{
     .{ .text = "try", .kind = .@"try" },
     .{ .text = "move", .kind = .move },
     .{ .text = "comptime", .kind = .@"comptime" },
+    .{ .text = "alloc", .kind = .alloc },
+    .{ .text = "noalloc", .kind = .noalloc },
     .{ .text = "static_assert", .kind = .static_assert },
     .{ .text = "must_use", .kind = .must_use },
     .{ .text = "discard", .kind = .discard },
@@ -434,6 +444,9 @@ test "non-keyword identifiers return null" {
         "moveValue",
         "movement",
         "move_value",
+        "allocate",
+        "noallocator",
+        "realloc",
         "score",
         "scoreValue",
         "score_thing",
@@ -502,6 +515,8 @@ test "token kind name output is stable" {
     try std.testing.expectEqualStrings("struct", TokenKind.@"struct".name());
     try std.testing.expectEqualStrings("return", TokenKind.@"return".name());
     try std.testing.expectEqualStrings("move", TokenKind.move.name());
+    try std.testing.expectEqualStrings("alloc", TokenKind.alloc.name());
+    try std.testing.expectEqualStrings("noalloc", TokenKind.noalloc.name());
     try std.testing.expectEqualStrings("true", TokenKind.true.name());
     try std.testing.expectEqualStrings("false", TokenKind.false.name());
     try std.testing.expectEqualStrings("pipe_pipe", TokenKind.pipe_pipe.name());

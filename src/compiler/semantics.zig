@@ -361,6 +361,7 @@ const Collector = struct {
         ) orelse return;
         const function_id = try self.module.hir.addFunctionWithSafety(name, self.module.types.voidType(), function_decl.is_unsafe, function_decl.span);
         self.module.hir.setFunctionAttributes(function_id, try self.copyAttributes(function_decl.attributes));
+        self.module.hir.setFunctionAllocationEffect(function_id, lowerAllocationEffect(function_decl.allocation_effect));
         if (function_decl.is_compile_time) {
             self.module.hir.markFunctionCompileTime(function_id);
             try self.copyCompileTimeCapabilities(function_id, function_decl.compile_time_capabilities);
@@ -391,6 +392,7 @@ const Collector = struct {
         ) orelse return;
         const generic_id = try self.module.hir.addGenericFunction(name, template_decl.span);
         self.module.hir.setGenericFunctionAttributes(generic_id, try self.copyAttributes(template_decl.attributes));
+        self.module.hir.setFunctionAllocationEffect(self.module.hir.getGenericFunction(generic_id).function, lowerAllocationEffect(template_decl.body.allocation_effect));
         try self.top_level_decls.put(name, .{ .generic_function = generic_id });
     }
 
@@ -823,6 +825,7 @@ const Collector = struct {
             if (!param_types_ok) continue;
 
             const function_id = try self.module.hir.addConceptWitnessFunction(function_symbol, return_type, function_decl.is_unsafe, function_decl.span);
+            self.module.hir.setFunctionAllocationEffect(function_id, lowerAllocationEffect(function_decl.allocation_effect));
             var param_names = std.AutoHashMap(interner.SymbolId, source.SourceSpan).init(self.allocator);
             defer param_names.deinit();
             for (function_decl.signature.params) |param| {
@@ -1091,6 +1094,14 @@ fn itemAttributes(item: ast.Item) []const ast.Attribute {
         .interface_decl => |decl| decl.attributes,
         .impl_decl => |decl| decl.attributes,
         .static_assert_decl => &.{},
+    };
+}
+
+fn lowerAllocationEffect(effect: ast.AllocationEffect) hir.AllocationEffect {
+    return switch (effect) {
+        .unspecified => .unspecified,
+        .noalloc => .noalloc,
+        .alloc => .alloc,
     };
 }
 
@@ -2801,6 +2812,28 @@ test "semantic collection preserves compile-time function metadata" {
     const snapshot = try module.hir.debugString(std.testing.allocator, module.interner);
     defer std.testing.allocator.free(snapshot);
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "CompileTime Function answer") != null);
+}
+
+test "semantic collection preserves allocation effect function metadata" {
+    var noalloc_item = functionItem("add", 0);
+    noalloc_item.function_decl.allocation_effect = .noalloc;
+    var alloc_item = functionItem("build", 20);
+    alloc_item.function_decl.allocation_effect = .alloc;
+    const unspecified_item = functionItem("plain", 40);
+
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+    var module = try collectItems(&.{ noalloc_item, alloc_item, unspecified_item }, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
+    try std.testing.expectEqual(hir.AllocationEffect.noalloc, module.hir.getFunction(.{ .index = 0 }).allocation_effect);
+    try std.testing.expectEqual(hir.AllocationEffect.alloc, module.hir.getFunction(.{ .index = 1 }).allocation_effect);
+    try std.testing.expectEqual(hir.AllocationEffect.unspecified, module.hir.getFunction(.{ .index = 2 }).allocation_effect);
+    const snapshot = try module.hir.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Function add effect=NoAlloc") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Function build effect=Alloc") != null);
 }
 
 test "semantic collection preserves function attributes in HIR" {
