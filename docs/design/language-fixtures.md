@@ -160,6 +160,25 @@ yet.
 
 ## Phase 13 machine fixtures
 
+Phase 13 fixtures live under `language/phase13-machines/` and cover explicit
+machine/state syntax, machine-local state validation, literal/match/decide
+transition target preservation, and the P13-M7 executable step/runtime subset.
+Valid parse fixtures cover machine declarations, parameters, effects,
+attributes, ordinary state-body statements, literal transitions, match-driven
+transition targets, and decide-driven transition targets. Invalid fixtures cover
+malformed machine/state/transition syntax plus semantic validation failures for
+zero states, duplicate states, unknown transition targets, and cross-machine
+state targets.
+
+P13-M7 valid run fixtures cover explicit frame construction through
+`MachineName(...)`, one-step literal transition behavior, completion via
+`return`, `Complete(machine)`, `Result(machine)`, extra `Step` after completion
+as a no-op, and captured scalar machine parameters. Match and decide transition
+runtime lowering remains deferred: those forms are still parsed, validated, and
+preserved in HIR, but they are not executable C-backend paths in P13-M7.
+
+## Phase 13 machine fixtures
+
 Phase 13 fixtures live under `language/phase13-machines/` and currently cover
 the P13-M1 parser/AST scaffold, P13-M2 state validation, P13-M3 literal
 transition statements, P13-M4 deterministic `transition match (...) { ... };`

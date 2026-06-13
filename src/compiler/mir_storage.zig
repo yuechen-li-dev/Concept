@@ -347,6 +347,7 @@ const Analyzer = struct {
             .drop => |drop| try self.dropPlace(states, drop.place, statement.span),
             .arena_reset => |arena_operand| try self.readOperand(states, arena_operand, statement.span),
             .arena_destroy => |arena_operand| try self.readOperand(states, arena_operand, statement.span),
+            .machine_step => |machine_operand| try self.readOperand(states, machine_operand, statement.span),
         }
     }
 
@@ -373,6 +374,9 @@ const Analyzer = struct {
             },
             .call => |call| for (call.args) |arg| try self.readOperand(states, arg, span),
             .arena_alloc => |arena_alloc| try self.readOperand(states, arena_alloc.arena_operand, span),
+            .machine_construct => |construct| for (construct.args) |arg| try self.readOperand(states, arg, span),
+            .machine_complete => |operand| try self.readOperand(states, operand, span),
+            .machine_result => |operand| try self.readOperand(states, operand, span),
             .enum_constructor => |constructor| for (constructor.args) |arg| try self.readOperand(states, arg, span),
             .struct_constructor => |constructor| for (constructor.fields) |field| try self.readOperand(states, field.value, span),
             .enum_tag => |operand| try self.readOperand(states, operand, span),

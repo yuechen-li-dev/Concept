@@ -1,0 +1,26 @@
+# name: machine step literal two steps
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Door() -> int {
+    state Closed {
+        transition Open;
+    }
+
+    state Open {
+        return 7;
+    }
+}
+
+int main() {
+    Door m = Door();
+    Step(m);
+    Step(m);
+    return Result(m);
+}
+
+=== run ===
+exit_code: 7

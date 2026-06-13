@@ -183,6 +183,12 @@ pub const MirRvalue = union(enum) {
         receiver: MirOperand,
         field_id: hir.FieldId,
     },
+    machine_construct: struct {
+        machine: hir.MachineId,
+        args: []MirOperand,
+    },
+    machine_complete: MirOperand,
+    machine_result: MirOperand,
 
     pub fn use_(operand: MirOperand) MirRvalue {
         return .{ .use = operand };
@@ -267,6 +273,9 @@ pub const MirRvalue = union(enum) {
             .enum_tag => |operand| MirRvalue.enumTag(try operand.clone(allocator)),
             .enum_payload_field => |payload| MirRvalue.enumPayloadField(try payload.enum_operand.clone(allocator), payload.payload_field),
             .field_access => |field_access| MirRvalue.fieldAccess(try field_access.receiver.clone(allocator), field_access.field_id),
+            .machine_construct => |construct| .{ .machine_construct = .{ .machine = construct.machine, .args = try cloneOperands(allocator, construct.args) } },
+            .machine_complete => |operand| .{ .machine_complete = try operand.clone(allocator) },
+            .machine_result => |operand| .{ .machine_result = try operand.clone(allocator) },
         };
     }
 
@@ -298,6 +307,12 @@ pub const MirRvalue = union(enum) {
             .enum_tag => |operand| operand.deinit(allocator),
             .enum_payload_field => |payload| payload.enum_operand.deinit(allocator),
             .field_access => |field_access| field_access.receiver.deinit(allocator),
+            .machine_construct => |construct| {
+                deinitOperands(allocator, construct.args);
+                if (construct.args.len > 0) allocator.free(construct.args);
+            },
+            .machine_complete => |operand| operand.deinit(allocator),
+            .machine_result => |operand| operand.deinit(allocator),
         }
     }
 };
@@ -326,6 +341,7 @@ pub const MirStatementKind = union(enum) {
     },
     arena_reset: MirOperand,
     arena_destroy: MirOperand,
+    machine_step: MirOperand,
 
     pub fn assignTo(place: MirPlace, rvalue: MirRvalue) MirStatementKind {
         return .{ .assign = .{ .place = place, .rvalue = rvalue } };
@@ -349,6 +365,7 @@ pub const MirStatementKind = union(enum) {
             .drop => |drop| MirStatementKind.dropPlace(drop.place, drop.function),
             .arena_reset => |arena_operand| MirStatementKind.arenaReset(try arena_operand.clone(allocator)),
             .arena_destroy => |arena_operand| MirStatementKind.arenaDestroy(try arena_operand.clone(allocator)),
+            .machine_step => |machine_operand| .{ .machine_step = try machine_operand.clone(allocator) },
         };
     }
 
@@ -358,6 +375,7 @@ pub const MirStatementKind = union(enum) {
             .drop => {},
             .arena_reset => |arena_operand| arena_operand.deinit(allocator),
             .arena_destroy => |arena_operand| arena_operand.deinit(allocator),
+            .machine_step => |machine_operand| machine_operand.deinit(allocator),
         }
     }
 };
@@ -708,6 +726,10 @@ pub const MirStore = struct {
                 try writer.writeAll("ArenaDestroy ");
                 try writeOperandDebug(writer, arena_operand);
             },
+            .machine_step => |machine_operand| {
+                try writer.writeAll("MachineStep ");
+                try writeOperandDebug(writer, machine_operand);
+            },
         }
     }
 
@@ -842,6 +864,24 @@ fn writeRvalueDebug(writer: *std.Io.Writer, rvalue: MirRvalue) !void {
             try writer.writeAll("FieldAccess(");
             try writeOperandDebug(writer, field_access.receiver);
             try writer.print(", {f})", .{field_access.field_id});
+        },
+        .machine_construct => |construct| {
+            try writer.print("MachineConstruct {f}(", .{construct.machine});
+            for (construct.args, 0..) |arg, index| {
+                if (index != 0) try writer.writeAll(", ");
+                try writeOperandDebug(writer, arg);
+            }
+            try writer.writeByte(')');
+        },
+        .machine_complete => |operand| {
+            try writer.writeAll("MachineComplete(");
+            try writeOperandDebug(writer, operand);
+            try writer.writeByte(')');
+        },
+        .machine_result => |operand| {
+            try writer.writeAll("MachineResult(");
+            try writeOperandDebug(writer, operand);
+            try writer.writeByte(')');
         },
     }
 }

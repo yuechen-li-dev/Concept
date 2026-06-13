@@ -2544,6 +2544,10 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectParseFixture("../../../language/phase13-machines/valid/machine_transition_decide_later_state.valid.conception");
     try expectParseFixture("../../../language/phase13-machines/valid/machine_transition_decide_nested_if.valid.conception");
     try expectParseFixture("../../../language/phase13-machines/valid/machine_transition_decide_zero_score_fallback.valid.conception");
+    try expectRunFixture("../../../language/phase13-machines/valid/machine_step_literal_two_steps.valid.conception");
+    try expectRunFixture("../../../language/phase13-machines/valid/machine_complete_result.valid.conception");
+    try expectRunFixture("../../../language/phase13-machines/valid/machine_extra_step_after_complete.valid.conception");
+    try expectRunFixture("../../../language/phase13-machines/valid/machine_param_return.valid.conception");
     try expectParseFixture("../../../language/phase13-machines/invalid/state_outside_machine.invalid.conception");
     try expectParseFixture("../../../language/phase13-machines/invalid/transition_outside_machine.invalid.conception");
     try expectParseFixture("../../../language/phase13-machines/invalid/transition_inside_function.invalid.conception");
@@ -2561,17 +2565,10 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectParseFixture("../../../language/phase13-machines/invalid/machine_transition_decide_non_state_result.invalid.conception");
     try expectCheckFixture("../../../language/phase13-machines/invalid/machine_zero_states.invalid.conception");
     try expectCheckFixture("../../../language/phase13-machines/invalid/machine_duplicate_state.invalid.conception");
-    try expectCheckFixture("../../../language/phase13-machines/invalid/machine_semantics_not_implemented.invalid.conception");
-    try expectCheckFixture("../../../language/phase13-machines/invalid/machine_hir_shell_literal.invalid.conception");
-    try expectCheckFixture("../../../language/phase13-machines/invalid/machine_hir_shell_match.invalid.conception");
-    try expectCheckFixture("../../../language/phase13-machines/invalid/machine_hir_shell_decide.invalid.conception");
-    try expectCheckFixture("../../../language/phase13-machines/invalid/machine_transition_valid_semantics_not_implemented.invalid.conception");
     try expectCheckFixture("../../../language/phase13-machines/invalid/machine_transition_unknown_state.invalid.conception");
     try expectCheckFixture("../../../language/phase13-machines/invalid/machine_transition_cross_machine_state.invalid.conception");
-    try expectCheckFixture("../../../language/phase13-machines/invalid/machine_transition_match_valid_semantics_not_implemented.invalid.conception");
     try expectCheckFixture("../../../language/phase13-machines/invalid/machine_transition_match_unknown_state.invalid.conception");
     try expectCheckFixture("../../../language/phase13-machines/invalid/machine_transition_match_cross_machine_state.invalid.conception");
-    try expectCheckFixture("../../../language/phase13-machines/invalid/machine_transition_decide_valid_semantics_not_implemented.invalid.conception");
     try expectCheckFixture("../../../language/phase13-machines/invalid/machine_transition_decide_unknown_state.invalid.conception");
     try expectCheckFixture("../../../language/phase13-machines/invalid/machine_transition_decide_cross_machine_state.invalid.conception");
 

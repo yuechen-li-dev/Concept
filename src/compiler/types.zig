@@ -31,6 +31,7 @@ pub const TypeKind = union(enum) {
     alloc_error,
     struct_type: hir.StructId,
     enum_type: hir.EnumId,
+    machine_type: hir.MachineId,
     pointer: struct {
         pointee: TypeId,
     },
@@ -53,6 +54,7 @@ pub const TypeKind = union(enum) {
             .alloc_error => try writer.writeAll("AllocError"),
             .struct_type => |id| try writer.print("struct {f}", .{id}),
             .enum_type => |id| try writer.print("enum {f}", .{id}),
+            .machine_type => |id| try writer.print("machine {f}", .{id}),
             .pointer => |pointer| try writer.print("{f}*", .{pointer.pointee}),
             .manual_init => |manual_init| try writer.print("ManualInit<{f}>", .{manual_init.payload}),
             .type_param => |param| try writer.print("type_param({s}:{d}/{d} {f})", .{ @tagName(param.owner.kind), param.owner.index, param.index, param.name }),
@@ -139,6 +141,14 @@ pub const TypeStore = struct {
         return try self.append(.{ .enum_type = enum_id }, error.TooManyTypes);
     }
 
+    pub fn addMachineType(self: *TypeStore, machine_id: hir.MachineId) TypeStoreError!TypeId {
+        if (self.findNominal(.{ .machine_type = machine_id })) |existing| {
+            return existing;
+        }
+
+        return try self.append(.{ .machine_type = machine_id }, error.TooManyTypes);
+    }
+
     pub fn addTypeParam(self: *TypeStore, owner: TypeParamOwner, index: u32, name: interner.SymbolId) TypeStoreError!TypeId {
         if (self.findTypeParam(owner, index, name)) |existing| {
             return existing;
@@ -170,6 +180,10 @@ pub const TypeStore = struct {
         return self.findPointer(pointee);
     }
 
+    pub fn machineType(self: TypeStore, machine_id: hir.MachineId) ?TypeId {
+        return self.findNominal(.{ .machine_type = machine_id });
+    }
+
     pub fn manualInitPayload(self: TypeStore, id: TypeId) ?TypeId {
         return switch (self.kind(id)) {
             .manual_init => |manual_init| manual_init.payload,
@@ -197,7 +211,7 @@ pub const TypeStore = struct {
         return switch (self.kind(id)) {
             .int, .bool, .pointer, .enum_type, .alloc_error => true,
             .struct_type => self.hasCopyMarkerImpl(hir_store, id),
-            .void, .arena, .allocator, .manual_init, .type_param => false,
+            .void, .arena, .allocator, .machine_type, .manual_init, .type_param => false,
         };
     }
 
@@ -275,6 +289,12 @@ pub const TypeStore = struct {
                 },
                 .enum_type => |needle_id| switch (candidate) {
                     .enum_type => |candidate_id| if (candidate_id.index == needle_id.index) {
+                        return .{ .index = @intCast(index) };
+                    },
+                    else => {},
+                },
+                .machine_type => |needle_id| switch (candidate) {
+                    .machine_type => |candidate_id| if (candidate_id.index == needle_id.index) {
                         return .{ .index = @intCast(index) };
                     },
                     else => {},

@@ -1,0 +1,21 @@
+# name: machine param return
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Echo(int value) -> int {
+    state Start {
+        return value;
+    }
+}
+
+int main() {
+    Echo m = Echo(6);
+    Step(m);
+    return Result(m);
+}
+
+=== run ===
+exit_code: 6

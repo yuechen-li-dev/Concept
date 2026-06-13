@@ -184,7 +184,10 @@ const Collector = struct {
             type_id: types.TypeId,
         },
         concept: hir.ConceptId,
-        machine: hir.MachineId,
+        machine: struct {
+            id: hir.MachineId,
+            type_id: types.TypeId,
+        },
     };
 
     fn init(allocator: std.mem.Allocator, module: *SemanticModule, diagnostic_bag: *DiagnosticBag, options: CollectOptions) Collector {
@@ -258,7 +261,7 @@ const Collector = struct {
         if (self.diagnostics.count() != 0) return;
         for (unit.items) |item| {
             switch (item) {
-                .machine_decl => |machine_decl| try self.diagnostics.append(diagnostics.machineSemanticsNotImplemented(machine_decl.name.span)),
+                .machine_decl => {},
                 else => {},
             }
         }
@@ -438,9 +441,10 @@ const Collector = struct {
         if (states.len == 0) return;
 
         const machine_id = try self.module.hir.addMachine(name, self.module.types.voidType(), states, machine_decl.span);
+        const type_id = try self.module.types.addMachineType(machine_id);
         self.module.hir.setMachineAttributes(machine_id, try self.copyAttributes(machine_decl.attributes));
         self.module.hir.setMachineAllocationEffect(machine_id, lowerAllocationEffect(machine_decl.allocation_effect));
-        try self.top_level_decls.put(name, .{ .machine = machine_id });
+        try self.top_level_decls.put(name, .{ .machine = .{ .id = machine_id, .type_id = type_id } });
     }
 
     fn validateAndCopyMachineStates(self: *Collector, machine_decl: ast.MachineDecl) ![]hir.HirMachineState {
@@ -569,7 +573,7 @@ const Collector = struct {
         const diagnostic_count_before = self.diagnostics.count();
         const machine_symbol = try self.module.interner.intern(machine_decl.name.text);
         const machine_id = switch (self.top_level_decls.get(machine_symbol).?) {
-            .machine => |id| id,
+            .machine => |entry| entry.id,
             else => unreachable,
         };
 
@@ -1228,7 +1232,8 @@ const Collector = struct {
         return switch (decl) {
             .struct_ => |entry| entry.type_id,
             .enum_ => |entry| entry.type_id,
-            .function, .generic_function, .concept, .machine => blk: {
+            .machine => |entry| entry.type_id,
+            .function, .generic_function, .concept => blk: {
                 try self.diagnostics.append(diagnostics.unknownTypeName(part.span));
                 break :blk null;
             },
@@ -1300,7 +1305,7 @@ const Collector = struct {
     fn lowerMachineBody(self: *Collector, machine_decl: ast.MachineDecl) !void {
         const machine_symbol = try self.module.interner.intern(machine_decl.name.text);
         const machine_id = switch (self.top_level_decls.get(machine_symbol).?) {
-            .machine => |id| id,
+            .machine => |entry| entry.id,
             else => unreachable,
         };
 
@@ -1775,7 +1780,50 @@ const BodyLowerer = struct {
                     return expr_id;
                 }
 
+                if (std.mem.eql(u8, call.callee.text, "Step") or
+                    std.mem.eql(u8, call.callee.text, "Complete") or
+                    std.mem.eql(u8, call.callee.text, "Result"))
+                {
+                    if (call.type_args.len != 0 or owned.len != 1) {
+                        try self.collector.diagnostics.append(diagnostics.Diagnostic.init(.InvalidCall, .@"error", "machine builtin expects exactly one machine argument", call.span));
+                        return null;
+                    }
+                    const machine_type = (try self.inferExprType(owned[0])) orelse return null;
+                    if (self.collector.module.types.kind(machine_type) != .machine_type) {
+                        try self.collector.diagnostics.append(diagnostics.Diagnostic.init(.InvalidCall, .@"error", "machine builtin expects a machine argument", call.span));
+                        return null;
+                    }
+                    if (std.mem.eql(u8, call.callee.text, "Step")) {
+                        return try self.collector.module.hir.addExpr(.{ .machine_step = owned[0] }, call.span);
+                    }
+                    if (std.mem.eql(u8, call.callee.text, "Complete")) {
+                        return try self.collector.module.hir.addExpr(.{ .machine_complete = owned[0] }, call.span);
+                    }
+                    return try self.collector.module.hir.addExpr(.{ .machine_result = owned[0] }, call.span);
+                }
+
                 if (self.collector.top_level_decls.get(symbol)) |decl| {
+                    switch (decl) {
+                        .machine => |entry| {
+                            const machine = self.collector.module.hir.getMachine(entry.id);
+                            if (machine.params.len != owned.len) {
+                                try self.collector.diagnostics.append(diagnostics.Diagnostic.init(.InvalidCall, .@"error", "machine constructor argument count does not match machine parameters", call.span));
+                                return null;
+                            }
+                            for (machine.params, owned) |param_id, arg_id| {
+                                const expected = self.collector.module.hir.getMachineParam(param_id).type_id;
+                                const actual = (try self.inferExprType(arg_id)) orelse return null;
+                                if (!sameType(expected, actual)) {
+                                    try self.collector.diagnostics.append(diagnostics.Diagnostic.init(.TypeMismatch, .@"error", "machine constructor argument type does not match parameter type", self.collector.module.hir.getExpr(arg_id).span));
+                                    return null;
+                                }
+                            }
+                            const expr_id = try self.collector.module.hir.addExpr(.{ .machine_construct = .{ .machine = entry.id, .args = owned } }, call.span);
+                            owned_args_transferred = true;
+                            return expr_id;
+                        },
+                        else => {},
+                    }
                     const function_id = switch (decl) {
                         .function => |id| id,
                         .generic_function => |id| self.collector.module.hir.getGenericFunction(id).function,
@@ -2252,6 +2300,20 @@ const BodyLowerer = struct {
                 }
             },
             .call => |call| self.collector.module.hir.getFunction(call.function).return_type,
+            .machine_construct => |construct| try self.collector.module.types.addMachineType(construct.machine),
+            .machine_step => self.collector.module.types.voidType(),
+            .machine_complete => self.collector.module.types.boolType(),
+            .machine_result => |machine_expr| blk: {
+                const machine_type = (try self.inferExprType(machine_expr)) orelse return null;
+                const machine_id = switch (self.collector.module.types.kind(machine_type)) {
+                    .machine_type => |id| id,
+                    else => {
+                        try self.collector.diagnostics.append(diagnostics.Diagnostic.init(.InvalidCall, .@"error", "Result expects a machine argument", expr.span));
+                        return null;
+                    },
+                };
+                break :blk self.collector.module.hir.getMachine(machine_id).return_type;
+            },
             .arena_alloc => |arena_alloc| arena_alloc.result_type,
             .field_access => |field_access| blk: {
                 const receiver_type = (try self.inferExprType(field_access.receiver)) orelse return null;
@@ -3190,7 +3252,7 @@ test "semantic collection rejects duplicate machine state in same machine" {
     try std.testing.expectEqual(states[1].name.span, diagnostics_bag.diagnostics.items[0].primary_span);
 }
 
-test "semantic collection accepts literal transition to declared states before unsupported lowering" {
+test "semantic collection accepts literal transition to declared states" {
     var start_statements = [_]ast.Stmt{transitionStmt("Done", 20)};
     var done_statements = [_]ast.Stmt{transitionStmt("Start", 60)};
     var states = [_]ast.MachineStateDecl{
@@ -3203,8 +3265,7 @@ test "semantic collection accepts literal transition to declared states before u
     var module = try collectMachineShellsForTest(&.{machineItemWithStates("Flow", states[0..], 0)}, &diagnostics_bag);
     defer module.deinit();
 
-    try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
-    try std.testing.expectEqual(DiagnosticCode.MachineSemanticsNotImplemented, diagnostics_bag.diagnostics.items[0].code);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
     const machine = module.hir.getMachine(.{ .index = 0 });
     const start_body = module.hir.getStmt(machine.states[0].body.?).kind.block;
     const start_transition = module.hir.getStmt(start_body[0]).kind.transition_stmt.literal_state;
@@ -3223,11 +3284,10 @@ test "semantic collection accepts literal self transition" {
     var module = try collectMachineShellsForTest(&.{machineItemWithStates("Flow", states[0..], 0)}, &diagnostics_bag);
     defer module.deinit();
 
-    try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
-    try std.testing.expectEqual(DiagnosticCode.MachineSemanticsNotImplemented, diagnostics_bag.diagnostics.items[0].code);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
 }
 
-test "semantic collection accepts match transition to declared states before unsupported lowering" {
+test "semantic collection accepts match transition to declared states" {
     var scrutinee = ast.Expr{ .int_literal = .{ .text = "0", .span = .{ .start = 20, .length = 1 } } };
     var arms = [_]ast.TransitionMatchArm{
         transitionMatchIntArm("0", "Identifier", 30),
@@ -3247,8 +3307,7 @@ test "semantic collection accepts match transition to declared states before uns
     var module = try collectMachineShellsForTest(&.{machineItemWithStates("Lexer", states[0..], 0)}, &diagnostics_bag);
     defer module.deinit();
 
-    try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
-    try std.testing.expectEqual(DiagnosticCode.MachineSemanticsNotImplemented, diagnostics_bag.diagnostics.items[0].code);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
     const machine = module.hir.getMachine(.{ .index = 0 });
     const body = module.hir.getStmt(machine.states[0].body.?).kind.block;
     const match_transition = module.hir.getStmt(body[0]).kind.transition_stmt.match_state;
@@ -3276,11 +3335,10 @@ test "semantic collection accepts match transition to self initial and later sta
     var module = try collectMachineShellsForTest(&.{machineItemWithStates("Flow", states[0..], 0)}, &diagnostics_bag);
     defer module.deinit();
 
-    try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
-    try std.testing.expectEqual(DiagnosticCode.MachineSemanticsNotImplemented, diagnostics_bag.diagnostics.items[0].code);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
 }
 
-test "semantic collection accepts decide transition to declared states before unsupported lowering" {
+test "semantic collection accepts decide transition to declared states" {
     var condition = ast.Expr{ .bool_literal = .{ .value = true, .span = .{ .start = 35, .length = 4 } } };
     var attack_score = ast.Expr{ .int_literal = .{ .text = "10", .span = .{ .start = 55, .length = 2 } } };
     var idle_score = ast.Expr{ .int_literal = .{ .text = "0", .span = .{ .start = 75, .length = 1 } } };
@@ -3300,8 +3358,7 @@ test "semantic collection accepts decide transition to declared states before un
     var module = try collectMachineShellsForTest(&.{machineItemWithStates("Brain", states[0..], 0)}, &diagnostics_bag);
     defer module.deinit();
 
-    try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
-    try std.testing.expectEqual(DiagnosticCode.MachineSemanticsNotImplemented, diagnostics_bag.diagnostics.items[0].code);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
     const machine = module.hir.getMachine(.{ .index = 0 });
     const body = module.hir.getStmt(machine.states[0].body.?).kind.block;
     const decide_transition = module.hir.getStmt(body[0]).kind.transition_stmt.decide_state;
@@ -3330,8 +3387,7 @@ test "semantic collection accepts decide transition to self initial and later st
     var module = try collectMachineShellsForTest(&.{machineItemWithStates("Flow", states[0..], 0)}, &diagnostics_bag);
     defer module.deinit();
 
-    try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
-    try std.testing.expectEqual(DiagnosticCode.MachineSemanticsNotImplemented, diagnostics_bag.diagnostics.items[0].code);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
 }
 
 test "semantic collection rejects unknown literal transition target before unsupported lowering" {
@@ -3467,9 +3523,7 @@ test "semantic collection keeps machine state names scoped per machine" {
     defer module.deinit();
 
     try std.testing.expectEqual(@as(usize, 2), module.hir.machines.items.len);
-    try std.testing.expectEqual(@as(usize, 2), diagnostics_bag.count());
-    try std.testing.expectEqual(DiagnosticCode.MachineSemanticsNotImplemented, diagnostics_bag.diagnostics.items[0].code);
-    try std.testing.expectEqual(DiagnosticCode.MachineSemanticsNotImplemented, diagnostics_bag.diagnostics.items[1].code);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
 }
 
 test "semantic collection preserves machine state order and initial state" {
@@ -3507,11 +3561,10 @@ test "semantic collection does not expose machine state names as module symbols"
 
     try std.testing.expectEqual(@as(usize, 1), module.hir.machines.items.len);
     try std.testing.expectEqual(@as(usize, 1), module.hir.functions.items.len);
-    try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
-    try std.testing.expectEqual(DiagnosticCode.MachineSemanticsNotImplemented, diagnostics_bag.diagnostics.items[0].code);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
 }
 
-test "semantic collection records machine shell metadata before unsupported lowering" {
+test "semantic collection records machine shell metadata" {
     var states = [_]ast.MachineStateDecl{stateDecl("Start", 10)};
     var params = [_]ast.ParamDecl{paramDecl("int", "limit", 40)};
     var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
@@ -3520,8 +3573,7 @@ test "semantic collection records machine shell metadata before unsupported lowe
     var module = try collectMachineShellsForTest(&.{machineItemWithParams("Lexer", params[0..], states[0..], 0)}, &diagnostics_bag);
     defer module.deinit();
 
-    try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
-    try std.testing.expectEqual(DiagnosticCode.MachineSemanticsNotImplemented, diagnostics_bag.diagnostics.items[0].code);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
     const machine = module.hir.getMachine(.{ .index = 0 });
     try std.testing.expectEqualStrings("Lexer", module.interner.text(machine.name));
     try std.testing.expectEqual(types.TypeId{ .index = 1 }, machine.return_type);

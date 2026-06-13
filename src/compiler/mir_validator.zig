@@ -144,6 +144,12 @@ const Validator = struct {
             },
             .arena_reset => |arena_operand| try self.validateArenaStorageOperand(function_id, arena_operand, statement.span),
             .arena_destroy => |arena_operand| try self.validateArenaStorageOperand(function_id, arena_operand, statement.span),
+            .machine_step => |machine_operand| {
+                const machine_type = try self.operandType(function_id, machine_operand, statement.span);
+                if (machine_type == null or self.semantic_module.types.kind(machine_type.?) != .machine_type) {
+                    try self.report(.InvalidMirType, statement.span, diagnostics.invalidMirType);
+                }
+            },
         }
     }
 
@@ -351,6 +357,45 @@ const Validator = struct {
                     try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
                 }
                 break :blk arena_alloc.result_type;
+            },
+            .machine_construct => |construct| blk: {
+                if (construct.machine.index >= self.semantic_module.hir.machines.items.len) {
+                    try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
+                    break :blk null;
+                }
+                const machine = self.semantic_module.hir.getMachine(construct.machine);
+                if (construct.args.len != machine.params.len) {
+                    try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
+                }
+                for (construct.args, machine.params) |arg, param_id| {
+                    const arg_type = try self.operandType(function_id, arg, span);
+                    const param_type = self.semantic_module.hir.getMachineParam(param_id).type_id;
+                    if (arg_type != null and !sameType(arg_type.?, param_type)) {
+                        try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                    }
+                }
+                break :blk self.semantic_module.types.machineType(construct.machine) orelse {
+                    try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                    break :blk null;
+                };
+            },
+            .machine_complete => |operand| blk: {
+                const operand_type = try self.operandType(function_id, operand, span);
+                if (operand_type == null or self.semantic_module.types.kind(operand_type.?) != .machine_type) {
+                    try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                }
+                break :blk self.semantic_module.types.boolType();
+            },
+            .machine_result => |operand| blk: {
+                const operand_type = try self.operandType(function_id, operand, span);
+                if (operand_type == null) break :blk null;
+                break :blk switch (self.semantic_module.types.kind(operand_type.?)) {
+                    .machine_type => |machine_id| self.semantic_module.hir.getMachine(machine_id).return_type,
+                    else => {
+                        try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                        break :blk null;
+                    },
+                };
             },
             .struct_constructor => |constructor| blk: {
                 if (constructor.struct_id.index >= self.semantic_module.hir.structs.items.len) {

@@ -34,14 +34,6 @@ pub fn emitExecutableFromMir(
     mir_module: *mir.MirModule,
     diagnostic_bag: ?*diagnostics.DiagnosticBag,
 ) EmitError![]const u8 {
-    if (semantic_module.hir.machines.items.len != 0) {
-        if (diagnostic_bag) |bag| {
-            const machine = semantic_module.hir.machines.items[0];
-            try bag.append(diagnostics.machineSemanticsNotImplemented(machine.span));
-        }
-        return error.InvalidExecutable;
-    }
-
     mir_storage.analyzeModule(allocator, semantic_module, mir_module, diagnostic_bag) catch |err| switch (err) {
         error.InvalidStorageState => return error.InvalidExecutable,
         error.OutOfMemory => return error.OutOfMemory,
@@ -64,7 +56,10 @@ pub fn emitExecutableFromMir(
     if (emitted_enum_layouts and ctx.module.hir.structs.items.len > 0) try writer.writeByte('\n');
 
     const emitted_struct_layouts = try emitStructLayouts(writer, &ctx);
-    if ((emitted_enum_layouts or emitted_struct_layouts) and mir_module.store.functions.items.len > 0) try writer.writeByte('\n');
+    if ((emitted_enum_layouts or emitted_struct_layouts) and ctx.module.hir.machines.items.len > 0) try writer.writeByte('\n');
+
+    const emitted_machine_layouts = try emitMachineLayouts(writer, &ctx);
+    if ((emitted_enum_layouts or emitted_struct_layouts or emitted_machine_layouts) and mir_module.store.functions.items.len > 0) try writer.writeByte('\n');
 
     const emitted_opaque_allocation_decls = try emitOpaqueAllocationForwardDeclarations(writer, &ctx);
     if (emitted_opaque_allocation_decls and mir_module.store.functions.items.len > 0) try writer.writeByte('\n');
@@ -243,7 +238,7 @@ fn isSupportedStructFieldType(ctx: *const BackendContext, type_id: types.TypeId)
         .int, .bool, .alloc_error => true,
         .enum_type => |enum_id| isSupportedEnumLayout(ctx, enum_id),
         .pointer => |pointer| isSupportedStructFieldPointerType(ctx, pointer.pointee),
-        .void, .arena, .allocator, .struct_type, .manual_init, .type_param => false,
+        .void, .arena, .allocator, .struct_type, .machine_type, .manual_init, .type_param => false,
     };
 }
 
@@ -253,8 +248,191 @@ fn isSupportedStructFieldPointerType(ctx: *const BackendContext, pointee: types.
         .void, .int, .bool, .arena, .allocator, .alloc_error => true,
         .enum_type => |enum_id| isSupportedEnumLayout(ctx, enum_id),
         .pointer => |nested| isSupportedStructFieldPointerType(ctx, nested.pointee),
-        .struct_type, .manual_init, .type_param => false,
+        .struct_type, .machine_type, .manual_init, .type_param => false,
     };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Machine layout and step emission
+// ─────────────────────────────────────────────────────────────────────────────
+
+fn emitMachineLayouts(writer: anytype, ctx: *const BackendContext) EmitError!bool {
+    var emitted_any = false;
+    for (ctx.module.hir.machines.items, 0..) |machine, index| {
+        if (emitted_any) try writer.writeByte('\n');
+        try emitMachineLayout(writer, ctx, .{ .index = @intCast(index) }, machine);
+        emitted_any = true;
+    }
+    return emitted_any;
+}
+
+fn emitMachineLayout(writer: anytype, ctx: *const BackendContext, machine_id: hir.MachineId, machine: hir.HirMachine) EmitError!void {
+    if (!isSupportedMachineScalarType(ctx, machine.return_type)) {
+        try reportUnsupportedCType(ctx, machine.span);
+        return error.InvalidExecutable;
+    }
+
+    try writer.writeAll("typedef enum {\n");
+    for (machine.states, 0..) |state, index| {
+        try writer.writeAll("    ");
+        try emitMachineStateName(writer, ctx.module, machine.name, state.name);
+        try writer.print(" = {d},\n", .{index});
+    }
+    try writer.writeAll("} ");
+    try emitMachineStateTypeName(writer, ctx.module, machine.name);
+    try writer.writeAll(";\n\n");
+
+    try writer.writeAll("typedef struct {\n    ");
+    try emitMachineStateTypeName(writer, ctx.module, machine.name);
+    try writer.writeAll(" state;\n    int complete;\n    ");
+    try emitCType(writer, ctx, machine.return_type, machine.span);
+    try writer.writeAll(" result;\n");
+    for (machine.params) |param_id| {
+        const param = ctx.module.hir.getMachineParam(param_id);
+        if (!isSupportedMachineScalarType(ctx, param.type_id)) {
+            try reportUnsupportedCType(ctx, param.span);
+            return error.InvalidExecutable;
+        }
+        try writer.writeAll("    ");
+        try emitCType(writer, ctx, param.type_id, param.span);
+        try writer.writeByte(' ');
+        try emitMachineParamFieldName(writer, ctx.module, param.name);
+        try writer.writeAll(";\n");
+    }
+    try writer.writeAll("} ");
+    try emitMachineTypeName(writer, ctx.module, machine.name);
+    try writer.writeAll(";\n\n");
+
+    try writer.writeAll("static ");
+    try emitMachineTypeName(writer, ctx.module, machine.name);
+    try writer.writeByte(' ');
+    try emitMachineNewFunctionName(writer, ctx.module, machine.name);
+    try writer.writeByte('(');
+    for (machine.params, 0..) |param_id, index| {
+        if (index != 0) try writer.writeAll(", ");
+        const param = ctx.module.hir.getMachineParam(param_id);
+        try emitCType(writer, ctx, param.type_id, param.span);
+        try writer.writeByte(' ');
+        try emitMachineParamName(writer, ctx.module, param.name);
+    }
+    try writer.writeAll(") {\n    ");
+    try emitMachineTypeName(writer, ctx.module, machine.name);
+    try writer.writeAll(" m;\n    m.state = ");
+    try emitMachineStateName(writer, ctx.module, machine.name, machine.states[machine.initial_state_index].name);
+    try writer.writeAll(";\n    m.complete = 0;\n    m.result = 0;\n");
+    for (machine.params) |param_id| {
+        const param = ctx.module.hir.getMachineParam(param_id);
+        try writer.writeAll("    m.");
+        try emitMachineParamFieldName(writer, ctx.module, param.name);
+        try writer.writeAll(" = ");
+        try emitMachineParamName(writer, ctx.module, param.name);
+        try writer.writeAll(";\n");
+    }
+    try writer.writeAll("    return m;\n}\n\n");
+
+    try writer.writeAll("static void ");
+    try emitMachineStepFunctionName(writer, ctx.module, machine.name);
+    try writer.writeByte('(');
+    try emitMachineTypeName(writer, ctx.module, machine.name);
+    try writer.writeAll("* m) {\n    if (m->complete) return;\n    switch (m->state) {\n");
+    for (machine.states) |state| {
+        try writer.writeAll("        case ");
+        try emitMachineStateName(writer, ctx.module, machine.name, state.name);
+        try writer.writeAll(":\n");
+        if (state.body) |body| {
+            try emitMachineStateStmt(writer, ctx, machine_id, machine, body);
+        }
+        try writer.writeAll("            return;\n");
+    }
+    try writer.writeAll("    }\n}\n");
+}
+
+fn isSupportedMachineScalarType(ctx: *const BackendContext, type_id: types.TypeId) bool {
+    if (!ctx.module.types.contains(type_id)) return false;
+    return switch (ctx.module.types.kind(type_id)) {
+        .int, .bool => true,
+        else => false,
+    };
+}
+
+fn emitMachineStateStmt(writer: anytype, ctx: *const BackendContext, machine_id: hir.MachineId, machine: hir.HirMachine, stmt_id: hir.StmtId) EmitError!void {
+    const stmt = ctx.module.hir.getStmt(stmt_id).*;
+    switch (stmt.kind) {
+        .block => |children| for (children) |child| try emitMachineStateStmt(writer, ctx, machine_id, machine, child),
+        .transition_stmt => |target| switch (target) {
+            .literal_state => |literal| {
+                try writer.writeAll("            m->state = ");
+                try emitMachineStateName(writer, ctx.module, machine.name, machine.states[literal.state_index].name);
+                try writer.writeAll(";\n            return;\n");
+            },
+            .match_state, .decide_state => {
+                if (ctx.diagnostic_bag) |bag| try bag.append(diagnostics.machineSemanticsNotImplemented(stmt.span));
+                return error.InvalidExecutable;
+            },
+        },
+        .return_stmt => |maybe_expr| {
+            const expr_id = maybe_expr orelse {
+                if (ctx.diagnostic_bag) |bag| try bag.append(diagnostics.machineSemanticsNotImplemented(stmt.span));
+                return error.InvalidExecutable;
+            };
+            try writer.writeAll("            m->result = ");
+            try emitMachineStateExpr(writer, ctx, machine_id, expr_id);
+            try writer.writeAll(";\n            m->complete = 1;\n            return;\n");
+        },
+        .if_stmt => |if_stmt| {
+            try writer.writeAll("            if (");
+            try emitMachineStateExpr(writer, ctx, machine_id, if_stmt.condition);
+            try writer.writeAll(") {\n");
+            try emitMachineStateStmt(writer, ctx, machine_id, machine, if_stmt.then_block);
+            try writer.writeAll("            }");
+            if (if_stmt.else_block) |else_block| {
+                try writer.writeAll(" else {\n");
+                try emitMachineStateStmt(writer, ctx, machine_id, machine, else_block);
+                try writer.writeAll("            }");
+            }
+            try writer.writeByte('\n');
+        },
+        else => {
+            if (ctx.diagnostic_bag) |bag| try bag.append(diagnostics.machineSemanticsNotImplemented(stmt.span));
+            return error.InvalidExecutable;
+        },
+    }
+}
+
+fn emitMachineStateExpr(writer: anytype, ctx: *const BackendContext, machine_id: hir.MachineId, expr_id: hir.ExprId) EmitError!void {
+    const expr = ctx.module.hir.getExpr(expr_id).*;
+    switch (expr.kind) {
+        .int_literal => |text| try writer.writeAll(text),
+        .bool_literal => |value| try writer.writeAll(if (value) "1" else "0"),
+        .machine_param_ref => |param_id| {
+            const param = ctx.module.hir.getMachineParam(param_id);
+            if (param.parent.index != machine_id.index) return error.InvalidExecutable;
+            try writer.writeAll("m->");
+            try emitMachineParamFieldName(writer, ctx.module, param.name);
+        },
+        .group => |inner| {
+            try writer.writeByte('(');
+            try emitMachineStateExpr(writer, ctx, machine_id, inner);
+            try writer.writeByte(')');
+        },
+        .unary => |unary| {
+            try writer.writeAll(unary.op.lexeme());
+            try emitMachineStateExpr(writer, ctx, machine_id, unary.operand);
+        },
+        .binary => |binary| {
+            try writer.writeByte('(');
+            try emitMachineStateExpr(writer, ctx, machine_id, binary.left);
+            try writer.writeByte(' ');
+            try writer.writeAll(binary.op.lexeme());
+            try writer.writeByte(' ');
+            try emitMachineStateExpr(writer, ctx, machine_id, binary.right);
+            try writer.writeByte(')');
+        },
+        else => {
+            if (ctx.diagnostic_bag) |bag| try bag.append(diagnostics.machineSemanticsNotImplemented(expr.span));
+            return error.InvalidExecutable;
+        },
+    }
 }
 
 fn emitOpaqueAllocationForwardDeclarations(writer: anytype, ctx: *const BackendContext) EmitError!bool {
@@ -311,7 +489,7 @@ fn mirContainsArenaAlloc(ctx: *const BackendContext) bool {
         for (block.statements) |statement| {
             switch (statement.kind) {
                 .assign => |assignment| if (rvalueContainsArenaAlloc(assignment.rvalue)) return true,
-                .drop => {},
+                .drop, .machine_step => {},
             }
         }
     }
@@ -321,6 +499,7 @@ fn mirContainsArenaAlloc(ctx: *const BackendContext) bool {
 fn rvalueContainsArenaAlloc(rvalue: mir.MirRvalue) bool {
     return switch (rvalue) {
         .arena_alloc => true,
+        .machine_construct, .machine_complete, .machine_result => false,
         else => false,
     };
 }
@@ -455,6 +634,14 @@ fn emitStatement(writer: anytype, ctx: *const BackendContext, statement: mir.Mir
         .arena_destroy => |arena_operand| {
             try writer.writeAll("    cpt_arena_destroy(");
             try emitOperand(writer, ctx, arena_operand);
+            try writer.writeAll(");\n");
+        },
+        .machine_step => |machine_operand| {
+            try writer.writeAll("    ");
+            const machine_id = try machineIdFromOperand(ctx, machine_operand);
+            try emitMachineStepFunctionName(writer, ctx.module, ctx.module.hir.getMachine(machine_id).name);
+            try writer.writeAll("(&");
+            try emitOperand(writer, ctx, machine_operand);
             try writer.writeAll(");\n");
         },
     }
@@ -632,6 +819,23 @@ fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue
             try emitCType(writer, ctx, arena_alloc.allocated_type, null);
             try writer.writeAll("))");
         },
+        .machine_construct => |construct| {
+            try emitMachineNewFunctionName(writer, ctx.module, ctx.module.hir.getMachine(construct.machine).name);
+            try writer.writeByte('(');
+            for (construct.args, 0..) |arg, index| {
+                if (index != 0) try writer.writeAll(", ");
+                try emitOperand(writer, ctx, arg);
+            }
+            try writer.writeByte(')');
+        },
+        .machine_complete => |operand| {
+            try emitOperand(writer, ctx, operand);
+            try writer.writeAll(".complete");
+        },
+        .machine_result => |operand| {
+            try emitOperand(writer, ctx, operand);
+            try writer.writeAll(".result");
+        },
         .enum_constructor, .struct_constructor => unreachable,
         .enum_tag => |operand| {
             try emitOperand(writer, ctx, operand);
@@ -680,6 +884,21 @@ fn emitPlace(writer: anytype, ctx: *const BackendContext, place: mir.MirPlace) E
             try emitStructFieldName(writer, ctx.module, field.name, field_index);
         },
     }
+}
+
+fn machineIdFromOperand(ctx: *const BackendContext, operand: mir.MirOperand) EmitError!hir.MachineId {
+    const place = switch (operand) {
+        .copy => |place| place,
+        else => return error.InvalidExecutable,
+    };
+    const local_id = switch (place) {
+        .local => |local_id| local_id,
+        else => return error.InvalidExecutable,
+    };
+    return switch (ctx.module.types.kind(ctx.mir_module.store.getLocal(local_id).type_id)) {
+        .machine_type => |machine_id| machine_id,
+        else => error.InvalidExecutable,
+    };
 }
 
 fn emitParamList(writer: anytype, ctx: *const BackendContext, function: mir.MirFunction, params: []const mir.MirLocalId) EmitError!void {
@@ -745,6 +964,9 @@ fn emitCTypeAt(writer: anytype, ctx: *const BackendContext, type_id: types.TypeI
             try requireSupportedStructLayout(ctx, struct_id, span);
             try emitStructTypeName(writer, ctx.module, ctx.module.hir.getStruct(struct_id).name);
         },
+        .machine_type => |machine_id| {
+            try emitMachineTypeName(writer, ctx.module, ctx.module.hir.getMachine(machine_id).name);
+        },
         .manual_init, .type_param => {
             try reportUnsupportedCType(ctx, span);
             return error.InvalidExecutable;
@@ -773,6 +995,42 @@ fn emitEnumTypeName(writer: anytype, module: *const semantics.SemanticModule, sy
 
 fn emitStructTypeName(writer: anytype, module: *const semantics.SemanticModule, symbol: hir.SymbolId) !void {
     try writer.writeAll("cpt_struct_");
+    try emitEscapedIdentifierComponent(writer, module.interner.text(symbol));
+}
+
+fn emitMachineTypeName(writer: anytype, module: *const semantics.SemanticModule, symbol: hir.SymbolId) !void {
+    try writer.writeAll("cpt_m_");
+    try emitEscapedIdentifierComponent(writer, module.interner.text(symbol));
+}
+
+fn emitMachineStateTypeName(writer: anytype, module: *const semantics.SemanticModule, symbol: hir.SymbolId) !void {
+    try emitMachineTypeName(writer, module, symbol);
+    try writer.writeAll("_state");
+}
+
+fn emitMachineStateName(writer: anytype, module: *const semantics.SemanticModule, machine_symbol: hir.SymbolId, state_symbol: hir.SymbolId) !void {
+    try emitMachineTypeName(writer, module, machine_symbol);
+    try writer.writeAll("_s_");
+    try emitEscapedIdentifierComponent(writer, module.interner.text(state_symbol));
+}
+
+fn emitMachineNewFunctionName(writer: anytype, module: *const semantics.SemanticModule, symbol: hir.SymbolId) !void {
+    try emitMachineTypeName(writer, module, symbol);
+    try writer.writeAll("_new");
+}
+
+fn emitMachineStepFunctionName(writer: anytype, module: *const semantics.SemanticModule, symbol: hir.SymbolId) !void {
+    try emitMachineTypeName(writer, module, symbol);
+    try writer.writeAll("_step");
+}
+
+fn emitMachineParamName(writer: anytype, module: *const semantics.SemanticModule, symbol: hir.SymbolId) !void {
+    try writer.writeAll("cpt_mp_");
+    try emitEscapedIdentifierComponent(writer, module.interner.text(symbol));
+}
+
+fn emitMachineParamFieldName(writer: anytype, module: *const semantics.SemanticModule, symbol: hir.SymbolId) !void {
+    try writer.writeAll("cpt_mpf_");
     try emitEscapedIdentifierComponent(writer, module.interner.text(symbol));
 }
 
@@ -1955,6 +2213,37 @@ test "MIR C backend emits deterministic generic instantiation names" {
     try std.testing.expect(std.mem.indexOf(u8, c_source, "int cpt_f_identity__bool(int cpt_p_value_") != null);
     try std.testing.expectEqual(@as(usize, 2), countOccurrences(c_source, "cpt_f_identity__int("));
     try std.testing.expectEqual(@as(usize, 2), countOccurrences(c_source, "cpt_f_identity__bool("));
+}
+
+test "MIR C backend emits machine frame and step runtime" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\
+        \\machine Door() -> int {
+        \\    state Closed {
+        \\        transition Open;
+        \\    }
+        \\
+        \\    state Open {
+        \\        return 1;
+        \\    }
+        \\}
+        \\
+        \\int main() {
+        \\    Door m = Door();
+        \\    Step(m);
+        \\    Step(m);
+        \\    return Result(m);
+        \\}
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "typedef enum {\n    cpt_m_Door_s_Closed = 0,\n    cpt_m_Door_s_Open = 1,") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "typedef struct {\n    cpt_m_Door_state state;\n    int complete;\n    int result;") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "static void cpt_m_Door_step(cpt_m_Door* m)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "m->state = cpt_m_Door_s_Open;") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "m->result = 1;\n            m->complete = 1;") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "malloc") == null);
 }
 
 fn countOccurrences(haystack: []const u8, needle: []const u8) usize {

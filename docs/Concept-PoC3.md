@@ -54,8 +54,12 @@ target against the containing machine's state table, while leaving arbitrary
 state-valued transition expressions and transition-decide condition/score
 typing deferred. P13-M6 adds a non-executable HIR machine scaffold that
 preserves states and literal/match/decide transition targets as machine-local
-state indexes; executable MIR lowering, C backend emission, and runtime
-step/resume support remain unsupported. Deferred Phase 12
+state indexes. P13-M7 adds the first executable step/resume runtime subset:
+machine declarations define explicit frame value types, `MachineName(...)`
+constructs frames, and `Step`, `Complete`, and `Result` operate on literal
+transition machines through MIR-backed C emission with no hidden heap or
+implicit scheduler. Runtime lowering for match/decide transitions remains
+deferred. Deferred Phase 12
 work includes
 `Arena.create`, hosted runtime helper implementation, allocation failure
 surfaces, generic `Store<T, Id>`, named store IDs, generation counters, region

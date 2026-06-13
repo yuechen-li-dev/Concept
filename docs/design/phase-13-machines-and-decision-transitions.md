@@ -142,6 +142,36 @@ enforcement, DragonGod features, stack HFSM, `board`, mailbox/event buses,
 actuators, dirty-key tracking, persistence, hysteresis, `min_commit`, policy
 memory, hidden heap behavior, scheduler behavior, or async behavior.
 
+P13-M7 adds the first executable machine runtime model. A machine declaration
+now defines a nominal frame value type, and `MachineName(...)` constructs that
+frame with the first declared state active, `complete = false`, zero-initialized
+result storage, and machine parameters captured into explicit frame fields.
+`Step(machine)` executes the active state once; `transition Target;` updates the
+frame state and ends the step; `return value;` stores the result, marks the
+frame complete, and ends the step. `Complete(machine)` reads the completion
+flag and `Result(machine)` reads the stored result after completion. Calling
+`Step` on a completed machine is a no-op.
+
+P13-M7 deliberately supports a narrow executable subset: single-active-state
+machines, by-value frame storage, `int`/`bool` result and parameter storage,
+direct `MachineName(...)` construction into an explicit local frame, literal
+state transitions, simple returns, simple machine-parameter references, and
+simple conditional state-body control that already lowers through HIR. The C
+backend emits deterministic state enums, frame structs, constructor helpers,
+and step functions. No generated machine code uses `malloc`, hidden heap
+allocation, an implicit scheduler, async machinery, stack HFSM, child machines,
+boards, blackboards, mailbox buses, actuators, persistence, hysteresis,
+`min_commit`, policy memory, state history, or debug/timeline visualization.
+
+Runtime lowering for `transition match (...) { ... };` and `transition decide {
+... };` remains deferred after P13-M7. Those forms are still parsed, validated,
+and preserved in HIR with resolved machine-local state indexes, but executable
+C emission reports the existing machine-semantics unsupported diagnostic for
+that transition form. `Result(machine)` before completion is currently a raw
+field read with no fallible surface or runtime trap; callers are expected to
+check `Complete(machine)` first until Concept has a fallible result-access
+surface.
+
 ## Core doctrine
 
 ```text
@@ -685,18 +715,19 @@ return completes the machine and stores the result.
 suspend/yield ends the step without changing state.
 ```
 
-Possible future builtins:
+P13-M7 builtins:
 
 ```text
 Step(machine)
-Active(machine)
 Complete(machine)
 Result(machine)
 ```
 
-These resemble Octomata inspection concepts, but Concept should not copy the Oct
-API wholesale unless later milestones prove that shape is right for Concept's
-storage and effects model.
+`Active(machine)` remains deferred because user-visible state-name/string
+support is not part of the current runtime subset. `Step`, `Complete`, and
+`Result` resemble Octomata inspection concepts, but Concept keeps them tied to
+explicit frame storage and compiler-lowered machine semantics rather than a
+hidden scheduler or behavior kernel.
 
 Rules and constraints:
 
@@ -704,7 +735,8 @@ Rules and constraints:
 - There is no hidden heap.
 - Machine instances are explicit values/places.
 - State frame storage is explicit or lowerable.
-- Step/resume runtime v0 may arrive in later milestones.
+- P13-M7 step/resume runtime v0 supports literal transitions and simple
+  return/completion paths.
 
 ## 13. Effects and allocation
 

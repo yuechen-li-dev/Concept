@@ -1,0 +1,22 @@
+# name: machine extra step after complete
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine DoneSoon() -> int {
+    state Start {
+        return 9;
+    }
+}
+
+int main() {
+    DoneSoon m = DoneSoon();
+    Step(m);
+    Step(m);
+    return Result(m);
+}
+
+=== run ===
+exit_code: 9

@@ -390,6 +390,46 @@ const Checker = struct {
                 try self.checkAllocationEffectCall(current_function_id, callee.*, expr.span);
                 break :blk callee.return_type;
             },
+            .machine_construct => |construct| blk: {
+                const machine = self.module.hir.getMachine(construct.machine);
+                if (construct.args.len != machine.params.len) {
+                    try self.reportAt(.InvalidCall, "machine constructor argument count mismatch", expr.span);
+                    return error.InvalidSemanticModule;
+                }
+                for (construct.args, machine.params) |arg, param_id| {
+                    const arg_type = try self.checkExpr(current_function_id, return_type, arg);
+                    const param_type = self.module.hir.getMachineParam(param_id).type_id;
+                    try self.requireCallSame(arg_type, param_type, "machine constructor argument type mismatch", self.exprSpan(arg));
+                }
+                break :blk try self.module.types.addMachineType(construct.machine);
+            },
+            .machine_step => |machine_expr| blk: {
+                const machine_type = try self.checkExpr(current_function_id, return_type, machine_expr);
+                if (self.module.types.kind(machine_type) != .machine_type) {
+                    try self.reportAt(.InvalidCall, "Step expects a machine argument", expr.span);
+                    return error.InvalidSemanticModule;
+                }
+                break :blk self.module.types.voidType();
+            },
+            .machine_complete => |machine_expr| blk: {
+                const machine_type = try self.checkExpr(current_function_id, return_type, machine_expr);
+                if (self.module.types.kind(machine_type) != .machine_type) {
+                    try self.reportAt(.InvalidCall, "Complete expects a machine argument", expr.span);
+                    return error.InvalidSemanticModule;
+                }
+                break :blk self.module.types.boolType();
+            },
+            .machine_result => |machine_expr| blk: {
+                const machine_type = try self.checkExpr(current_function_id, return_type, machine_expr);
+                const machine_id = switch (self.module.types.kind(machine_type)) {
+                    .machine_type => |id| id,
+                    else => {
+                        try self.reportAt(.InvalidCall, "Result expects a machine argument", expr.span);
+                        return error.InvalidSemanticModule;
+                    },
+                };
+                break :blk self.module.hir.getMachine(machine_id).return_type;
+            },
             .arena_alloc => |arena_alloc| blk: {
                 const arena_type = try self.checkExpr(current_function_id, return_type, arena_alloc.arena_expr);
                 const expected_arena_pointer = try self.module.types.addPointerType(self.module.types.arenaType());
@@ -1086,6 +1126,7 @@ const Checker = struct {
             .local_ref => |id| .{ .local_ref = local_map.get(id).? },
             .param_ref => |id| .{ .param_ref = param_map.get(id).? },
             .machine_param_ref => return error.InvalidSemanticModule,
+            .machine_construct, .machine_step, .machine_complete, .machine_result => return error.InvalidSemanticModule,
             .call => |call| blk: {
                 var args = try self.allocator.alloc(hir.ExprId, call.args.len);
                 errdefer self.allocator.free(args);
@@ -1227,6 +1268,7 @@ const Checker = struct {
             .alloc_error => try writer.writeAll("AllocError"),
             .struct_type => |struct_id| try writer.print("struct_{s}", .{self.module.interner.text(self.module.hir.getStruct(struct_id).name)}),
             .enum_type => |enum_id| try writer.print("enum_{s}", .{self.module.interner.text(self.module.hir.getEnum(enum_id).name)}),
+            .machine_type => |machine_id| try writer.print("machine_{s}", .{self.module.interner.text(self.module.hir.getMachine(machine_id).name)}),
             .pointer => |pointer| {
                 try self.writeTypeSuffix(writer, pointer.pointee);
                 try writer.writeAll("_ptr");

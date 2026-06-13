@@ -381,6 +381,10 @@ pub const HirExprKind = union(enum) {
     field_access: struct { receiver: ExprId, field_name: SymbolId, field_span: SourceSpan },
     target_metadata: struct { query: CompileTimeTargetQuery, field_span: SourceSpan },
     decide: struct { enum_type: types.TypeId, enum_id: EnumId, arms: []HirDecideArm },
+    machine_construct: struct { machine: MachineId, args: []ExprId },
+    machine_step: ExprId,
+    machine_complete: ExprId,
+    machine_result: ExprId,
     test_intrinsic: HirTestIntrinsic,
     group: ExprId,
     unary: struct { op: UnaryOp, operand: ExprId },
@@ -621,6 +625,7 @@ pub const HirStore = struct {
                 .enum_constructor => |constructor| if (constructor.args.len > 0) self.allocator.free(constructor.args),
                 .struct_literal => |literal| if (literal.fields.len > 0) self.allocator.free(literal.fields),
                 .decide => |decide| if (decide.arms.len > 0) self.allocator.free(decide.arms),
+                .machine_construct => |construct| if (construct.args.len > 0) self.allocator.free(construct.args),
                 .test_intrinsic => |test_intrinsic| {
                     if (test_intrinsic.operands.len > 0) self.allocator.free(test_intrinsic.operands);
                     self.allocator.free(test_intrinsic.reason);
@@ -1509,6 +1514,22 @@ pub const HirStore = struct {
                     try writer.writeAll("Score\n");
                     try self.writeExprDebug(writer, arm.score, depth + 3);
                 }
+            },
+            .machine_construct => |construct| {
+                try writer.print("MachineConstruct {f}\n", .{construct.machine});
+                for (construct.args) |arg| try self.writeExprDebug(writer, arg, depth + 1);
+            },
+            .machine_step => |machine_expr| {
+                try writer.writeAll("MachineStep\n");
+                try self.writeExprDebug(writer, machine_expr, depth + 1);
+            },
+            .machine_complete => |machine_expr| {
+                try writer.writeAll("MachineComplete\n");
+                try self.writeExprDebug(writer, machine_expr, depth + 1);
+            },
+            .machine_result => |machine_expr| {
+                try writer.writeAll("MachineResult\n");
+                try self.writeExprDebug(writer, machine_expr, depth + 1);
             },
             .test_intrinsic => |test_intrinsic| {
                 try writer.print("TestIntrinsic {s} because {s}\n", .{ test_intrinsic.kind.displayName(), test_intrinsic.reason });

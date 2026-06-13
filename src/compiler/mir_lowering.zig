@@ -41,8 +41,6 @@ const ModuleLowerer = struct {
     fn lower(self: *ModuleLowerer) LoweringError!mir.MirModule {
         errdefer self.mir_module.deinit();
 
-        if (self.semantic_module.hir.machines.items.len != 0) return error.MachineLoweringNotImplemented;
-
         for (self.semantic_module.hir.functions.items, 0..) |function, index| {
             if (function.body == null) continue;
             const hir_function_id = hir.FunctionId{ .index = @intCast(index) };
@@ -414,6 +412,10 @@ const FunctionLowerer = struct {
             .manual_init_assume => |slot| try self.lowerManualInitAssume(expr, slot, block_id),
             .binary => |binary| try self.lowerBinary(expr, binary, block_id),
             .call => |call| try self.lowerCall(expr, call, block_id),
+            .machine_construct => |construct| try self.lowerMachineConstruct(expr, construct, block_id),
+            .machine_step => |machine_expr| try self.lowerMachineStep(expr, machine_expr, block_id),
+            .machine_complete => |machine_expr| try self.lowerMachineComplete(expr, machine_expr, block_id),
+            .machine_result => |machine_expr| try self.lowerMachineResult(expr, machine_expr, block_id),
             .arena_alloc => |arena_alloc| try self.lowerArenaAlloc(expr, arena_alloc, block_id),
             .concept_requirement_call, .target_metadata, .test_intrinsic => error.InvalidMirLowering,
             .enum_constructor => |constructor| try self.lowerEnumConstructor(expr, constructor, block_id),
@@ -561,6 +563,67 @@ const FunctionLowerer = struct {
             ),
         });
         return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = current };
+    }
+
+    fn lowerMachineConstruct(self: *FunctionLowerer, expr: hir.HirExpr, construct: anytype, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const args = try self.allocator.alloc(mir.MirOperand, construct.args.len);
+        var args_owned = true;
+        var initialized: usize = 0;
+        errdefer if (args_owned) deinitInitializedOperands(self.allocator, args, initialized);
+
+        var current = block_id;
+        for (construct.args) |arg_expr| {
+            const lowered = try self.lowerExpr(arg_expr, current);
+            args[initialized] = lowered.operand;
+            initialized += 1;
+            current = lowered.block;
+        }
+
+        const temp = try self.addTemp(try self.inferExprTypeFrom(expr));
+        args_owned = false;
+        try self.store.appendStatement(current, .{
+            .span = expr.span,
+            .kind = mir.MirStatementKind.assignTo(
+                mir.MirPlace.localPlace(temp),
+                .{ .machine_construct = .{ .machine = construct.machine, .args = args } },
+            ),
+        });
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = current };
+    }
+
+    fn lowerMachineStep(self: *FunctionLowerer, expr: hir.HirExpr, machine_expr: hir.ExprId, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const lowered = try self.lowerExpr(machine_expr, block_id);
+        try self.store.appendStatement(lowered.block, .{
+            .span = expr.span,
+            .kind = .{ .machine_step = lowered.operand },
+        });
+        return .{ .operand = mir.MirOperand.boolLiteral(true), .block = lowered.block };
+    }
+
+    fn lowerMachineComplete(self: *FunctionLowerer, expr: hir.HirExpr, machine_expr: hir.ExprId, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const lowered = try self.lowerExpr(machine_expr, block_id);
+        const temp = try self.addTemp(try self.inferExprTypeFrom(expr));
+        try self.store.appendStatement(lowered.block, .{
+            .span = expr.span,
+            .kind = mir.MirStatementKind.assignTo(
+                mir.MirPlace.localPlace(temp),
+                .{ .machine_complete = lowered.operand },
+            ),
+        });
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = lowered.block };
+    }
+
+    fn lowerMachineResult(self: *FunctionLowerer, expr: hir.HirExpr, machine_expr: hir.ExprId, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const lowered = try self.lowerExpr(machine_expr, block_id);
+        const temp = try self.addTemp(try self.inferExprTypeFrom(expr));
+        try self.store.appendStatement(lowered.block, .{
+            .span = expr.span,
+            .kind = mir.MirStatementKind.assignTo(
+                mir.MirPlace.localPlace(temp),
+                .{ .machine_result = lowered.operand },
+            ),
+        });
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = lowered.block };
     }
 
     fn lowerArenaAlloc(self: *FunctionLowerer, expr: hir.HirExpr, arena_alloc: anytype, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
@@ -862,6 +925,16 @@ const FunctionLowerer = struct {
                 .less, .less_equal, .greater, .greater_equal, .equal_equal, .bang_equal, .logical_and, .logical_or => self.semantic_module.types.boolType(),
             },
             .call => |call| self.semantic_module.hir.getFunction(call.function).return_type,
+            .machine_construct => |construct| try self.semantic_module.types.addMachineType(construct.machine),
+            .machine_step => self.semantic_module.types.voidType(),
+            .machine_complete => self.semantic_module.types.boolType(),
+            .machine_result => |machine_expr| blk: {
+                const machine_type = try self.inferExprType(machine_expr);
+                break :blk switch (self.semantic_module.types.kind(machine_type)) {
+                    .machine_type => |machine_id| self.semantic_module.hir.getMachine(machine_id).return_type,
+                    else => error.InvalidMirLowering,
+                };
+            },
             .arena_alloc => |arena_alloc| arena_alloc.result_type,
             .concept_requirement_call, .test_intrinsic => error.InvalidMirLowering,
             .target_metadata => |metadata| metadata.query.typeOf(self.semantic_module.types),
@@ -1312,7 +1385,7 @@ test "MIR lowering validates Phase 7 struct value params returns and calls" {
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "Call FunctionId(1)(Copy(MirLocalId(") != null);
 }
 
-test "MIR lowering refuses machine-containing modules" {
+test "MIR lowering permits machine-containing modules" {
     var module = try newModule();
     defer module.deinit();
 
@@ -1323,9 +1396,12 @@ test "MIR lowering refuses machine-containing modules" {
         .source_order = 0,
         .body = null,
     };
-    _ = try module.hir.addMachine(try intern(&module, "Flow"), module.types.intType(), states, hir.synthetic_span);
+    const machine_id = try module.hir.addMachine(try intern(&module, "Flow"), module.types.intType(), states, hir.synthetic_span);
+    _ = try module.types.addMachineType(machine_id);
 
-    try std.testing.expectError(error.MachineLoweringNotImplemented, lowerModule(std.testing.allocator, &module));
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+    try std.testing.expectEqual(@as(usize, 0), mir_module.store.functions.items.len);
 }
 
 fn newModule() !semantics.SemanticModule {
