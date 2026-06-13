@@ -491,6 +491,11 @@ const Collector = struct {
                                 try self.validateMachineTransitionTarget(arm.target_name, state_names);
                             }
                         },
+                        .decide_state => |decide_target| {
+                            for (decide_target.cases) |case| {
+                                try self.validateMachineTransitionTarget(case.target_name, state_names);
+                            }
+                        },
                     }
                 },
                 .if_stmt => |if_stmt| {
@@ -2555,6 +2560,25 @@ fn transitionMatchWildcardArm(target: []const u8, start: usize) ast.TransitionMa
     };
 }
 
+fn transitionDecideStmt(cases: []ast.TransitionDecideCase, start: usize) ast.Stmt {
+    return .{ .transition_stmt = .{
+        .target = .{ .decide_state = .{
+            .cases = cases,
+            .span = .{ .start = start + 11, .length = 16 },
+        } },
+        .span = .{ .start = start, .length = 28 },
+    } };
+}
+
+fn transitionDecideCase(target: []const u8, condition: ?*ast.Expr, score: *ast.Expr, start: usize) ast.TransitionDecideCase {
+    return .{
+        .target_name = nameSegment(target, start),
+        .condition = condition,
+        .score = score,
+        .span = .{ .start = start, .length = target.len + 9 },
+    };
+}
+
 fn paramDecl(type_name: []const u8, name: []const u8, start: usize) ast.ParamDecl {
     return .{
         .type_name = typeName(type_name, start),
@@ -3094,6 +3118,52 @@ test "semantic collection accepts match transition to self initial and later sta
     try std.testing.expectEqual(DiagnosticCode.MachineSemanticsNotImplemented, diagnostics_bag.diagnostics.items[0].code);
 }
 
+test "semantic collection accepts decide transition to declared states before unsupported lowering" {
+    var condition = ast.Expr{ .bool_literal = .{ .value = true, .span = .{ .start = 35, .length = 4 } } };
+    var attack_score = ast.Expr{ .int_literal = .{ .text = "10", .span = .{ .start = 55, .length = 2 } } };
+    var idle_score = ast.Expr{ .int_literal = .{ .text = "0", .span = .{ .start = 75, .length = 1 } } };
+    var cases = [_]ast.TransitionDecideCase{
+        transitionDecideCase("Attack", &condition, &attack_score, 30),
+        transitionDecideCase("Idle", null, &idle_score, 70),
+    };
+    var start_statements = [_]ast.Stmt{transitionDecideStmt(cases[0..], 20)};
+    var states = [_]ast.MachineStateDecl{
+        stateDeclWithStatements("Decide", start_statements[0..], 10),
+        stateDecl("Attack", 100),
+        stateDecl("Idle", 140),
+    };
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    var module = try collectMachineShellsForTest(&.{machineItemWithStates("Brain", states[0..], 0)}, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
+    try std.testing.expectEqual(DiagnosticCode.MachineSemanticsNotImplemented, diagnostics_bag.diagnostics.items[0].code);
+}
+
+test "semantic collection accepts decide transition to self initial and later states" {
+    var start_score = ast.Expr{ .int_literal = .{ .text = "1", .span = .{ .start = 40, .length = 1 } } };
+    var done_score = ast.Expr{ .int_literal = .{ .text = "0", .span = .{ .start = 60, .length = 1 } } };
+    var cases = [_]ast.TransitionDecideCase{
+        transitionDecideCase("Start", null, &start_score, 30),
+        transitionDecideCase("Done", null, &done_score, 50),
+    };
+    var start_statements = [_]ast.Stmt{transitionDecideStmt(cases[0..], 20)};
+    var states = [_]ast.MachineStateDecl{
+        stateDeclWithStatements("Start", start_statements[0..], 10),
+        stateDecl("Done", 80),
+    };
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    var module = try collectMachineShellsForTest(&.{machineItemWithStates("Flow", states[0..], 0)}, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
+    try std.testing.expectEqual(DiagnosticCode.MachineSemanticsNotImplemented, diagnostics_bag.diagnostics.items[0].code);
+}
+
 test "semantic collection rejects unknown literal transition target before unsupported lowering" {
     var start_statements = [_]ast.Stmt{transitionStmt("Missing", 20)};
     var states = [_]ast.MachineStateDecl{stateDeclWithStatements("Start", start_statements[0..], 10)};
@@ -3120,6 +3190,41 @@ test "semantic collection rejects cross-machine literal transition target" {
     try std.testing.expectError(error.InvalidSemanticModule, collectItems(&.{
         machineItemWithStates("First", first_states[0..], 0),
         machineItemWithStates("Second", second_states[0..], 50),
+    }, &diagnostics_bag));
+    try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
+    try std.testing.expectEqual(DiagnosticCode.UnknownMachineState, diagnostics_bag.diagnostics.items[0].code);
+}
+
+test "semantic collection rejects unknown decide transition target before unsupported lowering" {
+    var missing_score = ast.Expr{ .int_literal = .{ .text = "1", .span = .{ .start = 40, .length = 1 } } };
+    var start_score = ast.Expr{ .int_literal = .{ .text = "0", .span = .{ .start = 60, .length = 1 } } };
+    var cases = [_]ast.TransitionDecideCase{
+        transitionDecideCase("Missing", null, &missing_score, 30),
+        transitionDecideCase("Start", null, &start_score, 50),
+    };
+    var start_statements = [_]ast.Stmt{transitionDecideStmt(cases[0..], 20)};
+    var states = [_]ast.MachineStateDecl{stateDeclWithStatements("Start", start_statements[0..], 10)};
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    try std.testing.expectError(error.InvalidSemanticModule, collectItems(&.{machineItemWithStates("Flow", states[0..], 0)}, &diagnostics_bag));
+    try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
+    try std.testing.expectEqual(DiagnosticCode.UnknownMachineState, diagnostics_bag.diagnostics.items[0].code);
+    try std.testing.expectEqual(cases[0].target_name.span, diagnostics_bag.diagnostics.items[0].primary_span);
+}
+
+test "semantic collection rejects cross-machine decide transition target" {
+    var score = ast.Expr{ .int_literal = .{ .text = "1", .span = .{ .start = 40, .length = 1 } } };
+    var cases = [_]ast.TransitionDecideCase{transitionDecideCase("OnlyInSecond", null, &score, 30)};
+    var first_statements = [_]ast.Stmt{transitionDecideStmt(cases[0..], 20)};
+    var first_states = [_]ast.MachineStateDecl{stateDeclWithStatements("Start", first_statements[0..], 10)};
+    var second_states = [_]ast.MachineStateDecl{stateDecl("OnlyInSecond", 80)};
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    try std.testing.expectError(error.InvalidSemanticModule, collectItems(&.{
+        machineItemWithStates("First", first_states[0..], 0),
+        machineItemWithStates("Second", second_states[0..], 70),
     }, &diagnostics_bag));
     try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
     try std.testing.expectEqual(DiagnosticCode.UnknownMachineState, diagnostics_bag.diagnostics.items[0].code);

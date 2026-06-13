@@ -817,14 +817,42 @@ pub const TransitionMatchTarget = struct {
     }
 };
 
+pub const TransitionDecideCase = struct {
+    target_name: NameSegment,
+    condition: ?*Expr,
+    score: *Expr,
+    span: SourceSpan,
+
+    pub fn deinit(self: TransitionDecideCase, allocator: std.mem.Allocator) void {
+        if (self.condition) |condition| {
+            condition.deinit(allocator);
+            allocator.destroy(condition);
+        }
+        self.score.deinit(allocator);
+        allocator.destroy(self.score);
+    }
+};
+
+pub const TransitionDecideTarget = struct {
+    cases: []TransitionDecideCase,
+    span: SourceSpan,
+
+    pub fn deinit(self: TransitionDecideTarget, allocator: std.mem.Allocator) void {
+        for (self.cases) |case| case.deinit(allocator);
+        allocator.free(self.cases);
+    }
+};
+
 pub const TransitionTarget = union(enum) {
     literal_state: NameSegment,
     match_state: TransitionMatchTarget,
+    decide_state: TransitionDecideTarget,
 
     pub fn deinit(self: TransitionTarget, allocator: std.mem.Allocator) void {
         switch (self) {
             .literal_state => {},
             .match_state => |match_target| match_target.deinit(allocator),
+            .decide_state => |decide_target| decide_target.deinit(allocator),
         }
     }
 };
@@ -919,6 +947,23 @@ pub const Stmt = union(enum) {
                             try writer.writeAll(" => ");
                             try writer.writeAll(arm.target_name.text);
                             try writer.writeByte('\n');
+                        }
+                    },
+                    .decide_state => |decide_target| {
+                        try writer.writeAll("TransitionDecide\n");
+                        for (decide_target.cases) |case| {
+                            try writeIndent(writer, depth + 1);
+                            try writer.writeAll("Case ");
+                            try writer.writeAll(case.target_name.text);
+                            if (case.condition) |condition| {
+                                try writer.writeAll(" when\n");
+                                try condition.writeDebug(writer, depth + 2);
+                                try writeIndent(writer, depth + 1);
+                                try writer.writeAll("Score\n");
+                            } else {
+                                try writer.writeAll(" score\n");
+                            }
+                            try case.score.writeDebug(writer, depth + 2);
                         }
                     },
                 }

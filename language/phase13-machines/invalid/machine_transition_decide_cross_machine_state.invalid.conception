@@ -1,0 +1,24 @@
+# name: machine transition decide cross machine state
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module Example;
+
+machine First(int scoreValue) -> int {
+    state Start {
+        transition decide {
+            OnlyInSecond score scoreValue;
+        };
+    }
+}
+
+machine Second() -> int {
+    state OnlyInSecond {
+        return 0;
+    }
+}
+
+=== diagnostics ===
+CON0222

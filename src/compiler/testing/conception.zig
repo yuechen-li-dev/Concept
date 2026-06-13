@@ -2537,6 +2537,13 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectParseFixture("../../../language/phase13-machines/valid/machine_transition_match_initial.valid.conception");
     try expectParseFixture("../../../language/phase13-machines/valid/machine_transition_match_later_state.valid.conception");
     try expectParseFixture("../../../language/phase13-machines/valid/machine_transition_match_nested_if.valid.conception");
+    try expectParseFixture("../../../language/phase13-machines/valid/machine_transition_decide_basic.valid.conception");
+    try expectParseFixture("../../../language/phase13-machines/valid/machine_transition_decide_when_conditions.valid.conception");
+    try expectParseFixture("../../../language/phase13-machines/valid/machine_transition_decide_self.valid.conception");
+    try expectParseFixture("../../../language/phase13-machines/valid/machine_transition_decide_initial.valid.conception");
+    try expectParseFixture("../../../language/phase13-machines/valid/machine_transition_decide_later_state.valid.conception");
+    try expectParseFixture("../../../language/phase13-machines/valid/machine_transition_decide_nested_if.valid.conception");
+    try expectParseFixture("../../../language/phase13-machines/valid/machine_transition_decide_zero_score_fallback.valid.conception");
     try expectParseFixture("../../../language/phase13-machines/invalid/state_outside_machine.invalid.conception");
     try expectParseFixture("../../../language/phase13-machines/invalid/transition_outside_machine.invalid.conception");
     try expectParseFixture("../../../language/phase13-machines/invalid/transition_inside_function.invalid.conception");
@@ -2549,6 +2556,9 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectParseFixture("../../../language/phase13-machines/invalid/machine_transition_match_bad_pattern.invalid.conception");
     try expectParseFixture("../../../language/phase13-machines/invalid/machine_transition_match_missing_semicolon.invalid.conception");
     try expectParseFixture("../../../language/phase13-machines/invalid/machine_transition_match_non_state_result.invalid.conception");
+    try expectParseFixture("../../../language/phase13-machines/invalid/machine_transition_decide_missing_score.invalid.conception");
+    try expectParseFixture("../../../language/phase13-machines/invalid/machine_transition_decide_missing_semicolon.invalid.conception");
+    try expectParseFixture("../../../language/phase13-machines/invalid/machine_transition_decide_non_state_result.invalid.conception");
     try expectCheckFixture("../../../language/phase13-machines/invalid/machine_zero_states.invalid.conception");
     try expectCheckFixture("../../../language/phase13-machines/invalid/machine_duplicate_state.invalid.conception");
     try expectCheckFixture("../../../language/phase13-machines/invalid/machine_semantics_not_implemented.invalid.conception");
@@ -2558,6 +2568,9 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase13-machines/invalid/machine_transition_match_valid_semantics_not_implemented.invalid.conception");
     try expectCheckFixture("../../../language/phase13-machines/invalid/machine_transition_match_unknown_state.invalid.conception");
     try expectCheckFixture("../../../language/phase13-machines/invalid/machine_transition_match_cross_machine_state.invalid.conception");
+    try expectCheckFixture("../../../language/phase13-machines/invalid/machine_transition_decide_valid_semantics_not_implemented.invalid.conception");
+    try expectCheckFixture("../../../language/phase13-machines/invalid/machine_transition_decide_unknown_state.invalid.conception");
+    try expectCheckFixture("../../../language/phase13-machines/invalid/machine_transition_decide_cross_machine_state.invalid.conception");
 
     try expectRunFixture("../../../language/phase10-ownership/valid/move_struct_local_run.valid.conception");
     try expectRunFixture("../../../language/phase10-ownership/valid/move_struct_argument_run.valid.conception");

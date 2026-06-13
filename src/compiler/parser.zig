@@ -1086,6 +1086,10 @@ pub const Parser = struct {
             const match_target = try self.parseTransitionMatchTarget(allocator);
             target_end_span = match_target.span;
             target = .{ .match_state = match_target };
+        } else if (self.current().kind == .decide) {
+            const decide_target = try self.parseTransitionDecideTarget(allocator);
+            target_end_span = decide_target.span;
+            target = .{ .decide_state = decide_target };
         } else {
             const target_token = try self.expect(.identifier, "expected transition target state name", .UnexpectedToken);
             const target_name = if (target_token) |identifier| blk: {
@@ -1204,6 +1208,106 @@ pub const Parser = struct {
             .pattern = pattern,
             .target_name = target_name,
             .span = ast.spanFromBounds(pattern.span().start, spanEnd(end_span)),
+        };
+    }
+
+    fn parseTransitionDecideTarget(self: *Parser, allocator: std.mem.Allocator) !ast.TransitionDecideTarget {
+        const decide_token = self.advance();
+
+        if (self.match(.left_brace) == null) {
+            try self.report(.UnexpectedToken, "expected '{' after transition decide", self.current().span);
+            return .{
+                .cases = try allocator.alloc(ast.TransitionDecideCase, 0),
+                .span = decide_token.span,
+            };
+        }
+
+        var cases = std.ArrayList(ast.TransitionDecideCase).init(allocator);
+        errdefer {
+            for (cases.items) |case| case.deinit(allocator);
+            cases.deinit();
+        }
+
+        var last_span = decide_token.span;
+        while (self.current().kind != .eof and self.current().kind != .right_brace) {
+            if (try self.parseTransitionDecideCase(allocator)) |case| {
+                last_span = case.span;
+                try cases.append(case);
+            }
+        }
+
+        const close_span = if (self.match(.right_brace)) |right_brace| right_brace.span else blk: {
+            try self.report(.UnexpectedToken, "expected '}' after transition decide cases", self.current().span);
+            break :blk last_span;
+        };
+
+        return .{
+            .cases = try cases.toOwnedSlice(),
+            .span = ast.spanFromBounds(decide_token.span.start, spanEnd(close_span)),
+        };
+    }
+
+    fn parseTransitionDecideCase(self: *Parser, allocator: std.mem.Allocator) !?ast.TransitionDecideCase {
+        const target_token = if (self.current().kind == .identifier) self.advance() else blk: {
+            try self.report(.UnexpectedToken, "expected transition decide target state name", self.current().span);
+            self.recoverDecideArm();
+            break :blk null;
+        };
+        const token = target_token orelse return null;
+        const target_name = ast.NameSegment{ .text = token.lexeme, .span = token.span };
+
+        var condition: ?*ast.Expr = null;
+        errdefer if (condition) |condition_expr| {
+            condition_expr.deinit(allocator);
+            allocator.destroy(condition_expr);
+        };
+
+        if (self.match(.when) != null) {
+            if (self.isContextualIdentifier("score") or self.current().kind == .semicolon or self.current().kind == .right_brace or self.current().kind == .eof) {
+                try self.report(.UnexpectedToken, "expected decide arm condition after when", self.current().span);
+            } else {
+                condition = self.parseExpr(allocator) catch |err| switch (err) {
+                    error.OutOfMemory => return err,
+                    error.ParseFailed => null,
+                };
+            }
+        }
+
+        if (try self.expectContextualIdentifier("score", "expected 'score' in decide arm") == null) {
+            self.recoverDecideArm();
+            return null;
+        }
+
+        var score = if (self.current().kind == .semicolon or self.current().kind == .right_brace or self.current().kind == .eof) blk: {
+            try self.report(.UnexpectedToken, "expected decide arm score expression", self.current().span);
+            const fallback = try allocator.create(ast.Expr);
+            fallback.* = .{ .int_literal = .{ .text = "0", .span = self.current().span } };
+            break :blk fallback;
+        } else self.parseExpr(allocator) catch |err| switch (err) {
+            error.OutOfMemory => return err,
+            error.ParseFailed => blk: {
+                try self.report(.UnexpectedToken, "expected decide arm score expression", self.current().span);
+                const fallback = try allocator.create(ast.Expr);
+                fallback.* = .{ .int_literal = .{ .text = "0", .span = self.current().span } };
+                break :blk fallback;
+            },
+        };
+        errdefer {
+            score.deinit(allocator);
+            allocator.destroy(score);
+        }
+
+        const end_span = if (self.match(.semicolon)) |semicolon| semicolon.span else blk: {
+            try self.report(.UnexpectedToken, "expected ';' after decide arm", self.current().span);
+            if (self.current().kind != .identifier and self.current().kind != .right_brace and self.current().kind != .eof) self.recoverDecideArm();
+            break :blk score.span();
+        };
+
+        return .{
+            .target_name = target_name,
+            .condition = condition,
+            .score = score,
+            .span = ast.spanFromBounds(target_name.span.start, spanEnd(end_span)),
         };
     }
 
@@ -4545,6 +4649,40 @@ test "parses machine match transition statement" {
     };
 }
 
+test "parses machine decide transition statement" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const source_text = "module Example; machine Brain(bool canAttack, int attackScore) -> int { state Decide { transition decide { Attack when canAttack score attackScore; Idle score 0; }; } state Attack { return 1; } state Idle { return 0; } }";
+    const unit = try parseTestSource(source_text, &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const transition = switch (expectMachineDecl(unit, 0).states[0].body.statements[0]) {
+        .transition_stmt => |stmt| stmt,
+        else => return error.ExpectedTransitionStmt,
+    };
+    const decide_target = switch (transition.target) {
+        .decide_state => |target| target,
+        else => return error.ExpectedDecideTransitionTarget,
+    };
+    try std.testing.expectEqual(@as(usize, 2), decide_target.cases.len);
+    try std.testing.expectEqualStrings("Attack", decide_target.cases[0].target_name.text);
+    try std.testing.expectEqualStrings("Idle", decide_target.cases[1].target_name.text);
+    try std.testing.expectEqual(std.mem.indexOf(u8, source_text, "Attack when").?, decide_target.cases[0].target_name.span.start);
+    const condition = switch (decide_target.cases[0].condition.?.*) {
+        .identifier => |expr| expr,
+        else => return error.ExpectedIdentifierCondition,
+    };
+    try std.testing.expectEqualStrings("canAttack", condition.name.text);
+    const score = switch (decide_target.cases[0].score.*) {
+        .identifier => |expr| expr,
+        else => return error.ExpectedIdentifierScore,
+    };
+    try std.testing.expectEqualStrings("attackScore", score.name.text);
+    try std.testing.expect(decide_target.cases[1].condition == null);
+}
+
 test "parses machine literal transition inside nested block" {
     var diagnostics = DiagnosticBag.init(std.testing.allocator);
     defer diagnostics.deinit();
@@ -4626,6 +4764,22 @@ test "machine AST debug output includes match transition targets" {
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "Arm _ => Done") != null);
 }
 
+test "machine AST debug output includes decide transition targets" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; machine M(bool ready, int scoreValue) -> int { state Start { transition decide { Done when ready score scoreValue; Start score 0; }; } state Done { return 0; } }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "TransitionDecide") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Case Done when") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Identifier ready") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Case Start score") != null);
+}
+
 test "machine parser diagnostics are stable" {
     try expectSingleDiagnostic("module Example; machine () -> int { state Start { } }", .UnexpectedToken);
     try expectSingleDiagnostic("module Example; machine M() { state Start { } }", .UnexpectedToken);
@@ -4638,6 +4792,8 @@ test "machine parser diagnostics are stable" {
     try expectSingleDiagnostic("module Example; machine M() -> int { state Start { transition Done } }", .UnexpectedToken);
     try expectSingleDiagnostic("module Example; machine M(int kind) -> int { state Start { transition match (kind) { 0 => Start; } } }", .UnexpectedToken);
     try expectSingleDiagnostic("module Example; machine M(int kind) -> int { state Start { transition match (kind) { + => Start; }; } }", .UnexpectedToken);
+    try expectSingleDiagnostic("module Example; machine M() -> int { state Start { transition decide { Start score 0; } } }", .UnexpectedToken);
+    try expectSingleDiagnostic("module Example; machine M() -> int { state Start { transition decide { Start; }; } }", .UnexpectedToken);
 }
 
 fn expectFunctionDecl(unit: ast.CompilationUnit, index: usize) ast.FunctionDecl {

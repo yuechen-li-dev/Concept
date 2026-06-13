@@ -1,0 +1,17 @@
+# name: machine transition decide missing score
+# phase: parse
+# expect: fail
+
+=== source ===
+module Example;
+
+machine M() -> int {
+    state Start {
+        transition decide {
+            Start;
+        };
+    }
+}
+
+=== diagnostics ===
+CON0001

@@ -1,0 +1,45 @@
+# name: machine transition decide initial
+# phase: parse
+# expect: pass
+
+=== source ===
+module Example;
+
+machine Resettable(bool reset, int resetScore) -> int {
+    state Start {
+        return 0;
+    }
+
+    state Decide {
+        transition decide {
+            Start when reset score resetScore;
+            Done score 0;
+        };
+    }
+
+    state Done {
+        return 1;
+    }
+}
+
+=== ast ===
+CompilationUnit
+  Module Example
+  Machine Resettable(bool reset, int resetScore) -> int
+    State Start
+      Body
+        Return
+          Int 0
+    State Decide
+      Body
+        TransitionDecide
+          Case Start when
+            Identifier reset
+          Score
+            Identifier resetScore
+          Case Done score
+            Int 0
+    State Done
+      Body
+        Return
+          Int 1

@@ -1,0 +1,66 @@
+# name: machine transition decide when conditions
+# phase: parse
+# expect: pass
+
+=== source ===
+module Example;
+
+machine Brain(bool canAttack, bool canHeal, int attackScore, int healScore) -> int {
+    state Decide {
+        transition decide {
+            Attack when canAttack && attackScore > 0 score attackScore;
+            Heal when canHeal || healScore > 10 score healScore;
+            Idle score 0;
+        };
+    }
+
+    state Attack {
+        return 1;
+    }
+
+    state Heal {
+        return 2;
+    }
+
+    state Idle {
+        return 0;
+    }
+}
+
+=== ast ===
+CompilationUnit
+  Module Example
+  Machine Brain(bool canAttack, bool canHeal, int attackScore, int healScore) -> int
+    State Decide
+      Body
+        TransitionDecide
+          Case Attack when
+            Binary &&
+              Identifier canAttack
+              Binary >
+                Identifier attackScore
+                Int 0
+          Score
+            Identifier attackScore
+          Case Heal when
+            Binary ||
+              Identifier canHeal
+              Binary >
+                Identifier healScore
+                Int 10
+          Score
+            Identifier healScore
+          Case Idle score
+            Int 0
+    State Attack
+      Body
+        Return
+          Int 1
+    State Heal
+      Body
+        Return
+          Int 2
+    State Idle
+      Body
+        Return
+          Int 0

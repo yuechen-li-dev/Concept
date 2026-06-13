@@ -1,0 +1,45 @@
+# name: machine transition decide zero score fallback
+# phase: parse
+# expect: pass
+
+=== source ===
+module Example;
+
+machine Brain(bool active, int activeScore) -> int {
+    state Decide {
+        transition decide {
+            Active when active score activeScore;
+            Idle score 0;
+        };
+    }
+
+    state Active {
+        return 1;
+    }
+
+    state Idle {
+        return 0;
+    }
+}
+
+=== ast ===
+CompilationUnit
+  Module Example
+  Machine Brain(bool active, int activeScore) -> int
+    State Decide
+      Body
+        TransitionDecide
+          Case Active when
+            Identifier active
+          Score
+            Identifier activeScore
+          Case Idle score
+            Int 0
+    State Active
+      Body
+        Return
+          Int 1
+    State Idle
+      Body
+        Return
+          Int 0

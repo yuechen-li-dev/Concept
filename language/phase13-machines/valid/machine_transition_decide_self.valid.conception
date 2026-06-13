@@ -1,0 +1,37 @@
+# name: machine transition decide self
+# phase: parse
+# expect: pass
+
+=== source ===
+module Example;
+
+machine Spinner(bool keepGoing, int scoreValue) -> int {
+    state Spin {
+        transition decide {
+            Spin when keepGoing score scoreValue;
+            Done score 0;
+        };
+    }
+
+    state Done {
+        return 0;
+    }
+}
+
+=== ast ===
+CompilationUnit
+  Module Example
+  Machine Spinner(bool keepGoing, int scoreValue) -> int
+    State Spin
+      Body
+        TransitionDecide
+          Case Spin when
+            Identifier keepGoing
+          Score
+            Identifier scoreValue
+          Case Done score
+            Int 0
+    State Done
+      Body
+        Return
+          Int 0

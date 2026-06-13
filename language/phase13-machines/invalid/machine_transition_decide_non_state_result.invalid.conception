@@ -1,0 +1,18 @@
+# name: machine transition decide non state result
+# phase: parse
+# expect: fail
+
+=== source ===
+module Example;
+
+machine M(int scoreValue) -> int {
+    state Start {
+        transition decide {
+            chooseState() score scoreValue;
+            Start score 0;
+        };
+    }
+}
+
+=== diagnostics ===
+CON0001

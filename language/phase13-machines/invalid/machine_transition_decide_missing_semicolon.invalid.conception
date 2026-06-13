@@ -1,0 +1,17 @@
+# name: machine transition decide missing semicolon
+# phase: parse
+# expect: fail
+
+=== source ===
+module Example;
+
+machine M() -> int {
+    state Start {
+        transition decide {
+            Start score 0;
+        }
+    }
+}
+
+=== diagnostics ===
+CON0001

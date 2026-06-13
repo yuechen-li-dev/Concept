@@ -90,6 +90,36 @@ remain deferred. Transition-match currently performs target validation only;
 full machine-body expression typing and match exhaustiveness for the transition
 scrutinee remain part of later machine lowering/checking work.
 
+P13-M5 adds contextual utility-scored decide-driven transition targets:
+
+```cpp
+transition decide {
+    Attack when canAttack score attackScore;
+    Heal when canHeal score healScore;
+    Idle score 0;
+};
+```
+
+The parser accepts `transition decide { ... };` inside machine state bodies,
+preserves decide cases in source order, records each case's bare state target
+name/span, and preserves optional `when` condition expressions plus required
+`score` expressions. Semantic collection validates every decide case target
+against the containing machine's local state table. Self targets, the initial
+state, and later states are valid; unknown and cross-machine targets report
+`CON0222 UnknownMachineState` before the general machine placeholder. Otherwise
+valid machines with literal, match, or decide transitions still report
+`CON0231 MachineSemanticsNotImplemented`.
+
+For P13-M5, decide case results are intentionally narrow: each result must be a
+bare machine state name. Arbitrary state-valued expressions, nested `match` or
+`decide` results, qualified external state targets, user-visible machine state
+enums, machine HIR/MIR lowering, runtime frames, scheduling, and DragonGod
+features remain deferred. Transition-decide currently performs target
+validation only; full condition/score typechecking for machine transition
+decide cases remains deferred until machine bodies lower/typecheck through the
+normal executable path. `decide` remains stateless in Concept core; policy
+memory, hysteresis, and `min_commit` remain DragonGod/library features.
+
 ## Core doctrine
 
 ```text
@@ -383,7 +413,7 @@ transition match (event) {
 ```
 
 ```cpp
-transition decide BrainState {
+transition decide {
     Attack when canAttack score attackScore;
     Heal   when canHeal   score healScore;
     Idle                      score 0;
@@ -545,6 +575,30 @@ Rules:
 
 P13-M0 does not implement decide-driven transitions and does not add new
 `decide` semantics.
+
+P13-M5 implementation status:
+
+- Stage 0 parses `transition decide { ... };` inside machine state bodies.
+- Decide-driven transition targets are represented in the AST/scaffold.
+- Decide cases preserve source order, bare target state names/spans, optional
+  `when` condition expressions, and required `score` expressions.
+- Each case result is currently a bare machine state name, not an arbitrary
+  state-valued expression.
+- Candidate targets validate against the containing machine's local state
+  table.
+- Unknown or cross-machine candidate targets report `CON0222
+  UnknownMachineState`.
+- Valid decide transitions still end at `CON0231
+  MachineSemanticsNotImplemented` because HIR/MIR lowering and runtime machine
+  semantics are not implemented.
+- Condition and score expression typing inside transition-decide is deferred
+  until machine bodies lower/typecheck through the normal executable path.
+- `decide` remains utility-scored transition selection and remains stateless in
+  Concept core.
+- Policy memory, hysteresis, `min_commit`, stack HFSM, blackboards, mailbox
+  buses, actuators, persistence, a core `board` keyword, hidden heap behavior,
+  scheduler behavior, and DragonGod kernel features remain outside core Phase
+  13 M5.
 
 ## 11. Machine-local memory
 

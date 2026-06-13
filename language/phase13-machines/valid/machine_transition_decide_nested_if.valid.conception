@@ -1,0 +1,43 @@
+# name: machine transition decide nested if
+# phase: parse
+# expect: pass
+
+=== source ===
+module Example;
+
+machine Flow(bool ready, int readyScore) -> int {
+    state Start {
+        if (ready) {
+            transition decide {
+                Done when ready score readyScore;
+                Start score 0;
+            };
+        }
+    }
+
+    state Done {
+        return 1;
+    }
+}
+
+=== ast ===
+CompilationUnit
+  Module Example
+  Machine Flow(bool ready, int readyScore) -> int
+    State Start
+      Body
+        If
+          Condition
+            Identifier ready
+          Then
+            TransitionDecide
+              Case Done when
+                Identifier ready
+              Score
+                Identifier readyScore
+              Case Start score
+                Int 0
+    State Done
+      Body
+        Return
+          Int 1

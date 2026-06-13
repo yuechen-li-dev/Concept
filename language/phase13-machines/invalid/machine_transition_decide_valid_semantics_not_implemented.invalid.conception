@@ -1,0 +1,27 @@
+# name: machine transition decide valid semantics not implemented
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module Example;
+
+machine Brain(bool active, int activeScore) -> int {
+    state Decide {
+        transition decide {
+            Active when active score activeScore;
+            Idle score 0;
+        };
+    }
+
+    state Active {
+        return 1;
+    }
+
+    state Idle {
+        return 0;
+    }
+}
+
+=== diagnostics ===
+CON0231

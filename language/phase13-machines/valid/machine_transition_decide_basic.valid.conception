@@ -1,0 +1,71 @@
+# name: machine transition decide basic
+# phase: parse
+# expect: pass
+
+=== source ===
+module Example;
+
+machine Brain(bool canAttack, bool canHeal, bool lowHealth, int attackScore, int healScore, int fleeScore) -> int {
+    state Decide {
+        transition decide {
+            Attack when canAttack score attackScore;
+            Heal when canHeal score healScore;
+            Flee when lowHealth score fleeScore;
+            Idle score 0;
+        };
+    }
+
+    state Attack {
+        return 1;
+    }
+
+    state Heal {
+        return 2;
+    }
+
+    state Flee {
+        return 3;
+    }
+
+    state Idle {
+        return 0;
+    }
+}
+
+=== ast ===
+CompilationUnit
+  Module Example
+  Machine Brain(bool canAttack, bool canHeal, bool lowHealth, int attackScore, int healScore, int fleeScore) -> int
+    State Decide
+      Body
+        TransitionDecide
+          Case Attack when
+            Identifier canAttack
+          Score
+            Identifier attackScore
+          Case Heal when
+            Identifier canHeal
+          Score
+            Identifier healScore
+          Case Flee when
+            Identifier lowHealth
+          Score
+            Identifier fleeScore
+          Case Idle score
+            Int 0
+    State Attack
+      Body
+        Return
+          Int 1
+    State Heal
+      Body
+        Return
+          Int 2
+    State Flee
+      Body
+        Return
+          Int 3
+    State Idle
+      Body
+        Return
+          Int 0

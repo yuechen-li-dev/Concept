@@ -48,9 +48,12 @@ scaffolding, P13-M2 adds machine-local state validation, and P13-M3 adds
 literal `transition TargetState;` parsing plus machine-local target validation.
 P13-M4 adds parser/AST support for deterministic `transition match (...) {
 ... };` targets and validates each bare arm target against the containing
-machine's state table, while leaving `transition decide`, arbitrary state-valued
-transition expressions, HIR/MIR lowering, and runtime step/resume support
-deferred. Deferred Phase 12 work includes
+machine's state table. P13-M5 adds parser/AST support for contextual
+`transition decide { ... };` targets and validates each bare decide candidate
+target against the containing machine's state table, while leaving arbitrary
+state-valued transition expressions, transition-decide condition/score typing,
+HIR/MIR lowering, and runtime step/resume support deferred. Deferred Phase 12
+work includes
 `Arena.create`, hosted runtime helper implementation, allocation failure
 surfaces, generic `Store<T, Id>`, named store IDs, generation counters, region
 lifetime checking, use-after-reset analysis, Drop-in-arena, hidden heap/default

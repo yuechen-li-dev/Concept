@@ -1,0 +1,19 @@
+# name: machine transition decide unknown state
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module Example;
+
+machine M(bool ready, int scoreValue) -> int {
+    state Start {
+        transition decide {
+            Missing when ready score scoreValue;
+            Start score 0;
+        };
+    }
+}
+
+=== diagnostics ===
+CON0222
