@@ -1,0 +1,18 @@
+module Examples.Phase11.TheoryInlineData;
+
+import Core.Test;
+
+int Add(int a, int b) {
+    return a + b;
+}
+
+[Theory]
+[InlineData(1, 2, 3)]
+[InlineData(10, 20, 30)]
+void AddsInlineData(int a, int b, int expected) {
+    Expect.Equal(
+        expected,
+        Add(a, b),
+        "add should return expected arithmetic sum for inline data row"
+    );
+}

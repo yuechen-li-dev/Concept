@@ -1,0 +1,23 @@
+module Examples.Phase11.AssertVsExpect;
+
+import Core.Test;
+
+int Increment(int value) {
+    return value + 1;
+}
+
+[Fact]
+void SeparatesSetupFromBehavior() {
+    int starting_value = 41;
+
+    Assert.True(
+        starting_value > 0,
+        "test setup should provide a positive input before checking behavior"
+    );
+
+    Expect.Equal(
+        42,
+        Increment(starting_value),
+        "increment should advance the input by exactly one"
+    );
+}

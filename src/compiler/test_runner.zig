@@ -44,6 +44,7 @@ pub const TestFailure = struct {
 };
 
 pub const TestRunResult = struct {
+    total_count: usize = 0,
     passed_count: usize = 0,
     failed_count: usize = 0,
     skipped_count: usize = 0,
@@ -54,6 +55,27 @@ pub const TestRunResult = struct {
         if (self.failures.len > 0) allocator.free(self.failures);
     }
 };
+
+pub fn formatResult(allocator: std.mem.Allocator, result: TestRunResult) ![]const u8 {
+    var output = std.Io.Writer.Allocating.init(allocator);
+    errdefer output.deinit();
+    const writer = &output.writer;
+
+    if (result.failed_count == 0) {
+        try writer.print("PASS tests={d} failures=0\n", .{result.total_count});
+    } else {
+        try writer.print("FAIL tests={d} failures={d}\n", .{ result.total_count, result.failed_count });
+        for (result.failures, 0..) |failure, index| {
+            try writer.writeByte('\n');
+            const rendered = try formatFailure(allocator, failure);
+            defer allocator.free(rendered);
+            try writer.writeAll(rendered);
+            if (index + 1 < result.failures.len) try writer.writeByte('\n');
+        }
+    }
+
+    return output.toOwnedSlice();
+}
 
 pub fn runModule(
     allocator: std.mem.Allocator,
@@ -90,12 +112,17 @@ pub fn formatFailure(allocator: std.mem.Allocator, failure: TestFailure) ![]cons
         \\
         \\{s} failed
         \\
+        \\Source:
+        \\  span start={d} length={d}
+        \\
         \\Because:
         \\  {s}
         \\
     , .{
         display_name,
         failureMessageName(failure.intrinsic_kind),
+        failure.source_span.start,
+        failure.source_span.length,
         failure.reason,
     });
 
@@ -143,6 +170,7 @@ const Runner = struct {
         var result = TestRunResult{};
 
         for (discovered) |test_case| {
+            result.total_count += 1;
             self.current_module_name = test_case.module_name;
             self.current_function_name = test_case.function_name;
             self.current_inline_data_row_index = test_case.inline_data_row_index;
@@ -745,6 +773,58 @@ test "runner aggregates Facts and Theory rows in the same test module" {
 
     try std.testing.expectEqual(@as(usize, 3), result.passed_count);
     try std.testing.expectEqual(@as(usize, 0), result.failed_count);
+    try std.testing.expectEqual(@as(usize, 3), result.total_count);
+}
+
+test "runner formats Fact pass summary" {
+    var module = try newTestModule();
+    defer module.deinit();
+    const fact = try addFunction(&module, "Passes");
+    try setAttributes(&module, fact, &.{"Fact"});
+    try setBody(&module, fact, &.{try exprStmt(&module, try intrinsic(&module, .expect_true, &.{try boolExpr(&module, true)}, "fact should pass"))});
+
+    const result = try runModule(std.testing.allocator, &module, "Test");
+    defer result.deinit(std.testing.allocator);
+
+    const rendered = try formatResult(std.testing.allocator, result);
+    defer std.testing.allocator.free(rendered);
+    try std.testing.expectEqualStrings("PASS tests=1 failures=0\n", rendered);
+}
+
+test "runner formats Theory pass summary" {
+    var module = try newTestModule();
+    defer module.deinit();
+    const theory = try addFunction(&module, "RowsPass");
+    const value = try module.hir.addParam(theory, try intern(&module, "value"), module.types.intType(), hir.synthetic_span);
+    try setTheoryInlineDataRows(&module, theory, &.{ &.{.{ .int_literal = "1" }}, &.{.{ .int_literal = "2" }} });
+    try setBody(&module, theory, &.{try exprStmt(&module, try intrinsic(&module, .expect_true, &.{try binaryExpr(&module, .greater, try paramExpr(&module, value), try intExpr(&module, "0"))}, "theory row should pass"))});
+
+    const result = try runModule(std.testing.allocator, &module, "Test");
+    defer result.deinit(std.testing.allocator);
+
+    const rendered = try formatResult(std.testing.allocator, result);
+    defer std.testing.allocator.free(rendered);
+    try std.testing.expectEqualStrings("PASS tests=2 failures=0\n", rendered);
+}
+
+test "runner formats mixed Fact and Theory pass summary" {
+    var module = try newTestModule();
+    defer module.deinit();
+    const fact = try addFunction(&module, "FactPasses");
+    try setAttributes(&module, fact, &.{"Fact"});
+    try setBody(&module, fact, &.{try exprStmt(&module, try intrinsic(&module, .expect_true, &.{try boolExpr(&module, true)}, "fact should pass"))});
+
+    const theory = try addFunction(&module, "RowsPass");
+    const value = try module.hir.addParam(theory, try intern(&module, "value"), module.types.intType(), hir.synthetic_span);
+    try setTheoryInlineDataRows(&module, theory, &.{ &.{.{ .int_literal = "1" }}, &.{.{ .int_literal = "2" }} });
+    try setBody(&module, theory, &.{try exprStmt(&module, try intrinsic(&module, .expect_equal_int, &.{ try paramExpr(&module, value), try paramExpr(&module, value) }, "theory value should equal itself"))});
+
+    const result = try runModule(std.testing.allocator, &module, "Test");
+    defer result.deinit(std.testing.allocator);
+
+    const rendered = try formatResult(std.testing.allocator, result);
+    defer std.testing.allocator.free(rendered);
+    try std.testing.expectEqualStrings("PASS tests=3 failures=0\n", rendered);
 }
 
 test "Theory runner defensively rejects malformed InlineData rows" {
@@ -931,7 +1011,43 @@ test "Fact runner formats failure with reason and expected actual" {
     defer std.testing.allocator.free(rendered);
 
     try std.testing.expect(std.mem.indexOf(u8, rendered, "FAILED Test.Fails") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "Source:\n  span start=0 length=0") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "Because:\n  addition should return the arithmetic sum of both operands") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "Expected:\n  4") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "Actual:\n  5") != null);
+}
+
+test "runner formats failure summary with ordered failure blocks" {
+    var module = try newTestModule();
+    defer module.deinit();
+    const first = try addFunction(&module, "FirstFails");
+    try setAttributes(&module, first, &.{"Fact"});
+    try setBody(&module, first, &.{try exprStmt(&module, try intrinsic(&module, .expect_equal_int, &.{ try intExpr(&module, "10"), try intExpr(&module, "9") }, "first failure should appear first"))});
+
+    const theory = try addFunction(&module, "TheoryFails");
+    const value = try module.hir.addParam(theory, try intern(&module, "value"), module.types.intType(), hir.synthetic_span);
+    try setTheoryInlineDataRows(&module, theory, &.{ &.{.{ .int_literal = "1" }}, &.{.{ .int_literal = "-1" }} });
+    try setBody(&module, theory, &.{try exprStmt(&module, try intrinsic(&module, .expect_that_true, &.{try binaryExpr(&module, .greater, try paramExpr(&module, value), try intExpr(&module, "0"))}, "row value should be positive"))});
+
+    const result = try runModule(std.testing.allocator, &module, "Test");
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 3), result.total_count);
+    try std.testing.expectEqual(@as(usize, 1), result.passed_count);
+    try std.testing.expectEqual(@as(usize, 2), result.failed_count);
+    try std.testing.expectEqualStrings("FirstFails", result.failures[0].function_name);
+    try std.testing.expectEqualStrings("TheoryFails", result.failures[1].function_name);
+    try std.testing.expectEqual(@as(?usize, 1), result.failures[1].inline_data_row_index);
+
+    const rendered = try formatResult(std.testing.allocator, result);
+    defer std.testing.allocator.free(rendered);
+
+    try std.testing.expect(std.mem.startsWith(u8, rendered, "FAIL tests=3 failures=2\n\nFAILED Test.FirstFails"));
+    const first_index = std.mem.indexOf(u8, rendered, "FAILED Test.FirstFails").?;
+    const second_index = std.mem.indexOf(u8, rendered, "FAILED Test.TheoryFails#1").?;
+    try std.testing.expect(first_index < second_index);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "Expect.That failed") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "Because:\n  row value should be positive") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "Expected:\n  true") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "Actual:\n  false") != null);
 }

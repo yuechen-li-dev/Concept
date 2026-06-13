@@ -717,10 +717,11 @@ Implemented behavior:
 - multiple facts aggregate pass/fail counts;
 - both `Assert` and `Expect` fail the current test immediately in v0.
 
-Runner result shape is internal for now:
+Runner result shape is a stable v0 internal API:
 
 ```text
 TestRunResult {
+    total_count
     passed_count
     failed_count
     skipped_count
@@ -744,6 +745,9 @@ The runner also has a stable human-readable formatter for failures:
 FAILED Test.Fails
 
 Expect.Equal failed
+
+Source:
+  span start=0 length=0
 
 Because:
   addition should return the arithmetic sum of both operands
@@ -823,6 +827,78 @@ Still deferred:
 - arbitrary data providers;
 - runtime reflection;
 - inline test blocks.
+
+## P11-M8 implementation status
+
+P11-M8 stabilizes the current runner-facing reporting and documentation without
+adding new assertion semantics.
+
+Supported v0 test surface:
+
+- `.con_test` source classification;
+- `[Fact]`, `[Theory]`, and `[InlineData(...)]`;
+- positional reason strings for `Assert.True`, `Assert.False`, `Expect.True`,
+  `Expect.False`, `Expect.Equal(int, int)`, and `Expect.Equal(bool, bool)`;
+- primitive `Expect.That(actual, relation, "reason")` with `Is.True()`,
+  `Is.False()`, `Is.EqualTo(int)`, and `Is.EqualTo(bool)`;
+- HIR-only runner execution for facts and InlineData theory rows.
+
+Stable v0 result summary:
+
+```text
+PASS tests=3 failures=0
+```
+
+or:
+
+```text
+FAIL tests=3 failures=1
+```
+
+Failure blocks include the full test case display name, source span, intrinsic
+or relation-shaped check kind, reason, and expected/actual scalar values when
+available:
+
+```text
+FAILED Core.Tests.Math.Adds#1
+
+Expect.That failed
+
+Source:
+  span start=128 length=52
+
+Because:
+  add should return the arithmetic sum of both operands
+
+Expected:
+  30
+
+Actual:
+  29
+```
+
+Ordering is deterministic: discovered functions follow module declaration
+order, facts and theories follow source order, InlineData rows use source order,
+and failures are emitted in execution order.
+
+Runtime-failing tests are runner failures, not compiler diagnostics and not
+compile-invalid fixtures. The fixture corpus covers parse/check validity for the
+testing surface; runner pass/fail summaries and failure formatting are covered by
+unit tests in `src/compiler/test_runner.zig`.
+
+Examples now live under `examples/phase11/` and intentionally use only the
+implemented positional reason bridge and primitive relation scaffold.
+
+Still deferred:
+
+- CLI/from-disk `.con_test` execution;
+- generated MIR/C test runner support;
+- named `because:` syntax;
+- full generic `TestRelation<R, T>`;
+- custom relations;
+- generic, enum, struct, string, array, or sequence equality;
+- inline test blocks;
+- filtering, async tests, fixtures/hooks, and runtime reflection.
 
 ## Close criteria
 

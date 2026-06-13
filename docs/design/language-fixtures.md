@@ -67,7 +67,7 @@ Invalid fixtures cover malformed template syntax, type parameters out of scope, 
 
 Phase 8 MIR/backend coverage is intentionally concrete-only: the pipeline run fixture and targeted compiler tests assert that template declarations, concepts, marker concepts, and type-parameter types do not leak into executable MIR or backend C, while deterministic instantiated function names and referenced static witness calls are emitted.
 
-Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed for compile-time execution v0. Phase 10 is closed for ownership/storage-state v0. Phase 11 is planned/in progress for first-class testing, attributes, and reasoned expectations; no Phase 11 fixtures exist yet.
+Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed for compile-time execution v0. Phase 10 is closed for ownership/storage-state v0. Phase 11 is in progress for first-class testing, attributes, and reasoned expectations.
 
 ## Phase 9 compile-time execution fixtures
 
@@ -84,6 +84,16 @@ Phase 10 fixtures live under `language/phase10-ownership/` and cover the closed 
 Invalid fixtures cover direct use-after-move, moving non-place expressions, unsupported field/partial moves, implicit non-Copy copies, maybe-moved use after branch joins, replacement rejection for non-Copy and Drop values, maybe-state cleanup/replacement rejection, and ManualInit errors such as missing type arguments, unsafe-boundary requirements, invalid implicit conversion to `T`, and rejected implicit wrapper copies.
 
 Some Phase 10 behavior is intentionally covered by MIR/unit tests rather than source fixtures. Partial direct-field initialization, whole-use rejection for partially initialized structs, and partial cleanup of initialized Drop fields depend on MIR storage states that the ordinary source surface cannot yet express broadly because Concept still rejects broad ordinary uninitialized locals and does not expose the full `ManualInit<T>.write` / ptr APIs. `ManualInit<T>` is the canonical Concept term; `MaybeUninit<T>` may appear only as compatibility or familiarity terminology.
+
+## Phase 11 testing fixtures
+
+Phase 11 fixtures live under `language/phase11-testing/` and cover the in-progress first-class testing surface. Parse fixtures cover declaration attributes, `[Fact]`, `[Theory]`, `[InlineData(...)]`, supported literal attribute arguments, and rejected malformed attribute placement or expressions.
+
+Valid `.con_test` check fixtures cover `.con_test` source-kind classification, helper functions that are not discovered as tests, `[Fact]` signature validation, `[Theory]` plus `[InlineData]` validation, primitive `Assert.*` / `Expect.*` reason validation, HIR runner-supported facts and theories, and the current primitive `Expect.That` relation scaffold (`Is.True()`, `Is.False()`, `Is.EqualTo(int)`, and `Is.EqualTo(bool)`).
+
+Invalid fixtures are compile-time parse or semantic invalid cases: test attributes in normal source, invalid test signatures, missing or mismatched InlineData, missing or empty reasons, wrong intrinsic arity, wrong primitive operand types, unsupported equality/relation types, standalone relation constructors, and rejected inline test blocks.
+
+Runtime-failing test examples are not compile-invalid fixtures. A `.con_test` file that type-checks but fails an expectation is a runner failure, not a compiler diagnostic. Current failing runner behavior, including summaries, ordered failures, row-indexed theory names, source spans, reasons, and expected/actual scalar display, is covered by unit tests in `src/compiler/test_runner.zig` rather than by fixture invalid cases.
 
 ## `.conception` format
 

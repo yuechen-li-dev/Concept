@@ -1,0 +1,16 @@
+module Examples.Phase11.FactBasic;
+
+import Core.Test;
+
+int Add(int a, int b) {
+    return a + b;
+}
+
+[Fact]
+void AddsTwoIntegers() {
+    Expect.That(
+        Add(2, 2),
+        Is.EqualTo(4),
+        "integer addition should return the arithmetic sum of both operands"
+    );
+}
