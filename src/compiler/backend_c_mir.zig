@@ -2264,6 +2264,8 @@ test "MIR C backend emits machine frame and step runtime" {
     try std.testing.expect(std.mem.indexOf(u8, c_source, "typedef enum {\n    cpt_m_Door_s_Closed = 0,\n    cpt_m_Door_s_Open = 1,") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, "typedef struct {\n    cpt_m_Door_state state;\n    int complete;\n    int result;") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, "static void cpt_m_Door_step(cpt_m_Door* m)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "    cpt_m_Door_step(&cpt_l_m_") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "= cpt_m_Door_step(") == null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, "m->state = cpt_m_Door_s_Open;") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, "m->result = 1;\n            m->complete = 1;") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, "malloc") == null);

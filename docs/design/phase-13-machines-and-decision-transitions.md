@@ -186,10 +186,11 @@ actuators, persistence, hysteresis, `min_commit`, or policy memory.
 
 P13-M9 closes Phase 13. The final v0 surface is explicit machines with
 machine-local states, literal/match/decide transition scaffolds, runnable
-literal-transition machine frames, `Step`, `Complete`, `Result`, and C backend
-support for the literal-transition subset. Match/decide transition runtime
-lowering, `Active(machine)`, `yield`, `suspend`, lifted locals, DragonGod
-features, and non-scalar executable machine params/results remain deferred.
+literal-transition machine frames, statement-like `Step`, value-producing
+`Complete`/`Result`, and C backend support for the literal-transition subset.
+Match/decide transition runtime lowering, `Active(machine)`, `yield`,
+`suspend`, lifted locals, DragonGod features, and non-scalar executable
+machine params/results remain deferred.
 
 ## Final P13 v0 supported surface
 
@@ -211,7 +212,9 @@ Closed Phase 13 supports:
 - MIR/backend runnable subset for literal-transition machines.
 - Nominal machine frame value types.
 - `MachineName(...)` frame construction with scalar parameter capture.
-- `Step(machine)`, `Complete(machine)`, and `Result(machine)`.
+- `Step(machine);` as a statement-like, void one-step advance.
+- `Complete(machine)` as a `bool` completion query.
+- `Result(machine)` as a completed-machine result read.
 - `Result(machine)` before completion lowering to the generated
   `cpt_machine_result_before_complete()` trap helper.
 - Executable machine params/results limited to scalar `int` and `bool`.
@@ -786,10 +789,15 @@ hidden scheduler or behavior kernel.
 
 P13-M8 behavior:
 
-- `Step(machine)` executes one active state and returns no value.
+- `Step(machine);` executes one active state and returns no value.
+- `Step(machine)` is typed as `void`/no-value and is only valid where a
+  statement-like expression is permitted. It cannot initialize a local, be
+  returned from an `int`/`bool` function, be used as an `if`/`while` condition,
+  be passed as a call argument, or participate in unary/binary expressions.
+- `discard Step(machine);` is invalid because there is no value to discard.
 - `Complete(machine)` reads the explicit completion flag and is false before a
-  machine returns.
-- `Result(machine)` reads the stored result only after completion.
+  machine returns; it produces `bool`.
+- `Result(machine)` reads the stored result type only after completion.
 - `Result(machine)` before completion lowers to an explicit generated C trap
   instead of silently reading raw result storage.
 - Calling `Step(machine)` after completion is a no-op.
@@ -974,9 +982,10 @@ Phase 13 v0 explicitly defers:
 
 ## 18. Examples
 
-Runnable P13-M8 examples live in `examples/phase13/`. The runnable files use
-literal transitions only. The match/decide transition model example documents
-syntax and validation, but is not a backend-runtime example yet.
+Runnable Phase 13 examples live in `examples/phase13/`. The runnable files use
+literal transitions only and call `Step(machine);` as a statement. The
+match/decide transition model example documents syntax and validation, but is
+not a backend-runtime example yet.
 
 ### A. Runnable literal transition
 

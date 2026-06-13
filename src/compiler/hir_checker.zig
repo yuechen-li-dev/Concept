@@ -223,7 +223,11 @@ const Checker = struct {
                 }
             },
             .discard_stmt => |expr_id| {
-                _ = try self.checkExpr(function_id, return_type, expr_id);
+                const value_type = try self.checkExpr(function_id, return_type, expr_id);
+                if (sameType(value_type, self.module.types.voidType())) {
+                    try self.reportAt(.TypeMismatch, "discard requires a value expression", self.exprSpan(expr_id));
+                    return error.InvalidSemanticModule;
+                }
             },
             .arena_reset => |op| try self.checkArenaStorageOp(function_id, return_type, op, stmt.span),
             .arena_destroy => |op| try self.checkArenaStorageOp(function_id, return_type, op, stmt.span),

@@ -14,11 +14,14 @@ state Closed {
 }
 ```
 
-`Step(machine)` executes the active state until a transition or return.
-`transition Target;` updates the current state and ends the step. `return value`
-stores the result, marks the frame complete, and ends the step. Extra
-`Step(machine)` calls after completion are no-ops. `Result(machine)` is only
-valid after completion; the generated C backend traps incomplete result access.
+`Step(machine);` executes the active state until a transition or return and is
+statement-like: it produces no usable value. It cannot be assigned, returned,
+used as a condition, passed as an argument, or used in an expression. `transition
+Target;` updates the current state and ends the step. `return value` stores the
+result, marks the frame complete, and ends the step. Extra `Step(machine)` calls
+after completion are no-ops. `Complete(machine)` returns `bool`.
+`Result(machine)` returns the machine result type and is only valid after
+completion; the generated C backend traps incomplete result access.
 
 `transition match (...) { ... };` and `transition decide { ... };` are syntax,
 validation, and HIR scaffolds in this milestone. They validate machine-local

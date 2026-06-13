@@ -1,0 +1,26 @@
+# name: machine step expression statement
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Door() -> int {
+    state Closed {
+        transition Open;
+    }
+
+    state Open {
+        return 9;
+    }
+}
+
+int main() {
+    Door m = Door();
+    Step(m);
+    Step(m);
+    return Result(m);
+}
+
+=== run ===
+exit_code: 9

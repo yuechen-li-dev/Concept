@@ -141,8 +141,7 @@ const FunctionLowerer = struct {
                 return lowered.block;
             },
             .expr_stmt => |expr_id| {
-                const lowered = try self.lowerExpr(expr_id, block_id);
-                return lowered.block;
+                return try self.lowerExprStmt(expr_id, block_id);
             },
             .discard_stmt => |expr_id| {
                 const lowered = try self.lowerExpr(expr_id, block_id);
@@ -395,6 +394,17 @@ const FunctionLowerer = struct {
     // Expression lowering
     // ─────────────────────────────────────────────────────────────────────────────
 
+    fn lowerExprStmt(self: *FunctionLowerer, expr_id: hir.ExprId, block_id: mir.MirBlockId) LoweringError!mir.MirBlockId {
+        const expr = self.semantic_module.hir.getExpr(expr_id).*;
+        switch (expr.kind) {
+            .machine_step => |machine_expr| return try self.lowerMachineStepStmt(expr, machine_expr, block_id),
+            else => {
+                const lowered = try self.lowerExpr(expr_id, block_id);
+                return lowered.block;
+            },
+        }
+    }
+
     fn lowerExpr(self: *FunctionLowerer, expr_id: hir.ExprId, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
         const expr = self.semantic_module.hir.getExpr(expr_id).*;
         return switch (expr.kind) {
@@ -413,7 +423,7 @@ const FunctionLowerer = struct {
             .binary => |binary| try self.lowerBinary(expr, binary, block_id),
             .call => |call| try self.lowerCall(expr, call, block_id),
             .machine_construct => |construct| try self.lowerMachineConstruct(expr, construct, block_id),
-            .machine_step => |machine_expr| try self.lowerMachineStep(expr, machine_expr, block_id),
+            .machine_step => error.InvalidMirLowering,
             .machine_complete => |machine_expr| try self.lowerMachineComplete(expr, machine_expr, block_id),
             .machine_result => |machine_expr| try self.lowerMachineResult(expr, machine_expr, block_id),
             .arena_alloc => |arena_alloc| try self.lowerArenaAlloc(expr, arena_alloc, block_id),
@@ -591,13 +601,13 @@ const FunctionLowerer = struct {
         return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = current };
     }
 
-    fn lowerMachineStep(self: *FunctionLowerer, expr: hir.HirExpr, machine_expr: hir.ExprId, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+    fn lowerMachineStepStmt(self: *FunctionLowerer, expr: hir.HirExpr, machine_expr: hir.ExprId, block_id: mir.MirBlockId) LoweringError!mir.MirBlockId {
         const lowered = try self.lowerExpr(machine_expr, block_id);
         try self.store.appendStatement(lowered.block, .{
             .span = expr.span,
             .kind = .{ .machine_step = lowered.operand },
         });
-        return .{ .operand = mir.MirOperand.boolLiteral(true), .block = lowered.block };
+        return lowered.block;
     }
 
     fn lowerMachineComplete(self: *FunctionLowerer, expr: hir.HirExpr, machine_expr: hir.ExprId, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
@@ -1402,6 +1412,39 @@ test "MIR lowering permits machine-containing modules" {
     var mir_module = try lowerModule(std.testing.allocator, &module);
     defer mir_module.deinit();
     try std.testing.expectEqual(@as(usize, 0), mir_module.store.functions.items.len);
+}
+
+test "MIR lowering emits machine step statement without value operand" {
+    var module = try newModule();
+    defer module.deinit();
+
+    const states = try std.testing.allocator.alloc(hir.HirMachineState, 1);
+    states[0] = .{
+        .name = try intern(&module, "Start"),
+        .span = hir.synthetic_span,
+        .source_order = 0,
+        .body = null,
+    };
+    const machine_id = try module.hir.addMachine(try intern(&module, "Door"), module.types.intType(), states, hir.synthetic_span);
+    const machine_type = try module.types.addMachineType(machine_id);
+
+    const main = try addFunction(&module, "main", module.types.intType(), true);
+    const local = try addLocal(&module, main, "m", machine_type);
+    const construct = try module.hir.addExpr(.{ .machine_construct = .{ .machine = machine_id, .args = &.{} } }, hir.synthetic_span);
+    const local_decl = try module.hir.addStmt(.{ .local_decl = .{ .local = local, .initializer = construct } }, hir.synthetic_span);
+    const local_ref = try module.hir.addExpr(.{ .local_ref = local }, hir.synthetic_span);
+    const step = try module.hir.addExpr(.{ .machine_step = local_ref }, hir.synthetic_span);
+    const step_stmt = try module.hir.addStmt(.{ .expr_stmt = step }, hir.synthetic_span);
+    const ret = try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "0") }, hir.synthetic_span);
+    try setBody(&module, main, &.{ local_decl, step_stmt, ret });
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "MachineStep Copy(") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Bool true") == null);
 }
 
 fn newModule() !semantics.SemanticModule {

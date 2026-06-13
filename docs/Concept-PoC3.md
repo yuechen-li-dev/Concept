@@ -1937,6 +1937,16 @@ A parser is a state machine over tokens.
 
 Concept should express these honestly.
 
+Phase 13 v0 provides a deliberately small runnable subset: explicit machine
+frames, scalar `int`/`bool` parameters and results, literal transitions,
+`MachineName(...)` construction, `Step(machine);`, `Complete(machine)`, and
+`Result(machine)`. `Step(machine);` is statement-like and produces no usable
+value; assigning it, returning it, using it as a condition, passing it as a call
+argument, or using it in unary/binary expressions is invalid. `Complete(machine)`
+returns `bool`. `Result(machine)` returns the machine result type only after
+completion; reading a result before completion traps in the generated runtime
+path.
+
 ## 37.1 Syntax sketch
 
 ```cpp

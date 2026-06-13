@@ -172,12 +172,16 @@ zero states, duplicate states, unknown transition targets, and cross-machine
 state targets.
 
 Valid run fixtures cover explicit frame construction through `MachineName(...)`,
-one-step and multi-step literal transition behavior, completion via `return`,
-`Complete(machine)` before and after completion, `Result(machine)` after
-completion, scalar `int` and `bool` results, captured scalar parameters, and
-extra `Step(machine)` calls after completion as no-ops. An invalid run fixture
-pins the P13-M8 hardening that `Result(machine)` before completion traps
-instead of silently reading raw result storage.
+`Step(machine);` as a statement-like no-value advance, one-step and multi-step
+literal transition behavior, completion via `return`, `Complete(machine)` as a
+`bool` query before and after completion, `Result(machine)` after completion,
+scalar `int` and `bool` results, captured scalar parameters, and extra
+`Step(machine)` calls after completion as no-ops. Invalid HIR-check fixtures pin
+that `Step(machine)` cannot initialize locals, be returned as a value, be used
+as a condition, be passed as a call argument, participate in binary expressions,
+or be discarded with `discard`. An invalid run fixture pins the P13-M8
+hardening that `Result(machine)` before completion traps instead of silently
+reading raw result storage.
 
 Backend-C fixtures and unit assertions pin the generated machine shape:
 state enum, frame struct, current-state field, completion flag, result storage,
@@ -198,8 +202,8 @@ v0.
 
 Phase 13 closed: explicit machines, machine-local states, literal/match/decide
 transition scaffolds, runnable literal-transition machine frames,
-`Step`/`Complete`/`Result`, and C backend support for the literal-transition
-subset.
+statement-like `Step`, `Complete`/`Result` value queries, and C backend support
+for the literal-transition subset.
 
 ## `.conception` format
 

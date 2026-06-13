@@ -2569,6 +2569,7 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectParseFixture("../../../language/phase13-machines/valid/machine_transition_decide_later_state.valid.conception");
     try expectParseFixture("../../../language/phase13-machines/valid/machine_transition_decide_nested_if.valid.conception");
     try expectParseFixture("../../../language/phase13-machines/valid/machine_transition_decide_zero_score_fallback.valid.conception");
+    try expectRunFixture("../../../language/phase13-machines/valid/machine_step_expression_statement.valid.conception");
     try expectRunFixture("../../../language/phase13-machines/valid/machine_step_literal_two_steps.valid.conception");
     try expectRunFixture("../../../language/phase13-machines/valid/machine_complete_result.valid.conception");
     try expectRunFixture("../../../language/phase13-machines/valid/machine_extra_step_after_complete.valid.conception");
@@ -2584,6 +2585,12 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectBackendCFixture("../../../language/phase13-machines/invalid/machine_decide_runtime_unsupported.invalid.conception");
     try expectBackendCFixture("../../../language/phase13-machines/invalid/machine_non_scalar_result_unsupported.invalid.conception");
     try expectBackendCFixture("../../../language/phase13-machines/invalid/machine_non_scalar_param_unsupported.invalid.conception");
+    try expectCheckFixture("../../../language/phase13-machines/invalid/machine_step_assignment.invalid.conception");
+    try expectCheckFixture("../../../language/phase13-machines/invalid/machine_step_return_value.invalid.conception");
+    try expectCheckFixture("../../../language/phase13-machines/invalid/machine_step_condition.invalid.conception");
+    try expectCheckFixture("../../../language/phase13-machines/invalid/machine_step_call_argument.invalid.conception");
+    try expectCheckFixture("../../../language/phase13-machines/invalid/machine_step_binary_expr.invalid.conception");
+    try expectCheckFixture("../../../language/phase13-machines/invalid/machine_step_discard.invalid.conception");
     try expectParseFixture("../../../language/phase13-machines/invalid/state_outside_machine.invalid.conception");
     try expectParseFixture("../../../language/phase13-machines/invalid/transition_outside_machine.invalid.conception");
     try expectParseFixture("../../../language/phase13-machines/invalid/transition_inside_function.invalid.conception");
