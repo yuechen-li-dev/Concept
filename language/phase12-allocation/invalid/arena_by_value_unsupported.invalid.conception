@@ -1,0 +1,14 @@
+# name: arena by value unsupported
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Example;
+
+noalloc int Bad(Arena arena) {
+    return 0;
+}
+
+=== diagnostics ===
+CON0199

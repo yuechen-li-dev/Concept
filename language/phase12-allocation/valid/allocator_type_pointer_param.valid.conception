@@ -1,0 +1,11 @@
+# name: allocator type pointer param
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Example;
+
+noalloc int UsesAllocator(Allocator* allocator) {
+    return 0;
+}

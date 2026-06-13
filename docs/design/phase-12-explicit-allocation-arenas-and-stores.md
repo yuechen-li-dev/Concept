@@ -232,6 +232,65 @@ checking, profile-specific defaults, region lifetime checking, generic stores,
 MIR allocation operations, backend allocation lowering, or hidden heap
 behavior.
 
+### P12-M3 implementation status
+
+P12-M3 adds compiler-known allocation surface type names:
+
+```text
+Arena
+Allocator
+AllocError
+```
+
+These names are resolved by the Stage 0 compiler as a v0 bridge because Concept
+does not yet have the core/prelude module surface needed to host them as normal
+library declarations.
+
+`Arena` is an opaque storage-region handle placeholder. `Allocator` is an
+opaque allocator placeholder. Neither type has runtime behavior, allocation
+behavior, fields, constructors, reset/destroy behavior, or ordinary struct
+literal construction in P12-M3. By-value `Arena` and `Allocator` signatures are
+rejected with `CON0199 OpaqueAllocationTypeByValueUnsupported`; the intended
+early shape is pointer use such as:
+
+```cpp
+noalloc int UsesArena(Arena* arena) {
+    return 0;
+}
+
+noalloc int UsesAllocator(Allocator* allocator) {
+    return 0;
+}
+```
+
+`AllocError` is a small compiler-known value placeholder reserved for future
+allocation failure surfaces. It is copyable, has no Drop behavior, exposes no
+public fields, and does not imply any allocation operation.
+
+The MIR C backend can spell opaque allocation handles in pointer position as:
+
+```c
+struct cpt_Arena* arena;
+struct cpt_Allocator* allocator;
+```
+
+It does not emit by-value incomplete opaque handle types. `AllocError` currently
+lowers as an integer placeholder in backend-supported value positions.
+
+Future operations remain reserved and unimplemented:
+
+```cpp
+Arena arena = Arena.create();       // future
+T* value = Arena.alloc<T>(arena);   // future P12-M4
+Arena.reset(arena);                 // future P12-M5
+Arena.destroy(arena);               // future P12-M5
+```
+
+P12-M3 does not add `Arena.alloc<T>`, `Arena.create`, reset/destroy semantics,
+allocator runtime code, hidden heap behavior, ID stores, MIR allocation
+operations, backend allocation lowering beyond opaque pointer spelling, region
+lifetime checking, arena pointer escape analysis, or Drop-in-arena behavior.
+
 ## 4. Profiles and hidden heap policy
 
 Phase 12 policy:

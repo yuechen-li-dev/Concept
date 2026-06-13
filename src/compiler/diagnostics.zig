@@ -173,6 +173,7 @@ pub const DiagnosticCode = enum {
     AllocationEffectMismatch,
     DuplicateAllocationEffect,
     AllocationEffectInvalidTarget,
+    OpaqueAllocationTypeByValueUnsupported,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -327,6 +328,7 @@ pub const DiagnosticCode = enum {
             .AllocationEffectMismatch => "CON0191",
             .DuplicateAllocationEffect => "CON0197",
             .AllocationEffectInvalidTarget => "CON0198",
+            .OpaqueAllocationTypeByValueUnsupported => "CON0199",
         };
     }
 };
@@ -796,6 +798,7 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0191", DiagnosticCode.AllocationEffectMismatch.format());
     try std.testing.expectEqualStrings("CON0197", DiagnosticCode.DuplicateAllocationEffect.format());
     try std.testing.expectEqualStrings("CON0198", DiagnosticCode.AllocationEffectInvalidTarget.format());
+    try std.testing.expectEqualStrings("CON0199", DiagnosticCode.OpaqueAllocationTypeByValueUnsupported.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {

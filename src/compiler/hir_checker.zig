@@ -120,6 +120,7 @@ const Checker = struct {
                 }
                 try self.checkStmt(function_id, body, function.return_type);
             }
+            try self.checkOpaqueAllocationTypeSignature(function);
         }
     }
 
@@ -131,6 +132,26 @@ const Checker = struct {
             try self.reportAt(.DropParamUnsupported, "by-value parameter with Drop<T> is not supported until parameter cleanup is implemented", param.span);
             return error.InvalidSemanticModule;
         }
+    }
+
+    fn checkOpaqueAllocationTypeSignature(self: *Checker, function: hir.HirFunction) CheckError!void {
+        if (self.isByValueOpaqueAllocationHandle(function.return_type)) {
+            try self.reportAt(.OpaqueAllocationTypeByValueUnsupported, "Arena and Allocator are opaque allocation handles and are not supported by value in v0; pass a pointer instead", function.span);
+            return error.InvalidSemanticModule;
+        }
+        for (function.params) |param_id| {
+            const param = self.module.hir.getParam(param_id);
+            if (!self.isByValueOpaqueAllocationHandle(param.type_id)) continue;
+            try self.reportAt(.OpaqueAllocationTypeByValueUnsupported, "Arena and Allocator are opaque allocation handles and are not supported by value in v0; pass a pointer instead", param.span);
+            return error.InvalidSemanticModule;
+        }
+    }
+
+    fn isByValueOpaqueAllocationHandle(self: *Checker, type_id: types.TypeId) bool {
+        return switch (self.module.types.kind(type_id)) {
+            .arena, .allocator => true,
+            else => false,
+        };
     }
 
     fn checkStaticAsserts(self: *Checker) CheckError!void {
@@ -809,6 +830,7 @@ const Checker = struct {
         const concrete_function = self.module.hir.getFunction(function_id);
         try self.checkDropParams(function_id, concrete_function.*);
         if (concrete_function.body) |body| try self.checkStmt(function_id, body, concrete_function.return_type);
+        try self.checkOpaqueAllocationTypeSignature(concrete_function.*);
         return function_id;
     }
 
@@ -969,6 +991,7 @@ const Checker = struct {
     fn substituteType(self: *Checker, type_id: types.TypeId, subst: TypeSubstitution, span: diagnostics.SourceSpan) CheckError!types.TypeId {
         if (self.typeParamIndex(type_id, subst.type_params)) |index| return subst.concrete_types[index];
         return switch (self.module.types.kind(type_id)) {
+            .arena, .allocator, .alloc_error => type_id,
             .pointer => |pointer| try self.module.types.addPointerType(try self.substituteType(pointer.pointee, subst, span)),
             .type_param => {
                 try self.reportAt(.UnsupportedGenericInstantiation, "unsupported type parameter in generic instantiation", span);
@@ -1147,6 +1170,9 @@ const Checker = struct {
             .void => try writer.writeAll("void"),
             .int => try writer.writeAll("int"),
             .bool => try writer.writeAll("bool"),
+            .arena => try writer.writeAll("Arena"),
+            .allocator => try writer.writeAll("Allocator"),
+            .alloc_error => try writer.writeAll("AllocError"),
             .struct_type => |struct_id| try writer.print("struct_{s}", .{self.module.interner.text(self.module.hir.getStruct(struct_id).name)}),
             .enum_type => |enum_id| try writer.print("enum_{s}", .{self.module.interner.text(self.module.hir.getEnum(enum_id).name)}),
             .pointer => |pointer| {
@@ -1563,6 +1589,56 @@ test "HIR checker permits alloc and unspecified callers to call any allocation e
     tm.setBody(unspecified_caller, try tm.block(&.{try tm.ret(try addTestExpr(&tm.module.hir, .{ .call = .{ .function = may_alloc, .args = try std.testing.allocator.dupe(hir.ExprId, &.{}) } }))}));
     _ = try addMainReturnInt(&tm, "0");
     try tm.checkPass();
+}
+
+test "HIR checker accepts allocation surface pointer params and AllocError value params" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+
+    const arena_ptr = try tm.module.types.addPointerType(tm.module.types.arenaType());
+    const allocator_ptr = try tm.module.types.addPointerType(tm.module.types.allocatorType());
+    const f = try tm.function("usesAllocationSurface", tm.module.types.intType());
+    _ = try tm.param(f, "arena", arena_ptr);
+    _ = try tm.param(f, "allocator", allocator_ptr);
+    _ = try tm.param(f, "err", tm.module.types.allocErrorType());
+    tm.setBody(f, try tm.block(&.{try tm.ret(try tm.int("0"))}));
+
+    var bag = DiagnosticBag.init(std.testing.allocator);
+    defer bag.deinit();
+    try checkTestModule(std.testing.allocator, &tm.module, &bag);
+    try std.testing.expectEqual(@as(usize, 0), bag.count());
+}
+
+test "HIR checker rejects by-value opaque allocation handles" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+
+    const f = try tm.function("bad", tm.module.types.intType());
+    _ = try tm.param(f, "arena", tm.module.types.arenaType());
+    tm.setBody(f, try tm.block(&.{try tm.ret(try tm.int("0"))}));
+
+    var bag = DiagnosticBag.init(std.testing.allocator);
+    defer bag.deinit();
+    try std.testing.expectError(error.InvalidSemanticModule, checkTestModule(std.testing.allocator, &tm.module, &bag));
+    try std.testing.expectEqual(@as(usize, 1), bag.count());
+    try std.testing.expectEqual(diagnostics.DiagnosticCode.OpaqueAllocationTypeByValueUnsupported, bag.diagnostics.items[0].code);
+}
+
+test "HIR checker rejects field access on opaque allocation handles" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+
+    const f = try tm.function("bad", tm.module.types.intType());
+    const arena = try tm.param(f, "arena", tm.module.types.arenaType());
+    const arena_ref = try addTestExpr(&tm.module.hir, .{ .param_ref = arena });
+    const field = try addTestExpr(&tm.module.hir, .{ .field_access = .{ .receiver = arena_ref, .field_name = try tm.name("someField"), .field_span = synthetic_span } });
+    tm.setBody(f, try tm.block(&.{try tm.ret(field)}));
+
+    var bag = DiagnosticBag.init(std.testing.allocator);
+    defer bag.deinit();
+    try std.testing.expectError(error.InvalidSemanticModule, checkTestModule(std.testing.allocator, &tm.module, &bag));
+    try std.testing.expectEqual(@as(usize, 1), bag.count());
+    try std.testing.expectEqual(diagnostics.DiagnosticCode.FieldAccessNonStruct, bag.diagnostics.items[0].code);
 }
 
 test "HIR checker checks nested noalloc call expressions" {

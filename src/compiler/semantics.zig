@@ -989,6 +989,9 @@ const Collector = struct {
         if (std.mem.eql(u8, part.text, "void")) return self.module.types.voidType();
         if (std.mem.eql(u8, part.text, "int")) return self.module.types.intType();
         if (std.mem.eql(u8, part.text, "bool")) return self.module.types.boolType();
+        if (std.mem.eql(u8, part.text, "Arena")) return self.module.types.arenaType();
+        if (std.mem.eql(u8, part.text, "Allocator")) return self.module.types.allocatorType();
+        if (std.mem.eql(u8, part.text, "AllocError")) return self.module.types.allocErrorType();
         if (std.mem.eql(u8, part.text, "ManualInit")) {
             if (type_name.generic_args.len != 1) {
                 try self.diagnostics.append(diagnostics.manualInitRequiresTypeArgument(type_name.span));
@@ -1027,7 +1030,7 @@ const Collector = struct {
 
     fn internFreshTopLevelName(self: *Collector, text: []const u8, span: source.SourceSpan) !?interner.SymbolId {
         const symbol = try self.module.interner.intern(text);
-        if (self.top_level_decls.contains(symbol)) {
+        if (self.top_level_decls.contains(symbol) or isCompilerKnownTypeName(text)) {
             try self.diagnostics.append(diagnostics.duplicateTopLevelName(span));
             return null;
         }
@@ -2253,21 +2256,33 @@ const test_int_type_parts = [_]ast.NameSegment{.{ .text = "int", .span = .{ .sta
 const test_drop_type_parts = [_]ast.NameSegment{.{ .text = "Drop", .span = .{ .start = 0, .length = 4 } }};
 const test_bool_type_parts = [_]ast.NameSegment{.{ .text = "bool", .span = .{ .start = 0, .length = 4 } }};
 const test_void_type_parts = [_]ast.NameSegment{.{ .text = "void", .span = .{ .start = 0, .length = 4 } }};
+const test_arena_type_parts = [_]ast.NameSegment{.{ .text = "Arena", .span = .{ .start = 0, .length = 5 } }};
+const test_allocator_type_parts = [_]ast.NameSegment{.{ .text = "Allocator", .span = .{ .start = 0, .length = 9 } }};
+const test_alloc_error_type_parts = [_]ast.NameSegment{.{ .text = "AllocError", .span = .{ .start = 0, .length = 10 } }};
 
 fn typeName(name: []const u8, start: usize) ast.TypeName {
-    const parts: []ast.NameSegment = if (std.mem.eql(u8, name, "Drop"))
+    const is_pointer = std.mem.endsWith(u8, name, "*");
+    const base_name = if (is_pointer) name[0 .. name.len - 1] else name;
+    const parts: []ast.NameSegment = if (std.mem.eql(u8, base_name, "Drop"))
         @constCast(test_drop_type_parts[0..])
-    else if (std.mem.eql(u8, name, "bool"))
+    else if (std.mem.eql(u8, base_name, "bool"))
         @constCast(test_bool_type_parts[0..])
-    else if (std.mem.eql(u8, name, "void"))
+    else if (std.mem.eql(u8, base_name, "void"))
         @constCast(test_void_type_parts[0..])
+    else if (std.mem.eql(u8, base_name, "Arena"))
+        @constCast(test_arena_type_parts[0..])
+    else if (std.mem.eql(u8, base_name, "Allocator"))
+        @constCast(test_allocator_type_parts[0..])
+    else if (std.mem.eql(u8, base_name, "AllocError"))
+        @constCast(test_alloc_error_type_parts[0..])
     else
         @constCast(test_int_type_parts[0..]);
     return .{
         .name = .{
             .parts = parts,
-            .span = .{ .start = start, .length = name.len },
+            .span = .{ .start = start, .length = base_name.len },
         },
+        .is_pointer = is_pointer,
         .span = .{ .start = start, .length = name.len },
     };
 }
@@ -2411,7 +2426,7 @@ test "semantic collection detects must_use Result-shaped enum" {
     try std.testing.expectEqual(hir.EnumPayloadFieldId{ .index = 1 }, shape.err_payload);
     try std.testing.expectEqual(module.types.intType(), shape.ok_type);
     try std.testing.expectEqual(module.types.intType(), shape.err_type);
-    try std.testing.expectEqual(shape, module.resultShapeForType(.{ .index = 3 }).?);
+    try std.testing.expectEqual(shape, module.resultShapeForType(.{ .index = 6 }).?);
 }
 
 test "semantic collection detects non-must_use Result-shaped enum" {
@@ -2586,9 +2601,9 @@ test "semantic collection adds struct and enum nominal types" {
     var module = try collectItems(&.{ structItem("Vec2", 0), enumItem("Token", 20) }, &diagnostics_bag);
     defer module.deinit();
 
-    try std.testing.expectEqual(@as(usize, 5), module.types.count());
-    try std.testing.expectEqual(types.TypeKind{ .struct_type = .{ .index = 0 } }, module.types.kind(.{ .index = 3 }));
-    try std.testing.expectEqual(types.TypeKind{ .enum_type = .{ .index = 0 } }, module.types.kind(.{ .index = 4 }));
+    try std.testing.expectEqual(@as(usize, 8), module.types.count());
+    try std.testing.expectEqual(types.TypeKind{ .struct_type = .{ .index = 0 } }, module.types.kind(.{ .index = 6 }));
+    try std.testing.expectEqual(types.TypeKind{ .enum_type = .{ .index = 0 } }, module.types.kind(.{ .index = 7 }));
 }
 
 test "semantic collection resolves raw pointer function return and parameter types" {
@@ -2655,7 +2670,33 @@ test "semantic collection resolves raw pointer to enum type" {
 
     try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
     const pointer_type = module.hir.getFunction(.{ .index = 0 }).return_type;
-    try std.testing.expectEqual(types.TypeKind{ .pointer = .{ .pointee = .{ .index = 3 } } }, module.types.kind(pointer_type));
+    try std.testing.expectEqual(types.TypeKind{ .pointer = .{ .pointee = .{ .index = 6 } } }, module.types.kind(pointer_type));
+}
+
+test "semantic collection resolves compiler-known allocation surface types" {
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    var params = [_]ast.ParamDecl{
+        paramDecl("Arena*", "arena", 20),
+        paramDecl("Allocator*", "allocator", 40),
+        paramDecl("AllocError", "err", 70),
+    };
+    var module = try collectItems(&.{functionItemWithSignature("usesAllocationSurface", "AllocError", params[0..], &.{}, 0)}, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
+    const function = module.hir.getFunction(.{ .index = 0 });
+    try std.testing.expectEqual(module.types.allocErrorType(), function.return_type);
+    try std.testing.expectEqual(types.TypeKind{ .pointer = .{ .pointee = module.types.arenaType() } }, module.types.kind(module.hir.getParam(function.params[0]).type_id));
+    try std.testing.expectEqual(types.TypeKind{ .pointer = .{ .pointee = module.types.allocatorType() } }, module.types.kind(module.hir.getParam(function.params[1]).type_id));
+    try std.testing.expectEqual(module.types.allocErrorType(), module.hir.getParam(function.params[2]).type_id);
+}
+
+test "semantic collection reserves allocation surface type names" {
+    try expectOneSemanticDiagnostic(&.{structItem("Arena", 0)}, .DuplicateTopLevelName);
+    try expectOneSemanticDiagnostic(&.{structItem("Allocator", 0)}, .DuplicateTopLevelName);
+    try expectOneSemanticDiagnostic(&.{enumItem("AllocError", 0)}, .DuplicateTopLevelName);
 }
 
 test "semantic collection rejects duplicate function" {
@@ -2738,11 +2779,11 @@ test "semantic collection lowers concept requirements into HIR debug" {
         \\HirModule
         \\  Concept Equatable
         \\    TypeParams
-        \\      #0 T: TypeId(3)
+        \\      #0 T: TypeId(6)
         \\    Requirements
         \\      equals -> TypeId(2)
-        \\        left: TypeId(3)
-        \\        right: TypeId(3)
+        \\        left: TypeId(6)
+        \\        right: TypeId(6)
         \\
     , snapshot);
 }
@@ -2770,7 +2811,7 @@ test "semantic collection marks compiler-known marker concepts in HIR debug" {
         \\HirModule
         \\  Marker Concept Copy known_marker=Copy
         \\    TypeParams
-        \\      #0 T: TypeId(3)
+        \\      #0 T: TypeId(6)
         \\
     , snapshot);
 }
@@ -3418,4 +3459,10 @@ test "test intrinsic semantics reject wrong arity and normal source usage" {
 
 fn sameType(left: types.TypeId, right: types.TypeId) bool {
     return left.index == right.index;
+}
+
+fn isCompilerKnownTypeName(text: []const u8) bool {
+    return std.mem.eql(u8, text, "Arena") or
+        std.mem.eql(u8, text, "Allocator") or
+        std.mem.eql(u8, text, "AllocError");
 }

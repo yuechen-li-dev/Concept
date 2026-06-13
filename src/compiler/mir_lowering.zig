@@ -1202,10 +1202,10 @@ test "MIR lowering stable snapshot for Phase 7 struct places" {
         \\MirModule
         \\  Function main -> TypeId(1)
         \\    Locals
-        \\      MirLocalId(0) user v: TypeId(3)
-        \\      MirLocalId(1) temp <temp>: TypeId(3)
-        \\      MirLocalId(2) user px: TypeId(4)
-        \\      MirLocalId(3) temp <temp>: TypeId(4)
+        \\      MirLocalId(0) user v: TypeId(6)
+        \\      MirLocalId(1) temp <temp>: TypeId(6)
+        \\      MirLocalId(2) user px: TypeId(7)
+        \\      MirLocalId(3) temp <temp>: TypeId(7)
         \\      MirLocalId(4) temp <temp>: TypeId(1)
         \\    Blocks
         \\      MirBlockId(0)
@@ -1267,7 +1267,7 @@ test "MIR lowering validates Phase 7 struct value params returns and calls" {
 
     const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
     defer std.testing.allocator.free(snapshot);
-    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Function makeVec -> TypeId(3)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Function makeVec -> TypeId(6)") != null);
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "StructConstructor StructId(0)(FieldId(0)=Copy(MirLocalId(0)), FieldId(1)=Copy(MirLocalId(1)))") != null);
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "Function sum -> TypeId(1)") != null);
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "FieldAccess(Copy(MirLocalId(3)), FieldId(0))") != null);

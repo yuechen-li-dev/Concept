@@ -1,0 +1,14 @@
+# name: allocator field access rejected
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Example;
+
+noalloc int Bad(Allocator allocator) {
+    return allocator.someField;
+}
+
+=== diagnostics ===
+CON0079

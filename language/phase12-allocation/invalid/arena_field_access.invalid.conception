@@ -1,0 +1,14 @@
+# name: arena field access rejected
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Example;
+
+noalloc int Bad(Arena arena) {
+    return arena.someField;
+}
+
+=== diagnostics ===
+CON0079

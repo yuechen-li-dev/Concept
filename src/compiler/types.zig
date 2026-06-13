@@ -26,6 +26,9 @@ pub const TypeKind = union(enum) {
     void,
     int,
     bool,
+    arena,
+    allocator,
+    alloc_error,
     struct_type: hir.StructId,
     enum_type: hir.EnumId,
     pointer: struct {
@@ -45,6 +48,9 @@ pub const TypeKind = union(enum) {
             .void => try writer.writeAll("void"),
             .int => try writer.writeAll("int"),
             .bool => try writer.writeAll("bool"),
+            .arena => try writer.writeAll("Arena"),
+            .allocator => try writer.writeAll("Allocator"),
+            .alloc_error => try writer.writeAll("AllocError"),
             .struct_type => |id| try writer.print("struct {f}", .{id}),
             .enum_type => |id| try writer.print("enum {f}", .{id}),
             .pointer => |pointer| try writer.print("{f}*", .{pointer.pointee}),
@@ -61,6 +67,9 @@ pub const TypeStore = struct {
     const void_type_id = TypeId{ .index = 0 };
     const int_type_id = TypeId{ .index = 1 };
     const bool_type_id = TypeId{ .index = 2 };
+    const arena_type_id = TypeId{ .index = 3 };
+    const allocator_type_id = TypeId{ .index = 4 };
+    const alloc_error_type_id = TypeId{ .index = 5 };
 
     pub fn init(allocator: std.mem.Allocator) !TypeStore {
         var store = TypeStore{
@@ -72,6 +81,9 @@ pub const TypeStore = struct {
         try store.types.append(allocator, .void);
         try store.types.append(allocator, .int);
         try store.types.append(allocator, .bool);
+        try store.types.append(allocator, .arena);
+        try store.types.append(allocator, .allocator);
+        try store.types.append(allocator, .alloc_error);
 
         return store;
     }
@@ -94,6 +106,21 @@ pub const TypeStore = struct {
     pub fn boolType(self: TypeStore) TypeId {
         _ = self;
         return bool_type_id;
+    }
+
+    pub fn arenaType(self: TypeStore) TypeId {
+        _ = self;
+        return arena_type_id;
+    }
+
+    pub fn allocatorType(self: TypeStore) TypeId {
+        _ = self;
+        return allocator_type_id;
+    }
+
+    pub fn allocErrorType(self: TypeStore) TypeId {
+        _ = self;
+        return alloc_error_type_id;
     }
 
     pub fn addStructType(self: *TypeStore, struct_id: hir.StructId) TypeStoreError!TypeId {
@@ -168,9 +195,9 @@ pub const TypeStore = struct {
     /// concept `Copy<T>` satisfaction is integrated deliberately.
     pub fn isCopyType(self: TypeStore, hir_store: ?*const hir.HirStore, id: TypeId) bool {
         return switch (self.kind(id)) {
-            .int, .bool, .pointer, .enum_type => true,
+            .int, .bool, .pointer, .enum_type, .alloc_error => true,
             .struct_type => self.hasCopyMarkerImpl(hir_store, id),
-            .void, .manual_init, .type_param => false,
+            .void, .arena, .allocator, .manual_init, .type_param => false,
         };
     }
 
@@ -286,10 +313,18 @@ test "builtin TypeIds are stable and distinct" {
     try std.testing.expectEqual(@as(u32, 1), store.intType().index);
     try std.testing.expectEqual(@as(u32, 2), store.boolType().index);
     try std.testing.expect(store.intType().index != store.boolType().index);
-    try std.testing.expectEqual(@as(usize, 3), store.count());
+    try std.testing.expectEqual(@as(u32, 3), store.arenaType().index);
+    try std.testing.expectEqual(@as(u32, 4), store.allocatorType().index);
+    try std.testing.expectEqual(@as(u32, 5), store.allocErrorType().index);
+    try std.testing.expect(store.arenaType().index != store.allocatorType().index);
+    try std.testing.expect(store.allocErrorType().index != store.intType().index);
+    try std.testing.expectEqual(@as(usize, 6), store.count());
     try std.testing.expect(store.contains(store.voidType()));
     try std.testing.expect(store.contains(store.intType()));
     try std.testing.expect(store.contains(store.boolType()));
+    try std.testing.expect(store.contains(store.arenaType()));
+    try std.testing.expect(store.contains(store.allocatorType()));
+    try std.testing.expect(store.contains(store.allocErrorType()));
     try std.testing.expect(!store.contains(.{ .index = 99 }));
 }
 
@@ -300,6 +335,9 @@ test "builtin kind lookup works" {
     try std.testing.expectEqual(@as(TypeKind, .void), store.kind(store.voidType()));
     try std.testing.expectEqual(@as(TypeKind, .int), store.kind(store.intType()));
     try std.testing.expectEqual(@as(TypeKind, .bool), store.kind(store.boolType()));
+    try std.testing.expectEqual(@as(TypeKind, .arena), store.kind(store.arenaType()));
+    try std.testing.expectEqual(@as(TypeKind, .allocator), store.kind(store.allocatorType()));
+    try std.testing.expectEqual(@as(TypeKind, .alloc_error), store.kind(store.allocErrorType()));
 }
 
 test "adding struct type stores nominal StructId" {
@@ -309,9 +347,9 @@ test "adding struct type stores nominal StructId" {
     const vec3_struct_id = hir.StructId{ .index = 0 };
     const vec3_type = try store.addStructType(vec3_struct_id);
 
-    try std.testing.expectEqual(@as(u32, 3), vec3_type.index);
+    try std.testing.expectEqual(@as(u32, 6), vec3_type.index);
     try std.testing.expectEqual(TypeKind{ .struct_type = vec3_struct_id }, store.kind(vec3_type));
-    try std.testing.expectEqual(@as(usize, 4), store.count());
+    try std.testing.expectEqual(@as(usize, 7), store.count());
 }
 
 test "adding enum type stores nominal EnumId" {
@@ -321,9 +359,9 @@ test "adding enum type stores nominal EnumId" {
     const token_enum_id = hir.EnumId{ .index = 0 };
     const token_type = try store.addEnumType(token_enum_id);
 
-    try std.testing.expectEqual(@as(u32, 3), token_type.index);
+    try std.testing.expectEqual(@as(u32, 6), token_type.index);
     try std.testing.expectEqual(TypeKind{ .enum_type = token_enum_id }, store.kind(token_type));
-    try std.testing.expectEqual(@as(usize, 4), store.count());
+    try std.testing.expectEqual(@as(usize, 7), store.count());
 }
 
 test "repeated nominal adds return same TypeId" {
@@ -340,7 +378,7 @@ test "repeated nominal adds return same TypeId" {
 
     try std.testing.expectEqual(vec3_first, vec3_second);
     try std.testing.expectEqual(token_first, token_second);
-    try std.testing.expectEqual(@as(usize, 5), store.count());
+    try std.testing.expectEqual(@as(usize, 8), store.count());
 }
 
 test "distinct nominal declarations get distinct TypeIds" {
@@ -354,7 +392,7 @@ test "distinct nominal declarations get distinct TypeIds" {
 
     try std.testing.expect(vec3_type.index != vec4_type.index);
     try std.testing.expect(token_type.index != keyword_type.index);
-    try std.testing.expectEqual(@as(usize, 7), store.count());
+    try std.testing.expectEqual(@as(usize, 10), store.count());
 }
 
 test "pointer TypeIds are interned by pointee" {
@@ -374,7 +412,7 @@ test "pointer TypeIds are interned by pointee" {
     try std.testing.expectEqual(TypeKind{ .pointer = .{ .pointee = int_ptr_first } }, store.kind(int_ptr_ptr));
 }
 
-test "copyability model v0 marks scalars pointers and enums Copy but structs non-Copy" {
+test "copyability model v0 marks scalars pointers enums and AllocError Copy but opaque handles and structs non-Copy" {
     var store = try TypeStore.init(std.testing.allocator);
     defer store.deinit();
 
@@ -386,8 +424,11 @@ test "copyability model v0 marks scalars pointers and enums Copy but structs non
     try std.testing.expect(store.isCopyType(null, store.boolType()));
     try std.testing.expect(store.isCopyType(null, pointer_type));
     try std.testing.expect(store.isCopyType(null, enum_type));
+    try std.testing.expect(store.isCopyType(null, store.allocErrorType()));
     try std.testing.expect(!store.isCopyType(null, struct_type));
     try std.testing.expect(!store.isCopyType(null, store.voidType()));
+    try std.testing.expect(!store.isCopyType(null, store.arenaType()));
+    try std.testing.expect(!store.isCopyType(null, store.allocatorType()));
 }
 
 test "copyability model recognizes explicit marker Copy impl for structs" {
@@ -419,23 +460,45 @@ test "invalid TypeIds assert by contract" {
     var store = try TypeStore.init(std.testing.allocator);
     defer store.deinit();
 
-    try std.testing.expectEqual(@as(usize, 3), store.count());
+    try std.testing.expectEqual(@as(usize, 6), store.count());
     // `kind` documents that invalid IDs assert; this test keeps that contract
     // visible without intentionally triggering a process abort.
 }
 
 test "TypeKind debug formatting is stable" {
-    const rendered = try std.fmt.allocPrint(std.testing.allocator, "{f} {f} {f} {f} {f} {f}", .{
+    const rendered = try std.fmt.allocPrint(std.testing.allocator, "{f} {f} {f} {f} {f} {f} {f} {f} {f}", .{
         @as(TypeKind, .void),
         @as(TypeKind, .int),
         @as(TypeKind, .bool),
+        @as(TypeKind, .arena),
+        @as(TypeKind, .allocator),
+        @as(TypeKind, .alloc_error),
         TypeKind{ .struct_type = .{ .index = 0 } },
         TypeKind{ .enum_type = .{ .index = 0 } },
         TypeKind{ .pointer = .{ .pointee = .{ .index = 1 } } },
     });
     defer std.testing.allocator.free(rendered);
 
-    try std.testing.expectEqualStrings("void int bool struct StructId(0) enum EnumId(0) TypeId(1)*", rendered);
+    try std.testing.expectEqualStrings("void int bool Arena Allocator AllocError struct StructId(0) enum EnumId(0) TypeId(1)*", rendered);
+}
+
+test "allocation surface TypeIds are stable distinct and display readable names" {
+    var store = try TypeStore.init(std.testing.allocator);
+    defer store.deinit();
+
+    try std.testing.expect(store.arenaType().index != store.allocatorType().index);
+    try std.testing.expect(store.allocErrorType().index != store.intType().index);
+    try std.testing.expect(store.allocErrorType().index != store.boolType().index);
+    try std.testing.expect(store.allocErrorType().index != store.arenaType().index);
+
+    const rendered = try std.fmt.allocPrint(std.testing.allocator, "{f} {f} {f}", .{
+        store.kind(store.arenaType()),
+        store.kind(store.allocatorType()),
+        store.kind(store.allocErrorType()),
+    });
+    defer std.testing.allocator.free(rendered);
+
+    try std.testing.expectEqualStrings("Arena Allocator AllocError", rendered);
 }
 
 test "type parameter TypeIds are stable and distinct by owner and index" {

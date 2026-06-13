@@ -1,0 +1,11 @@
+# name: alloc error type position
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Example;
+
+noalloc AllocError HandlesAllocError(AllocError err) {
+    return err;
+}

@@ -58,6 +58,9 @@ pub fn emitExecutableFromMir(
     const emitted_struct_layouts = try emitStructLayouts(writer, &ctx);
     if ((emitted_enum_layouts or emitted_struct_layouts) and mir_module.store.functions.items.len > 0) try writer.writeByte('\n');
 
+    const emitted_opaque_allocation_decls = try emitOpaqueAllocationForwardDeclarations(writer, &ctx);
+    if (emitted_opaque_allocation_decls and mir_module.store.functions.items.len > 0) try writer.writeByte('\n');
+
     if (mir_module.store.functions.items.len > 1) {
         for (mir_module.store.functions.items, 0..) |function, index| {
             try emitPrototype(writer, &ctx, .{ .index = @intCast(index) }, function);
@@ -156,8 +159,8 @@ fn requireSupportedEnumLayout(ctx: *const BackendContext, enum_id: hir.EnumId, s
 fn isSupportedEnumPayloadType(ctx: *const BackendContext, type_id: types.TypeId) bool {
     if (!ctx.module.types.contains(type_id)) return false;
     return switch (ctx.module.types.kind(type_id)) {
-        .int, .bool => true,
-        .void, .struct_type, .enum_type, .pointer => false,
+        .int, .bool, .alloc_error => true,
+        .void, .arena, .allocator, .struct_type, .enum_type, .pointer, .manual_init, .type_param => false,
     };
 }
 
@@ -220,21 +223,58 @@ fn requireSupportedStructLayout(ctx: *const BackendContext, struct_id: hir.Struc
 fn isSupportedStructFieldType(ctx: *const BackendContext, type_id: types.TypeId) bool {
     if (!ctx.module.types.contains(type_id)) return false;
     return switch (ctx.module.types.kind(type_id)) {
-        .int, .bool => true,
+        .int, .bool, .alloc_error => true,
         .enum_type => |enum_id| isSupportedEnumLayout(ctx, enum_id),
         .pointer => |pointer| isSupportedStructFieldPointerType(ctx, pointer.pointee),
-        .void, .struct_type => false,
+        .void, .arena, .allocator, .struct_type, .manual_init, .type_param => false,
     };
 }
 
 fn isSupportedStructFieldPointerType(ctx: *const BackendContext, pointee: types.TypeId) bool {
     if (!ctx.module.types.contains(pointee)) return false;
     return switch (ctx.module.types.kind(pointee)) {
-        .void, .int, .bool => true,
+        .void, .int, .bool, .arena, .allocator, .alloc_error => true,
         .enum_type => |enum_id| isSupportedEnumLayout(ctx, enum_id),
         .pointer => |nested| isSupportedStructFieldPointerType(ctx, nested.pointee),
-        .struct_type => false,
+        .struct_type, .manual_init, .type_param => false,
     };
+}
+
+fn emitOpaqueAllocationForwardDeclarations(writer: anytype, ctx: *const BackendContext) EmitError!bool {
+    var needs_arena = false;
+    var needs_allocator = false;
+
+    for (ctx.mir_module.store.functions.items) |function| {
+        noteOpaqueAllocationPointerType(ctx, function.return_type, &needs_arena, &needs_allocator);
+        for (function.params) |local_id| {
+            noteOpaqueAllocationPointerType(ctx, ctx.mir_module.store.getLocal(local_id).type_id, &needs_arena, &needs_allocator);
+        }
+        for (function.locals) |local_id| {
+            noteOpaqueAllocationPointerType(ctx, ctx.mir_module.store.getLocal(local_id).type_id, &needs_arena, &needs_allocator);
+        }
+    }
+
+    if (needs_arena) try writer.writeAll("struct cpt_Arena;\n");
+    if (needs_allocator) try writer.writeAll("struct cpt_Allocator;\n");
+    return needs_arena or needs_allocator;
+}
+
+fn noteOpaqueAllocationPointerType(ctx: *const BackendContext, type_id: types.TypeId, needs_arena: *bool, needs_allocator: *bool) void {
+    if (!ctx.module.types.contains(type_id)) return;
+    switch (ctx.module.types.kind(type_id)) {
+        .pointer => |pointer| noteOpaqueAllocationPointee(ctx, pointer.pointee, needs_arena, needs_allocator),
+        else => {},
+    }
+}
+
+fn noteOpaqueAllocationPointee(ctx: *const BackendContext, type_id: types.TypeId, needs_arena: *bool, needs_allocator: *bool) void {
+    if (!ctx.module.types.contains(type_id)) return;
+    switch (ctx.module.types.kind(type_id)) {
+        .arena => needs_arena.* = true,
+        .allocator => needs_allocator.* = true,
+        .pointer => |pointer| noteOpaqueAllocationPointee(ctx, pointer.pointee, needs_arena, needs_allocator),
+        else => {},
+    }
 }
 
 fn isSupportedEnumLayout(ctx: *const BackendContext, enum_id: hir.EnumId) bool {
@@ -570,7 +610,16 @@ fn emitParamList(writer: anytype, ctx: *const BackendContext, function: mir.MirF
 // C type rendering
 // ─────────────────────────────────────────────────────────────────────────────
 
+const CTypePosition = enum {
+    value,
+    pointer_pointee,
+};
+
 fn emitCType(writer: anytype, ctx: *const BackendContext, type_id: types.TypeId, span: ?diagnostics.SourceSpan) EmitError!void {
+    try emitCTypeAt(writer, ctx, type_id, span, .value);
+}
+
+fn emitCTypeAt(writer: anytype, ctx: *const BackendContext, type_id: types.TypeId, span: ?diagnostics.SourceSpan, position: CTypePosition) EmitError!void {
     if (!ctx.module.types.contains(type_id)) {
         try reportUnsupportedCType(ctx, span);
         return error.InvalidExecutable;
@@ -578,13 +627,27 @@ fn emitCType(writer: anytype, ctx: *const BackendContext, type_id: types.TypeId,
 
     switch (ctx.module.types.kind(type_id)) {
         .void => try writer.writeAll("void"),
-        .int, .bool => try writer.writeAll("int"),
+        .int, .bool, .alloc_error => try writer.writeAll("int"),
+        .arena => {
+            if (position != .pointer_pointee) {
+                try reportUnsupportedCType(ctx, span);
+                return error.InvalidExecutable;
+            }
+            try writer.writeAll("struct cpt_Arena");
+        },
+        .allocator => {
+            if (position != .pointer_pointee) {
+                try reportUnsupportedCType(ctx, span);
+                return error.InvalidExecutable;
+            }
+            try writer.writeAll("struct cpt_Allocator");
+        },
         .enum_type => |enum_id| {
             try requireSupportedEnumLayout(ctx, enum_id, span);
             try emitEnumTypeName(writer, ctx.module, ctx.module.hir.getEnum(enum_id).name);
         },
         .pointer => |pointer| {
-            try emitCType(writer, ctx, pointer.pointee, span);
+            try emitCTypeAt(writer, ctx, pointer.pointee, span, .pointer_pointee);
             try writer.writeByte('*');
         },
         .struct_type => |struct_id| {
@@ -1379,6 +1442,49 @@ test "MIR C backend emits raw pointer params returns and locals" {
     try std.testing.expect(std.mem.indexOf(u8, c_source, "int* cpt_l_q_1;") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_l_q_1 = cpt_p_p_0;") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, "return cpt_l_q_1;") != null);
+}
+
+test "MIR C backend emits opaque allocation handle pointer params" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\noalloc int usesArena(Arena* arena) { return 0; }
+        \\alloc int usesAllocator(Allocator* allocator) { return 0; }
+        \\int main() { return 0; }
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "struct cpt_Arena;\nstruct cpt_Allocator;\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "int cpt_f_usesArena(struct cpt_Arena* cpt_p_arena_") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "int cpt_f_usesAllocator(struct cpt_Allocator* cpt_p_allocator_") != null);
+}
+
+test "MIR C backend emits AllocError as value placeholder" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\noalloc AllocError id(AllocError err) { return err; }
+        \\int main() { return 0; }
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "int cpt_f_id(int cpt_p_err_") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "return cpt_p_err_") != null);
+}
+
+test "MIR C backend rejects by-value opaque allocation handles" {
+    var module = try newTestModule();
+    defer module.deinit();
+
+    const bad_hir = try addHirFunctionForTest(&module, "bad", module.types.arenaType());
+
+    var mir_module = mir.MirModule.init(std.testing.allocator);
+    defer mir_module.deinit();
+    _ = try mir_module.store.addFunction(bad_hir, try internForTest(&module, "bad"), module.types.arenaType(), hir.synthetic_span);
+
+    var diagnostic_bag = diagnostics.DiagnosticBag.init(std.testing.allocator);
+    defer diagnostic_bag.deinit();
+    try std.testing.expectError(error.InvalidExecutable, emitExecutableFromMir(std.testing.allocator, &module, &mir_module, &diagnostic_bag));
+    try std.testing.expectEqual(@as(usize, 1), diagnostic_bag.count());
+    try std.testing.expectEqual(diagnostics.DiagnosticCode.UnsupportedCBackendType, diagnostic_bag.diagnostics.items[0].code);
 }
 
 test "MIR C backend emits address-of and deref" {

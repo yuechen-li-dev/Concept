@@ -1020,7 +1020,9 @@ fn expectCheckFixture(comptime path: []const u8) !void {
 
     try std.testing.expectEqual(Phase.check, fixture.phase);
 
-    if (std.mem.indexOf(u8, path, "phase3-semantics") != null or std.mem.indexOf(u8, path, "phase8-concepts-templates") != null or std.mem.indexOf(u8, path, "phase5-sum-types") != null or std.mem.indexOf(u8, path, "phase5a-judgment") != null or std.mem.indexOf(u8, path, "phase6-unsafe-ownership") != null or std.mem.indexOf(u8, path, "phase7-runtime-structs") != null or std.mem.indexOf(u8, path, "phase10-ownership") != null or std.mem.indexOf(u8, path, "phase11-testing") != null) {
+    if (std.mem.indexOf(u8, path, "phase12-allocation") != null) {
+        try expectSemanticCheckFixtureAllowNoMain(path, fixture);
+    } else if (std.mem.indexOf(u8, path, "phase3-semantics") != null or std.mem.indexOf(u8, path, "phase8-concepts-templates") != null or std.mem.indexOf(u8, path, "phase5-sum-types") != null or std.mem.indexOf(u8, path, "phase5a-judgment") != null or std.mem.indexOf(u8, path, "phase6-unsafe-ownership") != null or std.mem.indexOf(u8, path, "phase7-runtime-structs") != null or std.mem.indexOf(u8, path, "phase10-ownership") != null or std.mem.indexOf(u8, path, "phase11-testing") != null) {
         try expectSemanticCheckFixture(path, fixture);
     } else {
         try expectPhase2CheckFixture(path, fixture);
@@ -1072,6 +1074,66 @@ fn expectSemanticCheckFixture(comptime path: []const u8, fixture: ConceptionFixt
                     try std.testing.expectError(
                         error.InvalidSemanticModule,
                         hir_checker_model.checkExecutable(std.testing.allocator, module, &semantic_diagnostics),
+                    );
+                } else {
+                    return error.ExpectedSemanticDiagnostic;
+                }
+            }
+            const expected_codes = try fixture.diagnosticCodes(std.testing.allocator);
+            defer std.testing.allocator.free(expected_codes);
+            try std.testing.expectEqual(expected_codes.len, semantic_diagnostics.count());
+            for (expected_codes, semantic_diagnostics.diagnostics.items) |expected_code, actual| {
+                try std.testing.expectEqualStrings(expected_code, actual.code.format());
+            }
+        },
+    }
+}
+
+fn expectSemanticCheckFixtureAllowNoMain(comptime path: []const u8, fixture: ConceptionFixture) !void {
+    var parse_diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
+    defer parse_diagnostics.deinit();
+    var semantic_diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
+    defer semantic_diagnostics.deinit();
+
+    const source_file = try source_model.SourceFile.init(std.testing.allocator, path, fixture.source().?);
+    defer source_file.deinit(std.testing.allocator);
+
+    const unit = try parser_model.parseSource(std.testing.allocator, source_file, &parse_diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), parse_diagnostics.count());
+
+    const use_hir_checker = fixture.checkMode() == .hir;
+
+    switch (fixture.expect) {
+        .pass => {
+            var module = try semantics_model.collectTopLevelDeclarationsWithOptions(
+                std.testing.allocator,
+                unit,
+                &semantic_diagnostics,
+                .{ .source_file_kind = source_file.kind },
+            );
+            defer module.deinit();
+            if (use_hir_checker) {
+                try hir_checker_model.checkTestModule(std.testing.allocator, &module, &semantic_diagnostics);
+            }
+            try std.testing.expectEqual(@as(usize, 0), semantic_diagnostics.count());
+        },
+        .fail => {
+            var maybe_module = semantics_model.collectTopLevelDeclarationsWithOptions(
+                std.testing.allocator,
+                unit,
+                &semantic_diagnostics,
+                .{ .source_file_kind = source_file.kind },
+            ) catch |err| switch (err) {
+                error.InvalidSemanticModule => null,
+                else => return err,
+            };
+            defer if (maybe_module) |*module| module.deinit();
+            if (maybe_module) |*module| {
+                if (use_hir_checker) {
+                    try std.testing.expectError(
+                        error.InvalidSemanticModule,
+                        hir_checker_model.checkTestModule(std.testing.allocator, module, &semantic_diagnostics),
                     );
                 } else {
                     return error.ExpectedSemanticDiagnostic;
@@ -2386,6 +2448,12 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase12-allocation/valid/noalloc_generic_call.valid.conception");
     try expectCheckFixture("../../../language/phase12-allocation/valid/comptime_noalloc_calls_noalloc.valid.conception");
     try expectCheckFixture("../../../language/phase12-allocation/valid/unsafe_noalloc_effect_call.valid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/valid/arena_type_pointer_param.valid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/valid/allocator_type_pointer_param.valid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/valid/alloc_error_type_position.valid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/valid/noalloc_uses_arena_pointer.valid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/valid/alloc_uses_allocator_pointer.valid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/valid/generic_function_with_arena_pointer.valid.conception");
     try expectParseFixture("../../../language/phase12-allocation/invalid/function_conflicting_alloc_effects.invalid.conception");
     try expectParseFixture("../../../language/phase12-allocation/invalid/function_duplicate_noalloc.invalid.conception");
     try expectParseFixture("../../../language/phase12-allocation/invalid/function_duplicate_alloc.invalid.conception");
@@ -2395,6 +2463,12 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase12-allocation/invalid/noalloc_calls_alloc_generic.invalid.conception");
     try expectCheckFixture("../../../language/phase12-allocation/invalid/noalloc_calls_unspecified_generic.invalid.conception");
     try expectCheckFixture("../../../language/phase12-allocation/invalid/comptime_noalloc_calls_alloc.invalid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/invalid/arena_struct_literal.invalid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/invalid/allocator_struct_literal.invalid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/invalid/arena_field_access.invalid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/invalid/allocator_field_access.invalid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/invalid/arena_by_value_unsupported.invalid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/invalid/allocator_by_value_unsupported.invalid.conception");
 
     try expectRunFixture("../../../language/phase10-ownership/valid/move_struct_local_run.valid.conception");
     try expectRunFixture("../../../language/phase10-ownership/valid/move_struct_argument_run.valid.conception");

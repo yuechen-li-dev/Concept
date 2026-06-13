@@ -1,0 +1,16 @@
+# name: generic function with arena pointer
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Example;
+
+template<T>
+noalloc T IdentityWithArena(T value, Arena* arena) {
+    return value;
+}
+
+noalloc int UseGeneric(Arena* arena) {
+    return IdentityWithArena(7, arena);
+}

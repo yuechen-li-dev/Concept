@@ -1,0 +1,11 @@
+# name: arena type pointer param
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Example;
+
+noalloc int UsesArena(Arena* arena) {
+    return 0;
+}

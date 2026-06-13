@@ -1,0 +1,11 @@
+# name: alloc uses allocator pointer
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Example;
+
+alloc int UsesAllocator(Allocator* allocator) {
+    return 0;
+}
