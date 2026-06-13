@@ -85,7 +85,20 @@ pub const Parser = struct {
                         attributes = &.{};
                     }
                 },
+                .machine => {
+                    if (try self.parseMachineItem(allocator, attributes)) |item| {
+                        try items.append(item);
+                        attributes = &.{};
+                    }
+                },
                 .identifier, .mut, .unsafe, .@"comptime", .alloc, .noalloc => {
+                    if ((self.current().kind == .alloc or self.current().kind == .noalloc) and self.peek(1).kind == .machine) {
+                        if (try self.parseMachineItem(allocator, attributes)) |item| {
+                            try items.append(item);
+                            attributes = &.{};
+                        }
+                        continue;
+                    }
                     if (self.current().kind == .unsafe and self.peek(1).kind == .impl) {
                         try items.append(try self.parseImplItem(allocator, attributes));
                         attributes = &.{};
@@ -143,6 +156,11 @@ pub const Parser = struct {
                     } else if (self.peek(1).kind == .@"enum" or self.peek(1).kind == .must_use) {
                         try items.append(try self.parseEnumItem(allocator, attributes));
                         attributes = &.{};
+                    } else if (self.peek(1).kind == .machine) {
+                        if (try self.parseMachineItem(allocator, attributes)) |item| {
+                            try items.append(item);
+                            attributes = &.{};
+                        }
                     } else if (self.peek(1).kind == .identifier or self.peek(1).kind == .mut or self.peek(1).kind == .unsafe or self.peek(1).kind == .@"comptime" or self.peek(1).kind == .alloc or self.peek(1).kind == .noalloc) {
                         if (try self.parseFunctionItem(allocator, attributes)) |item| {
                             try items.append(item);
@@ -488,6 +506,13 @@ pub const Parser = struct {
         return null;
     }
 
+    fn parseMachineItem(self: *Parser, allocator: std.mem.Allocator, attributes: []ast.Attribute) !?ast.Item {
+        if (try self.parseMachineDecl(allocator, attributes)) |machine_decl| {
+            return .{ .machine_decl = machine_decl };
+        }
+        return null;
+    }
+
     fn parseTemplateItem(self: *Parser, allocator: std.mem.Allocator, attributes: []ast.Attribute) !?ast.Item {
         if (try self.parseTemplateDecl(allocator, attributes)) |template_decl| {
             return .{ .template_decl = template_decl };
@@ -604,6 +629,26 @@ pub const Parser = struct {
         if (self.current().kind == .left_brace) self.skipFunctionBody();
     }
 
+    fn recoverMachineDecl(self: *Parser) !void {
+        while (self.current().kind != .eof and self.current().kind != .semicolon and self.current().kind != .left_brace) self.advance();
+        if (self.match(.semicolon) != null) return;
+        if (self.current().kind == .left_brace) self.skipFunctionBody();
+    }
+
+    fn recoverMachineBodyMember(self: *Parser) void {
+        if (self.current().kind == .left_brace) {
+            self.skipFunctionBody();
+            return;
+        }
+        while (self.current().kind != .eof and self.current().kind != .state and self.current().kind != .right_brace) {
+            if (self.current().kind == .left_brace) {
+                self.skipFunctionBody();
+                return;
+            }
+            _ = self.advance();
+        }
+    }
+
     fn parseStructItem(self: *Parser, allocator: std.mem.Allocator, attributes: []ast.Attribute) !ast.Item {
         var decl = try self.parseStructDecl(allocator);
         decl.attributes = attributes;
@@ -637,6 +682,156 @@ pub const Parser = struct {
         decl.attributes = attributes;
         decl.span = ast.spanFromBounds(itemStartWithAttributes(attributes, decl.span), spanEnd(decl.span));
         return .{ .impl_decl = decl };
+    }
+
+    fn parseMachineDecl(self: *Parser, allocator: std.mem.Allocator, attributes: []ast.Attribute) !?ast.MachineDecl {
+        var start_span = self.current().span;
+        var allocation_effect: ast.AllocationEffect = .unspecified;
+
+        while (self.current().kind == .alloc or self.current().kind == .noalloc) {
+            const token = self.advance();
+            if (allocation_effect == .unspecified) start_span = token.span;
+            const parsed_effect: ast.AllocationEffect = if (token.kind == .alloc) .alloc else .noalloc;
+            if (allocation_effect == .unspecified) {
+                allocation_effect = parsed_effect;
+            } else if (allocation_effect == parsed_effect) {
+                try self.report(.DuplicateAllocationEffect, "duplicate allocation effect modifier", token.span);
+            } else {
+                try self.report(.AllocationEffectMismatch, "conflicting allocation effect modifiers", token.span);
+            }
+        }
+
+        const machine_token = (try self.expect(.machine, "expected 'machine'", .ExpectedItem)) orelse return null;
+        if (allocation_effect == .unspecified) start_span = machine_token.span;
+
+        const name_token = try self.expect(.identifier, "expected machine name", .UnexpectedToken);
+        if (name_token == null) {
+            try self.recoverMachineDecl();
+            return null;
+        }
+        const name = ast.NameSegment{ .text = name_token.?.lexeme, .span = name_token.?.span };
+
+        if (self.match(.left_paren) == null) {
+            try self.report(.UnexpectedToken, "expected '(' after machine name", self.current().span);
+            try self.recoverMachineDecl();
+            return null;
+        }
+
+        var params = std.ArrayList(ast.ParamDecl).init(allocator);
+        errdefer {
+            for (params.items) |param| param.deinit(allocator);
+            params.deinit();
+        }
+
+        var last_span = name.span;
+        while (self.current().kind != .eof and self.current().kind != .right_paren and self.current().kind != .left_brace and self.current().kind != .semicolon) {
+            if (try self.parseFunctionParamDecl(allocator)) |param| {
+                last_span = param.span;
+                try params.append(param);
+            }
+            if (self.match(.comma)) |comma| {
+                last_span = comma.span;
+                continue;
+            }
+            if (self.current().kind == .right_paren or self.current().kind == .left_brace or self.current().kind == .semicolon) break;
+            try self.report(.UnexpectedToken, "expected ',' between machine parameters", self.current().span);
+            self.recoverFunctionParam();
+            _ = self.match(.comma);
+        }
+
+        if (self.match(.right_paren)) |right_paren| {
+            last_span = right_paren.span;
+        } else {
+            try self.report(.UnexpectedToken, "expected ')' after machine parameter list", self.current().span);
+            self.recoverFunctionAfterMissingRightParen();
+        }
+
+        if (self.match(.arrow) == null) {
+            try self.report(.UnexpectedToken, "expected '->' before machine return type", self.current().span);
+        }
+
+        var return_type = if (self.current().kind == .identifier or self.current().kind == .mut)
+            try self.parseTypeName(allocator)
+        else blk: {
+            try self.report(.UnexpectedToken, "expected machine return type", self.current().span);
+            break :blk try self.emptyTypeName(allocator, self.current().span);
+        };
+        errdefer return_type.deinit(allocator);
+        last_span = return_type.span;
+
+        if (self.current().kind != .left_brace) {
+            try self.report(.UnexpectedToken, "expected machine body", self.current().span);
+            try self.recoverMachineDecl();
+            return_type.deinit(allocator);
+            for (params.items) |param| param.deinit(allocator);
+            params.deinit();
+            return null;
+        }
+
+        const states = try self.parseMachineBody(allocator);
+        errdefer {
+            for (states.items) |state| state.deinit(allocator);
+            states.deinit();
+        }
+        const end_span = self.peekBack().span;
+
+        return .{
+            .attributes = attributes,
+            .name = name,
+            .params = try params.toOwnedSlice(),
+            .return_type = return_type,
+            .states = try states.toOwnedSlice(),
+            .allocation_effect = allocation_effect,
+            .span = ast.spanFromBounds(itemStartWithAttributes(attributes, start_span), spanEnd(end_span)),
+        };
+    }
+
+    fn parseMachineBody(self: *Parser, allocator: std.mem.Allocator) !std.ArrayList(ast.MachineStateDecl) {
+        _ = self.advance();
+        var states = std.ArrayList(ast.MachineStateDecl).init(allocator);
+        errdefer {
+            for (states.items) |state| state.deinit(allocator);
+            states.deinit();
+        }
+
+        while (self.current().kind != .eof and self.current().kind != .right_brace) {
+            if (self.current().kind == .state) {
+                try states.append(try self.parseMachineStateDecl(allocator));
+                continue;
+            }
+
+            try self.report(.UnexpectedToken, "expected state declaration in machine body", self.current().span);
+            self.recoverMachineBodyMember();
+        }
+
+        if (self.match(.right_brace) == null) {
+            try self.report(.UnexpectedToken, "unterminated machine body", self.current().span);
+        }
+
+        return states;
+    }
+
+    fn parseMachineStateDecl(self: *Parser, allocator: std.mem.Allocator) !ast.MachineStateDecl {
+        const state_token = self.advance();
+        const name_token = try self.expect(.identifier, "expected state name", .UnexpectedToken);
+        const name = if (name_token) |identifier|
+            ast.NameSegment{ .text = identifier.lexeme, .span = identifier.span }
+        else
+            ast.NameSegment{ .text = "", .span = self.current().span };
+
+        var body = if (self.current().kind == .left_brace)
+            try self.parseBlockAfterOpenBrace(allocator)
+        else blk: {
+            try self.report(.UnexpectedToken, "expected state body", self.current().span);
+            break :blk ast.BlockStmt{ .statements = try allocator.alloc(ast.Stmt, 0), .span = self.current().span };
+        };
+        errdefer body.deinit(allocator);
+
+        return .{
+            .name = name,
+            .body = body,
+            .span = ast.spanFromBounds(state_token.span.start, spanEnd(body.span)),
+        };
     }
 
     fn parseFunctionDecl(self: *Parser, allocator: std.mem.Allocator, attributes: []ast.Attribute) !?ast.FunctionDecl {
@@ -4075,6 +4270,115 @@ test "malformed template parameter lists report diagnostics" {
 test "templates on structs and enums are rejected for P8-M1" {
     try expectSingleDiagnostic("module Example; template<T> struct Box { T value; };", .UnexpectedToken);
     try expectSingleDiagnostic("module Example; template<T> enum Maybe { None };", .UnexpectedToken);
+}
+
+fn expectMachineDecl(unit: ast.CompilationUnit, index: usize) ast.MachineDecl {
+    return switch (unit.items[index]) {
+        .machine_decl => |machine_decl| machine_decl,
+        else => unreachable,
+    };
+}
+
+test "parses machine declaration name params return type and one state" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; machine Lexer(mut LexerInput& input) -> Token { state Start { } }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const machine_decl = expectMachineDecl(unit, 0);
+    try std.testing.expectEqualStrings("Lexer", machine_decl.name.text);
+    try std.testing.expectEqual(@as(usize, 1), machine_decl.params.len);
+    try std.testing.expect(machine_decl.params[0].type_name.is_mut);
+    try std.testing.expect(machine_decl.params[0].type_name.is_reference);
+    try std.testing.expectEqualStrings("LexerInput", machine_decl.params[0].type_name.name.parts[0].text);
+    try std.testing.expectEqualStrings("input", machine_decl.params[0].name.text);
+    try std.testing.expectEqualStrings("Token", machine_decl.return_type.name.parts[0].text);
+    try std.testing.expectEqual(@as(usize, 1), machine_decl.states.len);
+    try std.testing.expectEqualStrings("Start", machine_decl.states[0].name.text);
+}
+
+test "parses multiple machine states in source order" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; machine M() -> int { state Start { } state Done { return 0; } }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const machine_decl = expectMachineDecl(unit, 0);
+    try std.testing.expectEqual(@as(usize, 2), machine_decl.states.len);
+    try std.testing.expectEqualStrings("Start", machine_decl.states[0].name.text);
+    try std.testing.expectEqualStrings("Done", machine_decl.states[1].name.text);
+    try std.testing.expectEqual(@as(usize, 1), machine_decl.states[1].body.statements.len);
+    _ = switch (machine_decl.states[1].body.statements[0]) {
+        .return_stmt => |stmt| stmt,
+        else => return error.ExpectedReturnStmt,
+    };
+}
+
+test "parses machine state body ordinary statements" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; machine Counter() -> int { state Start { int x = 1; x = x + 1; return x; } }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const statements = expectMachineDecl(unit, 0).states[0].body.statements;
+    try std.testing.expectEqual(@as(usize, 3), statements.len);
+    _ = switch (statements[0]) {
+        .local_decl => |stmt| stmt,
+        else => return error.ExpectedLocalDecl,
+    };
+    _ = switch (statements[1]) {
+        .assignment => |stmt| stmt,
+        else => return error.ExpectedAssignment,
+    };
+}
+
+test "parses noalloc machine allocation effect metadata" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; noalloc machine M() -> int { state Start { return 0; } }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    try std.testing.expectEqual(ast.AllocationEffect.noalloc, expectMachineDecl(unit, 0).allocation_effect);
+}
+
+test "machine AST debug output includes states" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; noalloc machine M() -> int { state Start { return 0; } state Done { } }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+
+    try std.testing.expectEqualStrings(
+        \\CompilationUnit
+        \\  Module Example
+        \\  Machine effect=NoAlloc M() -> int
+        \\    State Start
+        \\      Body
+        \\        Return
+        \\          Int 0
+        \\    State Done
+        \\      Body
+        \\
+    , snapshot);
+}
+
+test "machine parser diagnostics are stable" {
+    try expectSingleDiagnostic("module Example; machine () -> int { state Start { } }", .UnexpectedToken);
+    try expectSingleDiagnostic("module Example; machine M() { state Start { } }", .UnexpectedToken);
+    try expectSingleDiagnostic("module Example; machine M() -> int;", .UnexpectedToken);
+    try expectSingleDiagnostic("module Example; machine M() -> int { int x = 0; }", .UnexpectedToken);
+    try expectSingleDiagnostic("module Example; state Start { }", .ExpectedItem);
 }
 
 fn expectFunctionDecl(unit: ast.CompilationUnit, index: usize) ast.FunctionDecl {

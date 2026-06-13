@@ -1002,8 +1002,39 @@ pub const FunctionDecl = struct {
     }
 };
 
+pub const MachineStateDecl = struct {
+    name: NameSegment,
+    body: BlockStmt,
+    span: SourceSpan,
+
+    pub fn deinit(self: MachineStateDecl, allocator: std.mem.Allocator) void {
+        self.body.deinit(allocator);
+    }
+};
+
+pub const MachineDecl = struct {
+    attributes: []Attribute = &.{},
+    name: NameSegment,
+    params: []ParamDecl,
+    return_type: TypeName,
+    states: []MachineStateDecl,
+    allocation_effect: AllocationEffect = .unspecified,
+    span: SourceSpan,
+
+    pub fn deinit(self: MachineDecl, allocator: std.mem.Allocator) void {
+        for (self.attributes) |attribute| attribute.deinit(allocator);
+        allocator.free(self.attributes);
+        for (self.params) |param| param.deinit(allocator);
+        allocator.free(self.params);
+        self.return_type.deinit(allocator);
+        for (self.states) |state| state.deinit(allocator);
+        allocator.free(self.states);
+    }
+};
+
 pub const Item = union(enum) {
     function_decl: FunctionDecl,
+    machine_decl: MachineDecl,
     template_decl: TemplateDecl,
     struct_decl: StructDecl,
     enum_decl: EnumDecl,
@@ -1015,6 +1046,7 @@ pub const Item = union(enum) {
     pub fn deinit(self: Item, allocator: std.mem.Allocator) void {
         switch (self) {
             .function_decl => |function_decl| function_decl.deinit(allocator),
+            .machine_decl => |machine_decl| machine_decl.deinit(allocator),
             .template_decl => |template_decl| template_decl.deinit(allocator),
             .struct_decl => |struct_decl| struct_decl.deinit(allocator),
             .enum_decl => |enum_decl| enum_decl.deinit(allocator),
@@ -1072,6 +1104,33 @@ pub const Item = union(enum) {
                 try writer.writeAll(")\n");
                 if (function_decl.body) |body| {
                     try body.writeDebug(writer);
+                }
+            },
+            .machine_decl => |machine_decl| {
+                try writeAttributesDebug(machine_decl.attributes, writer);
+                try writer.writeAll("  Machine ");
+                if (machine_decl.allocation_effect != .unspecified) {
+                    try writer.writeAll("effect=");
+                    try writer.writeAll(machine_decl.allocation_effect.debugName());
+                    try writer.writeByte(' ');
+                }
+                try writer.writeAll(machine_decl.name.text);
+                try writer.writeByte('(');
+                for (machine_decl.params, 0..) |param, index| {
+                    if (index != 0) try writer.writeAll(", ");
+                    try param.type_name.write(writer);
+                    try writer.writeByte(' ');
+                    try writer.writeAll(param.name.text);
+                }
+                try writer.writeAll(") -> ");
+                try machine_decl.return_type.write(writer);
+                try writer.writeByte('\n');
+                for (machine_decl.states) |state| {
+                    try writer.writeAll("    State ");
+                    try writer.writeAll(state.name.text);
+                    try writer.writeByte('\n');
+                    try writer.writeAll("      Body\n");
+                    for (state.body.statements) |stmt| try stmt.writeDebug(writer, 4);
                 }
             },
             .template_decl => |template_decl| {

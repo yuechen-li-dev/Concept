@@ -1,13 +1,28 @@
 # Phase 13: Explicit machines and decision-driven transitions
 
-P13-M0 is a documentation-only milestone. It defines Concept's core machine
+P13-M0 was a documentation-only milestone. It defines Concept's core machine
 model, state declarations, transition statements, state-target expressions, and
-HIR/MIR lowering direction before implementation begins.
+HIR/MIR lowering direction.
 
 P13-M0 does not implement compiler behavior. It does not add parser syntax,
 machine lowering, runtime support, DragonGod kernel features, stack HFSM,
 blackboards, mailbox buses, actuators, persistence, hysteresis, `min_commit`,
 policy memory, a `board` keyword, or new `decide` semantics.
+
+P13-M1 adds the parser and AST scaffold for `machine` declarations and nested
+`state` declarations. The Stage 0 parser now preserves the machine name,
+parameter list, result type, allocation effect metadata, attributes accepted by
+the existing attribute parser, ordered state list, and each state's ordinary
+statement body. `machine` and `state` are currently reserved lexer keywords
+rather than contextual keywords. `state` is only accepted as a declaration form
+inside a machine body.
+
+P13-M1 deliberately does not implement machine HIR/MIR lowering, semantic state
+validation, transition parsing or validation, runtime frames, step/resume
+support, DragonGod features, `board`, stack HFSM, hidden heap behavior,
+implicit scheduling, or new `decide` semantics. A machine that reaches semantic
+declaration collection is rejected with `CON0231
+MachineSemanticsNotImplemented` instead of silently disappearing.
 
 ## Core doctrine
 

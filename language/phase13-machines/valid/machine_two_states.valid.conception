@@ -1,0 +1,23 @@
+# name: machine two states
+# phase: parse
+# expect: pass
+
+=== source ===
+module Example;
+
+machine Lexer() -> Token {
+    state Start {
+    }
+
+    state Done {
+    }
+}
+
+=== ast ===
+CompilationUnit
+  Module Example
+  Machine Lexer() -> Token
+    State Start
+      Body
+    State Done
+      Body

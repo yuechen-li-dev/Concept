@@ -1,0 +1,18 @@
+# name: machine noalloc effect
+# phase: parse
+# expect: pass
+
+=== source ===
+module Example;
+
+noalloc machine Lexer(mut LexerInput& input) -> Token {
+    state Start {
+    }
+}
+
+=== ast ===
+CompilationUnit
+  Module Example
+  Machine effect=NoAlloc Lexer(mut LexerInput& input) -> Token
+    State Start
+      Body

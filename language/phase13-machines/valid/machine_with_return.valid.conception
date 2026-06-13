@@ -1,0 +1,21 @@
+# name: machine with return
+# phase: parse
+# expect: pass
+
+=== source ===
+module Example;
+
+machine M() -> int {
+    state Done {
+        return 0;
+    }
+}
+
+=== ast ===
+CompilationUnit
+  Module Example
+  Machine M() -> int
+    State Done
+      Body
+        Return
+          Int 0

@@ -2518,6 +2518,20 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase12-allocation/invalid/store_id_type_mismatch.invalid.conception");
     try expectCheckFixture("../../../language/phase12-allocation/invalid/store_get_wrong_id_type.invalid.conception");
 
+    try expectParseFixture("../../../language/phase13-machines/valid/machine_empty_state.valid.conception");
+    try expectParseFixture("../../../language/phase13-machines/valid/machine_two_states.valid.conception");
+    try expectParseFixture("../../../language/phase13-machines/valid/machine_with_return.valid.conception");
+    try expectParseFixture("../../../language/phase13-machines/valid/machine_with_params.valid.conception");
+    try expectParseFixture("../../../language/phase13-machines/valid/machine_noalloc_effect.valid.conception");
+    try expectParseFixture("../../../language/phase13-machines/valid/machine_with_attribute.valid.conception");
+    try expectParseFixture("../../../language/phase13-machines/valid/machine_state_ordinary_statements.valid.conception");
+    try expectParseFixture("../../../language/phase13-machines/invalid/state_outside_machine.invalid.conception");
+    try expectParseFixture("../../../language/phase13-machines/invalid/machine_missing_name.invalid.conception");
+    try expectParseFixture("../../../language/phase13-machines/invalid/machine_missing_return_type.invalid.conception");
+    try expectParseFixture("../../../language/phase13-machines/invalid/machine_missing_body.invalid.conception");
+    try expectParseFixture("../../../language/phase13-machines/invalid/machine_unclosed_state.invalid.conception");
+    try expectCheckFixture("../../../language/phase13-machines/invalid/machine_semantics_not_implemented.invalid.conception");
+
     try expectRunFixture("../../../language/phase10-ownership/valid/move_struct_local_run.valid.conception");
     try expectRunFixture("../../../language/phase10-ownership/valid/move_struct_argument_run.valid.conception");
     try expectRunFixture("../../../language/phase10-ownership/valid/move_int_copy_run.valid.conception");

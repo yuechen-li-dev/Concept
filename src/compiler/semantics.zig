@@ -207,6 +207,7 @@ const Collector = struct {
         for (unit.items) |item| {
             switch (item) {
                 .function_decl => |function_decl| try self.declareFunction(function_decl),
+                .machine_decl => |machine_decl| try self.rejectMachineSemantics(machine_decl),
                 .template_decl => |template_decl| try self.declareGenericFunction(template_decl),
                 .struct_decl => |struct_decl| try self.declareStruct(struct_decl),
                 .enum_decl => |enum_decl| try self.declareEnum(enum_decl),
@@ -220,6 +221,7 @@ const Collector = struct {
         for (unit.items) |item| {
             switch (item) {
                 .concept_decl => |concept_decl| try self.resolveConcept(concept_decl),
+                .machine_decl => {},
                 else => {},
             }
         }
@@ -227,6 +229,7 @@ const Collector = struct {
         for (unit.items) |item| {
             switch (item) {
                 .function_decl => |function_decl| try self.resolveFunction(function_decl),
+                .machine_decl => {},
                 .template_decl => |template_decl| try self.resolveGenericFunction(template_decl),
                 .struct_decl => |struct_decl| try self.resolveStruct(struct_decl),
                 .enum_decl => |enum_decl| try self.resolveEnum(enum_decl),
@@ -243,6 +246,7 @@ const Collector = struct {
         for (unit.items) |item| {
             switch (item) {
                 .function_decl => |function_decl| try self.lowerFunctionBody(function_decl),
+                .machine_decl => {},
                 .template_decl => |template_decl| try self.lowerGenericFunctionBody(template_decl),
                 .struct_decl, .enum_decl, .concept_decl, .interface_decl => {},
                 .impl_decl => |impl_decl| try self.lowerImplFunctionBodies(impl_decl),
@@ -417,6 +421,10 @@ const Collector = struct {
             try self.copyCompileTimeCapabilities(function_id, function_decl.compile_time_capabilities);
         }
         try self.top_level_decls.put(name, .{ .function = function_id });
+    }
+
+    fn rejectMachineSemantics(self: *Collector, machine_decl: ast.MachineDecl) !void {
+        try self.diagnostics.append(diagnostics.machineSemanticsNotImplemented(machine_decl.name.span));
     }
 
     fn copyCompileTimeCapabilities(self: *Collector, function_id: hir.FunctionId, capabilities: []const ast.CompileTimeCapabilitySyntax) !void {
@@ -1140,6 +1148,7 @@ const Collector = struct {
 fn itemAttributes(item: ast.Item) []const ast.Attribute {
     return switch (item) {
         .function_decl => |decl| decl.attributes,
+        .machine_decl => |decl| decl.attributes,
         .template_decl => |decl| decl.attributes,
         .struct_decl => |decl| decl.attributes,
         .enum_decl => |decl| decl.attributes,
@@ -2327,6 +2336,16 @@ fn functionItemWithSignature(name: []const u8, return_type: []const u8, params: 
     } };
 }
 
+fn machineItem(name: []const u8, start: usize) ast.Item {
+    return .{ .machine_decl = .{
+        .name = nameSegment(name, start + 8),
+        .params = &.{},
+        .return_type = typeName("int", start + name.len + 12),
+        .states = &.{},
+        .span = .{ .start = start, .length = name.len + 18 },
+    } };
+}
+
 fn paramDecl(type_name: []const u8, name: []const u8, start: usize) ast.ParamDecl {
     return .{
         .type_name = typeName(type_name, start),
@@ -2755,6 +2774,15 @@ test "semantic collection collects function struct and enum together" {
     try std.testing.expectEqual(@as(usize, 1), module.hir.functions.items.len);
     try std.testing.expectEqual(@as(usize, 1), module.hir.structs.items.len);
     try std.testing.expectEqual(@as(usize, 1), module.hir.enums.items.len);
+}
+
+test "semantic collection rejects machine declarations until lowering exists" {
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    try std.testing.expectError(error.InvalidSemanticModule, collectItems(&.{machineItem("Lexer", 0)}, &diagnostics_bag));
+    try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
+    try std.testing.expectEqual(DiagnosticCode.MachineSemanticsNotImplemented, diagnostics_bag.diagnostics.items[0].code);
 }
 
 test "semantic collection adds struct and enum nominal types" {

@@ -184,6 +184,7 @@ pub const DiagnosticCode = enum {
     ArenaResetDestroyArityMismatch,
     ArenaResetDestroyTypeArgsUnsupported,
     ArenaResetDestroyInComptimeUnsupported,
+    MachineSemanticsNotImplemented,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -349,6 +350,7 @@ pub const DiagnosticCode = enum {
             .ArenaResetDestroyArityMismatch => "CON0206",
             .ArenaResetDestroyTypeArgsUnsupported => "CON0207",
             .ArenaResetDestroyInComptimeUnsupported => "CON0210",
+            .MachineSemanticsNotImplemented => "CON0231",
         };
     }
 };
@@ -494,6 +496,15 @@ pub fn invalidEscapeSequence(span: SourceSpan) Diagnostic {
         "invalid escape sequence",
         span,
     ).withHelp("use a recognized escape sequence");
+}
+
+pub fn machineSemanticsNotImplemented(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .MachineSemanticsNotImplemented,
+        .@"error",
+        "machine semantics are not implemented yet",
+        span,
+    ).withHelp("P13-M1 preserves machine declarations in the AST; HIR/MIR lowering is deferred");
 }
 
 pub fn duplicateConceptTypeParameter(span: SourceSpan) Diagnostic {
@@ -829,6 +840,7 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0206", DiagnosticCode.ArenaResetDestroyArityMismatch.format());
     try std.testing.expectEqualStrings("CON0207", DiagnosticCode.ArenaResetDestroyTypeArgsUnsupported.format());
     try std.testing.expectEqualStrings("CON0210", DiagnosticCode.ArenaResetDestroyInComptimeUnsupported.format());
+    try std.testing.expectEqualStrings("CON0231", DiagnosticCode.MachineSemanticsNotImplemented.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {

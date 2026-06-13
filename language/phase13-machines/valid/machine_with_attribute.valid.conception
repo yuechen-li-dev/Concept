@@ -1,0 +1,20 @@
+# name: machine with attribute
+# phase: parse
+# expect: pass
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+machine Lexer() -> Token {
+    state Start {
+    }
+}
+
+=== ast ===
+CompilationUnit
+  Module Example.Tests
+  Attribute Fact
+  Machine Lexer() -> Token
+    State Start
+      Body

@@ -42,8 +42,10 @@ function-level `alloc`/`noalloc` effects, direct `noalloc` call-edge checks,
 compiler-known `Arena`/`Allocator`/`AllocError` surface types,
 `Arena.alloc<T>(arena)`, `Arena.reset(arena)`, `Arena.destroy(arena)`,
 Drop-hardened arena restrictions, a stable C helper ABI, and ID-based store
-examples. Phase 13 has started with the docs-only design milestone for explicit
-machines and decision-driven transitions. Deferred Phase 12 work includes
+examples. Phase 13 has started explicit machine support: P13-M0 documented the
+machine/state/transition doctrine, and P13-M1 begins machine/state parser and
+AST scaffolding while leaving semantic validation, transition behavior,
+HIR/MIR lowering, and runtime step/resume support deferred. Deferred Phase 12 work includes
 `Arena.create`, hosted runtime helper implementation, allocation failure
 surfaces, generic `Store<T, Id>`, named store IDs, generation counters, region
 lifetime checking, use-after-reset analysis, Drop-in-arena, hidden heap/default

@@ -1,0 +1,12 @@
+# name: state outside machine
+# phase: parse
+# expect: fail
+
+=== source ===
+module Example;
+
+state Start {
+}
+
+=== diagnostics ===
+CON0004

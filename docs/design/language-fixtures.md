@@ -40,6 +40,8 @@ language/phase10-ownership/valid/
 language/phase10-ownership/invalid/
 language/phase12-allocation/valid/
 language/phase12-allocation/invalid/
+language/phase13-machines/valid/
+language/phase13-machines/invalid/
 ```
 
 ## Phase 5 sum-type fixtures
@@ -155,6 +157,22 @@ declaration and call text is pinned by
 backend unit tests; backend-c fixtures currently assert the real lowering path
 accepts the source because fixture C-output snapshot matching is not implemented
 yet.
+
+## Phase 13 machine fixtures
+
+Phase 13 fixtures live under `language/phase13-machines/` and currently cover
+the P13-M1 parser/AST scaffold for explicit machines. Valid parse fixtures
+cover empty states, multiple states in source order, ordinary state-body
+statements, `return` statements, machine parameters, `->` result types,
+`noalloc machine` metadata, and attributes accepted by the existing declaration
+attribute parser.
+
+Invalid parse fixtures cover top-level `state`, missing machine names, missing
+result arrows/types, missing bodies, and unclosed state bodies. A declaration
+check fixture pins `CON0231 MachineSemanticsNotImplemented`, because P13-M1
+preserves machines in the AST but intentionally defers HIR/MIR lowering,
+transition semantics, state validation, runtime frames, DragonGod features, and
+any `board`/mailbox/actuator/policy surface.
 
 ## `.conception` format
 

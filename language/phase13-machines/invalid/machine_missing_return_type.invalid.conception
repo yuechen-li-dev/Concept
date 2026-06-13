@@ -1,0 +1,14 @@
+# name: machine missing return type
+# phase: parse
+# expect: fail
+
+=== source ===
+module Example;
+
+machine M() {
+    state Start {
+    }
+}
+
+=== diagnostics ===
+CON0003

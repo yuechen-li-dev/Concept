@@ -1,0 +1,30 @@
+# name: machine state ordinary statements
+# phase: parse
+# expect: pass
+
+=== source ===
+module Example;
+
+machine Counter() -> int {
+    state Start {
+        int x = 1;
+        x = x + 1;
+        return x;
+    }
+}
+
+=== ast ===
+CompilationUnit
+  Module Example
+  Machine Counter() -> int
+    State Start
+      Body
+        LocalDecl int x
+          Int 1
+        Assignment
+          Identifier x
+          Binary +
+            Identifier x
+            Int 1
+        Return
+          Identifier x

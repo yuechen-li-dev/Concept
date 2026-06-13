@@ -1,0 +1,14 @@
+# name: machine unclosed state
+# phase: parse
+# expect: fail
+
+=== source ===
+module Example;
+
+machine M() -> int {
+    state Start {
+        return 0;
+}
+
+=== diagnostics ===
+CON0003
