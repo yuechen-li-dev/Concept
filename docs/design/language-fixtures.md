@@ -124,6 +124,10 @@ single generated C file.
 P12-M8 valid fixtures cover nominal typed ID structs, noalloc ID helper
 functions, a deliberately tiny single-entry `ExprStore` add/get pattern, and ID
 value copying through the current `Copy<T>` marker model.
+P12-M9 adds a closeout smoke fixture that combines an `alloc` function, a
+`noalloc` helper, an `Arena*` parameter, `Arena.alloc<int>(arena)`,
+`Arena.reset(arena)`, `Arena.destroy(arena)`, and the typed-ID/store handle
+pattern in one HIR-check path.
 
 Invalid fixtures cover conflicting `alloc`/`noalloc` specifiers, duplicate
 effect specifiers, the reachable non-function target diagnostic, and `noalloc`
@@ -146,7 +150,7 @@ Phase 12 fixtures intentionally do not execute arena allocation at runtime. They
 do not cover allocator runtime behavior, allocation failure paths, transitive
 effect checking, profile defaults, region checking, generic ID stores,
 arena-backed stores, reset/destroy runtime execution, or runtime-backed
-allocation because those remain future Phase 12 milestones. Exact helper
+allocation because those remain future work. Exact helper
 declaration and call text is pinned by
 backend unit tests; backend-c fixtures currently assert the real lowering path
 accepts the source because fixture C-output snapshot matching is not implemented

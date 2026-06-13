@@ -1,11 +1,16 @@
-# Phase 12 Store Examples
+# Phase 12 Allocation And Store Examples
 
-These examples show the P12-M8 ID-store pattern using only the current Concept
-surface.
+These examples show the closed Phase 12 allocation/store v0 doctrine using only
+the current Concept surface.
 
-P12-M8 does not add a generic `Store<T, Id>`, vector storage, arena-backed
+Phase 12 implements explicit allocation effects and arena operation lowering,
+but it does not provide source-level `Arena` construction or a runtime arena
+helper implementation. The examples therefore avoid runtime arena execution and
+focus on the compiler-data handle pattern.
+
+Phase 12 does not add a generic `Store<T, Id>`, vector storage, arena-backed
 runtime stores, generation counters, stale-ID tracking, or hidden heap behavior.
-The point is narrower:
+The point is deliberately narrower:
 
 ```text
 Raw arena pointers are low-level.
@@ -23,4 +28,3 @@ The `.concept` files here are examples, not a complete container library. The
 single-entry store is deliberately tiny so it can be expressed with existing
 structs, field access, struct literals, `Copy<T>` marker impls, and `noalloc`
 functions.
-

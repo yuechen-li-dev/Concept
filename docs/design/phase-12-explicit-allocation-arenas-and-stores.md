@@ -1,5 +1,10 @@
 # Phase 12: Explicit allocation, arenas, and ID-based stores
 
+Phase 12 is closed as of P12-M9. The final v0 surface is intentionally narrow:
+allocation effects, explicit arena operations, opaque allocation surface types,
+Drop-hardened arena restrictions, stable C helper declarations, and
+documentation/examples/fixtures for typed ID stores.
+
 P12-M0 is a documentation-only milestone. It defines Concept's explicit
 allocation doctrine, arena model, allocation effects, and ID-based store
 direction before implementation begins.
@@ -540,6 +545,143 @@ Store internals may later use arenas, pages, segmented arrays, vectors, fixed
 buffers, or compiler-managed storage, but the public compiler-facing handle
 should remain typed IDs rather than untyped integers or long-lived raw pointers.
 
+### P12-M9 closeout status
+
+P12-M9 closes Phase 12. It is a closeout/documentation/fixture milestone, not a
+feature milestone. No new allocation behavior is added.
+
+Final supported allocation-effect surface:
+
+```cpp
+noalloc int Add(int a, int b) {
+    return a + b;
+}
+
+alloc int MayAllocate(Arena* arena) {
+    int* value = Arena.alloc<int>(arena);
+    return 0;
+}
+```
+
+Functions may be `unspecified`, `noalloc`, or `alloc`. A `noalloc` caller may
+directly call only known `noalloc` callees. `alloc` and unspecified callers
+remain permissive in v0. Unspecified callees are rejected from `noalloc` callers
+because they provide no `noalloc` guarantee.
+
+Final supported allocation surface types:
+
+```text
+Arena
+Allocator
+AllocError
+```
+
+`Arena` and `Allocator` are opaque allocation surface placeholders. `Arena*`
+and `Allocator*` are supported in pointer positions. By-value `Arena` and
+`Allocator` use is rejected. `Arena` and `Allocator` are non-Copy. `AllocError`
+is a copyable placeholder value type.
+
+Final supported arena operations:
+
+```cpp
+T* ptr = Arena.alloc<T>(arena);
+Arena.reset(arena);
+Arena.destroy(arena);
+```
+
+`Arena.alloc<T>` requires an `Arena*`, returns `T*`, and has allocation effect.
+It is rejected in `noalloc` functions, allowed in `alloc` functions, and allowed
+in unspecified functions for now. It supports concrete non-Drop types only:
+Drop types, structs containing Drop fields, `ManualInit<DropType>`, `Arena`,
+and `Allocator` are rejected.
+
+`Arena.reset(arena)` and `Arena.destroy(arena)` require an `Arena*`. They are
+`noalloc` storage-management operations. They do not run Drop in v0. Arena
+reset/destroy invalidation is documented and represented in HIR/MIR/backend
+operations, but it is not globally proven by region checking or escape
+analysis.
+
+Final C helper ABI emitted by the backend:
+
+```c
+struct cpt_Arena;
+
+void* cpt_arena_alloc(struct cpt_Arena* arena, size_t size, size_t align);
+void  cpt_arena_reset(struct cpt_Arena* arena);
+void  cpt_arena_destroy(struct cpt_Arena* arena);
+```
+
+Generated C emits explicit helper calls for Concept arena operations. It does
+not directly emit hidden `malloc`, `realloc`, or `free` for arena operations.
+The helper implementation remains external/deferred. Hosted helper
+implementations may use `malloc` internally as backend support, not core
+language semantics. Freestanding and kernel profiles must provide helpers or
+reject hosted arena execution.
+
+Final ID-store doctrine:
+
+```text
+Raw arena pointers are low-level.
+Typed IDs are the preferred compiler-data handle shape.
+Stores own backing storage.
+The store add/get pattern is documented and exemplified.
+No generic Store<T, Id> is implemented yet.
+```
+
+Phase 12 diagnostics added:
+
+```text
+CON0190 AllocationInNoAllocFunction
+CON0191 AllocationEffectMismatch
+CON0194 ArenaAllocDropTypeUnsupported
+CON0197 DuplicateAllocationEffect
+CON0198 AllocationEffectInvalidTarget
+CON0199 OpaqueAllocationTypeByValueUnsupported
+CON0201 ArenaAllocationInComptimeUnsupported
+CON0202 ArenaAllocRequiresArenaPointer
+CON0203 ArenaAllocRequiresConcreteType
+CON0204 ArenaAllocArityMismatch
+CON0205 ArenaResetDestroyRequiresArenaPointer
+CON0206 ArenaResetDestroyArityMismatch
+CON0207 ArenaResetDestroyTypeArgsUnsupported
+CON0210 ArenaResetDestroyInComptimeUnsupported
+```
+
+Fixture and example coverage includes allocation-effect syntax,
+duplicate/conflicting effects, direct `noalloc` call-edge checking, allocation
+surface types, opaque `Arena`/`Allocator` restrictions, `Arena.alloc`
+validation and effect behavior, Drop and Drop-field rejection,
+`ManualInit<DropType>` rejection, reset/destroy validation, backend helper ABI
+lowering, typed ID/store examples, and wrong-ID-type fixtures. Runtime arena
+execution is intentionally not covered because there is no arena runtime
+implementation yet.
+
+Deferred beyond Phase 12:
+
+- `Arena.create`;
+- source-level Arena construction/initialization;
+- hosted arena runtime helper implementation integrated into the build;
+- allocation failure handling;
+- `AllocError` return surface;
+- checked allocation APIs;
+- `Arena.allocInit<T>`;
+- `Arena.allocUninit<T>`;
+- `ManualInit` arena integration;
+- Drop-in-arena with destructor lists;
+- per-object destructor registration;
+- region lifetime checking;
+- escape analysis;
+- use-after-reset/destroy analysis;
+- profile-specific default allocators;
+- hidden hosted heap convenience APIs;
+- allocator interfaces/traits;
+- generic `Store<T, Id>`;
+- `id` syntax;
+- generation counters;
+- stale-ID checking;
+- arena-backed store runtime;
+- generic containers/vectors.
+
 ## 4. Profiles and hidden heap policy
 
 Phase 12 policy:
@@ -1001,7 +1143,7 @@ P12-M5  Arena reset/destroy semantics and invalidation rules
 P12-M6  Arena Drop/storage-state hardening
 P12-M7  Arena helper ABI contract and C backend hardening
 P12-M8  ID-based store design/prototype and examples
-P12-M9  Closeout
+P12-M9  Closeout (closed)
 ```
 
 This ordering keeps effects and metadata ahead of allocation operations, then

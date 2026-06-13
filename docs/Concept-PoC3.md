@@ -37,20 +37,16 @@ Concept is not a full formal specification yet.
 
 This document is a design constitution: it defines the language identity, core constraints, major semantic commitments, and implementation direction. Future documents should define grammar, MIR format, module layout, ABI details, standard library APIs, package/build tooling, and implementation milestones.
 
-Implementation note: Phase 12 now includes function-level `alloc`/`noalloc`
-syntax, direct `noalloc` call-edge checking, compiler-known allocation surface
-types, and a narrow `Arena.alloc<T>(arena)` intrinsic for non-Drop concrete
-types, plus explicit `Arena.reset(arena)` and `Arena.destroy(arena)` surface
-operations. Phase 12 also hardens arena allocation against
-Drop/resource-management loopholes, including generic instantiations,
-Drop-containing structs, and `ManualInit<DropType>`. Phase 12 now stabilizes
-the arena backend helper ABI emitted by the C backend; hosted helper
-implementation remains external/deferred rather than core language semantics.
-Allocation failure paths, transitive checking, runtime allocation support,
-deeper arena invalidation analysis, and hidden heap behavior remain
-unimplemented. Phase 12 now documents and examples the preferred ID-based store
-pattern for compiler-shaped data: typed IDs are the public handles, while raw
-arena pointers remain low-level implementation tools.
+Implementation note: Phase 12 is closed. It completes explicit allocation v0:
+function-level `alloc`/`noalloc` effects, direct `noalloc` call-edge checks,
+compiler-known `Arena`/`Allocator`/`AllocError` surface types,
+`Arena.alloc<T>(arena)`, `Arena.reset(arena)`, `Arena.destroy(arena)`,
+Drop-hardened arena restrictions, a stable C helper ABI, and ID-based store
+examples. Deferred work includes `Arena.create`, hosted runtime helper
+implementation, allocation failure surfaces, generic `Store<T, Id>`, named
+store IDs, generation counters, region lifetime checking, use-after-reset
+analysis, Drop-in-arena, hidden heap/default allocator behavior, and CLI
+from-disk allocation runner behavior.
 
 ---
 

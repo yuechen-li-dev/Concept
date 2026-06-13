@@ -1,0 +1,47 @@
+# name: phase12 closeout smoke
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Example;
+
+marker concept Copy<T>;
+
+struct ExprId {
+    int index;
+};
+
+impl Copy<ExprId>;
+
+struct Expr {
+    int kind;
+    int value;
+};
+
+impl Copy<Expr>;
+
+struct ExprStore {
+    int count;
+    Expr first;
+};
+
+noalloc ExprId FirstExprId() {
+    return ExprId {
+        index: 0,
+    };
+}
+
+noalloc Expr ExprStoreGet(ExprStore store, ExprId id) {
+    return store.first;
+}
+
+alloc int UsePhase12Surface(Arena* arena, ExprStore store) {
+    int* value = Arena.alloc<int>(arena);
+    Arena.reset(arena);
+    Arena.destroy(arena);
+    ExprId id = FirstExprId();
+    Expr loaded = ExprStoreGet(store, id);
+    return loaded.value;
+}
+

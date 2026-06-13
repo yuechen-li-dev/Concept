@@ -2478,6 +2478,7 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectRunFixture("../../../language/phase12-allocation/valid/store_add_get_pattern.valid.conception");
     try expectRunFixture("../../../language/phase12-allocation/valid/store_id_copy_value.valid.conception");
     try expectCheckFixture("../../../language/phase12-allocation/valid/store_id_with_noalloc_functions.valid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/valid/phase12_closeout_smoke.valid.conception");
     try expectParseFixture("../../../language/phase12-allocation/invalid/function_conflicting_alloc_effects.invalid.conception");
     try expectParseFixture("../../../language/phase12-allocation/invalid/function_duplicate_noalloc.invalid.conception");
     try expectParseFixture("../../../language/phase12-allocation/invalid/function_duplicate_alloc.invalid.conception");
