@@ -2334,6 +2334,7 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase11-testing/valid/expect_that_equal_bool_pass.con_test");
     try expectCheckFixture("../../../language/phase11-testing/valid/theory_expect_that_equal_int_pass.con_test");
     try expectCheckFixture("../../../language/phase11-testing/valid/theory_expect_that_true_pass.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/valid/phase11_closeout_smoke.con_test");
     try expectParseFixture("../../../language/phase11-testing/invalid/attribute_unknown.invalid.conception");
     try expectParseFixture("../../../language/phase11-testing/invalid/attribute_orphan.invalid.conception");
     try expectParseFixture("../../../language/phase11-testing/invalid/attribute_statement_position.invalid.conception");

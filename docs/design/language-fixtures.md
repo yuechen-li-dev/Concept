@@ -67,7 +67,7 @@ Invalid fixtures cover malformed template syntax, type parameters out of scope, 
 
 Phase 8 MIR/backend coverage is intentionally concrete-only: the pipeline run fixture and targeted compiler tests assert that template declarations, concepts, marker concepts, and type-parameter types do not leak into executable MIR or backend C, while deterministic instantiated function names and referenced static witness calls are emitted.
 
-Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed for compile-time execution v0. Phase 10 is closed for ownership/storage-state v0. Phase 11 is in progress for first-class testing, attributes, and reasoned expectations.
+Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed for compile-time execution v0. Phase 10 is closed for ownership/storage-state v0. Phase 11 is closed for first-class testing, attributes, and reasoned expectations v0.
 
 ## Phase 9 compile-time execution fixtures
 
@@ -87,9 +87,9 @@ Some Phase 10 behavior is intentionally covered by MIR/unit tests rather than so
 
 ## Phase 11 testing fixtures
 
-Phase 11 fixtures live under `language/phase11-testing/` and cover the in-progress first-class testing surface. Parse fixtures cover declaration attributes, `[Fact]`, `[Theory]`, `[InlineData(...)]`, supported literal attribute arguments, and rejected malformed attribute placement or expressions.
+Phase 11 fixtures live under `language/phase11-testing/` and cover the closed first-class testing v0 surface. Parse fixtures cover declaration attributes, `[Fact]`, `[Theory]`, `[InlineData(...)]`, supported literal attribute arguments, and rejected malformed attribute placement or expressions.
 
-Valid `.con_test` check fixtures cover `.con_test` source-kind classification, helper functions that are not discovered as tests, `[Fact]` signature validation, `[Theory]` plus `[InlineData]` validation, primitive `Assert.*` / `Expect.*` reason validation, HIR runner-supported facts and theories, and the current primitive `Expect.That` relation scaffold (`Is.True()`, `Is.False()`, `Is.EqualTo(int)`, and `Is.EqualTo(bool)`).
+Valid `.con_test` check fixtures cover `.con_test` source-kind classification, helper functions that are not discovered as tests, `[Fact]` signature validation, `[Theory]` plus `[InlineData]` validation, primitive `Assert.*` / `Expect.*` reason validation, HIR runner-supported facts and theories, the primitive `Expect.That` relation scaffold (`Is.True()`, `Is.False()`, `Is.EqualTo(int)`, and `Is.EqualTo(bool)`), reporting/output stabilization through runner unit tests, and a closeout smoke fixture combining one fact, one two-row theory, `Assert.True`, `Expect.Equal`, and `Expect.That(..., Is.EqualTo(...))`.
 
 Invalid fixtures are compile-time parse or semantic invalid cases: test attributes in normal source, invalid test signatures, missing or mismatched InlineData, missing or empty reasons, wrong intrinsic arity, wrong primitive operand types, unsupported equality/relation types, standalone relation constructors, and rejected inline test blocks.
 

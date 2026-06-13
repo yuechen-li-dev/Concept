@@ -900,6 +900,141 @@ Still deferred:
 - inline test blocks;
 - filtering, async tests, fixtures/hooks, and runtime reflection.
 
+## P11-M9 closeout status
+
+Phase 11 is closed for first-class testing v0. The implementation now has a
+documented, fixture-backed testing surface, stable diagnostic inventory,
+examples, and HIR runner output contract. This closeout does not add new testing
+semantics.
+
+Final supported v0 surface:
+
+File model:
+
+```text
+.con_test files are Concept test source files.
+Ordinary source files do not contain inline test blocks.
+Test helpers are ordinary functions inside test modules.
+```
+
+Attributes:
+
+```cpp
+[Fact]
+[Theory]
+[InlineData(...)]
+```
+
+Test entrypoints:
+
+```text
+[Fact] functions are zero-arg void tests.
+[Theory] functions are void parameterized tests.
+Each [InlineData] row creates one theory case.
+InlineData v0 supports int and bool values.
+```
+
+Assert/Expect:
+
+```cpp
+Assert.True(condition, "reason");
+Assert.False(condition, "reason");
+
+Expect.True(condition, "reason");
+Expect.False(condition, "reason");
+Expect.Equal(expectedInt, actualInt, "reason");
+Expect.Equal(expectedBool, actualBool, "reason");
+```
+
+Relation API scaffold:
+
+```cpp
+Expect.That(actualBool, Is.True(), "reason");
+Expect.That(actualBool, Is.False(), "reason");
+Expect.That(actualInt, Is.EqualTo(expectedInt), "reason");
+Expect.That(actualBool, Is.EqualTo(expectedBool), "reason");
+```
+
+Runner:
+
+```text
+HIR runner executes Fact and Theory cases.
+Counts are per case, not per function.
+Theory case display names use Module.Function#N.
+Failures include reason and expected/actual where available.
+```
+
+Output:
+
+```text
+PASS tests=N failures=0
+FAIL tests=N failures=N
+```
+
+Mandatory reason doctrine:
+
+```text
+Every Assert/Expect/Expect.That requires a non-empty, non-whitespace reason string.
+Reason is part of the test, not a comment.
+Current implementation uses positional reason string as a bridge until named because: syntax exists.
+```
+
+Phase 11 diagnostics:
+
+```text
+CON0170 TestExpectationRequiresReason
+CON0171 TestReasonMustBeNonEmpty
+CON0172 InvalidAttribute
+CON0173 FactRequiresZeroArgFunction
+CON0174 TheoryRequiresInlineData
+CON0175 InlineDataArityMismatch
+CON0176 InlineDataTypeMismatch
+CON0177 TestAttributeOutsideTestFile
+CON0178 TestFunctionReturnTypeInvalid
+CON0179 InlineDataRequiresTheory
+CON0180 ConflictingTestAttributes
+CON0181 DuplicateTestAttribute
+CON0182 TestIntrinsicOutsideTestFile
+CON0183 TestIntrinsicTypeMismatch
+CON0184 ExpectEqualUnsupportedType
+CON0185 TestIntrinsicArityMismatch
+CON0186 TestRelationUnsupported
+CON0187 TestRelationOutsideExpectThat
+```
+
+Fixture and example coverage:
+
+- parser fixtures cover declaration attribute parsing and malformed attribute
+  placement/arguments;
+- semantic fixtures cover `.con_test` source classification, test discovery,
+  attribute validation, reason enforcement, intrinsic arity/type checks,
+  unsupported equality, relation validation, and rejected inline test blocks;
+- valid runner-facing fixtures cover facts, theories, InlineData rows, helpers,
+  primitive Assert/Expect calls, and primitive `Expect.That` relations;
+- runner pass/fail behavior, output summaries, ordered failure blocks, theory
+  row names, reasons, and expected/actual scalar display are covered by
+  `src/compiler/test_runner.zig`;
+- examples under `examples/phase11/` use only the implemented positional reason
+  bridge and primitive v0 relations.
+
+Deferred after Phase 11:
+
+- named `because:` syntax;
+- CLI/from-disk `.con_test` execution command;
+- generated MIR/C test runner support;
+- full `TestRelation<R, T>` concept model;
+- custom user-defined relations;
+- richer equality for enums, structs, strings, arrays, and sequences;
+- `Has.Diagnostic`;
+- `Is.Ok` / `Is.Err`;
+- diagnostic-testing helpers;
+- filtering;
+- fixtures/lifecycle hooks;
+- async tests;
+- property/fuzz testing;
+- runtime reflection;
+- inline test blocks remain an explicit non-goal.
+
 ## Close criteria
 
 P11-M0 is successful if:

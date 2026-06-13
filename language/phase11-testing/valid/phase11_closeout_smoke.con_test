@@ -1,0 +1,28 @@
+# name: phase11 closeout smoke
+# phase: check
+# expect: pass
+
+=== source ===
+module Example.Tests;
+
+int Add(int a, int b) {
+    return a + b;
+}
+
+[Fact]
+void CloseoutFactSmoke() {
+    Assert.True(true, "closeout smoke fact should be able to assert setup");
+    Expect.Equal(4, Add(2, 2), "closeout smoke fact should compare primitive int equality");
+    Expect.That(Add(1, 1), Is.EqualTo(2), "closeout smoke fact should use primitive relation equality");
+    return;
+}
+
+[Theory]
+[InlineData(1, 2, 3)]
+[InlineData(10, 20, 30)]
+void CloseoutTheorySmoke(int a, int b, int expected) {
+    Assert.True(a < expected, "closeout smoke theory row should bind int InlineData");
+    Expect.Equal(expected, Add(a, b), "closeout smoke theory should compare bound row values");
+    Expect.That(Add(a, b), Is.EqualTo(expected), "closeout smoke theory should run relation equality per row");
+    return;
+}
