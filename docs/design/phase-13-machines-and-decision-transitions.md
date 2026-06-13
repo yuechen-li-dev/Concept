@@ -61,6 +61,35 @@ machine lowering, runtime frames, step/resume behavior, DragonGod features,
 stack HFSM, `board`, mailbox, actuator, policy memory, hidden heap, scheduler,
 or async behavior.
 
+P13-M4 adds deterministic match-driven transition targets in the current Stage
+0 match syntax:
+
+```cpp
+transition match (kind) {
+    TokenKind::Identifier => Identifier;
+    TokenKind::Number => Number;
+    _ => Error;
+};
+```
+
+The parser accepts `transition match (...) { ... };` inside machine state
+bodies, preserves the scrutinee expression, reuses existing match-pattern AST
+forms, preserves arm source order, and records each arm's bare state target
+name and span. Semantic collection validates every arm target against the
+containing machine's local state table. Self targets, the initial state, and
+later states are valid; unknown and cross-machine targets report `CON0222
+UnknownMachineState` before the general machine placeholder. Otherwise valid
+machines with literal or match transitions still report `CON0231
+MachineSemanticsNotImplemented`.
+
+For P13-M4, match arm results are intentionally narrow: each result must be a
+bare machine state name. Arbitrary state-valued expressions, nested `decide`
+results, qualified external state targets, user-visible machine state enums,
+machine HIR/MIR lowering, runtime frames, scheduling, and DragonGod features
+remain deferred. Transition-match currently performs target validation only;
+full machine-body expression typing and match exhaustiveness for the transition
+scrutinee remain part of later machine lowering/checking work.
+
 ## Core doctrine
 
 ```text
@@ -145,11 +174,11 @@ is not less typing. The goal is visible, typed, inspectable control progression:
 ```cpp
 machine Lexer(mut LexerInput& input) -> Token {
     state Start {
-        transition match input.peekClass() {
-            CharClass.Digit  => Number;
-            CharClass.Letter => Identifier;
-            CharClass.End    => Done;
-            _                => Error;
+        transition match (input.peekClass()) {
+            CharClass::Digit  => Number;
+            CharClass::Letter => Identifier;
+            CharClass::End    => Done;
+            _                 => Error;
         };
     }
 
@@ -264,9 +293,9 @@ Example:
 ```cpp
 machine DoorMachine(mut DoorInput& input) -> DoorResult {
     state Closed {
-        transition match input.command {
-            DoorCommand.Open => Opening;
-            _                => Closed;
+        transition match (input.command) {
+            DoorCommand::Open => Opening;
+            _                 => Closed;
         };
     }
 
@@ -346,9 +375,9 @@ transition Idle;
 ```
 
 ```cpp
-transition match event {
-    Event.Tick => Running;
-    Event.Stop => Stopped;
+transition match (event) {
+    Event::Tick => Running;
+    Event::Stop => Stopped;
     _          => Error;
 };
 ```
@@ -435,11 +464,11 @@ CON0224 InvalidTransitionTarget
 
 ```cpp
 state Start {
-    transition match input.peekClass() {
-        CharClass.Digit  => Number;
-        CharClass.Letter => Identifier;
-        CharClass.End    => Done;
-        _                => Error;
+    transition match (input.peekClass()) {
+        CharClass::Digit  => Number;
+        CharClass::Letter => Identifier;
+        CharClass::End    => Done;
+        _                 => Error;
     };
 }
 ```
@@ -452,7 +481,21 @@ Rules:
 - `match` is exact deterministic transition selection.
 - `match` is the degenerate deterministic form of transition decision.
 
-P13-M0 does not implement match-driven transitions.
+P13-M4 implementation status:
+
+- Stage 0 parses `transition match (...) { ... };` inside machine state bodies.
+- Match-driven transition targets are represented in the AST/scaffold.
+- Arm patterns reuse existing match-pattern syntax.
+- Each arm result is currently a bare machine state name, not an arbitrary
+  state-valued expression.
+- Arm targets validate against the containing machine's local state table.
+- Unknown or cross-machine arm targets report `CON0222 UnknownMachineState`.
+- Valid match transitions still end at `CON0231
+  MachineSemanticsNotImplemented` because HIR/MIR lowering and runtime machine
+  semantics are not implemented.
+- `transition decide` remains deferred to P13-M5.
+- Full transition-match exhaustiveness/type checking remains deferred until the
+  machine-local state target type is modeled in semantic lowering.
 
 ## 10. Decide-driven transitions
 
@@ -745,11 +788,11 @@ Phase 13 v0 explicitly defers:
 ```cpp
 machine Lexer(mut LexerInput& input) -> Token {
     state Start {
-        transition match input.peekClass() {
-            CharClass.Digit  => Number;
-            CharClass.Letter => Identifier;
-            CharClass.End    => Done;
-            _                => Error;
+        transition match (input.peekClass()) {
+            CharClass::Digit  => Number;
+            CharClass::Letter => Identifier;
+            CharClass::End    => Done;
+            _                 => Error;
         };
     }
 

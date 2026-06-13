@@ -1,0 +1,35 @@
+# name: machine transition match self
+# phase: parse
+# expect: pass
+
+=== source ===
+module Example;
+
+machine Spinner(int tick) -> int {
+    state Start {
+        transition match (tick) {
+            0 => Start;
+            _ => Done;
+        };
+    }
+
+    state Done {
+        return 0;
+    }
+}
+
+=== ast ===
+CompilationUnit
+  Module Example
+  Machine Spinner(int tick) -> int
+    State Start
+      Body
+        TransitionMatch
+          Scrutinee
+            Identifier tick
+          Arm 0 => Start
+          Arm _ => Done
+    State Done
+      Body
+        Return
+          Int 0

@@ -791,9 +791,51 @@ pub const MatchStmt = struct {
     }
 };
 
-pub const TransitionStmt = struct {
+pub const TransitionMatchArm = struct {
+    pattern: MatchPattern,
     target_name: NameSegment,
     span: SourceSpan,
+
+    pub fn deinit(self: TransitionMatchArm, allocator: std.mem.Allocator) void {
+        switch (self.pattern) {
+            .enum_variant => |pattern| pattern.deinit(allocator),
+            else => {},
+        }
+    }
+};
+
+pub const TransitionMatchTarget = struct {
+    scrutinee: *Expr,
+    arms: []TransitionMatchArm,
+    span: SourceSpan,
+
+    pub fn deinit(self: TransitionMatchTarget, allocator: std.mem.Allocator) void {
+        self.scrutinee.deinit(allocator);
+        allocator.destroy(self.scrutinee);
+        for (self.arms) |arm| arm.deinit(allocator);
+        allocator.free(self.arms);
+    }
+};
+
+pub const TransitionTarget = union(enum) {
+    literal_state: NameSegment,
+    match_state: TransitionMatchTarget,
+
+    pub fn deinit(self: TransitionTarget, allocator: std.mem.Allocator) void {
+        switch (self) {
+            .literal_state => {},
+            .match_state => |match_target| match_target.deinit(allocator),
+        }
+    }
+};
+
+pub const TransitionStmt = struct {
+    target: TransitionTarget,
+    span: SourceSpan,
+
+    pub fn deinit(self: TransitionStmt, allocator: std.mem.Allocator) void {
+        self.target.deinit(allocator);
+    }
 };
 
 pub const Stmt = union(enum) {
@@ -816,7 +858,7 @@ pub const Stmt = union(enum) {
             .expr_stmt => |stmt| stmt.deinit(allocator),
             .discard_stmt => |stmt| stmt.deinit(allocator),
             .return_stmt => |stmt| stmt.deinit(allocator),
-            .transition_stmt => {},
+            .transition_stmt => |stmt| stmt.deinit(allocator),
             .if_stmt => |stmt| stmt.deinit(allocator),
             .while_stmt => |stmt| stmt.deinit(allocator),
             .unsafe_block => |stmt| stmt.deinit(allocator),
@@ -859,9 +901,27 @@ pub const Stmt = union(enum) {
             },
             .transition_stmt => |stmt| {
                 try writeIndent(writer, depth);
-                try writer.writeAll("Transition ");
-                try writer.writeAll(stmt.target_name.text);
-                try writer.writeByte('\n');
+                switch (stmt.target) {
+                    .literal_state => |target_name| {
+                        try writer.writeAll("Transition ");
+                        try writer.writeAll(target_name.text);
+                        try writer.writeByte('\n');
+                    },
+                    .match_state => |match_target| {
+                        try writer.writeAll("TransitionMatch\n");
+                        try writeIndent(writer, depth + 1);
+                        try writer.writeAll("Scrutinee\n");
+                        try match_target.scrutinee.writeDebug(writer, depth + 2);
+                        for (match_target.arms) |arm| {
+                            try writeIndent(writer, depth + 1);
+                            try writer.writeAll("Arm ");
+                            try arm.pattern.writeDebug(writer);
+                            try writer.writeAll(" => ");
+                            try writer.writeAll(arm.target_name.text);
+                            try writer.writeByte('\n');
+                        }
+                    },
+                }
             },
             .if_stmt => |stmt| {
                 try writeIndent(writer, depth);

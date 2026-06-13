@@ -1,0 +1,17 @@
+# name: machine transition match non state result
+# phase: parse
+# expect: fail
+
+=== source ===
+module Example;
+
+machine M(int code) -> int {
+    state Start {
+        transition match (code) {
+            _ => choose();
+        };
+    }
+}
+
+=== diagnostics ===
+CON0001

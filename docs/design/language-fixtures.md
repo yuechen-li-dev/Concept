@@ -161,23 +161,27 @@ yet.
 ## Phase 13 machine fixtures
 
 Phase 13 fixtures live under `language/phase13-machines/` and currently cover
-the P13-M1 parser/AST scaffold, P13-M2 state validation, and P13-M3 literal
-transition statements for explicit machines. Valid parse fixtures cover empty
-states, single-state and multi-state machines, same state spelling in different
+the P13-M1 parser/AST scaffold, P13-M2 state validation, P13-M3 literal
+transition statements, and P13-M4 deterministic `transition match (...) { ... };`
+targets for explicit machines. Valid parse fixtures cover empty states,
+single-state and multi-state machines, same state spelling in different
 machines, ordinary state-body statements, `return` statements, literal
-`transition TargetState;` statements, nested-block transitions, machine
-parameters, `->` result types, `noalloc machine` metadata, and attributes
-accepted by the existing declaration attribute parser.
+`transition TargetState;` statements, match-driven transition targets,
+nested-block transitions, machine parameters, `->` result types, `noalloc
+machine` metadata, and attributes accepted by the existing declaration
+attribute parser.
 
 Invalid parse fixtures cover top-level `state`, missing machine names, missing
 result arrows/types, missing bodies, unclosed state bodies, transition outside
-machine states, missing transition targets, and missing transition semicolons.
-Declaration check fixtures pin `CON0220 MachineRequiresState`, `CON0221
-DuplicateMachineState`, `CON0222 UnknownMachineState`, and `CON0231
-MachineSemanticsNotImplemented`, because P13-M3 validates the machine-local
-state universe and literal transition targets but still intentionally defers
-transition expressions, HIR/MIR lowering, runtime frames, DragonGod features,
-and any `board`/mailbox/actuator/policy surface.
+machine states, missing transition targets, missing transition semicolons, bad
+transition-match patterns, missing transition-match semicolons, and non-bare
+transition-match arm results. Declaration check fixtures pin `CON0220
+MachineRequiresState`, `CON0221 DuplicateMachineState`, `CON0222
+UnknownMachineState`, and `CON0231 MachineSemanticsNotImplemented`, because
+P13-M4 validates the machine-local state universe plus literal and match arm
+transition targets but still intentionally defers arbitrary state-valued
+transition expressions, `transition decide`, HIR/MIR lowering, runtime frames,
+DragonGod features, and any `board`/mailbox/actuator/policy surface.
 
 ## `.conception` format
 

@@ -1,0 +1,17 @@
+# name: machine transition match missing semicolon
+# phase: parse
+# expect: fail
+
+=== source ===
+module Example;
+
+machine M(int code) -> int {
+    state Start {
+        transition match (code) {
+            _ => Start;
+        }
+    }
+}
+
+=== diagnostics ===
+CON0001

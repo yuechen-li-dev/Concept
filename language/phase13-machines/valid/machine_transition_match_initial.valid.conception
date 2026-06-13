@@ -1,0 +1,43 @@
+# name: machine transition match initial
+# phase: parse
+# expect: pass
+
+=== source ===
+module Example;
+
+machine Flow(int code) -> int {
+    state Start {
+        return 0;
+    }
+
+    state Check {
+        transition match (code) {
+            0 => Start;
+            _ => Done;
+        };
+    }
+
+    state Done {
+        return 1;
+    }
+}
+
+=== ast ===
+CompilationUnit
+  Module Example
+  Machine Flow(int code) -> int
+    State Start
+      Body
+        Return
+          Int 0
+    State Check
+      Body
+        TransitionMatch
+          Scrutinee
+            Identifier code
+          Arm 0 => Start
+          Arm _ => Done
+    State Done
+      Body
+        Return
+          Int 1

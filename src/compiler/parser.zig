@@ -1072,7 +1072,6 @@ pub const Parser = struct {
     }
 
     fn parseTransitionStmt(self: *Parser, allocator: std.mem.Allocator) !?ast.Stmt {
-        _ = allocator;
         const transition_token = self.advance();
         if (self.machine_state_depth == 0) {
             try self.diagnostics.append(diagnostics_model.transitionOutsideMachineState(transition_token.span));
@@ -1080,22 +1079,132 @@ pub const Parser = struct {
             return null;
         }
 
-        const target_token = try self.expect(.identifier, "expected transition target state name", .UnexpectedToken);
-        const target_name = if (target_token) |identifier|
-            ast.NameSegment{ .text = identifier.lexeme, .span = identifier.span }
-        else
-            ast.NameSegment{ .text = "", .span = self.current().span };
+        var target: ast.TransitionTarget = undefined;
+        var target_end_span: SourceSpan = transition_token.span;
+        var have_target = true;
+        if (self.current().kind == .match) {
+            const match_target = try self.parseTransitionMatchTarget(allocator);
+            target_end_span = match_target.span;
+            target = .{ .match_state = match_target };
+        } else {
+            const target_token = try self.expect(.identifier, "expected transition target state name", .UnexpectedToken);
+            const target_name = if (target_token) |identifier| blk: {
+                target_end_span = identifier.span;
+                break :blk ast.NameSegment{ .text = identifier.lexeme, .span = identifier.span };
+            } else blk: {
+                have_target = false;
+                break :blk ast.NameSegment{ .text = "", .span = self.current().span };
+            };
+            target = .{ .literal_state = target_name };
+        }
+        errdefer target.deinit(allocator);
 
         const end_span = if (self.match(.semicolon)) |semicolon| semicolon.span else blk: {
             try self.report(.UnexpectedToken, "expected ';' after transition statement", self.current().span);
             self.recoverStatement();
-            break :blk if (target_token) |identifier| identifier.span else transition_token.span;
+            break :blk if (have_target) target_end_span else transition_token.span;
         };
 
         return .{ .transition_stmt = .{
-            .target_name = target_name,
+            .target = target,
             .span = ast.spanFromBounds(transition_token.span.start, spanEnd(end_span)),
         } };
+    }
+
+    fn parseTransitionMatchTarget(self: *Parser, allocator: std.mem.Allocator) !ast.TransitionMatchTarget {
+        const match_token = self.advance();
+
+        if (self.match(.left_paren) == null) {
+            try self.report(.UnexpectedToken, "expected '(' after 'match'", self.current().span);
+        }
+
+        var scrutinee = self.parseExpr(allocator) catch |err| switch (err) {
+            error.OutOfMemory => return err,
+            error.ParseFailed => blk: {
+                const fallback = try allocator.create(ast.Expr);
+                fallback.* = .{ .int_literal = .{ .text = "0", .span = self.current().span } };
+                break :blk fallback;
+            },
+        };
+        errdefer {
+            scrutinee.deinit(allocator);
+            allocator.destroy(scrutinee);
+        }
+
+        if (self.match(.right_paren) == null) {
+            try self.report(.UnexpectedToken, "expected ')' after match scrutinee", self.current().span);
+            self.recoverMatchHeader();
+            _ = self.match(.right_paren);
+        }
+
+        if (self.match(.left_brace) == null) {
+            try self.report(.UnexpectedToken, "expected '{' after match scrutinee", self.current().span);
+            return .{
+                .scrutinee = scrutinee,
+                .arms = try allocator.alloc(ast.TransitionMatchArm, 0),
+                .span = ast.spanFromBounds(match_token.span.start, spanEnd(scrutinee.span())),
+            };
+        }
+
+        var arms = std.ArrayList(ast.TransitionMatchArm).init(allocator);
+        errdefer {
+            for (arms.items) |arm| arm.deinit(allocator);
+            arms.deinit();
+        }
+
+        var last_span = scrutinee.span();
+        while (self.current().kind != .eof and self.current().kind != .right_brace) {
+            if (try self.parseTransitionMatchArm(allocator)) |arm| {
+                last_span = arm.span;
+                try arms.append(arm);
+            }
+        }
+
+        const close_span = if (self.match(.right_brace)) |right_brace| right_brace.span else blk: {
+            try self.report(.UnexpectedToken, "unterminated match statement", self.current().span);
+            break :blk last_span;
+        };
+
+        return .{
+            .scrutinee = scrutinee,
+            .arms = try arms.toOwnedSlice(),
+            .span = ast.spanFromBounds(match_token.span.start, spanEnd(close_span)),
+        };
+    }
+
+    fn parseTransitionMatchArm(self: *Parser, allocator: std.mem.Allocator) !?ast.TransitionMatchArm {
+        const pattern = (try self.parseMatchPattern(allocator)) orelse {
+            self.recoverMatchArm();
+            return null;
+        };
+        errdefer switch (pattern) {
+            .enum_variant => |enum_pattern| enum_pattern.deinit(allocator),
+            else => {},
+        };
+
+        if (self.match(.fat_arrow) == null) {
+            try self.report(.UnexpectedToken, "expected '=>' after match pattern", self.current().span);
+            self.recoverMatchArm();
+            return null;
+        }
+
+        const target_token = (try self.expect(.identifier, "expected transition target state name", .UnexpectedToken)) orelse {
+            self.recoverMatchArm();
+            return null;
+        };
+        const target_name = ast.NameSegment{ .text = target_token.lexeme, .span = target_token.span };
+
+        const end_span = if (self.match(.semicolon)) |semicolon| semicolon.span else blk: {
+            try self.report(.UnexpectedToken, "expected ';' after transition match arm", self.current().span);
+            self.recoverMatchArm();
+            break :blk target_token.span;
+        };
+
+        return .{
+            .pattern = pattern,
+            .target_name = target_name,
+            .span = ast.spanFromBounds(pattern.span().start, spanEnd(end_span)),
+        };
     }
 
     fn parseDiscardStmt(self: *Parser, allocator: std.mem.Allocator) !ast.Stmt {
@@ -4391,8 +4500,49 @@ test "parses machine literal transition statement" {
         .transition_stmt => |stmt| stmt,
         else => return error.ExpectedTransitionStmt,
     };
-    try std.testing.expectEqualStrings("Done", transition.target_name.text);
-    try std.testing.expectEqual(std.mem.indexOf(u8, source_text, "Done;").?, transition.target_name.span.start);
+    const target_name = switch (transition.target) {
+        .literal_state => |target| target,
+        else => return error.ExpectedLiteralTransitionTarget,
+    };
+    try std.testing.expectEqualStrings("Done", target_name.text);
+    try std.testing.expectEqual(std.mem.indexOf(u8, source_text, "Done;").?, target_name.span.start);
+}
+
+test "parses machine match transition statement" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const source_text = "module Example; enum TokenKind { Identifier, Number, }; machine Lexer(TokenKind kind) -> int { state Start { transition match (kind) { TokenKind::Identifier => Identifier; TokenKind::Number => Number; _ => Error; }; } state Identifier { return 1; } state Number { return 2; } state Error { return -1; } }";
+    const unit = try parseTestSource(source_text, &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const transition = switch (expectMachineDecl(unit, 1).states[0].body.statements[0]) {
+        .transition_stmt => |stmt| stmt,
+        else => return error.ExpectedTransitionStmt,
+    };
+    const match_target = switch (transition.target) {
+        .match_state => |target| target,
+        else => return error.ExpectedMatchTransitionTarget,
+    };
+    const scrutinee = switch (match_target.scrutinee.*) {
+        .identifier => |expr| expr,
+        else => return error.ExpectedIdentifierScrutinee,
+    };
+    try std.testing.expectEqualStrings("kind", scrutinee.name.text);
+    try std.testing.expectEqual(@as(usize, 3), match_target.arms.len);
+    try std.testing.expectEqualStrings("Identifier", match_target.arms[0].target_name.text);
+    try std.testing.expectEqualStrings("Number", match_target.arms[1].target_name.text);
+    try std.testing.expectEqualStrings("Error", match_target.arms[2].target_name.text);
+    try std.testing.expectEqual(std.mem.indexOf(u8, source_text, "Identifier;").?, match_target.arms[0].target_name.span.start);
+    _ = switch (match_target.arms[0].pattern) {
+        .enum_variant => |pattern| pattern,
+        else => return error.ExpectedEnumPattern,
+    };
+    _ = switch (match_target.arms[2].pattern) {
+        .wildcard => |span| span,
+        else => return error.ExpectedWildcardPattern,
+    };
 }
 
 test "parses machine literal transition inside nested block" {
@@ -4461,6 +4611,21 @@ test "machine AST debug output includes transition target" {
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "Transition Done") != null);
 }
 
+test "machine AST debug output includes match transition targets" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; machine M(int kind) -> int { state Start { transition match (kind) { 0 => Start; _ => Done; }; } state Done { return 0; } }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "TransitionMatch") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Arm 0 => Start") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Arm _ => Done") != null);
+}
+
 test "machine parser diagnostics are stable" {
     try expectSingleDiagnostic("module Example; machine () -> int { state Start { } }", .UnexpectedToken);
     try expectSingleDiagnostic("module Example; machine M() { state Start { } }", .UnexpectedToken);
@@ -4471,6 +4636,8 @@ test "machine parser diagnostics are stable" {
     try expectSingleDiagnostic("module Example; int f() { transition Done; return 0; }", .TransitionOutsideMachineState);
     try expectSingleDiagnostic("module Example; machine M() -> int { state Start { transition; } }", .UnexpectedToken);
     try expectSingleDiagnostic("module Example; machine M() -> int { state Start { transition Done } }", .UnexpectedToken);
+    try expectSingleDiagnostic("module Example; machine M(int kind) -> int { state Start { transition match (kind) { 0 => Start; } } }", .UnexpectedToken);
+    try expectSingleDiagnostic("module Example; machine M(int kind) -> int { state Start { transition match (kind) { + => Start; }; } }", .UnexpectedToken);
 }
 
 fn expectFunctionDecl(unit: ast.CompilationUnit, index: usize) ast.FunctionDecl {

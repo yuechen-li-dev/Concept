@@ -1,0 +1,24 @@
+# name: machine transition match cross machine state
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module Example;
+
+machine First(int code) -> int {
+    state Start {
+        transition match (code) {
+            _ => OnlyInSecond;
+        };
+    }
+}
+
+machine Second() -> int {
+    state OnlyInSecond {
+        return 0;
+    }
+}
+
+=== diagnostics ===
+CON0222

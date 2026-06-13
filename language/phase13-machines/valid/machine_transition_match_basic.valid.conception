@@ -1,0 +1,62 @@
+# name: machine transition match basic
+# phase: parse
+# expect: pass
+
+=== source ===
+module Example;
+
+enum TokenKind {
+    Identifier,
+    Number,
+}
+
+machine Lexer(TokenKind kind) -> int {
+    state Start {
+        transition match (kind) {
+            TokenKind::Identifier => Identifier;
+            TokenKind::Number => Number;
+            _ => Error;
+        };
+    }
+
+    state Identifier {
+        return 1;
+    }
+
+    state Number {
+        return 2;
+    }
+
+    state Error {
+        return -1;
+    }
+}
+
+=== ast ===
+CompilationUnit
+  Module Example
+  Enum TokenKind
+    Variant Identifier
+    Variant Number
+  Machine Lexer(TokenKind kind) -> int
+    State Start
+      Body
+        TransitionMatch
+          Scrutinee
+            Identifier kind
+          Arm TokenKind::Identifier => Identifier
+          Arm TokenKind::Number => Number
+          Arm _ => Error
+    State Identifier
+      Body
+        Return
+          Int 1
+    State Number
+      Body
+        Return
+          Int 2
+    State Error
+      Body
+        Return
+          Unary -
+            Int 1

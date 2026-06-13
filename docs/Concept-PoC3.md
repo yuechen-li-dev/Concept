@@ -45,9 +45,12 @@ Drop-hardened arena restrictions, a stable C helper ABI, and ID-based store
 examples. Phase 13 has started explicit machine support: P13-M0 documented the
 machine/state/transition doctrine, P13-M1 begins machine/state parser and AST
 scaffolding, P13-M2 adds machine-local state validation, and P13-M3 adds
-literal `transition TargetState;` parsing plus machine-local target validation
-while leaving `transition match`, `transition decide`, HIR/MIR lowering, and
-runtime step/resume support deferred. Deferred Phase 12 work includes
+literal `transition TargetState;` parsing plus machine-local target validation.
+P13-M4 adds parser/AST support for deterministic `transition match (...) {
+... };` targets and validates each bare arm target against the containing
+machine's state table, while leaving `transition decide`, arbitrary state-valued
+transition expressions, HIR/MIR lowering, and runtime step/resume support
+deferred. Deferred Phase 12 work includes
 `Arena.create`, hosted runtime helper implementation, allocation failure
 surfaces, generic `Store<T, Id>`, named store IDs, generation counters, region
 lifetime checking, use-after-reset analysis, Drop-in-arena, hidden heap/default

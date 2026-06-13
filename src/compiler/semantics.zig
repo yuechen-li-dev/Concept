@@ -482,9 +482,15 @@ const Collector = struct {
         for (statements) |stmt| {
             switch (stmt) {
                 .transition_stmt => |transition_stmt| {
-                    const target_symbol = try self.module.interner.intern(transition_stmt.target_name.text);
-                    if (!state_names.contains(target_symbol)) {
-                        try self.diagnostics.append(diagnostics.unknownMachineState(transition_stmt.target_name.span));
+                    switch (transition_stmt.target) {
+                        .literal_state => |target_name| {
+                            try self.validateMachineTransitionTarget(target_name, state_names);
+                        },
+                        .match_state => |match_target| {
+                            for (match_target.arms) |arm| {
+                                try self.validateMachineTransitionTarget(arm.target_name, state_names);
+                            }
+                        },
                     }
                 },
                 .if_stmt => |if_stmt| {
@@ -514,6 +520,17 @@ const Collector = struct {
                 .return_stmt,
                 => {},
             }
+        }
+    }
+
+    fn validateMachineTransitionTarget(
+        self: *Collector,
+        target_name: ast.NameSegment,
+        state_names: *const std.AutoHashMap(interner.SymbolId, source.SourceSpan),
+    ) !void {
+        const target_symbol = try self.module.interner.intern(target_name.text);
+        if (!state_names.contains(target_symbol)) {
+            try self.diagnostics.append(diagnostics.unknownMachineState(target_name.span));
         }
     }
 
@@ -2506,9 +2523,36 @@ fn stateDeclWithStatements(name: []const u8, statements: []ast.Stmt, start: usiz
 
 fn transitionStmt(target: []const u8, start: usize) ast.Stmt {
     return .{ .transition_stmt = .{
-        .target_name = nameSegment(target, start + 11),
+        .target = .{ .literal_state = nameSegment(target, start + 11) },
         .span = .{ .start = start, .length = target.len + 12 },
     } };
+}
+
+fn transitionMatchStmt(scrutinee: *ast.Expr, arms: []ast.TransitionMatchArm, start: usize) ast.Stmt {
+    return .{ .transition_stmt = .{
+        .target = .{ .match_state = .{
+            .scrutinee = scrutinee,
+            .arms = arms,
+            .span = .{ .start = start + 11, .length = 16 },
+        } },
+        .span = .{ .start = start, .length = 28 },
+    } };
+}
+
+fn transitionMatchIntArm(value: []const u8, target: []const u8, start: usize) ast.TransitionMatchArm {
+    return .{
+        .pattern = .{ .int_literal = .{ .text = value, .span = .{ .start = start, .length = value.len } } },
+        .target_name = nameSegment(target, start + value.len + 4),
+        .span = .{ .start = start, .length = value.len + target.len + 5 },
+    };
+}
+
+fn transitionMatchWildcardArm(target: []const u8, start: usize) ast.TransitionMatchArm {
+    return .{
+        .pattern = .{ .wildcard = .{ .start = start, .length = 1 } },
+        .target_name = nameSegment(target, start + 5),
+        .span = .{ .start = start, .length = target.len + 6 },
+    };
 }
 
 fn paramDecl(type_name: []const u8, name: []const u8, start: usize) ast.ParamDecl {
@@ -3005,6 +3049,51 @@ test "semantic collection accepts literal self transition" {
     try std.testing.expectEqual(DiagnosticCode.MachineSemanticsNotImplemented, diagnostics_bag.diagnostics.items[0].code);
 }
 
+test "semantic collection accepts match transition to declared states before unsupported lowering" {
+    var scrutinee = ast.Expr{ .int_literal = .{ .text = "0", .span = .{ .start = 20, .length = 1 } } };
+    var arms = [_]ast.TransitionMatchArm{
+        transitionMatchIntArm("0", "Identifier", 30),
+        transitionMatchIntArm("1", "Number", 50),
+        transitionMatchWildcardArm("Error", 70),
+    };
+    var start_statements = [_]ast.Stmt{transitionMatchStmt(&scrutinee, arms[0..], 20)};
+    var states = [_]ast.MachineStateDecl{
+        stateDeclWithStatements("Start", start_statements[0..], 10),
+        stateDecl("Identifier", 100),
+        stateDecl("Number", 140),
+        stateDecl("Error", 180),
+    };
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    var module = try collectMachineShellsForTest(&.{machineItemWithStates("Lexer", states[0..], 0)}, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
+    try std.testing.expectEqual(DiagnosticCode.MachineSemanticsNotImplemented, diagnostics_bag.diagnostics.items[0].code);
+}
+
+test "semantic collection accepts match transition to self initial and later states" {
+    var scrutinee = ast.Expr{ .int_literal = .{ .text = "0", .span = .{ .start = 20, .length = 1 } } };
+    var arms = [_]ast.TransitionMatchArm{
+        transitionMatchIntArm("0", "Start", 30),
+        transitionMatchIntArm("1", "Done", 50),
+    };
+    var start_statements = [_]ast.Stmt{transitionMatchStmt(&scrutinee, arms[0..], 20)};
+    var states = [_]ast.MachineStateDecl{
+        stateDeclWithStatements("Start", start_statements[0..], 10),
+        stateDecl("Done", 80),
+    };
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    var module = try collectMachineShellsForTest(&.{machineItemWithStates("Flow", states[0..], 0)}, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
+    try std.testing.expectEqual(DiagnosticCode.MachineSemanticsNotImplemented, diagnostics_bag.diagnostics.items[0].code);
+}
+
 test "semantic collection rejects unknown literal transition target before unsupported lowering" {
     var start_statements = [_]ast.Stmt{transitionStmt("Missing", 20)};
     var states = [_]ast.MachineStateDecl{stateDeclWithStatements("Start", start_statements[0..], 10)};
@@ -3014,7 +3103,11 @@ test "semantic collection rejects unknown literal transition target before unsup
     try std.testing.expectError(error.InvalidSemanticModule, collectItems(&.{machineItemWithStates("Flow", states[0..], 0)}, &diagnostics_bag));
     try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
     try std.testing.expectEqual(DiagnosticCode.UnknownMachineState, diagnostics_bag.diagnostics.items[0].code);
-    try std.testing.expectEqual(start_statements[0].transition_stmt.target_name.span, diagnostics_bag.diagnostics.items[0].primary_span);
+    const target_name = switch (start_statements[0].transition_stmt.target) {
+        .literal_state => |name| name,
+        else => return error.ExpectedLiteralTransitionTarget,
+    };
+    try std.testing.expectEqual(target_name.span, diagnostics_bag.diagnostics.items[0].primary_span);
 }
 
 test "semantic collection rejects cross-machine literal transition target" {
@@ -3027,6 +3120,40 @@ test "semantic collection rejects cross-machine literal transition target" {
     try std.testing.expectError(error.InvalidSemanticModule, collectItems(&.{
         machineItemWithStates("First", first_states[0..], 0),
         machineItemWithStates("Second", second_states[0..], 50),
+    }, &diagnostics_bag));
+    try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
+    try std.testing.expectEqual(DiagnosticCode.UnknownMachineState, diagnostics_bag.diagnostics.items[0].code);
+}
+
+test "semantic collection rejects unknown match transition target before unsupported lowering" {
+    var scrutinee = ast.Expr{ .int_literal = .{ .text = "0", .span = .{ .start = 20, .length = 1 } } };
+    var arms = [_]ast.TransitionMatchArm{
+        transitionMatchIntArm("0", "Missing", 30),
+        transitionMatchWildcardArm("Start", 50),
+    };
+    var start_statements = [_]ast.Stmt{transitionMatchStmt(&scrutinee, arms[0..], 20)};
+    var states = [_]ast.MachineStateDecl{stateDeclWithStatements("Start", start_statements[0..], 10)};
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    try std.testing.expectError(error.InvalidSemanticModule, collectItems(&.{machineItemWithStates("Flow", states[0..], 0)}, &diagnostics_bag));
+    try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
+    try std.testing.expectEqual(DiagnosticCode.UnknownMachineState, diagnostics_bag.diagnostics.items[0].code);
+    try std.testing.expectEqual(arms[0].target_name.span, diagnostics_bag.diagnostics.items[0].primary_span);
+}
+
+test "semantic collection rejects cross-machine match transition target" {
+    var scrutinee = ast.Expr{ .int_literal = .{ .text = "0", .span = .{ .start = 20, .length = 1 } } };
+    var arms = [_]ast.TransitionMatchArm{transitionMatchWildcardArm("OnlyInSecond", 30)};
+    var first_statements = [_]ast.Stmt{transitionMatchStmt(&scrutinee, arms[0..], 20)};
+    var first_states = [_]ast.MachineStateDecl{stateDeclWithStatements("Start", first_statements[0..], 10)};
+    var second_states = [_]ast.MachineStateDecl{stateDecl("OnlyInSecond", 80)};
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    try std.testing.expectError(error.InvalidSemanticModule, collectItems(&.{
+        machineItemWithStates("First", first_states[0..], 0),
+        machineItemWithStates("Second", second_states[0..], 70),
     }, &diagnostics_bag));
     try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
     try std.testing.expectEqual(DiagnosticCode.UnknownMachineState, diagnostics_bag.diagnostics.items[0].code);
