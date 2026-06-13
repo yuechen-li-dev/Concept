@@ -290,6 +290,39 @@ pub const InterfaceDecl = struct {
     }
 };
 
+pub const ExternAbi = enum {
+    c,
+
+    pub fn debugName(self: ExternAbi) []const u8 {
+        return switch (self) {
+            .c => "C",
+        };
+    }
+};
+
+pub const ExternFunctionDecl = struct {
+    signature: SignatureDecl,
+    span: SourceSpan,
+
+    pub fn deinit(self: ExternFunctionDecl, allocator: std.mem.Allocator) void {
+        self.signature.deinit(allocator);
+    }
+};
+
+pub const ExternBlock = struct {
+    abi: ExternAbi,
+    abi_span: SourceSpan,
+    declarations: []ExternFunctionDecl,
+    span: SourceSpan,
+
+    pub fn deinit(self: ExternBlock, allocator: std.mem.Allocator) void {
+        for (self.declarations) |declaration| {
+            declaration.deinit(allocator);
+        }
+        allocator.free(self.declarations);
+    }
+};
+
 pub const ImplDecl = struct {
     attributes: []Attribute = &.{},
     concept_name: TypeName,
@@ -1185,6 +1218,7 @@ pub const Item = union(enum) {
     enum_decl: EnumDecl,
     concept_decl: ConceptDecl,
     interface_decl: InterfaceDecl,
+    extern_block: ExternBlock,
     impl_decl: ImplDecl,
     static_assert_decl: StaticAssertDecl,
 
@@ -1197,6 +1231,7 @@ pub const Item = union(enum) {
             .enum_decl => |enum_decl| enum_decl.deinit(allocator),
             .concept_decl => |concept_decl| concept_decl.deinit(allocator),
             .interface_decl => |interface_decl| interface_decl.deinit(allocator),
+            .extern_block => |extern_block| extern_block.deinit(allocator),
             .impl_decl => |impl_decl| impl_decl.deinit(allocator),
             .static_assert_decl => |static_assert_decl| static_assert_decl.deinit(allocator),
         }
@@ -1389,6 +1424,25 @@ pub const Item = union(enum) {
                 try writer.writeByte('\n');
                 for (interface_decl.signatures) |signature| {
                     try signature.writeDebug(writer);
+                }
+            },
+            .extern_block => |extern_block| {
+                try writer.writeAll("  ExternBlock \"");
+                try writer.writeAll(extern_block.abi.debugName());
+                try writer.writeAll("\"\n");
+                for (extern_block.declarations) |declaration| {
+                    try writer.writeAll("    Function ");
+                    try declaration.signature.return_type.write(writer);
+                    try writer.writeByte(' ');
+                    try declaration.signature.name.write(writer);
+                    try writer.writeByte('(');
+                    for (declaration.signature.params, 0..) |param, index| {
+                        if (index != 0) try writer.writeAll(", ");
+                        try param.type_name.write(writer);
+                        try writer.writeByte(' ');
+                        try writer.writeAll(param.name.text);
+                    }
+                    try writer.writeAll(")\n");
                 }
             },
             .static_assert_decl => |static_assert_decl| {

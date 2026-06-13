@@ -1,0 +1,15 @@
+# name: extern C function body
+# phase: parse
+# expect: fail
+
+=== source ===
+module CAbi;
+
+extern "C" {
+    int abs(int value) {
+        return value;
+    }
+}
+
+=== diagnostics ===
+CON0262

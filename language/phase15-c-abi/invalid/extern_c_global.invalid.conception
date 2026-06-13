@@ -1,0 +1,13 @@
+# name: extern C global variable
+# phase: parse
+# expect: fail
+
+=== source ===
+module CAbi;
+
+extern "C" {
+    int global;
+}
+
+=== diagnostics ===
+CON0261

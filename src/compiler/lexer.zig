@@ -397,8 +397,8 @@ test "module declaration tokenizes correctly" {
 }
 
 test "keywords tokenize as keyword kinds" {
-    const source_text = "module import export struct enum concept interface impl marker unsafe mut const return try move comptime alloc noalloc static_assert must_use discard match decide when if else while for machine state transition yield run true false";
-    const expected = [_]TokenKind{ .module, .import, .@"export", .@"struct", .@"enum", .concept, .interface, .impl, .marker, .unsafe, .mut, .@"const", .@"return", .@"try", .move, .@"comptime", .alloc, .noalloc, .static_assert, .must_use, .discard, .match, .decide, .when, .@"if", .@"else", .@"while", .@"for", .machine, .state, .transition, .yield, .run, .true, .false, .eof };
+    const source_text = "module import extern export struct enum concept interface impl marker unsafe mut const return try move comptime alloc noalloc static_assert must_use discard match decide when if else while for machine state transition yield run true false";
+    const expected = [_]TokenKind{ .module, .import, .@"extern", .@"export", .@"struct", .@"enum", .concept, .interface, .impl, .marker, .unsafe, .mut, .@"const", .@"return", .@"try", .move, .@"comptime", .alloc, .noalloc, .static_assert, .must_use, .discard, .match, .decide, .when, .@"if", .@"else", .@"while", .@"for", .machine, .state, .transition, .yield, .run, .true, .false, .eof };
     try expectLexedKinds(source_text, &expected);
 }
 

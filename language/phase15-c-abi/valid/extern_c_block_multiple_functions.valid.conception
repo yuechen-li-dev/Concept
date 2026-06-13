@@ -1,0 +1,18 @@
+# name: extern C block multiple functions
+# phase: parse
+# expect: pass
+
+=== source ===
+module CAbi;
+
+extern "C" {
+    int puts(char* s);
+    int abs(int value);
+}
+
+=== ast ===
+CompilationUnit
+  Module CAbi
+  ExternBlock "C"
+    Function int puts(char* s)
+    Function int abs(int value)

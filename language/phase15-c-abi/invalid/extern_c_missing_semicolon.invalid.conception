@@ -1,0 +1,13 @@
+# name: extern C missing semicolon
+# phase: parse
+# expect: fail
+
+=== source ===
+module CAbi;
+
+extern "C" {
+    int abs(int value)
+}
+
+=== diagnostics ===
+CON0003

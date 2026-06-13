@@ -18,6 +18,7 @@ pub const TokenKind = enum {
 
     module,
     import,
+    @"extern",
     @"export",
     @"struct",
     @"enum",
@@ -97,6 +98,7 @@ pub const TokenKind = enum {
 
             .module => "module",
             .import => "import",
+            .@"extern" => "extern",
             .@"export" => "export",
             .@"struct" => "struct",
             .@"enum" => "enum",
@@ -182,6 +184,7 @@ pub const TokenKind = enum {
 
             .module => "module",
             .import => "import",
+            .@"extern" => "extern",
             .@"export" => "export",
             .@"struct" => "struct",
             .@"enum" => "enum",
@@ -269,6 +272,7 @@ pub const Token = struct {
 pub fn keywordKind(identifier_text: []const u8) ?TokenKind {
     if (std.mem.eql(u8, identifier_text, "module")) return .module;
     if (std.mem.eql(u8, identifier_text, "import")) return .import;
+    if (std.mem.eql(u8, identifier_text, "extern")) return .@"extern";
     if (std.mem.eql(u8, identifier_text, "export")) return .@"export";
     if (std.mem.eql(u8, identifier_text, "struct")) return .@"struct";
     if (std.mem.eql(u8, identifier_text, "enum")) return .@"enum";
@@ -350,6 +354,7 @@ const KeywordCase = struct {
 const keyword_cases = [_]KeywordCase{
     .{ .text = "module", .kind = .module },
     .{ .text = "import", .kind = .import },
+    .{ .text = "extern", .kind = .@"extern" },
     .{ .text = "export", .kind = .@"export" },
     .{ .text = "struct", .kind = .@"struct" },
     .{ .text = "enum", .kind = .@"enum" },
@@ -438,6 +443,7 @@ test "non-keyword identifiers return null" {
         "module_name",
         "identifier",
         "imports",
+        "external",
         "unsafe_mode",
         "static_assertion",
         "staticAssert",
@@ -517,6 +523,7 @@ test "token kind name output is stable" {
     try std.testing.expectEqualStrings("string_literal", TokenKind.string_literal.name());
     try std.testing.expectEqualStrings("char_literal", TokenKind.char_literal.name());
     try std.testing.expectEqualStrings("module", TokenKind.module.name());
+    try std.testing.expectEqualStrings("extern", TokenKind.@"extern".name());
     try std.testing.expectEqualStrings("struct", TokenKind.@"struct".name());
     try std.testing.expectEqualStrings("return", TokenKind.@"return".name());
     try std.testing.expectEqualStrings("move", TokenKind.move.name());

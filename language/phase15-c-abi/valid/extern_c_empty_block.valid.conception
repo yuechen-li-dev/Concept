@@ -1,0 +1,14 @@
+# name: extern C empty block
+# phase: parse
+# expect: pass
+
+=== source ===
+module CAbi;
+
+extern "C" {
+}
+
+=== ast ===
+CompilationUnit
+  Module CAbi
+  ExternBlock "C"

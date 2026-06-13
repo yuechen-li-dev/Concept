@@ -1,0 +1,13 @@
+# name: extern C non-function item
+# phase: parse
+# expect: fail
+
+=== source ===
+module CAbi;
+
+extern "C" {
+    struct Point { int x; }
+}
+
+=== diagnostics ===
+CON0261

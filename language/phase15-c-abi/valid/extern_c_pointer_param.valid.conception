@@ -1,0 +1,16 @@
+# name: extern C pointer parameter
+# phase: parse
+# expect: pass
+
+=== source ===
+module CAbi;
+
+extern "C" {
+    void free(void* ptr);
+}
+
+=== ast ===
+CompilationUnit
+  Module CAbi
+  ExternBlock "C"
+    Function void free(void* ptr)

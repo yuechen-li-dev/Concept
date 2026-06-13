@@ -221,6 +221,7 @@ const Collector = struct {
                 .enum_decl => |enum_decl| try self.declareEnum(enum_decl),
                 .concept_decl => |concept_decl| try self.declareConcept(concept_decl),
                 .interface_decl => |interface_decl| try self.declareInterface(interface_decl),
+                .extern_block => |extern_block| try self.diagnostics.append(diagnostics.externCNotImplemented(extern_block.span)),
                 .impl_decl, .static_assert_decl => {},
             }
         }
@@ -244,6 +245,7 @@ const Collector = struct {
                 .struct_decl => |struct_decl| try self.resolveStruct(struct_decl),
                 .enum_decl => |enum_decl| try self.resolveEnum(enum_decl),
                 .concept_decl, .interface_decl, .static_assert_decl => {},
+                .extern_block => {},
                 .impl_decl => |impl_decl| try self.resolveImpl(impl_decl),
             }
         }
@@ -258,7 +260,7 @@ const Collector = struct {
                 .function_decl => |function_decl| try self.lowerFunctionBody(function_decl),
                 .machine_decl => |machine_decl| try self.lowerMachineBody(machine_decl),
                 .template_decl => |template_decl| try self.lowerGenericFunctionBody(template_decl),
-                .struct_decl, .enum_decl, .concept_decl, .interface_decl => {},
+                .struct_decl, .enum_decl, .concept_decl, .interface_decl, .extern_block => {},
                 .impl_decl => |impl_decl| try self.lowerImplFunctionBodies(impl_decl),
                 .static_assert_decl => |static_assert_decl| try self.lowerStaticAssert(static_assert_decl),
             }
@@ -1561,6 +1563,7 @@ fn itemAttributes(item: ast.Item) []const ast.Attribute {
         .enum_decl => |decl| decl.attributes,
         .concept_decl => |decl| decl.attributes,
         .interface_decl => |decl| decl.attributes,
+        .extern_block => &.{},
         .impl_decl => |decl| decl.attributes,
         .static_assert_decl => &.{},
     };

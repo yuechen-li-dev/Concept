@@ -2615,6 +2615,19 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase13-machines/invalid/machine_transition_decide_unknown_state.invalid.conception");
     try expectCheckFixture("../../../language/phase13-machines/invalid/machine_transition_decide_cross_machine_state.invalid.conception");
 
+    try expectParseFixture("../../../language/phase15-c-abi/valid/extern_c_block_basic.valid.conception");
+    try expectParseFixture("../../../language/phase15-c-abi/valid/extern_c_block_multiple_functions.valid.conception");
+    try expectParseFixture("../../../language/phase15-c-abi/valid/extern_c_pointer_param.valid.conception");
+    try expectParseFixture("../../../language/phase15-c-abi/valid/extern_c_empty_block.valid.conception");
+    try expectParseFixture("../../../language/phase15-c-abi/invalid/extern_c_unsupported_abi_cpp.invalid.conception");
+    try expectParseFixture("../../../language/phase15-c-abi/invalid/extern_c_missing_abi_string.invalid.conception");
+    try expectParseFixture("../../../language/phase15-c-abi/invalid/extern_c_missing_block.invalid.conception");
+    try expectParseFixture("../../../language/phase15-c-abi/invalid/extern_c_function_body.invalid.conception");
+    try expectParseFixture("../../../language/phase15-c-abi/invalid/extern_c_missing_semicolon.invalid.conception");
+    try expectParseFixture("../../../language/phase15-c-abi/invalid/extern_c_non_function_item.invalid.conception");
+    try expectParseFixture("../../../language/phase15-c-abi/invalid/extern_c_global.invalid.conception");
+    try expectParseFixture("../../../language/phase15-c-abi/invalid/extern_c_varargs.invalid.conception");
+
     try expectParseFixture("../../../language/phase14-interfaces/valid/interface_single_requirement.valid.conception");
     try expectCheckFixture("../../../language/phase14-interfaces/valid/interface_multiple_requirements.valid.conception");
     try expectCheckFixture("../../../language/phase14-interfaces/valid/interface_requirement_params.valid.conception");

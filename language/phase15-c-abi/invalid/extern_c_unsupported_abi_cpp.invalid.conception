@@ -1,0 +1,13 @@
+# name: extern C unsupported ABI C++
+# phase: parse
+# expect: fail
+
+=== source ===
+module CAbi;
+
+extern "C++" {
+    int puts(char* s);
+}
+
+=== diagnostics ===
+CON026A

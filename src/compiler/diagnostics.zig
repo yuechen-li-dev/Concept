@@ -206,6 +206,11 @@ pub const DiagnosticCode = enum {
     UnknownMachineState,
     TransitionOutsideMachineState,
     MachineSemanticsNotImplemented,
+    ExternCNotImplemented,
+    ExternCRequiresFunctionDeclaration,
+    ExternCFunctionCannotHaveBody,
+    ExternUnsupportedAbi,
+    VarargsUnsupported,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -393,6 +398,11 @@ pub const DiagnosticCode = enum {
             .UnknownMachineState => "CON0222",
             .TransitionOutsideMachineState => "CON0223",
             .MachineSemanticsNotImplemented => "CON0231",
+            .ExternCNotImplemented => "CON0259",
+            .ExternCRequiresFunctionDeclaration => "CON0261",
+            .ExternCFunctionCannotHaveBody => "CON0262",
+            .ExternUnsupportedAbi => "CON026A",
+            .VarargsUnsupported => "CON0269",
         };
     }
 };
@@ -547,6 +557,51 @@ pub fn machineSemanticsNotImplemented(span: SourceSpan) Diagnostic {
         "this executable machine form is not implemented yet",
         span,
     ).withHelp("literal-transition machines are executable; match/decide transitions and broader machine body forms remain parsed, validated, and represented in HIR but are not lowered to executable C yet");
+}
+
+pub fn externCNotImplemented(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .ExternCNotImplemented,
+        .@"error",
+        "extern C declarations are parsed but not lowered yet",
+        span,
+    ).withHelp("Phase 15 M1 preserves extern C declarations in the AST; HIR, MIR, backend emission, linking, and calls are deferred");
+}
+
+pub fn externCRequiresFunctionDeclaration(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .ExternCRequiresFunctionDeclaration,
+        .@"error",
+        "extern C block entries must be function declarations",
+        span,
+    ).withHelp("Phase 15 M1 supports only semicolon-terminated foreign function signatures inside extern \"C\" blocks");
+}
+
+pub fn externCFunctionCannotHaveBody(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .ExternCFunctionCannotHaveBody,
+        .@"error",
+        "extern C function declarations cannot have bodies",
+        span,
+    ).withHelp("declare the foreign function signature with ';' and provide the implementation in C or another linked object");
+}
+
+pub fn externUnsupportedAbi(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .ExternUnsupportedAbi,
+        .@"error",
+        "unsupported extern ABI",
+        span,
+    ).withHelp("Phase 15 M1 supports only extern \"C\" block declarations; C++ interop remains deferred");
+}
+
+pub fn varargsUnsupported(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .VarargsUnsupported,
+        .@"error",
+        "varargs are not supported in extern C declarations",
+        span,
+    ).withHelp("declare fixed-arity C functions only; varargs are deferred beyond Phase 15 v0");
 }
 
 pub fn dynRequiresInterface(span: SourceSpan) Diagnostic {
@@ -1006,6 +1061,11 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0256", DiagnosticCode.DuplicateInterfaceImpl.format());
     try std.testing.expectEqualStrings("CON0257", DiagnosticCode.DynRequiresInterface.format());
     try std.testing.expectEqualStrings("CON0258", DiagnosticCode.DynRequiresBorrowedReference.format());
+    try std.testing.expectEqualStrings("CON0259", DiagnosticCode.ExternCNotImplemented.format());
+    try std.testing.expectEqualStrings("CON0261", DiagnosticCode.ExternCRequiresFunctionDeclaration.format());
+    try std.testing.expectEqualStrings("CON0262", DiagnosticCode.ExternCFunctionCannotHaveBody.format());
+    try std.testing.expectEqualStrings("CON0269", DiagnosticCode.VarargsUnsupported.format());
+    try std.testing.expectEqualStrings("CON026A", DiagnosticCode.ExternUnsupportedAbi.format());
     try std.testing.expectEqualStrings("CON0172", DiagnosticCode.InvalidAttribute.format());
     try std.testing.expectEqualStrings("CON0173", DiagnosticCode.FactRequiresZeroArgFunction.format());
     try std.testing.expectEqualStrings("CON0174", DiagnosticCode.TheoryRequiresInlineData.format());

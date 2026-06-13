@@ -1,12 +1,16 @@
 # Phase 15: C ABI, extern declarations, and repr(C)
 
-P15-M0 is a documentation-only milestone. It defines Concept's explicit C ABI
+P15-M0 was a documentation-only milestone. It defined Concept's explicit C ABI
 source boundary, foreign C declarations, C-exported Concept functions,
 `repr(C)` struct layout promises, ABI type validation, HIR/MIR representation,
-and C backend emission plan.
+and C backend emission plan. P15-M1 starts implementation with the
+`extern "C"` parser/AST scaffold only.
 
-P15-M0 does not implement compiler behavior. It does not change lexer, parser,
-semantic, HIR, MIR, backend, fixture, linker, or runtime behavior.
+P15-M1 adds the parser/AST scaffold for block-form `extern "C"` declarations.
+The lexer recognizes `extern`, the parser accepts `extern "C" { ... }`, and the
+AST preserves the ABI string span, block span, declaration order, and foreign
+function signatures. This milestone still does not implement HIR, MIR, backend,
+fixture linker, or runtime behavior for C ABI calls.
 
 ## Core doctrine
 
@@ -89,6 +93,22 @@ extern "C" int puts(char* s);
 Recommended v0 implementation path: implement block form only. It keeps parsing
 clear, gives the ABI region a visible scope, and avoids ambiguity with ordinary
 function modifiers while the parser surface is still small.
+
+P15-M1 implementation status:
+
+- block-form `extern "C" { ... }` parses and is preserved in AST debug output;
+- the ABI token must be the exact string literal `"C"`;
+- empty extern blocks are allowed as a parser scaffold;
+- declarations inside the block are semicolon-terminated function signatures
+  only;
+- function bodies are rejected with `CON0262`;
+- non-function entries are rejected with `CON0261`;
+- varargs are rejected with `CON0269` when the parser sees `...`;
+- extern variables are not supported;
+- `extern "C++"` and all other ABI strings are rejected with `CON026A`;
+- HIR declarations, ABI type validation, extern calls, backend C prototype
+  emission, linker behavior, headers/includes, `export "C"`, and `repr(C)`
+  remain deferred.
 
 ## 3. Source syntax: export "C" functions
 

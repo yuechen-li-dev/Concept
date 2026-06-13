@@ -186,6 +186,11 @@ pub const Parser = struct {
                     try self.reportExpectedItem("expected item declaration", self.current().span);
                     self.advance();
                 },
+                .@"extern" => {
+                    try self.rejectAttributesBeforeUnsupportedItem(attributes, allocator);
+                    attributes = &.{};
+                    try items.append(try self.parseExternBlockItem(allocator));
+                },
                 else => {
                     if (attributes.len != 0) {
                         try self.reportExpectedItem("expected item declaration after attribute", self.current().span);
@@ -389,7 +394,7 @@ pub const Parser = struct {
         while (self.current().kind != .eof) {
             switch (self.current().kind) {
                 .right_bracket => return,
-                .@"struct", .@"enum", .concept, .interface, .impl, .template, .@"export", .identifier, .mut, .module, .import => return,
+                .@"struct", .@"enum", .concept, .interface, .impl, .template, .@"extern", .@"export", .identifier, .mut, .module, .import => return,
                 else => self.advance(),
             }
         }
@@ -426,6 +431,157 @@ pub const Parser = struct {
     fn parseStaticAssertItem(self: *Parser, allocator: std.mem.Allocator) !ast.Item {
         const decl = try self.parseStaticAssertDecl(allocator);
         return .{ .static_assert_decl = decl };
+    }
+
+    fn parseExternBlockItem(self: *Parser, allocator: std.mem.Allocator) !ast.Item {
+        return .{ .extern_block = try self.parseExternBlock(allocator) };
+    }
+
+    fn parseExternBlock(self: *Parser, allocator: std.mem.Allocator) !ast.ExternBlock {
+        const extern_token = (try self.expect(.@"extern", "expected 'extern'", .ExpectedItem)) orelse self.current();
+        var abi_was_string = false;
+        const abi_token = if (self.current().kind == .string_literal) blk: {
+            abi_was_string = true;
+            break :blk self.advance();
+        } else blk: {
+            try self.report(.UnexpectedToken, "expected ABI string after extern", self.current().span);
+            break :blk Token.init(.string_literal, self.current().span, "\"\"");
+        };
+
+        if (abi_was_string and !std.mem.eql(u8, abi_token.lexeme, "\"C\"")) {
+            try self.diagnostics.append(diagnostics_model.externUnsupportedAbi(abi_token.span));
+        }
+
+        var declarations = std.ArrayList(ast.ExternFunctionDecl).init(allocator);
+        errdefer {
+            for (declarations.items) |declaration| declaration.deinit(allocator);
+            declarations.deinit();
+        }
+
+        if (self.match(.left_brace) == null) {
+            try self.report(.UnexpectedToken, "expected '{' after extern ABI", self.current().span);
+            self.recoverExternBlockHeader();
+            return .{
+                .abi = .c,
+                .abi_span = abi_token.span,
+                .declarations = try declarations.toOwnedSlice(),
+                .span = ast.spanFromBounds(extern_token.span.start, spanEnd(abi_token.span)),
+            };
+        }
+
+        var end_span = abi_token.span;
+        while (self.current().kind != .eof and self.current().kind != .right_brace) {
+            if (self.current().kind == .semicolon) {
+                try self.diagnostics.append(diagnostics_model.externCRequiresFunctionDeclaration(self.current().span));
+                end_span = self.advance().span;
+                continue;
+            }
+            if (self.current().kind == .@"extern") {
+                try self.diagnostics.append(diagnostics_model.externCRequiresFunctionDeclaration(self.current().span));
+                self.recoverExternBlockEntry();
+                continue;
+            }
+            if (self.current().kind == .identifier or self.current().kind == .mut) {
+                if (try self.parseExternFunctionDecl(allocator)) |declaration| {
+                    end_span = declaration.span;
+                    try declarations.append(declaration);
+                }
+            } else {
+                try self.diagnostics.append(diagnostics_model.externCRequiresFunctionDeclaration(self.current().span));
+                self.recoverExternBlockEntry();
+            }
+        }
+
+        if (self.match(.right_brace)) |right_brace| {
+            end_span = right_brace.span;
+        } else {
+            try self.report(.UnexpectedToken, "expected '}' to close extern block", self.current().span);
+        }
+
+        return .{
+            .abi = .c,
+            .abi_span = abi_token.span,
+            .declarations = try declarations.toOwnedSlice(),
+            .span = ast.spanFromBounds(extern_token.span.start, spanEnd(end_span)),
+        };
+    }
+
+    fn parseExternFunctionDecl(self: *Parser, allocator: std.mem.Allocator) !?ast.ExternFunctionDecl {
+        const start_span = self.current().span;
+        var return_type = self.parseTypeName(allocator) catch |err| switch (err) {
+            error.OutOfMemory => return err,
+            else => unreachable,
+        };
+        errdefer return_type.deinit(allocator);
+
+        const name = try self.parseSignatureName();
+        if (name == null) {
+            return_type.deinit(allocator);
+            try self.diagnostics.append(diagnostics_model.externCRequiresFunctionDeclaration(self.current().span));
+            self.recoverExternBlockEntry();
+            return null;
+        }
+
+        if (self.match(.left_paren) == null) {
+            return_type.deinit(allocator);
+            try self.diagnostics.append(diagnostics_model.externCRequiresFunctionDeclaration(self.current().span));
+            self.recoverExternBlockEntry();
+            return null;
+        }
+
+        var params = std.ArrayList(ast.ParamDecl).init(allocator);
+        errdefer {
+            for (params.items) |param| param.deinit(allocator);
+            params.deinit();
+        }
+
+        var last_span = name.?.span;
+        while (self.current().kind != .eof and self.current().kind != .right_paren and self.current().kind != .left_brace and self.current().kind != .semicolon and self.current().kind != .right_brace) {
+            if (self.isVarargsTokenSequence()) {
+                try self.diagnostics.append(diagnostics_model.varargsUnsupported(self.current().span));
+                self.advance();
+                self.advance();
+                last_span = self.advance().span;
+            } else if (try self.parseFunctionParamDecl(allocator)) |param| {
+                last_span = param.span;
+                try params.append(param);
+            }
+
+            if (self.match(.comma)) |comma| {
+                last_span = comma.span;
+                continue;
+            }
+            if (self.current().kind == .right_paren or self.current().kind == .left_brace or self.current().kind == .semicolon or self.current().kind == .right_brace) break;
+            try self.report(.UnexpectedToken, "expected ',' between extern C function parameters", self.current().span);
+            self.recoverFunctionParam();
+            _ = self.match(.comma);
+        }
+
+        if (self.match(.right_paren)) |right_paren| {
+            last_span = right_paren.span;
+        } else {
+            try self.report(.UnexpectedToken, "expected ')' after extern C function parameter list", self.current().span);
+            self.recoverFunctionAfterMissingRightParen();
+        }
+
+        const end_span = if (self.current().kind == .left_brace) blk: {
+            try self.diagnostics.append(diagnostics_model.externCFunctionCannotHaveBody(self.current().span));
+            self.skipFunctionBody();
+            break :blk last_span;
+        } else if (self.match(.semicolon)) |semicolon| semicolon.span else blk: {
+            try self.report(.UnexpectedToken, "expected ';' after extern C function declaration", self.current().span);
+            break :blk last_span;
+        };
+
+        return .{
+            .signature = .{
+                .return_type = return_type,
+                .name = name.?,
+                .params = try params.toOwnedSlice(),
+                .span = ast.spanFromBounds(start_span.start, spanEnd(last_span)),
+            },
+            .span = ast.spanFromBounds(start_span.start, spanEnd(end_span)),
+        };
     }
 
     fn parseStaticAssertDecl(self: *Parser, allocator: std.mem.Allocator) !ast.StaticAssertDecl {
@@ -2456,6 +2612,10 @@ pub const Parser = struct {
         _ = self.match(.semicolon);
     }
 
+    fn isVarargsTokenSequence(self: Parser) bool {
+        return self.current().kind == .dot and self.peek(1).kind == .dot and self.peek(2).kind == .dot;
+    }
+
     fn parsePrimaryExpr(self: *Parser, allocator: std.mem.Allocator) ParseExprError!*ast.Expr {
         const token = self.current();
         switch (token.kind) {
@@ -2594,6 +2754,21 @@ pub const Parser = struct {
 
     fn recoverFunctionDecl(self: *Parser) !void {
         while (self.current().kind != .eof and self.current().kind != .semicolon and self.current().kind != .left_brace) self.advance();
+        if (self.match(.semicolon) != null) return;
+        if (self.current().kind == .left_brace) self.skipFunctionBody();
+    }
+
+    fn recoverExternBlockHeader(self: *Parser) void {
+        while (self.current().kind != .eof and self.current().kind != .semicolon and self.current().kind != .left_brace and self.current().kind != .right_brace) {
+            self.advance();
+        }
+        _ = self.match(.semicolon);
+    }
+
+    fn recoverExternBlockEntry(self: *Parser) void {
+        while (self.current().kind != .eof and self.current().kind != .semicolon and self.current().kind != .left_brace and self.current().kind != .right_brace) {
+            self.advance();
+        }
         if (self.match(.semicolon) != null) return;
         if (self.current().kind == .left_brace) self.skipFunctionBody();
     }
@@ -4866,6 +5041,136 @@ fn expectFunctionDecl(unit: ast.CompilationUnit, index: usize) ast.FunctionDecl 
         .function_decl => |function_decl| function_decl,
         else => unreachable,
     };
+}
+
+fn expectExternBlock(unit: ast.CompilationUnit, index: usize) ast.ExternBlock {
+    return switch (unit.items[index]) {
+        .extern_block => |extern_block| extern_block,
+        else => unreachable,
+    };
+}
+
+test "parses extern C block with declarations" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource(
+        "module Example; extern \"C\" { int puts(char* s); int abs(int value); }",
+        &diagnostics,
+    );
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const block = expectExternBlock(unit, 0);
+    try std.testing.expectEqual(ast.ExternAbi.c, block.abi);
+    try std.testing.expectEqual(@as(usize, 2), block.declarations.len);
+    try std.testing.expectEqualStrings("puts", block.declarations[0].signature.name.base.text);
+    try std.testing.expectEqualStrings("abs", block.declarations[1].signature.name.base.text);
+    try std.testing.expect(block.abi_span.length != 0);
+    try std.testing.expect(block.span.length != 0);
+}
+
+test "extern C preserves pointer parameter signature" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; extern \"C\" { int puts(char* s); }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const signature = expectExternBlock(unit, 0).declarations[0].signature;
+    try std.testing.expectEqualStrings("int", signature.return_type.name.parts[0].text);
+    try std.testing.expectEqualStrings("puts", signature.name.base.text);
+    try std.testing.expectEqual(@as(usize, 1), signature.params.len);
+    try std.testing.expectEqualStrings("char", signature.params[0].type_name.name.parts[0].text);
+    try std.testing.expect(signature.params[0].type_name.is_pointer);
+    try std.testing.expectEqualStrings("s", signature.params[0].name.text);
+}
+
+test "extern C debug output includes ABI and ordered declarations" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; extern \"C\" { int puts(char* s); int abs(int value); }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "ExternBlock \"C\"") != null);
+    const puts_index = std.mem.indexOf(u8, snapshot, "Function int puts(char* s)").?;
+    const abs_index = std.mem.indexOf(u8, snapshot, "Function int abs(int value)").?;
+    try std.testing.expect(puts_index < abs_index);
+}
+
+test "extern C allows empty block" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; extern \"C\" { }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    try std.testing.expectEqual(@as(usize, 0), expectExternBlock(unit, 0).declarations.len);
+}
+
+test "extern C rejects unsupported ABI" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; extern \"C++\" { int puts(char* s); }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.count());
+    try std.testing.expectEqual(DiagnosticCode.ExternUnsupportedAbi, diagnostics.diagnostics.items[0].code);
+}
+
+test "extern requires ABI string and block" {
+    var missing_string = DiagnosticBag.init(std.testing.allocator);
+    defer missing_string.deinit();
+    const missing_string_unit = try parseTestSource("module Example; extern C { int abs(int value); }", &missing_string);
+    defer missing_string_unit.deinit(std.testing.allocator);
+    try std.testing.expect(missing_string.count() >= 1);
+    try std.testing.expectEqualStrings("expected ABI string after extern", missing_string.diagnostics.items[0].message);
+
+    var missing_block = DiagnosticBag.init(std.testing.allocator);
+    defer missing_block.deinit();
+    const missing_block_unit = try parseTestSource("module Example; extern \"C\" int abs(int value);", &missing_block);
+    defer missing_block_unit.deinit(std.testing.allocator);
+    try std.testing.expect(missing_block.count() >= 1);
+    try std.testing.expectEqualStrings("expected '{' after extern ABI", missing_block.diagnostics.items[0].message);
+}
+
+test "extern C rejects function bodies and missing semicolons" {
+    var body_diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer body_diagnostics.deinit();
+    const body_unit = try parseTestSource("module Example; extern \"C\" { int abs(int value) { return value; } }", &body_diagnostics);
+    defer body_unit.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 1), body_diagnostics.count());
+    try std.testing.expectEqual(DiagnosticCode.ExternCFunctionCannotHaveBody, body_diagnostics.diagnostics.items[0].code);
+
+    var semicolon_diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer semicolon_diagnostics.deinit();
+    const semicolon_unit = try parseTestSource("module Example; extern \"C\" { int abs(int value) }", &semicolon_diagnostics);
+    defer semicolon_unit.deinit(std.testing.allocator);
+    try std.testing.expect(semicolon_diagnostics.count() >= 1);
+    try std.testing.expectEqualStrings("expected ';' after extern C function declaration", semicolon_diagnostics.diagnostics.items[0].message);
+}
+
+test "extern C rejects non-function entries and varargs" {
+    var item_diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer item_diagnostics.deinit();
+    const item_unit = try parseTestSource("module Example; extern \"C\" { struct Point { int x; } }", &item_diagnostics);
+    defer item_unit.deinit(std.testing.allocator);
+    try std.testing.expect(item_diagnostics.count() >= 1);
+    try std.testing.expectEqual(DiagnosticCode.ExternCRequiresFunctionDeclaration, item_diagnostics.diagnostics.items[0].code);
+
+    var varargs_diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer varargs_diagnostics.deinit();
+    const varargs_unit = try parseTestSource("module Example; extern \"C\" { int printf(char* fmt, ...); }", &varargs_diagnostics);
+    defer varargs_unit.deinit(std.testing.allocator);
+    try std.testing.expect(varargs_diagnostics.count() >= 1);
+    try std.testing.expectEqual(DiagnosticCode.VarargsUnsupported, varargs_diagnostics.diagnostics.items[0].code);
 }
 
 test "parses top-level function declaration" {
