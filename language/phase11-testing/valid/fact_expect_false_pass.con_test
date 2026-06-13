@@ -1,0 +1,7 @@
+module Example.Tests;
+
+[Fact]
+void FactExpectFalsePass() {
+    Expect.False(2 < 1, "reverse less-than comparison should not hold");
+    return;
+}

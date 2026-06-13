@@ -25,6 +25,16 @@ pub fn checkExecutable(
     try checker.checkModule();
 }
 
+pub fn checkTestModule(
+    allocator: std.mem.Allocator,
+    module: *semantics.SemanticModule,
+    diagnostic_bag: ?*DiagnosticBag,
+) CheckError!void {
+    var checker = Checker.init(allocator, module, diagnostic_bag);
+    defer checker.deinit();
+    try checker.checkTestModule();
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Checker state
 // ─────────────────────────────────────────────────────────────────────────────
@@ -85,6 +95,15 @@ const Checker = struct {
             return error.InvalidSemanticModule;
         }
 
+        try self.checkFunctionBodies();
+    }
+
+    fn checkTestModule(self: *Checker) CheckError!void {
+        try self.checkStaticAsserts();
+        try self.checkFunctionBodies();
+    }
+
+    fn checkFunctionBodies(self: *Checker) CheckError!void {
         for (self.module.hir.functions.items, 0..) |function, index| {
             const function_id = hir.FunctionId{ .index = @intCast(index) };
             if (self.module.hir.isGenericFunction(function_id)) continue;

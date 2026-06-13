@@ -1,0 +1,7 @@
+module Example.Tests;
+
+[Fact]
+void FactAssertTrueFail() {
+    Assert.True(false, "failed assert true should include this mandatory reason");
+    return;
+}

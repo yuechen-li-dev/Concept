@@ -1,0 +1,7 @@
+module Example.Tests;
+
+[Fact]
+void FactExpectTruePass() {
+    Expect.True(1 < 2, "less-than comparison should report the expected ordering");
+    return;
+}

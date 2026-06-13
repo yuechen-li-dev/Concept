@@ -1,0 +1,7 @@
+module Example.Tests;
+
+[Fact]
+void FactExpectFalseFail() {
+    Expect.False(true, "failed expect false should include this mandatory reason");
+    return;
+}

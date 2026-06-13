@@ -655,6 +655,85 @@ Still deferred:
 - runtime reflection;
 - inline test blocks.
 
+## P11-M5 implementation status
+
+P11-M5 adds the first executable `[Fact]` runner path. The v0 runner operates on
+semantically built HIR test modules after normal `.con_test` validation. It does
+not lower test intrinsics through MIR or the C backend yet; ordinary MIR lowering
+continues to reject `test_intrinsic` outside the runner path.
+
+Implemented behavior:
+
+- discovered `[Fact]` functions from test source metadata are executable;
+- only zero-argument `void` facts are executed;
+- helper functions without `[Fact]` are not runner entrypoints;
+- `[Theory]` functions may be discovered, but are not executed in P11-M5;
+- `Assert.True`, `Assert.False`, `Expect.True`, `Expect.False`,
+  `Expect.Equal(int, int)`, and `Expect.Equal(bool, bool)` execute in test mode;
+- failures preserve Assert versus Expect kind;
+- failures preserve the mandatory reason text and call/source span;
+- equality failures include expected and actual scalar values;
+- true/false failures include expected and actual boolean values;
+- multiple facts aggregate pass/fail counts;
+- both `Assert` and `Expect` fail the current test immediately in v0.
+
+Runner result shape is internal for now:
+
+```text
+TestRunResult {
+    passed_count
+    failed_count
+    skipped_count
+    failures: []TestFailure
+}
+
+TestFailure {
+    module_name
+    function_name
+    source_span
+    intrinsic_kind
+    reason
+    expected/actual display when available
+    message
+}
+```
+
+The runner also has a stable human-readable formatter for failures:
+
+```text
+FAILED Test.Fails
+
+Expect.Equal failed
+
+Because:
+  addition should return the arithmetic sum of both operands
+
+Expected:
+  4
+
+Actual:
+  5
+```
+
+Still deferred:
+
+- direct parser/CLI integration for running `.con_test` files from disk;
+- MIR/C generated test runner support;
+- `[Theory]` execution;
+- `InlineData` execution;
+- `Expect.That`;
+- `Is.EqualTo`;
+- relation API;
+- generic equality;
+- enum, struct, string, and array equality;
+- named `because:` syntax;
+- continuing after `Expect` failure;
+- filtering;
+- async tests;
+- fixtures/lifecycle hooks;
+- runtime reflection;
+- inline test blocks.
+
 ## Close criteria
 
 P11-M0 is successful if:

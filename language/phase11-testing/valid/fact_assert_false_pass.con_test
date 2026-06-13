@@ -1,0 +1,7 @@
+module Example.Tests;
+
+[Fact]
+void FactAssertFalsePass() {
+    Assert.False(false, "false condition should satisfy the negative precondition");
+    return;
+}

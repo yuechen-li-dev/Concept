@@ -1,0 +1,7 @@
+module Example.Tests;
+
+[Fact]
+void FactAssertTruePass() {
+    Assert.True(true, "true condition should satisfy the fact precondition");
+    return;
+}

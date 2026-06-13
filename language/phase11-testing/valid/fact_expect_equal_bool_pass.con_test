@@ -1,0 +1,7 @@
+module Example.Tests;
+
+[Fact]
+void FactExpectEqualBoolPass() {
+    Expect.Equal(true, !false, "boolean equality should compare evaluated logical operands");
+    return;
+}

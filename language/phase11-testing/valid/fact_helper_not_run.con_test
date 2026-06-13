@@ -1,0 +1,12 @@
+module Example.Tests;
+
+void HelperNotRun() {
+    Expect.True(false, "helper functions without Fact should not be runner entrypoints");
+    return;
+}
+
+[Fact]
+void FactRuns() {
+    Expect.True(true, "only the attributed fact should execute");
+    return;
+}

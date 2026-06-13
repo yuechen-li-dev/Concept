@@ -1,0 +1,7 @@
+module Example.Tests;
+
+[Fact]
+void FactExpectEqualIntPass() {
+    Expect.Equal(4, 2 + 2, "integer equality should compare evaluated arithmetic operands");
+    return;
+}

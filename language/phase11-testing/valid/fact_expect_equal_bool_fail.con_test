@@ -1,0 +1,7 @@
+module Example.Tests;
+
+[Fact]
+void FactExpectEqualBoolFail() {
+    Expect.Equal(true, false, "failed boolean equality should report expected and actual values");
+    return;
+}

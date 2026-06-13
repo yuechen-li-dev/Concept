@@ -1,0 +1,7 @@
+module Example.Tests;
+
+[Fact]
+void FactExpectEqualIntFail() {
+    Expect.Equal(4, 5, "failed integer equality should report expected and actual values");
+    return;
+}
