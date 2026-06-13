@@ -42,11 +42,12 @@ function-level `alloc`/`noalloc` effects, direct `noalloc` call-edge checks,
 compiler-known `Arena`/`Allocator`/`AllocError` surface types,
 `Arena.alloc<T>(arena)`, `Arena.reset(arena)`, `Arena.destroy(arena)`,
 Drop-hardened arena restrictions, a stable C helper ABI, and ID-based store
-examples. Deferred work includes `Arena.create`, hosted runtime helper
-implementation, allocation failure surfaces, generic `Store<T, Id>`, named
-store IDs, generation counters, region lifetime checking, use-after-reset
-analysis, Drop-in-arena, hidden heap/default allocator behavior, and CLI
-from-disk allocation runner behavior.
+examples. Phase 13 has started with the docs-only design milestone for explicit
+machines and decision-driven transitions. Deferred Phase 12 work includes
+`Arena.create`, hosted runtime helper implementation, allocation failure
+surfaces, generic `Store<T, Id>`, named store IDs, generation counters, region
+lifetime checking, use-after-reset analysis, Drop-in-arena, hidden heap/default
+allocator behavior, and CLI from-disk allocation runner behavior.
 
 ---
 
