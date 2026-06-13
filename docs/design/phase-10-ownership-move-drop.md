@@ -170,6 +170,87 @@ as through parameters or compiler-internal MIR tests. A clean construction and
 write surface is deferred until the language can express it without fake-safe
 APIs.
 
+## P10-M9 closeout
+
+Phase 10 closes around local ownership and storage-state accounting. The
+implemented surface is deliberately narrower than a full memory-safety or
+lifetime system: values have types, places have storage state, non-Copy values
+must move explicitly, moved values are unusable, branch joins create maybe
+states, and deterministic cleanup is represented as explicit MIR.
+
+Implemented:
+
+- MIR storage-state analysis;
+- `StorageState`:
+  - `uninitialized`
+  - `initialized`
+  - `moved`
+  - `maybe_initialized`
+  - `maybe_moved`
+  - `partially_initialized`
+- explicit `move`;
+- use-after-move diagnostics;
+- maybe-moved/maybe-uninitialized diagnostics;
+- copyability model:
+  - `int`/`bool`/raw pointers/enums Copy
+  - structs non-Copy by default
+  - `impl Copy<T>` support for structs
+  - `Drop<T>` treated as non-Copy
+- implicit non-Copy copy rejection;
+- `Drop<T>` intrinsic recognition;
+- MIR `Drop(place, drop_fn)` cleanup;
+- reverse local cleanup order;
+- early-return cleanup;
+- return-move source not dropped;
+- assignment/replacement v0:
+  - Copy replacement allowed
+  - live non-Copy/Drop replacement rejected
+  - moved whole local reinitialization allowed
+- partial struct field-state tracking;
+- partial cleanup of initialized Drop fields only;
+- `ManualInit<T>` type scaffold;
+- `manualAssumeInit(...)` unsafe scaffold;
+- `ManualInit<T>` does not drop contained `T` automatically;
+- backend rejects `ManualInit<T>` emission until layout exists.
+
+Deferred:
+
+- Drop replacement lowering / drop-old-then-init-new;
+- `ManualInit<T>` backend layout;
+- `ManualInit<T>.write` / ptr API;
+- broad ordinary uninitialized locals;
+- official `MaybeUninit<T>` primary surface;
+- field moves;
+- nested/indexed partial tracking;
+- field-level replacement/drop replacement;
+- param Drop;
+- path-sensitive conditional cleanup;
+- moved-state husks;
+- implicit move;
+- borrow checking;
+- lifetime analysis;
+- C++ constructors/destructors/operator=.
+
+`ManualInit<T>` is Concept's canonical term. `MaybeUninit<T>` is at most a
+Rust-compatibility alias/familiarity term.
+
+Phase 10 establishes local ownership/storage-state accounting:
+
+- values have types;
+- places have storage state;
+- non-Copy values must move explicitly;
+- moved values are unusable;
+- branch joins create maybe states;
+- `Drop<T>` cleanup is explicit MIR cleanup;
+- initialized Drop locals clean up deterministically;
+- moved Drop locals are skipped;
+- live non-Copy/Drop replacement is rejected;
+- partial struct initialization has field-state tracking;
+- `ManualInit<T>` exists as explicit manual-initialization storage scaffold.
+
+Concept still does not implement a Rust-style lifetime system. Concept still
+does not prove every pointer is safe.
+
 ## Thesis
 
 ```text

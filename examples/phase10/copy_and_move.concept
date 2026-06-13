@@ -1,0 +1,27 @@
+module Main;
+
+marker concept Copy<T>;
+
+struct Vec2 {
+    int x;
+    int y;
+};
+
+impl Copy<Vec2>;
+
+struct Token {
+    int id;
+};
+
+int main() {
+    int a = 20;
+    int b = a;
+
+    Vec2 left = Vec2 { x: 10, y: 12 };
+    Vec2 right = left;
+
+    Token original = Token { id: 0 };
+    Token moved = move original;
+
+    return b + right.x + right.y + moved.id;
+}

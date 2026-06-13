@@ -1,0 +1,14 @@
+module Main;
+
+struct Box {
+    int value;
+};
+
+int main() {
+    Box box = Box { value: 10 };
+    Box held = move box;
+
+    box = Box { value: 32 };
+
+    return box.value + held.value;
+}

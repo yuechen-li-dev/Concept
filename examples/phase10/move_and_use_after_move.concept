@@ -1,0 +1,16 @@
+module Main;
+
+struct Box {
+    int value;
+};
+
+int consume(Box box) {
+    return box.value;
+}
+
+int main() {
+    Box first = Box { value: 42 };
+    Box second = move first;
+
+    return consume(move second);
+}

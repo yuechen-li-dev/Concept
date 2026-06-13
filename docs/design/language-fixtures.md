@@ -36,8 +36,8 @@ language/phase8-concepts-templates/valid/
 language/phase8-concepts-templates/invalid/
 language/phase9-compile-time/valid/
 language/phase9-compile-time/invalid/
-language/phase10-ownership/valid/    future
-language/phase10-ownership/invalid/  future
+language/phase10-ownership/valid/
+language/phase10-ownership/invalid/
 ```
 
 ## Phase 5 sum-type fixtures
@@ -67,7 +67,7 @@ Invalid fixtures cover malformed template syntax, type parameters out of scope, 
 
 Phase 8 MIR/backend coverage is intentionally concrete-only: the pipeline run fixture and targeted compiler tests assert that template declarations, concepts, marker concepts, and type-parameter types do not leak into executable MIR or backend C, while deterministic instantiated function names and referenced static witness calls are emitted.
 
-Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed for compile-time execution v0. Phase 10 is in design for ownership, move, Drop, MaybeUninit, and richer storage-state analysis. P10-M0 adds the design only and does not add fixtures requiring unsupported compiler behavior.
+Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed for compile-time execution v0.
 
 ## Phase 9 compile-time execution fixtures
 
@@ -79,9 +79,11 @@ Phase 9 MIR/backend coverage asserts that evaluated values lower into ordinary M
 
 ## Phase 10 ownership fixtures
 
-Phase 10 ownership fixtures are future. P10-M0 intentionally adds no parser, HIR, MIR, backend, diagnostic, or fixture behavior. When implementation begins, the fixture corpus should separate storage-state analysis milestones from source-syntax milestones: early fixtures may exercise MIR/storage diagnostics indirectly through existing syntax, while `move`, `Drop<T>`, `MaybeUninit<T>`, partial initialization, and branch maybe-state fixtures should appear only after the corresponding compiler behavior exists.
+Phase 10 fixtures live under `language/phase10-ownership/` and cover the closed ownership/storage-state v0 surface. Valid fixtures cover explicit moves of whole local and parameter places, Copy scalar/enum/raw-pointer flow, `impl Copy<T>` for structs, Drop cleanup snapshots, branch-aware ownership paths, assignment/reinitialization after move, and `ManualInit<T>` / `manualAssumeInit(move slot)` check behavior.
 
-Planned fixture families include valid scalar copy, valid explicit move, invalid use-after-move, invalid maybe-moved use after branch merge, invalid use-before-initialization if ordinary uninitialized locals are later introduced, deterministic drop-order snapshots, and `MaybeUninit<T>` unsafe-boundary checks.
+Invalid fixtures cover direct use-after-move, moving non-place expressions, unsupported field/partial moves, implicit non-Copy copies, maybe-moved use after branch joins, replacement rejection for non-Copy and Drop values, maybe-state cleanup/replacement rejection, and ManualInit errors such as missing type arguments, unsafe-boundary requirements, invalid implicit conversion to `T`, and rejected implicit wrapper copies.
+
+Some Phase 10 behavior is intentionally covered by MIR/unit tests rather than source fixtures. Partial direct-field initialization, whole-use rejection for partially initialized structs, and partial cleanup of initialized Drop fields depend on MIR storage states that the ordinary source surface cannot yet express broadly because Concept still rejects broad ordinary uninitialized locals and does not expose the full `ManualInit<T>.write` / ptr APIs. `ManualInit<T>` is the canonical Concept term; `MaybeUninit<T>` may appear only as compatibility or familiarity terminology.
 
 ## `.conception` format
 

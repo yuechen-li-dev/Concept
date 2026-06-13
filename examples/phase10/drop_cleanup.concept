@@ -1,0 +1,18 @@
+module Main;
+
+struct File {
+    int fd;
+};
+
+impl Drop<File> {
+    void drop(File f) {
+        return;
+    }
+}
+
+int main() {
+    File first = File { fd: 1 };
+    File second = File { fd: 2 };
+
+    return 0;
+}

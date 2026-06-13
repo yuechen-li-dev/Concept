@@ -1,0 +1,11 @@
+module Main;
+
+int read(ManualInit<int> slot) {
+    unsafe {
+        return manualAssumeInit(move slot);
+    }
+}
+
+int main() {
+    return 0;
+}

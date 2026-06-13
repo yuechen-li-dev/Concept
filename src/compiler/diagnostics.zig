@@ -727,6 +727,9 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0157", DiagnosticCode.InvalidDropImpl.format());
     try std.testing.expectEqualStrings("CON0160", DiagnosticCode.AssignmentRequiresReplacement.format());
     try std.testing.expectEqualStrings("CON0161", DiagnosticCode.UseOfPartiallyInitializedValue.format());
+    try std.testing.expectEqualStrings("CON0162", DiagnosticCode.ManualInitRequiresTypeArgument.format());
+    try std.testing.expectEqualStrings("CON0163", DiagnosticCode.ManualInitAssumeInitRequiresUnsafe.format());
+    try std.testing.expectEqualStrings("CON0164", DiagnosticCode.ManualInitInvalidOperation.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {
