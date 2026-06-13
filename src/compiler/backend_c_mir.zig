@@ -466,6 +466,10 @@ fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue
     switch (rvalue) {
         .use => |operand| try emitOperand(writer, ctx, operand),
         .move => |place| try emitPlace(writer, ctx, place),
+        .manual_init_assume => {
+            try reportUnsupportedCType(ctx, null);
+            return error.InvalidExecutable;
+        },
         .unary => |unary| {
             try writer.writeAll(unary.op.lexeme());
             try emitOperand(writer, ctx, unary.operand);
@@ -586,6 +590,10 @@ fn emitCType(writer: anytype, ctx: *const BackendContext, type_id: types.TypeId,
         .struct_type => |struct_id| {
             try requireSupportedStructLayout(ctx, struct_id, span);
             try emitStructTypeName(writer, ctx.module, ctx.module.hir.getStruct(struct_id).name);
+        },
+        .manual_init, .type_param => {
+            try reportUnsupportedCType(ctx, span);
+            return error.InvalidExecutable;
         },
     }
 }

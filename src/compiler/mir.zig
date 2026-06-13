@@ -128,6 +128,7 @@ pub const MirStructFieldValue = struct {
 pub const MirRvalue = union(enum) {
     use: MirOperand,
     move: MirPlace,
+    manual_init_assume: MirOperand,
     unary: struct {
         op: MirUnaryOp,
         operand: MirOperand,
@@ -168,6 +169,10 @@ pub const MirRvalue = union(enum) {
 
     pub fn movePlace(place: MirPlace) MirRvalue {
         return .{ .move = place };
+    }
+
+    pub fn manualInitAssume(operand: MirOperand) MirRvalue {
+        return .{ .manual_init_assume = operand };
     }
 
     pub fn unaryOp(op: MirUnaryOp, operand: MirOperand) MirRvalue {
@@ -221,6 +226,7 @@ pub const MirRvalue = union(enum) {
         return switch (self) {
             .use => |operand| MirRvalue.use_(try operand.clone(allocator)),
             .move => |place| MirRvalue.movePlace(place),
+            .manual_init_assume => |operand| MirRvalue.manualInitAssume(try operand.clone(allocator)),
             .unary => |unary_rvalue| MirRvalue.unaryOp(unary_rvalue.op, try unary_rvalue.operand.clone(allocator)),
             .address_of => |place| MirRvalue.addressOf(place),
             .deref => |operand| MirRvalue.dereference(try operand.clone(allocator)),
@@ -242,6 +248,7 @@ pub const MirRvalue = union(enum) {
         switch (self) {
             .use => |operand| operand.deinit(allocator),
             .move => {},
+            .manual_init_assume => |operand| operand.deinit(allocator),
             .unary => |unary_rvalue| unary_rvalue.operand.deinit(allocator),
             .address_of => {},
             .deref => |operand| operand.deinit(allocator),
@@ -715,6 +722,11 @@ fn writeRvalueDebug(writer: *std.Io.Writer, rvalue: MirRvalue) !void {
         .move => |place| {
             try writer.writeAll("Move(");
             try writePlaceDebug(writer, place);
+            try writer.writeByte(')');
+        },
+        .manual_init_assume => |operand| {
+            try writer.writeAll("ManualInitAssume(");
+            try writeOperandDebug(writer, operand);
             try writer.writeByte(')');
         },
         .unary => |unary_rvalue| {

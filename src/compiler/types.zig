@@ -31,6 +31,9 @@ pub const TypeKind = union(enum) {
     pointer: struct {
         pointee: TypeId,
     },
+    manual_init: struct {
+        payload: TypeId,
+    },
     type_param: struct {
         owner: TypeParamOwner,
         index: u32,
@@ -45,6 +48,7 @@ pub const TypeKind = union(enum) {
             .struct_type => |id| try writer.print("struct {f}", .{id}),
             .enum_type => |id| try writer.print("enum {f}", .{id}),
             .pointer => |pointer| try writer.print("{f}*", .{pointer.pointee}),
+            .manual_init => |manual_init| try writer.print("ManualInit<{f}>", .{manual_init.payload}),
             .type_param => |param| try writer.print("type_param({s}:{d}/{d} {f})", .{ @tagName(param.owner.kind), param.owner.index, param.index, param.name }),
         }
     }
@@ -125,9 +129,25 @@ pub const TypeStore = struct {
         return try self.append(.{ .pointer = .{ .pointee = pointee } }, error.TooManyTypes);
     }
 
+    pub fn addManualInitType(self: *TypeStore, payload: TypeId) TypeStoreError!TypeId {
+        std.debug.assert(self.contains(payload));
+        if (self.findManualInit(payload)) |existing| {
+            return existing;
+        }
+
+        return try self.append(.{ .manual_init = .{ .payload = payload } }, error.TooManyTypes);
+    }
+
     pub fn pointerType(self: TypeStore, pointee: TypeId) ?TypeId {
         std.debug.assert(self.contains(pointee));
         return self.findPointer(pointee);
+    }
+
+    pub fn manualInitPayload(self: TypeStore, id: TypeId) ?TypeId {
+        return switch (self.kind(id)) {
+            .manual_init => |manual_init| manual_init.payload,
+            else => null,
+        };
     }
 
     /// Returns the type kind for a valid type ID.
@@ -150,7 +170,7 @@ pub const TypeStore = struct {
         return switch (self.kind(id)) {
             .int, .bool, .pointer, .enum_type => true,
             .struct_type => self.hasCopyMarkerImpl(hir_store, id),
-            .void, .type_param => false,
+            .void, .manual_init, .type_param => false,
         };
     }
 
@@ -204,6 +224,19 @@ pub const TypeStore = struct {
         return null;
     }
 
+    fn findManualInit(self: TypeStore, payload: TypeId) ?TypeId {
+        for (self.types.items, 0..) |candidate, index| {
+            switch (candidate) {
+                .manual_init => |manual_init| if (manual_init.payload.index == payload.index) {
+                    return .{ .index = @intCast(index) };
+                },
+                else => {},
+            }
+        }
+
+        return null;
+    }
+
     fn findNominal(self: TypeStore, needle: TypeKind) ?TypeId {
         for (self.types.items, 0..) |candidate, index| {
             switch (needle) {
@@ -219,7 +252,7 @@ pub const TypeStore = struct {
                     },
                     else => {},
                 },
-                .pointer, .type_param => unreachable,
+                .pointer, .manual_init, .type_param => unreachable,
                 else => unreachable,
             }
         }
@@ -441,6 +474,28 @@ test "pointer to type parameter is interned" {
 
     try std.testing.expectEqual(first, second);
     try std.testing.expectEqual(TypeKind{ .pointer = .{ .pointee = param } }, store.kind(first));
+}
+
+test "ManualInit TypeIds are interned and expose payload" {
+    var store = try TypeStore.init(std.testing.allocator);
+    defer store.deinit();
+
+    const first = try store.addManualInitType(store.intType());
+    const second = try store.addManualInitType(store.intType());
+    const other = try store.addManualInitType(store.boolType());
+
+    try std.testing.expectEqual(first, second);
+    try std.testing.expect(first.index != other.index);
+    try std.testing.expectEqual(store.intType(), store.manualInitPayload(first).?);
+    try std.testing.expectEqual(TypeKind{ .manual_init = .{ .payload = store.intType() } }, store.kind(first));
+}
+
+test "ManualInit is non-Copy by default" {
+    var store = try TypeStore.init(std.testing.allocator);
+    defer store.deinit();
+
+    const manual_int = try store.addManualInitType(store.intType());
+    try std.testing.expect(!store.isCopyType(null, manual_int));
 }
 
 test "type parameter debug formatting is stable" {

@@ -361,6 +361,7 @@ const Analyzer = struct {
         switch (rvalue) {
             .use => |operand| try self.readOperand(states, operand, span),
             .move => |place| try self.movePlace(states, place, span),
+            .manual_init_assume => |operand| try self.readOperand(states, operand, span),
             .unary => |unary| try self.readOperand(states, unary.operand, span),
             .address_of => |place| try self.readPlace(states, place, span),
             .deref => |operand| try self.readOperand(states, operand, span),
@@ -1681,6 +1682,50 @@ test "MIR storage rejects initialized Drop replacement and treats Drop as non-Co
     try std.testing.expectError(error.InvalidStorageState, analyzeModule(std.testing.allocator, &semantic_module, &module, &bag));
     try std.testing.expectEqual(@as(usize, 1), bag.count());
     try std.testing.expectEqual(diagnostics.DiagnosticCode.AssignmentRequiresReplacement, bag.diagnostics.items[0].code);
+}
+
+test "ManualInit wrapper does not inherit contained Drop" {
+    var semantic_module = try semantics.SemanticModule.init(std.testing.allocator);
+    defer semantic_module.deinit();
+
+    const file_type = try semantic_module.types.addStructType(try semantic_module.hir.addStruct(try semantic_module.interner.intern("File")));
+    _ = try addDropImplForTest(&semantic_module, file_type);
+    const manual_file = try semantic_module.types.addManualInitType(file_type);
+
+    try std.testing.expect(semantic_module.hasDrop(file_type) != null);
+    try std.testing.expect(semantic_module.hasDrop(manual_file) == null);
+    try std.testing.expect(!semantic_module.types.isCopyType(&semantic_module.hir, manual_file));
+}
+
+test "MIR storage skips ManualInit contained Drop but drops assumed value" {
+    var interner_value = interner.Interner.init(std.testing.allocator);
+    defer interner_value.deinit();
+    var semantic_module = try semantics.SemanticModule.init(std.testing.allocator);
+    defer semantic_module.deinit();
+    const file_type = try semantic_module.types.addStructType(try semantic_module.hir.addStruct(try semantic_module.interner.intern("File")));
+    const drop_fn = try addDropImplForTest(&semantic_module, file_type);
+    const manual_file = try semantic_module.types.addManualInitType(file_type);
+    var module = mir.MirModule.init(std.testing.allocator);
+    defer module.deinit();
+
+    const function = try module.store.addFunction(.{ .index = 0 }, try interner_value.intern("main"), semantic_module.types.intType(), hir.synthetic_span);
+    const slot = try module.store.addLocal(function, try interner_value.intern("slot"), .user, manual_file, hir.synthetic_span);
+    const moved_slot = try module.store.addLocal(function, null, .temp, manual_file, hir.synthetic_span);
+    const ready = try module.store.addLocal(function, try interner_value.intern("ready"), .user, file_type, hir.synthetic_span);
+    const block = try module.store.addBlock(function, hir.synthetic_span);
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = slot }, mir.MirRvalue.use_(try mir.MirOperand.intLiteral(std.testing.allocator, "0"))) });
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = moved_slot }, mir.MirRvalue.movePlace(.{ .local = slot })) });
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = ready }, mir.MirRvalue.manualInitAssume(mir.MirOperand.copyPlace(.{ .local = moved_slot }))) });
+    try module.store.setTerminator(block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(try mir.MirOperand.intLiteral(std.testing.allocator, "0")) });
+
+    var analysis = try analyzeFunction(std.testing.allocator, &semantic_module, &module, function, module.store.getFunction(function).*, null);
+    defer analysis.deinit();
+
+    try std.testing.expectEqual(StorageState.moved, analysis.stateOf(slot));
+    const statements = module.store.getBlock(block).statements;
+    try std.testing.expectEqual(@as(usize, 4), statements.len);
+    try std.testing.expectEqual(ready, statements[3].kind.drop.place.local);
+    try std.testing.expectEqual(drop_fn, statements[3].kind.drop.function);
 }
 
 test "MIR storage drops moved Drop local after reinitialization" {

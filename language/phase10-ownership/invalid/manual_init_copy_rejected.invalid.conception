@@ -1,0 +1,18 @@
+# name: manual init copy rejected
+# phase: backend-c
+# expect: fail
+
+=== source ===
+module Main;
+
+int read(ManualInit<int> slot) {
+    ManualInit<int> other = slot;
+    return 0;
+}
+
+int main() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0154

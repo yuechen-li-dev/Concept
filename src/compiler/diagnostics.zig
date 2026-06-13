@@ -148,6 +148,9 @@ pub const DiagnosticCode = enum {
     InvalidDropImpl,
     AssignmentRequiresReplacement,
     UseOfPartiallyInitializedValue,
+    ManualInitRequiresTypeArgument,
+    ManualInitAssumeInitRequiresUnsafe,
+    ManualInitInvalidOperation,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -277,6 +280,9 @@ pub const DiagnosticCode = enum {
             .InvalidDropImpl => "CON0157",
             .AssignmentRequiresReplacement => "CON0160",
             .UseOfPartiallyInitializedValue => "CON0161",
+            .ManualInitRequiresTypeArgument => "CON0162",
+            .ManualInitAssumeInitRequiresUnsafe => "CON0163",
+            .ManualInitInvalidOperation => "CON0164",
         };
     }
 };
@@ -1036,6 +1042,18 @@ pub fn invalidDropImpl(span: SourceSpan) Diagnostic {
 
 pub fn assignmentRequiresReplacement(span: SourceSpan) Diagnostic {
     return Diagnostic.init(.AssignmentRequiresReplacement, .@"error", "assignment would replace a non-Copy or Drop value; explicit replacement semantics are not implemented yet", span);
+}
+
+pub fn manualInitRequiresTypeArgument(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.ManualInitRequiresTypeArgument, .@"error", "ManualInit requires exactly one type argument", span);
+}
+
+pub fn manualInitAssumeInitRequiresUnsafe(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.ManualInitAssumeInitRequiresUnsafe, .@"error", "manualAssumeInit requires unsafe context", span);
+}
+
+pub fn manualInitInvalidOperation(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.ManualInitInvalidOperation, .@"error", "invalid ManualInit operation", span);
 }
 
 pub fn useOfPartiallyInitializedValue(span: SourceSpan) Diagnostic {

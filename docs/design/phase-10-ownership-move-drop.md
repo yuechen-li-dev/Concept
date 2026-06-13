@@ -142,6 +142,34 @@ collapse to existing maybe-state diagnostics. P10-M7 does not implement
 indexed partial tracking, Drop replacement for initialized Drop fields, borrow
 checking, lifetimes, or C++ constructor/destructor semantics.
 
+P10-M8 adds the first narrow compiler-recognized `ManualInit<T>` scaffold.
+`ManualInit<T>` is Concept's canonical spelling for explicit storage that may or
+may not currently contain a valid `T`; `MaybeUninit<T>` remains only possible
+future Rust-compatibility alias terminology, not the official term. The type
+store represents `ManualInit<T>` as a distinct compiler-known type constructor,
+so it is not an ordinary struct and the contained `T` is recoverable. The wrapper
+itself is a value type and is non-Copy by default. `ManualInit<T>` is not
+implicitly convertible to `T`, and `T` is not implicitly convertible to
+`ManualInit<T>`.
+
+P10-M8 deliberately separates wrapper storage from contained storage.
+Constructed or parameter-passed `ManualInit<T>` values are ordinary initialized
+wrapper values, but the contained `T` is not considered initialized by default.
+Dropping a `ManualInit<T>` wrapper does not run `Drop<T>` for the contained type,
+even when `T` has a visible `Drop<T>` impl. The compiler-known unsafe operation
+`manualAssumeInit(move slot)` is accepted as the v0 source-level spelling for
+assuming a `ManualInit<T>` contains a `T`; it requires an unsafe context, returns
+`T`, and relies on the existing explicit `move` expression to consume the source
+slot. The compiler does not prove contained initializedness in P10-M8.
+
+P10-M8 does not add a general source constructor, method syntax, pointer access,
+write/initialize operation, placement-new semantics, or broad uninitialized
+locals. Source can name `ManualInit<T>` in types and can use
+`manualAssumeInit(...)` where a `ManualInit<T>` value is already available, such
+as through parameters or compiler-internal MIR tests. A clean construction and
+write surface is deferred until the language can express it without fake-safe
+APIs.
+
 ## Thesis
 
 ```text
@@ -531,14 +559,17 @@ PageTable ready = table.assumeInit();
 Rules:
 
 - `ManualInit<T>` is explicit uninitialized storage.
+- `ManualInit<T>` is the canonical Concept term; `MaybeUninit<T>` is not the
+  official spelling and may only appear later as a compatibility alias.
+- `ManualInit<T>` is not `T`.
 - Ordinary uninitialized locals remain rejected unless deliberately introduced
   later.
 - `assumeInit` is unsafe.
 - Reading uninitialized storage is never safe.
 - Dropping `ManualInit<T>` does not drop `T` unless initialized state is
   explicitly transferred.
-- P10 early implementation may only document `ManualInit<T>`; implementation can
-  come later.
+- P10-M8 implements compiler recognition and the unsafe free-function scaffold
+  `manualAssumeInit(move slot)`; pointer/write/member-call APIs are deferred.
 
 `ManualInit<T>` should make uninitialized storage searchable and auditable. It is
 not a loophole that makes ordinary reads from uninitialized memory safe.

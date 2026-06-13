@@ -1,0 +1,19 @@
+# name: manual init implicit to t
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+int read(ManualInit<int> slot) {
+    int value = slot;
+    return value;
+}
+
+int main() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0029

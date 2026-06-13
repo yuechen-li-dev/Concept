@@ -247,6 +247,7 @@ pub const HirExprKind = union(enum) {
     address_of: ExprId,
     deref: ExprId,
     move_expr: ExprId,
+    manual_init_assume: ExprId,
     try_expr: ExprId,
     compile_time: struct { operand: ExprId, span: SourceSpan },
     binary: struct { op: BinaryOp, left: ExprId, right: ExprId },
@@ -1152,6 +1153,10 @@ pub const HirStore = struct {
             .move_expr => |operand| {
                 try writer.writeAll("Move\n");
                 try self.writeExprDebug(writer, operand, depth + 1);
+            },
+            .manual_init_assume => |slot| {
+                try writer.writeAll("ManualInitAssume\n");
+                try self.writeExprDebug(writer, slot, depth + 1);
             },
             .try_expr => |operand| {
                 try writer.writeAll("Try\n");

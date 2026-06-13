@@ -1015,7 +1015,7 @@ fn expectCheckFixture(comptime path: []const u8) !void {
 
     try std.testing.expectEqual(Phase.check, fixture.phase);
 
-    if (std.mem.indexOf(u8, path, "phase3-semantics") != null or std.mem.indexOf(u8, path, "phase8-concepts-templates") != null or std.mem.indexOf(u8, path, "phase5-sum-types") != null or std.mem.indexOf(u8, path, "phase5a-judgment") != null or std.mem.indexOf(u8, path, "phase6-unsafe-ownership") != null or std.mem.indexOf(u8, path, "phase7-runtime-structs") != null) {
+    if (std.mem.indexOf(u8, path, "phase3-semantics") != null or std.mem.indexOf(u8, path, "phase8-concepts-templates") != null or std.mem.indexOf(u8, path, "phase5-sum-types") != null or std.mem.indexOf(u8, path, "phase5a-judgment") != null or std.mem.indexOf(u8, path, "phase6-unsafe-ownership") != null or std.mem.indexOf(u8, path, "phase7-runtime-structs") != null or std.mem.indexOf(u8, path, "phase10-ownership") != null) {
         try expectSemanticCheckFixture(path, fixture);
     } else {
         try expectPhase2CheckFixture(path, fixture);
@@ -2303,6 +2303,7 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectBackendCFixture("../../../language/phase10-ownership/valid/drop_early_return.valid.conception");
     try expectBackendCFixture("../../../language/phase10-ownership/valid/drop_return_move.valid.conception");
     try expectBackendCFixture("../../../language/phase10-ownership/valid/reinitialize_after_move_drop_valid.valid.conception");
+    try expectCheckFixture("../../../language/phase10-ownership/valid/manual_init_assume_init_check.valid.conception");
     try expectCheckFixture("../../../language/phase10-ownership/invalid/use_after_move_local.invalid.conception");
     try expectCheckFixture("../../../language/phase10-ownership/invalid/use_after_move_argument.invalid.conception");
     try expectCheckFixture("../../../language/phase10-ownership/invalid/move_temporary_call.invalid.conception");
@@ -2324,4 +2325,8 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectBackendCFixture("../../../language/phase10-ownership/invalid/maybe_moved_move_after_if.invalid.conception");
     try expectBackendCFixture("../../../language/phase10-ownership/invalid/maybe_moved_argument_after_if.invalid.conception");
     try expectBackendCFixture("../../../language/phase10-ownership/invalid/maybe_moved_return_after_if.invalid.conception");
+    try expectCheckFixture("../../../language/phase10-ownership/invalid/manual_init_assume_init_requires_unsafe.invalid.conception");
+    try expectCheckFixture("../../../language/phase10-ownership/invalid/manual_init_missing_type_arg.invalid.conception");
+    try expectCheckFixture("../../../language/phase10-ownership/invalid/manual_init_implicit_to_t.invalid.conception");
+    try expectBackendCFixture("../../../language/phase10-ownership/invalid/manual_init_copy_rejected.invalid.conception");
 }

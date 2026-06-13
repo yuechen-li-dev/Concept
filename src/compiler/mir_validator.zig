@@ -232,6 +232,14 @@ const Validator = struct {
         return switch (rvalue) {
             .use => |operand| try self.operandType(function_id, operand, span),
             .move => |place| try self.placeType(function_id, place, span),
+            .manual_init_assume => |operand| blk: {
+                const operand_type = try self.operandType(function_id, operand, span);
+                if (operand_type == null) break :blk null;
+                break :blk self.semantic_module.types.manualInitPayload(operand_type.?) orelse {
+                    try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                    break :blk null;
+                };
+            },
             .unary => |unary| blk: {
                 const operand_type = try self.operandType(function_id, unary.operand, span);
                 if (operand_type == null) break :blk null;

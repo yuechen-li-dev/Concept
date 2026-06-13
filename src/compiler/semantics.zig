@@ -773,12 +773,12 @@ const Collector = struct {
     // Type-name resolution
     // ─────────────────────────────────────────────────────────────────────────────
 
-    fn resolveTypeName(self: *Collector, type_name: ast.TypeName) !?types.TypeId {
+    fn resolveTypeName(self: *Collector, type_name: ast.TypeName) anyerror!?types.TypeId {
         return self.resolveTypeNameScoped(type_name, null);
     }
 
-    fn resolveTypeNameScoped(self: *Collector, type_name: ast.TypeName, type_scope: ?*TypeParamScope) !?types.TypeId {
-        if (type_name.is_mut or type_name.is_reference or type_name.generic_args.len != 0 or type_name.name.parts.len != 1) {
+    fn resolveTypeNameScoped(self: *Collector, type_name: ast.TypeName, type_scope: ?*TypeParamScope) anyerror!?types.TypeId {
+        if (type_name.is_mut or type_name.is_reference or type_name.name.parts.len != 1) {
             try self.diagnostics.append(diagnostics.unsupportedTypeSyntax(type_name.span));
             return null;
         }
@@ -788,11 +788,23 @@ const Collector = struct {
         return pointee;
     }
 
-    fn resolveBaseTypeNameScoped(self: *Collector, type_name: ast.TypeName, type_scope: ?*TypeParamScope) !?types.TypeId {
+    fn resolveBaseTypeNameScoped(self: *Collector, type_name: ast.TypeName, type_scope: ?*TypeParamScope) anyerror!?types.TypeId {
         const part = type_name.name.parts[0];
         if (std.mem.eql(u8, part.text, "void")) return self.module.types.voidType();
         if (std.mem.eql(u8, part.text, "int")) return self.module.types.intType();
         if (std.mem.eql(u8, part.text, "bool")) return self.module.types.boolType();
+        if (std.mem.eql(u8, part.text, "ManualInit")) {
+            if (type_name.generic_args.len != 1) {
+                try self.diagnostics.append(diagnostics.manualInitRequiresTypeArgument(type_name.span));
+                return null;
+            }
+            const payload = (try self.resolveTypeNameScoped(type_name.generic_args[0], type_scope)) orelse return null;
+            return try self.module.types.addManualInitType(payload);
+        }
+        if (type_name.generic_args.len != 0) {
+            try self.diagnostics.append(diagnostics.unsupportedTypeSyntax(type_name.span));
+            return null;
+        }
 
         const symbol = try self.module.interner.intern(part.text);
         if (type_scope) |scope| {
@@ -1133,6 +1145,15 @@ const BodyLowerer = struct {
                 var owned_args_transferred = false;
                 defer if (!owned_args_transferred and owned.len > 0) self.collector.allocator.free(owned);
                 @memcpy(owned, args.items);
+
+                if (std.mem.eql(u8, call.callee.text, "manualAssumeInit")) {
+                    if (owned.len != 1) {
+                        try self.collector.diagnostics.append(diagnostics.manualInitInvalidOperation(call.span));
+                        return null;
+                    }
+                    const expr_id = try self.collector.module.hir.addExpr(.{ .manual_init_assume = owned[0] }, call.span);
+                    return expr_id;
+                }
 
                 if (self.collector.top_level_decls.get(symbol)) |decl| {
                     const function_id = switch (decl) {

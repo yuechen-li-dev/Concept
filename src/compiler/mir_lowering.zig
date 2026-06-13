@@ -405,6 +405,7 @@ const FunctionLowerer = struct {
             .address_of => |operand| try self.lowerAddressOf(expr, operand, block_id),
             .deref => |operand| try self.lowerDeref(expr, operand, block_id),
             .move_expr => |operand| try self.lowerMove(expr, operand, block_id),
+            .manual_init_assume => |slot| try self.lowerManualInitAssume(expr, slot, block_id),
             .binary => |binary| try self.lowerBinary(expr, binary, block_id),
             .call => |call| try self.lowerCall(expr, call, block_id),
             .concept_requirement_call, .target_metadata => error.InvalidMirLowering,
@@ -469,6 +470,19 @@ const FunctionLowerer = struct {
             .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(temp), mir.MirRvalue.movePlace(place)),
         });
         return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = block_id };
+    }
+
+    fn lowerManualInitAssume(self: *FunctionLowerer, expr: hir.HirExpr, slot: hir.ExprId, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const lowered = try self.lowerExpr(slot, block_id);
+        const temp = try self.addTemp(try self.inferExprTypeFrom(expr));
+        try self.store.appendStatement(lowered.block, .{
+            .span = expr.span,
+            .kind = mir.MirStatementKind.assignTo(
+                mir.MirPlace.localPlace(temp),
+                mir.MirRvalue.manualInitAssume(lowered.operand),
+            ),
+        });
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = lowered.block };
     }
 
     fn lowerMovablePlace(self: *FunctionLowerer, expr_id: hir.ExprId) LoweringError!mir.MirPlace {
@@ -797,6 +811,10 @@ const FunctionLowerer = struct {
             },
             .address_of => |operand| try self.semantic_module.types.addPointerType(try self.inferAddressableExprType(operand)),
             .move_expr => |operand| try self.inferMovableExprType(operand),
+            .manual_init_assume => |slot| blk: {
+                const slot_type = try self.inferExprType(slot);
+                break :blk self.semantic_module.types.manualInitPayload(slot_type) orelse return error.InvalidMirLowering;
+            },
             .deref => |operand| blk: {
                 const operand_type = try self.inferExprType(operand);
                 break :blk switch (self.semantic_module.types.kind(operand_type)) {

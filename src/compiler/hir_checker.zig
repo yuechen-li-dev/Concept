@@ -475,6 +475,18 @@ const Checker = struct {
                 break :blk pointee;
             },
             .move_expr => |operand| try self.movePlaceExprType(return_type, operand, expr.span),
+            .manual_init_assume => |slot| blk: {
+                if (self.unsafe_depth == 0) {
+                    try self.reportAt(.ManualInitAssumeInitRequiresUnsafe, "manualAssumeInit requires unsafe context", expr.span);
+                    return error.InvalidSemanticModule;
+                }
+                const slot_type = try self.checkExpr(return_type, slot);
+                const payload = self.module.types.manualInitPayload(slot_type) orelse {
+                    try self.reportAt(.ManualInitInvalidOperation, "manualAssumeInit requires ManualInit<T> operand", expr.span);
+                    return error.InvalidSemanticModule;
+                };
+                break :blk payload;
+            },
             // ─────────────────────────────────────────────────────────────────────────────
             // Result/try checking
             // ─────────────────────────────────────────────────────────────────────────────
@@ -1006,6 +1018,7 @@ const Checker = struct {
             .address_of => |operand| .{ .address_of = try self.cloneExpr(operand, subst, param_map, local_map, span) },
             .deref => |operand| .{ .deref = try self.cloneExpr(operand, subst, param_map, local_map, span) },
             .move_expr => |operand| .{ .move_expr = try self.cloneExpr(operand, subst, param_map, local_map, span) },
+            .manual_init_assume => |slot| .{ .manual_init_assume = try self.cloneExpr(slot, subst, param_map, local_map, span) },
             .try_expr => |operand| .{ .try_expr = try self.cloneExpr(operand, subst, param_map, local_map, span) },
             .compile_time => |compile_time_expr| .{ .compile_time = .{ .operand = try self.cloneExpr(compile_time_expr.operand, subst, param_map, local_map, span), .span = compile_time_expr.span } },
             .binary => |binary| .{ .binary = .{ .op = binary.op, .left = try self.cloneExpr(binary.left, subst, param_map, local_map, span), .right = try self.cloneExpr(binary.right, subst, param_map, local_map, span) } },
@@ -1089,6 +1102,10 @@ const Checker = struct {
             .pointer => |pointer| {
                 try self.writeTypeSuffix(writer, pointer.pointee);
                 try writer.writeAll("_ptr");
+            },
+            .manual_init => |manual_init| {
+                try writer.writeAll("manual_init_");
+                try self.writeTypeSuffix(writer, manual_init.payload);
             },
             .type_param => try writer.writeAll("type_param"),
         }

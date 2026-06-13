@@ -1,0 +1,17 @@
+# name: manual init assume init check
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+int read(ManualInit<int> slot) {
+    unsafe {
+        return manualAssumeInit(move slot);
+    }
+}
+
+int main() {
+    return 0;
+}
