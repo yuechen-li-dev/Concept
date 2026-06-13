@@ -1,0 +1,21 @@
+# name: interface impl missing requirement
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Interfaces;
+
+interface Writer {
+    void Write(int value);
+};
+
+struct ConsoleWriter {
+    int handle;
+};
+
+impl Writer<ConsoleWriter> {
+}
+
+=== diagnostics ===
+CON0245

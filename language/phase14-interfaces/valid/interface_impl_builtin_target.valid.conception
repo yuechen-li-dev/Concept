@@ -1,0 +1,21 @@
+# name: interface impl builtin target
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Interfaces;
+
+interface Incrementable {
+    int Next(int step);
+};
+
+impl Incrementable<int> {
+    int Next(mut int& self, int step) {
+        return step;
+    }
+}
+
+int main() {
+    return 0;
+}

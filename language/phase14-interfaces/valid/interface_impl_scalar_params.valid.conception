@@ -1,0 +1,25 @@
+# name: interface impl scalar params
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Interfaces;
+
+interface Sink {
+    bool Accept(int value, bool enabled);
+};
+
+struct Counter {
+    int value;
+};
+
+impl Sink<Counter> {
+    bool Accept(mut Counter& self, int value, bool enabled) {
+        return enabled;
+    }
+}
+
+int main() {
+    return 0;
+}

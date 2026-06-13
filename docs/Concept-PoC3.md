@@ -50,12 +50,14 @@ deferred and fails clearly during backend emission rather than silently
 generating unsupported code. Phase 14 has begun: M0 added the design document
 for interfaces and `dyn` dispatch, M1 preserves interface declarations and
 requirement signatures as top-level HIR declarations, and M2 validates the v0
-requirement shape. Concepts remain compile-time constraints, interfaces are
-runtime dispatch contracts, empty runtime interfaces are rejected, interface
-requirements may use ordinary resolved types but not interface types, and
-`dyn Interface&` is a borrowed fat reference design target. Dyn parsing,
-vtables, owning dyn boxes, inheritance, RTTI, and hidden heap allocation remain
-deferred.
+requirement shape. M3 recognizes `impl Interface<Type>` blocks, stores them as
+interface impl HIR separate from concept impls, and validates required methods,
+duplicates, extras, receiver convention, return types, and parameter types.
+Concepts remain compile-time constraints, interfaces are runtime dispatch
+contracts, empty runtime interfaces are rejected, interface requirements may
+use ordinary resolved types but not interface types, and `dyn Interface&` is a
+borrowed fat reference design target. Dyn parsing, vtables, owning dyn boxes,
+inheritance, RTTI, and hidden heap allocation remain deferred.
 Deferred Phase 12
 work includes
 `Arena.create`, hosted runtime helper implementation, allocation failure

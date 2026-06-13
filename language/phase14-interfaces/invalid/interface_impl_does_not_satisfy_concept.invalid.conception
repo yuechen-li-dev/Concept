@@ -1,0 +1,38 @@
+# name: interface impl does not satisfy concept
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Interfaces;
+
+concept StaticDrawable<T> {
+    void draw(T value);
+};
+
+interface Drawable {
+    void Draw();
+};
+
+struct Pen {
+    int id;
+};
+
+impl Drawable<Pen> {
+    void Draw(mut Pen& self) {
+    }
+}
+
+template<T: StaticDrawable<T>>
+void render(T value) {
+    draw(value);
+}
+
+int main() {
+    Pen pen = Pen { id: 1 };
+    render(pen);
+    return 0;
+}
+
+=== diagnostics ===
+CON0109

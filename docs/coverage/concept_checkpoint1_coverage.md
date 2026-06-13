@@ -1,10 +1,10 @@
 # Concept — Checkpoint 1 Coverage Matrix
-## Phase 14 M2 vs PoC3 Constitution
+## Phase 14 M3 vs PoC3 Constitution
 
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
-**Phases closed:** 1 through 13; Phase 14 M0-M2 implemented
-**Fixture corpus:** 648 total (322 valid, 326 invalid)
+**Phases closed:** 1 through 13; Phase 14 M0-M3 implemented
+**Fixture corpus:** 670 total (331 valid, 339 invalid)
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
 ---
@@ -41,8 +41,8 @@
 | `enum` declarations | ✅ | Payload enums with typed fields, unit variants |
 | `template` keyword | ✅ | Phase 8 — `template<T>` unconstrained and `template<T: Concept<T>>` constrained |
 | `concept` keyword | ✅ | Phase 8 — method-bearing and marker forms |
-| `interface` keyword | 🔶 | Parser accepts `interface` signature blocks; Phase 14 M2 preserves declarations in HIR and validates non-empty requirement signatures; dyn/vtable runtime dispatch not implemented |
-| `impl` blocks | ✅ | Phase 8 — `impl Concept<Type>`, `unsafe impl`, `impl Drop<T>` |
+| `interface` keyword | 🔶 | Parser accepts `interface` signature blocks; Phase 14 M3 preserves declarations in HIR, validates non-empty requirement signatures, and validates `impl Interface<Type>` conformance; dyn/vtable runtime dispatch not implemented |
+| `impl` blocks | ✅ | Phase 8 — `impl Concept<Type>`, `unsafe impl`, `impl Drop<T>`; Phase 14 M3 — separate interface impl conformance |
 | `operator` overloading | ❌ | PoC3 §25 — not in any phase plan yet |
 | `move` keyword | ✅ | Phase 10 — explicit move expression, use-after-move diagnosed |
 | `try` keyword | ✅ | Phase 5 — propagates `Result` error arm |
@@ -238,7 +238,8 @@
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| `interface Foo { ... }` declaration | 🔶 | Phase 14 M2 preserves top-level interface declarations, requirement signatures, spans, attributes, duplicate/overload checks, duplicate parameter checks, empty-interface rejection, and interface-type runtime-use rejection in HIR; runtime/vtable lowering not implemented |
+| `interface Foo { ... }` declaration | 🔶 | Phase 14 M3 preserves top-level interface declarations, requirement signatures, spans, attributes, duplicate/overload checks, duplicate parameter checks, empty-interface rejection, interface-type runtime-use rejection, and interface impl conformance in HIR; runtime/vtable lowering not implemented |
+| `impl Interface<Type>` | 🔶 | Phase 14 M3 recognizes interface impls as HIR entities separate from concept impls and checks missing/extra/duplicate methods, receiver convention, return type, and parameter types; no vtable emission yet |
 | `dyn Foo&` dynamic dispatch | ❌ | Phase 14 M0 documents borrowed fat-reference design; compiler behavior not implemented |
 | `interface` vs `concept` distinction | ✅ | Phase 14 doctrine: concept is static proof/generic constraint; interface is runtime contract represented in HIR; dyn is explicit dynamic reference and remains deferred |
 

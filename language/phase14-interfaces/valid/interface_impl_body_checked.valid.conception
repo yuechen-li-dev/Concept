@@ -1,0 +1,25 @@
+# name: interface impl body checked
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Interfaces;
+
+interface Reader {
+    int Read();
+};
+
+struct Buffer {
+    int value;
+};
+
+impl Reader<Buffer> {
+    int Read(mut Buffer& self) {
+        return self.value;
+    }
+}
+
+int main() {
+    return 0;
+}

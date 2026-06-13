@@ -1,0 +1,25 @@
+# name: interface impl struct target
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Interfaces;
+
+interface Tickable {
+    int Tick(int amount);
+};
+
+struct Clock {
+    int ticks;
+};
+
+impl Tickable<Clock> {
+    int Tick(mut Clock& self, int amount) {
+        return amount;
+    }
+}
+
+int main() {
+    return 0;
+}

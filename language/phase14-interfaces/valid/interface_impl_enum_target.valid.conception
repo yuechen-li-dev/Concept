@@ -1,0 +1,25 @@
+# name: interface impl enum target
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Interfaces;
+
+interface Paintable {
+    void Paint(int shade);
+};
+
+enum Color {
+    Red,
+    Blue,
+};
+
+impl Paintable<Color> {
+    void Paint(mut Color& self, int shade) {
+    }
+}
+
+int main() {
+    return 0;
+}

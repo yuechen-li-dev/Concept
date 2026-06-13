@@ -1,0 +1,23 @@
+# name: interface impl invalid target interface type
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Interfaces;
+
+interface Writer {
+    void Write(int value);
+};
+
+interface Sink {
+    void Flush();
+};
+
+impl Writer<Sink> {
+    void Write(mut Sink& self, int value) {
+    }
+}
+
+=== diagnostics ===
+CON0244

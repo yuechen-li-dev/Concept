@@ -1,0 +1,27 @@
+# name: interface impl wrong receiver type
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Interfaces;
+
+interface Writer {
+    void Write(int value);
+};
+
+struct ConsoleWriter {
+    int handle;
+};
+
+struct OtherWriter {
+    int handle;
+};
+
+impl Writer<ConsoleWriter> {
+    void Write(mut OtherWriter& self, int value) {
+    }
+}
+
+=== diagnostics ===
+CON0246

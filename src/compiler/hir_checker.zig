@@ -77,6 +77,7 @@ const Checker = struct {
     fn checkModule(self: *Checker) CheckError!void {
         try self.checkStaticAsserts();
         try self.checkInterfaceRequirements();
+        try self.checkInterfaceImpls();
 
         const main_id = self.findMain() orelse {
             try self.report(.MissingMain, "expected top-level 'main' function");
@@ -102,6 +103,7 @@ const Checker = struct {
     fn checkTestModule(self: *Checker) CheckError!void {
         try self.checkStaticAsserts();
         try self.checkInterfaceRequirements();
+        try self.checkInterfaceImpls();
         try self.checkFunctionBodies();
     }
 
@@ -189,6 +191,102 @@ const Checker = struct {
                 }
             }
         }
+    }
+
+    fn checkInterfaceImpls(self: *Checker) CheckError!void {
+        var seen = std.AutoHashMap(InterfaceImplKey, hir.SourceSpan).init(self.allocator);
+        defer seen.deinit();
+
+        for (self.module.hir.interface_impls.items) |interface_impl| {
+            const key = InterfaceImplKey{ .interface_index = interface_impl.interface_id.index, .target_index = interface_impl.target_type.index };
+            if (seen.contains(key)) {
+                try self.reportAt(.DuplicateInterfaceImpl, "duplicate interface impl", interface_impl.span);
+                return error.InvalidSemanticModule;
+            }
+            try seen.put(key, interface_impl.span);
+
+            if (self.isInvalidInterfaceImplTarget(interface_impl.target_type)) {
+                try self.reportAt(.InvalidInterfaceImplTarget, "invalid interface impl target", interface_impl.span);
+                return error.InvalidSemanticModule;
+            }
+
+            const interface_decl = self.module.hir.getInterface(interface_impl.interface_id);
+            var function_names = std.AutoHashMap(hir.SymbolId, hir.SourceSpan).init(self.allocator);
+            defer function_names.deinit();
+            for (interface_impl.functions) |function_id| {
+                const function = self.module.hir.getFunction(function_id);
+                if (function_names.contains(function.name)) {
+                    try self.reportAt(.DuplicateInterfaceImplFunction, "duplicate function in interface impl", function.span);
+                    return error.InvalidSemanticModule;
+                }
+                try function_names.put(function.name, function.span);
+            }
+
+            for (interface_decl.requirements) |requirement_id| {
+                const requirement = self.module.hir.getInterfaceRequirement(requirement_id);
+                const function_id = self.findInterfaceImplFunction(interface_impl, requirement.name) orelse {
+                    try self.reportAt(.MissingInterfaceRequirementImpl, "missing interface requirement implementation", interface_impl.span);
+                    return error.InvalidSemanticModule;
+                };
+                const function = self.module.hir.getFunction(function_id);
+                if (!sameType(function.return_type, requirement.return_type) or function.params.len != requirement.params.len + 1) {
+                    try self.reportAt(.InvalidInterfaceRequirementImplSignature, "interface requirement implementation signature does not match", function.span);
+                    return error.InvalidSemanticModule;
+                }
+                const receiver = self.module.hir.getParam(function.params[0]);
+                if (!sameType(receiver.type_id, interface_impl.target_type)) {
+                    try self.reportAt(.InvalidInterfaceRequirementImplSignature, "interface requirement implementation receiver does not match target type", receiver.span);
+                    return error.InvalidSemanticModule;
+                }
+                for (requirement.params, 0..) |required_param_id, required_index| {
+                    const required_param = self.module.hir.getInterfaceParam(required_param_id);
+                    const actual_param = self.module.hir.getParam(function.params[required_index + 1]);
+                    if (!sameType(actual_param.type_id, required_param.type_id)) {
+                        try self.reportAt(.InvalidInterfaceRequirementImplSignature, "interface requirement implementation parameter does not match", actual_param.span);
+                        return error.InvalidSemanticModule;
+                    }
+                }
+            }
+
+            for (interface_impl.functions) |function_id| {
+                const function = self.module.hir.getFunction(function_id);
+                if (self.findInterfaceRequirement(interface_decl.*, function.name) == null) {
+                    try self.reportAt(.ExtraInterfaceImplFunction, "extra function in interface impl", function.span);
+                    return error.InvalidSemanticModule;
+                }
+            }
+        }
+    }
+
+    const InterfaceImplKey = struct {
+        interface_index: u32,
+        target_index: u32,
+    };
+
+    fn isInvalidInterfaceImplTarget(self: *Checker, type_id: types.TypeId) bool {
+        return switch (self.module.types.kind(type_id)) {
+            .void, .interface_type, .type_param => true,
+            else => false,
+        };
+    }
+
+    fn findInterfaceImplFunction(self: *Checker, interface_impl: hir.HirInterfaceImpl, name: hir.SymbolId) ?hir.FunctionId {
+        var found: ?hir.FunctionId = null;
+        for (interface_impl.functions) |function_id| {
+            const function = self.module.hir.getFunction(function_id);
+            if (function.name.index != name.index) continue;
+            if (found != null) return null;
+            found = function_id;
+        }
+        return found;
+    }
+
+    fn findInterfaceRequirement(self: *Checker, interface_decl: hir.HirInterface, name: hir.SymbolId) ?hir.InterfaceRequirementId {
+        for (interface_decl.requirements) |requirement_id| {
+            const requirement = self.module.hir.getInterfaceRequirement(requirement_id);
+            if (requirement.name.index == name.index) return requirement_id;
+        }
+        return null;
     }
 
     fn isInterfaceRuntimeType(self: *Checker, type_id: types.TypeId) bool {

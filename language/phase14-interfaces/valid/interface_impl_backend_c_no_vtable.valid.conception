@@ -1,0 +1,29 @@
+# name: interface impl backend c no vtable
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+interface Writer {
+    void Write(int value);
+};
+
+struct ConsoleWriter {
+    int handle;
+};
+
+impl Writer<ConsoleWriter> {
+    void Write(mut ConsoleWriter& self, int value) {
+    }
+}
+
+int main() {
+    return 0;
+}
+
+=== c ===
+contains: int main(void)
+not_contains: cpt_itf_Writer
+not_contains: cpt_dyn_Writer
+not_contains: vtable

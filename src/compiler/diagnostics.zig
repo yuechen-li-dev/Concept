@@ -113,6 +113,12 @@ pub const DiagnosticCode = enum {
     InvalidConceptRequirementCall,
     DuplicateInterfaceRequirement,
     InterfaceRequiresRequirement,
+    InvalidInterfaceImplTarget,
+    MissingInterfaceRequirementImpl,
+    InvalidInterfaceRequirementImplSignature,
+    ExtraInterfaceImplFunction,
+    DuplicateInterfaceImpl,
+    DuplicateInterfaceImplFunction,
     InterfaceRuntimeUnsupported,
     CompileTimeUnsupportedExpression,
     CompileTimeUnsupportedStatement,
@@ -286,6 +292,12 @@ pub const DiagnosticCode = enum {
             .InvalidConceptRequirementCall => "CON0115",
             .DuplicateInterfaceRequirement => "CON0240",
             .InterfaceRequiresRequirement => "CON0241",
+            .InvalidInterfaceImplTarget => "CON0244",
+            .MissingInterfaceRequirementImpl => "CON0245",
+            .InvalidInterfaceRequirementImplSignature => "CON0246",
+            .ExtraInterfaceImplFunction => "CON0247",
+            .DuplicateInterfaceImplFunction => "CON0248",
+            .DuplicateInterfaceImpl => "CON0256",
             .InterfaceRuntimeUnsupported => "CON0255",
             .CompileTimeUnsupportedExpression => "CON0120",
             .CompileTimeTypeMismatch => "CON0121",
@@ -668,13 +680,37 @@ pub fn interfaceRequiresRequirement(span: SourceSpan) Diagnostic {
     ).withHelp("Phase 14 v0 rejects empty runtime interfaces; use a marker concept for static marker behavior");
 }
 
+pub fn invalidInterfaceImplTarget(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.InvalidInterfaceImplTarget, .@"error", "invalid interface impl target", span);
+}
+
+pub fn missingInterfaceRequirementImpl(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.MissingInterfaceRequirementImpl, .@"error", "missing interface requirement implementation", span);
+}
+
+pub fn invalidInterfaceRequirementImplSignature(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.InvalidInterfaceRequirementImplSignature, .@"error", "interface requirement implementation signature does not match", span);
+}
+
+pub fn extraInterfaceImplFunction(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.ExtraInterfaceImplFunction, .@"error", "extra function in interface impl", span);
+}
+
+pub fn duplicateInterfaceImpl(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.DuplicateInterfaceImpl, .@"error", "duplicate interface impl", span);
+}
+
+pub fn duplicateInterfaceImplFunction(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.DuplicateInterfaceImplFunction, .@"error", "duplicate function in interface impl", span);
+}
+
 pub fn interfaceRuntimeUnsupported(span: SourceSpan) Diagnostic {
     return Diagnostic.init(
         .InterfaceRuntimeUnsupported,
         .@"error",
         "interface runtime use is not implemented yet",
         span,
-    ).withHelp("Phase 14 M2 validates interface requirement signatures, but dyn references, interface values, impl conformance, vtables, and calls remain deferred");
+    ).withHelp("Phase 14 M3 validates interface declarations and impl conformance, but dyn references, interface values, vtables, and calls remain deferred");
 }
 
 pub fn duplicateTopLevelName(span: SourceSpan) Diagnostic {
@@ -880,6 +916,15 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0163", DiagnosticCode.ManualInitAssumeInitRequiresUnsafe.format());
     try std.testing.expectEqualStrings("CON0164", DiagnosticCode.ManualInitInvalidOperation.format());
     try std.testing.expectEqualStrings("CON0165", DiagnosticCode.DropParamUnsupported.format());
+    try std.testing.expectEqualStrings("CON0240", DiagnosticCode.DuplicateInterfaceRequirement.format());
+    try std.testing.expectEqualStrings("CON0241", DiagnosticCode.InterfaceRequiresRequirement.format());
+    try std.testing.expectEqualStrings("CON0244", DiagnosticCode.InvalidInterfaceImplTarget.format());
+    try std.testing.expectEqualStrings("CON0245", DiagnosticCode.MissingInterfaceRequirementImpl.format());
+    try std.testing.expectEqualStrings("CON0246", DiagnosticCode.InvalidInterfaceRequirementImplSignature.format());
+    try std.testing.expectEqualStrings("CON0247", DiagnosticCode.ExtraInterfaceImplFunction.format());
+    try std.testing.expectEqualStrings("CON0248", DiagnosticCode.DuplicateInterfaceImplFunction.format());
+    try std.testing.expectEqualStrings("CON0255", DiagnosticCode.InterfaceRuntimeUnsupported.format());
+    try std.testing.expectEqualStrings("CON0256", DiagnosticCode.DuplicateInterfaceImpl.format());
     try std.testing.expectEqualStrings("CON0172", DiagnosticCode.InvalidAttribute.format());
     try std.testing.expectEqualStrings("CON0173", DiagnosticCode.FactRequiresZeroArgFunction.format());
     try std.testing.expectEqualStrings("CON0174", DiagnosticCode.TheoryRequiresInlineData.format());

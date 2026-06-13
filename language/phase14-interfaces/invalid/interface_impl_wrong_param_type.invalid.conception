@@ -1,0 +1,23 @@
+# name: interface impl wrong param type
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Interfaces;
+
+interface Writer {
+    void Write(int value);
+};
+
+struct ConsoleWriter {
+    int handle;
+};
+
+impl Writer<ConsoleWriter> {
+    void Write(mut ConsoleWriter& self, bool value) {
+    }
+}
+
+=== diagnostics ===
+CON0246

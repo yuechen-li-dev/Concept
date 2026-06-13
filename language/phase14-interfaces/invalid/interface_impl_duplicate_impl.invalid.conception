@@ -1,0 +1,28 @@
+# name: interface impl duplicate impl
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Interfaces;
+
+interface Writer {
+    void Write(int value);
+};
+
+struct ConsoleWriter {
+    int handle;
+};
+
+impl Writer<ConsoleWriter> {
+    void Write(mut ConsoleWriter& self, int value) {
+    }
+}
+
+impl Writer<ConsoleWriter> {
+    void Write(mut ConsoleWriter& self, int value) {
+    }
+}
+
+=== diagnostics ===
+CON0256

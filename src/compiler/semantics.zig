@@ -988,7 +988,7 @@ const Collector = struct {
     }
 
     fn resolveImpl(self: *Collector, impl_decl: ast.ImplDecl) !void {
-        const concept_part = if (impl_decl.concept_name.name.parts.len == 1) impl_decl.concept_name.name.parts[0] else {
+        const impl_part = if (impl_decl.concept_name.name.parts.len == 1) impl_decl.concept_name.name.parts[0] else {
             try self.diagnostics.append(diagnostics.unknownConcept(impl_decl.concept_name.span));
             return;
         };
@@ -996,21 +996,22 @@ const Collector = struct {
             try self.diagnostics.append(diagnostics.unknownConcept(impl_decl.concept_name.span));
             return;
         }
-        const concept_symbol = try self.module.interner.intern(concept_part.text);
-        const maybe_decl = self.top_level_decls.get(concept_symbol) orelse blk: {
-            if (std.mem.eql(u8, concept_part.text, "Drop")) {
+        const impl_symbol = try self.module.interner.intern(impl_part.text);
+        const maybe_decl = self.top_level_decls.get(impl_symbol) orelse blk: {
+            if (std.mem.eql(u8, impl_part.text, "Drop")) {
                 break :blk TopLevelDecl{ .concept = try self.declareIntrinsicDropConcept() };
             }
-            try self.diagnostics.append(diagnostics.unknownConcept(concept_part.span));
+            try self.diagnostics.append(diagnostics.unknownConcept(impl_part.span));
             return;
         };
-        const concept_id = switch (maybe_decl) {
-            .concept => |id| id,
-            else => {
-                try self.diagnostics.append(diagnostics.unknownConcept(concept_part.span));
-                return;
-            },
-        };
+        switch (maybe_decl) {
+            .concept => |concept_id| try self.resolveConceptImpl(concept_id, impl_decl),
+            .interface_ => |entry| try self.resolveInterfaceImpl(entry.id, impl_decl),
+            else => try self.diagnostics.append(diagnostics.unknownConcept(impl_part.span)),
+        }
+    }
+
+    fn resolveConceptImpl(self: *Collector, concept_id: hir.ConceptId, impl_decl: ast.ImplDecl) !void {
         const concept = self.module.hir.getConcept(concept_id);
 
         if (impl_decl.target_types.len != concept.type_params.len or impl_decl.target_types.len != 1) {
@@ -1131,6 +1132,128 @@ const Collector = struct {
         }
     }
 
+    fn resolveInterfaceImpl(self: *Collector, interface_id: hir.InterfaceId, impl_decl: ast.ImplDecl) !void {
+        if (impl_decl.is_unsafe) {
+            try self.diagnostics.append(diagnostics.invalidInterfaceImplTarget(impl_decl.span));
+            return;
+        }
+        if (impl_decl.target_types.len != 1) {
+            try self.diagnostics.append(diagnostics.invalidInterfaceImplTarget(impl_decl.concept_name.span));
+            return;
+        }
+        const target_type = (try self.resolveTypeName(impl_decl.target_types[0])) orelse return;
+        if (self.invalidInterfaceImplTargetType(target_type)) {
+            try self.diagnostics.append(diagnostics.invalidInterfaceImplTarget(impl_decl.target_types[0].span));
+            return;
+        }
+        if (self.module.hir.hasInterfaceImpl(interface_id, target_type)) {
+            try self.diagnostics.append(diagnostics.duplicateInterfaceImpl(impl_decl.span));
+            return;
+        }
+
+        const interface_decl = self.module.hir.getInterface(interface_id).*;
+        var seen = std.AutoHashMap(interner.SymbolId, source.SourceSpan).init(self.allocator);
+        defer seen.deinit();
+        var methods = std.ArrayList(hir.FunctionId).empty;
+        defer methods.deinit(self.allocator);
+
+        for (impl_decl.functions) |function_decl| {
+            const function_symbol = try self.module.interner.intern(function_decl.signature.name.base.text);
+            if (seen.contains(function_symbol)) {
+                try self.diagnostics.append(diagnostics.duplicateInterfaceImplFunction(function_decl.signature.name.span));
+                continue;
+            }
+            try seen.put(function_symbol, function_decl.signature.name.span);
+
+            const requirement_id = self.findInterfaceRequirement(interface_decl, function_symbol) orelse {
+                try self.diagnostics.append(diagnostics.extraInterfaceImplFunction(function_decl.signature.name.span));
+                continue;
+            };
+            const requirement = self.module.hir.getInterfaceRequirement(requirement_id);
+            if (function_decl.signature.params.len != requirement.params.len + 1) {
+                try self.diagnostics.append(diagnostics.invalidInterfaceRequirementImplSignature(function_decl.signature.span));
+                continue;
+            }
+            if (!try self.interfaceReceiverMatchesTarget(function_decl.signature.params[0].type_name, target_type)) {
+                try self.diagnostics.append(diagnostics.invalidInterfaceRequirementImplSignature(function_decl.signature.params[0].type_name.span));
+                continue;
+            }
+
+            const return_type = (try self.resolveTypeName(function_decl.signature.return_type)) orelse continue;
+            if (!sameType(return_type, requirement.return_type)) {
+                try self.diagnostics.append(diagnostics.invalidInterfaceRequirementImplSignature(function_decl.signature.return_type.span));
+                continue;
+            }
+
+            var param_types_ok = true;
+            for (requirement.params, 0..) |required_param_id, required_index| {
+                const impl_param = function_decl.signature.params[required_index + 1];
+                const impl_param_type = (try self.resolveTypeName(impl_param.type_name)) orelse {
+                    param_types_ok = false;
+                    continue;
+                };
+                const required_param = self.module.hir.getInterfaceParam(required_param_id);
+                if (!sameType(impl_param_type, required_param.type_id)) {
+                    try self.diagnostics.append(diagnostics.invalidInterfaceRequirementImplSignature(impl_param.type_name.span));
+                    param_types_ok = false;
+                }
+            }
+            if (!param_types_ok) continue;
+
+            const function_id = try self.module.hir.addInterfaceImplMethodFunction(function_symbol, return_type, function_decl.is_unsafe, function_decl.span);
+            self.module.hir.setFunctionAllocationEffect(function_id, lowerAllocationEffect(function_decl.allocation_effect));
+            var param_names = std.AutoHashMap(interner.SymbolId, source.SourceSpan).init(self.allocator);
+            defer param_names.deinit();
+            for (function_decl.signature.params, 0..) |param, param_index| {
+                const param_symbol = try self.module.interner.intern(param.name.text);
+                if (param_names.contains(param_symbol)) {
+                    try self.diagnostics.append(diagnostics.duplicateParameterName(param.name.span));
+                    continue;
+                }
+                try param_names.put(param_symbol, param.name.span);
+                const param_type = if (param_index == 0) target_type else (try self.resolveTypeName(param.type_name)) orelse continue;
+                _ = try self.module.hir.addParam(function_id, param_symbol, param_type, param.span);
+            }
+            try methods.append(self.allocator, function_id);
+        }
+
+        for (interface_decl.requirements) |requirement_id| {
+            const requirement = self.module.hir.getInterfaceRequirement(requirement_id);
+            if (!seen.contains(requirement.name)) {
+                try self.diagnostics.append(diagnostics.missingInterfaceRequirementImpl(impl_decl.span));
+            }
+        }
+        if (self.diagnostics.count() != 0) return;
+
+        const owned = try self.allocator.alloc(hir.FunctionId, methods.items.len);
+        @memcpy(owned, methods.items);
+        methods.clearRetainingCapacity();
+        const impl_id = try self.module.hir.addInterfaceImpl(interface_id, target_type, owned, impl_decl.span);
+        self.module.hir.setInterfaceImplAttributes(impl_id, try self.copyAttributes(impl_decl.attributes));
+    }
+
+    fn invalidInterfaceImplTargetType(self: *Collector, type_id: types.TypeId) bool {
+        return switch (self.module.types.kind(type_id)) {
+            .void, .interface_type, .type_param => true,
+            else => false,
+        };
+    }
+
+    fn findInterfaceRequirement(self: *Collector, interface_decl: hir.HirInterface, name: interner.SymbolId) ?hir.InterfaceRequirementId {
+        for (interface_decl.requirements) |requirement_id| {
+            const requirement = self.module.hir.getInterfaceRequirement(requirement_id);
+            if (requirement.name.index == name.index) return requirement_id;
+        }
+        return null;
+    }
+
+    fn interfaceReceiverMatchesTarget(self: *Collector, receiver: ast.TypeName, target_type: types.TypeId) !bool {
+        if (!receiver.is_mut or !receiver.is_reference or receiver.is_pointer) return false;
+        if (receiver.name.parts.len != 1 or receiver.generic_args.len != 0) return false;
+        const receiver_type = (try self.resolveBaseTypeNameScoped(receiver, null)) orelse return false;
+        return sameType(receiver_type, target_type);
+    }
+
     fn isIntrinsicDropConcept(self: *Collector, concept: hir.HirConcept) bool {
         return !concept.is_marker and
             concept.type_params.len == 1 and
@@ -1168,17 +1291,23 @@ const Collector = struct {
 
     fn lowerImplFunctionBodies(self: *Collector, impl_decl: ast.ImplDecl) !void {
         if (impl_decl.functions.len == 0) return;
-        const concept_part = if (impl_decl.concept_name.name.parts.len == 1) impl_decl.concept_name.name.parts[0] else return;
-        const concept_symbol = try self.module.interner.intern(concept_part.text);
-        const concept_id = switch (self.top_level_decls.get(concept_symbol) orelse return) {
-            .concept => |id| id,
-            else => return,
-        };
+        const impl_part = if (impl_decl.concept_name.name.parts.len == 1) impl_decl.concept_name.name.parts[0] else return;
+        const impl_symbol = try self.module.interner.intern(impl_part.text);
+        const decl = self.top_level_decls.get(impl_symbol) orelse return;
         if (impl_decl.target_types.len != 1) return;
         const target_type = (try self.resolveTypeName(impl_decl.target_types[0])) orelse return;
-        const impl_id = self.module.hir.findConceptImpl(concept_id, target_type) orelse return;
-        const concept_impl = self.module.hir.getConceptImpl(impl_id);
-        for (impl_decl.functions, concept_impl.functions) |function_decl, function_id| {
+        const functions = switch (decl) {
+            .concept => |concept_id| blk: {
+                const impl_id = self.module.hir.findConceptImpl(concept_id, target_type) orelse return;
+                break :blk self.module.hir.getConceptImpl(impl_id).functions;
+            },
+            .interface_ => |entry| blk: {
+                const impl_id = self.module.hir.findInterfaceImpl(entry.id, target_type) orelse return;
+                break :blk self.module.hir.getInterfaceImpl(impl_id).functions;
+            },
+            else => return,
+        };
+        for (impl_decl.functions, functions) |function_decl, function_id| {
             const body = function_decl.body orelse continue;
             const block = body.block orelse continue;
             var lowerer = BodyLowerer.init(self, function_id);
@@ -3878,6 +4007,91 @@ test "semantic collection lowers interface requirements into HIR debug" {
         \\        InterfaceParamId(2) code: TypeId(1)
         \\
     , snapshot);
+}
+
+test "semantic collection stores interface impl separately from concept impl" {
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    var writer_requirement_params = [_]ast.ParamDecl{paramDecl("int", "value", 40)};
+    var writer_requirements = [_]ast.SignatureDecl{.{
+        .return_type = typeName("void", 20),
+        .name = .{ .base = nameSegment("Write", 25), .span = .{ .start = 25, .length = 5 } },
+        .params = writer_requirement_params[0..],
+        .span = .{ .start = 20, .length = 25 },
+    }};
+    var writer_parts = [_]ast.NameSegment{nameSegment("Writer", 100)};
+    var console_parts = [_]ast.NameSegment{nameSegment("ConsoleWriter", 120)};
+    var impl_targets = [_]ast.TypeName{typeNameFromSegment(&console_parts)};
+    var receiver_type = typeNameFromSegment(&console_parts);
+    receiver_type.is_mut = true;
+    receiver_type.is_reference = true;
+    var impl_params = [_]ast.ParamDecl{
+        .{ .type_name = receiver_type, .name = nameSegment("self", 140), .span = .{ .start = 120, .length = 23 } },
+        paramDecl("int", "value", 150),
+    };
+    var impl_functions = [_]ast.FunctionDecl{.{
+        .is_export = false,
+        .signature = .{
+            .return_type = typeName("void", 130),
+            .name = .{ .base = nameSegment("Write", 135), .span = .{ .start = 135, .length = 5 } },
+            .params = impl_params[0..],
+            .span = .{ .start = 130, .length = 35 },
+        },
+        .body = null,
+        .span = .{ .start = 130, .length = 35 },
+    }};
+
+    var module = try collectItems(&.{
+        .{ .interface_decl = .{ .name = nameSegment("Writer", 0), .signatures = writer_requirements[0..], .span = .{ .start = 0, .length = 60 } } },
+        structItem("ConsoleWriter", 70),
+        .{ .impl_decl = .{
+            .concept_name = typeNameFromSegment(&writer_parts),
+            .target_types = impl_targets[0..],
+            .functions = impl_functions[0..],
+            .span = .{ .start = 100, .length = 80 },
+        } },
+    }, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
+    try std.testing.expectEqual(@as(usize, 0), module.hir.concept_impls.items.len);
+    try std.testing.expectEqual(@as(usize, 1), module.hir.interface_impls.items.len);
+    const interface_impl = module.hir.getInterfaceImpl(.{ .index = 0 });
+    try std.testing.expectEqual(hir.InterfaceId{ .index = 0 }, interface_impl.interface_id);
+    try std.testing.expectEqual(types.TypeKind{ .struct_type = .{ .index = 0 } }, module.types.kind(interface_impl.target_type));
+    try std.testing.expectEqual(@as(usize, 1), interface_impl.functions.len);
+}
+
+test "semantic collection keeps concept impls out of interface impl storage" {
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    var marker_params = [_]ast.GenericParam{nameSegment("T", 20)};
+    var marker_parts = [_]ast.NameSegment{nameSegment("Copyable", 80)};
+    var token_parts = [_]ast.NameSegment{nameSegment("Token", 100)};
+    var impl_targets = [_]ast.TypeName{typeNameFromSegment(&token_parts)};
+    var module = try collectItems(&.{
+        .{ .concept_decl = .{
+            .name = nameSegment("Copyable", 0),
+            .generic_params = marker_params[0..],
+            .signatures = &.{},
+            .is_marker = true,
+            .span = .{ .start = 0, .length = 30 },
+        } },
+        structItem("Token", 40),
+        .{ .impl_decl = .{
+            .concept_name = typeNameFromSegment(&marker_parts),
+            .target_types = impl_targets[0..],
+            .functions = &.{},
+            .span = .{ .start = 80, .length = 40 },
+        } },
+    }, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
+    try std.testing.expectEqual(@as(usize, 1), module.hir.concept_impls.items.len);
+    try std.testing.expectEqual(@as(usize, 0), module.hir.interface_impls.items.len);
 }
 
 test "semantic collection rejects duplicate interface top-level name" {

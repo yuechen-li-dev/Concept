@@ -1,0 +1,19 @@
+# name: interface impl target void
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Interfaces;
+
+interface Writer {
+    void Write(int value);
+};
+
+impl Writer<void> {
+    void Write(mut void& self, int value) {
+    }
+}
+
+=== diagnostics ===
+CON0244

@@ -754,10 +754,46 @@ runtime dyn values, vtables, or backend C interface artifacts. A backend path
 containing an otherwise ordinary `main` plus a pure interface declaration emits
 only the ordinary executable code.
 
-Still unimplemented after P14-M2: interface impl conformance, `dyn` type
-syntax, dyn type checking, concrete-to-dyn coercion, dyn method calls, method
-call syntax, vtable representation, backend C vtable/interface emission,
-owning dyn boxes, heap boxing, dynamic cast, RTTI, reflection, interface
-inheritance, default methods, associated types, generic interface methods, Drop
-through dyn, effect checking through dyn, unsafe interface methods, and
-cross-module/orphan interface coherence.
+### P14-M3 implementation status
+
+P14-M3 validates interface implementation conformance without introducing dyn
+runtime dispatch. The existing `impl Name<Type>` parser surface now routes by
+the resolved top-level `Name`: concepts keep the Phase 8 concept-impl path,
+while interfaces use a separate interface-impl path.
+
+Implemented in M3:
+
+- `impl Interface<Type>` is recognized when `Interface` resolves to an
+  interface declaration;
+- interface impls are represented in HIR as distinct `HirInterfaceImpl` values
+  with stable `InterfaceImplId`;
+- interface impls are not stored as concept impls, and concept impls do not
+  create interface impls;
+- duplicate `(interface, target type)` impls are rejected with
+  `CON0256 DuplicateInterfaceImpl`;
+- missing required methods are rejected with
+  `CON0245 MissingInterfaceRequirementImpl`;
+- extra methods are rejected with `CON0247 ExtraInterfaceImplFunction`;
+- duplicate impl method names are rejected with
+  `CON0248 DuplicateInterfaceImplFunction`;
+- method signatures are checked against requirements with
+  `CON0246 InvalidInterfaceRequirementImplSignature`;
+- implementation methods must include the receiver as their first parameter;
+- the M3 receiver convention is `mut Target& self`, checked from the AST
+  spelling because reference types are not yet first-class TypeStore entries;
+- all non-receiver parameters and return types match the interface requirement
+  exactly by resolved `TypeId`;
+- invalid interface impl targets such as `void`, interface declarations, and
+  unresolved/invalid types are rejected with `CON0244 InvalidInterfaceImplTarget`;
+- interface impl method bodies are lowered and checked like existing hidden impl
+  witness bodies;
+- pure interface declarations and interface impl declarations still emit no C
+  interface structs, dyn fat references, vtable structs, or vtable constants.
+
+Still unimplemented after P14-M3: `dyn` type syntax, dyn type checking,
+concrete-to-dyn coercion, dyn method calls, method-call syntax beyond impl
+function declarations, vtable representation, backend C vtable/interface
+emission, owning dyn boxes, heap boxing, dynamic cast, RTTI, reflection,
+interface inheritance, default methods, associated types, generic interface
+methods, Drop through dyn, effect checking through dyn, unsafe interface
+methods, and cross-module/orphan interface coherence.
