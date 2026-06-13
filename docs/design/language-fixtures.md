@@ -116,6 +116,9 @@ non-Drop structs, unspecified-effect functions, and generic functions after
 instantiation.
 P12-M5 valid fixtures cover `Arena.reset(arena)` and `Arena.destroy(arena)` in
 `noalloc`, `alloc`, and unspecified functions, including after arena allocation.
+P12-M7 backend-c fixtures cover the explicit arena helper output paths for
+allocation, reset, destroy, struct size/alignment, and multiple operations in a
+single generated C file.
 
 Invalid fixtures cover conflicting `alloc`/`noalloc` specifiers, duplicate
 effect specifiers, the reachable non-function target diagnostic, and `noalloc`
@@ -135,7 +138,10 @@ Phase 12 fixtures intentionally do not execute arena allocation at runtime. They
 do not cover allocator runtime behavior, allocation failure paths, transitive
 effect checking, profile defaults, region checking, ID stores, reset/destroy
 runtime execution, or runtime-backed allocation because those remain future
-Phase 12 milestones.
+Phase 12 milestones. Exact helper declaration and call text is pinned by
+backend unit tests; backend-c fixtures currently assert the real lowering path
+accepts the source because fixture C-output snapshot matching is not implemented
+yet.
 
 ## `.conception` format
 

@@ -61,6 +61,9 @@ pub fn emitExecutableFromMir(
     const emitted_opaque_allocation_decls = try emitOpaqueAllocationForwardDeclarations(writer, &ctx);
     if (emitted_opaque_allocation_decls and mir_module.store.functions.items.len > 0) try writer.writeByte('\n');
 
+    const emitted_arena_alloc_size_header = try emitArenaAllocSizeHeader(writer, &ctx);
+    if (emitted_arena_alloc_size_header and mir_module.store.functions.items.len > 0) try writer.writeByte('\n');
+
     const emitted_arena_alloc_decl = try emitArenaAllocHelperDeclaration(writer, &ctx);
     if (emitted_arena_alloc_decl and mir_module.store.functions.items.len > 0) try writer.writeByte('\n');
 
@@ -285,7 +288,13 @@ fn noteOpaqueAllocationPointee(ctx: *const BackendContext, type_id: types.TypeId
 
 fn emitArenaAllocHelperDeclaration(writer: anytype, ctx: *const BackendContext) EmitError!bool {
     if (!mirContainsArenaAlloc(ctx)) return false;
-    try writer.writeAll("void* cpt_arena_alloc(struct cpt_Arena* arena, unsigned long size, unsigned long align);\n");
+    try writer.writeAll("void* cpt_arena_alloc(struct cpt_Arena* arena, size_t size, size_t align);\n");
+    return true;
+}
+
+fn emitArenaAllocSizeHeader(writer: anytype, ctx: *const BackendContext) EmitError!bool {
+    if (!mirContainsArenaAlloc(ctx)) return false;
+    try writer.writeAll("#include <stddef.h>\n");
     return true;
 }
 
@@ -1542,9 +1551,60 @@ test "MIR C backend emits explicit arena allocation helper call" {
     );
     defer std.testing.allocator.free(c_source);
 
-    try std.testing.expect(std.mem.indexOf(u8, c_source, "void* cpt_arena_alloc(struct cpt_Arena* arena, unsigned long size, unsigned long align);") != null);
+    try std.testing.expectEqual(@as(usize, 1), countOccurrences(c_source, "#include <stddef.h>\n"));
+    try std.testing.expectEqual(@as(usize, 1), countOccurrences(c_source, "void* cpt_arena_alloc(struct cpt_Arena* arena, size_t size, size_t align);"));
     try std.testing.expect(std.mem.indexOf(u8, c_source, "(int*)cpt_arena_alloc(cpt_p_arena_") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, ", sizeof(int), _Alignof(int))") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "malloc(") == null);
+}
+
+test "MIR C backend emits arena helper declarations once for multiple operations" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\alloc int useArena(Arena* arena) {
+        \\    int* first = Arena.alloc<int>(arena);
+        \\    bool* second = Arena.alloc<bool>(arena);
+        \\    Arena.reset(arena);
+        \\    int* third = Arena.alloc<int>(arena);
+        \\    Arena.destroy(arena);
+        \\    return 0;
+        \\}
+        \\int main() { return 0; }
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expectEqual(@as(usize, 1), countOccurrences(c_source, "#include <stddef.h>\n"));
+    try std.testing.expectEqual(@as(usize, 1), countOccurrences(c_source, "void* cpt_arena_alloc(struct cpt_Arena* arena, size_t size, size_t align);"));
+    try std.testing.expectEqual(@as(usize, 1), countOccurrences(c_source, "void cpt_arena_reset(struct cpt_Arena* arena);"));
+    try std.testing.expectEqual(@as(usize, 1), countOccurrences(c_source, "void cpt_arena_destroy(struct cpt_Arena* arena);"));
+    try std.testing.expectEqual(@as(usize, 3), countOccurrences(c_source, "cpt_arena_alloc(cpt_p_arena_"));
+    try std.testing.expectEqual(@as(usize, 1), countOccurrences(c_source, "cpt_arena_reset(cpt_p_arena_"));
+    try std.testing.expectEqual(@as(usize, 1), countOccurrences(c_source, "cpt_arena_destroy(cpt_p_arena_"));
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "malloc(") == null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "realloc(") == null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "free(") == null);
+}
+
+test "MIR C backend emits arena allocation size and alignment for bool and struct" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\struct Vec2 {
+        \\    int x;
+        \\    bool ok;
+        \\};
+        \\alloc int useArena(Arena* arena) {
+        \\    bool* flag = Arena.alloc<bool>(arena);
+        \\    Vec2* vec = Arena.alloc<Vec2>(arena);
+        \\    return 0;
+        \\}
+        \\int main() { return 0; }
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "(int*)cpt_arena_alloc(cpt_p_arena_") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, ", sizeof(int), _Alignof(int))") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "(cpt_struct_Vec2*)cpt_arena_alloc(cpt_p_arena_") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, ", sizeof(cpt_struct_Vec2), _Alignof(cpt_struct_Vec2))") != null);
 }
 
 test "MIR C backend emits explicit arena reset and destroy helper calls" {
@@ -1563,8 +1623,8 @@ test "MIR C backend emits explicit arena reset and destroy helper calls" {
     );
     defer std.testing.allocator.free(c_source);
 
-    try std.testing.expect(std.mem.indexOf(u8, c_source, "void cpt_arena_reset(struct cpt_Arena* arena);") != null);
-    try std.testing.expect(std.mem.indexOf(u8, c_source, "void cpt_arena_destroy(struct cpt_Arena* arena);") != null);
+    try std.testing.expectEqual(@as(usize, 1), countOccurrences(c_source, "void cpt_arena_reset(struct cpt_Arena* arena);"));
+    try std.testing.expectEqual(@as(usize, 1), countOccurrences(c_source, "void cpt_arena_destroy(struct cpt_Arena* arena);"));
     try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_arena_reset(cpt_p_arena_") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_arena_destroy(cpt_p_arena_") != null);
 }

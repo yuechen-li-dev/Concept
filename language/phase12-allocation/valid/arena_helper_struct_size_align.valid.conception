@@ -1,0 +1,19 @@
+# name: arena helper struct size align
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+struct Vec2 {
+    int x;
+    int y;
+};
+
+alloc Vec2* MakeVec(Arena* arena) {
+    return Arena.alloc<Vec2>(arena);
+}
+
+int main() {
+    return 0;
+}

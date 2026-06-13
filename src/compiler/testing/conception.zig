@@ -2468,6 +2468,11 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase12-allocation/valid/arena_destroy_after_alloc.valid.conception");
     try expectCheckFixture("../../../language/phase12-allocation/valid/arena_reset_in_unspecified_function.valid.conception");
     try expectCheckFixture("../../../language/phase12-allocation/valid/arena_destroy_in_unspecified_function.valid.conception");
+    try expectBackendCFixture("../../../language/phase12-allocation/valid/arena_helper_alloc_output.valid.conception");
+    try expectBackendCFixture("../../../language/phase12-allocation/valid/arena_helper_reset_output.valid.conception");
+    try expectBackendCFixture("../../../language/phase12-allocation/valid/arena_helper_destroy_output.valid.conception");
+    try expectBackendCFixture("../../../language/phase12-allocation/valid/arena_helper_struct_size_align.valid.conception");
+    try expectBackendCFixture("../../../language/phase12-allocation/valid/arena_helper_multiple_ops.valid.conception");
     try expectParseFixture("../../../language/phase12-allocation/invalid/function_conflicting_alloc_effects.invalid.conception");
     try expectParseFixture("../../../language/phase12-allocation/invalid/function_duplicate_noalloc.invalid.conception");
     try expectParseFixture("../../../language/phase12-allocation/invalid/function_duplicate_alloc.invalid.conception");

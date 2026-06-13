@@ -1,0 +1,19 @@
+# name: arena helper multiple ops
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+alloc int UseArena(Arena* arena) {
+    int* first = Arena.alloc<int>(arena);
+    bool* second = Arena.alloc<bool>(arena);
+    Arena.reset(arena);
+    int* third = Arena.alloc<int>(arena);
+    Arena.destroy(arena);
+    return 0;
+}
+
+int main() {
+    return 0;
+}

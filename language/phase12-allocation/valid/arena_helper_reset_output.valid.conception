@@ -1,0 +1,15 @@
+# name: arena helper reset output
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+noalloc int ResetArena(Arena* arena) {
+    Arena.reset(arena);
+    return 0;
+}
+
+int main() {
+    return 0;
+}

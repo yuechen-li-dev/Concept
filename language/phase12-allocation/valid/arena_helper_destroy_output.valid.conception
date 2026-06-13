@@ -1,0 +1,15 @@
+# name: arena helper destroy output
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+noalloc int DestroyArena(Arena* arena) {
+    Arena.destroy(arena);
+    return 0;
+}
+
+int main() {
+    return 0;
+}

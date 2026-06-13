@@ -330,12 +330,13 @@ explicit `ArenaAlloc` rvalue. The MIR C backend emits an external helper
 declaration and an auditable helper call:
 
 ```c
-void* cpt_arena_alloc(struct cpt_Arena* arena, unsigned long size, unsigned long align);
+void* cpt_arena_alloc(struct cpt_Arena* arena, size_t size, size_t align);
 (T*)cpt_arena_alloc(arena, sizeof(T), _Alignof(T))
 ```
 
-The backend does not provide a runtime implementation and does not silently use
-`malloc`. Hosted runtime support remains future work.
+The P12-M7 backend helper ABI uses `size_t`; P12-M4 originally emitted the same
+argument order with an integer-sized placeholder. The backend does not silently
+use `malloc`.
 
 P12-M4 does not add arena create/reset/destroy, allocation failure handling,
 `AllocError` return paths, destructor lists, arena allocation of Drop types,
@@ -429,6 +430,63 @@ Not implemented:
 - full `ManualInit<T>` arena integration;
 - region lifetime checking, escape checking, or use-after-reset/destroy
   diagnostics.
+
+### P12-M7 implementation status
+
+P12-M7 stabilizes the C backend arena helper ABI emitted for explicit arena
+operations:
+
+```c
+struct cpt_Arena;
+
+void* cpt_arena_alloc(struct cpt_Arena* arena, size_t size, size_t align);
+void  cpt_arena_reset(struct cpt_Arena* arena);
+void  cpt_arena_destroy(struct cpt_Arena* arena);
+```
+
+The helper names and argument order are stable. Allocation receives the arena
+pointer first, the requested size second, and the requested alignment third.
+Reset and destroy receive exactly the arena pointer. The MIR C backend emits
+each needed helper declaration once per generated C file, emits `<stddef.h>`
+when `size_t` is required by `cpt_arena_alloc`, and lowers explicit
+`Arena.alloc<T>(arena)` to:
+
+```c
+(T*)cpt_arena_alloc(arena, sizeof(T), _Alignof(T))
+```
+
+Reset and destroy lower to:
+
+```c
+cpt_arena_reset(arena);
+cpt_arena_destroy(arena);
+```
+
+The backend does not lower Concept arena operations to direct `malloc`,
+`realloc`, or `free` calls. Helper linkage is backend/runtime responsibility.
+P12-M7 does not add source-level arena construction, `Arena.create`, by-value
+arena use, `AllocError` return paths, checked allocation APIs, region lifetime
+checking, pointer escape analysis, destructor lists, Drop-in-arena, or ID
+stores.
+
+No hosted C helper scaffold is added in P12-M7 because the repository does not
+yet have a runtime/support build path. The helper implementation remains
+external/deferred. A future hosted scaffold may provide a malloc-backed arena
+implementation for generated C, but that would be backend support only, not
+core language semantics. Freestanding and kernel profiles must provide their
+own helpers or reject hosted arena execution.
+
+Failure behavior remains deliberately narrow. A future hosted helper may return
+null on allocation failure or temporarily abort on OOM, but generated Concept
+code still sees `Arena.alloc<T>` as returning `T*`; `AllocError` and
+Result-returning allocation APIs are not implemented in P12-M7. Using a null
+arena allocation result is outside the P12-M7 safety model.
+
+The alignment contract is explicit: the compiler emits valid C `sizeof(T)` and
+`_Alignof(T)` operands for valid allocated types, and any helper implementation
+must respect the requested alignment. An alignment of zero is invalid or may be
+normalized by a helper defensively, but the compiler should not emit zero
+alignment for valid Concept types.
 
 ## 4. Profiles and hidden heap policy
 
@@ -877,7 +935,7 @@ P12-M3  Core allocation surface: AllocError, Arena, allocator placeholders
 P12-M4  Arena allocation intrinsic for non-Drop concrete types
 P12-M5  Arena reset/destroy semantics and invalidation rules
 P12-M6  Arena Drop/storage-state hardening
-P12-M7  MIR allocation/effect representation and C backend hardening
+P12-M7  Arena helper ABI contract and C backend hardening
 P12-M8  ID-based store design/prototype and examples
 P12-M9  Closeout
 ```

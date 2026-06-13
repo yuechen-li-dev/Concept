@@ -1,0 +1,14 @@
+# name: arena helper alloc output
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+alloc int* MakeInt(Arena* arena) {
+    return Arena.alloc<int>(arena);
+}
+
+int main() {
+    return 0;
+}
