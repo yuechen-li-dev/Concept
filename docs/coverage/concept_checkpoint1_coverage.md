@@ -41,7 +41,7 @@
 | `enum` declarations | ✅ | Payload enums with typed fields, unit variants |
 | `template` keyword | ✅ | Phase 8 — `template<T>` unconstrained and `template<T: Concept<T>>` constrained |
 | `concept` keyword | ✅ | Phase 8 — method-bearing and marker forms |
-| `interface` keyword | 🔶 | Parser accepts `interface` signature blocks; HIR/runtime vtable dispatch not implemented |
+| `interface` keyword | 🔶 | Parser accepts `interface` signature blocks; Phase 14 M0 now documents runtime interface/vtable design; HIR/runtime vtable dispatch not implemented |
 | `impl` blocks | ✅ | Phase 8 — `impl Concept<Type>`, `unsafe impl`, `impl Drop<T>` |
 | `operator` overloading | ❌ | PoC3 §25 — not in any phase plan yet |
 | `move` keyword | ✅ | Phase 10 — explicit move expression, use-after-move diagnosed |
@@ -239,8 +239,8 @@
 | Feature | Status | Notes |
 |---------|--------|-------|
 | `interface Foo { ... }` declaration | 🔶 | Parser accepts interface blocks (signature parsing); HIR interface type and vtable lowering not implemented |
-| `dyn Foo&` dynamic dispatch | ❌ | |
-| `interface` vs `concept` distinction | ✅ | Conceptually enforced — interface is parsed separately; runtime vtable is the deferred half |
+| `dyn Foo&` dynamic dispatch | ❌ | Phase 14 M0 documents borrowed fat-reference design; compiler behavior not implemented |
+| `interface` vs `concept` distinction | ✅ | Phase 14 M0 sharpens doctrine: concept is static proof/generic constraint; interface is runtime contract; dyn is explicit dynamic reference |
 
 ---
 
@@ -437,6 +437,8 @@
 | **Stage 3** | LLVM backend, native backends, optimization | ❌ Future |
 
 **Stage 1 remaining gaps (blocking full Stage 1 completion):**
+- `interface` / `dyn` runtime dispatch implementation (Phase 14 is now designed
+  at M0, not implemented)
 - `extern "C"` interop (needed for real library calls from Concept)
 - `import` / multi-module compilation
 - `yield` in machines
@@ -493,7 +495,7 @@
 | §17 Errors | 🔶 `Result`, `try`, `must_use`, `discard` done; `panic` deferred |
 | §18–19 Enums and match | 🔶 Core done; guards, struct destructure, ref binding deferred |
 | §20–23 Concepts/generics/impl | 🔶 Core done; `derive`, negative concepts, orphan rule, bridge modules deferred |
-| §24 Interfaces/dyn | 🔶 Parser only; vtable runtime deferred |
+| §24 Interfaces/dyn | 🔶 Parser plus Phase 14 M0 design; vtable runtime deferred |
 | §25 Operator overloading | ❌ Not started |
 | §26–27 Allocation and arenas | 🔶 Core done; `Id<T>`, `Store`, `Arena.create`, generic allocator deferred |
 | §28 Unsafe | ✅ Complete |
@@ -528,4 +530,10 @@
 
 ---
 
-*This matrix reflects the state of the repository at Phase 13 closeout. Stage 1 is substantially implemented. The critical path to full Stage 1 completion is: `extern "C"` interop, `import`/multi-module compilation, `yield` in machines, and `repr(C)`. Everything else in the Stage 1 gap list is important but not load-bearing for the self-hosting bootstrap path.*
+*This matrix began as the Phase 13 closeout snapshot and has been lightly
+updated for Phase 14 M0. Stage 1 is substantially implemented. The critical
+path to full Stage 1 completion now includes implementing the designed
+`interface` / `dyn` runtime dispatch model, plus `extern "C"` interop,
+`import`/multi-module compilation, `yield` in machines, and `repr(C)`.
+Everything else in the Stage 1 gap list is important but not load-bearing for
+the self-hosting bootstrap path.*

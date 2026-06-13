@@ -71,7 +71,7 @@ Invalid fixtures cover malformed template syntax, type parameters out of scope, 
 
 Phase 8 MIR/backend coverage is intentionally concrete-only: the pipeline run fixture and targeted compiler tests assert that template declarations, concepts, marker concepts, and type-parameter types do not leak into executable MIR or backend C, while deterministic instantiated function names and referenced static witness calls are emitted.
 
-Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed for compile-time execution v0. Phase 10 is closed for ownership/storage-state v0. Phase 11 is closed for first-class testing, attributes, and reasoned expectations v0.
+Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed for compile-time execution v0. Phase 10 is closed for ownership/storage-state v0. Phase 11 is closed for first-class testing, attributes, and reasoned expectations v0. Phase 14 M0 is documentation-only; interface and `dyn` fixtures should wait until compiler behavior exists.
 
 ## Phase 9 compile-time execution fixtures
 
@@ -204,6 +204,19 @@ Phase 13 closed: explicit machines, machine-local states, literal/match/decide
 transition scaffolds, runnable literal-transition machine frames,
 statement-like `Step`, `Complete`/`Result` value queries, and C backend support
 for the literal-transition subset.
+
+## Phase 14 interface/dyn fixtures
+
+Phase 14 M0 adds the design document for runtime interfaces and borrowed `dyn`
+dispatch only. No Phase 14 fixture corpus is added at M0 because compiler
+behavior is intentionally unchanged.
+
+Future Phase 14 fixtures should cover interface declaration HIR, duplicate
+requirements, interface impl conformance, borrowed `dyn Interface&` type
+checking, concrete-to-dyn coercion from addressable places, rejection of rvalue
+temporary dyn coercions, dynamic method calls, mutability checks, explicit
+HIR/MIR dyn coercion/call shapes, and C backend vtable lowering without
+`malloc`, RTTI, reflection, or inheritance.
 
 ## `.conception` format
 

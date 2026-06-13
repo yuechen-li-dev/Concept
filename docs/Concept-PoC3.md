@@ -47,7 +47,11 @@ literal/match/decide transition scaffolds, runnable literal-transition machine
 frames, `Step`, `Complete`, `Result`, and C backend support for the
 literal-transition subset. Match/decide transition runtime lowering remains
 deferred and fails clearly during backend emission rather than silently
-generating unsupported code.
+generating unsupported code. Phase 14 has begun with the M0 design document for
+interfaces and `dyn` dispatch: concepts remain compile-time constraints,
+interfaces are runtime dispatch contracts, `dyn Interface&` is a borrowed fat
+reference, and owning dyn boxes, inheritance, RTTI, and hidden heap allocation
+remain deferred.
 Deferred Phase 12
 work includes
 `Arena.create`, hosted runtime helper implementation, allocation failure
