@@ -1,0 +1,13 @@
+# name: machine zero states
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module Example;
+
+machine Empty() -> int {
+}
+
+=== diagnostics ===
+CON0220

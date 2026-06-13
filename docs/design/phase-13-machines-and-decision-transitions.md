@@ -24,6 +24,20 @@ implicit scheduling, or new `decide` semantics. A machine that reaches semantic
 declaration collection is rejected with `CON0231
 MachineSemanticsNotImplemented` instead of silently disappearing.
 
+P13-M2 adds the first semantic state validation layer. Each machine now has a
+machine-local closed state universe: machines require at least one state,
+duplicate state names in the same machine are rejected, state names remain
+scoped to their containing machine, identical state names may appear in
+different machines, source order is preserved, and the first declared state is
+recorded as the v0 initial state. The semantic shell preserves machine name,
+parameters, result type, allocation-effect metadata, attributes, ordered
+states, and initial-state metadata for future transition validation. P13-M2
+still does not lower machines to executable HIR/MIR/runtime behavior, does not
+parse or validate transitions, and does not add DragonGod features, stack HFSM,
+`board`, mailbox, actuator, policy memory, hidden heap, scheduler, or async
+behavior. Otherwise valid machines still report `CON0231
+MachineSemanticsNotImplemented`.
+
 ## Core doctrine
 
 ```text

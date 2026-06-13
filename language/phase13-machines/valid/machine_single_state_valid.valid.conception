@@ -1,0 +1,21 @@
+# name: machine single state valid parse
+# phase: parse
+# expect: pass
+
+=== source ===
+module Example;
+
+machine Single() -> int {
+    state Start {
+        return 0;
+    }
+}
+
+=== ast ===
+CompilationUnit
+  Module Example
+  Machine Single() -> int
+    State Start
+      Body
+        Return
+          Int 0

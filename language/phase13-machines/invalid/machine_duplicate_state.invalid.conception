@@ -1,0 +1,20 @@
+# name: machine duplicate state
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module Example;
+
+machine Bad() -> int {
+    state Start {
+        return 0;
+    }
+
+    state Start {
+        return 1;
+    }
+}
+
+=== diagnostics ===
+CON0221

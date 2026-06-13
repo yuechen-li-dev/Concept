@@ -2519,7 +2519,9 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase12-allocation/invalid/store_get_wrong_id_type.invalid.conception");
 
     try expectParseFixture("../../../language/phase13-machines/valid/machine_empty_state.valid.conception");
+    try expectParseFixture("../../../language/phase13-machines/valid/machine_single_state_valid.valid.conception");
     try expectParseFixture("../../../language/phase13-machines/valid/machine_two_states.valid.conception");
+    try expectParseFixture("../../../language/phase13-machines/valid/machine_two_states_same_names_in_different_machines.valid.conception");
     try expectParseFixture("../../../language/phase13-machines/valid/machine_with_return.valid.conception");
     try expectParseFixture("../../../language/phase13-machines/valid/machine_with_params.valid.conception");
     try expectParseFixture("../../../language/phase13-machines/valid/machine_noalloc_effect.valid.conception");
@@ -2530,6 +2532,8 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectParseFixture("../../../language/phase13-machines/invalid/machine_missing_return_type.invalid.conception");
     try expectParseFixture("../../../language/phase13-machines/invalid/machine_missing_body.invalid.conception");
     try expectParseFixture("../../../language/phase13-machines/invalid/machine_unclosed_state.invalid.conception");
+    try expectCheckFixture("../../../language/phase13-machines/invalid/machine_zero_states.invalid.conception");
+    try expectCheckFixture("../../../language/phase13-machines/invalid/machine_duplicate_state.invalid.conception");
     try expectCheckFixture("../../../language/phase13-machines/invalid/machine_semantics_not_implemented.invalid.conception");
 
     try expectRunFixture("../../../language/phase10-ownership/valid/move_struct_local_run.valid.conception");

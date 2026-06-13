@@ -13,6 +13,7 @@ pub const SymbolId = interner_module.SymbolId;
 
 pub const ItemId = SemanticId("ItemId");
 pub const FunctionId = SemanticId("FunctionId");
+pub const MachineId = SemanticId("MachineId");
 pub const GenericFunctionId = SemanticId("GenericFunctionId");
 pub const ConceptId = SemanticId("ConceptId");
 pub const ConceptImplId = SemanticId("ConceptImplId");
@@ -22,6 +23,7 @@ pub const FieldId = SemanticId("FieldId");
 pub const VariantId = SemanticId("VariantId");
 pub const LocalId = SemanticId("LocalId");
 pub const ParamId = SemanticId("ParamId");
+pub const MachineParamId = SemanticId("MachineParamId");
 pub const StmtId = SemanticId("StmtId");
 pub const ExprId = SemanticId("ExprId");
 pub const EnumPayloadFieldId = SemanticId("EnumPayloadFieldId");
@@ -38,6 +40,7 @@ fn SemanticId(comptime label: []const u8) type {
 
 pub const HirItem = union(enum) {
     function: FunctionId,
+    machine: MachineId,
     struct_: StructId,
     enum_: EnumId,
 };
@@ -181,6 +184,28 @@ pub const HirFunction = struct {
     is_instantiation: bool = false,
     is_concept_witness: bool = false,
     is_referenced_concept_witness: bool = false,
+};
+
+pub const HirMachineState = struct {
+    name: SymbolId,
+    span: SourceSpan,
+    source_order: u32,
+};
+
+pub const HirMachine = struct {
+    item: ItemId,
+    name: SymbolId,
+    span: SourceSpan,
+    attributes: []HirAttribute = &.{},
+    return_type: types.TypeId,
+    allocation_effect: AllocationEffect = .unspecified,
+    params: []MachineParamId,
+    states: []HirMachineState,
+    initial_state_index: u32,
+
+    pub fn initialState(self: HirMachine) HirMachineState {
+        return self.states[self.initial_state_index];
+    }
 };
 
 pub const HirLocal = struct {
@@ -386,6 +411,13 @@ pub const HirParam = struct {
     type_id: types.TypeId,
 };
 
+pub const HirMachineParam = struct {
+    parent: MachineId,
+    name: SymbolId,
+    span: SourceSpan,
+    type_id: types.TypeId,
+};
+
 pub const HirStruct = struct {
     item: ItemId,
     name: SymbolId,
@@ -449,10 +481,12 @@ pub const HirStore = struct {
     allocator: std.mem.Allocator,
     items: std.ArrayList(HirItem),
     functions: std.ArrayList(HirFunction),
+    machines: std.ArrayList(HirMachine),
     generic_functions: std.ArrayList(HirGenericFunction),
     concepts: std.ArrayList(HirConcept),
     concept_impls: std.ArrayList(HirConceptImpl),
     params: std.ArrayList(HirParam),
+    machine_params: std.ArrayList(HirMachineParam),
     locals: std.ArrayList(HirLocal),
     stmts: std.ArrayList(HirStmt),
     exprs: std.ArrayList(HirExpr),
@@ -468,10 +502,12 @@ pub const HirStore = struct {
             .allocator = allocator,
             .items = std.ArrayList(HirItem).empty,
             .functions = std.ArrayList(HirFunction).empty,
+            .machines = std.ArrayList(HirMachine).empty,
             .generic_functions = std.ArrayList(HirGenericFunction).empty,
             .concepts = std.ArrayList(HirConcept).empty,
             .concept_impls = std.ArrayList(HirConceptImpl).empty,
             .params = std.ArrayList(HirParam).empty,
+            .machine_params = std.ArrayList(HirMachineParam).empty,
             .locals = std.ArrayList(HirLocal).empty,
             .stmts = std.ArrayList(HirStmt).empty,
             .exprs = std.ArrayList(HirExpr).empty,
@@ -519,6 +555,11 @@ pub const HirStore = struct {
             if (function.compile_time_capabilities.len > 0) self.allocator.free(function.compile_time_capabilities);
             if (function.params.len > 0) self.allocator.free(function.params);
             if (function.locals.len > 0) self.allocator.free(function.locals);
+        }
+        for (self.machines.items) |machine| {
+            freeAttributes(self.allocator, machine.attributes);
+            if (machine.params.len > 0) self.allocator.free(machine.params);
+            if (machine.states.len > 0) self.allocator.free(machine.states);
         }
         for (self.stmts.items) |stmt| {
             switch (stmt.kind) {
@@ -572,10 +613,12 @@ pub const HirStore = struct {
         self.exprs.deinit(self.allocator);
         self.stmts.deinit(self.allocator);
         self.locals.deinit(self.allocator);
+        self.machine_params.deinit(self.allocator);
         self.params.deinit(self.allocator);
         self.concept_impls.deinit(self.allocator);
         self.concepts.deinit(self.allocator);
         self.generic_functions.deinit(self.allocator);
+        self.machines.deinit(self.allocator);
         self.functions.deinit(self.allocator);
         self.items.deinit(self.allocator);
         self.* = undefined;
@@ -697,6 +740,24 @@ pub const HirStore = struct {
         return id;
     }
 
+    pub fn addMachine(self: *HirStore, name: SymbolId, return_type: types.TypeId, states: []HirMachineState, span: SourceSpan) !MachineId {
+        const id = MachineId{ .index = try nextIndex(self.machines.items.len, error.TooManyMachines) };
+        const item = try self.addItem(.{ .machine = id });
+        errdefer _ = self.items.pop();
+        try self.machines.append(self.allocator, .{
+            .item = item,
+            .name = name,
+            .span = span,
+            .attributes = &.{},
+            .return_type = return_type,
+            .allocation_effect = .unspecified,
+            .params = &.{},
+            .states = states,
+            .initial_state_index = 0,
+        });
+        return id;
+    }
+
     pub fn addConceptWitnessFunction(self: *HirStore, name: SymbolId, return_type: types.TypeId, is_unsafe: bool, span: SourceSpan) !FunctionId {
         const id = try self.addFunctionStorage(name, return_type, is_unsafe, span);
         self.getFunctionMut(id).is_concept_witness = true;
@@ -758,6 +819,20 @@ pub const HirStore = struct {
         function.attributes = attributes;
     }
 
+    pub fn setMachineAttributes(self: *HirStore, machine_id: MachineId, attributes: []HirAttribute) void {
+        const machine = self.getMachineMut(machine_id);
+        freeAttributes(self.allocator, machine.attributes);
+        machine.attributes = attributes;
+    }
+
+    pub fn setMachineAllocationEffect(self: *HirStore, machine_id: MachineId, allocation_effect: AllocationEffect) void {
+        self.getMachineMut(machine_id).allocation_effect = allocation_effect;
+    }
+
+    pub fn setMachineReturnType(self: *HirStore, machine_id: MachineId, type_id: types.TypeId) void {
+        self.getMachineMut(machine_id).return_type = type_id;
+    }
+
     pub fn setFunctionCompileTimeCapabilities(self: *HirStore, function_id: FunctionId, capabilities: []CompileTimeCapabilityRequired) void {
         const function = self.getFunctionMut(function_id);
         for (function.compile_time_capabilities) |capability| self.allocator.free(capability.name);
@@ -813,6 +888,17 @@ pub const HirStore = struct {
 
         const function_decl = self.getFunctionMut(parent);
         function_decl.params = try appendId(self.allocator, ParamId, function_decl.params, id);
+        return id;
+    }
+
+    pub fn addMachineParam(self: *HirStore, parent: MachineId, name: SymbolId, type_id: types.TypeId, span: SourceSpan) !MachineParamId {
+        _ = self.getMachine(parent);
+        const id = MachineParamId{ .index = try nextIndex(self.machine_params.items.len, error.TooManyParams) };
+        try self.machine_params.append(self.allocator, .{ .parent = parent, .name = name, .span = span, .type_id = type_id });
+        errdefer _ = self.machine_params.pop();
+
+        const machine = self.getMachineMut(parent);
+        machine.params = try appendId(self.allocator, MachineParamId, machine.params, id);
         return id;
     }
 
@@ -928,10 +1014,22 @@ pub const HirStore = struct {
         return &self.functions.items[index];
     }
 
+    pub fn getMachine(self: *const HirStore, id: MachineId) *const HirMachine {
+        const index: usize = id.index;
+        std.debug.assert(index < self.machines.items.len);
+        return &self.machines.items[index];
+    }
+
     pub fn getParam(self: *const HirStore, id: ParamId) *const HirParam {
         const index: usize = id.index;
         std.debug.assert(index < self.params.items.len);
         return &self.params.items[index];
+    }
+
+    pub fn getMachineParam(self: *const HirStore, id: MachineParamId) *const HirMachineParam {
+        const index: usize = id.index;
+        std.debug.assert(index < self.machine_params.items.len);
+        return &self.machine_params.items[index];
     }
 
     pub fn getLocal(self: *const HirStore, id: LocalId) *const HirLocal {
@@ -1012,6 +1110,12 @@ pub const HirStore = struct {
         const index: usize = id.index;
         std.debug.assert(index < self.functions.items.len);
         return &self.functions.items[index];
+    }
+
+    fn getMachineMut(self: *HirStore, id: MachineId) *HirMachine {
+        const index: usize = id.index;
+        std.debug.assert(index < self.machines.items.len);
+        return &self.machines.items[index];
     }
 
     fn getStructMut(self: *HirStore, id: StructId) *HirStruct {
@@ -1137,6 +1241,28 @@ pub const HirStore = struct {
                     if (function.body) |body| {
                         try writer.writeAll("    Body\n");
                         try self.writeStmtDebug(writer, body, 3);
+                    }
+                },
+                .machine => |id| {
+                    const machine = self.getMachine(id);
+                    try writeAttributesDebug(writer, machine.attributes, interner, 1);
+                    try writer.print("  Machine {s}", .{interner.text(machine.name)});
+                    if (machine.allocation_effect != .unspecified) {
+                        try writer.print(" effect={s}", .{machine.allocation_effect.debugName()});
+                    }
+                    try writer.print(" -> {f}\n", .{machine.return_type});
+                    if (machine.params.len != 0) {
+                        try writer.writeAll("    Params\n");
+                        for (machine.params) |param_id| {
+                            const param = self.getMachineParam(param_id);
+                            try writer.print("      {f} {s}: {f}\n", .{ param_id, interner.text(param.name), param.type_id });
+                        }
+                    }
+                    try writer.writeAll("    States\n");
+                    for (machine.states, 0..) |state, state_index| {
+                        try writer.print("      #{d} {s}", .{ state_index, interner.text(state.name) });
+                        if (state_index == machine.initial_state_index) try writer.writeAll(" initial");
+                        try writer.writeByte('\n');
                     }
                 },
                 .struct_ => |id| {

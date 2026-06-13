@@ -184,6 +184,8 @@ pub const DiagnosticCode = enum {
     ArenaResetDestroyArityMismatch,
     ArenaResetDestroyTypeArgsUnsupported,
     ArenaResetDestroyInComptimeUnsupported,
+    MachineRequiresState,
+    DuplicateMachineState,
     MachineSemanticsNotImplemented,
 
     pub fn format(self: DiagnosticCode) []const u8 {
@@ -350,6 +352,8 @@ pub const DiagnosticCode = enum {
             .ArenaResetDestroyArityMismatch => "CON0206",
             .ArenaResetDestroyTypeArgsUnsupported => "CON0207",
             .ArenaResetDestroyInComptimeUnsupported => "CON0210",
+            .MachineRequiresState => "CON0220",
+            .DuplicateMachineState => "CON0221",
             .MachineSemanticsNotImplemented => "CON0231",
         };
     }
@@ -504,7 +508,25 @@ pub fn machineSemanticsNotImplemented(span: SourceSpan) Diagnostic {
         .@"error",
         "machine semantics are not implemented yet",
         span,
-    ).withHelp("P13-M1 preserves machine declarations in the AST; HIR/MIR lowering is deferred");
+    ).withHelp("P13-M2 validates machine states and preserves metadata; HIR/MIR lowering is deferred");
+}
+
+pub fn machineRequiresState(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .MachineRequiresState,
+        .@"error",
+        "machine must declare at least one state",
+        span,
+    ).withHelp("declare the v0 initial state as the first state in the machine body");
+}
+
+pub fn duplicateMachineState(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .DuplicateMachineState,
+        .@"error",
+        "duplicate machine state name",
+        span,
+    ).withHelp("state names are scoped to one machine and must be unique within that machine");
 }
 
 pub fn duplicateConceptTypeParameter(span: SourceSpan) Diagnostic {
@@ -840,6 +862,8 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0206", DiagnosticCode.ArenaResetDestroyArityMismatch.format());
     try std.testing.expectEqualStrings("CON0207", DiagnosticCode.ArenaResetDestroyTypeArgsUnsupported.format());
     try std.testing.expectEqualStrings("CON0210", DiagnosticCode.ArenaResetDestroyInComptimeUnsupported.format());
+    try std.testing.expectEqualStrings("CON0220", DiagnosticCode.MachineRequiresState.format());
+    try std.testing.expectEqualStrings("CON0221", DiagnosticCode.DuplicateMachineState.format());
     try std.testing.expectEqualStrings("CON0231", DiagnosticCode.MachineSemanticsNotImplemented.format());
 }
 

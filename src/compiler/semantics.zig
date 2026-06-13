@@ -184,6 +184,7 @@ const Collector = struct {
             type_id: types.TypeId,
         },
         concept: hir.ConceptId,
+        machine: hir.MachineId,
     };
 
     fn init(allocator: std.mem.Allocator, module: *SemanticModule, diagnostic_bag: *DiagnosticBag, options: CollectOptions) Collector {
@@ -207,7 +208,7 @@ const Collector = struct {
         for (unit.items) |item| {
             switch (item) {
                 .function_decl => |function_decl| try self.declareFunction(function_decl),
-                .machine_decl => |machine_decl| try self.rejectMachineSemantics(machine_decl),
+                .machine_decl => |machine_decl| try self.declareMachine(machine_decl),
                 .template_decl => |template_decl| try self.declareGenericFunction(template_decl),
                 .struct_decl => |struct_decl| try self.declareStruct(struct_decl),
                 .enum_decl => |enum_decl| try self.declareEnum(enum_decl),
@@ -229,7 +230,7 @@ const Collector = struct {
         for (unit.items) |item| {
             switch (item) {
                 .function_decl => |function_decl| try self.resolveFunction(function_decl),
-                .machine_decl => {},
+                .machine_decl => |machine_decl| try self.resolveMachine(machine_decl),
                 .template_decl => |template_decl| try self.resolveGenericFunction(template_decl),
                 .struct_decl => |struct_decl| try self.resolveStruct(struct_decl),
                 .enum_decl => |enum_decl| try self.resolveEnum(enum_decl),
@@ -423,7 +424,78 @@ const Collector = struct {
         try self.top_level_decls.put(name, .{ .function = function_id });
     }
 
-    fn rejectMachineSemantics(self: *Collector, machine_decl: ast.MachineDecl) !void {
+    fn declareMachine(self: *Collector, machine_decl: ast.MachineDecl) !void {
+        const name = try self.internFreshTopLevelName(machine_decl.name.text, machine_decl.name.span) orelse return;
+        const states = try self.validateAndCopyMachineStates(machine_decl);
+        if (states.len == 0) return;
+
+        const machine_id = try self.module.hir.addMachine(name, self.module.types.voidType(), states, machine_decl.span);
+        self.module.hir.setMachineAttributes(machine_id, try self.copyAttributes(machine_decl.attributes));
+        self.module.hir.setMachineAllocationEffect(machine_id, lowerAllocationEffect(machine_decl.allocation_effect));
+        try self.top_level_decls.put(name, .{ .machine = machine_id });
+    }
+
+    fn validateAndCopyMachineStates(self: *Collector, machine_decl: ast.MachineDecl) ![]hir.HirMachineState {
+        if (machine_decl.states.len == 0) {
+            try self.diagnostics.append(diagnostics.machineRequiresState(machine_decl.name.span));
+            return &.{};
+        }
+
+        var state_names = std.AutoHashMap(interner.SymbolId, source.SourceSpan).init(self.allocator);
+        defer state_names.deinit();
+
+        var states = try self.allocator.alloc(hir.HirMachineState, machine_decl.states.len);
+        errdefer self.allocator.free(states);
+
+        for (machine_decl.states, 0..) |state, index| {
+            const state_name = try self.module.interner.intern(state.name.text);
+            if (state_names.get(state_name)) |_| {
+                try self.diagnostics.append(diagnostics.duplicateMachineState(state.name.span));
+                self.allocator.free(states);
+                return &.{};
+            }
+            try state_names.put(state_name, state.name.span);
+            states[index] = .{
+                .name = state_name,
+                .span = state.span,
+                .source_order = @intCast(index),
+            };
+        }
+
+        return states;
+    }
+
+    fn resolveMachineParams(self: *Collector, machine_id: hir.MachineId, params: []const ast.ParamDecl) !void {
+        var param_names = std.AutoHashMap(interner.SymbolId, source.SourceSpan).init(self.allocator);
+        defer param_names.deinit();
+
+        for (params) |param| {
+            const param_symbol = try self.module.interner.intern(param.name.text);
+            if (param_names.contains(param_symbol)) {
+                try self.diagnostics.append(diagnostics.duplicateParameterName(param.name.span));
+                continue;
+            }
+            try param_names.put(param_symbol, param.name.span);
+
+            if (try self.resolveTypeName(param.type_name)) |type_id| {
+                _ = try self.module.hir.addMachineParam(machine_id, param_symbol, type_id, param.span);
+            }
+        }
+    }
+
+    fn resolveMachine(self: *Collector, machine_decl: ast.MachineDecl) !void {
+        const diagnostic_count_before = self.diagnostics.count();
+        const machine_symbol = try self.module.interner.intern(machine_decl.name.text);
+        const machine_id = switch (self.top_level_decls.get(machine_symbol).?) {
+            .machine => |id| id,
+            else => unreachable,
+        };
+
+        if (try self.resolveTypeName(machine_decl.return_type)) |return_type| {
+            self.module.hir.setMachineReturnType(machine_id, return_type);
+        }
+        try self.resolveMachineParams(machine_id, machine_decl.params);
+        if (self.diagnostics.count() != diagnostic_count_before) return;
         try self.diagnostics.append(diagnostics.machineSemanticsNotImplemented(machine_decl.name.span));
     }
 
@@ -1075,7 +1147,7 @@ const Collector = struct {
         return switch (decl) {
             .struct_ => |entry| entry.type_id,
             .enum_ => |entry| entry.type_id,
-            .function, .generic_function, .concept => blk: {
+            .function, .generic_function, .concept, .machine => blk: {
                 try self.diagnostics.append(diagnostics.unknownTypeName(part.span));
                 break :blk null;
             },
@@ -2337,13 +2409,35 @@ fn functionItemWithSignature(name: []const u8, return_type: []const u8, params: 
 }
 
 fn machineItem(name: []const u8, start: usize) ast.Item {
+    return machineItemWithStates(name, &.{}, start);
+}
+
+fn machineItemWithStates(name: []const u8, states: []ast.MachineStateDecl, start: usize) ast.Item {
     return .{ .machine_decl = .{
         .name = nameSegment(name, start + 8),
         .params = &.{},
         .return_type = typeName("int", start + name.len + 12),
-        .states = &.{},
+        .states = states,
         .span = .{ .start = start, .length = name.len + 18 },
     } };
+}
+
+fn machineItemWithParams(name: []const u8, params: []ast.ParamDecl, states: []ast.MachineStateDecl, start: usize) ast.Item {
+    return .{ .machine_decl = .{
+        .name = nameSegment(name, start + 8),
+        .params = params,
+        .return_type = typeName("int", start + name.len + 12),
+        .states = states,
+        .span = .{ .start = start, .length = name.len + 18 },
+    } };
+}
+
+fn stateDecl(name: []const u8, start: usize) ast.MachineStateDecl {
+    return .{
+        .name = nameSegment(name, start + 6),
+        .body = .{ .statements = &.{}, .span = .{ .start = start + name.len + 8, .length = 2 } },
+        .span = .{ .start = start, .length = name.len + 10 },
+    };
 }
 
 fn paramDecl(type_name: []const u8, name: []const u8, start: usize) ast.ParamDecl {
@@ -2352,6 +2446,17 @@ fn paramDecl(type_name: []const u8, name: []const u8, start: usize) ast.ParamDec
         .name = nameSegment(name, start + type_name.len + 1),
         .span = .{ .start = start, .length = type_name.len + name.len + 1 },
     };
+}
+
+fn collectMachineShellsForTest(items: []const ast.Item, diagnostic_bag: *DiagnosticBag) !SemanticModule {
+    var module = try SemanticModule.init(std.testing.allocator);
+    errdefer module.deinit();
+
+    var collector = Collector.init(std.testing.allocator, &module, diagnostic_bag, .{});
+    defer collector.deinit();
+
+    try collector.collect(unitFromItems(items));
+    return module;
 }
 
 fn structItem(name: []const u8, start: usize) ast.Item {
@@ -2776,13 +2881,102 @@ test "semantic collection collects function struct and enum together" {
     try std.testing.expectEqual(@as(usize, 1), module.hir.enums.items.len);
 }
 
-test "semantic collection rejects machine declarations until lowering exists" {
+test "semantic collection rejects machine with zero states before unsupported lowering" {
     var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
     defer diagnostics_bag.deinit();
 
     try std.testing.expectError(error.InvalidSemanticModule, collectItems(&.{machineItem("Lexer", 0)}, &diagnostics_bag));
     try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
+    try std.testing.expectEqual(DiagnosticCode.MachineRequiresState, diagnostics_bag.diagnostics.items[0].code);
+}
+
+test "semantic collection rejects duplicate machine state in same machine" {
+    var states = [_]ast.MachineStateDecl{
+        stateDecl("Start", 10),
+        stateDecl("Start", 50),
+    };
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    try std.testing.expectError(error.InvalidSemanticModule, collectItems(&.{machineItemWithStates("Lexer", states[0..], 0)}, &diagnostics_bag));
+    try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
+    try std.testing.expectEqual(DiagnosticCode.DuplicateMachineState, diagnostics_bag.diagnostics.items[0].code);
+    try std.testing.expectEqual(states[1].name.span, diagnostics_bag.diagnostics.items[0].primary_span);
+}
+
+test "semantic collection keeps machine state names scoped per machine" {
+    var first_states = [_]ast.MachineStateDecl{stateDecl("Start", 10)};
+    var second_states = [_]ast.MachineStateDecl{stateDecl("Start", 50)};
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    var module = try collectMachineShellsForTest(&.{
+        machineItemWithStates("First", first_states[0..], 0),
+        machineItemWithStates("Second", second_states[0..], 40),
+    }, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 2), module.hir.machines.items.len);
+    try std.testing.expectEqual(@as(usize, 2), diagnostics_bag.count());
     try std.testing.expectEqual(DiagnosticCode.MachineSemanticsNotImplemented, diagnostics_bag.diagnostics.items[0].code);
+    try std.testing.expectEqual(DiagnosticCode.MachineSemanticsNotImplemented, diagnostics_bag.diagnostics.items[1].code);
+}
+
+test "semantic collection preserves machine state order and initial state" {
+    var states = [_]ast.MachineStateDecl{
+        stateDecl("Warmup", 10),
+        stateDecl("Run", 40),
+        stateDecl("Done", 70),
+    };
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    var module = try collectMachineShellsForTest(&.{machineItemWithStates("Pipeline", states[0..], 0)}, &diagnostics_bag);
+    defer module.deinit();
+
+    const machine = module.hir.getMachine(.{ .index = 0 });
+    try std.testing.expectEqual(@as(usize, 3), machine.states.len);
+    try std.testing.expectEqual(@as(u32, 0), machine.initial_state_index);
+    try std.testing.expectEqualStrings("Warmup", module.interner.text(machine.initialState().name));
+    try std.testing.expectEqualStrings("Warmup", module.interner.text(machine.states[0].name));
+    try std.testing.expectEqualStrings("Run", module.interner.text(machine.states[1].name));
+    try std.testing.expectEqualStrings("Done", module.interner.text(machine.states[2].name));
+    try std.testing.expectEqual(@as(u32, 2), machine.states[2].source_order);
+}
+
+test "semantic collection does not expose machine state names as module symbols" {
+    var states = [_]ast.MachineStateDecl{stateDecl("Start", 10)};
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    var module = try collectMachineShellsForTest(&.{
+        machineItemWithStates("Flow", states[0..], 0),
+        functionItem("Start", 50),
+    }, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), module.hir.machines.items.len);
+    try std.testing.expectEqual(@as(usize, 1), module.hir.functions.items.len);
+    try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
+    try std.testing.expectEqual(DiagnosticCode.MachineSemanticsNotImplemented, diagnostics_bag.diagnostics.items[0].code);
+}
+
+test "semantic collection records machine shell metadata before unsupported lowering" {
+    var states = [_]ast.MachineStateDecl{stateDecl("Start", 10)};
+    var params = [_]ast.ParamDecl{paramDecl("int", "limit", 40)};
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    var module = try collectMachineShellsForTest(&.{machineItemWithParams("Lexer", params[0..], states[0..], 0)}, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
+    try std.testing.expectEqual(DiagnosticCode.MachineSemanticsNotImplemented, diagnostics_bag.diagnostics.items[0].code);
+    const machine = module.hir.getMachine(.{ .index = 0 });
+    try std.testing.expectEqualStrings("Lexer", module.interner.text(machine.name));
+    try std.testing.expectEqual(types.TypeId{ .index = 1 }, machine.return_type);
+    try std.testing.expectEqual(@as(usize, 1), machine.params.len);
+    try std.testing.expectEqualStrings("limit", module.interner.text(module.hir.getMachineParam(machine.params[0]).name));
 }
 
 test "semantic collection adds struct and enum nominal types" {

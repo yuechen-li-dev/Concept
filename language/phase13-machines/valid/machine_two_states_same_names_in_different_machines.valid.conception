@@ -1,0 +1,32 @@
+# name: machine same state names in different machines
+# phase: parse
+# expect: pass
+
+=== source ===
+module Example;
+
+machine Door() -> int {
+    state Start {
+        return 0;
+    }
+}
+
+machine Lexer() -> int {
+    state Start {
+        return 1;
+    }
+}
+
+=== ast ===
+CompilationUnit
+  Module Example
+  Machine Door() -> int
+    State Start
+      Body
+        Return
+          Int 0
+  Machine Lexer() -> int
+    State Start
+      Body
+        Return
+          Int 1
