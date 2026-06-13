@@ -1,0 +1,32 @@
+# name: implicit copy drop field
+# phase: backend-c
+# expect: fail
+
+=== source ===
+module Main;
+
+struct File {
+    int fd;
+};
+
+impl Drop<File> {
+    void drop(File f) {
+    }
+}
+
+struct Holder {
+    File file;
+};
+
+int main() {
+    Holder h = Holder {
+        file: File { fd: 1 },
+    };
+
+    File f = h.file;
+
+    return f.fd;
+}
+
+=== diagnostics ===
+CON0154

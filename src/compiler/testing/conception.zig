@@ -2298,6 +2298,7 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectRunFixture("../../../language/phase10-ownership/valid/move_if_else_both_return_valid.valid.conception");
     try expectRunFixture("../../../language/phase10-ownership/valid/copy_scalar_after_branch_valid.valid.conception");
     try expectRunFixture("../../../language/phase10-ownership/valid/move_in_one_branch_no_later_use_valid.valid.conception");
+    try expectRunFixture("../../../language/phase10-ownership/valid/copy_field_read_valid.valid.conception");
     try expectBackendCFixture("../../../language/phase10-ownership/valid/drop_local_reverse_order.valid.conception");
     try expectBackendCFixture("../../../language/phase10-ownership/valid/drop_moved_local_skipped.valid.conception");
     try expectBackendCFixture("../../../language/phase10-ownership/valid/drop_early_return.valid.conception");
@@ -2317,6 +2318,10 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectBackendCFixture("../../../language/phase10-ownership/invalid/implicit_copy_struct_return.invalid.conception");
     try expectBackendCFixture("../../../language/phase10-ownership/invalid/implicit_copy_struct_assignment.invalid.conception");
     try expectBackendCFixture("../../../language/phase10-ownership/invalid/implicit_copy_param_forward.invalid.conception");
+    try expectBackendCFixture("../../../language/phase10-ownership/invalid/implicit_copy_drop_field.invalid.conception");
+    try expectBackendCFixture("../../../language/phase10-ownership/invalid/implicit_copy_drop_field_return.invalid.conception");
+    try expectBackendCFixture("../../../language/phase10-ownership/invalid/implicit_copy_noncopy_field_argument.invalid.conception");
+    try expectCheckFixture("../../../language/phase10-ownership/invalid/drop_param_deferred.invalid.conception");
     try expectBackendCFixture("../../../language/phase10-ownership/invalid/assign_noncopy_struct_replacement.invalid.conception");
     try expectBackendCFixture("../../../language/phase10-ownership/invalid/assign_drop_replacement.invalid.conception");
     try expectBackendCFixture("../../../language/phase10-ownership/invalid/assign_maybe_moved_replacement.invalid.conception");

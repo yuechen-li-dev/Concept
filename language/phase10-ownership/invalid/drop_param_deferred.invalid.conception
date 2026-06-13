@@ -1,0 +1,27 @@
+# name: drop param deferred
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+struct File {
+    int fd;
+};
+
+impl Drop<File> {
+    void drop(File f) {
+    }
+}
+
+int consume(File f) {
+    return 0;
+}
+
+int main() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0165

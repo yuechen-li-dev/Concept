@@ -1,0 +1,29 @@
+# name: implicit copy noncopy field argument
+# phase: backend-c
+# expect: fail
+
+=== source ===
+module Main;
+
+struct Box {
+    int value;
+};
+
+struct Holder {
+    Box box;
+};
+
+int consume(Box box) {
+    return box.value;
+}
+
+int main() {
+    Holder h = Holder {
+        box: Box { value: 7 },
+    };
+
+    return consume(h.box);
+}
+
+=== diagnostics ===
+CON0154

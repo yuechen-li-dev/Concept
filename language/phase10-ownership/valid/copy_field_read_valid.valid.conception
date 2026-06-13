@@ -1,0 +1,25 @@
+# name: copy field read valid
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+struct Vec2 {
+    int x;
+    int y;
+};
+
+int main() {
+    Vec2 v = Vec2 {
+        x: 1,
+        y: 2,
+    };
+
+    v.x = 42;
+
+    return v.x;
+}
+
+=== run ===
+exit_code: 42

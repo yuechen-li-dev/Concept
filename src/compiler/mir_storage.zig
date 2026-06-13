@@ -377,8 +377,15 @@ const Analyzer = struct {
             .field_access => |field_access| {
                 switch (field_access.receiver) {
                     .copy => |receiver_place| switch (receiver_place) {
-                        .local => |base| try self.readPlace(states, mir.MirPlace.fieldPlace(base, field_access.field_id), span),
-                        .field => try self.readOperand(states, field_access.receiver, span),
+                        .local => |base| {
+                            const field_place = mir.MirPlace.fieldPlace(base, field_access.field_id);
+                            try self.readPlace(states, field_place, span);
+                            try self.checkImplicitCopy(states, field_place, span);
+                        },
+                        .field => {
+                            try self.readOperand(states, field_access.receiver, span);
+                            try self.checkImplicitCopyOfType(localOfPlace(receiver_place), self.semantic_module.hir.getField(field_access.field_id).type_id, true, span);
+                        },
                     },
                     else => try self.readOperand(states, field_access.receiver, span),
                 }
@@ -634,19 +641,37 @@ const Analyzer = struct {
     }
 
     fn checkImplicitCopy(self: *Analyzer, states: *const StateFrame, place: mir.MirPlace, span: ?source.SourceSpan) AnalysisError!void {
-        const local_id = switch (place) {
-            .local => |local_id| local_id,
-            .field => return,
-        };
-        if (states.locals[local_id.index] != .initialized) return;
+        const local_id = localOfPlace(place);
+        if (!self.isPlaceDefinitelyInitialized(states, place)) return;
+        const allow_temp = place == .field;
+        try self.checkImplicitCopyOfType(local_id, self.placeType(place), allow_temp, span);
+    }
+
+    fn checkImplicitCopyOfType(self: *Analyzer, local_id: mir.MirLocalId, type_id: types.TypeId, allow_temp: bool, span: ?source.SourceSpan) AnalysisError!void {
         const local = self.mir_module.store.getLocal(local_id);
         switch (local.kind) {
             .param, .user => {},
-            .temp => return,
+            .temp => if (!allow_temp) return,
         }
-        if (!self.isCopyType(local.type_id)) {
+        if (!self.isCopyType(type_id)) {
             try self.report(.implicit_copy_requires_copy, local_id, span);
         }
+    }
+
+    fn isPlaceDefinitelyInitialized(self: *Analyzer, states: *const StateFrame, place: mir.MirPlace) bool {
+        const local_id = localOfPlace(place);
+        return switch (states.locals[local_id.index]) {
+            .initialized => true,
+            .partially_initialized => switch (place) {
+                .local => false,
+                .field => |field| blk: {
+                    const field_state = states.field_states[local_id.index] orelse break :blk false;
+                    const index = self.fieldIndex(field_state.struct_type, field.field_id) orelse break :blk false;
+                    break :blk field_state.fields[index] == .initialized;
+                },
+            },
+            else => false,
+        };
     }
 
     fn propagate(

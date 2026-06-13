@@ -234,6 +234,21 @@ Deferred:
 `ManualInit<T>` is Concept's canonical term. `MaybeUninit<T>` is at most a
 Rust-compatibility alias/familiarity term.
 
+## P10-Fix1 hardening
+
+P10-Fix1 closes two post-closeout audit holes without expanding Phase 10's
+ownership model. Reading a field place as a value is treated as an implicit copy
+of the field value. If the field type is non-Copy or has `Drop<T>`, the read is
+rejected with `CON0154 ImplicitCopyRequiresCopy`; there is no secret copy portal
+through field access. Field moves remain unsupported and `move h.field` still
+reports `CON0153 PartialMoveUnsupported`.
+
+By-value parameters whose type has `Drop<T>` are rejected with `CON0165
+DropParamUnsupported` until parameter cleanup is implemented. The intrinsic
+`Drop<T>.drop(T value)` witness parameter is modeled specially and is exempt
+from that rejection so cleanup lowering can call the Drop function without
+recursively dropping its own parameter.
+
 Phase 10 establishes local ownership/storage-state accounting:
 
 - values have types;

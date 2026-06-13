@@ -88,6 +88,7 @@ const Checker = struct {
         for (self.module.hir.functions.items, 0..) |function, index| {
             const function_id = hir.FunctionId{ .index = @intCast(index) };
             if (self.module.hir.isGenericFunction(function_id)) continue;
+            try self.checkDropParams(function_id, function);
             if (function.body) |body| {
                 if (function.is_compile_time) {
                     try self.checkCompileTimeFunctionEligibility(function);
@@ -100,6 +101,16 @@ const Checker = struct {
                 }
                 try self.checkStmt(function_id, body, function.return_type);
             }
+        }
+    }
+
+    fn checkDropParams(self: *Checker, function_id: hir.FunctionId, function: hir.HirFunction) CheckError!void {
+        for (function.params) |param_id| {
+            const param = self.module.hir.getParam(param_id);
+            const drop_info = self.module.hasDrop(param.type_id) orelse continue;
+            if (drop_info.function.index == function_id.index) continue;
+            try self.reportAt(.DropParamUnsupported, "by-value parameter with Drop<T> is not supported until parameter cleanup is implemented", param.span);
+            return error.InvalidSemanticModule;
         }
     }
 
@@ -772,6 +783,7 @@ const Checker = struct {
         self.active_instantiation_depth += 1;
         defer self.active_instantiation_depth -= 1;
         const concrete_function = self.module.hir.getFunction(function_id);
+        try self.checkDropParams(function_id, concrete_function.*);
         if (concrete_function.body) |body| try self.checkStmt(function_id, body, concrete_function.return_type);
         return function_id;
     }
