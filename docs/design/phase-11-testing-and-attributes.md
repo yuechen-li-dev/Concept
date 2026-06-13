@@ -734,6 +734,56 @@ Still deferred:
 - runtime reflection;
 - inline test blocks.
 
+## P11-M6 implementation status
+
+P11-M6 extends the HIR-only test runner from `[Fact]` execution to `[Theory]`
+execution through `[InlineData]` rows. The runner still operates on already
+validated `.con_test` HIR modules and does not lower test intrinsics through MIR
+or the C backend.
+
+Implemented behavior:
+
+- discovered `[Theory]` functions from test source metadata are executable;
+- each `[InlineData]` row becomes one independent test case;
+- row display names use stable zero-based suffixes: `Module.Function#0`,
+  `Module.Function#1`, and so on;
+- `int` and `bool` InlineData literals bind to corresponding theory parameters;
+- string InlineData remains attribute metadata only and does not bind to typed
+  theory parameters in v0;
+- helper functions may be called by theory bodies but are not direct runner
+  entrypoints;
+- facts and theory rows aggregate into the same `TestRunResult`;
+- `passed_count` and `failed_count` count test cases, not attributed functions;
+- failing expectations are runner test failures, not compile diagnostics;
+- theory failures preserve module name, function name, row index, source/call
+  span, reason, and expected/actual scalar display when available;
+- both `Assert` and `Expect` still fail the current test case immediately in v0.
+
+Defensive runner behavior:
+
+- malformed InlineData rows that bypass semantic validation are rejected by the
+  runner rather than reported as compile diagnostics;
+- unsupported InlineData literal kinds for parameter binding fail the runner path
+  instead of silently executing with uninitialized parameters.
+
+Still deferred:
+
+- direct parser/CLI integration for running `.con_test` files from disk;
+- MIR/C generated test runner support;
+- `Expect.That`;
+- `Is.EqualTo`;
+- relation API;
+- generic equality;
+- enum, struct, string, and array equality;
+- named `because:` syntax;
+- continuing after `Expect` failure within a single test case;
+- filtering;
+- async tests;
+- fixtures/lifecycle hooks;
+- arbitrary data providers;
+- runtime reflection;
+- inline test blocks.
+
 ## Close criteria
 
 P11-M0 is successful if:

@@ -1,0 +1,10 @@
+module Example.Tests;
+
+[Theory]
+[InlineData(1)]
+[InlineData(2)]
+[InlineData(3)]
+void TheoryMultipleRowsAllPass(int value) {
+    Expect.True(value > 0, "each InlineData row should execute as a separate positive case");
+    return;
+}

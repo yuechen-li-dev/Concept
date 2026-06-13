@@ -1,0 +1,9 @@
+module Example.Tests;
+
+[Theory]
+[InlineData(true, true)]
+[InlineData(false, false)]
+void TheoryExpectEqualBoolPass(bool expected, bool actual) {
+    Expect.Equal(expected, actual, "boolean theory rows should bind InlineData values before equality comparison");
+    return;
+}

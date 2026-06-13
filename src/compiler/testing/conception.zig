@@ -2318,6 +2318,10 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase11-testing/valid/theory_inline_data_valid.valid.con_test");
     try expectCheckFixture("../../../language/phase11-testing/valid/theory_multiple_inline_data_valid.valid.con_test");
     try expectCheckFixture("../../../language/phase11-testing/valid/theory_int_bool_inline_data_valid.valid.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/valid/theory_expect_equal_int_pass.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/valid/theory_expect_equal_bool_pass.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/valid/theory_multiple_rows_all_pass.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/valid/theory_with_helper_pass.con_test");
     try expectCheckFixture("../../../language/phase11-testing/valid/assert_true_reason_valid.valid.con_test");
     try expectCheckFixture("../../../language/phase11-testing/valid/assert_false_reason_valid.valid.con_test");
     try expectCheckFixture("../../../language/phase11-testing/valid/expect_true_reason_valid.valid.con_test");

@@ -16,6 +16,8 @@ pub const DiscoveredTest = struct {
     module_name: []const u8,
     function_name: []const u8,
     attribute_kind: TestAttributeKind,
+    inline_data_row_index: ?usize = null,
+    inline_data_args: []const hir.HirAttributeArg = &.{},
     source_span: SourceSpan,
     inline_data_count: usize,
     source_file_kind: SourceFileKind,
@@ -48,14 +50,34 @@ pub fn discoverTests(
         }
 
         if (maybe_kind) |kind| {
-            try discovered.append(allocator, .{
-                .module_name = module_name,
-                .function_name = module.interner.text(function.name),
-                .attribute_kind = kind,
-                .source_span = function.span,
-                .inline_data_count = inline_data_count,
-                .source_file_kind = source_file_kind,
-            });
+            switch (kind) {
+                .fact => try discovered.append(allocator, .{
+                    .module_name = module_name,
+                    .function_name = module.interner.text(function.name),
+                    .attribute_kind = kind,
+                    .source_span = function.span,
+                    .inline_data_count = inline_data_count,
+                    .source_file_kind = source_file_kind,
+                }),
+                .theory => {
+                    var row_index: usize = 0;
+                    for (function.attributes) |attribute| {
+                        const name = module.interner.text(attribute.name);
+                        if (!std.mem.eql(u8, name, "InlineData")) continue;
+                        try discovered.append(allocator, .{
+                            .module_name = module_name,
+                            .function_name = module.interner.text(function.name),
+                            .attribute_kind = kind,
+                            .inline_data_row_index = row_index,
+                            .inline_data_args = attribute.args,
+                            .source_span = attribute.span,
+                            .inline_data_count = inline_data_count,
+                            .source_file_kind = source_file_kind,
+                        });
+                        row_index += 1;
+                    }
+                },
+            }
         }
     }
 
@@ -100,7 +122,7 @@ test "discovers Fact function in test source" {
     try std.testing.expectEqual(SourceFileKind.@"test", tests[0].source_file_kind);
 }
 
-test "discovers Theory function and records InlineData count" {
+test "discovers Theory function as one case per InlineData row" {
     var module = try semantics.SemanticModule.init(std.testing.allocator);
     defer module.deinit();
     const function_id = try addFunction(&module, "AddsIntegers");
@@ -109,10 +131,12 @@ test "discovers Theory function and records InlineData count" {
     const tests = try discoverTests(std.testing.allocator, &module, "Math.Tests", .@"test");
     defer std.testing.allocator.free(tests);
 
-    try std.testing.expectEqual(@as(usize, 1), tests.len);
+    try std.testing.expectEqual(@as(usize, 2), tests.len);
     try std.testing.expectEqual(TestAttributeKind.theory, tests[0].attribute_kind);
     try std.testing.expectEqualStrings("AddsIntegers", tests[0].function_name);
     try std.testing.expectEqual(@as(usize, 2), tests[0].inline_data_count);
+    try std.testing.expectEqual(@as(?usize, 0), tests[0].inline_data_row_index);
+    try std.testing.expectEqual(@as(?usize, 1), tests[1].inline_data_row_index);
 }
 
 test "helper functions in test source are not discovered" {

@@ -1,0 +1,9 @@
+module Example.Tests;
+
+[Theory]
+[InlineData(1, 2, 3)]
+[InlineData(10, 20, 30)]
+void TheoryExpectEqualIntPass(int a, int b, int expected) {
+    Expect.Equal(expected, a + b, "integer theory rows should bind InlineData values before equality comparison");
+    return;
+}

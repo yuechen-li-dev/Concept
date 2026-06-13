@@ -25,6 +25,7 @@ pub const Value = union(enum) {
 pub const TestFailure = struct {
     module_name: []const u8,
     function_name: []const u8,
+    inline_data_row_index: ?usize = null,
     source_span: source.SourceSpan,
     intrinsic_kind: hir.HirTestIntrinsicKind,
     reason: []const u8,
@@ -81,9 +82,11 @@ pub fn formatFailure(allocator: std.mem.Allocator, failure: TestFailure) ![]cons
     var output = std.Io.Writer.Allocating.init(allocator);
     errdefer output.deinit();
     const writer = &output.writer;
+    const display_name = try testCaseName(allocator, failure.module_name, failure.function_name, failure.inline_data_row_index);
+    defer allocator.free(display_name);
 
     try writer.print(
-        \\FAILED {s}.{s}
+        \\FAILED {s}
         \\
         \\{s} failed
         \\
@@ -91,8 +94,7 @@ pub fn formatFailure(allocator: std.mem.Allocator, failure: TestFailure) ![]cons
         \\  {s}
         \\
     , .{
-        failure.module_name,
-        failure.function_name,
+        display_name,
         failureMessageName(failure.intrinsic_kind),
         failure.reason,
     });
@@ -123,6 +125,7 @@ const Runner = struct {
     failures: std.ArrayList(TestFailure),
     current_module_name: []const u8 = "",
     current_function_name: []const u8 = "",
+    current_inline_data_row_index: ?usize = null,
 
     fn init(allocator: std.mem.Allocator, module: *const semantics.SemanticModule) Runner {
         return .{
@@ -140,14 +143,20 @@ const Runner = struct {
         var result = TestRunResult{};
 
         for (discovered) |test_case| {
-            if (test_case.attribute_kind != .fact) continue;
-
             self.current_module_name = test_case.module_name;
             self.current_function_name = test_case.function_name;
+            self.current_inline_data_row_index = test_case.inline_data_row_index;
 
             const function_id = self.findFunction(test_case.function_name) orelse return error.UnsupportedConstruct;
+            const function = self.module.hir.getFunction(function_id);
+            const args = switch (test_case.attribute_kind) {
+                .fact => &.{},
+                .theory => try self.inlineDataArgs(function, test_case.inline_data_args),
+            };
+            defer if (test_case.attribute_kind == .theory) self.allocator.free(args);
+
             const before_failures = self.failures.items.len;
-            _ = self.executeFunction(function_id, &.{}) catch |err| switch (err) {
+            _ = self.executeFunction(function_id, args) catch |err| switch (err) {
                 error.TestFailed => {},
                 else => |other| return other,
             };
@@ -168,6 +177,32 @@ const Runner = struct {
             if (std.mem.eql(u8, self.module.interner.text(function.name), name)) return .{ .index = @intCast(index) };
         }
         return null;
+    }
+
+    fn inlineDataArgs(self: *Runner, function: *const hir.HirFunction, row_args: []const hir.HirAttributeArg) RunError![]Value {
+        if (row_args.len != function.params.len) return error.InvalidValue;
+
+        const args = try self.allocator.alloc(Value, row_args.len);
+        errdefer self.allocator.free(args);
+        for (row_args, function.params, 0..) |row_arg, param_id, index| {
+            const param = self.module.hir.getParam(param_id);
+            args[index] = try self.inlineDataValue(row_arg, param.type_id);
+        }
+        return args;
+    }
+
+    fn inlineDataValue(self: *Runner, row_arg: hir.HirAttributeArg, param_type: anytype) RunError!Value {
+        return switch (row_arg) {
+            .int_literal => |text| {
+                if (param_type.index != self.module.types.intType().index) return error.InvalidValue;
+                return .{ .int = std.fmt.parseInt(i64, text, 10) catch return error.InvalidValue };
+            },
+            .bool_literal => |value| {
+                if (param_type.index != self.module.types.boolType().index) return error.InvalidValue;
+                return .{ .bool = value };
+            },
+            .string_literal => error.InvalidValue,
+        };
     }
 
     fn executeFunction(self: *Runner, function_id: hir.FunctionId, args: []const Value) RunError!Value {
@@ -325,6 +360,7 @@ const Runner = struct {
         try self.failures.append(self.allocator, .{
             .module_name = try self.allocator.dupe(u8, self.current_module_name),
             .function_name = try self.allocator.dupe(u8, self.current_function_name),
+            .inline_data_row_index = self.current_inline_data_row_index,
             .source_span = span,
             .intrinsic_kind = test_intrinsic.kind,
             .reason = try self.allocator.dupe(u8, test_intrinsic.reason),
@@ -402,6 +438,13 @@ fn formatValue(allocator: std.mem.Allocator, value: Value) ![]const u8 {
     };
 }
 
+fn testCaseName(allocator: std.mem.Allocator, module_name: []const u8, function_name: []const u8, inline_data_row_index: ?usize) ![]const u8 {
+    if (inline_data_row_index) |row_index| {
+        return std.fmt.allocPrint(allocator, "{s}.{s}#{d}", .{ module_name, function_name, row_index });
+    }
+    return std.fmt.allocPrint(allocator, "{s}.{s}", .{ module_name, function_name });
+}
+
 fn failureMessageName(kind: hir.HirTestIntrinsicKind) []const u8 {
     return switch (kind) {
         .assert_true => "Assert.True",
@@ -437,12 +480,20 @@ fn setAttributes(module: *semantics.SemanticModule, function_id: hir.FunctionId,
     module.hir.setFunctionAttributes(function_id, attributes);
 }
 
-fn setTheoryInlineData(module: *semantics.SemanticModule, function_id: hir.FunctionId) !void {
-    const args = try std.testing.allocator.alloc(hir.HirAttributeArg, 1);
-    args[0] = .{ .int_literal = try std.testing.allocator.dupe(u8, "1") };
-    const attributes = try std.testing.allocator.alloc(hir.HirAttribute, 2);
+fn setTheoryInlineDataRows(module: *semantics.SemanticModule, function_id: hir.FunctionId, rows: []const []const hir.HirAttributeArg) !void {
+    const attributes = try std.testing.allocator.alloc(hir.HirAttribute, rows.len + 1);
     attributes[0] = .{ .name = try intern(module, "Theory"), .args = &.{}, .has_arguments = false, .span = .{ .start = 0, .length = 6 } };
-    attributes[1] = .{ .name = try intern(module, "InlineData"), .args = args, .has_arguments = true, .span = .{ .start = 8, .length = 10 } };
+    for (rows, 0..) |row, index| {
+        const args = try std.testing.allocator.alloc(hir.HirAttributeArg, row.len);
+        for (row, 0..) |arg, arg_index| {
+            args[arg_index] = switch (arg) {
+                .int_literal => |text| .{ .int_literal = try std.testing.allocator.dupe(u8, text) },
+                .bool_literal => |value| .{ .bool_literal = value },
+                .string_literal => |text| .{ .string_literal = try std.testing.allocator.dupe(u8, text) },
+            };
+        }
+        attributes[index + 1] = .{ .name = try intern(module, "InlineData"), .args = args, .has_arguments = true, .span = .{ .start = 8 + index, .length = 10 } };
+    }
     module.hir.setFunctionAttributes(function_id, attributes);
 }
 
@@ -463,6 +514,10 @@ fn boolExpr(module: *semantics.SemanticModule, value: bool) !hir.ExprId {
     return module.hir.addExpr(.{ .bool_literal = value }, hir.synthetic_span);
 }
 
+fn paramExpr(module: *semantics.SemanticModule, param: hir.ParamId) !hir.ExprId {
+    return module.hir.addExpr(.{ .param_ref = param }, hir.synthetic_span);
+}
+
 fn binaryExpr(module: *semantics.SemanticModule, op: hir.BinaryOp, left: hir.ExprId, right: hir.ExprId) !hir.ExprId {
     return module.hir.addExpr(.{ .binary = .{ .op = op, .left = left, .right = right } }, hir.synthetic_span);
 }
@@ -480,6 +535,19 @@ fn intrinsic(module: *semantics.SemanticModule, kind: hir.HirTestIntrinsicKind, 
             .reason_span = hir.synthetic_span,
         },
     }, hir.synthetic_span);
+}
+
+fn callExpr(module: *semantics.SemanticModule, function_id: hir.FunctionId, args: []const hir.ExprId) !hir.ExprId {
+    return module.hir.addExpr(.{
+        .call = .{
+            .function = function_id,
+            .args = try std.testing.allocator.dupe(hir.ExprId, args),
+        },
+    }, hir.synthetic_span);
+}
+
+fn returnStmt(module: *semantics.SemanticModule, maybe_expr: ?hir.ExprId) !hir.StmtId {
+    return module.hir.addStmt(.{ .return_stmt = maybe_expr }, hir.synthetic_span);
 }
 
 test "Fact runner executes passing Assert and Expect intrinsics" {
@@ -507,17 +575,17 @@ test "Fact runner executes passing Assert and Expect intrinsics" {
     try std.testing.expectEqual(@as(usize, 0), result.failures.len);
 }
 
-test "Fact runner discovers only Facts and does not execute helpers or Theory" {
+test "runner discovers facts and theories but does not execute helpers directly" {
     var module = try newTestModule();
     defer module.deinit();
 
     const helper = try addFunction(&module, "HelperNotRun");
     try setBody(&module, helper, &.{try exprStmt(&module, try intrinsic(&module, .expect_true, &.{try boolExpr(&module, false)}, "helper should not be an entrypoint"))});
 
-    const theory = try addFunction(&module, "TheoryNotRun");
+    const theory = try addFunction(&module, "TheoryRuns");
     _ = try module.hir.addParam(theory, try intern(&module, "value"), module.types.intType(), hir.synthetic_span);
-    try setTheoryInlineData(&module, theory);
-    try setBody(&module, theory, &.{try exprStmt(&module, try intrinsic(&module, .expect_true, &.{try boolExpr(&module, false)}, "theory execution is deferred"))});
+    try setTheoryInlineDataRows(&module, theory, &.{&.{.{ .int_literal = "1" }}});
+    try setBody(&module, theory, &.{try exprStmt(&module, try intrinsic(&module, .expect_true, &.{try boolExpr(&module, true)}, "theory row should run"))});
 
     const fact = try addFunction(&module, "FactRuns");
     try setAttributes(&module, fact, &.{"Fact"});
@@ -526,8 +594,144 @@ test "Fact runner discovers only Facts and does not execute helpers or Theory" {
     const result = try runModule(std.testing.allocator, &module, "Test");
     defer result.deinit(std.testing.allocator);
 
+    try std.testing.expectEqual(@as(usize, 2), result.passed_count);
+    try std.testing.expectEqual(@as(usize, 0), result.failed_count);
+}
+
+test "Theory runner executes one passing int row" {
+    var module = try newTestModule();
+    defer module.deinit();
+    const theory = try addFunction(&module, "BindsInt");
+    const value = try module.hir.addParam(theory, try intern(&module, "value"), module.types.intType(), hir.synthetic_span);
+    try setTheoryInlineDataRows(&module, theory, &.{&.{.{ .int_literal = "7" }}});
+    try setBody(&module, theory, &.{try exprStmt(&module, try intrinsic(&module, .expect_equal_int, &.{ try intExpr(&module, "7"), try paramExpr(&module, value) }, "InlineData int should initialize the theory parameter"))});
+
+    const result = try runModule(std.testing.allocator, &module, "Test");
+    defer result.deinit(std.testing.allocator);
+
     try std.testing.expectEqual(@as(usize, 1), result.passed_count);
     try std.testing.expectEqual(@as(usize, 0), result.failed_count);
+}
+
+test "Theory runner executes multiple passing rows as separate cases" {
+    var module = try newTestModule();
+    defer module.deinit();
+    const theory = try addFunction(&module, "MultipleRows");
+    const value = try module.hir.addParam(theory, try intern(&module, "value"), module.types.intType(), hir.synthetic_span);
+    try setTheoryInlineDataRows(&module, theory, &.{ &.{.{ .int_literal = "1" }}, &.{.{ .int_literal = "2" }} });
+    try setBody(&module, theory, &.{try exprStmt(&module, try intrinsic(&module, .expect_true, &.{try binaryExpr(&module, .greater, try paramExpr(&module, value), try intExpr(&module, "0"))}, "each InlineData row should be positive"))});
+
+    const result = try runModule(std.testing.allocator, &module, "Test");
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 2), result.passed_count);
+    try std.testing.expectEqual(@as(usize, 0), result.failed_count);
+}
+
+test "Theory runner records failing row reason and row index" {
+    var module = try newTestModule();
+    defer module.deinit();
+    const theory = try addFunction(&module, "FailsRow");
+    const value = try module.hir.addParam(theory, try intern(&module, "value"), module.types.intType(), hir.synthetic_span);
+    try setTheoryInlineDataRows(&module, theory, &.{&.{.{ .int_literal = "5" }}});
+    try setBody(&module, theory, &.{try exprStmt(&module, try intrinsic(&module, .expect_equal_int, &.{ try intExpr(&module, "6"), try paramExpr(&module, value) }, "the current row should bind the expected integer value"))});
+
+    const result = try runModule(std.testing.allocator, &module, "Test");
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), result.passed_count);
+    try std.testing.expectEqual(@as(usize, 1), result.failed_count);
+    try std.testing.expectEqual(@as(?usize, 0), result.failures[0].inline_data_row_index);
+    try std.testing.expectEqualStrings("the current row should bind the expected integer value", result.failures[0].reason);
+    try std.testing.expectEqualStrings("6", result.failures[0].expected.?);
+    try std.testing.expectEqualStrings("5", result.failures[0].actual.?);
+
+    const rendered = try formatFailure(std.testing.allocator, result.failures[0]);
+    defer std.testing.allocator.free(rendered);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "FAILED Test.FailsRow#0") != null);
+}
+
+test "Theory runner aggregates multiple rows with one failure" {
+    var module = try newTestModule();
+    defer module.deinit();
+    const theory = try addFunction(&module, "OneBadRow");
+    const value = try module.hir.addParam(theory, try intern(&module, "value"), module.types.intType(), hir.synthetic_span);
+    try setTheoryInlineDataRows(&module, theory, &.{ &.{.{ .int_literal = "1" }}, &.{.{ .int_literal = "-1" }}, &.{.{ .int_literal = "2" }} });
+    try setBody(&module, theory, &.{try exprStmt(&module, try intrinsic(&module, .expect_true, &.{try binaryExpr(&module, .greater, try paramExpr(&module, value), try intExpr(&module, "0"))}, "theory rows should continue after one row fails"))});
+
+    const result = try runModule(std.testing.allocator, &module, "Test");
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 2), result.passed_count);
+    try std.testing.expectEqual(@as(usize, 1), result.failed_count);
+    try std.testing.expectEqual(@as(?usize, 1), result.failures[0].inline_data_row_index);
+}
+
+test "Theory runner binds bool parameters" {
+    var module = try newTestModule();
+    defer module.deinit();
+    const theory = try addFunction(&module, "BindsBool");
+    const value = try module.hir.addParam(theory, try intern(&module, "value"), module.types.boolType(), hir.synthetic_span);
+    try setTheoryInlineDataRows(&module, theory, &.{ &.{.{ .bool_literal = true }}, &.{.{ .bool_literal = false }} });
+    try setBody(&module, theory, &.{try exprStmt(&module, try intrinsic(&module, .expect_equal_bool, &.{ try paramExpr(&module, value), try paramExpr(&module, value) }, "InlineData bool should initialize the theory parameter"))});
+
+    const result = try runModule(std.testing.allocator, &module, "Test");
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 2), result.passed_count);
+    try std.testing.expectEqual(@as(usize, 0), result.failed_count);
+}
+
+test "Theory runner can call helper functions without discovering them directly" {
+    var module = try newTestModule();
+    defer module.deinit();
+    const helper = try addFunction(&module, "AddOne");
+    const helper_value = try module.hir.addParam(helper, try intern(&module, "value"), module.types.intType(), hir.synthetic_span);
+    module.hir.setFunctionReturnType(helper, module.types.intType());
+    try setBody(&module, helper, &.{try returnStmt(&module, try binaryExpr(&module, .add, try paramExpr(&module, helper_value), try intExpr(&module, "1")))});
+
+    const theory = try addFunction(&module, "UsesHelper");
+    const value = try module.hir.addParam(theory, try intern(&module, "value"), module.types.intType(), hir.synthetic_span);
+    const expected = try module.hir.addParam(theory, try intern(&module, "expected"), module.types.intType(), hir.synthetic_span);
+    try setTheoryInlineDataRows(&module, theory, &.{&.{ .{ .int_literal = "2" }, .{ .int_literal = "3" } }});
+    const call = try callExpr(&module, helper, &.{try paramExpr(&module, value)});
+    try setBody(&module, theory, &.{try exprStmt(&module, try intrinsic(&module, .expect_equal_int, &.{ try paramExpr(&module, expected), call }, "helper result should be available inside theory rows"))});
+
+    const result = try runModule(std.testing.allocator, &module, "Test");
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), result.passed_count);
+    try std.testing.expectEqual(@as(usize, 0), result.failed_count);
+}
+
+test "runner aggregates Facts and Theory rows in the same test module" {
+    var module = try newTestModule();
+    defer module.deinit();
+    const fact = try addFunction(&module, "FactPasses");
+    try setAttributes(&module, fact, &.{"Fact"});
+    try setBody(&module, fact, &.{try exprStmt(&module, try intrinsic(&module, .expect_true, &.{try boolExpr(&module, true)}, "fact should pass"))});
+
+    const theory = try addFunction(&module, "TheoryRows");
+    const value = try module.hir.addParam(theory, try intern(&module, "value"), module.types.intType(), hir.synthetic_span);
+    try setTheoryInlineDataRows(&module, theory, &.{ &.{.{ .int_literal = "1" }}, &.{.{ .int_literal = "2" }} });
+    try setBody(&module, theory, &.{try exprStmt(&module, try intrinsic(&module, .expect_true, &.{try binaryExpr(&module, .greater, try paramExpr(&module, value), try intExpr(&module, "0"))}, "theory row should pass"))});
+
+    const result = try runModule(std.testing.allocator, &module, "Test");
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 3), result.passed_count);
+    try std.testing.expectEqual(@as(usize, 0), result.failed_count);
+}
+
+test "Theory runner defensively rejects malformed InlineData rows" {
+    var module = try newTestModule();
+    defer module.deinit();
+    const theory = try addFunction(&module, "MalformedRow");
+    _ = try module.hir.addParam(theory, try intern(&module, "value"), module.types.intType(), hir.synthetic_span);
+    try setTheoryInlineDataRows(&module, theory, &.{&.{}});
+    try setBody(&module, theory, &.{try exprStmt(&module, try intrinsic(&module, .expect_true, &.{try boolExpr(&module, true)}, "malformed rows should not execute"))});
+
+    try std.testing.expectError(error.InvalidValue, runModule(std.testing.allocator, &module, "Test"));
 }
 
 test "Fact runner records failing True and False reasons" {
