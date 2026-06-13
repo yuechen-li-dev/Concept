@@ -1,0 +1,14 @@
+# name: fact wrong return type invalid
+# phase: check
+# expect: fail
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+int ReturnsInt() {
+    return 1;
+}
+
+=== diagnostics ===
+CON0178

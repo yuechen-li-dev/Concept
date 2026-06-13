@@ -153,7 +153,15 @@ pub const DiagnosticCode = enum {
     ManualInitInvalidOperation,
     DropParamUnsupported,
     InvalidAttribute,
+    FactRequiresZeroArgFunction,
+    TheoryRequiresInlineData,
+    InlineDataArityMismatch,
+    InlineDataTypeMismatch,
     TestAttributeOutsideTestFile,
+    TestFunctionReturnTypeInvalid,
+    InlineDataRequiresTheory,
+    ConflictingTestAttributes,
+    DuplicateTestAttribute,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -288,7 +296,15 @@ pub const DiagnosticCode = enum {
             .ManualInitInvalidOperation => "CON0164",
             .DropParamUnsupported => "CON0165",
             .InvalidAttribute => "CON0172",
+            .FactRequiresZeroArgFunction => "CON0173",
+            .TheoryRequiresInlineData => "CON0174",
+            .InlineDataArityMismatch => "CON0175",
+            .InlineDataTypeMismatch => "CON0176",
             .TestAttributeOutsideTestFile => "CON0177",
+            .TestFunctionReturnTypeInvalid => "CON0178",
+            .InlineDataRequiresTheory => "CON0179",
+            .ConflictingTestAttributes => "CON0180",
+            .DuplicateTestAttribute => "CON0181",
         };
     }
 };
@@ -738,7 +754,15 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0164", DiagnosticCode.ManualInitInvalidOperation.format());
     try std.testing.expectEqualStrings("CON0165", DiagnosticCode.DropParamUnsupported.format());
     try std.testing.expectEqualStrings("CON0172", DiagnosticCode.InvalidAttribute.format());
+    try std.testing.expectEqualStrings("CON0173", DiagnosticCode.FactRequiresZeroArgFunction.format());
+    try std.testing.expectEqualStrings("CON0174", DiagnosticCode.TheoryRequiresInlineData.format());
+    try std.testing.expectEqualStrings("CON0175", DiagnosticCode.InlineDataArityMismatch.format());
+    try std.testing.expectEqualStrings("CON0176", DiagnosticCode.InlineDataTypeMismatch.format());
     try std.testing.expectEqualStrings("CON0177", DiagnosticCode.TestAttributeOutsideTestFile.format());
+    try std.testing.expectEqualStrings("CON0178", DiagnosticCode.TestFunctionReturnTypeInvalid.format());
+    try std.testing.expectEqualStrings("CON0179", DiagnosticCode.InlineDataRequiresTheory.format());
+    try std.testing.expectEqualStrings("CON0180", DiagnosticCode.ConflictingTestAttributes.format());
+    try std.testing.expectEqualStrings("CON0181", DiagnosticCode.DuplicateTestAttribute.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {
@@ -1076,8 +1100,40 @@ pub fn invalidAttribute(span: SourceSpan, message: []const u8) Diagnostic {
     return Diagnostic.init(.InvalidAttribute, .@"error", message, span);
 }
 
+pub fn factRequiresZeroArgFunction(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.FactRequiresZeroArgFunction, .@"error", "[Fact] test functions must not have parameters", span);
+}
+
+pub fn theoryRequiresInlineData(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.TheoryRequiresInlineData, .@"error", "[Theory] test functions require at least one [InlineData] row", span);
+}
+
+pub fn inlineDataArityMismatch(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.InlineDataArityMismatch, .@"error", "[InlineData] argument count must match test function parameter count", span);
+}
+
+pub fn inlineDataTypeMismatch(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.InlineDataTypeMismatch, .@"error", "[InlineData] argument type does not match test function parameter type", span);
+}
+
 pub fn testAttributeOutsideTestFile(span: SourceSpan) Diagnostic {
     return Diagnostic.init(.TestAttributeOutsideTestFile, .@"error", "test attributes are only valid in .con_test files", span);
+}
+
+pub fn testFunctionReturnTypeInvalid(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.TestFunctionReturnTypeInvalid, .@"error", "test functions must return void", span);
+}
+
+pub fn inlineDataRequiresTheory(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.InlineDataRequiresTheory, .@"error", "[InlineData] is only valid on [Theory] functions", span);
+}
+
+pub fn conflictingTestAttributes(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.ConflictingTestAttributes, .@"error", "test function cannot be both [Fact] and [Theory]", span);
+}
+
+pub fn duplicateTestAttribute(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.DuplicateTestAttribute, .@"error", "duplicate test attribute", span);
 }
 
 pub fn useOfPartiallyInitializedValue(span: SourceSpan) Diagnostic {

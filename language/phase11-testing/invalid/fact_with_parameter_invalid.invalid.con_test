@@ -1,0 +1,14 @@
+# name: fact with parameter invalid
+# phase: check
+# expect: fail
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+void HasParam(int value) {
+    return;
+}
+
+=== diagnostics ===
+CON0173

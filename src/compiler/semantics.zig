@@ -185,6 +185,9 @@ const Collector = struct {
             }
         }
 
+        if (self.diagnostics.count() == 0) {
+            try self.validateTestAttributeSemantics();
+        }
         if (self.diagnostics.count() != 0) return;
 
         for (unit.items) |item| {
@@ -196,6 +199,104 @@ const Collector = struct {
                 .static_assert_decl => |static_assert_decl| try self.lowerStaticAssert(static_assert_decl),
             }
         }
+    }
+
+    fn validateTestAttributeSemantics(self: *Collector) !void {
+        if (self.options.source_file_kind != .@"test") return;
+
+        for (self.module.hir.functions.items) |function| {
+            const summary = self.testAttributeSummary(function.attributes);
+            if (summary.fact_count == 0 and summary.theory_count == 0 and summary.inline_data_count == 0) continue;
+
+            if (summary.fact_count > 1) {
+                try self.diagnostics.append(diagnostics.duplicateTestAttribute(summary.second_fact_span.?));
+                return;
+            }
+            if (summary.theory_count > 1) {
+                try self.diagnostics.append(diagnostics.duplicateTestAttribute(summary.second_theory_span.?));
+                return;
+            }
+            if (summary.fact_count != 0 and summary.theory_count != 0) {
+                try self.diagnostics.append(diagnostics.conflictingTestAttributes(summary.theory_span.?));
+                return;
+            }
+            if (summary.inline_data_count != 0 and summary.theory_count == 0) {
+                try self.diagnostics.append(diagnostics.inlineDataRequiresTheory(summary.first_inline_data_span.?));
+                return;
+            }
+            if (summary.fact_count != 0) {
+                if (function.params.len != 0) {
+                    try self.diagnostics.append(diagnostics.factRequiresZeroArgFunction(summary.fact_span.?));
+                    return;
+                }
+                if (!sameType(function.return_type, self.module.types.voidType())) {
+                    try self.diagnostics.append(diagnostics.testFunctionReturnTypeInvalid(summary.fact_span.?));
+                    return;
+                }
+            }
+            if (summary.theory_count != 0) {
+                if (summary.inline_data_count == 0) {
+                    try self.diagnostics.append(diagnostics.theoryRequiresInlineData(summary.theory_span.?));
+                    return;
+                }
+                if (!sameType(function.return_type, self.module.types.voidType())) {
+                    try self.diagnostics.append(diagnostics.testFunctionReturnTypeInvalid(summary.theory_span.?));
+                    return;
+                }
+                for (function.attributes) |attribute| {
+                    const name = self.module.interner.text(attribute.name);
+                    if (!std.mem.eql(u8, name, "InlineData")) continue;
+                    if (attribute.args.len != function.params.len) {
+                        try self.diagnostics.append(diagnostics.inlineDataArityMismatch(attribute.span));
+                        return;
+                    }
+                    for (attribute.args, function.params) |arg, param_id| {
+                        const param = self.module.hir.getParam(param_id);
+                        if (!self.inlineDataArgMatchesParam(arg, param.type_id)) {
+                            try self.diagnostics.append(diagnostics.inlineDataTypeMismatch(attribute.span));
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    const TestAttributeSummary = struct {
+        fact_count: usize = 0,
+        theory_count: usize = 0,
+        inline_data_count: usize = 0,
+        fact_span: ?source.SourceSpan = null,
+        second_fact_span: ?source.SourceSpan = null,
+        theory_span: ?source.SourceSpan = null,
+        second_theory_span: ?source.SourceSpan = null,
+        first_inline_data_span: ?source.SourceSpan = null,
+    };
+
+    fn testAttributeSummary(self: *Collector, attributes: []const hir.HirAttribute) TestAttributeSummary {
+        var summary = TestAttributeSummary{};
+        for (attributes) |attribute| {
+            const name = self.module.interner.text(attribute.name);
+            if (std.mem.eql(u8, name, "Fact")) {
+                summary.fact_count += 1;
+                if (summary.fact_span == null) summary.fact_span = attribute.span else if (summary.second_fact_span == null) summary.second_fact_span = attribute.span;
+            } else if (std.mem.eql(u8, name, "Theory")) {
+                summary.theory_count += 1;
+                if (summary.theory_span == null) summary.theory_span = attribute.span else if (summary.second_theory_span == null) summary.second_theory_span = attribute.span;
+            } else if (std.mem.eql(u8, name, "InlineData")) {
+                summary.inline_data_count += 1;
+                if (summary.first_inline_data_span == null) summary.first_inline_data_span = attribute.span;
+            }
+        }
+        return summary;
+    }
+
+    fn inlineDataArgMatchesParam(self: *Collector, arg: hir.HirAttributeArg, param_type: types.TypeId) bool {
+        return switch (arg) {
+            .int_literal => sameType(param_type, self.module.types.intType()),
+            .bool_literal => sameType(param_type, self.module.types.boolType()),
+            .string_literal => false,
+        };
     }
 
     fn validateTestAttributePlacement(self: *Collector, unit: ast.CompilationUnit) !void {
@@ -1665,6 +1766,32 @@ fn functionItem(name: []const u8, start: usize) ast.Item {
     } };
 }
 
+fn functionItemWithSignature(name: []const u8, return_type: []const u8, params: []ast.ParamDecl, attributes: []ast.Attribute, start: usize) ast.Item {
+    return .{ .function_decl = .{
+        .is_export = false,
+        .signature = .{
+            .return_type = typeName(return_type, start),
+            .name = .{
+                .base = nameSegment(name, start + return_type.len + 1),
+                .span = .{ .start = start + return_type.len + 1, .length = name.len },
+            },
+            .params = params,
+            .span = .{ .start = start, .length = return_type.len + name.len + 3 },
+        },
+        .attributes = attributes,
+        .body = null,
+        .span = .{ .start = start, .length = return_type.len + name.len + 3 },
+    } };
+}
+
+fn paramDecl(type_name: []const u8, name: []const u8, start: usize) ast.ParamDecl {
+    return .{
+        .type_name = typeName(type_name, start),
+        .name = nameSegment(name, start + type_name.len + 1),
+        .span = .{ .start = start, .length = type_name.len + name.len + 1 },
+    };
+}
+
 fn structItem(name: []const u8, start: usize) ast.Item {
     return .{ .struct_decl = .{
         .is_export = false,
@@ -2313,9 +2440,8 @@ test "semantic collection preserves compile-time function metadata" {
 test "semantic collection preserves function attributes in HIR" {
     var parts = [_]ast.NameSegment{nameSegment("Fact", 0)};
     const attr = attributeNoArgs("Fact", parts[0..]);
-    var item = functionItem("ParsesIdentifier", 0);
     var attrs = [_]ast.Attribute{attr};
-    item.function_decl.attributes = attrs[0..];
+    const item = functionItemWithSignature("ParsesIdentifier", "void", &.{}, attrs[0..], 0);
 
     var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
     defer diagnostics_bag.deinit();
@@ -2332,17 +2458,22 @@ test "semantic collection preserves function attributes in HIR" {
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "Attribute Fact\n  Function ParsesIdentifier") != null);
 }
 
-test "semantic collection preserves attribute literal args and leaves type checking unchanged" {
+test "semantic collection preserves valid InlineData literal args" {
     var args = [_]ast.AttributeArg{
         .{ .int_literal = .{ .text = "1", .span = .{ .start = 0, .length = 1 } } },
         .{ .bool_literal = .{ .value = true, .span = .{ .start = 3, .length = 4 } } },
-        .{ .string_literal = .{ .text = "\"ok\"", .span = .{ .start = 9, .length = 4 } } },
     };
-    var parts = [_]ast.NameSegment{nameSegment("InlineData", 0)};
-    const attr = attributeWithArgs("InlineData", parts[0..], args[0..]);
-    var item = functionItem("main", 0);
-    var attrs = [_]ast.Attribute{attr};
-    item.function_decl.attributes = attrs[0..];
+    var theory_parts = [_]ast.NameSegment{nameSegment("Theory", 0)};
+    var inline_parts = [_]ast.NameSegment{nameSegment("InlineData", 8)};
+    var attrs = [_]ast.Attribute{
+        attributeNoArgs("Theory", theory_parts[0..]),
+        attributeWithArgs("InlineData", inline_parts[0..], args[0..]),
+    };
+    var params = [_]ast.ParamDecl{
+        paramDecl("int", "value", 20),
+        paramDecl("bool", "flag", 30),
+    };
+    const item = functionItemWithSignature("main", "void", params[0..], attrs[0..], 0);
 
     var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
     defer diagnostics_bag.deinit();
@@ -2351,10 +2482,9 @@ test "semantic collection preserves attribute literal args and leaves type check
 
     try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
     const function = module.hir.getFunction(.{ .index = 0 });
-    try std.testing.expectEqual(@as(usize, 3), function.attributes[0].args.len);
-    try std.testing.expectEqualStrings("1", function.attributes[0].args[0].int_literal);
-    try std.testing.expect(function.attributes[0].args[1].bool_literal);
-    try std.testing.expectEqualStrings("\"ok\"", function.attributes[0].args[2].string_literal);
+    try std.testing.expectEqual(@as(usize, 2), function.attributes[1].args.len);
+    try std.testing.expectEqualStrings("1", function.attributes[1].args[0].int_literal);
+    try std.testing.expect(function.attributes[1].args[1].bool_literal);
 }
 
 test "semantic collection rejects test attributes in normal source files" {
@@ -2441,6 +2571,137 @@ fn expectOneSemanticDiagnostic(items: []const ast.Item, code: DiagnosticCode) !v
     try std.testing.expectError(error.InvalidSemanticModule, collectItems(items, &diagnostics_bag));
     try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
     try std.testing.expectEqual(code, diagnostics_bag.diagnostics.items[0].code);
+}
+
+fn expectOneTestSemanticDiagnostic(items: []const ast.Item, code: DiagnosticCode) !void {
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+    try std.testing.expectError(error.InvalidSemanticModule, collectTestItems(items, &diagnostics_bag));
+    try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
+    try std.testing.expectEqual(code, diagnostics_bag.diagnostics.items[0].code);
+}
+
+test "test attribute semantics accept zero-param Fact" {
+    var fact_parts = [_]ast.NameSegment{nameSegment("Fact", 0)};
+    var attrs = [_]ast.Attribute{attributeNoArgs("Fact", fact_parts[0..])};
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    var module = try collectTestItems(&.{functionItemWithSignature("ParsesIdentifier", "void", &.{}, attrs[0..], 0)}, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
+}
+
+test "test attribute semantics reject Fact with parameter" {
+    var fact_parts = [_]ast.NameSegment{nameSegment("Fact", 0)};
+    var attrs = [_]ast.Attribute{attributeNoArgs("Fact", fact_parts[0..])};
+    var params = [_]ast.ParamDecl{paramDecl("int", "value", 20)};
+    try expectOneTestSemanticDiagnostic(&.{functionItemWithSignature("HasParam", "void", params[0..], attrs[0..], 0)}, .FactRequiresZeroArgFunction);
+}
+
+test "test attribute semantics reject Fact returning non-void" {
+    var fact_parts = [_]ast.NameSegment{nameSegment("Fact", 0)};
+    var attrs = [_]ast.Attribute{attributeNoArgs("Fact", fact_parts[0..])};
+    try expectOneTestSemanticDiagnostic(&.{functionItemWithSignature("ReturnsInt", "int", &.{}, attrs[0..], 0)}, .TestFunctionReturnTypeInvalid);
+}
+
+test "test attribute semantics reject Theory without InlineData" {
+    var theory_parts = [_]ast.NameSegment{nameSegment("Theory", 0)};
+    var attrs = [_]ast.Attribute{attributeNoArgs("Theory", theory_parts[0..])};
+    var params = [_]ast.ParamDecl{paramDecl("int", "value", 20)};
+    try expectOneTestSemanticDiagnostic(&.{functionItemWithSignature("NoData", "void", params[0..], attrs[0..], 0)}, .TheoryRequiresInlineData);
+}
+
+test "test attribute semantics reject InlineData without Theory" {
+    var inline_parts = [_]ast.NameSegment{nameSegment("InlineData", 0)};
+    var args = [_]ast.AttributeArg{.{ .int_literal = .{ .text = "1", .span = .{ .start = 0, .length = 1 } } }};
+    var attrs = [_]ast.Attribute{attributeWithArgs("InlineData", inline_parts[0..], args[0..])};
+    var params = [_]ast.ParamDecl{paramDecl("int", "value", 20)};
+    try expectOneTestSemanticDiagnostic(&.{functionItemWithSignature("NotTheory", "void", params[0..], attrs[0..], 0)}, .InlineDataRequiresTheory);
+}
+
+test "test attribute semantics reject Fact Theory conflict" {
+    var fact_parts = [_]ast.NameSegment{nameSegment("Fact", 0)};
+    var theory_parts = [_]ast.NameSegment{nameSegment("Theory", 8)};
+    var inline_parts = [_]ast.NameSegment{nameSegment("InlineData", 16)};
+    var args = [_]ast.AttributeArg{.{ .int_literal = .{ .text = "1", .span = .{ .start = 16, .length = 1 } } }};
+    var attrs = [_]ast.Attribute{
+        attributeNoArgs("Fact", fact_parts[0..]),
+        attributeNoArgs("Theory", theory_parts[0..]),
+        attributeWithArgs("InlineData", inline_parts[0..], args[0..]),
+    };
+    var params = [_]ast.ParamDecl{paramDecl("int", "value", 40)};
+    try expectOneTestSemanticDiagnostic(&.{functionItemWithSignature("Bad", "void", params[0..], attrs[0..], 0)}, .ConflictingTestAttributes);
+}
+
+test "test attribute semantics reject duplicate Fact and Theory" {
+    var fact_parts_a = [_]ast.NameSegment{nameSegment("Fact", 0)};
+    var fact_parts_b = [_]ast.NameSegment{nameSegment("Fact", 8)};
+    var fact_attrs = [_]ast.Attribute{
+        attributeNoArgs("Fact", fact_parts_a[0..]),
+        attributeNoArgs("Fact", fact_parts_b[0..]),
+    };
+    try expectOneTestSemanticDiagnostic(&.{functionItemWithSignature("DuplicateFact", "void", &.{}, fact_attrs[0..], 0)}, .DuplicateTestAttribute);
+
+    var theory_parts_a = [_]ast.NameSegment{nameSegment("Theory", 0)};
+    var theory_parts_b = [_]ast.NameSegment{nameSegment("Theory", 8)};
+    var inline_parts = [_]ast.NameSegment{nameSegment("InlineData", 16)};
+    var args = [_]ast.AttributeArg{.{ .int_literal = .{ .text = "1", .span = .{ .start = 16, .length = 1 } } }};
+    var theory_attrs = [_]ast.Attribute{
+        attributeNoArgs("Theory", theory_parts_a[0..]),
+        attributeNoArgs("Theory", theory_parts_b[0..]),
+        attributeWithArgs("InlineData", inline_parts[0..], args[0..]),
+    };
+    var params = [_]ast.ParamDecl{paramDecl("int", "value", 40)};
+    try expectOneTestSemanticDiagnostic(&.{functionItemWithSignature("DuplicateTheory", "void", params[0..], theory_attrs[0..], 0)}, .DuplicateTestAttribute);
+}
+
+test "test attribute semantics validate InlineData arity and type" {
+    var theory_parts = [_]ast.NameSegment{nameSegment("Theory", 0)};
+    var inline_parts = [_]ast.NameSegment{nameSegment("InlineData", 8)};
+    var one_arg = [_]ast.AttributeArg{.{ .int_literal = .{ .text = "1", .span = .{ .start = 8, .length = 1 } } }};
+    var arity_attrs = [_]ast.Attribute{
+        attributeNoArgs("Theory", theory_parts[0..]),
+        attributeWithArgs("InlineData", inline_parts[0..], one_arg[0..]),
+    };
+    var two_params = [_]ast.ParamDecl{ paramDecl("int", "a", 20), paramDecl("int", "b", 26) };
+    try expectOneTestSemanticDiagnostic(&.{functionItemWithSignature("Adds", "void", two_params[0..], arity_attrs[0..], 0)}, .InlineDataArityMismatch);
+
+    var mismatch_arg = [_]ast.AttributeArg{.{ .bool_literal = .{ .value = true, .span = .{ .start = 8, .length = 4 } } }};
+    var mismatch_attrs = [_]ast.Attribute{
+        attributeNoArgs("Theory", theory_parts[0..]),
+        attributeWithArgs("InlineData", inline_parts[0..], mismatch_arg[0..]),
+    };
+    var int_param = [_]ast.ParamDecl{paramDecl("int", "value", 20)};
+    try expectOneTestSemanticDiagnostic(&.{functionItemWithSignature("NeedsInt", "void", int_param[0..], mismatch_attrs[0..], 0)}, .InlineDataTypeMismatch);
+}
+
+test "test attribute semantics accept multiple int bool InlineData rows" {
+    var theory_parts = [_]ast.NameSegment{nameSegment("Theory", 0)};
+    var inline_parts_a = [_]ast.NameSegment{nameSegment("InlineData", 8)};
+    var inline_parts_b = [_]ast.NameSegment{nameSegment("InlineData", 24)};
+    var args_a = [_]ast.AttributeArg{
+        .{ .int_literal = .{ .text = "1", .span = .{ .start = 8, .length = 1 } } },
+        .{ .bool_literal = .{ .value = true, .span = .{ .start = 11, .length = 4 } } },
+    };
+    var args_b = [_]ast.AttributeArg{
+        .{ .int_literal = .{ .text = "2", .span = .{ .start = 24, .length = 1 } } },
+        .{ .bool_literal = .{ .value = false, .span = .{ .start = 27, .length = 5 } } },
+    };
+    var attrs = [_]ast.Attribute{
+        attributeNoArgs("Theory", theory_parts[0..]),
+        attributeWithArgs("InlineData", inline_parts_a[0..], args_a[0..]),
+        attributeWithArgs("InlineData", inline_parts_b[0..], args_b[0..]),
+    };
+    var params = [_]ast.ParamDecl{ paramDecl("int", "value", 40), paramDecl("bool", "flag", 50) };
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    var module = try collectTestItems(&.{functionItemWithSignature("Works", "void", params[0..], attrs[0..], 0)}, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
 }
 
 test "body lowering lowers return integer" {

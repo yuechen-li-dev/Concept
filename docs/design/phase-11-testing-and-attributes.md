@@ -474,7 +474,7 @@ The v0 work should make direct tests real before it grows a test ecosystem.
 P11-M0  Design doc: first-class testing, attributes, reasoned expectations
 P11-M1  Attribute syntax and declaration metadata
 P11-M2  .con_test file recognition and test discovery scaffold
-P11-M3  Mandatory reason metadata / string-literal reason validation
+P11-M3  Test attribute semantic validation
 P11-M4  [Fact] zero-arg test runner v0
 P11-M5  Assert.* and Expect.* v0 with mandatory reasons
 P11-M6  Expect.That relation API scaffold
@@ -563,6 +563,48 @@ Still deferred:
 - relation API;
 - filtering and result reporting;
 - runtime reflection.
+
+## P11-M3 implementation status
+
+P11-M3 adds semantic validation for test attributes in `.con_test` files. Test
+discovery remains a non-executing scaffold over semantically valid HIR
+functions; it does not run tests, generate per-row test cases, or synthesize
+runner code.
+
+Implemented behavior:
+
+- `[Fact]` functions must have zero parameters;
+- `[Fact]` functions must return `void`;
+- `[Theory]` functions must return `void`;
+- `[Theory]` functions require at least one `[InlineData]` row;
+- `[InlineData]` is valid only on `[Theory]` functions;
+- a function cannot be both `[Fact]` and `[Theory]`;
+- duplicate `[Fact]` and duplicate `[Theory]` attributes on the same function
+  are rejected;
+- multiple `[InlineData]` rows on one `[Theory]` function are valid;
+- each `[InlineData]` row must match the test function parameter count;
+- integer and boolean inline-data literals must match `int` and `bool`
+  parameters respectively;
+- string inline-data literals remain preserved as attribute metadata, but are
+  rejected against typed function parameters until Concept has a stable string
+  parameter type;
+- `[Fact]`, `[Theory]`, and `[InlineData]` in normal source files remain rejected
+  with `CON0177 TestAttributeOutsideTestFile`;
+- inline test blocks remain unsupported and are still rejected by the ordinary
+  parser.
+
+Still deferred:
+
+- test execution;
+- generated runner functions and generated per-row names such as
+  `Module.Function#0`;
+- `Assert.*` and `Expect.*`;
+- mandatory `because` reason validation;
+- relation API;
+- failure reporting and filtering;
+- runtime reflection;
+- inline test blocks;
+- attribute macros and arbitrary compile-time attribute expressions.
 
 ## Close criteria
 

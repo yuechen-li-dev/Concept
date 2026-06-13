@@ -1,0 +1,14 @@
+# name: theory missing inline data invalid
+# phase: check
+# expect: fail
+
+=== source ===
+module Example.Tests;
+
+[Theory]
+void NoData(int value) {
+    return;
+}
+
+=== diagnostics ===
+CON0174

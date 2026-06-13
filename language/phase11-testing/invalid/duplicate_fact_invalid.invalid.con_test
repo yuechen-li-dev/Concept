@@ -1,0 +1,15 @@
+# name: duplicate fact invalid
+# phase: check
+# expect: fail
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+[Fact]
+void Bad() {
+    return;
+}
+
+=== diagnostics ===
+CON0181

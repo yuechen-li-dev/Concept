@@ -1,0 +1,16 @@
+# name: fact theory conflict invalid
+# phase: check
+# expect: fail
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+[Theory]
+[InlineData(1)]
+void Bad(int value) {
+    return;
+}
+
+=== diagnostics ===
+CON0180

@@ -1,0 +1,13 @@
+# name: theory multiple inline data valid
+# phase: check
+# expect: pass
+
+=== source ===
+module Example.Tests;
+
+[Theory]
+[InlineData(1, 2, 3)]
+[InlineData(10, 20, 30)]
+void Adds(int a, int b, int expected) {
+    return;
+}

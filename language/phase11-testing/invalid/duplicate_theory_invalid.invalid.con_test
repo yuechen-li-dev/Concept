@@ -1,0 +1,16 @@
+# name: duplicate theory invalid
+# phase: check
+# expect: fail
+
+=== source ===
+module Example.Tests;
+
+[Theory]
+[Theory]
+[InlineData(1)]
+void Bad(int value) {
+    return;
+}
+
+=== diagnostics ===
+CON0181

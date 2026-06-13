@@ -1,0 +1,15 @@
+# name: inline data arity mismatch invalid
+# phase: check
+# expect: fail
+
+=== source ===
+module Example.Tests;
+
+[Theory]
+[InlineData(1)]
+void Adds(int a, int b) {
+    return;
+}
+
+=== diagnostics ===
+CON0175

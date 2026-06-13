@@ -1,0 +1,11 @@
+# name: fact zero arg valid
+# phase: check
+# expect: pass
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+void ParsesIdentifier() {
+    return;
+}

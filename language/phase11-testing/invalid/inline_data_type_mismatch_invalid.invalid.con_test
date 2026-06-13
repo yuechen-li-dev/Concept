@@ -1,0 +1,15 @@
+# name: inline data type mismatch invalid
+# phase: check
+# expect: fail
+
+=== source ===
+module Example.Tests;
+
+[Theory]
+[InlineData(true)]
+void NeedsInt(int value) {
+    return;
+}
+
+=== diagnostics ===
+CON0176
