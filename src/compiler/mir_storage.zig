@@ -16,6 +16,8 @@ pub const StorageState = enum {
     maybe_initialized,
     /// Some incoming paths have an initialized value and some have moved it.
     maybe_moved,
+    /// Struct storage has direct-field initializedness tracked separately.
+    partially_initialized,
 };
 
 pub const StorageDiagnostic = struct {
@@ -30,6 +32,7 @@ pub const StorageDiagnostic = struct {
         maybe_moved_use,
         implicit_copy_requires_copy,
         assignment_requires_replacement,
+        use_of_partially_initialized_value,
     };
 };
 
@@ -54,8 +57,74 @@ pub fn canAssignToState(target_state: StorageState, context: CopyDropContext) As
         .initialized => if (!context.has_drop and context.is_copy) .allow_copy_replacement else .reject_replacement_required,
         .maybe_initialized => .reject_maybe_uninitialized,
         .maybe_moved => .reject_maybe_moved,
+        .partially_initialized => .reject_maybe_uninitialized,
     };
 }
+
+const FieldStorageState = struct {
+    struct_type: types.TypeId,
+    fields: []StorageState,
+
+    fn clone(self: FieldStorageState, allocator: std.mem.Allocator) !FieldStorageState {
+        const fields = try allocator.alloc(StorageState, self.fields.len);
+        @memcpy(fields, self.fields);
+        return .{ .struct_type = self.struct_type, .fields = fields };
+    }
+
+    fn deinit(self: *FieldStorageState, allocator: std.mem.Allocator) void {
+        allocator.free(self.fields);
+        self.* = undefined;
+    }
+};
+
+const StateFrame = struct {
+    allocator: std.mem.Allocator,
+    locals: []StorageState,
+    field_states: []?FieldStorageState,
+
+    fn init(allocator: std.mem.Allocator, local_count: usize) !StateFrame {
+        const locals = try allocator.alloc(StorageState, local_count);
+        errdefer allocator.free(locals);
+        const field_states = try allocator.alloc(?FieldStorageState, local_count);
+        errdefer allocator.free(field_states);
+        @memset(field_states, null);
+        return .{ .allocator = allocator, .locals = locals, .field_states = field_states };
+    }
+
+    fn empty(allocator: std.mem.Allocator) StateFrame {
+        return .{ .allocator = allocator, .locals = &.{}, .field_states = &.{} };
+    }
+
+    fn clone(self: StateFrame) !StateFrame {
+        var cloned = try StateFrame.init(self.allocator, self.locals.len);
+        errdefer cloned.deinit();
+        @memcpy(cloned.locals, self.locals);
+        for (self.field_states, 0..) |maybe_fields, index| {
+            if (maybe_fields) |field_state| {
+                cloned.field_states[index] = try field_state.clone(self.allocator);
+            }
+        }
+        return cloned;
+    }
+
+    fn deinit(self: *StateFrame) void {
+        for (self.field_states) |*maybe_fields| {
+            if (maybe_fields.*) |*field_state| {
+                field_state.deinit(self.allocator);
+            }
+        }
+        if (self.field_states.len > 0) self.allocator.free(self.field_states);
+        if (self.locals.len > 0) self.allocator.free(self.locals);
+        self.* = undefined;
+    }
+
+    fn clearFieldState(self: *StateFrame, local_id: mir.MirLocalId) void {
+        if (self.field_states[local_id.index]) |*field_state| {
+            field_state.deinit(self.allocator);
+            self.field_states[local_id.index] = null;
+        }
+    }
+};
 
 pub const StorageAnalysis = struct {
     allocator: std.mem.Allocator,
@@ -135,26 +204,26 @@ const Analyzer = struct {
         errdefer self.diagnostics.deinit(self.allocator);
 
         const local_count = self.mir_module.store.locals.items.len;
-        var initial_states = try self.allocator.alloc(StorageState, local_count);
-        errdefer self.allocator.free(initial_states);
-        @memset(initial_states, .initialized);
+        var initial_states = try StateFrame.init(self.allocator, local_count);
+        errdefer initial_states.deinit();
+        @memset(initial_states.locals, .initialized);
 
         for (self.function.locals) |local_id| {
-            initial_states[local_id.index] = .uninitialized;
+            initial_states.locals[local_id.index] = .uninitialized;
         }
         for (self.function.params) |param_id| {
-            initial_states[param_id.index] = .initialized;
+            initial_states.locals[param_id.index] = .initialized;
         }
 
         const block_count = self.function.blocks.len;
-        var in_states = try self.allocator.alloc([]StorageState, block_count);
+        var in_states = try self.allocator.alloc(StateFrame, block_count);
         defer {
-            for (in_states) |states| {
-                if (states.len > 0) self.allocator.free(states);
+            for (in_states) |*states| {
+                if (states.locals.len > 0) states.deinit();
             }
             self.allocator.free(in_states);
         }
-        for (in_states) |*states| states.* = &.{};
+        for (in_states) |*states| states.* = StateFrame.empty(self.allocator);
 
         var reachable = try self.allocator.alloc(bool, block_count);
         defer self.allocator.free(reachable);
@@ -168,16 +237,16 @@ const Analyzer = struct {
         defer worklist.deinit(self.allocator);
 
         if (block_count > 0) {
-            in_states[0] = try cloneStates(self.allocator, initial_states);
+            in_states[0] = try initial_states.clone();
             reachable[0] = true;
             queued[0] = true;
             try worklist.append(self.allocator, 0);
         }
 
-        const final_states = initial_states;
-        initial_states = &.{};
+        var final_states = initial_states;
+        initial_states = StateFrame.empty(self.allocator);
         var have_final = false;
-        errdefer self.allocator.free(final_states);
+        errdefer final_states.deinit();
 
         self.emit_diagnostics = false;
         while (worklist.items.len > 0) {
@@ -186,15 +255,15 @@ const Analyzer = struct {
             const block_id = self.function.blocks[block_index];
             const block = self.mir_module.store.getBlock(block_id);
 
-            const states = try cloneStates(self.allocator, in_states[block_index]);
-            defer self.allocator.free(states);
+            var states = try in_states[block_index].clone();
+            defer states.deinit();
 
             for (block.statements) |statement| {
-                try self.analyzeStatement(states, statement);
+                try self.analyzeStatement(&states, statement);
             }
 
             if (block.terminator) |terminator| {
-                try self.analyzeTerminator(states, terminator);
+                try self.analyzeTerminator(&states, terminator);
                 switch (terminator.kind) {
                     .goto => |target| try self.propagate(states, target, in_states, reachable, queued, &worklist),
                     .switch_bool => |switch_bool| {
@@ -209,18 +278,18 @@ const Analyzer = struct {
                     },
                     .return_, .@"unreachable" => {
                         if (have_final) {
-                            _ = try joinStates(final_states, states);
+                            _ = try joinFrames(&final_states, states);
                         } else {
-                            @memcpy(final_states, states);
+                            try copyFrameInto(&final_states, states);
                             have_final = true;
                         }
                     },
                 }
             } else {
                 if (have_final) {
-                    _ = try joinStates(final_states, states);
+                    _ = try joinFrames(&final_states, states);
                 } else {
-                    @memcpy(final_states, states);
+                    try copyFrameInto(&final_states, states);
                     have_final = true;
                 }
             }
@@ -230,20 +299,20 @@ const Analyzer = struct {
         for (self.function.blocks, 0..) |block_id, block_index| {
             if (!reachable[block_index]) continue;
             const block = self.mir_module.store.getBlock(block_id);
-            const states = try cloneStates(self.allocator, in_states[block_index]);
-            defer self.allocator.free(states);
+            var states = try in_states[block_index].clone();
+            defer states.deinit();
 
             for (block.statements) |statement| {
-                try self.analyzeStatement(states, statement);
+                try self.analyzeStatement(&states, statement);
             }
             if (block.terminator) |terminator| {
-                try self.analyzeTerminator(states, terminator);
-                try self.insertCleanupBeforeTerminator(states, block_id, terminator);
+                try self.analyzeTerminator(&states, terminator);
+                try self.insertCleanupBeforeTerminator(&states, block_id, terminator);
             }
         }
 
         if (!have_final and block_count > 0) {
-            @memcpy(final_states, in_states[0]);
+            try copyFrameInto(&final_states, in_states[0]);
         }
 
         if (self.had_error) {
@@ -251,15 +320,23 @@ const Analyzer = struct {
         }
 
         const owned_diagnostics = try self.diagnostics.toOwnedSlice(self.allocator);
-
+        const owned_final_states = final_states.locals;
+        for (final_states.field_states) |*maybe_fields| {
+            if (maybe_fields.*) |*field_state| {
+                field_state.deinit(self.allocator);
+            }
+        }
+        self.allocator.free(final_states.field_states);
+        final_states.field_states = &.{};
+        final_states.locals = &.{};
         return .{
             .allocator = self.allocator,
-            .final_states = final_states,
+            .final_states = owned_final_states,
             .diagnostics = owned_diagnostics,
         };
     }
 
-    fn analyzeStatement(self: *Analyzer, states: []StorageState, statement: mir.MirStatement) AnalysisError!void {
+    fn analyzeStatement(self: *Analyzer, states: *StateFrame, statement: mir.MirStatement) AnalysisError!void {
         switch (statement.kind) {
             .assign => |assignment| {
                 const had_error_before = self.had_error;
@@ -271,7 +348,7 @@ const Analyzer = struct {
         }
     }
 
-    fn analyzeTerminator(self: *Analyzer, states: []StorageState, terminator: mir.MirTerminator) AnalysisError!void {
+    fn analyzeTerminator(self: *Analyzer, states: *StateFrame, terminator: mir.MirTerminator) AnalysisError!void {
         switch (terminator.kind) {
             .goto, .@"unreachable" => {},
             .return_ => |maybe_operand| if (maybe_operand) |operand| try self.readOperand(states, operand, terminator.span),
@@ -280,7 +357,7 @@ const Analyzer = struct {
         }
     }
 
-    fn readRvalue(self: *Analyzer, states: []StorageState, rvalue: mir.MirRvalue, span: ?source.SourceSpan) AnalysisError!void {
+    fn readRvalue(self: *Analyzer, states: *StateFrame, rvalue: mir.MirRvalue, span: ?source.SourceSpan) AnalysisError!void {
         switch (rvalue) {
             .use => |operand| try self.readOperand(states, operand, span),
             .move => |place| try self.movePlace(states, place, span),
@@ -296,11 +373,19 @@ const Analyzer = struct {
             .struct_constructor => |constructor| for (constructor.fields) |field| try self.readOperand(states, field.value, span),
             .enum_tag => |operand| try self.readOperand(states, operand, span),
             .enum_payload_field => |payload| try self.readOperand(states, payload.enum_operand, span),
-            .field_access => |field_access| try self.readOperand(states, field_access.receiver, span),
+            .field_access => |field_access| {
+                switch (field_access.receiver) {
+                    .copy => |receiver_place| switch (receiver_place) {
+                        .local => |base| try self.readPlace(states, mir.MirPlace.fieldPlace(base, field_access.field_id), span),
+                        .field => try self.readOperand(states, field_access.receiver, span),
+                    },
+                    else => try self.readOperand(states, field_access.receiver, span),
+                }
+            },
         }
     }
 
-    fn readOperand(self: *Analyzer, states: []StorageState, operand: mir.MirOperand, span: ?source.SourceSpan) AnalysisError!void {
+    fn readOperand(self: *Analyzer, states: *StateFrame, operand: mir.MirOperand, span: ?source.SourceSpan) AnalysisError!void {
         switch (operand) {
             .int_literal, .bool_literal => {},
             .copy => |place| {
@@ -310,68 +395,99 @@ const Analyzer = struct {
         }
     }
 
-    fn readPlace(self: *Analyzer, states: []StorageState, place: mir.MirPlace, span: ?source.SourceSpan) AnalysisError!void {
-        const local_id = switch (place) {
-            .local => |local_id| local_id,
-            .field => |field| field.base,
-        };
-        const state = states[local_id.index];
+    fn readPlace(self: *Analyzer, states: *StateFrame, place: mir.MirPlace, span: ?source.SourceSpan) AnalysisError!void {
+        const local_id = localOfPlace(place);
+        const state = states.locals[local_id.index];
         switch (state) {
             .initialized => {},
             .uninitialized => try self.report(.use_before_initialization, local_id, span),
             .moved => try self.report(.use_after_move, local_id, span),
             .maybe_initialized => try self.report(.maybe_uninitialized_use, local_id, span),
             .maybe_moved => try self.report(.maybe_moved_use, local_id, span),
+            .partially_initialized => switch (place) {
+                .local => try self.report(.use_of_partially_initialized_value, local_id, span),
+                .field => |field| {
+                    const field_state = states.field_states[local_id.index] orelse {
+                        try self.report(.use_of_partially_initialized_value, local_id, span);
+                        return;
+                    };
+                    const index = self.fieldIndex(field_state.struct_type, field.field_id) orelse {
+                        try self.report(.use_of_partially_initialized_value, local_id, span);
+                        return;
+                    };
+                    switch (field_state.fields[index]) {
+                        .initialized => {},
+                        .uninitialized => try self.report(.use_before_initialization, local_id, span),
+                        .moved => try self.report(.use_after_move, local_id, span),
+                        .maybe_initialized => try self.report(.maybe_uninitialized_use, local_id, span),
+                        .maybe_moved => try self.report(.maybe_moved_use, local_id, span),
+                        .partially_initialized => try self.report(.use_of_partially_initialized_value, local_id, span),
+                    }
+                },
+            },
         }
     }
 
-    fn writePlace(self: *Analyzer, states: []StorageState, place: mir.MirPlace, span: ?source.SourceSpan) AnalysisError!void {
-        const local_id = switch (place) {
-            .local => |local_id| local_id,
-            .field => |field| field.base,
-        };
+    fn writePlace(self: *Analyzer, states: *StateFrame, place: mir.MirPlace, span: ?source.SourceSpan) AnalysisError!void {
+        const local_id = localOfPlace(place);
         const local = self.mir_module.store.getLocal(local_id);
         if (local.kind == .temp) {
-            states[local_id.index] = .initialized;
+            states.locals[local_id.index] = .initialized;
+            states.clearFieldState(local_id);
             return;
         }
 
+        switch (place) {
+            .field => |field| return self.writeFieldPlace(states, field, span),
+            .local => {},
+        }
+
         const target_type = self.placeType(place);
-        const decision = canAssignToState(states[local_id.index], .{
+        const decision = canAssignToState(states.locals[local_id.index], .{
             .is_copy = self.isCopyType(target_type),
             .has_drop = self.semantic_module.hasDrop(target_type) != null,
         });
         switch (decision) {
-            .allow_initialization, .allow_reinitialization, .allow_copy_replacement => states[local_id.index] = .initialized,
+            .allow_initialization, .allow_reinitialization, .allow_copy_replacement => {
+                states.locals[local_id.index] = .initialized;
+                states.clearFieldState(local_id);
+            },
             .reject_replacement_required => try self.report(.assignment_requires_replacement, local_id, span),
             .reject_maybe_uninitialized => try self.report(.maybe_uninitialized_use, local_id, span),
             .reject_maybe_moved => try self.report(.maybe_moved_use, local_id, span),
         }
     }
 
-    fn movePlace(self: *Analyzer, states: []StorageState, place: mir.MirPlace, span: ?source.SourceSpan) AnalysisError!void {
+    fn movePlace(self: *Analyzer, states: *StateFrame, place: mir.MirPlace, span: ?source.SourceSpan) AnalysisError!void {
         try self.readPlace(states, place, span);
-        const local_id = switch (place) {
-            .local => |local_id| local_id,
-            .field => |field| field.base,
-        };
+        const local_id = localOfPlace(place);
         if (!self.isCopyLocal(local_id)) {
-            states[local_id.index] = .moved;
+            states.locals[local_id.index] = .moved;
+            states.clearFieldState(local_id);
         }
     }
 
-    fn dropPlace(self: *Analyzer, states: []StorageState, place: mir.MirPlace, span: ?source.SourceSpan) AnalysisError!void {
-        const local_id = switch (place) {
-            .local => |local_id| local_id,
-            .field => |field| field.base,
-        };
+    fn dropPlace(self: *Analyzer, states: *StateFrame, place: mir.MirPlace, span: ?source.SourceSpan) AnalysisError!void {
+        const local_id = localOfPlace(place);
         try self.readPlace(states, place, span);
-        if (states[local_id.index] == .initialized) {
-            states[local_id.index] = .moved;
+        switch (place) {
+            .local => if (states.locals[local_id.index] == .initialized) {
+                states.locals[local_id.index] = .moved;
+                states.clearFieldState(local_id);
+            },
+            .field => |field| {
+                if (states.locals[local_id.index] == .partially_initialized) {
+                    if (states.field_states[local_id.index]) |*field_state| {
+                        if (self.fieldIndex(field_state.struct_type, field.field_id)) |index| {
+                            field_state.fields[index] = .moved;
+                        }
+                    }
+                }
+            },
         }
     }
 
-    fn insertCleanupBeforeTerminator(self: *Analyzer, states: []StorageState, block_id: mir.MirBlockId, terminator: mir.MirTerminator) AnalysisError!void {
+    fn insertCleanupBeforeTerminator(self: *Analyzer, states: *StateFrame, block_id: mir.MirBlockId, terminator: mir.MirTerminator) AnalysisError!void {
         if (!self.emit_diagnostics) return;
         switch (terminator.kind) {
             .return_ => {},
@@ -388,20 +504,115 @@ const Analyzer = struct {
             const local_id = self.function.locals[index];
             const local = self.mir_module.store.getLocal(local_id);
             if (local.kind != .user) continue;
-            const drop_info = self.semantic_module.hasDrop(local.type_id) orelse continue;
-            switch (states[local_id.index]) {
+            const whole_drop_info = self.semantic_module.hasDrop(local.type_id);
+            switch (states.locals[local_id.index]) {
                 .initialized => {
+                    const drop_info = whole_drop_info orelse continue;
                     try self.mir_module.store.appendStatement(block_id, .{
                         .span = terminator.span,
                         .kind = mir.MirStatementKind.dropPlace(mir.MirPlace.localPlace(local_id), drop_info.function),
                     });
-                    states[local_id.index] = .moved;
+                    states.locals[local_id.index] = .moved;
+                    states.clearFieldState(local_id);
                 },
                 .moved, .uninitialized => {},
-                .maybe_moved => try self.report(.maybe_moved_use, local_id, terminator.span),
-                .maybe_initialized => try self.report(.maybe_uninitialized_use, local_id, terminator.span),
+                .maybe_moved => if (whole_drop_info != null) try self.report(.maybe_moved_use, local_id, terminator.span),
+                .maybe_initialized => if (whole_drop_info != null) try self.report(.maybe_uninitialized_use, local_id, terminator.span),
+                .partially_initialized => try self.insertPartialCleanup(states, block_id, local_id, terminator.span),
             }
         }
+    }
+
+    fn writeFieldPlace(self: *Analyzer, states: *StateFrame, field_place: anytype, span: ?source.SourceSpan) AnalysisError!void {
+        const local_id = field_place.base;
+        const target_type = self.semantic_module.hir.getField(field_place.field_id).type_id;
+        const context = CopyDropContext{
+            .is_copy = self.isCopyType(target_type),
+            .has_drop = self.semantic_module.hasDrop(target_type) != null,
+        };
+        switch (states.locals[local_id.index]) {
+            .initialized => {
+                const decision = canAssignToState(.initialized, context);
+                switch (decision) {
+                    .allow_copy_replacement => {},
+                    .reject_replacement_required => try self.report(.assignment_requires_replacement, local_id, span),
+                    else => unreachable,
+                }
+            },
+            .uninitialized => {
+                const field_state = try self.ensurePartialFieldState(states, local_id);
+                try self.initializePartialField(states, local_id, field_state, field_place.field_id);
+            },
+            .partially_initialized => {
+                const field_state = try self.ensurePartialFieldState(states, local_id);
+                const field_index = self.fieldIndex(field_state.struct_type, field_place.field_id) orelse {
+                    try self.report(.use_of_partially_initialized_value, local_id, span);
+                    return;
+                };
+                const decision = canAssignToState(field_state.fields[field_index], context);
+                switch (decision) {
+                    .allow_initialization, .allow_reinitialization, .allow_copy_replacement => try self.initializePartialField(states, local_id, field_state, field_place.field_id),
+                    .reject_replacement_required => try self.report(.assignment_requires_replacement, local_id, span),
+                    .reject_maybe_uninitialized => try self.report(.maybe_uninitialized_use, local_id, span),
+                    .reject_maybe_moved => try self.report(.maybe_moved_use, local_id, span),
+                }
+            },
+            .moved => try self.report(.use_after_move, local_id, span),
+            .maybe_moved => try self.report(.maybe_moved_use, local_id, span),
+            .maybe_initialized => try self.report(.maybe_uninitialized_use, local_id, span),
+        }
+    }
+
+    fn ensurePartialFieldState(self: *Analyzer, states: *StateFrame, local_id: mir.MirLocalId) AnalysisError!*FieldStorageState {
+        if (states.field_states[local_id.index] == null) {
+            const local = self.mir_module.store.getLocal(local_id);
+            const struct_id = switch (self.semantic_module.types.kind(local.type_id)) {
+                .struct_type => |struct_id| struct_id,
+                else => return error.InvalidStorageState,
+            };
+            const struct_decl = self.semantic_module.hir.getStruct(struct_id);
+            const fields = try self.allocator.alloc(StorageState, struct_decl.fields.len);
+            @memset(fields, .uninitialized);
+            states.field_states[local_id.index] = .{ .struct_type = local.type_id, .fields = fields };
+        }
+        states.locals[local_id.index] = .partially_initialized;
+        if (states.field_states[local_id.index]) |*field_state| return field_state;
+        unreachable;
+    }
+
+    fn initializePartialField(self: *Analyzer, states: *StateFrame, local_id: mir.MirLocalId, field_state: *FieldStorageState, field_id: hir.FieldId) AnalysisError!void {
+        const field_index = self.fieldIndex(field_state.struct_type, field_id) orelse return error.InvalidStorageState;
+        field_state.fields[field_index] = .initialized;
+        if (allFieldsInitialized(field_state.fields)) {
+            states.locals[local_id.index] = .initialized;
+            states.clearFieldState(local_id);
+        }
+    }
+
+    fn insertPartialCleanup(self: *Analyzer, states: *StateFrame, block_id: mir.MirBlockId, local_id: mir.MirLocalId, span: ?source.SourceSpan) AnalysisError!void {
+        const field_state = states.field_states[local_id.index] orelse {
+            try self.report(.use_of_partially_initialized_value, local_id, span);
+            return;
+        };
+        const struct_id = switch (self.semantic_module.types.kind(field_state.struct_type)) {
+            .struct_type => |struct_id| struct_id,
+            else => return error.InvalidStorageState,
+        };
+        const struct_decl = self.semantic_module.hir.getStruct(struct_id);
+        var index = struct_decl.fields.len;
+        while (index > 0) {
+            index -= 1;
+            if (field_state.fields[index] != .initialized) continue;
+            const field_id = struct_decl.fields[index];
+            const field = self.semantic_module.hir.getField(field_id);
+            const drop_info = self.semantic_module.hasDrop(field.type_id) orelse continue;
+            try self.mir_module.store.appendStatement(block_id, .{
+                .span = span,
+                .kind = mir.MirStatementKind.dropPlace(mir.MirPlace.fieldPlace(local_id, field_id), drop_info.function),
+            });
+        }
+        states.locals[local_id.index] = .moved;
+        states.clearFieldState(local_id);
     }
 
     fn isCopyLocal(self: *Analyzer, local_id: mir.MirLocalId) bool {
@@ -421,12 +632,12 @@ const Analyzer = struct {
         };
     }
 
-    fn checkImplicitCopy(self: *Analyzer, states: []const StorageState, place: mir.MirPlace, span: ?source.SourceSpan) AnalysisError!void {
+    fn checkImplicitCopy(self: *Analyzer, states: *const StateFrame, place: mir.MirPlace, span: ?source.SourceSpan) AnalysisError!void {
         const local_id = switch (place) {
             .local => |local_id| local_id,
             .field => return,
         };
-        if (states[local_id.index] != .initialized) return;
+        if (states.locals[local_id.index] != .initialized) return;
         const local = self.mir_module.store.getLocal(local_id);
         switch (local.kind) {
             .param, .user => {},
@@ -439,16 +650,16 @@ const Analyzer = struct {
 
     fn propagate(
         self: *Analyzer,
-        states: []const StorageState,
+        states: StateFrame,
         target: mir.MirBlockId,
-        in_states: [][]StorageState,
+        in_states: []StateFrame,
         reachable: []bool,
         queued: []bool,
         worklist: *std.ArrayList(usize),
     ) AnalysisError!void {
         const target_index = self.blockIndex(target) orelse return;
         if (!reachable[target_index]) {
-            in_states[target_index] = try cloneStates(self.allocator, states);
+            in_states[target_index] = try states.clone();
             reachable[target_index] = true;
             if (!queued[target_index]) {
                 queued[target_index] = true;
@@ -457,7 +668,7 @@ const Analyzer = struct {
             return;
         }
 
-        const changed = try joinStates(in_states[target_index], states);
+        const changed = try joinFrames(&in_states[target_index], states);
         if (changed and !queued[target_index]) {
             queued[target_index] = true;
             try worklist.append(self.allocator, target_index);
@@ -480,9 +691,22 @@ const Analyzer = struct {
                 .maybe_moved_use => diagnostics.maybeMovedUse(diagnostic_span),
                 .implicit_copy_requires_copy => diagnostics.implicitCopyRequiresCopy(diagnostic_span),
                 .assignment_requires_replacement => diagnostics.assignmentRequiresReplacement(diagnostic_span),
+                .use_of_partially_initialized_value => diagnostics.useOfPartiallyInitializedValue(diagnostic_span),
             });
         }
         self.had_error = true;
+    }
+
+    fn fieldIndex(self: *Analyzer, struct_type: types.TypeId, field_id: hir.FieldId) ?usize {
+        const struct_id = switch (self.semantic_module.types.kind(struct_type)) {
+            .struct_type => |struct_id| struct_id,
+            else => return null,
+        };
+        const struct_decl = self.semantic_module.hir.getStruct(struct_id);
+        for (struct_decl.fields, 0..) |candidate, index| {
+            if (candidate.index == field_id.index) return index;
+        }
+        return null;
     }
 
     fn blockIndex(self: *Analyzer, block_id: mir.MirBlockId) ?usize {
@@ -493,26 +717,77 @@ const Analyzer = struct {
     }
 };
 
-fn cloneStates(allocator: std.mem.Allocator, states: []const StorageState) ![]StorageState {
-    const cloned = try allocator.alloc(StorageState, states.len);
-    @memcpy(cloned, states);
-    return cloned;
+fn localOfPlace(place: mir.MirPlace) mir.MirLocalId {
+    return switch (place) {
+        .local => |local_id| local_id,
+        .field => |field| field.base,
+    };
 }
 
-fn joinStates(existing: []StorageState, incoming: []const StorageState) !bool {
+fn allFieldsInitialized(fields: []const StorageState) bool {
+    for (fields) |field| {
+        if (field != .initialized) return false;
+    }
+    return true;
+}
+
+fn copyFrameInto(destination: *StateFrame, source_frame: StateFrame) !void {
+    @memcpy(destination.locals, source_frame.locals);
+    for (destination.field_states, 0..) |*maybe_fields, index| {
+        if (maybe_fields.*) |*field_state| {
+            field_state.deinit(destination.allocator);
+            maybe_fields.* = null;
+        }
+        if (source_frame.field_states[index]) |field_state| {
+            maybe_fields.* = try field_state.clone(destination.allocator);
+        }
+    }
+}
+
+fn joinFrames(existing: *StateFrame, incoming: StateFrame) !bool {
     var changed = false;
-    for (existing, incoming) |*current, next| {
-        const joined = joinStorageState(current.*, next);
+    for (existing.locals, incoming.locals, 0..) |*current, next, index| {
+        const joined = joinStorageStateWithFields(current.*, existing.field_states[index], next, incoming.field_states[index]);
         if (joined != current.*) {
             current.* = joined;
+            changed = true;
+        }
+        if (joined == .partially_initialized) {
+            if (existing.field_states[index] == null and incoming.field_states[index] != null) {
+                existing.field_states[index] = try incoming.field_states[index].?.clone(existing.allocator);
+                changed = true;
+            }
+        } else if (existing.field_states[index] != null) {
+            existing.clearFieldState(.{ .index = @intCast(index) });
             changed = true;
         }
     }
     return changed;
 }
 
+fn joinStorageStateWithFields(left: StorageState, left_fields: ?FieldStorageState, right: StorageState, right_fields: ?FieldStorageState) StorageState {
+    if (left == .partially_initialized and right == .partially_initialized) {
+        if (sameFieldStates(left_fields, right_fields)) return .partially_initialized;
+        return .maybe_initialized;
+    }
+    if (left == .partially_initialized or right == .partially_initialized) return .maybe_initialized;
+    return joinStorageState(left, right);
+}
+
+fn sameFieldStates(left: ?FieldStorageState, right: ?FieldStorageState) bool {
+    const left_state = left orelse return false;
+    const right_state = right orelse return false;
+    if (left_state.struct_type.index != right_state.struct_type.index) return false;
+    if (left_state.fields.len != right_state.fields.len) return false;
+    for (left_state.fields, right_state.fields) |left_field, right_field| {
+        if (left_field != right_field) return false;
+    }
+    return true;
+}
+
 fn joinStorageState(left: StorageState, right: StorageState) StorageState {
     if (left == right) return left;
+    if (left == .partially_initialized or right == .partially_initialized) return .maybe_initialized;
 
     const left_uninit = left == .uninitialized or left == .maybe_initialized;
     const right_uninit = right == .uninitialized or right == .maybe_initialized;
@@ -561,19 +836,19 @@ test "MIR storage rejects maybe-state reads" {
     const local = try module.store.addLocal(function, try interner_value.intern("x"), .param, semantic_module.types.intType(), hir.synthetic_span);
     _ = try module.store.addBlock(function, hir.synthetic_span);
 
-    var states = try std.testing.allocator.alloc(StorageState, module.store.locals.items.len);
-    defer std.testing.allocator.free(states);
-    @memset(states, .initialized);
+    var states = try StateFrame.init(std.testing.allocator, module.store.locals.items.len);
+    defer states.deinit();
+    @memset(states.locals, .initialized);
 
     var analyzer = Analyzer.init(std.testing.allocator, &semantic_module, &module, function, module.store.getFunction(function).*, null);
     defer analyzer.diagnostics.deinit(std.testing.allocator);
 
-    states[local.index] = .maybe_moved;
-    try analyzer.readPlace(states, .{ .local = local }, hir.synthetic_span);
+    states.locals[local.index] = .maybe_moved;
+    try analyzer.readPlace(&states, .{ .local = local }, hir.synthetic_span);
     try std.testing.expectEqual(StorageDiagnostic.Kind.maybe_moved_use, analyzer.diagnostics.items[0].kind);
 
-    states[local.index] = .maybe_initialized;
-    try analyzer.readPlace(states, .{ .local = local }, hir.synthetic_span);
+    states.locals[local.index] = .maybe_initialized;
+    try analyzer.readPlace(&states, .{ .local = local }, hir.synthetic_span);
     try std.testing.expectEqual(StorageDiagnostic.Kind.maybe_uninitialized_use, analyzer.diagnostics.items[1].kind);
 }
 
@@ -802,14 +1077,14 @@ test "MIR storage rejects manually marked moved local read" {
     const local = try module.store.addLocal(function, try interner_value.intern("x"), .param, .{ .index = 1 }, hir.synthetic_span);
     _ = try module.store.addBlock(function, hir.synthetic_span);
 
-    var states = try std.testing.allocator.alloc(StorageState, module.store.locals.items.len);
-    defer std.testing.allocator.free(states);
-    @memset(states, .initialized);
-    states[local.index] = .moved;
+    var states = try StateFrame.init(std.testing.allocator, module.store.locals.items.len);
+    defer states.deinit();
+    @memset(states.locals, .initialized);
+    states.locals[local.index] = .moved;
 
     var analyzer = Analyzer.init(std.testing.allocator, &semantic_module, &module, function, module.store.getFunction(function).*, null);
     defer analyzer.diagnostics.deinit(std.testing.allocator);
-    try analyzer.readPlace(states, .{ .local = local }, hir.synthetic_span);
+    try analyzer.readPlace(&states, .{ .local = local }, hir.synthetic_span);
     try std.testing.expect(analyzer.had_error);
     try std.testing.expectEqual(StorageDiagnostic.Kind.use_after_move, analyzer.diagnostics.items[0].kind);
 }
@@ -827,7 +1102,7 @@ test "MIR storage field access requires initialized base" {
     const out = try module.store.addLocal(function, try interner_value.intern("out"), .user, .{ .index = 1 }, hir.synthetic_span);
     const block = try module.store.addBlock(function, hir.synthetic_span);
     try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = out }, mir.MirRvalue.use_(mir.MirOperand.copyPlace(mir.MirPlace.fieldPlace(base, .{ .index = 0 })))) });
-    try module.store.setTerminator(block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(mir.MirOperand.copyPlace(.{ .local = out })) });
+    try module.store.setTerminator(block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(try mir.MirOperand.intLiteral(std.testing.allocator, "0")) });
 
     var bag = diagnostics.DiagnosticBag.init(std.testing.allocator);
     defer bag.deinit();
@@ -999,6 +1274,190 @@ test "Drop lookup recognizes explicit Drop impl for struct only" {
     const drop_info = semantic_module.hasDrop(file_type).?;
     try std.testing.expectEqual(file_type, drop_info.type_id);
     try std.testing.expectEqual(drop_fn, drop_info.function);
+}
+
+test "MIR storage tracks partial struct field initialization and allows initialized field read" {
+    var interner_value = interner.Interner.init(std.testing.allocator);
+    defer interner_value.deinit();
+    var semantic_module = try semantics.SemanticModule.init(std.testing.allocator);
+    defer semantic_module.deinit();
+    const pair_struct = try semantic_module.hir.addStruct(try semantic_module.interner.intern("Pair"));
+    const left = try semantic_module.hir.addField(pair_struct, try semantic_module.interner.intern("left"), semantic_module.types.intType(), hir.synthetic_span);
+    const right = try semantic_module.hir.addField(pair_struct, try semantic_module.interner.intern("right"), semantic_module.types.intType(), hir.synthetic_span);
+    _ = right;
+    const pair_type = try semantic_module.types.addStructType(pair_struct);
+    var module = mir.MirModule.init(std.testing.allocator);
+    defer module.deinit();
+
+    const function = try module.store.addFunction(.{ .index = 0 }, try interner_value.intern("main"), semantic_module.types.intType(), hir.synthetic_span);
+    const p = try module.store.addLocal(function, try interner_value.intern("p"), .user, pair_type, hir.synthetic_span);
+    const out = try module.store.addLocal(function, try interner_value.intern("out"), .user, semantic_module.types.intType(), hir.synthetic_span);
+    const block = try module.store.addBlock(function, hir.synthetic_span);
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(mir.MirPlace.fieldPlace(p, left), mir.MirRvalue.use_(try mir.MirOperand.intLiteral(std.testing.allocator, "20"))) });
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = out }, mir.MirRvalue.use_(mir.MirOperand.copyPlace(mir.MirPlace.fieldPlace(p, left)))) });
+    try module.store.setTerminator(block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(try mir.MirOperand.intLiteral(std.testing.allocator, "0")) });
+
+    var analysis = try analyzeFunction(std.testing.allocator, &semantic_module, &module, function, module.store.getFunction(function).*, null);
+    defer analysis.deinit();
+    try std.testing.expectEqual(StorageState.partially_initialized, analysis.stateOf(p));
+}
+
+test "MIR storage rejects uninitialized field read from partial struct" {
+    var interner_value = interner.Interner.init(std.testing.allocator);
+    defer interner_value.deinit();
+    var semantic_module = try semantics.SemanticModule.init(std.testing.allocator);
+    defer semantic_module.deinit();
+    const pair_struct = try semantic_module.hir.addStruct(try semantic_module.interner.intern("Pair"));
+    const left = try semantic_module.hir.addField(pair_struct, try semantic_module.interner.intern("left"), semantic_module.types.intType(), hir.synthetic_span);
+    const right = try semantic_module.hir.addField(pair_struct, try semantic_module.interner.intern("right"), semantic_module.types.intType(), hir.synthetic_span);
+    const pair_type = try semantic_module.types.addStructType(pair_struct);
+    var module = mir.MirModule.init(std.testing.allocator);
+    defer module.deinit();
+
+    const function = try module.store.addFunction(.{ .index = 0 }, try interner_value.intern("main"), semantic_module.types.intType(), hir.synthetic_span);
+    const p = try module.store.addLocal(function, try interner_value.intern("p"), .user, pair_type, hir.synthetic_span);
+    const out = try module.store.addLocal(function, try interner_value.intern("out"), .user, semantic_module.types.intType(), hir.synthetic_span);
+    const block = try module.store.addBlock(function, hir.synthetic_span);
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(mir.MirPlace.fieldPlace(p, left), mir.MirRvalue.use_(try mir.MirOperand.intLiteral(std.testing.allocator, "20"))) });
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = out }, mir.MirRvalue.use_(mir.MirOperand.copyPlace(mir.MirPlace.fieldPlace(p, right)))) });
+    try module.store.setTerminator(block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(try mir.MirOperand.intLiteral(std.testing.allocator, "0")) });
+
+    var bag = diagnostics.DiagnosticBag.init(std.testing.allocator);
+    defer bag.deinit();
+    try std.testing.expectError(error.InvalidStorageState, analyzeModule(std.testing.allocator, &semantic_module, &module, &bag));
+    try std.testing.expectEqual(@as(usize, 1), bag.count());
+    try std.testing.expectEqual(diagnostics.DiagnosticCode.UseBeforeInitialization, bag.diagnostics.items[0].code);
+}
+
+test "MIR storage promotes partial struct to initialized after all fields are written" {
+    var interner_value = interner.Interner.init(std.testing.allocator);
+    defer interner_value.deinit();
+    var semantic_module = try semantics.SemanticModule.init(std.testing.allocator);
+    defer semantic_module.deinit();
+    const pair_struct = try semantic_module.hir.addStruct(try semantic_module.interner.intern("Pair"));
+    const left = try semantic_module.hir.addField(pair_struct, try semantic_module.interner.intern("left"), semantic_module.types.intType(), hir.synthetic_span);
+    const right = try semantic_module.hir.addField(pair_struct, try semantic_module.interner.intern("right"), semantic_module.types.intType(), hir.synthetic_span);
+    const pair_type = try semantic_module.types.addStructType(pair_struct);
+    var module = mir.MirModule.init(std.testing.allocator);
+    defer module.deinit();
+
+    const function = try module.store.addFunction(.{ .index = 0 }, try interner_value.intern("main"), semantic_module.types.intType(), hir.synthetic_span);
+    const p = try module.store.addLocal(function, try interner_value.intern("p"), .user, pair_type, hir.synthetic_span);
+    const block = try module.store.addBlock(function, hir.synthetic_span);
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(mir.MirPlace.fieldPlace(p, left), mir.MirRvalue.use_(try mir.MirOperand.intLiteral(std.testing.allocator, "20"))) });
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(mir.MirPlace.fieldPlace(p, right), mir.MirRvalue.use_(try mir.MirOperand.intLiteral(std.testing.allocator, "22"))) });
+    try module.store.setTerminator(block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(mir.MirOperand.copyPlace(mir.MirPlace.fieldPlace(p, left))) });
+
+    var analysis = try analyzeFunction(std.testing.allocator, &semantic_module, &module, function, module.store.getFunction(function).*, null);
+    defer analysis.deinit();
+    try std.testing.expectEqual(StorageState.initialized, analysis.stateOf(p));
+}
+
+test "MIR storage rejects whole move of partially initialized struct" {
+    var interner_value = interner.Interner.init(std.testing.allocator);
+    defer interner_value.deinit();
+    var semantic_module = try semantics.SemanticModule.init(std.testing.allocator);
+    defer semantic_module.deinit();
+    const pair_struct = try semantic_module.hir.addStruct(try semantic_module.interner.intern("Pair"));
+    const left = try semantic_module.hir.addField(pair_struct, try semantic_module.interner.intern("left"), semantic_module.types.intType(), hir.synthetic_span);
+    _ = try semantic_module.hir.addField(pair_struct, try semantic_module.interner.intern("right"), semantic_module.types.intType(), hir.synthetic_span);
+    const pair_type = try semantic_module.types.addStructType(pair_struct);
+    var module = mir.MirModule.init(std.testing.allocator);
+    defer module.deinit();
+
+    const function = try module.store.addFunction(.{ .index = 0 }, try interner_value.intern("main"), semantic_module.types.intType(), hir.synthetic_span);
+    const p = try module.store.addLocal(function, try interner_value.intern("p"), .user, pair_type, hir.synthetic_span);
+    const q = try module.store.addLocal(function, try interner_value.intern("q"), .user, pair_type, hir.synthetic_span);
+    const block = try module.store.addBlock(function, hir.synthetic_span);
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(mir.MirPlace.fieldPlace(p, left), mir.MirRvalue.use_(try mir.MirOperand.intLiteral(std.testing.allocator, "20"))) });
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = q }, mir.MirRvalue.movePlace(.{ .local = p })) });
+    try module.store.setTerminator(block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(try mir.MirOperand.intLiteral(std.testing.allocator, "0")) });
+
+    var bag = diagnostics.DiagnosticBag.init(std.testing.allocator);
+    defer bag.deinit();
+    try std.testing.expectError(error.InvalidStorageState, analyzeModule(std.testing.allocator, &semantic_module, &module, &bag));
+    try std.testing.expectEqual(@as(usize, 1), bag.count());
+    try std.testing.expectEqual(diagnostics.DiagnosticCode.UseOfPartiallyInitializedValue, bag.diagnostics.items[0].code);
+}
+
+test "MIR storage rejects replacement of initialized Drop field" {
+    var interner_value = interner.Interner.init(std.testing.allocator);
+    defer interner_value.deinit();
+    var semantic_module = try semantics.SemanticModule.init(std.testing.allocator);
+    defer semantic_module.deinit();
+    const file_struct = try semantic_module.hir.addStruct(try semantic_module.interner.intern("File"));
+    const file_type = try semantic_module.types.addStructType(file_struct);
+    _ = try addDropImplForTest(&semantic_module, file_type);
+    const holder_struct = try semantic_module.hir.addStruct(try semantic_module.interner.intern("Holder"));
+    const file_field = try semantic_module.hir.addField(holder_struct, try semantic_module.interner.intern("file"), file_type, hir.synthetic_span);
+    const holder_type = try semantic_module.types.addStructType(holder_struct);
+    var module = mir.MirModule.init(std.testing.allocator);
+    defer module.deinit();
+
+    const function = try module.store.addFunction(.{ .index = 0 }, try interner_value.intern("main"), semantic_module.types.intType(), hir.synthetic_span);
+    const h = try module.store.addLocal(function, try interner_value.intern("h"), .user, holder_type, hir.synthetic_span);
+    const f1 = try module.store.addLocal(function, null, .temp, file_type, hir.synthetic_span);
+    const f2 = try module.store.addLocal(function, null, .temp, file_type, hir.synthetic_span);
+    const block = try module.store.addBlock(function, hir.synthetic_span);
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = f1 }, try mir.MirRvalue.structConstructor(std.testing.allocator, file_struct, &.{})) });
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = h }, try mir.MirRvalue.structConstructor(std.testing.allocator, holder_struct, &.{.{ .field_id = file_field, .value = mir.MirOperand.copyPlace(.{ .local = f1 }) }})) });
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = f2 }, try mir.MirRvalue.structConstructor(std.testing.allocator, file_struct, &.{})) });
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(mir.MirPlace.fieldPlace(h, file_field), mir.MirRvalue.use_(mir.MirOperand.copyPlace(.{ .local = f2 }))) });
+    try module.store.setTerminator(block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(try mir.MirOperand.intLiteral(std.testing.allocator, "0")) });
+
+    var bag = diagnostics.DiagnosticBag.init(std.testing.allocator);
+    defer bag.deinit();
+    try std.testing.expectError(error.InvalidStorageState, analyzeModule(std.testing.allocator, &semantic_module, &module, &bag));
+    try std.testing.expectEqual(@as(usize, 1), bag.count());
+    try std.testing.expectEqual(diagnostics.DiagnosticCode.AssignmentRequiresReplacement, bag.diagnostics.items[0].code);
+}
+
+test "MIR storage drops initialized Drop fields of partial struct in reverse declaration order" {
+    var interner_value = interner.Interner.init(std.testing.allocator);
+    defer interner_value.deinit();
+    var semantic_module = try semantics.SemanticModule.init(std.testing.allocator);
+    defer semantic_module.deinit();
+    const file_struct = try semantic_module.hir.addStruct(try semantic_module.interner.intern("File"));
+    const file_type = try semantic_module.types.addStructType(file_struct);
+    const file_drop = try addDropImplForTest(&semantic_module, file_type);
+    const holder_struct = try semantic_module.hir.addStruct(try semantic_module.interner.intern("Holder"));
+    const first = try semantic_module.hir.addField(holder_struct, try semantic_module.interner.intern("first"), file_type, hir.synthetic_span);
+    const second = try semantic_module.hir.addField(holder_struct, try semantic_module.interner.intern("second"), file_type, hir.synthetic_span);
+    _ = try semantic_module.hir.addField(holder_struct, try semantic_module.interner.intern("rest"), semantic_module.types.intType(), hir.synthetic_span);
+    const holder_type = try semantic_module.types.addStructType(holder_struct);
+    var module = mir.MirModule.init(std.testing.allocator);
+    defer module.deinit();
+
+    const function = try module.store.addFunction(.{ .index = 0 }, try interner_value.intern("main"), semantic_module.types.intType(), hir.synthetic_span);
+    const h = try module.store.addLocal(function, try interner_value.intern("h"), .user, holder_type, hir.synthetic_span);
+    const block = try module.store.addBlock(function, hir.synthetic_span);
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(mir.MirPlace.fieldPlace(h, first), try mir.MirRvalue.structConstructor(std.testing.allocator, file_struct, &.{})) });
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(mir.MirPlace.fieldPlace(h, second), try mir.MirRvalue.structConstructor(std.testing.allocator, file_struct, &.{})) });
+    try module.store.setTerminator(block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(try mir.MirOperand.intLiteral(std.testing.allocator, "0")) });
+
+    var analysis = try analyzeFunction(std.testing.allocator, &semantic_module, &module, function, module.store.getFunction(function).*, null);
+    defer analysis.deinit();
+    const statements = module.store.getBlock(block).statements;
+    try std.testing.expectEqual(@as(usize, 4), statements.len);
+    try std.testing.expectEqual(second, statements[2].kind.drop.place.field.field_id);
+    try std.testing.expectEqual(file_drop, statements[2].kind.drop.function);
+    try std.testing.expectEqual(first, statements[3].kind.drop.place.field.field_id);
+    try std.testing.expectEqual(file_drop, statements[3].kind.drop.function);
+}
+
+test "MIR storage keeps matching partial branch joins and rejects different field sets conservatively" {
+    try std.testing.expectEqual(StorageState.partially_initialized, joinStorageStateWithFields(
+        .partially_initialized,
+        FieldStorageState{ .struct_type = .{ .index = 7 }, .fields = @constCast(&[_]StorageState{ .initialized, .uninitialized }) },
+        .partially_initialized,
+        FieldStorageState{ .struct_type = .{ .index = 7 }, .fields = @constCast(&[_]StorageState{ .initialized, .uninitialized }) },
+    ));
+    try std.testing.expectEqual(StorageState.maybe_initialized, joinStorageStateWithFields(
+        .partially_initialized,
+        FieldStorageState{ .struct_type = .{ .index = 7 }, .fields = @constCast(&[_]StorageState{ .initialized, .uninitialized }) },
+        .partially_initialized,
+        FieldStorageState{ .struct_type = .{ .index = 7 }, .fields = @constCast(&[_]StorageState{ .uninitialized, .initialized }) },
+    ));
 }
 
 test "MIR storage inserts Drop cleanup in reverse local initialization order" {

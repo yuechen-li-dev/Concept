@@ -147,6 +147,7 @@ pub const DiagnosticCode = enum {
     MaybeUninitializedUse,
     InvalidDropImpl,
     AssignmentRequiresReplacement,
+    UseOfPartiallyInitializedValue,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -275,6 +276,7 @@ pub const DiagnosticCode = enum {
             .MaybeUninitializedUse => "CON0156",
             .InvalidDropImpl => "CON0157",
             .AssignmentRequiresReplacement => "CON0160",
+            .UseOfPartiallyInitializedValue => "CON0161",
         };
     }
 };
@@ -718,6 +720,7 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0156", DiagnosticCode.MaybeUninitializedUse.format());
     try std.testing.expectEqualStrings("CON0157", DiagnosticCode.InvalidDropImpl.format());
     try std.testing.expectEqualStrings("CON0160", DiagnosticCode.AssignmentRequiresReplacement.format());
+    try std.testing.expectEqualStrings("CON0161", DiagnosticCode.UseOfPartiallyInitializedValue.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {
@@ -1033,6 +1036,10 @@ pub fn invalidDropImpl(span: SourceSpan) Diagnostic {
 
 pub fn assignmentRequiresReplacement(span: SourceSpan) Diagnostic {
     return Diagnostic.init(.AssignmentRequiresReplacement, .@"error", "assignment would replace a non-Copy or Drop value; explicit replacement semantics are not implemented yet", span);
+}
+
+pub fn useOfPartiallyInitializedValue(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.UseOfPartiallyInitializedValue, .@"error", "value is only partially initialized; initialize all fields before using it as a whole", span);
 }
 
 pub fn unsupportedCBackendType(span: SourceSpan) Diagnostic {

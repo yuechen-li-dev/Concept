@@ -117,6 +117,31 @@ replaced. P10-M6 does not implement `ManualInit<T>`, an official
 Drop replacement lowering, C++ `operator=`/copy-assignment semantics, implicit
 move, borrow checking, or lifetimes.
 
+P10-M7 adds partial initialization tracking for direct fields of local struct
+places in MIR storage analysis. A struct local can now enter
+`PartiallyInitialized` when fields are written into uninitialized storage; the
+pass records one direct field state per declared field, allows reads of fields
+known initialized, rejects reads of uninitialized fields, and rejects whole
+value copy/move/use while the struct is only partial with `CON0161
+UseOfPartiallyInitializedValue`. When all direct fields become initialized, the
+whole local is promoted to `Initialized` and the field-state side table is
+cleared. Whole struct assignment, whole move, and whole Drop continue to clear
+partial field state.
+
+P10-M7 cleanup does not call `Drop<T>` for a partially initialized struct as a
+whole. Instead, return cleanup drops only initialized direct fields that
+themselves have `Drop<T>`, in reverse declaration order; initialized fields
+without Drop need no cleanup, and uninitialized or moved fields are skipped.
+Field assignment into a fully initialized struct follows the P10-M6 replacement
+policy for the field type: initialized Copy/non-Drop fields may be overwritten,
+while non-Copy or Drop fields are rejected with `CON0160`. Branch joins for
+partial states are deliberately conservative: identical partial field sets can
+remain partial, while different partial sets or partial mixed with whole states
+collapse to existing maybe-state diagnostics. P10-M7 does not implement
+`ManualInit<T>`, an official `MaybeUninit<T>` surface, field moves, nested or
+indexed partial tracking, Drop replacement for initialized Drop fields, borrow
+checking, lifetimes, or C++ constructor/destructor semantics.
+
 ## Thesis
 
 ```text
