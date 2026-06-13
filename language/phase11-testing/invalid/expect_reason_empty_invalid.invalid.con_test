@@ -1,0 +1,15 @@
+# name: expect reason empty invalid
+# phase: check
+# expect: fail
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+void EmptyReason() {
+    Expect.True(true, "");
+    return;
+}
+
+=== diagnostics ===
+CON0171

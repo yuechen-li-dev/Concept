@@ -1,0 +1,12 @@
+# name: expect equal bool reason valid
+# phase: check
+# expect: pass
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+void ExpectEqualBoolReason() {
+    Expect.Equal(true, true, "boolean result should match the expected predicate value");
+    return;
+}

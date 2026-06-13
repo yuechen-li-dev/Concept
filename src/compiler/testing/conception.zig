@@ -2318,6 +2318,12 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase11-testing/valid/theory_inline_data_valid.valid.con_test");
     try expectCheckFixture("../../../language/phase11-testing/valid/theory_multiple_inline_data_valid.valid.con_test");
     try expectCheckFixture("../../../language/phase11-testing/valid/theory_int_bool_inline_data_valid.valid.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/valid/assert_true_reason_valid.valid.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/valid/assert_false_reason_valid.valid.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/valid/expect_true_reason_valid.valid.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/valid/expect_false_reason_valid.valid.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/valid/expect_equal_int_reason_valid.valid.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/valid/expect_equal_bool_reason_valid.valid.con_test");
     try expectParseFixture("../../../language/phase11-testing/invalid/attribute_unknown.invalid.conception");
     try expectParseFixture("../../../language/phase11-testing/invalid/attribute_orphan.invalid.conception");
     try expectParseFixture("../../../language/phase11-testing/invalid/attribute_statement_position.invalid.conception");
@@ -2334,6 +2340,17 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase11-testing/invalid/inline_data_arity_mismatch_invalid.invalid.con_test");
     try expectCheckFixture("../../../language/phase11-testing/invalid/inline_data_type_mismatch_invalid.invalid.con_test");
     try expectCheckFixture("../../../language/phase11-testing/invalid/fact_wrong_return_type_invalid.invalid.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/invalid/expect_true_missing_reason_invalid.invalid.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/invalid/assert_true_missing_reason_invalid.invalid.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/invalid/expect_equal_missing_reason_invalid.invalid.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/invalid/expect_reason_empty_invalid.invalid.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/invalid/expect_reason_whitespace_invalid.invalid.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/invalid/expect_true_non_bool_invalid.invalid.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/invalid/assert_false_non_bool_invalid.invalid.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/invalid/expect_equal_type_mismatch_invalid.invalid.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/invalid/expect_equal_unsupported_type_invalid.invalid.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/invalid/expect_wrong_arity_invalid.invalid.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/invalid/test_intrinsic_normal_source_invalid.invalid.conception");
     try expectParseFixture("../../../language/phase11-testing/invalid/inline_test_block_rejected.invalid.conception");
 
     try expectRunFixture("../../../language/phase10-ownership/valid/move_struct_local_run.valid.conception");

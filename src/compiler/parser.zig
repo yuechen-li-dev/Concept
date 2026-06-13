@@ -1457,6 +1457,14 @@ pub const Parser = struct {
                 .left_paren, .left_brace => {
                     const identifier = switch (expr.*) {
                         .identifier => |identifier| identifier,
+                        .field_access => |field_access| if (self.current().kind == .left_paren) {
+                            const receiver = switch (field_access.receiver.*) {
+                                .identifier => |receiver_identifier| receiver_identifier,
+                                else => break,
+                            };
+                            expr = try self.finishQualifiedCallExpr(allocator, expr, receiver, field_access.field_name);
+                            continue;
+                        } else break,
                         else => break,
                     };
                     if (self.current().kind == .left_paren) {
@@ -1539,6 +1547,64 @@ pub const Parser = struct {
             .callee = identifier.name,
             .args = owned_args,
             .span = ast.spanFromBounds(identifier.span.start, spanEnd(end_span)),
+        } };
+        return node;
+    }
+
+    fn finishQualifiedCallExpr(
+        self: *Parser,
+        allocator: std.mem.Allocator,
+        callee_expr: *ast.Expr,
+        qualifier: ast.Expr.IdentifierExpr,
+        callee: ast.NameSegment,
+    ) ParseExprError!*ast.Expr {
+        const left_paren = self.advance();
+        _ = left_paren;
+        var args = std.ArrayList(*ast.Expr).init(allocator);
+        errdefer {
+            for (args.items) |arg| {
+                arg.deinit(allocator);
+                allocator.destroy(arg);
+            }
+            args.deinit();
+        }
+
+        var last_span = callee.span;
+        if (self.current().kind != .right_paren) {
+            while (self.current().kind != .eof and self.current().kind != .right_paren and self.current().kind != .semicolon) {
+                const arg = self.parseExpr(allocator) catch |err| switch (err) {
+                    error.OutOfMemory => return err,
+                    error.ParseFailed => {
+                        self.recoverCallArgument();
+                        if (self.match(.comma) != null) continue;
+                        break;
+                    },
+                };
+                last_span = arg.span();
+                try args.append(arg);
+                if (self.match(.comma) == null) break;
+                if (self.current().kind == .right_paren) {
+                    self.report(.UnexpectedToken, "expected expression", self.current().span) catch return error.OutOfMemory;
+                    break;
+                }
+            }
+        }
+
+        const end_span = if (self.match(.right_paren)) |right_paren| right_paren.span else blk: {
+            self.report(.UnexpectedToken, "expected ')' after call arguments", self.current().span) catch return error.OutOfMemory;
+            self.recoverCallArgument();
+            break :blk last_span;
+        };
+
+        const owned_args = try args.toOwnedSlice();
+        const node = try allocator.create(ast.Expr);
+        callee_expr.deinit(allocator);
+        allocator.destroy(callee_expr);
+        node.* = .{ .call = .{
+            .qualifier = qualifier.name,
+            .callee = callee,
+            .args = owned_args,
+            .span = ast.spanFromBounds(qualifier.span.start, spanEnd(end_span)),
         } };
         return node;
     }
@@ -1812,6 +1878,12 @@ pub const Parser = struct {
                 _ = self.advance();
                 const node = try allocator.create(ast.Expr);
                 node.* = .{ .bool_literal = .{ .value = token.kind == .true, .span = token.span } };
+                return node;
+            },
+            .string_literal => {
+                _ = self.advance();
+                const node = try allocator.create(ast.Expr);
+                node.* = .{ .string_literal = .{ .text = token.lexeme, .span = token.span } };
                 return node;
             },
             .identifier => {
@@ -2631,7 +2703,7 @@ pub const Parser = struct {
 
     fn isExprStmtStart(self: Parser) bool {
         return switch (self.current().kind) {
-            .identifier, .int_literal, .true, .false, .left_paren, .minus, .bang, .ampersand, .star, .decide, .move, .@"comptime" => true,
+            .identifier, .int_literal, .true, .false, .string_literal, .left_paren, .minus, .bang, .ampersand, .star, .decide, .move, .@"comptime" => true,
             else => false,
         };
     }

@@ -1,0 +1,12 @@
+# name: assert false reason valid
+# phase: check
+# expect: pass
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+void AssertFalseReason() {
+    Assert.False(false, "setup invariant should reject the false path");
+    return;
+}

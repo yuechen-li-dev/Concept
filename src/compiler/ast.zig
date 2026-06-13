@@ -360,6 +360,7 @@ pub const BinaryOp = enum {
 pub const Expr = union(enum) {
     int_literal: IntLiteralExpr,
     bool_literal: BoolLiteralExpr,
+    string_literal: StringLiteralExpr,
     identifier: IdentifierExpr,
     group: GroupExpr,
     unary: UnaryExpr,
@@ -377,6 +378,7 @@ pub const Expr = union(enum) {
 
     pub const IntLiteralExpr = struct { text: []const u8, span: SourceSpan };
     pub const BoolLiteralExpr = struct { value: bool, span: SourceSpan };
+    pub const StringLiteralExpr = struct { text: []const u8, span: SourceSpan };
     pub const IdentifierExpr = struct { name: NameSegment, span: SourceSpan };
     pub const GroupExpr = struct { inner: *Expr, span: SourceSpan };
     pub const UnaryExpr = struct { op: UnaryOp, operand: *Expr, span: SourceSpan };
@@ -384,7 +386,7 @@ pub const Expr = union(enum) {
     pub const TryExpr = struct { operand: *Expr, span: SourceSpan };
     pub const CompileTimeExpr = struct { operand: *Expr, span: SourceSpan };
     pub const BinaryExpr = struct { op: BinaryOp, left: *Expr, right: *Expr, span: SourceSpan };
-    pub const CallExpr = struct { callee: NameSegment, args: []*Expr, span: SourceSpan };
+    pub const CallExpr = struct { qualifier: ?NameSegment = null, callee: NameSegment, args: []*Expr, span: SourceSpan };
     pub const EnumConstructorExpr = struct { enum_name: NameSegment, variant_name: NameSegment, args: []*Expr, span: SourceSpan };
     pub const StructLiteralExpr = struct { type_name: NameSegment, fields: []StructLiteralField, span: SourceSpan };
     pub const StructLiteralField = struct { name: NameSegment, value: *Expr, span: SourceSpan };
@@ -410,6 +412,7 @@ pub const Expr = union(enum) {
         return switch (self) {
             .int_literal => |expr| expr.span,
             .bool_literal => |expr| expr.span,
+            .string_literal => |expr| expr.span,
             .identifier => |expr| expr.span,
             .group => |expr| expr.span,
             .unary => |expr| expr.span,
@@ -477,7 +480,7 @@ pub const Expr = union(enum) {
                 for (expr.arms) |arm| arm.deinit(allocator);
                 allocator.free(expr.arms);
             },
-            .int_literal, .bool_literal, .identifier => {},
+            .int_literal, .bool_literal, .string_literal, .identifier => {},
         }
     }
 
@@ -492,6 +495,11 @@ pub const Expr = union(enum) {
             .bool_literal => |expr| {
                 try writer.writeAll("Bool ");
                 try writer.writeAll(if (expr.value) "true" else "false");
+                try writer.writeByte('\n');
+            },
+            .string_literal => |expr| {
+                try writer.writeAll("String ");
+                try writer.writeAll(expr.text);
                 try writer.writeByte('\n');
             },
             .identifier => |expr| {
@@ -538,6 +546,10 @@ pub const Expr = union(enum) {
             },
             .call => |expr| {
                 try writer.writeAll("Call ");
+                if (expr.qualifier) |qualifier| {
+                    try writer.writeAll(qualifier.text);
+                    try writer.writeByte('.');
+                }
                 try writer.writeAll(expr.callee.text);
                 try writer.writeByte('\n');
                 for (expr.args) |arg| try arg.writeDebug(writer, depth + 1);

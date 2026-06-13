@@ -301,6 +301,10 @@ const Checker = struct {
                 }
                 break :blk metadata.query.typeOf(self.module.types);
             },
+            .test_intrinsic => |test_intrinsic| blk: {
+                try self.checkTestIntrinsic(return_type, expr, test_intrinsic);
+                break :blk self.module.types.voidType();
+            },
             .call => |call| blk: {
                 var arg_types = std.ArrayList(types.TypeId).empty;
                 defer arg_types.deinit(self.allocator);
@@ -1034,6 +1038,19 @@ const Checker = struct {
             .try_expr => |operand| .{ .try_expr = try self.cloneExpr(operand, subst, param_map, local_map, span) },
             .compile_time => |compile_time_expr| .{ .compile_time = .{ .operand = try self.cloneExpr(compile_time_expr.operand, subst, param_map, local_map, span), .span = compile_time_expr.span } },
             .binary => |binary| .{ .binary = .{ .op = binary.op, .left = try self.cloneExpr(binary.left, subst, param_map, local_map, span), .right = try self.cloneExpr(binary.right, subst, param_map, local_map, span) } },
+            .test_intrinsic => |test_intrinsic| blk: {
+                var operands = try self.allocator.alloc(hir.ExprId, test_intrinsic.operands.len);
+                errdefer self.allocator.free(operands);
+                for (test_intrinsic.operands, 0..) |operand, index| {
+                    operands[index] = try self.cloneExpr(operand, subst, param_map, local_map, span);
+                }
+                break :blk .{ .test_intrinsic = .{
+                    .kind = test_intrinsic.kind,
+                    .operands = operands,
+                    .reason = try self.allocator.dupe(u8, test_intrinsic.reason),
+                    .reason_span = test_intrinsic.reason_span,
+                } };
+            },
         };
         return self.module.hir.addExpr(kind, expr.span);
     }
@@ -1137,6 +1154,43 @@ const Checker = struct {
         }
         try self.reportAt(.TypeMismatch, "unknown enum constructor type", synthetic_span);
         return error.InvalidSemanticModule;
+    }
+
+    fn checkTestIntrinsic(self: *Checker, return_type: types.TypeId, expr: hir.HirExpr, test_intrinsic: hir.HirTestIntrinsic) CheckError!void {
+        switch (test_intrinsic.kind) {
+            .assert_true, .assert_false, .expect_true, .expect_false => {
+                if (test_intrinsic.operands.len != 1) {
+                    try self.reportAt(.TestIntrinsicArityMismatch, "test intrinsic argument count mismatch", expr.span);
+                    return error.InvalidSemanticModule;
+                }
+                const condition_type = try self.checkExpr(return_type, test_intrinsic.operands[0]);
+                if (!self.isBool(condition_type)) {
+                    try self.reportAt(.TestIntrinsicTypeMismatch, "test intrinsic argument type mismatch", self.exprSpan(test_intrinsic.operands[0]));
+                    return error.InvalidSemanticModule;
+                }
+            },
+            .expect_equal_int, .expect_equal_bool => {
+                if (test_intrinsic.operands.len != 2) {
+                    try self.reportAt(.TestIntrinsicArityMismatch, "test intrinsic argument count mismatch", expr.span);
+                    return error.InvalidSemanticModule;
+                }
+                const expected_type = try self.checkExpr(return_type, test_intrinsic.operands[0]);
+                const actual_type = try self.checkExpr(return_type, test_intrinsic.operands[1]);
+                const required_type = switch (test_intrinsic.kind) {
+                    .expect_equal_int => self.module.types.intType(),
+                    .expect_equal_bool => self.module.types.boolType(),
+                    else => unreachable,
+                };
+                if (!sameType(expected_type, required_type) or !sameType(actual_type, required_type)) {
+                    try self.reportAt(.TestIntrinsicTypeMismatch, "test intrinsic argument type mismatch", expr.span);
+                    return error.InvalidSemanticModule;
+                }
+            },
+        }
+        if (std.mem.trim(u8, test_intrinsic.reason, " \t\r\n").len == 0) {
+            try self.reportAt(.TestReasonMustBeNonEmpty, "test intrinsic because reason must be non-empty", test_intrinsic.reason_span);
+            return error.InvalidSemanticModule;
+        }
     }
 
     fn requireSame(self: *Checker, actual: types.TypeId, expected: types.TypeId, message: []const u8, span: diagnostics.SourceSpan) CheckError!void {

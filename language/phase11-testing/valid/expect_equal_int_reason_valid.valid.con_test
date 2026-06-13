@@ -1,0 +1,12 @@
+# name: expect equal int reason valid
+# phase: check
+# expect: pass
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+void ExpectEqualIntReason() {
+    Expect.Equal(4, 4, "integer result should match the expected arithmetic value");
+    return;
+}

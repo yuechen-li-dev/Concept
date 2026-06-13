@@ -1,0 +1,15 @@
+# name: expect reason whitespace invalid
+# phase: check
+# expect: fail
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+void WhitespaceReason() {
+    Expect.True(true, "   ");
+    return;
+}
+
+=== diagnostics ===
+CON0171

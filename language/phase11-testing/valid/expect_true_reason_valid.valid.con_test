@@ -1,0 +1,12 @@
+# name: expect true reason valid
+# phase: check
+# expect: pass
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+void ExpectTrueReason() {
+    Expect.True(true, "boolean behavior should evaluate to true");
+    return;
+}

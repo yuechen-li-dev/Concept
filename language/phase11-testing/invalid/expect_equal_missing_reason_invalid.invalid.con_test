@@ -1,0 +1,15 @@
+# name: expect equal missing reason invalid
+# phase: check
+# expect: fail
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+void MissingReason() {
+    Expect.Equal(1, 1);
+    return;
+}
+
+=== diagnostics ===
+CON0170

@@ -247,6 +247,33 @@ pub const HirDecideArm = struct {
     span: SourceSpan,
 };
 
+pub const HirTestIntrinsicKind = enum {
+    assert_true,
+    assert_false,
+    expect_true,
+    expect_false,
+    expect_equal_int,
+    expect_equal_bool,
+
+    pub fn displayName(self: HirTestIntrinsicKind) []const u8 {
+        return switch (self) {
+            .assert_true => "assert_true",
+            .assert_false => "assert_false",
+            .expect_true => "expect_true",
+            .expect_false => "expect_false",
+            .expect_equal_int => "expect_equal_int",
+            .expect_equal_bool => "expect_equal_bool",
+        };
+    }
+};
+
+pub const HirTestIntrinsic = struct {
+    kind: HirTestIntrinsicKind,
+    operands: []ExprId,
+    reason: []const u8,
+    reason_span: SourceSpan,
+};
+
 pub const HirExprKind = union(enum) {
     int_literal: []const u8,
     bool_literal: bool,
@@ -259,6 +286,7 @@ pub const HirExprKind = union(enum) {
     field_access: struct { receiver: ExprId, field_name: SymbolId, field_span: SourceSpan },
     target_metadata: struct { query: CompileTimeTargetQuery, field_span: SourceSpan },
     decide: struct { enum_type: types.TypeId, enum_id: EnumId, arms: []HirDecideArm },
+    test_intrinsic: HirTestIntrinsic,
     group: ExprId,
     unary: struct { op: UnaryOp, operand: ExprId },
     address_of: ExprId,
@@ -481,6 +509,10 @@ pub const HirStore = struct {
                 .enum_constructor => |constructor| if (constructor.args.len > 0) self.allocator.free(constructor.args),
                 .struct_literal => |literal| if (literal.fields.len > 0) self.allocator.free(literal.fields),
                 .decide => |decide| if (decide.arms.len > 0) self.allocator.free(decide.arms),
+                .test_intrinsic => |test_intrinsic| {
+                    if (test_intrinsic.operands.len > 0) self.allocator.free(test_intrinsic.operands);
+                    self.allocator.free(test_intrinsic.reason);
+                },
                 else => {},
             }
         }
@@ -1212,6 +1244,10 @@ pub const HirStore = struct {
                     try writer.writeAll("Score\n");
                     try self.writeExprDebug(writer, arm.score, depth + 3);
                 }
+            },
+            .test_intrinsic => |test_intrinsic| {
+                try writer.print("TestIntrinsic {s} because {s}\n", .{ test_intrinsic.kind.displayName(), test_intrinsic.reason });
+                for (test_intrinsic.operands) |operand| try self.writeExprDebug(writer, operand, depth + 1);
             },
             .group => |inner| {
                 try writer.writeAll("Group\n");

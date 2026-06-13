@@ -1,0 +1,16 @@
+# name: expect equal unsupported type invalid
+# phase: check
+# expect: fail
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+void UnsupportedType() {
+    int value = 1;
+    Expect.Equal(&value, &value, "pointer equality is not part of v0");
+    return;
+}
+
+=== diagnostics ===
+CON0184

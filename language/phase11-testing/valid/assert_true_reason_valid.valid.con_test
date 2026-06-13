@@ -1,0 +1,12 @@
+# name: assert true reason valid
+# phase: check
+# expect: pass
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+void AssertTrueReason() {
+    Assert.True(true, "setup invariant should hold before expectations run");
+    return;
+}

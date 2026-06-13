@@ -1,0 +1,15 @@
+# name: expect equal type mismatch invalid
+# phase: check
+# expect: fail
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+void TypeMismatch() {
+    Expect.Equal(1, true, "expected and actual must have the same primitive type");
+    return;
+}
+
+=== diagnostics ===
+CON0183

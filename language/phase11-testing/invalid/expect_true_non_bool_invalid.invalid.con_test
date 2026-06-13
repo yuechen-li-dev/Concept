@@ -1,0 +1,15 @@
+# name: expect true non bool invalid
+# phase: check
+# expect: fail
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+void NonBool() {
+    Expect.True(1, "condition must be bool");
+    return;
+}
+
+=== diagnostics ===
+CON0183

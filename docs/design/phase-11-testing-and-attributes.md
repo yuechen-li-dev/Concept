@@ -606,6 +606,55 @@ Still deferred:
 - inline test blocks;
 - attribute macros and arbitrary compile-time attribute expressions.
 
+## P11-M4 implementation status
+
+P11-M4 adds compiler-recognized reasoned Assert/Expect intrinsics for `.con_test`
+files. This milestone deliberately does not add a test runner or execute tests.
+
+Implemented behavior:
+
+- `Assert.True` and `Assert.False` are recognized in test files;
+- `Expect.True`, `Expect.False`, and `Expect.Equal` are recognized in test files;
+- the implementation uses the positional reason bridge, such as
+  `Expect.True(condition, "reason")`;
+- the semantic slot is still named `because`;
+- reasons are mandatory;
+- reason arguments must be string literals in v0;
+- empty and whitespace-only reasons are rejected;
+- `Assert.True`, `Assert.False`, `Expect.True`, and `Expect.False` require a
+  `bool` condition;
+- `Expect.Equal` supports matching `int` operands and matching `bool` operands;
+- `Expect.Equal` rejects mismatched primitive operands;
+- `Expect.Equal` rejects unsupported equality types such as pointers, structs,
+  enums, strings, and arrays;
+- Assert versus Expect kind is preserved in HIR metadata;
+- reason text is preserved in HIR metadata for future failure reporting;
+- Assert/Expect intrinsics in normal source files are rejected.
+
+Representation:
+
+- test intrinsics lower to an explicit HIR-only `test_intrinsic` scaffold;
+- the HIR node stores the intrinsic kind, operand expression IDs, reason text,
+  reason span, and call span;
+- MIR lowering rejects this scaffold until a future runner supplies an execution
+  path.
+
+Still deferred:
+
+- test execution;
+- generated runner functions;
+- `[Theory]` execution;
+- `InlineData` execution;
+- `Expect.That`;
+- `Is.EqualTo`;
+- relation API;
+- generic equality;
+- enum, struct, string, and array equality;
+- failure reporting;
+- test filtering;
+- runtime reflection;
+- inline test blocks.
+
 ## Close criteria
 
 P11-M0 is successful if:

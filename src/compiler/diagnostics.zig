@@ -162,6 +162,12 @@ pub const DiagnosticCode = enum {
     InlineDataRequiresTheory,
     ConflictingTestAttributes,
     DuplicateTestAttribute,
+    TestExpectationRequiresReason,
+    TestReasonMustBeNonEmpty,
+    TestIntrinsicOutsideTestFile,
+    TestIntrinsicTypeMismatch,
+    ExpectEqualUnsupportedType,
+    TestIntrinsicArityMismatch,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -305,6 +311,12 @@ pub const DiagnosticCode = enum {
             .InlineDataRequiresTheory => "CON0179",
             .ConflictingTestAttributes => "CON0180",
             .DuplicateTestAttribute => "CON0181",
+            .TestExpectationRequiresReason => "CON0170",
+            .TestReasonMustBeNonEmpty => "CON0171",
+            .TestIntrinsicOutsideTestFile => "CON0182",
+            .TestIntrinsicTypeMismatch => "CON0183",
+            .ExpectEqualUnsupportedType => "CON0184",
+            .TestIntrinsicArityMismatch => "CON0185",
         };
     }
 };
@@ -763,6 +775,12 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0179", DiagnosticCode.InlineDataRequiresTheory.format());
     try std.testing.expectEqualStrings("CON0180", DiagnosticCode.ConflictingTestAttributes.format());
     try std.testing.expectEqualStrings("CON0181", DiagnosticCode.DuplicateTestAttribute.format());
+    try std.testing.expectEqualStrings("CON0170", DiagnosticCode.TestExpectationRequiresReason.format());
+    try std.testing.expectEqualStrings("CON0171", DiagnosticCode.TestReasonMustBeNonEmpty.format());
+    try std.testing.expectEqualStrings("CON0182", DiagnosticCode.TestIntrinsicOutsideTestFile.format());
+    try std.testing.expectEqualStrings("CON0183", DiagnosticCode.TestIntrinsicTypeMismatch.format());
+    try std.testing.expectEqualStrings("CON0184", DiagnosticCode.ExpectEqualUnsupportedType.format());
+    try std.testing.expectEqualStrings("CON0185", DiagnosticCode.TestIntrinsicArityMismatch.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {
@@ -1134,6 +1152,30 @@ pub fn conflictingTestAttributes(span: SourceSpan) Diagnostic {
 
 pub fn duplicateTestAttribute(span: SourceSpan) Diagnostic {
     return Diagnostic.init(.DuplicateTestAttribute, .@"error", "duplicate test attribute", span);
+}
+
+pub fn testExpectationRequiresReason(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.TestExpectationRequiresReason, .@"error", "Assert/Expect test intrinsics require a because reason", span);
+}
+
+pub fn testReasonMustBeNonEmpty(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.TestReasonMustBeNonEmpty, .@"error", "test intrinsic because reason must be non-empty", span);
+}
+
+pub fn testIntrinsicOutsideTestFile(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.TestIntrinsicOutsideTestFile, .@"error", "Assert/Expect test intrinsics are only valid in .con_test files", span);
+}
+
+pub fn testIntrinsicTypeMismatch(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.TestIntrinsicTypeMismatch, .@"error", "test intrinsic argument type mismatch", span);
+}
+
+pub fn expectEqualUnsupportedType(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.ExpectEqualUnsupportedType, .@"error", "Expect.Equal supports only matching int or bool operands in v0", span);
+}
+
+pub fn testIntrinsicArityMismatch(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.TestIntrinsicArityMismatch, .@"error", "test intrinsic argument count mismatch", span);
 }
 
 pub fn useOfPartiallyInitializedValue(span: SourceSpan) Diagnostic {

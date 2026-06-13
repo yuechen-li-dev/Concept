@@ -1,0 +1,15 @@
+# name: expect wrong arity invalid
+# phase: check
+# expect: fail
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+void WrongArity() {
+    Expect.True(true, "reason", false);
+    return;
+}
+
+=== diagnostics ===
+CON0185

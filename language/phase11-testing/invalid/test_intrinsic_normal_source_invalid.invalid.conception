@@ -1,0 +1,14 @@
+# name: test intrinsic normal source invalid
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+int main() {
+    Expect.True(true, "test intrinsics are test-source only");
+    return 0;
+}
+
+=== diagnostics ===
+CON0182
