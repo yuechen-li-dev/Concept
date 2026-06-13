@@ -1,0 +1,32 @@
+# name: dyn dispatch return int
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+interface Counter {
+    int Value();
+};
+
+struct Box {
+    int value;
+};
+
+impl Counter<Box> {
+    int Value(mut Box& self) {
+        return self.value;
+    }
+}
+
+int Read(mut dyn Counter& counter) {
+    return counter.Value();
+}
+
+int main() {
+    Box box = Box { value: 7 };
+    return Read(box);
+}
+
+=== run ===
+exit_code: 7

@@ -58,6 +58,9 @@ pub fn emitExecutableFromMir(
     const emitted_struct_layouts = try emitStructLayouts(writer, &ctx);
     if ((emitted_enum_layouts or emitted_struct_layouts) and ctx.module.hir.machines.items.len > 0) try writer.writeByte('\n');
 
+    const emitted_dyn_interface_layouts = try emitDynInterfaceLayouts(writer, &ctx);
+    if ((emitted_enum_layouts or emitted_struct_layouts or emitted_dyn_interface_layouts) and ctx.module.hir.machines.items.len > 0) try writer.writeByte('\n');
+
     const emitted_machine_result_trap = try emitMachineResultTrapHelper(writer, &ctx);
     if (emitted_machine_result_trap and ctx.module.hir.machines.items.len > 0) try writer.writeByte('\n');
 
@@ -82,6 +85,9 @@ pub fn emitExecutableFromMir(
         }
         try writer.writeByte('\n');
     }
+
+    const emitted_interface_impl_tables = try emitInterfaceImplWrappersAndTables(writer, &ctx);
+    if (emitted_interface_impl_tables and mir_module.store.functions.items.len > 0) try writer.writeByte('\n');
 
     for (mir_module.store.functions.items, 0..) |function, index| {
         if (index != 0) try writer.writeByte('\n');
@@ -252,6 +258,77 @@ fn isSupportedStructFieldPointerType(ctx: *const BackendContext, pointee: types.
         .enum_type => |enum_id| isSupportedEnumLayout(ctx, enum_id),
         .pointer => |nested| isSupportedStructFieldPointerType(ctx, nested.pointee),
         .struct_type, .machine_type, .interface_type, .dyn_interface, .manual_init, .type_param => false,
+    };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Interface dyn/vtable layout emission
+// ─────────────────────────────────────────────────────────────────────────────
+
+fn emitDynInterfaceLayouts(writer: anytype, ctx: *const BackendContext) EmitError!bool {
+    var emitted_any = false;
+    for (ctx.module.hir.interfaces.items, 0..) |interface_decl, index| {
+        const interface_id = hir.InterfaceId{ .index = @intCast(index) };
+        if (!usesDynInterface(ctx, interface_id)) continue;
+        if (emitted_any) try writer.writeByte('\n');
+        try emitInterfaceVTableLayout(writer, ctx, interface_id, interface_decl);
+        try writer.writeByte('\n');
+        try emitDynInterfaceLayout(writer, ctx, interface_decl);
+        emitted_any = true;
+    }
+    return emitted_any;
+}
+
+fn emitInterfaceVTableLayout(writer: anytype, ctx: *const BackendContext, interface_id: hir.InterfaceId, interface_decl: hir.HirInterface) EmitError!void {
+    try writer.writeAll("typedef struct {\n");
+    for (interface_decl.requirements) |requirement_id| {
+        const requirement = ctx.module.hir.getInterfaceRequirement(requirement_id);
+        try writer.writeAll("    ");
+        try emitCType(writer, ctx, requirement.return_type, requirement.span);
+        try writer.writeAll(" (*");
+        try emitInterfaceRequirementSlotName(writer, ctx.module, requirement.name);
+        try writer.writeAll(")(void* self");
+        for (requirement.params) |param_id| {
+            const param = ctx.module.hir.getInterfaceParam(param_id);
+            try writer.writeAll(", ");
+            try emitCType(writer, ctx, param.type_id, param.span);
+        }
+        try writer.writeAll(");\n");
+    }
+    try writer.writeAll("} ");
+    try emitInterfaceVTableTypeName(writer, ctx.module, ctx.module.hir.getInterface(interface_id).name);
+    try writer.writeAll(";\n");
+}
+
+fn emitDynInterfaceLayout(writer: anytype, ctx: *const BackendContext, interface_decl: hir.HirInterface) EmitError!void {
+    try writer.writeAll("typedef struct {\n");
+    try writer.writeAll("    void* data;\n");
+    try writer.writeAll("    const ");
+    try emitInterfaceVTableTypeName(writer, ctx.module, interface_decl.name);
+    try writer.writeAll("* vtable;\n");
+    try writer.writeAll("} ");
+    try emitDynInterfaceTypeName(writer, ctx.module, interface_decl.name);
+    try writer.writeAll(";\n");
+}
+
+fn usesDynInterface(ctx: *const BackendContext, interface_id: hir.InterfaceId) bool {
+    for (ctx.mir_module.store.functions.items) |function| {
+        if (typeIsDynInterface(ctx, function.return_type, interface_id)) return true;
+        for (function.params) |local_id| {
+            if (typeIsDynInterface(ctx, ctx.mir_module.store.getLocal(local_id).type_id, interface_id)) return true;
+        }
+        for (function.locals) |local_id| {
+            if (typeIsDynInterface(ctx, ctx.mir_module.store.getLocal(local_id).type_id, interface_id)) return true;
+        }
+    }
+    return false;
+}
+
+fn typeIsDynInterface(ctx: *const BackendContext, type_id: types.TypeId, interface_id: hir.InterfaceId) bool {
+    if (!ctx.module.types.contains(type_id)) return false;
+    return switch (ctx.module.types.kind(type_id)) {
+        .dyn_interface => |dyn| dyn.interface_id.index == interface_id.index,
+        else => false,
     };
 }
 
@@ -569,24 +646,129 @@ fn emitStructFieldCType(writer: anytype, ctx: *const BackendContext, type_id: ty
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Interface impl wrapper and vtable constant emission
+// ─────────────────────────────────────────────────────────────────────────────
+
+fn emitInterfaceImplWrappersAndTables(writer: anytype, ctx: *const BackendContext) EmitError!bool {
+    var emitted_any = false;
+    for (ctx.module.hir.interface_impls.items, 0..) |interface_impl, index| {
+        const impl_id = hir.InterfaceImplId{ .index = @intCast(index) };
+        if (!usesInterfaceImpl(ctx, impl_id)) continue;
+        if (emitted_any) try writer.writeByte('\n');
+        try emitInterfaceImplWrappers(writer, ctx, impl_id, interface_impl);
+        try writer.writeByte('\n');
+        try emitInterfaceImplVTableConstant(writer, ctx, impl_id, interface_impl);
+        emitted_any = true;
+    }
+    return emitted_any;
+}
+
+fn emitInterfaceImplWrappers(writer: anytype, ctx: *const BackendContext, impl_id: hir.InterfaceImplId, interface_impl: hir.HirInterfaceImpl) EmitError!void {
+    const interface_decl = ctx.module.hir.getInterface(interface_impl.interface_id);
+    for (interface_decl.requirements) |requirement_id| {
+        const requirement = ctx.module.hir.getInterfaceRequirement(requirement_id);
+        const function_id = findInterfaceImplFunction(ctx, interface_impl, requirement.name) orelse return error.InvalidExecutable;
+        try emitInterfaceImplWrapper(writer, ctx, impl_id, interface_impl, function_id, requirement.*);
+    }
+}
+
+fn emitInterfaceImplWrapper(writer: anytype, ctx: *const BackendContext, impl_id: hir.InterfaceImplId, interface_impl: hir.HirInterfaceImpl, function_id: hir.FunctionId, requirement: hir.HirInterfaceRequirement) EmitError!void {
+    const function = ctx.module.hir.getFunction(function_id);
+    try writer.writeAll("static ");
+    try emitCType(writer, ctx, requirement.return_type, requirement.span);
+    try writer.writeByte(' ');
+    try emitInterfaceImplWrapperName(writer, ctx.module, impl_id, interface_impl, requirement.name);
+    try writer.writeAll("(void* self");
+    for (requirement.params, 0..) |param_id, index| {
+        const param = ctx.module.hir.getInterfaceParam(param_id);
+        try writer.writeAll(", ");
+        try emitCType(writer, ctx, param.type_id, param.span);
+        try writer.writeByte(' ');
+        try emitInterfaceWrapperParamName(writer, index);
+    }
+    try writer.writeAll(") {\n");
+    try writer.writeAll("    ");
+    try emitCType(writer, ctx, interface_impl.target_type, interface_impl.span);
+    try writer.writeAll("* typed = (");
+    try emitCType(writer, ctx, interface_impl.target_type, interface_impl.span);
+    try writer.writeAll("*)self;\n");
+    try writer.writeAll("    ");
+    if (!sameType(requirement.return_type, ctx.module.types.voidType())) try writer.writeAll("return ");
+    try emitHirFunctionName(writer, ctx, function_id, function.*);
+    try writer.writeAll("(*typed");
+    for (requirement.params, 0..) |_, index| {
+        try writer.writeAll(", ");
+        try emitInterfaceWrapperParamName(writer, index);
+    }
+    try writer.writeAll(");\n");
+    try writer.writeAll("}\n");
+}
+
+fn emitInterfaceImplVTableConstant(writer: anytype, ctx: *const BackendContext, impl_id: hir.InterfaceImplId, interface_impl: hir.HirInterfaceImpl) EmitError!void {
+    const interface_decl = ctx.module.hir.getInterface(interface_impl.interface_id);
+    try writer.writeAll("static const ");
+    try emitInterfaceVTableTypeName(writer, ctx.module, interface_decl.name);
+    try writer.writeByte(' ');
+    try emitInterfaceImplVTableName(writer, ctx.module, interface_impl);
+    try writer.writeAll(" = {\n");
+    for (interface_decl.requirements) |requirement_id| {
+        const requirement = ctx.module.hir.getInterfaceRequirement(requirement_id);
+        try writer.writeAll("    .");
+        try emitInterfaceRequirementSlotName(writer, ctx.module, requirement.name);
+        try writer.writeAll(" = ");
+        try emitInterfaceImplWrapperName(writer, ctx.module, impl_id, interface_impl, requirement.name);
+        try writer.writeAll(",\n");
+    }
+    try writer.writeAll("};\n");
+}
+
+fn usesInterfaceImpl(ctx: *const BackendContext, impl_id: hir.InterfaceImplId) bool {
+    for (ctx.mir_module.store.functions.items) |function| {
+        for (function.blocks) |block_id| {
+            const block = ctx.mir_module.store.getBlock(block_id);
+            for (block.statements) |statement| {
+                switch (statement.kind) {
+                    .assign => |assignment| if (rvalueUsesInterfaceImpl(assignment.rvalue, impl_id)) return true,
+                    else => {},
+                }
+            }
+        }
+    }
+    return false;
+}
+
+fn rvalueUsesInterfaceImpl(rvalue: mir.MirRvalue, impl_id: hir.InterfaceImplId) bool {
+    return switch (rvalue) {
+        .dyn_coerce => |coerce| coerce.impl_id.index == impl_id.index,
+        else => false,
+    };
+}
+
+fn findInterfaceImplFunction(ctx: *const BackendContext, interface_impl: hir.HirInterfaceImpl, name: hir.SymbolId) ?hir.FunctionId {
+    for (interface_impl.functions) |function_id| {
+        const function = ctx.module.hir.getFunction(function_id);
+        if (function.name.index == name.index) return function_id;
+    }
+    return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Function/prototype emission
 // ─────────────────────────────────────────────────────────────────────────────
 
 fn emitPrototype(writer: anytype, ctx: *const BackendContext, function_id: mir.MirFunctionId, function: mir.MirFunction) EmitError!void {
-    _ = function_id;
     try emitCType(writer, ctx, function.return_type, function.source_span);
     try writer.writeByte(' ');
-    try emitFunctionName(writer, ctx.module, function.name);
+    try emitMirFunctionName(writer, ctx, function_id, function);
     try writer.writeByte('(');
     try emitParamList(writer, ctx, function, function.params);
     try writer.writeAll(");\n");
 }
 
 fn emitFunction(writer: anytype, ctx: *const BackendContext, function_id: mir.MirFunctionId, function: mir.MirFunction) EmitError!void {
-    _ = function_id;
     try emitCType(writer, ctx, function.return_type, function.source_span);
     try writer.writeByte(' ');
-    try emitFunctionName(writer, ctx.module, function.name);
+    try emitMirFunctionName(writer, ctx, function_id, function);
     try writer.writeByte('(');
     try emitParamList(writer, ctx, function, function.params);
     try writer.writeAll(") {\n");
@@ -638,10 +820,15 @@ fn emitStatement(writer: anytype, ctx: *const BackendContext, statement: mir.Mir
                 },
             }
         },
+        .interface_call => |call| {
+            try writer.writeAll("    ");
+            try emitInterfaceCall(writer, ctx, call);
+            try writer.writeAll(";\n");
+        },
         .drop => |drop| {
             const drop_function = ctx.module.hir.getFunction(drop.function);
             try writer.writeAll("    ");
-            try emitFunctionName(writer, ctx.module, drop_function.name);
+            try emitHirFunctionName(writer, ctx, drop.function, drop_function.*);
             try writer.writeByte('(');
             try emitPlace(writer, ctx, drop.place);
             try writer.writeAll(");\n");
@@ -809,14 +996,8 @@ fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue
             try writer.writeByte('*');
             try emitOperand(writer, ctx, operand);
         },
-        .dyn_coerce => {
-            try reportInterfaceRuntimeUnsupported(ctx, null);
-            return error.InvalidExecutable;
-        },
-        .interface_call => {
-            try reportInterfaceRuntimeUnsupported(ctx, null);
-            return error.InvalidExecutable;
-        },
+        .dyn_coerce => |coerce| try emitDynCoerce(writer, ctx, coerce),
+        .interface_call => |call| try emitInterfaceCall(writer, ctx, call),
         .binary => |binary| {
             try writer.writeByte('(');
             try emitOperand(writer, ctx, binary.left);
@@ -828,7 +1009,7 @@ fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue
         },
         .call => |call| {
             const callee = ctx.module.hir.getFunction(call.function);
-            try emitFunctionName(writer, ctx.module, callee.name);
+            try emitHirFunctionName(writer, ctx, call.function, callee.*);
             try writer.writeByte('(');
             for (call.args, 0..) |arg, index| {
                 if (index != 0) try writer.writeAll(", ");
@@ -893,6 +1074,35 @@ fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue
             try emitEnumPayloadFieldName(writer, ctx.module, payload_field.name, payload_index);
         },
     }
+}
+
+fn emitDynCoerce(writer: anytype, ctx: *const BackendContext, coerce: anytype) EmitError!void {
+    const interface_decl = ctx.module.hir.getInterface(coerce.interface_id);
+    const interface_impl = ctx.module.hir.getInterfaceImpl(coerce.impl_id);
+    try writer.writeByte('(');
+    try emitDynInterfaceTypeName(writer, ctx.module, interface_decl.name);
+    try writer.writeAll("){ .data = &");
+    try emitPlace(writer, ctx, coerce.source);
+    try writer.writeAll(", .vtable = &");
+    try emitInterfaceImplVTableName(writer, ctx.module, interface_impl.*);
+    try writer.writeAll(" }");
+}
+
+fn emitInterfaceCall(writer: anytype, ctx: *const BackendContext, call: mir.MirInterfaceCall) EmitError!void {
+    const requirement = ctx.module.hir.getInterfaceRequirement(call.requirement_id);
+    try writer.writeByte('(');
+    try emitOperand(writer, ctx, call.receiver);
+    try writer.writeAll(").vtable->");
+    try emitInterfaceRequirementSlotName(writer, ctx.module, requirement.name);
+    try writer.writeByte('(');
+    try writer.writeByte('(');
+    try emitOperand(writer, ctx, call.receiver);
+    try writer.writeAll(").data");
+    for (call.args) |arg| {
+        try writer.writeAll(", ");
+        try emitOperand(writer, ctx, arg);
+    }
+    try writer.writeByte(')');
 }
 
 fn emitOperand(writer: anytype, ctx: *const BackendContext, operand: mir.MirOperand) EmitError!void {
@@ -998,7 +1208,10 @@ fn emitCTypeAt(writer: anytype, ctx: *const BackendContext, type_id: types.TypeI
         .machine_type => |machine_id| {
             try emitMachineTypeName(writer, ctx.module, ctx.module.hir.getMachine(machine_id).name);
         },
-        .interface_type, .dyn_interface => {
+        .dyn_interface => |dyn| {
+            try emitDynInterfaceTypeName(writer, ctx.module, ctx.module.hir.getInterface(dyn.interface_id).name);
+        },
+        .interface_type => {
             try reportInterfaceRuntimeUnsupported(ctx, span);
             return error.InvalidExecutable;
         },
@@ -1025,6 +1238,10 @@ fn reportInterfaceRuntimeUnsupported(ctx: *const BackendContext, span: ?diagnost
     }
 }
 
+fn sameType(left: types.TypeId, right: types.TypeId) bool {
+    return left.index == right.index;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // C name rendering / escaping
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1037,6 +1254,17 @@ fn emitEnumTypeName(writer: anytype, module: *const semantics.SemanticModule, sy
 fn emitStructTypeName(writer: anytype, module: *const semantics.SemanticModule, symbol: hir.SymbolId) !void {
     try writer.writeAll("cpt_struct_");
     try emitEscapedIdentifierComponent(writer, module.interner.text(symbol));
+}
+
+fn emitDynInterfaceTypeName(writer: anytype, module: *const semantics.SemanticModule, symbol: hir.SymbolId) !void {
+    try writer.writeAll("cpt_dyn_");
+    try emitEscapedIdentifierComponent(writer, module.interner.text(symbol));
+}
+
+fn emitInterfaceVTableTypeName(writer: anytype, module: *const semantics.SemanticModule, symbol: hir.SymbolId) !void {
+    try writer.writeAll("cpt_itf_");
+    try emitEscapedIdentifierComponent(writer, module.interner.text(symbol));
+    try writer.writeAll("_vtable");
 }
 
 fn emitMachineTypeName(writer: anytype, module: *const semantics.SemanticModule, symbol: hir.SymbolId) !void {
@@ -1091,6 +1319,75 @@ fn emitEnumPayloadFieldName(writer: anytype, module: *const semantics.SemanticMo
     try writer.writeAll("cpt_pf_");
     try emitEscapedIdentifierComponent(writer, module.interner.text(symbol));
     try writer.print("_{d}", .{payload_index});
+}
+
+fn emitInterfaceRequirementSlotName(writer: anytype, module: *const semantics.SemanticModule, symbol: hir.SymbolId) !void {
+    try emitEscapedIdentifierComponent(writer, module.interner.text(symbol));
+}
+
+fn emitInterfaceWrapperParamName(writer: anytype, index: usize) !void {
+    try writer.print("arg_{d}", .{index});
+}
+
+fn emitInterfaceImplVTableName(writer: anytype, module: *const semantics.SemanticModule, interface_impl: hir.HirInterfaceImpl) !void {
+    try writer.writeAll("cpt_impl_");
+    try emitTypeNameComponent(writer, module, interface_impl.target_type);
+    try writer.writeAll("_as_");
+    try emitEscapedIdentifierComponent(writer, module.interner.text(module.hir.getInterface(interface_impl.interface_id).name));
+}
+
+fn emitInterfaceImplWrapperName(writer: anytype, module: *const semantics.SemanticModule, impl_id: hir.InterfaceImplId, interface_impl: hir.HirInterfaceImpl, requirement_name: hir.SymbolId) !void {
+    try emitInterfaceImplVTableName(writer, module, interface_impl);
+    try writer.writeByte('_');
+    try emitEscapedIdentifierComponent(writer, module.interner.text(requirement_name));
+    try writer.print("_{d}", .{impl_id.index});
+}
+
+fn emitMirFunctionName(writer: anytype, ctx: *const BackendContext, function_id: mir.MirFunctionId, function: mir.MirFunction) !void {
+    try emitHirFunctionName(writer, ctx, function.hir_function, ctx.module.hir.getFunction(function.hir_function).*);
+    _ = function_id;
+}
+
+fn emitHirFunctionName(writer: anytype, ctx: *const BackendContext, function_id: hir.FunctionId, function: hir.HirFunction) !void {
+    if (findInterfaceImplForFunction(ctx, function_id)) |interface_impl| {
+        try writer.writeAll("cpt_ifn_");
+        try emitTypeNameComponent(writer, ctx.module, interface_impl.target_type);
+        try writer.writeAll("_as_");
+        try emitEscapedIdentifierComponent(writer, ctx.module.interner.text(ctx.module.hir.getInterface(interface_impl.interface_id).name));
+        try writer.writeByte('_');
+        try emitEscapedIdentifierComponent(writer, ctx.module.interner.text(function.name));
+        try writer.print("_{d}", .{function_id.index});
+        return;
+    }
+    try emitFunctionName(writer, ctx.module, function.name);
+}
+
+fn findInterfaceImplForFunction(ctx: *const BackendContext, function_id: hir.FunctionId) ?hir.HirInterfaceImpl {
+    for (ctx.module.hir.interface_impls.items) |interface_impl| {
+        for (interface_impl.functions) |candidate| {
+            if (candidate.index == function_id.index) return interface_impl;
+        }
+    }
+    return null;
+}
+
+fn emitTypeNameComponent(writer: anytype, module: *const semantics.SemanticModule, type_id: types.TypeId) !void {
+    switch (module.types.kind(type_id)) {
+        .int => try writer.writeAll("int"),
+        .bool => try writer.writeAll("bool"),
+        .struct_type => |struct_id| try emitEscapedIdentifierComponent(writer, module.interner.text(module.hir.getStruct(struct_id).name)),
+        .enum_type => |enum_id| try emitEscapedIdentifierComponent(writer, module.interner.text(module.hir.getEnum(enum_id).name)),
+        .machine_type => |machine_id| try emitEscapedIdentifierComponent(writer, module.interner.text(module.hir.getMachine(machine_id).name)),
+        .pointer => |pointer| {
+            try emitTypeNameComponent(writer, module, pointer.pointee);
+            try writer.writeAll("_ptr");
+        },
+        .dyn_interface => |dyn| {
+            try writer.writeAll("dyn_");
+            try emitEscapedIdentifierComponent(writer, module.interner.text(module.hir.getInterface(dyn.interface_id).name));
+        },
+        .void, .arena, .allocator, .alloc_error, .interface_type, .manual_init, .type_param => try writer.writeAll("unsupported"),
+    }
 }
 
 fn emitFunctionName(writer: anytype, module: *const semantics.SemanticModule, symbol: hir.SymbolId) !void {
@@ -2287,6 +2584,82 @@ test "MIR C backend emits machine frame and step runtime" {
     try std.testing.expect(std.mem.indexOf(u8, c_source, "m->state = cpt_m_Door_s_Open;") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, "m->result = 1;\n            m->complete = 1;") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, "malloc") == null);
+}
+
+test "MIR C backend lowers dyn dispatch to vtable and fat reference" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\interface Counter { int Value(); };
+        \\struct Box { int value; };
+        \\impl Counter<Box> {
+        \\    int Value(mut Box& self) { return self.value; }
+        \\}
+        \\int Read(mut dyn Counter& counter) { return counter.Value(); }
+        \\int main() { Box box = Box { value: 7 }; return Read(box); }
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "typedef struct {\n    int (*Value)(void* self);\n} cpt_itf_Counter_vtable;") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "typedef struct {\n    void* data;\n    const cpt_itf_Counter_vtable* vtable;\n} cpt_dyn_Counter;") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "static int cpt_impl_Box_as_Counter_Value_0(void* self)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_struct_Box* typed = (cpt_struct_Box*)self;") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "return cpt_ifn_Box_as_Counter_Value_") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "static const cpt_itf_Counter_vtable cpt_impl_Box_as_Counter") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, ".Value = cpt_impl_Box_as_Counter_Value_0") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, ".data = &cpt_l_box_") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, ".vtable = &cpt_impl_Box_as_Counter") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, ").vtable->Value((") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, ").data") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "malloc") == null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "RTTI") == null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "dynamic_cast") == null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_scheduler") == null);
+}
+
+test "MIR C backend lowers void dyn interface calls as statements" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\interface Sink { void Put(int value); };
+        \\struct Box { int value; };
+        \\impl Sink<Box> {
+        \\    void Put(mut Box& self, int value) { return; }
+        \\}
+        \\void Emit(mut dyn Sink& sink) { sink.Put(7); }
+        \\int main() { Box box = Box { value: 0 }; Emit(box); return 0; }
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "void (*Put)(void* self, int);") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "static void cpt_impl_Box_as_Sink_Put_0(void* self, int arg_0)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, ").vtable->Put((") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "void cpt_t_") == null);
+}
+
+test "MIR C backend emits distinct dyn vtables for repeated interface shapes" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\interface Counter { int Value(); };
+        \\interface Other { int Value(); };
+        \\struct Left { int value; };
+        \\struct Right { int value; };
+        \\impl Counter<Left> { int Value(mut Left& self) { return self.value; } }
+        \\impl Counter<Right> { int Value(mut Right& self) { return self.value; } }
+        \\impl Other<Left> { int Value(mut Left& self) { return self.value + 1; } }
+        \\int ReadCounter(mut dyn Counter& counter) { return counter.Value(); }
+        \\int ReadOther(mut dyn Other& other) { return other.Value(); }
+        \\int main() {
+        \\    Left left = Left { value: 1 };
+        \\    Right right = Right { value: 2 };
+        \\    return ReadCounter(left) + ReadCounter(right) + ReadOther(left);
+        \\}
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_impl_Left_as_Counter") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_impl_Right_as_Counter") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_impl_Left_as_Other") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_itf_Counter_vtable") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_itf_Other_vtable") != null);
 }
 
 fn countOccurrences(haystack: []const u8, needle: []const u8) usize {

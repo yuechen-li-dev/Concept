@@ -1,0 +1,46 @@
+# name: dyn dispatch two interfaces same type
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+interface Low {
+    int Value();
+};
+
+interface High {
+    int Value();
+};
+
+struct Box {
+    int value;
+};
+
+impl Low<Box> {
+    int Value(mut Box& self) {
+        return self.value;
+    }
+}
+
+impl High<Box> {
+    int Value(mut Box& self) {
+        return self.value + 4;
+    }
+}
+
+int ReadLow(mut dyn Low& value) {
+    return value.Value();
+}
+
+int ReadHigh(mut dyn High& value) {
+    return value.Value();
+}
+
+int main() {
+    Box box = Box { value: 1 };
+    return ReadLow(box) + ReadHigh(box);
+}
+
+=== run ===
+exit_code: 6

@@ -1,0 +1,35 @@
+# name: dyn dispatch bool return
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+interface Flag {
+    bool IsSet();
+};
+
+struct Box {
+    bool value;
+};
+
+impl Flag<Box> {
+    bool IsSet(mut Box& self) {
+        return self.value;
+    }
+}
+
+int Read(mut dyn Flag& flag) {
+    if (flag.IsSet()) {
+        return 7;
+    }
+    return 1;
+}
+
+int main() {
+    Box box = Box { value: true };
+    return Read(box);
+}
+
+=== run ===
+exit_code: 7

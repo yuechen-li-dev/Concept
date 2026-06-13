@@ -943,3 +943,54 @@ emission, owning dyn boxes, heap boxing, dynamic cast, RTTI, reflection,
 interface inheritance, default methods, associated types, generic interface
 methods, Drop through dyn, effect checking through dyn beyond existing trivial
 checks, unsafe interface methods, and cross-module/orphan interface coherence.
+
+### P14-M7 implementation status
+
+P14-M7 lowers the Phase 14 borrowed dyn dispatch subset through the C backend.
+The runtime representation is explicit and inspectable in generated C: each
+used interface gets a vtable struct and a dyn fat-reference struct, dyn
+parameters and temps use the fat-reference value type, concrete-to-dyn
+coercions build `{ data, vtable }` values, and dyn interface calls dispatch
+through the selected vtable slot.
+
+Implemented in M7:
+
+- `dyn Interface&` / `mut dyn Interface&` parameters lower as pass-by-value
+  fat references in generated C;
+- used interfaces emit `cpt_itf_Interface_vtable` structs with one function
+  pointer per requirement in requirement source order;
+- used interfaces emit `cpt_dyn_Interface` structs containing `void* data` and
+  `const cpt_itf_Interface_vtable* vtable`;
+- interface impls selected by dyn coercion emit wrapper/thunk functions with
+  `void* self` as the first parameter;
+- wrappers cast `self` to the concrete target pointer and call the existing
+  hidden interface-impl method function;
+- each selected `(interface, concrete type)` impl emits one static const vtable
+  whose slots point at the wrappers;
+- `MirRvalue.dyn_coerce` lowers to explicit fat-reference construction with
+  `.data = &source_place` and `.vtable = &static_impl_vtable`;
+- `MirRvalue.interface_call` lowers to `receiver.vtable->Slot(receiver.data,
+  args...)`;
+- void-return interface calls in expression-statement position lower as
+  statement calls rather than impossible `void` temporaries;
+- simple int, bool, multiple-argument, void-call, two-impl, two-interface,
+  call-boundary coercion, and exact dyn passthrough fixtures execute through
+  MIR-backed C and native exit-code testing;
+- pure interface declarations and unused interface impls still emit no vtable
+  or dyn artifacts;
+- no `malloc`, scheduler helper, RTTI table, dynamic cast metadata, reflection,
+  hidden heap allocation, or per-instance vtable construction is introduced.
+
+Borrowed dyn remains non-owning. A dyn fat reference points at existing concrete
+storage and does not extend lifetime, allocate storage, own the object, or run
+Drop through the dyn reference. The C backend stores and passes the fat
+reference by value because it is a small pair of pointers.
+
+Still unimplemented after P14-M7: owning dyn boxes, heap boxing,
+`Box<dyn Interface>`, dynamic cast, RTTI, reflection, interface inheritance,
+interface upcasting, default methods, associated types, generic interface
+methods, Drop through dyn/destructor vtable slots, cross-module vtable ABI
+stability, unsafe interface methods, broader effect checking through dyn, and
+first-class dyn returns/fields/locals with initializers. Receiver mutability is
+still conservative: M6's rule that dyn calls require `mut dyn Interface&`
+remains in force.

@@ -123,6 +123,12 @@ const Validator = struct {
                     try self.report(.InvalidMirType, statement.span, diagnostics.invalidMirType);
                 }
             },
+            .interface_call => |call| {
+                const call_type = try self.rvalueType(function_id, .{ .interface_call = call }, statement.span);
+                if (call_type != null and !sameType(call_type.?, self.semantic_module.types.voidType())) {
+                    try self.report(.InvalidMirType, statement.span, diagnostics.invalidMirType);
+                }
+            },
             .drop => |drop| {
                 const place_type = try self.placeType(function_id, drop.place, statement.span);
                 if (!self.containsHirFunction(drop.function)) {

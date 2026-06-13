@@ -1,0 +1,47 @@
+# name: dyn dispatch backend c shape
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+interface Counter {
+    int Value();
+};
+
+struct Box {
+    int value;
+};
+
+impl Counter<Box> {
+    int Value(mut Box& self) {
+        return self.value;
+    }
+}
+
+int Read(mut dyn Counter& counter) {
+    return counter.Value();
+}
+
+int main() {
+    Box box = Box { value: 7 };
+    return Read(box);
+}
+
+=== c ===
+contains: cpt_itf_Counter_vtable
+contains: cpt_dyn_Counter
+contains: void* data;
+contains: const cpt_itf_Counter_vtable* vtable;
+contains: int (*Value)(void* self);
+contains: static int cpt_impl_Box_as_Counter_Value_0(void* self)
+contains: static const cpt_itf_Counter_vtable cpt_impl_Box_as_Counter
+contains: .Value = cpt_impl_Box_as_Counter_Value_0
+contains: .data = &cpt_l_box_
+contains: .vtable = &cpt_impl_Box_as_Counter
+contains: .vtable->Value(
+contains: ).data
+not_contains: malloc
+not_contains: RTTI
+not_contains: dynamic_cast
+not_contains: cpt_scheduler

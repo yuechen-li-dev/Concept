@@ -1,0 +1,33 @@
+# name: dyn dispatch void call
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+interface Sink {
+    void Put(int value);
+};
+
+struct Counter {
+    int value;
+};
+
+impl Sink<Counter> {
+    void Put(mut Counter& self, int value) {
+        return;
+    }
+}
+
+void Emit(mut dyn Sink& sink) {
+    sink.Put(7);
+}
+
+int main() {
+    Counter counter = Counter { value: 0 };
+    Emit(counter);
+    return 7;
+}
+
+=== run ===
+exit_code: 7

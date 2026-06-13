@@ -63,12 +63,16 @@ parameter when the concrete type has the matching interface impl. The coercion
 is explicit in HIR and MIR. M6 adds dyn interface method-call syntax and
 HIR/MIR `interface_call` scaffolding: calls through `mut dyn Interface&`
 resolve method names to interface requirement slots and validate arity and
-argument types. Backend fat-reference/vtable emission and executable runtime
-dispatch remain unsupported. Concepts remain compile-time constraints, interfaces are runtime
-dispatch contracts, empty runtime interfaces are rejected, and interface
-requirements may use ordinary resolved types but not interface or dyn runtime
-types. Executable dyn dispatch, vtables, backend fat-reference emission, owning
-dyn boxes, inheritance, RTTI, and hidden heap allocation remain deferred.
+argument types. M7 lowers the borrowed dyn subset in the C backend: dyn
+parameters and temps use explicit `{ data, vtable }` fat-reference structs,
+used interfaces emit vtable structs and dyn structs, selected interface impls
+emit wrapper thunks and static const vtables, dyn coercions build fat refs, and
+dyn calls dispatch indirectly through vtable slots. Concepts remain
+compile-time constraints, interfaces are runtime dispatch contracts, empty
+runtime interfaces are rejected, and interface requirements may use ordinary
+resolved types but not interface or dyn runtime types. Owning dyn boxes, heap
+boxing, inheritance, RTTI, dynamic cast, reflection, Drop through dyn, and
+hidden heap allocation remain deferred.
 Deferred Phase 12
 work includes
 `Arena.create`, hosted runtime helper implementation, allocation failure
@@ -1313,6 +1317,13 @@ be used directly in requirement return or parameter positions. Borrowed
 coercion requires an addressable concrete place plus a matching
 `impl Interface<ConcreteType>`. Temporaries are rejected until borrowed dyn
 lifetime extension is designed.
+
+The Phase 14 M7 C backend lowers that borrowed dyn subset to explicit fat
+references and vtables. A dyn value is passed by value as `{ data, vtable }`,
+coercion stores the address of existing concrete storage plus a static impl
+vtable, and interface calls lower to indirect slot calls. This does not imply
+inheritance, RTTI, dynamic cast, reflection, heap boxing, owning dyn boxes, or
+Drop through dyn.
 
 Example concept:
 

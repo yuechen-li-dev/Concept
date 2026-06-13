@@ -398,6 +398,13 @@ const FunctionLowerer = struct {
         const expr = self.semantic_module.hir.getExpr(expr_id).*;
         switch (expr.kind) {
             .machine_step => |machine_expr| return try self.lowerMachineStepStmt(expr, machine_expr, block_id),
+            .interface_call => |call| {
+                if (sameType(call.result_type, self.semantic_module.types.voidType())) {
+                    return try self.lowerInterfaceCallStmt(expr, call, block_id);
+                }
+                const lowered = try self.lowerExpr(expr_id, block_id);
+                return lowered.block;
+            },
             else => {
                 const lowered = try self.lowerExpr(expr_id, block_id);
                 return lowered.block;
@@ -588,6 +595,36 @@ const FunctionLowerer = struct {
             ),
         });
         return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = current };
+    }
+
+    fn lowerInterfaceCallStmt(self: *FunctionLowerer, expr: hir.HirExpr, call: hir.HirInterfaceCall, block_id: mir.MirBlockId) LoweringError!mir.MirBlockId {
+        const receiver = try self.lowerExpr(call.receiver, block_id);
+        const args = try self.allocator.alloc(mir.MirOperand, call.args.len);
+        var args_owned = true;
+        var initialized: usize = 0;
+        errdefer if (args_owned) deinitInitializedOperands(self.allocator, args, initialized);
+
+        var current = receiver.block;
+        for (call.args) |arg_expr| {
+            const lowered = try self.lowerExpr(arg_expr, current);
+            args[initialized] = lowered.operand;
+            initialized += 1;
+            current = lowered.block;
+        }
+
+        args_owned = false;
+        try self.store.appendStatement(current, .{
+            .span = expr.span,
+            .kind = .{ .interface_call = .{
+                .receiver = receiver.operand,
+                .interface_id = call.interface_id,
+                .requirement_id = call.requirement_id,
+                .requirement_index = call.requirement_index,
+                .args = args,
+                .result_type = call.result_type,
+            } },
+        });
+        return current;
     }
 
     fn lowerInterfaceCall(self: *FunctionLowerer, expr: hir.HirExpr, call: hir.HirInterfaceCall, block_id: mir.MirBlockId) LoweringError!LoweredExpr {

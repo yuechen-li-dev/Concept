@@ -344,6 +344,10 @@ const Analyzer = struct {
                 if (self.had_error != had_error_before) return;
                 try self.writePlace(states, assignment.place, statement.span);
             },
+            .interface_call => |call| {
+                try self.readOperand(states, call.receiver, statement.span);
+                for (call.args) |arg| try self.readOperand(states, arg, statement.span);
+            },
             .drop => |drop| try self.dropPlace(states, drop.place, statement.span),
             .arena_reset => |arena_operand| try self.readOperand(states, arena_operand, statement.span),
             .arena_destroy => |arena_operand| try self.readOperand(states, arena_operand, statement.span),

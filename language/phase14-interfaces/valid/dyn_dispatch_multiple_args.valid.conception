@@ -1,0 +1,32 @@
+# name: dyn dispatch multiple args
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+interface Adder {
+    int Add(int left, int right);
+};
+
+struct Bias {
+    int value;
+};
+
+impl Adder<Bias> {
+    int Add(mut Bias& self, int left, int right) {
+        return self.value + left + right;
+    }
+}
+
+int Read(mut dyn Adder& adder) {
+    return adder.Add(2, 3);
+}
+
+int main() {
+    Bias bias = Bias { value: 2 };
+    return Read(bias);
+}
+
+=== run ===
+exit_code: 7

@@ -380,6 +380,7 @@ pub const MirStatementKind = union(enum) {
         place: MirPlace,
         rvalue: MirRvalue,
     },
+    interface_call: MirInterfaceCall,
     drop: struct {
         place: MirPlace,
         function: hir.FunctionId,
@@ -390,6 +391,23 @@ pub const MirStatementKind = union(enum) {
 
     pub fn assignTo(place: MirPlace, rvalue: MirRvalue) MirStatementKind {
         return .{ .assign = .{ .place = place, .rvalue = rvalue } };
+    }
+
+    pub fn interfaceCall(allocator: std.mem.Allocator, call: MirInterfaceCall) !MirStatementKind {
+        const owned_args = try cloneOperands(allocator, call.args);
+        errdefer {
+            deinitOperands(allocator, owned_args);
+            if (owned_args.len > 0) allocator.free(owned_args);
+        }
+        const receiver = try call.receiver.clone(allocator);
+        return .{ .interface_call = .{
+            .receiver = receiver,
+            .interface_id = call.interface_id,
+            .requirement_id = call.requirement_id,
+            .requirement_index = call.requirement_index,
+            .args = owned_args,
+            .result_type = call.result_type,
+        } };
     }
 
     pub fn dropPlace(place: MirPlace, function: hir.FunctionId) MirStatementKind {
@@ -407,6 +425,7 @@ pub const MirStatementKind = union(enum) {
     fn clone(self: MirStatementKind, allocator: std.mem.Allocator) !MirStatementKind {
         return switch (self) {
             .assign => |assignment| MirStatementKind.assignTo(assignment.place, try assignment.rvalue.clone(allocator)),
+            .interface_call => |call| try MirStatementKind.interfaceCall(allocator, call),
             .drop => |drop| MirStatementKind.dropPlace(drop.place, drop.function),
             .arena_reset => |arena_operand| MirStatementKind.arenaReset(try arena_operand.clone(allocator)),
             .arena_destroy => |arena_operand| MirStatementKind.arenaDestroy(try arena_operand.clone(allocator)),
@@ -417,6 +436,11 @@ pub const MirStatementKind = union(enum) {
     fn deinit(self: MirStatementKind, allocator: std.mem.Allocator) void {
         switch (self) {
             .assign => |assignment| assignment.rvalue.deinit(allocator),
+            .interface_call => |call| {
+                call.receiver.deinit(allocator);
+                deinitOperands(allocator, call.args);
+                if (call.args.len > 0) allocator.free(call.args);
+            },
             .drop => {},
             .arena_reset => |arena_operand| arena_operand.deinit(allocator),
             .arena_destroy => |arena_operand| arena_operand.deinit(allocator),
@@ -757,6 +781,15 @@ pub const MirStore = struct {
                 try writePlaceDebug(writer, assignment.place);
                 try writer.writeAll(" = ");
                 try writeRvalueDebug(writer, assignment.rvalue);
+            },
+            .interface_call => |call| {
+                try writer.print("InterfaceCall {f} {f} #{d} -> {f}(", .{ call.interface_id, call.requirement_id, call.requirement_index, call.result_type });
+                try writeOperandDebug(writer, call.receiver);
+                for (call.args) |arg| {
+                    try writer.writeAll(", ");
+                    try writeOperandDebug(writer, arg);
+                }
+                try writer.writeByte(')');
             },
             .drop => |drop| {
                 try writer.writeAll("Drop ");
