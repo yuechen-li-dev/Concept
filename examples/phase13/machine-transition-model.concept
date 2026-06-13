@@ -1,0 +1,20 @@
+module Main;
+
+// This example documents syntax and machine-local target validation. Runtime
+// lowering for match/decide transitions remains deferred after P13-M7.
+machine Brain(bool canAttack, int attackScore) -> int {
+    state Decide {
+        transition decide {
+            Attack when canAttack score attackScore;
+            Idle score 0;
+        };
+    }
+
+    state Attack {
+        return 1;
+    }
+
+    state Idle {
+        return 0;
+    }
+}

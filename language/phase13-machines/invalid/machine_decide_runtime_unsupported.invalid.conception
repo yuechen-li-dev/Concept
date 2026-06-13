@@ -1,0 +1,32 @@
+# name: machine decide runtime unsupported
+# phase: backend-c
+# expect: fail
+
+=== source ===
+module Main;
+
+machine Brain(bool canAttack, int attackScore) -> int {
+    state Decide {
+        transition decide {
+            Attack when canAttack score attackScore;
+            Idle score 0;
+        };
+    }
+
+    state Attack {
+        return 1;
+    }
+
+    state Idle {
+        return 0;
+    }
+}
+
+int main() {
+    Brain brain = Brain(true, 10);
+    Step(brain);
+    return 0;
+}
+
+=== diagnostics ===
+CON0231

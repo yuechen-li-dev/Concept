@@ -31,6 +31,14 @@ pub fn expectExitCode(allocator: std.mem.Allocator, source_text: []const u8, exp
     };
 }
 
+pub fn expectRuntimeFailure(allocator: std.mem.Allocator, source_text: []const u8) RunError!void {
+    const actual_exit_code = runSource(allocator, source_text) catch |err| switch (err) {
+        error.ExecutableTerminated => return,
+        else => return err,
+    };
+    if (actual_exit_code == 0) return error.UnexpectedExitCode;
+}
+
 pub fn runSource(allocator: std.mem.Allocator, source_text: []const u8) RunError!u8 {
     var parse_diagnostics = diagnostics_model.DiagnosticBag.init(allocator);
     defer parse_diagnostics.deinit();

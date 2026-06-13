@@ -91,6 +91,10 @@ pub const ConceptionFixture = struct {
         return self.section("mir");
     }
 
+    pub fn c(self: ConceptionFixture) ?[]const u8 {
+        return self.section("c");
+    }
+
     pub fn expectedExitCode(self: ConceptionFixture) !u8 {
         const text = self.run() orelse return error.MissingRun;
         var lines = std.mem.splitScalar(u8, text, '\n');
@@ -242,8 +246,9 @@ fn validate(fixture: ConceptionFixture, options: ParseOptions) !void {
             .fail => if (fixture.diagnostics() == null) return error.MissingDiagnostics,
         },
         .run => {
-            if (fixture.expect != .pass) return error.UnsupportedRunExpectation;
-            _ = try fixture.expectedExitCode();
+            if (fixture.expect == .pass) {
+                _ = try fixture.expectedExitCode();
+            }
         },
         else => {},
     }
@@ -1453,6 +1458,24 @@ fn expectBackendCFixture(comptime path: []const u8) !void {
             const c_source = try backend_c_mir_model.emitExecutableFromMir(std.testing.allocator, &module, &mir_module, &diagnostics);
             defer std.testing.allocator.free(c_source);
             try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+            if (fixture.c()) |expected_fragments| {
+                var lines = std.mem.splitScalar(u8, expected_fragments, '\n');
+                while (lines.next()) |line| {
+                    const trimmed = std.mem.trim(u8, line, " \t\r");
+                    if (trimmed.len == 0) continue;
+                    if (trimmed[0] == '#') continue;
+                    if (std.mem.startsWith(u8, trimmed, "not_contains:")) {
+                        const needle = std.mem.trim(u8, trimmed["not_contains:".len..], " \t");
+                        try std.testing.expect(std.mem.indexOf(u8, c_source, needle) == null);
+                    } else {
+                        const needle = if (std.mem.startsWith(u8, trimmed, "contains:"))
+                            std.mem.trim(u8, trimmed["contains:".len..], " \t")
+                        else
+                            trimmed;
+                        try std.testing.expect(std.mem.indexOf(u8, c_source, needle) != null);
+                    }
+                }
+            }
         },
         .fail => {
             try std.testing.expectError(error.InvalidExecutable, backend_c_mir_model.emitExecutableFromMir(std.testing.allocator, &module, &mir_module, &diagnostics));
@@ -1549,8 +1572,10 @@ fn expectRunFixture(comptime path: []const u8) !void {
     defer fixture.deinit(std.testing.allocator);
 
     try std.testing.expectEqual(Phase.run, fixture.phase);
-    try std.testing.expectEqual(Expectation.pass, fixture.expect);
-    _ = try run_harness.expectExitCode(std.testing.allocator, fixture.source().?, try fixture.expectedExitCode());
+    switch (fixture.expect) {
+        .pass => _ = try run_harness.expectExitCode(std.testing.allocator, fixture.source().?, try fixture.expectedExitCode()),
+        .fail => try run_harness.expectRuntimeFailure(std.testing.allocator, fixture.source().?),
+    }
 }
 
 test "language run fixture: phase3 HIR sum loop" {
@@ -2548,6 +2573,16 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectRunFixture("../../../language/phase13-machines/valid/machine_complete_result.valid.conception");
     try expectRunFixture("../../../language/phase13-machines/valid/machine_extra_step_after_complete.valid.conception");
     try expectRunFixture("../../../language/phase13-machines/valid/machine_param_return.valid.conception");
+    try expectRunFixture("../../../language/phase13-machines/valid/machine_bool_result.valid.conception");
+    try expectRunFixture("../../../language/phase13-machines/valid/machine_two_literal_transitions.valid.conception");
+    try expectRunFixture("../../../language/phase13-machines/valid/machine_complete_false_before_return.valid.conception");
+    try expectRunFixture("../../../language/phase13-machines/valid/machine_step_completed_noop.valid.conception");
+    try expectRunFixture("../../../language/phase13-machines/invalid/machine_result_before_complete.invalid.conception");
+    try expectBackendCFixture("../../../language/phase13-machines/valid/machine_backend_c_shape.valid.conception");
+    try expectBackendCFixture("../../../language/phase13-machines/invalid/machine_match_runtime_unsupported.invalid.conception");
+    try expectBackendCFixture("../../../language/phase13-machines/invalid/machine_decide_runtime_unsupported.invalid.conception");
+    try expectBackendCFixture("../../../language/phase13-machines/invalid/machine_non_scalar_result_unsupported.invalid.conception");
+    try expectBackendCFixture("../../../language/phase13-machines/invalid/machine_non_scalar_param_unsupported.invalid.conception");
     try expectParseFixture("../../../language/phase13-machines/invalid/state_outside_machine.invalid.conception");
     try expectParseFixture("../../../language/phase13-machines/invalid/transition_outside_machine.invalid.conception");
     try expectParseFixture("../../../language/phase13-machines/invalid/transition_inside_function.invalid.conception");

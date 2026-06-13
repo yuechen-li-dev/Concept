@@ -1,0 +1,37 @@
+# name: machine two literal transitions
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Pipeline() -> int {
+    state Start {
+        transition Middle;
+    }
+
+    state Middle {
+        transition Done;
+    }
+
+    state Done {
+        return 7;
+    }
+}
+
+int main() {
+    Pipeline p = Pipeline();
+    Step(p);
+    if (Complete(p)) {
+        return 1;
+    }
+    Step(p);
+    if (Complete(p)) {
+        return 2;
+    }
+    Step(p);
+    return Result(p);
+}
+
+=== run ===
+exit_code: 7

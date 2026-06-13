@@ -1,0 +1,26 @@
+# name: machine step completed noop
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Once() -> int {
+    state Start {
+        return 4;
+    }
+}
+
+int main() {
+    Once m = Once();
+    Step(m);
+    Step(m);
+    Step(m);
+    if (!Complete(m)) {
+        return 1;
+    }
+    return Result(m);
+}
+
+=== run ===
+exit_code: 4

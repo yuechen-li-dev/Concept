@@ -1,0 +1,32 @@
+# name: machine match runtime unsupported
+# phase: backend-c
+# expect: fail
+
+=== source ===
+module Main;
+
+machine Flow(int code) -> int {
+    state Start {
+        transition match (code) {
+            0 => Done;
+            _ => Error;
+        };
+    }
+
+    state Done {
+        return 0;
+    }
+
+    state Error {
+        return 1;
+    }
+}
+
+int main() {
+    Flow f = Flow(0);
+    Step(f);
+    return 0;
+}
+
+=== diagnostics ===
+CON0231

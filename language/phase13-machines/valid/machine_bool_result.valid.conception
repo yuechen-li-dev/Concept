@@ -1,0 +1,29 @@
+# name: machine bool result
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Toggle() -> bool {
+    state Off {
+        transition On;
+    }
+
+    state On {
+        return true;
+    }
+}
+
+int main() {
+    Toggle t = Toggle();
+    Step(t);
+    Step(t);
+    if (Result(t)) {
+        return 0;
+    }
+    return 1;
+}
+
+=== run ===
+exit_code: 0

@@ -58,6 +58,9 @@ pub fn emitExecutableFromMir(
     const emitted_struct_layouts = try emitStructLayouts(writer, &ctx);
     if ((emitted_enum_layouts or emitted_struct_layouts) and ctx.module.hir.machines.items.len > 0) try writer.writeByte('\n');
 
+    const emitted_machine_result_trap = try emitMachineResultTrapHelper(writer, &ctx);
+    if (emitted_machine_result_trap and ctx.module.hir.machines.items.len > 0) try writer.writeByte('\n');
+
     const emitted_machine_layouts = try emitMachineLayouts(writer, &ctx);
     if ((emitted_enum_layouts or emitted_struct_layouts or emitted_machine_layouts) and mir_module.store.functions.items.len > 0) try writer.writeByte('\n');
 
@@ -255,6 +258,23 @@ fn isSupportedStructFieldPointerType(ctx: *const BackendContext, pointee: types.
 // ─────────────────────────────────────────────────────────────────────────────
 // Machine layout and step emission
 // ─────────────────────────────────────────────────────────────────────────────
+
+fn emitMachineResultTrapHelper(writer: anytype, ctx: *const BackendContext) EmitError!bool {
+    if (ctx.module.hir.machines.items.len == 0) return false;
+
+    try writer.writeAll(
+        \\static int cpt_machine_result_before_complete(void) {
+        \\#if defined(__GNUC__) || defined(__clang__)
+        \\    __builtin_trap();
+        \\#else
+        \\    *((volatile int*)0) = 0;
+        \\#endif
+        \\    return 0;
+        \\}
+        \\
+    );
+    return true;
+}
 
 fn emitMachineLayouts(writer: anytype, ctx: *const BackendContext) EmitError!bool {
     var emitted_any = false;
@@ -833,8 +853,11 @@ fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue
             try writer.writeAll(".complete");
         },
         .machine_result => |operand| {
+            try writer.writeByte('(');
             try emitOperand(writer, ctx, operand);
-            try writer.writeAll(".result");
+            try writer.writeAll(".complete ? ");
+            try emitOperand(writer, ctx, operand);
+            try writer.writeAll(".result : cpt_machine_result_before_complete())");
         },
         .enum_constructor, .struct_constructor => unreachable,
         .enum_tag => |operand| {

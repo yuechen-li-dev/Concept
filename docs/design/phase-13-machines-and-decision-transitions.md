@@ -167,10 +167,21 @@ Runtime lowering for `transition match (...) { ... };` and `transition decide {
 ... };` remains deferred after P13-M7. Those forms are still parsed, validated,
 and preserved in HIR with resolved machine-local state indexes, but executable
 C emission reports the existing machine-semantics unsupported diagnostic for
-that transition form. `Result(machine)` before completion is currently a raw
-field read with no fallible surface or runtime trap; callers are expected to
-check `Complete(machine)` first until Concept has a fallible result-access
-surface.
+that transition form.
+
+P13-M8 stabilizes the P13-M7 runtime subset with examples, fixtures, generated
+C shape assertions, and incomplete-result hardening. Runnable examples now live
+under `examples/phase13/` for literal-transition machines. The fixture corpus
+covers `Step`, `Complete`, `Result`, scalar `int` and `bool` results, captured
+scalar parameters, multiple literal transitions, completion checks before and
+after return, extra completed steps as no-ops, runtime trapping for
+`Result(machine)` before completion, and explicit backend refusal for
+match/decide transition runtime lowering. The C backend now emits a small
+trap helper for incomplete result access, plus the same explicit state enum,
+frame struct, constructor, and step helper shape. P13-M8 does not add
+DragonGod kernel features, a `board` keyword, hidden heap allocation, `malloc`,
+a scheduler, async runtime machinery, stack HFSM, blackboards, mailbox buses,
+actuators, persistence, hysteresis, `min_commit`, or policy memory.
 
 ## Core doctrine
 
@@ -572,9 +583,9 @@ P13-M4 implementation status:
   state-valued expression.
 - Arm targets validate against the containing machine's local state table.
 - Unknown or cross-machine arm targets report `CON0222 UnknownMachineState`.
-- Valid match transitions still end at `CON0231
-  MachineSemanticsNotImplemented` because HIR/MIR lowering and runtime machine
-  semantics are not implemented.
+- Valid match transitions are represented in HIR after P13-M6. Runtime lowering
+  remains deferred after P13-M8, and backend execution attempts report `CON0231
+  MachineSemanticsNotImplemented` for the unsupported transition form.
 - `transition decide` remains deferred to P13-M5.
 - Full transition-match exhaustiveness/type checking remains deferred until the
   machine-local state target type is modeled in semantic lowering.
@@ -640,9 +651,9 @@ P13-M5 implementation status:
   table.
 - Unknown or cross-machine candidate targets report `CON0222
   UnknownMachineState`.
-- Valid decide transitions still end at `CON0231
-  MachineSemanticsNotImplemented` because HIR/MIR lowering and runtime machine
-  semantics are not implemented.
+- Valid decide transitions are represented in HIR after P13-M6. Runtime
+  lowering remains deferred after P13-M8, and backend execution attempts report
+  `CON0231 MachineSemanticsNotImplemented` for the unsupported transition form.
 - Condition and score expression typing inside transition-decide is deferred
   until machine bodies lower/typecheck through the normal executable path.
 - `decide` remains utility-scored transition selection and remains stateless in
@@ -728,6 +739,18 @@ support is not part of the current runtime subset. `Step`, `Complete`, and
 `Result` resemble Octomata inspection concepts, but Concept keeps them tied to
 explicit frame storage and compiler-lowered machine semantics rather than a
 hidden scheduler or behavior kernel.
+
+P13-M8 behavior:
+
+- `Step(machine)` executes one active state and returns no value.
+- `Complete(machine)` reads the explicit completion flag and is false before a
+  machine returns.
+- `Result(machine)` reads the stored result only after completion.
+- `Result(machine)` before completion lowers to an explicit generated C trap
+  instead of silently reading raw result storage.
+- Calling `Step(machine)` after completion is a no-op.
+- The supported executable parameter/result storage remains scalar `int` and
+  `bool`.
 
 Rules and constraints:
 
@@ -837,6 +860,16 @@ MIR responsibilities:
 The important requirement is inspectability. Machine syntax should lower to
 visible HIR/MIR constructs rather than becoming opaque runtime magic.
 
+P13-M8 generated C shape for the executable literal-transition subset includes
+one machine-local state enum, one frame struct with `state`, `complete`,
+`result`, and scalar captured parameter fields, a constructor helper that
+initializes the initial state and `complete = false`, and a step helper that
+dispatches on the current state. Literal transitions assign the next state and
+return from the step. Machine returns store the result, set `complete = true`,
+and return from the step. Completed machine steps return immediately. Generated
+machine C remains free of `malloc`, hidden heap helpers, scheduler helpers, and
+async runtime helpers.
+
 ## 16. Diagnostics
 
 P13-M0 only reserves a diagnostic inventory:
@@ -891,7 +924,25 @@ Phase 13 v0 explicitly defers:
 
 ## 18. Examples
 
-### A. Lexer deterministic match transition
+Runnable P13-M8 examples live in `examples/phase13/`. The runnable files use
+literal transitions only. The match/decide transition model example documents
+syntax and validation, but is not a backend-runtime example yet.
+
+### A. Runnable literal transition
+
+```cpp
+machine Door() -> int {
+    state Closed {
+        transition Open;
+    }
+
+    state Open {
+        return 1;
+    }
+}
+```
+
+### B. Lexer deterministic match transition
 
 ```cpp
 machine Lexer(mut LexerInput& input) -> Token {
@@ -911,7 +962,7 @@ machine Lexer(mut LexerInput& input) -> Token {
 }
 ```
 
-### B. Utility AI decide transition
+### C. Utility AI decide transition
 
 ```cpp
 machine Brain(mut Context& ctx) -> Action {
@@ -931,7 +982,7 @@ machine Brain(mut Context& ctx) -> Action {
 }
 ```
 
-### C. DragonGod boundary
+### D. DragonGod boundary
 
 ```cpp
 struct BrainBoard {
@@ -976,7 +1027,7 @@ P13-M4  transition target expressions via match
 P13-M5  transition target expressions via decide
 P13-M6  HIR/MIR lowering scaffold
 P13-M7  step/resume runtime model v0
-P13-M8  examples/fixtures: lexer, parser mode, utility AI choice
+P13-M8  examples, fixtures, runtime hardening, generated C shape assertions
 P13-M9  Closeout
 ```
 

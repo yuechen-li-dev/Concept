@@ -1,0 +1,28 @@
+module Main;
+
+machine Toggle() -> bool {
+    state Off {
+        transition On;
+    }
+
+    state On {
+        return true;
+    }
+}
+
+int main() {
+    Toggle t = Toggle();
+    Step(t);
+
+    if (Complete(t)) {
+        return 1;
+    }
+
+    Step(t);
+
+    if (Complete(t)) {
+        return 0;
+    }
+
+    return 2;
+}

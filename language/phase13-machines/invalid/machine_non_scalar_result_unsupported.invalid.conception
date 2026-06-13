@@ -1,0 +1,25 @@
+# name: machine non scalar result unsupported
+# phase: backend-c
+# expect: fail
+
+=== source ===
+module Main;
+
+struct Payload {
+    int value;
+}
+
+machine Boxed() -> Payload {
+    state Start {
+        return { value: 1 };
+    }
+}
+
+int main() {
+    Boxed boxed = Boxed();
+    Step(boxed);
+    return 0;
+}
+
+=== diagnostics ===
+CON0045

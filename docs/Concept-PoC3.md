@@ -59,7 +59,13 @@ machine declarations define explicit frame value types, `MachineName(...)`
 constructs frames, and `Step`, `Complete`, and `Result` operate on literal
 transition machines through MIR-backed C emission with no hidden heap or
 implicit scheduler. Runtime lowering for match/decide transitions remains
-deferred. Deferred Phase 12
+deferred. P13-M8 adds runnable Phase 13 examples, strengthens fixture coverage
+for `Step`, `Complete`, `Result`, scalar params/results, multi-step literal
+transitions, and completed-step no-ops, pins generated C machine shape, and
+hardens `Result(machine)` before completion with an explicit generated C trap.
+Match/decide transition runtime lowering remains deferred and fails clearly
+during backend emission rather than silently generating unsupported code.
+Deferred Phase 12
 work includes
 `Arena.create`, hosted runtime helper implementation, allocation failure
 surfaces, generic `Store<T, Id>`, named store IDs, generation counters, region

@@ -1,0 +1,26 @@
+# name: machine non scalar param unsupported
+# phase: backend-c
+# expect: fail
+
+=== source ===
+module Main;
+
+struct Payload {
+    int value;
+}
+
+machine Echo(Payload payload) -> int {
+    state Start {
+        return 0;
+    }
+}
+
+int main() {
+    Payload payload = { value: 1 };
+    Echo echo = Echo(payload);
+    Step(echo);
+    return 0;
+}
+
+=== diagnostics ===
+CON0045

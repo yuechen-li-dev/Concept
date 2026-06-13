@@ -1,0 +1,31 @@
+# name: machine complete false before return
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Door() -> int {
+    state Closed {
+        transition Open;
+    }
+
+    state Open {
+        return 1;
+    }
+}
+
+int main() {
+    Door door = Door();
+    if (Complete(door)) {
+        return 1;
+    }
+    Step(door);
+    if (Complete(door)) {
+        return 2;
+    }
+    return 0;
+}
+
+=== run ===
+exit_code: 0

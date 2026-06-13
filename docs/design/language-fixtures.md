@@ -162,7 +162,8 @@ yet.
 
 Phase 13 fixtures live under `language/phase13-machines/` and cover explicit
 machine/state syntax, machine-local state validation, literal/match/decide
-transition target preservation, and the P13-M7 executable step/runtime subset.
+transition target preservation, and the P13-M8 executable literal-transition
+runtime subset.
 Valid parse fixtures cover machine declarations, parameters, effects,
 attributes, ordinary state-body statements, literal transitions, match-driven
 transition targets, and decide-driven transition targets. Invalid fixtures cover
@@ -170,44 +171,27 @@ malformed machine/state/transition syntax plus semantic validation failures for
 zero states, duplicate states, unknown transition targets, and cross-machine
 state targets.
 
-P13-M7 valid run fixtures cover explicit frame construction through
-`MachineName(...)`, one-step literal transition behavior, completion via
-`return`, `Complete(machine)`, `Result(machine)`, extra `Step` after completion
-as a no-op, and captured scalar machine parameters. Match and decide transition
-runtime lowering remains deferred: those forms are still parsed, validated, and
-preserved in HIR, but they are not executable C-backend paths in P13-M7.
+Valid run fixtures cover explicit frame construction through `MachineName(...)`,
+one-step and multi-step literal transition behavior, completion via `return`,
+`Complete(machine)` before and after completion, `Result(machine)` after
+completion, scalar `int` and `bool` results, captured scalar parameters, and
+extra `Step(machine)` calls after completion as no-ops. An invalid run fixture
+pins the P13-M8 hardening that `Result(machine)` before completion traps
+instead of silently reading raw result storage.
 
-## Phase 13 machine fixtures
+Backend-C fixtures and unit assertions pin the generated machine shape:
+state enum, frame struct, current-state field, completion flag, result storage,
+scalar captured parameter fields, constructor initialization, step dispatch,
+literal transition assignment, return-result storage, completed-step no-op,
+and absence of `malloc`, scheduler helpers, and async runtime helpers.
 
-Phase 13 fixtures live under `language/phase13-machines/` and currently cover
-the P13-M1 parser/AST scaffold, P13-M2 state validation, P13-M3 literal
-transition statements, P13-M4 deterministic `transition match (...) { ... };`
-targets, and P13-M5 contextual `transition decide { ... };` targets for
-explicit machines. P13-M6 adds check fixtures for the HIR machine shell while
-machines still intentionally fail with `CON0231` before executable lowering.
-Valid parse fixtures cover empty states,
-single-state and multi-state machines, same state spelling in different
-machines, ordinary state-body statements, `return` statements, literal
-`transition TargetState;` statements, match-driven transition targets,
-decide-driven transition targets, nested-block transitions, machine parameters,
-`->` result types, `noalloc machine` metadata, and attributes accepted by the
-existing declaration attribute parser.
-
-Invalid parse fixtures cover top-level `state`, missing machine names, missing
-result arrows/types, missing bodies, unclosed state bodies, transition outside
-machine states, missing transition targets, missing transition semicolons, bad
-transition-match patterns, missing transition-match semicolons, and non-bare
-transition-match arm results, as well as missing transition-decide scores,
-missing transition-decide semicolons, and non-bare transition-decide case
-results. Declaration check fixtures pin `CON0220
-MachineRequiresState`, `CON0221 DuplicateMachineState`, `CON0222
-UnknownMachineState`, and `CON0231 MachineSemanticsNotImplemented`, because
-P13-M5 validates the machine-local state universe plus literal, match arm, and
-decide case transition targets, and P13-M6 represents those forms in HIR with
-machine-local state indexes. It still intentionally defers arbitrary
-state-valued transition expressions, executable MIR lowering, runtime frames,
-DragonGod features, and any
-`board`/mailbox/actuator/policy surface.
+Match and decide transition runtime lowering remains deferred: those forms are
+still parsed, validated, and preserved in HIR, but backend execution attempts
+fail clearly with `CON0231 MachineSemanticsNotImplemented`. Phase 13 fixtures
+continue to exclude DragonGod features, `board`, stack HFSM, blackboards,
+mailbox buses, actuators, persistence, hysteresis, `min_commit`, policy memory,
+hidden heap behavior, scheduler behavior, and async behavior from Concept core
+v0.
 
 ## `.conception` format
 
@@ -234,6 +218,7 @@ Sections are introduced with `=== section-name ===` on a line by itself. The ini
 - `diagnostics`
 - `run`
 - `mir`
+- `c`
 
 Implemented fixture phases:
 
@@ -241,6 +226,7 @@ Implemented fixture phases:
 - `phase: check` fixtures pass `source` through parse and an explicit semantic check mode. `check: declarations` runs semantic declaration collection, declaration/type-name checks, and HIR lowering without invoking the HIR executable checker. `check: hir` runs semantic collection / HIR lowering and then invokes the HIR executable checker for executable-subset validation. When `phase: check` omits `check`, the default is `check: declarations`. Failing check fixtures still match stable diagnostic codes from `diagnostics`; full rendered diagnostic matching remains reserved for later.
 - `phase: run` fixtures pass `source` through parse, semantic collection / HIR lowering, the HIR executable checker, HIR-to-MIR lowering, MIR validation, MIR-backed C emission, `zig cc`, and native process execution. For now run fixtures support only `expect: pass` and a `=== run ===` section containing `exit_code: N`. Stdout and stderr matching are not implemented yet and are reserved for later.
 - `phase: mir` fixtures pass `source` through parse, semantic collection / HIR lowering, HIR executable checking, HIR-to-MIR lowering, MIR validation, and MIR debug snapshot rendering. Passing fixtures compare the raw `=== mir ===` section exactly against the stable MIR debug output. Failing MIR fixtures are reserved for future lowering/validation diagnostics and may use `=== diagnostics ===` when implemented. Phase 4 starts with raw MIR snapshots; later optimized MIR can use metadata such as `# mir: raw` or `# mir: optimized`.
+- `phase: backend-c` fixtures pass `source` through parse, semantic collection / HIR lowering, HIR executable checking, HIR-to-MIR lowering, MIR validation, and MIR-backed C emission. Passing fixtures may include a `=== c ===` section with line-based `contains:` and `not_contains:` substring assertions. Failing backend-C fixtures match diagnostic codes from `=== diagnostics ===`.
 
 Example:
 

@@ -1,0 +1,18 @@
+module Main;
+
+machine Door() -> int {
+    state Closed {
+        transition Open;
+    }
+
+    state Open {
+        return 1;
+    }
+}
+
+int main() {
+    Door door = Door();
+    Step(door);
+    Step(door);
+    return Result(door);
+}

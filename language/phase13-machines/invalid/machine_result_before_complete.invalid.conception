@@ -1,0 +1,21 @@
+# name: machine result before complete
+# phase: run
+# expect: fail
+
+=== source ===
+module Main;
+
+machine Door() -> int {
+    state Closed {
+        transition Open;
+    }
+
+    state Open {
+        return 1;
+    }
+}
+
+int main() {
+    Door door = Door();
+    return Result(door);
+}
