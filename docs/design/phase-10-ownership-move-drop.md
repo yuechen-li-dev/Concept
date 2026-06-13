@@ -76,6 +76,30 @@ replacement assignment semantics, and borrow/lifetime analysis remain deferred.
 Loops use the same fixed-point worklist and are conservative for
 ownership-sensitive patterns.
 
+P10-M5 adds Drop lowering v0 for whole initialized user locals. `Drop<T>` is a
+compiler-known intrinsic concept name, so source may write `impl Drop<File> {
+void drop(File f) { ... } }` without redeclaring the concept. The v0 Drop
+signature is exactly `void drop(T value)`: passing by value consumes the local
+being dropped, avoids reference semantics before references are implemented, and
+lowers to an ordinary backend-visible function call. Drop witness functions must
+not be compile-time functions; invalid return or parameter shapes are rejected by
+the existing concept impl signature diagnostics. The MIR storage pass inserts
+explicit `Drop(place, drop_fn)` cleanup statements before return terminators.
+The C backend only emits these explicit MIR drops; it does not decide cleanup on
+its own.
+
+P10-M5 drops initialized Drop locals in reverse whole-local initialization order
+at function exits and early returns. Moved locals are skipped, uninitialized
+locals are skipped, Copy/non-Drop locals are ignored, and return expressions are
+evaluated before cleanup so `return move f;` moves `f` out and does not drop it
+in the callee. Params are intentionally deferred in M5; only user locals are
+cleaned up. If cleanup reaches a Drop local in `MaybeMoved` or
+`MaybeInitialized`, the pass reports the existing maybe-state diagnostics rather
+than emitting path-sensitive conditional cleanup. P10-M5 still does not implement
+`ManualInit<T>`, an official `MaybeUninit<T>` surface, partial field states,
+field-level drops, replacement assignment semantics, C++ destructor syntax,
+implicit move, borrow checking, or lifetimes.
+
 ## Thesis
 
 ```text

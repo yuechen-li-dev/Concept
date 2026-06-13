@@ -145,6 +145,7 @@ pub const DiagnosticCode = enum {
     ImplicitCopyRequiresCopy,
     MaybeMovedUse,
     MaybeUninitializedUse,
+    InvalidDropImpl,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -271,6 +272,7 @@ pub const DiagnosticCode = enum {
             .ImplicitCopyRequiresCopy => "CON0154",
             .MaybeMovedUse => "CON0155",
             .MaybeUninitializedUse => "CON0156",
+            .InvalidDropImpl => "CON0157",
         };
     }
 };
@@ -712,6 +714,7 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0154", DiagnosticCode.ImplicitCopyRequiresCopy.format());
     try std.testing.expectEqualStrings("CON0155", DiagnosticCode.MaybeMovedUse.format());
     try std.testing.expectEqualStrings("CON0156", DiagnosticCode.MaybeUninitializedUse.format());
+    try std.testing.expectEqualStrings("CON0157", DiagnosticCode.InvalidDropImpl.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {
@@ -1019,6 +1022,10 @@ pub fn maybeMovedUse(span: SourceSpan) Diagnostic {
 
 pub fn maybeUninitializedUse(span: SourceSpan) Diagnostic {
     return Diagnostic.init(.MaybeUninitializedUse, .@"error", "value may be uninitialized on some control-flow paths", span);
+}
+
+pub fn invalidDropImpl(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.InvalidDropImpl, .@"error", "invalid Drop<T> impl", span);
 }
 
 pub fn unsupportedCBackendType(span: SourceSpan) Diagnostic {

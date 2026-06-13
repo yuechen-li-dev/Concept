@@ -24,14 +24,14 @@ pub const EmitError = error{InvalidExecutable} || std.mem.Allocator.Error || std
 
 const BackendContext = struct {
     module: *const semantics.SemanticModule,
-    mir_module: *const mir.MirModule,
+    mir_module: *mir.MirModule,
     diagnostic_bag: ?*diagnostics.DiagnosticBag,
 };
 
 pub fn emitExecutableFromMir(
     allocator: std.mem.Allocator,
     semantic_module: *semantics.SemanticModule,
-    mir_module: *const mir.MirModule,
+    mir_module: *mir.MirModule,
     diagnostic_bag: ?*diagnostics.DiagnosticBag,
 ) EmitError![]const u8 {
     mir_storage.analyzeModule(allocator, semantic_module, mir_module, diagnostic_bag) catch |err| switch (err) {
@@ -328,6 +328,14 @@ fn emitStatement(writer: anytype, ctx: *const BackendContext, statement: mir.Mir
                     try writer.writeAll(";\n");
                 },
             }
+        },
+        .drop => |drop| {
+            const drop_function = ctx.module.hir.getFunction(drop.function);
+            try writer.writeAll("    ");
+            try emitFunctionName(writer, ctx.module, drop_function.name);
+            try writer.writeByte('(');
+            try emitPlace(writer, ctx, drop.place);
+            try writer.writeAll(");\n");
         },
     }
 }
@@ -856,7 +864,7 @@ fn addVoidMainMirForTest(module: *semantics.SemanticModule, mir_module: *mir.Mir
     try mir_module.store.setTerminator(block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(null) });
 }
 
-fn emitManualModuleForTest(module: *semantics.SemanticModule, mir_module: *const mir.MirModule) ![]const u8 {
+fn emitManualModuleForTest(module: *semantics.SemanticModule, mir_module: *mir.MirModule) ![]const u8 {
     var diagnostic_bag = diagnostics.DiagnosticBag.init(std.testing.allocator);
     defer diagnostic_bag.deinit();
     const c_source = try emitExecutableFromMir(std.testing.allocator, module, mir_module, &diagnostic_bag);
@@ -865,7 +873,7 @@ fn emitManualModuleForTest(module: *semantics.SemanticModule, mir_module: *const
     return c_source;
 }
 
-fn expectUnsupportedManualModule(module: *semantics.SemanticModule, mir_module: *const mir.MirModule) !void {
+fn expectUnsupportedManualModule(module: *semantics.SemanticModule, mir_module: *mir.MirModule) !void {
     var diagnostic_bag = diagnostics.DiagnosticBag.init(std.testing.allocator);
     defer diagnostic_bag.deinit();
     try std.testing.expectError(error.InvalidExecutable, emitExecutableFromMir(std.testing.allocator, module, mir_module, &diagnostic_bag));
@@ -878,6 +886,91 @@ test "MIR C backend emits simple struct layout" {
         "module Main; struct Vec2 { int x; int y; }; int main() { return 0; }",
         "typedef struct {\n    int cpt_f_x_0;\n    int cpt_f_y_1;\n} cpt_struct_Vec2;\n\nint main(void) {\ncpt_bb_0:\n    return 0;\n}\n",
     );
+}
+
+test "MIR C backend emits Drop cleanup before return in reverse order" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\
+        \\struct File {
+        \\    int fd;
+        \\};
+        \\
+        \\impl Drop<File> {
+        \\    void drop(File f) {
+        \\        return;
+        \\    }
+        \\}
+        \\
+        \\int main() {
+        \\    File a = File { fd: 1 };
+        \\    File b = File { fd: 2 };
+        \\    return 0;
+        \\}
+    );
+    defer std.testing.allocator.free(c_source);
+
+    const drop_b = std.mem.indexOf(u8, c_source, "cpt_f_drop(cpt_l_b_2);").?;
+    const drop_a = std.mem.indexOf(u8, c_source, "cpt_f_drop(cpt_l_a_1);").?;
+    const ret = std.mem.indexOf(u8, c_source, "return 0;").?;
+    try std.testing.expect(drop_b < drop_a);
+    try std.testing.expect(drop_a < ret);
+}
+
+test "MIR C backend skips moved-from Drop local cleanup" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\
+        \\struct File {
+        \\    int fd;
+        \\};
+        \\
+        \\impl Drop<File> {
+        \\    void drop(File f) {
+        \\        return;
+        \\    }
+        \\}
+        \\
+        \\int main() {
+        \\    File f = File { fd: 1 };
+        \\    File g = move f;
+        \\    return 0;
+        \\}
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_f_drop(cpt_l_g_2);") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_f_drop(cpt_l_f_1);") == null);
+}
+
+test "MIR C backend return move does not drop returned source in callee" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\
+        \\struct File {
+        \\    int fd;
+        \\};
+        \\
+        \\impl Drop<File> {
+        \\    void drop(File f) {
+        \\        return;
+        \\    }
+        \\}
+        \\
+        \\File makeFile() {
+        \\    File f = File { fd: 7 };
+        \\    return move f;
+        \\}
+        \\
+        \\int main() {
+        \\    File x = makeFile();
+        \\    return 0;
+        \\}
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_f_drop(cpt_l_f_1);") == null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_f_drop(cpt_l_x_3);") != null);
 }
 
 test "MIR C backend emits address-of field place" {

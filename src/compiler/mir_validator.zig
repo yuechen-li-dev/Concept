@@ -123,6 +123,25 @@ const Validator = struct {
                     try self.report(.InvalidMirType, statement.span, diagnostics.invalidMirType);
                 }
             },
+            .drop => |drop| {
+                const place_type = try self.placeType(function_id, drop.place, statement.span);
+                if (!self.containsHirFunction(drop.function)) {
+                    try self.report(.InvalidMirOperand, statement.span, diagnostics.invalidMirOperand);
+                    return;
+                }
+                const drop_function = self.semantic_module.hir.getFunction(drop.function);
+                if (!sameType(drop_function.return_type, self.semantic_module.types.voidType())) {
+                    try self.report(.InvalidMirType, statement.span, diagnostics.invalidMirType);
+                }
+                if (drop_function.params.len != 1) {
+                    try self.report(.InvalidMirOperand, statement.span, diagnostics.invalidMirOperand);
+                    return;
+                }
+                const param_type = self.semantic_module.hir.getParam(drop_function.params[0]).type_id;
+                if (place_type != null and !sameType(place_type.?, param_type)) {
+                    try self.report(.InvalidMirType, statement.span, diagnostics.invalidMirType);
+                }
+            },
         }
     }
 

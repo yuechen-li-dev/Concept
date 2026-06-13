@@ -1,0 +1,26 @@
+# name: drop return move
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+struct File {
+    int fd;
+};
+
+impl Drop<File> {
+    void drop(File f) {
+        return;
+    }
+}
+
+File makeFile() {
+    File f = File { fd: 7 };
+    return move f;
+}
+
+int main() {
+    File x = makeFile();
+    return 0;
+}

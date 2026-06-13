@@ -48,6 +48,38 @@ pub const SemanticModule = struct {
             else => null,
         };
     }
+
+    pub const DropInfo = struct {
+        type_id: types.TypeId,
+        impl_id: hir.ConceptImplId,
+        function: hir.FunctionId,
+        span: source.SourceSpan,
+    };
+
+    pub fn hasDrop(self: *const SemanticModule, type_id: types.TypeId) ?DropInfo {
+        const drop_concept = self.findIntrinsicDropConcept() orelse return null;
+        const impl_id = self.hir.findConceptImpl(drop_concept, type_id) orelse return null;
+        const concept_impl = self.hir.getConceptImpl(impl_id);
+        if (concept_impl.functions.len != 1) return null;
+        return .{
+            .type_id = type_id,
+            .impl_id = impl_id,
+            .function = concept_impl.functions[0],
+            .span = concept_impl.span,
+        };
+    }
+
+    fn findIntrinsicDropConcept(self: *const SemanticModule) ?hir.ConceptId {
+        for (self.hir.concepts.items, 0..) |concept, index| {
+            if (std.mem.eql(u8, self.interner.text(concept.name), "Drop") and
+                concept.type_params.len == 1 and
+                !concept.is_marker)
+            {
+                return .{ .index = @intCast(index) };
+            }
+        }
+        return null;
+    }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -151,6 +183,44 @@ const Collector = struct {
     // ─────────────────────────────────────────────────────────────────────────────
     // Declaration resolution
     // ─────────────────────────────────────────────────────────────────────────────
+
+    fn declareIntrinsicDropConcept(self: *Collector) !hir.ConceptId {
+        const drop_name = try self.module.interner.intern("Drop");
+        if (self.top_level_decls.get(drop_name)) |decl| switch (decl) {
+            .concept => |id| return id,
+            else => {},
+        };
+        const concept_id = try self.module.hir.addConcept(drop_name, false, false, hir.synthetic_span);
+        try self.top_level_decls.put(drop_name, .{ .concept = concept_id });
+
+        const type_param_name = try self.module.interner.intern("T");
+        const type_param = try self.module.types.addTypeParam(.{ .kind = .concept, .index = concept_id.index }, 0, type_param_name);
+        const type_params = try self.allocator.alloc(hir.HirTypeParam, 1);
+        type_params[0] = .{
+            .name = type_param_name,
+            .span = hir.synthetic_span,
+            .type_id = type_param,
+        };
+        self.module.hir.setConceptTypeParams(concept_id, type_params);
+
+        const value_name = try self.module.interner.intern("value");
+        const drop_name_symbol = try self.module.interner.intern("drop");
+        const params = try self.allocator.alloc(hir.HirConceptParam, 1);
+        params[0] = .{
+            .name = value_name,
+            .span = hir.synthetic_span,
+            .type_id = type_param,
+        };
+        const requirements = try self.allocator.alloc(hir.HirConceptRequirement, 1);
+        requirements[0] = .{
+            .name = drop_name_symbol,
+            .return_type = self.module.types.voidType(),
+            .params = params,
+            .span = hir.synthetic_span,
+        };
+        self.module.hir.setConceptRequirements(concept_id, requirements);
+        return concept_id;
+    }
 
     fn declareFunction(self: *Collector, function_decl: ast.FunctionDecl) !void {
         const name = try self.internFreshTopLevelName(
@@ -462,10 +532,14 @@ const Collector = struct {
             return;
         }
         const concept_symbol = try self.module.interner.intern(concept_part.text);
-        const concept_id = switch (self.top_level_decls.get(concept_symbol) orelse {
+        const maybe_decl = self.top_level_decls.get(concept_symbol) orelse blk: {
+            if (std.mem.eql(u8, concept_part.text, "Drop")) {
+                break :blk TopLevelDecl{ .concept = try self.declareIntrinsicDropConcept() };
+            }
             try self.diagnostics.append(diagnostics.unknownConcept(concept_part.span));
             return;
-        }) {
+        };
+        const concept_id = switch (maybe_decl) {
             .concept => |id| id,
             else => {
                 try self.diagnostics.append(diagnostics.unknownConcept(concept_part.span));
@@ -518,6 +592,10 @@ const Collector = struct {
         defer witness_functions.deinit(self.allocator);
 
         for (impl_decl.functions) |function_decl| {
+            if (self.isIntrinsicDropConcept(concept) and function_decl.is_compile_time) {
+                try self.diagnostics.append(diagnostics.invalidDropImpl(function_decl.span));
+                continue;
+            }
             const function_symbol = try self.module.interner.intern(function_decl.signature.name.base.text);
             if (seen.contains(function_symbol)) {
                 try self.diagnostics.append(diagnostics.duplicateConceptImplFunction(function_decl.signature.name.span));
@@ -580,6 +658,15 @@ const Collector = struct {
         @memcpy(owned, witness_functions.items);
         witness_functions.clearRetainingCapacity();
         _ = try self.module.hir.addConceptImpl(concept_id, target_type, owned, impl_decl.is_unsafe, impl_decl.span);
+        if (self.isIntrinsicDropConcept(concept)) {
+            for (owned) |function_id| self.module.hir.markConceptWitnessReferenced(function_id);
+        }
+    }
+
+    fn isIntrinsicDropConcept(self: *Collector, concept: hir.HirConcept) bool {
+        return !concept.is_marker and
+            concept.type_params.len == 1 and
+            std.mem.eql(u8, self.module.interner.text(concept.name), "Drop");
     }
 
     fn findRequirement(self: *Collector, concept: hir.HirConcept, name: interner.SymbolId) ?hir.HirConceptRequirement {

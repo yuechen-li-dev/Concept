@@ -53,7 +53,7 @@ pub const AnalysisError = error{InvalidStorageState} || std.mem.Allocator.Error;
 pub fn analyzeModule(
     allocator: std.mem.Allocator,
     semantic_module: *const semantics.SemanticModule,
-    mir_module: *const mir.MirModule,
+    mir_module: *mir.MirModule,
     diagnostic_bag: ?*diagnostics.DiagnosticBag,
 ) AnalysisError!void {
     for (mir_module.store.functions.items, 0..) |function, index| {
@@ -65,7 +65,7 @@ pub fn analyzeModule(
 pub fn analyzeFunction(
     allocator: std.mem.Allocator,
     semantic_module: *const semantics.SemanticModule,
-    mir_module: *const mir.MirModule,
+    mir_module: *mir.MirModule,
     function_id: mir.MirFunctionId,
     function: mir.MirFunction,
     diagnostic_bag: ?*diagnostics.DiagnosticBag,
@@ -77,7 +77,7 @@ pub fn analyzeFunction(
 const Analyzer = struct {
     allocator: std.mem.Allocator,
     semantic_module: *const semantics.SemanticModule,
-    mir_module: *const mir.MirModule,
+    mir_module: *mir.MirModule,
     function_id: mir.MirFunctionId,
     function: mir.MirFunction,
     diagnostic_bag: ?*diagnostics.DiagnosticBag,
@@ -88,7 +88,7 @@ const Analyzer = struct {
     fn init(
         allocator: std.mem.Allocator,
         semantic_module: *const semantics.SemanticModule,
-        mir_module: *const mir.MirModule,
+        mir_module: *mir.MirModule,
         function_id: mir.MirFunctionId,
         function: mir.MirFunction,
         diagnostic_bag: ?*diagnostics.DiagnosticBag,
@@ -213,6 +213,7 @@ const Analyzer = struct {
             }
             if (block.terminator) |terminator| {
                 try self.analyzeTerminator(states, terminator);
+                try self.insertCleanupBeforeTerminator(states, block_id, terminator);
             }
         }
 
@@ -239,6 +240,7 @@ const Analyzer = struct {
                 try self.readRvalue(states, assignment.rvalue, statement.span);
                 try self.writePlace(states, assignment.place);
             },
+            .drop => |drop| try self.dropPlace(states, drop.place, statement.span),
         }
     }
 
@@ -314,6 +316,50 @@ const Analyzer = struct {
         };
         if (!self.isCopyLocal(local_id)) {
             states[local_id.index] = .moved;
+        }
+    }
+
+    fn dropPlace(self: *Analyzer, states: []StorageState, place: mir.MirPlace, span: ?source.SourceSpan) AnalysisError!void {
+        const local_id = switch (place) {
+            .local => |local_id| local_id,
+            .field => |field| field.base,
+        };
+        try self.readPlace(states, place, span);
+        if (states[local_id.index] == .initialized) {
+            states[local_id.index] = .moved;
+        }
+    }
+
+    fn insertCleanupBeforeTerminator(self: *Analyzer, states: []StorageState, block_id: mir.MirBlockId, terminator: mir.MirTerminator) AnalysisError!void {
+        if (!self.emit_diagnostics) return;
+        switch (terminator.kind) {
+            .return_ => {},
+            else => return,
+        }
+        const block = self.mir_module.store.getBlock(block_id);
+        for (block.statements) |statement| {
+            if (std.meta.activeTag(statement.kind) == .drop) return;
+        }
+
+        var index = self.function.locals.len;
+        while (index > 0) {
+            index -= 1;
+            const local_id = self.function.locals[index];
+            const local = self.mir_module.store.getLocal(local_id);
+            if (local.kind != .user) continue;
+            const drop_info = self.semantic_module.hasDrop(local.type_id) orelse continue;
+            switch (states[local_id.index]) {
+                .initialized => {
+                    try self.mir_module.store.appendStatement(block_id, .{
+                        .span = terminator.span,
+                        .kind = mir.MirStatementKind.dropPlace(mir.MirPlace.localPlace(local_id), drop_info.function),
+                    });
+                    states[local_id.index] = .moved;
+                },
+                .moved, .uninitialized => {},
+                .maybe_moved => try self.report(.maybe_moved_use, local_id, terminator.span),
+                .maybe_initialized => try self.report(.maybe_uninitialized_use, local_id, terminator.span),
+            }
         }
     }
 
@@ -854,4 +900,132 @@ test "MIR storage allows non-Copy temporaries and struct constructors as fresh v
     var analysis = try analyzeFunction(std.testing.allocator, &semantic_module, &module, function, module.store.getFunction(function).*, null);
     defer analysis.deinit();
     try std.testing.expectEqual(StorageState.initialized, analysis.stateOf(local));
+}
+
+fn addDropImplForTest(semantic_module: *semantics.SemanticModule, type_id: types.TypeId) !hir.FunctionId {
+    const drop_name = try semantic_module.interner.intern("Drop");
+    const concept_id = try semantic_module.hir.addConcept(drop_name, false, false, hir.synthetic_span);
+    const t_name = try semantic_module.interner.intern("T");
+    const t_type = try semantic_module.types.addTypeParam(.{ .kind = .concept, .index = concept_id.index }, 0, t_name);
+    const type_params = try std.testing.allocator.alloc(hir.HirTypeParam, 1);
+    type_params[0] = .{ .name = t_name, .span = hir.synthetic_span, .type_id = t_type };
+    semantic_module.hir.setConceptTypeParams(concept_id, type_params);
+
+    const value_name = try semantic_module.interner.intern("value");
+    const requirement_params = try std.testing.allocator.alloc(hir.HirConceptParam, 1);
+    requirement_params[0] = .{ .name = value_name, .span = hir.synthetic_span, .type_id = t_type };
+    const requirements = try std.testing.allocator.alloc(hir.HirConceptRequirement, 1);
+    requirements[0] = .{
+        .name = try semantic_module.interner.intern("drop"),
+        .return_type = semantic_module.types.voidType(),
+        .params = requirement_params,
+        .span = hir.synthetic_span,
+    };
+    semantic_module.hir.setConceptRequirements(concept_id, requirements);
+
+    const drop_fn = try semantic_module.hir.addConceptWitnessFunction(try semantic_module.interner.intern("drop"), semantic_module.types.voidType(), false, hir.synthetic_span);
+    _ = try semantic_module.hir.addParam(drop_fn, value_name, type_id, hir.synthetic_span);
+    semantic_module.hir.markConceptWitnessReferenced(drop_fn);
+    var functions = try std.testing.allocator.alloc(hir.FunctionId, 1);
+    functions[0] = drop_fn;
+    _ = try semantic_module.hir.addConceptImpl(concept_id, type_id, functions, false, hir.synthetic_span);
+    return drop_fn;
+}
+
+test "Drop lookup recognizes explicit Drop impl for struct only" {
+    var semantic_module = try semantics.SemanticModule.init(std.testing.allocator);
+    defer semantic_module.deinit();
+
+    const file_type = try semantic_module.types.addStructType(try semantic_module.hir.addStruct(try semantic_module.interner.intern("File")));
+    try std.testing.expect(semantic_module.hasDrop(semantic_module.types.intType()) == null);
+    try std.testing.expect(semantic_module.hasDrop(semantic_module.types.boolType()) == null);
+    try std.testing.expect(semantic_module.hasDrop(file_type) == null);
+
+    const drop_fn = try addDropImplForTest(&semantic_module, file_type);
+    const drop_info = semantic_module.hasDrop(file_type).?;
+    try std.testing.expectEqual(file_type, drop_info.type_id);
+    try std.testing.expectEqual(drop_fn, drop_info.function);
+}
+
+test "MIR storage inserts Drop cleanup in reverse local initialization order" {
+    var interner_value = interner.Interner.init(std.testing.allocator);
+    defer interner_value.deinit();
+    var semantic_module = try semantics.SemanticModule.init(std.testing.allocator);
+    defer semantic_module.deinit();
+    var module = mir.MirModule.init(std.testing.allocator);
+    defer module.deinit();
+
+    const file_type = try semantic_module.types.addStructType(try semantic_module.hir.addStruct(try semantic_module.interner.intern("File")));
+    const drop_fn = try addDropImplForTest(&semantic_module, file_type);
+    const function = try module.store.addFunction(.{ .index = 0 }, try interner_value.intern("main"), semantic_module.types.intType(), hir.synthetic_span);
+    const a = try module.store.addLocal(function, try interner_value.intern("a"), .user, file_type, hir.synthetic_span);
+    const b = try module.store.addLocal(function, try interner_value.intern("b"), .user, file_type, hir.synthetic_span);
+    const block = try module.store.addBlock(function, hir.synthetic_span);
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = a }, try mir.MirRvalue.structConstructor(std.testing.allocator, .{ .index = 0 }, &.{})) });
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = b }, try mir.MirRvalue.structConstructor(std.testing.allocator, .{ .index = 0 }, &.{})) });
+    try module.store.setTerminator(block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(try mir.MirOperand.intLiteral(std.testing.allocator, "0")) });
+
+    var analysis = try analyzeFunction(std.testing.allocator, &semantic_module, &module, function, module.store.getFunction(function).*, null);
+    defer analysis.deinit();
+    const statements = module.store.getBlock(block).statements;
+    try std.testing.expectEqual(@as(usize, 4), statements.len);
+    try std.testing.expectEqual(b, statements[2].kind.drop.place.local);
+    try std.testing.expectEqual(drop_fn, statements[2].kind.drop.function);
+    try std.testing.expectEqual(a, statements[3].kind.drop.place.local);
+}
+
+test "MIR storage skips moved Drop local at cleanup" {
+    var interner_value = interner.Interner.init(std.testing.allocator);
+    defer interner_value.deinit();
+    var semantic_module = try semantics.SemanticModule.init(std.testing.allocator);
+    defer semantic_module.deinit();
+    var module = mir.MirModule.init(std.testing.allocator);
+    defer module.deinit();
+
+    const file_type = try semantic_module.types.addStructType(try semantic_module.hir.addStruct(try semantic_module.interner.intern("File")));
+    _ = try addDropImplForTest(&semantic_module, file_type);
+    const function = try module.store.addFunction(.{ .index = 0 }, try interner_value.intern("main"), semantic_module.types.intType(), hir.synthetic_span);
+    const f = try module.store.addLocal(function, try interner_value.intern("f"), .user, file_type, hir.synthetic_span);
+    const g = try module.store.addLocal(function, try interner_value.intern("g"), .user, file_type, hir.synthetic_span);
+    const block = try module.store.addBlock(function, hir.synthetic_span);
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = f }, try mir.MirRvalue.structConstructor(std.testing.allocator, .{ .index = 0 }, &.{})) });
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = g }, mir.MirRvalue.movePlace(.{ .local = f })) });
+    try module.store.setTerminator(block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(try mir.MirOperand.intLiteral(std.testing.allocator, "0")) });
+
+    var analysis = try analyzeFunction(std.testing.allocator, &semantic_module, &module, function, module.store.getFunction(function).*, null);
+    defer analysis.deinit();
+    const statements = module.store.getBlock(block).statements;
+    try std.testing.expectEqual(@as(usize, 3), statements.len);
+    try std.testing.expectEqual(g, statements[2].kind.drop.place.local);
+}
+
+test "MIR storage diagnoses maybe-moved Drop cleanup" {
+    var interner_value = interner.Interner.init(std.testing.allocator);
+    defer interner_value.deinit();
+    var semantic_module = try semantics.SemanticModule.init(std.testing.allocator);
+    defer semantic_module.deinit();
+    var module = mir.MirModule.init(std.testing.allocator);
+    defer module.deinit();
+
+    const file_type = try semantic_module.types.addStructType(try semantic_module.hir.addStruct(try semantic_module.interner.intern("File")));
+    _ = try addDropImplForTest(&semantic_module, file_type);
+    const function = try module.store.addFunction(.{ .index = 0 }, try interner_value.intern("main"), semantic_module.types.intType(), hir.synthetic_span);
+    const cond = try module.store.addLocal(function, try interner_value.intern("cond"), .param, semantic_module.types.boolType(), hir.synthetic_span);
+    const f = try module.store.addLocal(function, try interner_value.intern("f"), .user, file_type, hir.synthetic_span);
+    const temp = try module.store.addLocal(function, null, .temp, file_type, hir.synthetic_span);
+    const entry = try module.store.addBlock(function, hir.synthetic_span);
+    const then_block = try module.store.addBlock(function, hir.synthetic_span);
+    const join = try module.store.addBlock(function, hir.synthetic_span);
+
+    try module.store.appendStatement(entry, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = f }, try mir.MirRvalue.structConstructor(std.testing.allocator, .{ .index = 0 }, &.{})) });
+    try module.store.setTerminator(entry, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.switchBool(mir.MirOperand.copyPlace(.{ .local = cond }), then_block, join) });
+    try module.store.appendStatement(then_block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = temp }, mir.MirRvalue.movePlace(.{ .local = f })) });
+    try module.store.setTerminator(then_block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.gotoBlock(join) });
+    try module.store.setTerminator(join, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(try mir.MirOperand.intLiteral(std.testing.allocator, "0")) });
+
+    var bag = diagnostics.DiagnosticBag.init(std.testing.allocator);
+    defer bag.deinit();
+    try std.testing.expectError(error.InvalidStorageState, analyzeModule(std.testing.allocator, &semantic_module, &module, &bag));
+    try std.testing.expectEqual(@as(usize, 1), bag.count());
+    try std.testing.expectEqual(diagnostics.DiagnosticCode.MaybeMovedUse, bag.diagnostics.items[0].code);
 }

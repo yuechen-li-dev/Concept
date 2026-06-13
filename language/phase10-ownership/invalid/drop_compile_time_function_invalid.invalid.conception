@@ -1,0 +1,24 @@
+# name: drop compile time function invalid
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+struct File {
+    int fd;
+};
+
+impl Drop<File> {
+    comptime void drop(File f) {
+        return;
+    }
+}
+
+int main() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0157

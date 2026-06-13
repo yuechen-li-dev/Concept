@@ -1,0 +1,29 @@
+# name: drop maybe moved cleanup
+# phase: backend-c
+# expect: fail
+
+=== source ===
+module Main;
+
+struct File {
+    int fd;
+};
+
+impl Drop<File> {
+    void drop(File f) {
+        return;
+    }
+}
+
+int main(bool cond) {
+    File f = File { fd: 1 };
+
+    if (cond) {
+        discard move f;
+    }
+
+    return 0;
+}
+
+=== diagnostics ===
+CON0155

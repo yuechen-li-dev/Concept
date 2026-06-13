@@ -286,20 +286,30 @@ pub const MirStatementKind = union(enum) {
         place: MirPlace,
         rvalue: MirRvalue,
     },
+    drop: struct {
+        place: MirPlace,
+        function: hir.FunctionId,
+    },
 
     pub fn assignTo(place: MirPlace, rvalue: MirRvalue) MirStatementKind {
         return .{ .assign = .{ .place = place, .rvalue = rvalue } };
     }
 
+    pub fn dropPlace(place: MirPlace, function: hir.FunctionId) MirStatementKind {
+        return .{ .drop = .{ .place = place, .function = function } };
+    }
+
     fn clone(self: MirStatementKind, allocator: std.mem.Allocator) !MirStatementKind {
         return switch (self) {
             .assign => |assignment| MirStatementKind.assignTo(assignment.place, try assignment.rvalue.clone(allocator)),
+            .drop => |drop| MirStatementKind.dropPlace(drop.place, drop.function),
         };
     }
 
     fn deinit(self: MirStatementKind, allocator: std.mem.Allocator) void {
         switch (self) {
             .assign => |assignment| assignment.rvalue.deinit(allocator),
+            .drop => {},
         }
     }
 };
@@ -636,6 +646,11 @@ pub const MirStore = struct {
                 try writePlaceDebug(writer, assignment.place);
                 try writer.writeAll(" = ");
                 try writeRvalueDebug(writer, assignment.rvalue);
+            },
+            .drop => |drop| {
+                try writer.writeAll("Drop ");
+                try writePlaceDebug(writer, drop.place);
+                try writer.print(" via {f}", .{drop.function});
             },
         }
     }

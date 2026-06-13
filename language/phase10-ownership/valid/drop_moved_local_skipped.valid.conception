@@ -1,0 +1,22 @@
+# name: drop moved local skipped
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+struct File {
+    int fd;
+};
+
+impl Drop<File> {
+    void drop(File f) {
+        return;
+    }
+}
+
+int main() {
+    File f = File { fd: 1 };
+    File g = move f;
+    return 0;
+}

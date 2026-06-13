@@ -1,0 +1,24 @@
+# name: drop invalid signature
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+struct File {
+    int fd;
+};
+
+impl Drop<File> {
+    int drop(File f) {
+        return 0;
+    }
+}
+
+int main() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0103
