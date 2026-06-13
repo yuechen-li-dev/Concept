@@ -1,0 +1,16 @@
+# name: comptime noalloc calls noalloc
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Example;
+
+comptime noalloc int PureConst(int a, int b) {
+    return a + b;
+}
+
+comptime noalloc int CallsPureConst(int a, int b) {
+    return PureConst(a, b);
+}
+

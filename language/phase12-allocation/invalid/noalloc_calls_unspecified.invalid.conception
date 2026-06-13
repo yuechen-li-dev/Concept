@@ -1,0 +1,19 @@
+# name: noalloc calls unspecified
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Example;
+
+int Unspecified() {
+    return 3;
+}
+
+noalloc int BadUnspecifiedCall() {
+    return Unspecified();
+}
+
+=== diagnostics ===
+CON0191
+

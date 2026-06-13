@@ -1,0 +1,20 @@
+# name: noalloc calls alloc generic
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Example;
+
+template<T>
+alloc T Build(T value) {
+    return value;
+}
+
+noalloc int Bad(int x) {
+    return Build(x);
+}
+
+=== diagnostics ===
+CON0191
+

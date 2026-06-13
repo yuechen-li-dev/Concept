@@ -1,0 +1,20 @@
+# name: unsafe noalloc effect call
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Example;
+
+unsafe noalloc int ReadRaw(int* ptr) {
+    unsafe {
+        return *ptr;
+    }
+}
+
+noalloc int CallRaw(int* ptr) {
+    unsafe {
+        return ReadRaw(ptr);
+    }
+}
+

@@ -2378,10 +2378,23 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectParseFixture("../../../language/phase12-allocation/valid/unsafe_noalloc_function.valid.conception");
     try expectParseFixture("../../../language/phase12-allocation/valid/comptime_noalloc_function.valid.conception");
     try expectParseFixture("../../../language/phase12-allocation/valid/template_noalloc_function.valid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/valid/noalloc_calls_noalloc.valid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/valid/alloc_calls_alloc.valid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/valid/alloc_calls_unspecified.valid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/valid/unspecified_calls_alloc.valid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/valid/noalloc_recursive_call.valid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/valid/noalloc_generic_call.valid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/valid/comptime_noalloc_calls_noalloc.valid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/valid/unsafe_noalloc_effect_call.valid.conception");
     try expectParseFixture("../../../language/phase12-allocation/invalid/function_conflicting_alloc_effects.invalid.conception");
     try expectParseFixture("../../../language/phase12-allocation/invalid/function_duplicate_noalloc.invalid.conception");
     try expectParseFixture("../../../language/phase12-allocation/invalid/function_duplicate_alloc.invalid.conception");
     try expectParseFixture("../../../language/phase12-allocation/invalid/allocation_effect_invalid_target.invalid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/invalid/noalloc_calls_alloc.invalid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/invalid/noalloc_calls_unspecified.invalid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/invalid/noalloc_calls_alloc_generic.invalid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/invalid/noalloc_calls_unspecified_generic.invalid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/invalid/comptime_noalloc_calls_alloc.invalid.conception");
 
     try expectRunFixture("../../../language/phase10-ownership/valid/move_struct_local_run.valid.conception");
     try expectRunFixture("../../../language/phase10-ownership/valid/move_struct_argument_run.valid.conception");

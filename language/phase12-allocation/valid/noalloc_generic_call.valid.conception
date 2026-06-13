@@ -1,0 +1,17 @@
+# name: noalloc generic call
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Example;
+
+template<T>
+noalloc T Identity(T value) {
+    return value;
+}
+
+noalloc int UseIdentity(int x) {
+    return Identity(x);
+}
+

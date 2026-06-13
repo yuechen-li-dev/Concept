@@ -1,0 +1,19 @@
+# name: comptime noalloc calls alloc
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Example;
+
+comptime alloc int MayAllocConst() {
+    return 1;
+}
+
+comptime noalloc int BadConst() {
+    return MayAllocConst();
+}
+
+=== diagnostics ===
+CON0191
+

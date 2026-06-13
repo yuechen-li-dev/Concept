@@ -137,7 +137,7 @@ const Checker = struct {
         for (self.module.hir.static_asserts.items) |static_assert| {
             self.compile_time_context_depth += 1;
             defer self.compile_time_context_depth -= 1;
-            _ = try self.checkExpr(self.module.types.voidType(), static_assert.expr);
+            _ = try self.checkExpr(null, self.module.types.voidType(), static_assert.expr);
             var evaluator = compile_time.CompileTimeEvaluator.init(self.module, self.allocator);
             const value = evaluator.evaluateExpr(static_assert.expr) catch |err| {
                 try self.reportCompileTimeError(err, static_assert.span);
@@ -182,27 +182,27 @@ const Checker = struct {
                     try self.reportAt(.TypeMismatch, "return statements must have an expression", stmt.span);
                     return error.InvalidSemanticModule;
                 };
-                const value_type = try self.checkExpr(return_type, value);
+                const value_type = try self.checkExpr(function_id, return_type, value);
                 try self.requireSame(value_type, return_type, "return expression type does not match function return type", self.exprSpan(value));
             },
             .local_decl => |decl| {
                 const local = self.module.hir.getLocal(decl.local);
-                const init_type = try self.checkExpr(return_type, decl.initializer);
+                const init_type = try self.checkExpr(function_id, return_type, decl.initializer);
                 try self.requireSame(init_type, local.type_id, "local initializer type does not match declared type", self.exprSpan(decl.initializer));
             },
             .expr_stmt => |expr_id| {
-                const value_type = try self.checkExpr(return_type, expr_id);
+                const value_type = try self.checkExpr(function_id, return_type, expr_id);
                 if (self.isMustUseType(value_type)) {
                     try self.reportAt(.IgnoredMustUseValue, "value must be used; use discard to ignore intentionally", self.exprSpan(expr_id));
                     return error.InvalidSemanticModule;
                 }
             },
             .discard_stmt => |expr_id| {
-                _ = try self.checkExpr(return_type, expr_id);
+                _ = try self.checkExpr(function_id, return_type, expr_id);
             },
             .assignment => |assignment| {
                 const target_type = try self.placeType(assignment.target, stmt.span);
-                const value_type = try self.checkExpr(return_type, assignment.value);
+                const value_type = try self.checkExpr(function_id, return_type, assignment.value);
                 if (!sameType(value_type, target_type)) {
                     const code: diagnostics.DiagnosticCode = switch (assignment.target) {
                         .field => .FieldAssignmentTypeMismatch,
@@ -213,13 +213,13 @@ const Checker = struct {
                 }
             },
             .if_stmt => |if_stmt| {
-                const condition_type = try self.checkExpr(return_type, if_stmt.condition);
+                const condition_type = try self.checkExpr(function_id, return_type, if_stmt.condition);
                 try self.requireBool(condition_type, "if condition must be bool", self.exprSpan(if_stmt.condition));
                 try self.checkStmt(function_id, if_stmt.then_block, return_type);
                 if (if_stmt.else_block) |else_block| try self.checkStmt(function_id, else_block, return_type);
             },
             .while_stmt => |while_stmt| {
-                const condition_type = try self.checkExpr(return_type, while_stmt.condition);
+                const condition_type = try self.checkExpr(function_id, return_type, while_stmt.condition);
                 try self.requireBool(condition_type, "while condition must be bool", self.exprSpan(while_stmt.condition));
                 try self.checkStmt(function_id, while_stmt.body, return_type);
             },
@@ -229,7 +229,7 @@ const Checker = struct {
                 try self.checkStmt(function_id, body, return_type);
             },
             .match_stmt => |match_stmt| {
-                const scrutinee_type = try self.checkExpr(return_type, match_stmt.scrutinee);
+                const scrutinee_type = try self.checkExpr(function_id, return_type, match_stmt.scrutinee);
                 const scrutinee_kind = self.module.types.kind(scrutinee_type);
                 if (!self.isInt(scrutinee_type) and !self.isBool(scrutinee_type) and scrutinee_kind != .enum_type) {
                     try self.reportAt(.TypeMismatch, "match scrutinee must be int, bool, or enum", self.exprSpan(match_stmt.scrutinee));
@@ -289,18 +289,18 @@ const Checker = struct {
     // Expression checking
     // ─────────────────────────────────────────────────────────────────────────────
 
-    fn checkExpr(self: *Checker, return_type: types.TypeId, expr_id: hir.ExprId) CheckError!types.TypeId {
+    fn checkExpr(self: *Checker, current_function_id: ?hir.FunctionId, return_type: types.TypeId, expr_id: hir.ExprId) CheckError!types.TypeId {
         const expr = self.module.hir.getExpr(expr_id).*;
         return switch (expr.kind) {
             .int_literal => self.module.types.intType(),
             .bool_literal => self.module.types.boolType(),
             .local_ref => |id| self.module.hir.getLocal(id).type_id,
             .param_ref => |id| self.module.hir.getParam(id).type_id,
-            .group => |inner| try self.checkExpr(return_type, inner),
+            .group => |inner| try self.checkExpr(current_function_id, return_type, inner),
             .compile_time => |compile_time_expr| blk: {
                 self.compile_time_context_depth += 1;
                 defer self.compile_time_context_depth -= 1;
-                _ = try self.checkExpr(return_type, compile_time_expr.operand);
+                _ = try self.checkExpr(current_function_id, return_type, compile_time_expr.operand);
                 var evaluator = compile_time.CompileTimeEvaluator.init(self.module, self.allocator);
                 const value = evaluator.evaluateExpr(compile_time_expr.operand) catch |err| {
                     try self.reportCompileTimeError(err, expr.span);
@@ -321,13 +321,13 @@ const Checker = struct {
                 break :blk metadata.query.typeOf(self.module.types);
             },
             .test_intrinsic => |test_intrinsic| blk: {
-                try self.checkTestIntrinsic(return_type, expr, test_intrinsic);
+                try self.checkTestIntrinsic(current_function_id, return_type, expr, test_intrinsic);
                 break :blk self.module.types.voidType();
             },
             .call => |call| blk: {
                 var arg_types = std.ArrayList(types.TypeId).empty;
                 defer arg_types.deinit(self.allocator);
-                for (call.args) |arg| try arg_types.append(self.allocator, try self.checkExpr(return_type, arg));
+                for (call.args) |arg| try arg_types.append(self.allocator, try self.checkExpr(current_function_id, return_type, arg));
 
                 const resolved_function = if (self.genericFunctionFor(call.function)) |generic_id|
                     try self.instantiateGenericCall(generic_id, call, arg_types.items, expr.span)
@@ -359,6 +359,7 @@ const Checker = struct {
                     const param_type = self.module.hir.getParam(param_id).type_id;
                     try self.requireCallSame(arg_type, param_type, "function call argument type mismatch", self.exprSpan(arg_expr));
                 }
+                try self.checkAllocationEffectCall(current_function_id, callee.*, expr.span);
                 break :blk callee.return_type;
             },
             // ─────────────────────────────────────────────────────────────────────────────
@@ -392,7 +393,7 @@ const Checker = struct {
                         return error.InvalidSemanticModule;
                     }
                     try seen.put(field_value.field_id, field_value.span);
-                    const value_type = try self.checkExpr(return_type, field_value.value);
+                    const value_type = try self.checkExpr(current_function_id, return_type, field_value.value);
                     if (!sameType(value_type, field.type_id)) {
                         try self.reportAt(.StructFieldInitializerTypeMismatch, "struct field initializer type mismatch", self.exprSpan(field_value.value));
                         return error.InvalidSemanticModule;
@@ -407,7 +408,7 @@ const Checker = struct {
                 break :blk literal.type_id;
             },
             .field_access => |field_access| blk: {
-                const receiver_type = try self.checkExpr(return_type, field_access.receiver);
+                const receiver_type = try self.checkExpr(current_function_id, return_type, field_access.receiver);
                 const receiver_kind = self.module.types.kind(receiver_type);
                 if (receiver_kind != .struct_type) {
                     try self.reportAt(.FieldAccessNonStruct, "field access receiver must be a struct value", expr.span);
@@ -426,7 +427,7 @@ const Checker = struct {
                     return error.InvalidSemanticModule;
                 }
                 for (constructor.args, variant.payload_fields) |arg, payload_id| {
-                    const arg_type = try self.checkExpr(return_type, arg);
+                    const arg_type = try self.checkExpr(current_function_id, return_type, arg);
                     const payload_type = self.module.hir.getEnumPayloadField(payload_id).type_id;
                     if (!sameType(arg_type, payload_type)) {
                         try self.reportAt(.EnumConstructorTypeMismatch, "enum constructor argument type mismatch", self.exprSpan(arg));
@@ -456,7 +457,7 @@ const Checker = struct {
                         return error.InvalidSemanticModule;
                     }
                     if (arm.condition) |condition| {
-                        const condition_type = try self.checkExpr(return_type, condition);
+                        const condition_type = try self.checkExpr(current_function_id, return_type, condition);
                         if (!self.isBool(condition_type)) {
                             try self.reportAt(.DecideConditionNotBool, "decide arm condition must be bool", self.exprSpan(condition));
                             return error.InvalidSemanticModule;
@@ -464,7 +465,7 @@ const Checker = struct {
                     } else {
                         has_unconditional = true;
                     }
-                    const score_type = try self.checkExpr(return_type, arm.score);
+                    const score_type = try self.checkExpr(current_function_id, return_type, arm.score);
                     if (!self.isInt(score_type)) {
                         try self.reportAt(.DecideScoreNotInt, "decide arm score must be int", self.exprSpan(arm.score));
                         return error.InvalidSemanticModule;
@@ -477,7 +478,7 @@ const Checker = struct {
                 break :blk decide.enum_type;
             },
             .unary => |unary| blk: {
-                const operand_type = try self.checkExpr(return_type, unary.operand);
+                const operand_type = try self.checkExpr(current_function_id, return_type, unary.operand);
                 switch (unary.op) {
                     .negate => {
                         try self.requireInt(operand_type, "arithmetic unary operator requires int operand", expr.span);
@@ -490,11 +491,11 @@ const Checker = struct {
                 }
             },
             .address_of => |operand| blk: {
-                const place_type = try self.addressableExprType(return_type, operand, expr.span);
+                const place_type = try self.addressableExprType(current_function_id, return_type, operand, expr.span);
                 break :blk try self.module.types.addPointerType(place_type);
             },
             .deref => |operand| blk: {
-                const operand_type = try self.checkExpr(return_type, operand);
+                const operand_type = try self.checkExpr(current_function_id, return_type, operand);
                 const pointee = switch (self.module.types.kind(operand_type)) {
                     .pointer => |pointer| pointer.pointee,
                     else => {
@@ -508,13 +509,13 @@ const Checker = struct {
                 }
                 break :blk pointee;
             },
-            .move_expr => |operand| try self.movePlaceExprType(return_type, operand, expr.span),
+            .move_expr => |operand| try self.movePlaceExprType(current_function_id, return_type, operand, expr.span),
             .manual_init_assume => |slot| blk: {
                 if (self.unsafe_depth == 0) {
                     try self.reportAt(.ManualInitAssumeInitRequiresUnsafe, "manualAssumeInit requires unsafe context", expr.span);
                     return error.InvalidSemanticModule;
                 }
-                const slot_type = try self.checkExpr(return_type, slot);
+                const slot_type = try self.checkExpr(current_function_id, return_type, slot);
                 const payload = self.module.types.manualInitPayload(slot_type) orelse {
                     try self.reportAt(.ManualInitInvalidOperation, "manualAssumeInit requires ManualInit<T> operand", expr.span);
                     return error.InvalidSemanticModule;
@@ -526,7 +527,7 @@ const Checker = struct {
             // ─────────────────────────────────────────────────────────────────────────────
 
             .try_expr => |operand| blk: {
-                const operand_type = try self.checkExpr(return_type, operand);
+                const operand_type = try self.checkExpr(current_function_id, return_type, operand);
                 const operand_shape = self.module.resultShapeForType(operand_type) orelse {
                     try self.reportAt(.TryOperandNotResult, "try operand must be a Result-shaped enum", expr.span);
                     return error.InvalidSemanticModule;
@@ -542,8 +543,8 @@ const Checker = struct {
                 break :blk operand_shape.ok_type;
             },
             .binary => |binary| blk: {
-                const left_type = try self.checkExpr(return_type, binary.left);
-                const right_type = try self.checkExpr(return_type, binary.right);
+                const left_type = try self.checkExpr(current_function_id, return_type, binary.left);
+                const right_type = try self.checkExpr(current_function_id, return_type, binary.right);
                 switch (binary.op) {
                     .add, .subtract, .multiply, .divide, .modulo => {
                         try self.requireIntPair(left_type, right_type, "arithmetic binary operator requires int operands", expr.span);
@@ -685,14 +686,14 @@ const Checker = struct {
         return null;
     }
 
-    fn addressableExprType(self: *Checker, return_type: types.TypeId, expr_id: hir.ExprId, span: diagnostics.SourceSpan) CheckError!types.TypeId {
+    fn addressableExprType(self: *Checker, current_function_id: ?hir.FunctionId, return_type: types.TypeId, expr_id: hir.ExprId, span: diagnostics.SourceSpan) CheckError!types.TypeId {
         const expr = self.module.hir.getExpr(expr_id).*;
         return switch (expr.kind) {
             .local_ref => |local_id| self.module.hir.getLocal(local_id).type_id,
             .param_ref => |param_id| self.module.hir.getParam(param_id).type_id,
-            .group => |inner| try self.addressableExprType(return_type, inner, span),
+            .group => |inner| try self.addressableExprType(current_function_id, return_type, inner, span),
             .field_access => |field_access| blk: {
-                const receiver_type = try self.checkExpr(return_type, field_access.receiver);
+                const receiver_type = try self.checkExpr(current_function_id, return_type, field_access.receiver);
                 const receiver_kind = self.module.types.kind(receiver_type);
                 if (receiver_kind != .struct_type) {
                     try self.reportAt(.FieldAccessNonStruct, "field access receiver must be a struct value", expr.span);
@@ -715,14 +716,14 @@ const Checker = struct {
         };
     }
 
-    fn movePlaceExprType(self: *Checker, return_type: types.TypeId, expr_id: hir.ExprId, span: diagnostics.SourceSpan) CheckError!types.TypeId {
+    fn movePlaceExprType(self: *Checker, current_function_id: ?hir.FunctionId, return_type: types.TypeId, expr_id: hir.ExprId, span: diagnostics.SourceSpan) CheckError!types.TypeId {
         const expr = self.module.hir.getExpr(expr_id).*;
         return switch (expr.kind) {
             .local_ref => |local_id| self.module.hir.getLocal(local_id).type_id,
             .param_ref => |param_id| self.module.hir.getParam(param_id).type_id,
-            .group => |inner| try self.movePlaceExprType(return_type, inner, span),
+            .group => |inner| try self.movePlaceExprType(current_function_id, return_type, inner, span),
             .field_access => |field_access| {
-                _ = try self.checkExpr(return_type, field_access.receiver);
+                _ = try self.checkExpr(current_function_id, return_type, field_access.receiver);
                 try self.reportAt(.PartialMoveUnsupported, "field and partial moves are not supported yet", span);
                 return error.InvalidSemanticModule;
             },
@@ -1176,14 +1177,51 @@ const Checker = struct {
         return error.InvalidSemanticModule;
     }
 
-    fn checkTestIntrinsic(self: *Checker, return_type: types.TypeId, expr: hir.HirExpr, test_intrinsic: hir.HirTestIntrinsic) CheckError!void {
+    fn checkAllocationEffectCall(self: *Checker, current_function_id: ?hir.FunctionId, callee: hir.HirFunction, span: diagnostics.SourceSpan) CheckError!void {
+        const caller_id = current_function_id orelse return;
+        const caller = self.module.hir.getFunction(caller_id);
+        if (caller.allocation_effect != .noalloc or callee.allocation_effect == .noalloc) return;
+
+        const caller_name = self.module.interner.text(caller.name);
+        const callee_name = self.module.interner.text(callee.name);
+        const callee_effect = allocationEffectDiagnosticName(callee.allocation_effect);
+        const reason = if (callee.allocation_effect == .unspecified)
+            "has no noalloc guarantee"
+        else
+            "has allocation effect";
+        if (self.diagnostics) |bag| {
+            const message = if (callee.allocation_effect == .unspecified)
+                try std.fmt.allocPrint(
+                    bag.allocator,
+                    "noalloc function '{s}' cannot call '{s}' because it {s}",
+                    .{ caller_name, callee_name, reason },
+                )
+            else
+                try std.fmt.allocPrint(
+                    bag.allocator,
+                    "noalloc function '{s}' cannot call '{s}' because it {s} '{s}'",
+                    .{ caller_name, callee_name, reason, callee_effect },
+                );
+            errdefer bag.allocator.free(message);
+            try bag.append(.{
+                .code = .AllocationEffectMismatch,
+                .severity = .@"error",
+                .message = message,
+                .primary_span = span,
+                .owns_message = true,
+            });
+        }
+        return error.InvalidSemanticModule;
+    }
+
+    fn checkTestIntrinsic(self: *Checker, current_function_id: ?hir.FunctionId, return_type: types.TypeId, expr: hir.HirExpr, test_intrinsic: hir.HirTestIntrinsic) CheckError!void {
         switch (test_intrinsic.kind) {
             .assert_true, .assert_false, .expect_true, .expect_false, .expect_that_true, .expect_that_false => {
                 if (test_intrinsic.operands.len != 1) {
                     try self.reportAt(.TestIntrinsicArityMismatch, "test intrinsic argument count mismatch", expr.span);
                     return error.InvalidSemanticModule;
                 }
-                const condition_type = try self.checkExpr(return_type, test_intrinsic.operands[0]);
+                const condition_type = try self.checkExpr(current_function_id, return_type, test_intrinsic.operands[0]);
                 if (!self.isBool(condition_type)) {
                     try self.reportAt(.TestIntrinsicTypeMismatch, "test intrinsic argument type mismatch", self.exprSpan(test_intrinsic.operands[0]));
                     return error.InvalidSemanticModule;
@@ -1194,8 +1232,8 @@ const Checker = struct {
                     try self.reportAt(.TestIntrinsicArityMismatch, "test intrinsic argument count mismatch", expr.span);
                     return error.InvalidSemanticModule;
                 }
-                const expected_type = try self.checkExpr(return_type, test_intrinsic.operands[0]);
-                const actual_type = try self.checkExpr(return_type, test_intrinsic.operands[1]);
+                const expected_type = try self.checkExpr(current_function_id, return_type, test_intrinsic.operands[0]);
+                const actual_type = try self.checkExpr(current_function_id, return_type, test_intrinsic.operands[1]);
                 const required_type = switch (test_intrinsic.kind) {
                     .expect_equal_int, .expect_that_equal_int => self.module.types.intType(),
                     .expect_equal_bool, .expect_that_equal_bool => self.module.types.boolType(),
@@ -1290,6 +1328,14 @@ fn sameType(a: types.TypeId, b: types.TypeId) bool {
     return a.index == b.index;
 }
 
+fn allocationEffectDiagnosticName(effect: hir.AllocationEffect) []const u8 {
+    return switch (effect) {
+        .alloc => "alloc",
+        .noalloc => "noalloc",
+        .unspecified => "unspecified",
+    };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Tests
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1321,6 +1367,10 @@ const TestModule = struct {
         const function_id = try self.module.hir.addFunction(try self.name(name_text), return_type, synthetic_span);
         self.module.hir.markFunctionCompileTime(function_id);
         return function_id;
+    }
+
+    fn setAllocationEffect(self: *TestModule, function_id: hir.FunctionId, effect: hir.AllocationEffect) void {
+        self.module.hir.setFunctionAllocationEffect(function_id, effect);
     }
 
     fn param(self: *TestModule, function_id: hir.FunctionId, name_text: []const u8, type_id: types.TypeId) !hir.ParamId {
@@ -1370,6 +1420,15 @@ const TestModule = struct {
         try std.testing.expectEqual(@as(usize, 1), bag.count());
         try std.testing.expectEqual(expected, bag.diagnostics.items[0].code);
         return bag.diagnostics.items[0].primary_span;
+    }
+
+    fn checkFailMessageContains(self: *TestModule, expected: diagnostics.DiagnosticCode, needle: []const u8) !void {
+        var bag = DiagnosticBag.init(std.testing.allocator);
+        defer bag.deinit();
+        try std.testing.expectError(error.InvalidSemanticModule, checkExecutable(std.testing.allocator, &self.module, &bag));
+        try std.testing.expectEqual(@as(usize, 1), bag.count());
+        try std.testing.expectEqual(expected, bag.diagnostics.items[0].code);
+        try std.testing.expect(std.mem.indexOf(u8, bag.diagnostics.items[0].message, needle) != null);
     }
 };
 
@@ -1434,6 +1493,136 @@ test "HIR checker accepts function calls" {
     const args = try std.testing.allocator.dupe(hir.ExprId, &.{ try tm.int("1"), try tm.int("2") });
     tm.setBody(main_id, try tm.block(&.{try tm.ret(try addTestExpr(&tm.module.hir, .{ .call = .{ .function = add_id, .args = args } }))}));
     try tm.checkPass();
+}
+
+test "HIR checker enforces direct allocation effects for noalloc callers" {
+    var ok = try TestModule.init();
+    defer ok.deinit();
+    const pure = try ok.function("pure", ok.module.types.intType());
+    ok.setAllocationEffect(pure, .noalloc);
+    ok.setBody(pure, try ok.block(&.{try ok.ret(try ok.int("1"))}));
+    const ok_caller = try ok.function("okCaller", ok.module.types.intType());
+    ok.setAllocationEffect(ok_caller, .noalloc);
+    const ok_args = try std.testing.allocator.dupe(hir.ExprId, &.{});
+    ok.setBody(ok_caller, try ok.block(&.{try ok.ret(try addTestExpr(&ok.module.hir, .{ .call = .{ .function = pure, .args = ok_args } }))}));
+    _ = try addMainReturnInt(&ok, "0");
+    try ok.checkPass();
+
+    var bad_alloc = try TestModule.init();
+    defer bad_alloc.deinit();
+    const may_alloc = try bad_alloc.function("mayAlloc", bad_alloc.module.types.intType());
+    bad_alloc.setAllocationEffect(may_alloc, .alloc);
+    bad_alloc.setBody(may_alloc, try bad_alloc.block(&.{try bad_alloc.ret(try bad_alloc.int("1"))}));
+    const noalloc_caller = try bad_alloc.function("noallocCaller", bad_alloc.module.types.intType());
+    bad_alloc.setAllocationEffect(noalloc_caller, .noalloc);
+    const alloc_args = try std.testing.allocator.dupe(hir.ExprId, &.{});
+    const alloc_call = try addTestExprAt(&bad_alloc.module.hir, .{ .call = .{ .function = may_alloc, .args = alloc_args } }, testSpan(40));
+    bad_alloc.setBody(noalloc_caller, try bad_alloc.block(&.{try bad_alloc.ret(alloc_call)}));
+    _ = try addMainReturnInt(&bad_alloc, "0");
+    try bad_alloc.checkFailMessageContains(.AllocationEffectMismatch, "allocation effect 'alloc'");
+    try std.testing.expectEqual(testSpan(40), try bad_alloc.checkFailSpan(.AllocationEffectMismatch));
+
+    var bad_unspecified = try TestModule.init();
+    defer bad_unspecified.deinit();
+    const unspecified = try bad_unspecified.function("unspecified", bad_unspecified.module.types.intType());
+    bad_unspecified.setBody(unspecified, try bad_unspecified.block(&.{try bad_unspecified.ret(try bad_unspecified.int("1"))}));
+    const bad_caller = try bad_unspecified.function("badCaller", bad_unspecified.module.types.intType());
+    bad_unspecified.setAllocationEffect(bad_caller, .noalloc);
+    const unspecified_args = try std.testing.allocator.dupe(hir.ExprId, &.{});
+    bad_unspecified.setBody(bad_caller, try bad_unspecified.block(&.{try bad_unspecified.ret(try addTestExpr(&bad_unspecified.module.hir, .{ .call = .{ .function = unspecified, .args = unspecified_args } }))}));
+    _ = try addMainReturnInt(&bad_unspecified, "0");
+    try bad_unspecified.checkFailMessageContains(.AllocationEffectMismatch, "no noalloc guarantee");
+}
+
+test "HIR checker permits alloc and unspecified callers to call any allocation effect" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+    const pure = try tm.function("pure", tm.module.types.intType());
+    tm.setAllocationEffect(pure, .noalloc);
+    tm.setBody(pure, try tm.block(&.{try tm.ret(try tm.int("1"))}));
+    const may_alloc = try tm.function("mayAlloc", tm.module.types.intType());
+    tm.setAllocationEffect(may_alloc, .alloc);
+    tm.setBody(may_alloc, try tm.block(&.{try tm.ret(try tm.int("2"))}));
+    const unspecified = try tm.function("unspecified", tm.module.types.intType());
+    tm.setBody(unspecified, try tm.block(&.{try tm.ret(try tm.int("3"))}));
+
+    const alloc_caller = try tm.function("allocCaller", tm.module.types.intType());
+    tm.setAllocationEffect(alloc_caller, .alloc);
+    const alloc_expr = try addTestExpr(&tm.module.hir, .{ .binary = .{
+        .op = .add,
+        .left = try addTestExpr(&tm.module.hir, .{ .call = .{ .function = pure, .args = try std.testing.allocator.dupe(hir.ExprId, &.{}) } }),
+        .right = try addTestExpr(&tm.module.hir, .{ .binary = .{
+            .op = .add,
+            .left = try addTestExpr(&tm.module.hir, .{ .call = .{ .function = may_alloc, .args = try std.testing.allocator.dupe(hir.ExprId, &.{}) } }),
+            .right = try addTestExpr(&tm.module.hir, .{ .call = .{ .function = unspecified, .args = try std.testing.allocator.dupe(hir.ExprId, &.{}) } }),
+        } }),
+    } });
+    tm.setBody(alloc_caller, try tm.block(&.{try tm.ret(alloc_expr)}));
+
+    const unspecified_caller = try tm.function("unspecifiedCaller", tm.module.types.intType());
+    tm.setBody(unspecified_caller, try tm.block(&.{try tm.ret(try addTestExpr(&tm.module.hir, .{ .call = .{ .function = may_alloc, .args = try std.testing.allocator.dupe(hir.ExprId, &.{}) } }))}));
+    _ = try addMainReturnInt(&tm, "0");
+    try tm.checkPass();
+}
+
+test "HIR checker checks nested noalloc call expressions" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+    const pure = try tm.function("pure", tm.module.types.intType());
+    tm.setAllocationEffect(pure, .noalloc);
+    tm.setBody(pure, try tm.block(&.{try tm.ret(try tm.int("1"))}));
+    const may_alloc = try tm.function("mayAlloc", tm.module.types.intType());
+    tm.setAllocationEffect(may_alloc, .alloc);
+    tm.setBody(may_alloc, try tm.block(&.{try tm.ret(try tm.int("2"))}));
+    const caller = try tm.function("caller", tm.module.types.intType());
+    tm.setAllocationEffect(caller, .noalloc);
+    const nested = try addTestExpr(&tm.module.hir, .{ .binary = .{
+        .op = .add,
+        .left = try addTestExpr(&tm.module.hir, .{ .call = .{ .function = pure, .args = try std.testing.allocator.dupe(hir.ExprId, &.{}) } }),
+        .right = try addTestExprAt(&tm.module.hir, .{ .call = .{ .function = may_alloc, .args = try std.testing.allocator.dupe(hir.ExprId, &.{}) } }, testSpan(70)),
+    } });
+    tm.setBody(caller, try tm.block(&.{try tm.ret(nested)}));
+    _ = try addMainReturnInt(&tm, "0");
+    try std.testing.expectEqual(testSpan(70), try tm.checkFailSpan(.AllocationEffectMismatch));
+}
+
+test "HIR checker allows recursive noalloc calls" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+    const countdown = try tm.function("countDown", tm.module.types.intType());
+    tm.setAllocationEffect(countdown, .noalloc);
+    _ = try tm.param(countdown, "x", tm.module.types.intType());
+    const args = try std.testing.allocator.dupe(hir.ExprId, &.{try tm.int("0")});
+    tm.setBody(countdown, try tm.block(&.{try tm.ret(try addTestExpr(&tm.module.hir, .{ .call = .{ .function = countdown, .args = args } }))}));
+    _ = try addMainReturnInt(&tm, "0");
+    try tm.checkPass();
+}
+
+test "HIR checker applies allocation effects to comptime and unsafe functions" {
+    var comptime_tm = try TestModule.init();
+    defer comptime_tm.deinit();
+    const may_alloc_const = try comptime_tm.compileTimeFunction("mayAllocConst", comptime_tm.module.types.intType());
+    comptime_tm.setAllocationEffect(may_alloc_const, .alloc);
+    comptime_tm.setBody(may_alloc_const, try comptime_tm.block(&.{try comptime_tm.ret(try comptime_tm.int("1"))}));
+    const bad_const = try comptime_tm.compileTimeFunction("badConst", comptime_tm.module.types.intType());
+    comptime_tm.setAllocationEffect(bad_const, .noalloc);
+    const const_call = try addTestExpr(&comptime_tm.module.hir, .{ .call = .{ .function = may_alloc_const, .args = try std.testing.allocator.dupe(hir.ExprId, &.{}) } });
+    comptime_tm.setBody(bad_const, try comptime_tm.block(&.{try comptime_tm.ret(const_call)}));
+    _ = try addMainReturnInt(&comptime_tm, "0");
+    try comptime_tm.checkFail(.AllocationEffectMismatch);
+
+    var unsafe_tm = try TestModule.init();
+    defer unsafe_tm.deinit();
+    const raw = try unsafe_tm.unsafeFunction("raw", unsafe_tm.module.types.intType());
+    unsafe_tm.setAllocationEffect(raw, .noalloc);
+    unsafe_tm.setBody(raw, try unsafe_tm.block(&.{try unsafe_tm.ret(try unsafe_tm.int("1"))}));
+    const caller = try unsafe_tm.function("caller", unsafe_tm.module.types.intType());
+    unsafe_tm.setAllocationEffect(caller, .noalloc);
+    const unsafe_call = try addTestExpr(&unsafe_tm.module.hir, .{ .call = .{ .function = raw, .args = try std.testing.allocator.dupe(hir.ExprId, &.{}) } });
+    const unsafe_body = try unsafe_tm.block(&.{try unsafe_tm.ret(unsafe_call)});
+    unsafe_tm.setBody(caller, try unsafe_tm.block(&.{try addTestStmt(&unsafe_tm.module.hir, .{ .unsafe_block = unsafe_body })}));
+    _ = try addMainReturnInt(&unsafe_tm, "0");
+    try unsafe_tm.checkPass();
 }
 
 test "HIR checker accepts if match while" {

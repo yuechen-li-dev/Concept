@@ -1,0 +1,16 @@
+# name: noalloc calls noalloc
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Example;
+
+noalloc int Pure() {
+    return 1;
+}
+
+noalloc int Good() {
+    return Pure();
+}
+

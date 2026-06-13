@@ -213,6 +213,25 @@ runtime code, direct allocation checking, transitive effect checking, call graph
 effect checking, region lifetime checking, generic stores, MIR allocation
 operations, backend allocation lowering, or hidden heap behavior.
 
+### P12-M2 implementation status
+
+P12-M2 makes `noalloc` meaningful for direct function calls. During HIR
+checking, a function marked `noalloc` may directly call only callees whose
+allocation effect is known `noalloc`. Direct calls from a `noalloc` caller to an
+`alloc` callee are rejected with `CON0191 AllocationEffectMismatch`.
+
+Functions with omitted allocation effects remain `unspecified`. An
+`unspecified` callee has not promised `noalloc`, so direct calls from a
+`noalloc` caller to an `unspecified` callee are also rejected with `CON0191`.
+For now, `alloc` callers and `unspecified` callers may call `noalloc`, `alloc`,
+or `unspecified` callees.
+
+This is shallow direct-call checking only. P12-M2 does not add allocation
+operations, arenas, allocator runtime code, transitive effect inference or
+checking, profile-specific defaults, region lifetime checking, generic stores,
+MIR allocation operations, backend allocation lowering, or hidden heap
+behavior.
+
 ## 4. Profiles and hidden heap policy
 
 Phase 12 policy:

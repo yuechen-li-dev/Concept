@@ -1,0 +1,20 @@
+# name: noalloc calls unspecified generic
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Example;
+
+template<T>
+T Identity(T value) {
+    return value;
+}
+
+noalloc int Bad(int x) {
+    return Identity(x);
+}
+
+=== diagnostics ===
+CON0191
+
