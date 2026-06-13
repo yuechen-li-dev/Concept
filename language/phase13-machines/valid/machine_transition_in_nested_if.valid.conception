@@ -1,0 +1,34 @@
+# name: machine transition in nested if
+# phase: parse
+# expect: pass
+
+=== source ===
+module Example;
+
+machine Conditional() -> int {
+    state Start {
+        if (true) {
+            transition Done;
+        }
+    }
+
+    state Done {
+        return 0;
+    }
+}
+
+=== ast ===
+CompilationUnit
+  Module Example
+  Machine Conditional() -> int
+    State Start
+      Body
+        If
+          Condition
+            Bool true
+          Then
+            Transition Done
+    State Done
+      Body
+        Return
+          Int 0

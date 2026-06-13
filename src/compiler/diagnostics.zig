@@ -186,6 +186,8 @@ pub const DiagnosticCode = enum {
     ArenaResetDestroyInComptimeUnsupported,
     MachineRequiresState,
     DuplicateMachineState,
+    UnknownMachineState,
+    TransitionOutsideMachineState,
     MachineSemanticsNotImplemented,
 
     pub fn format(self: DiagnosticCode) []const u8 {
@@ -354,6 +356,8 @@ pub const DiagnosticCode = enum {
             .ArenaResetDestroyInComptimeUnsupported => "CON0210",
             .MachineRequiresState => "CON0220",
             .DuplicateMachineState => "CON0221",
+            .UnknownMachineState => "CON0222",
+            .TransitionOutsideMachineState => "CON0223",
             .MachineSemanticsNotImplemented => "CON0231",
         };
     }
@@ -508,7 +512,7 @@ pub fn machineSemanticsNotImplemented(span: SourceSpan) Diagnostic {
         .@"error",
         "machine semantics are not implemented yet",
         span,
-    ).withHelp("P13-M2 validates machine states and preserves metadata; HIR/MIR lowering is deferred");
+    ).withHelp("P13-M3 validates literal machine transitions and preserves metadata; HIR/MIR lowering is deferred");
 }
 
 pub fn machineRequiresState(span: SourceSpan) Diagnostic {
@@ -527,6 +531,24 @@ pub fn duplicateMachineState(span: SourceSpan) Diagnostic {
         "duplicate machine state name",
         span,
     ).withHelp("state names are scoped to one machine and must be unique within that machine");
+}
+
+pub fn unknownMachineState(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .UnknownMachineState,
+        .@"error",
+        "unknown machine state",
+        span,
+    ).withHelp("transition targets must name a state declared in the same machine");
+}
+
+pub fn transitionOutsideMachineState(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .TransitionOutsideMachineState,
+        .@"error",
+        "transition statement outside machine state",
+        span,
+    ).withHelp("place transition statements inside a machine state body");
 }
 
 pub fn duplicateConceptTypeParameter(span: SourceSpan) Diagnostic {
@@ -864,6 +886,8 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0210", DiagnosticCode.ArenaResetDestroyInComptimeUnsupported.format());
     try std.testing.expectEqualStrings("CON0220", DiagnosticCode.MachineRequiresState.format());
     try std.testing.expectEqualStrings("CON0221", DiagnosticCode.DuplicateMachineState.format());
+    try std.testing.expectEqualStrings("CON0222", DiagnosticCode.UnknownMachineState.format());
+    try std.testing.expectEqualStrings("CON0223", DiagnosticCode.TransitionOutsideMachineState.format());
     try std.testing.expectEqualStrings("CON0231", DiagnosticCode.MachineSemanticsNotImplemented.format());
 }
 

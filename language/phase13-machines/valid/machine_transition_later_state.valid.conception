@@ -1,0 +1,28 @@
+# name: machine transition later state
+# phase: parse
+# expect: pass
+
+=== source ===
+module Example;
+
+machine Pipeline() -> int {
+    state Start {
+        transition Done;
+    }
+
+    state Done {
+        return 0;
+    }
+}
+
+=== ast ===
+CompilationUnit
+  Module Example
+  Machine Pipeline() -> int
+    State Start
+      Body
+        Transition Done
+    State Done
+      Body
+        Return
+          Int 0

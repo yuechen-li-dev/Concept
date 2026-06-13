@@ -1022,7 +1022,7 @@ fn expectCheckFixture(comptime path: []const u8) !void {
 
     if (std.mem.indexOf(u8, path, "phase12-allocation") != null) {
         try expectSemanticCheckFixtureAllowNoMain(path, fixture);
-    } else if (std.mem.indexOf(u8, path, "phase3-semantics") != null or std.mem.indexOf(u8, path, "phase8-concepts-templates") != null or std.mem.indexOf(u8, path, "phase5-sum-types") != null or std.mem.indexOf(u8, path, "phase5a-judgment") != null or std.mem.indexOf(u8, path, "phase6-unsafe-ownership") != null or std.mem.indexOf(u8, path, "phase7-runtime-structs") != null or std.mem.indexOf(u8, path, "phase10-ownership") != null or std.mem.indexOf(u8, path, "phase11-testing") != null) {
+    } else if (std.mem.indexOf(u8, path, "phase3-semantics") != null or std.mem.indexOf(u8, path, "phase8-concepts-templates") != null or std.mem.indexOf(u8, path, "phase5-sum-types") != null or std.mem.indexOf(u8, path, "phase5a-judgment") != null or std.mem.indexOf(u8, path, "phase6-unsafe-ownership") != null or std.mem.indexOf(u8, path, "phase7-runtime-structs") != null or std.mem.indexOf(u8, path, "phase10-ownership") != null or std.mem.indexOf(u8, path, "phase11-testing") != null or std.mem.indexOf(u8, path, "phase13-machines") != null) {
         try expectSemanticCheckFixture(path, fixture);
     } else {
         try expectPhase2CheckFixture(path, fixture);
@@ -2527,14 +2527,26 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectParseFixture("../../../language/phase13-machines/valid/machine_noalloc_effect.valid.conception");
     try expectParseFixture("../../../language/phase13-machines/valid/machine_with_attribute.valid.conception");
     try expectParseFixture("../../../language/phase13-machines/valid/machine_state_ordinary_statements.valid.conception");
+    try expectParseFixture("../../../language/phase13-machines/valid/machine_transition_literal.valid.conception");
+    try expectParseFixture("../../../language/phase13-machines/valid/machine_transition_self.valid.conception");
+    try expectParseFixture("../../../language/phase13-machines/valid/machine_transition_initial.valid.conception");
+    try expectParseFixture("../../../language/phase13-machines/valid/machine_transition_later_state.valid.conception");
+    try expectParseFixture("../../../language/phase13-machines/valid/machine_transition_in_nested_if.valid.conception");
     try expectParseFixture("../../../language/phase13-machines/invalid/state_outside_machine.invalid.conception");
+    try expectParseFixture("../../../language/phase13-machines/invalid/transition_outside_machine.invalid.conception");
+    try expectParseFixture("../../../language/phase13-machines/invalid/transition_inside_function.invalid.conception");
     try expectParseFixture("../../../language/phase13-machines/invalid/machine_missing_name.invalid.conception");
     try expectParseFixture("../../../language/phase13-machines/invalid/machine_missing_return_type.invalid.conception");
     try expectParseFixture("../../../language/phase13-machines/invalid/machine_missing_body.invalid.conception");
     try expectParseFixture("../../../language/phase13-machines/invalid/machine_unclosed_state.invalid.conception");
+    try expectParseFixture("../../../language/phase13-machines/invalid/machine_transition_missing_target.invalid.conception");
+    try expectParseFixture("../../../language/phase13-machines/invalid/machine_transition_missing_semicolon.invalid.conception");
     try expectCheckFixture("../../../language/phase13-machines/invalid/machine_zero_states.invalid.conception");
     try expectCheckFixture("../../../language/phase13-machines/invalid/machine_duplicate_state.invalid.conception");
     try expectCheckFixture("../../../language/phase13-machines/invalid/machine_semantics_not_implemented.invalid.conception");
+    try expectCheckFixture("../../../language/phase13-machines/invalid/machine_transition_valid_semantics_not_implemented.invalid.conception");
+    try expectCheckFixture("../../../language/phase13-machines/invalid/machine_transition_unknown_state.invalid.conception");
+    try expectCheckFixture("../../../language/phase13-machines/invalid/machine_transition_cross_machine_state.invalid.conception");
 
     try expectRunFixture("../../../language/phase10-ownership/valid/move_struct_local_run.valid.conception");
     try expectRunFixture("../../../language/phase10-ownership/valid/move_struct_argument_run.valid.conception");

@@ -1,0 +1,11 @@
+# name: transition outside machine
+# phase: parse
+# expect: fail
+
+=== source ===
+module Example;
+
+transition Done;
+
+=== diagnostics ===
+CON0223

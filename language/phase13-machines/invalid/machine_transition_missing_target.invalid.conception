@@ -1,0 +1,15 @@
+# name: machine transition missing target
+# phase: parse
+# expect: fail
+
+=== source ===
+module Example;
+
+machine M() -> int {
+    state Start {
+        transition;
+    }
+}
+
+=== diagnostics ===
+CON0003

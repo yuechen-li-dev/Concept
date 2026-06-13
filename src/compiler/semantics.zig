@@ -462,7 +462,59 @@ const Collector = struct {
             };
         }
 
+        const diagnostic_count_before_transitions = self.diagnostics.count();
+        for (machine_decl.states) |state| {
+            try self.validateMachineTransitionStatements(state.body.statements, &state_names);
+        }
+        if (self.diagnostics.count() != diagnostic_count_before_transitions) {
+            self.allocator.free(states);
+            return &.{};
+        }
+
         return states;
+    }
+
+    fn validateMachineTransitionStatements(
+        self: *Collector,
+        statements: []const ast.Stmt,
+        state_names: *const std.AutoHashMap(interner.SymbolId, source.SourceSpan),
+    ) !void {
+        for (statements) |stmt| {
+            switch (stmt) {
+                .transition_stmt => |transition_stmt| {
+                    const target_symbol = try self.module.interner.intern(transition_stmt.target_name.text);
+                    if (!state_names.contains(target_symbol)) {
+                        try self.diagnostics.append(diagnostics.unknownMachineState(transition_stmt.target_name.span));
+                    }
+                },
+                .if_stmt => |if_stmt| {
+                    try self.validateMachineTransitionStatements(if_stmt.then_block.statements, state_names);
+                    if (if_stmt.else_block) |else_block| {
+                        try self.validateMachineTransitionStatements(else_block.statements, state_names);
+                    }
+                },
+                .while_stmt => |while_stmt| {
+                    try self.validateMachineTransitionStatements(while_stmt.body.statements, state_names);
+                },
+                .unsafe_block => |unsafe_block| {
+                    try self.validateMachineTransitionStatements(unsafe_block.body.statements, state_names);
+                },
+                .match_stmt => |match_stmt| {
+                    for (match_stmt.arms) |arm| {
+                        try self.validateMachineTransitionStatements(&.{arm.body}, state_names);
+                    }
+                },
+                .block_stmt => |block_stmt| {
+                    try self.validateMachineTransitionStatements(block_stmt.statements, state_names);
+                },
+                .local_decl,
+                .assignment,
+                .expr_stmt,
+                .discard_stmt,
+                .return_stmt,
+                => {},
+            }
+        }
     }
 
     fn resolveMachineParams(self: *Collector, machine_id: hir.MachineId, params: []const ast.ParamDecl) !void {
@@ -1357,6 +1409,10 @@ const BodyLowerer = struct {
                 const value = if (ret.value) |expr| try self.lowerExpr(expr.*) else null;
                 if (ret.value != null and value == null) return null;
                 return try self.collector.module.hir.addStmt(.{ .return_stmt = value }, ret.span);
+            },
+            .transition_stmt => |transition_stmt| {
+                try self.collector.diagnostics.append(diagnostics.transitionOutsideMachineState(transition_stmt.span));
+                return null;
             },
             .local_decl => |local_decl| {
                 const initializer = (try self.lowerExpr(local_decl.initializer.*)) orelse return null;
@@ -2440,6 +2496,21 @@ fn stateDecl(name: []const u8, start: usize) ast.MachineStateDecl {
     };
 }
 
+fn stateDeclWithStatements(name: []const u8, statements: []ast.Stmt, start: usize) ast.MachineStateDecl {
+    return .{
+        .name = nameSegment(name, start + 6),
+        .body = .{ .statements = statements, .span = .{ .start = start + name.len + 8, .length = 2 } },
+        .span = .{ .start = start, .length = name.len + 10 },
+    };
+}
+
+fn transitionStmt(target: []const u8, start: usize) ast.Stmt {
+    return .{ .transition_stmt = .{
+        .target_name = nameSegment(target, start + 11),
+        .span = .{ .start = start, .length = target.len + 12 },
+    } };
+}
+
 fn paramDecl(type_name: []const u8, name: []const u8, start: usize) ast.ParamDecl {
     return .{
         .type_name = typeName(type_name, start),
@@ -2902,6 +2973,83 @@ test "semantic collection rejects duplicate machine state in same machine" {
     try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
     try std.testing.expectEqual(DiagnosticCode.DuplicateMachineState, diagnostics_bag.diagnostics.items[0].code);
     try std.testing.expectEqual(states[1].name.span, diagnostics_bag.diagnostics.items[0].primary_span);
+}
+
+test "semantic collection accepts literal transition to declared states before unsupported lowering" {
+    var start_statements = [_]ast.Stmt{transitionStmt("Done", 20)};
+    var done_statements = [_]ast.Stmt{transitionStmt("Start", 60)};
+    var states = [_]ast.MachineStateDecl{
+        stateDeclWithStatements("Start", start_statements[0..], 10),
+        stateDeclWithStatements("Done", done_statements[0..], 50),
+    };
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    var module = try collectMachineShellsForTest(&.{machineItemWithStates("Flow", states[0..], 0)}, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
+    try std.testing.expectEqual(DiagnosticCode.MachineSemanticsNotImplemented, diagnostics_bag.diagnostics.items[0].code);
+}
+
+test "semantic collection accepts literal self transition" {
+    var start_statements = [_]ast.Stmt{transitionStmt("Start", 20)};
+    var states = [_]ast.MachineStateDecl{stateDeclWithStatements("Start", start_statements[0..], 10)};
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    var module = try collectMachineShellsForTest(&.{machineItemWithStates("Flow", states[0..], 0)}, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
+    try std.testing.expectEqual(DiagnosticCode.MachineSemanticsNotImplemented, diagnostics_bag.diagnostics.items[0].code);
+}
+
+test "semantic collection rejects unknown literal transition target before unsupported lowering" {
+    var start_statements = [_]ast.Stmt{transitionStmt("Missing", 20)};
+    var states = [_]ast.MachineStateDecl{stateDeclWithStatements("Start", start_statements[0..], 10)};
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    try std.testing.expectError(error.InvalidSemanticModule, collectItems(&.{machineItemWithStates("Flow", states[0..], 0)}, &diagnostics_bag));
+    try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
+    try std.testing.expectEqual(DiagnosticCode.UnknownMachineState, diagnostics_bag.diagnostics.items[0].code);
+    try std.testing.expectEqual(start_statements[0].transition_stmt.target_name.span, diagnostics_bag.diagnostics.items[0].primary_span);
+}
+
+test "semantic collection rejects cross-machine literal transition target" {
+    var first_statements = [_]ast.Stmt{transitionStmt("OnlyInSecond", 20)};
+    var first_states = [_]ast.MachineStateDecl{stateDeclWithStatements("Start", first_statements[0..], 10)};
+    var second_states = [_]ast.MachineStateDecl{stateDecl("OnlyInSecond", 60)};
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    try std.testing.expectError(error.InvalidSemanticModule, collectItems(&.{
+        machineItemWithStates("First", first_states[0..], 0),
+        machineItemWithStates("Second", second_states[0..], 50),
+    }, &diagnostics_bag));
+    try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
+    try std.testing.expectEqual(DiagnosticCode.UnknownMachineState, diagnostics_bag.diagnostics.items[0].code);
+}
+
+test "semantic collection validates nested literal transition targets" {
+    var condition = ast.Expr{ .bool_literal = .{ .value = true, .span = .{ .start = 15, .length = 4 } } };
+    const nested_transition = transitionStmt("Missing", 20);
+    var then_statements = [_]ast.Stmt{nested_transition};
+    const if_stmt = ast.Stmt{ .if_stmt = .{
+        .condition = &condition,
+        .then_block = .{ .statements = then_statements[0..], .span = .{ .start = 15, .length = 1 } },
+        .else_block = null,
+        .span = .{ .start = 15, .length = 1 },
+    } };
+    var start_statements = [_]ast.Stmt{if_stmt};
+    var states = [_]ast.MachineStateDecl{stateDeclWithStatements("Start", start_statements[0..], 10)};
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    try std.testing.expectError(error.InvalidSemanticModule, collectItems(&.{machineItemWithStates("Flow", states[0..], 0)}, &diagnostics_bag));
+    try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
+    try std.testing.expectEqual(DiagnosticCode.UnknownMachineState, diagnostics_bag.diagnostics.items[0].code);
 }
 
 test "semantic collection keeps machine state names scoped per machine" {

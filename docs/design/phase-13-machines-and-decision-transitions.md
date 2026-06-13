@@ -38,6 +38,29 @@ parse or validate transitions, and does not add DragonGod features, stack HFSM,
 behavior. Otherwise valid machines still report `CON0231
 MachineSemanticsNotImplemented`.
 
+P13-M3 adds the first transition statement form:
+
+```cpp
+transition TargetState;
+```
+
+The parser accepts literal state transitions inside machine state bodies,
+including ordinary nested blocks within a state body. Transition statements are
+represented distinctly in the AST and preserve the bare target state name and
+span. Semantic collection validates each literal target against the containing
+machine's local state table: self-transitions, transitions to the initial
+state, and transitions to later states are valid, while unknown or cross-machine
+state targets report `CON0222 UnknownMachineState`. `transition` outside a
+machine state body reports `CON0223 TransitionOutsideMachineState` where the
+parser can encounter it. Otherwise valid machines with valid transitions still
+report `CON0231 MachineSemanticsNotImplemented`.
+
+P13-M3 deliberately does not implement `transition match`, `transition decide`,
+transition target expressions, reachability/completeness analysis, HIR/MIR
+machine lowering, runtime frames, step/resume behavior, DragonGod features,
+stack HFSM, `board`, mailbox, actuator, policy memory, hidden heap, scheduler,
+or async behavior.
+
 ## Core doctrine
 
 ```text

@@ -1,0 +1,22 @@
+# name: machine transition cross machine state
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module Example;
+
+machine First() -> int {
+    state Start {
+        transition OnlySecond;
+    }
+}
+
+machine Second() -> int {
+    state OnlySecond {
+        return 0;
+    }
+}
+
+=== diagnostics ===
+CON0222

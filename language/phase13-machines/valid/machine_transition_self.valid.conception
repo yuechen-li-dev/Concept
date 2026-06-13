@@ -1,0 +1,20 @@
+# name: machine transition self
+# phase: parse
+# expect: pass
+
+=== source ===
+module Example;
+
+machine Spinner() -> int {
+    state Start {
+        transition Start;
+    }
+}
+
+=== ast ===
+CompilationUnit
+  Module Example
+  Machine Spinner() -> int
+    State Start
+      Body
+        Transition Start

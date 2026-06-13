@@ -1,0 +1,14 @@
+# name: transition inside function
+# phase: parse
+# expect: fail
+
+=== source ===
+module Example;
+
+int main() {
+    transition Done;
+    return 0;
+}
+
+=== diagnostics ===
+CON0223

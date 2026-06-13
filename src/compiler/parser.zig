@@ -19,6 +19,7 @@ pub const Parser = struct {
     diagnostics: *DiagnosticBag,
     source_text: ?[]const u8 = null,
     index: usize = 0,
+    machine_state_depth: usize = 0,
 
     pub fn init(tokens: []const Token, diagnostics: *DiagnosticBag) Parser {
         return .{
@@ -90,6 +91,12 @@ pub const Parser = struct {
                         try items.append(item);
                         attributes = &.{};
                     }
+                },
+                .transition => {
+                    try self.rejectAttributesBeforeUnsupportedItem(attributes, allocator);
+                    attributes = &.{};
+                    try self.diagnostics.append(diagnostics_model.transitionOutsideMachineState(self.current().span));
+                    self.recoverStatement();
                 },
                 .identifier, .mut, .unsafe, .@"comptime", .alloc, .noalloc => {
                     if ((self.current().kind == .alloc or self.current().kind == .noalloc) and self.peek(1).kind == .machine) {
@@ -819,9 +826,11 @@ pub const Parser = struct {
         else
             ast.NameSegment{ .text = "", .span = self.current().span };
 
-        var body = if (self.current().kind == .left_brace)
-            try self.parseBlockAfterOpenBrace(allocator)
-        else blk: {
+        var body = if (self.current().kind == .left_brace) blk: {
+            self.machine_state_depth += 1;
+            defer self.machine_state_depth -= 1;
+            break :blk try self.parseBlockAfterOpenBrace(allocator);
+        } else blk: {
             try self.report(.UnexpectedToken, "expected state body", self.current().span);
             break :blk ast.BlockStmt{ .statements = try allocator.alloc(ast.Stmt, 0), .span = self.current().span };
         };
@@ -1046,6 +1055,7 @@ pub const Parser = struct {
             return null;
         }
         if (self.current().kind == .@"return") return try self.parseReturnStmt(allocator);
+        if (self.current().kind == .transition) return try self.parseTransitionStmt(allocator);
         if (self.current().kind == .@"if") return try self.parseIfStmt(allocator);
         if (self.current().kind == .@"while") return try self.parseWhileStmt(allocator);
         if (self.current().kind == .unsafe) return try self.parseUnsafeBlockStmt(allocator);
@@ -1059,6 +1069,33 @@ pub const Parser = struct {
         try self.report(.UnexpectedToken, "unsupported statement in function body", self.current().span);
         self.recoverStatement();
         return null;
+    }
+
+    fn parseTransitionStmt(self: *Parser, allocator: std.mem.Allocator) !?ast.Stmt {
+        _ = allocator;
+        const transition_token = self.advance();
+        if (self.machine_state_depth == 0) {
+            try self.diagnostics.append(diagnostics_model.transitionOutsideMachineState(transition_token.span));
+            self.recoverStatement();
+            return null;
+        }
+
+        const target_token = try self.expect(.identifier, "expected transition target state name", .UnexpectedToken);
+        const target_name = if (target_token) |identifier|
+            ast.NameSegment{ .text = identifier.lexeme, .span = identifier.span }
+        else
+            ast.NameSegment{ .text = "", .span = self.current().span };
+
+        const end_span = if (self.match(.semicolon)) |semicolon| semicolon.span else blk: {
+            try self.report(.UnexpectedToken, "expected ';' after transition statement", self.current().span);
+            self.recoverStatement();
+            break :blk if (target_token) |identifier| identifier.span else transition_token.span;
+        };
+
+        return .{ .transition_stmt = .{
+            .target_name = target_name,
+            .span = ast.spanFromBounds(transition_token.span.start, spanEnd(end_span)),
+        } };
     }
 
     fn parseDiscardStmt(self: *Parser, allocator: std.mem.Allocator) !ast.Stmt {
@@ -3147,6 +3184,7 @@ fn stmtSpan(stmt: ast.Stmt) SourceSpan {
         .expr_stmt => |expr_stmt| expr_stmt.span,
         .discard_stmt => |discard_stmt| discard_stmt.span,
         .return_stmt => |return_stmt| return_stmt.span,
+        .transition_stmt => |transition_stmt| transition_stmt.span,
         .if_stmt => |if_stmt| if_stmt.span,
         .while_stmt => |while_stmt| while_stmt.span,
         .unsafe_block => |unsafe_block| unsafe_block.span,
@@ -4338,6 +4376,43 @@ test "parses machine state body ordinary statements" {
     };
 }
 
+test "parses machine literal transition statement" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const source_text = "module Example; machine M() -> int { state Start { transition Done; return 0; } state Done { return 1; } }";
+    const unit = try parseTestSource(source_text, &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const statements = expectMachineDecl(unit, 0).states[0].body.statements;
+    try std.testing.expectEqual(@as(usize, 2), statements.len);
+    const transition = switch (statements[0]) {
+        .transition_stmt => |stmt| stmt,
+        else => return error.ExpectedTransitionStmt,
+    };
+    try std.testing.expectEqualStrings("Done", transition.target_name.text);
+    try std.testing.expectEqual(std.mem.indexOf(u8, source_text, "Done;").?, transition.target_name.span.start);
+}
+
+test "parses machine literal transition inside nested block" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; machine M() -> int { state Start { if (true) { transition Done; } } state Done { return 0; } }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const if_stmt = switch (expectMachineDecl(unit, 0).states[0].body.statements[0]) {
+        .if_stmt => |stmt| stmt,
+        else => return error.ExpectedIfStmt,
+    };
+    _ = switch (if_stmt.then_block.statements[0]) {
+        .transition_stmt => |stmt| stmt,
+        else => return error.ExpectedTransitionStmt,
+    };
+}
+
 test "parses noalloc machine allocation effect metadata" {
     var diagnostics = DiagnosticBag.init(std.testing.allocator);
     defer diagnostics.deinit();
@@ -4373,12 +4448,29 @@ test "machine AST debug output includes states" {
     , snapshot);
 }
 
+test "machine AST debug output includes transition target" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; machine M() -> int { state Start { transition Done; } state Done { return 0; } }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Transition Done") != null);
+}
+
 test "machine parser diagnostics are stable" {
     try expectSingleDiagnostic("module Example; machine () -> int { state Start { } }", .UnexpectedToken);
     try expectSingleDiagnostic("module Example; machine M() { state Start { } }", .UnexpectedToken);
     try expectSingleDiagnostic("module Example; machine M() -> int;", .UnexpectedToken);
     try expectSingleDiagnostic("module Example; machine M() -> int { int x = 0; }", .UnexpectedToken);
     try expectSingleDiagnostic("module Example; state Start { }", .ExpectedItem);
+    try expectSingleDiagnostic("module Example; transition Done;", .TransitionOutsideMachineState);
+    try expectSingleDiagnostic("module Example; int f() { transition Done; return 0; }", .TransitionOutsideMachineState);
+    try expectSingleDiagnostic("module Example; machine M() -> int { state Start { transition; } }", .UnexpectedToken);
+    try expectSingleDiagnostic("module Example; machine M() -> int { state Start { transition Done } }", .UnexpectedToken);
 }
 
 fn expectFunctionDecl(unit: ast.CompilationUnit, index: usize) ast.FunctionDecl {

@@ -1,0 +1,16 @@
+# name: machine transition unknown state
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module Example;
+
+machine M() -> int {
+    state Start {
+        transition Missing;
+    }
+}
+
+=== diagnostics ===
+CON0222

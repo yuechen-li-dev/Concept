@@ -1,0 +1,28 @@
+# name: machine transition initial
+# phase: parse
+# expect: pass
+
+=== source ===
+module Example;
+
+machine Resettable() -> int {
+    state Start {
+        return 0;
+    }
+
+    state Reset {
+        transition Start;
+    }
+}
+
+=== ast ===
+CompilationUnit
+  Module Example
+  Machine Resettable() -> int
+    State Start
+      Body
+        Return
+          Int 0
+    State Reset
+      Body
+        Transition Start

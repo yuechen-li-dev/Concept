@@ -791,12 +791,18 @@ pub const MatchStmt = struct {
     }
 };
 
+pub const TransitionStmt = struct {
+    target_name: NameSegment,
+    span: SourceSpan,
+};
+
 pub const Stmt = union(enum) {
     local_decl: LocalDeclStmt,
     assignment: AssignmentStmt,
     expr_stmt: ExprStmt,
     discard_stmt: DiscardStmt,
     return_stmt: ReturnStmt,
+    transition_stmt: TransitionStmt,
     if_stmt: IfStmt,
     while_stmt: WhileStmt,
     unsafe_block: UnsafeBlockStmt,
@@ -810,6 +816,7 @@ pub const Stmt = union(enum) {
             .expr_stmt => |stmt| stmt.deinit(allocator),
             .discard_stmt => |stmt| stmt.deinit(allocator),
             .return_stmt => |stmt| stmt.deinit(allocator),
+            .transition_stmt => {},
             .if_stmt => |stmt| stmt.deinit(allocator),
             .while_stmt => |stmt| stmt.deinit(allocator),
             .unsafe_block => |stmt| stmt.deinit(allocator),
@@ -849,6 +856,12 @@ pub const Stmt = union(enum) {
                 try writeIndent(writer, depth);
                 try writer.writeAll("Return\n");
                 if (stmt.value) |value| try value.writeDebug(writer, depth + 1);
+            },
+            .transition_stmt => |stmt| {
+                try writeIndent(writer, depth);
+                try writer.writeAll("Transition ");
+                try writer.writeAll(stmt.target_name.text);
+                try writer.writeByte('\n');
             },
             .if_stmt => |stmt| {
                 try writeIndent(writer, depth);

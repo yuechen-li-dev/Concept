@@ -1,0 +1,28 @@
+# name: machine transition literal
+# phase: parse
+# expect: pass
+
+=== source ===
+module Example;
+
+machine DoorMachine() -> int {
+    state Closed {
+        transition Opening;
+    }
+
+    state Opening {
+        return 1;
+    }
+}
+
+=== ast ===
+CompilationUnit
+  Module Example
+  Machine DoorMachine() -> int
+    State Closed
+      Body
+        Transition Opening
+    State Opening
+      Body
+        Return
+          Int 1
