@@ -29,8 +29,33 @@ pub const StorageDiagnostic = struct {
         maybe_uninitialized_use,
         maybe_moved_use,
         implicit_copy_requires_copy,
+        assignment_requires_replacement,
     };
 };
+
+pub const AssignmentDecision = enum {
+    allow_initialization,
+    allow_reinitialization,
+    allow_copy_replacement,
+    reject_replacement_required,
+    reject_maybe_uninitialized,
+    reject_maybe_moved,
+};
+
+pub const CopyDropContext = struct {
+    is_copy: bool,
+    has_drop: bool,
+};
+
+pub fn canAssignToState(target_state: StorageState, context: CopyDropContext) AssignmentDecision {
+    return switch (target_state) {
+        .uninitialized => .allow_initialization,
+        .moved => .allow_reinitialization,
+        .initialized => if (!context.has_drop and context.is_copy) .allow_copy_replacement else .reject_replacement_required,
+        .maybe_initialized => .reject_maybe_uninitialized,
+        .maybe_moved => .reject_maybe_moved,
+    };
+}
 
 pub const StorageAnalysis = struct {
     allocator: std.mem.Allocator,
@@ -237,8 +262,10 @@ const Analyzer = struct {
     fn analyzeStatement(self: *Analyzer, states: []StorageState, statement: mir.MirStatement) AnalysisError!void {
         switch (statement.kind) {
             .assign => |assignment| {
+                const had_error_before = self.had_error;
                 try self.readRvalue(states, assignment.rvalue, statement.span);
-                try self.writePlace(states, assignment.place);
+                if (self.had_error != had_error_before) return;
+                try self.writePlace(states, assignment.place, statement.span);
             },
             .drop => |drop| try self.dropPlace(states, drop.place, statement.span),
         }
@@ -298,13 +325,27 @@ const Analyzer = struct {
         }
     }
 
-    fn writePlace(self: *Analyzer, states: []StorageState, place: mir.MirPlace) AnalysisError!void {
-        _ = self;
-        switch (place) {
-            .local => |local_id| states[local_id.index] = .initialized,
-            // P10-M1 tracks whole-local storage state only. Field writes require
-            // the aggregate storage to be initialized before this pass sees them.
-            .field => |field| states[field.base.index] = .initialized,
+    fn writePlace(self: *Analyzer, states: []StorageState, place: mir.MirPlace, span: ?source.SourceSpan) AnalysisError!void {
+        const local_id = switch (place) {
+            .local => |local_id| local_id,
+            .field => |field| field.base,
+        };
+        const local = self.mir_module.store.getLocal(local_id);
+        if (local.kind == .temp) {
+            states[local_id.index] = .initialized;
+            return;
+        }
+
+        const target_type = self.placeType(place);
+        const decision = canAssignToState(states[local_id.index], .{
+            .is_copy = self.isCopyType(target_type),
+            .has_drop = self.semantic_module.hasDrop(target_type) != null,
+        });
+        switch (decision) {
+            .allow_initialization, .allow_reinitialization, .allow_copy_replacement => states[local_id.index] = .initialized,
+            .reject_replacement_required => try self.report(.assignment_requires_replacement, local_id, span),
+            .reject_maybe_uninitialized => try self.report(.maybe_uninitialized_use, local_id, span),
+            .reject_maybe_moved => try self.report(.maybe_moved_use, local_id, span),
         }
     }
 
@@ -365,7 +406,19 @@ const Analyzer = struct {
 
     fn isCopyLocal(self: *Analyzer, local_id: mir.MirLocalId) bool {
         const type_id = self.mir_module.store.getLocal(local_id).type_id;
+        return self.isCopyType(type_id);
+    }
+
+    fn isCopyType(self: *Analyzer, type_id: types.TypeId) bool {
+        if (self.semantic_module.hasDrop(type_id) != null) return false;
         return self.semantic_module.types.isCopyType(&self.semantic_module.hir, type_id);
+    }
+
+    fn placeType(self: *Analyzer, place: mir.MirPlace) types.TypeId {
+        return switch (place) {
+            .local => |local_id| self.mir_module.store.getLocal(local_id).type_id,
+            .field => |field| self.semantic_module.hir.getField(field.field_id).type_id,
+        };
     }
 
     fn checkImplicitCopy(self: *Analyzer, states: []const StorageState, place: mir.MirPlace, span: ?source.SourceSpan) AnalysisError!void {
@@ -379,7 +432,7 @@ const Analyzer = struct {
             .param, .user => {},
             .temp => return,
         }
-        if (!self.semantic_module.types.isCopyType(&self.semantic_module.hir, local.type_id)) {
+        if (!self.isCopyType(local.type_id)) {
             try self.report(.implicit_copy_requires_copy, local_id, span);
         }
     }
@@ -426,6 +479,7 @@ const Analyzer = struct {
                 .maybe_uninitialized_use => diagnostics.maybeUninitializedUse(diagnostic_span),
                 .maybe_moved_use => diagnostics.maybeMovedUse(diagnostic_span),
                 .implicit_copy_requires_copy => diagnostics.implicitCopyRequiresCopy(diagnostic_span),
+                .assignment_requires_replacement => diagnostics.assignmentRequiresReplacement(diagnostic_span),
             });
         }
         self.had_error = true;
@@ -1028,4 +1082,232 @@ test "MIR storage diagnoses maybe-moved Drop cleanup" {
     try std.testing.expectError(error.InvalidStorageState, analyzeModule(std.testing.allocator, &semantic_module, &module, &bag));
     try std.testing.expectEqual(@as(usize, 1), bag.count());
     try std.testing.expectEqual(diagnostics.DiagnosticCode.MaybeMovedUse, bag.diagnostics.items[0].code);
+}
+
+fn addCopyImplForTest(semantic_module: *semantics.SemanticModule, type_id: types.TypeId) !void {
+    const copy_name = try semantic_module.interner.intern("Copy");
+    const concept_id = try semantic_module.hir.addConcept(copy_name, true, false, hir.synthetic_span);
+    semantic_module.hir.setConceptKnownMarkerKind(concept_id, .copy);
+    const t_name = try semantic_module.interner.intern("T");
+    const t_type = try semantic_module.types.addTypeParam(.{ .kind = .concept, .index = concept_id.index }, 0, t_name);
+    const type_params = try std.testing.allocator.alloc(hir.HirTypeParam, 1);
+    type_params[0] = .{ .name = t_name, .span = hir.synthetic_span, .type_id = t_type };
+    semantic_module.hir.setConceptTypeParams(concept_id, type_params);
+    _ = try semantic_module.hir.addConceptImpl(concept_id, type_id, &.{}, false, hir.synthetic_span);
+}
+
+test "assignment policy allows initialized Copy scalar replacement" {
+    try std.testing.expectEqual(AssignmentDecision.allow_copy_replacement, canAssignToState(.initialized, .{ .is_copy = true, .has_drop = false }));
+    try std.testing.expectEqual(AssignmentDecision.reject_replacement_required, canAssignToState(.initialized, .{ .is_copy = false, .has_drop = false }));
+    try std.testing.expectEqual(AssignmentDecision.reject_replacement_required, canAssignToState(.initialized, .{ .is_copy = true, .has_drop = true }));
+    try std.testing.expectEqual(AssignmentDecision.allow_reinitialization, canAssignToState(.moved, .{ .is_copy = false, .has_drop = true }));
+    try std.testing.expectEqual(AssignmentDecision.allow_initialization, canAssignToState(.uninitialized, .{ .is_copy = false, .has_drop = true }));
+    try std.testing.expectEqual(AssignmentDecision.reject_maybe_moved, canAssignToState(.maybe_moved, .{ .is_copy = true, .has_drop = false }));
+    try std.testing.expectEqual(AssignmentDecision.reject_maybe_uninitialized, canAssignToState(.maybe_initialized, .{ .is_copy = true, .has_drop = false }));
+}
+
+test "MIR storage allows assignment replacement of initialized int and bool locals" {
+    var interner_value = interner.Interner.init(std.testing.allocator);
+    defer interner_value.deinit();
+    var semantic_module = try semantics.SemanticModule.init(std.testing.allocator);
+    defer semantic_module.deinit();
+    var module = mir.MirModule.init(std.testing.allocator);
+    defer module.deinit();
+
+    const function = try module.store.addFunction(.{ .index = 0 }, try interner_value.intern("main"), semantic_module.types.intType(), hir.synthetic_span);
+    const x = try module.store.addLocal(function, try interner_value.intern("x"), .user, semantic_module.types.intType(), hir.synthetic_span);
+    const flag = try module.store.addLocal(function, try interner_value.intern("flag"), .user, semantic_module.types.boolType(), hir.synthetic_span);
+    const block = try module.store.addBlock(function, hir.synthetic_span);
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = x }, mir.MirRvalue.use_(try mir.MirOperand.intLiteral(std.testing.allocator, "1"))) });
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = x }, mir.MirRvalue.use_(try mir.MirOperand.intLiteral(std.testing.allocator, "2"))) });
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = flag }, mir.MirRvalue.use_(mir.MirOperand.boolLiteral(false))) });
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = flag }, mir.MirRvalue.use_(mir.MirOperand.boolLiteral(true))) });
+    try module.store.setTerminator(block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(mir.MirOperand.copyPlace(.{ .local = x })) });
+
+    var analysis = try analyzeFunction(std.testing.allocator, &semantic_module, &module, function, module.store.getFunction(function).*, null);
+    defer analysis.deinit();
+    try std.testing.expectEqual(StorageState.initialized, analysis.stateOf(x));
+    try std.testing.expectEqual(StorageState.initialized, analysis.stateOf(flag));
+}
+
+test "MIR storage rejects initialized non-Copy struct replacement" {
+    var interner_value = interner.Interner.init(std.testing.allocator);
+    defer interner_value.deinit();
+    var semantic_module = try semantics.SemanticModule.init(std.testing.allocator);
+    defer semantic_module.deinit();
+    const box_type = try semantic_module.types.addStructType(.{ .index = 0 });
+    var module = mir.MirModule.init(std.testing.allocator);
+    defer module.deinit();
+
+    const function = try module.store.addFunction(.{ .index = 0 }, try interner_value.intern("main"), semantic_module.types.intType(), hir.synthetic_span);
+    const a = try module.store.addLocal(function, try interner_value.intern("a"), .user, box_type, hir.synthetic_span);
+    const block = try module.store.addBlock(function, hir.synthetic_span);
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = a }, try mir.MirRvalue.structConstructor(std.testing.allocator, .{ .index = 0 }, &.{})) });
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = a }, try mir.MirRvalue.structConstructor(std.testing.allocator, .{ .index = 0 }, &.{})) });
+    try module.store.setTerminator(block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(try mir.MirOperand.intLiteral(std.testing.allocator, "0")) });
+
+    var bag = diagnostics.DiagnosticBag.init(std.testing.allocator);
+    defer bag.deinit();
+    try std.testing.expectError(error.InvalidStorageState, analyzeModule(std.testing.allocator, &semantic_module, &module, &bag));
+    try std.testing.expectEqual(@as(usize, 1), bag.count());
+    try std.testing.expectEqual(diagnostics.DiagnosticCode.AssignmentRequiresReplacement, bag.diagnostics.items[0].code);
+}
+
+test "MIR storage allows initialized Copy marker struct assignment" {
+    var interner_value = interner.Interner.init(std.testing.allocator);
+    defer interner_value.deinit();
+    var semantic_module = try semantics.SemanticModule.init(std.testing.allocator);
+    defer semantic_module.deinit();
+    const vec_type = try semantic_module.types.addStructType(.{ .index = 0 });
+    try addCopyImplForTest(&semantic_module, vec_type);
+    var module = mir.MirModule.init(std.testing.allocator);
+    defer module.deinit();
+
+    const function = try module.store.addFunction(.{ .index = 0 }, try interner_value.intern("main"), semantic_module.types.intType(), hir.synthetic_span);
+    const v = try module.store.addLocal(function, try interner_value.intern("v"), .user, vec_type, hir.synthetic_span);
+    const block = try module.store.addBlock(function, hir.synthetic_span);
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = v }, try mir.MirRvalue.structConstructor(std.testing.allocator, .{ .index = 0 }, &.{})) });
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = v }, try mir.MirRvalue.structConstructor(std.testing.allocator, .{ .index = 0 }, &.{})) });
+    try module.store.setTerminator(block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(try mir.MirOperand.intLiteral(std.testing.allocator, "0")) });
+
+    var analysis = try analyzeFunction(std.testing.allocator, &semantic_module, &module, function, module.store.getFunction(function).*, null);
+    defer analysis.deinit();
+    try std.testing.expectEqual(StorageState.initialized, analysis.stateOf(v));
+}
+
+test "MIR storage allows reinitialization after moving non-Copy struct" {
+    var interner_value = interner.Interner.init(std.testing.allocator);
+    defer interner_value.deinit();
+    var semantic_module = try semantics.SemanticModule.init(std.testing.allocator);
+    defer semantic_module.deinit();
+    const box_type = try semantic_module.types.addStructType(.{ .index = 0 });
+    var module = mir.MirModule.init(std.testing.allocator);
+    defer module.deinit();
+
+    const function = try module.store.addFunction(.{ .index = 0 }, try interner_value.intern("main"), semantic_module.types.intType(), hir.synthetic_span);
+    const a = try module.store.addLocal(function, try interner_value.intern("a"), .user, box_type, hir.synthetic_span);
+    const b = try module.store.addLocal(function, try interner_value.intern("b"), .user, box_type, hir.synthetic_span);
+    const block = try module.store.addBlock(function, hir.synthetic_span);
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = a }, try mir.MirRvalue.structConstructor(std.testing.allocator, .{ .index = 0 }, &.{})) });
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = b }, mir.MirRvalue.movePlace(.{ .local = a })) });
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = a }, try mir.MirRvalue.structConstructor(std.testing.allocator, .{ .index = 0 }, &.{})) });
+    try module.store.setTerminator(block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(try mir.MirOperand.intLiteral(std.testing.allocator, "0")) });
+
+    var analysis = try analyzeFunction(std.testing.allocator, &semantic_module, &module, function, module.store.getFunction(function).*, null);
+    defer analysis.deinit();
+    try std.testing.expectEqual(StorageState.initialized, analysis.stateOf(a));
+    try std.testing.expectEqual(StorageState.initialized, analysis.stateOf(b));
+}
+
+test "MIR storage rejects initialized Drop replacement and treats Drop as non-Copy" {
+    var interner_value = interner.Interner.init(std.testing.allocator);
+    defer interner_value.deinit();
+    var semantic_module = try semantics.SemanticModule.init(std.testing.allocator);
+    defer semantic_module.deinit();
+    const file_type = try semantic_module.types.addStructType(try semantic_module.hir.addStruct(try semantic_module.interner.intern("File")));
+    _ = try addDropImplForTest(&semantic_module, file_type);
+    try addCopyImplForTest(&semantic_module, file_type);
+    var module = mir.MirModule.init(std.testing.allocator);
+    defer module.deinit();
+
+    const function = try module.store.addFunction(.{ .index = 0 }, try interner_value.intern("main"), semantic_module.types.intType(), hir.synthetic_span);
+    const f = try module.store.addLocal(function, try interner_value.intern("f"), .user, file_type, hir.synthetic_span);
+    const block = try module.store.addBlock(function, hir.synthetic_span);
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = f }, try mir.MirRvalue.structConstructor(std.testing.allocator, .{ .index = 0 }, &.{})) });
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = f }, try mir.MirRvalue.structConstructor(std.testing.allocator, .{ .index = 0 }, &.{})) });
+    try module.store.setTerminator(block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(try mir.MirOperand.intLiteral(std.testing.allocator, "0")) });
+
+    var bag = diagnostics.DiagnosticBag.init(std.testing.allocator);
+    defer bag.deinit();
+    try std.testing.expectError(error.InvalidStorageState, analyzeModule(std.testing.allocator, &semantic_module, &module, &bag));
+    try std.testing.expectEqual(@as(usize, 1), bag.count());
+    try std.testing.expectEqual(diagnostics.DiagnosticCode.AssignmentRequiresReplacement, bag.diagnostics.items[0].code);
+}
+
+test "MIR storage drops moved Drop local after reinitialization" {
+    var interner_value = interner.Interner.init(std.testing.allocator);
+    defer interner_value.deinit();
+    var semantic_module = try semantics.SemanticModule.init(std.testing.allocator);
+    defer semantic_module.deinit();
+    const file_type = try semantic_module.types.addStructType(try semantic_module.hir.addStruct(try semantic_module.interner.intern("File")));
+    const drop_fn = try addDropImplForTest(&semantic_module, file_type);
+    var module = mir.MirModule.init(std.testing.allocator);
+    defer module.deinit();
+
+    const function = try module.store.addFunction(.{ .index = 0 }, try interner_value.intern("main"), semantic_module.types.intType(), hir.synthetic_span);
+    const a = try module.store.addLocal(function, try interner_value.intern("a"), .user, file_type, hir.synthetic_span);
+    const b = try module.store.addLocal(function, try interner_value.intern("b"), .user, file_type, hir.synthetic_span);
+    const block = try module.store.addBlock(function, hir.synthetic_span);
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = a }, try mir.MirRvalue.structConstructor(std.testing.allocator, .{ .index = 0 }, &.{})) });
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = b }, mir.MirRvalue.movePlace(.{ .local = a })) });
+    try module.store.appendStatement(block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = a }, try mir.MirRvalue.structConstructor(std.testing.allocator, .{ .index = 0 }, &.{})) });
+    try module.store.setTerminator(block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(try mir.MirOperand.intLiteral(std.testing.allocator, "0")) });
+
+    var analysis = try analyzeFunction(std.testing.allocator, &semantic_module, &module, function, module.store.getFunction(function).*, null);
+    defer analysis.deinit();
+    const statements = module.store.getBlock(block).statements;
+    try std.testing.expectEqual(@as(usize, 5), statements.len);
+    try std.testing.expectEqual(b, statements[3].kind.drop.place.local);
+    try std.testing.expectEqual(drop_fn, statements[3].kind.drop.function);
+    try std.testing.expectEqual(a, statements[4].kind.drop.place.local);
+}
+
+test "MIR storage rejects assignment to maybe-moved place" {
+    var interner_value = interner.Interner.init(std.testing.allocator);
+    defer interner_value.deinit();
+    var semantic_module = try semantics.SemanticModule.init(std.testing.allocator);
+    defer semantic_module.deinit();
+    const box_type = try semantic_module.types.addStructType(.{ .index = 0 });
+    var module = mir.MirModule.init(std.testing.allocator);
+    defer module.deinit();
+
+    const function = try module.store.addFunction(.{ .index = 0 }, try interner_value.intern("main"), semantic_module.types.intType(), hir.synthetic_span);
+    const cond = try module.store.addLocal(function, try interner_value.intern("cond"), .param, semantic_module.types.boolType(), hir.synthetic_span);
+    const a = try module.store.addLocal(function, try interner_value.intern("a"), .user, box_type, hir.synthetic_span);
+    const temp = try module.store.addLocal(function, null, .temp, box_type, hir.synthetic_span);
+    const entry = try module.store.addBlock(function, hir.synthetic_span);
+    const then_block = try module.store.addBlock(function, hir.synthetic_span);
+    const join = try module.store.addBlock(function, hir.synthetic_span);
+
+    try module.store.appendStatement(entry, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = a }, try mir.MirRvalue.structConstructor(std.testing.allocator, .{ .index = 0 }, &.{})) });
+    try module.store.setTerminator(entry, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.switchBool(mir.MirOperand.copyPlace(.{ .local = cond }), then_block, join) });
+    try module.store.appendStatement(then_block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = temp }, mir.MirRvalue.movePlace(.{ .local = a })) });
+    try module.store.setTerminator(then_block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.gotoBlock(join) });
+    try module.store.appendStatement(join, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = a }, try mir.MirRvalue.structConstructor(std.testing.allocator, .{ .index = 0 }, &.{})) });
+    try module.store.setTerminator(join, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(try mir.MirOperand.intLiteral(std.testing.allocator, "0")) });
+
+    var bag = diagnostics.DiagnosticBag.init(std.testing.allocator);
+    defer bag.deinit();
+    try std.testing.expectError(error.InvalidStorageState, analyzeModule(std.testing.allocator, &semantic_module, &module, &bag));
+    try std.testing.expectEqual(@as(usize, 1), bag.count());
+    try std.testing.expectEqual(diagnostics.DiagnosticCode.MaybeMovedUse, bag.diagnostics.items[0].code);
+}
+
+test "MIR storage rejects assignment to maybe-initialized place" {
+    var interner_value = interner.Interner.init(std.testing.allocator);
+    defer interner_value.deinit();
+    var semantic_module = try semantics.SemanticModule.init(std.testing.allocator);
+    defer semantic_module.deinit();
+    const box_type = try semantic_module.types.addStructType(.{ .index = 0 });
+    var module = mir.MirModule.init(std.testing.allocator);
+    defer module.deinit();
+
+    const function = try module.store.addFunction(.{ .index = 0 }, try interner_value.intern("main"), semantic_module.types.intType(), hir.synthetic_span);
+    const cond = try module.store.addLocal(function, try interner_value.intern("cond"), .param, semantic_module.types.boolType(), hir.synthetic_span);
+    const a = try module.store.addLocal(function, try interner_value.intern("a"), .user, box_type, hir.synthetic_span);
+    const entry = try module.store.addBlock(function, hir.synthetic_span);
+    const then_block = try module.store.addBlock(function, hir.synthetic_span);
+    const join = try module.store.addBlock(function, hir.synthetic_span);
+
+    try module.store.setTerminator(entry, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.switchBool(mir.MirOperand.copyPlace(.{ .local = cond }), then_block, join) });
+    try module.store.appendStatement(then_block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = a }, try mir.MirRvalue.structConstructor(std.testing.allocator, .{ .index = 0 }, &.{})) });
+    try module.store.setTerminator(then_block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.gotoBlock(join) });
+    try module.store.appendStatement(join, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = a }, try mir.MirRvalue.structConstructor(std.testing.allocator, .{ .index = 0 }, &.{})) });
+    try module.store.setTerminator(join, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(try mir.MirOperand.intLiteral(std.testing.allocator, "0")) });
+
+    var bag = diagnostics.DiagnosticBag.init(std.testing.allocator);
+    defer bag.deinit();
+    try std.testing.expectError(error.InvalidStorageState, analyzeModule(std.testing.allocator, &semantic_module, &module, &bag));
+    try std.testing.expectEqual(@as(usize, 1), bag.count());
+    try std.testing.expectEqual(diagnostics.DiagnosticCode.MaybeUninitializedUse, bag.diagnostics.items[0].code);
 }

@@ -100,6 +100,23 @@ than emitting path-sensitive conditional cleanup. P10-M5 still does not implemen
 field-level drops, replacement assignment semantics, C++ destructor syntax,
 implicit move, borrow checking, or lifetimes.
 
+P10-M6 adds assignment and replacement semantics v0. The MIR storage pass now
+checks the target state before writes instead of blindly marking assignment
+targets initialized. Assignment to initialized Copy places remains ordinary value
+replacement. Assignment to initialized non-Copy places, including any type with
+`Drop<T>`, is rejected with `CON0160 AssignmentRequiresReplacement` because
+drop-old-then-initialize-new replacement is not implemented yet. Assignment to a
+moved whole local is accepted as reinitialization, and assignment to
+uninitialized whole-local storage remains accepted where such storage exists
+internally. Assignment to `MaybeMoved` and `MaybeInitialized` places is rejected
+with the existing maybe-state diagnostics until path-sensitive reinitialization
+exists. For storage analysis, `Drop<T>` makes a value non-Copy even if a marker
+`Copy<T>` impl is also present, so Drop values cannot be silently copied or
+replaced. P10-M6 does not implement `ManualInit<T>`, an official
+`MaybeUninit<T>` surface, partial field states, field-level replacement, hidden
+Drop replacement lowering, C++ `operator=`/copy-assignment semantics, implicit
+move, borrow checking, or lifetimes.
+
 ## Thesis
 
 ```text
@@ -344,6 +361,16 @@ Potential diagnostics:
   storage exists by an explicit rule;
 - assignment to non-Copy/Drop values should be rejected until replacement
   semantics and drop ordering are implemented.
+
+P10-M6 implementation:
+
+- initialized Copy assignment is allowed;
+- initialized non-Copy assignment is rejected with `CON0160`;
+- initialized `Drop<T>` assignment is rejected with `CON0160`;
+- moved whole locals may be reinitialized by assignment;
+- maybe-moved and maybe-initialized assignment targets are rejected;
+- no hidden drop-old-then-init-new replacement lowering is emitted;
+- no C++ copy assignment or user-defined assignment operator model exists.
 
 ## Use before initialization
 

@@ -1,0 +1,24 @@
+# name: reinitialize after move drop
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+struct File {
+    int fd;
+};
+
+impl Drop<File> {
+    void drop(File f) {
+    }
+}
+
+int main() {
+    File a = File { fd: 1 };
+    File b = move a;
+
+    a = File { fd: 2 };
+
+    return 0;
+}

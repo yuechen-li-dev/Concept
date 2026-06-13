@@ -1,0 +1,22 @@
+# name: reinitialize after move struct
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+struct Box {
+    int value;
+};
+
+int main() {
+    Box a = Box { value: 10 };
+    Box b = move a;
+
+    a = Box { value: 32 };
+
+    return a.value + b.value;
+}
+
+=== run ===
+exit_code: 42

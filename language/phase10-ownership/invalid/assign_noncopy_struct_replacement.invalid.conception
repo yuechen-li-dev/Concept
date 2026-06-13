@@ -1,0 +1,20 @@
+# name: assign noncopy struct replacement
+# phase: backend-c
+# expect: fail
+
+=== source ===
+module Main;
+
+struct Box {
+    int value;
+};
+
+int main() {
+    Box a = Box { value: 1 };
+    a = Box { value: 42 };
+
+    return a.value;
+}
+
+=== diagnostics ===
+CON0160

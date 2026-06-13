@@ -2286,10 +2286,14 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectRunFixture("../../../language/phase10-ownership/valid/move_bool_copy_run.valid.conception");
     try expectRunFixture("../../../language/phase10-ownership/valid/copy_int_valid.valid.conception");
     try expectRunFixture("../../../language/phase10-ownership/valid/copy_bool_valid.valid.conception");
+    try expectRunFixture("../../../language/phase10-ownership/valid/assign_copy_int_valid.valid.conception");
+    try expectRunFixture("../../../language/phase10-ownership/valid/assign_copy_bool_valid.valid.conception");
     try expectRunFixture("../../../language/phase10-ownership/valid/move_param_forward_valid.valid.conception");
     try expectRunFixture("../../../language/phase10-ownership/valid/copy_enum_valid.valid.conception");
     try expectRunFixture("../../../language/phase10-ownership/valid/copy_pointer_valid.valid.conception");
     try expectRunFixture("../../../language/phase10-ownership/valid/copy_marker_struct_valid.valid.conception");
+    try expectRunFixture("../../../language/phase10-ownership/valid/assign_copy_marker_struct_valid.valid.conception");
+    try expectRunFixture("../../../language/phase10-ownership/valid/reinitialize_after_move_struct_valid.valid.conception");
     try expectRunFixture("../../../language/phase10-ownership/valid/move_branch_return_valid.valid.conception");
     try expectRunFixture("../../../language/phase10-ownership/valid/move_if_else_both_return_valid.valid.conception");
     try expectRunFixture("../../../language/phase10-ownership/valid/copy_scalar_after_branch_valid.valid.conception");
@@ -2298,6 +2302,7 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectBackendCFixture("../../../language/phase10-ownership/valid/drop_moved_local_skipped.valid.conception");
     try expectBackendCFixture("../../../language/phase10-ownership/valid/drop_early_return.valid.conception");
     try expectBackendCFixture("../../../language/phase10-ownership/valid/drop_return_move.valid.conception");
+    try expectBackendCFixture("../../../language/phase10-ownership/valid/reinitialize_after_move_drop_valid.valid.conception");
     try expectCheckFixture("../../../language/phase10-ownership/invalid/use_after_move_local.invalid.conception");
     try expectCheckFixture("../../../language/phase10-ownership/invalid/use_after_move_argument.invalid.conception");
     try expectCheckFixture("../../../language/phase10-ownership/invalid/move_temporary_call.invalid.conception");
@@ -2311,6 +2316,9 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectBackendCFixture("../../../language/phase10-ownership/invalid/implicit_copy_struct_return.invalid.conception");
     try expectBackendCFixture("../../../language/phase10-ownership/invalid/implicit_copy_struct_assignment.invalid.conception");
     try expectBackendCFixture("../../../language/phase10-ownership/invalid/implicit_copy_param_forward.invalid.conception");
+    try expectBackendCFixture("../../../language/phase10-ownership/invalid/assign_noncopy_struct_replacement.invalid.conception");
+    try expectBackendCFixture("../../../language/phase10-ownership/invalid/assign_drop_replacement.invalid.conception");
+    try expectBackendCFixture("../../../language/phase10-ownership/invalid/assign_maybe_moved_replacement.invalid.conception");
     try expectBackendCFixture("../../../language/phase10-ownership/invalid/drop_maybe_moved_cleanup.invalid.conception");
     try expectBackendCFixture("../../../language/phase10-ownership/invalid/maybe_moved_after_if.invalid.conception");
     try expectBackendCFixture("../../../language/phase10-ownership/invalid/maybe_moved_move_after_if.invalid.conception");

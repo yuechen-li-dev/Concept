@@ -1,0 +1,24 @@
+# name: assign maybe moved replacement
+# phase: backend-c
+# expect: fail
+
+=== source ===
+module Main;
+
+struct Box {
+    int value;
+};
+
+int main(bool cond) {
+    Box a = Box { value: 1 };
+
+    if (cond) {
+        Box b = move a;
+    }
+
+    a = Box { value: 42 };
+    return a.value;
+}
+
+=== diagnostics ===
+CON0155
