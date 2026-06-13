@@ -17,6 +17,10 @@ pub const DiagnosticBag = diagnostics.DiagnosticBag;
 pub const DiagnosticCode = diagnostics.DiagnosticCode;
 pub const SemanticError = error{InvalidSemanticModule};
 
+pub const CollectOptions = struct {
+    source_file_kind: source.SourceFileKind = .normal,
+};
+
 pub const SemanticModule = struct {
     interner: interner.Interner,
     hir: hir.HirStore,
@@ -91,10 +95,19 @@ pub fn collectTopLevelDeclarations(
     unit: ast.CompilationUnit,
     diagnostic_bag: *DiagnosticBag,
 ) !SemanticModule {
+    return collectTopLevelDeclarationsWithOptions(allocator, unit, diagnostic_bag, .{});
+}
+
+pub fn collectTopLevelDeclarationsWithOptions(
+    allocator: std.mem.Allocator,
+    unit: ast.CompilationUnit,
+    diagnostic_bag: *DiagnosticBag,
+    options: CollectOptions,
+) !SemanticModule {
     var module = try SemanticModule.init(allocator);
     errdefer module.deinit();
 
-    var collector = Collector.init(allocator, &module, diagnostic_bag);
+    var collector = Collector.init(allocator, &module, diagnostic_bag, options);
     defer collector.deinit();
 
     try collector.collect(unit);
@@ -106,6 +119,7 @@ const Collector = struct {
     allocator: std.mem.Allocator,
     module: *SemanticModule,
     diagnostics: *DiagnosticBag,
+    options: CollectOptions,
     top_level_decls: std.AutoHashMap(interner.SymbolId, TopLevelDecl),
 
     const TopLevelDecl = union(enum) {
@@ -122,11 +136,12 @@ const Collector = struct {
         concept: hir.ConceptId,
     };
 
-    fn init(allocator: std.mem.Allocator, module: *SemanticModule, diagnostic_bag: *DiagnosticBag) Collector {
+    fn init(allocator: std.mem.Allocator, module: *SemanticModule, diagnostic_bag: *DiagnosticBag, options: CollectOptions) Collector {
         return .{
             .allocator = allocator,
             .module = module,
             .diagnostics = diagnostic_bag,
+            .options = options,
             .top_level_decls = std.AutoHashMap(interner.SymbolId, TopLevelDecl).init(allocator),
         };
     }
@@ -136,6 +151,9 @@ const Collector = struct {
     }
 
     fn collect(self: *Collector, unit: ast.CompilationUnit) !void {
+        try self.validateTestAttributePlacement(unit);
+        if (self.diagnostics.count() != 0) return;
+
         for (unit.items) |item| {
             switch (item) {
                 .function_decl => |function_decl| try self.declareFunction(function_decl),
@@ -176,6 +194,19 @@ const Collector = struct {
                 .struct_decl, .enum_decl, .concept_decl, .interface_decl => {},
                 .impl_decl => |impl_decl| try self.lowerImplFunctionBodies(impl_decl),
                 .static_assert_decl => |static_assert_decl| try self.lowerStaticAssert(static_assert_decl),
+            }
+        }
+    }
+
+    fn validateTestAttributePlacement(self: *Collector, unit: ast.CompilationUnit) !void {
+        if (self.options.source_file_kind == .@"test") return;
+
+        for (unit.items) |item| {
+            const attributes = itemAttributes(item);
+            for (attributes) |attribute| {
+                if (isTestAttributeName(attribute.name.parts)) {
+                    try self.diagnostics.append(diagnostics.testAttributeOutsideTestFile(attribute.span));
+                }
             }
         }
     }
@@ -949,6 +980,27 @@ const Collector = struct {
     }
 };
 
+fn itemAttributes(item: ast.Item) []const ast.Attribute {
+    return switch (item) {
+        .function_decl => |decl| decl.attributes,
+        .template_decl => |decl| decl.attributes,
+        .struct_decl => |decl| decl.attributes,
+        .enum_decl => |decl| decl.attributes,
+        .concept_decl => |decl| decl.attributes,
+        .interface_decl => |decl| decl.attributes,
+        .impl_decl => |decl| decl.attributes,
+        .static_assert_decl => &.{},
+    };
+}
+
+fn isTestAttributeName(parts: []const ast.NameSegment) bool {
+    if (parts.len != 1) return false;
+    const text = parts[0].text;
+    return std.mem.eql(u8, text, "Fact") or
+        std.mem.eql(u8, text, "Theory") or
+        std.mem.eql(u8, text, "InlineData");
+}
+
 const TypeParamScope = struct {
     map: std.AutoHashMap(interner.SymbolId, types.TypeId),
 
@@ -1581,6 +1633,10 @@ fn lowerBinaryOp(op: ast.BinaryOp) hir.BinaryOp {
 
 fn collectItems(items: []const ast.Item, diagnostic_bag: *DiagnosticBag) !SemanticModule {
     return collectTopLevelDeclarations(std.testing.allocator, unitFromItems(items), diagnostic_bag);
+}
+
+fn collectTestItems(items: []const ast.Item, diagnostic_bag: *DiagnosticBag) !SemanticModule {
+    return collectTopLevelDeclarationsWithOptions(std.testing.allocator, unitFromItems(items), diagnostic_bag, .{ .source_file_kind = .@"test" });
 }
 
 fn unitFromItems(items: []const ast.Item) ast.CompilationUnit {
@@ -2263,7 +2319,7 @@ test "semantic collection preserves function attributes in HIR" {
 
     var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
     defer diagnostics_bag.deinit();
-    var module = try collectItems(&.{item}, &diagnostics_bag);
+    var module = try collectTestItems(&.{item}, &diagnostics_bag);
     defer module.deinit();
 
     try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
@@ -2290,7 +2346,7 @@ test "semantic collection preserves attribute literal args and leaves type check
 
     var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
     defer diagnostics_bag.deinit();
-    var module = try collectItems(&.{item}, &diagnostics_bag);
+    var module = try collectTestItems(&.{item}, &diagnostics_bag);
     defer module.deinit();
 
     try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
@@ -2299,6 +2355,22 @@ test "semantic collection preserves attribute literal args and leaves type check
     try std.testing.expectEqualStrings("1", function.attributes[0].args[0].int_literal);
     try std.testing.expect(function.attributes[0].args[1].bool_literal);
     try std.testing.expectEqualStrings("\"ok\"", function.attributes[0].args[2].string_literal);
+}
+
+test "semantic collection rejects test attributes in normal source files" {
+    var parts = [_]ast.NameSegment{nameSegment("Fact", 0)};
+    const attr = attributeNoArgs("Fact", parts[0..]);
+    var item = functionItem("ParsesIdentifier", 0);
+    var attrs = [_]ast.Attribute{attr};
+    item.function_decl.attributes = attrs[0..];
+
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    try std.testing.expectError(error.InvalidSemanticModule, collectItems(&.{item}, &diagnostics_bag));
+    try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
+    try std.testing.expectEqual(DiagnosticCode.TestAttributeOutsideTestFile, diagnostics_bag.diagnostics.items[0].code);
+    try std.testing.expectEqualStrings("test attributes are only valid in .con_test files", diagnostics_bag.diagnostics.items[0].message);
 }
 
 fn allocExpr(allocator: std.mem.Allocator, expr: ast.Expr) !*ast.Expr {

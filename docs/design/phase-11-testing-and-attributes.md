@@ -20,6 +20,14 @@ Expectations are typed semantic claims.
 Every Assert or Expect must include a reason explaining why the claim matters.
 
 The reason is part of the test, not a comment.
+
+Concept does not support inline test blocks in production source files.
+
+Tests live in `.con_test` files.
+
+Test helpers are ordinary functions in test modules.
+
+Only attributed functions such as `[Fact]` and `[Theory]` are test entrypoints.
 ```
 
 Concept's test surface should fit the language's larger identity: cleaned-up
@@ -90,6 +98,8 @@ Test files:
 
 The extension marks intent to the toolchain. It does not suspend normal language
 semantics.
+
+Inline test blocks are not part of Concept's testing model.
 
 ## Attribute model
 
@@ -519,6 +529,40 @@ Implemented boundaries:
 - mandatory reason validation is not implemented yet;
 - the relation API is not implemented yet;
 - there are no attribute macros and no runtime reflection.
+
+## P11-M2 implementation status
+
+P11-M2 recognizes `.con_test` as Concept test source files. Test files are parsed
+with the normal parser, lowered through normal AST/HIR metadata, and retain the
+same language semantics as production source files. `.con_test` recognition
+currently lives in the source-file classification used by the harness and
+semantic collection options; the parser itself does not need a separate test
+grammar or direct extension checks.
+
+Implemented behavior:
+
+- `.con_test` maps to test source kind;
+- existing normal source and `.conception` fixture paths remain normal source;
+- test attributes `[Fact]`, `[Theory]`, and `[InlineData]` are rejected in normal
+  source files with `CON0177 TestAttributeOutsideTestFile`;
+- discovery scans only test source files;
+- discovery finds `[Fact]` and `[Theory]` attributed functions;
+- discovery records `[InlineData]` count for discovered theories;
+- helper functions without test attributes are not discovered;
+- production source files do not support inline test blocks;
+- inline test block syntax remains rejected by the ordinary parser.
+
+Still deferred:
+
+- test execution;
+- generated runner functions;
+- `[Fact]` and `[Theory]` signature validation;
+- mandatory reason validation;
+- `Assert.*` and `Expect.*`;
+- `InlineData` arity and type checking;
+- relation API;
+- filtering and result reporting;
+- runtime reflection.
 
 ## Close criteria
 

@@ -1,0 +1,16 @@
+# name: theory in normal source
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+[Theory]
+[InlineData(1)]
+void NotATestFile(int value) {
+    return;
+}
+
+=== diagnostics ===
+CON0177
+CON0177

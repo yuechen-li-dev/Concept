@@ -1,0 +1,12 @@
+# name: inline test block rejected
+# phase: parse
+# expect: fail
+
+=== source ===
+module Example;
+
+test "adds integers" {
+}
+
+=== diagnostics ===
+CON0004

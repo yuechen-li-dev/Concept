@@ -26,6 +26,16 @@ pub const SourceSpan = struct {
     }
 };
 
+pub const SourceFileKind = enum {
+    normal,
+    @"test",
+
+    pub fn fromPath(path: []const u8) SourceFileKind {
+        if (std.mem.endsWith(u8, path, ".con_test")) return .@"test";
+        return .normal;
+    }
+};
+
 /// Borrowed source text plus precomputed line start offsets.
 ///
 /// `display_name` and `text` are borrowed from the caller. `line_starts` is
@@ -33,12 +43,18 @@ pub const SourceSpan = struct {
 pub const SourceFile = struct {
     display_name: []const u8,
     text: []const u8,
+    kind: SourceFileKind,
     line_starts: []const usize,
 
     pub fn init(allocator: std.mem.Allocator, display_name: []const u8, text: []const u8) !SourceFile {
+        return initWithKind(allocator, display_name, text, SourceFileKind.fromPath(display_name));
+    }
+
+    pub fn initWithKind(allocator: std.mem.Allocator, display_name: []const u8, text: []const u8, kind: SourceFileKind) !SourceFile {
         return .{
             .display_name = display_name,
             .text = text,
+            .kind = kind,
             .line_starts = try computeLineStarts(allocator, text),
         };
     }
@@ -124,6 +140,21 @@ test "empty source maps EOF to first line and column" {
     try std.testing.expectEqual(@as(usize, 1), location.line);
     try std.testing.expectEqual(@as(usize, 1), location.column);
     try std.testing.expectEqual(@as(usize, 0), location.offset);
+}
+
+test "source file kind classifies con_test as test source" {
+    try std.testing.expectEqual(SourceFileKind.@"test", SourceFileKind.fromPath("math.con_test"));
+    try std.testing.expectEqual(SourceFileKind.@"test", SourceFileKind.fromPath("tests/math.con_test"));
+}
+
+test "source file kind keeps existing source and fixture extensions normal" {
+    try std.testing.expectEqual(SourceFileKind.normal, SourceFileKind.fromPath("main.concept"));
+    try std.testing.expectEqual(SourceFileKind.normal, SourceFileKind.fromPath("main.con"));
+    try std.testing.expectEqual(SourceFileKind.normal, SourceFileKind.fromPath("fixture.valid.conception"));
+
+    const source = try SourceFile.init(std.testing.allocator, "fixture.valid.conception", "module Example;");
+    defer source.deinit(std.testing.allocator);
+    try std.testing.expectEqual(SourceFileKind.normal, source.kind);
 }
 
 test "single-line source uses one-based byte columns" {

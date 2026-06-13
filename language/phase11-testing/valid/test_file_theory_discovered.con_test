@@ -1,0 +1,8 @@
+module Example.Tests;
+
+[Theory]
+[InlineData(1, 2, 3)]
+[InlineData(2, 3, 5)]
+void TheoryIsDiscovered(int a, int b, int expected) {
+    return;
+}

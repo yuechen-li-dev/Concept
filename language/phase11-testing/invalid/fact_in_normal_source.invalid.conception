@@ -1,0 +1,14 @@
+# name: fact in normal source
+# phase: check
+# expect: fail
+
+=== source ===
+module Example;
+
+[Fact]
+void NotATestFile() {
+    return;
+}
+
+=== diagnostics ===
+CON0177

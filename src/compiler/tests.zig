@@ -15,6 +15,7 @@ pub const hir_checker = @import("hir_checker.zig");
 pub const lexer = @import("lexer.zig");
 pub const parser = @import("parser.zig");
 pub const source = @import("source.zig");
+pub const test_discovery = @import("test_discovery.zig");
 pub const token = @import("token.zig");
 pub const testing = @import("testing/harness.zig");
 pub const checker = @import("checker.zig");
@@ -37,4 +38,5 @@ test {
     _ = hir_checker;
     _ = compile_time;
     _ = compile_time_target;
+    _ = test_discovery;
 }

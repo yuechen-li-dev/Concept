@@ -1,0 +1,10 @@
+module Example.Tests;
+
+int helper() {
+    return 1;
+}
+
+[Fact]
+void FactIsDiscovered() {
+    return;
+}

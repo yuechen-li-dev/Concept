@@ -1,0 +1,10 @@
+# name: normal file without test attributes ok
+# phase: check
+# expect: pass
+
+=== source ===
+module Example;
+
+int helper() {
+    return 1;
+}

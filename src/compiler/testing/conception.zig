@@ -985,7 +985,12 @@ test "language MIR fixture: phase8 concepts templates pipeline uses concrete MIR
     defer unit.deinit(std.testing.allocator);
     try std.testing.expectEqual(@as(usize, 0), parse_diagnostics.count());
 
-    var module = try semantics_model.collectTopLevelDeclarations(std.testing.allocator, unit, &semantic_diagnostics);
+    var module = try semantics_model.collectTopLevelDeclarationsWithOptions(
+        std.testing.allocator,
+        unit,
+        &semantic_diagnostics,
+        .{ .source_file_kind = source_file.kind },
+    );
     defer module.deinit();
     try hir_checker_model.checkExecutable(std.testing.allocator, &module, &semantic_diagnostics);
     try std.testing.expectEqual(@as(usize, 0), semantic_diagnostics.count());
@@ -1015,7 +1020,7 @@ fn expectCheckFixture(comptime path: []const u8) !void {
 
     try std.testing.expectEqual(Phase.check, fixture.phase);
 
-    if (std.mem.indexOf(u8, path, "phase3-semantics") != null or std.mem.indexOf(u8, path, "phase8-concepts-templates") != null or std.mem.indexOf(u8, path, "phase5-sum-types") != null or std.mem.indexOf(u8, path, "phase5a-judgment") != null or std.mem.indexOf(u8, path, "phase6-unsafe-ownership") != null or std.mem.indexOf(u8, path, "phase7-runtime-structs") != null or std.mem.indexOf(u8, path, "phase10-ownership") != null) {
+    if (std.mem.indexOf(u8, path, "phase3-semantics") != null or std.mem.indexOf(u8, path, "phase8-concepts-templates") != null or std.mem.indexOf(u8, path, "phase5-sum-types") != null or std.mem.indexOf(u8, path, "phase5a-judgment") != null or std.mem.indexOf(u8, path, "phase6-unsafe-ownership") != null or std.mem.indexOf(u8, path, "phase7-runtime-structs") != null or std.mem.indexOf(u8, path, "phase10-ownership") != null or std.mem.indexOf(u8, path, "phase11-testing") != null) {
         try expectSemanticCheckFixture(path, fixture);
     } else {
         try expectPhase2CheckFixture(path, fixture);
@@ -1039,7 +1044,12 @@ fn expectSemanticCheckFixture(comptime path: []const u8, fixture: ConceptionFixt
 
     switch (fixture.expect) {
         .pass => {
-            var module = try semantics_model.collectTopLevelDeclarations(std.testing.allocator, unit, &semantic_diagnostics);
+            var module = try semantics_model.collectTopLevelDeclarationsWithOptions(
+                std.testing.allocator,
+                unit,
+                &semantic_diagnostics,
+                .{ .source_file_kind = source_file.kind },
+            );
             defer module.deinit();
             if (use_hir_checker) {
                 try hir_checker_model.checkExecutable(std.testing.allocator, &module, &semantic_diagnostics);
@@ -1047,7 +1057,12 @@ fn expectSemanticCheckFixture(comptime path: []const u8, fixture: ConceptionFixt
             try std.testing.expectEqual(@as(usize, 0), semantic_diagnostics.count());
         },
         .fail => {
-            var maybe_module = semantics_model.collectTopLevelDeclarations(std.testing.allocator, unit, &semantic_diagnostics) catch |err| switch (err) {
+            var maybe_module = semantics_model.collectTopLevelDeclarationsWithOptions(
+                std.testing.allocator,
+                unit,
+                &semantic_diagnostics,
+                .{ .source_file_kind = source_file.kind },
+            ) catch |err| switch (err) {
                 error.InvalidSemanticModule => null,
                 else => return err,
             };
@@ -1319,7 +1334,12 @@ fn expectMirFixture(comptime path: []const u8) !void {
     defer unit.deinit(std.testing.allocator);
     try std.testing.expectEqual(@as(usize, 0), parse_diagnostics.count());
 
-    var module = try semantics_model.collectTopLevelDeclarations(std.testing.allocator, unit, &semantic_diagnostics);
+    var module = try semantics_model.collectTopLevelDeclarationsWithOptions(
+        std.testing.allocator,
+        unit,
+        &semantic_diagnostics,
+        .{ .source_file_kind = source_file.kind },
+    );
     defer module.deinit();
     try hir_checker_model.checkExecutable(std.testing.allocator, &module, &semantic_diagnostics);
     try std.testing.expectEqual(@as(usize, 0), semantic_diagnostics.count());
@@ -1353,7 +1373,12 @@ fn expectBackendCFixture(comptime path: []const u8) !void {
     defer unit.deinit(std.testing.allocator);
     try std.testing.expectEqual(@as(usize, 0), parse_diagnostics.count());
 
-    var module = try semantics_model.collectTopLevelDeclarations(std.testing.allocator, unit, &diagnostics);
+    var module = try semantics_model.collectTopLevelDeclarationsWithOptions(
+        std.testing.allocator,
+        unit,
+        &diagnostics,
+        .{ .source_file_kind = source_file.kind },
+    );
     defer module.deinit();
     try hir_checker_model.checkExecutable(std.testing.allocator, &module, &diagnostics);
     try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
@@ -1392,7 +1417,12 @@ fn expectMirCorpus(comptime source_path: []const u8, comptime expected_path: []c
     defer unit.deinit(std.testing.allocator);
     try std.testing.expectEqual(@as(usize, 0), parse_diagnostics.count());
 
-    var module = try semantics_model.collectTopLevelDeclarations(std.testing.allocator, unit, &semantic_diagnostics);
+    var module = try semantics_model.collectTopLevelDeclarationsWithOptions(
+        std.testing.allocator,
+        unit,
+        &semantic_diagnostics,
+        .{ .source_file_kind = source_file.kind },
+    );
     defer module.deinit();
     try hir_checker_model.checkExecutable(std.testing.allocator, &module, &semantic_diagnostics);
     try std.testing.expectEqual(@as(usize, 0), semantic_diagnostics.count());
@@ -2283,10 +2313,14 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectParseFixture("../../../language/phase11-testing/valid/attribute_fact_function.valid.conception");
     try expectParseFixture("../../../language/phase11-testing/valid/attribute_theory_inline_data.valid.conception");
     try expectParseFixture("../../../language/phase11-testing/valid/attribute_multiple_inline_data.valid.conception");
+    try expectCheckFixture("../../../language/phase11-testing/valid/normal_file_without_test_attributes_ok.valid.conception");
     try expectParseFixture("../../../language/phase11-testing/invalid/attribute_unknown.invalid.conception");
     try expectParseFixture("../../../language/phase11-testing/invalid/attribute_orphan.invalid.conception");
     try expectParseFixture("../../../language/phase11-testing/invalid/attribute_statement_position.invalid.conception");
     try expectParseFixture("../../../language/phase11-testing/invalid/attribute_arg_expression.invalid.conception");
+    try expectCheckFixture("../../../language/phase11-testing/invalid/fact_in_normal_source.invalid.conception");
+    try expectCheckFixture("../../../language/phase11-testing/invalid/theory_in_normal_source.invalid.conception");
+    try expectParseFixture("../../../language/phase11-testing/invalid/inline_test_block_rejected.invalid.conception");
 
     try expectRunFixture("../../../language/phase10-ownership/valid/move_struct_local_run.valid.conception");
     try expectRunFixture("../../../language/phase10-ownership/valid/move_struct_argument_run.valid.conception");
