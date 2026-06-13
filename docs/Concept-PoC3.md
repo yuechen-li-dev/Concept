@@ -47,37 +47,23 @@ literal/match/decide transition scaffolds, runnable literal-transition machine
 frames, `Step`, `Complete`, `Result`, and C backend support for the
 literal-transition subset. Match/decide transition runtime lowering remains
 deferred and fails clearly during backend emission rather than silently
-generating unsupported code. Phase 14 has begun: M0 added the design document
-for interfaces and `dyn` dispatch, M1 preserves interface declarations and
-requirement signatures as top-level HIR declarations, M2 validates the v0
-requirement shape, and M3 recognizes `impl Interface<Type>` blocks, stores them
-as interface impl HIR separate from concept impls, and validates required
-methods, duplicates, extras, receiver convention, return types, and parameter
-types. M4 adds the borrowed dyn type surface: `dyn Interface&` and
-`mut dyn Interface&` can appear in function parameter signatures, resolve to
-distinct TypeStore dyn interface reference types, and reject non-interface,
-by-value, and raw-pointer dyn spellings. M5 adds call-boundary
-concrete-to-dyn coercion scaffolding: an addressable concrete local, parameter,
-or field place can be passed to a `dyn Interface&` or `mut dyn Interface&`
-parameter when the concrete type has the matching interface impl. The coercion
-is explicit in HIR and MIR. M6 adds dyn interface method-call syntax and
-HIR/MIR `interface_call` scaffolding: calls through `mut dyn Interface&`
-resolve method names to interface requirement slots and validate arity and
-argument types. M7 lowers the borrowed dyn subset in the C backend: dyn
-parameters and temps use explicit `{ data, vtable }` fat-reference structs,
-used interfaces emit vtable structs and dyn structs, selected interface impls
-emit wrapper thunks and static const vtables, dyn coercions build fat refs, and
-dyn calls dispatch indirectly through vtable slots. Concepts remain
-compile-time constraints, interfaces are runtime dispatch contracts, empty
-runtime interfaces are rejected, and interface requirements may use ordinary
-resolved types but not interface or dyn runtime types. M8 adds examples,
-fixture hardening, stronger backend C-shape assertions, and explicit
-documentation for the current receiver ABI limitation: wrappers cast
-`void* self` to a concrete pointer but still call the hidden impl ABI with
-`*typed`, so mutation observed through dyn dispatch remains deferred until
-references are first-class TypeStore/ABI values. Owning dyn boxes, heap boxing,
-inheritance, RTTI, dynamic cast, reflection, Drop through dyn, and hidden heap
-allocation remain deferred.
+generating unsupported code. Phase 14 is closed: runtime interfaces and
+borrowed dyn dispatch v0. Interfaces are HIR declarations with validated
+requirements and impl conformance. Borrowed dyn references support
+concrete-to-dyn call-boundary coercion, dyn method calls, MIR-visible dyn
+coercion/interface calls, and C backend vtable lowering for the supported
+subset. Concepts remain compile-time constraints, interfaces are runtime
+dispatch contracts, empty runtime interfaces are rejected, and interface
+requirements may use ordinary resolved types but not interface or dyn runtime
+types. The closed subset uses explicit `{ data, vtable }` fat-reference structs
+passed by value in generated C, per-interface vtable structs, wrapper thunks,
+static const vtables for selected impls, and indirect vtable calls. The current
+receiver ABI limitation remains documented: wrappers cast `void* self` to a
+concrete pointer but still call the hidden impl ABI with `*typed`, so mutation
+observed through dyn dispatch remains deferred until references are
+first-class TypeStore/ABI values. Owning dyn boxes, heap boxing, inheritance,
+RTTI, dynamic cast, reflection, Drop through dyn, dyn fields/returns/locals,
+and hidden heap allocation remain deferred.
 Deferred Phase 12
 work includes
 `Arena.create`, hosted runtime helper implementation, allocation failure

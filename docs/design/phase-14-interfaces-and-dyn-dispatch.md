@@ -9,6 +9,93 @@ semantic, HIR, MIR, backend, fixture, or runtime behavior. Existing parser
 support for `interface` signature blocks remains only the starting point for
 later milestones.
 
+## Phase 14 closeout
+
+Phase 14 is closed. The closed v0 surface is runtime dispatch through borrowed
+dyn references only: interface declarations, validated interface requirements,
+validated `impl Interface<Type>` conformance, explicit `dyn Interface&` and
+`mut dyn Interface&` parameter types, call-boundary concrete-to-dyn coercion,
+dyn method calls through `mut dyn Interface&`, MIR-visible dyn coercions and
+interface calls, and inspectable C backend lowering to fat references,
+vtables, wrapper thunks, static vtable constants, and indirect calls.
+
+The final supported v0 surface is:
+
+- interface declarations;
+- interface requirement validation;
+- interface impl conformance;
+- `impl Interface<Type>`;
+- separate concept impls and interface impls;
+- borrowed `dyn Interface&`;
+- borrowed `mut dyn Interface&`;
+- concrete-to-dyn call-boundary coercion;
+- an addressable-place requirement for concrete-to-dyn coercion;
+- matching `impl Interface<ConcreteType>` lookup for concrete-to-dyn coercion;
+- dyn method calls on `mut dyn Interface&`;
+- `HirExprKind.dyn_coerce`;
+- `HirExprKind.interface_call`;
+- `MirRvalue.dyn_coerce`;
+- `MirRvalue.interface_call`;
+- C backend fat-reference structs passed by value;
+- C backend vtable structs;
+- C backend wrapper thunks;
+- C backend static vtable constants;
+- indirect vtable dispatch;
+- no hidden heap allocation;
+- no RTTI;
+- no dynamic cast;
+- no inheritance or class hierarchy.
+
+The exact v0 boundaries are deliberate:
+
+- `dyn Interface&` and `mut dyn Interface&` are borrowed references, not owned
+  objects.
+- `mut dyn Interface&` is required for all dyn method calls in v0 because
+  interface requirement receiver mutability is not modeled yet.
+- Concrete-to-dyn coercion happens only at function call boundaries.
+- A concrete coercion source must be an addressable place, such as a local,
+  parameter, or already-addressable field place.
+- The concrete source type must have a matching interface impl for the target
+  interface.
+- Dyn fat references are passed by value in generated C as `{ data, vtable }`
+  structs.
+- Vtables are emitted as static constants for selected interface impls.
+- Wrapper thunks receive `void* self`, cast it to the concrete pointer type,
+  and call the hidden interface-impl method ABI.
+- Owning dyn boxes are not implemented.
+
+Final deferred work:
+
+- owning dyn boxes;
+- heap boxing;
+- `Box<dyn Interface>`;
+- RTTI and dynamic cast;
+- reflection;
+- interface inheritance and upcasting;
+- default methods;
+- associated types;
+- generic interface methods;
+- Drop through dyn;
+- destructor slots in vtables;
+- dyn fields;
+- dyn returns;
+- dyn locals with initializers;
+- dyn locals as explicit variables beyond declaration-only unsupported forms;
+- cross-module ABI stability;
+- import and multi-module interface coherence;
+- effect checking through dyn beyond the existing direct checks;
+- unsafe interface methods;
+- mutation-through-dyn semantic hardening until receiver references are
+  first-class TypeStore and ABI values.
+
+P14 v0 supports runtime dispatch through borrowed dyn refs. It does not fully
+harden mutation-through-dyn semantics beyond the conservative `mut dyn`
+call gate and current backend thunk ABI. The backend currently casts
+`void* self` to the concrete pointer type and calls the hidden impl ABI with
+`*typed`. That is acceptable for v0's read-style and side-effect-free dispatch
+coverage, but must be revisited when references become first-class TypeStore
+values.
+
 ## Core doctrine
 
 ```text
@@ -612,13 +699,11 @@ Phase 14 v0 explicitly defers:
 
 ## 17. Diagnostics
 
-Suggested initial diagnostic inventory:
+Final implemented Phase 14 diagnostic inventory:
 
 ```text
 CON0240 DuplicateInterfaceRequirement
 CON0241 InterfaceRequiresRequirement
-CON0242 InterfaceRequirementInvalid
-CON0243 UnknownInterface
 CON0244 InvalidInterfaceImplTarget
 CON0245 MissingInterfaceRequirementImpl
 CON0246 InvalidInterfaceRequirementImplSignature
@@ -636,9 +721,11 @@ CON0257 DynRequiresInterface
 CON0258 DynRequiresBorrowedReference
 ```
 
-P14-M0 does not implement these diagnostics. They are a planning list so later
-milestones can produce specific errors instead of generic unsupported-runtime
-failures.
+Unknown interface names and unknown types use the existing name/type
+diagnostics outside this Phase 14 range.
+
+P14-M0 recorded the intended Phase 14 diagnostic range; M1-M8 implemented the
+final inventory above.
 
 ## 18. Milestone plan
 
@@ -1046,3 +1133,19 @@ methods, Drop through dyn/destructor vtable slots, cross-module vtable ABI
 stability, unsafe interface methods, broader effect checking through dyn,
 first-class dyn returns/fields/locals with initializers, and the full
 first-class reference TypeStore model needed to harden mutation-through-dyn.
+
+### P14-M9 closeout status
+
+P14-M9 closes Phase 14 without adding new feature work. The final audit keeps
+the M8 runtime subset intact: borrowed dyn refs only, call-boundary coercion
+from addressable concrete places only, `mut dyn Interface&` required for dyn
+method calls, no owning boxes, no hidden heap allocation, no RTTI, no dynamic
+cast, no reflection, and no inheritance or class hierarchy.
+
+The fixture corpus remains at 725 fixtures. The Phase 14 corpus covers valid
+interface declarations, requirement validation, interface impl conformance,
+concept/interface separation, borrowed dyn parameter types, call-boundary
+coercion, exact dyn passthrough, dyn interface calls, executable C-backed dyn
+dispatch, backend C shape assertions, and the unsupported forms listed above.
+No extra closeout fixture was added because the existing focused fixtures
+already cover the proposed closeout smoke path.

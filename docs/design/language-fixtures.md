@@ -73,7 +73,7 @@ Invalid fixtures cover malformed template syntax, type parameters out of scope, 
 
 Phase 8 MIR/backend coverage is intentionally concrete-only: the pipeline run fixture and targeted compiler tests assert that template declarations, concepts, marker concepts, and type-parameter types do not leak into executable MIR or backend C, while deterministic instantiated function names and referenced static witness calls are emitted.
 
-Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed for compile-time execution v0. Phase 10 is closed for ownership/storage-state v0. Phase 11 is closed for first-class testing, attributes, and reasoned expectations v0. Phase 14 M8 now has interface declaration, requirement validation, interface impl conformance, borrowed `dyn Interface&` type-surface fixtures, call-boundary concrete-to-dyn coercion fixtures, dyn method-call HIR/MIR fixtures, C backend vtable/fat-reference lowering fixtures, executable borrowed dyn dispatch fixtures, examples, mutability hardening fixtures, and backend C-shape assertions for the borrowed dyn subset.
+Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed for compile-time execution v0. Phase 10 is closed for ownership/storage-state v0. Phase 11 is closed for first-class testing, attributes, and reasoned expectations v0. Phase 14 is closed for runtime interfaces and borrowed dyn dispatch v0: interface declaration, requirement validation, interface impl conformance, borrowed `dyn Interface&` type-surface fixtures, call-boundary concrete-to-dyn coercion fixtures, dyn method-call HIR/MIR fixtures, C backend vtable/fat-reference lowering fixtures, executable borrowed dyn dispatch fixtures, examples, mutability hardening fixtures, and backend C-shape assertions for the borrowed dyn subset.
 
 ## Phase 9 compile-time execution fixtures
 
@@ -209,11 +209,12 @@ for the literal-transition subset.
 
 ## Phase 14 interface/dyn fixtures
 
-Phase 14 fixtures live under `language/phase14-interfaces/` and currently cover
-P14-M8 interface declaration HIR behavior, requirement validation, interface
-impl conformance, the borrowed dyn interface type surface, call-boundary
-concrete-to-dyn coercion, dyn interface method-call HIR/MIR scaffolding, and C
-backend lowering for the borrowed dyn dispatch subset. Valid
+Phase 14 fixtures live under `language/phase14-interfaces/` and cover the
+closed P14 v0 surface: interface declaration HIR behavior, requirement
+validation, interface impl conformance, the borrowed dyn interface type
+surface, call-boundary concrete-to-dyn coercion, dyn interface method-call
+HIR/MIR scaffolding, and C backend lowering for the borrowed dyn dispatch
+subset. Valid
 fixtures cover parser preservation for
 `interface Writer { void Write(int value); }`, multiple requirements,
 requirement source order, void/scalar/pointer/struct/enum requirement
@@ -262,10 +263,17 @@ current `mut dyn Interface&` method-call rule. Mutation observed through dyn
 dispatch remains deferred because receiver references are not yet first-class
 TypeStore values.
 
+Phase 14 closed: runtime interfaces and borrowed dyn dispatch v0. Interfaces
+are HIR declarations with validated requirements and impl conformance. Borrowed
+dyn references support concrete-to-dyn call-boundary coercion, dyn method
+calls, MIR-visible dyn coercion/interface calls, and C backend vtable lowering
+for the supported subset.
+
 Phase 14 fixtures intentionally do not cover owning dyn boxes, heap boxing,
 dynamic cast, RTTI, reflection, inheritance, interface upcasting, default
 methods, associated types, generic interface methods, Drop through dyn, or
-cross-module vtable ABI stability. Those remain later Phase 14 milestones.
+cross-module vtable ABI stability. Those remain deferred follow-on work beyond
+the closed Phase 14 v0 subset.
 
 ## `.conception` format
 
