@@ -1,0 +1,13 @@
+# name: arena reset in noalloc
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Example;
+
+noalloc int ResetOnly(Arena* arena) {
+    Arena.reset(arena);
+    return 0;
+}
+

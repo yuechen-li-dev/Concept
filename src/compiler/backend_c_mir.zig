@@ -64,6 +64,9 @@ pub fn emitExecutableFromMir(
     const emitted_arena_alloc_decl = try emitArenaAllocHelperDeclaration(writer, &ctx);
     if (emitted_arena_alloc_decl and mir_module.store.functions.items.len > 0) try writer.writeByte('\n');
 
+    const emitted_arena_storage_decl = try emitArenaStorageHelperDeclarations(writer, &ctx);
+    if (emitted_arena_storage_decl and mir_module.store.functions.items.len > 0) try writer.writeByte('\n');
+
     if (mir_module.store.functions.items.len > 1) {
         for (mir_module.store.functions.items, 0..) |function, index| {
             try emitPrototype(writer, &ctx, .{ .index = @intCast(index) }, function);
@@ -305,6 +308,28 @@ fn rvalueContainsArenaAlloc(rvalue: mir.MirRvalue) bool {
     };
 }
 
+fn emitArenaStorageHelperDeclarations(writer: anytype, ctx: *const BackendContext) EmitError!bool {
+    const needs = mirContainsArenaStorageOps(ctx);
+    if (needs.reset) try writer.writeAll("void cpt_arena_reset(struct cpt_Arena* arena);\n");
+    if (needs.destroy) try writer.writeAll("void cpt_arena_destroy(struct cpt_Arena* arena);\n");
+    return needs.reset or needs.destroy;
+}
+
+fn mirContainsArenaStorageOps(ctx: *const BackendContext) struct { reset: bool, destroy: bool } {
+    var needs_reset = false;
+    var needs_destroy = false;
+    for (ctx.mir_module.store.blocks.items) |block| {
+        for (block.statements) |statement| {
+            switch (statement.kind) {
+                .arena_reset => needs_reset = true,
+                .arena_destroy => needs_destroy = true,
+                else => {},
+            }
+        }
+    }
+    return .{ .reset = needs_reset, .destroy = needs_destroy };
+}
+
 fn isSupportedEnumLayout(ctx: *const BackendContext, enum_id: hir.EnumId) bool {
     if (enum_id.index >= ctx.module.hir.enums.items.len) return false;
     const enum_decl = ctx.module.hir.getEnum(enum_id);
@@ -403,6 +428,16 @@ fn emitStatement(writer: anytype, ctx: *const BackendContext, statement: mir.Mir
             try emitFunctionName(writer, ctx.module, drop_function.name);
             try writer.writeByte('(');
             try emitPlace(writer, ctx, drop.place);
+            try writer.writeAll(");\n");
+        },
+        .arena_reset => |arena_operand| {
+            try writer.writeAll("    cpt_arena_reset(");
+            try emitOperand(writer, ctx, arena_operand);
+            try writer.writeAll(");\n");
+        },
+        .arena_destroy => |arena_operand| {
+            try writer.writeAll("    cpt_arena_destroy(");
+            try emitOperand(writer, ctx, arena_operand);
             try writer.writeAll(");\n");
         },
     }
@@ -1510,6 +1545,28 @@ test "MIR C backend emits explicit arena allocation helper call" {
     try std.testing.expect(std.mem.indexOf(u8, c_source, "void* cpt_arena_alloc(struct cpt_Arena* arena, unsigned long size, unsigned long align);") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, "(int*)cpt_arena_alloc(cpt_p_arena_") != null);
     try std.testing.expect(std.mem.indexOf(u8, c_source, ", sizeof(int), _Alignof(int))") != null);
+}
+
+test "MIR C backend emits explicit arena reset and destroy helper calls" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\noalloc int resetOnly(Arena* arena) {
+        \\    Arena.reset(arena);
+        \\    return 0;
+        \\}
+        \\alloc int destroyAfterAlloc(Arena* arena) {
+        \\    int* value = Arena.alloc<int>(arena);
+        \\    Arena.destroy(arena);
+        \\    return 0;
+        \\}
+        \\int main() { return 0; }
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "void cpt_arena_reset(struct cpt_Arena* arena);") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "void cpt_arena_destroy(struct cpt_Arena* arena);") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_arena_reset(cpt_p_arena_") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_arena_destroy(cpt_p_arena_") != null);
 }
 
 test "MIR C backend emits AllocError as value placeholder" {

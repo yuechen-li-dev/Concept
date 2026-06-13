@@ -221,6 +221,8 @@ const Checker = struct {
             .discard_stmt => |expr_id| {
                 _ = try self.checkExpr(function_id, return_type, expr_id);
             },
+            .arena_reset => |op| try self.checkArenaStorageOp(function_id, return_type, op, stmt.span),
+            .arena_destroy => |op| try self.checkArenaStorageOp(function_id, return_type, op, stmt.span),
             .assignment => |assignment| {
                 const target_type = try self.placeType(assignment.target, stmt.span);
                 const value_type = try self.checkExpr(function_id, return_type, assignment.value);
@@ -1042,6 +1044,14 @@ const Checker = struct {
             .assignment => |assignment| .{ .assignment = .{ .target = self.cloneAssignTarget(assignment.target, param_map, local_map), .value = try self.cloneExpr(assignment.value, subst, param_map, local_map, span) } },
             .expr_stmt => |expr_id| .{ .expr_stmt = try self.cloneExpr(expr_id, subst, param_map, local_map, span) },
             .discard_stmt => |expr_id| .{ .discard_stmt = try self.cloneExpr(expr_id, subst, param_map, local_map, span) },
+            .arena_reset => |op| .{ .arena_reset = .{
+                .arena_expr = try self.cloneExpr(op.arena_expr, subst, param_map, local_map, span),
+                .arena_type = try self.substituteType(op.arena_type, subst, span),
+            } },
+            .arena_destroy => |op| .{ .arena_destroy = .{
+                .arena_expr = try self.cloneExpr(op.arena_expr, subst, param_map, local_map, span),
+                .arena_type = try self.substituteType(op.arena_type, subst, span),
+            } },
             .if_stmt => |if_stmt| .{ .if_stmt = .{
                 .condition = try self.cloneExpr(if_stmt.condition, subst, param_map, local_map, span),
                 .then_block = try self.cloneStmt(if_stmt.then_block, subst, param_map, local_map, function_id, span),
@@ -1281,6 +1291,26 @@ const Checker = struct {
         }
         if (caller.allocation_effect == .noalloc) {
             try self.reportAt(.AllocationInNoAllocFunction, "noalloc function cannot perform arena allocation", span);
+            return error.InvalidSemanticModule;
+        }
+    }
+
+    fn checkArenaStorageOp(self: *Checker, current_function_id: hir.FunctionId, return_type: types.TypeId, op: hir.ArenaStorageOp, span: diagnostics.SourceSpan) CheckError!void {
+        const caller = self.module.hir.getFunction(current_function_id);
+        if (caller.is_compile_time or self.compile_time_context_depth != 0) {
+            try self.reportAt(.ArenaResetDestroyInComptimeUnsupported, "Arena.reset and Arena.destroy are not supported during compile-time execution in Phase 12 v0", span);
+            return error.InvalidSemanticModule;
+        }
+
+        const expected_arena_pointer = try self.module.types.addPointerType(self.module.types.arenaType());
+        if (!sameType(op.arena_type, expected_arena_pointer)) {
+            try self.reportAt(.ArenaResetDestroyRequiresArenaPointer, "Arena.reset and Arena.destroy require an Arena* argument", span);
+            return error.InvalidSemanticModule;
+        }
+
+        const arena_type = try self.checkExpr(current_function_id, return_type, op.arena_expr);
+        if (!sameType(arena_type, expected_arena_pointer)) {
+            try self.reportAt(.ArenaResetDestroyRequiresArenaPointer, "Arena.reset and Arena.destroy require an Arena* argument", self.exprSpan(op.arena_expr));
             return error.InvalidSemanticModule;
         }
     }

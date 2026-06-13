@@ -142,6 +142,19 @@ const Validator = struct {
                     try self.report(.InvalidMirType, statement.span, diagnostics.invalidMirType);
                 }
             },
+            .arena_reset => |arena_operand| try self.validateArenaStorageOperand(function_id, arena_operand, statement.span),
+            .arena_destroy => |arena_operand| try self.validateArenaStorageOperand(function_id, arena_operand, statement.span),
+        }
+    }
+
+    fn validateArenaStorageOperand(self: *Validator, function_id: mir.MirFunctionId, arena_operand: mir.MirOperand, span: ?diagnostics.SourceSpan) ValidationError!void {
+        const arena_operand_type = try self.operandType(function_id, arena_operand, span);
+        const expected_arena_pointer = self.semantic_module.types.pointerType(self.semantic_module.types.arenaType()) orelse {
+            try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+            return;
+        };
+        if (arena_operand_type != null and !sameType(arena_operand_type.?, expected_arena_pointer)) {
+            try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
         }
     }
 
@@ -686,6 +699,33 @@ test "MIR validator accepts valid call MIR" {
     try built.module.store.appendStatement(built.block, .{ .span = synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = temp }, .{ .call = .{ .function = callee, .args = args } }) });
     try built.module.store.setTerminator(built.block, .{ .span = synthetic_span, .kind = mir.MirTerminatorKind.returnValue(mir.MirOperand.copyPlace(.{ .local = temp })) });
     try ctx.validateOk(&built.module);
+}
+
+test "MIR validator checks arena reset and destroy operands" {
+    var ctx = try TestContext.init();
+    defer ctx.deinit();
+    const arena_ptr = try ctx.module.types.addPointerType(ctx.module.types.arenaType());
+
+    var reset_ok = try validMirFunction(&ctx, ctx.module.types.intType());
+    defer reset_ok.module.deinit();
+    const reset_arena = try reset_ok.module.store.addLocal(reset_ok.function, try ctx.module.interner.intern("reset_arena"), .user, arena_ptr, synthetic_span);
+    try reset_ok.module.store.appendStatement(reset_ok.block, .{ .span = synthetic_span, .kind = mir.MirStatementKind.arenaReset(mir.MirOperand.copyPlace(.{ .local = reset_arena })) });
+    try reset_ok.module.store.setTerminator(reset_ok.block, .{ .span = synthetic_span, .kind = mir.MirTerminatorKind.returnValue(try mir.MirOperand.intLiteral(std.testing.allocator, "0")) });
+    try ctx.validateOk(&reset_ok.module);
+
+    var destroy_ok = try validMirFunction(&ctx, ctx.module.types.intType());
+    defer destroy_ok.module.deinit();
+    const destroy_arena = try destroy_ok.module.store.addLocal(destroy_ok.function, try ctx.module.interner.intern("destroy_arena"), .user, arena_ptr, synthetic_span);
+    try destroy_ok.module.store.appendStatement(destroy_ok.block, .{ .span = synthetic_span, .kind = mir.MirStatementKind.arenaDestroy(mir.MirOperand.copyPlace(.{ .local = destroy_arena })) });
+    try destroy_ok.module.store.setTerminator(destroy_ok.block, .{ .span = synthetic_span, .kind = mir.MirTerminatorKind.returnValue(try mir.MirOperand.intLiteral(std.testing.allocator, "0")) });
+    try ctx.validateOk(&destroy_ok.module);
+
+    var reset_bad = try validMirFunction(&ctx, ctx.module.types.intType());
+    defer reset_bad.module.deinit();
+    const not_arena = try reset_bad.module.store.addLocal(reset_bad.function, try ctx.module.interner.intern("not_arena"), .user, ctx.module.types.intType(), synthetic_span);
+    try reset_bad.module.store.appendStatement(reset_bad.block, .{ .span = synthetic_span, .kind = mir.MirStatementKind.arenaReset(mir.MirOperand.copyPlace(.{ .local = not_arena })) });
+    try reset_bad.module.store.setTerminator(reset_bad.block, .{ .span = synthetic_span, .kind = mir.MirTerminatorKind.returnValue(try mir.MirOperand.intLiteral(std.testing.allocator, "0")) });
+    try ctx.validateFail(&reset_bad.module, .InvalidMirType);
 }
 
 test "MIR validator rejects manually malformed MIR" {

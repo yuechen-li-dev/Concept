@@ -1,0 +1,16 @@
+# name: arena reset requires arena pointer
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Example;
+
+alloc int Bad(int notArena) {
+    Arena.reset(notArena);
+    return 0;
+}
+
+=== diagnostics ===
+CON0205
+

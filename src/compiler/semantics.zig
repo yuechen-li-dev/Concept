@@ -1240,10 +1240,12 @@ const BodyLowerer = struct {
                 return try self.collector.module.hir.addStmt(.{ .local_decl = .{ .local = local_id, .initializer = initializer } }, local_decl.span);
             },
             .expr_stmt => |expr_stmt| {
+                if (try self.lowerArenaStorageOpStmt(expr_stmt.value.*)) |stmt_id| return stmt_id;
                 const value = (try self.lowerExpr(expr_stmt.value.*)) orelse return null;
                 return try self.collector.module.hir.addStmt(.{ .expr_stmt = value }, expr_stmt.span);
             },
             .discard_stmt => |discard_stmt| {
+                if (try self.lowerArenaStorageOpStmt(discard_stmt.value.*)) |stmt_id| return stmt_id;
                 const value = (try self.lowerExpr(discard_stmt.value.*)) orelse return null;
                 return try self.collector.module.hir.addStmt(.{ .discard_stmt = value }, discard_stmt.span);
             },
@@ -1368,6 +1370,15 @@ const BodyLowerer = struct {
             .call => |call| {
                 if (self.isArenaAllocCall(call)) {
                     return try self.lowerArenaAlloc(call);
+                }
+                if (self.arenaStorageOpKind(call) != null) {
+                    try self.collector.diagnostics.append(diagnostics.Diagnostic.init(
+                        .InvalidCall,
+                        .@"error",
+                        "Arena.reset and Arena.destroy are statement-only operations",
+                        call.span,
+                    ));
+                    return null;
                 }
                 if (self.maybeTestIntrinsicCall(call)) |intrinsic| {
                     return try self.lowerTestIntrinsic(call, intrinsic);
@@ -1949,6 +1960,50 @@ const BodyLowerer = struct {
         _ = self;
         const qualifier = call.qualifier orelse return false;
         return std.mem.eql(u8, qualifier.text, "Arena") and std.mem.eql(u8, call.callee.text, "alloc");
+    }
+
+    const ArenaStorageOpKind = enum { reset, destroy };
+
+    fn arenaStorageOpKind(self: *BodyLowerer, call: ast.Expr.CallExpr) ?ArenaStorageOpKind {
+        _ = self;
+        const qualifier = call.qualifier orelse return null;
+        if (!std.mem.eql(u8, qualifier.text, "Arena")) return null;
+        if (std.mem.eql(u8, call.callee.text, "reset")) return .reset;
+        if (std.mem.eql(u8, call.callee.text, "destroy")) return .destroy;
+        return null;
+    }
+
+    fn lowerArenaStorageOpStmt(self: *BodyLowerer, expr: ast.Expr) !?hir.StmtId {
+        const call = switch (expr) {
+            .call => |call| call,
+            else => return null,
+        };
+        const kind = self.arenaStorageOpKind(call) orelse return null;
+        if (call.type_args.len != 0) {
+            try self.collector.diagnostics.append(diagnostics.Diagnostic.init(
+                .ArenaResetDestroyTypeArgsUnsupported,
+                .@"error",
+                "Arena.reset and Arena.destroy do not accept type arguments",
+                call.span,
+            ));
+            return null;
+        }
+        if (call.args.len != 1) {
+            try self.collector.diagnostics.append(diagnostics.Diagnostic.init(
+                .ArenaResetDestroyArityMismatch,
+                .@"error",
+                "Arena.reset and Arena.destroy require exactly one arena argument",
+                call.span,
+            ));
+            return null;
+        }
+
+        const arena_expr = (try self.lowerExpr(call.args[0].*)) orelse return null;
+        const arena_type = try self.collector.module.types.addPointerType(self.collector.module.types.arenaType());
+        return try self.collector.module.hir.addStmt(switch (kind) {
+            .reset => .{ .arena_reset = .{ .arena_expr = arena_expr, .arena_type = arena_type } },
+            .destroy => .{ .arena_destroy = .{ .arena_expr = arena_expr, .arena_type = arena_type } },
+        }, call.span);
     }
 
     fn lowerArenaAlloc(self: *BodyLowerer, call: ast.Expr.CallExpr) !?hir.ExprId {

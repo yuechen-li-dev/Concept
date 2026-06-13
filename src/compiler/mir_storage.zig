@@ -345,6 +345,8 @@ const Analyzer = struct {
                 try self.writePlace(states, assignment.place, statement.span);
             },
             .drop => |drop| try self.dropPlace(states, drop.place, statement.span),
+            .arena_reset => |arena_operand| try self.readOperand(states, arena_operand, statement.span),
+            .arena_destroy => |arena_operand| try self.readOperand(states, arena_operand, statement.span),
         }
     }
 

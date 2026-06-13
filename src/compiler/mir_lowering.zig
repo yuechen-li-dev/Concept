@@ -148,6 +148,8 @@ const FunctionLowerer = struct {
                 const lowered = try self.lowerExpr(expr_id, block_id);
                 return lowered.block;
             },
+            .arena_reset => |op| return try self.lowerArenaStorageOp(op.arena_expr, block_id, stmt.span, .reset),
+            .arena_destroy => |op| return try self.lowerArenaStorageOp(op.arena_expr, block_id, stmt.span, .destroy),
             .assignment => |assignment| {
                 const place = try self.resolveAssignTarget(assignment.target);
                 const lowered = try self.lowerExpr(assignment.value, block_id);
@@ -568,6 +570,20 @@ const FunctionLowerer = struct {
             ),
         });
         return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = arena_lowered.block };
+    }
+
+    const ArenaStorageOpKind = enum { reset, destroy };
+
+    fn lowerArenaStorageOp(self: *FunctionLowerer, arena_expr: hir.ExprId, block_id: mir.MirBlockId, span: ?hir.SourceSpan, kind: ArenaStorageOpKind) LoweringError!mir.MirBlockId {
+        const arena_lowered = try self.lowerExpr(arena_expr, block_id);
+        try self.store.appendStatement(arena_lowered.block, .{
+            .span = span,
+            .kind = switch (kind) {
+                .reset => mir.MirStatementKind.arenaReset(arena_lowered.operand),
+                .destroy => mir.MirStatementKind.arenaDestroy(arena_lowered.operand),
+            },
+        });
+        return arena_lowered.block;
     }
 
     // ─────────────────────────────────────────────────────────────────────────────

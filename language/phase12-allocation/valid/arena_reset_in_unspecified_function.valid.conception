@@ -1,0 +1,13 @@
+# name: arena reset in unspecified function
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Example;
+
+int ResetUnspecified(Arena* arena) {
+    Arena.reset(arena);
+    return 0;
+}
+

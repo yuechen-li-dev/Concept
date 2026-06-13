@@ -101,8 +101,9 @@ Runtime-failing test examples are not compile-invalid fixtures. A `.con_test` fi
 
 Phase 12 fixtures live under `language/phase12-allocation/` and currently cover
 the P12-M1 allocation-effect syntax and metadata scaffold, P12-M2 direct
-call-edge checking, P12-M3 compiler-known allocation surface types, and P12-M4
-arena allocation. Valid parse fixtures cover `alloc`, `noalloc`,
+call-edge checking, P12-M3 compiler-known allocation surface types, P12-M4
+arena allocation, and P12-M5 arena reset/destroy operations. Valid parse
+fixtures cover `alloc`, `noalloc`,
 omitted/default effects, and coexistence with `unsafe`, `comptime`, and
 template functions. Valid check fixtures cover `noalloc` callers calling known
 `noalloc` callees, recursive `noalloc` calls, generic `noalloc` calls,
@@ -112,6 +113,8 @@ parameter positions, `AllocError` type positions, allocation surface types in
 `noalloc` functions, `alloc` functions, and generic functions.
 P12-M4 valid fixtures cover `Arena.alloc<T>(arena)` for `int`, `bool`, structs,
 unspecified-effect functions, and generic functions after instantiation.
+P12-M5 valid fixtures cover `Arena.reset(arena)` and `Arena.destroy(arena)` in
+`noalloc`, `alloc`, and unspecified functions, including after arena allocation.
 
 Invalid fixtures cover conflicting `alloc`/`noalloc` specifiers, duplicate
 effect specifiers, the reachable non-function target diagnostic, and `noalloc`
@@ -123,11 +126,14 @@ P12-M4 invalid fixtures cover arena allocation inside `noalloc`, missing type
 arguments, wrong value arity, non-`Arena*` operands, Drop allocated types,
 opaque allocation handles allocated by value, and compile-time allocation
 rejection.
+P12-M5 invalid fixtures cover reset/destroy arity, rejected type arguments,
+non-`Arena*` operands, and unsupported compile-time reset/destroy.
 
 Phase 12 fixtures intentionally do not execute arena allocation at runtime. They
-do not cover arena reset/destroy, allocator runtime behavior, allocation failure
-paths, transitive effect checking, profile defaults, region checking, ID stores,
-or runtime-backed allocation because those remain future Phase 12 milestones.
+do not cover allocator runtime behavior, allocation failure paths, transitive
+effect checking, profile defaults, region checking, ID stores, reset/destroy
+runtime execution, or runtime-backed allocation because those remain future
+Phase 12 milestones.
 
 ## `.conception` format
 

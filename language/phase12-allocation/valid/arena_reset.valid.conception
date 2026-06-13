@@ -1,0 +1,13 @@
+# name: arena reset
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Example;
+
+alloc int ResetArena(Arena* arena) {
+    Arena.reset(arena);
+    return 0;
+}
+

@@ -1,0 +1,16 @@
+# name: arena destroy wrong arity
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Example;
+
+alloc int Bad(Arena* arena) {
+    Arena.destroy();
+    return 0;
+}
+
+=== diagnostics ===
+CON0206
+

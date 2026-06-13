@@ -277,13 +277,13 @@ struct cpt_Allocator* allocator;
 It does not emit by-value incomplete opaque handle types. `AllocError` currently
 lowers as an integer placeholder in backend-supported value positions.
 
-Future operations remain reserved and unimplemented:
+Allocation and storage operations are introduced across later milestones:
 
 ```cpp
 Arena arena = Arena.create();       // future
 T* value = Arena.alloc<T>(arena);   // P12-M4
-Arena.reset(arena);                 // future P12-M5
-Arena.destroy(arena);               // future P12-M5
+Arena.reset(arena);                 // P12-M5
+Arena.destroy(arena);               // P12-M5
 ```
 
 P12-M3 does not add `Arena.alloc<T>`, `Arena.create`, reset/destroy semantics,
@@ -339,6 +339,63 @@ escape analysis, pointer field access sugar, `->`, auto-deref, ID stores, or a
 hidden global heap. Arena allocation returns a raw pointer; existing raw pointer
 rules still apply. The pointer value is initialized, but pointed-to storage
 initializedness is not tracked by Phase 12 v0.
+
+### P12-M5 implementation status
+
+P12-M5 adds compiler-recognized arena storage operations with the source
+spelling:
+
+```cpp
+alloc int UseArena(Arena* arena) {
+    int* value = Arena.alloc<int>(arena);
+    Arena.reset(arena);
+    Arena.destroy(arena);
+    return 0;
+}
+```
+
+`Arena.reset(arena)` and `Arena.destroy(arena)` require exactly one value
+argument, no type arguments, and an operand of type `Arena*`. They are
+statement-like operations in v0. Wrong arity is rejected with
+`CON0206 ArenaResetDestroyArityMismatch`, type arguments are rejected with
+`CON0207 ArenaResetDestroyTypeArgsUnsupported`, and non-`Arena*` operands are
+rejected with `CON0205 ArenaResetDestroyRequiresArenaPointer`.
+
+Reset and destroy are explicit storage-management operations, not allocation
+operations. They are allowed in `noalloc`, `alloc`, and unspecified functions.
+They are not supported inside compile-time function bodies in P12-M5 and are
+rejected with `CON0210 ArenaResetDestroyInComptimeUnsupported`.
+
+The HIR contains dedicated `arena_reset` and `arena_destroy` statements carrying
+the arena operand and its type. MIR lowers these to explicit statement
+operations, and MIR validation requires an `Arena*` operand. The MIR C backend
+emits external helper declarations and auditable helper calls:
+
+```c
+void cpt_arena_reset(struct cpt_Arena* arena);
+void cpt_arena_destroy(struct cpt_Arena* arena);
+
+cpt_arena_reset(arena);
+cpt_arena_destroy(arena);
+```
+
+The backend still does not provide a runtime implementation and does not
+silently use `malloc`.
+
+Semantically, `Arena.reset(arena)` invalidates all storage previously allocated
+from that arena. `Arena.destroy(arena)` invalidates that storage and
+conceptually invalidates the arena handle for later allocation, reset, or
+destroy. P12-M5 documents that invalidation model and keeps the compiler
+representation explicit, but it does not implement global escape analysis,
+alias analysis, region lifetime checking, or pointer use-after-reset/destroy
+diagnostics. Obvious same-function invalidation diagnostics remain future work
+unless they can be added without growing a lifetime system.
+
+Reset/destroy do not run destructors in v0. This is sound only because P12-M4
+already rejects arena allocation of Drop types; P12-M5 does not add destructor
+lists, per-object Drop registration, or Drop-in-arena behavior. Reset/destroy
+also do not integrate with `ManualInit<T>`: the operation is region-level
+storage invalidation, not per-place initializedness tracking.
 
 ## 4. Profiles and hidden heap policy
 
@@ -434,7 +491,14 @@ Possible future diagnostics:
 ```text
 CON0192 ArenaPointerEscapeUnsupported
 CON0193 ArenaUseAfterDestroyObvious
+CON0208 ArenaPointerUseAfterResetObvious
+CON0209 ArenaPointerUseAfterDestroyObvious
 ```
+
+P12-M5 does not implement these invalidation diagnostics. The current compiler
+recognizes reset/destroy explicitly and preserves their invalidation semantics
+in docs, HIR, MIR, and backend output; diagnostic use-after-reset/destroy
+tracking remains a later local-analysis milestone.
 
 ## 7. Drop interaction
 
@@ -490,6 +554,9 @@ Trivial and non-Drop structs may be arena-allocated. Drop-in-arena may be added
 later with explicit destructor registration. Arena reset/destroy must not
 silently bypass Drop for Drop types.
 
+P12-M5 reset/destroy therefore run no Drop code: Drop types cannot be
+arena-allocated in v0, and there is no arena destructor list to walk.
+
 ## 8. ManualInit interaction
 
 `ManualInit<T>` is explicit manual storage-state control from Phase 10. Arena
@@ -522,6 +589,9 @@ Phase 12 does not design a full uninitialized arena allocation model. If a later
 milestone adds uninitialized arena storage, it must integrate with
 `ManualInit<T>`, unsafe boundaries, storage-state diagnostics, Drop restrictions,
 and partial initialization rules.
+
+Reset/destroy invalidation is region-level storage invalidation. It does not
+change or model per-place `ManualInit<T>` initializedness in P12-M5.
 
 ## 9. ID-based stores
 

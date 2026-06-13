@@ -308,6 +308,8 @@ pub const MirStatementKind = union(enum) {
         place: MirPlace,
         function: hir.FunctionId,
     },
+    arena_reset: MirOperand,
+    arena_destroy: MirOperand,
 
     pub fn assignTo(place: MirPlace, rvalue: MirRvalue) MirStatementKind {
         return .{ .assign = .{ .place = place, .rvalue = rvalue } };
@@ -317,10 +319,20 @@ pub const MirStatementKind = union(enum) {
         return .{ .drop = .{ .place = place, .function = function } };
     }
 
+    pub fn arenaReset(arena_operand: MirOperand) MirStatementKind {
+        return .{ .arena_reset = arena_operand };
+    }
+
+    pub fn arenaDestroy(arena_operand: MirOperand) MirStatementKind {
+        return .{ .arena_destroy = arena_operand };
+    }
+
     fn clone(self: MirStatementKind, allocator: std.mem.Allocator) !MirStatementKind {
         return switch (self) {
             .assign => |assignment| MirStatementKind.assignTo(assignment.place, try assignment.rvalue.clone(allocator)),
             .drop => |drop| MirStatementKind.dropPlace(drop.place, drop.function),
+            .arena_reset => |arena_operand| MirStatementKind.arenaReset(try arena_operand.clone(allocator)),
+            .arena_destroy => |arena_operand| MirStatementKind.arenaDestroy(try arena_operand.clone(allocator)),
         };
     }
 
@@ -328,6 +340,8 @@ pub const MirStatementKind = union(enum) {
         switch (self) {
             .assign => |assignment| assignment.rvalue.deinit(allocator),
             .drop => {},
+            .arena_reset => |arena_operand| arena_operand.deinit(allocator),
+            .arena_destroy => |arena_operand| arena_operand.deinit(allocator),
         }
     }
 };
@@ -669,6 +683,14 @@ pub const MirStore = struct {
                 try writer.writeAll("Drop ");
                 try writePlaceDebug(writer, drop.place);
                 try writer.print(" via {f}", .{drop.function});
+            },
+            .arena_reset => |arena_operand| {
+                try writer.writeAll("ArenaReset ");
+                try writeOperandDebug(writer, arena_operand);
+            },
+            .arena_destroy => |arena_operand| {
+                try writer.writeAll("ArenaDestroy ");
+                try writeOperandDebug(writer, arena_operand);
             },
         }
     }

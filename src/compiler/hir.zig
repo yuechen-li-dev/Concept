@@ -213,10 +213,17 @@ pub const HirStmtKind = union(enum) {
     assignment: struct { target: AssignTarget, value: ExprId },
     expr_stmt: ExprId,
     discard_stmt: ExprId,
+    arena_reset: ArenaStorageOp,
+    arena_destroy: ArenaStorageOp,
     if_stmt: struct { condition: ExprId, then_block: StmtId, else_block: ?StmtId },
     while_stmt: struct { condition: ExprId, body: StmtId },
     unsafe_block: StmtId,
     match_stmt: struct { scrutinee: ExprId, arms: []HirMatchArm },
+};
+
+pub const ArenaStorageOp = struct {
+    arena_expr: ExprId,
+    arena_type: types.TypeId,
 };
 
 pub const HirPatternBinding = struct {
@@ -1174,6 +1181,14 @@ pub const HirStore = struct {
             .local_decl => |decl| {
                 try writer.print("LocalDecl {f}\n", .{decl.local});
                 try self.writeExprDebug(writer, decl.initializer, depth + 1);
+            },
+            .arena_reset => |op| {
+                try writer.print("ArenaReset {f}\n", .{op.arena_type});
+                try self.writeExprDebug(writer, op.arena_expr, depth + 1);
+            },
+            .arena_destroy => |op| {
+                try writer.print("ArenaDestroy {f}\n", .{op.arena_type});
+                try self.writeExprDebug(writer, op.arena_expr, depth + 1);
             },
             .assignment => |assignment| {
                 try writer.writeAll("Assignment ");

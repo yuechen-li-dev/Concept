@@ -1,0 +1,14 @@
+# name: arena reset after alloc
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Example;
+
+alloc int ResetAfterAlloc(Arena* arena) {
+    int* value = Arena.alloc<int>(arena);
+    Arena.reset(arena);
+    return 0;
+}
+

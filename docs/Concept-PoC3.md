@@ -40,8 +40,10 @@ This document is a design constitution: it defines the language identity, core c
 Implementation note: Phase 12 now includes function-level `alloc`/`noalloc`
 syntax, direct `noalloc` call-edge checking, compiler-known allocation surface
 types, and a narrow `Arena.alloc<T>(arena)` intrinsic for non-Drop concrete
-types. Arena reset/destroy, allocation failure paths, transitive checking,
-runtime allocation support, and hidden heap behavior remain unimplemented.
+types, plus explicit `Arena.reset(arena)` and `Arena.destroy(arena)` surface
+operations. Allocation failure paths, transitive checking, runtime allocation
+support, deeper arena invalidation analysis, and hidden heap behavior remain
+unimplemented.
 
 ---
 

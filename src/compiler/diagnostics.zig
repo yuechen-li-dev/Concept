@@ -180,6 +180,10 @@ pub const DiagnosticCode = enum {
     ArenaAllocRequiresArenaPointer,
     ArenaAllocRequiresConcreteType,
     ArenaAllocationInComptimeUnsupported,
+    ArenaResetDestroyRequiresArenaPointer,
+    ArenaResetDestroyArityMismatch,
+    ArenaResetDestroyTypeArgsUnsupported,
+    ArenaResetDestroyInComptimeUnsupported,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -341,6 +345,10 @@ pub const DiagnosticCode = enum {
             .ArenaAllocRequiresArenaPointer => "CON0202",
             .ArenaAllocRequiresConcreteType => "CON0203",
             .ArenaAllocationInComptimeUnsupported => "CON0201",
+            .ArenaResetDestroyRequiresArenaPointer => "CON0205",
+            .ArenaResetDestroyArityMismatch => "CON0206",
+            .ArenaResetDestroyTypeArgsUnsupported => "CON0207",
+            .ArenaResetDestroyInComptimeUnsupported => "CON0210",
         };
     }
 };
@@ -817,6 +825,10 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0202", DiagnosticCode.ArenaAllocRequiresArenaPointer.format());
     try std.testing.expectEqualStrings("CON0203", DiagnosticCode.ArenaAllocRequiresConcreteType.format());
     try std.testing.expectEqualStrings("CON0204", DiagnosticCode.ArenaAllocArityMismatch.format());
+    try std.testing.expectEqualStrings("CON0205", DiagnosticCode.ArenaResetDestroyRequiresArenaPointer.format());
+    try std.testing.expectEqualStrings("CON0206", DiagnosticCode.ArenaResetDestroyArityMismatch.format());
+    try std.testing.expectEqualStrings("CON0207", DiagnosticCode.ArenaResetDestroyTypeArgsUnsupported.format());
+    try std.testing.expectEqualStrings("CON0210", DiagnosticCode.ArenaResetDestroyInComptimeUnsupported.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {

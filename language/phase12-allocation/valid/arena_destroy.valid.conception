@@ -1,0 +1,13 @@
+# name: arena destroy
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Example;
+
+alloc int DestroyArena(Arena* arena) {
+    Arena.destroy(arena);
+    return 0;
+}
+

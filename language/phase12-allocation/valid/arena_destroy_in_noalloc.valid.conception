@@ -1,0 +1,13 @@
+# name: arena destroy in noalloc
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Example;
+
+noalloc int DestroyOnly(Arena* arena) {
+    Arena.destroy(arena);
+    return 0;
+}
+

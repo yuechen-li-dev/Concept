@@ -301,7 +301,7 @@ pub const CompileTimeEvaluator = struct {
                 break :blk .continue_;
             },
             .while_stmt => |while_stmt| try self.executeWhile(while_stmt.condition, while_stmt.body),
-            .expr_stmt, .discard_stmt, .unsafe_block, .match_stmt => error.UnsupportedStatement,
+            .expr_stmt, .discard_stmt, .arena_reset, .arena_destroy, .unsafe_block, .match_stmt => error.UnsupportedStatement,
         };
     }
 
