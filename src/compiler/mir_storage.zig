@@ -374,6 +374,10 @@ const Analyzer = struct {
                 try self.readOperand(states, binary.right, span);
             },
             .call => |call| for (call.args) |arg| try self.readOperand(states, arg, span),
+            .interface_call => |call| {
+                try self.readOperand(states, call.receiver, span);
+                for (call.args) |arg| try self.readOperand(states, arg, span);
+            },
             .arena_alloc => |arena_alloc| try self.readOperand(states, arena_alloc.arena_operand, span),
             .machine_construct => |construct| for (construct.args) |arg| try self.readOperand(states, arg, span),
             .machine_complete => |operand| try self.readOperand(states, operand, span),

@@ -73,7 +73,7 @@ Invalid fixtures cover malformed template syntax, type parameters out of scope, 
 
 Phase 8 MIR/backend coverage is intentionally concrete-only: the pipeline run fixture and targeted compiler tests assert that template declarations, concepts, marker concepts, and type-parameter types do not leak into executable MIR or backend C, while deterministic instantiated function names and referenced static witness calls are emitted.
 
-Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed for compile-time execution v0. Phase 10 is closed for ownership/storage-state v0. Phase 11 is closed for first-class testing, attributes, and reasoned expectations v0. Phase 14 M5 now has interface declaration, requirement validation, interface impl conformance, borrowed `dyn Interface&` type-surface fixtures, and call-boundary concrete-to-dyn coercion scaffold fixtures; dyn calls and vtable runtime fixtures still wait for later milestones.
+Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed for compile-time execution v0. Phase 10 is closed for ownership/storage-state v0. Phase 11 is closed for first-class testing, attributes, and reasoned expectations v0. Phase 14 M6 now has interface declaration, requirement validation, interface impl conformance, borrowed `dyn Interface&` type-surface fixtures, call-boundary concrete-to-dyn coercion scaffold fixtures, and dyn method-call HIR/MIR scaffold fixtures; executable vtable runtime fixtures still wait for later milestones.
 
 ## Phase 9 compile-time execution fixtures
 
@@ -210,9 +210,10 @@ for the literal-transition subset.
 ## Phase 14 interface/dyn fixtures
 
 Phase 14 fixtures live under `language/phase14-interfaces/` and currently cover
-P14-M5 interface declaration HIR behavior, requirement validation, interface
-impl conformance, the borrowed dyn interface type surface, and call-boundary
-concrete-to-dyn coercion scaffolding. Valid
+P14-M6 interface declaration HIR behavior, requirement validation, interface
+impl conformance, the borrowed dyn interface type surface, call-boundary
+concrete-to-dyn coercion scaffolding, and dyn interface method-call HIR/MIR
+scaffolding. Valid
 fixtures cover parser preservation for
 `interface Writer { void Write(int value); }`, multiple requirements,
 requirement source order, void/scalar/pointer/struct/enum requirement
@@ -224,7 +225,9 @@ enum, and builtin targets, body checking for impl methods, declaration-only
 interface parameters in one signature, concrete locals passed to dyn
 parameters, mutable dyn parameters, multiple coerced call arguments, exact
 dyn-to-dyn forwarding, and concept/interface separation when both impl kinds
-exist. Invalid fixtures
+exist. They also cover void-return dyn calls, value-return dyn calls, multiple
+dyn-call arguments, and dyn calls inside a callee reached through concrete-to-dyn
+coercion. Invalid fixtures
 cover duplicate top-level interface names, empty interfaces, unknown
 requirement return and parameter types, duplicate and overloaded requirement
 names, duplicate requirement parameter names, interface types in requirement
@@ -236,11 +239,14 @@ structs, enums, concepts, builtins, and unknown names; rejected by-value and raw
 pointer dyn spellings; rejected dyn locals, returns, and struct fields;
 missing or wrong interface impls for dyn coercion; concept impls that do not
 count as interface impls; non-place coercion sources such as temporaries, call
-results, binary expressions, and `move`; and backend-C rejection for dyn
-signatures and dyn coercions before fat-reference lowering exists.
+results, binary expressions, and `move`; unknown dyn methods, wrong dyn-call
+arity, wrong dyn-call argument types, immutable dyn call receivers, non-dyn
+method-call receivers, void dyn calls used as values; and backend-C rejection
+for dyn signatures, dyn coercions, and dyn calls before fat-reference/vtable
+lowering exists.
 
 Phase 14 fixtures intentionally do not cover vtable lowering, dynamic method
-calls, owning dyn boxes, heap boxing, dynamic cast, RTTI, reflection,
+dispatch execution, owning dyn boxes, heap boxing, dynamic cast, RTTI, reflection,
 inheritance, default methods, associated types, generic interface methods, or
 Drop through dyn. Those remain later Phase 14 milestones.
 

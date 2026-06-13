@@ -374,6 +374,7 @@ pub const Expr = union(enum) {
     compile_time: CompileTimeExpr,
     binary: BinaryExpr,
     call: CallExpr,
+    method_call: MethodCallExpr,
     enum_constructor: EnumConstructorExpr,
     struct_literal: StructLiteralExpr,
     field_access: FieldAccessExpr,
@@ -393,6 +394,12 @@ pub const Expr = union(enum) {
         qualifier: ?NameSegment = null,
         callee: NameSegment,
         type_args: []TypeName = &.{},
+        args: []*Expr,
+        span: SourceSpan,
+    };
+    pub const MethodCallExpr = struct {
+        receiver: *Expr,
+        method_name: NameSegment,
         args: []*Expr,
         span: SourceSpan,
     };
@@ -432,6 +439,7 @@ pub const Expr = union(enum) {
             .compile_time => |expr| expr.span,
             .binary => |expr| expr.span,
             .call => |expr| expr.span,
+            .method_call => |expr| expr.span,
             .enum_constructor => |expr| expr.span,
             .struct_literal => |expr| expr.span,
             .field_access => |expr| expr.span,
@@ -464,6 +472,15 @@ pub const Expr = union(enum) {
                     type_arg.deinit(allocator);
                 }
                 if (expr.type_args.len > 0) allocator.free(expr.type_args);
+                for (expr.args) |arg| {
+                    arg.deinit(allocator);
+                    allocator.destroy(arg);
+                }
+                allocator.free(expr.args);
+            },
+            .method_call => |expr| {
+                expr.receiver.deinit(allocator);
+                allocator.destroy(expr.receiver);
                 for (expr.args) |arg| {
                     arg.deinit(allocator);
                     allocator.destroy(arg);
@@ -573,6 +590,13 @@ pub const Expr = union(enum) {
                     try writer.writeByte('>');
                 }
                 try writer.writeByte('\n');
+                for (expr.args) |arg| try arg.writeDebug(writer, depth + 1);
+            },
+            .method_call => |expr| {
+                try writer.writeAll("MethodCall .");
+                try writer.writeAll(expr.method_name.text);
+                try writer.writeByte('\n');
+                try expr.receiver.writeDebug(writer, depth + 1);
                 for (expr.args) |arg| try arg.writeDebug(writer, depth + 1);
             },
             .enum_constructor => |expr| {

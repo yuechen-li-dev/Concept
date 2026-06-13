@@ -536,6 +536,55 @@ const Checker = struct {
                 try self.requireDynCoerceValid(coerce, expr.span);
                 break :blk coerce.result_type;
             },
+            .interface_call => |call| blk: {
+                const receiver_type = try self.checkExpr(current_function_id, return_type, call.receiver);
+                const dyn = switch (self.module.types.kind(receiver_type)) {
+                    .dyn_interface => |dyn| dyn,
+                    else => {
+                        try self.reportAt(.InvalidCall, "interface call receiver must be a dyn interface reference", self.exprSpan(call.receiver));
+                        return error.InvalidSemanticModule;
+                    },
+                };
+                if (dyn.interface_id.index != call.interface_id.index) {
+                    try self.reportAt(.InvalidCall, "interface call receiver interface mismatch", expr.span);
+                    return error.InvalidSemanticModule;
+                }
+                if (!dyn.is_mut) {
+                    try self.reportAt(.InterfaceCallRequiresMutableDyn, "interface method call requires a mutable dyn reference", self.exprSpan(call.receiver));
+                    return error.InvalidSemanticModule;
+                }
+                if (call.interface_id.index >= self.module.hir.interfaces.items.len or call.requirement_id.index >= self.module.hir.interface_requirements.items.len) {
+                    try self.reportAt(.UnknownInterfaceMethod, "unknown interface method", expr.span);
+                    return error.InvalidSemanticModule;
+                }
+                const interface_decl = self.module.hir.getInterface(call.interface_id);
+                if (call.requirement_index >= interface_decl.requirements.len or interface_decl.requirements[call.requirement_index].index != call.requirement_id.index) {
+                    try self.reportAt(.UnknownInterfaceMethod, "unknown interface method", expr.span);
+                    return error.InvalidSemanticModule;
+                }
+                const requirement = self.module.hir.getInterfaceRequirement(call.requirement_id);
+                if (requirement.parent.index != call.interface_id.index) {
+                    try self.reportAt(.UnknownInterfaceMethod, "unknown interface method", expr.span);
+                    return error.InvalidSemanticModule;
+                }
+                if (call.args.len != requirement.params.len) {
+                    try self.reportAt(.InterfaceCallArityMismatch, "interface method call argument count mismatch", expr.span);
+                    return error.InvalidSemanticModule;
+                }
+                for (call.args, requirement.params) |arg, param_id| {
+                    const arg_type = try self.checkExpr(current_function_id, return_type, arg);
+                    const param_type = self.module.hir.getInterfaceParam(param_id).type_id;
+                    if (!sameType(arg_type, param_type)) {
+                        try self.reportAt(.InterfaceCallTypeMismatch, "interface method call argument type mismatch", self.exprSpan(arg));
+                        return error.InvalidSemanticModule;
+                    }
+                }
+                if (!sameType(call.result_type, requirement.return_type)) {
+                    try self.reportAt(.InterfaceCallTypeMismatch, "interface method call result type mismatch", expr.span);
+                    return error.InvalidSemanticModule;
+                }
+                break :blk call.result_type;
+            },
             .call => |call| blk: {
                 var arg_types = std.ArrayList(types.TypeId).empty;
                 defer arg_types.deinit(self.allocator);
@@ -1414,6 +1463,19 @@ const Checker = struct {
                 const witness = try self.resolveWitnessForRequirement(call.concept_id, call.requirement_index, subst, expr.span);
                 self.module.hir.markConceptWitnessReferenced(witness);
                 break :blk .{ .call = .{ .function = witness, .args = args } };
+            },
+            .interface_call => |call| blk: {
+                var args = try self.allocator.alloc(hir.ExprId, call.args.len);
+                errdefer self.allocator.free(args);
+                for (call.args, 0..) |arg, index| args[index] = try self.cloneExpr(arg, subst, param_map, local_map, span);
+                break :blk .{ .interface_call = .{
+                    .receiver = try self.cloneExpr(call.receiver, subst, param_map, local_map, span),
+                    .interface_id = call.interface_id,
+                    .requirement_id = call.requirement_id,
+                    .requirement_index = call.requirement_index,
+                    .args = args,
+                    .result_type = try self.substituteType(call.result_type, subst, span),
+                } };
             },
             .enum_constructor => |constructor| blk: {
                 var args = try self.allocator.alloc(hir.ExprId, constructor.args.len);

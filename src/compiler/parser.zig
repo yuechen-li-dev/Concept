@@ -1935,11 +1935,14 @@ pub const Parser = struct {
                     const identifier = switch (expr.*) {
                         .identifier => |identifier| identifier,
                         .field_access => |field_access| if (self.current().kind == .left_paren) {
-                            const receiver = switch (field_access.receiver.*) {
-                                .identifier => |receiver_identifier| receiver_identifier,
-                                else => break,
-                            };
-                            expr = try self.finishQualifiedCallExpr(allocator, expr, receiver, field_access.field_name);
+                            switch (field_access.receiver.*) {
+                                .identifier => |receiver_identifier| if (isQualifiedCallRoot(receiver_identifier.name.text)) {
+                                    expr = try self.finishQualifiedCallExpr(allocator, expr, receiver_identifier, field_access.field_name);
+                                } else {
+                                    expr = try self.finishMethodCallExpr(allocator, expr, field_access);
+                                },
+                                else => expr = try self.finishMethodCallExpr(allocator, expr, field_access),
+                            }
                             continue;
                         } else break,
                         else => break,
@@ -1999,6 +2002,10 @@ pub const Parser = struct {
             callee: ast.NameSegment,
         },
     };
+
+    fn isQualifiedCallRoot(text: []const u8) bool {
+        return text.len != 0 and std.ascii.isUpper(text[0]);
+    }
 
     fn finishFieldAccessExpr(self: *Parser, allocator: std.mem.Allocator, receiver: *ast.Expr) ParseExprError!*ast.Expr {
         const dot = self.advance();
@@ -2069,6 +2076,57 @@ pub const Parser = struct {
             .args = owned_args,
             .span = ast.spanFromBounds(identifier.span.start, spanEnd(end_span)),
         } };
+        return node;
+    }
+
+    fn finishMethodCallExpr(self: *Parser, allocator: std.mem.Allocator, field_expr: *ast.Expr, field_access: ast.Expr.FieldAccessExpr) ParseExprError!*ast.Expr {
+        const left_paren = self.advance();
+        _ = left_paren;
+        var args = std.ArrayList(*ast.Expr).init(allocator);
+        errdefer {
+            for (args.items) |arg| {
+                arg.deinit(allocator);
+                allocator.destroy(arg);
+            }
+            args.deinit();
+        }
+
+        var last_span = field_access.field_name.span;
+        if (self.current().kind != .right_paren) {
+            while (self.current().kind != .eof and self.current().kind != .right_paren and self.current().kind != .semicolon) {
+                const arg = self.parseExpr(allocator) catch |err| switch (err) {
+                    error.OutOfMemory => return err,
+                    error.ParseFailed => {
+                        self.recoverCallArgument();
+                        if (self.match(.comma) != null) continue;
+                        break;
+                    },
+                };
+                last_span = arg.span();
+                try args.append(arg);
+                if (self.match(.comma) == null) break;
+                if (self.current().kind == .right_paren) {
+                    self.report(.UnexpectedToken, "expected expression", self.current().span) catch return error.OutOfMemory;
+                    break;
+                }
+            }
+        }
+
+        const end_span = if (self.match(.right_paren)) |right_paren| right_paren.span else blk: {
+            self.report(.UnexpectedToken, "expected ')' after method call arguments", self.current().span) catch return error.OutOfMemory;
+            self.recoverCallArgument();
+            break :blk last_span;
+        };
+
+        const owned_args = try args.toOwnedSlice();
+        const node = try allocator.create(ast.Expr);
+        node.* = .{ .method_call = .{
+            .receiver = field_access.receiver,
+            .method_name = field_access.field_name,
+            .args = owned_args,
+            .span = ast.spanFromBounds(field_access.receiver.span().start, spanEnd(end_span)),
+        } };
+        allocator.destroy(field_expr);
         return node;
     }
 
@@ -6967,6 +7025,24 @@ test "parses field access expressions and debug output" {
     defer std.testing.allocator.free(snapshot);
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "FieldAccess .x") != null);
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "FieldAccess .y") != null);
+}
+
+test "parses receiver method call expressions and debug output" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource(
+        \\module Main;
+        \\int main() { writer.Write(42); return 0; }
+    , &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "MethodCall .Write") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Identifier writer") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Int 42") != null);
 }
 
 test "field access missing field name diagnostic" {

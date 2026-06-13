@@ -325,6 +325,7 @@ const Runner = struct {
             .arena_alloc,
             .try_expr,
             .concept_requirement_call,
+            .interface_call,
             .enum_constructor,
             .struct_literal,
             .field_access,

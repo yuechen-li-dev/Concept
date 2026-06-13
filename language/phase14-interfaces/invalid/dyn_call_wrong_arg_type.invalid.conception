@@ -1,0 +1,18 @@
+# name: dyn call wrong arg type
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+interface Writer {
+    void Write(int value);
+};
+
+void Emit(mut dyn Writer& writer) {
+    writer.Write(true);
+}
+
+=== diagnostics ===
+CON0253

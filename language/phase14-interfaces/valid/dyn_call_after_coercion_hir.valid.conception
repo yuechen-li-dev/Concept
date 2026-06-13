@@ -1,6 +1,7 @@
-# name: dyn coerce backend unsupported
-# phase: backend-c
-# expect: fail
+# name: dyn call after coercion hir
+# phase: check
+# check: hir
+# expect: pass
 
 === source ===
 module Main;
@@ -19,6 +20,7 @@ impl Writer<ConsoleWriter> {
 }
 
 void Emit(mut dyn Writer& writer) {
+    writer.Write(42);
 }
 
 int main() {
@@ -26,6 +28,3 @@ int main() {
     Emit(writer);
     return 0;
 }
-
-=== diagnostics ===
-CON0255

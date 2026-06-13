@@ -1,4 +1,4 @@
-# name: dyn backend unsupported
+# name: dyn call backend unsupported
 # phase: backend-c
 # expect: fail
 
@@ -9,7 +9,8 @@ interface Writer {
     void Write(int value);
 };
 
-void Emit(dyn Writer& writer) {
+void Emit(mut dyn Writer& writer) {
+    writer.Write(42);
 }
 
 int main() {

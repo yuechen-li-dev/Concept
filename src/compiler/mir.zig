@@ -141,6 +141,15 @@ pub const MirStructFieldValue = struct {
     value: MirOperand,
 };
 
+pub const MirInterfaceCall = struct {
+    receiver: MirOperand,
+    interface_id: hir.InterfaceId,
+    requirement_id: hir.InterfaceRequirementId,
+    requirement_index: u32,
+    args: []MirOperand,
+    result_type: types.TypeId,
+};
+
 pub const MirRvalue = union(enum) {
     use: MirOperand,
     move: MirPlace,
@@ -166,6 +175,7 @@ pub const MirRvalue = union(enum) {
         function: hir.FunctionId,
         args: []MirOperand,
     },
+    interface_call: MirInterfaceCall,
     arena_alloc: struct {
         arena_operand: MirOperand,
         allocated_type: types.TypeId,
@@ -233,6 +243,23 @@ pub const MirRvalue = union(enum) {
         return .{ .call = .{ .function = function, .args = owned_args } };
     }
 
+    pub fn interfaceCall(allocator: std.mem.Allocator, call: MirInterfaceCall) !MirRvalue {
+        const owned_args = try cloneOperands(allocator, call.args);
+        errdefer {
+            deinitOperands(allocator, owned_args);
+            if (owned_args.len > 0) allocator.free(owned_args);
+        }
+        const receiver = try call.receiver.clone(allocator);
+        return .{ .interface_call = .{
+            .receiver = receiver,
+            .interface_id = call.interface_id,
+            .requirement_id = call.requirement_id,
+            .requirement_index = call.requirement_index,
+            .args = owned_args,
+            .result_type = call.result_type,
+        } };
+    }
+
     pub fn arenaAlloc(arena_operand: MirOperand, allocated_type: types.TypeId, result_type: types.TypeId) MirRvalue {
         return .{ .arena_alloc = .{ .arena_operand = arena_operand, .allocated_type = allocated_type, .result_type = result_type } };
     }
@@ -278,6 +305,7 @@ pub const MirRvalue = union(enum) {
                 try binary_rvalue.right.clone(allocator),
             ),
             .call => |call_rvalue| try MirRvalue.callFunction(allocator, call_rvalue.function, call_rvalue.args),
+            .interface_call => |call| try MirRvalue.interfaceCall(allocator, call),
             .arena_alloc => |arena_alloc| MirRvalue.arenaAlloc(try arena_alloc.arena_operand.clone(allocator), arena_alloc.allocated_type, arena_alloc.result_type),
             .enum_constructor => |constructor| try MirRvalue.enumConstructor(allocator, constructor.enum_id, constructor.variant_id, constructor.args),
             .struct_constructor => |constructor| try MirRvalue.structConstructor(allocator, constructor.struct_id, constructor.fields),
@@ -306,6 +334,11 @@ pub const MirRvalue = union(enum) {
             .call => |call_rvalue| {
                 deinitOperands(allocator, call_rvalue.args);
                 if (call_rvalue.args.len > 0) allocator.free(call_rvalue.args);
+            },
+            .interface_call => |call| {
+                call.receiver.deinit(allocator);
+                deinitOperands(allocator, call.args);
+                if (call.args.len > 0) allocator.free(call.args);
             },
             .arena_alloc => |arena_alloc| arena_alloc.arena_operand.deinit(allocator),
             .enum_constructor => |constructor| {
@@ -840,6 +873,15 @@ fn writeRvalueDebug(writer: *std.Io.Writer, rvalue: MirRvalue) !void {
             try writer.print("Call {f}(", .{call_rvalue.function});
             for (call_rvalue.args, 0..) |arg, index| {
                 if (index != 0) try writer.writeAll(", ");
+                try writeOperandDebug(writer, arg);
+            }
+            try writer.writeByte(')');
+        },
+        .interface_call => |call| {
+            try writer.print("InterfaceCall {f} {f} #{d} -> {f}(", .{ call.interface_id, call.requirement_id, call.requirement_index, call.result_type });
+            try writeOperandDebug(writer, call.receiver);
+            for (call.args) |arg| {
+                try writer.writeAll(", ");
                 try writeOperandDebug(writer, arg);
             }
             try writer.writeByte(')');

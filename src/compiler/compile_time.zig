@@ -194,6 +194,7 @@ pub const CompileTimeEvaluator = struct {
             .machine_complete,
             .machine_result,
             .concept_requirement_call,
+            .interface_call,
             .enum_constructor,
             .struct_literal,
             .field_access,

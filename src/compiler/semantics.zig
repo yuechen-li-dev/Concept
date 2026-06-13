@@ -2074,6 +2074,7 @@ const BodyLowerer = struct {
                 try self.collector.diagnostics.append(diagnostics.unknownFunction(call.callee.span));
                 return null;
             },
+            .method_call => |call| return try self.lowerMethodCall(call),
             .struct_literal => |literal| {
                 const struct_symbol = try self.collector.module.interner.intern(literal.type_name.text);
                 const target = switch (self.collector.top_level_decls.get(struct_symbol) orelse {
@@ -2526,6 +2527,7 @@ const BodyLowerer = struct {
                 }
             },
             .call => |call| self.collector.module.hir.getFunction(call.function).return_type,
+            .interface_call => |call| call.result_type,
             .machine_construct => |construct| try self.collector.module.types.addMachineType(construct.machine),
             .machine_step => self.collector.module.types.voidType(),
             .machine_complete => self.collector.module.types.boolType(),
@@ -2583,6 +2585,61 @@ const BodyLowerer = struct {
                 return null;
             },
         };
+    }
+
+    fn lowerMethodCall(self: *BodyLowerer, call: ast.Expr.MethodCallExpr) !?hir.ExprId {
+        const receiver = (try self.lowerExpr(call.receiver.*)) orelse return null;
+        const receiver_type = (try self.inferExprType(receiver)) orelse return null;
+        const dyn = switch (self.collector.module.types.kind(receiver_type)) {
+            .dyn_interface => |dyn| dyn,
+            else => {
+                try self.collector.diagnostics.append(diagnostics.unknownFunction(call.method_name.span));
+                return null;
+            },
+        };
+        if (!dyn.is_mut) {
+            try self.collector.diagnostics.append(diagnostics.interfaceCallRequiresMutableDyn(call.method_name.span));
+            return null;
+        }
+
+        const interface_decl = self.collector.module.hir.getInterface(dyn.interface_id).*;
+        const method_symbol = try self.collector.module.interner.intern(call.method_name.text);
+        const requirement_id = self.collector.findInterfaceRequirement(interface_decl, method_symbol) orelse {
+            try self.collector.diagnostics.append(diagnostics.unknownInterfaceMethod(call.method_name.span));
+            return null;
+        };
+        const requirement = self.collector.module.hir.getInterfaceRequirement(requirement_id).*;
+        if (call.args.len != requirement.params.len) {
+            try self.collector.diagnostics.append(diagnostics.interfaceCallArityMismatch(call.span));
+            return null;
+        }
+
+        var args = std.ArrayList(hir.ExprId).empty;
+        defer args.deinit(self.collector.allocator);
+        for (call.args, requirement.params) |arg, param_id| {
+            const arg_id = (try self.lowerExpr(arg.*)) orelse return null;
+            const actual = (try self.inferExprType(arg_id)) orelse return null;
+            const expected = self.collector.module.hir.getInterfaceParam(param_id).type_id;
+            if (!sameType(actual, expected)) {
+                try self.collector.diagnostics.append(diagnostics.interfaceCallTypeMismatch(arg.span()));
+                return null;
+            }
+            try args.append(self.collector.allocator, arg_id);
+        }
+
+        const owned = try self.collector.allocator.alloc(hir.ExprId, args.items.len);
+        @memcpy(owned, args.items);
+        const requirement_index = for (interface_decl.requirements, 0..) |candidate, index| {
+            if (candidate.index == requirement_id.index) break @as(u32, @intCast(index));
+        } else unreachable;
+        return try self.collector.module.hir.addExpr(.{ .interface_call = .{
+            .receiver = receiver,
+            .interface_id = dyn.interface_id,
+            .requirement_id = requirement_id,
+            .requirement_index = requirement_index,
+            .args = owned,
+            .result_type = requirement.return_type,
+        } }, call.span);
     }
 
     fn stringLiteralContents(text: []const u8) []const u8 {

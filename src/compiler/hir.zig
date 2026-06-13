@@ -406,6 +406,15 @@ pub const HirDynCoerce = struct {
     result_type: types.TypeId,
 };
 
+pub const HirInterfaceCall = struct {
+    receiver: ExprId,
+    interface_id: InterfaceId,
+    requirement_id: InterfaceRequirementId,
+    requirement_index: u32,
+    args: []ExprId,
+    result_type: types.TypeId,
+};
+
 pub const HirExprKind = union(enum) {
     int_literal: []const u8,
     bool_literal: bool,
@@ -434,6 +443,7 @@ pub const HirExprKind = union(enum) {
     address_of: ExprId,
     deref: ExprId,
     dyn_coerce: HirDynCoerce,
+    interface_call: HirInterfaceCall,
     move_expr: ExprId,
     manual_init_assume: ExprId,
     try_expr: ExprId,
@@ -685,6 +695,7 @@ pub const HirStore = struct {
                 .int_literal => |text| self.allocator.free(text),
                 .call => |call| if (call.args.len > 0) self.allocator.free(call.args),
                 .concept_requirement_call => |call| if (call.args.len > 0) self.allocator.free(call.args),
+                .interface_call => |call| if (call.args.len > 0) self.allocator.free(call.args),
                 .enum_constructor => |constructor| if (constructor.args.len > 0) self.allocator.free(constructor.args),
                 .struct_literal => |literal| if (literal.fields.len > 0) self.allocator.free(literal.fields),
                 .decide => |decide| if (decide.arms.len > 0) self.allocator.free(decide.arms),
@@ -1700,6 +1711,17 @@ pub const HirStore = struct {
             .concept_requirement_call => |call| {
                 try writer.print("ConceptRequirementCall {f} #{d}\n", .{ call.concept_id, call.requirement_index });
                 for (call.args) |arg| try self.writeExprDebug(writer, arg, depth + 1);
+            },
+            .interface_call => |call| {
+                try writer.print("InterfaceCall {f} {f} #{d} -> {f}\n", .{ call.interface_id, call.requirement_id, call.requirement_index, call.result_type });
+                try writeIndent(writer, depth + 1);
+                try writer.writeAll("Receiver\n");
+                try self.writeExprDebug(writer, call.receiver, depth + 2);
+                if (call.args.len != 0) {
+                    try writeIndent(writer, depth + 1);
+                    try writer.writeAll("Args\n");
+                    for (call.args) |arg| try self.writeExprDebug(writer, arg, depth + 2);
+                }
             },
             .enum_constructor => |constructor| {
                 try writer.print("EnumConstructor {f}::{f}\n", .{ constructor.enum_id, constructor.variant_id });

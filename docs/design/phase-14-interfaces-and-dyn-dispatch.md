@@ -892,3 +892,54 @@ dynamic cast, RTTI, reflection, interface inheritance, default methods,
 associated types, generic interface methods, Drop through dyn, effect checking
 through dyn, unsafe interface methods, and cross-module/orphan interface
 coherence.
+
+### P14-M6 implementation status
+
+P14-M6 adds the dyn interface method-call scaffold without adding runtime
+dispatch. The accepted source shape is:
+
+```cpp
+writer.Write(42);
+return writer.Count();
+```
+
+Implemented in M6:
+
+- receiver-preserving method-call parsing exists for lowercase/expression
+  receivers such as `writer.Write(42)`;
+- existing uppercase qualified-call parsing remains available for
+  namespace-like builtins such as `Arena.alloc<T>(arena)`, `Assert.True`, and
+  `Expect.That`;
+- when the receiver type is `mut dyn Interface&`, semantic lowering resolves
+  the method name to a requirement of that interface;
+- unknown interface methods are rejected with
+  `CON0251 UnknownInterfaceMethod`;
+- interface method call arity mismatches are rejected with
+  `CON0252 InterfaceCallArityMismatch`;
+- interface method call argument type mismatches are rejected with
+  `CON0253 InterfaceCallTypeMismatch`;
+- P14-M6 conservatively requires mutable dyn receivers for every interface
+  method call, because requirement receiver mutability is not modeled yet;
+- calls through immutable `dyn Interface&` are rejected with
+  `CON0254 InterfaceCallRequiresMutableDyn`;
+- HIR represents dyn calls explicitly as `interface_call`, preserving the
+  receiver expression, interface id, requirement id, requirement slot index,
+  argument list, and result type;
+- MIR lowering preserves dyn calls explicitly as `MirRvalue.interface_call`,
+  with receiver operand, interface id, requirement id, slot index, arguments,
+  and result type;
+- the MIR validator checks that the interface and requirement ids exist, the
+  slot index names the same requirement, the receiver is a dyn reference for
+  the same interface, and argument count/types match the requirement;
+- backend C emission reports `CON0255 InterfaceRuntimeUnsupported` for dyn
+  interface runtime use and emits no vtable structs, vtable constants, dyn
+  fat-reference structs, `cpt_dyn_*` helpers, or fake direct calls;
+- concrete-to-dyn coercion from M5 composes with M6 at HIR/MIR level: callers
+  can coerce concrete arguments into a dyn parameter, and the callee body can
+  contain explicit interface calls.
+
+Still unimplemented after P14-M6: backend C vtable/interface/fat-reference
+emission, owning dyn boxes, heap boxing, dynamic cast, RTTI, reflection,
+interface inheritance, default methods, associated types, generic interface
+methods, Drop through dyn, effect checking through dyn beyond existing trivial
+checks, unsafe interface methods, and cross-module/orphan interface coherence.

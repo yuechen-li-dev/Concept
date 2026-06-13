@@ -364,6 +364,50 @@ const Validator = struct {
                 }
                 break :blk callee.return_type;
             },
+            .interface_call => |call| blk: {
+                try self.requireValidType(call.result_type, span);
+                const receiver_type = try self.operandType(function_id, call.receiver, span);
+                if (receiver_type == null) break :blk call.result_type;
+                const dyn = switch (self.semantic_module.types.kind(receiver_type.?)) {
+                    .dyn_interface => |dyn| dyn,
+                    else => {
+                        try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                        break :blk call.result_type;
+                    },
+                };
+                if (dyn.interface_id.index != call.interface_id.index) {
+                    try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                }
+                if (call.interface_id.index >= self.semantic_module.hir.interfaces.items.len or call.requirement_id.index >= self.semantic_module.hir.interface_requirements.items.len) {
+                    try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
+                    break :blk call.result_type;
+                }
+                const interface_decl = self.semantic_module.hir.getInterface(call.interface_id);
+                if (call.requirement_index >= interface_decl.requirements.len or interface_decl.requirements[call.requirement_index].index != call.requirement_id.index) {
+                    try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
+                    break :blk call.result_type;
+                }
+                const requirement = self.semantic_module.hir.getInterfaceRequirement(call.requirement_id);
+                if (requirement.parent.index != call.interface_id.index) {
+                    try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
+                }
+                if (call.args.len != requirement.params.len) {
+                    try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
+                    break :blk call.result_type;
+                }
+                for (call.args, requirement.params) |arg, param_id| {
+                    const arg_type = try self.operandType(function_id, arg, span);
+                    const param_type = self.semantic_module.hir.getInterfaceParam(param_id).type_id;
+                    try self.requireValidType(param_type, span);
+                    if (arg_type != null and !sameType(arg_type.?, param_type)) {
+                        try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                    }
+                }
+                if (!sameType(call.result_type, requirement.return_type)) {
+                    try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                }
+                break :blk call.result_type;
+            },
             .arena_alloc => |arena_alloc| blk: {
                 try self.requireValidType(arena_alloc.allocated_type, span);
                 try self.requireValidType(arena_alloc.result_type, span);

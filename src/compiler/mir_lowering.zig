@@ -423,6 +423,7 @@ const FunctionLowerer = struct {
             .manual_init_assume => |slot| try self.lowerManualInitAssume(expr, slot, block_id),
             .binary => |binary| try self.lowerBinary(expr, binary, block_id),
             .call => |call| try self.lowerCall(expr, call, block_id),
+            .interface_call => |call| try self.lowerInterfaceCall(expr, call, block_id),
             .machine_construct => |construct| try self.lowerMachineConstruct(expr, construct, block_id),
             .machine_step => error.InvalidMirLowering,
             .machine_complete => |machine_expr| try self.lowerMachineComplete(expr, machine_expr, block_id),
@@ -584,6 +585,40 @@ const FunctionLowerer = struct {
             .kind = mir.MirStatementKind.assignTo(
                 mir.MirPlace.localPlace(temp),
                 .{ .call = .{ .function = call.function, .args = args } },
+            ),
+        });
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = current };
+    }
+
+    fn lowerInterfaceCall(self: *FunctionLowerer, expr: hir.HirExpr, call: hir.HirInterfaceCall, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const receiver = try self.lowerExpr(call.receiver, block_id);
+        const args = try self.allocator.alloc(mir.MirOperand, call.args.len);
+        var args_owned = true;
+        var initialized: usize = 0;
+        errdefer if (args_owned) deinitInitializedOperands(self.allocator, args, initialized);
+
+        var current = receiver.block;
+        for (call.args) |arg_expr| {
+            const lowered = try self.lowerExpr(arg_expr, current);
+            args[initialized] = lowered.operand;
+            initialized += 1;
+            current = lowered.block;
+        }
+
+        const temp = try self.addTemp(call.result_type);
+        args_owned = false;
+        try self.store.appendStatement(current, .{
+            .span = expr.span,
+            .kind = mir.MirStatementKind.assignTo(
+                mir.MirPlace.localPlace(temp),
+                .{ .interface_call = .{
+                    .receiver = receiver.operand,
+                    .interface_id = call.interface_id,
+                    .requirement_id = call.requirement_id,
+                    .requirement_index = call.requirement_index,
+                    .args = args,
+                    .result_type = call.result_type,
+                } },
             ),
         });
         return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = current };
@@ -950,6 +985,7 @@ const FunctionLowerer = struct {
                 .less, .less_equal, .greater, .greater_equal, .equal_equal, .bang_equal, .logical_and, .logical_or => self.semantic_module.types.boolType(),
             },
             .call => |call| self.semantic_module.hir.getFunction(call.function).return_type,
+            .interface_call => |call| call.result_type,
             .machine_construct => |construct| try self.semantic_module.types.addMachineType(construct.machine),
             .machine_step => self.semantic_module.types.voidType(),
             .machine_complete => self.semantic_module.types.boolType(),
@@ -1160,6 +1196,43 @@ test "MIR lowering preserves dyn coercion rvalue" {
     const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
     defer std.testing.allocator.free(snapshot);
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "DynCoerce InterfaceId(0) via InterfaceImplId(0)") != null);
+}
+
+test "MIR lowering preserves interface call rvalue" {
+    var module = try newModule();
+    defer module.deinit();
+
+    const writer = try module.hir.addInterface(try intern(&module, "Writer"), hir.synthetic_span);
+    const write_requirement = try module.hir.addInterfaceRequirement(writer, try intern(&module, "Write"), module.types.voidType(), hir.synthetic_span);
+    _ = try module.hir.addInterfaceParam(write_requirement, try intern(&module, "value"), module.types.intType(), hir.synthetic_span);
+    const dyn_writer = try module.types.addDynInterfaceType(writer, true);
+
+    const emit = try addFunction(&module, "Emit", module.types.voidType(), false);
+    const writer_param = try addParam(&module, emit, "writer", dyn_writer);
+    const receiver = try module.hir.addExpr(.{ .param_ref = writer_param }, hir.synthetic_span);
+    const args = try std.testing.allocator.alloc(hir.ExprId, 1);
+    args[0] = try intExpr(&module, "42");
+    const call = try module.hir.addExpr(.{ .interface_call = .{
+        .receiver = receiver,
+        .interface_id = writer,
+        .requirement_id = write_requirement,
+        .requirement_index = 0,
+        .args = args,
+        .result_type = module.types.voidType(),
+    } }, hir.synthetic_span);
+    try setBody(&module, emit, &.{try module.hir.addStmt(.{ .expr_stmt = call }, hir.synthetic_span)});
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+
+    var diagnostic_bag = diagnostics.DiagnosticBag.init(std.testing.allocator);
+    defer diagnostic_bag.deinit();
+    try mir_validator.validateModule(std.testing.allocator, &module, &mir_module, &diagnostic_bag);
+
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "InterfaceCall InterfaceId(0) InterfaceRequirementId(0) #0 -> TypeId(0)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Int 42") != null);
 }
 
 test "MIR lowering debug snapshot includes enum tag switch" {

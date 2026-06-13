@@ -121,6 +121,10 @@ pub const DiagnosticCode = enum {
     DuplicateInterfaceImplFunction,
     DynCoercionRequiresImpl,
     DynCoercionRequiresPlace,
+    UnknownInterfaceMethod,
+    InterfaceCallArityMismatch,
+    InterfaceCallTypeMismatch,
+    InterfaceCallRequiresMutableDyn,
     DynRequiresInterface,
     DynRequiresBorrowedReference,
     InterfaceRuntimeUnsupported,
@@ -303,6 +307,10 @@ pub const DiagnosticCode = enum {
             .DuplicateInterfaceImplFunction => "CON0248",
             .DynCoercionRequiresImpl => "CON0249",
             .DynCoercionRequiresPlace => "CON0250",
+            .UnknownInterfaceMethod => "CON0251",
+            .InterfaceCallArityMismatch => "CON0252",
+            .InterfaceCallTypeMismatch => "CON0253",
+            .InterfaceCallRequiresMutableDyn => "CON0254",
             .DynRequiresInterface => "CON0257",
             .DynRequiresBorrowedReference => "CON0258",
             .DuplicateInterfaceImpl => "CON0256",
@@ -748,6 +756,27 @@ pub fn dynCoercionRequiresPlace(span: SourceSpan) Diagnostic {
     ).withHelp("borrowed dyn references cannot be formed from temporaries in Phase 14 M5");
 }
 
+pub fn unknownInterfaceMethod(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.UnknownInterfaceMethod, .@"error", "unknown interface method", span);
+}
+
+pub fn interfaceCallArityMismatch(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.InterfaceCallArityMismatch, .@"error", "interface method call argument count mismatch", span);
+}
+
+pub fn interfaceCallTypeMismatch(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.InterfaceCallTypeMismatch, .@"error", "interface method call argument type mismatch", span);
+}
+
+pub fn interfaceCallRequiresMutableDyn(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .InterfaceCallRequiresMutableDyn,
+        .@"error",
+        "interface method call requires a mutable dyn reference",
+        span,
+    ).withHelp("Phase 14 M6 requires mut dyn Interface& because interface receiver mutability is not modeled on requirements yet");
+}
+
 pub fn interfaceRuntimeUnsupported(span: SourceSpan) Diagnostic {
     return Diagnostic.init(
         .InterfaceRuntimeUnsupported,
@@ -969,6 +998,10 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0248", DiagnosticCode.DuplicateInterfaceImplFunction.format());
     try std.testing.expectEqualStrings("CON0249", DiagnosticCode.DynCoercionRequiresImpl.format());
     try std.testing.expectEqualStrings("CON0250", DiagnosticCode.DynCoercionRequiresPlace.format());
+    try std.testing.expectEqualStrings("CON0251", DiagnosticCode.UnknownInterfaceMethod.format());
+    try std.testing.expectEqualStrings("CON0252", DiagnosticCode.InterfaceCallArityMismatch.format());
+    try std.testing.expectEqualStrings("CON0253", DiagnosticCode.InterfaceCallTypeMismatch.format());
+    try std.testing.expectEqualStrings("CON0254", DiagnosticCode.InterfaceCallRequiresMutableDyn.format());
     try std.testing.expectEqualStrings("CON0255", DiagnosticCode.InterfaceRuntimeUnsupported.format());
     try std.testing.expectEqualStrings("CON0256", DiagnosticCode.DuplicateInterfaceImpl.format());
     try std.testing.expectEqualStrings("CON0257", DiagnosticCode.DynRequiresInterface.format());

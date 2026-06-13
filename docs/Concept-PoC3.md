@@ -60,12 +60,15 @@ by-value, and raw-pointer dyn spellings. M5 adds call-boundary
 concrete-to-dyn coercion scaffolding: an addressable concrete local, parameter,
 or field place can be passed to a `dyn Interface&` or `mut dyn Interface&`
 parameter when the concrete type has the matching interface impl. The coercion
-is explicit in HIR and MIR, but backend fat-reference/vtable emission remains
-unsupported. Concepts remain compile-time constraints, interfaces are runtime
+is explicit in HIR and MIR. M6 adds dyn interface method-call syntax and
+HIR/MIR `interface_call` scaffolding: calls through `mut dyn Interface&`
+resolve method names to interface requirement slots and validate arity and
+argument types. Backend fat-reference/vtable emission and executable runtime
+dispatch remain unsupported. Concepts remain compile-time constraints, interfaces are runtime
 dispatch contracts, empty runtime interfaces are rejected, and interface
 requirements may use ordinary resolved types but not interface or dyn runtime
-types. Dyn method calls, vtables, backend fat-reference emission, owning dyn
-boxes, inheritance, RTTI, and hidden heap allocation remain deferred.
+types. Executable dyn dispatch, vtables, backend fat-reference emission, owning
+dyn boxes, inheritance, RTTI, and hidden heap allocation remain deferred.
 Deferred Phase 12
 work includes
 `Arena.create`, hosted runtime helper implementation, allocation failure

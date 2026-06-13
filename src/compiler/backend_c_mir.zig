@@ -810,7 +810,11 @@ fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue
             try emitOperand(writer, ctx, operand);
         },
         .dyn_coerce => {
-            try reportUnsupportedCType(ctx, null);
+            try reportInterfaceRuntimeUnsupported(ctx, null);
+            return error.InvalidExecutable;
+        },
+        .interface_call => {
+            try reportInterfaceRuntimeUnsupported(ctx, null);
             return error.InvalidExecutable;
         },
         .binary => |binary| {
@@ -994,7 +998,11 @@ fn emitCTypeAt(writer: anytype, ctx: *const BackendContext, type_id: types.TypeI
         .machine_type => |machine_id| {
             try emitMachineTypeName(writer, ctx.module, ctx.module.hir.getMachine(machine_id).name);
         },
-        .interface_type, .dyn_interface, .manual_init, .type_param => {
+        .interface_type, .dyn_interface => {
+            try reportInterfaceRuntimeUnsupported(ctx, span);
+            return error.InvalidExecutable;
+        },
+        .manual_init, .type_param => {
             try reportUnsupportedCType(ctx, span);
             return error.InvalidExecutable;
         },
@@ -1008,6 +1016,12 @@ fn emitCTypeAt(writer: anytype, ctx: *const BackendContext, type_id: types.TypeI
 fn reportUnsupportedCType(ctx: *const BackendContext, span: ?diagnostics.SourceSpan) !void {
     if (ctx.diagnostic_bag) |bag| {
         try bag.append(diagnostics.unsupportedCBackendType(span orelse hir.synthetic_span));
+    }
+}
+
+fn reportInterfaceRuntimeUnsupported(ctx: *const BackendContext, span: ?diagnostics.SourceSpan) !void {
+    if (ctx.diagnostic_bag) |bag| {
+        try bag.append(diagnostics.interfaceRuntimeUnsupported(span orelse hir.synthetic_span));
     }
 }
 
