@@ -1,0 +1,19 @@
+# name: attribute fact function
+# phase: parse
+# expect: pass
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+void ParsesIdentifier() {
+    return;
+}
+
+=== ast ===
+CompilationUnit
+  Module Example.Tests
+  Attribute Fact
+  Function void ParsesIdentifier()
+    Body
+      Return

@@ -2280,6 +2280,14 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/static_assert_division_by_zero.invalid.conception");
     try expectCheckFixture("../../../language/phase9-compile-time/invalid/static_assert_overflow.invalid.conception");
 
+    try expectParseFixture("../../../language/phase11-testing/valid/attribute_fact_function.valid.conception");
+    try expectParseFixture("../../../language/phase11-testing/valid/attribute_theory_inline_data.valid.conception");
+    try expectParseFixture("../../../language/phase11-testing/valid/attribute_multiple_inline_data.valid.conception");
+    try expectParseFixture("../../../language/phase11-testing/invalid/attribute_unknown.invalid.conception");
+    try expectParseFixture("../../../language/phase11-testing/invalid/attribute_orphan.invalid.conception");
+    try expectParseFixture("../../../language/phase11-testing/invalid/attribute_statement_position.invalid.conception");
+    try expectParseFixture("../../../language/phase11-testing/invalid/attribute_arg_expression.invalid.conception");
+
     try expectRunFixture("../../../language/phase10-ownership/valid/move_struct_local_run.valid.conception");
     try expectRunFixture("../../../language/phase10-ownership/valid/move_struct_argument_run.valid.conception");
     try expectRunFixture("../../../language/phase10-ownership/valid/move_int_copy_run.valid.conception");

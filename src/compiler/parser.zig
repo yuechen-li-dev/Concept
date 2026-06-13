@@ -271,6 +271,7 @@ pub const Parser = struct {
         const name_start_span = self.current().span;
         var name = try self.parseAttributeName(allocator);
         errdefer name.deinit(allocator);
+        try self.validateAttributeName(name);
 
         var arguments: ?ast.AttributeArguments = null;
         errdefer if (arguments) |argument_list| argument_list.deinit(allocator);
@@ -295,52 +296,90 @@ pub const Parser = struct {
 
     fn parseAttributeName(self: *Parser, allocator: std.mem.Allocator) !ast.QualifiedName {
         if (self.current().kind != .identifier) {
-            try self.report(.UnexpectedToken, "expected attribute name", self.current().span);
+            try self.report(.InvalidAttribute, "expected attribute name", self.current().span);
             const parts = try allocator.alloc(ast.NameSegment, 0);
             return .{ .parts = parts, .span = self.current().span };
         }
         return self.parseDottedName(allocator);
     }
 
+    fn validateAttributeName(self: *Parser, name: ast.QualifiedName) !void {
+        if (name.parts.len != 1) {
+            try self.report(.InvalidAttribute, "unknown attribute", name.span);
+            return;
+        }
+        const text = name.parts[0].text;
+        if (std.mem.eql(u8, text, "Fact")) return;
+        if (std.mem.eql(u8, text, "Theory")) return;
+        if (std.mem.eql(u8, text, "InlineData")) return;
+        try self.report(.InvalidAttribute, "unknown attribute", name.parts[0].span);
+    }
+
     fn parseAttributeArguments(self: *Parser, allocator: std.mem.Allocator, left_paren_span: SourceSpan) !ast.AttributeArguments {
-        const args_start = self.current().span.start;
-        var args_end = args_start;
-        var depth: usize = 1;
+        var arguments = std.ArrayList(ast.AttributeArg).init(allocator);
+        errdefer arguments.deinit();
         var last_span = left_paren_span;
-        while (self.current().kind != .eof and self.current().kind != .right_bracket) {
-            const token = self.advance();
-            last_span = token.span;
-            switch (token.kind) {
-                .left_paren => depth += 1,
-                .right_paren => {
-                    depth -= 1;
-                    if (depth == 0) {
-                        args_end = token.span.start;
-                        const raw_text = try self.attributeArgumentText(allocator, args_start, args_end);
-                        return .{
-                            .text = raw_text,
-                            .span = ast.spanFromBounds(left_paren_span.start, spanEnd(token.span)),
-                        };
-                    }
-                },
-                else => {},
+
+        while (self.current().kind != .eof and self.current().kind != .right_bracket and self.current().kind != .right_paren) {
+            if (try self.parseAttributeArgument()) |argument| {
+                last_span = argument.span();
+                try arguments.append(argument);
             }
+
+            if (self.match(.comma)) |comma| {
+                last_span = comma.span;
+                if (self.current().kind == .right_paren) {
+                    try self.report(.InvalidAttribute, "attribute arguments must be simple literals in Phase 11 v0", self.current().span);
+                }
+                continue;
+            }
+
+            if (self.current().kind == .right_paren or self.current().kind == .right_bracket or self.current().kind == .eof) break;
+            try self.report(.InvalidAttribute, "attribute arguments must be simple literals in Phase 11 v0", self.current().span);
+            self.recoverAttributeArgument();
         }
 
-        try self.report(.UnexpectedToken, "unterminated attribute argument list", self.current().span);
-        const raw_end = if (last_span.start >= args_start) spanEnd(last_span) else args_start;
-        const raw_text = try self.attributeArgumentText(allocator, args_start, raw_end);
+        const right_span = if (self.match(.right_paren)) |right_paren| right_paren.span else blk: {
+            try self.report(.UnexpectedToken, "unterminated attribute argument list", self.current().span);
+            break :blk last_span;
+        };
+
         return .{
-            .text = raw_text,
-            .span = ast.spanFromBounds(left_paren_span.start, raw_end),
+            .args = try arguments.toOwnedSlice(),
+            .span = ast.spanFromBounds(left_paren_span.start, spanEnd(right_span)),
         };
     }
 
-    fn attributeArgumentText(self: Parser, allocator: std.mem.Allocator, start: usize, end: usize) ![]const u8 {
-        if (self.source_text) |source_text| {
-            if (start <= end and end <= source_text.len) return allocator.dupe(u8, source_text[start..end]);
+    fn parseAttributeArgument(self: *Parser) !?ast.AttributeArg {
+        const token = self.current();
+        switch (token.kind) {
+            .int_literal => {
+                _ = self.advance();
+                return .{ .int_literal = .{ .text = token.lexeme, .span = token.span } };
+            },
+            .true, .false => {
+                _ = self.advance();
+                return .{ .bool_literal = .{ .value = token.kind == .true, .span = token.span } };
+            },
+            .string_literal => {
+                _ = self.advance();
+                return .{ .string_literal = .{ .text = token.lexeme, .span = token.span } };
+            },
+            else => {
+                try self.report(.InvalidAttribute, "attribute arguments must be simple literals in Phase 11 v0", token.span);
+                self.recoverAttributeArgument();
+                return null;
+            },
         }
-        return allocator.dupe(u8, "");
+    }
+
+    fn recoverAttributeArgument(self: *Parser) void {
+        while (self.current().kind != .eof) {
+            switch (self.current().kind) {
+                .comma, .right_paren, .right_bracket => return,
+                else => self.advance(),
+            }
+        }
     }
 
     fn recoverAttributeAfterMissingBracket(self: *Parser) void {
@@ -774,6 +813,11 @@ pub const Parser = struct {
     }
 
     fn parseStmt(self: *Parser, allocator: std.mem.Allocator) !?ast.Stmt {
+        if (self.current().kind == .left_bracket) {
+            try self.report(.InvalidAttribute, "attributes may only appear before declarations", self.current().span);
+            self.recoverStatement();
+            return null;
+        }
         if (self.current().kind == .@"return") return try self.parseReturnStmt(allocator);
         if (self.current().kind == .@"if") return try self.parseIfStmt(allocator);
         if (self.current().kind == .@"while") return try self.parseWhileStmt(allocator);
@@ -4156,18 +4200,23 @@ test "parses multiple attributes before function" {
     try std.testing.expectEqualStrings("InlineData", function_decl.attributes[1].name.parts[0].text);
 }
 
-test "parses attribute with argument tokens" {
+test "parses attribute with int bool and string literal arguments" {
     var diagnostics = DiagnosticBag.init(std.testing.allocator);
     defer diagnostics.deinit();
 
-    const unit = try parseTestSource("module Example; [InlineData(1, value, (2 + 3))] void AddsValues();", &diagnostics);
+    const unit = try parseTestSource("module Example; [InlineData(1, true, false, \"ok\")] void AddsValues();", &diagnostics);
     defer unit.deinit(std.testing.allocator);
 
     try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
     const function_decl = expectFunctionDecl(unit, 0);
     try std.testing.expectEqual(@as(usize, 1), function_decl.attributes.len);
     try std.testing.expect(function_decl.attributes[0].arguments != null);
-    try std.testing.expectEqualStrings("1, value, (2 + 3)", function_decl.attributes[0].arguments.?.text);
+    const args = function_decl.attributes[0].arguments.?.args;
+    try std.testing.expectEqual(@as(usize, 4), args.len);
+    try std.testing.expectEqualStrings("1", args[0].int_literal.text);
+    try std.testing.expect(args[1].bool_literal.value);
+    try std.testing.expect(!args[2].bool_literal.value);
+    try std.testing.expectEqualStrings("\"ok\"", args[3].string_literal.text);
 }
 
 test "parses multiple InlineData attributes" {
@@ -4186,8 +4235,8 @@ test "parses multiple InlineData attributes" {
     try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
     const function_decl = expectFunctionDecl(unit, 0);
     try std.testing.expectEqual(@as(usize, 3), function_decl.attributes.len);
-    try std.testing.expectEqualStrings("1, 2, 3", function_decl.attributes[1].arguments.?.text);
-    try std.testing.expectEqualStrings("10, 20, 30", function_decl.attributes[2].arguments.?.text);
+    try std.testing.expectEqualStrings("1", function_decl.attributes[1].arguments.?.args[0].int_literal.text);
+    try std.testing.expectEqualStrings("20", function_decl.attributes[2].arguments.?.args[1].int_literal.text);
 }
 
 test "Fact Theory and InlineData remain identifiers" {
@@ -4205,11 +4254,11 @@ test "Fact Theory and InlineData remain identifiers" {
     try std.testing.expectEqual(TokenKind.identifier, tokens[2].kind);
 }
 
-test "parses attribute before struct" {
+test "parses recognized attribute before struct" {
     var diagnostics = DiagnosticBag.init(std.testing.allocator);
     defer diagnostics.deinit();
 
-    const unit = try parseTestSource("module Example; [SomeMetadata] struct Thing {};", &diagnostics);
+    const unit = try parseTestSource("module Example; [Fact] struct Thing {};", &diagnostics);
     defer unit.deinit(std.testing.allocator);
 
     try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
@@ -4218,7 +4267,7 @@ test "parses attribute before struct" {
         else => unreachable,
     };
     try std.testing.expectEqual(@as(usize, 1), struct_decl.attributes.len);
-    try std.testing.expectEqualStrings("SomeMetadata", struct_decl.attributes[0].name.parts[0].text);
+    try std.testing.expectEqualStrings("Fact", struct_decl.attributes[0].name.parts[0].text);
 }
 
 test "AST snapshot debug output for Fact function is stable" {
@@ -4272,7 +4321,7 @@ test "AST snapshot debug output for Theory InlineData function is stable" {
 }
 
 test "missing attribute name diagnostic" {
-    try expectSingleDiagnostic("module Example; [] void Test();", .UnexpectedToken);
+    try expectSingleDiagnostic("module Example; [] void Test();", .InvalidAttribute);
 }
 
 test "missing closing attribute bracket diagnostic" {
@@ -4285,6 +4334,18 @@ test "unterminated attribute argument list diagnostic" {
 
 test "attribute with no following item diagnostic" {
     try expectSingleDiagnostic("module Example; [Fact]", .ExpectedItem);
+}
+
+test "unknown attribute diagnostic" {
+    try expectSingleDiagnostic("module Example; [SomeMetadata] void Test();", .InvalidAttribute);
+}
+
+test "attribute argument expression diagnostic" {
+    try expectSingleDiagnostic("module Example; [InlineData(1 + 2)] void Test();", .InvalidAttribute);
+}
+
+test "attribute in statement position diagnostic" {
+    try expectSingleDiagnostic("module Example; int main() { [Fact] int x = 1; return x; }", .InvalidAttribute);
 }
 
 test "malformed attribute recovery followed by valid item" {

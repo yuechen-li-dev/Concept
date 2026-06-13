@@ -228,6 +228,7 @@ const Collector = struct {
             function_decl.signature.name.base.span,
         ) orelse return;
         const function_id = try self.module.hir.addFunctionWithSafety(name, self.module.types.voidType(), function_decl.is_unsafe, function_decl.span);
+        self.module.hir.setFunctionAttributes(function_id, try self.copyAttributes(function_decl.attributes));
         if (function_decl.is_compile_time) {
             self.module.hir.markFunctionCompileTime(function_id);
             try self.copyCompileTimeCapabilities(function_id, function_decl.compile_time_capabilities);
@@ -257,12 +258,14 @@ const Collector = struct {
             template_decl.body.signature.name.base.span,
         ) orelse return;
         const generic_id = try self.module.hir.addGenericFunction(name, template_decl.span);
+        self.module.hir.setGenericFunctionAttributes(generic_id, try self.copyAttributes(template_decl.attributes));
         try self.top_level_decls.put(name, .{ .generic_function = generic_id });
     }
 
     fn declareStruct(self: *Collector, struct_decl: ast.StructDecl) !void {
         const name = try self.internFreshTopLevelName(struct_decl.name.text, struct_decl.name.span) orelse return;
         const struct_id = try self.module.hir.addStruct(name);
+        self.module.hir.setStructAttributes(struct_id, try self.copyAttributes(struct_decl.attributes));
         const type_id = try self.module.types.addStructType(struct_id);
         try self.top_level_decls.put(name, .{ .struct_ = .{ .id = struct_id, .type_id = type_id } });
     }
@@ -270,6 +273,7 @@ const Collector = struct {
     fn declareEnum(self: *Collector, enum_decl: ast.EnumDecl) !void {
         const name = try self.internFreshTopLevelName(enum_decl.name.text, enum_decl.name.span) orelse return;
         const enum_id = try self.module.hir.addEnum(name, enum_decl.is_must_use);
+        self.module.hir.setEnumAttributes(enum_id, try self.copyAttributes(enum_decl.attributes));
         const type_id = try self.module.types.addEnumType(enum_id);
         try self.top_level_decls.put(name, .{ .enum_ = .{ .id = enum_id, .type_id = type_id } });
     }
@@ -277,7 +281,62 @@ const Collector = struct {
     fn declareConcept(self: *Collector, concept_decl: ast.ConceptDecl) !void {
         const name = try self.internFreshTopLevelName(concept_decl.name.text, concept_decl.name.span) orelse return;
         const concept_id = try self.module.hir.addConcept(name, concept_decl.is_marker, concept_decl.is_unsafe, concept_decl.span);
+        self.module.hir.setConceptAttributes(concept_id, try self.copyAttributes(concept_decl.attributes));
         try self.top_level_decls.put(name, .{ .concept = concept_id });
+    }
+
+    fn copyAttributes(self: *Collector, attributes: []const ast.Attribute) ![]hir.HirAttribute {
+        if (attributes.len == 0) return &.{};
+        var owned = try self.allocator.alloc(hir.HirAttribute, attributes.len);
+        var initialized: usize = 0;
+        errdefer {
+            for (owned[0..initialized]) |attribute| {
+                for (attribute.args) |arg| switch (arg) {
+                    .int_literal => |text| self.allocator.free(text),
+                    .string_literal => |text| self.allocator.free(text),
+                    .bool_literal => {},
+                };
+                if (attribute.args.len > 0) self.allocator.free(attribute.args);
+            }
+            self.allocator.free(owned);
+        }
+
+        for (attributes, 0..) |attribute, index| {
+            const name = try self.module.interner.intern(attribute.name.parts[0].text);
+            const args = if (attribute.arguments) |arguments| try self.copyAttributeArgs(arguments.args) else @constCast(&.{});
+            owned[index] = .{
+                .name = name,
+                .args = args,
+                .has_arguments = attribute.arguments != null,
+                .span = attribute.span,
+            };
+            initialized += 1;
+        }
+        return owned;
+    }
+
+    fn copyAttributeArgs(self: *Collector, args: []const ast.AttributeArg) ![]hir.HirAttributeArg {
+        if (args.len == 0) return &.{};
+        var owned = try self.allocator.alloc(hir.HirAttributeArg, args.len);
+        var initialized: usize = 0;
+        errdefer {
+            for (owned[0..initialized]) |arg| switch (arg) {
+                .int_literal => |text| self.allocator.free(text),
+                .string_literal => |text| self.allocator.free(text),
+                .bool_literal => {},
+            };
+            self.allocator.free(owned);
+        }
+
+        for (args, 0..) |arg, index| {
+            owned[index] = switch (arg) {
+                .int_literal => |literal| .{ .int_literal = try self.allocator.dupe(u8, literal.text) },
+                .bool_literal => |literal| .{ .bool_literal = literal.value },
+                .string_literal => |literal| .{ .string_literal = try self.allocator.dupe(u8, literal.text) },
+            };
+            initialized += 1;
+        }
+        return owned;
     }
 
     fn resolveFunction(self: *Collector, function_decl: ast.FunctionDecl) !void {
@@ -578,7 +637,8 @@ const Collector = struct {
                 try self.diagnostics.append(diagnostics.markerConceptImplCannotHaveFunctions(impl_decl.functions[0].span));
                 return;
             }
-            _ = try self.module.hir.addConceptImpl(concept_id, target_type, &.{}, impl_decl.is_unsafe, impl_decl.span);
+            const impl_id = try self.module.hir.addConceptImpl(concept_id, target_type, &.{}, impl_decl.is_unsafe, impl_decl.span);
+            self.module.hir.setConceptImplAttributes(impl_id, try self.copyAttributes(impl_decl.attributes));
             return;
         }
 
@@ -657,7 +717,8 @@ const Collector = struct {
         const owned = try self.allocator.alloc(hir.FunctionId, witness_functions.items.len);
         @memcpy(owned, witness_functions.items);
         witness_functions.clearRetainingCapacity();
-        _ = try self.module.hir.addConceptImpl(concept_id, target_type, owned, impl_decl.is_unsafe, impl_decl.span);
+        const impl_id = try self.module.hir.addConceptImpl(concept_id, target_type, owned, impl_decl.is_unsafe, impl_decl.span);
+        self.module.hir.setConceptImplAttributes(impl_id, try self.copyAttributes(impl_decl.attributes));
         if (self.isIntrinsicDropConcept(concept)) {
             for (owned) |function_id| self.module.hir.markConceptWitnessReferenced(function_id);
         }
@@ -2193,6 +2254,53 @@ test "semantic collection preserves compile-time function metadata" {
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "CompileTime Function answer") != null);
 }
 
+test "semantic collection preserves function attributes in HIR" {
+    var parts = [_]ast.NameSegment{nameSegment("Fact", 0)};
+    const attr = attributeNoArgs("Fact", parts[0..]);
+    var item = functionItem("ParsesIdentifier", 0);
+    var attrs = [_]ast.Attribute{attr};
+    item.function_decl.attributes = attrs[0..];
+
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+    var module = try collectItems(&.{item}, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
+    const function = module.hir.getFunction(.{ .index = 0 });
+    try std.testing.expectEqual(@as(usize, 1), function.attributes.len);
+    try std.testing.expectEqualStrings("Fact", module.interner.text(function.attributes[0].name));
+
+    const snapshot = try module.hir.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Attribute Fact\n  Function ParsesIdentifier") != null);
+}
+
+test "semantic collection preserves attribute literal args and leaves type checking unchanged" {
+    var args = [_]ast.AttributeArg{
+        .{ .int_literal = .{ .text = "1", .span = .{ .start = 0, .length = 1 } } },
+        .{ .bool_literal = .{ .value = true, .span = .{ .start = 3, .length = 4 } } },
+        .{ .string_literal = .{ .text = "\"ok\"", .span = .{ .start = 9, .length = 4 } } },
+    };
+    var parts = [_]ast.NameSegment{nameSegment("InlineData", 0)};
+    const attr = attributeWithArgs("InlineData", parts[0..], args[0..]);
+    var item = functionItem("main", 0);
+    var attrs = [_]ast.Attribute{attr};
+    item.function_decl.attributes = attrs[0..];
+
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+    var module = try collectItems(&.{item}, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
+    const function = module.hir.getFunction(.{ .index = 0 });
+    try std.testing.expectEqual(@as(usize, 3), function.attributes[0].args.len);
+    try std.testing.expectEqualStrings("1", function.attributes[0].args[0].int_literal);
+    try std.testing.expect(function.attributes[0].args[1].bool_literal);
+    try std.testing.expectEqualStrings("\"ok\"", function.attributes[0].args[2].string_literal);
+}
+
 fn allocExpr(allocator: std.mem.Allocator, expr: ast.Expr) !*ast.Expr {
     const ptr = try allocator.create(ast.Expr);
     ptr.* = expr;
@@ -2237,6 +2345,22 @@ fn functionWithBody(name: []const u8, params: []ast.ParamDecl, statements: []ast
         .body = .{ .span = .{ .start = 0, .length = 1 }, .block = .{ .statements = statements, .span = .{ .start = 0, .length = 1 } } },
         .span = .{ .start = 0, .length = name.len },
     } };
+}
+
+fn attributeNoArgs(name: []const u8, parts: []ast.NameSegment) ast.Attribute {
+    return .{
+        .name = .{ .parts = parts, .span = .{ .start = 0, .length = name.len } },
+        .arguments = null,
+        .span = .{ .start = 0, .length = name.len + 2 },
+    };
+}
+
+fn attributeWithArgs(name: []const u8, parts: []ast.NameSegment, args: []ast.AttributeArg) ast.Attribute {
+    return .{
+        .name = .{ .parts = parts, .span = .{ .start = 0, .length = name.len } },
+        .arguments = .{ .args = args, .span = .{ .start = 0, .length = 0 } },
+        .span = .{ .start = 0, .length = name.len + 2 },
+    };
 }
 
 fn expectOneSemanticDiagnostic(items: []const ast.Item, code: DiagnosticCode) !void {

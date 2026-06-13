@@ -42,12 +42,34 @@ pub const ImportDecl = struct {
     }
 };
 
+pub const AttributeArg = union(enum) {
+    int_literal: struct { text: []const u8, span: SourceSpan },
+    bool_literal: struct { value: bool, span: SourceSpan },
+    string_literal: struct { text: []const u8, span: SourceSpan },
+
+    pub fn span(self: AttributeArg) SourceSpan {
+        return switch (self) {
+            .int_literal => |arg| arg.span,
+            .bool_literal => |arg| arg.span,
+            .string_literal => |arg| arg.span,
+        };
+    }
+
+    pub fn writeDebug(self: AttributeArg, writer: anytype) !void {
+        switch (self) {
+            .int_literal => |arg| try writer.writeAll(arg.text),
+            .bool_literal => |arg| try writer.writeAll(if (arg.value) "true" else "false"),
+            .string_literal => |arg| try writer.writeAll(arg.text),
+        }
+    }
+};
+
 pub const AttributeArguments = struct {
-    text: []const u8,
+    args: []AttributeArg,
     span: SourceSpan,
 
     pub fn deinit(self: AttributeArguments, allocator: std.mem.Allocator) void {
-        allocator.free(self.text);
+        allocator.free(self.args);
     }
 };
 
@@ -66,7 +88,10 @@ pub const Attribute = struct {
         try self.name.write(writer);
         if (self.arguments) |arguments| {
             try writer.writeByte('(');
-            try writer.writeAll(arguments.text);
+            for (arguments.args, 0..) |argument, index| {
+                if (index != 0) try writer.writeAll(", ");
+                try argument.writeDebug(writer);
+            }
             try writer.writeByte(')');
         }
         try writer.writeByte('\n');

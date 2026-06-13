@@ -482,6 +482,44 @@ mandatory reasons before broad assertion APIs,
 relation constraints after simple runner value exists.
 ```
 
+## P11-M1 implementation status
+
+P11-M1 implements declaration attributes as inert parser/AST/HIR metadata.
+Attributes may appear immediately before supported declarations and attach to the
+following declaration. The initial recognized spellings are:
+
+- `[Fact]`
+- `[Theory]`
+- `[InlineData(...)]`
+
+Unknown attributes are diagnosed with `CON0172 InvalidAttribute`. This follows
+the v0 policy that Concept should not preserve unknown metadata until it has a
+deliberate preservation contract for external tooling.
+
+Attribute arguments are syntax-only metadata and are deliberately narrow in this
+milestone. The accepted argument forms are:
+
+- integer literals;
+- boolean literals;
+- string literals.
+
+Arbitrary expressions are rejected in attributes. Calls, binary expressions,
+field access, `comptime` expressions, and other executable syntax are not
+accepted as attribute arguments in Phase 11 v0.
+
+Implemented boundaries:
+
+- attributes parse and lower as declaration metadata;
+- metadata is preserved through HIR;
+- attributes do not alter type checking;
+- there is no `.con_test` discovery yet;
+- there is no test runner yet;
+- `[Fact]`, `[Theory]`, and `[InlineData]` have no validation behavior yet;
+- `Assert.*` and `Expect.*` are not implemented yet;
+- mandatory reason validation is not implemented yet;
+- the relation API is not implemented yet;
+- there are no attribute macros and no runtime reflection.
+
 ## Close criteria
 
 P11-M0 is successful if:
@@ -500,4 +538,3 @@ P11-M0 is successful if:
 - interaction with Phase 8, Phase 9, and Phase 10 is explicit;
 - non-goals prevent Phase 11 from becoming a macro, reflection, fixture, or
   property-testing project.
-

@@ -152,6 +152,7 @@ pub const DiagnosticCode = enum {
     ManualInitAssumeInitRequiresUnsafe,
     ManualInitInvalidOperation,
     DropParamUnsupported,
+    InvalidAttribute,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -285,6 +286,7 @@ pub const DiagnosticCode = enum {
             .ManualInitAssumeInitRequiresUnsafe => "CON0163",
             .ManualInitInvalidOperation => "CON0164",
             .DropParamUnsupported => "CON0165",
+            .InvalidAttribute => "CON0172",
         };
     }
 };
@@ -733,6 +735,7 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0163", DiagnosticCode.ManualInitAssumeInitRequiresUnsafe.format());
     try std.testing.expectEqualStrings("CON0164", DiagnosticCode.ManualInitInvalidOperation.format());
     try std.testing.expectEqualStrings("CON0165", DiagnosticCode.DropParamUnsupported.format());
+    try std.testing.expectEqualStrings("CON0172", DiagnosticCode.InvalidAttribute.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {
@@ -1064,6 +1067,10 @@ pub fn manualInitInvalidOperation(span: SourceSpan) Diagnostic {
 
 pub fn dropParamUnsupported(span: SourceSpan) Diagnostic {
     return Diagnostic.init(.DropParamUnsupported, .@"error", "by-value parameter with Drop<T> is not supported until parameter cleanup is implemented", span);
+}
+
+pub fn invalidAttribute(span: SourceSpan, message: []const u8) Diagnostic {
+    return Diagnostic.init(.InvalidAttribute, .@"error", message, span);
 }
 
 pub fn useOfPartiallyInitializedValue(span: SourceSpan) Diagnostic {

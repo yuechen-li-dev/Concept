@@ -1,0 +1,14 @@
+# name: attribute arg expression
+# phase: parse
+# expect: fail
+
+=== source ===
+module Example.Tests;
+
+[InlineData(1 + 2)]
+void Adds() {
+    return;
+}
+
+=== diagnostics ===
+CON0172

@@ -42,6 +42,19 @@ pub const HirItem = union(enum) {
     enum_: EnumId,
 };
 
+pub const HirAttributeArg = union(enum) {
+    int_literal: []const u8,
+    bool_literal: bool,
+    string_literal: []const u8,
+};
+
+pub const HirAttribute = struct {
+    name: SymbolId,
+    args: []HirAttributeArg,
+    has_arguments: bool = false,
+    span: SourceSpan,
+};
+
 pub const HirTypeConstraint = struct {
     text: []const u8,
     span: SourceSpan,
@@ -59,6 +72,7 @@ pub const HirTypeParam = struct {
 pub const HirGenericFunction = struct {
     name: SymbolId,
     span: SourceSpan,
+    attributes: []HirAttribute = &.{},
     type_params: []HirTypeParam,
     function: FunctionId,
 };
@@ -109,6 +123,7 @@ pub const MarkerKind = enum {
 pub const HirConcept = struct {
     name: SymbolId,
     span: SourceSpan,
+    attributes: []HirAttribute = &.{},
     type_params: []HirTypeParam,
     requirements: []HirConceptRequirement,
     is_marker: bool = false,
@@ -119,6 +134,7 @@ pub const HirConcept = struct {
 pub const HirConceptImpl = struct {
     concept_id: ConceptId,
     target_type: types.TypeId,
+    attributes: []HirAttribute = &.{},
     functions: []FunctionId,
     is_unsafe: bool = false,
     span: SourceSpan,
@@ -139,6 +155,7 @@ pub const HirFunction = struct {
     item: ItemId,
     name: SymbolId,
     span: SourceSpan,
+    attributes: []HirAttribute = &.{},
     return_type: types.TypeId,
     is_unsafe: bool = false,
     is_compile_time: bool = false,
@@ -309,6 +326,7 @@ pub const HirParam = struct {
 pub const HirStruct = struct {
     item: ItemId,
     name: SymbolId,
+    attributes: []HirAttribute = &.{},
     fields: []FieldId,
 };
 
@@ -324,6 +342,7 @@ pub const HirResultShape = struct {
 pub const HirEnum = struct {
     item: ItemId,
     name: SymbolId,
+    attributes: []HirAttribute = &.{},
     variants: []VariantId,
     is_must_use: bool = false,
     result_shape: ?HirResultShape = null,
@@ -404,6 +423,7 @@ pub const HirStore = struct {
 
     pub fn deinit(self: *HirStore) void {
         for (self.generic_functions.items) |generic_function| {
+            freeAttributes(self.allocator, generic_function.attributes);
             for (generic_function.type_params) |type_param| {
                 if (type_param.constraint) |constraint| {
                     self.allocator.free(constraint.text);
@@ -413,6 +433,7 @@ pub const HirStore = struct {
             if (generic_function.type_params.len > 0) self.allocator.free(generic_function.type_params);
         }
         for (self.concepts.items) |concept| {
+            freeAttributes(self.allocator, concept.attributes);
             for (concept.type_params) |type_param| {
                 if (type_param.constraint) |constraint| {
                     self.allocator.free(constraint.text);
@@ -426,9 +447,11 @@ pub const HirStore = struct {
             if (concept.requirements.len > 0) self.allocator.free(concept.requirements);
         }
         for (self.concept_impls.items) |concept_impl| {
+            freeAttributes(self.allocator, concept_impl.attributes);
             if (concept_impl.functions.len > 0) self.allocator.free(concept_impl.functions);
         }
         for (self.functions.items) |function| {
+            freeAttributes(self.allocator, function.attributes);
             for (function.compile_time_capabilities) |capability| self.allocator.free(capability.name);
             if (function.compile_time_capabilities.len > 0) self.allocator.free(function.compile_time_capabilities);
             if (function.params.len > 0) self.allocator.free(function.params);
@@ -462,9 +485,11 @@ pub const HirStore = struct {
             }
         }
         for (self.structs.items) |struct_decl| {
+            freeAttributes(self.allocator, struct_decl.attributes);
             if (struct_decl.fields.len > 0) self.allocator.free(struct_decl.fields);
         }
         for (self.enums.items) |enum_decl| {
+            freeAttributes(self.allocator, enum_decl.attributes);
             if (enum_decl.variants.len > 0) self.allocator.free(enum_decl.variants);
         }
 
@@ -496,6 +521,7 @@ pub const HirStore = struct {
         try self.generic_functions.append(self.allocator, .{
             .name = name,
             .span = span,
+            .attributes = &.{},
             .type_params = &.{},
             .function = function,
         });
@@ -508,11 +534,18 @@ pub const HirStore = struct {
         generic.type_params = type_params;
     }
 
+    pub fn setGenericFunctionAttributes(self: *HirStore, id: GenericFunctionId, attributes: []HirAttribute) void {
+        const generic = self.getGenericFunctionMut(id);
+        freeAttributes(self.allocator, generic.attributes);
+        generic.attributes = attributes;
+    }
+
     pub fn addConcept(self: *HirStore, name: SymbolId, is_marker: bool, is_unsafe: bool, span: SourceSpan) !ConceptId {
         const id = ConceptId{ .index = try nextIndex(self.concepts.items.len, error.TooManyConcepts) };
         try self.concepts.append(self.allocator, .{
             .name = name,
             .span = span,
+            .attributes = &.{},
             .type_params = &.{},
             .requirements = &.{},
             .is_marker = is_marker,
@@ -525,6 +558,12 @@ pub const HirStore = struct {
         const concept = self.getConceptMut(id);
         if (concept.type_params.len > 0) self.allocator.free(concept.type_params);
         concept.type_params = type_params;
+    }
+
+    pub fn setConceptAttributes(self: *HirStore, id: ConceptId, attributes: []HirAttribute) void {
+        const concept = self.getConceptMut(id);
+        freeAttributes(self.allocator, concept.attributes);
+        concept.attributes = attributes;
     }
 
     pub fn setConceptKnownMarkerKind(self: *HirStore, id: ConceptId, kind: MarkerKind) void {
@@ -602,11 +641,18 @@ pub const HirStore = struct {
         try self.concept_impls.append(self.allocator, .{
             .concept_id = concept_id,
             .target_type = target_type,
+            .attributes = &.{},
             .functions = functions,
             .is_unsafe = is_unsafe,
             .span = span,
         });
         return id;
+    }
+
+    pub fn setConceptImplAttributes(self: *HirStore, id: ConceptImplId, attributes: []HirAttribute) void {
+        const concept_impl = self.getConceptImplMut(id);
+        freeAttributes(self.allocator, concept_impl.attributes);
+        concept_impl.attributes = attributes;
     }
 
     fn addFunctionStorage(self: *HirStore, name: SymbolId, return_type: types.TypeId, is_unsafe: bool, span: SourceSpan) !FunctionId {
@@ -615,6 +661,7 @@ pub const HirStore = struct {
             .item = ItemId{ .index = std.math.maxInt(u32) },
             .name = name,
             .span = span,
+            .attributes = &.{},
             .return_type = return_type,
             .is_unsafe = is_unsafe,
             .is_compile_time = false,
@@ -633,6 +680,12 @@ pub const HirStore = struct {
         self.getFunctionMut(function_id).is_compile_time = true;
     }
 
+    pub fn setFunctionAttributes(self: *HirStore, function_id: FunctionId, attributes: []HirAttribute) void {
+        const function = self.getFunctionMut(function_id);
+        freeAttributes(self.allocator, function.attributes);
+        function.attributes = attributes;
+    }
+
     pub fn setFunctionCompileTimeCapabilities(self: *HirStore, function_id: FunctionId, capabilities: []CompileTimeCapabilityRequired) void {
         const function = self.getFunctionMut(function_id);
         for (function.compile_time_capabilities) |capability| self.allocator.free(capability.name);
@@ -647,9 +700,16 @@ pub const HirStore = struct {
         try self.structs.append(self.allocator, .{
             .item = item,
             .name = name,
+            .attributes = &.{},
             .fields = &.{},
         });
         return id;
+    }
+
+    pub fn setStructAttributes(self: *HirStore, id: StructId, attributes: []HirAttribute) void {
+        const struct_decl = self.getStructMut(id);
+        freeAttributes(self.allocator, struct_decl.attributes);
+        struct_decl.attributes = attributes;
     }
 
     pub fn addEnum(self: *HirStore, name: SymbolId, is_must_use: bool) !EnumId {
@@ -659,11 +719,18 @@ pub const HirStore = struct {
         try self.enums.append(self.allocator, .{
             .item = item,
             .name = name,
+            .attributes = &.{},
             .variants = &.{},
             .is_must_use = is_must_use,
             .result_shape = null,
         });
         return id;
+    }
+
+    pub fn setEnumAttributes(self: *HirStore, id: EnumId, attributes: []HirAttribute) void {
+        const enum_decl = self.getEnumMut(id);
+        freeAttributes(self.allocator, enum_decl.attributes);
+        enum_decl.attributes = attributes;
     }
 
     pub fn addParam(self: *HirStore, parent: FunctionId, name: SymbolId, type_id: types.TypeId, span: SourceSpan) !ParamId {
@@ -772,6 +839,12 @@ pub const HirStore = struct {
     }
 
     pub fn getConceptImpl(self: *const HirStore, id: ConceptImplId) *const HirConceptImpl {
+        const index: usize = id.index;
+        std.debug.assert(index < self.concept_impls.items.len);
+        return &self.concept_impls.items[index];
+    }
+
+    fn getConceptImplMut(self: *HirStore, id: ConceptImplId) *HirConceptImpl {
         const index: usize = id.index;
         std.debug.assert(index < self.concept_impls.items.len);
         return &self.concept_impls.items[index];
@@ -899,6 +972,7 @@ pub const HirStore = struct {
         }
         for (self.generic_functions.items) |generic_function| {
             const function = self.getFunction(generic_function.function);
+            try writeAttributesDebug(writer, generic_function.attributes, interner, 1);
             try writer.print("  GenericFunction {s} {f} -> {f}\n", .{ interner.text(generic_function.name), generic_function.function, function.return_type });
             if (generic_function.type_params.len != 0) {
                 try writer.writeAll("    TypeParams\n");
@@ -924,6 +998,7 @@ pub const HirStore = struct {
             }
         }
         for (self.concepts.items) |concept| {
+            try writeAttributesDebug(writer, concept.attributes, interner, 1);
             try writer.print("  {s}{s}Concept {s}", .{ if (concept.is_unsafe) "Unsafe " else "", if (concept.is_marker) "Marker " else "", interner.text(concept.name) });
             if (concept.known_marker_kind != .user) try writer.print(" known_marker={s}", .{concept.known_marker_kind.displayName()});
             try writer.writeByte('\n');
@@ -945,6 +1020,7 @@ pub const HirStore = struct {
         }
         for (self.concept_impls.items, 0..) |concept_impl, index| {
             const concept = self.getConcept(concept_impl.concept_id);
+            try writeAttributesDebug(writer, concept_impl.attributes, interner, 1);
             try writer.print("  {s}ConceptImpl #{d} {s} for {f}\n", .{ if (concept_impl.is_unsafe) "Unsafe " else "", index, interner.text(concept.name), concept_impl.target_type });
             if (concept_impl.functions.len != 0) {
                 try writer.writeAll("    Witnesses\n");
@@ -958,6 +1034,7 @@ pub const HirStore = struct {
             switch (item) {
                 .function => |id| {
                     const function = self.getFunction(id);
+                    try writeAttributesDebug(writer, function.attributes, interner, 1);
                     try writer.print("  {s}{s}Function {s}", .{ if (function.is_compile_time) "CompileTime " else "", if (function.is_unsafe) "Unsafe " else "", interner.text(function.name) });
                     if (function.compile_time_capabilities.len != 0) {
                         try writer.writeAll(" capabilities=[");
@@ -989,6 +1066,7 @@ pub const HirStore = struct {
                 },
                 .struct_ => |id| {
                     const struct_decl = self.getStruct(id);
+                    try writeAttributesDebug(writer, struct_decl.attributes, interner, 1);
                     try writer.print("  Struct {s}\n", .{interner.text(struct_decl.name)});
                     for (struct_decl.fields) |field_id| {
                         const field = self.getField(field_id);
@@ -997,6 +1075,7 @@ pub const HirStore = struct {
                 },
                 .enum_ => |id| {
                     const enum_decl = self.getEnum(id);
+                    try writeAttributesDebug(writer, enum_decl.attributes, interner, 1);
                     try writer.print("  {s}Enum {s}{s}\n", .{ if (enum_decl.is_must_use) "MustUse " else "", interner.text(enum_decl.name), if (enum_decl.result_shape != null) " result_shape" else "" });
                     for (enum_decl.variants) |variant_id| {
                         const variant = self.getVariant(variant_id);
@@ -1194,6 +1273,20 @@ fn appendId(allocator: std.mem.Allocator, comptime Id: type, existing: []Id, id:
     return expanded;
 }
 
+fn freeAttributes(allocator: std.mem.Allocator, attributes: []HirAttribute) void {
+    for (attributes) |attribute| {
+        for (attribute.args) |arg| {
+            switch (arg) {
+                .int_literal => |text| allocator.free(text),
+                .string_literal => |text| allocator.free(text),
+                .bool_literal => {},
+            }
+        }
+        if (attribute.args.len > 0) allocator.free(attribute.args);
+    }
+    if (attributes.len > 0) allocator.free(attributes);
+}
+
 test "semantic ID debug formatting" {
     const rendered = try std.fmt.allocPrint(std.testing.allocator, "{f} {f} {f} {f}", .{
         ItemId{ .index = 1 },
@@ -1314,6 +1407,26 @@ test "HIR debug formatting uses interned names" {
 
 fn writeIndent(writer: *std.Io.Writer, depth: usize) !void {
     for (0..depth) |_| try writer.writeAll("  ");
+}
+
+fn writeAttributesDebug(writer: *std.Io.Writer, attributes: []const HirAttribute, interner: Interner, depth: usize) !void {
+    for (attributes) |attribute| {
+        try writeIndent(writer, depth);
+        try writer.print("Attribute {s}", .{interner.text(attribute.name)});
+        if (attribute.has_arguments) {
+            try writer.writeByte('(');
+            for (attribute.args, 0..) |arg, index| {
+                if (index != 0) try writer.writeAll(", ");
+                switch (arg) {
+                    .int_literal => |text| try writer.writeAll(text),
+                    .bool_literal => |value| try writer.writeAll(if (value) "true" else "false"),
+                    .string_literal => |text| try writer.writeAll(text),
+                }
+            }
+            try writer.writeByte(')');
+        }
+        try writer.writeByte('\n');
+    }
 }
 
 fn writeAssignTarget(writer: *std.Io.Writer, target: AssignTarget) !void {

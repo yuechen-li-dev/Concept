@@ -1,0 +1,15 @@
+# name: attribute statement position
+# phase: parse
+# expect: fail
+
+=== source ===
+module Example.Tests;
+
+int main() {
+    [Fact]
+    int x = 1;
+    return x;
+}
+
+=== diagnostics ===
+CON0172

@@ -1,0 +1,23 @@
+# name: attribute multiple inline data
+# phase: parse
+# expect: pass
+
+=== source ===
+module Example.Tests;
+
+[Theory]
+[InlineData(1, true)]
+[InlineData(2, false)]
+void Chooses(int value, bool expected) {
+    return;
+}
+
+=== ast ===
+CompilationUnit
+  Module Example.Tests
+  Attribute Theory
+  Attribute InlineData(1, true)
+  Attribute InlineData(2, false)
+  Function void Chooses(int value, bool expected)
+    Body
+      Return

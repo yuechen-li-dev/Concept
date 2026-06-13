@@ -1,0 +1,14 @@
+# name: attribute unknown
+# phase: parse
+# expect: fail
+
+=== source ===
+module Example.Tests;
+
+[SomeMetadata]
+void Test() {
+    return;
+}
+
+=== diagnostics ===
+CON0172

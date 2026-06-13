@@ -1,0 +1,11 @@
+# name: attribute orphan
+# phase: parse
+# expect: fail
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+
+=== diagnostics ===
+CON0004
