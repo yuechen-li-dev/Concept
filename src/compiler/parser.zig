@@ -3242,11 +3242,15 @@ pub const Parser = struct {
     }
 
     fn isLocalDeclStart(self: Parser) bool {
-        if (self.current().kind != .identifier) return false;
-        var offset: usize = 1;
+        var offset: usize = 0;
+        if (self.peek(offset).kind == .mut) offset += 1;
+        if (self.peek(offset).kind == .dyn) offset += 1;
+        if (self.peek(offset).kind != .identifier) return false;
+        offset += 1;
         while (self.peek(offset).kind == .dot and self.peek(offset + 1).kind == .identifier) {
             offset += 2;
         }
+        if (self.peek(offset).kind == .ampersand or self.peek(offset).kind == .star) offset += 1;
         if (self.peek(offset).kind != .identifier) return false;
         const after_name = self.peek(offset + 1).kind;
         return after_name == .equal or after_name == .semicolon;
@@ -3254,7 +3258,8 @@ pub const Parser = struct {
 
     fn parseTypeName(self: *Parser, allocator: std.mem.Allocator) !ast.TypeName {
         const mut_token = self.match(.mut);
-        const start_span = if (mut_token) |token| token.span else self.current().span;
+        const dyn_token = self.match(.dyn);
+        const start_span = if (mut_token) |token| token.span else if (dyn_token) |token| token.span else self.current().span;
         var name = try self.parseDottedName(allocator);
         errdefer name.deinit(allocator);
         const generic_args = try self.parseOptionalGenericTypeArgs(allocator);
@@ -3271,6 +3276,8 @@ pub const Parser = struct {
             .name = name,
             .generic_args = generic_args,
             .is_mut = mut_token != null,
+            .is_dyn = dyn_token != null,
+            .dyn_span = if (dyn_token) |token| token.span else .{ .start = 0, .length = 0 },
             .is_reference = is_reference,
             .is_pointer = is_pointer,
             .span = ast.spanFromBounds(start_span.start, spanEnd(last_span)),
@@ -3285,7 +3292,7 @@ pub const Parser = struct {
         }
         if (self.match(.less) == null) return args.toOwnedSlice();
         while (self.current().kind != .eof and self.current().kind != .greater and self.current().kind != .right_paren and self.current().kind != .semicolon and self.current().kind != .left_brace and self.current().kind != .right_brace) {
-            if (self.current().kind == .identifier or self.current().kind == .mut) {
+            if (self.current().kind == .identifier or self.current().kind == .mut or self.current().kind == .dyn) {
                 try args.append(try self.parseTypeName(allocator));
                 if (self.match(.comma) != null) continue;
                 if (self.current().kind == .greater) break;
@@ -4896,6 +4903,38 @@ test "parses function with mutable reference parameter" {
     const function_decl = expectFunctionDecl(unit, 0);
     try std.testing.expect(function_decl.signature.params[0].type_name.is_mut);
     try std.testing.expect(function_decl.signature.params[0].type_name.is_reference);
+}
+
+test "parses function with dyn interface reference parameter" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; void emit(dyn Writer& writer);", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const function_decl = expectFunctionDecl(unit, 0);
+    const type_name = function_decl.signature.params[0].type_name;
+    try std.testing.expect(type_name.is_dyn);
+    try std.testing.expect(type_name.is_reference);
+    try std.testing.expect(!type_name.is_mut);
+    try std.testing.expectEqualStrings("Writer", type_name.name.parts[0].text);
+}
+
+test "parses function with mutable dyn interface reference parameter" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Example; void emit(mut dyn Writer& writer);", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const function_decl = expectFunctionDecl(unit, 0);
+    const type_name = function_decl.signature.params[0].type_name;
+    try std.testing.expect(type_name.is_mut);
+    try std.testing.expect(type_name.is_dyn);
+    try std.testing.expect(type_name.is_reference);
+    try std.testing.expectEqualStrings("Writer", type_name.name.parts[0].text);
 }
 
 test "parses function with raw pointer parameter" {

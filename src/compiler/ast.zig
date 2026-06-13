@@ -102,6 +102,8 @@ pub const TypeName = struct {
     name: QualifiedName,
     generic_args: []TypeName = &.{},
     is_mut: bool = false,
+    is_dyn: bool = false,
+    dyn_span: SourceSpan = .{ .start = 0, .length = 0 },
     is_reference: bool = false,
     is_pointer: bool = false,
     span: SourceSpan,
@@ -116,6 +118,7 @@ pub const TypeName = struct {
 
     pub fn write(self: TypeName, writer: anytype) !void {
         if (self.is_mut) try writer.writeAll("mut ");
+        if (self.is_dyn) try writer.writeAll("dyn ");
         try self.name.write(writer);
         if (self.generic_args.len != 0) {
             try writer.writeByte('<');

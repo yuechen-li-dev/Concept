@@ -788,7 +788,7 @@ const Collector = struct {
         const text = try self.renderTypeName(type_name);
         var text_owned = true;
         defer if (text_owned) self.allocator.free(text);
-        if (type_name.is_mut or type_name.is_reference or type_name.is_pointer or type_name.name.parts.len != 1) {
+        if (type_name.is_mut or type_name.is_dyn or type_name.is_reference or type_name.is_pointer or type_name.name.parts.len != 1) {
             try self.diagnostics.append(diagnostics.unsupportedConceptConstraint(type_name.span));
             return null;
         }
@@ -1234,7 +1234,7 @@ const Collector = struct {
 
     fn invalidInterfaceImplTargetType(self: *Collector, type_id: types.TypeId) bool {
         return switch (self.module.types.kind(type_id)) {
-            .void, .interface_type, .type_param => true,
+            .void, .interface_type, .dyn_interface, .type_param => true,
             else => false,
         };
     }
@@ -1248,7 +1248,7 @@ const Collector = struct {
     }
 
     fn interfaceReceiverMatchesTarget(self: *Collector, receiver: ast.TypeName, target_type: types.TypeId) !bool {
-        if (!receiver.is_mut or !receiver.is_reference or receiver.is_pointer) return false;
+        if (!receiver.is_mut or receiver.is_dyn or !receiver.is_reference or receiver.is_pointer) return false;
         if (receiver.name.parts.len != 1 or receiver.generic_args.len != 0) return false;
         const receiver_type = (try self.resolveBaseTypeNameScoped(receiver, null)) orelse return false;
         return sameType(receiver_type, target_type);
@@ -1375,6 +1375,8 @@ const Collector = struct {
     }
 
     fn resolveTypeNameScoped(self: *Collector, type_name: ast.TypeName, type_scope: ?*TypeParamScope) anyerror!?types.TypeId {
+        if (type_name.is_dyn) return self.resolveDynTypeNameScoped(type_name, type_scope);
+
         if (type_name.is_mut or type_name.is_reference or type_name.name.parts.len != 1) {
             try self.diagnostics.append(diagnostics.unsupportedTypeSyntax(type_name.span));
             return null;
@@ -1383,6 +1385,43 @@ const Collector = struct {
         const pointee = try self.resolveBaseTypeNameScoped(type_name, type_scope) orelse return null;
         if (type_name.is_pointer) return try self.module.types.addPointerType(pointee);
         return pointee;
+    }
+
+    fn resolveDynTypeNameScoped(self: *Collector, type_name: ast.TypeName, type_scope: ?*TypeParamScope) anyerror!?types.TypeId {
+        if (!type_name.is_reference or type_name.is_pointer) {
+            try self.diagnostics.append(diagnostics.dynRequiresBorrowedReference(type_name.span));
+            return null;
+        }
+        if (type_name.name.parts.len != 1 or type_name.generic_args.len != 0) {
+            try self.diagnostics.append(diagnostics.dynRequiresInterface(type_name.span));
+            return null;
+        }
+
+        const part = type_name.name.parts[0];
+        if (isDynRejectedBuiltinTypeName(part.text)) {
+            try self.diagnostics.append(diagnostics.dynRequiresInterface(part.span));
+            return null;
+        }
+
+        const symbol = try self.module.interner.intern(part.text);
+        if (type_scope) |scope| {
+            if (scope.get(symbol) != null) {
+                try self.diagnostics.append(diagnostics.dynRequiresInterface(part.span));
+                return null;
+            }
+        }
+
+        const decl = self.top_level_decls.get(symbol) orelse {
+            try self.diagnostics.append(diagnostics.unknownTypeName(part.span));
+            return null;
+        };
+        return switch (decl) {
+            .interface_ => |entry| try self.module.types.addDynInterfaceType(entry.id, type_name.is_mut),
+            .struct_, .enum_, .machine, .function, .generic_function, .concept => blk: {
+                try self.diagnostics.append(diagnostics.dynRequiresInterface(part.span));
+                break :blk null;
+            },
+        };
     }
 
     fn resolveBaseTypeNameScoped(self: *Collector, type_name: ast.TypeName, type_scope: ?*TypeParamScope) anyerror!?types.TypeId {
@@ -2659,7 +2698,7 @@ const BodyLowerer = struct {
     // ─────────────────────────────────────────────────────────────────────────────
 
     fn resolveDecideEnum(self: *BodyLowerer, type_name: ast.TypeName) !?struct { type_id: types.TypeId, enum_id: hir.EnumId } {
-        if (type_name.is_mut or type_name.is_reference or type_name.is_pointer or type_name.generic_args.len != 0 or type_name.name.parts.len != 1) {
+        if (type_name.is_mut or type_name.is_dyn or type_name.is_reference or type_name.is_pointer or type_name.generic_args.len != 0 or type_name.name.parts.len != 1) {
             try self.collector.diagnostics.append(diagnostics.unknownDecideEnum(type_name.span));
             return null;
         }
@@ -3133,6 +3172,13 @@ fn typeNameFromSegment(part: *[1]ast.NameSegment) ast.TypeName {
     return .{
         .name = .{ .parts = part[0..], .span = part[0].span },
         .span = part[0].span,
+    };
+}
+
+fn customTypeName(parts: []ast.NameSegment, start: usize, len: usize) ast.TypeName {
+    return .{
+        .name = .{ .parts = parts, .span = .{ .start = start, .length = len } },
+        .span = .{ .start = start, .length = len },
     };
 }
 
@@ -4007,6 +4053,136 @@ test "semantic collection lowers interface requirements into HIR debug" {
         \\        InterfaceParamId(2) code: TypeId(1)
         \\
     , snapshot);
+}
+
+test "semantic collection resolves dyn interface reference parameters" {
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    var writer_params = [_]ast.ParamDecl{paramDecl("int", "value", 40)};
+    var writer_requirements = [_]ast.SignatureDecl{.{
+        .return_type = typeName("void", 20),
+        .name = .{ .base = nameSegment("Write", 25), .span = .{ .start = 25, .length = 5 } },
+        .params = writer_params[0..],
+        .span = .{ .start = 20, .length = 25 },
+    }};
+    var writer_parts = [_]ast.NameSegment{nameSegment("Writer", 70)};
+    var dyn_writer = customTypeName(writer_parts[0..], 66, 11);
+    dyn_writer.is_dyn = true;
+    dyn_writer.dyn_span = .{ .start = 66, .length = 3 };
+    dyn_writer.is_reference = true;
+    var dyn_writer_mut = dyn_writer;
+    dyn_writer_mut.is_mut = true;
+    dyn_writer_mut.span = .{ .start = 100, .length = 15 };
+    dyn_writer_mut.dyn_span = .{ .start = 104, .length = 3 };
+    var emit_params = [_]ast.ParamDecl{.{ .type_name = dyn_writer, .name = nameSegment("writer", 80), .span = .{ .start = 66, .length = 20 } }};
+    var emit_mut_params = [_]ast.ParamDecl{.{ .type_name = dyn_writer_mut, .name = nameSegment("writer", 118), .span = .{ .start = 100, .length = 24 } }};
+
+    var module = try collectTestItems(&.{
+        .{ .interface_decl = .{
+            .name = nameSegment("Writer", 10),
+            .signatures = writer_requirements[0..],
+            .span = .{ .start = 0, .length = 55 },
+        } },
+        .{ .function_decl = .{
+            .is_export = false,
+            .signature = .{
+                .return_type = typeName("void", 60),
+                .name = .{ .base = nameSegment("Emit", 65), .span = .{ .start = 65, .length = 4 } },
+                .params = emit_params[0..],
+                .span = .{ .start = 60, .length = 26 },
+            },
+            .body = null,
+            .span = .{ .start = 60, .length = 26 },
+        } },
+        .{ .function_decl = .{
+            .is_export = false,
+            .signature = .{
+                .return_type = typeName("void", 94),
+                .name = .{ .base = nameSegment("EmitMut", 99), .span = .{ .start = 99, .length = 7 } },
+                .params = emit_mut_params[0..],
+                .span = .{ .start = 94, .length = 32 },
+            },
+            .body = null,
+            .span = .{ .start = 94, .length = 32 },
+        } },
+    }, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
+    const emit = module.hir.getFunction(.{ .index = 0 });
+    const emit_mut = module.hir.getFunction(.{ .index = 1 });
+    const writer_param = module.hir.getParam(emit.params[0]);
+    const writer_mut_param = module.hir.getParam(emit_mut.params[0]);
+    try std.testing.expectEqual(types.TypeKind{ .dyn_interface = .{ .interface_id = .{ .index = 0 }, .is_mut = false } }, module.types.kind(writer_param.type_id));
+    try std.testing.expectEqual(types.TypeKind{ .dyn_interface = .{ .interface_id = .{ .index = 0 }, .is_mut = true } }, module.types.kind(writer_mut_param.type_id));
+    try std.testing.expect(writer_param.type_id.index != writer_mut_param.type_id.index);
+}
+
+test "semantic collection rejects invalid dyn type forms" {
+    {
+        var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+        defer diagnostics_bag.deinit();
+        var writer_parts = [_]ast.NameSegment{nameSegment("Writer", 40)};
+        var dyn_writer = customTypeName(writer_parts[0..], 36, 10);
+        dyn_writer.is_dyn = true;
+        var params = [_]ast.ParamDecl{.{ .type_name = dyn_writer, .name = nameSegment("writer", 47), .span = .{ .start = 36, .length = 17 } }};
+        try std.testing.expectError(error.InvalidSemanticModule, collectTestItems(&.{ interfaceItemWithOneRequirement("Writer", 0), .{ .function_decl = .{
+            .is_export = false,
+            .signature = .{ .return_type = typeName("void", 30), .name = .{ .base = nameSegment("Emit", 35), .span = .{ .start = 35, .length = 4 } }, .params = params[0..], .span = .{ .start = 30, .length = 25 } },
+            .body = null,
+            .span = .{ .start = 30, .length = 25 },
+        } } }, &diagnostics_bag));
+        try std.testing.expectEqual(DiagnosticCode.DynRequiresBorrowedReference, diagnostics_bag.diagnostics.items[0].code);
+    }
+    {
+        var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+        defer diagnostics_bag.deinit();
+        var writer_parts = [_]ast.NameSegment{nameSegment("Writer", 40)};
+        var dyn_writer = customTypeName(writer_parts[0..], 36, 11);
+        dyn_writer.is_dyn = true;
+        dyn_writer.is_pointer = true;
+        var params = [_]ast.ParamDecl{.{ .type_name = dyn_writer, .name = nameSegment("writer", 48), .span = .{ .start = 36, .length = 18 } }};
+        try std.testing.expectError(error.InvalidSemanticModule, collectTestItems(&.{ interfaceItemWithOneRequirement("Writer", 0), .{ .function_decl = .{
+            .is_export = false,
+            .signature = .{ .return_type = typeName("void", 30), .name = .{ .base = nameSegment("Emit", 35), .span = .{ .start = 35, .length = 4 } }, .params = params[0..], .span = .{ .start = 30, .length = 26 } },
+            .body = null,
+            .span = .{ .start = 30, .length = 26 },
+        } } }, &diagnostics_bag));
+        try std.testing.expectEqual(DiagnosticCode.DynRequiresBorrowedReference, diagnostics_bag.diagnostics.items[0].code);
+    }
+    {
+        var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+        defer diagnostics_bag.deinit();
+        var sink_parts = [_]ast.NameSegment{nameSegment("Sink", 40)};
+        var dyn_sink = customTypeName(sink_parts[0..], 36, 9);
+        dyn_sink.is_dyn = true;
+        dyn_sink.is_reference = true;
+        var params = [_]ast.ParamDecl{.{ .type_name = dyn_sink, .name = nameSegment("sink", 46), .span = .{ .start = 36, .length = 14 } }};
+        try std.testing.expectError(error.InvalidSemanticModule, collectTestItems(&.{ structItem("Sink", 0), .{ .function_decl = .{
+            .is_export = false,
+            .signature = .{ .return_type = typeName("void", 30), .name = .{ .base = nameSegment("Emit", 35), .span = .{ .start = 35, .length = 4 } }, .params = params[0..], .span = .{ .start = 30, .length = 22 } },
+            .body = null,
+            .span = .{ .start = 30, .length = 22 },
+        } } }, &diagnostics_bag));
+        try std.testing.expectEqual(DiagnosticCode.DynRequiresInterface, diagnostics_bag.diagnostics.items[0].code);
+    }
+    {
+        var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+        defer diagnostics_bag.deinit();
+        var int_parts = [_]ast.NameSegment{nameSegment("int", 40)};
+        var dyn_int = customTypeName(int_parts[0..], 36, 8);
+        dyn_int.is_dyn = true;
+        dyn_int.is_reference = true;
+        var params = [_]ast.ParamDecl{.{ .type_name = dyn_int, .name = nameSegment("value", 45), .span = .{ .start = 36, .length = 14 } }};
+        try std.testing.expectError(error.InvalidSemanticModule, collectTestItems(&.{.{ .function_decl = .{
+            .is_export = false,
+            .signature = .{ .return_type = typeName("void", 30), .name = .{ .base = nameSegment("Emit", 35), .span = .{ .start = 35, .length = 4 } }, .params = params[0..], .span = .{ .start = 30, .length = 22 } },
+            .body = null,
+            .span = .{ .start = 30, .length = 22 },
+        } }}, &diagnostics_bag));
+        try std.testing.expectEqual(DiagnosticCode.DynRequiresInterface, diagnostics_bag.diagnostics.items[0].code);
+    }
 }
 
 test "semantic collection stores interface impl separately from concept impl" {
@@ -4887,4 +5063,14 @@ fn isCompilerKnownTypeName(text: []const u8) bool {
     return std.mem.eql(u8, text, "Arena") or
         std.mem.eql(u8, text, "Allocator") or
         std.mem.eql(u8, text, "AllocError");
+}
+
+fn isDynRejectedBuiltinTypeName(text: []const u8) bool {
+    return std.mem.eql(u8, text, "void") or
+        std.mem.eql(u8, text, "int") or
+        std.mem.eql(u8, text, "bool") or
+        std.mem.eql(u8, text, "Arena") or
+        std.mem.eql(u8, text, "Allocator") or
+        std.mem.eql(u8, text, "AllocError") or
+        std.mem.eql(u8, text, "ManualInit");
 }

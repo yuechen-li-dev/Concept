@@ -33,6 +33,10 @@ pub const TypeKind = union(enum) {
     enum_type: hir.EnumId,
     machine_type: hir.MachineId,
     interface_type: hir.InterfaceId,
+    dyn_interface: struct {
+        interface_id: hir.InterfaceId,
+        is_mut: bool,
+    },
     pointer: struct {
         pointee: TypeId,
     },
@@ -57,6 +61,10 @@ pub const TypeKind = union(enum) {
             .enum_type => |id| try writer.print("enum {f}", .{id}),
             .machine_type => |id| try writer.print("machine {f}", .{id}),
             .interface_type => |id| try writer.print("interface {f}", .{id}),
+            .dyn_interface => |dyn| {
+                if (dyn.is_mut) try writer.writeAll("mut ");
+                try writer.print("dyn interface {f}&", .{dyn.interface_id});
+            },
             .pointer => |pointer| try writer.print("{f}*", .{pointer.pointee}),
             .manual_init => |manual_init| try writer.print("ManualInit<{f}>", .{manual_init.payload}),
             .type_param => |param| try writer.print("type_param({s}:{d}/{d} {f})", .{ @tagName(param.owner.kind), param.owner.index, param.index, param.name }),
@@ -159,6 +167,14 @@ pub const TypeStore = struct {
         return try self.append(.{ .interface_type = interface_id }, error.TooManyTypes);
     }
 
+    pub fn addDynInterfaceType(self: *TypeStore, interface_id: hir.InterfaceId, is_mut: bool) TypeStoreError!TypeId {
+        if (self.findDynInterface(interface_id, is_mut)) |existing| {
+            return existing;
+        }
+
+        return try self.append(.{ .dyn_interface = .{ .interface_id = interface_id, .is_mut = is_mut } }, error.TooManyTypes);
+    }
+
     pub fn addTypeParam(self: *TypeStore, owner: TypeParamOwner, index: u32, name: interner.SymbolId) TypeStoreError!TypeId {
         if (self.findTypeParam(owner, index, name)) |existing| {
             return existing;
@@ -221,7 +237,7 @@ pub const TypeStore = struct {
         return switch (self.kind(id)) {
             .int, .bool, .pointer, .enum_type, .alloc_error => true,
             .struct_type => self.hasCopyMarkerImpl(hir_store, id),
-            .void, .arena, .allocator, .machine_type, .interface_type, .manual_init, .type_param => false,
+            .void, .arena, .allocator, .machine_type, .interface_type, .dyn_interface, .manual_init, .type_param => false,
         };
     }
 
@@ -288,6 +304,19 @@ pub const TypeStore = struct {
         return null;
     }
 
+    fn findDynInterface(self: TypeStore, interface_id: hir.InterfaceId, is_mut: bool) ?TypeId {
+        for (self.types.items, 0..) |candidate, index| {
+            switch (candidate) {
+                .dyn_interface => |dyn| if (dyn.interface_id.index == interface_id.index and dyn.is_mut == is_mut) {
+                    return .{ .index = @intCast(index) };
+                },
+                else => {},
+            }
+        }
+
+        return null;
+    }
+
     fn findNominal(self: TypeStore, needle: TypeKind) ?TypeId {
         for (self.types.items, 0..) |candidate, index| {
             switch (needle) {
@@ -315,7 +344,7 @@ pub const TypeStore = struct {
                     },
                     else => {},
                 },
-                .pointer, .manual_init, .type_param => unreachable,
+                .dyn_interface, .pointer, .manual_init, .type_param => unreachable,
                 else => unreachable,
             }
         }
@@ -448,6 +477,26 @@ test "pointer TypeIds are interned by pointee" {
     try std.testing.expectEqual(TypeKind{ .pointer = .{ .pointee = int_ptr_first } }, store.kind(int_ptr_ptr));
 }
 
+test "dyn interface TypeIds are interned by interface and mutability" {
+    var store = try TypeStore.init(std.testing.allocator);
+    defer store.deinit();
+
+    const writer = hir.InterfaceId{ .index = 0 };
+    const reader = hir.InterfaceId{ .index = 1 };
+    const writer_dyn = try store.addDynInterfaceType(writer, false);
+    const writer_dyn_again = try store.addDynInterfaceType(writer, false);
+    const writer_dyn_mut = try store.addDynInterfaceType(writer, true);
+    const reader_dyn = try store.addDynInterfaceType(reader, false);
+    const bare_writer = try store.addInterfaceType(writer);
+
+    try std.testing.expectEqual(writer_dyn, writer_dyn_again);
+    try std.testing.expect(writer_dyn.index != writer_dyn_mut.index);
+    try std.testing.expect(writer_dyn.index != reader_dyn.index);
+    try std.testing.expect(writer_dyn.index != bare_writer.index);
+    try std.testing.expectEqual(TypeKind{ .dyn_interface = .{ .interface_id = writer, .is_mut = false } }, store.kind(writer_dyn));
+    try std.testing.expectEqual(TypeKind{ .dyn_interface = .{ .interface_id = writer, .is_mut = true } }, store.kind(writer_dyn_mut));
+}
+
 test "copyability model v0 marks scalars pointers enums and AllocError Copy but opaque handles and structs non-Copy" {
     var store = try TypeStore.init(std.testing.allocator);
     defer store.deinit();
@@ -465,6 +514,14 @@ test "copyability model v0 marks scalars pointers enums and AllocError Copy but 
     try std.testing.expect(!store.isCopyType(null, store.voidType()));
     try std.testing.expect(!store.isCopyType(null, store.arenaType()));
     try std.testing.expect(!store.isCopyType(null, store.allocatorType()));
+}
+
+test "dyn interface references are non-Copy in M4" {
+    var store = try TypeStore.init(std.testing.allocator);
+    defer store.deinit();
+
+    const dyn_writer = try store.addDynInterfaceType(.{ .index = 0 }, false);
+    try std.testing.expect(!store.isCopyType(null, dyn_writer));
 }
 
 test "copyability model recognizes explicit marker Copy impl for structs" {
@@ -502,7 +559,7 @@ test "invalid TypeIds assert by contract" {
 }
 
 test "TypeKind debug formatting is stable" {
-    const rendered = try std.fmt.allocPrint(std.testing.allocator, "{f} {f} {f} {f} {f} {f} {f} {f} {f}", .{
+    const rendered = try std.fmt.allocPrint(std.testing.allocator, "{f} {f} {f} {f} {f} {f} {f} {f} {f} {f}", .{
         @as(TypeKind, .void),
         @as(TypeKind, .int),
         @as(TypeKind, .bool),
@@ -511,11 +568,12 @@ test "TypeKind debug formatting is stable" {
         @as(TypeKind, .alloc_error),
         TypeKind{ .struct_type = .{ .index = 0 } },
         TypeKind{ .enum_type = .{ .index = 0 } },
+        TypeKind{ .dyn_interface = .{ .interface_id = .{ .index = 0 }, .is_mut = true } },
         TypeKind{ .pointer = .{ .pointee = .{ .index = 1 } } },
     });
     defer std.testing.allocator.free(rendered);
 
-    try std.testing.expectEqualStrings("void int bool Arena Allocator AllocError struct StructId(0) enum EnumId(0) TypeId(1)*", rendered);
+    try std.testing.expectEqualStrings("void int bool Arena Allocator AllocError struct StructId(0) enum EnumId(0) mut dyn interface InterfaceId(0)& TypeId(1)*", rendered);
 }
 
 test "allocation surface TypeIds are stable distinct and display readable names" {

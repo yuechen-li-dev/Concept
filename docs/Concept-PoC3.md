@@ -49,14 +49,18 @@ literal-transition subset. Match/decide transition runtime lowering remains
 deferred and fails clearly during backend emission rather than silently
 generating unsupported code. Phase 14 has begun: M0 added the design document
 for interfaces and `dyn` dispatch, M1 preserves interface declarations and
-requirement signatures as top-level HIR declarations, and M2 validates the v0
-requirement shape. M3 recognizes `impl Interface<Type>` blocks, stores them as
-interface impl HIR separate from concept impls, and validates required methods,
-duplicates, extras, receiver convention, return types, and parameter types.
-Concepts remain compile-time constraints, interfaces are runtime dispatch
-contracts, empty runtime interfaces are rejected, interface requirements may
-use ordinary resolved types but not interface types, and `dyn Interface&` is a
-borrowed fat reference design target. Dyn parsing, vtables, owning dyn boxes,
+requirement signatures as top-level HIR declarations, M2 validates the v0
+requirement shape, and M3 recognizes `impl Interface<Type>` blocks, stores them
+as interface impl HIR separate from concept impls, and validates required
+methods, duplicates, extras, receiver convention, return types, and parameter
+types. M4 adds the borrowed dyn type surface: `dyn Interface&` and
+`mut dyn Interface&` can appear in function parameter signatures, resolve to
+distinct TypeStore dyn interface reference types, and reject non-interface,
+by-value, and raw-pointer dyn spellings. Concepts remain compile-time
+constraints, interfaces are runtime dispatch contracts, empty runtime
+interfaces are rejected, and interface requirements may use ordinary resolved
+types but not interface or dyn runtime types. Concrete-to-dyn coercion, dyn
+method calls, vtables, backend fat-reference emission, owning dyn boxes,
 inheritance, RTTI, and hidden heap allocation remain deferred.
 Deferred Phase 12
 work includes

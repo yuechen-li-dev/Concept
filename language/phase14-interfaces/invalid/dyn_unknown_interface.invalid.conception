@@ -1,0 +1,12 @@
+# name: dyn unknown interface
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module Interfaces;
+
+void Emit(dyn Writer& writer);
+
+=== diagnostics ===
+CON0021

@@ -73,7 +73,7 @@ Invalid fixtures cover malformed template syntax, type parameters out of scope, 
 
 Phase 8 MIR/backend coverage is intentionally concrete-only: the pipeline run fixture and targeted compiler tests assert that template declarations, concepts, marker concepts, and type-parameter types do not leak into executable MIR or backend C, while deterministic instantiated function names and referenced static witness calls are emitted.
 
-Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed for compile-time execution v0. Phase 10 is closed for ownership/storage-state v0. Phase 11 is closed for first-class testing, attributes, and reasoned expectations v0. Phase 14 M3 now has interface declaration, requirement validation, and interface impl conformance fixtures; `dyn` and vtable runtime fixtures still wait for later milestones.
+Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed for compile-time execution v0. Phase 10 is closed for ownership/storage-state v0. Phase 11 is closed for first-class testing, attributes, and reasoned expectations v0. Phase 14 M4 now has interface declaration, requirement validation, interface impl conformance, and borrowed `dyn Interface&` type-surface fixtures; concrete-to-dyn coercion, dyn calls, and vtable runtime fixtures still wait for later milestones.
 
 ## Phase 9 compile-time execution fixtures
 
@@ -210,26 +210,31 @@ for the literal-transition subset.
 ## Phase 14 interface/dyn fixtures
 
 Phase 14 fixtures live under `language/phase14-interfaces/` and currently cover
-P14-M3 interface declaration HIR behavior, requirement validation, and
-interface impl conformance. Valid
+P14-M4 interface declaration HIR behavior, requirement validation, interface
+impl conformance, and the borrowed dyn interface type surface. Valid
 fixtures cover parser preservation for
 `interface Writer { void Write(int value); }`, multiple requirements,
 requirement source order, void/scalar/pointer/struct/enum requirement
 signatures, requirement parameter names/types, and backend-C non-emission for
 pure interface declarations and interface impl declarations. They also cover
 basic interface impls, multiple requirements, void/scalar signatures, struct,
-enum, and builtin targets, and body checking for impl methods. Invalid fixtures
+enum, and builtin targets, body checking for impl methods, declaration-only
+`dyn Interface&` parameters, `mut dyn Interface&` parameters, and multiple dyn
+interface parameters in one signature. Invalid fixtures
 cover duplicate top-level interface names, empty interfaces, unknown
 requirement return and parameter types, duplicate and overloaded requirement
 names, duplicate requirement parameter names, interface types in requirement
 return/parameter positions, ordinary runtime interface values, and invalid
 interface impls for missing, extra, duplicate, wrong receiver, wrong return,
 wrong parameter, duplicate impl, unknown interface, invalid target, and
-concept/interface separation cases.
+concept/interface separation cases. They also cover rejected dyn targets for
+structs, enums, concepts, builtins, and unknown names; rejected by-value and raw
+pointer dyn spellings; rejected dyn locals, returns, and struct fields; and
+backend-C rejection for dyn signatures before fat-reference lowering exists.
 
-Phase 14 fixtures intentionally do not cover `dyn`, concrete-to-dyn coercion,
-vtable lowering, dynamic method calls, owning dyn boxes, heap boxing, dynamic
-cast, RTTI, reflection, inheritance, default methods, associated types, generic
+Phase 14 fixtures intentionally do not cover concrete-to-dyn coercion, vtable
+lowering, dynamic method calls, owning dyn boxes, heap boxing, dynamic cast,
+RTTI, reflection, inheritance, default methods, associated types, generic
 interface methods, or Drop through dyn. Those remain later Phase 14 milestones.
 
 ## `.conception` format

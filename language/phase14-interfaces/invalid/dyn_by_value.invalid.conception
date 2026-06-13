@@ -1,0 +1,16 @@
+# name: dyn by value
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module Interfaces;
+
+interface Writer {
+    void Write(int value);
+};
+
+void Emit(dyn Writer writer);
+
+=== diagnostics ===
+CON0258

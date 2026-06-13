@@ -119,6 +119,8 @@ pub const DiagnosticCode = enum {
     ExtraInterfaceImplFunction,
     DuplicateInterfaceImpl,
     DuplicateInterfaceImplFunction,
+    DynRequiresInterface,
+    DynRequiresBorrowedReference,
     InterfaceRuntimeUnsupported,
     CompileTimeUnsupportedExpression,
     CompileTimeUnsupportedStatement,
@@ -297,6 +299,8 @@ pub const DiagnosticCode = enum {
             .InvalidInterfaceRequirementImplSignature => "CON0246",
             .ExtraInterfaceImplFunction => "CON0247",
             .DuplicateInterfaceImplFunction => "CON0248",
+            .DynRequiresInterface => "CON0257",
+            .DynRequiresBorrowedReference => "CON0258",
             .DuplicateInterfaceImpl => "CON0256",
             .InterfaceRuntimeUnsupported => "CON0255",
             .CompileTimeUnsupportedExpression => "CON0120",
@@ -531,6 +535,24 @@ pub fn machineSemanticsNotImplemented(span: SourceSpan) Diagnostic {
         "this executable machine form is not implemented yet",
         span,
     ).withHelp("literal-transition machines are executable; match/decide transitions and broader machine body forms remain parsed, validated, and represented in HIR but are not lowered to executable C yet");
+}
+
+pub fn dynRequiresInterface(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .DynRequiresInterface,
+        .@"error",
+        "dyn target must be an interface",
+        span,
+    ).withHelp("Phase 14 M4 supports only borrowed dyn interface references such as dyn Writer&");
+}
+
+pub fn dynRequiresBorrowedReference(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .DynRequiresBorrowedReference,
+        .@"error",
+        "dyn requires a borrowed interface reference",
+        span,
+    ).withHelp("use dyn Interface& or mut dyn Interface&; by-value dyn and raw dyn pointers are not supported in Phase 14 M4");
 }
 
 pub fn machineRequiresState(span: SourceSpan) Diagnostic {
@@ -925,6 +947,8 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0248", DiagnosticCode.DuplicateInterfaceImplFunction.format());
     try std.testing.expectEqualStrings("CON0255", DiagnosticCode.InterfaceRuntimeUnsupported.format());
     try std.testing.expectEqualStrings("CON0256", DiagnosticCode.DuplicateInterfaceImpl.format());
+    try std.testing.expectEqualStrings("CON0257", DiagnosticCode.DynRequiresInterface.format());
+    try std.testing.expectEqualStrings("CON0258", DiagnosticCode.DynRequiresBorrowedReference.format());
     try std.testing.expectEqualStrings("CON0172", DiagnosticCode.InvalidAttribute.format());
     try std.testing.expectEqualStrings("CON0173", DiagnosticCode.FactRequiresZeroArgFunction.format());
     try std.testing.expectEqualStrings("CON0174", DiagnosticCode.TheoryRequiresInlineData.format());

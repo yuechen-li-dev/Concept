@@ -1,0 +1,20 @@
+# name: dyn backend unsupported
+# phase: backend-c
+# expect: fail
+
+=== source ===
+module Main;
+
+interface Writer {
+    void Write(int value);
+};
+
+void Emit(dyn Writer& writer) {
+}
+
+int main() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0045

@@ -1,0 +1,16 @@
+# name: dyn non interface enum
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module Interfaces;
+
+enum Color {
+    Red,
+};
+
+void Paint(dyn Color& color);
+
+=== diagnostics ===
+CON0257

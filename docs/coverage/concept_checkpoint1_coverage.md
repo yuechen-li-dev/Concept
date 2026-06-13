@@ -238,10 +238,10 @@
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| `interface Foo { ... }` declaration | 🔶 | Phase 14 M3 preserves top-level interface declarations, requirement signatures, spans, attributes, duplicate/overload checks, duplicate parameter checks, empty-interface rejection, interface-type runtime-use rejection, and interface impl conformance in HIR; runtime/vtable lowering not implemented |
+| `interface Foo { ... }` declaration | 🔶 | Phase 14 M4 preserves top-level interface declarations, requirement signatures, spans, attributes, duplicate/overload checks, duplicate parameter checks, empty-interface rejection, interface-type runtime-use rejection, interface impl conformance, and dyn parameter type surfaces in HIR; runtime/vtable lowering not implemented |
 | `impl Interface<Type>` | 🔶 | Phase 14 M3 recognizes interface impls as HIR entities separate from concept impls and checks missing/extra/duplicate methods, receiver convention, return type, and parameter types; no vtable emission yet |
-| `dyn Foo&` dynamic dispatch | ❌ | Phase 14 M0 documents borrowed fat-reference design; compiler behavior not implemented |
-| `interface` vs `concept` distinction | ✅ | Phase 14 doctrine: concept is static proof/generic constraint; interface is runtime contract represented in HIR; dyn is explicit dynamic reference and remains deferred |
+| `dyn Foo&` dynamic dispatch | 🔶 | Phase 14 M4 implements borrowed `dyn Interface&` / `mut dyn Interface&` type syntax and TypeStore/HIR preservation for function parameters; concrete-to-dyn coercion, dyn calls, fat refs, vtables, and backend emission remain unimplemented |
+| `interface` vs `concept` distinction | ✅ | Phase 14 doctrine: concept is static proof/generic constraint; interface is runtime contract represented in HIR; dyn is explicit dynamic reference with runtime dispatch still deferred |
 
 ---
 

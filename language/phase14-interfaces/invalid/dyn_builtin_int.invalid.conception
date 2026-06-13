@@ -1,0 +1,12 @@
+# name: dyn builtin int
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module Interfaces;
+
+void Emit(dyn int& value);
+
+=== diagnostics ===
+CON0257

@@ -1,0 +1,16 @@
+# name: dyn non interface concept
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module Interfaces;
+
+concept Drawable<T> {
+    void Draw(T value);
+};
+
+void Paint(dyn Drawable& drawable);
+
+=== diagnostics ===
+CON0257

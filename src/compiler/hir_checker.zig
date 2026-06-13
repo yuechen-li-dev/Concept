@@ -76,6 +76,7 @@ const Checker = struct {
 
     fn checkModule(self: *Checker) CheckError!void {
         try self.checkStaticAsserts();
+        try self.checkAggregateDynStorage();
         try self.checkInterfaceRequirements();
         try self.checkInterfaceImpls();
 
@@ -102,6 +103,7 @@ const Checker = struct {
 
     fn checkTestModule(self: *Checker) CheckError!void {
         try self.checkStaticAsserts();
+        try self.checkAggregateDynStorage();
         try self.checkInterfaceRequirements();
         try self.checkInterfaceImpls();
         try self.checkFunctionBodies();
@@ -164,6 +166,10 @@ const Checker = struct {
             try self.reportAt(.InterfaceRuntimeUnsupported, "interface types are not supported as ordinary return values in Phase 14 M2", function.span);
             return error.InvalidSemanticModule;
         }
+        if (self.isDynInterfaceType(function.return_type)) {
+            try self.reportAt(.InterfaceRuntimeUnsupported, "dyn interface references are not supported as return values in Phase 14 M4", function.span);
+            return error.InvalidSemanticModule;
+        }
         for (function.params) |param_id| {
             const param = self.module.hir.getParam(param_id);
             if (!self.isInterfaceRuntimeType(param.type_id)) continue;
@@ -183,12 +189,27 @@ const Checker = struct {
                     try self.reportAt(.InterfaceRuntimeUnsupported, "interface types are not supported as interface requirement returns in Phase 14 M2", requirement.span);
                     return error.InvalidSemanticModule;
                 }
-                for (requirement.params) |param_id| {
-                    const param = self.module.hir.getInterfaceParam(param_id);
-                    if (!self.isInterfaceRuntimeType(param.type_id)) continue;
-                    try self.reportAt(.InterfaceRuntimeUnsupported, "interface types are not supported as interface requirement parameters in Phase 14 M2", param.span);
+                if (self.isDynInterfaceType(requirement.return_type)) {
+                    try self.reportAt(.InterfaceRuntimeUnsupported, "dyn interface references are not supported in interface requirements in Phase 14 M4", requirement.span);
                     return error.InvalidSemanticModule;
                 }
+                for (requirement.params) |param_id| {
+                    const param = self.module.hir.getInterfaceParam(param_id);
+                    if (!self.isInterfaceRuntimeType(param.type_id) and !self.isDynInterfaceType(param.type_id)) continue;
+                    try self.reportAt(.InterfaceRuntimeUnsupported, "interface runtime types are not supported as interface requirement parameters in Phase 14 M4", param.span);
+                    return error.InvalidSemanticModule;
+                }
+            }
+        }
+    }
+
+    fn checkAggregateDynStorage(self: *Checker) CheckError!void {
+        for (self.module.hir.structs.items) |struct_decl| {
+            for (struct_decl.fields) |field_id| {
+                const field = self.module.hir.getField(field_id);
+                if (!self.isDynInterfaceType(field.type_id)) continue;
+                try self.reportAt(.InterfaceRuntimeUnsupported, "dyn interface references are not supported as struct fields in Phase 14 M4", field.span);
+                return error.InvalidSemanticModule;
             }
         }
     }
@@ -265,7 +286,7 @@ const Checker = struct {
 
     fn isInvalidInterfaceImplTarget(self: *Checker, type_id: types.TypeId) bool {
         return switch (self.module.types.kind(type_id)) {
-            .void, .interface_type, .type_param => true,
+            .void, .interface_type, .dyn_interface, .type_param => true,
             else => false,
         };
     }
@@ -293,6 +314,13 @@ const Checker = struct {
         return switch (self.module.types.kind(type_id)) {
             .interface_type => true,
             .pointer => |pointer| self.isInterfaceRuntimeType(pointer.pointee),
+            else => false,
+        };
+    }
+
+    fn isDynInterfaceType(self: *Checker, type_id: types.TypeId) bool {
+        return switch (self.module.types.kind(type_id)) {
+            .dyn_interface => true,
             else => false,
         };
     }
@@ -355,8 +383,8 @@ const Checker = struct {
             },
             .local_decl => |decl| {
                 const local = self.module.hir.getLocal(decl.local);
-                if (self.isInterfaceRuntimeType(local.type_id)) {
-                    try self.reportAt(.InterfaceRuntimeUnsupported, "interface types are not supported as ordinary locals in Phase 14 M2", local.span);
+                if (self.isInterfaceRuntimeType(local.type_id) or self.isDynInterfaceType(local.type_id)) {
+                    try self.reportAt(.InterfaceRuntimeUnsupported, "interface runtime types are not supported as ordinary locals in Phase 14 M4", local.span);
                     return error.InvalidSemanticModule;
                 }
                 const init_type = try self.checkExpr(function_id, return_type, decl.initializer);
@@ -1421,6 +1449,10 @@ const Checker = struct {
             .enum_type => |enum_id| try writer.print("enum_{s}", .{self.module.interner.text(self.module.hir.getEnum(enum_id).name)}),
             .machine_type => |machine_id| try writer.print("machine_{s}", .{self.module.interner.text(self.module.hir.getMachine(machine_id).name)}),
             .interface_type => |interface_id| try writer.print("interface_{s}", .{self.module.interner.text(self.module.hir.getInterface(interface_id).name)}),
+            .dyn_interface => |dyn| {
+                if (dyn.is_mut) try writer.writeAll("mut_");
+                try writer.print("dyn_interface_{s}", .{self.module.interner.text(self.module.hir.getInterface(dyn.interface_id).name)});
+            },
             .pointer => |pointer| {
                 try self.writeTypeSuffix(writer, pointer.pointee);
                 try writer.writeAll("_ptr");
@@ -1858,6 +1890,61 @@ test "HIR checker rejects interface requirement interface parameters" {
     const pointer_requirement_id = try pointer_tm.interfaceRequirement(pointer_interface_id, "Take", pointer_tm.module.types.voidType());
     _ = try pointer_tm.interfaceParam(pointer_requirement_id, "value", try pointer_tm.module.types.addPointerType(pointer_writer_type));
     try pointer_tm.checkTestFail(.InterfaceRuntimeUnsupported);
+}
+
+test "HIR checker accepts dyn interface function parameters" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+
+    const interface_id = try tm.interfaceDecl("Writer");
+    _ = try tm.interfaceRequirement(interface_id, "Write", tm.module.types.voidType());
+    const writer_dyn = try tm.module.types.addDynInterfaceType(interface_id, false);
+    const writer_dyn_mut = try tm.module.types.addDynInterfaceType(interface_id, true);
+    const function_id = try tm.function("Emit", tm.module.types.voidType());
+    _ = try tm.param(function_id, "writer", writer_dyn);
+    _ = try tm.param(function_id, "mut_writer", writer_dyn_mut);
+
+    try tm.checkTestPass();
+}
+
+test "HIR checker rejects deferred dyn interface storage surfaces" {
+    var return_tm = try TestModule.init();
+    defer return_tm.deinit();
+    const return_interface = try return_tm.interfaceDecl("Writer");
+    _ = try return_tm.interfaceRequirement(return_interface, "Write", return_tm.module.types.voidType());
+    const return_dyn = try return_tm.module.types.addDynInterfaceType(return_interface, false);
+    _ = try return_tm.function("GetWriter", return_dyn);
+    try return_tm.checkTestFail(.InterfaceRuntimeUnsupported);
+
+    var requirement_tm = try TestModule.init();
+    defer requirement_tm.deinit();
+    const requirement_interface = try requirement_tm.interfaceDecl("Writer");
+    const requirement_dyn = try requirement_tm.module.types.addDynInterfaceType(requirement_interface, false);
+    const requirement_id = try requirement_tm.interfaceRequirement(requirement_interface, "Take", requirement_tm.module.types.voidType());
+    _ = try requirement_tm.interfaceParam(requirement_id, "writer", requirement_dyn);
+    try requirement_tm.checkTestFail(.InterfaceRuntimeUnsupported);
+
+    var field_tm = try TestModule.init();
+    defer field_tm.deinit();
+    const field_interface = try field_tm.interfaceDecl("Writer");
+    _ = try field_tm.interfaceRequirement(field_interface, "Write", field_tm.module.types.voidType());
+    const field_dyn = try field_tm.module.types.addDynInterfaceType(field_interface, false);
+    const holder = try field_tm.module.hir.addStruct(try field_tm.name("Holder"));
+    _ = try field_tm.module.types.addStructType(holder);
+    _ = try field_tm.module.hir.addField(holder, try field_tm.name("writer"), field_dyn, synthetic_span);
+    try field_tm.checkTestFail(.InterfaceRuntimeUnsupported);
+
+    var local_tm = try TestModule.init();
+    defer local_tm.deinit();
+    const local_interface = try local_tm.interfaceDecl("Writer");
+    _ = try local_tm.interfaceRequirement(local_interface, "Write", local_tm.module.types.voidType());
+    const local_dyn = try local_tm.module.types.addDynInterfaceType(local_interface, false);
+    const function_id = try local_tm.function("Use", local_tm.module.types.voidType());
+    const local_id = try local_tm.local(function_id, "writer", local_dyn);
+    const init = try local_tm.int("0");
+    const local_stmt = try local_tm.module.hir.addStmt(.{ .local_decl = .{ .local = local_id, .initializer = init } }, synthetic_span);
+    local_tm.setBody(function_id, try local_tm.block(&.{local_stmt}));
+    try local_tm.checkTestFail(.InterfaceRuntimeUnsupported);
 }
 
 test "HIR checker still rejects ordinary interface type signatures" {

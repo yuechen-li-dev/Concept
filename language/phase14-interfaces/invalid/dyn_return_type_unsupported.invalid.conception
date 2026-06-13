@@ -1,0 +1,16 @@
+# name: dyn return type unsupported
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Interfaces;
+
+interface Writer {
+    void Write(int value);
+};
+
+dyn Writer& GetWriter();
+
+=== diagnostics ===
+CON0255

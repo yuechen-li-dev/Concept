@@ -1,0 +1,19 @@
+# name: dyn local initializer requires coercion
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Interfaces;
+
+interface Writer {
+    void Write(int value);
+};
+
+int main() {
+    dyn Writer& writer = 0;
+    return 0;
+}
+
+=== diagnostics ===
+CON0255

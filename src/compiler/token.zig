@@ -23,6 +23,7 @@ pub const TokenKind = enum {
     @"enum",
     concept,
     interface,
+    dyn,
     impl,
     template,
     marker,
@@ -101,6 +102,7 @@ pub const TokenKind = enum {
             .@"enum" => "enum",
             .concept => "concept",
             .interface => "interface",
+            .dyn => "dyn",
             .impl => "impl",
             .template => "template",
             .marker => "marker",
@@ -185,6 +187,7 @@ pub const TokenKind = enum {
             .@"enum" => "enum",
             .concept => "concept",
             .interface => "interface",
+            .dyn => "dyn",
             .impl => "impl",
             .template => "template",
             .marker => "marker",
@@ -271,6 +274,7 @@ pub fn keywordKind(identifier_text: []const u8) ?TokenKind {
     if (std.mem.eql(u8, identifier_text, "enum")) return .@"enum";
     if (std.mem.eql(u8, identifier_text, "concept")) return .concept;
     if (std.mem.eql(u8, identifier_text, "interface")) return .interface;
+    if (std.mem.eql(u8, identifier_text, "dyn")) return .dyn;
     if (std.mem.eql(u8, identifier_text, "impl")) return .impl;
     if (std.mem.eql(u8, identifier_text, "template")) return .template;
     if (std.mem.eql(u8, identifier_text, "marker")) return .marker;
@@ -351,6 +355,7 @@ const keyword_cases = [_]KeywordCase{
     .{ .text = "enum", .kind = .@"enum" },
     .{ .text = "concept", .kind = .concept },
     .{ .text = "interface", .kind = .interface },
+    .{ .text = "dyn", .kind = .dyn },
     .{ .text = "impl", .kind = .impl },
     .{ .text = "template", .kind = .template },
     .{ .text = "marker", .kind = .marker },

@@ -797,3 +797,48 @@ emission, owning dyn boxes, heap boxing, dynamic cast, RTTI, reflection,
 interface inheritance, default methods, associated types, generic interface
 methods, Drop through dyn, effect checking through dyn, unsafe interface
 methods, and cross-module/orphan interface coherence.
+
+### P14-M4 implementation status
+
+P14-M4 adds the borrowed dyn interface type surface without adding runtime
+dispatch. The accepted source spellings are:
+
+```cpp
+dyn Writer&
+mut dyn Writer&
+```
+
+Implemented in M4:
+
+- `dyn` is a reserved keyword;
+- `dyn Interface&` parses as an immutable borrowed dynamic interface
+  reference;
+- `mut dyn Interface&` parses as a mutable borrowed dynamic interface
+  reference;
+- HIR/type resolution preserves dyn interface reference parameters in function
+  signatures;
+- TypeStore interns dyn interface reference types as distinct from bare
+  `interface_type`;
+- mutable and immutable dyn references have distinct `TypeId`s;
+- dyn targets must resolve to an interface declaration;
+- `dyn` targeting structs, enums, concepts, compiler-known scalar/allocation
+  types, and type parameters is rejected with `CON0257 DynRequiresInterface`;
+- unknown dyn targets use the existing unknown-type diagnostic;
+- `dyn Interface` by value and `dyn Interface*` raw pointer spellings are
+  rejected with `CON0258 DynRequiresBorrowedReference`;
+- ordinary bare interface runtime values and raw pointers to interfaces remain
+  rejected with `CON0255 InterfaceRuntimeUnsupported`;
+- dyn return types, dyn locals, dyn struct fields, and dyn use inside interface
+  requirement signatures are deferred and rejected with
+  `CON0255 InterfaceRuntimeUnsupported`;
+- backend C emission treats dyn interface references as unsupported C types and
+  does not emit fat-reference structs, vtable structs, vtable constants, or
+  placeholder `cpt_dyn_*` artifacts.
+
+Still unimplemented after P14-M4: concrete-to-dyn coercion, dyn method calls,
+method-call syntax beyond impl function declarations, vtable representation,
+MIR lowering for dyn fat references, backend C vtable/interface emission,
+owning dyn boxes, heap boxing, dynamic cast, RTTI, reflection, interface
+inheritance, default methods, associated types, generic interface methods, Drop
+through dyn, effect checking through dyn, unsafe interface methods, and
+cross-module/orphan interface coherence.

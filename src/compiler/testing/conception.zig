@@ -2631,6 +2631,10 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase14-interfaces/valid/interface_impl_enum_target.valid.conception");
     try expectCheckFixture("../../../language/phase14-interfaces/valid/interface_impl_builtin_target.valid.conception");
     try expectCheckFixture("../../../language/phase14-interfaces/valid/interface_impl_body_checked.valid.conception");
+    try expectCheckFixture("../../../language/phase14-interfaces/valid/dyn_param_read_ref.valid.conception");
+    try expectCheckFixture("../../../language/phase14-interfaces/valid/dyn_param_mut_ref.valid.conception");
+    try expectCheckFixture("../../../language/phase14-interfaces/valid/dyn_type_hir_surface.valid.conception");
+    try expectCheckFixture("../../../language/phase14-interfaces/valid/dyn_multiple_interfaces.valid.conception");
     try expectBackendCFixture("../../../language/phase14-interfaces/valid/interface_backend_c_hir_only.valid.conception");
     try expectBackendCFixture("../../../language/phase14-interfaces/valid/interface_impl_backend_c_no_vtable.valid.conception");
     try expectCheckFixture("../../../language/phase14-interfaces/invalid/interface_duplicate_top_level.invalid.conception");
@@ -2656,6 +2660,17 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase14-interfaces/invalid/interface_impl_invalid_target_interface_type.invalid.conception");
     try expectCheckFixture("../../../language/phase14-interfaces/invalid/interface_impl_target_void.invalid.conception");
     try expectCheckFixture("../../../language/phase14-interfaces/invalid/interface_impl_does_not_satisfy_concept.invalid.conception");
+    try expectCheckFixture("../../../language/phase14-interfaces/invalid/dyn_non_interface_struct.invalid.conception");
+    try expectCheckFixture("../../../language/phase14-interfaces/invalid/dyn_non_interface_enum.invalid.conception");
+    try expectCheckFixture("../../../language/phase14-interfaces/invalid/dyn_non_interface_concept.invalid.conception");
+    try expectCheckFixture("../../../language/phase14-interfaces/invalid/dyn_builtin_int.invalid.conception");
+    try expectCheckFixture("../../../language/phase14-interfaces/invalid/dyn_unknown_interface.invalid.conception");
+    try expectCheckFixture("../../../language/phase14-interfaces/invalid/dyn_by_value.invalid.conception");
+    try expectCheckFixture("../../../language/phase14-interfaces/invalid/dyn_raw_pointer.invalid.conception");
+    try expectCheckFixture("../../../language/phase14-interfaces/invalid/dyn_local_initializer_requires_coercion.invalid.conception");
+    try expectCheckFixture("../../../language/phase14-interfaces/invalid/dyn_return_type_unsupported.invalid.conception");
+    try expectCheckFixture("../../../language/phase14-interfaces/invalid/dyn_struct_field_unsupported.invalid.conception");
+    try expectBackendCFixture("../../../language/phase14-interfaces/invalid/dyn_backend_unsupported.invalid.conception");
 
     try expectRunFixture("../../../language/phase10-ownership/valid/move_struct_local_run.valid.conception");
     try expectRunFixture("../../../language/phase10-ownership/valid/move_struct_argument_run.valid.conception");

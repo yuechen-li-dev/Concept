@@ -1,0 +1,16 @@
+# name: dyn non interface struct
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module Interfaces;
+
+struct Sink {
+    int value;
+};
+
+void Emit(dyn Sink& sink);
+
+=== diagnostics ===
+CON0257

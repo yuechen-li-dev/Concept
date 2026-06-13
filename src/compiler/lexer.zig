@@ -572,7 +572,7 @@ test "simple float literals tokenize with raw lexemes" {
     const expected_lexemes = [_][]const u8{ "1.0", "0.5", "123.456", "" };
     try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
     try std.testing.expectEqual(expected_lexemes.len, tokens.len);
-    for (expected_lexemes, tokens[0..3]) |expected_lexeme, actual| {
+    for (expected_lexemes[0..3], tokens[0..3]) |expected_lexeme, actual| {
         try std.testing.expectEqual(TokenKind.float_literal, actual.kind);
         try std.testing.expectEqualStrings(expected_lexeme, actual.lexeme);
         try std.testing.expectEqualStrings(try source_file.slice(actual.span), actual.lexeme);

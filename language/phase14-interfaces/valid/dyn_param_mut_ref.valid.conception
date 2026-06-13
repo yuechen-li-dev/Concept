@@ -1,0 +1,13 @@
+# name: dyn param mut ref
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Interfaces;
+
+interface Writer {
+    void Write(int value);
+};
+
+void Emit(mut dyn Writer& writer);
