@@ -1,9 +1,10 @@
 # Concept — Checkpoint 1 Coverage Matrix
-## Phase 14 Closeout vs PoC3 Constitution
+## Phase 15 M0 vs PoC3 Constitution
 
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
 **Phases closed:** 1 through 14
+**Current phase:** Phase 15 M0 design-only C ABI milestone
 **Fixture corpus:** 725 total (355 valid, 370 invalid)
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
@@ -305,7 +306,7 @@
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| `repr(C)` layout annotation | ❌ | Not yet |
+| `repr(C)` layout annotation | ❌ | Phase 15 M0 design added; parser/HIR/layout validation not implemented yet |
 | `repr(packed)` annotation | ❌ | Not yet |
 | `align(n)` annotation | ❌ | Not yet |
 | `static_assert(sizeof(...) == N)` | ❌ | `static_assert` exists for comptime bool expressions; `sizeof`/`alignof` builtins not yet |
@@ -359,9 +360,9 @@
 |---------|--------|-------|
 | C backend (compile Concept to C) | ✅ | Phase 4+ — MIR → C backend, primary bootstrap path |
 | C-readable generated output | ✅ | Generated C is auditable and readable |
-| `extern "C"` declarations | ❌ | Not yet — FFI boundary declarations not parsed |
-| `repr(C)` struct layout | ❌ | Depends on layout annotation work |
-| Export to C (`export "C" fn`) | ❌ | Not yet |
+| `extern "C"` declarations | ❌ | Phase 15 M0 design added; parser/HIR/MIR/backend behavior not implemented yet |
+| `repr(C)` struct layout | ❌ | Phase 15 M0 design added; layout marker and ABI validation not implemented yet |
+| Export to C (`export "C" fn`) | ❌ | Phase 15 M0 design added; source surface and backend symbol emission not implemented yet |
 | C++ interop (`extern "C++"`) | ❌ | PoC3 §36.2 — quarantined/future |
 
 ---
@@ -441,10 +442,13 @@
 - remaining `interface` / `dyn` work beyond the borrowed C backend subset:
   owning dyn boxes, dyn returns/fields/locals, RTTI/dynamic cast decisions,
   upcasting/inheritance non-goals, and ABI policy
-- `extern "C"` interop (needed for real library calls from Concept)
+- `extern "C"` interop implementation after the Phase 15 M0 design
 - `import` / multi-module compilation
 - `yield` in machines
-- `repr(C)` for ABI-compatible structs
+- `repr(C)` implementation for ABI-compatible structs after the Phase 15 M0
+  design
+- `export "C"` implementation for Concept functions exposed to C after the
+  Phase 15 M0 design
 - Full `must_use` on arbitrary functions (not just enums)
 - `panic` / `assert` infrastructure
 
@@ -502,11 +506,11 @@
 | §26–27 Allocation and arenas | 🔶 Core done; `Id<T>`, `Store`, `Arena.create`, generic allocator deferred |
 | §28 Unsafe | ✅ Complete |
 | §29 Volatile/atomics/barriers | ❌ Not started |
-| §30–31 Layout/ABI/bitfields | ❌ Not started |
+| §30–31 Layout/ABI/bitfields | ❌ Phase 15 M0 design added for `repr(C)` structs; implementation not started |
 | §32 Inline assembly | ❌ Not started |
 | §33 Comptime | 🔶 Scalar hermetic comptime done; type-level comptime, capability execution deferred |
 | §34–35 Reflection/macros | ❌ Correctly deferred per PoC3 |
-| §36 C interop | 🔶 C backend done; `extern "C"`, `repr(C)`, export deferred |
+| §36 C interop | 🔶 C backend done; Phase 15 M0 design added for `extern "C"`, `export "C"`, and `repr(C)`; implementation deferred |
 | §37 State machines | 🔶 Literal transitions runnable; `yield`, nested machines, match/decide runtime deferred |
 | §38–39 SoA/audit | ❌ Provisional/future |
 | §40 Compiler architecture | 🔶 Core pipeline done; LLVM/native backends are Stage 3 |
@@ -533,13 +537,14 @@
 ---
 
 *This matrix began as the Phase 13 closeout snapshot and has been updated
-through the Phase 14 closeout. Stage 1 is substantially implemented. Phase 14
+through Phase 15 M0. Stage 1 is substantially implemented. Phase 14
 closed runtime interfaces and borrowed dyn dispatch v0: interfaces are HIR
 declarations with validated requirements and impl conformance; borrowed dyn
 references support concrete-to-dyn call-boundary coercion, dyn method calls,
 MIR-visible dyn coercion/interface calls, and C backend vtable lowering for
-the supported subset. The critical path to full Stage 1 completion now includes
-`extern "C"` interop, `import`/multi-module compilation, `yield` in machines,
-and `repr(C)`.
+the supported subset. Phase 15 M0 defines the C ABI design for `extern "C"`,
+`export "C"`, and `repr(C)` without implementing compiler behavior. The
+critical path to full Stage 1 completion now includes C ABI implementation,
+`import`/multi-module compilation, and `yield` in machines.
 Everything else in the Stage 1 gap list is important but not load-bearing for
 the self-hosting bootstrap path.*

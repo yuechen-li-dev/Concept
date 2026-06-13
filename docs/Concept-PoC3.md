@@ -64,6 +64,13 @@ observed through dyn dispatch remains deferred until references are
 first-class TypeStore/ABI values. Owning dyn boxes, heap boxing, inheritance,
 RTTI, dynamic cast, reflection, Drop through dyn, dyn fields/returns/locals,
 and hidden heap allocation remain deferred.
+Phase 15 has started with a documentation-only C ABI design milestone:
+`extern "C"` declares foreign C symbols without parsing headers, `export "C"`
+exposes checked Concept functions with C linkage, and `repr(C)` is reserved for
+supported C-compatible struct layout promises. No compiler behavior is
+implemented by P15-M0; C header parsing, automatic includes, automatic library
+linking, C++ interop, varargs, enum ABI, dyn ABI stability, and machine frame
+ABI stability remain deferred.
 Deferred Phase 12
 work includes
 `Arena.create`, hosted runtime helper implementation, allocation failure
