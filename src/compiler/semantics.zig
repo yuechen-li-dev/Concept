@@ -73,6 +73,56 @@ pub const SemanticModule = struct {
         };
     }
 
+    pub const ArenaAllocationTypeEligibility = enum {
+        ok,
+        contains_type_param,
+        void_type,
+        opaque_handle,
+        drop_required,
+        manual_init_drop_payload,
+    };
+
+    pub fn arenaAllocationTypeEligibility(self: *const SemanticModule, type_id: types.TypeId) ArenaAllocationTypeEligibility {
+        if (self.typeContainsTypeParam(type_id)) return .contains_type_param;
+        return switch (self.types.kind(type_id)) {
+            .void => .void_type,
+            .arena, .allocator => .opaque_handle,
+            .manual_init => |manual_init| if (self.typeRequiresDropForArena(manual_init.payload, 0))
+                .manual_init_drop_payload
+            else
+                .ok,
+            else => if (self.typeRequiresDropForArena(type_id, 0)) .drop_required else .ok,
+        };
+    }
+
+    fn typeRequiresDropForArena(self: *const SemanticModule, type_id: types.TypeId, depth: usize) bool {
+        if (depth > self.types.count()) return false;
+        if (self.hasDrop(type_id) != null) return true;
+        return switch (self.types.kind(type_id)) {
+            .struct_type => |struct_id| self.structRequiresDropForArena(struct_id, depth + 1),
+            else => false,
+        };
+    }
+
+    fn structRequiresDropForArena(self: *const SemanticModule, struct_id: hir.StructId, depth: usize) bool {
+        if (struct_id.index >= self.hir.structs.items.len) return false;
+        const struct_decl = self.hir.getStruct(struct_id);
+        for (struct_decl.fields) |field_id| {
+            const field = self.hir.getField(field_id);
+            if (self.typeRequiresDropForArena(field.type_id, depth)) return true;
+        }
+        return false;
+    }
+
+    fn typeContainsTypeParam(self: *const SemanticModule, type_id: types.TypeId) bool {
+        return switch (self.types.kind(type_id)) {
+            .type_param => true,
+            .pointer => |pointer| self.typeContainsTypeParam(pointer.pointee),
+            .manual_init => |manual_init| self.typeContainsTypeParam(manual_init.payload),
+            else => false,
+        };
+    }
+
     fn findIntrinsicDropConcept(self: *const SemanticModule) ?hir.ConceptId {
         for (self.hir.concepts.items, 0..) |concept, index| {
             if (std.mem.eql(u8, self.interner.text(concept.name), "Drop") and

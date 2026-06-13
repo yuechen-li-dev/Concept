@@ -1569,6 +1569,38 @@ test "MIR C backend emits explicit arena reset and destroy helper calls" {
     try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_arena_destroy(cpt_p_arena_") != null);
 }
 
+test "MIR C backend does not emit Drop cleanup for arena pointer locals or reset destroy" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\
+        \\struct File {
+        \\    int handle;
+        \\};
+        \\
+        \\impl Drop<File> {
+        \\    void drop(File f) {
+        \\        return;
+        \\    }
+        \\}
+        \\
+        \\alloc int useArena(Arena* arena) {
+        \\    int* value = Arena.alloc<int>(arena);
+        \\    Arena.reset(arena);
+        \\    Arena.destroy(arena);
+        \\    return 0;
+        \\}
+        \\
+        \\int main() {
+        \\    return 0;
+        \\}
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_arena_reset(cpt_p_arena_") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_arena_destroy(cpt_p_arena_") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_f_drop(cpt_l_value_") == null);
+}
+
 test "MIR C backend emits AllocError as value placeholder" {
     const c_source = try emitForTest(
         \\module Main;

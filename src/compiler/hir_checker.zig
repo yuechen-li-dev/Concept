@@ -1316,24 +1316,28 @@ const Checker = struct {
     }
 
     fn checkArenaAllocatedType(self: *Checker, allocated_type: types.TypeId, span: diagnostics.SourceSpan) CheckError!void {
-        if (self.containsTypeParam(allocated_type)) {
-            try self.reportAt(.ArenaAllocRequiresConcreteType, "Arena.alloc requires a concrete allocated type", span);
-            return error.InvalidSemanticModule;
-        }
-        switch (self.module.types.kind(allocated_type)) {
-            .void => {
+        switch (self.module.arenaAllocationTypeEligibility(allocated_type)) {
+            .ok => {},
+            .contains_type_param => {
+                try self.reportAt(.ArenaAllocRequiresConcreteType, "Arena.alloc requires a concrete allocated type", span);
+                return error.InvalidSemanticModule;
+            },
+            .void_type => {
                 try self.reportAt(.ArenaAllocRequiresConcreteType, "Arena.alloc cannot allocate void", span);
                 return error.InvalidSemanticModule;
             },
-            .arena, .allocator => {
+            .opaque_handle => {
                 try self.reportAt(.OpaqueAllocationTypeByValueUnsupported, "Arena and Allocator are opaque allocation handles and cannot be arena-allocated by value in v0", span);
                 return error.InvalidSemanticModule;
             },
-            else => {},
-        }
-        if (self.module.hasDrop(allocated_type) != null) {
-            try self.reportAt(.ArenaAllocDropTypeUnsupported, "arena allocation of Drop types is not supported in Phase 12 v0", span);
-            return error.InvalidSemanticModule;
+            .drop_required => {
+                try self.reportAt(.ArenaAllocDropTypeUnsupported, "arena allocation of types that require Drop is not supported in Phase 12 v0", span);
+                return error.InvalidSemanticModule;
+            },
+            .manual_init_drop_payload => {
+                try self.reportAt(.ArenaAllocDropTypeUnsupported, "arena allocation of ManualInit<T> where T requires Drop is not supported in Phase 12 v0", span);
+                return error.InvalidSemanticModule;
+            },
         }
     }
 

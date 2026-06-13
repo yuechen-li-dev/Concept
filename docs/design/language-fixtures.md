@@ -111,8 +111,9 @@ comptime `noalloc` calls, unsafe/noalloc coexistence, and permissive `alloc` or
 unspecified callers. P12-M3 valid fixtures cover `Arena*` and `Allocator*`
 parameter positions, `AllocError` type positions, allocation surface types in
 `noalloc` functions, `alloc` functions, and generic functions.
-P12-M4 valid fixtures cover `Arena.alloc<T>(arena)` for `int`, `bool`, structs,
-unspecified-effect functions, and generic functions after instantiation.
+P12-M4/P12-M6 valid fixtures cover `Arena.alloc<T>(arena)` for `int`, `bool`,
+non-Drop structs, unspecified-effect functions, and generic functions after
+instantiation.
 P12-M5 valid fixtures cover `Arena.reset(arena)` and `Arena.destroy(arena)` in
 `noalloc`, `alloc`, and unspecified functions, including after arena allocation.
 
@@ -122,10 +123,11 @@ callers directly calling `alloc` or unspecified callees, including generic and
 comptime cases. P12-M3 invalid fixtures cover rejected `Arena`/`Allocator`
 struct literals, field access on opaque allocation handles, and by-value
 opaque-handle signatures.
-P12-M4 invalid fixtures cover arena allocation inside `noalloc`, missing type
-arguments, wrong value arity, non-`Arena*` operands, Drop allocated types,
-opaque allocation handles allocated by value, and compile-time allocation
-rejection.
+P12-M4/P12-M6 invalid fixtures cover arena allocation inside `noalloc`, missing
+type arguments, wrong value arity, non-`Arena*` operands, direct Drop allocated
+types, generic Drop allocation after instantiation, structs containing Drop
+fields, `ManualInit<DropType>` allocation, opaque allocation handles allocated
+by value, and compile-time allocation rejection.
 P12-M5 invalid fixtures cover reset/destroy arity, rejected type arguments,
 non-`Arena*` operands, and unsupported compile-time reset/destroy.
 

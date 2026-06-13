@@ -313,11 +313,16 @@ now, and rejected inside `noalloc` functions with
 `CON0190 AllocationInNoAllocFunction`. This diagnostic is distinct from the
 P12-M2 direct call-edge diagnostic `CON0191 AllocationEffectMismatch`.
 
-P12-M4 v0 supports only concrete non-Drop allocated types. Allocation of a type
-with a `Drop<T>` impl is rejected with
-`CON0194 ArenaAllocDropTypeUnsupported`. Allocation of `Arena` or `Allocator`
-by value is rejected with `CON0199 OpaqueAllocationTypeByValueUnsupported`.
-`AllocError` remains a copyable value placeholder and may be allocated.
+P12-M4 v0 supports only concrete non-Drop allocated types. P12-M6 hardens this
+through a single arena allocation eligibility check used by `Arena.alloc<T>`.
+Allocation of a type with a direct `Drop<T>` impl is rejected with
+`CON0194 ArenaAllocDropTypeUnsupported`; allocation of a struct containing a
+field that requires Drop is rejected with the same diagnostic. Generic
+`Arena.alloc<T>` is checked after instantiation and substitution, so
+`Arena.alloc<T>` in a template may compile for `T = int` and reject for a
+concrete Drop type. Allocation of `Arena` or `Allocator` by value is rejected
+with `CON0199 OpaqueAllocationTypeByValueUnsupported`. `AllocError` remains a
+copyable value placeholder and may be allocated.
 
 The HIR contains a dedicated `arena_alloc` expression carrying the arena
 operand, allocated type, result type, and source span. MIR lowers this to an
@@ -396,6 +401,34 @@ already rejects arena allocation of Drop types; P12-M5 does not add destructor
 lists, per-object Drop registration, or Drop-in-arena behavior. Reset/destroy
 also do not integrate with `ManualInit<T>`: the operation is region-level
 storage invalidation, not per-place initializedness tracking.
+
+### P12-M6 implementation status
+
+P12-M6 is a hardening milestone for arena allocation and storage-state
+interactions. It does not add new arena syntax.
+
+Implemented:
+
+- `Arena.alloc<T>` uses a centralized eligibility predicate.
+- allocated types must be concrete and non-void;
+- `Arena` and `Allocator` by-value allocation remains rejected with `CON0199`;
+- direct Drop allocated types are rejected with `CON0194`;
+- structs containing fields that require Drop are rejected with `CON0194`;
+- generic arena allocation is checked after concrete type substitution;
+- `ManualInit<T>` is rejected for arena allocation when `T` requires Drop;
+- arena pointer locals remain pointer values, not owned pointees;
+- `Arena.reset` and `Arena.destroy` emit helper calls only and run no Drop.
+
+Not implemented:
+
+- Drop-in-arena;
+- destructor lists or Drop registration;
+- arena runtime allocation;
+- hidden heap fallback;
+- allocation failure paths;
+- full `ManualInit<T>` arena integration;
+- region lifetime checking, escape checking, or use-after-reset/destroy
+  diagnostics.
 
 ## 4. Profiles and hidden heap policy
 
@@ -554,8 +587,12 @@ Trivial and non-Drop structs may be arena-allocated. Drop-in-arena may be added
 later with explicit destructor registration. Arena reset/destroy must not
 silently bypass Drop for Drop types.
 
-P12-M5 reset/destroy therefore run no Drop code: Drop types cannot be
-arena-allocated in v0, and there is no arena destructor list to walk.
+P12-M6 treats a struct as arena-ineligible when any field requires Drop. This is
+an arena eligibility rule, not a general expansion of local automatic cleanup:
+storage-state cleanup still follows the Phase 10 machinery and does not make
+arena pointees owned locals. P12-M5 reset/destroy therefore run no Drop code:
+Drop types cannot be arena-allocated in v0, and there is no arena destructor
+list to walk.
 
 ## 8. ManualInit interaction
 
@@ -590,8 +627,14 @@ milestone adds uninitialized arena storage, it must integrate with
 `ManualInit<T>`, unsafe boundaries, storage-state diagnostics, Drop restrictions,
 and partial initialization rules.
 
+P12-M6 rejects `Arena.alloc<ManualInit<T>>(arena)` when `T` requires Drop, so
+`ManualInit<DropType>` cannot be used to bypass the arena Drop restriction.
+`ManualInit<T>` for non-Drop `T` remains only the existing Phase 10 manual
+storage-state wrapper; Phase 12 does not add uninitialized arena allocation or
+construction semantics for it.
+
 Reset/destroy invalidation is region-level storage invalidation. It does not
-change or model per-place `ManualInit<T>` initializedness in P12-M5.
+change or model per-place `ManualInit<T>` initializedness in P12-M6.
 
 ## 9. ID-based stores
 
@@ -777,7 +820,10 @@ Future tests:
 
 - `noalloc` rejects direct allocation;
 - arena allocation works for non-Drop structs;
-- arena allocation rejects Drop types;
+- arena allocation rejects direct Drop types;
+- arena allocation rejects structs containing Drop fields;
+- generic arena allocation rejects Drop types after instantiation;
+- `ManualInit<DropType>` cannot bypass arena Drop rejection;
 - arena reset/destroy behavior is represented;
 - store add/get returns correct values;
 - ID type mismatches are rejected;
@@ -830,7 +876,7 @@ P12-M2  direct allocation-effect checking scaffold
 P12-M3  Core allocation surface: AllocError, Arena, allocator placeholders
 P12-M4  Arena allocation intrinsic for non-Drop concrete types
 P12-M5  Arena reset/destroy semantics and invalidation rules
-P12-M6  Drop interaction hardening follow-ups
+P12-M6  Arena Drop/storage-state hardening
 P12-M7  MIR allocation/effect representation and C backend hardening
 P12-M8  ID-based store design/prototype and examples
 P12-M9  Closeout

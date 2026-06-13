@@ -1,0 +1,24 @@
+# name: arena alloc manual init drop
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Example;
+
+struct File {
+    int handle;
+};
+
+impl Drop<File> {
+    void drop(File f) {
+    }
+}
+
+alloc ManualInit<File>* Bad(Arena* arena) {
+    return Arena.alloc<ManualInit<File>>(arena);
+}
+
+=== diagnostics ===
+CON0194
+

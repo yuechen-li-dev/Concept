@@ -41,9 +41,11 @@ Implementation note: Phase 12 now includes function-level `alloc`/`noalloc`
 syntax, direct `noalloc` call-edge checking, compiler-known allocation surface
 types, and a narrow `Arena.alloc<T>(arena)` intrinsic for non-Drop concrete
 types, plus explicit `Arena.reset(arena)` and `Arena.destroy(arena)` surface
-operations. Allocation failure paths, transitive checking, runtime allocation
-support, deeper arena invalidation analysis, and hidden heap behavior remain
-unimplemented.
+operations. Phase 12 also hardens arena allocation against
+Drop/resource-management loopholes, including generic instantiations,
+Drop-containing structs, and `ManualInit<DropType>`. Allocation failure paths,
+transitive checking, runtime allocation support, deeper arena invalidation
+analysis, and hidden heap behavior remain unimplemented.
 
 ---
 

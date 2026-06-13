@@ -1,0 +1,29 @@
+# name: arena alloc generic drop type
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Example;
+
+struct File {
+    int handle;
+};
+
+impl Drop<File> {
+    void drop(File f) {
+    }
+}
+
+template<T>
+alloc T* Make(Arena* arena, T* seed) {
+    return Arena.alloc<T>(arena);
+}
+
+alloc File* MakeFile(Arena* arena, File* seed) {
+    return Make(arena, seed);
+}
+
+=== diagnostics ===
+CON0194
+
