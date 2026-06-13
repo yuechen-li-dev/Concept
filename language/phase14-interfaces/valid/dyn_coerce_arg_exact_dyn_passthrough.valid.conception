@@ -1,0 +1,22 @@
+# name: dyn coerce arg exact dyn passthrough
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+interface Writer {
+    void Write(int value);
+};
+
+void Emit(mut dyn Writer& writer) {
+}
+
+void Forward(mut dyn Writer& writer) {
+    Emit(writer);
+}
+
+int main() {
+    return 0;
+}

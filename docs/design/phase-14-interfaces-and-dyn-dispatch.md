@@ -623,7 +623,7 @@ CON0244 InvalidInterfaceImplTarget
 CON0245 MissingInterfaceRequirementImpl
 CON0246 InvalidInterfaceRequirementImplSignature
 CON0247 ExtraInterfaceImplFunction
-CON0248 DynRequiresInterface
+CON0248 DuplicateInterfaceImplFunction
 CON0249 DynCoercionRequiresImpl
 CON0250 DynCoercionRequiresPlace
 CON0251 UnknownInterfaceMethod
@@ -631,6 +631,9 @@ CON0252 InterfaceCallArityMismatch
 CON0253 InterfaceCallTypeMismatch
 CON0254 InterfaceCallRequiresMutableDyn
 CON0255 InterfaceRuntimeUnsupported
+CON0256 DuplicateInterfaceImpl
+CON0257 DynRequiresInterface
+CON0258 DynRequiresBorrowedReference
 ```
 
 P14-M0 does not implement these diagnostics. They are a planning list so later
@@ -842,3 +845,50 @@ owning dyn boxes, heap boxing, dynamic cast, RTTI, reflection, interface
 inheritance, default methods, associated types, generic interface methods, Drop
 through dyn, effect checking through dyn, unsafe interface methods, and
 cross-module/orphan interface coherence.
+
+### P14-M5 implementation status
+
+P14-M5 adds the concrete-to-dyn coercion scaffold at function call boundaries.
+When a parameter expects `dyn Interface&` or `mut dyn Interface&`, an
+addressable concrete argument may be coerced if its concrete type has a
+matching `impl Interface<ConcreteType>`.
+
+Implemented in M5:
+
+- call arguments can coerce from an addressable concrete place to `dyn
+  Interface&` or `mut dyn Interface&`;
+- accepted source places include locals, parameters, and addressable field
+  places already modeled by HIR/MIR;
+- struct literals, function-call results, binary expressions, `move` operands,
+  and other rvalues are rejected with `CON0250 DynCoercionRequiresPlace`;
+- missing interface impls are rejected with
+  `CON0249 DynCoercionRequiresImpl`;
+- concept impls do not count as interface impls;
+- impls for another interface or another concrete type do not count;
+- exact dyn-to-dyn argument passing remains an ordinary exact type match;
+- the coercion is represented explicitly in HIR as `dyn_coerce` with source
+  expression, target interface id, selected interface impl id, and result dyn
+  type;
+- MIR lowering preserves the coercion explicitly as `MirRvalue.dyn_coerce`
+  with source place, interface id, impl id, and result type;
+- the MIR validator checks that the selected interface impl exists, targets the
+  same interface, and matches the source place type;
+- backend C emission still rejects dyn runtime use as unsupported and emits no
+  fat-reference structs, vtable structs, vtable constants, or `cpt_dyn_*`
+  artifacts;
+- no heap allocation, owning dyn box, dynamic cast, RTTI, reflection, Drop
+  through dyn, or interface inheritance behavior is introduced.
+
+M5 preserves `is_mut` in the dyn interface type but does not yet enforce
+method-call receiver mutability because dyn method calls are still deferred.
+For this scaffold, both immutable and mutable dyn parameter coercions are
+accepted from addressable concrete places when the interface impl exists.
+
+Still unimplemented after P14-M5: dyn method calls, method-call syntax beyond
+impl function declarations, interface-call HIR/MIR, vtable representation,
+backend C vtable/interface/fat-reference emission, dyn locals with
+initializers, dyn returns, dyn struct fields, owning dyn boxes, heap boxing,
+dynamic cast, RTTI, reflection, interface inheritance, default methods,
+associated types, generic interface methods, Drop through dyn, effect checking
+through dyn, unsafe interface methods, and cross-module/orphan interface
+coherence.

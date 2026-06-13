@@ -2577,6 +2577,7 @@ const BodyLowerer = struct {
                 };
                 break :blk pointee;
             },
+            .dyn_coerce => |coerce| coerce.result_type,
             .move_expr, .manual_init_assume, .try_expr, .compile_time, .target_metadata, .decide, .concept_requirement_call, .test_intrinsic => {
                 try self.collector.diagnostics.append(diagnostics.testIntrinsicTypeMismatch(expr.span));
                 return null;

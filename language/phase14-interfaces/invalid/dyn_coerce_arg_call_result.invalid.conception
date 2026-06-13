@@ -1,0 +1,35 @@
+# name: dyn coerce arg call result
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+interface Writer {
+    void Write(int value);
+};
+
+struct ConsoleWriter {
+    int handle;
+};
+
+impl Writer<ConsoleWriter> {
+    void Write(mut ConsoleWriter& self, int value) {
+    }
+}
+
+ConsoleWriter Make() {
+    return ConsoleWriter { handle: 1 };
+}
+
+void Emit(mut dyn Writer& writer) {
+}
+
+int main() {
+    Emit(Make());
+    return 0;
+}
+
+=== diagnostics ===
+CON0250

@@ -531,6 +531,11 @@ const Checker = struct {
                 try self.checkTestIntrinsic(current_function_id, return_type, expr, test_intrinsic);
                 break :blk self.module.types.voidType();
             },
+            .dyn_coerce => |coerce| blk: {
+                _ = try self.checkExpr(current_function_id, return_type, coerce.source);
+                try self.requireDynCoerceValid(coerce, expr.span);
+                break :blk coerce.result_type;
+            },
             .call => |call| blk: {
                 var arg_types = std.ArrayList(types.TypeId).empty;
                 defer arg_types.deinit(self.allocator);
@@ -562,9 +567,15 @@ const Checker = struct {
                     try self.reportAt(.InvalidCall, "function call argument count mismatch", expr.span);
                     return error.InvalidSemanticModule;
                 }
-                for (arg_types.items, callee.params, call.args) |arg_type, param_id, arg_expr| {
+                for (arg_types.items, callee.params, call.args, 0..) |arg_type, param_id, arg_expr, arg_index| {
                     const param_type = self.module.hir.getParam(param_id).type_id;
-                    try self.requireCallSame(arg_type, param_type, "function call argument type mismatch", self.exprSpan(arg_expr));
+                    const checked_arg = try self.coerceDynCallArg(arg_expr, arg_type, param_type);
+                    if (checked_arg.index != arg_expr.index) {
+                        call.args[arg_index] = checked_arg;
+                        arg_types.items[arg_index] = param_type;
+                    } else {
+                        try self.requireCallSame(arg_type, param_type, "function call argument type mismatch", self.exprSpan(arg_expr));
+                    }
                 }
                 try self.checkAllocationEffectCall(current_function_id, callee.*, expr.span);
                 break :blk callee.return_type;
@@ -858,6 +869,85 @@ const Checker = struct {
             error.CapabilityNotGranted => try self.reportAt(.CompileTimeCapabilityNotGranted, "compile-time capability not granted; capability-bearing comptime function cannot be evaluated yet", span),
             error.TargetMetadataUnavailable => try self.reportAt(.CompileTimeTargetMetadataUnavailable, "compile-time target metadata is unavailable", span),
         }
+    }
+
+    fn coerceDynCallArg(self: *Checker, arg_expr: hir.ExprId, arg_type: types.TypeId, param_type: types.TypeId) CheckError!hir.ExprId {
+        const target_dyn = switch (self.module.types.kind(param_type)) {
+            .dyn_interface => |dyn| dyn,
+            else => return arg_expr,
+        };
+
+        if (sameType(arg_type, param_type)) return arg_expr;
+
+        if (self.module.types.kind(arg_type) == .dyn_interface) return arg_expr;
+
+        if (!self.isAddressablePlace(arg_expr)) {
+            try self.reportAt(.DynCoercionRequiresPlace, "dyn coercion requires an addressable concrete place", self.exprSpan(arg_expr));
+            return error.InvalidSemanticModule;
+        }
+
+        const impl_id = self.module.hir.findInterfaceImpl(target_dyn.interface_id, arg_type) orelse {
+            try self.reportAt(.DynCoercionRequiresImpl, "dyn coercion requires an interface impl for the concrete type", self.exprSpan(arg_expr));
+            return error.InvalidSemanticModule;
+        };
+
+        return try self.module.hir.addExpr(.{ .dyn_coerce = .{
+            .source = arg_expr,
+            .interface_id = target_dyn.interface_id,
+            .impl_id = impl_id,
+            .result_type = param_type,
+        } }, self.exprSpan(arg_expr));
+    }
+
+    fn requireDynCoerceValid(self: *Checker, coerce: hir.HirDynCoerce, span: diagnostics.SourceSpan) CheckError!void {
+        const dyn = switch (self.module.types.kind(coerce.result_type)) {
+            .dyn_interface => |dyn| dyn,
+            else => {
+                try self.reportAt(.TypeMismatch, "dyn coercion result type must be dyn interface", span);
+                return error.InvalidSemanticModule;
+            },
+        };
+        if (dyn.interface_id.index != coerce.interface_id.index) {
+            try self.reportAt(.TypeMismatch, "dyn coercion interface does not match result type", span);
+            return error.InvalidSemanticModule;
+        }
+        if (coerce.impl_id.index >= self.module.hir.interface_impls.items.len) {
+            try self.reportAt(.DynCoercionRequiresImpl, "dyn coercion requires an interface impl for the concrete type", span);
+            return error.InvalidSemanticModule;
+        }
+        const interface_impl = self.module.hir.getInterfaceImpl(coerce.impl_id);
+        if (interface_impl.interface_id.index != coerce.interface_id.index) {
+            try self.reportAt(.DynCoercionRequiresImpl, "dyn coercion requires an interface impl for the concrete type", span);
+            return error.InvalidSemanticModule;
+        }
+        const source_type = try self.checkExpr(null, self.module.types.voidType(), coerce.source);
+        if (!sameType(source_type, interface_impl.target_type)) {
+            try self.reportAt(.DynCoercionRequiresImpl, "dyn coercion requires an interface impl for the concrete type", span);
+            return error.InvalidSemanticModule;
+        }
+        if (!self.isAddressablePlace(coerce.source)) {
+            try self.reportAt(.DynCoercionRequiresPlace, "dyn coercion requires an addressable concrete place", span);
+            return error.InvalidSemanticModule;
+        }
+    }
+
+    fn isAddressablePlace(self: *Checker, expr_id: hir.ExprId) bool {
+        const expr = self.module.hir.getExpr(expr_id).*;
+        return switch (expr.kind) {
+            .local_ref, .param_ref => true,
+            .group => |inner| self.isAddressablePlace(inner),
+            .field_access => |field_access| self.isAddressableBase(field_access.receiver),
+            else => false,
+        };
+    }
+
+    fn isAddressableBase(self: *Checker, expr_id: hir.ExprId) bool {
+        const expr = self.module.hir.getExpr(expr_id).*;
+        return switch (expr.kind) {
+            .local_ref, .param_ref => true,
+            .group => |inner| self.isAddressableBase(inner),
+            else => false,
+        };
     }
 
     fn checkCompileTimeFunctionEligibility(self: *Checker, function: hir.HirFunction) CheckError!void {
@@ -1349,6 +1439,12 @@ const Checker = struct {
             .unary => |unary| .{ .unary = .{ .op = unary.op, .operand = try self.cloneExpr(unary.operand, subst, param_map, local_map, span) } },
             .address_of => |operand| .{ .address_of = try self.cloneExpr(operand, subst, param_map, local_map, span) },
             .deref => |operand| .{ .deref = try self.cloneExpr(operand, subst, param_map, local_map, span) },
+            .dyn_coerce => |coerce| .{ .dyn_coerce = .{
+                .source = try self.cloneExpr(coerce.source, subst, param_map, local_map, span),
+                .interface_id = coerce.interface_id,
+                .impl_id = coerce.impl_id,
+                .result_type = try self.substituteType(coerce.result_type, subst, span),
+            } },
             .move_expr => |operand| .{ .move_expr = try self.cloneExpr(operand, subst, param_map, local_map, span) },
             .manual_init_assume => |slot| .{ .manual_init_assume = try self.cloneExpr(slot, subst, param_map, local_map, span) },
             .try_expr => |operand| .{ .try_expr = try self.cloneExpr(operand, subst, param_map, local_map, span) },
@@ -1994,6 +2090,43 @@ test "HIR checker accepts function calls" {
     const args = try std.testing.allocator.dupe(hir.ExprId, &.{ try tm.int("1"), try tm.int("2") });
     tm.setBody(main_id, try tm.block(&.{try tm.ret(try addTestExpr(&tm.module.hir, .{ .call = .{ .function = add_id, .args = args } }))}));
     try tm.checkPass();
+}
+
+test "HIR checker inserts dyn coercion for concrete call argument" {
+    var tm = try TestModule.init();
+    defer tm.deinit();
+
+    const writer = try tm.interfaceDecl("Writer");
+    const write_req = try tm.interfaceRequirement(writer, "Write", tm.module.types.voidType());
+    _ = try tm.interfaceParam(write_req, "value", tm.module.types.intType());
+    const write_impl = try tm.module.hir.addInterfaceImplMethodFunction(try tm.name("Write"), tm.module.types.voidType(), false, synthetic_span);
+    _ = try tm.param(write_impl, "self", tm.module.types.intType());
+    _ = try tm.param(write_impl, "value", tm.module.types.intType());
+    tm.setBody(write_impl, try tm.block(&.{}));
+    const impl_functions = try std.testing.allocator.dupe(hir.FunctionId, &.{write_impl});
+    const impl_id = try tm.module.hir.addInterfaceImpl(writer, tm.module.types.intType(), impl_functions, synthetic_span);
+
+    const dyn_writer = try tm.module.types.addDynInterfaceType(writer, true);
+    const emit = try tm.function("Emit", tm.module.types.voidType());
+    _ = try tm.param(emit, "writer", dyn_writer);
+    tm.setBody(emit, try tm.block(&.{}));
+
+    const main = try tm.function("main", tm.module.types.intType());
+    const local = try tm.local(main, "writer", tm.module.types.intType());
+    const local_decl = try addTestStmt(&tm.module.hir, .{ .local_decl = .{ .local = local, .initializer = try tm.int("1") } });
+    const local_expr = try addTestExpr(&tm.module.hir, .{ .local_ref = local });
+    const args = try std.testing.allocator.dupe(hir.ExprId, &.{local_expr});
+    const call = try addTestExpr(&tm.module.hir, .{ .call = .{ .function = emit, .args = args } });
+    tm.setBody(main, try tm.block(&.{ local_decl, try addTestStmt(&tm.module.hir, .{ .expr_stmt = call }), try tm.ret(try tm.int("0")) }));
+
+    try tm.checkPass();
+
+    const checked_call = tm.module.hir.getExpr(call).kind.call;
+    const coerce = tm.module.hir.getExpr(checked_call.args[0]).kind.dyn_coerce;
+    try std.testing.expectEqual(local_expr, coerce.source);
+    try std.testing.expectEqual(writer, coerce.interface_id);
+    try std.testing.expectEqual(impl_id, coerce.impl_id);
+    try std.testing.expectEqual(dyn_writer, coerce.result_type);
 }
 
 test "HIR checker enforces direct allocation effects for noalloc callers" {

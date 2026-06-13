@@ -1,0 +1,27 @@
+# name: dyn coerce arg missing impl
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+interface Writer {
+    void Write(int value);
+};
+
+struct Other {
+    int x;
+};
+
+void Emit(mut dyn Writer& writer) {
+}
+
+int main() {
+    Other other = Other { x: 1 };
+    Emit(other);
+    return 0;
+}
+
+=== diagnostics ===
+CON0249

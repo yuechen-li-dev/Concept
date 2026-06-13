@@ -809,6 +809,10 @@ fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue
             try writer.writeByte('*');
             try emitOperand(writer, ctx, operand);
         },
+        .dyn_coerce => {
+            try reportUnsupportedCType(ctx, null);
+            return error.InvalidExecutable;
+        },
         .binary => |binary| {
             try writer.writeByte('(');
             try emitOperand(writer, ctx, binary.left);

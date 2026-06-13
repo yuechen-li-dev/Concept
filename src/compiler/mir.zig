@@ -151,6 +151,12 @@ pub const MirRvalue = union(enum) {
     },
     address_of: MirPlace,
     deref: MirOperand,
+    dyn_coerce: struct {
+        source: MirPlace,
+        interface_id: hir.InterfaceId,
+        impl_id: hir.InterfaceImplId,
+        result_type: types.TypeId,
+    },
     binary: struct {
         op: MirBinaryOp,
         left: MirOperand,
@@ -214,6 +220,10 @@ pub const MirRvalue = union(enum) {
         return .{ .deref = operand };
     }
 
+    pub fn dynCoerce(source_place: MirPlace, interface_id: hir.InterfaceId, impl_id: hir.InterfaceImplId, result_type: types.TypeId) MirRvalue {
+        return .{ .dyn_coerce = .{ .source = source_place, .interface_id = interface_id, .impl_id = impl_id, .result_type = result_type } };
+    }
+
     pub fn binaryOp(op: MirBinaryOp, left: MirOperand, right: MirOperand) MirRvalue {
         return .{ .binary = .{ .op = op, .left = left, .right = right } };
     }
@@ -261,6 +271,7 @@ pub const MirRvalue = union(enum) {
             .unary => |unary_rvalue| MirRvalue.unaryOp(unary_rvalue.op, try unary_rvalue.operand.clone(allocator)),
             .address_of => |place| MirRvalue.addressOf(place),
             .deref => |operand| MirRvalue.dereference(try operand.clone(allocator)),
+            .dyn_coerce => |coerce| MirRvalue.dynCoerce(coerce.source, coerce.interface_id, coerce.impl_id, coerce.result_type),
             .binary => |binary_rvalue| MirRvalue.binaryOp(
                 binary_rvalue.op,
                 try binary_rvalue.left.clone(allocator),
@@ -287,6 +298,7 @@ pub const MirRvalue = union(enum) {
             .unary => |unary_rvalue| unary_rvalue.operand.deinit(allocator),
             .address_of => {},
             .deref => |operand| operand.deinit(allocator),
+            .dyn_coerce => {},
             .binary => |binary_rvalue| {
                 binary_rvalue.left.deinit(allocator);
                 binary_rvalue.right.deinit(allocator);
@@ -813,6 +825,10 @@ fn writeRvalueDebug(writer: *std.Io.Writer, rvalue: MirRvalue) !void {
             try writer.writeAll("Deref(");
             try writeOperandDebug(writer, operand);
             try writer.writeByte(')');
+        },
+        .dyn_coerce => |coerce| {
+            try writer.print("DynCoerce {f} via {f} -> {f} ", .{ coerce.interface_id, coerce.impl_id, coerce.result_type });
+            try writePlaceDebug(writer, coerce.source);
         },
         .binary => |binary_rvalue| {
             try writer.print("Binary {s} ", .{binary_rvalue.op.lexeme()});

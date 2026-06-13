@@ -1,0 +1,27 @@
+# name: dyn coerce arg binary expr
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+interface Writer {
+    void Write(int value);
+};
+
+impl Writer<int> {
+    void Write(mut int& self, int value) {
+    }
+}
+
+void Emit(mut dyn Writer& writer) {
+}
+
+int main() {
+    Emit(1 + 2);
+    return 0;
+}
+
+=== diagnostics ===
+CON0250

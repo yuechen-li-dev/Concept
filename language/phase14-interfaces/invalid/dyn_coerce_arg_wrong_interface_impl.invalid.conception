@@ -1,0 +1,37 @@
+# name: dyn coerce arg wrong interface impl
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+interface Writer {
+    void Write(int value);
+};
+
+interface Reader {
+    int Read();
+};
+
+struct ConsoleWriter {
+    int handle;
+};
+
+impl Reader<ConsoleWriter> {
+    int Read(mut ConsoleWriter& self) {
+        return 0;
+    }
+}
+
+void Emit(mut dyn Writer& writer) {
+}
+
+int main() {
+    ConsoleWriter writer = ConsoleWriter { handle: 1 };
+    Emit(writer);
+    return 0;
+}
+
+=== diagnostics ===
+CON0249

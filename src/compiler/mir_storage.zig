@@ -368,6 +368,7 @@ const Analyzer = struct {
             .unary => |unary| try self.readOperand(states, unary.operand, span),
             .address_of => |place| try self.readPlace(states, place, span),
             .deref => |operand| try self.readOperand(states, operand, span),
+            .dyn_coerce => |coerce| try self.readPlace(states, coerce.source, span),
             .binary => |binary| {
                 try self.readOperand(states, binary.left, span);
                 try self.readOperand(states, binary.right, span);

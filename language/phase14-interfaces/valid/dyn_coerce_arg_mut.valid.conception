@@ -1,0 +1,29 @@
+# name: dyn coerce arg mut
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+interface Writer {
+    void Write(int value);
+};
+
+struct ConsoleWriter {
+    int handle;
+};
+
+impl Writer<ConsoleWriter> {
+    void Write(mut ConsoleWriter& self, int value) {
+    }
+}
+
+void Emit(mut dyn Writer& writer) {
+}
+
+int main() {
+    ConsoleWriter writer = ConsoleWriter { handle: 1 };
+    Emit(writer);
+    return 0;
+}

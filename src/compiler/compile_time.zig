@@ -200,6 +200,7 @@ pub const CompileTimeEvaluator = struct {
             .decide,
             .address_of,
             .deref,
+            .dyn_coerce,
             .move_expr,
             .manual_init_assume,
             .try_expr,

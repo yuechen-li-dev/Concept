@@ -1,10 +1,10 @@
 # Concept — Checkpoint 1 Coverage Matrix
-## Phase 14 M3 vs PoC3 Constitution
+## Phase 14 M5 vs PoC3 Constitution
 
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
-**Phases closed:** 1 through 13; Phase 14 M0-M3 implemented
-**Fixture corpus:** 670 total (331 valid, 339 invalid)
+**Phases closed:** 1 through 13; Phase 14 M0-M5 implemented
+**Fixture corpus:** 698 total (340 valid, 358 invalid)
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
 ---
@@ -41,8 +41,8 @@
 | `enum` declarations | ✅ | Payload enums with typed fields, unit variants |
 | `template` keyword | ✅ | Phase 8 — `template<T>` unconstrained and `template<T: Concept<T>>` constrained |
 | `concept` keyword | ✅ | Phase 8 — method-bearing and marker forms |
-| `interface` keyword | 🔶 | Parser accepts `interface` signature blocks; Phase 14 M3 preserves declarations in HIR, validates non-empty requirement signatures, and validates `impl Interface<Type>` conformance; dyn/vtable runtime dispatch not implemented |
-| `impl` blocks | ✅ | Phase 8 — `impl Concept<Type>`, `unsafe impl`, `impl Drop<T>`; Phase 14 M3 — separate interface impl conformance |
+| `interface` keyword | 🔶 | Parser accepts `interface` signature blocks; Phase 14 M5 preserves declarations in HIR, validates non-empty requirement signatures, validates `impl Interface<Type>` conformance, preserves dyn parameter types, and scaffolds concrete-to-dyn call coercion; dyn method calls and vtable runtime dispatch not implemented |
+| `impl` blocks | ✅ | Phase 8 — `impl Concept<Type>`, `unsafe impl`, `impl Drop<T>`; Phase 14 M5 — separate interface impl conformance used for dyn coercion lookup |
 | `operator` overloading | ❌ | PoC3 §25 — not in any phase plan yet |
 | `move` keyword | ✅ | Phase 10 — explicit move expression, use-after-move diagnosed |
 | `try` keyword | ✅ | Phase 5 — propagates `Result` error arm |
@@ -238,9 +238,9 @@
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| `interface Foo { ... }` declaration | 🔶 | Phase 14 M4 preserves top-level interface declarations, requirement signatures, spans, attributes, duplicate/overload checks, duplicate parameter checks, empty-interface rejection, interface-type runtime-use rejection, interface impl conformance, and dyn parameter type surfaces in HIR; runtime/vtable lowering not implemented |
-| `impl Interface<Type>` | 🔶 | Phase 14 M3 recognizes interface impls as HIR entities separate from concept impls and checks missing/extra/duplicate methods, receiver convention, return type, and parameter types; no vtable emission yet |
-| `dyn Foo&` dynamic dispatch | 🔶 | Phase 14 M4 implements borrowed `dyn Interface&` / `mut dyn Interface&` type syntax and TypeStore/HIR preservation for function parameters; concrete-to-dyn coercion, dyn calls, fat refs, vtables, and backend emission remain unimplemented |
+| `interface Foo { ... }` declaration | 🔶 | Phase 14 M5 preserves top-level interface declarations, requirement signatures, spans, attributes, duplicate/overload checks, duplicate parameter checks, empty-interface rejection, interface-type runtime-use rejection, interface impl conformance, dyn parameter type surfaces, and dyn coercion HIR/MIR scaffolding; runtime/vtable lowering not implemented |
+| `impl Interface<Type>` | 🔶 | Phase 14 M5 recognizes interface impls as HIR entities separate from concept impls, checks missing/extra/duplicate methods, receiver convention, return type, and parameter types, and uses matching `(interface, concrete type)` impls for dyn coercion lookup; no vtable emission yet |
+| `dyn Foo&` dynamic dispatch | 🔶 | Phase 14 M5 implements borrowed `dyn Interface&` / `mut dyn Interface&` type syntax, TypeStore/HIR preservation for function parameters, and call-boundary concrete-to-dyn coercion from addressable places with matching interface impls; dyn calls, fat-ref/vtable backend emission, and owning dyn remain unimplemented |
 | `interface` vs `concept` distinction | ✅ | Phase 14 doctrine: concept is static proof/generic constraint; interface is runtime contract represented in HIR; dyn is explicit dynamic reference with runtime dispatch still deferred |
 
 ---
@@ -496,7 +496,7 @@
 | §17 Errors | 🔶 `Result`, `try`, `must_use`, `discard` done; `panic` deferred |
 | §18–19 Enums and match | 🔶 Core done; guards, struct destructure, ref binding deferred |
 | §20–23 Concepts/generics/impl | 🔶 Core done; `derive`, negative concepts, orphan rule, bridge modules deferred |
-| §24 Interfaces/dyn | 🔶 Parser plus Phase 14 M0 design; vtable runtime deferred |
+| §24 Interfaces/dyn | 🔶 Phase 14 M5 covers declarations, impl conformance, borrowed dyn parameter types, and concrete-to-dyn call coercion scaffold; dyn calls and vtable runtime deferred |
 | §25 Operator overloading | ❌ Not started |
 | §26–27 Allocation and arenas | 🔶 Core done; `Id<T>`, `Store`, `Arena.create`, generic allocator deferred |
 | §28 Unsafe | ✅ Complete |
@@ -532,8 +532,8 @@
 ---
 
 *This matrix began as the Phase 13 closeout snapshot and has been lightly
-updated for Phase 14 M0. Stage 1 is substantially implemented. The critical
-path to full Stage 1 completion now includes implementing the designed
+updated through Phase 14 M5. Stage 1 is substantially implemented. The
+critical path to full Stage 1 completion now includes completing the designed
 `interface` / `dyn` runtime dispatch model, plus `extern "C"` interop,
 `import`/multi-module compilation, `yield` in machines, and `repr(C)`.
 Everything else in the Stage 1 gap list is important but not load-bearing for

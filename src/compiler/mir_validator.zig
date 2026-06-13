@@ -292,6 +292,32 @@ const Validator = struct {
                     },
                 }
             },
+            .dyn_coerce => |coerce| blk: {
+                try self.requireValidType(coerce.result_type, span);
+                const dyn = switch (self.semantic_module.types.kind(coerce.result_type)) {
+                    .dyn_interface => |dyn| dyn,
+                    else => {
+                        try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                        break :blk null;
+                    },
+                };
+                if (dyn.interface_id.index != coerce.interface_id.index) {
+                    try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                }
+                const source_type = try self.placeType(function_id, coerce.source, span);
+                if (coerce.impl_id.index >= self.semantic_module.hir.interface_impls.items.len) {
+                    try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
+                    break :blk coerce.result_type;
+                }
+                const interface_impl = self.semantic_module.hir.getInterfaceImpl(coerce.impl_id);
+                if (interface_impl.interface_id.index != coerce.interface_id.index) {
+                    try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
+                }
+                if (source_type != null and !sameType(source_type.?, interface_impl.target_type)) {
+                    try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                }
+                break :blk coerce.result_type;
+            },
             .binary => |binary| blk: {
                 const left_type = try self.operandType(function_id, binary.left, span);
                 const right_type = try self.operandType(function_id, binary.right, span);

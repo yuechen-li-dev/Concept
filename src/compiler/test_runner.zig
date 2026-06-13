@@ -319,6 +319,7 @@ const Runner = struct {
             .machine_result,
             .address_of,
             .deref,
+            .dyn_coerce,
             .move_expr,
             .manual_init_assume,
             .arena_alloc,

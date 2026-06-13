@@ -1,0 +1,36 @@
+# name: dyn coerce arg wrong concrete impl
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+interface Writer {
+    void Write(int value);
+};
+
+struct ConsoleWriter {
+    int handle;
+};
+
+struct Other {
+    int x;
+};
+
+impl Writer<Other> {
+    void Write(mut Other& self, int value) {
+    }
+}
+
+void Emit(mut dyn Writer& writer) {
+}
+
+int main() {
+    ConsoleWriter writer = ConsoleWriter { handle: 1 };
+    Emit(writer);
+    return 0;
+}
+
+=== diagnostics ===
+CON0249

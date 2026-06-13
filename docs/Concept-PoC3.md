@@ -56,12 +56,16 @@ methods, duplicates, extras, receiver convention, return types, and parameter
 types. M4 adds the borrowed dyn type surface: `dyn Interface&` and
 `mut dyn Interface&` can appear in function parameter signatures, resolve to
 distinct TypeStore dyn interface reference types, and reject non-interface,
-by-value, and raw-pointer dyn spellings. Concepts remain compile-time
-constraints, interfaces are runtime dispatch contracts, empty runtime
-interfaces are rejected, and interface requirements may use ordinary resolved
-types but not interface or dyn runtime types. Concrete-to-dyn coercion, dyn
-method calls, vtables, backend fat-reference emission, owning dyn boxes,
-inheritance, RTTI, and hidden heap allocation remain deferred.
+by-value, and raw-pointer dyn spellings. M5 adds call-boundary
+concrete-to-dyn coercion scaffolding: an addressable concrete local, parameter,
+or field place can be passed to a `dyn Interface&` or `mut dyn Interface&`
+parameter when the concrete type has the matching interface impl. The coercion
+is explicit in HIR and MIR, but backend fat-reference/vtable emission remains
+unsupported. Concepts remain compile-time constraints, interfaces are runtime
+dispatch contracts, empty runtime interfaces are rejected, and interface
+requirements may use ordinary resolved types but not interface or dyn runtime
+types. Dyn method calls, vtables, backend fat-reference emission, owning dyn
+boxes, inheritance, RTTI, and hidden heap allocation remain deferred.
 Deferred Phase 12
 work includes
 `Arena.create`, hosted runtime helper implementation, allocation failure
@@ -1301,8 +1305,11 @@ interface:
 Phase 14 v0 accepts non-empty interface declarations as HIR-only runtime
 contracts. Requirement names and parameter names must be unique, requirement
 types must resolve, overloads are rejected by name, and interface types may not
-be used directly in requirement return or parameter positions before `dyn`
-exists.
+be used directly in requirement return or parameter positions. Borrowed
+`dyn Interface&` parameters are accepted, and call-boundary concrete-to-dyn
+coercion requires an addressable concrete place plus a matching
+`impl Interface<ConcreteType>`. Temporaries are rejected until borrowed dyn
+lifetime extension is designed.
 
 Example concept:
 

@@ -1,0 +1,33 @@
+# name: dyn coerce arg impl separation
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+marker concept Marker<T>;
+
+interface Writer {
+    void Write(int value);
+};
+
+struct ConsoleWriter {
+    int handle;
+};
+
+impl Marker<ConsoleWriter>;
+
+impl Writer<ConsoleWriter> {
+    void Write(mut ConsoleWriter& self, int value) {
+    }
+}
+
+void Emit(mut dyn Writer& writer) {
+}
+
+int main() {
+    ConsoleWriter writer = ConsoleWriter { handle: 1 };
+    Emit(writer);
+    return 0;
+}

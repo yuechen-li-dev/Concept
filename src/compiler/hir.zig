@@ -399,6 +399,13 @@ pub const HirTestIntrinsic = struct {
     reason_span: SourceSpan,
 };
 
+pub const HirDynCoerce = struct {
+    source: ExprId,
+    interface_id: InterfaceId,
+    impl_id: InterfaceImplId,
+    result_type: types.TypeId,
+};
+
 pub const HirExprKind = union(enum) {
     int_literal: []const u8,
     bool_literal: bool,
@@ -426,6 +433,7 @@ pub const HirExprKind = union(enum) {
     unary: struct { op: UnaryOp, operand: ExprId },
     address_of: ExprId,
     deref: ExprId,
+    dyn_coerce: HirDynCoerce,
     move_expr: ExprId,
     manual_init_assume: ExprId,
     try_expr: ExprId,
@@ -1762,6 +1770,10 @@ pub const HirStore = struct {
             .deref => |operand| {
                 try writer.writeAll("Deref\n");
                 try self.writeExprDebug(writer, operand, depth + 1);
+            },
+            .dyn_coerce => |coerce| {
+                try writer.print("DynCoerce {f} via {f} -> {f}\n", .{ coerce.interface_id, coerce.impl_id, coerce.result_type });
+                try self.writeExprDebug(writer, coerce.source, depth + 1);
             },
             .move_expr => |operand| {
                 try writer.writeAll("Move\n");

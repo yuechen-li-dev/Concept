@@ -119,6 +119,8 @@ pub const DiagnosticCode = enum {
     ExtraInterfaceImplFunction,
     DuplicateInterfaceImpl,
     DuplicateInterfaceImplFunction,
+    DynCoercionRequiresImpl,
+    DynCoercionRequiresPlace,
     DynRequiresInterface,
     DynRequiresBorrowedReference,
     InterfaceRuntimeUnsupported,
@@ -299,6 +301,8 @@ pub const DiagnosticCode = enum {
             .InvalidInterfaceRequirementImplSignature => "CON0246",
             .ExtraInterfaceImplFunction => "CON0247",
             .DuplicateInterfaceImplFunction => "CON0248",
+            .DynCoercionRequiresImpl => "CON0249",
+            .DynCoercionRequiresPlace => "CON0250",
             .DynRequiresInterface => "CON0257",
             .DynRequiresBorrowedReference => "CON0258",
             .DuplicateInterfaceImpl => "CON0256",
@@ -726,6 +730,24 @@ pub fn duplicateInterfaceImplFunction(span: SourceSpan) Diagnostic {
     return Diagnostic.init(.DuplicateInterfaceImplFunction, .@"error", "duplicate function in interface impl", span);
 }
 
+pub fn dynCoercionRequiresImpl(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .DynCoercionRequiresImpl,
+        .@"error",
+        "dyn coercion requires an interface impl for the concrete type",
+        span,
+    ).withHelp("add an impl Interface<ConcreteType> or pass an existing dyn interface reference");
+}
+
+pub fn dynCoercionRequiresPlace(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .DynCoercionRequiresPlace,
+        .@"error",
+        "dyn coercion requires an addressable concrete place",
+        span,
+    ).withHelp("borrowed dyn references cannot be formed from temporaries in Phase 14 M5");
+}
+
 pub fn interfaceRuntimeUnsupported(span: SourceSpan) Diagnostic {
     return Diagnostic.init(
         .InterfaceRuntimeUnsupported,
@@ -945,6 +967,8 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0246", DiagnosticCode.InvalidInterfaceRequirementImplSignature.format());
     try std.testing.expectEqualStrings("CON0247", DiagnosticCode.ExtraInterfaceImplFunction.format());
     try std.testing.expectEqualStrings("CON0248", DiagnosticCode.DuplicateInterfaceImplFunction.format());
+    try std.testing.expectEqualStrings("CON0249", DiagnosticCode.DynCoercionRequiresImpl.format());
+    try std.testing.expectEqualStrings("CON0250", DiagnosticCode.DynCoercionRequiresPlace.format());
     try std.testing.expectEqualStrings("CON0255", DiagnosticCode.InterfaceRuntimeUnsupported.format());
     try std.testing.expectEqualStrings("CON0256", DiagnosticCode.DuplicateInterfaceImpl.format());
     try std.testing.expectEqualStrings("CON0257", DiagnosticCode.DynRequiresInterface.format());

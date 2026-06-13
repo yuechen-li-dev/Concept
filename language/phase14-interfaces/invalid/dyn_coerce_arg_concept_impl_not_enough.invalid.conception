@@ -1,0 +1,31 @@
+# name: dyn coerce arg concept impl not enough
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+marker concept Marker<T>;
+
+interface Writer {
+    void Write(int value);
+};
+
+struct ConsoleWriter {
+    int handle;
+};
+
+impl Marker<ConsoleWriter>;
+
+void Emit(mut dyn Writer& writer) {
+}
+
+int main() {
+    ConsoleWriter writer = ConsoleWriter { handle: 1 };
+    Emit(writer);
+    return 0;
+}
+
+=== diagnostics ===
+CON0249

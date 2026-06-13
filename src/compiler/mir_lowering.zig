@@ -418,6 +418,7 @@ const FunctionLowerer = struct {
             .unary => |unary| try self.lowerUnary(expr, unary, block_id),
             .address_of => |operand| try self.lowerAddressOf(expr, operand, block_id),
             .deref => |operand| try self.lowerDeref(expr, operand, block_id),
+            .dyn_coerce => |coerce| try self.lowerDynCoerce(expr, coerce, block_id),
             .move_expr => |operand| try self.lowerMove(expr, operand, block_id),
             .manual_init_assume => |slot| try self.lowerManualInitAssume(expr, slot, block_id),
             .binary => |binary| try self.lowerBinary(expr, binary, block_id),
@@ -479,6 +480,19 @@ const FunctionLowerer = struct {
             .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(temp), mir.MirRvalue.dereference(lowered.operand)),
         });
         return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = lowered.block };
+    }
+
+    fn lowerDynCoerce(self: *FunctionLowerer, expr: hir.HirExpr, coerce: hir.HirDynCoerce, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const source = try self.lowerAddressablePlace(coerce.source);
+        const temp = try self.addTemp(coerce.result_type);
+        try self.store.appendStatement(block_id, .{
+            .span = expr.span,
+            .kind = mir.MirStatementKind.assignTo(
+                mir.MirPlace.localPlace(temp),
+                mir.MirRvalue.dynCoerce(source, coerce.interface_id, coerce.impl_id, coerce.result_type),
+            ),
+        });
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = block_id };
     }
 
     fn lowerMove(self: *FunctionLowerer, expr: hir.HirExpr, operand: hir.ExprId, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
@@ -918,6 +932,7 @@ const FunctionLowerer = struct {
                 .logical_not => self.semantic_module.types.boolType(),
             },
             .address_of => |operand| try self.semantic_module.types.addPointerType(try self.inferAddressableExprType(operand)),
+            .dyn_coerce => |coerce| coerce.result_type,
             .move_expr => |operand| try self.inferMovableExprType(operand),
             .manual_init_assume => |slot| blk: {
                 const slot_type = try self.inferExprType(slot);
@@ -1117,6 +1132,35 @@ fn deinitInitializedOperands(allocator: std.mem.Allocator, operands: []mir.MirOp
 // ─────────────────────────────────────────────────────────────────────────────
 // Tests
 // ─────────────────────────────────────────────────────────────────────────────
+
+test "MIR lowering preserves dyn coercion rvalue" {
+    var module = try newModule();
+    defer module.deinit();
+
+    const writer = try module.hir.addInterface(try intern(&module, "Writer"), hir.synthetic_span);
+    const dyn_writer = try module.types.addDynInterfaceType(writer, true);
+    const impl_functions = try std.testing.allocator.dupe(hir.FunctionId, &.{});
+    const impl_id = try module.hir.addInterfaceImpl(writer, module.types.intType(), impl_functions, hir.synthetic_span);
+
+    const main = try addFunction(&module, "main", module.types.intType(), false);
+    const value = try addLocal(&module, main, "value", module.types.intType());
+    const value_decl = try module.hir.addStmt(.{ .local_decl = .{ .local = value, .initializer = try intExpr(&module, "1") } }, hir.synthetic_span);
+    const value_ref = try module.hir.addExpr(.{ .local_ref = value }, hir.synthetic_span);
+    const coerce = try module.hir.addExpr(.{ .dyn_coerce = .{
+        .source = value_ref,
+        .interface_id = writer,
+        .impl_id = impl_id,
+        .result_type = dyn_writer,
+    } }, hir.synthetic_span);
+    try setBody(&module, main, &.{ value_decl, try module.hir.addStmt(.{ .discard_stmt = coerce }, hir.synthetic_span), try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "0") }, hir.synthetic_span) });
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "DynCoerce InterfaceId(0) via InterfaceImplId(0)") != null);
+}
 
 test "MIR lowering debug snapshot includes enum tag switch" {
     var module = try newModule();
