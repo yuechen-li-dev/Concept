@@ -1,0 +1,32 @@
+# name: machine HIR shell match transition
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module Example;
+
+machine Lexer(int kind) -> int {
+    state Start {
+        transition match (kind) {
+            0 => Identifier;
+            1 => Number;
+            _ => Error;
+        };
+    }
+
+    state Identifier {
+        return 1;
+    }
+
+    state Number {
+        return 2;
+    }
+
+    state Error {
+        return -1;
+    }
+}
+
+=== diagnostics ===
+CON0231

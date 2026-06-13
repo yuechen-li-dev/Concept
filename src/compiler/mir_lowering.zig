@@ -41,6 +41,8 @@ const ModuleLowerer = struct {
     fn lower(self: *ModuleLowerer) LoweringError!mir.MirModule {
         errdefer self.mir_module.deinit();
 
+        if (self.semantic_module.hir.machines.items.len != 0) return error.MachineLoweringNotImplemented;
+
         for (self.semantic_module.hir.functions.items, 0..) |function, index| {
             if (function.body == null) continue;
             const hir_function_id = hir.FunctionId{ .index = @intCast(index) };
@@ -168,6 +170,7 @@ const FunctionLowerer = struct {
                 try self.terminateBlock(block_id, stmt.span, mir.MirTerminatorKind.returnValue(null));
                 return block_id;
             },
+            .transition_stmt => return error.MachineLoweringNotImplemented,
             .if_stmt => |if_stmt| return self.lowerIf(stmt, if_stmt, block_id),
             .while_stmt => |while_stmt| return self.lowerWhile(stmt, while_stmt, block_id),
             .unsafe_block => |body| return self.lowerStmt(body, block_id),
@@ -401,6 +404,7 @@ const FunctionLowerer = struct {
             .bool_literal => |value| .{ .operand = mir.MirOperand.boolLiteral(value), .block = block_id },
             .local_ref => |local_id| .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(try self.resolveLocal(local_id))), .block = block_id },
             .param_ref => |param_id| .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(try self.resolveParam(param_id))), .block = block_id },
+            .machine_param_ref => error.MachineLoweringNotImplemented,
             .group => |inner| try self.lowerExpr(inner, block_id),
             .compile_time => try self.lowerCompileTime(expr_id, block_id),
             .unary => |unary| try self.lowerUnary(expr, unary, block_id),
@@ -833,6 +837,7 @@ const FunctionLowerer = struct {
             .bool_literal => self.semantic_module.types.boolType(),
             .local_ref => |local_id| self.semantic_module.hir.getLocal(local_id).type_id,
             .param_ref => |param_id| self.semantic_module.hir.getParam(param_id).type_id,
+            .machine_param_ref => error.MachineLoweringNotImplemented,
             .group => |inner| try self.inferExprType(inner),
             .compile_time => |compile_time_expr| try self.inferExprType(compile_time_expr.operand),
             .unary => |unary| switch (unary.op) {
@@ -1305,6 +1310,22 @@ test "MIR lowering validates Phase 7 struct value params returns and calls" {
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "FieldAccess(Copy(MirLocalId(3)), FieldId(1))") != null);
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "Call FunctionId(0)(Int 3, Int 4)") != null);
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "Call FunctionId(1)(Copy(MirLocalId(") != null);
+}
+
+test "MIR lowering refuses machine-containing modules" {
+    var module = try newModule();
+    defer module.deinit();
+
+    const states = try std.testing.allocator.alloc(hir.HirMachineState, 1);
+    states[0] = .{
+        .name = try intern(&module, "Start"),
+        .span = hir.synthetic_span,
+        .source_order = 0,
+        .body = null,
+    };
+    _ = try module.hir.addMachine(try intern(&module, "Flow"), module.types.intType(), states, hir.synthetic_span);
+
+    try std.testing.expectError(error.MachineLoweringNotImplemented, lowerModule(std.testing.allocator, &module));
 }
 
 fn newModule() !semantics.SemanticModule {

@@ -120,6 +120,28 @@ decide cases remains deferred until machine bodies lower/typecheck through the
 normal executable path. `decide` remains stateless in Concept core; policy
 memory, hysteresis, and `min_commit` remain DragonGod/library features.
 
+P13-M6 adds the explicit HIR machine lowering scaffold. Machine declarations
+now have a real HIR item that preserves name, parameters, result type,
+allocation-effect metadata, attributes, ordered states, and the v0 initial
+state index. Each HIR state can reference its lowered state-body block, and
+transition statements are represented in HIR with literal, match, or decide
+transition targets. Literal targets, match arm targets, and decide case targets
+resolve to machine-local state indexes while preserving target spans for later
+diagnostics/debugging. HIR debug output exposes the machine, state, and
+transition structure.
+
+P13-M6 deliberately remains non-executable. Otherwise valid machines still
+report `CON0231 MachineSemanticsNotImplemented`, with wording updated to state
+that declarations are parsed, validated, and represented in HIR but executable
+machine lowering/runtime support is not implemented yet. MIR lowering refuses
+machine-containing modules instead of silently dropping them or treating them as
+functions, and the C backend must not emit machine code. P13-M6 does not add
+runtime frames, resume dispatch, Step/Active/Complete/Result builtins,
+yield/suspend, lifted locals, Drop/lifetime handling, machine effect
+enforcement, DragonGod features, stack HFSM, `board`, mailbox/event buses,
+actuators, dirty-key tracking, persistence, hysteresis, `min_commit`, policy
+memory, hidden heap behavior, scheduler behavior, or async behavior.
+
 ## Core doctrine
 
 ```text

@@ -188,6 +188,7 @@ pub const CompileTimeEvaluator = struct {
             .call => |call| try self.evaluateCall(call.function, call.args),
             .target_metadata => |metadata| self.evaluateTargetMetadata(metadata.query),
             .arena_alloc,
+            .machine_param_ref,
             .concept_requirement_call,
             .enum_constructor,
             .struct_literal,
@@ -301,7 +302,7 @@ pub const CompileTimeEvaluator = struct {
                 break :blk .continue_;
             },
             .while_stmt => |while_stmt| try self.executeWhile(while_stmt.condition, while_stmt.body),
-            .expr_stmt, .discard_stmt, .arena_reset, .arena_destroy, .unsafe_block, .match_stmt => error.UnsupportedStatement,
+            .expr_stmt, .discard_stmt, .transition_stmt, .arena_reset, .arena_destroy, .unsafe_block, .match_stmt => error.UnsupportedStatement,
         };
     }
 

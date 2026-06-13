@@ -11,6 +11,22 @@ pub const SourceSpan = source.SourceSpan;
 pub const MirFunctionId = MirId("MirFunctionId");
 pub const MirLocalId = MirId("MirLocalId");
 pub const MirBlockId = MirId("MirBlockId");
+pub const MirMachineStateId = MirId("MirMachineStateId");
+
+// P13-M6 names the MIR machine scaffold shape without emitting executable
+// machine MIR yet. Actual frame layout, resume dispatch, transitions, and
+// backend codegen remain future milestones.
+pub const MirMachineState = struct {
+    hir_state_index: u32,
+    name: hir.SymbolId,
+    span: SourceSpan,
+};
+
+pub const MirMachineTransitionTarget = union(enum) {
+    state: MirMachineStateId,
+    unsupported_match,
+    unsupported_decide,
+};
 
 fn MirId(comptime label: []const u8) type {
     return struct {

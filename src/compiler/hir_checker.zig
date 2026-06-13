@@ -206,6 +206,10 @@ const Checker = struct {
                 const value_type = try self.checkExpr(function_id, return_type, value);
                 try self.requireSame(value_type, return_type, "return expression type does not match function return type", self.exprSpan(value));
             },
+            .transition_stmt => {
+                try self.reportAt(.MachineSemanticsNotImplemented, "machine transition statements are not executable in function HIR", stmt.span);
+                return error.InvalidSemanticModule;
+            },
             .local_decl => |decl| {
                 const local = self.module.hir.getLocal(decl.local);
                 const init_type = try self.checkExpr(function_id, return_type, decl.initializer);
@@ -319,6 +323,7 @@ const Checker = struct {
             .bool_literal => self.module.types.boolType(),
             .local_ref => |id| self.module.hir.getLocal(id).type_id,
             .param_ref => |id| self.module.hir.getParam(id).type_id,
+            .machine_param_ref => |id| self.module.hir.getMachineParam(id).type_id,
             .group => |inner| try self.checkExpr(current_function_id, return_type, inner),
             .compile_time => |compile_time_expr| blk: {
                 self.compile_time_context_depth += 1;
@@ -741,6 +746,7 @@ const Checker = struct {
         return switch (expr.kind) {
             .local_ref => |local_id| self.module.hir.getLocal(local_id).type_id,
             .param_ref => |param_id| self.module.hir.getParam(param_id).type_id,
+            .machine_param_ref => |param_id| self.module.hir.getMachineParam(param_id).type_id,
             .group => |inner| try self.addressableExprType(current_function_id, return_type, inner, span),
             .field_access => |field_access| blk: {
                 const receiver_type = try self.checkExpr(current_function_id, return_type, field_access.receiver);
@@ -771,6 +777,7 @@ const Checker = struct {
         return switch (expr.kind) {
             .local_ref => |local_id| self.module.hir.getLocal(local_id).type_id,
             .param_ref => |param_id| self.module.hir.getParam(param_id).type_id,
+            .machine_param_ref => |param_id| self.module.hir.getMachineParam(param_id).type_id,
             .group => |inner| try self.movePlaceExprType(current_function_id, return_type, inner, span),
             .field_access => |field_access| {
                 _ = try self.checkExpr(current_function_id, return_type, field_access.receiver);
@@ -789,6 +796,7 @@ const Checker = struct {
         return switch (expr.kind) {
             .local_ref => |local_id| .{ .local = local_id },
             .param_ref => |param_id| .{ .param = param_id },
+            .machine_param_ref => return null,
             .group => |inner| self.addressableBase(inner),
             else => null,
         };
@@ -1059,6 +1067,7 @@ const Checker = struct {
             } },
             .while_stmt => |while_stmt| .{ .while_stmt = .{ .condition = try self.cloneExpr(while_stmt.condition, subst, param_map, local_map, span), .body = try self.cloneStmt(while_stmt.body, subst, param_map, local_map, function_id, span) } },
             .unsafe_block => |body| .{ .unsafe_block = try self.cloneStmt(body, subst, param_map, local_map, function_id, span) },
+            .transition_stmt => return error.InvalidSemanticModule,
             .match_stmt => |match_stmt| blk: {
                 var arms = try self.allocator.alloc(hir.HirMatchArm, match_stmt.arms.len);
                 errdefer self.allocator.free(arms);
@@ -1076,6 +1085,7 @@ const Checker = struct {
             .bool_literal => |value| .{ .bool_literal = value },
             .local_ref => |id| .{ .local_ref = local_map.get(id).? },
             .param_ref => |id| .{ .param_ref = param_map.get(id).? },
+            .machine_param_ref => return error.InvalidSemanticModule,
             .call => |call| blk: {
                 var args = try self.allocator.alloc(hir.ExprId, call.args.len);
                 errdefer self.allocator.free(args);

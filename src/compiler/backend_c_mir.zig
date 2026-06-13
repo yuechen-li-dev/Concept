@@ -34,6 +34,14 @@ pub fn emitExecutableFromMir(
     mir_module: *mir.MirModule,
     diagnostic_bag: ?*diagnostics.DiagnosticBag,
 ) EmitError![]const u8 {
+    if (semantic_module.hir.machines.items.len != 0) {
+        if (diagnostic_bag) |bag| {
+            const machine = semantic_module.hir.machines.items[0];
+            try bag.append(diagnostics.machineSemanticsNotImplemented(machine.span));
+        }
+        return error.InvalidExecutable;
+    }
+
     mir_storage.analyzeModule(allocator, semantic_module, mir_module, diagnostic_bag) catch |err| switch (err) {
         error.InvalidStorageState => return error.InvalidExecutable,
         error.OutOfMemory => return error.OutOfMemory,

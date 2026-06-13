@@ -510,9 +510,9 @@ pub fn machineSemanticsNotImplemented(span: SourceSpan) Diagnostic {
     return Diagnostic.init(
         .MachineSemanticsNotImplemented,
         .@"error",
-        "machine semantics are not implemented yet",
+        "executable machine semantics are not implemented yet",
         span,
-    ).withHelp("P13-M3 validates literal machine transitions and preserves metadata; HIR/MIR lowering is deferred");
+    ).withHelp("machine declarations are parsed, validated, and represented in HIR, but executable machine lowering/runtime support is not implemented yet");
 }
 
 pub fn machineRequiresState(span: SourceSpan) Diagnostic {

@@ -292,7 +292,7 @@ const Runner = struct {
                 break :blk null;
             },
             .unsafe_block => |body| try self.executeStmt(body, frame, return_type),
-            .arena_reset, .arena_destroy, .match_stmt => error.UnsupportedConstruct,
+            .transition_stmt, .arena_reset, .arena_destroy, .match_stmt => error.UnsupportedConstruct,
         };
     }
 
@@ -312,6 +312,7 @@ const Runner = struct {
                 return .void;
             },
             .compile_time => |compile_time_expr| try self.evaluateExpr(compile_time_expr.operand, frame),
+            .machine_param_ref,
             .address_of,
             .deref,
             .move_expr,

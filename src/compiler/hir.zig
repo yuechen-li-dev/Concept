@@ -190,6 +190,39 @@ pub const HirMachineState = struct {
     name: SymbolId,
     span: SourceSpan,
     source_order: u32,
+    body: ?StmtId = null,
+};
+
+pub const HirTransitionStateTarget = struct {
+    state_index: u32,
+    target_span: SourceSpan,
+};
+
+pub const HirTransitionMatchArm = struct {
+    pattern: HirMatchPattern,
+    pattern_span: SourceSpan,
+    target: HirTransitionStateTarget,
+    span: SourceSpan,
+};
+
+pub const HirTransitionDecideCase = struct {
+    target: HirTransitionStateTarget,
+    condition: ?ExprId,
+    score: ExprId,
+    span: SourceSpan,
+};
+
+pub const HirTransitionTarget = union(enum) {
+    literal_state: HirTransitionStateTarget,
+    match_state: struct {
+        scrutinee: ExprId,
+        arms: []HirTransitionMatchArm,
+        span: SourceSpan,
+    },
+    decide_state: struct {
+        cases: []HirTransitionDecideCase,
+        span: SourceSpan,
+    },
 };
 
 pub const HirMachine = struct {
@@ -234,6 +267,7 @@ pub const HirStmt = struct {
 pub const HirStmtKind = union(enum) {
     block: []StmtId,
     return_stmt: ?ExprId,
+    transition_stmt: HirTransitionTarget,
     local_decl: struct { local: LocalId, initializer: ExprId },
     assignment: struct { target: AssignTarget, value: ExprId },
     expr_stmt: ExprId,
@@ -334,6 +368,7 @@ pub const HirExprKind = union(enum) {
     bool_literal: bool,
     local_ref: LocalId,
     param_ref: ParamId,
+    machine_param_ref: MachineParamId,
     call: struct { function: FunctionId, args: []ExprId },
     arena_alloc: struct {
         arena_expr: ExprId,
@@ -564,6 +599,7 @@ pub const HirStore = struct {
         for (self.stmts.items) |stmt| {
             switch (stmt.kind) {
                 .block => |children| if (children.len > 0) self.allocator.free(children),
+                .transition_stmt => |target| freeTransitionTarget(self.allocator, target),
                 .match_stmt => |match_stmt| if (match_stmt.arms.len > 0) {
                     for (match_stmt.arms) |arm| {
                         switch (arm.pattern) {
@@ -831,6 +867,10 @@ pub const HirStore = struct {
 
     pub fn setMachineReturnType(self: *HirStore, machine_id: MachineId, type_id: types.TypeId) void {
         self.getMachineMut(machine_id).return_type = type_id;
+    }
+
+    pub fn setMachineStateBody(self: *HirStore, machine_id: MachineId, state_index: usize, body: StmtId) void {
+        self.getMachineMut(machine_id).states[state_index].body = body;
     }
 
     pub fn setFunctionCompileTimeCapabilities(self: *HirStore, function_id: FunctionId, capabilities: []CompileTimeCapabilityRequired) void {
@@ -1263,6 +1303,9 @@ pub const HirStore = struct {
                         try writer.print("      #{d} {s}", .{ state_index, interner.text(state.name) });
                         if (state_index == machine.initial_state_index) try writer.writeAll(" initial");
                         try writer.writeByte('\n');
+                        if (state.body) |body| {
+                            try self.writeStmtDebug(writer, body, 4);
+                        }
                     }
                 },
                 .struct_ => |id| {
@@ -1303,6 +1346,10 @@ pub const HirStore = struct {
             .return_stmt => |maybe_value| {
                 try writer.writeAll("Return\n");
                 if (maybe_value) |value| try self.writeExprDebug(writer, value, depth + 1);
+            },
+            .transition_stmt => |target| {
+                try writer.writeAll("Transition\n");
+                try self.writeTransitionTargetDebug(writer, target, depth + 1);
             },
             .local_decl => |decl| {
                 try writer.print("LocalDecl {f}\n", .{decl.local});
@@ -1373,6 +1420,42 @@ pub const HirStore = struct {
         }
     }
 
+    fn writeTransitionTargetDebug(self: *const HirStore, writer: *std.Io.Writer, target: HirTransitionTarget, depth: usize) !void {
+        try writeIndent(writer, depth);
+        switch (target) {
+            .literal_state => |literal| {
+                try writer.print("LiteralState #{d}\n", .{literal.state_index});
+            },
+            .match_state => |match_state| {
+                try writer.writeAll("MatchState\n");
+                try writeIndent(writer, depth + 1);
+                try writer.writeAll("Scrutinee\n");
+                try self.writeExprDebug(writer, match_state.scrutinee, depth + 2);
+                for (match_state.arms) |arm| {
+                    try writeIndent(writer, depth + 1);
+                    try writer.writeAll("Arm ");
+                    try writePattern(writer, arm.pattern);
+                    try writer.print(" -> #{d}\n", .{arm.target.state_index});
+                }
+            },
+            .decide_state => |decide_state| {
+                try writer.writeAll("DecideState\n");
+                for (decide_state.cases) |case| {
+                    try writeIndent(writer, depth + 1);
+                    try writer.print("Case -> #{d}{s}\n", .{ case.target.state_index, if (case.condition != null) " when" else "" });
+                    if (case.condition) |condition| {
+                        try writeIndent(writer, depth + 2);
+                        try writer.writeAll("Condition\n");
+                        try self.writeExprDebug(writer, condition, depth + 3);
+                    }
+                    try writeIndent(writer, depth + 2);
+                    try writer.writeAll("Score\n");
+                    try self.writeExprDebug(writer, case.score, depth + 3);
+                }
+            },
+        }
+    }
+
     fn writeExprDebug(self: *const HirStore, writer: *std.Io.Writer, id: ExprId, depth: usize) !void {
         try writeIndent(writer, depth);
         switch (self.getExpr(id).kind) {
@@ -1380,6 +1463,7 @@ pub const HirStore = struct {
             .bool_literal => |value| try writer.print("Bool {s}\n", .{if (value) "true" else "false"}),
             .local_ref => |local| try writer.print("LocalRef {f}\n", .{local}),
             .param_ref => |param| try writer.print("ParamRef {f}\n", .{param}),
+            .machine_param_ref => |param| try writer.print("MachineParamRef {f}\n", .{param}),
             .call => |call| {
                 try writer.print("Call {f}\n", .{call.function});
                 for (call.args) |arg| try self.writeExprDebug(writer, arg, depth + 1);
@@ -1502,6 +1586,25 @@ fn freeAttributes(allocator: std.mem.Allocator, attributes: []HirAttribute) void
         if (attribute.args.len > 0) allocator.free(attribute.args);
     }
     if (attributes.len > 0) allocator.free(attributes);
+}
+
+fn freeTransitionTarget(allocator: std.mem.Allocator, target: HirTransitionTarget) void {
+    switch (target) {
+        .literal_state => {},
+        .match_state => |match_state| {
+            for (match_state.arms) |arm| {
+                switch (arm.pattern) {
+                    .int_literal => |text| allocator.free(text),
+                    .enum_variant => |pattern| if (pattern.bindings.len > 0) allocator.free(pattern.bindings),
+                    else => {},
+                }
+            }
+            if (match_state.arms.len > 0) allocator.free(match_state.arms);
+        },
+        .decide_state => |decide_state| {
+            if (decide_state.cases.len > 0) allocator.free(decide_state.cases);
+        },
+    }
 }
 
 test "semantic ID debug formatting" {

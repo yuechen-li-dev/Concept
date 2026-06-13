@@ -247,11 +247,19 @@ const Collector = struct {
         for (unit.items) |item| {
             switch (item) {
                 .function_decl => |function_decl| try self.lowerFunctionBody(function_decl),
-                .machine_decl => {},
+                .machine_decl => |machine_decl| try self.lowerMachineBody(machine_decl),
                 .template_decl => |template_decl| try self.lowerGenericFunctionBody(template_decl),
                 .struct_decl, .enum_decl, .concept_decl, .interface_decl => {},
                 .impl_decl => |impl_decl| try self.lowerImplFunctionBodies(impl_decl),
                 .static_assert_decl => |static_assert_decl| try self.lowerStaticAssert(static_assert_decl),
+            }
+        }
+
+        if (self.diagnostics.count() != 0) return;
+        for (unit.items) |item| {
+            switch (item) {
+                .machine_decl => |machine_decl| try self.diagnostics.append(diagnostics.machineSemanticsNotImplemented(machine_decl.name.span)),
+                else => {},
             }
         }
     }
@@ -441,7 +449,7 @@ const Collector = struct {
             return &.{};
         }
 
-        var state_names = std.AutoHashMap(interner.SymbolId, source.SourceSpan).init(self.allocator);
+        var state_names = std.AutoHashMap(interner.SymbolId, u32).init(self.allocator);
         defer state_names.deinit();
 
         var states = try self.allocator.alloc(hir.HirMachineState, machine_decl.states.len);
@@ -454,7 +462,7 @@ const Collector = struct {
                 self.allocator.free(states);
                 return &.{};
             }
-            try state_names.put(state_name, state.name.span);
+            try state_names.put(state_name, @intCast(index));
             states[index] = .{
                 .name = state_name,
                 .span = state.span,
@@ -477,7 +485,7 @@ const Collector = struct {
     fn validateMachineTransitionStatements(
         self: *Collector,
         statements: []const ast.Stmt,
-        state_names: *const std.AutoHashMap(interner.SymbolId, source.SourceSpan),
+        state_names: *const std.AutoHashMap(interner.SymbolId, u32),
     ) !void {
         for (statements) |stmt| {
             switch (stmt) {
@@ -531,7 +539,7 @@ const Collector = struct {
     fn validateMachineTransitionTarget(
         self: *Collector,
         target_name: ast.NameSegment,
-        state_names: *const std.AutoHashMap(interner.SymbolId, source.SourceSpan),
+        state_names: *const std.AutoHashMap(interner.SymbolId, u32),
     ) !void {
         const target_symbol = try self.module.interner.intern(target_name.text);
         if (!state_names.contains(target_symbol)) {
@@ -570,7 +578,6 @@ const Collector = struct {
         }
         try self.resolveMachineParams(machine_id, machine_decl.params);
         if (self.diagnostics.count() != diagnostic_count_before) return;
-        try self.diagnostics.append(diagnostics.machineSemanticsNotImplemented(machine_decl.name.span));
     }
 
     fn copyCompileTimeCapabilities(self: *Collector, function_id: hir.FunctionId, capabilities: []const ast.CompileTimeCapabilitySyntax) !void {
@@ -1289,6 +1296,29 @@ const Collector = struct {
             self.module.hir.setFunctionBody(function_id, body_id);
         }
     }
+
+    fn lowerMachineBody(self: *Collector, machine_decl: ast.MachineDecl) !void {
+        const machine_symbol = try self.module.interner.intern(machine_decl.name.text);
+        const machine_id = switch (self.top_level_decls.get(machine_symbol).?) {
+            .machine => |id| id,
+            else => unreachable,
+        };
+
+        var state_indexes = std.AutoHashMap(interner.SymbolId, u32).init(self.allocator);
+        defer state_indexes.deinit();
+        for (self.module.hir.getMachine(machine_id).states, 0..) |state, index| {
+            try state_indexes.put(state.name, @intCast(index));
+        }
+
+        var lowerer = BodyLowerer.initMachine(self, machine_id, &state_indexes);
+        defer lowerer.deinit();
+        try lowerer.seedMachineParams();
+        for (machine_decl.states, 0..) |state_decl, state_index| {
+            if (try lowerer.lowerBlock(state_decl.body)) |body_id| {
+                self.module.hir.setMachineStateBody(machine_id, state_index, body_id);
+            }
+        }
+    }
 };
 
 fn itemAttributes(item: ast.Item) []const ast.Attribute {
@@ -1341,7 +1371,11 @@ const TypeParamScope = struct {
     }
 };
 
-const Binding = hir.AssignBase;
+const Binding = union(enum) {
+    local: hir.LocalId,
+    param: hir.ParamId,
+    machine_param: hir.MachineParamId,
+};
 
 const ScopedBinding = struct {
     name: interner.SymbolId,
@@ -1356,6 +1390,8 @@ const ScopedBinding = struct {
 const BodyLowerer = struct {
     collector: *Collector,
     function_id: ?hir.FunctionId,
+    machine_id: ?hir.MachineId = null,
+    machine_state_indexes: ?*const std.AutoHashMap(interner.SymbolId, u32) = null,
     bindings: std.ArrayList(ScopedBinding),
     depth: usize = 0,
 
@@ -1363,6 +1399,8 @@ const BodyLowerer = struct {
         return .{
             .collector = collector,
             .function_id = function_id,
+            .machine_id = null,
+            .machine_state_indexes = null,
             .bindings = std.ArrayList(ScopedBinding).empty,
         };
     }
@@ -1371,6 +1409,22 @@ const BodyLowerer = struct {
         return .{
             .collector = collector,
             .function_id = null,
+            .machine_id = null,
+            .machine_state_indexes = null,
+            .bindings = std.ArrayList(ScopedBinding).empty,
+        };
+    }
+
+    fn initMachine(
+        collector: *Collector,
+        machine_id: hir.MachineId,
+        state_indexes: *const std.AutoHashMap(interner.SymbolId, u32),
+    ) BodyLowerer {
+        return .{
+            .collector = collector,
+            .function_id = null,
+            .machine_id = machine_id,
+            .machine_state_indexes = state_indexes,
             .bindings = std.ArrayList(ScopedBinding).empty,
         };
     }
@@ -1384,6 +1438,14 @@ const BodyLowerer = struct {
         for (function.params) |param_id| {
             const param = self.collector.module.hir.getParam(param_id);
             try self.bindings.append(self.collector.allocator, .{ .name = param.name, .binding = .{ .param = param_id }, .depth = 0 });
+        }
+    }
+
+    fn seedMachineParams(self: *BodyLowerer) !void {
+        const machine = self.collector.module.hir.getMachine(self.machine_id.?);
+        for (machine.params) |param_id| {
+            const param = self.collector.module.hir.getMachineParam(param_id);
+            try self.bindings.append(self.collector.allocator, .{ .name = param.name, .binding = .{ .machine_param = param_id }, .depth = 0 });
         }
     }
 
@@ -1433,10 +1495,15 @@ const BodyLowerer = struct {
                 return try self.collector.module.hir.addStmt(.{ .return_stmt = value }, ret.span);
             },
             .transition_stmt => |transition_stmt| {
-                try self.collector.diagnostics.append(diagnostics.transitionOutsideMachineState(transition_stmt.span));
-                return null;
+                if (self.machine_id == null) {
+                    try self.collector.diagnostics.append(diagnostics.transitionOutsideMachineState(transition_stmt.span));
+                    return null;
+                }
+                const target = (try self.lowerTransitionTarget(transition_stmt.target)) orelse return null;
+                return try self.collector.module.hir.addStmt(.{ .transition_stmt = target }, transition_stmt.span);
             },
             .local_decl => |local_decl| {
+                if (self.function_id == null) return null;
                 const initializer = (try self.lowerExpr(local_decl.initializer.*)) orelse return null;
                 const local_symbol = try self.collector.module.interner.intern(local_decl.name.text);
                 if (self.lookup(local_symbol) != null) {
@@ -1506,6 +1573,10 @@ const BodyLowerer = struct {
                 break :blk switch (base) {
                     .local => |id| hir.AssignTarget{ .local = id },
                     .param => |id| hir.AssignTarget{ .param = id },
+                    .machine_param => {
+                        try self.collector.diagnostics.append(diagnostics.Diagnostic.init(.FieldAssignmentNonPlace, .@"error", "machine parameters are not assignable until machine runtime lowering is implemented", ident.name.span));
+                        return null;
+                    },
                 };
             },
             .field_access => |field_access| blk: {
@@ -1534,9 +1605,17 @@ const BodyLowerer = struct {
         return switch (target) {
             .identifier => |ident| blk: {
                 const symbol = try self.collector.module.interner.intern(ident.name.text);
-                break :blk self.lookup(symbol) orelse {
+                const binding = self.lookup(symbol) orelse {
                     try self.collector.diagnostics.append(diagnostics.unknownIdentifier(ident.name.span));
                     return null;
+                };
+                break :blk switch (binding) {
+                    .local => |id| .{ .local = id },
+                    .param => |id| .{ .param = id },
+                    .machine_param => {
+                        try self.collector.diagnostics.append(diagnostics.Diagnostic.init(.FieldAssignmentNonPlace, .@"error", "machine parameters are not assignable until machine runtime lowering is implemented", ident.name.span));
+                        return null;
+                    },
                 };
             },
             else => {
@@ -1551,6 +1630,72 @@ const BodyLowerer = struct {
             .local => |id| self.collector.module.hir.getLocal(id).type_id,
             .param => |id| self.collector.module.hir.getParam(id).type_id,
         };
+    }
+
+    fn bindingType(self: *BodyLowerer, binding: Binding) types.TypeId {
+        return switch (binding) {
+            .local => |id| self.collector.module.hir.getLocal(id).type_id,
+            .param => |id| self.collector.module.hir.getParam(id).type_id,
+            .machine_param => |id| self.collector.module.hir.getMachineParam(id).type_id,
+        };
+    }
+
+    fn lowerTransitionTarget(self: *BodyLowerer, target: ast.TransitionTarget) anyerror!?hir.HirTransitionTarget {
+        return switch (target) {
+            .literal_state => |target_name| .{ .literal_state = (try self.resolveMachineStateTarget(target_name)) orelse return null },
+            .match_state => |match_target| blk: {
+                const scrutinee = (try self.lowerExpr(match_target.scrutinee.*)) orelse return null;
+                var arms = std.ArrayList(hir.HirTransitionMatchArm).empty;
+                defer arms.deinit(self.collector.allocator);
+                for (match_target.arms) |arm| {
+                    const pattern = (try self.lowerPattern(arm.pattern)) orelse return null;
+                    const resolved_target = (try self.resolveMachineStateTarget(arm.target_name)) orelse return null;
+                    try arms.append(self.collector.allocator, .{
+                        .pattern = pattern,
+                        .pattern_span = arm.pattern.span(),
+                        .target = resolved_target,
+                        .span = arm.span,
+                    });
+                }
+                const owned = try self.collector.allocator.alloc(hir.HirTransitionMatchArm, arms.items.len);
+                @memcpy(owned, arms.items);
+                break :blk .{ .match_state = .{
+                    .scrutinee = scrutinee,
+                    .arms = owned,
+                    .span = match_target.span,
+                } };
+            },
+            .decide_state => |decide_target| blk: {
+                var cases = std.ArrayList(hir.HirTransitionDecideCase).empty;
+                defer cases.deinit(self.collector.allocator);
+                for (decide_target.cases) |case| {
+                    const resolved_target = (try self.resolveMachineStateTarget(case.target_name)) orelse return null;
+                    const condition = if (case.condition) |condition_expr| (try self.lowerExpr(condition_expr.*)) orelse return null else null;
+                    const score = (try self.lowerExpr(case.score.*)) orelse return null;
+                    try cases.append(self.collector.allocator, .{
+                        .target = resolved_target,
+                        .condition = condition,
+                        .score = score,
+                        .span = case.span,
+                    });
+                }
+                const owned = try self.collector.allocator.alloc(hir.HirTransitionDecideCase, cases.items.len);
+                @memcpy(owned, cases.items);
+                break :blk .{ .decide_state = .{
+                    .cases = owned,
+                    .span = decide_target.span,
+                } };
+            },
+        };
+    }
+
+    fn resolveMachineStateTarget(self: *BodyLowerer, target_name: ast.NameSegment) !?hir.HirTransitionStateTarget {
+        const target_symbol = try self.collector.module.interner.intern(target_name.text);
+        const state_index = self.machine_state_indexes.?.get(target_symbol) orelse {
+            try self.collector.diagnostics.append(diagnostics.unknownMachineState(target_name.span));
+            return null;
+        };
+        return .{ .state_index = state_index, .target_span = target_name.span };
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
@@ -1574,6 +1719,7 @@ const BodyLowerer = struct {
                 return switch (binding) {
                     .local => |id| try self.collector.module.hir.addExpr(.{ .local_ref = id }, ident.span),
                     .param => |id| try self.collector.module.hir.addExpr(.{ .param_ref = id }, ident.span),
+                    .machine_param => |id| try self.collector.module.hir.addExpr(.{ .machine_param_ref = id }, ident.span),
                 };
             },
             .call => |call| {
@@ -2050,6 +2196,7 @@ const BodyLowerer = struct {
             .bool_literal => self.collector.module.types.boolType(),
             .local_ref => |local_id| self.collector.module.hir.getLocal(local_id).type_id,
             .param_ref => |param_id| self.collector.module.hir.getParam(param_id).type_id,
+            .machine_param_ref => |param_id| self.collector.module.hir.getMachineParam(param_id).type_id,
             .group => |inner| try self.inferExprType(inner),
             .unary => |unary| blk: {
                 const operand_type = (try self.inferExprType(unary.operand)) orelse return null;
@@ -2394,7 +2541,7 @@ const BodyLowerer = struct {
         return null;
     }
 
-    fn lookup(self: *BodyLowerer, name: interner.SymbolId) ?hir.AssignBase {
+    fn lookup(self: *BodyLowerer, name: interner.SymbolId) ?Binding {
         var index = self.bindings.items.len;
         while (index > 0) {
             index -= 1;
@@ -3058,6 +3205,13 @@ test "semantic collection accepts literal transition to declared states before u
 
     try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
     try std.testing.expectEqual(DiagnosticCode.MachineSemanticsNotImplemented, diagnostics_bag.diagnostics.items[0].code);
+    const machine = module.hir.getMachine(.{ .index = 0 });
+    const start_body = module.hir.getStmt(machine.states[0].body.?).kind.block;
+    const start_transition = module.hir.getStmt(start_body[0]).kind.transition_stmt.literal_state;
+    try std.testing.expectEqual(@as(u32, 1), start_transition.state_index);
+    try std.testing.expectEqual(start_statements[0].transition_stmt.target.literal_state.span, start_transition.target_span);
+    const done_body = module.hir.getStmt(machine.states[1].body.?).kind.block;
+    try std.testing.expectEqual(@as(u32, 0), module.hir.getStmt(done_body[0]).kind.transition_stmt.literal_state.state_index);
 }
 
 test "semantic collection accepts literal self transition" {
@@ -3095,6 +3249,14 @@ test "semantic collection accepts match transition to declared states before uns
 
     try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
     try std.testing.expectEqual(DiagnosticCode.MachineSemanticsNotImplemented, diagnostics_bag.diagnostics.items[0].code);
+    const machine = module.hir.getMachine(.{ .index = 0 });
+    const body = module.hir.getStmt(machine.states[0].body.?).kind.block;
+    const match_transition = module.hir.getStmt(body[0]).kind.transition_stmt.match_state;
+    try std.testing.expectEqual(@as(usize, 3), match_transition.arms.len);
+    try std.testing.expectEqual(@as(u32, 1), match_transition.arms[0].target.state_index);
+    try std.testing.expectEqual(@as(u32, 2), match_transition.arms[1].target.state_index);
+    try std.testing.expectEqual(@as(u32, 3), match_transition.arms[2].target.state_index);
+    try std.testing.expectEqual(arms[0].target_name.span, match_transition.arms[0].target.target_span);
 }
 
 test "semantic collection accepts match transition to self initial and later states" {
@@ -3140,6 +3302,14 @@ test "semantic collection accepts decide transition to declared states before un
 
     try std.testing.expectEqual(@as(usize, 1), diagnostics_bag.count());
     try std.testing.expectEqual(DiagnosticCode.MachineSemanticsNotImplemented, diagnostics_bag.diagnostics.items[0].code);
+    const machine = module.hir.getMachine(.{ .index = 0 });
+    const body = module.hir.getStmt(machine.states[0].body.?).kind.block;
+    const decide_transition = module.hir.getStmt(body[0]).kind.transition_stmt.decide_state;
+    try std.testing.expectEqual(@as(usize, 2), decide_transition.cases.len);
+    try std.testing.expectEqual(@as(u32, 1), decide_transition.cases[0].target.state_index);
+    try std.testing.expect(decide_transition.cases[0].condition != null);
+    try std.testing.expectEqual(@as(u32, 2), decide_transition.cases[1].target.state_index);
+    try std.testing.expectEqual(cases[1].target_name.span, decide_transition.cases[1].target.target_span);
 }
 
 test "semantic collection accepts decide transition to self initial and later states" {

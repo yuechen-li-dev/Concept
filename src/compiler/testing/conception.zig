@@ -2562,6 +2562,9 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase13-machines/invalid/machine_zero_states.invalid.conception");
     try expectCheckFixture("../../../language/phase13-machines/invalid/machine_duplicate_state.invalid.conception");
     try expectCheckFixture("../../../language/phase13-machines/invalid/machine_semantics_not_implemented.invalid.conception");
+    try expectCheckFixture("../../../language/phase13-machines/invalid/machine_hir_shell_literal.invalid.conception");
+    try expectCheckFixture("../../../language/phase13-machines/invalid/machine_hir_shell_match.invalid.conception");
+    try expectCheckFixture("../../../language/phase13-machines/invalid/machine_hir_shell_decide.invalid.conception");
     try expectCheckFixture("../../../language/phase13-machines/invalid/machine_transition_valid_semantics_not_implemented.invalid.conception");
     try expectCheckFixture("../../../language/phase13-machines/invalid/machine_transition_unknown_state.invalid.conception");
     try expectCheckFixture("../../../language/phase13-machines/invalid/machine_transition_cross_machine_state.invalid.conception");

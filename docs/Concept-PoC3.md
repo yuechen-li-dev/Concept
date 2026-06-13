@@ -51,8 +51,11 @@ P13-M4 adds parser/AST support for deterministic `transition match (...) {
 machine's state table. P13-M5 adds parser/AST support for contextual
 `transition decide { ... };` targets and validates each bare decide candidate
 target against the containing machine's state table, while leaving arbitrary
-state-valued transition expressions, transition-decide condition/score typing,
-HIR/MIR lowering, and runtime step/resume support deferred. Deferred Phase 12
+state-valued transition expressions and transition-decide condition/score
+typing deferred. P13-M6 adds a non-executable HIR machine scaffold that
+preserves states and literal/match/decide transition targets as machine-local
+state indexes; executable MIR lowering, C backend emission, and runtime
+step/resume support remain unsupported. Deferred Phase 12
 work includes
 `Arena.create`, hosted runtime helper implementation, allocation failure
 surfaces, generic `Store<T, Id>`, named store IDs, generation counters, region

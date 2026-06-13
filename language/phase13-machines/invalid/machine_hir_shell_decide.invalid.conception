@@ -1,0 +1,27 @@
+# name: machine HIR shell decide transition
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module Example;
+
+machine Brain(bool canAttack, int attackScore) -> int {
+    state Decide {
+        transition decide {
+            Attack when canAttack score attackScore;
+            Idle score 0;
+        };
+    }
+
+    state Attack {
+        return 1;
+    }
+
+    state Idle {
+        return 0;
+    }
+}
+
+=== diagnostics ===
+CON0231

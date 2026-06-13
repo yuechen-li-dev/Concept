@@ -164,7 +164,9 @@ Phase 13 fixtures live under `language/phase13-machines/` and currently cover
 the P13-M1 parser/AST scaffold, P13-M2 state validation, P13-M3 literal
 transition statements, P13-M4 deterministic `transition match (...) { ... };`
 targets, and P13-M5 contextual `transition decide { ... };` targets for
-explicit machines. Valid parse fixtures cover empty states,
+explicit machines. P13-M6 adds check fixtures for the HIR machine shell while
+machines still intentionally fail with `CON0231` before executable lowering.
+Valid parse fixtures cover empty states,
 single-state and multi-state machines, same state spelling in different
 machines, ordinary state-body statements, `return` statements, literal
 `transition TargetState;` statements, match-driven transition targets,
@@ -182,9 +184,10 @@ results. Declaration check fixtures pin `CON0220
 MachineRequiresState`, `CON0221 DuplicateMachineState`, `CON0222
 UnknownMachineState`, and `CON0231 MachineSemanticsNotImplemented`, because
 P13-M5 validates the machine-local state universe plus literal, match arm, and
-decide case transition targets but still intentionally defers arbitrary
-state-valued transition expressions, transition-decide condition/score typing,
-HIR/MIR lowering, runtime frames, DragonGod features, and any
+decide case transition targets, and P13-M6 represents those forms in HIR with
+machine-local state indexes. It still intentionally defers arbitrary
+state-valued transition expressions, executable MIR lowering, runtime frames,
+DragonGod features, and any
 `board`/mailbox/actuator/policy surface.
 
 ## `.conception` format
