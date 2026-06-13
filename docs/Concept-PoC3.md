@@ -48,7 +48,9 @@ the arena backend helper ABI emitted by the C backend; hosted helper
 implementation remains external/deferred rather than core language semantics.
 Allocation failure paths, transitive checking, runtime allocation support,
 deeper arena invalidation analysis, and hidden heap behavior remain
-unimplemented.
+unimplemented. Phase 12 now documents and examples the preferred ID-based store
+pattern for compiler-shaped data: typed IDs are the public handles, while raw
+arena pointers remain low-level implementation tools.
 
 ---
 

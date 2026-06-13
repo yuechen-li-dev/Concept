@@ -1,0 +1,26 @@
+# name: store id copy value
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+marker concept Copy<T>;
+
+struct ExprId {
+    int index;
+};
+
+impl Copy<ExprId>;
+
+int main() {
+    ExprId first = ExprId {
+        index: 21,
+    };
+    ExprId second = first;
+    return first.index + second.index;
+}
+
+=== run ===
+exit_code: 42
+

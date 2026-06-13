@@ -1,0 +1,18 @@
+module Examples.Phase12.TypedIds;
+
+struct ExprId {
+    int index;
+};
+
+struct TypeId {
+    int index;
+};
+
+noalloc int ReadExprId(ExprId id) {
+    return id.index;
+}
+
+noalloc int ReadTypeId(TypeId id) {
+    return id.index;
+}
+

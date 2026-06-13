@@ -1,0 +1,43 @@
+# name: store get wrong id type
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Example;
+
+marker concept Copy<T>;
+
+struct ExprId {
+    int index;
+};
+
+impl Copy<ExprId>;
+
+struct TypeId {
+    int index;
+};
+
+impl Copy<TypeId>;
+
+struct Expr {
+    int value;
+};
+
+impl Copy<Expr>;
+
+struct ExprStore {
+    Expr first;
+};
+
+noalloc Expr ExprStoreGet(ExprStore store, ExprId id) {
+    return store.first;
+}
+
+noalloc Expr BadLookup(ExprStore store, TypeId id) {
+    return ExprStoreGet(store, id);
+}
+
+=== diagnostics ===
+CON0029 error: argument type does not match parameter type
+

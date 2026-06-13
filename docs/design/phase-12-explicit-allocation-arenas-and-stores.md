@@ -488,6 +488,58 @@ must respect the requested alignment. An alignment of zero is invalid or may be
 normalized by a helper defensively, but the compiler should not emit zero
 alignment for valid Concept types.
 
+### P12-M8 implementation status
+
+P12-M8 makes the ID-based store doctrine concrete through documentation,
+examples, and fixtures. It intentionally chooses an example-level scaffold over
+a compiler-known generic container:
+
+```cpp
+struct ExprId {
+    int index;
+};
+
+struct ExprStore {
+    int count;
+    Expr first;
+};
+```
+
+The v0 examples use ordinary structs, struct literals, field access,
+`Copy<T>` marker impls where value handles need copying, and `noalloc`
+functions such as `ExprStoreAddFirst` and `ExprStoreGet`. This proves the
+compiler-facing pattern with existing language features:
+
+- the public handle is a typed ID;
+- the store owns the backing data;
+- callers pass IDs around instead of raw arena pointers;
+- `ExprId` and `TypeId` are nominally distinct and naturally rejected when
+  mixed;
+- IDs are small value handles and do not own stored objects.
+
+The example store is deliberately single-entry. It is not a production
+container, does not allocate, and does not hide a heap. The intended future
+shape remains add/get over typed handles:
+
+```cpp
+ExprId id = ExprStore.add(store, Expr.IntLiteral(42));
+Expr expr = ExprStore.get(store, id);
+```
+
+or, while method syntax remains unsettled:
+
+```cpp
+ExprId id = ExprStoreAdd(store, expr);
+Expr expr = ExprStoreGet(store, id);
+```
+
+P12-M8 does not add a new `id` keyword, generic `Store<T, Id>`, vectors,
+arena-backed store runtime, generation counters, stale-ID checking, store
+invalidation tracking, region lifetime checking, or new arena runtime behavior.
+Store internals may later use arenas, pages, segmented arrays, vectors, fixed
+buffers, or compiler-managed storage, but the public compiler-facing handle
+should remain typed IDs rather than untyped integers or long-lived raw pointers.
+
 ## 4. Profiles and hidden heap policy
 
 Phase 12 policy:
@@ -745,6 +797,10 @@ compiler-managed storage. The ID is the stable user-facing handle. Raw pointers
 may be temporary implementation details for fast local access, but should not be
 the public long-lived graph model.
 
+P12-M8 implements this section as doctrine, examples, and fixtures only. The
+single-entry `ExprStore` example is intentionally small enough to be expressed
+without storage primitives that Concept has not implemented yet.
+
 ## 10. Store ID typing
 
 IDs should avoid accidental cross-store and cross-kind mixing.
@@ -773,6 +829,10 @@ Rules:
 - `ExprId` should not be interchangeable with `TypeId`.
 - Store APIs should use explicit ID types.
 - Untyped integer indexes are not the public model.
+- ID structs are Copy-like value handles when their fields are Copy and the type
+  opts into the current `Copy<T>` marker model.
+- IDs do not own the stored object.
+- IDs are stable handles into a store.
 - IDs may eventually include generation counters for stale-ID detection, but
   that is not required for v0.
 
@@ -891,6 +951,10 @@ Testing allocation semantics requires clear separation between compile
 diagnostics and runtime test failures. A rejected `noalloc` allocation or
 Drop-in-arena attempt is a compile diagnostic. A store add/get behavior test is
 a runtime/test-runner result once stores have executable support.
+
+P12-M8 adds fixture coverage for typed ID structs, noalloc ID helper functions,
+single-entry store add/get shape, ID value copying through `Copy<T>`, and
+wrong-ID-type rejection through the existing type mismatch diagnostic.
 
 ## 15. Non-goals for Phase 12 v0
 

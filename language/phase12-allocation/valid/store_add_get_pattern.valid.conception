@@ -1,0 +1,54 @@
+# name: store add get pattern
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+marker concept Copy<T>;
+
+struct ExprId {
+    int index;
+};
+
+impl Copy<ExprId>;
+
+struct Expr {
+    int kind;
+    int value;
+};
+
+impl Copy<Expr>;
+
+struct ExprStore {
+    int count;
+    Expr first;
+};
+
+noalloc ExprStore ExprStoreAddFirst(Expr expr) {
+    return ExprStore {
+        count: 1,
+        first: expr,
+    };
+}
+
+noalloc Expr ExprStoreGet(ExprStore store, ExprId id) {
+    return store.first;
+}
+
+int main() {
+    Expr expr = Expr {
+        kind: 1,
+        value: 41,
+    };
+    ExprStore store = ExprStoreAddFirst(expr);
+    ExprId id = ExprId {
+        index: 0,
+    };
+    Expr loaded = ExprStoreGet(store, id);
+    return loaded.value + id.index + store.count;
+}
+
+=== run ===
+exit_code: 42
+

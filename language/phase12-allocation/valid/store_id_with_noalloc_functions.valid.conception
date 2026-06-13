@@ -1,0 +1,27 @@
+# name: store id with noalloc functions
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Example;
+
+struct ExprId {
+    int index;
+};
+
+noalloc ExprId MakeExprId() {
+    return ExprId {
+        index: 0,
+    };
+}
+
+noalloc int ReadExprId(ExprId id) {
+    return id.index;
+}
+
+noalloc int UseExprId() {
+    ExprId id = MakeExprId();
+    return ReadExprId(id);
+}
+

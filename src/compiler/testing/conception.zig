@@ -2473,6 +2473,11 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectBackendCFixture("../../../language/phase12-allocation/valid/arena_helper_destroy_output.valid.conception");
     try expectBackendCFixture("../../../language/phase12-allocation/valid/arena_helper_struct_size_align.valid.conception");
     try expectBackendCFixture("../../../language/phase12-allocation/valid/arena_helper_multiple_ops.valid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/valid/typed_id_structs.valid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/valid/expr_store_single_entry.valid.conception");
+    try expectRunFixture("../../../language/phase12-allocation/valid/store_add_get_pattern.valid.conception");
+    try expectRunFixture("../../../language/phase12-allocation/valid/store_id_copy_value.valid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/valid/store_id_with_noalloc_functions.valid.conception");
     try expectParseFixture("../../../language/phase12-allocation/invalid/function_conflicting_alloc_effects.invalid.conception");
     try expectParseFixture("../../../language/phase12-allocation/invalid/function_duplicate_noalloc.invalid.conception");
     try expectParseFixture("../../../language/phase12-allocation/invalid/function_duplicate_alloc.invalid.conception");
@@ -2509,6 +2514,8 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase12-allocation/invalid/arena_destroy_type_args.invalid.conception");
     try expectCheckFixture("../../../language/phase12-allocation/invalid/arena_reset_comptime.invalid.conception");
     try expectCheckFixture("../../../language/phase12-allocation/invalid/arena_destroy_comptime.invalid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/invalid/store_id_type_mismatch.invalid.conception");
+    try expectCheckFixture("../../../language/phase12-allocation/invalid/store_get_wrong_id_type.invalid.conception");
 
     try expectRunFixture("../../../language/phase10-ownership/valid/move_struct_local_run.valid.conception");
     try expectRunFixture("../../../language/phase10-ownership/valid/move_struct_argument_run.valid.conception");

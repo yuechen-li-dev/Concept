@@ -102,7 +102,9 @@ Runtime-failing test examples are not compile-invalid fixtures. A `.con_test` fi
 Phase 12 fixtures live under `language/phase12-allocation/` and currently cover
 the P12-M1 allocation-effect syntax and metadata scaffold, P12-M2 direct
 call-edge checking, P12-M3 compiler-known allocation surface types, P12-M4
-arena allocation, and P12-M5 arena reset/destroy operations. Valid parse
+arena allocation, P12-M5 arena reset/destroy operations, P12-M6 arena
+Drop/storage-state hardening, P12-M7 backend helper ABI coverage, and P12-M8
+ID-based store doctrine examples. Valid parse
 fixtures cover `alloc`, `noalloc`,
 omitted/default effects, and coexistence with `unsafe`, `comptime`, and
 template functions. Valid check fixtures cover `noalloc` callers calling known
@@ -119,6 +121,9 @@ P12-M5 valid fixtures cover `Arena.reset(arena)` and `Arena.destroy(arena)` in
 P12-M7 backend-c fixtures cover the explicit arena helper output paths for
 allocation, reset, destroy, struct size/alignment, and multiple operations in a
 single generated C file.
+P12-M8 valid fixtures cover nominal typed ID structs, noalloc ID helper
+functions, a deliberately tiny single-entry `ExprStore` add/get pattern, and ID
+value copying through the current `Copy<T>` marker model.
 
 Invalid fixtures cover conflicting `alloc`/`noalloc` specifiers, duplicate
 effect specifiers, the reachable non-function target diagnostic, and `noalloc`
@@ -133,12 +138,16 @@ fields, `ManualInit<DropType>` allocation, opaque allocation handles allocated
 by value, and compile-time allocation rejection.
 P12-M5 invalid fixtures cover reset/destroy arity, rejected type arguments,
 non-`Arena*` operands, and unsupported compile-time reset/destroy.
+P12-M8 invalid fixtures cover wrong typed-ID use through the existing nominal
+type mismatch diagnostics, including passing a `TypeId` where an `ExprId` is
+required.
 
 Phase 12 fixtures intentionally do not execute arena allocation at runtime. They
 do not cover allocator runtime behavior, allocation failure paths, transitive
-effect checking, profile defaults, region checking, ID stores, reset/destroy
-runtime execution, or runtime-backed allocation because those remain future
-Phase 12 milestones. Exact helper declaration and call text is pinned by
+effect checking, profile defaults, region checking, generic ID stores,
+arena-backed stores, reset/destroy runtime execution, or runtime-backed
+allocation because those remain future Phase 12 milestones. Exact helper
+declaration and call text is pinned by
 backend unit tests; backend-c fixtures currently assert the real lowering path
 accepts the source because fixture C-output snapshot matching is not implemented
 yet.
