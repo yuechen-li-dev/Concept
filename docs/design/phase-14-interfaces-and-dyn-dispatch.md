@@ -696,3 +696,31 @@ P14-M0 adds only this design document and light status/index updates. It
 intentionally does not implement lexer, parser, AST, HIR, MIR, backend,
 fixtures, runtime vtables, `dyn` type parsing, dyn coercions, dynamic method
 calls, allocation behavior, or compiler diagnostics.
+
+## P14-M1 status
+
+P14-M1 represents interface declarations in HIR. Top-level `interface`
+declarations are collected as `HirItem.interface_`, reserve their names in the
+top-level declaration namespace, preserve declaration spans and attributes, and
+own stable `InterfaceId`, `InterfaceRequirementId`, and interface-parameter IDs.
+
+Requirement signatures are lowered in source order. Requirement names, spans,
+return types, parameter names, parameter types, and parameter spans are
+preserved, with type names resolved to `TypeId`. Duplicate top-level interface
+names use the existing duplicate top-level declaration diagnostic. Duplicate
+requirement names are rejected with `CON0240 DuplicateInterfaceRequirement`;
+duplicate requirement parameter names use the existing duplicate-parameter
+diagnostic.
+
+P14-M1 adds `interface_type` only so interface names can resolve consistently
+inside the type store. Interface types are non-Copy and ordinary runtime use of
+interface values or pointers remains unsupported. The HIR checker reports
+`CON0255 InterfaceRuntimeUnsupported` if an interface type reaches an ordinary
+function signature or local.
+
+Still unimplemented after P14-M1: `dyn` type syntax, borrowed dyn references,
+concrete-to-dyn coercion, interface impl conformance, vtable representation,
+interface method calls, MIR dyn/interface-call lowering, backend C interface or
+vtable emission, owning dyn boxes, heap boxing, dynamic cast, RTTI, reflection,
+Drop through dyn, interface inheritance, default methods, associated types, and
+generic interface methods.

@@ -111,6 +111,8 @@ pub const DiagnosticCode = enum {
     AmbiguousConceptRequirementCall,
     UnknownConceptRequirementCall,
     InvalidConceptRequirementCall,
+    DuplicateInterfaceRequirement,
+    InterfaceRuntimeUnsupported,
     CompileTimeUnsupportedExpression,
     CompileTimeUnsupportedStatement,
     CompileTimeTypeMismatch,
@@ -281,6 +283,8 @@ pub const DiagnosticCode = enum {
             .AmbiguousConceptRequirementCall => "CON0113",
             .UnknownConceptRequirementCall => "CON0114",
             .InvalidConceptRequirementCall => "CON0115",
+            .DuplicateInterfaceRequirement => "CON0240",
+            .InterfaceRuntimeUnsupported => "CON0255",
             .CompileTimeUnsupportedExpression => "CON0120",
             .CompileTimeTypeMismatch => "CON0121",
             .CompileTimeEvaluationFailed => "CON0122",
@@ -647,6 +651,19 @@ pub fn unknownConceptRequirementCall(span: SourceSpan) Diagnostic {
 
 pub fn invalidConceptRequirementCall(span: SourceSpan) Diagnostic {
     return Diagnostic.init(.InvalidConceptRequirementCall, .@"error", "invalid concept requirement call", span);
+}
+
+pub fn duplicateInterfaceRequirement(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.DuplicateInterfaceRequirement, .@"error", "duplicate interface requirement", span);
+}
+
+pub fn interfaceRuntimeUnsupported(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .InterfaceRuntimeUnsupported,
+        .@"error",
+        "interface runtime use is not implemented yet",
+        span,
+    ).withHelp("Phase 14 M1 preserves interface declarations in HIR, but dyn references, interface values, impl conformance, vtables, and calls remain deferred");
 }
 
 pub fn duplicateTopLevelName(span: SourceSpan) Diagnostic {

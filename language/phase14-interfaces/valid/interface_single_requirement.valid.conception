@@ -1,0 +1,16 @@
+# name: interface single requirement
+# phase: parse
+# expect: pass
+
+=== source ===
+module Interfaces;
+
+interface Writer {
+    void Write(int value);
+};
+
+=== ast ===
+CompilationUnit
+  Module Interfaces
+  Interface Writer
+    Signature void Write(int value)

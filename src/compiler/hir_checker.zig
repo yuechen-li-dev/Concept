@@ -121,6 +121,7 @@ const Checker = struct {
                 if (function.is_compile_time) try self.checkCompileTimeFunctionEligibility(function);
             }
             try self.checkOpaqueAllocationTypeSignature(function);
+            try self.checkInterfaceRuntimeSignature(function);
         }
     }
 
@@ -150,6 +151,27 @@ const Checker = struct {
     fn isByValueOpaqueAllocationHandle(self: *Checker, type_id: types.TypeId) bool {
         return switch (self.module.types.kind(type_id)) {
             .arena, .allocator => true,
+            else => false,
+        };
+    }
+
+    fn checkInterfaceRuntimeSignature(self: *Checker, function: hir.HirFunction) CheckError!void {
+        if (self.isInterfaceRuntimeType(function.return_type)) {
+            try self.reportAt(.InterfaceRuntimeUnsupported, "interface types are not supported as ordinary return values in Phase 14 M1", function.span);
+            return error.InvalidSemanticModule;
+        }
+        for (function.params) |param_id| {
+            const param = self.module.hir.getParam(param_id);
+            if (!self.isInterfaceRuntimeType(param.type_id)) continue;
+            try self.reportAt(.InterfaceRuntimeUnsupported, "interface types are not supported as ordinary parameters in Phase 14 M1", param.span);
+            return error.InvalidSemanticModule;
+        }
+    }
+
+    fn isInterfaceRuntimeType(self: *Checker, type_id: types.TypeId) bool {
+        return switch (self.module.types.kind(type_id)) {
+            .interface_type => true,
+            .pointer => |pointer| self.isInterfaceRuntimeType(pointer.pointee),
             else => false,
         };
     }
@@ -212,6 +234,10 @@ const Checker = struct {
             },
             .local_decl => |decl| {
                 const local = self.module.hir.getLocal(decl.local);
+                if (self.isInterfaceRuntimeType(local.type_id)) {
+                    try self.reportAt(.InterfaceRuntimeUnsupported, "interface types are not supported as ordinary locals in Phase 14 M1", local.span);
+                    return error.InvalidSemanticModule;
+                }
                 const init_type = try self.checkExpr(function_id, return_type, decl.initializer);
                 try self.requireSame(init_type, local.type_id, "local initializer type does not match declared type", self.exprSpan(decl.initializer));
             },
@@ -1273,6 +1299,7 @@ const Checker = struct {
             .struct_type => |struct_id| try writer.print("struct_{s}", .{self.module.interner.text(self.module.hir.getStruct(struct_id).name)}),
             .enum_type => |enum_id| try writer.print("enum_{s}", .{self.module.interner.text(self.module.hir.getEnum(enum_id).name)}),
             .machine_type => |machine_id| try writer.print("machine_{s}", .{self.module.interner.text(self.module.hir.getMachine(machine_id).name)}),
+            .interface_type => |interface_id| try writer.print("interface_{s}", .{self.module.interner.text(self.module.hir.getInterface(interface_id).name)}),
             .pointer => |pointer| {
                 try self.writeTypeSuffix(writer, pointer.pointee);
                 try writer.writeAll("_ptr");

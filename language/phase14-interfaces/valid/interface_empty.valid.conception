@@ -1,0 +1,10 @@
+# name: interface empty
+# phase: check
+# check: declarations
+# expect: pass
+
+=== source ===
+module Interfaces;
+
+interface Marker {
+};

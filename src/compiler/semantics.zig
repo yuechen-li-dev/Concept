@@ -184,6 +184,10 @@ const Collector = struct {
             type_id: types.TypeId,
         },
         concept: hir.ConceptId,
+        interface_: struct {
+            id: hir.InterfaceId,
+            type_id: types.TypeId,
+        },
         machine: struct {
             id: hir.MachineId,
             type_id: types.TypeId,
@@ -216,7 +220,8 @@ const Collector = struct {
                 .struct_decl => |struct_decl| try self.declareStruct(struct_decl),
                 .enum_decl => |enum_decl| try self.declareEnum(enum_decl),
                 .concept_decl => |concept_decl| try self.declareConcept(concept_decl),
-                .interface_decl, .impl_decl, .static_assert_decl => {},
+                .interface_decl => |interface_decl| try self.declareInterface(interface_decl),
+                .impl_decl, .static_assert_decl => {},
             }
         }
 
@@ -225,6 +230,7 @@ const Collector = struct {
         for (unit.items) |item| {
             switch (item) {
                 .concept_decl => |concept_decl| try self.resolveConcept(concept_decl),
+                .interface_decl => |interface_decl| try self.resolveInterface(interface_decl),
                 .machine_decl => {},
                 else => {},
             }
@@ -634,6 +640,14 @@ const Collector = struct {
         try self.top_level_decls.put(name, .{ .concept = concept_id });
     }
 
+    fn declareInterface(self: *Collector, interface_decl: ast.InterfaceDecl) !void {
+        const name = try self.internFreshTopLevelName(interface_decl.name.text, interface_decl.name.span) orelse return;
+        const interface_id = try self.module.hir.addInterface(name, interface_decl.span);
+        const type_id = try self.module.types.addInterfaceType(interface_id);
+        self.module.hir.setInterfaceAttributes(interface_id, try self.copyAttributes(interface_decl.attributes));
+        try self.top_level_decls.put(name, .{ .interface_ = .{ .id = interface_id, .type_id = type_id } });
+    }
+
     fn copyAttributes(self: *Collector, attributes: []const ast.Attribute) ![]hir.HirAttribute {
         if (attributes.len == 0) return &.{};
         var owned = try self.allocator.alloc(hir.HirAttribute, attributes.len);
@@ -928,6 +942,44 @@ const Collector = struct {
         @memcpy(owned_requirements, requirements.items);
         requirements.clearRetainingCapacity();
         self.module.hir.setConceptRequirements(concept_id, owned_requirements);
+    }
+
+    fn resolveInterface(self: *Collector, interface_decl: ast.InterfaceDecl) !void {
+        const interface_symbol = try self.module.interner.intern(interface_decl.name.text);
+        const interface_id = switch (self.top_level_decls.get(interface_symbol).?) {
+            .interface_ => |entry| entry.id,
+            else => unreachable,
+        };
+
+        var requirement_names = std.AutoHashMap(interner.SymbolId, source.SourceSpan).init(self.allocator);
+        defer requirement_names.deinit();
+
+        for (interface_decl.signatures) |signature| {
+            const requirement_symbol = try self.module.interner.intern(signature.name.base.text);
+            if (requirement_names.contains(requirement_symbol)) {
+                try self.diagnostics.append(diagnostics.duplicateInterfaceRequirement(signature.name.span));
+                continue;
+            }
+            try requirement_names.put(requirement_symbol, signature.name.span);
+
+            const return_type = (try self.resolveTypeName(signature.return_type)) orelse continue;
+            const requirement_id = try self.module.hir.addInterfaceRequirement(interface_id, requirement_symbol, return_type, signature.span);
+
+            var param_names = std.AutoHashMap(interner.SymbolId, source.SourceSpan).init(self.allocator);
+            defer param_names.deinit();
+            for (signature.params) |param| {
+                const param_symbol = try self.module.interner.intern(param.name.text);
+                if (param_names.contains(param_symbol)) {
+                    try self.diagnostics.append(diagnostics.duplicateParameterName(param.name.span));
+                    continue;
+                }
+                try param_names.put(param_symbol, param.name.span);
+
+                if (try self.resolveTypeName(param.type_name)) |type_id| {
+                    _ = try self.module.hir.addInterfaceParam(requirement_id, param_symbol, type_id, param.span);
+                }
+            }
+        }
     }
 
     fn resolveImpl(self: *Collector, impl_decl: ast.ImplDecl) !void {
@@ -1233,6 +1285,7 @@ const Collector = struct {
             .struct_ => |entry| entry.type_id,
             .enum_ => |entry| entry.type_id,
             .machine => |entry| entry.type_id,
+            .interface_ => |entry| entry.type_id,
             .function, .generic_function, .concept => blk: {
                 try self.diagnostics.append(diagnostics.unknownTypeName(part.span));
                 break :blk null;
@@ -3720,17 +3773,136 @@ test "semantic collection rejects duplicate struct and enum" {
     try std.testing.expectEqual(DiagnosticCode.DuplicateTopLevelName, diagnostics_bag.diagnostics.items[0].code);
 }
 
-test "semantic collection stores concept and ignores interface executable items" {
+test "semantic collection stores concept and interface top-level items" {
     var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
     defer diagnostics_bag.deinit();
 
     var module = try collectItems(&.{ conceptItem("Hashable", 0), interfaceItem("Renderer", 40), structItem("Texture", 100) }, &diagnostics_bag);
     defer module.deinit();
 
-    try std.testing.expectEqual(@as(usize, 1), module.hir.items.items.len);
+    try std.testing.expectEqual(@as(usize, 2), module.hir.items.items.len);
     try std.testing.expectEqual(@as(usize, 1), module.hir.structs.items.len);
     try std.testing.expectEqual(@as(usize, 1), module.hir.concepts.items.len);
+    try std.testing.expectEqual(@as(usize, 1), module.hir.interfaces.items.len);
+    try std.testing.expectEqual(hir.HirItem{ .interface_ = .{ .index = 0 } }, module.hir.items.items[0]);
+    try std.testing.expectEqual(hir.HirItem{ .struct_ = .{ .index = 0 } }, module.hir.items.items[1]);
     try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
+}
+
+test "semantic collection lowers interface requirements into HIR debug" {
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    var write_params = [_]ast.ParamDecl{paramDecl("int", "value", 40)};
+    var flush_params = [_]ast.ParamDecl{
+        paramDecl("bool", "force", 80),
+        paramDecl("int", "code", 92),
+    };
+    var signatures = [_]ast.SignatureDecl{
+        .{
+            .return_type = typeName("void", 20),
+            .name = .{ .base = nameSegment("Write", 25), .span = .{ .start = 25, .length = 5 } },
+            .params = write_params[0..],
+            .span = .{ .start = 20, .length = 25 },
+        },
+        .{
+            .return_type = typeName("bool", 60),
+            .name = .{ .base = nameSegment("Flush", 65), .span = .{ .start = 65, .length = 5 } },
+            .params = flush_params[0..],
+            .span = .{ .start = 60, .length = 40 },
+        },
+    };
+    var attr_parts = [_]ast.NameSegment{nameSegment("RuntimeContract", 0)};
+    var attrs = [_]ast.Attribute{attributeNoArgs("RuntimeContract", attr_parts[0..])};
+    var module = try collectItems(&.{.{ .interface_decl = .{
+        .attributes = attrs[0..],
+        .name = nameSegment("Writer", 10),
+        .signatures = signatures[0..],
+        .span = .{ .start = 0, .length = 110 },
+    } }}, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
+    try std.testing.expectEqual(@as(usize, 1), module.hir.interfaces.items.len);
+    const interface_decl = module.hir.getInterface(.{ .index = 0 });
+    try std.testing.expectEqual(@as(usize, 2), interface_decl.requirements.len);
+    try std.testing.expectEqual(@as(usize, 1), interface_decl.attributes.len);
+    try std.testing.expectEqual(@as(usize, 110), interface_decl.span.length);
+    try std.testing.expectEqual(types.TypeKind{ .interface_type = .{ .index = 0 } }, module.types.kind(.{ .index = 6 }));
+
+    const first = module.hir.getInterfaceRequirement(interface_decl.requirements[0]);
+    const second = module.hir.getInterfaceRequirement(interface_decl.requirements[1]);
+    try std.testing.expectEqualStrings("Write", module.interner.text(first.name));
+    try std.testing.expectEqualStrings("Flush", module.interner.text(second.name));
+    try std.testing.expectEqual(module.types.voidType(), first.return_type);
+    try std.testing.expectEqual(module.types.boolType(), second.return_type);
+    try std.testing.expectEqual(@as(usize, 1), first.params.len);
+    try std.testing.expectEqual(@as(usize, 2), second.params.len);
+    try std.testing.expectEqualStrings("value", module.interner.text(module.hir.getInterfaceParam(first.params[0]).name));
+    try std.testing.expectEqual(module.types.intType(), module.hir.getInterfaceParam(first.params[0]).type_id);
+    try std.testing.expectEqualStrings("force", module.interner.text(module.hir.getInterfaceParam(second.params[0]).name));
+    try std.testing.expectEqual(module.types.boolType(), module.hir.getInterfaceParam(second.params[0]).type_id);
+
+    const snapshot = try module.hir.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expectEqualStrings(
+        \\HirModule
+        \\  Attribute RuntimeContract
+        \\  Interface Writer
+        \\    Requirements
+        \\      InterfaceRequirementId(0) Write -> TypeId(0)
+        \\        InterfaceParamId(0) value: TypeId(1)
+        \\      InterfaceRequirementId(1) Flush -> TypeId(2)
+        \\        InterfaceParamId(1) force: TypeId(2)
+        \\        InterfaceParamId(2) code: TypeId(1)
+        \\
+    , snapshot);
+}
+
+test "semantic collection rejects duplicate interface top-level name" {
+    try expectOneSemanticDiagnostic(&.{ functionItem("Writer", 0), interfaceItem("Writer", 40) }, .DuplicateTopLevelName);
+}
+
+test "semantic collection rejects duplicate interface requirement" {
+    var signatures = [_]ast.SignatureDecl{
+        .{
+            .return_type = typeName("void", 20),
+            .name = .{ .base = nameSegment("Write", 25), .span = .{ .start = 25, .length = 5 } },
+            .params = &.{},
+            .span = .{ .start = 20, .length = 12 },
+        },
+        .{
+            .return_type = typeName("void", 40),
+            .name = .{ .base = nameSegment("Write", 45), .span = .{ .start = 45, .length = 5 } },
+            .params = &.{},
+            .span = .{ .start = 40, .length = 12 },
+        },
+    };
+
+    try expectOneSemanticDiagnostic(&.{.{ .interface_decl = .{
+        .name = nameSegment("Writer", 0),
+        .signatures = signatures[0..],
+        .span = .{ .start = 0, .length = 60 },
+    } }}, .DuplicateInterfaceRequirement);
+}
+
+test "semantic collection rejects duplicate interface requirement parameter" {
+    var params = [_]ast.ParamDecl{
+        paramDecl("int", "value", 40),
+        paramDecl("bool", "value", 55),
+    };
+    var signatures = [_]ast.SignatureDecl{.{
+        .return_type = typeName("void", 20),
+        .name = .{ .base = nameSegment("Write", 25), .span = .{ .start = 25, .length = 5 } },
+        .params = params[0..],
+        .span = .{ .start = 20, .length = 50 },
+    }};
+
+    try expectOneSemanticDiagnostic(&.{.{ .interface_decl = .{
+        .name = nameSegment("Writer", 0),
+        .signatures = signatures[0..],
+        .span = .{ .start = 0, .length = 80 },
+    } }}, .DuplicateParameterName);
 }
 
 test "semantic collection lowers concept requirements into HIR debug" {

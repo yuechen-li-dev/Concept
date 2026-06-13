@@ -17,6 +17,9 @@ pub const MachineId = SemanticId("MachineId");
 pub const GenericFunctionId = SemanticId("GenericFunctionId");
 pub const ConceptId = SemanticId("ConceptId");
 pub const ConceptImplId = SemanticId("ConceptImplId");
+pub const InterfaceId = SemanticId("InterfaceId");
+pub const InterfaceRequirementId = SemanticId("InterfaceRequirementId");
+pub const InterfaceParamId = SemanticId("InterfaceParamId");
 pub const StructId = SemanticId("StructId");
 pub const EnumId = SemanticId("EnumId");
 pub const FieldId = SemanticId("FieldId");
@@ -43,6 +46,7 @@ pub const HirItem = union(enum) {
     machine: MachineId,
     struct_: StructId,
     enum_: EnumId,
+    interface_: InterfaceId,
 };
 
 pub const HirAttributeArg = union(enum) {
@@ -141,6 +145,29 @@ pub const HirConceptImpl = struct {
     functions: []FunctionId,
     is_unsafe: bool = false,
     span: SourceSpan,
+};
+
+pub const HirInterfaceParam = struct {
+    parent: InterfaceRequirementId,
+    name: SymbolId,
+    span: SourceSpan,
+    type_id: types.TypeId,
+};
+
+pub const HirInterfaceRequirement = struct {
+    parent: InterfaceId,
+    name: SymbolId,
+    return_type: types.TypeId,
+    params: []InterfaceParamId,
+    span: SourceSpan,
+};
+
+pub const HirInterface = struct {
+    item: ItemId,
+    name: SymbolId,
+    span: SourceSpan,
+    attributes: []HirAttribute = &.{},
+    requirements: []InterfaceRequirementId,
 };
 
 pub const HirStaticAssert = struct {
@@ -524,6 +551,9 @@ pub const HirStore = struct {
     generic_functions: std.ArrayList(HirGenericFunction),
     concepts: std.ArrayList(HirConcept),
     concept_impls: std.ArrayList(HirConceptImpl),
+    interfaces: std.ArrayList(HirInterface),
+    interface_requirements: std.ArrayList(HirInterfaceRequirement),
+    interface_params: std.ArrayList(HirInterfaceParam),
     params: std.ArrayList(HirParam),
     machine_params: std.ArrayList(HirMachineParam),
     locals: std.ArrayList(HirLocal),
@@ -545,6 +575,9 @@ pub const HirStore = struct {
             .generic_functions = std.ArrayList(HirGenericFunction).empty,
             .concepts = std.ArrayList(HirConcept).empty,
             .concept_impls = std.ArrayList(HirConceptImpl).empty,
+            .interfaces = std.ArrayList(HirInterface).empty,
+            .interface_requirements = std.ArrayList(HirInterfaceRequirement).empty,
+            .interface_params = std.ArrayList(HirInterfaceParam).empty,
             .params = std.ArrayList(HirParam).empty,
             .machine_params = std.ArrayList(HirMachineParam).empty,
             .locals = std.ArrayList(HirLocal).empty,
@@ -587,6 +620,13 @@ pub const HirStore = struct {
         for (self.concept_impls.items) |concept_impl| {
             freeAttributes(self.allocator, concept_impl.attributes);
             if (concept_impl.functions.len > 0) self.allocator.free(concept_impl.functions);
+        }
+        for (self.interfaces.items) |interface_decl| {
+            freeAttributes(self.allocator, interface_decl.attributes);
+            if (interface_decl.requirements.len > 0) self.allocator.free(interface_decl.requirements);
+        }
+        for (self.interface_requirements.items) |requirement| {
+            if (requirement.params.len > 0) self.allocator.free(requirement.params);
         }
         for (self.functions.items) |function| {
             freeAttributes(self.allocator, function.attributes);
@@ -656,6 +696,9 @@ pub const HirStore = struct {
         self.locals.deinit(self.allocator);
         self.machine_params.deinit(self.allocator);
         self.params.deinit(self.allocator);
+        self.interface_params.deinit(self.allocator);
+        self.interface_requirements.deinit(self.allocator);
+        self.interfaces.deinit(self.allocator);
         self.concept_impls.deinit(self.allocator);
         self.concepts.deinit(self.allocator);
         self.generic_functions.deinit(self.allocator);
@@ -822,6 +865,54 @@ pub const HirStore = struct {
         const concept_impl = self.getConceptImplMut(id);
         freeAttributes(self.allocator, concept_impl.attributes);
         concept_impl.attributes = attributes;
+    }
+
+    pub fn addInterface(self: *HirStore, name: SymbolId, span: SourceSpan) !InterfaceId {
+        const id = InterfaceId{ .index = try nextIndex(self.interfaces.items.len, error.TooManyInterfaces) };
+        const item = try self.addItem(.{ .interface_ = id });
+        errdefer _ = self.items.pop();
+        try self.interfaces.append(self.allocator, .{
+            .item = item,
+            .name = name,
+            .span = span,
+            .attributes = &.{},
+            .requirements = &.{},
+        });
+        return id;
+    }
+
+    pub fn setInterfaceAttributes(self: *HirStore, id: InterfaceId, attributes: []HirAttribute) void {
+        const interface_decl = self.getInterfaceMut(id);
+        freeAttributes(self.allocator, interface_decl.attributes);
+        interface_decl.attributes = attributes;
+    }
+
+    pub fn addInterfaceRequirement(self: *HirStore, parent: InterfaceId, name: SymbolId, return_type: types.TypeId, span: SourceSpan) !InterfaceRequirementId {
+        _ = self.getInterface(parent);
+        const id = InterfaceRequirementId{ .index = try nextIndex(self.interface_requirements.items.len, error.TooManyInterfaceRequirements) };
+        try self.interface_requirements.append(self.allocator, .{
+            .parent = parent,
+            .name = name,
+            .return_type = return_type,
+            .params = &.{},
+            .span = span,
+        });
+        errdefer _ = self.interface_requirements.pop();
+
+        const interface_decl = self.getInterfaceMut(parent);
+        interface_decl.requirements = try appendId(self.allocator, InterfaceRequirementId, interface_decl.requirements, id);
+        return id;
+    }
+
+    pub fn addInterfaceParam(self: *HirStore, parent: InterfaceRequirementId, name: SymbolId, type_id: types.TypeId, span: SourceSpan) !InterfaceParamId {
+        _ = self.getInterfaceRequirement(parent);
+        const id = InterfaceParamId{ .index = try nextIndex(self.interface_params.items.len, error.TooManyParams) };
+        try self.interface_params.append(self.allocator, .{ .parent = parent, .name = name, .span = span, .type_id = type_id });
+        errdefer _ = self.interface_params.pop();
+
+        const requirement = self.getInterfaceRequirementMut(parent);
+        requirement.params = try appendId(self.allocator, InterfaceParamId, requirement.params, id);
+        return id;
     }
 
     fn addFunctionStorage(self: *HirStore, name: SymbolId, return_type: types.TypeId, is_unsafe: bool, span: SourceSpan) !FunctionId {
@@ -1047,10 +1138,40 @@ pub const HirStore = struct {
         return &self.concept_impls.items[index];
     }
 
+    pub fn getInterface(self: *const HirStore, id: InterfaceId) *const HirInterface {
+        const index: usize = id.index;
+        std.debug.assert(index < self.interfaces.items.len);
+        return &self.interfaces.items[index];
+    }
+
+    pub fn getInterfaceRequirement(self: *const HirStore, id: InterfaceRequirementId) *const HirInterfaceRequirement {
+        const index: usize = id.index;
+        std.debug.assert(index < self.interface_requirements.items.len);
+        return &self.interface_requirements.items[index];
+    }
+
+    pub fn getInterfaceParam(self: *const HirStore, id: InterfaceParamId) *const HirInterfaceParam {
+        const index: usize = id.index;
+        std.debug.assert(index < self.interface_params.items.len);
+        return &self.interface_params.items[index];
+    }
+
     fn getConceptImplMut(self: *HirStore, id: ConceptImplId) *HirConceptImpl {
         const index: usize = id.index;
         std.debug.assert(index < self.concept_impls.items.len);
         return &self.concept_impls.items[index];
+    }
+
+    fn getInterfaceMut(self: *HirStore, id: InterfaceId) *HirInterface {
+        const index: usize = id.index;
+        std.debug.assert(index < self.interfaces.items.len);
+        return &self.interfaces.items[index];
+    }
+
+    fn getInterfaceRequirementMut(self: *HirStore, id: InterfaceRequirementId) *HirInterfaceRequirement {
+        const index: usize = id.index;
+        std.debug.assert(index < self.interface_requirements.items.len);
+        return &self.interface_requirements.items[index];
     }
 
     pub fn getFunction(self: *const HirStore, id: FunctionId) *const HirFunction {
@@ -1332,6 +1453,22 @@ pub const HirStore = struct {
                         for (variant.payload_fields) |payload_id| {
                             const payload = self.getEnumPayloadField(payload_id);
                             try writer.print("      Payload {s}: {f}\n", .{ interner.text(payload.name), payload.type_id });
+                        }
+                    }
+                },
+                .interface_ => |id| {
+                    const interface_decl = self.getInterface(id);
+                    try writeAttributesDebug(writer, interface_decl.attributes, interner, 1);
+                    try writer.print("  Interface {s}\n", .{interner.text(interface_decl.name)});
+                    if (interface_decl.requirements.len != 0) {
+                        try writer.writeAll("    Requirements\n");
+                        for (interface_decl.requirements) |requirement_id| {
+                            const requirement = self.getInterfaceRequirement(requirement_id);
+                            try writer.print("      {f} {s} -> {f}\n", .{ requirement_id, interner.text(requirement.name), requirement.return_type });
+                            for (requirement.params) |param_id| {
+                                const param = self.getInterfaceParam(param_id);
+                                try writer.print("        {f} {s}: {f}\n", .{ param_id, interner.text(param.name), param.type_id });
+                            }
                         }
                     }
                 },

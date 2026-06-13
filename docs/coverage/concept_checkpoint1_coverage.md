@@ -4,7 +4,7 @@
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
 **Phases closed:** 1 through 13  
-**Fixture corpus:** 628 total (313 valid, 315 invalid)  
+**Fixture corpus:** 638 total (317 valid, 321 invalid)
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
 ---
@@ -41,7 +41,7 @@
 | `enum` declarations | ✅ | Payload enums with typed fields, unit variants |
 | `template` keyword | ✅ | Phase 8 — `template<T>` unconstrained and `template<T: Concept<T>>` constrained |
 | `concept` keyword | ✅ | Phase 8 — method-bearing and marker forms |
-| `interface` keyword | 🔶 | Parser accepts `interface` signature blocks; Phase 14 M0 now documents runtime interface/vtable design; HIR/runtime vtable dispatch not implemented |
+| `interface` keyword | 🔶 | Parser accepts `interface` signature blocks; Phase 14 M1 preserves interface declarations and requirement signatures in HIR; dyn/vtable runtime dispatch not implemented |
 | `impl` blocks | ✅ | Phase 8 — `impl Concept<Type>`, `unsafe impl`, `impl Drop<T>` |
 | `operator` overloading | ❌ | PoC3 §25 — not in any phase plan yet |
 | `move` keyword | ✅ | Phase 10 — explicit move expression, use-after-move diagnosed |
@@ -238,9 +238,9 @@
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| `interface Foo { ... }` declaration | 🔶 | Parser accepts interface blocks (signature parsing); HIR interface type and vtable lowering not implemented |
+| `interface Foo { ... }` declaration | 🔶 | Phase 14 M1 preserves top-level interface declarations, requirement signatures, spans, attributes, and duplicate checks in HIR; runtime/vtable lowering not implemented |
 | `dyn Foo&` dynamic dispatch | ❌ | Phase 14 M0 documents borrowed fat-reference design; compiler behavior not implemented |
-| `interface` vs `concept` distinction | ✅ | Phase 14 M0 sharpens doctrine: concept is static proof/generic constraint; interface is runtime contract; dyn is explicit dynamic reference |
+| `interface` vs `concept` distinction | ✅ | Phase 14 doctrine: concept is static proof/generic constraint; interface is runtime contract represented in HIR; dyn is explicit dynamic reference and remains deferred |
 
 ---
 

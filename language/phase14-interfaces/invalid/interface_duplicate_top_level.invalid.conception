@@ -1,0 +1,15 @@
+# name: interface duplicate top level
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module Interfaces;
+
+interface Writer {
+};
+
+struct Writer {};
+
+=== diagnostics ===
+CON0020

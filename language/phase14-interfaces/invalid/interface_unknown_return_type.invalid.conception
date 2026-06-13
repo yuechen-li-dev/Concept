@@ -1,0 +1,14 @@
+# name: interface unknown return type
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module Interfaces;
+
+interface Writer {
+    Unknown Write(int value);
+};
+
+=== diagnostics ===
+CON0021

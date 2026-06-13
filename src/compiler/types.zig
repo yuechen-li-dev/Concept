@@ -32,6 +32,7 @@ pub const TypeKind = union(enum) {
     struct_type: hir.StructId,
     enum_type: hir.EnumId,
     machine_type: hir.MachineId,
+    interface_type: hir.InterfaceId,
     pointer: struct {
         pointee: TypeId,
     },
@@ -55,6 +56,7 @@ pub const TypeKind = union(enum) {
             .struct_type => |id| try writer.print("struct {f}", .{id}),
             .enum_type => |id| try writer.print("enum {f}", .{id}),
             .machine_type => |id| try writer.print("machine {f}", .{id}),
+            .interface_type => |id| try writer.print("interface {f}", .{id}),
             .pointer => |pointer| try writer.print("{f}*", .{pointer.pointee}),
             .manual_init => |manual_init| try writer.print("ManualInit<{f}>", .{manual_init.payload}),
             .type_param => |param| try writer.print("type_param({s}:{d}/{d} {f})", .{ @tagName(param.owner.kind), param.owner.index, param.index, param.name }),
@@ -149,6 +151,14 @@ pub const TypeStore = struct {
         return try self.append(.{ .machine_type = machine_id }, error.TooManyTypes);
     }
 
+    pub fn addInterfaceType(self: *TypeStore, interface_id: hir.InterfaceId) TypeStoreError!TypeId {
+        if (self.findNominal(.{ .interface_type = interface_id })) |existing| {
+            return existing;
+        }
+
+        return try self.append(.{ .interface_type = interface_id }, error.TooManyTypes);
+    }
+
     pub fn addTypeParam(self: *TypeStore, owner: TypeParamOwner, index: u32, name: interner.SymbolId) TypeStoreError!TypeId {
         if (self.findTypeParam(owner, index, name)) |existing| {
             return existing;
@@ -211,7 +221,7 @@ pub const TypeStore = struct {
         return switch (self.kind(id)) {
             .int, .bool, .pointer, .enum_type, .alloc_error => true,
             .struct_type => self.hasCopyMarkerImpl(hir_store, id),
-            .void, .arena, .allocator, .machine_type, .manual_init, .type_param => false,
+            .void, .arena, .allocator, .machine_type, .interface_type, .manual_init, .type_param => false,
         };
     }
 
@@ -295,6 +305,12 @@ pub const TypeStore = struct {
                 },
                 .machine_type => |needle_id| switch (candidate) {
                     .machine_type => |candidate_id| if (candidate_id.index == needle_id.index) {
+                        return .{ .index = @intCast(index) };
+                    },
+                    else => {},
+                },
+                .interface_type => |needle_id| switch (candidate) {
+                    .interface_type => |candidate_id| if (candidate_id.index == needle_id.index) {
                         return .{ .index = @intCast(index) };
                     },
                     else => {},

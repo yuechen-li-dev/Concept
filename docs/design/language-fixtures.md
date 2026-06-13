@@ -42,6 +42,8 @@ language/phase12-allocation/valid/
 language/phase12-allocation/invalid/
 language/phase13-machines/valid/
 language/phase13-machines/invalid/
+language/phase14-interfaces/valid/
+language/phase14-interfaces/invalid/
 ```
 
 ## Phase 5 sum-type fixtures
@@ -71,7 +73,7 @@ Invalid fixtures cover malformed template syntax, type parameters out of scope, 
 
 Phase 8 MIR/backend coverage is intentionally concrete-only: the pipeline run fixture and targeted compiler tests assert that template declarations, concepts, marker concepts, and type-parameter types do not leak into executable MIR or backend C, while deterministic instantiated function names and referenced static witness calls are emitted.
 
-Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed for compile-time execution v0. Phase 10 is closed for ownership/storage-state v0. Phase 11 is closed for first-class testing, attributes, and reasoned expectations v0. Phase 14 M0 is documentation-only; interface and `dyn` fixtures should wait until compiler behavior exists.
+Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed for compile-time execution v0. Phase 10 is closed for ownership/storage-state v0. Phase 11 is closed for first-class testing, attributes, and reasoned expectations v0. Phase 14 M1 now has interface declaration HIR fixtures; `dyn` and vtable runtime fixtures still wait for later milestones.
 
 ## Phase 9 compile-time execution fixtures
 
@@ -207,16 +209,20 @@ for the literal-transition subset.
 
 ## Phase 14 interface/dyn fixtures
 
-Phase 14 M0 adds the design document for runtime interfaces and borrowed `dyn`
-dispatch only. No Phase 14 fixture corpus is added at M0 because compiler
-behavior is intentionally unchanged.
+Phase 14 fixtures live under `language/phase14-interfaces/` and currently cover
+P14-M1 interface declaration HIR behavior. Valid fixtures cover parser
+preservation for `interface Writer { void Write(int value); }`, empty
+interfaces, multiple requirements, requirement source order, and requirement
+parameter names/types. Invalid fixtures cover duplicate top-level interface
+names, unknown requirement return and parameter types, duplicate requirement
+names, duplicate requirement parameter names, and the current rejection of
+ordinary runtime interface values.
 
-Future Phase 14 fixtures should cover interface declaration HIR, duplicate
-requirements, interface impl conformance, borrowed `dyn Interface&` type
-checking, concrete-to-dyn coercion from addressable places, rejection of rvalue
-temporary dyn coercions, dynamic method calls, mutability checks, explicit
-HIR/MIR dyn coercion/call shapes, and C backend vtable lowering without
-`malloc`, RTTI, reflection, or inheritance.
+Phase 14 fixtures intentionally do not cover `dyn`, concrete-to-dyn coercion,
+interface impl conformance, vtable lowering, dynamic method calls, owning dyn
+boxes, heap boxing, dynamic cast, RTTI, reflection, inheritance, default
+methods, associated types, generic interface methods, or Drop through dyn. Those
+remain later Phase 14 milestones.
 
 ## `.conception` format
 

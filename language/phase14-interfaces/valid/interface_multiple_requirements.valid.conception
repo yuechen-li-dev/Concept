@@ -1,0 +1,12 @@
+# name: interface multiple requirements
+# phase: check
+# check: declarations
+# expect: pass
+
+=== source ===
+module Interfaces;
+
+interface Writer {
+    void Write(int value);
+    bool Flush(bool force);
+};

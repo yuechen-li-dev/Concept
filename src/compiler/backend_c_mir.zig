@@ -175,7 +175,7 @@ fn isSupportedEnumPayloadType(ctx: *const BackendContext, type_id: types.TypeId)
     if (!ctx.module.types.contains(type_id)) return false;
     return switch (ctx.module.types.kind(type_id)) {
         .int, .bool, .alloc_error => true,
-        .void, .arena, .allocator, .struct_type, .enum_type, .pointer, .manual_init, .type_param => false,
+        .void, .arena, .allocator, .struct_type, .enum_type, .machine_type, .interface_type, .pointer, .manual_init, .type_param => false,
     };
 }
 
@@ -241,7 +241,7 @@ fn isSupportedStructFieldType(ctx: *const BackendContext, type_id: types.TypeId)
         .int, .bool, .alloc_error => true,
         .enum_type => |enum_id| isSupportedEnumLayout(ctx, enum_id),
         .pointer => |pointer| isSupportedStructFieldPointerType(ctx, pointer.pointee),
-        .void, .arena, .allocator, .struct_type, .machine_type, .manual_init, .type_param => false,
+        .void, .arena, .allocator, .struct_type, .machine_type, .interface_type, .manual_init, .type_param => false,
     };
 }
 
@@ -251,7 +251,7 @@ fn isSupportedStructFieldPointerType(ctx: *const BackendContext, pointee: types.
         .void, .int, .bool, .arena, .allocator, .alloc_error => true,
         .enum_type => |enum_id| isSupportedEnumLayout(ctx, enum_id),
         .pointer => |nested| isSupportedStructFieldPointerType(ctx, nested.pointee),
-        .struct_type, .machine_type, .manual_init, .type_param => false,
+        .struct_type, .machine_type, .interface_type, .manual_init, .type_param => false,
     };
 }
 
@@ -990,7 +990,7 @@ fn emitCTypeAt(writer: anytype, ctx: *const BackendContext, type_id: types.TypeI
         .machine_type => |machine_id| {
             try emitMachineTypeName(writer, ctx.module, ctx.module.hir.getMachine(machine_id).name);
         },
-        .manual_init, .type_param => {
+        .interface_type, .manual_init, .type_param => {
             try reportUnsupportedCType(ctx, span);
             return error.InvalidExecutable;
         },

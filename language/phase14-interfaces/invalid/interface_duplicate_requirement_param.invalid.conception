@@ -1,0 +1,14 @@
+# name: interface duplicate requirement param
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module Interfaces;
+
+interface Writer {
+    void Write(int value, bool value);
+};
+
+=== diagnostics ===
+CON0025

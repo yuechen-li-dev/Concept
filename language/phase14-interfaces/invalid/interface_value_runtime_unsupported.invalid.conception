@@ -1,0 +1,22 @@
+# name: interface value runtime unsupported
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Interfaces;
+
+interface Writer {
+    void Write(int value);
+};
+
+int Use(Writer writer) {
+    return 0;
+}
+
+int main() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0255
