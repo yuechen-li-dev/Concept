@@ -2290,6 +2290,10 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectRunFixture("../../../language/phase10-ownership/valid/copy_enum_valid.valid.conception");
     try expectRunFixture("../../../language/phase10-ownership/valid/copy_pointer_valid.valid.conception");
     try expectRunFixture("../../../language/phase10-ownership/valid/copy_marker_struct_valid.valid.conception");
+    try expectRunFixture("../../../language/phase10-ownership/valid/move_branch_return_valid.valid.conception");
+    try expectRunFixture("../../../language/phase10-ownership/valid/move_if_else_both_return_valid.valid.conception");
+    try expectRunFixture("../../../language/phase10-ownership/valid/copy_scalar_after_branch_valid.valid.conception");
+    try expectRunFixture("../../../language/phase10-ownership/valid/move_in_one_branch_no_later_use_valid.valid.conception");
     try expectCheckFixture("../../../language/phase10-ownership/invalid/use_after_move_local.invalid.conception");
     try expectCheckFixture("../../../language/phase10-ownership/invalid/use_after_move_argument.invalid.conception");
     try expectCheckFixture("../../../language/phase10-ownership/invalid/move_temporary_call.invalid.conception");
@@ -2301,4 +2305,8 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectBackendCFixture("../../../language/phase10-ownership/invalid/implicit_copy_struct_return.invalid.conception");
     try expectBackendCFixture("../../../language/phase10-ownership/invalid/implicit_copy_struct_assignment.invalid.conception");
     try expectBackendCFixture("../../../language/phase10-ownership/invalid/implicit_copy_param_forward.invalid.conception");
+    try expectBackendCFixture("../../../language/phase10-ownership/invalid/maybe_moved_after_if.invalid.conception");
+    try expectBackendCFixture("../../../language/phase10-ownership/invalid/maybe_moved_move_after_if.invalid.conception");
+    try expectBackendCFixture("../../../language/phase10-ownership/invalid/maybe_moved_argument_after_if.invalid.conception");
+    try expectBackendCFixture("../../../language/phase10-ownership/invalid/maybe_moved_return_after_if.invalid.conception");
 }

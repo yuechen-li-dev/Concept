@@ -1,0 +1,21 @@
+# name: copy scalar after branch valid
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    bool cond = false;
+    int a = 40;
+
+    if (cond) {
+        int b = a;
+    }
+
+    int c = a;
+    return c + 2;
+}
+
+=== run ===
+exit_code: 42

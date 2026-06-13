@@ -1,0 +1,25 @@
+# name: move if else both return valid
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+struct Box {
+    int value;
+};
+
+int main() {
+    bool cond = true;
+    Box a = Box { value: 42 };
+
+    if (cond) {
+        Box b = move a;
+        return b.value;
+    } else {
+        return a.value;
+    }
+}
+
+=== run ===
+exit_code: 42

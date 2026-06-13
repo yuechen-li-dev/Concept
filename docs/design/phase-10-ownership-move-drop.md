@@ -22,7 +22,7 @@ covered primarily by MIR unit tests because source `move` and ordinary
 uninitialized local syntax do not exist yet.
 
 P10-M1 remains intentionally conservative: there is no source `move` syntax, no
-Drop insertion, no `MaybeUninit`, no branch maybe-state diagnostics, no partial
+Drop insertion, no `ManualInit<T>`, no branch maybe-state diagnostics, no partial
 field state, and no Copy marker integration. Field places currently require the
 base local to be usable and are otherwise tracked at whole-local granularity.
 
@@ -39,7 +39,7 @@ non-Copy by default and a successful `move` marks the source local `Moved`.
 Reading that source later produces `CON0151 UseAfterMove`, and moving an
 uninitialized source reports the existing `CON0150 UseBeforeInitialization`.
 
-P10-M2 still intentionally defers Drop, `MaybeUninit`, branch maybe-state
+P10-M2 still intentionally defers Drop, `ManualInit<T>`, branch maybe-state
 diagnostics beyond the existing conservative lattice, partial field moves,
 `Copy<T>` marker integration, user-defined move/copy constructors, replacement
 assignment semantics for Drop types, borrow checking, lifetime analysis,
@@ -57,10 +57,24 @@ non-consuming for Copy types. Fresh values such as struct literals, function
 returns held in temps, enum constructors, and literals are not implicit copies
 from an existing user place.
 
-P10-M3 still intentionally defers Drop, `MaybeUninit`, branch maybe-state
+P10-M3 still intentionally defers Drop, `ManualInit<T>`, branch maybe-state
 diagnostics, partial field moves, partial field copyability, replacement
 assignment semantics for Drop types, user-defined copy/move constructors,
 borrow checking, lifetime analysis, and implicit move.
+
+P10-M4 adds branch merge storage states to the MIR storage analysis.
+`MaybeInitialized` and `MaybeMoved` are now implemented for whole-local storage
+state, and control-flow joins merge local states from reachable predecessors.
+Returned and unreachable paths do not propagate into successor joins, so an
+early-returning move branch does not poison later uses on the non-returning path.
+Reading or moving a maybe-moved value reports `CON0155 MaybeMovedUse`; reading
+or moving a maybe-initialized value reports `CON0156 MaybeUninitializedUse`.
+Mixed moved/uninitialized joins conservatively collapse to `MaybeInitialized`
+because at least one incoming path lacks a usable live value and P10-M4 does not
+add a combined public unusable state. Partial field joins, Drop, `ManualInit<T>`,
+replacement assignment semantics, and borrow/lifetime analysis remain deferred.
+Loops use the same fixed-point worklist and are conservative for
+ownership-sensitive patterns.
 
 ## Thesis
 
@@ -144,7 +158,7 @@ is this place currently usable?
 
 The two are related but distinct. A `Buffer` local may still have type `Buffer`
 after being moved, but the place is no longer readable or droppable. A
-`MaybeUninit<PageTable>` value has an ordinary type, while the storage it exposes
+`ManualInit<PageTable>` value has an ordinary type, while the storage it exposes
 is deliberately not a usable `PageTable` until initialization is explicitly
 asserted or transferred.
 
@@ -325,7 +339,7 @@ If ordinary uninitialized local syntax is introduced later:
 - drops before initialization are errors;
 - branch joins can produce maybe-initialized state;
 - ordinary uninitialized locals should not become broadly valid merely because
-  `MaybeUninit<T>` exists.
+  `ManualInit<T>` exists.
 
 Future example:
 
@@ -424,12 +438,12 @@ The phrase "successful initialization order" matters for fallible construction
 and partial initialization. A local whose initializer did not complete is not
 initialized and must not be dropped as a whole value.
 
-## MaybeUninit
+## ManualInit
 
 Source direction:
 
 ```cpp
-MaybeUninit<PageTable> table;
+ManualInit<PageTable> table;
 
 unsafe {
     initializePageTable(table.ptr());
@@ -440,27 +454,29 @@ PageTable ready = table.assumeInit();
 
 Rules:
 
-- `MaybeUninit<T>` is explicit uninitialized storage.
+- `ManualInit<T>` is explicit uninitialized storage.
 - Ordinary uninitialized locals remain rejected unless deliberately introduced
   later.
 - `assumeInit` is unsafe.
 - Reading uninitialized storage is never safe.
-- Dropping `MaybeUninit<T>` does not drop `T` unless initialized state is
+- Dropping `ManualInit<T>` does not drop `T` unless initialized state is
   explicitly transferred.
-- P10 early implementation may only document `MaybeUninit`; implementation can
+- P10 early implementation may only document `ManualInit<T>`; implementation can
   come later.
 
-`MaybeUninit<T>` should make uninitialized storage searchable and auditable. It
-is not a loophole that makes ordinary reads from uninitialized memory safe.
+`ManualInit<T>` should make uninitialized storage searchable and auditable. It is
+not a loophole that makes ordinary reads from uninitialized memory safe.
+`MaybeUninit<T>` may be considered later only as a Rust-compatibility alias or
+familiarity spelling; it is not the official Concept design name.
 
 ## Partial initialization
 
 Partial initialization is especially important for structs.
 
-Future `MaybeUninit` field-writing direction:
+Future `ManualInit<T>` field-writing direction:
 
 ```cpp
-MaybeUninit<Pair> pair;
+ManualInit<Pair> pair;
 
 unsafe {
     pair.field(.left).write(makeLeft());
@@ -598,7 +614,7 @@ DoubleDrop
 AssignToMovedPlace
 AssignToNonCopyRequiresReplacement
 PartialInitializationUnsupported
-MaybeUninitAssumeInitRequiresUnsafe
+ManualInitAssumeInitRequiresUnsafe
 DropFunctionMustNotThrow
 InvalidDropImpl
 ```
@@ -655,10 +671,10 @@ impl Drop<File> {
 }
 ```
 
-MaybeUninit:
+ManualInit:
 
 ```cpp
-MaybeUninit<PageTable> table;
+ManualInit<PageTable> table;
 
 unsafe {
     initializePageTable(table.ptr());
@@ -686,7 +702,7 @@ P10-M0 does not implement:
 - parser changes;
 - `move` syntax;
 - Drop lowering;
-- `MaybeUninit`;
+- `ManualInit<T>`;
 - storage-state pass;
 - diagnostics;
 - fixtures.
@@ -694,7 +710,7 @@ P10-M0 does not implement:
 ## Proposed Phase 10 milestone ladder
 
 ```text
-P10-M0  Ownership/move/Drop/MaybeUninit design doc
+P10-M0  Ownership/move/Drop/ManualInit design doc
 
 P10-M1  MIR storage-state analysis skeleton
         - local states: Initialized / Moved
@@ -732,7 +748,7 @@ P10-M7  Partial initialization and struct fields
         - partially initialized structs
         - drop initialized fields only
 
-P10-M8  MaybeUninit scaffold
+P10-M8  ManualInit scaffold
         - explicit uninitialized storage wrapper
         - unsafe assumeInit direction
         - no ambient uninitialized locals
@@ -757,10 +773,10 @@ P10-M0 is successful if:
 - assignment/replacement boundaries are documented;
 - use-before-init and use-after-move rules are documented;
 - Drop and drop-order direction is documented without implementation;
-- `MaybeUninit` and partial initialization are documented as explicit/future;
+- `ManualInit<T>` and partial initialization are documented as explicit/future;
 - branch and loop analysis staging is documented;
 - a MIR storage-state pass location and responsibilities are documented;
 - non-goals prevent accidental lifetime-system or C++ destructor drift.
 
-P10 implementation should not begin by adding Drop or `MaybeUninit`. It should
+P10 implementation should not begin by adding Drop or `ManualInit<T>`. It should
 begin by making local storage-state accounting real and testable.

@@ -143,6 +143,8 @@ pub const DiagnosticCode = enum {
     MoveRequiresPlace,
     PartialMoveUnsupported,
     ImplicitCopyRequiresCopy,
+    MaybeMovedUse,
+    MaybeUninitializedUse,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -267,6 +269,8 @@ pub const DiagnosticCode = enum {
             .MoveRequiresPlace => "CON0152",
             .PartialMoveUnsupported => "CON0153",
             .ImplicitCopyRequiresCopy => "CON0154",
+            .MaybeMovedUse => "CON0155",
+            .MaybeUninitializedUse => "CON0156",
         };
     }
 };
@@ -706,6 +710,8 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0152", DiagnosticCode.MoveRequiresPlace.format());
     try std.testing.expectEqualStrings("CON0153", DiagnosticCode.PartialMoveUnsupported.format());
     try std.testing.expectEqualStrings("CON0154", DiagnosticCode.ImplicitCopyRequiresCopy.format());
+    try std.testing.expectEqualStrings("CON0155", DiagnosticCode.MaybeMovedUse.format());
+    try std.testing.expectEqualStrings("CON0156", DiagnosticCode.MaybeUninitializedUse.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {
@@ -1005,6 +1011,14 @@ pub fn partialMoveUnsupported(span: SourceSpan) Diagnostic {
 
 pub fn implicitCopyRequiresCopy(span: SourceSpan) Diagnostic {
     return Diagnostic.init(.ImplicitCopyRequiresCopy, .@"error", "implicit copy of non-Copy value requires Copy<T> or explicit move", span);
+}
+
+pub fn maybeMovedUse(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.MaybeMovedUse, .@"error", "value may have been moved on some control-flow paths", span);
+}
+
+pub fn maybeUninitializedUse(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.MaybeUninitializedUse, .@"error", "value may be uninitialized on some control-flow paths", span);
 }
 
 pub fn unsupportedCBackendType(span: SourceSpan) Diagnostic {

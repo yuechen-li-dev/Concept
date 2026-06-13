@@ -12,6 +12,10 @@ pub const StorageState = enum {
     uninitialized,
     initialized,
     moved,
+    /// Some incoming paths have an initialized value and some do not.
+    maybe_initialized,
+    /// Some incoming paths have an initialized value and some have moved it.
+    maybe_moved,
 };
 
 pub const StorageDiagnostic = struct {
@@ -22,6 +26,8 @@ pub const StorageDiagnostic = struct {
     pub const Kind = enum {
         use_before_initialization,
         use_after_move,
+        maybe_uninitialized_use,
+        maybe_moved_use,
         implicit_copy_requires_copy,
     };
 };
@@ -77,6 +83,7 @@ const Analyzer = struct {
     diagnostic_bag: ?*diagnostics.DiagnosticBag,
     diagnostics: std.ArrayList(StorageDiagnostic),
     had_error: bool,
+    emit_diagnostics: bool,
 
     fn init(
         allocator: std.mem.Allocator,
@@ -95,6 +102,7 @@ const Analyzer = struct {
             .diagnostic_bag = diagnostic_bag,
             .diagnostics = std.ArrayList(StorageDiagnostic).empty,
             .had_error = false,
+            .emit_diagnostics = true,
         };
     }
 
@@ -146,6 +154,7 @@ const Analyzer = struct {
         var have_final = false;
         errdefer self.allocator.free(final_states);
 
+        self.emit_diagnostics = false;
         while (worklist.items.len > 0) {
             const block_index = worklist.pop().?;
             queued[block_index] = false;
@@ -174,13 +183,36 @@ const Analyzer = struct {
                         try self.propagate(states, switch_int.default_target, in_states, reachable, queued, &worklist);
                     },
                     .return_, .@"unreachable" => {
-                        @memcpy(final_states, states);
-                        have_final = true;
+                        if (have_final) {
+                            _ = try joinStates(final_states, states);
+                        } else {
+                            @memcpy(final_states, states);
+                            have_final = true;
+                        }
                     },
                 }
             } else {
-                @memcpy(final_states, states);
-                have_final = true;
+                if (have_final) {
+                    _ = try joinStates(final_states, states);
+                } else {
+                    @memcpy(final_states, states);
+                    have_final = true;
+                }
+            }
+        }
+        self.emit_diagnostics = true;
+
+        for (self.function.blocks, 0..) |block_id, block_index| {
+            if (!reachable[block_index]) continue;
+            const block = self.mir_module.store.getBlock(block_id);
+            const states = try cloneStates(self.allocator, in_states[block_index]);
+            defer self.allocator.free(states);
+
+            for (block.statements) |statement| {
+                try self.analyzeStatement(states, statement);
+            }
+            if (block.terminator) |terminator| {
+                try self.analyzeTerminator(states, terminator);
             }
         }
 
@@ -259,6 +291,8 @@ const Analyzer = struct {
             .initialized => {},
             .uninitialized => try self.report(.use_before_initialization, local_id, span),
             .moved => try self.report(.use_after_move, local_id, span),
+            .maybe_initialized => try self.report(.maybe_uninitialized_use, local_id, span),
+            .maybe_moved => try self.report(.maybe_moved_use, local_id, span),
         }
     }
 
@@ -332,6 +366,7 @@ const Analyzer = struct {
     }
 
     fn report(self: *Analyzer, kind: StorageDiagnostic.Kind, local_id: mir.MirLocalId, span: ?source.SourceSpan) AnalysisError!void {
+        if (!self.emit_diagnostics) return;
         const diagnostic_span = span orelse self.mir_module.store.getLocal(local_id).source_span orelse self.function.source_span orelse source.SourceSpan{ .start = 0, .length = 0 };
         try self.diagnostics.append(self.allocator, .{
             .kind = kind,
@@ -342,6 +377,8 @@ const Analyzer = struct {
             try bag.append(switch (kind) {
                 .use_before_initialization => diagnostics.useBeforeInitialization(diagnostic_span),
                 .use_after_move => diagnostics.useAfterMove(diagnostic_span),
+                .maybe_uninitialized_use => diagnostics.maybeUninitializedUse(diagnostic_span),
+                .maybe_moved_use => diagnostics.maybeMovedUse(diagnostic_span),
                 .implicit_copy_requires_copy => diagnostics.implicitCopyRequiresCopy(diagnostic_span),
             });
         }
@@ -365,7 +402,7 @@ fn cloneStates(allocator: std.mem.Allocator, states: []const StorageState) ![]St
 fn joinStates(existing: []StorageState, incoming: []const StorageState) !bool {
     var changed = false;
     for (existing, incoming) |*current, next| {
-        const joined = joinState(current.*, next);
+        const joined = joinStorageState(current.*, next);
         if (joined != current.*) {
             current.* = joined;
             changed = true;
@@ -374,13 +411,186 @@ fn joinStates(existing: []StorageState, incoming: []const StorageState) !bool {
     return changed;
 }
 
-fn joinState(left: StorageState, right: StorageState) StorageState {
+fn joinStorageState(left: StorageState, right: StorageState) StorageState {
     if (left == right) return left;
-    // P10-M1 deliberately has no maybe-state lattice yet. Existing source MIR
-    // initializes locals at declaration, so mixed joins are kept permissive until
-    // P10-M4 introduces MaybeInitialized/MaybeMoved diagnostics.
-    if (left == .initialized or right == .initialized) return .initialized;
-    return .uninitialized;
+
+    const left_uninit = left == .uninitialized or left == .maybe_initialized;
+    const right_uninit = right == .uninitialized or right == .maybe_initialized;
+    const left_moved = left == .moved or left == .maybe_moved;
+    const right_moved = right == .moved or right == .maybe_moved;
+    const any_uninit = left_uninit or right_uninit;
+    const any_moved = left_moved or right_moved;
+    const any_initialized = left == .initialized or right == .initialized or left == .maybe_initialized or right == .maybe_initialized or left == .maybe_moved or right == .maybe_moved;
+
+    if (any_uninit) {
+        // Mixed moved/uninitialized paths are represented as maybe-initialized:
+        // at least one incoming path lacks a usable live value, and P10-M4 does
+        // not add a combined public maybe-unusable state.
+        return .maybe_initialized;
+    }
+    if (any_moved and any_initialized) return .maybe_moved;
+    if (any_moved) return .moved;
+    return .initialized;
+}
+
+test "MIR storage joins branch states conservatively" {
+    try std.testing.expectEqual(StorageState.initialized, joinStorageState(.initialized, .initialized));
+    try std.testing.expectEqual(StorageState.moved, joinStorageState(.moved, .moved));
+    try std.testing.expectEqual(StorageState.uninitialized, joinStorageState(.uninitialized, .uninitialized));
+    try std.testing.expectEqual(StorageState.maybe_moved, joinStorageState(.initialized, .moved));
+    try std.testing.expectEqual(StorageState.maybe_moved, joinStorageState(.moved, .initialized));
+    try std.testing.expectEqual(StorageState.maybe_initialized, joinStorageState(.initialized, .uninitialized));
+    try std.testing.expectEqual(StorageState.maybe_initialized, joinStorageState(.uninitialized, .initialized));
+    try std.testing.expectEqual(StorageState.maybe_initialized, joinStorageState(.moved, .uninitialized));
+    try std.testing.expectEqual(StorageState.maybe_initialized, joinStorageState(.uninitialized, .moved));
+    try std.testing.expectEqual(StorageState.maybe_moved, joinStorageState(.maybe_moved, .initialized));
+    try std.testing.expectEqual(StorageState.maybe_moved, joinStorageState(.maybe_moved, .moved));
+    try std.testing.expectEqual(StorageState.maybe_initialized, joinStorageState(.maybe_moved, .uninitialized));
+    try std.testing.expectEqual(StorageState.maybe_initialized, joinStorageState(.maybe_initialized, .moved));
+}
+
+test "MIR storage rejects maybe-state reads" {
+    var interner_value = interner.Interner.init(std.testing.allocator);
+    defer interner_value.deinit();
+    var semantic_module = try semantics.SemanticModule.init(std.testing.allocator);
+    defer semantic_module.deinit();
+    var module = mir.MirModule.init(std.testing.allocator);
+    defer module.deinit();
+
+    const function = try module.store.addFunction(.{ .index = 0 }, try interner_value.intern("main"), semantic_module.types.intType(), hir.synthetic_span);
+    const local = try module.store.addLocal(function, try interner_value.intern("x"), .param, semantic_module.types.intType(), hir.synthetic_span);
+    _ = try module.store.addBlock(function, hir.synthetic_span);
+
+    var states = try std.testing.allocator.alloc(StorageState, module.store.locals.items.len);
+    defer std.testing.allocator.free(states);
+    @memset(states, .initialized);
+
+    var analyzer = Analyzer.init(std.testing.allocator, &semantic_module, &module, function, module.store.getFunction(function).*, null);
+    defer analyzer.diagnostics.deinit(std.testing.allocator);
+
+    states[local.index] = .maybe_moved;
+    try analyzer.readPlace(states, .{ .local = local }, hir.synthetic_span);
+    try std.testing.expectEqual(StorageDiagnostic.Kind.maybe_moved_use, analyzer.diagnostics.items[0].kind);
+
+    states[local.index] = .maybe_initialized;
+    try analyzer.readPlace(states, .{ .local = local }, hir.synthetic_span);
+    try std.testing.expectEqual(StorageDiagnostic.Kind.maybe_uninitialized_use, analyzer.diagnostics.items[1].kind);
+}
+
+test "MIR storage branch move join produces maybe moved" {
+    var interner_value = interner.Interner.init(std.testing.allocator);
+    defer interner_value.deinit();
+    var semantic_module = try semantics.SemanticModule.init(std.testing.allocator);
+    defer semantic_module.deinit();
+    const type_store = &semantic_module.types;
+    var module = mir.MirModule.init(std.testing.allocator);
+    defer module.deinit();
+
+    const box_type = try type_store.addStructType(.{ .index = 0 });
+    const function = try module.store.addFunction(.{ .index = 0 }, try interner_value.intern("main"), type_store.intType(), hir.synthetic_span);
+    const cond = try module.store.addLocal(function, try interner_value.intern("cond"), .param, type_store.boolType(), hir.synthetic_span);
+    const source_local = try module.store.addLocal(function, try interner_value.intern("a"), .user, box_type, hir.synthetic_span);
+    const dest_local = try module.store.addLocal(function, try interner_value.intern("b"), .user, box_type, hir.synthetic_span);
+    const entry = try module.store.addBlock(function, hir.synthetic_span);
+    const then_block = try module.store.addBlock(function, hir.synthetic_span);
+    const join_block = try module.store.addBlock(function, hir.synthetic_span);
+
+    try module.store.appendStatement(entry, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = source_local }, mir.MirRvalue.use_(try mir.MirOperand.intLiteral(std.testing.allocator, "1"))) });
+    try module.store.setTerminator(entry, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.switchBool(mir.MirOperand.copyPlace(.{ .local = cond }), then_block, join_block) });
+    try module.store.appendStatement(then_block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = dest_local }, mir.MirRvalue.movePlace(.{ .local = source_local })) });
+    try module.store.setTerminator(then_block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.gotoBlock(join_block) });
+    try module.store.setTerminator(join_block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(mir.MirOperand.copyPlace(.{ .local = source_local })) });
+
+    var bag = diagnostics.DiagnosticBag.init(std.testing.allocator);
+    defer bag.deinit();
+    try std.testing.expectError(error.InvalidStorageState, analyzeModule(std.testing.allocator, &semantic_module, &module, &bag));
+    try std.testing.expectEqual(@as(usize, 1), bag.count());
+    try std.testing.expectEqual(diagnostics.DiagnosticCode.MaybeMovedUse, bag.diagnostics.items[0].code);
+}
+
+test "MIR storage branch maybe initialized join is rejected on read" {
+    var interner_value = interner.Interner.init(std.testing.allocator);
+    defer interner_value.deinit();
+    var semantic_module = try semantics.SemanticModule.init(std.testing.allocator);
+    defer semantic_module.deinit();
+    const type_store = &semantic_module.types;
+    var module = mir.MirModule.init(std.testing.allocator);
+    defer module.deinit();
+
+    const function = try module.store.addFunction(.{ .index = 0 }, try interner_value.intern("main"), type_store.intType(), hir.synthetic_span);
+    const cond = try module.store.addLocal(function, try interner_value.intern("cond"), .param, type_store.boolType(), hir.synthetic_span);
+    const local = try module.store.addLocal(function, try interner_value.intern("x"), .user, type_store.intType(), hir.synthetic_span);
+    const entry = try module.store.addBlock(function, hir.synthetic_span);
+    const then_block = try module.store.addBlock(function, hir.synthetic_span);
+    const join_block = try module.store.addBlock(function, hir.synthetic_span);
+
+    try module.store.setTerminator(entry, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.switchBool(mir.MirOperand.copyPlace(.{ .local = cond }), then_block, join_block) });
+    try module.store.appendStatement(then_block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = local }, mir.MirRvalue.use_(try mir.MirOperand.intLiteral(std.testing.allocator, "1"))) });
+    try module.store.setTerminator(then_block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.gotoBlock(join_block) });
+    try module.store.setTerminator(join_block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(mir.MirOperand.copyPlace(.{ .local = local })) });
+
+    var bag = diagnostics.DiagnosticBag.init(std.testing.allocator);
+    defer bag.deinit();
+    try std.testing.expectError(error.InvalidStorageState, analyzeModule(std.testing.allocator, &semantic_module, &module, &bag));
+    try std.testing.expectEqual(@as(usize, 1), bag.count());
+    try std.testing.expectEqual(diagnostics.DiagnosticCode.MaybeUninitializedUse, bag.diagnostics.items[0].code);
+}
+
+test "MIR storage returned move path does not poison later join" {
+    var interner_value = interner.Interner.init(std.testing.allocator);
+    defer interner_value.deinit();
+    var semantic_module = try semantics.SemanticModule.init(std.testing.allocator);
+    defer semantic_module.deinit();
+    const type_store = &semantic_module.types;
+    var module = mir.MirModule.init(std.testing.allocator);
+    defer module.deinit();
+
+    const box_type = try type_store.addStructType(.{ .index = 0 });
+    const function = try module.store.addFunction(.{ .index = 0 }, try interner_value.intern("main"), type_store.intType(), hir.synthetic_span);
+    const cond = try module.store.addLocal(function, try interner_value.intern("cond"), .param, type_store.boolType(), hir.synthetic_span);
+    const source_local = try module.store.addLocal(function, try interner_value.intern("a"), .user, box_type, hir.synthetic_span);
+    const dest_local = try module.store.addLocal(function, try interner_value.intern("b"), .user, box_type, hir.synthetic_span);
+    const entry = try module.store.addBlock(function, hir.synthetic_span);
+    const then_block = try module.store.addBlock(function, hir.synthetic_span);
+    const join_block = try module.store.addBlock(function, hir.synthetic_span);
+
+    try module.store.appendStatement(entry, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = source_local }, mir.MirRvalue.use_(try mir.MirOperand.intLiteral(std.testing.allocator, "1"))) });
+    try module.store.setTerminator(entry, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.switchBool(mir.MirOperand.copyPlace(.{ .local = cond }), then_block, join_block) });
+    try module.store.appendStatement(then_block, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = dest_local }, mir.MirRvalue.movePlace(.{ .local = source_local })) });
+    try module.store.setTerminator(then_block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(try mir.MirOperand.intLiteral(std.testing.allocator, "7")) });
+    try module.store.setTerminator(join_block, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(try mir.MirOperand.intLiteral(std.testing.allocator, "42")) });
+
+    var analysis = try analyzeFunction(std.testing.allocator, &semantic_module, &module, function, module.store.getFunction(function).*, null);
+    defer analysis.deinit();
+    try std.testing.expectEqual(StorageState.maybe_moved, analysis.stateOf(source_local));
+}
+
+test "MIR storage worklist converges on scalar loop" {
+    var interner_value = interner.Interner.init(std.testing.allocator);
+    defer interner_value.deinit();
+    var semantic_module = try semantics.SemanticModule.init(std.testing.allocator);
+    defer semantic_module.deinit();
+    const type_store = &semantic_module.types;
+    var module = mir.MirModule.init(std.testing.allocator);
+    defer module.deinit();
+
+    const function = try module.store.addFunction(.{ .index = 0 }, try interner_value.intern("main"), type_store.intType(), hir.synthetic_span);
+    const local = try module.store.addLocal(function, try interner_value.intern("x"), .user, type_store.intType(), hir.synthetic_span);
+    const entry = try module.store.addBlock(function, hir.synthetic_span);
+    const condition = try module.store.addBlock(function, hir.synthetic_span);
+    const body = try module.store.addBlock(function, hir.synthetic_span);
+    const exit = try module.store.addBlock(function, hir.synthetic_span);
+
+    try module.store.appendStatement(entry, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = local }, mir.MirRvalue.use_(try mir.MirOperand.intLiteral(std.testing.allocator, "0"))) });
+    try module.store.setTerminator(entry, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.gotoBlock(condition) });
+    try module.store.setTerminator(condition, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.switchBool(mir.MirOperand.boolLiteral(false), body, exit) });
+    try module.store.appendStatement(body, .{ .span = hir.synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = local }, mir.MirRvalue.use_(try mir.MirOperand.intLiteral(std.testing.allocator, "1"))) });
+    try module.store.setTerminator(body, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.gotoBlock(condition) });
+    try module.store.setTerminator(exit, .{ .span = hir.synthetic_span, .kind = mir.MirTerminatorKind.returnValue(mir.MirOperand.copyPlace(.{ .local = local })) });
+
+    var analysis = try analyzeFunction(std.testing.allocator, &semantic_module, &module, function, module.store.getFunction(function).*, null);
+    defer analysis.deinit();
+    try std.testing.expectEqual(StorageState.initialized, analysis.stateOf(local));
 }
 
 test "MIR storage initializes params and rejects uninitialized local return" {

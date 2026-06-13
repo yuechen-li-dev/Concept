@@ -1,0 +1,25 @@
+# name: move in one branch no later use valid
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+struct Box {
+    int value;
+};
+
+int main() {
+    bool cond = true;
+    Box a = Box { value: 42 };
+
+    if (cond) {
+        Box b = move a;
+        return b.value;
+    }
+
+    return 0;
+}
+
+=== run ===
+exit_code: 42
