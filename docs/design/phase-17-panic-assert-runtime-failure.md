@@ -2,7 +2,7 @@
 
 ## Status
 
-P17-M5 is now implemented for runtime failure reason validation. P17-M4 remains closed for `assert(condition, "reason")` MIR/backend lowering, and P17-M2 remains closed for `panic(reason)` MIR/backend lowering:
+P17-M6 is now implemented for Core.Test `Assert.True` / `Assert.False` doctrine alignment. P17-M5 remains closed for runtime failure reason validation, P17-M4 remains closed for `assert(condition, "reason")` MIR/backend lowering, and P17-M2 remains closed for `panic(reason)` MIR/backend lowering:
 
 - `panic("reason");` parses in statement position.
 - The reason string literal and source span are preserved in AST/HIR.
@@ -26,8 +26,11 @@ P17-M5 is now implemented for runtime failure reason validation. P17-M4 remains 
 - Runtime fixtures prove assert-true continues, assert-false exits 101, and condition expressions continue normally. Reason output remains pinned through generated C/backend assertions while runtime stderr matching is unsupported.
 - Runtime `panic` and `assert` share semantic failure-reason content validation before HIR/MIR/backend lowering. Current validation uses the stored string-literal interior text; ordinary space, tab, carriage-return, and newline characters in that stored text count as whitespace. General string escape decoding remains staged with string-literal semantics and backend escaping unchanged.
 - Reason-required diagnostics are split: `CON0280` covers missing/wrong panic reasons, `CON0281` covers missing/wrong assert reasons, `CON0282` covers empty/whitespace runtime failure reasons, `CON0283` covers non-bool assert conditions, and `CON0284`/`CON0285` cover unsupported expression-position panic/assert.
-- Phase 11 Core.Test already rejects empty and whitespace-only primitive test intrinsic reasons with its Phase 11 diagnostic path; routing `Assert.True` through the shared runtime assertion doctrine remains deferred to P17-M6.
-- Named `because:` syntax, expression-position assert, `never`, Core.Test `Assert.True` runtime rewiring, test-runner panic catching, exceptions, unwinding, and stack traces remain deferred.
+- Core.Test `Assert.True(condition, reason)` and `Assert.False(condition, reason)` now align with the runtime assertion doctrine: the condition must be `bool`; the reason is required, non-empty, and not whitespace-only; failures are assertion/invariant failures reported by the test runner rather than runtime panics.
+- Test-side empty and whitespace-only Assert reasons continue to use stable Phase 11 diagnostics while reusing the shared blank-reason predicate used by runtime failure validation.
+- Runtime `assert` still lowers to backend-owned `cpt_panic` and does not call or depend on Core.Test or the test runner.
+- `Assert.Equal`, `Expect.True`, `Expect.False`, `Expect.Equal`, and `Expect.That` remain richer test APIs and keep their existing behavior.
+- Named `because:` syntax, expression-position assert, `never`, broad test-runner panic catching, exceptions, unwinding, stack traces, and machine trap migration remain deferred.
 
 ## Core doctrine
 
@@ -339,16 +342,11 @@ reporting can be deferred.
 ## 10. Interaction with Phase 11 testing
 
 `assert(condition, reason)` should align with `Assert.True(condition, reason)`.
-A `.con_test` `Assert.True` may later lower or route through shared assertion
-machinery. Tests may catch and report assertion failures as test failures rather
-than aborting the entire runner if the runner supports it.
+Core.Test `Assert.True(condition, reason)` and `Assert.False(condition, reason)` are test invariant/precondition checks. They share the runtime assertion doctrine for mandatory, non-blank reasons and bool-only conditions, but false test assertions are recorded as test assertion failures instead of lowering to process panic.
 
-`Assert.Equal` and `Expect.That` remain richer test APIs and are not replaced by
-runtime `assert`. Mandatory reason diagnostics should align with Phase 11 reason
-diagnostics where possible.
+`Assert.Equal` and `Expect.That` remain richer test APIs and are not replaced by runtime `assert`. `Expect.*` continues to model behavioral expectations; `Assert.True` / `Assert.False` now carry an internal assertion/invariant failure kind in the runner.
 
-Ordinary runtime code must not depend on the test runner. The test runner may
-depend on shared failure concepts.
+Ordinary runtime code must not depend on the test runner. The runtime assert path lowers independently to `cpt_panic`; the test runner may depend on shared failure concepts and predicates.
 
 ## 11. Interaction with Phase 13 machines
 
@@ -387,9 +385,15 @@ CON0284 PanicExpressionUseUnsupported
 CON0285 AssertExpressionUseUnsupported
 ```
 
-If Phase 11 reason-required diagnostics can be generalized, the implementation
-should reuse them rather than duplicating behavior under new codes. Reason
-validation should mirror Phase 11:
+Implemented diagnostic split after P17-M6:
+
+| Surface | Missing/wrong reason | Empty/whitespace reason | Non-bool condition | Failure path |
+| --- | --- | --- | --- | --- |
+| `panic(reason)` | `CON0280` | `CON0282` | n/a | runtime `cpt_panic` |
+| runtime `assert(condition, reason)` | `CON0281` | `CON0282` | `CON0283` | runtime `cpt_panic` |
+| Core.Test `Assert.True/False(condition, reason)` | `CON0170` | `CON0171` | `CON0183` | test assertion failure |
+
+Runtime failure and Core.Test Assert reason checks share the same blank-reason predicate while preserving established diagnostics. Reason validation covers:
 
 - missing reason;
 - empty reason;
@@ -426,7 +430,7 @@ P17-M2  panic(reason) MIR/backend lowering (implemented: MIR panic statement, C 
 P17-M3  assert(condition, reason) parser/AST/HIR scaffold (implemented: statement syntax, AST/HIR assert, bool condition check, reason diagnostics)
 P17-M4  assert(condition, reason) MIR/backend lowering (implemented: MIR assert statement, storage/validation, backend if-not guard calling shared cpt_panic, run/backend fixtures)
 P17-M5  reason validation and diagnostics hardening (implemented: shared semantic validation for runtime panic/assert, empty and whitespace-only reasons rejected with CON0282)
-P17-M6  align Core.Test Assert.True with shared assertion doctrine
+P17-M6  align Core.Test Assert.True/False with shared assertion doctrine (implemented: shared blank-reason predicate, bool-only condition coverage, assertion/invariant test failure kind, runtime/test separation fixtures)
 P17-M7  migrate existing runtime trap sites to shared panic path
 P17-M8  examples/fixtures/hardening
 P17-M9  Closeout

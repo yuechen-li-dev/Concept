@@ -2670,6 +2670,9 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase11-testing/valid/theory_with_helper_pass.con_test");
     try expectCheckFixture("../../../language/phase11-testing/valid/assert_true_reason_valid.valid.con_test");
     try expectCheckFixture("../../../language/phase11-testing/valid/assert_false_reason_valid.valid.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/valid/assert_true_reason_alignment.valid.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/valid/assert_false_reason_alignment.valid.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/valid/assert_runtime_and_test_alignment.valid.con_test");
     try expectCheckFixture("../../../language/phase11-testing/valid/expect_true_reason_valid.valid.con_test");
     try expectCheckFixture("../../../language/phase11-testing/valid/expect_false_reason_valid.valid.con_test");
     try expectCheckFixture("../../../language/phase11-testing/valid/expect_equal_int_reason_valid.valid.con_test");
@@ -2702,7 +2705,12 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase11-testing/invalid/expect_equal_missing_reason_invalid.invalid.con_test");
     try expectCheckFixture("../../../language/phase11-testing/invalid/expect_reason_empty_invalid.invalid.con_test");
     try expectCheckFixture("../../../language/phase11-testing/invalid/expect_reason_whitespace_invalid.invalid.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/invalid/assert_true_empty_reason.invalid.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/invalid/assert_true_whitespace_reason.invalid.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/invalid/assert_false_empty_reason.invalid.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/invalid/assert_false_whitespace_reason.invalid.con_test");
     try expectCheckFixture("../../../language/phase11-testing/invalid/expect_true_non_bool_invalid.invalid.con_test");
+    try expectCheckFixture("../../../language/phase11-testing/invalid/assert_true_non_bool.invalid.con_test");
     try expectCheckFixture("../../../language/phase11-testing/invalid/assert_false_non_bool_invalid.invalid.con_test");
     try expectCheckFixture("../../../language/phase11-testing/invalid/expect_equal_type_mismatch_invalid.invalid.con_test");
     try expectCheckFixture("../../../language/phase11-testing/invalid/expect_equal_unsupported_type_invalid.invalid.con_test");

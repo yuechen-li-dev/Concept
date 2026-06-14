@@ -1,0 +1,15 @@
+# name: assert true non bool
+# phase: check
+# expect: fail
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+void NonBool() {
+    Assert.True(1, "condition must be bool");
+    return;
+}
+
+=== diagnostics ===
+CON0183

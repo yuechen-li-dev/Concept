@@ -1,0 +1,12 @@
+# name: assert false reason alignment
+# phase: check
+# expect: pass
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+void AssertFalseReason() {
+    Assert.False(false, "setup invariant must not hold");
+    return;
+}

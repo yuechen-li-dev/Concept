@@ -22,6 +22,15 @@ pub const CollectOptions = struct {
     source_file_kind: source.SourceFileKind = .normal,
 };
 
+pub fn failureReasonLiteralContents(text: []const u8) []const u8 {
+    if (text.len >= 2 and text[0] == '"' and text[text.len - 1] == '"') return text[1 .. text.len - 1];
+    return text;
+}
+
+pub fn failureReasonIsBlank(text: []const u8) bool {
+    return std.mem.trim(u8, text, " \t\r\n").len == 0;
+}
+
 pub const SemanticModule = struct {
     interner: interner.Interner,
     hir: hir.HirStore,
@@ -2696,8 +2705,8 @@ const BodyLowerer = struct {
                 return null;
             },
         };
-        const reason_text = stringLiteralContents(reason.text);
-        if (std.mem.trim(u8, reason_text, " \t\r\n").len == 0) {
+        const reason_text = failureReasonLiteralContents(reason.text);
+        if (failureReasonIsBlank(reason_text)) {
             try self.collector.diagnostics.append(diagnostics.testReasonMustBeNonEmpty(reason.span));
             return null;
         }
@@ -3132,21 +3141,12 @@ const BodyLowerer = struct {
     }
 
     fn validateFailureReason(self: *BodyLowerer, literal_text: []const u8, span: source.SourceSpan) !?[]const u8 {
-        const reason_text = stringLiteralContents(literal_text);
-        if (isBlankFailureReason(reason_text)) {
+        const reason_text = failureReasonLiteralContents(literal_text);
+        if (failureReasonIsBlank(reason_text)) {
             try self.collector.diagnostics.append(diagnostics.failureReasonMustBeNonEmpty(span));
             return null;
         }
         return reason_text;
-    }
-
-    fn stringLiteralContents(text: []const u8) []const u8 {
-        if (text.len >= 2 and text[0] == '"' and text[text.len - 1] == '"') return text[1 .. text.len - 1];
-        return text;
-    }
-
-    fn isBlankFailureReason(text: []const u8) bool {
-        return std.mem.trim(u8, text, " \t\r\n").len == 0;
     }
 
     fn isUnboundTargetRoot(self: *BodyLowerer, expr: ast.Expr) bool {
@@ -5670,11 +5670,11 @@ test "test intrinsic semantics reject wrong arity and normal source usage" {
 }
 
 test "failure reason helper validates non-empty and blank reasons" {
-    try std.testing.expect(!BodyLowerer.isBlankFailureReason("because state must be ready"));
-    try std.testing.expect(BodyLowerer.isBlankFailureReason(""));
-    try std.testing.expect(BodyLowerer.isBlankFailureReason("   "));
-    try std.testing.expect(BodyLowerer.isBlankFailureReason("\t\t"));
-    try std.testing.expect(BodyLowerer.isBlankFailureReason(" \t\r\n "));
+    try std.testing.expect(!failureReasonIsBlank("because state must be ready"));
+    try std.testing.expect(failureReasonIsBlank(""));
+    try std.testing.expect(failureReasonIsBlank("   "));
+    try std.testing.expect(failureReasonIsBlank("\t\t"));
+    try std.testing.expect(failureReasonIsBlank(" \t\r\n "));
 }
 
 fn expectPanicStatementReasonDiagnostic(reason_text: []const u8, code: DiagnosticCode) !void {

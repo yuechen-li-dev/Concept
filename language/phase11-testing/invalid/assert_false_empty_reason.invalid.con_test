@@ -1,0 +1,15 @@
+# name: assert false empty reason
+# phase: check
+# expect: fail
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+void EmptyReason() {
+    Assert.False(false, "");
+    return;
+}
+
+=== diagnostics ===
+CON0171

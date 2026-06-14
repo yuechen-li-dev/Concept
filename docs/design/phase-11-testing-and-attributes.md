@@ -979,6 +979,8 @@ Reason is part of the test, not a comment.
 Current implementation uses positional reason string as a bridge until named because: syntax exists.
 ```
 
+Phase 17 aligned `Assert.True` and `Assert.False` with runtime `assert(condition, reason)` doctrine: both require bool conditions and non-blank reasons, while test Assert failures still report through the HIR test runner instead of becoming runtime panics.
+
 Phase 11 diagnostics:
 
 ```text

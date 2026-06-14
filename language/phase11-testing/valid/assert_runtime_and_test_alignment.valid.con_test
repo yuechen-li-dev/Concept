@@ -1,0 +1,13 @@
+# name: assert runtime and test alignment
+# phase: check
+# expect: pass
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+void RuntimeAndTestAssert() {
+    assert(true, "runtime invariant in test body should continue");
+    Assert.True(true, "test invariant should continue");
+    return;
+}

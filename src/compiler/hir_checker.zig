@@ -1918,7 +1918,7 @@ const Checker = struct {
                 }
             },
         }
-        if (std.mem.trim(u8, test_intrinsic.reason, " \t\r\n").len == 0) {
+        if (semantics.failureReasonIsBlank(test_intrinsic.reason)) {
             try self.reportAt(.TestReasonMustBeNonEmpty, "test intrinsic because reason must be non-empty", test_intrinsic.reason_span);
             return error.InvalidSemanticModule;
         }
