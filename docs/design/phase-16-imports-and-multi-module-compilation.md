@@ -515,7 +515,7 @@ module paths after name resolution.
 
 ## 17. Diagnostics planning
 
-Suggested diagnostic names:
+Implemented Phase 16 diagnostics:
 
 ```text
 CON0270 DuplicateModule
@@ -526,13 +526,13 @@ CON0274 ModuleQualifiedNameUnknown
 CON0275 ModuleQualifiedNameNotImported
 CON0276 ModuleDeclarationRequired
 CON0277 DuplicateImport
-CON0278 MultipleModulesInFile
-CON0279 DuplicateModuleItem
 ```
 
-Use exact names later based on implementation. The important part is diagnostic
-shape: report the failing module declaration, import declaration, or qualified
-access span, and keep unknown-import failures early in the pipeline.
+Related existing diagnostics remain part of the final surface: multiple module
+declarations in one file use the parser diagnostic `CON0005`, ordinary
+duplicate top-level items inside the same module use the existing duplicate
+declaration diagnostics, and duplicate C ABI linkage symbols across modules use
+`CON0265`.
 
 ## 18. Non-goals for Phase 16 v0
 
@@ -573,7 +573,7 @@ P16-M5  Module-aware HIR store and top-level symbol tables
 P16-M6  Qualified module name resolution for functions and values
 P16-M7  Qualified type resolution and cross-module type use
 P16-M8  Multi-module MIR/backend lowering and examples/fixtures
-P16-M9  Closeout
+P16-M9  Closeout — implemented/closed
 ```
 
 ## P16-M1 implementation status: multi-file fixture scaffold
@@ -780,3 +780,74 @@ Implemented behavior:
 - examples live under `examples/phase16/` and document the harness-supplied virtual-file model.
 
 Still deferred: package management, filesystem module lookup, public/private visibility, aliases, wildcard imports, re-exports, unqualified imported names, header imports, separate objects, linker driving, incremental compilation, module spanning multiple files, multiple modules per file, and cross-package dependency resolution.
+
+
+## P16-M9 closeout status
+
+Phase 16 is closed after P16-M9. The final v0 surface is deliberately a
+compilation-unit module system, not a package system and not filesystem import
+resolution. Source files are supplied by the harness or driver, each source file
+declares exactly one module, imports make module roots visible by name, and all
+imported access remains qualified. Imports do not inject unqualified names.
+
+Final supported Phase 16 v0 surface:
+
+- multi-file `.conception` fixtures with virtual source files;
+- source set representation and virtual-path preservation;
+- module declaration table with stable module IDs;
+- duplicate module diagnostics;
+- missing module diagnostics;
+- import declarations after `module`;
+- import ordering diagnostics;
+- raw import preservation;
+- resolved import graph;
+- unknown import diagnostics;
+- duplicate import diagnostics;
+- import cycle diagnostics;
+- HIR module records;
+- per-item module ownership;
+- resolved imports preserved in HIR module metadata;
+- per-module top-level symbol tables;
+- ordinary duplicate names scoped per module;
+- C ABI duplicate symbols remaining compilation-unit-wide;
+- qualified module function calls;
+- current-module qualified calls;
+- qualified module type references;
+- imported struct type use;
+- imported enum type references;
+- imported `[Repr(C)]` metadata visible across modules;
+- multi-source MIR/backend/run lowering;
+- one generated C unit for v0;
+- backend function-name collision hardening for ordinary same-name functions
+  across modules;
+- backend struct-name collision hardening for ordinary same-name structs across
+  modules;
+- exact/unmangled `export "C"` symbols;
+- examples and representative fixtures, including a closeout multi-module run
+  fixture.
+
+Final diagnostics inventory:
+
+```text
+CON0270 DuplicateModule
+CON0271 UnknownImport
+CON0272 ImportCycle
+CON0273 ImportMustAppearBeforeDeclarations
+CON0274 ModuleQualifiedNameUnknown
+CON0275 ModuleQualifiedNameNotImported
+CON0276 ModuleDeclarationRequired
+CON0277 DuplicateImport
+```
+
+`CON0005` continues to cover multiple module declarations in one file, existing
+duplicate-declaration diagnostics cover ordinary same-module duplicate items,
+and `CON0265` continues to reject duplicate C ABI symbols across the whole
+compilation unit.
+
+Known limitations and non-goals remain explicit: aliases, wildcard imports,
+re-exports, unqualified imported names, public/private visibility, package
+management, filesystem module search, import path-to-file mapping, module
+spanning multiple files, multiple modules per file, separate object files, a
+linker driver, incremental compilation, and cross-package dependency resolution
+are all deferred. The backend emits one generated C translation unit for the
+collected v0 program.

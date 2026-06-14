@@ -81,35 +81,39 @@ Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed f
 
 ## Phase 16 import/multi-module fixtures
 
-Phase 16 M1 introduces hermetic multi-file `.conception` cases. A
-single fixture may contain multiple virtual Concept source files, each with a
-stable virtual path for diagnostics. The implemented embedded form is
+Phase 16 is closed. Its fixtures live under `language/phase16-imports/` and
+cover the v0 module/import surface for harness-supplied multi-source
+compilation units. The full corpus now contains 906 `.conception` fixtures,
+including 73 Phase 16 fixtures.
+
+A single `.conception` fixture may contain multiple virtual Concept source
+files, each with a stable virtual path for diagnostics. The embedded form is
 `=== file: Name.concept ===` sections followed by the usual fixture assertion
 sections. Legacy `=== source ===` fixtures still parse as exactly one internal
 source. Duplicate or empty virtual file paths are fixture-format errors.
 
-Phase 16 M2 extends multi-file parser fixtures with a module-table pre-pass:
-every virtual source is parsed, exactly one `module` declaration is required per
-source in multi-source mode, duplicate module names are rejected across the
-fixture compilation unit, and the module table preserves source order, stable
-module IDs, virtual paths, and declaration spans. Phase 16 M3 adds parser-only
-`import Qualified.Module;` fixtures: imports are preserved in AST/debug output
-and raw module-table import records, import-after-declaration is rejected with
-`CON0273`, and string, wildcard, alias, list, and re-export forms are rejected
-syntactically. Phase 16 M4 resolves multi-source imports to stable module IDs, Phase 16 M5 adds multi-source semantic/HIR-only fixtures for module-aware HIR records and per-module duplicate checks, and P16-M6 adds semantic fixtures for qualified module function calls, current-module qualification, same-name functions across modules, not-imported/unknown/missing qualified names, and non-injected unqualified imports. P16-M7 adds semantic fixtures for qualified imported struct and enum types, same-name types selected by qualifier, current-module qualified types, imported repr(C) C ABI signatures, not-imported/unknown/missing/non-type qualified type diagnostics, and non-injected unqualified imported types. P16-M8 adds multi-source run fixtures for cross-module calls, same function names, imported struct values, and imported extern C calls, plus Phase 16 examples. Current fixture count: 969.
+The Phase 16 corpus covers multi-file parser fixtures, module declaration table
+collection, duplicate and missing module diagnostics, import declarations and
+ordering, raw import preservation, resolved import graph edges, unknown import
+diagnostics (`CON0271`), duplicate import diagnostics (`CON0277`), import cycle
+diagnostics (`CON0272`), HIR module records, per-item module ownership,
+per-module duplicate top-level checking, compilation-unit-wide C ABI duplicate
+symbol checking, qualified module function calls, current-module qualification,
+qualified imported struct and enum type references, imported repr(C) metadata at
+C ABI boundaries, multi-source MIR/backend/run lowering, generated-C name
+collision hardening, and examples under `examples/phase16/`.
 
-Phase 16 M4 resolves multi-source imports to stable module IDs,
-rejects unknown imports with `CON0271`, duplicate imports within one module with
-`CON0277`, and self/direct/long import cycles with `CON0272`. P16-M5 adds a
-semantic/HIR-only multi-source fixture path for module-aware HIR records and
-per-module top-level duplicate checks. P16-M6 adds qualified function lookup; P16-M7 adds qualified type resolution. Broader cross-module type/name resolution, MIR, backend, and run multi-file behavior remain deferred.
+Representative run fixtures include cross-module function calls, same ordinary
+function and struct names selected by qualification, imported struct values,
+imported `extern "C"` calls, and the closeout surface fixture combining a
+qualified function call, imported struct type, and imported extern C call.
 
-Representative Phase 16 fixtures should cover module declaration collection,
-duplicate module diagnostics, import ordering, unknown imports, duplicate
-imports, import cycles, qualified cross-module calls, qualified type references,
-repr(C) metadata used across modules, and generated C collision avoidance. The
-fixtures should not require filesystem import search paths or sidecar files in
-v0.
+Phase 16 fixtures intentionally do not require filesystem import search paths or
+sidecar files. Aliases, wildcard imports, re-exports, unqualified imported
+names, visibility, packages, filesystem lookup, import path-to-file mapping,
+module spanning multiple files, multiple modules per file, separate object
+files, linker driving, incremental compilation, and cross-package dependencies
+remain deferred.
 
 ## Phase 9 compile-time execution fixtures
 
