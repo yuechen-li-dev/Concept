@@ -48,6 +48,8 @@ language/phase15-c-abi/valid/
 language/phase15-c-abi/invalid/
 language/phase16-imports/valid/
 language/phase16-imports/invalid/
+language/phase17-runtime-failure/valid/
+language/phase17-runtime-failure/invalid/
 ```
 
 ## Phase 5 sum-type fixtures
@@ -80,6 +82,8 @@ Phase 8 MIR/backend coverage is intentionally concrete-only: the pipeline run fi
 Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed for compile-time execution v0. Phase 10 is closed for ownership/storage-state v0. Phase 11 is closed for first-class testing, attributes, and reasoned expectations v0. Phase 14 is closed for runtime interfaces and borrowed dyn dispatch v0: interface declaration, requirement validation, interface impl conformance, borrowed `dyn Interface&` type-surface fixtures, call-boundary concrete-to-dyn coercion fixtures, dyn method-call HIR/MIR fixtures, C backend vtable/fat-reference lowering fixtures, executable borrowed dyn dispatch fixtures, examples, mutability hardening fixtures, and backend C-shape assertions for the borrowed dyn subset. Phase 15 is closed for C ABI v0: extern C parser/AST/HIR fixtures, ABI type validation, extern call MIR/backend prototype and call-shape fixtures, export C parser/check/backend/run fixtures, staged `[Repr(C)]` marker fixtures, repr(C) field validation, ABI-boundary acceptance, backend layout/order/de-duplication fixtures, examples, and representative invalid fixtures for the pinned non-goals.
 
 ## Phase 16 import/multi-module fixtures
+
+Phase 17 M0 is design-only for panic, assertions, and runtime failure reporting; Phase 17 fixtures are planned under `language/phase17-runtime-failure/` once compiler behavior begins.
 
 Phase 16 is closed. Its fixtures live under `language/phase16-imports/` and
 cover the v0 module/import surface for harness-supplied multi-source

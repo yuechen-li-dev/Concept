@@ -4,7 +4,7 @@
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
 **Phases closed:** 1 through 16
-**Current phase:** Phase 16 closed — imports and multi-module compilation v0
+**Current phase:** Phase 17 M0 — panic, assertions, and runtime failure reporting design
 **Fixture corpus:** 906 total `.conception` fixtures; 108 under `language/phase15-c-abi/`; 73 under `language/phase16-imports/`
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
@@ -207,7 +207,7 @@
 | `discard` for intentional error discard | ✅ | Phase 5 |
 | Generalizable `must_use` on any type | 🔶 | `must_use` on enums implemented; arbitrary `must_use` on functions deferred |
 | Nominal error types preferred | ✅ | Payload enums as error types work fully |
-| `panic` / `assert` | ❌ | Not implemented — no panic infrastructure yet |
+| `panic` / `assert` | 🔶 | Phase 17 M0 design added for explicit runtime failure, mandatory reasons, shared panic/assert failure doctrine, and inspectable HIR/MIR/C lowering targets; compiler behavior not implemented yet |
 | `panic_handler` for freestanding | ❌ | |
 | Panic modes (`abort`, `halt`, `unwind`, `custom`) | ❌ | |
 
