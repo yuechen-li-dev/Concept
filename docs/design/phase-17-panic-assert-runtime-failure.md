@@ -2,7 +2,7 @@
 
 ## Status
 
-P17-M6 is now implemented for Core.Test `Assert.True` / `Assert.False` doctrine alignment. P17-M5 remains closed for runtime failure reason validation, P17-M4 remains closed for `assert(condition, "reason")` MIR/backend lowering, and P17-M2 remains closed for `panic(reason)` MIR/backend lowering:
+P17-M7 is now implemented for runtime trap consolidation. P17-M6 remains closed for Core.Test `Assert.True` / `Assert.False` doctrine alignment, P17-M5 remains closed for runtime failure reason validation, P17-M4 remains closed for `assert(condition, "reason")` MIR/backend lowering, and P17-M2 remains closed for `panic(reason)` MIR/backend lowering:
 
 - `panic("reason");` parses in statement position.
 - The reason string literal and source span are preserved in AST/HIR.
@@ -30,7 +30,9 @@ P17-M6 is now implemented for Core.Test `Assert.True` / `Assert.False` doctrine 
 - Test-side empty and whitespace-only Assert reasons continue to use stable Phase 11 diagnostics while reusing the shared blank-reason predicate used by runtime failure validation.
 - Runtime `assert` still lowers to backend-owned `cpt_panic` and does not call or depend on Core.Test or the test runner.
 - `Assert.Equal`, `Expect.True`, `Expect.False`, `Expect.Equal`, and `Expect.That` remain richer test APIs and keep their existing behavior.
-- Named `because:` syntax, expression-position assert, `never`, broad test-runner panic catching, exceptions, unwinding, stack traces, and machine trap migration remain deferred.
+- Machine `Result(machine)` before completion now routes through the shared backend-owned `cpt_panic` helper with stable reason `machine result cannot be read before completion` and deterministic exit code 101. Explicit panic, runtime assert, and this migrated runtime trap share one de-duplicated helper definition per generated C unit.
+- Runtime trap inventory for M7 found the safe ad-hoc generated runtime trap in machine result-before-completion lowering. Other searched sites were compile-time diagnostics, MIR/compiler `unreachable` for invalid compiler paths, unsupported runtime `transition match` / `transition decide` diagnostics, allocation helper declarations, and future/non-implemented bounds/use-after-move traps; those were not migrated because they are not current ad-hoc generated runtime traps or would require new semantics.
+- Named `because:` syntax, expression-position assert, `never`, broad test-runner panic catching, exceptions, unwinding, stack traces, nested machines, runtime `transition match`, runtime `transition decide`, and `yield` remain deferred.
 
 ## Core doctrine
 
@@ -431,7 +433,7 @@ P17-M3  assert(condition, reason) parser/AST/HIR scaffold (implemented: statemen
 P17-M4  assert(condition, reason) MIR/backend lowering (implemented: MIR assert statement, storage/validation, backend if-not guard calling shared cpt_panic, run/backend fixtures)
 P17-M5  reason validation and diagnostics hardening (implemented: shared semantic validation for runtime panic/assert, empty and whitespace-only reasons rejected with CON0282)
 P17-M6  align Core.Test Assert.True/False with shared assertion doctrine (implemented: shared blank-reason predicate, bool-only condition coverage, assertion/invariant test failure kind, runtime/test separation fixtures)
-P17-M7  migrate existing runtime trap sites to shared panic path
+P17-M7  migrate existing runtime trap sites to shared panic path (implemented: machine Result-before-completion calls shared cpt_panic with stable reason and exit 101; helper de-duplicates with panic/assert)
 P17-M8  examples/fixtures/hardening
 P17-M9  Closeout
 ```

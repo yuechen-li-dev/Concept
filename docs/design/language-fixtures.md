@@ -94,8 +94,8 @@ test-runner dependency, assert-true exit 0, assert-false exit 101, and condition
 expression runtime success. P17-M2 panic fixtures continue to cover
 statement-position `panic("reason");`, invalid reason/expression forms,
 backend-owned `cpt_panic` lowering, helper de-duplication, escaping, no
-test-runner dependency, and exit code 101. P17-M5 adds empty, whitespace-only, and tab-only reason rejection fixtures plus non-empty reason acceptance fixtures for both panic and assert. P17-M6 adds Core.Test `Assert.True` / `Assert.False` alignment fixtures for valid reasons, empty and whitespace-only reason rejection, bool-only conditions, and runtime/test assertion separation in a `.con_test` body. The language fixture corpus contains
-1021 fixture files after adding the P17-M6 alignment fixtures.
+test-runner dependency, and exit code 101. P17-M5 adds empty, whitespace-only, and tab-only reason rejection fixtures plus non-empty reason acceptance fixtures for both panic and assert. P17-M6 adds Core.Test `Assert.True` / `Assert.False` alignment fixtures for valid reasons, empty and whitespace-only reason rejection, bool-only conditions, and runtime/test assertion separation in a `.con_test` body. P17-M7 adds runtime trap consolidation fixtures proving machine `Result(machine)` before completion exits through shared `cpt_panic` with code 101, successful result-after-completion behavior remains unchanged, and migrated traps share one helper with runtime assert. The language fixture corpus contains
+1024 fixture files after adding the P17-M7 trap consolidation fixtures.
 
 Phase 16 is closed. Its fixtures live under `language/phase16-imports/` and
 cover the v0 module/import surface for harness-supplied multi-source

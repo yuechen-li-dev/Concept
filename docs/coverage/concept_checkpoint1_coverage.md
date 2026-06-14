@@ -4,8 +4,8 @@
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
 **Phases closed:** 1 through 16
-**Current phase:** Phase 17 M6 — Core.Test Assert.True/False runtime assertion doctrine alignment
-**Fixture corpus:** 1021 total fixture files; 108 under `language/phase15-c-abi/`; 73 under `language/phase16-imports/`; 42 under `language/phase17-runtime-failure/`
+**Current phase:** Phase 17 M7 — runtime trap consolidation through shared panic path
+**Fixture corpus:** 1024 total fixture files; 108 under `language/phase15-c-abi/`; 73 under `language/phase16-imports/`; 45 under `language/phase17-runtime-failure/`
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
 ---
@@ -207,7 +207,7 @@
 | `discard` for intentional error discard | ✅ | Phase 5 |
 | Generalizable `must_use` on any type | 🔶 | `must_use` on enums implemented; arbitrary `must_use` on functions deferred |
 | Nominal error types preferred | ✅ | Payload enums as error types work fully |
-| `panic` / `assert` | 🔶 | Phase 17 M6 aligns Core.Test `Assert.True` / `Assert.False` with the runtime assertion doctrine while preserving test-runner failure reporting and no runtime dependency on Core.Test; M5 validates runtime failure reasons for statement-position `panic("reason")` and `assert(condition, "reason")`, rejecting empty/whitespace-only reasons with `CON0282` while keeping missing/wrong reason diagnostics split; M4 lowering routes both runtime forms through a shared backend-owned `cpt_panic` helper emitted once per C unit and exits 101 on panic or failed assert; bool-condition and unsupported expression-position diagnostics remain |
+| `panic` / `assert` | 🔶 | Phase 17 M7 routes machine `Result(machine)` before completion through the shared backend-owned `cpt_panic` helper with stable reason and exit 101, de-duplicated with explicit `panic` and runtime `assert`; M6 aligns Core.Test `Assert.True` / `Assert.False` with the runtime assertion doctrine while preserving test-runner failure reporting and no runtime dependency on Core.Test; M5 validates runtime failure reasons with `CON0282`; bool-condition and unsupported expression-position diagnostics remain |
 | `panic_handler` for freestanding | ❌ | |
 | Panic modes (`abort`, `halt`, `unwind`, `custom`) | ❌ | |
 
@@ -577,6 +577,6 @@ linking, C++ ABI, varargs, extern variables, symbol aliasing, callbacks, and
 platform ABI matrices).*
 
 
-## Phase 17 M6 assertion alignment update
+## Phase 17 M7 runtime trap consolidation update
 
-P17-M6 aligns Core.Test `Assert.True` / `Assert.False` with the shared runtime assertion doctrine: bool-only conditions, mandatory non-empty/non-whitespace reasons via the shared blank-reason predicate, stable Phase 11 test diagnostics, test-runner assertion failures for `.con_test`, and no runtime dependency on Core.Test. The language fixture corpus now contains 1021 fixture files.
+P17-M7 migrates machine `Result(machine)` before completion from an ad-hoc backend trap to the shared runtime panic path. The generated C now calls `cpt_panic("machine result cannot be read before completion")`, exits through code 101, and shares the one-per-C-unit helper with explicit `panic` and runtime `assert`; successful result-after-completion machine behavior is unchanged. P17-M6 remains closed for Core.Test `Assert.True` / `Assert.False` assertion doctrine alignment. The language fixture corpus now contains 1024 fixture files.
