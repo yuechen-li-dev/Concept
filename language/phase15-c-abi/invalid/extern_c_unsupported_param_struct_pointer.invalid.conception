@@ -1,0 +1,19 @@
+# name: extern C unsupported param struct pointer
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module CAbi;
+
+struct Point {
+    int x;
+    int y;
+}
+
+extern "C" {
+    int use_point_ptr(Point* p);
+}
+
+=== diagnostics ===
+CON0260

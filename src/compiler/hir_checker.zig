@@ -112,6 +112,10 @@ const Checker = struct {
     fn checkFunctionBodies(self: *Checker) CheckError!void {
         for (self.module.hir.functions.items, 0..) |function, index| {
             const function_id = hir.FunctionId{ .index = @intCast(index) };
+            if (function.is_extern) {
+                try self.checkExternFunctionDeclaration(function_id, function);
+                continue;
+            }
             if (self.module.hir.isGenericFunction(function_id)) continue;
             try self.checkDropParams(function_id, function);
             if (function.body) |body| {
@@ -129,6 +133,55 @@ const Checker = struct {
             try self.checkOpaqueAllocationTypeSignature(function);
             try self.checkInterfaceRuntimeSignature(function);
         }
+    }
+
+    fn checkExternFunctionDeclaration(self: *Checker, function_id: hir.FunctionId, function: hir.HirFunction) CheckError!void {
+        if (function.body != null) {
+            try self.reportAt(.InvalidCall, "extern C function declaration must not have a body", function.span);
+            return error.InvalidSemanticModule;
+        }
+        if (function.is_compile_time or self.module.hir.isGenericFunction(function_id) or function.is_concept_witness) {
+            try self.reportAt(.UnsupportedCAbiType, "extern C function declaration cannot be comptime, generic, or a concept witness", function.span);
+            return error.InvalidSemanticModule;
+        }
+        if (function.extern_abi == null or function.extern_abi.? != .c or function.c_symbol_name == null) {
+            try self.reportAt(.UnsupportedCAbiType, "extern C function declaration is missing C ABI metadata", function.span);
+            return error.InvalidSemanticModule;
+        }
+        if (!self.isSupportedCAbiReturnType(function.return_type)) {
+            try self.reportAt(.UnsupportedCAbiType, "unsupported extern C return type", function.span);
+            return error.InvalidSemanticModule;
+        }
+        for (function.params) |param_id| {
+            const param = self.module.hir.getParam(param_id);
+            if (!self.isSupportedCAbiParamType(param.type_id)) {
+                try self.reportAt(.UnsupportedCAbiType, "unsupported extern C parameter type", param.span);
+                return error.InvalidSemanticModule;
+            }
+        }
+    }
+
+    fn isSupportedCAbiReturnType(self: *Checker, type_id: types.TypeId) bool {
+        return switch (self.module.types.kind(type_id)) {
+            .void, .int, .bool, .alloc_error => true,
+            .pointer => |pointer| self.isSupportedCAbiPointerPointee(pointer.pointee),
+            else => false,
+        };
+    }
+
+    fn isSupportedCAbiParamType(self: *Checker, type_id: types.TypeId) bool {
+        return switch (self.module.types.kind(type_id)) {
+            .int, .bool, .alloc_error => true,
+            .pointer => |pointer| self.isSupportedCAbiPointerPointee(pointer.pointee),
+            else => false,
+        };
+    }
+
+    fn isSupportedCAbiPointerPointee(self: *Checker, type_id: types.TypeId) bool {
+        return switch (self.module.types.kind(type_id)) {
+            .void, .int, .bool, .arena, .allocator, .alloc_error => true,
+            else => false,
+        };
     }
 
     fn checkDropParams(self: *Checker, function_id: hir.FunctionId, function: hir.HirFunction) CheckError!void {
@@ -355,6 +408,7 @@ const Checker = struct {
             const function_id = hir.FunctionId{ .index = @intCast(index) };
             if (self.module.hir.isGenericFunction(function_id)) continue;
             if (self.module.hir.isConceptWitnessFunction(function_id)) continue;
+            if (function.is_extern) continue;
             if (function.is_compile_time) continue;
             if (std.mem.eql(u8, self.module.interner.text(function.name), "main")) return function_id;
         }
@@ -604,7 +658,7 @@ const Checker = struct {
                     try self.reportAt(.CompileTimeFunctionRequired, "compile-time function call requires a compile-time context", expr.span);
                     return error.InvalidSemanticModule;
                 }
-                if (callee.body == null) {
+                if (callee.body == null and !callee.is_extern) {
                     try self.reportAt(.InvalidCall, "cannot call function without body", expr.span);
                     return error.InvalidSemanticModule;
                 }

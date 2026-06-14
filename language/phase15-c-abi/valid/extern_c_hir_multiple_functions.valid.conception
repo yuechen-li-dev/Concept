@@ -1,0 +1,13 @@
+# name: extern C HIR multiple functions
+# phase: check
+# check: declarations
+# expect: pass
+
+=== source ===
+module CAbi;
+
+extern "C" {
+    int abs(int value);
+    bool is_positive(int value);
+    void observe(int value);
+}

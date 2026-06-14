@@ -572,6 +572,10 @@ const FunctionLowerer = struct {
     }
 
     fn lowerCall(self: *FunctionLowerer, expr: hir.HirExpr, call: anytype, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        if (self.semantic_module.hir.getFunction(call.function).is_extern) {
+            return error.ExternCLinkageDeferred;
+        }
+
         const args = try self.allocator.alloc(mir.MirOperand, call.args.len);
         var args_owned = true;
         var initialized: usize = 0;
@@ -2017,6 +2021,23 @@ test "MIR lowering lowers function call temp" {
     try std.testing.expectEqualStrings("1", lowered_call.args[0].int_literal);
     try std.testing.expectEqualStrings("2", lowered_call.args[1].int_literal);
     try std.testing.expectEqual(main_function.locals[0], block.terminator.?.kind.return_.?.copy.local);
+}
+
+test "MIR lowering rejects extern C calls until Phase 15 M3" {
+    var module = try newModule();
+    defer module.deinit();
+
+    const abs_name = try intern(&module, "abs");
+    const abs = try module.hir.addExternFunction(abs_name, module.types.intType(), .c, abs_name, hir.synthetic_span, hir.synthetic_span);
+    _ = try addParam(&module, abs, "value", module.types.intType());
+
+    const main = try addFunction(&module, "main", module.types.intType(), false);
+    const args = try std.testing.allocator.alloc(hir.ExprId, 1);
+    args[0] = try intExpr(&module, "1");
+    const call = try module.hir.addExpr(.{ .call = .{ .function = abs, .args = args } }, hir.synthetic_span);
+    try setBody(&module, main, &.{try module.hir.addStmt(.{ .return_stmt = call }, hir.synthetic_span)});
+
+    try std.testing.expectError(error.ExternCLinkageDeferred, lowerModule(std.testing.allocator, &module));
 }
 
 test "MIR lowering lowers if without else" {

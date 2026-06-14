@@ -1027,7 +1027,7 @@ fn expectCheckFixture(comptime path: []const u8) !void {
 
     if (std.mem.indexOf(u8, path, "phase12-allocation") != null) {
         try expectSemanticCheckFixtureAllowNoMain(path, fixture);
-    } else if (std.mem.indexOf(u8, path, "phase3-semantics") != null or std.mem.indexOf(u8, path, "phase8-concepts-templates") != null or std.mem.indexOf(u8, path, "phase5-sum-types") != null or std.mem.indexOf(u8, path, "phase5a-judgment") != null or std.mem.indexOf(u8, path, "phase6-unsafe-ownership") != null or std.mem.indexOf(u8, path, "phase7-runtime-structs") != null or std.mem.indexOf(u8, path, "phase10-ownership") != null or std.mem.indexOf(u8, path, "phase11-testing") != null or std.mem.indexOf(u8, path, "phase13-machines") != null or std.mem.indexOf(u8, path, "phase14-interfaces") != null) {
+    } else if (std.mem.indexOf(u8, path, "phase3-semantics") != null or std.mem.indexOf(u8, path, "phase8-concepts-templates") != null or std.mem.indexOf(u8, path, "phase5-sum-types") != null or std.mem.indexOf(u8, path, "phase5a-judgment") != null or std.mem.indexOf(u8, path, "phase6-unsafe-ownership") != null or std.mem.indexOf(u8, path, "phase7-runtime-structs") != null or std.mem.indexOf(u8, path, "phase10-ownership") != null or std.mem.indexOf(u8, path, "phase11-testing") != null or std.mem.indexOf(u8, path, "phase13-machines") != null or std.mem.indexOf(u8, path, "phase14-interfaces") != null or std.mem.indexOf(u8, path, "phase15-c-abi") != null) {
         try expectSemanticCheckFixture(path, fixture);
     } else {
         try expectPhase2CheckFixture(path, fixture);
@@ -2627,6 +2627,24 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectParseFixture("../../../language/phase15-c-abi/invalid/extern_c_non_function_item.invalid.conception");
     try expectParseFixture("../../../language/phase15-c-abi/invalid/extern_c_global.invalid.conception");
     try expectParseFixture("../../../language/phase15-c-abi/invalid/extern_c_varargs.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/valid/extern_c_hir_basic.valid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/valid/extern_c_hir_multiple_functions.valid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/valid/extern_c_hir_empty_block.valid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/valid/extern_c_hir_pointer_params.valid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/valid/extern_c_bool_param_return.valid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/valid/extern_c_arena_pointer_param.valid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/valid/extern_c_allocator_pointer_param.valid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/valid/extern_c_call_resolves_semantic.valid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_duplicate_symbol_same_block.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_duplicate_symbol_across_blocks.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_duplicate_top_level_name.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_unsupported_return_struct.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_unsupported_param_struct.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_unsupported_param_struct_pointer.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_unsupported_param_interface.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_unsupported_param_dyn.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_unsupported_param_manual_init.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_void_param_invalid.invalid.conception");
 
     try expectParseFixture("../../../language/phase14-interfaces/valid/interface_single_requirement.valid.conception");
     try expectCheckFixture("../../../language/phase14-interfaces/valid/interface_multiple_requirements.valid.conception");

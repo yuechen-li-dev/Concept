@@ -1,0 +1,19 @@
+# name: extern C unsupported return struct
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module CAbi;
+
+struct Point {
+    int x;
+    int y;
+}
+
+extern "C" {
+    Point make_point();
+}
+
+=== diagnostics ===
+CON0260

@@ -1,0 +1,11 @@
+# name: extern C bool param return
+# phase: check
+# check: declarations
+# expect: pass
+
+=== source ===
+module CAbi;
+
+extern "C" {
+    bool negate_bool(bool value);
+}

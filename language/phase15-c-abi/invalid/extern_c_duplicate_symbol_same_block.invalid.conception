@@ -1,0 +1,15 @@
+# name: extern C duplicate symbol same block
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module CAbi;
+
+extern "C" {
+    int abs(int value);
+    int abs(int other);
+}
+
+=== diagnostics ===
+CON0265

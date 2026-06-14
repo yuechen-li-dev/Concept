@@ -204,6 +204,16 @@ pub const AllocationEffect = enum {
     }
 };
 
+pub const ExternAbi = enum {
+    c,
+
+    pub fn debugName(self: ExternAbi) []const u8 {
+        return switch (self) {
+            .c => "C",
+        };
+    }
+};
+
 pub const HirFunction = struct {
     item: ItemId,
     name: SymbolId,
@@ -220,6 +230,10 @@ pub const HirFunction = struct {
     is_instantiation: bool = false,
     is_concept_witness: bool = false,
     is_referenced_concept_witness: bool = false,
+    is_extern: bool = false,
+    extern_abi: ?ExternAbi = null,
+    c_symbol_name: ?SymbolId = null,
+    extern_abi_span: ?SourceSpan = null,
 };
 
 pub const HirMachineState = struct {
@@ -872,6 +886,16 @@ pub const HirStore = struct {
         return id;
     }
 
+    pub fn addExternFunction(self: *HirStore, name: SymbolId, return_type: types.TypeId, abi: ExternAbi, c_symbol_name: SymbolId, span: SourceSpan, abi_span: SourceSpan) !FunctionId {
+        const id = try self.addFunctionWithSafety(name, return_type, false, span);
+        const function = self.getFunctionMut(id);
+        function.is_extern = true;
+        function.extern_abi = abi;
+        function.c_symbol_name = c_symbol_name;
+        function.extern_abi_span = abi_span;
+        return id;
+    }
+
     pub fn addMachine(self: *HirStore, name: SymbolId, return_type: types.TypeId, states: []HirMachineState, span: SourceSpan) !MachineId {
         const id = MachineId{ .index = try nextIndex(self.machines.items.len, error.TooManyMachines) };
         const item = try self.addItem(.{ .machine = id });
@@ -1003,6 +1027,10 @@ pub const HirStore = struct {
             .is_instantiation = false,
             .is_concept_witness = false,
             .is_referenced_concept_witness = false,
+            .is_extern = false,
+            .extern_abi = null,
+            .c_symbol_name = null,
+            .extern_abi_span = null,
         });
         return id;
     }
@@ -1471,7 +1499,14 @@ pub const HirStore = struct {
                 .function => |id| {
                     const function = self.getFunction(id);
                     try writeAttributesDebug(writer, function.attributes, interner, 1);
-                    try writer.print("  {s}{s}Function {s}", .{ if (function.is_compile_time) "CompileTime " else "", if (function.is_unsafe) "Unsafe " else "", interner.text(function.name) });
+                    if (function.is_extern) {
+                        try writer.print("  ExternFunction \"{s}\" {s}", .{ function.extern_abi.?.debugName(), interner.text(function.name) });
+                        if (function.c_symbol_name) |symbol| {
+                            try writer.print(" symbol={s}", .{interner.text(symbol)});
+                        }
+                    } else {
+                        try writer.print("  {s}{s}Function {s}", .{ if (function.is_compile_time) "CompileTime " else "", if (function.is_unsafe) "Unsafe " else "", interner.text(function.name) });
+                    }
                     if (function.allocation_effect != .unspecified) {
                         try writer.print(" effect={s}", .{function.allocation_effect.debugName()});
                     }
@@ -1923,6 +1958,27 @@ test "add function with interned name and lookup by ID" {
     try std.testing.expectEqual(HirItem{ .function = function_id }, store.getItem(function.item).*);
 }
 
+test "add extern C function stores linkage metadata without body" {
+    var interner = Interner.init(std.testing.allocator);
+    defer interner.deinit();
+    var store = HirStore.init(std.testing.allocator);
+    defer store.deinit();
+
+    const abs_name = try interner.intern("abs");
+    const function_id = try store.addExternFunction(abs_name, .{ .index = 1 }, .c, abs_name, synthetic_span, .{ .start = 7, .length = 3 });
+    const function = store.getFunction(function_id);
+
+    try std.testing.expect(function.is_extern);
+    try std.testing.expectEqual(ExternAbi.c, function.extern_abi.?);
+    try std.testing.expectEqual(abs_name, function.c_symbol_name.?);
+    try std.testing.expectEqual(@as(usize, 0), function.params.len);
+    try std.testing.expectEqual(@as(usize, 0), function.locals.len);
+    try std.testing.expectEqual(@as(?StmtId, null), function.body);
+    try std.testing.expect(!function.is_compile_time);
+    try std.testing.expect(!function.is_concept_witness);
+    try std.testing.expectEqual(HirItem{ .function = function_id }, store.getItem(function.item).*);
+}
+
 test "set function allocation effect metadata" {
     var interner = Interner.init(std.testing.allocator);
     defer interner.deinit();
@@ -2002,6 +2058,28 @@ test "HIR debug formatting uses interned names" {
         \\  Enum Token
         \\    Variant Identifier
         \\    Variant End
+        \\
+    , rendered);
+}
+
+test "HIR debug formatting includes extern C function metadata" {
+    var interner = Interner.init(std.testing.allocator);
+    defer interner.deinit();
+    var module = HirModule.init(std.testing.allocator);
+    defer module.deinit();
+
+    const abs_name = try interner.intern("abs");
+    const function_id = try module.store.addExternFunction(abs_name, .{ .index = 1 }, .c, abs_name, synthetic_span, synthetic_span);
+    _ = try module.store.addParam(function_id, try interner.intern("value"), .{ .index = 1 }, synthetic_span);
+
+    const rendered = try module.store.debugString(std.testing.allocator, interner);
+    defer std.testing.allocator.free(rendered);
+
+    try std.testing.expectEqualStrings(
+        \\HirModule
+        \\  ExternFunction "C" abs symbol=abs -> TypeId(1)
+        \\    Params
+        \\      ParamId(0) value: TypeId(1)
         \\
     , rendered);
 }

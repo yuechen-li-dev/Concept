@@ -207,8 +207,10 @@ pub const DiagnosticCode = enum {
     TransitionOutsideMachineState,
     MachineSemanticsNotImplemented,
     ExternCNotImplemented,
+    UnsupportedCAbiType,
     ExternCRequiresFunctionDeclaration,
     ExternCFunctionCannotHaveBody,
+    DuplicateCAbiSymbol,
     ExternUnsupportedAbi,
     VarargsUnsupported,
 
@@ -399,8 +401,10 @@ pub const DiagnosticCode = enum {
             .TransitionOutsideMachineState => "CON0223",
             .MachineSemanticsNotImplemented => "CON0231",
             .ExternCNotImplemented => "CON0259",
+            .UnsupportedCAbiType => "CON0260",
             .ExternCRequiresFunctionDeclaration => "CON0261",
             .ExternCFunctionCannotHaveBody => "CON0262",
+            .DuplicateCAbiSymbol => "CON0265",
             .ExternUnsupportedAbi => "CON026A",
             .VarargsUnsupported => "CON0269",
         };
@@ -568,6 +572,15 @@ pub fn externCNotImplemented(span: SourceSpan) Diagnostic {
     ).withHelp("Phase 15 M1 preserves extern C declarations in the AST; HIR, MIR, backend emission, linking, and calls are deferred");
 }
 
+pub fn unsupportedCAbiType(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .UnsupportedCAbiType,
+        .@"error",
+        "unsupported C ABI type",
+        span,
+    ).withHelp("Phase 15 M2 extern C declarations support void returns, int, bool, AllocError, and raw pointers to void, int, bool, Arena, Allocator, or AllocError only");
+}
+
 pub fn externCRequiresFunctionDeclaration(span: SourceSpan) Diagnostic {
     return Diagnostic.init(
         .ExternCRequiresFunctionDeclaration,
@@ -584,6 +597,15 @@ pub fn externCFunctionCannotHaveBody(span: SourceSpan) Diagnostic {
         "extern C function declarations cannot have bodies",
         span,
     ).withHelp("declare the foreign function signature with ';' and provide the implementation in C or another linked object");
+}
+
+pub fn duplicateCAbiSymbol(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .DuplicateCAbiSymbol,
+        .@"error",
+        "duplicate extern C symbol",
+        span,
+    ).withHelp("Phase 15 v0 rejects duplicate extern C declarations by declared symbol name in one module");
 }
 
 pub fn externUnsupportedAbi(span: SourceSpan) Diagnostic {

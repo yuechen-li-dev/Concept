@@ -3,14 +3,21 @@
 P15-M0 was a documentation-only milestone. It defined Concept's explicit C ABI
 source boundary, foreign C declarations, C-exported Concept functions,
 `repr(C)` struct layout promises, ABI type validation, HIR/MIR representation,
-and C backend emission plan. P15-M1 starts implementation with the
-`extern "C"` parser/AST scaffold only.
+and C backend emission plan. P15-M1 started implementation with the
+`extern "C"` parser/AST scaffold.
 
 P15-M1 adds the parser/AST scaffold for block-form `extern "C"` declarations.
 The lexer recognizes `extern`, the parser accepts `extern "C" { ... }`, and the
 AST preserves the ABI string span, block span, declaration order, and foreign
-function signatures. This milestone still does not implement HIR, MIR, backend,
-fixture linker, or runtime behavior for C ABI calls.
+function signatures.
+
+P15-M2 lowers valid extern C function declarations into HIR. Extern functions
+reuse `HirFunction` with explicit `is_extern`, ABI, ABI-span, and C symbol-name
+metadata. They have no body, are visible to ordinary call resolution, and are
+type-checked with ordinary call arity/type rules. P15-M2 also validates the v0 C
+ABI type subset, rejects duplicate extern C symbols, and stops emitting
+`CON0259` for valid declarations. MIR extern call lowering, backend C prototype
+emission, linking, headers, `export "C"`, and `repr(C)` remain deferred.
 
 ## Core doctrine
 
@@ -105,10 +112,24 @@ P15-M1 implementation status:
 - non-function entries are rejected with `CON0261`;
 - varargs are rejected with `CON0269` when the parser sees `...`;
 - extern variables are not supported;
-- `extern "C++"` and all other ABI strings are rejected with `CON026A`;
-- HIR declarations, ABI type validation, extern calls, backend C prototype
-  emission, linker behavior, headers/includes, `export "C"`, and `repr(C)`
-  remain deferred.
+- `extern "C++"` and all other ABI strings are rejected with `CON026A`.
+
+P15-M2 implementation status:
+
+- valid extern C function declarations lower to HIR functions;
+- HIR stores `is_extern`, `extern_abi = c`, the ABI span, and the C symbol name;
+- the C symbol name currently equals the declared function name;
+- extern functions have no body and are not compile-time or concept witness
+  functions;
+- extern declarations are visible to ordinary call resolution and normal HIR
+  call type checking;
+- empty extern blocks remain accepted;
+- duplicate extern C symbols are rejected with `CON0265`;
+- duplicate extern-vs-ordinary top-level names use the existing `CON0020`;
+- `CON0259` is no longer emitted for valid extern declarations;
+- MIR lowering rejects calls to extern functions with a clear M3-deferred error;
+- backend prototype emission, linker behavior, headers/includes, `export "C"`,
+  and `repr(C)` remain deferred.
 
 ## 3. Source syntax: export "C" functions
 
@@ -224,6 +245,23 @@ Rejected in v0:
 ABI type validation happens before backend codegen. An unsupported ABI type
 must produce a clear diagnostic, not guessed C emission.
 
+P15-M2 implements a strict extern C declaration subset:
+
+- return types: `void`, `int`, `bool`, `AllocError`, or raw pointers to
+  supported pointee types;
+- parameter types: `int`, `bool`, `AllocError`, or raw pointers to supported
+  pointee types;
+- supported raw pointer pointees: `void`, `int`, `bool`, `Arena`, `Allocator`,
+  and `AllocError`;
+- `void` is rejected as a parameter type;
+- structs, struct pointers, enums, enum pointers, interfaces, dyn interfaces,
+  machines, `ManualInit<T>`, type parameters, and generic extern functions are
+  rejected until their ABI contracts are deliberately designed.
+
+This means non-`repr(C)` structs are rejected both by value and by pointer in
+M2. Opaque handle support is limited to the compiler-known allocation handles
+`Arena*` and `Allocator*`, plus scalar/void pointer forms above.
+
 Suggested diagnostic:
 
 ```text
@@ -253,17 +291,17 @@ HirFunction {
 }
 ```
 
-An equivalent representation may model extern functions as `HirFunction`
-entries with no body plus `is_extern`, ABI kind, and symbol name metadata. The
-important rule is that body-less foreign declarations must not be confused with
-ordinary incomplete Concept functions.
+P15-M2 uses `HirFunction` entries with no body plus `is_extern`, ABI kind,
+ABI span, and symbol-name metadata. The important rule is that body-less
+foreign declarations must not be confused with ordinary incomplete Concept
+functions.
 
 HIR requirements:
 
 - extern declarations are visible to normal call resolution;
 - extern declarations are not required to have bodies;
 - extern declarations do not trigger missing-body errors;
-- extern calls lower to MIR calls with external linkage metadata;
+- P15-M2 keeps extern call lowering deferred to M3;
 - exported functions lower as ordinary functions with C symbol metadata;
 - the `repr(C)` marker is stored on HIR structs.
 

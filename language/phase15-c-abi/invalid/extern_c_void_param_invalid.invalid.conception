@@ -1,0 +1,14 @@
+# name: extern C void param invalid
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module CAbi;
+
+extern "C" {
+    int bad_void(void value);
+}
+
+=== diagnostics ===
+CON0260

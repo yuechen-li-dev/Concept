@@ -171,6 +171,7 @@ const Collector = struct {
     diagnostics: *DiagnosticBag,
     options: CollectOptions,
     top_level_decls: std.AutoHashMap(interner.SymbolId, TopLevelDecl),
+    extern_c_symbols: std.AutoHashMap(interner.SymbolId, source.SourceSpan),
 
     const TopLevelDecl = union(enum) {
         function: hir.FunctionId,
@@ -201,10 +202,12 @@ const Collector = struct {
             .diagnostics = diagnostic_bag,
             .options = options,
             .top_level_decls = std.AutoHashMap(interner.SymbolId, TopLevelDecl).init(allocator),
+            .extern_c_symbols = std.AutoHashMap(interner.SymbolId, source.SourceSpan).init(allocator),
         };
     }
 
     fn deinit(self: *Collector) void {
+        self.extern_c_symbols.deinit();
         self.top_level_decls.deinit();
     }
 
@@ -221,7 +224,7 @@ const Collector = struct {
                 .enum_decl => |enum_decl| try self.declareEnum(enum_decl),
                 .concept_decl => |concept_decl| try self.declareConcept(concept_decl),
                 .interface_decl => |interface_decl| try self.declareInterface(interface_decl),
-                .extern_block => |extern_block| try self.diagnostics.append(diagnostics.externCNotImplemented(extern_block.span)),
+                .extern_block => |extern_block| try self.declareExternBlock(extern_block),
                 .impl_decl, .static_assert_decl => {},
             }
         }
@@ -245,7 +248,7 @@ const Collector = struct {
                 .struct_decl => |struct_decl| try self.resolveStruct(struct_decl),
                 .enum_decl => |enum_decl| try self.resolveEnum(enum_decl),
                 .concept_decl, .interface_decl, .static_assert_decl => {},
-                .extern_block => {},
+                .extern_block => |extern_block| try self.resolveExternBlock(extern_block),
                 .impl_decl => |impl_decl| try self.resolveImpl(impl_decl),
             }
         }
@@ -441,6 +444,30 @@ const Collector = struct {
             try self.copyCompileTimeCapabilities(function_id, function_decl.compile_time_capabilities);
         }
         try self.top_level_decls.put(name, .{ .function = function_id });
+    }
+
+    fn declareExternBlock(self: *Collector, extern_block: ast.ExternBlock) !void {
+        for (extern_block.declarations) |declaration| {
+            const name = try self.module.interner.intern(declaration.signature.name.base.text);
+            if (self.top_level_decls.contains(name) or isCompilerKnownTypeName(declaration.signature.name.base.text)) {
+                try self.diagnostics.append(diagnostics.duplicateTopLevelName(declaration.signature.name.base.span));
+                continue;
+            }
+            if (self.extern_c_symbols.contains(name)) {
+                try self.diagnostics.append(diagnostics.duplicateCAbiSymbol(declaration.signature.name.base.span));
+                continue;
+            }
+            try self.extern_c_symbols.put(name, declaration.signature.name.base.span);
+            const function_id = try self.module.hir.addExternFunction(
+                name,
+                self.module.types.voidType(),
+                lowerExternAbi(extern_block.abi),
+                name,
+                declaration.span,
+                extern_block.abi_span,
+            );
+            try self.top_level_decls.put(name, .{ .function = function_id });
+        }
     }
 
     fn declareMachine(self: *Collector, machine_decl: ast.MachineDecl) !void {
@@ -730,6 +757,67 @@ const Collector = struct {
                 _ = try self.module.hir.addParam(function_id, param_symbol, type_id, param.span);
             }
         }
+    }
+
+    fn resolveExternBlock(self: *Collector, extern_block: ast.ExternBlock) !void {
+        for (extern_block.declarations) |declaration| {
+            const function_symbol = try self.module.interner.intern(declaration.signature.name.base.text);
+            const function_id = switch (self.top_level_decls.get(function_symbol) orelse continue) {
+                .function => |id| id,
+                else => continue,
+            };
+            const function = self.module.hir.getFunction(function_id);
+            if (!function.is_extern) continue;
+
+            if (try self.resolveTypeName(declaration.signature.return_type)) |return_type| {
+                self.module.hir.setFunctionReturnType(function_id, return_type);
+                if (!self.isSupportedCAbiReturnType(return_type)) {
+                    try self.diagnostics.append(diagnostics.unsupportedCAbiType(declaration.signature.return_type.span));
+                }
+            }
+
+            var param_names = std.AutoHashMap(interner.SymbolId, source.SourceSpan).init(self.allocator);
+            defer param_names.deinit();
+
+            for (declaration.signature.params) |param| {
+                const param_symbol = try self.module.interner.intern(param.name.text);
+                if (param_names.contains(param_symbol)) {
+                    try self.diagnostics.append(diagnostics.duplicateParameterName(param.name.span));
+                    continue;
+                }
+                try param_names.put(param_symbol, param.name.span);
+
+                if (try self.resolveTypeName(param.type_name)) |type_id| {
+                    _ = try self.module.hir.addParam(function_id, param_symbol, type_id, param.span);
+                    if (!self.isSupportedCAbiParamType(type_id)) {
+                        try self.diagnostics.append(diagnostics.unsupportedCAbiType(param.type_name.span));
+                    }
+                }
+            }
+        }
+    }
+
+    fn isSupportedCAbiReturnType(self: *Collector, type_id: types.TypeId) bool {
+        return switch (self.module.types.kind(type_id)) {
+            .void, .int, .bool, .alloc_error => true,
+            .pointer => |pointer| self.isSupportedCAbiPointerPointee(pointer.pointee),
+            else => false,
+        };
+    }
+
+    fn isSupportedCAbiParamType(self: *Collector, type_id: types.TypeId) bool {
+        return switch (self.module.types.kind(type_id)) {
+            .int, .bool, .alloc_error => true,
+            .pointer => |pointer| self.isSupportedCAbiPointerPointee(pointer.pointee),
+            else => false,
+        };
+    }
+
+    fn isSupportedCAbiPointerPointee(self: *Collector, type_id: types.TypeId) bool {
+        return switch (self.module.types.kind(type_id)) {
+            .void, .int, .bool, .arena, .allocator, .alloc_error => true,
+            else => false,
+        };
     }
 
     fn resolveGenericFunction(self: *Collector, template_decl: ast.TemplateDecl) !void {
@@ -1574,6 +1662,12 @@ fn lowerAllocationEffect(effect: ast.AllocationEffect) hir.AllocationEffect {
         .unspecified => .unspecified,
         .noalloc => .noalloc,
         .alloc => .alloc,
+    };
+}
+
+fn lowerExternAbi(abi: ast.ExternAbi) hir.ExternAbi {
+    return switch (abi) {
+        .c => .c,
     };
 }
 

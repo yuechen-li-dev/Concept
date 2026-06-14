@@ -1,0 +1,11 @@
+# name: extern C Arena pointer param
+# phase: check
+# check: declarations
+# expect: pass
+
+=== source ===
+module CAbi;
+
+extern "C" {
+    void consume_arena(Arena* arena);
+}

@@ -1,0 +1,11 @@
+# name: extern C Allocator pointer param
+# phase: check
+# check: declarations
+# expect: pass
+
+=== source ===
+module CAbi;
+
+extern "C" {
+    AllocError allocate_with(Allocator* allocator);
+}

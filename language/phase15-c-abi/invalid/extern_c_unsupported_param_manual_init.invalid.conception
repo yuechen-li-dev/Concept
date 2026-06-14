@@ -1,0 +1,14 @@
+# name: extern C unsupported param manual init
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module CAbi;
+
+extern "C" {
+    int use_slot(ManualInit<int> slot);
+}
+
+=== diagnostics ===
+CON0260

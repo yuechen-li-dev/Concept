@@ -1,0 +1,11 @@
+# name: extern C HIR basic
+# phase: check
+# check: declarations
+# expect: pass
+
+=== source ===
+module CAbi;
+
+extern "C" {
+    int abs(int value);
+}

@@ -1,0 +1,13 @@
+# name: extern C HIR pointer params
+# phase: check
+# check: declarations
+# expect: pass
+
+=== source ===
+module CAbi;
+
+extern "C" {
+    int read_int(int* value);
+    void fill_bool(bool* flag);
+    void* passthrough(void* handle);
+}

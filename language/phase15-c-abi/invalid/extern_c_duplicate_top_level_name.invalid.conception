@@ -1,0 +1,18 @@
+# name: extern C duplicate top level name
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module CAbi;
+
+extern "C" {
+    int abs(int value);
+}
+
+int abs(int value) {
+    return value;
+}
+
+=== diagnostics ===
+CON0020
