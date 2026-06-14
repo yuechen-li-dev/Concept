@@ -1,0 +1,17 @@
+# name: multi-file two sources parse
+# phase: parse
+# expect: pass
+
+=== file: A.concept ===
+module A;
+
+int AValue() {
+    return 1;
+}
+
+=== file: B.concept ===
+module B;
+
+int BValue() {
+    return 2;
+}

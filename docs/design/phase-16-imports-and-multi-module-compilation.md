@@ -575,3 +575,38 @@ P16-M7  Qualified type resolution and cross-module type use
 P16-M8  Multi-module MIR/backend lowering and examples/fixtures
 P16-M9  Closeout
 ```
+
+## P16-M1 implementation status: multi-file fixture scaffold
+
+P16-M1 adds the hermetic fixture harness scaffold needed before real module
+semantics. A `.conception` fixture can now embed one or more virtual Concept
+source files with `=== file: <virtual-path> ===` sections. The fixture parser
+stores these as an ordered source set, preserves each virtual path for parser
+diagnostics and future source IDs, and continues to map legacy `=== source ===`
+fixtures to a one-source case with no fixture changes.
+
+Implemented M1 behavior:
+
+- embedded multi-file `.conception` source sections are supported by the fixture
+  parser;
+- virtual file paths are preserved in fixture source records;
+- source order is deterministic and follows fixture order;
+- duplicate virtual file paths are rejected as fixture-format errors;
+- missing/empty virtual file paths are rejected as fixture-format errors;
+- parser-only multi-file fixtures parse each virtual source independently;
+- existing single-file fixtures, run fixtures, backend fixtures, and snapshot
+  sections remain unchanged.
+
+Deferred after M1:
+
+- import syntax implementation;
+- module table construction;
+- duplicate module diagnostics;
+- import resolution and import-cycle rejection;
+- module-aware HIR/MIR/backend lowering;
+- cross-module qualified lookup;
+- package management, filesystem search paths, linker-driver behavior, and
+  visibility.
+
+Semantic, run, MIR, and backend fixtures remain single-source until the Phase 16
+module graph exists. The harness must not silently drop extra virtual files.
