@@ -1,0 +1,11 @@
+# name: export import invalid
+# phase: parse
+# expect: fail
+
+=== source ===
+module Main;
+
+export import Math;
+
+=== diagnostics ===
+CON0004

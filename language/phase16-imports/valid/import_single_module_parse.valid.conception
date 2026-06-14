@@ -1,0 +1,20 @@
+# name: import single module parse
+# phase: parse
+# expect: pass
+
+=== source ===
+module Main;
+
+import Math;
+
+int main() {
+    return 0;
+}
+
+=== ast ===
+CompilationUnit
+  Module Main
+  Import Math
+  Function main -> int
+    Return
+      IntLiteral 0

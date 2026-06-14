@@ -1,0 +1,11 @@
+# name: import string path invalid
+# phase: parse
+# expect: fail
+
+=== source ===
+module Main;
+
+import "Math";
+
+=== diagnostics ===
+CON0003

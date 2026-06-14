@@ -1,0 +1,11 @@
+# name: import alias invalid
+# phase: parse
+# expect: fail
+
+=== source ===
+module Main;
+
+import Math as M;
+
+=== diagnostics ===
+CON0003

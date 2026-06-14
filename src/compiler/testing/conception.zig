@@ -3072,6 +3072,58 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectBackendCFixture("../../../language/phase10-ownership/invalid/manual_init_copy_rejected.invalid.conception");
 }
 
+test "language parse fixture: phase16 import single module" {
+    try expectParseFixture("../../../language/phase16-imports/valid/import_single_module_parse.valid.conception");
+}
+
+test "language parse fixture: phase16 import dotted module" {
+    try expectParseFixture("../../../language/phase16-imports/valid/import_dotted_module_parse.valid.conception");
+}
+
+test "language parse fixture: phase16 import multiple modules" {
+    try expectParseFixture("../../../language/phase16-imports/valid/import_multiple_modules_parse.valid.conception");
+}
+
+test "language parse fixture: phase16 import unknown deferred" {
+    try expectParseFixture("../../../language/phase16-imports/valid/import_unknown_deferred_parse.valid.conception");
+}
+
+test "language parse fixture: phase16 multifile import syntax" {
+    try expectParseFixture("../../../language/phase16-imports/valid/multifile_import_syntax_parse.valid.conception");
+}
+
+test "language parse fixture: phase16 import before module" {
+    try expectParseFixture("../../../language/phase16-imports/invalid/import_before_module.invalid.conception");
+}
+
+test "language parse fixture: phase16 import after declaration" {
+    try expectParseFixture("../../../language/phase16-imports/invalid/import_after_declaration.invalid.conception");
+}
+
+test "language parse fixture: phase16 import missing semicolon" {
+    try expectParseFixture("../../../language/phase16-imports/invalid/import_missing_semicolon.invalid.conception");
+}
+
+test "language parse fixture: phase16 import string path invalid" {
+    try expectParseFixture("../../../language/phase16-imports/invalid/import_string_path_invalid.invalid.conception");
+}
+
+test "language parse fixture: phase16 import wildcard invalid" {
+    try expectParseFixture("../../../language/phase16-imports/invalid/import_wildcard_invalid.invalid.conception");
+}
+
+test "language parse fixture: phase16 import alias invalid" {
+    try expectParseFixture("../../../language/phase16-imports/invalid/import_alias_invalid.invalid.conception");
+}
+
+test "language parse fixture: phase16 import list invalid" {
+    try expectParseFixture("../../../language/phase16-imports/invalid/import_list_invalid.invalid.conception");
+}
+
+test "language parse fixture: phase16 export import invalid" {
+    try expectParseFixture("../../../language/phase16-imports/invalid/export_import_invalid.invalid.conception");
+}
+
 test "language parse fixture: phase16 multi-file two sources" {
     try expectParseFixture("../../../language/phase16-imports/valid/multifile_two_sources_parse.valid.conception");
 }

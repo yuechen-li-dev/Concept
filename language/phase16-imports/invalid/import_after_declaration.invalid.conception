@@ -1,0 +1,15 @@
+# name: import after declaration
+# phase: parse
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    return 0;
+}
+
+import Math;
+
+=== diagnostics ===
+CON0273

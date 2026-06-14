@@ -11,12 +11,19 @@ pub const ParsedSource = struct {
     unit: *const ast.CompilationUnit,
 };
 
+pub const RawImport = struct {
+    name: []const u8,
+    import_span: source.SourceSpan,
+    path_span: source.SourceSpan,
+};
+
 pub const ModuleUnit = struct {
     id: ModuleId,
     name: []const u8,
     source_index: usize,
     source_path: []const u8,
     module_decl_span: source.SourceSpan,
+    imports: []RawImport,
 };
 
 pub const ModuleTable = struct {
@@ -24,7 +31,11 @@ pub const ModuleTable = struct {
     name_to_module: std.StringHashMapUnmanaged(ModuleId) = .empty,
 
     pub fn deinit(self: *ModuleTable, allocator: std.mem.Allocator) void {
-        for (self.modules) |module| allocator.free(module.name);
+        for (self.modules) |module| {
+            allocator.free(module.name);
+            for (module.imports) |import_decl| allocator.free(import_decl.name);
+            allocator.free(module.imports);
+        }
         allocator.free(self.modules);
         self.name_to_module.deinit(allocator);
         self.* = .{ .modules = &.{} };
@@ -43,7 +54,11 @@ pub fn buildFromParsedSources(
 ) !ModuleTable {
     var modules = std.ArrayList(ModuleUnit).empty;
     errdefer {
-        for (modules.items) |module| allocator.free(module.name);
+        for (modules.items) |module| {
+            allocator.free(module.name);
+            for (module.imports) |import_decl| allocator.free(import_decl.name);
+            allocator.free(module.imports);
+        }
         modules.deinit(allocator);
     }
 
@@ -66,6 +81,19 @@ pub fn buildFromParsedSources(
             continue;
         }
 
+        var imports = std.ArrayList(RawImport).empty;
+        errdefer {
+            for (imports.items) |import_decl| allocator.free(import_decl.name);
+            imports.deinit(allocator);
+        }
+        for (parsed_source.unit.imports) |import_decl| {
+            try imports.append(allocator, .{
+                .name = try qualifiedNameString(allocator, import_decl.name),
+                .import_span = import_decl.span,
+                .path_span = import_decl.name.span,
+            });
+        }
+
         const id: ModuleId = .{ .index = modules.items.len };
         try modules.append(allocator, .{
             .id = id,
@@ -73,6 +101,7 @@ pub fn buildFromParsedSources(
             .source_index = source_index,
             .source_path = parsed_source.path,
             .module_decl_span = module_decl.span,
+            .imports = try imports.toOwnedSlice(allocator),
         });
         try name_to_module.put(allocator, name, id);
     }
@@ -120,4 +149,27 @@ test "module table preserves source order paths ids names and spans" {
     try testing.expectEqualStrings("B.concept", table.modules[1].source_path);
     try testing.expectEqual(@as(usize, 0), table.modules[0].module_decl_span.start);
     try testing.expect(table.find("Compiler.Lexer") != null);
+}
+
+test "module table preserves raw imports" {
+    const parser = @import("parser.zig");
+
+    var diagnostics_bag = diagnostics.DiagnosticBag.init(testing.allocator);
+    defer diagnostics_bag.deinit();
+
+    var source_main = try source.SourceFile.init(testing.allocator, "Main.concept", "module Main;\nimport Math;\nimport Compiler.Lexer;\n");
+    defer source_main.deinit(testing.allocator);
+    var unit_main = try parser.parseSource(testing.allocator, source_main, &diagnostics_bag);
+    defer unit_main.deinit(testing.allocator);
+
+    var table = try buildFromParsedSources(testing.allocator, &.{.{ .path = "Main.concept", .unit = &unit_main }}, &diagnostics_bag);
+    defer table.deinit(testing.allocator);
+
+    try testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
+    try testing.expectEqual(@as(usize, 1), table.modules.len);
+    try testing.expectEqual(@as(usize, 2), table.modules[0].imports.len);
+    try testing.expectEqualStrings("Math", table.modules[0].imports[0].name);
+    try testing.expectEqualStrings("Compiler.Lexer", table.modules[0].imports[1].name);
+    try testing.expectEqual(@as(usize, 13), table.modules[0].imports[0].import_span.start);
+    try testing.expectEqual(@as(usize, 20), table.modules[0].imports[0].path_span.start);
 }
