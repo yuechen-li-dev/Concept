@@ -1,0 +1,20 @@
+# name: repr C struct marker
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module CAbi;
+
+[Repr(C)]
+struct Point {
+    int x;
+    int y;
+};
+
+=== hir ===
+HirModule
+  Attribute Repr(C)
+  Struct Point repr(C)
+    Field x: TypeId(1)
+    Field y: TypeId(1)

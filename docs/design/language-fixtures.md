@@ -302,7 +302,11 @@ across blocks, extern-vs-ordinary duplicate top-level names, unsupported struct
 returns, struct parameters, struct pointer parameters, interface and dyn
 parameters, `ManualInit<T>` parameters, and `void` parameters. P15-M3 invalid
 fixtures cover extern call arity/type mismatches and using a `void` extern call
-as a value.
+as a value. P15-M5 fixtures cover staged `[Repr(C)]` struct markers in AST and
+HIR debug output, ordinary backend emission without C ABI boundary use, invalid
+Repr targets, missing/unsupported/extra Repr arguments, duplicate markers, and
+the deliberate continued rejection of repr(C) structs at export C ABI boundaries
+until M6.
 
 Future valid coverage will add `export "C"` functions, `repr(C)` structs,
 unmangled exported C names, and deterministic supported struct field order.

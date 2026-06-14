@@ -1,0 +1,14 @@
+# name: repr C too many args
+# phase: check
+# expect: fail
+
+=== source ===
+module CAbi;
+
+[Repr(C, packed)]
+struct Point {
+    int x;
+};
+
+=== diagnostics ===
+CON026B

@@ -1,0 +1,15 @@
+# name: repr C duplicate marker
+# phase: check
+# expect: fail
+
+=== source ===
+module CAbi;
+
+[Repr(C)]
+[Repr(C)]
+struct Point {
+    int x;
+};
+
+=== diagnostics ===
+CON026B

@@ -1,0 +1,16 @@
+# name: repr C invalid target machine
+# phase: check
+# expect: fail
+
+=== source ===
+module CAbi;
+
+[Repr(C)]
+machine M() -> int {
+    state Start {
+        return 0;
+    }
+}
+
+=== diagnostics ===
+CON0266

@@ -2642,6 +2642,18 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectBackendCFixture("../../../language/phase15-c-abi/valid/extern_c_empty_block_backend.valid.conception");
     try expectRunFixture("../../../language/phase15-c-abi/valid/extern_c_call_abs_run.valid.conception");
     try expectRunFixture("../../../language/phase15-c-abi/valid/export_c_add_run.valid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/valid/repr_c_struct_marker.valid.conception");
+    try expectParseFixture("../../../language/phase15-c-abi/valid/repr_c_struct_marker_debug.valid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/valid/repr_c_struct_with_multiple_fields.valid.conception");
+    try expectBackendCFixture("../../../language/phase15-c-abi/valid/repr_c_struct_marker_no_abi_use.valid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/repr_c_invalid_target_function.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/repr_c_invalid_target_enum.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/repr_c_invalid_target_machine.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/repr_c_missing_arg.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/repr_c_unsupported_abi.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/repr_c_too_many_args.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/repr_c_duplicate_marker.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/repr_c_export_struct_param_still_invalid.invalid.conception");
     try expectBackendCFixture("../../../language/phase15-c-abi/valid/export_c_backend_symbol.valid.conception");
     try expectBackendCFixture("../../../language/phase15-c-abi/valid/export_c_void_backend.valid.conception");
     try expectCheckFixture("../../../language/phase15-c-abi/invalid/export_c_missing_body.invalid.conception");

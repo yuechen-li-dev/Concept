@@ -43,12 +43,14 @@ pub const ImportDecl = struct {
 };
 
 pub const AttributeArg = union(enum) {
+    identifier: NameSegment,
     int_literal: struct { text: []const u8, span: SourceSpan },
     bool_literal: struct { value: bool, span: SourceSpan },
     string_literal: struct { text: []const u8, span: SourceSpan },
 
     pub fn span(self: AttributeArg) SourceSpan {
         return switch (self) {
+            .identifier => |arg| arg.span,
             .int_literal => |arg| arg.span,
             .bool_literal => |arg| arg.span,
             .string_literal => |arg| arg.span,
@@ -57,6 +59,7 @@ pub const AttributeArg = union(enum) {
 
     pub fn writeDebug(self: AttributeArg, writer: anytype) !void {
         switch (self) {
+            .identifier => |arg| try writer.writeAll(arg.text),
             .int_literal => |arg| try writer.writeAll(arg.text),
             .bool_literal => |arg| try writer.writeAll(if (arg.value) "true" else "false"),
             .string_literal => |arg| try writer.writeAll(arg.text),

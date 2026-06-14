@@ -46,6 +46,13 @@ pub const SemanticModule = struct {
         self.* = undefined;
     }
 
+    pub fn isReprCStructType(self: *const SemanticModule, type_id: types.TypeId) bool {
+        return switch (self.types.kind(type_id)) {
+            .struct_type => |struct_id| struct_id.index < self.hir.structs.items.len and self.hir.getStruct(struct_id).repr_abi == .c,
+            else => false,
+        };
+    }
+
     pub fn resultShapeForType(self: *const SemanticModule, type_id: types.TypeId) ?hir.HirResultShape {
         return switch (self.types.kind(type_id)) {
             .enum_type => |enum_id| self.hir.getResultShape(enum_id),
@@ -213,6 +220,7 @@ const Collector = struct {
 
     fn collect(self: *Collector, unit: ast.CompilationUnit) !void {
         try self.validateTestAttributePlacement(unit);
+        try self.validateReprAttributes(unit);
         if (self.diagnostics.count() != 0) return;
 
         for (unit.items) |item| {
@@ -370,10 +378,33 @@ const Collector = struct {
 
     fn inlineDataArgMatchesParam(self: *Collector, arg: hir.HirAttributeArg, param_type: types.TypeId) bool {
         return switch (arg) {
+            .identifier => false,
             .int_literal => sameType(param_type, self.module.types.intType()),
             .bool_literal => sameType(param_type, self.module.types.boolType()),
             .string_literal => false,
         };
+    }
+
+    fn validateReprAttributes(self: *Collector, unit: ast.CompilationUnit) !void {
+        for (unit.items) |item| {
+            const attributes = itemAttributes(item);
+            for (attributes) |attribute| {
+                if (!isReprAttributeName(attribute.name.parts)) continue;
+                if (item != .struct_decl) {
+                    try self.diagnostics.append(diagnostics.reprCInvalidTarget(attribute.span));
+                    continue;
+                }
+                if (!isSupportedReprCAttribute(attribute)) {
+                    const span = if (attribute.arguments) |arguments| arguments.span else attribute.span;
+                    try self.diagnostics.append(diagnostics.unsupportedReprAbi(span));
+                }
+            }
+            if (item == .struct_decl) {
+                if (duplicateReprAttributeSpan(item.struct_decl.attributes)) |span| {
+                    try self.diagnostics.append(diagnostics.unsupportedReprAbi(span));
+                }
+            }
+        }
     }
 
     fn validateTestAttributePlacement(self: *Collector, unit: ast.CompilationUnit) !void {
@@ -664,6 +695,9 @@ const Collector = struct {
         const name = try self.internFreshTopLevelName(struct_decl.name.text, struct_decl.name.span) orelse return;
         const struct_id = try self.module.hir.addStruct(name);
         self.module.hir.setStructAttributes(struct_id, try self.copyAttributes(struct_decl.attributes));
+        if (reprCAttribute(struct_decl.attributes)) |repr_attr| {
+            self.module.hir.setStructReprAbi(struct_id, .c, repr_attr.span, repr_attr.arguments.?.args[0].span());
+        }
         const type_id = try self.module.types.addStructType(struct_id);
         try self.top_level_decls.put(name, .{ .struct_ = .{ .id = struct_id, .type_id = type_id } });
     }
@@ -698,6 +732,7 @@ const Collector = struct {
         errdefer {
             for (owned[0..initialized]) |attribute| {
                 for (attribute.args) |arg| switch (arg) {
+                    .identifier => |text| self.allocator.free(text),
                     .int_literal => |text| self.allocator.free(text),
                     .string_literal => |text| self.allocator.free(text),
                     .bool_literal => {},
@@ -727,6 +762,7 @@ const Collector = struct {
         var initialized: usize = 0;
         errdefer {
             for (owned[0..initialized]) |arg| switch (arg) {
+                .identifier => |text| self.allocator.free(text),
                 .int_literal => |text| self.allocator.free(text),
                 .string_literal => |text| self.allocator.free(text),
                 .bool_literal => {},
@@ -736,6 +772,7 @@ const Collector = struct {
 
         for (args, 0..) |arg, index| {
             owned[index] = switch (arg) {
+                .identifier => |identifier| .{ .identifier = try self.allocator.dupe(u8, identifier.text) },
                 .int_literal => |literal| .{ .int_literal = try self.allocator.dupe(u8, literal.text) },
                 .bool_literal => |literal| .{ .bool_literal = literal.value },
                 .string_literal => |literal| .{ .string_literal = try self.allocator.dupe(u8, literal.text) },
@@ -1675,6 +1712,37 @@ fn itemAttributes(item: ast.Item) []const ast.Attribute {
         .impl_decl => |decl| decl.attributes,
         .static_assert_decl => &.{},
     };
+}
+
+fn isReprAttributeName(parts: []const ast.NameSegment) bool {
+    return parts.len == 1 and std.mem.eql(u8, parts[0].text, "Repr");
+}
+
+fn isSupportedReprCAttribute(attribute: ast.Attribute) bool {
+    const arguments = attribute.arguments orelse return false;
+    if (arguments.args.len != 1) return false;
+    return switch (arguments.args[0]) {
+        .identifier => |identifier| std.mem.eql(u8, identifier.text, "C"),
+        .string_literal => |literal| std.mem.eql(u8, literal.text, "\"C\""),
+        else => false,
+    };
+}
+
+fn reprCAttribute(attributes: []const ast.Attribute) ?ast.Attribute {
+    for (attributes) |attribute| {
+        if (isReprAttributeName(attribute.name.parts) and isSupportedReprCAttribute(attribute)) return attribute;
+    }
+    return null;
+}
+
+fn duplicateReprAttributeSpan(attributes: []const ast.Attribute) ?source.SourceSpan {
+    var seen = false;
+    for (attributes) |attribute| {
+        if (!isReprAttributeName(attribute.name.parts)) continue;
+        if (seen) return attribute.span;
+        seen = true;
+    }
+    return null;
 }
 
 fn lowerAllocationEffect(effect: ast.AllocationEffect) hir.AllocationEffect {
@@ -4648,6 +4716,60 @@ test "semantic collection preserves allocation effect function metadata" {
     defer std.testing.allocator.free(snapshot);
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "Function add effect=NoAlloc") != null);
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "Function build effect=Alloc") != null);
+}
+
+test "semantic collection marks repr C structs in HIR" {
+    var parts = [_]ast.NameSegment{nameSegment("Repr", 0)};
+    var args = [_]ast.AttributeArg{.{ .identifier = nameSegment("C", 6) }};
+    var attrs = [_]ast.Attribute{attributeWithArgs("Repr", parts[0..], args[0..])};
+    var item = structItem("Point", 10);
+    item.struct_decl.attributes = attrs[0..];
+
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+    var module = try collectItems(&.{item}, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
+    const struct_decl = module.hir.getStruct(.{ .index = 0 });
+    try std.testing.expectEqual(hir.ReprAbi.c, struct_decl.repr_abi.?);
+    const snapshot = try module.hir.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Struct Point repr(C)") != null);
+}
+
+test "semantic collection leaves ordinary structs without repr marker" {
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+    var module = try collectItems(&.{structItem("Point", 0)}, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
+    try std.testing.expect(module.hir.getStruct(.{ .index = 0 }).repr_abi == null);
+}
+
+test "semantic collection rejects invalid Repr targets and args" {
+    var parts = [_]ast.NameSegment{nameSegment("Repr", 0)};
+    var args = [_]ast.AttributeArg{.{ .identifier = nameSegment("C", 6) }};
+    var attrs = [_]ast.Attribute{attributeWithArgs("Repr", parts[0..], args[0..])};
+    var function = functionItem("main", 10);
+    function.function_decl.attributes = attrs[0..];
+
+    var target_diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer target_diagnostics.deinit();
+    try std.testing.expectError(error.InvalidSemanticModule, collectItems(&.{function}, &target_diagnostics));
+    try std.testing.expectEqual(DiagnosticCode.ReprCInvalidTarget, target_diagnostics.diagnostics.items[0].code);
+
+    var rust_parts = [_]ast.NameSegment{nameSegment("Repr", 0)};
+    var rust_args = [_]ast.AttributeArg{.{ .identifier = nameSegment("Rust", 6) }};
+    var rust_attrs = [_]ast.Attribute{attributeWithArgs("Repr", rust_parts[0..], rust_args[0..])};
+    var rust_struct = structItem("Point", 20);
+    rust_struct.struct_decl.attributes = rust_attrs[0..];
+
+    var arg_diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer arg_diagnostics.deinit();
+    try std.testing.expectError(error.InvalidSemanticModule, collectItems(&.{rust_struct}, &arg_diagnostics));
+    try std.testing.expectEqual(DiagnosticCode.UnsupportedReprAbi, arg_diagnostics.diagnostics.items[0].code);
 }
 
 test "semantic collection preserves function attributes in HIR" {

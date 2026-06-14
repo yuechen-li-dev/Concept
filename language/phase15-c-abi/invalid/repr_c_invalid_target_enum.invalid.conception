@@ -1,0 +1,15 @@
+# name: repr C invalid target enum
+# phase: check
+# expect: fail
+
+=== source ===
+module CAbi;
+
+[Repr(C)]
+enum Color {
+    Red,
+    Blue,
+}
+
+=== diagnostics ===
+CON0266
