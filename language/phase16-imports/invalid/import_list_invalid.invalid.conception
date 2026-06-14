@@ -1,0 +1,11 @@
+# name: import list invalid
+# phase: parse
+# expect: fail
+
+=== source ===
+module Main;
+
+import { Math, Geometry };
+
+=== diagnostics ===
+CON0003

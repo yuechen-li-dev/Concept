@@ -30,6 +30,7 @@ pub const DiagnosticCode = enum {
     DuplicateModuleDeclaration,
     DuplicateModule,
     ModuleDeclarationRequired,
+    ImportMustAppearBeforeDeclarations,
     UnterminatedChar,
     EmptyCharLiteral,
     InvalidEscapeSequence,
@@ -232,6 +233,7 @@ pub const DiagnosticCode = enum {
             .DuplicateModuleDeclaration => "CON0005",
             .DuplicateModule => "CON0270",
             .ModuleDeclarationRequired => "CON0276",
+            .ImportMustAppearBeforeDeclarations => "CON0273",
             .UnterminatedChar => "CON0007",
             .EmptyCharLiteral => "CON0008",
             .InvalidEscapeSequence => "CON0009",
@@ -1132,6 +1134,7 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0258", DiagnosticCode.DynRequiresBorrowedReference.format());
     try std.testing.expectEqualStrings("CON0259", DiagnosticCode.ExternCNotImplemented.format());
     try std.testing.expectEqualStrings("CON0261", DiagnosticCode.ExternCRequiresFunctionDeclaration.format());
+    try std.testing.expectEqualStrings("CON0273", DiagnosticCode.ImportMustAppearBeforeDeclarations.format());
     try std.testing.expectEqualStrings("CON0262", DiagnosticCode.ExternCFunctionCannotHaveBody.format());
     try std.testing.expectEqualStrings("CON0269", DiagnosticCode.VarargsUnsupported.format());
     try std.testing.expectEqualStrings("CON026A", DiagnosticCode.ExternUnsupportedAbi.format());

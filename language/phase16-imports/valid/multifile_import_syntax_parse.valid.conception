@@ -1,0 +1,19 @@
+# name: multifile import syntax parse
+# phase: parse
+# expect: pass
+
+=== file: Main.concept ===
+module Main;
+
+import Math;
+
+int main() {
+    return 0;
+}
+
+=== file: Math.concept ===
+module Math;
+
+int Add(int a, int b) {
+    return a + b;
+}

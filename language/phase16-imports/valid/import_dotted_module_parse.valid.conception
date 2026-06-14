@@ -1,0 +1,20 @@
+# name: import dotted module parse
+# phase: parse
+# expect: pass
+
+=== source ===
+module Main;
+
+import Compiler.Lexer;
+
+int main() {
+    return 0;
+}
+
+=== ast ===
+CompilationUnit
+  Module Main
+  Import Compiler.Lexer
+  Function main -> int
+    Return
+      IntLiteral 0

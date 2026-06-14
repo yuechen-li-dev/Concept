@@ -183,8 +183,8 @@ pub const Parser = struct {
                 .import => {
                     try self.rejectAttributesBeforeUnsupportedItem(attributes, allocator);
                     attributes = &.{};
-                    try self.reportExpectedItem("expected item declaration", self.current().span);
-                    self.advance();
+                    try self.report(.ImportMustAppearBeforeDeclarations, "import declarations must appear before other top-level declarations", self.current().span);
+                    _ = try self.parseImportDecl(allocator);
                 },
                 .@"export" => {
                     if (try self.parseFunctionItem(allocator, attributes)) |item| {
@@ -3861,6 +3861,17 @@ test "parses multiple imports" {
     try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
     try std.testing.expectEqual(@as(usize, 2), unit.imports.len);
     try std.testing.expectEqualStrings("Diagnostics", unit.imports[1].name.parts[1].text);
+}
+
+test "import after declaration produces ordering diagnostic" {
+    try expectSingleDiagnostic("module Example; int main() { return 0; } import Core.Memory;", .ImportMustAppearBeforeDeclarations);
+}
+
+test "unsupported import syntaxes produce parse diagnostics" {
+    try expectSingleDiagnostic("module Example; import \"Core\";", .UnexpectedToken);
+    try expectSingleDiagnostic("module Example; import Core.*;", .UnexpectedToken);
+    try expectSingleDiagnostic("module Example; import Core as C;", .UnexpectedToken);
+    try expectSingleDiagnostic("module Example; import { Core, Memory };", .UnexpectedToken);
 }
 
 test "missing module declaration produces diagnostic" {

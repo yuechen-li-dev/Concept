@@ -1,0 +1,22 @@
+# name: import multiple modules parse
+# phase: parse
+# expect: pass
+
+=== source ===
+module Main;
+
+import Math;
+import Compiler.Lexer;
+
+int main() {
+    return 0;
+}
+
+=== ast ===
+CompilationUnit
+  Module Main
+  Import Math
+  Import Compiler.Lexer
+  Function main -> int
+    Return
+      IntLiteral 0

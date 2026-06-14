@@ -649,3 +649,40 @@ Still deferred after M2:
 - module-aware HIR item ownership beyond this table;
 - qualified cross-module name lookup;
 - semantic, run, MIR, and backend multi-source compilation.
+
+## P16-M3 implementation status: import parser/AST and ordering diagnostics
+
+P16-M3 implements the parser-only import declaration surface needed before graph
+resolution. The lexer reserves `import`, the parser accepts module-path imports
+after the file `module` declaration and before all ordinary top-level
+declarations, and the AST preserves import declaration order, dotted path
+components, declaration spans, and path spans. Stable AST debug output now emits
+imports in source order after the module declaration.
+
+Implemented M3 behavior:
+
+- `import` is a keyword token;
+- v0 source syntax is `import Qualified.Module.Name;` with a module path, not a
+  string or filesystem path;
+- imports are parsed only after `module` and before non-import top-level items;
+- dotted import paths are preserved in the AST;
+- AST debug output shows `Import <path>` entries in source order;
+- imports after ordinary declarations are rejected with
+  `CON0273 ImportMustAppearBeforeDeclarations`;
+- imports before the module declaration continue to use the existing parser
+  module-first diagnostic path;
+- unsupported string, wildcard, alias, list, and re-export import forms are
+  rejected syntactically;
+- the module table preserves raw import declarations per module in source order,
+  including path text and spans, without resolving them.
+
+Still deferred after M3:
+
+- unknown import diagnostics (`CON0271`);
+- duplicate import diagnostics (`CON0277`);
+- import cycle diagnostics (`CON0272`);
+- module graph resolution;
+- module-aware HIR item ownership;
+- qualified cross-module lookup for values, functions, and types;
+- cross-module lowering, backend emission, filesystem lookup, package management,
+  re-export, aliases, wildcard imports, and visibility.

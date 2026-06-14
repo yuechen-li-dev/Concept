@@ -92,8 +92,13 @@ Phase 16 M2 extends multi-file parser fixtures with a module-table pre-pass:
 every virtual source is parsed, exactly one `module` declaration is required per
 source in multi-source mode, duplicate module names are rejected across the
 fixture compilation unit, and the module table preserves source order, stable
-module IDs, virtual paths, and declaration spans. Semantic, MIR, backend, and
-run multi-file behavior remains deferred until import graph and module-aware HIR
+module IDs, virtual paths, and declaration spans. Phase 16 M3 adds parser-only
+`import Qualified.Module;` fixtures: imports are preserved in AST/debug output
+and raw module-table import records, import-after-declaration is rejected with
+`CON0273`, and string, wildcard, alias, list, and re-export forms are rejected
+syntactically. Unknown imports, duplicate imports, cycles, qualified lookup, and
+cross-module semantics remain deferred. Semantic, MIR, backend, and run
+multi-file behavior remains deferred until import graph and module-aware HIR
 milestones exist.
 
 Representative Phase 16 fixtures should cover module declaration collection,

@@ -4,8 +4,8 @@
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
 **Phases closed:** 1 through 15
-**Current phase:** Phase 16 M2 module table scaffold: multi-source module declaration inventory and duplicate module diagnostics
-**Fixture corpus:** 848 total `.conception` fixtures; 108 under `language/phase15-c-abi/`; 15 under `language/phase16-imports/`
+**Current phase:** Phase 16 M3 import parser/AST and ordering diagnostics
+**Fixture corpus:** 861 total `.conception` fixtures; 108 under `language/phase15-c-abi/`; 28 under `language/phase16-imports/`
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
 ---
@@ -48,7 +48,7 @@
 | `move` keyword | ✅ | Phase 10 — explicit move expression, use-after-move diagnosed |
 | `try` keyword | ✅ | Phase 5 — propagates `Result` error arm |
 | `unsafe` blocks and functions | ✅ | Phase 6 — quarantined, raw pointer deref and pointer arith require unsafe |
-| Real module system (no headers) | 🔶 | Single-file modules are implemented; Phase 16 M1 adds hermetic multi-file fixture source sets with virtual paths, but real module graph/import semantics are still deferred |
+| Real module system (no headers) | 🔶 | Single-file modules are implemented; Phase 16 M1 adds hermetic multi-file fixture source sets with virtual paths, M2 adds module-table collection, and M3 parses import declarations with ordering diagnostics; real module graph/import semantics are still deferred |
 | `import` declarations | ❌ | Phase 16 M1 adds only multi-file fixture plumbing; import syntax and resolution remain future |
 | Conditional compilation `when target.*` | 🔶 | `target.isLittleEndian`, `target.pointerSize` available as comptime queries; full `when target.os` structured conditional compilation not implemented |
 
@@ -450,7 +450,7 @@
   upcasting/inheritance non-goals, and ABI policy
 - repr(C) enums, nested by-value repr(C) fields, packed layout, custom alignment, bitfields, and platform ABI matrices beyond the closed Phase 15 v0 subset
 - C headers/includes, automatic linking/linker driver, symbol aliasing, callbacks/function pointers, extern variables, and C++ ABI interop beyond the closed Phase 15 v0 subset
-- `import` / multi-module compilation implementation after Phase 16 M0 design
+- `import` / multi-module compilation graph resolution and cross-module semantics after Phase 16 M3 parser/AST support
 - `yield` in machines
 - Full `must_use` on arbitrary functions (not just enums)
 - `panic` / `assert` infrastructure
