@@ -1,0 +1,10 @@
+# name: qualified current module call
+# phase: check
+# check: declarations
+# expect: pass
+
+=== file: Main.concept ===
+module Main;
+
+int Helper() { return 1; }
+int main() { return Main.Helper(); }

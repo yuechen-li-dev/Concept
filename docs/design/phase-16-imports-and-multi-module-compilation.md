@@ -748,3 +748,11 @@ Still deferred:
 - visibility, aliases, wildcard imports, re-exports, package management, and
   filesystem import search remain out of scope;
 - multi-source MIR/backend/run lowering remains deferred to P16-M8.
+
+## P16-M6 implementation status: qualified module function lookup
+
+P16-M6 implements expression-position qualified module function lookup for the semantic/HIR fixture path. `Module.Function(...)` resolves the left root against the current module or the current module's resolved imports, then resolves the right-hand name against the target module's top-level HIR items. Calls preserve the defining cross-module `HirFunctionId`, so modules may define the same function name and callers can select the intended function with qualification.
+
+Imports still do not inject unqualified names: `import Math;` permits `Math.Add(...)`, but a bare `Add(...)` in another module remains an ordinary unknown-function error. Known but non-imported module roots are rejected with `CON0275`; unknown module roots and missing qualified items are rejected with `CON0274`. Qualified current-module calls such as `Main.Helper()` are accepted.
+
+Qualified type references such as `Geometry.Point`, cross-module type use, and multi-source MIR/backend/run lowering remain deferred to P16-M7 and P16-M8 respectively.
