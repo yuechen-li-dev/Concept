@@ -1,0 +1,2 @@
+// Phase 16 note-style example.
+// See README.md. The v0 harness supplies virtual files; imports do not search the filesystem.

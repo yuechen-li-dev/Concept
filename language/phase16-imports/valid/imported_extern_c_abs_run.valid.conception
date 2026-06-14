@@ -1,0 +1,22 @@
+# name: phase16 imported extern C abs run
+# phase: run
+# expect: pass
+
+=== file: CApi.concept ===
+module CApi;
+
+extern "C" {
+    int abs(int value);
+}
+
+=== file: Main.concept ===
+module Main;
+
+import CApi;
+
+int main() {
+    return CApi.abs(-7);
+}
+
+=== run ===
+exit_code: 7

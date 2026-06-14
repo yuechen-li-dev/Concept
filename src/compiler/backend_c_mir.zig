@@ -211,7 +211,7 @@ fn emitStructLayout(writer: anytype, ctx: *const BackendContext, struct_id: hir.
 
     if (struct_decl.repr_abi == .c) {
         try writer.writeAll("typedef struct ");
-        try emitStructTypeName(writer, ctx.module, struct_decl.name);
+        try emitStructTypeName(writer, ctx, struct_id);
         try writer.writeAll(" {\n");
     } else {
         try writer.writeAll("typedef struct {\n");
@@ -225,7 +225,7 @@ fn emitStructLayout(writer: anytype, ctx: *const BackendContext, struct_id: hir.
         try writer.writeAll(";\n");
     }
     try writer.writeAll("} ");
-    try emitStructTypeName(writer, ctx.module, struct_decl.name);
+    try emitStructTypeName(writer, ctx, struct_id);
     try writer.writeAll(";\n");
 }
 
@@ -1271,7 +1271,7 @@ fn emitCTypeAt(writer: anytype, ctx: *const BackendContext, type_id: types.TypeI
             if (position == .pointer_pointee) {
                 try writer.writeAll("struct ");
             }
-            try emitStructTypeName(writer, ctx.module, ctx.module.hir.getStruct(struct_id).name);
+            try emitStructTypeName(writer, ctx, struct_id);
         },
         .machine_type => |machine_id| {
             try emitMachineTypeName(writer, ctx.module, ctx.module.hir.getMachine(machine_id).name);
@@ -1319,9 +1319,21 @@ fn emitEnumTypeName(writer: anytype, module: *const semantics.SemanticModule, sy
     try emitEscapedIdentifierComponent(writer, module.interner.text(symbol));
 }
 
-fn emitStructTypeName(writer: anytype, module: *const semantics.SemanticModule, symbol: hir.SymbolId) !void {
+fn emitStructTypeName(writer: anytype, ctx: *const BackendContext, struct_id: hir.StructId) !void {
+    const struct_decl = ctx.module.hir.getStruct(struct_id);
     try writer.writeAll("cpt_struct_");
-    try emitEscapedIdentifierComponent(writer, module.interner.text(symbol));
+    try emitEscapedIdentifierComponent(writer, ctx.module.interner.text(struct_decl.name));
+    if (structNameCollides(ctx, struct_id, struct_decl.*)) {
+        try writer.print("_{d}", .{struct_id.index});
+    }
+}
+
+fn structNameCollides(ctx: *const BackendContext, struct_id: hir.StructId, struct_decl: hir.HirStruct) bool {
+    for (ctx.module.hir.structs.items, 0..) |candidate, index| {
+        if (index == struct_id.index) continue;
+        if (candidate.name.index == struct_decl.name.index) return true;
+    }
+    return false;
 }
 
 fn emitDynInterfaceTypeName(writer: anytype, module: *const semantics.SemanticModule, symbol: hir.SymbolId) !void {
@@ -1436,6 +1448,19 @@ fn emitHirFunctionName(writer: anytype, ctx: *const BackendContext, function_id:
         return;
     }
     try emitFunctionName(writer, ctx.module, function.name);
+    if (functionNameCollides(ctx, function_id, function)) {
+        try writer.print("_{d}", .{function_id.index});
+    }
+}
+
+fn functionNameCollides(ctx: *const BackendContext, function_id: hir.FunctionId, function: hir.HirFunction) bool {
+    for (ctx.module.hir.functions.items, 0..) |candidate, index| {
+        if (index == function_id.index) continue;
+        if (candidate.is_extern) continue;
+        if (candidate.is_exported and candidate.extern_abi == .c) continue;
+        if (candidate.name.index == function.name.index) return true;
+    }
+    return false;
 }
 
 fn findInterfaceImplForFunction(ctx: *const BackendContext, function_id: hir.FunctionId) ?hir.HirInterfaceImpl {

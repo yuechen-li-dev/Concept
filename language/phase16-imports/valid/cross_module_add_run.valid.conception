@@ -1,0 +1,22 @@
+# name: phase16 cross module add run
+# phase: run
+# expect: pass
+
+=== file: Math.concept ===
+module Math;
+
+int Add(int a, int b) {
+    return a + b;
+}
+
+=== file: Main.concept ===
+module Main;
+
+import Math;
+
+int main() {
+    return Math.Add(20, 22);
+}
+
+=== run ===
+exit_code: 42

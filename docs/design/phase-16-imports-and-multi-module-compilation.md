@@ -764,3 +764,19 @@ P16-M7 implements type-position qualified module lookup for the semantic/HIR fix
 Imports still do not inject unqualified type names: `import Geometry;` permits `Geometry.Point`, but a bare `Point` in another module remains the existing unknown-type diagnostic. Known but non-imported module roots are rejected with `CON0275`; unknown module roots and missing or non-type qualified items are rejected with `CON0274`.
 
 Imported `[Repr(C)]` struct metadata is visible through the shared HIR `TypeId`. Semantic C ABI validation now accepts imported repr(C) structs by value in C export/extern parameter positions and accepts pointers to imported repr(C) structs. Imported non-repr structs remain rejected at C ABI boundaries with `CON0260`. Multi-source MIR/backend/run lowering remains deferred to P16-M8.
+
+## P16-M8 implementation status
+
+P16-M8 enables the backend/run payoff path for the Phase 16 v0 subset. Multi-source fixtures now parse, build the module table, collect one module-aware HIR program, lower all non-generic runtime functions from all modules to MIR, and emit one generated C translation unit.
+
+Implemented behavior:
+
+- qualified cross-module function calls lower and run through MIR/backend;
+- ordinary same-named functions in different modules receive collision-safe generated C names while `export "C"` symbols remain unmangled;
+- qualified struct type references that are already accepted semantically survive MIR/backend/run;
+- same-named structs in different modules receive collision-safe generated C typedef names when both are emitted;
+- `extern "C"` declarations in imported modules are callable by qualified name and emit C prototypes in the generated unit;
+- duplicate exported/extern C symbols remain compilation-unit-wide semantic errors before backend emission;
+- examples live under `examples/phase16/` and document the harness-supplied virtual-file model.
+
+Still deferred: package management, filesystem module lookup, public/private visibility, aliases, wildcard imports, re-exports, unqualified imported names, header imports, separate objects, linker driving, incremental compilation, module spanning multiple files, multiple modules per file, and cross-package dependency resolution.

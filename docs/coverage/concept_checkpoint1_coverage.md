@@ -4,7 +4,7 @@
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
 **Phases closed:** 1 through 15
-**Current phase:** Phase 16 M7 qualified module type lookup
+**Current phase:** Phase 16 M8 multi-module MIR/backend lowering
 **Fixture corpus:** 900 total `.conception` fixtures; 108 under `language/phase15-c-abi/`; 67 under `language/phase16-imports/`
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
@@ -48,7 +48,7 @@
 | `move` keyword | ✅ | Phase 10 — explicit move expression, use-after-move diagnosed |
 | `try` keyword | ✅ | Phase 5 — propagates `Result` error arm |
 | `unsafe` blocks and functions | ✅ | Phase 6 — quarantined, raw pointer deref and pointer arith require unsafe |
-| Real module system (no headers) | 🔶 | Single-file modules are implemented; Phase 16 M1 adds hermetic multi-file fixture source sets with virtual paths, M2 adds module-table collection, M3 parses import declarations with ordering diagnostics, and M4 resolves import graph edges with unknown/duplicate/cycle diagnostics, M5 carries modules/imports into HIR with per-module top-level duplicate checks, M6 resolves qualified module function calls, and M7 resolves qualified module type references plus imported repr(C) semantic C ABI validation while keeping unqualified imports invalid; multi-source backend/run remains deferred |
+| Real module system (no headers) | 🔶 | Single-file modules are implemented; Phase 16 M1 adds hermetic multi-file fixture source sets with virtual paths, M2 adds module-table collection, M3 parses import declarations with ordering diagnostics, and M4 resolves import graph edges with unknown/duplicate/cycle diagnostics, M5 carries modules/imports into HIR with per-module top-level duplicate checks, M6 resolves qualified module function calls, M7 resolves qualified module type references plus imported repr(C) semantic C ABI validation while keeping unqualified imports invalid, and M8 enables supported multi-source MIR/backend/run in one generated C unit |
 | `import` declarations | 🔶 | Phase 16 M3 parses qualified import declarations and M4 resolves module graph edges with `CON0271` unknown import, `CON0277` duplicate import, and `CON0272` cycle diagnostics; qualified function lookup is implemented in P16-M6; qualified type lookup is implemented in P16-M7 |
 | Conditional compilation `when target.*` | 🔶 | `target.isLittleEndian`, `target.pointerSize` available as comptime queries; full `when target.os` structured conditional compilation not implemented |
 
@@ -450,7 +450,7 @@
   upcasting/inheritance non-goals, and ABI policy
 - repr(C) enums, nested by-value repr(C) fields, packed layout, custom alignment, bitfields, and platform ABI matrices beyond the closed Phase 15 v0 subset
 - C headers/includes, automatic linking/linker driver, symbol aliasing, callbacks/function pointers, extern variables, and C++ ABI interop beyond the closed Phase 15 v0 subset
-- multi-source backend/run after Phase 16 M7 qualified type lookup
+- broader module features after Phase 16 M8 multi-source backend/run: visibility, aliases, packages, filesystem lookup, separate object files, and linker driving
 - `yield` in machines
 - Full `must_use` on arbitrary functions (not just enums)
 - `panic` / `assert` infrastructure
