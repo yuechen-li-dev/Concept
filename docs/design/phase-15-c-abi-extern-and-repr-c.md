@@ -556,3 +556,19 @@ Phase 15 should close only when:
 - tests and fixtures cover accepted and rejected extern/export/repr(C) paths;
 - docs clearly state that C++ interop, bindgen, headers, linker driving,
   varargs, packed layout, and enum ABI remain deferred.
+
+## P15-M6 implementation status
+
+P15-M6 implements the first usable `repr(C)` struct ABI subset for Stage 0:
+
+- `[Repr(C)]` structs are validated in HIR checking before ABI use.
+- Empty `[Repr(C)]` structs are rejected with `CON0268` because C empty structs are non-standard/compiler-specific.
+- Supported v0 fields are scalar `int`, `bool`, `AllocError`, and raw pointers to supported C ABI pointees (`void`, `int`, `bool`, `Arena`, `Allocator`, `AllocError`, and `[Repr(C)]` structs).
+- Nested/by-value struct fields remain deferred and are rejected with `CON0267`, including by-value recursive struct layouts.
+- `extern "C"` and `export "C"` accept non-empty validated `[Repr(C)]` structs by value and pointers to validated `[Repr(C)]` structs.
+- Non-`repr(C)` structs and pointers to non-`repr(C)` structs remain rejected at C ABI boundaries with `CON0260`.
+- The C backend emits deterministic struct fields in source order, with no hidden Concept fields and no artificial padding fields; the C compiler remains responsible for natural padding/alignment.
+- `repr(C)` struct definitions use a named C struct tag plus typedef so pointer self-references are representable in generated C.
+- Backend C prototypes and exported function definitions use the generated struct type/tag for `repr(C)` values and pointers.
+
+Still deferred: `repr(C)` enums, `repr(packed)`, custom alignment, bitfields, volatile/atomics/MMIO, C header parsing, automatic includes/linking, symbol aliasing, import/multi-module compilation, C++ interop, and platform-specific ABI matrices.

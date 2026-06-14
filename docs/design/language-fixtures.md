@@ -75,7 +75,7 @@ Invalid fixtures cover malformed template syntax, type parameters out of scope, 
 
 Phase 8 MIR/backend coverage is intentionally concrete-only: the pipeline run fixture and targeted compiler tests assert that template declarations, concepts, marker concepts, and type-parameter types do not leak into executable MIR or backend C, while deterministic instantiated function names and referenced static witness calls are emitted.
 
-Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed for compile-time execution v0. Phase 10 is closed for ownership/storage-state v0. Phase 11 is closed for first-class testing, attributes, and reasoned expectations v0. Phase 14 is closed for runtime interfaces and borrowed dyn dispatch v0: interface declaration, requirement validation, interface impl conformance, borrowed `dyn Interface&` type-surface fixtures, call-boundary concrete-to-dyn coercion fixtures, dyn method-call HIR/MIR fixtures, C backend vtable/fat-reference lowering fixtures, executable borrowed dyn dispatch fixtures, examples, mutability hardening fixtures, and backend C-shape assertions for the borrowed dyn subset. Phase 15 has started C ABI work: P15-M0 added the design, P15-M1 adds parser/AST fixtures for block-form `extern "C"` declarations, P15-M2 adds HIR extern declarations plus ABI type validation fixtures, P15-M3 adds MIR extern-call lowering plus backend C prototype/call-shape fixtures, and P15-M4 adds export C parser/check/backend/run fixtures.
+Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed for compile-time execution v0. Phase 10 is closed for ownership/storage-state v0. Phase 11 is closed for first-class testing, attributes, and reasoned expectations v0. Phase 14 is closed for runtime interfaces and borrowed dyn dispatch v0: interface declaration, requirement validation, interface impl conformance, borrowed `dyn Interface&` type-surface fixtures, call-boundary concrete-to-dyn coercion fixtures, dyn method-call HIR/MIR fixtures, C backend vtable/fat-reference lowering fixtures, executable borrowed dyn dispatch fixtures, examples, mutability hardening fixtures, and backend C-shape assertions for the borrowed dyn subset. Phase 15 has started C ABI work: P15-M0 added the design, P15-M1 adds parser/AST fixtures for block-form `extern "C"` declarations, P15-M2 adds HIR extern declarations plus ABI type validation fixtures, P15-M3 adds MIR extern-call lowering plus backend C prototype/call-shape fixtures, P15-M4 adds export C parser/check/backend/run fixtures, P15-M5 adds staged `[Repr(C)]` marker fixtures, and P15-M6 adds repr(C) field validation, ABI-boundary acceptance, backend layout-shape, and exported-struct runtime fixtures.
 
 ## Phase 9 compile-time execution fixtures
 
@@ -305,13 +305,13 @@ fixtures cover extern call arity/type mismatches and using a `void` extern call
 as a value. P15-M5 fixtures cover staged `[Repr(C)]` struct markers in AST and
 HIR debug output, ordinary backend emission without C ABI boundary use, invalid
 Repr targets, missing/unsupported/extra Repr arguments, duplicate markers, and
-the deliberate continued rejection of repr(C) structs at export C ABI boundaries
+the deliberate continued rejection of non-repr structs at C ABI boundaries and the P15-M6 acceptance of validated repr(C) structs
 until M6.
 
-Future valid coverage will add `export "C"` functions, `repr(C)` structs,
+Valid coverage includes `export "C"` functions, validated `[Repr(C)]` structs,
 unmangled exported C names, and deterministic supported struct field order.
 
-Future invalid coverage will add generic exports, `repr(C)` on non-struct
+Invalid coverage includes generic exports, `repr(C)` on non-struct
 declarations, empty `repr(C)` structs, unsupported `repr(C)` fields, machine
 frame ABI exposure, and payload enum ABI exposure.
 

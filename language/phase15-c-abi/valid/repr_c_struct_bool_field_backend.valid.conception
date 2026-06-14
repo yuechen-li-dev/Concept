@@ -1,0 +1,19 @@
+# name: repr C struct bool field backend
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module CAbi;
+
+[Repr(C)]
+struct Flag {
+    bool enabled;
+};
+
+int main() {
+    return 0;
+}
+
+=== c ===
+contains: int cpt_f_enabled_0;
+contains: } cpt_struct_Flag;

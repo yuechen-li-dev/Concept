@@ -1,0 +1,22 @@
+# name: repr C field non repr struct
+# phase: check
+# expect: fail
+
+=== source ===
+module CAbi;
+
+struct Inner {
+    int value;
+};
+
+[Repr(C)]
+struct Outer {
+    Inner inner;
+};
+
+int main() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0267

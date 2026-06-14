@@ -1,0 +1,23 @@
+# name: repr C extern struct pointer param backend
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module CAbi;
+
+[Repr(C)]
+struct Point {
+    int x;
+    int y;
+};
+
+extern "C" {
+    int use_point_ptr(Point* p);
+}
+
+int main() {
+    return 0;
+}
+
+=== c ===
+contains: int use_point_ptr(struct cpt_struct_Point* p);
