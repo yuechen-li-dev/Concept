@@ -719,3 +719,32 @@ Still deferred after M4:
   lowering, and executable multi-module compilation;
 - import aliases, wildcard imports, re-exports, visibility, packages, filesystem
   module search, and dependency resolution.
+
+## P16-M5 implementation status: module-aware HIR scaffold
+
+P16-M5 adds the first module-aware HIR architecture layer. The HIR store now has
+module records corresponding to resolved `ModuleUnit`s, preserving module name,
+source index, virtual source path, module declaration span, resolved import
+edges, and item order. Top-level HIR item IDs are associated with their defining
+HIR module so later qualified lookup can map declarations back to module roots.
+
+Semantic lowering now has a multi-source, HIR-only path for fixtures: the module
+table is built and imports are resolved first, HIR modules are created in module
+table/source order, and each source file lowers into its own current module.
+Top-level duplicate checking is therefore per module for ordinary Concept items:
+`Math.Add` and `Main.Add` may both exist. Duplicate ordinary names inside the
+same module still use the existing duplicate top-level diagnostic.
+
+C ABI symbol checking intentionally remains compilation-unit-wide. Duplicate
+`extern "C"` or `export "C"` symbols across different modules still diagnose as
+`CON0265`; Phase 16 has not introduced C symbol aliases, package/linkage scopes,
+or per-module C namespaces.
+
+Still deferred:
+
+- P16-M6 owns qualified module lookup such as `Math.Add`;
+- P16-M7 owns qualified cross-module type lookup such as `Geometry.Point`;
+- imports still do not inject unqualified names;
+- visibility, aliases, wildcard imports, re-exports, package management, and
+  filesystem import search remain out of scope;
+- multi-source MIR/backend/run lowering remains deferred to P16-M8.

@@ -1,0 +1,17 @@
+# name: hir modules duplicate export c symbol across modules
+# phase: check
+# check: declarations
+# expect: fail
+
+=== file: A.concept ===
+module A;
+
+export "C" int Add(int a, int b) { return a + b; }
+
+=== file: B.concept ===
+module B;
+
+export "C" int Add(int a, int b) { return a + b; }
+
+=== diagnostics ===
+CON0265

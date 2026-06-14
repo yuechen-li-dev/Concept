@@ -1,0 +1,13 @@
+# name: hir modules duplicate struct same module
+# phase: check
+# check: declarations
+# expect: fail
+
+=== file: A.concept ===
+module A;
+
+struct Point { int x; }
+struct Point { int y; }
+
+=== diagnostics ===
+CON0020

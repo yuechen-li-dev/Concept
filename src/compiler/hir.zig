@@ -12,6 +12,7 @@ pub const Interner = interner_module.Interner;
 pub const SymbolId = interner_module.SymbolId;
 
 pub const ItemId = SemanticId("ItemId");
+pub const HirModuleId = SemanticId("HirModuleId");
 pub const FunctionId = SemanticId("FunctionId");
 pub const MachineId = SemanticId("MachineId");
 pub const GenericFunctionId = SemanticId("GenericFunctionId");
@@ -586,6 +587,15 @@ pub const HirEnumPayloadField = struct {
     type_id: types.TypeId,
 };
 
+pub const HirModuleRecord = struct {
+    name: SymbolId,
+    source_index: usize,
+    source_path: []const u8,
+    module_decl_span: SourceSpan,
+    imports: []const HirModuleId,
+    items: []ItemId,
+};
+
 pub const HirModule = struct {
     store: HirStore,
 
@@ -602,6 +612,9 @@ pub const HirModule = struct {
 pub const HirStore = struct {
     allocator: std.mem.Allocator,
     items: std.ArrayList(HirItem),
+    item_modules: std.ArrayList(?HirModuleId),
+    modules: std.ArrayList(HirModuleRecord),
+    current_module: ?HirModuleId,
     functions: std.ArrayList(HirFunction),
     machines: std.ArrayList(HirMachine),
     generic_functions: std.ArrayList(HirGenericFunction),
@@ -627,6 +640,9 @@ pub const HirStore = struct {
         return .{
             .allocator = allocator,
             .items = std.ArrayList(HirItem).empty,
+            .item_modules = std.ArrayList(?HirModuleId).empty,
+            .modules = std.ArrayList(HirModuleRecord).empty,
+            .current_module = null,
             .functions = std.ArrayList(HirFunction).empty,
             .machines = std.ArrayList(HirMachine).empty,
             .generic_functions = std.ArrayList(HirGenericFunction).empty,
@@ -768,8 +784,46 @@ pub const HirStore = struct {
         self.generic_functions.deinit(self.allocator);
         self.machines.deinit(self.allocator);
         self.functions.deinit(self.allocator);
+        for (self.modules.items) |module| {
+            self.allocator.free(module.source_path);
+            if (module.imports.len > 0) self.allocator.free(module.imports);
+            if (module.items.len > 0) self.allocator.free(module.items);
+        }
+        self.modules.deinit(self.allocator);
+        self.item_modules.deinit(self.allocator);
         self.items.deinit(self.allocator);
         self.* = undefined;
+    }
+
+    pub fn addModule(self: *HirStore, name: SymbolId, source_index: usize, source_path: []const u8, module_decl_span: SourceSpan, imports: []const HirModuleId) !HirModuleId {
+        const id = HirModuleId{ .index = try nextIndex(self.modules.items.len, error.TooManyItems) };
+        const owned_path = try self.allocator.dupe(u8, source_path);
+        errdefer self.allocator.free(owned_path);
+        const owned_imports = if (imports.len == 0) &.{} else blk: {
+            const copy = try self.allocator.alloc(HirModuleId, imports.len);
+            @memcpy(copy, imports);
+            break :blk copy;
+        };
+        errdefer if (owned_imports.len > 0) self.allocator.free(owned_imports);
+        try self.modules.append(self.allocator, .{
+            .name = name,
+            .source_index = source_index,
+            .source_path = owned_path,
+            .module_decl_span = module_decl_span,
+            .imports = owned_imports,
+            .items = &.{},
+        });
+        return id;
+    }
+
+    pub fn setCurrentModule(self: *HirStore, module_id: ?HirModuleId) void {
+        self.current_module = module_id;
+    }
+
+    pub fn moduleForItem(self: *const HirStore, item_id: ItemId) ?HirModuleId {
+        const index: usize = item_id.index;
+        std.debug.assert(index < self.item_modules.items.len);
+        return self.item_modules.items[index];
     }
 
     pub fn addGenericFunction(self: *HirStore, name: SymbolId, span: SourceSpan) !GenericFunctionId {
@@ -1450,6 +1504,26 @@ pub const HirStore = struct {
         errdefer buffer.deinit();
         const writer = &buffer.writer;
 
+        if (self.modules.items.len != 0) {
+            try writer.writeAll("HirModules\n");
+            for (self.modules.items) |module| {
+                try writer.print("  Module {s} path={s}\n", .{ interner.text(module.name), module.source_path });
+                for (module.imports) |import_id| {
+                    const imported = self.modules.items[import_id.index];
+                    try writer.print("    Import {s}\n", .{interner.text(imported.name)});
+                }
+                for (module.items) |item_id| {
+                    const item = self.getItem(item_id).*;
+                    switch (item) {
+                        .function => |id| try writer.print("    Function {s}\n", .{interner.text(self.getFunction(id).name)}),
+                        .machine => |id| try writer.print("    Machine {s}\n", .{interner.text(self.getMachine(id).name)}),
+                        .struct_ => |id| try writer.print("    Struct {s}\n", .{interner.text(self.getStruct(id).name)}),
+                        .enum_ => |id| try writer.print("    Enum {s}\n", .{interner.text(self.getEnum(id).name)}),
+                        .interface_ => |id| try writer.print("    Interface {s}\n", .{interner.text(self.getInterface(id).name)}),
+                    }
+                }
+            }
+        }
         try writer.writeAll("HirModule\n");
         for (self.static_asserts.items) |static_assert| {
             try writer.writeAll("  StaticAssert\n");
@@ -1901,6 +1975,15 @@ pub const HirStore = struct {
     fn addItem(self: *HirStore, item: HirItem) !ItemId {
         const id = ItemId{ .index = try nextIndex(self.items.items.len, error.TooManyItems) };
         try self.items.append(self.allocator, item);
+        errdefer _ = self.items.pop();
+        try self.item_modules.append(self.allocator, self.current_module);
+        errdefer _ = self.item_modules.pop();
+        if (self.current_module) |module_id| {
+            const module = &self.modules.items[module_id.index];
+            const old_items = module.items;
+            module.items = try appendId(self.allocator, ItemId, module.items, id);
+            if (old_items.len > 0) self.allocator.free(old_items);
+        }
         return id;
     }
 };
@@ -2250,4 +2333,34 @@ test "concept impl storage and lookup helpers" {
     const impl_id = try module.store.addConceptImpl(concept_id, target_type, &.{}, false, synthetic_span);
     try std.testing.expect(module.store.hasConceptImpl(concept_id, target_type));
     try std.testing.expectEqual(impl_id, module.store.findConceptImpl(concept_id, target_type).?);
+}
+
+test "HIR module records preserve imports, paths, and item ownership" {
+    var interner = Interner.init(std.testing.allocator);
+    defer interner.deinit();
+
+    var store = HirStore.init(std.testing.allocator);
+    defer store.deinit();
+
+    const math_name = try interner.intern("Math");
+    const main_name = try interner.intern("Main");
+    const math_id = try store.addModule(math_name, 0, "Math.concept", synthetic_span, &.{});
+    const main_id = try store.addModule(main_name, 1, "Main.concept", synthetic_span, &.{math_id});
+
+    store.setCurrentModule(math_id);
+    const math_fn = try store.addFunction(try interner.intern("Add"), .{ .index = 0 }, synthetic_span);
+    store.setCurrentModule(main_id);
+    const main_fn = try store.addFunction(try interner.intern("Add"), .{ .index = 0 }, synthetic_span);
+    store.setCurrentModule(null);
+
+    try std.testing.expectEqual(@as(usize, 2), store.modules.items.len);
+    try std.testing.expectEqualStrings("Math.concept", store.modules.items[math_id.index].source_path);
+    try std.testing.expectEqual(math_id.index, store.modules.items[main_id.index].imports[0].index);
+    try std.testing.expectEqual(math_id.index, store.moduleForItem(store.getFunction(math_fn).item).?.index);
+    try std.testing.expectEqual(main_id.index, store.moduleForItem(store.getFunction(main_fn).item).?.index);
+
+    const rendered = try store.debugString(std.testing.allocator, interner);
+    defer std.testing.allocator.free(rendered);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "Module Math") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "Import Math") != null);
 }
