@@ -22,12 +22,18 @@ pub const Value = union(enum) {
     bool: bool,
 };
 
+pub const TestFailureKind = enum {
+    assertion_invariant,
+    expectation,
+};
+
 pub const TestFailure = struct {
     module_name: []const u8,
     function_name: []const u8,
     inline_data_row_index: ?usize = null,
     source_span: source.SourceSpan,
     intrinsic_kind: hir.HirTestIntrinsicKind,
+    failure_kind: TestFailureKind,
     reason: []const u8,
     expected: ?[]const u8 = null,
     actual: ?[]const u8 = null,
@@ -401,6 +407,7 @@ const Runner = struct {
             .inline_data_row_index = self.current_inline_data_row_index,
             .source_span = span,
             .intrinsic_kind = test_intrinsic.kind,
+            .failure_kind = failureKind(test_intrinsic.kind),
             .reason = try self.allocator.dupe(u8, test_intrinsic.reason),
             .expected = try formatValue(self.allocator, expected),
             .actual = try formatValue(self.allocator, actual),
@@ -481,6 +488,13 @@ fn testCaseName(allocator: std.mem.Allocator, module_name: []const u8, function_
         return std.fmt.allocPrint(allocator, "{s}.{s}#{d}", .{ module_name, function_name, row_index });
     }
     return std.fmt.allocPrint(allocator, "{s}.{s}", .{ module_name, function_name });
+}
+
+fn failureKind(kind: hir.HirTestIntrinsicKind) TestFailureKind {
+    return switch (kind) {
+        .assert_true, .assert_false => .assertion_invariant,
+        .expect_true, .expect_false, .expect_equal_int, .expect_equal_bool, .expect_that_true, .expect_that_false, .expect_that_equal_int, .expect_that_equal_bool => .expectation,
+    };
 }
 
 fn failureMessageName(kind: hir.HirTestIntrinsicKind) []const u8 {
@@ -861,6 +875,7 @@ test "Fact runner records failing True and False reasons" {
     try std.testing.expectEqual(@as(usize, 0), true_result.passed_count);
     try std.testing.expectEqual(@as(usize, 1), true_result.failed_count);
     try std.testing.expectEqual(hir.HirTestIntrinsicKind.assert_true, true_result.failures[0].intrinsic_kind);
+    try std.testing.expectEqual(TestFailureKind.assertion_invariant, true_result.failures[0].failure_kind);
     try std.testing.expectEqualStrings("setup condition should hold", true_result.failures[0].reason);
     try std.testing.expectEqualStrings("true", true_result.failures[0].expected.?);
     try std.testing.expectEqualStrings("false", true_result.failures[0].actual.?);
@@ -874,6 +889,7 @@ test "Fact runner records failing True and False reasons" {
     defer false_result.deinit(std.testing.allocator);
 
     try std.testing.expectEqual(hir.HirTestIntrinsicKind.expect_false, false_result.failures[0].intrinsic_kind);
+    try std.testing.expectEqual(TestFailureKind.expectation, false_result.failures[0].failure_kind);
     try std.testing.expectEqualStrings("false", false_result.failures[0].expected.?);
     try std.testing.expectEqualStrings("true", false_result.failures[0].actual.?);
 

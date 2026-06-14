@@ -1,0 +1,15 @@
+# name: assert false whitespace reason
+# phase: check
+# expect: fail
+
+=== source ===
+module Example.Tests;
+
+[Fact]
+void WhitespaceReason() {
+    Assert.False(false, "   ");
+    return;
+}
+
+=== diagnostics ===
+CON0171
