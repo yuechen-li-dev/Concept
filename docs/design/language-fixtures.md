@@ -50,6 +50,8 @@ language/phase16-imports/valid/
 language/phase16-imports/invalid/
 language/phase17-runtime-failure/valid/
 language/phase17-runtime-failure/invalid/
+language/phase18-composable-machines/valid/
+language/phase18-composable-machines/invalid/
 ```
 
 ## Phase 5 sum-type fixtures
@@ -216,6 +218,19 @@ declaration and call text is pinned by
 backend unit tests; backend-c fixtures currently assert the real lowering path
 accepts the source because fixture C-output snapshot matching is not implemented
 yet.
+
+
+## Phase 18 composable machine fixtures
+
+Phase 18 has started as a design milestone. Planned fixtures should live under
+`language/phase18-composable-machines/` once implementation begins. The intended
+corpus should cover by-value nested machine fields, default-initialized
+zero-parameter child frames, `Step`/`Complete`/`Result` on nested fields, runtime
+`transition match`, runtime `transition decide`, deterministic tie-breaking,
+state introspection if implemented, and shared-panic runtime failures for
+invalid machine states, no matching transition case, and no enabled decision
+candidates. P18-M0 adds only the design document and does not add executable
+fixtures yet.
 
 ## Phase 13 machine fixtures
 

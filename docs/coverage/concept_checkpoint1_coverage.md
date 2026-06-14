@@ -4,7 +4,7 @@
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
 **Phases closed:** 1 through 17
-**Current phase:** Phase 17 closed — panic, assertions, and runtime failure reporting v0
+**Current phase:** Phase 18 started — composable machines and runtime transitions design
 **Fixture corpus:** 1035 total fixture files; 85 under `language/phase11-testing/`; 108 under `language/phase15-c-abi/`; 73 under `language/phase16-imports/`; 57 under `language/phase17-runtime-failure/`
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
@@ -406,15 +406,15 @@
 | `machine Name(params) -> ReturnType { }` declaration | ✅ | Phase 13 |
 | `state StateName { }` blocks | ✅ | Phase 13 |
 | `transition StateName` literal transitions | ✅ | Phase 13 — runnable, C backend lowered |
-| `transition match { ... }` transitions | 🔶 | Phase 13 — parsed and HIR-represented; runtime lowering deferred, fails clearly at C backend emission |
-| `transition decide { ... }` transitions | 🔶 | Phase 13 — parsed and HIR-represented; runtime lowering deferred, fails clearly at C backend emission |
+| `transition match { ... }` transitions | 🔶 | Phase 13 parsed and HIR-represented this form; Phase 18 plans deterministic runtime lowering with shared-panic no-match failure |
+| `transition decide { ... }` transitions | 🔶 | Phase 13 parsed and HIR-represented this form; Phase 18 plans deterministic runtime lowering with int scores, bool guards, source-order tie-breaking, and shared-panic no-enabled-candidate failure |
 | `Step(machine)` as statement | ✅ | Phase 13 — statement-like, produces no value |
 | `Complete(machine)` returning bool | ✅ | Phase 13 |
 | `Result(machine)` returning result type | ✅ | Phase 13 — traps if read before completion |
 | `MachineName(args)` construction | ✅ | Phase 13 |
 | `noalloc machine` effect checking | ✅ | Phase 13 — `noalloc` effect on machine declaration enforced |
 | `yield` statement in machines | ❌ | Deferred from Phase 13 |
-| `run childMachine(...)` nested machines | ❌ | Deferred from Phase 13 |
+| Nested machine fields / child frames | ❌ | Phase 18 design milestone defines by-value zero-parameter child machine fields and explicit parent `Step`/`Complete`/`Result`; implementation deferred to P18-M2/P18-M3 |
 | Machine lowers to explicit state struct in MIR | ✅ | Phase 13 — state enum and struct visible in MIR |
 | Machine lowering visible in MIR (not hidden) | ✅ | Phase 13 |
 | References crossing yield restricted | ❌ | Depends on yield being implemented |
@@ -566,14 +566,14 @@
 ---
 
 *This matrix began as the Phase 13 closeout snapshot and has been updated
-through Phase 17 closeout. Stage 1 is substantially implemented. Phase 14
+through Phase 17 closeout, with Phase 18 design work now started. Stage 1 is substantially implemented. Phase 14
 closed runtime interfaces and borrowed dyn dispatch v0. Phase 15 closed the
 single-compilation-unit C ABI v0 surface. Phase 16 closes imports and
 multi-module compilation-unit modules v0: harness/driver-supplied multi-file
 source sets, module table, import graph, module-aware HIR, per-module ordinary
 symbol tables, qualified cross-module functions/types, imported repr(C)
 metadata, and multi-source MIR/backend/run in one generated C unit. Remaining
-Stage 1 gaps include `yield` in machines, nested machines, runtime transition match/decide, visibility and package/filesystem
+Stage 1 gaps include `yield` in machines, nested machine implementation, runtime transition match/decide implementation, visibility and package/filesystem
 module resolution, separate compilation/linker driving, reference/receiver hardening, and broader ABI/layout
 features deliberately deferred beyond Phase 15 (repr(C) enums, nested by-value
 struct layout, packed/custom alignment, bitfields, headers/includes, automatic
