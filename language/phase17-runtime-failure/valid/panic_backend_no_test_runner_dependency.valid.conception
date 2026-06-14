@@ -1,0 +1,17 @@
+# name: panic backend no test runner dependency
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    panic("ordinary runtime failure");
+    return 0;
+}
+
+=== c ===
+contains: cpt_panic("ordinary runtime failure");
+not_contains: cpt_test
+not_contains: Assert
+not_contains: Expect

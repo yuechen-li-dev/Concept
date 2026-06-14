@@ -79,6 +79,9 @@ pub fn emitExecutableFromMir(
     const emitted_arena_storage_decl = try emitArenaStorageHelperDeclarations(writer, &ctx);
     if (emitted_arena_storage_decl and mir_module.store.functions.items.len > 0) try writer.writeByte('\n');
 
+    const emitted_panic_helper = try emitPanicHelper(writer, &ctx);
+    if (emitted_panic_helper and mir_module.store.functions.items.len > 0) try writer.writeByte('\n');
+
     const emitted_extern_c_prototypes = try emitExternCPrototypes(writer, &ctx);
     if (emitted_extern_c_prototypes and mir_module.store.functions.items.len > 0) try writer.writeByte('\n');
 
@@ -596,7 +599,7 @@ fn mirContainsArenaAlloc(ctx: *const BackendContext) bool {
         for (block.statements) |statement| {
             switch (statement.kind) {
                 .assign => |assignment| if (rvalueContainsArenaAlloc(assignment.rvalue)) return true,
-                .drop, .machine_step => {},
+                .drop, .machine_step, .panic => {},
             }
         }
     }
@@ -631,6 +634,33 @@ fn mirContainsArenaStorageOps(ctx: *const BackendContext) struct { reset: bool, 
         }
     }
     return .{ .reset = needs_reset, .destroy = needs_destroy };
+}
+
+fn emitPanicHelper(writer: anytype, ctx: *const BackendContext) EmitError!bool {
+    if (!mirContainsPanic(ctx)) return false;
+    try writer.writeAll(
+        \\#include <stdio.h>
+        \\#include <stdlib.h>
+        \\
+        \\static void cpt_panic(const char* reason) {
+        \\    fprintf(stderr, "panic: %s\n", reason);
+        \\    exit(101);
+        \\}
+        \\
+    );
+    return true;
+}
+
+fn mirContainsPanic(ctx: *const BackendContext) bool {
+    for (ctx.mir_module.store.blocks.items) |block| {
+        for (block.statements) |statement| {
+            switch (statement.kind) {
+                .panic => return true,
+                else => {},
+            }
+        }
+    }
+    return false;
 }
 
 fn isSupportedEnumLayout(ctx: *const BackendContext, enum_id: hir.EnumId) bool {
@@ -905,6 +935,11 @@ fn emitStatement(writer: anytype, ctx: *const BackendContext, statement: mir.Mir
             try emitMachineStepFunctionName(writer, ctx.module, ctx.module.hir.getMachine(machine_id).name);
             try writer.writeAll("(&");
             try emitOperand(writer, ctx, machine_operand);
+            try writer.writeAll(");\n");
+        },
+        .panic => |panic_stmt| {
+            try writer.writeAll("    cpt_panic(");
+            try emitCStringLiteral(writer, panic_stmt.reason);
             try writer.writeAll(");\n");
         },
     }
@@ -1399,6 +1434,21 @@ fn emitEnumPayloadFieldName(writer: anytype, module: *const semantics.SemanticMo
     try writer.writeAll("cpt_pf_");
     try emitEscapedIdentifierComponent(writer, module.interner.text(symbol));
     try writer.print("_{d}", .{payload_index});
+}
+
+fn emitCStringLiteral(writer: anytype, text: []const u8) !void {
+    try writer.writeByte('"');
+    for (text) |byte| {
+        switch (byte) {
+            '\\' => try writer.writeAll("\\\\"),
+            '"' => try writer.writeAll("\\\""),
+            '\n' => try writer.writeAll("\\n"),
+            '\r' => try writer.writeAll("\\r"),
+            '\t' => try writer.writeAll("\\t"),
+            else => try writer.writeByte(byte),
+        }
+    }
+    try writer.writeByte('"');
 }
 
 fn emitInterfaceRequirementSlotName(writer: anytype, module: *const semantics.SemanticModule, symbol: hir.SymbolId) !void {

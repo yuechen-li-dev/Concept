@@ -103,13 +103,14 @@ for semantic C ABI validation while keeping unqualified imported names invalid.
 M8 lowers/runs the supported multi-source subset through MIR and the C backend
 in one generated C unit, hardening ordinary backend function and struct names
 for same names across modules while leaving `export "C"` symbols exact. M9 closes
-Phase 16 with 73 Phase 16 fixtures out of 906 `.conception` fixtures total and
-examples under `examples/phase16/`. Phase 17 M1 now scaffolds `panic("reason")`
-as a statement-only runtime failure primitive: parser/AST/HIR preserve the
-reason literal and span, debug output exposes dedicated panic statements, wrong
-reason forms are rejected, and expression-position `panic(...)` is explicitly
-unsupported until later `never` work. MIR/backend lowering, runtime panic
-helpers, and `assert(condition, reason)` remain deferred. Filesystem lookup, packages, aliases,
+Phase 16 with 73 Phase 16 fixtures and examples under `examples/phase16/`.
+The corpus now has 919 `.conception` fixtures. Phase 17 M2 lowers
+statement-position `panic("reason")` through MIR and the MIR-backed C backend:
+reason text/span are preserved into MIR, debug output exposes dedicated panic
+statements, the backend emits one `cpt_panic` helper per generated C unit, calls
+that helper with an escaped C string literal, prints the reason to `stderr`, and
+exits with code 101. Wrong reason forms and expression-position `panic(...)`
+remain rejected; `assert(condition, reason)` remains deferred. Filesystem lookup, packages, aliases,
 wildcards, re-exports, visibility, separate objects, linker driving, incremental
 compilation, module spanning multiple files, multiple modules per file, and
 cross-package dependency resolution remain deferred.

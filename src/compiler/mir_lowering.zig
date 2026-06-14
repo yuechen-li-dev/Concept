@@ -148,7 +148,13 @@ const FunctionLowerer = struct {
                 const lowered = try self.lowerExpr(expr_id, block_id);
                 return lowered.block;
             },
-            .panic_stmt => return error.InvalidMirLowering,
+            .panic_stmt => |panic_stmt| {
+                try self.store.appendStatement(block_id, .{
+                    .span = stmt.span,
+                    .kind = try mir.MirStatementKind.panicStmt(self.allocator, panic_stmt.reason, panic_stmt.reason_span),
+                });
+                return block_id;
+            },
             .arena_reset => |op| return try self.lowerArenaStorageOp(op.arena_expr, block_id, stmt.span, .reset),
             .arena_destroy => |op| return try self.lowerArenaStorageOp(op.arena_expr, block_id, stmt.span, .destroy),
             .assignment => |assignment| {

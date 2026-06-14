@@ -1,0 +1,17 @@
+# name: panic backend helper emitted once
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    panic("first failure");
+    panic("second failure");
+    return 0;
+}
+
+=== c ===
+count: static void cpt_panic(const char* reason) | 1
+count: cpt_panic("first failure"); | 1
+count: cpt_panic("second failure"); | 1
