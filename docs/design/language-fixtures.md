@@ -86,10 +86,15 @@ single fixture may contain multiple virtual Concept source files, each with a
 stable virtual path for diagnostics. The implemented embedded form is
 `=== file: Name.concept ===` sections followed by the usual fixture assertion
 sections. Legacy `=== source ===` fixtures still parse as exactly one internal
-source. Multi-file parser fixtures parse each virtual file independently;
-semantic, MIR, backend, and run multi-file behavior remains deferred until the
-module graph exists. Duplicate or empty virtual file paths are fixture-format
-errors.
+source. Duplicate or empty virtual file paths are fixture-format errors.
+
+Phase 16 M2 extends multi-file parser fixtures with a module-table pre-pass:
+every virtual source is parsed, exactly one `module` declaration is required per
+source in multi-source mode, duplicate module names are rejected across the
+fixture compilation unit, and the module table preserves source order, stable
+module IDs, virtual paths, and declaration spans. Semantic, MIR, backend, and
+run multi-file behavior remains deferred until import graph and module-aware HIR
+milestones exist.
 
 Representative Phase 16 fixtures should cover module declaration collection,
 duplicate module diagnostics, import ordering, unknown imports, duplicate

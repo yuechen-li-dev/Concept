@@ -1,0 +1,14 @@
+# name: module table multiple modules in file
+# phase: parse
+# expect: fail
+
+=== file: A.concept ===
+module A;
+
+module B;
+
+=== file: C.concept ===
+module C;
+
+=== diagnostics ===
+CON0005

@@ -5,6 +5,7 @@
 const std = @import("std");
 
 const parser_model = @import("../parser.zig");
+const module_table_model = @import("../module_table.zig");
 const source_model = @import("../source.zig");
 const checker_model = @import("../checker.zig");
 const semantics_model = @import("../semantics.zig");
@@ -731,17 +732,42 @@ fn expectParseFixture(comptime path: []const u8) !void {
     try std.testing.expectEqual(Phase.parse, fixture.phase);
 
     if (fixture.isMultiSource()) {
-        if (fixture.expect != .pass) return error.UnsupportedMultiSourceParseFailureFixture;
-        for (fixture.sources) |fixture_source| {
-            var diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
-            defer diagnostics.deinit();
+        var diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
+        defer diagnostics.deinit();
 
+        const units = try std.testing.allocator.alloc(parser_model.ast.CompilationUnit, fixture.sources.len);
+        defer std.testing.allocator.free(units);
+        var parsed_sources = try std.testing.allocator.alloc(module_table_model.ParsedSource, fixture.sources.len);
+        defer std.testing.allocator.free(parsed_sources);
+
+        var parsed_count: usize = 0;
+        defer {
+            for (units[0..parsed_count]) |unit| unit.deinit(std.testing.allocator);
+        }
+
+        for (fixture.sources, 0..) |fixture_source, source_index| {
             const source_file = try source_model.SourceFile.init(std.testing.allocator, fixture_source.path, fixture_source.text);
             defer source_file.deinit(std.testing.allocator);
 
-            const unit = try parser_model.parseSource(std.testing.allocator, source_file, &diagnostics);
-            defer unit.deinit(std.testing.allocator);
-            try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+            units[source_index] = try parser_model.parseSource(std.testing.allocator, source_file, &diagnostics);
+            parsed_count += 1;
+            parsed_sources[source_index] = .{ .path = fixture_source.path, .unit = &units[source_index] };
+        }
+
+        var module_table = try module_table_model.buildFromParsedSources(std.testing.allocator, parsed_sources, &diagnostics);
+        defer module_table.deinit(std.testing.allocator);
+
+        switch (fixture.expect) {
+            .pass => try std.testing.expectEqual(@as(usize, 0), diagnostics.count()),
+            .fail => {
+                try std.testing.expect(diagnostics.count() > 0);
+                const expected_codes = try fixture.diagnosticCodes(std.testing.allocator);
+                defer std.testing.allocator.free(expected_codes);
+                try std.testing.expectEqual(expected_codes.len, diagnostics.count());
+                for (expected_codes, diagnostics.diagnostics.items) |expected_code, actual| {
+                    try std.testing.expectEqualStrings(expected_code, actual.code.format());
+                }
+            },
         }
         return;
     }
@@ -3060,6 +3086,42 @@ test "language parse fixture: phase16 multi-file virtual paths" {
 
 test "language parse fixture: phase16 multi-file empty second source" {
     try expectParseFixture("../../../language/phase16-imports/valid/multifile_empty_second_source_parse.valid.conception");
+}
+
+test "language parse fixture: phase16 module table two modules" {
+    try expectParseFixture("../../../language/phase16-imports/valid/module_table_two_modules.valid.conception");
+}
+
+test "language parse fixture: phase16 module table three modules" {
+    try expectParseFixture("../../../language/phase16-imports/valid/module_table_three_modules.valid.conception");
+}
+
+test "language parse fixture: phase16 module table dotted module names" {
+    try expectParseFixture("../../../language/phase16-imports/valid/module_table_dotted_module_names.valid.conception");
+}
+
+test "language parse fixture: phase16 module table same item names different modules" {
+    try expectParseFixture("../../../language/phase16-imports/valid/module_table_same_item_names_different_modules.valid.conception");
+}
+
+test "language parse fixture: phase16 duplicate module name" {
+    try expectParseFixture("../../../language/phase16-imports/invalid/module_table_duplicate_module_name.invalid.conception");
+}
+
+test "language parse fixture: phase16 missing module in multifile" {
+    try expectParseFixture("../../../language/phase16-imports/invalid/module_table_missing_module_in_multifile.invalid.conception");
+}
+
+test "language parse fixture: phase16 multiple modules in file" {
+    try expectParseFixture("../../../language/phase16-imports/invalid/module_table_multiple_modules_in_file.invalid.conception");
+}
+
+test "language parse fixture: phase16 duplicate module name different paths" {
+    try expectParseFixture("../../../language/phase16-imports/invalid/module_table_duplicate_module_name_different_paths.invalid.conception");
+}
+
+test "language parse fixture: phase16 empty module file" {
+    try expectParseFixture("../../../language/phase16-imports/invalid/module_table_empty_module_file.invalid.conception");
 }
 
 test "language fixture format: phase16 duplicate virtual path rejected" {

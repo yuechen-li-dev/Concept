@@ -1,0 +1,12 @@
+# name: module table duplicate module name different paths
+# phase: parse
+# expect: fail
+
+=== file: src/A.concept ===
+module Shared;
+
+=== file: tests/A.concept ===
+module Shared;
+
+=== diagnostics ===
+CON0270

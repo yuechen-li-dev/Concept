@@ -1,0 +1,15 @@
+# name: module table missing module in multifile
+# phase: parse
+# expect: fail
+
+=== file: A.concept ===
+int AValue() {
+    return 1;
+}
+
+=== file: B.concept ===
+module B;
+
+=== diagnostics ===
+CON0004
+CON0276
