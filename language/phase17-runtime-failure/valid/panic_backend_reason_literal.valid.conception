@@ -1,0 +1,15 @@
+# name: panic backend reason literal
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    panic("quote \" and slash \\ should survive");
+    return 0;
+}
+
+=== c ===
+contains: cpt_panic("quote \\\" and slash \\\\ should survive");
+not_contains: panic("quote

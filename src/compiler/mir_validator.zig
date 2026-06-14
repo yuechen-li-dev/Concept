@@ -182,6 +182,7 @@ const Validator = struct {
                     try self.report(.InvalidMirType, statement.span, diagnostics.invalidMirType);
                 }
             },
+            .panic => {},
         }
     }
 

@@ -353,6 +353,7 @@ const Analyzer = struct {
             .arena_reset => |arena_operand| try self.readOperand(states, arena_operand, statement.span),
             .arena_destroy => |arena_operand| try self.readOperand(states, arena_operand, statement.span),
             .machine_step => |machine_operand| try self.readOperand(states, machine_operand, statement.span),
+            .panic => {},
         }
     }
 

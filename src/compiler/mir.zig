@@ -427,6 +427,10 @@ pub const MirStatementKind = union(enum) {
     arena_reset: MirOperand,
     arena_destroy: MirOperand,
     machine_step: MirOperand,
+    panic: struct {
+        reason: []const u8,
+        reason_span: SourceSpan,
+    },
 
     pub fn assignTo(place: MirPlace, rvalue: MirRvalue) MirStatementKind {
         return .{ .assign = .{ .place = place, .rvalue = rvalue } };
@@ -469,6 +473,10 @@ pub const MirStatementKind = union(enum) {
         return .{ .arena_destroy = arena_operand };
     }
 
+    pub fn panicStmt(allocator: std.mem.Allocator, reason: []const u8, reason_span: SourceSpan) !MirStatementKind {
+        return .{ .panic = .{ .reason = try allocator.dupe(u8, reason), .reason_span = reason_span } };
+    }
+
     fn clone(self: MirStatementKind, allocator: std.mem.Allocator) !MirStatementKind {
         return switch (self) {
             .assign => |assignment| MirStatementKind.assignTo(assignment.place, try assignment.rvalue.clone(allocator)),
@@ -478,6 +486,7 @@ pub const MirStatementKind = union(enum) {
             .arena_reset => |arena_operand| MirStatementKind.arenaReset(try arena_operand.clone(allocator)),
             .arena_destroy => |arena_operand| MirStatementKind.arenaDestroy(try arena_operand.clone(allocator)),
             .machine_step => |machine_operand| .{ .machine_step = try machine_operand.clone(allocator) },
+            .panic => |panic_stmt| try MirStatementKind.panicStmt(allocator, panic_stmt.reason, panic_stmt.reason_span),
         };
     }
 
@@ -494,6 +503,7 @@ pub const MirStatementKind = union(enum) {
             .arena_reset => |arena_operand| arena_operand.deinit(allocator),
             .arena_destroy => |arena_operand| arena_operand.deinit(allocator),
             .machine_step => |machine_operand| machine_operand.deinit(allocator),
+            .panic => |panic_stmt| allocator.free(panic_stmt.reason),
         }
     }
 };
@@ -879,6 +889,7 @@ pub const MirStore = struct {
                 try writer.writeAll("MachineStep ");
                 try writeOperandDebug(writer, machine_operand);
             },
+            .panic => |panic_stmt| try writer.print("Panic \"{s}\"", .{panic_stmt.reason}),
         }
     }
 

@@ -3432,3 +3432,23 @@ test "language check fixture: phase17 panic expression initializer" {
 test "language check fixture: phase17 panic return expression" {
     try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/panic_return_expression.invalid.conception");
 }
+
+test "language run fixture: phase17 panic exits 101" {
+    try expectRunFixture("../../../language/phase17-runtime-failure/valid/panic_run_exits_101.valid.conception");
+}
+
+test "language backend-c fixture: phase17 panic helper emitted" {
+    try expectBackendCFixture("../../../language/phase17-runtime-failure/valid/panic_backend_helper_emitted.valid.conception");
+}
+
+test "language backend-c fixture: phase17 panic helper emitted once" {
+    try expectBackendCFixture("../../../language/phase17-runtime-failure/valid/panic_backend_helper_emitted_once.valid.conception");
+}
+
+test "language backend-c fixture: phase17 panic reason literal" {
+    try expectBackendCFixture("../../../language/phase17-runtime-failure/valid/panic_backend_reason_literal.valid.conception");
+}
+
+test "language backend-c fixture: phase17 panic has no test runner dependency" {
+    try expectBackendCFixture("../../../language/phase17-runtime-failure/valid/panic_backend_no_test_runner_dependency.valid.conception");
+}
