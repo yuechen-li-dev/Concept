@@ -1,0 +1,22 @@
+# name: extern C call bool backend
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module CAbi;
+
+extern "C" {
+    bool cpt_test_bool(bool value);
+}
+
+int main() {
+    if (cpt_test_bool(true)) {
+        return 1;
+    }
+    return 0;
+}
+
+=== c ===
+contains: int cpt_test_bool(int value);
+contains: cpt_test_bool(1)
+not_contains: cpt_f_cpt_test_bool

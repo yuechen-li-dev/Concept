@@ -398,6 +398,14 @@ const FunctionLowerer = struct {
         const expr = self.semantic_module.hir.getExpr(expr_id).*;
         switch (expr.kind) {
             .machine_step => |machine_expr| return try self.lowerMachineStepStmt(expr, machine_expr, block_id),
+            .call => |call| {
+                const callee = self.semantic_module.hir.getFunction(call.function);
+                if (sameType(callee.return_type, self.semantic_module.types.voidType())) {
+                    return try self.lowerCallStmt(expr, call, block_id);
+                }
+                const lowered = try self.lowerExpr(expr_id, block_id);
+                return lowered.block;
+            },
             .interface_call => |call| {
                 if (sameType(call.result_type, self.semantic_module.types.voidType())) {
                     return try self.lowerInterfaceCallStmt(expr, call, block_id);
@@ -572,10 +580,6 @@ const FunctionLowerer = struct {
     }
 
     fn lowerCall(self: *FunctionLowerer, expr: hir.HirExpr, call: anytype, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
-        if (self.semantic_module.hir.getFunction(call.function).is_extern) {
-            return error.ExternCLinkageDeferred;
-        }
-
         const args = try self.allocator.alloc(mir.MirOperand, call.args.len);
         var args_owned = true;
         var initialized: usize = 0;
@@ -590,15 +594,47 @@ const FunctionLowerer = struct {
         }
 
         const temp = try self.addTemp(try self.inferExprTypeFrom(expr));
+        const callee = self.semantic_module.hir.getFunction(call.function);
+        const call_rvalue: mir.MirRvalue = if (callee.is_extern)
+            .{ .call = .{ .callee = .{ .extern_c = .{ .function = call.function, .symbol = callee.c_symbol_name orelse return error.InvalidMirLowering, .result_type = callee.return_type } }, .args = args } }
+        else
+            .{ .call = .{ .callee = .{ .internal = call.function }, .args = args } };
         args_owned = false;
         try self.store.appendStatement(current, .{
             .span = expr.span,
             .kind = mir.MirStatementKind.assignTo(
                 mir.MirPlace.localPlace(temp),
-                .{ .call = .{ .function = call.function, .args = args } },
+                call_rvalue,
             ),
         });
         return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = current };
+    }
+
+    fn lowerCallStmt(self: *FunctionLowerer, expr: hir.HirExpr, call: anytype, block_id: mir.MirBlockId) LoweringError!mir.MirBlockId {
+        const args = try self.allocator.alloc(mir.MirOperand, call.args.len);
+        var args_owned = true;
+        var initialized: usize = 0;
+        errdefer if (args_owned) deinitInitializedOperands(self.allocator, args, initialized);
+
+        var current = block_id;
+        for (call.args) |arg_expr| {
+            const lowered = try self.lowerExpr(arg_expr, current);
+            args[initialized] = lowered.operand;
+            initialized += 1;
+            current = lowered.block;
+        }
+
+        const callee = self.semantic_module.hir.getFunction(call.function);
+        const call_stmt: mir.MirCall = if (callee.is_extern)
+            .{ .callee = .{ .extern_c = .{ .function = call.function, .symbol = callee.c_symbol_name orelse return error.InvalidMirLowering, .result_type = callee.return_type } }, .args = args }
+        else
+            .{ .callee = .{ .internal = call.function }, .args = args };
+        args_owned = false;
+        try self.store.appendStatement(current, .{
+            .span = expr.span,
+            .kind = .{ .call = call_stmt },
+        });
+        return current;
     }
 
     fn lowerInterfaceCallStmt(self: *FunctionLowerer, expr: hir.HirExpr, call: hir.HirInterfaceCall, block_id: mir.MirBlockId) LoweringError!mir.MirBlockId {
@@ -1549,8 +1585,8 @@ test "MIR lowering validates Phase 7 struct value params returns and calls" {
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "Function sum -> TypeId(1)") != null);
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "FieldAccess(Copy(MirLocalId(3)), FieldId(0))") != null);
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "FieldAccess(Copy(MirLocalId(3)), FieldId(1))") != null);
-    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Call FunctionId(0)(Int 3, Int 4)") != null);
-    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Call FunctionId(1)(Copy(MirLocalId(") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Call internal FunctionId(0)(Int 3, Int 4)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Call internal FunctionId(1)(Copy(MirLocalId(") != null);
 }
 
 test "MIR lowering permits machine-containing modules" {
@@ -1780,7 +1816,7 @@ test "MIR lowering debug snapshot lowers decide in call argument" {
     defer std.testing.allocator.free(snapshot);
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "Function main") != null);
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "temp bestValue") != null);
-    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Call FunctionId(0)(Copy(") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Call internal FunctionId(0)(Copy(") != null);
 }
 
 test "MIR lowering skips function declarations without bodies" {
@@ -2016,14 +2052,14 @@ test "MIR lowering lowers function call temp" {
     const block = mir_module.store.getBlock(main_function.blocks[0]);
     try std.testing.expectEqual(@as(usize, 1), block.statements.len);
     const lowered_call = block.statements[0].kind.assign.rvalue.call;
-    try std.testing.expectEqual(hir.FunctionId{ .index = 0 }, lowered_call.function);
+    try std.testing.expectEqual(hir.FunctionId{ .index = 0 }, lowered_call.callee.internal);
     try std.testing.expectEqual(@as(usize, 2), lowered_call.args.len);
     try std.testing.expectEqualStrings("1", lowered_call.args[0].int_literal);
     try std.testing.expectEqualStrings("2", lowered_call.args[1].int_literal);
     try std.testing.expectEqual(main_function.locals[0], block.terminator.?.kind.return_.?.copy.local);
 }
 
-test "MIR lowering rejects extern C calls until Phase 15 M3" {
+test "MIR lowering lowers extern C value calls" {
     var module = try newModule();
     defer module.deinit();
 
@@ -2037,7 +2073,48 @@ test "MIR lowering rejects extern C calls until Phase 15 M3" {
     const call = try module.hir.addExpr(.{ .call = .{ .function = abs, .args = args } }, hir.synthetic_span);
     try setBody(&module, main, &.{try module.hir.addStmt(.{ .return_stmt = call }, hir.synthetic_span)});
 
-    try std.testing.expectError(error.ExternCLinkageDeferred, lowerModule(std.testing.allocator, &module));
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), mir_module.store.functions.items.len);
+    const block = mir_module.store.getBlock(mir_module.store.functions.items[0].blocks[0]);
+    const lowered_call = block.statements[0].kind.assign.rvalue.call;
+    try std.testing.expectEqual(hir.FunctionId{ .index = 0 }, lowered_call.callee.extern_c.function);
+    try std.testing.expectEqual(abs_name, lowered_call.callee.extern_c.symbol);
+    try std.testing.expectEqual(module.types.intType(), lowered_call.callee.extern_c.result_type);
+    try std.testing.expectEqual(@as(usize, 1), lowered_call.args.len);
+    try std.testing.expectEqualStrings("1", lowered_call.args[0].int_literal);
+
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Call extern C FunctionId(0) symbol SymbolId(") != null);
+}
+
+test "MIR lowering lowers void extern C calls as statements" {
+    var module = try newModule();
+    defer module.deinit();
+
+    const observe_name = try intern(&module, "observe");
+    const observe = try module.hir.addExternFunction(observe_name, module.types.voidType(), .c, observe_name, hir.synthetic_span, hir.synthetic_span);
+    _ = try addParam(&module, observe, "value", module.types.intType());
+
+    const main = try addFunction(&module, "main", module.types.intType(), false);
+    const args = try std.testing.allocator.alloc(hir.ExprId, 1);
+    args[0] = try intExpr(&module, "3");
+    const call = try module.hir.addExpr(.{ .call = .{ .function = observe, .args = args } }, hir.synthetic_span);
+    const call_stmt = try module.hir.addStmt(.{ .expr_stmt = call }, hir.synthetic_span);
+    const ret = try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "0") }, hir.synthetic_span);
+    try setBody(&module, main, &.{ call_stmt, ret });
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+
+    const block = mir_module.store.getBlock(mir_module.store.functions.items[0].blocks[0]);
+    const lowered_call = block.statements[0].kind.call;
+    try std.testing.expectEqual(hir.FunctionId{ .index = 0 }, lowered_call.callee.extern_c.function);
+    try std.testing.expectEqual(observe_name, lowered_call.callee.extern_c.symbol);
+    try std.testing.expectEqual(module.types.voidType(), lowered_call.callee.extern_c.result_type);
+    try std.testing.expectEqual(@as(usize, 1), lowered_call.args.len);
 }
 
 test "MIR lowering lowers if without else" {

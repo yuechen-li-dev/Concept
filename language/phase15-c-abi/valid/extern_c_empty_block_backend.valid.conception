@@ -1,0 +1,18 @@
+# name: extern C empty block backend
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module CAbi;
+
+extern "C" {
+}
+
+int main() {
+    return 0;
+}
+
+=== c ===
+contains: int main(void)
+not_contains: extern
+not_contains: cpt_f_

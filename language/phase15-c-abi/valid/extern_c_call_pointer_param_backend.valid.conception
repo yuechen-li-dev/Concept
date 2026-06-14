@@ -1,0 +1,24 @@
+# name: extern C call pointer param backend
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module CAbi;
+
+extern "C" {
+    void consume_int_ptr(int* value);
+    void* passthrough(void* value);
+}
+
+int main() {
+    int value = 3;
+    consume_int_ptr(&value);
+    return 0;
+}
+
+=== c ===
+contains: void consume_int_ptr(int* value);
+contains: void* passthrough(void* value);
+contains: consume_int_ptr(&cpt_l_value_
+not_contains: cpt_f_consume_int_ptr
+not_contains: void consume_int_ptr(int* value) {

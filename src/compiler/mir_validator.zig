@@ -123,6 +123,12 @@ const Validator = struct {
                     try self.report(.InvalidMirType, statement.span, diagnostics.invalidMirType);
                 }
             },
+            .call => |call| {
+                const call_type = try self.validateCall(function_id, call, statement.span);
+                if (call_type != null and !sameType(call_type.?, self.semantic_module.types.voidType())) {
+                    try self.report(.InvalidMirType, statement.span, diagnostics.invalidMirType);
+                }
+            },
             .interface_call => |call| {
                 const call_type = try self.rvalueType(function_id, .{ .interface_call = call }, statement.span);
                 if (call_type != null and !sameType(call_type.?, self.semantic_module.types.voidType())) {
@@ -350,25 +356,7 @@ const Validator = struct {
                 }
             },
             .call => |call| blk: {
-                if (!self.containsHirFunction(call.function)) {
-                    try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
-                    break :blk null;
-                }
-                const callee = self.semantic_module.hir.getFunction(call.function);
-                try self.requireValidType(callee.return_type, span);
-                if (call.args.len != callee.params.len) {
-                    try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
-                    break :blk callee.return_type;
-                }
-                for (call.args, callee.params) |arg, param_id| {
-                    const arg_type = try self.operandType(function_id, arg, span);
-                    const param_type = self.semantic_module.hir.getParam(param_id).type_id;
-                    try self.requireValidType(param_type, span);
-                    if (arg_type != null and !sameType(arg_type.?, param_type)) {
-                        try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
-                    }
-                }
-                break :blk callee.return_type;
+                break :blk try self.validateCall(function_id, call, span);
             },
             .interface_call => |call| blk: {
                 try self.requireValidType(call.result_type, span);
@@ -578,6 +566,49 @@ const Validator = struct {
         return null;
     }
 
+    fn validateCall(self: *Validator, function_id: mir.MirFunctionId, call: mir.MirCall, span: ?diagnostics.SourceSpan) ValidationError!?types.TypeId {
+        const callee_function_id = call.callee.functionId();
+        if (!self.containsHirFunction(callee_function_id)) {
+            try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
+            return null;
+        }
+
+        const callee = self.semantic_module.hir.getFunction(callee_function_id);
+        switch (call.callee) {
+            .internal => {
+                if (callee.is_extern) {
+                    try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
+                }
+            },
+            .extern_c => |extern_c| {
+                if (!callee.is_extern or callee.extern_abi == null or callee.extern_abi.? != .c) {
+                    try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
+                }
+                if (callee.c_symbol_name == null or callee.c_symbol_name.?.index != extern_c.symbol.index) {
+                    try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
+                }
+                if (!sameType(callee.return_type, extern_c.result_type)) {
+                    try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                }
+            },
+        }
+
+        try self.requireValidType(callee.return_type, span);
+        if (call.args.len != callee.params.len) {
+            try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
+            return callee.return_type;
+        }
+        for (call.args, callee.params) |arg, param_id| {
+            const arg_type = try self.operandType(function_id, arg, span);
+            const param_type = self.semantic_module.hir.getParam(param_id).type_id;
+            try self.requireValidType(param_type, span);
+            if (arg_type != null and !sameType(arg_type.?, param_type)) {
+                try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+            }
+        }
+        return callee.return_type;
+    }
+
     fn requireValidType(self: *Validator, type_id: types.TypeId, span: ?diagnostics.SourceSpan) ValidationError!void {
         if (!self.semantic_module.types.contains(type_id)) {
             try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
@@ -693,6 +724,11 @@ const TestContext = struct {
         const function_id = try self.module.hir.addFunction(name_id, return_type, synthetic_span);
         if (has_body) self.module.hir.setFunctionBody(function_id, try self.module.hir.addStmt(.{ .block = &.{} }, synthetic_span));
         return function_id;
+    }
+
+    fn externFunction(self: *TestContext, name: []const u8, return_type: types.TypeId) !hir.FunctionId {
+        const name_id = try self.module.interner.intern(name);
+        return self.module.hir.addExternFunction(name_id, return_type, .c, name_id, synthetic_span, synthetic_span);
     }
 
     fn param(self: *TestContext, function_id: hir.FunctionId, name: []const u8, type_id: types.TypeId) !hir.ParamId {
@@ -817,9 +853,46 @@ test "MIR validator accepts valid call MIR" {
     const temp = try built.module.store.addLocal(built.function, null, .temp, ctx.module.types.intType(), synthetic_span);
     const args = try std.testing.allocator.alloc(mir.MirOperand, 1);
     args[0] = try mir.MirOperand.intLiteral(std.testing.allocator, "1");
-    try built.module.store.appendStatement(built.block, .{ .span = synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = temp }, .{ .call = .{ .function = callee, .args = args } }) });
+    try built.module.store.appendStatement(built.block, .{ .span = synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = temp }, .{ .call = .{ .callee = .{ .internal = callee }, .args = args } }) });
     try built.module.store.setTerminator(built.block, .{ .span = synthetic_span, .kind = mir.MirTerminatorKind.returnValue(mir.MirOperand.copyPlace(.{ .local = temp })) });
     try ctx.validateOk(&built.module);
+}
+
+test "MIR validator validates extern C call linkage" {
+    var ctx = try TestContext.init();
+    defer ctx.deinit();
+    const extern_abs = try ctx.externFunction("abs", ctx.module.types.intType());
+    _ = try ctx.param(extern_abs, "value", ctx.module.types.intType());
+
+    var valid = try validMirFunction(&ctx, ctx.module.types.intType());
+    defer valid.module.deinit();
+    const valid_temp = try valid.module.store.addLocal(valid.function, null, .temp, ctx.module.types.intType(), synthetic_span);
+    const valid_args = try std.testing.allocator.alloc(mir.MirOperand, 1);
+    valid_args[0] = try mir.MirOperand.intLiteral(std.testing.allocator, "1");
+    const symbol = ctx.module.hir.getFunction(extern_abs).c_symbol_name.?;
+    try valid.module.store.appendStatement(valid.block, .{ .span = synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = valid_temp }, .{ .call = .{ .callee = .{ .extern_c = .{ .function = extern_abs, .symbol = symbol, .result_type = ctx.module.types.intType() } }, .args = valid_args } }) });
+    try valid.module.store.setTerminator(valid.block, .{ .span = synthetic_span, .kind = mir.MirTerminatorKind.returnValue(mir.MirOperand.copyPlace(.{ .local = valid_temp })) });
+    try ctx.validateOk(&valid.module);
+
+    var internal_to_extern = try validMirFunction(&ctx, ctx.module.types.intType());
+    defer internal_to_extern.module.deinit();
+    const internal_temp = try internal_to_extern.module.store.addLocal(internal_to_extern.function, null, .temp, ctx.module.types.intType(), synthetic_span);
+    const internal_args = try std.testing.allocator.alloc(mir.MirOperand, 1);
+    internal_args[0] = try mir.MirOperand.intLiteral(std.testing.allocator, "1");
+    try internal_to_extern.module.store.appendStatement(internal_to_extern.block, .{ .span = synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = internal_temp }, .{ .call = .{ .callee = .{ .internal = extern_abs }, .args = internal_args } }) });
+    try internal_to_extern.module.store.setTerminator(internal_to_extern.block, .{ .span = synthetic_span, .kind = mir.MirTerminatorKind.returnValue(mir.MirOperand.copyPlace(.{ .local = internal_temp })) });
+    try ctx.validateFail(&internal_to_extern.module, .InvalidMirOperand);
+
+    const ordinary = try ctx.function("ordinary", ctx.module.types.intType(), true);
+    _ = try ctx.param(ordinary, "value", ctx.module.types.intType());
+    var extern_to_internal = try validMirFunction(&ctx, ctx.module.types.intType());
+    defer extern_to_internal.module.deinit();
+    const extern_temp = try extern_to_internal.module.store.addLocal(extern_to_internal.function, null, .temp, ctx.module.types.intType(), synthetic_span);
+    const extern_args = try std.testing.allocator.alloc(mir.MirOperand, 1);
+    extern_args[0] = try mir.MirOperand.intLiteral(std.testing.allocator, "1");
+    try extern_to_internal.module.store.appendStatement(extern_to_internal.block, .{ .span = synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = extern_temp }, .{ .call = .{ .callee = .{ .extern_c = .{ .function = ordinary, .symbol = symbol, .result_type = ctx.module.types.intType() } }, .args = extern_args } }) });
+    try extern_to_internal.module.store.setTerminator(extern_to_internal.block, .{ .span = synthetic_span, .kind = mir.MirTerminatorKind.returnValue(mir.MirOperand.copyPlace(.{ .local = extern_temp })) });
+    try ctx.validateFail(&extern_to_internal.module, .InvalidMirOperand);
 }
 
 test "MIR validator checks arena reset and destroy operands" {
@@ -911,7 +984,7 @@ test "MIR validator rejects type params in executable MIR" {
     const temp = try call_type_param.module.store.addLocal(call_type_param.function, null, .temp, ctx.module.types.intType(), synthetic_span);
     const args = try std.testing.allocator.alloc(mir.MirOperand, 1);
     args[0] = try mir.MirOperand.intLiteral(std.testing.allocator, "1");
-    try call_type_param.module.store.appendStatement(call_type_param.block, .{ .span = synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = temp }, .{ .call = .{ .function = callee, .args = args } }) });
+    try call_type_param.module.store.appendStatement(call_type_param.block, .{ .span = synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = temp }, .{ .call = .{ .callee = .{ .internal = callee }, .args = args } }) });
     try call_type_param.module.store.setTerminator(call_type_param.block, .{ .span = synthetic_span, .kind = mir.MirTerminatorKind.returnValue(mir.MirOperand.copyPlace(.{ .local = temp })) });
     try ctx.validateFail(&call_type_param.module, .InvalidMirType);
 }
@@ -942,7 +1015,7 @@ test "MIR validator rejects switch and call mismatches" {
     var call_count = try validMirFunction(&ctx, ctx.module.types.intType());
     defer call_count.module.deinit();
     const count_temp = try call_count.module.store.addLocal(call_count.function, null, .temp, ctx.module.types.intType(), synthetic_span);
-    try call_count.module.store.appendStatement(call_count.block, .{ .span = synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = count_temp }, .{ .call = .{ .function = callee, .args = &.{} } }) });
+    try call_count.module.store.appendStatement(call_count.block, .{ .span = synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = count_temp }, .{ .call = .{ .callee = .{ .internal = callee }, .args = &.{} } }) });
     try call_count.module.store.setTerminator(call_count.block, .{ .span = synthetic_span, .kind = mir.MirTerminatorKind.returnValue(mir.MirOperand.copyPlace(.{ .local = count_temp })) });
     try ctx.validateFail(&call_count.module, .InvalidMirOperand);
 
@@ -951,7 +1024,7 @@ test "MIR validator rejects switch and call mismatches" {
     const type_temp = try call_type.module.store.addLocal(call_type.function, null, .temp, ctx.module.types.intType(), synthetic_span);
     const args = try std.testing.allocator.alloc(mir.MirOperand, 1);
     args[0] = mir.MirOperand.boolLiteral(false);
-    try call_type.module.store.appendStatement(call_type.block, .{ .span = synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = type_temp }, .{ .call = .{ .function = callee, .args = args } }) });
+    try call_type.module.store.appendStatement(call_type.block, .{ .span = synthetic_span, .kind = mir.MirStatementKind.assignTo(.{ .local = type_temp }, .{ .call = .{ .callee = .{ .internal = callee }, .args = args } }) });
     try call_type.module.store.setTerminator(call_type.block, .{ .span = synthetic_span, .kind = mir.MirTerminatorKind.returnValue(mir.MirOperand.copyPlace(.{ .local = type_temp })) });
     try ctx.validateFail(&call_type.module, .InvalidMirType);
 }

@@ -2635,6 +2635,12 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase15-c-abi/valid/extern_c_arena_pointer_param.valid.conception");
     try expectCheckFixture("../../../language/phase15-c-abi/valid/extern_c_allocator_pointer_param.valid.conception");
     try expectCheckFixture("../../../language/phase15-c-abi/valid/extern_c_call_resolves_semantic.valid.conception");
+    try expectBackendCFixture("../../../language/phase15-c-abi/valid/extern_c_call_abs_backend.valid.conception");
+    try expectBackendCFixture("../../../language/phase15-c-abi/valid/extern_c_prototype_multiple.valid.conception");
+    try expectBackendCFixture("../../../language/phase15-c-abi/valid/extern_c_call_bool_backend.valid.conception");
+    try expectBackendCFixture("../../../language/phase15-c-abi/valid/extern_c_call_pointer_param_backend.valid.conception");
+    try expectBackendCFixture("../../../language/phase15-c-abi/valid/extern_c_empty_block_backend.valid.conception");
+    try expectRunFixture("../../../language/phase15-c-abi/valid/extern_c_call_abs_run.valid.conception");
     try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_duplicate_symbol_same_block.invalid.conception");
     try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_duplicate_symbol_across_blocks.invalid.conception");
     try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_duplicate_top_level_name.invalid.conception");
@@ -2645,6 +2651,9 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_unsupported_param_dyn.invalid.conception");
     try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_unsupported_param_manual_init.invalid.conception");
     try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_void_param_invalid.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_void_call_used_as_value.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_call_wrong_arg_type.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_call_wrong_arity.invalid.conception");
 
     try expectParseFixture("../../../language/phase14-interfaces/valid/interface_single_requirement.valid.conception");
     try expectCheckFixture("../../../language/phase14-interfaces/valid/interface_multiple_requirements.valid.conception");

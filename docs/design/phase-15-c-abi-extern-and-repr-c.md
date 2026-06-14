@@ -16,8 +16,10 @@ reuse `HirFunction` with explicit `is_extern`, ABI, ABI-span, and C symbol-name
 metadata. They have no body, are visible to ordinary call resolution, and are
 type-checked with ordinary call arity/type rules. P15-M2 also validates the v0 C
 ABI type subset, rejects duplicate extern C symbols, and stops emitting
-`CON0259` for valid declarations. MIR extern call lowering, backend C prototype
-emission, linking, headers, `export "C"`, and `repr(C)` remain deferred.
+`CON0259` for valid declarations. P15-M3 lowers extern C calls through MIR,
+emits backend C prototypes for extern declarations, emits calls with declared C
+symbol names, and keeps headers, includes, linker flags, `export "C"`, and
+`repr(C)` deferred.
 
 ## Core doctrine
 
@@ -114,7 +116,7 @@ P15-M1 implementation status:
 - extern variables are not supported;
 - `extern "C++"` and all other ABI strings are rejected with `CON026A`.
 
-P15-M2 implementation status:
+P15-M2/P15-M3 implementation status:
 
 - valid extern C function declarations lower to HIR functions;
 - HIR stores `is_extern`, `extern_abi = c`, the ABI span, and the C symbol name;
@@ -127,9 +129,19 @@ P15-M2 implementation status:
 - duplicate extern C symbols are rejected with `CON0265`;
 - duplicate extern-vs-ordinary top-level names use the existing `CON0020`;
 - `CON0259` is no longer emitted for valid extern declarations;
-- MIR lowering rejects calls to extern functions with a clear M3-deferred error;
-- backend prototype emission, linker behavior, headers/includes, `export "C"`,
-  and `repr(C)` remain deferred.
+- P15-M3 removes the deferred MIR extern-call error for supported declarations;
+- MIR calls distinguish Concept-internal callees from extern C callees;
+- extern C calls lower through MIR with the HIR function id, C symbol name,
+  result type, and lowered arguments;
+- the MIR validator checks extern call linkage, argument count/type matching,
+  result type metadata, and symbol presence against the HIR declaration;
+- the C backend emits one plain prototype for each extern C declaration in the
+  compiled unit;
+- extern declarations do not produce MIR functions or generated C bodies;
+- extern calls emit the declared C symbol name instead of `cpt_f_*` names;
+- the `abs` smoke fixture runs through the hosted C toolchain with exit code 7;
+- linker behavior, headers/includes, `export "C"`, and `repr(C)` remain
+  deferred.
 
 ## 3. Source syntax: export "C" functions
 
@@ -301,7 +313,8 @@ HIR requirements:
 - extern declarations are visible to normal call resolution;
 - extern declarations are not required to have bodies;
 - extern declarations do not trigger missing-body errors;
-- P15-M2 keeps extern call lowering deferred to M3;
+- P15-M3 lowers extern calls explicitly in MIR rather than as internal Concept
+  calls;
 - exported functions lower as ordinary functions with C symbol metadata;
 - the `repr(C)` marker is stored on HIR structs.
 

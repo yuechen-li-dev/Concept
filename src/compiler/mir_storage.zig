@@ -344,6 +344,7 @@ const Analyzer = struct {
                 if (self.had_error != had_error_before) return;
                 try self.writePlace(states, assignment.place, statement.span);
             },
+            .call => |call| for (call.args) |arg| try self.readOperand(states, arg, statement.span),
             .interface_call => |call| {
                 try self.readOperand(states, call.receiver, statement.span);
                 for (call.args) |arg| try self.readOperand(states, arg, statement.span);

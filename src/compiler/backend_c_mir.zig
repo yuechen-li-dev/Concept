@@ -79,6 +79,9 @@ pub fn emitExecutableFromMir(
     const emitted_arena_storage_decl = try emitArenaStorageHelperDeclarations(writer, &ctx);
     if (emitted_arena_storage_decl and mir_module.store.functions.items.len > 0) try writer.writeByte('\n');
 
+    const emitted_extern_c_prototypes = try emitExternCPrototypes(writer, &ctx);
+    if (emitted_extern_c_prototypes and mir_module.store.functions.items.len > 0) try writer.writeByte('\n');
+
     if (mir_module.store.functions.items.len > 1) {
         for (mir_module.store.functions.items, 0..) |function, index| {
             try emitPrototype(writer, &ctx, .{ .index = @intCast(index) }, function);
@@ -765,6 +768,38 @@ fn emitPrototype(writer: anytype, ctx: *const BackendContext, function_id: mir.M
     try writer.writeAll(");\n");
 }
 
+fn emitExternCPrototypes(writer: anytype, ctx: *const BackendContext) EmitError!bool {
+    var emitted_any = false;
+    for (ctx.module.hir.functions.items) |function| {
+        if (!function.is_extern) continue;
+        if (function.extern_abi == null or function.extern_abi.? != .c or function.c_symbol_name == null) {
+            return error.InvalidExecutable;
+        }
+        try emitCType(writer, ctx, function.return_type, function.span);
+        try writer.writeByte(' ');
+        try emitCSymbolName(writer, ctx.module, function.c_symbol_name.?);
+        try writer.writeByte('(');
+        try emitExternCParamList(writer, ctx, function);
+        try writer.writeAll(");\n");
+        emitted_any = true;
+    }
+    return emitted_any;
+}
+
+fn emitExternCParamList(writer: anytype, ctx: *const BackendContext, function: hir.HirFunction) EmitError!void {
+    if (function.params.len == 0) {
+        try writer.writeAll("void");
+        return;
+    }
+    for (function.params, 0..) |param_id, index| {
+        const param = ctx.module.hir.getParam(param_id);
+        if (index != 0) try writer.writeAll(", ");
+        try emitCType(writer, ctx, param.type_id, param.span);
+        try writer.writeByte(' ');
+        try emitCSymbolName(writer, ctx.module, param.name);
+    }
+}
+
 fn emitFunction(writer: anytype, ctx: *const BackendContext, function_id: mir.MirFunctionId, function: mir.MirFunction) EmitError!void {
     try emitCType(writer, ctx, function.return_type, function.source_span);
     try writer.writeByte(' ');
@@ -819,6 +854,11 @@ fn emitStatement(writer: anytype, ctx: *const BackendContext, statement: mir.Mir
                     try writer.writeAll(";\n");
                 },
             }
+        },
+        .call => |call| {
+            try writer.writeAll("    ");
+            try emitCall(writer, ctx, call);
+            try writer.writeAll(";\n");
         },
         .interface_call => |call| {
             try writer.writeAll("    ");
@@ -1008,14 +1048,7 @@ fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue
             try writer.writeByte(')');
         },
         .call => |call| {
-            const callee = ctx.module.hir.getFunction(call.function);
-            try emitHirFunctionName(writer, ctx, call.function, callee.*);
-            try writer.writeByte('(');
-            for (call.args, 0..) |arg, index| {
-                if (index != 0) try writer.writeAll(", ");
-                try emitOperand(writer, ctx, arg);
-            }
-            try writer.writeByte(')');
+            try emitCall(writer, ctx, call);
         },
         .arena_alloc => |arena_alloc| {
             try writer.writeByte('(');
@@ -1074,6 +1107,22 @@ fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue
             try emitEnumPayloadFieldName(writer, ctx.module, payload_field.name, payload_index);
         },
     }
+}
+
+fn emitCall(writer: anytype, ctx: *const BackendContext, call: mir.MirCall) EmitError!void {
+    switch (call.callee) {
+        .internal => |function_id| {
+            const callee = ctx.module.hir.getFunction(function_id);
+            try emitHirFunctionName(writer, ctx, function_id, callee.*);
+        },
+        .extern_c => |extern_c| try emitCSymbolName(writer, ctx.module, extern_c.symbol),
+    }
+    try writer.writeByte('(');
+    for (call.args, 0..) |arg, index| {
+        if (index != 0) try writer.writeAll(", ");
+        try emitOperand(writer, ctx, arg);
+    }
+    try writer.writeByte(')');
 }
 
 fn emitDynCoerce(writer: anytype, ctx: *const BackendContext, coerce: anytype) EmitError!void {
@@ -1398,6 +1447,10 @@ fn emitFunctionName(writer: anytype, module: *const semantics.SemanticModule, sy
     }
     try writer.writeAll("cpt_f_");
     try emitEscapedIdentifierComponent(writer, source_name);
+}
+
+fn emitCSymbolName(writer: anytype, module: *const semantics.SemanticModule, symbol: hir.SymbolId) !void {
+    try writer.writeAll(module.interner.text(symbol));
 }
 
 fn emitLocalName(writer: anytype, module: *const semantics.SemanticModule, mir_module: *const mir.MirModule, local_id: mir.MirLocalId) !void {
@@ -1880,6 +1933,96 @@ test "MIR C backend emits void helper prototype with backend-owned function name
         "module Main; void helper() { return; } int main() { return 0; }",
         "void cpt_f_helper(void);\nint main(void);\n\nvoid cpt_f_helper(void) {\ncpt_bb_0:\n    return;\n}\n\nint main(void) {\ncpt_bb_1:\n    return 0;\n}\n",
     );
+}
+
+test "MIR C backend emits extern C prototypes and symbol calls" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\extern "C" {
+        \\    int abs(int value);
+        \\}
+        \\int main() {
+        \\    return abs(-3);
+        \\}
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "int abs(int value);") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "return abs(") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "int abs(int value) {") == null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_f_abs") == null);
+}
+
+test "MIR C backend emits extern C prototype once for multiple calls" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\extern "C" {
+        \\    int abs(int value);
+        \\}
+        \\int main() {
+        \\    return abs(-3) + abs(-4);
+        \\}
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expectEqual(@as(usize, 1), countOccurrences(c_source, "int abs(int value);"));
+    try std.testing.expectEqual(@as(usize, 2), countOccurrences(c_source, "abs(") - 1);
+}
+
+test "MIR C backend keeps ordinary function mangling distinct from extern symbols" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\extern "C" {
+        \\    int c_abs(int value);
+        \\}
+        \\int abs(int value) {
+        \\    return value;
+        \\}
+        \\int main() {
+        \\    return abs(1) + c_abs(2);
+        \\}
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "int c_abs(int value);") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "int cpt_f_abs(int cpt_p_value_") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_f_abs(1)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "c_abs(2)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_f_c_abs") == null);
+}
+
+test "MIR C backend emits void extern C calls as statements" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\extern "C" {
+        \\    void observe(int value);
+        \\}
+        \\int main() {
+        \\    observe(3);
+        \\    return 0;
+        \\}
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "void observe(int value);") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "    observe(3);\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "void cpt_t_") == null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_f_observe") == null);
+}
+
+test "MIR C backend emits no extern C prototypes for empty extern block" {
+    const c_source = try emitForTest(
+        \\module Main;
+        \\extern "C" {
+        \\}
+        \\int main() {
+        \\    return 0;
+        \\}
+    );
+    defer std.testing.allocator.free(c_source);
+
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "extern") == null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "int main(void)") != null);
 }
 
 test "MIR C backend escapes keywords and invalid identifier bytes in backend names" {

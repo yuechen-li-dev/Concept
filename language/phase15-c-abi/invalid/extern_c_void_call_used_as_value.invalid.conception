@@ -1,0 +1,17 @@
+# name: extern C void call used as value
+# phase: check
+# expect: fail
+
+=== source ===
+module CAbi;
+
+extern "C" {
+    void observe(int value);
+}
+
+int main() {
+    return observe(1);
+}
+
+=== diagnostics ===
+CON0029

@@ -150,6 +150,47 @@ pub const MirInterfaceCall = struct {
     result_type: types.TypeId,
 };
 
+pub const MirCallee = union(enum) {
+    internal: hir.FunctionId,
+    extern_c: struct {
+        function: hir.FunctionId,
+        symbol: hir.SymbolId,
+        result_type: types.TypeId,
+    },
+
+    pub fn functionId(self: MirCallee) hir.FunctionId {
+        return switch (self) {
+            .internal => |function| function,
+            .extern_c => |extern_c| extern_c.function,
+        };
+    }
+};
+
+pub const MirCall = struct {
+    callee: MirCallee,
+    args: []MirOperand,
+
+    pub fn initInternal(allocator: std.mem.Allocator, function: hir.FunctionId, args: []const MirOperand) !MirCall {
+        return .{ .callee = .{ .internal = function }, .args = try cloneOperands(allocator, args) };
+    }
+
+    pub fn initExternC(allocator: std.mem.Allocator, function: hir.FunctionId, symbol: hir.SymbolId, result_type: types.TypeId, args: []const MirOperand) !MirCall {
+        return .{ .callee = .{ .extern_c = .{ .function = function, .symbol = symbol, .result_type = result_type } }, .args = try cloneOperands(allocator, args) };
+    }
+
+    fn clone(self: MirCall, allocator: std.mem.Allocator) !MirCall {
+        return switch (self.callee) {
+            .internal => |function| MirCall.initInternal(allocator, function, self.args),
+            .extern_c => |extern_c| MirCall.initExternC(allocator, extern_c.function, extern_c.symbol, extern_c.result_type, self.args),
+        };
+    }
+
+    fn deinit(self: MirCall, allocator: std.mem.Allocator) void {
+        deinitOperands(allocator, self.args);
+        if (self.args.len > 0) allocator.free(self.args);
+    }
+};
+
 pub const MirRvalue = union(enum) {
     use: MirOperand,
     move: MirPlace,
@@ -171,10 +212,7 @@ pub const MirRvalue = union(enum) {
         left: MirOperand,
         right: MirOperand,
     },
-    call: struct {
-        function: hir.FunctionId,
-        args: []MirOperand,
-    },
+    call: MirCall,
     interface_call: MirInterfaceCall,
     arena_alloc: struct {
         arena_operand: MirOperand,
@@ -239,8 +277,11 @@ pub const MirRvalue = union(enum) {
     }
 
     pub fn callFunction(allocator: std.mem.Allocator, function: hir.FunctionId, args: []const MirOperand) !MirRvalue {
-        const owned_args = try cloneOperands(allocator, args);
-        return .{ .call = .{ .function = function, .args = owned_args } };
+        return .{ .call = try MirCall.initInternal(allocator, function, args) };
+    }
+
+    pub fn callExternC(allocator: std.mem.Allocator, function: hir.FunctionId, symbol: hir.SymbolId, result_type: types.TypeId, args: []const MirOperand) !MirRvalue {
+        return .{ .call = try MirCall.initExternC(allocator, function, symbol, result_type, args) };
     }
 
     pub fn interfaceCall(allocator: std.mem.Allocator, call: MirInterfaceCall) !MirRvalue {
@@ -304,7 +345,7 @@ pub const MirRvalue = union(enum) {
                 try binary_rvalue.left.clone(allocator),
                 try binary_rvalue.right.clone(allocator),
             ),
-            .call => |call_rvalue| try MirRvalue.callFunction(allocator, call_rvalue.function, call_rvalue.args),
+            .call => |call_rvalue| .{ .call = try call_rvalue.clone(allocator) },
             .interface_call => |call| try MirRvalue.interfaceCall(allocator, call),
             .arena_alloc => |arena_alloc| MirRvalue.arenaAlloc(try arena_alloc.arena_operand.clone(allocator), arena_alloc.allocated_type, arena_alloc.result_type),
             .enum_constructor => |constructor| try MirRvalue.enumConstructor(allocator, constructor.enum_id, constructor.variant_id, constructor.args),
@@ -331,10 +372,7 @@ pub const MirRvalue = union(enum) {
                 binary_rvalue.left.deinit(allocator);
                 binary_rvalue.right.deinit(allocator);
             },
-            .call => |call_rvalue| {
-                deinitOperands(allocator, call_rvalue.args);
-                if (call_rvalue.args.len > 0) allocator.free(call_rvalue.args);
-            },
+            .call => |call_rvalue| call_rvalue.deinit(allocator),
             .interface_call => |call| {
                 call.receiver.deinit(allocator);
                 deinitOperands(allocator, call.args);
@@ -380,6 +418,7 @@ pub const MirStatementKind = union(enum) {
         place: MirPlace,
         rvalue: MirRvalue,
     },
+    call: MirCall,
     interface_call: MirInterfaceCall,
     drop: struct {
         place: MirPlace,
@@ -391,6 +430,14 @@ pub const MirStatementKind = union(enum) {
 
     pub fn assignTo(place: MirPlace, rvalue: MirRvalue) MirStatementKind {
         return .{ .assign = .{ .place = place, .rvalue = rvalue } };
+    }
+
+    pub fn callFunction(allocator: std.mem.Allocator, function: hir.FunctionId, args: []const MirOperand) !MirStatementKind {
+        return .{ .call = try MirCall.initInternal(allocator, function, args) };
+    }
+
+    pub fn callExternC(allocator: std.mem.Allocator, function: hir.FunctionId, symbol: hir.SymbolId, result_type: types.TypeId, args: []const MirOperand) !MirStatementKind {
+        return .{ .call = try MirCall.initExternC(allocator, function, symbol, result_type, args) };
     }
 
     pub fn interfaceCall(allocator: std.mem.Allocator, call: MirInterfaceCall) !MirStatementKind {
@@ -425,6 +472,7 @@ pub const MirStatementKind = union(enum) {
     fn clone(self: MirStatementKind, allocator: std.mem.Allocator) !MirStatementKind {
         return switch (self) {
             .assign => |assignment| MirStatementKind.assignTo(assignment.place, try assignment.rvalue.clone(allocator)),
+            .call => |call| .{ .call = try call.clone(allocator) },
             .interface_call => |call| try MirStatementKind.interfaceCall(allocator, call),
             .drop => |drop| MirStatementKind.dropPlace(drop.place, drop.function),
             .arena_reset => |arena_operand| MirStatementKind.arenaReset(try arena_operand.clone(allocator)),
@@ -436,6 +484,7 @@ pub const MirStatementKind = union(enum) {
     fn deinit(self: MirStatementKind, allocator: std.mem.Allocator) void {
         switch (self) {
             .assign => |assignment| assignment.rvalue.deinit(allocator),
+            .call => |call| call.deinit(allocator),
             .interface_call => |call| {
                 call.receiver.deinit(allocator);
                 deinitOperands(allocator, call.args);
@@ -782,6 +831,10 @@ pub const MirStore = struct {
                 try writer.writeAll(" = ");
                 try writeRvalueDebug(writer, assignment.rvalue);
             },
+            .call => |call| {
+                try writer.writeAll("Statement");
+                try writeCallDebug(writer, call);
+            },
             .interface_call => |call| {
                 try writer.print("InterfaceCall {f} {f} #{d} -> {f}(", .{ call.interface_id, call.requirement_id, call.requirement_index, call.result_type });
                 try writeOperandDebug(writer, call.receiver);
@@ -902,14 +955,7 @@ fn writeRvalueDebug(writer: *std.Io.Writer, rvalue: MirRvalue) !void {
             try writer.writeAll(", ");
             try writeOperandDebug(writer, binary_rvalue.right);
         },
-        .call => |call_rvalue| {
-            try writer.print("Call {f}(", .{call_rvalue.function});
-            for (call_rvalue.args, 0..) |arg, index| {
-                if (index != 0) try writer.writeAll(", ");
-                try writeOperandDebug(writer, arg);
-            }
-            try writer.writeByte(')');
-        },
+        .call => |call_rvalue| try writeCallDebug(writer, call_rvalue),
         .interface_call => |call| {
             try writer.print("InterfaceCall {f} {f} #{d} -> {f}(", .{ call.interface_id, call.requirement_id, call.requirement_index, call.result_type });
             try writeOperandDebug(writer, call.receiver);
@@ -975,6 +1021,18 @@ fn writeRvalueDebug(writer: *std.Io.Writer, rvalue: MirRvalue) !void {
             try writer.writeByte(')');
         },
     }
+}
+
+fn writeCallDebug(writer: *std.Io.Writer, call: MirCall) !void {
+    switch (call.callee) {
+        .internal => |function| try writer.print("Call internal {f}(", .{function}),
+        .extern_c => |extern_c| try writer.print("Call extern C {f} symbol {f} -> {f}(", .{ extern_c.function, extern_c.symbol, extern_c.result_type }),
+    }
+    for (call.args, 0..) |arg, index| {
+        if (index != 0) try writer.writeAll(", ");
+        try writeOperandDebug(writer, arg);
+    }
+    try writer.writeByte(')');
 }
 
 fn nextIndex(len: usize, overflow_error: anyerror) !u32 {
@@ -1192,7 +1250,7 @@ test "MIR unary binary and call rvalues render" {
     defer std.testing.allocator.free(rendered);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "MirLocalId(0) = Unary - Int 7") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "MirLocalId(0) = Binary + Copy(MirLocalId(0)), Int 2") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "MirLocalId(0) = Call FunctionId(9)(Copy(MirLocalId(0)), Bool false)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "MirLocalId(0) = Call internal FunctionId(9)(Copy(MirLocalId(0)), Bool false)") != null);
 }
 
 test "MIR terminators render and reject replacement" {

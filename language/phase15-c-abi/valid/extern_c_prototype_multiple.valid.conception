@@ -1,0 +1,22 @@
+# name: extern C prototype multiple
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module CAbi;
+
+extern "C" {
+    int abs(int value);
+    void observe(int value);
+}
+
+int main() {
+    return 0;
+}
+
+=== c ===
+contains: int abs(int value);
+contains: void observe(int value);
+not_contains: cpt_f_abs
+not_contains: cpt_f_observe
+not_contains: void observe(int value) {

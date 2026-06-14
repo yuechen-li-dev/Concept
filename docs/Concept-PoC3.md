@@ -74,9 +74,11 @@ debug output, bodies/non-function entries/varargs/unsupported ABI strings are
 rejected, and empty blocks are allowed as a parser scaffold. P15-M2 lowers
 valid extern C declarations into HIR with C ABI/linkage metadata and C symbol
 names, makes them visible to ordinary call resolution, validates a strict ABI
-type subset, and rejects duplicate extern C symbols. MIR extern call lowering,
-backend prototype emission, linking, C headers, `export "C"`, and `repr(C)`
-remain deferred.
+type subset, and rejects duplicate extern C symbols. P15-M3 lowers extern C
+calls through MIR, emits backend C prototypes for extern declarations, emits
+calls with declared C symbol names instead of Concept internal names, and keeps
+extern declarations bodyless in generated C. Headers/includes, automatic
+linking, `export "C"`, and `repr(C)` remain deferred.
 Deferred Phase 12
 work includes
 `Arena.create`, hosted runtime helper implementation, allocation failure

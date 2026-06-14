@@ -1,0 +1,17 @@
+# name: extern C call wrong arity
+# phase: check
+# expect: fail
+
+=== source ===
+module CAbi;
+
+extern "C" {
+    int abs(int value);
+}
+
+int main() {
+    return abs();
+}
+
+=== diagnostics ===
+CON0033

@@ -75,7 +75,7 @@ Invalid fixtures cover malformed template syntax, type parameters out of scope, 
 
 Phase 8 MIR/backend coverage is intentionally concrete-only: the pipeline run fixture and targeted compiler tests assert that template declarations, concepts, marker concepts, and type-parameter types do not leak into executable MIR or backend C, while deterministic instantiated function names and referenced static witness calls are emitted.
 
-Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed for compile-time execution v0. Phase 10 is closed for ownership/storage-state v0. Phase 11 is closed for first-class testing, attributes, and reasoned expectations v0. Phase 14 is closed for runtime interfaces and borrowed dyn dispatch v0: interface declaration, requirement validation, interface impl conformance, borrowed `dyn Interface&` type-surface fixtures, call-boundary concrete-to-dyn coercion fixtures, dyn method-call HIR/MIR fixtures, C backend vtable/fat-reference lowering fixtures, executable borrowed dyn dispatch fixtures, examples, mutability hardening fixtures, and backend C-shape assertions for the borrowed dyn subset. Phase 15 has started C ABI work: P15-M0 added the design, P15-M1 adds parser/AST fixtures for block-form `extern "C"` declarations, and P15-M2 adds HIR extern declarations plus ABI type validation fixtures.
+Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed for compile-time execution v0. Phase 10 is closed for ownership/storage-state v0. Phase 11 is closed for first-class testing, attributes, and reasoned expectations v0. Phase 14 is closed for runtime interfaces and borrowed dyn dispatch v0: interface declaration, requirement validation, interface impl conformance, borrowed `dyn Interface&` type-surface fixtures, call-boundary concrete-to-dyn coercion fixtures, dyn method-call HIR/MIR fixtures, C backend vtable/fat-reference lowering fixtures, executable borrowed dyn dispatch fixtures, examples, mutability hardening fixtures, and backend C-shape assertions for the borrowed dyn subset. Phase 15 has started C ABI work: P15-M0 added the design, P15-M1 adds parser/AST fixtures for block-form `extern "C"` declarations, P15-M2 adds HIR extern declarations plus ABI type validation fixtures, and P15-M3 adds MIR extern-call lowering plus backend C prototype/call-shape fixtures.
 
 ## Phase 9 compile-time execution fixtures
 
@@ -287,7 +287,11 @@ parameters, and empty blocks.
 P15-M2 check fixtures cover HIR extern declarations, multiple extern functions,
 empty extern blocks, supported pointer parameters, `bool` ABI use,
 `Arena*`/`Allocator*` opaque-handle parameters, and semantic resolution of
-ordinary calls to extern declarations.
+ordinary calls to extern declarations. P15-M3 backend and run fixtures cover
+extern C call lowering through MIR, plain C prototype emission for declarations,
+declared-symbol call emission, multiple prototypes, bool ABI spelling as C
+`int`, pointer parameter prototypes/calls, empty extern blocks, and an `abs`
+runtime smoke fixture that exits with code 7.
 
 Invalid P15-M1 parse fixtures cover unsupported ABI strings such as `"C++"`,
 missing ABI strings, missing blocks, extern function bodies, missing
@@ -296,11 +300,12 @@ semicolons, non-function entries, extern variables, and varargs.
 Invalid P15-M2 check fixtures cover duplicate extern symbols in one block and
 across blocks, extern-vs-ordinary duplicate top-level names, unsupported struct
 returns, struct parameters, struct pointer parameters, interface and dyn
-parameters, `ManualInit<T>` parameters, and `void` parameters.
+parameters, `ManualInit<T>` parameters, and `void` parameters. P15-M3 invalid
+fixtures cover extern call arity/type mismatches and using a `void` extern call
+as a value.
 
-Future valid coverage will add C ABI call lowering, `export "C"` functions,
-`repr(C)` structs, and backend-C assertions for extern prototypes, unmangled
-exported C names, and deterministic supported struct field order.
+Future valid coverage will add `export "C"` functions, `repr(C)` structs,
+unmangled exported C names, and deterministic supported struct field order.
 
 Future invalid coverage will add generic exports, `repr(C)` on non-struct
 declarations, empty `repr(C)` structs, unsupported `repr(C)` fields, machine
