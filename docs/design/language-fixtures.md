@@ -46,6 +46,8 @@ language/phase14-interfaces/valid/
 language/phase14-interfaces/invalid/
 language/phase15-c-abi/valid/
 language/phase15-c-abi/invalid/
+language/phase16-imports/valid/
+language/phase16-imports/invalid/
 ```
 
 ## Phase 5 sum-type fixtures
@@ -76,6 +78,22 @@ Invalid fixtures cover malformed template syntax, type parameters out of scope, 
 Phase 8 MIR/backend coverage is intentionally concrete-only: the pipeline run fixture and targeted compiler tests assert that template declarations, concepts, marker concepts, and type-parameter types do not leak into executable MIR or backend C, while deterministic instantiated function names and referenced static witness calls are emitted.
 
 Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed for compile-time execution v0. Phase 10 is closed for ownership/storage-state v0. Phase 11 is closed for first-class testing, attributes, and reasoned expectations v0. Phase 14 is closed for runtime interfaces and borrowed dyn dispatch v0: interface declaration, requirement validation, interface impl conformance, borrowed `dyn Interface&` type-surface fixtures, call-boundary concrete-to-dyn coercion fixtures, dyn method-call HIR/MIR fixtures, C backend vtable/fat-reference lowering fixtures, executable borrowed dyn dispatch fixtures, examples, mutability hardening fixtures, and backend C-shape assertions for the borrowed dyn subset. Phase 15 is closed for C ABI v0: extern C parser/AST/HIR fixtures, ABI type validation, extern call MIR/backend prototype and call-shape fixtures, export C parser/check/backend/run fixtures, staged `[Repr(C)]` marker fixtures, repr(C) field validation, ABI-boundary acceptance, backend layout/order/de-duplication fixtures, examples, and representative invalid fixtures for the pinned non-goals.
+
+## Phase 16 import/multi-module fixtures
+
+Phase 16 fixtures should introduce hermetic multi-file `.conception` cases. A
+single fixture may contain multiple virtual Concept source files, each with a
+stable virtual path for diagnostics, and the harness should pass those files to
+one compilation unit. The recommended embedded form is `=== file: Name.concept
+===` sections followed by the usual `=== diagnostics ===`, `=== mir ===`, or
+`=== run ===` expectations.
+
+Representative Phase 16 fixtures should cover module declaration collection,
+duplicate module diagnostics, import ordering, unknown imports, duplicate
+imports, import cycles, qualified cross-module calls, qualified type references,
+repr(C) metadata used across modules, and generated C collision avoidance. The
+fixtures should not require filesystem import search paths or sidecar files in
+v0.
 
 ## Phase 9 compile-time execution fixtures
 
