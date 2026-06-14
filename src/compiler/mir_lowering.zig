@@ -56,7 +56,8 @@ const ModuleLowerer = struct {
     }
 
     fn lowerFunction(self: *ModuleLowerer, hir_function_id: hir.FunctionId, function: hir.HirFunction) LoweringError!void {
-        const function_id = try self.mir_module.store.addFunction(hir_function_id, function.name, function.return_type, function.span);
+        const linkage: mir.MirFunctionLinkage = if (function.is_exported and function.c_symbol_name != null) .{ .export_c = .{ .symbol = function.c_symbol_name.? } } else .internal;
+        const function_id = try self.mir_module.store.addFunctionWithLinkage(hir_function_id, function.name, function.return_type, function.span, linkage);
         var function_lowerer = FunctionLowerer.init(self.allocator, self.semantic_module, &self.mir_module.store, function_id);
         defer function_lowerer.deinit();
 

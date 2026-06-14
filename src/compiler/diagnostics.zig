@@ -210,6 +210,8 @@ pub const DiagnosticCode = enum {
     UnsupportedCAbiType,
     ExternCRequiresFunctionDeclaration,
     ExternCFunctionCannotHaveBody,
+    ExportCRequiresFunctionDefinition,
+    ExportCFunctionCannotBeGeneric,
     DuplicateCAbiSymbol,
     ExternUnsupportedAbi,
     VarargsUnsupported,
@@ -404,6 +406,8 @@ pub const DiagnosticCode = enum {
             .UnsupportedCAbiType => "CON0260",
             .ExternCRequiresFunctionDeclaration => "CON0261",
             .ExternCFunctionCannotHaveBody => "CON0262",
+            .ExportCRequiresFunctionDefinition => "CON0263",
+            .ExportCFunctionCannotBeGeneric => "CON0264",
             .DuplicateCAbiSymbol => "CON0265",
             .ExternUnsupportedAbi => "CON026A",
             .VarargsUnsupported => "CON0269",
@@ -599,13 +603,22 @@ pub fn externCFunctionCannotHaveBody(span: SourceSpan) Diagnostic {
     ).withHelp("declare the foreign function signature with ';' and provide the implementation in C or another linked object");
 }
 
+pub fn exportCRequiresFunctionDefinition(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .ExportCRequiresFunctionDefinition,
+        .@"error",
+        "export C requires a function definition",
+        span,
+    ).withHelp("Phase 15 M4 supports only export \"C\" on function definitions with bodies");
+}
+
 pub fn duplicateCAbiSymbol(span: SourceSpan) Diagnostic {
     return Diagnostic.init(
         .DuplicateCAbiSymbol,
         .@"error",
-        "duplicate extern C symbol",
+        "duplicate C ABI symbol",
         span,
-    ).withHelp("Phase 15 v0 rejects duplicate extern C declarations by declared symbol name in one module");
+    ).withHelp("Phase 15 v0 rejects duplicate C ABI declarations/exports by declared symbol name in one module");
 }
 
 pub fn externUnsupportedAbi(span: SourceSpan) Diagnostic {

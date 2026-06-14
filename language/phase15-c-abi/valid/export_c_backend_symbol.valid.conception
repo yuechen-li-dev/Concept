@@ -1,0 +1,24 @@
+# name: export C backend symbol
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module CAbi;
+
+export "C" int Add(int a, int b) {
+    return a + b;
+}
+
+int Helper(int value) {
+    return value;
+}
+
+int main() {
+    return Helper(Add(1, 2));
+}
+
+=== c ===
+contains: int Add(
+contains: int cpt_f_Helper(
+contains: return Add(
+not_contains: cpt_f_Add

@@ -432,11 +432,25 @@ const Collector = struct {
     }
 
     fn declareFunction(self: *Collector, function_decl: ast.FunctionDecl) !void {
+        if (function_decl.export_abi != null) {
+            const export_name = try self.module.interner.intern(function_decl.signature.name.base.text);
+            if (self.extern_c_symbols.contains(export_name)) {
+                try self.diagnostics.append(diagnostics.duplicateCAbiSymbol(function_decl.signature.name.base.span));
+            }
+        }
         const name = try self.internFreshTopLevelName(
             function_decl.signature.name.base.text,
             function_decl.signature.name.base.span,
         ) orelse return;
         const function_id = try self.module.hir.addFunctionWithSafety(name, self.module.types.voidType(), function_decl.is_unsafe, function_decl.span);
+        if (function_decl.export_abi) |abi| {
+            if (self.extern_c_symbols.contains(name)) {
+                try self.diagnostics.append(diagnostics.duplicateCAbiSymbol(function_decl.signature.name.base.span));
+            } else {
+                try self.extern_c_symbols.put(name, function_decl.signature.name.base.span);
+                self.module.hir.markFunctionExportC(function_id, lowerExternAbi(abi), name, function_decl.export_abi_span);
+            }
+        }
         self.module.hir.setFunctionAttributes(function_id, try self.copyAttributes(function_decl.attributes));
         self.module.hir.setFunctionAllocationEffect(function_id, lowerAllocationEffect(function_decl.allocation_effect));
         if (function_decl.is_compile_time) {
@@ -740,6 +754,9 @@ const Collector = struct {
 
         if (try self.resolveTypeName(function_decl.signature.return_type)) |return_type| {
             self.module.hir.setFunctionReturnType(function_id, return_type);
+            if (function_decl.export_abi != null and !self.isSupportedCAbiReturnType(return_type)) {
+                try self.diagnostics.append(diagnostics.unsupportedCAbiType(function_decl.signature.return_type.span));
+            }
         }
 
         var param_names = std.AutoHashMap(interner.SymbolId, source.SourceSpan).init(self.allocator);
@@ -755,6 +772,9 @@ const Collector = struct {
 
             if (try self.resolveTypeName(param.type_name)) |type_id| {
                 _ = try self.module.hir.addParam(function_id, param_symbol, type_id, param.span);
+                if (function_decl.export_abi != null and !self.isSupportedCAbiParamType(type_id)) {
+                    try self.diagnostics.append(diagnostics.unsupportedCAbiType(param.type_name.span));
+                }
             }
         }
     }

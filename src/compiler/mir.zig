@@ -608,10 +608,16 @@ pub const MirModule = struct {
     }
 };
 
+pub const MirFunctionLinkage = union(enum) {
+    internal,
+    export_c: struct { symbol: hir.SymbolId },
+};
+
 pub const MirFunction = struct {
     hir_function: hir.FunctionId,
     name: hir.SymbolId,
     return_type: types.TypeId,
+    linkage: MirFunctionLinkage = .internal,
     params: []MirLocalId,
     locals: []MirLocalId,
     blocks: []MirBlockId,
@@ -673,11 +679,23 @@ pub const MirStore = struct {
         return_type: types.TypeId,
         source_span: ?SourceSpan,
     ) !MirFunctionId {
+        return self.addFunctionWithLinkage(hir_function, name, return_type, source_span, .internal);
+    }
+
+    pub fn addFunctionWithLinkage(
+        self: *MirStore,
+        hir_function: hir.FunctionId,
+        name: hir.SymbolId,
+        return_type: types.TypeId,
+        source_span: ?SourceSpan,
+        linkage: MirFunctionLinkage,
+    ) !MirFunctionId {
         const id = MirFunctionId{ .index = try nextIndex(self.functions.items.len, error.TooManyMirFunctions) };
         try self.functions.append(self.allocator, .{
             .hir_function = hir_function,
             .name = name,
             .return_type = return_type,
+            .linkage = linkage,
             .params = &.{},
             .locals = &.{},
             .blocks = &.{},

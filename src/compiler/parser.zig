@@ -186,6 +186,12 @@ pub const Parser = struct {
                     try self.reportExpectedItem("expected item declaration", self.current().span);
                     self.advance();
                 },
+                .@"export" => {
+                    if (try self.parseFunctionItem(allocator, attributes)) |item| {
+                        try items.append(item);
+                        attributes = &.{};
+                    }
+                },
                 .@"extern" => {
                     try self.rejectAttributesBeforeUnsupportedItem(attributes, allocator);
                     attributes = &.{};
@@ -1001,6 +1007,24 @@ pub const Parser = struct {
 
     fn parseFunctionDecl(self: *Parser, allocator: std.mem.Allocator, attributes: []ast.Attribute) !?ast.FunctionDecl {
         const export_token = self.match(.@"export");
+        var export_abi: ?ast.ExternAbi = null;
+        var export_abi_span: SourceSpan = .{ .start = 0, .length = 0 };
+        if (export_token != null and self.current().kind == .string_literal) {
+            const abi_token = self.advance();
+            export_abi_span = abi_token.span;
+            if (std.mem.eql(u8, abi_token.lexeme, "\"C\"")) {
+                export_abi = .c;
+            } else {
+                try self.diagnostics.append(diagnostics_model.externUnsupportedAbi(abi_token.span));
+            }
+        } else if (export_token != null and (self.current().kind == .identifier or self.current().kind == .mut or self.current().kind == .unsafe or self.current().kind == .@"comptime" or self.current().kind == .alloc or self.current().kind == .noalloc)) {
+            try self.report(.UnexpectedToken, "expected ABI string after export", self.current().span);
+        } else if (export_token != null and self.current().kind == .left_brace) {
+            try self.diagnostics.append(diagnostics_model.exportCRequiresFunctionDefinition(self.current().span));
+            self.advance();
+            try self.recoverFunctionDecl();
+            return null;
+        }
         var start_span = if (export_token) |token| token.span else self.current().span;
         var first_unsafe_token: ?Token = null;
         var compile_time_token: ?Token = null;
@@ -1120,9 +1144,15 @@ pub const Parser = struct {
             break :blk last_span;
         };
 
+        if (export_abi != null and body == null) {
+            try self.diagnostics.append(diagnostics_model.exportCRequiresFunctionDefinition(end_span));
+        }
+
         const result = ast.FunctionDecl{
             .attributes = attributes,
             .is_export = export_token != null,
+            .export_abi = export_abi,
+            .export_abi_span = export_abi_span,
             .is_unsafe = first_unsafe_token != null,
             .is_compile_time = compile_time_token != null,
             .allocation_effect = allocation_effect,

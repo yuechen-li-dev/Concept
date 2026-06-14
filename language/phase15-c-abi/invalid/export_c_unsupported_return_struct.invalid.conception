@@ -1,0 +1,17 @@
+# name: export C unsupported return struct
+# phase: check
+# expect: fail
+
+=== source ===
+module CAbi;
+
+struct Point {
+    int x;
+}
+
+export "C" Point Make(int x) {
+    return Point { x: x };
+}
+
+=== diagnostics ===
+CON0260

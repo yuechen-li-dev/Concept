@@ -2641,6 +2641,16 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectBackendCFixture("../../../language/phase15-c-abi/valid/extern_c_call_pointer_param_backend.valid.conception");
     try expectBackendCFixture("../../../language/phase15-c-abi/valid/extern_c_empty_block_backend.valid.conception");
     try expectRunFixture("../../../language/phase15-c-abi/valid/extern_c_call_abs_run.valid.conception");
+    try expectRunFixture("../../../language/phase15-c-abi/valid/export_c_add_run.valid.conception");
+    try expectBackendCFixture("../../../language/phase15-c-abi/valid/export_c_backend_symbol.valid.conception");
+    try expectBackendCFixture("../../../language/phase15-c-abi/valid/export_c_void_backend.valid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/export_c_missing_body.invalid.conception");
+    try expectParseFixture("../../../language/phase15-c-abi/invalid/export_c_unsupported_abi_cpp.invalid.conception");
+    try expectParseFixture("../../../language/phase15-c-abi/invalid/export_c_missing_abi_string.invalid.conception");
+    try expectParseFixture("../../../language/phase15-c-abi/invalid/export_c_block_form_invalid.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/export_c_duplicate_extern_symbol.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/export_c_unsupported_return_struct.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/export_c_unsupported_param_struct.invalid.conception");
     try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_duplicate_symbol_same_block.invalid.conception");
     try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_duplicate_symbol_across_blocks.invalid.conception");
     try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_duplicate_top_level_name.invalid.conception");

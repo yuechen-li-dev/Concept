@@ -17,9 +17,13 @@ metadata. They have no body, are visible to ordinary call resolution, and are
 type-checked with ordinary call arity/type rules. P15-M2 also validates the v0 C
 ABI type subset, rejects duplicate extern C symbols, and stops emitting
 `CON0259` for valid declarations. P15-M3 lowers extern C calls through MIR,
-emits backend C prototypes for extern declarations, emits calls with declared C
-symbol names, and keeps headers, includes, linker flags, `export "C"`, and
-`repr(C)` deferred.
+emits backend C prototypes for extern declarations, and emits calls with declared
+C symbol names. P15-M4 implements `export "C"` function definitions: exported
+functions parse as ordinary bodies with C linkage metadata, lower through HIR and
+MIR, validate C ABI-compatible parameter and return types, reject duplicate C
+ABI symbols across extern declarations and exports, and emit unmangled C function
+definitions while ordinary functions retain internal backend names. Headers,
+includes, linker flags, and `repr(C)` remain deferred.
 
 ## Core doctrine
 
@@ -528,7 +532,7 @@ P15-M0  Design doc: C ABI, extern declarations, and repr(C)
 P15-M1  extern "C" parser/AST scaffold
 P15-M2  extern C HIR declarations and ABI type validation
 P15-M3  extern C call lowering and backend prototype emission
-P15-M4  export "C" function surface
+P15-M4  export "C" function surface (implemented)
 P15-M5  repr(C) struct syntax/attribute and HIR marker
 P15-M6  repr(C) field/type validation and backend layout hardening
 P15-M7  C ABI diagnostics and symbol/linkage hardening

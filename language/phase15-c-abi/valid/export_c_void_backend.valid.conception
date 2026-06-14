@@ -1,0 +1,20 @@
+# name: export C void backend
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module CAbi;
+
+export "C" void Touch(int value) {
+    return;
+}
+
+int main() {
+    Touch(1);
+    return 0;
+}
+
+=== c ===
+contains: void Touch(int cpt_p_value_
+contains: Touch(1);
+not_contains: cpt_f_Touch

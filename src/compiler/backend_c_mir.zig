@@ -1393,7 +1393,10 @@ fn emitInterfaceImplWrapperName(writer: anytype, module: *const semantics.Semant
 }
 
 fn emitMirFunctionName(writer: anytype, ctx: *const BackendContext, function_id: mir.MirFunctionId, function: mir.MirFunction) !void {
-    try emitHirFunctionName(writer, ctx, function.hir_function, ctx.module.hir.getFunction(function.hir_function).*);
+    switch (function.linkage) {
+        .internal => try emitHirFunctionName(writer, ctx, function.hir_function, ctx.module.hir.getFunction(function.hir_function).*),
+        .export_c => |export_c| try emitCSymbolName(writer, ctx.module, export_c.symbol),
+    }
     _ = function_id;
 }
 
@@ -1406,6 +1409,10 @@ fn emitHirFunctionName(writer: anytype, ctx: *const BackendContext, function_id:
         try writer.writeByte('_');
         try emitEscapedIdentifierComponent(writer, ctx.module.interner.text(function.name));
         try writer.print("_{d}", .{function_id.index});
+        return;
+    }
+    if (function.is_exported and function.extern_abi == .c and function.c_symbol_name != null) {
+        try emitCSymbolName(writer, ctx.module, function.c_symbol_name.?);
         return;
     }
     try emitFunctionName(writer, ctx.module, function.name);

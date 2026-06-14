@@ -116,7 +116,14 @@ const Checker = struct {
                 try self.checkExternFunctionDeclaration(function_id, function);
                 continue;
             }
-            if (self.module.hir.isGenericFunction(function_id)) continue;
+            if (self.module.hir.isGenericFunction(function_id)) {
+                if (function.is_exported) {
+                    try self.reportAt(.ExportCFunctionCannotBeGeneric, "export C function cannot be generic", function.span);
+                    return error.InvalidSemanticModule;
+                }
+                continue;
+            }
+            if (function.is_exported) try self.checkExportCFunction(function_id, function);
             try self.checkDropParams(function_id, function);
             if (function.body) |body| {
                 if (function.is_compile_time) {
@@ -156,6 +163,32 @@ const Checker = struct {
             const param = self.module.hir.getParam(param_id);
             if (!self.isSupportedCAbiParamType(param.type_id)) {
                 try self.reportAt(.UnsupportedCAbiType, "unsupported extern C parameter type", param.span);
+                return error.InvalidSemanticModule;
+            }
+        }
+    }
+
+    fn checkExportCFunction(self: *Checker, function_id: hir.FunctionId, function: hir.HirFunction) CheckError!void {
+        if (function.body == null) {
+            try self.reportAt(.ExportCRequiresFunctionDefinition, "export C function requires a body", function.span);
+            return error.InvalidSemanticModule;
+        }
+        if (self.module.hir.isGenericFunction(function_id) or function.is_concept_witness) {
+            try self.reportAt(.ExportCFunctionCannotBeGeneric, "export C function cannot be generic or a concept witness", function.span);
+            return error.InvalidSemanticModule;
+        }
+        if (function.extern_abi == null or function.extern_abi.? != .c or function.c_symbol_name == null) {
+            try self.reportAt(.UnsupportedCAbiType, "export C function is missing C ABI metadata", function.span);
+            return error.InvalidSemanticModule;
+        }
+        if (!self.isSupportedCAbiReturnType(function.return_type)) {
+            try self.reportAt(.UnsupportedCAbiType, "unsupported export C return type", function.span);
+            return error.InvalidSemanticModule;
+        }
+        for (function.params) |param_id| {
+            const param = self.module.hir.getParam(param_id);
+            if (!self.isSupportedCAbiParamType(param.type_id)) {
+                try self.reportAt(.UnsupportedCAbiType, "unsupported export C parameter type", param.span);
                 return error.InvalidSemanticModule;
             }
         }
