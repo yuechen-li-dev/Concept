@@ -1,0 +1,12 @@
+# name: module table empty module file
+# phase: parse
+# expect: fail
+
+=== file: Empty.concept ===
+
+=== file: B.concept ===
+module B;
+
+=== diagnostics ===
+CON0004
+CON0276

@@ -28,6 +28,8 @@ pub const DiagnosticCode = enum {
     UnexpectedToken,
     ExpectedItem,
     DuplicateModuleDeclaration,
+    DuplicateModule,
+    ModuleDeclarationRequired,
     UnterminatedChar,
     EmptyCharLiteral,
     InvalidEscapeSequence,
@@ -228,6 +230,8 @@ pub const DiagnosticCode = enum {
             .UnexpectedToken => "CON0003",
             .ExpectedItem => "CON0004",
             .DuplicateModuleDeclaration => "CON0005",
+            .DuplicateModule => "CON0270",
+            .ModuleDeclarationRequired => "CON0276",
             .UnterminatedChar => "CON0007",
             .EmptyCharLiteral => "CON0008",
             .InvalidEscapeSequence => "CON0009",
@@ -564,6 +568,28 @@ pub fn invalidEscapeSequence(span: SourceSpan) Diagnostic {
         "invalid escape sequence",
         span,
     ).withHelp("use a recognized escape sequence");
+}
+
+pub fn duplicateModule(allocator: std.mem.Allocator, name: []const u8, span: SourceSpan, previous_path: []const u8) !Diagnostic {
+    return .{
+        .code = .DuplicateModule,
+        .severity = .@"error",
+        .message = try std.fmt.allocPrint(allocator, "duplicate module '{s}'; previous declaration is in {s}", .{ name, previous_path }),
+        .primary_span = span,
+        .help = "module names must be unique in one compilation unit; v0 does not allow one module to span multiple files",
+        .owns_message = true,
+    };
+}
+
+pub fn moduleDeclarationRequired(allocator: std.mem.Allocator, path: []const u8, span: SourceSpan) !Diagnostic {
+    return .{
+        .code = .ModuleDeclarationRequired,
+        .severity = .@"error",
+        .message = try std.fmt.allocPrint(allocator, "module declaration required in multi-source file '{s}'", .{path}),
+        .primary_span = span,
+        .help = "Phase 16 v0 requires exactly one module declaration per file in multi-source fixtures",
+        .owns_message = true,
+    };
 }
 
 pub fn machineSemanticsNotImplemented(span: SourceSpan) Diagnostic {

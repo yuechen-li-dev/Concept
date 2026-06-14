@@ -1,0 +1,17 @@
+# name: module table two modules
+# phase: parse
+# expect: pass
+
+=== file: A.concept ===
+module A;
+
+int ValueA() {
+    return 1;
+}
+
+=== file: B.concept ===
+module B;
+
+int ValueB() {
+    return 2;
+}

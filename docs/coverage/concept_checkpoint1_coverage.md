@@ -4,8 +4,8 @@
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
 **Phases closed:** 1 through 15
-**Current phase:** Phase 16 M1 fixture harness scaffold: hermetic multi-file `.conception` sources
-**Fixture corpus:** 839 total `.conception` fixtures; 108 under `language/phase15-c-abi/`; 6 under `language/phase16-imports/`
+**Current phase:** Phase 16 M2 module table scaffold: multi-source module declaration inventory and duplicate module diagnostics
+**Fixture corpus:** 848 total `.conception` fixtures; 108 under `language/phase15-c-abi/`; 15 under `language/phase16-imports/`
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
 ---

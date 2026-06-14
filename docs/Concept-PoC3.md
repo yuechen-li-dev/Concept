@@ -91,8 +91,12 @@ dependency resolution, linker drivers, and visibility systems remain deferred.
 M1 adds the hermetic multi-file `.conception` fixture scaffold: embedded
 `=== file: <virtual-path> ===` sections parse into ordered fixture source sets,
 virtual paths are preserved, duplicate/empty virtual paths are rejected, and
-legacy single-source fixtures remain unchanged. Real import parsing, module
-graph construction, and cross-module semantics remain deferred.
+legacy single-source fixtures remain unchanged. M2 adds the module declaration
+table scaffold for multi-source parser fixtures: every virtual source is parsed,
+one module declaration is required per source in multi-source mode, duplicate
+module names are rejected, and module name/source path/source order/declaration
+span are preserved for later import graph work. Real import parsing, import
+graph resolution, and cross-module semantics remain deferred.
 Deferred Phase 12
 work includes
 `Arena.create`, hosted runtime helper implementation, allocation failure

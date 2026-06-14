@@ -610,3 +610,42 @@ Deferred after M1:
 
 Semantic, run, MIR, and backend fixtures remain single-source until the Phase 16
 module graph exists. The harness must not silently drop extra virtual files.
+
+## P16-M2 implementation status: module table scaffold
+
+P16-M2 adds the compilation-unit module inventory pass used by later import
+graph milestones. Multi-source parser fixtures now parse every virtual source,
+collect each file's top-level `module` declaration, and build an ordered module
+table that preserves stable module IDs, module names, virtual source paths,
+source indexes, and declaration spans.
+
+Implemented M2 behavior:
+
+- multi-source parser fixtures build a module table after all virtual sources
+  parse;
+- exactly one module declaration is required for each source file in
+  multi-source fixtures;
+- duplicate module names are rejected across one compilation unit;
+- one module cannot span multiple files in v0;
+- multiple module declarations in one source file remain rejected by the parser;
+- dotted module names supported by the existing parser are preserved in the
+  table;
+- existing single-source fixtures keep their historical behavior.
+
+Diagnostics added or used by M2:
+
+- `CON0270 DuplicateModule` for duplicate module names in distinct virtual
+  source files;
+- `CON0276 ModuleDeclarationRequired` when a multi-source file has no module
+  declaration;
+- the existing parser duplicate-module diagnostic continues to reject multiple
+  module declarations inside one file.
+
+Still deferred after M2:
+
+- import syntax and import declarations in the AST;
+- import graph resolution, unknown import diagnostics, duplicate imports, and
+  cycle detection;
+- module-aware HIR item ownership beyond this table;
+- qualified cross-module name lookup;
+- semantic, run, MIR, and backend multi-source compilation.

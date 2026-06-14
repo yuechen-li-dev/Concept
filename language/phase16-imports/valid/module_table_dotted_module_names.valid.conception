@@ -1,0 +1,9 @@
+# name: module table dotted module names
+# phase: parse
+# expect: pass
+
+=== file: Compiler/Lexer.concept ===
+module Compiler.Lexer;
+
+=== file: Compiler/Parser.concept ===
+module Compiler.Parser;

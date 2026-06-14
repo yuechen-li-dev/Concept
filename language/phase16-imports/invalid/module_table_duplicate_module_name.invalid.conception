@@ -1,0 +1,12 @@
+# name: module table duplicate module name
+# phase: parse
+# expect: fail
+
+=== file: A1.concept ===
+module A;
+
+=== file: A2.concept ===
+module A;
+
+=== diagnostics ===
+CON0270

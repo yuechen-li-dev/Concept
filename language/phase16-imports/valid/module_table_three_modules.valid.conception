@@ -1,0 +1,12 @@
+# name: module table three modules
+# phase: parse
+# expect: pass
+
+=== file: A.concept ===
+module A;
+
+=== file: B.concept ===
+module B;
+
+=== file: C.concept ===
+module C;
