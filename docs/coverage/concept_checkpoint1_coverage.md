@@ -1,11 +1,11 @@
 # Concept — Checkpoint 1 Coverage Matrix
-## Phase 15 Closeout vs PoC3 Constitution
+## Phase 16 Closeout vs PoC3 Constitution
 
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
-**Phases closed:** 1 through 15
-**Current phase:** Phase 16 M8 multi-module MIR/backend lowering
-**Fixture corpus:** 900 total `.conception` fixtures; 108 under `language/phase15-c-abi/`; 67 under `language/phase16-imports/`
+**Phases closed:** 1 through 16
+**Current phase:** Phase 16 closed — imports and multi-module compilation v0
+**Fixture corpus:** 906 total `.conception` fixtures; 108 under `language/phase15-c-abi/`; 73 under `language/phase16-imports/`
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
 ---
@@ -48,8 +48,29 @@
 | `move` keyword | ✅ | Phase 10 — explicit move expression, use-after-move diagnosed |
 | `try` keyword | ✅ | Phase 5 — propagates `Result` error arm |
 | `unsafe` blocks and functions | ✅ | Phase 6 — quarantined, raw pointer deref and pointer arith require unsafe |
-| Real module system (no headers) | 🔶 | Single-file modules are implemented; Phase 16 M1 adds hermetic multi-file fixture source sets with virtual paths, M2 adds module-table collection, M3 parses import declarations with ordering diagnostics, and M4 resolves import graph edges with unknown/duplicate/cycle diagnostics, M5 carries modules/imports into HIR with per-module top-level duplicate checks, M6 resolves qualified module function calls, M7 resolves qualified module type references plus imported repr(C) semantic C ABI validation while keeping unqualified imports invalid, and M8 enables supported multi-source MIR/backend/run in one generated C unit |
-| `import` declarations | 🔶 | Phase 16 M3 parses qualified import declarations and M4 resolves module graph edges with `CON0271` unknown import, `CON0277` duplicate import, and `CON0272` cycle diagnostics; qualified function lookup is implemented in P16-M6; qualified type lookup is implemented in P16-M7 |
+| Real module system (no headers) | 🔶 | Phase 16 closed for compilation-unit modules v0: harness/driver-supplied multi-file source sets, module declaration table, resolved import graph, module-aware HIR, per-module top-level symbol tables, qualified cross-module functions/types, imported repr(C) metadata, and multi-source MIR/backend/run in one generated C unit; packages, filesystem lookup, visibility, separate compilation, and linker driving remain deferred |
+| `import` declarations | ✅ | Phase 16 v0 imports are implemented for qualified access only: parser/AST preservation, ordering diagnostic `CON0273`, resolved graph edges, `CON0271` unknown import, `CON0277` duplicate import, `CON0272` import cycle, qualified function calls, qualified type references, and no unqualified name injection |
+| Multi-file fixture support | ✅ | Phase 16 supports hermetic `.conception` source sets with `=== file: <virtual-path> ===` sections and virtual-path preservation |
+| Module declaration table | ✅ | Stable `ModuleId` records, source order, virtual paths, duplicate module detection `CON0270`, and missing module declaration `CON0276` |
+| Import graph resolution | ✅ | Raw imports are preserved and resolved to module IDs before semantic lowering; unknown, duplicate, and cyclic imports are diagnosed |
+| HIR module records | ✅ | HIR stores module records, resolved imports, and per-item module ownership metadata |
+| Per-module symbol tables | ✅ | Ordinary duplicate top-level names are scoped per module; same item names across modules are accepted when referenced with qualification |
+| Cross-module qualified function calls | ✅ | `Module.Function(...)` resolves for current/imported modules and lowers/runs through MIR/backend |
+| Cross-module qualified type references | ✅ | `Module.Type` resolves in type positions for imported structs/enums and current modules |
+| Imported repr(C) metadata across modules | ✅ | Imported repr(C) structs remain visible to semantic C ABI validation; imported non-repr structs remain rejected at C ABI boundaries |
+| Multi-source backend/run lowering | ✅ | Supported multi-source programs lower to MIR and emit one generated C unit in v0 |
+| Backend module name collision hardening | ✅ | Ordinary same-name functions and structs across modules receive collision-safe generated C names; `export "C"` symbols remain exact/unmangled |
+| Phase 16 examples/fixtures | ✅ | `examples/phase16/` documents representative virtual-file examples; `language/phase16-imports/` contains 73 fixtures including closeout coverage |
+| Import aliases | ❌ | Deferred; no alias syntax in v0 |
+| Wildcard imports | ❌ | Deferred; wildcard imports are rejected |
+| Re-exports | ❌ | Deferred; imports do not create a public export surface |
+| Unqualified imported names | ❌ | Deferred by design; imports do not inject declarations into local scope |
+| Module visibility (`public`/`private`) | ❌ | Deferred; all imported top-level declarations are accessible by qualified name in v0 |
+| Package manager / cross-package dependencies | ❌ | Deferred; modules are compilation-unit boundaries, not packages |
+| Filesystem import search / path-to-file mapping | ❌ | Deferred; source files are supplied by harness/driver rather than discovered from import paths |
+| Module spanning multiple files | ❌ | Deferred; each v0 source declares exactly one module and one module does not span files |
+| Multiple modules per file | ❌ | Deferred/rejected; multiple `module` declarations use existing parser diagnostic `CON0005` |
+| Separate object files / linker driver / incremental compilation | ❌ | Deferred; Phase 16 emits one generated C unit for v0 |
 | Conditional compilation `when target.*` | 🔶 | `target.isLittleEndian`, `target.pointerSize` available as comptime queries; full `when target.os` structured conditional compilation not implemented |
 
 ---
@@ -450,7 +471,7 @@
   upcasting/inheritance non-goals, and ABI policy
 - repr(C) enums, nested by-value repr(C) fields, packed layout, custom alignment, bitfields, and platform ABI matrices beyond the closed Phase 15 v0 subset
 - C headers/includes, automatic linking/linker driver, symbol aliasing, callbacks/function pointers, extern variables, and C++ ABI interop beyond the closed Phase 15 v0 subset
-- broader module features after Phase 16 M8 multi-source backend/run: visibility, aliases, packages, filesystem lookup, separate object files, and linker driving
+- broader module features beyond Phase 16 v0: visibility, aliases, wildcard imports, re-exports, packages, filesystem lookup/path mapping, module spanning multiple files, separate object files, linker driving, incremental compilation, and cross-package dependency resolution
 - `yield` in machines
 - Full `must_use` on arbitrary functions (not just enums)
 - `panic` / `assert` infrastructure
@@ -492,7 +513,7 @@
 | PoC3 Sections | Coverage |
 |--------------|----------|
 | §1–4 Thesis, laws, identity | ✅ Complete |
-| §5–6 Syntax and modules | ✅ Core complete; Phase 16 M0 designs `import`/multi-module compilation; implementation, broader interface object model, and `operator` deferred |
+| §5–6 Syntax and modules | ✅ Core complete for Phase 16 v0 imports/multi-module compilation-unit modules; packages, visibility, filesystem lookup, separate compilation/linking, broader interface object model, and `operator` remain deferred |
 | §7–8 Stdlib layers and profiles | ❌ Not started |
 | §9 Effects | 🔶 `noalloc`/`alloc` done; 8 other effects deferred |
 | §10 Memory model | 🔶 Core guarantees done; `immovable`, `nullable`, `moved_state` deferred |
@@ -540,14 +561,16 @@
 ---
 
 *This matrix began as the Phase 13 closeout snapshot and has been updated
-through Phase 15 closeout. Stage 1 is substantially implemented. Phase 14
-closed runtime interfaces and borrowed dyn dispatch v0. Phase 15 closes the
-single-compilation-unit C ABI v0 surface: `extern "C"` declarations and calls,
-`export "C"` definitions, validated `[Repr(C)]` structs by value/pointer, C ABI
-type diagnostics, duplicate C symbol rejection, extern prototype/call emission,
-unmangled exported definitions, no generated includes, no C++ text, examples,
-and representative final-surface fixtures. Remaining Stage 1 gaps include
-`import`/multi-module compilation, `yield` in machines, and broader ABI/layout
+through Phase 16 closeout. Stage 1 is substantially implemented. Phase 14
+closed runtime interfaces and borrowed dyn dispatch v0. Phase 15 closed the
+single-compilation-unit C ABI v0 surface. Phase 16 closes imports and
+multi-module compilation-unit modules v0: harness/driver-supplied multi-file
+source sets, module table, import graph, module-aware HIR, per-module ordinary
+symbol tables, qualified cross-module functions/types, imported repr(C)
+metadata, and multi-source MIR/backend/run in one generated C unit. Remaining
+Stage 1 gaps include `yield` in machines, visibility and package/filesystem
+module resolution, separate compilation/linker driving, panic/assert runtime
+failure infrastructure, reference/receiver hardening, and broader ABI/layout
 features deliberately deferred beyond Phase 15 (repr(C) enums, nested by-value
 struct layout, packed/custom alignment, bitfields, headers/includes, automatic
 linking, C++ ABI, varargs, extern variables, symbol aliasing, callbacks, and

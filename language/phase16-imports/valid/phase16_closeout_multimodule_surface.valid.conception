@@ -1,0 +1,44 @@
+# name: phase16 closeout multimodule surface
+# phase: run
+# expect: pass
+
+=== file: Math.concept ===
+module Math;
+
+int Add(int a, int b) {
+    return a + b;
+}
+
+=== file: Geometry.concept ===
+module Geometry;
+
+struct Point {
+    int x;
+    int y;
+};
+
+=== file: CApi.concept ===
+module CApi;
+
+extern "C" {
+    int abs(int value);
+}
+
+=== file: Main.concept ===
+module Main;
+
+import Math;
+import Geometry;
+import CApi;
+
+int Sum(Geometry.Point p) {
+    return Math.Add(p.x, p.y);
+}
+
+int main() {
+    Geometry.Point p = Geometry.Point { x: 20, y: CApi.abs(-22) };
+    return Sum(p);
+}
+
+=== run ===
+exit_code: 42

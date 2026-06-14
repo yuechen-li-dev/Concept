@@ -82,27 +82,32 @@ rules, and current bool/AllocError C backend spelling. Examples live under
 export, and `[Repr(C)]` behavior. Headers/includes, automatic linking or a
 linker driver, C++ interop, varargs, extern variables, symbol aliasing, callback
 /function-pointer surface, repr(C) enums, nested by-value repr(C) fields,
-packed layout, custom alignment, and bitfields remain deferred. Phase 16 has
-started with imports and multi-module compilation. M0 documented the doctrine:
-modules are compilation-unit boundaries rather than packages, source files
-declare one module, imports name modules rather than filesystem paths, qualified
-access is the v0 model, import cycles are rejected, and package managers,
-dependency resolution, linker drivers, and visibility systems remain deferred.
-M1 added hermetic multi-file parser fixtures, M2 added the module table
-scaffold, M3 added parser/AST import declarations plus ordering diagnostics, and
-M4 resolves the import graph: raw imports become stable module-ID edges, unknown
-imports use `CON0271`, duplicate imports use `CON0277`, and self/direct/long
-cycles use `CON0272`. Qualified lookup and cross-module semantic/backend work
-remain deferred to later Phase 16 milestones. P16-M5 adds module-aware HIR records and per-module top-level symbol tables. P16-M6 resolves `Module.Function(...)` calls against current/imported module roots and preserves cross-module HIR function IDs. P16-M7 resolves qualified imported type references such as `Geometry.Point`, supports imported struct/enum type positions and imported repr(C) metadata for semantic C ABI validation, and keeps unqualified imported names invalid and P16-M8 lowers/runs the supported multi-source subset through MIR and the C backend in one generated C unit.
-M1 adds the hermetic multi-file `.conception` fixture scaffold: embedded
-`=== file: <virtual-path> ===` sections parse into ordered fixture source sets,
-virtual paths are preserved, duplicate/empty virtual paths are rejected, and
-legacy single-source fixtures remain unchanged. M2 adds the module declaration
-table scaffold for multi-source parser fixtures: every virtual source is parsed,
-one module declaration is required per source in multi-source mode, duplicate
-module names are rejected, and module name/source path/source order/declaration
-span are preserved for later import graph work. Real import parsing, import
-graph resolution, and cross-module semantics remain deferred.
+packed layout, custom alignment, and bitfields remain deferred. Phase 16 is closed for imports and multi-module compilation v0. M0 documented
+the doctrine: modules are compilation-unit boundaries rather than packages,
+source files declare one module, imports name modules rather than filesystem
+paths, qualified access is the v0 model, import cycles are rejected, and package
+managers, dependency resolution, linker drivers, and visibility systems remain
+deferred. M1 added hermetic multi-file `.conception` fixture source sets with
+virtual paths. M2 added the module declaration table and stable module IDs, with
+duplicate module diagnostics (`CON0270`) and missing module diagnostics
+(`CON0276`). M3 added parser/AST import declarations, raw import preservation,
+and import ordering diagnostics (`CON0273`). M4 resolves import graph edges,
+rejecting unknown imports (`CON0271`), duplicate imports (`CON0277`), and import
+cycles (`CON0272`). M5 carries modules and resolved import metadata into HIR,
+tracks per-item module ownership, and scopes ordinary duplicate top-level names
+per module while C ABI duplicate symbols remain compilation-unit-wide. M6
+resolves `Module.Function(...)` calls against current/imported module roots. M7
+resolves qualified imported type references such as `Geometry.Point`, supports
+imported struct and enum type positions, and exposes imported repr(C) metadata
+for semantic C ABI validation while keeping unqualified imported names invalid.
+M8 lowers/runs the supported multi-source subset through MIR and the C backend
+in one generated C unit, hardening ordinary backend function and struct names
+for same names across modules while leaving `export "C"` symbols exact. M9 closes
+Phase 16 with 73 Phase 16 fixtures out of 906 `.conception` fixtures total and
+examples under `examples/phase16/`. Filesystem lookup, packages, aliases,
+wildcards, re-exports, visibility, separate objects, linker driving, incremental
+compilation, module spanning multiple files, multiple modules per file, and
+cross-package dependency resolution remain deferred.
 Deferred Phase 12
 work includes
 `Arena.create`, hosted runtime helper implementation, allocation failure
