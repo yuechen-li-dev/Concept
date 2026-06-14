@@ -83,10 +83,13 @@ Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed f
 
 ## Phase 16 import/multi-module fixtures
 
-Phase 17 fixtures now live under `language/phase17-runtime-failure/`. P17-M2
-covers statement-position `panic("reason");`, HIR-check acceptance for the
-reason-preserving statement form, invalid diagnostics for missing reason, wrong
-arity, non-string reason, initializer expression use, and return expression use,
+Phase 17 fixtures now live under `language/phase17-runtime-failure/`. P17-M3
+covers statement-position `assert(condition, "reason");`, HIR-check acceptance
+for bool conditions and preserved reasons, invalid diagnostics for missing
+reason arguments, wrong arity, non-string reasons, non-bool conditions, and
+expression-position `assert(...)` forms. P17-M2 also covers statement-position
+`panic("reason");`, HIR-check acceptance for the reason-preserving statement
+form, invalid diagnostics for panic reason forms and expression-position panic,
 plus MIR/backend lowering to a backend-owned `cpt_panic` helper. Backend-C
 fixtures assert helper emission, one-per-C-unit helper emission, reason literal
 escaping, calls to `cpt_panic`, and no test-runner dependency. A run fixture
@@ -94,8 +97,8 @@ executes through the native path and expects deterministic exit code 101.
 
 Phase 16 is closed. Its fixtures live under `language/phase16-imports/` and
 cover the v0 module/import surface for harness-supplied multi-source
-compilation units. The full corpus now contains 919 `.conception` fixtures,
-including 73 Phase 16 fixtures and 13 Phase 17 fixtures.
+compilation units. The full corpus now contains 930 `.conception` fixtures,
+including 73 Phase 16 fixtures and 24 Phase 17 fixtures.
 
 A single `.conception` fixture may contain multiple virtual Concept source
 files, each with a stable virtual path for diagnostics. The embedded form is

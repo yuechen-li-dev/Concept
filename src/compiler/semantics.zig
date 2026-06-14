@@ -718,6 +718,7 @@ const Collector = struct {
                 .expr_stmt,
                 .discard_stmt,
                 .panic_stmt,
+                .assert_stmt,
                 .return_stmt,
                 => {},
             }
@@ -2126,6 +2127,23 @@ const BodyLowerer = struct {
                     .reason_span = panic_stmt.reason_span,
                 } }, panic_stmt.span);
             },
+            .assert_stmt => |assert_stmt| {
+                const condition = (try self.lowerExpr(assert_stmt.condition.*)) orelse return null;
+                const condition_type = (try self.inferExprType(condition)) orelse return null;
+                if (!sameType(condition_type, self.collector.module.types.boolType())) {
+                    try self.collector.diagnostics.append(diagnostics.assertConditionMustBeBool(assert_stmt.condition_span));
+                    return null;
+                }
+                const reason_text = stringLiteralContents(assert_stmt.reason.text);
+                const owned_reason = try self.collector.allocator.dupe(u8, reason_text);
+                errdefer self.collector.allocator.free(owned_reason);
+                return try self.collector.module.hir.addStmt(.{ .assert_stmt = .{
+                    .condition = condition,
+                    .reason = owned_reason,
+                    .condition_span = assert_stmt.condition_span,
+                    .reason_span = assert_stmt.reason_span,
+                } }, assert_stmt.span);
+            },
             .discard_stmt => |discard_stmt| {
                 if (try self.lowerArenaStorageOpStmt(discard_stmt.value.*)) |stmt_id| return stmt_id;
                 const value = (try self.lowerExpr(discard_stmt.value.*)) orelse return null;
@@ -2331,6 +2349,10 @@ const BodyLowerer = struct {
             .call => |call| {
                 if (self.isPanicCall(call)) {
                     try self.collector.diagnostics.append(diagnostics.panicExpressionUseUnsupported(call.span));
+                    return null;
+                }
+                if (self.isAssertCall(call)) {
+                    try self.collector.diagnostics.append(diagnostics.assertExpressionUseUnsupported(call.span));
                     return null;
                 }
                 if (self.isArenaAllocCall(call)) {
@@ -2627,6 +2649,11 @@ const BodyLowerer = struct {
     fn isPanicCall(self: *BodyLowerer, call: ast.Expr.CallExpr) bool {
         _ = self;
         return call.qualifier == null and std.mem.eql(u8, call.callee.text, "panic");
+    }
+
+    fn isAssertCall(self: *BodyLowerer, call: ast.Expr.CallExpr) bool {
+        _ = self;
+        return call.qualifier == null and std.mem.eql(u8, call.callee.text, "assert");
     }
 
     fn maybeTestRelationConstructorCall(self: *BodyLowerer, call: ast.Expr.CallExpr) bool {
@@ -5690,4 +5717,60 @@ fn isDynRejectedBuiltinTypeName(text: []const u8) bool {
         std.mem.eql(u8, text, "Allocator") or
         std.mem.eql(u8, text, "AllocError") or
         std.mem.eql(u8, text, "ManualInit");
+}
+
+test "assert statement lowers to HIR and debug output preserves reason" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const statements = try allocator.alloc(ast.Stmt, 2);
+    statements[0] = .{ .assert_stmt = .{
+        .condition = try allocExpr(allocator, boolExpr(true)),
+        .reason = .{ .text = "\"runtime invariant\"", .span = .{ .start = 0, .length = 19 } },
+        .condition_span = .{ .start = 0, .length = 4 },
+        .reason_span = .{ .start = 0, .length = 19 },
+        .span = .{ .start = 0, .length = 34 },
+    } };
+    statements[1] = try returnStmt(allocator, intExpr("0"));
+
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+    var module = try collectItems(&.{functionWithBody("main", &.{}, statements)}, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
+    const block = module.hir.getStmt(module.hir.getFunction(.{ .index = 0 }).body.?).kind.block;
+    const assert_stmt = module.hir.getStmt(block[0]).kind.assert_stmt;
+    try std.testing.expectEqualStrings("runtime invariant", assert_stmt.reason);
+
+    const snapshot = try module.hir.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Assert because runtime invariant") != null);
+}
+
+test "assert semantics reject non bool condition and expression position" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const bad_condition = try allocator.alloc(ast.Stmt, 2);
+    bad_condition[0] = .{ .assert_stmt = .{
+        .condition = try allocExpr(allocator, intExpr("1")),
+        .reason = .{ .text = "\"needs bool\"", .span = .{ .start = 0, .length = 12 } },
+        .condition_span = .{ .start = 0, .length = 1 },
+        .reason_span = .{ .start = 0, .length = 12 },
+        .span = .{ .start = 0, .length = 24 },
+    } };
+    bad_condition[1] = try returnStmt(allocator, intExpr("0"));
+    try expectOneSemanticDiagnostic(&.{functionWithBody("main", &.{}, bad_condition)}, .AssertConditionMustBeBool);
+
+    const init_statements = try allocator.alloc(ast.Stmt, 2);
+    init_statements[0] = try localStmt(allocator, "x", try callExpr(allocator, "assert", &.{ boolExpr(true), stringExpr("\"reason\"") }));
+    init_statements[1] = try returnStmt(allocator, intExpr("0"));
+    try expectOneSemanticDiagnostic(&.{functionWithBody("main", &.{}, init_statements)}, .AssertExpressionUseUnsupported);
+
+    const return_statements = try allocator.alloc(ast.Stmt, 1);
+    return_statements[0] = try returnStmt(allocator, try callExpr(allocator, "assert", &.{ boolExpr(true), stringExpr("\"reason\"") }));
+    try expectOneSemanticDiagnostic(&.{functionWithBody("main", &.{}, return_statements)}, .AssertExpressionUseUnsupported);
 }

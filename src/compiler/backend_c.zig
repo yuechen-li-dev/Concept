@@ -135,7 +135,7 @@ fn emitHirStmt(writer: anytype, module: *const semantics.SemanticModule, stmt_id
             try emitHirExpr(writer, module, maybe_value.?);
             try writer.writeAll(";\n");
         },
-        .panic_stmt => return error.InvalidExecutable,
+        .panic_stmt, .assert_stmt => return error.InvalidExecutable,
         .local_decl => |local_decl| {
             const local = module.hir.getLocal(local_decl.local);
             try emitIndent(writer, depth);
@@ -349,7 +349,7 @@ fn emitStmt(writer: anytype, stmt: ast_model.Stmt, depth: usize) !void {
             try emitExpr(writer, assignment.value.*);
             try writer.writeAll(";\n");
         },
-        .panic_stmt => return error.InvalidExecutable,
+        .panic_stmt, .assert_stmt => return error.InvalidExecutable,
         .return_stmt => |return_stmt| {
             try emitIndent(writer, depth);
             try writer.writeAll("return ");

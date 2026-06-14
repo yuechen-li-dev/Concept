@@ -1,0 +1,16 @@
+# name: assert too many args
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    bool ok = true;
+    assert(ok, "one", "two");
+    return 0;
+}
+
+=== diagnostics ===
+CON0281

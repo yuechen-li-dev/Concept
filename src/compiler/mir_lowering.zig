@@ -155,6 +155,7 @@ const FunctionLowerer = struct {
                 });
                 return block_id;
             },
+            .assert_stmt => return error.AssertLoweringDeferred,
             .arena_reset => |op| return try self.lowerArenaStorageOp(op.arena_expr, block_id, stmt.span, .reset),
             .arena_destroy => |op| return try self.lowerArenaStorageOp(op.arena_expr, block_id, stmt.span, .destroy),
             .assignment => |assignment| {

@@ -1,0 +1,16 @@
+# name: assert non bool condition
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    int x = 1;
+    assert(x, "x is not a bool");
+    return 0;
+}
+
+=== diagnostics ===
+CON0283
