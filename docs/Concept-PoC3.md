@@ -104,8 +104,12 @@ M8 lowers/runs the supported multi-source subset through MIR and the C backend
 in one generated C unit, hardening ordinary backend function and struct names
 for same names across modules while leaving `export "C"` symbols exact. M9 closes
 Phase 16 with 73 Phase 16 fixtures and examples under `examples/phase16/`.
-The corpus now has 919 `.conception` fixtures. Phase 17 M2 lowers
-statement-position `panic("reason")` through MIR and the MIR-backed C backend:
+The corpus now has 930 `.conception` fixtures. Phase 17 M3 parses and checks
+statement-position `assert(condition, "reason")` as a compiler-known runtime
+invariant assertion with dedicated AST/HIR scaffold, mandatory string-literal
+reasons, bool-only conditions, HIR debug output, and expression-position
+rejection. Phase 17 M2 lowers statement-position `panic("reason")` through MIR
+and the MIR-backed C backend:
 reason text/span are preserved into MIR, debug output exposes dedicated panic
 statements, the backend emits one `cpt_panic` helper per generated C unit, calls
 that helper with an escaped C string literal, prints the reason to `stderr`, and

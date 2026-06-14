@@ -228,8 +228,11 @@ pub const DiagnosticCode = enum {
     UnsupportedReprAbi,
     VarargsUnsupported,
     PanicRequiresReason,
+    AssertRequiresReason,
     FailureReasonMustBeNonEmpty,
+    AssertConditionMustBeBool,
     PanicExpressionUseUnsupported,
+    AssertExpressionUseUnsupported,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -439,8 +442,11 @@ pub const DiagnosticCode = enum {
             .UnsupportedReprAbi => "CON026B",
             .VarargsUnsupported => "CON0269",
             .PanicRequiresReason => "CON0280",
+            .AssertRequiresReason => "CON0281",
             .FailureReasonMustBeNonEmpty => "CON0282",
+            .AssertConditionMustBeBool => "CON0283",
             .PanicExpressionUseUnsupported => "CON0284",
+            .AssertExpressionUseUnsupported => "CON0285",
         };
     }
 };
@@ -1256,8 +1262,11 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0223", DiagnosticCode.TransitionOutsideMachineState.format());
     try std.testing.expectEqualStrings("CON0231", DiagnosticCode.MachineSemanticsNotImplemented.format());
     try std.testing.expectEqualStrings("CON0280", DiagnosticCode.PanicRequiresReason.format());
+    try std.testing.expectEqualStrings("CON0281", DiagnosticCode.AssertRequiresReason.format());
     try std.testing.expectEqualStrings("CON0282", DiagnosticCode.FailureReasonMustBeNonEmpty.format());
+    try std.testing.expectEqualStrings("CON0283", DiagnosticCode.AssertConditionMustBeBool.format());
     try std.testing.expectEqualStrings("CON0284", DiagnosticCode.PanicExpressionUseUnsupported.format());
+    try std.testing.expectEqualStrings("CON0285", DiagnosticCode.AssertExpressionUseUnsupported.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {
@@ -1675,12 +1684,24 @@ pub fn panicRequiresReason(span: SourceSpan) Diagnostic {
     return Diagnostic.init(.PanicRequiresReason, .@"error", "panic requires exactly one string literal reason", span);
 }
 
+pub fn assertRequiresReason(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.AssertRequiresReason, .@"error", "assert requires exactly two arguments: a condition and string literal reason", span);
+}
+
+pub fn assertConditionMustBeBool(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.AssertConditionMustBeBool, .@"error", "assert condition must be bool", span);
+}
+
 pub fn failureReasonMustBeNonEmpty(span: SourceSpan) Diagnostic {
     return Diagnostic.init(.FailureReasonMustBeNonEmpty, .@"error", "failure reason must be non-empty", span);
 }
 
 pub fn panicExpressionUseUnsupported(span: SourceSpan) Diagnostic {
     return Diagnostic.init(.PanicExpressionUseUnsupported, .@"error", "panic is only supported as a statement in Phase 17 M1", span);
+}
+
+pub fn assertExpressionUseUnsupported(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.AssertExpressionUseUnsupported, .@"error", "assert is only supported as a statement in Phase 17 M3", span);
 }
 
 pub fn useOfPartiallyInitializedValue(span: SourceSpan) Diagnostic {

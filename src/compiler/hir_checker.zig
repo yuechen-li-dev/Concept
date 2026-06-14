@@ -541,6 +541,11 @@ const Checker = struct {
                 }
             },
             .panic_stmt => {},
+            .assert_stmt => |assert_stmt| {
+                const condition_type = try self.checkExpr(function_id, return_type, assert_stmt.condition);
+                try self.requireBool(condition_type, "assert condition must be bool", assert_stmt.condition_span);
+                if (assert_stmt.reason.len == 0) try self.reportAt(.AssertRequiresReason, "assert requires a reason", assert_stmt.reason_span);
+            },
             .arena_reset => |op| try self.checkArenaStorageOp(function_id, return_type, op, stmt.span),
             .arena_destroy => |op| try self.checkArenaStorageOp(function_id, return_type, op, stmt.span),
             .assignment => |assignment| {
@@ -1550,6 +1555,12 @@ const Checker = struct {
             .panic_stmt => |panic_stmt| .{ .panic_stmt = .{
                 .reason = try self.allocator.dupe(u8, panic_stmt.reason),
                 .reason_span = panic_stmt.reason_span,
+            } },
+            .assert_stmt => |assert_stmt| .{ .assert_stmt = .{
+                .condition = assert_stmt.condition,
+                .reason = try self.allocator.dupe(u8, assert_stmt.reason),
+                .condition_span = assert_stmt.condition_span,
+                .reason_span = assert_stmt.reason_span,
             } },
             .arena_reset => |op| .{ .arena_reset = .{
                 .arena_expr = try self.cloneExpr(op.arena_expr, subst, param_map, local_map, span),

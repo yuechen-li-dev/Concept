@@ -1,0 +1,16 @@
+# name: assert missing reason
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    bool ok = true;
+    assert(ok);
+    return 0;
+}
+
+=== diagnostics ===
+CON0281

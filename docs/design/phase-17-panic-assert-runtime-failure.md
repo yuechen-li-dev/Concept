@@ -2,7 +2,7 @@
 
 ## Status
 
-P17-M2 is now implemented for `panic(reason)` MIR/backend lowering. P17-M1 remains closed for the parser/AST/HIR scaffold:
+P17-M3 is now implemented for `assert(condition, "reason")` parser/AST/HIR scaffold. P17-M2 remains closed for `panic(reason)` MIR/backend lowering:
 
 - `panic("reason");` parses in statement position.
 - The reason string literal and source span are preserved in AST/HIR.
@@ -14,7 +14,12 @@ P17-M2 is now implemented for `panic(reason)` MIR/backend lowering. P17-M1 remai
 - The C backend emits a backend-owned `static void cpt_panic(const char* reason)` helper exactly once per generated C unit when panic is used.
 - Hosted C v0 includes `<stdio.h>` and `<stdlib.h>` for this backend-owned helper, prints `panic: %s\n` to `stderr`, and terminates with deterministic `exit(101)`.
 - `panic("reason");` lowers to `cpt_panic("reason");` with backend C string-literal escaping and no test-runner dependency.
-- `assert(condition, reason)` remains deferred to P17-M3/M4.
+- `assert(condition, "reason");` parses in statement position as a compiler-known runtime invariant assertion.
+- Assert AST/HIR preserve the condition expression, reason string literal text, full statement span, condition span, and reason span.
+- Assert HIR/debug output exposes dedicated assert statements and their reason.
+- Assert conditions must type-check as `bool`; missing/wrong reason forms and non-string-literal reasons are rejected.
+- Expression-position `assert(...)` remains unsupported and is diagnosed.
+- MIR/backend assert lowering remains deferred to P17-M4; Core.Test `Assert.True` alignment remains deferred to P17-M6.
 
 ## Core doctrine
 
@@ -411,7 +416,7 @@ Phase 17 v0 explicitly defers:
 P17-M0  Design doc: panic, assertions, and runtime failure reporting
 P17-M1  panic(reason) parser/AST/HIR scaffold
 P17-M2  panic(reason) MIR/backend lowering (implemented: MIR panic statement, C cpt_panic helper, exit 101)
-P17-M3  assert(condition, reason) parser/AST/HIR scaffold
+P17-M3  assert(condition, reason) parser/AST/HIR scaffold (implemented: statement syntax, AST/HIR assert, bool condition check, reason diagnostics)
 P17-M4  assert(condition, reason) MIR/backend lowering
 P17-M5  reason validation and diagnostics hardening
 P17-M6  align Core.Test Assert.True with shared assertion doctrine

@@ -3452,3 +3452,47 @@ test "language backend-c fixture: phase17 panic reason literal" {
 test "language backend-c fixture: phase17 panic has no test runner dependency" {
     try expectBackendCFixture("../../../language/phase17-runtime-failure/valid/panic_backend_no_test_runner_dependency.valid.conception");
 }
+
+test "language check fixture: phase17 assert statement basic" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/valid/assert_statement_basic.valid.conception");
+}
+
+test "language check fixture: phase17 assert statement preserves reason" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/valid/assert_statement_preserves_reason.valid.conception");
+}
+
+test "language check fixture: phase17 assert statement condition expression" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/valid/assert_statement_condition_expression.valid.conception");
+}
+
+test "language check fixture: phase17 assert statement after code" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/valid/assert_statement_after_code.valid.conception");
+}
+
+test "language check fixture: phase17 assert missing all args" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/assert_missing_all_args.invalid.conception");
+}
+
+test "language check fixture: phase17 assert missing reason" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/assert_missing_reason.invalid.conception");
+}
+
+test "language check fixture: phase17 assert too many args" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/assert_too_many_args.invalid.conception");
+}
+
+test "language check fixture: phase17 assert non string reason" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/assert_non_string_reason.invalid.conception");
+}
+
+test "language check fixture: phase17 assert non bool condition" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/assert_non_bool_condition.invalid.conception");
+}
+
+test "language check fixture: phase17 assert expression initializer" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/assert_expression_initializer.invalid.conception");
+}
+
+test "language check fixture: phase17 assert return expression" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/assert_return_expression.invalid.conception");
+}

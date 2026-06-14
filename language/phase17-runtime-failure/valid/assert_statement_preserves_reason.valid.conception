@@ -1,0 +1,12 @@
+# name: assert statement preserves reason
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    assert(true, "machine result read only after completion");
+    return 0;
+}

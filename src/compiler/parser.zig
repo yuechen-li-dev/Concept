@@ -1253,6 +1253,7 @@ pub const Parser = struct {
         if (self.current().kind == .match) return try self.parseMatchStmt(allocator);
         if (self.current().kind == .discard) return try self.parseDiscardStmt(allocator);
         if (self.isPanicStmtStart()) return try self.parsePanicStmt(allocator);
+        if (self.isAssertStmtStart()) return try self.parseAssertStmt(allocator);
         if (self.current().kind == .left_brace) return .{ .block_stmt = try self.parseBlockAfterOpenBrace(allocator) };
         if (self.isLocalDeclStart()) return try self.parseLocalDeclStmt(allocator);
         if (self.isAssignmentStmtStart()) return try self.parseAssignmentStmt(allocator);
@@ -1595,6 +1596,76 @@ pub const Parser = struct {
             .reason = reason,
             .reason_span = reason_span,
             .span = ast.spanFromBounds(panic_token.span.start, spanEnd(end_span)),
+        } };
+    }
+
+    fn parseAssertStmt(self: *Parser, allocator: std.mem.Allocator) !ast.Stmt {
+        const assert_token = self.advance();
+        var condition_ptr: ?*ast.Expr = null;
+        var condition_span = assert_token.span;
+        var reason = ast.Expr.StringLiteralExpr{ .text = "\"\"", .span = assert_token.span };
+        var reason_span = assert_token.span;
+
+        if (self.match(.left_paren) == null) {
+            try self.diagnostics.append(diagnostics_model.assertRequiresReason(self.current().span));
+        } else {
+            if (self.current().kind == .right_paren or self.current().kind == .semicolon or self.current().kind == .eof) {
+                try self.diagnostics.append(diagnostics_model.assertRequiresReason(self.current().span));
+            } else {
+                const condition = self.parseExpr(allocator) catch |err| switch (err) {
+                    error.OutOfMemory => return err,
+                    error.ParseFailed => null,
+                };
+                if (condition) |expr| {
+                    condition_span = expr.span();
+                    condition_ptr = try allocator.create(ast.Expr);
+                    condition_ptr.?.* = expr;
+                }
+            }
+
+            if (self.match(.comma) == null) {
+                try self.diagnostics.append(diagnostics_model.assertRequiresReason(self.current().span));
+            } else if (self.current().kind == .string_literal) {
+                const token = self.advance();
+                reason = .{ .text = token.lexeme, .span = token.span };
+                reason_span = token.span;
+            } else {
+                try self.diagnostics.append(diagnostics_model.assertRequiresReason(self.current().span));
+                if (self.current().kind != .right_paren and self.current().kind != .semicolon and self.current().kind != .eof) {
+                    _ = self.parseExpr(allocator) catch |err| switch (err) {
+                        error.OutOfMemory => return err,
+                        error.ParseFailed => {},
+                    };
+                }
+            }
+
+            if (self.match(.comma) != null) {
+                try self.diagnostics.append(diagnostics_model.assertRequiresReason(self.current().span));
+                while (self.current().kind != .eof and self.current().kind != .right_paren) _ = self.advance();
+            }
+
+            if (self.match(.right_paren) == null) {
+                try self.report(.UnexpectedToken, "expected ')' after assert arguments", self.current().span);
+                self.recoverStatement();
+            }
+        }
+
+        const end_span = if (self.match(.semicolon)) |semicolon| semicolon.span else blk: {
+            try self.report(.UnexpectedToken, "expected ';' after assert statement", self.current().span);
+            self.recoverStatement();
+            break :blk reason_span;
+        };
+
+        if (condition_ptr == null) {
+            condition_ptr = try allocator.create(ast.Expr);
+            condition_ptr.?.* = .{ .bool_literal = .{ .value = false, .span = condition_span } };
+        }
+        return .{ .assert_stmt = .{
+            .condition = condition_ptr.?,
+            .reason = reason,
+            .condition_span = condition_span,
+            .reason_span = reason_span,
+            .span = ast.spanFromBounds(assert_token.span.start, spanEnd(end_span)),
         } };
     }
 
@@ -2700,6 +2771,10 @@ pub const Parser = struct {
         return self.isContextualIdentifier("panic") and self.peek(1).kind == .left_paren;
     }
 
+    fn isAssertStmtStart(self: Parser) bool {
+        return self.isContextualIdentifier("assert") and self.peek(1).kind == .left_paren;
+    }
+
     fn expectContextualIdentifier(self: *Parser, text: []const u8, message: []const u8) !?Token {
         if (self.isContextualIdentifier(text)) return self.advance();
         try self.report(.UnexpectedToken, message, self.current().span);
@@ -3738,6 +3813,7 @@ fn stmtSpan(stmt: ast.Stmt) SourceSpan {
         .expr_stmt => |expr_stmt| expr_stmt.span,
         .discard_stmt => |discard_stmt| discard_stmt.span,
         .panic_stmt => |panic_stmt| panic_stmt.span,
+        .assert_stmt => |assert_stmt| assert_stmt.span,
         .return_stmt => |return_stmt| return_stmt.span,
         .transition_stmt => |transition_stmt| transition_stmt.span,
         .if_stmt => |if_stmt| if_stmt.span,
@@ -7609,4 +7685,40 @@ test "static_assert parser diagnostics are stable" {
     const missing_semicolon_unit = try parseTestSource("module Main; static_assert(true) int main() { return 0; }", &missing_semicolon);
     defer missing_semicolon_unit.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("expected ';' after static_assert", missing_semicolon.diagnostics.items[0].message);
+}
+
+test "parses assert statements and AST debug output" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { bool ok = true; assert(ok, \"ok reason\"); return 0; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const statements = expectFunctionDecl(unit, 3).body.?.block.?.statements;
+    const assert_stmt = switch (statements[1]) {
+        .assert_stmt => |assert_stmt| assert_stmt,
+        else => return error.ExpectedAssertStmt,
+    };
+    try std.testing.expectEqualStrings("\"ok reason\"", assert_stmt.reason.text);
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Assert \"ok reason\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Identifier ok") != null);
+}
+
+test "assert statement parser rejects bad reason arity and kind" {
+    const cases = [_][]const u8{
+        "module Main; int main() { assert(); return 0; }",
+        "module Main; int main() { bool ok = true; assert(ok); return 0; }",
+        "module Main; int main() { bool ok = true; assert(ok, \"one\", \"two\"); return 0; }",
+        "module Main; int main() { bool ok = true; assert(ok, 123); return 0; }",
+    };
+    for (cases) |source| {
+        var diagnostics = DiagnosticBag.init(std.testing.allocator);
+        defer diagnostics.deinit();
+        const unit = try parseTestSource(source, &diagnostics);
+        defer unit.deinit(std.testing.allocator);
+        try std.testing.expect(diagnostics.count() >= 1);
+        try std.testing.expectEqual(DiagnosticCode.AssertRequiresReason, diagnostics.diagnostics.items[0].code);
+    }
 }
