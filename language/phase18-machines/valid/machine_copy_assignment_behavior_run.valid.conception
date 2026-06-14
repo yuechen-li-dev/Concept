@@ -1,0 +1,25 @@
+# name: machine copy assignment behavior run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Simple(int value) -> int {
+    state Start {
+        return value;
+    }
+}
+
+int main() {
+    Simple a = Simple(5);
+    Simple b = a;
+    Step(a);
+    Step(b);
+    b = Simple(6);
+    Step(b);
+    return Result(a) + Result(b);
+}
+
+=== run ===
+exit_code: 11

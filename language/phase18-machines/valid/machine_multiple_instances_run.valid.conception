@@ -1,0 +1,23 @@
+# name: machine multiple instances run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Simple() -> int {
+    state Start {
+        return 4;
+    }
+}
+
+int main() {
+    Simple a = Simple();
+    Simple b = Simple();
+    Step(a);
+    Step(b);
+    return Result(a) + Result(b);
+}
+
+=== run ===
+exit_code: 8

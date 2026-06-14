@@ -1199,7 +1199,7 @@ fn expectCheckFixture(comptime path: []const u8) !void {
 
     if (std.mem.indexOf(u8, path, "phase12-allocation") != null) {
         try expectSemanticCheckFixtureAllowNoMain(path, fixture);
-    } else if (std.mem.indexOf(u8, path, "phase3-semantics") != null or std.mem.indexOf(u8, path, "phase8-concepts-templates") != null or std.mem.indexOf(u8, path, "phase5-sum-types") != null or std.mem.indexOf(u8, path, "phase5a-judgment") != null or std.mem.indexOf(u8, path, "phase6-unsafe-ownership") != null or std.mem.indexOf(u8, path, "phase7-runtime-structs") != null or std.mem.indexOf(u8, path, "phase10-ownership") != null or std.mem.indexOf(u8, path, "phase11-testing") != null or std.mem.indexOf(u8, path, "phase13-machines") != null or std.mem.indexOf(u8, path, "phase14-interfaces") != null or std.mem.indexOf(u8, path, "phase15-c-abi") != null or std.mem.indexOf(u8, path, "phase16-imports") != null or std.mem.indexOf(u8, path, "phase17-runtime-failure") != null) {
+    } else if (std.mem.indexOf(u8, path, "phase3-semantics") != null or std.mem.indexOf(u8, path, "phase8-concepts-templates") != null or std.mem.indexOf(u8, path, "phase5-sum-types") != null or std.mem.indexOf(u8, path, "phase5a-judgment") != null or std.mem.indexOf(u8, path, "phase6-unsafe-ownership") != null or std.mem.indexOf(u8, path, "phase7-runtime-structs") != null or std.mem.indexOf(u8, path, "phase10-ownership") != null or std.mem.indexOf(u8, path, "phase11-testing") != null or std.mem.indexOf(u8, path, "phase13-machines") != null or std.mem.indexOf(u8, path, "phase14-interfaces") != null or std.mem.indexOf(u8, path, "phase15-c-abi") != null or std.mem.indexOf(u8, path, "phase16-imports") != null or std.mem.indexOf(u8, path, "phase17-runtime-failure") != null or std.mem.indexOf(u8, path, "phase18-machines") != null) {
         try expectSemanticCheckFixture(path, fixture);
     } else {
         try expectPhase2CheckFixture(path, fixture);
@@ -2881,6 +2881,18 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase13-machines/invalid/machine_transition_match_cross_machine_state.invalid.conception");
     try expectCheckFixture("../../../language/phase13-machines/invalid/machine_transition_decide_unknown_state.invalid.conception");
     try expectCheckFixture("../../../language/phase13-machines/invalid/machine_transition_decide_cross_machine_state.invalid.conception");
+
+    try expectRunFixture("../../../language/phase18-machines/valid/machine_local_step_result_run.valid.conception");
+    try expectRunFixture("../../../language/phase18-machines/valid/machine_local_complete_run.valid.conception");
+    try expectRunFixture("../../../language/phase18-machines/valid/machine_multiple_instances_run.valid.conception");
+    try expectRunFixture("../../../language/phase18-machines/valid/machine_copy_assignment_behavior_run.valid.conception");
+    try expectRunFixture("../../../language/phase18-machines/valid/machine_result_before_completion_panics_run.valid.conception");
+    try expectBackendCFixture("../../../language/phase18-machines/valid/machine_frame_backend_shape.valid.conception");
+    try expectBackendCFixture("../../../language/phase18-machines/valid/machine_result_panic_backend_shape.valid.conception");
+    try expectCheckFixture("../../../language/phase18-machines/invalid/machine_step_non_machine.invalid.conception");
+    try expectCheckFixture("../../../language/phase18-machines/invalid/machine_step_temporary.invalid.conception");
+    try expectCheckFixture("../../../language/phase18-machines/invalid/machine_complete_non_machine.invalid.conception");
+    try expectCheckFixture("../../../language/phase18-machines/invalid/machine_result_non_machine.invalid.conception");
 
     try expectParseFixture("../../../language/phase15-c-abi/valid/extern_c_block_basic.valid.conception");
     try expectParseFixture("../../../language/phase15-c-abi/valid/extern_c_block_multiple_functions.valid.conception");

@@ -100,14 +100,13 @@ Design answers for v0:
 
 - **Can a machine frame be a local?** Yes. Phase 13 already supports local
   machine values created with `MachineName(...)`.
-- **Can a machine frame be a field?** Yes in Phase 18 v0, when the field type is
-  a machine type and initialization can be satisfied by the conservative child
-  initialization rules.
+- **Can a machine frame be a field?** Planned for P18-M2+. P18-M1 deliberately
+  does not implement nested machine fields or child frame initialization.
 - **Can a machine frame be copied/moved?** It follows existing storage/move
   rules. Phase 18 does not invent special machine cloning. If a machine frame's
   contained fields make it non-copy, existing non-copy diagnostics should apply.
-- **Can a machine frame contain child machine frames?** Yes. A parent frame may
-  contain child frames by value as fields.
+- **Can a machine frame contain child machine frames?** Planned for P18-M2+.
+  P18-M1 only audits the existing single-frame value model.
 - **How are result slots represented?** As part of the explicit frame, using the
   existing Phase 13 result storage model: a completion flag gates reads, and
   `Result(machine)` reads the result slot only after completion.
@@ -115,6 +114,29 @@ Design answers for v0:
   fields may be default-initialized as part of parent construction. Parameterized
   child fields are deferred unless existing explicit field initialization syntax
   makes the construction trivial and visible.
+
+
+## P18-M1 implementation status: machine frame/value audit and hardening
+
+P18-M1 is an audit and hardening milestone, not a nested-machine implementation milestone. It pins the current machine frame/value model before P18-M2 adds child machine fields.
+
+### Current machine frame/value audit
+
+- **Machine frame representation:** a machine declaration creates a nominal `machine_type` in the type store keyed by the HIR machine id. In executable C, each machine lowers to a `typedef struct` frame with a state enum field, `int complete`, a scalar result slot, and one field per captured machine parameter.
+- **Construction behavior:** `MachineName(...)` lowers to a backend constructor function returning the frame by value. The constructor initializes the initial state, clears `complete`, zero-initializes the result slot, and copies scalar parameters into frame fields.
+- **Local machine behavior:** machine frames are supported as ordinary locals. Multiple local frame instances are independent when constructed separately.
+- **Step behavior:** `Step(machine)` is statement-like/void and now requires an assignable machine place (`CON0291`). The current supported place surface is a local or parameter machine binding. `Step(Simple())` is rejected instead of stepping a compiler-created temporary.
+- **Complete behavior:** `Complete(machine)` accepts readable machine values/places and returns the frame completion flag. Non-machine operands are rejected with `CON0292`. Temporaries remain readable under the current value model, but relying on completion of a freshly constructed temporary is provisional and not a nested-machine feature.
+- **Result behavior:** `Result(machine)` accepts readable machine values/places, returns the machine result type, and is valid only after completion at runtime. Non-machine operands are rejected with `CON0293`. Temporary reads remain part of the current readable-value behavior, but are provisional.
+- **Result-before-completion panic behavior:** incomplete `Result(machine)` reads lower through the shared `cpt_panic("machine result cannot be read before completion")` path and preserve deterministic runtime failure exit code 101.
+- **Copy/move/assignment behavior:** machine frames are currently copyable/assignable by value through existing storage rules. A copied frame copies state, completion, result, and captured parameter fields. This behavior is fixture-pinned as current/provisional; P18-M2 must revisit it before nested child frames make frame copies deeper.
+- **Parameter/return behavior:** machine values can be represented as function parameter or return types in the current type/backend model when otherwise expressible, but P18-M1 does not broaden or promote this as stable API doctrine.
+- **Field behavior:** machine fields are not implemented as a supported machine-composition feature in P18-M1. Nested machine fields, initialization, and operations on child fields are deferred to P18-M2+.
+- **Backend frame layout summary:** current generated C uses a state enum, a by-value frame struct, a by-value constructor, and a pointer-taking step function. `Step` calls the step function with the address of the local frame; `Complete` reads `.complete`; `Result` reads `.result` after a `.complete` guard.
+
+### Assumptions for P18-M2 nested fields
+
+P18-M2 may build on nominal machine frame types, by-value frame constructors, explicit local storage, explicit pointer-taking step emission, completion/result fields, and shared panic routing. It must not assume stable final field names beyond the audited essentials, and it must decide whether by-value copying of parent frames with child frames is acceptable or should be restricted before child fields are stabilized.
 
 ## 3. Nested machine fields / child frames
 
