@@ -1,0 +1,23 @@
+# name: machine result panic backend shape
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Simple() -> int {
+    state Start { return 3; }
+}
+
+int main() {
+    Simple m = Simple();
+    int value = Result(m);
+    panic("ordinary panic");
+    return value;
+}
+
+=== c ===
+count: static void cpt_panic(const char* reason) | 1
+contains: cpt_panic("machine result cannot be read before completion")
+contains: cpt_panic("ordinary panic")
+not_contains: cpt_machine_result_before_complete

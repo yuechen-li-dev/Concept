@@ -233,6 +233,9 @@ pub const DiagnosticCode = enum {
     AssertConditionMustBeBool,
     PanicExpressionUseUnsupported,
     AssertExpressionUseUnsupported,
+    StepRequiresMachinePlace,
+    CompleteRequiresMachineValue,
+    ResultRequiresMachineValue,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -447,6 +450,9 @@ pub const DiagnosticCode = enum {
             .AssertConditionMustBeBool => "CON0283",
             .PanicExpressionUseUnsupported => "CON0284",
             .AssertExpressionUseUnsupported => "CON0285",
+            .StepRequiresMachinePlace => "CON0291",
+            .CompleteRequiresMachineValue => "CON0292",
+            .ResultRequiresMachineValue => "CON0293",
         };
     }
 };

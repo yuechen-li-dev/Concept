@@ -4,8 +4,8 @@
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
 **Phases closed:** 1 through 17
-**Current phase:** Phase 18 started — composable machines and runtime transitions design
-**Fixture corpus:** 1035 total fixture files; 85 under `language/phase11-testing/`; 108 under `language/phase15-c-abi/`; 73 under `language/phase16-imports/`; 57 under `language/phase17-runtime-failure/`
+**Current phase:** Phase 18 in progress — P18-M1 machine frame/value audit and hardening complete
+**Fixture corpus:** 1046 total fixture files; 85 under `language/phase11-testing/`; 108 under `language/phase15-c-abi/`; 73 under `language/phase16-imports/`; 57 under `language/phase17-runtime-failure/`; 11 under `language/phase18-machines/`
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
 ---
@@ -414,7 +414,7 @@
 | `MachineName(args)` construction | ✅ | Phase 13 |
 | `noalloc machine` effect checking | ✅ | Phase 13 — `noalloc` effect on machine declaration enforced |
 | `yield` statement in machines | ❌ | Deferred from Phase 13 |
-| Nested machine fields / child frames | ❌ | Phase 18 design milestone defines by-value zero-parameter child machine fields and explicit parent `Step`/`Complete`/`Result`; implementation deferred to P18-M2/P18-M3 |
+| Nested machine fields / child frames | ❌ | Phase 18 P18-M1 audits/hardens the existing local machine frame value model first; by-value zero-parameter child fields and explicit parent `Step`/`Complete`/`Result` remain deferred to P18-M2/P18-M3 |
 | Machine lowers to explicit state struct in MIR | ✅ | Phase 13 — state enum and struct visible in MIR |
 | Machine lowering visible in MIR (not hidden) | ✅ | Phase 13 |
 | References crossing yield restricted | ❌ | Depends on yield being implemented |
@@ -540,7 +540,7 @@
 | §33 Comptime | 🔶 Scalar hermetic comptime done; type-level comptime, capability execution deferred |
 | §34–35 Reflection/macros | ❌ Correctly deferred per PoC3 |
 | §36 C interop | ✅ Phase 15 v0 complete for single-compilation-unit C ABI: `extern "C"` declarations/calls, `export "C"` definitions, validated `[Repr(C)]` structs by value/pointer, strict ABI diagnostics, duplicate C symbol rejection, extern prototype/call emission, unmangled exported C definitions, no generated includes, no C++ text, examples, and invalid coverage for deferred non-goals |
-| §37 State machines | 🔶 Literal transitions runnable; `yield`, nested machines, match/decide runtime deferred |
+| §37 State machines | 🔶 Literal transitions runnable; P18-M1 pins machine locals, explicit `Step` place validation, `Complete`/`Result` value reads, backend frame shape, shared panic routing, and provisional by-value copy/assignment; `yield`, nested machines, match/decide runtime deferred |
 | §38–39 SoA/audit | ❌ Provisional/future |
 | §40 Compiler architecture | 🔶 Core pipeline done; LLVM/native backends are Stage 3 |
 | §41 Bringup roadmap | 🔶 Stage 0 complete; Stage 1 ~75% |
@@ -566,7 +566,7 @@
 ---
 
 *This matrix began as the Phase 13 closeout snapshot and has been updated
-through Phase 17 closeout, with Phase 18 design work now started. Stage 1 is substantially implemented. Phase 14
+through Phase 17 closeout, with Phase 18 P18-M1 machine frame/value audit now complete. Stage 1 is substantially implemented. Phase 14
 closed runtime interfaces and borrowed dyn dispatch v0. Phase 15 closed the
 single-compilation-unit C ABI v0 surface. Phase 16 closes imports and
 multi-module compilation-unit modules v0: harness/driver-supplied multi-file
@@ -583,4 +583,9 @@ platform ABI matrices). Phase 17 closes the basic runtime failure substrate, so 
 
 ## Phase 17 M9 closeout update
 
-P17-M9 closes Phase 17. P17-M8 added human-readable examples under `examples/phase17/` and representative fixtures for panic/assert/machine runtime failure behavior. The M8 fixtures pin exit code 101 for panic, false assert, and machine `Result(machine)` before completion; exit 0/ordinary result behavior for true assert and result-after-completion; one-per-C-unit `cpt_panic` helper sharing across panic/assert/migrated machine trap sites; absence of the old `cpt_machine_result_before_complete` helper and `__builtin_trap` at the migrated site; C-escaped reason strings; blank reason rejection; expression-position rejection; bool-only assert conditions; and ordinary runtime assert independence from Core.Test/test-runner symbols. The language fixture corpus now contains 1035 fixture files, including 57 under `language/phase17-runtime-failure/`.
+P17-M9 closes Phase 17. P17-M8 added human-readable examples under `examples/phase17/` and representative fixtures for panic/assert/machine runtime failure behavior. The M8 fixtures pin exit code 101 for panic, false assert, and machine `Result(machine)` before completion; exit 0/ordinary result behavior for true assert and result-after-completion; one-per-C-unit `cpt_panic` helper sharing across panic/assert/migrated machine trap sites; absence of the old `cpt_machine_result_before_complete` helper and `__builtin_trap` at the migrated site; C-escaped reason strings; blank reason rejection; expression-position rejection; bool-only assert conditions; and ordinary runtime assert independence from Core.Test/test-runner symbols. The language fixture corpus now contains 1046 fixture files, including 57 under `language/phase17-runtime-failure/` and 11 under `language/phase18-machines/`.
+
+
+## Phase 18 M1 update
+
+P18-M1 hardens the machine frame/value baseline before nested fields. It adds 11 fixtures under `language/phase18-machines/` covering local frame construction, explicit stepping, completion/result stability, independent local instances, result-before-completion exit code 101, backend frame shape, shared `cpt_panic` routing, current by-value copy/assignment behavior, and invalid `Step`/`Complete`/`Result` operands. `Step` now requires an assignable machine place and reports `CON0291`; non-machine `Complete` and `Result` report `CON0292` and `CON0293`. Nested machine fields, child initialization, executable transition match, and executable transition decide remain future Phase 18 milestones.

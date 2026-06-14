@@ -50,8 +50,8 @@ language/phase16-imports/valid/
 language/phase16-imports/invalid/
 language/phase17-runtime-failure/valid/
 language/phase17-runtime-failure/invalid/
-language/phase18-composable-machines/valid/
-language/phase18-composable-machines/invalid/
+language/phase18-machines/valid/
+language/phase18-machines/invalid/
 ```
 
 ## Phase 5 sum-type fixtures
@@ -97,13 +97,13 @@ expression runtime success. P17-M2 panic fixtures continue to cover
 statement-position `panic("reason");`, invalid reason/expression forms,
 backend-owned `cpt_panic` lowering, helper de-duplication, escaping, no
 test-runner dependency, and exit code 101. P17-M5 adds empty, whitespace-only, and tab-only reason rejection fixtures plus non-empty reason acceptance fixtures for both panic and assert. P17-M6 adds Core.Test `Assert.True` / `Assert.False` alignment fixtures for valid reasons, empty and whitespace-only reason rejection, bool-only conditions, and runtime/test assertion separation in a `.con_test` body. P17-M7 adds runtime trap consolidation fixtures proving machine `Result(machine)` before completion exits through shared `cpt_panic` with code 101, successful result-after-completion behavior remains unchanged, and migrated traps share one helper with runtime assert. P17-M8 adds human-readable examples under `examples/phase17/` plus representative example-named fixtures for panic/assert/machine runtime exit behavior, backend helper sharing/de-duplication, reason validation, expression-position rejection, bool-only assert conditions, and runtime assert separation from Core.Test/test-runner symbols. The language fixture corpus contains
-1035 fixture files after adding the P17-M8 examples/hardening fixtures, including 57 under `language/phase17-runtime-failure/` and 85 files under `language/phase11-testing/`.
+1046 fixture files after adding the P18-M1 machine audit fixtures, including 57 under `language/phase17-runtime-failure/`, 11 under `language/phase18-machines/`, and 85 files under `language/phase11-testing/`.
 
 ## Phase 16 import/multi-module fixtures
 
 Phase 16 is closed. Its fixtures live under `language/phase16-imports/` and
 cover the v0 module/import surface for harness-supplied multi-source
-compilation units. The full corpus now contains 1035 `.conception`/`.con_test` fixtures, including 963 `.conception` fixtures, 72 `.con_test` fixtures, 73 Phase 16 fixtures, 57 Phase 17 fixtures, and 84 Phase 11 testing fixtures across 85 files under `language/phase11-testing/`.
+compilation units. The full corpus now contains 1046 `.conception`/`.con_test` fixtures, including 974 `.conception` fixtures, 72 `.con_test` fixtures, 73 Phase 16 fixtures, 57 Phase 17 fixtures, 11 Phase 18 machine fixtures, and 84 Phase 11 testing fixtures across 85 files under `language/phase11-testing/`.
 
 A single `.conception` fixture may contain multiple virtual Concept source
 files, each with a stable virtual path for diagnostics. The embedded form is
@@ -220,17 +220,11 @@ accepts the source because fixture C-output snapshot matching is not implemented
 yet.
 
 
-## Phase 18 composable machine fixtures
+## Phase 18 machine fixtures
 
-Phase 18 has started as a design milestone. Planned fixtures should live under
-`language/phase18-composable-machines/` once implementation begins. The intended
-corpus should cover by-value nested machine fields, default-initialized
-zero-parameter child frames, `Step`/`Complete`/`Result` on nested fields, runtime
-`transition match`, runtime `transition decide`, deterministic tie-breaking,
-state introspection if implemented, and shared-panic runtime failures for
-invalid machine states, no matching transition case, and no enabled decision
-candidates. P18-M0 adds only the design document and does not add executable
-fixtures yet.
+Phase 18 implementation fixtures now live under `language/phase18-machines/`. P18-M1 adds 11 machine frame/value audit fixtures: local machine construction, `Step`/`Complete`/`Result` runtime stability, independent local instances, current by-value copy/assignment behavior, result-before-completion exit code 101, backend frame shape, shared `cpt_panic` backend routing, and invalid `Step`/`Complete`/`Result` operand diagnostics.
+
+Nested machine fields, child initialization, operations on nested fields, executable `transition match`, and executable `transition decide` remain deferred to later Phase 18 milestones.
 
 ## Phase 13 machine fixtures
 

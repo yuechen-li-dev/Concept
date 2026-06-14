@@ -1,0 +1,21 @@
+# name: machine local step result run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Simple() -> int {
+    state Start {
+        return 7;
+    }
+}
+
+int main() {
+    Simple m = Simple();
+    Step(m);
+    return Result(m);
+}
+
+=== run ===
+exit_code: 7

@@ -1,0 +1,44 @@
+# name: machine frame backend shape
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Door(int code) -> int {
+    state Closed { transition Open; }
+    state Open { return code; }
+}
+
+int main() {
+    Door door = Door(5);
+    Step(door);
+    Step(door);
+    return Result(door);
+}
+
+=== c ===
+contains: typedef enum {
+contains: cpt_m_Door_s_Closed = 0,
+contains: cpt_m_Door_s_Open = 1,
+contains: typedef struct {
+contains: cpt_m_Door_state state;
+contains: int complete;
+contains: int result;
+contains: int cpt_mpf_code;
+contains: static cpt_m_Door cpt_m_Door_new(int cpt_mp_code)
+contains: m.state = cpt_m_Door_s_Closed;
+contains: m.complete = 0;
+contains: m.result = 0;
+contains: m.cpt_mpf_code = cpt_mp_code;
+contains: static void cpt_m_Door_step(cpt_m_Door* m)
+contains: if (m->complete) return;
+contains: m->state = cpt_m_Door_s_Open;
+contains: m->result = m->cpt_mpf_code;
+contains: m->complete = 1;
+contains: cpt_m_Door_step(&
+contains: .complete ?
+contains: .result : (cpt_panic("machine result cannot be read before completion"), 0)
+not_contains: malloc
+not_contains: scheduler
+not_contains: async

@@ -2425,10 +2425,20 @@ const BodyLowerer = struct {
                     }
                     const machine_type = (try self.inferExprType(owned[0])) orelse return null;
                     if (self.collector.module.types.kind(machine_type) != .machine_type) {
-                        try self.collector.diagnostics.append(diagnostics.Diagnostic.init(.InvalidCall, .@"error", "machine builtin expects a machine argument", call.span));
+                        const code: diagnostics.DiagnosticCode = if (std.mem.eql(u8, call.callee.text, "Complete"))
+                            .CompleteRequiresMachineValue
+                        else if (std.mem.eql(u8, call.callee.text, "Result"))
+                            .ResultRequiresMachineValue
+                        else
+                            .StepRequiresMachinePlace;
+                        try self.collector.diagnostics.append(diagnostics.Diagnostic.init(code, .@"error", "machine builtin expects a machine argument", call.span));
                         return null;
                     }
                     if (std.mem.eql(u8, call.callee.text, "Step")) {
+                        if (!self.isMachineStepPlace(owned[0])) {
+                            try self.collector.diagnostics.append(diagnostics.Diagnostic.init(.StepRequiresMachinePlace, .@"error", "Step expects an assignable machine place", call.span));
+                            return null;
+                        }
                         return try self.collector.module.hir.addExpr(.{ .machine_step = owned[0] }, call.span);
                     }
                     if (std.mem.eql(u8, call.callee.text, "Complete")) {
@@ -3003,6 +3013,14 @@ const BodyLowerer = struct {
                 try self.collector.diagnostics.append(diagnostics.testIntrinsicTypeMismatch(expr.span));
                 return null;
             },
+        };
+    }
+
+    fn isMachineStepPlace(self: *BodyLowerer, expr_id: hir.ExprId) bool {
+        const expr = self.collector.module.hir.getExpr(expr_id).*;
+        return switch (expr.kind) {
+            .local_ref, .param_ref => true,
+            else => false,
         };
     }
 

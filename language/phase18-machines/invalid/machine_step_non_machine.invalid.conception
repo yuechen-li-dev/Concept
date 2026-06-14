@@ -1,0 +1,16 @@
+# name: machine step non machine
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    int x = 0;
+    Step(x);
+    return 0;
+}
+
+=== diagnostics ===
+CON0291
