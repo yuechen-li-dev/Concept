@@ -276,6 +276,7 @@ const Runner = struct {
                 _ = try self.evaluateExpr(expr_id, frame);
                 return null;
             },
+            .panic_stmt => error.UnsupportedConstruct,
             .return_stmt => |maybe_expr| if (maybe_expr) |expr_id| try self.evaluateExpr(expr_id, frame) else .void,
             .if_stmt => |if_stmt| blk: {
                 const condition = try self.evaluateExpr(if_stmt.condition, frame);

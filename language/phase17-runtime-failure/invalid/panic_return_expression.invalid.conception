@@ -1,0 +1,14 @@
+# name: panic return expression
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    return panic("return panic");
+}
+
+=== diagnostics ===
+CON0284

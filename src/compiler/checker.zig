@@ -190,6 +190,10 @@ fn validateStmt(allocator: std.mem.Allocator, stmt: ast.Stmt, return_type: ExprT
                 return error.InvalidExecutable;
             }
         },
+        .panic_stmt => |panic_stmt| {
+            try report(diagnostics, "panic is not supported by the legacy AST executable checker", panic_stmt.span);
+            return error.InvalidExecutable;
+        },
         .return_stmt => |return_stmt| {
             const value = return_stmt.value orelse {
                 try report(diagnostics, "P2-M2 C backend requires return statements to have an expression", return_stmt.span);

@@ -2,9 +2,15 @@
 
 ## Status
 
-P17-M0 design milestone. This document defines the target doctrine and staged
-implementation plan for panic, runtime assertions, and shared runtime failure
-reporting. It does not require compiler behavior in M0.
+P17-M1 is now implemented for `panic(reason)` parser/AST/HIR scaffold:
+
+- `panic("reason");` parses in statement position.
+- The reason string literal and source span are preserved in AST/HIR.
+- HIR/debug output shows dedicated panic statements.
+- Missing reasons, wrong arity, and non-string reasons are rejected.
+- Expression-position `panic(...)` remains unsupported and is diagnosed.
+- MIR/backend lowering remains deferred to P17-M2.
+- `assert(condition, reason)` remains deferred to P17-M3.
 
 ## Core doctrine
 
@@ -123,6 +129,9 @@ assert(ok, "   ");
 assert(123, "numeric condition is not bool");
 panic();
 panic("");
+
+`panic("")` and whitespace-only reasons remain planned for P17-M5 diagnostic
+hardening rather than enforced in P17-M1.
 ```
 
 ## 4. `panic(reason)`

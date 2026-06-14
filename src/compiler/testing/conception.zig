@@ -1199,7 +1199,7 @@ fn expectCheckFixture(comptime path: []const u8) !void {
 
     if (std.mem.indexOf(u8, path, "phase12-allocation") != null) {
         try expectSemanticCheckFixtureAllowNoMain(path, fixture);
-    } else if (std.mem.indexOf(u8, path, "phase3-semantics") != null or std.mem.indexOf(u8, path, "phase8-concepts-templates") != null or std.mem.indexOf(u8, path, "phase5-sum-types") != null or std.mem.indexOf(u8, path, "phase5a-judgment") != null or std.mem.indexOf(u8, path, "phase6-unsafe-ownership") != null or std.mem.indexOf(u8, path, "phase7-runtime-structs") != null or std.mem.indexOf(u8, path, "phase10-ownership") != null or std.mem.indexOf(u8, path, "phase11-testing") != null or std.mem.indexOf(u8, path, "phase13-machines") != null or std.mem.indexOf(u8, path, "phase14-interfaces") != null or std.mem.indexOf(u8, path, "phase15-c-abi") != null or std.mem.indexOf(u8, path, "phase16-imports") != null) {
+    } else if (std.mem.indexOf(u8, path, "phase3-semantics") != null or std.mem.indexOf(u8, path, "phase8-concepts-templates") != null or std.mem.indexOf(u8, path, "phase5-sum-types") != null or std.mem.indexOf(u8, path, "phase5a-judgment") != null or std.mem.indexOf(u8, path, "phase6-unsafe-ownership") != null or std.mem.indexOf(u8, path, "phase7-runtime-structs") != null or std.mem.indexOf(u8, path, "phase10-ownership") != null or std.mem.indexOf(u8, path, "phase11-testing") != null or std.mem.indexOf(u8, path, "phase13-machines") != null or std.mem.indexOf(u8, path, "phase14-interfaces") != null or std.mem.indexOf(u8, path, "phase15-c-abi") != null or std.mem.indexOf(u8, path, "phase16-imports") != null or std.mem.indexOf(u8, path, "phase17-runtime-failure") != null) {
         try expectSemanticCheckFixture(path, fixture);
     } else {
         try expectPhase2CheckFixture(path, fixture);
@@ -3399,4 +3399,36 @@ test "language run fixture: phase16 imported extern C abs" {
 
 test "language run fixture: phase16 same struct names qualified" {
     try expectRunFixture("../../../language/phase16-imports/valid/same_struct_names_qualified_run.valid.conception");
+}
+
+test "language check fixture: phase17 panic statement basic" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/valid/panic_statement_basic.valid.conception");
+}
+
+test "language check fixture: phase17 panic statement preserves reason" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/valid/panic_statement_preserves_reason.valid.conception");
+}
+
+test "language check fixture: phase17 panic statement after code" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/valid/panic_statement_after_code.valid.conception");
+}
+
+test "language check fixture: phase17 panic missing reason" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/panic_missing_reason.invalid.conception");
+}
+
+test "language check fixture: phase17 panic too many args" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/panic_too_many_args.invalid.conception");
+}
+
+test "language check fixture: phase17 panic non string reason" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/panic_non_string_reason.invalid.conception");
+}
+
+test "language check fixture: phase17 panic expression initializer" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/panic_expression_initializer.invalid.conception");
+}
+
+test "language check fixture: phase17 panic return expression" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/panic_return_expression.invalid.conception");
 }

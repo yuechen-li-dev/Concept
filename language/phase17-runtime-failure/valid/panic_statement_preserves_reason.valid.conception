@@ -1,0 +1,12 @@
+# name: panic statement preserves reason
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    panic("machine result read before completion");
+    return 0;
+}

@@ -717,6 +717,7 @@ const Collector = struct {
                 .assignment,
                 .expr_stmt,
                 .discard_stmt,
+                .panic_stmt,
                 .return_stmt,
                 => {},
             }
@@ -2116,6 +2117,15 @@ const BodyLowerer = struct {
                 const value = (try self.lowerExpr(expr_stmt.value.*)) orelse return null;
                 return try self.collector.module.hir.addStmt(.{ .expr_stmt = value }, expr_stmt.span);
             },
+            .panic_stmt => |panic_stmt| {
+                const reason_text = stringLiteralContents(panic_stmt.reason.text);
+                const owned_reason = try self.collector.allocator.dupe(u8, reason_text);
+                errdefer self.collector.allocator.free(owned_reason);
+                return try self.collector.module.hir.addStmt(.{ .panic_stmt = .{
+                    .reason = owned_reason,
+                    .reason_span = panic_stmt.reason_span,
+                } }, panic_stmt.span);
+            },
             .discard_stmt => |discard_stmt| {
                 if (try self.lowerArenaStorageOpStmt(discard_stmt.value.*)) |stmt_id| return stmt_id;
                 const value = (try self.lowerExpr(discard_stmt.value.*)) orelse return null;
@@ -2319,6 +2329,10 @@ const BodyLowerer = struct {
                 };
             },
             .call => |call| {
+                if (self.isPanicCall(call)) {
+                    try self.collector.diagnostics.append(diagnostics.panicExpressionUseUnsupported(call.span));
+                    return null;
+                }
                 if (self.isArenaAllocCall(call)) {
                     return try self.lowerArenaAlloc(call);
                 }
@@ -2608,6 +2622,11 @@ const BodyLowerer = struct {
         if (std.mem.eql(u8, qualifier.text, "Assert")) return .{ .family = .assert, .name = call.callee.text };
         if (std.mem.eql(u8, qualifier.text, "Expect")) return .{ .family = .expect, .name = call.callee.text };
         return null;
+    }
+
+    fn isPanicCall(self: *BodyLowerer, call: ast.Expr.CallExpr) bool {
+        _ = self;
+        return call.qualifier == null and std.mem.eql(u8, call.callee.text, "panic");
     }
 
     fn maybeTestRelationConstructorCall(self: *BodyLowerer, call: ast.Expr.CallExpr) bool {
@@ -5608,6 +5627,49 @@ test "test intrinsic semantics reject wrong arity and normal source usage" {
     that_statements[0] = try exprStmt(allocator, try qualifiedCallExpr(allocator, "Expect", "That", &.{ boolExpr(true), try qualifiedCallExpr(allocator, "Is", "True", &.{}), stringExpr("\"reason\"") }));
     that_statements[1] = try returnStmt(allocator, intExpr("0"));
     try expectOneSemanticDiagnostic(&.{functionWithBody("main", &.{}, that_statements)}, .TestIntrinsicOutsideTestFile);
+}
+
+test "panic statement lowers to HIR and debug output preserves reason" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const statements = try allocator.alloc(ast.Stmt, 2);
+    statements[0] = .{ .panic_stmt = .{
+        .reason = .{ .text = "\"unreachable state\"", .span = .{ .start = 0, .length = 19 } },
+        .reason_span = .{ .start = 0, .length = 19 },
+        .span = .{ .start = 0, .length = 26 },
+    } };
+    statements[1] = try returnStmt(allocator, intExpr("0"));
+
+    var diagnostics_bag = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics_bag.deinit();
+    var module = try collectItems(&.{functionWithBody("main", &.{}, statements)}, &diagnostics_bag);
+    defer module.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics_bag.count());
+    const block = module.hir.getStmt(module.hir.getFunction(.{ .index = 0 }).body.?).kind.block;
+    const panic_stmt = module.hir.getStmt(block[0]).kind.panic_stmt;
+    try std.testing.expectEqualStrings("unreachable state", panic_stmt.reason);
+
+    const snapshot = try module.hir.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Panic because unreachable state") != null);
+}
+
+test "panic expression use is rejected in local initializers and returns" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const init_statements = try allocator.alloc(ast.Stmt, 2);
+    init_statements[0] = try localStmt(allocator, "x", try callExpr(allocator, "panic", &.{stringExpr("\"reason\"")}));
+    init_statements[1] = try returnStmt(allocator, intExpr("0"));
+    try expectOneSemanticDiagnostic(&.{functionWithBody("main", &.{}, init_statements)}, .PanicExpressionUseUnsupported);
+
+    const return_statements = try allocator.alloc(ast.Stmt, 1);
+    return_statements[0] = try returnStmt(allocator, try callExpr(allocator, "panic", &.{stringExpr("\"reason\"")}));
+    try expectOneSemanticDiagnostic(&.{functionWithBody("main", &.{}, return_statements)}, .PanicExpressionUseUnsupported);
 }
 
 fn sameType(left: types.TypeId, right: types.TypeId) bool {

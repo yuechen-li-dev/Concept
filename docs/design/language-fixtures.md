@@ -83,12 +83,15 @@ Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed f
 
 ## Phase 16 import/multi-module fixtures
 
-Phase 17 M0 is design-only for panic, assertions, and runtime failure reporting; Phase 17 fixtures are planned under `language/phase17-runtime-failure/` once compiler behavior begins.
+Phase 17 fixtures now live under `language/phase17-runtime-failure/`. P17-M1
+covers statement-position `panic("reason");`, HIR-check acceptance for the
+scaffolded statement form, and invalid diagnostics for missing reason, wrong
+arity, non-string reason, and unsupported expression-position use.
 
 Phase 16 is closed. Its fixtures live under `language/phase16-imports/` and
 cover the v0 module/import surface for harness-supplied multi-source
-compilation units. The full corpus now contains 906 `.conception` fixtures,
-including 73 Phase 16 fixtures.
+compilation units. The full corpus now contains 914 `.conception` fixtures,
+including 73 Phase 16 fixtures and 8 Phase 17 fixtures.
 
 A single `.conception` fixture may contain multiple virtual Concept source
 files, each with a stable virtual path for diagnostics. The embedded form is

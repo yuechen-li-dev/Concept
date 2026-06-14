@@ -929,11 +929,18 @@ pub const TransitionStmt = struct {
     }
 };
 
+pub const PanicStmt = struct {
+    reason: Expr.StringLiteralExpr,
+    reason_span: SourceSpan,
+    span: SourceSpan,
+};
+
 pub const Stmt = union(enum) {
     local_decl: LocalDeclStmt,
     assignment: AssignmentStmt,
     expr_stmt: ExprStmt,
     discard_stmt: DiscardStmt,
+    panic_stmt: PanicStmt,
     return_stmt: ReturnStmt,
     transition_stmt: TransitionStmt,
     if_stmt: IfStmt,
@@ -948,6 +955,7 @@ pub const Stmt = union(enum) {
             .assignment => |stmt| stmt.deinit(allocator),
             .expr_stmt => |stmt| stmt.deinit(allocator),
             .discard_stmt => |stmt| stmt.deinit(allocator),
+            .panic_stmt => {},
             .return_stmt => |stmt| stmt.deinit(allocator),
             .transition_stmt => |stmt| stmt.deinit(allocator),
             .if_stmt => |stmt| stmt.deinit(allocator),
@@ -984,6 +992,12 @@ pub const Stmt = union(enum) {
                 try writeIndent(writer, depth);
                 try writer.writeAll("Discard\n");
                 try stmt.value.writeDebug(writer, depth + 1);
+            },
+            .panic_stmt => |stmt| {
+                try writeIndent(writer, depth);
+                try writer.writeAll("Panic ");
+                try writer.writeAll(stmt.reason.text);
+                try writer.writeByte('\n');
             },
             .return_stmt => |stmt| {
                 try writeIndent(writer, depth);

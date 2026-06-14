@@ -540,6 +540,7 @@ const Checker = struct {
                     return error.InvalidSemanticModule;
                 }
             },
+            .panic_stmt => {},
             .arena_reset => |op| try self.checkArenaStorageOp(function_id, return_type, op, stmt.span),
             .arena_destroy => |op| try self.checkArenaStorageOp(function_id, return_type, op, stmt.span),
             .assignment => |assignment| {
@@ -1546,6 +1547,10 @@ const Checker = struct {
             .assignment => |assignment| .{ .assignment = .{ .target = self.cloneAssignTarget(assignment.target, param_map, local_map), .value = try self.cloneExpr(assignment.value, subst, param_map, local_map, span) } },
             .expr_stmt => |expr_id| .{ .expr_stmt = try self.cloneExpr(expr_id, subst, param_map, local_map, span) },
             .discard_stmt => |expr_id| .{ .discard_stmt = try self.cloneExpr(expr_id, subst, param_map, local_map, span) },
+            .panic_stmt => |panic_stmt| .{ .panic_stmt = .{
+                .reason = try self.allocator.dupe(u8, panic_stmt.reason),
+                .reason_span = panic_stmt.reason_span,
+            } },
             .arena_reset => |op| .{ .arena_reset = .{
                 .arena_expr = try self.cloneExpr(op.arena_expr, subst, param_map, local_map, span),
                 .arena_type = try self.substituteType(op.arena_type, subst, span),

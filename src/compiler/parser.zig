@@ -1252,6 +1252,7 @@ pub const Parser = struct {
         if (self.current().kind == .unsafe) return try self.parseUnsafeBlockStmt(allocator);
         if (self.current().kind == .match) return try self.parseMatchStmt(allocator);
         if (self.current().kind == .discard) return try self.parseDiscardStmt(allocator);
+        if (self.isPanicStmtStart()) return try self.parsePanicStmt(allocator);
         if (self.current().kind == .left_brace) return .{ .block_stmt = try self.parseBlockAfterOpenBrace(allocator) };
         if (self.isLocalDeclStart()) return try self.parseLocalDeclStmt(allocator);
         if (self.isAssignmentStmtStart()) return try self.parseAssignmentStmt(allocator);
@@ -1537,6 +1538,63 @@ pub const Parser = struct {
         return .{ .discard_stmt = .{
             .value = value,
             .span = ast.spanFromBounds(discard_token.span.start, spanEnd(end_span)),
+        } };
+    }
+
+    fn parsePanicStmt(self: *Parser, allocator: std.mem.Allocator) !ast.Stmt {
+        const panic_token = self.advance();
+        var reason = ast.Expr.StringLiteralExpr{
+            .text = "\"\"",
+            .span = panic_token.span,
+        };
+        var reason_span = panic_token.span;
+        var have_reason = false;
+
+        if (self.match(.left_paren) == null) {
+            try self.diagnostics.append(diagnostics_model.panicRequiresReason(self.current().span));
+        } else {
+            switch (self.current().kind) {
+                .string_literal => {
+                    const token = self.advance();
+                    reason = .{ .text = token.lexeme, .span = token.span };
+                    reason_span = token.span;
+                    have_reason = true;
+                },
+                .right_paren, .semicolon, .eof => {
+                    try self.diagnostics.append(diagnostics_model.panicRequiresReason(self.current().span));
+                },
+                else => {
+                    try self.diagnostics.append(diagnostics_model.panicRequiresReason(self.current().span));
+                    _ = self.parseExpr(allocator) catch |err| switch (err) {
+                        error.OutOfMemory => return err,
+                        error.ParseFailed => {},
+                    };
+                },
+            }
+
+            if (self.match(.comma) != null) {
+                try self.diagnostics.append(diagnostics_model.panicRequiresReason(self.current().span));
+                while (self.current().kind != .eof and self.current().kind != .right_paren) {
+                    _ = self.advance();
+                }
+            }
+
+            if (self.match(.right_paren) == null) {
+                try self.report(.UnexpectedToken, "expected ')' after panic reason", self.current().span);
+                self.recoverStatement();
+            }
+        }
+
+        const end_span = if (self.match(.semicolon)) |semicolon| semicolon.span else blk: {
+            try self.report(.UnexpectedToken, "expected ';' after panic statement", self.current().span);
+            self.recoverStatement();
+            break :blk if (have_reason) reason.span else panic_token.span;
+        };
+
+        return .{ .panic_stmt = .{
+            .reason = reason,
+            .reason_span = reason_span,
+            .span = ast.spanFromBounds(panic_token.span.start, spanEnd(end_span)),
         } };
     }
 
@@ -2638,6 +2696,10 @@ pub const Parser = struct {
         return self.current().kind == .identifier and std.mem.eql(u8, self.current().lexeme, text);
     }
 
+    fn isPanicStmtStart(self: Parser) bool {
+        return self.isContextualIdentifier("panic") and self.peek(1).kind == .left_paren;
+    }
+
     fn expectContextualIdentifier(self: *Parser, text: []const u8, message: []const u8) !?Token {
         if (self.isContextualIdentifier(text)) return self.advance();
         try self.report(.UnexpectedToken, message, self.current().span);
@@ -3675,6 +3737,7 @@ fn stmtSpan(stmt: ast.Stmt) SourceSpan {
         .assignment => |assignment| assignment.span,
         .expr_stmt => |expr_stmt| expr_stmt.span,
         .discard_stmt => |discard_stmt| discard_stmt.span,
+        .panic_stmt => |panic_stmt| panic_stmt.span,
         .return_stmt => |return_stmt| return_stmt.span,
         .transition_stmt => |transition_stmt| transition_stmt.span,
         .if_stmt => |if_stmt| if_stmt.span,
@@ -6739,6 +6802,59 @@ test "trying remains an identifier" {
     defer unit.deinit(std.testing.allocator);
 
     try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+}
+
+test "parses panic statements and AST debug output" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { panic(\"unreachable\"); return 0; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const statements = expectFunctionDecl(unit, 0).body.?.block.?.statements;
+    const panic_stmt = switch (statements[0]) {
+        .panic_stmt => |panic_stmt| panic_stmt,
+        else => return error.ExpectedPanicStmt,
+    };
+    try std.testing.expectEqualStrings("\"unreachable\"", panic_stmt.reason.text);
+
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Panic \"unreachable\"") != null);
+}
+
+test "panic statement parser rejects missing reason" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { panic(); return 0; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqual(DiagnosticCode.PanicRequiresReason, diagnostics.diagnostics.items[0].code);
+}
+
+test "panic statement parser rejects extra arguments" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { panic(\"one\", \"two\"); return 0; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqual(DiagnosticCode.PanicRequiresReason, diagnostics.diagnostics.items[0].code);
+}
+
+test "panic statement parser rejects non-string reason" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource("module Main; int main() { panic(123); return 0; }", &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expect(diagnostics.count() >= 1);
+    try std.testing.expectEqual(DiagnosticCode.PanicRequiresReason, diagnostics.diagnostics.items[0].code);
 }
 
 test "parses decide expression with one unconditional arm" {

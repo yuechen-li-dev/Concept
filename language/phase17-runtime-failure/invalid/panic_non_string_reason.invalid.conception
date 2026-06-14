@@ -1,0 +1,15 @@
+# name: panic non string reason
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    panic(123);
+    return 0;
+}
+
+=== diagnostics ===
+CON0280

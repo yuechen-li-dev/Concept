@@ -104,7 +104,12 @@ M8 lowers/runs the supported multi-source subset through MIR and the C backend
 in one generated C unit, hardening ordinary backend function and struct names
 for same names across modules while leaving `export "C"` symbols exact. M9 closes
 Phase 16 with 73 Phase 16 fixtures out of 906 `.conception` fixtures total and
-examples under `examples/phase16/`. Phase 17 has started with M0 documenting the panic, runtime assertion, and shared runtime failure reporting doctrine; no compiler behavior is implemented yet. Filesystem lookup, packages, aliases,
+examples under `examples/phase16/`. Phase 17 M1 now scaffolds `panic("reason")`
+as a statement-only runtime failure primitive: parser/AST/HIR preserve the
+reason literal and span, debug output exposes dedicated panic statements, wrong
+reason forms are rejected, and expression-position `panic(...)` is explicitly
+unsupported until later `never` work. MIR/backend lowering, runtime panic
+helpers, and `assert(condition, reason)` remain deferred. Filesystem lookup, packages, aliases,
 wildcards, re-exports, visibility, separate objects, linker driving, incremental
 compilation, module spanning multiple files, multiple modules per file, and
 cross-package dependency resolution remain deferred.

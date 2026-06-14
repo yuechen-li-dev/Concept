@@ -335,6 +335,7 @@ pub const HirStmtKind = union(enum) {
     assignment: struct { target: AssignTarget, value: ExprId },
     expr_stmt: ExprId,
     discard_stmt: ExprId,
+    panic_stmt: struct { reason: []const u8, reason_span: SourceSpan },
     arena_reset: ArenaStorageOp,
     arena_destroy: ArenaStorageOp,
     if_stmt: struct { condition: ExprId, then_block: StmtId, else_block: ?StmtId },
@@ -722,6 +723,7 @@ pub const HirStore = struct {
             switch (stmt.kind) {
                 .block => |children| if (children.len > 0) self.allocator.free(children),
                 .transition_stmt => |target| freeTransitionTarget(self.allocator, target),
+                .panic_stmt => |panic_stmt| self.allocator.free(panic_stmt.reason),
                 .match_stmt => |match_stmt| if (match_stmt.arms.len > 0) {
                     for (match_stmt.arms) |arm| {
                         switch (arm.pattern) {
@@ -1763,6 +1765,9 @@ pub const HirStore = struct {
             .discard_stmt => |expr_id| {
                 try writer.writeAll("Discard\n");
                 try self.writeExprDebug(writer, expr_id, depth + 1);
+            },
+            .panic_stmt => |panic_stmt| {
+                try writer.print("Panic because {s}\n", .{panic_stmt.reason});
             },
             .if_stmt => |stmt| {
                 try writer.writeAll("If\n");

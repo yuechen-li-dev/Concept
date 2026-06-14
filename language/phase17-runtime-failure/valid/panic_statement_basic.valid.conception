@@ -1,0 +1,12 @@
+# name: panic statement basic
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    panic("unreachable");
+    return 0;
+}

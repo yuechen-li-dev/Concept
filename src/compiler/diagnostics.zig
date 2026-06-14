@@ -227,6 +227,9 @@ pub const DiagnosticCode = enum {
     ExternUnsupportedAbi,
     UnsupportedReprAbi,
     VarargsUnsupported,
+    PanicRequiresReason,
+    FailureReasonMustBeNonEmpty,
+    PanicExpressionUseUnsupported,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -435,6 +438,9 @@ pub const DiagnosticCode = enum {
             .ExternUnsupportedAbi => "CON026A",
             .UnsupportedReprAbi => "CON026B",
             .VarargsUnsupported => "CON0269",
+            .PanicRequiresReason => "CON0280",
+            .FailureReasonMustBeNonEmpty => "CON0282",
+            .PanicExpressionUseUnsupported => "CON0284",
         };
     }
 };
@@ -1249,6 +1255,9 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0222", DiagnosticCode.UnknownMachineState.format());
     try std.testing.expectEqualStrings("CON0223", DiagnosticCode.TransitionOutsideMachineState.format());
     try std.testing.expectEqualStrings("CON0231", DiagnosticCode.MachineSemanticsNotImplemented.format());
+    try std.testing.expectEqualStrings("CON0280", DiagnosticCode.PanicRequiresReason.format());
+    try std.testing.expectEqualStrings("CON0282", DiagnosticCode.FailureReasonMustBeNonEmpty.format());
+    try std.testing.expectEqualStrings("CON0284", DiagnosticCode.PanicExpressionUseUnsupported.format());
 }
 
 test "diagnostic bag counts diagnostics and detects errors" {
@@ -1660,6 +1669,18 @@ pub fn testRelationUnsupported(span: SourceSpan) Diagnostic {
 
 pub fn testRelationOutsideExpectThat(span: SourceSpan) Diagnostic {
     return Diagnostic.init(.TestRelationOutsideExpectThat, .@"error", "test relation constructors are only supported inside Expect.That in Phase 11 v0", span);
+}
+
+pub fn panicRequiresReason(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.PanicRequiresReason, .@"error", "panic requires exactly one string literal reason", span);
+}
+
+pub fn failureReasonMustBeNonEmpty(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.FailureReasonMustBeNonEmpty, .@"error", "failure reason must be non-empty", span);
+}
+
+pub fn panicExpressionUseUnsupported(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.PanicExpressionUseUnsupported, .@"error", "panic is only supported as a statement in Phase 17 M1", span);
 }
 
 pub fn useOfPartiallyInitializedValue(span: SourceSpan) Diagnostic {
