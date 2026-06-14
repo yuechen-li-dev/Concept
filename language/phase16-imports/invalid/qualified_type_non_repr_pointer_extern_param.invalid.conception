@@ -1,0 +1,19 @@
+# name: qualified type non repr pointer extern param
+# phase: check
+# check: declarations
+# expect: fail
+
+=== file: Geometry.concept ===
+module Geometry;
+struct Point { int x; int y; };
+
+=== file: Main.concept ===
+module Main;
+import Geometry;
+
+extern "C" {
+    int UsePoint(Geometry.Point* p);
+}
+
+=== diagnostics ===
+CON0260

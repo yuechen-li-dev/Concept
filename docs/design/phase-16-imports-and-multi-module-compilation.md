@@ -755,4 +755,12 @@ P16-M6 implements expression-position qualified module function lookup for the s
 
 Imports still do not inject unqualified names: `import Math;` permits `Math.Add(...)`, but a bare `Add(...)` in another module remains an ordinary unknown-function error. Known but non-imported module roots are rejected with `CON0275`; unknown module roots and missing qualified items are rejected with `CON0274`. Qualified current-module calls such as `Main.Helper()` are accepted.
 
-Qualified type references such as `Geometry.Point`, cross-module type use, and multi-source MIR/backend/run lowering remain deferred to P16-M7 and P16-M8 respectively.
+Qualified type references such as `Geometry.Point` and cross-module type use were deferred from P16-M6 to P16-M7; multi-source MIR/backend/run lowering remains deferred to P16-M8.
+
+## P16-M7 implementation status: qualified module type lookup
+
+P16-M7 implements type-position qualified module lookup for the semantic/HIR fixture path. `Geometry.Point` resolves the left root against the current module or the current module's resolved imports, then resolves the right-hand name against the target module's top-level type items. Imported structs, enums, machines, and interfaces are accepted in ordinary type positions where the corresponding unqualified type category was already supported. Same-named types in different modules no longer collide when referenced through `A.Point` and `B.Point`, and current-module qualification such as `Main.Point` is accepted.
+
+Imports still do not inject unqualified type names: `import Geometry;` permits `Geometry.Point`, but a bare `Point` in another module remains the existing unknown-type diagnostic. Known but non-imported module roots are rejected with `CON0275`; unknown module roots and missing or non-type qualified items are rejected with `CON0274`.
+
+Imported `[Repr(C)]` struct metadata is visible through the shared HIR `TypeId`. Semantic C ABI validation now accepts imported repr(C) structs by value in C export/extern parameter positions and accepts pointers to imported repr(C) structs. Imported non-repr structs remain rejected at C ABI boundaries with `CON0260`. Multi-source MIR/backend/run lowering remains deferred to P16-M8.

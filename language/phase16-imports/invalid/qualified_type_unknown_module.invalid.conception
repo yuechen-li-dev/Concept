@@ -1,0 +1,12 @@
+# name: qualified type unknown module
+# phase: check
+# check: declarations
+# expect: fail
+
+=== file: Main.concept ===
+module Main;
+
+int Use(Missing.Point p) { return 0; }
+
+=== diagnostics ===
+CON0274

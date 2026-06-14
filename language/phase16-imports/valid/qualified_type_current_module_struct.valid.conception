@@ -1,0 +1,11 @@
+# name: qualified type current module struct
+# phase: check
+# check: declarations
+# expect: pass
+
+=== file: Main.concept ===
+module Main;
+
+struct Point { int x; };
+
+int Use(Main.Point p) { return p.x; }

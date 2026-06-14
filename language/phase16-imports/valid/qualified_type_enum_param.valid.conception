@@ -1,0 +1,21 @@
+# name: qualified type enum param
+# phase: check
+# check: declarations
+# expect: pass
+
+=== file: Tokens.concept ===
+module Tokens;
+
+enum TokenKind {
+    Identifier,
+    Number,
+};
+
+=== file: Main.concept ===
+module Main;
+
+import Tokens;
+
+int Use(Tokens.TokenKind kind) {
+    return 0;
+}

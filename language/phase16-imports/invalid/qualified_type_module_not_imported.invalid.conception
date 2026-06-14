@@ -1,0 +1,16 @@
+# name: qualified type module not imported
+# phase: check
+# check: declarations
+# expect: fail
+
+=== file: Geometry.concept ===
+module Geometry;
+struct Point { int x; };
+
+=== file: Main.concept ===
+module Main;
+
+int Use(Geometry.Point p) { return 0; }
+
+=== diagnostics ===
+CON0275

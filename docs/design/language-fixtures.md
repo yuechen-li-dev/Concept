@@ -96,15 +96,13 @@ module IDs, virtual paths, and declaration spans. Phase 16 M3 adds parser-only
 `import Qualified.Module;` fixtures: imports are preserved in AST/debug output
 and raw module-table import records, import-after-declaration is rejected with
 `CON0273`, and string, wildcard, alias, list, and re-export forms are rejected
-syntactically. Phase 16 M4 resolves multi-source imports to stable module IDs, Phase 16 M5 adds multi-source semantic/HIR-only fixtures for module-aware HIR records and per-module duplicate checks, and P16-M6 adds semantic fixtures for qualified module function calls, current-module qualification, same-name functions across modules, not-imported/unknown/missing qualified names, and non-injected unqualified imports. Current fixture count: 886.
+syntactically. Phase 16 M4 resolves multi-source imports to stable module IDs, Phase 16 M5 adds multi-source semantic/HIR-only fixtures for module-aware HIR records and per-module duplicate checks, and P16-M6 adds semantic fixtures for qualified module function calls, current-module qualification, same-name functions across modules, not-imported/unknown/missing qualified names, and non-injected unqualified imports. P16-M7 adds semantic fixtures for qualified imported struct and enum types, same-name types selected by qualifier, current-module qualified types, imported repr(C) C ABI signatures, not-imported/unknown/missing/non-type qualified type diagnostics, and non-injected unqualified imported types. Current fixture count: 900.
 
 Phase 16 M4 resolves multi-source imports to stable module IDs,
 rejects unknown imports with `CON0271`, duplicate imports within one module with
 `CON0277`, and self/direct/long import cycles with `CON0272`. P16-M5 adds a
 semantic/HIR-only multi-source fixture path for module-aware HIR records and
-per-module top-level duplicate checks. P16-M6 adds qualified function lookup;
-qualified type resolution, broader cross-module type/name resolution, MIR,
-backend, and run multi-file behavior remain deferred.
+per-module top-level duplicate checks. P16-M6 adds qualified function lookup; P16-M7 adds qualified type resolution. Broader cross-module type/name resolution, MIR, backend, and run multi-file behavior remain deferred.
 
 Representative Phase 16 fixtures should cover module declaration collection,
 duplicate module diagnostics, import ordering, unknown imports, duplicate
