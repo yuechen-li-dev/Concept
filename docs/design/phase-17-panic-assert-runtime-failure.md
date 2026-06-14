@@ -2,7 +2,7 @@
 
 ## Status
 
-P17-M8 is now implemented for runtime failure examples, representative fixtures, and hardening. P17-M7 remains closed for runtime trap consolidation. P17-M6 remains closed for Core.Test `Assert.True` / `Assert.False` doctrine alignment, P17-M5 remains closed for runtime failure reason validation, P17-M4 remains closed for `assert(condition, "reason")` MIR/backend lowering, and P17-M2 remains closed for `panic(reason)` MIR/backend lowering:
+Phase 17 is closed at P17-M9. P17-M8 remains implemented for runtime failure examples, representative fixtures, and hardening. P17-M7 remains closed for runtime trap consolidation. P17-M6 remains closed for Core.Test `Assert.True` / `Assert.False` doctrine alignment, P17-M5 remains closed for runtime failure reason validation, P17-M4 remains closed for `assert(condition, "reason")` MIR/backend lowering, and P17-M2 remains closed for `panic(reason)` MIR/backend lowering:
 
 - `panic("reason");` parses in statement position.
 - The reason string literal and source span are preserved in AST/HIR.
@@ -34,7 +34,26 @@ P17-M8 is now implemented for runtime failure examples, representative fixtures,
 - Examples under `examples/phase17/` now document unconditional `panic`, runtime invariant `assert`, the migrated machine result-before-completion trap, exit code 101, runtime/test assertion separation, and deferred non-goals.
 - Representative M8 fixtures pin example-named panic/assert/machine runtime exit behavior, successful result-after-completion behavior, shared backend helper emission/de-duplication, absence of the old machine trap helper and `__builtin_trap` at the migrated site, C-escaped reason strings, blank reason rejection, expression-position rejection, bool-only assert conditions, and ordinary runtime assert independence from Core.Test/test-runner symbols.
 - Runtime trap inventory for M7 found the safe ad-hoc generated runtime trap in machine result-before-completion lowering. Other searched sites were compile-time diagnostics, MIR/compiler `unreachable` for invalid compiler paths, unsupported runtime `transition match` / `transition decide` diagnostics, allocation helper declarations, and future/non-implemented bounds/use-after-move traps; those were not migrated because they are not current ad-hoc generated runtime traps or would require new semantics.
-- Named `because:` syntax, expression-position assert, `never`, broad test-runner panic catching, exceptions, unwinding, stack traces, nested machines, runtime `transition match`, runtime `transition decide`, and `yield` remain deferred.
+- Named `because:` syntax, expression-position panic/assert, `never`, broad test-runner panic catching, exceptions, unwinding, stack traces, nested machines, runtime `transition match`, runtime `transition decide`, and `yield` remain deferred.
+
+## Closeout: Phase 17 v0 supported surface
+
+Phase 17 closes the v0 runtime failure surface. The implemented and documented surface is intentionally small and inspectable:
+
+- Positional statement syntax is the only supported v0 source form: `panic("reason");` and `assert(condition, "reason");`.
+- `panic("reason")` has dedicated AST, HIR, and MIR representation, lowers through the backend to backend-owned `cpt_panic`, and exits deterministically with code 101.
+- `assert(condition, "reason")` has dedicated AST, HIR, and MIR representation, validates that `condition` is `bool`, and lowers to a conditional call to `cpt_panic`.
+- `cpt_panic` is shared by explicit panic, failing runtime assert, and the migrated machine `Result(machine)`-before-completion trap.
+- The backend emits `cpt_panic` once per generated C unit when any of those surfaces need it.
+- Runtime failure reasons are mandatory string literals in v0; empty and whitespace-only reasons are rejected by shared runtime failure reason validation.
+- Core.Test `Assert.True` and `Assert.False` are aligned with the runtime assertion doctrine: bool-only conditions, mandatory non-blank reasons, and assertion/invariant test-failure classification.
+- Core.Test `Expect.*` remains expectation-style and is not converted into runtime assertion semantics.
+- Runtime `assert` remains ordinary runtime code and has no dependency on Core.Test or the test runner.
+- Machine `Result(machine)` before completion routes through `cpt_panic` with stable reason `machine result cannot be read before completion`; result-after-completion behavior is unchanged.
+- `examples/phase17/` documents panic, runtime assert, the migrated machine trap, mandatory reasons, runtime/test separation, and deferred non-goals.
+- Representative fixtures under `language/phase17-runtime-failure/` pin parser/HIR/MIR/backend/run behavior, reason diagnostics, exit code 101, helper sharing/de-duplication, old helper absence, no test-runner dependency, and expression-position rejection.
+
+Deferred beyond Phase 17 v0: named `because:` syntax, expression-position panic/assert, `never`, stderr matching in the run fixture harness, stack traces, exceptions, unwinding, panic hooks, no_std/bare-metal panic ABI, broad test-runner panic catching, nested machines, runtime `transition match`, runtime `transition decide`, `yield`, and additional machine semantics.
 
 ## Core doctrine
 
@@ -270,7 +289,7 @@ one minimal helper strategy and document it in the implementation milestone:
 - use `abort()` with a prototype; or
 - emit a simple trap helper that does not require formatting.
 
-The exact helper body is intentionally deferred from M0.
+The implemented hosted C v0 helper is backend-owned and emits `static void cpt_panic(const char* reason)`, includes hosted C support headers when needed, calls `fprintf(stderr, "panic: %s\n", reason);`, and terminates with `exit(101);`. Runtime `panic`, failing runtime `assert`, and the migrated machine result-before-completion trap all use exit code 101. The current run fixture harness does not support stderr matching, so reason output is pinned through generated-C/backend assertions. The helper is emitted once per generated C unit when needed, performs no heap allocation, uses no exceptions, and performs no stack unwinding.
 
 ## 8. HIR/MIR representation
 
@@ -376,9 +395,9 @@ Multi-module compilation emits the helper once per generated C unit. Exported C
 functions may call `assert` or `panic` internally, but `panic` does not become C
 ABI exception behavior and does not introduce unwinding across the ABI boundary.
 
-## 13. Diagnostics planning
+## 13. Final diagnostics inventory
 
-Suggested diagnostics:
+Implemented Phase 17 runtime diagnostics:
 
 ```text
 CON0280 PanicRequiresReason
@@ -436,6 +455,6 @@ P17-M4  assert(condition, reason) MIR/backend lowering (implemented: MIR assert 
 P17-M5  reason validation and diagnostics hardening (implemented: shared semantic validation for runtime panic/assert, empty and whitespace-only reasons rejected with CON0282)
 P17-M6  align Core.Test Assert.True/False with shared assertion doctrine (implemented: shared blank-reason predicate, bool-only condition coverage, assertion/invariant test failure kind, runtime/test separation fixtures)
 P17-M7  migrate existing runtime trap sites to shared panic path (implemented: machine Result-before-completion calls shared cpt_panic with stable reason and exit 101; helper de-duplicates with panic/assert)
-P17-M8  examples/fixtures/hardening
-P17-M9  Closeout
+P17-M8  examples/fixtures/hardening (implemented: examples under examples/phase17 plus representative runtime failure fixtures)
+P17-M9  Closeout (implemented/closed: final docs, diagnostics inventory, fixture/corpus inventory, Checkpoint 1 matrix updates, final tests)
 ```

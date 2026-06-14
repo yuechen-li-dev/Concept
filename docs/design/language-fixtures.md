@@ -81,9 +81,9 @@ Phase 8 MIR/backend coverage is intentionally concrete-only: the pipeline run fi
 
 Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed for compile-time execution v0. Phase 10 is closed for ownership/storage-state v0. Phase 11 is closed for first-class testing, attributes, and reasoned expectations v0. Phase 14 is closed for runtime interfaces and borrowed dyn dispatch v0: interface declaration, requirement validation, interface impl conformance, borrowed `dyn Interface&` type-surface fixtures, call-boundary concrete-to-dyn coercion fixtures, dyn method-call HIR/MIR fixtures, C backend vtable/fat-reference lowering fixtures, executable borrowed dyn dispatch fixtures, examples, mutability hardening fixtures, and backend C-shape assertions for the borrowed dyn subset. Phase 15 is closed for C ABI v0: extern C parser/AST/HIR fixtures, ABI type validation, extern call MIR/backend prototype and call-shape fixtures, export C parser/check/backend/run fixtures, staged `[Repr(C)]` marker fixtures, repr(C) field validation, ABI-boundary acceptance, backend layout/order/de-duplication fixtures, examples, and representative invalid fixtures for the pinned non-goals.
 
-## Phase 16 import/multi-module fixtures
+## Phase 17 runtime failure fixtures
 
-Phase 17 fixtures now live under `language/phase17-runtime-failure/`. P17-M5
+Phase 17 is closed. Its fixtures live under `language/phase17-runtime-failure/`. P17-M5
 covers statement-position `assert(condition, "reason");` through parser, HIR,
 MIR, backend C, and runtime execution. Assert fixtures now pin HIR-check
 acceptance for basic assertions, reason preservation, bool condition expressions,
@@ -95,12 +95,13 @@ expression runtime success. P17-M2 panic fixtures continue to cover
 statement-position `panic("reason");`, invalid reason/expression forms,
 backend-owned `cpt_panic` lowering, helper de-duplication, escaping, no
 test-runner dependency, and exit code 101. P17-M5 adds empty, whitespace-only, and tab-only reason rejection fixtures plus non-empty reason acceptance fixtures for both panic and assert. P17-M6 adds Core.Test `Assert.True` / `Assert.False` alignment fixtures for valid reasons, empty and whitespace-only reason rejection, bool-only conditions, and runtime/test assertion separation in a `.con_test` body. P17-M7 adds runtime trap consolidation fixtures proving machine `Result(machine)` before completion exits through shared `cpt_panic` with code 101, successful result-after-completion behavior remains unchanged, and migrated traps share one helper with runtime assert. P17-M8 adds human-readable examples under `examples/phase17/` plus representative example-named fixtures for panic/assert/machine runtime exit behavior, backend helper sharing/de-duplication, reason validation, expression-position rejection, bool-only assert conditions, and runtime assert separation from Core.Test/test-runner symbols. The language fixture corpus contains
-1036 fixture files after adding the P17-M8 examples/hardening fixtures, including 57 under `language/phase17-runtime-failure/`.
+1035 fixture files after adding the P17-M8 examples/hardening fixtures, including 57 under `language/phase17-runtime-failure/` and 85 files under `language/phase11-testing/`.
+
+## Phase 16 import/multi-module fixtures
 
 Phase 16 is closed. Its fixtures live under `language/phase16-imports/` and
 cover the v0 module/import surface for harness-supplied multi-source
-compilation units. The full corpus now contains 948 `.conception` fixtures,
-including 73 Phase 16 fixtures and 57 Phase 17 fixtures.
+compilation units. The full corpus now contains 1035 `.conception`/`.con_test` fixtures, including 963 `.conception` fixtures, 72 `.con_test` fixtures, 73 Phase 16 fixtures, 57 Phase 17 fixtures, and 84 Phase 11 testing fixtures across 85 files under `language/phase11-testing/`.
 
 A single `.conception` fixture may contain multiple virtual Concept source
 files, each with a stable virtual path for diagnostics. The embedded form is
