@@ -1,0 +1,20 @@
+# name: repr C struct pointer field backend
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module CAbi;
+
+[Repr(C)]
+struct Node {
+    Node* next;
+    int* value;
+};
+
+int main() {
+    return 0;
+}
+
+=== c ===
+contains: struct cpt_struct_Node* cpt_f_next_0;
+contains: int* cpt_f_value_1;

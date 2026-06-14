@@ -1,18 +1,21 @@
-# name: repr C export struct param still invalid
+# name: non repr struct pointer extern param still invalid
 # phase: check
 # expect: fail
 
 === source ===
 module CAbi;
 
-[Repr(C)]
 struct Point {
     int x;
     int y;
 };
 
-export "C" int Use(Point p) {
-    return p.x;
+extern "C" {
+    int use_point(Point* p);
+}
+
+int main() {
+    return 0;
 }
 
 === diagnostics ===

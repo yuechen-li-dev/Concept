@@ -81,9 +81,11 @@ extern declarations bodyless in generated C. Headers/includes and automatic link
 `export "C"` function definitions with C ABI validation, duplicate C symbol
 rejection, MIR export linkage, and unmangled backend C symbols. P15-M5 adds the
 staged `[Repr(C)]` struct marker, preserves it in AST/HIR metadata and debug
-output, and rejects invalid targets or unsupported repr arguments while
-deferring full field/layout validation and C ABI boundary acceptance for structs
-to M6.
+output, and rejects invalid targets or unsupported repr arguments. P15-M6 validates
+the supported repr(C) struct field subset, rejects empty repr(C) structs, allows
+validated repr(C) structs/pointers across C ABI boundaries, and hardens backend C
+layout emission while keeping enums, packed layout, custom alignment, and
+platform ABI matrices deferred.
 Deferred Phase 12
 work includes
 `Arena.create`, hosted runtime helper implementation, allocation failure

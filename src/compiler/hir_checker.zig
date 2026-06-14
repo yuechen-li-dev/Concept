@@ -79,6 +79,7 @@ const Checker = struct {
         try self.checkAggregateDynStorage();
         try self.checkInterfaceRequirements();
         try self.checkInterfaceImpls();
+        try self.checkReprCStructs();
 
         const main_id = self.findMain() orelse {
             try self.report(.MissingMain, "expected top-level 'main' function");
@@ -106,6 +107,7 @@ const Checker = struct {
         try self.checkAggregateDynStorage();
         try self.checkInterfaceRequirements();
         try self.checkInterfaceImpls();
+        try self.checkReprCStructs();
         try self.checkFunctionBodies();
     }
 
@@ -197,6 +199,7 @@ const Checker = struct {
     fn isSupportedCAbiReturnType(self: *Checker, type_id: types.TypeId) bool {
         return switch (self.module.types.kind(type_id)) {
             .void, .int, .bool, .alloc_error => true,
+            .struct_type => |struct_id| self.isValidatedReprCStruct(struct_id),
             .pointer => |pointer| self.isSupportedCAbiPointerPointee(pointer.pointee),
             else => false,
         };
@@ -205,6 +208,7 @@ const Checker = struct {
     fn isSupportedCAbiParamType(self: *Checker, type_id: types.TypeId) bool {
         return switch (self.module.types.kind(type_id)) {
             .int, .bool, .alloc_error => true,
+            .struct_type => |struct_id| self.isValidatedReprCStruct(struct_id),
             .pointer => |pointer| self.isSupportedCAbiPointerPointee(pointer.pointee),
             else => false,
         };
@@ -213,6 +217,51 @@ const Checker = struct {
     fn isSupportedCAbiPointerPointee(self: *Checker, type_id: types.TypeId) bool {
         return switch (self.module.types.kind(type_id)) {
             .void, .int, .bool, .arena, .allocator, .alloc_error => true,
+            .struct_type => |struct_id| self.isValidatedReprCStruct(struct_id),
+            else => false,
+        };
+    }
+
+    fn checkReprCStructs(self: *Checker) CheckError!void {
+        for (self.module.hir.structs.items, 0..) |struct_decl, index| {
+            if (struct_decl.repr_abi != .c) continue;
+            if (struct_decl.fields.len == 0) {
+                try self.reportAt(.ReprCEmptyStructUnsupported, "empty repr(C) structs are not supported in v0", struct_decl.repr_span);
+                return error.InvalidSemanticModule;
+            }
+            for (struct_decl.fields) |field_id| {
+                const field = self.module.hir.getField(field_id);
+                if (!self.isSupportedReprCFieldType(field.type_id, .{ .index = @intCast(index) })) {
+                    try self.reportAt(.ReprCUnsupportedFieldType, "unsupported repr(C) field type", field.span);
+                    return error.InvalidSemanticModule;
+                }
+            }
+        }
+    }
+
+    fn isValidatedReprCStruct(self: *Checker, struct_id: hir.StructId) bool {
+        if (struct_id.index >= self.module.hir.structs.items.len) return false;
+        const struct_decl = self.module.hir.getStruct(struct_id);
+        if (struct_decl.repr_abi != .c or struct_decl.fields.len == 0) return false;
+        for (struct_decl.fields) |field_id| {
+            if (!self.isSupportedReprCFieldType(self.module.hir.getField(field_id).type_id, struct_id)) return false;
+        }
+        return true;
+    }
+
+    fn isSupportedReprCFieldType(self: *Checker, type_id: types.TypeId, _: hir.StructId) bool {
+        return switch (self.module.types.kind(type_id)) {
+            .int, .bool, .alloc_error => true,
+            .pointer => |pointer| self.isSupportedReprCPointerPointee(pointer.pointee),
+            .struct_type => false, // Nested repr(C) by value is deferred in M6 to avoid recursive layouts.
+            .void, .arena, .allocator, .enum_type, .machine_type, .interface_type, .dyn_interface, .manual_init, .type_param => false,
+        };
+    }
+
+    fn isSupportedReprCPointerPointee(self: *Checker, type_id: types.TypeId) bool {
+        return switch (self.module.types.kind(type_id)) {
+            .void, .int, .bool, .arena, .allocator, .alloc_error => true,
+            .struct_type => |struct_id| struct_id.index < self.module.hir.structs.items.len and self.module.hir.getStruct(struct_id).repr_abi == .c,
             else => false,
         };
     }

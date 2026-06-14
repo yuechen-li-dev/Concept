@@ -1,0 +1,22 @@
+# name: non repr struct extern param still invalid
+# phase: check
+# expect: fail
+
+=== source ===
+module CAbi;
+
+struct Point {
+    int x;
+    int y;
+};
+
+extern "C" {
+    int use_point(Point p);
+}
+
+int main() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0260

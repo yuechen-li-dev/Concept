@@ -1,0 +1,25 @@
+# name: repr C struct int fields backend
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module CAbi;
+
+[Repr(C)]
+struct Point {
+    int x;
+    int y;
+};
+
+int main() {
+    return 0;
+}
+
+=== c ===
+contains: typedef struct cpt_struct_Point {
+contains: int cpt_f_x_0;
+contains: int cpt_f_y_1;
+contains: } cpt_struct_Point;
+contains: int cpt_f_x_0;
+    int cpt_f_y_1;
+not_contains: cpt_f_hidden

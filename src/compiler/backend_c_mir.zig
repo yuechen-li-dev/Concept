@@ -209,7 +209,13 @@ fn emitStructLayouts(writer: anytype, ctx: *const BackendContext) EmitError!bool
 fn emitStructLayout(writer: anytype, ctx: *const BackendContext, struct_id: hir.StructId, struct_decl: hir.HirStruct) EmitError!void {
     try requireSupportedStructLayout(ctx, struct_id, null);
 
-    try writer.writeAll("typedef struct {\n");
+    if (struct_decl.repr_abi == .c) {
+        try writer.writeAll("typedef struct ");
+        try emitStructTypeName(writer, ctx.module, struct_decl.name);
+        try writer.writeAll(" {\n");
+    } else {
+        try writer.writeAll("typedef struct {\n");
+    }
     for (struct_decl.fields, 0..) |field_id, field_index| {
         const field = ctx.module.hir.getField(field_id);
         try writer.writeAll("    ");
@@ -260,7 +266,8 @@ fn isSupportedStructFieldPointerType(ctx: *const BackendContext, pointee: types.
         .void, .int, .bool, .arena, .allocator, .alloc_error => true,
         .enum_type => |enum_id| isSupportedEnumLayout(ctx, enum_id),
         .pointer => |nested| isSupportedStructFieldPointerType(ctx, nested.pointee),
-        .struct_type, .machine_type, .interface_type, .dyn_interface, .manual_init, .type_param => false,
+        .struct_type => |struct_id| struct_id.index < ctx.module.hir.structs.items.len and ctx.module.hir.getStruct(struct_id).repr_abi == .c,
+        .machine_type, .interface_type, .dyn_interface, .manual_init, .type_param => false,
     };
 }
 
@@ -1252,6 +1259,9 @@ fn emitCTypeAt(writer: anytype, ctx: *const BackendContext, type_id: types.TypeI
         },
         .struct_type => |struct_id| {
             try requireSupportedStructLayout(ctx, struct_id, span);
+            if (position == .pointer_pointee) {
+                try writer.writeAll("struct ");
+            }
             try emitStructTypeName(writer, ctx.module, ctx.module.hir.getStruct(struct_id).name);
         },
         .machine_type => |machine_id| {
