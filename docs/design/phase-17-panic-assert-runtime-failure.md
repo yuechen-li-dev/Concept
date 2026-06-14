@@ -2,12 +2,12 @@
 
 ## Status
 
-P17-M4 is now implemented for `assert(condition, "reason")` MIR/backend lowering. P17-M2 remains closed for `panic(reason)` MIR/backend lowering:
+P17-M5 is now implemented for runtime failure reason validation. P17-M4 remains closed for `assert(condition, "reason")` MIR/backend lowering, and P17-M2 remains closed for `panic(reason)` MIR/backend lowering:
 
 - `panic("reason");` parses in statement position.
 - The reason string literal and source span are preserved in AST/HIR.
 - HIR/debug output shows dedicated panic statements.
-- Missing reasons, wrong arity, and non-string reasons are rejected.
+- Missing reasons, wrong arity, and non-string reasons are rejected with `CON0280`; empty or whitespace-only reasons are rejected with `CON0282`.
 - Expression-position `panic(...)` remains unsupported and is diagnosed.
 - HIR panic statements lower to dedicated MIR panic statements preserving reason text and reason span.
 - MIR debug output exposes `Panic "reason"`, and MIR validation accepts statement-position panic with no value result.
@@ -17,14 +17,17 @@ P17-M4 is now implemented for `assert(condition, "reason")` MIR/backend lowering
 - `assert(condition, "reason");` parses in statement position as a compiler-known runtime invariant assertion.
 - Assert AST/HIR preserve the condition expression, reason string literal text, full statement span, condition span, and reason span.
 - Assert HIR/debug output exposes dedicated assert statements and their reason.
-- Assert conditions must type-check as `bool`; missing/wrong reason forms and non-string-literal reasons are rejected.
+- Assert conditions must type-check as `bool`; missing/wrong reason forms and non-string-literal reasons are rejected with `CON0281`; empty or whitespace-only reasons are rejected with `CON0282`.
 - Expression-position `assert(...)` remains unsupported and is diagnosed.
 - HIR assert statements lower to dedicated MIR assert statements preserving the lowered bool condition operand, reason text, condition span, and reason span.
 - MIR debug output exposes `Assert "reason"`, MIR storage analysis reads the condition operand, and MIR validation requires a bool condition plus present reason metadata.
 - The C backend lowers `assert(condition, "reason")` to `if (!(condition)) { cpt_panic("reason"); }`, reusing backend C string escaping.
 - The backend-owned `cpt_panic` helper is shared by panic and assert and is emitted exactly once per generated C unit when either or both are used.
 - Runtime fixtures prove assert-true continues, assert-false exits 101, and condition expressions continue normally. Reason output remains pinned through generated C/backend assertions while runtime stderr matching is unsupported.
-- Named `because:` syntax, expression-position assert, `never`, empty/whitespace reason hardening, Core.Test `Assert.True` alignment, test-runner panic catching, exceptions, unwinding, and stack traces remain deferred.
+- Runtime `panic` and `assert` share semantic failure-reason content validation before HIR/MIR/backend lowering. Current validation uses the stored string-literal interior text; ordinary space, tab, carriage-return, and newline characters in that stored text count as whitespace. General string escape decoding remains staged with string-literal semantics and backend escaping unchanged.
+- Reason-required diagnostics are split: `CON0280` covers missing/wrong panic reasons, `CON0281` covers missing/wrong assert reasons, `CON0282` covers empty/whitespace runtime failure reasons, `CON0283` covers non-bool assert conditions, and `CON0284`/`CON0285` cover unsupported expression-position panic/assert.
+- Phase 11 Core.Test already rejects empty and whitespace-only primitive test intrinsic reasons with its Phase 11 diagnostic path; routing `Assert.True` through the shared runtime assertion doctrine remains deferred to P17-M6.
+- Named `because:` syntax, expression-position assert, `never`, Core.Test `Assert.True` runtime rewiring, test-runner panic catching, exceptions, unwinding, and stack traces remain deferred.
 
 ## Core doctrine
 
@@ -144,8 +147,7 @@ assert(123, "numeric condition is not bool");
 panic();
 panic("");
 
-`panic("")` and whitespace-only reasons remain planned for P17-M5 diagnostic
-hardening rather than enforced in P17-M1.
+`panic("")`, `assert(ok, "")`, and whitespace-only runtime failure reasons are rejected by P17-M5 with `CON0282 FailureReasonMustBeNonEmpty`.
 ```
 
 ## 4. `panic(reason)`
@@ -423,7 +425,7 @@ P17-M1  panic(reason) parser/AST/HIR scaffold
 P17-M2  panic(reason) MIR/backend lowering (implemented: MIR panic statement, C cpt_panic helper, exit 101)
 P17-M3  assert(condition, reason) parser/AST/HIR scaffold (implemented: statement syntax, AST/HIR assert, bool condition check, reason diagnostics)
 P17-M4  assert(condition, reason) MIR/backend lowering (implemented: MIR assert statement, storage/validation, backend if-not guard calling shared cpt_panic, run/backend fixtures)
-P17-M5  reason validation and diagnostics hardening
+P17-M5  reason validation and diagnostics hardening (implemented: shared semantic validation for runtime panic/assert, empty and whitespace-only reasons rejected with CON0282)
 P17-M6  align Core.Test Assert.True with shared assertion doctrine
 P17-M7  migrate existing runtime trap sites to shared panic path
 P17-M8  examples/fixtures/hardening

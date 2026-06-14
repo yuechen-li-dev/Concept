@@ -104,7 +104,7 @@ M8 lowers/runs the supported multi-source subset through MIR and the C backend
 in one generated C unit, hardening ordinary backend function and struct names
 for same names across modules while leaving `export "C"` symbols exact. M9 closes
 Phase 16 with 73 Phase 16 fixtures and examples under `examples/phase16/`.
-The corpus now has 940 `.conception` fixtures. Phase 17 M4 parses, checks, lowers,
+The corpus now has 948 `.conception` fixtures. Phase 17 M5 hardens runtime failure reason validation for both `panic` and `assert`: empty, space-only, and tab-only stored string-literal reasons are rejected with `CON0282`, while missing/wrong panic reasons remain `CON0280` and missing/wrong assert reasons remain `CON0281`. Phase 17 M4 parses, checks, lowers,
 and executes statement-position `assert(condition, "reason")` as a compiler-known
 runtime invariant assertion with dedicated AST/HIR/MIR representation, mandatory
 string-literal reasons, bool-only conditions, span preservation, MIR debug output,
@@ -117,8 +117,8 @@ literals, has no test-runner dependency, lets true assertions continue, and exit
 `panic("reason")` through MIR and backend C to deterministic runtime failure:
 reason text/span are preserved into MIR, debug output exposes dedicated panic
 statements, the helper prints the reason to `stderr`, and exits with code 101.
-Wrong reason forms and expression-position `panic(...)` / `assert(...)` remain
-rejected. Filesystem lookup, packages, aliases,
+Wrong reason forms, empty/whitespace-only reasons, and expression-position `panic(...)` / `assert(...)` remain
+rejected. Phase 11 Core.Test primitive reason validation already rejects empty/whitespace reasons on its existing diagnostic path; shared `Assert.True` runtime doctrine alignment remains P17-M6 work. Filesystem lookup, packages, aliases,
 wildcards, re-exports, visibility, separate objects, linker driving, incremental
 compilation, module spanning multiple files, multiple modules per file, and
 cross-package dependency resolution remain deferred.
