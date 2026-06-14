@@ -104,7 +104,7 @@ M8 lowers/runs the supported multi-source subset through MIR and the C backend
 in one generated C unit, hardening ordinary backend function and struct names
 for same names across modules while leaving `export "C"` symbols exact. M9 closes
 Phase 16 with 73 Phase 16 fixtures and examples under `examples/phase16/`.
-The corpus now has 1035 fixture files. Phase 17 M9 closes panic, assertions, and runtime failure reporting v0. Phase 17 M8 added examples under `examples/phase17/` and representative hardening fixtures for panic/assert/machine runtime failure behavior, shared `cpt_panic` backend emission and de-duplication, reason validation, runtime exit code 101, and runtime/test assertion separation. Phase 17 M7 routes machine `Result(machine)` before completion through the shared backend-owned `cpt_panic` helper with stable reason `machine result cannot be read before completion`, deterministic exit code 101, and helper de-duplication with explicit `panic` and `assert`; successful result-after-completion semantics are unchanged. Phase 17 M6 aligns Core.Test `Assert.True` / `Assert.False` with the shared runtime assertion doctrine: bool-only conditions, mandatory non-empty/non-whitespace reasons via the shared blank-reason predicate, stable Phase 11 test diagnostics, test-runner assertion failures in `.con_test`, and no runtime dependency on Core.Test. Phase 17 M5 hardens runtime failure reason validation for both `panic` and `assert`: empty, space-only, and tab-only stored string-literal reasons are rejected with `CON0282`, while missing/wrong panic reasons remain `CON0280` and missing/wrong assert reasons remain `CON0281`. Phase 17 M4 parses, checks, lowers,
+The corpus now has 1035 fixture files. Phase 18 has started with P18-M0, the design milestone for composable machines and runtime transitions. The Phase 18 design goal is to make machines composable and make non-literal transitions executable without adding a hidden heap, scheduler, async runtime, event bus, blackboard keyword, or DragonGod-specific runtime to core Concept. Phase 17 M9 closes panic, assertions, and runtime failure reporting v0. Phase 17 M8 added examples under `examples/phase17/` and representative hardening fixtures for panic/assert/machine runtime failure behavior, shared `cpt_panic` backend emission and de-duplication, reason validation, runtime exit code 101, and runtime/test assertion separation. Phase 17 M7 routes machine `Result(machine)` before completion through the shared backend-owned `cpt_panic` helper with stable reason `machine result cannot be read before completion`, deterministic exit code 101, and helper de-duplication with explicit `panic` and `assert`; successful result-after-completion semantics are unchanged. Phase 17 M6 aligns Core.Test `Assert.True` / `Assert.False` with the shared runtime assertion doctrine: bool-only conditions, mandatory non-empty/non-whitespace reasons via the shared blank-reason predicate, stable Phase 11 test diagnostics, test-runner assertion failures in `.con_test`, and no runtime dependency on Core.Test. Phase 17 M5 hardens runtime failure reason validation for both `panic` and `assert`: empty, space-only, and tab-only stored string-literal reasons are rejected with `CON0282`, while missing/wrong panic reasons remain `CON0280` and missing/wrong assert reasons remain `CON0281`. Phase 17 M4 parses, checks, lowers,
 and executes statement-position `assert(condition, "reason")` as a compiler-known
 runtime invariant assertion with dedicated AST/HIR/MIR representation, mandatory
 string-literal reasons, bool-only conditions, span preservation, MIR debug output,
@@ -2039,8 +2039,7 @@ frames, scalar `int`/`bool` parameters and results, literal transitions,
 value; assigning it, returning it, using it as a condition, passing it as a call
 argument, or using it in unary/binary expressions is invalid. `Complete(machine)`
 returns `bool`. `Result(machine)` returns the machine result type only after
-completion; reading a result before completion traps in the generated runtime
-path.
+completion; reading a result before completion routes through the shared Phase 17 panic path with deterministic runtime failure behavior. Phase 18 is planned to extend this machine substrate with by-value nested machine fields, explicit child stepping, executable `transition match`, executable `transition decide`, and optional state introspection helpers while keeping DragonGod as a library/pattern layer rather than a language runtime.
 
 ## 37.1 Syntax sketch
 
@@ -2204,13 +2203,17 @@ machine Driver(mut Device& device) -> Result<DriverEvent, DriverError> {
 }
 ```
 
-Nested machine semantics must remain explicit:
+Nested machine semantics must remain explicit. Phase 18 narrows the v0 composition model to by-value child machine fields and explicit operations on those fields:
 
 ```text
 child machine storage is known
-parent suspension is explicit
-child drop behavior is explicit
-transition away from a child drops its lifted state
+child machine frames are fields, not scheduled tasks
+parent stepping of children is explicit with Step(child)
+completion checks are explicit with Complete(child)
+result reads are explicit with Result(child) and panic before completion
+no hidden heap
+no hidden scheduler
+no async runtime
 ```
 
 ## 37.6 Domain policies are not core
@@ -2224,8 +2227,10 @@ Core state machines provide:
 ```text
 state
 transition
-yield
-run
+explicit frame values
+explicit Step / Complete / Result
+deterministic transition match
+deterministic transition decide
 explicit lowering
 effect checking
 drop checking
