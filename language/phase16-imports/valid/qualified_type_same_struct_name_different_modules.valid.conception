@@ -1,0 +1,20 @@
+# name: qualified type same struct name different modules
+# phase: check
+# check: declarations
+# expect: pass
+
+=== file: A.concept ===
+module A;
+struct Point { int x; };
+
+=== file: B.concept ===
+module B;
+struct Point { int y; };
+
+=== file: Main.concept ===
+module Main;
+import A;
+import B;
+
+int UseA(A.Point p) { return p.x; }
+int UseB(B.Point p) { return p.y; }

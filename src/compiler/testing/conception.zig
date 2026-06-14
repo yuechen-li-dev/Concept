@@ -3313,3 +3313,59 @@ test "language check fixture: phase16 hir duplicate export c symbol across modul
 test "language check fixture: phase16 hir duplicate extern c symbol across modules" {
     try expectCheckFixture("../../../language/phase16-imports/invalid/hir_modules_duplicate_extern_c_symbol_across_modules.invalid.conception");
 }
+
+test "language check fixture: phase16 qualified imported struct type param" {
+    try expectCheckFixture("../../../language/phase16-imports/valid/qualified_type_struct_param.valid.conception");
+}
+
+test "language check fixture: phase16 qualified imported enum type param" {
+    try expectCheckFixture("../../../language/phase16-imports/valid/qualified_type_enum_param.valid.conception");
+}
+
+test "language check fixture: phase16 qualified same struct name different modules" {
+    try expectCheckFixture("../../../language/phase16-imports/valid/qualified_type_same_struct_name_different_modules.valid.conception");
+}
+
+test "language check fixture: phase16 qualified current module struct type" {
+    try expectCheckFixture("../../../language/phase16-imports/valid/qualified_type_current_module_struct.valid.conception");
+}
+
+test "language check fixture: phase16 qualified repr c export param" {
+    try expectCheckFixture("../../../language/phase16-imports/valid/qualified_type_repr_c_export_param.valid.conception");
+}
+
+test "language check fixture: phase16 qualified repr c extern param" {
+    try expectCheckFixture("../../../language/phase16-imports/valid/qualified_type_repr_c_extern_param.valid.conception");
+}
+
+test "language check fixture: phase16 qualified repr c pointer extern param" {
+    try expectCheckFixture("../../../language/phase16-imports/valid/qualified_type_repr_c_pointer_extern_param.valid.conception");
+}
+
+test "language check fixture: phase16 qualified type module not imported" {
+    try expectCheckFixture("../../../language/phase16-imports/invalid/qualified_type_module_not_imported.invalid.conception");
+}
+
+test "language check fixture: phase16 qualified type unknown module" {
+    try expectCheckFixture("../../../language/phase16-imports/invalid/qualified_type_unknown_module.invalid.conception");
+}
+
+test "language check fixture: phase16 qualified type missing item" {
+    try expectCheckFixture("../../../language/phase16-imports/invalid/qualified_type_missing_item.invalid.conception");
+}
+
+test "language check fixture: phase16 qualified type item not type" {
+    try expectCheckFixture("../../../language/phase16-imports/invalid/qualified_type_item_not_type.invalid.conception");
+}
+
+test "language check fixture: phase16 unqualified imported type remains unknown" {
+    try expectCheckFixture("../../../language/phase16-imports/invalid/qualified_type_unqualified_imported_type.invalid.conception");
+}
+
+test "language check fixture: phase16 qualified non repr export param" {
+    try expectCheckFixture("../../../language/phase16-imports/invalid/qualified_type_non_repr_export_param.invalid.conception");
+}
+
+test "language check fixture: phase16 qualified non repr pointer extern param" {
+    try expectCheckFixture("../../../language/phase16-imports/invalid/qualified_type_non_repr_pointer_extern_param.invalid.conception");
+}

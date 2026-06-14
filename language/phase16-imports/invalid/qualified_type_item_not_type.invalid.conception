@@ -1,0 +1,17 @@
+# name: qualified type item not type
+# phase: check
+# check: declarations
+# expect: fail
+
+=== file: Math.concept ===
+module Math;
+int Add(int a, int b) { return a + b; }
+
+=== file: Main.concept ===
+module Main;
+import Math;
+
+int Use(Math.Add x) { return 0; }
+
+=== diagnostics ===
+CON0274

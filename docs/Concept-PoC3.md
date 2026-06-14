@@ -93,7 +93,7 @@ scaffold, M3 added parser/AST import declarations plus ordering diagnostics, and
 M4 resolves the import graph: raw imports become stable module-ID edges, unknown
 imports use `CON0271`, duplicate imports use `CON0277`, and self/direct/long
 cycles use `CON0272`. Qualified lookup and cross-module semantic/backend work
-remain deferred to later Phase 16 milestones. P16-M5 adds module-aware HIR records and per-module top-level symbol tables. P16-M6 resolves `Module.Function(...)` calls against current/imported module roots, preserves cross-module HIR function IDs, and keeps unqualified imported names invalid while cross-module types and multi-source backend/run lowering remain deferred.
+remain deferred to later Phase 16 milestones. P16-M5 adds module-aware HIR records and per-module top-level symbol tables. P16-M6 resolves `Module.Function(...)` calls against current/imported module roots and preserves cross-module HIR function IDs. P16-M7 resolves qualified imported type references such as `Geometry.Point`, supports imported struct/enum type positions and imported repr(C) metadata for semantic C ABI validation, and keeps unqualified imported names invalid while multi-source backend/run lowering remains deferred.
 M1 adds the hermetic multi-file `.conception` fixture scaffold: embedded
 `=== file: <virtual-path> ===` sections parse into ordered fixture source sets,
 virtual paths are preserved, duplicate/empty virtual paths are rejected, and

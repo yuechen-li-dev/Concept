@@ -1,0 +1,17 @@
+# name: qualified type unqualified imported type
+# phase: check
+# check: declarations
+# expect: fail
+
+=== file: Geometry.concept ===
+module Geometry;
+struct Point { int x; int y; };
+
+=== file: Main.concept ===
+module Main;
+import Geometry;
+
+int Sum(Point p) { return p.x + p.y; }
+
+=== diagnostics ===
+CON0025

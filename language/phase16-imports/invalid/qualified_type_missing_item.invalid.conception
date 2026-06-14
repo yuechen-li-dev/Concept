@@ -1,0 +1,17 @@
+# name: qualified type missing item
+# phase: check
+# check: declarations
+# expect: fail
+
+=== file: Geometry.concept ===
+module Geometry;
+struct Point { int x; };
+
+=== file: Main.concept ===
+module Main;
+import Geometry;
+
+int Use(Geometry.Missing p) { return 0; }
+
+=== diagnostics ===
+CON0274

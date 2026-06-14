@@ -960,6 +960,7 @@ const Collector = struct {
     fn isSupportedCAbiReturnType(self: *Collector, type_id: types.TypeId) bool {
         return switch (self.module.types.kind(type_id)) {
             .void, .int, .bool, .alloc_error => true,
+            .struct_type => |struct_id| self.isReprCStruct(struct_id),
             .pointer => |pointer| self.isSupportedCAbiPointerPointee(pointer.pointee),
             else => false,
         };
@@ -968,6 +969,7 @@ const Collector = struct {
     fn isSupportedCAbiParamType(self: *Collector, type_id: types.TypeId) bool {
         return switch (self.module.types.kind(type_id)) {
             .int, .bool, .alloc_error => true,
+            .struct_type => |struct_id| self.isReprCStruct(struct_id),
             .pointer => |pointer| self.isSupportedCAbiPointerPointee(pointer.pointee),
             else => false,
         };
@@ -976,8 +978,14 @@ const Collector = struct {
     fn isSupportedCAbiPointerPointee(self: *Collector, type_id: types.TypeId) bool {
         return switch (self.module.types.kind(type_id)) {
             .void, .int, .bool, .arena, .allocator, .alloc_error => true,
+            .struct_type => |struct_id| self.isReprCStruct(struct_id),
             else => false,
         };
+    }
+
+    fn isReprCStruct(self: *Collector, struct_id: hir.StructId) bool {
+        if (struct_id.index >= self.module.hir.structs.items.len) return false;
+        return self.module.hir.getStruct(struct_id).repr_abi == .c;
     }
 
     fn resolveGenericFunction(self: *Collector, template_decl: ast.TemplateDecl) !void {
@@ -1627,7 +1635,7 @@ const Collector = struct {
     fn resolveTypeNameScoped(self: *Collector, type_name: ast.TypeName, type_scope: ?*TypeParamScope) anyerror!?types.TypeId {
         if (type_name.is_dyn) return self.resolveDynTypeNameScoped(type_name, type_scope);
 
-        if (type_name.is_mut or type_name.is_reference or type_name.name.parts.len != 1) {
+        if (type_name.is_mut or type_name.is_reference) {
             try self.diagnostics.append(diagnostics.unsupportedTypeSyntax(type_name.span));
             return null;
         }
@@ -1676,6 +1684,17 @@ const Collector = struct {
 
     fn resolveBaseTypeNameScoped(self: *Collector, type_name: ast.TypeName, type_scope: ?*TypeParamScope) anyerror!?types.TypeId {
         const part = type_name.name.parts[0];
+        if (type_name.name.parts.len == 2) {
+            if (type_name.generic_args.len != 0) {
+                try self.diagnostics.append(diagnostics.unsupportedTypeSyntax(type_name.span));
+                return null;
+            }
+            return self.resolveQualifiedTypeName(type_name.name.parts[0], type_name.name.parts[1]);
+        }
+        if (type_name.name.parts.len != 1) {
+            try self.diagnostics.append(diagnostics.unsupportedTypeSyntax(type_name.span));
+            return null;
+        }
         if (std.mem.eql(u8, part.text, "void")) return self.module.types.voidType();
         if (std.mem.eql(u8, part.text, "int")) return self.module.types.intType();
         if (std.mem.eql(u8, part.text, "bool")) return self.module.types.boolType();
@@ -1714,6 +1733,64 @@ const Collector = struct {
                 break :blk null;
             },
         };
+    }
+
+    fn resolveQualifiedTypeName(self: *Collector, qualifier: ast.NameSegment, item_name: ast.NameSegment) !?types.TypeId {
+        const module_id = try self.resolveQualifiedModuleRoot(qualifier) orelse return null;
+        const item_symbol = try self.module.interner.intern(item_name.text);
+        const module_record = self.module.hir.modules.items[module_id.index];
+        for (module_record.items) |item_id| {
+            switch (self.module.hir.getItem(item_id).*) {
+                .struct_ => |id| {
+                    if (self.module.hir.getStruct(id).name.index == item_symbol.index) {
+                        return self.findExistingStructType(id) orelse try self.module.types.addStructType(id);
+                    }
+                },
+                .enum_ => |id| {
+                    if (self.module.hir.getEnum(id).name.index == item_symbol.index) {
+                        return self.findExistingEnumType(id) orelse try self.module.types.addEnumType(id);
+                    }
+                },
+                .machine => |id| {
+                    if (self.module.hir.getMachine(id).name.index == item_symbol.index) {
+                        return self.findExistingMachineType(id) orelse try self.module.types.addMachineType(id);
+                    }
+                },
+                .interface_ => |id| {
+                    if (self.module.hir.getInterface(id).name.index == item_symbol.index) {
+                        return self.findExistingInterfaceType(id) orelse try self.module.types.addInterfaceType(id);
+                    }
+                },
+                .function => |id| {
+                    if (self.module.hir.getFunction(id).name.index == item_symbol.index) break;
+                },
+            }
+        }
+        try self.diagnostics.append(try diagnostics.moduleQualifiedNameUnknown(self.allocator, qualifier.text, item_name.text, item_name.span));
+        return null;
+    }
+
+    fn resolveQualifiedModuleRoot(self: *Collector, qualifier: ast.NameSegment) !?hir.HirModuleId {
+        const target_symbol = try self.module.interner.intern(qualifier.text);
+        var target: ?hir.HirModuleId = null;
+        for (self.module.hir.modules.items, 0..) |module_record, index| {
+            if (module_record.name.index == target_symbol.index) {
+                target = .{ .index = @intCast(index) };
+                break;
+            }
+        }
+        const target_id = target orelse {
+            try self.diagnostics.append(try diagnostics.moduleQualifiedNameUnknown(self.allocator, qualifier.text, null, qualifier.span));
+            return null;
+        };
+        const current = self.module.hir.current_module orelse return target_id;
+        if (current.index == target_id.index) return target_id;
+        const current_module = self.module.hir.modules.items[current.index];
+        for (current_module.imports) |import_id| {
+            if (import_id.index == target_id.index) return target_id;
+        }
+        try self.diagnostics.append(try diagnostics.moduleQualifiedNameNotImported(self.allocator, qualifier.text, qualifier.span));
+        return null;
     }
 
     // ─────────────────────────────────────────────────────────────────────────────

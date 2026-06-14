@@ -1,0 +1,19 @@
+# name: qualified type repr C extern param
+# phase: check
+# check: declarations
+# expect: pass
+
+=== file: Geometry.concept ===
+module Geometry;
+
+[Repr(C)]
+struct Point { int x; int y; };
+
+=== file: Main.concept ===
+module Main;
+
+import Geometry;
+
+extern "C" {
+    int SumPoint(Geometry.Point p);
+}
