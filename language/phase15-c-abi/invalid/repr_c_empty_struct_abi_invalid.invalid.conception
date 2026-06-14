@@ -1,0 +1,15 @@
+# name: repr C empty struct ABI invalid
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module CAbi;
+
+[Repr(C)]
+struct Empty {};
+
+extern "C" { int Use(Empty e); }
+
+=== diagnostics ===
+CON0268

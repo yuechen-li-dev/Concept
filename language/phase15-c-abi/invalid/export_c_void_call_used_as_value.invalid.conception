@@ -1,0 +1,17 @@
+# name: export C void call used as value
+# phase: check
+# check: executable
+# expect: fail
+
+=== source ===
+module CAbi;
+
+export "C" void Touch(int x) { return; }
+
+int main() {
+    int x = Touch(1);
+    return x;
+}
+
+=== diagnostics ===
+CON0034

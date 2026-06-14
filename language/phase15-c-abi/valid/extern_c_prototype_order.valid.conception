@@ -1,0 +1,19 @@
+# name: extern C prototype order
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module CAbi;
+
+extern "C" {
+    int first(int value);
+    int second(int value);
+}
+
+int main() { return 0; }
+
+=== c ===
+contains: int first(int value);
+contains: int second(int value);
+before: int first(int value); | int second(int value);
+before: int second(int value); | int main(void)

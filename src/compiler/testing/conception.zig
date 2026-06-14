@@ -1467,6 +1467,26 @@ fn expectBackendCFixture(comptime path: []const u8) !void {
                     if (std.mem.startsWith(u8, trimmed, "not_contains:")) {
                         const needle = std.mem.trim(u8, trimmed["not_contains:".len..], " \t");
                         try std.testing.expect(std.mem.indexOf(u8, c_source, needle) == null);
+                    } else if (std.mem.startsWith(u8, trimmed, "count:")) {
+                        const rest = std.mem.trim(u8, trimmed["count:".len..], " \t");
+                        const separator = std.mem.indexOfScalar(u8, rest, '|') orelse return error.InvalidFixture;
+                        const needle = std.mem.trim(u8, rest[0..separator], " \t");
+                        const expected_count = try std.fmt.parseInt(usize, std.mem.trim(u8, rest[separator + 1 ..], " \t"), 10);
+                        var actual_count: usize = 0;
+                        var search_start: usize = 0;
+                        while (std.mem.indexOf(u8, c_source[search_start..], needle)) |relative_index| {
+                            actual_count += 1;
+                            search_start += relative_index + needle.len;
+                        }
+                        try std.testing.expectEqual(expected_count, actual_count);
+                    } else if (std.mem.startsWith(u8, trimmed, "before:")) {
+                        const rest = std.mem.trim(u8, trimmed["before:".len..], " \t");
+                        const separator = std.mem.indexOfScalar(u8, rest, '|') orelse return error.InvalidFixture;
+                        const first = std.mem.trim(u8, rest[0..separator], " \t");
+                        const second = std.mem.trim(u8, rest[separator + 1 ..], " \t");
+                        const first_index = std.mem.indexOf(u8, c_source, first) orelse return error.TestExpectedEqual;
+                        const second_index = std.mem.indexOf(u8, c_source, second) orelse return error.TestExpectedEqual;
+                        try std.testing.expect(first_index < second_index);
                     } else {
                         const needle = if (std.mem.startsWith(u8, trimmed, "contains:"))
                             std.mem.trim(u8, trimmed["contains:".len..], " \t")
@@ -2640,6 +2660,11 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectBackendCFixture("../../../language/phase15-c-abi/valid/extern_c_call_bool_backend.valid.conception");
     try expectBackendCFixture("../../../language/phase15-c-abi/valid/extern_c_call_pointer_param_backend.valid.conception");
     try expectBackendCFixture("../../../language/phase15-c-abi/valid/extern_c_empty_block_backend.valid.conception");
+    try expectBackendCFixture("../../../language/phase15-c-abi/valid/extern_c_prototype_emitted_once.valid.conception");
+    try expectBackendCFixture("../../../language/phase15-c-abi/valid/extern_c_prototype_order.valid.conception");
+    try expectBackendCFixture("../../../language/phase15-c-abi/valid/extern_c_multiple_blocks_order.valid.conception");
+    try expectBackendCFixture("../../../language/phase15-c-abi/valid/extern_c_bool_abi_backend.valid.conception");
+    try expectBackendCFixture("../../../language/phase15-c-abi/valid/extern_c_alloc_error_abi_backend.valid.conception");
     try expectRunFixture("../../../language/phase15-c-abi/valid/extern_c_call_abs_run.valid.conception");
     try expectRunFixture("../../../language/phase15-c-abi/valid/export_c_add_run.valid.conception");
     try expectCheckFixture("../../../language/phase15-c-abi/valid/repr_c_struct_marker.valid.conception");
@@ -2651,6 +2676,9 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectBackendCFixture("../../../language/phase15-c-abi/valid/repr_c_struct_pointer_field_backend.valid.conception");
     try expectBackendCFixture("../../../language/phase15-c-abi/valid/repr_c_extern_struct_param_backend.valid.conception");
     try expectBackendCFixture("../../../language/phase15-c-abi/valid/repr_c_extern_struct_pointer_param_backend.valid.conception");
+    try expectBackendCFixture("../../../language/phase15-c-abi/valid/repr_c_typedef_before_extern_prototype.valid.conception");
+    try expectBackendCFixture("../../../language/phase15-c-abi/valid/repr_c_typedef_before_export_definition.valid.conception");
+    try expectBackendCFixture("../../../language/phase15-c-abi/valid/repr_c_typedef_emitted_once.valid.conception");
     try expectRunFixture("../../../language/phase15-c-abi/valid/repr_c_export_struct_param_run.valid.conception");
     try expectCheckFixture("../../../language/phase15-c-abi/invalid/repr_c_invalid_target_function.invalid.conception");
     try expectCheckFixture("../../../language/phase15-c-abi/invalid/repr_c_invalid_target_enum.invalid.conception");
@@ -2661,15 +2689,22 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase15-c-abi/invalid/repr_c_duplicate_marker.invalid.conception");
     try expectCheckFixture("../../../language/phase15-c-abi/invalid/repr_c_empty_struct.invalid.conception");
     try expectCheckFixture("../../../language/phase15-c-abi/invalid/repr_c_field_non_repr_struct.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/repr_c_nested_struct_by_value_still_invalid.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/repr_c_empty_struct_abi_invalid.invalid.conception");
     try expectBackendCFixture("../../../language/phase15-c-abi/valid/export_c_backend_symbol.valid.conception");
+    try expectBackendCFixture("../../../language/phase15-c-abi/valid/export_c_internal_helper_naming_backend.valid.conception");
     try expectBackendCFixture("../../../language/phase15-c-abi/valid/export_c_void_backend.valid.conception");
+    try expectRunFixture("../../../language/phase15-c-abi/valid/export_c_void_call_run.valid.conception");
     try expectCheckFixture("../../../language/phase15-c-abi/invalid/export_c_missing_body.invalid.conception");
     try expectParseFixture("../../../language/phase15-c-abi/invalid/export_c_unsupported_abi_cpp.invalid.conception");
     try expectParseFixture("../../../language/phase15-c-abi/invalid/export_c_missing_abi_string.invalid.conception");
     try expectParseFixture("../../../language/phase15-c-abi/invalid/export_c_block_form_invalid.invalid.conception");
     try expectCheckFixture("../../../language/phase15-c-abi/invalid/export_c_duplicate_extern_symbol.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/export_c_duplicate_symbol.invalid.conception");
     try expectCheckFixture("../../../language/phase15-c-abi/invalid/export_c_unsupported_return_struct.invalid.conception");
     try expectCheckFixture("../../../language/phase15-c-abi/invalid/export_c_unsupported_param_struct.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/non_repr_struct_export_param_still_invalid.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/non_repr_struct_pointer_export_param_still_invalid.invalid.conception");
     try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_duplicate_symbol_same_block.invalid.conception");
     try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_duplicate_symbol_across_blocks.invalid.conception");
     try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_duplicate_top_level_name.invalid.conception");
@@ -2683,6 +2718,8 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_unsupported_param_manual_init.invalid.conception");
     try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_void_param_invalid.invalid.conception");
     try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_void_call_used_as_value.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/export_c_void_call_used_as_value.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/export_c_void_param_invalid.invalid.conception");
     try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_call_wrong_arg_type.invalid.conception");
     try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_call_wrong_arity.invalid.conception");
 

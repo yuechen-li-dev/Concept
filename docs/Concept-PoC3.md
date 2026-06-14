@@ -85,7 +85,11 @@ output, and rejects invalid targets or unsupported repr arguments. P15-M6 valida
 the supported repr(C) struct field subset, rejects empty repr(C) structs, allows
 validated repr(C) structs/pointers across C ABI boundaries, and hardens backend C
 layout emission while keeping enums, packed layout, custom alignment, and
-platform ABI matrices deferred.
+platform ABI matrices deferred. P15-M7 hardens diagnostics, duplicate C ABI
+symbol detection coverage, extern prototype de-duplication/order, repr(C)
+typedef-before-use ordering, ordinary-vs-C-linkage backend names, void
+rules, and the current bool/AllocError C ABI spelling without adding new C ABI
+features.
 Deferred Phase 12
 work includes
 `Arena.create`, hosted runtime helper implementation, allocation failure

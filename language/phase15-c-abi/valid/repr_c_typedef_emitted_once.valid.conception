@@ -1,0 +1,20 @@
+# name: repr C typedef emitted once
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module CAbi;
+
+[Repr(C)]
+struct Point { int x; int y; };
+
+extern "C" { int Use(Point p); int UsePtr(Point* p); }
+export "C" int Sum(Point p) { return p.x + p.y; }
+
+int main() { return 0; }
+
+=== c ===
+count: typedef struct cpt_struct_Point { | 1
+contains: int Use(cpt_struct_Point p);
+contains: int UsePtr(cpt_struct_Point* p);
+contains: int Sum(cpt_struct_Point p)

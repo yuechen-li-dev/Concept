@@ -1,0 +1,12 @@
+# name: export C void param invalid
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module CAbi;
+
+export "C" int Touch(void x) { return 0; }
+
+=== diagnostics ===
+CON0260

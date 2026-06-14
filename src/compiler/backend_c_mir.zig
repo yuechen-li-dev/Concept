@@ -779,7 +779,7 @@ fn emitExternCPrototypes(writer: anytype, ctx: *const BackendContext) EmitError!
     var emitted_any = false;
     for (ctx.module.hir.functions.items) |function| {
         if (!function.is_extern) continue;
-        if (function.extern_abi == null or function.extern_abi.? != .c or function.c_symbol_name == null) {
+        if (function.extern_abi == null or function.extern_abi.? != .c or function.c_symbol_name == null or ctx.module.interner.text(function.c_symbol_name.?).len == 0) {
             return error.InvalidExecutable;
         }
         try emitCType(writer, ctx, function.return_type, function.span);
@@ -808,6 +808,15 @@ fn emitExternCParamList(writer: anytype, ctx: *const BackendContext, function: h
 }
 
 fn emitFunction(writer: anytype, ctx: *const BackendContext, function_id: mir.MirFunctionId, function: mir.MirFunction) EmitError!void {
+    const hir_function = ctx.module.hir.getFunction(function.hir_function);
+    if (hir_function.is_extern) return error.InvalidExecutable;
+    switch (function.linkage) {
+        .internal => if (hir_function.is_exported and hir_function.extern_abi == .c) return error.InvalidExecutable,
+        .export_c => |export_c| {
+            if (!hir_function.is_exported or hir_function.extern_abi == null or hir_function.extern_abi.? != .c) return error.InvalidExecutable;
+            if (hir_function.c_symbol_name == null or hir_function.c_symbol_name.?.index != export_c.symbol.index or ctx.module.interner.text(export_c.symbol).len == 0) return error.InvalidExecutable;
+        },
+    }
     try emitCType(writer, ctx, function.return_type, function.source_span);
     try writer.writeByte(' ');
     try emitMirFunctionName(writer, ctx, function_id, function);
@@ -1421,7 +1430,8 @@ fn emitHirFunctionName(writer: anytype, ctx: *const BackendContext, function_id:
         try writer.print("_{d}", .{function_id.index});
         return;
     }
-    if (function.is_exported and function.extern_abi == .c and function.c_symbol_name != null) {
+    if (function.is_exported and function.extern_abi == .c) {
+        if (function.c_symbol_name == null or ctx.module.interner.text(function.c_symbol_name.?).len == 0) return error.InvalidExecutable;
         try emitCSymbolName(writer, ctx.module, function.c_symbol_name.?);
         return;
     }

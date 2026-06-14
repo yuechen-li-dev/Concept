@@ -51,6 +51,26 @@ const Validator = struct {
     fn validateFunction(self: *Validator, function_id: mir.MirFunctionId, mir_function: mir.MirFunction) ValidationError!void {
         if (!self.containsHirFunction(mir_function.hir_function)) {
             try self.report(.InvalidMirOperand, mir_function.source_span, diagnostics.invalidMirOperand);
+        } else {
+            const hir_function = self.semantic_module.hir.getFunction(mir_function.hir_function);
+            if (hir_function.is_extern) {
+                try self.report(.InvalidMirOperand, mir_function.source_span, diagnostics.invalidMirOperand);
+            }
+            switch (mir_function.linkage) {
+                .internal => {
+                    if (hir_function.is_exported and hir_function.extern_abi == .c) {
+                        try self.report(.InvalidMirOperand, mir_function.source_span, diagnostics.invalidMirOperand);
+                    }
+                },
+                .export_c => |export_c| {
+                    if (!hir_function.is_exported or hir_function.extern_abi == null or hir_function.extern_abi.? != .c) {
+                        try self.report(.InvalidMirOperand, mir_function.source_span, diagnostics.invalidMirOperand);
+                    }
+                    if (hir_function.c_symbol_name == null or hir_function.c_symbol_name.?.index != export_c.symbol.index or self.semantic_module.interner.text(export_c.symbol).len == 0) {
+                        try self.report(.InvalidMirOperand, mir_function.source_span, diagnostics.invalidMirOperand);
+                    }
+                },
+            }
         }
         try self.requireValidType(mir_function.return_type, mir_function.source_span);
         if (mir_function.blocks.len == 0) {
@@ -584,7 +604,7 @@ const Validator = struct {
                 if (!callee.is_extern or callee.extern_abi == null or callee.extern_abi.? != .c) {
                     try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
                 }
-                if (callee.c_symbol_name == null or callee.c_symbol_name.?.index != extern_c.symbol.index) {
+                if (callee.c_symbol_name == null or callee.c_symbol_name.?.index != extern_c.symbol.index or self.semantic_module.interner.text(extern_c.symbol).len == 0) {
                     try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
                 }
                 if (!sameType(callee.return_type, extern_c.result_type)) {
