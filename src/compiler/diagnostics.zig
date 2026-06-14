@@ -29,8 +29,11 @@ pub const DiagnosticCode = enum {
     ExpectedItem,
     DuplicateModuleDeclaration,
     DuplicateModule,
+    UnknownImport,
+    ImportCycle,
     ModuleDeclarationRequired,
     ImportMustAppearBeforeDeclarations,
+    DuplicateImport,
     UnterminatedChar,
     EmptyCharLiteral,
     InvalidEscapeSequence,
@@ -232,8 +235,11 @@ pub const DiagnosticCode = enum {
             .ExpectedItem => "CON0004",
             .DuplicateModuleDeclaration => "CON0005",
             .DuplicateModule => "CON0270",
+            .UnknownImport => "CON0271",
+            .ImportCycle => "CON0272",
             .ModuleDeclarationRequired => "CON0276",
             .ImportMustAppearBeforeDeclarations => "CON0273",
+            .DuplicateImport => "CON0277",
             .UnterminatedChar => "CON0007",
             .EmptyCharLiteral => "CON0008",
             .InvalidEscapeSequence => "CON0009",
@@ -579,6 +585,39 @@ pub fn duplicateModule(allocator: std.mem.Allocator, name: []const u8, span: Sou
         .message = try std.fmt.allocPrint(allocator, "duplicate module '{s}'; previous declaration is in {s}", .{ name, previous_path }),
         .primary_span = span,
         .help = "module names must be unique in one compilation unit; v0 does not allow one module to span multiple files",
+        .owns_message = true,
+    };
+}
+
+pub fn unknownImport(allocator: std.mem.Allocator, name: []const u8, importer_path: []const u8, span: SourceSpan) !Diagnostic {
+    return .{
+        .code = .UnknownImport,
+        .severity = .@"error",
+        .message = try std.fmt.allocPrint(allocator, "unknown import '{s}' in {s}", .{ name, importer_path }),
+        .primary_span = span,
+        .help = "imports must name a module supplied in the same compilation unit; v0 does not search the filesystem",
+        .owns_message = true,
+    };
+}
+
+pub fn duplicateImport(allocator: std.mem.Allocator, name: []const u8, span: SourceSpan) !Diagnostic {
+    return .{
+        .code = .DuplicateImport,
+        .severity = .@"error",
+        .message = try std.fmt.allocPrint(allocator, "duplicate import '{s}'", .{name}),
+        .primary_span = span,
+        .help = "a module may import another module at most once; duplicate imports across different modules are allowed",
+        .owns_message = true,
+    };
+}
+
+pub fn importCycle(allocator: std.mem.Allocator, cycle: []const u8, span: SourceSpan) !Diagnostic {
+    return .{
+        .code = .ImportCycle,
+        .severity = .@"error",
+        .message = try std.fmt.allocPrint(allocator, "import cycle detected: {s}", .{cycle}),
+        .primary_span = span,
+        .help = "Phase 16 v0 rejects cyclic module imports, including self-imports",
         .owns_message = true,
     };
 }
@@ -1134,7 +1173,10 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0258", DiagnosticCode.DynRequiresBorrowedReference.format());
     try std.testing.expectEqualStrings("CON0259", DiagnosticCode.ExternCNotImplemented.format());
     try std.testing.expectEqualStrings("CON0261", DiagnosticCode.ExternCRequiresFunctionDeclaration.format());
+    try std.testing.expectEqualStrings("CON0271", DiagnosticCode.UnknownImport.format());
+    try std.testing.expectEqualStrings("CON0272", DiagnosticCode.ImportCycle.format());
     try std.testing.expectEqualStrings("CON0273", DiagnosticCode.ImportMustAppearBeforeDeclarations.format());
+    try std.testing.expectEqualStrings("CON0277", DiagnosticCode.DuplicateImport.format());
     try std.testing.expectEqualStrings("CON0262", DiagnosticCode.ExternCFunctionCannotHaveBody.format());
     try std.testing.expectEqualStrings("CON0269", DiagnosticCode.VarargsUnsupported.format());
     try std.testing.expectEqualStrings("CON026A", DiagnosticCode.ExternUnsupportedAbi.format());

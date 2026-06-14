@@ -1,0 +1,11 @@
+# name: import graph unknown dotted import
+# phase: parse
+# expect: fail
+
+=== file: Main.concept ===
+module Main;
+
+import Compiler.Missing;
+
+=== diagnostics ===
+CON0271

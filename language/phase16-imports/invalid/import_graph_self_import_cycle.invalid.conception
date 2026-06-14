@@ -1,0 +1,11 @@
+# name: import graph self import cycle
+# phase: parse
+# expect: fail
+
+=== file: A.concept ===
+module A;
+
+import A;
+
+=== diagnostics ===
+CON0272

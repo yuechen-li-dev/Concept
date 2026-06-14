@@ -1,0 +1,22 @@
+# name: import graph shared dependency
+# phase: parse
+# expect: pass
+
+=== file: Main.concept ===
+module Main;
+
+import A;
+import B;
+
+=== file: A.concept ===
+module A;
+
+import Common;
+
+=== file: B.concept ===
+module B;
+
+import Common;
+
+=== file: Common.concept ===
+module Common;

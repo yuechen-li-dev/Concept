@@ -1,0 +1,16 @@
+# name: import graph duplicate import across modules valid
+# phase: parse
+# expect: pass
+
+=== file: Main.concept ===
+module Main;
+
+import Math;
+
+=== file: Tests.concept ===
+module Tests;
+
+import Math;
+
+=== file: Math.concept ===
+module Math;

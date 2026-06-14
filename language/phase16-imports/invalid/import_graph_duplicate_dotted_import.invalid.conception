@@ -1,0 +1,15 @@
+# name: import graph duplicate dotted import
+# phase: parse
+# expect: fail
+
+=== file: Main.concept ===
+module Main;
+
+import Compiler.Lexer;
+import Compiler.Lexer;
+
+=== file: Lexer.concept ===
+module Compiler.Lexer;
+
+=== diagnostics ===
+CON0277

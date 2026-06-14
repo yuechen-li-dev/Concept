@@ -1,0 +1,11 @@
+# name: import graph unknown import
+# phase: parse
+# expect: fail
+
+=== file: Main.concept ===
+module Main;
+
+import Missing;
+
+=== diagnostics ===
+CON0271

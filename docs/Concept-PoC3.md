@@ -89,9 +89,11 @@ declare one module, imports name modules rather than filesystem paths, qualified
 access is the v0 model, import cycles are rejected, and package managers,
 dependency resolution, linker drivers, and visibility systems remain deferred.
 M1 added hermetic multi-file parser fixtures, M2 added the module table
-scaffold, and M3 adds parser/AST import declarations plus ordering diagnostics.
-Import graph resolution, unknown/duplicate import checks, cycles, and
-cross-module lookup remain deferred to later Phase 16 milestones.
+scaffold, M3 added parser/AST import declarations plus ordering diagnostics, and
+M4 resolves the import graph: raw imports become stable module-ID edges, unknown
+imports use `CON0271`, duplicate imports use `CON0277`, and self/direct/long
+cycles use `CON0272`. Qualified lookup and cross-module semantic/backend work
+remain deferred to later Phase 16 milestones.
 M1 adds the hermetic multi-file `.conception` fixture scaffold: embedded
 `=== file: <virtual-path> ===` sections parse into ordered fixture source sets,
 virtual paths are preserved, duplicate/empty virtual paths are rejected, and
