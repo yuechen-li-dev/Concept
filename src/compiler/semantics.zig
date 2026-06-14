@@ -2119,7 +2119,7 @@ const BodyLowerer = struct {
                 return try self.collector.module.hir.addStmt(.{ .expr_stmt = value }, expr_stmt.span);
             },
             .panic_stmt => |panic_stmt| {
-                const reason_text = stringLiteralContents(panic_stmt.reason.text);
+                const reason_text = (try self.validateFailureReason(panic_stmt.reason.text, panic_stmt.reason_span)) orelse return null;
                 const owned_reason = try self.collector.allocator.dupe(u8, reason_text);
                 errdefer self.collector.allocator.free(owned_reason);
                 return try self.collector.module.hir.addStmt(.{ .panic_stmt = .{
@@ -2134,7 +2134,7 @@ const BodyLowerer = struct {
                     try self.collector.diagnostics.append(diagnostics.assertConditionMustBeBool(assert_stmt.condition_span));
                     return null;
                 }
-                const reason_text = stringLiteralContents(assert_stmt.reason.text);
+                const reason_text = (try self.validateFailureReason(assert_stmt.reason.text, assert_stmt.reason_span)) orelse return null;
                 const owned_reason = try self.collector.allocator.dupe(u8, reason_text);
                 errdefer self.collector.allocator.free(owned_reason);
                 return try self.collector.module.hir.addStmt(.{ .assert_stmt = .{
@@ -3131,9 +3131,22 @@ const BodyLowerer = struct {
         } }, call.span);
     }
 
+    fn validateFailureReason(self: *BodyLowerer, literal_text: []const u8, span: source.SourceSpan) !?[]const u8 {
+        const reason_text = stringLiteralContents(literal_text);
+        if (isBlankFailureReason(reason_text)) {
+            try self.collector.diagnostics.append(diagnostics.failureReasonMustBeNonEmpty(span));
+            return null;
+        }
+        return reason_text;
+    }
+
     fn stringLiteralContents(text: []const u8) []const u8 {
         if (text.len >= 2 and text[0] == '"' and text[text.len - 1] == '"') return text[1 .. text.len - 1];
         return text;
+    }
+
+    fn isBlankFailureReason(text: []const u8) bool {
+        return std.mem.trim(u8, text, " \t\r\n").len == 0;
     }
 
     fn isUnboundTargetRoot(self: *BodyLowerer, expr: ast.Expr) bool {
@@ -5654,6 +5667,55 @@ test "test intrinsic semantics reject wrong arity and normal source usage" {
     that_statements[0] = try exprStmt(allocator, try qualifiedCallExpr(allocator, "Expect", "That", &.{ boolExpr(true), try qualifiedCallExpr(allocator, "Is", "True", &.{}), stringExpr("\"reason\"") }));
     that_statements[1] = try returnStmt(allocator, intExpr("0"));
     try expectOneSemanticDiagnostic(&.{functionWithBody("main", &.{}, that_statements)}, .TestIntrinsicOutsideTestFile);
+}
+
+test "failure reason helper validates non-empty and blank reasons" {
+    try std.testing.expect(!BodyLowerer.isBlankFailureReason("because state must be ready"));
+    try std.testing.expect(BodyLowerer.isBlankFailureReason(""));
+    try std.testing.expect(BodyLowerer.isBlankFailureReason("   "));
+    try std.testing.expect(BodyLowerer.isBlankFailureReason("\t\t"));
+    try std.testing.expect(BodyLowerer.isBlankFailureReason(" \t\r\n "));
+}
+
+fn expectPanicStatementReasonDiagnostic(reason_text: []const u8, code: DiagnosticCode) !void {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const statements = try allocator.alloc(ast.Stmt, 2);
+    statements[0] = .{ .panic_stmt = .{
+        .reason = .{ .text = reason_text, .span = .{ .start = 0, .length = @intCast(reason_text.len) } },
+        .reason_span = .{ .start = 0, .length = @intCast(reason_text.len) },
+        .span = .{ .start = 0, .length = @intCast(reason_text.len + 8) },
+    } };
+    statements[1] = try returnStmt(allocator, intExpr("0"));
+    try expectOneSemanticDiagnostic(&.{functionWithBody("main", &.{}, statements)}, code);
+}
+
+fn expectAssertStatementReasonDiagnostic(reason_text: []const u8, code: DiagnosticCode) !void {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const statements = try allocator.alloc(ast.Stmt, 2);
+    statements[0] = .{ .assert_stmt = .{
+        .condition = try allocExpr(allocator, boolExpr(true)),
+        .reason = .{ .text = reason_text, .span = .{ .start = 0, .length = @intCast(reason_text.len) } },
+        .condition_span = .{ .start = 0, .length = 4 },
+        .reason_span = .{ .start = 0, .length = @intCast(reason_text.len) },
+        .span = .{ .start = 0, .length = @intCast(reason_text.len + 14) },
+    } };
+    statements[1] = try returnStmt(allocator, intExpr("0"));
+    try expectOneSemanticDiagnostic(&.{functionWithBody("main", &.{}, statements)}, code);
+}
+
+test "panic and assert semantics reject empty and whitespace failure reasons" {
+    try expectPanicStatementReasonDiagnostic("\"\"", .FailureReasonMustBeNonEmpty);
+    try expectPanicStatementReasonDiagnostic("\"   \"", .FailureReasonMustBeNonEmpty);
+    try expectPanicStatementReasonDiagnostic("\"\t\t\"", .FailureReasonMustBeNonEmpty);
+    try expectAssertStatementReasonDiagnostic("\"\"", .FailureReasonMustBeNonEmpty);
+    try expectAssertStatementReasonDiagnostic("\"   \"", .FailureReasonMustBeNonEmpty);
+    try expectAssertStatementReasonDiagnostic("\"\t\t\"", .FailureReasonMustBeNonEmpty);
 }
 
 test "panic statement lowers to HIR and debug output preserves reason" {

@@ -3413,6 +3413,10 @@ test "language check fixture: phase17 panic statement after code" {
     try expectCheckFixture("../../../language/phase17-runtime-failure/valid/panic_statement_after_code.valid.conception");
 }
 
+test "language check fixture: phase17 panic non empty reason still valid" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/valid/panic_non_empty_reason_still_valid.valid.conception");
+}
+
 test "language check fixture: phase17 panic missing reason" {
     try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/panic_missing_reason.invalid.conception");
 }
@@ -3423,6 +3427,18 @@ test "language check fixture: phase17 panic too many args" {
 
 test "language check fixture: phase17 panic non string reason" {
     try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/panic_non_string_reason.invalid.conception");
+}
+
+test "language check fixture: phase17 panic empty reason" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/panic_empty_reason.invalid.conception");
+}
+
+test "language check fixture: phase17 panic whitespace reason" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/panic_whitespace_reason.invalid.conception");
+}
+
+test "language check fixture: phase17 panic tab reason" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/panic_tab_reason.invalid.conception");
 }
 
 test "language check fixture: phase17 panic expression initializer" {
@@ -3469,6 +3485,10 @@ test "language check fixture: phase17 assert statement after code" {
     try expectCheckFixture("../../../language/phase17-runtime-failure/valid/assert_statement_after_code.valid.conception");
 }
 
+test "language check fixture: phase17 assert non empty reason still valid" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/valid/assert_non_empty_reason_still_valid.valid.conception");
+}
+
 test "language check fixture: phase17 assert missing all args" {
     try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/assert_missing_all_args.invalid.conception");
 }
@@ -3483,6 +3503,18 @@ test "language check fixture: phase17 assert too many args" {
 
 test "language check fixture: phase17 assert non string reason" {
     try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/assert_non_string_reason.invalid.conception");
+}
+
+test "language check fixture: phase17 assert empty reason" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/assert_empty_reason.invalid.conception");
+}
+
+test "language check fixture: phase17 assert whitespace reason" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/assert_whitespace_reason.invalid.conception");
+}
+
+test "language check fixture: phase17 assert tab reason" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/assert_tab_reason.invalid.conception");
 }
 
 test "language check fixture: phase17 assert non bool condition" {
