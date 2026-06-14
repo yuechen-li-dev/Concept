@@ -1163,6 +1163,8 @@ pub const AllocationEffect = enum {
 pub const FunctionDecl = struct {
     attributes: []Attribute = &.{},
     is_export: bool,
+    export_abi: ?ExternAbi = null,
+    export_abi_span: SourceSpan = .{ .start = 0, .length = 0 },
     is_unsafe: bool = false,
     is_compile_time: bool = false,
     allocation_effect: AllocationEffect = .unspecified,
@@ -1251,6 +1253,8 @@ pub const Item = union(enum) {
                     try writer.writeAll("  CompileTime Function ");
                 } else if (function_decl.is_export and function_decl.is_unsafe) {
                     try writer.writeAll("  Export Unsafe Function ");
+                } else if (function_decl.export_abi) |abi| {
+                    try writer.print("  ExportFunction \"{s}\" ", .{abi.debugName()});
                 } else if (function_decl.is_export) {
                     try writer.writeAll("  Export Function ");
                 } else if (function_decl.is_unsafe) {

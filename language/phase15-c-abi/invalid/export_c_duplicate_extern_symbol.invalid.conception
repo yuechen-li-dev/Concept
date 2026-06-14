@@ -1,0 +1,17 @@
+# name: export C duplicate extern symbol
+# phase: check
+# expect: fail
+
+=== source ===
+module CAbi;
+
+extern "C" {
+    int abs(int value);
+}
+
+export "C" int abs(int value) {
+    return value;
+}
+
+=== diagnostics ===
+CON0265

@@ -1,0 +1,13 @@
+# name: export C missing ABI string
+# phase: parse
+# expect: fail
+
+=== source ===
+module CAbi;
+
+export int Add(int a, int b) {
+    return a + b;
+}
+
+=== diagnostics ===
+CON0005

@@ -4,7 +4,7 @@
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
 **Phases closed:** 1 through 14
-**Current phase:** Phase 15 M3 extern C call lowering and backend prototype emission
+**Current phase:** Phase 15 M4 export C function surface
 **Fixture corpus:** 746 total (365 valid, 381 invalid)
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
@@ -360,7 +360,7 @@
 |---------|--------|-------|
 | C backend (compile Concept to C) | ✅ | Phase 4+ — MIR → C backend, primary bootstrap path |
 | C-readable generated output | ✅ | Generated C is auditable and readable |
-| `extern "C"` declarations | 🔶 | Phase 15 M3 parses block-form declarations, lowers valid extern C functions to HIR with ABI/linkage metadata and C symbol names, validates the strict v0 ABI type subset, makes declarations visible to ordinary call resolution, lowers extern calls through MIR, emits backend C prototypes for declarations, emits calls with declared C symbols, and rejects duplicate extern C symbols. Headers/includes, linker driving, export, and repr(C) remain deferred |
+| `extern "C"` declarations | 🔶 | Phase 15 M3 parses block-form declarations, lowers valid extern C functions to HIR with ABI/linkage metadata and C symbol names, validates the strict v0 ABI type subset, makes declarations visible to ordinary call resolution, lowers extern calls through MIR, emits backend C prototypes for declarations, emits calls with declared C symbols, and rejects duplicate extern C symbols. Headers/includes, linker driving, and repr(C) remain deferred; P15-M4 adds export C function definitions with unmangled backend symbols |
 | `repr(C)` struct layout | ❌ | Phase 15 M0 design added; layout marker and ABI validation not implemented yet |
 | Export to C (`export "C" fn`) | ❌ | Phase 15 M0 design added; source surface and backend symbol emission not implemented yet |
 | C++ interop (`extern "C++"`) | ❌ | PoC3 §36.2 — quarantined/future |
@@ -442,7 +442,7 @@
 - remaining `interface` / `dyn` work beyond the borrowed C backend subset:
   owning dyn boxes, dyn returns/fields/locals, RTTI/dynamic cast decisions,
   upcasting/inheritance non-goals, and ABI policy
-- `export "C"` and `repr(C)` implementation after the Phase 15 M3 extern call/prototype milestone
+- `repr(C)` implementation after the Phase 15 M4 export C function milestone
 - `import` / multi-module compilation
 - `yield` in machines
 - `repr(C)` implementation for ABI-compatible structs after the Phase 15 M0
@@ -510,7 +510,7 @@
 | §32 Inline assembly | ❌ Not started |
 | §33 Comptime | 🔶 Scalar hermetic comptime done; type-level comptime, capability execution deferred |
 | §34–35 Reflection/macros | ❌ Correctly deferred per PoC3 |
-| §36 C interop | 🔶 C backend done; Phase 15 M0 design added for `extern "C"`, `export "C"`, and `repr(C)`; P15-M3 parses and preserves `extern "C"` blocks, lowers valid extern functions into HIR with C ABI metadata, validates ABI types, rejects duplicate C symbols, lowers extern calls through MIR, and emits backend C prototypes/calls with declared C symbols |
+| §36 C interop | 🔶 C backend done; Phase 15 M0 design added for `extern "C"`, `export "C"`, and `repr(C)`; P15-M4 parses and lowers `extern "C"` declarations and `export "C"` definitions, validates ABI types, rejects duplicate C ABI symbols, lowers extern calls and exported function bodies through MIR, emits extern prototypes/calls with declared C symbols, and emits export definitions with unmangled C symbols |
 | §37 State machines | 🔶 Literal transitions runnable; `yield`, nested machines, match/decide runtime deferred |
 | §38–39 SoA/audit | ❌ Provisional/future |
 | §40 Compiler architecture | 🔶 Core pipeline done; LLVM/native backends are Stage 3 |

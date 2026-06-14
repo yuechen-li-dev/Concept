@@ -1,0 +1,13 @@
+# name: export C unsupported ABI C++
+# phase: parse
+# expect: fail
+
+=== source ===
+module CAbi;
+
+export "C++" int Add(int a, int b) {
+    return a + b;
+}
+
+=== diagnostics ===
+CON026A

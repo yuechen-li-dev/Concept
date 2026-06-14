@@ -231,6 +231,7 @@ pub const HirFunction = struct {
     is_concept_witness: bool = false,
     is_referenced_concept_witness: bool = false,
     is_extern: bool = false,
+    is_exported: bool = false,
     extern_abi: ?ExternAbi = null,
     c_symbol_name: ?SymbolId = null,
     extern_abi_span: ?SourceSpan = null,
@@ -896,6 +897,14 @@ pub const HirStore = struct {
         return id;
     }
 
+    pub fn markFunctionExportC(self: *HirStore, id: FunctionId, abi: ExternAbi, c_symbol_name: SymbolId, abi_span: SourceSpan) void {
+        const function = self.getFunctionMut(id);
+        function.is_exported = true;
+        function.extern_abi = abi;
+        function.c_symbol_name = c_symbol_name;
+        function.extern_abi_span = abi_span;
+    }
+
     pub fn addMachine(self: *HirStore, name: SymbolId, return_type: types.TypeId, states: []HirMachineState, span: SourceSpan) !MachineId {
         const id = MachineId{ .index = try nextIndex(self.machines.items.len, error.TooManyMachines) };
         const item = try self.addItem(.{ .machine = id });
@@ -1501,6 +1510,11 @@ pub const HirStore = struct {
                     try writeAttributesDebug(writer, function.attributes, interner, 1);
                     if (function.is_extern) {
                         try writer.print("  ExternFunction \"{s}\" {s}", .{ function.extern_abi.?.debugName(), interner.text(function.name) });
+                        if (function.c_symbol_name) |symbol| {
+                            try writer.print(" symbol={s}", .{interner.text(symbol)});
+                        }
+                    } else if (function.is_exported) {
+                        try writer.print("  ExportFunction \"{s}\" {s}", .{ function.extern_abi.?.debugName(), interner.text(function.name) });
                         if (function.c_symbol_name) |symbol| {
                             try writer.print(" symbol={s}", .{interner.text(symbol)});
                         }

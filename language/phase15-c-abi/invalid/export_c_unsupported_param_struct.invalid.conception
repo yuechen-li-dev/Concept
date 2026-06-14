@@ -1,0 +1,17 @@
+# name: export C unsupported param struct
+# phase: check
+# expect: fail
+
+=== source ===
+module CAbi;
+
+struct Point {
+    int x;
+}
+
+export "C" int Sum(Point p) {
+    return 0;
+}
+
+=== diagnostics ===
+CON0260
