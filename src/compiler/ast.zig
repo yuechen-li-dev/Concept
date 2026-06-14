@@ -1236,6 +1236,7 @@ pub const MachineDecl = struct {
     name: NameSegment,
     params: []ParamDecl,
     return_type: TypeName,
+    fields: []FieldDecl = &.{},
     states: []MachineStateDecl,
     allocation_effect: AllocationEffect = .unspecified,
     span: SourceSpan,
@@ -1246,6 +1247,8 @@ pub const MachineDecl = struct {
         for (self.params) |param| param.deinit(allocator);
         allocator.free(self.params);
         self.return_type.deinit(allocator);
+        for (self.fields) |field| field.deinit(allocator);
+        allocator.free(self.fields);
         for (self.states) |state| state.deinit(allocator);
         allocator.free(self.states);
     }

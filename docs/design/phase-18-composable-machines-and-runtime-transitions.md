@@ -503,3 +503,11 @@ behavior and should not change lexer, parser, HIR, MIR, or backend behavior.
 Light status/index updates may mention that Phase 18 has started and that the
 new design document defines the intended machine-composition and runtime
 transition work.
+
+## M2 status: nested machine fields / child frames
+
+Phase 18 M2 adds the first storage-only form of explicit machine composition. A machine body may declare an ordinary field whose type is another machine type. For v0, accepted child machine fields must be default-constructible: the child machine must have zero parameters. Parameterized child machine fields are rejected with `CON0290 NestedMachineFieldRequiresDefaultConstruction` because explicit child-field initializer syntax is deferred.
+
+Accepted child machine fields are represented in HIR as machine fields and emitted in the C backend as by-value child frame storage in the parent frame. The parent constructor initializes each child field by invoking the zero-argument child machine constructor. Construction does not step the child and does not allocate heap storage, register scheduler tasks, start async work, or create hidden child lists.
+
+M2 is intentionally not a nested execution milestone. `Step`, `Complete`, and `Result` composition for child fields is deferred to P18-M3 unless existing place/value machinery naturally supports a case that is explicitly tested. Current machine copy/assignment remains the provisional by-value behavior documented in M1; nested child frames are copied as part of the parent value under that provisional policy.

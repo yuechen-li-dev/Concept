@@ -885,12 +885,6 @@ pub const Parser = struct {
         }
         const name = ast.NameSegment{ .text = name_token.?.lexeme, .span = name_token.?.span };
 
-        if (self.match(.left_paren) == null) {
-            try self.report(.UnexpectedToken, "expected '(' after machine name", self.current().span);
-            try self.recoverMachineDecl();
-            return null;
-        }
-
         var params = std.ArrayList(ast.ParamDecl).init(allocator);
         errdefer {
             for (params.items) |param| param.deinit(allocator);
@@ -898,37 +892,43 @@ pub const Parser = struct {
         }
 
         var last_span = name.span;
-        while (self.current().kind != .eof and self.current().kind != .right_paren and self.current().kind != .left_brace and self.current().kind != .semicolon) {
-            if (try self.parseFunctionParamDecl(allocator)) |param| {
-                last_span = param.span;
-                try params.append(param);
+        const has_param_list = self.match(.left_paren) != null;
+        if (has_param_list) {
+            while (self.current().kind != .eof and self.current().kind != .right_paren and self.current().kind != .left_brace and self.current().kind != .semicolon) {
+                if (try self.parseFunctionParamDecl(allocator)) |param| {
+                    last_span = param.span;
+                    try params.append(param);
+                }
+                if (self.match(.comma)) |comma| {
+                    last_span = comma.span;
+                    continue;
+                }
+                if (self.current().kind == .right_paren or self.current().kind == .left_brace or self.current().kind == .semicolon) break;
+                try self.report(.UnexpectedToken, "expected ',' between machine parameters", self.current().span);
+                self.recoverFunctionParam();
+                _ = self.match(.comma);
             }
-            if (self.match(.comma)) |comma| {
-                last_span = comma.span;
-                continue;
+
+            if (self.match(.right_paren)) |right_paren| {
+                last_span = right_paren.span;
+            } else {
+                try self.report(.UnexpectedToken, "expected ')' after machine parameter list", self.current().span);
+                self.recoverFunctionAfterMissingRightParen();
             }
-            if (self.current().kind == .right_paren or self.current().kind == .left_brace or self.current().kind == .semicolon) break;
-            try self.report(.UnexpectedToken, "expected ',' between machine parameters", self.current().span);
-            self.recoverFunctionParam();
-            _ = self.match(.comma);
         }
 
-        if (self.match(.right_paren)) |right_paren| {
-            last_span = right_paren.span;
-        } else {
-            try self.report(.UnexpectedToken, "expected ')' after machine parameter list", self.current().span);
-            self.recoverFunctionAfterMissingRightParen();
-        }
-
-        if (self.match(.arrow) == null) {
+        var return_type = if (self.match(.arrow) != null) blk: {
+            if (self.current().kind == .identifier or self.current().kind == .mut)
+                break :blk try self.parseTypeName(allocator)
+            else {
+                try self.report(.UnexpectedToken, "expected machine return type", self.current().span);
+                break :blk try self.emptyTypeName(allocator, self.current().span);
+            }
+        } else if (has_param_list) blk: {
             try self.report(.UnexpectedToken, "expected '->' before machine return type", self.current().span);
-        }
-
-        var return_type = if (self.current().kind == .identifier or self.current().kind == .mut)
-            try self.parseTypeName(allocator)
-        else blk: {
-            try self.report(.UnexpectedToken, "expected machine return type", self.current().span);
             break :blk try self.emptyTypeName(allocator, self.current().span);
+        } else {
+            try self.syntheticTypeName(allocator, "int", name.span);
         };
         errdefer return_type.deinit(allocator);
         last_span = return_type.span;
@@ -942,10 +942,12 @@ pub const Parser = struct {
             return null;
         }
 
-        const states = try self.parseMachineBody(allocator);
+        const body = try self.parseMachineBody(allocator);
         errdefer {
-            for (states.items) |state| state.deinit(allocator);
-            states.deinit();
+            for (body.states.items) |state| state.deinit(allocator);
+            body.states.deinit();
+            for (body.fields.items) |field| field.deinit(allocator);
+            body.fields.deinit();
         }
         const end_span = self.peekBack().span;
 
@@ -954,16 +956,22 @@ pub const Parser = struct {
             .name = name,
             .params = try params.toOwnedSlice(),
             .return_type = return_type,
-            .states = try states.toOwnedSlice(),
+            .fields = try body.fields.toOwnedSlice(),
+            .states = try body.states.toOwnedSlice(),
             .allocation_effect = allocation_effect,
             .span = ast.spanFromBounds(itemStartWithAttributes(attributes, start_span), spanEnd(end_span)),
         };
     }
 
-    fn parseMachineBody(self: *Parser, allocator: std.mem.Allocator) !std.ArrayList(ast.MachineStateDecl) {
+    const MachineBody = struct { fields: std.ArrayList(ast.FieldDecl), states: std.ArrayList(ast.MachineStateDecl) };
+
+    fn parseMachineBody(self: *Parser, allocator: std.mem.Allocator) !MachineBody {
         _ = self.advance();
+        var fields = std.ArrayList(ast.FieldDecl).init(allocator);
         var states = std.ArrayList(ast.MachineStateDecl).init(allocator);
         errdefer {
+            for (fields.items) |field| field.deinit(allocator);
+            fields.deinit();
             for (states.items) |state| state.deinit(allocator);
             states.deinit();
         }
@@ -971,6 +979,10 @@ pub const Parser = struct {
         while (self.current().kind != .eof and self.current().kind != .right_brace) {
             if (self.current().kind == .state) {
                 try states.append(try self.parseMachineStateDecl(allocator));
+                continue;
+            }
+            if (self.current().kind == .identifier) {
+                try fields.append(try self.parseFieldDecl(allocator));
                 continue;
             }
 
@@ -982,7 +994,7 @@ pub const Parser = struct {
             try self.report(.UnexpectedToken, "unterminated machine body", self.current().span);
         }
 
-        return states;
+        return .{ .fields = fields, .states = states };
     }
 
     fn parseMachineStateDecl(self: *Parser, allocator: std.mem.Allocator) !ast.MachineStateDecl {
@@ -3721,6 +3733,13 @@ pub const Parser = struct {
     fn emptyTypeName(self: *Parser, allocator: std.mem.Allocator, span: SourceSpan) !ast.TypeName {
         const parts = try allocator.alloc(ast.NameSegment, 0);
         _ = self;
+        return .{ .name = .{ .parts = parts, .span = span }, .generic_args = try allocator.alloc(ast.TypeName, 0), .span = span };
+    }
+
+    fn syntheticTypeName(self: *Parser, allocator: std.mem.Allocator, name: []const u8, span: SourceSpan) !ast.TypeName {
+        _ = self;
+        const parts = try allocator.alloc(ast.NameSegment, 1);
+        parts[0] = .{ .text = name, .span = span };
         return .{ .name = .{ .parts = parts, .span = span }, .generic_args = try allocator.alloc(ast.TypeName, 0), .span = span };
     }
 
