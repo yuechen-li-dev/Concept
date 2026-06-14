@@ -34,6 +34,8 @@ pub const DiagnosticCode = enum {
     ModuleDeclarationRequired,
     ImportMustAppearBeforeDeclarations,
     DuplicateImport,
+    ModuleQualifiedNameUnknown,
+    ModuleQualifiedNameNotImported,
     UnterminatedChar,
     EmptyCharLiteral,
     InvalidEscapeSequence,
@@ -240,6 +242,8 @@ pub const DiagnosticCode = enum {
             .ModuleDeclarationRequired => "CON0276",
             .ImportMustAppearBeforeDeclarations => "CON0273",
             .DuplicateImport => "CON0277",
+            .ModuleQualifiedNameUnknown => "CON0274",
+            .ModuleQualifiedNameNotImported => "CON0275",
             .UnterminatedChar => "CON0007",
             .EmptyCharLiteral => "CON0008",
             .InvalidEscapeSequence => "CON0009",
@@ -618,6 +622,32 @@ pub fn importCycle(allocator: std.mem.Allocator, cycle: []const u8, span: Source
         .message = try std.fmt.allocPrint(allocator, "import cycle detected: {s}", .{cycle}),
         .primary_span = span,
         .help = "Phase 16 v0 rejects cyclic module imports, including self-imports",
+        .owns_message = true,
+    };
+}
+
+pub fn moduleQualifiedNameUnknown(allocator: std.mem.Allocator, module_name: []const u8, item_name: ?[]const u8, span: SourceSpan) !Diagnostic {
+    const message = if (item_name) |item|
+        try std.fmt.allocPrint(allocator, "unknown module-qualified name '{s}.{s}'", .{ module_name, item })
+    else
+        try std.fmt.allocPrint(allocator, "unknown module-qualified root '{s}'", .{module_name});
+    return .{
+        .code = .ModuleQualifiedNameUnknown,
+        .severity = .@"error",
+        .message = message,
+        .primary_span = span,
+        .help = "qualified module access must name a module in this compilation unit and a top-level item in that module",
+        .owns_message = true,
+    };
+}
+
+pub fn moduleQualifiedNameNotImported(allocator: std.mem.Allocator, module_name: []const u8, span: SourceSpan) !Diagnostic {
+    return .{
+        .code = .ModuleQualifiedNameNotImported,
+        .severity = .@"error",
+        .message = try std.fmt.allocPrint(allocator, "module '{s}' is not imported here", .{module_name}),
+        .primary_span = span,
+        .help = "import the module before using it as a qualified expression root; imports do not inject unqualified names",
         .owns_message = true,
     };
 }
@@ -1176,6 +1206,8 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0271", DiagnosticCode.UnknownImport.format());
     try std.testing.expectEqualStrings("CON0272", DiagnosticCode.ImportCycle.format());
     try std.testing.expectEqualStrings("CON0273", DiagnosticCode.ImportMustAppearBeforeDeclarations.format());
+    try std.testing.expectEqualStrings("CON0274", DiagnosticCode.ModuleQualifiedNameUnknown.format());
+    try std.testing.expectEqualStrings("CON0275", DiagnosticCode.ModuleQualifiedNameNotImported.format());
     try std.testing.expectEqualStrings("CON0277", DiagnosticCode.DuplicateImport.format());
     try std.testing.expectEqualStrings("CON0262", DiagnosticCode.ExternCFunctionCannotHaveBody.format());
     try std.testing.expectEqualStrings("CON0269", DiagnosticCode.VarargsUnsupported.format());

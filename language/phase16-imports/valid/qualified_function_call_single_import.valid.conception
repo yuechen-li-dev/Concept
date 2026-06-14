@@ -1,0 +1,16 @@
+# name: qualified function call single import
+# phase: check
+# check: declarations
+# expect: pass
+
+=== file: Main.concept ===
+module Main;
+
+import Math;
+
+int main() { return Math.Add(20, 22); }
+
+=== file: Math.concept ===
+module Math;
+
+int Add(int a, int b) { return a + b; }

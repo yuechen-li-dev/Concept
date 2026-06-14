@@ -1,0 +1,17 @@
+# name: qualified call module not imported
+# phase: check
+# check: declarations
+# expect: fail
+
+=== file: Main.concept ===
+module Main;
+
+int main() { return Math.Add(1, 2); }
+
+=== file: Math.concept ===
+module Math;
+
+int Add(int a, int b) { return a + b; }
+
+=== diagnostics ===
+CON0275

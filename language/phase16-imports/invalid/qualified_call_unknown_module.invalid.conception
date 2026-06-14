@@ -1,0 +1,12 @@
+# name: qualified call unknown module
+# phase: check
+# check: declarations
+# expect: fail
+
+=== file: Main.concept ===
+module Main;
+
+int main() { return Missing.Add(1, 2); }
+
+=== diagnostics ===
+CON0274

@@ -200,7 +200,17 @@ pub fn collectModuleTableDeclarations(
         collector.resetTopLevel();
         const hir_module_id = hir.HirModuleId{ .index = @intCast(module_unit.id.index) };
         module.hir.setCurrentModule(hir_module_id);
-        try collector.collect(parsed_sources[module_unit.source_index].unit.*);
+        try collector.collectDeclarations(parsed_sources[module_unit.source_index].unit.*);
+        module.hir.setCurrentModule(null);
+        if (diagnostic_bag.count() != 0) return error.InvalidSemanticModule;
+    }
+
+    for (module_table.modules) |module_unit| {
+        collector.resetTopLevel();
+        const hir_module_id = hir.HirModuleId{ .index = @intCast(module_unit.id.index) };
+        module.hir.setCurrentModule(hir_module_id);
+        try collector.loadTopLevelFromCurrentModule();
+        try collector.collectResolutionAndBodies(parsed_sources[module_unit.source_index].unit.*);
         module.hir.setCurrentModule(null);
         if (diagnostic_bag.count() != 0) return error.InvalidSemanticModule;
     }
@@ -259,6 +269,12 @@ const Collector = struct {
     }
 
     fn collect(self: *Collector, unit: ast.CompilationUnit) !void {
+        try self.collectDeclarations(unit);
+        if (self.diagnostics.count() != 0) return;
+        try self.collectResolutionAndBodies(unit);
+    }
+
+    fn collectDeclarations(self: *Collector, unit: ast.CompilationUnit) !void {
         try self.validateTestAttributePlacement(unit);
         try self.validateReprAttributes(unit);
         if (self.diagnostics.count() != 0) return;
@@ -276,7 +292,9 @@ const Collector = struct {
                 .impl_decl, .static_assert_decl => {},
             }
         }
+    }
 
+    fn collectResolutionAndBodies(self: *Collector, unit: ast.CompilationUnit) !void {
         if (self.diagnostics.count() != 0) return;
 
         for (unit.items) |item| {
@@ -316,14 +334,59 @@ const Collector = struct {
                 .static_assert_decl => |static_assert_decl| try self.lowerStaticAssert(static_assert_decl),
             }
         }
+    }
 
-        if (self.diagnostics.count() != 0) return;
-        for (unit.items) |item| {
+    fn loadTopLevelFromCurrentModule(self: *Collector) !void {
+        const module_id = self.module.hir.current_module orelse return;
+        const module_record = self.module.hir.modules.items[module_id.index];
+        for (module_record.items) |item_id| {
+            const item = self.module.hir.getItem(item_id).*;
             switch (item) {
-                .machine_decl => {},
-                else => {},
+                .function => |id| try self.top_level_decls.put(self.module.hir.getFunction(id).name, .{ .function = id }),
+                .machine => |id| try self.top_level_decls.put(self.module.hir.getMachine(id).name, .{ .machine = .{ .id = id, .type_id = self.findExistingMachineType(id).? } }),
+                .struct_ => |id| try self.top_level_decls.put(self.module.hir.getStruct(id).name, .{ .struct_ = .{ .id = id, .type_id = self.findExistingStructType(id).? } }),
+                .enum_ => |id| try self.top_level_decls.put(self.module.hir.getEnum(id).name, .{ .enum_ = .{ .id = id, .type_id = self.findExistingEnumType(id).? } }),
+                .interface_ => |id| try self.top_level_decls.put(self.module.hir.getInterface(id).name, .{ .interface_ = .{ .id = id, .type_id = self.findExistingInterfaceType(id).? } }),
             }
         }
+        for (self.module.hir.concepts.items, 0..) |concept, index| {
+            if (self.module.hir.moduleForItem(concept.item)) |owner| {
+                if (owner.index == module_id.index) try self.top_level_decls.put(concept.name, .{ .concept = .{ .index = @intCast(index) } });
+            }
+        }
+        for (self.module.hir.generic_functions.items, 0..) |generic, index| {
+            if (self.module.hir.moduleForItem(self.module.hir.getFunction(generic.function).item)) |owner| {
+                if (owner.index == module_id.index) try self.top_level_decls.put(generic.name, .{ .generic_function = .{ .index = @intCast(index) } });
+            }
+        }
+    }
+
+    fn findExistingStructType(self: *Collector, struct_id: hir.StructId) ?types.TypeId {
+        for (self.module.types.types.items, 0..) |kind, index| {
+            if (kind == .struct_type and kind.struct_type.index == struct_id.index) return .{ .index = @intCast(index) };
+        }
+        return null;
+    }
+
+    fn findExistingEnumType(self: *Collector, enum_id: hir.EnumId) ?types.TypeId {
+        for (self.module.types.types.items, 0..) |kind, index| {
+            if (kind == .enum_type and kind.enum_type.index == enum_id.index) return .{ .index = @intCast(index) };
+        }
+        return null;
+    }
+
+    fn findExistingMachineType(self: *Collector, machine_id: hir.MachineId) ?types.TypeId {
+        for (self.module.types.types.items, 0..) |kind, index| {
+            if (kind == .machine_type and kind.machine_type.index == machine_id.index) return .{ .index = @intCast(index) };
+        }
+        return null;
+    }
+
+    fn findExistingInterfaceType(self: *Collector, interface_id: hir.InterfaceId) ?types.TypeId {
+        for (self.module.types.types.items, 0..) |kind, index| {
+            if (kind == .interface_type and kind.interface_type.index == interface_id.index) return .{ .index = @intCast(index) };
+        }
+        return null;
     }
 
     fn validateTestAttributeSemantics(self: *Collector) !void {
@@ -2203,8 +2266,7 @@ const BodyLowerer = struct {
                     return null;
                 }
                 if (call.qualifier) |qualifier| {
-                    try self.collector.diagnostics.append(diagnostics.unknownFunction(qualifier.span));
-                    return null;
+                    return try self.lowerQualifiedModuleCall(call, qualifier);
                 }
                 const symbol = try self.collector.module.interner.intern(call.callee.text);
                 var args = std.ArrayList(hir.ExprId).empty;
@@ -2810,6 +2872,85 @@ const BodyLowerer = struct {
                 return null;
             },
         };
+    }
+
+    fn lowerQualifiedModuleCall(self: *BodyLowerer, call: ast.Expr.CallExpr, qualifier: ast.NameSegment) !?hir.ExprId {
+        if (call.type_args.len != 0) {
+            try self.collector.diagnostics.append(diagnostics.unknownFunction(call.callee.span));
+            return null;
+        }
+        const function_id = (try self.resolveQualifiedModuleFunction(qualifier, call.callee)) orelse return null;
+        var args = std.ArrayList(hir.ExprId).empty;
+        defer args.deinit(self.collector.allocator);
+        for (call.args) |arg| {
+            const arg_id = (try self.lowerExpr(arg.*)) orelse return null;
+            try args.append(self.collector.allocator, arg_id);
+        }
+        const owned = try self.collector.allocator.alloc(hir.ExprId, args.items.len);
+        @memcpy(owned, args.items);
+        return try self.collector.module.hir.addExpr(.{ .call = .{ .function = function_id, .args = owned } }, call.span);
+    }
+
+    fn resolveQualifiedModuleFunction(self: *BodyLowerer, qualifier: ast.NameSegment, callee: ast.NameSegment) !?hir.FunctionId {
+        const target_module_id = (try self.resolveQualifiedModuleRoot(qualifier)) orelse return null;
+        const item_symbol = try self.collector.module.interner.intern(callee.text);
+        const target_module = self.collector.module.hir.modules.items[target_module_id.index];
+        for (target_module.items) |item_id| {
+            const item = self.collector.module.hir.getItem(item_id).*;
+            switch (item) {
+                .function => |function_id| {
+                    if (self.collector.module.hir.getFunction(function_id).name.index == item_symbol.index) return function_id;
+                },
+                .struct_ => |struct_id| {
+                    if (self.collector.module.hir.getStruct(struct_id).name.index == item_symbol.index) {
+                        try self.collector.diagnostics.append(diagnostics.unknownFunction(callee.span));
+                        return null;
+                    }
+                },
+                .enum_ => |enum_id| {
+                    if (self.collector.module.hir.getEnum(enum_id).name.index == item_symbol.index) {
+                        try self.collector.diagnostics.append(diagnostics.unknownFunction(callee.span));
+                        return null;
+                    }
+                },
+                .machine => |machine_id| {
+                    if (self.collector.module.hir.getMachine(machine_id).name.index == item_symbol.index) {
+                        try self.collector.diagnostics.append(diagnostics.unknownFunction(callee.span));
+                        return null;
+                    }
+                },
+                .interface_ => |interface_id| {
+                    if (self.collector.module.hir.getInterface(interface_id).name.index == item_symbol.index) {
+                        try self.collector.diagnostics.append(diagnostics.unknownFunction(callee.span));
+                        return null;
+                    }
+                },
+            }
+        }
+        try self.collector.diagnostics.append(try diagnostics.moduleQualifiedNameUnknown(self.collector.allocator, qualifier.text, callee.text, callee.span));
+        return null;
+    }
+
+    fn resolveQualifiedModuleRoot(self: *BodyLowerer, qualifier: ast.NameSegment) !?hir.HirModuleId {
+        var known: ?hir.HirModuleId = null;
+        for (self.collector.module.hir.modules.items, 0..) |module_record, index| {
+            if (std.mem.eql(u8, self.collector.module.interner.text(module_record.name), qualifier.text)) {
+                known = .{ .index = @intCast(index) };
+                break;
+            }
+        }
+        const target = known orelse {
+            try self.collector.diagnostics.append(try diagnostics.moduleQualifiedNameUnknown(self.collector.allocator, qualifier.text, null, qualifier.span));
+            return null;
+        };
+        const current = self.collector.module.hir.current_module orelse return target;
+        if (target.index == current.index) return target;
+        const current_module = self.collector.module.hir.modules.items[current.index];
+        for (current_module.imports) |import_id| {
+            if (import_id.index == target.index) return target;
+        }
+        try self.collector.diagnostics.append(try diagnostics.moduleQualifiedNameNotImported(self.collector.allocator, qualifier.text, qualifier.span));
+        return null;
     }
 
     fn lowerMethodCall(self: *BodyLowerer, call: ast.Expr.MethodCallExpr) !?hir.ExprId {

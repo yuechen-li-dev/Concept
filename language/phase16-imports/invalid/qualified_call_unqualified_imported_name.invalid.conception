@@ -1,0 +1,19 @@
+# name: qualified call unqualified imported name
+# phase: check
+# check: declarations
+# expect: fail
+
+=== file: Math.concept ===
+module Math;
+
+int Add(int a, int b) { return a + b; }
+
+=== file: Main.concept ===
+module Main;
+
+import Math;
+
+int main() { return Add(20, 22); }
+
+=== diagnostics ===
+CON0023
