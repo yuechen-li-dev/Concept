@@ -82,8 +82,12 @@ rules, and current bool/AllocError C backend spelling. Examples live under
 export, and `[Repr(C)]` behavior. Headers/includes, automatic linking or a
 linker driver, C++ interop, varargs, extern variables, symbol aliasing, callback
 /function-pointer surface, repr(C) enums, nested by-value repr(C) fields,
-packed layout, custom alignment, bitfields, and import/multi-module compilation
-remain deferred.
+packed layout, custom alignment, and bitfields remain deferred. Phase 16 has
+started as a design milestone for imports and multi-module compilation: modules
+are compilation-unit boundaries rather than packages, source files declare one
+module, imports name modules rather than filesystem paths, qualified access is
+the v0 model, import cycles are rejected, and package managers, dependency
+resolution, linker drivers, and visibility systems remain deferred.
 Deferred Phase 12
 work includes
 `Arena.create`, hosted runtime helper implementation, allocation failure

@@ -4,7 +4,7 @@
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
 **Phases closed:** 1 through 15
-**Current phase:** Phase 15 closed; Phase 16 import/multi-module remains future
+**Current phase:** Phase 16 M0 design: imports and multi-module compilation
 **Fixture corpus:** 833 total `.conception` fixtures; 108 under `language/phase15-c-abi/`
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
@@ -49,7 +49,7 @@
 | `try` keyword | ✅ | Phase 5 — propagates `Result` error arm |
 | `unsafe` blocks and functions | ✅ | Phase 6 — quarantined, raw pointer deref and pointer arith require unsafe |
 | Real module system (no headers) | ✅ | Single-file modules; cross-file import deferred |
-| `import` declarations | ❌ | Multi-file/multi-module compilation not yet implemented |
+| `import` declarations | ❌ | Phase 16 M0 design added for explicit module graph; implementation remains future |
 | Conditional compilation `when target.*` | 🔶 | `target.isLittleEndian`, `target.pointerSize` available as comptime queries; full `when target.os` structured conditional compilation not implemented |
 
 ---
@@ -450,7 +450,7 @@
   upcasting/inheritance non-goals, and ABI policy
 - repr(C) enums, nested by-value repr(C) fields, packed layout, custom alignment, bitfields, and platform ABI matrices beyond the closed Phase 15 v0 subset
 - C headers/includes, automatic linking/linker driver, symbol aliasing, callbacks/function pointers, extern variables, and C++ ABI interop beyond the closed Phase 15 v0 subset
-- `import` / multi-module compilation
+- `import` / multi-module compilation implementation after Phase 16 M0 design
 - `yield` in machines
 - Full `must_use` on arbitrary functions (not just enums)
 - `panic` / `assert` infrastructure
@@ -492,7 +492,7 @@
 | PoC3 Sections | Coverage |
 |--------------|----------|
 | §1–4 Thesis, laws, identity | ✅ Complete |
-| §5–6 Syntax and modules | ✅ Core complete; `import`, broader interface object model, `operator` deferred |
+| §5–6 Syntax and modules | ✅ Core complete; Phase 16 M0 designs `import`/multi-module compilation; implementation, broader interface object model, and `operator` deferred |
 | §7–8 Stdlib layers and profiles | ❌ Not started |
 | §9 Effects | 🔶 `noalloc`/`alloc` done; 8 other effects deferred |
 | §10 Memory model | 🔶 Core guarantees done; `immovable`, `nullable`, `moved_state` deferred |
