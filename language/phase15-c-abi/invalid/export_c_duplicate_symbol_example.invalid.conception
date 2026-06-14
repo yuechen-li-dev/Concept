@@ -1,0 +1,14 @@
+# name: export C duplicate symbol example
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module CAbi;
+
+export "C" int Add(int a, int b) { return a + b; }
+export "C" int Add(int a, int b) { return a + b; }
+
+=== diagnostics ===
+CON0265
+CON0020

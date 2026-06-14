@@ -1,0 +1,16 @@
+# name: C ABI AllocError signature example
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module CAbi;
+
+extern "C" { AllocError probe(AllocError value); }
+export "C" AllocError echo(AllocError value) { return value; }
+int main() { return 0; }
+
+=== c ===
+contains: int probe(int value);
+contains: int echo(int value) {
+not_contains: AllocError probe
+not_contains: AllocError echo

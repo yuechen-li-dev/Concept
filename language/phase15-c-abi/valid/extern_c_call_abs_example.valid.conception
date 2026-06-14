@@ -1,0 +1,13 @@
+# name: extern C call abs example
+# phase: run
+# expect: pass
+
+=== source ===
+module CAbi;
+
+extern "C" { int abs(int value); }
+
+int main() { return abs(-7); }
+
+=== run ===
+exit_code: 7

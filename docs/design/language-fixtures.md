@@ -305,7 +305,9 @@ fixtures cover extern call arity/type mismatches and using a `void` extern call
 as a value. P15-M5 fixtures cover staged `[Repr(C)]` struct markers in AST and
 HIR debug output, ordinary backend emission without C ABI boundary use, invalid
 Repr targets, missing/unsupported/extra Repr arguments, duplicate markers, and
-the deliberate continued rejection of non-repr structs at C ABI boundaries, and the P15-M6 acceptance of validated repr(C) structs. P15-M7 adds hardening fixtures for duplicate C ABI symbols, extern prototype de-duplication and deterministic order, repr(C) typedef-before-prototype/definition order, exported-vs-internal backend names, void C ABI rules, and bool/AllocError C spelling.
+the deliberate continued rejection of non-repr structs at C ABI boundaries, and the P15-M6 acceptance of validated repr(C) structs. P15-M7 adds hardening fixtures for duplicate C ABI symbols, extern prototype de-duplication and deterministic order, repr(C) typedef-before-prototype/definition order, exported-vs-internal backend names, void C ABI rules, and bool/AllocError C spelling. P15-M8 adds representative example fixtures for the final Phase 15 surface: executable extern/export examples, repr(C) by-value and pointer prototypes, bool/AllocError signatures, no-header backend output, exported-vs-helper naming, typedef-before-use ordering, and invalid fixtures for the pinned non-goals.
+
+The fixture corpus now contains 833 `.conception` files total, including 108 Phase 15 C ABI fixtures. Phase 15 examples live under `examples/phase15/` and mirror the representative fixture surface.
 
 Valid coverage includes `export "C"` functions, validated `[Repr(C)]` structs,
 unmangled exported C names, deterministic supported struct field order, extern prototype order/de-duplication, repr(C) typedef order/de-duplication, void C exports, and current bool/AllocError C ABI spelling.

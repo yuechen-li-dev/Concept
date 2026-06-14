@@ -1,0 +1,12 @@
+# name: export C add example
+# phase: run
+# expect: pass
+
+=== source ===
+module CAbi;
+
+export "C" int Add(int a, int b) { return a + b; }
+int main() { return Add(20, 22); }
+
+=== run ===
+exit_code: 42

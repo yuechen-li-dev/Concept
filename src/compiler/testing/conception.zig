@@ -2723,6 +2723,29 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_call_wrong_arg_type.invalid.conception");
     try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_call_wrong_arity.invalid.conception");
 
+    // P15-M8 representative examples and final surface coverage.
+    try expectRunFixture("../../../language/phase15-c-abi/valid/extern_c_call_abs_example.valid.conception");
+    try expectRunFixture("../../../language/phase15-c-abi/valid/export_c_add_example.valid.conception");
+    try expectRunFixture("../../../language/phase15-c-abi/valid/repr_c_export_point_sum_example.valid.conception");
+    try expectBackendCFixture("../../../language/phase15-c-abi/valid/repr_c_extern_point_prototype_example.valid.conception");
+    try expectBackendCFixture("../../../language/phase15-c-abi/valid/repr_c_pointer_prototype_example.valid.conception");
+    try expectBackendCFixture("../../../language/phase15-c-abi/valid/c_abi_bool_signature_example.valid.conception");
+    try expectBackendCFixture("../../../language/phase15-c-abi/valid/c_abi_alloc_error_signature_example.valid.conception");
+    try expectBackendCFixture("../../../language/phase15-c-abi/valid/c_abi_no_headers_includes_example.valid.conception");
+    try expectBackendCFixture("../../../language/phase15-c-abi/valid/export_c_add_backend_example.valid.conception");
+    try expectBackendCFixture("../../../language/phase15-c-abi/valid/repr_c_export_point_sum_backend_example.valid.conception");
+    try expectParseFixture("../../../language/phase15-c-abi/invalid/extern_c_varargs_example.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/export_c_struct_without_repr_example.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/extern_c_struct_without_repr_example.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/repr_c_bad_field_dyn_example.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/repr_c_empty_example.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/c_abi_dyn_param_example.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/c_abi_machine_param_example.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/export_c_missing_body_example.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/export_c_duplicate_symbol_example.invalid.conception");
+    try expectParseFixture("../../../language/phase15-c-abi/invalid/extern_c_unsupported_abi_cpp_example.invalid.conception");
+    try expectCheckFixture("../../../language/phase15-c-abi/invalid/repr_c_nested_by_value_example.invalid.conception");
+
     try expectParseFixture("../../../language/phase14-interfaces/valid/interface_single_requirement.valid.conception");
     try expectCheckFixture("../../../language/phase14-interfaces/valid/interface_multiple_requirements.valid.conception");
     try expectCheckFixture("../../../language/phase14-interfaces/valid/interface_requirement_params.valid.conception");

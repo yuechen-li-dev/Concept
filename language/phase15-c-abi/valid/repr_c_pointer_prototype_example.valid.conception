@@ -1,0 +1,18 @@
+# name: repr C pointer prototype example
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module CAbi;
+
+[Repr(C)]
+struct Point { int x; int y; };
+
+extern "C" { int use_point_ptr(Point* p); }
+int main() { return 0; }
+
+=== c ===
+contains: typedef struct cpt_struct_Point {
+contains: int use_point_ptr(cpt_struct_Point* p);
+count: int use_point_ptr(cpt_struct_Point* p); | 1
+before: typedef struct cpt_struct_Point { | int use_point_ptr(cpt_struct_Point* p);

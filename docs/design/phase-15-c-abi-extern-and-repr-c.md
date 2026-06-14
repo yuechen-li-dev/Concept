@@ -537,7 +537,7 @@ P15-M4  export "C" function surface (implemented)
 P15-M5  repr(C) struct staged attribute and HIR marker (implemented)
 P15-M6  repr(C) field/type validation and backend layout hardening
 P15-M7  C ABI diagnostics and symbol/linkage hardening (implemented)
-P15-M8  examples/fixtures: extern calls, exports, repr(C) structs
+P15-M8  examples/fixtures: extern calls, exports, repr(C) structs (implemented)
 P15-M9  Closeout
 ```
 
@@ -586,3 +586,14 @@ P15-M7 hardens the existing Phase 15 C ABI subset without adding new ABI feature
 - ABI edge cases are fixture-pinned for non-repr struct values/pointers at extern/export boundaries, nested repr(C) by-value fields, empty repr(C) structs, void returns/calls, void parameters, and the current bool/AllocError C spelling.
 
 Still deferred after P15-M7: `repr(C)` enums, nested repr(C) by-value struct fields as supported layout, `repr(packed)`, custom alignment, bitfields, volatile/atomics/MMIO, C header parsing, automatic includes/linking, linker driving, symbol aliasing, C++ interop, varargs, extern variables, callbacks/function pointers beyond pre-existing support, import/multi-module compilation, and platform-specific ABI matrices.
+
+
+## P15-M8 implementation status
+
+P15-M8 adds examples, representative fixtures, and documentation polish for the final Phase 15 C ABI surface without adding new ABI features:
+
+- Human-readable examples now live under `examples/phase15/` for outbound `extern "C"` calls, inbound `export "C"` functions, `[Repr(C)]` exported struct parameters, repr(C) extern prototypes, and boundary notes.
+- Representative valid fixtures cover executable `abs`, exported `Add`, exported repr(C) point summing, repr(C) by-value and pointer extern prototypes, bool and `AllocError` C spelling, no generated headers/includes, exported symbol spelling, ordinary helper naming, and typedef-before-use ordering.
+- Representative invalid fixtures pin non-goals: varargs, C++ ABI strings, missing export bodies, duplicate C symbols, non-repr structs at C ABI boundaries, dyn/interface and machine-frame ABI exposure, empty repr(C) structs, unsupported dyn fields, and nested repr(C) structs by value.
+- Backend-output fixtures use `count:` and `before:` assertions where useful to pin de-duplication and ordering for extern prototypes and repr(C) typedefs.
+- The final supported Phase 15 subset remains explicit: no header parser, no automatic includes, no automatic linking/linker driver, no C++ interop, no varargs, no extern variables, no symbol aliasing, no callbacks/function pointers beyond pre-existing support, no repr(C) enums, no packed/custom alignment/bitfields, and no nested repr(C) by-value layout support.

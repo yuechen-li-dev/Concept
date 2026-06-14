@@ -1,0 +1,16 @@
+# name: C ABI machine param example
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module CAbi;
+
+machine Task() -> int {
+    state Start { return 0; }
+}
+
+extern "C" { int use_task(Task task); }
+
+=== diagnostics ===
+CON0260

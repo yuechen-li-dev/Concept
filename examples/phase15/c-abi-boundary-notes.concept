@@ -1,0 +1,21 @@
+module Main;
+
+// Phase 15 supported C ABI boundary forms include:
+// - int, bool, and AllocError values;
+// - void returns;
+// - raw pointers to supported ABI pointees;
+// - [Repr(C)] structs by value;
+// - pointers to [Repr(C)] structs.
+//
+// Unsupported/deferred forms include:
+// - non-repr structs;
+// - dyn/interface and machine frame types;
+// - ManualInit<T> and Result<T,E>;
+// - enums;
+// - nested [Repr(C)] structs by value;
+// - varargs and extern variables;
+// - C++ ABI, C header parsing/includes, and automatic linking.
+
+int main() {
+    return 0;
+}

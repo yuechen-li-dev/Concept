@@ -1,0 +1,16 @@
+# name: C ABI bool signature example
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module CAbi;
+
+extern "C" { bool flip(bool value); }
+export "C" bool keep(bool value) { return value; }
+int main() { return 0; }
+
+=== c ===
+contains: int flip(int value);
+contains: int keep(int value) {
+not_contains: bool flip
+not_contains: bool keep

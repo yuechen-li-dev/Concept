@@ -1,0 +1,16 @@
+# name: C ABI no headers includes example
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module CAbi;
+
+extern "C" { int abs(int value); }
+int main() { return abs(-7); }
+
+=== c ===
+contains: int abs(int value);
+contains: return abs(-7);
+count: int abs(int value); | 1
+not_contains: #include
+not_contains: extern "C"

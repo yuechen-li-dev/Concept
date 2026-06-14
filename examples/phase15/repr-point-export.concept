@@ -1,0 +1,16 @@
+module Main;
+
+[Repr(C)]
+struct Point {
+    int x;
+    int y;
+};
+
+export "C" int SumPoint(Point p) {
+    return p.x + p.y;
+}
+
+int main() {
+    Point p = Point { x: 20, y: 22 };
+    return SumPoint(p);
+}

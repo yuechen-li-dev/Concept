@@ -1,0 +1,17 @@
+# name: repr C empty example
+# phase: check
+# expect: fail
+
+=== source ===
+module CAbi;
+
+[Repr(C)]
+struct Empty {
+};
+
+int main() {
+    return 0;
+}
+
+=== diagnostics ===
+CON0268

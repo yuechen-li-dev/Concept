@@ -1,0 +1,15 @@
+# name: repr C bad field dyn example
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module CAbi;
+
+interface Writer { void Write(int value); };
+
+[Repr(C)]
+struct Bad { dyn Writer& writer; };
+
+=== diagnostics ===
+CON0267

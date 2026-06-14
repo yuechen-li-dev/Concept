@@ -4,8 +4,8 @@
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
 **Phases closed:** 1 through 14
-**Current phase:** Phase 15 M7 C ABI diagnostics and symbol/linkage hardening
-**Fixture corpus:** 812 total (396 valid, 416 invalid)
+**Current phase:** Phase 15 M8 C ABI examples and final surface coverage
+**Fixture corpus:** 833 total `.conception` fixtures; 108 under `language/phase15-c-abi/`
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
 ---
@@ -360,7 +360,7 @@
 |---------|--------|-------|
 | C backend (compile Concept to C) | ✅ | Phase 4+ — MIR → C backend, primary bootstrap path |
 | C-readable generated output | ✅ | Generated C is auditable and readable |
-| `extern "C"` declarations | 🔶 | Phase 15 M3 parses block-form declarations, lowers valid extern C functions to HIR with ABI/linkage metadata and C symbol names, validates the strict v0 ABI type subset, makes declarations visible to ordinary call resolution, lowers extern calls through MIR, emits backend C prototypes for declarations, emits calls with declared C symbols, and rejects duplicate extern C symbols. Headers/includes and linker driving remain deferred; P15-M4 adds export C function definitions with unmangled backend symbols; P15-M5 adds staged `[Repr(C)]` struct markers; P15-M6 accepts validated repr(C) structs/pointers at C ABI boundaries; P15-M7 hardens duplicate symbol coverage, prototype de-duplication/order, linkage naming, void rules, and bool/AllocError ABI spelling |
+| `extern "C"` declarations | 🔶 | Phase 15 parses block-form declarations, lowers valid extern C functions to HIR with ABI/linkage metadata and C symbol names, validates the strict v0 ABI type subset, makes declarations visible to ordinary call resolution, lowers extern calls through MIR, emits backend C prototypes/calls with declared C symbols, and rejects duplicate C ABI symbols. Headers/includes and linker driving remain deferred; P15-M4 adds export C function definitions with unmangled backend symbols; P15-M5 adds staged `[Repr(C)]` struct markers; P15-M6 accepts validated repr(C) structs/pointers at C ABI boundaries; P15-M7 hardens duplicate symbol coverage, prototype de-duplication/order, linkage naming, void rules, and bool/AllocError ABI spelling; P15-M8 adds `examples/phase15/` plus representative valid/invalid fixtures and backend assertions for the final Phase 15 surface |
 | `repr(C)` struct layout | 🔶 | P15-M7 validates supported repr(C) fields through the P15-M6 subset, rejects empty/unsupported/nested-by-value layouts, accepts validated repr(C) structs and pointers at C ABI boundaries, emits deterministic C struct layouts, and pins typedef-before-use ordering/de-duplication |
 | Export to C (`export "C" fn`) | 🔶 | P15-M4 implements checked `export "C"` function definitions and unmangled backend symbols; P15-M6 accepts validated repr(C) struct values/pointers in that ABI subset |
 | C++ interop (`extern "C++"`) | ❌ | PoC3 §36.2 — quarantined/future |
@@ -506,11 +506,11 @@
 | §26–27 Allocation and arenas | 🔶 Core done; `Id<T>`, `Store`, `Arena.create`, generic allocator deferred |
 | §28 Unsafe | ✅ Complete |
 | §29 Volatile/atomics/barriers | ❌ Not started |
-| §30–31 Layout/ABI/bitfields | 🔶 P15-M5 adds staged `[Repr(C)]` struct markers; layout validation, packed, alignment, and bitfields remain deferred |
+| §30–31 Layout/ABI/bitfields | 🔶 P15-M8 covers the validated `[Repr(C)]` struct subset with examples and representative fixtures; repr(C) enums, nested by-value repr(C) fields, packed layout, custom alignment, and bitfields remain deferred |
 | §32 Inline assembly | ❌ Not started |
 | §33 Comptime | 🔶 Scalar hermetic comptime done; type-level comptime, capability execution deferred |
 | §34–35 Reflection/macros | ❌ Correctly deferred per PoC3 |
-| §36 C interop | 🔶 C backend done; Phase 15 M0 design added for `extern "C"`, `export "C"`, and `repr(C)`; P15-M4 parses and lowers `extern "C"` declarations and `export "C"` definitions, validates ABI types, rejects duplicate C ABI symbols, lowers extern calls and exported function bodies through MIR, emits extern prototypes/calls with declared C symbols, and emits export definitions with unmangled C symbols |
+| §36 C interop | 🔶 C backend done; Phase 15 M8 documents and fixtures the final v0 C ABI surface: `extern "C"` declarations, `export "C"` definitions, validated `[Repr(C)]` structs by value/pointer, strict ABI type diagnostics, duplicate C symbol rejection, extern prototype/call emission, unmangled exported C definitions, no generated includes, no C++ text, and explicit invalid coverage for deferred non-goals |
 | §37 State machines | 🔶 Literal transitions runnable; `yield`, nested machines, match/decide runtime deferred |
 | §38–39 SoA/audit | ❌ Provisional/future |
 | §40 Compiler architecture | 🔶 Core pipeline done; LLVM/native backends are Stage 3 |
@@ -537,7 +537,7 @@
 ---
 
 *This matrix began as the Phase 13 closeout snapshot and has been updated
-through Phase 15 M3. Stage 1 is substantially implemented. Phase 14
+through Phase 15 M8. Stage 1 is substantially implemented. Phase 14
 closed runtime interfaces and borrowed dyn dispatch v0: interfaces are HIR
 declarations with validated requirements and impl conformance; borrowed dyn
 references support concrete-to-dyn call-boundary coercion, dyn method calls,
@@ -545,8 +545,8 @@ MIR-visible dyn coercion/interface calls, and C backend vtable lowering for
 the supported subset. Phase 15 M0 defines the C ABI design for `extern "C"`,
 `export "C"`, and `repr(C)`, P15-M1 implements the `extern "C"` parser/AST
 scaffold, and P15-M2 implements HIR extern declarations plus ABI type
-validation. P15-M3 implements MIR/backend extern call lowering, prototype
-emission, declared C-symbol call emission, P15-M4 export C symbol emission, and P15-M5 staged `[Repr(C)]` struct markers, and P15-M6 repr(C) field/type validation plus backend layout hardening while enum/packed/custom ABI work
+validation. P15-M3 implements MIR/backend extern call lowering and prototype
+emission, P15-M4 export C symbol emission, P15-M5 staged `[Repr(C)]` struct markers, P15-M6 repr(C) field/type validation plus backend layout hardening, P15-M7 C ABI hardening, and P15-M8 examples plus representative final surface fixtures while enum/packed/custom ABI work
 remain deferred. The critical path to full Stage 1 completion now includes C ABI implementation,
 `import`/multi-module compilation, and `yield` in machines.
 Everything else in the Stage 1 gap list is important but not load-bearing for
