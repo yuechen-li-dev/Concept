@@ -1,0 +1,17 @@
+# name: repr C export point sum backend example
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module CAbi;
+
+[Repr(C)]
+struct Point { int x; int y; };
+
+export "C" int SumPoint(Point p) { return p.x + p.y; }
+int main() { return 0; }
+
+=== c ===
+contains: typedef struct cpt_struct_Point {
+contains: int SumPoint(cpt_struct_Point p) {
+before: typedef struct cpt_struct_Point { | int SumPoint(cpt_struct_Point p) {

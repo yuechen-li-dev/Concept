@@ -1,0 +1,9 @@
+module Main;
+
+extern "C" {
+    int abs(int value);
+}
+
+int main() {
+    return abs(-7);
+}

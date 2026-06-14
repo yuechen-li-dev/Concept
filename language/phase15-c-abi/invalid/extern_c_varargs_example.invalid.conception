@@ -1,0 +1,13 @@
+# name: extern C varargs example
+# phase: parse
+# expect: fail
+
+=== source ===
+module CAbi;
+
+extern "C" {
+    int printf(char* fmt, ...);
+}
+
+=== diagnostics ===
+CON0269

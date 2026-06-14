@@ -1,0 +1,11 @@
+# name: export C missing body example
+# phase: check
+# expect: fail
+
+=== source ===
+module CAbi;
+
+export "C" int Add(int a, int b);
+
+=== diagnostics ===
+CON0263
