@@ -1,11 +1,11 @@
 # Concept — Checkpoint 1 Coverage Matrix
-## Phase 16 Closeout vs PoC3 Constitution
+## Phase 17 Closeout vs PoC3 Constitution
 
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
-**Phases closed:** 1 through 16
-**Current phase:** Phase 17 M8 — runtime failure examples, fixtures, and hardening
-**Fixture corpus:** 1036 total fixture files; 108 under `language/phase15-c-abi/`; 73 under `language/phase16-imports/`; 57 under `language/phase17-runtime-failure/`
+**Phases closed:** 1 through 17
+**Current phase:** Phase 17 closed — panic, assertions, and runtime failure reporting v0
+**Fixture corpus:** 1035 total fixture files; 85 under `language/phase11-testing/`; 108 under `language/phase15-c-abi/`; 73 under `language/phase16-imports/`; 57 under `language/phase17-runtime-failure/`
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
 ---
@@ -207,7 +207,12 @@
 | `discard` for intentional error discard | ✅ | Phase 5 |
 | Generalizable `must_use` on any type | 🔶 | `must_use` on enums implemented; arbitrary `must_use` on functions deferred |
 | Nominal error types preferred | ✅ | Payload enums as error types work fully |
-| `panic` / `assert` | 🔶 | Phase 17 M7 routes machine `Result(machine)` before completion through the shared backend-owned `cpt_panic` helper with stable reason and exit 101, de-duplicated with explicit `panic` and runtime `assert`; M6 aligns Core.Test `Assert.True` / `Assert.False` with the runtime assertion doctrine while preserving test-runner failure reporting and no runtime dependency on Core.Test; M5 validates runtime failure reasons with `CON0282`; bool-condition and unsupported expression-position diagnostics remain |
+| `panic` / `assert` | ✅ | Phase 17 closed for statement-position `panic("reason")` and `assert(condition, "reason")`: AST/HIR/MIR/backend lowering, bool-only assert conditions, mandatory non-blank runtime failure reasons (`CON0280`-`CON0285`), deterministic exit code 101, backend-owned `cpt_panic`, helper de-duplication, machine `Result(machine)`-before-completion trap migration, and no Core.Test/test-runner dependency for runtime assertions |
+| Mandatory runtime failure reasons | ✅ | Missing/wrong panic reasons use `CON0280`, missing/wrong assert reasons use `CON0281`, and empty/whitespace reasons use shared validation with `CON0282` |
+| Runtime failure lowering substrate | ✅ | Panic/assert HIR and MIR lower to C through a shared backend helper; failing assert emits a conditional `cpt_panic` call, explicit panic emits a direct call, and migrated machine traps emit the same helper call |
+| Deterministic runtime failure exit code | ✅ | Explicit panic, false runtime assert, and machine result-before-completion all exit 101 in hosted C v0 |
+| Backend `cpt_panic` helper | ✅ | Backend-owned helper prints `panic: %s\n` to stderr, exits 101, is emitted once per generated C unit when needed, and is shared across panic/assert/migrated traps |
+| Core.Test Assert doctrine alignment | ✅ | `Assert.True`/`Assert.False` require bool conditions and non-blank reasons and are classified internally as assertion/invariant failures; `Expect.*` remains expectation-style |
 | `panic_handler` for freestanding | ❌ | |
 | Panic modes (`abort`, `halt`, `unwind`, `custom`) | ❌ | |
 
@@ -522,7 +527,7 @@
 | §13 Initialization | ✅ Complete including `ManualInit<T>` |
 | §14–15 Move and immovable | 🔶 Move done; `immovable` and `moved_state` deferred |
 | §16 Drop/RAII | ✅ Substantially complete |
-| §17 Errors | 🔶 `Result`, `try`, `must_use`, `discard` done; statement-position `panic("reason")` lowers through MIR/backend to deterministic runtime failure; statement-position `assert(condition, "reason")` has AST/HIR/MIR/backend lowering, shared empty/whitespace reason validation, bool/reason diagnostics, runtime exit-code fixtures, examples, and backend helper-sharing hardening |
+| §17 Errors | ✅ Core Stage 1 surface complete for `Result`, `try`, `must_use`, `discard`, statement-position `panic("reason")`, statement-position `assert(condition, "reason")`, shared runtime failure reasons, deterministic exit 101, and migrated machine result-before-completion trap; richer panic modes and freestanding hooks remain deferred |
 | §18–19 Enums and match | 🔶 Core done; guards, struct destructure, ref binding deferred |
 | §20–23 Concepts/generics/impl | 🔶 Core done; `derive`, negative concepts, orphan rule, bridge modules deferred |
 | §24 Interfaces/dyn | 🔶 Phase 14 closed for borrowed dyn dispatch v0: declarations, impl conformance, borrowed dyn parameter types, concrete-to-dyn call coercion, dyn method-call HIR/MIR, C vtable/fat-reference lowering, executable borrowed dyn dispatch, examples, mutability hardening fixtures, and backend C-shape assertions; owning boxes, RTTI/dynamic cast, inheritance/upcast, dyn returns/fields/locals, mutation-through-dyn hardening, and ABI stability deferred |
@@ -561,22 +566,21 @@
 ---
 
 *This matrix began as the Phase 13 closeout snapshot and has been updated
-through Phase 16 closeout. Stage 1 is substantially implemented. Phase 14
+through Phase 17 closeout. Stage 1 is substantially implemented. Phase 14
 closed runtime interfaces and borrowed dyn dispatch v0. Phase 15 closed the
 single-compilation-unit C ABI v0 surface. Phase 16 closes imports and
 multi-module compilation-unit modules v0: harness/driver-supplied multi-file
 source sets, module table, import graph, module-aware HIR, per-module ordinary
 symbol tables, qualified cross-module functions/types, imported repr(C)
 metadata, and multi-source MIR/backend/run in one generated C unit. Remaining
-Stage 1 gaps include `yield` in machines, visibility and package/filesystem
-module resolution, separate compilation/linker driving, panic/assert runtime
-failure infrastructure, reference/receiver hardening, and broader ABI/layout
+Stage 1 gaps include `yield` in machines, nested machines, runtime transition match/decide, visibility and package/filesystem
+module resolution, separate compilation/linker driving, reference/receiver hardening, and broader ABI/layout
 features deliberately deferred beyond Phase 15 (repr(C) enums, nested by-value
 struct layout, packed/custom alignment, bitfields, headers/includes, automatic
 linking, C++ ABI, varargs, extern variables, symbol aliasing, callbacks, and
-platform ABI matrices).*
+platform ABI matrices). Phase 17 closes the basic runtime failure substrate, so basic panic, basic runtime assert, shared `cpt_panic`, and machine Result-before-completion trap routing are no longer Stage 1 gaps.*
 
 
-## Phase 17 M8 runtime failure examples and hardening update
+## Phase 17 M9 closeout update
 
-P17-M8 adds human-readable examples under `examples/phase17/` and representative fixtures for panic/assert/machine runtime failure behavior. The M8 fixtures pin exit code 101 for panic, false assert, and machine `Result(machine)` before completion; exit 0/ordinary result behavior for true assert and result-after-completion; one-per-C-unit `cpt_panic` helper sharing across panic/assert/migrated machine trap sites; absence of the old `cpt_machine_result_before_complete` helper and `__builtin_trap` at the migrated site; C-escaped reason strings; blank reason rejection; expression-position rejection; bool-only assert conditions; and ordinary runtime assert independence from Core.Test/test-runner symbols. The language fixture corpus now contains 1036 fixture files, including 57 under `language/phase17-runtime-failure/`.
+P17-M9 closes Phase 17. P17-M8 added human-readable examples under `examples/phase17/` and representative fixtures for panic/assert/machine runtime failure behavior. The M8 fixtures pin exit code 101 for panic, false assert, and machine `Result(machine)` before completion; exit 0/ordinary result behavior for true assert and result-after-completion; one-per-C-unit `cpt_panic` helper sharing across panic/assert/migrated machine trap sites; absence of the old `cpt_machine_result_before_complete` helper and `__builtin_trap` at the migrated site; C-escaped reason strings; blank reason rejection; expression-position rejection; bool-only assert conditions; and ordinary runtime assert independence from Core.Test/test-runner symbols. The language fixture corpus now contains 1035 fixture files, including 57 under `language/phase17-runtime-failure/`.
