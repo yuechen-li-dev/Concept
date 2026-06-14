@@ -1,0 +1,21 @@
+# name: hir modules duplicate extern c symbol across modules
+# phase: check
+# check: declarations
+# expect: fail
+
+=== file: A.concept ===
+module A;
+
+extern "C" {
+    int abs(int value);
+}
+
+=== file: B.concept ===
+module B;
+
+extern "C" {
+    int abs(int value);
+}
+
+=== diagnostics ===
+CON0265

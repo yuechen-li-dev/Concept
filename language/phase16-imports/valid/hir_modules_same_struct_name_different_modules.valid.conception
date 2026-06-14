@@ -1,0 +1,18 @@
+# name: hir modules same struct name different modules
+# phase: check
+# check: declarations
+# expect: pass
+
+=== file: A.concept ===
+module A;
+
+struct Point {
+    int x;
+}
+
+=== file: B.concept ===
+module B;
+
+struct Point {
+    int y;
+}

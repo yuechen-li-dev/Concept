@@ -1199,14 +1199,70 @@ fn expectCheckFixture(comptime path: []const u8) !void {
 
     if (std.mem.indexOf(u8, path, "phase12-allocation") != null) {
         try expectSemanticCheckFixtureAllowNoMain(path, fixture);
-    } else if (std.mem.indexOf(u8, path, "phase3-semantics") != null or std.mem.indexOf(u8, path, "phase8-concepts-templates") != null or std.mem.indexOf(u8, path, "phase5-sum-types") != null or std.mem.indexOf(u8, path, "phase5a-judgment") != null or std.mem.indexOf(u8, path, "phase6-unsafe-ownership") != null or std.mem.indexOf(u8, path, "phase7-runtime-structs") != null or std.mem.indexOf(u8, path, "phase10-ownership") != null or std.mem.indexOf(u8, path, "phase11-testing") != null or std.mem.indexOf(u8, path, "phase13-machines") != null or std.mem.indexOf(u8, path, "phase14-interfaces") != null or std.mem.indexOf(u8, path, "phase15-c-abi") != null) {
+    } else if (std.mem.indexOf(u8, path, "phase3-semantics") != null or std.mem.indexOf(u8, path, "phase8-concepts-templates") != null or std.mem.indexOf(u8, path, "phase5-sum-types") != null or std.mem.indexOf(u8, path, "phase5a-judgment") != null or std.mem.indexOf(u8, path, "phase6-unsafe-ownership") != null or std.mem.indexOf(u8, path, "phase7-runtime-structs") != null or std.mem.indexOf(u8, path, "phase10-ownership") != null or std.mem.indexOf(u8, path, "phase11-testing") != null or std.mem.indexOf(u8, path, "phase13-machines") != null or std.mem.indexOf(u8, path, "phase14-interfaces") != null or std.mem.indexOf(u8, path, "phase15-c-abi") != null or std.mem.indexOf(u8, path, "phase16-imports") != null) {
         try expectSemanticCheckFixture(path, fixture);
     } else {
         try expectPhase2CheckFixture(path, fixture);
     }
 }
 
+fn expectSemanticMultiSourceCheckFixture(fixture: ConceptionFixture) !void {
+    var parse_diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
+    defer parse_diagnostics.deinit();
+    var semantic_diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
+    defer semantic_diagnostics.deinit();
+
+    const units = try std.testing.allocator.alloc(parser_model.ast.CompilationUnit, fixture.sources.len);
+    defer std.testing.allocator.free(units);
+    var parsed_sources = try std.testing.allocator.alloc(module_table_model.ParsedSource, fixture.sources.len);
+    defer std.testing.allocator.free(parsed_sources);
+
+    var parsed_count: usize = 0;
+    defer for (units[0..parsed_count]) |unit| unit.deinit(std.testing.allocator);
+
+    for (fixture.sources, 0..) |fixture_source, source_index| {
+        const source_file = try source_model.SourceFile.init(std.testing.allocator, fixture_source.path, fixture_source.text);
+        defer source_file.deinit(std.testing.allocator);
+        units[source_index] = try parser_model.parseSource(std.testing.allocator, source_file, &parse_diagnostics);
+        parsed_count += 1;
+        parsed_sources[source_index] = .{ .path = fixture_source.path, .unit = &units[source_index] };
+    }
+    try std.testing.expectEqual(@as(usize, 0), parse_diagnostics.count());
+
+    var module_table = try module_table_model.buildFromParsedSources(std.testing.allocator, parsed_sources, &semantic_diagnostics);
+    defer module_table.deinit(std.testing.allocator);
+
+    const maybe_module = semantics_model.collectModuleTableDeclarations(
+        std.testing.allocator,
+        parsed_sources,
+        module_table,
+        &semantic_diagnostics,
+        .{},
+    ) catch |err| switch (err) {
+        error.InvalidSemanticModule => null,
+        else => return err,
+    };
+    defer if (maybe_module) |*module| module.deinit();
+
+    switch (fixture.expect) {
+        .pass => {
+            try std.testing.expect(maybe_module != null);
+            try std.testing.expectEqual(@as(usize, 0), semantic_diagnostics.count());
+        },
+        .fail => {
+            try std.testing.expect(semantic_diagnostics.count() > 0);
+            const expected_codes = try fixture.diagnosticCodes(std.testing.allocator);
+            defer std.testing.allocator.free(expected_codes);
+            try std.testing.expectEqual(expected_codes.len, semantic_diagnostics.count());
+            for (expected_codes, semantic_diagnostics.diagnostics.items) |expected_code, actual| {
+                try std.testing.expectEqualStrings(expected_code, actual.code.format());
+            }
+        },
+    }
+}
+
 fn expectSemanticCheckFixture(comptime path: []const u8, fixture: ConceptionFixture) !void {
+    if (fixture.isMultiSource()) return expectSemanticMultiSourceCheckFixture(fixture);
     var parse_diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
     defer parse_diagnostics.deinit();
     var semantic_diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
@@ -3228,4 +3284,32 @@ test "language fixture format: phase16 duplicate virtual path rejected" {
 test "language fixture format: phase16 missing virtual path rejected" {
     const path = "../../../language/phase16-imports/invalid/multifile_missing_virtual_path.invalid.conception";
     try std.testing.expectError(error.MissingVirtualFilePath, parse(std.testing.allocator, @embedFile(path), .{ .path = path }));
+}
+
+test "language check fixture: phase16 hir same function names across modules" {
+    try expectCheckFixture("../../../language/phase16-imports/valid/hir_modules_same_function_name_different_modules.valid.conception");
+}
+
+test "language check fixture: phase16 hir same struct names across modules" {
+    try expectCheckFixture("../../../language/phase16-imports/valid/hir_modules_same_struct_name_different_modules.valid.conception");
+}
+
+test "language check fixture: phase16 hir import edges preserved" {
+    try expectCheckFixture("../../../language/phase16-imports/valid/hir_modules_import_edges_preserved.valid.conception");
+}
+
+test "language check fixture: phase16 hir duplicate function same module" {
+    try expectCheckFixture("../../../language/phase16-imports/invalid/hir_modules_duplicate_function_same_module.invalid.conception");
+}
+
+test "language check fixture: phase16 hir duplicate struct same module" {
+    try expectCheckFixture("../../../language/phase16-imports/invalid/hir_modules_duplicate_struct_same_module.invalid.conception");
+}
+
+test "language check fixture: phase16 hir duplicate export c symbol across modules" {
+    try expectCheckFixture("../../../language/phase16-imports/invalid/hir_modules_duplicate_export_c_symbol_across_modules.invalid.conception");
+}
+
+test "language check fixture: phase16 hir duplicate extern c symbol across modules" {
+    try expectCheckFixture("../../../language/phase16-imports/invalid/hir_modules_duplicate_extern_c_symbol_across_modules.invalid.conception");
 }

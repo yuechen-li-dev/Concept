@@ -8,6 +8,7 @@ const ast = @import("ast.zig");
 const diagnostics = @import("diagnostics.zig");
 const hir = @import("hir.zig");
 const interner = @import("interner.zig");
+const module_table_model = @import("module_table.zig");
 const source = @import("source.zig");
 const types = @import("types.zig");
 const compile_time = @import("compile_time.zig");
@@ -172,6 +173,41 @@ pub fn collectTopLevelDeclarationsWithOptions(
     return module;
 }
 
+pub fn collectModuleTableDeclarations(
+    allocator: std.mem.Allocator,
+    parsed_sources: []const module_table_model.ParsedSource,
+    module_table: module_table_model.ModuleTable,
+    diagnostic_bag: *DiagnosticBag,
+    options: CollectOptions,
+) !SemanticModule {
+    var module = try SemanticModule.init(allocator);
+    errdefer module.deinit();
+
+    var collector = Collector.init(allocator, &module, diagnostic_bag, options);
+    defer collector.deinit();
+
+    for (module_table.modules) |module_unit| {
+        const name = try module.interner.intern(module_unit.name);
+        var imports = std.ArrayList(hir.HirModuleId).empty;
+        defer imports.deinit(allocator);
+        for (module_unit.resolved_imports) |import_id| {
+            try imports.append(allocator, .{ .index = @intCast(import_id.index) });
+        }
+        _ = try module.hir.addModule(name, module_unit.source_index, module_unit.source_path, module_unit.module_decl_span, imports.items);
+    }
+
+    for (module_table.modules) |module_unit| {
+        collector.resetTopLevel();
+        const hir_module_id = hir.HirModuleId{ .index = @intCast(module_unit.id.index) };
+        module.hir.setCurrentModule(hir_module_id);
+        try collector.collect(parsed_sources[module_unit.source_index].unit.*);
+        module.hir.setCurrentModule(null);
+        if (diagnostic_bag.count() != 0) return error.InvalidSemanticModule;
+    }
+
+    return module;
+}
+
 const Collector = struct {
     allocator: std.mem.Allocator,
     module: *SemanticModule,
@@ -216,6 +252,10 @@ const Collector = struct {
     fn deinit(self: *Collector) void {
         self.extern_c_symbols.deinit();
         self.top_level_decls.deinit();
+    }
+
+    fn resetTopLevel(self: *Collector) void {
+        self.top_level_decls.clearRetainingCapacity();
     }
 
     fn collect(self: *Collector, unit: ast.CompilationUnit) !void {
