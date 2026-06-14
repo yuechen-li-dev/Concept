@@ -1821,7 +1821,18 @@ fn expectRunFixture(comptime path: []const u8) !void {
 
     try std.testing.expectEqual(Phase.run, fixture.phase);
     switch (fixture.expect) {
-        .pass => _ = try run_harness.expectExitCode(std.testing.allocator, try fixture.singleSourceText(), try fixture.expectedExitCode()),
+        .pass => {
+            if (fixture.isMultiSource()) {
+                const inputs = try std.testing.allocator.alloc(run_harness.SourceInput, fixture.sources.len);
+                defer std.testing.allocator.free(inputs);
+                for (fixture.sources, 0..) |fixture_source, index| {
+                    inputs[index] = .{ .path = fixture_source.path, .text = fixture_source.text };
+                }
+                _ = try run_harness.expectExitCodeMulti(std.testing.allocator, inputs, try fixture.expectedExitCode());
+            } else {
+                _ = try run_harness.expectExitCode(std.testing.allocator, try fixture.singleSourceText(), try fixture.expectedExitCode());
+            }
+        },
         .fail => try run_harness.expectRuntimeFailure(std.testing.allocator, try fixture.singleSourceText()),
     }
 }
@@ -3368,4 +3379,24 @@ test "language check fixture: phase16 qualified non repr export param" {
 
 test "language check fixture: phase16 qualified non repr pointer extern param" {
     try expectCheckFixture("../../../language/phase16-imports/invalid/qualified_type_non_repr_pointer_extern_param.invalid.conception");
+}
+
+test "language run fixture: phase16 cross module add" {
+    try expectRunFixture("../../../language/phase16-imports/valid/cross_module_add_run.valid.conception");
+}
+
+test "language run fixture: phase16 same function names qualified" {
+    try expectRunFixture("../../../language/phase16-imports/valid/same_function_names_qualified_run.valid.conception");
+}
+
+test "language run fixture: phase16 imported struct type use" {
+    try expectRunFixture("../../../language/phase16-imports/valid/imported_struct_type_run.valid.conception");
+}
+
+test "language run fixture: phase16 imported extern C abs" {
+    try expectRunFixture("../../../language/phase16-imports/valid/imported_extern_c_abs_run.valid.conception");
+}
+
+test "language run fixture: phase16 same struct names qualified" {
+    try expectRunFixture("../../../language/phase16-imports/valid/same_struct_names_qualified_run.valid.conception");
 }

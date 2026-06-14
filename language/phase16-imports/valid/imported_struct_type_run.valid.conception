@@ -1,0 +1,28 @@
+# name: phase16 imported struct type run
+# phase: run
+# expect: pass
+
+=== file: Geometry.concept ===
+module Geometry;
+
+struct Point {
+    int x;
+    int y;
+};
+
+=== file: Main.concept ===
+module Main;
+
+import Geometry;
+
+int Sum(Geometry.Point p) {
+    return p.x + p.y;
+}
+
+int main() {
+    Geometry.Point p = Geometry.Point { x: 20, y: 22 };
+    return Sum(p);
+}
+
+=== run ===
+exit_code: 42

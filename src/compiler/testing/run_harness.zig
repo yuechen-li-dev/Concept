@@ -6,6 +6,7 @@ const diagnostics_model = @import("../diagnostics.zig");
 const hir_checker = @import("../hir_checker.zig");
 const mir_lowering = @import("../mir_lowering.zig");
 const parser_model = @import("../parser.zig");
+const module_table_model = @import("../module_table.zig");
 const semantics_model = @import("../semantics.zig");
 const source_model = @import("../source.zig");
 
@@ -22,6 +23,8 @@ pub const RunResult = struct {
     actual_exit_code: u8,
 };
 
+pub const SourceInput = struct { path: []const u8, text: []const u8 };
+
 pub fn expectExitCode(allocator: std.mem.Allocator, source_text: []const u8, expected_exit_code: u8) RunError!RunResult {
     const actual_exit_code = try runSource(allocator, source_text);
     if (actual_exit_code != expected_exit_code) return error.UnexpectedExitCode;
@@ -29,6 +32,12 @@ pub fn expectExitCode(allocator: std.mem.Allocator, source_text: []const u8, exp
         .expected_exit_code = expected_exit_code,
         .actual_exit_code = actual_exit_code,
     };
+}
+
+pub fn expectExitCodeMulti(allocator: std.mem.Allocator, sources: []const SourceInput, expected_exit_code: u8) RunError!RunResult {
+    const actual_exit_code = try runSources(allocator, sources);
+    if (actual_exit_code != expected_exit_code) return error.UnexpectedExitCode;
+    return .{ .expected_exit_code = expected_exit_code, .actual_exit_code = actual_exit_code };
 }
 
 pub fn expectRuntimeFailure(allocator: std.mem.Allocator, source_text: []const u8) RunError!void {
@@ -40,21 +49,46 @@ pub fn expectRuntimeFailure(allocator: std.mem.Allocator, source_text: []const u
 }
 
 pub fn runSource(allocator: std.mem.Allocator, source_text: []const u8) RunError!u8 {
+    return runSources(allocator, &.{.{ .path = "run-harness.concept", .text = source_text }});
+}
+
+pub fn runSources(allocator: std.mem.Allocator, sources: []const SourceInput) RunError!u8 {
     var parse_diagnostics = diagnostics_model.DiagnosticBag.init(allocator);
     defer parse_diagnostics.deinit();
     var check_diagnostics = diagnostics_model.DiagnosticBag.init(allocator);
     defer check_diagnostics.deinit();
 
-    const source_file = try source_model.SourceFile.init(allocator, "run-harness.concept", source_text);
-    defer source_file.deinit(allocator);
+    const units = try allocator.alloc(parser_model.ast.CompilationUnit, sources.len);
+    defer allocator.free(units);
+    var parsed_sources = try allocator.alloc(module_table_model.ParsedSource, sources.len);
+    defer allocator.free(parsed_sources);
 
-    const unit = try parser_model.parseSource(allocator, source_file, &parse_diagnostics);
-    defer unit.deinit(allocator);
+    var parsed_count: usize = 0;
+    defer for (units[0..parsed_count]) |unit| unit.deinit(allocator);
+
+    for (sources, 0..) |input, source_index| {
+        const source_file = try source_model.SourceFile.init(allocator, input.path, input.text);
+        defer source_file.deinit(allocator);
+        units[source_index] = try parser_model.parseSource(allocator, source_file, &parse_diagnostics);
+        parsed_count += 1;
+        parsed_sources[source_index] = .{ .path = input.path, .unit = &units[source_index] };
+    }
     if (parse_diagnostics.count() != 0) return error.ParseFailed;
 
-    var module = semantics_model.collectTopLevelDeclarations(allocator, unit, &check_diagnostics) catch |err| switch (err) {
-        error.InvalidSemanticModule => return error.CheckOrBackendFailed,
-        error.OutOfMemory => return error.OutOfMemory,
+    var module = if (sources.len == 1) blk: {
+        break :blk semantics_model.collectTopLevelDeclarations(allocator, units[0], &check_diagnostics) catch |err| switch (err) {
+            error.InvalidSemanticModule => return error.CheckOrBackendFailed,
+            error.OutOfMemory => return error.OutOfMemory,
+        };
+    } else blk: {
+        var module_table = module_table_model.buildFromParsedSources(allocator, parsed_sources, &check_diagnostics) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+        };
+        defer module_table.deinit(allocator);
+        break :blk semantics_model.collectModuleTableDeclarations(allocator, parsed_sources, module_table, &check_diagnostics, .{}) catch |err| switch (err) {
+            error.InvalidSemanticModule => return error.CheckOrBackendFailed,
+            error.OutOfMemory => return error.OutOfMemory,
+        };
     };
     defer module.deinit();
 

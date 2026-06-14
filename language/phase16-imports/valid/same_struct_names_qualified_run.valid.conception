@@ -1,0 +1,40 @@
+# name: phase16 same struct names qualified run
+# phase: run
+# expect: pass
+
+=== file: A.concept ===
+module A;
+
+struct Point {
+    int x;
+};
+
+int Get(Point p) {
+    return p.x;
+}
+
+=== file: B.concept ===
+module B;
+
+struct Point {
+    int y;
+};
+
+int Get(Point p) {
+    return p.y;
+}
+
+=== file: Main.concept ===
+module Main;
+
+import A;
+import B;
+
+int main() {
+    A.Point a = A.Point { x: 20 };
+    B.Point b = B.Point { y: 22 };
+    return A.Get(a) + B.Get(b);
+}
+
+=== run ===
+exit_code: 42

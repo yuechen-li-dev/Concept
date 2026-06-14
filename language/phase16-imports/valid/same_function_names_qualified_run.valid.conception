@@ -1,0 +1,30 @@
+# name: phase16 same function names qualified run
+# phase: run
+# expect: pass
+
+=== file: A.concept ===
+module A;
+
+int Value() {
+    return 20;
+}
+
+=== file: B.concept ===
+module B;
+
+int Value() {
+    return 22;
+}
+
+=== file: Main.concept ===
+module Main;
+
+import A;
+import B;
+
+int main() {
+    return A.Value() + B.Value();
+}
+
+=== run ===
+exit_code: 42
