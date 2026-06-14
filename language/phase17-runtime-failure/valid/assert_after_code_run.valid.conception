@@ -1,0 +1,15 @@
+# name: assert after code run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    bool ok = true;
+    assert(ok, "ok should continue");
+    return 7;
+}
+
+=== run ===
+exit_code: 7

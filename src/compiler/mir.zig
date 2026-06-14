@@ -431,6 +431,12 @@ pub const MirStatementKind = union(enum) {
         reason: []const u8,
         reason_span: SourceSpan,
     },
+    assert_stmt: struct {
+        condition: MirOperand,
+        reason: []const u8,
+        condition_span: SourceSpan,
+        reason_span: SourceSpan,
+    },
 
     pub fn assignTo(place: MirPlace, rvalue: MirRvalue) MirStatementKind {
         return .{ .assign = .{ .place = place, .rvalue = rvalue } };
@@ -477,6 +483,15 @@ pub const MirStatementKind = union(enum) {
         return .{ .panic = .{ .reason = try allocator.dupe(u8, reason), .reason_span = reason_span } };
     }
 
+    pub fn assertStmt(allocator: std.mem.Allocator, condition: MirOperand, reason: []const u8, condition_span: SourceSpan, reason_span: SourceSpan) !MirStatementKind {
+        return .{ .assert_stmt = .{
+            .condition = try condition.clone(allocator),
+            .reason = try allocator.dupe(u8, reason),
+            .condition_span = condition_span,
+            .reason_span = reason_span,
+        } };
+    }
+
     fn clone(self: MirStatementKind, allocator: std.mem.Allocator) !MirStatementKind {
         return switch (self) {
             .assign => |assignment| MirStatementKind.assignTo(assignment.place, try assignment.rvalue.clone(allocator)),
@@ -487,6 +502,7 @@ pub const MirStatementKind = union(enum) {
             .arena_destroy => |arena_operand| MirStatementKind.arenaDestroy(try arena_operand.clone(allocator)),
             .machine_step => |machine_operand| .{ .machine_step = try machine_operand.clone(allocator) },
             .panic => |panic_stmt| try MirStatementKind.panicStmt(allocator, panic_stmt.reason, panic_stmt.reason_span),
+            .assert_stmt => |assert_stmt| try MirStatementKind.assertStmt(allocator, assert_stmt.condition, assert_stmt.reason, assert_stmt.condition_span, assert_stmt.reason_span),
         };
     }
 
@@ -504,6 +520,10 @@ pub const MirStatementKind = union(enum) {
             .arena_destroy => |arena_operand| arena_operand.deinit(allocator),
             .machine_step => |machine_operand| machine_operand.deinit(allocator),
             .panic => |panic_stmt| allocator.free(panic_stmt.reason),
+            .assert_stmt => |assert_stmt| {
+                assert_stmt.condition.deinit(allocator);
+                allocator.free(assert_stmt.reason);
+            },
         }
     }
 };
@@ -890,6 +910,10 @@ pub const MirStore = struct {
                 try writeOperandDebug(writer, machine_operand);
             },
             .panic => |panic_stmt| try writer.print("Panic \"{s}\"", .{panic_stmt.reason}),
+            .assert_stmt => |assert_stmt| {
+                try writer.print("Assert \"{s}\" ", .{assert_stmt.reason});
+                try writeOperandDebug(writer, assert_stmt.condition);
+            },
         }
     }
 

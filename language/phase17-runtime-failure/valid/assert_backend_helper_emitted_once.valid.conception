@@ -1,0 +1,17 @@
+# name: assert backend helper emitted once
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    assert(true, "first assert");
+    assert(true, "second assert");
+    return 0;
+}
+
+=== c ===
+count: static void cpt_panic(const char* reason) | 1
+count: cpt_panic("first assert"); | 1
+count: cpt_panic("second assert"); | 1

@@ -1,0 +1,17 @@
+# name: assert backend helper emitted
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    assert(true, "true should continue");
+    return 0;
+}
+
+=== c ===
+contains: static void cpt_panic(const char* reason)
+contains: fprintf(stderr, "panic: %s\n", reason);
+contains: exit(101);
+contains: cpt_panic("true should continue");

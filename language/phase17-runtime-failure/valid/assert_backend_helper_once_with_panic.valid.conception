@@ -1,0 +1,17 @@
+# name: assert backend helper once with panic
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    assert(true, "assert reason");
+    panic("panic reason");
+    return 0;
+}
+
+=== c ===
+count: static void cpt_panic(const char* reason) | 1
+contains: cpt_panic("assert reason");
+contains: cpt_panic("panic reason");

@@ -4,8 +4,8 @@
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
 **Phases closed:** 1 through 16
-**Current phase:** Phase 17 M3 — `assert(condition, reason)` parser/AST/HIR scaffold
-**Fixture corpus:** 930 total `.conception` fixtures; 108 under `language/phase15-c-abi/`; 73 under `language/phase16-imports/`; 24 under `language/phase17-runtime-failure/`
+**Current phase:** Phase 17 M4 — `assert(condition, reason)` MIR/backend lowering
+**Fixture corpus:** 940 total `.conception` fixtures; 108 under `language/phase15-c-abi/`; 73 under `language/phase16-imports/`; 34 under `language/phase17-runtime-failure/`
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
 ---
@@ -207,7 +207,7 @@
 | `discard` for intentional error discard | ✅ | Phase 5 |
 | Generalizable `must_use` on any type | 🔶 | `must_use` on enums implemented; arbitrary `must_use` on functions deferred |
 | Nominal error types preferred | ✅ | Payload enums as error types work fully |
-| `panic` / `assert` | 🔶 | Phase 17 M2 lowers statement-position `panic("reason")` through MIR/backend to a backend-owned `cpt_panic` helper emitted once per C unit, prints the reason to `stderr`, and exits 101; mandatory-reason and unsupported expression-position diagnostics remain; runtime `assert(condition, "reason")` now has parser/AST/HIR scaffold with bool condition checking, mandatory string-literal reasons, expression-position rejection, and MIR/backend lowering deferred |
+| `panic` / `assert` | 🔶 | Phase 17 M4 lowers statement-position `panic("reason")` and `assert(condition, "reason")` through MIR/backend to a shared backend-owned `cpt_panic` helper emitted once per C unit, prints the reason to `stderr`, and exits 101 on panic or failed assert; assert true continues normally; mandatory-reason, bool-condition, and unsupported expression-position diagnostics remain |
 | `panic_handler` for freestanding | ❌ | |
 | Panic modes (`abort`, `halt`, `unwind`, `custom`) | ❌ | |
 
@@ -522,7 +522,7 @@
 | §13 Initialization | ✅ Complete including `ManualInit<T>` |
 | §14–15 Move and immovable | 🔶 Move done; `immovable` and `moved_state` deferred |
 | §16 Drop/RAII | ✅ Substantially complete |
-| §17 Errors | 🔶 `Result`, `try`, `must_use`, `discard` done; statement-position `panic("reason")` lowers through MIR/backend to deterministic runtime failure; statement-position `assert(condition, "reason")` has AST/HIR scaffold and bool/reason diagnostics |
+| §17 Errors | 🔶 `Result`, `try`, `must_use`, `discard` done; statement-position `panic("reason")` lowers through MIR/backend to deterministic runtime failure; statement-position `assert(condition, "reason")` has AST/HIR/MIR/backend lowering, bool/reason diagnostics, and runtime exit-code fixtures |
 | §18–19 Enums and match | 🔶 Core done; guards, struct destructure, ref binding deferred |
 | §20–23 Concepts/generics/impl | 🔶 Core done; `derive`, negative concepts, orphan rule, bridge modules deferred |
 | §24 Interfaces/dyn | 🔶 Phase 14 closed for borrowed dyn dispatch v0: declarations, impl conformance, borrowed dyn parameter types, concrete-to-dyn call coercion, dyn method-call HIR/MIR, C vtable/fat-reference lowering, executable borrowed dyn dispatch, examples, mutability hardening fixtures, and backend C-shape assertions; owning boxes, RTTI/dynamic cast, inheritance/upcast, dyn returns/fields/locals, mutation-through-dyn hardening, and ABI stability deferred |

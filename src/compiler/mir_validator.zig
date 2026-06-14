@@ -182,7 +182,16 @@ const Validator = struct {
                     try self.report(.InvalidMirType, statement.span, diagnostics.invalidMirType);
                 }
             },
-            .panic => {},
+            .panic => |panic_stmt| {
+                if (panic_stmt.reason.len == 0) try self.report(.InvalidMirOperand, statement.span, diagnostics.invalidMirOperand);
+            },
+            .assert_stmt => |assert_stmt| {
+                const condition_type = try self.operandType(function_id, assert_stmt.condition, statement.span);
+                if (condition_type != null and !sameType(condition_type.?, self.semantic_module.types.boolType())) {
+                    try self.report(.InvalidMirType, statement.span, diagnostics.invalidMirType);
+                }
+                if (assert_stmt.reason.len == 0) try self.report(.InvalidMirOperand, statement.span, diagnostics.invalidMirOperand);
+            },
         }
     }
 

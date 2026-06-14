@@ -1,0 +1,18 @@
+# name: assert backend no test runner dependency
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    assert(true, "ordinary runtime assert");
+    return 0;
+}
+
+=== c ===
+contains: cpt_panic("ordinary runtime assert");
+not_contains: Assert.
+not_contains: Expect.
+not_contains: test_runner
+not_contains: con_test
