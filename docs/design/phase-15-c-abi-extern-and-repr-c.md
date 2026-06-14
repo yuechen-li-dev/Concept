@@ -3,8 +3,7 @@
 P15-M0 was a documentation-only milestone. It defined Concept's explicit C ABI
 source boundary, foreign C declarations, C-exported Concept functions,
 `repr(C)` struct layout promises, ABI type validation, HIR/MIR representation,
-and C backend emission plan. P15-M1 started implementation with the
-`extern "C"` parser/AST scaffold.
+and C backend emission plan. Phase 15 is now closed after P15-M9: the implemented v0 surface covers explicit `extern "C"` declarations and calls, `export "C"` definitions, and the staged `[Repr(C)]` struct subset, with headers, linking, C++ interop, varargs, extern variables, and broader layout features deliberately deferred.
 
 P15-M1 adds the parser/AST scaffold for block-form `extern "C"` declarations.
 The lexer recognizes `extern`, the parser accepts `extern "C" { ... }`, and the
@@ -22,8 +21,7 @@ C symbol names. P15-M4 implements `export "C"` function definitions: exported
 functions parse as ordinary bodies with C linkage metadata, lower through HIR and
 MIR, validate C ABI-compatible parameter and return types, reject duplicate C
 ABI symbols across extern declarations and exports, and emit unmangled C function
-definitions while ordinary functions retain internal backend names. Headers,
-includes, linker flags, and `repr(C)` remain deferred.
+definitions while ordinary functions retain internal backend names. Headers, includes, linker flags, and broader ABI features remain deferred.
 
 ## Core doctrine
 
@@ -230,34 +228,44 @@ Rules:
 
 ## 5. C ABI-compatible type subset
 
-Supported v0 C ABI types:
+Supported final Phase 15 C ABI types:
 
 - `void` as a function return only;
 - `int`;
 - `bool`, lowered as C `int` under the existing backend convention;
-- raw pointers to supported ABI types;
-- raw pointers to opaque allocation handles, specifically `Arena*` and
-  `Allocator*`;
-- `repr(C)` structs whose fields are ABI-compatible.
+- `AllocError`, lowered as C `int` under the current backend convention;
+- supported raw pointers;
+- `Arena*`;
+- `Allocator*`;
+- `AllocError*`;
+- `[Repr(C)]` structs whose fields are validated as ABI-compatible, by value;
+- pointers to validated `[Repr(C)]` structs.
+
+`[Repr(C)]` is the Phase 15 staged source spelling. The keyword spelling
+`repr(C)` remains reserved and deferred, though docs and HIR/debug text may use
+`repr(C)` as the representation concept name.
 
 Enum ABI is deferred. Even non-payload unit enums should wait until the enum
 layout contract is explicitly designed as a user-visible ABI promise.
 
 Rejected in v0:
 
+- `void` parameters;
 - bare `Arena` or `Allocator` by value;
-- bare interface types;
-- dyn interface types;
-- machine frame types;
-- non-`repr(C)` structs across a C ABI boundary;
-- payload enums across a C ABI boundary;
+- non-repr structs by value;
+- pointers to non-repr structs;
+- interfaces;
+- dyn interfaces;
+- machines and machine frame types;
 - `ManualInit<T>`;
-- generic type parameters;
-- `Result<T, E>` unless explicitly represented as `repr(C)` later;
-- templates/generic functions;
+- `Result<T, E>`;
+- enums, including payload enums and unit enums;
+- nested `[Repr(C)]` structs by value as fields;
+- generic/template ABI surfaces;
 - concept/interface impl functions;
-- function pointers unless already supported and deliberately included;
-- varargs.
+- function pointers/callbacks unless independently designed later;
+- varargs;
+- extern variables.
 
 ABI type validation happens before backend codegen. An unsupported ABI type
 must produce a clear diagnostic, not guessed C emission.
@@ -482,9 +490,10 @@ export "C" symbol("concept_add") int Add(int a, int b) { ... }
 
 ## 12. Diagnostics
 
-Initial diagnostic planning list:
+Final implemented Phase 15 diagnostic inventory:
 
 ```text
+CON0259 ExternCNotImplemented
 CON0260 UnsupportedCAbiType
 CON0261 ExternCRequiresFunctionDeclaration
 CON0262 ExternCFunctionCannotHaveBody
@@ -495,9 +504,18 @@ CON0266 ReprCInvalidTarget
 CON0267 ReprCUnsupportedFieldType
 CON0268 ReprCEmptyStructUnsupported
 CON0269 VarargsUnsupported
+CON026A ExternUnsupportedAbi
+CON026B UnsupportedReprAbi
 ```
 
-P15-M0 does not implement these diagnostics.
+`CON0259` remains in the diagnostic inventory as a historical/reserved
+deferred-path diagnostic. It is not used for valid final Phase 15 extern,
+export, or `[Repr(C)]` paths. Unsupported C ABI boundary types use `CON0260`;
+invalid extern block entries use `CON0261`/`CON0262`; invalid exports use
+`CON0263`/`CON0264`; C linkage namespace collisions use `CON0265`; invalid
+repr targets/fields/layouts use `CON0266`/`CON0267`/`CON0268`; varargs use
+`CON0269`; unsupported extern ABI strings use `CON026A`; unsupported repr ABI
+arguments use `CON026B`.
 
 ## 13. Non-goals for Phase 15 v0
 
@@ -538,7 +556,7 @@ P15-M5  repr(C) struct staged attribute and HIR marker (implemented)
 P15-M6  repr(C) field/type validation and backend layout hardening
 P15-M7  C ABI diagnostics and symbol/linkage hardening (implemented)
 P15-M8  examples/fixtures: extern calls, exports, repr(C) structs (implemented)
-P15-M9  Closeout
+P15-M9  Closeout (implemented/closed)
 ```
 
 ## 15. Closeout criteria
@@ -597,3 +615,63 @@ P15-M8 adds examples, representative fixtures, and documentation polish for the 
 - Representative invalid fixtures pin non-goals: varargs, C++ ABI strings, missing export bodies, duplicate C symbols, non-repr structs at C ABI boundaries, dyn/interface and machine-frame ABI exposure, empty repr(C) structs, unsupported dyn fields, and nested repr(C) structs by value.
 - Backend-output fixtures use `count:` and `before:` assertions where useful to pin de-duplication and ordering for extern prototypes and repr(C) typedefs.
 - The final supported Phase 15 subset remains explicit: no header parser, no automatic includes, no automatic linking/linker driver, no C++ interop, no varargs, no extern variables, no symbol aliasing, no callbacks/function pointers beyond pre-existing support, no repr(C) enums, no packed/custom alignment/bitfields, and no nested repr(C) by-value layout support.
+
+
+## P15-M9 closeout status
+
+Phase 15 is closed. The final supported surface is intentionally small and
+explicit:
+
+- `extern "C"` block declarations;
+- extern C HIR declarations;
+- extern C ABI type validation;
+- extern C semantic call resolution;
+- extern C MIR call lowering;
+- extern C backend prototype emission;
+- extern C backend call emission using declared C symbol names;
+- `export "C"` function definitions;
+- export C ABI type validation;
+- export C MIR function linkage metadata;
+- export C backend unmangled symbol emission;
+- `[Repr(C)]` staged struct marker;
+- HIR repr(C) struct metadata;
+- repr(C) field validation;
+- empty repr(C) rejection;
+- repr(C) structs accepted by value across C ABI boundaries;
+- repr(C) struct pointers accepted across C ABI boundaries;
+- backend named typedef struct emission;
+- repr(C) source field order preservation;
+- backend ordering/de-duplication hardening;
+- examples and representative fixtures.
+
+Precision notes for the closed milestone:
+
+- `[Repr(C)]` is the Phase 15 staged source spelling. The keyword spelling
+  `repr(C)` remains reserved/deferred.
+- `extern "C"` declares already-existing foreign C symbols; it does not parse C
+  headers and does not generate `#include` lines.
+- `export "C"` exposes a Concept function with an unmangled C symbol; it does
+  not imply linker behavior, library selection, or symbol aliasing.
+- `repr(C)` promises layout only for validated supported structs. It does not
+  cover enums, nested by-value struct fields, packed layout, bitfields, custom
+  alignment, or platform ABI matrices beyond the current C backend target.
+- There is no hidden linker magic. Headers, automatic includes, automatic
+  linking, and linker-driver behavior remain outside Phase 15.
+- There is no C++ interop, bindgen/header parser, varargs, extern variables, or
+  callback/function-pointer surface in Phase 15 v0.
+
+Final examples live under `examples/phase15/` and mirror the fixture corpus:
+
+- `extern-abs.concept` demonstrates an outbound `extern "C"` call.
+- `export-add.concept` demonstrates an inbound `export "C"` function.
+- `repr-point-export.concept` demonstrates a `[Repr(C)]` struct crossing an
+  export boundary.
+- `extern-repr-prototype.concept` demonstrates repr(C) value and pointer extern
+  prototypes.
+- `c-abi-boundary-notes.concept` records supported boundaries and non-goals.
+
+The closeout fixture inventory is 833 `.conception` files total, including 108
+Phase 15 C ABI fixtures under `language/phase15-c-abi/`. P15-M9 added no new
+fixture because the M8 corpus already covers the final supported surface,
+backend C-shape assertions, executable smoke paths, and representative rejected
+non-goals.
