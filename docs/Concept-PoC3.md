@@ -64,34 +64,26 @@ observed through dyn dispatch remains deferred until references are
 first-class TypeStore/ABI values. Owning dyn boxes, heap boxing, inheritance,
 RTTI, dynamic cast, reflection, Drop through dyn, dyn fields/returns/locals,
 and hidden heap allocation remain deferred.
-Phase 15 has started C ABI work. P15-M0 added the C ABI design:
-`extern "C"` declares foreign C symbols without parsing headers, `export "C"`
-exposes checked Concept functions with C linkage, and `repr(C)` is reserved for
-supported C-compatible struct layout promises. P15-M1 added the parser/AST
-scaffold for block-form `extern "C"` function declarations: the ABI string and
-block spans are preserved, declaration order and signatures are visible in AST
-debug output, bodies/non-function entries/varargs/unsupported ABI strings are
-rejected, and empty blocks are allowed as a parser scaffold. P15-M2 lowers
-valid extern C declarations into HIR with C ABI/linkage metadata and C symbol
-names, makes them visible to ordinary call resolution, validates a strict ABI
-type subset, and rejects duplicate extern C symbols. P15-M3 lowers extern C
-calls through MIR, emits backend C prototypes for extern declarations, emits
-calls with declared C symbol names instead of Concept internal names, and keeps
-extern declarations bodyless in generated C. Headers/includes and automatic linking remain deferred. P15-M4 added
-`export "C"` function definitions with C ABI validation, duplicate C symbol
-rejection, MIR export linkage, and unmangled backend C symbols. P15-M5 adds the
-staged `[Repr(C)]` struct marker, preserves it in AST/HIR metadata and debug
-output, and rejects invalid targets or unsupported repr arguments. P15-M6 validates
-the supported repr(C) struct field subset, rejects empty repr(C) structs, allows
-validated repr(C) structs/pointers across C ABI boundaries, and hardens backend C
-layout emission while keeping enums, packed layout, custom alignment, and
-platform ABI matrices deferred. P15-M7 hardens diagnostics, duplicate C ABI
-symbol detection coverage, extern prototype de-duplication/order, repr(C)
-typedef-before-use ordering, ordinary-vs-C-linkage backend names, void
-rules, and the current bool/AllocError C ABI spelling without adding new C ABI
-features. P15-M8 adds `examples/phase15/`, representative valid/invalid C ABI
-fixtures, backend assertions for final surface coverage, and documentation polish
-while preserving the no-new-features constraint.
+Phase 15 is closed. It completes Concept's explicit C ABI v0 surface for a
+single compilation unit: block-form `extern "C"` declarations lower through HIR
+and MIR, participate in semantic call resolution, validate a strict C ABI type
+subset, and emit plain backend C prototypes/calls using declared C symbol names.
+`export "C"` function definitions parse and lower as ordinary Concept bodies
+with explicit C linkage metadata, validate C ABI-compatible signatures, reject
+duplicate C ABI symbols, and emit unmangled C symbols. The staged `[Repr(C)]`
+struct marker is preserved in AST/HIR metadata, validates supported field types,
+rejects empty structs and unsupported/nested-by-value layouts, accepts validated
+repr(C) structs and pointers at extern/export C ABI boundaries, emits named C
+typedef structs before use, and preserves source field order. Phase 15 also
+hardens diagnostics, duplicate-symbol behavior, extern prototype ordering and
+de-duplication, typedef ordering, ordinary-vs-C-linkage backend naming, void
+rules, and current bool/AllocError C backend spelling. Examples live under
+`examples/phase15/`, and the fixture corpus pins valid and invalid extern,
+export, and `[Repr(C)]` behavior. Headers/includes, automatic linking or a
+linker driver, C++ interop, varargs, extern variables, symbol aliasing, callback
+/function-pointer surface, repr(C) enums, nested by-value repr(C) fields,
+packed layout, custom alignment, bitfields, and import/multi-module compilation
+remain deferred.
 Deferred Phase 12
 work includes
 `Arena.create`, hosted runtime helper implementation, allocation failure
