@@ -354,6 +354,7 @@ const Analyzer = struct {
             .arena_destroy => |arena_operand| try self.readOperand(states, arena_operand, statement.span),
             .machine_step => |machine_operand| try self.readOperand(states, machine_operand, statement.span),
             .panic => {},
+            .assert_stmt => |assert_stmt| try self.readOperand(states, assert_stmt.condition, statement.span),
         }
     }
 

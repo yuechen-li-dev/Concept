@@ -1,0 +1,16 @@
+# name: assert backend lowers to if panic
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    bool ok = true;
+    assert(ok, "ok should be true");
+    return 0;
+}
+
+=== c ===
+contains: if (!(cpt_l_ok_0)) {
+contains: cpt_panic("ok should be true");

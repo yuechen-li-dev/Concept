@@ -1,0 +1,14 @@
+# name: assert backend reason literal
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    assert(false, "assert says \"quoted\" and \\ escaped");
+    return 0;
+}
+
+=== c ===
+contains: cpt_panic("assert says \"quoted\" and \\ escaped");

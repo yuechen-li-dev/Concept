@@ -3496,3 +3496,43 @@ test "language check fixture: phase17 assert expression initializer" {
 test "language check fixture: phase17 assert return expression" {
     try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/assert_return_expression.invalid.conception");
 }
+
+test "language run fixture: phase17 assert true continues" {
+    try expectRunFixture("../../../language/phase17-runtime-failure/valid/assert_true_run.valid.conception");
+}
+
+test "language run fixture: phase17 assert false exits 101" {
+    try expectRunFixture("../../../language/phase17-runtime-failure/valid/assert_false_exits_101.valid.conception");
+}
+
+test "language run fixture: phase17 assert condition expression continues" {
+    try expectRunFixture("../../../language/phase17-runtime-failure/valid/assert_condition_expression_run.valid.conception");
+}
+
+test "language run fixture: phase17 assert after code continues" {
+    try expectRunFixture("../../../language/phase17-runtime-failure/valid/assert_after_code_run.valid.conception");
+}
+
+test "language backend-c fixture: phase17 assert lowers to if panic" {
+    try expectBackendCFixture("../../../language/phase17-runtime-failure/valid/assert_backend_lowers_to_if_panic.valid.conception");
+}
+
+test "language backend-c fixture: phase17 assert helper emitted" {
+    try expectBackendCFixture("../../../language/phase17-runtime-failure/valid/assert_backend_helper_emitted.valid.conception");
+}
+
+test "language backend-c fixture: phase17 assert helper emitted once" {
+    try expectBackendCFixture("../../../language/phase17-runtime-failure/valid/assert_backend_helper_emitted_once.valid.conception");
+}
+
+test "language backend-c fixture: phase17 assert helper once with panic" {
+    try expectBackendCFixture("../../../language/phase17-runtime-failure/valid/assert_backend_helper_once_with_panic.valid.conception");
+}
+
+test "language backend-c fixture: phase17 assert reason literal" {
+    try expectBackendCFixture("../../../language/phase17-runtime-failure/valid/assert_backend_reason_literal.valid.conception");
+}
+
+test "language backend-c fixture: phase17 assert no test runner dependency" {
+    try expectBackendCFixture("../../../language/phase17-runtime-failure/valid/assert_backend_no_test_runner_dependency.valid.conception");
+}

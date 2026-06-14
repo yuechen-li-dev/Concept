@@ -2,7 +2,7 @@
 
 ## Status
 
-P17-M3 is now implemented for `assert(condition, "reason")` parser/AST/HIR scaffold. P17-M2 remains closed for `panic(reason)` MIR/backend lowering:
+P17-M4 is now implemented for `assert(condition, "reason")` MIR/backend lowering. P17-M2 remains closed for `panic(reason)` MIR/backend lowering:
 
 - `panic("reason");` parses in statement position.
 - The reason string literal and source span are preserved in AST/HIR.
@@ -19,7 +19,12 @@ P17-M3 is now implemented for `assert(condition, "reason")` parser/AST/HIR scaff
 - Assert HIR/debug output exposes dedicated assert statements and their reason.
 - Assert conditions must type-check as `bool`; missing/wrong reason forms and non-string-literal reasons are rejected.
 - Expression-position `assert(...)` remains unsupported and is diagnosed.
-- MIR/backend assert lowering remains deferred to P17-M4; Core.Test `Assert.True` alignment remains deferred to P17-M6.
+- HIR assert statements lower to dedicated MIR assert statements preserving the lowered bool condition operand, reason text, condition span, and reason span.
+- MIR debug output exposes `Assert "reason"`, MIR storage analysis reads the condition operand, and MIR validation requires a bool condition plus present reason metadata.
+- The C backend lowers `assert(condition, "reason")` to `if (!(condition)) { cpt_panic("reason"); }`, reusing backend C string escaping.
+- The backend-owned `cpt_panic` helper is shared by panic and assert and is emitted exactly once per generated C unit when either or both are used.
+- Runtime fixtures prove assert-true continues, assert-false exits 101, and condition expressions continue normally. Reason output remains pinned through generated C/backend assertions while runtime stderr matching is unsupported.
+- Named `because:` syntax, expression-position assert, `never`, empty/whitespace reason hardening, Core.Test `Assert.True` alignment, test-runner panic catching, exceptions, unwinding, and stack traces remain deferred.
 
 ## Core doctrine
 
@@ -417,7 +422,7 @@ P17-M0  Design doc: panic, assertions, and runtime failure reporting
 P17-M1  panic(reason) parser/AST/HIR scaffold
 P17-M2  panic(reason) MIR/backend lowering (implemented: MIR panic statement, C cpt_panic helper, exit 101)
 P17-M3  assert(condition, reason) parser/AST/HIR scaffold (implemented: statement syntax, AST/HIR assert, bool condition check, reason diagnostics)
-P17-M4  assert(condition, reason) MIR/backend lowering
+P17-M4  assert(condition, reason) MIR/backend lowering (implemented: MIR assert statement, storage/validation, backend if-not guard calling shared cpt_panic, run/backend fixtures)
 P17-M5  reason validation and diagnostics hardening
 P17-M6  align Core.Test Assert.True with shared assertion doctrine
 P17-M7  migrate existing runtime trap sites to shared panic path

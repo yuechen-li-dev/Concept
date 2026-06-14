@@ -155,7 +155,14 @@ const FunctionLowerer = struct {
                 });
                 return block_id;
             },
-            .assert_stmt => return error.AssertLoweringDeferred,
+            .assert_stmt => |assert_stmt| {
+                const lowered = try self.lowerExpr(assert_stmt.condition, block_id);
+                try self.store.appendStatement(lowered.block, .{
+                    .span = stmt.span,
+                    .kind = try mir.MirStatementKind.assertStmt(self.allocator, lowered.operand, assert_stmt.reason, assert_stmt.condition_span, assert_stmt.reason_span),
+                });
+                return lowered.block;
+            },
             .arena_reset => |op| return try self.lowerArenaStorageOp(op.arena_expr, block_id, stmt.span, .reset),
             .arena_destroy => |op| return try self.lowerArenaStorageOp(op.arena_expr, block_id, stmt.span, .destroy),
             .assignment => |assignment| {
@@ -2528,4 +2535,25 @@ test "MIR lowering debug snapshot includes try propagation control flow" {
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "SwitchInt Copy(") != null);
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "EnumPayloadField(Copy(") != null);
     try std.testing.expect(std.mem.indexOf(u8, snapshot, "Return Copy(") != null);
+}
+
+test "MIR lowering lowers HIR assert to MIR assert" {
+    var module = try newModule();
+    defer module.deinit();
+    const main = try addFunction(&module, "main", module.types.intType(), false);
+    const condition = try module.hir.addExpr(.{ .bool_literal = true }, hir.synthetic_span);
+    const assert_stmt = try module.hir.addStmt(.{ .assert_stmt = .{ .condition = condition, .reason = try std.testing.allocator.dupe(u8, "mir assert reason"), .condition_span = hir.synthetic_span, .reason_span = hir.synthetic_span } }, hir.synthetic_span);
+    try setBody(&module, main, &.{ assert_stmt, try module.hir.addStmt(.{ .return_stmt = try intExpr(&module, "0") }, hir.synthetic_span) });
+
+    var mir_module = try lowerModule(std.testing.allocator, &module);
+    defer mir_module.deinit();
+    const block = mir_module.store.getBlock(mir_module.store.functions.items[0].blocks[0]);
+    try std.testing.expectEqual(@as(usize, 1), block.statements.len);
+    switch (block.statements[0].kind) {
+        .assert_stmt => |assert_stmt_value| try std.testing.expectEqualStrings("mir assert reason", assert_stmt_value.reason),
+        else => return error.ExpectedAssertStmt,
+    }
+    const snapshot = try mir_module.store.debugString(std.testing.allocator, module.interner);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Assert \"mir assert reason\"") != null);
 }

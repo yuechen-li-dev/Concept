@@ -599,7 +599,7 @@ fn mirContainsArenaAlloc(ctx: *const BackendContext) bool {
         for (block.statements) |statement| {
             switch (statement.kind) {
                 .assign => |assignment| if (rvalueContainsArenaAlloc(assignment.rvalue)) return true,
-                .drop, .machine_step, .panic => {},
+                .drop, .machine_step, .panic, .assert_stmt => {},
             }
         }
     }
@@ -655,7 +655,7 @@ fn mirContainsPanic(ctx: *const BackendContext) bool {
     for (ctx.mir_module.store.blocks.items) |block| {
         for (block.statements) |statement| {
             switch (statement.kind) {
-                .panic => return true,
+                .panic, .assert_stmt => return true,
                 else => {},
             }
         }
@@ -941,6 +941,15 @@ fn emitStatement(writer: anytype, ctx: *const BackendContext, statement: mir.Mir
             try writer.writeAll("    cpt_panic(");
             try emitCStringLiteral(writer, panic_stmt.reason);
             try writer.writeAll(");\n");
+        },
+        .assert_stmt => |assert_stmt| {
+            try writer.writeAll("    if (!(");
+            try emitOperand(writer, ctx, assert_stmt.condition);
+            try writer.writeAll(")) {\n");
+            try writer.writeAll("        cpt_panic(");
+            try emitCStringLiteral(writer, assert_stmt.reason);
+            try writer.writeAll(");\n");
+            try writer.writeAll("    }\n");
         },
     }
 }
@@ -2967,4 +2976,25 @@ fn countOccurrences(haystack: []const u8, needle: []const u8) usize {
         start += offset + needle.len;
     }
     return count;
+}
+
+test "MIR C backend lowers assert to conditional panic" {
+    const c_source = try emitForTest("module Main; int main() { bool ok = true; assert(ok, \"ok reason\"); return 0; }");
+    defer std.testing.allocator.free(c_source);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "if (!(cpt_l_ok_0)) {") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_panic(\"ok reason\");") != null);
+}
+
+test "MIR C backend emits panic helper once for multiple asserts" {
+    const c_source = try emitForTest("module Main; int main() { assert(true, \"one\"); assert(true, \"two\"); return 0; }");
+    defer std.testing.allocator.free(c_source);
+    try std.testing.expectEqual(@as(usize, 1), countOccurrences(c_source, "static void cpt_panic(const char* reason)"));
+}
+
+test "MIR C backend emits panic helper once for panic and assert" {
+    const c_source = try emitForTest("module Main; int main() { assert(true, \"assert reason\"); panic(\"panic reason\"); return 0; }");
+    defer std.testing.allocator.free(c_source);
+    try std.testing.expectEqual(@as(usize, 1), countOccurrences(c_source, "static void cpt_panic(const char* reason)"));
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_panic(\"assert reason\");") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c_source, "cpt_panic(\"panic reason\");") != null);
 }
