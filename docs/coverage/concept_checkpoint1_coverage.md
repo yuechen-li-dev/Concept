@@ -4,8 +4,8 @@
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
 **Phases closed:** 1 through 14
-**Current phase:** Phase 15 M6 repr(C) field/type validation and backend layout hardening
-**Fixture corpus:** 746 total (365 valid, 381 invalid)
+**Current phase:** Phase 15 M7 C ABI diagnostics and symbol/linkage hardening
+**Fixture corpus:** 812 total (396 valid, 416 invalid)
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
 ---
@@ -306,7 +306,7 @@
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| `repr(C)` layout annotation | 🔶 | P15-M6 implements staged `[Repr(C)]` on structs with AST/HIR marker/debug output, invalid target/argument rejection, field/type validation, empty-struct rejection, C ABI-boundary acceptance for validated repr(C) structs/pointers, and backend layout hardening |
+| `repr(C)` layout annotation | 🔶 | P15-M7 keeps the P15-M6 staged `[Repr(C)]` struct subset and hardens diagnostics plus backend typedef ordering/de-duplication before extern prototypes and exported definitions |
 | `repr(packed)` annotation | ❌ | Not yet |
 | `align(n)` annotation | ❌ | Not yet |
 | `static_assert(sizeof(...) == N)` | ❌ | `static_assert` exists for comptime bool expressions; `sizeof`/`alignof` builtins not yet |
@@ -360,8 +360,8 @@
 |---------|--------|-------|
 | C backend (compile Concept to C) | ✅ | Phase 4+ — MIR → C backend, primary bootstrap path |
 | C-readable generated output | ✅ | Generated C is auditable and readable |
-| `extern "C"` declarations | 🔶 | Phase 15 M3 parses block-form declarations, lowers valid extern C functions to HIR with ABI/linkage metadata and C symbol names, validates the strict v0 ABI type subset, makes declarations visible to ordinary call resolution, lowers extern calls through MIR, emits backend C prototypes for declarations, emits calls with declared C symbols, and rejects duplicate extern C symbols. Headers/includes and linker driving remain deferred; P15-M4 adds export C function definitions with unmangled backend symbols; P15-M5 adds staged `[Repr(C)]` struct markers; P15-M6 accepts validated repr(C) structs/pointers at C ABI boundaries |
-| `repr(C)` struct layout | 🔶 | P15-M6 validates supported repr(C) fields, rejects empty/unsupported layouts, accepts validated repr(C) structs and pointers at C ABI boundaries, and emits deterministic C struct layouts |
+| `extern "C"` declarations | 🔶 | Phase 15 M3 parses block-form declarations, lowers valid extern C functions to HIR with ABI/linkage metadata and C symbol names, validates the strict v0 ABI type subset, makes declarations visible to ordinary call resolution, lowers extern calls through MIR, emits backend C prototypes for declarations, emits calls with declared C symbols, and rejects duplicate extern C symbols. Headers/includes and linker driving remain deferred; P15-M4 adds export C function definitions with unmangled backend symbols; P15-M5 adds staged `[Repr(C)]` struct markers; P15-M6 accepts validated repr(C) structs/pointers at C ABI boundaries; P15-M7 hardens duplicate symbol coverage, prototype de-duplication/order, linkage naming, void rules, and bool/AllocError ABI spelling |
+| `repr(C)` struct layout | 🔶 | P15-M7 validates supported repr(C) fields through the P15-M6 subset, rejects empty/unsupported/nested-by-value layouts, accepts validated repr(C) structs and pointers at C ABI boundaries, emits deterministic C struct layouts, and pins typedef-before-use ordering/de-duplication |
 | Export to C (`export "C" fn`) | 🔶 | P15-M4 implements checked `export "C"` function definitions and unmangled backend symbols; P15-M6 accepts validated repr(C) struct values/pointers in that ABI subset |
 | C++ interop (`extern "C++"`) | ❌ | PoC3 §36.2 — quarantined/future |
 

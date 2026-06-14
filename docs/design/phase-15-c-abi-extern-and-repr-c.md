@@ -536,7 +536,7 @@ P15-M3  extern C call lowering and backend prototype emission
 P15-M4  export "C" function surface (implemented)
 P15-M5  repr(C) struct staged attribute and HIR marker (implemented)
 P15-M6  repr(C) field/type validation and backend layout hardening
-P15-M7  C ABI diagnostics and symbol/linkage hardening
+P15-M7  C ABI diagnostics and symbol/linkage hardening (implemented)
 P15-M8  examples/fixtures: extern calls, exports, repr(C) structs
 P15-M9  Closeout
 ```
@@ -572,3 +572,17 @@ P15-M6 implements the first usable `repr(C)` struct ABI subset for Stage 0:
 - Backend C prototypes and exported function definitions use the generated struct type/tag for `repr(C)` values and pointers.
 
 Still deferred: `repr(C)` enums, `repr(packed)`, custom alignment, bitfields, volatile/atomics/MMIO, C header parsing, automatic includes/linking, symbol aliasing, import/multi-module compilation, C++ interop, and platform-specific ABI matrices.
+
+
+## P15-M7 implementation status
+
+P15-M7 hardens the existing Phase 15 C ABI subset without adding new ABI features:
+
+- Diagnostic inventory is pinned for `CON0259` through `CON026B`; valid extern/export/repr(C) paths do not rely on `CON0259`, and unsupported C ABI boundary types continue to report `CON0260` while repr(C) field/layout failures report `CON0267`/`CON0268`.
+- Duplicate C ABI symbol coverage is audited for same-block externs, cross-block externs, extern/export conflicts, export/export duplicates, and ordinary same-language name conflicts. C ABI symbol collisions use `CON0265` where the C linkage namespace is the relevant failure; ordinary Concept duplicate declarations may still fail first with `CON0020`.
+- Backend extern prototype emission is fixture-pinned for exactly-once output, deterministic source/HIR order across one or more extern blocks, no output for empty extern blocks, and prototype placement before function bodies.
+- Backend repr(C) ordering is fixture-pinned so named typedef structs are emitted before extern prototypes and exported C definitions that reference them, with one typedef per struct, source-order fields, no hidden fields, and consistent named-type spelling for pointer and by-value ABI uses.
+- Linkage naming is fixture-pinned so exported C functions and extern calls use declared C symbols, while ordinary helper functions retain backend-internal names.
+- ABI edge cases are fixture-pinned for non-repr struct values/pointers at extern/export boundaries, nested repr(C) by-value fields, empty repr(C) structs, void returns/calls, void parameters, and the current bool/AllocError C spelling.
+
+Still deferred after P15-M7: `repr(C)` enums, nested repr(C) by-value struct fields as supported layout, `repr(packed)`, custom alignment, bitfields, volatile/atomics/MMIO, C header parsing, automatic includes/linking, linker driving, symbol aliasing, C++ interop, varargs, extern variables, callbacks/function pointers beyond pre-existing support, import/multi-module compilation, and platform-specific ABI matrices.

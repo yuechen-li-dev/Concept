@@ -305,14 +305,13 @@ fixtures cover extern call arity/type mismatches and using a `void` extern call
 as a value. P15-M5 fixtures cover staged `[Repr(C)]` struct markers in AST and
 HIR debug output, ordinary backend emission without C ABI boundary use, invalid
 Repr targets, missing/unsupported/extra Repr arguments, duplicate markers, and
-the deliberate continued rejection of non-repr structs at C ABI boundaries and the P15-M6 acceptance of validated repr(C) structs
-until M6.
+the deliberate continued rejection of non-repr structs at C ABI boundaries, and the P15-M6 acceptance of validated repr(C) structs. P15-M7 adds hardening fixtures for duplicate C ABI symbols, extern prototype de-duplication and deterministic order, repr(C) typedef-before-prototype/definition order, exported-vs-internal backend names, void C ABI rules, and bool/AllocError C spelling.
 
 Valid coverage includes `export "C"` functions, validated `[Repr(C)]` structs,
-unmangled exported C names, and deterministic supported struct field order.
+unmangled exported C names, deterministic supported struct field order, extern prototype order/de-duplication, repr(C) typedef order/de-duplication, void C exports, and current bool/AllocError C ABI spelling.
 
-Invalid coverage includes generic exports, `repr(C)` on non-struct
-declarations, empty `repr(C)` structs, unsupported `repr(C)` fields, machine
+Invalid coverage includes generic exports, duplicate C ABI symbols, `repr(C)` on non-struct
+declarations, empty `repr(C)` structs, unsupported/nested-by-value `repr(C)` fields, non-repr struct values/pointers at C ABI boundaries, void parameters/void-as-value calls, machine
 frame ABI exposure, and payload enum ABI exposure.
 
 ## `.conception` format

@@ -1,0 +1,12 @@
+# name: extern C bool ABI backend
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module CAbi;
+
+extern "C" { bool flip(bool value); }
+int main() { return 0; }
+
+=== c ===
+contains: int flip(int value);
