@@ -77,8 +77,13 @@ names, makes them visible to ordinary call resolution, validates a strict ABI
 type subset, and rejects duplicate extern C symbols. P15-M3 lowers extern C
 calls through MIR, emits backend C prototypes for extern declarations, emits
 calls with declared C symbol names instead of Concept internal names, and keeps
-extern declarations bodyless in generated C. Headers/includes, automatic
-linking, `export "C"`, and `repr(C)` remain deferred.
+extern declarations bodyless in generated C. Headers/includes and automatic linking remain deferred. P15-M4 added
+`export "C"` function definitions with C ABI validation, duplicate C symbol
+rejection, MIR export linkage, and unmangled backend C symbols. P15-M5 adds the
+staged `[Repr(C)]` struct marker, preserves it in AST/HIR metadata and debug
+output, and rejects invalid targets or unsupported repr arguments while
+deferring full field/layout validation and C ABI boundary acceptance for structs
+to M6.
 Deferred Phase 12
 work includes
 `Arena.create`, hosted runtime helper implementation, allocation failure

@@ -1,0 +1,14 @@
+# name: repr C unsupported ABI
+# phase: check
+# expect: fail
+
+=== source ===
+module CAbi;
+
+[Repr(Rust)]
+struct Point {
+    int x;
+};
+
+=== diagnostics ===
+CON026B

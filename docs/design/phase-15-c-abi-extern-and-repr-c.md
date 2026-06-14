@@ -205,10 +205,10 @@ struct Point {
 }
 ```
 
-Recommended v0 implementation path: use `[Repr(C)]` first if the existing
-attribute parser makes that materially simpler, while reserving `repr(C)` as
-the preferred language spelling. The semantic marker should be the same either
-way.
+P15-M5 implementation status: the staged attribute spelling `[Repr(C)]` is
+implemented. The preferred keyword spelling `repr(C)` remains reserved and
+deferred until it can be added without disrupting the parser. The semantic
+marker is represented as `repr(C)` in HIR debug output.
 
 Rules:
 
@@ -217,7 +217,8 @@ Rules:
 - Field order is declaration order.
 - Structs must be non-empty unless C empty-struct behavior is explicitly
   designed.
-- Unsupported field types are rejected.
+- P15-M5 preserves the marker in AST/HIR and rejects invalid targets or
+  unsupported repr arguments. Full C ABI field validation is deferred to M6.
 - No `repr(C)` enums in v0.
 - No packed layout in v0.
 - No custom alignment in v0.
@@ -533,7 +534,7 @@ P15-M1  extern "C" parser/AST scaffold
 P15-M2  extern C HIR declarations and ABI type validation
 P15-M3  extern C call lowering and backend prototype emission
 P15-M4  export "C" function surface (implemented)
-P15-M5  repr(C) struct syntax/attribute and HIR marker
+P15-M5  repr(C) struct staged attribute and HIR marker (implemented)
 P15-M6  repr(C) field/type validation and backend layout hardening
 P15-M7  C ABI diagnostics and symbol/linkage hardening
 P15-M8  examples/fixtures: extern calls, exports, repr(C) structs

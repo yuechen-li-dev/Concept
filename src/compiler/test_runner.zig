@@ -221,6 +221,7 @@ const Runner = struct {
 
     fn inlineDataValue(self: *Runner, row_arg: hir.HirAttributeArg, param_type: anytype) RunError!Value {
         return switch (row_arg) {
+            .identifier => return error.InvalidValue,
             .int_literal => |text| {
                 if (param_type.index != self.module.types.intType().index) return error.InvalidValue;
                 return .{ .int = std.fmt.parseInt(i64, text, 10) catch return error.InvalidValue };
@@ -524,6 +525,7 @@ fn setTheoryInlineDataRows(module: *semantics.SemanticModule, function_id: hir.F
         const args = try std.testing.allocator.alloc(hir.HirAttributeArg, row.len);
         for (row, 0..) |arg, arg_index| {
             args[arg_index] = switch (arg) {
+                .identifier => |text| .{ .identifier = try std.testing.allocator.dupe(u8, text) },
                 .int_literal => |text| .{ .int_literal = try std.testing.allocator.dupe(u8, text) },
                 .bool_literal => |value| .{ .bool_literal = value },
                 .string_literal => |text| .{ .string_literal = try std.testing.allocator.dupe(u8, text) },

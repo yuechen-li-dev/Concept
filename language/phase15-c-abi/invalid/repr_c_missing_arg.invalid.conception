@@ -1,0 +1,14 @@
+# name: repr C missing arg
+# phase: check
+# expect: fail
+
+=== source ===
+module CAbi;
+
+[Repr]
+struct Point {
+    int x;
+};
+
+=== diagnostics ===
+CON026B

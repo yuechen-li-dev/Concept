@@ -1,0 +1,19 @@
+# name: repr C export struct param still invalid
+# phase: check
+# expect: fail
+
+=== source ===
+module CAbi;
+
+[Repr(C)]
+struct Point {
+    int x;
+    int y;
+};
+
+export "C" int Use(Point p) {
+    return p.x;
+}
+
+=== diagnostics ===
+CON0260

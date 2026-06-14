@@ -326,6 +326,7 @@ pub const Parser = struct {
         if (std.mem.eql(u8, text, "Fact")) return;
         if (std.mem.eql(u8, text, "Theory")) return;
         if (std.mem.eql(u8, text, "InlineData")) return;
+        if (std.mem.eql(u8, text, "Repr")) return;
         try self.report(.InvalidAttribute, "unknown attribute", name.parts[0].span);
     }
 
@@ -367,6 +368,10 @@ pub const Parser = struct {
     fn parseAttributeArgument(self: *Parser) !?ast.AttributeArg {
         const token = self.current();
         switch (token.kind) {
+            .identifier => {
+                _ = self.advance();
+                return .{ .identifier = .{ .text = token.lexeme, .span = token.span } };
+            },
             .int_literal => {
                 _ = self.advance();
                 return .{ .int_literal = .{ .text = token.lexeme, .span = token.span } };
@@ -1767,6 +1772,10 @@ pub const Parser = struct {
     fn parseMatchPattern(self: *Parser, allocator: std.mem.Allocator) !?ast.MatchPattern {
         const token = self.current();
         switch (token.kind) {
+            .identifier => {
+                _ = self.advance();
+                return .{ .identifier = .{ .text = token.lexeme, .span = token.span } };
+            },
             .int_literal => {
                 _ = self.advance();
                 return .{ .int_literal = .{ .text = token.lexeme, .span = token.span } };
@@ -5563,6 +5572,31 @@ test "Fact Theory and InlineData remain identifiers" {
     try std.testing.expectEqual(TokenKind.identifier, tokens[0].kind);
     try std.testing.expectEqual(TokenKind.identifier, tokens[1].kind);
     try std.testing.expectEqual(TokenKind.identifier, tokens[2].kind);
+}
+
+test "parses Repr C attribute before struct" {
+    var diagnostics = DiagnosticBag.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const unit = try parseTestSource(
+        \\module Example;
+        \\[Repr(C)]
+        \\struct Point {
+        \\    int x;
+        \\};
+    , &diagnostics);
+    defer unit.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+    const struct_decl = unit.items[0].struct_decl;
+    try std.testing.expectEqual(@as(usize, 1), struct_decl.attributes.len);
+    try std.testing.expectEqualStrings("Repr", struct_decl.attributes[0].name.parts[0].text);
+    try std.testing.expectEqual(@as(usize, 1), struct_decl.attributes[0].arguments.?.args.len);
+    try std.testing.expectEqualStrings("C", struct_decl.attributes[0].arguments.?.args[0].identifier.text);
+
+    const snapshot = try unit.debugString(std.testing.allocator);
+    defer std.testing.allocator.free(snapshot);
+    try std.testing.expect(std.mem.indexOf(u8, snapshot, "Attribute Repr(C)\n  Struct Point") != null);
 }
 
 test "parses recognized attribute before struct" {

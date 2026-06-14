@@ -1,0 +1,17 @@
+# name: repr C struct marker no ABI use
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module CAbi;
+
+[Repr(C)]
+struct Point {
+    int x;
+    int y;
+};
+
+int main() {
+    Point p = Point { x: 20, y: 22 };
+    return p.x + p.y;
+}

@@ -213,7 +213,11 @@ pub const DiagnosticCode = enum {
     ExportCRequiresFunctionDefinition,
     ExportCFunctionCannotBeGeneric,
     DuplicateCAbiSymbol,
+    ReprCInvalidTarget,
+    ReprCUnsupportedFieldType,
+    ReprCEmptyStructUnsupported,
     ExternUnsupportedAbi,
+    UnsupportedReprAbi,
     VarargsUnsupported,
 
     pub fn format(self: DiagnosticCode) []const u8 {
@@ -409,7 +413,11 @@ pub const DiagnosticCode = enum {
             .ExportCRequiresFunctionDefinition => "CON0263",
             .ExportCFunctionCannotBeGeneric => "CON0264",
             .DuplicateCAbiSymbol => "CON0265",
+            .ReprCInvalidTarget => "CON0266",
+            .ReprCUnsupportedFieldType => "CON0267",
+            .ReprCEmptyStructUnsupported => "CON0268",
             .ExternUnsupportedAbi => "CON026A",
+            .UnsupportedReprAbi => "CON026B",
             .VarargsUnsupported => "CON0269",
         };
     }
@@ -1473,6 +1481,14 @@ pub fn dropParamUnsupported(span: SourceSpan) Diagnostic {
 
 pub fn invalidAttribute(span: SourceSpan, message: []const u8) Diagnostic {
     return Diagnostic.init(.InvalidAttribute, .@"error", message, span);
+}
+
+pub fn reprCInvalidTarget(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.ReprCInvalidTarget, .@"error", "[Repr(C)] may only be applied to struct declarations", span);
+}
+
+pub fn unsupportedReprAbi(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.UnsupportedReprAbi, .@"error", "unsupported repr ABI", span).withHelp("Phase 15 M5 supports only [Repr(C)] on structs; packed, custom alignment, repr enums, and other ABI strings are deferred");
 }
 
 pub fn factRequiresZeroArgFunction(span: SourceSpan) Diagnostic {

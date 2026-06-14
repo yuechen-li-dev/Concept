@@ -1,0 +1,12 @@
+# name: repr C struct with multiple fields
+# phase: check
+# expect: pass
+
+=== source ===
+module CAbi;
+
+[Repr(C)]
+struct Pair {
+    int left;
+    bool right;
+};

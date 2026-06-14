@@ -50,7 +50,18 @@ pub const HirItem = union(enum) {
     interface_: InterfaceId,
 };
 
+pub const ReprAbi = enum {
+    c,
+
+    pub fn debugName(self: ReprAbi) []const u8 {
+        return switch (self) {
+            .c => "C",
+        };
+    }
+};
+
 pub const HirAttributeArg = union(enum) {
+    identifier: []const u8,
     int_literal: []const u8,
     bool_literal: bool,
     string_literal: []const u8,
@@ -530,6 +541,9 @@ pub const HirStruct = struct {
     item: ItemId,
     name: SymbolId,
     attributes: []HirAttribute = &.{},
+    repr_abi: ?ReprAbi = null,
+    repr_span: SourceSpan = synthetic_span,
+    repr_arg_span: SourceSpan = synthetic_span,
     fields: []FieldId,
 };
 
@@ -1091,6 +1105,9 @@ pub const HirStore = struct {
             .item = item,
             .name = name,
             .attributes = &.{},
+            .repr_abi = null,
+            .repr_span = synthetic_span,
+            .repr_arg_span = synthetic_span,
             .fields = &.{},
         });
         return id;
@@ -1100,6 +1117,13 @@ pub const HirStore = struct {
         const struct_decl = self.getStructMut(id);
         freeAttributes(self.allocator, struct_decl.attributes);
         struct_decl.attributes = attributes;
+    }
+
+    pub fn setStructReprAbi(self: *HirStore, id: StructId, repr_abi: ReprAbi, repr_span: SourceSpan, repr_arg_span: SourceSpan) void {
+        const struct_decl = self.getStructMut(id);
+        struct_decl.repr_abi = repr_abi;
+        struct_decl.repr_span = repr_span;
+        struct_decl.repr_arg_span = repr_arg_span;
     }
 
     pub fn addEnum(self: *HirStore, name: SymbolId, is_must_use: bool) !EnumId {
@@ -1580,7 +1604,11 @@ pub const HirStore = struct {
                 .struct_ => |id| {
                     const struct_decl = self.getStruct(id);
                     try writeAttributesDebug(writer, struct_decl.attributes, interner, 1);
-                    try writer.print("  Struct {s}\n", .{interner.text(struct_decl.name)});
+                    if (struct_decl.repr_abi) |repr_abi| {
+                        try writer.print("  Struct {s} repr({s})\n", .{ interner.text(struct_decl.name), repr_abi.debugName() });
+                    } else {
+                        try writer.print("  Struct {s}\n", .{interner.text(struct_decl.name)});
+                    }
                     for (struct_decl.fields) |field_id| {
                         const field = self.getField(field_id);
                         try writer.print("    Field {s}: {f}\n", .{ interner.text(field.name), field.type_id });
@@ -1894,6 +1922,7 @@ fn freeAttributes(allocator: std.mem.Allocator, attributes: []HirAttribute) void
     for (attributes) |attribute| {
         for (attribute.args) |arg| {
             switch (arg) {
+                .identifier => |text| allocator.free(text),
                 .int_literal => |text| allocator.free(text),
                 .string_literal => |text| allocator.free(text),
                 .bool_literal => {},
@@ -2111,6 +2140,7 @@ fn writeAttributesDebug(writer: *std.Io.Writer, attributes: []const HirAttribute
             for (attribute.args, 0..) |arg, index| {
                 if (index != 0) try writer.writeAll(", ");
                 switch (arg) {
+                    .identifier => |text| try writer.writeAll(text),
                     .int_literal => |text| try writer.writeAll(text),
                     .bool_literal => |value| try writer.writeAll(if (value) "true" else "false"),
                     .string_literal => |text| try writer.writeAll(text),
