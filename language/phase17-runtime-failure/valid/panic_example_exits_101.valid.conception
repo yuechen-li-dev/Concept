@@ -1,0 +1,14 @@
+# name: panic example exits 101
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    panic("example panic reason");
+    return 0;
+}
+
+=== run ===
+exit_code: 101

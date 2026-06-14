@@ -4,8 +4,8 @@
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
 **Phases closed:** 1 through 16
-**Current phase:** Phase 17 M7 — runtime trap consolidation through shared panic path
-**Fixture corpus:** 1024 total fixture files; 108 under `language/phase15-c-abi/`; 73 under `language/phase16-imports/`; 45 under `language/phase17-runtime-failure/`
+**Current phase:** Phase 17 M8 — runtime failure examples, fixtures, and hardening
+**Fixture corpus:** 1036 total fixture files; 108 under `language/phase15-c-abi/`; 73 under `language/phase16-imports/`; 57 under `language/phase17-runtime-failure/`
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
 ---
@@ -522,7 +522,7 @@
 | §13 Initialization | ✅ Complete including `ManualInit<T>` |
 | §14–15 Move and immovable | 🔶 Move done; `immovable` and `moved_state` deferred |
 | §16 Drop/RAII | ✅ Substantially complete |
-| §17 Errors | 🔶 `Result`, `try`, `must_use`, `discard` done; statement-position `panic("reason")` lowers through MIR/backend to deterministic runtime failure; statement-position `assert(condition, "reason")` has AST/HIR/MIR/backend lowering, shared empty/whitespace reason validation, bool/reason diagnostics, and runtime exit-code fixtures |
+| §17 Errors | 🔶 `Result`, `try`, `must_use`, `discard` done; statement-position `panic("reason")` lowers through MIR/backend to deterministic runtime failure; statement-position `assert(condition, "reason")` has AST/HIR/MIR/backend lowering, shared empty/whitespace reason validation, bool/reason diagnostics, runtime exit-code fixtures, examples, and backend helper-sharing hardening |
 | §18–19 Enums and match | 🔶 Core done; guards, struct destructure, ref binding deferred |
 | §20–23 Concepts/generics/impl | 🔶 Core done; `derive`, negative concepts, orphan rule, bridge modules deferred |
 | §24 Interfaces/dyn | 🔶 Phase 14 closed for borrowed dyn dispatch v0: declarations, impl conformance, borrowed dyn parameter types, concrete-to-dyn call coercion, dyn method-call HIR/MIR, C vtable/fat-reference lowering, executable borrowed dyn dispatch, examples, mutability hardening fixtures, and backend C-shape assertions; owning boxes, RTTI/dynamic cast, inheritance/upcast, dyn returns/fields/locals, mutation-through-dyn hardening, and ABI stability deferred |
@@ -577,6 +577,6 @@ linking, C++ ABI, varargs, extern variables, symbol aliasing, callbacks, and
 platform ABI matrices).*
 
 
-## Phase 17 M7 runtime trap consolidation update
+## Phase 17 M8 runtime failure examples and hardening update
 
-P17-M7 migrates machine `Result(machine)` before completion from an ad-hoc backend trap to the shared runtime panic path. The generated C now calls `cpt_panic("machine result cannot be read before completion")`, exits through code 101, and shares the one-per-C-unit helper with explicit `panic` and runtime `assert`; successful result-after-completion machine behavior is unchanged. P17-M6 remains closed for Core.Test `Assert.True` / `Assert.False` assertion doctrine alignment. The language fixture corpus now contains 1024 fixture files.
+P17-M8 adds human-readable examples under `examples/phase17/` and representative fixtures for panic/assert/machine runtime failure behavior. The M8 fixtures pin exit code 101 for panic, false assert, and machine `Result(machine)` before completion; exit 0/ordinary result behavior for true assert and result-after-completion; one-per-C-unit `cpt_panic` helper sharing across panic/assert/migrated machine trap sites; absence of the old `cpt_machine_result_before_complete` helper and `__builtin_trap` at the migrated site; C-escaped reason strings; blank reason rejection; expression-position rejection; bool-only assert conditions; and ordinary runtime assert independence from Core.Test/test-runner symbols. The language fixture corpus now contains 1036 fixture files, including 57 under `language/phase17-runtime-failure/`.

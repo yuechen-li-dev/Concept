@@ -1,0 +1,17 @@
+# name: runtime assert without core test example
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    assert(true, "ordinary runtime assert has no Core.Test dependency");
+    return 0;
+}
+
+=== c ===
+contains: cpt_panic("ordinary runtime assert has no Core.Test dependency");
+not_contains: Core.Test
+not_contains: Assert.True
+not_contains: cpt_test

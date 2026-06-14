@@ -1,0 +1,13 @@
+module Main;
+
+int main() {
+    int x = 20;
+    int y = 22;
+
+    assert(x + y == 42, "sum invariant should hold before continuing");
+
+    // Uncomment to see a runtime assertion failure that exits with code 101:
+    // assert(false, "this assertion intentionally fails");
+
+    return 0;
+}

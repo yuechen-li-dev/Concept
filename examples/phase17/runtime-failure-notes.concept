@@ -1,0 +1,18 @@
+module Main;
+
+// Phase 17 runtime failure notes:
+// - panic(reason) is unconditional runtime failure.
+// - assert(condition, reason) is an ordinary runtime invariant assertion.
+// - Runtime assert does not import or depend on Core.Test.
+// - Assert.True / Assert.False in .con_test files share assertion doctrine but
+//   report through the test runner.
+// - Expect.* remains expectation-style test API.
+// - Reasons are mandatory and non-blank.
+// - because:, expression-position panic/assert, never, exceptions, unwinding,
+//   stack traces, hooks, and bare-metal panic ABI are deferred.
+// - Machine trap migration begins with Result(machine) before completion.
+
+int main() {
+    assert(true, "runtime failure notes compile as ordinary source");
+    return 0;
+}
