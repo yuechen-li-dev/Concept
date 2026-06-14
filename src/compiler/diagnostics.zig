@@ -233,6 +233,7 @@ pub const DiagnosticCode = enum {
     AssertConditionMustBeBool,
     PanicExpressionUseUnsupported,
     AssertExpressionUseUnsupported,
+    NestedMachineFieldRequiresDefaultConstruction,
     StepRequiresMachinePlace,
     CompleteRequiresMachineValue,
     ResultRequiresMachineValue,
@@ -450,6 +451,7 @@ pub const DiagnosticCode = enum {
             .AssertConditionMustBeBool => "CON0283",
             .PanicExpressionUseUnsupported => "CON0284",
             .AssertExpressionUseUnsupported => "CON0285",
+            .NestedMachineFieldRequiresDefaultConstruction => "CON0290",
             .StepRequiresMachinePlace => "CON0291",
             .CompleteRequiresMachineValue => "CON0292",
             .ResultRequiresMachineValue => "CON0293",
@@ -1024,6 +1026,15 @@ pub fn duplicateStructField(span: SourceSpan) Diagnostic {
         "duplicate struct field name",
         span,
     ).withHelp("field names must be unique within a struct");
+}
+
+pub fn nestedMachineFieldRequiresDefaultConstruction(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .NestedMachineFieldRequiresDefaultConstruction,
+        .@"error",
+        "nested machine field requires default construction",
+        span,
+    ).withHelp("parameterized child machine fields require explicit initialization, which is deferred beyond Phase 18 M2");
 }
 
 pub fn duplicateEnumVariant(span: SourceSpan) Diagnostic {

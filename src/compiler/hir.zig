@@ -29,6 +29,7 @@ pub const VariantId = SemanticId("VariantId");
 pub const LocalId = SemanticId("LocalId");
 pub const ParamId = SemanticId("ParamId");
 pub const MachineParamId = SemanticId("MachineParamId");
+pub const MachineFieldId = SemanticId("MachineFieldId");
 pub const StmtId = SemanticId("StmtId");
 pub const ExprId = SemanticId("ExprId");
 pub const EnumPayloadFieldId = SemanticId("EnumPayloadFieldId");
@@ -296,6 +297,7 @@ pub const HirMachine = struct {
     return_type: types.TypeId,
     allocation_effect: AllocationEffect = .unspecified,
     params: []MachineParamId,
+    fields: []MachineFieldId = &.{},
     states: []HirMachineState,
     initial_state_index: u32,
 
@@ -540,6 +542,14 @@ pub const HirMachineParam = struct {
     type_id: types.TypeId,
 };
 
+pub const HirMachineField = struct {
+    parent: MachineId,
+    name: SymbolId,
+    span: SourceSpan,
+    type_id: types.TypeId,
+    type_span: SourceSpan,
+};
+
 pub const HirStruct = struct {
     item: ItemId,
     name: SymbolId,
@@ -628,6 +638,7 @@ pub const HirStore = struct {
     interface_params: std.ArrayList(HirInterfaceParam),
     params: std.ArrayList(HirParam),
     machine_params: std.ArrayList(HirMachineParam),
+    machine_fields: std.ArrayList(HirMachineField),
     locals: std.ArrayList(HirLocal),
     stmts: std.ArrayList(HirStmt),
     exprs: std.ArrayList(HirExpr),
@@ -656,6 +667,7 @@ pub const HirStore = struct {
             .interface_params = std.ArrayList(HirInterfaceParam).empty,
             .params = std.ArrayList(HirParam).empty,
             .machine_params = std.ArrayList(HirMachineParam).empty,
+            .machine_fields = std.ArrayList(HirMachineField).empty,
             .locals = std.ArrayList(HirLocal).empty,
             .stmts = std.ArrayList(HirStmt).empty,
             .exprs = std.ArrayList(HirExpr).empty,
@@ -718,6 +730,7 @@ pub const HirStore = struct {
         for (self.machines.items) |machine| {
             freeAttributes(self.allocator, machine.attributes);
             if (machine.params.len > 0) self.allocator.free(machine.params);
+            if (machine.fields.len > 0) self.allocator.free(machine.fields);
             if (machine.states.len > 0) self.allocator.free(machine.states);
         }
         for (self.stmts.items) |stmt| {
@@ -778,6 +791,7 @@ pub const HirStore = struct {
         self.stmts.deinit(self.allocator);
         self.locals.deinit(self.allocator);
         self.machine_params.deinit(self.allocator);
+        self.machine_fields.deinit(self.allocator);
         self.params.deinit(self.allocator);
         self.interface_params.deinit(self.allocator);
         self.interface_requirements.deinit(self.allocator);
@@ -989,6 +1003,7 @@ pub const HirStore = struct {
             .return_type = return_type,
             .allocation_effect = .unspecified,
             .params = &.{},
+            .fields = &.{},
             .states = states,
             .initial_state_index = 0,
         });
@@ -1227,6 +1242,16 @@ pub const HirStore = struct {
         return id;
     }
 
+    pub fn addMachineField(self: *HirStore, parent: MachineId, name: SymbolId, type_id: types.TypeId, span: SourceSpan, type_span: SourceSpan) !MachineFieldId {
+        _ = self.getMachine(parent);
+        const id = MachineFieldId{ .index = try nextIndex(self.machine_fields.items.len, error.TooManyFields) };
+        try self.machine_fields.append(self.allocator, .{ .parent = parent, .name = name, .span = span, .type_id = type_id, .type_span = type_span });
+        errdefer _ = self.machine_fields.pop();
+        const machine = self.getMachineMut(parent);
+        machine.fields = try appendId(self.allocator, MachineFieldId, machine.fields, id);
+        return id;
+    }
+
     pub fn addLocal(self: *HirStore, parent: FunctionId, name: SymbolId, type_id: types.TypeId, span: SourceSpan) !LocalId {
         _ = self.getFunction(parent);
         const id = LocalId{ .index = try nextIndex(self.locals.items.len, error.TooManyLocals) };
@@ -1397,6 +1422,12 @@ pub const HirStore = struct {
         const index: usize = id.index;
         std.debug.assert(index < self.machine_params.items.len);
         return &self.machine_params.items[index];
+    }
+
+    pub fn getMachineField(self: *const HirStore, id: MachineFieldId) *const HirMachineField {
+        const index: usize = @intCast(id.index);
+        std.debug.assert(index < self.machine_fields.items.len);
+        return &self.machine_fields.items[index];
     }
 
     pub fn getLocal(self: *const HirStore, id: LocalId) *const HirLocal {
@@ -1667,6 +1698,13 @@ pub const HirStore = struct {
                         for (machine.params) |param_id| {
                             const param = self.getMachineParam(param_id);
                             try writer.print("      {f} {s}: {f}\n", .{ param_id, interner.text(param.name), param.type_id });
+                        }
+                    }
+                    if (machine.fields.len != 0) {
+                        try writer.writeAll("    Fields\n");
+                        for (machine.fields) |field_id| {
+                            const field = self.getMachineField(field_id);
+                            try writer.print("      {f} {s}: {f}\n", .{ field_id, interner.text(field.name), field.type_id });
                         }
                     }
                     try writer.writeAll("    States\n");

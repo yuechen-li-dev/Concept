@@ -2940,3 +2940,7 @@ Concept is a C++-lineage language for compilers, runtimes, kernels, and bare-met
 
 > We know compiler and bare-metal programming is hard.
 > Concept exists to make it honest, not haunted.
+
+### Phase 18 M2 — nested machine fields
+
+P18-M2 supports storage-only child machine frames: a machine may declare a field whose type is a zero-parameter machine, and the backend stores that child frame by value in the parent frame. Parent constructors initialize child fields through the child machine's zero-argument constructor. Parameterized child machine fields are rejected until explicit initializer syntax is designed. Step/Complete/Result composition over child fields remains deferred to P18-M3.

@@ -2889,10 +2889,15 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectRunFixture("../../../language/phase18-machines/valid/machine_result_before_completion_panics_run.valid.conception");
     try expectBackendCFixture("../../../language/phase18-machines/valid/machine_frame_backend_shape.valid.conception");
     try expectBackendCFixture("../../../language/phase18-machines/valid/machine_result_panic_backend_shape.valid.conception");
+    try expectRunFixture("../../../language/phase18-machines/valid/nested_machine_field_parent_run.valid.conception");
+    try expectBackendCFixture("../../../language/phase18-machines/valid/nested_machine_field_basic_backend.valid.conception");
+    try expectBackendCFixture("../../../language/phase18-machines/valid/nested_machine_field_multiple_children_backend.valid.conception");
     try expectCheckFixture("../../../language/phase18-machines/invalid/machine_step_non_machine.invalid.conception");
     try expectCheckFixture("../../../language/phase18-machines/invalid/machine_step_temporary.invalid.conception");
     try expectCheckFixture("../../../language/phase18-machines/invalid/machine_complete_non_machine.invalid.conception");
     try expectCheckFixture("../../../language/phase18-machines/invalid/machine_result_non_machine.invalid.conception");
+    try expectCheckFixture("../../../language/phase18-machines/invalid/nested_machine_field_parameterized_child.invalid.conception");
+    try expectCheckFixture("../../../language/phase18-machines/invalid/nested_machine_field_duplicate_name.invalid.conception");
 
     try expectParseFixture("../../../language/phase15-c-abi/valid/extern_c_block_basic.valid.conception");
     try expectParseFixture("../../../language/phase15-c-abi/valid/extern_c_block_multiple_functions.valid.conception");

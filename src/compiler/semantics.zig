@@ -775,7 +775,41 @@ const Collector = struct {
             self.module.hir.setMachineReturnType(machine_id, return_type);
         }
         try self.resolveMachineParams(machine_id, machine_decl.params);
+        try self.resolveMachineFields(machine_id, machine_decl.fields);
         if (self.diagnostics.count() != diagnostic_count_before) return;
+    }
+
+    fn resolveMachineFields(self: *Collector, machine_id: hir.MachineId, fields: []const ast.FieldDecl) !void {
+        var field_names = std.AutoHashMap(interner.SymbolId, source.SourceSpan).init(self.allocator);
+        defer field_names.deinit();
+
+        const machine = self.module.hir.getMachine(machine_id);
+        for (machine.states) |state| {
+            try field_names.put(state.name, state.span);
+        }
+
+        for (fields) |field| {
+            const field_symbol = try self.module.interner.intern(field.name.text);
+            if (field_names.contains(field_symbol)) {
+                try self.diagnostics.append(diagnostics.duplicateStructField(field.name.span));
+                continue;
+            }
+            try field_names.put(field_symbol, field.name.span);
+
+            if (try self.resolveTypeName(field.type_name)) |type_id| {
+                switch (self.module.types.kind(type_id)) {
+                    .machine_type => |child_machine_id| {
+                        const child = self.module.hir.getMachine(child_machine_id);
+                        if (child.params.len != 0) {
+                            try self.diagnostics.append(diagnostics.nestedMachineFieldRequiresDefaultConstruction(field.type_name.span));
+                            continue;
+                        }
+                    },
+                    else => {},
+                }
+                _ = try self.module.hir.addMachineField(machine_id, field_symbol, type_id, field.span, field.type_name.span);
+            }
+        }
     }
 
     fn copyCompileTimeCapabilities(self: *Collector, function_id: hir.FunctionId, capabilities: []const ast.CompileTimeCapabilitySyntax) !void {

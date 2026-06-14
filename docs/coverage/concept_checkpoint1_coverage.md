@@ -589,3 +589,7 @@ P17-M9 closes Phase 17. P17-M8 added human-readable examples under `examples/pha
 ## Phase 18 M1 update
 
 P18-M1 hardens the machine frame/value baseline before nested fields. It adds 11 fixtures under `language/phase18-machines/` covering local frame construction, explicit stepping, completion/result stability, independent local instances, result-before-completion exit code 101, backend frame shape, shared `cpt_panic` routing, current by-value copy/assignment behavior, and invalid `Step`/`Complete`/`Result` operands. `Step` now requires an assignable machine place and reports `CON0291`; non-machine `Complete` and `Result` report `CON0292` and `CON0293`. Nested machine fields, child initialization, executable transition match, and executable transition decide remain future Phase 18 milestones.
+
+### Phase 18 M2 coverage
+
+Nested machine field coverage now includes HIR preservation, backend by-value child frame fields, deterministic parent-constructor initialization of zero-parameter children, rejection of parameterized child fields with `CON0290`, duplicate child field diagnostics through existing field-name checks, and no hidden heap/scheduler/async backend markers.

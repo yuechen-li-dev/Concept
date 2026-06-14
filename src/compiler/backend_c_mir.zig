@@ -389,6 +389,27 @@ fn emitMachineLayout(writer: anytype, ctx: *const BackendContext, machine_id: hi
         try emitMachineParamFieldName(writer, ctx.module, param.name);
         try writer.writeAll(";\n");
     }
+    for (machine.fields, 0..) |field_id, field_index| {
+        const field = ctx.module.hir.getMachineField(field_id);
+        switch (ctx.module.types.kind(field.type_id)) {
+            .machine_type => |child_id| {
+                const child = ctx.module.hir.getMachine(child_id);
+                if (child.params.len != 0) {
+                    if (ctx.diagnostic_bag) |bag| try bag.append(diagnostics.nestedMachineFieldRequiresDefaultConstruction(field.type_span));
+                    return error.InvalidExecutable;
+                }
+                try writer.writeAll("    ");
+                try emitMachineTypeName(writer, ctx.module, child.name);
+                try writer.writeByte(' ');
+                try emitMachineFieldName(writer, ctx.module, field.name, field_index);
+                try writer.writeAll(";\n");
+            },
+            else => {
+                try reportUnsupportedCType(ctx, field.span);
+                return error.InvalidExecutable;
+            },
+        }
+    }
     try writer.writeAll("} ");
     try emitMachineTypeName(writer, ctx.module, machine.name);
     try writer.writeAll(";\n\n");
@@ -417,6 +438,20 @@ fn emitMachineLayout(writer: anytype, ctx: *const BackendContext, machine_id: hi
         try writer.writeAll(" = ");
         try emitMachineParamName(writer, ctx.module, param.name);
         try writer.writeAll(";\n");
+    }
+    for (machine.fields, 0..) |field_id, field_index| {
+        const field = ctx.module.hir.getMachineField(field_id);
+        switch (ctx.module.types.kind(field.type_id)) {
+            .machine_type => |child_id| {
+                const child = ctx.module.hir.getMachine(child_id);
+                try writer.writeAll("    m.");
+                try emitMachineFieldName(writer, ctx.module, field.name, field_index);
+                try writer.writeAll(" = ");
+                try emitMachineNewFunctionName(writer, ctx.module, child.name);
+                try writer.writeAll("();\n");
+            },
+            else => return error.InvalidExecutable,
+        }
     }
     try writer.writeAll("    return m;\n}\n\n");
 
@@ -1413,6 +1448,12 @@ fn emitMachineParamName(writer: anytype, module: *const semantics.SemanticModule
 fn emitMachineParamFieldName(writer: anytype, module: *const semantics.SemanticModule, symbol: hir.SymbolId) !void {
     try writer.writeAll("cpt_mpf_");
     try emitEscapedIdentifierComponent(writer, module.interner.text(symbol));
+}
+
+fn emitMachineFieldName(writer: anytype, module: *const semantics.SemanticModule, symbol: hir.SymbolId, field_index: usize) !void {
+    try writer.writeAll("cpt_mf_");
+    try emitEscapedIdentifierComponent(writer, module.interner.text(symbol));
+    try writer.print("_{d}", .{field_index});
 }
 
 fn emitStructFieldName(writer: anytype, module: *const semantics.SemanticModule, symbol: hir.SymbolId, field_index: usize) !void {

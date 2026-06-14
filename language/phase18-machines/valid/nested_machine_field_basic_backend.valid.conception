@@ -1,0 +1,28 @@
+# name: nested machine field basic backend
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Child {
+    state Start { return 7; }
+}
+
+machine Parent {
+    Child child;
+    state Start { return 0; }
+}
+
+int main() {
+    Parent p = Parent();
+    Step(p);
+    return Result(p);
+}
+
+=== c ===
+contains: cpt_m_Child cpt_mf_child_0;
+contains: m.cpt_mf_child_0 = cpt_m_Child_new();
+not_contains: malloc
+not_contains: scheduler
+not_contains: async

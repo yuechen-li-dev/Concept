@@ -501,3 +501,7 @@ fn main() -> int {
   ...
 }
 ```
+
+## Phase 18 M2 fixtures
+
+Phase 18 M2 adds nested machine field fixtures under `language/phase18-machines/`. Valid fixtures cover backend child-frame storage, zero-parameter child constructor initialization, multiple child fields, absence of heap/scheduler/async markers, and a parent machine that runs to completion while holding an unused child frame. Invalid fixtures cover parameterized child fields (`CON0290`) and duplicate child field names (`CON0022`).
