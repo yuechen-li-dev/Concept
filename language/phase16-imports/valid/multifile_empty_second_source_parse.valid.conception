@@ -1,0 +1,13 @@
+# name: multi-file empty second source parse
+# phase: parse
+# expect: pass
+
+=== file: A.concept ===
+module A;
+
+int AValue() {
+    return 1;
+}
+
+=== file: Empty.concept ===
+module Empty;

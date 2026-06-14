@@ -1,0 +1,12 @@
+# name: multi-file duplicate virtual path
+# phase: parse
+# expect: fail
+
+=== file: A.concept ===
+module A;
+
+=== file: A.concept ===
+module Duplicate;
+
+=== diagnostics ===
+DuplicateVirtualFilePath

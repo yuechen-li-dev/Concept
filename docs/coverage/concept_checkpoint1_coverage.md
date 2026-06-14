@@ -4,8 +4,8 @@
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
 **Phases closed:** 1 through 15
-**Current phase:** Phase 16 M0 design: imports and multi-module compilation
-**Fixture corpus:** 833 total `.conception` fixtures; 108 under `language/phase15-c-abi/`
+**Current phase:** Phase 16 M1 fixture harness scaffold: hermetic multi-file `.conception` sources
+**Fixture corpus:** 839 total `.conception` fixtures; 108 under `language/phase15-c-abi/`; 6 under `language/phase16-imports/`
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
 ---
@@ -48,8 +48,8 @@
 | `move` keyword | ✅ | Phase 10 — explicit move expression, use-after-move diagnosed |
 | `try` keyword | ✅ | Phase 5 — propagates `Result` error arm |
 | `unsafe` blocks and functions | ✅ | Phase 6 — quarantined, raw pointer deref and pointer arith require unsafe |
-| Real module system (no headers) | ✅ | Single-file modules; cross-file import deferred |
-| `import` declarations | ❌ | Phase 16 M0 design added for explicit module graph; implementation remains future |
+| Real module system (no headers) | 🔶 | Single-file modules are implemented; Phase 16 M1 adds hermetic multi-file fixture source sets with virtual paths, but real module graph/import semantics are still deferred |
+| `import` declarations | ❌ | Phase 16 M1 adds only multi-file fixture plumbing; import syntax and resolution remain future |
 | Conditional compilation `when target.*` | 🔶 | `target.isLittleEndian`, `target.pointerSize` available as comptime queries; full `when target.os` structured conditional compilation not implemented |
 
 ---

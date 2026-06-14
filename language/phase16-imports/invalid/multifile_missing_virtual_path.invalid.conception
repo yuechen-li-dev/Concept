@@ -1,0 +1,9 @@
+# name: multi-file missing virtual path
+# phase: parse
+# expect: fail
+
+=== file: ===
+module A;
+
+=== diagnostics ===
+MissingVirtualFilePath

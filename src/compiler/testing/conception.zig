@@ -60,19 +60,35 @@ pub const Section = struct {
     body: []const u8,
 };
 
+pub const FixtureSource = struct {
+    path: []const u8,
+    text: []const u8,
+};
+
 pub const ConceptionFixture = struct {
     name: []const u8,
     phase: Phase,
     expect: Expectation,
     check: ?CheckMode = null,
     sections: []const Section,
+    sources: []const FixtureSource,
 
     pub fn checkMode(self: ConceptionFixture) CheckMode {
         return self.check orelse .declarations;
     }
 
     pub fn source(self: ConceptionFixture) ?[]const u8 {
-        return self.section("source");
+        if (self.sources.len == 1) return self.sources[0].text;
+        return null;
+    }
+
+    pub fn isMultiSource(self: ConceptionFixture) bool {
+        return self.sources.len > 1;
+    }
+
+    pub fn singleSourceText(self: ConceptionFixture) ![]const u8 {
+        if (self.sources.len != 1) return error.MultiSourceCompilationDeferred;
+        return self.sources[0].text;
     }
 
     pub fn ast(self: ConceptionFixture) ?[]const u8 {
@@ -137,6 +153,7 @@ pub const ConceptionFixture = struct {
 
     pub fn deinit(self: ConceptionFixture, allocator: std.mem.Allocator) void {
         allocator.free(self.sections);
+        allocator.free(self.sources);
     }
 };
 
@@ -155,6 +172,8 @@ pub fn parse(allocator: std.mem.Allocator, text: []const u8, options: ParseOptio
     var check: ?CheckMode = null;
     var sections = std.ArrayList(Section).init(allocator);
     errdefer sections.deinit();
+    var sources = std.ArrayList(FixtureSource).init(allocator);
+    errdefer sources.deinit();
 
     var cursor: usize = 0;
     var current_section_name: ?[]const u8 = null;
@@ -190,12 +209,15 @@ pub fn parse(allocator: std.mem.Allocator, text: []const u8, options: ParseOptio
         try sections.append(.{ .name = previous_name, .body = trimTrailingLineEnding(text[current_section_start..text.len]) });
     }
 
+    try collectSources(sections.items, &sources, options);
+
     const parsed = ConceptionFixture{
         .name = name orelse return error.MissingName,
         .phase = phase orelse return error.MissingPhase,
         .expect = expect orelse return error.MissingExpectation,
         .check = check,
         .sections = try sections.toOwnedSlice(),
+        .sources = try sources.toOwnedSlice(),
     };
     errdefer parsed.deinit(allocator);
 
@@ -231,18 +253,55 @@ fn parseHeader(line: []const u8, name: *?[]const u8, phase: *?Phase, expect: *?E
     }
 }
 
+fn collectSources(
+    sections: []const Section,
+    sources: *std.ArrayList(FixtureSource),
+    options: ParseOptions,
+) !void {
+    var saw_file_section = false;
+    for (sections) |section| {
+        if (std.mem.startsWith(u8, section.name, "file:")) {
+            const path = fileSectionPath(section.name) orelse return error.MissingVirtualFilePath;
+            saw_file_section = true;
+            for (sources.items) |existing| {
+                if (std.mem.eql(u8, existing.path, path)) return error.DuplicateVirtualFilePath;
+            }
+            try sources.append(.{ .path = path, .text = section.body });
+        }
+    }
+
+    if (saw_file_section) return;
+
+    for (sections) |section| {
+        if (std.mem.eql(u8, section.name, "source")) {
+            try sources.append(.{
+                .path = options.path orelse "<source>",
+                .text = section.body,
+            });
+            return;
+        }
+    }
+}
+
+fn fileSectionPath(name: []const u8) ?[]const u8 {
+    if (!std.mem.startsWith(u8, name, "file:")) return null;
+    const path = std.mem.trim(u8, name[5..], " \t");
+    if (path.len == 0) return null;
+    return path;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Validation
 // ─────────────────────────────────────────────────────────────────────────────
 
 fn validate(fixture: ConceptionFixture, options: ParseOptions) !void {
-    if (fixture.source() == null) return error.MissingSource;
+    if (fixture.sources.len == 0) return error.MissingSource;
 
     if (fixture.check != null and fixture.phase != .check) return error.CheckModeOnNonCheckPhase;
 
     switch (fixture.phase) {
         .parse => switch (fixture.expect) {
-            .pass => if (fixture.ast() == null) return error.MissingAst,
+            .pass => if (!fixture.isMultiSource() and fixture.ast() == null) return error.MissingAst,
             .fail => if (fixture.diagnostics() == null) return error.MissingDiagnostics,
         },
         .run => {
@@ -405,7 +464,78 @@ test "conception parser parses source section" {
     const fixture = try expectFixture(sample_fixture);
     defer fixture.deinit(std.testing.allocator);
 
-    try std.testing.expectEqualStrings("module Example;", fixture.source().?);
+    try std.testing.expectEqualStrings("module Example;", try fixture.singleSourceText());
+}
+
+test "conception parser maps legacy source section to one fixture source" {
+    const fixture = try expectFixture(sample_fixture);
+    defer fixture.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), fixture.sources.len);
+    try std.testing.expectEqualStrings("<source>", fixture.sources[0].path);
+    try std.testing.expectEqualStrings("module Example;", fixture.sources[0].text);
+}
+
+test "conception parser parses multi-file sources in fixture order" {
+    const text =
+        \\# name: multi source
+        \\# phase: parse
+        \\# expect: pass
+        \\
+        \\=== file: Math.concept ===
+        \\module Math;
+        \\
+        \\int Add() {
+        \\    return 1;
+        \\}
+        \\
+        \\=== file: app/Main.concept ===
+        \\module Main;
+        \\
+        \\int main() {
+        \\    return 0;
+        \\}
+        \\
+        \\=== run ===
+        \\exit_code: 0
+    ;
+    const fixture = try expectFixture(text);
+    defer fixture.deinit(std.testing.allocator);
+
+    try std.testing.expect(fixture.isMultiSource());
+    try std.testing.expectEqual(@as(usize, 2), fixture.sources.len);
+    try std.testing.expectEqualStrings("Math.concept", fixture.sources[0].path);
+    try std.testing.expectEqualStrings("module Math;\n\nint Add() {\n    return 1;\n}", fixture.sources[0].text);
+    try std.testing.expectEqualStrings("app/Main.concept", fixture.sources[1].path);
+    try std.testing.expect(std.mem.indexOf(u8, fixture.sources[1].text, "module Main;") != null);
+    try std.testing.expectEqual(@as(u8, 0), try fixture.expectedExitCode());
+}
+
+test "conception parser rejects duplicate virtual file paths" {
+    const text =
+        \\# name: duplicate virtual path
+        \\# phase: parse
+        \\# expect: pass
+        \\
+        \\=== file: A.concept ===
+        \\module A;
+        \\
+        \\=== file: A.concept ===
+        \\module B;
+    ;
+    try std.testing.expectError(error.DuplicateVirtualFilePath, expectFixture(text));
+}
+
+test "conception parser rejects missing virtual file path" {
+    const text =
+        \\# name: missing virtual path
+        \\# phase: parse
+        \\# expect: pass
+        \\
+        \\=== file: ===
+        \\module A;
+    ;
+    try std.testing.expectError(error.MissingVirtualFilePath, expectFixture(text));
 }
 
 test "conception parser parses ast section" {
@@ -600,10 +730,26 @@ fn expectParseFixture(comptime path: []const u8) !void {
 
     try std.testing.expectEqual(Phase.parse, fixture.phase);
 
+    if (fixture.isMultiSource()) {
+        if (fixture.expect != .pass) return error.UnsupportedMultiSourceParseFailureFixture;
+        for (fixture.sources) |fixture_source| {
+            var diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
+            defer diagnostics.deinit();
+
+            const source_file = try source_model.SourceFile.init(std.testing.allocator, fixture_source.path, fixture_source.text);
+            defer source_file.deinit(std.testing.allocator);
+
+            const unit = try parser_model.parseSource(std.testing.allocator, source_file, &diagnostics);
+            defer unit.deinit(std.testing.allocator);
+            try std.testing.expectEqual(@as(usize, 0), diagnostics.count());
+        }
+        return;
+    }
+
     var diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
     defer diagnostics.deinit();
 
-    const source_file = try source_model.SourceFile.init(std.testing.allocator, path, fixture.source().?);
+    const source_file = try source_model.SourceFile.init(std.testing.allocator, fixture.sources[0].path, fixture.sources[0].text);
     defer source_file.deinit(std.testing.allocator);
 
     const unit = try parser_model.parseSource(std.testing.allocator, source_file, &diagnostics);
@@ -983,7 +1129,7 @@ test "language MIR fixture: phase8 concepts templates pipeline uses concrete MIR
     var semantic_diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
     defer semantic_diagnostics.deinit();
 
-    const source_file = try source_model.SourceFile.init(std.testing.allocator, path, fixture.source().?);
+    const source_file = try source_model.SourceFile.init(std.testing.allocator, path, try fixture.singleSourceText());
     defer source_file.deinit(std.testing.allocator);
 
     const unit = try parser_model.parseSource(std.testing.allocator, source_file, &parse_diagnostics);
@@ -1040,7 +1186,7 @@ fn expectSemanticCheckFixture(comptime path: []const u8, fixture: ConceptionFixt
     var semantic_diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
     defer semantic_diagnostics.deinit();
 
-    const source_file = try source_model.SourceFile.init(std.testing.allocator, path, fixture.source().?);
+    const source_file = try source_model.SourceFile.init(std.testing.allocator, path, try fixture.singleSourceText());
     defer source_file.deinit(std.testing.allocator);
 
     const unit = try parser_model.parseSource(std.testing.allocator, source_file, &parse_diagnostics);
@@ -1100,7 +1246,7 @@ fn expectSemanticCheckFixtureAllowNoMain(comptime path: []const u8, fixture: Con
     var semantic_diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
     defer semantic_diagnostics.deinit();
 
-    const source_file = try source_model.SourceFile.init(std.testing.allocator, path, fixture.source().?);
+    const source_file = try source_model.SourceFile.init(std.testing.allocator, path, try fixture.singleSourceText());
     defer source_file.deinit(std.testing.allocator);
 
     const unit = try parser_model.parseSource(std.testing.allocator, source_file, &parse_diagnostics);
@@ -1160,7 +1306,7 @@ fn expectPhase2CheckFixture(comptime path: []const u8, fixture: ConceptionFixtur
     var check_diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
     defer check_diagnostics.deinit();
 
-    const source_file = try source_model.SourceFile.init(std.testing.allocator, path, fixture.source().?);
+    const source_file = try source_model.SourceFile.init(std.testing.allocator, path, try fixture.singleSourceText());
     defer source_file.deinit(std.testing.allocator);
 
     const unit = try parser_model.parseSource(std.testing.allocator, source_file, &parse_diagnostics);
@@ -1394,7 +1540,7 @@ fn expectMirFixture(comptime path: []const u8) !void {
     var semantic_diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
     defer semantic_diagnostics.deinit();
 
-    const source_file = try source_model.SourceFile.init(std.testing.allocator, path, fixture.source().?);
+    const source_file = try source_model.SourceFile.init(std.testing.allocator, path, try fixture.singleSourceText());
     defer source_file.deinit(std.testing.allocator);
 
     const unit = try parser_model.parseSource(std.testing.allocator, source_file, &parse_diagnostics);
@@ -1433,7 +1579,7 @@ fn expectBackendCFixture(comptime path: []const u8) !void {
     var diagnostics = parser_model.DiagnosticBag.init(std.testing.allocator);
     defer diagnostics.deinit();
 
-    const source_file = try source_model.SourceFile.init(std.testing.allocator, path, fixture.source().?);
+    const source_file = try source_model.SourceFile.init(std.testing.allocator, path, try fixture.singleSourceText());
     defer source_file.deinit(std.testing.allocator);
 
     const unit = try parser_model.parseSource(std.testing.allocator, source_file, &parse_diagnostics);
@@ -1593,8 +1739,8 @@ fn expectRunFixture(comptime path: []const u8) !void {
 
     try std.testing.expectEqual(Phase.run, fixture.phase);
     switch (fixture.expect) {
-        .pass => _ = try run_harness.expectExitCode(std.testing.allocator, fixture.source().?, try fixture.expectedExitCode()),
-        .fail => try run_harness.expectRuntimeFailure(std.testing.allocator, fixture.source().?),
+        .pass => _ = try run_harness.expectExitCode(std.testing.allocator, try fixture.singleSourceText(), try fixture.expectedExitCode()),
+        .fail => try run_harness.expectRuntimeFailure(std.testing.allocator, try fixture.singleSourceText()),
     }
 }
 
@@ -2898,4 +3044,30 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase10-ownership/invalid/manual_init_missing_type_arg.invalid.conception");
     try expectCheckFixture("../../../language/phase10-ownership/invalid/manual_init_implicit_to_t.invalid.conception");
     try expectBackendCFixture("../../../language/phase10-ownership/invalid/manual_init_copy_rejected.invalid.conception");
+}
+
+test "language parse fixture: phase16 multi-file two sources" {
+    try expectParseFixture("../../../language/phase16-imports/valid/multifile_two_sources_parse.valid.conception");
+}
+
+test "language parse fixture: phase16 multi-file three sources" {
+    try expectParseFixture("../../../language/phase16-imports/valid/multifile_three_sources_parse.valid.conception");
+}
+
+test "language parse fixture: phase16 multi-file virtual paths" {
+    try expectParseFixture("../../../language/phase16-imports/valid/multifile_virtual_paths_parse.valid.conception");
+}
+
+test "language parse fixture: phase16 multi-file empty second source" {
+    try expectParseFixture("../../../language/phase16-imports/valid/multifile_empty_second_source_parse.valid.conception");
+}
+
+test "language fixture format: phase16 duplicate virtual path rejected" {
+    const path = "../../../language/phase16-imports/invalid/multifile_duplicate_virtual_path.invalid.conception";
+    try std.testing.expectError(error.DuplicateVirtualFilePath, parse(std.testing.allocator, @embedFile(path), .{ .path = path }));
+}
+
+test "language fixture format: phase16 missing virtual path rejected" {
+    const path = "../../../language/phase16-imports/invalid/multifile_missing_virtual_path.invalid.conception";
+    try std.testing.expectError(error.MissingVirtualFilePath, parse(std.testing.allocator, @embedFile(path), .{ .path = path }));
 }

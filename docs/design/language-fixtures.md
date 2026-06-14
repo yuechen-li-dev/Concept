@@ -81,12 +81,15 @@ Roadmap status: Phase 8 is closed for concepts/templates v0. Phase 9 is closed f
 
 ## Phase 16 import/multi-module fixtures
 
-Phase 16 fixtures should introduce hermetic multi-file `.conception` cases. A
+Phase 16 M1 introduces hermetic multi-file `.conception` cases. A
 single fixture may contain multiple virtual Concept source files, each with a
-stable virtual path for diagnostics, and the harness should pass those files to
-one compilation unit. The recommended embedded form is `=== file: Name.concept
-===` sections followed by the usual `=== diagnostics ===`, `=== mir ===`, or
-`=== run ===` expectations.
+stable virtual path for diagnostics. The implemented embedded form is
+`=== file: Name.concept ===` sections followed by the usual fixture assertion
+sections. Legacy `=== source ===` fixtures still parse as exactly one internal
+source. Multi-file parser fixtures parse each virtual file independently;
+semantic, MIR, backend, and run multi-file behavior remains deferred until the
+module graph exists. Duplicate or empty virtual file paths are fixture-format
+errors.
 
 Representative Phase 16 fixtures should cover module declaration collection,
 duplicate module diagnostics, import ordering, unknown imports, duplicate

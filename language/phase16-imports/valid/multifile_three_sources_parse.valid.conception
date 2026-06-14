@@ -1,0 +1,24 @@
+# name: multi-file three sources parse
+# phase: parse
+# expect: pass
+
+=== file: A.concept ===
+module A;
+
+int AValue() {
+    return 1;
+}
+
+=== file: B.concept ===
+module B;
+
+int BValue() {
+    return 2;
+}
+
+=== file: C.concept ===
+module C;
+
+int CValue() {
+    return 3;
+}

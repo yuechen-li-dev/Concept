@@ -1,0 +1,17 @@
+# name: multi-file virtual paths parse
+# phase: parse
+# expect: pass
+
+=== file: lib/math/A.concept ===
+module A;
+
+int AValue() {
+    return 1;
+}
+
+=== file: apps/main/B.concept ===
+module B;
+
+int BValue() {
+    return 2;
+}
