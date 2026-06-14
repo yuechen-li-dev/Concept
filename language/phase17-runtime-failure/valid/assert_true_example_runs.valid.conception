@@ -1,0 +1,16 @@
+# name: assert true example runs
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    int x = 20;
+    int y = 22;
+    assert(x + y == 42, "sum invariant should hold before continuing");
+    return 0;
+}
+
+=== run ===
+exit_code: 0

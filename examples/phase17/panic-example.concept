@@ -1,0 +1,6 @@
+module Main;
+
+int main() {
+    panic("unreachable path reached in example");
+    return 0;
+}

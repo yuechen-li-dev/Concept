@@ -1,0 +1,18 @@
+module Main;
+
+machine Simple() -> int {
+    state Start {
+        return 7;
+    }
+}
+
+int main() {
+    Simple m = Simple();
+
+    // Reading Result(m) before completion panics through cpt_panic with reason:
+    // "machine result cannot be read before completion"
+    // return Result(m);
+
+    step(m);
+    return Result(m);
+}

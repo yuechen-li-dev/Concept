@@ -2,7 +2,7 @@
 
 ## Status
 
-P17-M7 is now implemented for runtime trap consolidation. P17-M6 remains closed for Core.Test `Assert.True` / `Assert.False` doctrine alignment, P17-M5 remains closed for runtime failure reason validation, P17-M4 remains closed for `assert(condition, "reason")` MIR/backend lowering, and P17-M2 remains closed for `panic(reason)` MIR/backend lowering:
+P17-M8 is now implemented for runtime failure examples, representative fixtures, and hardening. P17-M7 remains closed for runtime trap consolidation. P17-M6 remains closed for Core.Test `Assert.True` / `Assert.False` doctrine alignment, P17-M5 remains closed for runtime failure reason validation, P17-M4 remains closed for `assert(condition, "reason")` MIR/backend lowering, and P17-M2 remains closed for `panic(reason)` MIR/backend lowering:
 
 - `panic("reason");` parses in statement position.
 - The reason string literal and source span are preserved in AST/HIR.
@@ -31,6 +31,8 @@ P17-M7 is now implemented for runtime trap consolidation. P17-M6 remains closed 
 - Runtime `assert` still lowers to backend-owned `cpt_panic` and does not call or depend on Core.Test or the test runner.
 - `Assert.Equal`, `Expect.True`, `Expect.False`, `Expect.Equal`, and `Expect.That` remain richer test APIs and keep their existing behavior.
 - Machine `Result(machine)` before completion now routes through the shared backend-owned `cpt_panic` helper with stable reason `machine result cannot be read before completion` and deterministic exit code 101. Explicit panic, runtime assert, and this migrated runtime trap share one de-duplicated helper definition per generated C unit.
+- Examples under `examples/phase17/` now document unconditional `panic`, runtime invariant `assert`, the migrated machine result-before-completion trap, exit code 101, runtime/test assertion separation, and deferred non-goals.
+- Representative M8 fixtures pin example-named panic/assert/machine runtime exit behavior, successful result-after-completion behavior, shared backend helper emission/de-duplication, absence of the old machine trap helper and `__builtin_trap` at the migrated site, C-escaped reason strings, blank reason rejection, expression-position rejection, bool-only assert conditions, and ordinary runtime assert independence from Core.Test/test-runner symbols.
 - Runtime trap inventory for M7 found the safe ad-hoc generated runtime trap in machine result-before-completion lowering. Other searched sites were compile-time diagnostics, MIR/compiler `unreachable` for invalid compiler paths, unsupported runtime `transition match` / `transition decide` diagnostics, allocation helper declarations, and future/non-implemented bounds/use-after-move traps; those were not migrated because they are not current ad-hoc generated runtime traps or would require new semantics.
 - Named `because:` syntax, expression-position assert, `never`, broad test-runner panic catching, exceptions, unwinding, stack traces, nested machines, runtime `transition match`, runtime `transition decide`, and `yield` remain deferred.
 

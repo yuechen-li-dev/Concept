@@ -3588,3 +3588,51 @@ test "language run fixture: phase17 machine result after completion still works"
 test "language backend-c fixture: phase17 runtime traps share panic helper" {
     try expectBackendCFixture("../../../language/phase17-runtime-failure/valid/runtime_traps_share_panic_helper.valid.conception");
 }
+
+test "language run fixture: phase17 M8 panic example exits 101" {
+    try expectRunFixture("../../../language/phase17-runtime-failure/valid/panic_example_exits_101.valid.conception");
+}
+
+test "language run fixture: phase17 M8 assert true example runs" {
+    try expectRunFixture("../../../language/phase17-runtime-failure/valid/assert_true_example_runs.valid.conception");
+}
+
+test "language run fixture: phase17 M8 assert false example exits 101" {
+    try expectRunFixture("../../../language/phase17-runtime-failure/valid/assert_false_example_exits_101.valid.conception");
+}
+
+test "language run fixture: phase17 M8 machine result before completion example exits 101" {
+    try expectRunFixture("../../../language/phase17-runtime-failure/valid/machine_result_before_completion_example_exits_101.valid.conception");
+}
+
+test "language run fixture: phase17 M8 machine result after completion example runs" {
+    try expectRunFixture("../../../language/phase17-runtime-failure/valid/machine_result_after_completion_example_runs.valid.conception");
+}
+
+test "language backend-c fixture: phase17 M8 panic assert machine helper shared" {
+    try expectBackendCFixture("../../../language/phase17-runtime-failure/valid/panic_assert_machine_helper_shared_backend.valid.conception");
+}
+
+test "language backend-c fixture: phase17 M8 runtime assert without Core.Test" {
+    try expectBackendCFixture("../../../language/phase17-runtime-failure/valid/runtime_assert_without_core_test_example.valid.conception");
+}
+
+test "language check fixture: phase17 M8 panic blank reason example" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/panic_blank_reason_example.invalid.conception");
+}
+
+test "language check fixture: phase17 M8 assert blank reason example" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/assert_blank_reason_example.invalid.conception");
+}
+
+test "language check fixture: phase17 M8 panic expression use example" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/panic_expression_use_example.invalid.conception");
+}
+
+test "language check fixture: phase17 M8 assert expression use example" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/assert_expression_use_example.invalid.conception");
+}
+
+test "language check fixture: phase17 M8 assert non bool condition example" {
+    try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/assert_non_bool_condition_example.invalid.conception");
+}

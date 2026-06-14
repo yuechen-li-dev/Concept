@@ -1,0 +1,14 @@
+# name: assert false example exits 101
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    assert(false, "this assertion intentionally fails");
+    return 0;
+}
+
+=== run ===
+exit_code: 101
