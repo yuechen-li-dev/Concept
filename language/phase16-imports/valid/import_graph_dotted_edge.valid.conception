@@ -1,0 +1,11 @@
+# name: import graph dotted edge
+# phase: parse
+# expect: pass
+
+=== file: Main.concept ===
+module Main;
+
+import Compiler.Lexer;
+
+=== file: Lexer.concept ===
+module Compiler.Lexer;

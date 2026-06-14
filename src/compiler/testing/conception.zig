@@ -3084,8 +3084,52 @@ test "language parse fixture: phase16 import multiple modules" {
     try expectParseFixture("../../../language/phase16-imports/valid/import_multiple_modules_parse.valid.conception");
 }
 
-test "language parse fixture: phase16 import unknown deferred" {
-    try expectParseFixture("../../../language/phase16-imports/valid/import_unknown_deferred_parse.valid.conception");
+test "language parse fixture: phase16 import graph unknown import" {
+    try expectParseFixture("../../../language/phase16-imports/invalid/import_graph_unknown_import.invalid.conception");
+}
+
+test "language parse fixture: phase16 import graph single edge" {
+    try expectParseFixture("../../../language/phase16-imports/valid/import_graph_single_edge.valid.conception");
+}
+
+test "language parse fixture: phase16 import graph dotted edge" {
+    try expectParseFixture("../../../language/phase16-imports/valid/import_graph_dotted_edge.valid.conception");
+}
+
+test "language parse fixture: phase16 import graph multiple edges" {
+    try expectParseFixture("../../../language/phase16-imports/valid/import_graph_multiple_edges.valid.conception");
+}
+
+test "language parse fixture: phase16 import graph shared dependency" {
+    try expectParseFixture("../../../language/phase16-imports/valid/import_graph_shared_dependency.valid.conception");
+}
+
+test "language parse fixture: phase16 import graph duplicate across modules valid" {
+    try expectParseFixture("../../../language/phase16-imports/valid/import_graph_duplicate_import_across_modules_valid.valid.conception");
+}
+
+test "language parse fixture: phase16 import graph unknown dotted import" {
+    try expectParseFixture("../../../language/phase16-imports/invalid/import_graph_unknown_dotted_import.invalid.conception");
+}
+
+test "language parse fixture: phase16 import graph duplicate import" {
+    try expectParseFixture("../../../language/phase16-imports/invalid/import_graph_duplicate_import.invalid.conception");
+}
+
+test "language parse fixture: phase16 import graph duplicate dotted import" {
+    try expectParseFixture("../../../language/phase16-imports/invalid/import_graph_duplicate_dotted_import.invalid.conception");
+}
+
+test "language parse fixture: phase16 import graph self cycle" {
+    try expectParseFixture("../../../language/phase16-imports/invalid/import_graph_self_import_cycle.invalid.conception");
+}
+
+test "language parse fixture: phase16 import graph direct cycle" {
+    try expectParseFixture("../../../language/phase16-imports/invalid/import_graph_direct_cycle.invalid.conception");
+}
+
+test "language parse fixture: phase16 import graph long cycle" {
+    try expectParseFixture("../../../language/phase16-imports/invalid/import_graph_long_cycle.invalid.conception");
 }
 
 test "language parse fixture: phase16 multifile import syntax" {

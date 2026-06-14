@@ -1,0 +1,21 @@
+# name: import graph long cycle
+# phase: parse
+# expect: fail
+
+=== file: A.concept ===
+module A;
+
+import B;
+
+=== file: B.concept ===
+module B;
+
+import C;
+
+=== file: C.concept ===
+module C;
+
+import A;
+
+=== diagnostics ===
+CON0272

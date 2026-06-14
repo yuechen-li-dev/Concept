@@ -1,0 +1,16 @@
+# name: import graph direct cycle
+# phase: parse
+# expect: fail
+
+=== file: A.concept ===
+module A;
+
+import B;
+
+=== file: B.concept ===
+module B;
+
+import A;
+
+=== diagnostics ===
+CON0272

@@ -96,10 +96,12 @@ module IDs, virtual paths, and declaration spans. Phase 16 M3 adds parser-only
 `import Qualified.Module;` fixtures: imports are preserved in AST/debug output
 and raw module-table import records, import-after-declaration is rejected with
 `CON0273`, and string, wildcard, alias, list, and re-export forms are rejected
-syntactically. Unknown imports, duplicate imports, cycles, qualified lookup, and
-cross-module semantics remain deferred. Semantic, MIR, backend, and run
-multi-file behavior remains deferred until import graph and module-aware HIR
-milestones exist.
+syntactically. Phase 16 M4 resolves multi-source imports to stable module IDs,
+rejects unknown imports with `CON0271`, duplicate imports within one module with
+`CON0277`, and self/direct/long import cycles with `CON0272`. Qualified lookup
+and cross-module semantics remain deferred. Semantic, MIR, backend, and run
+multi-file behavior remains deferred until module-aware HIR/lowering milestones
+exist.
 
 Representative Phase 16 fixtures should cover module declaration collection,
 duplicate module diagnostics, import ordering, unknown imports, duplicate

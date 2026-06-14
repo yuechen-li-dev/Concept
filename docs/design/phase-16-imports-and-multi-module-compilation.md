@@ -686,3 +686,36 @@ Still deferred after M3:
 - qualified cross-module lookup for values, functions, and types;
 - cross-module lowering, backend emission, filesystem lookup, package management,
   re-export, aliases, wildcard imports, and visibility.
+
+## P16-M4 implementation status: import graph resolution
+
+Phase 16 M4 resolves the raw import records collected in M3 against the module
+table produced in M2. Each `ModuleUnit` now preserves `resolved_imports` in
+source order as stable `ModuleId` edges while retaining raw import text and spans
+for diagnostics and later qualified lookup work.
+
+Implemented M4 behavior:
+
+- unknown imports are rejected with `CON0271 UnknownImport` before semantic
+  lowering or cross-module name resolution;
+- duplicate imports within one module are rejected with `CON0277 DuplicateImport`,
+  including dotted import paths;
+- duplicate imports in different modules remain valid because visibility is per
+  importer module;
+- deterministic DFS cycle detection rejects self-imports, direct cycles, and
+  longer cycles with `CON0272 ImportCycle`;
+- import graph resolution runs only after structural module-table collection
+  succeeds, so duplicate module names and missing module declarations remain the
+  earlier diagnostics;
+- multi-source parser/module-table fixtures now exercise graph resolution; valid
+  multi-source import fixtures must supply every imported module in the same
+  fixture compilation unit.
+
+Still deferred after M4:
+
+- qualified lookup such as `Math.Add` or `Math.Type`;
+- unqualified imported names;
+- cross-module semantic resolution, HIR ownership, MIR lowering, backend
+  lowering, and executable multi-module compilation;
+- import aliases, wildcard imports, re-exports, visibility, packages, filesystem
+  module search, and dependency resolution.

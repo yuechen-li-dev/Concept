@@ -1,0 +1,11 @@
+# name: import graph single edge
+# phase: parse
+# expect: pass
+
+=== file: Main.concept ===
+module Main;
+
+import Math;
+
+=== file: Math.concept ===
+module Math;

@@ -1,0 +1,15 @@
+# name: import graph duplicate import
+# phase: parse
+# expect: fail
+
+=== file: Main.concept ===
+module Main;
+
+import Math;
+import Math;
+
+=== file: Math.concept ===
+module Math;
+
+=== diagnostics ===
+CON0277

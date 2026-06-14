@@ -1,0 +1,15 @@
+# name: import graph multiple edges
+# phase: parse
+# expect: pass
+
+=== file: Main.concept ===
+module Main;
+
+import Math;
+import Geometry;
+
+=== file: Math.concept ===
+module Math;
+
+=== file: Geometry.concept ===
+module Geometry;
