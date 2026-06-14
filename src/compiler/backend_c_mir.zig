@@ -61,9 +61,6 @@ pub fn emitExecutableFromMir(
     const emitted_dyn_interface_layouts = try emitDynInterfaceLayouts(writer, &ctx);
     if ((emitted_enum_layouts or emitted_struct_layouts or emitted_dyn_interface_layouts) and ctx.module.hir.machines.items.len > 0) try writer.writeByte('\n');
 
-    const emitted_machine_result_trap = try emitMachineResultTrapHelper(writer, &ctx);
-    if (emitted_machine_result_trap and ctx.module.hir.machines.items.len > 0) try writer.writeByte('\n');
-
     const emitted_machine_layouts = try emitMachineLayouts(writer, &ctx);
     if ((emitted_enum_layouts or emitted_struct_layouts or emitted_machine_layouts) and mir_module.store.functions.items.len > 0) try writer.writeByte('\n');
 
@@ -348,23 +345,6 @@ fn typeIsDynInterface(ctx: *const BackendContext, type_id: types.TypeId, interfa
 // ─────────────────────────────────────────────────────────────────────────────
 // Machine layout and step emission
 // ─────────────────────────────────────────────────────────────────────────────
-
-fn emitMachineResultTrapHelper(writer: anytype, ctx: *const BackendContext) EmitError!bool {
-    if (ctx.module.hir.machines.items.len == 0) return false;
-
-    try writer.writeAll(
-        \\static int cpt_machine_result_before_complete(void) {
-        \\#if defined(__GNUC__) || defined(__clang__)
-        \\    __builtin_trap();
-        \\#else
-        \\    *((volatile int*)0) = 0;
-        \\#endif
-        \\    return 0;
-        \\}
-        \\
-    );
-    return true;
-}
 
 fn emitMachineLayouts(writer: anytype, ctx: *const BackendContext) EmitError!bool {
     var emitted_any = false;
@@ -656,11 +636,19 @@ fn mirContainsPanic(ctx: *const BackendContext) bool {
         for (block.statements) |statement| {
             switch (statement.kind) {
                 .panic, .assert_stmt => return true,
+                .assign => |assignment| if (rvalueContainsRuntimePanic(assignment.rvalue)) return true,
                 else => {},
             }
         }
     }
     return false;
+}
+
+fn rvalueContainsRuntimePanic(rvalue: mir.MirRvalue) bool {
+    return switch (rvalue) {
+        .machine_result => true,
+        else => false,
+    };
 }
 
 fn isSupportedEnumLayout(ctx: *const BackendContext, enum_id: hir.EnumId) bool {
@@ -1139,7 +1127,7 @@ fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue
             try emitOperand(writer, ctx, operand);
             try writer.writeAll(".complete ? ");
             try emitOperand(writer, ctx, operand);
-            try writer.writeAll(".result : cpt_machine_result_before_complete())");
+            try writer.writeAll(".result : (cpt_panic(\"machine result cannot be read before completion\"), 0))");
         },
         .enum_constructor, .struct_constructor => unreachable,
         .enum_tag => |operand| {

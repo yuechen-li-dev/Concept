@@ -3576,3 +3576,15 @@ test "language backend-c fixture: phase17 assert reason literal" {
 test "language backend-c fixture: phase17 assert no test runner dependency" {
     try expectBackendCFixture("../../../language/phase17-runtime-failure/valid/assert_backend_no_test_runner_dependency.valid.conception");
 }
+
+test "language run fixture: phase17 machine result before completion panics" {
+    try expectRunFixture("../../../language/phase17-runtime-failure/valid/machine_result_before_completion_panics.valid.conception");
+}
+
+test "language run fixture: phase17 machine result after completion still works" {
+    try expectRunFixture("../../../language/phase17-runtime-failure/valid/machine_result_after_completion_still_works.valid.conception");
+}
+
+test "language backend-c fixture: phase17 runtime traps share panic helper" {
+    try expectBackendCFixture("../../../language/phase17-runtime-failure/valid/runtime_traps_share_panic_helper.valid.conception");
+}
