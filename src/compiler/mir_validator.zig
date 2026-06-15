@@ -278,6 +278,22 @@ const Validator = struct {
                 }
                 break :blk field.type_id;
             },
+            .index => |index_place| blk: {
+                const base_type = try self.placeType(function_id, index_place.base.*, span);
+                const index_type = try self.operandType(function_id, index_place.index.*, span);
+                if (index_type) |type_id| if (self.semantic_module.types.kind(type_id) != .int) {
+                    try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                };
+                if (base_type) |type_id| {
+                    const kind = self.semantic_module.types.kind(type_id);
+                    if (kind != .array) {
+                        try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                    } else if (kind.array.element.index != index_place.result_type.index or kind.array.length != index_place.length) {
+                        try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                    }
+                }
+                break :blk index_place.result_type;
+            },
         };
     }
 

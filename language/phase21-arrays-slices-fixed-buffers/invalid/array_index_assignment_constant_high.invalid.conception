@@ -1,0 +1,6 @@
+fn main() -> int {
+    int[2] values = [1, 2];
+    values[2] = 9;
+    return 0;
+}
+// error: CON0414

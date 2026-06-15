@@ -270,7 +270,7 @@ const Runner = struct {
                 switch (assignment.target) {
                     .local => |local| frame.locals[local.index] = value,
                     .param => |param| frame.params[param.index] = value,
-                    .field => return error.UnsupportedConstruct,
+                    .field, .index => return error.UnsupportedConstruct,
                 }
                 return null;
             },

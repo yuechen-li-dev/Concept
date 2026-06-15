@@ -3081,3 +3081,9 @@ Phase 21 M1 adds parser, AST, semantic type, and HIR carrying support for fixed-
 ### Phase 21 M3 — fixed array reads
 
 P21-M3 adds read-only fixed-array indexing and fixed-array `Len`. The supported expression surface includes `values[0]`, variable-index reads such as `values[i]`, repeated nested reads such as `matrix[1][0]`, and `Len(values)` / `Len(matrix[0])`. The compiler rejects non-array receivers with `CON0406`, non-`int` indexes with `CON0407`, and constant out-of-bounds indexes with `CON0414`. Non-constant indexes lower with a runtime panic guard using the stable reason `Concept array index out of bounds`. Mutable indexed assignment, slices, fixed buffers, `Capacity`, unchecked indexing, and DragonGod migration remain deferred.
+
+### P21-M4 status: mutable fixed-array element assignment
+
+P21-M4 teaches Stage 0 to treat fixed-array indexing over assignable places as a mutable place projection. Assignments such as `values[1] = 99;` and nested projections such as `matrix[1][0] = 42;` now type-check and lower through HIR/MIR place machinery. The assigned value is checked against the projected element type, constant indexes keep the existing static out-of-bounds diagnostic, and generated C emits the same bounds guard used by read indexing before the store.
+
+This milestone does not add slices, mutable slices, fixed buffers, `Capacity`, unchecked indexing, pointer decay, array-to-slice conversion, or DragonGod migration.

@@ -294,7 +294,7 @@ pub const CompileTimeEvaluator = struct {
             .assignment => |assignment| blk: {
                 const local_id = switch (assignment.target) {
                     .local => |local| local,
-                    .param, .field => return error.UnsupportedStatement,
+                    .param, .field, .index => return error.UnsupportedStatement,
                 };
                 const local = self.module.hir.getLocal(local_id);
                 const value = try self.evaluateExpr(assignment.value);

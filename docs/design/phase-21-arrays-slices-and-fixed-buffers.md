@@ -551,3 +551,9 @@ M2 adds diagnostics for array literal length mismatch (`CON0400`), element type 
 P21-M3 teaches the compiler to read from fixed arrays. It adds postfix expression indexing (`values[0]`, `values[i]`, and repeated nested indexing such as `matrix[1][0]`), semantic checking that the receiver is a fixed array, semantic checking that the index is `int`, and static diagnostics for constant out-of-bounds indexes. Dynamic index reads lower through MIR to C with a guard that calls `cpt_panic("Concept array index out of bounds")` before the C array access when the index is negative or greater than or equal to the fixed length.
 
 `Len(array)` is compiler-known for fixed arrays and returns the fixed length as an `int` expression; nested cases such as `Len(matrix[0])` use the element array length after the first read. Mutable indexed assignment remains explicitly out of scope for M3 and is reserved for M4. Slices, `MutSlice<T>`, `FixedBuffer<T, N>`, `Capacity`, unchecked indexing, unsafe indexing APIs, DragonGod migration, full C ABI array passing, and full array value-copy semantics remain deferred.
+
+### P21-M4 status: mutable fixed-array element assignment
+
+P21-M4 teaches Stage 0 to treat fixed-array indexing over assignable places as a mutable place projection. Assignments such as `values[1] = 99;` and nested projections such as `matrix[1][0] = 42;` now type-check and lower through HIR/MIR place machinery. The assigned value is checked against the projected element type, constant indexes keep the existing static out-of-bounds diagnostic, and generated C emits the same bounds guard used by read indexing before the store.
+
+This milestone does not add slices, mutable slices, fixed buffers, `Capacity`, unchecked indexing, pointer decay, array-to-slice conversion, or DragonGod migration.
