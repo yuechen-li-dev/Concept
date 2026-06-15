@@ -1,0 +1,40 @@
+# name: transition decide nested child score run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Child -> int {
+    state Start { return 9; }
+}
+
+machine Parent -> int {
+    Child child;
+
+    state Start {
+        Step(child);
+        transition Decide;
+    }
+
+    state Decide {
+        transition decide {
+            Done when Complete(child) score 10;
+            Wait score 0;
+        };
+    }
+
+    state Wait { return 0; }
+    state Done { return Result(child); }
+}
+
+int main() {
+    Parent p = Parent();
+    Step(p);
+    Step(p);
+    Step(p);
+    return Result(p);
+}
+
+=== run ===
+exit_code: 9

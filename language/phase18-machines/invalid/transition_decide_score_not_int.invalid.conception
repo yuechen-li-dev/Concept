@@ -1,0 +1,19 @@
+# name: transition decide score not int
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+machine M(bool flag) -> int {
+    state Start {
+        transition decide {
+            Done score flag;
+        };
+    }
+    state Done { return 0; }
+}
+
+=== diagnostics ===
+CON0298

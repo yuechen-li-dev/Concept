@@ -291,7 +291,7 @@ Rules:
 ## 7. Runtime `transition decide`
 
 Phase 13 already has syntax and validation scaffolding for `transition decide`.
-Phase 18 should make it executable.
+P18-M5 makes the v0 utility-selection subset executable.
 
 Example:
 
@@ -327,6 +327,8 @@ Rules:
 - No hidden scheduler.
 - No implicit blackboard.
 - Target states must exist.
+- Empty decide transitions are rejected with `CON0299`.
+- Repeated target states are allowed; each candidate remains an independent source-order candidate.
 
 Deterministic tie-breaking is required for tests and DragonGod reproducibility.
 The same inputs, scores, guards, and source order must always select the same
@@ -518,13 +520,13 @@ P18-M3 enables explicit `Step`, `Complete`, and `Result` composition over zero-p
 
 The implementation preserves the Phase 18 doctrine: a child machine is a field, not a task. Child frames are initialized by the parent constructor, but they are not automatically advanced. The backend emits a child step only for an explicit `Step(child)` call, passing the address of the child field in the parent frame; `Complete(child)` reads the child field's completion flag; `Result(child)` reads the child result through the existing shared completion guard and routes result-before-completion through `cpt_panic` with deterministic exit code 101.
 
-Current copy/assignment behavior remains provisional: nested child fields copy as part of parent frame copy/assignment under the existing by-value storage semantics. This must be revisited before DragonGod or other libraries rely on copyable parent machines. Runtime `transition match`, runtime `transition decide`, `yield`, schedulers, async, event buses, blackboards/mailboxes, dynamic child lists, heap-owned machines, parameterized child initialization, and DragonGod runtime hooks remain deferred/non-goals.
+Current copy/assignment behavior remains provisional: nested child fields copy as part of parent frame copy/assignment under the existing by-value storage semantics. This must be revisited before DragonGod or other libraries rely on copyable parent machines. Runtime `transition match` and runtime `transition decide` are implemented by later P18-M4/P18-M5 subsets; `yield`, schedulers, async, event buses, blackboards/mailboxes, dynamic child lists, heap-owned machines, parameterized child initialization, and DragonGod runtime hooks remain deferred/non-goals.
 
 ## P18-M4 status: runtime `transition match` lowering
 
 P18-M4 makes the v0 bool subset of `transition match` executable. A machine state may now branch on a `bool` scrutinee, including machine parameters, boolean expressions, comparisons, and nested-machine `Complete(child)` expressions. Case labels are limited to `true`, `false`, and the existing wildcard default syntax. Bool matches must cover both boolean values unless a wildcard arm is present. Duplicate labels, non-bool scrutinees, mismatched labels, and empty matches are diagnostics.
 
-Lowering is deterministic runtime branching: the scrutinee is evaluated at `Step` time and the selected arm assigns the parent frame state to the target state. Exhaustive bool matches lower to C `if`/`else` state assignment without heap allocation, scheduler hooks, async machinery, event buses, blackboards, or DragonGod runtime hooks. `transition decide` remains deferred to P18-M5.
+Lowering is deterministic runtime branching: the scrutinee is evaluated at `Step` time and the selected arm assigns the parent frame state to the target state. Exhaustive bool matches lower to C `if`/`else` state assignment without heap allocation, scheduler hooks, async machinery, event buses, blackboards, or DragonGod runtime hooks.
 
 Example:
 
@@ -534,3 +536,11 @@ transition match (Complete(child)) {
     false => Check;
 };
 ```
+
+## P18-M5 status: runtime `transition decide` lowering
+
+P18-M5 makes `transition decide` executable for ordered candidates with optional `bool` guards and required `int` scores. Guards and scores are type-checked during HIR lowering: non-bool guards report `CON0297`, non-int scores report `CON0298`, empty candidate lists report `CON0299`, and unknown target states continue to use the existing machine-state diagnostic. Candidates are evaluated in source order, missing `when` means enabled, score expressions are evaluated only for enabled candidates, the highest score wins, and ties keep the earlier candidate because the backend uses a strict `>` comparison rather than `>=`.
+
+The backend lowers decide transitions to ordinary imperative C inside the machine step path: local `cpt_has_candidate`, `cpt_best_score`, and `cpt_best_state` temporaries track the current winner, each candidate updates those temporaries only when enabled and strictly better, and the final selected state is assigned to the machine frame. If no candidate is enabled, generated code calls shared `cpt_panic` with the stable reason `machine decision transition has no enabled candidates`, producing the Phase 17 runtime failure exit code 101. No heap allocation, scheduler, async machinery, event bus, blackboard/mailbox, randomness, behavior-tree runtime, planner runtime, or DragonGod hook is introduced.
+
+The fixture corpus covers highest-score selection, guard filtering, source-order tie-breaking, unconditional candidates, no-enabled shared panic, backend C shape, and composition with nested machines through `Complete(child)` and `Result(child)`. Yield, schedulers, async/event-bus facilities, dynamic child lists, heap-owned machines, `State(machine)`, DragonGod runtime hooks, floating-point scores, randomness, weighted selection, behavior-tree runtimes, and GOAP/planner runtimes remain outside the v0 subset.

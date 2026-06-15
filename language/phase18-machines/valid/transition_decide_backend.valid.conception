@@ -1,0 +1,41 @@
+# name: transition decide backend
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Choose(bool canHigh, int highScore) -> int {
+    state Start {
+        transition decide {
+            High when canHigh score highScore;
+            Low score 1;
+        };
+    }
+    state High { return 2; }
+    state Low { return 1; }
+}
+
+int main() {
+    Choose c = Choose(true, 9);
+    Step(c);
+    Step(c);
+    return Result(c);
+}
+
+=== c ===
+contains: int cpt_has_candidate = 0;
+contains: int cpt_best_score = 0;
+contains: if (m->cpt_mp_canHigh)
+contains: int cpt_score_0 = m->cpt_mp_highScore;
+contains: cpt_score_0 > cpt_best_score
+contains: cpt_score_1 > cpt_best_score
+contains: m->state = cpt_best_state;
+contains: machine decision transition has no enabled candidates
+before: if (m->cpt_mp_canHigh) | int cpt_score_1 = 1;
+not_contains: >= cpt_best_score
+not_contains: transition decide
+not_contains: scheduler
+not_contains: async
+not_contains: blackboard
+not_contains: malloc

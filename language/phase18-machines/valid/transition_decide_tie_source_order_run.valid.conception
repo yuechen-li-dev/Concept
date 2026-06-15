@@ -1,0 +1,27 @@
+# name: transition decide tie source order run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Choose -> int {
+    state Start {
+        transition decide {
+            First score 10;
+            Second score 10;
+        };
+    }
+    state First { return 1; }
+    state Second { return 2; }
+}
+
+int main() {
+    Choose c = Choose();
+    Step(c);
+    Step(c);
+    return Result(c);
+}
+
+=== run ===
+exit_code: 1

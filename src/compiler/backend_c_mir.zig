@@ -491,10 +491,7 @@ fn emitMachineStateStmt(writer: anytype, ctx: *const BackendContext, machine_id:
                 try writer.writeAll(";\n            return;\n");
             },
             .match_state => |match_target| try emitMachineTransitionMatch(writer, ctx, machine_id, machine, match_target),
-            .decide_state => {
-                if (ctx.diagnostic_bag) |bag| try bag.append(diagnostics.machineSemanticsNotImplemented(stmt.span));
-                return error.InvalidExecutable;
-            },
+            .decide_state => |decide_target| try emitMachineTransitionDecide(writer, ctx, machine_id, machine, decide_target),
         },
         .return_stmt => |maybe_expr| {
             const expr_id = maybe_expr orelse {
@@ -570,6 +567,38 @@ fn emitMachineTransitionMatch(writer: anytype, ctx: *const BackendContext, machi
     try writer.writeAll(";\n            } else {\n                m->state = ");
     try emitMachineStateName(writer, ctx.module, machine.name, machine.states[on_false.state_index].name);
     try writer.writeAll(";\n            }\n            return;\n");
+}
+
+fn emitMachineTransitionDecide(writer: anytype, ctx: *const BackendContext, machine_id: hir.MachineId, machine: hir.HirMachine, decide_target: anytype) EmitError!void {
+    if (decide_target.cases.len == 0) return error.InvalidExecutable;
+
+    try writer.writeAll("            {\n                int cpt_has_candidate = 0;\n                int cpt_best_score = 0;\n                ");
+    try emitMachineStateTypeName(writer, ctx.module, machine.name);
+    try writer.writeAll(" cpt_best_state = m->state;\n");
+    for (decide_target.cases, 0..) |case, index| {
+        if (case.condition) |condition| {
+            try writer.writeAll("                if (");
+            try emitMachineStateExpr(writer, ctx, machine_id, condition);
+            try writer.writeAll(") {\n                    int cpt_score_");
+            try writer.print("{d} = ", .{index});
+            try emitMachineStateExpr(writer, ctx, machine_id, case.score);
+            try writer.writeAll(";\n                    if (!cpt_has_candidate || cpt_score_");
+            try writer.print("{d} > cpt_best_score) {{\n                        cpt_has_candidate = 1;\n                        cpt_best_score = cpt_score_", .{index});
+            try writer.print("{d};\n                        cpt_best_state = ", .{index});
+            try emitMachineStateName(writer, ctx.module, machine.name, machine.states[case.target.state_index].name);
+            try writer.writeAll(";\n                    }\n                }\n");
+        } else {
+            try writer.writeAll("                {\n                    int cpt_score_");
+            try writer.print("{d} = ", .{index});
+            try emitMachineStateExpr(writer, ctx, machine_id, case.score);
+            try writer.writeAll(";\n                    if (!cpt_has_candidate || cpt_score_");
+            try writer.print("{d} > cpt_best_score) {{\n                        cpt_has_candidate = 1;\n                        cpt_best_score = cpt_score_", .{index});
+            try writer.print("{d};\n                        cpt_best_state = ", .{index});
+            try emitMachineStateName(writer, ctx.module, machine.name, machine.states[case.target.state_index].name);
+            try writer.writeAll(";\n                    }\n                }\n");
+        }
+    }
+    try writer.writeAll("                if (!cpt_has_candidate) {\n                    cpt_panic(\"machine decision transition has no enabled candidates\");\n                }\n                m->state = cpt_best_state;\n            }\n            return;\n");
 }
 
 fn emitMachineStateExpr(writer: anytype, ctx: *const BackendContext, machine_id: hir.MachineId, expr_id: hir.ExprId) EmitError!void {

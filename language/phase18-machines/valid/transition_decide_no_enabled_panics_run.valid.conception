@@ -1,0 +1,26 @@
+# name: transition decide no enabled panics run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Choose -> int {
+    state Start {
+        transition decide {
+            A when false score 1;
+            B when false score 2;
+        };
+    }
+    state A { return 1; }
+    state B { return 2; }
+}
+
+int main() {
+    Choose c = Choose();
+    Step(c);
+    return 0;
+}
+
+=== run ===
+exit_code: 101

@@ -1,0 +1,19 @@
+# name: transition decide unknown target state
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+machine M -> int {
+    state Start {
+        transition decide {
+            Missing score 1;
+        };
+    }
+    state Done { return 0; }
+}
+
+=== diagnostics ===
+CON0223

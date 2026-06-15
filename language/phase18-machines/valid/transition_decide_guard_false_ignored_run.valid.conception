@@ -1,0 +1,27 @@
+# name: transition decide guard false ignored run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Choose(bool canHigh) -> int {
+    state Start {
+        transition decide {
+            High when canHigh score 100;
+            Low score 1;
+        };
+    }
+    state High { return 100; }
+    state Low { return 1; }
+}
+
+int main() {
+    Choose c = Choose(false);
+    Step(c);
+    Step(c);
+    return Result(c);
+}
+
+=== run ===
+exit_code: 1

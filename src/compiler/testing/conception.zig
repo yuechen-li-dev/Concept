@@ -3706,3 +3706,47 @@ test "language check fixture: phase18 transition match unknown target state" {
 test "language check fixture: phase18 transition match empty" {
     try expectCheckFixture("../../../language/phase18-machines/invalid/transition_match_empty.invalid.conception");
 }
+
+test "language run fixture: phase18 transition decide highest score" {
+    try expectRunFixture("../../../language/phase18-machines/valid/transition_decide_highest_score_run.valid.conception");
+}
+
+test "language run fixture: phase18 transition decide guard false ignored" {
+    try expectRunFixture("../../../language/phase18-machines/valid/transition_decide_guard_false_ignored_run.valid.conception");
+}
+
+test "language run fixture: phase18 transition decide tie source order" {
+    try expectRunFixture("../../../language/phase18-machines/valid/transition_decide_tie_source_order_run.valid.conception");
+}
+
+test "language run fixture: phase18 transition decide unconditional candidate" {
+    try expectRunFixture("../../../language/phase18-machines/valid/transition_decide_unconditional_candidate_run.valid.conception");
+}
+
+test "language run fixture: phase18 transition decide no enabled panics" {
+    try expectRunFixture("../../../language/phase18-machines/valid/transition_decide_no_enabled_panics_run.valid.conception");
+}
+
+test "language run fixture: phase18 transition decide nested child score" {
+    try expectRunFixture("../../../language/phase18-machines/valid/transition_decide_nested_child_score_run.valid.conception");
+}
+
+test "language backend-c fixture: phase18 transition decide" {
+    try expectBackendCFixture("../../../language/phase18-machines/valid/transition_decide_backend.valid.conception");
+}
+
+test "language check fixture: phase18 transition decide empty" {
+    try expectCheckFixture("../../../language/phase18-machines/invalid/transition_decide_empty.invalid.conception");
+}
+
+test "language check fixture: phase18 transition decide guard not bool" {
+    try expectCheckFixture("../../../language/phase18-machines/invalid/transition_decide_guard_not_bool.invalid.conception");
+}
+
+test "language check fixture: phase18 transition decide score not int" {
+    try expectCheckFixture("../../../language/phase18-machines/invalid/transition_decide_score_not_int.invalid.conception");
+}
+
+test "language check fixture: phase18 transition decide unknown target state" {
+    try expectCheckFixture("../../../language/phase18-machines/invalid/transition_decide_unknown_target_state.invalid.conception");
+}

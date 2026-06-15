@@ -2369,12 +2369,29 @@ const BodyLowerer = struct {
                 } };
             },
             .decide_state => |decide_target| blk: {
+                if (decide_target.cases.len == 0) {
+                    try self.collector.diagnostics.append(diagnostics.transitionDecideRequiresCandidate(decide_target.span));
+                    return null;
+                }
                 var cases = std.ArrayList(hir.HirTransitionDecideCase).empty;
                 defer cases.deinit(self.collector.allocator);
                 for (decide_target.cases) |case| {
                     const resolved_target = (try self.resolveMachineStateTarget(case.target_name)) orelse return null;
-                    const condition = if (case.condition) |condition_expr| (try self.lowerExpr(condition_expr.*)) orelse return null else null;
+                    const condition = if (case.condition) |condition_expr| blk_condition: {
+                        const lowered = (try self.lowerExpr(condition_expr.*)) orelse return null;
+                        const condition_type = (try self.inferExprType(lowered)) orelse return null;
+                        if (!sameType(condition_type, self.collector.module.types.boolType())) {
+                            try self.collector.diagnostics.append(diagnostics.transitionDecideGuardMustBeBool(condition_expr.span()));
+                            return null;
+                        }
+                        break :blk_condition lowered;
+                    } else null;
                     const score = (try self.lowerExpr(case.score.*)) orelse return null;
+                    const score_type = (try self.inferExprType(score)) orelse return null;
+                    if (!sameType(score_type, self.collector.module.types.intType())) {
+                        try self.collector.diagnostics.append(diagnostics.transitionDecideScoreMustBeInt(case.score.span()));
+                        return null;
+                    }
                     try cases.append(self.collector.allocator, .{
                         .target = resolved_target,
                         .condition = condition,
