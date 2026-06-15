@@ -775,3 +775,7 @@ Phase 21 is closed. Coverage now includes P21-M0 design documentation; P21-M1 fi
 Deferred coverage remains explicit: `MutSlice<T>`, local slice construction, slice returns, fixed-buffer element assignment, fixed-buffer-to-slice conversion, fixed-buffer set/replace/pop/clear/find/update helpers, heap vectors, iterators/ranges, generic containers, and complete DragonGod migration. Remaining FixedBuffer helper work is future Phase 22 input, especially for Memory update-by-key, AutomataStack pop/replace-top, ActuatorHost complete/fail-by-id, and iteration cleanup in EventBus/AutomataGraph.
 
 P21-M9 also records a source formatting inventory for `.concept` and `.conception` files. This is coverage/process documentation only; no formatter or new compiler behavior is added.
+
+## Phase 22 / P22-M1 Option value type coverage
+
+P22-M1 implements `Option<T>` as a compiler-known generic value type. Coverage includes construction of `optionSome<int>(...)` and `optionNone<int>()`, assignment/copy, function parameter and return flow, minimal `optionOr` runtime inspection, distinct malformed/missing type diagnostics (`CON0500`, `CON0511`, `CON0512`), and C backend tagged-struct lowering without heap allocation or hidden failure channels. Qualified `Option<T>::Some` / `Option<T>::None`, full option matching ergonomics, Result, BufferError, FixedBuffer try helpers, and DragonGod migration are deferred.

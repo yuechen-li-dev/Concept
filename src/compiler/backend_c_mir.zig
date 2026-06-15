@@ -64,6 +64,8 @@ pub fn emitExecutableFromMir(
     const emitted_array_layouts = try emitArrayLayouts(writer, &ctx);
     if (emitted_array_layouts and (ctx.module.hir.enums.items.len > 0 or ctx.module.hir.structs.items.len > 0 or ctx.module.hir.machines.items.len > 0 or mir_module.store.functions.items.len > 0)) try writer.writeByte('\n');
 
+    const emitted_option_layouts = try emitOptionLayouts(writer, &ctx);
+    if (emitted_option_layouts and (ctx.module.hir.enums.items.len > 0 or ctx.module.hir.structs.items.len > 0 or ctx.module.hir.machines.items.len > 0 or mir_module.store.functions.items.len > 0)) try writer.writeByte('\n');
     const emitted_slice_layouts = try emitSliceLayouts(writer, &ctx);
     const emitted_fixed_buffer_layouts = try emitFixedBufferLayouts(writer, &ctx);
     if ((emitted_slice_layouts or emitted_fixed_buffer_layouts) and (ctx.module.hir.enums.items.len > 0 or ctx.module.hir.structs.items.len > 0 or ctx.module.hir.machines.items.len > 0 or mir_module.store.functions.items.len > 0)) try writer.writeByte('\n');
@@ -153,6 +155,22 @@ fn emitArrayLayout(writer: anytype, ctx: *const BackendContext, type_id: types.T
     try writer.writeAll(";\n");
 }
 
+fn emitOptionLayouts(writer: anytype, ctx: *const BackendContext) EmitError!bool {
+    var emitted_any = false;
+    for (ctx.module.types.types.items, 0..) |kind, index| {
+        if (kind != .option) continue;
+        const type_id = types.TypeId{ .index = @intCast(index) };
+        if (emitted_any) try writer.writeByte('\n');
+        try writer.writeAll("typedef struct {\n    int tag;\n    ");
+        try emitCType(writer, ctx, kind.option.element, null);
+        try writer.writeAll(" value;\n} ");
+        try emitOptionTypeName(writer, ctx.module, type_id);
+        try writer.writeAll(";\n");
+        emitted_any = true;
+    }
+    return emitted_any;
+}
+
 fn emitFixedBufferLayouts(writer: anytype, ctx: *const BackendContext) EmitError!bool {
     var emitted_any = false;
     for (ctx.module.types.types.items, 0..) |kind, index| {
@@ -191,6 +209,7 @@ fn isSupportedArrayValueType(ctx: *const BackendContext, type_id: types.TypeId) 
     return switch (ctx.module.types.kind(type_id)) {
         .int, .bool, .alloc_error => true,
         .array => |array| isSupportedArrayValueType(ctx, array.element),
+        .option => |option| isSupportedArrayValueType(ctx, option.element),
         .struct_type => false,
         .enum_type => |enum_id| isSupportedEnumLayout(ctx, enum_id),
         else => false,
@@ -1426,6 +1445,31 @@ fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue
             try emitCType(writer, ctx, type_id, null);
             try writer.writeAll("){ .storage = {0}, .count = 0 }");
         },
+        .option_some => |some| {
+            try writer.writeByte('(');
+            try emitCType(writer, ctx, some.type_id, null);
+            try writer.writeAll("){ .tag = 1, .value = ");
+            try emitOperand(writer, ctx, some.value);
+            try writer.writeAll(" }");
+        },
+        .option_none => |type_id| {
+            try writer.writeByte('(');
+            try emitCType(writer, ctx, type_id, null);
+            try writer.writeAll("){ .tag = 0, .value = 0 }");
+        },
+        .option_is_some => |operand| {
+            try emitOperand(writer, ctx, operand);
+            try writer.writeAll(".tag == 1");
+        },
+        .option_or => |option_or| {
+            try writer.writeByte('(');
+            try emitOperand(writer, ctx, option_or.option);
+            try writer.writeAll(".tag == 1 ? ");
+            try emitOperand(writer, ctx, option_or.option);
+            try writer.writeAll(".value : ");
+            try emitOperand(writer, ctx, option_or.fallback);
+            try writer.writeByte(')');
+        },
         .fixed_buffer_index => |index| {
             try writer.writeByte('(');
             try emitOperand(writer, ctx, index.index);
@@ -1694,6 +1738,7 @@ fn emitCTypeAt(writer: anytype, ctx: *const BackendContext, type_id: types.TypeI
         .array => try emitArrayTypeName(writer, ctx.module, type_id),
         .slice => try emitSliceTypeName(writer, ctx.module, type_id),
         .fixed_buffer => try emitFixedBufferTypeName(writer, ctx.module, type_id),
+        .option => try emitOptionTypeName(writer, ctx.module, type_id),
         .manual_init, .type_param => {
             try reportUnsupportedCType(ctx, span);
             return error.InvalidExecutable;
@@ -1732,6 +1777,11 @@ fn emitArrayTypeName(writer: anytype, module: *const semantics.SemanticModule, t
 
 fn emitSliceTypeName(writer: anytype, module: *const semantics.SemanticModule, type_id: types.TypeId) !void {
     try writer.writeAll("cpt_slice_");
+    try emitTypeNameComponent(writer, module, type_id);
+}
+
+fn emitOptionTypeName(writer: anytype, module: *const semantics.SemanticModule, type_id: types.TypeId) !void {
+    try writer.writeAll("cpt_option_");
     try emitTypeNameComponent(writer, module, type_id);
 }
 
@@ -1945,6 +1995,10 @@ fn emitTypeNameComponent(writer: anytype, module: *const semantics.SemanticModul
         .fixed_buffer => |buffer| {
             try emitTypeNameComponent(writer, module, buffer.element);
             try writer.print("_fixed_buffer_{d}", .{buffer.capacity});
+        },
+        .option => |option| {
+            try writer.writeAll("option_");
+            try emitTypeNameComponent(writer, module, option.element);
         },
         .void, .arena, .allocator, .alloc_error, .interface_type, .manual_init, .type_param => try writer.writeAll("unsupported"),
     }

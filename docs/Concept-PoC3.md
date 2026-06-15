@@ -3125,3 +3125,7 @@ Recommended next Concept phase:
 Later roadmap items remain strings/StringView/byte slices, callable values/function pointers, serialization primitives, and dyn storage hardening. DragonGod remains a stress suite: `Memory`, `AutomataStack`, and `ActuatorHost` are the next meaningful container-pressure targets once Phase 22 supplies honest mutation and lookup helpers.
 
 P21-M9 also adds `docs/Concept-Source-Formatting-Inventory.md` as a human-readability inventory for `.concept` and `.conception` files. It is not a formatter implementation and does not add `concept fmt`.
+
+### Phase 22 M1 — Option value type
+
+P22-M1 adds `Option<T>` as a compiler-known generic value type for absence. Stage 0 uses the helper constructor surface `optionSome<T>(value)` and `optionNone<T>()` rather than qualified payload constructors; `optionSome` checks the payload exactly against `T`, and `optionNone` requires its explicit type argument. Minimal executable helpers `optionIsSome(value)` and `optionOr(value, fallback)` exist for smoke fixtures while full match ergonomics and broader helper APIs remain deferred. HIR/MIR carry option construction explicitly, and the C backend lowers each `Option<T>` to a value-shaped tagged struct with `int tag` and a `value` payload field. Result, BufferError, FixedBuffer try APIs, and DragonGod migrations remain out of M1 scope.

@@ -256,7 +256,7 @@ const Checker = struct {
             .pointer => |pointer| self.isSupportedReprCPointerPointee(pointer.pointee),
             .struct_type => false, // Nested repr(C) by value is deferred in M6 to avoid recursive layouts.
             .array => |array| self.isSupportedReprCFieldType(array.element, undefined),
-            .slice, .fixed_buffer => false,
+            .slice, .fixed_buffer, .option => false,
             .void, .arena, .allocator, .enum_type, .machine_type, .interface_type, .dyn_interface, .manual_init, .type_param => false,
         };
     }
@@ -669,6 +669,20 @@ const Checker = struct {
                 break :blk self.module.types.intType();
             },
             .fixed_buffer_capacity => self.module.types.intType(),
+            .option_some => |some| blk: {
+                _ = try self.checkExpr(current_function_id, return_type, some.value);
+                break :blk some.type_id;
+            },
+            .option_none => |type_id| type_id,
+            .option_is_some => |option| blk: {
+                _ = try self.checkExpr(current_function_id, return_type, option);
+                break :blk self.module.types.boolType();
+            },
+            .option_or => |option_or| blk: {
+                _ = try self.checkExpr(current_function_id, return_type, option_or.option);
+                const fallback_type = try self.checkExpr(current_function_id, return_type, option_or.fallback);
+                break :blk fallback_type;
+            },
             .fixed_buffer_empty => |type_id| type_id,
             .fixed_buffer_append => |append| blk: {
                 _ = try self.checkExpr(current_function_id, return_type, append.buffer);
@@ -1667,6 +1681,10 @@ const Checker = struct {
             .fixed_buffer_append => |append| .{ .fixed_buffer_append = .{ .buffer = try self.cloneExpr(append.buffer, subst, param_map, local_map, span), .value = try self.cloneExpr(append.value, subst, param_map, local_map, span) } },
             .fixed_buffer_len => |buffer| .{ .fixed_buffer_len = try self.cloneExpr(buffer, subst, param_map, local_map, span) },
             .fixed_buffer_capacity => |capacity| .{ .fixed_buffer_capacity = capacity },
+            .option_some => |some| .{ .option_some = .{ .type_id = some.type_id, .value = try self.cloneExpr(some.value, subst, param_map, local_map, span) } },
+            .option_none => |type_id| .{ .option_none = type_id },
+            .option_is_some => |option| .{ .option_is_some = try self.cloneExpr(option, subst, param_map, local_map, span) },
+            .option_or => |option_or| .{ .option_or = .{ .option = try self.cloneExpr(option_or.option, subst, param_map, local_map, span), .fallback = try self.cloneExpr(option_or.fallback, subst, param_map, local_map, span) } },
             .call => |call| blk: {
                 var args = try self.allocator.alloc(hir.ExprId, call.args.len);
                 errdefer self.allocator.free(args);
@@ -1869,6 +1887,10 @@ const Checker = struct {
             .fixed_buffer => |buffer| {
                 try self.writeTypeSuffix(writer, buffer.element);
                 try writer.print("_fixed_buffer_{d}", .{buffer.capacity});
+            },
+            .option => |option| {
+                try writer.writeAll("option_");
+                try self.writeTypeSuffix(writer, option.element);
             },
             .type_param => try writer.writeAll("type_param"),
         }

@@ -479,3 +479,13 @@ Explicitly deferred again for clarity:
 P22-M0 should update the project roadmap and coverage notes to mark Phase 22 as design/in-progress. The update should state that Phase 21 closeout led directly to Phase 22 by proving append/read/count migrations and isolating the remaining fixed-buffer mutation/search friction.
 
 Roadmap notes should keep the boundary explicit: Phase 22 designs `Option<T>`, `Result<T, E>`, `BufferError`, and bounded FixedBuffer mutation/try APIs. It does not implement heap vectors, allocators, callables, generic predicate helpers, dynamic DragonGod runtime, or compiler behavior in M0.
+
+## P22-M1 implementation status
+
+P22-M1 is implemented with a deliberately small Stage 0 surface. `Option<T>` is a compiler-known generic value type with exact element-type identity and display spelling `Option<T>`. The accepted construction helpers are `optionSome<T>(value)` and `optionNone<T>()`; qualified payload constructor syntax such as `Option<int>::Some(3)` remains deferred until generic qualified constructors are introduced cleanly.
+
+`optionSome<T>(value)` requires a non-`void` value type argument and checks that `value` has exactly type `T`. `optionNone<T>()` requires the explicit type argument because untyped `None` has no payload from which to infer `T`. The minimal inspection helpers added for executable fixtures are `optionIsSome(value)` and `optionOr(value, fallback)`. Full matching ergonomics, `optionUnwrap`, broader helper libraries, and target-typed constructor inference remain P22-M2 work.
+
+HIR and MIR carry `Option.Some`, `Option.None`, `optionIsSome`, and `optionOr` as explicit value operations. The C backend emits deterministic tagged structs with `int tag` and a payload `value` field, initializes `Some` with tag `1`, initializes `None` with tag `0` and a deterministic zero payload, and uses no heap allocation or hidden failure channel.
+
+Deferred after M1: `Result<T, E>`, `BufferError`, FixedBuffer try/mutation APIs, DragonGod Memory/AutomataStack/ActuatorHost migration, predicate helpers, callable values, and new fallible-function semantics.

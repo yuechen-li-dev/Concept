@@ -1,0 +1,7 @@
+module Main;
+
+int main() {
+    Option<int> value = optionNone<int>();
+    return optionOr(value, 7);
+}
+// expect: 7
