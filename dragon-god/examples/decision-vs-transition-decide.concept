@@ -1,0 +1,23 @@
+// DG6 example: DragonGod.Kernel.Decision integer v0.
+// Decision uses deterministic source order, integer scores, no floats/randomness.
+// Native transition decide remains the tool for local stateless machine choice.
+module DragonGod.Examples.Decision;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Decision;
+
+int main() {
+    DragonGod.Kernel.Decision.DecisionMemory memory = DragonGod.Kernel.Decision.decisionMemoryEmpty();
+    DragonGod.Kernel.Decision.DecisionPolicy policy = DragonGod.Kernel.Decision.DecisionPolicy { hysteresisDelta: 10, minCommitTicks: 2, tieEpsilon: 3 };
+    DragonGod.Kernel.Core.StateId chosen = DragonGod.Kernel.Decision.decisionChoose4(
+        memory&,
+        policy,
+        10,
+        DragonGod.Kernel.Decision.utilityOption(DragonGod.Kernel.Core.StateId { value: 10 }, 80, true),
+        DragonGod.Kernel.Decision.utilityOption(DragonGod.Kernel.Core.StateId { value: 1 }, 0, true),
+        DragonGod.Kernel.Decision.utilityOption(DragonGod.Kernel.Core.StateId { value: 2 }, 0, false),
+        DragonGod.Kernel.Decision.utilityOption(DragonGod.Kernel.Core.StateId { value: 3 }, 0, false),
+        DragonGod.Kernel.Core.StateId { value: 99 }
+    );
+    return chosen.value;
+}
