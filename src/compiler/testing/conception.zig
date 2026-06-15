@@ -3797,3 +3797,15 @@ test "language fixtures: phase19 yield validation" {
     try expectParseFixture("../../../language/phase19-yielding-machines/invalid/yield_expression.invalid.conception");
     try expectParseFixture("../../../language/phase19-yielding-machines/invalid/yield_missing_semicolon.invalid.conception");
 }
+
+test "language run fixtures: phase19 yield runtime lowering" {
+    try expectRunFixture("../../../language/phase19-yielding-machines/valid/yield_keeps_machine_incomplete_run.valid.conception");
+    try expectRunFixture("../../../language/phase19-yielding-machines/valid/yield_preserves_state_run.valid.conception");
+    try expectRunFixture("../../../language/phase19-yielding-machines/valid/yield_reenters_same_state_run.valid.conception");
+    try expectRunFixture("../../../language/phase19-yielding-machines/valid/yield_in_if_branch_run.valid.conception");
+    try expectRunFixture("../../../language/phase19-yielding-machines/valid/yield_result_after_yield_panics_run.valid.conception");
+}
+
+test "language backend-c fixture: phase19 yield lowers to step return" {
+    try expectBackendCFixture("../../../language/phase19-yielding-machines/valid/yield_backend_step_return.valid.conception");
+}

@@ -473,7 +473,7 @@ Explicitly deferred:
 P19-M0  Design doc: yielding machines and explicit suspension
 P19-M1  yield statement syntax / AST / HIR scaffold (implemented: lexer keyword, parser statement, AST/HIR statement nodes, source spans, debug/deinit paths, machine-state semantic guard, and six fixtures)
 P19-M2  yield validation: machine-state-only, statement-only, no value (implemented: stable CON0301/CON0302/CON0303 diagnostics and ten fixtures)
-P19-M3  backend lowering: yield exits Step without state/completion mutation
+P19-M3  backend lowering: yield exits Step without state/completion mutation (implemented)
 P19-M4  yield + Complete / Result / State behavior fixtures
 P19-M5  yield + nested child machine ticking fixtures
 P19-M6  yield + transition match / decide interaction fixtures
@@ -493,3 +493,12 @@ P19-M1 is implemented as a syntax and compiler-representation scaffold only. Bar
 P19-M2 is implemented as a validation and diagnostic milestone only. Bare `yield;` remains accepted only as a statement inside machine state bodies, including nested blocks and `if` branches within those state bodies. The parser now gives stable diagnostics for rejected non-bare forms: `CON0301 YieldExpressionUnsupported` for expression-position `yield`, `CON0302 YieldValueUnsupported` for `yield value;`, and `CON0303 YieldReturnUnsupported` for `yield return ...;`. `CON0300 YieldOnlyAllowedInMachineState` remains the diagnostic for ordinary-function and nested ordinary-block `yield;`, while top-level `yield;` remains rejected by the normal top-level item parser path. Missing-semicolon `yield` continues to use the expected-semicolon parse diagnostic.
 
 The Phase 19 fixture set now has ten fixtures under `language/phase19-yielding-machines/`: three valid check/HIR fixtures and seven invalid parse fixtures. P19-M2 does not add runtime/backend lowering, state preservation, child ticking, `Complete`/`Result`/`State` behavior after yield, transition interaction, lifted locals, sub-state program counters, `yield return`, yield values, `suspend`, `resume`, scheduler support, async/generator protocol, or DragonGod runtime hooks. Runtime lowering remains deferred to P19-M3.
+
+
+## P19-M3 status: backend/runtime lowering
+
+P19-M3 is implemented for the state-level `yield;` contract. In generated machine `Step` functions, a valid HIR `yield_stmt` in a machine state body lowers directly to `return;` from the step function. The lowering does not assign a new state, does not set `complete`, does not write result storage, does not call `cpt_panic`, does not allocate, and does not introduce scheduler, async, event, mailbox, blackboard, or DragonGod runtime hooks.
+
+A yielded machine therefore remains in the same numeric state and remains incomplete. `Result(machine)` after a yield continues to use the existing result-before-completion panic path, while `Complete(machine)` and `State(machine)` observe the unchanged frame. The next `Step(machine)` re-enters the same state body from the beginning; P19-M3 proves this with an explicit child-machine ticking pattern rather than continuation locals. Unreachable-code diagnostics after unconditional yield are deferred; generated C may contain unreachable statements after a branch-local `return;` where the existing statement emitter does not perform broad control-flow analysis.
+
+The Phase 19 fixture set now has sixteen fixtures under `language/phase19-yielding-machines/`: the ten P19-M2 validation fixtures plus five runtime fixtures for incomplete-after-yield, state preservation, re-entry from the beginning, `if`-branch yield behavior, and `Result`-after-yield panic, plus one backend C fixture pinning direct `return;` lowering and absence of state/completion/result/panic/allocation/scheduler markers. Continuation-preserving yield, lifted locals, sub-state program counters, `yield return`, yield values, `suspend`, `resume`, async/generator protocol, scheduler integration, and DragonGod hooks remain deferred.
