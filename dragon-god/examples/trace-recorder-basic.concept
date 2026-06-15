@@ -1,0 +1,15 @@
+module DragonGod.Examples.TraceRecorderBasic;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Trace;
+
+// Trace v0 is explicit: kernel/user code calls trace helpers directly. There
+// is no automatic instrumentation, logging backend, heap buffer, or scheduler.
+void exampleTraceRecorderBasic(mut DragonGod.Kernel.Trace.TraceRecorder& recorder) {
+    DragonGod.Kernel.Core.StateId start = DragonGod.Kernel.Core.StateId { value: 1 };
+    DragonGod.Kernel.Core.StateId done = DragonGod.Kernel.Core.StateId { value: 2 };
+    DragonGod.Kernel.Core.Reason reason = DragonGod.Kernel.Core.Reason { code: 7 };
+    DragonGod.Kernel.Trace.traceEnter(recorder&, start, 0, reason);
+    DragonGod.Kernel.Trace.traceTransition(recorder&, start, done, 1, reason);
+    DragonGod.Kernel.Trace.traceExit(recorder&, done, 2, reason);
+}

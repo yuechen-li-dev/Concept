@@ -190,3 +190,17 @@ DG7 added `DragonGod.Kernel.Actuation` as a fixed-slot, explicit host surface in
 - Event reads use `eventReadNextInt(bus, cursor&, type, fallback)` because Concept does not yet have a standard `Option`/`Result` return or out-parameter convention that is clearer for small fixtures.
 - Missing-event behavior advances the stream cursor to `bus.count`; this avoids rescanning old fixed slots but has to be documented because cursors are generic stream positions, not per-type bucket cursors.
 - Slot scanning is written explicitly rather than with loops over arrays because the current DragonGod fixed-slot style is more predictable for backend fixtures.
+
+
+## DG9 Trace subsystem v0 friction
+
+No blocking DG9 friction observed. `TraceEvent` can store `AutomataSignal` directly, and `match` over both `TraceEventKind` and `AutomataSignal` was usable for compact interpretation helpers. A minimal `TraceSink` interface with `StateId`, `Reason`, and payload enum `AutomataSignal` arguments compiled in a smoke fixture, and borrowed `mut dyn TraceSink&` calls worked for explicit sink emission.
+
+Non-blocking friction remains:
+
+- The fixed-slot recorder repeats field and branch boilerplate (`event0` through `event3`) because Concept still lacks the arrays/vectors/spans needed for a cleaner trace ring/buffer surface.
+- Lack of stable strings/StringView keeps trace reasons integer-backed and prevents useful textual trace payloads without turning Trace into formatting/logging work.
+- Module-qualified signatures for kernel interfaces are verbose, especially for `TraceSink` methods crossing Core and Automata types.
+- Backend C fixture assertions remain shape-oriented and intentionally avoid overfitting temporary names, but they still require explicit absence checks for heap/logging/scheduler markers.
+
+Workaround: DG9 keeps `TraceRecorder` as the v0 implementation and treats `TraceSink` as smoke-proven interface surface only. Future Concept improvements that would materially improve Trace include fixed arrays, slices/spans, string views, and lower-noise qualified import ergonomics.

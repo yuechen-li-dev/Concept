@@ -1,0 +1,15 @@
+# name: kernel_trace_sink_interface_smoke_run.valid.conception
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+struct StateId { int value; }; struct Reason { int code; };
+enum AutomataSignal { None, Succeed(Reason reason), };
+interface TraceSink { void onEnter(StateId state, int tick, Reason reason); void onSignal(AutomataSignal signal, int tick); };
+struct CountingSink { int count; int last; };
+impl TraceSink<CountingSink> { void onEnter(mut CountingSink& self, StateId state, int tick, Reason reason) { self.count = self.count + 1; self.last = state.value + tick + reason.code; } void onSignal(mut CountingSink& self, AutomataSignal signal, int tick) { self.count = self.count + 1; match (signal) { AutomataSignal::Succeed(reason) => { self.last = reason.code + tick; return; } AutomataSignal::None => { self.last = tick; return; } } } }
+void emit(mut dyn TraceSink& sink) { sink.onEnter(StateId { value: 1 }, 2, Reason { code: 3 }); sink.onSignal(AutomataSignal::Succeed(Reason { code: 4 }), 5); }
+int main() { CountingSink sink = CountingSink { count: 0, last: 0 }; emit(sink); if (sink.count != 2) { return 1; } return sink.last - 9; }
+
+=== run ===

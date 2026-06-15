@@ -4,8 +4,8 @@
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
 **Phases closed:** 1 through 20 / DG1
-**Current phase:** Phase 20 / DG5 complete — DragonGod Kernel Automata stack v0
-**Fixture corpus:** 1089 total `.conception` fixture files; 85 under `language/phase11-testing/`; 108 under `language/phase15-c-abi/`; 73 under `language/phase16-imports/`; 57 under `language/phase17-runtime-failure/`; 66 under `language/phase18-machines/`; 23 under `language/phase19-yielding-machines/`; 37 under `language/phase20-dragongod-kernel/`
+**Current phase:** Phase 20 / DG9 complete — DragonGod Kernel Trace subsystem v0
+**Fixture corpus:** 1130 total `.conception` fixture files; 85 under `language/phase11-testing/`; 108 under `language/phase15-c-abi/`; 73 under `language/phase16-imports/`; 57 under `language/phase17-runtime-failure/`; 66 under `language/phase18-machines/`; 23 under `language/phase19-yielding-machines/`; 78 under `language/phase20-dragongod-kernel/`
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
 
@@ -21,10 +21,10 @@ Phase 20 / DG1 is complete as a kernel foundation milestone. The `dragon-god/` t
 | Memory storage | ❌ | Only `Memory { revision }` shell and `MemoryKeyInt` placeholder exist. |
 | Mind tick loop | ❌ | `Mind`, `Agent`, and `World` shells only. |
 | Automata stack | ❌ | Not implemented. |
-| Decision subsystem | ❌ | Local machine `transition decide` exists from Phase 18; DragonGod decision subsystem does not. |
+| Decision subsystem | ✅ | DG6 fixed-slot integer decision subsystem v0 is implemented. |
 | Actuation subsystem | ❌ | Only `ActuationId` and signal variants are seeded. |
-| Events subsystem | ❌ | Not implemented. |
-| Trace subsystem | ❌ | Not implemented. |
+| Events subsystem | ✅ | DG8 fixed-slot integer Events subsystem v0 is implemented. |
+| Trace subsystem | ✅ | DG9 fixed-slot explicit Trace subsystem v0 is implemented. |
 | Replay | ❌ | Not implemented. |
 | Persistence | ❌ | Not implemented. |
 | Parallel | ❌ | Not implemented. |
@@ -696,3 +696,10 @@ DG8 is complete. DragonGod coverage now includes `DragonGod.Kernel.Events` with 
 The DG8 fixture corpus adds eight run fixtures and one backend-C fixture, bringing Phase 20 DragonGod coverage to 69 `.conception` fixtures. Backend coverage pins fixed event slots, `nextId`/`count` mutation, `eventReadNextInt` cursor writes, and absence of heap allocation, scheduler/async markers, mailbox/blackboard naming, event-bus language runtime naming, and DragonGod compiler hooks.
 
 Feature matrix: DG0 Blueprint complete; DG1 Kernel core seed complete; DG2 static automata signals and machine examples complete; DG3 Memory v0 complete; DG4 Mind v0 static executor complete; DG5 Automata stack v0 complete; DG6 Decision subsystem v0 complete; DG7 Actuation subsystem v0 complete; DG8 Events subsystem v0 complete. Supported after DG8: integer event type ids, integer event ids, integer payloads, fixed event slots, stream cursors, push, tail cursor, read-next with fallback, cursor advancement, future-only polling, deterministic order, Memory integration, and AutomataSignal machine integration. Deferred: generic typed payloads, type-erased payloads, dynamic event type registry, event bucket maps, trimming, cross-agent mailbox delivery, parallel staged event merge, replay integration, persistence integration, scheduler/async behavior, event/mailbox language keywords, and DragonGod compiler hooks.
+
+
+### Phase 20 / DragonGod DG9 Trace subsystem v0
+
+DG9 is complete. DragonGod coverage now includes `DragonGod.Kernel.Trace` with `TraceEventKind`, `TraceEvent`, fixed-slot `TraceRecorder`, and explicit helper calls for `traceEnter`, `traceExit`, `traceTransition`, `traceYield`, and `traceSignal`. `TraceEvent` stores `AutomataSignal` directly, and interpretation helpers use `match` for event-kind and signal-reason handling. The `TraceSink` interface/dyn shape is smoke-tested and supported for explicit calls, while `TraceRecorder` remains the v0 implementation surface.
+
+Feature matrix after DG9: DG0 Blueprint complete; DG1 Kernel core seed complete; DG2 static automata signals and machine examples complete; DG3 Memory v0 complete; DG4 Mind v0 static executor complete; DG5 Automata stack v0 complete; DG6 Decision subsystem v0 complete; DG7 Actuation subsystem v0 complete; DG8 Events subsystem v0 complete; DG9 Trace subsystem v0 complete. Supported DG9 surface: `TraceEventKind`, `TraceEvent`, fixed-slot `TraceRecorder`, `traceEnter`, `traceExit`, `traceTransition`, `traceYield`, `traceSignal`, and explicit trace examples. Deferred after DG9: automatic trace injection, runtime logging backend, file/stdout sink, async sink, trace persistence/replay integration, parallel trace merge, dynamic sink registry, and DragonGod compiler hooks.

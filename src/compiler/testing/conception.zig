@@ -3874,6 +3874,14 @@ test "language run fixtures: phase20 DragonGod Kernel core seed" {
     try expectRunFixture("../../../language/phase20-dragongod-kernel/valid/kernel_events_cursor_advances_run.valid.conception");
     try expectRunFixture("../../../language/phase20-dragongod-kernel/valid/kernel_events_memory_integration_run.valid.conception");
     try expectRunFixture("../../../language/phase20-dragongod-kernel/valid/kernel_events_signal_machine_run.valid.conception");
+    try expectRunFixture("../../../language/phase20-dragongod-kernel/valid/kernel_trace_enter_exit_run.valid.conception");
+    try expectRunFixture("../../../language/phase20-dragongod-kernel/valid/kernel_trace_transition_run.valid.conception");
+    try expectRunFixture("../../../language/phase20-dragongod-kernel/valid/kernel_trace_yield_run.valid.conception");
+    try expectRunFixture("../../../language/phase20-dragongod-kernel/valid/kernel_trace_signal_succeed_run.valid.conception");
+    try expectRunFixture("../../../language/phase20-dragongod-kernel/valid/kernel_trace_event_order_run.valid.conception");
+    try expectRunFixture("../../../language/phase20-dragongod-kernel/valid/kernel_trace_capacity_panics_run.valid.conception");
+    try expectRunFixture("../../../language/phase20-dragongod-kernel/valid/kernel_trace_signal_reason_match_run.valid.conception");
+    try expectRunFixture("../../../language/phase20-dragongod-kernel/valid/kernel_trace_sink_interface_smoke_run.valid.conception");
 }
 
 test "language backend-c fixture: phase20 DragonGod automata signal machines" {
@@ -3883,4 +3891,5 @@ test "language backend-c fixture: phase20 DragonGod automata signal machines" {
     try expectBackendCFixture("../../../language/phase20-dragongod-kernel/valid/kernel_decision_backend_shape.valid.conception");
     try expectBackendCFixture("../../../language/phase20-dragongod-kernel/valid/kernel_actuation_backend_shape.valid.conception");
     try expectBackendCFixture("../../../language/phase20-dragongod-kernel/valid/kernel_events_backend_shape.valid.conception");
+    try expectBackendCFixture("../../../language/phase20-dragongod-kernel/valid/kernel_trace_backend_shape.valid.conception");
 }
