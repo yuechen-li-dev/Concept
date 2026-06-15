@@ -54,6 +54,9 @@ pub const TypeKind = union(enum) {
         element: TypeId,
         capacity: u64,
     },
+    option: struct {
+        element: TypeId,
+    },
     type_param: struct {
         owner: TypeParamOwner,
         index: u32,
@@ -81,6 +84,7 @@ pub const TypeKind = union(enum) {
             .array => |array| try writer.print("{f}[{d}]", .{ array.element, array.length }),
             .slice => |slice| try writer.print("Slice<{f}>", .{slice.element}),
             .fixed_buffer => |buffer| try writer.print("FixedBuffer<{f}, {d}>", .{ buffer.element, buffer.capacity }),
+            .option => |option| try writer.print("Option<{f}>", .{option.element}),
             .type_param => |param| try writer.print("type_param({s}:{d}/{d} {f})", .{ @tagName(param.owner.kind), param.owner.index, param.index, param.name }),
         }
     }
@@ -234,6 +238,12 @@ pub const TypeStore = struct {
         return try self.append(.{ .fixed_buffer = .{ .element = element, .capacity = capacity } }, error.TooManyTypes);
     }
 
+    pub fn addOptionType(self: *TypeStore, element: TypeId) TypeStoreError!TypeId {
+        std.debug.assert(self.contains(element));
+        if (self.findOption(element)) |existing| return existing;
+        return try self.append(.{ .option = .{ .element = element } }, error.TooManyTypes);
+    }
+
     pub fn pointerType(self: TypeStore, pointee: TypeId) ?TypeId {
         std.debug.assert(self.contains(pointee));
         return self.findPointer(pointee);
@@ -271,6 +281,7 @@ pub const TypeStore = struct {
             .int, .bool, .pointer, .enum_type, .alloc_error => true,
             .array => |array| self.isCopyType(hir_store, array.element),
             .fixed_buffer => |buffer| self.isCopyType(hir_store, buffer.element),
+            .option => |option| self.isCopyType(hir_store, option.element),
             .slice => true,
             .struct_type => self.hasCopyMarkerImpl(hir_store, id),
             .void, .arena, .allocator, .machine_type, .interface_type, .dyn_interface, .manual_init, .type_param => false,
@@ -357,6 +368,16 @@ pub const TypeStore = struct {
         return null;
     }
 
+    fn findOption(self: TypeStore, element: TypeId) ?TypeId {
+        for (self.types.items, 0..) |candidate, index| {
+            switch (candidate) {
+                .option => |option| if (option.element.index == element.index) return .{ .index = @intCast(index) },
+                else => {},
+            }
+        }
+        return null;
+    }
+
     fn findManualInit(self: TypeStore, payload: TypeId) ?TypeId {
         for (self.types.items, 0..) |candidate, index| {
             switch (candidate) {
@@ -410,7 +431,7 @@ pub const TypeStore = struct {
                     },
                     else => {},
                 },
-                .dyn_interface, .pointer, .manual_init, .array, .slice, .type_param => unreachable,
+                .dyn_interface, .pointer, .manual_init, .array, .slice, .fixed_buffer, .option, .type_param => unreachable,
                 else => unreachable,
             }
         }

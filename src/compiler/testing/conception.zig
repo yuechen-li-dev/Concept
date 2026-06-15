@@ -3967,3 +3967,31 @@ test "language check fixtures: phase21 arrays slices fixed buffers" {
     try expectCheckFixture("../../../language/phase21-arrays-slices-fixed-buffers/invalid/fixed_buffer_malformed_type.invalid.conception");
     try expectCheckFixture("../../../language/phase21-arrays-slices-fixed-buffers/invalid/fixed_buffer_append_type_mismatch.invalid.conception");
 }
+
+test "language run fixture: phase22 option some int" {
+    try expectRunFixture("../../../language/phase22-option-result-bounded-collection-mutation/valid/option_some_int_run.valid.conception");
+}
+
+test "language run fixture: phase22 option none int" {
+    try expectRunFixture("../../../language/phase22-option-result-bounded-collection-mutation/valid/option_none_int_run.valid.conception");
+}
+
+test "language run fixture: phase22 option assignment" {
+    try expectRunFixture("../../../language/phase22-option-result-bounded-collection-mutation/valid/option_assignment_run.valid.conception");
+}
+
+test "language run fixture: phase22 option parameter return" {
+    try expectRunFixture("../../../language/phase22-option-result-bounded-collection-mutation/valid/option_parameter_return_run.valid.conception");
+}
+
+test "language check fixture: phase22 option missing type" {
+    try expectCheckFixture("../../../language/phase22-option-result-bounded-collection-mutation/invalid/option_missing_type.invalid.conception");
+}
+
+test "language check fixture: phase22 option none requires type" {
+    try expectCheckFixture("../../../language/phase22-option-result-bounded-collection-mutation/invalid/option_none_requires_type.invalid.conception");
+}
+
+test "language check fixture: phase22 option some type mismatch" {
+    try expectCheckFixture("../../../language/phase22-option-result-bounded-collection-mutation/invalid/option_some_type_mismatch.invalid.conception");
+}

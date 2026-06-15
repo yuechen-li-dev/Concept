@@ -385,6 +385,13 @@ const Analyzer = struct {
                 try self.readOperand(states, index.base, span);
                 try self.readOperand(states, index.index, span);
             },
+            .option_some => |some| try self.readOperand(states, some.value, span),
+            .option_none => {},
+            .option_is_some => |operand| try self.readOperand(states, operand, span),
+            .option_or => |option_or| {
+                try self.readOperand(states, option_or.option, span);
+                try self.readOperand(states, option_or.fallback, span);
+            },
             .fixed_buffer_append => |append| {
                 try self.readOperand(states, append.buffer, span);
                 try self.readOperand(states, append.value, span);

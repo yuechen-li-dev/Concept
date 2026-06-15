@@ -1,0 +1,15 @@
+# name: phase22 option some type mismatch
+# phase: check
+# check: executable
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    Option<int> value = optionSome<int>(true);
+    return 0;
+}
+
+=== diagnostics ===
+CON0512

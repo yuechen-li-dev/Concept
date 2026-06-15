@@ -177,7 +177,7 @@ pub const CompileTimeEvaluator = struct {
             .bool_literal => |value| .{ .bool = value },
             .machine_field_ref => error.UnsupportedExpression,
             .index_access => error.UnsupportedExpression,
-            .slice_len, .fixed_buffer_empty, .fixed_buffer_append, .fixed_buffer_len, .fixed_buffer_capacity => error.UnsupportedExpression,
+            .slice_len, .fixed_buffer_empty, .fixed_buffer_append, .fixed_buffer_len, .fixed_buffer_capacity, .option_some, .option_none, .option_is_some, .option_or => error.UnsupportedExpression,
             .machine_state => error.UnsupportedExpression,
             .group => |inner| try self.evaluateExpr(inner),
             .compile_time => |compile_time_expr| try self.evaluateExpr(compile_time_expr.operand),

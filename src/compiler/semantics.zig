@@ -1778,6 +1778,18 @@ const Collector = struct {
             const element = (try self.resolveTypeNameScoped(type_name.generic_args[0], type_scope)) orelse return null;
             return try self.module.types.addSliceType(element);
         }
+        if (std.mem.eql(u8, part.text, "Option")) {
+            if (type_name.generic_args.len != 1) {
+                try self.diagnostics.append(diagnostics.optionRequiresValueType(type_name.span));
+                return null;
+            }
+            const element = (try self.resolveTypeNameScoped(type_name.generic_args[0], type_scope)) orelse return null;
+            if (sameType(element, self.module.types.voidType())) {
+                try self.diagnostics.append(diagnostics.optionRequiresValueType(type_name.generic_args[0].span));
+                return null;
+            }
+            return try self.module.types.addOptionType(element);
+        }
         if (std.mem.eql(u8, part.text, "FixedBuffer")) {
             if (type_name.generic_args.len != 2) {
                 try self.diagnostics.append(diagnostics.fixedBufferRequiresElementAndCapacity(type_name.span));
@@ -2646,6 +2658,73 @@ const BodyLowerer = struct {
                     return try self.collector.module.hir.addExpr(.{ .fixed_buffer_empty = type_id }, call.span);
                 }
 
+                if (std.mem.eql(u8, call.callee.text, "optionSome")) {
+                    if (call.type_args.len != 1 or owned.len != 1) {
+                        try self.collector.diagnostics.append(diagnostics.optionRequiresValueType(call.span));
+                        return null;
+                    }
+                    const element = (try self.collector.resolveTypeNameScoped(call.type_args[0], null)) orelse return null;
+                    if (sameType(element, self.collector.module.types.voidType())) {
+                        try self.collector.diagnostics.append(diagnostics.optionRequiresValueType(call.type_args[0].span));
+                        return null;
+                    }
+                    const actual = (try self.inferExprType(owned[0])) orelse return null;
+                    if (!sameType(actual, element)) {
+                        try self.collector.diagnostics.append(diagnostics.optionSomeTypeMismatch(call.args[0].span()));
+                        return null;
+                    }
+                    const option_type = try self.collector.module.types.addOptionType(element);
+                    return try self.collector.module.hir.addExpr(.{ .option_some = .{ .type_id = option_type, .value = owned[0] } }, call.span);
+                }
+
+                if (std.mem.eql(u8, call.callee.text, "optionNone")) {
+                    if (call.type_args.len != 1 or owned.len != 0) {
+                        try self.collector.diagnostics.append(diagnostics.optionNoneRequiresTargetType(call.span));
+                        return null;
+                    }
+                    const element = (try self.collector.resolveTypeNameScoped(call.type_args[0], null)) orelse return null;
+                    if (sameType(element, self.collector.module.types.voidType())) {
+                        try self.collector.diagnostics.append(diagnostics.optionRequiresValueType(call.type_args[0].span));
+                        return null;
+                    }
+                    const option_type = try self.collector.module.types.addOptionType(element);
+                    return try self.collector.module.hir.addExpr(.{ .option_none = option_type }, call.span);
+                }
+
+                if (std.mem.eql(u8, call.callee.text, "optionIsSome")) {
+                    if (call.type_args.len != 0 or owned.len != 1) {
+                        try self.collector.diagnostics.append(diagnostics.optionRequiresValueType(call.span));
+                        return null;
+                    }
+                    const option_type = (try self.inferExprType(owned[0])) orelse return null;
+                    if (self.collector.module.types.kind(option_type) != .option) {
+                        try self.collector.diagnostics.append(diagnostics.optionRequiresValueType(call.args[0].span()));
+                        return null;
+                    }
+                    return try self.collector.module.hir.addExpr(.{ .option_is_some = owned[0] }, call.span);
+                }
+
+                if (std.mem.eql(u8, call.callee.text, "optionOr")) {
+                    if (call.type_args.len != 0 or owned.len != 2) {
+                        try self.collector.diagnostics.append(diagnostics.optionRequiresValueType(call.span));
+                        return null;
+                    }
+                    const option_type = (try self.inferExprType(owned[0])) orelse return null;
+                    const option = switch (self.collector.module.types.kind(option_type)) {
+                        .option => |option| option,
+                        else => {
+                            try self.collector.diagnostics.append(diagnostics.optionRequiresValueType(call.args[0].span()));
+                            return null;
+                        },
+                    };
+                    const fallback_type = (try self.inferExprType(owned[1])) orelse return null;
+                    if (!sameType(fallback_type, option.element)) {
+                        try self.collector.diagnostics.append(diagnostics.optionSomeTypeMismatch(call.args[1].span()));
+                        return null;
+                    }
+                    return try self.collector.module.hir.addExpr(.{ .option_or = .{ .option = owned[0], .fallback = owned[1] } }, call.span);
+                }
+
                 if (std.mem.eql(u8, call.callee.text, "fixedBufferAppend")) {
                     if (call.type_args.len != 0 or owned.len != 2) {
                         try self.collector.diagnostics.append(diagnostics.fixedBufferReceiverRequired(call.span));
@@ -3340,6 +3419,13 @@ const BodyLowerer = struct {
             .slice_len, .fixed_buffer_len, .fixed_buffer_capacity => self.collector.module.types.intType(),
             .fixed_buffer_empty => |type_id| type_id,
             .fixed_buffer_append => self.collector.module.types.voidType(),
+            .option_some => |some| some.type_id,
+            .option_none => |type_id| type_id,
+            .option_is_some => self.collector.module.types.boolType(),
+            .option_or => |option_or| blk: {
+                const option_type = (try self.inferExprType(option_or.option)) orelse return null;
+                break :blk self.collector.module.types.kind(option_type).option.element;
+            },
             .field_access => |field_access| blk: {
                 const receiver_type = (try self.inferExprType(field_access.receiver)) orelse return null;
                 const receiver_kind = self.collector.module.types.kind(receiver_type);

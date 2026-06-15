@@ -377,6 +377,27 @@ const Validator = struct {
                 }
                 break :blk index.result_type;
             },
+            .option_some => |some| blk: {
+                const value_type = try self.operandType(function_id, some.value, span);
+                const option = self.semantic_module.types.kind(some.type_id);
+                if (option != .option or (value_type != null and option.option.element.index != value_type.?.index)) try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                break :blk some.type_id;
+            },
+            .option_none => |type_id| type_id,
+            .option_is_some => |operand| blk: {
+                const operand_type = try self.operandType(function_id, operand, span);
+                if (operand_type) |type_id| if (self.semantic_module.types.kind(type_id) != .option) try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                break :blk self.semantic_module.types.boolType();
+            },
+            .option_or => |option_or| blk: {
+                const option_type = try self.operandType(function_id, option_or.option, span);
+                const fallback_type = try self.operandType(function_id, option_or.fallback, span);
+                if (option_type) |type_id| {
+                    const option = self.semantic_module.types.kind(type_id);
+                    if (option != .option or (fallback_type != null and option.option.element.index != fallback_type.?.index)) try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                }
+                break :blk fallback_type;
+            },
             .manual_init_assume => |operand| blk: {
                 const operand_type = try self.operandType(function_id, operand, span);
                 if (operand_type == null) break :blk null;

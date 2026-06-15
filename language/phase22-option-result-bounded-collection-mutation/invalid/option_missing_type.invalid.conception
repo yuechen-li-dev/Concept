@@ -1,0 +1,14 @@
+# name: phase22 option missing type
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module Example;
+
+struct Bag {
+    Option value;
+};
+
+=== diagnostics ===
+CON0500

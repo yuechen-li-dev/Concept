@@ -236,6 +236,10 @@ pub const MirRvalue = union(enum) {
     array_constructor: []MirOperand,
     fixed_buffer_empty: types.TypeId,
     fixed_buffer_append: struct { buffer: MirOperand, value: MirOperand, capacity: u64 },
+    option_some: struct { type_id: types.TypeId, value: MirOperand },
+    option_none: types.TypeId,
+    option_is_some: MirOperand,
+    option_or: struct { option: MirOperand, fallback: MirOperand },
     enum_tag: MirOperand,
     enum_payload_field: struct {
         enum_operand: MirOperand,
@@ -402,6 +406,10 @@ pub const MirRvalue = union(enum) {
             .array_constructor => |elements| try MirRvalue.arrayConstructor(allocator, elements),
             .fixed_buffer_empty => |type_id| .{ .fixed_buffer_empty = type_id },
             .fixed_buffer_append => |append| .{ .fixed_buffer_append = .{ .buffer = try append.buffer.clone(allocator), .value = try append.value.clone(allocator), .capacity = append.capacity } },
+            .option_some => |some| .{ .option_some = .{ .type_id = some.type_id, .value = try some.value.clone(allocator) } },
+            .option_none => |type_id| .{ .option_none = type_id },
+            .option_is_some => |operand| .{ .option_is_some = try operand.clone(allocator) },
+            .option_or => |option_or| .{ .option_or = .{ .option = try option_or.option.clone(allocator), .fallback = try option_or.fallback.clone(allocator) } },
             .enum_tag => |operand| MirRvalue.enumTag(try operand.clone(allocator)),
             .enum_payload_field => |payload| MirRvalue.enumPayloadField(try payload.enum_operand.clone(allocator), payload.payload_field),
             .field_access => |field_access| MirRvalue.fieldAccess(try field_access.receiver.clone(allocator), field_access.field_id),
@@ -455,6 +463,13 @@ pub const MirRvalue = union(enum) {
             .fixed_buffer_append => |append| {
                 append.buffer.deinit(allocator);
                 append.value.deinit(allocator);
+            },
+            .option_some => |some| some.value.deinit(allocator),
+            .option_none => {},
+            .option_is_some => |operand| operand.deinit(allocator),
+            .option_or => |option_or| {
+                option_or.option.deinit(allocator);
+                option_or.fallback.deinit(allocator);
             },
             .enum_tag => |operand| operand.deinit(allocator),
             .enum_payload_field => |payload| payload.enum_operand.deinit(allocator),
@@ -1109,6 +1124,24 @@ fn writeRvalueDebug(writer: *std.Io.Writer, rvalue: MirRvalue) !void {
             try writer.writeByte(')');
         },
         .fixed_buffer_capacity => |capacity| try writer.print("FixedBufferCapacity({d})", .{capacity}),
+        .option_some => |some| {
+            try writer.print("OptionSome({f}, ", .{some.type_id});
+            try writeOperandDebug(writer, some.value);
+            try writer.writeByte(')');
+        },
+        .option_none => |type_id| try writer.print("OptionNone({f})", .{type_id}),
+        .option_is_some => |operand| {
+            try writer.writeAll("OptionIsSome(");
+            try writeOperandDebug(writer, operand);
+            try writer.writeByte(')');
+        },
+        .option_or => |option_or| {
+            try writer.writeAll("OptionOr(");
+            try writeOperandDebug(writer, option_or.option);
+            try writer.writeAll(", ");
+            try writeOperandDebug(writer, option_or.fallback);
+            try writer.writeByte(')');
+        },
         .fixed_buffer_empty => |type_id| try writer.print("FixedBufferEmpty({f})", .{type_id}),
         .fixed_buffer_append => |append| {
             try writer.writeAll("FixedBufferAppend(");

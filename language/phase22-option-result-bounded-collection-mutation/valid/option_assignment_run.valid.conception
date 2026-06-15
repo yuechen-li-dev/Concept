@@ -1,0 +1,9 @@
+module Main;
+
+int main() {
+    Option<int> a = optionSome<int>(9);
+    Option<int> b = optionNone<int>();
+    b = a;
+    return optionOr(b, 0);
+}
+// expect: 9

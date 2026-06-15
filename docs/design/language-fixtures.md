@@ -654,3 +654,7 @@ Phase 21 closes with 50 fixtures under `language/phase21-arrays-slices-fixed-buf
 The Phase 21 fixtures now cover fixed array type syntax, array literals, fixed-array indexing, mutable fixed-array element assignment, value lowering, read-only slices, fixed buffers, capacity/length builtins, and the DragonGod migration spike through updated backend-shape coverage for Trace, Events, Replay, and AutomataGraph.
 
 Future `.conception` fixtures should prefer human-readable C++-style formatting over compressed one-liners: one statement per line, spaces around assignment and binary operators, spaces after commas, and readable block indentation. Compact syntax may remain useful for narrow parser tests, but feature and backend fixtures should be readable by human reviewers.
+
+## Phase 22 Option/Result/bounded mutation fixtures
+
+P22-M1 adds the initial fixture set under `language/phase22-option-result-bounded-collection-mutation/`. Valid fixtures cover `Option<int>` `optionSome<int>(value)`, `optionNone<int>()`, assignment/copy, and function parameter/return value paths through `optionOr`. Invalid fixtures pin malformed `Option` spelling (`CON0500`), `optionNone()` without a type argument (`CON0511`), and `optionSome<int>(true)` payload mismatch (`CON0512`). Match ergonomics, Result, BufferError, FixedBuffer try APIs, and DragonGod migrations are intentionally absent from this milestone's fixture surface.

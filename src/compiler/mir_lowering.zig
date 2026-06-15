@@ -473,6 +473,10 @@ const FunctionLowerer = struct {
             .fixed_buffer_capacity => |capacity| try self.lowerFixedBufferCapacity(expr, capacity, block_id),
             .fixed_buffer_empty => |type_id| try self.lowerFixedBufferEmpty(expr, type_id, block_id),
             .fixed_buffer_append => |append| try self.lowerFixedBufferAppend(expr, append, block_id),
+            .option_some => |some| try self.lowerOptionSome(expr, some, block_id),
+            .option_none => |type_id| try self.lowerOptionNone(expr, type_id, block_id),
+            .option_is_some => |option| try self.lowerOptionIsSome(expr, option, block_id),
+            .option_or => |option_or| try self.lowerOptionOr(expr, option_or, block_id),
             .try_expr => |operand| try self.lowerTry(expr, operand, block_id),
             .decide => |decide| try self.lowerDecide(expr, decide, block_id),
         };
@@ -911,6 +915,34 @@ const FunctionLowerer = struct {
         return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = block_id };
     }
 
+    fn lowerOptionSome(self: *FunctionLowerer, expr: hir.HirExpr, some: anytype, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const value = try self.lowerExpr(some.value, block_id);
+        const temp = try self.addTemp(some.type_id);
+        try self.store.appendStatement(value.block, .{ .span = expr.span, .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(temp), .{ .option_some = .{ .type_id = some.type_id, .value = value.operand } }) });
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = value.block };
+    }
+
+    fn lowerOptionNone(self: *FunctionLowerer, expr: hir.HirExpr, type_id: types.TypeId, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const temp = try self.addTemp(type_id);
+        try self.store.appendStatement(block_id, .{ .span = expr.span, .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(temp), .{ .option_none = type_id }) });
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = block_id };
+    }
+
+    fn lowerOptionIsSome(self: *FunctionLowerer, expr: hir.HirExpr, option: hir.ExprId, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const lowered = try self.lowerExpr(option, block_id);
+        const temp = try self.addTemp(self.semantic_module.types.boolType());
+        try self.store.appendStatement(lowered.block, .{ .span = expr.span, .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(temp), .{ .option_is_some = lowered.operand }) });
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = lowered.block };
+    }
+
+    fn lowerOptionOr(self: *FunctionLowerer, expr: hir.HirExpr, option_or: anytype, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const option = try self.lowerExpr(option_or.option, block_id);
+        const fallback = try self.lowerExpr(option_or.fallback, option.block);
+        const temp = try self.addTemp(try self.inferExprType(option_or.fallback));
+        try self.store.appendStatement(fallback.block, .{ .span = expr.span, .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(temp), .{ .option_or = .{ .option = option.operand, .fallback = fallback.operand } }) });
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = fallback.block };
+    }
+
     fn lowerFixedBufferAppend(self: *FunctionLowerer, expr: hir.HirExpr, append: anytype, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
         const buffer = try self.lowerExpr(append.buffer, block_id);
         const value = try self.lowerExpr(append.value, buffer.block);
@@ -1213,6 +1245,10 @@ const FunctionLowerer = struct {
             .slice_len, .fixed_buffer_len, .fixed_buffer_capacity => self.semantic_module.types.intType(),
             .fixed_buffer_empty => |type_id| type_id,
             .fixed_buffer_append => self.semantic_module.types.voidType(),
+            .option_some => |some| some.type_id,
+            .option_none => |type_id| type_id,
+            .option_is_some => self.semantic_module.types.boolType(),
+            .option_or => |option_or| try self.inferExprType(option_or.fallback),
             .decide => |decide| decide.enum_type,
             .try_expr => |operand| blk: {
                 const operand_type = try self.inferExprType(operand);
@@ -1245,6 +1281,10 @@ const FunctionLowerer = struct {
             .slice_len, .fixed_buffer_len, .fixed_buffer_capacity => self.semantic_module.types.intType(),
             .fixed_buffer_empty => |type_id| type_id,
             .fixed_buffer_append => self.semantic_module.types.voidType(),
+            .option_some => |some| some.type_id,
+            .option_none => |type_id| type_id,
+            .option_is_some => self.semantic_module.types.boolType(),
+            .option_or => |option_or| try self.inferExprType(option_or.fallback),
             else => error.InvalidMirLowering,
         };
     }

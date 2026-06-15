@@ -62,6 +62,9 @@ pub const DiagnosticCode = enum {
     FixedBufferCapacityMustBePositive,
     FixedBufferAppendTypeMismatch,
     FixedBufferReceiverRequired,
+    OptionRequiresValueType,
+    OptionNoneRequiresTargetType,
+    OptionSomeTypeMismatch,
     DuplicateParameterName,
     UnknownIdentifier,
     UnknownFunction,
@@ -310,6 +313,9 @@ pub const DiagnosticCode = enum {
             .FixedBufferCapacityMustBePositive => "CON0420",
             .FixedBufferAppendTypeMismatch => "CON0421",
             .FixedBufferReceiverRequired => "CON0422",
+            .OptionRequiresValueType => "CON0500",
+            .OptionNoneRequiresTargetType => "CON0511",
+            .OptionSomeTypeMismatch => "CON0512",
             .DuplicateParameterName => "CON0025",
             .UnknownIdentifier => "CON0026",
             .UnknownFunction => "CON0027",
@@ -1190,6 +1196,17 @@ pub fn arrayToSliceElementTypeMismatch(span: SourceSpan) Diagnostic {
     return Diagnostic.init(.ArrayToSliceElementTypeMismatch, .@"error", "array element type does not match Slice element type", span);
 }
 
+pub fn optionRequiresValueType(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.OptionRequiresValueType, .@"error", "Option requires exactly one value type argument", span);
+}
+
+pub fn optionNoneRequiresTargetType(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.OptionNoneRequiresTargetType, .@"error", "optionNone requires an explicit Option element type", span);
+}
+
+pub fn optionSomeTypeMismatch(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.OptionSomeTypeMismatch, .@"error", "optionSome payload does not match the requested Option element type", span);
+}
 pub fn fixedBufferRequiresElementAndCapacity(span: SourceSpan) Diagnostic {
     return Diagnostic.init(.FixedBufferRequiresElementAndCapacity, .@"error", "FixedBuffer requires exactly one element type and one positive integer capacity", span);
 }

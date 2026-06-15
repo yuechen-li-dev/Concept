@@ -1,0 +1,15 @@
+module Main;
+
+Option<int> makeSome() {
+    return optionSome<int>(11);
+}
+
+int use(Option<int> value) {
+    return optionOr(value, 0);
+}
+
+int main() {
+    Option<int> value = makeSome();
+    return use(value);
+}
+// expect: 11

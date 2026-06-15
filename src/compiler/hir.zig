@@ -465,6 +465,10 @@ pub const HirExprKind = union(enum) {
     array_literal: struct { type_id: types.TypeId, elements: []ExprId },
     fixed_buffer_empty: types.TypeId,
     fixed_buffer_append: struct { buffer: ExprId, value: ExprId },
+    option_some: struct { type_id: types.TypeId, value: ExprId },
+    option_none: types.TypeId,
+    option_is_some: ExprId,
+    option_or: struct { option: ExprId, fallback: ExprId },
     index_access: struct { base: ExprId, index: ExprId, result_type: types.TypeId, array_length: u64, is_slice: bool, is_fixed_buffer: bool = false },
     slice_len: ExprId,
     fixed_buffer_len: ExprId,
@@ -1954,6 +1958,20 @@ pub const HirStore = struct {
                 for (literal.elements) |element| try self.writeExprDebug(writer, element, depth + 1);
             },
             .fixed_buffer_empty => |type_id| try writer.print("FixedBufferEmpty {f}\n", .{type_id}),
+            .option_some => |some| {
+                try writer.print("OptionSome {f}\n", .{some.type_id});
+                try self.writeExprDebug(writer, some.value, depth + 1);
+            },
+            .option_none => |type_id| try writer.print("OptionNone {f}\n", .{type_id}),
+            .option_is_some => |option| {
+                try writer.writeAll("OptionIsSome\n");
+                try self.writeExprDebug(writer, option, depth + 1);
+            },
+            .option_or => |option_or| {
+                try writer.writeAll("OptionOr\n");
+                try self.writeExprDebug(writer, option_or.option, depth + 1);
+                try self.writeExprDebug(writer, option_or.fallback, depth + 1);
+            },
             .fixed_buffer_append => |append| {
                 try writer.writeAll("FixedBufferAppend\n");
                 try self.writeExprDebug(writer, append.buffer, depth + 1);

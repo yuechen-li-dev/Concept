@@ -1,0 +1,7 @@
+module Main;
+
+int main() {
+    Option<int> value = optionSome<int>(3);
+    return optionOr(value, 0);
+}
+// expect: 3
