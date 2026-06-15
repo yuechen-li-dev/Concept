@@ -471,7 +471,7 @@ Explicitly deferred:
 
 ```text
 P19-M0  Design doc: yielding machines and explicit suspension
-P19-M1  yield statement syntax / AST / HIR scaffold
+P19-M1  yield statement syntax / AST / HIR scaffold (implemented: lexer keyword, parser statement, AST/HIR statement nodes, source spans, debug/deinit paths, machine-state semantic guard, and six fixtures)
 P19-M2  yield validation: machine-state-only, statement-only, no value
 P19-M3  backend lowering: yield exits Step without state/completion mutation
 P19-M4  yield + Complete / Result / State behavior fixtures
@@ -481,3 +481,8 @@ P19-M7  diagnostics and runtime-failure hardening
 P19-M8  examples/fixtures: wait-until, polling, long-running behavior
 P19-M9  closeout
 ```
+
+
+## P19-M1 status: syntax / AST / HIR scaffold
+
+P19-M1 is implemented as a syntax and compiler-representation scaffold only. Bare `yield;` now tokenizes as a keyword, parses in statement position inside machine state bodies, preserves its source span in AST and HIR, participates in AST/HIR deinit and debug dumps, and lowers from AST to HIR as a no-payload statement. `yield;` in ordinary functions is rejected with `CON0300`. Value-bearing forms such as `yield 1;`, `yield return 1;`, and expression-position `yield` remain rejected by the parser. Runtime lowering remains intentionally unsupported and deferred to P19-M3; P19-M2 will harden full validation. No `yield return`, `yield value`, `suspend`, continuation yield, async/generator protocol, scheduler, blackboard/mailbox runtime, or DragonGod runtime hook is introduced. The M1 fixture set adds six fixtures under `language/phase19-yielding-machines/`.

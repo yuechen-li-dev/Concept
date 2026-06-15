@@ -333,6 +333,7 @@ pub const HirStmtKind = union(enum) {
     block: []StmtId,
     return_stmt: ?ExprId,
     transition_stmt: HirTransitionTarget,
+    yield_stmt,
     local_decl: struct { local: LocalId, initializer: ExprId },
     assignment: struct { target: AssignTarget, value: ExprId },
     expr_stmt: ExprId,
@@ -739,6 +740,7 @@ pub const HirStore = struct {
             switch (stmt.kind) {
                 .block => |children| if (children.len > 0) self.allocator.free(children),
                 .transition_stmt => |target| freeTransitionTarget(self.allocator, target),
+                .yield_stmt => {},
                 .panic_stmt => |panic_stmt| self.allocator.free(panic_stmt.reason),
                 .assert_stmt => |assert_stmt| self.allocator.free(assert_stmt.reason),
                 .match_stmt => |match_stmt| if (match_stmt.arms.len > 0) {
@@ -1781,6 +1783,9 @@ pub const HirStore = struct {
             .transition_stmt => |target| {
                 try writer.writeAll("Transition\n");
                 try self.writeTransitionTargetDebug(writer, target, depth + 1);
+            },
+            .yield_stmt => {
+                try writer.writeAll("Yield\n");
             },
             .local_decl => |decl| {
                 try writer.print("LocalDecl {f}\n", .{decl.local});

@@ -1,0 +1,15 @@
+# name: yield return
+# phase: parse
+# expect: fail
+
+=== source ===
+module Main;
+
+machine Bad {
+    state Start {
+        yield return 1;
+    }
+}
+
+=== diagnostics ===
+CON0003

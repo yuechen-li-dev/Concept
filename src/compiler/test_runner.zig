@@ -300,7 +300,7 @@ const Runner = struct {
                 break :blk null;
             },
             .unsafe_block => |body| try self.executeStmt(body, frame, return_type),
-            .transition_stmt, .arena_reset, .arena_destroy, .match_stmt => error.UnsupportedConstruct,
+            .transition_stmt, .yield_stmt, .arena_reset, .arena_destroy, .match_stmt => error.UnsupportedConstruct,
         };
     }
 

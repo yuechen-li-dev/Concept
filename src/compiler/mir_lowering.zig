@@ -184,6 +184,7 @@ const FunctionLowerer = struct {
                 return block_id;
             },
             .transition_stmt => return error.MachineLoweringNotImplemented,
+            .yield_stmt => return error.MachineLoweringNotImplemented,
             .if_stmt => |if_stmt| return self.lowerIf(stmt, if_stmt, block_id),
             .while_stmt => |while_stmt| return self.lowerWhile(stmt, while_stmt, block_id),
             .unsafe_block => |body| return self.lowerStmt(body, block_id),

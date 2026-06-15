@@ -1,0 +1,14 @@
+# name: yield expression
+# phase: parse
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    int x = yield;
+    return x;
+}
+
+=== diagnostics ===
+CON0003

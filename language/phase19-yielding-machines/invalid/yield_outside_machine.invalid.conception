@@ -1,0 +1,14 @@
+# name: yield outside machine
+# phase: parse
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    yield;
+    return 0;
+}
+
+=== diagnostics ===
+CON0300

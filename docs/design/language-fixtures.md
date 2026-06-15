@@ -56,6 +56,11 @@ language/phase19-yielding-machines/valid/
 language/phase19-yielding-machines/invalid/
 ```
 
+
+## Phase 19 yielding-machine fixtures
+
+Phase 19 fixtures live under `language/phase19-yielding-machines/`. P19-M1 adds six syntax/scaffold fixtures: one valid check/HIR fixture for bare `yield;` in a machine state body, and invalid parse fixtures for `yield;` outside a machine state, `yield 1;`, `yield return 1;`, expression-position `yield`, and a missing semicolon. These fixtures deliberately stop before backend/runtime yield behavior; P19-M3 owns executable lowering.
+
 ## Phase 5 sum-type fixtures
 
 Phase 5 fixtures live under `language/phase5-sum-types/` and cover the concrete enum/failure surface: enum constructors, enum-variant `match`, payload binding, `must_use`, `discard`, strict Result-shaped metadata, and `try` diagnostics. Valid run fixtures execute through the full parse -> HIR -> MIR -> MIR-backed C -> `zig cc` -> native exit-code path; invalid check fixtures use code-based diagnostic matching.

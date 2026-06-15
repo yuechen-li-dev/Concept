@@ -935,6 +935,10 @@ pub const PanicStmt = struct {
     span: SourceSpan,
 };
 
+pub const YieldStmt = struct {
+    span: SourceSpan,
+};
+
 pub const AssertStmt = struct {
     condition: *Expr,
     reason: Expr.StringLiteralExpr,
@@ -954,6 +958,7 @@ pub const Stmt = union(enum) {
     expr_stmt: ExprStmt,
     discard_stmt: DiscardStmt,
     panic_stmt: PanicStmt,
+    yield_stmt: YieldStmt,
     assert_stmt: AssertStmt,
     return_stmt: ReturnStmt,
     transition_stmt: TransitionStmt,
@@ -970,6 +975,7 @@ pub const Stmt = union(enum) {
             .expr_stmt => |stmt| stmt.deinit(allocator),
             .discard_stmt => |stmt| stmt.deinit(allocator),
             .panic_stmt => {},
+            .yield_stmt => {},
             .assert_stmt => |stmt| stmt.deinit(allocator),
             .return_stmt => |stmt| stmt.deinit(allocator),
             .transition_stmt => |stmt| stmt.deinit(allocator),
@@ -1013,6 +1019,10 @@ pub const Stmt = union(enum) {
                 try writer.writeAll("Panic ");
                 try writer.writeAll(stmt.reason.text);
                 try writer.writeByte('\n');
+            },
+            .yield_stmt => {
+                try writeIndent(writer, depth);
+                try writer.writeAll("Yield\n");
             },
             .assert_stmt => |stmt| {
                 try writeIndent(writer, depth);

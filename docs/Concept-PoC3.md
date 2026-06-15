@@ -2966,3 +2966,7 @@ P18-M7 hardens existing machine runtime failures rather than adding language sur
 ### Phase 19 M0: yielding machines and explicit suspension
 
 P19-M0 starts Phase 19 as a design-only milestone. The chosen v0 surface is bare `yield;` inside machine state bodies: it exits the current `Step`, leaves the machine incomplete, preserves the current state, writes no result, takes no transition, allocates nothing, creates no task, and invokes no scheduler. The next `Step` re-enters the same state body from the beginning. `yield return`, yield values, `suspend`, `resume`, async/await, generator protocols, continuation-preserving yield, lifted locals, and sub-state program counters remain deferred.
+
+### Phase 19 M1: `yield;` syntax / AST / HIR scaffold
+
+P19-M1 implements only the front-end scaffold for bare `yield;`: `yield` is a reserved token, machine-state statement parsing creates a no-payload AST node with a source span, semantic lowering creates a no-payload HIR statement with the same span, and AST/HIR cleanup and debug output know about the statement. Ordinary-function `yield;` is rejected with `CON0300`; value, `yield return`, expression-position, and missing-semicolon forms are fixture-pinned as invalid. Backend/runtime lowering is still intentionally unsupported until P19-M3, so P19-M1 adds check/parse fixtures rather than executable yield behavior.

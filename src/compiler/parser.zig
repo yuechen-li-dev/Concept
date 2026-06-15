@@ -1259,6 +1259,7 @@ pub const Parser = struct {
         }
         if (self.current().kind == .@"return") return try self.parseReturnStmt(allocator);
         if (self.current().kind == .transition) return try self.parseTransitionStmt(allocator);
+        if (self.current().kind == .yield) return try self.parseYieldStmt();
         if (self.current().kind == .@"if") return try self.parseIfStmt(allocator);
         if (self.current().kind == .@"while") return try self.parseWhileStmt(allocator);
         if (self.current().kind == .unsafe) return try self.parseUnsafeBlockStmt(allocator);
@@ -1274,6 +1275,25 @@ pub const Parser = struct {
         try self.report(.UnexpectedToken, "unsupported statement in function body", self.current().span);
         self.recoverStatement();
         return null;
+    }
+
+    fn parseYieldStmt(self: *Parser) !?ast.Stmt {
+        const yield_token = self.advance();
+        if (self.machine_state_depth == 0) {
+            try self.diagnostics.append(diagnostics_model.yieldOnlyAllowedInMachineState(yield_token.span));
+            self.recoverStatement();
+            return null;
+        }
+
+        const end_span = if (self.match(.semicolon)) |semicolon| semicolon.span else blk: {
+            try self.report(.UnexpectedToken, "expected ';' after yield statement", self.current().span);
+            self.recoverStatement();
+            break :blk yield_token.span;
+        };
+
+        return .{ .yield_stmt = .{
+            .span = ast.spanFromBounds(yield_token.span.start, spanEnd(end_span)),
+        } };
     }
 
     fn parseTransitionStmt(self: *Parser, allocator: std.mem.Allocator) !?ast.Stmt {
@@ -3832,6 +3852,7 @@ fn stmtSpan(stmt: ast.Stmt) SourceSpan {
         .expr_stmt => |expr_stmt| expr_stmt.span,
         .discard_stmt => |discard_stmt| discard_stmt.span,
         .panic_stmt => |panic_stmt| panic_stmt.span,
+        .yield_stmt => |yield_stmt| yield_stmt.span,
         .assert_stmt => |assert_stmt| assert_stmt.span,
         .return_stmt => |return_stmt| return_stmt.span,
         .transition_stmt => |transition_stmt| transition_stmt.span,

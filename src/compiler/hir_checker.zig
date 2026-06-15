@@ -517,6 +517,10 @@ const Checker = struct {
                 try self.reportAt(.MachineSemanticsNotImplemented, "machine transition statements are not executable in function HIR", stmt.span);
                 return error.InvalidSemanticModule;
             },
+            .yield_stmt => {
+                try self.reportAt(.YieldOnlyAllowedInMachineState, "yield statements are only allowed in machine state HIR", stmt.span);
+                return error.InvalidSemanticModule;
+            },
             .local_decl => |decl| {
                 const local = self.module.hir.getLocal(decl.local);
                 if (self.isInterfaceRuntimeType(local.type_id) or self.isDynInterfaceType(local.type_id)) {
@@ -1587,6 +1591,7 @@ const Checker = struct {
             .while_stmt => |while_stmt| .{ .while_stmt = .{ .condition = try self.cloneExpr(while_stmt.condition, subst, param_map, local_map, span), .body = try self.cloneStmt(while_stmt.body, subst, param_map, local_map, function_id, span) } },
             .unsafe_block => |body| .{ .unsafe_block = try self.cloneStmt(body, subst, param_map, local_map, function_id, span) },
             .transition_stmt => return error.InvalidSemanticModule,
+            .yield_stmt => return error.InvalidSemanticModule,
             .match_stmt => |match_stmt| blk: {
                 var arms = try self.allocator.alloc(hir.HirMatchArm, match_stmt.arms.len);
                 errdefer self.allocator.free(arms);
