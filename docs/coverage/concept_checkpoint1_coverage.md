@@ -1,17 +1,17 @@
 # Concept — Checkpoint 1 Coverage Matrix
-## Phase 18 M8 vs PoC3 Constitution
+## Phase 18 M9 closeout vs PoC3 Constitution
 
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
-**Phases closed:** 1 through 17
-**Current phase:** Phase 18 in progress — P18-M8 examples and integration fixtures complete
-**Fixture corpus:** 1029 total `.conception` fixture files; 85 under `language/phase11-testing/`; 108 under `language/phase15-c-abi/`; 73 under `language/phase16-imports/`; 57 under `language/phase17-runtime-failure/`; 66 under `language/phase18-machines/`
+**Phases closed:** 1 through 18
+**Current phase:** Phase 18 closed — P18-M9 closeout complete
+**Fixture corpus:** 1102 total `.conception` fixture files; 85 under `language/phase11-testing/`; 108 under `language/phase15-c-abi/`; 73 under `language/phase16-imports/`; 57 under `language/phase17-runtime-failure/`; 66 under `language/phase18-machines/`
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
 
-## Phase 18 M8 snapshot
+## Phase 18 M9 closeout snapshot
 
-Phase 18 is in closeout after P18-M8. The machine composition substrate now has examples under `examples/phase18/` and 66 fixtures under `language/phase18-machines/`: 43 valid and 23 invalid. The P18-M8 additions pin hierarchical by-value child frames, explicit child stepping, `Complete(child)`, `Result(child)`, numeric `State(machine)`, bool `transition match`, deterministic `transition decide`, shared `cpt_panic` runtime machine failures, and backend-shape assertions that exclude hidden heap allocation, scheduler, async, blackboard, mailbox, event-bus, and DragonGod runtime hooks. Remaining Phase 18 work is closeout only; `yield`, scheduler, async, blackboard/mailbox/event keywords, dynamic child lists, heap-owned machines, `StateName`, reflection, and DragonGod runtime hooks remain deferred.
+Phase 18 is closed after P18-M9. The machine composition substrate now has examples under `examples/phase18/` and 66 fixtures under `language/phase18-machines/`: 43 valid and 23 invalid. The closed Phase 18 substrate pins hierarchical by-value child frames, explicit child stepping, `Complete(child)`, `Result(child)`, numeric `State(machine)`, bool `transition match`, deterministic `transition decide`, shared `cpt_panic` runtime machine failures, and backend-shape assertions that exclude hidden heap allocation, scheduler, async, blackboard, mailbox, event-bus, and DragonGod runtime hooks. Deferred non-goals remain explicit: `yield`, scheduler, async, blackboard/mailbox/event keywords, dynamic child lists, heap-owned machines, `StateName`, reflection, and DragonGod runtime hooks remain deferred.
 
 ---
 
@@ -411,22 +411,23 @@ Phase 18 is in closeout after P18-M8. The machine composition substrate now has 
 | `machine Name(params) -> ReturnType { }` declaration | ✅ | Phase 13 |
 | `state StateName { }` blocks | ✅ | Phase 13 |
 | `transition StateName` literal transitions | ✅ | Phase 13 — runnable, C backend lowered |
-| `transition match { ... }` transitions | 🔶 | Phase 13 parsed and HIR-represented this form; Phase 18 plans deterministic runtime lowering with shared-panic no-match failure |
-| `transition decide { ... }` transitions | 🔶 | Phase 13 parsed and HIR-represented this form; Phase 18 plans deterministic runtime lowering with int scores, bool guards, source-order tie-breaking, and shared-panic no-enabled-candidate failure |
+| `transition match { ... }` transitions | ✅ | Phase 18 closed with executable runtime bool subset: bool scrutinees, `true`/`false`/`_` labels, deterministic branching, exhaustive/default validation, and shared-panic no-match reason reserved for future wider match subsets |
+| `transition decide { ... }` transitions | ✅ | Phase 18 closed with deterministic v0 runtime lowering: optional bool guards, required int scores, missing `when` enabled, disabled candidates ignored, highest score wins, strict `>` preserves source-order ties, and no-enabled candidates call shared `cpt_panic` |
 | `Step(machine)` as statement | ✅ | Phase 13 — statement-like, produces no value |
 | `Complete(machine)` returning bool | ✅ | Phase 13 |
-| `Result(machine)` returning result type | ✅ | Phase 13 — traps if read before completion |
+| `Result(machine)` returning result type | ✅ | Phase 13; Phase 17/18 route before-completion reads through shared `cpt_panic` with stable reason |
 | `MachineName(args)` construction | ✅ | Phase 13 |
 | `noalloc machine` effect checking | ✅ | Phase 13 — `noalloc` effect on machine declaration enforced |
 | `yield` statement in machines | ❌ | Deferred from Phase 13 |
-| Nested machine fields / child frames | ❌ | Phase 18 P18-M1 audits/hardens the existing local machine frame value model first; by-value zero-parameter child fields and explicit parent `Step`/`Complete`/`Result` remain deferred to P18-M2/P18-M3 |
+| Nested machine fields / child frames | ✅ | Phase 18 closed for zero-parameter child machine fields stored by value in parent frames, parent-constructor child initialization, and explicit parent `Step(child)` / `Complete(child)` / `Result(child)` operations |
+| `State(machine) -> int` | ✅ | Phase 18 closed for local and nested child machine numeric state introspection; no `StateName(machine)`, reflection metadata, or state-name runtime surface |
 | Machine lowers to explicit state struct in MIR | ✅ | Phase 13 — state enum and struct visible in MIR |
 | Machine lowering visible in MIR (not hidden) | ✅ | Phase 13 |
 | References crossing yield restricted | ❌ | Depends on yield being implemented |
 | Immovable machine frames | ❌ | Depends on `immovable` being implemented |
 | Scalar `int`/`bool` params and results only (Phase 13 v0 constraint) | ✅ | Phase 13 — non-scalar params/results produce clear error |
 
-> **Implementation difference:** PoC3 §37 presents `transition decide` as a core machine primitive alongside `transition`. Phase 13 implemented decide-transition *parse and HIR representation* and P18-M5 adds runtime lowering for the deterministic bool-guard/int-score subset. The standalone `decide` expression (Phase 5a) remains a separate fully runnable expression feature.
+> **Implementation difference:** PoC3 §37 presents `transition decide` as a core machine primitive alongside `transition`. Phase 13 implemented decide-transition *parse and HIR representation* and P18-M5 added runtime lowering for the deterministic bool-guard/int-score subset. The standalone `decide` expression (Phase 5a) remains a separate fully runnable expression feature.
 
 ---
 
@@ -545,7 +546,7 @@ Phase 18 is in closeout after P18-M8. The machine composition substrate now has 
 | §33 Comptime | 🔶 Scalar hermetic comptime done; type-level comptime, capability execution deferred |
 | §34–35 Reflection/macros | ❌ Correctly deferred per PoC3 |
 | §36 C interop | ✅ Phase 15 v0 complete for single-compilation-unit C ABI: `extern "C"` declarations/calls, `export "C"` definitions, validated `[Repr(C)]` structs by value/pointer, strict ABI diagnostics, duplicate C symbol rejection, extern prototype/call emission, unmangled exported C definitions, no generated includes, no C++ text, examples, and invalid coverage for deferred non-goals |
-| §37 State machines | 🔶 Literal transitions runnable; P18-M1 pins machine locals and shared panic routing; P18-M2/M3 add nested machines; P18-M4/M5 add executable match/decide subsets; `yield` and schedulers deferred |
+| §37 State machines | ✅ Phase 18 closed for the explicit machine substrate: local frames, by-value zero-parameter nested child fields, explicit `Step`/`Complete`/`Result`, runtime bool `transition match`, deterministic int-score/bool-guard `transition decide`, numeric `State(machine)`, shared-panic hardening, examples, and 66 Phase 18 fixtures; `yield`, schedulers, async, dynamic child lists, heap-owned machines, parameterized child initialization, enum/int runtime match, `StateName`, reflection, and DragonGod runtime hooks remain deferred |
 | §38–39 SoA/audit | ❌ Provisional/future |
 | §40 Compiler architecture | 🔶 Core pipeline done; LLVM/native backends are Stage 3 |
 | §41 Bringup roadmap | 🔶 Stage 0 complete; Stage 1 ~75% |
@@ -571,19 +572,19 @@ Phase 18 is in closeout after P18-M8. The machine composition substrate now has 
 ---
 
 *This matrix began as the Phase 13 closeout snapshot and has been updated
-through Phase 17 closeout, with Phase 18 P18-M1 machine frame/value audit now complete. Stage 1 is substantially implemented. Phase 14
+through Phase 18 closeout. Stage 1 is substantially implemented. Phase 14
 closed runtime interfaces and borrowed dyn dispatch v0. Phase 15 closed the
 single-compilation-unit C ABI v0 surface. Phase 16 closes imports and
 multi-module compilation-unit modules v0: harness/driver-supplied multi-file
 source sets, module table, import graph, module-aware HIR, per-module ordinary
 symbol tables, qualified cross-module functions/types, imported repr(C)
 metadata, and multi-source MIR/backend/run in one generated C unit. Remaining
-Stage 1 gaps include `yield` in machines, nested machine implementation, runtime transition match/decide implementation, visibility and package/filesystem
+Stage 1 gaps include `yield` in machines, visibility and package/filesystem
 module resolution, separate compilation/linker driving, reference/receiver hardening, and broader ABI/layout
 features deliberately deferred beyond Phase 15 (repr(C) enums, nested by-value
 struct layout, packed/custom alignment, bitfields, headers/includes, automatic
 linking, C++ ABI, varargs, extern variables, symbol aliasing, callbacks, and
-platform ABI matrices). Phase 17 closes the basic runtime failure substrate, so basic panic, basic runtime assert, shared `cpt_panic`, and machine Result-before-completion trap routing are no longer Stage 1 gaps.*
+platform ABI matrices). Phase 17 closes the basic runtime failure substrate, so basic panic, basic runtime assert, shared `cpt_panic`, machine Result-before-completion trap routing, nested machine fields, runtime bool transition match, runtime deterministic transition decide, and numeric `State(machine)` are no longer Stage 1 gaps.*
 
 
 ## Phase 17 M9 closeout update

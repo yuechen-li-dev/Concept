@@ -2903,6 +2903,12 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectRunFixture("../../../language/phase18-machines/valid/machine_state_nested_child_run.valid.conception");
     try expectRunFixture("../../../language/phase18-machines/valid/machine_state_no_completion_requirement_run.valid.conception");
     try expectBackendCFixture("../../../language/phase18-machines/valid/machine_state_backend.valid.conception");
+    try expectRunFixture("../../../language/phase18-machines/valid/integration_hierarchical_child_run.valid.conception");
+    try expectRunFixture("../../../language/phase18-machines/valid/integration_match_child_completion_run.valid.conception");
+    try expectRunFixture("../../../language/phase18-machines/valid/integration_decide_utility_run.valid.conception");
+    try expectRunFixture("../../../language/phase18-machines/valid/integration_nested_decide_child_run.valid.conception");
+    try expectRunFixture("../../../language/phase18-machines/valid/integration_state_observation_run.valid.conception");
+    try expectBackendCFixture("../../../language/phase18-machines/valid/integration_phase18_backend_shape.valid.conception");
     try expectCheckFixture("../../../language/phase18-machines/invalid/machine_step_non_machine.invalid.conception");
     try expectCheckFixture("../../../language/phase18-machines/invalid/machine_step_temporary.invalid.conception");
     try expectCheckFixture("../../../language/phase18-machines/invalid/machine_complete_non_machine.invalid.conception");

@@ -528,8 +528,8 @@ P18-M7 raised the Phase 18 machine fixture corpus to 60 files before P18-M8 expa
 
 ## Phase 18 machine composition fixtures
 
-Phase 18 machine fixtures live under `language/phase18-machines/`. P18-M8 expands
-the corpus to 66 fixtures: 43 valid fixtures and 23 invalid fixtures. The added
+Phase 18 machine fixtures live under `language/phase18-machines/`. P18-M9 closes
+the corpus at 66 fixtures: 43 valid fixtures and 23 invalid fixtures. The final Phase 18 categories cover frame/value hardening, nested machine fields, nested operations, runtime match, runtime decide, `State(machine)`, runtime failure hardening, and integration examples/backend shape. The added
 integration fixtures cover hierarchical child machines, match-driven child
 completion, deterministic utility selection, nested utility controllers, numeric
 state observation, and combined backend shape assertions.
@@ -537,4 +537,4 @@ state observation, and combined backend shape assertions.
 The backend integration fixture intentionally asserts the absence of hidden
 runtime machinery: no `malloc`, scheduler, async marker, blackboard, mailbox,
 event bus, or DragonGod hook appears in generated C. This pins Phase 18 as a
-pre-DragonGod substrate rather than a DragonGod runtime implementation.
+pre-DragonGod substrate rather than a DragonGod runtime implementation. The full language fixture corpus now contains 1102 `.conception` files.

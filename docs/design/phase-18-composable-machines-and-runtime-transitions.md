@@ -633,3 +633,114 @@ Still deferred:
 - `StateName(machine)`;
 - reflection;
 - DragonGod runtime hooks.
+
+## P18-M9 closeout status: Phase 18 closed
+
+P18-M9 closes Phase 18. P18-M0 through P18-M9 are complete:
+
+- P18-M0 design document;
+- P18-M1 machine frame/value audit and hardening;
+- P18-M2 nested machine fields / child frames;
+- P18-M3 `Step` / `Complete` / `Result` composition for nested machines;
+- P18-M4 runtime bool `transition match` lowering;
+- P18-M5 runtime deterministic `transition decide` lowering;
+- P18-M6 `State(machine) -> int`;
+- P18-M7 runtime failure hardening for machine transitions;
+- P18-M8 examples and integration fixtures;
+- P18-M9 closeout documentation, coverage, and fixture registration audit.
+
+Final supported Phase 18 surface:
+
+- machine frame/value audit and hardening;
+- machine fields in machine bodies;
+- zero-parameter nested child machine fields;
+- child frame by-value storage in parent frame;
+- parent constructor child-frame initialization;
+- `Step(child)`;
+- `Complete(child)`;
+- `Result(child)`;
+- bool `transition match` at runtime;
+- `transition match` labels: `true`, `false`, `_`;
+- `transition match` bool exhaustiveness/default validation;
+- deterministic `transition decide` at runtime;
+- decide candidate optional bool guard;
+- decide candidate required int score;
+- missing `when` means enabled;
+- disabled candidates ignored;
+- highest score wins;
+- strict `>` tie behavior preserving source order;
+- no-enabled decide shared panic;
+- `State(machine) -> int`;
+- local and nested child machine introspection;
+- shared `cpt_panic` for machine runtime failures;
+- invalid machine state defensive panic;
+- `examples/phase18`;
+- Phase 18 integration fixtures.
+
+Final Phase 18 fixture count is 66 fixtures under `language/phase18-machines/`:
+43 valid fixtures and 23 invalid fixtures. The full language fixture corpus has
+1102 `.conception` files at closeout. The Phase 18 fixture categories cover
+frame/value hardening, nested machine fields, nested operations, runtime match,
+runtime decide, `State(machine)`, runtime failure hardening, and integration
+examples/backend shape. P18-M9 also registers the six P18-M8 integration fixtures
+in the Zig test harness so every Phase 18 fixture file is exercised.
+
+Final examples added under `examples/phase18/`:
+
+- `hierarchical-child-machine.concept`;
+- `match-child-completion.concept`;
+- `utility-decision.concept`;
+- `nested-utility-controller.concept`;
+- `machine-introspection.concept`;
+- `runtime-failure-notes.concept`;
+- `README.md`.
+
+Final backend hardening guarantees:
+
+- machine frames are explicit runtime values;
+- nested child frames are parent-frame fields stored by value;
+- parent constructors initialize zero-parameter child frames explicitly;
+- `Step(child)` lowers to an explicit child-frame address step;
+- `Complete(child)`, `Result(child)`, and `State(child)` lower to explicit frame
+  reads or guarded reads;
+- bool `transition match` lowers to deterministic runtime branching;
+- `transition decide` lowers to deterministic source-order candidate evaluation;
+- machine runtime failures route through shared backend-owned `cpt_panic` with
+  deterministic runtime failure behavior;
+- generated Phase 18 backend fixtures do not introduce hidden heap allocation,
+  scheduler machinery, async runtime machinery, blackboard/mailbox/event-bus
+  runtime machinery, reflection metadata, `StateName` machinery, or DragonGod
+  runtime hooks.
+
+Final stable runtime machine failure reasons:
+
+- `machine result cannot be read before completion`;
+- `machine decision transition has no enabled candidates`;
+- `machine transition match found no matching case`;
+- `invalid machine state reached`.
+
+Bool v0 `transition match` is statically exhaustive/default-covered, so an
+ordinary bool no-case runtime fixture is not emitted. The match no-case reason is
+documented for future wider match subsets.
+
+Final deferred non-goals:
+
+- new syntax beyond the implemented Phase 18 surface;
+- enum/int runtime `transition match`;
+- additional `transition decide` score types;
+- `yield`, suspend, or resume;
+- scheduler;
+- async runtime;
+- event bus keyword;
+- blackboard or mailbox keywords;
+- dynamic child lists;
+- heap-owned machines;
+- parameterized child initialization;
+- `StateName(machine)`;
+- reflection or runtime state metadata;
+- generic HSM/UML statechart support;
+- DragonGod-specific runtime hooks in core Concept.
+
+Phase 18 therefore closes as a composable, explicit, pre-DragonGod machine
+substrate. DragonGod can be built on top of these primitives, but core Concept
+contains no DragonGod runtime.
