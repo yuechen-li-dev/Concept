@@ -1,0 +1,35 @@
+module Main;
+
+machine TickOne -> int {
+    state Start { transition Done; }
+    state Done { return 1; }
+}
+
+machine LongRunningAction -> int {
+    TickOne first;
+    TickOne second;
+
+    state Running {
+        Step(first);
+        if (!Complete(first)) {
+            yield;
+        }
+
+        Step(second);
+        if (!Complete(second)) {
+            yield;
+        }
+
+        return Result(first) + Result(second);
+    }
+}
+
+int main() {
+    LongRunningAction action = LongRunningAction();
+
+    Step(action);
+    Step(action);
+    Step(action);
+
+    return Result(action);
+}
