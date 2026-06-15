@@ -1,0 +1,33 @@
+# name: transition match bool backend
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Gate(bool open) -> int {
+    state Start {
+        transition match (open) {
+            true => Open;
+            false => Closed;
+        };
+    }
+    state Open { return 1; }
+    state Closed { return 0; }
+}
+
+int main() {
+    Gate g = Gate(true);
+    Step(g);
+    return Result(g);
+}
+
+=== c ===
+contains: if (m->cpt_mp_open)
+contains: m->state = cpt_m_Gate_s_Open;
+contains: m->state = cpt_m_Gate_s_Closed;
+not_contains: transition match
+not_contains: __builtin_trap
+not_contains: scheduler
+not_contains: async
+not_contains: malloc

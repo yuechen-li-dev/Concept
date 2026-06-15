@@ -2949,3 +2949,7 @@ P18-M2 supports storage-only child machine frames: a machine may declare a field
 ### Phase 18 M3 — nested machine operations
 
 P18-M3 supports `Step(child)`, `Complete(child)`, and `Result(child)` inside parent machine state bodies for child machine fields. Bare child field lookup is limited to machine state bodies and is shadowed by normal locals/parameters. Backend C emits explicit child-field address stepping, child completion reads, and child result reads guarded by shared `cpt_panic`; there is no scheduler, async runtime, implicit child stepping, heap-owned child list, or DragonGod hook. The Phase 18 fixture corpus now has 25 machine fixtures.
+
+### Phase 18 M4: runtime `transition match` lowering
+
+P18-M4 supports executable bool `transition match` for machine states. The v0 subset accepts bool scrutinees, `true`/`false` arms, and wildcard defaults, requires exhaustive bool coverage when no wildcard is present, and lowers to deterministic C `if`/`else` assignment of the machine frame state. Scrutinees may include nested-machine completion checks such as `Complete(child)`. Non-bool scrutinees and mismatched cases are rejected; `transition decide` remains deferred.

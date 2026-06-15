@@ -237,6 +237,10 @@ pub const DiagnosticCode = enum {
     StepRequiresMachinePlace,
     CompleteRequiresMachineValue,
     ResultRequiresMachineValue,
+    TransitionMatchUnsupportedScrutinee,
+    TransitionMatchNonExhaustive,
+    TransitionMatchCaseTypeMismatch,
+    MachineTransitionMatchNoCase,
 
     pub fn format(self: DiagnosticCode) []const u8 {
         return switch (self) {
@@ -455,6 +459,10 @@ pub const DiagnosticCode = enum {
             .StepRequiresMachinePlace => "CON0291",
             .CompleteRequiresMachineValue => "CON0292",
             .ResultRequiresMachineValue => "CON0293",
+            .TransitionMatchUnsupportedScrutinee => "CON0294",
+            .TransitionMatchNonExhaustive => "CON0295",
+            .TransitionMatchCaseTypeMismatch => "CON0296",
+            .MachineTransitionMatchNoCase => "CON029B",
         };
     }
 };
@@ -1026,6 +1034,42 @@ pub fn duplicateStructField(span: SourceSpan) Diagnostic {
         "duplicate struct field name",
         span,
     ).withHelp("field names must be unique within a struct");
+}
+
+pub fn transitionMatchUnsupportedScrutinee(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .TransitionMatchUnsupportedScrutinee,
+        .@"error",
+        "unsupported transition match scrutinee",
+        span,
+    ).withHelp("Phase 18 M4 supports executable transition match for bool scrutinees only");
+}
+
+pub fn transitionMatchNonExhaustive(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .TransitionMatchNonExhaustive,
+        .@"error",
+        "non-exhaustive transition match",
+        span,
+    ).withHelp("bool transition matches must cover both true and false, or use a wildcard default arm");
+}
+
+pub fn transitionMatchCaseTypeMismatch(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .TransitionMatchCaseTypeMismatch,
+        .@"error",
+        "transition match case type mismatch",
+        span,
+    ).withHelp("case labels must match the transition match scrutinee type");
+}
+
+pub fn machineTransitionMatchNoCase(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .MachineTransitionMatchNoCase,
+        .@"error",
+        "transition match has no cases",
+        span,
+    ).withHelp("add true/false arms or a wildcard default arm");
 }
 
 pub fn nestedMachineFieldRequiresDefaultConstruction(span: SourceSpan) Diagnostic {
