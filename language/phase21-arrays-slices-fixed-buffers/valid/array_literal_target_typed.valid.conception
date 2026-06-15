@@ -1,0 +1,12 @@
+# name: phase21 array literal target typed
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Example;
+
+int main() {
+    int[4] values = [1, 2, 3, 4];
+    return 0;
+}

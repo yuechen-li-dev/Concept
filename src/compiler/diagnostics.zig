@@ -47,6 +47,9 @@ pub const DiagnosticCode = enum {
     UnsupportedTypeSyntax,
     ArrayLengthMustBeCompileTimeConstant,
     ArrayLengthMustBePositive,
+    ArrayLiteralLengthMismatch,
+    ArrayLiteralElementTypeMismatch,
+    EmptyArrayLiteralUnsupported,
     DuplicateParameterName,
     UnknownIdentifier,
     UnknownFunction,
@@ -280,6 +283,9 @@ pub const DiagnosticCode = enum {
             .UnsupportedTypeSyntax => "CON0024",
             .ArrayLengthMustBeCompileTimeConstant => "CON0402",
             .ArrayLengthMustBePositive => "CON0411",
+            .ArrayLiteralLengthMismatch => "CON0400",
+            .ArrayLiteralElementTypeMismatch => "CON0401",
+            .EmptyArrayLiteralUnsupported => "CON0412",
             .DuplicateParameterName => "CON0025",
             .UnknownIdentifier => "CON0026",
             .UnknownFunction => "CON0027",
@@ -1101,6 +1107,33 @@ pub fn arrayLengthMustBePositive(span: SourceSpan) Diagnostic {
         "array length must be positive",
         span,
     ).withHelp("Phase 21 M1 rejects zero-length and negative-length arrays");
+}
+
+pub fn arrayLiteralLengthMismatch(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .ArrayLiteralLengthMismatch,
+        .@"error",
+        "array literal length does not match target array length",
+        span,
+    ).withHelp("array literal element count must exactly match the fixed array length");
+}
+
+pub fn arrayLiteralElementTypeMismatch(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .ArrayLiteralElementTypeMismatch,
+        .@"error",
+        "array literal element type does not match array element type",
+        span,
+    ).withHelp("all array literal elements must match the fixed array element type");
+}
+
+pub fn emptyArrayLiteralUnsupported(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .EmptyArrayLiteralUnsupported,
+        .@"error",
+        "empty array literals are not supported yet",
+        span,
+    ).withHelp("Phase 21 M2 rejects [] because zero-length arrays are still unsupported");
 }
 
 pub fn duplicateStructField(span: SourceSpan) Diagnostic {

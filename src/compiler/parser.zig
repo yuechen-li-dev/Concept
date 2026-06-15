@@ -2865,6 +2865,7 @@ pub const Parser = struct {
                 return node;
             },
             .decide => return self.parseDecideExpr(allocator),
+            .left_bracket => return self.parseArrayLiteralExpr(allocator),
             .yield => {
                 self.diagnostics.append(diagnostics_model.yieldExpressionUnsupported(token.span)) catch return error.OutOfMemory;
                 return error.ParseFailed;
@@ -2898,6 +2899,41 @@ pub const Parser = struct {
                 return error.ParseFailed;
             },
         }
+    }
+
+    fn parseArrayLiteralExpr(self: *Parser, allocator: std.mem.Allocator) ParseExprError!*ast.Expr {
+        const left = self.advance();
+        var elements = std.ArrayList(*ast.Expr).init(allocator);
+        errdefer {
+            for (elements.items) |element| {
+                element.deinit(allocator);
+                allocator.destroy(element);
+            }
+            elements.deinit();
+        }
+        while (self.current().kind != .right_bracket and self.current().kind != .eof) {
+            const element = self.parseExpr(allocator) catch |err| switch (err) {
+                error.OutOfMemory => return err,
+                error.ParseFailed => {
+                    self.report(.UnexpectedToken, "expected array literal element expression", self.current().span) catch return error.OutOfMemory;
+                    return error.ParseFailed;
+                },
+            };
+            try elements.append(element);
+            if (self.match(.comma) == null) break;
+            if (self.current().kind == .right_bracket) break;
+        }
+        const right_span = if (self.match(.right_bracket)) |right| right.span else blk: {
+            self.report(.UnexpectedToken, "expected ']' after array literal", self.current().span) catch return error.OutOfMemory;
+            break :blk left.span;
+        };
+        const owned = try elements.toOwnedSlice();
+        const node = try allocator.create(ast.Expr);
+        node.* = .{ .array_literal = .{
+            .elements = owned,
+            .span = ast.spanFromBounds(left.span.start, spanEnd(right_span)),
+        } };
+        return node;
     }
 
     fn recoverStatement(self: *Parser) void {

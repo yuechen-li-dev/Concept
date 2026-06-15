@@ -463,6 +463,7 @@ pub const HirExprKind = union(enum) {
     concept_requirement_call: struct { concept_id: ConceptId, requirement_index: u32, args: []ExprId },
     enum_constructor: struct { enum_id: EnumId, variant_id: VariantId, args: []ExprId },
     struct_literal: struct { struct_id: StructId, type_id: types.TypeId, fields: []HirStructLiteralField },
+    array_literal: struct { type_id: types.TypeId, elements: []ExprId },
     field_access: struct { receiver: ExprId, field_name: SymbolId, field_span: SourceSpan },
     target_metadata: struct { query: CompileTimeTargetQuery, field_span: SourceSpan },
     decide: struct { enum_type: types.TypeId, enum_id: EnumId, arms: []HirDecideArm },
@@ -764,6 +765,7 @@ pub const HirStore = struct {
                 .interface_call => |call| if (call.args.len > 0) self.allocator.free(call.args),
                 .enum_constructor => |constructor| if (constructor.args.len > 0) self.allocator.free(constructor.args),
                 .struct_literal => |literal| if (literal.fields.len > 0) self.allocator.free(literal.fields),
+                .array_literal => |literal| if (literal.elements.len > 0) self.allocator.free(literal.elements),
                 .decide => |decide| if (decide.arms.len > 0) self.allocator.free(decide.arms),
                 .machine_construct => |construct| if (construct.args.len > 0) self.allocator.free(construct.args),
                 .test_intrinsic => |test_intrinsic| {
@@ -1941,6 +1943,10 @@ pub const HirStore = struct {
                     try writer.print("Field {f}\n", .{field.field_id});
                     try self.writeExprDebug(writer, field.value, depth + 2);
                 }
+            },
+            .array_literal => |literal| {
+                try writer.print("ArrayLiteral {f}\n", .{literal.type_id});
+                for (literal.elements) |element| try self.writeExprDebug(writer, element, depth + 1);
             },
             .machine_field_ref => |field_id| {
                 try writer.print("MachineFieldRef {f}\n", .{field_id});

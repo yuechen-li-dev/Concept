@@ -1,0 +1,15 @@
+# name: phase21 empty array literal unsupported
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Example;
+
+int main() {
+    discard [];
+    return 0;
+}
+
+=== diagnostics ===
+CON0412

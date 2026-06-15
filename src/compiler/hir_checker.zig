@@ -888,6 +888,27 @@ const Checker = struct {
                 }
                 break :blk literal.type_id;
             },
+            .array_literal => |literal| blk: {
+                const array = switch (self.module.types.kind(literal.type_id)) {
+                    .array => |array| array,
+                    else => {
+                        try self.reportAt(.ArrayLiteralElementTypeMismatch, "array literal must have fixed array type", expr.span);
+                        return error.InvalidSemanticModule;
+                    },
+                };
+                if (array.length != literal.elements.len) {
+                    try self.reportAt(.ArrayLiteralLengthMismatch, "array literal length does not match target array length", expr.span);
+                    return error.InvalidSemanticModule;
+                }
+                for (literal.elements) |element| {
+                    const actual = try self.checkExpr(current_function_id, return_type, element);
+                    if (!sameType(actual, array.element)) {
+                        try self.reportAt(.ArrayLiteralElementTypeMismatch, "array literal element type does not match array element type", self.exprSpan(element));
+                        return error.InvalidSemanticModule;
+                    }
+                }
+                break :blk literal.type_id;
+            },
             .field_access => |field_access| blk: {
                 const receiver_type = try self.checkExpr(current_function_id, return_type, field_access.receiver);
                 const receiver_kind = self.module.types.kind(receiver_type);
@@ -1656,6 +1677,12 @@ const Checker = struct {
                 errdefer self.allocator.free(fields);
                 for (literal.fields, 0..) |field, index| fields[index] = .{ .field_id = field.field_id, .value = try self.cloneExpr(field.value, subst, param_map, local_map, span), .span = field.span };
                 break :blk .{ .struct_literal = .{ .struct_id = literal.struct_id, .type_id = try self.substituteType(literal.type_id, subst, span), .fields = fields } };
+            },
+            .array_literal => |literal| blk: {
+                var elements = try self.allocator.alloc(hir.ExprId, literal.elements.len);
+                errdefer self.allocator.free(elements);
+                for (literal.elements, 0..) |element, index| elements[index] = try self.cloneExpr(element, subst, param_map, local_map, span);
+                break :blk .{ .array_literal = .{ .type_id = try self.substituteType(literal.type_id, subst, span), .elements = elements } };
             },
             .field_access => |field_access| .{ .field_access = .{ .receiver = try self.cloneExpr(field_access.receiver, subst, param_map, local_map, span), .field_name = field_access.field_name, .field_span = field_access.field_span } },
             .target_metadata => |metadata| .{ .target_metadata = metadata },
