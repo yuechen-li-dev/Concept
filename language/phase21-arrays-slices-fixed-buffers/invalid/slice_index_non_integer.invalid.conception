@@ -1,0 +1,9 @@
+# name: phase21 slice index non integer
+# mode: check
+# expect_error: CON0407
+
+int first(Slice<int> values) {
+    return values[true];
+}
+
+int main() { return 0; }

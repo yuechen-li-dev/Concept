@@ -376,6 +376,12 @@ const Analyzer = struct {
                 try self.readOperand(states, array_index.base, span);
                 try self.readOperand(states, array_index.index, span);
             },
+            .slice_from_array => |slice| try self.readOperand(states, slice.array, span),
+            .slice_index => |slice_index| {
+                try self.readOperand(states, slice_index.base, span);
+                try self.readOperand(states, slice_index.index, span);
+            },
+            .slice_len => |operand| try self.readOperand(states, operand, span),
             .unary => |unary| try self.readOperand(states, unary.operand, span),
             .address_of => |place| try self.readPlace(states, place, span),
             .deref => |operand| try self.readOperand(states, operand, span),

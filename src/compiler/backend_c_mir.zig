@@ -18,6 +18,7 @@ const types = @import("types.zig");
 
 const machine_result_before_completion_reason = "machine result cannot be read before completion";
 const array_index_oob_reason = "Concept array index out of bounds";
+const slice_index_oob_reason = "Concept slice index out of bounds";
 const machine_decide_no_enabled_reason = "machine decision transition has no enabled candidates";
 const machine_match_no_case_reason = "machine transition match found no matching case"; // Documented stable reason; bool v0 exhaustiveness prevents emission.
 const invalid_machine_state_reason = "invalid machine state reached";
@@ -60,6 +61,9 @@ pub fn emitExecutableFromMir(
 
     const emitted_array_layouts = try emitArrayLayouts(writer, &ctx);
     if (emitted_array_layouts and (ctx.module.hir.enums.items.len > 0 or ctx.module.hir.structs.items.len > 0 or ctx.module.hir.machines.items.len > 0 or mir_module.store.functions.items.len > 0)) try writer.writeByte('\n');
+
+    const emitted_slice_layouts = try emitSliceLayouts(writer, &ctx);
+    if (emitted_slice_layouts and (ctx.module.hir.enums.items.len > 0 or ctx.module.hir.structs.items.len > 0 or ctx.module.hir.machines.items.len > 0 or mir_module.store.functions.items.len > 0)) try writer.writeByte('\n');
 
     const emitted_enum_layouts = try emitEnumLayouts(writer, &ctx);
     if (emitted_enum_layouts and ctx.module.hir.structs.items.len > 0) try writer.writeByte('\n');
@@ -144,6 +148,22 @@ fn emitArrayLayout(writer: anytype, ctx: *const BackendContext, type_id: types.T
     try writer.print(" data[{d}];\n}} ", .{array.length});
     try emitArrayTypeName(writer, ctx.module, type_id);
     try writer.writeAll(";\n");
+}
+
+fn emitSliceLayouts(writer: anytype, ctx: *const BackendContext) EmitError!bool {
+    var emitted_any = false;
+    for (ctx.module.types.types.items, 0..) |kind, index| {
+        if (kind != .slice) continue;
+        const type_id = types.TypeId{ .index = @intCast(index) };
+        if (emitted_any) try writer.writeByte('\n');
+        try writer.writeAll("typedef struct {\n    const ");
+        try emitCType(writer, ctx, kind.slice.element, null);
+        try writer.writeAll("* data;\n    int length;\n} ");
+        try emitSliceTypeName(writer, ctx.module, type_id);
+        try writer.writeAll(";\n");
+        emitted_any = true;
+    }
+    return emitted_any;
 }
 
 fn isSupportedArrayValueType(ctx: *const BackendContext, type_id: types.TypeId) bool {
@@ -1380,6 +1400,32 @@ fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue
             try emitOperand(writer, ctx, array_index.index);
             try writer.writeAll("])");
         },
+        .slice_from_array => |slice| {
+            try writer.writeByte('(');
+            try emitCType(writer, ctx, slice.result_type, null);
+            try writer.writeAll("){ .data = ");
+            try emitOperand(writer, ctx, slice.array);
+            try writer.print(".data, .length = {d} }}", .{slice.length});
+        },
+        .slice_index => |slice_index| {
+            try writer.writeByte('(');
+            try emitOperand(writer, ctx, slice_index.index);
+            try writer.writeAll(" < 0 || ");
+            try emitOperand(writer, ctx, slice_index.index);
+            try writer.writeAll(" >= ");
+            try emitOperand(writer, ctx, slice_index.base);
+            try writer.writeAll(".length ? (cpt_panic(\"");
+            try writer.writeAll(slice_index_oob_reason);
+            try writer.writeAll("\"), 0) : ");
+            try emitOperand(writer, ctx, slice_index.base);
+            try writer.writeAll(".data[");
+            try emitOperand(writer, ctx, slice_index.index);
+            try writer.writeAll("])");
+        },
+        .slice_len => |operand| {
+            try emitOperand(writer, ctx, operand);
+            try writer.writeAll(".length");
+        },
         .field_access => |field_access| {
             const field = ctx.module.hir.getField(field_access.field_id);
             const struct_decl = ctx.module.hir.getStruct(field.parent);
@@ -1581,6 +1627,7 @@ fn emitCTypeAt(writer: anytype, ctx: *const BackendContext, type_id: types.TypeI
             return error.InvalidExecutable;
         },
         .array => try emitArrayTypeName(writer, ctx.module, type_id),
+        .slice => try emitSliceTypeName(writer, ctx.module, type_id),
         .manual_init, .type_param => {
             try reportUnsupportedCType(ctx, span);
             return error.InvalidExecutable;
@@ -1614,6 +1661,11 @@ fn sameType(left: types.TypeId, right: types.TypeId) bool {
 
 fn emitArrayTypeName(writer: anytype, module: *const semantics.SemanticModule, type_id: types.TypeId) !void {
     try writer.writeAll("cpt_array_");
+    try emitTypeNameComponent(writer, module, type_id);
+}
+
+fn emitSliceTypeName(writer: anytype, module: *const semantics.SemanticModule, type_id: types.TypeId) !void {
+    try writer.writeAll("cpt_slice_");
     try emitTypeNameComponent(writer, module, type_id);
 }
 
@@ -1814,6 +1866,10 @@ fn emitTypeNameComponent(writer: anytype, module: *const semantics.SemanticModul
         .array => |array| {
             try emitTypeNameComponent(writer, module, array.element);
             try writer.print("_array_{d}", .{array.length});
+        },
+        .slice => |slice| {
+            try writer.writeAll("slice_");
+            try emitTypeNameComponent(writer, module, slice.element);
         },
         .void, .arena, .allocator, .alloc_error, .interface_type, .manual_init, .type_param => try writer.writeAll("unsupported"),
     }

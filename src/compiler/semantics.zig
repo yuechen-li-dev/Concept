@@ -1770,6 +1770,14 @@ const Collector = struct {
             const payload = (try self.resolveTypeNameScoped(type_name.generic_args[0], type_scope)) orelse return null;
             return try self.module.types.addManualInitType(payload);
         }
+        if (std.mem.eql(u8, part.text, "Slice")) {
+            if (type_name.generic_args.len != 1) {
+                try self.diagnostics.append(diagnostics.sliceRequiresElementType(type_name.span));
+                return null;
+            }
+            const element = (try self.resolveTypeNameScoped(type_name.generic_args[0], type_scope)) orelse return null;
+            return try self.module.types.addSliceType(element);
+        }
         if (type_name.generic_args.len != 0) {
             try self.diagnostics.append(diagnostics.unsupportedTypeSyntax(type_name.span));
             return null;
@@ -2300,13 +2308,28 @@ const BodyLowerer = struct {
                 }
                 const base_value = (try self.lowerAssignPlace(index_access.base.*, false)) orelse return null;
                 const base_type = self.assignPlaceType(base_value);
-                const array = switch (self.collector.module.types.kind(base_type)) {
-                    .array => |array| array,
+                const base_kind = self.collector.module.types.kind(base_type);
+                var element_type: types.TypeId = undefined;
+                var array_length: u64 = 0;
+                var is_slice = false;
+                switch (base_kind) {
+                    .array => |array| {
+                        element_type = array.element;
+                        array_length = array.length;
+                    },
+                    .slice => |slice| {
+                        element_type = slice.element;
+                        is_slice = true;
+                    },
                     else => {
                         try self.collector.diagnostics.append(diagnostics.arrayIndexRequiresArrayOrSlice(index_access.base.span()));
                         return null;
                     },
-                };
+                }
+                if (is_slice) {
+                    try self.collector.diagnostics.append(diagnostics.sliceElementAssignmentUnsupported(index_access.span));
+                    return null;
+                }
                 const index = (try self.lowerExpr(index_access.index.*)) orelse return null;
                 const index_type = (try self.inferExprType(index)) orelse return null;
                 if (!sameType(index_type, self.collector.module.types.intType())) {
@@ -2314,14 +2337,14 @@ const BodyLowerer = struct {
                     return null;
                 }
                 if (self.constantInt(index)) |value| {
-                    if (value < 0 or value >= array.length) {
-                        try self.collector.diagnostics.append(diagnostics.arrayIndexOutOfBounds(index_access.index.span(), value, array.length));
+                    if (value < 0 or (!is_slice and value >= array_length)) {
+                        try self.collector.diagnostics.append(diagnostics.arrayIndexOutOfBounds(index_access.index.span(), value, array_length));
                         return null;
                     }
                 }
                 const base = try self.collector.allocator.create(hir.AssignPlace);
                 base.* = base_value;
-                break :blk hir.AssignPlace{ .index = .{ .base = base, .index = index, .result_type = array.element, .array_length = array.length, .span = index_access.span } };
+                break :blk hir.AssignPlace{ .index = .{ .base = base, .index = index, .result_type = element_type, .array_length = array_length, .is_slice = is_slice, .span = index_access.span } };
             },
             else => {
                 try self.collector.diagnostics.append(diagnostics.Diagnostic.init(if (target_context) .ArrayIndexTargetNotAssignable else .FieldAssignmentNonPlace, .@"error", "array index assignment target must be an assignable place", target.span()));
@@ -2550,15 +2573,17 @@ const BodyLowerer = struct {
                         return null;
                     }
                     const arg_type = (try self.inferExprType(owned[0])) orelse return null;
-                    const array = switch (self.collector.module.types.kind(arg_type)) {
-                        .array => |array| array,
+                    switch (self.collector.module.types.kind(arg_type)) {
+                        .array => |array| {
+                            const text = try std.fmt.allocPrint(self.collector.allocator, "{d}", .{array.length});
+                            return try self.collector.module.hir.addExpr(.{ .int_literal = text }, call.span);
+                        },
+                        .slice => return try self.collector.module.hir.addExpr(.{ .slice_len = owned[0] }, call.span),
                         else => {
                             try self.collector.diagnostics.append(diagnostics.arrayIndexRequiresArrayOrSlice(call.args[0].span()));
                             return null;
                         },
-                    };
-                    const text = try std.fmt.allocPrint(self.collector.allocator, "{d}", .{array.length});
-                    return try self.collector.module.hir.addExpr(.{ .int_literal = text }, call.span);
+                    }
                 }
 
                 if (std.mem.eql(u8, call.callee.text, "manualAssumeInit")) {
@@ -2768,25 +2793,36 @@ const BodyLowerer = struct {
                 const base = (try self.lowerExpr(index_access.base.*)) orelse return null;
                 const index = (try self.lowerExpr(index_access.index.*)) orelse return null;
                 const base_type = (try self.inferExprType(base)) orelse return null;
-                const array = switch (self.collector.module.types.kind(base_type)) {
-                    .array => |array| array,
+                const base_kind = self.collector.module.types.kind(base_type);
+                var element_type: types.TypeId = undefined;
+                var array_length: u64 = 0;
+                var is_slice = false;
+                switch (base_kind) {
+                    .array => |array| {
+                        element_type = array.element;
+                        array_length = array.length;
+                    },
+                    .slice => |slice| {
+                        element_type = slice.element;
+                        is_slice = true;
+                    },
                     else => {
                         try self.collector.diagnostics.append(diagnostics.arrayIndexRequiresArrayOrSlice(index_access.base.span()));
                         return null;
                     },
-                };
+                }
                 const index_type = (try self.inferExprType(index)) orelse return null;
                 if (!sameType(index_type, self.collector.module.types.intType())) {
                     try self.collector.diagnostics.append(diagnostics.arrayIndexMustBeInteger(index_access.index.span()));
                     return null;
                 }
                 if (self.constantInt(index)) |value| {
-                    if (value < 0 or value >= array.length) {
-                        try self.collector.diagnostics.append(diagnostics.arrayIndexOutOfBounds(index_access.index.span(), value, array.length));
+                    if (value < 0 or (!is_slice and value >= array_length)) {
+                        try self.collector.diagnostics.append(diagnostics.arrayIndexOutOfBounds(index_access.index.span(), value, array_length));
                         return null;
                     }
                 }
-                return try self.collector.module.hir.addExpr(.{ .index_access = .{ .base = base, .index = index, .result_type = array.element, .array_length = array.length } }, index_access.span);
+                return try self.collector.module.hir.addExpr(.{ .index_access = .{ .base = base, .index = index, .result_type = element_type, .array_length = array_length, .is_slice = is_slice } }, index_access.span);
             },
             .field_access => |field_access| {
                 if (self.isUnboundTargetRoot(field_access.receiver.*)) {
@@ -3220,6 +3256,7 @@ const BodyLowerer = struct {
             },
             .arena_alloc => |arena_alloc| arena_alloc.result_type,
             .index_access => |index_access| index_access.result_type,
+            .slice_len => self.collector.module.types.intType(),
             .field_access => |field_access| blk: {
                 const receiver_type = (try self.inferExprType(field_access.receiver)) orelse return null;
                 const receiver_kind = self.collector.module.types.kind(receiver_type);
@@ -6053,7 +6090,8 @@ fn sameType(left: types.TypeId, right: types.TypeId) bool {
 fn isCompilerKnownTypeName(text: []const u8) bool {
     return std.mem.eql(u8, text, "Arena") or
         std.mem.eql(u8, text, "Allocator") or
-        std.mem.eql(u8, text, "AllocError");
+        std.mem.eql(u8, text, "AllocError") or
+        std.mem.eql(u8, text, "Slice");
 }
 
 fn isDynRejectedBuiltinTypeName(text: []const u8) bool {

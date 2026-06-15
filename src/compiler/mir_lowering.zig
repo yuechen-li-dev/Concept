@@ -468,6 +468,7 @@ const FunctionLowerer = struct {
             .array_literal => |literal| try self.lowerArrayLiteral(expr, literal, block_id),
             .field_access => |field_access| try self.lowerFieldAccess(expr, field_access, block_id),
             .index_access => |index_access| try self.lowerIndexAccess(expr, index_access, block_id),
+            .slice_len => |slice_expr| try self.lowerSliceLen(expr, slice_expr, block_id),
             .try_expr => |operand| try self.lowerTry(expr, operand, block_id),
             .decide => |decide| try self.lowerDecide(expr, decide, block_id),
         };
@@ -606,15 +607,28 @@ const FunctionLowerer = struct {
         errdefer if (args_owned) deinitInitializedOperands(self.allocator, args, initialized);
 
         var current = block_id;
-        for (call.args) |arg_expr| {
+        const callee = self.semantic_module.hir.getFunction(call.function);
+        for (call.args, 0..) |arg_expr, arg_index| {
             const lowered = try self.lowerExpr(arg_expr, current);
-            args[initialized] = lowered.operand;
-            initialized += 1;
             current = lowered.block;
+            var operand = lowered.operand;
+            if (arg_index < callee.params.len) {
+                const param_type = self.semantic_module.hir.getParam(callee.params[arg_index]).type_id;
+                if (self.semantic_module.types.kind(param_type) == .slice) {
+                    const arg_type = try self.inferExprType(arg_expr);
+                    if (self.semantic_module.types.kind(arg_type) == .array) {
+                        const array = self.semantic_module.types.kind(arg_type).array;
+                        const slice_temp = try self.addTemp(param_type);
+                        try self.store.appendStatement(current, .{ .span = expr.span, .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(slice_temp), mir.MirRvalue.sliceFromArray(operand, array.length, param_type)) });
+                        operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(slice_temp));
+                    }
+                }
+            }
+            args[initialized] = operand;
+            initialized += 1;
         }
 
         const temp = try self.addTemp(try self.inferExprTypeFrom(expr));
-        const callee = self.semantic_module.hir.getFunction(call.function);
         const call_rvalue: mir.MirRvalue = if (callee.is_extern)
             .{ .call = .{ .callee = .{ .extern_c = .{ .function = call.function, .symbol = callee.c_symbol_name orelse return error.InvalidMirLowering, .result_type = callee.return_type } }, .args = args } }
         else
@@ -860,10 +874,17 @@ const FunctionLowerer = struct {
             .span = expr.span,
             .kind = mir.MirStatementKind.assignTo(
                 mir.MirPlace.localPlace(temp),
-                mir.MirRvalue.arrayIndex(base.operand, index.operand, index_access.array_length, index_access.result_type),
+                if (index_access.is_slice) mir.MirRvalue.sliceIndex(base.operand, index.operand, index_access.result_type) else mir.MirRvalue.arrayIndex(base.operand, index.operand, index_access.array_length, index_access.result_type),
             ),
         });
         return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = index.block };
+    }
+
+    fn lowerSliceLen(self: *FunctionLowerer, expr: hir.HirExpr, slice_expr: hir.ExprId, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const lowered = try self.lowerExpr(slice_expr, block_id);
+        const temp = try self.addTemp(self.semantic_module.types.intType());
+        try self.store.appendStatement(lowered.block, .{ .span = expr.span, .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(temp), .{ .slice_len = lowered.operand }) });
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = lowered.block };
     }
 
     fn lowerFieldAccess(self: *FunctionLowerer, expr: hir.HirExpr, field_access: anytype, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
@@ -1155,6 +1176,7 @@ const FunctionLowerer = struct {
             .array_literal => |literal| literal.type_id,
             .field_access => |field_access| self.semantic_module.hir.getField(try self.resolveFieldAccess(field_access.receiver, field_access.field_name)).type_id,
             .index_access => |index_access| index_access.result_type,
+            .slice_len => self.semantic_module.types.intType(),
             .decide => |decide| decide.enum_type,
             .try_expr => |operand| blk: {
                 const operand_type = try self.inferExprType(operand);
@@ -1184,6 +1206,7 @@ const FunctionLowerer = struct {
             .group => |inner| try self.inferAddressableExprType(inner),
             .field_access => |field_access| self.semantic_module.hir.getField(try self.resolveFieldAccess(field_access.receiver, field_access.field_name)).type_id,
             .index_access => |index_access| index_access.result_type,
+            .slice_len => self.semantic_module.types.intType(),
             else => error.InvalidMirLowering,
         };
     }

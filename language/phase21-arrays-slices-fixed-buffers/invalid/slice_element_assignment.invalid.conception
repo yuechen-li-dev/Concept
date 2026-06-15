@@ -1,0 +1,10 @@
+# name: phase21 slice element assignment unsupported
+# mode: check
+# expect_error: CON0416
+
+int replace(Slice<int> values) {
+    values[0] = 1;
+    return 0;
+}
+
+int main() { return 0; }

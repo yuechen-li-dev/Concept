@@ -55,6 +55,9 @@ pub const DiagnosticCode = enum {
     ArrayIndexMustBeInteger,
     ArrayIndexOutOfBounds,
     ArrayIndexTargetNotAssignable,
+    SliceElementAssignmentUnsupported,
+    SliceRequiresElementType,
+    ArrayToSliceElementTypeMismatch,
     DuplicateParameterName,
     UnknownIdentifier,
     UnknownFunction,
@@ -296,6 +299,9 @@ pub const DiagnosticCode = enum {
             .ArrayIndexMustBeInteger => "CON0407",
             .ArrayIndexOutOfBounds => "CON0414",
             .ArrayIndexTargetNotAssignable => "CON0404",
+            .SliceElementAssignmentUnsupported => "CON0416",
+            .SliceRequiresElementType => "CON0417",
+            .ArrayToSliceElementTypeMismatch => "CON0418",
             .DuplicateParameterName => "CON0025",
             .UnknownIdentifier => "CON0026",
             .UnknownFunction => "CON0027",
@@ -1147,7 +1153,7 @@ pub fn emptyArrayLiteralUnsupported(span: SourceSpan) Diagnostic {
 }
 
 pub fn arrayIndexRequiresArrayOrSlice(span: SourceSpan) Diagnostic {
-    return Diagnostic.init(.ArrayIndexRequiresArrayOrSlice, .@"error", "array index receiver must be a fixed array", span);
+    return Diagnostic.init(.ArrayIndexRequiresArrayOrSlice, .@"error", "array index receiver must be a fixed array or slice", span);
 }
 
 pub fn arrayIndexMustBeInteger(span: SourceSpan) Diagnostic {
@@ -1162,6 +1168,18 @@ pub fn arrayIndexOutOfBounds(span: SourceSpan, index: i128, length: u64) Diagnos
 
 pub fn arrayIndexTargetNotAssignable(span: SourceSpan) Diagnostic {
     return Diagnostic.init(.ArrayIndexTargetNotAssignable, .@"error", "array index assignment target must be an assignable place", span);
+}
+
+pub fn sliceElementAssignmentUnsupported(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.SliceElementAssignmentUnsupported, .@"error", "slice element assignment is not supported in Phase 21 M6", span);
+}
+
+pub fn sliceRequiresElementType(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.SliceRequiresElementType, .@"error", "Slice requires exactly one element type argument", span);
+}
+
+pub fn arrayToSliceElementTypeMismatch(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.ArrayToSliceElementTypeMismatch, .@"error", "array element type does not match Slice element type", span);
 }
 
 pub fn duplicateStructField(span: SourceSpan) Diagnostic {
