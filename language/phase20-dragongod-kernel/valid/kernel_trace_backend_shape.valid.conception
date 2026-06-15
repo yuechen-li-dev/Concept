@@ -5,35 +5,30 @@
 === source ===
 module Main;
 struct StateId { int value; }; struct ActuationId { int value; }; struct Reason { int code; };
-enum AutomataSignal { None, Goto(StateId target, Reason reason), Push(StateId target, Reason reason), Pop(Reason reason), Succeed(Reason reason), Fail(Reason reason), Act(ActuationId id), AwaitActuation(ActuationId id), };
-enum TraceEventKind { Empty, Enter, Exit, Transition, Yield, Signal, };
+enum AutomataSignal { None, Succeed(Reason reason), };
+enum TraceEventKind { Empty, Enter, Signal, };
 struct TraceEvent { TraceEventKind kind; StateId from; StateId to; Reason reason; int tick; AutomataSignal signal; bool occupied; };
-struct TraceRecorder { int count; TraceEvent event0; TraceEvent event1; TraceEvent event2; TraceEvent event3; };
-TraceEvent traceEmptyEvent() { return TraceEvent { kind: TraceEventKind::Empty, from: StateId { value: 0 }, to: StateId { value: 0 }, reason: Reason { code: 0 }, tick: 0, signal: AutomataSignal::None, occupied: false }; }
-TraceRecorder traceRecorderEmpty() { return TraceRecorder { count: 0, event0: traceEmptyEvent(), event1: traceEmptyEvent(), event2: traceEmptyEvent(), event3: traceEmptyEvent() }; }
-int traceCount(TraceRecorder recorder) { return recorder.count; }
-TraceEvent traceAt(TraceRecorder recorder, int index) { if (index == 0) { return recorder.event0; } if (index == 1) { return recorder.event1; } if (index == 2) { return recorder.event2; } if (index == 3) { return recorder.event3; } panic("DragonGod.Trace index out of range"); }
-void traceAppend(mut TraceRecorder& recorder, TraceEvent event) { if (!recorder.event0.occupied) { recorder.event0 = event; recorder.count = recorder.count + 1; return; } if (!recorder.event1.occupied) { recorder.event1 = event; recorder.count = recorder.count + 1; return; } if (!recorder.event2.occupied) { recorder.event2 = event; recorder.count = recorder.count + 1; return; } if (!recorder.event3.occupied) { recorder.event3 = event; recorder.count = recorder.count + 1; return; } panic("DragonGod.Trace capacity exceeded"); }
+struct TraceRecorder { FixedBuffer<TraceEvent, 4> events; };
+TraceRecorder traceRecorderEmpty() { return TraceRecorder { events: fixedBufferEmpty<TraceEvent, 4>() }; }
+int traceCount(TraceRecorder recorder) { return Len(recorder.events); }
+TraceEvent traceAt(TraceRecorder recorder, int index) { if (index >= traceCount(recorder)) { panic("DragonGod.Trace index out of range"); } return recorder.events[index]; }
+void traceAppend(mut TraceRecorder& recorder, TraceEvent event) { if (traceCount(recorder) >= Capacity(recorder.events)) { panic("DragonGod.Trace capacity exceeded"); } fixedBufferAppend(recorder.events, event); }
 void traceEnter(mut TraceRecorder& recorder, StateId state, int tick, Reason reason) { traceAppend(recorder&, TraceEvent { kind: TraceEventKind::Enter, from: state, to: state, reason: reason, tick: tick, signal: AutomataSignal::None, occupied: true }); }
-void traceExit(mut TraceRecorder& recorder, StateId state, int tick, Reason reason) { traceAppend(recorder&, TraceEvent { kind: TraceEventKind::Exit, from: state, to: state, reason: reason, tick: tick, signal: AutomataSignal::None, occupied: true }); }
-void traceTransition(mut TraceRecorder& recorder, StateId from, StateId to, int tick, Reason reason) { traceAppend(recorder&, TraceEvent { kind: TraceEventKind::Transition, from: from, to: to, reason: reason, tick: tick, signal: AutomataSignal::None, occupied: true }); }
-void traceYield(mut TraceRecorder& recorder, StateId state, int tick) { traceAppend(recorder&, TraceEvent { kind: TraceEventKind::Yield, from: state, to: state, reason: Reason { code: 0 }, tick: tick, signal: AutomataSignal::None, occupied: true }); }
 void traceSignal(mut TraceRecorder& recorder, AutomataSignal signal, int tick) { traceAppend(recorder&, TraceEvent { kind: TraceEventKind::Signal, from: StateId { value: 0 }, to: StateId { value: 0 }, reason: Reason { code: 0 }, tick: tick, signal: signal, occupied: true }); }
-int traceEventKindCode(TraceEvent event) { match (event.kind) { TraceEventKind::Empty => { return 0; } TraceEventKind::Enter => { return 1; } TraceEventKind::Exit => { return 2; } TraceEventKind::Transition => { return 3; } TraceEventKind::Yield => { return 4; } TraceEventKind::Signal => { return 5; } } }
-int traceSignalReasonCode(TraceEvent event) { match (event.signal) { AutomataSignal::Succeed(reason) => { return reason.code; } AutomataSignal::Fail(reason) => { return reason.code; } AutomataSignal::Goto(target, reason) => { return reason.code; } AutomataSignal::Push(target, reason) => { return reason.code; } AutomataSignal::Pop(reason) => { return reason.code; } AutomataSignal::None => { return 0; } AutomataSignal::Act(id) => { return id.value; } AutomataSignal::AwaitActuation(id) => { return id.value; } } }
-
-int main() { TraceRecorder r = traceRecorderEmpty(); traceEnter(r&, StateId { value: 1 }, 0, Reason { code: 7 }); traceSignal(r&, AutomataSignal::Succeed(Reason { code: 42 }), 1); if (r.count != 2) { return 1; } return traceSignalReasonCode(traceAt(r, 1)) - 42; }
+int traceSignalReasonCode(TraceEvent event) { match (event.signal) { AutomataSignal::Succeed(reason) => { return reason.code; } AutomataSignal::None => { return 0; } } }
+int main() { TraceRecorder r = traceRecorderEmpty(); traceEnter(r&, StateId { value: 1 }, 0, Reason { code: 7 }); traceSignal(r&, AutomataSignal::Succeed(Reason { code: 42 }), 1); if (traceCount(r) != 2) { return 1; } return traceSignalReasonCode(traceAt(r, 1)) - 42; }
 
 === c ===
-contains: typedef enum Main__TraceEventKind
-contains: typedef struct Main__TraceEvent
 contains: typedef struct Main__TraceRecorder
-contains: event0
-contains: event3
+contains: cpt_fixed_buffer
+contains: storage
+contains: count
 contains: Main__traceAppend
-contains: recorder->count = recorder->count + 1
-contains: Main__traceSignal
 contains: DragonGod.Trace capacity exceeded
+contains: DragonGod.Trace index out of range
+contains: Main__traceSignal
+not_contains: event0
+not_contains: event3
 not_contains: malloc
 not_contains: scheduler
 not_contains: async

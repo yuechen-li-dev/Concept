@@ -759,3 +759,7 @@ Explicit local `Slice(values)` construction, slice returns, slice fields, mutabl
 ### P21-M7 status: FixedBuffer v0 coverage
 
 Phase 21 M7 covers `FixedBuffer<T, N>` type resolution, positive literal capacity validation, empty construction, append, initialized-range read indexing, `Len(buffer)`, `Capacity(buffer)`, value copy behavior, and C backend wrapper emission with fixed-array storage plus count. Diagnostics now cover malformed fixed-buffer type arguments, zero capacity, append element mismatch, and non-buffer receivers. Runtime guards use `Concept fixed buffer capacity exceeded` and `Concept fixed buffer index out of bounds`. Heap vectors, allocation, mutable slices, fixed-buffer-to-slice conversion, direct indexed assignment, and DragonGod migration remain uncovered by design.
+
+### P21-M8 DragonGod FixedBuffer migration coverage
+
+P21-M8 updates the DragonGod backend shape fixtures for Trace, Events, Replay, and AutomataGraph so they compile and assert `FixedBuffer<T, 4>` wrapper storage instead of explicit `event0`/`slot0`/`node0` fields. The existing run fixtures continue to cover subsystem behavior, while the backend fixtures now pin no-heap contiguous storage, subsystem-specific capacity/index/root panic strings, and absence of hidden runtime hooks. Memory, AutomataStack, and ActuatorHost remain fixed-slot by design because they need update/pop/replace operations not present in `FixedBuffer<T, N>` v0.

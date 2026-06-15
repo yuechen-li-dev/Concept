@@ -24,11 +24,7 @@ enum ReplayEvent {
 };
 
 struct ReplayLog {
-    int count;
-    ReplayEvent event0;
-    ReplayEvent event1;
-    ReplayEvent event2;
-    ReplayEvent event3;
+    FixedBuffer<ReplayEvent, 4> events;
 };
 
 struct ReplayDriver {
@@ -44,25 +40,19 @@ struct ReplayDriver {
 ReplayEvent replayEmptyEvent() { return ReplayEvent::Empty; }
 
 ReplayLog replayLogEmpty() {
-    return ReplayLog { count: 0, event0: replayEmptyEvent(), event1: replayEmptyEvent(), event2: replayEmptyEvent(), event3: replayEmptyEvent() };
+    return ReplayLog { events: fixedBufferEmpty<ReplayEvent, 4>() };
 }
 
-int replayLogCount(ReplayLog log) { return log.count; }
+int replayLogCount(ReplayLog log) { return Len(log.events); }
 
 ReplayEvent replayLogAt(ReplayLog log, int index) {
-    if (index == 0) { return log.event0; }
-    if (index == 1) { return log.event1; }
-    if (index == 2) { return log.event2; }
-    if (index == 3) { return log.event3; }
-    panic("DragonGod.Replay index out of range");
+    if (index >= replayLogCount(log)) { panic("DragonGod.Replay index out of range"); }
+    return log.events[index];
 }
 
 void replayPush(mut ReplayLog& log, ReplayEvent event) {
-    if (log.count == 0) { log.event0 = event; log.count = 1; return; }
-    if (log.count == 1) { log.event1 = event; log.count = 2; return; }
-    if (log.count == 2) { log.event2 = event; log.count = 3; return; }
-    if (log.count == 3) { log.event3 = event; log.count = 4; return; }
-    panic("DragonGod.Replay capacity exceeded");
+    if (replayLogCount(log) >= Capacity(log.events)) { panic("DragonGod.Replay capacity exceeded"); }
+    fixedBufferAppend(log.events, event);
 }
 
 ReplayDriver replayDriver(DragonGod.Kernel.Mind.World world, DragonGod.Kernel.Mind.Agent agent, DragonGod.Kernel.Events.EventBus events, DragonGod.Kernel.Actuation.ActuatorHost actuator, DragonGod.Kernel.Trace.TraceRecorder trace) {

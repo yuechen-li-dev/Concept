@@ -642,3 +642,7 @@ Explicit local `Slice(values)` construction, slice returns, slice fields, mutabl
 ### P21-M7 FixedBuffer fixtures
 
 P21-M7 expands `language/phase21-arrays-slices-fixed-buffers/` with run fixtures for `FixedBuffer<int, 4>` empty length, append plus read indexing, fixed capacity, and value-copy behavior. Invalid fixtures pin zero capacity (`CON0420`), malformed `FixedBuffer<T>` spelling (`CON0419`), and append element mismatch (`CON0421`). The fixtures preserve the M7 boundary: no heap vector, allocator, iterator, mutable slice, fixed-buffer-to-slice conversion, direct element assignment, or DragonGod migration coverage is added.
+
+## Phase 21 / M8 DragonGod FixedBuffer migration fixtures
+
+P21-M8 keeps the Phase 20 DragonGod fixture count stable but updates four backend-C shape fixtures: `kernel_trace_backend_shape.valid.conception`, `kernel_events_backend_shape.valid.conception`, `kernel_replay_backend_shape.valid.conception`, and `kernel_graph_backend_shape.valid.conception`. These fixtures now assert generated fixed-buffer wrapper storage (`storage` plus `count`), prove the migrated append/read/count paths still compile, preserve DragonGod-specific panic strings, and assert that old explicit event/slot/node fields are absent for the migrated types. Existing run fixtures continue to cover behavior for Trace, Events, Replay, Graph, checkpoint composition, and integrations.

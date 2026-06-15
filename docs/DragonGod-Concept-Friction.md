@@ -274,3 +274,77 @@ Workaround: DG9 keeps `TraceRecorder` as the v0 implementation and treats `Trace
 - No serialization/string/file primitives were used; this is correct for v0, but future disk persistence will need separate design rather than stretching checkpoint helpers.
 - No generic snapshot traits/interfaces or array/vector/spans exist, so fixed-slot state snapshot repetition remains visible.
 - Backend fixtures assert broad generated-C shape and forbidden terms; exact temporary-name assertions remain intentionally avoided for stability.
+
+## P21-M8 DragonGod FixedBuffer migration inventory
+
+P21-M8 migrated only fixed-slot subsystems whose behavior maps honestly to the P21-M7 `FixedBuffer<T, N>` surface: empty construction, append, initialized-range read indexing, `Len`, and `Capacity`. No new FixedBuffer operation or language feature was added.
+
+### Migrated successfully
+
+#### TraceRecorder
+- Status: migrated.
+- Previous shape: `TraceRecorder` stored `count` plus `event0` through `event3`.
+- New shape: `TraceRecorder` stores `FixedBuffer<TraceEvent, 4> events`.
+- Missing operations: none for append/read/count behavior.
+- Behavior preserved: `traceCount`, `traceAt`, `traceAppend`, and trace event helpers keep their public names; capacity still panics with `DragonGod.Trace capacity exceeded`; index misses still panic with `DragonGod.Trace index out of range`.
+- Notes: Trace is append-only and reads by initialized index, so it fits M7 without direct element assignment, replace-at, pop, slicing, or iteration.
+
+#### EventBus
+- Status: migrated.
+- Previous shape: `EventBus` stored `nextId`, `count`, and `slot0` through `slot3`.
+- New shape: `EventBus` stores `nextId` plus `FixedBuffer<EventSlot, 4> slots`; `Len(bus.slots)` is the stream count.
+- Missing operations: slice/iteration ergonomics would remove hand-unrolled scans, but they are not required for correctness.
+- Behavior preserved: `eventPush`, `eventReadNextInt`, `eventCursorStart`, and `eventTailCursor` keep their public names; deterministic id allocation and stream cursor semantics are unchanged; capacity still panics with `DragonGod.Events capacity exceeded`.
+- Notes: Event reads remain explicitly unrolled over four possible initialized indexes because M8 avoids adding iterators or a fixed-buffer-to-slice conversion.
+
+#### ReplayLog
+- Status: migrated.
+- Previous shape: `ReplayLog` stored `count` plus `event0` through `event3`.
+- New shape: `ReplayLog` stores `FixedBuffer<ReplayEvent, 4> events`.
+- Missing operations: none for append/read/count behavior.
+- Behavior preserved: `replayLogEmpty`, `replayLogCount`, `replayLogAt`, `replayPush`, and driver application APIs keep their public names; capacity still panics with `DragonGod.Replay capacity exceeded`; index misses still panic with `DragonGod.Replay index out of range`.
+- Notes: Replay remains deterministic and no heap, file I/O, JSON, serializer, scheduler, async runtime, or compiler hook was introduced.
+
+#### AutomataGraph
+- Status: migrated.
+- Previous shape: `AutomatonGraph` stored `nextId`, `count`, root metadata, and `node0` through `node3`.
+- New shape: `AutomatonGraph` stores `nextId`, root metadata, and `FixedBuffer<AutomatonNode, 4> nodes`; `Len(graph.nodes)` is the node count.
+- Missing operations: find/update by predicate and iteration ergonomics would make graph scans less repetitive, but append/find/root metadata behavior is expressible today.
+- Behavior preserved: add/find/count/root helper names remain stable; graph capacity, missing-node, and missing-root panic strings remain subsystem-specific.
+- Notes: Graph migrated because node insertion is append-only and root selection mutates separate root metadata rather than an existing node.
+
+### Blocked or intentionally unchanged
+
+#### Memory
+- Status: blocked by missing FixedBuffer operation.
+- Previous shape: `Memory` stores `revision` and four mutable `MemorySlot` fields.
+- Missing operations: direct fixed-buffer element assignment, replace-at, and find/update by predicate. `memoryWrite` must update an existing matching key in place and increment revision; appending a duplicate key would change semantics.
+- Behavior preserved by leaving unchanged: read fallback, `memoryHas`, revision increments, update-existing-key behavior, and fixed capacity no-op policy remain stable.
+
+#### AutomataStack
+- Status: blocked by missing FixedBuffer operation.
+- Previous shape: stack frames are explicit fixed slots.
+- Missing operations: pop/remove-last, top mutation or replace-top, and direct element assignment. Stack push/pop/top semantics are not a pure append/read/count workload.
+- Behavior preserved by leaving unchanged: existing push/pop/top and Mind signal handling fixtures remain on the DG5 shape.
+
+#### ActuatorHost
+- Status: blocked by missing FixedBuffer operation.
+- Previous shape: `ActuatorHost` stores `nextId` and four mutable `ActuationSlot` fields.
+- Missing operations: direct fixed-buffer element assignment, replace-at, and find/update by predicate. Completion/failure must update the matching occupied slot status and reason.
+- Behavior preserved by leaving unchanged: allow/deny dispatch, status query, complete/fail mutation, and `DragonGod.Actuation capacity exceeded` remain stable.
+
+#### Mind and Persistence shells
+- Status: partially affected through composed migrated field types, but not directly migrated.
+- Missing operations: no independent fixed-slot store in the Mind shell beyond `AutomataStack`; Persistence/checkpoint copies the subsystem value shapes it is given.
+- Notes: checkpoint fixtures continue to prove value-shaped restore behavior; any shape changes in EventBus or TraceRecorder are inherited structurally rather than introducing a new persistence feature.
+
+### Required inventory categories
+
+- Migrated successfully: TraceRecorder, EventBus, ReplayLog, AutomataGraph.
+- Blocked because `FixedBuffer` lacks direct element assignment: Memory, ActuatorHost, AutomataStack replace-top/top mutation paths.
+- Blocked because `FixedBuffer` lacks replace-at: Memory update-existing-key, ActuatorHost complete/fail status updates, AutomataStack replace-top-style operations.
+- Blocked because `FixedBuffer` lacks pop/remove-last: AutomataStack.
+- Blocked because `FixedBuffer` lacks find/update by predicate: Memory key lookup/update, ActuatorHost id lookup/update, graph would benefit for lookup ergonomics but does not require update.
+- Blocked because custom subsystem panic strings cannot be preserved: none of the migrated subsystems; M8 added pre-checks before `fixedBufferAppend`/indexing to preserve subsystem-specific panic strings.
+- Blocked because slice/iteration ergonomics are insufficient: EventBus and AutomataGraph still use hand-unrolled scans; this is acceptable for M8 but remains friction.
+- Blocked because element type/backend support is insufficient: no migrated subsystem hit a backend element-type blocker; enum and struct payloads used by Trace, Replay, Events, and Graph compiled in backend fixtures.
