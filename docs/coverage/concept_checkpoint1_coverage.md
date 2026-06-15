@@ -1,13 +1,18 @@
 # Concept — Checkpoint 1 Coverage Matrix
-## Phase 20 DragonGod Kernel closeout vs PoC3 Constitution
+## Phase 21 arrays/slices design start vs PoC3 Constitution
 
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
 **Phases closed:** 1 through 20 / DG12
-**Current phase:** Phase 20 closed after DG12 — DragonGod Kernel proof-of-concept closeout
+**Current phase:** Phase 21 P21-M0 — arrays, slices, and fixed buffers design-only milestone
 **Fixture corpus:** 1151 total `.conception` fixture files; 99 under `language/phase20-dragongod-kernel/`.
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
+
+
+## Phase 21 / P21-M0 arrays, slices, and fixed buffers design snapshot
+
+Phase 21 is open as a design-only milestone. `docs/design/phase-21-arrays-slices-and-fixed-buffers.md` defines fixed-size owned arrays with `T[N]` syntax, array literals with `[1, 2, 3, 4]`, read-only `Slice<T>` borrowed views, explicit future `MutSlice<T>`, bounded `FixedBuffer<T, N>` value storage, `Len`, `Capacity`, bounds-checked indexing, stable panic reasons, and the `CON0400`-`CON0410` diagnostic range. No parser, lexer, semantic, MIR, backend, fixture, or DragonGod migration behavior is implemented by P21-M0.
 
 
 ## Phase 20 / DG12 DragonGod Kernel snapshot
