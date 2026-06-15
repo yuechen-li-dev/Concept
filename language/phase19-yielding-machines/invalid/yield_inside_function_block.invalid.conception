@@ -1,4 +1,4 @@
-# name: yield expression
+# name: yield inside function block
 # phase: parse
 # expect: fail
 
@@ -6,9 +6,11 @@
 module Main;
 
 int main() {
-    int x = yield;
-    return x;
+    {
+        yield;
+    }
+    return 0;
 }
 
 === diagnostics ===
-CON0301
+CON0300

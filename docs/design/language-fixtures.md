@@ -59,7 +59,7 @@ language/phase19-yielding-machines/invalid/
 
 ## Phase 19 yielding-machine fixtures
 
-Phase 19 fixtures live under `language/phase19-yielding-machines/`. P19-M1 adds six syntax/scaffold fixtures: one valid check/HIR fixture for bare `yield;` in a machine state body, and invalid parse fixtures for `yield;` outside a machine state, `yield 1;`, `yield return 1;`, expression-position `yield`, and a missing semicolon. These fixtures deliberately stop before backend/runtime yield behavior; P19-M3 owns executable lowering.
+Phase 19 fixtures live under `language/phase19-yielding-machines/`. P19-M2 raises the set to ten validation fixtures: three valid check/HIR fixtures for bare `yield;` in a machine state body, in a nested machine-state block, and in an `if` branch, plus seven invalid parse fixtures for ordinary-function `yield;`, nested ordinary-function-block `yield;`, top-level `yield;`, `yield 1;`, `yield return 1;`, expression-position `yield`, and missing semicolon. These fixtures deliberately stop before backend/runtime yield behavior; P19-M3 owns executable lowering.
 
 ## Phase 5 sum-type fixtures
 
@@ -548,4 +548,4 @@ pre-DragonGod substrate rather than a DragonGod runtime implementation. The full
 
 ## Phase 19 yielding machine fixtures
 
-Phase 19 has started with P19-M0 as a design-only milestone. No fixture corpus is added yet. The planned fixture root is `language/phase19-yielding-machines/`, and the v0 design chooses bare `yield;` as a machine-state-only statement that exits the current `Step`, preserves the current state, leaves the machine incomplete, and does not allocate, schedule, create tasks, write results, or take transitions. `yield return`, yield values, `suspend`/`resume`, async/await, generator protocols, and continuation-preserving yield remain deferred.
+Phase 19 has advanced through P19-M2 validation hardening. The fixture root is `language/phase19-yielding-machines/`, with ten fixtures: three valid check/HIR fixtures and seven invalid parse fixtures. The v0 design and implementation boundary remains bare `yield;` as a machine-state-only, statement-only, no-operand form. `CON0300` rejects yield outside machine states; `CON0301`, `CON0302`, and `CON0303` pin expression, value, and `yield return` rejections. Runtime lowering, `yield return`, yield values, `suspend`/`resume`, async/await, generator protocols, and continuation-preserving yield remain deferred.

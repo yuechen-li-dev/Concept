@@ -1286,7 +1286,13 @@ pub const Parser = struct {
         }
 
         const end_span = if (self.match(.semicolon)) |semicolon| semicolon.span else blk: {
-            try self.report(.UnexpectedToken, "expected ';' after yield statement", self.current().span);
+            if (self.current().kind == .@"return") {
+                try self.diagnostics.append(diagnostics_model.yieldReturnUnsupported(ast.spanFromBounds(yield_token.span.start, spanEnd(self.current().span))));
+            } else if (self.current().kind == .right_brace or self.current().kind == .eof) {
+                try self.report(.UnexpectedToken, "expected ';' after yield statement", self.current().span);
+            } else {
+                try self.diagnostics.append(diagnostics_model.yieldValueUnsupported(ast.spanFromBounds(yield_token.span.start, spanEnd(self.current().span))));
+            }
             self.recoverStatement();
             break :blk yield_token.span;
         };
@@ -2859,6 +2865,10 @@ pub const Parser = struct {
                 return node;
             },
             .decide => return self.parseDecideExpr(allocator),
+            .yield => {
+                self.diagnostics.append(diagnostics_model.yieldExpressionUnsupported(token.span)) catch return error.OutOfMemory;
+                return error.ParseFailed;
+            },
             .left_paren => {
                 const left_paren = self.advance();
                 var inner = self.parseExpr(allocator) catch |err| switch (err) {

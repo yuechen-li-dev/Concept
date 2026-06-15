@@ -1,0 +1,20 @@
+# name: machine yield in if
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Waiter {
+    state Waiting {
+        if (true) {
+            yield;
+        }
+        transition Waiting;
+    }
+}
+
+int main() {
+    return 0;
+}
