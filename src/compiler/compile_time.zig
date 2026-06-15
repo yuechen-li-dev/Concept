@@ -175,6 +175,7 @@ pub const CompileTimeEvaluator = struct {
         return switch (expr.kind) {
             .int_literal => |text| .{ .int = std.fmt.parseInt(i64, text, 10) catch return error.Overflow },
             .bool_literal => |value| .{ .bool = value },
+            .machine_field_ref => error.UnsupportedExpression,
             .group => |inner| try self.evaluateExpr(inner),
             .compile_time => |compile_time_expr| try self.evaluateExpr(compile_time_expr.operand),
             .unary => |unary| try self.evaluateUnary(unary.op, try self.evaluateExpr(unary.operand)),

@@ -593,3 +593,7 @@ P18-M1 hardens the machine frame/value baseline before nested fields. It adds 11
 ### Phase 18 M2 coverage
 
 Nested machine field coverage now includes HIR preservation, backend by-value child frame fields, deterministic parent-constructor initialization of zero-parameter children, rejection of parameterized child fields with `CON0290`, duplicate child field diagnostics through existing field-name checks, and no hidden heap/scheduler/async backend markers.
+
+### Phase 18 M3 nested machine operation coverage
+
+P18-M3 covers explicit nested machine composition for child fields: `Step(child)` mutates the child frame stored in the parent, `Complete(child)` reads that child completion flag, and `Result(child)` uses the shared result-before-completion panic path. Fixtures also prove that children are not implicitly stepped, multiple child fields compose independently, and runtime `transition match`/`transition decide` remain deferred.
