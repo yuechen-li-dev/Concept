@@ -1,0 +1,12 @@
+# name: phase21 slice parameter len
+# mode: run
+# expect_exit: 3
+
+int length(Slice<int> values) {
+    return Len(values);
+}
+
+int main() {
+    int[3] values = [4, 5, 6];
+    return length(values);
+}

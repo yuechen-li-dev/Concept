@@ -1,0 +1,12 @@
+# name: phase21 slice parameter dynamic index
+# mode: run
+# expect_exit: 6
+
+int at(Slice<int> values, int index) {
+    return values[index];
+}
+
+int main() {
+    int[3] values = [4, 5, 6];
+    return at(values, 2);
+}

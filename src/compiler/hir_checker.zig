@@ -201,6 +201,7 @@ const Checker = struct {
             .void, .int, .bool, .alloc_error => true,
             .struct_type => |struct_id| self.isValidatedReprCStruct(struct_id),
             .pointer => |pointer| self.isSupportedCAbiPointerPointee(pointer.pointee),
+            .slice => false,
             else => false,
         };
     }
@@ -255,6 +256,7 @@ const Checker = struct {
             .pointer => |pointer| self.isSupportedReprCPointerPointee(pointer.pointee),
             .struct_type => false, // Nested repr(C) by value is deferred in M6 to avoid recursive layouts.
             .array => |array| self.isSupportedReprCFieldType(array.element, undefined),
+            .slice => false,
             .void, .arena, .allocator, .enum_type, .machine_type, .interface_type, .dyn_interface, .manual_init, .type_param => false,
         };
     }
@@ -653,6 +655,14 @@ const Checker = struct {
             .machine_param_ref => |id| self.module.hir.getMachineParam(id).type_id,
             .machine_field_ref => |id| self.module.hir.getMachineField(id).type_id,
             .index_access => |index_access| index_access.result_type,
+            .slice_len => |slice_expr| blk: {
+                const slice_type = try self.checkExpr(current_function_id, return_type, slice_expr);
+                if (self.module.types.kind(slice_type) != .slice) {
+                    try self.reportAt(.ArrayIndexRequiresArrayOrSlice, "Len receiver must be a slice", expr.span);
+                    return error.InvalidSemanticModule;
+                }
+                break :blk self.module.types.intType();
+            },
             .group => |inner| try self.checkExpr(current_function_id, return_type, inner),
             .compile_time => |compile_time_expr| blk: {
                 self.compile_time_context_depth += 1;
@@ -1696,7 +1706,9 @@ const Checker = struct {
                 .index = try self.cloneExpr(index_access.index, subst, param_map, local_map, span),
                 .result_type = try self.substituteType(index_access.result_type, subst, span),
                 .array_length = index_access.array_length,
+                .is_slice = index_access.is_slice,
             } },
+            .slice_len => |slice_expr| .{ .slice_len = try self.cloneExpr(slice_expr, subst, param_map, local_map, span) },
             .field_access => |field_access| .{ .field_access = .{ .receiver = try self.cloneExpr(field_access.receiver, subst, param_map, local_map, span), .field_name = field_access.field_name, .field_span = field_access.field_span } },
             .target_metadata => |metadata| .{ .target_metadata = metadata },
             .decide => |decide| blk: {
@@ -1742,7 +1754,7 @@ const Checker = struct {
             .local => |id| .{ .local = local_map.get(id).? },
             .param => |id| .{ .param = param_map.get(id).? },
             .field => |field| .{ .field = .{ .base = self.cloneAssignPlacePtr(field.base, param_map, local_map), .field_id = field.field_id, .field_span = field.field_span } },
-            .index => |index| .{ .index = .{ .base = self.cloneAssignPlacePtr(index.base, param_map, local_map), .index = index.index, .result_type = index.result_type, .array_length = index.array_length, .span = index.span } },
+            .index => |index| .{ .index = .{ .base = self.cloneAssignPlacePtr(index.base, param_map, local_map), .index = index.index, .result_type = index.result_type, .array_length = index.array_length, .is_slice = index.is_slice, .span = index.span } },
         };
     }
 
@@ -1833,6 +1845,10 @@ const Checker = struct {
             .array => |array| {
                 try self.writeTypeSuffix(writer, array.element);
                 try writer.print("_array_{d}", .{array.length});
+            },
+            .slice => |slice| {
+                try writer.writeAll("slice_");
+                try self.writeTypeSuffix(writer, slice.element);
             },
             .type_param => try writer.writeAll("type_param"),
         }
@@ -1995,10 +2011,16 @@ const Checker = struct {
     }
 
     fn requireCallSame(self: *Checker, actual: types.TypeId, expected: types.TypeId, message: []const u8, span: diagnostics.SourceSpan) CheckError!void {
-        if (!sameType(actual, expected)) {
-            try self.reportAt(.InvalidCall, message, span);
+        if (sameType(actual, expected)) return;
+        if (self.module.types.kind(expected) == .slice and self.module.types.kind(actual) == .array) {
+            const expected_slice = self.module.types.kind(expected).slice;
+            const actual_array = self.module.types.kind(actual).array;
+            if (sameType(expected_slice.element, actual_array.element)) return;
+            try self.reportAt(.ArrayToSliceElementTypeMismatch, "array element type does not match slice parameter element type", span);
             return error.InvalidSemanticModule;
         }
+        try self.reportAt(.InvalidCall, message, span);
+        return error.InvalidSemanticModule;
     }
 
     fn requireInt(self: *Checker, actual: types.TypeId, message: []const u8, span: diagnostics.SourceSpan) CheckError!void {

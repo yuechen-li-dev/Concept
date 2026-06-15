@@ -177,6 +177,7 @@ pub const CompileTimeEvaluator = struct {
             .bool_literal => |value| .{ .bool = value },
             .machine_field_ref => error.UnsupportedExpression,
             .index_access => error.UnsupportedExpression,
+            .slice_len => error.UnsupportedExpression,
             .machine_state => error.UnsupportedExpression,
             .group => |inner| try self.evaluateExpr(inner),
             .compile_time => |compile_time_expr| try self.evaluateExpr(compile_time_expr.operand),

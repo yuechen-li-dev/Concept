@@ -325,6 +325,32 @@ const Validator = struct {
                 }
                 break :blk array_index.result_type;
             },
+            .slice_from_array => |slice| blk: {
+                const array_type = try self.operandType(function_id, slice.array, span);
+                if (array_type) |type_id| {
+                    const kind = self.semantic_module.types.kind(type_id);
+                    const slice_kind = self.semantic_module.types.kind(slice.result_type);
+                    if (kind != .array or slice_kind != .slice or kind.array.length != slice.length or kind.array.element.index != slice_kind.slice.element.index) {
+                        try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                    }
+                }
+                break :blk slice.result_type;
+            },
+            .slice_index => |slice_index| blk: {
+                const base_type = try self.operandType(function_id, slice_index.base, span);
+                const index_type = try self.operandType(function_id, slice_index.index, span);
+                if (index_type) |type_id| if (self.semantic_module.types.kind(type_id) != .int) try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                if (base_type) |type_id| {
+                    const kind = self.semantic_module.types.kind(type_id);
+                    if (kind != .slice or kind.slice.element.index != slice_index.result_type.index) try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                }
+                break :blk slice_index.result_type;
+            },
+            .slice_len => |operand| blk: {
+                const operand_type = try self.operandType(function_id, operand, span);
+                if (operand_type) |type_id| if (self.semantic_module.types.kind(type_id) != .slice) try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                break :blk self.semantic_module.types.intType();
+            },
             .manual_init_assume => |operand| blk: {
                 const operand_type = try self.operandType(function_id, operand, span);
                 if (operand_type == null) break :blk null;

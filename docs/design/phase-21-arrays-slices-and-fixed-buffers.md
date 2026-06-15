@@ -565,3 +565,9 @@ P21-M5 hardens fixed arrays as Concept values through MIR validation and C backe
 This preserves the core doctrine: Concept arrays are values, while C arrays are only an implementation detail inside the wrapper. Local declarations, assignments/copies, by-value parameters, by-value returns, struct fields, nested arrays, indexed reads, and indexed writes use wrapper values and `.data[...]` element access rather than relying on C array assignment, C parameter adjustment, or pointer decay.
 
 M5 remains intentionally internal to Concept lowering. It does not add slices, fixed buffers, `Capacity`, unchecked indexing, C ABI array passing, `repr(C)` array layout, heap vectors, generic containers, or DragonGod migration. Arrays of scalar values and arrays nested over scalar arrays are the proven M5 path; broader element layouts continue to follow the backend's existing supported-type rules.
+
+### P21-M6 status: read-only slices
+
+P21-M6 adds the initial read-only `Slice<T>` view model. A slice is a borrowed pointer-plus-runtime-length view over contiguous storage; it does not allocate, own, copy, drop, or extend the lifetime of its backing array. M6 supports array-to-slice conversion only at function call boundaries where the parameter type is explicitly `Slice<T>` and the argument is a fixed array with the same element type. `Len(slice)` returns the runtime slice length, and `slice[index]` is read-only with runtime bounds checks using the stable panic reason `Concept slice index out of bounds`.
+
+Explicit local `Slice(values)` construction, slice returns, slice fields, mutable slices/`MutSlice<T>`, fixed buffers, `Capacity`, range slicing syntax, C ABI guarantees, and DragonGod migration remain deferred. Slice element assignment is rejected in M6.

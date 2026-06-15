@@ -317,7 +317,7 @@ pub const AssignPlace = union(enum) {
     local: LocalId,
     param: ParamId,
     field: struct { base: *AssignPlace, field_id: FieldId, field_span: SourceSpan },
-    index: struct { base: *AssignPlace, index: ExprId, result_type: types.TypeId, array_length: u64, span: SourceSpan },
+    index: struct { base: *AssignPlace, index: ExprId, result_type: types.TypeId, array_length: u64, is_slice: bool, span: SourceSpan },
 };
 
 pub const AssignBase = AssignPlace;
@@ -463,7 +463,8 @@ pub const HirExprKind = union(enum) {
     enum_constructor: struct { enum_id: EnumId, variant_id: VariantId, args: []ExprId },
     struct_literal: struct { struct_id: StructId, type_id: types.TypeId, fields: []HirStructLiteralField },
     array_literal: struct { type_id: types.TypeId, elements: []ExprId },
-    index_access: struct { base: ExprId, index: ExprId, result_type: types.TypeId, array_length: u64 },
+    index_access: struct { base: ExprId, index: ExprId, result_type: types.TypeId, array_length: u64, is_slice: bool },
+    slice_len: ExprId,
     field_access: struct { receiver: ExprId, field_name: SymbolId, field_span: SourceSpan },
     target_metadata: struct { query: CompileTimeTargetQuery, field_span: SourceSpan },
     decide: struct { enum_type: types.TypeId, enum_id: EnumId, arms: []HirDecideArm },
@@ -1955,6 +1956,10 @@ pub const HirStore = struct {
                 try writer.print("IndexAccess len={d}\n", .{index_access.array_length});
                 try self.writeExprDebug(writer, index_access.base, depth + 1);
                 try self.writeExprDebug(writer, index_access.index, depth + 1);
+            },
+            .slice_len => |slice_expr| {
+                try writer.writeAll("SliceLen\n");
+                try self.writeExprDebug(writer, slice_expr, depth + 1);
             },
             .field_access => |field_access| {
                 try writer.print("FieldAccess {f}\n", .{field_access.field_name});

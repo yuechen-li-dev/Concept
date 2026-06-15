@@ -47,6 +47,9 @@ pub const TypeKind = union(enum) {
         element: TypeId,
         length: u64,
     },
+    slice: struct {
+        element: TypeId,
+    },
     type_param: struct {
         owner: TypeParamOwner,
         index: u32,
@@ -72,6 +75,7 @@ pub const TypeKind = union(enum) {
             .pointer => |pointer| try writer.print("{f}*", .{pointer.pointee}),
             .manual_init => |manual_init| try writer.print("ManualInit<{f}>", .{manual_init.payload}),
             .array => |array| try writer.print("{f}[{d}]", .{ array.element, array.length }),
+            .slice => |slice| try writer.print("Slice<{f}>", .{slice.element}),
             .type_param => |param| try writer.print("type_param({s}:{d}/{d} {f})", .{ @tagName(param.owner.kind), param.owner.index, param.index, param.name }),
         }
     }
@@ -212,6 +216,12 @@ pub const TypeStore = struct {
         return try self.append(.{ .array = .{ .element = element, .length = length } }, error.TooManyTypes);
     }
 
+    pub fn addSliceType(self: *TypeStore, element: TypeId) TypeStoreError!TypeId {
+        std.debug.assert(self.contains(element));
+        if (self.findSlice(element)) |existing| return existing;
+        return try self.append(.{ .slice = .{ .element = element } }, error.TooManyTypes);
+    }
+
     pub fn pointerType(self: TypeStore, pointee: TypeId) ?TypeId {
         std.debug.assert(self.contains(pointee));
         return self.findPointer(pointee);
@@ -248,6 +258,7 @@ pub const TypeStore = struct {
         return switch (self.kind(id)) {
             .int, .bool, .pointer, .enum_type, .alloc_error => true,
             .array => |array| self.isCopyType(hir_store, array.element),
+            .slice => true,
             .struct_type => self.hasCopyMarkerImpl(hir_store, id),
             .void, .arena, .allocator, .machine_type, .interface_type, .dyn_interface, .manual_init, .type_param => false,
         };
@@ -313,6 +324,16 @@ pub const TypeStore = struct {
         return null;
     }
 
+    fn findSlice(self: TypeStore, element: TypeId) ?TypeId {
+        for (self.types.items, 0..) |candidate, index| {
+            switch (candidate) {
+                .slice => |slice| if (slice.element.index == element.index) return .{ .index = @intCast(index) },
+                else => {},
+            }
+        }
+        return null;
+    }
+
     fn findManualInit(self: TypeStore, payload: TypeId) ?TypeId {
         for (self.types.items, 0..) |candidate, index| {
             switch (candidate) {
@@ -366,7 +387,7 @@ pub const TypeStore = struct {
                     },
                     else => {},
                 },
-                .dyn_interface, .pointer, .manual_init, .array, .type_param => unreachable,
+                .dyn_interface, .pointer, .manual_init, .array, .slice, .type_param => unreachable,
                 else => unreachable,
             }
         }

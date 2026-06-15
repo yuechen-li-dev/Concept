@@ -632,3 +632,9 @@ This milestone does not add slices, mutable slices, fixed buffers, `Capacity`, u
 ### P21-M5 fixed-array value lowering fixtures
 
 P21-M5 expands `language/phase21-arrays-slices-fixed-buffers/` with run fixtures for fixed-array value assignment/copy, by-value function parameters, by-value returns, struct fields containing arrays, nested array assignment, and dynamic indexed reads after a copy. Invalid fixtures pin exact fixed-array assignment typing by rejecting different lengths and different element types. These fixtures verify that the C backend's wrapper-struct representation does not leak C array non-assignability or parameter decay into Concept semantics.
+
+### P21-M6 status: read-only slices
+
+P21-M6 adds the initial read-only `Slice<T>` view model. A slice is a borrowed pointer-plus-runtime-length view over contiguous storage; it does not allocate, own, copy, drop, or extend the lifetime of its backing array. M6 supports array-to-slice conversion only at function call boundaries where the parameter type is explicitly `Slice<T>` and the argument is a fixed array with the same element type. `Len(slice)` returns the runtime slice length, and `slice[index]` is read-only with runtime bounds checks using the stable panic reason `Concept slice index out of bounds`.
+
+Explicit local `Slice(values)` construction, slice returns, slice fields, mutable slices/`MutSlice<T>`, fixed buffers, `Capacity`, range slicing syntax, C ABI guarantees, and DragonGod migration remain deferred. Slice element assignment is rejected in M6.
