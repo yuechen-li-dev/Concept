@@ -1,0 +1,19 @@
+# name: phase22 option match duplicate some
+# phase: check
+# check: executable
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    Option<int> maybe = optionSome<int>(1);
+    match maybe {
+        Some(value) => return value;
+        Some(other) => return other;
+        None => return 0;
+    }
+}
+
+=== diagnostics ===
+CON0514

@@ -1,0 +1,28 @@
+# name: phase22 option match backend shape
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+int main() {
+    Option<int> maybe = optionSome<int>(3);
+    int fallback = optionUnwrapOr(maybe, 1);
+    if (optionIsNone(maybe)) {
+        return 99;
+    }
+
+    match maybe {
+        Some(value) => return value + fallback;
+        None => return 0;
+    }
+}
+
+=== c ===
+contains: struct cpt_option_int
+contains: .tag = 1
+contains: .tag == 0
+contains: .value
+not_contains: malloc
+not_contains: throw
+not_contains: Result

@@ -1,0 +1,15 @@
+# name: phase22 option fallback type mismatch
+# phase: check
+# check: executable
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    Option<int> maybe = optionSome<int>(1);
+    return optionUnwrapOr(maybe, true);
+}
+
+=== diagnostics ===
+CON0517

@@ -2096,6 +2096,7 @@ const BodyLowerer = struct {
     machine_state_indexes: ?*const std.AutoHashMap(interner.SymbolId, u32) = null,
     bindings: std.ArrayList(ScopedBinding),
     depth: usize = 0,
+    current_match_type: ?types.TypeId = null,
 
     fn init(collector: *Collector, function_id: hir.FunctionId) BodyLowerer {
         return .{
@@ -2283,6 +2284,9 @@ const BodyLowerer = struct {
             },
             .match_stmt => |match_stmt| {
                 const scrutinee = (try self.lowerExpr(match_stmt.scrutinee.*)) orelse return null;
+                const previous_match_type = self.current_match_type;
+                self.current_match_type = try self.inferExprType(scrutinee);
+                defer self.current_match_type = previous_match_type;
                 var arms = std.ArrayList(hir.HirMatchArm).empty;
                 defer arms.deinit(self.collector.allocator);
                 for (match_stmt.arms) |arm| {
@@ -2660,7 +2664,7 @@ const BodyLowerer = struct {
 
                 if (std.mem.eql(u8, call.callee.text, "optionSome")) {
                     if (call.type_args.len != 1 or owned.len != 1) {
-                        try self.collector.diagnostics.append(diagnostics.optionRequiresValueType(call.span));
+                        try self.collector.diagnostics.append(diagnostics.optionHelperRequiresOption(call.span));
                         return null;
                     }
                     const element = (try self.collector.resolveTypeNameScoped(call.type_args[0], null)) orelse return null;
@@ -2691,20 +2695,23 @@ const BodyLowerer = struct {
                     return try self.collector.module.hir.addExpr(.{ .option_none = option_type }, call.span);
                 }
 
-                if (std.mem.eql(u8, call.callee.text, "optionIsSome")) {
+                if (std.mem.eql(u8, call.callee.text, "optionIsSome") or std.mem.eql(u8, call.callee.text, "optionIsNone")) {
                     if (call.type_args.len != 0 or owned.len != 1) {
-                        try self.collector.diagnostics.append(diagnostics.optionRequiresValueType(call.span));
+                        try self.collector.diagnostics.append(diagnostics.optionHelperRequiresOption(call.span));
                         return null;
                     }
                     const option_type = (try self.inferExprType(owned[0])) orelse return null;
                     if (self.collector.module.types.kind(option_type) != .option) {
-                        try self.collector.diagnostics.append(diagnostics.optionRequiresValueType(call.args[0].span()));
+                        try self.collector.diagnostics.append(diagnostics.optionHelperRequiresOption(call.args[0].span()));
                         return null;
+                    }
+                    if (std.mem.eql(u8, call.callee.text, "optionIsNone")) {
+                        return try self.collector.module.hir.addExpr(.{ .option_is_none = owned[0] }, call.span);
                     }
                     return try self.collector.module.hir.addExpr(.{ .option_is_some = owned[0] }, call.span);
                 }
 
-                if (std.mem.eql(u8, call.callee.text, "optionOr")) {
+                if (std.mem.eql(u8, call.callee.text, "optionOr") or std.mem.eql(u8, call.callee.text, "optionUnwrapOr")) {
                     if (call.type_args.len != 0 or owned.len != 2) {
                         try self.collector.diagnostics.append(diagnostics.optionRequiresValueType(call.span));
                         return null;
@@ -2713,13 +2720,13 @@ const BodyLowerer = struct {
                     const option = switch (self.collector.module.types.kind(option_type)) {
                         .option => |option| option,
                         else => {
-                            try self.collector.diagnostics.append(diagnostics.optionRequiresValueType(call.args[0].span()));
+                            try self.collector.diagnostics.append(diagnostics.optionHelperRequiresOption(call.args[0].span()));
                             return null;
                         },
                     };
                     const fallback_type = (try self.inferExprType(owned[1])) orelse return null;
                     if (!sameType(fallback_type, option.element)) {
-                        try self.collector.diagnostics.append(diagnostics.optionSomeTypeMismatch(call.args[1].span()));
+                        try self.collector.diagnostics.append(diagnostics.optionFallbackTypeMismatch(call.args[1].span()));
                         return null;
                     }
                     return try self.collector.module.hir.addExpr(.{ .option_or = .{ .option = owned[0], .fallback = owned[1] } }, call.span);
@@ -3421,7 +3428,7 @@ const BodyLowerer = struct {
             .fixed_buffer_append => self.collector.module.types.voidType(),
             .option_some => |some| some.type_id,
             .option_none => |type_id| type_id,
-            .option_is_some => self.collector.module.types.boolType(),
+            .option_is_some, .option_is_none => self.collector.module.types.boolType(),
             .option_or => |option_or| blk: {
                 const option_type = (try self.inferExprType(option_or.option)) orelse return null;
                 break :blk self.collector.module.types.kind(option_type).option.element;
@@ -3760,6 +3767,7 @@ const BodyLowerer = struct {
             .bool_literal => |lit| .{ .bool_literal = lit.value },
             .wildcard => .wildcard,
             .enum_variant => |variant_pattern| try self.lowerEnumVariantPattern(variant_pattern),
+            .option_variant => |variant_pattern| try self.lowerOptionVariantPattern(variant_pattern),
         };
     }
 
@@ -3806,6 +3814,43 @@ const BodyLowerer = struct {
             try bindings.append(self.collector.allocator, .{ .name = symbol, .local = local_id, .payload_field = payload_id, .type_id = payload.type_id, .span = binding.name.span });
         }
         return .{ .enum_variant = .{ .enum_id = enum_id, .variant_id = variant_id, .bindings = try bindings.toOwnedSlice(self.collector.allocator) } };
+    }
+
+    fn lowerOptionVariantPattern(self: *BodyLowerer, variant_pattern: ast.OptionVariantPattern) !?hir.HirMatchPattern {
+        const match_type = self.current_match_type orelse {
+            try self.collector.diagnostics.append(diagnostics.optionMatchInvalidArm(variant_pattern.span));
+            return null;
+        };
+        const option = switch (self.collector.module.types.kind(match_type)) {
+            .option => |option| option,
+            else => {
+                try self.collector.diagnostics.append(diagnostics.optionMatchInvalidArm(variant_pattern.span));
+                return null;
+            },
+        };
+        if (std.mem.eql(u8, variant_pattern.variant_name.text, "None")) {
+            if (variant_pattern.bindings.len != 0) {
+                try self.collector.diagnostics.append(diagnostics.optionMatchInvalidArm(variant_pattern.span));
+                return null;
+            }
+            return .option_none;
+        }
+        if (!std.mem.eql(u8, variant_pattern.variant_name.text, "Some") or variant_pattern.bindings.len != 1) {
+            try self.collector.diagnostics.append(diagnostics.optionMatchInvalidArm(variant_pattern.span));
+            return null;
+        }
+        var bindings = std.ArrayList(hir.HirOptionPatternBinding).empty;
+        errdefer bindings.deinit(self.collector.allocator);
+        const binding = variant_pattern.bindings[0];
+        const symbol = try self.collector.module.interner.intern(binding.name.text);
+        if (self.lookup(symbol) != null) {
+            try self.collector.diagnostics.append(diagnostics.duplicateLocalName(binding.name.span));
+            return null;
+        }
+        const local_id = try self.collector.module.hir.addLocal(self.function_id.?, symbol, option.element, binding.name.span);
+        try self.bindings.append(self.collector.allocator, .{ .name = symbol, .binding = .{ .local = local_id }, .depth = self.depth });
+        try bindings.append(self.collector.allocator, .{ .name = symbol, .local = local_id, .type_id = option.element, .span = binding.name.span });
+        return .{ .option_some = .{ .bindings = try bindings.toOwnedSlice(self.collector.allocator) } };
     }
 
     const RequirementCallResolution = struct {

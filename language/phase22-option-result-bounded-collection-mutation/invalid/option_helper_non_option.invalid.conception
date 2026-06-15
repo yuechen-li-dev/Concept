@@ -1,0 +1,14 @@
+# name: phase22 option helper non option
+# phase: check
+# check: executable
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    return optionIsNone(1);
+}
+
+=== diagnostics ===
+CON0516

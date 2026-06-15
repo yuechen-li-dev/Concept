@@ -63,6 +63,12 @@ pub const DiagnosticCode = enum {
     FixedBufferAppendTypeMismatch,
     FixedBufferReceiverRequired,
     OptionRequiresValueType,
+    OptionMatchMustHandleNone,
+    OptionMatchMustHandleSome,
+    DuplicateOptionMatchArm,
+    OptionMatchInvalidArm,
+    OptionHelperRequiresOption,
+    OptionFallbackTypeMismatch,
     OptionNoneRequiresTargetType,
     OptionSomeTypeMismatch,
     DuplicateParameterName,
@@ -314,6 +320,12 @@ pub const DiagnosticCode = enum {
             .FixedBufferAppendTypeMismatch => "CON0421",
             .FixedBufferReceiverRequired => "CON0422",
             .OptionRequiresValueType => "CON0500",
+            .OptionMatchMustHandleNone => "CON0502",
+            .OptionMatchMustHandleSome => "CON0513",
+            .DuplicateOptionMatchArm => "CON0514",
+            .OptionMatchInvalidArm => "CON0515",
+            .OptionHelperRequiresOption => "CON0516",
+            .OptionFallbackTypeMismatch => "CON0517",
             .OptionNoneRequiresTargetType => "CON0511",
             .OptionSomeTypeMismatch => "CON0512",
             .DuplicateParameterName => "CON0025",
@@ -1715,6 +1727,30 @@ pub fn unknownIdentifier(span: SourceSpan) Diagnostic {
         "unknown identifier",
         span,
     ).withHelp("function bodies can reference visible parameters and locals");
+}
+
+pub fn optionMatchMustHandleNone(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.OptionMatchMustHandleNone, .@"error", "Option match must handle None", span);
+}
+
+pub fn optionMatchMustHandleSome(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.OptionMatchMustHandleSome, .@"error", "Option match must handle Some", span);
+}
+
+pub fn duplicateOptionMatchArm(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.DuplicateOptionMatchArm, .@"error", "duplicate Option match arm", span);
+}
+
+pub fn optionMatchInvalidArm(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.OptionMatchInvalidArm, .@"error", "Option match arms must be Some(value), None, or _", span);
+}
+
+pub fn optionHelperRequiresOption(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.OptionHelperRequiresOption, .@"error", "Option helper requires Option<T>", span);
+}
+
+pub fn optionFallbackTypeMismatch(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.OptionFallbackTypeMismatch, .@"error", "Option fallback type must match payload type", span);
 }
 
 pub fn unknownFunction(span: SourceSpan) Diagnostic {

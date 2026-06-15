@@ -1,0 +1,17 @@
+# name: phase22 option match missing some
+# phase: check
+# check: executable
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    Option<int> maybe = optionNone<int>();
+    match maybe {
+        None => return 0;
+    }
+}
+
+=== diagnostics ===
+CON0513

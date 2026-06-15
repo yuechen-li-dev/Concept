@@ -1,0 +1,18 @@
+module Main;
+
+Option<int> choose(bool enabled) {
+    if (enabled) {
+        return optionSome<int>(4);
+    }
+    return optionNone<int>();
+}
+
+int main() {
+    Option<int> maybe = choose(false);
+
+    match maybe {
+        Some(value) => return value;
+        None => return 6;
+    }
+}
+// expect: 6

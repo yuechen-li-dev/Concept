@@ -360,6 +360,13 @@ pub const HirPatternBinding = struct {
     span: SourceSpan,
 };
 
+pub const HirOptionPatternBinding = struct {
+    name: SymbolId,
+    local: LocalId,
+    type_id: types.TypeId,
+    span: SourceSpan,
+};
+
 pub const HirMatchPattern = union(enum) {
     int_literal: []const u8,
     bool_literal: bool,
@@ -369,6 +376,8 @@ pub const HirMatchPattern = union(enum) {
         variant_id: VariantId,
         bindings: []HirPatternBinding,
     },
+    option_some: struct { bindings: []HirOptionPatternBinding },
+    option_none,
 };
 
 pub const HirMatchArm = struct {
@@ -468,6 +477,7 @@ pub const HirExprKind = union(enum) {
     option_some: struct { type_id: types.TypeId, value: ExprId },
     option_none: types.TypeId,
     option_is_some: ExprId,
+    option_is_none: ExprId,
     option_or: struct { option: ExprId, fallback: ExprId },
     index_access: struct { base: ExprId, index: ExprId, result_type: types.TypeId, array_length: u64, is_slice: bool, is_fixed_buffer: bool = false },
     slice_len: ExprId,
@@ -758,6 +768,7 @@ pub const HirStore = struct {
                         switch (arm.pattern) {
                             .int_literal => |text| self.allocator.free(text),
                             .enum_variant => |pattern| if (pattern.bindings.len > 0) self.allocator.free(pattern.bindings),
+                            .option_some => |pattern| if (pattern.bindings.len > 0) self.allocator.free(pattern.bindings),
                             else => {},
                         }
                     }
@@ -1963,6 +1974,10 @@ pub const HirStore = struct {
                 try self.writeExprDebug(writer, some.value, depth + 1);
             },
             .option_none => |type_id| try writer.print("OptionNone {f}\n", .{type_id}),
+            .option_is_none => |option| {
+                try writer.writeAll("OptionIsNone\n");
+                try self.writeExprDebug(writer, option, depth + 1);
+            },
             .option_is_some => |option| {
                 try writer.writeAll("OptionIsSome\n");
                 try self.writeExprDebug(writer, option, depth + 1);
@@ -2136,6 +2151,7 @@ fn freeTransitionTarget(allocator: std.mem.Allocator, target: HirTransitionTarge
                 switch (arm.pattern) {
                     .int_literal => |text| allocator.free(text),
                     .enum_variant => |pattern| if (pattern.bindings.len > 0) allocator.free(pattern.bindings),
+                    .option_some => |pattern| if (pattern.bindings.len > 0) allocator.free(pattern.bindings),
                     else => {},
                 }
             }
@@ -2369,6 +2385,8 @@ fn writePattern(writer: *std.Io.Writer, pattern: HirMatchPattern) !void {
         .int_literal => |text| try writer.writeAll(text),
         .bool_literal => |value| try writer.writeAll(if (value) "true" else "false"),
         .wildcard => try writer.writeByte('_'),
+        .option_some => try writer.writeAll("Some"),
+        .option_none => try writer.writeAll("None"),
         .enum_variant => |enum_variant| {
             try writer.print("EnumVariant {f}::{f}", .{ enum_variant.enum_id, enum_variant.variant_id });
             if (enum_variant.bindings.len != 0) {

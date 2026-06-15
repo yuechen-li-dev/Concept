@@ -3984,6 +3984,38 @@ test "language run fixture: phase22 option parameter return" {
     try expectRunFixture("../../../language/phase22-option-result-bounded-collection-mutation/valid/option_parameter_return_run.valid.conception");
 }
 
+test "language run fixture: phase22 option match some" {
+    try expectRunFixture("../../../language/phase22-option-result-bounded-collection-mutation/valid/option_match_some_run.valid.conception");
+}
+
+test "language run fixture: phase22 option match none" {
+    try expectRunFixture("../../../language/phase22-option-result-bounded-collection-mutation/valid/option_match_none_run.valid.conception");
+}
+
+test "language run fixture: phase22 option match parameter" {
+    try expectRunFixture("../../../language/phase22-option-result-bounded-collection-mutation/valid/option_match_parameter_run.valid.conception");
+}
+
+test "language run fixture: phase22 option match return" {
+    try expectRunFixture("../../../language/phase22-option-result-bounded-collection-mutation/valid/option_match_return_run.valid.conception");
+}
+
+test "language run fixture: phase22 option is none" {
+    try expectRunFixture("../../../language/phase22-option-result-bounded-collection-mutation/valid/option_is_none_run.valid.conception");
+}
+
+test "language run fixture: phase22 option unwrap or some" {
+    try expectRunFixture("../../../language/phase22-option-result-bounded-collection-mutation/valid/option_unwrap_or_some_run.valid.conception");
+}
+
+test "language run fixture: phase22 option unwrap or none" {
+    try expectRunFixture("../../../language/phase22-option-result-bounded-collection-mutation/valid/option_unwrap_or_none_run.valid.conception");
+}
+
+test "language backend-c fixture: phase22 option match backend shape" {
+    try expectBackendCFixture("../../../language/phase22-option-result-bounded-collection-mutation/valid/option_match_backend_shape.valid.conception");
+}
+
 test "language check fixture: phase22 option missing type" {
     try expectCheckFixture("../../../language/phase22-option-result-bounded-collection-mutation/invalid/option_missing_type.invalid.conception");
 }
@@ -3994,4 +4026,32 @@ test "language check fixture: phase22 option none requires type" {
 
 test "language check fixture: phase22 option some type mismatch" {
     try expectCheckFixture("../../../language/phase22-option-result-bounded-collection-mutation/invalid/option_some_type_mismatch.invalid.conception");
+}
+
+test "language check fixture: phase22 option match missing none" {
+    try expectCheckFixture("../../../language/phase22-option-result-bounded-collection-mutation/invalid/option_match_missing_none.invalid.conception");
+}
+
+test "language check fixture: phase22 option match missing some" {
+    try expectCheckFixture("../../../language/phase22-option-result-bounded-collection-mutation/invalid/option_match_missing_some.invalid.conception");
+}
+
+test "language check fixture: phase22 option match duplicate some" {
+    try expectCheckFixture("../../../language/phase22-option-result-bounded-collection-mutation/invalid/option_match_duplicate_some.invalid.conception");
+}
+
+test "language check fixture: phase22 option match invalid arm" {
+    try expectCheckFixture("../../../language/phase22-option-result-bounded-collection-mutation/invalid/option_match_invalid_arm.invalid.conception");
+}
+
+test "language check fixture: phase22 option match non option" {
+    try expectCheckFixture("../../../language/phase22-option-result-bounded-collection-mutation/invalid/option_match_non_option.invalid.conception");
+}
+
+test "language check fixture: phase22 option fallback type mismatch" {
+    try expectCheckFixture("../../../language/phase22-option-result-bounded-collection-mutation/invalid/option_or_fallback_type_mismatch.invalid.conception");
+}
+
+test "language check fixture: phase22 option helper non option" {
+    try expectCheckFixture("../../../language/phase22-option-result-bounded-collection-mutation/invalid/option_helper_non_option.invalid.conception");
 }

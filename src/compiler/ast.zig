@@ -832,11 +832,22 @@ pub const EnumVariantPattern = struct {
     }
 };
 
+pub const OptionVariantPattern = struct {
+    variant_name: NameSegment,
+    bindings: []PatternBinding,
+    span: SourceSpan,
+
+    pub fn deinit(self: OptionVariantPattern, allocator: std.mem.Allocator) void {
+        allocator.free(self.bindings);
+    }
+};
+
 pub const MatchPattern = union(enum) {
     int_literal: Expr.IntLiteralExpr,
     bool_literal: Expr.BoolLiteralExpr,
     wildcard: SourceSpan,
     enum_variant: EnumVariantPattern,
+    option_variant: OptionVariantPattern,
 
     pub fn span(self: MatchPattern) SourceSpan {
         return switch (self) {
@@ -844,6 +855,7 @@ pub const MatchPattern = union(enum) {
             .bool_literal => |pattern| pattern.span,
             .wildcard => |pattern_span| pattern_span,
             .enum_variant => |pattern| pattern.span,
+            .option_variant => |pattern| pattern.span,
         };
     }
 
@@ -854,6 +866,17 @@ pub const MatchPattern = union(enum) {
             .wildcard => try writer.writeByte('_'),
             .enum_variant => |pattern| {
                 try writer.print("{s}::{s}", .{ pattern.enum_name.text, pattern.variant_name.text });
+                if (pattern.bindings.len != 0) {
+                    try writer.writeByte('(');
+                    for (pattern.bindings, 0..) |binding, index| {
+                        if (index != 0) try writer.writeAll(", ");
+                        try writer.writeAll(binding.name.text);
+                    }
+                    try writer.writeByte(')');
+                }
+            },
+            .option_variant => |pattern| {
+                try writer.writeAll(pattern.variant_name.text);
                 if (pattern.bindings.len != 0) {
                     try writer.writeByte('(');
                     for (pattern.bindings, 0..) |binding, index| {
@@ -875,6 +898,7 @@ pub const MatchArm = struct {
     pub fn deinit(self: MatchArm, allocator: std.mem.Allocator) void {
         switch (self.pattern) {
             .enum_variant => |pattern| pattern.deinit(allocator),
+            .option_variant => |pattern| pattern.deinit(allocator),
             else => {},
         }
         self.body.deinit(allocator);
@@ -902,6 +926,7 @@ pub const TransitionMatchArm = struct {
     pub fn deinit(self: TransitionMatchArm, allocator: std.mem.Allocator) void {
         switch (self.pattern) {
             .enum_variant => |pattern| pattern.deinit(allocator),
+            .option_variant => |pattern| pattern.deinit(allocator),
             else => {},
         }
     }

@@ -1,0 +1,13 @@
+module Main;
+
+int valueOrZero(Option<int> maybe) {
+    match maybe {
+        Some(value) => return value;
+        None => return 0;
+    }
+}
+
+int main() {
+    return valueOrZero(optionSome<int>(5));
+}
+// expect: 5

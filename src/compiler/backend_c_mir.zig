@@ -1461,6 +1461,18 @@ fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue
             try emitOperand(writer, ctx, operand);
             try writer.writeAll(".tag == 1");
         },
+        .option_is_none => |operand| {
+            try emitOperand(writer, ctx, operand);
+            try writer.writeAll(".tag == 0");
+        },
+        .option_tag => |operand| {
+            try emitOperand(writer, ctx, operand);
+            try writer.writeAll(".tag");
+        },
+        .option_payload => |operand| {
+            try emitOperand(writer, ctx, operand);
+            try writer.writeAll(".value");
+        },
         .option_or => |option_or| {
             try writer.writeByte('(');
             try emitOperand(writer, ctx, option_or.option);
