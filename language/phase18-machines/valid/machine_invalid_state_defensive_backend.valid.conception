@@ -1,0 +1,25 @@
+# name: machine invalid state defensive backend
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Simple() -> int {
+    state Start { transition Done; }
+    state Done { return 1; }
+}
+
+int main() {
+    Simple s = Simple();
+    Step(s);
+    Step(s);
+    return Result(s);
+}
+
+=== c ===
+contains: default:
+contains: cpt_panic("invalid machine state reached");
+contains: exit(101);
+not_contains: __builtin_trap
+not_contains: abort(

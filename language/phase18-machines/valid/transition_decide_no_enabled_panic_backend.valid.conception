@@ -1,0 +1,32 @@
+# name: transition decide no enabled panic backend
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Choose -> int {
+    state Start {
+        transition decide {
+            A when false score 1;
+            B when false score 2;
+        };
+    }
+    state A { return 1; }
+    state B { return 2; }
+}
+
+int main() {
+    Choose c = Choose();
+    Step(c);
+    return 0;
+}
+
+=== c ===
+count: static void cpt_panic(const char* reason) | 1
+contains: cpt_panic("machine decision transition has no enabled candidates");
+contains: exit(101);
+not_contains: transition_decide_trap
+not_contains: machine_decision_trap
+not_contains: __builtin_trap
+not_contains: abort(

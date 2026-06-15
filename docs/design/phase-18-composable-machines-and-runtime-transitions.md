@@ -552,3 +552,20 @@ P18-M6 adds the minimal `State(machine) -> int` machine introspection helper. `S
 The v0 state-id contract is intentionally narrow: ids are stable within one compiled machine definition, the initial state id is deterministic, ids are intended for tests, debug loops, and DragonGod control loops, and they are not source-level enum variant names. There is no cross-version ABI stability promise yet. P18-M6 does not add `StateName(machine)`, string state names, runtime metadata tables, reflection, state lists, a source-level state enum surface, scheduler/yield/async/event-bus behavior, blackboards/mailboxes, dynamic child lists, heap-owned machines, or DragonGod runtime hooks.
 
 Invalid non-machine operands are rejected with `CON029D StateRequiresMachineValue`; invalid arity uses the existing invalid-call diagnostic. The Phase 18 fixture corpus now includes runtime, backend, and invalid coverage for initial state reads, after-step state reads, nested child state reads, no-completion-required reads, direct C state-field lowering, and non-machine/arity failures. Remaining P18 work is runtime failure hardening, examples/fixtures, and closeout.
+
+## P18-M7 status: runtime failure hardening for machine transitions
+
+P18-M7 audits and hardens machine runtime failure paths without adding new transition forms. All machine runtime failures touched by Phase 18 now route through the shared Phase 17 backend-owned `cpt_panic` helper and deterministic exit code 101 path. The stable machine runtime failure reasons are:
+
+- `machine result cannot be read before completion`
+- `machine decision transition has no enabled candidates`
+- `machine transition match found no matching case`
+- `invalid machine state reached`
+
+`Result(machine)` and `Result(child)` before completion are fixture-pinned to emit calls to `cpt_panic("machine result cannot be read before completion")`; stale machine-result trap/helper names and `__builtin_trap` remain absent. `transition decide` no-enabled-candidate failure is fixture-pinned to call `cpt_panic("machine decision transition has no enabled candidates")`.
+
+Bool v0 `transition match` remains exhaustively validated at compile time: both `true` and `false` must be covered unless a wildcard arm exists. Therefore ordinary bool matches have no reachable runtime no-case fixture; the stable no-case reason is reserved for a future runtime no-match path if a wider match subset requires one.
+
+Machine step dispatch now emits a defensive default arm that calls `cpt_panic("invalid machine state reached")` if a corrupted frame reaches an impossible state id. This is a defensive runtime failure path only; statically invalid machine programs remain diagnostics.
+
+The backend emits the `cpt_panic` helper once per generated C unit even when manual `panic`, `assert`, machine result guards, decide no-enabled guards, and invalid-state dispatch guards coexist. P18-M7 adds backend fixtures for local result, nested child result, decide no-enabled, multiple panic sites, and invalid-state defensive emission. The Phase 18 machine fixture corpus now contains 60 fixtures. Remaining Phase 18 work is examples/fixtures and closeout.

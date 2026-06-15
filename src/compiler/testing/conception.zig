@@ -3743,6 +3743,26 @@ test "language backend-c fixture: phase18 transition decide" {
     try expectBackendCFixture("../../../language/phase18-machines/valid/transition_decide_backend.valid.conception");
 }
 
+test "language backend-c fixture: phase18 machine result panic reason" {
+    try expectBackendCFixture("../../../language/phase18-machines/valid/machine_result_before_completion_panic_reason_backend.valid.conception");
+}
+
+test "language backend-c fixture: phase18 nested machine result panic reason" {
+    try expectBackendCFixture("../../../language/phase18-machines/valid/nested_machine_result_before_completion_panic_reason_backend.valid.conception");
+}
+
+test "language backend-c fixture: phase18 transition decide no enabled panic reason" {
+    try expectBackendCFixture("../../../language/phase18-machines/valid/transition_decide_no_enabled_panic_backend.valid.conception");
+}
+
+test "language backend-c fixture: phase18 machine multiple panic sites" {
+    try expectBackendCFixture("../../../language/phase18-machines/valid/machine_multiple_panic_sites_backend.valid.conception");
+}
+
+test "language backend-c fixture: phase18 invalid machine state defensive panic" {
+    try expectBackendCFixture("../../../language/phase18-machines/valid/machine_invalid_state_defensive_backend.valid.conception");
+}
+
 test "language check fixture: phase18 transition decide empty" {
     try expectCheckFixture("../../../language/phase18-machines/invalid/transition_decide_empty.invalid.conception");
 }
