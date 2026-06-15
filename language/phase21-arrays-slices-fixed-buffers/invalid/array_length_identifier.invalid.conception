@@ -1,0 +1,14 @@
+# name: phase21 fixed array identifier length
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module Example;
+
+struct Bag {
+    int[x] values;
+};
+
+=== diagnostics ===
+CON0402

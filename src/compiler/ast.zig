@@ -101,6 +101,13 @@ pub const Attribute = struct {
     }
 };
 
+pub const ArraySuffix = struct {
+    length_text: []const u8,
+    length_span: SourceSpan,
+    owns_length_text: bool = false,
+    span: SourceSpan,
+};
+
 pub const TypeName = struct {
     name: QualifiedName,
     generic_args: []TypeName = &.{},
@@ -109,6 +116,7 @@ pub const TypeName = struct {
     dyn_span: SourceSpan = .{ .start = 0, .length = 0 },
     is_reference: bool = false,
     is_pointer: bool = false,
+    array_suffixes: []ArraySuffix = &.{},
     span: SourceSpan,
 
     pub fn deinit(self: TypeName, allocator: std.mem.Allocator) void {
@@ -117,6 +125,10 @@ pub const TypeName = struct {
             generic_arg.deinit(allocator);
         }
         allocator.free(self.generic_args);
+        for (self.array_suffixes) |suffix| {
+            if (suffix.owns_length_text) allocator.free(suffix.length_text);
+        }
+        allocator.free(self.array_suffixes);
     }
 
     pub fn write(self: TypeName, writer: anytype) !void {
@@ -133,6 +145,11 @@ pub const TypeName = struct {
         }
         if (self.is_reference) try writer.writeByte('&');
         if (self.is_pointer) try writer.writeByte('*');
+        for (self.array_suffixes) |suffix| {
+            try writer.writeByte('[');
+            try writer.writeAll(suffix.length_text);
+            try writer.writeByte(']');
+        }
     }
 };
 

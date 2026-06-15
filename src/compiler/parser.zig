@@ -3723,6 +3723,39 @@ pub const Parser = struct {
         if (is_reference) last_span = self.peekBack().span;
         const is_pointer = self.match(.star) != null;
         if (is_pointer) last_span = self.peekBack().span;
+        var array_suffixes = std.ArrayList(ast.ArraySuffix).init(allocator);
+        errdefer array_suffixes.deinit();
+        while (self.match(.left_bracket)) |left_bracket| {
+            if (self.current().kind == .right_bracket) {
+                try self.report(.UnexpectedToken, "expected positive integer literal array length", self.current().span);
+                _ = self.advance();
+                continue;
+            }
+            var length_token = self.advance();
+            var length_text = length_token.lexeme;
+            var length_span = length_token.span;
+            var owns_length_text = false;
+            if (length_token.kind == .minus and self.current().kind == .int_literal) {
+                const int_token = self.advance();
+                length_text = try std.fmt.allocPrint(allocator, "-{s}", .{int_token.lexeme});
+                length_span = ast.spanFromBounds(length_token.span.start, spanEnd(int_token.span));
+                owns_length_text = true;
+                length_token = int_token;
+            }
+            const right_bracket = self.match(.right_bracket) orelse blk: {
+                try self.report(.UnexpectedToken, "expected ']' after array length", self.current().span);
+                break :blk length_token;
+            };
+            last_span = right_bracket.span;
+            try array_suffixes.append(.{
+                .length_text = length_text,
+                .length_span = length_span,
+                .owns_length_text = owns_length_text,
+                .span = ast.spanFromBounds(left_bracket.span.start, spanEnd(right_bracket.span)),
+            });
+        }
+        const owned_array_suffixes = try array_suffixes.toOwnedSlice();
+        errdefer allocator.free(owned_array_suffixes);
         return .{
             .name = name,
             .generic_args = generic_args,
@@ -3731,6 +3764,7 @@ pub const Parser = struct {
             .dyn_span = if (dyn_token) |token| token.span else .{ .start = 0, .length = 0 },
             .is_reference = is_reference,
             .is_pointer = is_pointer,
+            .array_suffixes = owned_array_suffixes,
             .span = ast.spanFromBounds(start_span.start, spanEnd(last_span)),
         };
     }
@@ -3763,14 +3797,14 @@ pub const Parser = struct {
     fn emptyTypeName(self: *Parser, allocator: std.mem.Allocator, span: SourceSpan) !ast.TypeName {
         const parts = try allocator.alloc(ast.NameSegment, 0);
         _ = self;
-        return .{ .name = .{ .parts = parts, .span = span }, .generic_args = try allocator.alloc(ast.TypeName, 0), .span = span };
+        return .{ .name = .{ .parts = parts, .span = span }, .generic_args = try allocator.alloc(ast.TypeName, 0), .array_suffixes = try allocator.alloc(ast.ArraySuffix, 0), .span = span };
     }
 
     fn syntheticTypeName(self: *Parser, allocator: std.mem.Allocator, name: []const u8, span: SourceSpan) !ast.TypeName {
         _ = self;
         const parts = try allocator.alloc(ast.NameSegment, 1);
         parts[0] = .{ .text = name, .span = span };
-        return .{ .name = .{ .parts = parts, .span = span }, .generic_args = try allocator.alloc(ast.TypeName, 0), .span = span };
+        return .{ .name = .{ .parts = parts, .span = span }, .generic_args = try allocator.alloc(ast.TypeName, 0), .array_suffixes = try allocator.alloc(ast.ArraySuffix, 0), .span = span };
     }
 
     fn expectTrailingBlockSemicolonAfterBrace(self: *Parser, decl_kind: []const u8, right_brace_span: SourceSpan) !SourceSpan {

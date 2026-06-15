@@ -1,0 +1,14 @@
+# name: phase21 fixed array negative length
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module Example;
+
+struct Bag {
+    int[-1] values;
+};
+
+=== diagnostics ===
+CON0411

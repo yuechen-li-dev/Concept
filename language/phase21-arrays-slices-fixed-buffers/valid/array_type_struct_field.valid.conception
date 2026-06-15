@@ -1,0 +1,11 @@
+# name: phase21 fixed array struct field
+# phase: check
+# check: declarations
+# expect: pass
+
+=== source ===
+module Example;
+
+struct Bag {
+    int[4] values;
+};

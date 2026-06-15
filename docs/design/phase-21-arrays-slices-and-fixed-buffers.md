@@ -520,3 +520,20 @@ Add Phase 21 arrays and slices design
 - Confirm fixed buffer spelling: `FixedBuffer<T, N>`.
 - Use `Len(...)` and `Capacity(...)`; do not add `.length` in v0.
 - Prefer explicit `Slice(values)` for local slice creation and implicit array-to-slice conversion only at explicit slice parameter call boundaries.
+
+## P21-M1 status: fixed array type shell
+
+P21-M1 teaches the Stage 0 compiler that `T[N]` is a type spelling. The parser accepts postfix fixed-array type suffixes after ordinary type names, generic type arguments, raw pointer suffixes, and borrowed-reference suffixes where those syntactic forms are otherwise accepted.
+
+Supported M1 examples:
+
+```cpp
+int[4] values;
+int[4][2] matrix;
+```
+
+Nested postfix array type syntax is interpreted as repeated postfix type construction: `T[N][M]` means an array of `M` elements, each of type `T[N]`.
+
+M1 deliberately accepts positive integer literal lengths only. `int[4]` is accepted. `int[0]`, `int[-1]`, `int[x]`, and `int[1 + 2]` are rejected. General compile-time length expressions remain deferred.
+
+M1 does not implement array literals, indexing, element assignment, bounds checks, `Len`, `Capacity`, `Slice<T>`, `MutSlice<T>`, `FixedBuffer<T, N>`, array-to-slice conversion, DragonGod migrations, or full backend value-copy semantics. DragonGod migration remains deferred until the later Phase 21 migration milestone.

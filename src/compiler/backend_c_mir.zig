@@ -1491,6 +1491,10 @@ fn emitCTypeAt(writer: anytype, ctx: *const BackendContext, type_id: types.TypeI
             try reportInterfaceRuntimeUnsupported(ctx, span);
             return error.InvalidExecutable;
         },
+        .array => |array| {
+            try emitCTypeAt(writer, ctx, array.element, span, .value);
+            try writer.print("[{d}]", .{array.length});
+        },
         .manual_init, .type_param => {
             try reportUnsupportedCType(ctx, span);
             return error.InvalidExecutable;
@@ -1715,6 +1719,10 @@ fn emitTypeNameComponent(writer: anytype, module: *const semantics.SemanticModul
         .dyn_interface => |dyn| {
             try writer.writeAll("dyn_");
             try emitEscapedIdentifierComponent(writer, module.interner.text(module.hir.getInterface(dyn.interface_id).name));
+        },
+        .array => |array| {
+            try emitTypeNameComponent(writer, module, array.element);
+            try writer.print("_array_{d}", .{array.length});
         },
         .void, .arena, .allocator, .alloc_error, .interface_type, .manual_init, .type_param => try writer.writeAll("unsupported"),
     }

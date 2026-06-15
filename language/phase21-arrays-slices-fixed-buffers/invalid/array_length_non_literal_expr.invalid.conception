@@ -1,0 +1,13 @@
+# name: phase21 fixed array non literal expression length
+# phase: parse
+# expect: fail
+
+=== source ===
+module Example;
+
+struct Bag {
+    int[1 + 2] values;
+};
+
+=== diagnostics ===
+CON0003

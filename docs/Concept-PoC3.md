@@ -3071,3 +3071,7 @@ Recommended next Concept phases:
 | Phase 28 | DragonGod revisit: dynamic machine execution spike | Revisit AutomataGraph execution only after container, option/result, string/bytes, generic, callable, and dyn storage foundations exist. |
 
 Phase 21 is now open at P21-M0 as a design-only milestone for arrays, slices, and fixed buffers. The design lives in `docs/design/phase-21-arrays-slices-and-fixed-buffers.md` and confirms `T[N]` fixed arrays, `[ ... ]` array literals, read-only `Slice<T>`, explicit future `MutSlice<T>`, `FixedBuffer<T, N>`, `Len`, `Capacity`, bounds-checked indexing, no hidden allocation, and no DragonGod migrations during M0. DragonGod should remain paused as a subsystem-expansion project and continue as a regression/stress suite for upcoming Concept language and library work.
+
+### Phase 21 M1 fixed array type syntax
+
+Phase 21 M1 adds parser, AST, semantic type, and HIR carrying support for fixed-size array type syntax `T[N]`. Lengths are part of semantic type identity, so `int[4]`, `int[5]`, and `bool[4]` are distinct types. M1 restricts lengths to positive integer literals and rejects zero, negative, identifier, and non-literal expression lengths with stable diagnostics. Array construction, literals, indexing, `Len`, `Capacity`, slices, fixed buffers, DragonGod migration, and full backend value-copy semantics remain out of scope.

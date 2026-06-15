@@ -45,6 +45,8 @@ pub const DiagnosticCode = enum {
     DuplicateStructField,
     DuplicateEnumVariant,
     UnsupportedTypeSyntax,
+    ArrayLengthMustBeCompileTimeConstant,
+    ArrayLengthMustBePositive,
     DuplicateParameterName,
     UnknownIdentifier,
     UnknownFunction,
@@ -276,6 +278,8 @@ pub const DiagnosticCode = enum {
             .DuplicateStructField => "CON0022",
             .DuplicateEnumVariant => "CON0023",
             .UnsupportedTypeSyntax => "CON0024",
+            .ArrayLengthMustBeCompileTimeConstant => "CON0402",
+            .ArrayLengthMustBePositive => "CON0411",
             .DuplicateParameterName => "CON0025",
             .UnknownIdentifier => "CON0026",
             .UnknownFunction => "CON0027",
@@ -1079,6 +1083,24 @@ pub fn unknownTypeName(span: SourceSpan) Diagnostic {
         "unknown type name",
         span,
     ).withHelp("Phase 3 declaration types can name void, int, bool, top-level structs, or top-level enums");
+}
+
+pub fn arrayLengthMustBeCompileTimeConstant(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .ArrayLengthMustBeCompileTimeConstant,
+        .@"error",
+        "array length must be a positive integer literal",
+        span,
+    ).withHelp("Phase 21 M1 accepts fixed array lengths written as positive integer literals only");
+}
+
+pub fn arrayLengthMustBePositive(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .ArrayLengthMustBePositive,
+        .@"error",
+        "array length must be positive",
+        span,
+    ).withHelp("Phase 21 M1 rejects zero-length and negative-length arrays");
 }
 
 pub fn duplicateStructField(span: SourceSpan) Diagnostic {
