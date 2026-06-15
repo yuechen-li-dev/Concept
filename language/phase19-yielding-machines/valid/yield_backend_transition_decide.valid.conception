@@ -1,0 +1,58 @@
+# name: yield backend transition interactions
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Child -> int {
+    state Start { transition Done; }
+    state Done { return 7; }
+}
+
+machine Parent -> int {
+    Child child;
+
+    state Waiting {
+        Step(child);
+
+        if (!Complete(child)) {
+            yield;
+        }
+
+        transition decide {
+            Done when Complete(child) score 10;
+            Retry score 0;
+        };
+    }
+
+    state Retry { return 0; }
+    state Done { return Result(child); }
+}
+
+int main() {
+    Parent p = Parent();
+    Step(p);
+
+    if (Complete(p)) {
+        return 99;
+    }
+
+    Step(p);
+    Step(p);
+    return Result(p);
+}
+
+=== c ===
+contains: return;
+contains: if (!cpt_machine_Complete_Child(&m->child)) {
+contains: cpt_m_Parent_s_Done
+contains: cpt_m_Parent_s_Retry
+contains: m->state = cpt_m_Parent_s_Done;
+not_contains: malloc
+not_contains: scheduler
+not_contains: async
+not_contains: blackboard
+not_contains: mailbox
+not_contains: event bus
+not_contains: DragonGod

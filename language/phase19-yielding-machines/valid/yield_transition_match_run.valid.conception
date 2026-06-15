@@ -1,0 +1,46 @@
+# name: yield transition match run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Child -> int {
+    state Start { transition Done; }
+    state Done { return 1; }
+}
+
+machine Parent -> int {
+    Child child;
+
+    state Waiting {
+        Step(child);
+
+        if (!Complete(child)) {
+            yield;
+        }
+
+        transition match (Complete(child)) {
+            true => Done;
+            false => Waiting;
+        };
+    }
+
+    state Done { return Result(child); }
+}
+
+int main() {
+    Parent p = Parent();
+    Step(p);
+
+    if (Complete(p)) {
+        return 99;
+    }
+
+    Step(p);
+    Step(p);
+    return Result(p);
+}
+
+=== run ===
+exit_code: 1

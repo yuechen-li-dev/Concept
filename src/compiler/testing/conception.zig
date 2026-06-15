@@ -3804,8 +3804,13 @@ test "language run fixtures: phase19 yield runtime lowering" {
     try expectRunFixture("../../../language/phase19-yielding-machines/valid/yield_reenters_same_state_run.valid.conception");
     try expectRunFixture("../../../language/phase19-yielding-machines/valid/yield_in_if_branch_run.valid.conception");
     try expectRunFixture("../../../language/phase19-yielding-machines/valid/yield_result_after_yield_panics_run.valid.conception");
+    try expectRunFixture("../../../language/phase19-yielding-machines/valid/yield_child_state_readable_run.valid.conception");
+    try expectRunFixture("../../../language/phase19-yielding-machines/valid/yield_transition_match_run.valid.conception");
+    try expectRunFixture("../../../language/phase19-yielding-machines/valid/yield_transition_decide_run.valid.conception");
+    try expectRunFixture("../../../language/phase19-yielding-machines/valid/yield_multi_step_child_poll_run.valid.conception");
 }
 
 test "language backend-c fixture: phase19 yield lowers to step return" {
     try expectBackendCFixture("../../../language/phase19-yielding-machines/valid/yield_backend_step_return.valid.conception");
+    try expectBackendCFixture("../../../language/phase19-yielding-machines/valid/yield_backend_transition_decide.valid.conception");
 }
