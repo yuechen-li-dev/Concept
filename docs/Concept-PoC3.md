@@ -3101,3 +3101,9 @@ Explicit local `Slice(values)` construction, slice returns, slice fields, mutabl
 ### P21-M7 status: FixedBuffer v0
 
 Stage 0 now supports `FixedBuffer<T, N>` as bounded appendable owned value storage. The implemented surface is `fixedBufferEmpty<T, N>()`, `fixedBufferAppend(buffer, value)`, `buffer[index]` reads over initialized elements, `Len(buffer)` for current count, and `Capacity(buffer)` for fixed capacity. The C backend emits wrapper structs with fixed-array `storage` plus `int count`; append and read paths use deterministic runtime panic reasons for capacity overflow and initialized-range index failure. Fixed buffers do not allocate and do not migrate DragonGod yet; P21-M8 remains the DragonGod fixed-slot migration spike.
+
+## Phase 21 / M8 DragonGod FixedBuffer migration spike
+
+P21-M8 migrates the DragonGod fixed-slot systems that fit the current `FixedBuffer<T, N>` v0 contract. `TraceRecorder`, `EventBus`, `ReplayLog`, and `AutomataGraph` now store their event/node streams in `FixedBuffer<..., 4>` while keeping the existing public helper APIs and DragonGod-specific panic strings. Backend fixtures assert the fixed-buffer wrapper shape (`storage` plus `count`), verify that old explicit event/slot/node fields are gone for the migrated types, and continue to forbid heap allocation, scheduler/async artifacts, persistence serializers, logging hooks, and DragonGod compiler hooks.
+
+M8 intentionally does not add new language features. Memory, AutomataStack, and ActuatorHost remain on explicit fixed slots because their motivating behavior requires existing-element update, replace-at, pop/remove-last, mutable indexing, or find/update-by-predicate support. The friction inventory in `docs/DragonGod-Concept-Friction.md` records each migrated and blocked subsystem.

@@ -1774,3 +1774,9 @@ Scope remains metadata only: no type-erased machine execution, dynamic MachineOp
 ### DG11 Persistence/checkpoint v0
 
 DG11 adds `DragonGod.Kernel.Persistence` with `KernelCheckpoint`, an explicit value-shaped in-memory checkpoint for World, Agent, EventBus, ActuatorHost, TraceRecorder, RNG seed metadata, and an occupied sentinel. Capture and restore helpers prove deterministic snapshot/restore for world memory, agent memory, events, actuation, trace, restore-all, RNG metadata, and replay/checkpoint composition. This is not file I/O, JSON, binary serialization, schema migration, compression, heap/pointer graph persistence, dynamic graph snapshots, replay log persistence, or external storage adapters.
+
+## Phase 21 / M8 FixedBuffer migration note
+
+P21-M8 repays the cleanest Phase 20 fixed-slot debt by moving append/read/count-only DragonGod kernel storage to native `FixedBuffer<T, 4>`. TraceRecorder, EventBus, ReplayLog, and AutomataGraph now use contiguous fixed-buffer storage while preserving their public helper names, fixed capacity, no-heap doctrine, deterministic ordering, and subsystem-specific panic strings.
+
+The remaining fixed-slot systems are intentionally unchanged. Memory needs key-based update of an existing slot, AutomataStack needs pop/top/replace-top semantics, and ActuatorHost needs id-based status mutation; these require direct fixed-buffer element assignment, replace-at, pop/remove-last, or find/update helpers that are not part of P21-M7. M8 records those blockers rather than rewriting DragonGod architecture around missing operations.

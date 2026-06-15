@@ -27,11 +27,7 @@ struct TraceEvent {
 };
 
 struct TraceRecorder {
-    int count;
-    TraceEvent event0;
-    TraceEvent event1;
-    TraceEvent event2;
-    TraceEvent event3;
+    FixedBuffer<TraceEvent, 4> events;
 };
 
 interface TraceSink {
@@ -55,25 +51,19 @@ TraceEvent traceEmptyEvent() {
 }
 
 TraceRecorder traceRecorderEmpty() {
-    return TraceRecorder { count: 0, event0: traceEmptyEvent(), event1: traceEmptyEvent(), event2: traceEmptyEvent(), event3: traceEmptyEvent() };
+    return TraceRecorder { events: fixedBufferEmpty<TraceEvent, 4>() };
 }
 
-int traceCount(TraceRecorder recorder) { return recorder.count; }
+int traceCount(TraceRecorder recorder) { return Len(recorder.events); }
 
 TraceEvent traceAt(TraceRecorder recorder, int index) {
-    if (index == 0) { return recorder.event0; }
-    if (index == 1) { return recorder.event1; }
-    if (index == 2) { return recorder.event2; }
-    if (index == 3) { return recorder.event3; }
-    panic("DragonGod.Trace index out of range");
+    if (index >= traceCount(recorder)) { panic("DragonGod.Trace index out of range"); }
+    return recorder.events[index];
 }
 
 void traceAppend(mut TraceRecorder& recorder, TraceEvent event) {
-    if (!recorder.event0.occupied) { recorder.event0 = event; recorder.count = recorder.count + 1; return; }
-    if (!recorder.event1.occupied) { recorder.event1 = event; recorder.count = recorder.count + 1; return; }
-    if (!recorder.event2.occupied) { recorder.event2 = event; recorder.count = recorder.count + 1; return; }
-    if (!recorder.event3.occupied) { recorder.event3 = event; recorder.count = recorder.count + 1; return; }
-    panic("DragonGod.Trace capacity exceeded");
+    if (traceCount(recorder) >= Capacity(recorder.events)) { panic("DragonGod.Trace capacity exceeded"); }
+    fixedBufferAppend(recorder.events, event);
 }
 
 void traceEnter(mut TraceRecorder& recorder, DragonGod.Kernel.Core.StateId state, int tick, DragonGod.Kernel.Core.Reason reason) {
