@@ -1,0 +1,22 @@
+# name: machine yield in nested block
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Waiter {
+    state Waiting {
+        {
+            int ticks = 1;
+            discard ticks;
+            yield;
+        }
+        transition Waiting;
+    }
+}
+
+int main() {
+    return 0;
+}

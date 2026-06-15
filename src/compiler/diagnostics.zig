@@ -214,6 +214,9 @@ pub const DiagnosticCode = enum {
     UnknownMachineState,
     TransitionOutsideMachineState,
     YieldOnlyAllowedInMachineState,
+    YieldExpressionUnsupported,
+    YieldValueUnsupported,
+    YieldReturnUnsupported,
     MachineSemanticsNotImplemented,
     ExternCNotImplemented,
     UnsupportedCAbiType,
@@ -442,6 +445,9 @@ pub const DiagnosticCode = enum {
             .UnknownMachineState => "CON0222",
             .TransitionOutsideMachineState => "CON0223",
             .YieldOnlyAllowedInMachineState => "CON0300",
+            .YieldExpressionUnsupported => "CON0301",
+            .YieldValueUnsupported => "CON0302",
+            .YieldReturnUnsupported => "CON0303",
             .MachineSemanticsNotImplemented => "CON0231",
             .ExternCNotImplemented => "CON0259",
             .UnsupportedCAbiType => "CON0260",
@@ -845,6 +851,33 @@ pub fn yieldOnlyAllowedInMachineState(span: SourceSpan) Diagnostic {
         "yield statement outside machine state",
         span,
     ).withHelp("place bare yield statements inside a machine state body");
+}
+
+pub fn yieldExpressionUnsupported(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .YieldExpressionUnsupported,
+        .@"error",
+        "yield expression unsupported",
+        span,
+    ).withHelp("use bare 'yield;' only as a statement inside a machine state body");
+}
+
+pub fn yieldValueUnsupported(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .YieldValueUnsupported,
+        .@"error",
+        "yield value unsupported",
+        span,
+    ).withHelp("Concept Phase 19 only supports bare 'yield;' with no operand or result value");
+}
+
+pub fn yieldReturnUnsupported(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .YieldReturnUnsupported,
+        .@"error",
+        "yield return unsupported",
+        span,
+    ).withHelp("use 'return' to return from functions and bare 'yield;' to suspend machine states");
 }
 
 pub fn duplicateConceptTypeParameter(span: SourceSpan) Diagnostic {
@@ -1370,6 +1403,9 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0222", DiagnosticCode.UnknownMachineState.format());
     try std.testing.expectEqualStrings("CON0223", DiagnosticCode.TransitionOutsideMachineState.format());
     try std.testing.expectEqualStrings("CON0300", DiagnosticCode.YieldOnlyAllowedInMachineState.format());
+    try std.testing.expectEqualStrings("CON0301", DiagnosticCode.YieldExpressionUnsupported.format());
+    try std.testing.expectEqualStrings("CON0302", DiagnosticCode.YieldValueUnsupported.format());
+    try std.testing.expectEqualStrings("CON0303", DiagnosticCode.YieldReturnUnsupported.format());
     try std.testing.expectEqualStrings("CON0231", DiagnosticCode.MachineSemanticsNotImplemented.format());
     try std.testing.expectEqualStrings("CON0280", DiagnosticCode.PanicRequiresReason.format());
     try std.testing.expectEqualStrings("CON0281", DiagnosticCode.AssertRequiresReason.format());

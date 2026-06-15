@@ -472,7 +472,7 @@ Explicitly deferred:
 ```text
 P19-M0  Design doc: yielding machines and explicit suspension
 P19-M1  yield statement syntax / AST / HIR scaffold (implemented: lexer keyword, parser statement, AST/HIR statement nodes, source spans, debug/deinit paths, machine-state semantic guard, and six fixtures)
-P19-M2  yield validation: machine-state-only, statement-only, no value
+P19-M2  yield validation: machine-state-only, statement-only, no value (implemented: stable CON0301/CON0302/CON0303 diagnostics and ten fixtures)
 P19-M3  backend lowering: yield exits Step without state/completion mutation
 P19-M4  yield + Complete / Result / State behavior fixtures
 P19-M5  yield + nested child machine ticking fixtures
@@ -486,3 +486,10 @@ P19-M9  closeout
 ## P19-M1 status: syntax / AST / HIR scaffold
 
 P19-M1 is implemented as a syntax and compiler-representation scaffold only. Bare `yield;` now tokenizes as a keyword, parses in statement position inside machine state bodies, preserves its source span in AST and HIR, participates in AST/HIR deinit and debug dumps, and lowers from AST to HIR as a no-payload statement. `yield;` in ordinary functions is rejected with `CON0300`. Value-bearing forms such as `yield 1;`, `yield return 1;`, and expression-position `yield` remain rejected by the parser. Runtime lowering remains intentionally unsupported and deferred to P19-M3; P19-M2 will harden full validation. No `yield return`, `yield value`, `suspend`, continuation yield, async/generator protocol, scheduler, blackboard/mailbox runtime, or DragonGod runtime hook is introduced. The M1 fixture set adds six fixtures under `language/phase19-yielding-machines/`.
+
+
+## P19-M2 status: validation hardening
+
+P19-M2 is implemented as a validation and diagnostic milestone only. Bare `yield;` remains accepted only as a statement inside machine state bodies, including nested blocks and `if` branches within those state bodies. The parser now gives stable diagnostics for rejected non-bare forms: `CON0301 YieldExpressionUnsupported` for expression-position `yield`, `CON0302 YieldValueUnsupported` for `yield value;`, and `CON0303 YieldReturnUnsupported` for `yield return ...;`. `CON0300 YieldOnlyAllowedInMachineState` remains the diagnostic for ordinary-function and nested ordinary-block `yield;`, while top-level `yield;` remains rejected by the normal top-level item parser path. Missing-semicolon `yield` continues to use the expected-semicolon parse diagnostic.
+
+The Phase 19 fixture set now has ten fixtures under `language/phase19-yielding-machines/`: three valid check/HIR fixtures and seven invalid parse fixtures. P19-M2 does not add runtime/backend lowering, state preservation, child ticking, `Complete`/`Result`/`State` behavior after yield, transition interaction, lifted locals, sub-state program counters, `yield return`, yield values, `suspend`, `resume`, scheduler support, async/generator protocol, or DragonGod runtime hooks. Runtime lowering remains deferred to P19-M3.

@@ -3785,9 +3785,13 @@ test "language check fixture: phase18 transition decide unknown target state" {
     try expectCheckFixture("../../../language/phase18-machines/invalid/transition_decide_unknown_target_state.invalid.conception");
 }
 
-test "language fixtures: phase19 yield scaffold" {
+test "language fixtures: phase19 yield validation" {
     try expectCheckFixture("../../../language/phase19-yielding-machines/valid/machine_yield_statement.valid.conception");
+    try expectCheckFixture("../../../language/phase19-yielding-machines/valid/machine_yield_in_if.valid.conception");
+    try expectCheckFixture("../../../language/phase19-yielding-machines/valid/machine_yield_in_nested_block.valid.conception");
     try expectParseFixture("../../../language/phase19-yielding-machines/invalid/yield_outside_machine.invalid.conception");
+    try expectParseFixture("../../../language/phase19-yielding-machines/invalid/yield_inside_function_block.invalid.conception");
+    try expectParseFixture("../../../language/phase19-yielding-machines/invalid/yield_top_level.invalid.conception");
     try expectParseFixture("../../../language/phase19-yielding-machines/invalid/yield_value.invalid.conception");
     try expectParseFixture("../../../language/phase19-yielding-machines/invalid/yield_return.invalid.conception");
     try expectParseFixture("../../../language/phase19-yielding-machines/invalid/yield_expression.invalid.conception");
