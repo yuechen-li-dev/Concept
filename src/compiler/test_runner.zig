@@ -338,6 +338,7 @@ const Runner = struct {
             .interface_call,
             .enum_constructor,
             .struct_literal,
+            .array_literal,
             .field_access,
             .target_metadata,
             .decide,

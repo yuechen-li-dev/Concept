@@ -1305,6 +1305,14 @@ fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue
             try emitOperand(writer, ctx, operand);
             try writer.writeAll(".state");
         },
+        .array_constructor => |elements| {
+            try writer.writeByte('{');
+            for (elements, 0..) |element, index| {
+                if (index != 0) try writer.writeAll(", ");
+                try emitOperand(writer, ctx, element);
+            }
+            try writer.writeByte('}');
+        },
         .enum_constructor, .struct_constructor => unreachable,
         .enum_tag => |operand| {
             try emitOperand(writer, ctx, operand);

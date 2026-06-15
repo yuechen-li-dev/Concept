@@ -618,3 +618,5 @@ These fixtures now serve as a Concept stress/regression suite for upcoming langu
 ## Phase 21 arrays, slices, and fixed buffers fixtures
 
 `language/phase21-arrays-slices-fixed-buffers/` contains M1 fixtures for fixed-size array type syntax. Valid fixtures cover `T[N]` in struct fields and function parameters plus nested postfix spelling `T[N][M]`, interpreted as an array of `M` elements of `T[N]`. Invalid fixtures document the M1 length restriction: only positive integer literals are accepted; zero, negative, identifier, and expression lengths are rejected. Array literals, indexing, length/capacity operations, slices, mutable slices, and fixed buffers intentionally have no positive fixtures yet.
+
+- Phase 21 arrays/slices/fixed-buffers fixtures now include fixed array literal valid cases and invalid diagnostics for `CON0400`, `CON0401`, and `CON0412`.

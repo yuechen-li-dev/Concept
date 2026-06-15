@@ -2168,13 +2168,13 @@ const BodyLowerer = struct {
             },
             .local_decl => |local_decl| {
                 if (self.function_id == null) return null;
-                const initializer = (try self.lowerExpr(local_decl.initializer.*)) orelse return null;
                 const local_symbol = try self.collector.module.interner.intern(local_decl.name.text);
                 if (self.lookup(local_symbol) != null) {
                     try self.collector.diagnostics.append(diagnostics.duplicateLocalName(local_decl.name.span));
                     return null;
                 }
                 const type_id = (try self.collector.resolveTypeName(local_decl.type_name)) orelse return null;
+                const initializer = (try self.lowerExprWithTarget(local_decl.initializer.*, type_id)) orelse return null;
                 const local_id = try self.collector.module.hir.addLocal(self.function_id.?, local_symbol, type_id, local_decl.span);
                 try self.bindings.append(self.collector.allocator, .{ .name = local_symbol, .binding = .{ .local = local_id }, .depth = self.depth });
                 return try self.collector.module.hir.addStmt(.{ .local_decl = .{ .local = local_id, .initializer = initializer } }, local_decl.span);
@@ -2446,6 +2446,10 @@ const BodyLowerer = struct {
     // ─────────────────────────────────────────────────────────────────────────────
 
     fn lowerExpr(self: *BodyLowerer, expr: ast.Expr) anyerror!?hir.ExprId {
+        return self.lowerExprWithTarget(expr, null);
+    }
+
+    fn lowerExprWithTarget(self: *BodyLowerer, expr: ast.Expr, target_type: ?types.TypeId) anyerror!?hir.ExprId {
         switch (expr) {
             .int_literal => |lit| return try self.collector.module.hir.addExpr(.{ .int_literal = try self.collector.allocator.dupe(u8, lit.text) }, lit.span),
             .bool_literal => |lit| return try self.collector.module.hir.addExpr(.{ .bool_literal = lit.value }, lit.span),
@@ -2655,6 +2659,9 @@ const BodyLowerer = struct {
                 @memcpy(owned, fields.items);
                 return try self.collector.module.hir.addExpr(.{ .struct_literal = .{ .struct_id = target.id, .type_id = target.type_id, .fields = owned } }, literal.span);
             },
+            .array_literal => |literal| {
+                return try self.lowerArrayLiteral(literal, target_type);
+            },
             .enum_constructor => |constructor| {
                 const enum_symbol = try self.collector.module.interner.intern(constructor.enum_name.text);
                 const enum_id = switch (self.collector.top_level_decls.get(enum_symbol) orelse {
@@ -2763,6 +2770,47 @@ const BodyLowerer = struct {
                 return try self.collector.module.hir.addExpr(.{ .binary = .{ .op = lowerBinaryOp(binary.op), .left = left, .right = right } }, binary.span);
             },
         }
+    }
+
+    fn lowerArrayLiteral(self: *BodyLowerer, literal: ast.Expr.ArrayLiteralExpr, target_type: ?types.TypeId) anyerror!?hir.ExprId {
+        if (literal.elements.len == 0) {
+            try self.collector.diagnostics.append(diagnostics.emptyArrayLiteralUnsupported(literal.span));
+            return null;
+        }
+        const target_array = if (target_type) |target| switch (self.collector.module.types.kind(target)) {
+            .array => |array| array,
+            else => null,
+        } else null;
+        if (target_array) |array| {
+            if (array.length != literal.elements.len) {
+                try self.collector.diagnostics.append(diagnostics.arrayLiteralLengthMismatch(literal.span));
+                return null;
+            }
+        }
+        var elements = std.ArrayList(hir.ExprId).empty;
+        defer elements.deinit(self.collector.allocator);
+        var element_type: ?types.TypeId = if (target_array) |array| array.element else null;
+        for (literal.elements) |element_expr| {
+            const lowered = if (element_type) |expected|
+                (try self.lowerExprWithTarget(element_expr.*, expected)) orelse return null
+            else
+                (try self.lowerExpr(element_expr.*)) orelse return null;
+            const actual = (try self.inferExprType(lowered)) orelse return null;
+            if (element_type) |expected| {
+                if (!sameType(actual, expected)) {
+                    try self.collector.diagnostics.append(diagnostics.arrayLiteralElementTypeMismatch(element_expr.span()));
+                    return null;
+                }
+            } else {
+                element_type = actual;
+            }
+            try elements.append(self.collector.allocator, lowered);
+        }
+        const final_element_type = element_type.?;
+        const type_id = target_type orelse try self.collector.module.types.addArrayType(final_element_type, @intCast(literal.elements.len));
+        const owned = try self.collector.allocator.alloc(hir.ExprId, elements.items.len);
+        @memcpy(owned, elements.items);
+        return try self.collector.module.hir.addExpr(.{ .array_literal = .{ .type_id = type_id, .elements = owned } }, literal.span);
     }
 
     const ParsedTestIntrinsic = struct {
@@ -3107,6 +3155,7 @@ const BodyLowerer = struct {
                 break :blk self.collector.module.hir.getField(field_id).type_id;
             },
             .struct_literal => |literal| literal.type_id,
+            .array_literal => |literal| literal.type_id,
             .enum_constructor => |constructor| blk: {
                 for (self.collector.module.types.types.items, 0..) |kind, index| {
                     if (kind == .enum_type and kind.enum_type.index == constructor.enum_id.index) break :blk types.TypeId{ .index = @intCast(index) };

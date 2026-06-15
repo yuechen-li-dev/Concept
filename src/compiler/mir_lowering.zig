@@ -465,6 +465,7 @@ const FunctionLowerer = struct {
             .concept_requirement_call, .target_metadata, .test_intrinsic => error.InvalidMirLowering,
             .enum_constructor => |constructor| try self.lowerEnumConstructor(expr, constructor, block_id),
             .struct_literal => |literal| try self.lowerStructLiteral(expr, literal, block_id),
+            .array_literal => |literal| try self.lowerArrayLiteral(expr, literal, block_id),
             .field_access => |field_access| try self.lowerFieldAccess(expr, field_access, block_id),
             .try_expr => |operand| try self.lowerTry(expr, operand, block_id),
             .decide => |decide| try self.lowerDecide(expr, decide, block_id),
@@ -890,6 +891,32 @@ const FunctionLowerer = struct {
         return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = current };
     }
 
+    fn lowerArrayLiteral(self: *FunctionLowerer, expr: hir.HirExpr, literal: anytype, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const elements = try self.allocator.alloc(mir.MirOperand, literal.elements.len);
+        var elements_owned = true;
+        var initialized: usize = 0;
+        errdefer if (elements_owned) self.allocator.free(elements);
+
+        var current = block_id;
+        for (literal.elements) |element| {
+            const lowered = try self.lowerExpr(element, current);
+            elements[initialized] = lowered.operand;
+            initialized += 1;
+            current = lowered.block;
+        }
+
+        const temp = try self.addTemp(try self.inferExprTypeFrom(expr));
+        elements_owned = false;
+        try self.store.appendStatement(current, .{
+            .span = expr.span,
+            .kind = mir.MirStatementKind.assignTo(
+                mir.MirPlace.localPlace(temp),
+                .{ .array_constructor = elements },
+            ),
+        });
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = current };
+    }
+
     // ─────────────────────────────────────────────────────────────────────────────
     // Decide lowering
     // ─────────────────────────────────────────────────────────────────────────────
@@ -1110,6 +1137,7 @@ const FunctionLowerer = struct {
             .target_metadata => |metadata| metadata.query.typeOf(self.semantic_module.types),
             .enum_constructor => |constructor| try self.enumType(constructor.enum_id),
             .struct_literal => |literal| literal.type_id,
+            .array_literal => |literal| literal.type_id,
             .field_access => |field_access| self.semantic_module.hir.getField(try self.resolveFieldAccess(field_access.receiver, field_access.field_name)).type_id,
             .decide => |decide| decide.enum_type,
             .try_expr => |operand| blk: {

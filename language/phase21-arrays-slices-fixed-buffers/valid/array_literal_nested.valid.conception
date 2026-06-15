@@ -1,0 +1,12 @@
+# name: phase21 nested array literal
+# phase: check
+# check: hir
+# expect: pass
+
+=== source ===
+module Example;
+
+int main() {
+    int[2][2] matrix = [[1, 2], [3, 4]];
+    return 0;
+}

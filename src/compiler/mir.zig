@@ -228,6 +228,7 @@ pub const MirRvalue = union(enum) {
         struct_id: hir.StructId,
         fields: []MirStructFieldValue,
     },
+    array_constructor: []MirOperand,
     enum_tag: MirOperand,
     enum_payload_field: struct {
         enum_operand: MirOperand,
@@ -320,6 +321,10 @@ pub const MirRvalue = union(enum) {
         return .{ .struct_constructor = .{ .struct_id = struct_id, .fields = owned_fields } };
     }
 
+    pub fn arrayConstructor(allocator: std.mem.Allocator, elements: []const MirOperand) !MirRvalue {
+        return .{ .array_constructor = try cloneOperands(allocator, elements) };
+    }
+
     pub fn enumTag(operand: MirOperand) MirRvalue {
         return .{ .enum_tag = operand };
     }
@@ -351,6 +356,7 @@ pub const MirRvalue = union(enum) {
             .arena_alloc => |arena_alloc| MirRvalue.arenaAlloc(try arena_alloc.arena_operand.clone(allocator), arena_alloc.allocated_type, arena_alloc.result_type),
             .enum_constructor => |constructor| try MirRvalue.enumConstructor(allocator, constructor.enum_id, constructor.variant_id, constructor.args),
             .struct_constructor => |constructor| try MirRvalue.structConstructor(allocator, constructor.struct_id, constructor.fields),
+            .array_constructor => |elements| try MirRvalue.arrayConstructor(allocator, elements),
             .enum_tag => |operand| MirRvalue.enumTag(try operand.clone(allocator)),
             .enum_payload_field => |payload| MirRvalue.enumPayloadField(try payload.enum_operand.clone(allocator), payload.payload_field),
             .field_access => |field_access| MirRvalue.fieldAccess(try field_access.receiver.clone(allocator), field_access.field_id),
@@ -388,6 +394,10 @@ pub const MirRvalue = union(enum) {
             .struct_constructor => |constructor| {
                 for (constructor.fields) |field| field.value.deinit(allocator);
                 if (constructor.fields.len > 0) allocator.free(constructor.fields);
+            },
+            .array_constructor => |elements| {
+                deinitOperands(allocator, elements);
+                if (elements.len > 0) allocator.free(elements);
             },
             .enum_tag => |operand| operand.deinit(allocator),
             .enum_payload_field => |payload| payload.enum_operand.deinit(allocator),
@@ -1040,6 +1050,14 @@ fn writeRvalueDebug(writer: *std.Io.Writer, rvalue: MirRvalue) !void {
                 if (index != 0) try writer.writeAll(", ");
                 try writer.print("{f}=", .{field.field_id});
                 try writeOperandDebug(writer, field.value);
+            }
+            try writer.writeByte(')');
+        },
+        .array_constructor => |elements| {
+            try writer.writeAll("ArrayConstructor(");
+            for (elements, 0..) |element, index| {
+                if (index != 0) try writer.writeAll(", ");
+                try writeOperandDebug(writer, element);
             }
             try writer.writeByte(')');
         },

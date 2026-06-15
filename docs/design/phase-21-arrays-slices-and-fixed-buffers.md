@@ -537,3 +537,11 @@ Nested postfix array type syntax is interpreted as repeated postfix type constru
 M1 deliberately accepts positive integer literal lengths only. `int[4]` is accepted. `int[0]`, `int[-1]`, `int[x]`, and `int[1 + 2]` are rejected. General compile-time length expressions remain deferred.
 
 M1 does not implement array literals, indexing, element assignment, bounds checks, `Len`, `Capacity`, `Slice<T>`, `MutSlice<T>`, `FixedBuffer<T, N>`, array-to-slice conversion, DragonGod migrations, or full backend value-copy semantics. DragonGod migration remains deferred until the later Phase 21 migration milestone.
+
+## P21-M2 status: array literals and basic type checking
+
+P21-M2 teaches the Stage 0 compiler to parse expression-position fixed array literals such as `[1, 2, 3, 4]` and lower them into typed HIR array literal expressions. Target-typed local initialization is supported for fixed arrays: `int[4] values = [1, 2, 3, 4];` checks as `int[4]` when the element count and element types match the target array type.
+
+Nested fixed-array literals are supported through recursive target typing where the target type is nested, for example `int[2][2] matrix = [[1, 2], [3, 4]];`. Empty array literals remain rejected with `CON0412` because M1 rejects zero-length arrays. Non-empty array literals can infer their own fixed-array type internally when no target is supplied, but the language still has no general `let`/`auto` local declaration form, so the user-facing M2 path is target-typed initialization.
+
+M2 adds diagnostics for array literal length mismatch (`CON0400`), element type mismatch (`CON0401`), and empty array literal rejection (`CON0412`). It does not implement array indexing, element mutation, bounds checks, `Len`, `Capacity`, slices, fixed buffers, array-to-slice conversion, heap vectors, C ABI array passing, or DragonGod migration. MIR and C backend representation is intentionally conservative and exists only to keep simple literal shapes representable; full array value copy/return/assignment semantics remain deferred to later Phase 21 milestones.

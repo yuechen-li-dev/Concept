@@ -392,6 +392,7 @@ const Analyzer = struct {
             .machine_state => |operand| try self.readOperand(states, operand, span),
             .enum_constructor => |constructor| for (constructor.args) |arg| try self.readOperand(states, arg, span),
             .struct_constructor => |constructor| for (constructor.fields) |field| try self.readOperand(states, field.value, span),
+            .array_constructor => |elements| for (elements) |element| try self.readOperand(states, element, span),
             .enum_tag => |operand| try self.readOperand(states, operand, span),
             .enum_payload_field => |payload| try self.readOperand(states, payload.enum_operand, span),
             .field_access => |field_access| {

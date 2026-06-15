@@ -527,6 +527,23 @@ const Validator = struct {
                 }
                 break :blk self.structType(constructor.struct_id);
             },
+            .array_constructor => |elements| blk: {
+                if (elements.len == 0) {
+                    try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
+                    break :blk null;
+                }
+                const element_type = (try self.operandType(function_id, elements[0], span)) orelse break :blk null;
+                for (elements[1..]) |element| {
+                    const actual = try self.operandType(function_id, element, span);
+                    if (actual != null and !sameType(actual.?, element_type)) {
+                        try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                    }
+                }
+                break :blk self.arrayType(element_type, @intCast(elements.len)) orelse {
+                    try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                    break :blk null;
+                };
+            },
             .enum_constructor => |constructor| blk: {
                 if (constructor.enum_id.index >= self.semantic_module.hir.enums.items.len or constructor.variant_id.index >= self.semantic_module.hir.variants.items.len) {
                     try self.report(.InvalidMirOperand, span, diagnostics.invalidMirOperand);
@@ -599,6 +616,13 @@ const Validator = struct {
     fn enumType(self: *Validator, enum_id: hir.EnumId) ?types.TypeId {
         for (self.semantic_module.types.types.items, 0..) |kind, index| {
             if (kind == .enum_type and kind.enum_type.index == enum_id.index) return .{ .index = @intCast(index) };
+        }
+        return null;
+    }
+
+    fn arrayType(self: *Validator, element: types.TypeId, length: u64) ?types.TypeId {
+        for (self.semantic_module.types.types.items, 0..) |kind, index| {
+            if (kind == .array and kind.array.element.index == element.index and kind.array.length == length) return .{ .index = @intCast(index) };
         }
         return null;
     }

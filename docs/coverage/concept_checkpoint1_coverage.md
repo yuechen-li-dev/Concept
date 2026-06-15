@@ -733,3 +733,5 @@ Persistence/checkpoint v0 coverage now includes 8 run fixtures and 1 backend-C f
 ## Phase 21 M1 coverage note
 
 Fixed-size array type syntax `T[N]` is now covered at parser/declaration-check level, including struct fields, function parameters, nested postfix array types, positive literal length validation, and invalid zero/negative/non-literal length fixtures. Runtime construction, indexing, literals, slices, fixed buffers, `Len`, and `Capacity` remain uncovered because they are explicitly deferred beyond M1.
+
+- Phase 21 M2 coverage includes target-typed fixed array literals, nested array literals, length mismatch, element mismatch, and empty literal rejection fixtures.
