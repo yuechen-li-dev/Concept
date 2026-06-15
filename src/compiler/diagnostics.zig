@@ -213,6 +213,7 @@ pub const DiagnosticCode = enum {
     DuplicateMachineState,
     UnknownMachineState,
     TransitionOutsideMachineState,
+    YieldOnlyAllowedInMachineState,
     MachineSemanticsNotImplemented,
     ExternCNotImplemented,
     UnsupportedCAbiType,
@@ -440,6 +441,7 @@ pub const DiagnosticCode = enum {
             .DuplicateMachineState => "CON0221",
             .UnknownMachineState => "CON0222",
             .TransitionOutsideMachineState => "CON0223",
+            .YieldOnlyAllowedInMachineState => "CON0300",
             .MachineSemanticsNotImplemented => "CON0231",
             .ExternCNotImplemented => "CON0259",
             .UnsupportedCAbiType => "CON0260",
@@ -834,6 +836,15 @@ pub fn transitionOutsideMachineState(span: SourceSpan) Diagnostic {
         "transition statement outside machine state",
         span,
     ).withHelp("place transition statements inside a machine state body");
+}
+
+pub fn yieldOnlyAllowedInMachineState(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .YieldOnlyAllowedInMachineState,
+        .@"error",
+        "yield statement outside machine state",
+        span,
+    ).withHelp("place bare yield statements inside a machine state body");
 }
 
 pub fn duplicateConceptTypeParameter(span: SourceSpan) Diagnostic {
@@ -1358,6 +1369,7 @@ test "diagnostic code has stable string formatting" {
     try std.testing.expectEqualStrings("CON0221", DiagnosticCode.DuplicateMachineState.format());
     try std.testing.expectEqualStrings("CON0222", DiagnosticCode.UnknownMachineState.format());
     try std.testing.expectEqualStrings("CON0223", DiagnosticCode.TransitionOutsideMachineState.format());
+    try std.testing.expectEqualStrings("CON0300", DiagnosticCode.YieldOnlyAllowedInMachineState.format());
     try std.testing.expectEqualStrings("CON0231", DiagnosticCode.MachineSemanticsNotImplemented.format());
     try std.testing.expectEqualStrings("CON0280", DiagnosticCode.PanicRequiresReason.format());
     try std.testing.expectEqualStrings("CON0281", DiagnosticCode.AssertRequiresReason.format());

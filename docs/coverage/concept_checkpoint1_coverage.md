@@ -4,14 +4,14 @@
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
 **Phases closed:** 1 through 18
-**Current phase:** Phase 19 started — P19-M0 design-only milestone
+**Current phase:** Phase 19 started — P19-M1 syntax / AST / HIR scaffold milestone
 **Fixture corpus:** 1102 total `.conception` fixture files; 85 under `language/phase11-testing/`; 108 under `language/phase15-c-abi/`; 73 under `language/phase16-imports/`; 57 under `language/phase17-runtime-failure/`; 66 under `language/phase18-machines/`
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
 
 ## Phase 18 M9 closeout snapshot
 
-Phase 18 is closed after P18-M9. The machine composition substrate now has examples under `examples/phase18/` and 66 fixtures under `language/phase18-machines/`: 43 valid and 23 invalid. The closed Phase 18 substrate pins hierarchical by-value child frames, explicit child stepping, `Complete(child)`, `Result(child)`, numeric `State(machine)`, bool `transition match`, deterministic `transition decide`, shared `cpt_panic` runtime machine failures, and backend-shape assertions that exclude hidden heap allocation, scheduler, async, blackboard, mailbox, event-bus, and DragonGod runtime hooks. Phase 19 has now started with a design-only P19-M0 document for bare machine-state `yield;`. Compiler behavior is unchanged at M0: yield remains unimplemented, while scheduler, async, blackboard/mailbox/event keywords, dynamic child lists, heap-owned machines, `StateName`, reflection, `yield return`, `suspend`/`resume`, and DragonGod runtime hooks remain deferred.
+Phase 18 is closed after P18-M9. The machine composition substrate now has examples under `examples/phase18/` and 66 fixtures under `language/phase18-machines/`: 43 valid and 23 invalid. The closed Phase 18 substrate pins hierarchical by-value child frames, explicit child stepping, `Complete(child)`, `Result(child)`, numeric `State(machine)`, bool `transition match`, deterministic `transition decide`, shared `cpt_panic` runtime machine failures, and backend-shape assertions that exclude hidden heap allocation, scheduler, async, blackboard, mailbox, event-bus, and DragonGod runtime hooks. Phase 19 has advanced through P19-M1 for bare machine-state `yield;` syntax, AST, and HIR scaffold. Runtime lowering remains unimplemented until P19-M3, while scheduler, async, blackboard/mailbox/event keywords, dynamic child lists, heap-owned machines, `StateName`, reflection, `yield return`, `suspend`/`resume`, and DragonGod runtime hooks remain deferred.
 
 ---
 
@@ -418,7 +418,7 @@ Phase 18 is closed after P18-M9. The machine composition substrate now has examp
 | `Result(machine)` returning result type | ✅ | Phase 13; Phase 17/18 route before-completion reads through shared `cpt_panic` with stable reason |
 | `MachineName(args)` construction | ✅ | Phase 13 |
 | `noalloc machine` effect checking | ✅ | Phase 13 — `noalloc` effect on machine declaration enforced |
-| `yield` statement in machines | 🔶 | Phase 19 M0 design started; v0 chooses bare `yield;` in machine state bodies only, with implementation deferred to later P19 milestones |
+| `yield` statement in machines | 🔶 | Phase 19 M1 reserves `yield`, parses bare `yield;` in machine state bodies, preserves AST/HIR spans, rejects ordinary-function `yield;` with `CON0300`, and pins six parse/check fixtures; backend/runtime behavior is deferred to P19-M3 |
 | Nested machine fields / child frames | ✅ | Phase 18 closed for zero-parameter child machine fields stored by value in parent frames, parent-constructor child initialization, and explicit parent `Step(child)` / `Complete(child)` / `Result(child)` operations |
 | `State(machine) -> int` | ✅ | Phase 18 closed for local and nested child machine numeric state introspection; no `StateName(machine)`, reflection metadata, or state-name runtime surface |
 | Machine lowers to explicit state struct in MIR | ✅ | Phase 13 — state enum and struct visible in MIR |
@@ -546,7 +546,7 @@ Phase 18 is closed after P18-M9. The machine composition substrate now has examp
 | §33 Comptime | 🔶 Scalar hermetic comptime done; type-level comptime, capability execution deferred |
 | §34–35 Reflection/macros | ❌ Correctly deferred per PoC3 |
 | §36 C interop | ✅ Phase 15 v0 complete for single-compilation-unit C ABI: `extern "C"` declarations/calls, `export "C"` definitions, validated `[Repr(C)]` structs by value/pointer, strict ABI diagnostics, duplicate C symbol rejection, extern prototype/call emission, unmangled exported C definitions, no generated includes, no C++ text, examples, and invalid coverage for deferred non-goals |
-| §37 State machines | ✅ Phase 18 closed for the explicit machine substrate: local frames, by-value zero-parameter nested child fields, explicit `Step`/`Complete`/`Result`, runtime bool `transition match`, deterministic int-score/bool-guard `transition decide`, numeric `State(machine)`, shared-panic hardening, examples, and 66 Phase 18 fixtures; `yield`, schedulers, async, dynamic child lists, heap-owned machines, parameterized child initialization, enum/int runtime match, `StateName`, reflection, and DragonGod runtime hooks remain deferred |
+| §37 State machines | 🔶 Phase 19 M1 adds `yield;` front-end scaffold while runtime yield remains deferred; Phase 18 closed for the explicit machine substrate: local frames, by-value zero-parameter nested child fields, explicit `Step`/`Complete`/`Result`, runtime bool `transition match`, deterministic int-score/bool-guard `transition decide`, numeric `State(machine)`, shared-panic hardening, examples, and 66 Phase 18 fixtures; runtime yield behavior, schedulers, async, dynamic child lists, heap-owned machines, parameterized child initialization, enum/int runtime match, `StateName`, reflection, and DragonGod runtime hooks remain deferred |
 | §38–39 SoA/audit | ❌ Provisional/future |
 | §40 Compiler architecture | 🔶 Core pipeline done; LLVM/native backends are Stage 3 |
 | §41 Bringup roadmap | 🔶 Stage 0 complete; Stage 1 ~75% |
@@ -613,3 +613,8 @@ P18-M6 extends machine coverage with `State(machine) -> int`, a non-reflective h
 ### Phase 18 M7 runtime failure hardening coverage
 
 P18-M7 hardens machine runtime failure coverage. The corpus now contains 1096 fixture files, including 60 under `language/phase18-machines/`. Backend fixtures pin `cpt_panic("machine result cannot be read before completion")` for local and nested child result-before-completion guards, `cpt_panic("machine decision transition has no enabled candidates")` for no-enabled `transition decide`, one-per-C-unit `cpt_panic` helper emission across multiple failure sites, and the defensive machine step default `cpt_panic("invalid machine state reached")`. Bool v0 `transition match` still relies on exhaustive static validation, so there is no ordinary runtime no-case fixture; the stable reason `machine transition match found no matching case` is documented for any future runtime no-match path. Static invalid machine programs remain diagnostics rather than runtime panics.
+
+
+### Phase 19 M1 yield scaffold coverage
+
+P19-M1 adds six fixtures under `language/phase19-yielding-machines/`: one valid check/HIR fixture for bare `yield;` in a machine state body and five invalid parse fixtures covering ordinary-function `yield;` (`CON0300`), `yield 1;`, `yield return 1;`, expression-position `yield`, and missing semicolon. The compiler now has token/parser/AST/HIR representation and source-span preservation for a no-payload yield statement. MIR/backend lowering, state preservation behavior, scheduler/async/generator semantics, `yield return`, yield values, `suspend`, continuation yield, and DragonGod hooks remain out of scope.

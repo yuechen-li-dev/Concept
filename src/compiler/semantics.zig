@@ -727,6 +727,7 @@ const Collector = struct {
                 .expr_stmt,
                 .discard_stmt,
                 .panic_stmt,
+                .yield_stmt,
                 .assert_stmt,
                 .return_stmt,
                 => {},
@@ -2142,6 +2143,13 @@ const BodyLowerer = struct {
                 }
                 const target = (try self.lowerTransitionTarget(transition_stmt.target)) orelse return null;
                 return try self.collector.module.hir.addStmt(.{ .transition_stmt = target }, transition_stmt.span);
+            },
+            .yield_stmt => |yield_stmt| {
+                if (self.machine_id == null) {
+                    try self.collector.diagnostics.append(diagnostics.yieldOnlyAllowedInMachineState(yield_stmt.span));
+                    return null;
+                }
+                return try self.collector.module.hir.addStmt(.yield_stmt, yield_stmt.span);
             },
             .local_decl => |local_decl| {
                 if (self.function_id == null) return null;

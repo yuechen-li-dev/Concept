@@ -1199,7 +1199,7 @@ fn expectCheckFixture(comptime path: []const u8) !void {
 
     if (std.mem.indexOf(u8, path, "phase12-allocation") != null) {
         try expectSemanticCheckFixtureAllowNoMain(path, fixture);
-    } else if (std.mem.indexOf(u8, path, "phase3-semantics") != null or std.mem.indexOf(u8, path, "phase8-concepts-templates") != null or std.mem.indexOf(u8, path, "phase5-sum-types") != null or std.mem.indexOf(u8, path, "phase5a-judgment") != null or std.mem.indexOf(u8, path, "phase6-unsafe-ownership") != null or std.mem.indexOf(u8, path, "phase7-runtime-structs") != null or std.mem.indexOf(u8, path, "phase10-ownership") != null or std.mem.indexOf(u8, path, "phase11-testing") != null or std.mem.indexOf(u8, path, "phase13-machines") != null or std.mem.indexOf(u8, path, "phase14-interfaces") != null or std.mem.indexOf(u8, path, "phase15-c-abi") != null or std.mem.indexOf(u8, path, "phase16-imports") != null or std.mem.indexOf(u8, path, "phase17-runtime-failure") != null or std.mem.indexOf(u8, path, "phase18-machines") != null) {
+    } else if (std.mem.indexOf(u8, path, "phase3-semantics") != null or std.mem.indexOf(u8, path, "phase8-concepts-templates") != null or std.mem.indexOf(u8, path, "phase5-sum-types") != null or std.mem.indexOf(u8, path, "phase5a-judgment") != null or std.mem.indexOf(u8, path, "phase6-unsafe-ownership") != null or std.mem.indexOf(u8, path, "phase7-runtime-structs") != null or std.mem.indexOf(u8, path, "phase10-ownership") != null or std.mem.indexOf(u8, path, "phase11-testing") != null or std.mem.indexOf(u8, path, "phase13-machines") != null or std.mem.indexOf(u8, path, "phase14-interfaces") != null or std.mem.indexOf(u8, path, "phase15-c-abi") != null or std.mem.indexOf(u8, path, "phase16-imports") != null or std.mem.indexOf(u8, path, "phase17-runtime-failure") != null or std.mem.indexOf(u8, path, "phase18-machines") != null or std.mem.indexOf(u8, path, "phase19-yielding-machines") != null) {
         try expectSemanticCheckFixture(path, fixture);
     } else {
         try expectPhase2CheckFixture(path, fixture);
@@ -3783,4 +3783,13 @@ test "language check fixture: phase18 transition decide score not int" {
 
 test "language check fixture: phase18 transition decide unknown target state" {
     try expectCheckFixture("../../../language/phase18-machines/invalid/transition_decide_unknown_target_state.invalid.conception");
+}
+
+test "language fixtures: phase19 yield scaffold" {
+    try expectCheckFixture("../../../language/phase19-yielding-machines/valid/machine_yield_statement.valid.conception");
+    try expectParseFixture("../../../language/phase19-yielding-machines/invalid/yield_outside_machine.invalid.conception");
+    try expectParseFixture("../../../language/phase19-yielding-machines/invalid/yield_value.invalid.conception");
+    try expectParseFixture("../../../language/phase19-yielding-machines/invalid/yield_return.invalid.conception");
+    try expectParseFixture("../../../language/phase19-yielding-machines/invalid/yield_expression.invalid.conception");
+    try expectParseFixture("../../../language/phase19-yielding-machines/invalid/yield_missing_semicolon.invalid.conception");
 }
