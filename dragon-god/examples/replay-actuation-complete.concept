@@ -1,0 +1,17 @@
+// Replay can deterministically apply host actuation outcomes. Dispatch remains
+// explicit setup; replay only applies the recorded completion/failure input.
+module Example.DragonGod.ReplayActuationComplete;
+
+import DragonGod.Kernel.Replay;
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Actuation;
+
+int main() {
+    DragonGod.Kernel.Replay.ReplayDriver driver = DragonGod.Kernel.Replay.replayDriverEmpty();
+    DragonGod.Kernel.Actuation.ActuationDispatchResult dispatched = DragonGod.Kernel.Actuation.actuatorDispatch(driver.actuator&, DragonGod.Kernel.Actuation.actuationAllow());
+    DragonGod.Kernel.Replay.ReplayLog log = DragonGod.Kernel.Replay.replayLogEmpty();
+    DragonGod.Kernel.Replay.replayPush(log&, DragonGod.Kernel.Replay.ReplayEvent::ActuationComplete(dispatched.id, DragonGod.Kernel.Core.Reason { code: 7 }));
+    discard DragonGod.Kernel.Replay.replayApplyNext(driver&, log);
+    if (DragonGod.Kernel.Actuation.actuatorStatus(driver.actuator, dispatched.id) == DragonGod.Kernel.Actuation.ActuationStatus::Completed) { return 0; }
+    return 1;
+}

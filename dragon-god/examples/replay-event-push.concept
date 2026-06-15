@@ -1,0 +1,15 @@
+// Replay is the deterministic input stream for external integer events.
+// Replay v0 is not Persistence and performs no file I/O or serialization.
+module Example.DragonGod.ReplayEventPush;
+
+import DragonGod.Kernel.Replay;
+import DragonGod.Kernel.Events;
+
+int main() {
+    DragonGod.Kernel.Replay.ReplayLog log = DragonGod.Kernel.Replay.replayLogEmpty();
+    DragonGod.Kernel.Replay.replayPush(log&, DragonGod.Kernel.Replay.ReplayEvent::EventPushInt(DragonGod.Kernel.Events.eventType(1), 42));
+    DragonGod.Kernel.Replay.ReplayDriver driver = DragonGod.Kernel.Replay.replayDriverEmpty();
+    discard DragonGod.Kernel.Replay.replayApplyAll(driver&, log);
+    DragonGod.Kernel.Events.EventCursor cursor = DragonGod.Kernel.Events.eventCursorStart();
+    return DragonGod.Kernel.Events.eventReadNextInt(driver.events, cursor&, DragonGod.Kernel.Events.eventType(1), 0) - 42;
+}
