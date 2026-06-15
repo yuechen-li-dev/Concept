@@ -123,6 +123,8 @@ rejected. Phase 11 Core.Test primitive reason validation rejects empty/whitespac
 wildcards, re-exports, visibility, separate objects, linker driving, incremental
 compilation, module spanning multiple files, multiple modules per file, and
 cross-package dependency resolution remain deferred.
+
+Phase 22 is open at P22-M0 as a design-only milestone. It follows directly from Phase 21 closeout: arrays, slices, and `FixedBuffer<T, N>` made append/read/count patterns real, while the remaining DragonGod migrations exposed the need for `Option<T>`, `Result<T, E>`, typed `BufferError`, and bounded FixedBuffer mutation/try APIs. P22-M0 documents absence vs recoverable operation outcomes vs function-level fallibility vs panic, reserves the `CON0500`-`CON0510` diagnostic range, and keeps heap vectors, allocators, callable predicate helpers, generic iterators, dynamic DragonGod runtime, and compiler behavior deferred.
 Deferred Phase 12
 work includes
 `Arena.create`, hosted runtime helper implementation, allocation failure
@@ -3118,7 +3120,7 @@ Recommended next Concept phase:
 
 | Phase | Focus | Scope |
 | --- | --- | --- |
-| Phase 22 | Result/Option and collection mutation helpers | Add standard `Option<T>` / `Result<T, E>` surface, try/read/find return ergonomics, fixed-buffer set/replace/pop/clear/find-index helpers, and use remaining DragonGod fixed-slot subsystems as migration targets while still avoiding heap vectors. |
+| Phase 22 | Option, Result, and bounded collection mutation | Design/in-progress at P22-M0. Add standard `Option<T>` / `Result<T, E>` surface, typed `BufferError`, try/read/find return ergonomics, fixed-buffer set/replace/pop/clear/find-index helpers, and use remaining DragonGod fixed-slot subsystems as migration targets while still avoiding heap vectors. |
 
 Later roadmap items remain strings/StringView/byte slices, callable values/function pointers, serialization primitives, and dyn storage hardening. DragonGod remains a stress suite: `Memory`, `AutomataStack`, and `ActuatorHost` are the next meaningful container-pressure targets once Phase 22 supplies honest mutation and lookup helpers.
 
