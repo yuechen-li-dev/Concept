@@ -3024,3 +3024,11 @@ Phase 20 / DG6 adds a library-level kernel Decision subsystem, not a language fe
 ### Phase 20 / DragonGod DG7 Actuation update
 
 DG7 adds the DragonGod Kernel actuation v0 scaffold in Concept source. The supported surface is deterministic and fixed-capacity: `ActuationStatus`, `ActuationDecision`, `ActuationDispatchResult`, `ActuationSlot`, `ActuatorHost`, allow/deny dispatch, status query, and complete/fail updates. Payload enum `match` is exercised for `AutomataSignal::Act`, `AutomataSignal::AwaitActuation`, and actuation statuses. This is intentionally not an async runtime, scheduler, event bus, mailbox/blackboard, command payload registry, dynamic handler table, external command dispatcher, or DragonGod compiler hook.
+
+## Phase 20 / DG8 DragonGod Kernel Events v0
+
+Phase 20 / DG8 is complete. DragonGod now has `DragonGod.Kernel.Events`, a fixed-capacity four-slot integer event stream with `EventTypeId`, `EventId`, `EventPayloadInt`, `EventSlot`, `EventCursor`, and `EventBus`. The v0 API includes `eventType`, `eventPayloadInt`, `eventEmptySlot`, `eventBusEmpty`, `eventCursorStart`, `eventTailCursor`, `eventPush`, and `eventReadNextInt`.
+
+Events v0 allocates deterministic ids from `EventBus.nextId`, appends into fixed slots in insertion order, increments `count`, and panics with `DragonGod.Events capacity exceeded` when the four slots are exhausted. `EventCursor` is an explicit stream-position cursor, not a per-type bucket cursor. Reads scan from `cursor.nextIndex`, consume the first matching type, advance to the index after the consumed event, and return the integer payload. A missing event returns the caller fallback and advances the cursor to `bus.count`; a tail cursor starts after current events so old events are ignored and later pushes remain visible.
+
+DG8 adds run fixtures for push/read, fallback, future-only tail cursors, deterministic same-type order, multi-type independent cursors, cursor advancement/skipping, Memory integration, and signal-machine integration, plus a backend-C shape fixture. No generic payloads, type erasure, dynamic event registry, heap buckets, trimming heuristics, mailbox delivery, scheduler/async runtime, event-bus/mailbox keyword, DragonGod compiler hook, replay, persistence, or parallel staged merge was added.

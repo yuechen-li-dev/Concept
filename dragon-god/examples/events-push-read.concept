@@ -1,0 +1,14 @@
+module DragonGod.Examples.EventsPushRead;
+
+import DragonGod.Kernel.Events;
+
+// Events v0 is a fixed-slot integer-payload kernel stream. It is not a
+// scheduler, mailbox runtime, dynamic event registry, or event-bus keyword.
+int main() {
+    DragonGod.Kernel.Events.EventBus bus = DragonGod.Kernel.Events.eventBusEmpty();
+    DragonGod.Kernel.Events.EventTypeId threat = DragonGod.Kernel.Events.eventType(1);
+    DragonGod.Kernel.Events.eventPush(bus&, threat, DragonGod.Kernel.Events.eventPayloadInt(80));
+
+    DragonGod.Kernel.Events.EventCursor cursor = DragonGod.Kernel.Events.eventCursorStart();
+    return DragonGod.Kernel.Events.eventReadNextInt(bus, cursor&, threat, 0) - 80;
+}

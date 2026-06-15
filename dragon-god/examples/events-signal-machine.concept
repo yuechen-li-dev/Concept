@@ -1,0 +1,16 @@
+module DragonGod.Examples.EventsSignalMachine;
+
+import DragonGod.Kernel.Events;
+import DragonGod.Kernel.Automata;
+import DragonGod.Kernel.Core;
+
+// A machine may inspect an explicit Events cursor and return AutomataSignal.
+// DG8 does not add async, scheduler, mailbox delivery, or compiler hooks.
+machine EventSignalMachine(DragonGod.Kernel.Events.EventBus bus) -> DragonGod.Kernel.Automata.AutomataSignal {
+    state Start {
+        DragonGod.Kernel.Events.EventCursor cursor = DragonGod.Kernel.Events.eventCursorStart();
+        int value = DragonGod.Kernel.Events.eventReadNextInt(bus, cursor&, DragonGod.Kernel.Events.eventType(1), 0);
+        if (value == 80) { return DragonGod.Kernel.Automata.automataSucceed(DragonGod.Kernel.Core.Reason { code: value }); }
+        return DragonGod.Kernel.Automata.automataFail(DragonGod.Kernel.Core.Reason { code: value });
+    }
+}
