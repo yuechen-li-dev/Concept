@@ -234,6 +234,8 @@ pub const MirRvalue = union(enum) {
         fields: []MirStructFieldValue,
     },
     array_constructor: []MirOperand,
+    fixed_buffer_empty: types.TypeId,
+    fixed_buffer_append: struct { buffer: MirOperand, value: MirOperand, capacity: u64 },
     enum_tag: MirOperand,
     enum_payload_field: struct {
         enum_operand: MirOperand,
@@ -259,7 +261,14 @@ pub const MirRvalue = union(enum) {
         index: MirOperand,
         result_type: types.TypeId,
     },
+    fixed_buffer_index: struct {
+        base: MirOperand,
+        index: MirOperand,
+        result_type: types.TypeId,
+    },
     slice_len: MirOperand,
+    fixed_buffer_len: MirOperand,
+    fixed_buffer_capacity: u64,
     machine_construct: struct {
         machine: hir.MachineId,
         args: []MirOperand,
@@ -391,13 +400,18 @@ pub const MirRvalue = union(enum) {
             .enum_constructor => |constructor| try MirRvalue.enumConstructor(allocator, constructor.enum_id, constructor.variant_id, constructor.args),
             .struct_constructor => |constructor| try MirRvalue.structConstructor(allocator, constructor.struct_id, constructor.fields),
             .array_constructor => |elements| try MirRvalue.arrayConstructor(allocator, elements),
+            .fixed_buffer_empty => |type_id| .{ .fixed_buffer_empty = type_id },
+            .fixed_buffer_append => |append| .{ .fixed_buffer_append = .{ .buffer = try append.buffer.clone(allocator), .value = try append.value.clone(allocator), .capacity = append.capacity } },
             .enum_tag => |operand| MirRvalue.enumTag(try operand.clone(allocator)),
             .enum_payload_field => |payload| MirRvalue.enumPayloadField(try payload.enum_operand.clone(allocator), payload.payload_field),
             .field_access => |field_access| MirRvalue.fieldAccess(try field_access.receiver.clone(allocator), field_access.field_id),
             .array_index => |array_index| MirRvalue.arrayIndex(try array_index.base.clone(allocator), try array_index.index.clone(allocator), array_index.length, array_index.result_type),
             .slice_from_array => |slice| MirRvalue.sliceFromArray(try slice.array.clone(allocator), slice.length, slice.result_type),
             .slice_index => |slice_index| MirRvalue.sliceIndex(try slice_index.base.clone(allocator), try slice_index.index.clone(allocator), slice_index.result_type),
+            .fixed_buffer_index => |index| .{ .fixed_buffer_index = .{ .base = try index.base.clone(allocator), .index = try index.index.clone(allocator), .result_type = index.result_type } },
             .slice_len => |operand| .{ .slice_len = try operand.clone(allocator) },
+            .fixed_buffer_len => |operand| .{ .fixed_buffer_len = try operand.clone(allocator) },
+            .fixed_buffer_capacity => |capacity| .{ .fixed_buffer_capacity = capacity },
             .machine_construct => |construct| .{ .machine_construct = .{ .machine = construct.machine, .args = try cloneOperands(allocator, construct.args) } },
             .machine_complete => |operand| .{ .machine_complete = try operand.clone(allocator) },
             .machine_result => |operand| .{ .machine_result = try operand.clone(allocator) },
@@ -437,6 +451,11 @@ pub const MirRvalue = union(enum) {
                 deinitOperands(allocator, elements);
                 if (elements.len > 0) allocator.free(elements);
             },
+            .fixed_buffer_empty => {},
+            .fixed_buffer_append => |append| {
+                append.buffer.deinit(allocator);
+                append.value.deinit(allocator);
+            },
             .enum_tag => |operand| operand.deinit(allocator),
             .enum_payload_field => |payload| payload.enum_operand.deinit(allocator),
             .field_access => |field_access| field_access.receiver.deinit(allocator),
@@ -449,7 +468,13 @@ pub const MirRvalue = union(enum) {
                 slice_index.base.deinit(allocator);
                 slice_index.index.deinit(allocator);
             },
+            .fixed_buffer_index => |index| {
+                index.base.deinit(allocator);
+                index.index.deinit(allocator);
+            },
             .slice_len => |operand| operand.deinit(allocator),
+            .fixed_buffer_len => |operand| operand.deinit(allocator),
+            .fixed_buffer_capacity => {},
             .machine_construct => |construct| {
                 deinitOperands(allocator, construct.args);
                 if (construct.args.len > 0) allocator.free(construct.args);
@@ -1069,6 +1094,27 @@ fn writeRvalueDebug(writer: *std.Io.Writer, rvalue: MirRvalue) !void {
         .slice_len => |operand| {
             try writer.writeAll("SliceLen(");
             try writeOperandDebug(writer, operand);
+            try writer.writeByte(')');
+        },
+        .fixed_buffer_index => |index| {
+            try writer.writeAll("FixedBufferIndex(");
+            try writeOperandDebug(writer, index.base);
+            try writer.writeAll(", ");
+            try writeOperandDebug(writer, index.index);
+            try writer.writeByte(')');
+        },
+        .fixed_buffer_len => |operand| {
+            try writer.writeAll("FixedBufferLen(");
+            try writeOperandDebug(writer, operand);
+            try writer.writeByte(')');
+        },
+        .fixed_buffer_capacity => |capacity| try writer.print("FixedBufferCapacity({d})", .{capacity}),
+        .fixed_buffer_empty => |type_id| try writer.print("FixedBufferEmpty({f})", .{type_id}),
+        .fixed_buffer_append => |append| {
+            try writer.writeAll("FixedBufferAppend(");
+            try writeOperandDebug(writer, append.buffer);
+            try writer.writeAll(", ");
+            try writeOperandDebug(writer, append.value);
             try writer.writeByte(')');
         },
         .manual_init_assume => |operand| {

@@ -1,0 +1,10 @@
+module Main;
+
+int main() {
+    FixedBuffer<int, 4> a = fixedBufferEmpty<int, 4>();
+    fixedBufferAppend(a, 7);
+    FixedBuffer<int, 4> b = a;
+    fixedBufferAppend(b, 9);
+    return Len(a) + b[1];
+}
+// expect: 10

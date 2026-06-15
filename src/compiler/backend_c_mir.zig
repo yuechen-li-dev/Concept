@@ -19,6 +19,8 @@ const types = @import("types.zig");
 const machine_result_before_completion_reason = "machine result cannot be read before completion";
 const array_index_oob_reason = "Concept array index out of bounds";
 const slice_index_oob_reason = "Concept slice index out of bounds";
+const fixed_buffer_capacity_reason = "Concept fixed buffer capacity exceeded";
+const fixed_buffer_index_oob_reason = "Concept fixed buffer index out of bounds";
 const machine_decide_no_enabled_reason = "machine decision transition has no enabled candidates";
 const machine_match_no_case_reason = "machine transition match found no matching case"; // Documented stable reason; bool v0 exhaustiveness prevents emission.
 const invalid_machine_state_reason = "invalid machine state reached";
@@ -63,7 +65,8 @@ pub fn emitExecutableFromMir(
     if (emitted_array_layouts and (ctx.module.hir.enums.items.len > 0 or ctx.module.hir.structs.items.len > 0 or ctx.module.hir.machines.items.len > 0 or mir_module.store.functions.items.len > 0)) try writer.writeByte('\n');
 
     const emitted_slice_layouts = try emitSliceLayouts(writer, &ctx);
-    if (emitted_slice_layouts and (ctx.module.hir.enums.items.len > 0 or ctx.module.hir.structs.items.len > 0 or ctx.module.hir.machines.items.len > 0 or mir_module.store.functions.items.len > 0)) try writer.writeByte('\n');
+    const emitted_fixed_buffer_layouts = try emitFixedBufferLayouts(writer, &ctx);
+    if ((emitted_slice_layouts or emitted_fixed_buffer_layouts) and (ctx.module.hir.enums.items.len > 0 or ctx.module.hir.structs.items.len > 0 or ctx.module.hir.machines.items.len > 0 or mir_module.store.functions.items.len > 0)) try writer.writeByte('\n');
 
     const emitted_enum_layouts = try emitEnumLayouts(writer, &ctx);
     if (emitted_enum_layouts and ctx.module.hir.structs.items.len > 0) try writer.writeByte('\n');
@@ -148,6 +151,23 @@ fn emitArrayLayout(writer: anytype, ctx: *const BackendContext, type_id: types.T
     try writer.print(" data[{d}];\n}} ", .{array.length});
     try emitArrayTypeName(writer, ctx.module, type_id);
     try writer.writeAll(";\n");
+}
+
+fn emitFixedBufferLayouts(writer: anytype, ctx: *const BackendContext) EmitError!bool {
+    var emitted_any = false;
+    for (ctx.module.types.types.items, 0..) |kind, index| {
+        if (kind != .fixed_buffer) continue;
+        const type_id = types.TypeId{ .index = @intCast(index) };
+        if (emitted_any) try writer.writeByte('\n');
+        try writer.writeAll("typedef struct {\n    ");
+        const array_type = ctx.module.types.findArray(kind.fixed_buffer.element, kind.fixed_buffer.capacity).?;
+        try emitCType(writer, ctx, array_type, null);
+        try writer.writeAll(" storage;\n    int count;\n} ");
+        try emitFixedBufferTypeName(writer, ctx.module, type_id);
+        try writer.writeAll(";\n");
+        emitted_any = true;
+    }
+    return emitted_any;
 }
 
 fn emitSliceLayouts(writer: anytype, ctx: *const BackendContext) EmitError!bool {
@@ -1109,6 +1129,7 @@ fn emitStatement(writer: anytype, ctx: *const BackendContext, statement: mir.Mir
                 .enum_constructor => |constructor| try emitEnumConstructorAssignment(writer, ctx, assignment.place, constructor),
                 .struct_constructor => |constructor| try emitStructConstructorAssignment(writer, ctx, assignment.place, constructor),
                 .array_constructor => |elements| try emitArrayConstructorAssignment(writer, ctx, assignment.place, elements),
+                .fixed_buffer_append => |append| try emitFixedBufferAppendAssignment(writer, ctx, assignment.place, append),
                 else => {
                     try writer.writeAll("    ");
                     try emitPlace(writer, ctx, assignment.place);
@@ -1400,6 +1421,31 @@ fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue
             try emitOperand(writer, ctx, array_index.index);
             try writer.writeAll("])");
         },
+        .fixed_buffer_empty => |type_id| {
+            try writer.writeByte('(');
+            try emitCType(writer, ctx, type_id, null);
+            try writer.writeAll("){ .storage = {0}, .count = 0 }");
+        },
+        .fixed_buffer_index => |index| {
+            try writer.writeByte('(');
+            try emitOperand(writer, ctx, index.index);
+            try writer.writeAll(" < 0 || ");
+            try emitOperand(writer, ctx, index.index);
+            try writer.writeAll(" >= ");
+            try emitOperand(writer, ctx, index.base);
+            try writer.writeAll(".count ? (cpt_panic(\"");
+            try writer.writeAll(fixed_buffer_index_oob_reason);
+            try writer.writeAll("\"), 0) : ");
+            try emitOperand(writer, ctx, index.base);
+            try writer.writeAll(".storage.data[");
+            try emitOperand(writer, ctx, index.index);
+            try writer.writeAll("])");
+        },
+        .fixed_buffer_len => |operand| {
+            try emitOperand(writer, ctx, operand);
+            try writer.writeAll(".count");
+        },
+        .fixed_buffer_capacity => |capacity| try writer.print("{d}", .{capacity}),
         .slice_from_array => |slice| {
             try writer.writeByte('(');
             try emitCType(writer, ctx, slice.result_type, null);
@@ -1447,6 +1493,25 @@ fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue
             try emitEnumPayloadFieldName(writer, ctx.module, payload_field.name, payload_index);
         },
     }
+}
+
+fn emitFixedBufferAppendAssignment(writer: anytype, ctx: *const BackendContext, place: mir.MirPlace, append: anytype) EmitError!void {
+    _ = place;
+    try writer.writeAll("    if (");
+    try emitOperand(writer, ctx, append.buffer);
+    try writer.print(".count >= {d}) {{ cpt_panic(\"", .{append.capacity});
+    try writer.writeAll(fixed_buffer_capacity_reason);
+    try writer.writeAll("\"); }\n    ");
+    try emitOperand(writer, ctx, append.buffer);
+    try writer.writeAll(".storage.data[");
+    try emitOperand(writer, ctx, append.buffer);
+    try writer.writeAll(".count] = ");
+    try emitOperand(writer, ctx, append.value);
+    try writer.writeAll(";\n    ");
+    try emitOperand(writer, ctx, append.buffer);
+    try writer.writeAll(".count = ");
+    try emitOperand(writer, ctx, append.buffer);
+    try writer.writeAll(".count + 1;\n");
 }
 
 fn emitCall(writer: anytype, ctx: *const BackendContext, call: mir.MirCall) EmitError!void {
@@ -1628,6 +1693,7 @@ fn emitCTypeAt(writer: anytype, ctx: *const BackendContext, type_id: types.TypeI
         },
         .array => try emitArrayTypeName(writer, ctx.module, type_id),
         .slice => try emitSliceTypeName(writer, ctx.module, type_id),
+        .fixed_buffer => try emitFixedBufferTypeName(writer, ctx.module, type_id),
         .manual_init, .type_param => {
             try reportUnsupportedCType(ctx, span);
             return error.InvalidExecutable;
@@ -1666,6 +1732,11 @@ fn emitArrayTypeName(writer: anytype, module: *const semantics.SemanticModule, t
 
 fn emitSliceTypeName(writer: anytype, module: *const semantics.SemanticModule, type_id: types.TypeId) !void {
     try writer.writeAll("cpt_slice_");
+    try emitTypeNameComponent(writer, module, type_id);
+}
+
+fn emitFixedBufferTypeName(writer: anytype, module: *const semantics.SemanticModule, type_id: types.TypeId) !void {
+    try writer.writeAll("cpt_fixed_buffer_");
     try emitTypeNameComponent(writer, module, type_id);
 }
 
@@ -1870,6 +1941,10 @@ fn emitTypeNameComponent(writer: anytype, module: *const semantics.SemanticModul
         .slice => |slice| {
             try writer.writeAll("slice_");
             try emitTypeNameComponent(writer, module, slice.element);
+        },
+        .fixed_buffer => |buffer| {
+            try emitTypeNameComponent(writer, module, buffer.element);
+            try writer.print("_fixed_buffer_{d}", .{buffer.capacity});
         },
         .void, .arena, .allocator, .alloc_error, .interface_type, .manual_init, .type_param => try writer.writeAll("unsupported"),
     }

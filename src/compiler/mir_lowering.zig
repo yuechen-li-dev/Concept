@@ -469,6 +469,10 @@ const FunctionLowerer = struct {
             .field_access => |field_access| try self.lowerFieldAccess(expr, field_access, block_id),
             .index_access => |index_access| try self.lowerIndexAccess(expr, index_access, block_id),
             .slice_len => |slice_expr| try self.lowerSliceLen(expr, slice_expr, block_id),
+            .fixed_buffer_len => |buffer_expr| try self.lowerFixedBufferLen(expr, buffer_expr, block_id),
+            .fixed_buffer_capacity => |capacity| try self.lowerFixedBufferCapacity(expr, capacity, block_id),
+            .fixed_buffer_empty => |type_id| try self.lowerFixedBufferEmpty(expr, type_id, block_id),
+            .fixed_buffer_append => |append| try self.lowerFixedBufferAppend(expr, append, block_id),
             .try_expr => |operand| try self.lowerTry(expr, operand, block_id),
             .decide => |decide| try self.lowerDecide(expr, decide, block_id),
         };
@@ -874,7 +878,7 @@ const FunctionLowerer = struct {
             .span = expr.span,
             .kind = mir.MirStatementKind.assignTo(
                 mir.MirPlace.localPlace(temp),
-                if (index_access.is_slice) mir.MirRvalue.sliceIndex(base.operand, index.operand, index_access.result_type) else mir.MirRvalue.arrayIndex(base.operand, index.operand, index_access.array_length, index_access.result_type),
+                if (index_access.is_fixed_buffer) .{ .fixed_buffer_index = .{ .base = base.operand, .index = index.operand, .result_type = index_access.result_type } } else if (index_access.is_slice) mir.MirRvalue.sliceIndex(base.operand, index.operand, index_access.result_type) else mir.MirRvalue.arrayIndex(base.operand, index.operand, index_access.array_length, index_access.result_type),
             ),
         });
         return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = index.block };
@@ -885,6 +889,36 @@ const FunctionLowerer = struct {
         const temp = try self.addTemp(self.semantic_module.types.intType());
         try self.store.appendStatement(lowered.block, .{ .span = expr.span, .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(temp), .{ .slice_len = lowered.operand }) });
         return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = lowered.block };
+    }
+
+    fn lowerFixedBufferLen(self: *FunctionLowerer, expr: hir.HirExpr, buffer_expr: hir.ExprId, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const lowered = try self.lowerExpr(buffer_expr, block_id);
+        const temp = try self.addTemp(self.semantic_module.types.intType());
+        try self.store.appendStatement(lowered.block, .{ .span = expr.span, .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(temp), .{ .fixed_buffer_len = lowered.operand }) });
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = lowered.block };
+    }
+
+    fn lowerFixedBufferCapacity(self: *FunctionLowerer, expr: hir.HirExpr, capacity: u64, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const temp = try self.addTemp(self.semantic_module.types.intType());
+        const text = try std.fmt.allocPrint(self.allocator, "{d}", .{capacity});
+        try self.store.appendStatement(block_id, .{ .span = expr.span, .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(temp), mir.MirRvalue.use_(try mir.MirOperand.intLiteral(self.allocator, text))) });
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = block_id };
+    }
+
+    fn lowerFixedBufferEmpty(self: *FunctionLowerer, expr: hir.HirExpr, type_id: types.TypeId, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const temp = try self.addTemp(type_id);
+        try self.store.appendStatement(block_id, .{ .span = expr.span, .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(temp), .{ .fixed_buffer_empty = type_id }) });
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = block_id };
+    }
+
+    fn lowerFixedBufferAppend(self: *FunctionLowerer, expr: hir.HirExpr, append: anytype, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const buffer = try self.lowerExpr(append.buffer, block_id);
+        const value = try self.lowerExpr(append.value, buffer.block);
+        const buffer_type = try self.inferExprType(append.buffer);
+        const capacity = self.semantic_module.types.kind(buffer_type).fixed_buffer.capacity;
+        const temp = try self.addTemp(self.semantic_module.types.voidType());
+        try self.store.appendStatement(value.block, .{ .span = expr.span, .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(temp), .{ .fixed_buffer_append = .{ .buffer = buffer.operand, .value = value.operand, .capacity = capacity } }) });
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = value.block };
     }
 
     fn lowerFieldAccess(self: *FunctionLowerer, expr: hir.HirExpr, field_access: anytype, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
@@ -1176,7 +1210,9 @@ const FunctionLowerer = struct {
             .array_literal => |literal| literal.type_id,
             .field_access => |field_access| self.semantic_module.hir.getField(try self.resolveFieldAccess(field_access.receiver, field_access.field_name)).type_id,
             .index_access => |index_access| index_access.result_type,
-            .slice_len => self.semantic_module.types.intType(),
+            .slice_len, .fixed_buffer_len, .fixed_buffer_capacity => self.semantic_module.types.intType(),
+            .fixed_buffer_empty => |type_id| type_id,
+            .fixed_buffer_append => self.semantic_module.types.voidType(),
             .decide => |decide| decide.enum_type,
             .try_expr => |operand| blk: {
                 const operand_type = try self.inferExprType(operand);
@@ -1206,7 +1242,9 @@ const FunctionLowerer = struct {
             .group => |inner| try self.inferAddressableExprType(inner),
             .field_access => |field_access| self.semantic_module.hir.getField(try self.resolveFieldAccess(field_access.receiver, field_access.field_name)).type_id,
             .index_access => |index_access| index_access.result_type,
-            .slice_len => self.semantic_module.types.intType(),
+            .slice_len, .fixed_buffer_len, .fixed_buffer_capacity => self.semantic_module.types.intType(),
+            .fixed_buffer_empty => |type_id| type_id,
+            .fixed_buffer_append => self.semantic_module.types.voidType(),
             else => error.InvalidMirLowering,
         };
     }

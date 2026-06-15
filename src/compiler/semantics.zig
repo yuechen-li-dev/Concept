@@ -1778,6 +1778,31 @@ const Collector = struct {
             const element = (try self.resolveTypeNameScoped(type_name.generic_args[0], type_scope)) orelse return null;
             return try self.module.types.addSliceType(element);
         }
+        if (std.mem.eql(u8, part.text, "FixedBuffer")) {
+            if (type_name.generic_args.len != 2) {
+                try self.diagnostics.append(diagnostics.fixedBufferRequiresElementAndCapacity(type_name.span));
+                return null;
+            }
+            const element = (try self.resolveTypeNameScoped(type_name.generic_args[0], type_scope)) orelse return null;
+            const capacity_arg = type_name.generic_args[1];
+            if (capacity_arg.name.parts.len != 1 or capacity_arg.generic_args.len != 0 or capacity_arg.array_suffixes.len != 0) {
+                try self.diagnostics.append(diagnostics.fixedBufferRequiresElementAndCapacity(capacity_arg.span));
+                return null;
+            }
+            if (std.mem.startsWith(u8, capacity_arg.name.parts[0].text, "-")) {
+                try self.diagnostics.append(diagnostics.fixedBufferCapacityMustBePositive(capacity_arg.span));
+                return null;
+            }
+            const capacity = std.fmt.parseUnsigned(u64, capacity_arg.name.parts[0].text, 10) catch {
+                try self.diagnostics.append(diagnostics.fixedBufferRequiresElementAndCapacity(capacity_arg.span));
+                return null;
+            };
+            if (capacity == 0) {
+                try self.diagnostics.append(diagnostics.fixedBufferCapacityMustBePositive(capacity_arg.span));
+                return null;
+            }
+            return try self.module.types.addFixedBufferType(element, capacity);
+        }
         if (type_name.generic_args.len != 0) {
             try self.diagnostics.append(diagnostics.unsupportedTypeSyntax(type_name.span));
             return null;
@@ -2321,6 +2346,10 @@ const BodyLowerer = struct {
                         element_type = slice.element;
                         is_slice = true;
                     },
+                    .fixed_buffer => |buffer| {
+                        element_type = buffer.element;
+                        array_length = buffer.capacity;
+                    },
                     else => {
                         try self.collector.diagnostics.append(diagnostics.arrayIndexRequiresArrayOrSlice(index_access.base.span()));
                         return null;
@@ -2569,7 +2598,7 @@ const BodyLowerer = struct {
 
                 if (std.mem.eql(u8, call.callee.text, "Len")) {
                     if (call.type_args.len != 0 or owned.len != 1) {
-                        try self.collector.diagnostics.append(diagnostics.Diagnostic.init(.InvalidCall, .@"error", "Len expects exactly one array argument", call.span));
+                        try self.collector.diagnostics.append(diagnostics.Diagnostic.init(.InvalidCall, .@"error", "Len expects exactly one array, slice, or fixed buffer argument", call.span));
                         return null;
                     }
                     const arg_type = (try self.inferExprType(owned[0])) orelse return null;
@@ -2579,11 +2608,63 @@ const BodyLowerer = struct {
                             return try self.collector.module.hir.addExpr(.{ .int_literal = text }, call.span);
                         },
                         .slice => return try self.collector.module.hir.addExpr(.{ .slice_len = owned[0] }, call.span),
+                        .fixed_buffer => return try self.collector.module.hir.addExpr(.{ .fixed_buffer_len = owned[0] }, call.span),
                         else => {
                             try self.collector.diagnostics.append(diagnostics.arrayIndexRequiresArrayOrSlice(call.args[0].span()));
                             return null;
                         },
                     }
+                }
+
+                if (std.mem.eql(u8, call.callee.text, "Capacity")) {
+                    if (call.type_args.len != 0 or owned.len != 1) {
+                        try self.collector.diagnostics.append(diagnostics.Diagnostic.init(.InvalidCall, .@"error", "Capacity expects exactly one fixed array or fixed buffer argument", call.span));
+                        return null;
+                    }
+                    const arg_type = (try self.inferExprType(owned[0])) orelse return null;
+                    switch (self.collector.module.types.kind(arg_type)) {
+                        .array => |array| {
+                            const text = try std.fmt.allocPrint(self.collector.allocator, "{d}", .{array.length});
+                            return try self.collector.module.hir.addExpr(.{ .int_literal = text }, call.span);
+                        },
+                        .fixed_buffer => |buffer| return try self.collector.module.hir.addExpr(.{ .fixed_buffer_capacity = buffer.capacity }, call.span),
+                        else => {
+                            try self.collector.diagnostics.append(diagnostics.fixedBufferReceiverRequired(call.args[0].span()));
+                            return null;
+                        },
+                    }
+                }
+
+                if (std.mem.eql(u8, call.callee.text, "fixedBufferEmpty")) {
+                    if (call.type_args.len != 2 or owned.len != 0) {
+                        try self.collector.diagnostics.append(diagnostics.fixedBufferRequiresElementAndCapacity(call.span));
+                        return null;
+                    }
+                    const fake = ast.TypeName{ .name = .{ .parts = try self.collector.allocator.dupe(ast.NameSegment, &[_]ast.NameSegment{.{ .text = "FixedBuffer", .span = call.callee.span }}), .span = call.callee.span }, .generic_args = call.type_args, .span = call.span };
+                    defer self.collector.allocator.free(fake.name.parts);
+                    const type_id = (try self.collector.resolveTypeNameScoped(fake, null)) orelse return null;
+                    return try self.collector.module.hir.addExpr(.{ .fixed_buffer_empty = type_id }, call.span);
+                }
+
+                if (std.mem.eql(u8, call.callee.text, "fixedBufferAppend")) {
+                    if (call.type_args.len != 0 or owned.len != 2) {
+                        try self.collector.diagnostics.append(diagnostics.fixedBufferReceiverRequired(call.span));
+                        return null;
+                    }
+                    const receiver_type = (try self.inferExprType(owned[0])) orelse return null;
+                    const buffer = switch (self.collector.module.types.kind(receiver_type)) {
+                        .fixed_buffer => |buffer| buffer,
+                        else => {
+                            try self.collector.diagnostics.append(diagnostics.fixedBufferReceiverRequired(call.args[0].span()));
+                            return null;
+                        },
+                    };
+                    const value_type = (try self.inferExprType(owned[1])) orelse return null;
+                    if (!sameType(value_type, buffer.element)) {
+                        try self.collector.diagnostics.append(diagnostics.fixedBufferAppendTypeMismatch(call.args[1].span()));
+                        return null;
+                    }
+                    return try self.collector.module.hir.addExpr(.{ .fixed_buffer_append = .{ .buffer = owned[0], .value = owned[1] } }, call.span);
                 }
 
                 if (std.mem.eql(u8, call.callee.text, "manualAssumeInit")) {
@@ -2822,7 +2903,7 @@ const BodyLowerer = struct {
                         return null;
                     }
                 }
-                return try self.collector.module.hir.addExpr(.{ .index_access = .{ .base = base, .index = index, .result_type = element_type, .array_length = array_length, .is_slice = is_slice } }, index_access.span);
+                return try self.collector.module.hir.addExpr(.{ .index_access = .{ .base = base, .index = index, .result_type = element_type, .array_length = array_length, .is_slice = is_slice, .is_fixed_buffer = self.collector.module.types.kind(base_type) == .fixed_buffer } }, index_access.span);
             },
             .field_access => |field_access| {
                 if (self.isUnboundTargetRoot(field_access.receiver.*)) {
@@ -3256,7 +3337,9 @@ const BodyLowerer = struct {
             },
             .arena_alloc => |arena_alloc| arena_alloc.result_type,
             .index_access => |index_access| index_access.result_type,
-            .slice_len => self.collector.module.types.intType(),
+            .slice_len, .fixed_buffer_len, .fixed_buffer_capacity => self.collector.module.types.intType(),
+            .fixed_buffer_empty => |type_id| type_id,
+            .fixed_buffer_append => self.collector.module.types.voidType(),
             .field_access => |field_access| blk: {
                 const receiver_type = (try self.inferExprType(field_access.receiver)) orelse return null;
                 const receiver_kind = self.collector.module.types.kind(receiver_type);

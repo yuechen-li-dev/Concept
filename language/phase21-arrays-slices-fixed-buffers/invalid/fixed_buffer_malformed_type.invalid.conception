@@ -1,0 +1,14 @@
+# name: phase21 fixed buffer malformed type
+# phase: check
+# check: declarations
+# expect: fail
+
+=== source ===
+module Example;
+
+struct Bag {
+    FixedBuffer<int> values;
+};
+
+=== diagnostics ===
+CON0419
