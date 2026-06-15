@@ -763,3 +763,11 @@ Phase 21 M7 covers `FixedBuffer<T, N>` type resolution, positive literal capacit
 ### P21-M8 DragonGod FixedBuffer migration coverage
 
 P21-M8 updates the DragonGod backend shape fixtures for Trace, Events, Replay, and AutomataGraph so they compile and assert `FixedBuffer<T, 4>` wrapper storage instead of explicit `event0`/`slot0`/`node0` fields. The existing run fixtures continue to cover subsystem behavior, while the backend fixtures now pin no-heap contiguous storage, subsystem-specific capacity/index/root panic strings, and absence of hidden runtime hooks. Memory, AutomataStack, and ActuatorHost remain fixed-slot by design because they need update/pop/replace operations not present in `FixedBuffer<T, N>` v0.
+
+## Phase 21 closeout coverage
+
+Phase 21 is closed. Coverage now includes P21-M0 design documentation; P21-M1 fixed-size array type syntax; P21-M2 array literals; P21-M3 read indexing and `Len(array)`; P21-M4 mutable fixed-array element assignment; P21-M5 array value lowering and C backend wrapper structs; P21-M6 read-only `Slice<T>` with call-boundary array-to-slice conversion, `Len(slice)`, and read indexing; P21-M7 `FixedBuffer<T, N>` v0 with empty construction, append, initialized-range reads, `Len(buffer)`, `Capacity(buffer)`, and `Capacity(array)`; and P21-M8 DragonGod migration coverage for TraceRecorder, EventBus, ReplayLog, and AutomataGraph.
+
+Deferred coverage remains explicit: `MutSlice<T>`, local slice construction, slice returns, fixed-buffer element assignment, fixed-buffer-to-slice conversion, fixed-buffer set/replace/pop/clear/find/update helpers, heap vectors, iterators/ranges, generic containers, and complete DragonGod migration. Remaining FixedBuffer helper work is future Phase 22 input, especially for Memory update-by-key, AutomataStack pop/replace-top, ActuatorHost complete/fail-by-id, and iteration cleanup in EventBus/AutomataGraph.
+
+P21-M9 also records a source formatting inventory for `.concept` and `.conception` files. This is coverage/process documentation only; no formatter or new compiler behavior is added.

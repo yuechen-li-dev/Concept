@@ -646,3 +646,11 @@ P21-M7 expands `language/phase21-arrays-slices-fixed-buffers/` with run fixtures
 ## Phase 21 / M8 DragonGod FixedBuffer migration fixtures
 
 P21-M8 keeps the Phase 20 DragonGod fixture count stable but updates four backend-C shape fixtures: `kernel_trace_backend_shape.valid.conception`, `kernel_events_backend_shape.valid.conception`, `kernel_replay_backend_shape.valid.conception`, and `kernel_graph_backend_shape.valid.conception`. These fixtures now assert generated fixed-buffer wrapper storage (`storage` plus `count`), prove the migrated append/read/count paths still compile, preserve DragonGod-specific panic strings, and assert that old explicit event/slot/node fields are absent for the migrated types. Existing run fixtures continue to cover behavior for Trace, Events, Replay, Graph, checkpoint composition, and integrations.
+
+## Phase 21 closeout fixture status
+
+Phase 21 closes with 50 fixtures under `language/phase21-arrays-slices-fixed-buffers/`: 26 valid fixtures and 24 invalid fixtures. The full `language/` corpus currently contains 1201 `.conception` fixture files, and the Phase 20 DragonGod stress suite remains at 99 valid fixtures.
+
+The Phase 21 fixtures now cover fixed array type syntax, array literals, fixed-array indexing, mutable fixed-array element assignment, value lowering, read-only slices, fixed buffers, capacity/length builtins, and the DragonGod migration spike through updated backend-shape coverage for Trace, Events, Replay, and AutomataGraph.
+
+Future `.conception` fixtures should prefer human-readable C++-style formatting over compressed one-liners: one statement per line, spaces around assignment and binary operators, spaces after commas, and readable block indentation. Compact syntax may remain useful for narrow parser tests, but feature and backend fixtures should be readable by human reviewers.
