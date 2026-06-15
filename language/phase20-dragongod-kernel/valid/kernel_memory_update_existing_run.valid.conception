@@ -1,0 +1,40 @@
+# name: phase20 DG3 kernel_memory_update_existing_run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+struct MemoryKeyInt { int id; };
+struct MemorySlot { int key; int value; bool occupied; };
+struct Memory { int revision; MemorySlot slot0; MemorySlot slot1; MemorySlot slot2; MemorySlot slot3; };
+MemorySlot memoryEmptySlot() { return MemorySlot { key: 0, value: 0, occupied: false }; }
+Memory memoryEmpty() { return Memory { revision: 0, slot0: memoryEmptySlot(), slot1: memoryEmptySlot(), slot2: memoryEmptySlot(), slot3: memoryEmptySlot() }; }
+void memoryWrite(mut Memory& memory, MemoryKeyInt key, int value) {
+    if (memory.slot0.occupied && memory.slot0.key == key.id) { memory.slot0.value = value; memory.revision = memory.revision + 1; return; }
+    if (memory.slot1.occupied && memory.slot1.key == key.id) { memory.slot1.value = value; memory.revision = memory.revision + 1; return; }
+    if (memory.slot2.occupied && memory.slot2.key == key.id) { memory.slot2.value = value; memory.revision = memory.revision + 1; return; }
+    if (memory.slot3.occupied && memory.slot3.key == key.id) { memory.slot3.value = value; memory.revision = memory.revision + 1; return; }
+    if (!memory.slot0.occupied) { memory.slot0.key = key.id; memory.slot0.value = value; memory.slot0.occupied = true; memory.revision = memory.revision + 1; return; }
+    if (!memory.slot1.occupied) { memory.slot1.key = key.id; memory.slot1.value = value; memory.slot1.occupied = true; memory.revision = memory.revision + 1; return; }
+    if (!memory.slot2.occupied) { memory.slot2.key = key.id; memory.slot2.value = value; memory.slot2.occupied = true; memory.revision = memory.revision + 1; return; }
+    if (!memory.slot3.occupied) { memory.slot3.key = key.id; memory.slot3.value = value; memory.slot3.occupied = true; memory.revision = memory.revision + 1; return; }
+}
+int memoryRead(Memory memory, MemoryKeyInt key, int fallback) {
+    if (memory.slot0.occupied && memory.slot0.key == key.id) { return memory.slot0.value; }
+    if (memory.slot1.occupied && memory.slot1.key == key.id) { return memory.slot1.value; }
+    if (memory.slot2.occupied && memory.slot2.key == key.id) { return memory.slot2.value; }
+    if (memory.slot3.occupied && memory.slot3.key == key.id) { return memory.slot3.value; }
+    return fallback;
+}
+bool memoryHas(Memory memory, MemoryKeyInt key) {
+    if (memory.slot0.occupied && memory.slot0.key == key.id) { return true; }
+    if (memory.slot1.occupied && memory.slot1.key == key.id) { return true; }
+    if (memory.slot2.occupied && memory.slot2.key == key.id) { return true; }
+    if (memory.slot3.occupied && memory.slot3.key == key.id) { return true; }
+    return false;
+}
+int memoryRevision(Memory memory) { return memory.revision; }
+int main() { Memory memory = memoryEmpty(); MemoryKeyInt key = MemoryKeyInt { id: 3 }; memoryWrite(memory&, key, 10); memoryWrite(memory&, key, 40); return memoryRead(memory, key, 0) + memoryRevision(memory); }
+
+=== run ===
+exit_code: 42

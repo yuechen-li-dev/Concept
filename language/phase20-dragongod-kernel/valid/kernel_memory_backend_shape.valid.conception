@@ -1,0 +1,28 @@
+# name: phase20 DG3 memory backend shape
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+struct MemoryKeyInt { int id; };
+struct MemorySlot { int key; int value; bool occupied; };
+struct Memory { int revision; MemorySlot slot0; MemorySlot slot1; MemorySlot slot2; MemorySlot slot3; };
+MemorySlot memoryEmptySlot() { return MemorySlot { key: 0, value: 0, occupied: false }; }
+Memory memoryEmpty() { return Memory { revision: 0, slot0: memoryEmptySlot(), slot1: memoryEmptySlot(), slot2: memoryEmptySlot(), slot3: memoryEmptySlot() }; }
+void memoryWrite(mut Memory& memory, MemoryKeyInt key, int value) { if (!memory.slot0.occupied) { memory.slot0.key = key.id; memory.slot0.value = value; memory.slot0.occupied = true; memory.revision = memory.revision + 1; return; } }
+int memoryRead(Memory memory, MemoryKeyInt key, int fallback) { if (memory.slot0.occupied && memory.slot0.key == key.id) { return memory.slot0.value; } return fallback; }
+int main() { Memory memory = memoryEmpty(); MemoryKeyInt key = MemoryKeyInt { id: 1 }; memoryWrite(memory&, key, 7); return memoryRead(memory, key, 0); }
+
+=== c ===
+contains: typedef struct Main__Memory
+contains: revision
+contains: slot0
+contains: Main__memoryWrite(&memory, key, 7)
+contains: return fallback
+not_contains: malloc
+not_contains: Blackboard
+not_contains: BbKey
+not_contains: scheduler
+not_contains: async
+not_contains: mailbox

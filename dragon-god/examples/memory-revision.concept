@@ -1,0 +1,11 @@
+module Main;
+
+import DragonGod.Kernel.Memory;
+
+int main() {
+    DragonGod.Kernel.Memory.Memory memory = DragonGod.Kernel.Memory.memoryEmpty();
+    DragonGod.Kernel.Memory.MemoryKeyInt key = DragonGod.Kernel.Memory.MemoryKeyInt { id: 7 };
+    DragonGod.Kernel.Memory.memoryWrite(memory&, key, 10);
+    DragonGod.Kernel.Memory.memoryWrite(memory&, key, 20);
+    return DragonGod.Kernel.Memory.memoryRevision(memory);
+}

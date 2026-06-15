@@ -1,6 +1,7 @@
 module DragonGod.Kernel.Memory;
 
-// Temporary non-generic key shell for DG1. Generic MemoryKey<T> is deferred.
+// MemoryKey<T> is deferred until generic/type-erased Memory is ready.
+// MemoryKeyInt is the DG3 scaffold for integer memory values.
 struct MemoryKeyInt {
     int id;
 };
