@@ -1,0 +1,8 @@
+module DragonGod.Examples.FailSignalMachine;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Automata;
+
+machine FailNow -> DragonGod.Kernel.Automata.AutomataSignal {
+    state Start { return DragonGod.Kernel.Automata.AutomataSignal::Fail(DragonGod.Kernel.Core.Reason { code: 13 }); }
+}

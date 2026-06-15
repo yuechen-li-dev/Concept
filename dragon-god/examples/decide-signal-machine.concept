@@ -1,0 +1,10 @@
+module DragonGod.Examples.DecideSignalMachine;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Automata;
+
+machine DecideSignal(bool high) -> DragonGod.Kernel.Automata.AutomataSignal {
+    state Start { transition decide { High when high score 100; Low score 1; }; }
+    state High { return DragonGod.Kernel.Automata.AutomataSignal::Succeed(DragonGod.Kernel.Core.Reason { code: 100 }); }
+    state Low { return DragonGod.Kernel.Automata.AutomataSignal::Succeed(DragonGod.Kernel.Core.Reason { code: 1 }); }
+}

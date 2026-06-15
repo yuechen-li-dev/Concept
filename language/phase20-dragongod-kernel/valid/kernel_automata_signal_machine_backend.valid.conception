@@ -1,0 +1,39 @@
+# name: phase20 DG2 automata signal machine backend
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+struct StateId { int value; };
+struct ActuationId { int value; };
+struct Reason { int code; };
+
+enum AutomataSignal {
+    None,
+    Goto(StateId target, Reason reason),
+    Succeed(Reason reason),
+    Fail(Reason reason),
+    Act(ActuationId id),
+    AwaitActuation(ActuationId id),
+};
+
+machine Child -> int { state Start { transition Done; } state Done { return 7; } }
+machine SignalMachine(bool ready) -> AutomataSignal { Child child; state Start { if (!ready) { yield; } Step(child); transition match (Complete(child)) { true => Done; false => Start; }; } state Done { return AutomataSignal::Succeed(Reason { code: Result(child) }); } }
+int main() { SignalMachine m = SignalMachine(true); Step(m); Step(m); return 0; }
+
+=== c ===
+contains: typedef struct cpt_enum_AutomataSignal
+contains: cpt_enum_AutomataSignal result;
+contains: cpt_enum_AutomataSignal_variant_Succeed
+contains: m->result =
+contains: return;
+contains: cpt_m_Child_step(&m->cpt_mf_child_0);
+contains: if (m->cpt_mf_child_0.complete)
+not_contains: malloc
+not_contains: scheduler
+not_contains: async
+not_contains: event
+not_contains: blackboard
+not_contains: mailbox
+not_contains: DragonGod

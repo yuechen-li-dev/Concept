@@ -1,0 +1,10 @@
+module DragonGod.Examples.MatchSignalMachine;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Automata;
+
+machine GateSignal(bool ok) -> DragonGod.Kernel.Automata.AutomataSignal {
+    state Start { transition match (ok) { true => Good; false => Bad; }; }
+    state Good { return DragonGod.Kernel.Automata.AutomataSignal::Succeed(DragonGod.Kernel.Core.Reason { code: 1 }); }
+    state Bad { return DragonGod.Kernel.Automata.AutomataSignal::Fail(DragonGod.Kernel.Core.Reason { code: 2 }); }
+}

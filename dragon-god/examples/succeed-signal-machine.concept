@@ -1,0 +1,24 @@
+module DragonGod.Examples.SucceedSignalMachine;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Automata;
+
+machine SucceedNow -> DragonGod.Kernel.Automata.AutomataSignal {
+    state Start {
+        return DragonGod.Kernel.Automata.AutomataSignal::Succeed(DragonGod.Kernel.Core.Reason { code: 7 });
+    }
+}
+
+int main() {
+    SucceedNow m = SucceedNow();
+    Step(m);
+    DragonGod.Kernel.Automata.AutomataSignal signal = Result(m);
+    match (signal) {
+        DragonGod.Kernel.Automata.AutomataSignal::Succeed(reason) => return reason.code;
+        DragonGod.Kernel.Automata.AutomataSignal::None => return 99;
+        DragonGod.Kernel.Automata.AutomataSignal::Goto(target, reason) => return target.value + reason.code;
+        DragonGod.Kernel.Automata.AutomataSignal::Fail(reason) => return reason.code;
+        DragonGod.Kernel.Automata.AutomataSignal::Act(id) => return id.value;
+        DragonGod.Kernel.Automata.AutomataSignal::AwaitActuation(id) => return id.value;
+    }
+}

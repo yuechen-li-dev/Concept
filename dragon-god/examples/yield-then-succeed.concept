@@ -1,0 +1,15 @@
+module DragonGod.Examples.YieldThenSucceed;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Automata;
+
+machine Child -> int { state Start { transition Done; } state Done { return 21; } }
+
+machine YieldThenSucceed -> DragonGod.Kernel.Automata.AutomataSignal {
+    Child child;
+    state Waiting {
+        Step(child);
+        if (!Complete(child)) { yield; }
+        return DragonGod.Kernel.Automata.AutomataSignal::Succeed(DragonGod.Kernel.Core.Reason { code: Result(child) });
+    }
+}
