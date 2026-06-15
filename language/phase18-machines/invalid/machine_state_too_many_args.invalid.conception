@@ -1,0 +1,18 @@
+# name: machine state too many args
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+machine Simple { state Start { return 0; } }
+
+int main() {
+    Simple a = Simple();
+    Simple b = Simple();
+    return State(a, b);
+}
+
+=== diagnostics ===
+CON0004

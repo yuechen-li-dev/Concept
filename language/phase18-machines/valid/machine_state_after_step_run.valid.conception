@@ -1,0 +1,20 @@
+# name: machine state after step run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Simple() -> int {
+    state Start { transition Done; }
+    state Done { return 9; }
+}
+
+int main() {
+    Simple m = Simple();
+    Step(m);
+    return State(m);
+}
+
+=== run ===
+exit_code: 1

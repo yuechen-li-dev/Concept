@@ -1,0 +1,14 @@
+# name: machine state too few args
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    return State();
+}
+
+=== diagnostics ===
+CON0004

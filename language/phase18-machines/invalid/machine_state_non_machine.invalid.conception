@@ -1,0 +1,15 @@
+# name: machine state non machine
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+int main() {
+    int x = 0;
+    return State(x);
+}
+
+=== diagnostics ===
+CON029D

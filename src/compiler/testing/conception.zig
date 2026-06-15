@@ -2898,6 +2898,11 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectBackendCFixture("../../../language/phase18-machines/valid/nested_machine_field_basic_backend.valid.conception");
     try expectBackendCFixture("../../../language/phase18-machines/valid/nested_machine_field_multiple_children_backend.valid.conception");
     try expectBackendCFixture("../../../language/phase18-machines/valid/nested_machine_operations_backend.valid.conception");
+    try expectRunFixture("../../../language/phase18-machines/valid/machine_state_initial_run.valid.conception");
+    try expectRunFixture("../../../language/phase18-machines/valid/machine_state_after_step_run.valid.conception");
+    try expectRunFixture("../../../language/phase18-machines/valid/machine_state_nested_child_run.valid.conception");
+    try expectRunFixture("../../../language/phase18-machines/valid/machine_state_no_completion_requirement_run.valid.conception");
+    try expectBackendCFixture("../../../language/phase18-machines/valid/machine_state_backend.valid.conception");
     try expectCheckFixture("../../../language/phase18-machines/invalid/machine_step_non_machine.invalid.conception");
     try expectCheckFixture("../../../language/phase18-machines/invalid/machine_step_temporary.invalid.conception");
     try expectCheckFixture("../../../language/phase18-machines/invalid/machine_complete_non_machine.invalid.conception");
@@ -2907,6 +2912,9 @@ test "language run fixture: phase7 struct pipeline closeout" {
     try expectCheckFixture("../../../language/phase18-machines/invalid/nested_machine_step_unknown_field.invalid.conception");
     try expectCheckFixture("../../../language/phase18-machines/invalid/nested_machine_complete_unknown_field.invalid.conception");
     try expectCheckFixture("../../../language/phase18-machines/invalid/nested_machine_result_unknown_field.invalid.conception");
+    try expectCheckFixture("../../../language/phase18-machines/invalid/machine_state_non_machine.invalid.conception");
+    try expectCheckFixture("../../../language/phase18-machines/invalid/machine_state_too_few_args.invalid.conception");
+    try expectCheckFixture("../../../language/phase18-machines/invalid/machine_state_too_many_args.invalid.conception");
 
     try expectParseFixture("../../../language/phase15-c-abi/valid/extern_c_block_basic.valid.conception");
     try expectParseFixture("../../../language/phase15-c-abi/valid/extern_c_block_multiple_functions.valid.conception");

@@ -459,6 +459,7 @@ const FunctionLowerer = struct {
             .machine_step => error.InvalidMirLowering,
             .machine_complete => |machine_expr| try self.lowerMachineComplete(expr, machine_expr, block_id),
             .machine_result => |machine_expr| try self.lowerMachineResult(expr, machine_expr, block_id),
+            .machine_state => |machine_expr| try self.lowerMachineState(expr, machine_expr, block_id),
             .arena_alloc => |arena_alloc| try self.lowerArenaAlloc(expr, arena_alloc, block_id),
             .concept_requirement_call, .target_metadata, .test_intrinsic => error.InvalidMirLowering,
             .enum_constructor => |constructor| try self.lowerEnumConstructor(expr, constructor, block_id),
@@ -760,6 +761,19 @@ const FunctionLowerer = struct {
             .kind = mir.MirStatementKind.assignTo(
                 mir.MirPlace.localPlace(temp),
                 .{ .machine_complete = lowered.operand },
+            ),
+        });
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = lowered.block };
+    }
+
+    fn lowerMachineState(self: *FunctionLowerer, expr: hir.HirExpr, machine_expr: hir.ExprId, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const lowered = try self.lowerExpr(machine_expr, block_id);
+        const temp = try self.addTemp(try self.inferExprTypeFrom(expr));
+        try self.store.appendStatement(lowered.block, .{
+            .span = expr.span,
+            .kind = mir.MirStatementKind.assignTo(
+                mir.MirPlace.localPlace(temp),
+                .{ .machine_state = lowered.operand },
             ),
         });
         return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = lowered.block };
@@ -1082,6 +1096,7 @@ const FunctionLowerer = struct {
             .machine_construct => |construct| try self.semantic_module.types.addMachineType(construct.machine),
             .machine_step => self.semantic_module.types.voidType(),
             .machine_complete => self.semantic_module.types.boolType(),
+            .machine_state => self.semantic_module.types.intType(),
             .machine_result => |machine_expr| blk: {
                 const machine_type = try self.inferExprType(machine_expr);
                 break :blk switch (self.semantic_module.types.kind(machine_type)) {

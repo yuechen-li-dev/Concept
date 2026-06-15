@@ -1,0 +1,21 @@
+# name: machine state no completion requirement run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Simple() -> int {
+    state Start { transition Done; }
+    state Done { return 5; }
+}
+
+int main() {
+    Simple m = Simple();
+    int s = State(m);
+    if (Complete(m)) { return 99; }
+    return s;
+}
+
+=== run ===
+exit_code: 0
