@@ -1,17 +1,17 @@
 # Concept — Checkpoint 1 Coverage Matrix
-## Phase 18 M9 closeout vs PoC3 Constitution
+## Phase 19 M0 design start vs PoC3 Constitution
 
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
 **Phases closed:** 1 through 18
-**Current phase:** Phase 18 closed — P18-M9 closeout complete
+**Current phase:** Phase 19 started — P19-M0 design-only milestone
 **Fixture corpus:** 1102 total `.conception` fixture files; 85 under `language/phase11-testing/`; 108 under `language/phase15-c-abi/`; 73 under `language/phase16-imports/`; 57 under `language/phase17-runtime-failure/`; 66 under `language/phase18-machines/`
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
 
 ## Phase 18 M9 closeout snapshot
 
-Phase 18 is closed after P18-M9. The machine composition substrate now has examples under `examples/phase18/` and 66 fixtures under `language/phase18-machines/`: 43 valid and 23 invalid. The closed Phase 18 substrate pins hierarchical by-value child frames, explicit child stepping, `Complete(child)`, `Result(child)`, numeric `State(machine)`, bool `transition match`, deterministic `transition decide`, shared `cpt_panic` runtime machine failures, and backend-shape assertions that exclude hidden heap allocation, scheduler, async, blackboard, mailbox, event-bus, and DragonGod runtime hooks. Deferred non-goals remain explicit: `yield`, scheduler, async, blackboard/mailbox/event keywords, dynamic child lists, heap-owned machines, `StateName`, reflection, and DragonGod runtime hooks remain deferred.
+Phase 18 is closed after P18-M9. The machine composition substrate now has examples under `examples/phase18/` and 66 fixtures under `language/phase18-machines/`: 43 valid and 23 invalid. The closed Phase 18 substrate pins hierarchical by-value child frames, explicit child stepping, `Complete(child)`, `Result(child)`, numeric `State(machine)`, bool `transition match`, deterministic `transition decide`, shared `cpt_panic` runtime machine failures, and backend-shape assertions that exclude hidden heap allocation, scheduler, async, blackboard, mailbox, event-bus, and DragonGod runtime hooks. Phase 19 has now started with a design-only P19-M0 document for bare machine-state `yield;`. Compiler behavior is unchanged at M0: yield remains unimplemented, while scheduler, async, blackboard/mailbox/event keywords, dynamic child lists, heap-owned machines, `StateName`, reflection, `yield return`, `suspend`/`resume`, and DragonGod runtime hooks remain deferred.
 
 ---
 
@@ -418,7 +418,7 @@ Phase 18 is closed after P18-M9. The machine composition substrate now has examp
 | `Result(machine)` returning result type | ✅ | Phase 13; Phase 17/18 route before-completion reads through shared `cpt_panic` with stable reason |
 | `MachineName(args)` construction | ✅ | Phase 13 |
 | `noalloc machine` effect checking | ✅ | Phase 13 — `noalloc` effect on machine declaration enforced |
-| `yield` statement in machines | ❌ | Deferred from Phase 13 |
+| `yield` statement in machines | 🔶 | Phase 19 M0 design started; v0 chooses bare `yield;` in machine state bodies only, with implementation deferred to later P19 milestones |
 | Nested machine fields / child frames | ✅ | Phase 18 closed for zero-parameter child machine fields stored by value in parent frames, parent-constructor child initialization, and explicit parent `Step(child)` / `Complete(child)` / `Result(child)` operations |
 | `State(machine) -> int` | ✅ | Phase 18 closed for local and nested child machine numeric state introspection; no `StateName(machine)`, reflection metadata, or state-name runtime surface |
 | Machine lowers to explicit state struct in MIR | ✅ | Phase 13 — state enum and struct visible in MIR |
@@ -579,7 +579,7 @@ multi-module compilation-unit modules v0: harness/driver-supplied multi-file
 source sets, module table, import graph, module-aware HIR, per-module ordinary
 symbol tables, qualified cross-module functions/types, imported repr(C)
 metadata, and multi-source MIR/backend/run in one generated C unit. Remaining
-Stage 1 gaps include `yield` in machines, visibility and package/filesystem
+Stage 1 gaps include implementation of Phase 19 machine `yield;`, visibility and package/filesystem
 module resolution, separate compilation/linker driving, reference/receiver hardening, and broader ABI/layout
 features deliberately deferred beyond Phase 15 (repr(C) enums, nested by-value
 struct layout, packed/custom alignment, bitfields, headers/includes, automatic

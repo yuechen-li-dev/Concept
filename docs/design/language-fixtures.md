@@ -52,6 +52,8 @@ language/phase17-runtime-failure/valid/
 language/phase17-runtime-failure/invalid/
 language/phase18-machines/valid/
 language/phase18-machines/invalid/
+language/phase19-yielding-machines/valid/
+language/phase19-yielding-machines/invalid/
 ```
 
 ## Phase 5 sum-type fixtures
@@ -538,3 +540,7 @@ The backend integration fixture intentionally asserts the absence of hidden
 runtime machinery: no `malloc`, scheduler, async marker, blackboard, mailbox,
 event bus, or DragonGod hook appears in generated C. This pins Phase 18 as a
 pre-DragonGod substrate rather than a DragonGod runtime implementation. The full language fixture corpus now contains 1102 `.conception` files.
+
+## Phase 19 yielding machine fixtures
+
+Phase 19 has started with P19-M0 as a design-only milestone. No fixture corpus is added yet. The planned fixture root is `language/phase19-yielding-machines/`, and the v0 design chooses bare `yield;` as a machine-state-only statement that exits the current `Step`, preserves the current state, leaves the machine incomplete, and does not allocate, schedule, create tasks, write results, or take transitions. `yield return`, yield values, `suspend`/`resume`, async/await, generator protocols, and continuation-preserving yield remain deferred.
