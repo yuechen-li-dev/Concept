@@ -587,3 +587,77 @@ P21-M8 migrates the append/read/count-only DragonGod fixed-slot subsystems onto 
 Subsystem-specific panic strings are preserved by checking `Len(buffer) >= Capacity(buffer)` before appending and by checking the initialized length before indexed reads. This keeps `DragonGod.Trace capacity exceeded`, `DragonGod.Events capacity exceeded`, `DragonGod.Replay capacity exceeded`, `DragonGod.Graph capacity exceeded`, and the existing subsystem index/root lookup strings rather than leaking the lower-level `Concept fixed buffer ...` panic reasons.
 
 M8 deliberately leaves update/pop-heavy systems unchanged. Memory still needs direct element assignment or replace-at plus find/update by key. AutomataStack still needs pop/remove-last and replace-top or mutable indexing. ActuatorHost still needs find/update by id and replace-at for complete/fail status mutation. EventBus and AutomataGraph still expose hand-unrolled scans because M8 does not add iterators, range slicing, or fixed-buffer-to-slice conversion.
+
+## P21-M9 closeout
+
+Phase 21 is closed after P21-M8. P21-M9 is a closeout, documentation, and inventory milestone; it does not add compiler behavior, runtime behavior, language features, FixedBuffer mutation helpers, a formatter, or Phase 22 implementation work.
+
+### Milestone summary
+
+| Milestone | Status | Result |
+| --- | --- | --- |
+| P21-M0 | Closed | Design doc |
+| P21-M1 | Closed | Fixed-size array type syntax |
+| P21-M2 | Closed | Array literals |
+| P21-M3 | Closed | Read indexing and `Len(array)` |
+| P21-M4 | Closed | Mutable array element assignment |
+| P21-M5 | Closed | Array value lowering and C backend wrappers |
+| P21-M6 | Closed | Read-only `Slice<T>` |
+| P21-M7 | Closed | `FixedBuffer<T, N>` v0 |
+| P21-M8 | Closed | DragonGod FixedBuffer migration spike |
+| P21-M9 | Closed | Closeout and formatting inventory |
+
+### Final implemented surface
+
+- Fixed-size array type syntax: `T[N]`.
+- Positive integer literal lengths only.
+- Array literals: `[1, 2, 3, 4]`.
+- Nested arrays and nested array literals.
+- Read indexing for arrays.
+- Mutable fixed-array element assignment.
+- `Len(array)`.
+- Array wrapper value representation in the C backend.
+- Array assignment/copy.
+- Array parameters.
+- Array returns.
+- Array struct fields.
+- Read-only `Slice<T>`.
+- Array-to-slice conversion at function-call boundaries when the parameter is explicitly `Slice<T>`.
+- `Len(slice)`.
+- Read-only slice indexing.
+- `FixedBuffer<T, N>`.
+- `fixedBufferEmpty<T, N>()`.
+- `fixedBufferAppend(buffer&, value)`.
+- Initialized-range fixed-buffer read indexing.
+- `Len(buffer)`.
+- `Capacity(buffer)`.
+- `Capacity(array)`.
+- DragonGod migration spike for `TraceRecorder`, `EventBus`, `ReplayLog`, and `AutomataGraph`.
+
+### Deferred surface
+
+- `MutSlice<T>`.
+- Slice returns and local slice construction.
+- Fixed-buffer element assignment.
+- Fixed-buffer-to-slice conversion.
+- Fixed-buffer replace-at, pop/remove-last, find, and update helpers.
+- Heap vectors and allocator-backed growable containers.
+- Iterators and range ergonomics.
+- Generic containers and collection algorithms.
+- Full DragonGod migration of Memory, AutomataStack, ActuatorHost, and any future update/pop-heavy subsystems.
+
+### FixedBuffer operations still needed
+
+P21-M8 preserves the missing-operation inventory exposed by DragonGod. These are roadmap inputs, not P21-M9 implementation tasks.
+
+| Missing operation | Blocked DragonGod use |
+| --- | --- |
+| `fixedBufferSet(buffer&, index, value)` or indexed assignment support for `FixedBuffer` | `Memory` update-existing slot by key; `ActuatorHost` complete/fail by id; `AutomataStack` top mutation and replace-top paths. |
+| `fixedBufferReplaceAt(buffer&, index, value)` | `Memory` update-existing-key semantics; `ActuatorHost` status/reason replacement; `AutomataStack` replace-top. |
+| `fixedBufferPop(buffer&)` / remove-last | `AutomataStack` pop. |
+| `fixedBufferFindIndex` / find by predicate | `Memory` key lookup/update; `ActuatorHost` id lookup/update; `AutomataGraph` lookup ergonomics. |
+| `fixedBufferUpdateWhere` or equivalent update-by-key/predicate pattern | `Memory` and `ActuatorHost` need in-place mutation without duplicating keys/ids. |
+| Fixed-buffer-to-slice conversion | Shared read-only helper APIs over initialized storage. |
+| Iteration/range ergonomics | `EventBus` and `AutomataGraph` still use hand-unrolled scans even after migration. |
+
+The successful migrations were append/read/count-shaped. The intentionally unchanged systems remain unchanged because appending duplicate records or faking pop/update semantics would be a regression rather than progress.

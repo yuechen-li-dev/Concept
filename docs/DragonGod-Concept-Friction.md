@@ -348,3 +348,17 @@ P21-M8 migrated only fixed-slot subsystems whose behavior maps honestly to the P
 - Blocked because custom subsystem panic strings cannot be preserved: none of the migrated subsystems; M8 added pre-checks before `fixedBufferAppend`/indexing to preserve subsystem-specific panic strings.
 - Blocked because slice/iteration ergonomics are insufficient: EventBus and AutomataGraph still use hand-unrolled scans; this is acceptable for M8 but remains friction.
 - Blocked because element type/backend support is insufficient: no migrated subsystem hit a backend element-type blocker; enum and struct payloads used by Trace, Replay, Events, and Graph compiled in backend fixtures.
+
+### FixedBuffer operations still needed
+
+P21-M8 left the remaining fixed-slot DragonGod systems unchanged because `FixedBuffer<T, N>` v0 intentionally supports only empty construction, append, initialized-range read indexing, `Len`, and `Capacity`. The missing operations are now explicit roadmap inputs:
+
+- `fixedBufferSet(buffer&, index, value)` or indexed assignment support for `FixedBuffer`: blocks `Memory` update-existing slot by key, `AutomataStack` top mutation/replace-top, and `ActuatorHost` complete/fail by id.
+- `fixedBufferReplaceAt(buffer&, index, value)`: blocks clean replacement in `Memory`, `AutomataStack`, and `ActuatorHost` without duplicating records or rewriting fixed-slot branches.
+- `fixedBufferPop(buffer&)` / remove-last: blocks `AutomataStack` pop.
+- `fixedBufferFindIndex` / find by predicate: blocks `Memory` key lookup/update and `ActuatorHost` id lookup/update; would also simplify `AutomataGraph` lookup.
+- `fixedBufferUpdateWhere` or an equivalent update-by-key/predicate pattern: blocks idiomatic update-existing semantics for `Memory` and `ActuatorHost`.
+- Fixed-buffer-to-slice conversion: blocks shared read-only helper APIs over initialized buffer contents.
+- Iteration/range ergonomics: leaves `EventBus` and `AutomataGraph` scans hand-unrolled even after their successful FixedBuffer migration.
+
+These operations should feed the next Concept roadmap, especially Phase 22 Result/Option and collection mutation helpers. They should not be backfilled into Phase 21 retroactively.

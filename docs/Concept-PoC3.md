@@ -3107,3 +3107,19 @@ Stage 0 now supports `FixedBuffer<T, N>` as bounded appendable owned value stora
 P21-M8 migrates the DragonGod fixed-slot systems that fit the current `FixedBuffer<T, N>` v0 contract. `TraceRecorder`, `EventBus`, `ReplayLog`, and `AutomataGraph` now store their event/node streams in `FixedBuffer<..., 4>` while keeping the existing public helper APIs and DragonGod-specific panic strings. Backend fixtures assert the fixed-buffer wrapper shape (`storage` plus `count`), verify that old explicit event/slot/node fields are gone for the migrated types, and continue to forbid heap allocation, scheduler/async artifacts, persistence serializers, logging hooks, and DragonGod compiler hooks.
 
 M8 intentionally does not add new language features. Memory, AutomataStack, and ActuatorHost remain on explicit fixed slots because their motivating behavior requires existing-element update, replace-at, pop/remove-last, mutable indexing, or find/update-by-predicate support. The friction inventory in `docs/DragonGod-Concept-Friction.md` records each migrated and blocked subsystem.
+
+## Phase 21 closeout and post-Phase-21 roadmap
+
+Phase 21 is closed. The completed surface covers fixed-size arrays `T[N]`, positive literal lengths, array literals, nested arrays, read indexing, mutable fixed-array element assignment, `Len(array)`, C backend wrapper value representation, array assignment/copy, array parameters, array returns, array struct fields, read-only `Slice<T>`, array-to-slice call-boundary conversion, `Len(slice)`, read-only slice indexing, `FixedBuffer<T, N>`, `fixedBufferEmpty<T, N>()`, `fixedBufferAppend`, initialized-range fixed-buffer reads, `Len(buffer)`, `Capacity(buffer)`, `Capacity(array)`, and the DragonGod migration spike for Trace, Events, Replay, and Graph.
+
+Deferred after Phase 21: `MutSlice<T>`, local slice construction, slice returns, fixed-buffer element assignment, fixed-buffer-to-slice conversion, fixed-buffer replace/pop/find/update helpers, heap vectors, iterators, generic containers, and full DragonGod migration.
+
+Recommended next Concept phase:
+
+| Phase | Focus | Scope |
+| --- | --- | --- |
+| Phase 22 | Result/Option and collection mutation helpers | Add standard `Option<T>` / `Result<T, E>` surface, try/read/find return ergonomics, fixed-buffer set/replace/pop/clear/find-index helpers, and use remaining DragonGod fixed-slot subsystems as migration targets while still avoiding heap vectors. |
+
+Later roadmap items remain strings/StringView/byte slices, callable values/function pointers, serialization primitives, and dyn storage hardening. DragonGod remains a stress suite: `Memory`, `AutomataStack`, and `ActuatorHost` are the next meaningful container-pressure targets once Phase 22 supplies honest mutation and lookup helpers.
+
+P21-M9 also adds `docs/Concept-Source-Formatting-Inventory.md` as a human-readability inventory for `.concept` and `.conception` files. It is not a formatter implementation and does not add `concept fmt`.
