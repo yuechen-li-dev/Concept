@@ -651,6 +651,7 @@ const Checker = struct {
             .param_ref => |id| self.module.hir.getParam(id).type_id,
             .machine_param_ref => |id| self.module.hir.getMachineParam(id).type_id,
             .machine_field_ref => |id| self.module.hir.getMachineField(id).type_id,
+            .index_access => |index_access| index_access.result_type,
             .group => |inner| try self.checkExpr(current_function_id, return_type, inner),
             .compile_time => |compile_time_expr| blk: {
                 self.compile_time_context_depth += 1;
@@ -1684,6 +1685,12 @@ const Checker = struct {
                 for (literal.elements, 0..) |element, index| elements[index] = try self.cloneExpr(element, subst, param_map, local_map, span);
                 break :blk .{ .array_literal = .{ .type_id = try self.substituteType(literal.type_id, subst, span), .elements = elements } };
             },
+            .index_access => |index_access| .{ .index_access = .{
+                .base = try self.cloneExpr(index_access.base, subst, param_map, local_map, span),
+                .index = try self.cloneExpr(index_access.index, subst, param_map, local_map, span),
+                .result_type = try self.substituteType(index_access.result_type, subst, span),
+                .array_length = index_access.array_length,
+            } },
             .field_access => |field_access| .{ .field_access = .{ .receiver = try self.cloneExpr(field_access.receiver, subst, param_map, local_map, span), .field_name = field_access.field_name, .field_span = field_access.field_span } },
             .target_metadata => |metadata| .{ .target_metadata = metadata },
             .decide => |decide| blk: {

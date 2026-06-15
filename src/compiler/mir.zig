@@ -238,6 +238,12 @@ pub const MirRvalue = union(enum) {
         receiver: MirOperand,
         field_id: hir.FieldId,
     },
+    array_index: struct {
+        base: MirOperand,
+        index: MirOperand,
+        length: u64,
+        result_type: types.TypeId,
+    },
     machine_construct: struct {
         machine: hir.MachineId,
         args: []MirOperand,
@@ -337,6 +343,10 @@ pub const MirRvalue = union(enum) {
         return .{ .field_access = .{ .receiver = receiver, .field_id = field_id } };
     }
 
+    pub fn arrayIndex(base: MirOperand, index: MirOperand, length: u64, result_type: types.TypeId) MirRvalue {
+        return .{ .array_index = .{ .base = base, .index = index, .length = length, .result_type = result_type } };
+    }
+
     fn clone(self: MirRvalue, allocator: std.mem.Allocator) !MirRvalue {
         return switch (self) {
             .use => |operand| MirRvalue.use_(try operand.clone(allocator)),
@@ -360,6 +370,7 @@ pub const MirRvalue = union(enum) {
             .enum_tag => |operand| MirRvalue.enumTag(try operand.clone(allocator)),
             .enum_payload_field => |payload| MirRvalue.enumPayloadField(try payload.enum_operand.clone(allocator), payload.payload_field),
             .field_access => |field_access| MirRvalue.fieldAccess(try field_access.receiver.clone(allocator), field_access.field_id),
+            .array_index => |array_index| MirRvalue.arrayIndex(try array_index.base.clone(allocator), try array_index.index.clone(allocator), array_index.length, array_index.result_type),
             .machine_construct => |construct| .{ .machine_construct = .{ .machine = construct.machine, .args = try cloneOperands(allocator, construct.args) } },
             .machine_complete => |operand| .{ .machine_complete = try operand.clone(allocator) },
             .machine_result => |operand| .{ .machine_result = try operand.clone(allocator) },
@@ -402,6 +413,10 @@ pub const MirRvalue = union(enum) {
             .enum_tag => |operand| operand.deinit(allocator),
             .enum_payload_field => |payload| payload.enum_operand.deinit(allocator),
             .field_access => |field_access| field_access.receiver.deinit(allocator),
+            .array_index => |array_index| {
+                array_index.base.deinit(allocator);
+                array_index.index.deinit(allocator);
+            },
             .machine_construct => |construct| {
                 deinitOperands(allocator, construct.args);
                 if (construct.args.len > 0) allocator.free(construct.args);
@@ -990,6 +1005,13 @@ fn writeRvalueDebug(writer: *std.Io.Writer, rvalue: MirRvalue) !void {
         .move => |place| {
             try writer.writeAll("Move(");
             try writePlaceDebug(writer, place);
+            try writer.writeByte(')');
+        },
+        .array_index => |array_index| {
+            try writer.writeAll("ArrayIndex(");
+            try writeOperandDebug(writer, array_index.base);
+            try writer.writeAll(", ");
+            try writeOperandDebug(writer, array_index.index);
             try writer.writeByte(')');
         },
         .manual_init_assume => |operand| {

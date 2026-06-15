@@ -431,6 +431,7 @@ pub const Expr = union(enum) {
     enum_constructor: EnumConstructorExpr,
     struct_literal: StructLiteralExpr,
     array_literal: ArrayLiteralExpr,
+    index_access: IndexAccessExpr,
     field_access: FieldAccessExpr,
     decide: DecideExpr,
 
@@ -461,6 +462,7 @@ pub const Expr = union(enum) {
     pub const StructLiteralExpr = struct { type_name: NameSegment, fields: []StructLiteralField, span: SourceSpan };
     pub const StructLiteralField = struct { name: NameSegment, value: *Expr, span: SourceSpan };
     pub const ArrayLiteralExpr = struct { elements: []*Expr, span: SourceSpan };
+    pub const IndexAccessExpr = struct { base: *Expr, index: *Expr, span: SourceSpan };
     pub const FieldAccessExpr = struct { receiver: *Expr, field_name: NameSegment, span: SourceSpan };
     pub const DecideExpr = struct { type_name: TypeName, arms: []DecideArm, span: SourceSpan };
     pub const DecideArm = struct {
@@ -498,6 +500,7 @@ pub const Expr = union(enum) {
             .enum_constructor => |expr| expr.span,
             .struct_literal => |expr| expr.span,
             .array_literal => |expr| expr.span,
+            .index_access => |expr| expr.span,
             .field_access => |expr| expr.span,
             .decide => |expr| expr.span,
         };
@@ -563,6 +566,12 @@ pub const Expr = union(enum) {
                     allocator.destroy(element);
                 }
                 allocator.free(expr.elements);
+            },
+            .index_access => |expr| {
+                expr.base.deinit(allocator);
+                allocator.destroy(expr.base);
+                expr.index.deinit(allocator);
+                allocator.destroy(expr.index);
             },
             .field_access => |expr| {
                 expr.receiver.deinit(allocator);

@@ -293,6 +293,11 @@ const Validator = struct {
         return switch (rvalue) {
             .use => |operand| try self.operandType(function_id, operand, span),
             .move => |place| try self.placeType(function_id, place, span),
+            .array_index => |array_index| blk: {
+                _ = try self.operandType(function_id, array_index.base, span);
+                _ = try self.operandType(function_id, array_index.index, span);
+                break :blk array_index.result_type;
+            },
             .manual_init_assume => |operand| blk: {
                 const operand_type = try self.operandType(function_id, operand, span);
                 if (operand_type == null) break :blk null;

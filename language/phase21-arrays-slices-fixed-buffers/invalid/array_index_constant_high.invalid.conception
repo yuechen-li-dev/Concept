@@ -1,0 +1,7 @@
+module Main;
+
+int main() {
+    int[2] x = [1, 2];
+    return x[2];
+}
+// expected: CON0414

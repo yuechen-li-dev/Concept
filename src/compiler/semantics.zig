@@ -2519,6 +2519,23 @@ const BodyLowerer = struct {
                 defer if (!owned_args_transferred and owned.len > 0) self.collector.allocator.free(owned);
                 @memcpy(owned, args.items);
 
+                if (std.mem.eql(u8, call.callee.text, "Len")) {
+                    if (call.type_args.len != 0 or owned.len != 1) {
+                        try self.collector.diagnostics.append(diagnostics.Diagnostic.init(.InvalidCall, .@"error", "Len expects exactly one array argument", call.span));
+                        return null;
+                    }
+                    const arg_type = (try self.inferExprType(owned[0])) orelse return null;
+                    const array = switch (self.collector.module.types.kind(arg_type)) {
+                        .array => |array| array,
+                        else => {
+                            try self.collector.diagnostics.append(diagnostics.arrayIndexRequiresArrayOrSlice(call.args[0].span()));
+                            return null;
+                        },
+                    };
+                    const text = try std.fmt.allocPrint(self.collector.allocator, "{d}", .{array.length});
+                    return try self.collector.module.hir.addExpr(.{ .int_literal = text }, call.span);
+                }
+
                 if (std.mem.eql(u8, call.callee.text, "manualAssumeInit")) {
                     if (call.type_args.len != 0) {
                         try self.collector.diagnostics.append(diagnostics.manualInitInvalidOperation(call.span));
@@ -2722,6 +2739,30 @@ const BodyLowerer = struct {
                 const operand = (try self.lowerExpr(compile_time_expr.operand.*)) orelse return null;
                 return try self.collector.module.hir.addExpr(.{ .compile_time = .{ .operand = operand, .span = compile_time_expr.span } }, compile_time_expr.span);
             },
+            .index_access => |index_access| {
+                const base = (try self.lowerExpr(index_access.base.*)) orelse return null;
+                const index = (try self.lowerExpr(index_access.index.*)) orelse return null;
+                const base_type = (try self.inferExprType(base)) orelse return null;
+                const array = switch (self.collector.module.types.kind(base_type)) {
+                    .array => |array| array,
+                    else => {
+                        try self.collector.diagnostics.append(diagnostics.arrayIndexRequiresArrayOrSlice(index_access.base.span()));
+                        return null;
+                    },
+                };
+                const index_type = (try self.inferExprType(index)) orelse return null;
+                if (!sameType(index_type, self.collector.module.types.intType())) {
+                    try self.collector.diagnostics.append(diagnostics.arrayIndexMustBeInteger(index_access.index.span()));
+                    return null;
+                }
+                if (self.constantInt(index)) |value| {
+                    if (value < 0 or value >= array.length) {
+                        try self.collector.diagnostics.append(diagnostics.arrayIndexOutOfBounds(index_access.index.span(), value, array.length));
+                        return null;
+                    }
+                }
+                return try self.collector.module.hir.addExpr(.{ .index_access = .{ .base = base, .index = index, .result_type = array.element, .array_length = array.length } }, index_access.span);
+            },
             .field_access => |field_access| {
                 if (self.isUnboundTargetRoot(field_access.receiver.*)) {
                     const query = compile_time_target.lookupTargetQuery(field_access.field_name.text) orelse {
@@ -2770,6 +2811,18 @@ const BodyLowerer = struct {
                 return try self.collector.module.hir.addExpr(.{ .binary = .{ .op = lowerBinaryOp(binary.op), .left = left, .right = right } }, binary.span);
             },
         }
+    }
+
+    fn constantInt(self: *BodyLowerer, expr_id: hir.ExprId) ?i128 {
+        const expr = self.collector.module.hir.getExpr(expr_id).*;
+        return switch (expr.kind) {
+            .int_literal => |text| std.fmt.parseInt(i128, text, 10) catch null,
+            .unary => |unary| switch (unary.op) {
+                .negate => if (self.constantInt(unary.operand)) |v| -v else null,
+                else => null,
+            },
+            else => null,
+        };
     }
 
     fn lowerArrayLiteral(self: *BodyLowerer, literal: ast.Expr.ArrayLiteralExpr, target_type: ?types.TypeId) anyerror!?hir.ExprId {
@@ -3141,6 +3194,7 @@ const BodyLowerer = struct {
                 break :blk self.collector.module.hir.getMachine(machine_id).return_type;
             },
             .arena_alloc => |arena_alloc| arena_alloc.result_type,
+            .index_access => |index_access| index_access.result_type,
             .field_access => |field_access| blk: {
                 const receiver_type = (try self.inferExprType(field_access.receiver)) orelse return null;
                 const receiver_kind = self.collector.module.types.kind(receiver_type);

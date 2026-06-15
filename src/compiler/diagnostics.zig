@@ -50,6 +50,10 @@ pub const DiagnosticCode = enum {
     ArrayLiteralLengthMismatch,
     ArrayLiteralElementTypeMismatch,
     EmptyArrayLiteralUnsupported,
+    ArrayIndexRequiresArrayOrSlice,
+    ArrayIndexMustBeInteger,
+    ArrayIndexOutOfBounds,
+    ArrayIndexTargetNotAssignable,
     DuplicateParameterName,
     UnknownIdentifier,
     UnknownFunction,
@@ -286,6 +290,10 @@ pub const DiagnosticCode = enum {
             .ArrayLiteralLengthMismatch => "CON0400",
             .ArrayLiteralElementTypeMismatch => "CON0401",
             .EmptyArrayLiteralUnsupported => "CON0412",
+            .ArrayIndexRequiresArrayOrSlice => "CON0406",
+            .ArrayIndexMustBeInteger => "CON0407",
+            .ArrayIndexOutOfBounds => "CON0414",
+            .ArrayIndexTargetNotAssignable => "CON0404",
             .DuplicateParameterName => "CON0025",
             .UnknownIdentifier => "CON0026",
             .UnknownFunction => "CON0027",
@@ -1134,6 +1142,24 @@ pub fn emptyArrayLiteralUnsupported(span: SourceSpan) Diagnostic {
         "empty array literals are not supported yet",
         span,
     ).withHelp("Phase 21 M2 rejects [] because zero-length arrays are still unsupported");
+}
+
+pub fn arrayIndexRequiresArrayOrSlice(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.ArrayIndexRequiresArrayOrSlice, .@"error", "array index receiver must be a fixed array", span);
+}
+
+pub fn arrayIndexMustBeInteger(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.ArrayIndexMustBeInteger, .@"error", "array index must be an integer", span);
+}
+
+pub fn arrayIndexOutOfBounds(span: SourceSpan, index: i128, length: u64) Diagnostic {
+    _ = index;
+    _ = length;
+    return Diagnostic.init(.ArrayIndexOutOfBounds, .@"error", "array index is out of bounds", span);
+}
+
+pub fn arrayIndexTargetNotAssignable(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.ArrayIndexTargetNotAssignable, .@"error", "array index assignment is deferred beyond Phase 21 M3", span);
 }
 
 pub fn duplicateStructField(span: SourceSpan) Diagnostic {
