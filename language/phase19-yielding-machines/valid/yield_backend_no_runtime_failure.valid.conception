@@ -1,0 +1,41 @@
+# name: yield backend no runtime failure
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Waiter {
+    state Waiting {
+        yield;
+    }
+}
+
+int main() {
+    Waiter w = Waiter();
+    Step(w);
+    return 0;
+}
+
+=== c ===
+contains: case cpt_m_Waiter_s_Waiting:
+contains: return;
+not_contains: cpt_panic
+not_contains: machine result cannot be read before completion
+not_contains: yield cannot
+not_contains: yield panic
+not_contains: yield_helper
+not_contains: m->state = cpt_m_Waiter_s_Waiting;
+not_contains: m->complete = 1;
+not_contains: m->result =
+not_contains: malloc
+not_contains: scheduler
+not_contains: async
+not_contains: blackboard
+not_contains: mailbox
+not_contains: event_bus
+not_contains: DragonGod
+not_contains: suspend
+not_contains: resume
+not_contains: __builtin_trap
+not_contains: abort(

@@ -3813,4 +3813,6 @@ test "language run fixtures: phase19 yield runtime lowering" {
 test "language backend-c fixture: phase19 yield lowers to step return" {
     try expectBackendCFixture("../../../language/phase19-yielding-machines/valid/yield_backend_step_return.valid.conception");
     try expectBackendCFixture("../../../language/phase19-yielding-machines/valid/yield_backend_transition_decide.valid.conception");
+    try expectBackendCFixture("../../../language/phase19-yielding-machines/valid/yield_backend_no_runtime_failure.valid.conception");
+    try expectBackendCFixture("../../../language/phase19-yielding-machines/valid/yield_result_after_yield_panic_reason_backend.valid.conception");
 }

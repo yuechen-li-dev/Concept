@@ -1,0 +1,40 @@
+# name: yield result after yield panic reason backend
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Waiter -> int {
+    state Waiting {
+        yield;
+    }
+}
+
+int main() {
+    Waiter w = Waiter();
+    Step(w);
+    return Result(w);
+}
+
+=== c ===
+count: static void cpt_panic(const char* reason) | 1
+contains: case cpt_m_Waiter_s_Waiting:
+contains: return;
+contains: cpt_panic("machine result cannot be read before completion")
+contains: exit(101);
+not_contains: yield cannot
+not_contains: yield panic
+not_contains: yield result
+not_contains: yield_helper
+not_contains: machine_result_trap
+not_contains: __builtin_trap
+not_contains: abort(
+not_contains: scheduler
+not_contains: async
+not_contains: blackboard
+not_contains: mailbox
+not_contains: event_bus
+not_contains: DragonGod
+not_contains: suspend
+not_contains: resume
