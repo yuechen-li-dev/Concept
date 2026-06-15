@@ -480,6 +480,13 @@ const Validator = struct {
                 }
                 break :blk self.semantic_module.types.boolType();
             },
+            .machine_state => |operand| blk: {
+                const operand_type = try self.operandType(function_id, operand, span);
+                if (operand_type == null or self.semantic_module.types.kind(operand_type.?) != .machine_type) {
+                    try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                }
+                break :blk self.semantic_module.types.intType();
+            },
             .machine_result => |operand| blk: {
                 const operand_type = try self.operandType(function_id, operand, span);
                 if (operand_type == null) break :blk null;

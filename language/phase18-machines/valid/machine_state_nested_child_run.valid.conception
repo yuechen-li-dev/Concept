@@ -1,0 +1,22 @@
+# name: machine state nested child run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Child { state Start { transition Done; } state Done { return 3; } }
+
+machine Parent {
+    Child child;
+    state Start { return State(child); }
+}
+
+int main() {
+    Parent p = Parent();
+    Step(p);
+    return Result(p);
+}
+
+=== run ===
+exit_code: 0

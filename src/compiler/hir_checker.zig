@@ -801,6 +801,14 @@ const Checker = struct {
                 }
                 break :blk self.module.types.boolType();
             },
+            .machine_state => |machine_expr| blk: {
+                const machine_type = try self.checkExpr(current_function_id, return_type, machine_expr);
+                if (self.module.types.kind(machine_type) != .machine_type) {
+                    try self.reportAt(.InvalidCall, "State expects a machine argument", expr.span);
+                    return error.InvalidSemanticModule;
+                }
+                break :blk self.module.types.intType();
+            },
             .machine_result => |machine_expr| blk: {
                 const machine_type = try self.checkExpr(current_function_id, return_type, machine_expr);
                 const machine_id = switch (self.module.types.kind(machine_type)) {
@@ -1597,7 +1605,7 @@ const Checker = struct {
             .local_ref => |id| .{ .local_ref = local_map.get(id).? },
             .param_ref => |id| .{ .param_ref = param_map.get(id).? },
             .machine_param_ref, .machine_field_ref => return error.InvalidSemanticModule,
-            .machine_construct, .machine_step, .machine_complete, .machine_result => return error.InvalidSemanticModule,
+            .machine_construct, .machine_step, .machine_complete, .machine_result, .machine_state => return error.InvalidSemanticModule,
             .call => |call| blk: {
                 var args = try self.allocator.alloc(hir.ExprId, call.args.len);
                 errdefer self.allocator.free(args);

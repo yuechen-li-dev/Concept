@@ -744,7 +744,7 @@ fn mirContainsArenaAlloc(ctx: *const BackendContext) bool {
 fn rvalueContainsArenaAlloc(rvalue: mir.MirRvalue) bool {
     return switch (rvalue) {
         .arena_alloc => true,
-        .machine_construct, .machine_complete, .machine_result => false,
+        .machine_construct, .machine_complete, .machine_result, .machine_state => false,
         else => false,
     };
 }
@@ -1283,6 +1283,10 @@ fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue
             try writer.writeAll(".complete ? ");
             try emitOperand(writer, ctx, operand);
             try writer.writeAll(".result : (cpt_panic(\"machine result cannot be read before completion\"), 0))");
+        },
+        .machine_state => |operand| {
+            try emitOperand(writer, ctx, operand);
+            try writer.writeAll(".state");
         },
         .enum_constructor, .struct_constructor => unreachable,
         .enum_tag => |operand| {

@@ -2507,7 +2507,8 @@ const BodyLowerer = struct {
 
                 if (std.mem.eql(u8, call.callee.text, "Step") or
                     std.mem.eql(u8, call.callee.text, "Complete") or
-                    std.mem.eql(u8, call.callee.text, "Result"))
+                    std.mem.eql(u8, call.callee.text, "Result") or
+                    std.mem.eql(u8, call.callee.text, "State"))
                 {
                     if (call.type_args.len != 0 or owned.len != 1) {
                         try self.collector.diagnostics.append(diagnostics.Diagnostic.init(.InvalidCall, .@"error", "machine builtin expects exactly one machine argument", call.span));
@@ -2519,6 +2520,8 @@ const BodyLowerer = struct {
                             .CompleteRequiresMachineValue
                         else if (std.mem.eql(u8, call.callee.text, "Result"))
                             .ResultRequiresMachineValue
+                        else if (std.mem.eql(u8, call.callee.text, "State"))
+                            .StateRequiresMachineValue
                         else
                             .StepRequiresMachinePlace;
                         try self.collector.diagnostics.append(diagnostics.Diagnostic.init(code, .@"error", "machine builtin expects a machine argument", call.span));
@@ -2534,7 +2537,10 @@ const BodyLowerer = struct {
                     if (std.mem.eql(u8, call.callee.text, "Complete")) {
                         return try self.collector.module.hir.addExpr(.{ .machine_complete = owned[0] }, call.span);
                     }
-                    return try self.collector.module.hir.addExpr(.{ .machine_result = owned[0] }, call.span);
+                    if (std.mem.eql(u8, call.callee.text, "Result")) {
+                        return try self.collector.module.hir.addExpr(.{ .machine_result = owned[0] }, call.span);
+                    }
+                    return try self.collector.module.hir.addExpr(.{ .machine_state = owned[0] }, call.span);
                 }
 
                 if (self.collector.top_level_decls.get(symbol)) |decl| {
@@ -3051,6 +3057,7 @@ const BodyLowerer = struct {
             .machine_field_ref => |field_id| self.collector.module.hir.getMachineField(field_id).type_id,
             .machine_step => self.collector.module.types.voidType(),
             .machine_complete => self.collector.module.types.boolType(),
+            .machine_state => self.collector.module.types.intType(),
             .machine_result => |machine_expr| blk: {
                 const machine_type = (try self.inferExprType(machine_expr)) orelse return null;
                 const machine_id = switch (self.collector.module.types.kind(machine_type)) {

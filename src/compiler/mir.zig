@@ -243,6 +243,7 @@ pub const MirRvalue = union(enum) {
     },
     machine_complete: MirOperand,
     machine_result: MirOperand,
+    machine_state: MirOperand,
 
     pub fn use_(operand: MirOperand) MirRvalue {
         return .{ .use = operand };
@@ -356,6 +357,7 @@ pub const MirRvalue = union(enum) {
             .machine_construct => |construct| .{ .machine_construct = .{ .machine = construct.machine, .args = try cloneOperands(allocator, construct.args) } },
             .machine_complete => |operand| .{ .machine_complete = try operand.clone(allocator) },
             .machine_result => |operand| .{ .machine_result = try operand.clone(allocator) },
+            .machine_state => |operand| .{ .machine_state = try operand.clone(allocator) },
         };
     }
 
@@ -396,6 +398,7 @@ pub const MirRvalue = union(enum) {
             },
             .machine_complete => |operand| operand.deinit(allocator),
             .machine_result => |operand| operand.deinit(allocator),
+            .machine_state => |operand| operand.deinit(allocator),
         }
     }
 };
@@ -1070,6 +1073,11 @@ fn writeRvalueDebug(writer: *std.Io.Writer, rvalue: MirRvalue) !void {
         },
         .machine_result => |operand| {
             try writer.writeAll("MachineResult(");
+            try writeOperandDebug(writer, operand);
+            try writer.writeByte(')');
+        },
+        .machine_state => |operand| {
+            try writer.writeAll("MachineState(");
             try writeOperandDebug(writer, operand);
             try writer.writeByte(')');
         },

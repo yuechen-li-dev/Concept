@@ -469,6 +469,7 @@ pub const HirExprKind = union(enum) {
     machine_step: ExprId,
     machine_complete: ExprId,
     machine_result: ExprId,
+    machine_state: ExprId,
     test_intrinsic: HirTestIntrinsic,
     group: ExprId,
     unary: struct { op: UnaryOp, operand: ExprId },
@@ -1975,6 +1976,10 @@ pub const HirStore = struct {
             },
             .machine_result => |machine_expr| {
                 try writer.writeAll("MachineResult\n");
+                try self.writeExprDebug(writer, machine_expr, depth + 1);
+            },
+            .machine_state => |machine_expr| {
+                try writer.writeAll("MachineState\n");
                 try self.writeExprDebug(writer, machine_expr, depth + 1);
             },
             .test_intrinsic => |test_intrinsic| {

@@ -1,0 +1,29 @@
+# name: machine state backend
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Child { state Start { transition Done; } state Done { return 4; } }
+
+machine Parent {
+    Child child;
+    state Start { return State(child); }
+}
+
+int main() {
+    Parent p = Parent();
+    int a = State(p);
+    Step(p);
+    return a + Result(p);
+}
+
+=== c ===
+contains: cpt_l_p_0.state
+contains: m->cpt_mf_child_0.state
+not_contains: cpt_panic("machine result cannot be read before completion"), 0)).state
+not_contains: malloc
+not_contains: scheduler
+not_contains: async
+not_contains: blackboard
