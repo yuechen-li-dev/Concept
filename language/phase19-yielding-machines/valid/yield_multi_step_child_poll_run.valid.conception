@@ -1,0 +1,42 @@
+# name: yield multi step child poll run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Child -> int {
+    state Start { transition Middle; }
+    state Middle { transition Done; }
+    state Done { return 5; }
+}
+
+machine Parent -> int {
+    Child child;
+
+    state Waiting {
+        Step(child);
+
+        if (!Complete(child)) {
+            yield;
+        }
+
+        return Result(child);
+    }
+}
+
+int main() {
+    Parent p = Parent();
+
+    Step(p);
+    if (Complete(p)) { return 99; }
+
+    Step(p);
+    if (Complete(p)) { return 98; }
+
+    Step(p);
+    return Result(p);
+}
+
+=== run ===
+exit_code: 5

@@ -474,9 +474,7 @@ P19-M0  Design doc: yielding machines and explicit suspension
 P19-M1  yield statement syntax / AST / HIR scaffold (implemented: lexer keyword, parser statement, AST/HIR statement nodes, source spans, debug/deinit paths, machine-state semantic guard, and six fixtures)
 P19-M2  yield validation: machine-state-only, statement-only, no value (implemented: stable CON0301/CON0302/CON0303 diagnostics and ten fixtures)
 P19-M3  backend lowering: yield exits Step without state/completion mutation (implemented)
-P19-M4  yield + Complete / Result / State behavior fixtures
-P19-M5  yield + nested child machine ticking fixtures
-P19-M6  yield + transition match / decide interaction fixtures
+P19-M4-M6  combined fixture sweep for yield + Complete / Result / State, nested child ticking, transition match, transition decide, polling patterns, and backend hidden-runtime assertions (implemented together)
 P19-M7  diagnostics and runtime-failure hardening
 P19-M8  examples/fixtures: wait-until, polling, long-running behavior
 P19-M9  closeout
@@ -502,3 +500,11 @@ P19-M3 is implemented for the state-level `yield;` contract. In generated machin
 A yielded machine therefore remains in the same numeric state and remains incomplete. `Result(machine)` after a yield continues to use the existing result-before-completion panic path, while `Complete(machine)` and `State(machine)` observe the unchanged frame. The next `Step(machine)` re-enters the same state body from the beginning; P19-M3 proves this with an explicit child-machine ticking pattern rather than continuation locals. Unreachable-code diagnostics after unconditional yield are deferred; generated C may contain unreachable statements after a branch-local `return;` where the existing statement emitter does not perform broad control-flow analysis.
 
 The Phase 19 fixture set now has sixteen fixtures under `language/phase19-yielding-machines/`: the ten P19-M2 validation fixtures plus five runtime fixtures for incomplete-after-yield, state preservation, re-entry from the beginning, `if`-branch yield behavior, and `Result`-after-yield panic, plus one backend C fixture pinning direct `return;` lowering and absence of state/completion/result/panic/allocation/scheduler markers. Continuation-preserving yield, lifted locals, sub-state program counters, `yield return`, yield values, `suspend`, `resume`, async/generator protocol, scheduler integration, and DragonGod hooks remain deferred.
+
+## P19-M4-M6 status: yield behavior and interaction fixture sweep
+
+P19-M4, P19-M5, and P19-M6 were completed together as a fixture sweep rather than as separate semantic milestones. The sweep adds no new language semantics: bare machine-state `yield;` still lowers to immediate `Step` return, preserves the current state, leaves completion false until a later non-yielding path completes, writes no result on the yield path, and introduces no scheduler, async, generator, event, blackboard, mailbox, heap-owned-machine, dynamic-child, or DragonGod runtime hook.
+
+The Phase 19 fixture set now has twenty-one fixtures under `language/phase19-yielding-machines/`: ten validation fixtures, nine runtime fixtures, and two backend C fixtures. Runtime coverage now explicitly covers `yield + Complete`, `yield + Result`, `yield + State`, branch-local yield completion differences, parent/child polling where a parent yields while a nested child advances across external `Step` calls, `State(child)` after a parent yield, multi-step wait-until patterns, `yield + transition match`, and `yield + transition decide`. Backend coverage pins direct `return;` lowering, transition code reachable only on non-yield paths, and absence of hidden runtime markers such as allocation, scheduler, async, event bus, mailbox, blackboard, and DragonGod hooks.
+
+Remaining Phase 19 work is diagnostics/runtime hardening, examples, and closeout.

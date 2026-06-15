@@ -1,0 +1,47 @@
+# name: yield child state readable run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Child -> int {
+    state Start { transition Done; }
+    state Done { return 7; }
+}
+
+machine Parent -> int {
+    Child child;
+
+    state Waiting {
+        Step(child);
+
+        if (!Complete(child)) {
+            yield;
+        }
+
+        return Result(child);
+    }
+}
+
+int main() {
+    Parent p = Parent();
+    int child_before = State(p.child);
+
+    Step(p);
+    int child_after_parent_yield = State(p.child);
+
+    if (Complete(p)) {
+        return 99;
+    }
+
+    if (child_before == child_after_parent_yield) {
+        return 98;
+    }
+
+    Step(p);
+    return Result(p);
+}
+
+=== run ===
+exit_code: 7
