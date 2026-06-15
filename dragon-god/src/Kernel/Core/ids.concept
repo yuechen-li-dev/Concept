@@ -1,0 +1,17 @@
+module DragonGod.Kernel.Core;
+
+struct AgentId {
+    int value;
+};
+
+struct StateId {
+    int value;
+};
+
+struct ActuationId {
+    int value;
+};
+
+struct DecisionSlotId {
+    int value;
+};

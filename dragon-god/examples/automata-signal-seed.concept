@@ -1,0 +1,17 @@
+module DragonGod.Examples.AutomataSignalSeed;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Automata;
+
+int main() {
+    DragonGod.Kernel.Core.Reason reason = DragonGod.Kernel.Core.Reason { code: 42 };
+    DragonGod.Kernel.Automata.AutomataSignal signal = DragonGod.Kernel.Automata.AutomataSignal::Succeed(reason);
+    match (signal) {
+        DragonGod.Kernel.Automata.AutomataSignal::Succeed(value) => return value.code;
+        DragonGod.Kernel.Automata.AutomataSignal::None => return 0;
+        DragonGod.Kernel.Automata.AutomataSignal::Goto(target, value) => return target.value + value.code;
+        DragonGod.Kernel.Automata.AutomataSignal::Fail(value) => return value.code;
+        DragonGod.Kernel.Automata.AutomataSignal::Act(id) => return id.value;
+        DragonGod.Kernel.Automata.AutomataSignal::AwaitActuation(id) => return id.value;
+    }
+}

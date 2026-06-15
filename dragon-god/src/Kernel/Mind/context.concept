@@ -1,0 +1,15 @@
+module DragonGod.Kernel.Mind;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Memory;
+
+struct Agent {
+    DragonGod.Kernel.Core.AgentId id;
+    DragonGod.Kernel.Memory.Memory memory;
+    Mind mind;
+};
+
+struct World {
+    DragonGod.Kernel.Core.Clock clock;
+    DragonGod.Kernel.Memory.Memory memory;
+};

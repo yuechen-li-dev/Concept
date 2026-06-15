@@ -1,0 +1,7 @@
+module DragonGod.Kernel.Automata;
+
+import DragonGod.Kernel.Core;
+
+struct AutomataState {
+    DragonGod.Kernel.Core.StateId id;
+};

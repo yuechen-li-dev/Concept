@@ -1,0 +1,10 @@
+module DragonGod.Examples.KernelCoreSeed;
+
+import DragonGod.Kernel.Core;
+
+int main() {
+    DragonGod.Kernel.Core.AgentId agent = DragonGod.Kernel.Core.AgentId { value: 7 };
+    DragonGod.Kernel.Core.Clock clock = DragonGod.Kernel.Core.Clock { tick: 20 };
+    DragonGod.Kernel.Core.Reason reason = DragonGod.Kernel.Core.Reason { code: 15 };
+    return agent.value + clock.tick + reason.code;
+}

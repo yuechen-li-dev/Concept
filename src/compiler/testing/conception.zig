@@ -3816,3 +3816,11 @@ test "language backend-c fixture: phase19 yield lowers to step return" {
     try expectBackendCFixture("../../../language/phase19-yielding-machines/valid/yield_backend_no_runtime_failure.valid.conception");
     try expectBackendCFixture("../../../language/phase19-yielding-machines/valid/yield_result_after_yield_panic_reason_backend.valid.conception");
 }
+
+test "language run fixtures: phase20 DragonGod Kernel core seed" {
+    try expectRunFixture("../../../language/phase20-dragongod-kernel/valid/kernel_core_ids.valid.conception");
+    try expectRunFixture("../../../language/phase20-dragongod-kernel/valid/kernel_automata_signal.valid.conception");
+    try expectRunFixture("../../../language/phase20-dragongod-kernel/valid/kernel_memory_shell.valid.conception");
+    try expectRunFixture("../../../language/phase20-dragongod-kernel/valid/kernel_mind_agent_world.valid.conception");
+    try expectRunFixture("../../../language/phase20-dragongod-kernel/valid/kernel_cross_module_imports.valid.conception");
+}

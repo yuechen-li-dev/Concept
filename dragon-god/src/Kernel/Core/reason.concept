@@ -1,0 +1,7 @@
+module DragonGod.Kernel.Core;
+
+// DG1 placeholder: Reason is integer-backed until Concept string/StringView
+// support is stable enough for a kernel-facing reason surface.
+struct Reason {
+    int code;
+};

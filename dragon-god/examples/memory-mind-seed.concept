@@ -1,0 +1,13 @@
+module DragonGod.Examples.MemoryMindSeed;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Memory;
+import DragonGod.Kernel.Mind;
+
+int main() {
+    DragonGod.Kernel.Memory.Memory memory = DragonGod.Kernel.Memory.Memory { revision: 3 };
+    DragonGod.Kernel.Mind.Mind mind = DragonGod.Kernel.Mind.Mind { active: 1 };
+    DragonGod.Kernel.Core.AgentId id = DragonGod.Kernel.Core.AgentId { value: 5 };
+    DragonGod.Kernel.Mind.Agent agent = DragonGod.Kernel.Mind.Agent { id: id, memory: memory, mind: mind };
+    return agent.id.value + agent.memory.revision + agent.mind.active;
+}

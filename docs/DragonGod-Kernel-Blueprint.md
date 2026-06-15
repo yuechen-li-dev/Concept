@@ -2,7 +2,7 @@
 
 ## Concept-native behavioral kernel design
 
-**Status:** conceptual blueprint
+**Status:** DG0 blueprint complete; DG1 kernel core seed complete
 **Target:** Concept Stage 1+
 **Root module:** `DragonGod.Kernel`
 **Derived from:** Dominatus doctrine and production architecture
@@ -1621,3 +1621,12 @@ DragonGod is not compiler magic.
 
 DragonGod is explicit behavioral architecture in Concept.
 ```
+
+
+---
+
+## DG1 implementation seed status
+
+Phase 20 / DG1 creates the first `dragon-god/` source tree and seeds the `DragonGod.Kernel` root with Core, Automata, Memory, and Mind module/type skeletons. Public names are pinned to Automata, Mind, Memory, and AutomataSignal; historical names such as HFSM, Brain, Blackboard, AiStep, and NodeRunner are not part of the public DragonGod.Kernel source surface.
+
+DG1 is intentionally not the full kernel. It does not implement Memory storage, changed-key tracking, TTL, Mind ticking, Automata stacks, dynamic graphs, MachineOps erasure, actuation, events, trace, replay, persistence, parallel staged ticks, a scheduler, async behavior, blackboard/mailbox/event keywords, or DragonGod compiler hooks. The DG1 Concept friction log starts in `docs/DragonGod-Concept-Friction.md`.

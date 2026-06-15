@@ -1,0 +1,46 @@
+# name: phase20 DragonGod mind agent world
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+struct AgentId {
+    int value;
+};
+
+struct Clock {
+    int tick;
+};
+
+struct Memory {
+    int revision;
+};
+
+struct Mind {
+    int active;
+};
+
+struct Agent {
+    AgentId id;
+    Memory memory;
+    Mind mind;
+};
+
+struct World {
+    Clock clock;
+    Memory memory;
+};
+
+int main() {
+    AgentId id = AgentId { value: 5 };
+    Memory memory = Memory { revision: 7 };
+    Mind mind = Mind { active: 10 };
+    Agent agent = Agent { id: id, memory: memory, mind: mind };
+    Clock clock = Clock { tick: 20 };
+    World world = World { clock: clock, memory: memory };
+    return agent.id.value + agent.memory.revision + agent.mind.active + world.clock.tick;
+}
+
+=== run ===
+exit_code: 42

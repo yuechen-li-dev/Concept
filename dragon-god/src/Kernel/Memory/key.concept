@@ -1,0 +1,6 @@
+module DragonGod.Kernel.Memory;
+
+// Temporary non-generic key shell for DG1. Generic MemoryKey<T> is deferred.
+struct MemoryKeyInt {
+    int id;
+};

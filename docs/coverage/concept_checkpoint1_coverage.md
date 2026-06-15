@@ -1,14 +1,36 @@
 # Concept — Checkpoint 1 Coverage Matrix
-## Phase 19 M9 closeout vs PoC3 Constitution
+## Phase 20 DG1 DragonGod Kernel core seed vs PoC3 Constitution
 
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
-**Phases closed:** 1 through 19
-**Current phase:** Phase 19 closed — yielding machines and explicit suspension
-**Fixture corpus:** 1052 total `.conception` fixture files; 85 under `language/phase11-testing/`; 108 under `language/phase15-c-abi/`; 73 under `language/phase16-imports/`; 57 under `language/phase17-runtime-failure/`; 66 under `language/phase18-machines/`; 23 under `language/phase19-yielding-machines/`
+**Phases closed:** 1 through 20 / DG1
+**Current phase:** Phase 20 / DG1 complete — DragonGod Kernel core seed only
+**Fixture corpus:** 1057 total `.conception` fixture files; 85 under `language/phase11-testing/`; 108 under `language/phase15-c-abi/`; 73 under `language/phase16-imports/`; 57 under `language/phase17-runtime-failure/`; 66 under `language/phase18-machines/`; 23 under `language/phase19-yielding-machines/`; 5 under `language/phase20-dragongod-kernel/`
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
 
+
+## Phase 20 / DG1 DragonGod Kernel snapshot
+
+Phase 20 / DG1 is complete as a kernel foundation milestone. The `dragon-god/` tree now seeds `DragonGod.Kernel.Core`, `DragonGod.Kernel.Automata`, `DragonGod.Kernel.Memory`, and `DragonGod.Kernel.Mind` with ID/time/reason/signal types and shell structs for `Memory`, `Mind`, `Agent`, and `World`. This is deliberately a module/type seed: no Memory storage, Mind tick loop, Automata stack, decision subsystem, actuation subsystem, events subsystem, trace, replay, persistence, parallel staged tick, scheduler, async runtime, or bare-metal proof is implemented.
+
+| DragonGod Kernel capability | Status | Notes |
+|-----------------------------|--------|-------|
+| DG0 Blueprint | ✅ | `docs/DragonGod-Kernel-Blueprint.md` is present. |
+| DG1 Kernel core seed | ✅ | Module/type seed, examples, fixtures, and friction log added. |
+| Memory storage | ❌ | Only `Memory { revision }` shell and `MemoryKeyInt` placeholder exist. |
+| Mind tick loop | ❌ | `Mind`, `Agent`, and `World` shells only. |
+| Automata stack | ❌ | Not implemented. |
+| Decision subsystem | ❌ | Local machine `transition decide` exists from Phase 18; DragonGod decision subsystem does not. |
+| Actuation subsystem | ❌ | Only `ActuationId` and signal variants are seeded. |
+| Events subsystem | ❌ | Not implemented. |
+| Trace subsystem | ❌ | Not implemented. |
+| Replay | ❌ | Not implemented. |
+| Persistence | ❌ | Not implemented. |
+| Parallel | ❌ | Not implemented. |
+| Bare-metal proof | ❌ | Not implemented. |
+
+---
 ## Phase 18 M9 closeout snapshot
 
 Phase 18 is closed after P18-M9. The machine composition substrate now has examples under `examples/phase18/` and 66 fixtures under `language/phase18-machines/`: 43 valid and 23 invalid. The closed Phase 18 substrate pins hierarchical by-value child frames, explicit child stepping, `Complete(child)`, `Result(child)`, numeric `State(machine)`, bool `transition match`, deterministic `transition decide`, shared `cpt_panic` runtime machine failures, and backend-shape assertions that exclude hidden heap allocation, scheduler, async, blackboard, mailbox, event-bus, and DragonGod runtime hooks. Phase 19 is closed after P19-M9 closeout, P19-M8 examples/docs, P19-M7 hardening, and the combined P19-M4-M6 fixture sweep for bare machine-state `yield;` validation, backend/runtime lowering, and interactions with Complete/Result/State, child machines, and transition match/decide. `yield;` now exits the current generated `Step` immediately without state/completion/result mutation, while scheduler, async, blackboard/mailbox/event keywords, dynamic child lists, heap-owned machines, `StateName`, reflection, `yield return`, `suspend`/`resume`, and DragonGod runtime hooks remain deferred.
