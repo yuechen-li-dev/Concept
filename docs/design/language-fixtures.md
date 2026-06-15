@@ -224,7 +224,7 @@ yet.
 
 Phase 18 implementation fixtures now live under `language/phase18-machines/`. P18-M1 adds 11 machine frame/value audit fixtures: local machine construction, `Step`/`Complete`/`Result` runtime stability, independent local instances, current by-value copy/assignment behavior, result-before-completion exit code 101, backend frame shape, shared `cpt_panic` backend routing, and invalid `Step`/`Complete`/`Result` operand diagnostics.
 
-Nested machine fields, child initialization, nested operations, executable bool `transition match`, and executable deterministic `transition decide` are covered by Phase 18 milestones through P18-M5.
+Nested machine fields, child initialization, nested operations, executable bool `transition match`, executable deterministic `transition decide`, numeric `State(machine)`, runtime failure hardening, and P18-M8 integration examples are covered by Phase 18 milestones through P18-M8.
 
 ## Phase 13 machine fixtures
 
@@ -520,8 +520,21 @@ P18-M5 adds runtime, backend, and invalid fixtures for executable `transition de
 
 ### Phase 18 P18-M6 machine state introspection fixtures
 
-P18-M6 adds fixtures for `State(machine) -> int` under `language/phase18-machines/`. The valid fixtures cover local machine state reads before stepping, state reads after an explicit `Step`, nested child-field state reads inside a parent machine, and state reads before completion without using the shared panic path. The backend fixture pins direct `.state` field reads for both local and nested child frames and asserts that the helper does not introduce completion checks, result guards, panic-only state behavior, heap allocation, scheduler, async, or blackboard markers. Invalid fixtures cover `CON029D StateRequiresMachineValue` for non-machine operands plus existing invalid-call arity diagnostics. The fixture corpus now contains 1090 files, including 55 Phase 18 machine fixtures.
+P18-M6 adds fixtures for `State(machine) -> int` under `language/phase18-machines/`. The valid fixtures cover local machine state reads before stepping, state reads after an explicit `Step`, nested child-field state reads inside a parent machine, and state reads before completion without using the shared panic path. The backend fixture pins direct `.state` field reads for both local and nested child frames and asserts that the helper does not introduce completion checks, result guards, panic-only state behavior, heap allocation, scheduler, async, or blackboard markers. Invalid fixtures cover `CON029D StateRequiresMachineValue` for non-machine operands plus existing invalid-call arity diagnostics. Later P18-M7/P18-M8 fixtures raise the Phase 18 machine corpus to 66 fixtures.
 
 ### Phase 18 M7 runtime failure hardening fixtures
 
-P18-M7 raises the Phase 18 machine fixture corpus to 60 files. The new backend fixtures pin stable shared-panic lowering for local `Result(machine)` before completion, nested `Result(child)` before completion, `transition decide` with no enabled candidates, a generated C unit with multiple panic sites sharing one `cpt_panic` helper, and the defensive invalid-machine-state step-dispatch default. The runtime fixtures for local result, nested child result, and decide no-enabled continue to pin exit code 101. Bool v0 `transition match` does not gain a runtime no-case fixture because exhaustive validation prevents ordinary no-match programs from reaching backend execution.
+P18-M7 raised the Phase 18 machine fixture corpus to 60 files before P18-M8 expanded it to 66 files. The new backend fixtures pin stable shared-panic lowering for local `Result(machine)` before completion, nested `Result(child)` before completion, `transition decide` with no enabled candidates, a generated C unit with multiple panic sites sharing one `cpt_panic` helper, and the defensive invalid-machine-state step-dispatch default. The runtime fixtures for local result, nested child result, and decide no-enabled continue to pin exit code 101. Bool v0 `transition match` does not gain a runtime no-case fixture because exhaustive validation prevents ordinary no-match programs from reaching backend execution.
+
+## Phase 18 machine composition fixtures
+
+Phase 18 machine fixtures live under `language/phase18-machines/`. P18-M8 expands
+the corpus to 66 fixtures: 43 valid fixtures and 23 invalid fixtures. The added
+integration fixtures cover hierarchical child machines, match-driven child
+completion, deterministic utility selection, nested utility controllers, numeric
+state observation, and combined backend shape assertions.
+
+The backend integration fixture intentionally asserts the absence of hidden
+runtime machinery: no `malloc`, scheduler, async marker, blackboard, mailbox,
+event bus, or DragonGod hook appears in generated C. This pins Phase 18 as a
+pre-DragonGod substrate rather than a DragonGod runtime implementation.

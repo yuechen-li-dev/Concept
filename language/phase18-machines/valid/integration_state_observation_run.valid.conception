@@ -1,0 +1,22 @@
+# name: integration state observation run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine TwoState {
+    state Start { transition Done; }
+    state Done { return 9; }
+}
+
+int main() {
+    TwoState m = TwoState();
+    int initial = State(m);
+    Step(m);
+    int after = State(m);
+    return after - initial;
+}
+
+=== run ===
+exit_code: 1

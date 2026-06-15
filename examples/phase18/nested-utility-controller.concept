@@ -1,0 +1,39 @@
+module Main;
+
+machine Child {
+    state Start {
+        return 7;
+    }
+}
+
+machine Controller {
+    Child child;
+
+    state Start {
+        Step(child);
+        transition Decide;
+    }
+
+    state Decide {
+        transition decide {
+            Done when Complete(child) score 10;
+            Wait score 0;
+        };
+    }
+
+    state Wait {
+        return State(child);
+    }
+
+    state Done {
+        return Result(child);
+    }
+}
+
+int main() {
+    Controller controller = Controller();
+    Step(controller);
+    Step(controller);
+    Step(controller);
+    return Result(controller);
+}

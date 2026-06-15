@@ -1,0 +1,23 @@
+module Main;
+
+// Documentation notes for Phase 18 runtime failures.
+//
+// Result(machine) before completion panics through cpt_panic with the stable
+// reason "machine result cannot be read before completion".
+//
+// A transition decide with no enabled candidate panics through cpt_panic with
+// the stable reason "machine decision transition has no enabled candidates".
+//
+// Backend-generated machine step functions also include a defensive invalid
+// state panic path. This file is not intended as a successful run example.
+
+machine NeverCompletes {
+    state Start {
+        transition Start;
+    }
+}
+
+int main() {
+    NeverCompletes machine = NeverCompletes();
+    return Result(machine);
+}

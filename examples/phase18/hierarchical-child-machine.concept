@@ -1,0 +1,27 @@
+module Main;
+
+machine Patrol {
+    state Start {
+        return 7;
+    }
+}
+
+machine Guard {
+    Patrol patrol;
+
+    state Start {
+        Step(patrol);
+        transition Done;
+    }
+
+    state Done {
+        return Result(patrol);
+    }
+}
+
+int main() {
+    Guard guard = Guard();
+    Step(guard);
+    Step(guard);
+    return Result(guard);
+}

@@ -1,0 +1,32 @@
+# name: integration nested decide child run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Child { state Start { return 7; } }
+
+machine Controller {
+    Child child;
+    state Start { Step(child); transition Decide; }
+    state Decide {
+        transition decide {
+            Done when Complete(child) score 10;
+            Wait score 0;
+        };
+    }
+    state Wait { return State(child); }
+    state Done { return Result(child); }
+}
+
+int main() {
+    Controller c = Controller();
+    Step(c);
+    Step(c);
+    Step(c);
+    return Result(c);
+}
+
+=== run ===
+exit_code: 7
