@@ -520,3 +520,60 @@ The Phase 19 fixture set now has twenty-three fixtures under `language/phase19-y
 ### P19-M8 implementation status
 
 P19-M8 is an examples/docs milestone and adds no new language semantics. Polished examples now live under `examples/phase19/` for wait-until child completion, explicit external polling, long-running tickable behavior, nested child-machine ticking with yield, yield before `transition match`, yield before `transition decide`, numeric `State(machine)` observation after a yielding step, runtime failure notes, and DragonGod readiness. The examples document that `yield;` exits the current `Step`, leaves the machine incomplete, preserves the current numeric state, and causes the next `Step` to re-enter the same state body from the beginning. DragonGod can later orchestrate these ordinary machine frames, but Phase 19 still does not add continuation-preserving yield, lifted locals, sub-state program counters, `yield return`, yield values, `suspend`, `resume`, scheduler support, async/generator protocol, event-loop support, blackboard/mailbox runtime, or DragonGod runtime hooks. Remaining Phase 19 work is closeout.
+
+## 12. P19-M9 closeout status
+
+Phase 19 is closed. P19-M0 through P19-M9 are complete: design, syntax/AST/HIR scaffold, validation hardening, backend lowering, behavior and interaction fixture sweep, diagnostics/runtime-failure hardening, examples, and closeout documentation/audit.
+
+Final supported surface:
+
+```text
+yield keyword/token
+yield; parser support
+AST YieldStmt
+HIR yield_stmt
+machine-state-only yield lowering
+validation diagnostics:
+  CON0300 YieldOnlyAllowedInMachineState
+  CON0301 YieldExpressionUnsupported
+  CON0302 YieldValueUnsupported
+  CON0303 YieldReturnUnsupported
+yield in machine state bodies
+yield in nested blocks/if branches inside machine states
+yield outside machine state rejected
+yield value rejected
+yield return rejected
+expression-position yield rejected
+yield lowers to immediate return from generated machine Step
+yield preserves current state
+yield leaves machine incomplete
+yield does not write result storage
+yield does not call cpt_panic
+yield does not allocate
+yield does not schedule
+next Step re-enters same state body from beginning
+Complete(machine) after yield returns false
+State(machine) before/after yield remains same
+Result(machine) after yield uses existing result-before-completion panic
+yield + nested child ticking fixtures
+yield + transition match fixtures
+yield + transition decide fixtures
+examples/phase19
+```
+
+Final fixture count: 23 Phase 19 `.conception` fixtures under `language/phase19-yielding-machines/`: 16 valid fixtures and 7 invalid fixtures. By category, the corpus has 10 validation fixtures, 9 runtime fixtures, and 4 backend C fixtures. The validation category includes the 3 accepted check/HIR fixtures and 7 rejected parse/diagnostic fixtures.
+
+Final examples: `examples/phase19/README.md`, `wait-until-child-complete.concept`, `polling-loop.concept`, `long-running-behavior.concept`, `yield-transition-match.concept`, `yield-transition-decide.concept`, `state-observation-after-yield.concept`, `runtime-failure-notes.concept`, and `dragon-god-readiness.concept`. These examples are documentation examples, not fixture-count inputs.
+
+Final backend guarantees:
+
+```text
+yield path emits direct Step return
+no state assignment on yield path
+no completion write on yield path
+no result write on yield path
+no yield-specific panic/helper
+no heap/scheduler/async/event/blackboard/mailbox/DragonGod runtime marker
+```
+
+Final deferred non-goals remain explicit: continuation yield, resume-after-yield statement continuation, lifted locals, sub-state program counters, `yield return`, `yield value`, `suspend`, `resume`, async/await, scheduler, event loop, generator/iterator protocol, blackboard/mailbox runtime, dynamic child machines, heap-owned machines, and DragonGod runtime hooks. Phase 19 completes the DragonGod-ready yield substrate for tickable machines; it does not implement DragonGod.
