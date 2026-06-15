@@ -729,3 +729,7 @@ Status: complete. Added fixed-slot `AutomatonGraph` metadata (`AutomatonNodeId`,
 ## DragonGod DG11 coverage
 
 Persistence/checkpoint v0 coverage now includes 8 run fixtures and 1 backend-C fixture for `KernelCheckpoint`: world memory restore, agent memory restore, EventBus restore, ActuatorHost restore, TraceRecorder restore, RNG seed metadata, restore-all, replay/checkpoint composition, and generated-C shape/forbidden storage checks.
+
+## Phase 21 M1 coverage note
+
+Fixed-size array type syntax `T[N]` is now covered at parser/declaration-check level, including struct fields, function parameters, nested postfix array types, positive literal length validation, and invalid zero/negative/non-literal length fixtures. Runtime construction, indexing, literals, slices, fixed buffers, `Len`, and `Capacity` remain uncovered because they are explicitly deferred beyond M1.

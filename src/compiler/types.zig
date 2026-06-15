@@ -43,6 +43,10 @@ pub const TypeKind = union(enum) {
     manual_init: struct {
         payload: TypeId,
     },
+    array: struct {
+        element: TypeId,
+        length: u64,
+    },
     type_param: struct {
         owner: TypeParamOwner,
         index: u32,
@@ -67,6 +71,7 @@ pub const TypeKind = union(enum) {
             },
             .pointer => |pointer| try writer.print("{f}*", .{pointer.pointee}),
             .manual_init => |manual_init| try writer.print("ManualInit<{f}>", .{manual_init.payload}),
+            .array => |array| try writer.print("{f}[{d}]", .{ array.element, array.length }),
             .type_param => |param| try writer.print("type_param({s}:{d}/{d} {f})", .{ @tagName(param.owner.kind), param.owner.index, param.index, param.name }),
         }
     }
@@ -201,6 +206,12 @@ pub const TypeStore = struct {
         return try self.append(.{ .manual_init = .{ .payload = payload } }, error.TooManyTypes);
     }
 
+    pub fn addArrayType(self: *TypeStore, element: TypeId, length: u64) TypeStoreError!TypeId {
+        std.debug.assert(self.contains(element));
+        if (self.findArray(element, length)) |existing| return existing;
+        return try self.append(.{ .array = .{ .element = element, .length = length } }, error.TooManyTypes);
+    }
+
     pub fn pointerType(self: TypeStore, pointee: TypeId) ?TypeId {
         std.debug.assert(self.contains(pointee));
         return self.findPointer(pointee);
@@ -236,6 +247,7 @@ pub const TypeStore = struct {
     pub fn isCopyType(self: TypeStore, hir_store: ?*const hir.HirStore, id: TypeId) bool {
         return switch (self.kind(id)) {
             .int, .bool, .pointer, .enum_type, .alloc_error => true,
+            .array => |array| self.isCopyType(hir_store, array.element),
             .struct_type => self.hasCopyMarkerImpl(hir_store, id),
             .void, .arena, .allocator, .machine_type, .interface_type, .dyn_interface, .manual_init, .type_param => false,
         };
@@ -288,6 +300,16 @@ pub const TypeStore = struct {
             }
         }
 
+        return null;
+    }
+
+    fn findArray(self: TypeStore, element: TypeId, length: u64) ?TypeId {
+        for (self.types.items, 0..) |candidate, index| {
+            switch (candidate) {
+                .array => |array| if (array.element.index == element.index and array.length == length) return .{ .index = @intCast(index) },
+                else => {},
+            }
+        }
         return null;
     }
 
@@ -344,7 +366,7 @@ pub const TypeStore = struct {
                     },
                     else => {},
                 },
-                .dyn_interface, .pointer, .manual_init, .type_param => unreachable,
+                .dyn_interface, .pointer, .manual_init, .array, .type_param => unreachable,
                 else => unreachable,
             }
         }
@@ -666,4 +688,19 @@ test "type parameter debug formatting is stable" {
     defer std.testing.allocator.free(rendered);
 
     try std.testing.expectEqualStrings("type_param(generic_function:3/2 SymbolId(0))", rendered);
+}
+
+test "fixed array types include element and length identity" {
+    var store = try TypeStore.init(std.testing.allocator);
+    defer store.deinit();
+
+    const int4 = try store.addArrayType(store.intType(), 4);
+    const int4_again = try store.addArrayType(store.intType(), 4);
+    const int5 = try store.addArrayType(store.intType(), 5);
+    const bool4 = try store.addArrayType(store.boolType(), 4);
+
+    try std.testing.expectEqual(int4, int4_again);
+    try std.testing.expect(int4.index != int5.index);
+    try std.testing.expect(int4.index != bool4.index);
+    try std.testing.expectEqual(TypeKind{ .array = .{ .element = store.intType(), .length = 4 } }, store.kind(int4));
 }

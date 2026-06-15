@@ -254,6 +254,7 @@ const Checker = struct {
             .int, .bool, .alloc_error => true,
             .pointer => |pointer| self.isSupportedReprCPointerPointee(pointer.pointee),
             .struct_type => false, // Nested repr(C) by value is deferred in M6 to avoid recursive layouts.
+            .array => |array| self.isSupportedReprCFieldType(array.element, undefined),
             .void, .arena, .allocator, .enum_type, .machine_type, .interface_type, .dyn_interface, .manual_init, .type_param => false,
         };
     }
@@ -1213,6 +1214,7 @@ const Checker = struct {
             .type_param => true,
             .pointer => |pointer| self.containsTypeParam(pointer.pointee),
             .manual_init => |manual_init| self.containsTypeParam(manual_init.payload),
+            .array => |array| self.containsTypeParam(array.element),
             else => false,
         };
     }
@@ -1784,6 +1786,10 @@ const Checker = struct {
             .manual_init => |manual_init| {
                 try writer.writeAll("manual_init_");
                 try self.writeTypeSuffix(writer, manual_init.payload);
+            },
+            .array => |array| {
+                try self.writeTypeSuffix(writer, array.element);
+                try writer.print("_array_{d}", .{array.length});
             },
             .type_param => try writer.writeAll("type_param"),
         }

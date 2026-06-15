@@ -1686,9 +1686,24 @@ const Collector = struct {
             return null;
         }
 
-        const pointee = try self.resolveBaseTypeNameScoped(type_name, type_scope) orelse return null;
-        if (type_name.is_pointer) return try self.module.types.addPointerType(pointee);
-        return pointee;
+        var resolved = try self.resolveBaseTypeNameScoped(type_name, type_scope) orelse return null;
+        if (type_name.is_pointer) resolved = try self.module.types.addPointerType(resolved);
+        for (type_name.array_suffixes) |suffix| {
+            if (std.mem.startsWith(u8, suffix.length_text, "-")) {
+                try self.diagnostics.append(diagnostics.arrayLengthMustBePositive(suffix.length_span));
+                return null;
+            }
+            const length = std.fmt.parseUnsigned(u64, suffix.length_text, 10) catch {
+                try self.diagnostics.append(diagnostics.arrayLengthMustBeCompileTimeConstant(suffix.length_span));
+                return null;
+            };
+            if (length == 0) {
+                try self.diagnostics.append(diagnostics.arrayLengthMustBePositive(suffix.length_span));
+                return null;
+            }
+            resolved = try self.module.types.addArrayType(resolved, length);
+        }
+        return resolved;
     }
 
     fn resolveDynTypeNameScoped(self: *Collector, type_name: ast.TypeName, type_scope: ?*TypeParamScope) anyerror!?types.TypeId {

@@ -1,0 +1,11 @@
+# name: phase21 fixed array function parameter
+# phase: check
+# check: declarations
+# expect: pass
+
+=== source ===
+module Example;
+
+int count(int[4] values) {
+    return 0;
+}

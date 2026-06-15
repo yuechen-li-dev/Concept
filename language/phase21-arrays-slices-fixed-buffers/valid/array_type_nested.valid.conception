@@ -1,0 +1,11 @@
+# name: phase21 nested fixed array type
+# phase: check
+# check: declarations
+# expect: pass
+
+=== source ===
+module Example;
+
+struct MatrixBag {
+    int[4][2] matrix;
+};

@@ -1,0 +1,13 @@
+# name: phase21 fixed array missing length
+# phase: parse
+# expect: fail
+
+=== source ===
+module Example;
+
+struct Bag {
+    int[] values;
+};
+
+=== diagnostics ===
+CON0003

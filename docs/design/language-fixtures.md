@@ -614,3 +614,7 @@ Added 9 Phase 20 fixtures for DragonGod Persistence/checkpoint v0: 8 run fixture
 Phase 20 is closed after DG12. The DragonGod fixture suite lives under `language/phase20-dragongod-kernel/valid/` and currently contains 99 valid `.conception` fixtures. The groups cover DG1 kernel core IDs/imports, DG2 static automata signals and signal-returning machines, DG3 Memory v0, DG4 Mind v0, DG5 Automata stack v0, DG6 Decision v0, DG7 Actuation v0, DG8 Events v0, DG9 Trace v0, DG10 Replay v0, DG11 Persistence/checkpoint v0, and DG12 AutomataGraph metadata v0.
 
 These fixtures now serve as a Concept stress/regression suite for upcoming language and library work. They intentionally preserve fixed-slot v0 shapes until arrays/slices/fixed buffers, standard Option/Result ergonomics, strings/byte slices, generic containers, callable values, and stronger dyn storage are available.
+
+## Phase 21 arrays, slices, and fixed buffers fixtures
+
+`language/phase21-arrays-slices-fixed-buffers/` contains M1 fixtures for fixed-size array type syntax. Valid fixtures cover `T[N]` in struct fields and function parameters plus nested postfix spelling `T[N][M]`, interpreted as an array of `M` elements of `T[N]`. Invalid fixtures document the M1 length restriction: only positive integer literals are accepted; zero, negative, identifier, and expression lengths are rejected. Array literals, indexing, length/capacity operations, slices, mutable slices, and fixed buffers intentionally have no positive fixtures yet.
