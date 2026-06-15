@@ -1,18 +1,22 @@
 # Concept — Checkpoint 1 Coverage Matrix
-## Phase 21 arrays/slices design start vs PoC3 Constitution
+## Phase 22 Option/Result design start vs PoC3 Constitution
 
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
 **Phases closed:** 1 through 20 / DG12
-**Current phase:** Phase 21 P21-M0 — arrays, slices, and fixed buffers design-only milestone
+**Current phase:** Phase 22 P22-M0 — Option, Result, and bounded collection mutation design-only milestone
 **Fixture corpus:** 1151 total `.conception` fixture files; 99 under `language/phase20-dragongod-kernel/`.
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
 
 
-## Phase 21 / P21-M0 arrays, slices, and fixed buffers design snapshot
+## Phase 22 / P22-M0 Option, Result, and bounded collection mutation design snapshot
 
-Phase 21 is open as a design-only milestone. `docs/design/phase-21-arrays-slices-and-fixed-buffers.md` defines fixed-size owned arrays with `T[N]` syntax, array literals with `[1, 2, 3, 4]`, read-only `Slice<T>` borrowed views, explicit future `MutSlice<T>`, bounded `FixedBuffer<T, N>` value storage, `Len`, `Capacity`, bounds-checked indexing, stable panic reasons, and the `CON0400`-`CON0410` diagnostic range. No parser, lexer, semantic, MIR, backend, fixture, or DragonGod migration behavior is implemented by P21-M0.
+Phase 22 is open as a design-only milestone. `docs/design/phase-22-option-result-and-bounded-collection-mutation.md` defines the doctrine that absence is not failure, recoverable operation failure is not panic, and panic is not collection control flow. It designs `Option<T>` for absence, `Result<T, E>` for recoverable operation outcomes, `BufferError` for bounded collection operations, FixedBuffer asserting mutation APIs, FixedBuffer try APIs, domain-specific find/update migration patterns, read-only FixedBuffer-to-Slice conversion direction, source formatting requirements, and reserved diagnostics `CON0500` through `CON0510`. No parser, lexer, semantic, MIR, backend, fixture, FixedBuffer helper, or DragonGod migration behavior is implemented by P22-M0.
+
+## Phase 21 closeout snapshot
+
+Phase 21 is closed. It implemented fixed-size owned arrays with `T[N]` syntax, array literals with `[1, 2, 3, 4]`, read-only `Slice<T>` borrowed views, bounded `FixedBuffer<T, N>` value storage, `Len`, `Capacity`, bounds-checked indexing, stable panic reasons, and the `CON0400`-`CON0410` diagnostic range. Phase 21 closeout directly motivates Phase 22 because the remaining DragonGod migrations require fixed-buffer mutation/search operations with honest `Option<T>` and `Result<T, E>` return semantics.
 
 
 ## Phase 20 / DG12 DragonGod Kernel snapshot
