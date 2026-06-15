@@ -1,0 +1,33 @@
+# name: yield in if branch run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine MaybeYield(bool ready) -> int {
+    state Start {
+        if (!ready) {
+            yield;
+        }
+
+        return 7;
+    }
+}
+
+int main() {
+    MaybeYield a = MaybeYield(false);
+    Step(a);
+
+    if (Complete(a)) {
+        return 99;
+    }
+
+    MaybeYield b = MaybeYield(true);
+    Step(b);
+
+    return Result(b);
+}
+
+=== run ===
+exit_code: 7

@@ -1,0 +1,47 @@
+# name: yield backend step return
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Waiter {
+    state Waiting {
+        yield;
+    }
+}
+
+machine MaybeYield(bool ready) -> int {
+    state Start {
+        if (!ready) {
+            yield;
+        }
+
+        return 7;
+    }
+}
+
+int main() {
+    Waiter w = Waiter();
+    Step(w);
+    MaybeYield m = MaybeYield(true);
+    Step(m);
+    return Result(m);
+}
+
+=== c ===
+contains: case cpt_m_Waiter_s_Waiting:
+contains: return;
+contains: if (!m->cpt_mpf_ready) {
+contains: m->result = 7;
+contains: m->complete = 1;
+not_contains: m->state = cpt_m_Waiter_s_Waiting;
+not_contains: transition match
+not_contains: __builtin_trap
+not_contains: malloc
+not_contains: scheduler
+not_contains: async
+not_contains: event
+not_contains: blackboard
+not_contains: mailbox
+not_contains: DragonGod

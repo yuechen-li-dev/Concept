@@ -59,7 +59,7 @@ language/phase19-yielding-machines/invalid/
 
 ## Phase 19 yielding-machine fixtures
 
-Phase 19 fixtures live under `language/phase19-yielding-machines/`. P19-M2 raises the set to ten validation fixtures: three valid check/HIR fixtures for bare `yield;` in a machine state body, in a nested machine-state block, and in an `if` branch, plus seven invalid parse fixtures for ordinary-function `yield;`, nested ordinary-function-block `yield;`, top-level `yield;`, `yield 1;`, `yield return 1;`, expression-position `yield`, and missing semicolon. These fixtures deliberately stop before backend/runtime yield behavior; P19-M3 owns executable lowering.
+Phase 19 fixtures live under `language/phase19-yielding-machines/`. P19-M3 raises the set to sixteen fixtures: the ten P19-M2 validation fixtures, five run fixtures proving that `yield;` leaves a machine incomplete, preserves `State(machine)`, re-enters the same state body from the beginning on the next `Step`, works as an `if`-branch terminal, and keeps `Result(machine)` guarded by the existing result-before-completion panic, plus one backend C fixture proving direct `return;` lowering with no state assignment, completion write, result write, panic helper use in yield-only code, allocation, scheduler, async, event, mailbox, blackboard, or DragonGod marker.
 
 ## Phase 5 sum-type fixtures
 

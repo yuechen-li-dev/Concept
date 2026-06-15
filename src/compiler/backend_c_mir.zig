@@ -491,6 +491,9 @@ fn emitMachineStateStmt(writer: anytype, ctx: *const BackendContext, machine_id:
     const stmt = ctx.module.hir.getStmt(stmt_id).*;
     switch (stmt.kind) {
         .block => |children| for (children) |child| try emitMachineStateStmt(writer, ctx, machine_id, machine, child),
+        .yield_stmt => {
+            try writer.writeAll("            return;\n");
+        },
         .transition_stmt => |target| switch (target) {
             .literal_state => |literal| {
                 try writer.writeAll("            m->state = ");

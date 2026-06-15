@@ -1,0 +1,28 @@
+# name: yield preserves state run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Waiter {
+    state Waiting {
+        yield;
+    }
+}
+
+int main() {
+    Waiter w = Waiter();
+    int before = State(w);
+    Step(w);
+    int after = State(w);
+
+    if (before == after) {
+        return 0;
+    }
+
+    return 1;
+}
+
+=== run ===
+exit_code: 0

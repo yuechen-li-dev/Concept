@@ -1,0 +1,21 @@
+# name: yield result after yield panics run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Waiter {
+    state Waiting {
+        yield;
+    }
+}
+
+int main() {
+    Waiter w = Waiter();
+    Step(w);
+    return Result(w);
+}
+
+=== run ===
+exit_code: 101
