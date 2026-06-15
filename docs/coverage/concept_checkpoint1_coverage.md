@@ -597,3 +597,5 @@ Nested machine field coverage now includes HIR preservation, backend by-value ch
 ### Phase 18 M3 nested machine operation coverage
 
 P18-M3 covers explicit nested machine composition for child fields: `Step(child)` mutates the child frame stored in the parent, `Complete(child)` reads that child completion flag, and `Result(child)` uses the shared result-before-completion panic path. Fixtures also prove that children are not implicitly stepped, multiple child fields compose independently, and runtime `transition match`/`transition decide` remain deferred.
+
+P18-M4 updates `transition match { ... }` coverage from parsed/HIR-only scaffold to executable runtime lowering for the bool subset. Bool scrutinees, including `Complete(child)`, lower through machine step emission to deterministic C `if`/`else` state assignment with exhaustive true/false validation or wildcard default coverage. Non-bool runtime match and `transition decide` remain future work.

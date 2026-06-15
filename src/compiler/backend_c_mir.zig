@@ -490,7 +490,8 @@ fn emitMachineStateStmt(writer: anytype, ctx: *const BackendContext, machine_id:
                 try emitMachineStateName(writer, ctx.module, machine.name, machine.states[literal.state_index].name);
                 try writer.writeAll(";\n            return;\n");
             },
-            .match_state, .decide_state => {
+            .match_state => |match_target| try emitMachineTransitionMatch(writer, ctx, machine_id, machine, match_target),
+            .decide_state => {
                 if (ctx.diagnostic_bag) |bag| try bag.append(diagnostics.machineSemanticsNotImplemented(stmt.span));
                 return error.InvalidExecutable;
             },
@@ -544,6 +545,31 @@ fn emitMachineStateStmt(writer: anytype, ctx: *const BackendContext, machine_id:
             return error.InvalidExecutable;
         },
     }
+}
+
+fn emitMachineTransitionMatch(writer: anytype, ctx: *const BackendContext, machine_id: hir.MachineId, machine: hir.HirMachine, match_target: anytype) EmitError!void {
+    var true_target: ?hir.HirTransitionStateTarget = null;
+    var false_target: ?hir.HirTransitionStateTarget = null;
+    var default_target: ?hir.HirTransitionStateTarget = null;
+    for (match_target.arms) |arm| {
+        switch (arm.pattern) {
+            .bool_literal => |value| {
+                if (value) true_target = arm.target else false_target = arm.target;
+            },
+            .wildcard => default_target = arm.target,
+            else => return error.InvalidExecutable,
+        }
+    }
+    const on_true = true_target orelse default_target orelse return error.InvalidExecutable;
+    const on_false = false_target orelse default_target orelse return error.InvalidExecutable;
+
+    try writer.writeAll("            if (");
+    try emitMachineStateExpr(writer, ctx, machine_id, match_target.scrutinee);
+    try writer.writeAll(") {\n                m->state = ");
+    try emitMachineStateName(writer, ctx.module, machine.name, machine.states[on_true.state_index].name);
+    try writer.writeAll(";\n            } else {\n                m->state = ");
+    try emitMachineStateName(writer, ctx.module, machine.name, machine.states[on_false.state_index].name);
+    try writer.writeAll(";\n            }\n            return;\n");
 }
 
 fn emitMachineStateExpr(writer: anytype, ctx: *const BackendContext, machine_id: hir.MachineId, expr_id: hir.ExprId) EmitError!void {

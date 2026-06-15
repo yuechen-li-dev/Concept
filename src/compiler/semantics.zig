@@ -2312,10 +2312,42 @@ const BodyLowerer = struct {
             .literal_state => |target_name| .{ .literal_state = (try self.resolveMachineStateTarget(target_name)) orelse return null },
             .match_state => |match_target| blk: {
                 const scrutinee = (try self.lowerExpr(match_target.scrutinee.*)) orelse return null;
+                const scrutinee_type = (try self.inferExprType(scrutinee)) orelse return null;
+                if (!sameType(scrutinee_type, self.collector.module.types.boolType())) {
+                    try self.collector.diagnostics.append(diagnostics.transitionMatchUnsupportedScrutinee(match_target.scrutinee.span()));
+                    return null;
+                }
+                if (match_target.arms.len == 0) {
+                    try self.collector.diagnostics.append(diagnostics.machineTransitionMatchNoCase(match_target.span));
+                    return null;
+                }
                 var arms = std.ArrayList(hir.HirTransitionMatchArm).empty;
                 defer arms.deinit(self.collector.allocator);
+                var seen_true = false;
+                var seen_false = false;
+                var seen_default = false;
                 for (match_target.arms) |arm| {
                     const pattern = (try self.lowerPattern(arm.pattern)) orelse return null;
+                    switch (pattern) {
+                        .bool_literal => |value| {
+                            if ((value and seen_true) or (!value and seen_false)) {
+                                try self.collector.diagnostics.append(diagnostics.transitionMatchCaseTypeMismatch(arm.pattern.span()));
+                                return null;
+                            }
+                            if (value) seen_true = true else seen_false = true;
+                        },
+                        .wildcard => {
+                            if (seen_default) {
+                                try self.collector.diagnostics.append(diagnostics.transitionMatchCaseTypeMismatch(arm.pattern.span()));
+                                return null;
+                            }
+                            seen_default = true;
+                        },
+                        else => {
+                            try self.collector.diagnostics.append(diagnostics.transitionMatchCaseTypeMismatch(arm.pattern.span()));
+                            return null;
+                        },
+                    }
                     const resolved_target = (try self.resolveMachineStateTarget(arm.target_name)) orelse return null;
                     try arms.append(self.collector.allocator, .{
                         .pattern = pattern,
@@ -2323,6 +2355,10 @@ const BodyLowerer = struct {
                         .target = resolved_target,
                         .span = arm.span,
                     });
+                }
+                if (!seen_default and (!seen_true or !seen_false)) {
+                    try self.collector.diagnostics.append(diagnostics.transitionMatchNonExhaustive(match_target.span));
+                    return null;
                 }
                 const owned = try self.collector.allocator.alloc(hir.HirTransitionMatchArm, arms.items.len);
                 @memcpy(owned, arms.items);
@@ -3613,6 +3649,14 @@ fn transitionMatchIntArm(value: []const u8, target: []const u8, start: usize) as
     };
 }
 
+fn transitionMatchBoolArm(value: bool, target: []const u8, start: usize) ast.TransitionMatchArm {
+    return .{
+        .pattern = .{ .bool_literal = .{ .value = value, .span = .{ .start = start, .length = if (value) 4 else 5 } } },
+        .target_name = nameSegment(target, start + 10),
+        .span = .{ .start = start, .length = 16 },
+    };
+}
+
 fn transitionMatchWildcardArm(target: []const u8, start: usize) ast.TransitionMatchArm {
     return .{
         .pattern = .{ .wildcard = .{ .start = start, .length = 1 } },
@@ -4163,10 +4207,10 @@ test "semantic collection accepts literal self transition" {
 }
 
 test "semantic collection accepts match transition to declared states" {
-    var scrutinee = ast.Expr{ .int_literal = .{ .text = "0", .span = .{ .start = 20, .length = 1 } } };
+    var scrutinee = ast.Expr{ .bool_literal = .{ .value = true, .span = .{ .start = 20, .length = 4 } } };
     var arms = [_]ast.TransitionMatchArm{
-        transitionMatchIntArm("0", "Identifier", 30),
-        transitionMatchIntArm("1", "Number", 50),
+        transitionMatchBoolArm(true, "Identifier", 30),
+        transitionMatchBoolArm(false, "Number", 50),
         transitionMatchWildcardArm("Error", 70),
     };
     var start_statements = [_]ast.Stmt{transitionMatchStmt(&scrutinee, arms[0..], 20)};
@@ -4194,10 +4238,10 @@ test "semantic collection accepts match transition to declared states" {
 }
 
 test "semantic collection accepts match transition to self initial and later states" {
-    var scrutinee = ast.Expr{ .int_literal = .{ .text = "0", .span = .{ .start = 20, .length = 1 } } };
+    var scrutinee = ast.Expr{ .bool_literal = .{ .value = true, .span = .{ .start = 20, .length = 4 } } };
     var arms = [_]ast.TransitionMatchArm{
-        transitionMatchIntArm("0", "Start", 30),
-        transitionMatchIntArm("1", "Done", 50),
+        transitionMatchBoolArm(true, "Start", 30),
+        transitionMatchBoolArm(false, "Done", 50),
     };
     var start_statements = [_]ast.Stmt{transitionMatchStmt(&scrutinee, arms[0..], 20)};
     var states = [_]ast.MachineStateDecl{

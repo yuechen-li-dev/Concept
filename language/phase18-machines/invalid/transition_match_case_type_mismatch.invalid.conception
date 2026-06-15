@@ -1,0 +1,20 @@
+# name: transition match case type mismatch
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Main;
+
+machine M(bool flag) -> int {
+    state Start {
+        transition match (flag) {
+            1 => Done;
+            false => Done;
+        };
+    }
+    state Done { return 0; }
+}
+
+=== diagnostics ===
+CON0296

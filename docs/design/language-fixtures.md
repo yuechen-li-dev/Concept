@@ -509,3 +509,7 @@ Phase 18 M2 adds nested machine field fixtures under `language/phase18-machines/
 ## Phase 18 machine fixtures
 
 Phase 18 machine fixtures live under `language/phase18-machines/`. P18-M3 expands the corpus to 25 fixtures and pins nested `Step(child)`, `Complete(child)`, and `Result(child)` over child machine fields, including explicit stepping only, multiple child fields, child result-before-completion panic via shared `cpt_panic` exit code 101, backend address-of-child-field step emission, completion/result field reads, and unknown child-field diagnostics. Runtime `transition match` and `transition decide` remain deferred.
+
+### Phase 18 M4 runtime transition match fixtures
+
+P18-M4 adds runtime, backend, and invalid fixtures for executable bool `transition match` under `language/phase18-machines/`. The valid fixtures cover true/false parameter matches, backend C `if`/`else` state assignment, and composition with nested-machine `Complete(child)`. Invalid fixtures cover unsupported non-bool scrutinees, missing true/false coverage, duplicate bool labels, case type mismatch, unknown target state, and empty matches. `transition decide` remains deferred.

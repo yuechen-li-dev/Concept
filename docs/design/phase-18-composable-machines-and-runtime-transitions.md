@@ -519,3 +519,18 @@ P18-M3 enables explicit `Step`, `Complete`, and `Result` composition over zero-p
 The implementation preserves the Phase 18 doctrine: a child machine is a field, not a task. Child frames are initialized by the parent constructor, but they are not automatically advanced. The backend emits a child step only for an explicit `Step(child)` call, passing the address of the child field in the parent frame; `Complete(child)` reads the child field's completion flag; `Result(child)` reads the child result through the existing shared completion guard and routes result-before-completion through `cpt_panic` with deterministic exit code 101.
 
 Current copy/assignment behavior remains provisional: nested child fields copy as part of parent frame copy/assignment under the existing by-value storage semantics. This must be revisited before DragonGod or other libraries rely on copyable parent machines. Runtime `transition match`, runtime `transition decide`, `yield`, schedulers, async, event buses, blackboards/mailboxes, dynamic child lists, heap-owned machines, parameterized child initialization, and DragonGod runtime hooks remain deferred/non-goals.
+
+## P18-M4 status: runtime `transition match` lowering
+
+P18-M4 makes the v0 bool subset of `transition match` executable. A machine state may now branch on a `bool` scrutinee, including machine parameters, boolean expressions, comparisons, and nested-machine `Complete(child)` expressions. Case labels are limited to `true`, `false`, and the existing wildcard default syntax. Bool matches must cover both boolean values unless a wildcard arm is present. Duplicate labels, non-bool scrutinees, mismatched labels, and empty matches are diagnostics.
+
+Lowering is deterministic runtime branching: the scrutinee is evaluated at `Step` time and the selected arm assigns the parent frame state to the target state. Exhaustive bool matches lower to C `if`/`else` state assignment without heap allocation, scheduler hooks, async machinery, event buses, blackboards, or DragonGod runtime hooks. `transition decide` remains deferred to P18-M5.
+
+Example:
+
+```cpp
+transition match (Complete(child)) {
+    true => Done;
+    false => Check;
+};
+```

@@ -3662,3 +3662,47 @@ test "language check fixture: phase17 M8 assert expression use example" {
 test "language check fixture: phase17 M8 assert non bool condition example" {
     try expectCheckFixture("../../../language/phase17-runtime-failure/invalid/assert_non_bool_condition_example.invalid.conception");
 }
+
+test "language run fixture: phase18 transition match bool true" {
+    try expectRunFixture("../../../language/phase18-machines/valid/transition_match_bool_true_run.valid.conception");
+}
+
+test "language run fixture: phase18 transition match bool false" {
+    try expectRunFixture("../../../language/phase18-machines/valid/transition_match_bool_false_run.valid.conception");
+}
+
+test "language run fixture: phase18 transition match complete child" {
+    try expectRunFixture("../../../language/phase18-machines/valid/transition_match_complete_child_run.valid.conception");
+}
+
+test "language backend-c fixture: phase18 transition match bool branch" {
+    try expectBackendCFixture("../../../language/phase18-machines/valid/transition_match_bool_backend.valid.conception");
+}
+
+test "language check fixture: phase18 transition match non bool scrutinee" {
+    try expectCheckFixture("../../../language/phase18-machines/invalid/transition_match_non_bool_scrutinee.invalid.conception");
+}
+
+test "language check fixture: phase18 transition match bool missing false" {
+    try expectCheckFixture("../../../language/phase18-machines/invalid/transition_match_bool_missing_false.invalid.conception");
+}
+
+test "language check fixture: phase18 transition match bool missing true" {
+    try expectCheckFixture("../../../language/phase18-machines/invalid/transition_match_bool_missing_true.invalid.conception");
+}
+
+test "language check fixture: phase18 transition match duplicate true" {
+    try expectCheckFixture("../../../language/phase18-machines/invalid/transition_match_duplicate_true.invalid.conception");
+}
+
+test "language check fixture: phase18 transition match case type mismatch" {
+    try expectCheckFixture("../../../language/phase18-machines/invalid/transition_match_case_type_mismatch.invalid.conception");
+}
+
+test "language check fixture: phase18 transition match unknown target state" {
+    try expectCheckFixture("../../../language/phase18-machines/invalid/transition_match_unknown_target_state.invalid.conception");
+}
+
+test "language check fixture: phase18 transition match empty" {
+    try expectCheckFixture("../../../language/phase18-machines/invalid/transition_match_empty.invalid.conception");
+}

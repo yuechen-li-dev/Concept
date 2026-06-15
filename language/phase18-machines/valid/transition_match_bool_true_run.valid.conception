@@ -1,0 +1,26 @@
+# name: transition match bool true run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Gate(bool open) -> int {
+    state Start {
+        transition match (open) {
+            true => Open;
+            false => Closed;
+        };
+    }
+    state Open { return 1; }
+    state Closed { return 0; }
+}
+
+int main() {
+    Gate g = Gate(true);
+    Step(g);
+    return Result(g);
+}
+
+=== run ===
+exit_code: 1
