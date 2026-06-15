@@ -310,8 +310,19 @@ const Validator = struct {
             .use => |operand| try self.operandType(function_id, operand, span),
             .move => |place| try self.placeType(function_id, place, span),
             .array_index => |array_index| blk: {
-                _ = try self.operandType(function_id, array_index.base, span);
-                _ = try self.operandType(function_id, array_index.index, span);
+                const base_type = try self.operandType(function_id, array_index.base, span);
+                const index_type = try self.operandType(function_id, array_index.index, span);
+                if (index_type) |type_id| if (self.semantic_module.types.kind(type_id) != .int) {
+                    try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                };
+                if (base_type) |type_id| {
+                    const kind = self.semantic_module.types.kind(type_id);
+                    if (kind != .array) {
+                        try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                    } else if (kind.array.element.index != array_index.result_type.index or kind.array.length != array_index.length) {
+                        try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                    }
+                }
                 break :blk array_index.result_type;
             },
             .manual_init_assume => |operand| blk: {

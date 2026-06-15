@@ -3927,6 +3927,12 @@ test "language check fixtures: phase21 arrays slices fixed buffers" {
     try expectRunFixture("../../../language/phase21-arrays-slices-fixed-buffers/valid/array_index_assignment_constant_run.valid.conception");
     try expectRunFixture("../../../language/phase21-arrays-slices-fixed-buffers/valid/array_index_assignment_variable_run.valid.conception");
     try expectRunFixture("../../../language/phase21-arrays-slices-fixed-buffers/valid/array_index_assignment_nested_run.valid.conception");
+    try expectRunFixture("../../../language/phase21-arrays-slices-fixed-buffers/valid/array_value_assignment_run.valid.conception");
+    try expectRunFixture("../../../language/phase21-arrays-slices-fixed-buffers/valid/array_value_parameter_run.valid.conception");
+    try expectRunFixture("../../../language/phase21-arrays-slices-fixed-buffers/valid/array_value_return_run.valid.conception");
+    try expectRunFixture("../../../language/phase21-arrays-slices-fixed-buffers/valid/array_value_nested_assignment_run.valid.conception");
+    try expectRunFixture("../../../language/phase21-arrays-slices-fixed-buffers/valid/array_value_struct_field_run.valid.conception");
+    try expectRunFixture("../../../language/phase21-arrays-slices-fixed-buffers/valid/array_value_dynamic_index_after_copy_run.valid.conception");
     try expectRunFixture("../../../language/phase21-arrays-slices-fixed-buffers/valid/array_len_run.valid.conception");
     try expectRunFixture("../../../language/phase21-arrays-slices-fixed-buffers/valid/array_len_nested_run.valid.conception");
     try expectCheckFixture("../../../language/phase21-arrays-slices-fixed-buffers/invalid/array_length_identifier.invalid.conception");
@@ -3945,4 +3951,6 @@ test "language check fixtures: phase21 arrays slices fixed buffers" {
     try expectCheckFixture("../../../language/phase21-arrays-slices-fixed-buffers/invalid/array_index_assignment_type_mismatch.invalid.conception");
     try expectCheckFixture("../../../language/phase21-arrays-slices-fixed-buffers/invalid/array_index_assignment_constant_high.invalid.conception");
     try expectCheckFixture("../../../language/phase21-arrays-slices-fixed-buffers/invalid/array_index_assignment_temporary.invalid.conception");
+    try expectCheckFixture("../../../language/phase21-arrays-slices-fixed-buffers/invalid/array_assignment_length_mismatch.invalid.conception");
+    try expectCheckFixture("../../../language/phase21-arrays-slices-fixed-buffers/invalid/array_assignment_element_type_mismatch.invalid.conception");
 }

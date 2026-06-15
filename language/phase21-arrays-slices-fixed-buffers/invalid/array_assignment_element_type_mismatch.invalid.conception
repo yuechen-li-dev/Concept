@@ -1,0 +1,7 @@
+fn main() -> int {
+    int[3] a = [1, 2, 3];
+    bool[3] b = [true, false, true];
+    b = a;
+    return 0;
+}
+// error: CON0028

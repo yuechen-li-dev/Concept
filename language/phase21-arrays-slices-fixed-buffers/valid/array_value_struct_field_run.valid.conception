@@ -1,0 +1,10 @@
+struct Bag {
+    int[3] values;
+};
+
+fn main() -> int {
+    Bag a = Bag { values: [1, 2, 3] };
+    Bag b = a;
+    return b.values[1];
+}
+// expect: 2

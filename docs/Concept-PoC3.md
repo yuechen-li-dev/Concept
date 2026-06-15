@@ -3087,3 +3087,7 @@ P21-M3 adds read-only fixed-array indexing and fixed-array `Len`. The supported 
 P21-M4 teaches Stage 0 to treat fixed-array indexing over assignable places as a mutable place projection. Assignments such as `values[1] = 99;` and nested projections such as `matrix[1][0] = 42;` now type-check and lower through HIR/MIR place machinery. The assigned value is checked against the projected element type, constant indexes keep the existing static out-of-bounds diagnostic, and generated C emits the same bounds guard used by read indexing before the store.
 
 This milestone does not add slices, mutable slices, fixed buffers, `Capacity`, unchecked indexing, pointer decay, array-to-slice conversion, or DragonGod migration.
+
+## Phase 21 M5 fixed-array backend note
+
+Stage 0 now lowers fixed-size Concept arrays as value-shaped C wrapper structs in the MIR C backend. The wrapper representation keeps C arrays behind a generated `.data` field, allowing ordinary Concept value paths for local initialization, assignment/copy, by-value parameters, by-value returns, struct fields, nested arrays, and checked indexing. This is not a C ABI array-passing feature and does not add slices, fixed buffers, `Capacity`, unchecked indexing, heap vectors, or DragonGod migration.

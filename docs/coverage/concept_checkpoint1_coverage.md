@@ -745,3 +745,7 @@ Phase 21 M3 now covers read-only fixed-array indexing through AST, HIR, MIR, and
 P21-M4 teaches Stage 0 to treat fixed-array indexing over assignable places as a mutable place projection. Assignments such as `values[1] = 99;` and nested projections such as `matrix[1][0] = 42;` now type-check and lower through HIR/MIR place machinery. The assigned value is checked against the projected element type, constant indexes keep the existing static out-of-bounds diagnostic, and generated C emits the same bounds guard used by read indexing before the store.
 
 This milestone does not add slices, mutable slices, fixed buffers, `Capacity`, unchecked indexing, pointer decay, array-to-slice conversion, or DragonGod migration.
+
+### P21-M5 status: fixed-array value lowering
+
+P21-M5 closes the first backend value-semantics debt for fixed arrays. The MIR C backend now represents fixed arrays as generated wrapper structs with a `data` member, emits wrapper typedefs before functions and user structs, and indexes through `.data[...]` while preserving the stable dynamic-bounds panic reason. Same-type fixed-array assignment/copy, by-value parameters, by-value returns, struct fields containing arrays, and nested array assignment are covered by Phase 21 fixtures. Slices, fixed buffers, `Capacity`, unchecked indexing, C ABI array passing, `repr(C)` array layout, and DragonGod migration remain deferred.
