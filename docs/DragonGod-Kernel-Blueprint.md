@@ -1719,3 +1719,8 @@ Trace v0 appends deterministically in slot order, increments count, panics with 
 ### DG10 Replay v0 status
 
 DG10 adds `DragonGod.Kernel.Replay` as the first deterministic replay input subsystem. Replay v0 is a fixed-slot, integer-backed input stream: `ReplayEvent`, `ReplayLog`, `ReplayDriver`, `replayPush`, `replayApplyNext`, and `replayApplyAll`. Events are applied explicitly with `match`, advancing the driver cursor and mutating the value-shaped driver shells for `World.clock`, `World.memory`, `Agent.memory`, `EventBus`, `ActuatorHost`, and optional `TraceRecorder` marker integration. `RngSeed` is recorded as deterministic seed metadata only. Replay is not Persistence: no file I/O, JSON, binary serialization, checkpoint loading/saving, dynamic payloads, scheduler, async runtime, external input adapter, or DragonGod compiler hook is introduced.
+
+
+### DG11 Persistence/checkpoint v0
+
+DG11 adds `DragonGod.Kernel.Persistence` with `KernelCheckpoint`, an explicit value-shaped in-memory checkpoint for World, Agent, EventBus, ActuatorHost, TraceRecorder, RNG seed metadata, and an occupied sentinel. Capture and restore helpers prove deterministic snapshot/restore for world memory, agent memory, events, actuation, trace, restore-all, RNG metadata, and replay/checkpoint composition. This is not file I/O, JSON, binary serialization, schema migration, compression, heap/pointer graph persistence, dynamic graph snapshots, replay log persistence, or external storage adapters.
