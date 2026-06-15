@@ -168,3 +168,17 @@ Observed friction:
 - `match` remains useful for `AutomataSignal` handling in Mind integration, avoiding tag if-chains.
 - `transition decide` remains useful for local machine decisions; DG6 fixtures keep it separate from memoryful policy arbitration.
 - The only ordered checks in `decisionBestOption4` are deterministic fixed-slot source-order comparisons, not enum/payload tag chains.
+
+## Phase 20 / DG7 Actuation subsystem v0 friction
+
+DG7 added `DragonGod.Kernel.Actuation` as a fixed-slot, explicit host surface instead of a generic command runtime.
+
+- Marker concept attempt: `marker concept ActuationCommand<C>;` matches Phase 8's marker concept direction, but DG7 did not keep it in source because command payloads and generic dispatch would be ceremonial without arrays/vectors or a handler registry. Workaround: concrete integer-backed `ActuationId` plus fixed `ActuatorHost` slots. Future fix: first-class marker-only concepts that can document kernel traits without requiring an unused witness surface.
+- Interfaces/dyn handlers: Phase 14 borrowed `dyn Interface&` can express a small handler parameter shape, but a useful actuator handler table would need arrays/vectors/function pointers or stored dyn fields. Workaround: no handler table in DG7. Future fix: stable dyn fields/arrays or explicit noalloc handler-table primitives.
+- Generic dispatch: generic command payload dispatch was not clean for v0 because there is no dynamic command registry and arbitrary payload storage would require type erasure. Workaround: `actuatorDispatch(host&, ActuationDecision)` only records host status.
+- Payload enum `match`: `match` remained usable for `AutomataSignal::Act`, `AutomataSignal::AwaitActuation`, and `ActuationStatus` smoke fixtures. This was the best-fit Concept feature for signal/status inspection.
+- Fixed slots: repeating slot0/slot1/slot2/slot3 logic is still noisy in `ActuatorHost`, as it was for Memory and AutomataStack. Lack of arrays/vectors keeps the v0 code explicit but repetitive.
+- `Reason`: integer-backed `Reason { code: ... }` was sufficient for allow/deny/complete/fail fixtures, but it still cannot carry descriptive kernel policy text.
+- `mut ActuatorHost&`: explicit mutable host references compiled and made mutation sites clear; the ergonomics are verbose but acceptable for kernel-facing examples.
+- Module import verbosity: fully-qualified DragonGod names remain long in examples. Local aliases/import member syntax would make examples easier to read.
+- Missing arrays/vectors/function pointers: these are the main blockers for a real deterministic handler registry, policy chains, pending completion queues, and command payload tables. DG7 intentionally defers those designs.

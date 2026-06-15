@@ -1,0 +1,11 @@
+module DragonGod.Examples.ActuationMindRecord;
+
+import DragonGod.Kernel.Automata;
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Mind;
+
+int main() {
+    DragonGod.Kernel.Mind.Mind mind = DragonGod.Kernel.Mind.mindEmpty();
+    DragonGod.Kernel.Mind.mindRecordSignal(mind&, DragonGod.Kernel.Automata.AutomataSignal::AwaitActuation(DragonGod.Kernel.Core.ActuationId { value: 1 }));
+    return 0;
+}

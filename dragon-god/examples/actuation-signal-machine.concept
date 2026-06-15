@@ -1,0 +1,10 @@
+module DragonGod.Examples.ActuationSignalMachine;
+
+import DragonGod.Kernel.Automata;
+import DragonGod.Kernel.Core;
+
+machine RequestMove() -> DragonGod.Kernel.Automata.AutomataSignal {
+    state Start {
+        return DragonGod.Kernel.Automata.AutomataSignal::Act(DragonGod.Kernel.Core.ActuationId { value: 1 });
+    }
+}

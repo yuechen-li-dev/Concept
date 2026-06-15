@@ -1,0 +1,13 @@
+module DragonGod.Examples.ActuationAllowDeny;
+
+import DragonGod.Kernel.Actuation;
+import DragonGod.Kernel.Core;
+
+int main() {
+    DragonGod.Kernel.Actuation.ActuatorHost host = DragonGod.Kernel.Actuation.actuatorHostEmpty();
+    DragonGod.Kernel.Actuation.ActuationDispatchResult accepted = DragonGod.Kernel.Actuation.actuatorDispatch(host&, DragonGod.Kernel.Actuation.actuationAllow());
+    DragonGod.Kernel.Actuation.ActuationDispatchResult denied = DragonGod.Kernel.Actuation.actuatorDispatch(host&, DragonGod.Kernel.Actuation.actuationDeny(DragonGod.Kernel.Core.Reason { code: 403 }));
+    if (!accepted.accepted) { return 1; }
+    if (denied.accepted) { return 2; }
+    return 0;
+}
