@@ -224,7 +224,7 @@ yet.
 
 Phase 18 implementation fixtures now live under `language/phase18-machines/`. P18-M1 adds 11 machine frame/value audit fixtures: local machine construction, `Step`/`Complete`/`Result` runtime stability, independent local instances, current by-value copy/assignment behavior, result-before-completion exit code 101, backend frame shape, shared `cpt_panic` backend routing, and invalid `Step`/`Complete`/`Result` operand diagnostics.
 
-Nested machine fields, child initialization, operations on nested fields, executable `transition match`, and executable `transition decide` remain deferred to later Phase 18 milestones.
+Nested machine fields, child initialization, nested operations, executable bool `transition match`, and executable deterministic `transition decide` are covered by Phase 18 milestones through P18-M5.
 
 ## Phase 13 machine fixtures
 
@@ -508,8 +508,12 @@ Phase 18 M2 adds nested machine field fixtures under `language/phase18-machines/
 
 ## Phase 18 machine fixtures
 
-Phase 18 machine fixtures live under `language/phase18-machines/`. P18-M3 expands the corpus to 25 fixtures and pins nested `Step(child)`, `Complete(child)`, and `Result(child)` over child machine fields, including explicit stepping only, multiple child fields, child result-before-completion panic via shared `cpt_panic` exit code 101, backend address-of-child-field step emission, completion/result field reads, and unknown child-field diagnostics. Runtime `transition match` and `transition decide` remain deferred.
+Phase 18 machine fixtures live under `language/phase18-machines/`. P18-M3 expands the corpus to 25 fixtures and pins nested `Step(child)`, `Complete(child)`, and `Result(child)` over child machine fields, including explicit stepping only, multiple child fields, child result-before-completion panic via shared `cpt_panic` exit code 101, backend address-of-child-field step emission, completion/result field reads, and unknown child-field diagnostics. Runtime `transition match` is covered by P18-M4 and runtime `transition decide` is covered by P18-M5.
 
 ### Phase 18 M4 runtime transition match fixtures
 
-P18-M4 adds runtime, backend, and invalid fixtures for executable bool `transition match` under `language/phase18-machines/`. The valid fixtures cover true/false parameter matches, backend C `if`/`else` state assignment, and composition with nested-machine `Complete(child)`. Invalid fixtures cover unsupported non-bool scrutinees, missing true/false coverage, duplicate bool labels, case type mismatch, unknown target state, and empty matches. `transition decide` remains deferred.
+P18-M4 adds runtime, backend, and invalid fixtures for executable bool `transition match` under `language/phase18-machines/`. The valid fixtures cover true/false parameter matches, backend C `if`/`else` state assignment, and composition with nested-machine `Complete(child)`. Invalid fixtures cover unsupported non-bool scrutinees, missing true/false coverage, duplicate bool labels, case type mismatch, unknown target state, and empty matches. P18-M5 adds the runtime `transition decide` fixture set described below.
+
+### Phase 18 M5 runtime transition decide fixtures
+
+P18-M5 adds runtime, backend, and invalid fixtures for executable `transition decide` under `language/phase18-machines/`. The valid fixtures cover highest-score selection, false guards being ignored, source-order tie-breaking for equal scores, unguarded candidates, no-enabled shared panic with exit code 101, backend C lowering with strict `>` comparisons and the stable panic reason, and nested-machine composition using `Complete(child)` as a guard and `Result(child)` as the winning branch result. Invalid fixtures cover empty decides (`CON0299`), non-bool guards (`CON0297`), non-int scores (`CON0298`), and unknown target states via the existing machine-state diagnostic. The v0 subset remains deterministic and does not add yield, scheduler, async, event bus, blackboard/mailbox, heap-owned machines, random/weighted selection, behavior-tree runtime, GOAP/planner runtime, or DragonGod hooks.

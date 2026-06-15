@@ -1,0 +1,27 @@
+# name: transition decide unconditional candidate run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Choose(bool blocked) -> int {
+    state Start {
+        transition decide {
+            Blocked when blocked score 100;
+            Idle score 7;
+        };
+    }
+    state Blocked { return 100; }
+    state Idle { return 7; }
+}
+
+int main() {
+    Choose c = Choose(false);
+    Step(c);
+    Step(c);
+    return Result(c);
+}
+
+=== run ===
+exit_code: 7

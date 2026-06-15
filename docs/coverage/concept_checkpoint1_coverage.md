@@ -421,7 +421,7 @@
 | Immovable machine frames | ❌ | Depends on `immovable` being implemented |
 | Scalar `int`/`bool` params and results only (Phase 13 v0 constraint) | ✅ | Phase 13 — non-scalar params/results produce clear error |
 
-> **Implementation difference:** PoC3 §37 presents `transition decide` as a core machine primitive alongside `transition`. Phase 13 implements decide-transition *parse and HIR representation* but defers runtime lowering, with a clear error at codegen. The standalone `decide` expression (Phase 5a) is fully runnable — the machine-internal `transition decide` is the deferred variant. This is a deliberate scope decision, not an omission.
+> **Implementation difference:** PoC3 §37 presents `transition decide` as a core machine primitive alongside `transition`. Phase 13 implemented decide-transition *parse and HIR representation* and P18-M5 adds runtime lowering for the deterministic bool-guard/int-score subset. The standalone `decide` expression (Phase 5a) remains a separate fully runnable expression feature.
 
 ---
 
@@ -540,7 +540,7 @@
 | §33 Comptime | 🔶 Scalar hermetic comptime done; type-level comptime, capability execution deferred |
 | §34–35 Reflection/macros | ❌ Correctly deferred per PoC3 |
 | §36 C interop | ✅ Phase 15 v0 complete for single-compilation-unit C ABI: `extern "C"` declarations/calls, `export "C"` definitions, validated `[Repr(C)]` structs by value/pointer, strict ABI diagnostics, duplicate C symbol rejection, extern prototype/call emission, unmangled exported C definitions, no generated includes, no C++ text, examples, and invalid coverage for deferred non-goals |
-| §37 State machines | 🔶 Literal transitions runnable; P18-M1 pins machine locals, explicit `Step` place validation, `Complete`/`Result` value reads, backend frame shape, shared panic routing, and provisional by-value copy/assignment; `yield`, nested machines, match/decide runtime deferred |
+| §37 State machines | 🔶 Literal transitions runnable; P18-M1 pins machine locals and shared panic routing; P18-M2/M3 add nested machines; P18-M4/M5 add executable match/decide subsets; `yield` and schedulers deferred |
 | §38–39 SoA/audit | ❌ Provisional/future |
 | §40 Compiler architecture | 🔶 Core pipeline done; LLVM/native backends are Stage 3 |
 | §41 Bringup roadmap | 🔶 Stage 0 complete; Stage 1 ~75% |
@@ -553,13 +553,13 @@
 
 2. **`Arena` and `Allocator` as compiler intrinsics, not library types** — Phase 12 special-cases these rather than implementing a generic `AllocatorLike<T>` concept first. Explicit temporary deviation pending the generic-concept path.
 
-3. **`decide` as a standalone top-level expression (Phase 5a), not only inside machine transitions** — PoC3 §37.6 says utility scoring is "not core" and belongs in libraries. Concept implemented `decide` as a first-class language expression outside machines as a distinct phase 5a feature. Machine-internal `transition decide` is the deferred form. These are separate features.
+3. **`decide` as a standalone top-level expression (Phase 5a), not only inside machine transitions** — PoC3 §37.6 says utility scoring is "not core" and belongs in libraries. Concept implemented `decide` as a first-class language expression outside machines as a distinct phase 5a feature. Machine-internal `transition decide` now has the P18-M5 deterministic transition subset. These are separate features.
 
 4. **Capability annotations present but inactive** — Phase 9 capability syntax (`comptime(read_fs, env)`) is parsed and validated but no capability grants are actually executable yet. This is stricter than PoC3 implies.
 
 5. **Testing as `.con_test` files with `[Fact]`/`[Theory]` C#-influenced attributes** — PoC3 §11 leaves the testing model unspecified. Phase 11 chose a xUnit-inspired design with mandatory reason strings, which is not in PoC3.
 
-6. **`transition match` and `transition decide` inside machines fail clearly at backend, not silently** — Phase 13 explicitly defers machine match/decide runtime lowering with clear error messages rather than silently generating wrong code. A deliberate correctness decision.
+6. **`transition match` and `transition decide` inside machines moved from clear backend failures to executable subsets** — Phase 13 deliberately rejected unsupported runtime lowering; P18-M4 and P18-M5 now lower the bool match subset and deterministic bool-guard/int-score decide subset.
 
 7. **Manifest format as `concept-manifest-v0` key/value sections** — PoC3 §50 mentions a build manifest as a future document. Phase 11 partially implements a `manifest.zig` parser for a restricted key/value format, not the full declarative subset described in conversations.
 
@@ -596,6 +596,8 @@ Nested machine field coverage now includes HIR preservation, backend by-value ch
 
 ### Phase 18 M3 nested machine operation coverage
 
-P18-M3 covers explicit nested machine composition for child fields: `Step(child)` mutates the child frame stored in the parent, `Complete(child)` reads that child completion flag, and `Result(child)` uses the shared result-before-completion panic path. Fixtures also prove that children are not implicitly stepped, multiple child fields compose independently, and runtime `transition match`/`transition decide` remain deferred.
+P18-M3 covers explicit nested machine composition for child fields: `Step(child)` mutates the child frame stored in the parent, `Complete(child)` reads that child completion flag, and `Result(child)` uses the shared result-before-completion panic path. Fixtures also prove that children are not implicitly stepped, multiple child fields compose independently, and runtime `transition match` and `transition decide` are implemented in later P18-M4/P18-M5 subsets.
 
 P18-M4 updates `transition match { ... }` coverage from parsed/HIR-only scaffold to executable runtime lowering for the bool subset. Bool scrutinees, including `Complete(child)`, lower through machine step emission to deterministic C `if`/`else` state assignment with exhaustive true/false validation or wildcard default coverage. Non-bool runtime match and `transition decide` remain future work.
+
+P18-M5 updates `transition decide { ... }` coverage from parsed/HIR-only scaffold to executable deterministic utility selection. The v0 subset supports ordered candidates with optional bool guards and required int scores, evaluates candidates in source order, evaluates scores only for enabled candidates, uses strict `>` so equal scores preserve the earlier candidate, assigns the selected state through the machine step backend path, and calls shared `cpt_panic("machine decision transition has no enabled candidates")` with exit code 101 when no candidate is enabled. Diagnostics now cover empty decides (`CON0299`), non-bool guards (`CON0297`), non-int scores (`CON0298`), and existing unknown target-state errors; fixtures include nested-machine composition via `Complete(child)` and `Result(child)`. Yield, schedulers, async/event buses, blackboards/mailboxes, floating-point scores, randomness, weighted selection, behavior-tree runtimes, GOAP/planner runtimes, and DragonGod runtime hooks remain out of scope.

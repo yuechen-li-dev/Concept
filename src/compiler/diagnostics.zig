@@ -240,6 +240,10 @@ pub const DiagnosticCode = enum {
     TransitionMatchUnsupportedScrutinee,
     TransitionMatchNonExhaustive,
     TransitionMatchCaseTypeMismatch,
+    TransitionDecideGuardMustBeBool,
+    TransitionDecideScoreMustBeInt,
+    TransitionDecideRequiresCandidate,
+    MachineDecisionNoEnabledCandidate,
     MachineTransitionMatchNoCase,
 
     pub fn format(self: DiagnosticCode) []const u8 {
@@ -462,6 +466,10 @@ pub const DiagnosticCode = enum {
             .TransitionMatchUnsupportedScrutinee => "CON0294",
             .TransitionMatchNonExhaustive => "CON0295",
             .TransitionMatchCaseTypeMismatch => "CON0296",
+            .TransitionDecideGuardMustBeBool => "CON0297",
+            .TransitionDecideScoreMustBeInt => "CON0298",
+            .TransitionDecideRequiresCandidate => "CON0299",
+            .MachineDecisionNoEnabledCandidate => "CON029A",
             .MachineTransitionMatchNoCase => "CON029B",
         };
     }
@@ -1070,6 +1078,33 @@ pub fn machineTransitionMatchNoCase(span: SourceSpan) Diagnostic {
         "transition match has no cases",
         span,
     ).withHelp("add true/false arms or a wildcard default arm");
+}
+
+pub fn transitionDecideGuardMustBeBool(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .TransitionDecideGuardMustBeBool,
+        .@"error",
+        "transition decide guard must be bool",
+        span,
+    ).withHelp("the expression after 'when' must have type bool");
+}
+
+pub fn transitionDecideScoreMustBeInt(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .TransitionDecideScoreMustBeInt,
+        .@"error",
+        "transition decide score must be int",
+        span,
+    ).withHelp("the expression after 'score' must have type int");
+}
+
+pub fn transitionDecideRequiresCandidate(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(
+        .TransitionDecideRequiresCandidate,
+        .@"error",
+        "transition decide requires at least one candidate",
+        span,
+    ).withHelp("add an explicit candidate; an unguarded candidate is enabled unconditionally");
 }
 
 pub fn nestedMachineFieldRequiresDefaultConstruction(span: SourceSpan) Diagnostic {

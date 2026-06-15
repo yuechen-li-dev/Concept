@@ -1,0 +1,27 @@
+# name: transition decide highest score run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Choose -> int {
+    state Start {
+        transition decide {
+            Low score 1;
+            High score 5;
+        };
+    }
+    state Low { return 1; }
+    state High { return 5; }
+}
+
+int main() {
+    Choose c = Choose();
+    Step(c);
+    Step(c);
+    return Result(c);
+}
+
+=== run ===
+exit_code: 5
