@@ -16,6 +16,11 @@ const semantics = @import("semantics.zig");
 const source_model = @import("source.zig");
 const types = @import("types.zig");
 
+const machine_result_before_completion_reason = "machine result cannot be read before completion";
+const machine_decide_no_enabled_reason = "machine decision transition has no enabled candidates";
+const machine_match_no_case_reason = "machine transition match found no matching case"; // Documented stable reason; bool v0 exhaustiveness prevents emission.
+const invalid_machine_state_reason = "invalid machine state reached";
+
 pub const EmitError = error{InvalidExecutable} || std.mem.Allocator.Error || std.Io.Writer.Error;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -469,7 +474,9 @@ fn emitMachineLayout(writer: anytype, ctx: *const BackendContext, machine_id: hi
         }
         try writer.writeAll("            return;\n");
     }
-    try writer.writeAll("    }\n}\n");
+    try writer.writeAll("        default:\n            cpt_panic(\"");
+    try writer.writeAll(invalid_machine_state_reason);
+    try writer.writeAll("\");\n            return;\n    }\n}\n");
 }
 
 fn isSupportedMachineScalarType(ctx: *const BackendContext, type_id: types.TypeId) bool {
@@ -598,7 +605,9 @@ fn emitMachineTransitionDecide(writer: anytype, ctx: *const BackendContext, mach
             try writer.writeAll(";\n                    }\n                }\n");
         }
     }
-    try writer.writeAll("                if (!cpt_has_candidate) {\n                    cpt_panic(\"machine decision transition has no enabled candidates\");\n                }\n                m->state = cpt_best_state;\n            }\n            return;\n");
+    try writer.writeAll("                if (!cpt_has_candidate) {\n                    cpt_panic(\"");
+    try writer.writeAll(machine_decide_no_enabled_reason);
+    try writer.writeAll("\");\n                }\n                m->state = cpt_best_state;\n            }\n            return;\n");
 }
 
 fn emitMachineStateExpr(writer: anytype, ctx: *const BackendContext, machine_id: hir.MachineId, expr_id: hir.ExprId) EmitError!void {
@@ -633,7 +642,9 @@ fn emitMachineStateExpr(writer: anytype, ctx: *const BackendContext, machine_id:
             try emitMachineFieldName(writer, ctx.module, field.name, machineFieldIndex(ctx, machine_id, field_id) orelse return error.InvalidExecutable);
             try writer.writeAll(".complete ? m->");
             try emitMachineFieldName(writer, ctx.module, field.name, machineFieldIndex(ctx, machine_id, field_id) orelse return error.InvalidExecutable);
-            try writer.writeAll(".result : (cpt_panic(\"machine result cannot be read before completion\"), 0))");
+            try writer.writeAll(".result : (cpt_panic(\"");
+            try writer.writeAll(machine_result_before_completion_reason);
+            try writer.writeAll("\"), 0))");
         },
         .group => |inner| {
             try writer.writeByte('(');
@@ -787,6 +798,7 @@ fn emitPanicHelper(writer: anytype, ctx: *const BackendContext) EmitError!bool {
 }
 
 fn mirContainsPanic(ctx: *const BackendContext) bool {
+    if (ctx.module.hir.machines.items.len > 0) return true;
     for (ctx.mir_module.store.blocks.items) |block| {
         for (block.statements) |statement| {
             switch (statement.kind) {
@@ -1282,7 +1294,9 @@ fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue
             try emitOperand(writer, ctx, operand);
             try writer.writeAll(".complete ? ");
             try emitOperand(writer, ctx, operand);
-            try writer.writeAll(".result : (cpt_panic(\"machine result cannot be read before completion\"), 0))");
+            try writer.writeAll(".result : (cpt_panic(\"");
+            try writer.writeAll(machine_result_before_completion_reason);
+            try writer.writeAll("\"), 0))");
         },
         .machine_state => |operand| {
             try emitOperand(writer, ctx, operand);

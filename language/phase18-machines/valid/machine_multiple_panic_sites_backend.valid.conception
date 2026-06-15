@@ -1,0 +1,42 @@
+# name: machine multiple panic sites backend
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Choose -> int {
+    state Start {
+        transition decide {
+            Done when false score 1;
+        };
+    }
+    state Done { return 1; }
+}
+
+machine Simple() -> int {
+    state Start { return 3; }
+}
+
+int main() {
+    Simple s = Simple();
+    int value = Result(s);
+    Choose c = Choose();
+    Step(c);
+    assert(false, "assert reason");
+    panic("manual reason");
+    return value;
+}
+
+=== c ===
+count: static void cpt_panic(const char* reason) | 1
+contains: cpt_panic("machine result cannot be read before completion")
+contains: cpt_panic("machine decision transition has no enabled candidates");
+contains: cpt_panic("assert reason");
+contains: cpt_panic("manual reason");
+contains: cpt_panic("invalid machine state reached");
+not_contains: cpt_machine_result_before_complete
+not_contains: machine_result_trap
+not_contains: transition_decide_trap
+not_contains: __builtin_trap
+not_contains: abort(
