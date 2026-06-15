@@ -1,0 +1,18 @@
+// DG4: caller owns a concrete machine and asks Mind to record its result.
+module Example.MindStaticSucceed;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Automata;
+import DragonGod.Kernel.Mind;
+
+machine SucceedMachine -> DragonGod.Kernel.Automata.AutomataSignal {
+    state Start { return DragonGod.Kernel.Automata.AutomataSignal::Succeed(DragonGod.Kernel.Core.Reason { code: 7 }); }
+}
+
+int main() {
+    DragonGod.Kernel.Mind.Mind mind = DragonGod.Kernel.Mind.mindEmpty();
+    SucceedMachine machine = SucceedMachine();
+    Step(machine);
+    if (Complete(machine)) { DragonGod.Kernel.Mind.mindRecordSignal(mind&, Result(machine)); }
+    return DragonGod.Kernel.Mind.mindLastReasonCode(mind);
+}

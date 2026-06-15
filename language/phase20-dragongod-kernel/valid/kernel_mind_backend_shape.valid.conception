@@ -1,0 +1,32 @@
+# name: phase20 DG4 mind backend shape
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+struct StateId { int value; };
+struct ActuationId { int value; };
+struct Reason { int code; };
+enum AutomataSignal { None, Goto(StateId target, Reason reason), Succeed(Reason reason), Fail(Reason reason), Act(ActuationId id), AwaitActuation(ActuationId id), };
+enum MindStatus { Idle, Running, Succeeded, Failed, WaitingActuation, };
+struct Mind { int active; MindStatus status; AutomataSignal lastSignal; Reason lastReason; };
+Mind mindEmpty() { return Mind { active: 0, status: MindStatus::Idle, lastSignal: AutomataSignal::None, lastReason: Reason { code: 0 } }; }
+void mindRecordSignal(mut Mind& mind, AutomataSignal signal) { mind.lastSignal = signal; match (signal) { AutomataSignal::Succeed(reason) => { mind.status = MindStatus::Succeeded; mind.lastReason = reason; return; } AutomataSignal::Fail(reason) => { mind.status = MindStatus::Failed; mind.lastReason = reason; return; } AutomataSignal::AwaitActuation(id) => { mind.status = MindStatus::WaitingActuation; return; } AutomataSignal::Act(id) => { mind.status = MindStatus::Running; return; } AutomataSignal::Goto(target, reason) => { mind.status = MindStatus::Running; mind.lastReason = reason; return; } AutomataSignal::None => { return; } } }
+bool mindIsDone(Mind mind) { return mind.status == MindStatus::Succeeded || mind.status == MindStatus::Failed; }
+int mindLastReasonCode(Mind mind) { return mind.lastReason.code; }
+
+int main() { Mind mind = mindEmpty(); mindRecordSignal(mind&, AutomataSignal::Succeed(Reason { code: 7 })); return mindLastReasonCode(mind); }
+
+=== backend-c ===
+contains: typedef struct cpt_struct_Mind
+contains: cpt_enum_MindStatus status;
+contains: cpt_enum_AutomataSignal lastSignal;
+contains: cpt_func_mindRecordSignal
+contains: cpt_enum_AutomataSignal_variant_Succeed
+contains: cpt_enum_AutomataSignal_variant_Fail
+not_contains: malloc
+not_contains: scheduler
+not_contains: AutomataStack
+not_contains: AutomatonGraph
+not_contains: DragonGod

@@ -1,0 +1,16 @@
+// DG4: yielding machines remain caller-polled; Mind records only after completion.
+module Example.MindStaticYield;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Automata;
+import DragonGod.Kernel.Mind;
+
+machine Child -> int { state Start { return 21; } }
+machine YieldThenSucceed -> DragonGod.Kernel.Automata.AutomataSignal {
+    Child child;
+    state Waiting {
+        Step(child);
+        if (!Complete(child)) { yield; }
+        return DragonGod.Kernel.Automata.AutomataSignal::Succeed(DragonGod.Kernel.Core.Reason { code: Result(child) });
+    }
+}
