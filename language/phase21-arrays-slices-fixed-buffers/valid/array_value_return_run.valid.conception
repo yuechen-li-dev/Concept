@@ -1,0 +1,9 @@
+fn makeValues() -> int[3] {
+    return [1, 2, 3];
+}
+
+fn main() -> int {
+    int[3] values = makeValues();
+    return values[2];
+}
+// expect: 3

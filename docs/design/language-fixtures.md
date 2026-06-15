@@ -628,3 +628,7 @@ Phase 21 M3 expands the arrays/slices/fixed-buffers corpus with run fixtures for
 P21-M4 teaches Stage 0 to treat fixed-array indexing over assignable places as a mutable place projection. Assignments such as `values[1] = 99;` and nested projections such as `matrix[1][0] = 42;` now type-check and lower through HIR/MIR place machinery. The assigned value is checked against the projected element type, constant indexes keep the existing static out-of-bounds diagnostic, and generated C emits the same bounds guard used by read indexing before the store.
 
 This milestone does not add slices, mutable slices, fixed buffers, `Capacity`, unchecked indexing, pointer decay, array-to-slice conversion, or DragonGod migration.
+
+### P21-M5 fixed-array value lowering fixtures
+
+P21-M5 expands `language/phase21-arrays-slices-fixed-buffers/` with run fixtures for fixed-array value assignment/copy, by-value function parameters, by-value returns, struct fields containing arrays, nested array assignment, and dynamic indexed reads after a copy. Invalid fixtures pin exact fixed-array assignment typing by rejecting different lengths and different element types. These fixtures verify that the C backend's wrapper-struct representation does not leak C array non-assignability or parameter decay into Concept semantics.

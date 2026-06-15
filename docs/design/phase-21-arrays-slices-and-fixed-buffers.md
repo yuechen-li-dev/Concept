@@ -557,3 +557,11 @@ P21-M3 teaches the compiler to read from fixed arrays. It adds postfix expressio
 P21-M4 teaches Stage 0 to treat fixed-array indexing over assignable places as a mutable place projection. Assignments such as `values[1] = 99;` and nested projections such as `matrix[1][0] = 42;` now type-check and lower through HIR/MIR place machinery. The assigned value is checked against the projected element type, constant indexes keep the existing static out-of-bounds diagnostic, and generated C emits the same bounds guard used by read indexing before the store.
 
 This milestone does not add slices, mutable slices, fixed buffers, `Capacity`, unchecked indexing, pointer decay, array-to-slice conversion, or DragonGod migration.
+
+## P21-M5 implementation note: MIR and C backend value arrays
+
+P21-M5 hardens fixed arrays as Concept values through MIR validation and C backend lowering. The C backend now emits each fixed-array type as a deterministic wrapper struct with a `data` member, for example `int[3]` lowers as a generated `cpt_array_int_array_3`-style typedef containing `int data[3]`. Nested arrays are emitted in type-store order, so the inner wrapper is declared before the outer wrapper.
+
+This preserves the core doctrine: Concept arrays are values, while C arrays are only an implementation detail inside the wrapper. Local declarations, assignments/copies, by-value parameters, by-value returns, struct fields, nested arrays, indexed reads, and indexed writes use wrapper values and `.data[...]` element access rather than relying on C array assignment, C parameter adjustment, or pointer decay.
+
+M5 remains intentionally internal to Concept lowering. It does not add slices, fixed buffers, `Capacity`, unchecked indexing, C ABI array passing, `repr(C)` array layout, heap vectors, generic containers, or DragonGod migration. Arrays of scalar values and arrays nested over scalar arrays are the proven M5 path; broader element layouts continue to follow the backend's existing supported-type rules.

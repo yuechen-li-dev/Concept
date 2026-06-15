@@ -1,0 +1,9 @@
+fn second(values: int[3]) -> int {
+    return values[1];
+}
+
+fn main() -> int {
+    int[3] values = [1, 2, 3];
+    return second(values);
+}
+// expect: 2

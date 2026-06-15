@@ -58,6 +58,9 @@ pub fn emitExecutableFromMir(
         .diagnostic_bag = diagnostic_bag,
     };
 
+    const emitted_array_layouts = try emitArrayLayouts(writer, &ctx);
+    if (emitted_array_layouts and (ctx.module.hir.enums.items.len > 0 or ctx.module.hir.structs.items.len > 0 or ctx.module.hir.machines.items.len > 0 or mir_module.store.functions.items.len > 0)) try writer.writeByte('\n');
+
     const emitted_enum_layouts = try emitEnumLayouts(writer, &ctx);
     if (emitted_enum_layouts and ctx.module.hir.structs.items.len > 0) try writer.writeByte('\n');
 
@@ -117,6 +120,41 @@ fn emitEnumLayouts(writer: anytype, ctx: *const BackendContext) EmitError!bool {
         emitted_any = true;
     }
     return emitted_any;
+}
+
+fn emitArrayLayouts(writer: anytype, ctx: *const BackendContext) EmitError!bool {
+    var emitted_any = false;
+    for (ctx.module.types.types.items, 0..) |kind, index| {
+        if (kind != .array) continue;
+        const type_id = types.TypeId{ .index = @intCast(index) };
+        if (!isSupportedArrayValueType(ctx, type_id)) {
+            try reportUnsupportedCType(ctx, null);
+            return error.InvalidExecutable;
+        }
+        if (emitted_any) try writer.writeByte('\n');
+        try emitArrayLayout(writer, ctx, type_id, kind.array);
+        emitted_any = true;
+    }
+    return emitted_any;
+}
+
+fn emitArrayLayout(writer: anytype, ctx: *const BackendContext, type_id: types.TypeId, array: anytype) EmitError!void {
+    try writer.writeAll("typedef struct {\n    ");
+    try emitCType(writer, ctx, array.element, null);
+    try writer.print(" data[{d}];\n}} ", .{array.length});
+    try emitArrayTypeName(writer, ctx.module, type_id);
+    try writer.writeAll(";\n");
+}
+
+fn isSupportedArrayValueType(ctx: *const BackendContext, type_id: types.TypeId) bool {
+    if (!ctx.module.types.contains(type_id)) return false;
+    return switch (ctx.module.types.kind(type_id)) {
+        .int, .bool, .alloc_error => true,
+        .array => |array| isSupportedArrayValueType(ctx, array.element),
+        .struct_type => false,
+        .enum_type => |enum_id| isSupportedEnumLayout(ctx, enum_id),
+        else => false,
+    };
 }
 
 /// P5-M1 enum layout emission is backend-local and intentionally not ABI-stable.
@@ -260,6 +298,7 @@ fn isSupportedStructFieldType(ctx: *const BackendContext, type_id: types.TypeId)
     if (!ctx.module.types.contains(type_id)) return false;
     return switch (ctx.module.types.kind(type_id)) {
         .int, .bool, .alloc_error => true,
+        .array => |array| isSupportedArrayValueType(ctx, array.element),
         .enum_type => |enum_id| isSupportedEnumLayout(ctx, enum_id),
         .pointer => |pointer| isSupportedStructFieldPointerType(ctx, pointer.pointee),
         .void, .arena, .allocator, .struct_type, .machine_type, .interface_type, .dyn_interface, .manual_init, .type_param => false,
@@ -1135,7 +1174,7 @@ fn emitArrayConstructorAssignment(writer: anytype, ctx: *const BackendContext, p
     for (elements, 0..) |element, index| {
         try writer.writeAll("    ");
         try emitPlace(writer, ctx, place);
-        try writer.print("[{d}] = ", .{index});
+        try writer.print(".data[{d}] = ", .{index});
         try emitOperand(writer, ctx, element);
         try writer.writeAll(";\n");
     }
@@ -1337,7 +1376,7 @@ fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue
             try writer.writeAll(array_index_oob_reason);
             try writer.writeAll("\"), 0) : ");
             try emitOperand(writer, ctx, array_index.base);
-            try writer.writeByte('[');
+            try writer.writeAll(".data[");
             try emitOperand(writer, ctx, array_index.index);
             try writer.writeAll("])");
         },
@@ -1437,9 +1476,9 @@ fn emitPlace(writer: anytype, ctx: *const BackendContext, place: mir.MirPlace) E
             try writer.writeAll(array_index_oob_reason);
             try writer.writeAll("\"), ");
             try emitPlace(writer, ctx, index_place.base.*);
-            try writer.writeAll("[0]) : ");
+            try writer.writeAll(".data[0]) : ");
             try emitPlace(writer, ctx, index_place.base.*);
-            try writer.writeByte('[');
+            try writer.writeAll(".data[");
             try emitOperand(writer, ctx, index_place.index.*);
             try writer.writeAll("])");
         },
@@ -1484,19 +1523,9 @@ const CTypePosition = enum {
 };
 
 fn emitCDeclLocal(writer: anytype, ctx: *const BackendContext, type_id: types.TypeId, span: ?diagnostics.SourceSpan, local_id: mir.MirLocalId) EmitError!void {
-    switch (ctx.module.types.kind(type_id)) {
-        .array => |array| {
-            try emitCTypeAt(writer, ctx, array.element, span, .value);
-            try writer.writeByte(' ');
-            try emitLocalName(writer, ctx.module, ctx.mir_module, local_id);
-            try writer.print("[{d}]", .{array.length});
-        },
-        else => {
-            try emitCType(writer, ctx, type_id, span);
-            try writer.writeByte(' ');
-            try emitLocalName(writer, ctx.module, ctx.mir_module, local_id);
-        },
-    }
+    try emitCType(writer, ctx, type_id, span);
+    try writer.writeByte(' ');
+    try emitLocalName(writer, ctx.module, ctx.mir_module, local_id);
 }
 
 fn emitCType(writer: anytype, ctx: *const BackendContext, type_id: types.TypeId, span: ?diagnostics.SourceSpan) EmitError!void {
@@ -1551,10 +1580,7 @@ fn emitCTypeAt(writer: anytype, ctx: *const BackendContext, type_id: types.TypeI
             try reportInterfaceRuntimeUnsupported(ctx, span);
             return error.InvalidExecutable;
         },
-        .array => |array| {
-            try emitCTypeAt(writer, ctx, array.element, span, .value);
-            try writer.print("[{d}]", .{array.length});
-        },
+        .array => try emitArrayTypeName(writer, ctx.module, type_id),
         .manual_init, .type_param => {
             try reportUnsupportedCType(ctx, span);
             return error.InvalidExecutable;
@@ -1585,6 +1611,11 @@ fn sameType(left: types.TypeId, right: types.TypeId) bool {
 // ─────────────────────────────────────────────────────────────────────────────
 // C name rendering / escaping
 // ─────────────────────────────────────────────────────────────────────────────
+
+fn emitArrayTypeName(writer: anytype, module: *const semantics.SemanticModule, type_id: types.TypeId) !void {
+    try writer.writeAll("cpt_array_");
+    try emitTypeNameComponent(writer, module, type_id);
+}
 
 fn emitEnumTypeName(writer: anytype, module: *const semantics.SemanticModule, symbol: hir.SymbolId) !void {
     try writer.writeAll("cpt_enum_");
