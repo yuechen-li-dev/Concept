@@ -1,0 +1,5 @@
+module DragonGod.Examples.CheckpointReplayComposition;
+
+// Replay produces deterministic in-memory state; checkpoint captures that state;
+// restore returns to it. Replay log file persistence is intentionally deferred.
+import DragonGod.Kernel.Persistence;

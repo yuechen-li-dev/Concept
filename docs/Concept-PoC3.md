@@ -3043,3 +3043,8 @@ DG9 stores `AutomataSignal` directly inside `TraceEvent` and uses `match` for bo
 ### Phase 20 / DG10 DragonGod Replay v0
 
 DG10 extends the DragonGod kernel shell with `DragonGod.Kernel.Replay`: fixed-slot `ReplayLog`, integer-backed `ReplayEvent` variants, value-shaped `ReplayDriver`, replay appending, single-step cursor application, and bounded apply-all behavior. Fixtures prove deterministic application into clock, Memory, Events, Actuation, Agent memory, RNG-seed metadata, and Trace marker state. Persistence/checkpoint/serialization/file input remain deferred.
+
+
+### DragonGod DG11 status
+
+DG11 Persistence/checkpoint v0 is implemented as in-memory checkpoint capture/restore only. Supported: `KernelCheckpoint`, checkpoint capture, world restore, agent restore, events restore, actuation restore, trace restore, RNG seed metadata, and replay/checkpoint composition fixtures. Deferred: file I/O, JSON, binary serialization, stable schema, migration, compression, dynamic graph snapshots, heap/pointer graph persistence, replay log persistence, and external storage adapters.

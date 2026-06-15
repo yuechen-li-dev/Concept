@@ -1,0 +1,5 @@
+module DragonGod.Examples.CheckpointMemoryRestore;
+
+// Checkpoint v0 is in-memory only: no disk, file, JSON, or binary serialization.
+// Capture explicit kernel structs, mutate live memory, then restore explicitly.
+import DragonGod.Kernel.Persistence;

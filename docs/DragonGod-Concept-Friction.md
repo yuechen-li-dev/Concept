@@ -216,3 +216,13 @@ Workaround: DG9 keeps `TraceRecorder` as the v0 implementation and treats `Trace
 - No file/string/serialization substrate is used; replay loading/saving, JSON, binary checkpoints, and Persistence are intentionally deferred.
 - Events and Actuation integrate through their existing fixed-slot APIs. Trace integration uses an explicit `TraceMark` mapped onto `traceEnter` as a marker-shaped v0 workaround until Trace has a dedicated mark kind.
 - Backend fixtures assert broad no-hidden-runtime properties, but avoid overfitting every generated temporary name beyond the replay enum/log/driver/switch shape.
+
+## DG11 Persistence/checkpoint v0 friction
+
+- Large value-shaped snapshots are possible, but ergonomics are repetitive: every fixed-slot kernel shape must be named explicitly in `KernelCheckpoint` and constructor/restore helpers.
+- Nested struct restore works through whole-struct assignment, but field-by-field alternatives would become noisy for World/Agent memory, EventBus, ActuatorHost, and TraceRecorder.
+- Multiple `mut &` restore parameters compiled in fixtures, but the call shape is visually dense; v0 keeps explicit helpers plus `checkpointRestoreAll`.
+- Persistence does not import Replay in v0 to avoid coupling checkpoint state to replay log mechanics; RNG seed metadata is captured as an `int`.
+- No serialization/string/file primitives were used; this is correct for v0, but future disk persistence will need separate design rather than stretching checkpoint helpers.
+- No generic snapshot traits/interfaces or array/vector/spans exist, so fixed-slot state snapshot repetition remains visible.
+- Backend fixtures assert broad generated-C shape and forbidden terms; exact temporary-name assertions remain intentionally avoided for stability.

@@ -1,0 +1,5 @@
+module DragonGod.Examples.CheckpointTraceRestore;
+
+// Trace restore is an explicit in-memory struct restore, not a logging framework
+// snapshot, file sink, JSON document, or binary trace format.
+import DragonGod.Kernel.Persistence;
