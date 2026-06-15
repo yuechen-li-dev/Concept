@@ -131,3 +131,25 @@ Observed non-blocking friction:
 - Pain observed: `MindCtx` with live `World`/`Agent` references would broaden DG4 into borrowing/lifetime design.
 - Workaround used: `MindCtx` stores value-shaped `Clock` and `Memory`, while `Agent` and `World` continue as shells with enough integration for static fixtures.
 - Suggested future fix: Introduce borrowed world/agent context when DG5+ stack/tick semantics need it.
+
+
+## DG5 Automata stack v0
+
+Status: DG5 Automata stack v0 complete; no blocking DG5 friction observed.
+
+DG5 proved that Concept can express a small kernel-owned stack as explicit value fields, return `AutomataFrame` structs by value, mutate `AutomataStack` through `mut AutomataStack&`, and route payload enum variants `Goto`, `Push`, and `Pop` through `mindRecordSignal` without DragonGod compiler hooks.
+
+- Phase: 20 / DG5
+- Pain observed: DragonGod wants an eventual vector/arena-backed stack, but the current stable kernel slice intentionally avoids generic containers and allocation.
+- Workaround used: `AutomataStack` v0 uses four explicit frame fields plus `depth`.
+- Suggested future fix: replace the fixed slots only when the real graph/machine-storage phase needs an arena-backed stack.
+
+- Phase: 20 / DG5
+- Pain observed: Fixed slots make push/top/replace code repetitive and field-oriented.
+- Workaround used: keep helper functions small and deterministic so callers do not duplicate slot dispatch.
+- Suggested future fix: add kernel container primitives later rather than adding a DragonGod-specific compiler feature.
+
+- Phase: 20 / DG5
+- Pain observed: Empty-top, overflow, and underflow would be cleaner with an `Option`/`Result` surface for non-panicking callers.
+- Workaround used: DG5 uses `panic` with stable DragonGod reasons, matching existing runtime failure doctrine.
+- Suggested future fix: introduce explicit optional/result-shaped APIs once Concept's kernel-facing error vocabulary is settled.

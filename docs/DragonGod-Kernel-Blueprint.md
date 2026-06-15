@@ -1675,4 +1675,13 @@ The DG3 API is `memoryWrite(mut Memory& memory, MemoryKeyInt key, int value)`, `
 
 ### DG4 Mind v0 static executor status
 
-DG4 proves Mind can supervise static concrete machines. A caller owns a concrete machine value, explicitly calls `Step(machine)`, checks `Complete(machine)`, and records an `AutomataSignal` result through `mindRecordSignal`. Mind v0 records `None`, terminal `Succeed`/`Fail` reason codes, deferred `Goto`, and waiting/actuation-shaped signals without executing graph or stack semantics. DG5 introduces Automata stack semantics. Dynamic `AutomatonGraph`, `AutomataStack`, root-frame behavior, transition scanning, interrupt scanning, scheduler/async hooks, and DragonGod compiler hooks remain deferred.
+DG4 proves Mind can supervise static concrete machines. A caller owns a concrete machine value, explicitly calls `Step(machine)`, checks `Complete(machine)`, and records an `AutomataSignal` result through `mindRecordSignal`. Mind v0 records `None`, terminal `Succeed`/`Fail` reason codes, deferred `Goto`, and waiting/actuation-shaped signals without executing graph or stack semantics. DG5 introduces Automata stack semantics. Dynamic `AutomatonGraph`, root-frame behavior, transition scanning, interrupt scanning, scheduler/async hooks, and DragonGod compiler hooks remain deferred.
+
+
+### DG5 Automata stack v0 status
+
+DG5 is complete as the first DragonGod Kernel Automata stack slice. `DragonGod.Kernel.Automata` now defines `AutomataFrame` as a `StateId` plus `Reason`, and `AutomataStack` as a fixed four-frame value with explicit `frame0`, `frame1`, `frame2`, `frame3`, and `depth` fields. The helper API covers empty construction, push, pop, top, replace-top, depth, empty, and full queries. Overflow, underflow, and empty-top reads use shared Concept runtime failure via `panic`/`cpt_panic`.
+
+`AutomataSignal` now includes `Push(target, reason)` and `Pop(reason)`. `Mind` now owns an `AutomataStack`; `mindRecordSignal` keeps `Succeed` and `Fail` terminal, leaves `None` as a no-op, continues to record/defer `Act` and `AwaitActuation`, pushes-or-replaces for `Goto`, pushes for `Push`, and pops for `Pop`. A `Pop` that empties the stack returns Mind to `Idle`; a `Pop` with remaining frames leaves Mind `Running`.
+
+DG5 remains Automata stack v0, not dynamic graph execution. It does not add dynamic `AutomatonGraph`, root-frame semantics, keep-root behavior, type-erased machine storage, `AutomataMachineOps`, generic machine stepping, transition scanning, interrupt scanning, decision memory, actuation dispatch, events, trace, replay, persistence, parallel staged ticking, scheduler/async behavior, or DragonGod compiler hooks.

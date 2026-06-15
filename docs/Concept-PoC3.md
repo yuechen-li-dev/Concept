@@ -3002,8 +3002,17 @@ DG3 also adds examples and fixtures proving Memory read/write, fallback reads, k
 
 ## Phase 20 / DG4 DragonGod Kernel Mind v0 static executor
 
-Phase 20 / DG4 is complete. The corpus now has 1082 `.conception` fixture files, with 30 DragonGod Phase 20 valid fixtures. DG4 turns the Mind shell into a minimal static executor/signal recorder: `MindStatus` records Idle/Running/Succeeded/Failed/WaitingActuation, `Mind` stores `active`, `status`, `lastSignal`, and `lastReason`, and helper functions initialize Mind, record signals, report terminal success/failure, and read the last reason code.
+Phase 20 / DG4 is complete. The corpus then had 1082 `.conception` fixture files, with 30 DragonGod Phase 20 valid fixtures. DG4 turns the Mind shell into a minimal static executor/signal recorder: `MindStatus` records Idle/Running/Succeeded/Failed/WaitingActuation, `Mind` stores `active`, `status`, `lastSignal`, and `lastReason`, and helper functions initialize Mind, record signals, report terminal success/failure, and read the last reason code.
 
 DG4 proves Mind can supervise static concrete machines. A caller owns a concrete signal-returning machine, calls `Step(machine)`, checks `Complete(machine)`, and passes `Result(machine)` to `mindRecordSignal`. Fixtures cover direct `Succeed`/`Fail` recording, deferred `Goto` recording without stack execution, static succeed machines, yielding machines that remain incomplete until later steps, and a Memory-driven static machine using DG3 `memoryRead`. DG5 introduces Automata stack semantics.
 
 DG4 deliberately does not add a dynamic `AutomatonGraph`, `AutomataStack`, `Goto`/`Push`/`Pop` execution, root-frame semantics, transition scanning, interrupt scanning, decision memory, type-erased machine storage, Actuation dispatch, Events, Trace, Replay, Persistence, parallel staged tick, scheduler/async behavior, or DragonGod compiler hooks.
+
+
+## Phase 20 / DG5 DragonGod Kernel Automata stack v0
+
+Phase 20 / DG5 is complete. The corpus now has 1089 `.conception` fixture files, with 37 DragonGod Phase 20 valid fixtures. DG5 adds `AutomataFrame` and the fixed-capacity four-frame `AutomataStack` to `DragonGod.Kernel.Automata`, plus helpers for empty construction, push, pop, top, replace-top, depth, empty, and full queries. Stack frames store `StateId` plus integer-backed `Reason`; they do not store erased machines, dynamic graph nodes, or scheduler state.
+
+`AutomataSignal` now includes `Push(target, reason)` and `Pop(reason)` alongside `None`, `Goto`, `Succeed`, `Fail`, `Act`, and `AwaitActuation`. Mind v0 now owns an `AutomataStack`: `Goto` pushes when the stack is empty and replaces the current top frame otherwise; `Push` pushes a new frame; `Pop` removes the top frame and leaves Mind `Running` when frames remain or `Idle` when the stack becomes empty. `Succeed` and `Fail` remain explicit terminal statuses, `None` remains a no-op, and `Act`/`AwaitActuation` remain recorded/deferred only.
+
+DG5 deliberately does not add a dynamic `AutomatonGraph`, root-frame policy, keep-root behavior, type-erased machine storage, `AutomataMachineOps`, transition scanning, interrupt scanning, decision memory, actuation dispatch, events, trace, replay, persistence, parallel staged ticks, scheduler/async behavior, or DragonGod compiler hooks.
