@@ -679,7 +679,7 @@ Final supported Phase 18 surface:
 
 Final Phase 18 fixture count is 66 fixtures under `language/phase18-machines/`:
 43 valid fixtures and 23 invalid fixtures. The full language fixture corpus has
-1102 `.conception` files at closeout. The Phase 18 fixture categories cover
+1052 `.conception` files in the current corpus. The Phase 18 fixture categories cover
 frame/value hardening, nested machine fields, nested operations, runtime match,
 runtime decide, `State(machine)`, runtime failure hardening, and integration
 examples/backend shape. P18-M9 also registers the six P18-M8 integration fixtures
