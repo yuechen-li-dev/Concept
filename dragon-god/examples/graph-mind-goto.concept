@@ -1,0 +1,18 @@
+module DragonGod.Examples.GraphMindGoto;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Automata;
+import DragonGod.Kernel.Graph;
+import DragonGod.Kernel.Mind;
+
+// Graph metadata can feed a StateId target to Mind without generic dynamic
+// machine stepping or type-erased machine storage.
+int exampleGraphMindGoto() {
+    DragonGod.Kernel.Graph.AutomatonGraph graph = DragonGod.Kernel.Graph.automatonGraphEmpty();
+    DragonGod.Kernel.Graph.AutomatonNodeId root = DragonGod.Kernel.Graph.automatonGraphAddNode(graph&, DragonGod.Kernel.Core.StateId { value: 20 }, DragonGod.Kernel.Graph.AutomatonNodeKind::StaticState, DragonGod.Kernel.Core.Reason { code: 2 });
+    DragonGod.Kernel.Graph.automatonGraphSetRoot(graph&, root);
+    DragonGod.Kernel.Graph.AutomatonNode node = DragonGod.Kernel.Graph.automatonGraphRootNode(graph);
+    DragonGod.Kernel.Mind.Mind mind = DragonGod.Kernel.Mind.mindEmpty();
+    DragonGod.Kernel.Mind.mindRecordSignal(mind&, DragonGod.Kernel.Automata.AutomataSignal::Goto(node.state, node.reason));
+    return DragonGod.Kernel.Mind.mindCurrentState(mind).value;
+}

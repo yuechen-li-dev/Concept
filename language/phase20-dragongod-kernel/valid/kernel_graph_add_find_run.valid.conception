@@ -1,0 +1,30 @@
+# name: kernel_graph_add_find_run.valid.conception
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+struct StateId { int value; }; struct ActuationId { int value; }; struct DecisionSlotId { int value; }; struct Reason { int code; };
+struct AutomatonNodeId { int value; };
+enum AutomatonNodeKind { Empty, StaticState, MachineKind, External, };
+struct AutomatonNode { AutomatonNodeId id; StateId state; AutomatonNodeKind kind; Reason reason; bool occupied; };
+struct AutomatonGraph { int nextId; int count; AutomatonNodeId root; bool hasRoot; AutomatonNode node0; AutomatonNode node1; AutomatonNode node2; AutomatonNode node3; };
+AutomatonNodeId automatonNodeId(int value) { return AutomatonNodeId { value: value }; }
+AutomatonNode automatonNodeEmpty() { return AutomatonNode { id: automatonNodeId(0), state: StateId { value: 0 }, kind: AutomatonNodeKind::Empty, reason: Reason { code: 0 }, occupied: false }; }
+AutomatonNode automatonNode(AutomatonNodeId id, StateId state, AutomatonNodeKind kind, Reason reason) { return AutomatonNode { id: id, state: state, kind: kind, reason: reason, occupied: true }; }
+AutomatonGraph automatonGraphEmpty() { AutomatonNode empty = automatonNodeEmpty(); return AutomatonGraph { nextId: 1, count: 0, root: automatonNodeId(0), hasRoot: false, node0: empty, node1: empty, node2: empty, node3: empty }; }
+int automatonGraphCount(AutomatonGraph graph) { return graph.count; }
+void automatonGraphStoreNode(mut AutomatonGraph& graph, AutomatonNode node) { if (!graph.node0.occupied) { graph.node0 = node; graph.count = graph.count + 1; return; } if (!graph.node1.occupied) { graph.node1 = node; graph.count = graph.count + 1; return; } if (!graph.node2.occupied) { graph.node2 = node; graph.count = graph.count + 1; return; } if (!graph.node3.occupied) { graph.node3 = node; graph.count = graph.count + 1; return; } panic("DragonGod.Graph capacity exceeded"); }
+AutomatonNodeId automatonGraphAddNode(mut AutomatonGraph& graph, StateId state, AutomatonNodeKind kind, Reason reason) { AutomatonNodeId id = automatonNodeId(graph.nextId); graph.nextId = graph.nextId + 1; automatonGraphStoreNode(graph&, automatonNode(id, state, kind, reason)); return id; }
+bool automatonGraphNodeMatches(AutomatonNode node, AutomatonNodeId id) { return node.occupied && node.id.value == id.value; }
+bool automatonGraphHasNode(AutomatonGraph graph, AutomatonNodeId id) { if (automatonGraphNodeMatches(graph.node0, id)) { return true; } if (automatonGraphNodeMatches(graph.node1, id)) { return true; } if (automatonGraphNodeMatches(graph.node2, id)) { return true; } if (automatonGraphNodeMatches(graph.node3, id)) { return true; } return false; }
+AutomatonNode automatonGraphFindNode(AutomatonGraph graph, AutomatonNodeId id) { if (automatonGraphNodeMatches(graph.node0, id)) { return graph.node0; } if (automatonGraphNodeMatches(graph.node1, id)) { return graph.node1; } if (automatonGraphNodeMatches(graph.node2, id)) { return graph.node2; } if (automatonGraphNodeMatches(graph.node3, id)) { return graph.node3; } panic("DragonGod.Graph node not found"); }
+void automatonGraphSetRoot(mut AutomatonGraph& graph, AutomatonNodeId id) { if (!automatonGraphHasNode(graph, id)) { panic("DragonGod.Graph root node not found"); } graph.root = id; graph.hasRoot = true; }
+bool automatonGraphHasRoot(AutomatonGraph graph) { return graph.hasRoot; }
+AutomatonNodeId automatonGraphRootId(AutomatonGraph graph) { if (!graph.hasRoot) { panic("DragonGod.Graph root not set"); } return graph.root; }
+AutomatonNode automatonGraphRootNode(AutomatonGraph graph) { if (!graph.hasRoot) { panic("DragonGod.Graph root not set"); } return automatonGraphFindNode(graph, graph.root); }
+int automatonNodeKindCode(AutomatonNodeKind kind) { match (kind) { AutomatonNodeKind::Empty => { return 0; } AutomatonNodeKind::StaticState => { return 1; } AutomatonNodeKind::MachineKind => { return 2; } AutomatonNodeKind::External => { return 3; } } }
+
+int main() { AutomatonGraph g = automatonGraphEmpty(); AutomatonNodeId a = automatonGraphAddNode(g&, StateId { value: 10 }, AutomatonNodeKind::StaticState, Reason { code: 1 }); AutomatonNodeId b = automatonGraphAddNode(g&, StateId { value: 20 }, AutomatonNodeKind::External, Reason { code: 2 }); if (g.nextId != 3) { return 1; } if (automatonGraphCount(g) != 2) { return 2; } if (!automatonGraphHasNode(g, a)) { return 3; } AutomatonNode node = automatonGraphFindNode(g, b); return node.state.value - 20; }
+
+=== run ===
