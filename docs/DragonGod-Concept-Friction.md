@@ -56,3 +56,15 @@ Each DragonGod phase should record friction discovered while writing real Concep
 - Classification: documentation gap
 - Severity: low
 - Suggested future fix: Document idiomatic import and qualified-name conventions for multi-module Concept code.
+
+## DG2 static automata signals and machine examples
+
+Status: no blocking DG2 friction observed.
+
+DG2 proved the existing Concept machine substrate can return `AutomataSignal` payload enum values without DragonGod-specific compiler hooks. `Step`, `Complete`, and `Result` work on signal-returning machines, and payload variants can be constructed, returned, matched, and inspected for `Succeed`, `Fail`, `Goto`, `Act`, and `AwaitActuation` in static fixtures.
+
+Observed non-blocking friction:
+
+- Imported payload enum examples still use fully qualified `DragonGod.Kernel.Automata.AutomataSignal::...` variant names for clarity and to avoid relying on alias/import sugar that does not exist yet.
+- `Reason` remains integer-backed; string/StringView-backed human-readable reasons are still deferred.
+- Backend C assertions for payload-enum machine results should pin only stable essentials, because exact generated helper and temporary names are not intended as public DragonGod API.

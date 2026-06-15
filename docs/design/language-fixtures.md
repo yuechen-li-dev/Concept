@@ -555,3 +555,9 @@ Phase 19 also adds documentation examples under `examples/phase19/` for wait-unt
 ## Phase 20 DragonGod Kernel fixtures
 
 Phase 20 fixtures live under `language/phase20-dragongod-kernel/valid/` and pin the DG1 module/type seed. The five valid run fixtures cover foundational ID/time/reason structs, payload `AutomataSignal` construction and matching, the minimal Memory shell, Mind/Agent/World shell structs, and qualified multi-module imports for the `DragonGod.Kernel` root. They intentionally do not test a DragonGod runtime: Memory storage, Mind tick loops, Automata stacks, schedulers, async, blackboard/mailbox/event-bus behavior, and compiler hooks remain outside DG1.
+
+## Phase 20 / DG2 DragonGod fixtures
+
+Phase 20 DragonGod coverage now contains 16 valid fixtures. DG2 added signal-returning machine run fixtures for `Succeed`, `Fail`, `Goto`, yield-then-succeed, transition-match true/false, transition-decide high/low, `Act`, and `AwaitActuation`, plus a backend C fixture for the static automata signal machine shape.
+
+These fixtures intentionally remain static and specialized. They do not introduce Mind ticking, Automata stacks, dynamic graph storage, Memory storage, Actuation implementation, Events, Trace, Replay, Persistence, parallel staged ticking, scheduler/async behavior, or DragonGod compiler hooks.

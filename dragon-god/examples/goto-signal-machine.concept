@@ -1,0 +1,10 @@
+module DragonGod.Examples.GotoSignalMachine;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Automata;
+
+machine GotoNow -> DragonGod.Kernel.Automata.AutomataSignal {
+    state Start {
+        return DragonGod.Kernel.Automata.AutomataSignal::Goto(DragonGod.Kernel.Core.StateId { value: 42 }, DragonGod.Kernel.Core.Reason { code: 5 });
+    }
+}

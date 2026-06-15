@@ -1,0 +1,26 @@
+# name: phase20 DG2 signal await actuation smoke run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+struct StateId { int value; };
+struct ActuationId { int value; };
+struct Reason { int code; };
+
+enum AutomataSignal {
+    None,
+    Goto(StateId target, Reason reason),
+    Succeed(Reason reason),
+    Fail(Reason reason),
+    Act(ActuationId id),
+    AwaitActuation(ActuationId id),
+};
+
+machine AwaitNow -> AutomataSignal { state Start { return AutomataSignal::AwaitActuation(ActuationId { value: 32 }); } }
+int main() { AwaitNow m = AwaitNow(); Step(m); AutomataSignal signal = Result(m); match (signal) { AutomataSignal::AwaitActuation(id) => return id.value; AutomataSignal::Act(id) => return id.value; AutomataSignal::None => return 99; AutomataSignal::Goto(target, reason) => return target.value + reason.code; AutomataSignal::Succeed(reason) => return reason.code; AutomataSignal::Fail(reason) => return reason.code; } }
+
+
+=== run ===
+exit_code: 32

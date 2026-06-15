@@ -1630,3 +1630,19 @@ DragonGod is explicit behavioral architecture in Concept.
 Phase 20 / DG1 creates the first `dragon-god/` source tree and seeds the `DragonGod.Kernel` root with Core, Automata, Memory, and Mind module/type skeletons. Public names are pinned to Automata, Mind, Memory, and AutomataSignal; historical names such as HFSM, Brain, Blackboard, AiStep, and NodeRunner are not part of the public DragonGod.Kernel source surface.
 
 DG1 is intentionally not the full kernel. It does not implement Memory storage, changed-key tracking, TTL, Mind ticking, Automata stacks, dynamic graphs, MachineOps erasure, actuation, events, trace, replay, persistence, parallel staged ticks, a scheduler, async behavior, blackboard/mailbox/event keywords, or DragonGod compiler hooks. The DG1 Concept friction log starts in `docs/DragonGod-Concept-Friction.md`.
+
+## Phase 20 / DG2 status: static automata signals and machine examples
+
+DG2 is complete as a static/specialized DragonGod.Kernel milestone. Concept machines now have DragonGod examples and fixtures proving machines can return `AutomataSignal`, and that `Step`, `Complete`, and `Result` operate on those signal-returning machine frames. DG2 covers `AutomataSignal::Succeed`, `Fail`, `Goto`, `Act`, and `AwaitActuation` construction, return, match, and payload inspection in static examples/fixtures.
+
+DG2 also proves `yield;` inside a machine returning `AutomataSignal`: the yielding step returns immediately, leaves the machine incomplete, preserves state, and does not write the result until a later completing step returns the signal. Runtime `transition match` and deterministic `transition decide` are covered for machines that eventually return `AutomataSignal`.
+
+No Mind tick loop, Automata stack, dynamic `AutomatonGraph`, type-erased machine storage, `AutomataMachineOps`, Memory storage, changed-key tracking, Actuation subsystem, Events, Trace, Replay, Persistence, parallel staged tick, scheduler, async runtime, blackboard/mailbox/event keywords, or DragonGod compiler hooks were added for DG2.
+
+Feature matrix update:
+
+- DG0 Blueprint: complete.
+- DG1 Kernel core seed: complete.
+- DG2 Static automata signals and machine examples: complete.
+- Supported in DG2: machines returning `AutomataSignal`; `Step`/`Complete`/`Result` on signal-returning machines; payload construction and matching; yield in signal-returning machines; transition match/decide in signal-returning machines.
+- Deferred after DG2: Mind tick loop; Automata stack; dynamic graph; Memory storage; Actuation subsystem; Events; Trace; Replay; Persistence; parallel execution; scheduler/async/DragonGod runtime hooks.

@@ -3823,4 +3823,18 @@ test "language run fixtures: phase20 DragonGod Kernel core seed" {
     try expectRunFixture("../../../language/phase20-dragongod-kernel/valid/kernel_memory_shell.valid.conception");
     try expectRunFixture("../../../language/phase20-dragongod-kernel/valid/kernel_mind_agent_world.valid.conception");
     try expectRunFixture("../../../language/phase20-dragongod-kernel/valid/kernel_cross_module_imports.valid.conception");
+    try expectRunFixture("../../../language/phase20-dragongod-kernel/valid/kernel_signal_succeed_machine_run.valid.conception");
+    try expectRunFixture("../../../language/phase20-dragongod-kernel/valid/kernel_signal_fail_machine_run.valid.conception");
+    try expectRunFixture("../../../language/phase20-dragongod-kernel/valid/kernel_signal_goto_machine_run.valid.conception");
+    try expectRunFixture("../../../language/phase20-dragongod-kernel/valid/kernel_signal_yield_then_succeed_run.valid.conception");
+    try expectRunFixture("../../../language/phase20-dragongod-kernel/valid/kernel_signal_match_true_run.valid.conception");
+    try expectRunFixture("../../../language/phase20-dragongod-kernel/valid/kernel_signal_match_false_run.valid.conception");
+    try expectRunFixture("../../../language/phase20-dragongod-kernel/valid/kernel_signal_decide_high_run.valid.conception");
+    try expectRunFixture("../../../language/phase20-dragongod-kernel/valid/kernel_signal_decide_low_run.valid.conception");
+    try expectRunFixture("../../../language/phase20-dragongod-kernel/valid/kernel_signal_act_smoke_run.valid.conception");
+    try expectRunFixture("../../../language/phase20-dragongod-kernel/valid/kernel_signal_await_actuation_smoke_run.valid.conception");
+}
+
+test "language backend-c fixture: phase20 DragonGod automata signal machines" {
+    try expectBackendCFixture("../../../language/phase20-dragongod-kernel/valid/kernel_automata_signal_machine_backend.valid.conception");
 }
