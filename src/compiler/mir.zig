@@ -239,6 +239,9 @@ pub const MirRvalue = union(enum) {
     option_some: struct { type_id: types.TypeId, value: MirOperand },
     option_none: types.TypeId,
     option_is_some: MirOperand,
+    option_is_none: MirOperand,
+    option_tag: MirOperand,
+    option_payload: MirOperand,
     option_or: struct { option: MirOperand, fallback: MirOperand },
     enum_tag: MirOperand,
     enum_payload_field: struct {
@@ -409,6 +412,9 @@ pub const MirRvalue = union(enum) {
             .option_some => |some| .{ .option_some = .{ .type_id = some.type_id, .value = try some.value.clone(allocator) } },
             .option_none => |type_id| .{ .option_none = type_id },
             .option_is_some => |operand| .{ .option_is_some = try operand.clone(allocator) },
+            .option_is_none => |operand| .{ .option_is_none = try operand.clone(allocator) },
+            .option_tag => |operand| .{ .option_tag = try operand.clone(allocator) },
+            .option_payload => |operand| .{ .option_payload = try operand.clone(allocator) },
             .option_or => |option_or| .{ .option_or = .{ .option = try option_or.option.clone(allocator), .fallback = try option_or.fallback.clone(allocator) } },
             .enum_tag => |operand| MirRvalue.enumTag(try operand.clone(allocator)),
             .enum_payload_field => |payload| MirRvalue.enumPayloadField(try payload.enum_operand.clone(allocator), payload.payload_field),
@@ -467,6 +473,9 @@ pub const MirRvalue = union(enum) {
             .option_some => |some| some.value.deinit(allocator),
             .option_none => {},
             .option_is_some => |operand| operand.deinit(allocator),
+            .option_is_none => |operand| operand.deinit(allocator),
+            .option_tag => |operand| operand.deinit(allocator),
+            .option_payload => |operand| operand.deinit(allocator),
             .option_or => |option_or| {
                 option_or.option.deinit(allocator);
                 option_or.fallback.deinit(allocator);
@@ -1130,6 +1139,21 @@ fn writeRvalueDebug(writer: *std.Io.Writer, rvalue: MirRvalue) !void {
             try writer.writeByte(')');
         },
         .option_none => |type_id| try writer.print("OptionNone({f})", .{type_id}),
+        .option_is_none => |operand| {
+            try writer.writeAll("OptionIsNone(");
+            try writeOperandDebug(writer, operand);
+            try writer.writeByte(')');
+        },
+        .option_tag => |operand| {
+            try writer.writeAll("OptionTag(");
+            try writeOperandDebug(writer, operand);
+            try writer.writeByte(')');
+        },
+        .option_payload => |operand| {
+            try writer.writeAll("OptionPayload(");
+            try writeOperandDebug(writer, operand);
+            try writer.writeByte(')');
+        },
         .option_is_some => |operand| {
             try writer.writeAll("OptionIsSome(");
             try writeOperandDebug(writer, operand);

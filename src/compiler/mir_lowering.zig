@@ -263,6 +263,15 @@ const FunctionLowerer = struct {
             try self.terminateBlock(switch_block, stmt.span, try self.lowerBoolMatchTerminator(scrutinee, match_stmt.arms, arm_blocks, join_block));
         } else if (sameType(scrutinee_type, self.semantic_module.types.intType())) {
             try self.terminateBlock(switch_block, stmt.span, try self.lowerIntMatchTerminator(scrutinee, match_stmt.arms, arm_blocks, join_block));
+        } else if (self.semantic_module.types.kind(scrutinee_type) == .option) {
+            payload_scrutinee = try scrutinee.clone(self.allocator);
+            const tag_temp = try self.addTemp(self.semantic_module.types.intType());
+            try self.store.appendStatement(switch_block, .{
+                .span = stmt.span,
+                .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(tag_temp), .{ .option_tag = scrutinee }),
+            });
+            const tag_operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(tag_temp));
+            try self.terminateBlock(switch_block, stmt.span, try self.lowerOptionMatchTerminator(tag_operand, match_stmt.arms, arm_blocks, join_block));
         } else if (self.semantic_module.types.kind(scrutinee_type) == .enum_type) {
             payload_scrutinee = try scrutinee.clone(self.allocator);
             const tag_temp = try self.addTemp(self.semantic_module.types.intType());
@@ -294,6 +303,20 @@ const FunctionLowerer = struct {
 
     fn lowerPatternBindings(self: *FunctionLowerer, pattern: hir.HirMatchPattern, maybe_scrutinee: ?mir.MirOperand, block_id: mir.MirBlockId, span: ?hir.SourceSpan) LoweringError!void {
         switch (pattern) {
+            .option_some => |option_some| {
+                if (option_some.bindings.len == 0) return;
+                const scrutinee = maybe_scrutinee orelse return error.UnsupportedControlFlow;
+                for (option_some.bindings) |binding| {
+                    const mapped = try self.ensureLocal(binding.local);
+                    try self.store.appendStatement(block_id, .{
+                        .span = span,
+                        .kind = mir.MirStatementKind.assignTo(
+                            mir.MirPlace.localPlace(mapped),
+                            .{ .option_payload = try scrutinee.clone(self.allocator) },
+                        ),
+                    });
+                }
+            },
             .enum_variant => |enum_variant| {
                 if (enum_variant.bindings.len == 0) return;
                 const scrutinee = maybe_scrutinee orelse return error.UnsupportedControlFlow;
@@ -332,7 +355,7 @@ const FunctionLowerer = struct {
                     false_target = arm_blocks[index];
                 },
                 .wildcard => wildcard_target = arm_blocks[index],
-                .int_literal, .enum_variant => return error.UnsupportedControlFlow,
+                .int_literal, .enum_variant, .option_some, .option_none => return error.UnsupportedControlFlow,
             }
         }
 
@@ -355,11 +378,35 @@ const FunctionLowerer = struct {
             switch (arm.pattern) {
                 .int_literal => |text| try cases.append(self.allocator, .{ .value = text, .target = arm_blocks[index] }),
                 .wildcard => fallback = arm_blocks[index],
-                .bool_literal, .enum_variant => return error.UnsupportedControlFlow,
+                .bool_literal, .enum_variant, .option_some, .option_none => return error.UnsupportedControlFlow,
             }
         }
 
         return try mir.MirTerminatorKind.switchInt(self.allocator, scrutinee, cases.items, fallback);
+    }
+
+    fn lowerOptionMatchTerminator(
+        self: *FunctionLowerer,
+        tag_operand: mir.MirOperand,
+        arms: []const hir.HirMatchArm,
+        arm_blocks: []const mir.MirBlockId,
+        default_target: mir.MirBlockId,
+    ) LoweringError!mir.MirTerminatorKind {
+        var cases = std.ArrayList(mir.MirSwitchIntCase).empty;
+        defer {
+            for (cases.items) |case| self.allocator.free(case.value);
+            cases.deinit(self.allocator);
+        }
+        var fallback = default_target;
+        for (arms, 0..) |arm, index| {
+            switch (arm.pattern) {
+                .option_some => try cases.append(self.allocator, .{ .value = try std.fmt.allocPrint(self.allocator, "1", .{}), .target = arm_blocks[index] }),
+                .option_none => try cases.append(self.allocator, .{ .value = try std.fmt.allocPrint(self.allocator, "0", .{}), .target = arm_blocks[index] }),
+                .wildcard => fallback = arm_blocks[index],
+                else => return error.UnsupportedControlFlow,
+            }
+        }
+        return try mir.MirTerminatorKind.switchInt(self.allocator, tag_operand, cases.items, fallback);
     }
 
     fn lowerEnumMatchTerminator(
@@ -383,7 +430,7 @@ const FunctionLowerer = struct {
                     try cases.append(self.allocator, .{ .value = tag_value, .target = arm_blocks[index] });
                 },
                 .wildcard => fallback = arm_blocks[index],
-                .int_literal, .bool_literal => return error.UnsupportedControlFlow,
+                .int_literal, .bool_literal, .option_some, .option_none => return error.UnsupportedControlFlow,
             }
         }
 
@@ -476,6 +523,7 @@ const FunctionLowerer = struct {
             .option_some => |some| try self.lowerOptionSome(expr, some, block_id),
             .option_none => |type_id| try self.lowerOptionNone(expr, type_id, block_id),
             .option_is_some => |option| try self.lowerOptionIsSome(expr, option, block_id),
+            .option_is_none => |option| try self.lowerOptionIsNone(expr, option, block_id),
             .option_or => |option_or| try self.lowerOptionOr(expr, option_or, block_id),
             .try_expr => |operand| try self.lowerTry(expr, operand, block_id),
             .decide => |decide| try self.lowerDecide(expr, decide, block_id),
@@ -935,6 +983,13 @@ const FunctionLowerer = struct {
         return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = lowered.block };
     }
 
+    fn lowerOptionIsNone(self: *FunctionLowerer, expr: hir.HirExpr, option: hir.ExprId, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
+        const lowered = try self.lowerExpr(option, block_id);
+        const temp = try self.addTemp(self.semantic_module.types.boolType());
+        try self.store.appendStatement(lowered.block, .{ .span = expr.span, .kind = mir.MirStatementKind.assignTo(mir.MirPlace.localPlace(temp), .{ .option_is_none = lowered.operand }) });
+        return .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(temp)), .block = lowered.block };
+    }
+
     fn lowerOptionOr(self: *FunctionLowerer, expr: hir.HirExpr, option_or: anytype, block_id: mir.MirBlockId) LoweringError!LoweredExpr {
         const option = try self.lowerExpr(option_or.option, block_id);
         const fallback = try self.lowerExpr(option_or.fallback, option.block);
@@ -1247,7 +1302,7 @@ const FunctionLowerer = struct {
             .fixed_buffer_append => self.semantic_module.types.voidType(),
             .option_some => |some| some.type_id,
             .option_none => |type_id| type_id,
-            .option_is_some => self.semantic_module.types.boolType(),
+            .option_is_some, .option_is_none => self.semantic_module.types.boolType(),
             .option_or => |option_or| try self.inferExprType(option_or.fallback),
             .decide => |decide| decide.enum_type,
             .try_expr => |operand| blk: {
@@ -1283,7 +1338,7 @@ const FunctionLowerer = struct {
             .fixed_buffer_append => self.semantic_module.types.voidType(),
             .option_some => |some| some.type_id,
             .option_none => |type_id| type_id,
-            .option_is_some => self.semantic_module.types.boolType(),
+            .option_is_some, .option_is_none => self.semantic_module.types.boolType(),
             .option_or => |option_or| try self.inferExprType(option_or.fallback),
             else => error.InvalidMirLowering,
         };

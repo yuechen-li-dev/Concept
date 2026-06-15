@@ -1,0 +1,7 @@
+module Main;
+
+int main() {
+    Option<int> maybe = optionNone<int>();
+    return optionUnwrapOr(maybe, 2);
+}
+// expect: 2

@@ -587,8 +587,8 @@ const Checker = struct {
             .match_stmt => |match_stmt| {
                 const scrutinee_type = try self.checkExpr(function_id, return_type, match_stmt.scrutinee);
                 const scrutinee_kind = self.module.types.kind(scrutinee_type);
-                if (!self.isInt(scrutinee_type) and !self.isBool(scrutinee_type) and scrutinee_kind != .enum_type) {
-                    try self.reportAt(.TypeMismatch, "match scrutinee must be int, bool, or enum", self.exprSpan(match_stmt.scrutinee));
+                if (!self.isInt(scrutinee_type) and !self.isBool(scrutinee_type) and scrutinee_kind != .enum_type and scrutinee_kind != .option) {
+                    try self.reportAt(.TypeMismatch, "match scrutinee must be int, bool, enum, or Option", self.exprSpan(match_stmt.scrutinee));
                     return error.InvalidSemanticModule;
                 }
                 var seen_ints = std.StringHashMap(void).init(self.allocator);
@@ -597,6 +597,8 @@ const Checker = struct {
                 defer seen_variants.deinit();
                 var seen_true = false;
                 var seen_false = false;
+                var seen_some = false;
+                var seen_none = false;
                 var seen_wildcard = false;
                 for (match_stmt.arms) |arm| {
                     switch (arm.pattern) {
@@ -627,6 +629,28 @@ const Checker = struct {
                             }
                             try seen_variants.put(pattern.variant_id, {});
                         },
+                        .option_some => {
+                            if (scrutinee_kind != .option) {
+                                try self.reportAt(.OptionMatchInvalidArm, "Option match arm can only be used with Option scrutinee", arm.pattern_span);
+                                return error.InvalidSemanticModule;
+                            }
+                            if (seen_some) {
+                                try self.reportAt(.DuplicateOptionMatchArm, "duplicate Some match arm", arm.pattern_span);
+                                return error.InvalidSemanticModule;
+                            }
+                            seen_some = true;
+                        },
+                        .option_none => {
+                            if (scrutinee_kind != .option) {
+                                try self.reportAt(.OptionMatchInvalidArm, "Option match arm can only be used with Option scrutinee", arm.pattern_span);
+                                return error.InvalidSemanticModule;
+                            }
+                            if (seen_none) {
+                                try self.reportAt(.DuplicateOptionMatchArm, "duplicate None match arm", arm.pattern_span);
+                                return error.InvalidSemanticModule;
+                            }
+                            seen_none = true;
+                        },
                         .wildcard => {
                             if (seen_wildcard) {
                                 try self.reportAt(.TypeMismatch, "duplicate wildcard match pattern", arm.pattern_span);
@@ -636,6 +660,16 @@ const Checker = struct {
                         },
                     }
                     try self.checkStmt(function_id, arm.body, return_type);
+                }
+                if (scrutinee_kind == .option and !seen_wildcard) {
+                    if (!seen_none) {
+                        try self.reportAt(.OptionMatchMustHandleNone, "Option match must handle None", self.exprSpan(match_stmt.scrutinee));
+                        return error.InvalidSemanticModule;
+                    }
+                    if (!seen_some) {
+                        try self.reportAt(.OptionMatchMustHandleSome, "Option match must handle Some", self.exprSpan(match_stmt.scrutinee));
+                        return error.InvalidSemanticModule;
+                    }
                 }
             },
         }
@@ -674,8 +708,9 @@ const Checker = struct {
                 break :blk some.type_id;
             },
             .option_none => |type_id| type_id,
-            .option_is_some => |option| blk: {
-                _ = try self.checkExpr(current_function_id, return_type, option);
+            .option_is_some, .option_is_none => |option| blk: {
+                const option_type = try self.checkExpr(current_function_id, return_type, option);
+                if (self.module.types.kind(option_type) != .option) try self.reportAt(.OptionHelperRequiresOption, "Option helper requires Option<T>", expr.span);
                 break :blk self.module.types.boolType();
             },
             .option_or => |option_or| blk: {
@@ -1684,6 +1719,7 @@ const Checker = struct {
             .option_some => |some| .{ .option_some = .{ .type_id = some.type_id, .value = try self.cloneExpr(some.value, subst, param_map, local_map, span) } },
             .option_none => |type_id| .{ .option_none = type_id },
             .option_is_some => |option| .{ .option_is_some = try self.cloneExpr(option, subst, param_map, local_map, span) },
+            .option_is_none => |option| .{ .option_is_none = try self.cloneExpr(option, subst, param_map, local_map, span) },
             .option_or => |option_or| .{ .option_or = .{ .option = try self.cloneExpr(option_or.option, subst, param_map, local_map, span), .fallback = try self.cloneExpr(option_or.fallback, subst, param_map, local_map, span) } },
             .call => |call| blk: {
                 var args = try self.allocator.alloc(hir.ExprId, call.args.len);
@@ -1808,6 +1844,16 @@ const Checker = struct {
             .int_literal => |text| .{ .int_literal = try self.allocator.dupe(u8, text) },
             .bool_literal => |value| .{ .bool_literal = value },
             .wildcard => .wildcard,
+            .option_none => .option_none,
+            .option_some => |some| blk: {
+                var bindings = try self.allocator.alloc(hir.HirOptionPatternBinding, some.bindings.len);
+                errdefer self.allocator.free(bindings);
+                for (some.bindings, 0..) |binding, index| {
+                    bindings[index] = binding;
+                    bindings[index].local = local_map.get(binding.local).?;
+                }
+                break :blk .{ .option_some = .{ .bindings = bindings } };
+            },
             .enum_variant => |variant| blk: {
                 var bindings = try self.allocator.alloc(hir.HirPatternBinding, variant.bindings.len);
                 errdefer self.allocator.free(bindings);

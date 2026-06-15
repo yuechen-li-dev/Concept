@@ -1,0 +1,11 @@
+module Main;
+
+int main() {
+    Option<int> maybe = optionSome<int>(7);
+
+    match maybe {
+        Some(value) => return value;
+        None => return 0;
+    }
+}
+// expect: 7

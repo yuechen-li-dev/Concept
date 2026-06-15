@@ -1958,39 +1958,20 @@ pub const Parser = struct {
                 }
                 if (self.match(.colon_colon) != null) {
                     const variant = (try self.expect(.identifier, "expected enum variant after '::'", .UnexpectedToken)) orelse return null;
-                    var bindings = std.ArrayList(ast.PatternBinding).init(allocator);
-                    errdefer bindings.deinit();
-                    var end_span = variant.span;
-                    if (self.match(.left_paren)) |left_paren| {
-                        end_span = left_paren.span;
-                        while (self.current().kind != .eof and self.current().kind != .right_paren and self.current().kind != .fat_arrow) {
-                            const binding = self.current();
-                            if (binding.kind != .identifier or std.mem.eql(u8, binding.lexeme, "_")) {
-                                try self.report(.UnexpectedToken, "expected payload binding identifier", binding.span);
-                                self.recoverPatternBindingList();
-                                break;
-                            }
-                            _ = self.advance();
-                            try bindings.append(.{ .name = .{ .text = binding.lexeme, .span = binding.span } });
-                            end_span = binding.span;
-                            if (self.match(.comma)) |comma| {
-                                end_span = comma.span;
-                                if (self.current().kind == .right_paren) break;
-                                continue;
-                            }
-                            break;
-                        }
-                        if (self.match(.right_paren)) |right_paren| {
-                            end_span = right_paren.span;
-                        } else {
-                            try self.report(.UnexpectedToken, "expected ')' after payload binding list", self.current().span);
-                        }
-                    }
+                    const parsed = try self.parsePatternBindings(allocator, variant.span);
                     return .{ .enum_variant = .{
                         .enum_name = .{ .text = token.lexeme, .span = token.span },
                         .variant_name = .{ .text = variant.lexeme, .span = variant.span },
-                        .bindings = try bindings.toOwnedSlice(),
-                        .span = ast.spanFromBounds(token.span.start, spanEnd(end_span)),
+                        .bindings = parsed.bindings,
+                        .span = ast.spanFromBounds(token.span.start, spanEnd(parsed.end_span)),
+                    } };
+                }
+                if (std.mem.eql(u8, token.lexeme, "Some") or std.mem.eql(u8, token.lexeme, "None")) {
+                    const parsed = try self.parsePatternBindings(allocator, token.span);
+                    return .{ .option_variant = .{
+                        .variant_name = .{ .text = token.lexeme, .span = token.span },
+                        .bindings = parsed.bindings,
+                        .span = ast.spanFromBounds(token.span.start, spanEnd(parsed.end_span)),
                     } };
                 }
             },
@@ -1998,6 +1979,43 @@ pub const Parser = struct {
         }
         try self.report(.UnexpectedToken, "expected match pattern", token.span);
         return null;
+    }
+
+    const ParsedPatternBindings = struct {
+        bindings: []ast.PatternBinding,
+        end_span: SourceSpan,
+    };
+
+    fn parsePatternBindings(self: *Parser, allocator: std.mem.Allocator, initial_span: SourceSpan) !ParsedPatternBindings {
+        var bindings = std.ArrayList(ast.PatternBinding).init(allocator);
+        errdefer bindings.deinit();
+        var end_span = initial_span;
+        if (self.match(.left_paren)) |left_paren| {
+            end_span = left_paren.span;
+            while (self.current().kind != .eof and self.current().kind != .right_paren and self.current().kind != .fat_arrow) {
+                const binding = self.current();
+                if (binding.kind != .identifier or std.mem.eql(u8, binding.lexeme, "_")) {
+                    try self.report(.UnexpectedToken, "expected payload binding identifier", binding.span);
+                    self.recoverPatternBindingList();
+                    break;
+                }
+                _ = self.advance();
+                try bindings.append(.{ .name = .{ .text = binding.lexeme, .span = binding.span } });
+                end_span = binding.span;
+                if (self.match(.comma)) |comma| {
+                    end_span = comma.span;
+                    if (self.current().kind == .right_paren) break;
+                    continue;
+                }
+                break;
+            }
+            if (self.match(.right_paren)) |right_paren| {
+                end_span = right_paren.span;
+            } else {
+                try self.report(.UnexpectedToken, "expected ')' after payload binding list", self.current().span);
+            }
+        }
+        return .{ .bindings = try bindings.toOwnedSlice(), .end_span = end_span };
     }
 
     fn recoverPatternBindingList(self: *Parser) void {

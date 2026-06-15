@@ -1,0 +1,10 @@
+module Main;
+
+int main() {
+    Option<int> maybe = optionNone<int>();
+    if (optionIsNone(maybe)) {
+        return 1;
+    }
+    return 0;
+}
+// expect: 1
