@@ -1,0 +1,15 @@
+// DG10 Replay v0: fixed-slot, integer-backed deterministic input.
+// This example records a world-memory write as replay input. It does not load
+// files, JSON, binary logs, checkpoints, or Persistence data.
+module Example.DragonGod.ReplayMemoryWrite;
+
+import DragonGod.Kernel.Replay;
+import DragonGod.Kernel.Memory;
+
+int main() {
+    DragonGod.Kernel.Replay.ReplayLog log = DragonGod.Kernel.Replay.replayLogEmpty();
+    DragonGod.Kernel.Replay.replayPush(log&, DragonGod.Kernel.Replay.ReplayEvent::WorldMemoryWriteInt(DragonGod.Kernel.Memory.MemoryKeyInt { id: 1 }, 80));
+    DragonGod.Kernel.Replay.ReplayDriver driver = DragonGod.Kernel.Replay.replayDriverEmpty();
+    discard DragonGod.Kernel.Replay.replayApplyAll(driver&, log);
+    return DragonGod.Kernel.Memory.memoryRead(driver.world.memory, DragonGod.Kernel.Memory.MemoryKeyInt { id: 1 }, 0) - 80;
+}

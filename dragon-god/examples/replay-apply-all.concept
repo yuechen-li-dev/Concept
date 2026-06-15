@@ -1,0 +1,16 @@
+// replayApplyAll consumes the fixed-slot replay log in cursor order. Replay is
+// deterministic input application only: no JSON, file loading, checkpoints, or
+// binary serialization are part of v0.
+module Example.DragonGod.ReplayApplyAll;
+
+import DragonGod.Kernel.Replay;
+
+int main() {
+    DragonGod.Kernel.Replay.ReplayLog log = DragonGod.Kernel.Replay.replayLogEmpty();
+    DragonGod.Kernel.Replay.replayPush(log&, DragonGod.Kernel.Replay.ReplayEvent::Advance(2));
+    DragonGod.Kernel.Replay.replayPush(log&, DragonGod.Kernel.Replay.ReplayEvent::Advance(3));
+    DragonGod.Kernel.Replay.ReplayDriver driver = DragonGod.Kernel.Replay.replayDriverEmpty();
+    int applied = DragonGod.Kernel.Replay.replayApplyAll(driver&, log);
+    if (applied != 2) { return 1; }
+    return driver.world.clock.tick - 5;
+}

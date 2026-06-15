@@ -1,0 +1,107 @@
+module DragonGod.Kernel.Replay;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Memory;
+import DragonGod.Kernel.Mind;
+import DragonGod.Kernel.Automata;
+import DragonGod.Kernel.Events;
+import DragonGod.Kernel.Actuation;
+import DragonGod.Kernel.Trace;
+
+// DG10 Replay v0: deterministic fixed-slot integer input stream. Replay is
+// not persistence, checkpointing, file I/O, JSON, binary serialization, an
+// external input adapter, scheduler, async runtime, or compiler hook.
+enum ReplayEvent {
+    Empty,
+    Advance(int ticks),
+    WorldMemoryWriteInt(DragonGod.Kernel.Memory.MemoryKeyInt key, int value),
+    AgentMemoryWriteInt(DragonGod.Kernel.Memory.MemoryKeyInt key, int value),
+    EventPushInt(DragonGod.Kernel.Events.EventTypeId eventType, int value),
+    ActuationComplete(DragonGod.Kernel.Core.ActuationId id, DragonGod.Kernel.Core.Reason reason),
+    ActuationFail(DragonGod.Kernel.Core.ActuationId id, DragonGod.Kernel.Core.Reason reason),
+    TraceMark(DragonGod.Kernel.Core.Reason reason),
+    RngSeed(int seed),
+};
+
+struct ReplayLog {
+    int count;
+    ReplayEvent event0;
+    ReplayEvent event1;
+    ReplayEvent event2;
+    ReplayEvent event3;
+};
+
+struct ReplayDriver {
+    int cursor;
+    DragonGod.Kernel.Mind.World world;
+    DragonGod.Kernel.Mind.Agent agent;
+    DragonGod.Kernel.Events.EventBus events;
+    DragonGod.Kernel.Actuation.ActuatorHost actuator;
+    DragonGod.Kernel.Trace.TraceRecorder trace;
+    int rngSeed;
+};
+
+ReplayEvent replayEmptyEvent() { return ReplayEvent::Empty; }
+
+ReplayLog replayLogEmpty() {
+    return ReplayLog { count: 0, event0: replayEmptyEvent(), event1: replayEmptyEvent(), event2: replayEmptyEvent(), event3: replayEmptyEvent() };
+}
+
+int replayLogCount(ReplayLog log) { return log.count; }
+
+ReplayEvent replayLogAt(ReplayLog log, int index) {
+    if (index == 0) { return log.event0; }
+    if (index == 1) { return log.event1; }
+    if (index == 2) { return log.event2; }
+    if (index == 3) { return log.event3; }
+    panic("DragonGod.Replay index out of range");
+}
+
+void replayPush(mut ReplayLog& log, ReplayEvent event) {
+    if (log.count == 0) { log.event0 = event; log.count = 1; return; }
+    if (log.count == 1) { log.event1 = event; log.count = 2; return; }
+    if (log.count == 2) { log.event2 = event; log.count = 3; return; }
+    if (log.count == 3) { log.event3 = event; log.count = 4; return; }
+    panic("DragonGod.Replay capacity exceeded");
+}
+
+ReplayDriver replayDriver(DragonGod.Kernel.Mind.World world, DragonGod.Kernel.Mind.Agent agent, DragonGod.Kernel.Events.EventBus events, DragonGod.Kernel.Actuation.ActuatorHost actuator, DragonGod.Kernel.Trace.TraceRecorder trace) {
+    return ReplayDriver { cursor: 0, world: world, agent: agent, events: events, actuator: actuator, trace: trace, rngSeed: 0 };
+}
+
+ReplayDriver replayDriverEmpty() {
+    return replayDriver(
+        DragonGod.Kernel.Mind.World { clock: DragonGod.Kernel.Core.Clock { tick: 0 }, memory: DragonGod.Kernel.Memory.memoryEmpty() },
+        DragonGod.Kernel.Mind.Agent { id: DragonGod.Kernel.Core.AgentId { value: 0 }, memory: DragonGod.Kernel.Memory.memoryEmpty(), mind: DragonGod.Kernel.Mind.mindEmpty() },
+        DragonGod.Kernel.Events.eventBusEmpty(),
+        DragonGod.Kernel.Actuation.actuatorHostEmpty(),
+        DragonGod.Kernel.Trace.traceRecorderEmpty()
+    );
+}
+
+bool replayApplyNext(mut ReplayDriver& driver, ReplayLog log) {
+    if (driver.cursor >= replayLogCount(log)) { return false; }
+    ReplayEvent event = replayLogAt(log, driver.cursor);
+    driver.cursor = driver.cursor + 1;
+
+    match (event) {
+        ReplayEvent::Empty => { return true; }
+        ReplayEvent::Advance(ticks) => { driver.world.clock.tick = driver.world.clock.tick + ticks; return true; }
+        ReplayEvent::WorldMemoryWriteInt(key, value) => { DragonGod.Kernel.Memory.memoryWrite(driver.world.memory&, key, value); return true; }
+        ReplayEvent::AgentMemoryWriteInt(key, value) => { DragonGod.Kernel.Memory.memoryWrite(driver.agent.memory&, key, value); return true; }
+        ReplayEvent::EventPushInt(eventType, value) => { discard DragonGod.Kernel.Events.eventPush(driver.events&, eventType, DragonGod.Kernel.Events.eventPayloadInt(value)); return true; }
+        ReplayEvent::ActuationComplete(id, reason) => { DragonGod.Kernel.Actuation.actuatorComplete(driver.actuator&, id, reason); return true; }
+        ReplayEvent::ActuationFail(id, reason) => { DragonGod.Kernel.Actuation.actuatorFail(driver.actuator&, id, reason); return true; }
+        ReplayEvent::TraceMark(reason) => { DragonGod.Kernel.Trace.traceEnter(driver.trace&, DragonGod.Kernel.Core.StateId { value: reason.code }, driver.world.clock.tick, reason); return true; }
+        ReplayEvent::RngSeed(seed) => { driver.rngSeed = seed; return true; }
+    }
+}
+
+int replayApplyAll(mut ReplayDriver& driver, ReplayLog log) {
+    int applied = 0;
+    if (replayApplyNext(driver&, log)) { applied = applied + 1; }
+    if (replayApplyNext(driver&, log)) { applied = applied + 1; }
+    if (replayApplyNext(driver&, log)) { applied = applied + 1; }
+    if (replayApplyNext(driver&, log)) { applied = applied + 1; }
+    return applied;
+}

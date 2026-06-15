@@ -5,7 +5,7 @@
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
 **Phases closed:** 1 through 20 / DG1
 **Current phase:** Phase 20 / DG9 complete — DragonGod Kernel Trace subsystem v0
-**Fixture corpus:** 1130 total `.conception` fixture files; 85 under `language/phase11-testing/`; 108 under `language/phase15-c-abi/`; 73 under `language/phase16-imports/`; 57 under `language/phase17-runtime-failure/`; 66 under `language/phase18-machines/`; 23 under `language/phase19-yielding-machines/`; 78 under `language/phase20-dragongod-kernel/`
+**Fixture corpus:** 1135 total `.conception` fixture files; 85 under `language/phase11-testing/`; 108 under `language/phase15-c-abi/`; 73 under `language/phase16-imports/`; 57 under `language/phase17-runtime-failure/`; 66 under `language/phase18-machines/`; 23 under `language/phase19-yielding-machines/`; 83 under `language/phase20-dragongod-kernel/`
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
 
@@ -18,14 +18,14 @@ Phase 20 / DG1 is complete as a kernel foundation milestone. The `dragon-god/` t
 |-----------------------------|--------|-------|
 | DG0 Blueprint | ✅ | `docs/DragonGod-Kernel-Blueprint.md` is present. |
 | DG1 Kernel core seed | ✅ | Module/type seed, examples, fixtures, and friction log added. |
-| Memory storage | ❌ | Only `Memory { revision }` shell and `MemoryKeyInt` placeholder exist. |
-| Mind tick loop | ❌ | `Mind`, `Agent`, and `World` shells only. |
-| Automata stack | ❌ | Not implemented. |
+| Memory storage | ✅ | DG3 fixed-slot integer Memory v0 is implemented. |
+| Mind v0 static executor | ✅ | DG4 static executor/signal recorder with `Agent` and `World` shells is implemented; dynamic tick loop remains deferred. |
+| Automata stack | ✅ | DG5 fixed-capacity Automata stack v0 is implemented. |
 | Decision subsystem | ✅ | DG6 fixed-slot integer decision subsystem v0 is implemented. |
-| Actuation subsystem | ❌ | Only `ActuationId` and signal variants are seeded. |
+| Actuation subsystem | ✅ | DG7 fixed-slot Actuation subsystem v0 is implemented. |
 | Events subsystem | ✅ | DG8 fixed-slot integer Events subsystem v0 is implemented. |
 | Trace subsystem | ✅ | DG9 fixed-slot explicit Trace subsystem v0 is implemented. |
-| Replay | ❌ | Not implemented. |
+| Replay subsystem | ✅ | DG10 fixed-slot deterministic Replay v0 is implemented. |
 | Persistence | ❌ | Not implemented. |
 | Parallel | ❌ | Not implemented. |
 | Bare-metal proof | ❌ | Not implemented. |
@@ -703,3 +703,5 @@ Feature matrix: DG0 Blueprint complete; DG1 Kernel core seed complete; DG2 stati
 DG9 is complete. DragonGod coverage now includes `DragonGod.Kernel.Trace` with `TraceEventKind`, `TraceEvent`, fixed-slot `TraceRecorder`, and explicit helper calls for `traceEnter`, `traceExit`, `traceTransition`, `traceYield`, and `traceSignal`. `TraceEvent` stores `AutomataSignal` directly, and interpretation helpers use `match` for event-kind and signal-reason handling. The `TraceSink` interface/dyn shape is smoke-tested and supported for explicit calls, while `TraceRecorder` remains the v0 implementation surface.
 
 Feature matrix after DG9: DG0 Blueprint complete; DG1 Kernel core seed complete; DG2 static automata signals and machine examples complete; DG3 Memory v0 complete; DG4 Mind v0 static executor complete; DG5 Automata stack v0 complete; DG6 Decision subsystem v0 complete; DG7 Actuation subsystem v0 complete; DG8 Events subsystem v0 complete; DG9 Trace subsystem v0 complete. Supported DG9 surface: `TraceEventKind`, `TraceEvent`, fixed-slot `TraceRecorder`, `traceEnter`, `traceExit`, `traceTransition`, `traceYield`, `traceSignal`, and explicit trace examples. Deferred after DG9: automatic trace injection, runtime logging backend, file/stdout sink, async sink, trace persistence/replay integration, parallel trace merge, dynamic sink registry, and DragonGod compiler hooks.
+
+DG10 adds DragonGod Replay v0. Phase 20 DragonGod coverage now contains 83 valid fixtures. Replay coverage includes `ReplayEvent` v0, fixed-slot `ReplayLog`, value-shaped `ReplayDriver`, `replayPush`, `replayApplyNext`, `replayApplyAll`, deterministic cursor application, Memory integration, Events integration, Actuation integration, Agent memory integration, RNG seed metadata, and Trace marker integration. Deferred: persistence/checkpoint, file I/O, JSON, binary serialization, dynamic/string payloads, replay loading/saving, parallel deterministic merge, external input adapters, schedulers, async, and DragonGod compiler hooks.

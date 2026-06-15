@@ -204,3 +204,15 @@ Non-blocking friction remains:
 - Backend C fixture assertions remain shape-oriented and intentionally avoid overfitting temporary names, but they still require explicit absence checks for heap/logging/scheduler markers.
 
 Workaround: DG9 keeps `TraceRecorder` as the v0 implementation and treats `TraceSink` as smoke-proven interface surface only. Future Concept improvements that would materially improve Trace include fixed arrays, slices/spans, string views, and lower-noise qualified import ergonomics.
+
+## DG10 Replay v0 friction
+
+- `ReplayEvent` payload enums are expressive enough for fixed integer variants, but fixture stability still benefits from compact standalone source because cross-module fixture imports are heavier than inline backend/run sources.
+- `match (event)` cleanly expresses replay dispatch and avoids a giant imperative if/else chain; each arm currently returns explicitly because statement-expression fallthrough ergonomics are still narrow.
+- `ReplayDriver` is value-shaped rather than reference-shaped. Pointer/reference fields for long-lived kernel shell ownership remain awkward for a tiny deterministic fixture surface, so v0 copies `World`, `Agent`, `EventBus`, `ActuatorHost`, and `TraceRecorder` into the driver.
+- Mutating nested driver fields works (`driver.world.memory&`, `driver.events&`, `driver.actuator&`, `driver.trace&`) but remains verbose when fully-qualified module names are involved.
+- Lack of arrays/vectors keeps `ReplayLog` at named fixed slots (`event0` through `event3`) and forces `replayApplyAll` to use four bounded calls instead of a capacity-driven loop abstraction.
+- `replayApplyNext` returns `bool` for exhausted/applied because there is no ergonomic Option/Result surface for the DG10 driver status yet.
+- No file/string/serialization substrate is used; replay loading/saving, JSON, binary checkpoints, and Persistence are intentionally deferred.
+- Events and Actuation integrate through their existing fixed-slot APIs. Trace integration uses an explicit `TraceMark` mapped onto `traceEnter` as a marker-shaped v0 workaround until Trace has a dedicated mark kind.
+- Backend fixtures assert broad no-hidden-runtime properties, but avoid overfitting every generated temporary name beyond the replay enum/log/driver/switch shape.
