@@ -475,7 +475,7 @@ P19-M1  yield statement syntax / AST / HIR scaffold (implemented: lexer keyword,
 P19-M2  yield validation: machine-state-only, statement-only, no value (implemented: stable CON0301/CON0302/CON0303 diagnostics and ten fixtures)
 P19-M3  backend lowering: yield exits Step without state/completion mutation (implemented)
 P19-M4-M6  combined fixture sweep for yield + Complete / Result / State, nested child ticking, transition match, transition decide, polling patterns, and backend hidden-runtime assertions (implemented together)
-P19-M7  diagnostics and runtime-failure hardening
+P19-M7  diagnostics and runtime-failure hardening (implemented: yield-only backend path has no panic/helper/runtime marker, Result-after-yield uses the existing result-before-completion panic reason, unsupported forms remain diagnostics/parse errors, compile-time/test-runner paths stay unsupported, and unreachable-after-yield diagnostics remain deferred)
 P19-M8  examples/fixtures: wait-until, polling, long-running behavior
 P19-M9  closeout
 ```
@@ -507,4 +507,12 @@ P19-M4, P19-M5, and P19-M6 were completed together as a fixture sweep rather tha
 
 The Phase 19 fixture set now has twenty-one fixtures under `language/phase19-yielding-machines/`: ten validation fixtures, nine runtime fixtures, and two backend C fixtures. Runtime coverage now explicitly covers `yield + Complete`, `yield + Result`, `yield + State`, branch-local yield completion differences, parent/child polling where a parent yields while a nested child advances across external `Step` calls, `State(child)` after a parent yield, multi-step wait-until patterns, `yield + transition match`, and `yield + transition decide`. Backend coverage pins direct `return;` lowering, transition code reachable only on non-yield paths, and absence of hidden runtime markers such as allocation, scheduler, async, event bus, mailbox, blackboard, and DragonGod hooks.
 
-Remaining Phase 19 work is diagnostics/runtime hardening, examples, and closeout.
+## P19-M7 status: yield diagnostics and runtime-failure hardening
+
+P19-M7 is implemented as a hardening milestone, not a new semantics milestone. The audit pins the yield-only backend path as a plain generated `return;` from the current `Step`: it has no `cpt_panic` call, no yield-specific panic reason, no yield helper, no state assignment, no completion write, no result write, no allocation, and no scheduler/async/event/blackboard/mailbox/DragonGod/suspend/resume marker.
+
+`Result(machine)` after a yielding step remains exactly the existing result-before-completion failure. Runtime execution exits with code 101, and backend C contains the shared `cpt_panic("machine result cannot be read before completion")` reason rather than any yield-specific failure. Unsupported yield forms remain front-end failures: outside-machine-state `yield;` is `CON0300`, expression-position `yield` is `CON0301`, value-bearing `yield` is `CON0302`, `yield return` is `CON0303`, missing semicolons use the expected-semicolon parser diagnostic, and top-level yield is rejected by the normal item parser path.
+
+Compile-time execution and the test-runner do not gain yield semantics. Because valid `yield;` is limited to machine state bodies and machine state execution is backend/runtime-owned, any unexpected HIR `yield_stmt` reaching those interpreters remains a clean unsupported-construct path rather than a runtime protocol. Broad unreachable-after-yield diagnostics remain deferred: `yield;` is terminal for the current generated Step path and emitted C returns before later statements on that path, but Phase 19 still avoids CFG construction, lifted locals, continuation program counters, or resume-after-yield statement continuation.
+
+The Phase 19 fixture set now has twenty-three fixtures under `language/phase19-yielding-machines/`: ten validation fixtures, nine runtime fixtures, and four backend C fixtures. Remaining Phase 19 work is examples and closeout.
