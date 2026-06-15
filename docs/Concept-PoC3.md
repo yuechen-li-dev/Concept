@@ -3020,3 +3020,7 @@ DG5 deliberately does not add a dynamic `AutomatonGraph`, root-frame policy, kee
 ### DragonGod DG6 Decision subsystem v0 note
 
 Phase 20 / DG6 adds a library-level kernel Decision subsystem, not a language feature. `DecisionPolicy`, `DecisionMemory`, and `UtilityOption` use integer scores and deterministic fixed four-option arbitration. Machine-local stateless choice remains native `transition decide`; Decision v0 exists for stateful policy memory such as min-commit, hysteresis, tie epsilon, current-option retention, source-order tie behavior, and fallback handling.
+
+### Phase 20 / DragonGod DG7 Actuation update
+
+DG7 adds the DragonGod Kernel actuation v0 scaffold in Concept source. The supported surface is deterministic and fixed-capacity: `ActuationStatus`, `ActuationDecision`, `ActuationDispatchResult`, `ActuationSlot`, `ActuatorHost`, allow/deny dispatch, status query, and complete/fail updates. Payload enum `match` is exercised for `AutomataSignal::Act`, `AutomataSignal::AwaitActuation`, and actuation statuses. This is intentionally not an async runtime, scheduler, event bus, mailbox/blackboard, command payload registry, dynamic handler table, external command dispatcher, or DragonGod compiler hook.

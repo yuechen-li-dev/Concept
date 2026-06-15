@@ -1,0 +1,13 @@
+module DragonGod.Examples.ActuationCompleteFail;
+
+import DragonGod.Kernel.Actuation;
+import DragonGod.Kernel.Core;
+
+int main() {
+    DragonGod.Kernel.Actuation.ActuatorHost host = DragonGod.Kernel.Actuation.actuatorHostEmpty();
+    DragonGod.Kernel.Actuation.ActuationDispatchResult done = DragonGod.Kernel.Actuation.actuatorDispatch(host&, DragonGod.Kernel.Actuation.actuationAllow());
+    DragonGod.Kernel.Actuation.ActuationDispatchResult failed = DragonGod.Kernel.Actuation.actuatorDispatch(host&, DragonGod.Kernel.Actuation.actuationAllow());
+    DragonGod.Kernel.Actuation.actuatorComplete(host&, done.id, DragonGod.Kernel.Core.Reason { code: 1 });
+    DragonGod.Kernel.Actuation.actuatorFail(host&, failed.id, DragonGod.Kernel.Core.Reason { code: 2 });
+    return DragonGod.Kernel.Actuation.actuationStatusCode(DragonGod.Kernel.Actuation.actuatorStatus(host, done.id)) - 3;
+}

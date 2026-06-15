@@ -1,0 +1,149 @@
+# name: kernel_actuation_signal_act_match_run.valid.conception
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+struct ActuationId { int value; };
+struct Reason { int code; };
+
+// DG7 Actuation v0: explicit fixed-slot command tracking. The kernel records
+// command intent and host-visible status only; it does not execute external OS,
+// engine, async, scheduler, event-bus, or handler-registry work.
+enum ActuationStatus {
+    Empty,
+    Pending,
+    Accepted,
+    Completed,
+    Failed,
+    Denied,
+};
+
+struct ActuationDecision {
+    bool allowed;
+    Reason reason;
+};
+
+struct ActuationDispatchResult {
+    ActuationId id;
+    bool accepted;
+    bool completed;
+    bool ok;
+    Reason reason;
+};
+
+struct ActuationSlot {
+    ActuationId id;
+    ActuationStatus status;
+    Reason reason;
+    bool occupied;
+};
+
+struct ActuatorHost {
+    int nextId;
+    ActuationSlot slot0;
+    ActuationSlot slot1;
+    ActuationSlot slot2;
+    ActuationSlot slot3;
+};
+
+ActuationDecision actuationAllow() {
+    return ActuationDecision { allowed: true, reason: Reason { code: 0 } };
+}
+
+ActuationDecision actuationDeny(Reason reason) {
+    return ActuationDecision { allowed: false, reason: reason };
+}
+
+ActuationSlot actuationEmptySlot() {
+    return ActuationSlot {
+        id: ActuationId { value: 0 },
+        status: ActuationStatus::Empty,
+        reason: Reason { code: 0 },
+        occupied: false
+    };
+}
+
+ActuatorHost actuatorHostEmpty() {
+    return ActuatorHost { nextId: 1, slot0: actuationEmptySlot(), slot1: actuationEmptySlot(), slot2: actuationEmptySlot(), slot3: actuationEmptySlot() };
+}
+
+ActuationDispatchResult actuationAccepted(ActuationId id, Reason reason) {
+    return ActuationDispatchResult { id: id, accepted: true, completed: false, ok: true, reason: reason };
+}
+
+ActuationDispatchResult actuationDenied(ActuationId id, Reason reason) {
+    return ActuationDispatchResult { id: id, accepted: false, completed: true, ok: false, reason: reason };
+}
+
+void actuatorFillSlot(mut ActuationSlot& slot, ActuationId id, Reason reason) {
+    slot.id = id;
+    slot.status = ActuationStatus::Pending;
+    slot.reason = reason;
+    slot.occupied = true;
+}
+
+ActuationDispatchResult actuatorDispatch(mut ActuatorHost& host, ActuationDecision decision) {
+    ActuationId id = ActuationId { value: host.nextId };
+    host.nextId = host.nextId + 1;
+
+    if (!decision.allowed) { return actuationDenied(id, decision.reason); }
+
+    if (!host.slot0.occupied) { actuatorFillSlot(host.slot0&, id, decision.reason); return actuationAccepted(id, decision.reason); }
+    if (!host.slot1.occupied) { actuatorFillSlot(host.slot1&, id, decision.reason); return actuationAccepted(id, decision.reason); }
+    if (!host.slot2.occupied) { actuatorFillSlot(host.slot2&, id, decision.reason); return actuationAccepted(id, decision.reason); }
+    if (!host.slot3.occupied) { actuatorFillSlot(host.slot3&, id, decision.reason); return actuationAccepted(id, decision.reason); }
+    panic("DragonGod.Actuation capacity exceeded");
+}
+
+bool actuatorHas(ActuatorHost host, ActuationId id) {
+    if (host.slot0.occupied && host.slot0.id.value == id.value) { return true; }
+    if (host.slot1.occupied && host.slot1.id.value == id.value) { return true; }
+    if (host.slot2.occupied && host.slot2.id.value == id.value) { return true; }
+    if (host.slot3.occupied && host.slot3.id.value == id.value) { return true; }
+    return false;
+}
+
+ActuationStatus actuatorStatus(ActuatorHost host, ActuationId id) {
+    if (host.slot0.occupied && host.slot0.id.value == id.value) { return host.slot0.status; }
+    if (host.slot1.occupied && host.slot1.id.value == id.value) { return host.slot1.status; }
+    if (host.slot2.occupied && host.slot2.id.value == id.value) { return host.slot2.status; }
+    if (host.slot3.occupied && host.slot3.id.value == id.value) { return host.slot3.status; }
+    return ActuationStatus::Empty;
+}
+
+void actuatorComplete(mut ActuatorHost& host, ActuationId id, Reason reason) {
+    if (host.slot0.occupied && host.slot0.id.value == id.value) { host.slot0.status = ActuationStatus::Completed; host.slot0.reason = reason; return; }
+    if (host.slot1.occupied && host.slot1.id.value == id.value) { host.slot1.status = ActuationStatus::Completed; host.slot1.reason = reason; return; }
+    if (host.slot2.occupied && host.slot2.id.value == id.value) { host.slot2.status = ActuationStatus::Completed; host.slot2.reason = reason; return; }
+    if (host.slot3.occupied && host.slot3.id.value == id.value) { host.slot3.status = ActuationStatus::Completed; host.slot3.reason = reason; return; }
+}
+
+void actuatorFail(mut ActuatorHost& host, ActuationId id, Reason reason) {
+    if (host.slot0.occupied && host.slot0.id.value == id.value) { host.slot0.status = ActuationStatus::Failed; host.slot0.reason = reason; return; }
+    if (host.slot1.occupied && host.slot1.id.value == id.value) { host.slot1.status = ActuationStatus::Failed; host.slot1.reason = reason; return; }
+    if (host.slot2.occupied && host.slot2.id.value == id.value) { host.slot2.status = ActuationStatus::Failed; host.slot2.reason = reason; return; }
+    if (host.slot3.occupied && host.slot3.id.value == id.value) { host.slot3.status = ActuationStatus::Failed; host.slot3.reason = reason; return; }
+}
+
+int actuationStatusCode(ActuationStatus status) {
+    match (status) {
+        ActuationStatus::Empty => { return 0; }
+        ActuationStatus::Pending => { return 1; }
+        ActuationStatus::Accepted => { return 2; }
+        ActuationStatus::Completed => { return 3; }
+        ActuationStatus::Failed => { return 4; }
+        ActuationStatus::Denied => { return 5; }
+    }
+}
+
+enum AutomataSignal { None, Act(ActuationId id), AwaitActuation(ActuationId id) };
+machine ActMachine() -> AutomataSignal { state Start { return AutomataSignal::Act(ActuationId { value: 11 }); } }
+machine AwaitMachine() -> AutomataSignal { state Start { return AutomataSignal::AwaitActuation(ActuationId { value: 12 }); } }
+int signalCode(AutomataSignal signal) { match (signal) { AutomataSignal::Act(id) => { return id.value; } AutomataSignal::AwaitActuation(id) => { return id.value; } AutomataSignal::None => { return 0; } } }
+
+int main() { ActMachine m; Step(m); return signalCode(Result(m)) - 11; }
+
+=== run ===
+exit_code: 0

@@ -584,3 +584,7 @@ The backend fixture pins `AutomataStack` as explicit `frame0` through `frame3` f
 ## Phase 20 / DG6 DragonGod Decision fixtures
 
 DG6 adds fourteen Phase 20 fixtures: ten direct `decisionChoose4` runtime fixtures for highest score, disabled option ignoring, source-order tie, fallback, first-selection recording, same-current refresh, min-commit, hysteresis, tie-epsilon, and allowed switching; one DG3 Memory score integration fixture; one DG5 Mind/Goto stack integration fixture; one native `transition decide` doctrine fixture; and one backend-C shape fixture asserting deterministic integer policy structures and excluding floats, randomness, allocation, scheduler/async, Blackboard, and mailbox markers.
+
+## Phase 20 DragonGod DG7 actuation fixtures
+
+DG7 adds fixtures under `language/phase20-dragongod-kernel/valid/` for the fixed-slot actuation host. Run fixtures cover allow dispatch, deny dispatch, completed status, failed status, missing-id `Empty` status, `AutomataSignal::Act` matching, `AutomataSignal::AwaitActuation` matching, and Mind recording of Act/AwaitActuation without automatic dispatch. A backend-C fixture pins the shape of `ActuationStatus`, `ActuatorHost`, `actuatorDispatch`, `nextId` mutation, fixed slots, complete/fail status emission, and absence of heap allocation, scheduler/async/event-bus, mailbox/blackboard, dynamic handler-table, and DragonGod compiler-hook markers. Phase 20 DragonGod now has 60 `.conception` fixtures; the full language corpus has 1112 `.conception` fixtures.
