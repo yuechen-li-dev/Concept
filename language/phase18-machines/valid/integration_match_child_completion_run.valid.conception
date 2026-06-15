@@ -1,0 +1,32 @@
+# name: integration match child completion run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Child { state Start { return 7; } }
+
+machine Parent {
+    Child child;
+    state Start { Step(child); transition Check; }
+    state Check {
+        transition match (Complete(child)) {
+            true => Done;
+            false => Waiting;
+        };
+    }
+    state Waiting { transition Check; }
+    state Done { return Result(child); }
+}
+
+int main() {
+    Parent p = Parent();
+    Step(p);
+    Step(p);
+    Step(p);
+    return Result(p);
+}
+
+=== run ===
+exit_code: 7

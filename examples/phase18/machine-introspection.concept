@@ -1,0 +1,19 @@
+module Main;
+
+machine TwoState {
+    state Start {
+        transition Done;
+    }
+
+    state Done {
+        return 9;
+    }
+}
+
+int main() {
+    TwoState machine = TwoState();
+    int initial = State(machine);
+    Step(machine);
+    int after = State(machine);
+    return after;
+}

@@ -569,3 +569,67 @@ Bool v0 `transition match` remains exhaustively validated at compile time: both 
 Machine step dispatch now emits a defensive default arm that calls `cpt_panic("invalid machine state reached")` if a corrupted frame reaches an impossible state id. This is a defensive runtime failure path only; statically invalid machine programs remain diagnostics.
 
 The backend emits the `cpt_panic` helper once per generated C unit even when manual `panic`, `assert`, machine result guards, decide no-enabled guards, and invalid-state dispatch guards coexist. P18-M7 adds backend fixtures for local result, nested child result, decide no-enabled, multiple panic sites, and invalid-state defensive emission. The Phase 18 machine fixture corpus now contains 60 fixtures. Remaining Phase 18 work is examples/fixtures and closeout.
+
+## P18-M8 implementation status: examples and integration fixtures
+
+P18-M8 is a showcase and hardening milestone. It does not add new core machine
+semantics. Instead it documents and pins the composable-machine substrate already
+implemented by P18-M1 through P18-M7.
+
+### Examples added
+
+`examples/phase18/` now contains polished examples for:
+
+- hierarchical parent/child machines where the parent owns a child frame by value
+  and explicitly steps it;
+- match-driven child completion with `transition match (Complete(child))`;
+- deterministic utility selection with `transition decide` and source-order tie
+  behavior for equal scores;
+- a nested utility controller combining child stepping, `Complete(child)`,
+  `Result(child)`, `State(child)`, and `transition decide`;
+- numeric machine introspection through `State(machine)`;
+- runtime failure notes for incomplete `Result(machine)`, no-enabled decisions,
+  and backend invalid-state defensive paths.
+
+The Phase 18 README states the key doctrine: these primitives are the substrate
+DragonGod can build on, not DragonGod itself. There is still no scheduler, async
+runtime, event bus keyword, blackboard keyword, mailbox keyword, hidden heap,
+dynamic child list, heap-owned machine, reflection surface, or DragonGod runtime
+hook in core Concept.
+
+### Integration fixture coverage
+
+The Phase 18 fixture corpus now includes integration run fixtures for explicit
+child stepping, match branch selection on child completion, utility-decision
+branch selection, nested decide/controller composition, and state observation.
+It also includes a backend-shape fixture that pins the combined lowering shape:
+parent frames contain child frame fields, constructors initialize child frames,
+parent steps pass child frame addresses to child step functions, bool match lowers
+to deterministic branching, decide lowering uses candidate variables and strict
+`>` comparison, `State(child)` reads the numeric `.state` field, panic sites share
+`cpt_panic`, and generated C remains free of hidden `malloc`, scheduler, async,
+blackboard, mailbox, event-bus, and DragonGod runtime markers.
+
+### Fixture count
+
+After P18-M8, `language/phase18-machines/` contains 66 `.conception` fixtures:
+43 valid fixtures and 23 invalid fixtures.
+
+### Remaining Phase 18 work
+
+The remaining Phase 18 work is closeout: reconcile documentation, confirm the
+fixture matrix, and close the phase without expanding the semantics surface.
+
+Still deferred:
+
+- `yield`;
+- scheduler;
+- async;
+- blackboard, mailbox, or event keywords;
+- dynamic child lists;
+- heap-owned machines;
+- parameterized child initialization;
+- enum/int runtime match;
+- `StateName(machine)`;
+- reflection;
+- DragonGod runtime hooks.

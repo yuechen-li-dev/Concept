@@ -1,0 +1,27 @@
+# name: integration decide utility run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Choose(bool canHigh) {
+    state Start {
+        transition decide {
+            High when canHigh score 100;
+            Low score 1;
+        };
+    }
+    state High { return 100; }
+    state Low { return 1; }
+}
+
+int main() {
+    Choose c = Choose(true);
+    Step(c);
+    Step(c);
+    return Result(c);
+}
+
+=== run ===
+exit_code: 100

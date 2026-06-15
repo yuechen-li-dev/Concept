@@ -1,0 +1,26 @@
+module Main;
+
+machine Choose(bool canHigh) {
+    state Start {
+        // Equal scores keep the earlier candidate because lowering uses strict >.
+        transition decide {
+            High when canHigh score 100;
+            Low score 1;
+        };
+    }
+
+    state High {
+        return 100;
+    }
+
+    state Low {
+        return 1;
+    }
+}
+
+int main() {
+    Choose choice = Choose(true);
+    Step(choice);
+    Step(choice);
+    return Result(choice);
+}

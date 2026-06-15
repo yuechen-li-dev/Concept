@@ -1,12 +1,17 @@
 # Concept — Checkpoint 1 Coverage Matrix
-## Phase 17 Closeout vs PoC3 Constitution
+## Phase 18 M8 vs PoC3 Constitution
 
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
 **Phases closed:** 1 through 17
-**Current phase:** Phase 18 in progress — P18-M1 machine frame/value audit and hardening complete
-**Fixture corpus:** 1046 total fixture files; 85 under `language/phase11-testing/`; 108 under `language/phase15-c-abi/`; 73 under `language/phase16-imports/`; 57 under `language/phase17-runtime-failure/`; 11 under `language/phase18-machines/`
+**Current phase:** Phase 18 in progress — P18-M8 examples and integration fixtures complete
+**Fixture corpus:** 1029 total `.conception` fixture files; 85 under `language/phase11-testing/`; 108 under `language/phase15-c-abi/`; 73 under `language/phase16-imports/`; 57 under `language/phase17-runtime-failure/`; 66 under `language/phase18-machines/`
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
+
+
+## Phase 18 M8 snapshot
+
+Phase 18 is in closeout after P18-M8. The machine composition substrate now has examples under `examples/phase18/` and 66 fixtures under `language/phase18-machines/`: 43 valid and 23 invalid. The P18-M8 additions pin hierarchical by-value child frames, explicit child stepping, `Complete(child)`, `Result(child)`, numeric `State(machine)`, bool `transition match`, deterministic `transition decide`, shared `cpt_panic` runtime machine failures, and backend-shape assertions that exclude hidden heap allocation, scheduler, async, blackboard, mailbox, event-bus, and DragonGod runtime hooks. Remaining Phase 18 work is closeout only; `yield`, scheduler, async, blackboard/mailbox/event keywords, dynamic child lists, heap-owned machines, `StateName`, reflection, and DragonGod runtime hooks remain deferred.
 
 ---
 

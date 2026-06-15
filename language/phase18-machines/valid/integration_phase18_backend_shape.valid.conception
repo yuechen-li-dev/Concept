@@ -1,0 +1,59 @@
+# name: integration phase18 backend shape
+# phase: backend-c
+# expect: pass
+
+=== source ===
+module Main;
+
+machine Child { state Start { return 7; } }
+
+machine Controller(bool preferDone) {
+    Child child;
+    state Start { Step(child); transition Check; }
+    state Check {
+        transition match (Complete(child)) {
+            true => Decide;
+            false => Start;
+        };
+    }
+    state Decide {
+        int childState = State(child);
+        transition decide {
+            Done when preferDone score 10;
+            Observe score childState;
+        };
+    }
+    state Observe { return State(child); }
+    state Done { return Result(child); }
+}
+
+int main() {
+    Controller c = Controller(true);
+    Step(c);
+    Step(c);
+    Step(c);
+    Step(c);
+    return Result(c);
+}
+
+=== c ===
+contains: cpt_m_Child cpt_mf_child_0;
+contains: frame.cpt_mf_child_0 = cpt_m_Child_ctor();
+contains: cpt_m_Child_step(&m->cpt_mf_child_0);
+contains: if (m->cpt_mf_child_0.complete)
+contains: int cpt_has_candidate = 0;
+contains: int cpt_best_score = 0;
+contains: int cpt_score_0 = 10;
+contains: cpt_score_0 > cpt_best_score
+contains: cpt_score_1 > cpt_best_score
+contains: m->cpt_mf_child_0.state
+contains: cpt_panic("machine result cannot be read before completion")
+contains: cpt_panic("machine decision transition has no enabled candidates")
+not_contains: >= cpt_best_score
+not_contains: malloc
+not_contains: scheduler
+not_contains: async
+not_contains: blackboard
+not_contains: mailbox
+not_contains: event_bus
+not_contains: DragonGod
