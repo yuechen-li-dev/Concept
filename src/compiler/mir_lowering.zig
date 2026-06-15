@@ -166,11 +166,11 @@ const FunctionLowerer = struct {
             .arena_reset => |op| return try self.lowerArenaStorageOp(op.arena_expr, block_id, stmt.span, .reset),
             .arena_destroy => |op| return try self.lowerArenaStorageOp(op.arena_expr, block_id, stmt.span, .destroy),
             .assignment => |assignment| {
-                const place = try self.resolveAssignTarget(assignment.target);
-                const lowered = try self.lowerExpr(assignment.value, block_id);
+                const lowered_place = try self.resolveAssignTarget(assignment.target, block_id);
+                const lowered = try self.lowerExpr(assignment.value, lowered_place.block);
                 try self.store.appendStatement(lowered.block, .{
                     .span = stmt.span,
-                    .kind = mir.MirStatementKind.assignTo(place, mir.MirRvalue.use_(lowered.operand)),
+                    .kind = mir.MirStatementKind.assignTo(lowered_place.place, mir.MirRvalue.use_(lowered.operand)),
                 });
                 return lowered.block;
             },
@@ -1232,18 +1232,30 @@ const FunctionLowerer = struct {
         return self.param_map.get(param_id) orelse error.MissingParamMapping;
     }
 
-    fn resolveAssignTarget(self: *FunctionLowerer, target: hir.AssignTarget) LoweringError!mir.MirPlace {
+    const LoweredPlace = struct { place: mir.MirPlace, block: mir.MirBlockId };
+
+    fn resolveAssignTarget(self: *FunctionLowerer, target: hir.AssignTarget, block_id: mir.MirBlockId) LoweringError!LoweredPlace {
         return switch (target) {
-            .local => |local_id| mir.MirPlace.localPlace(try self.resolveLocal(local_id)),
-            .param => |param_id| mir.MirPlace.localPlace(try self.resolveParam(param_id)),
-            .field => |field| mir.MirPlace.fieldPlace(try self.resolveAssignBase(field.base), field.field_id),
+            .local => |local_id| .{ .place = mir.MirPlace.localPlace(try self.resolveLocal(local_id)), .block = block_id },
+            .param => |param_id| .{ .place = mir.MirPlace.localPlace(try self.resolveParam(param_id)), .block = block_id },
+            .field => |field| .{ .place = mir.MirPlace.fieldPlace(try self.resolveAssignBaseLocal(field.base.*), field.field_id), .block = block_id },
+            .index => |index| blk: {
+                const lowered_base = try self.resolveAssignTarget(index.base.*, block_id);
+                const lowered_index = try self.lowerExpr(index.index, lowered_base.block);
+                const base_place = try self.allocator.create(mir.MirPlace);
+                base_place.* = lowered_base.place;
+                const index_operand = try self.allocator.create(mir.MirOperand);
+                index_operand.* = lowered_index.operand;
+                break :blk .{ .place = mir.MirPlace.indexPlace(base_place, index_operand, index.array_length, index.result_type), .block = lowered_index.block };
+            },
         };
     }
 
-    fn resolveAssignBase(self: *FunctionLowerer, base: hir.AssignBase) LoweringError!mir.MirLocalId {
+    fn resolveAssignBaseLocal(self: *FunctionLowerer, base: hir.AssignBase) LoweringError!mir.MirLocalId {
         return switch (base) {
             .local => |local_id| try self.resolveLocal(local_id),
             .param => |param_id| try self.resolveParam(param_id),
+            .field, .index => error.UnsupportedNestedFieldAssignmentBase,
         };
     }
 
@@ -1569,7 +1581,10 @@ test "MIR lowering stable snapshot for Phase 7 struct places" {
     });
     const literal = try module.hir.addExpr(.{ .struct_literal = .{ .struct_id = vec_id, .type_id = vec_type, .fields = fields } }, hir.synthetic_span);
     const decl_v = try module.hir.addStmt(.{ .local_decl = .{ .local = v, .initializer = literal } }, hir.synthetic_span);
-    const assign_x = try module.hir.addStmt(.{ .assignment = .{ .target = .{ .field = .{ .base = .{ .local = v }, .field_id = x_field, .field_span = hir.synthetic_span } }, .value = try intExpr(&module, "11") } }, hir.synthetic_span);
+    const assign_base = try std.testing.allocator.create(hir.AssignPlace);
+    defer std.testing.allocator.destroy(assign_base);
+    assign_base.* = .{ .local = v };
+    const assign_x = try module.hir.addStmt(.{ .assignment = .{ .target = .{ .field = .{ .base = assign_base, .field_id = x_field, .field_span = hir.synthetic_span } }, .value = try intExpr(&module, "11") } }, hir.synthetic_span);
     const field_access = try module.hir.addExpr(.{ .field_access = .{ .receiver = try module.hir.addExpr(.{ .local_ref = v }, hir.synthetic_span), .field_name = try intern(&module, "x"), .field_span = hir.synthetic_span } }, hir.synthetic_span);
     const addr = try module.hir.addExpr(.{ .address_of = field_access }, hir.synthetic_span);
     const decl_px = try module.hir.addStmt(.{ .local_decl = .{ .local = px, .initializer = addr } }, hir.synthetic_span);

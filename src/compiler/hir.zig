@@ -313,16 +313,15 @@ pub const HirLocal = struct {
     type_id: types.TypeId,
 };
 
-pub const AssignBase = union(enum) {
+pub const AssignPlace = union(enum) {
     local: LocalId,
     param: ParamId,
+    field: struct { base: *AssignPlace, field_id: FieldId, field_span: SourceSpan },
+    index: struct { base: *AssignPlace, index: ExprId, result_type: types.TypeId, array_length: u64, span: SourceSpan },
 };
 
-pub const AssignTarget = union(enum) {
-    local: LocalId,
-    param: ParamId,
-    field: struct { base: AssignBase, field_id: FieldId, field_span: SourceSpan },
-};
+pub const AssignBase = AssignPlace;
+pub const AssignTarget = AssignPlace;
 
 pub const HirStmt = struct {
     span: SourceSpan,
@@ -2316,11 +2315,13 @@ fn writeAssignTarget(writer: *std.Io.Writer, target: AssignTarget) !void {
         .param => |id| try writer.print("ParamRef {f}", .{id}),
         .field => |field| {
             try writer.writeAll("FieldPlace ");
-            switch (field.base) {
-                .local => |id| try writer.print("LocalRef {f}", .{id}),
-                .param => |id| try writer.print("ParamRef {f}", .{id}),
-            }
+            try writeAssignTarget(writer, field.base.*);
             try writer.print(".{f}", .{field.field_id});
+        },
+        .index => |index| {
+            try writer.writeAll("IndexPlace ");
+            try writeAssignTarget(writer, index.base.*);
+            try writer.print("[{f}]", .{index.index});
         },
     }
 }

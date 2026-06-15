@@ -407,7 +407,7 @@ const Analyzer = struct {
                             try self.readPlace(states, field_place, span);
                             try self.checkImplicitCopy(states, field_place, span);
                         },
-                        .field => {
+                        .field, .index => {
                             try self.readOperand(states, field_access.receiver, span);
                             try self.checkImplicitCopyOfType(localOfPlace(receiver_place), self.semantic_module.hir.getField(field_access.field_id).type_id, true, span);
                         },
@@ -439,6 +439,7 @@ const Analyzer = struct {
             .maybe_moved => try self.report(.maybe_moved_use, local_id, span),
             .partially_initialized => switch (place) {
                 .local => try self.report(.use_of_partially_initialized_value, local_id, span),
+                .index => try self.readPlace(states, place.index.base.*, span),
                 .field => |field| {
                     const field_state = states.field_states[local_id.index] orelse {
                         try self.report(.use_of_partially_initialized_value, local_id, span);
@@ -472,6 +473,7 @@ const Analyzer = struct {
 
         switch (place) {
             .field => |field| return self.writeFieldPlace(states, field, span),
+            .index => |index| return self.writePlace(states, index.base.*, span),
             .local => {},
         }
 
@@ -504,6 +506,7 @@ const Analyzer = struct {
         const local_id = localOfPlace(place);
         try self.readPlace(states, place, span);
         switch (place) {
+            .index => |index| return self.dropPlace(states, index.base.*, span),
             .local => if (states.locals[local_id.index] == .initialized) {
                 states.locals[local_id.index] = .moved;
                 states.clearFieldState(local_id);
@@ -662,6 +665,7 @@ const Analyzer = struct {
         return switch (place) {
             .local => |local_id| self.mir_module.store.getLocal(local_id).type_id,
             .field => |field| self.semantic_module.hir.getField(field.field_id).type_id,
+            .index => |index| index.result_type,
         };
     }
 
@@ -689,6 +693,7 @@ const Analyzer = struct {
             .initialized => true,
             .partially_initialized => switch (place) {
                 .local => false,
+                .index => |index| self.isPlaceDefinitelyInitialized(states, index.base.*),
                 .field => |field| blk: {
                     const field_state = states.field_states[local_id.index] orelse break :blk false;
                     const index = self.fieldIndex(field_state.struct_type, field.field_id) orelse break :blk false;
@@ -772,6 +777,7 @@ fn localOfPlace(place: mir.MirPlace) mir.MirLocalId {
     return switch (place) {
         .local => |local_id| local_id,
         .field => |field| field.base,
+        .index => |index| localOfPlace(index.base.*),
     };
 }
 

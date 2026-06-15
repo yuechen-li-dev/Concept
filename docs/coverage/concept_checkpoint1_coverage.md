@@ -739,3 +739,9 @@ Fixed-size array type syntax `T[N]` is now covered at parser/declaration-check l
 ## Phase 21 M3 coverage note
 
 Phase 21 M3 now covers read-only fixed-array indexing through AST, HIR, MIR, and the C backend for simple fixed-array values, including constant indexes, local variable indexes, nested repeated indexing, fixed-array `Len`, and diagnostics `CON0406`, `CON0407`, and `CON0414`. Runtime non-constant index reads emit the stable panic reason `Concept array index out of bounds`. Mutable indexed assignment, slices, fixed buffers, `Capacity`, unchecked indexing, DragonGod migration, and broad C ABI array passing remain outside this milestone.
+
+### P21-M4 status: mutable fixed-array element assignment
+
+P21-M4 teaches Stage 0 to treat fixed-array indexing over assignable places as a mutable place projection. Assignments such as `values[1] = 99;` and nested projections such as `matrix[1][0] = 42;` now type-check and lower through HIR/MIR place machinery. The assigned value is checked against the projected element type, constant indexes keep the existing static out-of-bounds diagnostic, and generated C emits the same bounds guard used by read indexing before the store.
+
+This milestone does not add slices, mutable slices, fixed buffers, `Capacity`, unchecked indexing, pointer decay, array-to-slice conversion, or DragonGod migration.

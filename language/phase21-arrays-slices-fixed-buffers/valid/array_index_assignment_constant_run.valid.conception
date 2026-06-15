@@ -1,0 +1,6 @@
+fn main() -> int {
+    int[4] values = [1, 2, 3, 4];
+    values[1] = 99;
+    return values[1];
+}
+// expect: 99

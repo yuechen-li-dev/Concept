@@ -49,6 +49,7 @@ pub const DiagnosticCode = enum {
     ArrayLengthMustBePositive,
     ArrayLiteralLengthMismatch,
     ArrayLiteralElementTypeMismatch,
+    ArrayElementTypeMismatch,
     EmptyArrayLiteralUnsupported,
     ArrayIndexRequiresArrayOrSlice,
     ArrayIndexMustBeInteger,
@@ -289,6 +290,7 @@ pub const DiagnosticCode = enum {
             .ArrayLengthMustBePositive => "CON0411",
             .ArrayLiteralLengthMismatch => "CON0400",
             .ArrayLiteralElementTypeMismatch => "CON0401",
+            .ArrayElementTypeMismatch => "CON0405",
             .EmptyArrayLiteralUnsupported => "CON0412",
             .ArrayIndexRequiresArrayOrSlice => "CON0406",
             .ArrayIndexMustBeInteger => "CON0407",
@@ -1159,7 +1161,7 @@ pub fn arrayIndexOutOfBounds(span: SourceSpan, index: i128, length: u64) Diagnos
 }
 
 pub fn arrayIndexTargetNotAssignable(span: SourceSpan) Diagnostic {
-    return Diagnostic.init(.ArrayIndexTargetNotAssignable, .@"error", "array index assignment is deferred beyond Phase 21 M3", span);
+    return Diagnostic.init(.ArrayIndexTargetNotAssignable, .@"error", "array index assignment target must be an assignable place", span);
 }
 
 pub fn duplicateStructField(span: SourceSpan) Diagnostic {

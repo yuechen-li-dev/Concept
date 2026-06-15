@@ -1428,6 +1428,21 @@ fn emitPlace(writer: anytype, ctx: *const BackendContext, place: mir.MirPlace) E
             try writer.writeByte('.');
             try emitStructFieldName(writer, ctx.module, field.name, field_index);
         },
+        .index => |index_place| {
+            try writer.writeByte('(');
+            try emitOperand(writer, ctx, index_place.index.*);
+            try writer.writeAll(" < 0 || ");
+            try emitOperand(writer, ctx, index_place.index.*);
+            try writer.print(" >= {d} ? (cpt_panic(\"", .{index_place.length});
+            try writer.writeAll(array_index_oob_reason);
+            try writer.writeAll("\"), ");
+            try emitPlace(writer, ctx, index_place.base.*);
+            try writer.writeAll("[0]) : ");
+            try emitPlace(writer, ctx, index_place.base.*);
+            try writer.writeByte('[');
+            try emitOperand(writer, ctx, index_place.index.*);
+            try writer.writeAll("])");
+        },
     }
 }
 

@@ -1,0 +1,10 @@
+fn writeAt(int i) -> int {
+    int[4] values = [1, 2, 3, 4];
+    values[i] = 99;
+    return values[i];
+}
+
+fn main() -> int {
+    return writeAt(2);
+}
+// expect: 99

@@ -2253,6 +2253,10 @@ const BodyLowerer = struct {
     }
 
     fn lowerAssignTarget(self: *BodyLowerer, target: ast.Expr) !?hir.AssignTarget {
+        return self.lowerAssignPlace(target, true);
+    }
+
+    fn lowerAssignPlace(self: *BodyLowerer, target: ast.Expr, target_context: bool) !?hir.AssignPlace {
         return switch (target) {
             .identifier => |ident| blk: {
                 const target_symbol = try self.collector.module.interner.intern(ident.name.text);
@@ -2261,8 +2265,8 @@ const BodyLowerer = struct {
                     return null;
                 };
                 break :blk switch (base) {
-                    .local => |id| hir.AssignTarget{ .local = id },
-                    .param => |id| hir.AssignTarget{ .param = id },
+                    .local => |id| hir.AssignPlace{ .local = id },
+                    .param => |id| hir.AssignPlace{ .param = id },
                     .machine_param => {
                         try self.collector.diagnostics.append(diagnostics.Diagnostic.init(.FieldAssignmentNonPlace, .@"error", "machine parameters are not assignable until machine runtime lowering is implemented", ident.name.span));
                         return null;
@@ -2270,8 +2274,8 @@ const BodyLowerer = struct {
                 };
             },
             .field_access => |field_access| blk: {
-                const base = (try self.lowerAssignBase(field_access.receiver.*)) orelse return null;
-                const base_type = self.assignBaseType(base);
+                const base_value = (try self.lowerAssignPlace(field_access.receiver.*, false)) orelse return null;
+                const base_type = self.assignPlaceType(base_value);
                 const base_kind = self.collector.module.types.kind(base_type);
                 if (base_kind != .struct_type) {
                     try self.collector.diagnostics.append(diagnostics.Diagnostic.init(.FieldAccessNonStruct, .@"error", "field assignment receiver must be a struct place", field_access.receiver.span()));
@@ -2282,43 +2286,64 @@ const BodyLowerer = struct {
                     try self.collector.diagnostics.append(diagnostics.Diagnostic.init(.UnknownFieldAccess, .@"error", "unknown field on struct value", field_access.field_name.span));
                     return null;
                 };
-                break :blk hir.AssignTarget{ .field = .{ .base = base, .field_id = field_id, .field_span = field_access.field_name.span } };
+                const base = try self.collector.allocator.create(hir.AssignPlace);
+                base.* = base_value;
+                break :blk hir.AssignPlace{ .field = .{ .base = base, .field_id = field_id, .field_span = field_access.field_name.span } };
+            },
+            .index_access => |index_access| blk: {
+                switch (index_access.base.*) {
+                    .identifier, .field_access, .index_access => {},
+                    else => {
+                        try self.collector.diagnostics.append(diagnostics.arrayIndexTargetNotAssignable(index_access.base.span()));
+                        return null;
+                    },
+                }
+                const base_value = (try self.lowerAssignPlace(index_access.base.*, false)) orelse return null;
+                const base_type = self.assignPlaceType(base_value);
+                const array = switch (self.collector.module.types.kind(base_type)) {
+                    .array => |array| array,
+                    else => {
+                        try self.collector.diagnostics.append(diagnostics.arrayIndexRequiresArrayOrSlice(index_access.base.span()));
+                        return null;
+                    },
+                };
+                const index = (try self.lowerExpr(index_access.index.*)) orelse return null;
+                const index_type = (try self.inferExprType(index)) orelse return null;
+                if (!sameType(index_type, self.collector.module.types.intType())) {
+                    try self.collector.diagnostics.append(diagnostics.arrayIndexMustBeInteger(index_access.index.span()));
+                    return null;
+                }
+                if (self.constantInt(index)) |value| {
+                    if (value < 0 or value >= array.length) {
+                        try self.collector.diagnostics.append(diagnostics.arrayIndexOutOfBounds(index_access.index.span(), value, array.length));
+                        return null;
+                    }
+                }
+                const base = try self.collector.allocator.create(hir.AssignPlace);
+                base.* = base_value;
+                break :blk hir.AssignPlace{ .index = .{ .base = base, .index = index, .result_type = array.element, .array_length = array.length, .span = index_access.span } };
             },
             else => {
-                try self.collector.diagnostics.append(diagnostics.Diagnostic.init(.FieldAssignmentNonPlace, .@"error", "field assignment target must be an assignable place", target.span()));
+                try self.collector.diagnostics.append(diagnostics.Diagnostic.init(if (target_context) .ArrayIndexTargetNotAssignable else .FieldAssignmentNonPlace, .@"error", "array index assignment target must be an assignable place", target.span()));
                 return null;
             },
         };
     }
 
     fn lowerAssignBase(self: *BodyLowerer, target: ast.Expr) !?hir.AssignBase {
-        return switch (target) {
-            .identifier => |ident| blk: {
-                const symbol = try self.collector.module.interner.intern(ident.name.text);
-                const binding = self.lookup(symbol) orelse {
-                    try self.collector.diagnostics.append(diagnostics.unknownIdentifier(ident.name.span));
-                    return null;
-                };
-                break :blk switch (binding) {
-                    .local => |id| .{ .local = id },
-                    .param => |id| .{ .param = id },
-                    .machine_param => {
-                        try self.collector.diagnostics.append(diagnostics.Diagnostic.init(.FieldAssignmentNonPlace, .@"error", "machine parameters are not assignable until machine runtime lowering is implemented", ident.name.span));
-                        return null;
-                    },
-                };
-            },
-            else => {
-                try self.collector.diagnostics.append(diagnostics.Diagnostic.init(.FieldAssignmentNonPlace, .@"error", "field assignment receiver must be an assignable place", target.span()));
-                return null;
-            },
-        };
+        return self.lowerAssignPlace(target, false);
     }
 
     fn assignBaseType(self: *BodyLowerer, base: hir.AssignBase) types.TypeId {
-        return switch (base) {
+        return self.assignPlaceType(base);
+    }
+
+    fn assignPlaceType(self: *BodyLowerer, place: hir.AssignPlace) types.TypeId {
+        return switch (place) {
             .local => |id| self.collector.module.hir.getLocal(id).type_id,
             .param => |id| self.collector.module.hir.getParam(id).type_id,
+            .field => |field| self.collector.module.hir.getField(field.field_id).type_id,
+            .index => |index| index.result_type,
         };
     }
 

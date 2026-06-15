@@ -622,3 +622,9 @@ These fixtures now serve as a Concept stress/regression suite for upcoming langu
 - Phase 21 arrays/slices/fixed-buffers fixtures now include fixed array literal valid cases and invalid diagnostics for `CON0400`, `CON0401`, and `CON0412`.
 
 Phase 21 M3 expands the arrays/slices/fixed-buffers corpus with run fixtures for constant fixed-array reads, local variable fixed-array reads, nested repeated reads, `Len(values)`, and `Len(matrix[0])`. Invalid fixtures pin non-array indexing (`CON0406`), non-integer indexes (`CON0407`), and constant high/negative out-of-bounds indexes (`CON0414`). Mutable indexed assignment remains deferred beyond M3.
+
+### P21-M4 status: mutable fixed-array element assignment
+
+P21-M4 teaches Stage 0 to treat fixed-array indexing over assignable places as a mutable place projection. Assignments such as `values[1] = 99;` and nested projections such as `matrix[1][0] = 42;` now type-check and lower through HIR/MIR place machinery. The assigned value is checked against the projected element type, constant indexes keep the existing static out-of-bounds diagnostic, and generated C emits the same bounds guard used by read indexing before the store.
+
+This milestone does not add slices, mutable slices, fixed buffers, `Capacity`, unchecked indexing, pointer decay, array-to-slice conversion, or DragonGod migration.

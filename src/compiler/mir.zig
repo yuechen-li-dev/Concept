@@ -47,6 +47,7 @@ pub const MirLocalKind = enum {
 pub const MirPlace = union(enum) {
     local: MirLocalId,
     field: struct { base: MirLocalId, field_id: hir.FieldId },
+    index: struct { base: *MirPlace, index: *MirOperand, length: u64, result_type: types.TypeId },
 
     pub fn localPlace(id: MirLocalId) MirPlace {
         return .{ .local = id };
@@ -54,6 +55,10 @@ pub const MirPlace = union(enum) {
 
     pub fn fieldPlace(base: MirLocalId, field_id: hir.FieldId) MirPlace {
         return .{ .field = .{ .base = base, .field_id = field_id } };
+    }
+
+    pub fn indexPlace(base: *MirPlace, index: *MirOperand, length: u64, result_type: types.TypeId) MirPlace {
+        return .{ .index = .{ .base = base, .index = index, .length = length, .result_type = result_type } };
     }
 };
 
@@ -976,14 +981,21 @@ pub const MirStore = struct {
     }
 };
 
-fn writePlaceDebug(writer: *std.Io.Writer, place: MirPlace) !void {
+fn writePlaceDebug(writer: *std.Io.Writer, place: MirPlace) std.Io.Writer.Error!void {
     switch (place) {
         .local => |id| try writer.print("{f}", .{id}),
         .field => |field| try writer.print("Field({f}, {f})", .{ field.base, field.field_id }),
+        .index => |index| {
+            try writer.writeAll("Index(");
+            try writePlaceDebug(writer, index.base.*);
+            try writer.writeAll(", ");
+            try writeOperandDebug(writer, index.index.*);
+            try writer.writeByte(')');
+        },
     }
 }
 
-fn writeOperandDebug(writer: *std.Io.Writer, operand: MirOperand) !void {
+fn writeOperandDebug(writer: *std.Io.Writer, operand: MirOperand) std.Io.Writer.Error!void {
     switch (operand) {
         .int_literal => |text| try writer.print("Int {s}", .{text}),
         .bool_literal => |value| try writer.print("Bool {}", .{value}),

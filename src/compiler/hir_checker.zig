@@ -559,6 +559,7 @@ const Checker = struct {
                 if (!sameType(value_type, target_type)) {
                     const code: diagnostics.DiagnosticCode = switch (assignment.target) {
                         .field => .FieldAssignmentTypeMismatch,
+                        .index => .ArrayElementTypeMismatch,
                         else => .TypeMismatch,
                     };
                     try self.reportAt(code, "assignment expression type does not match target type", self.exprSpan(assignment.value));
@@ -1246,10 +1247,7 @@ const Checker = struct {
             .local => |id| self.module.hir.getLocal(id).type_id,
             .param => |id| self.module.hir.getParam(id).type_id,
             .field => |field_place| blk: {
-                const base_type = switch (field_place.base) {
-                    .local => |id| self.module.hir.getLocal(id).type_id,
-                    .param => |id| self.module.hir.getParam(id).type_id,
-                };
+                const base_type = try self.placeType(field_place.base.*, span);
                 const base_kind = self.module.types.kind(base_type);
                 if (base_kind != .struct_type) {
                     try self.reportAt(.FieldAccessNonStruct, "field assignment receiver must be a struct place", span);
@@ -1265,6 +1263,14 @@ const Checker = struct {
                     return error.InvalidSemanticModule;
                 }
                 break :blk field.type_id;
+            },
+            .index => |index_place| blk: {
+                const base_type = try self.placeType(index_place.base.*, span);
+                if (self.module.types.kind(base_type) != .array) {
+                    try self.reportAt(.ArrayIndexRequiresArrayOrSlice, "array index assignment receiver must be an array place", index_place.span);
+                    return error.InvalidSemanticModule;
+                }
+                break :blk index_place.result_type;
             },
         };
     }
@@ -1735,16 +1741,19 @@ const Checker = struct {
         return switch (target) {
             .local => |id| .{ .local = local_map.get(id).? },
             .param => |id| .{ .param = param_map.get(id).? },
-            .field => |field| .{ .field = .{ .base = self.cloneAssignBase(field.base, param_map, local_map), .field_id = field.field_id, .field_span = field.field_span } },
+            .field => |field| .{ .field = .{ .base = self.cloneAssignPlacePtr(field.base, param_map, local_map), .field_id = field.field_id, .field_span = field.field_span } },
+            .index => |index| .{ .index = .{ .base = self.cloneAssignPlacePtr(index.base, param_map, local_map), .index = index.index, .result_type = index.result_type, .array_length = index.array_length, .span = index.span } },
         };
     }
 
+    fn cloneAssignPlacePtr(self: *Checker, base: *hir.AssignPlace, param_map: *std.AutoHashMap(hir.ParamId, hir.ParamId), local_map: *std.AutoHashMap(hir.LocalId, hir.LocalId)) *hir.AssignPlace {
+        const cloned = self.allocator.create(hir.AssignPlace) catch @panic("failed to clone assignment place");
+        cloned.* = self.cloneAssignTarget(base.*, param_map, local_map);
+        return cloned;
+    }
+
     fn cloneAssignBase(self: *Checker, base: hir.AssignBase, param_map: *std.AutoHashMap(hir.ParamId, hir.ParamId), local_map: *std.AutoHashMap(hir.LocalId, hir.LocalId)) hir.AssignBase {
-        _ = self;
-        return switch (base) {
-            .local => |id| .{ .local = local_map.get(id).? },
-            .param => |id| .{ .param = param_map.get(id).? },
-        };
+        return self.cloneAssignTarget(base, param_map, local_map);
     }
 
     fn clonePattern(self: *Checker, pattern: hir.HirMatchPattern, param_map: *std.AutoHashMap(hir.ParamId, hir.ParamId), local_map: *std.AutoHashMap(hir.LocalId, hir.LocalId)) CheckError!hir.HirMatchPattern {
