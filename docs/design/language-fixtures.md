@@ -54,6 +54,7 @@ language/phase18-machines/valid/
 language/phase18-machines/invalid/
 language/phase19-yielding-machines/valid/
 language/phase19-yielding-machines/invalid/
+language/phase20-dragongod-kernel/valid/
 ```
 
 
@@ -549,3 +550,8 @@ Phase 19 fixtures live under `language/phase19-yielding-machines/`. P19-M9 close
 The Phase 19 run fixtures cover `yield + Complete`, `yield + Result`, `yield + State`, branch-local yield, nested child ticking, child `State` readability after parent yield, repeated external `Step` polling, `transition match`, and `transition decide`. The backend fixtures prove direct `return;` lowering; absence of yield-specific panic/helper/state/completion/result/allocation/scheduler/async/event/mailbox/blackboard/DragonGod/suspend/resume markers; and `Result(machine)` after yield using the existing `machine result cannot be read before completion` shared panic reason. Validation fixtures cover accepted bare `yield;` in machine state bodies, nested blocks, and `if` branches, plus rejections for yield outside machine states, top-level yield, function-block yield, yield values, `yield return`, expression-position yield, and missing semicolon syntax.
 
 Phase 19 also adds documentation examples under `examples/phase19/` for wait-until child completion, caller-controlled polling, long-running tickable behavior, yield before `transition match`, yield before `transition decide`, `State(machine)` observation after yield, runtime failure notes, and DragonGod readiness. Examples are separate from fixture counts. Unsupported yield forms remain diagnostics or stable parse errors, compile-time/test-runner execution remains unsupported for unexpected yield HIR, unreachable-after-yield diagnostics remain deferred, and Phase 19 is closed.
+
+
+## Phase 20 DragonGod Kernel fixtures
+
+Phase 20 fixtures live under `language/phase20-dragongod-kernel/valid/` and pin the DG1 module/type seed. The five valid run fixtures cover foundational ID/time/reason structs, payload `AutomataSignal` construction and matching, the minimal Memory shell, Mind/Agent/World shell structs, and qualified multi-module imports for the `DragonGod.Kernel` root. They intentionally do not test a DragonGod runtime: Memory storage, Mind tick loops, Automata stacks, schedulers, async, blackboard/mailbox/event-bus behavior, and compiler hooks remain outside DG1.

@@ -1,0 +1,64 @@
+# name: phase20 DragonGod cross module imports
+# phase: run
+# expect: pass
+
+=== file: DragonGod.Kernel.Core.concept ===
+module DragonGod.Kernel.Core;
+
+struct AgentId {
+    int value;
+};
+
+struct Clock {
+    int tick;
+};
+
+struct Reason {
+    int code;
+};
+
+=== file: DragonGod.Kernel.Memory.concept ===
+module DragonGod.Kernel.Memory;
+
+struct Memory {
+    int revision;
+};
+
+=== file: DragonGod.Kernel.Mind.concept ===
+module DragonGod.Kernel.Mind;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Memory;
+
+struct Mind {
+    int active;
+};
+
+struct Agent {
+    DragonGod.Kernel.Core.AgentId id;
+    DragonGod.Kernel.Memory.Memory memory;
+    Mind mind;
+};
+
+struct World {
+    DragonGod.Kernel.Core.Clock clock;
+    DragonGod.Kernel.Memory.Memory memory;
+};
+
+=== file: Main.concept ===
+module Main;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Memory;
+import DragonGod.Kernel.Mind;
+
+int main() {
+    DragonGod.Kernel.Core.AgentId id = DragonGod.Kernel.Core.AgentId { value: 9 };
+    DragonGod.Kernel.Memory.Memory memory = DragonGod.Kernel.Memory.Memory { revision: 11 };
+    DragonGod.Kernel.Mind.Mind mind = DragonGod.Kernel.Mind.Mind { active: 22 };
+    DragonGod.Kernel.Mind.Agent agent = DragonGod.Kernel.Mind.Agent { id: id, memory: memory, mind: mind };
+    return agent.id.value + agent.memory.revision + agent.mind.active;
+}
+
+=== run ===
+exit_code: 42

@@ -1,0 +1,14 @@
+module DragonGod.Kernel.Automata;
+
+import DragonGod.Kernel.Core;
+
+// Upward automata/mind intent. Tick suspension remains `yield;`, and local
+// machine decisions remain `transition decide`.
+enum AutomataSignal {
+    None,
+    Goto(DragonGod.Kernel.Core.StateId target, DragonGod.Kernel.Core.Reason reason),
+    Succeed(DragonGod.Kernel.Core.Reason reason),
+    Fail(DragonGod.Kernel.Core.Reason reason),
+    Act(DragonGod.Kernel.Core.ActuationId id),
+    AwaitActuation(DragonGod.Kernel.Core.ActuationId id),
+};

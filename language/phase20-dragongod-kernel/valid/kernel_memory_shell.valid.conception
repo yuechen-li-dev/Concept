@@ -1,0 +1,27 @@
+# name: phase20 DragonGod memory shell
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+struct Memory {
+    int revision;
+};
+
+struct MemoryKeyInt {
+    int id;
+};
+
+int memoryRevision(Memory memory) {
+    return memory.revision;
+}
+
+int main() {
+    Memory memory = Memory { revision: 40 };
+    MemoryKeyInt key = MemoryKeyInt { id: 2 };
+    return memoryRevision(memory) + key.id;
+}
+
+=== run ===
+exit_code: 42

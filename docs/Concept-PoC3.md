@@ -64,6 +64,7 @@ observed through dyn dispatch remains deferred until references are
 first-class TypeStore/ABI values. Owning dyn boxes, heap boxing, inheritance,
 RTTI, dynamic cast, reflection, Drop through dyn, dyn fields/returns/locals,
 and hidden heap allocation remain deferred.
+Phase 20 / DG1 is complete as a DragonGod Kernel core seed, not a full runtime. The new `dragon-god/` tree establishes the `DragonGod.Kernel` root with Core, Automata, Mind, and Memory module/type skeletons; pins public terminology to Automata, Mind, Memory, and AutomataSignal; adds DG1 examples and fixtures; and starts `docs/DragonGod-Concept-Friction.md`. Memory storage, Mind ticking, Automata stacks, scheduler/async behavior, blackboard/mailbox/event-bus concepts, and DragonGod compiler hooks remain unimplemented.
 Phase 15 is closed. It completes Concept's explicit C ABI v0 surface for a
 single compilation unit: block-form `extern "C"` declarations lower through HIR
 and MIR, participate in semantic call resolution, validate a strict C ABI type

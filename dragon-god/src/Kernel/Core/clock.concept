@@ -1,0 +1,5 @@
+module DragonGod.Kernel.Core;
+
+struct Clock {
+    int tick;
+};

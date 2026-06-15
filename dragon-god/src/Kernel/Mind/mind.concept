@@ -1,0 +1,5 @@
+module DragonGod.Kernel.Mind;
+
+struct Mind {
+    int active;
+};

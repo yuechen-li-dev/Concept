@@ -1,0 +1,10 @@
+module DragonGod.Kernel.Memory;
+
+// Minimal shell only: no storage, TTL, or changed-key tracking implementation.
+struct Memory {
+    int revision;
+};
+
+int memoryRevision(Memory memory) {
+    return memory.revision;
+}

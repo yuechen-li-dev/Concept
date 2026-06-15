@@ -1,0 +1,43 @@
+# name: phase20 DragonGod kernel core ids
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+struct AgentId {
+    int value;
+};
+
+struct StateId {
+    int value;
+};
+
+struct ActuationId {
+    int value;
+};
+
+struct DecisionSlotId {
+    int value;
+};
+
+struct Clock {
+    int tick;
+};
+
+struct Reason {
+    int code;
+};
+
+int main() {
+    AgentId agent = AgentId { value: 10 };
+    StateId state = StateId { value: 20 };
+    ActuationId act = ActuationId { value: 5 };
+    DecisionSlotId slot = DecisionSlotId { value: 3 };
+    Clock clock = Clock { tick: 2 };
+    Reason reason = Reason { code: 2 };
+    return agent.value + state.value + act.value + slot.value + clock.tick + reason.code;
+}
+
+=== run ===
+exit_code: 42
