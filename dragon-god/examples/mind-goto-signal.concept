@@ -1,0 +1,13 @@
+module DragonGod.Examples.MindGotoSignal;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Automata;
+import DragonGod.Kernel.Mind;
+
+// Goto pushes the first frame, then replaces the top frame. Dynamic graphs are deferred.
+int main() {
+    DragonGod.Kernel.Mind.Mind mind = DragonGod.Kernel.Mind.mindEmpty();
+    DragonGod.Kernel.Mind.mindRecordSignal(mind&, DragonGod.Kernel.Automata.AutomataSignal::Goto(DragonGod.Kernel.Core.StateId { value: 10 }, DragonGod.Kernel.Core.Reason { code: 1 }));
+    DragonGod.Kernel.Mind.mindRecordSignal(mind&, DragonGod.Kernel.Automata.AutomataSignal::Goto(DragonGod.Kernel.Core.StateId { value: 20 }, DragonGod.Kernel.Core.Reason { code: 2 }));
+    return DragonGod.Kernel.Mind.mindCurrentState(mind).value;
+}

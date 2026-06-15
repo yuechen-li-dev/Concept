@@ -4,8 +4,8 @@
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
 **Phases closed:** 1 through 20 / DG1
-**Current phase:** Phase 20 / DG1 complete — DragonGod Kernel core seed only
-**Fixture corpus:** 1057 total `.conception` fixture files; 85 under `language/phase11-testing/`; 108 under `language/phase15-c-abi/`; 73 under `language/phase16-imports/`; 57 under `language/phase17-runtime-failure/`; 66 under `language/phase18-machines/`; 23 under `language/phase19-yielding-machines/`; 5 under `language/phase20-dragongod-kernel/`
+**Current phase:** Phase 20 / DG5 complete — DragonGod Kernel Automata stack v0
+**Fixture corpus:** 1089 total `.conception` fixture files; 85 under `language/phase11-testing/`; 108 under `language/phase15-c-abi/`; 73 under `language/phase16-imports/`; 57 under `language/phase17-runtime-failure/`; 66 under `language/phase18-machines/`; 23 under `language/phase19-yielding-machines/`; 37 under `language/phase20-dragongod-kernel/`
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
 
@@ -666,4 +666,13 @@ P19-M9 closes Phase 19 after P19-M8 added examples/docs for the existing bare `y
 
 DG4 is complete. DragonGod coverage now includes Mind v0 as a static executor/signal recorder: `MindStatus`, `Mind` status/signal/reason fields, `mindEmpty`, `mindRecordSignal`, `mindIsDone`, and `mindLastReasonCode`. Supported static paths include recording `AutomataSignal::None` as no completion, `Succeed` as terminal success, `Fail` as terminal failure, `Goto` as recorded/deferred intent without stack execution, and static supervision of concrete machines through caller-owned `Step`/`Complete`/`Result` calls. Memory-driven static signal machines compose with DG3 Memory v0.
 
-Feature matrix: DG0 Blueprint complete; DG1 Kernel core seed complete; DG2 static automata signals and machine examples complete; DG3 Memory v0 complete; DG4 Mind v0 static executor complete. Deferred: Automata stack, dynamic graph, `Goto`/`Push`/`Pop` execution, root frame semantics, transition/interrupt scanning, decision memory, type-erased machine storage, Actuation subsystem, Events, Trace, Replay, Persistence, and Parallel staged tick.
+Feature matrix after DG4: DG0 Blueprint complete; DG1 Kernel core seed complete; DG2 static automata signals and machine examples complete; DG3 Memory v0 complete; DG4 Mind v0 static executor complete. Deferred after DG4: Automata stack, dynamic graph, `Goto`/`Push`/`Pop` execution, root frame semantics, transition/interrupt scanning, decision memory, type-erased machine storage, Actuation subsystem, Events, Trace, Replay, Persistence, and Parallel staged tick.
+
+
+### Phase 20 / DragonGod DG5 Automata stack v0
+
+DG5 is complete. DragonGod coverage now includes `AutomataFrame`, fixed-capacity `AutomataStack`, push/pop/top/replace/depth/empty/full helpers, `Mind.stack`, and structural `mindRecordSignal` handling for `Goto`, `Push`, and `Pop`. `Goto` pushes the target frame when no frame exists and replaces the current top frame otherwise; `Push` adds a frame; `Pop` removes one frame and returns Mind to `Idle` only when the stack becomes empty. Reason propagation is preserved through frame storage and `Mind.lastReason`.
+
+The DG5 fixture corpus adds six run fixtures and one backend fixture, bringing Phase 20 DragonGod coverage to 37 valid fixtures and the full `.conception` corpus to 1089 files. Panic-backed stack overflow, underflow, and empty-top paths lower through the shared `cpt_panic` runtime failure helper with DragonGod-specific reason strings.
+
+Feature matrix: DG0 Blueprint complete; DG1 Kernel core seed complete; DG2 static automata signals and machine examples complete; DG3 Memory v0 complete; DG4 Mind v0 static executor complete; DG5 Automata stack v0 complete. Supported after DG5: `AutomataFrame`; fixed-capacity `AutomataStack`; push/pop/top/replace helpers; Mind stack field; structural Mind handling of `Goto`/`Push`/`Pop`. Deferred: dynamic graph, type-erased machine storage, `AutomataMachineOps`, root-frame semantics, keep-root behavior, transition scanning, interrupt scanning, decision memory, actuation dispatch, events, trace, replay, persistence, parallel staged ticking, scheduler/async behavior, and DragonGod compiler hooks.

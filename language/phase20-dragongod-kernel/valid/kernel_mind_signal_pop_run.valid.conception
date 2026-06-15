@@ -1,0 +1,35 @@
+# name: phase20 DG5 mind pop run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+struct StateId { int value; };
+struct ActuationId { int value; };
+struct Reason { int code; };
+enum AutomataSignal { None, Goto(StateId target, Reason reason), Push(StateId target, Reason reason), Pop(Reason reason), Succeed(Reason reason), Fail(Reason reason), Act(ActuationId id), AwaitActuation(ActuationId id), };
+struct AutomataFrame { StateId state; Reason reason; };
+AutomataFrame automataFrame(StateId state, Reason reason) { return AutomataFrame { state: state, reason: reason }; }
+struct AutomataStack { int depth; AutomataFrame frame0; AutomataFrame frame1; AutomataFrame frame2; AutomataFrame frame3; };
+AutomataStack automataStackEmpty() { AutomataFrame empty = automataFrame(StateId { value: 0 }, Reason { code: 0 }); return AutomataStack { depth: 0, frame0: empty, frame1: empty, frame2: empty, frame3: empty }; }
+int automataStackDepth(AutomataStack stack) { return stack.depth; }
+bool automataStackIsEmpty(AutomataStack stack) { return stack.depth == 0; }
+bool automataStackIsFull(AutomataStack stack) { return stack.depth == 4; }
+void automataStackPush(mut AutomataStack& stack, StateId state, Reason reason) { AutomataFrame frame = automataFrame(state, reason); if (stack.depth == 0) { stack.frame0 = frame; stack.depth = 1; return; } if (stack.depth == 1) { stack.frame1 = frame; stack.depth = 2; return; } if (stack.depth == 2) { stack.frame2 = frame; stack.depth = 3; return; } if (stack.depth == 3) { stack.frame3 = frame; stack.depth = 4; return; } panic("DragonGod.Automata stack capacity exceeded"); }
+void automataStackPop(mut AutomataStack& stack) { if (stack.depth == 0) { panic("DragonGod.Automata stack underflow"); } stack.depth = stack.depth - 1; }
+AutomataFrame automataStackTop(AutomataStack stack) { if (stack.depth == 1) { return stack.frame0; } if (stack.depth == 2) { return stack.frame1; } if (stack.depth == 3) { return stack.frame2; } if (stack.depth == 4) { return stack.frame3; } panic("DragonGod.Automata stack empty"); }
+void automataStackReplaceTop(mut AutomataStack& stack, StateId state, Reason reason) { AutomataFrame frame = automataFrame(state, reason); if (stack.depth == 1) { stack.frame0 = frame; return; } if (stack.depth == 2) { stack.frame1 = frame; return; } if (stack.depth == 3) { stack.frame2 = frame; return; } if (stack.depth == 4) { stack.frame3 = frame; return; } panic("DragonGod.Automata stack empty"); }
+enum MindStatus { Idle, Running, Succeeded, Failed, WaitingActuation, };
+struct Mind { int active; MindStatus status; AutomataSignal lastSignal; Reason lastReason; AutomataStack stack; };
+Mind mindEmpty() { return Mind { active: 0, status: MindStatus::Idle, lastSignal: AutomataSignal::None, lastReason: Reason { code: 0 }, stack: automataStackEmpty() }; }
+void mindRecordSignal(mut Mind& mind, AutomataSignal signal) { mind.lastSignal = signal; match (signal) { AutomataSignal::Succeed(reason) => { mind.status = MindStatus::Succeeded; mind.lastReason = reason; return; } AutomataSignal::Fail(reason) => { mind.status = MindStatus::Failed; mind.lastReason = reason; return; } AutomataSignal::AwaitActuation(id) => { mind.status = MindStatus::WaitingActuation; return; } AutomataSignal::Act(id) => { mind.status = MindStatus::Running; return; } AutomataSignal::Goto(target, reason) => { if (automataStackIsEmpty(mind.stack)) { automataStackPush(mind.stack&, target, reason); } else { automataStackReplaceTop(mind.stack&, target, reason); } mind.status = MindStatus::Running; mind.lastReason = reason; return; } AutomataSignal::Push(target, reason) => { automataStackPush(mind.stack&, target, reason); mind.status = MindStatus::Running; mind.lastReason = reason; return; } AutomataSignal::Pop(reason) => { automataStackPop(mind.stack&); if (automataStackIsEmpty(mind.stack)) { mind.status = MindStatus::Idle; } else { mind.status = MindStatus::Running; } mind.lastReason = reason; return; } AutomataSignal::None => { return; } } }
+int mindStackDepth(Mind mind) { return automataStackDepth(mind.stack); }
+bool mindHasState(Mind mind) { return !automataStackIsEmpty(mind.stack); }
+StateId mindCurrentState(Mind mind) { return automataStackTop(mind.stack).state; }
+
+
+int main() { Mind mind = mindEmpty(); mindRecordSignal(mind&, AutomataSignal::Push(StateId { value: 10 }, Reason { code: 1 })); mindRecordSignal(mind&, AutomataSignal::Push(StateId { value: 20 }, Reason { code: 2 })); mindRecordSignal(mind&, AutomataSignal::Pop(Reason { code: 4 })); return mindStackDepth(mind) + mindCurrentState(mind).value + mind.lastReason.code; }
+
+=== run ===
+exit_code: 15

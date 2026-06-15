@@ -3,8 +3,9 @@ module DragonGod.Kernel.Mind;
 import DragonGod.Kernel.Core;
 import DragonGod.Kernel.Automata;
 
-// DG4 Mind v0: static executor/signal recorder only.
-// No dynamic graph, Automata stack, scheduler, or runtime hooks.
+// DG5 Mind v0: static signal recorder with a fixed-capacity Automata stack.
+// The stack stores StateId frames only; dynamic graph execution, machine
+// storage, transition scanning, and scheduler/runtime hooks remain deferred.
 enum MindStatus {
     Idle,
     Running,
@@ -18,6 +19,7 @@ struct Mind {
     MindStatus status;
     DragonGod.Kernel.Automata.AutomataSignal lastSignal;
     DragonGod.Kernel.Core.Reason lastReason;
+    DragonGod.Kernel.Automata.AutomataStack stack;
 };
 
 Mind mindEmpty() {
@@ -25,7 +27,8 @@ Mind mindEmpty() {
         active: 0,
         status: MindStatus::Idle,
         lastSignal: DragonGod.Kernel.Automata.AutomataSignal::None,
-        lastReason: DragonGod.Kernel.Core.Reason { code: 0 }
+        lastReason: DragonGod.Kernel.Core.Reason { code: 0 },
+        stack: DragonGod.Kernel.Automata.automataStackEmpty()
     };
 }
 
@@ -52,7 +55,28 @@ void mindRecordSignal(mut Mind& mind, DragonGod.Kernel.Automata.AutomataSignal s
             return;
         }
         DragonGod.Kernel.Automata.AutomataSignal::Goto(target, reason) => {
+            if (DragonGod.Kernel.Automata.automataStackIsEmpty(mind.stack)) {
+                DragonGod.Kernel.Automata.automataStackPush(mind.stack&, target, reason);
+            } else {
+                DragonGod.Kernel.Automata.automataStackReplaceTop(mind.stack&, target, reason);
+            }
             mind.status = MindStatus::Running;
+            mind.lastReason = reason;
+            return;
+        }
+        DragonGod.Kernel.Automata.AutomataSignal::Push(target, reason) => {
+            DragonGod.Kernel.Automata.automataStackPush(mind.stack&, target, reason);
+            mind.status = MindStatus::Running;
+            mind.lastReason = reason;
+            return;
+        }
+        DragonGod.Kernel.Automata.AutomataSignal::Pop(reason) => {
+            DragonGod.Kernel.Automata.automataStackPop(mind.stack&);
+            if (DragonGod.Kernel.Automata.automataStackIsEmpty(mind.stack)) {
+                mind.status = MindStatus::Idle;
+            } else {
+                mind.status = MindStatus::Running;
+            }
             mind.lastReason = reason;
             return;
         }
@@ -68,4 +92,16 @@ bool mindIsDone(Mind mind) {
 
 int mindLastReasonCode(Mind mind) {
     return mind.lastReason.code;
+}
+
+int mindStackDepth(Mind mind) {
+    return DragonGod.Kernel.Automata.automataStackDepth(mind.stack);
+}
+
+bool mindHasState(Mind mind) {
+    return !DragonGod.Kernel.Automata.automataStackIsEmpty(mind.stack);
+}
+
+DragonGod.Kernel.Core.StateId mindCurrentState(Mind mind) {
+    return DragonGod.Kernel.Automata.automataStackTop(mind.stack).state;
 }

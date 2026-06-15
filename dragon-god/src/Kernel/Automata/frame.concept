@@ -1,0 +1,17 @@
+module DragonGod.Kernel.Automata;
+
+import DragonGod.Kernel.Core;
+
+// DG5 Automata frame v0: stores the current StateId plus the Reason that
+// produced the frame. It does not store machine code or erased machine data.
+struct AutomataFrame {
+    DragonGod.Kernel.Core.StateId state;
+    DragonGod.Kernel.Core.Reason reason;
+};
+
+AutomataFrame automataFrame(DragonGod.Kernel.Core.StateId state, DragonGod.Kernel.Core.Reason reason) {
+    return AutomataFrame {
+        state: state,
+        reason: reason
+    };
+}

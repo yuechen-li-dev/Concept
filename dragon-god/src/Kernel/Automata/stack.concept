@@ -1,0 +1,54 @@
+module DragonGod.Kernel.Automata;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Automata;
+
+// DG5 Automata stack v0: explicit fixed-capacity StateId frames.
+// No heap, vector, root-frame policy, dynamic graph, or machine storage.
+struct AutomataStack {
+    int depth;
+    AutomataFrame frame0;
+    AutomataFrame frame1;
+    AutomataFrame frame2;
+    AutomataFrame frame3;
+};
+
+AutomataStack automataStackEmpty() {
+    AutomataFrame empty = automataFrame(DragonGod.Kernel.Core.StateId { value: 0 }, DragonGod.Kernel.Core.Reason { code: 0 });
+    return AutomataStack { depth: 0, frame0: empty, frame1: empty, frame2: empty, frame3: empty };
+}
+
+int automataStackDepth(AutomataStack stack) { return stack.depth; }
+bool automataStackIsEmpty(AutomataStack stack) { return stack.depth == 0; }
+bool automataStackIsFull(AutomataStack stack) { return stack.depth == 4; }
+
+void automataStackPush(mut AutomataStack& stack, DragonGod.Kernel.Core.StateId state, DragonGod.Kernel.Core.Reason reason) {
+    AutomataFrame frame = automataFrame(state, reason);
+    if (stack.depth == 0) { stack.frame0 = frame; stack.depth = 1; return; }
+    if (stack.depth == 1) { stack.frame1 = frame; stack.depth = 2; return; }
+    if (stack.depth == 2) { stack.frame2 = frame; stack.depth = 3; return; }
+    if (stack.depth == 3) { stack.frame3 = frame; stack.depth = 4; return; }
+    panic("DragonGod.Automata stack capacity exceeded");
+}
+
+void automataStackPop(mut AutomataStack& stack) {
+    if (stack.depth == 0) { panic("DragonGod.Automata stack underflow"); }
+    stack.depth = stack.depth - 1;
+}
+
+AutomataFrame automataStackTop(AutomataStack stack) {
+    if (stack.depth == 1) { return stack.frame0; }
+    if (stack.depth == 2) { return stack.frame1; }
+    if (stack.depth == 3) { return stack.frame2; }
+    if (stack.depth == 4) { return stack.frame3; }
+    panic("DragonGod.Automata stack empty");
+}
+
+void automataStackReplaceTop(mut AutomataStack& stack, DragonGod.Kernel.Core.StateId state, DragonGod.Kernel.Core.Reason reason) {
+    AutomataFrame frame = automataFrame(state, reason);
+    if (stack.depth == 1) { stack.frame0 = frame; return; }
+    if (stack.depth == 2) { stack.frame1 = frame; return; }
+    if (stack.depth == 3) { stack.frame2 = frame; return; }
+    if (stack.depth == 4) { stack.frame3 = frame; return; }
+    panic("DragonGod.Automata stack empty");
+}
