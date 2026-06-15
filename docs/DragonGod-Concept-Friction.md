@@ -23,6 +23,46 @@ Each DragonGod phase should record friction discovered while writing real Concep
   - blocking
 - Suggested future fix:
 
+
+
+## Phase 20 closeout friction summary
+
+Phase 20 is closed after DG12. The accumulated DragonGod entries show one clear pattern: the kernel can be expressed in Concept today, but too many subsystems had to repeat fixed four-slot storage, integer-only payloads, and verbose lookup/fallback APIs. This is enough evidence to pause further DragonGod subsystem expansion and return to Concept core implementation work.
+
+### P0 / next-implementation blockers
+
+- Arrays, vectors, slices, spans, and fixed buffers: Memory, AutomataStack, Decision, Actuation, Events, Trace, Replay, Persistence, and Graph all converged on explicit `slot0`/`slot1`/`slot2`/`slot3`-style scaffolds.
+- Option/Result-like lookup and try-style ergonomics: stack top/pop, event read, replay apply-next, graph find, memory read, and capacity handling all need a standard non-panicking value-return vocabulary.
+- Strings, `StringView`, and byte slices: `Reason`, trace messages, event/replay/persistence formats, and diagnostics remain integer- or enum-backed placeholders.
+- Generic collection and payload patterns: typed Memory keys, event payloads, actuation commands, replay inputs, trace sinks, and graph node payloads need shared generic/container surfaces rather than DragonGod-specific machinery.
+- Module/package ergonomics: DragonGod source organization wants multiple files per module/package while fixtures still aggregate module-shaped sources manually.
+
+### P1 / major ergonomics blockers
+
+- Function pointers, callable values, and consideration functions: DG6 could not express reusable utility consideration functions or stored callable policies cleanly.
+- Generic interfaces/traits for snapshots, event payloads, actuation commands, trace sinks, and machine-like values remain awkward without stronger generic/dyn/container composition.
+- Dynamic storage, dyn object ownership, and handler tables are still too immature for useful actuator registries, sink registries, or type-erased machine stores.
+- Large struct copy/restore ergonomics surfaced in checkpoint restore and replay/checkpoint composition; explicit value snapshots work but are verbose.
+- Nested mutation verbosity remains visible across `memory&`, `host&`, `bus&`, `trace&`, and checkpoint restore helpers.
+- Payload enum qualification verbosity remains visible in cross-module `AutomataSignal::...` examples.
+- Backend fixture brittleness appears when tests assert implementation-shaped generated C rather than stable semantic markers.
+
+### P2 / important but not immediate
+
+- Serialization and file I/O for checkpoints, replay logs, and external formats.
+- Stable schema and versioning for persistence.
+- Dynamic machine execution and type-erased `MachineOps`.
+- Dynamic transition scanning and graph-driven execution.
+- Scheduler/async integration and parallel staged execution.
+- Replay/persistence merge formats and durable log/checkpoint interoperability.
+
+### Expected limitations / not bugs
+
+- DragonGod v0 uses fixed slots because containers are not implemented yet.
+- Integer-backed IDs and `Reason` codes are acceptable Stage 0 placeholders.
+- Dynamic machine execution should remain deferred until Concept has stronger container, dyn, generic, ownership, and storage support.
+- The Phase 20 proof proves Concept stress coverage, not a production DragonGod runtime.
+
 ## DG1 entries
 
 - Phase: 20 / DG1

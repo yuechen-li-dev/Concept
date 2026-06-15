@@ -1,18 +1,18 @@
 # Concept — Checkpoint 1 Coverage Matrix
-## Phase 20 DG1 DragonGod Kernel core seed vs PoC3 Constitution
+## Phase 20 DragonGod Kernel closeout vs PoC3 Constitution
 
 **Generated:** June 2026  
 **Compiler:** Stage 0 (Zig, self-hosted Concept frontend, C backend via MIR)  
-**Phases closed:** 1 through 20 / DG1
-**Current phase:** Phase 20 / DG9 complete — DragonGod Kernel Trace subsystem v0
-**Fixture corpus:** 1135 total `.conception` fixture files; 85 under `language/phase11-testing/`; 108 under `language/phase15-c-abi/`; 73 under `language/phase16-imports/`; 57 under `language/phase17-runtime-failure/`; 66 under `language/phase18-machines/`; 23 under `language/phase19-yielding-machines/`; 83 under `language/phase20-dragongod-kernel/`
+**Phases closed:** 1 through 20 / DG12
+**Current phase:** Phase 20 closed after DG12 — DragonGod Kernel proof-of-concept closeout
+**Fixture corpus:** 1151 total `.conception` fixture files; 99 under `language/phase20-dragongod-kernel/`.
 **Stage target:** Stage 1 (MIR-complete, C backend from MIR, ownership/effects/machines)
 
 
 
-## Phase 20 / DG1 DragonGod Kernel snapshot
+## Phase 20 / DG12 DragonGod Kernel snapshot
 
-Phase 20 / DG1 is complete as a kernel foundation milestone. The `dragon-god/` tree now seeds `DragonGod.Kernel.Core`, `DragonGod.Kernel.Automata`, `DragonGod.Kernel.Memory`, and `DragonGod.Kernel.Mind` with ID/time/reason/signal types and shell structs for `Memory`, `Mind`, `Agent`, and `World`. This is deliberately a module/type seed: no Memory storage, Mind tick loop, Automata stack, decision subsystem, actuation subsystem, events subsystem, trace, replay, persistence, parallel staged tick, scheduler, async runtime, or bare-metal proof is implemented.
+Phase 20 is complete through DG12 as a DragonGod Kernel proof-of-concept milestone. The `dragon-god/` tree now covers Core, Automata, Memory, Mind, Decision, Actuation, Events, Trace, Replay, Persistence/checkpoint, and Graph metadata. This is deliberately still a proof-of-concept kernel: production runtime behavior, dynamic machine execution, scheduler/async behavior, durable persistence, parallel staged execution, and DragonGod compiler hooks remain deferred.
 
 | DragonGod Kernel capability | Status | Notes |
 |-----------------------------|--------|-------|
@@ -26,9 +26,20 @@ Phase 20 / DG1 is complete as a kernel foundation milestone. The `dragon-god/` t
 | Events subsystem | ✅ | DG8 fixed-slot integer Events subsystem v0 is implemented. |
 | Trace subsystem | ✅ | DG9 fixed-slot explicit Trace subsystem v0 is implemented. |
 | Replay subsystem | ✅ | DG10 fixed-slot deterministic Replay v0 is implemented. |
-| Persistence | ❌ | Not implemented. |
+| Persistence/checkpoint | ✅ | DG11 in-memory checkpoint v0 is implemented; file I/O and serialization remain deferred. |
+| AutomataGraph metadata | ✅ | DG12 fixed-slot dynamic metadata v0 is implemented; dynamic machine execution remains deferred. |
 | Parallel | ❌ | Not implemented. |
 | Bare-metal proof | ❌ | Not implemented. |
+
+
+
+## Phase 20 / DG12 closeout snapshot
+
+Phase 20 is closed after DG12. DG0 through DG12 are all closed: blueprint, kernel core seed, static automata signals, Memory v0, Mind v0 static executor, Automata stack v0, Decision v0, Actuation v0, Events v0, Trace v0, Replay v0, in-memory Persistence/checkpoint v0, and AutomataGraph metadata v0.
+
+DragonGod.Kernel remains a proof-of-concept kernel. The Phase 20 fixture corpus now has 99 DragonGod `.conception` fixtures under `language/phase20-dragongod-kernel/valid/`, covering Core IDs/Reason/Clock, AutomataSignal, Memory, Mind, AutomataStack, Decision, Actuation, Events, Trace, Replay, Persistence/checkpoint, and Graph metadata.
+
+Key missing features surfaced by Phase 20 are arrays/slices/fixed buffers, a standard Option/Result surface, strings/StringView/byte slices, generic containers and payloads, callable values, stronger dyn/interface storage, and serialization primitives. Further DragonGod subsystem expansion should pause until those Concept features are implemented.
 
 ---
 ## Phase 18 M9 closeout snapshot

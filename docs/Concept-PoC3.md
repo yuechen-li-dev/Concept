@@ -3051,3 +3051,23 @@ DG12 is complete as graph metadata v0. `DragonGod.Kernel.Graph` provides fixed-s
 ### DragonGod DG11 status
 
 DG11 Persistence/checkpoint v0 is implemented as in-memory checkpoint capture/restore only. Supported: `KernelCheckpoint`, checkpoint capture, world restore, agent restore, events restore, actuation restore, trace restore, RNG seed metadata, and replay/checkpoint composition fixtures. Deferred: file I/O, JSON, binary serialization, stable schema, migration, compression, dynamic graph snapshots, heap/pointer graph persistence, replay log persistence, and external storage adapters.
+
+
+## Post-Phase-20 roadmap from DragonGod friction
+
+Phase 20 is closed after DG12. DragonGod.Kernel should now become a regression and stress suite while Concept core catches up. The next implementation work should target the recurring friction exposed by Memory, AutomataStack, Decision, Actuation, Events, Trace, Replay, Persistence/checkpoint, and AutomataGraph metadata rather than adding more DragonGod fixed-slot subsystems.
+
+Recommended next Concept phases:
+
+| Phase | Focus | DragonGod friction addressed |
+| --- | --- | --- |
+| Phase 21 | Arrays, slices, and fixed buffers | Replaces repeated four-slot scaffolds across Memory, Stack, Actuation, Events, Trace, Replay, Graph, and checkpoint shells. |
+| Phase 22 | Option/Result standard surface and try-style ergonomics | Gives lookup, read, find, apply-next, and capacity APIs a consistent non-panicking return shape. |
+| Phase 23 | String, StringView, and byte slices | Moves `Reason`, trace text, persistence payloads, and byte formats beyond integer placeholders. |
+| Phase 24 | Small generic containers and append buffers | Enables reusable kernel buffers, event streams, replay logs, trace recorders, and graph node lists. |
+| Phase 25 | Callable values / function pointers / consideration functions | Supports Decision consideration functions, policy callbacks, explicit handlers, and reusable machine utilities. |
+| Phase 26 | Interface/dyn storage and object lifetime hardening | Prepares safe handler/sink tables and later type-erased machine storage. |
+| Phase 27 | Serialization primitives and in-memory byte encoding | Prepares checkpoint/replay persistence without jumping directly to file I/O. |
+| Phase 28 | DragonGod revisit: dynamic machine execution spike | Revisit AutomataGraph execution only after container, option/result, string/bytes, generic, callable, and dyn storage foundations exist. |
+
+Phase 21 should probably be arrays, slices, and fixed buffers because every DG subsystem exposed fixed-slot pain. DragonGod should remain paused as a subsystem-expansion project and continue as a regression/stress suite for upcoming Concept language and library work.
