@@ -1,0 +1,13 @@
+// DG4: Mind v0 records AutomataSignal values only.
+// No Automata stack, dynamic graph, scheduler, or runtime hook is involved.
+module Example.MindRecordSignal;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Automata;
+import DragonGod.Kernel.Mind;
+
+int main() {
+    DragonGod.Kernel.Mind.Mind mind = DragonGod.Kernel.Mind.mindEmpty();
+    DragonGod.Kernel.Mind.mindRecordSignal(mind&, DragonGod.Kernel.Automata.AutomataSignal::Succeed(DragonGod.Kernel.Core.Reason { code: 7 }));
+    return DragonGod.Kernel.Mind.mindLastReasonCode(mind);
+}

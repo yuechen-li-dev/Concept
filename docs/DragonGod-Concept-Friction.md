@@ -105,3 +105,29 @@ DG3 replaces the DG1 `Memory` shell with a deterministic fixed-slot integer stor
 - Pain observed: Passing `Memory` by value into a machine works for read-only decision fixtures, but it is not the final agent-context borrowing model.
 - Workaround used: The DG3 signal-machine fixture reads a copied `Memory` and returns `AutomataSignal`; Mind tick and mutable Memory context remain deferred.
 - Suggested future fix: Introduce the real Mind/Agent tick context and borrowing shape in a later DragonGod phase.
+
+## DG4 Mind v0 static executor
+
+Status: DG4 Mind v0 static executor complete; no blocking DG4 friction observed.
+
+DG4 upgrades the Mind shell into a minimal static executor/signal recorder. The implementation proved that `Mind` can contain a typed `MindStatus`, remember an `AutomataSignal`, record integer-backed `Reason` values from `Succeed`, `Fail`, and deferred `Goto`, and expose small helpers (`mindEmpty`, `mindRecordSignal`, `mindIsDone`, `mindLastReasonCode`) without DragonGod compiler hooks.
+
+Observed non-blocking friction:
+
+- Phase: 20 / DG4
+- Area: Generic machine stepping
+- Pain observed: Concept still does not have a clean generic surface for “any concrete machine returning `AutomataSignal`”.
+- Workaround used: DG4 keeps static supervision in fixtures and examples: callers own concrete machine values, call `Step`, check `Complete`, then pass `Result` to `mindRecordSignal`.
+- Suggested future fix: Revisit a typed/generic static-machine helper after the language has an explicit generic or interface shape for machine operations.
+
+- Phase: 20 / DG4
+- Area: Mutable Mind recording ergonomics
+- Pain observed: Kernel helper calls require explicit `mind&` syntax for mutation.
+- Workaround used: Keep mutation explicit in all examples and fixtures because it documents that Mind recording changes the caller-owned value.
+- Suggested future fix: Improve reference ergonomics only if it preserves Concept's explicit mutation doctrine.
+
+- Phase: 20 / DG4
+- Area: Context borrowing shape
+- Pain observed: `MindCtx` with live `World`/`Agent` references would broaden DG4 into borrowing/lifetime design.
+- Workaround used: `MindCtx` stores value-shaped `Clock` and `Memory`, while `Agent` and `World` continue as shells with enough integration for static fixtures.
+- Suggested future fix: Introduce borrowed world/agent context when DG5+ stack/tick semantics need it.

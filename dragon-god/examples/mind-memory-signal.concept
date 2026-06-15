@@ -1,0 +1,10 @@
+// DG4 + DG3: static machine reads Memory v0, then Mind records the signal.
+module Example.MindMemorySignal;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Automata;
+import DragonGod.Kernel.Memory;
+import DragonGod.Kernel.Mind;
+
+// See language/phase20-dragongod-kernel/valid/kernel_mind_memory_signal_machine_run.valid.conception.
+// Memory remains fixed-capacity integer storage; Mind does not tick a dynamic graph yet.

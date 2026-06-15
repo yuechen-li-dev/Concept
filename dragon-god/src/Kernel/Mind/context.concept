@@ -3,6 +3,11 @@ module DragonGod.Kernel.Mind;
 import DragonGod.Kernel.Core;
 import DragonGod.Kernel.Memory;
 
+struct MindCtx {
+    DragonGod.Kernel.Core.Clock clock;
+    DragonGod.Kernel.Memory.Memory memory;
+};
+
 struct Agent {
     DragonGod.Kernel.Core.AgentId id;
     DragonGod.Kernel.Memory.Memory memory;

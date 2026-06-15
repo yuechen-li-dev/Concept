@@ -1,5 +1,71 @@
 module DragonGod.Kernel.Mind;
 
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Automata;
+
+// DG4 Mind v0: static executor/signal recorder only.
+// No dynamic graph, Automata stack, scheduler, or runtime hooks.
+enum MindStatus {
+    Idle,
+    Running,
+    Succeeded,
+    Failed,
+    WaitingActuation,
+};
+
 struct Mind {
     int active;
+    MindStatus status;
+    DragonGod.Kernel.Automata.AutomataSignal lastSignal;
+    DragonGod.Kernel.Core.Reason lastReason;
 };
+
+Mind mindEmpty() {
+    return Mind {
+        active: 0,
+        status: MindStatus::Idle,
+        lastSignal: DragonGod.Kernel.Automata.AutomataSignal::None,
+        lastReason: DragonGod.Kernel.Core.Reason { code: 0 }
+    };
+}
+
+void mindRecordSignal(mut Mind& mind, DragonGod.Kernel.Automata.AutomataSignal signal) {
+    mind.lastSignal = signal;
+
+    match (signal) {
+        DragonGod.Kernel.Automata.AutomataSignal::Succeed(reason) => {
+            mind.status = MindStatus::Succeeded;
+            mind.lastReason = reason;
+            return;
+        }
+        DragonGod.Kernel.Automata.AutomataSignal::Fail(reason) => {
+            mind.status = MindStatus::Failed;
+            mind.lastReason = reason;
+            return;
+        }
+        DragonGod.Kernel.Automata.AutomataSignal::AwaitActuation(id) => {
+            mind.status = MindStatus::WaitingActuation;
+            return;
+        }
+        DragonGod.Kernel.Automata.AutomataSignal::Act(id) => {
+            mind.status = MindStatus::Running;
+            return;
+        }
+        DragonGod.Kernel.Automata.AutomataSignal::Goto(target, reason) => {
+            mind.status = MindStatus::Running;
+            mind.lastReason = reason;
+            return;
+        }
+        DragonGod.Kernel.Automata.AutomataSignal::None => {
+            return;
+        }
+    }
+}
+
+bool mindIsDone(Mind mind) {
+    return mind.status == MindStatus::Succeeded || mind.status == MindStatus::Failed;
+}
+
+int mindLastReasonCode(Mind mind) {
+    return mind.lastReason.code;
+}

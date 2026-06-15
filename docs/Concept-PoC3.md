@@ -2999,3 +2999,11 @@ Phase 20 / DG3 is complete. The corpus now has 1075 `.conception` fixture files,
 Revision behavior is deterministic: new `memoryEmpty()` instances start at revision 0, and every successful `memoryWrite` increments `revision`, including updates to existing keys. Reads return the stored value when present and the caller-provided fallback otherwise. The v0 store has a fixed four-key capacity; overflow writes are documented no-ops rather than a final Memory error policy.
 
 DG3 also adds examples and fixtures proving Memory read/write, fallback reads, key presence checks, revision increments, update-existing behavior, backend fixed-slot/no-heap shape, and a read-only Memory-driven machine that returns `AutomataSignal`. No generic `MemoryKey<T>`, arbitrary payload storage, type erasure, hash maps, TTL, changed-key tracking, arena allocation, Mind tick loop, Automata stack, scheduler/async behavior, persistence/replay, or DragonGod compiler hooks were added.
+
+## Phase 20 / DG4 DragonGod Kernel Mind v0 static executor
+
+Phase 20 / DG4 is complete. The corpus now has 1082 `.conception` fixture files, with 30 DragonGod Phase 20 valid fixtures. DG4 turns the Mind shell into a minimal static executor/signal recorder: `MindStatus` records Idle/Running/Succeeded/Failed/WaitingActuation, `Mind` stores `active`, `status`, `lastSignal`, and `lastReason`, and helper functions initialize Mind, record signals, report terminal success/failure, and read the last reason code.
+
+DG4 proves Mind can supervise static concrete machines. A caller owns a concrete signal-returning machine, calls `Step(machine)`, checks `Complete(machine)`, and passes `Result(machine)` to `mindRecordSignal`. Fixtures cover direct `Succeed`/`Fail` recording, deferred `Goto` recording without stack execution, static succeed machines, yielding machines that remain incomplete until later steps, and a Memory-driven static machine using DG3 `memoryRead`. DG5 introduces Automata stack semantics.
+
+DG4 deliberately does not add a dynamic `AutomatonGraph`, `AutomataStack`, `Goto`/`Push`/`Pop` execution, root-frame semantics, transition scanning, interrupt scanning, decision memory, type-erased machine storage, Actuation dispatch, Events, Trace, Replay, Persistence, parallel staged tick, scheduler/async behavior, or DragonGod compiler hooks.

@@ -1,0 +1,23 @@
+# name: kernel_mind_static_succeed_machine_run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+struct StateId { int value; };
+struct ActuationId { int value; };
+struct Reason { int code; };
+enum AutomataSignal { None, Goto(StateId target, Reason reason), Succeed(Reason reason), Fail(Reason reason), Act(ActuationId id), AwaitActuation(ActuationId id), };
+enum MindStatus { Idle, Running, Succeeded, Failed, WaitingActuation, };
+struct Mind { int active; MindStatus status; AutomataSignal lastSignal; Reason lastReason; };
+Mind mindEmpty() { return Mind { active: 0, status: MindStatus::Idle, lastSignal: AutomataSignal::None, lastReason: Reason { code: 0 } }; }
+void mindRecordSignal(mut Mind& mind, AutomataSignal signal) { mind.lastSignal = signal; match (signal) { AutomataSignal::Succeed(reason) => { mind.status = MindStatus::Succeeded; mind.lastReason = reason; return; } AutomataSignal::Fail(reason) => { mind.status = MindStatus::Failed; mind.lastReason = reason; return; } AutomataSignal::AwaitActuation(id) => { mind.status = MindStatus::WaitingActuation; return; } AutomataSignal::Act(id) => { mind.status = MindStatus::Running; return; } AutomataSignal::Goto(target, reason) => { mind.status = MindStatus::Running; mind.lastReason = reason; return; } AutomataSignal::None => { return; } } }
+bool mindIsDone(Mind mind) { return mind.status == MindStatus::Succeeded || mind.status == MindStatus::Failed; }
+int mindLastReasonCode(Mind mind) { return mind.lastReason.code; }
+
+machine SucceedMachine -> AutomataSignal { state Start { return AutomataSignal::Succeed(Reason { code: 7 }); } }
+int main() { Mind mind = mindEmpty(); SucceedMachine machine = SucceedMachine(); Step(machine); if (Complete(machine)) { mindRecordSignal(mind&, Result(machine)); } return mindLastReasonCode(mind); }
+
+=== run ===
+exit_code: 7

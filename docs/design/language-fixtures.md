@@ -568,3 +568,9 @@ These fixtures intentionally remain static and specialized. They do not introduc
 Phase 20 DragonGod coverage now contains 23 valid fixtures. DG3 adds seven fixtures under `language/phase20-dragongod-kernel/valid/`: six run fixtures for Memory write/read, fallback read, `memoryHas`, revision behavior, update-existing-key behavior, and Memory-driven `AutomataSignal` machines; plus one backend C fixture for the fixed-slot Memory shape.
 
 The backend fixture pins the presence of the `Memory` struct with `revision` and explicit slots, direct mutation through `memoryWrite`, fallback return behavior in `memoryRead`, and absence of heap allocation, scheduler/async/mailbox markers, and Blackboard/BbKey public naming. The fixtures intentionally do not cover generic `MemoryKey<T>`, hash maps, TTL, changed-key filtering, type erasure, persistence, replay, Mind ticking, or DragonGod compiler hooks.
+
+## Phase 20 / DG4 DragonGod Mind fixtures
+
+Phase 20 DragonGod coverage now contains 30 valid fixtures out of 1082 `.conception` files. DG4 adds seven fixtures under `language/phase20-dragongod-kernel/valid/`: six run fixtures for `mindRecordSignal` with `Succeed`, `Fail`, deferred `Goto`, static succeed-machine supervision, yielding static-machine supervision, and Memory-driven signal-machine supervision; plus one backend C fixture for the Mind v0 shape.
+
+The backend fixture pins `Mind` with typed status/signal fields, `mindRecordSignal`, `Succeed`/`Fail` handling, and absence of heap allocation, dynamic graph/stack storage, scheduler markers, and DragonGod runtime hooks. The DG4 fixtures intentionally do not cover dynamic Automata graphs, stack frame semantics, `Goto` execution, transition scanning, interrupts, decision memory, type-erased machine storage, Actuation dispatch, Events, Trace, Replay, Persistence, or parallel staged ticking.

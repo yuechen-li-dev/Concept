@@ -1671,3 +1671,8 @@ struct Memory {
 The DG3 API is `memoryWrite(mut Memory& memory, MemoryKeyInt key, int value)`, `memoryRead(Memory memory, MemoryKeyInt key, int fallback)`, `memoryHas(Memory memory, MemoryKeyInt key)`, and `memoryRevision(Memory memory)`. `memoryEmpty()` creates revision-0 Memory with empty slots. Every successful write increments `revision`, including updates to an existing key. `memoryRead` returns the fallback when the key is absent. Capacity is four keys; overflow writes are documented v0 no-ops until the real typed arena/hash/error policy exists.
 
 `MemoryKey<T>` remains deferred. `MemoryKeyInt` is the v0 scaffold for integer Memory values. DG3 does not implement arbitrary payload storage, type erasure, hash maps, string-key maps, TTL, changed-key filtering, arena allocation, serialization, Mind ticking, Automata stacks, Decision/Actuation/Events/Trace/Replay/Persistence subsystems, parallel staged tick, scheduler/async behavior, or DragonGod compiler hooks.
+
+
+### DG4 Mind v0 static executor status
+
+DG4 proves Mind can supervise static concrete machines. A caller owns a concrete machine value, explicitly calls `Step(machine)`, checks `Complete(machine)`, and records an `AutomataSignal` result through `mindRecordSignal`. Mind v0 records `None`, terminal `Succeed`/`Fail` reason codes, deferred `Goto`, and waiting/actuation-shaped signals without executing graph or stack semantics. DG5 introduces Automata stack semantics. Dynamic `AutomatonGraph`, `AutomataStack`, root-frame behavior, transition scanning, interrupt scanning, scheduler/async hooks, and DragonGod compiler hooks remain deferred.
