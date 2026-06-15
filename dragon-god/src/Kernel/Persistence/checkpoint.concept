@@ -1,0 +1,93 @@
+module DragonGod.Kernel.Persistence;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Mind;
+import DragonGod.Kernel.Events;
+import DragonGod.Kernel.Actuation;
+import DragonGod.Kernel.Trace;
+
+// DG11 Persistence/checkpoint v0: deterministic in-memory state capture.
+// This is not file I/O, JSON, binary serialization, schema migration,
+// compression, heap snapshotting, replay log storage, or a storage adapter.
+struct KernelCheckpoint {
+    DragonGod.Kernel.Mind.World world;
+    DragonGod.Kernel.Mind.Agent agent;
+    DragonGod.Kernel.Events.EventBus events;
+    DragonGod.Kernel.Actuation.ActuatorHost actuator;
+    DragonGod.Kernel.Trace.TraceRecorder trace;
+    int rngSeed;
+    bool occupied;
+};
+
+KernelCheckpoint checkpointEmpty() {
+    return KernelCheckpoint {
+        world: DragonGod.Kernel.Mind.World { clock: DragonGod.Kernel.Core.Clock { tick: 0 }, memory: DragonGod.Kernel.Memory.memoryEmpty() },
+        agent: DragonGod.Kernel.Mind.Agent { id: DragonGod.Kernel.Core.AgentId { value: 0 }, memory: DragonGod.Kernel.Memory.memoryEmpty(), mind: DragonGod.Kernel.Mind.mindEmpty() },
+        events: DragonGod.Kernel.Events.eventBusEmpty(),
+        actuator: DragonGod.Kernel.Actuation.actuatorHostEmpty(),
+        trace: DragonGod.Kernel.Trace.traceRecorderEmpty(),
+        rngSeed: 0,
+        occupied: false
+    };
+}
+
+KernelCheckpoint checkpointCapture(
+    DragonGod.Kernel.Mind.World world,
+    DragonGod.Kernel.Mind.Agent agent,
+    DragonGod.Kernel.Events.EventBus events,
+    DragonGod.Kernel.Actuation.ActuatorHost actuator,
+    DragonGod.Kernel.Trace.TraceRecorder trace,
+    int rngSeed
+) {
+    return KernelCheckpoint { world: world, agent: agent, events: events, actuator: actuator, trace: trace, rngSeed: rngSeed, occupied: true };
+}
+
+void checkpointRequireOccupied(KernelCheckpoint checkpoint) {
+    if (!checkpoint.occupied) { panic("DragonGod.Checkpoint empty restore"); }
+}
+
+void checkpointRestoreWorld(mut DragonGod.Kernel.Mind.World& world, KernelCheckpoint checkpoint) {
+    checkpointRequireOccupied(checkpoint);
+    world = checkpoint.world;
+}
+
+void checkpointRestoreAgent(mut DragonGod.Kernel.Mind.Agent& agent, KernelCheckpoint checkpoint) {
+    checkpointRequireOccupied(checkpoint);
+    agent = checkpoint.agent;
+}
+
+void checkpointRestoreEvents(mut DragonGod.Kernel.Events.EventBus& events, KernelCheckpoint checkpoint) {
+    checkpointRequireOccupied(checkpoint);
+    events = checkpoint.events;
+}
+
+void checkpointRestoreActuator(mut DragonGod.Kernel.Actuation.ActuatorHost& actuator, KernelCheckpoint checkpoint) {
+    checkpointRequireOccupied(checkpoint);
+    actuator = checkpoint.actuator;
+}
+
+void checkpointRestoreTrace(mut DragonGod.Kernel.Trace.TraceRecorder& trace, KernelCheckpoint checkpoint) {
+    checkpointRequireOccupied(checkpoint);
+    trace = checkpoint.trace;
+}
+
+int checkpointRngSeed(KernelCheckpoint checkpoint) {
+    checkpointRequireOccupied(checkpoint);
+    return checkpoint.rngSeed;
+}
+
+void checkpointRestoreAll(
+    mut DragonGod.Kernel.Mind.World& world,
+    mut DragonGod.Kernel.Mind.Agent& agent,
+    mut DragonGod.Kernel.Events.EventBus& events,
+    mut DragonGod.Kernel.Actuation.ActuatorHost& actuator,
+    mut DragonGod.Kernel.Trace.TraceRecorder& trace,
+    KernelCheckpoint checkpoint
+) {
+    checkpointRequireOccupied(checkpoint);
+    world = checkpoint.world;
+    agent = checkpoint.agent;
+    events = checkpoint.events;
+    actuator = checkpoint.actuator;
+    trace = checkpoint.trace;
+}

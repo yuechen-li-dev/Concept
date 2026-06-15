@@ -1725,3 +1725,7 @@ DG10 adds `DragonGod.Kernel.Replay` as the first deterministic replay input subs
 DG12 adds `DragonGod.Kernel.Graph` as fixed-slot dynamic metadata for the DragonGod Kernel. The milestone defines `AutomatonNodeId`, `AutomatonNodeKind`, `AutomatonNode`, and `AutomatonGraph`, with add/find/count/root helpers and match-based node-kind interpretation. Graph nodes carry `StateId` metadata that can feed existing Mind, Decision, and Trace paths.
 
 Scope remains metadata only: no type-erased machine execution, dynamic MachineOps storage, heap-owned machine frames, dynamic child lists, transition scanning, scheduler/async runtime, graph persistence serializer, replay graph loading, parallel graph execution, or compiler hook is implemented.
+
+### DG11 Persistence/checkpoint v0
+
+DG11 adds `DragonGod.Kernel.Persistence` with `KernelCheckpoint`, an explicit value-shaped in-memory checkpoint for World, Agent, EventBus, ActuatorHost, TraceRecorder, RNG seed metadata, and an occupied sentinel. Capture and restore helpers prove deterministic snapshot/restore for world memory, agent memory, events, actuation, trace, restore-all, RNG metadata, and replay/checkpoint composition. This is not file I/O, JSON, binary serialization, schema migration, compression, heap/pointer graph persistence, dynamic graph snapshots, replay log persistence, or external storage adapters.

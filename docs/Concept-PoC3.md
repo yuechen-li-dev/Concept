@@ -3047,3 +3047,7 @@ DG10 extends the DragonGod kernel shell with `DragonGod.Kernel.Replay`: fixed-sl
 ### Phase 20 / DG12 — Dynamic AutomataGraph v0
 
 DG12 is complete as graph metadata v0. `DragonGod.Kernel.Graph` provides fixed-slot `AutomatonGraph` storage with `AutomatonNodeId`, `AutomatonNodeKind`, `AutomatonNode`, add/find/root operations, and a `match`-based node-kind helper. Fixtures cover add/find, root read/write, Mind root `Goto`, Decision target selection, Trace transition observation, and backend C shape constraints. Type-erased dynamic execution and graph persistence remain deferred.
+
+### DragonGod DG11 status
+
+DG11 Persistence/checkpoint v0 is implemented as in-memory checkpoint capture/restore only. Supported: `KernelCheckpoint`, checkpoint capture, world restore, agent restore, events restore, actuation restore, trace restore, RNG seed metadata, and replay/checkpoint composition fixtures. Deferred: file I/O, JSON, binary serialization, stable schema, migration, compression, dynamic graph snapshots, heap/pointer graph persistence, replay log persistence, and external storage adapters.

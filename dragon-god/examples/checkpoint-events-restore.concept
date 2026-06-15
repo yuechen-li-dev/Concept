@@ -1,0 +1,5 @@
+module DragonGod.Examples.CheckpointEventsRestore;
+
+// Persistence/checkpoint v0 captures the explicit EventBus value in memory.
+// Storage formats and loading/saving come later.
+import DragonGod.Kernel.Persistence;

@@ -710,3 +710,6 @@ DG10 adds DragonGod Replay v0. Phase 20 DragonGod coverage now contains 83 valid
 ### DG12 Dynamic AutomataGraph v0
 
 Status: complete. Added fixed-slot `AutomatonGraph` metadata (`AutomatonNodeId`, `AutomatonNodeKind`, `AutomatonNode`) with add/find/root helpers, graph-to-Mind root `Goto`, Decision and Trace composition fixtures, and backend shape coverage. Deferred: type-erased machine execution, dynamic MachineOps, heap graph storage, dynamic transition scanning, graph persistence serialization, scheduler/async, and parallel execution. Phase 20 DragonGod fixture count increased by seven DG12 fixtures (six run, one backend C).
+## DragonGod DG11 coverage
+
+Persistence/checkpoint v0 coverage now includes 8 run fixtures and 1 backend-C fixture for `KernelCheckpoint`: world memory restore, agent memory restore, EventBus restore, ActuatorHost restore, TraceRecorder restore, RNG seed metadata, restore-all, replay/checkpoint composition, and generated-C shape/forbidden storage checks.
