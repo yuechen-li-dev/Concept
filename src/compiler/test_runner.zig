@@ -311,6 +311,7 @@ const Runner = struct {
             .bool_literal => |value| .{ .bool = value },
             .local_ref => |local| frame.locals[local.index],
             .param_ref => |param| frame.params[param.index],
+            .machine_field_ref => error.UnsupportedConstruct,
             .group => |inner| try self.evaluateExpr(inner, frame),
             .unary => |unary| try self.evaluateUnary(unary, frame),
             .binary => |binary| try self.evaluateBinary(binary, frame),

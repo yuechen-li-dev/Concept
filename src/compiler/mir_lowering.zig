@@ -443,7 +443,7 @@ const FunctionLowerer = struct {
             .bool_literal => |value| .{ .operand = mir.MirOperand.boolLiteral(value), .block = block_id },
             .local_ref => |local_id| .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(try self.resolveLocal(local_id))), .block = block_id },
             .param_ref => |param_id| .{ .operand = mir.MirOperand.copyPlace(mir.MirPlace.localPlace(try self.resolveParam(param_id))), .block = block_id },
-            .machine_param_ref => error.MachineLoweringNotImplemented,
+            .machine_param_ref, .machine_field_ref => error.MachineLoweringNotImplemented,
             .group => |inner| try self.lowerExpr(inner, block_id),
             .compile_time => try self.lowerCompileTime(expr_id, block_id),
             .unary => |unary| try self.lowerUnary(expr, unary, block_id),
@@ -1052,7 +1052,7 @@ const FunctionLowerer = struct {
             .bool_literal => self.semantic_module.types.boolType(),
             .local_ref => |local_id| self.semantic_module.hir.getLocal(local_id).type_id,
             .param_ref => |param_id| self.semantic_module.hir.getParam(param_id).type_id,
-            .machine_param_ref => error.MachineLoweringNotImplemented,
+            .machine_param_ref, .machine_field_ref => error.MachineLoweringNotImplemented,
             .group => |inner| try self.inferExprType(inner),
             .compile_time => |compile_time_expr| try self.inferExprType(compile_time_expr.operand),
             .unary => |unary| switch (unary.op) {

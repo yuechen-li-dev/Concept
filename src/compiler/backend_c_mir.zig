@@ -504,6 +504,28 @@ fn emitMachineStateStmt(writer: anytype, ctx: *const BackendContext, machine_id:
             try emitMachineStateExpr(writer, ctx, machine_id, expr_id);
             try writer.writeAll(";\n            m->complete = 1;\n            return;\n");
         },
+        .expr_stmt => |expr_id| {
+            const expr = ctx.module.hir.getExpr(expr_id).*;
+            switch (expr.kind) {
+                .machine_step => |machine_expr| {
+                    const field_id = try machineFieldRef(ctx, machine_id, machine_expr);
+                    const field = ctx.module.hir.getMachineField(field_id);
+                    const child_id = switch (ctx.module.types.kind(field.type_id)) {
+                        .machine_type => |id| id,
+                        else => return error.InvalidExecutable,
+                    };
+                    try writer.writeAll("            ");
+                    try emitMachineStepFunctionName(writer, ctx.module, ctx.module.hir.getMachine(child_id).name);
+                    try writer.writeAll("(&m->");
+                    try emitMachineFieldName(writer, ctx.module, field.name, machineFieldIndex(ctx, machine_id, field_id) orelse return error.InvalidExecutable);
+                    try writer.writeAll(");\n");
+                },
+                else => {
+                    if (ctx.diagnostic_bag) |bag| try bag.append(diagnostics.machineSemanticsNotImplemented(expr.span));
+                    return error.InvalidExecutable;
+                },
+            }
+        },
         .if_stmt => |if_stmt| {
             try writer.writeAll("            if (");
             try emitMachineStateExpr(writer, ctx, machine_id, if_stmt.condition);
@@ -535,6 +557,29 @@ fn emitMachineStateExpr(writer: anytype, ctx: *const BackendContext, machine_id:
             try writer.writeAll("m->");
             try emitMachineParamFieldName(writer, ctx.module, param.name);
         },
+        .machine_field_ref => |field_id| {
+            const field = ctx.module.hir.getMachineField(field_id);
+            if (field.parent.index != machine_id.index) return error.InvalidExecutable;
+            try writer.writeAll("m->");
+            try emitMachineFieldName(writer, ctx.module, field.name, machineFieldIndex(ctx, machine_id, field_id) orelse return error.InvalidExecutable);
+        },
+        .machine_complete => |machine_expr| {
+            const field_id = try machineFieldRef(ctx, machine_id, machine_expr);
+            const field = ctx.module.hir.getMachineField(field_id);
+            try writer.writeAll("m->");
+            try emitMachineFieldName(writer, ctx.module, field.name, machineFieldIndex(ctx, machine_id, field_id) orelse return error.InvalidExecutable);
+            try writer.writeAll(".complete");
+        },
+        .machine_result => |machine_expr| {
+            const field_id = try machineFieldRef(ctx, machine_id, machine_expr);
+            const field = ctx.module.hir.getMachineField(field_id);
+            try writer.writeByte('(');
+            try writer.writeAll("m->");
+            try emitMachineFieldName(writer, ctx.module, field.name, machineFieldIndex(ctx, machine_id, field_id) orelse return error.InvalidExecutable);
+            try writer.writeAll(".complete ? m->");
+            try emitMachineFieldName(writer, ctx.module, field.name, machineFieldIndex(ctx, machine_id, field_id) orelse return error.InvalidExecutable);
+            try writer.writeAll(".result : (cpt_panic(\"machine result cannot be read before completion\"), 0))");
+        },
         .group => |inner| {
             try writer.writeByte('(');
             try emitMachineStateExpr(writer, ctx, machine_id, inner);
@@ -558,6 +603,26 @@ fn emitMachineStateExpr(writer: anytype, ctx: *const BackendContext, machine_id:
             return error.InvalidExecutable;
         },
     }
+}
+
+fn machineFieldRef(ctx: *const BackendContext, machine_id: hir.MachineId, expr_id: hir.ExprId) EmitError!hir.MachineFieldId {
+    const expr = ctx.module.hir.getExpr(expr_id).*;
+    return switch (expr.kind) {
+        .machine_field_ref => |field_id| blk: {
+            const field = ctx.module.hir.getMachineField(field_id);
+            if (field.parent.index != machine_id.index) return error.InvalidExecutable;
+            break :blk field_id;
+        },
+        else => error.InvalidExecutable,
+    };
+}
+
+fn machineFieldIndex(ctx: *const BackendContext, machine_id: hir.MachineId, field_id: hir.MachineFieldId) ?usize {
+    const machine = ctx.module.hir.getMachine(machine_id);
+    for (machine.fields, 0..) |candidate, index| {
+        if (candidate.index == field_id.index) return index;
+    }
+    return null;
 }
 
 fn emitOpaqueAllocationForwardDeclarations(writer: anytype, ctx: *const BackendContext) EmitError!bool {

@@ -645,6 +645,7 @@ const Checker = struct {
             .local_ref => |id| self.module.hir.getLocal(id).type_id,
             .param_ref => |id| self.module.hir.getParam(id).type_id,
             .machine_param_ref => |id| self.module.hir.getMachineParam(id).type_id,
+            .machine_field_ref => |id| self.module.hir.getMachineField(id).type_id,
             .group => |inner| try self.checkExpr(current_function_id, return_type, inner),
             .compile_time => |compile_time_expr| blk: {
                 self.compile_time_context_depth += 1;
@@ -1595,7 +1596,7 @@ const Checker = struct {
             .bool_literal => |value| .{ .bool_literal = value },
             .local_ref => |id| .{ .local_ref = local_map.get(id).? },
             .param_ref => |id| .{ .param_ref = param_map.get(id).? },
-            .machine_param_ref => return error.InvalidSemanticModule,
+            .machine_param_ref, .machine_field_ref => return error.InvalidSemanticModule,
             .machine_construct, .machine_step, .machine_complete, .machine_result => return error.InvalidSemanticModule,
             .call => |call| blk: {
                 var args = try self.allocator.alloc(hir.ExprId, call.args.len);

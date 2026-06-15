@@ -452,6 +452,7 @@ pub const HirExprKind = union(enum) {
     local_ref: LocalId,
     param_ref: ParamId,
     machine_param_ref: MachineParamId,
+    machine_field_ref: MachineFieldId,
     call: struct { function: FunctionId, args: []ExprId },
     arena_alloc: struct {
         arena_expr: ExprId,
@@ -1934,6 +1935,9 @@ pub const HirStore = struct {
                     try writer.print("Field {f}\n", .{field.field_id});
                     try self.writeExprDebug(writer, field.value, depth + 2);
                 }
+            },
+            .machine_field_ref => |field_id| {
+                try writer.print("MachineFieldRef {f}\n", .{field_id});
             },
             .field_access => |field_access| {
                 try writer.print("FieldAccess {f}\n", .{field_access.field_name});

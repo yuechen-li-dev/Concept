@@ -97,13 +97,13 @@ expression runtime success. P17-M2 panic fixtures continue to cover
 statement-position `panic("reason");`, invalid reason/expression forms,
 backend-owned `cpt_panic` lowering, helper de-duplication, escaping, no
 test-runner dependency, and exit code 101. P17-M5 adds empty, whitespace-only, and tab-only reason rejection fixtures plus non-empty reason acceptance fixtures for both panic and assert. P17-M6 adds Core.Test `Assert.True` / `Assert.False` alignment fixtures for valid reasons, empty and whitespace-only reason rejection, bool-only conditions, and runtime/test assertion separation in a `.con_test` body. P17-M7 adds runtime trap consolidation fixtures proving machine `Result(machine)` before completion exits through shared `cpt_panic` with code 101, successful result-after-completion behavior remains unchanged, and migrated traps share one helper with runtime assert. P17-M8 adds human-readable examples under `examples/phase17/` plus representative example-named fixtures for panic/assert/machine runtime exit behavior, backend helper sharing/de-duplication, reason validation, expression-position rejection, bool-only assert conditions, and runtime assert separation from Core.Test/test-runner symbols. The language fixture corpus contains
-1046 fixture files after adding the P18-M1 machine audit fixtures, including 57 under `language/phase17-runtime-failure/`, 11 under `language/phase18-machines/`, and 85 files under `language/phase11-testing/`.
+1060 fixture files after adding the P18-M1 machine audit fixtures, including 57 under `language/phase17-runtime-failure/`, 25 under `language/phase18-machines/`, and 85 files under `language/phase11-testing/`.
 
 ## Phase 16 import/multi-module fixtures
 
 Phase 16 is closed. Its fixtures live under `language/phase16-imports/` and
 cover the v0 module/import surface for harness-supplied multi-source
-compilation units. The full corpus now contains 1046 `.conception`/`.con_test` fixtures, including 974 `.conception` fixtures, 72 `.con_test` fixtures, 73 Phase 16 fixtures, 57 Phase 17 fixtures, 11 Phase 18 machine fixtures, and 84 Phase 11 testing fixtures across 85 files under `language/phase11-testing/`.
+compilation units. The full corpus now contains 1060 `.conception`/`.con_test` fixtures, including 974 `.conception` fixtures, 72 `.con_test` fixtures, 73 Phase 16 fixtures, 57 Phase 17 fixtures, 25 Phase 18 machine fixtures, and 84 Phase 11 testing fixtures across 85 files under `language/phase11-testing/`.
 
 A single `.conception` fixture may contain multiple virtual Concept source
 files, each with a stable virtual path for diagnostics. The embedded form is
@@ -505,3 +505,7 @@ fn main() -> int {
 ## Phase 18 M2 fixtures
 
 Phase 18 M2 adds nested machine field fixtures under `language/phase18-machines/`. Valid fixtures cover backend child-frame storage, zero-parameter child constructor initialization, multiple child fields, absence of heap/scheduler/async markers, and a parent machine that runs to completion while holding an unused child frame. Invalid fixtures cover parameterized child fields (`CON0290`) and duplicate child field names (`CON0022`).
+
+## Phase 18 machine fixtures
+
+Phase 18 machine fixtures live under `language/phase18-machines/`. P18-M3 expands the corpus to 25 fixtures and pins nested `Step(child)`, `Complete(child)`, and `Result(child)` over child machine fields, including explicit stepping only, multiple child fields, child result-before-completion panic via shared `cpt_panic` exit code 101, backend address-of-child-field step emission, completion/result field reads, and unknown child-field diagnostics. Runtime `transition match` and `transition decide` remain deferred.

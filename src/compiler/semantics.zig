@@ -2379,15 +2379,18 @@ const BodyLowerer = struct {
             },
             .identifier => |ident| {
                 const symbol = try self.collector.module.interner.intern(ident.name.text);
-                const binding = self.lookup(symbol) orelse {
-                    try self.collector.diagnostics.append(diagnostics.unknownIdentifier(ident.name.span));
-                    return null;
-                };
-                return switch (binding) {
-                    .local => |id| try self.collector.module.hir.addExpr(.{ .local_ref = id }, ident.span),
-                    .param => |id| try self.collector.module.hir.addExpr(.{ .param_ref = id }, ident.span),
-                    .machine_param => |id| try self.collector.module.hir.addExpr(.{ .machine_param_ref = id }, ident.span),
-                };
+                if (self.lookup(symbol)) |binding| {
+                    return switch (binding) {
+                        .local => |id| try self.collector.module.hir.addExpr(.{ .local_ref = id }, ident.span),
+                        .param => |id| try self.collector.module.hir.addExpr(.{ .param_ref = id }, ident.span),
+                        .machine_param => |id| try self.collector.module.hir.addExpr(.{ .machine_param_ref = id }, ident.span),
+                    };
+                }
+                if (self.findMachineField(symbol)) |field_id| {
+                    return try self.collector.module.hir.addExpr(.{ .machine_field_ref = field_id }, ident.span);
+                }
+                try self.collector.diagnostics.append(diagnostics.unknownIdentifier(ident.name.span));
+                return null;
             },
             .call => |call| {
                 if (self.isPanicCall(call)) {
@@ -2992,6 +2995,7 @@ const BodyLowerer = struct {
             .call => |call| self.collector.module.hir.getFunction(call.function).return_type,
             .interface_call => |call| call.result_type,
             .machine_construct => |construct| try self.collector.module.types.addMachineType(construct.machine),
+            .machine_field_ref => |field_id| self.collector.module.hir.getMachineField(field_id).type_id,
             .machine_step => self.collector.module.types.voidType(),
             .machine_complete => self.collector.module.types.boolType(),
             .machine_result => |machine_expr| blk: {
@@ -3053,7 +3057,7 @@ const BodyLowerer = struct {
     fn isMachineStepPlace(self: *BodyLowerer, expr_id: hir.ExprId) bool {
         const expr = self.collector.module.hir.getExpr(expr_id).*;
         return switch (expr.kind) {
-            .local_ref, .param_ref => true,
+            .local_ref, .param_ref, .machine_field_ref => true,
             else => false,
         };
     }
@@ -3436,6 +3440,16 @@ const BodyLowerer = struct {
         const struct_decl = self.collector.module.hir.getStruct(struct_id);
         for (struct_decl.fields) |field_id| {
             const field = self.collector.module.hir.getField(field_id);
+            if (field.name.index == field_symbol.index) return field_id;
+        }
+        return null;
+    }
+
+    fn findMachineField(self: *BodyLowerer, field_symbol: interner.SymbolId) ?hir.MachineFieldId {
+        const machine_id = self.machine_id orelse return null;
+        const machine = self.collector.module.hir.getMachine(machine_id);
+        for (machine.fields) |field_id| {
+            const field = self.collector.module.hir.getMachineField(field_id);
             if (field.name.index == field_symbol.index) return field_id;
         }
         return null;
