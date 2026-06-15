@@ -1,0 +1,23 @@
+module DragonGod.Examples.TraceSinkInterface;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Automata;
+import DragonGod.Kernel.Trace;
+
+// DG9 smoke-shaped interface sink: borrowed dyn dispatch works for explicit
+// calls, but TraceRecorder remains the v0 implementation surface.
+struct CountingTraceSink {
+    int count;
+};
+
+impl DragonGod.Kernel.Trace.TraceSink<CountingTraceSink> {
+    void onEnter(mut CountingTraceSink& self, DragonGod.Kernel.Core.StateId state, int tick, DragonGod.Kernel.Core.Reason reason) { self.count = self.count + 1; }
+    void onExit(mut CountingTraceSink& self, DragonGod.Kernel.Core.StateId state, int tick, DragonGod.Kernel.Core.Reason reason) { self.count = self.count + 1; }
+    void onTransition(mut CountingTraceSink& self, DragonGod.Kernel.Core.StateId from, DragonGod.Kernel.Core.StateId to, int tick, DragonGod.Kernel.Core.Reason reason) { self.count = self.count + 1; }
+    void onYield(mut CountingTraceSink& self, DragonGod.Kernel.Core.StateId state, int tick) { self.count = self.count + 1; }
+    void onSignal(mut CountingTraceSink& self, DragonGod.Kernel.Automata.AutomataSignal signal, int tick) { self.count = self.count + 1; }
+}
+
+void exampleTraceSinkInterface(mut dyn DragonGod.Kernel.Trace.TraceSink& sink) {
+    sink.onYield(DragonGod.Kernel.Core.StateId { value: 1 }, 0);
+}

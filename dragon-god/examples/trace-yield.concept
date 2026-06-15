@@ -1,0 +1,10 @@
+module DragonGod.Examples.TraceYield;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Trace;
+
+// Yield trace events are explicit observations only; Trace v0 has no scheduler
+// or coroutine semantics.
+void exampleTraceYield(mut DragonGod.Kernel.Trace.TraceRecorder& recorder) {
+    DragonGod.Kernel.Trace.traceYield(recorder&, DragonGod.Kernel.Core.StateId { value: 1 }, 4);
+}

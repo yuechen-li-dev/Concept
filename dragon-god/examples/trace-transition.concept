@@ -1,0 +1,10 @@
+module DragonGod.Examples.TraceTransition;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Trace;
+
+// Transition trace events record from/to/reason/tick in a fixed slot recorder;
+// no file output, stdout/stderr logging, telemetry, or persistence is implied.
+void exampleTraceTransition(mut DragonGod.Kernel.Trace.TraceRecorder& recorder) {
+    DragonGod.Kernel.Trace.traceTransition(recorder&, DragonGod.Kernel.Core.StateId { value: 1 }, DragonGod.Kernel.Core.StateId { value: 2 }, 1, DragonGod.Kernel.Core.Reason { code: 7 });
+}

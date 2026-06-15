@@ -1,0 +1,121 @@
+module DragonGod.Kernel.Trace;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Automata;
+
+// DG9 Trace v0: explicit fixed-slot kernel trace recording. Trace observes
+// behavior; it does not control behavior. This is not a logging framework,
+// dynamic tracing runtime, sink registry, scheduler, telemetry protocol, or
+// compiler-injected instrumentation path.
+enum TraceEventKind {
+    Empty,
+    Enter,
+    Exit,
+    Transition,
+    Yield,
+    Signal,
+};
+
+struct TraceEvent {
+    TraceEventKind kind;
+    DragonGod.Kernel.Core.StateId from;
+    DragonGod.Kernel.Core.StateId to;
+    DragonGod.Kernel.Core.Reason reason;
+    int tick;
+    DragonGod.Kernel.Automata.AutomataSignal signal;
+    bool occupied;
+};
+
+struct TraceRecorder {
+    int count;
+    TraceEvent event0;
+    TraceEvent event1;
+    TraceEvent event2;
+    TraceEvent event3;
+};
+
+interface TraceSink {
+    void onEnter(DragonGod.Kernel.Core.StateId state, int tick, DragonGod.Kernel.Core.Reason reason);
+    void onExit(DragonGod.Kernel.Core.StateId state, int tick, DragonGod.Kernel.Core.Reason reason);
+    void onTransition(DragonGod.Kernel.Core.StateId from, DragonGod.Kernel.Core.StateId to, int tick, DragonGod.Kernel.Core.Reason reason);
+    void onYield(DragonGod.Kernel.Core.StateId state, int tick);
+    void onSignal(DragonGod.Kernel.Automata.AutomataSignal signal, int tick);
+};
+
+TraceEvent traceEmptyEvent() {
+    return TraceEvent {
+        kind: TraceEventKind::Empty,
+        from: DragonGod.Kernel.Core.StateId { value: 0 },
+        to: DragonGod.Kernel.Core.StateId { value: 0 },
+        reason: DragonGod.Kernel.Core.Reason { code: 0 },
+        tick: 0,
+        signal: DragonGod.Kernel.Automata.AutomataSignal::None,
+        occupied: false
+    };
+}
+
+TraceRecorder traceRecorderEmpty() {
+    return TraceRecorder { count: 0, event0: traceEmptyEvent(), event1: traceEmptyEvent(), event2: traceEmptyEvent(), event3: traceEmptyEvent() };
+}
+
+int traceCount(TraceRecorder recorder) { return recorder.count; }
+
+TraceEvent traceAt(TraceRecorder recorder, int index) {
+    if (index == 0) { return recorder.event0; }
+    if (index == 1) { return recorder.event1; }
+    if (index == 2) { return recorder.event2; }
+    if (index == 3) { return recorder.event3; }
+    panic("DragonGod.Trace index out of range");
+}
+
+void traceAppend(mut TraceRecorder& recorder, TraceEvent event) {
+    if (!recorder.event0.occupied) { recorder.event0 = event; recorder.count = recorder.count + 1; return; }
+    if (!recorder.event1.occupied) { recorder.event1 = event; recorder.count = recorder.count + 1; return; }
+    if (!recorder.event2.occupied) { recorder.event2 = event; recorder.count = recorder.count + 1; return; }
+    if (!recorder.event3.occupied) { recorder.event3 = event; recorder.count = recorder.count + 1; return; }
+    panic("DragonGod.Trace capacity exceeded");
+}
+
+void traceEnter(mut TraceRecorder& recorder, DragonGod.Kernel.Core.StateId state, int tick, DragonGod.Kernel.Core.Reason reason) {
+    traceAppend(recorder&, TraceEvent { kind: TraceEventKind::Enter, from: state, to: state, reason: reason, tick: tick, signal: DragonGod.Kernel.Automata.AutomataSignal::None, occupied: true });
+}
+
+void traceExit(mut TraceRecorder& recorder, DragonGod.Kernel.Core.StateId state, int tick, DragonGod.Kernel.Core.Reason reason) {
+    traceAppend(recorder&, TraceEvent { kind: TraceEventKind::Exit, from: state, to: state, reason: reason, tick: tick, signal: DragonGod.Kernel.Automata.AutomataSignal::None, occupied: true });
+}
+
+void traceTransition(mut TraceRecorder& recorder, DragonGod.Kernel.Core.StateId from, DragonGod.Kernel.Core.StateId to, int tick, DragonGod.Kernel.Core.Reason reason) {
+    traceAppend(recorder&, TraceEvent { kind: TraceEventKind::Transition, from: from, to: to, reason: reason, tick: tick, signal: DragonGod.Kernel.Automata.AutomataSignal::None, occupied: true });
+}
+
+void traceYield(mut TraceRecorder& recorder, DragonGod.Kernel.Core.StateId state, int tick) {
+    traceAppend(recorder&, TraceEvent { kind: TraceEventKind::Yield, from: state, to: state, reason: DragonGod.Kernel.Core.Reason { code: 0 }, tick: tick, signal: DragonGod.Kernel.Automata.AutomataSignal::None, occupied: true });
+}
+
+void traceSignal(mut TraceRecorder& recorder, DragonGod.Kernel.Automata.AutomataSignal signal, int tick) {
+    traceAppend(recorder&, TraceEvent { kind: TraceEventKind::Signal, from: DragonGod.Kernel.Core.StateId { value: 0 }, to: DragonGod.Kernel.Core.StateId { value: 0 }, reason: DragonGod.Kernel.Core.Reason { code: 0 }, tick: tick, signal: signal, occupied: true });
+}
+
+int traceEventKindCode(TraceEvent event) {
+    match (event.kind) {
+        TraceEventKind::Empty => { return 0; }
+        TraceEventKind::Enter => { return 1; }
+        TraceEventKind::Exit => { return 2; }
+        TraceEventKind::Transition => { return 3; }
+        TraceEventKind::Yield => { return 4; }
+        TraceEventKind::Signal => { return 5; }
+    }
+}
+
+int traceSignalReasonCode(TraceEvent event) {
+    match (event.signal) {
+        DragonGod.Kernel.Automata.AutomataSignal::Succeed(reason) => { return reason.code; }
+        DragonGod.Kernel.Automata.AutomataSignal::Fail(reason) => { return reason.code; }
+        DragonGod.Kernel.Automata.AutomataSignal::Goto(target, reason) => { return reason.code; }
+        DragonGod.Kernel.Automata.AutomataSignal::Push(target, reason) => { return reason.code; }
+        DragonGod.Kernel.Automata.AutomataSignal::Pop(reason) => { return reason.code; }
+        DragonGod.Kernel.Automata.AutomataSignal::None => { return 0; }
+        DragonGod.Kernel.Automata.AutomataSignal::Act(id) => { return id.value; }
+        DragonGod.Kernel.Automata.AutomataSignal::AwaitActuation(id) => { return id.value; }
+    }
+}

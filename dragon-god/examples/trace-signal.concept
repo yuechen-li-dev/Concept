@@ -1,0 +1,12 @@
+module DragonGod.Examples.TraceSignal;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Automata;
+import DragonGod.Kernel.Trace;
+
+// Trace observes AutomataSignal explicitly; it does not control Mind behavior
+// and does not install hidden runtime hooks.
+void exampleTraceSignal(mut DragonGod.Kernel.Trace.TraceRecorder& recorder) {
+    DragonGod.Kernel.Automata.AutomataSignal signal = DragonGod.Kernel.Automata.AutomataSignal::Succeed(DragonGod.Kernel.Core.Reason { code: 42 });
+    DragonGod.Kernel.Trace.traceSignal(recorder&, signal, 3);
+}
