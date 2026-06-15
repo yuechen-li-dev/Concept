@@ -707,6 +707,9 @@ Feature matrix after DG9: DG0 Blueprint complete; DG1 Kernel core seed complete;
 DG10 adds DragonGod Replay v0. Phase 20 DragonGod coverage now contains 83 valid fixtures. Replay coverage includes `ReplayEvent` v0, fixed-slot `ReplayLog`, value-shaped `ReplayDriver`, `replayPush`, `replayApplyNext`, `replayApplyAll`, deterministic cursor application, Memory integration, Events integration, Actuation integration, Agent memory integration, RNG seed metadata, and Trace marker integration. Deferred: persistence/checkpoint, file I/O, JSON, binary serialization, dynamic/string payloads, replay loading/saving, parallel deterministic merge, external input adapters, schedulers, async, and DragonGod compiler hooks.
 
 
+### DG12 Dynamic AutomataGraph v0
+
+Status: complete. Added fixed-slot `AutomatonGraph` metadata (`AutomatonNodeId`, `AutomatonNodeKind`, `AutomatonNode`) with add/find/root helpers, graph-to-Mind root `Goto`, Decision and Trace composition fixtures, and backend shape coverage. Deferred: type-erased machine execution, dynamic MachineOps, heap graph storage, dynamic transition scanning, graph persistence serialization, scheduler/async, and parallel execution. Phase 20 DragonGod fixture count increased by seven DG12 fixtures (six run, one backend C).
 ## DragonGod DG11 coverage
 
 Persistence/checkpoint v0 coverage now includes 8 run fixtures and 1 backend-C fixture for `KernelCheckpoint`: world memory restore, agent memory restore, EventBus restore, ActuatorHost restore, TraceRecorder restore, RNG seed metadata, restore-all, replay/checkpoint composition, and generated-C shape/forbidden storage checks.

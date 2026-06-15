@@ -1,0 +1,13 @@
+module DragonGod.Examples.GraphAddRoot;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Graph;
+
+// AutomataGraph v0 is fixed-slot metadata only: it does not execute dynamic
+// machines, store MachineOps, allocate heap frames, or schedule work.
+int exampleGraphAddRoot() {
+    DragonGod.Kernel.Graph.AutomatonGraph graph = DragonGod.Kernel.Graph.automatonGraphEmpty();
+    DragonGod.Kernel.Graph.AutomatonNodeId root = DragonGod.Kernel.Graph.automatonGraphAddNode(graph&, DragonGod.Kernel.Core.StateId { value: 10 }, DragonGod.Kernel.Graph.AutomatonNodeKind::StaticState, DragonGod.Kernel.Core.Reason { code: 1 });
+    DragonGod.Kernel.Graph.automatonGraphSetRoot(graph&, root);
+    return DragonGod.Kernel.Graph.automatonGraphRootNode(graph).state.value;
+}

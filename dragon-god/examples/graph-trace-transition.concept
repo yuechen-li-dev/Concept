@@ -1,0 +1,16 @@
+module DragonGod.Examples.GraphTraceTransition;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Graph;
+import DragonGod.Kernel.Trace;
+
+// Trace can observe a transition to a graph root StateId; graph persistence,
+// replay graph loading, and compiler hooks remain deferred.
+int exampleGraphTraceTransition() {
+    DragonGod.Kernel.Graph.AutomatonGraph graph = DragonGod.Kernel.Graph.automatonGraphEmpty();
+    DragonGod.Kernel.Graph.AutomatonNodeId root = DragonGod.Kernel.Graph.automatonGraphAddNode(graph&, DragonGod.Kernel.Core.StateId { value: 30 }, DragonGod.Kernel.Graph.AutomatonNodeKind::StaticState, DragonGod.Kernel.Core.Reason { code: 3 });
+    DragonGod.Kernel.Graph.automatonGraphSetRoot(graph&, root);
+    DragonGod.Kernel.Trace.TraceRecorder recorder = DragonGod.Kernel.Trace.traceRecorderEmpty();
+    DragonGod.Kernel.Trace.traceTransition(recorder&, DragonGod.Kernel.Core.StateId { value: 0 }, DragonGod.Kernel.Graph.automatonGraphRootNode(graph).state, 1, DragonGod.Kernel.Core.Reason { code: 3 });
+    return DragonGod.Kernel.Trace.traceCount(recorder);
+}

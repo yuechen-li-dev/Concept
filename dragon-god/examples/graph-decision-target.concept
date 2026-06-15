@@ -1,0 +1,15 @@
+module DragonGod.Examples.GraphDecisionTarget;
+
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Decision;
+import DragonGod.Kernel.Graph;
+
+// Decision can choose among StateId values sourced from graph metadata; DG12
+// still does not scan graph transitions or execute graph nodes.
+DragonGod.Kernel.Core.StateId exampleGraphDecisionTarget() {
+    DragonGod.Kernel.Graph.AutomatonGraph graph = DragonGod.Kernel.Graph.automatonGraphEmpty();
+    DragonGod.Kernel.Graph.AutomatonNodeId a = DragonGod.Kernel.Graph.automatonGraphAddNode(graph&, DragonGod.Kernel.Core.StateId { value: 1 }, DragonGod.Kernel.Graph.AutomatonNodeKind::StaticState, DragonGod.Kernel.Core.Reason { code: 1 });
+    DragonGod.Kernel.Graph.AutomatonNodeId b = DragonGod.Kernel.Graph.automatonGraphAddNode(graph&, DragonGod.Kernel.Core.StateId { value: 2 }, DragonGod.Kernel.Graph.AutomatonNodeKind::StaticState, DragonGod.Kernel.Core.Reason { code: 2 });
+    DragonGod.Kernel.Decision.DecisionMemory memory = DragonGod.Kernel.Decision.decisionMemoryEmpty();
+    return DragonGod.Kernel.Decision.decisionChoose4(memory&, DragonGod.Kernel.Decision.decisionPolicyDefault(), 0, DragonGod.Kernel.Decision.utilityOption(DragonGod.Kernel.Graph.automatonGraphFindNode(graph, a).state, 1, true), DragonGod.Kernel.Decision.utilityOption(DragonGod.Kernel.Graph.automatonGraphFindNode(graph, b).state, 9, true), DragonGod.Kernel.Decision.utilityOption(DragonGod.Kernel.Core.StateId { value: 0 }, 0, false), DragonGod.Kernel.Decision.utilityOption(DragonGod.Kernel.Core.StateId { value: 0 }, 0, false), DragonGod.Kernel.Core.StateId { value: 99 });
+}

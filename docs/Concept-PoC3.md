@@ -3044,6 +3044,9 @@ DG9 stores `AutomataSignal` directly inside `TraceEvent` and uses `match` for bo
 
 DG10 extends the DragonGod kernel shell with `DragonGod.Kernel.Replay`: fixed-slot `ReplayLog`, integer-backed `ReplayEvent` variants, value-shaped `ReplayDriver`, replay appending, single-step cursor application, and bounded apply-all behavior. Fixtures prove deterministic application into clock, Memory, Events, Actuation, Agent memory, RNG-seed metadata, and Trace marker state. Persistence/checkpoint/serialization/file input remain deferred.
 
+### Phase 20 / DG12 — Dynamic AutomataGraph v0
+
+DG12 is complete as graph metadata v0. `DragonGod.Kernel.Graph` provides fixed-slot `AutomatonGraph` storage with `AutomatonNodeId`, `AutomatonNodeKind`, `AutomatonNode`, add/find/root operations, and a `match`-based node-kind helper. Fixtures cover add/find, root read/write, Mind root `Goto`, Decision target selection, Trace transition observation, and backend C shape constraints. Type-erased dynamic execution and graph persistence remain deferred.
 
 ### DragonGod DG11 status
 

@@ -1720,6 +1720,11 @@ Trace v0 appends deterministically in slot order, increments count, panics with 
 
 DG10 adds `DragonGod.Kernel.Replay` as the first deterministic replay input subsystem. Replay v0 is a fixed-slot, integer-backed input stream: `ReplayEvent`, `ReplayLog`, `ReplayDriver`, `replayPush`, `replayApplyNext`, and `replayApplyAll`. Events are applied explicitly with `match`, advancing the driver cursor and mutating the value-shaped driver shells for `World.clock`, `World.memory`, `Agent.memory`, `EventBus`, `ActuatorHost`, and optional `TraceRecorder` marker integration. `RngSeed` is recorded as deterministic seed metadata only. Replay is not Persistence: no file I/O, JSON, binary serialization, checkpoint loading/saving, dynamic payloads, scheduler, async runtime, external input adapter, or DragonGod compiler hook is introduced.
 
+## DG12 — Dynamic AutomataGraph v0 status
+
+DG12 adds `DragonGod.Kernel.Graph` as fixed-slot dynamic metadata for the DragonGod Kernel. The milestone defines `AutomatonNodeId`, `AutomatonNodeKind`, `AutomatonNode`, and `AutomatonGraph`, with add/find/count/root helpers and match-based node-kind interpretation. Graph nodes carry `StateId` metadata that can feed existing Mind, Decision, and Trace paths.
+
+Scope remains metadata only: no type-erased machine execution, dynamic MachineOps storage, heap-owned machine frames, dynamic child lists, transition scanning, scheduler/async runtime, graph persistence serializer, replay graph loading, parallel graph execution, or compiler hook is implemented.
 
 ### DG11 Persistence/checkpoint v0
 

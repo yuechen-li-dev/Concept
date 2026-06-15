@@ -217,6 +217,14 @@ Workaround: DG9 keeps `TraceRecorder` as the v0 implementation and treats `Trace
 - Events and Actuation integrate through their existing fixed-slot APIs. Trace integration uses an explicit `TraceMark` mapped onto `traceEnter` as a marker-shaped v0 workaround until Trace has a dedicated mark kind.
 - Backend fixtures assert broad no-hidden-runtime properties, but avoid overfitting every generated temporary name beyond the replay enum/log/driver/switch shape.
 
+## DG12 — Dynamic AutomataGraph v0 friction
+
+- Fixed-slot graph storage was retained because Concept still has no standard Vector/container surface suitable for DragonGod kernel metadata.
+- Dynamic machine storage remains deferred: storing arbitrary machines, borrowed dyn references, or heap-owned frames inside graph slots is not clean enough for kernel v0.
+- Generic machine stepping remains static; DG12 deliberately does not fake automatic `Step` over arbitrary node machine types.
+- Interface/dyn is proven elsewhere by TraceSink, but graph node ops would require borrowed dyn/pointer lifetime/storage rules that are too broad for this milestone.
+- Graph lookup uses panic for missing nodes/root because Option/Result-shaped ergonomic returns are not yet part of the kernel surface.
+- Payload enum and `match` worked for node kind/status code helpers, but backend fixtures should assert durable shape intent rather than fragile full emitted C.
 ## DG11 Persistence/checkpoint v0 friction
 
 - Large value-shaped snapshots are possible, but ergonomics are repetitive: every fixed-slot kernel shape must be named explicitly in `KernelCheckpoint` and constructor/restore helpers.

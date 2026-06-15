@@ -601,6 +601,9 @@ DG9 adds fixtures under `language/phase20-dragongod-kernel/valid/` for the fixed
 Phase 20 DragonGod coverage now contains 83 valid fixtures after DG10. DG10 adds five replay fixtures under `language/phase20-dragongod-kernel/valid/`: four run fixtures for deterministic apply-all, event push, actuation completion/cursor exhaustion, and agent-memory/RNG/Trace marker integration; plus one backend C fixture pinning the fixed-slot ReplayEvent/ReplayLog/ReplayDriver shape, switch-like `match` lowering, and absence of heap, file I/O, JSON, scheduler/async, blackboard/mailbox, persistence serializer, and DragonGod compiler hook artifacts.
 
 
+### DG12 Dynamic AutomataGraph v0
+
+Status: complete. Added fixed-slot `AutomatonGraph` metadata (`AutomatonNodeId`, `AutomatonNodeKind`, `AutomatonNode`) with add/find/root helpers, graph-to-Mind root `Goto`, Decision and Trace composition fixtures, and backend shape coverage. Deferred: type-erased machine execution, dynamic MachineOps, heap graph storage, dynamic transition scanning, graph persistence serialization, scheduler/async, and parallel execution. Phase 20 DragonGod fixture count increased by seven DG12 fixtures (six run, one backend C).
 ### Phase 20 DG11 Persistence/checkpoint fixtures
 
 Added 9 Phase 20 fixtures for DragonGod Persistence/checkpoint v0: 8 run fixtures covering world/agent memory, events, actuation, trace, RNG seed, restore-all, and replay/checkpoint composition, plus 1 backend-C shape fixture. The fixtures keep persistence in-memory only and assert no file/JSON/binary/scheduler/async/storage-adapter behavior.
