@@ -1,0 +1,25 @@
+# name: kernel_decision_disabled_option_ignored_run.valid.conception
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+struct StateId { int value; };
+struct DecisionSlotId { int value; };
+struct Reason { int code; };
+struct DecisionSlot { DecisionSlotId id; };
+struct DecisionPolicy { int hysteresisDelta; int minCommitTicks; int tieEpsilon; };
+struct DecisionMemory { StateId currentOption; int currentScore; int lastSwitchTick; bool hasCurrent; };
+struct UtilityOption { StateId target; int score; bool enabled; };
+DecisionPolicy decisionPolicyDefault() { return DecisionPolicy { hysteresisDelta: 0, minCommitTicks: 0, tieEpsilon: 0 }; }
+DecisionMemory decisionMemoryEmpty() { return DecisionMemory { currentOption: StateId { value: 0 }, currentScore: 0, lastSwitchTick: 0, hasCurrent: false }; }
+UtilityOption utilityOption(StateId target, int score, bool enabled) { return UtilityOption { target: target, score: score, enabled: enabled }; }
+int decisionAbsDiff(int left, int right) { if (left >= right) { return left - right; } return right - left; }
+UtilityOption decisionBestOption4(UtilityOption option0, UtilityOption option1, UtilityOption option2, UtilityOption option3, StateId fallback) { UtilityOption best = UtilityOption { target: fallback, score: 0, enabled: false }; if (option0.enabled) { best = option0; } if (option1.enabled && (!best.enabled || option1.score > best.score)) { best = option1; } if (option2.enabled && (!best.enabled || option2.score > best.score)) { best = option2; } if (option3.enabled && (!best.enabled || option3.score > best.score)) { best = option3; } return best; }
+StateId decisionChoose4(mut DecisionMemory& memory, DecisionPolicy policy, int nowTick, UtilityOption option0, UtilityOption option1, UtilityOption option2, UtilityOption option3, StateId fallback) { UtilityOption best = decisionBestOption4(option0, option1, option2, option3, fallback); if (!best.enabled) { return fallback; } if (!memory.hasCurrent) { memory.currentOption = best.target; memory.currentScore = best.score; memory.lastSwitchTick = nowTick; memory.hasCurrent = true; return best.target; } if (best.target.value == memory.currentOption.value) { memory.currentScore = best.score; return memory.currentOption; } if (nowTick - memory.lastSwitchTick < policy.minCommitTicks) { return memory.currentOption; } if (best.score <= memory.currentScore + policy.hysteresisDelta) { return memory.currentOption; } if (decisionAbsDiff(best.score, memory.currentScore) <= policy.tieEpsilon) { return memory.currentOption; } memory.currentOption = best.target; memory.currentScore = best.score; memory.lastSwitchTick = nowTick; memory.hasCurrent = true; return best.target; }
+
+int main() { StateId idle = StateId { value: 1 }; StateId attack = StateId { value: 10 }; StateId flee = StateId { value: 20 }; StateId fb = StateId { value: 99 }; DecisionMemory m = decisionMemoryEmpty(); StateId c = decisionChoose4(m&, decisionPolicyDefault(), 0, utilityOption(idle, 1, true), utilityOption(attack, 80, false), utilityOption(flee, 20, true), utilityOption(StateId { value: 4 }, 0, false), fb); return c.value; }
+
+=== run ===
+exit_code: 20

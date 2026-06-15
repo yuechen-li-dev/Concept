@@ -3016,3 +3016,7 @@ Phase 20 / DG5 is complete. The corpus now has 1089 `.conception` fixture files,
 `AutomataSignal` now includes `Push(target, reason)` and `Pop(reason)` alongside `None`, `Goto`, `Succeed`, `Fail`, `Act`, and `AwaitActuation`. Mind v0 now owns an `AutomataStack`: `Goto` pushes when the stack is empty and replaces the current top frame otherwise; `Push` pushes a new frame; `Pop` removes the top frame and leaves Mind `Running` when frames remain or `Idle` when the stack becomes empty. `Succeed` and `Fail` remain explicit terminal statuses, `None` remains a no-op, and `Act`/`AwaitActuation` remain recorded/deferred only.
 
 DG5 deliberately does not add a dynamic `AutomatonGraph`, root-frame policy, keep-root behavior, type-erased machine storage, `AutomataMachineOps`, transition scanning, interrupt scanning, decision memory, actuation dispatch, events, trace, replay, persistence, parallel staged ticks, scheduler/async behavior, or DragonGod compiler hooks.
+
+### DragonGod DG6 Decision subsystem v0 note
+
+Phase 20 / DG6 adds a library-level kernel Decision subsystem, not a language feature. `DecisionPolicy`, `DecisionMemory`, and `UtilityOption` use integer scores and deterministic fixed four-option arbitration. Machine-local stateless choice remains native `transition decide`; Decision v0 exists for stateful policy memory such as min-commit, hysteresis, tie epsilon, current-option retention, source-order tie behavior, and fallback handling.

@@ -153,3 +153,18 @@ DG5 proved that Concept can express a small kernel-owned stack as explicit value
 - Pain observed: Empty-top, overflow, and underflow would be cleaner with an `Option`/`Result` surface for non-panicking callers.
 - Workaround used: DG5 uses `panic` with stable DragonGod reasons, matching existing runtime failure doctrine.
 - Suggested future fix: introduce explicit optional/result-shaped APIs once Concept's kernel-facing error vocabulary is settled.
+
+## DG6 Decision subsystem v0 friction
+
+DG6 adds `DragonGod.Kernel.Decision` as kernel policy memory, not as language-level decision machinery. The implementation deliberately keeps local stateless machine choice on native `transition decide`, and uses the Decision subsystem only for current-option retention, min-commit, hysteresis, and tie/current preference.
+
+Observed friction:
+
+- Lack of arrays/vectors/spans keeps DG6 on a fixed four-option `decisionChoose4` API, matching DG3 Memory and DG5 AutomataStack fixed-slot style.
+- Integer policy is a good Stage 0 fit; floating scores, probability, random weighted selection, and consideration curves remain deferred.
+- Lack of generics/function pointers means reusable `ConsiderationFn`/option collections are not expressible cleanly yet.
+- `StateId` and `Reason` construction remains verbose in examples and integration fixtures.
+- Reusable utility-option collections are hard to express without arrays or slices.
+- `match` remains useful for `AutomataSignal` handling in Mind integration, avoiding tag if-chains.
+- `transition decide` remains useful for local machine decisions; DG6 fixtures keep it separate from memoryful policy arbitration.
+- The only ordered checks in `decisionBestOption4` are deterministic fixed-slot source-order comparisons, not enum/payload tag chains.
