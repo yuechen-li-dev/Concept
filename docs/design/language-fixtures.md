@@ -607,3 +607,10 @@ Status: complete. Added fixed-slot `AutomatonGraph` metadata (`AutomatonNodeId`,
 ### Phase 20 DG11 Persistence/checkpoint fixtures
 
 Added 9 Phase 20 fixtures for DragonGod Persistence/checkpoint v0: 8 run fixtures covering world/agent memory, events, actuation, trace, RNG seed, restore-all, and replay/checkpoint composition, plus 1 backend-C shape fixture. The fixtures keep persistence in-memory only and assert no file/JSON/binary/scheduler/async/storage-adapter behavior.
+
+
+## Phase 20 DragonGod closeout fixtures
+
+Phase 20 is closed after DG12. The DragonGod fixture suite lives under `language/phase20-dragongod-kernel/valid/` and currently contains 99 valid `.conception` fixtures. The groups cover DG1 kernel core IDs/imports, DG2 static automata signals and signal-returning machines, DG3 Memory v0, DG4 Mind v0, DG5 Automata stack v0, DG6 Decision v0, DG7 Actuation v0, DG8 Events v0, DG9 Trace v0, DG10 Replay v0, DG11 Persistence/checkpoint v0, and DG12 AutomataGraph metadata v0.
+
+These fixtures now serve as a Concept stress/regression suite for upcoming language and library work. They intentionally preserve fixed-slot v0 shapes until arrays/slices/fixed buffers, standard Option/Result ergonomics, strings/byte slices, generic containers, callable values, and stronger dyn storage are available.

@@ -2,7 +2,7 @@
 
 ## Concept-native behavioral kernel design
 
-**Status:** DG0 blueprint complete; DG1 kernel core seed complete; DG2 static automata signals complete; DG3 Memory v0 complete
+**Status:** Phase 20 closed after DG12; DragonGod Kernel proof-of-concept complete
 **Target:** Concept Stage 1+
 **Root module:** `DragonGod.Kernel`
 **Derived from:** Dominatus doctrine and production architecture
@@ -52,6 +52,51 @@ No hidden DragonGod compiler magic.
 ```
 
 ---
+
+
+
+## Phase 20 closeout: DragonGod Kernel proof-of-concept
+
+Phase 20 is closed after DG12. DragonGod.Kernel remains a proof-of-concept kernel, not a production runtime. The goal of Phase 20 was not production DragonGod; the goal was to stress Concept's language, runtime, library, module, fixture, and backend surface with a large Concept-native systems workload. That goal succeeded.
+
+DragonGod.Kernel now has enough subsystem breadth to act as a Concept stress suite. Further DragonGod subsystem expansion should pause until the highest-priority Concept friction items are addressed.
+
+| Milestone | Status | Result |
+| --- | --- | --- |
+| DG0 | Closed | Blueprint and doctrine |
+| DG1 | Closed | Kernel core seed |
+| DG2 | Closed | Static automata signals |
+| DG3 | Closed | Memory v0 |
+| DG4 | Closed | Mind v0 |
+| DG5 | Closed | Automata stack v0 |
+| DG6 | Closed | Decision v0 |
+| DG7 | Closed | Actuation v0 |
+| DG8 | Closed | Events v0 |
+| DG9 | Closed | Trace v0 |
+| DG10 | Closed | Replay v0 |
+| DG11 | Closed | In-memory checkpoint v0 |
+| DG12 | Closed | AutomataGraph metadata v0 |
+
+Final Phase 20 kernel surface:
+
+- Core IDs / Reason / Clock
+- AutomataSignal
+- Memory
+- Mind
+- AutomataStack
+- Decision
+- Actuation
+- Events
+- Trace
+- Replay
+- Persistence/checkpoint
+- AutomataGraph metadata
+
+### What this does not prove yet
+
+Phase 20 deliberately does not prove a production runtime. It also does not prove heap-backed containers, dynamic machine execution, type-erased `MachineOps` runtime storage, scheduler or async runtime behavior, real external actuation, dynamic event registries, file persistence or serialization, replay log persistence, parallel staged execution, or DragonGod compiler hooks.
+
+The correct closeout action is to use DragonGod as a regression and stress suite while Concept core implementation catches up, beginning with array/slice/fixed-buffer support rather than more fixed-slot DragonGod subsystems.
 
 ## 1. Purpose
 
