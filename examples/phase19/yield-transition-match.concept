@@ -1,0 +1,35 @@
+module Main;
+
+machine Probe -> int {
+    state Start { transition Done; }
+    state Done { return 1; }
+}
+
+machine MatchAfterYield -> int {
+    Probe probe;
+
+    state Waiting {
+        Step(probe);
+
+        if (!Complete(probe)) {
+            yield;
+        }
+
+        transition match (Complete(probe)) {
+            true => Done;
+            false => Waiting;
+        };
+    }
+
+    state Done { return Result(probe); }
+}
+
+int main() {
+    MatchAfterYield machine = MatchAfterYield();
+
+    Step(machine);
+    Step(machine);
+    Step(machine);
+
+    return Result(machine);
+}

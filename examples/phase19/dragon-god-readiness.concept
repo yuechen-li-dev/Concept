@@ -1,0 +1,36 @@
+module Main;
+
+machine Leaf -> int {
+    state Start { transition Done; }
+    state Done { return 1; }
+}
+
+machine DragonGodReadyPattern -> int {
+    Leaf action;
+
+    state Tick {
+        Step(action);
+
+        if (!Complete(action)) {
+            yield;
+        }
+
+        transition decide {
+            Done when Complete(action) score Result(action);
+            Retry score 0;
+        };
+    }
+
+    state Retry { transition Tick; }
+    state Done { return State(action); }
+}
+
+int main() {
+    DragonGodReadyPattern behavior = DragonGodReadyPattern();
+
+    Step(behavior);
+    Step(behavior);
+    Step(behavior);
+
+    return Result(behavior);
+}

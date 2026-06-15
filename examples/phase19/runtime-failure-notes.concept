@@ -1,0 +1,19 @@
+module Main;
+
+machine Yielding -> int {
+    state Waiting {
+        yield;
+    }
+}
+
+int main() {
+    Yielding machine = Yielding();
+
+    Step(machine);
+
+    // The yield itself does not panic. This Result read still panics because the
+    // machine is incomplete, using the existing shared reason:
+    // "machine result cannot be read before completion".
+    // There is no yield-specific panic reason.
+    return Result(machine);
+}

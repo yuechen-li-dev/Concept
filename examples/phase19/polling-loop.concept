@@ -1,0 +1,17 @@
+module Main;
+
+machine Task -> int {
+    state Start { transition Middle; }
+    state Middle { transition Done; }
+    state Done { return 3; }
+}
+
+int main() {
+    Task task = Task();
+
+    while (!Complete(task)) {
+        Step(task);
+    }
+
+    return Result(task);
+}

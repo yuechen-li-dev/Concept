@@ -1,0 +1,36 @@
+module Main;
+
+machine Probe -> int {
+    state Start { transition Done; }
+    state Done { return 7; }
+}
+
+machine DecideAfterYield -> int {
+    Probe probe;
+
+    state Waiting {
+        Step(probe);
+
+        if (!Complete(probe)) {
+            yield;
+        }
+
+        transition decide {
+            Done when Complete(probe) score 10;
+            Retry score 0;
+        };
+    }
+
+    state Retry { return 0; }
+    state Done { return Result(probe); }
+}
+
+int main() {
+    DecideAfterYield machine = DecideAfterYield();
+
+    Step(machine);
+    Step(machine);
+    Step(machine);
+
+    return Result(machine);
+}

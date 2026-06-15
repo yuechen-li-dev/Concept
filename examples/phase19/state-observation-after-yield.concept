@@ -1,0 +1,22 @@
+module Main;
+
+machine WaitOneTick -> int {
+    state Waiting {
+        yield;
+    }
+}
+
+int main() {
+    WaitOneTick machine = WaitOneTick();
+
+    int before = State(machine);
+    Step(machine);
+    int after = State(machine);
+
+    // State(machine) is a numeric state id, not a string state name.
+    if (before == after) {
+        return 0;
+    }
+
+    return 1;
+}

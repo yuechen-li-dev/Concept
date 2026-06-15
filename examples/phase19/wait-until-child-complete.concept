@@ -1,0 +1,29 @@
+module Main;
+
+machine Child -> int {
+    state Start { transition Done; }
+    state Done { return 7; }
+}
+
+machine Parent -> int {
+    Child child;
+
+    state Waiting {
+        Step(child);
+
+        if (!Complete(child)) {
+            yield;
+        }
+
+        return Result(child);
+    }
+}
+
+int main() {
+    Parent parent = Parent();
+
+    Step(parent);
+    Step(parent);
+
+    return Result(parent);
+}
