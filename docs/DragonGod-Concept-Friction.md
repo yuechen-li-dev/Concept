@@ -68,3 +68,40 @@ Observed non-blocking friction:
 - Imported payload enum examples still use fully qualified `DragonGod.Kernel.Automata.AutomataSignal::...` variant names for clarity and to avoid relying on alias/import sugar that does not exist yet.
 - `Reason` remains integer-backed; string/StringView-backed human-readable reasons are still deferred.
 - Backend C assertions for payload-enum machine results should pin only stable essentials, because exact generated helper and temporary names are not intended as public DragonGod API.
+
+
+## DG3 Kernel Memory v0
+
+Status: DG3 Memory v0 complete; no blocking DG3 friction observed.
+
+DG3 replaces the DG1 `Memory` shell with a deterministic fixed-slot integer store. The public names remain `Memory`, `memoryWrite`, `memoryRead`, `memoryHas`, and `memoryRevision`; no Blackboard terminology was introduced.
+
+- Phase: 20 / DG3
+- Area: Generic typed Memory keys
+- Pain observed: The desired `MemoryKey<T>` shape is still premature for the current minimal store because DG3 has no type-erased payload arena or generic Memory API to bind to.
+- Workaround used: Keep `MemoryKeyInt { id: int }` as a v0 scaffold for integer memory values.
+- Suggested future fix: Revisit `MemoryKey<T>` when arbitrary typed payload storage and type-erased Memory entries exist.
+
+- Phase: 20 / DG3
+- Area: Memory storage containers
+- Pain observed: Hash maps, string-key maps, changed-key sets, TTL indexes, and arena-backed containers are intentionally outside the current Concept/DragonGod milestone.
+- Workaround used: Use four explicit `MemorySlot` fields (`slot0` through `slot3`) rather than arrays or maps. This keeps generated code direct and fixture-pinnable.
+- Suggested future fix: Replace the fixed-slot scaffold with typed arena/hash storage in a later DragonGod Memory phase.
+
+- Phase: 20 / DG3
+- Area: Capacity behavior
+- Pain observed: A stable Memory-specific error/Result surface is not available yet, and adding one would broaden DG3 beyond API-shape proof.
+- Workaround used: A full v0 store leaves overflow writes as no-ops. Successful writes increment `revision`; overflow does not. This limitation is documented rather than hidden.
+- Suggested future fix: Add deterministic capacity failure through the eventual Memory error model or shared kernel panic policy.
+
+- Phase: 20 / DG3
+- Area: Struct initialization and mutable reference syntax
+- Pain observed: Fixed-slot storage requires verbose full struct initialization, and mutation calls require explicit `memory&` address syntax.
+- Workaround used: Add `memoryEmptySlot()` and `memoryEmpty()` helpers; fixtures call `memoryWrite(memory&, key, value)` explicitly.
+- Suggested future fix: Revisit default field values/constructors and reference ergonomics as the language matures.
+
+- Phase: 20 / DG3
+- Area: Memory plus machine parameters
+- Pain observed: Passing `Memory` by value into a machine works for read-only decision fixtures, but it is not the final agent-context borrowing model.
+- Workaround used: The DG3 signal-machine fixture reads a copied `Memory` and returns `AutomataSignal`; Mind tick and mutable Memory context remain deferred.
+- Suggested future fix: Introduce the real Mind/Agent tick context and borrowing shape in a later DragonGod phase.

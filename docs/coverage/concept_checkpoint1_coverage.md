@@ -649,3 +649,15 @@ P19-M9 closes Phase 19 after P19-M8 added examples/docs for the existing bare `y
 - Fixture corpus count: 1068 total `.conception` files; 16 Phase 20 DragonGod valid fixtures.
 - Covered: machines returning `AutomataSignal`; `Step`/`Complete`/`Result` for signal-returning machines; payload construction/matching for `Succeed`, `Fail`, `Goto`, `Act`, and `AwaitActuation`; `yield;` before eventual signal completion; runtime `transition match` and deterministic `transition decide` before signal return; backend C essentials for signal machine result slots and yield direct return.
 - Deferred: Mind tick loop, Automata stack, dynamic graph, Memory storage, Actuation subsystem, Events, Trace, Replay, Persistence, parallel execution, scheduler/async, and DragonGod compiler hooks.
+
+
+### DragonGod DG3 coverage update
+
+- DG0 Blueprint: complete.
+- DG1 Kernel core seed: complete.
+- DG2 Static automata signals and machine examples: complete.
+- DG3 Memory v0: complete.
+- Fixture corpus count: 1075 total `.conception` files; 23 Phase 20 DragonGod valid fixtures.
+- Supported DG3 Memory surface: fixed four-slot `Memory` storage, `MemoryKeyInt`, `memoryWrite`, `memoryRead(memory, key, fallback)`, `memoryHas`, `memoryRevision`, and revision increments on every successful write including existing-key updates.
+- Backend coverage: Memory struct has revision and slots, `memoryWrite` mutates through an explicit mutable reference, `memoryRead` preserves a fallback path, and generated/source fixture text avoids heap allocation, scheduler/async/event/mailbox hooks, and Blackboard/BbKey public naming.
+- Deferred after DG3: generic typed `MemoryKey<T>`, arbitrary value types, type erasure, hash maps, string-key maps, TTL expiration, changed-key tracking/filtering, arena allocation, serialization, Mind tick loop, Automata stack, Decision/Actuation/Events/Trace/Replay/Persistence subsystems, parallel staged tick, scheduler/async, and DragonGod compiler hooks.

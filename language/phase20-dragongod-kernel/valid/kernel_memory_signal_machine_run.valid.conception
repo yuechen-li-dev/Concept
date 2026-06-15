@@ -1,0 +1,56 @@
+# name: phase20 DG3 memory signal machine run
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+struct StateId { int value; };
+struct ActuationId { int value; };
+struct Reason { int code; };
+enum AutomataSignal { None, Goto(StateId target, Reason reason), Succeed(Reason reason), Fail(Reason reason), Act(ActuationId id), AwaitActuation(ActuationId id), };
+struct MemoryKeyInt { int id; };
+struct MemorySlot { int key; int value; bool occupied; };
+struct Memory { int revision; MemorySlot slot0; MemorySlot slot1; MemorySlot slot2; MemorySlot slot3; };
+MemorySlot memoryEmptySlot() { return MemorySlot { key: 0, value: 0, occupied: false }; }
+Memory memoryEmpty() { return Memory { revision: 0, slot0: memoryEmptySlot(), slot1: memoryEmptySlot(), slot2: memoryEmptySlot(), slot3: memoryEmptySlot() }; }
+void memoryWrite(mut Memory& memory, MemoryKeyInt key, int value) {
+    if (!memory.slot0.occupied) { memory.slot0.key = key.id; memory.slot0.value = value; memory.slot0.occupied = true; memory.revision = memory.revision + 1; return; }
+}
+int memoryRead(Memory memory, MemoryKeyInt key, int fallback) {
+    if (memory.slot0.occupied && memory.slot0.key == key.id) { return memory.slot0.value; }
+    return fallback;
+}
+
+machine MemoryDecision(Memory memory, MemoryKeyInt key) -> AutomataSignal {
+    state Start {
+        int value = memoryRead(memory, key, 0);
+        transition decide {
+            High when value > 50 score 100;
+            Low score 1;
+        };
+    }
+    state High { return AutomataSignal::Succeed(Reason { code: 42 }); }
+    state Low { return AutomataSignal::Fail(Reason { code: 1 }); }
+}
+
+int main() {
+    Memory memory = memoryEmpty();
+    MemoryKeyInt key = MemoryKeyInt { id: 4 };
+    memoryWrite(memory&, key, 60);
+    MemoryDecision m = MemoryDecision(memory, key);
+    Step(m);
+    if (!Complete(m)) { return 98; }
+    AutomataSignal signal = Result(m);
+    match (signal) {
+        AutomataSignal::Succeed(reason) => return reason.code;
+        AutomataSignal::Fail(reason) => return reason.code;
+        AutomataSignal::None => return 99;
+        AutomataSignal::Goto(target, reason) => return target.value + reason.code;
+        AutomataSignal::Act(id) => return id.value;
+        AutomataSignal::AwaitActuation(id) => return id.value;
+    }
+}
+
+=== run ===
+exit_code: 42

@@ -2990,3 +2990,12 @@ P19-M4 through P19-M6 completed together as a fixture/docs hardening sweep, not 
 Phase 20 / DG2 is complete. The corpus now has 1068 fixture files, with 16 DragonGod Phase 20 valid fixtures. DG2 adds static DragonGod automata signal machine examples and fixtures proving that machines can return `AutomataSignal`; `Step`, `Complete`, and `Result` work with those machines; `Succeed`, `Fail`, `Goto`, `Act`, and `AwaitActuation` payload variants can be constructed, returned, matched, and inspected; `yield;` works inside a signal-returning machine without scheduler/async semantics; and runtime `transition match` plus deterministic `transition decide` can route to states that return `AutomataSignal`.
 
 DG2 remains static/specialized DragonGod.Kernel work. No Mind runtime tick loop, Automata stack, dynamic graph, Memory storage, Actuation subsystem, Events, Trace, Replay, Persistence, parallel staged tick, scheduler, async behavior, or DragonGod compiler hooks were added.
+
+
+## Phase 20 / DG3 DragonGod Kernel Memory v0
+
+Phase 20 / DG3 is complete. The corpus now has 1075 `.conception` fixture files, with 23 DragonGod Phase 20 valid fixtures. DG3 replaces the DG1 Memory shell with a minimal working DragonGod.Kernel Memory v0: `Memory` contains `revision` plus four explicit `MemorySlot` fields, `MemoryKeyInt` remains the v0 integer-key scaffold, and the API now includes `memoryWrite(mut Memory&, MemoryKeyInt, int)`, `memoryRead(Memory, MemoryKeyInt, int)`, `memoryHas(Memory, MemoryKeyInt)`, and `memoryRevision(Memory)`.
+
+Revision behavior is deterministic: new `memoryEmpty()` instances start at revision 0, and every successful `memoryWrite` increments `revision`, including updates to existing keys. Reads return the stored value when present and the caller-provided fallback otherwise. The v0 store has a fixed four-key capacity; overflow writes are documented no-ops rather than a final Memory error policy.
+
+DG3 also adds examples and fixtures proving Memory read/write, fallback reads, key presence checks, revision increments, update-existing behavior, backend fixed-slot/no-heap shape, and a read-only Memory-driven machine that returns `AutomataSignal`. No generic `MemoryKey<T>`, arbitrary payload storage, type erasure, hash maps, TTL, changed-key tracking, arena allocation, Mind tick loop, Automata stack, scheduler/async behavior, persistence/replay, or DragonGod compiler hooks were added.

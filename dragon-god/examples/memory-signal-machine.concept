@@ -1,0 +1,23 @@
+module Main;
+
+import DragonGod.Kernel.Automata;
+import DragonGod.Kernel.Core;
+import DragonGod.Kernel.Memory;
+
+machine MemoryDecision(DragonGod.Kernel.Memory.Memory memory, DragonGod.Kernel.Memory.MemoryKeyInt key) -> DragonGod.Kernel.Automata.AutomataSignal {
+    state Start {
+        int value = DragonGod.Kernel.Memory.memoryRead(memory, key, 0);
+        transition decide {
+            High when value > 50 score 100;
+            Low score 1;
+        };
+    }
+
+    state High {
+        return DragonGod.Kernel.Automata.AutomataSignal::Succeed(DragonGod.Kernel.Core.Reason { code: 100 });
+    }
+
+    state Low {
+        return DragonGod.Kernel.Automata.AutomataSignal::Fail(DragonGod.Kernel.Core.Reason { code: 1 });
+    }
+}

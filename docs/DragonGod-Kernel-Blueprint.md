@@ -2,7 +2,7 @@
 
 ## Concept-native behavioral kernel design
 
-**Status:** DG0 blueprint complete; DG1 kernel core seed complete
+**Status:** DG0 blueprint complete; DG1 kernel core seed complete; DG2 static automata signals complete; DG3 Memory v0 complete
 **Target:** Concept Stage 1+
 **Root module:** `DragonGod.Kernel`
 **Derived from:** Dominatus doctrine and production architecture
@@ -1646,3 +1646,28 @@ Feature matrix update:
 - DG2 Static automata signals and machine examples: complete.
 - Supported in DG2: machines returning `AutomataSignal`; `Step`/`Complete`/`Result` on signal-returning machines; payload construction and matching; yield in signal-returning machines; transition match/decide in signal-returning machines.
 - Deferred after DG2: Mind tick loop; Automata stack; dynamic graph; Memory storage; Actuation subsystem; Events; Trace; Replay; Persistence; parallel execution; scheduler/async/DragonGod runtime hooks.
+
+
+## DG3 Memory v0 status
+
+DG3 establishes the first working `DragonGod.Kernel.Memory` store while preserving public terminology: Memory, not Blackboard. The v0 shape is intentionally small and deterministic:
+
+```cpp
+struct MemorySlot {
+    int key;
+    int value;
+    bool occupied;
+};
+
+struct Memory {
+    int revision;
+    MemorySlot slot0;
+    MemorySlot slot1;
+    MemorySlot slot2;
+    MemorySlot slot3;
+};
+```
+
+The DG3 API is `memoryWrite(mut Memory& memory, MemoryKeyInt key, int value)`, `memoryRead(Memory memory, MemoryKeyInt key, int fallback)`, `memoryHas(Memory memory, MemoryKeyInt key)`, and `memoryRevision(Memory memory)`. `memoryEmpty()` creates revision-0 Memory with empty slots. Every successful write increments `revision`, including updates to an existing key. `memoryRead` returns the fallback when the key is absent. Capacity is four keys; overflow writes are documented v0 no-ops until the real typed arena/hash/error policy exists.
+
+`MemoryKey<T>` remains deferred. `MemoryKeyInt` is the v0 scaffold for integer Memory values. DG3 does not implement arbitrary payload storage, type erasure, hash maps, string-key maps, TTL, changed-key filtering, arena allocation, serialization, Mind ticking, Automata stacks, Decision/Actuation/Events/Trace/Replay/Persistence subsystems, parallel staged tick, scheduler/async behavior, or DragonGod compiler hooks.

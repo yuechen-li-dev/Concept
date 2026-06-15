@@ -561,3 +561,10 @@ Phase 20 fixtures live under `language/phase20-dragongod-kernel/valid/` and pin 
 Phase 20 DragonGod coverage now contains 16 valid fixtures. DG2 added signal-returning machine run fixtures for `Succeed`, `Fail`, `Goto`, yield-then-succeed, transition-match true/false, transition-decide high/low, `Act`, and `AwaitActuation`, plus a backend C fixture for the static automata signal machine shape.
 
 These fixtures intentionally remain static and specialized. They do not introduce Mind ticking, Automata stacks, dynamic graph storage, Memory storage, Actuation implementation, Events, Trace, Replay, Persistence, parallel staged ticking, scheduler/async behavior, or DragonGod compiler hooks.
+
+
+## Phase 20 / DG3 DragonGod Memory fixtures
+
+Phase 20 DragonGod coverage now contains 23 valid fixtures. DG3 adds seven fixtures under `language/phase20-dragongod-kernel/valid/`: six run fixtures for Memory write/read, fallback read, `memoryHas`, revision behavior, update-existing-key behavior, and Memory-driven `AutomataSignal` machines; plus one backend C fixture for the fixed-slot Memory shape.
+
+The backend fixture pins the presence of the `Memory` struct with `revision` and explicit slots, direct mutation through `memoryWrite`, fallback return behavior in `memoryRead`, and absence of heap allocation, scheduler/async/mailbox markers, and Blackboard/BbKey public naming. The fixtures intentionally do not cover generic `MemoryKey<T>`, hash maps, TTL, changed-key filtering, type erasure, persistence, replay, Mind ticking, or DragonGod compiler hooks.

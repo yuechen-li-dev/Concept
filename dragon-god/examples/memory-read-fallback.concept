@@ -1,0 +1,9 @@
+module Main;
+
+import DragonGod.Kernel.Memory;
+
+int main() {
+    DragonGod.Kernel.Memory.Memory memory = DragonGod.Kernel.Memory.memoryEmpty();
+    DragonGod.Kernel.Memory.MemoryKeyInt missing = DragonGod.Kernel.Memory.MemoryKeyInt { id: 99 };
+    return DragonGod.Kernel.Memory.memoryRead(memory, missing, 42);
+}
