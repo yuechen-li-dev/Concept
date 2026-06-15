@@ -1,0 +1,136 @@
+# name: kernel_events_signal_machine_run.valid.conception
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+// DG8 Events v0: deterministic fixed-slot integer event stream. This is a
+// kernel event substrate, not a mailbox runtime, scheduler, async system,
+// dynamic event registry, or language event-bus keyword.
+struct EventTypeId {
+    int value;
+};
+
+struct EventId {
+    int value;
+};
+
+struct EventPayloadInt {
+    int value;
+};
+
+struct EventSlot {
+    EventId id;
+    EventTypeId type;
+    EventPayloadInt payload;
+    bool occupied;
+};
+
+struct EventCursor {
+    int nextIndex;
+};
+
+struct EventBus {
+    int nextId;
+    int count;
+    EventSlot slot0;
+    EventSlot slot1;
+    EventSlot slot2;
+    EventSlot slot3;
+};
+
+EventTypeId eventType(int value) {
+    return EventTypeId { value: value };
+}
+
+EventPayloadInt eventPayloadInt(int value) {
+    return EventPayloadInt { value: value };
+}
+
+EventSlot eventEmptySlot() {
+    return EventSlot {
+        id: EventId { value: 0 },
+        type: EventTypeId { value: 0 },
+        payload: EventPayloadInt { value: 0 },
+        occupied: false
+    };
+}
+
+EventBus eventBusEmpty() {
+    return EventBus {
+        nextId: 1,
+        count: 0,
+        slot0: eventEmptySlot(),
+        slot1: eventEmptySlot(),
+        slot2: eventEmptySlot(),
+        slot3: eventEmptySlot()
+    };
+}
+
+EventCursor eventCursorStart() {
+    return EventCursor { nextIndex: 0 };
+}
+
+EventCursor eventTailCursor(EventBus bus) {
+    return EventCursor { nextIndex: bus.count };
+}
+
+void eventFillSlot(mut EventSlot& slot, EventId id, EventTypeId type, EventPayloadInt payload) {
+    slot.id = id;
+    slot.type = type;
+    slot.payload = payload;
+    slot.occupied = true;
+}
+
+EventId eventPush(mut EventBus& bus, EventTypeId type, EventPayloadInt payload) {
+    EventId id = EventId { value: bus.nextId };
+    bus.nextId = bus.nextId + 1;
+
+    if (!bus.slot0.occupied) { eventFillSlot(bus.slot0&, id, type, payload); bus.count = bus.count + 1; return id; }
+    if (!bus.slot1.occupied) { eventFillSlot(bus.slot1&, id, type, payload); bus.count = bus.count + 1; return id; }
+    if (!bus.slot2.occupied) { eventFillSlot(bus.slot2&, id, type, payload); bus.count = bus.count + 1; return id; }
+    if (!bus.slot3.occupied) { eventFillSlot(bus.slot3&, id, type, payload); bus.count = bus.count + 1; return id; }
+    panic("DragonGod.Events capacity exceeded");
+}
+
+bool eventSlotMatches(EventSlot slot, EventTypeId type) {
+    return slot.occupied && slot.type.value == type.value;
+}
+
+int eventReadNextInt(EventBus bus, mut EventCursor& cursor, EventTypeId type, int fallback) {
+    if (cursor.nextIndex <= 0) {
+        if (eventSlotMatches(bus.slot0, type)) { cursor.nextIndex = 1; return bus.slot0.payload.value; }
+    }
+    if (cursor.nextIndex <= 1) {
+        if (eventSlotMatches(bus.slot1, type)) { cursor.nextIndex = 2; return bus.slot1.payload.value; }
+    }
+    if (cursor.nextIndex <= 2) {
+        if (eventSlotMatches(bus.slot2, type)) { cursor.nextIndex = 3; return bus.slot2.payload.value; }
+    }
+    if (cursor.nextIndex <= 3) {
+        if (eventSlotMatches(bus.slot3, type)) { cursor.nextIndex = 4; return bus.slot3.payload.value; }
+    }
+    cursor.nextIndex = bus.count;
+    return fallback;
+}
+
+struct StateId { int value; };
+struct ActuationId { int value; };
+struct Reason { int code; };
+// Upward automata/mind intent. Tick suspension remains `yield;`, and local
+// machine decisions remain `transition decide`.
+enum AutomataSignal {
+    None,
+    Goto(DragonGod.Kernel.Core.StateId target, DragonGod.Kernel.Core.Reason reason),
+    Push(DragonGod.Kernel.Core.StateId target, DragonGod.Kernel.Core.Reason reason),
+    Pop(DragonGod.Kernel.Core.Reason reason),
+    Succeed(DragonGod.Kernel.Core.Reason reason),
+    Fail(DragonGod.Kernel.Core.Reason reason),
+    Act(DragonGod.Kernel.Core.ActuationId id),
+    AwaitActuation(DragonGod.Kernel.Core.ActuationId id),
+};
+machine EventSignalMachine(EventBus bus) -> AutomataSignal { state Start { EventCursor cursor = eventCursorStart(); int value = eventReadNextInt(bus, cursor&, eventType(1), 0); if (value == 80) { return automataSucceed(Reason { code: value }); } return automataFail(Reason { code: value }); } } int main() { EventBus bus = eventBusEmpty(); eventPush(bus&, eventType(1), eventPayloadInt(80)); EventSignalMachine m = EventSignalMachine(bus); Step(m); AutomataSignal signal = Result(m); match (signal.kind) { AutomataSignalKind::Succeed => { return signal.reason.code - 80; } AutomataSignalKind::Fail => { return 1; } AutomataSignalKind::Goto => { return 2; } AutomataSignalKind::Act => { return 3; } AutomataSignalKind::AwaitActuation => { return 4; } AutomataSignalKind::Push => { return 5; } AutomataSignalKind::Pop => { return 6; } } }
+
+=== run ===
+exit_code: 0

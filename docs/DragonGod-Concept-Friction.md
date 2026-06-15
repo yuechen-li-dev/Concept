@@ -182,3 +182,11 @@ DG7 added `DragonGod.Kernel.Actuation` as a fixed-slot, explicit host surface in
 - `mut ActuatorHost&`: explicit mutable host references compiled and made mutation sites clear; the ergonomics are verbose but acceptable for kernel-facing examples.
 - Module import verbosity: fully-qualified DragonGod names remain long in examples. Local aliases/import member syntax would make examples easier to read.
 - Missing arrays/vectors/function pointers: these are the main blockers for a real deterministic handler registry, policy chains, pending completion queues, and command payload tables. DG7 intentionally defers those designs.
+
+## DG8 Events v0 friction
+
+- Events v0 uses four explicit slots because Concept still lacks a standard Vector/container, arrays/spans ergonomic enough for this kernel proof, and generic fixed-capacity storage helpers.
+- Event payloads are integer-only (`EventPayloadInt`) because generic typed payloads, type-erased arbitrary values, and event bucket maps would add more language and runtime surface than DG8 needs.
+- Event reads use `eventReadNextInt(bus, cursor&, type, fallback)` because Concept does not yet have a standard `Option`/`Result` return or out-parameter convention that is clearer for small fixtures.
+- Missing-event behavior advances the stream cursor to `bus.count`; this avoids rescanning old fixed slots but has to be documented because cursors are generic stream positions, not per-type bucket cursors.
+- Slot scanning is written explicitly rather than with loops over arrays because the current DragonGod fixed-slot style is more predictable for backend fixtures.

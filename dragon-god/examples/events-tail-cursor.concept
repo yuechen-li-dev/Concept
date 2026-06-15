@@ -1,0 +1,15 @@
+module DragonGod.Examples.EventsTailCursor;
+
+import DragonGod.Kernel.Events;
+
+// A tail cursor is future-only: events already in the stream are ignored, while
+// later pushes are visible to the same explicit cursor.
+int main() {
+    DragonGod.Kernel.Events.EventBus bus = DragonGod.Kernel.Events.eventBusEmpty();
+    DragonGod.Kernel.Events.EventTypeId threat = DragonGod.Kernel.Events.eventType(1);
+    DragonGod.Kernel.Events.eventPush(bus&, threat, DragonGod.Kernel.Events.eventPayloadInt(10));
+
+    DragonGod.Kernel.Events.EventCursor cursor = DragonGod.Kernel.Events.eventTailCursor(bus);
+    DragonGod.Kernel.Events.eventPush(bus&, threat, DragonGod.Kernel.Events.eventPayloadInt(20));
+    return DragonGod.Kernel.Events.eventReadNextInt(bus, cursor&, threat, 0) - 20;
+}

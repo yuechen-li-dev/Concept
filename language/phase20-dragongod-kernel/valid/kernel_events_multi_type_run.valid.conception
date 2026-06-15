@@ -1,0 +1,121 @@
+# name: kernel_events_multi_type_run.valid.conception
+# phase: run
+# expect: pass
+
+=== source ===
+module Main;
+
+// DG8 Events v0: deterministic fixed-slot integer event stream. This is a
+// kernel event substrate, not a mailbox runtime, scheduler, async system,
+// dynamic event registry, or language event-bus keyword.
+struct EventTypeId {
+    int value;
+};
+
+struct EventId {
+    int value;
+};
+
+struct EventPayloadInt {
+    int value;
+};
+
+struct EventSlot {
+    EventId id;
+    EventTypeId type;
+    EventPayloadInt payload;
+    bool occupied;
+};
+
+struct EventCursor {
+    int nextIndex;
+};
+
+struct EventBus {
+    int nextId;
+    int count;
+    EventSlot slot0;
+    EventSlot slot1;
+    EventSlot slot2;
+    EventSlot slot3;
+};
+
+EventTypeId eventType(int value) {
+    return EventTypeId { value: value };
+}
+
+EventPayloadInt eventPayloadInt(int value) {
+    return EventPayloadInt { value: value };
+}
+
+EventSlot eventEmptySlot() {
+    return EventSlot {
+        id: EventId { value: 0 },
+        type: EventTypeId { value: 0 },
+        payload: EventPayloadInt { value: 0 },
+        occupied: false
+    };
+}
+
+EventBus eventBusEmpty() {
+    return EventBus {
+        nextId: 1,
+        count: 0,
+        slot0: eventEmptySlot(),
+        slot1: eventEmptySlot(),
+        slot2: eventEmptySlot(),
+        slot3: eventEmptySlot()
+    };
+}
+
+EventCursor eventCursorStart() {
+    return EventCursor { nextIndex: 0 };
+}
+
+EventCursor eventTailCursor(EventBus bus) {
+    return EventCursor { nextIndex: bus.count };
+}
+
+void eventFillSlot(mut EventSlot& slot, EventId id, EventTypeId type, EventPayloadInt payload) {
+    slot.id = id;
+    slot.type = type;
+    slot.payload = payload;
+    slot.occupied = true;
+}
+
+EventId eventPush(mut EventBus& bus, EventTypeId type, EventPayloadInt payload) {
+    EventId id = EventId { value: bus.nextId };
+    bus.nextId = bus.nextId + 1;
+
+    if (!bus.slot0.occupied) { eventFillSlot(bus.slot0&, id, type, payload); bus.count = bus.count + 1; return id; }
+    if (!bus.slot1.occupied) { eventFillSlot(bus.slot1&, id, type, payload); bus.count = bus.count + 1; return id; }
+    if (!bus.slot2.occupied) { eventFillSlot(bus.slot2&, id, type, payload); bus.count = bus.count + 1; return id; }
+    if (!bus.slot3.occupied) { eventFillSlot(bus.slot3&, id, type, payload); bus.count = bus.count + 1; return id; }
+    panic("DragonGod.Events capacity exceeded");
+}
+
+bool eventSlotMatches(EventSlot slot, EventTypeId type) {
+    return slot.occupied && slot.type.value == type.value;
+}
+
+int eventReadNextInt(EventBus bus, mut EventCursor& cursor, EventTypeId type, int fallback) {
+    if (cursor.nextIndex <= 0) {
+        if (eventSlotMatches(bus.slot0, type)) { cursor.nextIndex = 1; return bus.slot0.payload.value; }
+    }
+    if (cursor.nextIndex <= 1) {
+        if (eventSlotMatches(bus.slot1, type)) { cursor.nextIndex = 2; return bus.slot1.payload.value; }
+    }
+    if (cursor.nextIndex <= 2) {
+        if (eventSlotMatches(bus.slot2, type)) { cursor.nextIndex = 3; return bus.slot2.payload.value; }
+    }
+    if (cursor.nextIndex <= 3) {
+        if (eventSlotMatches(bus.slot3, type)) { cursor.nextIndex = 4; return bus.slot3.payload.value; }
+    }
+    cursor.nextIndex = bus.count;
+    return fallback;
+}
+
+int main() { EventBus bus = eventBusEmpty(); EventTypeId a = eventType(1); EventTypeId b = eventType(2); eventPush(bus&, a, eventPayloadInt(10)); eventPush(bus&, b, eventPayloadInt(99)); EventCursor cursorB = eventCursorStart(); if (eventReadNextInt(bus, cursorB&, b, 0) != 99) { return 1; } EventCursor cursorA = eventCursorStart(); return eventReadNextInt(bus, cursorA&, a, 0) - 10; }
+
+=== run ===
+exit_code: 0

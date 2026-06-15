@@ -1701,3 +1701,10 @@ DG7 is complete as an explicit kernel actuation host scaffold, not as an externa
 DG7 keeps actuation explicit. `AutomataSignal::Act` and `AutomataSignal::AwaitActuation` are covered by smoke fixtures and `Mind` continues to record them; no automatic Mind-to-host dispatch, scheduler, async runtime, event bus, command registry, dynamic handler table, external OS/game-engine dispatch, replay, persistence, or parallel execution is introduced.
 
 DragonGod matrix: DG0 Blueprint ✅; DG1 Kernel core seed ✅; DG2 static automata signals and machine examples ✅; DG3 Memory v0 ✅; DG4 Mind v0 static executor ✅; DG5 Automata stack v0 ✅; DG6 Decision subsystem v0 ✅; DG7 Actuation subsystem v0 ✅. Deferred after DG7: command payload generics, `ActuationCommand` marker concept surface, generic handler registry, policy chains, dynamic dispatch, pending completion queues, actual external command execution, scheduler/async integration, Replay/Persistence/Parallel, and DragonGod compiler hooks.
+
+
+## DG8 Events subsystem v0 status
+
+DG8 adds `DragonGod.Kernel.Events` as a kernel event substrate, not a mailbox runtime or scheduler. Events v0 is deliberately fixed and integer-backed: `EventTypeId`, `EventId`, `EventPayloadInt`, `EventSlot`, `EventCursor`, and `EventBus` model a four-slot stream. `eventPush` assigns deterministic ids from `nextId`, appends in insertion order, increments `count`, and panics on capacity exhaustion with `DragonGod.Events capacity exceeded`. `eventReadNextInt` scans from an explicit stream cursor, returns the first matching integer payload, advances to the position after the consumed event, and returns a fallback while moving to `bus.count` when no match exists. `eventTailCursor` starts after existing events, making old events invisible and future pushes visible.
+
+Deferred after DG8: generic or type-erased event payloads, dynamic event type registries, heap-backed buckets, trimming heuristics, cross-agent mailbox delivery, scheduler/async behavior, event-bus or mailbox language keywords, replay/persistence integration, parallel staged event merge, and DragonGod compiler hooks.
