@@ -17,6 +17,7 @@ const source_model = @import("source.zig");
 const types = @import("types.zig");
 
 const machine_result_before_completion_reason = "machine result cannot be read before completion";
+const array_index_oob_reason = "Concept array index out of bounds";
 const machine_decide_no_enabled_reason = "machine decision transition has no enabled candidates";
 const machine_match_no_case_reason = "machine transition match found no matching case"; // Documented stable reason; bool v0 exhaustiveness prevents emission.
 const invalid_machine_state_reason = "invalid machine state reached";
@@ -1015,9 +1016,7 @@ fn emitFunction(writer: anytype, ctx: *const BackendContext, function_id: mir.Mi
     for (function.locals) |local_id| {
         const local = ctx.mir_module.store.getLocal(local_id);
         try writer.writeAll("    ");
-        try emitCType(writer, ctx, local.type_id, local.source_span);
-        try writer.writeByte(' ');
-        try emitLocalName(writer, ctx.module, ctx.mir_module, local_id);
+        try emitCDeclLocal(writer, ctx, local.type_id, local.source_span, local_id);
         try writer.writeAll(";\n");
     }
     if (function.locals.len != 0) try writer.writeByte('\n');
@@ -1050,6 +1049,7 @@ fn emitStatement(writer: anytype, ctx: *const BackendContext, statement: mir.Mir
             switch (assignment.rvalue) {
                 .enum_constructor => |constructor| try emitEnumConstructorAssignment(writer, ctx, assignment.place, constructor),
                 .struct_constructor => |constructor| try emitStructConstructorAssignment(writer, ctx, assignment.place, constructor),
+                .array_constructor => |elements| try emitArrayConstructorAssignment(writer, ctx, assignment.place, elements),
                 else => {
                     try writer.writeAll("    ");
                     try emitPlace(writer, ctx, assignment.place);
@@ -1127,6 +1127,16 @@ fn emitStructConstructorAssignment(writer: anytype, ctx: *const BackendContext, 
         try emitStructFieldName(writer, ctx.module, field.name, field_index);
         try writer.writeAll(" = ");
         try emitOperand(writer, ctx, value);
+        try writer.writeAll(";\n");
+    }
+}
+
+fn emitArrayConstructorAssignment(writer: anytype, ctx: *const BackendContext, place: mir.MirPlace, elements: []const mir.MirOperand) EmitError!void {
+    for (elements, 0..) |element, index| {
+        try writer.writeAll("    ");
+        try emitPlace(writer, ctx, place);
+        try writer.print("[{d}] = ", .{index});
+        try emitOperand(writer, ctx, element);
         try writer.writeAll(";\n");
     }
 }
@@ -1318,6 +1328,19 @@ fn emitRvalue(writer: anytype, ctx: *const BackendContext, rvalue: mir.MirRvalue
             try emitOperand(writer, ctx, operand);
             try writer.writeAll(".tag");
         },
+        .array_index => |array_index| {
+            try writer.writeByte('(');
+            try emitOperand(writer, ctx, array_index.index);
+            try writer.writeAll(" < 0 || ");
+            try emitOperand(writer, ctx, array_index.index);
+            try writer.print(" >= {d} ? (cpt_panic(\"", .{array_index.length});
+            try writer.writeAll(array_index_oob_reason);
+            try writer.writeAll("\"), 0) : ");
+            try emitOperand(writer, ctx, array_index.base);
+            try writer.writeByte('[');
+            try emitOperand(writer, ctx, array_index.index);
+            try writer.writeAll("])");
+        },
         .field_access => |field_access| {
             const field = ctx.module.hir.getField(field_access.field_id);
             const struct_decl = ctx.module.hir.getStruct(field.parent);
@@ -1432,9 +1455,7 @@ fn emitParamList(writer: anytype, ctx: *const BackendContext, function: mir.MirF
     for (params, 0..) |local_id, index| {
         const local = ctx.mir_module.store.getLocal(local_id);
         if (index != 0) try writer.writeAll(", ");
-        try emitCType(writer, ctx, local.type_id, local.source_span);
-        try writer.writeByte(' ');
-        try emitLocalName(writer, ctx.module, ctx.mir_module, local_id);
+        try emitCDeclLocal(writer, ctx, local.type_id, local.source_span, local_id);
     }
 }
 
@@ -1446,6 +1467,22 @@ const CTypePosition = enum {
     value,
     pointer_pointee,
 };
+
+fn emitCDeclLocal(writer: anytype, ctx: *const BackendContext, type_id: types.TypeId, span: ?diagnostics.SourceSpan, local_id: mir.MirLocalId) EmitError!void {
+    switch (ctx.module.types.kind(type_id)) {
+        .array => |array| {
+            try emitCTypeAt(writer, ctx, array.element, span, .value);
+            try writer.writeByte(' ');
+            try emitLocalName(writer, ctx.module, ctx.mir_module, local_id);
+            try writer.print("[{d}]", .{array.length});
+        },
+        else => {
+            try emitCType(writer, ctx, type_id, span);
+            try writer.writeByte(' ');
+            try emitLocalName(writer, ctx.module, ctx.mir_module, local_id);
+        },
+    }
+}
 
 fn emitCType(writer: anytype, ctx: *const BackendContext, type_id: types.TypeId, span: ?diagnostics.SourceSpan) EmitError!void {
     try emitCTypeAt(writer, ctx, type_id, span, .value);

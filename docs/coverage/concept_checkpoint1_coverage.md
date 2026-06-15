@@ -735,3 +735,7 @@ Persistence/checkpoint v0 coverage now includes 8 run fixtures and 1 backend-C f
 Fixed-size array type syntax `T[N]` is now covered at parser/declaration-check level, including struct fields, function parameters, nested postfix array types, positive literal length validation, and invalid zero/negative/non-literal length fixtures. Runtime construction, indexing, literals, slices, fixed buffers, `Len`, and `Capacity` remain uncovered because they are explicitly deferred beyond M1.
 
 - Phase 21 M2 coverage includes target-typed fixed array literals, nested array literals, length mismatch, element mismatch, and empty literal rejection fixtures.
+
+## Phase 21 M3 coverage note
+
+Phase 21 M3 now covers read-only fixed-array indexing through AST, HIR, MIR, and the C backend for simple fixed-array values, including constant indexes, local variable indexes, nested repeated indexing, fixed-array `Len`, and diagnostics `CON0406`, `CON0407`, and `CON0414`. Runtime non-constant index reads emit the stable panic reason `Concept array index out of bounds`. Mutable indexed assignment, slices, fixed buffers, `Capacity`, unchecked indexing, DragonGod migration, and broad C ABI array passing remain outside this milestone.

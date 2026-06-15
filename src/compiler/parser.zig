@@ -2346,6 +2346,7 @@ pub const Parser = struct {
                     };
                     type_args = &.{};
                 },
+                .left_bracket => expr = try self.finishIndexAccessExpr(allocator, expr),
                 .dot => expr = try self.finishFieldAccessExpr(allocator, expr),
                 .arrow => {
                     self.report(.UnexpectedToken, "'->' field access is not supported; use '.' on struct values", self.current().span) catch return error.OutOfMemory;
@@ -2367,6 +2368,27 @@ pub const Parser = struct {
 
     fn isQualifiedCallRoot(text: []const u8) bool {
         return text.len != 0 and std.ascii.isUpper(text[0]);
+    }
+
+    fn finishIndexAccessExpr(self: *Parser, allocator: std.mem.Allocator, base: *ast.Expr) ParseExprError!*ast.Expr {
+        const left = self.advance();
+        _ = left;
+        const index = try self.parseExpr(allocator);
+        errdefer {
+            index.deinit(allocator);
+            allocator.destroy(index);
+        }
+        const right = if (self.match(.right_bracket)) |token| token else {
+            self.report(.UnexpectedToken, "expected ']' after array index", self.current().span) catch return error.OutOfMemory;
+            return error.ParseFailed;
+        };
+        const node = try allocator.create(ast.Expr);
+        node.* = .{ .index_access = .{
+            .base = base,
+            .index = index,
+            .span = ast.spanFromBounds(base.span().start, spanEnd(right.span)),
+        } };
+        return node;
     }
 
     fn finishFieldAccessExpr(self: *Parser, allocator: std.mem.Allocator, receiver: *ast.Expr) ParseExprError!*ast.Expr {

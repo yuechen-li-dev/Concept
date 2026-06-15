@@ -372,6 +372,10 @@ const Analyzer = struct {
             .use => |operand| try self.readOperand(states, operand, span),
             .move => |place| try self.movePlace(states, place, span),
             .manual_init_assume => |operand| try self.readOperand(states, operand, span),
+            .array_index => |array_index| {
+                try self.readOperand(states, array_index.base, span);
+                try self.readOperand(states, array_index.index, span);
+            },
             .unary => |unary| try self.readOperand(states, unary.operand, span),
             .address_of => |place| try self.readPlace(states, place, span),
             .deref => |operand| try self.readOperand(states, operand, span),

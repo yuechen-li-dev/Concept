@@ -1,0 +1,6 @@
+module Main;
+
+int main() {
+    int[4] values = [1, 2, 3, 4];
+    return values[2];
+}

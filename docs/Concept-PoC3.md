@@ -3077,3 +3077,7 @@ Phase 21 is now open at P21-M0 as a design-only milestone for arrays, slices, an
 Phase 21 M1 adds parser, AST, semantic type, and HIR carrying support for fixed-size array type syntax `T[N]`. Lengths are part of semantic type identity, so `int[4]`, `int[5]`, and `bool[4]` are distinct types. M1 restricts lengths to positive integer literals and rejects zero, negative, identifier, and non-literal expression lengths with stable diagnostics. Array construction, literals, indexing, `Len`, `Capacity`, slices, fixed buffers, DragonGod migration, and full backend value-copy semantics remain out of scope.
 
 - Phase 21 M2 adds fixed array literal parsing and basic target-typed checking for `T[N]` locals, including nested literals, while keeping indexing, Len/Capacity, slices, fixed buffers, and DragonGod migration deferred.
+
+### Phase 21 M3 — fixed array reads
+
+P21-M3 adds read-only fixed-array indexing and fixed-array `Len`. The supported expression surface includes `values[0]`, variable-index reads such as `values[i]`, repeated nested reads such as `matrix[1][0]`, and `Len(values)` / `Len(matrix[0])`. The compiler rejects non-array receivers with `CON0406`, non-`int` indexes with `CON0407`, and constant out-of-bounds indexes with `CON0414`. Non-constant indexes lower with a runtime panic guard using the stable reason `Concept array index out of bounds`. Mutable indexed assignment, slices, fixed buffers, `Capacity`, unchecked indexing, and DragonGod migration remain deferred.
