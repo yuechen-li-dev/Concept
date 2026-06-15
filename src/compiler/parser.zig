@@ -3835,6 +3835,14 @@ pub const Parser = struct {
         }
         if (self.match(.less) == null) return args.toOwnedSlice();
         while (self.current().kind != .eof and self.current().kind != .greater and self.current().kind != .right_paren and self.current().kind != .semicolon and self.current().kind != .left_brace and self.current().kind != .right_brace) {
+            if (self.current().kind == .int_literal or (self.current().kind == .minus and self.peek(1).kind == .int_literal)) {
+                try args.append(try self.parseIntegerTypeArgument(allocator));
+                if (self.match(.comma) != null) continue;
+                if (self.current().kind == .greater) break;
+                try self.report(.UnexpectedToken, "expected ',' between generic type arguments", self.current().span);
+                self.advance();
+                continue;
+            }
             if (self.current().kind == .identifier or self.current().kind == .mut or self.current().kind == .dyn) {
                 try args.append(try self.parseTypeName(allocator));
                 if (self.match(.comma) != null) continue;
@@ -3850,6 +3858,20 @@ pub const Parser = struct {
             try self.report(.UnexpectedToken, "expected '>' after generic type arguments", self.current().span);
         }
         return args.toOwnedSlice();
+    }
+
+    fn parseIntegerTypeArgument(self: *Parser, allocator: std.mem.Allocator) !ast.TypeName {
+        const token = self.advance();
+        var text = token.lexeme;
+        var span = token.span;
+        if (token.kind == .minus) {
+            const int_token = self.advance();
+            text = try std.fmt.allocPrint(allocator, "-{s}", .{int_token.lexeme});
+            span = ast.spanFromBounds(token.span.start, spanEnd(int_token.span));
+        }
+        const parts = try allocator.alloc(ast.NameSegment, 1);
+        parts[0] = .{ .text = text, .span = span };
+        return .{ .name = .{ .parts = parts, .span = span }, .generic_args = try allocator.alloc(ast.TypeName, 0), .array_suffixes = try allocator.alloc(ast.ArraySuffix, 0), .span = span };
     }
 
     fn emptyTypeName(self: *Parser, allocator: std.mem.Allocator, span: SourceSpan) !ast.TypeName {

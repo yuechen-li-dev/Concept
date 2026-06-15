@@ -351,6 +351,32 @@ const Validator = struct {
                 if (operand_type) |type_id| if (self.semantic_module.types.kind(type_id) != .slice) try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
                 break :blk self.semantic_module.types.intType();
             },
+            .fixed_buffer_len => |operand| blk: {
+                const operand_type = try self.operandType(function_id, operand, span);
+                if (operand_type) |type_id| if (self.semantic_module.types.kind(type_id) != .fixed_buffer) try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                break :blk self.semantic_module.types.intType();
+            },
+            .fixed_buffer_capacity => self.semantic_module.types.intType(),
+            .fixed_buffer_empty => |type_id| type_id,
+            .fixed_buffer_append => |append| blk: {
+                const base_type = try self.operandType(function_id, append.buffer, span);
+                const value_type = try self.operandType(function_id, append.value, span);
+                if (base_type) |type_id| {
+                    const kind = self.semantic_module.types.kind(type_id);
+                    if (kind != .fixed_buffer or kind.fixed_buffer.capacity != append.capacity or (value_type != null and kind.fixed_buffer.element.index != value_type.?.index)) try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                }
+                break :blk self.semantic_module.types.voidType();
+            },
+            .fixed_buffer_index => |index| blk: {
+                const base_type = try self.operandType(function_id, index.base, span);
+                const index_type = try self.operandType(function_id, index.index, span);
+                if (index_type) |type_id| if (self.semantic_module.types.kind(type_id) != .int) try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                if (base_type) |type_id| {
+                    const kind = self.semantic_module.types.kind(type_id);
+                    if (kind != .fixed_buffer or kind.fixed_buffer.element.index != index.result_type.index) try self.report(.InvalidMirType, span, diagnostics.invalidMirType);
+                }
+                break :blk index.result_type;
+            },
             .manual_init_assume => |operand| blk: {
                 const operand_type = try self.operandType(function_id, operand, span);
                 if (operand_type == null) break :blk null;

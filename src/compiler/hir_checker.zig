@@ -256,7 +256,7 @@ const Checker = struct {
             .pointer => |pointer| self.isSupportedReprCPointerPointee(pointer.pointee),
             .struct_type => false, // Nested repr(C) by value is deferred in M6 to avoid recursive layouts.
             .array => |array| self.isSupportedReprCFieldType(array.element, undefined),
-            .slice => false,
+            .slice, .fixed_buffer => false,
             .void, .arena, .allocator, .enum_type, .machine_type, .interface_type, .dyn_interface, .manual_init, .type_param => false,
         };
     }
@@ -662,6 +662,18 @@ const Checker = struct {
                     return error.InvalidSemanticModule;
                 }
                 break :blk self.module.types.intType();
+            },
+            .fixed_buffer_len => |buffer_expr| blk: {
+                const buffer_type = try self.checkExpr(current_function_id, return_type, buffer_expr);
+                if (self.module.types.kind(buffer_type) != .fixed_buffer) return error.InvalidSemanticModule;
+                break :blk self.module.types.intType();
+            },
+            .fixed_buffer_capacity => self.module.types.intType(),
+            .fixed_buffer_empty => |type_id| type_id,
+            .fixed_buffer_append => |append| blk: {
+                _ = try self.checkExpr(current_function_id, return_type, append.buffer);
+                _ = try self.checkExpr(current_function_id, return_type, append.value);
+                break :blk self.module.types.voidType();
             },
             .group => |inner| try self.checkExpr(current_function_id, return_type, inner),
             .compile_time => |compile_time_expr| blk: {
@@ -1651,6 +1663,10 @@ const Checker = struct {
             .param_ref => |id| .{ .param_ref = param_map.get(id).? },
             .machine_param_ref, .machine_field_ref => return error.InvalidSemanticModule,
             .machine_construct, .machine_step, .machine_complete, .machine_result, .machine_state => return error.InvalidSemanticModule,
+            .fixed_buffer_empty => |type_id| .{ .fixed_buffer_empty = try self.substituteType(type_id, subst, span) },
+            .fixed_buffer_append => |append| .{ .fixed_buffer_append = .{ .buffer = try self.cloneExpr(append.buffer, subst, param_map, local_map, span), .value = try self.cloneExpr(append.value, subst, param_map, local_map, span) } },
+            .fixed_buffer_len => |buffer| .{ .fixed_buffer_len = try self.cloneExpr(buffer, subst, param_map, local_map, span) },
+            .fixed_buffer_capacity => |capacity| .{ .fixed_buffer_capacity = capacity },
             .call => |call| blk: {
                 var args = try self.allocator.alloc(hir.ExprId, call.args.len);
                 errdefer self.allocator.free(args);
@@ -1849,6 +1865,10 @@ const Checker = struct {
             .slice => |slice| {
                 try writer.writeAll("slice_");
                 try self.writeTypeSuffix(writer, slice.element);
+            },
+            .fixed_buffer => |buffer| {
+                try self.writeTypeSuffix(writer, buffer.element);
+                try writer.print("_fixed_buffer_{d}", .{buffer.capacity});
             },
             .type_param => try writer.writeAll("type_param"),
         }

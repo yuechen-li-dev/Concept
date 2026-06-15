@@ -50,6 +50,10 @@ pub const TypeKind = union(enum) {
     slice: struct {
         element: TypeId,
     },
+    fixed_buffer: struct {
+        element: TypeId,
+        capacity: u64,
+    },
     type_param: struct {
         owner: TypeParamOwner,
         index: u32,
@@ -76,6 +80,7 @@ pub const TypeKind = union(enum) {
             .manual_init => |manual_init| try writer.print("ManualInit<{f}>", .{manual_init.payload}),
             .array => |array| try writer.print("{f}[{d}]", .{ array.element, array.length }),
             .slice => |slice| try writer.print("Slice<{f}>", .{slice.element}),
+            .fixed_buffer => |buffer| try writer.print("FixedBuffer<{f}, {d}>", .{ buffer.element, buffer.capacity }),
             .type_param => |param| try writer.print("type_param({s}:{d}/{d} {f})", .{ @tagName(param.owner.kind), param.owner.index, param.index, param.name }),
         }
     }
@@ -222,6 +227,13 @@ pub const TypeStore = struct {
         return try self.append(.{ .slice = .{ .element = element } }, error.TooManyTypes);
     }
 
+    pub fn addFixedBufferType(self: *TypeStore, element: TypeId, capacity: u64) TypeStoreError!TypeId {
+        std.debug.assert(self.contains(element));
+        _ = try self.addArrayType(element, capacity);
+        if (self.findFixedBuffer(element, capacity)) |existing| return existing;
+        return try self.append(.{ .fixed_buffer = .{ .element = element, .capacity = capacity } }, error.TooManyTypes);
+    }
+
     pub fn pointerType(self: TypeStore, pointee: TypeId) ?TypeId {
         std.debug.assert(self.contains(pointee));
         return self.findPointer(pointee);
@@ -258,6 +270,7 @@ pub const TypeStore = struct {
         return switch (self.kind(id)) {
             .int, .bool, .pointer, .enum_type, .alloc_error => true,
             .array => |array| self.isCopyType(hir_store, array.element),
+            .fixed_buffer => |buffer| self.isCopyType(hir_store, buffer.element),
             .slice => true,
             .struct_type => self.hasCopyMarkerImpl(hir_store, id),
             .void, .arena, .allocator, .machine_type, .interface_type, .dyn_interface, .manual_init, .type_param => false,
@@ -314,7 +327,7 @@ pub const TypeStore = struct {
         return null;
     }
 
-    fn findArray(self: TypeStore, element: TypeId, length: u64) ?TypeId {
+    pub fn findArray(self: TypeStore, element: TypeId, length: u64) ?TypeId {
         for (self.types.items, 0..) |candidate, index| {
             switch (candidate) {
                 .array => |array| if (array.element.index == element.index and array.length == length) return .{ .index = @intCast(index) },
@@ -328,6 +341,16 @@ pub const TypeStore = struct {
         for (self.types.items, 0..) |candidate, index| {
             switch (candidate) {
                 .slice => |slice| if (slice.element.index == element.index) return .{ .index = @intCast(index) },
+                else => {},
+            }
+        }
+        return null;
+    }
+
+    fn findFixedBuffer(self: TypeStore, element: TypeId, capacity: u64) ?TypeId {
+        for (self.types.items, 0..) |candidate, index| {
+            switch (candidate) {
+                .fixed_buffer => |buffer| if (buffer.element.index == element.index and buffer.capacity == capacity) return .{ .index = @intCast(index) },
                 else => {},
             }
         }

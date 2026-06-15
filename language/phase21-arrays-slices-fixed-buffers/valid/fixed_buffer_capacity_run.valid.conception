@@ -1,0 +1,7 @@
+module Main;
+
+int main() {
+    FixedBuffer<int, 4> buffer = fixedBufferEmpty<int, 4>();
+    return Capacity(buffer);
+}
+// expect: 4

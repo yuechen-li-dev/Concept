@@ -463,8 +463,12 @@ pub const HirExprKind = union(enum) {
     enum_constructor: struct { enum_id: EnumId, variant_id: VariantId, args: []ExprId },
     struct_literal: struct { struct_id: StructId, type_id: types.TypeId, fields: []HirStructLiteralField },
     array_literal: struct { type_id: types.TypeId, elements: []ExprId },
-    index_access: struct { base: ExprId, index: ExprId, result_type: types.TypeId, array_length: u64, is_slice: bool },
+    fixed_buffer_empty: types.TypeId,
+    fixed_buffer_append: struct { buffer: ExprId, value: ExprId },
+    index_access: struct { base: ExprId, index: ExprId, result_type: types.TypeId, array_length: u64, is_slice: bool, is_fixed_buffer: bool = false },
     slice_len: ExprId,
+    fixed_buffer_len: ExprId,
+    fixed_buffer_capacity: u64,
     field_access: struct { receiver: ExprId, field_name: SymbolId, field_span: SourceSpan },
     target_metadata: struct { query: CompileTimeTargetQuery, field_span: SourceSpan },
     decide: struct { enum_type: types.TypeId, enum_id: EnumId, arms: []HirDecideArm },
@@ -1949,6 +1953,12 @@ pub const HirStore = struct {
                 try writer.print("ArrayLiteral {f}\n", .{literal.type_id});
                 for (literal.elements) |element| try self.writeExprDebug(writer, element, depth + 1);
             },
+            .fixed_buffer_empty => |type_id| try writer.print("FixedBufferEmpty {f}\n", .{type_id}),
+            .fixed_buffer_append => |append| {
+                try writer.writeAll("FixedBufferAppend\n");
+                try self.writeExprDebug(writer, append.buffer, depth + 1);
+                try self.writeExprDebug(writer, append.value, depth + 1);
+            },
             .machine_field_ref => |field_id| {
                 try writer.print("MachineFieldRef {f}\n", .{field_id});
             },
@@ -1961,6 +1971,11 @@ pub const HirStore = struct {
                 try writer.writeAll("SliceLen\n");
                 try self.writeExprDebug(writer, slice_expr, depth + 1);
             },
+            .fixed_buffer_len => |buffer_expr| {
+                try writer.writeAll("FixedBufferLen\n");
+                try self.writeExprDebug(writer, buffer_expr, depth + 1);
+            },
+            .fixed_buffer_capacity => |capacity| try writer.print("FixedBufferCapacity {d}\n", .{capacity}),
             .field_access => |field_access| {
                 try writer.print("FieldAccess {f}\n", .{field_access.field_name});
                 try self.writeExprDebug(writer, field_access.receiver, depth + 1);

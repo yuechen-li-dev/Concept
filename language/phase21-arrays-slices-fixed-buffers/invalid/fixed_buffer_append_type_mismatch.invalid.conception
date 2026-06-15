@@ -1,0 +1,16 @@
+# name: phase21 fixed buffer append type mismatch
+# phase: check
+# check: hir
+# expect: fail
+
+=== source ===
+module Example;
+
+int main() {
+    FixedBuffer<int, 4> buffer = fixedBufferEmpty<int, 4>();
+    fixedBufferAppend(buffer, true);
+    return 0;
+}
+
+=== diagnostics ===
+CON0421

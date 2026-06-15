@@ -381,7 +381,16 @@ const Analyzer = struct {
                 try self.readOperand(states, slice_index.base, span);
                 try self.readOperand(states, slice_index.index, span);
             },
-            .slice_len => |operand| try self.readOperand(states, operand, span),
+            .fixed_buffer_index => |index| {
+                try self.readOperand(states, index.base, span);
+                try self.readOperand(states, index.index, span);
+            },
+            .fixed_buffer_append => |append| {
+                try self.readOperand(states, append.buffer, span);
+                try self.readOperand(states, append.value, span);
+            },
+            .slice_len, .fixed_buffer_len => |operand| try self.readOperand(states, operand, span),
+            .fixed_buffer_empty, .fixed_buffer_capacity => {},
             .unary => |unary| try self.readOperand(states, unary.operand, span),
             .address_of => |place| try self.readPlace(states, place, span),
             .deref => |operand| try self.readOperand(states, operand, span),

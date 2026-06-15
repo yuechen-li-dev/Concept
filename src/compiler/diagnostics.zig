@@ -58,6 +58,10 @@ pub const DiagnosticCode = enum {
     SliceElementAssignmentUnsupported,
     SliceRequiresElementType,
     ArrayToSliceElementTypeMismatch,
+    FixedBufferRequiresElementAndCapacity,
+    FixedBufferCapacityMustBePositive,
+    FixedBufferAppendTypeMismatch,
+    FixedBufferReceiverRequired,
     DuplicateParameterName,
     UnknownIdentifier,
     UnknownFunction,
@@ -302,6 +306,10 @@ pub const DiagnosticCode = enum {
             .SliceElementAssignmentUnsupported => "CON0416",
             .SliceRequiresElementType => "CON0417",
             .ArrayToSliceElementTypeMismatch => "CON0418",
+            .FixedBufferRequiresElementAndCapacity => "CON0419",
+            .FixedBufferCapacityMustBePositive => "CON0420",
+            .FixedBufferAppendTypeMismatch => "CON0421",
+            .FixedBufferReceiverRequired => "CON0422",
             .DuplicateParameterName => "CON0025",
             .UnknownIdentifier => "CON0026",
             .UnknownFunction => "CON0027",
@@ -1153,7 +1161,7 @@ pub fn emptyArrayLiteralUnsupported(span: SourceSpan) Diagnostic {
 }
 
 pub fn arrayIndexRequiresArrayOrSlice(span: SourceSpan) Diagnostic {
-    return Diagnostic.init(.ArrayIndexRequiresArrayOrSlice, .@"error", "array index receiver must be a fixed array or slice", span);
+    return Diagnostic.init(.ArrayIndexRequiresArrayOrSlice, .@"error", "index receiver must be a fixed array, slice, or fixed buffer", span);
 }
 
 pub fn arrayIndexMustBeInteger(span: SourceSpan) Diagnostic {
@@ -1180,6 +1188,22 @@ pub fn sliceRequiresElementType(span: SourceSpan) Diagnostic {
 
 pub fn arrayToSliceElementTypeMismatch(span: SourceSpan) Diagnostic {
     return Diagnostic.init(.ArrayToSliceElementTypeMismatch, .@"error", "array element type does not match Slice element type", span);
+}
+
+pub fn fixedBufferRequiresElementAndCapacity(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.FixedBufferRequiresElementAndCapacity, .@"error", "FixedBuffer requires exactly one element type and one positive integer capacity", span);
+}
+
+pub fn fixedBufferCapacityMustBePositive(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.FixedBufferCapacityMustBePositive, .@"error", "FixedBuffer capacity must be positive", span);
+}
+
+pub fn fixedBufferAppendTypeMismatch(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.FixedBufferAppendTypeMismatch, .@"error", "fixedBufferAppend value type does not match FixedBuffer element type", span);
+}
+
+pub fn fixedBufferReceiverRequired(span: SourceSpan) Diagnostic {
+    return Diagnostic.init(.FixedBufferReceiverRequired, .@"error", "fixed buffer operation requires a FixedBuffer receiver", span);
 }
 
 pub fn duplicateStructField(span: SourceSpan) Diagnostic {
