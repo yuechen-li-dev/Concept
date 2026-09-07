@@ -1,5 +1,11 @@
 # Concept: Proof of Concept 3
 
+> **Historical status (EVT1 R0):** PoC3/Zig is a retired reference
+> implementation. Its compiler is preserved under `legacy/poc3-zig`, and this
+> document plus the existing fixture corpus remain semantic/reference material.
+> Active Concept development targets the Go-based EVT1 Stage 0 compiler. Phase
+> 22 roadmap items below are not active EVT1 commitments.
+
 ## Initial Design Document
 
 ### A C++-lineage systems language for auditable compiler, runtime, and bare-metal programming
