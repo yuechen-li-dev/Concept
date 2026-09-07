@@ -1,0 +1,13 @@
+profile Core;
+
+ref const int Borrow(ref const int source)
+{
+    return ref const source;
+}
+
+int Main()
+{
+    int value = 42;
+    ref const int view = Borrow(ref const value);
+    return view;
+}

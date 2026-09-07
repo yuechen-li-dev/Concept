@@ -1,6 +1,6 @@
 # Concept EVT1 Stage 0 compiler architecture
 
-Status: R4a lifetime-bound references and semantic proof requirements
+Status: R4b relational lifetime proofs and selected result provenance
 
 ## Authority
 
@@ -175,7 +175,7 @@ No R3 rule is registered in `ProfileDefinition`. The Vulkan-positive immovable
 reference case passes through the same parser, validator, MIR, and C lowerer as
 Core.
 
-## R4a lifetime and semantic-requirement implementation
+## R4a-R4b lifetime and semantic-requirement implementation
 
 R4a extends the existing concept resolver rather than adding a template-local
 lifetime subsystem:
@@ -194,6 +194,44 @@ and template instantiation both pass through `checkConceptSatisfaction`, so a
 lifetime proof runs because the selected concept requests it. Successful
 proofs are retained in MIR as `semantic_proofs`; compiler-analysis
 requirements remain compile-time-only and have no C representation.
+
+R4b generalizes only the compiler-analysis argument boundary. A requirement
+may name bounded semantic subjects while concepts and templates retain one
+type parameter. `requires compiler.Outlives(source, result);` resolves
+`source` to a named parameter and `result` to the result of exactly one
+required operation. The internal subject record distinguishes `type`,
+`parameter`, and `result`; parameter subjects carry a stable zero-based index
+and all value subjects carry the selected function identity and type.
+
+Selected result provenance follows this pipeline:
+
+```text
+function body
+    -> syntax-directed result provenance summary
+    -> call-site argument instantiation
+    -> semantic relation request
+    -> Outlives evaluator
+    -> deterministic MIR proof evidence
+```
+
+`resultProvenance` is keyed by exact function signature. The bounded summary
+forms are `static`, `parameter`, `shortest_of_parameters`, and `unknown`.
+Direct parameter/reference return, ref-struct construction, nested ref-struct
+construction, and acyclic direct pass-through calls are recognized. Recursive
+cycles, ambiguous overloads, control-flow-dependent returns, and unsupported
+expressions become `unknown`; there is no fixed-point region inference.
+
+At a call site, parameter indices select actual argument provenance. Scoped
+state from either the actual value or formal parameter is retained. Existing
+R4a assignment/return checks then operate on that instantiated provenance, so
+a helper call cannot extend an inner local or hide scoped state.
+
+The `Outlives` evaluator is invoked only during concept satisfaction. It
+returns `proven`, `disproven`, or `unknown`; only `proven` satisfies the
+requirement. MIR function records expose `result_provenance`. MIR semantic
+proofs expose deterministic identity, analysis name, relational subjects,
+outcome, provenance facts, and requirement-origin span. None has a runtime
+payload.
 
 `Type` carries the `scoped` bit and existing ownership qualifier. `StructDecl`
 and `MIRStruct` carry the `ref` aggregate classification. Semantic scope
@@ -252,7 +290,7 @@ silently broaden core parsing or typing. A profile-specific construct must be
 rejected outside its profile or explicitly promoted through the specification
 and reconciliation process.
 
-## R4a limitations
+## R4b limitations
 
 - The package remains deliberately cohesive rather than prematurely split.
 - Effect/actuator validation and C runtime emission remain in-package profile
@@ -275,7 +313,7 @@ and reconciliation process.
   interfaces/dyn, slices, FixedBuffer, Option, and Result surfaces are not
   ported.
 
-R4a does not add a generalized place lattice or prove global alias/lifetime
+R4b does not add a generalized place lattice or prove global alias/lifetime
 safety. `borrow` compatibility behavior remains narrower than the canonical
 explicit `ref` spelling.
 
@@ -312,3 +350,12 @@ provide six valid and five invalid readable cases. They cover local and
 downward-passed ref structs, scoped calls, concept-triggered lifetime proof,
 local/ref-struct/scoped/outlives rejection, unrestricted aggregate rejection,
 live owned replacement ordering, MIR proof metadata, and native C11 execution.
+
+## R4b executable evidence
+
+`internal/concept/r4b_conformance_test.go` and `language/evt1-r4b/core`
+provide six valid and five invalid readable cases. They cover direct and
+ref-struct call results, nested and multi-source summaries, acyclic
+pass-through, scoped propagation, longer-place rejection, relational
+pass/fail/unknown outcomes, deterministic proof identity, MIR inspection, and
+three native C11 executions.

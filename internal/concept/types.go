@@ -233,9 +233,15 @@ func (*PrerequisiteRequirement) evt1ConceptRequirement() {}
 func (r *PrerequisiteRequirement) requirementSpan() Span { return r.Span }
 
 type CompilerAnalysisRequirement struct {
-	Analysis string `json:"analysis"`
-	TypeArgs []Type `json:"type_args"`
-	Span     Span   `json:"span"`
+	Analysis    string               `json:"analysis"`
+	TypeArgs    []Type               `json:"type_args,omitempty"`
+	SubjectArgs []SemanticSubjectRef `json:"subject_args,omitempty"`
+	Span        Span                 `json:"span"`
+}
+
+type SemanticSubjectRef struct {
+	Name string `json:"name"`
+	Span Span   `json:"span"`
 }
 
 func (*CompilerAnalysisRequirement) evt1ConceptRequirement() {}
@@ -811,20 +817,38 @@ type MIRInstance struct {
 }
 
 type MIRFunction struct {
-	Name       string         `json:"name"`
-	ReturnType Type           `json:"return_type"`
-	Params     []MIRName      `json:"params,omitempty"`
-	Operations []MIROperation `json:"operations"`
-	Cleanups   []MIRCleanup   `json:"cleanups,omitempty"`
-	SourceSpan Span           `json:"source_span"`
+	Name             string                      `json:"name"`
+	ReturnType       Type                        `json:"return_type"`
+	Params           []MIRName                   `json:"params,omitempty"`
+	ResultProvenance *MIRResultProvenanceSummary `json:"result_provenance,omitempty"`
+	Operations       []MIROperation              `json:"operations"`
+	Cleanups         []MIRCleanup                `json:"cleanups,omitempty"`
+	SourceSpan       Span                        `json:"source_span"`
 }
 
 type MIRSemanticProof struct {
-	Concept      string `json:"concept"`
-	Analysis     string `json:"analysis"`
-	ConcreteType string `json:"concrete_type"`
-	Satisfied    bool   `json:"satisfied"`
-	SourceSpan   Span   `json:"source_span"`
+	ID              string               `json:"id,omitempty"`
+	Concept         string               `json:"concept"`
+	Analysis        string               `json:"analysis"`
+	ConcreteType    string               `json:"concrete_type"`
+	Subjects        []MIRSemanticSubject `json:"subjects,omitempty"`
+	Satisfied       bool                 `json:"satisfied"`
+	Outcome         string               `json:"outcome,omitempty"`
+	ProvenanceFacts []string             `json:"provenance_facts,omitempty"`
+	SourceSpan      Span                 `json:"source_span"`
+}
+
+type MIRSemanticSubject struct {
+	Kind           string `json:"kind"`
+	Name           string `json:"name"`
+	Function       string `json:"function,omitempty"`
+	ParameterIndex *int   `json:"parameter_index,omitempty"`
+	Type           string `json:"type,omitempty"`
+}
+
+type MIRResultProvenanceSummary struct {
+	Kind             string `json:"kind"`
+	ParameterIndices []int  `json:"parameter_indices,omitempty"`
 }
 
 type MIRCleanup struct {
@@ -865,6 +889,7 @@ type semanticEnv struct {
 	templateInfos     map[string]*evt1TemplateInfo
 	templateInstances map[string]*evt1TemplateInstance
 	semanticProofs    []MIRSemanticProof
+	resultProvenance  map[string]evt1ResultProvenanceSummary
 }
 
 const evt1AutomataDispatchOutcomeTypeName = "AutomataDispatchOutcome"
@@ -916,6 +941,7 @@ func newSemanticEnv(profile *ProfileDefinition) *semanticEnv {
 		templateInfos:     map[string]*evt1TemplateInfo{},
 		templateInstances: map[string]*evt1TemplateInstance{},
 		semanticProofs:    nil,
+		resultProvenance:  map[string]evt1ResultProvenanceSummary{},
 	}
 }
 

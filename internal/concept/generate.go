@@ -265,6 +265,9 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 				for _, arg := range r.TypeArgs {
 					args = append(args, arg.String())
 				}
+				for _, subject := range r.SubjectArgs {
+					args = append(args, subject.Name)
+				}
 				mirConcept.Requirements = append(mirConcept.Requirements, MIRConceptRequirement{
 					Kind: "compiler_analysis", Name: r.Analysis, Detail: strings.Join(args, ", "), SourceSpan: r.Span,
 				})
@@ -391,6 +394,10 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 	}
 	for _, fn := range module.Functions {
 		mirFn := MIRFunction{Name: fn.Name, ReturnType: evt1MIRType(env, fn.ReturnType), SourceSpan: fn.Span}
+		if fn.ReturnType.isReference() || evt1IsRefStructType(env, fn.ReturnType) {
+			summary := env.resultProvenance[evt1FunctionProvenanceKey(fn)]
+			mirFn.ResultProvenance = &MIRResultProvenanceSummary{Kind: string(summary.Kind), ParameterIndices: append([]int{}, summary.ParameterIndices...)}
+		}
 		for _, param := range fn.Params {
 			mirFn.Params = append(mirFn.Params, MIRName{Name: param.Name, Type: evt1MIRType(env, param.Type)})
 		}

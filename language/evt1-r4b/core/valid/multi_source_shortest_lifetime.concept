@@ -1,0 +1,33 @@
+profile Core;
+
+ref struct PairView
+{
+    ref const int left;
+    ref const int right;
+}
+
+PairView MakePair(ref const int left, ref const int right)
+{
+    return PairView{ref const left, ref const right};
+}
+
+concept PairViewOfLeft<T>
+{
+    requires T MakePair(ref const int left, ref const int right);
+    requires compiler.Outlives(left, result);
+}
+
+template <typename T>
+requires PairViewOfLeft<T>
+T ConfirmPair(T pair)
+{
+    return pair;
+}
+
+int Main()
+{
+    int left = 20;
+    int right = 22;
+    PairView pair = ConfirmPair<PairView>(MakePair(ref const left, ref const right));
+    return pair.left + pair.right;
+}

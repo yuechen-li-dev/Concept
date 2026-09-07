@@ -1,6 +1,6 @@
 # EVT1 diagnostic reconciliation
 
-Status: R4a bounded lifetime/reference and cleanup slice
+Status: R4b relational lifetime and call-result provenance slice
 
 Concept EVT1 compares diagnostics by semantic family. The active Go compiler
 retains `CV` numbers and the retired PoC3 compiler retains `CON` numbers; R2
@@ -44,6 +44,13 @@ the executable mapping used by the R2 conformance harness.
 | lifetime semantic requirement | compiler-known marker pressure | `CV4524` | `LIFETIME_REQUIREMENT_UNSATISFIED` | EVT1-new | concept-requested analysis rejected the concrete type |
 | invalid lifetime-bound field | reference aggregate deferred | `CV4525` | `REF_STRUCT_INVALID_FIELD` | EVT1-new | references/ref structs require a ref struct container |
 | compiler analysis declaration | compiler-known marker pressure | `CV4526` | `COMPILER_ANALYSIS_REQUIREMENT_FAILED` | EVT1-new | unknown analysis or wrong fixed arity |
+| disproven Outlives requirement | lifetime system deferred | `CV4527` | `OUTLIVES_REQUIREMENT_FAILED` | EVT1-new | selected result derives from a different semantic source |
+| unknown Outlives provenance | lifetime system deferred | `CV4528` | `OUTLIVES_PROVENANCE_UNKNOWN` | EVT1-new | required proof rejects unknown rather than maybe-passing |
+| unknown call-result lifetime | lifetime system deferred | `CV4529` | `CALL_RESULT_LIFETIME_UNKNOWN` | EVT1-new | no summary can justify outward assignment |
+| call result escapes source | lifetime system deferred | `CV4530` | `CALL_RESULT_ESCAPES_SOURCE` | EVT1-new | helper boundary preserves the shorter actual source |
+| scoped result escape | lifetime system deferred | `CV4531` | `SCOPED_RESULT_ESCAPE` | EVT1-new | derived call result retains scoped state |
+| invalid relational subject | no source counterpart | `CV4532` | `RELATIONAL_REQUIREMENT_INVALID_SUBJECT` | EVT1-new | subjects must select one required operation parameter/result relation |
+| unsupported relational requirement | no source counterpart | `CV4533` | `RELATIONAL_REQUIREMENT_UNSUPPORTED` | reserved EVT1-new | bounded subject model rejects unsupported relation shapes |
 
 `VALUE_TYPE_MISMATCH` maps the existing Go `CV4107` assignment family to
 PoC3 `CON0078`/`CON0082` aggregate and field mismatch evidence.

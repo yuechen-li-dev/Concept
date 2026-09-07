@@ -1,0 +1,23 @@
+profile Core;
+
+ref struct View
+{
+    ref const int data;
+}
+
+View MakeView(ref const int source)
+{
+    return View{ref const source};
+}
+
+int Bad()
+{
+    int outerSource = 1;
+    View outer = MakeView(ref const outerSource);
+    {
+        int innerSource = 2;
+        View shorter = MakeView(ref const innerSource);
+        outer = shorter;
+    }
+    return outer.data;
+}

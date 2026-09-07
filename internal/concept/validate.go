@@ -23,9 +23,24 @@ const (
 )
 
 type evt1LifetimeProvenance struct {
-	Kind   evt1ProvenanceKind
-	Depth  int
-	Scoped bool
+	Kind           evt1ProvenanceKind
+	Depth          int
+	ParameterIndex int
+	Scoped         bool
+}
+
+type evt1ResultProvenanceKind string
+
+const (
+	evt1ResultProvenanceUnknown    evt1ResultProvenanceKind = "unknown"
+	evt1ResultProvenanceStatic     evt1ResultProvenanceKind = "static"
+	evt1ResultProvenanceParameter  evt1ResultProvenanceKind = "parameter"
+	evt1ResultProvenanceShortestOf evt1ResultProvenanceKind = "shortest_of_parameters"
+)
+
+type evt1ResultProvenanceSummary struct {
+	Kind             evt1ResultProvenanceKind
+	ParameterIndices []int
 }
 
 type evt1ValueBinding struct {
@@ -446,11 +461,22 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 				if !ok {
 					return nil, evt1Diagnostic("CV4526", fmt.Sprintf("unknown compiler analysis %s", r.Analysis), r.Span)
 				}
-				if len(r.TypeArgs) != analysis.Arity {
-					return nil, evt1Diagnostic("CV4526", fmt.Sprintf("compiler analysis %s requires %d type argument(s)", r.Analysis, analysis.Arity), r.Span)
+				if len(r.TypeArgs) != analysis.TypeArity || len(r.SubjectArgs) != analysis.SubjectArity {
+					return nil, evt1Diagnostic("CV4526", fmt.Sprintf("compiler analysis %s requires %d type argument(s) and %d semantic subject(s)", r.Analysis, analysis.TypeArity, analysis.SubjectArity), r.Span)
 				}
 				for _, arg := range r.TypeArgs {
 					if err := validateKnownType(env, arg, r.Span, conceptDecl.TypeParam, false); err != nil {
+						return nil, err
+					}
+				}
+				if len(r.SubjectArgs) > 0 {
+					if r.Analysis == "Outlives" && (r.SubjectArgs[0].Name == "result" || r.SubjectArgs[1].Name != "result") {
+						return nil, evt1Diagnostic("CV4532", "Outlives requires a source parameter followed by result", r.Span)
+					}
+					if analysis.CheckSubjects == nil {
+						return nil, evt1Diagnostic("CV4533", fmt.Sprintf("compiler analysis %s does not support semantic subjects", r.Analysis), r.Span)
+					}
+					if _, err := evt1FindRelationalRequirementOperation(conceptDecl, r.SubjectArgs, r.Span); err != nil {
 						return nil, err
 					}
 				}
@@ -477,6 +503,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 			return nil, err
 		}
 	}
+	evt1DeriveResultProvenanceSummaries(env, module.Functions)
 	for _, fn := range module.ComptimeFns {
 		if err := validateFunctionSignature(env, fn); err != nil {
 			return nil, err
@@ -507,7 +534,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		if err != nil {
 			return nil, err
 		}
-		for _, param := range templateDecl.Params {
+		for paramIndex, param := range templateDecl.Params {
 			resolvedParam, err := evt1ResolveType(env, nil, param.Type)
 			if err != nil {
 				return nil, err
@@ -516,7 +543,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 				t:          resolvedParam,
 				mutable:    !param.Type.Const,
 				state:      evt1StorageInitialized,
-				provenance: evt1LifetimeProvenance{Kind: evt1ProvenanceParameter, Scoped: resolvedParam.Scoped},
+				provenance: evt1InitialParameterProvenance(env, resolvedParam, paramIndex, scope.depth),
 			})
 		}
 		if err := validateBlock(env, scope, resolvedReturn, *templateDecl.Body, env.templateInfos[templateDecl.Name], false); err != nil {
@@ -532,7 +559,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		if err != nil {
 			return nil, err
 		}
-		for _, param := range fn.Params {
+		for paramIndex, param := range fn.Params {
 			resolvedParam, err := evt1ResolveType(env, nil, param.Type)
 			if err != nil {
 				return nil, err
@@ -541,7 +568,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 				t:          resolvedParam,
 				mutable:    !param.Type.Const,
 				state:      evt1StorageInitialized,
-				provenance: evt1LifetimeProvenance{Kind: evt1ProvenanceParameter, Scoped: resolvedParam.Scoped},
+				provenance: evt1InitialParameterProvenance(env, resolvedParam, paramIndex, scope.depth),
 			})
 		}
 		collectEscapedArmBindings(fn.Body, env)
@@ -555,7 +582,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		if err != nil {
 			return nil, err
 		}
-		for _, param := range fn.Params {
+		for paramIndex, param := range fn.Params {
 			resolvedParam, err := evt1ResolveType(env, nil, param.Type)
 			if err != nil {
 				return nil, err
@@ -565,7 +592,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 				mutable:    !param.Type.Const,
 				state:      evt1StorageInitialized,
 				comptime:   true,
-				provenance: evt1LifetimeProvenance{Kind: evt1ProvenanceParameter, Scoped: resolvedParam.Scoped},
+				provenance: evt1InitialParameterProvenance(env, resolvedParam, paramIndex, scope.depth),
 			})
 		}
 		collectEscapedArmBindings(fn.Body, env)
@@ -1079,6 +1106,12 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				binding, _ := local.lookup(name.Name)
 				sourceProvenance := evt1ExprProvenance(env, local, s.Value)
 				if evt1LifetimeShorterThan(sourceProvenance, binding.provenance) {
+					if sourceProvenance.Kind == evt1ProvenanceUnknown && evt1IsCallResultExpr(s.Value) {
+						return evt1Diagnostic("CV4529", fmt.Sprintf("call result assigned to %s has unknown lifetime provenance", name.Name), s.Value.exprSpan())
+					}
+					if evt1IsCallResultExpr(s.Value) {
+						return evt1Diagnostic("CV4530", fmt.Sprintf("call result assigned to %s would outlive its source", name.Name), s.Value.exprSpan())
+					}
 					return evt1Diagnostic("CV4523", fmt.Sprintf("value assigned to %s does not outlive its destination", name.Name), s.Value.exprSpan())
 				}
 				if binding.t.Scoped && !sourceProvenance.Scoped {
@@ -1125,6 +1158,9 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 			if returnType.isBorrowLike() {
 				provenance := evt1ExprProvenance(env, local, s.Value)
 				if provenance.Scoped {
+					if evt1IsCallResultExpr(s.Value) {
+						return evt1Diagnostic("CV4531", "call result derived from scoped provenance cannot escape through return", s.Value.exprSpan())
+					}
 					return evt1Diagnostic("CV4522", "scoped reference cannot escape through return", s.Value.exprSpan())
 				}
 				if provenance.Kind != evt1ProvenanceParameter && provenance.Kind != evt1ProvenanceStatic {
@@ -1134,6 +1170,9 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 			if evt1IsRefStructType(env, returnType) {
 				provenance := evt1ExprProvenance(env, local, s.Value)
 				if provenance.Scoped {
+					if evt1IsCallResultExpr(s.Value) {
+						return evt1Diagnostic("CV4531", "call result derived from scoped provenance cannot escape through return", s.Value.exprSpan())
+					}
 					return evt1Diagnostic("CV4522", "scoped lifetime-bound value cannot escape through return", s.Value.exprSpan())
 				}
 				if provenance.Kind != evt1ProvenanceParameter && provenance.Kind != evt1ProvenanceStatic {
@@ -2170,6 +2209,212 @@ func evt1IsRefStructType(env *semanticEnv, t Type) bool {
 	return ok && decl.Ref
 }
 
+func evt1InitialParameterProvenance(env *semanticEnv, t Type, index, depth int) evt1LifetimeProvenance {
+	if t.isReference() || evt1IsRefStructType(env, t) {
+		return evt1LifetimeProvenance{Kind: evt1ProvenanceParameter, ParameterIndex: index, Scoped: t.Scoped}
+	}
+	return evt1LifetimeProvenance{Kind: evt1ProvenanceLocal, Depth: depth, Scoped: t.Scoped}
+}
+
+func evt1IsCallResultExpr(expr Expr) bool {
+	switch e := expr.(type) {
+	case *ParenExpr:
+		return evt1IsCallResultExpr(e.Value)
+	case *MoveExpr:
+		return evt1IsCallResultExpr(e.Value)
+	case *CallExpr:
+		return true
+	default:
+		return false
+	}
+}
+
+func evt1FunctionProvenanceKey(fn FunctionDecl) string {
+	return fn.Name + "|" + evt1FunctionParamSignature(fn)
+}
+
+func evt1UnknownResultProvenance() evt1ResultProvenanceSummary {
+	return evt1ResultProvenanceSummary{Kind: evt1ResultProvenanceUnknown}
+}
+
+func evt1ParameterResultProvenance(index int) evt1ResultProvenanceSummary {
+	return evt1ResultProvenanceSummary{Kind: evt1ResultProvenanceParameter, ParameterIndices: []int{index}}
+}
+
+func evt1NormalizeResultProvenance(indices []int) evt1ResultProvenanceSummary {
+	if len(indices) == 0 {
+		return evt1ResultProvenanceSummary{Kind: evt1ResultProvenanceStatic}
+	}
+	seen := map[int]bool{}
+	unique := make([]int, 0, len(indices))
+	for _, index := range indices {
+		if !seen[index] {
+			seen[index] = true
+			unique = append(unique, index)
+		}
+	}
+	sort.Ints(unique)
+	kind := evt1ResultProvenanceParameter
+	if len(unique) > 1 {
+		kind = evt1ResultProvenanceShortestOf
+	}
+	return evt1ResultProvenanceSummary{Kind: kind, ParameterIndices: unique}
+}
+
+func evt1CombineResultProvenance(parts ...evt1ResultProvenanceSummary) evt1ResultProvenanceSummary {
+	var indices []int
+	for _, part := range parts {
+		if part.Kind == evt1ResultProvenanceUnknown {
+			return evt1UnknownResultProvenance()
+		}
+		indices = append(indices, part.ParameterIndices...)
+	}
+	return evt1NormalizeResultProvenance(indices)
+}
+
+func evt1SameResultProvenance(left, right evt1ResultProvenanceSummary) bool {
+	if left.Kind != right.Kind || len(left.ParameterIndices) != len(right.ParameterIndices) {
+		return false
+	}
+	for i := range left.ParameterIndices {
+		if left.ParameterIndices[i] != right.ParameterIndices[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// evt1DeriveResultProvenanceSummaries performs a bounded, syntax-directed
+// summary pass. Calls are followed on demand, while recursive cycles and
+// non-straight-line returns remain Unknown rather than starting region solving.
+func evt1DeriveResultProvenanceSummaries(env *semanticEnv, functions []FunctionDecl) {
+	state := map[string]uint8{}
+	var derive func(FunctionDecl) evt1ResultProvenanceSummary
+	derive = func(fn FunctionDecl) evt1ResultProvenanceSummary {
+		key := evt1FunctionProvenanceKey(fn)
+		if state[key] == 2 {
+			return env.resultProvenance[key]
+		}
+		if state[key] == 1 {
+			return evt1UnknownResultProvenance()
+		}
+		if fn.Body == nil || (!fn.ReturnType.isReference() && !evt1IsRefStructType(env, fn.ReturnType)) {
+			summary := evt1UnknownResultProvenance()
+			env.resultProvenance[key] = summary
+			state[key] = 2
+			return summary
+		}
+		state[key] = 1
+		bindings := map[string]evt1ResultProvenanceSummary{}
+		for i, param := range fn.Params {
+			if param.Type.isReference() || evt1IsRefStructType(env, param.Type) {
+				bindings[param.Name] = evt1ParameterResultProvenance(i)
+			} else {
+				bindings[param.Name] = evt1UnknownResultProvenance()
+			}
+		}
+		summary, found := evt1DeriveBlockResultProvenance(env, *fn.Body, bindings, derive)
+		if !found {
+			summary = evt1UnknownResultProvenance()
+		}
+		env.resultProvenance[key] = summary
+		state[key] = 2
+		return summary
+	}
+	for _, fn := range functions {
+		derive(fn)
+	}
+}
+
+func evt1DeriveBlockResultProvenance(env *semanticEnv, block Block, inherited map[string]evt1ResultProvenanceSummary, derive func(FunctionDecl) evt1ResultProvenanceSummary) (evt1ResultProvenanceSummary, bool) {
+	bindings := make(map[string]evt1ResultProvenanceSummary, len(inherited))
+	for name, summary := range inherited {
+		bindings[name] = summary
+	}
+	var result evt1ResultProvenanceSummary
+	found := false
+	for _, stmt := range block.Statements {
+		switch s := stmt.(type) {
+		case *VarDecl:
+			if s.Type.isReference() || evt1IsRefStructType(env, s.Type) {
+				bindings[s.Name] = evt1DeriveExprResultProvenance(env, s.Value, bindings, derive)
+			}
+		case *AssignStmt:
+			if name, ok := s.Target.(*NameExpr); ok {
+				if _, tracked := bindings[name.Name]; tracked {
+					bindings[name.Name] = evt1DeriveExprResultProvenance(env, s.Value, bindings, derive)
+				}
+			}
+		case *ReturnStmt:
+			if s.Value == nil {
+				continue
+			}
+			candidate := evt1DeriveExprResultProvenance(env, s.Value, bindings, derive)
+			if found && !evt1SameResultProvenance(result, candidate) {
+				return evt1UnknownResultProvenance(), true
+			}
+			result, found = candidate, true
+		case *IfStmt, *MatchStmt, *WhileStmt:
+			return evt1UnknownResultProvenance(), true
+		}
+	}
+	return result, found
+}
+
+func evt1DeriveExprResultProvenance(env *semanticEnv, expr Expr, bindings map[string]evt1ResultProvenanceSummary, derive func(FunctionDecl) evt1ResultProvenanceSummary) evt1ResultProvenanceSummary {
+	switch e := expr.(type) {
+	case *ParenExpr:
+		return evt1DeriveExprResultProvenance(env, e.Value, bindings, derive)
+	case *MoveExpr:
+		return evt1DeriveExprResultProvenance(env, e.Value, bindings, derive)
+	case *NameExpr:
+		if summary, ok := bindings[e.Name]; ok {
+			return summary
+		}
+	case *RefExpr:
+		return evt1DeriveExprResultProvenance(env, e.Value, bindings, derive)
+	case *FieldExpr:
+		return evt1DeriveExprResultProvenance(env, e.Receiver, bindings, derive)
+	case *StructConstructExpr:
+		decl, ok := env.structs[e.StructName]
+		if !ok || !decl.Ref {
+			break
+		}
+		parts := make([]evt1ResultProvenanceSummary, 0, len(e.Args))
+		for i, arg := range e.Args {
+			if i < len(decl.Fields) && (decl.Fields[i].Type.isReference() || evt1IsRefStructType(env, decl.Fields[i].Type)) {
+				parts = append(parts, evt1DeriveExprResultProvenance(env, arg, bindings, derive))
+			}
+		}
+		if len(parts) > 0 {
+			return evt1CombineResultProvenance(parts...)
+		}
+	case *CallExpr:
+		var candidates []FunctionDecl
+		for _, fn := range env.functions[e.Callee] {
+			if len(fn.Params) == len(e.Args) {
+				candidates = append(candidates, fn)
+			}
+		}
+		if len(candidates) != 1 {
+			break
+		}
+		calleeSummary := derive(candidates[0])
+		if calleeSummary.Kind == evt1ResultProvenanceUnknown {
+			return calleeSummary
+		}
+		parts := make([]evt1ResultProvenanceSummary, 0, len(calleeSummary.ParameterIndices))
+		for _, index := range calleeSummary.ParameterIndices {
+			if index < 0 || index >= len(e.Args) {
+				return evt1UnknownResultProvenance()
+			}
+			parts = append(parts, evt1DeriveExprResultProvenance(env, e.Args[index], bindings, derive))
+		}
+		return evt1CombineResultProvenance(parts...)
+	}
+	return evt1UnknownResultProvenance()
+}
+
 func evt1ExprProvenance(env *semanticEnv, scope *evt1Scope, expr Expr) evt1LifetimeProvenance {
 	switch e := expr.(type) {
 	case *ParenExpr:
@@ -2205,6 +2450,42 @@ func evt1ExprProvenance(env *semanticEnv, scope *evt1Scope, expr Expr) evt1Lifet
 					continue
 				}
 				p := evt1ExprProvenance(env, scope, arg)
+				if !found || evt1ProvenanceIsShorter(p, result) {
+					result = p
+				}
+				result.Scoped = result.Scoped || p.Scoped
+				found = true
+			}
+			if found {
+				return result
+			}
+		}
+	case *CallExpr:
+		argTypes := make([]Type, 0, len(e.Args))
+		for _, arg := range e.Args {
+			argType, err := validateExpr(env, scope, arg, nil, false)
+			if err != nil {
+				return evt1LifetimeProvenance{Kind: evt1ProvenanceUnknown, Depth: scope.depth, Scoped: true}
+			}
+			argTypes = append(argTypes, argType)
+		}
+		fn, err := evt1ResolveOrdinaryCall(env, scope, e.Callee, e.Args, argTypes, nil, e.Span)
+		if err != nil {
+			return evt1LifetimeProvenance{Kind: evt1ProvenanceUnknown, Depth: scope.depth, Scoped: true}
+		}
+		summary := env.resultProvenance[evt1FunctionProvenanceKey(fn)]
+		if summary.Kind == evt1ResultProvenanceStatic {
+			return evt1LifetimeProvenance{Kind: evt1ProvenanceStatic}
+		}
+		if summary.Kind == evt1ResultProvenanceParameter || summary.Kind == evt1ResultProvenanceShortestOf {
+			result := evt1LifetimeProvenance{Kind: evt1ProvenanceStatic}
+			found := false
+			for _, index := range summary.ParameterIndices {
+				if index < 0 || index >= len(e.Args) {
+					return evt1LifetimeProvenance{Kind: evt1ProvenanceUnknown, Depth: scope.depth, Scoped: true}
+				}
+				p := evt1ExprProvenance(env, scope, e.Args[index])
+				p.Scoped = p.Scoped || fn.Params[index].Type.Scoped
 				if !found || evt1ProvenanceIsShorter(p, result) {
 					result = p
 				}
@@ -3037,14 +3318,43 @@ func checkConceptSatisfaction(env *semanticEnv, conceptName string, concreteType
 				return err
 			}
 		case *CompilerAnalysisRequirement:
+			analysis := evt1SemanticAnalysisRegistry[r.Analysis]
+			proof := MIRSemanticProof{Concept: conceptName, Analysis: r.Analysis, ConcreteType: concreteType.String(), SourceSpan: r.Span}
+			if len(r.SubjectArgs) > 0 {
+				subjects, err := evt1BindRelationalRequirementSubjects(env, conceptDecl, concreteType, r.SubjectArgs, span)
+				if err != nil {
+					return err
+				}
+				outcome, facts := analysis.CheckSubjects(env, subjects)
+				proof.Subjects = evt1MIRSemanticSubjects(subjects)
+				proof.Outcome = string(outcome)
+				proof.Satisfied = outcome == evt1AnalysisProven
+				proof.ProvenanceFacts = facts
+				proof.ID = evt1SemanticProofID(conceptName, concreteType, r.Analysis, proof.Subjects)
+				env.semanticProofs = append(env.semanticProofs, proof)
+				if outcome == evt1AnalysisUnknown {
+					return evt1Diagnostic("CV4528", fmt.Sprintf("%s requires %s, but result provenance is unknown", strings.Join(path, " -> "), r.Analysis), span)
+				}
+				if outcome != evt1AnalysisProven {
+					return evt1Diagnostic("CV4527", fmt.Sprintf("%s failed relational requirement %s", strings.Join(path, " -> "), r.Analysis), span)
+				}
+				continue
+			}
 			args := make([]Type, len(r.TypeArgs))
 			for i, arg := range r.TypeArgs {
 				args[i] = evt1SubstituteType(arg, conceptDecl.TypeParam, concreteType)
 			}
-			analysis := evt1SemanticAnalysisRegistry[r.Analysis]
-			satisfied := analysis.Check(env, args)
-			env.semanticProofs = append(env.semanticProofs, MIRSemanticProof{Concept: conceptName, Analysis: r.Analysis, ConcreteType: concreteType.String(), Satisfied: satisfied, SourceSpan: span})
-			if !satisfied {
+			for _, arg := range args {
+				proof.Subjects = append(proof.Subjects, MIRSemanticSubject{Kind: "type", Name: arg.String(), Type: arg.String()})
+			}
+			proof.ID = evt1SemanticProofID(conceptName, concreteType, r.Analysis, proof.Subjects)
+			proof.Satisfied = analysis.CheckTypes(env, args)
+			proof.Outcome = string(evt1AnalysisDisproven)
+			if proof.Satisfied {
+				proof.Outcome = string(evt1AnalysisProven)
+			}
+			env.semanticProofs = append(env.semanticProofs, proof)
+			if !proof.Satisfied {
 				return evt1Diagnostic("CV4524", fmt.Sprintf("%s failed compiler analysis requirement %s<%s>", strings.Join(path, " -> "), r.Analysis, concreteType.String()), span)
 			}
 		}
@@ -3053,30 +3363,152 @@ func checkConceptSatisfaction(env *semanticEnv, conceptName string, concreteType
 }
 
 type evt1SemanticAnalysis struct {
-	Arity int
-	Check func(*semanticEnv, []Type) bool
+	TypeArity     int
+	SubjectArity  int
+	CheckTypes    func(*semanticEnv, []Type) bool
+	CheckSubjects func(*semanticEnv, []evt1BoundSemanticSubject) (evt1SemanticAnalysisOutcome, []string)
+}
+
+type evt1SemanticAnalysisOutcome string
+
+const (
+	evt1AnalysisProven    evt1SemanticAnalysisOutcome = "proven"
+	evt1AnalysisDisproven evt1SemanticAnalysisOutcome = "disproven"
+	evt1AnalysisUnknown   evt1SemanticAnalysisOutcome = "unknown"
+)
+
+type evt1BoundSemanticSubject struct {
+	Kind           string
+	Name           string
+	Function       FunctionDecl
+	ParameterIndex int
+	Type           Type
 }
 
 var evt1SemanticAnalysisRegistry = map[string]evt1SemanticAnalysis{
-	"LifetimeSafe": {Arity: 1, Check: func(env *semanticEnv, args []Type) bool {
+	"LifetimeSafe": {TypeArity: 1, CheckTypes: func(env *semanticEnv, args []Type) bool {
 		return len(args) == 1 && (args[0].isReference() || args[0].Scoped || evt1IsRefStructType(env, args[0]))
 	}},
-	"NonEscaping": {Arity: 1, Check: func(env *semanticEnv, args []Type) bool {
+	"NonEscaping": {TypeArity: 1, CheckTypes: func(env *semanticEnv, args []Type) bool {
 		return len(args) == 1 && (args[0].Scoped || evt1IsRefStructType(env, args[0]))
 	}},
-	"Outlives": {Arity: 2, Check: func(env *semanticEnv, args []Type) bool {
-		return len(args) == 2 && evt1TypeLifetimeRank(env, args[0]) >= evt1TypeLifetimeRank(env, args[1])
+	"Outlives": {SubjectArity: 2, CheckSubjects: func(env *semanticEnv, subjects []evt1BoundSemanticSubject) (evt1SemanticAnalysisOutcome, []string) {
+		if len(subjects) != 2 || subjects[0].Kind != "parameter" || subjects[1].Kind != "result" || evt1FunctionProvenanceKey(subjects[0].Function) != evt1FunctionProvenanceKey(subjects[1].Function) {
+			return evt1AnalysisDisproven, []string{"Outlives requires a parameter and result from one selected operation"}
+		}
+		summary := env.resultProvenance[evt1FunctionProvenanceKey(subjects[1].Function)]
+		fact := evt1ResultProvenanceFact(subjects[1].Function.Name, summary)
+		if summary.Kind == evt1ResultProvenanceUnknown {
+			return evt1AnalysisUnknown, []string{fact}
+		}
+		for _, index := range summary.ParameterIndices {
+			if index == subjects[0].ParameterIndex {
+				return evt1AnalysisProven, []string{fact}
+			}
+		}
+		return evt1AnalysisDisproven, []string{fact}
 	}},
 }
 
-func evt1TypeLifetimeRank(env *semanticEnv, t Type) int {
-	if t.Scoped {
-		return 0
+func evt1FindRelationalRequirementOperation(conceptDecl ConceptDecl, refs []SemanticSubjectRef, span Span) (*OperationRequirement, error) {
+	var matches []*OperationRequirement
+	for _, requirement := range conceptDecl.Requirements {
+		operation, ok := requirement.(*OperationRequirement)
+		if !ok {
+			continue
+		}
+		matched := true
+		for _, ref := range refs {
+			if ref.Name == "result" {
+				continue
+			}
+			found := false
+			for _, param := range operation.Params {
+				found = found || param.Name == ref.Name
+			}
+			matched = matched && found
+		}
+		if matched {
+			matches = append(matches, operation)
+		}
 	}
-	if t.isReference() || evt1IsRefStructType(env, t) {
-		return 1
+	if len(matches) != 1 {
+		return nil, evt1Diagnostic("CV4532", "relational requirement subjects must identify exactly one required operation", span)
 	}
-	return 2
+	return matches[0], nil
+}
+
+func evt1BindRelationalRequirementSubjects(env *semanticEnv, conceptDecl ConceptDecl, concreteType Type, refs []SemanticSubjectRef, span Span) ([]evt1BoundSemanticSubject, error) {
+	operation, err := evt1FindRelationalRequirementOperation(conceptDecl, refs, span)
+	if err != nil {
+		return nil, err
+	}
+	required := evt1SubstituteRequirement(*operation, conceptDecl.TypeParam, concreteType)
+	fn, err := evt1LookupRequiredOperation(env, required, span, conceptDecl.Name+"<"+concreteType.String()+">")
+	if err != nil {
+		return nil, err
+	}
+	subjects := make([]evt1BoundSemanticSubject, 0, len(refs))
+	for _, ref := range refs {
+		if ref.Name == "result" {
+			subjects = append(subjects, evt1BoundSemanticSubject{Kind: "result", Name: ref.Name, Function: fn, ParameterIndex: -1, Type: fn.ReturnType})
+			continue
+		}
+		index := -1
+		for i, param := range operation.Params {
+			if param.Name == ref.Name {
+				index = i
+				break
+			}
+		}
+		if index < 0 || index >= len(fn.Params) {
+			return nil, evt1Diagnostic("CV4532", fmt.Sprintf("semantic subject %s is not a parameter of the selected operation", ref.Name), ref.Span)
+		}
+		subjects = append(subjects, evt1BoundSemanticSubject{Kind: "parameter", Name: ref.Name, Function: fn, ParameterIndex: index, Type: fn.Params[index].Type})
+	}
+	return subjects, nil
+}
+
+func evt1MIRSemanticSubjects(subjects []evt1BoundSemanticSubject) []MIRSemanticSubject {
+	result := make([]MIRSemanticSubject, 0, len(subjects))
+	for _, subject := range subjects {
+		entry := MIRSemanticSubject{Kind: subject.Kind, Name: subject.Name, Function: subject.Function.Name, Type: subject.Type.String()}
+		if subject.Kind == "parameter" {
+			index := subject.ParameterIndex
+			entry.ParameterIndex = &index
+		}
+		result = append(result, entry)
+	}
+	return result
+}
+
+func evt1SemanticProofID(conceptName string, concreteType Type, analysis string, subjects []MIRSemanticSubject) string {
+	parts := []string{conceptName + "<" + concreteType.String() + ">", analysis}
+	for _, subject := range subjects {
+		label := subject.Function + "." + subject.Kind
+		if subject.Kind == "type" {
+			label = "type[" + subject.Type + "]"
+		}
+		if subject.ParameterIndex != nil {
+			label += fmt.Sprintf("[%d]", *subject.ParameterIndex)
+		}
+		parts = append(parts, label)
+	}
+	return strings.Join(parts, "|")
+}
+
+func evt1ResultProvenanceFact(functionName string, summary evt1ResultProvenanceSummary) string {
+	if summary.Kind == evt1ResultProvenanceUnknown {
+		return functionName + " result provenance is unknown"
+	}
+	if summary.Kind == evt1ResultProvenanceStatic {
+		return functionName + " result provenance is static"
+	}
+	indices := make([]string, 0, len(summary.ParameterIndices))
+	for _, index := range summary.ParameterIndices {
+		indices = append(indices, fmt.Sprintf("parameter[%d]", index))
+	}
+	return functionName + " result derives_from " + strings.Join(indices, ",")
 }
 
 func evt1LookupRequiredOperation(env *semanticEnv, required OperationRequirement, span Span, prefix string) (FunctionDecl, error) {
@@ -3451,12 +3883,12 @@ func instantiateTemplate(env *semanticEnv, templateName string, concreteType Typ
 		return nil, err
 	}
 	scope := newEVT1Scope(nil)
-	for _, param := range instFn.Params {
+	for paramIndex, param := range instFn.Params {
 		scope.declare(param.Name, evt1ValueBinding{
 			t:          evt1CanonicalType(env, param.Type),
 			mutable:    !param.Type.Const,
 			state:      evt1StorageInitialized,
-			provenance: evt1LifetimeProvenance{Kind: evt1ProvenanceParameter, Scoped: param.Type.Scoped},
+			provenance: evt1InitialParameterProvenance(env, param.Type, paramIndex, scope.depth),
 		})
 	}
 	if err := validateBlock(env, scope, instFn.ReturnType, *instFn.Body, nil, false); err != nil {

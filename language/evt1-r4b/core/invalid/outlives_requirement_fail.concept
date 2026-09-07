@@ -1,0 +1,32 @@
+profile Core;
+
+ref struct View
+{
+    ref const int data;
+}
+
+View SelectOther(ref const int source, ref const int other)
+{
+    return View{ref const other};
+}
+
+concept ViewOfSource<T>
+{
+    requires T SelectOther(ref const int source, ref const int other);
+    requires compiler.Outlives(source, result);
+}
+
+template <typename T>
+requires ViewOfSource<T>
+T Confirm(T view)
+{
+    return view;
+}
+
+int Bad()
+{
+    int value = 1;
+    View view = View{ref const value};
+    View checked = Confirm<View>(view);
+    return checked.data;
+}

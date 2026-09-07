@@ -1,0 +1,29 @@
+profile Core;
+
+ref struct View
+{
+    ref const int data;
+}
+
+View UnknownView(ref const int source);
+
+concept ProvenView<T>
+{
+    requires T UnknownView(ref const int source);
+    requires compiler.Outlives(source, result);
+}
+
+template <typename T>
+requires ProvenView<T>
+T Confirm(T view)
+{
+    return view;
+}
+
+int Bad()
+{
+    int value = 1;
+    View view = View{ref const value};
+    View checked = Confirm<View>(view);
+    return checked.data;
+}

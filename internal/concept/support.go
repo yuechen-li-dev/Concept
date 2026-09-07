@@ -115,6 +115,20 @@ func (d Diagnostic) SemanticCategory() string {
 		return "REF_STRUCT_INVALID_FIELD"
 	case "CV4526":
 		return "COMPILER_ANALYSIS_REQUIREMENT_FAILED"
+	case "CV4527":
+		return "OUTLIVES_REQUIREMENT_FAILED"
+	case "CV4528":
+		return "OUTLIVES_PROVENANCE_UNKNOWN"
+	case "CV4529":
+		return "CALL_RESULT_LIFETIME_UNKNOWN"
+	case "CV4530":
+		return "CALL_RESULT_ESCAPES_SOURCE"
+	case "CV4531":
+		return "SCOPED_RESULT_ESCAPE"
+	case "CV4532":
+		return "RELATIONAL_REQUIREMENT_INVALID_SUBJECT"
+	case "CV4533":
+		return "RELATIONAL_REQUIREMENT_UNSUPPORTED"
 	default:
 		return d.Code
 	}

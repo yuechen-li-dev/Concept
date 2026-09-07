@@ -1,0 +1,32 @@
+profile Core;
+
+ref struct View
+{
+    ref const int data;
+}
+
+View MakeView(ref const int source)
+{
+    return View{ref const source};
+}
+
+concept ViewOf<T>
+{
+    requires T MakeView(ref const int source);
+    requires compiler.Outlives(source, result);
+}
+
+template <typename T>
+requires ViewOf<T>
+T ConfirmView(T view)
+{
+    return view;
+}
+
+int Main()
+{
+    int value = 42;
+    View view = MakeView(ref const value);
+    View confirmed = ConfirmView<View>(view);
+    return confirmed.data;
+}

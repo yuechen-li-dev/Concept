@@ -1015,26 +1015,39 @@ func (p *parser) parseConceptRequirement(typeParam string) (ConceptRequirement, 
 		if err != nil {
 			return nil, err
 		}
-		if _, err := p.expect("<"); err != nil {
-			return nil, err
-		}
 		req := &CompilerAnalysisRequirement{Analysis: analysis.Lexeme, Span: start.Span}
-		for {
-			arg, err := p.parseType(typeParam)
-			if err != nil {
+		if p.peekLexeme() == "<" {
+			p.next()
+			for {
+				arg, err := p.parseType(typeParam)
+				if err != nil {
+					return nil, err
+				}
+				req.TypeArgs = append(req.TypeArgs, arg)
+				if p.peekLexeme() != "," {
+					break
+				}
+				p.next()
+			}
+			if _, err := p.expect(">"); err != nil {
 				return nil, err
 			}
-			req.TypeArgs = append(req.TypeArgs, arg)
-			if p.peekLexeme() != "," {
-				break
-			}
-			p.next()
-		}
-		if _, err := p.expect(">"); err != nil {
-			return nil, err
 		}
 		if _, err := p.expect("("); err != nil {
 			return nil, err
+		}
+		if p.peekLexeme() != ")" {
+			for {
+				subject, err := p.expectIdentifier("CV4527", "expected semantic subject name")
+				if err != nil {
+					return nil, err
+				}
+				req.SubjectArgs = append(req.SubjectArgs, SemanticSubjectRef{Name: subject.Lexeme, Span: subject.Span})
+				if p.peekLexeme() != "," {
+					break
+				}
+				p.next()
+			}
 		}
 		if _, err := p.expect(")"); err != nil {
 			return nil, err

@@ -1,6 +1,6 @@
 # EVT1 semantic reconciliation matrix
 
-Status: R0 authority ledger with R1-R4a executable evidence
+Status: R0 authority ledger with R1-R4b executable evidence
 
 `Port required?` means implementation or conformance work remains after R0; it
 does not authorize that work in this milestone. Status is one of `Keep PoC3`,
@@ -34,7 +34,7 @@ does not authorize that work in this milestone. Status is one of `Keep PoC3`,
 | arrays | runtime fixed arrays | fixed arrays only in compile-time domain | canonical compile-time subset; runtime deferred | Merge | Yes | phase21; M1B-D tests | do not infer runtime storage law |
 | runtime arrays | implemented with MIR/C in PoC3 | explicitly excluded | defer and port from PoC3 deliberately | Keep PoC3 | Yes | phase21 fixtures | not R0 |
 | indexing | runtime and array indexing pressure | bounded compile-time array indexing | keep bounded subset | Merge | Yes | phase21; M1B-D diagnostics | runtime bounds law deferred |
-| slices | read-only `Slice<T>` implemented | absent | redesign against explicit references and future lifetime-bound spans | Redesign | Yes | phase21 fixtures; R3 direction note | do not port mechanically; no Slice/Span in R3 |
+| slices | read-only `Slice<T>` implemented | absent | redesign against explicit references, R4b relational proofs, and future lifetime-bound spans | Redesign | Yes | phase21 fixtures; R4b direction note | do not port mechanically; no Slice/Span in R4b |
 | FixedBuffer | compiler-known bounded buffer implemented | absent | preserve design and fixtures; do not port in R0 | Keep PoC3 | Yes | phase21/22 fixtures | helper spree prohibited |
 | Option | compiler-known `Option<T>` plus exhaustive Some/None match | absent | preserve PoC3 reference; defer EVT1 adoption | Keep PoC3 | Yes | phase22 fixtures | not R0 |
 | Result | design only/incomplete at cutover; function fallibility exists | profile signatures use `Result<T,E>` shape | redesign unified failure model before core adoption | Redesign | Yes | phase5/22; Vulkan examples | no general Result implementation in R0 |
@@ -45,13 +45,16 @@ does not authorize that work in this milestone. Status is one of `Keep PoC3`,
 | owned | move/drop/allocation interactions | bounded `owned T` movable-only ownership | canonize for local/call/return transfer and deterministic drop only | Merge | Yes beyond R3 | phase10; R3 tests | allocation/store ownership remains deferred |
 | move | explicit move and invalidation | explicit whole-local/parameter move with branch joins | canonize explicit non-copyable transfer; copyable move is non-consuming | Merge | No for R3 subset | phase10 fixtures; R3 corpus | no implicit, field, or partial moves |
 | drop | explicit MIR cleanup from `Drop<T>` witness | `void Drop(owned T)` witness, MIR validation, deterministic C cleanup, and live replacement | canonize reverse-order cleanup, transfer suppression, and drop-old-then-initialize-new | Merge | Yes beyond R4a | phase10 fixtures; R3-R4a MIR/native tests | no unwinding or partial drop |
-| reference escape | lifetime analysis deferred | lexical provenance, `ref struct`, `scoped`, and concept-requested proof | enforce local invariants universally and stronger analysis on semantic demand | Redesign | Yes beyond R4a | R3-R4a EVT1-new cases | no named/NLL/global borrow system |
+| reference escape | lifetime analysis deferred | lexical provenance, `ref struct`, `scoped`, selected result summaries, and concept-requested proof | enforce local invariants universally and stronger analysis on semantic demand | Redesign | Yes beyond R4b | R3-R4b EVT1-new cases | no named/NLL/global borrow system |
+| call-result provenance | lifetime analysis deferred | `Parameter`, `ShortestOfParameters`, reserved `Static`, and conservative `Unknown` summaries | preserve source bounds across selected helper calls | Redesign | Yes beyond R4b | R4b corpus and MIR tests | no arbitrary interprocedural inference |
+| relational lifetime proof | lifetime analysis deferred | semantic parameter/result subjects and demand-driven `Outlives` | prove requested relations; reject disproven or unknown | Redesign | Yes beyond R4b | R4b concept and proof tests | source concepts remain single-parameter |
+| scoped result propagation | lifetime analysis deferred | scoped formal/actual provenance survives call-result instantiation | helpers cannot hide a non-escape restriction | Redesign | Yes beyond R4b | R4b valid/invalid scoped cases | no general reborrow lattice |
 | unsafe | explicit unsafe blocks/operations | qualifier used for admitted foreign/Vulkan types | reconcile core escape hatch and profile admission | Merge | Yes | phase6; Vulkan examples | no broad allowlist yet |
 | allocation | arenas/stores/allocators and allocation effects | no general model | retain PoC3 as design/reference pressure | Keep PoC3 | Yes | phase12 fixtures | no hidden heap |
 | fallible functions | PoC3 fallible calls and propagation | profile `Result`/`?` direction | redesign with Result/panic distinction | Redesign | Yes | phase5/22; kernel examples | not canonical core |
 | panic/assert | stable runtime panic/assert and test behavior | only compile-time `static_assert` | preserve PoC3 reference; defer runtime adoption | Keep PoC3 | Yes | phase17 fixtures | static_assert stays canonical |
 | C ABI | extern/export/repr(C) implemented | emits C/H but does not define Concept FFI law | preserve PoC3 pressure; specify anew atop C11 backend | Redesign | Yes | phase15 fixtures | backend is not ABI spec |
-| interfaces/dyn | implemented bounded interface/dyn dispatch | absent | redesign as semantic concept + compile-time witness + downstream runtime witness reification; interface may be sugar/marker | Redesign | Yes | phase14 fixtures; R4a witness direction | dyn must not imply hidden allocation; not implemented in R4a |
+| interfaces/dyn | implemented bounded interface/dyn dispatch | absent | redesign as semantic concept + operation/semantic-proof witness + downstream runtime witness reification; interface may be sugar/marker | Redesign | Yes | phase14 fixtures; R4b witness direction | relational lifetime proof stays compile-time; dyn is not implemented |
 | machines | `machine`, states, transitions, completion/result | nested `machine` declarations inside automata | do not alias surfaces in R0 | Deferred | Yes | phase13/18; DragonGod tests | general semantics likely core |
 | automata | PoC3 uses Automata mainly in application architecture | bounded `automata -> machine -> state` runtime model | preserve provisionally pending reconciliation | Deferred | Yes | phase20; DragonGod M0-M4 | not automatically Vulkan-only |
 | decide | judgment-driven deterministic transition selection | absent | preserve PoC3 reference | Keep PoC3 | Yes | phase5a/13/18 | compare with guarded candidates later |
@@ -120,3 +123,15 @@ record update, existing bounded record structural equality, and immovable
 final-storage/boundary/embed restrictions. Full ownership, move, drop, borrow,
 aliasing, allocation, runtime collections, C ABI, interfaces, and automata
 reconciliation remain open.
+
+## R4b executable evidence
+
+R4b adds 11 `PASS` cases: six valid and five invalid, with no fabricated PoC3
+parity classification. Provenance is recorded as either the R4a foundation
+plus EVT1-new relational semantics or EVT1-new relational semantics. The
+active compiler preserves parameter-derived, nested, pass-through, scoped,
+and shortest-of-parameters result bounds; executes requested `Outlives`
+relations; rejects disproven or unknown proofs; and records deterministic MIR
+subjects, facts, outcomes, and result summaries. Slice remains `Redesign`, and
+Span, dyn, interface syntax, named/NLL lifetimes, and generalized alias
+analysis remain unimplemented.

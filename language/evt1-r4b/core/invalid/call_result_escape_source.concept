@@ -1,0 +1,27 @@
+profile Core;
+
+ref struct View
+{
+    ref const int data;
+}
+
+View MakeView(ref const int source)
+{
+    return View{ref const source};
+}
+
+View ForwardView(ref const int source)
+{
+    return MakeView(ref const source);
+}
+
+int Bad()
+{
+    int outerSource = 1;
+    View outer = ForwardView(ref const outerSource);
+    {
+        int innerSource = 2;
+        outer = ForwardView(ref const innerSource);
+    }
+    return outer.data;
+}

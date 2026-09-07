@@ -1,0 +1,23 @@
+profile Core;
+
+ref struct View
+{
+    ref const int data;
+}
+
+View MakeView(ref const int source)
+{
+    return View{ref const source};
+}
+
+int ReadScoped(scoped ref const int source)
+{
+    View view = MakeView(ref const source);
+    return view.data;
+}
+
+int Main()
+{
+    int value = 42;
+    return ReadScoped(ref const value);
+}

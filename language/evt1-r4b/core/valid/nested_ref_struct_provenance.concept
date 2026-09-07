@@ -1,0 +1,24 @@
+profile Core;
+
+ref struct Inner
+{
+    ref const int value;
+}
+
+ref struct Outer
+{
+    Inner inner;
+}
+
+Outer MakeOuter(ref const int source)
+{
+    Inner inner = Inner{ref const source};
+    return Outer{inner};
+}
+
+int Main()
+{
+    int value = 42;
+    Outer outer = MakeOuter(ref const value);
+    return outer.inner.value;
+}

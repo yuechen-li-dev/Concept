@@ -1,0 +1,16 @@
+profile Core;
+
+ref struct View
+{
+    ref const int data;
+}
+
+View MakeView(ref const int source)
+{
+    return View{ref const source};
+}
+
+View Escape(scoped ref const int source)
+{
+    return MakeView(ref const source);
+}

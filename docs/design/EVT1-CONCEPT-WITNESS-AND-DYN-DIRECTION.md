@@ -1,6 +1,6 @@
 # EVT1 concept witness and dyn direction
 
-Status: R4a semantic-contract direction; runtime reification is not implemented
+Status: R4b semantic-proof direction; runtime reification is not implemented
 
 ## Model
 
@@ -28,10 +28,21 @@ and proves `LifetimeSafe<T>` through the ordinary concept-satisfaction path.
 The requirement resolver remains the single owner of satisfaction; templates
 do not contain a parallel lifetime checker.
 
+R4b permits a compiler analysis to consume bounded semantic subjects from one
+required operation. `Outlives(source, result)` produces inspectable relational
+proof evidence containing the selected parameter, result, provenance facts,
+outcome, and requirement origin. This extends the compile-time witness with a
+semantic proof; it does not expand source concepts beyond one type parameter.
+
 Compile-time satisfaction is authoritative. A template specialization uses
 the selected operations and semantic proof results statically. Runtime witness
 reification, if added, is downstream of that same satisfaction result rather
 than an independent interface implementation subsystem.
+
+Runtime dyn reification must therefore originate from an already-satisfied
+compile-time semantic contract. Relational lifetime evidence is compile-time
+only and must not be copied into a runtime witness table unless a future,
+separately specified runtime invariant actually needs it.
 
 ## Runtime direction
 
@@ -46,7 +57,7 @@ dyn-reifiable, or remain unnecessary if `dyn C` is sufficient.
 
 ## Boundaries
 
-R4a does not implement `dyn`, interface syntax, witness tables, object safety,
+R4b does not implement `dyn`, interface syntax, witness tables, object safety,
 associated types, multi-parameter source concepts, ABI layout, allocation, or
 ownership rules for erased values. Future unsafe should ideally bypass a
 specific semantic requirement, for example `unsafe(LifetimeSafety)`, rather

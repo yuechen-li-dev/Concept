@@ -1,6 +1,6 @@
 # Concept EVT1 language specification foundation
 
-Status: R4a lifetime-bound references and semantic proof requirements
+Status: R4b relational lifetime proofs and selected call-result provenance
 
 This document defines the authority categories and the smallest currently
 executable EVT1 language foundation. It is derived from the retired Concept
@@ -270,6 +270,32 @@ downward, but cannot be returned or embedded into unrestricted storage. R4a
 adds no named lifetimes, non-lexical lifetime inference, reborrow lattice, or
 general mutable-alias analysis.
 
+**Canonical EVT1 R4b.** A function returning a reference or ref struct has a
+compile-time result-provenance summary when its body proves one by a bounded,
+syntax-directed rule. The supported summaries are `Parameter(index)`,
+`ShortestOfParameters(indices)`, and `Unknown`; `Static` is reserved for a
+statically rooted result. Direct parameter returns, reference/ref-struct
+construction, nested ref-struct construction, and direct pass-through calls to
+an already summarizable function participate. Branch-sensitive unions,
+callbacks, recursive inference, and arbitrary interprocedural alias analysis
+do not.
+
+At a call site, a parameter summary is instantiated with the corresponding
+argument provenance. A shortest-of summary takes the shortest instantiated
+argument bound. Scoped state is preserved from both the actual argument and
+the selected parameter. Therefore:
+
+```text
+A function call does not erase or extend reference provenance.
+Result provenance is derived, not reset.
+```
+
+Assignment and return apply the R4a lexical rules to that instantiated result.
+A call derived from an inner local cannot initialize an outer lifetime-bound
+place, and a result derived from scoped provenance remains non-escaping.
+Unknown result provenance remains conservative and cannot justify outward
+flow or a required relational proof.
+
 ## 9. Enums and payload enums
 
 **Canonical EVT1 foundation.** Enums may contain nullary and payload variants.
@@ -338,7 +364,7 @@ errors, function-level propagation, and panic before Result becomes canonical.
 
 ## 13. Concepts
 
-**Canonical EVT1 R4a.** Named concepts have one type parameter and a finite set
+**Canonical EVT1 R4b.** Named concepts have one type parameter and a finite set
 of named operation, prerequisite-concept, or compiler-analysis requirements.
 The bounded compiler-analysis spelling is:
 
@@ -349,10 +375,32 @@ concept LifetimeBound<T>
 }
 ```
 
-The internal registry contains `LifetimeSafe`, `NonEscaping`, and `Outlives`;
-R4a exercises the one-entity lifetime proofs and retains multi-entity analysis
-as a bounded internal direction while source concepts remain single-parameter.
-Explicit
+R4b keeps source concepts and templates single-parameter, but compiler-analysis
+requirements may consume a bounded list of semantic subjects. `Outlives`
+binds the named parameter and `result` subjects of exactly one required
+operation:
+
+```concept
+concept ViewOf<T>
+{
+    requires T MakeView(ref const int source);
+    requires compiler.Outlives(source, result);
+}
+```
+
+`Outlives(Source, View)` succeeds only when the selected operation's result
+summary proves that `Source` lives at least as long as `View`. A result derived
+from that parameter, including as one member of a shortest-of-parameters
+summary, proves the relation. A result derived only from another parameter
+disproves it. `Unknown` is rejection for a required proof; there is no
+maybe-satisfied outcome.
+
+The semantic subjects implemented in R4b are operation parameters, operation
+results, and concrete types for the existing unary analyses. Local/ref-struct
+bindings participate through their instantiated provenance at call sites.
+Relational analyses run only because concept satisfaction requests them. Their
+deterministic MIR evidence records analysis, subjects, outcome, provenance
+facts, and the requirement-origin span. Explicit
 `requires ConceptName<ConcreteType>;` assertions request a compile-time proof.
 Requirement closure and cycles are diagnosed deterministically.
 
@@ -405,9 +453,10 @@ behavior are not ported. Runtime array law must be reconciled before promotion.
 
 **Redesign.** The old `Slice<T>` surface is design pressure, not a direct-port
 candidate. It must be reconciled against `ref`, `ref const`, future `ref
-struct`, `scoped`, `Span<T>`, and `ReadOnlySpan<T>`. R3 implements none of those
-aggregate/view types. FixedBuffer mutation and collection rules remain future
-work.
+struct`, `scoped`, `Span<T>`, and `ReadOnlySpan<T>`. R4b supplies selected
+call-result provenance and relational `Outlives` evidence, but implements no
+Span, Slice, stack allocation, or runtime collection type. FixedBuffer mutation
+and collection rules remain future work.
 
 ## 18. Interfaces and dyn
 
@@ -415,11 +464,13 @@ work.
 dispatch fixtures.
 
 **Redesign.** A concept is the semantic contract, compile-time satisfaction
-produces a witness, and `template<T satisfies C>` consumes that witness
-statically. Future `dyn C` is a runtime-erased value/reference paired with a
+produces a witness, and `template<T satisfies C>` consumes operation and
+semantic-proof evidence statically. Future `dyn C` is a runtime-erased value/reference paired with a
 reified witness; `interface` may become optional sugar or a marker for a
 dyn-compatible concept. Runtime witness reification is downstream of
-compile-time satisfaction and must not imply hidden allocation. R4a does not
+compile-time satisfaction and must not imply hidden allocation. Relational
+lifetime proofs remain compile-time evidence and do not become runtime witness
+baggage. R4b does not
 implement dyn, interface objects, or a vtable ABI.
 
 ## 19. Allocation
@@ -509,7 +560,7 @@ The following remain explicit reconciliation or implementation work:
 - ownership beyond bounded local move/drop/reference and live-replacement
   accounting;
 - generalized borrow checking, named lifetimes, non-lexical lifetimes,
-  `Span<T>`, and `ReadOnlySpan<T>`;
+`Span<T>`, and `ReadOnlySpan<T>`;
 - the failure-model relationship among Option, Result, fallibility, and panic;
 - runtime arrays, slices, FixedBuffer, and bounded mutation;
 - witness reification, interfaces, and dyn storage/dispatch;

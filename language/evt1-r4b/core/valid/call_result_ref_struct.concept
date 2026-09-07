@@ -1,0 +1,24 @@
+profile Core;
+
+ref struct Cursor
+{
+    ref int current;
+}
+
+Cursor MakeCursor(ref int source)
+{
+    return Cursor{ref source};
+}
+
+Cursor ForwardCursor(ref int source)
+{
+    return MakeCursor(ref source);
+}
+
+int Main()
+{
+    int value = 41;
+    Cursor cursor = ForwardCursor(ref value);
+    cursor.current = cursor.current + 1;
+    return value;
+}
