@@ -20,6 +20,3 @@ A failed attempt is only acceptable if it leaves behind a narrower problem, stro
 
 Any partial work must leave the codebase in a cleaner, more legible, and more diagnosable state than before.
 
-## Reporting
-
-Run `zig build test` before reporting completion. Keep changes small and report implemented changes, tests added, known limitations, and commands run.
