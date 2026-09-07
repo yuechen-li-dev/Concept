@@ -8,6 +8,8 @@
       "c_name": "concept_lifecycle_context",
       "immovable": false,
       "copyable": true,
+      "movable": true,
+      "has_drop": false,
       "fields": [
         {
           "name": "queueAvailable",

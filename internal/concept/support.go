@@ -71,6 +71,38 @@ func (d Diagnostic) SemanticCategory() string {
 		return "VALUE_TYPE_MISMATCH"
 	case "CV4009":
 		return "EXPLICIT_LOCAL_TYPE_REQUIRED"
+	case "CV4501":
+		return "COPY_OF_NONCOPYABLE"
+	case "CV4502":
+		return "USE_AFTER_MOVE"
+	case "CV4503":
+		return "MAYBE_MOVED_USE"
+	case "CV4504":
+		return "MOVE_AFTER_MOVE"
+	case "CV4505":
+		return "MOVE_OF_IMMOVABLE"
+	case "CV4506":
+		return "RETURN_NONCOPYABLE_WITHOUT_MOVE"
+	case "CV4507":
+		return "MOVE_REQUIRES_PLACE"
+	case "CV4508":
+		return "REF_REQUIRES_PLACE"
+	case "CV4509":
+		return "REF_MUTABLE_FROM_CONST"
+	case "CV4510":
+		return "REF_TYPE_MISMATCH"
+	case "CV4511":
+		return "REF_ESCAPE_LOCAL"
+	case "CV4512":
+		return "PASS_NONCOPYABLE_WITHOUT_MOVE"
+	case "CV4513":
+		return "MUTATION_THROUGH_REF_CONST"
+	case "CV4514":
+		return "USE_BEFORE_INITIALIZATION"
+	case "CV4515":
+		return "REFERENCE_AGGREGATE_DEFERRED"
+	case "CV4516":
+		return "DROP_OF_MOVED_VALUE"
 	default:
 		return d.Code
 	}

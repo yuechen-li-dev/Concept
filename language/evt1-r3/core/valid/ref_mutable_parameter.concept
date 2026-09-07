@@ -1,0 +1,13 @@
+profile Core;
+
+void Increment(ref int value)
+{
+    value = value + 1;
+}
+
+int Main()
+{
+    int count = 41;
+    Increment(ref count);
+    return count;
+}

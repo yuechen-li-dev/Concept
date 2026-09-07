@@ -8,6 +8,8 @@
       "c_name": "concept_buffer_range",
       "immovable": false,
       "copyable": true,
+      "movable": true,
+      "has_drop": false,
       "fields": [
         {
           "name": "bufferId",
@@ -53,6 +55,8 @@
       "c_name": "concept_pipeline_state",
       "immovable": true,
       "copyable": false,
+      "movable": false,
+      "has_drop": false,
       "fields": [
         {
           "name": "handle",
@@ -87,6 +91,8 @@
       "c_name": "concept_destroy_audit",
       "immovable": false,
       "copyable": true,
+      "movable": true,
+      "has_drop": false,
       "fields": [
         {
           "name": "first",

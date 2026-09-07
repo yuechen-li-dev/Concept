@@ -1,6 +1,6 @@
 # PoC3 fixture migration inventory
 
-Status: R2 bounded migration evidence; no bulk port attempted
+Status: R3 bounded migration evidence; no bulk port attempted
 
 ## Corpus snapshot
 
@@ -66,7 +66,8 @@ gain separate EVT1 counterparts rather than being rewritten in place.
 
 ### Semantic feature missing in Go EVT1
 
-The principal missing families are PoC3 judgment/decide, full move/drop,
+The principal missing families are PoC3 judgment/decide, ownership beyond the
+R3 bounded local move/drop/reference foundation,
 testing, allocation, interfaces/dyn, C ABI, multi-module resolution,
 panic/assert, yield, runtime arrays/slices/FixedBuffer, and Option. Result and
 bounded collection mutation were not complete in PoC3 and remain deferred;
@@ -149,3 +150,17 @@ ledger marks `immovable` as not implemented. R2 therefore uses those sources
 only as design pressure and records executable immovable evidence from the Go
 M1B-A lineage. New record/update cases are EVT1-new evidence rather than fake
 legacy translations.
+
+## R3 transfer and reference audit
+
+R3 reuses Phase 10 explicit-move, use-after-move, branch-join, call/return
+transfer, early-return cleanup, moved-local suppression, and reverse-drop-order
+fixtures as semantic evidence. EVT1 keeps the R2 structural-copy decision, so
+movable-only behavior is expressed by the already-parsed `owned T` qualifier
+rather than making every ordinary struct non-Copy.
+
+The R3 corpus contains explicit hand-authored EVT1 sources; no PoC3 fixture was
+rewritten. Reference cases are EVT1-new evidence because PoC3 did not close the
+selected `ref T` / `ref const T` surface. The old `Slice<T>` family is now
+classified as redesign pressure for future lifetime-bound Span work, not as a
+direct-port queue.

@@ -1,0 +1,13 @@
+profile Core;
+
+void Set(ref bool value)
+{
+    value = true;
+}
+
+int Main()
+{
+    int value = 0;
+    Set(ref value);
+    return value;
+}

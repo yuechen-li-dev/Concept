@@ -2,6 +2,7 @@ package concept
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -14,6 +15,7 @@ type evt1Scope struct {
 type evt1ValueBinding struct {
 	t                Type
 	mutable          bool
+	state            evt1StorageState
 	comptime         bool
 	hasValue         bool
 	value            Value
@@ -21,6 +23,15 @@ type evt1ValueBinding struct {
 	batchAutomata    string
 	actuatorName     string
 }
+
+type evt1StorageState string
+
+const (
+	evt1StorageUninitialized evt1StorageState = "uninitialized"
+	evt1StorageInitialized   evt1StorageState = "initialized"
+	evt1StorageMoved         evt1StorageState = "moved"
+	evt1StorageMaybeMoved    evt1StorageState = "maybe_moved"
+)
 
 type evt1AccessPath struct {
 	Root   string
@@ -64,6 +75,64 @@ func (s *evt1Scope) lookup(name string) (evt1ValueBinding, bool) {
 		}
 	}
 	return evt1ValueBinding{}, false
+}
+
+func (s *evt1Scope) setState(name string, state evt1StorageState) bool {
+	for scope := s; scope != nil; scope = scope.parent {
+		if binding, ok := scope.values[name]; ok {
+			binding.state = state
+			scope.values[name] = binding
+			return true
+		}
+	}
+	return false
+}
+
+func evt1CloneScope(scope *evt1Scope) *evt1Scope {
+	if scope == nil {
+		return nil
+	}
+	out := newEVT1Scope(evt1CloneScope(scope.parent))
+	for name, binding := range scope.values {
+		out.values[name] = binding
+	}
+	out.borrows = append([]evt1RetainedBorrow{}, scope.borrows...)
+	return out
+}
+
+func evt1JoinStorageState(a, b evt1StorageState) evt1StorageState {
+	if a == b {
+		return a
+	}
+	return evt1StorageMaybeMoved
+}
+
+func evt1MergeScopeStates(target, left, right *evt1Scope) {
+	if target == nil || left == nil || right == nil {
+		return
+	}
+	evt1MergeScopeStates(target.parent, left.parent, right.parent)
+	for name, binding := range target.values {
+		leftBinding, leftOK := left.values[name]
+		rightBinding, rightOK := right.values[name]
+		if leftOK && rightOK {
+			binding.state = evt1JoinStorageState(leftBinding.state, rightBinding.state)
+			target.values[name] = binding
+		}
+	}
+}
+
+func evt1CheckReadableBinding(name string, binding evt1ValueBinding, span Span) error {
+	switch binding.state {
+	case evt1StorageUninitialized:
+		return evt1Diagnostic("CV4514", fmt.Sprintf("use of %s before initialization", name), span)
+	case evt1StorageMoved:
+		return evt1Diagnostic("CV4502", fmt.Sprintf("use of %s after ownership was moved", name), span)
+	case evt1StorageMaybeMoved:
+		return evt1Diagnostic("CV4503", fmt.Sprintf("use of %s is invalid because it is moved on some control-flow paths", name), span)
+	default:
+		return nil
+	}
 }
 
 func (s *evt1Scope) activeBorrows() []evt1RetainedBorrow {
@@ -273,6 +342,9 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 	}
 	for _, structDecl := range module.Structs {
 		for _, field := range structDecl.Fields {
+			if field.Type.isReference() {
+				return nil, evt1Diagnostic("CV4515", fmt.Sprintf("struct %s cannot contain ref field %s in R3; ref struct is deferred", structDecl.Name, field.Name), field.Span)
+			}
 			if !field.Type.isBorrowLike() && evt1IsImmovableValueType(env, field.Type) {
 				return nil, evt1Diagnostic("CV4138", fmt.Sprintf("struct %s cannot embed immovable field %s", structDecl.Name, field.Type.String()), field.Span)
 			}
@@ -281,6 +353,9 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 	for _, enumDecl := range module.Enums {
 		for _, variant := range enumDecl.Variants {
 			for _, field := range variant.Payload {
+				if field.Type.isReference() {
+					return nil, evt1Diagnostic("CV4515", fmt.Sprintf("enum payload %s::%s cannot contain a reference in R3", enumDecl.Name, variant.Name), field.Span)
+				}
 				if evt1IsImmovableValueType(env, field.Type) {
 					return nil, evt1Diagnostic("CV4139", fmt.Sprintf("enum payload %s::%s cannot contain immovable type %s", enumDecl.Name, variant.Name, field.Type.String()), field.Span)
 				}
@@ -392,6 +467,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 			scope.declare(param.Name, evt1ValueBinding{
 				t:       resolvedParam,
 				mutable: !param.Type.Const,
+				state:   evt1StorageInitialized,
 			})
 		}
 		if err := validateBlock(env, scope, resolvedReturn, *templateDecl.Body, env.templateInfos[templateDecl.Name], false); err != nil {
@@ -415,6 +491,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 			scope.declare(param.Name, evt1ValueBinding{
 				t:       resolvedParam,
 				mutable: !param.Type.Const,
+				state:   evt1StorageInitialized,
 			})
 		}
 		collectEscapedArmBindings(fn.Body, env)
@@ -436,6 +513,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 			scope.declare(param.Name, evt1ValueBinding{
 				t:        resolvedParam,
 				mutable:  !param.Type.Const,
+				state:    evt1StorageInitialized,
 				comptime: true,
 			})
 		}
@@ -702,9 +780,6 @@ func validateByValueBoundary(env *semanticEnv, t Type, span Span, context string
 			return evt1Diagnostic("CV4137", fmt.Sprintf("immovable type %s cannot be returned by value", t.String()), span)
 		}
 	}
-	if !evt1TypeCopyable(env, t) {
-		return evt1Diagnostic("CV4133", fmt.Sprintf("non-copyable type %s cannot cross a by-value %s boundary", t.String(), context), span)
-	}
 	return nil
 }
 
@@ -764,6 +839,11 @@ func collectEscapedArmBindings(block *Block, env *semanticEnv) {
 			}
 		case *Block:
 			collectEscapedArmBindings(s, env)
+		case *IfStmt:
+			collectEscapedArmBindings(&s.Then, env)
+			if s.Else != nil {
+				collectEscapedArmBindings(s.Else, env)
+			}
 		}
 	}
 }
@@ -794,7 +874,10 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 			if !evt1TypesCompatible(env, resolvedType, valueType, typeParam) {
 				return evt1Diagnostic("CV4106", fmt.Sprintf("constructor or initializer for %s expected %s but got %s", s.Name, resolvedType.String(), valueType.String()), s.Value.exprSpan())
 			}
-			if !s.Comptime && !evt1CanDirectInitialize(env, resolvedType, s.Value) && !evt1TypeCopyable(env, resolvedType) && !evt1TypeDependsOnParam(resolvedType, typeParam) {
+			if !s.Comptime && valueType.isOwned() && !evt1CanTransferInitialize(env, resolvedType, s.Value) && !evt1TypeDependsOnParam(valueType, typeParam) {
+				return evt1Diagnostic("CV4501", fmt.Sprintf("copy of non-copyable type %s requires move", valueType.String()), s.Value.exprSpan())
+			}
+			if !s.Comptime && !evt1CanTransferInitialize(env, resolvedType, s.Value) && !evt1TypeCopyable(env, resolvedType) && !evt1TypeDependsOnParam(resolvedType, typeParam) {
 				if evt1IsImmovableValueType(env, resolvedType) {
 					return evt1Diagnostic("CV4134", fmt.Sprintf("immovable value %s must be constructed directly in final storage", resolvedType.String()), s.Span)
 				}
@@ -811,7 +894,7 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				local.declare(s.Name, evt1ValueBinding{t: resolvedType, mutable: false, comptime: true, hasValue: true, value: value})
 				continue
 			}
-			local.declare(s.Name, evt1ValueBinding{t: resolvedType, mutable: !s.Const, comptime: inComptimeFn})
+			local.declare(s.Name, evt1ValueBinding{t: resolvedType, mutable: !s.Const, state: evt1StorageInitialized, comptime: inComptimeFn})
 		case *EffectsDecl:
 			if inComptimeFn {
 				return evt1Diagnostic("CV4304", fmt.Sprintf("effects batch %s cannot be declared in comptime code", s.Name), s.Span)
@@ -917,6 +1000,9 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				if target.readOnlyReason == "record" {
 					return evt1Diagnostic("CV4142", "record fields are read-only after construction", s.Target.exprSpan())
 				}
+				if target.readOnlyReason == "ref_const" {
+					return evt1Diagnostic("CV4513", "mutation through ref const is not allowed", s.Target.exprSpan())
+				}
 				return evt1Diagnostic("CV4128", "mutation through a const access path is not allowed", s.Target.exprSpan())
 			}
 			if borrow, ok := evt1FindOverlappingBorrow(local.activeBorrows(), target.path); ok {
@@ -937,7 +1023,18 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				if evt1IsImmovableValueType(env, target.t) && target.wholeValue {
 					return evt1Diagnostic("CV4135", fmt.Sprintf("immovable value %s cannot be assigned as a whole", target.t.String()), s.Span)
 				}
-				return evt1Diagnostic("CV4133", fmt.Sprintf("assignment copies non-copyable type %s", target.t.String()), s.Span)
+				name, isName := s.Target.(*NameExpr)
+				binding := evt1ValueBinding{}
+				if isName {
+					binding, _ = local.lookup(name.Name)
+				}
+				if !isName || binding.state != evt1StorageMoved || !evt1CanTransferInitialize(env, target.t, s.Value) {
+					if target.t.isOwned() {
+						return evt1Diagnostic("CV4501", fmt.Sprintf("assignment copies non-copyable type %s; use move from an initialized owner", target.t.String()), s.Span)
+					}
+					return evt1Diagnostic("CV4133", fmt.Sprintf("assignment copies non-copyable type %s", target.t.String()), s.Span)
+				}
+				local.setState(name.Name, evt1StorageInitialized)
 			}
 		case *ReturnStmt:
 			if s.Value == nil {
@@ -956,6 +1053,12 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 			}
 			if !evt1TypesCompatible(env, returnType, valueType, typeParam) {
 				return evt1Diagnostic("CV4116", fmt.Sprintf("expression result type mismatch: expected %s but got %s", returnType.String(), valueType.String()), s.Value.exprSpan())
+			}
+			if returnType.isBorrowLike() {
+				return evt1Diagnostic("CV4511", "reference returns are rejected in R3 because their referent lifetime cannot be proven", s.Value.exprSpan())
+			}
+			if !evt1TypeCopyable(env, returnType) && !evt1CanTransferInitialize(env, returnType, s.Value) {
+				return evt1Diagnostic("CV4506", fmt.Sprintf("return of non-copyable type %s requires an explicit move", returnType.String()), s.Value.exprSpan())
 			}
 		case *ExprStmt:
 			if _, err := validateExpr(env, local, s.Value, templateInfo, inComptimeFn); err != nil {
@@ -981,12 +1084,46 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 			if err := validateWhileStmt(env, local, *s, templateInfo, inComptimeFn); err != nil {
 				return err
 			}
+		case *IfStmt:
+			conditionType, err := validateExpr(env, local, s.Condition, templateInfo, inComptimeFn)
+			if err != nil {
+				return err
+			}
+			if conditionType.Name != "bool" {
+				return evt1Diagnostic("CV4186", "if statement condition must be bool", s.Condition.exprSpan())
+			}
+			thenScope := evt1CloneScope(local)
+			elseScope := evt1CloneScope(local)
+			if err := validateBlock(env, thenScope, returnType, s.Then, templateInfo, inComptimeFn); err != nil {
+				return err
+			}
+			if s.Else != nil {
+				if err := validateBlock(env, elseScope, returnType, *s.Else, templateInfo, inComptimeFn); err != nil {
+					return err
+				}
+			}
+			evt1MergeScopeStates(local, thenScope, elseScope)
 		case *Block:
 			if err := validateBlock(env, local, returnType, *s, templateInfo, inComptimeFn); err != nil {
 				return err
 			}
 		default:
 			return evt1Diagnostic("CV4023", "unsupported statement", stmt.statementSpan())
+		}
+	}
+	return evt1ValidateMaybeDropOwners(env, local)
+}
+
+func evt1ValidateMaybeDropOwners(env *semanticEnv, scope *evt1Scope) error {
+	var names []string
+	for name := range scope.values {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		binding := scope.values[name]
+		if binding.state == evt1StorageMaybeMoved && evt1TypeHasDrop(env, binding.t) {
+			return evt1Diagnostic("CV4516", fmt.Sprintf("drop responsibility for %s is ambiguous after control-flow join", name), binding.t.Span)
 		}
 	}
 	return nil
@@ -1310,6 +1447,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		return validateExpr(env, scope, e.Value, templateInfo, inComptimeFn)
 	case *NameExpr:
 		if binding, ok := scope.lookup(e.Name); ok {
+			if err := evt1CheckReadableBinding(e.Name, binding, e.Span); err != nil {
+				return Type{}, err
+			}
 			if binding.isInstance() {
 				return Type{}, evt1Diagnostic("CV4272", fmt.Sprintf("instance %s of automata %s cannot be used as an ordinary value; use dispatch(%s, signal)", e.Name, binding.instanceAutomata, e.Name), e.Span)
 			}
@@ -1318,6 +1458,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			}
 			if binding.isActuatorLocal() {
 				return Type{}, evt1Diagnostic("CV4319", fmt.Sprintf("actuator local %s of actuator %s cannot be used as an ordinary value; use actuation ... = actuate(batch, %s)", e.Name, binding.actuatorName, e.Name), e.Span)
+			}
+			if binding.t.isReference() {
+				return evt1CanonicalType(env, binding.t.borrowBase()), nil
 			}
 			return evt1CanonicalType(env, binding.t), nil
 		}
@@ -1521,6 +1664,52 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		default:
 			return Type{}, evt1Diagnostic("CV4028", "unsupported unary operator "+e.Op, e.Span)
 		}
+	case *MoveExpr:
+		name, ok := e.Value.(*NameExpr)
+		if !ok {
+			return Type{}, evt1Diagnostic("CV4507", "move requires a whole local or parameter place", e.Value.exprSpan())
+		}
+		binding, ok := scope.lookup(name.Name)
+		if !ok {
+			return Type{}, evt1Diagnostic("CV4024", fmt.Sprintf("unknown name %s", name.Name), name.Span)
+		}
+		if binding.state == evt1StorageMoved {
+			return Type{}, evt1Diagnostic("CV4504", fmt.Sprintf("%s was already moved", name.Name), e.Span)
+		}
+		if binding.state == evt1StorageMaybeMoved {
+			return Type{}, evt1Diagnostic("CV4503", fmt.Sprintf("%s is moved on some control-flow paths", name.Name), e.Span)
+		}
+		if evt1IsImmovableValueType(env, binding.t) {
+			return Type{}, evt1Diagnostic("CV4505", fmt.Sprintf("immovable type %s cannot be relocated", binding.t.String()), e.Span)
+		}
+		if !evt1TypeMovable(env, binding.t) {
+			return Type{}, evt1Diagnostic("CV4505", fmt.Sprintf("type %s is not movable", binding.t.String()), e.Span)
+		}
+		if !evt1TypeCopyable(env, binding.t) {
+			if !binding.mutable {
+				return Type{}, evt1Diagnostic("CV4128", "move requires a mutable owning place", e.Span)
+			}
+			scope.setState(name.Name, evt1StorageMoved)
+		}
+		return evt1CanonicalType(env, binding.t), nil
+	case *RefExpr:
+		lvalue, err := validateAssignable(env, scope, e.Value, templateInfo)
+		if err != nil {
+			return Type{}, evt1Diagnostic("CV4508", "ref requires an existing place; temporaries are not referenceable in R3", e.Value.exprSpan())
+		}
+		if binding, ok := scope.lookup(lvalue.path.Root); ok {
+			if err := evt1CheckReadableBinding(lvalue.path.Root, binding, e.Value.exprSpan()); err != nil {
+				return Type{}, err
+			}
+		}
+		if !e.Const && !lvalue.mutable {
+			return Type{}, evt1Diagnostic("CV4509", "mutable ref cannot bind a const or read-only place", e.Value.exprSpan())
+		}
+		out := lvalue.t.valueType()
+		out.Ownership = "ref"
+		out.Const = e.Const || !lvalue.mutable
+		out.Span = e.Span
+		return out, nil
 	case *BinaryExpr:
 		leftType, err := validateExpr(env, scope, e.Left, templateInfo, inComptimeFn)
 		if err != nil {
@@ -1633,6 +1822,19 @@ func validateCallArgument(env *semanticEnv, scope *evt1Scope, paramType Type, ar
 		}
 		argType = validatedType
 	}
+	if paramType.isReference() {
+		if _, ok := arg.(*RefExpr); !ok {
+			return evt1Diagnostic("CV4508", fmt.Sprintf("reference parameter %s requires an explicit ref argument", paramType.String()), arg.exprSpan())
+		}
+		required := paramType.borrowBase()
+		if !argType.isReference() || !evt1TypesCompatible(env, required, argType.borrowBase(), typeParam) {
+			return evt1Diagnostic("CV4510", fmt.Sprintf("reference argument expected %s but got %s", paramType.String(), argType.String()), arg.exprSpan())
+		}
+		if !paramType.Const && argType.Const {
+			return evt1Diagnostic("CV4509", fmt.Sprintf("mutable reference parameter %s cannot accept a ref const argument", paramType.String()), arg.exprSpan())
+		}
+		return nil
+	}
 	if paramType.isBorrow() {
 		required := paramType.borrowBase()
 		if argType.isBorrowLike() {
@@ -1659,8 +1861,8 @@ func validateCallArgument(env *semanticEnv, scope *evt1Scope, paramType Type, ar
 	if !evt1TypesCompatible(env, paramType, argType, typeParam) {
 		return evt1Diagnostic("CV4107", fmt.Sprintf("wrong payload type for call argument: expected %s but got %s", paramType.String(), argType.String()), arg.exprSpan())
 	}
-	if !evt1TypeCopyable(env, argType) && !evt1TypeDependsOnParam(argType, typeParam) {
-		return evt1Diagnostic("CV4133", fmt.Sprintf("call copies non-copyable type %s", argType.String()), arg.exprSpan())
+	if !evt1TypeCopyable(env, argType) && !evt1TypeDependsOnParam(argType, typeParam) && !evt1CanTransferInitialize(env, paramType, arg) {
+		return evt1Diagnostic("CV4512", fmt.Sprintf("call would copy non-copyable type %s; pass it with move", argType.String()), arg.exprSpan())
 	}
 	return nil
 }
@@ -1681,10 +1883,23 @@ func validateAssignable(env *semanticEnv, scope *evt1Scope, expr Expr, templateI
 		if binding.isActuatorLocal() {
 			return evt1LValue{}, evt1Diagnostic("CV4319", fmt.Sprintf("actuator local %s of actuator %s cannot be assigned or copied as a value", e.Name, binding.actuatorName), e.Span)
 		}
+		resolvedType := evt1CanonicalType(env, binding.t)
+		mutable := binding.mutable
+		wholeValue := true
+		if binding.t.isReference() {
+			resolvedType = evt1CanonicalType(env, binding.t.borrowBase())
+			mutable = !binding.t.Const
+			wholeValue = false
+		}
+		readOnlyReason := ""
+		if binding.t.isReference() && binding.t.Const {
+			readOnlyReason = "ref_const"
+		}
 		return evt1LValue{
-			t:          evt1CanonicalType(env, binding.t),
-			mutable:    binding.mutable,
-			wholeValue: true,
+			t:              resolvedType,
+			mutable:        mutable,
+			wholeValue:     wholeValue,
+			readOnlyReason: readOnlyReason,
 			path: evt1AccessPath{
 				Root: e.Name,
 				Span: e.Span,
@@ -1843,6 +2058,9 @@ func validateStructConstructExpr(env *semanticEnv, scope *evt1Scope, expr Struct
 		if !evt1CanInitializeStoredType(env, structDecl.Fields[i].Type, argType) {
 			return Type{}, evt1Diagnostic("CV4107", fmt.Sprintf("wrong initializer type for %s field %s: expected %s but got %s", expr.StructName, structDecl.Fields[i].Name, structDecl.Fields[i].Type.String(), argType.String()), arg.exprSpan())
 		}
+		if !evt1TypeCopyable(env, argType) && !evt1CanTransferInitialize(env, structDecl.Fields[i].Type, arg) {
+			return Type{}, evt1Diagnostic("CV4501", fmt.Sprintf("construction of %s.%s would copy non-copyable type %s", expr.StructName, structDecl.Fields[i].Name, argType.String()), arg.exprSpan())
+		}
 	}
 	return Type{Name: structDecl.Name, Kind: TypeStruct, Span: expr.Span}, nil
 }
@@ -1975,7 +2193,13 @@ func validateWhileStmt(env *semanticEnv, scope *evt1Scope, stmt WhileStmt, templ
 			return evt1Diagnostic("CV4206", fmt.Sprintf("comptime loop bound %d exceeds limit %d", value.IntValue, evt1ComptimeMaxLoopBound), stmt.Bound.exprSpan())
 		}
 	}
-	return validateBlock(env, scope, Type{Name: "void", Kind: TypeBuiltin}, stmt.Body, templateInfo, inComptimeFn)
+	bodyScope := evt1CloneScope(scope)
+	if err := validateBlock(env, bodyScope, Type{Name: "void", Kind: TypeBuiltin}, stmt.Body, templateInfo, inComptimeFn); err != nil {
+		return err
+	}
+	beforeScope := evt1CloneScope(scope)
+	evt1MergeScopeStates(scope, beforeScope, bodyScope)
+	return nil
 }
 
 const (
@@ -2483,6 +2707,27 @@ func evt1TypeCopyable(env *semanticEnv, t Type) bool {
 	return true
 }
 
+func evt1TypeMovable(env *semanticEnv, t Type) bool {
+	return !evt1IsImmovableValueType(env, t)
+}
+
+func evt1DropFunction(env *semanticEnv, t Type) *FunctionDecl {
+	for i := range env.functions["Drop"] {
+		fn := &env.functions["Drop"][i]
+		if fn.ReturnType.Name != "void" || len(fn.Params) != 1 || !fn.Params[0].Type.isOwned() {
+			continue
+		}
+		if evt1CanonicalType(env, fn.Params[0].Type.valueType()).Equal(evt1CanonicalType(env, t.valueType())) {
+			return fn
+		}
+	}
+	return nil
+}
+
+func evt1TypeHasDrop(env *semanticEnv, t Type) bool {
+	return t.isOwned() && evt1DropFunction(env, t) != nil
+}
+
 func evt1IsImmovableValueType(env *semanticEnv, t Type) bool {
 	if t.isBorrowLike() || len(t.TypeArgs) > 0 {
 		return false
@@ -2502,6 +2747,18 @@ func evt1CanDirectInitialize(env *semanticEnv, t Type, expr Expr) bool {
 		return false
 	}
 	return construct.StructName == t.Name && evt1LookupStruct(env, t.Name)
+}
+
+func evt1CanTransferInitialize(env *semanticEnv, t Type, expr Expr) bool {
+	if evt1CanDirectInitialize(env, t, expr) {
+		return true
+	}
+	switch expr.(type) {
+	case *MoveExpr, *CallExpr, *TemplateCallExpr, *ConstructExpr:
+		return true
+	default:
+		return false
+	}
 }
 
 func evt1LookupStruct(env *semanticEnv, name string) bool {
@@ -2548,6 +2805,7 @@ func evt1ResolveOrdinaryCall(env *semanticEnv, scope *evt1Scope, name string, ar
 		return FunctionDecl{}, evt1Diagnostic("CV4027", fmt.Sprintf("unknown function %s", name), span)
 	}
 	var matches []FunctionDecl
+	var r3Error error
 	for _, fn := range candidates {
 		if len(fn.Params) != len(args) {
 			continue
@@ -2555,6 +2813,9 @@ func evt1ResolveOrdinaryCall(env *semanticEnv, scope *evt1Scope, name string, ar
 		match := true
 		for i, arg := range args {
 			if err := validateCallArgument(env, scope, fn.Params[i].Type, arg, argTypes[i], templateInfo); err != nil {
+				if diagnostic, ok := err.(Diagnostic); ok && strings.HasPrefix(diagnostic.Code, "CV45") {
+					r3Error = err
+				}
 				match = false
 				break
 			}
@@ -2568,6 +2829,9 @@ func evt1ResolveOrdinaryCall(env *semanticEnv, scope *evt1Scope, name string, ar
 	}
 	if len(matches) > 1 {
 		return FunctionDecl{}, evt1Diagnostic("CV4182", fmt.Sprintf("call %s is ambiguous under exact-signature matching", name), span)
+	}
+	if r3Error != nil {
+		return FunctionDecl{}, r3Error
 	}
 	return FunctionDecl{}, evt1Diagnostic("CV4107", fmt.Sprintf("no exact call target matched %s", name), span)
 }
@@ -2967,6 +3231,7 @@ func instantiateTemplate(env *semanticEnv, templateName string, concreteType Typ
 		scope.declare(param.Name, evt1ValueBinding{
 			t:       evt1CanonicalType(env, param.Type),
 			mutable: !param.Type.Const,
+			state:   evt1StorageInitialized,
 		})
 	}
 	if err := validateBlock(env, scope, instFn.ReturnType, *instFn.Body, nil, false); err != nil {
@@ -3106,6 +3371,24 @@ func evt1SubstituteStatement(stmt Statement, typeParam string, concreteType Type
 			return nil, err
 		}
 		return &block, nil
+	case *IfStmt:
+		condition, err := evt1SubstituteExpr(s.Condition, typeParam, concreteType)
+		if err != nil {
+			return nil, err
+		}
+		thenBlock, err := evt1SubstituteBlock(s.Then, typeParam, concreteType)
+		if err != nil {
+			return nil, err
+		}
+		out := &IfStmt{Condition: condition, Then: thenBlock, Span: s.Span}
+		if s.Else != nil {
+			elseBlock, err := evt1SubstituteBlock(*s.Else, typeParam, concreteType)
+			if err != nil {
+				return nil, err
+			}
+			out.Else = &elseBlock
+		}
+		return out, nil
 	default:
 		return nil, evt1Diagnostic("CV4180", "unsupported template statement during instantiation", stmt.statementSpan())
 	}
@@ -3187,6 +3470,18 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 			out.Updates = append(out.Updates, FieldUpdate{Name: update.Name, NameSpan: update.NameSpan, Value: value})
 		}
 		return out, nil
+	case *MoveExpr:
+		value, err := evt1SubstituteExpr(e.Value, typeParam, concreteType)
+		if err != nil {
+			return nil, err
+		}
+		return &MoveExpr{Value: value, Span: e.Span}, nil
+	case *RefExpr:
+		value, err := evt1SubstituteExpr(e.Value, typeParam, concreteType)
+		if err != nil {
+			return nil, err
+		}
+		return &RefExpr{Value: value, Const: e.Const, Span: e.Span}, nil
 	case *MatchExpr:
 		subject, err := evt1SubstituteExpr(e.Subject, typeParam, concreteType)
 		if err != nil {

@@ -1,0 +1,14 @@
+profile Core;
+
+struct Resource
+{
+    int handle;
+}
+
+int Main()
+{
+    owned Resource first = Resource{1};
+    owned Resource second = move first;
+    owned Resource third = move first;
+    return second.handle + third.handle;
+}

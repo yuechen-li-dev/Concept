@@ -1,0 +1,23 @@
+profile Core;
+
+struct Resource
+{
+    int handle;
+}
+
+void Drop(owned Resource resource)
+{
+    return;
+}
+
+owned Resource MakeResource()
+{
+    owned Resource value = Resource{42};
+    return move value;
+}
+
+int Main()
+{
+    owned Resource resource = MakeResource();
+    return resource.handle;
+}

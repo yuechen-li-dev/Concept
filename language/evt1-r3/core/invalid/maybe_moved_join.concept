@@ -1,0 +1,17 @@
+profile Core;
+
+struct Resource
+{
+    int handle;
+}
+
+int Main()
+{
+    bool transfer = true;
+    owned Resource resource = Resource{42};
+    if (transfer)
+    {
+        owned Resource taken = move resource;
+    }
+    return resource.handle;
+}

@@ -1196,6 +1196,8 @@
       "c_name": "concept_buffer_range",
       "immovable": false,
       "copyable": true,
+      "movable": true,
+      "has_drop": false,
       "fields": [
         {
           "name": "buffer",
@@ -1241,6 +1243,8 @@
       "c_name": "concept_pipeline_state",
       "immovable": true,
       "copyable": false,
+      "movable": false,
+      "has_drop": false,
       "fields": [
         {
           "name": "pool",

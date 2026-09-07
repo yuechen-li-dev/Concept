@@ -1,0 +1,22 @@
+profile Core;
+
+struct Resource
+{
+    int handle;
+}
+
+void Drop(owned Resource resource)
+{
+    return;
+}
+
+int Main()
+{
+    bool transfer = true;
+    owned Resource resource = Resource{42};
+    if (transfer)
+    {
+        owned Resource taken = move resource;
+    }
+    return 0;
+}

@@ -1,0 +1,17 @@
+profile Core;
+
+struct Resource
+{
+    int handle;
+}
+
+int Consume(owned Resource resource)
+{
+    return resource.handle;
+}
+
+int Main()
+{
+    owned Resource resource = Resource{42};
+    return Consume(resource);
+}

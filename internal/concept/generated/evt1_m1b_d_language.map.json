@@ -593,6 +593,8 @@
       "c_name": "concept_transition",
       "immovable": false,
       "copyable": true,
+      "movable": true,
+      "has_drop": false,
       "fields": [
         {
           "name": "from",
@@ -638,6 +640,8 @@
       "c_name": "concept_retry_summary",
       "immovable": false,
       "copyable": true,
+      "movable": true,
+      "has_drop": false,
       "fields": [
         {
           "name": "values",

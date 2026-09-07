@@ -1,0 +1,18 @@
+profile Core;
+
+immovable struct State
+{
+    int counter;
+}
+
+void Reset(ref State state)
+{
+    state.counter = 42;
+}
+
+int Main()
+{
+    State state = State{0};
+    Reset(ref state);
+    return state.counter;
+}

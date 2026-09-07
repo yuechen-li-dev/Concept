@@ -1,0 +1,9 @@
+profile Core;
+
+int Main()
+{
+    int value = 1;
+    ref int alias = ref value;
+    alias = 42;
+    return value;
+}

@@ -122,12 +122,16 @@ func (t Type) isBorrow() bool {
 	return t.Ownership == "borrow"
 }
 
+func (t Type) isReference() bool {
+	return t.Ownership == "ref"
+}
+
 func (t Type) isOwned() bool {
 	return t.Ownership == "owned"
 }
 
 func (t Type) isBorrowLike() bool {
-	return t.isBorrow() || t.PointerTo != nil
+	return t.isBorrow() || t.isReference() || t.PointerTo != nil
 }
 
 func (t Type) borrowBase() Type {
@@ -295,6 +299,16 @@ type Block struct {
 	Statements []Statement `json:"statements,omitempty"`
 	Span       Span        `json:"span"`
 }
+
+type IfStmt struct {
+	Condition Expr   `json:"condition"`
+	Then      Block  `json:"then"`
+	Else      *Block `json:"else,omitempty"`
+	Span      Span   `json:"span"`
+}
+
+func (*IfStmt) evt1Statement()        {}
+func (s *IfStmt) statementSpan() Span { return s.Span }
 
 func (*Block) evt1Statement()        {}
 func (s *Block) statementSpan() Span { return s.Span }
@@ -517,6 +531,23 @@ type UnaryExpr struct {
 func (*UnaryExpr) evt1Expr()        {}
 func (e *UnaryExpr) exprSpan() Span { return e.Span }
 
+type MoveExpr struct {
+	Value Expr `json:"value"`
+	Span  Span `json:"span"`
+}
+
+func (*MoveExpr) evt1Expr()        {}
+func (e *MoveExpr) exprSpan() Span { return e.Span }
+
+type RefExpr struct {
+	Value Expr `json:"value"`
+	Const bool `json:"const,omitempty"`
+	Span  Span `json:"span"`
+}
+
+func (*RefExpr) evt1Expr()        {}
+func (e *RefExpr) exprSpan() Span { return e.Span }
+
 type ConstructExpr struct {
 	EnumName    string `json:"enum_name"`
 	VariantName string `json:"variant_name"`
@@ -652,6 +683,8 @@ type MIRStruct struct {
 	Immovable  bool      `json:"immovable"`
 	Record     bool      `json:"record,omitempty"`
 	Copyable   bool      `json:"copyable"`
+	Movable    bool      `json:"movable"`
+	HasDrop    bool      `json:"has_drop"`
 	Fields     []MIRName `json:"fields,omitempty"`
 	SourceSpan Span      `json:"source_span"`
 }
@@ -764,7 +797,16 @@ type MIRFunction struct {
 	ReturnType Type           `json:"return_type"`
 	Params     []MIRName      `json:"params,omitempty"`
 	Operations []MIROperation `json:"operations"`
+	Cleanups   []MIRCleanup   `json:"cleanups,omitempty"`
 	SourceSpan Span           `json:"source_span"`
+}
+
+type MIRCleanup struct {
+	Owner        string `json:"owner"`
+	Type         string `json:"type"`
+	DropFunction string `json:"drop_function"`
+	State        string `json:"state"`
+	Order        int    `json:"order"`
 }
 
 type MIROperation struct {

@@ -1,0 +1,19 @@
+profile Core;
+
+struct Resource
+{
+    int handle;
+}
+
+void Drop(owned Resource resource)
+{
+    return;
+}
+
+int Main()
+{
+    owned Resource first = Resource{1};
+    owned Resource second = move first;
+    first = Resource{42};
+    return first.handle + second.handle;
+}

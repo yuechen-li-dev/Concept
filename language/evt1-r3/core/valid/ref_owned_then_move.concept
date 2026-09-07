@@ -1,0 +1,29 @@
+profile Core;
+
+struct Resource
+{
+    int handle;
+}
+
+int Inspect(ref const Resource resource)
+{
+    return resource.handle;
+}
+
+void Reset(ref Resource resource)
+{
+    resource.handle = 42;
+}
+
+int Consume(owned Resource resource)
+{
+    return resource.handle;
+}
+
+int Main()
+{
+    owned Resource resource = Resource{1};
+    int before = Inspect(ref const resource);
+    Reset(ref resource);
+    return Consume(move resource) + before;
+}

@@ -461,6 +461,8 @@
       "c_name": "concept_descriptor_binding",
       "immovable": false,
       "copyable": true,
+      "movable": true,
+      "has_drop": false,
       "fields": [
         {
           "name": "set",
@@ -506,6 +508,8 @@
       "c_name": "concept_binding_summary",
       "immovable": false,
       "copyable": true,
+      "movable": true,
+      "has_drop": false,
       "fields": [
         {
           "name": "slots",

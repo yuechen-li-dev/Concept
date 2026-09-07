@@ -1,6 +1,6 @@
 # Concept EVT1 language specification foundation
 
-Status: R2 value/place semantics
+Status: R3 resource transfer and reference foundation
 
 This document defines the authority categories and the smallest currently
 executable EVT1 language foundation. It is derived from the retired Concept
@@ -103,21 +103,23 @@ and `VkCommandPool` are Vulkan admissions, not core primitives.
 
 ## 7. Ownership and storage vocabulary
 
-**Canonical EVT1 R2.** In a local declaration, `const` qualifies the binding
+**Canonical EVT1 R2-R3.** In a local declaration, `const` qualifies the binding
 and its projected places, not the value type. A const local can be read and a
 copyable value can be copied from it, but the local cannot be reassigned and a
 mutable struct field cannot be written through it. R2 also applies the same
 place rule to the already-natural `const Type parameter` qualifier. This is a
 parameter-place rule, not a full borrowing model.
 
-**Provisional EVT1.** The Go compiler additionally parses and validates
-`borrow`, `owned`, `imported`, pointer, and `unsafe` vocabulary within its
-bounded type rules. These spellings preserve the Concept/Vulkan evidence and
-align with PoC3's requirement that storage and hazards be visible.
+**Canonical EVT1 R3.** `owned T` is the bounded movable-only representation.
+It owns a `T`, is not copyable, is movable when `T` is not immovable, and may
+carry deterministic drop responsibility. This reuses the existing ownership
+vocabulary without adding a trait or derive system. Unqualified ordinary
+values retain structural copyability. `borrow` remains accepted compatibility
+vocabulary; `ref` is the canonical R3 reference spelling.
 
-**Legacy PoC3 / deferred reconciliation.** Full move invalidation, explicit
-`move`, drop scheduling, RAII, allocator/store ownership, and PoC3 borrow/place
-laws are not yet ported. R2 does not infer them from the accepted vocabulary.
+**Deferred reconciliation.** Allocation/store ownership, partial moves,
+general borrow checking, lifetime parameters, and reference-containing
+aggregates are not implied by R3.
 
 ## 8. Values, structs, records, and places
 
@@ -180,6 +182,72 @@ The existing bounded compile-time structural equality implementation applies
 to record structs when every field supports equality. R2 adds no generated
 runtime operators.
 
+### 8.4 Move state and deterministic drop
+
+**Canonical EVT1 R3.** Copyability is structural, while movability is broader.
+An ordinary copyable value may be assigned or passed by value without consuming
+its source. `move place` is semantically unnecessary but legal for such a value
+and does not make the source moved-from.
+
+An `owned T` place is movable-only when `T` is movable. Transferring it from an
+existing owner requires explicit `move`:
+
+```concept
+owned Resource second = move first;
+```
+
+The source becomes moved-from. Reading, projecting, passing, returning, or
+moving it again is invalid until legal whole-place reassignment initializes it
+again. Straight-line state and simple `if`/`while` joins use the bounded states
+`Uninitialized`, `Initialized`, `Moved`, and `MaybeMoved`; a value initialized
+on one path and moved on another is not usable after the join. R3 has no partial
+or field-level moves.
+
+An immovable value cannot be relocated, including with `move`, but remains
+usable in final storage and through references.
+
+`void Drop(owned T value)` is the narrow R3 drop witness. A live owning local
+or by-value owning parameter with that witness is dropped exactly once at scope
+exit, including early return, unless ownership was transferred. Return values
+are evaluated before cleanup. Cleanup proceeds in reverse declaration order.
+The MIR records owner, witness, order, and whether an owner is live or
+transferred; the C backend emits only those deterministic cleanup calls. R3
+rejects a `MaybeMoved` Drop owner at scope exit because conditional cleanup is
+not implemented. R3 does not define unwinding, partial-field drop, implicit replacement of a live
+resource, or dynamic cleanup stacks.
+
+### 8.5 References
+
+**Canonical EVT1 R3.** `ref T` aliases an existing mutable `T` place; `ref const
+T` aliases an existing place as a read-only view. References do not copy or own
+the referent and do not transfer ownership. Binding is explicit at the call or
+local initializer site:
+
+```concept
+Increment(ref count);
+Inspect(ref const widget);
+```
+
+The bounded binding rules are:
+
+- mutable place to `ref T`: allowed;
+- mutable place to `ref const T`: allowed;
+- const place to `ref const T`: allowed;
+- const place to `ref T`: rejected;
+- temporary/rvalue to either reference form: rejected.
+
+No temporary lifetime extension occurs. Mutation through `ref const` is
+rejected. Record fields remain immutable through both reference forms because
+record immutability is type-level. A mutable immovable final-storage value may
+bind to `ref T`; this is the normal R3 way to manipulate it without relocation.
+Borrowing an `owned T` does not change its ownership state, so it may later be
+transferred with `move`.
+
+R3 rejects reference returns because the referent lifetime is not proven by
+the bounded local analysis. In particular, a reference to an ordinary local
+cannot escape. Safe reference-parameter returns await an explicit later rule;
+there are no named lifetimes in R3.
+
 ## 9. Enums and payload enums
 
 **Canonical EVT1 foundation.** Enums may contain nullary and payload variants.
@@ -226,6 +294,12 @@ camelCase.
 **Provisional EVT1.** Overload resolution is bounded to the implemented exact
 signature and template requirement rules. Full PoC3 callable and module rules
 are deferred.
+
+**Canonical EVT1 R3.** An `owned T` by-value parameter receives ownership.
+Passing an existing movable-only owner requires `move`; the callee drops its
+live parameter unless it transfers ownership onward. Returning an `owned T`
+local likewise requires explicit `return move value;`. Fresh function results
+may initialize an owner directly. No NRVO or implicit-move law is specified.
 
 ## 12. Failure model
 
@@ -288,9 +362,11 @@ behavior are not ported. Runtime array law must be reconciled before promotion.
 **Legacy PoC3.** PoC3 implemented read-only `Slice<T>` and
 `FixedBuffer<T, N>` foundations.
 
-**Deferred reconciliation.** They are not in the Go seed. FixedBuffer mutation,
-try helpers, and conversion rules remain future work; R0 does not continue the
-old Phase 22 roadmap.
+**Redesign.** The old `Slice<T>` surface is design pressure, not a direct-port
+candidate. It must be reconciled against `ref`, `ref const`, future `ref
+struct`, `scoped`, `Span<T>`, and `ReadOnlySpan<T>`. R3 implements none of those
+aggregate/view types. FixedBuffer mutation and collection rules remain future
+work.
 
 ## 18. Interfaces and dyn
 
@@ -385,7 +461,9 @@ The following remain explicit reconciliation or implementation work:
 
 - general imports and multi-module compilation;
 - complete primitive widths and conversion rules;
-- full ownership, move, borrow, drop, and storage semantics;
+- ownership beyond bounded local move/drop/reference accounting;
+- generalized borrow checking, reference returns, `ref struct`, `scoped`,
+  `Span<T>`, and `ReadOnlySpan<T>`;
 - the failure-model relationship among Option, Result, fallibility, and panic;
 - runtime arrays, slices, FixedBuffer, and bounded mutation;
 - interfaces and dyn storage/dispatch;

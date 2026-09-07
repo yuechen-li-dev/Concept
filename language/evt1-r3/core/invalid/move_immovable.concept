@@ -1,0 +1,13 @@
+profile Core;
+
+immovable struct State
+{
+    int counter;
+}
+
+int Main()
+{
+    State state = State{1};
+    State other = move state;
+    return other.counter;
+}

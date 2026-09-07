@@ -1,0 +1,19 @@
+profile Core;
+
+record struct Point
+{
+    int x;
+    int y;
+}
+
+void Mutate(ref Point point)
+{
+    point.x = 42;
+}
+
+int Main()
+{
+    Point point = Point{0, 0};
+    Mutate(ref point);
+    return point.x;
+}

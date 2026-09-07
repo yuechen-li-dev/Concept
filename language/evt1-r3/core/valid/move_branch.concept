@@ -1,0 +1,21 @@
+profile Core;
+
+struct Resource
+{
+    int handle;
+}
+
+int Main()
+{
+    bool chooseLeft = true;
+    owned Resource resource = Resource{42};
+    if (chooseLeft)
+    {
+        owned Resource left = move resource;
+    }
+    else
+    {
+        owned Resource right = move resource;
+    }
+    return 0;
+}

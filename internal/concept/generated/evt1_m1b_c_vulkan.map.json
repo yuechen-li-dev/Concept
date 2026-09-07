@@ -632,6 +632,8 @@
       "c_name": "concept_range_config",
       "immovable": false,
       "copyable": true,
+      "movable": true,
+      "has_drop": false,
       "fields": [
         {
           "name": "step",

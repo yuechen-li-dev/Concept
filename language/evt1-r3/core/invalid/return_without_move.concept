@@ -1,0 +1,12 @@
+profile Core;
+
+struct Resource
+{
+    int handle;
+}
+
+owned Resource MakeResource()
+{
+    owned Resource resource = Resource{42};
+    return resource;
+}

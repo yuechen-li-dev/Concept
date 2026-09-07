@@ -1,0 +1,18 @@
+profile Vulkan;
+
+immovable struct CommandState
+{
+    int resetCount;
+}
+
+void MarkReset(ref CommandState state)
+{
+    state.resetCount = state.resetCount + 1;
+}
+
+int Main()
+{
+    CommandState state = CommandState{0};
+    MarkReset(ref state);
+    return state.resetCount;
+}

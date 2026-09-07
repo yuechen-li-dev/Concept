@@ -11,11 +11,11 @@
     },
     {
       "path": "evt1_m1b_a_vulkan.mir.json",
-      "sha256": "731a6172733f0ad7959544a24ccde86ea60d4a5d60afe4cd0dbb2cf8340f5ff9"
+      "sha256": "70d24578b5a00342d586c6a0a645d36aed9e4bb9d5045a9b33dbfbdab6ec175d"
     },
     {
       "path": "evt1_m1b_a_vulkan.map.json",
-      "sha256": "e0c359a1b6a25e8dbb3accc577c015f6e0dbe219029aac7618fc11805cade72a"
+      "sha256": "63139e5a760213c59319374ebd26047bd2b2aae8892e8d22cd95823165057959"
     }
   ],
   "options": {

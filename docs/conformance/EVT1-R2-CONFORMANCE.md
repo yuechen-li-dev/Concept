@@ -53,12 +53,13 @@ borrow checking, aliases/noalias, allocation, runtime arrays and collections,
 Option/Result, C ABI, interfaces/dyn, panic/assert, testing, machine/automata,
 decide/yield, and multi-module compilation remain outside this slice.
 
-## Recommended R3 scope
+## R3 handoff (completed)
 
-R3 should be a bounded value-transfer reconciliation: explicit `move` for
+R3 was implemented as a bounded value-transfer reconciliation: explicit `move` for
 non-copyable movable locals, deterministic moved-state diagnostics across
 straight-line and simple branch flow, call/return transfer, and the minimum
 drop scheduling needed to make those paths executable. It should reuse the R2
 place and copyability classifications, keep immovable values in final storage,
-and exclude allocators, generalized lifetime inference, runtime collections,
-interfaces, and C ABI work.
+and excluded allocators, generalized lifetime inference, runtime collections,
+interfaces, and C ABI work. See `EVT1-R3-CONFORMANCE.md` for executable counts
+and the recommended R4 boundary.

@@ -1,6 +1,6 @@
 # Concept EVT1 Stage 0 compiler architecture
 
-Status: R2 value/place and record foundation
+Status: R3 resource transfer and reference foundation
 
 ## Authority
 
@@ -138,6 +138,43 @@ No R2 rule is registered in `ProfileDefinition` or implemented by the Vulkan
 package. A Vulkan-positive corpus case proves that the profile inherits these
 core semantics unchanged.
 
+## R3 move, drop, and reference implementation
+
+R3 remains entirely in compiler core:
+
+- `parse.go` recognizes `move` and `ref` prefix expressions, `ref T` / `ref
+  const T` types, and statement-form `if`, retaining keyword and operand spans;
+- `types.go` represents move/reference expressions directly. The existing
+  ownership field carries `owned`, compatibility `borrow`, and canonical `ref`
+  rather than introducing a parallel type hierarchy;
+- `validate.go` decides structural copyability, movability, immovability, and
+  exact `void Drop(owned T)` witness matching. `owned T` is the bounded
+  movable-only representation;
+- scope bindings carry `Uninitialized`, `Initialized`, `Moved`, or
+  `MaybeMoved` state. Whole-local/parameter moves update that state,
+  reassignment restores a moved mutable owner, and cloned simple branch/loop
+  scopes merge conservatively;
+- call and return validation distinguishes fresh values, copyable reads, and
+  explicit transfer from an existing owner. The type checker rejects implicit
+  copies before C lowering;
+- reference binding reuses the R2 lvalue classifier. It requires an existing
+  place, checks const-to-mutable binding, preserves record-field read-only
+  status, and allows immovable final storage to be mutated through `ref`;
+- all reference returns are rejected in R3. This is an explicit bounded escape
+  rule, not a lifetime inference framework;
+- MIR operations expose `move`, `ref`, and `ref_const`. Function cleanup
+  metadata lists each Drop owner in reverse declaration order with its witness
+  and `live` or `transferred` state;
+- `generate.go` lowers `ref T` to `T*`, `ref const T` to `const T*`, and
+  materializes return expressions before emitting semantic cleanup calls.
+  Moved sources are suppressed, by-value owned parameters are callee-owned,
+  and the backend uses the validated Drop witness rather than inferring C
+  destructors.
+
+No R3 rule is registered in `ProfileDefinition`. The Vulkan-positive immovable
+reference case passes through the same parser, validator, MIR, and C lowerer as
+Core.
+
 ## CLI and artifacts
 
 `cmd/concept` is the active driver:
@@ -176,7 +213,7 @@ silently broaden core parsing or typing. A profile-specific construct must be
 rejected outside its profile or explicitly promoted through the specification
 and reconciliation process.
 
-## R2 limitations
+## R3 limitations
 
 - The package remains deliberately cohesive rather than prematurely split.
 - Effect/actuator validation and C runtime emission remain in-package profile
@@ -188,13 +225,19 @@ and reconciliation process.
 - Imports are represented, but Core multi-module compilation is not yet active.
 - Automata are implemented but provisional; PoC3 machine/decide/yield laws are
   not merged.
-- The complete PoC3 ownership, allocation, C ABI, testing, panic/assert,
+- Ownership beyond whole-local explicit transfer and deterministic local/
+  parameter cleanup remains deferred. There is no implicit move, field move,
+  partial drop, live-resource replacement, unwinding, or dynamic cleanup stack.
+- Reference returns, named lifetimes, generalized borrow checking, `ref
+  struct`, `scoped`, Span types, and reference-containing aggregates are not
+  implemented.
+- The remaining PoC3 allocation, C ABI, testing, panic/assert,
   interfaces/dyn, slices, FixedBuffer, Option, and Result surfaces are not
   ported.
 
-R2 does not add a borrow checker, move/drop invalidation, runtime aggregates,
-or a generalized place lattice. `const Type parameter` uses the natural
-existing qualifier grammar only as a parameter-place restriction.
+R3 does not add a generalized place lattice or prove global alias/lifetime
+safety. `borrow` compatibility behavior remains narrower than the canonical
+explicit `ref` spelling.
 
 ## R1 executable evidence
 
@@ -212,3 +255,12 @@ R1 leakage audit.
 32 readable cases with semantic-family diagnostics, MIR checks, exactly-once
 base lowering proof, Core/Vulkan inheritance evidence, and native C11 runs for
 mutable struct, record update, and immovable final-storage paths.
+
+## R3 executable evidence
+
+`internal/concept/r3_conformance_test.go` and `language/evt1-r3/core` cover 31
+readable cases: 30 PASS and one retained ordinary-struct-copy
+EXPECTED-DIVERGENCE. Evidence includes moved-state diagnostics and joins,
+call/return transfer, MIR cleanup ownership, generated-C ordering and
+suppression, mutable and const references, record/const interaction,
+immovable-by-reference use, Vulkan inheritance, and native C11 execution.

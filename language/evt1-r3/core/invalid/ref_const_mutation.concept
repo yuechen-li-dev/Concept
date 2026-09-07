@@ -1,0 +1,13 @@
+profile Core;
+
+void Mutate(ref const int value)
+{
+    value = 42;
+}
+
+int Main()
+{
+    int value = 0;
+    Mutate(ref const value);
+    return value;
+}

@@ -8,6 +8,8 @@
       "c_name": "concept_buffer_range",
       "immovable": false,
       "copyable": true,
+      "movable": true,
+      "has_drop": false,
       "fields": [
         {
           "name": "bufferId",
@@ -53,6 +55,8 @@
       "c_name": "concept_allocation",
       "immovable": false,
       "copyable": true,
+      "movable": true,
+      "has_drop": false,
       "fields": [
         {
           "name": "range",
@@ -87,6 +91,8 @@
       "c_name": "concept_observed_values",
       "immovable": false,
       "copyable": true,
+      "movable": true,
+      "has_drop": false,
       "fields": [
         {
           "name": "first",
@@ -132,6 +138,8 @@
       "c_name": "concept_copy_result",
       "immovable": false,
       "copyable": true,
+      "movable": true,
+      "has_drop": false,
       "fields": [
         {
           "name": "firstOffset",
@@ -166,6 +174,8 @@
       "c_name": "concept_command_pool_state",
       "immovable": true,
       "copyable": false,
+      "movable": false,
+      "has_drop": false,
       "fields": [
         {
           "name": "poolId",

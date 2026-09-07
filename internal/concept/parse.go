@@ -1121,6 +1121,9 @@ func (p *parser) parseType(conceptParam string) (Type, error) {
 		case "borrow":
 			t.Ownership = "borrow"
 			p.next()
+		case "ref":
+			t.Ownership = "ref"
+			p.next()
 		case "const":
 			t.Const = true
 			p.next()
@@ -1267,6 +1270,8 @@ func (p *parser) parseStatement() (Statement, error) {
 			return nil, err
 		}
 		return &ReturnStmt{Value: value, Span: start}, nil
+	case "if":
+		return p.parseIfStmt()
 	case "match":
 		return p.parseMatchStmt()
 	case "while":
@@ -1741,6 +1746,27 @@ func (p *parser) parseMultiplicative() (Expr, error) {
 }
 
 func (p *parser) parseUnary() (Expr, error) {
+	if p.peekLexeme() == "move" {
+		op := p.next()
+		value, err := p.parseUnary()
+		if err != nil {
+			return nil, err
+		}
+		return &MoveExpr{Value: value, Span: op.Span}, nil
+	}
+	if p.peekLexeme() == "ref" {
+		op := p.next()
+		isConst := false
+		if p.peekLexeme() == "const" {
+			p.next()
+			isConst = true
+		}
+		value, err := p.parseUnary()
+		if err != nil {
+			return nil, err
+		}
+		return &RefExpr{Value: value, Const: isConst, Span: op.Span}, nil
+	}
 	if p.peekLexeme() == "-" || p.peekLexeme() == "not" {
 		op := p.next()
 		value, err := p.parseUnary()
@@ -1750,6 +1776,37 @@ func (p *parser) parseUnary() (Expr, error) {
 		return &UnaryExpr{Op: op.Lexeme, Value: value, Span: op.Span}, nil
 	}
 	return p.parsePrimary()
+}
+
+func (p *parser) parseIfStmt() (Statement, error) {
+	start, err := p.expect("if")
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.expect("("); err != nil {
+		return nil, err
+	}
+	condition, err := p.parseExpr()
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.expect(")"); err != nil {
+		return nil, err
+	}
+	thenBlock, err := p.parseBlock()
+	if err != nil {
+		return nil, err
+	}
+	stmt := &IfStmt{Condition: condition, Then: thenBlock, Span: start.Span}
+	if p.peekLexeme() == "else" {
+		p.next()
+		elseBlock, err := p.parseBlock()
+		if err != nil {
+			return nil, err
+		}
+		stmt.Else = &elseBlock
+	}
+	return stmt, nil
 }
 
 func (p *parser) parsePrimary() (Expr, error) {

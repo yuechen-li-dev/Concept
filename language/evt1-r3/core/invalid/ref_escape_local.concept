@@ -1,0 +1,7 @@
+profile Core;
+
+ref int Escape()
+{
+    int local = 42;
+    return ref local;
+}

@@ -102,6 +102,8 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 			Immovable:  structDecl.Immovable,
 			Record:     structDecl.Record,
 			Copyable:   evt1TypeCopyable(env, Type{Name: structDecl.Name, Kind: TypeStruct}),
+			Movable:    !structDecl.Immovable,
+			HasDrop:    evt1DropFunction(env, Type{Name: structDecl.Name, Kind: TypeStruct}) != nil,
 			SourceSpan: structDecl.Span,
 		}
 		for _, field := range structDecl.Fields {
@@ -382,6 +384,7 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 		}
 		if fn.Body != nil {
 			collectMIROps(env, fn.Body, &mirFn, nil)
+			mirFn.Cleanups = evt1MIRCleanups(env, fn)
 		}
 		mir.Functions = append(mir.Functions, mirFn)
 	}
@@ -396,6 +399,74 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 		mir.ComptimeFns = append(mir.ComptimeFns, mirFn)
 	}
 	return mir
+}
+
+func evt1MIRCleanups(env *semanticEnv, fn FunctionDecl) []MIRCleanup {
+	types := map[string]Type{}
+	var declarationOrder []string
+	state := map[string]string{}
+	if fn.Name != "Drop" {
+		for _, param := range fn.Params {
+			if evt1TypeHasDrop(env, param.Type) {
+				types[param.Name] = param.Type
+				declarationOrder = append(declarationOrder, param.Name)
+				state[param.Name] = "live"
+			}
+		}
+	}
+	var visitExpr func(Expr)
+	visitExpr = func(expr Expr) {
+		switch e := expr.(type) {
+		case *MoveExpr:
+			if name, ok := e.Value.(*NameExpr); ok {
+				state[name.Name] = "transferred"
+			}
+		case *CallExpr:
+			for _, arg := range e.Args {
+				visitExpr(arg)
+			}
+		}
+	}
+	var visitBlock func(Block)
+	visitBlock = func(block Block) {
+		for _, stmt := range block.Statements {
+			switch s := stmt.(type) {
+			case *VarDecl:
+				visitExpr(s.Value)
+				if evt1TypeHasDrop(env, s.Type) {
+					types[s.Name] = s.Type
+					declarationOrder = append(declarationOrder, s.Name)
+					state[s.Name] = "live"
+				}
+			case *AssignStmt:
+				visitExpr(s.Value)
+				if name, ok := s.Target.(*NameExpr); ok && types[name.Name].Name != "" {
+					state[name.Name] = "live"
+				}
+			case *ReturnStmt:
+				if s.Value != nil {
+					visitExpr(s.Value)
+				}
+			case *ExprStmt:
+				visitExpr(s.Value)
+			case *Block:
+				visitBlock(*s)
+			case *IfStmt:
+				visitBlock(s.Then)
+				if s.Else != nil {
+					visitBlock(*s.Else)
+				}
+			}
+		}
+	}
+	visitBlock(*fn.Body)
+	var cleanups []MIRCleanup
+	for i := len(declarationOrder) - 1; i >= 0; i-- {
+		name := declarationOrder[i]
+		dropFn := evt1DropFunction(env, types[name])
+		cleanups = append(cleanups, MIRCleanup{Owner: name, Type: types[name].String(), DropFunction: dropFn.Name, State: state[name], Order: len(cleanups) + 1})
+	}
+	return cleanups
 }
 
 func collectMIROps(env *semanticEnv, block *Block, fn *MIRFunction, templateInfo *evt1TemplateInfo) {
@@ -470,6 +541,13 @@ func collectMIROps(env *semanticEnv, block *Block, fn *MIRFunction, templateInfo
 				collectExprMIROps(env, s.Bound, fn, templateInfo)
 			}
 			collectMIROps(env, &s.Body, fn, templateInfo)
+		case *IfStmt:
+			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "if_stmt", SourceSpan: s.Span})
+			collectExprMIROps(env, s.Condition, fn, templateInfo)
+			collectMIROps(env, &s.Then, fn, templateInfo)
+			if s.Else != nil {
+				collectMIROps(env, s.Else, fn, templateInfo)
+			}
 		}
 	}
 }
@@ -477,6 +555,15 @@ func collectMIROps(env *semanticEnv, block *Block, fn *MIRFunction, templateInfo
 func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInfo *evt1TemplateInfo) {
 	id := fmt.Sprintf("%s.%02d", fn.Name, len(fn.Operations)+1)
 	switch e := expr.(type) {
+	case *MoveExpr:
+		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "move", Detail: exprLabel(e.Value), SourceSpan: e.Span})
+		collectExprMIROps(env, e.Value, fn, templateInfo)
+	case *RefExpr:
+		kind := "ref"
+		if e.Const {
+			kind = "ref_const"
+		}
+		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: kind, Detail: exprLabel(e.Value), SourceSpan: e.Span})
 	case *StructConstructExpr:
 		kind := "struct_construct"
 		if !evt1TypeCopyable(env, Type{Name: e.StructName, Kind: TypeStruct}) {
@@ -1830,7 +1917,7 @@ func evt1CType(t Type) string {
 		}
 		return base + "*"
 	}
-	if t.isBorrow() {
+	if t.isBorrow() || t.isReference() {
 		base := evt1CType(t.borrowBase())
 		if t.Const {
 			return "const " + base + "*"
@@ -1969,6 +2056,8 @@ type evt1FunctionLowerer struct {
 	symbol      string
 	private     bool
 	scope       []map[string]evt1Binding
+	ownedOrder  [][]string
+	liveOwners  map[string]bool
 	tempCounter int
 }
 
@@ -1984,10 +2073,16 @@ type evt1Binding struct {
 
 func newEVT1FunctionLowerer(l *lowering, fn FunctionDecl, symbol string, private bool) *evt1FunctionLowerer {
 	scope := []map[string]evt1Binding{{}}
+	ownedOrder := [][]string{{}}
+	liveOwners := map[string]bool{}
 	for _, param := range fn.Params {
 		scope[0][param.Name] = evt1Binding{cName: param.Name, t: param.Type}
+		if evt1TypeHasDrop(l.env, param.Type) && fn.Name != "Drop" {
+			ownedOrder[0] = append(ownedOrder[0], param.Name)
+			liveOwners[param.Name] = true
+		}
 	}
-	return &evt1FunctionLowerer{l: l, fn: fn, symbol: symbol, private: private, scope: scope}
+	return &evt1FunctionLowerer{l: l, fn: fn, symbol: symbol, private: private, scope: scope, ownedOrder: ownedOrder, liveOwners: liveOwners}
 }
 
 func (f *evt1FunctionLowerer) lower() string {
@@ -2005,6 +2100,7 @@ func (f *evt1FunctionLowerer) lower() string {
 	}
 	b.WriteString(") {\n")
 	b.WriteString(f.lowerBlock(*f.fn.Body, 1))
+	b.WriteString(f.lowerCurrentScopeDrops(1))
 	b.WriteString("}\n")
 	return b.String()
 }
@@ -2015,6 +2111,7 @@ func (f *evt1FunctionLowerer) lowerBlock(block Block, indent int) string {
 	for _, stmt := range block.Statements {
 		b.WriteString(f.lowerStatement(stmt, indent))
 	}
+	b.WriteString(f.lowerCurrentScopeDrops(indent))
 	f.popScope()
 	return b.String()
 }
@@ -2082,13 +2179,22 @@ func (f *evt1FunctionLowerer) lowerStatement(stmt Statement, indent int) string 
 	case *AssignStmt:
 		prelude, target, _, _ := f.lowerLValue(s.Target, indent)
 		rhsPrelude, value, _ := f.lowerExpr(s.Value, indent)
+		if name, ok := s.Target.(*NameExpr); ok {
+			if binding, found := scopeLookup(name.Name, f.scope); found && evt1TypeHasDrop(f.l.env, binding.t) {
+				f.liveOwners[binding.cName] = true
+			}
+		}
 		return prelude + rhsPrelude + ind(indent) + fmt.Sprintf("%s = %s;\n", target, value)
 	case *ReturnStmt:
 		if s.Value == nil {
-			return ind(indent) + "return;\n"
+			return f.lowerAllScopeDrops(indent) + ind(indent) + "return;\n"
 		}
-		prelude, value, _ := f.lowerExpr(s.Value, indent)
-		return prelude + ind(indent) + fmt.Sprintf("return %s;\n", value)
+		prelude, value, valueType := f.lowerExpr(s.Value, indent)
+		if !f.hasLiveOwner() {
+			return prelude + ind(indent) + fmt.Sprintf("return %s;\n", value)
+		}
+		returnTemp := f.nextTemp("return")
+		return prelude + ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(valueType), returnTemp, value) + f.lowerAllScopeDrops(indent) + ind(indent) + fmt.Sprintf("return %s;\n", returnTemp)
 	case *ExprStmt:
 		prelude, value, valueType := f.lowerExpr(s.Value, indent)
 		if valueType.Name == "void" {
@@ -2101,6 +2207,8 @@ func (f *evt1FunctionLowerer) lowerStatement(stmt Statement, indent int) string 
 		return f.lowerMatchStmt(*s, indent)
 	case *WhileStmt:
 		return f.lowerWhileStmt(*s, indent)
+	case *IfStmt:
+		return f.lowerIfStmt(*s, indent)
 	case *Block:
 		var b strings.Builder
 		b.WriteString(ind(indent) + "{\n")
@@ -2137,6 +2245,33 @@ func (f *evt1FunctionLowerer) lowerWhileStmt(stmt WhileStmt, indent int) string 
 	b.WriteString(ind(indent+1) + fmt.Sprintf("if (!(%s)) { break; }\n", condExpr))
 	b.WriteString(f.lowerBlock(stmt.Body, indent+1))
 	b.WriteString(ind(indent) + "}\n")
+	return b.String()
+}
+
+func (f *evt1FunctionLowerer) lowerIfStmt(stmt IfStmt, indent int) string {
+	conditionPrelude, conditionExpr, _ := f.lowerExpr(stmt.Condition, indent)
+	before := f.cloneLiveOwners()
+	var b strings.Builder
+	b.WriteString(conditionPrelude)
+	b.WriteString(ind(indent) + fmt.Sprintf("if (%s) {\n", conditionExpr))
+	b.WriteString(f.lowerBlock(stmt.Then, indent+1))
+	thenLive := f.cloneLiveOwners()
+	f.liveOwners = before
+	b.WriteString(ind(indent) + "}")
+	if stmt.Else != nil {
+		b.WriteString(" else {\n")
+		b.WriteString(f.lowerBlock(*stmt.Else, indent+1))
+		elseLive := f.cloneLiveOwners()
+		for name, live := range thenLive {
+			f.liveOwners[name] = live && elseLive[name]
+		}
+		b.WriteString(ind(indent) + "}\n")
+		return b.String()
+	}
+	for name, live := range thenLive {
+		f.liveOwners[name] = live && before[name]
+	}
+	b.WriteString("\n")
 	return b.String()
 }
 
@@ -2213,6 +2348,9 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 			if binding.comptime {
 				return "", evt1RenderCValue(f.l.env, binding.value), binding.t
 			}
+			if binding.t.isReference() {
+				return "", "(*" + binding.cName + ")", binding.t.borrowBase()
+			}
 			return "", binding.cName, binding.t
 		}
 		if value, ok := f.l.env.comptimeValues[e.Name]; ok {
@@ -2256,6 +2394,20 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 			return prelude, "(!" + value + ")", Type{Name: "bool", Kind: TypeBuiltin}
 		}
 		return prelude, "(" + e.Op + value + ")", valueType
+	case *MoveExpr:
+		prelude, value, valueType := f.lowerExpr(e.Value, indent)
+		if name, ok := e.Value.(*NameExpr); ok {
+			if binding, found := scopeLookup(name.Name, f.scope); found && !evt1TypeCopyable(f.l.env, binding.t) {
+				f.liveOwners[binding.cName] = false
+			}
+		}
+		return prelude, value, valueType
+	case *RefExpr:
+		prelude, target, targetType, _ := f.lowerLValue(e.Value, indent)
+		out := targetType.valueType()
+		out.Ownership = "ref"
+		out.Const = e.Const
+		return prelude, "&(" + target + ")", out
 	case *CallExpr:
 		if e.Callee == "discard" && len(e.Args) == 1 {
 			if nameExpr, ok := e.Args[0].(*NameExpr); ok {
@@ -2280,7 +2432,7 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		var args []string
 		for i, argType := range argTypes {
 			argExpr := rawArgs[i]
-			if fn.Params[i].Type.isBorrow() {
+			if fn.Params[i].Type.isBorrow() || fn.Params[i].Type.isReference() {
 				if argType.isBorrowLike() {
 					args = append(args, argExpr)
 				} else {
@@ -2321,7 +2473,7 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		for i, arg := range e.Args {
 			argPrelude, argExpr, argType := f.lowerExpr(arg, indent)
 			prelude.WriteString(argPrelude)
-			if instance.Function.Params[i].Type.isBorrow() {
+			if instance.Function.Params[i].Type.isBorrow() || instance.Function.Params[i].Type.isReference() {
 				if argType.isBorrowLike() {
 					args = append(args, argExpr)
 				} else {
@@ -2433,6 +2585,9 @@ func (f *evt1FunctionLowerer) lowerLValue(expr Expr, indent int) (string, string
 	switch e := expr.(type) {
 	case *NameExpr:
 		binding, _ := scopeLookup(e.Name, f.scope)
+		if binding.t.isReference() {
+			return "", "(*" + binding.cName + ")", binding.t.borrowBase(), false
+		}
 		return "", binding.cName, binding.t, true
 	case *FieldExpr:
 		prelude, recv, recvType, _ := f.lowerLValue(e.Receiver, indent)
@@ -2449,10 +2604,15 @@ func (f *evt1FunctionLowerer) lowerLValue(expr Expr, indent int) (string, string
 
 func (f *evt1FunctionLowerer) pushScope() {
 	f.scope = append(f.scope, map[string]evt1Binding{})
+	f.ownedOrder = append(f.ownedOrder, []string{})
 }
 
 func (f *evt1FunctionLowerer) popScope() {
+	for _, name := range f.ownedOrder[len(f.ownedOrder)-1] {
+		delete(f.liveOwners, name)
+	}
 	f.scope = f.scope[:len(f.scope)-1]
+	f.ownedOrder = f.ownedOrder[:len(f.ownedOrder)-1]
 }
 
 func (f *evt1FunctionLowerer) currentScope() map[string]evt1Binding {
@@ -2463,11 +2623,75 @@ func (f *evt1FunctionLowerer) bindName(name string, t Type) string {
 	scope := f.currentScope()
 	if _, exists := scope[name]; !exists {
 		scope[name] = evt1Binding{cName: name, t: t}
+		f.registerOwner(name, t)
 		return name
 	}
 	unique := f.nextTemp(name)
 	scope[name] = evt1Binding{cName: unique, t: t}
+	f.registerOwner(unique, t)
 	return unique
+}
+
+func (f *evt1FunctionLowerer) registerOwner(cName string, t Type) {
+	if !evt1TypeHasDrop(f.l.env, t) {
+		return
+	}
+	f.ownedOrder[len(f.ownedOrder)-1] = append(f.ownedOrder[len(f.ownedOrder)-1], cName)
+	f.liveOwners[cName] = true
+}
+
+func (f *evt1FunctionLowerer) cloneLiveOwners() map[string]bool {
+	out := map[string]bool{}
+	for name, live := range f.liveOwners {
+		out[name] = live
+	}
+	return out
+}
+
+func (f *evt1FunctionLowerer) hasLiveOwner() bool {
+	for _, live := range f.liveOwners {
+		if live {
+			return true
+		}
+	}
+	return false
+}
+
+func (f *evt1FunctionLowerer) lowerCurrentScopeDrops(indent int) string {
+	return f.lowerScopeDrops(len(f.ownedOrder)-1, indent)
+}
+
+func (f *evt1FunctionLowerer) lowerAllScopeDrops(indent int) string {
+	var b strings.Builder
+	for scopeIndex := len(f.ownedOrder) - 1; scopeIndex >= 0; scopeIndex-- {
+		b.WriteString(f.lowerScopeDrops(scopeIndex, indent))
+	}
+	return b.String()
+}
+
+func (f *evt1FunctionLowerer) lowerScopeDrops(scopeIndex, indent int) string {
+	var b strings.Builder
+	order := f.ownedOrder[scopeIndex]
+	for i := len(order) - 1; i >= 0; i-- {
+		name := order[i]
+		if !f.liveOwners[name] {
+			continue
+		}
+		var binding evt1Binding
+		for _, layer := range f.scope {
+			for _, candidate := range layer {
+				if candidate.cName == name {
+					binding = candidate
+				}
+			}
+		}
+		dropFn := evt1DropFunction(f.l.env, binding.t)
+		if dropFn != nil {
+			b.WriteString(ind(indent) + fmt.Sprintf("%s(%s);\n", evt1FunctionSymbolForDecl(f.l.outputBase, f.l.env, *dropFn), name))
+		}
+		f.liveOwners[name] = false
+	}
+	return b.String()
 }
 
 func (f *evt1FunctionLowerer) bindInstanceName(name, automataName string) string {

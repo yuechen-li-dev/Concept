@@ -1,0 +1,17 @@
+profile Core;
+
+struct Widget
+{
+    int value;
+}
+
+int Inspect(ref const Widget widget)
+{
+    return widget.value;
+}
+
+int Main()
+{
+    const Widget widget = Widget{42};
+    return Inspect(ref const widget);
+}

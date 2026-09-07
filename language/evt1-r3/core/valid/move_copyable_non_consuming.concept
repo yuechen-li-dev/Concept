@@ -1,0 +1,8 @@
+profile Core;
+
+int Main()
+{
+    int first = 20;
+    int second = move first;
+    return first + second;
+}
