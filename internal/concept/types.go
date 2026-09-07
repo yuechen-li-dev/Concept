@@ -26,6 +26,7 @@ type Type struct {
 	Kind            TypeKind `json:"kind"`
 	Ownership       string   `json:"ownership,omitempty"`
 	Const           bool     `json:"const,omitempty"`
+	Scoped          bool     `json:"scoped,omitempty"`
 	Imported        bool     `json:"imported,omitempty"`
 	Unsafe          bool     `json:"unsafe,omitempty"`
 	PointerTo       *Type    `json:"pointer_to,omitempty"`
@@ -43,6 +44,9 @@ func (t Type) String() string {
 	}
 	if t.Imported {
 		parts = append(parts, "imported")
+	}
+	if t.Scoped {
+		parts = append(parts, "scoped")
 	}
 	if t.Ownership != "" {
 		parts = append(parts, t.Ownership)
@@ -71,6 +75,7 @@ func (t Type) Equal(other Type) bool {
 		t.Kind != other.Kind ||
 		t.Ownership != other.Ownership ||
 		t.Const != other.Const ||
+		t.Scoped != other.Scoped ||
 		t.Imported != other.Imported ||
 		t.Unsafe != other.Unsafe ||
 		len(t.TypeArgs) != len(other.TypeArgs) ||
@@ -105,6 +110,7 @@ func (t Type) valueType() Type {
 	out := t
 	out.Ownership = ""
 	out.Const = false
+	out.Scoped = false
 	out.Imported = false
 	out.Unsafe = false
 	if out.PointerTo != nil {
@@ -153,6 +159,7 @@ type StructDecl struct {
 	Name       string  `json:"name"`
 	Immovable  bool    `json:"immovable"`
 	Record     bool    `json:"record"`
+	Ref        bool    `json:"ref,omitempty"`
 	Fields     []Field `json:"fields"`
 	Span       Span    `json:"span"`
 	RecordSpan Span    `json:"record_span,omitempty"`
@@ -224,6 +231,15 @@ type PrerequisiteRequirement struct {
 
 func (*PrerequisiteRequirement) evt1ConceptRequirement() {}
 func (r *PrerequisiteRequirement) requirementSpan() Span { return r.Span }
+
+type CompilerAnalysisRequirement struct {
+	Analysis string `json:"analysis"`
+	TypeArgs []Type `json:"type_args"`
+	Span     Span   `json:"span"`
+}
+
+func (*CompilerAnalysisRequirement) evt1ConceptRequirement() {}
+func (r *CompilerAnalysisRequirement) requirementSpan() Span { return r.Span }
 
 type ConceptDecl struct {
 	Name         string               `json:"name"`
@@ -659,22 +675,23 @@ type MIRActuatorMapping struct {
 }
 
 type MIR struct {
-	Schema        string            `json:"schema"`
-	Module        string            `json:"module"`
-	Profile       string            `json:"profile"`
-	Structs       []MIRStruct       `json:"structs,omitempty"`
-	Enums         []MIREnum         `json:"enums,omitempty"`
-	Effects       []MIREffect       `json:"effects,omitempty"`
-	Actuators     []MIRActuator     `json:"actuators,omitempty"`
-	Automata      []MIRAutomata     `json:"automata,omitempty"`
-	Concepts      []MIRConcept      `json:"concepts,omitempty"`
-	Assertions    []MIRAssertion    `json:"assertions,omitempty"`
-	ComptimeDecls []MIRComptimeDecl `json:"comptime_decls,omitempty"`
-	StaticAsserts []MIRStaticAssert `json:"static_asserts,omitempty"`
-	Templates     []MIRTemplate     `json:"templates,omitempty"`
-	Instances     []MIRInstance     `json:"instances,omitempty"`
-	Functions     []MIRFunction     `json:"functions"`
-	ComptimeFns   []MIRFunction     `json:"comptime_functions,omitempty"`
+	Schema         string             `json:"schema"`
+	Module         string             `json:"module"`
+	Profile        string             `json:"profile"`
+	Structs        []MIRStruct        `json:"structs,omitempty"`
+	Enums          []MIREnum          `json:"enums,omitempty"`
+	Effects        []MIREffect        `json:"effects,omitempty"`
+	Actuators      []MIRActuator      `json:"actuators,omitempty"`
+	Automata       []MIRAutomata      `json:"automata,omitempty"`
+	Concepts       []MIRConcept       `json:"concepts,omitempty"`
+	Assertions     []MIRAssertion     `json:"assertions,omitempty"`
+	ComptimeDecls  []MIRComptimeDecl  `json:"comptime_decls,omitempty"`
+	StaticAsserts  []MIRStaticAssert  `json:"static_asserts,omitempty"`
+	Templates      []MIRTemplate      `json:"templates,omitempty"`
+	Instances      []MIRInstance      `json:"instances,omitempty"`
+	Functions      []MIRFunction      `json:"functions"`
+	ComptimeFns    []MIRFunction      `json:"comptime_functions,omitempty"`
+	SemanticProofs []MIRSemanticProof `json:"semantic_proofs,omitempty"`
 }
 
 type MIRStruct struct {
@@ -682,6 +699,7 @@ type MIRStruct struct {
 	CName      string    `json:"c_name"`
 	Immovable  bool      `json:"immovable"`
 	Record     bool      `json:"record,omitempty"`
+	Ref        bool      `json:"ref,omitempty"`
 	Copyable   bool      `json:"copyable"`
 	Movable    bool      `json:"movable"`
 	HasDrop    bool      `json:"has_drop"`
@@ -801,6 +819,14 @@ type MIRFunction struct {
 	SourceSpan Span           `json:"source_span"`
 }
 
+type MIRSemanticProof struct {
+	Concept      string `json:"concept"`
+	Analysis     string `json:"analysis"`
+	ConcreteType string `json:"concrete_type"`
+	Satisfied    bool   `json:"satisfied"`
+	SourceSpan   Span   `json:"source_span"`
+}
+
 type MIRCleanup struct {
 	Owner        string `json:"owner"`
 	Type         string `json:"type"`
@@ -838,6 +864,7 @@ type semanticEnv struct {
 	copyableCache     map[string]bool
 	templateInfos     map[string]*evt1TemplateInfo
 	templateInstances map[string]*evt1TemplateInstance
+	semanticProofs    []MIRSemanticProof
 }
 
 const evt1AutomataDispatchOutcomeTypeName = "AutomataDispatchOutcome"
@@ -888,6 +915,7 @@ func newSemanticEnv(profile *ProfileDefinition) *semanticEnv {
 		copyableCache:     map[string]bool{},
 		templateInfos:     map[string]*evt1TemplateInfo{},
 		templateInstances: map[string]*evt1TemplateInstance{},
+		semanticProofs:    nil,
 	}
 }
 

@@ -1,0 +1,6 @@
+profile Core;
+
+struct InvalidHolder
+{
+    ref int value;
+}

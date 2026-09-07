@@ -1,0 +1,17 @@
+profile Core;
+
+ref struct Cursor
+{
+    ref int current;
+}
+
+int Bad()
+{
+    int outerValue = 1;
+    Cursor outer = Cursor{ref outerValue};
+    {
+        int innerValue = 2;
+        outer = Cursor{ref innerValue};
+    }
+    return outerValue;
+}

@@ -1,0 +1,13 @@
+profile Core;
+
+ref struct Cursor
+{
+    ref int current;
+}
+
+Cursor Bad()
+{
+    int value = 1;
+    Cursor cursor = Cursor{ref value};
+    return cursor;
+}

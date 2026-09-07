@@ -1,6 +1,6 @@
 # Concept EVT1 Stage 0 compiler architecture
 
-Status: R3 resource transfer and reference foundation
+Status: R4a lifetime-bound references and semantic proof requirements
 
 ## Authority
 
@@ -175,6 +175,45 @@ No R3 rule is registered in `ProfileDefinition`. The Vulkan-positive immovable
 reference case passes through the same parser, validator, MIR, and C lowerer as
 Core.
 
+## R4a lifetime and semantic-requirement implementation
+
+R4a extends the existing concept resolver rather than adding a template-local
+lifetime subsystem:
+
+```text
+concept requirement
+    -> requirement resolver
+    -> operation / prerequisite concept / compiler analysis
+    -> semantic proof result
+```
+
+`CompilerAnalysisRequirement` is the third requirement variant. A small
+internal registry owns `LifetimeSafe`, `NonEscaping`, and `Outlives` with fixed
+arities and check functions; it is not a plugin framework. Concept assertions
+and template instantiation both pass through `checkConceptSatisfaction`, so a
+lifetime proof runs because the selected concept requests it. Successful
+proofs are retained in MIR as `semantic_proofs`; compiler-analysis
+requirements remain compile-time-only and have no C representation.
+
+`Type` carries the `scoped` bit and existing ownership qualifier. `StructDecl`
+and `MIRStruct` carry the `ref` aggregate classification. Semantic scope
+bindings carry lexical provenance kind, depth, and scoped state. Construction
+of a ref struct derives the shortest bound from reference/ref-struct fields;
+assignment and return compare that bound against the destination. Unknown
+provenance is rejected conservatively. Unrestricted structs and enum payloads
+cannot contain references or ref structs.
+
+The C backend lowers ref structs as ordinary aggregate values and their
+reference fields as pointers. No lifetime metadata is emitted at runtime.
+Scoped parameters use the same pointer ABI as references after semantic
+validation.
+
+R4a also validates MIR cleanup obligations before artifact generation. Each
+recorded Drop owner must be unique, ordered, and either live or transferred.
+Live `owned T` replacement emits the old Drop call before evaluation/assignment
+of the new initializer and retains one final cleanup obligation for the new
+value.
+
 ## CLI and artifacts
 
 `cmd/concept` is the active driver:
@@ -213,7 +252,7 @@ silently broaden core parsing or typing. A profile-specific construct must be
 rejected outside its profile or explicitly promoted through the specification
 and reconciliation process.
 
-## R3 limitations
+## R4a limitations
 
 - The package remains deliberately cohesive rather than prematurely split.
 - Effect/actuator validation and C runtime emission remain in-package profile
@@ -225,17 +264,18 @@ and reconciliation process.
 - Imports are represented, but Core multi-module compilation is not yet active.
 - Automata are implemented but provisional; PoC3 machine/decide/yield laws are
   not merged.
-- Ownership beyond whole-local explicit transfer and deterministic local/
-  parameter cleanup remains deferred. There is no implicit move, field move,
-  partial drop, live-resource replacement, unwinding, or dynamic cleanup stack.
-- Reference returns, named lifetimes, generalized borrow checking, `ref
-  struct`, `scoped`, Span types, and reference-containing aggregates are not
-  implemented.
+- Ownership beyond whole-local explicit transfer, deterministic local/
+  parameter cleanup, and live whole-owner replacement remains deferred. There
+  is no implicit move, field move, partial drop, unwinding, or dynamic cleanup
+  stack.
+- Named lifetimes, generalized borrow checking, non-lexical lifetimes, mutable
+  alias analysis, Span types, and unrestricted reference-containing
+  aggregates are not implemented.
 - The remaining PoC3 allocation, C ABI, testing, panic/assert,
   interfaces/dyn, slices, FixedBuffer, Option, and Result surfaces are not
   ported.
 
-R3 does not add a generalized place lattice or prove global alias/lifetime
+R4a does not add a generalized place lattice or prove global alias/lifetime
 safety. `borrow` compatibility behavior remains narrower than the canonical
 explicit `ref` spelling.
 
@@ -264,3 +304,11 @@ EXPECTED-DIVERGENCE. Evidence includes moved-state diagnostics and joins,
 call/return transfer, MIR cleanup ownership, generated-C ordering and
 suppression, mutable and const references, record/const interaction,
 immovable-by-reference use, Vulkan inheritance, and native C11 execution.
+
+## R4a executable evidence
+
+`internal/concept/r4a_conformance_test.go` and `language/evt1-r4a/core`
+provide six valid and five invalid readable cases. They cover local and
+downward-passed ref structs, scoped calls, concept-triggered lifetime proof,
+local/ref-struct/scoped/outlives rejection, unrestricted aggregate rejection,
+live owned replacement ordering, MIR proof metadata, and native C11 execution.

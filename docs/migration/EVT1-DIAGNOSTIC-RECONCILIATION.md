@@ -1,6 +1,6 @@
 # EVT1 diagnostic reconciliation
 
-Status: R3 bounded transfer/reference slice
+Status: R4a bounded lifetime/reference and cleanup slice
 
 Concept EVT1 compares diagnostics by semantic family. The active Go compiler
 retains `CV` numbers and the retired PoC3 compiler retains `CON` numbers; R2
@@ -38,6 +38,12 @@ the executable mapping used by the R2 conformance harness.
 | mutation through ref const | PoC3 immutable-borrow pressure | `CV4513` | `MUTATION_THROUGH_REF_CONST` | EVT1-new | record immutability still has `CV4142` |
 | use before initialization | `CON0150` | `CV4514` | `USE_BEFORE_INITIALIZATION` | reserved R3 state family | current source locals require initializers |
 | ambiguous/moved drop state | `CON0155` cleanup pressure | `CV4516` | `DROP_OF_MOVED_VALUE` | EVT1 number | maybe-moved Drop owner is rejected; transferred owner emits no drop |
+| ref struct escape | lifetime system deferred | `CV4521` | `REF_STRUCT_ESCAPE` | EVT1-new | lifetime-bound aggregate cannot carry local provenance outward |
+| scoped escape | lifetime system deferred | `CV4522` | `SCOPED_ESCAPE` | EVT1-new | explicit scoped reference/value cannot escape |
+| outlives violation | lifetime system deferred | `CV4523` | `LIFETIME_OUTLIVES_VIOLATION` | EVT1-new | shorter lexical provenance cannot initialize longer-lived storage |
+| lifetime semantic requirement | compiler-known marker pressure | `CV4524` | `LIFETIME_REQUIREMENT_UNSATISFIED` | EVT1-new | concept-requested analysis rejected the concrete type |
+| invalid lifetime-bound field | reference aggregate deferred | `CV4525` | `REF_STRUCT_INVALID_FIELD` | EVT1-new | references/ref structs require a ref struct container |
+| compiler analysis declaration | compiler-known marker pressure | `CV4526` | `COMPILER_ANALYSIS_REQUIREMENT_FAILED` | EVT1-new | unknown analysis or wrong fixed arity |
 
 `VALUE_TYPE_MISMATCH` maps the existing Go `CV4107` assignment family to
 PoC3 `CON0078`/`CON0082` aggregate and field mismatch evidence.

@@ -1,0 +1,6 @@
+profile Core;
+
+ref const int Bad(scoped ref const int value)
+{
+    return ref const value;
+}

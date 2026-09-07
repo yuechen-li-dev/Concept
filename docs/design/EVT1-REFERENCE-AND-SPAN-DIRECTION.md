@@ -1,6 +1,6 @@
 # EVT1 reference and span direction
 
-Status: R3 directional note; only the active `ref` rules in the language
+Status: R4a lifetime foundation; active rules remain normative in the language
 specification are normative.
 
 R3 establishes `ref T` and `ref const T` as explicit, non-owning aliases of
@@ -20,9 +20,13 @@ Span<T>
 ReadOnlySpan<T>
 ```
 
-`ref struct` is reserved for lifetime-bound aggregate values in a later
-milestone. `scoped` is intended to make non-escape constraints explicit where
-local inference is insufficient. Neither spelling is active in R3.
+R4a activates `ref struct` for lifetime-bound aggregate values and `scoped`
+for an explicit non-escape constraint. The compiler tracks bounded lexical
+provenance (`Local`, `Parameter`, static/global where available, or `Unknown`),
+derives a ref struct bound from its shortest-lived referenced field, and
+conservatively rejects uncertain outward flow. This is deliberately not a
+global borrow checker and introduces no named lifetimes or alias-exclusivity
+solver.
 
 `Span<T>` and `ReadOnlySpan<T>` are intended to be lifetime-bound borrowed
 contiguous views, not owning collections and not hidden heap abstractions.
@@ -33,4 +37,6 @@ The retired PoC3 `Slice<T>` fixtures remain useful pressure for pointer-plus-
 length representation, bounds checks, and read-only access. They are not a
 surface or lifetime contract for EVT1. R3 therefore marks `Slice<T>` for
 redesign and does not port Slice, Span, reference-containing aggregates,
-stack allocation, allocators, arenas, or runtime collections.
+stack allocation, allocators, arenas, or runtime collections. R4a establishes
+the lifetime machinery those future views require; it does not implement
+`Span<T>`, `ReadOnlySpan<T>`, `stackalloc`, or runtime `Slice<T>`.

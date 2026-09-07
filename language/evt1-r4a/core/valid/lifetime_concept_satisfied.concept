@@ -1,0 +1,26 @@
+profile Core;
+
+ref struct View
+{
+    ref const int value;
+}
+
+concept LifetimeBound<T>
+{
+    requires compiler.LifetimeSafe<T>();
+}
+
+template <typename T>
+requires LifetimeBound<T>
+T UseView(T view)
+{
+    return view;
+}
+
+int Main()
+{
+    int value = 42;
+    View view = View{ref const value};
+    View used = UseView<View>(view);
+    return value;
+}

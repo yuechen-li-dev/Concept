@@ -196,19 +196,33 @@ func (p *parser) parseModule() (Module, error) {
 			}
 			module.Templates = append(module.Templates, templateDecl)
 		case "immovable":
-			structDecl, err := p.parseStructDecl(true, false)
+			structDecl, err := p.parseStructDecl(true, false, false)
 			if err != nil {
 				return module, err
 			}
 			module.Structs = append(module.Structs, structDecl)
 		case "record":
-			structDecl, err := p.parseStructDecl(false, true)
+			structDecl, err := p.parseStructDecl(false, true, false)
+			if err != nil {
+				return module, err
+			}
+			module.Structs = append(module.Structs, structDecl)
+		case "ref":
+			if p.peekLexemeN(1) != "struct" {
+				fn, err := p.parseFunctionDecl("", false)
+				if err != nil {
+					return module, err
+				}
+				module.Functions = append(module.Functions, fn)
+				continue
+			}
+			structDecl, err := p.parseStructDecl(false, false, true)
 			if err != nil {
 				return module, err
 			}
 			module.Structs = append(module.Structs, structDecl)
 		case "struct":
-			structDecl, err := p.parseStructDecl(false, false)
+			structDecl, err := p.parseStructDecl(false, false, false)
 			if err != nil {
 				return module, err
 			}
@@ -857,8 +871,11 @@ func (p *parser) parseStaticAssert() (StaticAssert, error) {
 	return assertion, nil
 }
 
-func (p *parser) parseStructDecl(immovable, record bool) (StructDecl, error) {
+func (p *parser) parseStructDecl(immovable, record, refStruct bool) (StructDecl, error) {
 	start := p.currentSpan()
+	if refStruct {
+		p.next()
+	}
 	if immovable {
 		p.next()
 	}
@@ -876,7 +893,7 @@ func (p *parser) parseStructDecl(immovable, record bool) (StructDecl, error) {
 	if _, err := p.expect("{"); err != nil {
 		return StructDecl{}, err
 	}
-	decl := StructDecl{Name: nameTok.Lexeme, Immovable: immovable, Record: record, Span: start, RecordSpan: recordSpan}
+	decl := StructDecl{Name: nameTok.Lexeme, Immovable: immovable, Record: record, Ref: refStruct, Span: start, RecordSpan: recordSpan}
 	for !p.done() && p.peekLexeme() != "}" {
 		fieldType, err := p.parseType("")
 		if err != nil {
@@ -990,6 +1007,42 @@ func (p *parser) parseConceptRequirement(typeParam string) (ConceptRequirement, 
 	}
 	if p.peekLexeme() == "" {
 		return nil, evt1Diagnostic("CV4142", "expected concept requirement", start.Span)
+	}
+	if p.peekLexeme() == "compiler" && p.peekLexemeN(1) == "." {
+		p.next()
+		p.next()
+		analysis, err := p.expectIdentifier("CV4526", "expected compiler analysis name")
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.expect("<"); err != nil {
+			return nil, err
+		}
+		req := &CompilerAnalysisRequirement{Analysis: analysis.Lexeme, Span: start.Span}
+		for {
+			arg, err := p.parseType(typeParam)
+			if err != nil {
+				return nil, err
+			}
+			req.TypeArgs = append(req.TypeArgs, arg)
+			if p.peekLexeme() != "," {
+				break
+			}
+			p.next()
+		}
+		if _, err := p.expect(">"); err != nil {
+			return nil, err
+		}
+		if _, err := p.expect("("); err != nil {
+			return nil, err
+		}
+		if _, err := p.expect(")"); err != nil {
+			return nil, err
+		}
+		if _, err := p.expect(";"); err != nil {
+			return nil, err
+		}
+		return req, nil
 	}
 	if p.isConceptApplicationAhead(typeParam) {
 		ref, err := p.parseConceptUse(typeParam)
@@ -1123,6 +1176,9 @@ func (p *parser) parseType(conceptParam string) (Type, error) {
 			p.next()
 		case "ref":
 			t.Ownership = "ref"
+			p.next()
+		case "scoped":
+			t.Scoped = true
 			p.next()
 		case "const":
 			t.Const = true

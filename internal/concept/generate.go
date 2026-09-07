@@ -32,6 +32,9 @@ func Generate(module Module, source []byte) (Outputs, error) {
 		outputBase: evt1OutputBase(module.Path),
 	}
 	l.mir = buildMIR(module, env)
+	if err := evt1ValidateMIR(l.mir); err != nil {
+		return nil, err
+	}
 	header, body, err := l.generateC()
 	if err != nil {
 		return nil, err
@@ -101,6 +104,7 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 			CName:      evt1CName(structDecl.Name),
 			Immovable:  structDecl.Immovable,
 			Record:     structDecl.Record,
+			Ref:        structDecl.Ref,
 			Copyable:   evt1TypeCopyable(env, Type{Name: structDecl.Name, Kind: TypeStruct}),
 			Movable:    !structDecl.Immovable,
 			HasDrop:    evt1DropFunction(env, Type{Name: structDecl.Name, Kind: TypeStruct}) != nil,
@@ -256,6 +260,14 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 					Detail:     r.TypeArg.String(),
 					SourceSpan: r.Span,
 				})
+			case *CompilerAnalysisRequirement:
+				var args []string
+				for _, arg := range r.TypeArgs {
+					args = append(args, arg.String())
+				}
+				mirConcept.Requirements = append(mirConcept.Requirements, MIRConceptRequirement{
+					Kind: "compiler_analysis", Name: r.Analysis, Detail: strings.Join(args, ", "), SourceSpan: r.Span,
+				})
 			}
 		}
 		mir.Concepts = append(mir.Concepts, mirConcept)
@@ -398,7 +410,24 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 		}
 		mir.ComptimeFns = append(mir.ComptimeFns, mirFn)
 	}
+	mir.SemanticProofs = append(mir.SemanticProofs, env.semanticProofs...)
 	return mir
+}
+
+func evt1ValidateMIR(mir MIR) error {
+	for _, fn := range mir.Functions {
+		seen := map[string]bool{}
+		for i, cleanup := range fn.Cleanups {
+			if cleanup.Owner == "" || cleanup.DropFunction == "" || seen[cleanup.Owner] || cleanup.Order != i+1 {
+				return evt1Diagnostic("CV4516", fmt.Sprintf("MIR cleanup for %s is not a unique ordered drop obligation", fn.Name), fn.SourceSpan)
+			}
+			if cleanup.State != "live" && cleanup.State != "transferred" {
+				return evt1Diagnostic("CV4516", fmt.Sprintf("MIR cleanup for %s.%s has inconsistent state %s", fn.Name, cleanup.Owner, cleanup.State), fn.SourceSpan)
+			}
+			seen[cleanup.Owner] = true
+		}
+	}
+	return nil
 }
 
 func evt1MIRCleanups(env *semanticEnv, fn FunctionDecl) []MIRCleanup {
@@ -2179,12 +2208,18 @@ func (f *evt1FunctionLowerer) lowerStatement(stmt Statement, indent int) string 
 	case *AssignStmt:
 		prelude, target, _, _ := f.lowerLValue(s.Target, indent)
 		rhsPrelude, value, _ := f.lowerExpr(s.Value, indent)
+		replacementDrop := ""
 		if name, ok := s.Target.(*NameExpr); ok {
 			if binding, found := scopeLookup(name.Name, f.scope); found && evt1TypeHasDrop(f.l.env, binding.t) {
+				if f.liveOwners[binding.cName] {
+					if dropFn := evt1DropFunction(f.l.env, binding.t); dropFn != nil {
+						replacementDrop = ind(indent) + fmt.Sprintf("%s(%s);\n", evt1FunctionSymbolForDecl(f.l.outputBase, f.l.env, *dropFn), binding.cName)
+					}
+				}
 				f.liveOwners[binding.cName] = true
 			}
 		}
-		return prelude + rhsPrelude + ind(indent) + fmt.Sprintf("%s = %s;\n", target, value)
+		return prelude + replacementDrop + rhsPrelude + ind(indent) + fmt.Sprintf("%s = %s;\n", target, value)
 	case *ReturnStmt:
 		if s.Value == nil {
 			return f.lowerAllScopeDrops(indent) + ind(indent) + "return;\n"
@@ -2367,7 +2402,11 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		if recvType.isBorrowLike() {
 			op = "->"
 		}
-		return prelude, recv + op + e.Field, fieldType
+		fieldExpr := recv + op + e.Field
+		if fieldType.isReference() {
+			return prelude, "(*(" + fieldExpr + "))", fieldType.borrowBase()
+		}
+		return prelude, fieldExpr, fieldType
 	case *IndexExpr:
 		return "", "/* comptime_array_index */", Type{Name: "int", Kind: TypeBuiltin}
 	case *BinaryExpr:
@@ -2596,7 +2635,11 @@ func (f *evt1FunctionLowerer) lowerLValue(expr Expr, indent int) (string, string
 		if recvType.isBorrowLike() {
 			op = "->"
 		}
-		return prelude, recv + op + e.Field, fieldType, false
+		fieldExpr := recv + op + e.Field
+		if fieldType.isReference() {
+			return prelude, "(*(" + fieldExpr + "))", fieldType.borrowBase(), false
+		}
+		return prelude, fieldExpr, fieldType, false
 	default:
 		return "", "/* invalid */", Type{}, false
 	}

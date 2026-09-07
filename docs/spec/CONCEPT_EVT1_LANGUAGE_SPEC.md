@@ -1,6 +1,6 @@
 # Concept EVT1 language specification foundation
 
-Status: R3 resource transfer and reference foundation
+Status: R4a lifetime-bound references and semantic proof requirements
 
 This document defines the authority categories and the smallest currently
 executable EVT1 language foundation. It is derived from the retired Concept
@@ -118,8 +118,9 @@ values retain structural copyability. `borrow` remains accepted compatibility
 vocabulary; `ref` is the canonical R3 reference spelling.
 
 **Deferred reconciliation.** Allocation/store ownership, partial moves,
-general borrow checking, lifetime parameters, and reference-containing
-aggregates are not implied by R3.
+general borrow checking, and named lifetime parameters are not implied by
+R4a. Reference-containing aggregates are admitted only through the bounded
+`ref struct` rules below.
 
 ## 8. Values, structs, records, and places
 
@@ -211,10 +212,14 @@ or by-value owning parameter with that witness is dropped exactly once at scope
 exit, including early return, unless ownership was transferred. Return values
 are evaluated before cleanup. Cleanup proceeds in reverse declaration order.
 The MIR records owner, witness, order, and whether an owner is live or
-transferred; the C backend emits only those deterministic cleanup calls. R3
-rejects a `MaybeMoved` Drop owner at scope exit because conditional cleanup is
-not implemented. R3 does not define unwinding, partial-field drop, implicit replacement of a live
-resource, or dynamic cleanup stacks.
+transferred; the C backend emits only those deterministic cleanup calls. R4a
+validates those obligations as MIR invariants: every recorded owner has one
+ordered obligation and is either live (drop exactly once) or transferred (no
+drop). A `MaybeMoved` Drop owner remains rejected because conditional cleanup
+is not implemented. Assigning a fresh or explicitly transferred value to a
+live `owned T` local performs `Drop` on the old value and then initializes the
+same storage with the new value. R4a does not define unwinding, partial-field
+drop, or dynamic cleanup stacks.
 
 ### 8.5 References
 
@@ -243,10 +248,27 @@ bind to `ref T`; this is the normal R3 way to manipulate it without relocation.
 Borrowing an `owned T` does not change its ownership state, so it may later be
 transferred with `move`.
 
-R3 rejects reference returns because the referent lifetime is not proven by
-the bounded local analysis. In particular, a reference to an ordinary local
-cannot escape. Safe reference-parameter returns await an explicit later rule;
-there are no named lifetimes in R3.
+**Canonical EVT1 R4a.** References carry bounded compile-time provenance:
+`Local(scope)`, `Parameter(scope)`, static/global where supported, or
+`Unknown`. Lexical checks reject a local reference returned from its function
+and reject assignment of a shorter-lived reference into a longer-lived slot.
+A reference derived from a non-scoped parameter may be returned when this
+bounded provenance proves the relationship; unknown cases are rejected.
+
+`ref struct Name { ... }` declares a value type that may contain `ref T`,
+`ref const T`, or another ref struct. Its lifetime bound is the shortest-lived
+referenced field. Copying the aggregate does not extend that bound, and the C11
+representation remains an ordinary aggregate with pointer fields: no hidden
+allocation or runtime lifetime object exists. An unrestricted struct or enum
+payload may not embed a reference or ref struct. A ref struct may be passed by
+value downward, but returning or assigning it outward requires the same
+provenance proof as a reference.
+
+`scoped ref T` and `scoped ref const T` state that the reference must not
+escape the current semantic scope. Scoped parameters may be used and passed
+downward, but cannot be returned or embedded into unrestricted storage. R4a
+adds no named lifetimes, non-lexical lifetime inference, reborrow lattice, or
+general mutable-alias analysis.
 
 ## 9. Enums and payload enums
 
@@ -316,10 +338,29 @@ errors, function-level propagation, and panic before Result becomes canonical.
 
 ## 13. Concepts
 
-**Canonical EVT1 foundation.** Named concepts have one type parameter and a
-finite set of named operation or prerequisite requirements. Explicit
+**Canonical EVT1 R4a.** Named concepts have one type parameter and a finite set
+of named operation, prerequisite-concept, or compiler-analysis requirements.
+The bounded compiler-analysis spelling is:
+
+```concept
+concept LifetimeBound<T>
+{
+    requires compiler.LifetimeSafe<T>();
+}
+```
+
+The internal registry contains `LifetimeSafe`, `NonEscaping`, and `Outlives`;
+R4a exercises the one-entity lifetime proofs and retains multi-entity analysis
+as a bounded internal direction while source concepts remain single-parameter.
+Explicit
 `requires ConceptName<ConcreteType>;` assertions request a compile-time proof.
 Requirement closure and cycles are diagnosed deterministically.
+
+The Concept compiler enforces local reference invariants universally.
+Additional global or restrictive analyses are explicitly requested through
+semantic requirements. A template constraint consumes the resulting
+compile-time witness; lifetime analysis is not silently run across unrelated
+code.
 
 **Deferred reconciliation.** Multiple parameters, specialization, negative
 concepts, orphan/coherence breadth, and the full PoC3 marker-concept system are
@@ -373,9 +414,13 @@ work.
 **Legacy PoC3.** PoC3 contains interface declarations and bounded dynamic
 dispatch fixtures.
 
-**Deferred reconciliation.** The Go seed has no equivalent core feature. No
-interface object representation, dyn storage, vtable ABI, or ownership law is
-canonical EVT1 yet.
+**Redesign.** A concept is the semantic contract, compile-time satisfaction
+produces a witness, and `template<T satisfies C>` consumes that witness
+statically. Future `dyn C` is a runtime-erased value/reference paired with a
+reified witness; `interface` may become optional sugar or a marker for a
+dyn-compatible concept. Runtime witness reification is downstream of
+compile-time satisfaction and must not imply hidden allocation. R4a does not
+implement dyn, interface objects, or a vtable ABI.
 
 ## 19. Allocation
 
@@ -461,12 +506,13 @@ The following remain explicit reconciliation or implementation work:
 
 - general imports and multi-module compilation;
 - complete primitive widths and conversion rules;
-- ownership beyond bounded local move/drop/reference accounting;
-- generalized borrow checking, reference returns, `ref struct`, `scoped`,
+- ownership beyond bounded local move/drop/reference and live-replacement
+  accounting;
+- generalized borrow checking, named lifetimes, non-lexical lifetimes,
   `Span<T>`, and `ReadOnlySpan<T>`;
 - the failure-model relationship among Option, Result, fallibility, and panic;
 - runtime arrays, slices, FixedBuffer, and bounded mutation;
-- interfaces and dyn storage/dispatch;
+- witness reification, interfaces, and dyn storage/dispatch;
 - allocation, allocator effects, arenas, and stores;
 - stable C ABI and layout law;
 - canonical machine/automata syntax and decide/yield semantics;
@@ -474,6 +520,6 @@ The following remain explicit reconciliation or implementation work:
 - Concept-native testing and runtime panic/assert;
 - broader concepts/templates and capability-based comptime.
 
-R0 intentionally adds none of these merely because they were next on the PoC3
+EVT1 intentionally adds none of these merely because they were next on the PoC3
 roadmap. Promotion requires a matrix decision, a specification update, and
 executable EVT1 evidence.

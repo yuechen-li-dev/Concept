@@ -1,0 +1,30 @@
+profile Core;
+
+struct Resource
+{
+    int handle;
+}
+
+void Drop(owned Resource resource)
+{
+    return;
+}
+
+owned Resource AcquireA()
+{
+    owned Resource value = Resource{1};
+    return move value;
+}
+
+owned Resource AcquireB()
+{
+    owned Resource value = Resource{42};
+    return move value;
+}
+
+int Main()
+{
+    owned Resource resource = AcquireA();
+    resource = AcquireB();
+    return resource.handle;
+}

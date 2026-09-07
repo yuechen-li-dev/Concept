@@ -1,0 +1,21 @@
+profile Core;
+
+ref struct Cursor
+{
+    ref const int current;
+    int remaining;
+}
+
+int Remaining(Cursor cursor)
+{
+    return cursor.current + cursor.remaining;
+}
+
+int Main()
+{
+    int value = 7;
+    {
+        Cursor cursor = Cursor{ref const value, 35};
+        return Remaining(cursor);
+    }
+}

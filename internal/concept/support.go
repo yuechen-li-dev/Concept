@@ -103,6 +103,18 @@ func (d Diagnostic) SemanticCategory() string {
 		return "REFERENCE_AGGREGATE_DEFERRED"
 	case "CV4516":
 		return "DROP_OF_MOVED_VALUE"
+	case "CV4521":
+		return "REF_STRUCT_ESCAPE"
+	case "CV4522":
+		return "SCOPED_ESCAPE"
+	case "CV4523":
+		return "LIFETIME_OUTLIVES_VIOLATION"
+	case "CV4524":
+		return "LIFETIME_REQUIREMENT_UNSATISFIED"
+	case "CV4525":
+		return "REF_STRUCT_INVALID_FIELD"
+	case "CV4526":
+		return "COMPILER_ANALYSIS_REQUIREMENT_FAILED"
 	default:
 		return d.Code
 	}

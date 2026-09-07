@@ -1,0 +1,13 @@
+profile Core;
+
+struct Plain
+{
+    int value;
+}
+
+concept LifetimeBound<T>
+{
+    requires compiler.LifetimeSafe<T>();
+}
+
+requires LifetimeBound<Plain>;

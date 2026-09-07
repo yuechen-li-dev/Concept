@@ -1,6 +1,6 @@
 # EVT1 semantic reconciliation matrix
 
-Status: R0 authority ledger with R1-R3 executable evidence
+Status: R0 authority ledger with R1-R4a executable evidence
 
 `Port required?` means implementation or conformance work remains after R0; it
 does not authorize that work in this milestone. Status is one of `Keep PoC3`,
@@ -44,14 +44,14 @@ does not authorize that work in this milestone. Status is one of `Keep PoC3`,
 | borrow/ref | place and call rules across PoC3 features | legacy `borrow` plus explicit R3 `ref` expressions/types | `ref T` and `ref const T` are canonical non-owning aliases | Redesign | Yes beyond R3 | phase6/10 pressure; R3 EVT1-new cases | no generalized borrow checker |
 | owned | move/drop/allocation interactions | bounded `owned T` movable-only ownership | canonize for local/call/return transfer and deterministic drop only | Merge | Yes beyond R3 | phase10; R3 tests | allocation/store ownership remains deferred |
 | move | explicit move and invalidation | explicit whole-local/parameter move with branch joins | canonize explicit non-copyable transfer; copyable move is non-consuming | Merge | No for R3 subset | phase10 fixtures; R3 corpus | no implicit, field, or partial moves |
-| drop | explicit MIR cleanup from `Drop<T>` witness | `void Drop(owned T)` witness and deterministic C cleanup | canonize reverse-order local/parameter cleanup, early return, and moved-source suppression | Merge | Yes beyond R3 | phase10 fixtures; R3 MIR/native tests | no unwinding, partial drop, or live replacement |
-| reference escape | lifetime analysis deferred | obvious reference returns rejected | reject when bounded analysis cannot prove safety | Redesign | Yes | R3 EVT1-new cases | named lifetimes, scoped, and safe ref returns deferred |
+| drop | explicit MIR cleanup from `Drop<T>` witness | `void Drop(owned T)` witness, MIR validation, deterministic C cleanup, and live replacement | canonize reverse-order cleanup, transfer suppression, and drop-old-then-initialize-new | Merge | Yes beyond R4a | phase10 fixtures; R3-R4a MIR/native tests | no unwinding or partial drop |
+| reference escape | lifetime analysis deferred | lexical provenance, `ref struct`, `scoped`, and concept-requested proof | enforce local invariants universally and stronger analysis on semantic demand | Redesign | Yes beyond R4a | R3-R4a EVT1-new cases | no named/NLL/global borrow system |
 | unsafe | explicit unsafe blocks/operations | qualifier used for admitted foreign/Vulkan types | reconcile core escape hatch and profile admission | Merge | Yes | phase6; Vulkan examples | no broad allowlist yet |
 | allocation | arenas/stores/allocators and allocation effects | no general model | retain PoC3 as design/reference pressure | Keep PoC3 | Yes | phase12 fixtures | no hidden heap |
 | fallible functions | PoC3 fallible calls and propagation | profile `Result`/`?` direction | redesign with Result/panic distinction | Redesign | Yes | phase5/22; kernel examples | not canonical core |
 | panic/assert | stable runtime panic/assert and test behavior | only compile-time `static_assert` | preserve PoC3 reference; defer runtime adoption | Keep PoC3 | Yes | phase17 fixtures | static_assert stays canonical |
 | C ABI | extern/export/repr(C) implemented | emits C/H but does not define Concept FFI law | preserve PoC3 pressure; specify anew atop C11 backend | Redesign | Yes | phase15 fixtures | backend is not ABI spec |
-| interfaces/dyn | implemented bounded interface/dyn dispatch | absent | preserve PoC3 reference and defer | Keep PoC3 | Yes | phase14 fixtures | dyn storage not in R0 |
+| interfaces/dyn | implemented bounded interface/dyn dispatch | absent | redesign as semantic concept + compile-time witness + downstream runtime witness reification; interface may be sugar/marker | Redesign | Yes | phase14 fixtures; R4a witness direction | dyn must not imply hidden allocation; not implemented in R4a |
 | machines | `machine`, states, transitions, completion/result | nested `machine` declarations inside automata | do not alias surfaces in R0 | Deferred | Yes | phase13/18; DragonGod tests | general semantics likely core |
 | automata | PoC3 uses Automata mainly in application architecture | bounded `automata -> machine -> state` runtime model | preserve provisionally pending reconciliation | Deferred | Yes | phase20; DragonGod M0-M4 | not automatically Vulkan-only |
 | decide | judgment-driven deterministic transition selection | absent | preserve PoC3 reference | Keep PoC3 | Yes | phase5a/13/18 | compare with guarded candidates later |

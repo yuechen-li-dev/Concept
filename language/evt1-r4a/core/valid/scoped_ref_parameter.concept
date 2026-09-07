@@ -1,0 +1,12 @@
+profile Core;
+
+int Read(scoped ref const int value)
+{
+    return value;
+}
+
+int Main()
+{
+    int value = 42;
+    return Read(ref const value);
+}

@@ -1,6 +1,6 @@
 # PoC3 fixture migration inventory
 
-Status: R3 bounded migration evidence; no bulk port attempted
+Status: R4a bounded migration evidence; no bulk port attempted
 
 ## Corpus snapshot
 
@@ -164,3 +164,18 @@ rewritten. Reference cases are EVT1-new evidence because PoC3 did not close the
 selected `ref T` / `ref const T` surface. The old `Slice<T>` family is now
 classified as redesign pressure for future lifetime-bound Span work, not as a
 direct-port queue.
+
+## R4a lifetime and witness audit
+
+R4a inspected PoC3 ownership/reference pressure and the Phase 8/14
+concept/template/interface implementation. PoC3 provides useful witness and
+runtime-erasure pressure, but it does not provide the selected lexical
+provenance, `ref struct`, `scoped`, or compiler-analysis-requirement semantics.
+Those cases are EVT1-new evidence.
+
+Phase 14 interface/dyn fixtures are no longer a mechanical port queue. Their
+runtime dispatch behavior remains design pressure for a witness model in which
+ordinary concept satisfaction produces the compile-time evidence that may
+later be reified for `dyn C`. R4a does not port interface declarations, vtables,
+or dyn storage. Slice fixtures likewise remain deferred until Span is designed
+against the now-active lifetime machinery.

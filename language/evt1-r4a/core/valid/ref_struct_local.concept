@@ -1,0 +1,14 @@
+profile Core;
+
+ref struct Cursor
+{
+    ref int current;
+    int remaining;
+}
+
+int Main()
+{
+    int value = 41;
+    Cursor cursor = Cursor{ref value, 1};
+    return cursor.current + cursor.remaining;
+}

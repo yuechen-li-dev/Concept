@@ -10,6 +10,22 @@ type evt1Scope struct {
 	parent  *evt1Scope
 	values  map[string]evt1ValueBinding
 	borrows []evt1RetainedBorrow
+	depth   int
+}
+
+type evt1ProvenanceKind string
+
+const (
+	evt1ProvenanceUnknown   evt1ProvenanceKind = "unknown"
+	evt1ProvenanceStatic    evt1ProvenanceKind = "static"
+	evt1ProvenanceParameter evt1ProvenanceKind = "parameter"
+	evt1ProvenanceLocal     evt1ProvenanceKind = "local"
+)
+
+type evt1LifetimeProvenance struct {
+	Kind   evt1ProvenanceKind
+	Depth  int
+	Scoped bool
 }
 
 type evt1ValueBinding struct {
@@ -22,6 +38,7 @@ type evt1ValueBinding struct {
 	instanceAutomata string
 	batchAutomata    string
 	actuatorName     string
+	provenance       evt1LifetimeProvenance
 }
 
 type evt1StorageState string
@@ -57,7 +74,11 @@ type evt1LValue struct {
 }
 
 func newEVT1Scope(parent *evt1Scope) *evt1Scope {
-	return &evt1Scope{parent: parent, values: map[string]evt1ValueBinding{}}
+	depth := 0
+	if parent != nil {
+		depth = parent.depth + 1
+	}
+	return &evt1Scope{parent: parent, values: map[string]evt1ValueBinding{}, depth: depth}
 }
 
 func (s *evt1Scope) declare(name string, binding evt1ValueBinding) {
@@ -81,6 +102,17 @@ func (s *evt1Scope) setState(name string, state evt1StorageState) bool {
 	for scope := s; scope != nil; scope = scope.parent {
 		if binding, ok := scope.values[name]; ok {
 			binding.state = state
+			scope.values[name] = binding
+			return true
+		}
+	}
+	return false
+}
+
+func (s *evt1Scope) setProvenance(name string, provenance evt1LifetimeProvenance) bool {
+	for scope := s; scope != nil; scope = scope.parent {
+		if binding, ok := scope.values[name]; ok {
+			binding.provenance = provenance
 			scope.values[name] = binding
 			return true
 		}
@@ -313,7 +345,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 			if err := validateKnownType(env, field.Type, field.Span, "", false); err != nil {
 				return nil, err
 			}
-			resolved, err := evt1ResolveType(env, nil, field.Type.valueType())
+			resolved, err := evt1ResolveType(env, nil, field.Type)
 			if err != nil {
 				return nil, err
 			}
@@ -342,8 +374,11 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 	}
 	for _, structDecl := range module.Structs {
 		for _, field := range structDecl.Fields {
-			if field.Type.isReference() {
-				return nil, evt1Diagnostic("CV4515", fmt.Sprintf("struct %s cannot contain ref field %s in R3; ref struct is deferred", structDecl.Name, field.Name), field.Span)
+			if field.Type.isReference() && !structDecl.Ref {
+				return nil, evt1Diagnostic("CV4525", fmt.Sprintf("unrestricted struct %s cannot contain reference field %s; declare a ref struct", structDecl.Name, field.Name), field.Span)
+			}
+			if embedded, ok := env.structs[field.Type.valueType().Name]; ok && embedded.Ref && !structDecl.Ref {
+				return nil, evt1Diagnostic("CV4525", fmt.Sprintf("unrestricted struct %s cannot contain lifetime-bound ref struct field %s", structDecl.Name, field.Name), field.Span)
 			}
 			if !field.Type.isBorrowLike() && evt1IsImmovableValueType(env, field.Type) {
 				return nil, evt1Diagnostic("CV4138", fmt.Sprintf("struct %s cannot embed immovable field %s", structDecl.Name, field.Type.String()), field.Span)
@@ -353,8 +388,8 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 	for _, enumDecl := range module.Enums {
 		for _, variant := range enumDecl.Variants {
 			for _, field := range variant.Payload {
-				if field.Type.isReference() {
-					return nil, evt1Diagnostic("CV4515", fmt.Sprintf("enum payload %s::%s cannot contain a reference in R3", enumDecl.Name, variant.Name), field.Span)
+				if field.Type.isReference() || evt1IsRefStructType(env, field.Type) {
+					return nil, evt1Diagnostic("CV4525", fmt.Sprintf("enum payload %s::%s cannot contain lifetime-bound type %s", enumDecl.Name, variant.Name, field.Type.String()), field.Span)
 				}
 				if evt1IsImmovableValueType(env, field.Type) {
 					return nil, evt1Diagnostic("CV4139", fmt.Sprintf("enum payload %s::%s cannot contain immovable type %s", enumDecl.Name, variant.Name, field.Type.String()), field.Span)
@@ -405,6 +440,19 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 				}
 				if r.TypeArg.Kind != TypeConceptParam || r.TypeArg.Name != conceptDecl.TypeParam {
 					return nil, evt1Diagnostic("CV4152", fmt.Sprintf("prerequisite %s must use the concept parameter %s", r.ConceptName, conceptDecl.TypeParam), r.Span)
+				}
+			case *CompilerAnalysisRequirement:
+				analysis, ok := evt1SemanticAnalysisRegistry[r.Analysis]
+				if !ok {
+					return nil, evt1Diagnostic("CV4526", fmt.Sprintf("unknown compiler analysis %s", r.Analysis), r.Span)
+				}
+				if len(r.TypeArgs) != analysis.Arity {
+					return nil, evt1Diagnostic("CV4526", fmt.Sprintf("compiler analysis %s requires %d type argument(s)", r.Analysis, analysis.Arity), r.Span)
+				}
+				for _, arg := range r.TypeArgs {
+					if err := validateKnownType(env, arg, r.Span, conceptDecl.TypeParam, false); err != nil {
+						return nil, err
+					}
 				}
 			default:
 				return nil, evt1Diagnostic("CV4147", "unsupported concept requirement", req.requirementSpan())
@@ -465,9 +513,10 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 				return nil, err
 			}
 			scope.declare(param.Name, evt1ValueBinding{
-				t:       resolvedParam,
-				mutable: !param.Type.Const,
-				state:   evt1StorageInitialized,
+				t:          resolvedParam,
+				mutable:    !param.Type.Const,
+				state:      evt1StorageInitialized,
+				provenance: evt1LifetimeProvenance{Kind: evt1ProvenanceParameter, Scoped: resolvedParam.Scoped},
 			})
 		}
 		if err := validateBlock(env, scope, resolvedReturn, *templateDecl.Body, env.templateInfos[templateDecl.Name], false); err != nil {
@@ -489,9 +538,10 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 				return nil, err
 			}
 			scope.declare(param.Name, evt1ValueBinding{
-				t:       resolvedParam,
-				mutable: !param.Type.Const,
-				state:   evt1StorageInitialized,
+				t:          resolvedParam,
+				mutable:    !param.Type.Const,
+				state:      evt1StorageInitialized,
+				provenance: evt1LifetimeProvenance{Kind: evt1ProvenanceParameter, Scoped: resolvedParam.Scoped},
 			})
 		}
 		collectEscapedArmBindings(fn.Body, env)
@@ -511,10 +561,11 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 				return nil, err
 			}
 			scope.declare(param.Name, evt1ValueBinding{
-				t:        resolvedParam,
-				mutable:  !param.Type.Const,
-				state:    evt1StorageInitialized,
-				comptime: true,
+				t:          resolvedParam,
+				mutable:    !param.Type.Const,
+				state:      evt1StorageInitialized,
+				comptime:   true,
+				provenance: evt1LifetimeProvenance{Kind: evt1ProvenanceParameter, Scoped: resolvedParam.Scoped},
 			})
 		}
 		collectEscapedArmBindings(fn.Body, env)
@@ -894,7 +945,12 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				local.declare(s.Name, evt1ValueBinding{t: resolvedType, mutable: false, comptime: true, hasValue: true, value: value})
 				continue
 			}
-			local.declare(s.Name, evt1ValueBinding{t: resolvedType, mutable: !s.Const, state: evt1StorageInitialized, comptime: inComptimeFn})
+			provenance := evt1LifetimeProvenance{Kind: evt1ProvenanceLocal, Depth: local.depth, Scoped: resolvedType.Scoped}
+			if resolvedType.isReference() || evt1IsRefStructType(env, resolvedType) {
+				provenance = evt1ExprProvenance(env, local, s.Value)
+				provenance.Scoped = provenance.Scoped || resolvedType.Scoped
+			}
+			local.declare(s.Name, evt1ValueBinding{t: resolvedType, mutable: !s.Const, state: evt1StorageInitialized, comptime: inComptimeFn, provenance: provenance})
 		case *EffectsDecl:
 			if inComptimeFn {
 				return evt1Diagnostic("CV4304", fmt.Sprintf("effects batch %s cannot be declared in comptime code", s.Name), s.Span)
@@ -1019,6 +1075,17 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 			if !evt1TypesCompatible(env, target.t, valueType, typeParam) {
 				return evt1Diagnostic("CV4107", fmt.Sprintf("assignment to %s expected %s but got %s", exprLabel(s.Target), target.t.String(), valueType.String()), s.Value.exprSpan())
 			}
+			if name, ok := s.Target.(*NameExpr); ok && (target.t.isReference() || evt1IsRefStructType(env, target.t)) {
+				binding, _ := local.lookup(name.Name)
+				sourceProvenance := evt1ExprProvenance(env, local, s.Value)
+				if evt1LifetimeShorterThan(sourceProvenance, binding.provenance) {
+					return evt1Diagnostic("CV4523", fmt.Sprintf("value assigned to %s does not outlive its destination", name.Name), s.Value.exprSpan())
+				}
+				if binding.t.Scoped && !sourceProvenance.Scoped {
+					sourceProvenance.Scoped = true
+				}
+				local.setProvenance(name.Name, sourceProvenance)
+			}
 			if !evt1TypeCopyable(env, target.t) && !evt1TypeDependsOnParam(target.t, typeParam) {
 				if evt1IsImmovableValueType(env, target.t) && target.wholeValue {
 					return evt1Diagnostic("CV4135", fmt.Sprintf("immovable value %s cannot be assigned as a whole", target.t.String()), s.Span)
@@ -1028,7 +1095,8 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				if isName {
 					binding, _ = local.lookup(name.Name)
 				}
-				if !isName || binding.state != evt1StorageMoved || !evt1CanTransferInitialize(env, target.t, s.Value) {
+				canReplaceOwned := isName && binding.state == evt1StorageInitialized && target.t.isOwned() && evt1CanTransferInitialize(env, target.t, s.Value)
+				if !isName || (binding.state != evt1StorageMoved && !canReplaceOwned) || !evt1CanTransferInitialize(env, target.t, s.Value) {
 					if target.t.isOwned() {
 						return evt1Diagnostic("CV4501", fmt.Sprintf("assignment copies non-copyable type %s; use move from an initialized owner", target.t.String()), s.Span)
 					}
@@ -1055,7 +1123,22 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				return evt1Diagnostic("CV4116", fmt.Sprintf("expression result type mismatch: expected %s but got %s", returnType.String(), valueType.String()), s.Value.exprSpan())
 			}
 			if returnType.isBorrowLike() {
-				return evt1Diagnostic("CV4511", "reference returns are rejected in R3 because their referent lifetime cannot be proven", s.Value.exprSpan())
+				provenance := evt1ExprProvenance(env, local, s.Value)
+				if provenance.Scoped {
+					return evt1Diagnostic("CV4522", "scoped reference cannot escape through return", s.Value.exprSpan())
+				}
+				if provenance.Kind != evt1ProvenanceParameter && provenance.Kind != evt1ProvenanceStatic {
+					return evt1Diagnostic("CV4511", "reference return would escape local storage", s.Value.exprSpan())
+				}
+			}
+			if evt1IsRefStructType(env, returnType) {
+				provenance := evt1ExprProvenance(env, local, s.Value)
+				if provenance.Scoped {
+					return evt1Diagnostic("CV4522", "scoped lifetime-bound value cannot escape through return", s.Value.exprSpan())
+				}
+				if provenance.Kind != evt1ProvenanceParameter && provenance.Kind != evt1ProvenanceStatic {
+					return evt1Diagnostic("CV4521", "ref struct return would escape referenced local storage", s.Value.exprSpan())
+				}
 			}
 			if !evt1TypeCopyable(env, returnType) && !evt1CanTransferInitialize(env, returnType, s.Value) {
 				return evt1Diagnostic("CV4506", fmt.Sprintf("return of non-copyable type %s requires an explicit move", returnType.String()), s.Value.exprSpan())
@@ -1369,6 +1452,9 @@ func validateArrayLiteralExpr(env *semanticEnv, scope *evt1Scope, expr ArrayLite
 }
 
 func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string, allowConceptApp bool) error {
+	if t.Scoped && !t.isReference() && t.Kind != TypeConceptParam && !evt1IsRefStructType(env, t) {
+		return evt1Diagnostic("CV4525", fmt.Sprintf("scoped requires a reference or ref struct type, got %s", t.String()), span)
+	}
 	if t.PointerTo != nil {
 		return validateKnownType(env, *t.PointerTo, span, conceptParam, allowConceptApp)
 	}
@@ -1486,6 +1572,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		fieldType, ok := fields[e.Field]
 		if !ok {
 			return Type{}, evt1Diagnostic("CV4026", fmt.Sprintf("unknown field %s on %s", e.Field, baseName), e.Span)
+		}
+		if fieldType.isReference() {
+			return evt1CanonicalType(env, fieldType.borrowBase()), nil
 		}
 		return evt1CanonicalType(env, fieldType), nil
 	case *CallExpr:
@@ -1930,6 +2019,13 @@ func validateAssignable(env *semanticEnv, scope *evt1Scope, expr Expr, templateI
 			mutable = false
 			readOnlyReason = "record"
 		}
+		if fieldType.isReference() {
+			mutable = mutable && !fieldType.Const
+			if fieldType.Const {
+				readOnlyReason = "ref_const"
+			}
+			fieldType = fieldType.borrowBase()
+		}
 		return evt1LValue{t: evt1CanonicalType(env, fieldType), mutable: mutable, wholeValue: false, readOnlyReason: readOnlyReason, path: path}, nil
 	case *IndexExpr:
 		return evt1LValue{}, evt1Diagnostic("CV4231", "fixed compile-time array elements are immutable in EVT1 M1B-D", expr.exprSpan())
@@ -2055,7 +2151,11 @@ func validateStructConstructExpr(env *semanticEnv, scope *evt1Scope, expr Struct
 		if err != nil {
 			return Type{}, err
 		}
-		if !evt1CanInitializeStoredType(env, structDecl.Fields[i].Type, argType) {
+		if structDecl.Fields[i].Type.isReference() {
+			if err := validateCallArgument(env, scope, structDecl.Fields[i].Type, arg, argType, nil); err != nil {
+				return Type{}, err
+			}
+		} else if !evt1CanInitializeStoredType(env, structDecl.Fields[i].Type, argType) {
 			return Type{}, evt1Diagnostic("CV4107", fmt.Sprintf("wrong initializer type for %s field %s: expected %s but got %s", expr.StructName, structDecl.Fields[i].Name, structDecl.Fields[i].Type.String(), argType.String()), arg.exprSpan())
 		}
 		if !evt1TypeCopyable(env, argType) && !evt1CanTransferInitialize(env, structDecl.Fields[i].Type, arg) {
@@ -2063,6 +2163,92 @@ func validateStructConstructExpr(env *semanticEnv, scope *evt1Scope, expr Struct
 		}
 	}
 	return Type{Name: structDecl.Name, Kind: TypeStruct, Span: expr.Span}, nil
+}
+
+func evt1IsRefStructType(env *semanticEnv, t Type) bool {
+	decl, ok := env.structs[t.valueType().Name]
+	return ok && decl.Ref
+}
+
+func evt1ExprProvenance(env *semanticEnv, scope *evt1Scope, expr Expr) evt1LifetimeProvenance {
+	switch e := expr.(type) {
+	case *ParenExpr:
+		return evt1ExprProvenance(env, scope, e.Value)
+	case *MoveExpr:
+		return evt1ExprProvenance(env, scope, e.Value)
+	case *NameExpr:
+		if binding, ok := scope.lookup(e.Name); ok {
+			if binding.provenance.Kind != "" {
+				return binding.provenance
+			}
+			return evt1LifetimeProvenance{Kind: evt1ProvenanceLocal, Depth: scope.depth}
+		}
+	case *RefExpr:
+		if lvalue, err := validateAssignable(env, scope, e.Value, nil); err == nil {
+			if binding, ok := scope.lookup(lvalue.path.Root); ok {
+				if binding.provenance.Kind != "" {
+					return binding.provenance
+				}
+				for owner := scope; owner != nil; owner = owner.parent {
+					if _, ok := owner.values[lvalue.path.Root]; ok {
+						return evt1LifetimeProvenance{Kind: evt1ProvenanceLocal, Depth: owner.depth}
+					}
+				}
+			}
+		}
+	case *StructConstructExpr:
+		if decl, ok := env.structs[e.StructName]; ok && decl.Ref {
+			result := evt1LifetimeProvenance{Kind: evt1ProvenanceStatic}
+			found := false
+			for i, arg := range e.Args {
+				if i >= len(decl.Fields) || (!decl.Fields[i].Type.isReference() && !evt1IsRefStructType(env, decl.Fields[i].Type)) {
+					continue
+				}
+				p := evt1ExprProvenance(env, scope, arg)
+				if !found || evt1ProvenanceIsShorter(p, result) {
+					result = p
+				}
+				result.Scoped = result.Scoped || p.Scoped
+				found = true
+			}
+			if found {
+				return result
+			}
+		}
+	}
+	return evt1LifetimeProvenance{Kind: evt1ProvenanceUnknown, Depth: scope.depth, Scoped: true}
+}
+
+func evt1LifetimeShorterThan(source, destination evt1LifetimeProvenance) bool {
+	if source.Scoped && !destination.Scoped {
+		return true
+	}
+	if source.Kind == evt1ProvenanceUnknown {
+		return true
+	}
+	if destination.Kind == evt1ProvenanceParameter || destination.Kind == evt1ProvenanceStatic {
+		return source.Kind == evt1ProvenanceLocal
+	}
+	return source.Kind == evt1ProvenanceLocal && source.Depth > destination.Depth
+}
+
+func evt1ProvenanceIsShorter(left, right evt1LifetimeProvenance) bool {
+	if left.Scoped != right.Scoped {
+		return left.Scoped
+	}
+	if left.Kind == evt1ProvenanceUnknown {
+		return true
+	}
+	if right.Kind == evt1ProvenanceUnknown {
+		return false
+	}
+	if left.Kind == evt1ProvenanceLocal {
+		if right.Kind != evt1ProvenanceLocal {
+			return true
+		}
+		return left.Depth > right.Depth
+	}
+	return left.Kind == evt1ProvenanceParameter && right.Kind == evt1ProvenanceStatic
 }
 
 func validateMatchExpr(env *semanticEnv, scope *evt1Scope, expr MatchExpr, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
@@ -2850,9 +3036,47 @@ func checkConceptSatisfaction(env *semanticEnv, conceptName string, concreteType
 			if _, err := evt1LookupRequiredOperation(env, required, span, strings.Join(path, " -> ")); err != nil {
 				return err
 			}
+		case *CompilerAnalysisRequirement:
+			args := make([]Type, len(r.TypeArgs))
+			for i, arg := range r.TypeArgs {
+				args[i] = evt1SubstituteType(arg, conceptDecl.TypeParam, concreteType)
+			}
+			analysis := evt1SemanticAnalysisRegistry[r.Analysis]
+			satisfied := analysis.Check(env, args)
+			env.semanticProofs = append(env.semanticProofs, MIRSemanticProof{Concept: conceptName, Analysis: r.Analysis, ConcreteType: concreteType.String(), Satisfied: satisfied, SourceSpan: span})
+			if !satisfied {
+				return evt1Diagnostic("CV4524", fmt.Sprintf("%s failed compiler analysis requirement %s<%s>", strings.Join(path, " -> "), r.Analysis, concreteType.String()), span)
+			}
 		}
 	}
 	return nil
+}
+
+type evt1SemanticAnalysis struct {
+	Arity int
+	Check func(*semanticEnv, []Type) bool
+}
+
+var evt1SemanticAnalysisRegistry = map[string]evt1SemanticAnalysis{
+	"LifetimeSafe": {Arity: 1, Check: func(env *semanticEnv, args []Type) bool {
+		return len(args) == 1 && (args[0].isReference() || args[0].Scoped || evt1IsRefStructType(env, args[0]))
+	}},
+	"NonEscaping": {Arity: 1, Check: func(env *semanticEnv, args []Type) bool {
+		return len(args) == 1 && (args[0].Scoped || evt1IsRefStructType(env, args[0]))
+	}},
+	"Outlives": {Arity: 2, Check: func(env *semanticEnv, args []Type) bool {
+		return len(args) == 2 && evt1TypeLifetimeRank(env, args[0]) >= evt1TypeLifetimeRank(env, args[1])
+	}},
+}
+
+func evt1TypeLifetimeRank(env *semanticEnv, t Type) int {
+	if t.Scoped {
+		return 0
+	}
+	if t.isReference() || evt1IsRefStructType(env, t) {
+		return 1
+	}
+	return 2
 }
 
 func evt1LookupRequiredOperation(env *semanticEnv, required OperationRequirement, span Span, prefix string) (FunctionDecl, error) {
@@ -3229,9 +3453,10 @@ func instantiateTemplate(env *semanticEnv, templateName string, concreteType Typ
 	scope := newEVT1Scope(nil)
 	for _, param := range instFn.Params {
 		scope.declare(param.Name, evt1ValueBinding{
-			t:       evt1CanonicalType(env, param.Type),
-			mutable: !param.Type.Const,
-			state:   evt1StorageInitialized,
+			t:          evt1CanonicalType(env, param.Type),
+			mutable:    !param.Type.Const,
+			state:      evt1StorageInitialized,
+			provenance: evt1LifetimeProvenance{Kind: evt1ProvenanceParameter, Scoped: param.Type.Scoped},
 		})
 	}
 	if err := validateBlock(env, scope, instFn.ReturnType, *instFn.Body, nil, false); err != nil {
