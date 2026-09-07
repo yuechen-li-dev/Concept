@@ -34,6 +34,48 @@ type Diagnostic struct {
 	Span    Span
 }
 
+// SemanticCategory returns the stable diagnostic family used by differential
+// conformance. Numeric CV codes remain implementation-local during EVT1
+// reconciliation.
+func (d Diagnostic) SemanticCategory() string {
+	switch d.Code {
+	case "CV4127":
+		return "NOT_ASSIGNABLE"
+	case "CV4128":
+		return "CONST_MUTATION"
+	case "CV4142":
+		return "RECORD_FIELD_MUTATION"
+	case "CV4026", "CV4144":
+		return "UNKNOWN_FIELD"
+	case "CV4145":
+		return "DUPLICATE_WITH_FIELD"
+	case "CV4147":
+		return "WITH_FIELD_TYPE_MISMATCH"
+	case "CV4143":
+		return "WITH_REQUIRES_RECORD"
+	case "CV4146":
+		return "WITH_NONCOPYABLE_RECORD"
+	case "CV4134":
+		return "IMMOVABLE_COPY"
+	case "CV4135":
+		return "IMMOVABLE_ASSIGNMENT"
+	case "CV4136":
+		return "IMMOVABLE_BY_VALUE_PARAMETER"
+	case "CV4137":
+		return "IMMOVABLE_BY_VALUE_RETURN"
+	case "CV4138":
+		return "IMMOVABLE_EMBEDDING"
+	case "CV4139":
+		return "IMMOVABLE_ENUM_PAYLOAD"
+	case "CV4107":
+		return "VALUE_TYPE_MISMATCH"
+	case "CV4009":
+		return "EXPLICIT_LOCAL_TYPE_REQUIRED"
+	default:
+		return d.Code
+	}
+}
+
 func (d Diagnostic) Error() string {
 	return fmt.Sprintf("concept:%d:%d: %s: %s", d.Span.Line, d.Span.Column, d.Code, d.Message)
 }

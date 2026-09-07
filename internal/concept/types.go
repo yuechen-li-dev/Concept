@@ -146,10 +146,12 @@ type Field struct {
 }
 
 type StructDecl struct {
-	Name      string  `json:"name"`
-	Immovable bool    `json:"immovable"`
-	Fields    []Field `json:"fields"`
-	Span      Span    `json:"span"`
+	Name       string  `json:"name"`
+	Immovable  bool    `json:"immovable"`
+	Record     bool    `json:"record"`
+	Fields     []Field `json:"fields"`
+	Span       Span    `json:"span"`
+	RecordSpan Span    `json:"record_span,omitempty"`
 }
 
 type VariantDecl struct {
@@ -303,11 +305,13 @@ type Statement interface {
 }
 
 type VarDecl struct {
-	Comptime bool   `json:"comptime,omitempty"`
-	Type     Type   `json:"type"`
-	Name     string `json:"name"`
-	Value    Expr   `json:"value"`
-	Span     Span   `json:"span"`
+	Comptime  bool   `json:"comptime,omitempty"`
+	Const     bool   `json:"const,omitempty"`
+	Type      Type   `json:"type"`
+	Name      string `json:"name"`
+	Value     Expr   `json:"value"`
+	Span      Span   `json:"span"`
+	ConstSpan Span   `json:"const_span,omitempty"`
 }
 
 func (*VarDecl) evt1Statement()        {}
@@ -532,6 +536,21 @@ type StructConstructExpr struct {
 func (*StructConstructExpr) evt1Expr()        {}
 func (e *StructConstructExpr) exprSpan() Span { return e.Span }
 
+type FieldUpdate struct {
+	Name     string `json:"name"`
+	NameSpan Span   `json:"name_span"`
+	Value    Expr   `json:"value"`
+}
+
+type WithExpr struct {
+	Base    Expr          `json:"base"`
+	Updates []FieldUpdate `json:"updates"`
+	Span    Span          `json:"span"`
+}
+
+func (*WithExpr) evt1Expr()        {}
+func (e *WithExpr) exprSpan() Span { return e.Span }
+
 type ArrayLiteralExpr struct {
 	Elements []Expr `json:"elements,omitempty"`
 	Span     Span   `json:"span"`
@@ -631,6 +650,7 @@ type MIRStruct struct {
 	Name       string    `json:"name"`
 	CName      string    `json:"c_name"`
 	Immovable  bool      `json:"immovable"`
+	Record     bool      `json:"record,omitempty"`
 	Copyable   bool      `json:"copyable"`
 	Fields     []MIRName `json:"fields,omitempty"`
 	SourceSpan Span      `json:"source_span"`

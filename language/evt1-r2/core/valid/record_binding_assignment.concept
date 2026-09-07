@@ -1,0 +1,14 @@
+profile Core;
+
+record struct Point
+{
+    int x;
+    int y;
+}
+
+int Main()
+{
+    Point point = Point{1, 2};
+    point = Point{3, 4};
+    return point.x + point.y;
+}

@@ -1,0 +1,14 @@
+profile Core;
+
+record struct Point
+{
+    int x;
+    int y;
+};
+
+int Main()
+{
+    const Point source = Point{1, 2};
+    const Point copy = source;
+    return copy.x + copy.y;
+}

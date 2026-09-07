@@ -1,0 +1,12 @@
+profile Core;
+
+struct MutablePoint
+{
+    int x;
+};
+
+void Reject()
+{
+    const MutablePoint point = MutablePoint{0};
+    point.x = 1;
+}

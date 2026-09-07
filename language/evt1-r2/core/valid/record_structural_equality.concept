@@ -1,0 +1,21 @@
+profile Core;
+
+record struct Point
+{
+    int x;
+    int y;
+};
+
+comptime Point origin = Point{0, 0};
+comptime Point moved = origin with
+{
+    x = 10;
+};
+
+static_assert(origin == Point{0, 0});
+static_assert(moved == Point{10, 0});
+
+int Main()
+{
+    return 0;
+}

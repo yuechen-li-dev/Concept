@@ -1,0 +1,11 @@
+profile Core;
+
+struct Counter
+{
+    int value;
+};
+
+void Reject(const Counter counter)
+{
+    counter.value = 1;
+}

@@ -1,0 +1,7 @@
+profile Core;
+
+int Main()
+{
+    let int value = 3;
+    return value;
+}

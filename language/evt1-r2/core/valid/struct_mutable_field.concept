@@ -1,0 +1,13 @@
+profile Core;
+
+struct Counter
+{
+    int value;
+};
+
+int Main()
+{
+    Counter counter = Counter{0};
+    counter.value = 1;
+    return counter.value;
+}

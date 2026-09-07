@@ -1,0 +1,16 @@
+profile Core;
+
+record struct ResourceRecord
+{
+    owned int handle;
+    int generation;
+};
+
+void Reject()
+{
+    ResourceRecord resource = ResourceRecord{1, 0};
+    ResourceRecord next = resource with
+    {
+        generation = 1;
+    };
+}

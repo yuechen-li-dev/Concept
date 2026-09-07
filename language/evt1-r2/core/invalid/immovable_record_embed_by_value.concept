@@ -1,0 +1,11 @@
+profile Core;
+
+immovable struct State
+{
+    int value;
+};
+
+record struct Snapshot
+{
+    State state;
+};

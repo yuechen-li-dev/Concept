@@ -100,6 +100,7 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 			Name:       structDecl.Name,
 			CName:      evt1CName(structDecl.Name),
 			Immovable:  structDecl.Immovable,
+			Record:     structDecl.Record,
 			Copyable:   evt1TypeCopyable(env, Type{Name: structDecl.Name, Kind: TypeStruct}),
 			SourceSpan: structDecl.Span,
 		}
@@ -405,6 +406,8 @@ func collectMIROps(env *semanticEnv, block *Block, fn *MIRFunction, templateInfo
 			kind := "var_decl"
 			if s.Comptime {
 				kind = "comptime_decl"
+			} else if s.Const {
+				kind = "const_decl"
 			}
 			if _, ok := s.Value.(*StructConstructExpr); ok {
 				if !evt1TypeCopyable(env, s.Type) {
@@ -482,6 +485,12 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: kind, Detail: e.StructName, SourceSpan: e.Span})
 		for _, arg := range e.Args {
 			collectExprMIROps(env, arg, fn, templateInfo)
+		}
+	case *WithExpr:
+		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "record_with", Detail: fmt.Sprintf("%d updates", len(e.Updates)), SourceSpan: e.Span})
+		collectExprMIROps(env, e.Base, fn, templateInfo)
+		for _, update := range e.Updates {
+			collectExprMIROps(env, update.Value, fn, templateInfo)
 		}
 	case *ConstructExpr:
 		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "enum_construct", Detail: e.EnumName + "::" + e.VariantName, SourceSpan: e.Span})
@@ -910,6 +919,15 @@ func evt1ModuleUsesAutomataDispatchOutcome(module Module) bool {
 		case *StructConstructExpr:
 			for _, arg := range e.Args {
 				if usesExpr(arg) {
+					return true
+				}
+			}
+		case *WithExpr:
+			if usesExpr(e.Base) {
+				return true
+			}
+			for _, update := range e.Updates {
+				if usesExpr(update.Value) {
 					return true
 				}
 			}
@@ -2343,6 +2361,18 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 			}
 		}
 		return prelude.String(), evt1StructConstructorName(e.StructName) + "(" + strings.Join(args, ", ") + ")", structType
+	case *WithExpr:
+		basePrelude, baseExpr, baseType := f.lowerExpr(e.Base, indent)
+		resultTemp := f.nextTemp("record_with")
+		var b strings.Builder
+		b.WriteString(basePrelude)
+		b.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(baseType), resultTemp, baseExpr))
+		for _, update := range e.Updates {
+			valuePrelude, valueExpr, _ := f.lowerExpr(update.Value, indent)
+			b.WriteString(valuePrelude)
+			b.WriteString(ind(indent) + fmt.Sprintf("%s.%s = %s;\n", resultTemp, update.Name, valueExpr))
+		}
+		return b.String(), resultTemp, baseType
 	case *MatchExpr:
 		subPrelude, subjectExpr, subjectType := f.lowerExpr(e.Subject, indent)
 		enumDecl := f.l.env.enums[subjectType.Name]

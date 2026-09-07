@@ -1,0 +1,14 @@
+profile Core;
+
+struct Counter
+{
+    int value;
+};
+
+int Main()
+{
+    Counter source = Counter{4};
+    Counter target = Counter{0};
+    target = source;
+    return target.value;
+}

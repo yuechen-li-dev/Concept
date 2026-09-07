@@ -1,0 +1,16 @@
+profile Core;
+
+record struct Point
+{
+    int x;
+    int y;
+};
+
+void Reject()
+{
+    Point point = Point{1, 2};
+    Point moved = point with
+    {
+        z = 5;
+    };
+}

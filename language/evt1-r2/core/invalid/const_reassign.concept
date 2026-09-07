@@ -1,0 +1,7 @@
+profile Core;
+
+void Reject()
+{
+    const int value = 1;
+    value = 2;
+}

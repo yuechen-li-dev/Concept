@@ -196,13 +196,19 @@ func (p *parser) parseModule() (Module, error) {
 			}
 			module.Templates = append(module.Templates, templateDecl)
 		case "immovable":
-			structDecl, err := p.parseStructDecl(true)
+			structDecl, err := p.parseStructDecl(true, false)
+			if err != nil {
+				return module, err
+			}
+			module.Structs = append(module.Structs, structDecl)
+		case "record":
+			structDecl, err := p.parseStructDecl(false, true)
 			if err != nil {
 				return module, err
 			}
 			module.Structs = append(module.Structs, structDecl)
 		case "struct":
-			structDecl, err := p.parseStructDecl(false)
+			structDecl, err := p.parseStructDecl(false, false)
 			if err != nil {
 				return module, err
 			}
@@ -851,10 +857,14 @@ func (p *parser) parseStaticAssert() (StaticAssert, error) {
 	return assertion, nil
 }
 
-func (p *parser) parseStructDecl(immovable bool) (StructDecl, error) {
+func (p *parser) parseStructDecl(immovable, record bool) (StructDecl, error) {
 	start := p.currentSpan()
 	if immovable {
 		p.next()
+	}
+	recordSpan := Span{}
+	if record {
+		recordSpan = p.next().Span
 	}
 	if _, err := p.expect("struct"); err != nil {
 		return StructDecl{}, err
@@ -866,7 +876,7 @@ func (p *parser) parseStructDecl(immovable bool) (StructDecl, error) {
 	if _, err := p.expect("{"); err != nil {
 		return StructDecl{}, err
 	}
-	decl := StructDecl{Name: nameTok.Lexeme, Immovable: immovable, Span: start}
+	decl := StructDecl{Name: nameTok.Lexeme, Immovable: immovable, Record: record, Span: start, RecordSpan: recordSpan}
 	for !p.done() && p.peekLexeme() != "}" {
 		fieldType, err := p.parseType("")
 		if err != nil {
@@ -884,8 +894,8 @@ func (p *parser) parseStructDecl(immovable bool) (StructDecl, error) {
 	if _, err := p.expect("}"); err != nil {
 		return StructDecl{}, err
 	}
-	if _, err := p.expect(";"); err != nil {
-		return StructDecl{}, err
+	if p.peekLexeme() == ";" {
+		p.next()
 	}
 	return decl, nil
 }
@@ -1268,7 +1278,7 @@ func (p *parser) parseStatement() (Statement, error) {
 		}
 		return &block, nil
 	default:
-		if p.looksLikeVarDecl() {
+		if p.peekLexeme() == "const" || p.peekLexeme() == "let" || p.looksLikeVarDecl() {
 			return p.parseVarDecl()
 		}
 		value, err := p.parseExpr()
@@ -1433,6 +1443,9 @@ func (p *parser) looksLikeVarDecl() bool {
 	}
 	save := p.pos
 	defer func() { p.pos = save }()
+	if p.peekLexeme() == "const" || p.peekLexeme() == "let" {
+		p.next()
+	}
 	if _, err := p.parseType(""); err != nil {
 		return false
 	}
@@ -1444,6 +1457,12 @@ func (p *parser) looksLikeVarDecl() bool {
 }
 
 func (p *parser) parseVarDecl() (Statement, error) {
+	isConst := false
+	constSpan := Span{}
+	if p.peekLexeme() == "const" || p.peekLexeme() == "let" {
+		isConst = true
+		constSpan = p.next().Span
+	}
 	t, err := p.parseType("")
 	if err != nil {
 		return nil, err
@@ -1462,7 +1481,7 @@ func (p *parser) parseVarDecl() (Statement, error) {
 	if _, err := p.expect(";"); err != nil {
 		return nil, err
 	}
-	return &VarDecl{Type: t, Name: nameTok.Lexeme, Value: value, Span: nameTok.Span}, nil
+	return &VarDecl{Const: isConst, Type: t, Name: nameTok.Lexeme, Value: value, Span: nameTok.Span, ConstSpan: constSpan}, nil
 }
 
 func (p *parser) parseMatchStmt() (Statement, error) {
@@ -1548,7 +1567,7 @@ func (p *parser) parseExpr() (Expr, error) {
 
 func (p *parser) parseIfExpr() (Expr, error) {
 	if p.peekLexeme() != "if" {
-		return p.parseLogicalOr()
+		return p.parseWithExpr()
 	}
 	start := p.next().Span
 	if _, err := p.expect("("); err != nil {
@@ -1576,6 +1595,42 @@ func (p *parser) parseIfExpr() (Expr, error) {
 		return nil, evt1Diagnostic("CV4185", "else-if ladders are not supported; use match for multi-branch selection", elseExpr.exprSpan())
 	}
 	return &IfExpr{Condition: condition, Then: thenExpr, Else: elseExpr, Span: start}, nil
+}
+
+func (p *parser) parseWithExpr() (Expr, error) {
+	base, err := p.parseLogicalOr()
+	if err != nil {
+		return nil, err
+	}
+	if p.peekLexeme() != "with" {
+		return base, nil
+	}
+	withToken := p.next()
+	if _, err := p.expect("{"); err != nil {
+		return nil, err
+	}
+	expr := &WithExpr{Base: base, Span: withToken.Span}
+	for !p.done() && p.peekLexeme() != "}" {
+		name, err := p.expectIdentifier("CV4141", "expected record field name in with update")
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.expect("="); err != nil {
+			return nil, err
+		}
+		value, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.expect(";"); err != nil {
+			return nil, err
+		}
+		expr.Updates = append(expr.Updates, FieldUpdate{Name: name.Lexeme, NameSpan: name.Span, Value: value})
+	}
+	if _, err := p.expect("}"); err != nil {
+		return nil, err
+	}
+	return expr, nil
 }
 
 func evt1IsDirectIfExpr(expr Expr) bool {

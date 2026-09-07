@@ -1,0 +1,14 @@
+profile Core;
+
+struct Counter
+{
+    int value;
+};
+
+int Main()
+{
+    const Counter source = Counter{1};
+    Counter copy = source;
+    copy.value = 2;
+    return source.value + copy.value;
+}

@@ -38,10 +38,11 @@ type evt1RetainedBorrow struct {
 }
 
 type evt1LValue struct {
-	t          Type
-	mutable    bool
-	wholeValue bool
-	path       evt1AccessPath
+	t              Type
+	mutable        bool
+	wholeValue     bool
+	readOnlyReason string
+	path           evt1AccessPath
 }
 
 func newEVT1Scope(parent *evt1Scope) *evt1Scope {
@@ -390,7 +391,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 			}
 			scope.declare(param.Name, evt1ValueBinding{
 				t:       resolvedParam,
-				mutable: !(param.Type.isBorrowLike() && param.Type.Const),
+				mutable: !param.Type.Const,
 			})
 		}
 		if err := validateBlock(env, scope, resolvedReturn, *templateDecl.Body, env.templateInfos[templateDecl.Name], false); err != nil {
@@ -413,7 +414,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 			}
 			scope.declare(param.Name, evt1ValueBinding{
 				t:       resolvedParam,
-				mutable: !(param.Type.isBorrowLike() && param.Type.Const),
+				mutable: !param.Type.Const,
 			})
 		}
 		collectEscapedArmBindings(fn.Body, env)
@@ -434,7 +435,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 			}
 			scope.declare(param.Name, evt1ValueBinding{
 				t:        resolvedParam,
-				mutable:  true,
+				mutable:  !param.Type.Const,
 				comptime: true,
 			})
 		}
@@ -601,6 +602,12 @@ func evt1CollectComptimeCallsFromExpr(expr Expr, env *semanticEnv) []string {
 		var out []string
 		for _, arg := range e.Args {
 			out = append(out, evt1CollectComptimeCallsFromExpr(arg, env)...)
+		}
+		return out
+	case *WithExpr:
+		out := evt1CollectComptimeCallsFromExpr(e.Base, env)
+		for _, update := range e.Updates {
+			out = append(out, evt1CollectComptimeCallsFromExpr(update.Value, env)...)
 		}
 		return out
 	case *ArrayLiteralExpr:
@@ -804,7 +811,7 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				local.declare(s.Name, evt1ValueBinding{t: resolvedType, mutable: false, comptime: true, hasValue: true, value: value})
 				continue
 			}
-			local.declare(s.Name, evt1ValueBinding{t: resolvedType, mutable: true, comptime: inComptimeFn})
+			local.declare(s.Name, evt1ValueBinding{t: resolvedType, mutable: !s.Const, comptime: inComptimeFn})
 		case *EffectsDecl:
 			if inComptimeFn {
 				return evt1Diagnostic("CV4304", fmt.Sprintf("effects batch %s cannot be declared in comptime code", s.Name), s.Span)
@@ -907,6 +914,9 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				return err
 			}
 			if !target.mutable {
+				if target.readOnlyReason == "record" {
+					return evt1Diagnostic("CV4142", "record fields are read-only after construction", s.Target.exprSpan())
+				}
 				return evt1Diagnostic("CV4128", "mutation through a const access path is not allowed", s.Target.exprSpan())
 			}
 			if borrow, ok := evt1FindOverlappingBorrow(local.activeBorrows(), target.path); ok {
@@ -1582,6 +1592,8 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		return validateConstructExpr(env, scope, *e)
 	case *StructConstructExpr:
 		return validateStructConstructExpr(env, scope, *e)
+	case *WithExpr:
+		return validateWithExpr(env, scope, *e, templateInfo, inComptimeFn)
 	case *IfExpr:
 		conditionType, err := validateExpr(env, scope, e.Condition, templateInfo, inComptimeFn)
 		if err != nil {
@@ -1697,12 +1709,52 @@ func validateAssignable(env *semanticEnv, scope *evt1Scope, expr Expr, templateI
 		path := receiver.path
 		path.Fields = append(append([]string{}, receiver.path.Fields...), e.Field)
 		path.Span = e.Span
-		return evt1LValue{t: evt1CanonicalType(env, fieldType), mutable: receiver.mutable, wholeValue: false, path: path}, nil
+		mutable := receiver.mutable
+		readOnlyReason := receiver.readOnlyReason
+		if decl, ok := env.structs[receiver.t.borrowBase().Name]; ok && decl.Record {
+			mutable = false
+			readOnlyReason = "record"
+		}
+		return evt1LValue{t: evt1CanonicalType(env, fieldType), mutable: mutable, wholeValue: false, readOnlyReason: readOnlyReason, path: path}, nil
 	case *IndexExpr:
 		return evt1LValue{}, evt1Diagnostic("CV4231", "fixed compile-time array elements are immutable in EVT1 M1B-D", expr.exprSpan())
 	default:
 		return evt1LValue{}, evt1Diagnostic("CV4127", "assignment requires a local or field access target", expr.exprSpan())
 	}
+}
+
+func validateWithExpr(env *semanticEnv, scope *evt1Scope, expr WithExpr, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
+	baseType, err := validateExpr(env, scope, expr.Base, templateInfo, inComptimeFn)
+	if err != nil {
+		return Type{}, err
+	}
+	baseType = evt1CanonicalType(env, baseType.valueType())
+	decl, ok := env.structs[baseType.Name]
+	if !ok || !decl.Record {
+		return Type{}, evt1Diagnostic("CV4143", fmt.Sprintf("with requires a record struct value, got %s", baseType.String()), expr.Span)
+	}
+	if !evt1TypeCopyable(env, baseType) {
+		return Type{}, evt1Diagnostic("CV4146", fmt.Sprintf("with cannot copy non-copyable record %s", baseType.String()), expr.Span)
+	}
+	seen := map[string]bool{}
+	for _, update := range expr.Updates {
+		fieldType, exists := env.fieldSets[decl.Name][update.Name]
+		if !exists {
+			return Type{}, evt1Diagnostic("CV4144", fmt.Sprintf("unknown field %s in with update for %s", update.Name, decl.Name), update.NameSpan)
+		}
+		if seen[update.Name] {
+			return Type{}, evt1Diagnostic("CV4145", fmt.Sprintf("duplicate field %s in with update for %s", update.Name, decl.Name), update.NameSpan)
+		}
+		seen[update.Name] = true
+		valueType, err := validateExprAgainstExpected(env, scope, update.Value, evt1CanonicalType(env, fieldType), templateInfo, inComptimeFn)
+		if err != nil {
+			return Type{}, err
+		}
+		if !evt1TypesCompatible(env, fieldType, valueType, "") {
+			return Type{}, evt1Diagnostic("CV4147", fmt.Sprintf("with update for %s.%s expected %s but got %s", decl.Name, update.Name, fieldType.String(), valueType.String()), update.Value.exprSpan())
+		}
+	}
+	return baseType, nil
 }
 
 func evt1FindOverlappingBorrow(borrows []evt1RetainedBorrow, path evt1AccessPath) (evt1RetainedBorrow, bool) {
@@ -2016,6 +2068,16 @@ func evt1ValidateGuardExpr(env *semanticEnv, scope *evt1Scope, expr Expr, state 
 			}
 		}
 		return nil
+	case *WithExpr:
+		if err := evt1ValidateGuardExpr(env, scope, e.Base, state, depth); err != nil {
+			return err
+		}
+		for _, update := range e.Updates {
+			if err := evt1ValidateGuardExpr(env, scope, update.Value, state, depth); err != nil {
+				return err
+			}
+		}
+		return nil
 	case *ArrayLiteralExpr:
 		for _, element := range e.Elements {
 			if err := evt1ValidateGuardExpr(env, scope, element, state, depth); err != nil {
@@ -2187,6 +2249,11 @@ func evt1GuardExprNodeCount(expr Expr) int {
 		for _, arg := range e.Args {
 			count += evt1GuardExprNodeCount(arg)
 		}
+	case *WithExpr:
+		count += evt1GuardExprNodeCount(e.Base)
+		for _, update := range e.Updates {
+			count += evt1GuardExprNodeCount(update.Value)
+		}
 	case *DispatchExpr:
 		count += evt1GuardExprNodeCount(e.Signal)
 	case *TemplateCallExpr:
@@ -2276,6 +2343,12 @@ func evt1ExprIdentity(expr Expr) string {
 			args = append(args, evt1ExprIdentity(arg))
 		}
 		return e.StructName + "{" + strings.Join(args, ",") + "}"
+	case *WithExpr:
+		parts := []string{evt1ExprIdentity(e.Base)}
+		for _, update := range e.Updates {
+			parts = append(parts, update.Name+"="+evt1ExprIdentity(update.Value))
+		}
+		return "with(" + strings.Join(parts, ",") + ")"
 	case *ArrayLiteralExpr:
 		var parts []string
 		for _, element := range e.Elements {
@@ -2893,7 +2966,7 @@ func instantiateTemplate(env *semanticEnv, templateName string, concreteType Typ
 	for _, param := range instFn.Params {
 		scope.declare(param.Name, evt1ValueBinding{
 			t:       evt1CanonicalType(env, param.Type),
-			mutable: !(param.Type.isBorrowLike() && param.Type.Const),
+			mutable: !param.Type.Const,
 		})
 	}
 	if err := validateBlock(env, scope, instFn.ReturnType, *instFn.Body, nil, false); err != nil {
@@ -3098,6 +3171,20 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 				return nil, err
 			}
 			out.Args = append(out.Args, sub)
+		}
+		return out, nil
+	case *WithExpr:
+		base, err := evt1SubstituteExpr(e.Base, typeParam, concreteType)
+		if err != nil {
+			return nil, err
+		}
+		out := &WithExpr{Base: base, Span: e.Span}
+		for _, update := range e.Updates {
+			value, err := evt1SubstituteExpr(update.Value, typeParam, concreteType)
+			if err != nil {
+				return nil, err
+			}
+			out.Updates = append(out.Updates, FieldUpdate{Name: update.Name, NameSpan: update.NameSpan, Value: value})
 		}
 		return out, nil
 	case *MatchExpr:

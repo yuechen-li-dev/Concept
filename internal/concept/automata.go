@@ -872,6 +872,16 @@ func evt1ValidateEffectPayloadExpr(env *semanticEnv, scope *evt1Scope, expr Expr
 			}
 		}
 		return nil
+	case *WithExpr:
+		if err := evt1ValidateEffectPayloadExpr(env, scope, e.Base); err != nil {
+			return err
+		}
+		for _, update := range e.Updates {
+			if err := evt1ValidateEffectPayloadExpr(env, scope, update.Value); err != nil {
+				return err
+			}
+		}
+		return nil
 	default:
 		return evt1Diagnostic("CV4312", "effect payload expressions must use pure value construction only in M3", expr.exprSpan())
 	}

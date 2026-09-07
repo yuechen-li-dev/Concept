@@ -1,0 +1,13 @@
+profile Core;
+
+immovable struct State
+{
+    int value;
+};
+
+void Reject()
+{
+    State source = State{1};
+    State target = State{2};
+    target = source;
+}

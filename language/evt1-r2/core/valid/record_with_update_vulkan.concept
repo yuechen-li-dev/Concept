@@ -1,0 +1,17 @@
+profile Vulkan;
+
+record struct Point
+{
+    int x;
+    int y;
+};
+
+int Main()
+{
+    const Point origin = Point{0, 0};
+    const Point moved = origin with
+    {
+        y = 5;
+    };
+    return moved.y;
+}

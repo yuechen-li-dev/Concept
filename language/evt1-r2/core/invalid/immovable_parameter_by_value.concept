@@ -1,0 +1,11 @@
+profile Core;
+
+immovable struct State
+{
+    int value;
+};
+
+void Reject(State state)
+{
+    state.value = 1;
+}

@@ -1,0 +1,11 @@
+profile Core;
+
+immovable struct State
+{
+    int value;
+};
+
+enum Event
+{
+    Updated(State state),
+}

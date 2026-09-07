@@ -1,0 +1,14 @@
+profile Core;
+
+struct Counter
+{
+    int value;
+};
+
+int Main()
+{
+    Counter source = Counter{4};
+    Counter copy = source;
+    copy.value = 7;
+    return source.value + copy.value;
+}

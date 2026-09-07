@@ -1,0 +1,17 @@
+profile Core;
+
+struct Counter
+{
+    int value;
+};
+
+int Inspect(const Counter counter)
+{
+    return counter.value;
+}
+
+int Main()
+{
+    Counter counter = Counter{3};
+    return Inspect(counter);
+}

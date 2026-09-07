@@ -1,0 +1,10 @@
+profile Core;
+
+void Reject()
+{
+    int value = 1;
+    int moved = value with
+    {
+        value = 2;
+    };
+}

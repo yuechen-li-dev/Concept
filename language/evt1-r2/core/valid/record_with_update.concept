@@ -1,0 +1,17 @@
+profile Core;
+
+record struct Point
+{
+    int x;
+    int y;
+};
+
+int Main()
+{
+    const Point origin = Point{0, 2};
+    const Point moved = origin with
+    {
+        x = 10;
+    };
+    return origin.x + moved.x + moved.y;
+}

@@ -318,6 +318,24 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 			StructName: e.StructName,
 			Fields:     fields,
 		}, nil
+	case *WithExpr:
+		base, err := evt1EvalExpr(state, scope, e.Base)
+		if err != nil {
+			return Value{}, err
+		}
+		fields := make(map[string]Value, len(base.Fields))
+		for name, value := range base.Fields {
+			fields[name] = value
+		}
+		for _, update := range e.Updates {
+			value, err := evt1EvalExpr(state, scope, update.Value)
+			if err != nil {
+				return Value{}, err
+			}
+			fields[update.Name] = value
+		}
+		base.Fields = fields
+		return base, nil
 	case *ConstructExpr:
 		var payload []Value
 		for _, arg := range e.Args {

@@ -1,0 +1,14 @@
+profile Core;
+
+immovable struct CommandPoolState
+{
+    int handle;
+    bool initialized;
+};
+
+int Main()
+{
+    CommandPoolState state = CommandPoolState{7, false};
+    state.initialized = true;
+    return state.handle;
+}

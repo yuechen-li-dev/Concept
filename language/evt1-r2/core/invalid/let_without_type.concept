@@ -1,0 +1,6 @@
+profile Core;
+
+void Reject()
+{
+    let value = 3;
+}
