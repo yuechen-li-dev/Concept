@@ -1,6 +1,6 @@
 # Concept EVT1 Stage 0 compiler architecture
 
-Status: R1 conformance and profile-isolation foundation
+Status: R2 value/place and record foundation
 
 ## Authority
 
@@ -42,6 +42,9 @@ The following mechanisms are compiler-core responsibilities:
 - recursive syntax parsing into typed declarations and expressions;
 - type identity, declaration indexing, scope validation, and diagnostics;
 - payload-enum construction and exhaustive match validation;
+- local and parameter place mutability, record metadata, and bounded
+  copyability/immovability validation;
+- non-destructive record update typing and lowering;
 - named concept requirements, constraint closure, and bounded template
   specialization;
 - deterministic, fuel-bounded compile-time evaluation;
@@ -103,6 +106,38 @@ has no Prometheus package, builtin type, or application binding dependency.
 **Vulkan is an extension of Concept EVT1. Concept EVT1 is not an extension of
 Vulkan.**
 
+## R2 value/place implementation
+
+R2 keeps these semantics in compiler core:
+
+- `parse.go` recognizes `record struct`, binding `const`/typed `let`, and
+  `WithExpr`, preserving modifier, keyword, field-name, and value spans;
+- `types.go` stores record and binding metadata on the existing struct/local
+  AST shapes and exposes `record` on MIR structs;
+- `validate.go` owns the bounded place classification. Scope bindings carry
+  mutability, lvalue projection propagates constness, record projections force
+  a record-read-only reason, and existing recursive copyability supplies the
+  ordinary/record copy law;
+- the same validator owns immovable final-storage, whole-assignment,
+  by-value boundary, struct/record embedding, and enum-payload checks;
+- `WithExpr` validation requires a copyable record, resolves fields, rejects
+  duplicates and type mismatches, and visits replacement expressions in
+  source order;
+- `comptime.go` performs value-map copy/update for bounded compile-time record
+  expressions;
+- MIR records a `record_with` semantic operation. `generate.go` evaluates the
+  base once into a fresh C aggregate temporary and applies updates in source
+  order.
+
+The generated C struct representation is shared by ordinary, record, and
+immovable structs. C mutation used to construct a fresh record is not exposed
+as Concept-level mutability. C `const` is not relied upon for correctness; the
+semantic validator is authoritative.
+
+No R2 rule is registered in `ProfileDefinition` or implemented by the Vulkan
+package. A Vulkan-positive corpus case proves that the profile inherits these
+core semantics unchanged.
+
 ## CLI and artifacts
 
 `cmd/concept` is the active driver:
@@ -141,14 +176,14 @@ silently broaden core parsing or typing. A profile-specific construct must be
 rejected outside its profile or explicitly promoted through the specification
 and reconciliation process.
 
-## R1 limitations
+## R2 limitations
 
 - The package remains deliberately cohesive rather than prematurely split.
 - Effect/actuator validation and C runtime emission remain in-package profile
   hooks; their complete physical extraction is deferred until the private
   semantic boundary stabilizes.
 - Diagnostic codes retain the historical `CV` namespace for compatibility;
-  renumbering is deferred.
+  R2 maps its bounded slice to semantic family names and defers renumbering.
 - The backend is the extracted strict-C11 path only.
 - Imports are represented, but Core multi-module compilation is not yet active.
 - Automata are implemented but provisional; PoC3 machine/decide/yield laws are
@@ -156,6 +191,10 @@ and reconciliation process.
 - The complete PoC3 ownership, allocation, C ABI, testing, panic/assert,
   interfaces/dyn, slices, FixedBuffer, Option, and Result surfaces are not
   ported.
+
+R2 does not add a borrow checker, move/drop invalidation, runtime aggregates,
+or a generalized place lattice. `const Type parameter` uses the natural
+existing qualifier grammar only as a parameter-place restriction.
 
 ## R1 executable evidence
 
@@ -166,3 +205,10 @@ templates, deterministic monomorphization, bounded comptime, and compile-time
 fixed arrays. `docs/conformance/EVT1-R1-CONFORMANCE.md` records classifications
 and provenance; `docs/compiler/EVT1-R1-VULKAN-ISOLATION.md` records the complete
 R1 leakage audit.
+
+## R2 executable evidence
+
+`internal/concept/r2_conformance_test.go` and `language/evt1-r2/core` provide
+32 readable cases with semantic-family diagnostics, MIR checks, exactly-once
+base lowering proof, Core/Vulkan inheritance evidence, and native C11 runs for
+mutable struct, record update, and immovable final-storage paths.

@@ -1,6 +1,6 @@
 # EVT1 semantic reconciliation matrix
 
-Status: R0 authority ledger with R1 executable evidence
+Status: R0 authority ledger with R1-R2 executable evidence
 
 `Port required?` means implementation or conformance work remains after R0; it
 does not authorize that work in this milestone. Status is one of `Keep PoC3`,
@@ -11,10 +11,13 @@ does not authorize that work in this milestone. Status is one of `Keep PoC3`,
 | source unit/module syntax | module-oriented PoC3 surface | mandatory `profile Vulkan;` source unit | require explicit `profile Core;` or `profile Vulkan;` in R0 | Merge | No for R0 | `profile_test.go`; phase1 fixtures | broader module law deferred |
 | imports | implemented multi-module compiler and diagnostics | dotted paths parsed; Vulkan import used as admission marker | preserve syntax; Core import resolution is not active | Keep PoC3 | Yes | phase16 fixtures | no fake resolver in R0 |
 | naming | C++ lineage, but fixtures include older surface conventions | PascalCase types/functions/operations; camelCase locals/parameters | use Go line's explicit naming law | Keep Go | Translation | extracted examples | backend/MIR names may remain snake_case |
-| declaration syntax | includes `fn`, `name: Type`, arrows, `let`/`var` in historical fixtures | return type first; `Type name`; braces | canonical C++-shaped Go syntax | Keep Go | Translation | phase1/2 plus extracted examples | material surface conflict resolved explicitly |
+| declaration syntax | includes `fn`, `name: Type`, arrows, `let`/`var` in historical fixtures | return type first; `Type name`; braces | canonical C++-shaped Go syntax; typed `let` is only a const alias | Keep Go | Translation | phase1/2 plus R2 corpus | inference remains absent |
 | primitive types | broader general systems-language set | `int`, `bool`, `void`, compile-time `string`, `uint64`, profile handles | canonize minimal core; widths/string runtime remain open | Merge | Yes | phase1; Go type tests | Vulkan handles are not core |
-| structs | runtime structs, places, initialization, MIR/C lowering | mutable structs, positional construction, field checks | retain Go executable subset; reconcile broader place laws | Merge | Yes | phase7; M1B-A tests | core candidate |
-| immovable/value types | `immovable`, move/drop integration | bounded `immovable struct`, copy rejection | preserve spelling and bounded rule provisionally | Merge | Yes | phase10; M1B-A tests | complete storage law missing |
+| structs | runtime structs and places; PoC3 later requires explicit `Copy` conformance | mutable structs, positional construction, field checks, structural copy | ordinary structs are mutable values and copy when all fields are copyable | Merge | No for R2 subset | phase7; R2 corpus | default structural copy is an expected PoC3 divergence; drop remains open |
+| record struct | no corresponding syntax or type-level record immutability | absent before R2 | immutable value aggregate with copy/update construction | Keep Go | No for R2 subset | `language/evt1-r2/core` | EVT1-new evidence, not a PoC3 divergence |
+| const binding/place | historical qualifiers and ownership-era place rules | type qualifier existed; local binding was mutable before R2 | `const` freezes reassignment and projected mutable places, independently of record type immutability | Merge | No for local and natural parameter subset | R2 const corpus | full borrow/alias law remains deferred |
+| with expression | no corresponding syntax | absent before R2 | fresh copyable-record update; source evaluated once and preserved | Keep Go | No for R2 subset | R2 MIR/C/native tests | ordinary structs and non-copyable records rejected |
+| immovable/value types | design pressure but no closed PoC3 fixture implementation; ownership fixtures cover non-copyable flow | bounded `immovable struct`, final-storage construction and copy rejection | canonize bounded final-storage, mutation, copy/assignment/boundary/embed rejection | Merge | Yes beyond R2 subset | phase10 pressure; M1B-A and R2 tests | complete move/drop/borrow storage law missing |
 | payload enums | implemented sum types and payload construction | typed payload enums with deterministic tags | canonical bounded payload enum subset | Merge | No for subset | phase5; M1A tests | generic built-ins separate |
 | variant construction | PoC3 constructor forms, including built-in forms | qualified `Enum::Variant(args)` | prefer qualified Go form for EVT1 | Keep Go | Translation | phase5; M1A examples | built-in Option syntax deferred |
 | match syntax | PoC3 match and several later machine forms | `match (value)` with qualified enum arms | canonical Go expression spelling for base enum match | Keep Go | Translation | phase5; M1A tests | machine match not covered |
@@ -35,7 +38,7 @@ does not authorize that work in this milestone. Status is one of `Keep PoC3`,
 | FixedBuffer | compiler-known bounded buffer implemented | absent | preserve design and fixtures; do not port in R0 | Keep PoC3 | Yes | phase21/22 fixtures | helper spree prohibited |
 | Option | compiler-known `Option<T>` plus exhaustive Some/None match | absent | preserve PoC3 reference; defer EVT1 adoption | Keep PoC3 | Yes | phase22 fixtures | not R0 |
 | Result | design only/incomplete at cutover; function fallibility exists | profile signatures use `Result<T,E>` shape | redesign unified failure model before core adoption | Redesign | Yes | phase5/22; Vulkan examples | no general Result implementation in R0 |
-| ownership vocabulary | broad values/references/pointers/store doctrine | parses owned/borrow/const/imported/unsafe in bounded checks | retain spelling provisionally | Merge | Yes | phase6/10; Go diagnostics | vocabulary is not full semantics |
+| ownership vocabulary | broad values/references/pointers/store doctrine | parses owned/borrow/imported/unsafe in bounded checks; R2 separates binding `const` | retain non-const ownership spelling provisionally; make R2 value/place split canonical | Merge | Yes | phase6/10; R2 diagnostics | vocabulary is not full ownership semantics |
 | borrow | place and call rules across PoC3 features | exact borrowed values and automata context restrictions | merge only after differential cases | Deferred | Yes | phase6/10; DragonGod M2 tests | profile context law may stay narrower |
 | owned | move/drop/allocation interactions | bounded owned resource/value checks | retain as provisional syntax | Deferred | Yes | phase10/12; Go tests | no silent full ownership claim |
 | move | explicit move and invalidation | narrow `move` pressure in historical mechanism path; no full model | port PoC3 semantics only after core tests | Keep PoC3 | Yes | phase10 fixtures | not R0 |
@@ -56,7 +59,7 @@ does not authorize that work in this milestone. Status is one of `Keep PoC3`,
 | multi-module compilation | implemented module table and diagnostics | single source unit only | preserve PoC3 semantics as port candidate | Keep PoC3 | Yes | phase16 fixtures | imports alone are not support |
 | MIR | typed PoC3 MIR plus validators/storage | typed deterministic Go MIR/source maps | keep Go architecture; port semantic facts selectively | Merge | Yes | phase4; Go exact artifacts | active MIR schema is `concept-evt1-mir.v1` |
 | C backend | PoC3 backend supports its broad surface | strict-C11 generator for Go subset/profile | use Go backend as Stage 0 base | Keep Go | Yes | golden and native harness tests | neutral `concept_*` symbols |
-| diagnostics/provenance | stable `CON` diagnostics and fixtures | stable `CV` diagnostics with spans/maps | preserve both; map deliberately in conformance work | Merge | Yes | invalid corpora; Go tests | code namespace rename deferred |
+| diagnostics/provenance | stable `CON` diagnostics and fixtures | stable `CV` diagnostics with spans/maps and R2 semantic categories | compare canonical semantic families; preserve both numeric namespaces for now | Merge | Yes | invalid corpora; R2 diagnostic table | mass renumbering deferred |
 
 ## R0 interpretation
 
@@ -97,3 +100,19 @@ Rows not listed in this R1 table are untouched. In particular, no evidence in
 R1 changes the status of runtime arrays, Slice, FixedBuffer, Option/Result,
 ownership, allocation, C ABI, interfaces/dyn, machines, decide, yield, testing,
 or multi-module compilation.
+
+## R2 executable evidence
+
+R2 adds 32 value/place cases: 30 `PASS`, 2 `EXPECTED-DIVERGENCE`, and zero
+`EVT1-GAP`, `POC3-LEGACY`, or `SPEC-AMBIGUITY`. The expected divergences make
+the selected ordinary-struct structural copy and assignment law explicit
+against PoC3 Phase 10's opt-in `Copy` behavior. `record struct` and `with` are
+EVT1-new evidence and therefore remain `PASS`, not artificial PoC3
+divergences.
+
+The executable slice closes mutable struct fields, bounded structural copy,
+const local and natural parameter places, immutable record fields, fresh
+record update, existing bounded record structural equality, and immovable
+final-storage/boundary/embed restrictions. Full ownership, move, drop, borrow,
+aliasing, allocation, runtime collections, C ABI, interfaces, and automata
+reconciliation remain open.

@@ -1,6 +1,6 @@
 # Concept EVT1 language specification foundation
 
-Status: R0 reconciliation foundation
+Status: R2 value/place semantics
 
 This document defines the authority categories and the smallest currently
 executable EVT1 language foundation. It is derived from the retired Concept
@@ -36,7 +36,7 @@ system is implied by syntax.
 
 ## 3. Source files and modules
 
-**Canonical EVT1 foundation.** Source uses `.concept`. An R0 source unit begins
+**Canonical EVT1 foundation.** Source uses `.concept`. An EVT1 source unit begins
 with exactly one explicit profile declaration:
 
 ```concept
@@ -70,14 +70,16 @@ Result<ProbeEvidence, PrometheusError> Execute(
 ```
 
 Return type precedes function name. EVT1 does not use `fn`, `name: Type`,
-`-> ReturnType`, `let`, or `var`. Braces and indentation remain human-readable,
+`-> ReturnType`, inferred `let`, or `var`. R2 accepts `let Type name = value;`
+only as an exact alias of `const Type name = value;`; `const` is canonical and
+documentation should prefer it. Braces and indentation remain human-readable,
 with one statement per line. This resolves a material PoC3 surface conflict in
 favor of the newer Concept/Vulkan direction; PoC3 syntax remains accepted only
 by the retired compiler until translated.
 
 ## 5. Declarations
 
-**Canonical EVT1 foundation.** R0 parses named structs, immovable structs,
+**Canonical EVT1 foundation.** R2 parses named structs, record structs, immovable structs,
 enums, concepts, constrained function templates, compile-time declarations,
 static assertions, ordinary functions, and profile-admitted declarations.
 Declarations use explicit types and semicolon-terminated fields/statements.
@@ -101,25 +103,82 @@ and `VkCommandPool` are Vulkan admissions, not core primitives.
 
 ## 7. Ownership and storage vocabulary
 
-**Provisional EVT1.** The Go seed parses and validates explicit `borrow`,
-`owned`, `const`, `imported`, pointer, and `unsafe` vocabulary within its bounded
-type rules. These spellings preserve the Concept/Vulkan evidence and align with
-PoC3's requirement that storage and hazards be visible.
+**Canonical EVT1 R2.** In a local declaration, `const` qualifies the binding
+and its projected places, not the value type. A const local can be read and a
+copyable value can be copied from it, but the local cannot be reassigned and a
+mutable struct field cannot be written through it. R2 also applies the same
+place rule to the already-natural `const Type parameter` qualifier. This is a
+parameter-place rule, not a full borrowing model.
+
+**Provisional EVT1.** The Go compiler additionally parses and validates
+`borrow`, `owned`, `imported`, pointer, and `unsafe` vocabulary within its
+bounded type rules. These spellings preserve the Concept/Vulkan evidence and
+align with PoC3's requirement that storage and hazards be visible.
 
 **Legacy PoC3 / deferred reconciliation.** Full move invalidation, explicit
 `move`, drop scheduling, RAII, allocator/store ownership, and PoC3 borrow/place
-laws are not yet ported. R0 does not infer them from the accepted vocabulary.
+laws are not yet ported. R2 does not infer them from the accepted vocabulary.
 
-## 8. Structs
+## 8. Values, structs, records, and places
 
-**Canonical EVT1 foundation.** `struct Name { Type field; };` declares a
-mutable aggregate. Construction is positional in the current seed. Field
-identity and type checking are static; generated C uses transparent,
-deterministic layouts for the supported subset.
+**Canonical EVT1 R2.** `struct Name { Type field; }` declares an ordinary
+mutable value type. Fields retain declaration order. Positional construction,
+field reads, field writes through mutable places, whole-value assignment, and
+copying are supported when every contained field is copyable. A struct that
+contains a non-copyable field is itself non-copyable.
 
-**Provisional EVT1.** `immovable struct` prevents value copying under the Go
-seed's finite rules. Complete PoC3 initialization, layout, drop, and place laws
-remain to be reconciled.
+`record struct Name { Type field; }` declares an immutable value type using
+the same declaration-ordered aggregate representation. Record fields are
+readable but never user-assignable, even through a non-const binding. A record
+is copyable exactly when all fields are copyable. This is type-level field
+immutability; it is distinct from binding/place immutability supplied by
+`const`. A non-const record binding may therefore be rebound as a whole to a
+new copyable record value even though none of its field projections is mutable.
+
+The bounded R2 place classes are:
+
+- mutable local place;
+- const local or const parameter place;
+- record-field read-only projection;
+- immovable final-storage place;
+- temporary/rvalue, which is not assignable.
+
+A mutable struct field projected from a mutable place remains mutable. The
+same field projected from a const place is read-only. Every record-field
+projection is read-only. An immovable local's fields may be mutated in its
+final storage, but its whole value is never copy-assignable. This is not the
+future ownership/place lattice and establishes no general alias or borrow law.
+
+### 8.1 Non-destructive record update
+
+`base with { field = value; }` evaluates `base` exactly once, requires a
+copyable record value, copies its fields, evaluates replacements in source
+order, and produces a fresh record value. Unspecified fields retain their
+source values and the source is unchanged. Fields must exist, may appear only
+once, and replacement types must match. R2 rejects `with` on ordinary structs,
+non-record values, and records containing a non-copyable field. Dotted update
+targets are not syntax; nested updates compose as nested `with` expressions.
+
+The MIR records `record_with` aggregate-copy/update intent. The C backend may
+construct the fresh value through a temporary and field assignments; those
+assignments are compiler-generated construction and do not make record fields
+mutable in Concept.
+
+### 8.2 Immovable structs
+
+**Canonical EVT1 R2 subset.** `immovable struct` declares mutable,
+storage-bound data. It may be constructed directly in final local storage and
+its fields may be mutated through that mutable place. Whole-value copy and
+assignment, pass-by-value, return-by-value, struct or record embedding by
+value, and enum payload embedding by value are rejected. Borrow/reference
+semantics beyond the already-implemented bounded subset remain deferred; no
+implicit relocation is permitted.
+
+### 8.3 Structural equality
+
+The existing bounded compile-time structural equality implementation applies
+to record structs when every field supports equality. R2 adds no generated
+runtime operators.
 
 ## 9. Enums and payload enums
 

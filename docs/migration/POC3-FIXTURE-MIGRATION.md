@@ -1,6 +1,6 @@
 # PoC3 fixture migration inventory
 
-Status: R1 bounded migration evidence; no bulk port attempted
+Status: R2 bounded migration evidence; no bulk port attempted
 
 ## Corpus snapshot
 
@@ -134,3 +134,18 @@ constitution as their authority, for 21 new `.concept` sources total.
 The one executable disagreement is the historical unannotated compile-time
 loop. It is classified `EXPECTED-DIVERGENCE`, because canonical EVT1 requires
 `bounded(limit)`. It is not counted as an EVT1 feature gap.
+
+## R2 value/place audit
+
+R2 audited all 42 Phase 7 runtime-struct fixtures and all 54 Phase 10
+ownership fixtures as reference families, then selected the narrow field,
+copy, assignment, and non-copyable-flow cases named in the R2 conformance
+metadata. Phase 7 supplies direct field-place and type-mismatch diagnostics.
+Phase 10 supplies `CON0154`/`CON0160` pressure, but its opt-in `Copy` law differs
+from EVT1's selected structural-copy rule for ordinary structs.
+
+PoC3 has no `record struct` or `with` fixture syntax, and its archived coverage
+ledger marks `immovable` as not implemented. R2 therefore uses those sources
+only as design pressure and records executable immovable evidence from the Go
+M1B-A lineage. New record/update cases are EVT1-new evidence rather than fake
+legacy translations.
