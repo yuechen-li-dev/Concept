@@ -1,20 +1,19 @@
 const std = @import("std");
 
-// Compatibility entry point for the retired PoC3 reference suite. The active
-// Stage 0 compiler is the Go implementation under cmd/concept.
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
     const compiler_tests = b.addTest(.{
         .root_module = b.createModule(.{
-            .root_source_file = b.path("legacy/poc3-zig/src/compiler/tests.zig"),
+            .root_source_file = b.path("src/compiler/tests.zig"),
             .target = target,
             .optimize = optimize,
         }),
     });
 
     const run_compiler_tests = b.addRunArtifact(compiler_tests);
-    const test_step = b.step("test", "Run retired PoC3 reference compiler tests");
+
+    const test_step = b.step("test", "Run compiler tests");
     test_step.dependOn(&run_compiler_tests.step);
 }
