@@ -1,0 +1,29 @@
+{
+  "compiler": "concept-evt1-stage0-go",
+  "files": [
+    {
+      "path": "evt1_dragongod_m0_vulkan.generated.h",
+      "sha256": "a421aa35248a4f7e2c29b12eccecc46bd5fa487f0678d5792b4d34e70fbb8b06"
+    },
+    {
+      "path": "evt1_dragongod_m0_vulkan.generated.c",
+      "sha256": "64cfddcac745c6743e81e52832a53357cb9384c03a8ef9bedf2160697f708359"
+    },
+    {
+      "path": "evt1_dragongod_m0_vulkan.mir.json",
+      "sha256": "5a0a1140ab92ccb35dbd1991113cd80292a631eb744bdafb1df6d9b036190466"
+    },
+    {
+      "path": "evt1_dragongod_m0_vulkan.map.json",
+      "sha256": "de06928bffe5650014358e2b39ae37e30810bedb816952c3899a259ed02cb19e"
+    }
+  ],
+  "options": {
+    "paths": "repository-relative",
+    "timestamps": "forbidden"
+  },
+  "profile": "Vulkan",
+  "schema": "concept-evt1-generation-manifest.v1",
+  "source": "Examples/Concept-Vulkan/evt1_dragongod_m0_vulkan.concept",
+  "source_sha256": "2030ee29202576b319ea10f003d91458a37e246f9a5914f677c984c8bfa76d56"
+}

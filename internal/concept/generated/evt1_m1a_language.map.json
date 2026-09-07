@@ -1,0 +1,1119 @@
+{
+  "actuators": null,
+  "assertions": null,
+  "automata": null,
+  "comptime_decls": null,
+  "concepts": null,
+  "functions": [
+    {
+      "name": "Add",
+      "span": {
+        "line": 17,
+        "column": 5
+      },
+      "symbol": "concept_evt1_m1a_language_add"
+    },
+    {
+      "name": "ObserveState",
+      "span": {
+        "line": 18,
+        "column": 11
+      },
+      "symbol": "concept_evt1_m1a_language_observe_state"
+    },
+    {
+      "name": "ObserveCalls",
+      "span": {
+        "line": 19,
+        "column": 5
+      },
+      "symbol": "concept_evt1_m1a_language_observe_calls"
+    },
+    {
+      "name": "RecordInt",
+      "span": {
+        "line": 20,
+        "column": 6
+      },
+      "symbol": "concept_evt1_m1a_language_record_int"
+    },
+    {
+      "name": "RecordPair",
+      "span": {
+        "line": 21,
+        "column": 6
+      },
+      "symbol": "concept_evt1_m1a_language_record_pair"
+    },
+    {
+      "name": "MakeEmpty",
+      "span": {
+        "line": 23,
+        "column": 11
+      },
+      "symbol": "concept_evt1_m1a_language_make_empty"
+    },
+    {
+      "name": "MakeInnerIdle",
+      "span": {
+        "line": 28,
+        "column": 13
+      },
+      "symbol": "concept_evt1_m1a_language_make_inner_idle"
+    },
+    {
+      "name": "MakeInnerCounted",
+      "span": {
+        "line": 33,
+        "column": 13
+      },
+      "symbol": "concept_evt1_m1a_language_make_inner_counted"
+    },
+    {
+      "name": "MakeCounted",
+      "span": {
+        "line": 38,
+        "column": 11
+      },
+      "symbol": "concept_evt1_m1a_language_make_counted"
+    },
+    {
+      "name": "MakePair",
+      "span": {
+        "line": 43,
+        "column": 11
+      },
+      "symbol": "concept_evt1_m1a_language_make_pair"
+    },
+    {
+      "name": "MakeWrapped",
+      "span": {
+        "line": 48,
+        "column": 11
+      },
+      "symbol": "concept_evt1_m1a_language_make_wrapped"
+    },
+    {
+      "name": "Classify",
+      "span": {
+        "line": 53,
+        "column": 5
+      },
+      "symbol": "concept_evt1_m1a_language_classify"
+    },
+    {
+      "name": "ObserveAndClassify",
+      "span": {
+        "line": 68,
+        "column": 5
+      },
+      "symbol": "concept_evt1_m1a_language_observe_and_classify"
+    },
+    {
+      "name": "Visit",
+      "span": {
+        "line": 73,
+        "column": 6
+      },
+      "symbol": "concept_evt1_m1a_language_visit"
+    }
+  ],
+  "instances": null,
+  "mir": [
+    {
+      "name": "Add",
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 17,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "left",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 17,
+              "column": 9
+            }
+          }
+        },
+        {
+          "name": "right",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 17,
+              "column": 19
+            }
+          }
+        }
+      ],
+      "operations": null,
+      "source_span": {
+        "line": 17,
+        "column": 5
+      }
+    },
+    {
+      "name": "ObserveState",
+      "return_type": {
+        "name": "DemoState",
+        "kind": "enum",
+        "span": {
+          "line": 18,
+          "column": 1
+        }
+      },
+      "operations": null,
+      "source_span": {
+        "line": 18,
+        "column": 11
+      }
+    },
+    {
+      "name": "ObserveCalls",
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 19,
+          "column": 1
+        }
+      },
+      "operations": null,
+      "source_span": {
+        "line": 19,
+        "column": 5
+      }
+    },
+    {
+      "name": "RecordInt",
+      "return_type": {
+        "name": "void",
+        "kind": "builtin",
+        "span": {
+          "line": 20,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "value",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 20,
+              "column": 16
+            }
+          }
+        }
+      ],
+      "operations": null,
+      "source_span": {
+        "line": 20,
+        "column": 6
+      }
+    },
+    {
+      "name": "RecordPair",
+      "return_type": {
+        "name": "void",
+        "kind": "builtin",
+        "span": {
+          "line": 21,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "first",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 21,
+              "column": 17
+            }
+          }
+        },
+        {
+          "name": "second",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 21,
+              "column": 28
+            }
+          }
+        }
+      ],
+      "operations": null,
+      "source_span": {
+        "line": 21,
+        "column": 6
+      }
+    },
+    {
+      "name": "MakeEmpty",
+      "return_type": {
+        "name": "DemoState",
+        "kind": "enum",
+        "span": {
+          "line": 23,
+          "column": 1
+        }
+      },
+      "operations": [
+        {
+          "id": "MakeEmpty.01",
+          "kind": "return",
+          "type": "DemoState",
+          "source_span": {
+            "line": 25,
+            "column": 5
+          }
+        },
+        {
+          "id": "MakeEmpty.02",
+          "kind": "enum_construct",
+          "detail": "DemoState::Empty",
+          "source_span": {
+            "line": 25,
+            "column": 12
+          }
+        }
+      ],
+      "source_span": {
+        "line": 23,
+        "column": 11
+      }
+    },
+    {
+      "name": "MakeInnerIdle",
+      "return_type": {
+        "name": "InnerStatus",
+        "kind": "enum",
+        "span": {
+          "line": 28,
+          "column": 1
+        }
+      },
+      "operations": [
+        {
+          "id": "MakeInnerIdle.01",
+          "kind": "return",
+          "type": "InnerStatus",
+          "source_span": {
+            "line": 30,
+            "column": 5
+          }
+        },
+        {
+          "id": "MakeInnerIdle.02",
+          "kind": "enum_construct",
+          "detail": "InnerStatus::Idle",
+          "source_span": {
+            "line": 30,
+            "column": 12
+          }
+        }
+      ],
+      "source_span": {
+        "line": 28,
+        "column": 13
+      }
+    },
+    {
+      "name": "MakeInnerCounted",
+      "return_type": {
+        "name": "InnerStatus",
+        "kind": "enum",
+        "span": {
+          "line": 33,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "value",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 33,
+              "column": 30
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "MakeInnerCounted.01",
+          "kind": "return",
+          "type": "InnerStatus",
+          "source_span": {
+            "line": 35,
+            "column": 5
+          }
+        },
+        {
+          "id": "MakeInnerCounted.02",
+          "kind": "enum_construct",
+          "detail": "InnerStatus::Counted",
+          "source_span": {
+            "line": 35,
+            "column": 12
+          }
+        },
+        {
+          "id": "MakeInnerCounted.03",
+          "kind": "name",
+          "detail": "value",
+          "source_span": {
+            "line": 35,
+            "column": 33
+          }
+        }
+      ],
+      "source_span": {
+        "line": 33,
+        "column": 13
+      }
+    },
+    {
+      "name": "MakeCounted",
+      "return_type": {
+        "name": "DemoState",
+        "kind": "enum",
+        "span": {
+          "line": 38,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "value",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 38,
+              "column": 23
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "MakeCounted.01",
+          "kind": "return",
+          "type": "DemoState",
+          "source_span": {
+            "line": 40,
+            "column": 5
+          }
+        },
+        {
+          "id": "MakeCounted.02",
+          "kind": "enum_construct",
+          "detail": "DemoState::Counted",
+          "source_span": {
+            "line": 40,
+            "column": 12
+          }
+        },
+        {
+          "id": "MakeCounted.03",
+          "kind": "name",
+          "detail": "value",
+          "source_span": {
+            "line": 40,
+            "column": 31
+          }
+        }
+      ],
+      "source_span": {
+        "line": 38,
+        "column": 11
+      }
+    },
+    {
+      "name": "MakePair",
+      "return_type": {
+        "name": "DemoState",
+        "kind": "enum",
+        "span": {
+          "line": 43,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "first",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 43,
+              "column": 20
+            }
+          }
+        },
+        {
+          "name": "second",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 43,
+              "column": 31
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "MakePair.01",
+          "kind": "return",
+          "type": "DemoState",
+          "source_span": {
+            "line": 45,
+            "column": 5
+          }
+        },
+        {
+          "id": "MakePair.02",
+          "kind": "enum_construct",
+          "detail": "DemoState::Pair",
+          "source_span": {
+            "line": 45,
+            "column": 12
+          }
+        },
+        {
+          "id": "MakePair.03",
+          "kind": "name",
+          "detail": "first",
+          "source_span": {
+            "line": 45,
+            "column": 28
+          }
+        },
+        {
+          "id": "MakePair.04",
+          "kind": "name",
+          "detail": "second",
+          "source_span": {
+            "line": 45,
+            "column": 35
+          }
+        }
+      ],
+      "source_span": {
+        "line": 43,
+        "column": 11
+      }
+    },
+    {
+      "name": "MakeWrapped",
+      "return_type": {
+        "name": "DemoState",
+        "kind": "enum",
+        "span": {
+          "line": 48,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "inner",
+          "type": {
+            "name": "InnerStatus",
+            "kind": "enum",
+            "span": {
+              "line": 48,
+              "column": 23
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "MakeWrapped.01",
+          "kind": "return",
+          "type": "DemoState",
+          "source_span": {
+            "line": 50,
+            "column": 5
+          }
+        },
+        {
+          "id": "MakeWrapped.02",
+          "kind": "enum_construct",
+          "detail": "DemoState::Wrapped",
+          "source_span": {
+            "line": 50,
+            "column": 12
+          }
+        },
+        {
+          "id": "MakeWrapped.03",
+          "kind": "name",
+          "detail": "inner",
+          "source_span": {
+            "line": 50,
+            "column": 31
+          }
+        }
+      ],
+      "source_span": {
+        "line": 48,
+        "column": 11
+      }
+    },
+    {
+      "name": "Classify",
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 53,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "state",
+          "type": {
+            "name": "DemoState",
+            "kind": "enum",
+            "span": {
+              "line": 53,
+              "column": 14
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "Classify.01",
+          "kind": "return",
+          "type": "int",
+          "source_span": {
+            "line": 55,
+            "column": 5
+          }
+        },
+        {
+          "id": "Classify.02",
+          "kind": "match_expr",
+          "detail": "4 arms",
+          "source_span": {
+            "line": 55,
+            "column": 12
+          }
+        },
+        {
+          "id": "Classify.03",
+          "kind": "name",
+          "detail": "state",
+          "source_span": {
+            "line": 55,
+            "column": 19
+          }
+        },
+        {
+          "id": "Classify.04",
+          "kind": "pattern",
+          "detail": "DemoState::Empty",
+          "source_span": {
+            "line": 57,
+            "column": 9
+          }
+        },
+        {
+          "id": "Classify.05",
+          "kind": "literal",
+          "detail": "0",
+          "source_span": {
+            "line": 57,
+            "column": 29
+          }
+        },
+        {
+          "id": "Classify.06",
+          "kind": "pattern",
+          "detail": "DemoState::Counted",
+          "source_span": {
+            "line": 58,
+            "column": 9
+          }
+        },
+        {
+          "id": "Classify.07",
+          "kind": "name",
+          "detail": "value",
+          "source_span": {
+            "line": 58,
+            "column": 38
+          }
+        },
+        {
+          "id": "Classify.08",
+          "kind": "pattern",
+          "detail": "DemoState::Pair",
+          "source_span": {
+            "line": 59,
+            "column": 9
+          }
+        },
+        {
+          "id": "Classify.09",
+          "kind": "call",
+          "detail": "Add",
+          "source_span": {
+            "line": 59,
+            "column": 43
+          }
+        },
+        {
+          "id": "Classify.10",
+          "kind": "name",
+          "detail": "first",
+          "source_span": {
+            "line": 59,
+            "column": 47
+          }
+        },
+        {
+          "id": "Classify.11",
+          "kind": "name",
+          "detail": "second",
+          "source_span": {
+            "line": 59,
+            "column": 54
+          }
+        },
+        {
+          "id": "Classify.12",
+          "kind": "pattern",
+          "detail": "DemoState::Wrapped",
+          "source_span": {
+            "line": 60,
+            "column": 9
+          }
+        },
+        {
+          "id": "Classify.13",
+          "kind": "match_expr",
+          "detail": "2 arms",
+          "source_span": {
+            "line": 60,
+            "column": 38
+          }
+        },
+        {
+          "id": "Classify.14",
+          "kind": "name",
+          "detail": "inner",
+          "source_span": {
+            "line": 60,
+            "column": 45
+          }
+        },
+        {
+          "id": "Classify.15",
+          "kind": "pattern",
+          "detail": "InnerStatus::Idle",
+          "source_span": {
+            "line": 62,
+            "column": 13
+          }
+        },
+        {
+          "id": "Classify.16",
+          "kind": "literal",
+          "detail": "100",
+          "source_span": {
+            "line": 62,
+            "column": 34
+          }
+        },
+        {
+          "id": "Classify.17",
+          "kind": "pattern",
+          "detail": "InnerStatus::Counted",
+          "source_span": {
+            "line": 63,
+            "column": 13
+          }
+        },
+        {
+          "id": "Classify.18",
+          "kind": "call",
+          "detail": "Add",
+          "source_span": {
+            "line": 63,
+            "column": 44
+          }
+        },
+        {
+          "id": "Classify.19",
+          "kind": "name",
+          "detail": "value",
+          "source_span": {
+            "line": 63,
+            "column": 48
+          }
+        },
+        {
+          "id": "Classify.20",
+          "kind": "literal",
+          "detail": "100",
+          "source_span": {
+            "line": 63,
+            "column": 55
+          }
+        }
+      ],
+      "source_span": {
+        "line": 53,
+        "column": 5
+      }
+    },
+    {
+      "name": "ObserveAndClassify",
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 68,
+          "column": 1
+        }
+      },
+      "operations": [
+        {
+          "id": "ObserveAndClassify.01",
+          "kind": "return",
+          "type": "int",
+          "source_span": {
+            "line": 70,
+            "column": 5
+          }
+        },
+        {
+          "id": "ObserveAndClassify.02",
+          "kind": "call",
+          "detail": "Classify",
+          "source_span": {
+            "line": 70,
+            "column": 12
+          }
+        },
+        {
+          "id": "ObserveAndClassify.03",
+          "kind": "call",
+          "detail": "ObserveState",
+          "source_span": {
+            "line": 70,
+            "column": 21
+          }
+        }
+      ],
+      "source_span": {
+        "line": 68,
+        "column": 5
+      }
+    },
+    {
+      "name": "Visit",
+      "return_type": {
+        "name": "void",
+        "kind": "builtin",
+        "span": {
+          "line": 73,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "state",
+          "type": {
+            "name": "DemoState",
+            "kind": "enum",
+            "span": {
+              "line": 73,
+              "column": 12
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "Visit.01",
+          "kind": "match_stmt",
+          "detail": "4 arms",
+          "source_span": {
+            "line": 75,
+            "column": 5
+          }
+        },
+        {
+          "id": "Visit.02",
+          "kind": "name",
+          "detail": "state",
+          "source_span": {
+            "line": 75,
+            "column": 12
+          }
+        },
+        {
+          "id": "Visit.03",
+          "kind": "pattern",
+          "detail": "DemoState::Empty",
+          "source_span": {
+            "line": 77,
+            "column": 9
+          }
+        },
+        {
+          "id": "Visit.04",
+          "kind": "expr_stmt",
+          "source_span": {
+            "line": 79,
+            "column": 13
+          }
+        },
+        {
+          "id": "Visit.05",
+          "kind": "call",
+          "detail": "RecordInt",
+          "source_span": {
+            "line": 79,
+            "column": 13
+          }
+        },
+        {
+          "id": "Visit.06",
+          "kind": "literal",
+          "detail": "0",
+          "source_span": {
+            "line": 79,
+            "column": 23
+          }
+        },
+        {
+          "id": "Visit.07",
+          "kind": "pattern",
+          "detail": "DemoState::Counted",
+          "source_span": {
+            "line": 82,
+            "column": 9
+          }
+        },
+        {
+          "id": "Visit.08",
+          "kind": "expr_stmt",
+          "source_span": {
+            "line": 84,
+            "column": 13
+          }
+        },
+        {
+          "id": "Visit.09",
+          "kind": "call",
+          "detail": "RecordInt",
+          "source_span": {
+            "line": 84,
+            "column": 13
+          }
+        },
+        {
+          "id": "Visit.10",
+          "kind": "name",
+          "detail": "value",
+          "source_span": {
+            "line": 84,
+            "column": 23
+          }
+        },
+        {
+          "id": "Visit.11",
+          "kind": "pattern",
+          "detail": "DemoState::Pair",
+          "source_span": {
+            "line": 87,
+            "column": 9
+          }
+        },
+        {
+          "id": "Visit.12",
+          "kind": "expr_stmt",
+          "source_span": {
+            "line": 89,
+            "column": 13
+          }
+        },
+        {
+          "id": "Visit.13",
+          "kind": "call",
+          "detail": "RecordPair",
+          "source_span": {
+            "line": 89,
+            "column": 13
+          }
+        },
+        {
+          "id": "Visit.14",
+          "kind": "name",
+          "detail": "first",
+          "source_span": {
+            "line": 89,
+            "column": 24
+          }
+        },
+        {
+          "id": "Visit.15",
+          "kind": "name",
+          "detail": "second",
+          "source_span": {
+            "line": 89,
+            "column": 31
+          }
+        },
+        {
+          "id": "Visit.16",
+          "kind": "pattern",
+          "detail": "DemoState::Wrapped",
+          "source_span": {
+            "line": 92,
+            "column": 9
+          }
+        },
+        {
+          "id": "Visit.17",
+          "kind": "match_stmt",
+          "detail": "2 arms",
+          "source_span": {
+            "line": 94,
+            "column": 13
+          }
+        },
+        {
+          "id": "Visit.18",
+          "kind": "name",
+          "detail": "inner",
+          "source_span": {
+            "line": 94,
+            "column": 20
+          }
+        },
+        {
+          "id": "Visit.19",
+          "kind": "pattern",
+          "detail": "InnerStatus::Idle",
+          "source_span": {
+            "line": 96,
+            "column": 17
+          }
+        },
+        {
+          "id": "Visit.20",
+          "kind": "expr_stmt",
+          "source_span": {
+            "line": 98,
+            "column": 21
+          }
+        },
+        {
+          "id": "Visit.21",
+          "kind": "call",
+          "detail": "RecordInt",
+          "source_span": {
+            "line": 98,
+            "column": 21
+          }
+        },
+        {
+          "id": "Visit.22",
+          "kind": "literal",
+          "detail": "1000",
+          "source_span": {
+            "line": 98,
+            "column": 31
+          }
+        },
+        {
+          "id": "Visit.23",
+          "kind": "pattern",
+          "detail": "InnerStatus::Counted",
+          "source_span": {
+            "line": 101,
+            "column": 17
+          }
+        },
+        {
+          "id": "Visit.24",
+          "kind": "expr_stmt",
+          "source_span": {
+            "line": 103,
+            "column": 21
+          }
+        },
+        {
+          "id": "Visit.25",
+          "kind": "call",
+          "detail": "RecordInt",
+          "source_span": {
+            "line": 103,
+            "column": 21
+          }
+        },
+        {
+          "id": "Visit.26",
+          "kind": "call",
+          "detail": "Add",
+          "source_span": {
+            "line": 103,
+            "column": 31
+          }
+        },
+        {
+          "id": "Visit.27",
+          "kind": "name",
+          "detail": "value",
+          "source_span": {
+            "line": 103,
+            "column": 35
+          }
+        },
+        {
+          "id": "Visit.28",
+          "kind": "literal",
+          "detail": "1000",
+          "source_span": {
+            "line": 103,
+            "column": 42
+          }
+        }
+      ],
+      "source_span": {
+        "line": 73,
+        "column": 6
+      }
+    }
+  ],
+  "schema": "concept-evt1-source-map.v1",
+  "source": "Examples/Concept-Vulkan/evt1_m1a_language.concept",
+  "static_asserts": null,
+  "structs": null,
+  "templates": null
+}

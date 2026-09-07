@@ -1,0 +1,1630 @@
+{
+  "actuators": null,
+  "assertions": [
+    {
+      "concept_name": "ResourceState",
+      "concrete_type": {
+        "name": "CommandPoolState",
+        "kind": "struct",
+        "span": {
+          "line": 63,
+          "column": 24
+        }
+      },
+      "satisfied": true,
+      "source_span": {
+        "line": 63,
+        "column": 1
+      }
+    }
+  ],
+  "automata": null,
+  "comptime_decls": null,
+  "concepts": [
+    {
+      "name": "Validatable",
+      "type_param": "T",
+      "requirements": [
+        {
+          "kind": "operation",
+          "name": "IsValid",
+          "return_type": {
+            "name": "bool",
+            "kind": "builtin",
+            "span": {
+              "line": 44,
+              "column": 14
+            }
+          },
+          "params": [
+            {
+              "name": "value",
+              "type": {
+                "name": "T",
+                "kind": "concept_param",
+                "ownership": "borrow",
+                "const": true,
+                "span": {
+                  "line": 44,
+                  "column": 27
+                }
+              }
+            }
+          ],
+          "source_span": {
+            "line": 44,
+            "column": 5
+          }
+        }
+      ],
+      "source_span": {
+        "line": 42,
+        "column": 1
+      }
+    },
+    {
+      "name": "Destroyable",
+      "type_param": "T",
+      "requirements": [
+        {
+          "kind": "operation",
+          "name": "Destroy",
+          "return_type": {
+            "name": "void",
+            "kind": "builtin",
+            "span": {
+              "line": 49,
+              "column": 14
+            }
+          },
+          "params": [
+            {
+              "name": "value",
+              "type": {
+                "name": "T",
+                "kind": "concept_param",
+                "ownership": "borrow",
+                "span": {
+                  "line": 49,
+                  "column": 27
+                }
+              }
+            }
+          ],
+          "source_span": {
+            "line": 49,
+            "column": 5
+          }
+        }
+      ],
+      "source_span": {
+        "line": 47,
+        "column": 1
+      }
+    },
+    {
+      "name": "ResourceState",
+      "type_param": "T",
+      "requirements": [
+        {
+          "kind": "prerequisite",
+          "name": "Validatable",
+          "detail": "T",
+          "source_span": {
+            "line": 54,
+            "column": 5
+          }
+        },
+        {
+          "kind": "prerequisite",
+          "name": "Destroyable",
+          "detail": "T",
+          "source_span": {
+            "line": 55,
+            "column": 5
+          }
+        }
+      ],
+      "source_span": {
+        "line": 52,
+        "column": 1
+      }
+    }
+  ],
+  "functions": [
+    {
+      "name": "IsValid",
+      "span": {
+        "line": 58,
+        "column": 6
+      },
+      "symbol": "concept_evt1_m1b_a_language_is_valid"
+    },
+    {
+      "name": "Destroy",
+      "span": {
+        "line": 59,
+        "column": 6
+      },
+      "symbol": "concept_evt1_m1b_a_language_destroy"
+    },
+    {
+      "name": "NextValue",
+      "span": {
+        "line": 60,
+        "column": 5
+      },
+      "symbol": "concept_evt1_m1b_a_language_next_value"
+    },
+    {
+      "name": "Add",
+      "span": {
+        "line": 61,
+        "column": 5
+      },
+      "symbol": "concept_evt1_m1b_a_language_add"
+    },
+    {
+      "name": "MakeRange",
+      "span": {
+        "line": 65,
+        "column": 13
+      },
+      "symbol": "concept_evt1_m1b_a_language_make_range"
+    },
+    {
+      "name": "MakeAllocation",
+      "span": {
+        "line": 71,
+        "column": 12
+      },
+      "symbol": "concept_evt1_m1b_a_language_make_allocation"
+    },
+    {
+      "name": "ObserveConstruction",
+      "span": {
+        "line": 77,
+        "column": 16
+      },
+      "symbol": "concept_evt1_m1b_a_language_observe_construction"
+    },
+    {
+      "name": "CopyAndMutate",
+      "span": {
+        "line": 84,
+        "column": 12
+      },
+      "symbol": "concept_evt1_m1b_a_language_copy_and_mutate"
+    },
+    {
+      "name": "ClassifyOutcome",
+      "span": {
+        "line": 93,
+        "column": 5
+      },
+      "symbol": "concept_evt1_m1b_a_language_classify_outcome"
+    },
+    {
+      "name": "MatchAllocation",
+      "span": {
+        "line": 103,
+        "column": 5
+      },
+      "symbol": "concept_evt1_m1b_a_language_match_allocation"
+    },
+    {
+      "name": "InitializePool",
+      "span": {
+        "line": 111,
+        "column": 6
+      },
+      "symbol": "concept_evt1_m1b_a_language_initialize_pool"
+    },
+    {
+      "name": "UseImmovable",
+      "span": {
+        "line": 116,
+        "column": 6
+      },
+      "symbol": "concept_evt1_m1b_a_language_use_immovable"
+    }
+  ],
+  "instances": null,
+  "mir": [
+    {
+      "name": "IsValid",
+      "return_type": {
+        "name": "bool",
+        "kind": "builtin",
+        "span": {
+          "line": 58,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "value",
+          "type": {
+            "name": "CommandPoolState",
+            "kind": "struct",
+            "ownership": "borrow",
+            "const": true,
+            "span": {
+              "line": 58,
+              "column": 14
+            }
+          }
+        }
+      ],
+      "operations": null,
+      "source_span": {
+        "line": 58,
+        "column": 6
+      }
+    },
+    {
+      "name": "Destroy",
+      "return_type": {
+        "name": "void",
+        "kind": "builtin",
+        "span": {
+          "line": 59,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "value",
+          "type": {
+            "name": "CommandPoolState",
+            "kind": "struct",
+            "ownership": "borrow",
+            "span": {
+              "line": 59,
+              "column": 14
+            }
+          }
+        }
+      ],
+      "operations": null,
+      "source_span": {
+        "line": 59,
+        "column": 6
+      }
+    },
+    {
+      "name": "NextValue",
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 60,
+          "column": 1
+        }
+      },
+      "operations": null,
+      "source_span": {
+        "line": 60,
+        "column": 5
+      }
+    },
+    {
+      "name": "Add",
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 61,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "left",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 61,
+              "column": 9
+            }
+          }
+        },
+        {
+          "name": "right",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 61,
+              "column": 19
+            }
+          }
+        }
+      ],
+      "operations": null,
+      "source_span": {
+        "line": 61,
+        "column": 5
+      }
+    },
+    {
+      "name": "MakeRange",
+      "return_type": {
+        "name": "BufferRange",
+        "kind": "struct",
+        "span": {
+          "line": 65,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "bufferId",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 65,
+              "column": 23
+            }
+          }
+        },
+        {
+          "name": "offset",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 65,
+              "column": 37
+            }
+          }
+        },
+        {
+          "name": "size",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 65,
+              "column": 49
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "MakeRange.01",
+          "kind": "struct_construct",
+          "type": "BufferRange",
+          "detail": "range",
+          "source_span": {
+            "line": 67,
+            "column": 17
+          }
+        },
+        {
+          "id": "MakeRange.02",
+          "kind": "struct_construct",
+          "detail": "BufferRange",
+          "source_span": {
+            "line": 67,
+            "column": 25
+          }
+        },
+        {
+          "id": "MakeRange.03",
+          "kind": "name",
+          "detail": "bufferId",
+          "source_span": {
+            "line": 67,
+            "column": 37
+          }
+        },
+        {
+          "id": "MakeRange.04",
+          "kind": "name",
+          "detail": "offset",
+          "source_span": {
+            "line": 67,
+            "column": 47
+          }
+        },
+        {
+          "id": "MakeRange.05",
+          "kind": "name",
+          "detail": "size",
+          "source_span": {
+            "line": 67,
+            "column": 55
+          }
+        },
+        {
+          "id": "MakeRange.06",
+          "kind": "return",
+          "type": "BufferRange",
+          "source_span": {
+            "line": 68,
+            "column": 5
+          }
+        },
+        {
+          "id": "MakeRange.07",
+          "kind": "name",
+          "detail": "range",
+          "source_span": {
+            "line": 68,
+            "column": 12
+          }
+        }
+      ],
+      "source_span": {
+        "line": 65,
+        "column": 13
+      }
+    },
+    {
+      "name": "MakeAllocation",
+      "return_type": {
+        "name": "Allocation",
+        "kind": "struct",
+        "span": {
+          "line": 71,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "range",
+          "type": {
+            "name": "BufferRange",
+            "kind": "struct",
+            "span": {
+              "line": 71,
+              "column": 27
+            }
+          }
+        },
+        {
+          "name": "generation",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 71,
+              "column": 46
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "MakeAllocation.01",
+          "kind": "struct_construct",
+          "type": "Allocation",
+          "detail": "allocation",
+          "source_span": {
+            "line": 73,
+            "column": 16
+          }
+        },
+        {
+          "id": "MakeAllocation.02",
+          "kind": "struct_construct",
+          "detail": "Allocation",
+          "source_span": {
+            "line": 73,
+            "column": 29
+          }
+        },
+        {
+          "id": "MakeAllocation.03",
+          "kind": "name",
+          "detail": "range",
+          "source_span": {
+            "line": 73,
+            "column": 40
+          }
+        },
+        {
+          "id": "MakeAllocation.04",
+          "kind": "name",
+          "detail": "generation",
+          "source_span": {
+            "line": 73,
+            "column": 47
+          }
+        },
+        {
+          "id": "MakeAllocation.05",
+          "kind": "return",
+          "type": "Allocation",
+          "source_span": {
+            "line": 74,
+            "column": 5
+          }
+        },
+        {
+          "id": "MakeAllocation.06",
+          "kind": "name",
+          "detail": "allocation",
+          "source_span": {
+            "line": 74,
+            "column": 12
+          }
+        }
+      ],
+      "source_span": {
+        "line": 71,
+        "column": 12
+      }
+    },
+    {
+      "name": "ObserveConstruction",
+      "return_type": {
+        "name": "ObservedValues",
+        "kind": "struct",
+        "span": {
+          "line": 77,
+          "column": 1
+        }
+      },
+      "operations": [
+        {
+          "id": "ObserveConstruction.01",
+          "kind": "struct_construct",
+          "type": "BufferRange",
+          "detail": "range",
+          "source_span": {
+            "line": 79,
+            "column": 17
+          }
+        },
+        {
+          "id": "ObserveConstruction.02",
+          "kind": "struct_construct",
+          "detail": "BufferRange",
+          "source_span": {
+            "line": 79,
+            "column": 25
+          }
+        },
+        {
+          "id": "ObserveConstruction.03",
+          "kind": "call",
+          "detail": "NextValue",
+          "source_span": {
+            "line": 79,
+            "column": 37
+          }
+        },
+        {
+          "id": "ObserveConstruction.04",
+          "kind": "call",
+          "detail": "NextValue",
+          "source_span": {
+            "line": 79,
+            "column": 50
+          }
+        },
+        {
+          "id": "ObserveConstruction.05",
+          "kind": "call",
+          "detail": "NextValue",
+          "source_span": {
+            "line": 79,
+            "column": 63
+          }
+        },
+        {
+          "id": "ObserveConstruction.06",
+          "kind": "struct_construct",
+          "type": "ObservedValues",
+          "detail": "observed",
+          "source_span": {
+            "line": 80,
+            "column": 20
+          }
+        },
+        {
+          "id": "ObserveConstruction.07",
+          "kind": "struct_construct",
+          "detail": "ObservedValues",
+          "source_span": {
+            "line": 80,
+            "column": 31
+          }
+        },
+        {
+          "id": "ObserveConstruction.08",
+          "kind": "field_access",
+          "detail": "bufferId",
+          "source_span": {
+            "line": 80,
+            "column": 52
+          }
+        },
+        {
+          "id": "ObserveConstruction.09",
+          "kind": "name",
+          "detail": "range",
+          "source_span": {
+            "line": 80,
+            "column": 46
+          }
+        },
+        {
+          "id": "ObserveConstruction.10",
+          "kind": "field_access",
+          "detail": "offset",
+          "source_span": {
+            "line": 80,
+            "column": 68
+          }
+        },
+        {
+          "id": "ObserveConstruction.11",
+          "kind": "name",
+          "detail": "range",
+          "source_span": {
+            "line": 80,
+            "column": 62
+          }
+        },
+        {
+          "id": "ObserveConstruction.12",
+          "kind": "field_access",
+          "detail": "size",
+          "source_span": {
+            "line": 80,
+            "column": 82
+          }
+        },
+        {
+          "id": "ObserveConstruction.13",
+          "kind": "name",
+          "detail": "range",
+          "source_span": {
+            "line": 80,
+            "column": 76
+          }
+        },
+        {
+          "id": "ObserveConstruction.14",
+          "kind": "return",
+          "type": "ObservedValues",
+          "source_span": {
+            "line": 81,
+            "column": 5
+          }
+        },
+        {
+          "id": "ObserveConstruction.15",
+          "kind": "name",
+          "detail": "observed",
+          "source_span": {
+            "line": 81,
+            "column": 12
+          }
+        }
+      ],
+      "source_span": {
+        "line": 77,
+        "column": 16
+      }
+    },
+    {
+      "name": "CopyAndMutate",
+      "return_type": {
+        "name": "CopyResult",
+        "kind": "struct",
+        "span": {
+          "line": 84,
+          "column": 1
+        }
+      },
+      "operations": [
+        {
+          "id": "CopyAndMutate.01",
+          "kind": "struct_construct",
+          "type": "BufferRange",
+          "detail": "first",
+          "source_span": {
+            "line": 86,
+            "column": 17
+          }
+        },
+        {
+          "id": "CopyAndMutate.02",
+          "kind": "struct_construct",
+          "detail": "BufferRange",
+          "source_span": {
+            "line": 86,
+            "column": 25
+          }
+        },
+        {
+          "id": "CopyAndMutate.03",
+          "kind": "literal",
+          "detail": "7",
+          "source_span": {
+            "line": 86,
+            "column": 37
+          }
+        },
+        {
+          "id": "CopyAndMutate.04",
+          "kind": "literal",
+          "detail": "1",
+          "source_span": {
+            "line": 86,
+            "column": 40
+          }
+        },
+        {
+          "id": "CopyAndMutate.05",
+          "kind": "literal",
+          "detail": "3",
+          "source_span": {
+            "line": 86,
+            "column": 43
+          }
+        },
+        {
+          "id": "CopyAndMutate.06",
+          "kind": "var_decl",
+          "type": "BufferRange",
+          "detail": "second",
+          "source_span": {
+            "line": 87,
+            "column": 17
+          }
+        },
+        {
+          "id": "CopyAndMutate.07",
+          "kind": "name",
+          "detail": "first",
+          "source_span": {
+            "line": 87,
+            "column": 26
+          }
+        },
+        {
+          "id": "CopyAndMutate.08",
+          "kind": "assign",
+          "type": "second.offset",
+          "detail": "second.offset",
+          "source_span": {
+            "line": 88,
+            "column": 12
+          }
+        },
+        {
+          "id": "CopyAndMutate.09",
+          "kind": "field_access",
+          "detail": "offset",
+          "source_span": {
+            "line": 88,
+            "column": 12
+          }
+        },
+        {
+          "id": "CopyAndMutate.10",
+          "kind": "name",
+          "detail": "second",
+          "source_span": {
+            "line": 88,
+            "column": 5
+          }
+        },
+        {
+          "id": "CopyAndMutate.11",
+          "kind": "literal",
+          "detail": "9",
+          "source_span": {
+            "line": 88,
+            "column": 21
+          }
+        },
+        {
+          "id": "CopyAndMutate.12",
+          "kind": "struct_construct",
+          "type": "CopyResult",
+          "detail": "result",
+          "source_span": {
+            "line": 89,
+            "column": 16
+          }
+        },
+        {
+          "id": "CopyAndMutate.13",
+          "kind": "struct_construct",
+          "detail": "CopyResult",
+          "source_span": {
+            "line": 89,
+            "column": 25
+          }
+        },
+        {
+          "id": "CopyAndMutate.14",
+          "kind": "field_access",
+          "detail": "offset",
+          "source_span": {
+            "line": 89,
+            "column": 42
+          }
+        },
+        {
+          "id": "CopyAndMutate.15",
+          "kind": "name",
+          "detail": "first",
+          "source_span": {
+            "line": 89,
+            "column": 36
+          }
+        },
+        {
+          "id": "CopyAndMutate.16",
+          "kind": "field_access",
+          "detail": "offset",
+          "source_span": {
+            "line": 89,
+            "column": 57
+          }
+        },
+        {
+          "id": "CopyAndMutate.17",
+          "kind": "name",
+          "detail": "second",
+          "source_span": {
+            "line": 89,
+            "column": 50
+          }
+        },
+        {
+          "id": "CopyAndMutate.18",
+          "kind": "return",
+          "type": "CopyResult",
+          "source_span": {
+            "line": 90,
+            "column": 5
+          }
+        },
+        {
+          "id": "CopyAndMutate.19",
+          "kind": "name",
+          "detail": "result",
+          "source_span": {
+            "line": 90,
+            "column": 12
+          }
+        }
+      ],
+      "source_span": {
+        "line": 84,
+        "column": 12
+      }
+    },
+    {
+      "name": "ClassifyOutcome",
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 93,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "outcome",
+          "type": {
+            "name": "Outcome",
+            "kind": "enum",
+            "span": {
+              "line": 93,
+              "column": 21
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "ClassifyOutcome.01",
+          "kind": "return",
+          "type": "int",
+          "source_span": {
+            "line": 95,
+            "column": 5
+          }
+        },
+        {
+          "id": "ClassifyOutcome.02",
+          "kind": "match_expr",
+          "detail": "3 arms",
+          "source_span": {
+            "line": 95,
+            "column": 12
+          }
+        },
+        {
+          "id": "ClassifyOutcome.03",
+          "kind": "name",
+          "detail": "outcome",
+          "source_span": {
+            "line": 95,
+            "column": 19
+          }
+        },
+        {
+          "id": "ClassifyOutcome.04",
+          "kind": "pattern",
+          "detail": "Outcome::Empty",
+          "source_span": {
+            "line": 97,
+            "column": 9
+          }
+        },
+        {
+          "id": "ClassifyOutcome.05",
+          "kind": "literal",
+          "detail": "0",
+          "source_span": {
+            "line": 97,
+            "column": 27
+          }
+        },
+        {
+          "id": "ClassifyOutcome.06",
+          "kind": "pattern",
+          "detail": "Outcome::Ready",
+          "source_span": {
+            "line": 98,
+            "column": 9
+          }
+        },
+        {
+          "id": "ClassifyOutcome.07",
+          "kind": "call",
+          "detail": "Add",
+          "source_span": {
+            "line": 98,
+            "column": 39
+          }
+        },
+        {
+          "id": "ClassifyOutcome.08",
+          "kind": "call",
+          "detail": "Add",
+          "source_span": {
+            "line": 98,
+            "column": 43
+          }
+        },
+        {
+          "id": "ClassifyOutcome.09",
+          "kind": "field_access",
+          "detail": "offset",
+          "source_span": {
+            "line": 98,
+            "column": 64
+          }
+        },
+        {
+          "id": "ClassifyOutcome.10",
+          "kind": "field_access",
+          "detail": "range",
+          "source_span": {
+            "line": 98,
+            "column": 58
+          }
+        },
+        {
+          "id": "ClassifyOutcome.11",
+          "kind": "name",
+          "detail": "allocation",
+          "source_span": {
+            "line": 98,
+            "column": 47
+          }
+        },
+        {
+          "id": "ClassifyOutcome.12",
+          "kind": "field_access",
+          "detail": "size",
+          "source_span": {
+            "line": 98,
+            "column": 89
+          }
+        },
+        {
+          "id": "ClassifyOutcome.13",
+          "kind": "field_access",
+          "detail": "range",
+          "source_span": {
+            "line": 98,
+            "column": 83
+          }
+        },
+        {
+          "id": "ClassifyOutcome.14",
+          "kind": "name",
+          "detail": "allocation",
+          "source_span": {
+            "line": 98,
+            "column": 72
+          }
+        },
+        {
+          "id": "ClassifyOutcome.15",
+          "kind": "field_access",
+          "detail": "generation",
+          "source_span": {
+            "line": 98,
+            "column": 107
+          }
+        },
+        {
+          "id": "ClassifyOutcome.16",
+          "kind": "name",
+          "detail": "allocation",
+          "source_span": {
+            "line": 98,
+            "column": 96
+          }
+        },
+        {
+          "id": "ClassifyOutcome.17",
+          "kind": "pattern",
+          "detail": "Outcome::Failed",
+          "source_span": {
+            "line": 99,
+            "column": 9
+          }
+        },
+        {
+          "id": "ClassifyOutcome.18",
+          "kind": "name",
+          "detail": "code",
+          "source_span": {
+            "line": 99,
+            "column": 34
+          }
+        }
+      ],
+      "source_span": {
+        "line": 93,
+        "column": 5
+      }
+    },
+    {
+      "name": "MatchAllocation",
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 103,
+          "column": 1
+        }
+      },
+      "operations": [
+        {
+          "id": "MatchAllocation.01",
+          "kind": "struct_construct",
+          "type": "BufferRange",
+          "detail": "range",
+          "source_span": {
+            "line": 105,
+            "column": 17
+          }
+        },
+        {
+          "id": "MatchAllocation.02",
+          "kind": "struct_construct",
+          "detail": "BufferRange",
+          "source_span": {
+            "line": 105,
+            "column": 25
+          }
+        },
+        {
+          "id": "MatchAllocation.03",
+          "kind": "literal",
+          "detail": "4",
+          "source_span": {
+            "line": 105,
+            "column": 37
+          }
+        },
+        {
+          "id": "MatchAllocation.04",
+          "kind": "literal",
+          "detail": "5",
+          "source_span": {
+            "line": 105,
+            "column": 40
+          }
+        },
+        {
+          "id": "MatchAllocation.05",
+          "kind": "literal",
+          "detail": "6",
+          "source_span": {
+            "line": 105,
+            "column": 43
+          }
+        },
+        {
+          "id": "MatchAllocation.06",
+          "kind": "struct_construct",
+          "type": "Allocation",
+          "detail": "allocation",
+          "source_span": {
+            "line": 106,
+            "column": 16
+          }
+        },
+        {
+          "id": "MatchAllocation.07",
+          "kind": "struct_construct",
+          "detail": "Allocation",
+          "source_span": {
+            "line": 106,
+            "column": 29
+          }
+        },
+        {
+          "id": "MatchAllocation.08",
+          "kind": "name",
+          "detail": "range",
+          "source_span": {
+            "line": 106,
+            "column": 40
+          }
+        },
+        {
+          "id": "MatchAllocation.09",
+          "kind": "literal",
+          "detail": "7",
+          "source_span": {
+            "line": 106,
+            "column": 47
+          }
+        },
+        {
+          "id": "MatchAllocation.10",
+          "kind": "var_decl",
+          "type": "Outcome",
+          "detail": "outcome",
+          "source_span": {
+            "line": 107,
+            "column": 13
+          }
+        },
+        {
+          "id": "MatchAllocation.11",
+          "kind": "enum_construct",
+          "detail": "Outcome::Ready",
+          "source_span": {
+            "line": 107,
+            "column": 23
+          }
+        },
+        {
+          "id": "MatchAllocation.12",
+          "kind": "name",
+          "detail": "allocation",
+          "source_span": {
+            "line": 107,
+            "column": 38
+          }
+        },
+        {
+          "id": "MatchAllocation.13",
+          "kind": "return",
+          "type": "int",
+          "source_span": {
+            "line": 108,
+            "column": 5
+          }
+        },
+        {
+          "id": "MatchAllocation.14",
+          "kind": "call",
+          "detail": "ClassifyOutcome",
+          "source_span": {
+            "line": 108,
+            "column": 12
+          }
+        },
+        {
+          "id": "MatchAllocation.15",
+          "kind": "name",
+          "detail": "outcome",
+          "source_span": {
+            "line": 108,
+            "column": 28
+          }
+        }
+      ],
+      "source_span": {
+        "line": 103,
+        "column": 5
+      }
+    },
+    {
+      "name": "InitializePool",
+      "return_type": {
+        "name": "void",
+        "kind": "builtin",
+        "span": {
+          "line": 111,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "state",
+          "type": {
+            "name": "CommandPoolState",
+            "kind": "struct",
+            "ownership": "borrow",
+            "span": {
+              "line": 111,
+              "column": 21
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "InitializePool.01",
+          "kind": "assign",
+          "type": "state.initialized",
+          "detail": "state.initialized",
+          "source_span": {
+            "line": 113,
+            "column": 11
+          }
+        },
+        {
+          "id": "InitializePool.02",
+          "kind": "field_access",
+          "detail": "initialized",
+          "source_span": {
+            "line": 113,
+            "column": 11
+          }
+        },
+        {
+          "id": "InitializePool.03",
+          "kind": "name",
+          "detail": "state",
+          "source_span": {
+            "line": 113,
+            "column": 5
+          }
+        },
+        {
+          "id": "InitializePool.04",
+          "kind": "bool_literal",
+          "detail": "true",
+          "source_span": {
+            "line": 113,
+            "column": 25
+          }
+        }
+      ],
+      "source_span": {
+        "line": 111,
+        "column": 6
+      }
+    },
+    {
+      "name": "UseImmovable",
+      "return_type": {
+        "name": "bool",
+        "kind": "builtin",
+        "span": {
+          "line": 116,
+          "column": 1
+        }
+      },
+      "operations": [
+        {
+          "id": "UseImmovable.01",
+          "kind": "final_storage_construct",
+          "type": "CommandPoolState",
+          "detail": "state",
+          "source_span": {
+            "line": 118,
+            "column": 22
+          }
+        },
+        {
+          "id": "UseImmovable.02",
+          "kind": "noncopyable_struct_construct",
+          "detail": "CommandPoolState",
+          "source_span": {
+            "line": 118,
+            "column": 30
+          }
+        },
+        {
+          "id": "UseImmovable.03",
+          "kind": "literal",
+          "detail": "11",
+          "source_span": {
+            "line": 118,
+            "column": 47
+          }
+        },
+        {
+          "id": "UseImmovable.04",
+          "kind": "bool_literal",
+          "detail": "false",
+          "source_span": {
+            "line": 118,
+            "column": 51
+          }
+        },
+        {
+          "id": "UseImmovable.05",
+          "kind": "expr_stmt",
+          "source_span": {
+            "line": 119,
+            "column": 5
+          }
+        },
+        {
+          "id": "UseImmovable.06",
+          "kind": "call",
+          "detail": "InitializePool",
+          "source_span": {
+            "line": 119,
+            "column": 5
+          }
+        },
+        {
+          "id": "UseImmovable.07",
+          "kind": "name",
+          "detail": "state",
+          "source_span": {
+            "line": 119,
+            "column": 20
+          }
+        },
+        {
+          "id": "UseImmovable.08",
+          "kind": "return",
+          "type": "bool",
+          "source_span": {
+            "line": 120,
+            "column": 5
+          }
+        },
+        {
+          "id": "UseImmovable.09",
+          "kind": "call",
+          "detail": "IsValid",
+          "source_span": {
+            "line": 120,
+            "column": 12
+          }
+        },
+        {
+          "id": "UseImmovable.10",
+          "kind": "name",
+          "detail": "state",
+          "source_span": {
+            "line": 120,
+            "column": 20
+          }
+        }
+      ],
+      "source_span": {
+        "line": 116,
+        "column": 6
+      }
+    }
+  ],
+  "schema": "concept-evt1-source-map.v1",
+  "source": "Examples/Concept-Vulkan/evt1_m1b_a_language.concept",
+  "static_asserts": null,
+  "structs": [
+    {
+      "name": "BufferRange",
+      "c_name": "concept_buffer_range",
+      "immovable": false,
+      "copyable": true,
+      "fields": [
+        {
+          "name": "bufferId",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 5,
+              "column": 5
+            }
+          }
+        },
+        {
+          "name": "offset",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 6,
+              "column": 5
+            }
+          }
+        },
+        {
+          "name": "size",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 7,
+              "column": 5
+            }
+          }
+        }
+      ],
+      "source_span": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "name": "Allocation",
+      "c_name": "concept_allocation",
+      "immovable": false,
+      "copyable": true,
+      "fields": [
+        {
+          "name": "range",
+          "type": {
+            "name": "BufferRange",
+            "kind": "struct",
+            "span": {
+              "line": 12,
+              "column": 5
+            }
+          }
+        },
+        {
+          "name": "generation",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 13,
+              "column": 5
+            }
+          }
+        }
+      ],
+      "source_span": {
+        "line": 10,
+        "column": 1
+      }
+    },
+    {
+      "name": "ObservedValues",
+      "c_name": "concept_observed_values",
+      "immovable": false,
+      "copyable": true,
+      "fields": [
+        {
+          "name": "first",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 18,
+              "column": 5
+            }
+          }
+        },
+        {
+          "name": "second",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 19,
+              "column": 5
+            }
+          }
+        },
+        {
+          "name": "third",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 20,
+              "column": 5
+            }
+          }
+        }
+      ],
+      "source_span": {
+        "line": 16,
+        "column": 1
+      }
+    },
+    {
+      "name": "CopyResult",
+      "c_name": "concept_copy_result",
+      "immovable": false,
+      "copyable": true,
+      "fields": [
+        {
+          "name": "firstOffset",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 25,
+              "column": 5
+            }
+          }
+        },
+        {
+          "name": "secondOffset",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 26,
+              "column": 5
+            }
+          }
+        }
+      ],
+      "source_span": {
+        "line": 23,
+        "column": 1
+      }
+    },
+    {
+      "name": "CommandPoolState",
+      "c_name": "concept_command_pool_state",
+      "immovable": true,
+      "copyable": false,
+      "fields": [
+        {
+          "name": "poolId",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 31,
+              "column": 5
+            }
+          }
+        },
+        {
+          "name": "initialized",
+          "type": {
+            "name": "bool",
+            "kind": "builtin",
+            "span": {
+              "line": 32,
+              "column": 5
+            }
+          }
+        }
+      ],
+      "source_span": {
+        "line": 29,
+        "column": 1
+      }
+    }
+  ],
+  "templates": null
+}

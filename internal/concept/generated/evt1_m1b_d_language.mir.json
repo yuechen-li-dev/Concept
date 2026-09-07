@@ -1,0 +1,2004 @@
+{
+  "schema": "concept-evt1-mir.v1",
+  "module": "Examples/Concept-Vulkan/evt1_m1b_d_language.concept",
+  "profile": "Vulkan",
+  "structs": [
+    {
+      "name": "Transition",
+      "c_name": "concept_transition",
+      "immovable": false,
+      "copyable": true,
+      "fields": [
+        {
+          "name": "from",
+          "type": {
+            "name": "LifecycleState",
+            "kind": "enum",
+            "span": {
+              "line": 12,
+              "column": 5
+            }
+          }
+        },
+        {
+          "name": "signal",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 13,
+              "column": 5
+            }
+          }
+        },
+        {
+          "name": "to",
+          "type": {
+            "name": "LifecycleState",
+            "kind": "enum",
+            "span": {
+              "line": 14,
+              "column": 5
+            }
+          }
+        }
+      ],
+      "source_span": {
+        "line": 10,
+        "column": 1
+      }
+    },
+    {
+      "name": "RetrySummary",
+      "c_name": "concept_retry_summary",
+      "immovable": false,
+      "copyable": true,
+      "fields": [
+        {
+          "name": "values",
+          "type": {
+            "name": "int[]",
+            "kind": "array",
+            "array_elem": {
+              "name": "int",
+              "kind": "builtin",
+              "span": {
+                "line": 19,
+                "column": 5
+              }
+            },
+            "array_length": 2,
+            "span": {
+              "line": 19,
+              "column": 5
+            }
+          }
+        }
+      ],
+      "source_span": {
+        "line": 17,
+        "column": 1
+      }
+    }
+  ],
+  "enums": [
+    {
+      "name": "LifecycleState",
+      "c_name": "concept_lifecycle_state",
+      "source_span": {
+        "line": 3,
+        "column": 1
+      },
+      "variants": [
+        {
+          "name": "Empty",
+          "tag_name": "CONCEPT_LIFECYCLE_STATE_EMPTY",
+          "tag": 0,
+          "source_span": {
+            "line": 5,
+            "column": 5
+          }
+        },
+        {
+          "name": "Ready",
+          "tag_name": "CONCEPT_LIFECYCLE_STATE_READY",
+          "tag": 1,
+          "source_span": {
+            "line": 6,
+            "column": 5
+          }
+        },
+        {
+          "name": "Submitted",
+          "tag_name": "CONCEPT_LIFECYCLE_STATE_SUBMITTED",
+          "tag": 2,
+          "source_span": {
+            "line": 7,
+            "column": 5
+          }
+        }
+      ]
+    }
+  ],
+  "comptime_decls": [
+    {
+      "name": "EmptyRetryBudgets",
+      "type": {
+        "name": "int[]",
+        "kind": "array",
+        "array_elem": {
+          "name": "int",
+          "kind": "builtin",
+          "span": {
+            "line": 22,
+            "column": 10
+          }
+        },
+        "span": {
+          "line": 22,
+          "column": 10
+        }
+      },
+      "value": "[]",
+      "source_span": {
+        "line": 22,
+        "column": 1
+      }
+    },
+    {
+      "name": "RetryBudgets",
+      "type": {
+        "name": "int[]",
+        "kind": "array",
+        "array_elem": {
+          "name": "int",
+          "kind": "builtin",
+          "span": {
+            "line": 23,
+            "column": 10
+          }
+        },
+        "array_length": 3,
+        "span": {
+          "line": 23,
+          "column": 10
+        }
+      },
+      "value": "[1, 2, 4]",
+      "source_span": {
+        "line": 23,
+        "column": 1
+      }
+    },
+    {
+      "name": "RetryMatrix",
+      "type": {
+        "name": "int[2][]",
+        "kind": "array",
+        "array_elem": {
+          "name": "int[]",
+          "kind": "array",
+          "array_elem": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 24,
+              "column": 10
+            }
+          },
+          "array_length": 2,
+          "span": {
+            "line": 24,
+            "column": 10
+          }
+        },
+        "array_length": 3,
+        "span": {
+          "line": 24,
+          "column": 10
+        }
+      },
+      "value": "[[1, 2], [3, 4], [5, 6]]",
+      "source_span": {
+        "line": 24,
+        "column": 1
+      }
+    },
+    {
+      "name": "Transitions",
+      "type": {
+        "name": "Transition[]",
+        "kind": "array",
+        "array_elem": {
+          "name": "Transition",
+          "kind": "struct",
+          "span": {
+            "line": 25,
+            "column": 10
+          }
+        },
+        "array_length": 4,
+        "span": {
+          "line": 25,
+          "column": 10
+        }
+      },
+      "value": "[Transition{from=LifecycleState::Empty, signal=0, to=LifecycleState::Ready}, Transition{from=LifecycleState::Ready, signal=1, to=LifecycleState::Submitted}, Transition{from=LifecycleState::Submitted, signal=2, to=LifecycleState::Ready}, Transition{from=LifecycleState::Ready, signal=3, to=LifecycleState::Empty}]",
+      "source_span": {
+        "line": 25,
+        "column": 1
+      }
+    },
+    {
+      "name": "Summary",
+      "type": {
+        "name": "RetrySummary",
+        "kind": "struct",
+        "span": {
+          "line": 32,
+          "column": 10
+        }
+      },
+      "value": "RetrySummary{values=[3, 4]}",
+      "source_span": {
+        "line": 32,
+        "column": 1
+      }
+    },
+    {
+      "name": "TransitionTableIsStable",
+      "type": {
+        "name": "bool",
+        "kind": "builtin",
+        "span": {
+          "line": 33,
+          "column": 10
+        }
+      },
+      "value": "true",
+      "source_span": {
+        "line": 33,
+        "column": 1
+      }
+    },
+    {
+      "name": "RetryBudgetTotal",
+      "type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 34,
+          "column": 10
+        }
+      },
+      "value": "7",
+      "source_span": {
+        "line": 34,
+        "column": 1
+      }
+    }
+  ],
+  "static_asserts": [
+    {
+      "condition": "expression",
+      "satisfied": true,
+      "source_span": {
+        "line": 86,
+        "column": 1
+      }
+    },
+    {
+      "condition": "expression",
+      "satisfied": true,
+      "source_span": {
+        "line": 87,
+        "column": 1
+      }
+    },
+    {
+      "condition": "expression",
+      "satisfied": true,
+      "source_span": {
+        "line": 88,
+        "column": 1
+      }
+    },
+    {
+      "condition": "expression",
+      "satisfied": true,
+      "source_span": {
+        "line": 89,
+        "column": 1
+      }
+    },
+    {
+      "condition": "expression",
+      "satisfied": true,
+      "source_span": {
+        "line": 90,
+        "column": 1
+      }
+    },
+    {
+      "condition": "expression",
+      "satisfied": true,
+      "source_span": {
+        "line": 91,
+        "column": 1
+      }
+    },
+    {
+      "condition": "TransitionTableIsStable",
+      "message": "\"duplicate transition key\"",
+      "satisfied": true,
+      "source_span": {
+        "line": 92,
+        "column": 1
+      }
+    },
+    {
+      "condition": "expression",
+      "satisfied": true,
+      "source_span": {
+        "line": 93,
+        "column": 1
+      }
+    },
+    {
+      "condition": "expression",
+      "satisfied": true,
+      "source_span": {
+        "line": 94,
+        "column": 1
+      }
+    },
+    {
+      "condition": "expression",
+      "satisfied": true,
+      "source_span": {
+        "line": 95,
+        "column": 1
+      }
+    }
+  ],
+  "functions": [
+    {
+      "name": "DefaultRetryBudget",
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 97,
+          "column": 1
+        }
+      },
+      "operations": [
+        {
+          "id": "DefaultRetryBudget.01",
+          "kind": "return",
+          "type": "int",
+          "source_span": {
+            "line": 99,
+            "column": 5
+          }
+        },
+        {
+          "id": "DefaultRetryBudget.02",
+          "kind": "array_index",
+          "source_span": {
+            "line": 99,
+            "column": 12
+          }
+        },
+        {
+          "id": "DefaultRetryBudget.03",
+          "kind": "name",
+          "detail": "RetryBudgets",
+          "source_span": {
+            "line": 99,
+            "column": 12
+          }
+        },
+        {
+          "id": "DefaultRetryBudget.04",
+          "kind": "literal",
+          "detail": "1",
+          "source_span": {
+            "line": 99,
+            "column": 25
+          }
+        }
+      ],
+      "source_span": {
+        "line": 97,
+        "column": 5
+      }
+    },
+    {
+      "name": "MatrixCorner",
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 102,
+          "column": 1
+        }
+      },
+      "operations": [
+        {
+          "id": "MatrixCorner.01",
+          "kind": "return",
+          "type": "int",
+          "source_span": {
+            "line": 104,
+            "column": 5
+          }
+        },
+        {
+          "id": "MatrixCorner.02",
+          "kind": "array_index",
+          "source_span": {
+            "line": 104,
+            "column": 12
+          }
+        },
+        {
+          "id": "MatrixCorner.03",
+          "kind": "array_index",
+          "source_span": {
+            "line": 104,
+            "column": 12
+          }
+        },
+        {
+          "id": "MatrixCorner.04",
+          "kind": "name",
+          "detail": "RetryMatrix",
+          "source_span": {
+            "line": 104,
+            "column": 12
+          }
+        },
+        {
+          "id": "MatrixCorner.05",
+          "kind": "literal",
+          "detail": "2",
+          "source_span": {
+            "line": 104,
+            "column": 24
+          }
+        },
+        {
+          "id": "MatrixCorner.06",
+          "kind": "literal",
+          "detail": "1",
+          "source_span": {
+            "line": 104,
+            "column": 27
+          }
+        }
+      ],
+      "source_span": {
+        "line": 102,
+        "column": 5
+      }
+    },
+    {
+      "name": "SummaryValue",
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 107,
+          "column": 1
+        }
+      },
+      "operations": [
+        {
+          "id": "SummaryValue.01",
+          "kind": "return",
+          "type": "int",
+          "source_span": {
+            "line": 109,
+            "column": 5
+          }
+        },
+        {
+          "id": "SummaryValue.02",
+          "kind": "binary",
+          "detail": "+",
+          "source_span": {
+            "line": 109,
+            "column": 30
+          }
+        },
+        {
+          "id": "SummaryValue.03",
+          "kind": "array_index",
+          "source_span": {
+            "line": 109,
+            "column": 12
+          }
+        },
+        {
+          "id": "SummaryValue.04",
+          "kind": "field_access",
+          "detail": "values",
+          "source_span": {
+            "line": 109,
+            "column": 20
+          }
+        },
+        {
+          "id": "SummaryValue.05",
+          "kind": "name",
+          "detail": "Summary",
+          "source_span": {
+            "line": 109,
+            "column": 12
+          }
+        },
+        {
+          "id": "SummaryValue.06",
+          "kind": "literal",
+          "detail": "0",
+          "source_span": {
+            "line": 109,
+            "column": 27
+          }
+        },
+        {
+          "id": "SummaryValue.07",
+          "kind": "array_index",
+          "source_span": {
+            "line": 109,
+            "column": 32
+          }
+        },
+        {
+          "id": "SummaryValue.08",
+          "kind": "field_access",
+          "detail": "values",
+          "source_span": {
+            "line": 109,
+            "column": 40
+          }
+        },
+        {
+          "id": "SummaryValue.09",
+          "kind": "name",
+          "detail": "Summary",
+          "source_span": {
+            "line": 109,
+            "column": 32
+          }
+        },
+        {
+          "id": "SummaryValue.10",
+          "kind": "literal",
+          "detail": "1",
+          "source_span": {
+            "line": 109,
+            "column": 47
+          }
+        }
+      ],
+      "source_span": {
+        "line": 107,
+        "column": 5
+      }
+    },
+    {
+      "name": "TransitionTableStable",
+      "return_type": {
+        "name": "bool",
+        "kind": "builtin",
+        "span": {
+          "line": 112,
+          "column": 1
+        }
+      },
+      "operations": [
+        {
+          "id": "TransitionTableStable.01",
+          "kind": "return",
+          "type": "bool",
+          "source_span": {
+            "line": 114,
+            "column": 5
+          }
+        },
+        {
+          "id": "TransitionTableStable.02",
+          "kind": "name",
+          "detail": "TransitionTableIsStable",
+          "source_span": {
+            "line": 114,
+            "column": 12
+          }
+        }
+      ],
+      "source_span": {
+        "line": 112,
+        "column": 6
+      }
+    },
+    {
+      "name": "TotalRetryBudget",
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 117,
+          "column": 1
+        }
+      },
+      "operations": [
+        {
+          "id": "TotalRetryBudget.01",
+          "kind": "return",
+          "type": "int",
+          "source_span": {
+            "line": 119,
+            "column": 5
+          }
+        },
+        {
+          "id": "TotalRetryBudget.02",
+          "kind": "name",
+          "detail": "RetryBudgetTotal",
+          "source_span": {
+            "line": 119,
+            "column": 12
+          }
+        }
+      ],
+      "source_span": {
+        "line": 117,
+        "column": 5
+      }
+    }
+  ],
+  "comptime_functions": [
+    {
+      "name": "CanonicalRetryBudgets",
+      "return_type": {
+        "name": "int[]",
+        "kind": "array",
+        "array_elem": {
+          "name": "int",
+          "kind": "builtin",
+          "span": {
+            "line": 36,
+            "column": 10
+          }
+        },
+        "array_length": 3,
+        "span": {
+          "line": 36,
+          "column": 10
+        }
+      },
+      "operations": [
+        {
+          "id": "CanonicalRetryBudgets.01",
+          "kind": "return",
+          "type": "int[3]",
+          "source_span": {
+            "line": 38,
+            "column": 5
+          }
+        },
+        {
+          "id": "CanonicalRetryBudgets.02",
+          "kind": "array_literal",
+          "detail": "3 elements",
+          "source_span": {
+            "line": 38,
+            "column": 12
+          }
+        },
+        {
+          "id": "CanonicalRetryBudgets.03",
+          "kind": "literal",
+          "detail": "1",
+          "source_span": {
+            "line": 38,
+            "column": 13
+          }
+        },
+        {
+          "id": "CanonicalRetryBudgets.04",
+          "kind": "literal",
+          "detail": "2",
+          "source_span": {
+            "line": 38,
+            "column": 16
+          }
+        },
+        {
+          "id": "CanonicalRetryBudgets.05",
+          "kind": "literal",
+          "detail": "4",
+          "source_span": {
+            "line": 38,
+            "column": 19
+          }
+        }
+      ],
+      "source_span": {
+        "line": 36,
+        "column": 17
+      }
+    },
+    {
+      "name": "SumBudgets",
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 41,
+          "column": 10
+        }
+      },
+      "params": [
+        {
+          "name": "values",
+          "type": {
+            "name": "int[]",
+            "kind": "array",
+            "array_elem": {
+              "name": "int",
+              "kind": "builtin",
+              "span": {
+                "line": 41,
+                "column": 25
+              }
+            },
+            "array_length": 3,
+            "span": {
+              "line": 41,
+              "column": 25
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "SumBudgets.01",
+          "kind": "var_decl",
+          "type": "int",
+          "detail": "cursor",
+          "source_span": {
+            "line": 43,
+            "column": 9
+          }
+        },
+        {
+          "id": "SumBudgets.02",
+          "kind": "literal",
+          "detail": "0",
+          "source_span": {
+            "line": 43,
+            "column": 18
+          }
+        },
+        {
+          "id": "SumBudgets.03",
+          "kind": "var_decl",
+          "type": "int",
+          "detail": "total",
+          "source_span": {
+            "line": 44,
+            "column": 9
+          }
+        },
+        {
+          "id": "SumBudgets.04",
+          "kind": "literal",
+          "detail": "0",
+          "source_span": {
+            "line": 44,
+            "column": 17
+          }
+        },
+        {
+          "id": "SumBudgets.05",
+          "kind": "bounded_while",
+          "source_span": {
+            "line": 45,
+            "column": 5
+          }
+        },
+        {
+          "id": "SumBudgets.06",
+          "kind": "binary",
+          "detail": "\u003c",
+          "source_span": {
+            "line": 45,
+            "column": 19
+          }
+        },
+        {
+          "id": "SumBudgets.07",
+          "kind": "name",
+          "detail": "cursor",
+          "source_span": {
+            "line": 45,
+            "column": 12
+          }
+        },
+        {
+          "id": "SumBudgets.08",
+          "kind": "array_len",
+          "detail": "Len",
+          "source_span": {
+            "line": 45,
+            "column": 21
+          }
+        },
+        {
+          "id": "SumBudgets.09",
+          "kind": "name",
+          "detail": "values",
+          "source_span": {
+            "line": 45,
+            "column": 25
+          }
+        },
+        {
+          "id": "SumBudgets.10",
+          "kind": "literal",
+          "detail": "16",
+          "source_span": {
+            "line": 45,
+            "column": 42
+          }
+        },
+        {
+          "id": "SumBudgets.11",
+          "kind": "assign",
+          "type": "total",
+          "detail": "total",
+          "source_span": {
+            "line": 47,
+            "column": 9
+          }
+        },
+        {
+          "id": "SumBudgets.12",
+          "kind": "name",
+          "detail": "total",
+          "source_span": {
+            "line": 47,
+            "column": 9
+          }
+        },
+        {
+          "id": "SumBudgets.13",
+          "kind": "binary",
+          "detail": "+",
+          "source_span": {
+            "line": 47,
+            "column": 23
+          }
+        },
+        {
+          "id": "SumBudgets.14",
+          "kind": "name",
+          "detail": "total",
+          "source_span": {
+            "line": 47,
+            "column": 17
+          }
+        },
+        {
+          "id": "SumBudgets.15",
+          "kind": "array_index",
+          "source_span": {
+            "line": 47,
+            "column": 25
+          }
+        },
+        {
+          "id": "SumBudgets.16",
+          "kind": "name",
+          "detail": "values",
+          "source_span": {
+            "line": 47,
+            "column": 25
+          }
+        },
+        {
+          "id": "SumBudgets.17",
+          "kind": "name",
+          "detail": "cursor",
+          "source_span": {
+            "line": 47,
+            "column": 32
+          }
+        },
+        {
+          "id": "SumBudgets.18",
+          "kind": "assign",
+          "type": "cursor",
+          "detail": "cursor",
+          "source_span": {
+            "line": 48,
+            "column": 9
+          }
+        },
+        {
+          "id": "SumBudgets.19",
+          "kind": "name",
+          "detail": "cursor",
+          "source_span": {
+            "line": 48,
+            "column": 9
+          }
+        },
+        {
+          "id": "SumBudgets.20",
+          "kind": "binary",
+          "detail": "+",
+          "source_span": {
+            "line": 48,
+            "column": 25
+          }
+        },
+        {
+          "id": "SumBudgets.21",
+          "kind": "name",
+          "detail": "cursor",
+          "source_span": {
+            "line": 48,
+            "column": 18
+          }
+        },
+        {
+          "id": "SumBudgets.22",
+          "kind": "literal",
+          "detail": "1",
+          "source_span": {
+            "line": 48,
+            "column": 27
+          }
+        },
+        {
+          "id": "SumBudgets.23",
+          "kind": "return",
+          "type": "int",
+          "source_span": {
+            "line": 50,
+            "column": 5
+          }
+        },
+        {
+          "id": "SumBudgets.24",
+          "kind": "name",
+          "detail": "total",
+          "source_span": {
+            "line": 50,
+            "column": 12
+          }
+        }
+      ],
+      "source_span": {
+        "line": 41,
+        "column": 14
+      }
+    },
+    {
+      "name": "HasDuplicateTransitionKeys",
+      "return_type": {
+        "name": "bool",
+        "kind": "builtin",
+        "span": {
+          "line": 53,
+          "column": 10
+        }
+      },
+      "params": [
+        {
+          "name": "values",
+          "type": {
+            "name": "Transition[]",
+            "kind": "array",
+            "array_elem": {
+              "name": "Transition",
+              "kind": "struct",
+              "span": {
+                "line": 53,
+                "column": 42
+              }
+            },
+            "array_length": 4,
+            "span": {
+              "line": 53,
+              "column": 42
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "HasDuplicateTransitionKeys.01",
+          "kind": "var_decl",
+          "type": "int",
+          "detail": "outer",
+          "source_span": {
+            "line": 55,
+            "column": 9
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.02",
+          "kind": "literal",
+          "detail": "0",
+          "source_span": {
+            "line": 55,
+            "column": 17
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.03",
+          "kind": "var_decl",
+          "type": "bool",
+          "detail": "duplicate",
+          "source_span": {
+            "line": 56,
+            "column": 10
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.04",
+          "kind": "bool_literal",
+          "detail": "false",
+          "source_span": {
+            "line": 56,
+            "column": 22
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.05",
+          "kind": "bounded_while",
+          "source_span": {
+            "line": 57,
+            "column": 5
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.06",
+          "kind": "binary",
+          "detail": "\u003c",
+          "source_span": {
+            "line": 57,
+            "column": 18
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.07",
+          "kind": "name",
+          "detail": "outer",
+          "source_span": {
+            "line": 57,
+            "column": 12
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.08",
+          "kind": "array_len",
+          "detail": "Len",
+          "source_span": {
+            "line": 57,
+            "column": 20
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.09",
+          "kind": "name",
+          "detail": "values",
+          "source_span": {
+            "line": 57,
+            "column": 24
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.10",
+          "kind": "literal",
+          "detail": "16",
+          "source_span": {
+            "line": 57,
+            "column": 41
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.11",
+          "kind": "var_decl",
+          "type": "int",
+          "detail": "inner",
+          "source_span": {
+            "line": 59,
+            "column": 13
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.12",
+          "kind": "binary",
+          "detail": "+",
+          "source_span": {
+            "line": 59,
+            "column": 27
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.13",
+          "kind": "name",
+          "detail": "outer",
+          "source_span": {
+            "line": 59,
+            "column": 21
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.14",
+          "kind": "literal",
+          "detail": "1",
+          "source_span": {
+            "line": 59,
+            "column": 29
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.15",
+          "kind": "bounded_while",
+          "source_span": {
+            "line": 60,
+            "column": 9
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.16",
+          "kind": "binary",
+          "detail": "\u003c",
+          "source_span": {
+            "line": 60,
+            "column": 22
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.17",
+          "kind": "name",
+          "detail": "inner",
+          "source_span": {
+            "line": 60,
+            "column": 16
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.18",
+          "kind": "array_len",
+          "detail": "Len",
+          "source_span": {
+            "line": 60,
+            "column": 24
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.19",
+          "kind": "name",
+          "detail": "values",
+          "source_span": {
+            "line": 60,
+            "column": 28
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.20",
+          "kind": "literal",
+          "detail": "16",
+          "source_span": {
+            "line": 60,
+            "column": 45
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.21",
+          "kind": "var_decl",
+          "type": "bool",
+          "detail": "sameFrom",
+          "source_span": {
+            "line": 62,
+            "column": 18
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.22",
+          "kind": "binary",
+          "detail": "==",
+          "source_span": {
+            "line": 62,
+            "column": 48
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.23",
+          "kind": "field_access",
+          "detail": "from",
+          "source_span": {
+            "line": 62,
+            "column": 43
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.24",
+          "kind": "array_index",
+          "source_span": {
+            "line": 62,
+            "column": 29
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.25",
+          "kind": "name",
+          "detail": "values",
+          "source_span": {
+            "line": 62,
+            "column": 29
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.26",
+          "kind": "name",
+          "detail": "outer",
+          "source_span": {
+            "line": 62,
+            "column": 36
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.27",
+          "kind": "field_access",
+          "detail": "from",
+          "source_span": {
+            "line": 62,
+            "column": 65
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.28",
+          "kind": "array_index",
+          "source_span": {
+            "line": 62,
+            "column": 51
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.29",
+          "kind": "name",
+          "detail": "values",
+          "source_span": {
+            "line": 62,
+            "column": 51
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.30",
+          "kind": "name",
+          "detail": "inner",
+          "source_span": {
+            "line": 62,
+            "column": 58
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.31",
+          "kind": "var_decl",
+          "type": "bool",
+          "detail": "sameSignal",
+          "source_span": {
+            "line": 63,
+            "column": 18
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.32",
+          "kind": "binary",
+          "detail": "==",
+          "source_span": {
+            "line": 63,
+            "column": 52
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.33",
+          "kind": "field_access",
+          "detail": "signal",
+          "source_span": {
+            "line": 63,
+            "column": 45
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.34",
+          "kind": "array_index",
+          "source_span": {
+            "line": 63,
+            "column": 31
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.35",
+          "kind": "name",
+          "detail": "values",
+          "source_span": {
+            "line": 63,
+            "column": 31
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.36",
+          "kind": "name",
+          "detail": "outer",
+          "source_span": {
+            "line": 63,
+            "column": 38
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.37",
+          "kind": "field_access",
+          "detail": "signal",
+          "source_span": {
+            "line": 63,
+            "column": 69
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.38",
+          "kind": "array_index",
+          "source_span": {
+            "line": 63,
+            "column": 55
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.39",
+          "kind": "name",
+          "detail": "values",
+          "source_span": {
+            "line": 63,
+            "column": 55
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.40",
+          "kind": "name",
+          "detail": "inner",
+          "source_span": {
+            "line": 63,
+            "column": 62
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.41",
+          "kind": "assign",
+          "type": "duplicate",
+          "detail": "duplicate",
+          "source_span": {
+            "line": 64,
+            "column": 13
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.42",
+          "kind": "name",
+          "detail": "duplicate",
+          "source_span": {
+            "line": 64,
+            "column": 13
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.43",
+          "kind": "binary",
+          "detail": "or",
+          "source_span": {
+            "line": 64,
+            "column": 35
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.44",
+          "kind": "name",
+          "detail": "duplicate",
+          "source_span": {
+            "line": 64,
+            "column": 25
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.45",
+          "kind": "binary",
+          "detail": "and",
+          "source_span": {
+            "line": 64,
+            "column": 48
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.46",
+          "kind": "name",
+          "detail": "sameFrom",
+          "source_span": {
+            "line": 64,
+            "column": 39
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.47",
+          "kind": "name",
+          "detail": "sameSignal",
+          "source_span": {
+            "line": 64,
+            "column": 52
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.48",
+          "kind": "assign",
+          "type": "inner",
+          "detail": "inner",
+          "source_span": {
+            "line": 65,
+            "column": 13
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.49",
+          "kind": "name",
+          "detail": "inner",
+          "source_span": {
+            "line": 65,
+            "column": 13
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.50",
+          "kind": "binary",
+          "detail": "+",
+          "source_span": {
+            "line": 65,
+            "column": 27
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.51",
+          "kind": "name",
+          "detail": "inner",
+          "source_span": {
+            "line": 65,
+            "column": 21
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.52",
+          "kind": "literal",
+          "detail": "1",
+          "source_span": {
+            "line": 65,
+            "column": 29
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.53",
+          "kind": "assign",
+          "type": "outer",
+          "detail": "outer",
+          "source_span": {
+            "line": 67,
+            "column": 9
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.54",
+          "kind": "name",
+          "detail": "outer",
+          "source_span": {
+            "line": 67,
+            "column": 9
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.55",
+          "kind": "binary",
+          "detail": "+",
+          "source_span": {
+            "line": 67,
+            "column": 23
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.56",
+          "kind": "name",
+          "detail": "outer",
+          "source_span": {
+            "line": 67,
+            "column": 17
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.57",
+          "kind": "literal",
+          "detail": "1",
+          "source_span": {
+            "line": 67,
+            "column": 25
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.58",
+          "kind": "return",
+          "type": "bool",
+          "source_span": {
+            "line": 69,
+            "column": 5
+          }
+        },
+        {
+          "id": "HasDuplicateTransitionKeys.59",
+          "kind": "name",
+          "detail": "duplicate",
+          "source_span": {
+            "line": 69,
+            "column": 12
+          }
+        }
+      ],
+      "source_span": {
+        "line": 53,
+        "column": 15
+      }
+    },
+    {
+      "name": "LookupTransition",
+      "return_type": {
+        "name": "LifecycleState",
+        "kind": "enum",
+        "span": {
+          "line": 72,
+          "column": 10
+        }
+      },
+      "params": [
+        {
+          "name": "values",
+          "type": {
+            "name": "Transition[]",
+            "kind": "array",
+            "array_elem": {
+              "name": "Transition",
+              "kind": "struct",
+              "span": {
+                "line": 72,
+                "column": 42
+              }
+            },
+            "array_length": 4,
+            "span": {
+              "line": 72,
+              "column": 42
+            }
+          }
+        },
+        {
+          "name": "from",
+          "type": {
+            "name": "LifecycleState",
+            "kind": "enum",
+            "span": {
+              "line": 72,
+              "column": 64
+            }
+          }
+        },
+        {
+          "name": "signal",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 72,
+              "column": 85
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "LookupTransition.01",
+          "kind": "var_decl",
+          "type": "int",
+          "detail": "cursor",
+          "source_span": {
+            "line": 74,
+            "column": 9
+          }
+        },
+        {
+          "id": "LookupTransition.02",
+          "kind": "literal",
+          "detail": "0",
+          "source_span": {
+            "line": 74,
+            "column": 18
+          }
+        },
+        {
+          "id": "LookupTransition.03",
+          "kind": "var_decl",
+          "type": "LifecycleState",
+          "detail": "result",
+          "source_span": {
+            "line": 75,
+            "column": 20
+          }
+        },
+        {
+          "id": "LookupTransition.04",
+          "kind": "enum_construct",
+          "detail": "LifecycleState::Empty",
+          "source_span": {
+            "line": 75,
+            "column": 29
+          }
+        },
+        {
+          "id": "LookupTransition.05",
+          "kind": "bounded_while",
+          "source_span": {
+            "line": 76,
+            "column": 5
+          }
+        },
+        {
+          "id": "LookupTransition.06",
+          "kind": "binary",
+          "detail": "\u003c",
+          "source_span": {
+            "line": 76,
+            "column": 19
+          }
+        },
+        {
+          "id": "LookupTransition.07",
+          "kind": "name",
+          "detail": "cursor",
+          "source_span": {
+            "line": 76,
+            "column": 12
+          }
+        },
+        {
+          "id": "LookupTransition.08",
+          "kind": "array_len",
+          "detail": "Len",
+          "source_span": {
+            "line": 76,
+            "column": 21
+          }
+        },
+        {
+          "id": "LookupTransition.09",
+          "kind": "name",
+          "detail": "values",
+          "source_span": {
+            "line": 76,
+            "column": 25
+          }
+        },
+        {
+          "id": "LookupTransition.10",
+          "kind": "literal",
+          "detail": "16",
+          "source_span": {
+            "line": 76,
+            "column": 42
+          }
+        },
+        {
+          "id": "LookupTransition.11",
+          "kind": "var_decl",
+          "type": "bool",
+          "detail": "sameFrom",
+          "source_span": {
+            "line": 78,
+            "column": 14
+          }
+        },
+        {
+          "id": "LookupTransition.12",
+          "kind": "binary",
+          "detail": "==",
+          "source_span": {
+            "line": 78,
+            "column": 45
+          }
+        },
+        {
+          "id": "LookupTransition.13",
+          "kind": "field_access",
+          "detail": "from",
+          "source_span": {
+            "line": 78,
+            "column": 40
+          }
+        },
+        {
+          "id": "LookupTransition.14",
+          "kind": "array_index",
+          "source_span": {
+            "line": 78,
+            "column": 25
+          }
+        },
+        {
+          "id": "LookupTransition.15",
+          "kind": "name",
+          "detail": "values",
+          "source_span": {
+            "line": 78,
+            "column": 25
+          }
+        },
+        {
+          "id": "LookupTransition.16",
+          "kind": "name",
+          "detail": "cursor",
+          "source_span": {
+            "line": 78,
+            "column": 32
+          }
+        },
+        {
+          "id": "LookupTransition.17",
+          "kind": "name",
+          "detail": "from",
+          "source_span": {
+            "line": 78,
+            "column": 48
+          }
+        },
+        {
+          "id": "LookupTransition.18",
+          "kind": "var_decl",
+          "type": "bool",
+          "detail": "sameSignal",
+          "source_span": {
+            "line": 79,
+            "column": 14
+          }
+        },
+        {
+          "id": "LookupTransition.19",
+          "kind": "binary",
+          "detail": "==",
+          "source_span": {
+            "line": 79,
+            "column": 49
+          }
+        },
+        {
+          "id": "LookupTransition.20",
+          "kind": "field_access",
+          "detail": "signal",
+          "source_span": {
+            "line": 79,
+            "column": 42
+          }
+        },
+        {
+          "id": "LookupTransition.21",
+          "kind": "array_index",
+          "source_span": {
+            "line": 79,
+            "column": 27
+          }
+        },
+        {
+          "id": "LookupTransition.22",
+          "kind": "name",
+          "detail": "values",
+          "source_span": {
+            "line": 79,
+            "column": 27
+          }
+        },
+        {
+          "id": "LookupTransition.23",
+          "kind": "name",
+          "detail": "cursor",
+          "source_span": {
+            "line": 79,
+            "column": 34
+          }
+        },
+        {
+          "id": "LookupTransition.24",
+          "kind": "name",
+          "detail": "signal",
+          "source_span": {
+            "line": 79,
+            "column": 52
+          }
+        },
+        {
+          "id": "LookupTransition.25",
+          "kind": "assign",
+          "type": "result",
+          "detail": "result",
+          "source_span": {
+            "line": 80,
+            "column": 9
+          }
+        },
+        {
+          "id": "LookupTransition.26",
+          "kind": "name",
+          "detail": "result",
+          "source_span": {
+            "line": 80,
+            "column": 9
+          }
+        },
+        {
+          "id": "LookupTransition.27",
+          "kind": "if_expr",
+          "source_span": {
+            "line": 80,
+            "column": 18
+          }
+        },
+        {
+          "id": "LookupTransition.28",
+          "kind": "binary",
+          "detail": "and",
+          "source_span": {
+            "line": 80,
+            "column": 31
+          }
+        },
+        {
+          "id": "LookupTransition.29",
+          "kind": "name",
+          "detail": "sameFrom",
+          "source_span": {
+            "line": 80,
+            "column": 22
+          }
+        },
+        {
+          "id": "LookupTransition.30",
+          "kind": "name",
+          "detail": "sameSignal",
+          "source_span": {
+            "line": 80,
+            "column": 35
+          }
+        },
+        {
+          "id": "LookupTransition.31",
+          "kind": "field_access",
+          "detail": "to",
+          "source_span": {
+            "line": 80,
+            "column": 62
+          }
+        },
+        {
+          "id": "LookupTransition.32",
+          "kind": "array_index",
+          "source_span": {
+            "line": 80,
+            "column": 47
+          }
+        },
+        {
+          "id": "LookupTransition.33",
+          "kind": "name",
+          "detail": "values",
+          "source_span": {
+            "line": 80,
+            "column": 47
+          }
+        },
+        {
+          "id": "LookupTransition.34",
+          "kind": "name",
+          "detail": "cursor",
+          "source_span": {
+            "line": 80,
+            "column": 54
+          }
+        },
+        {
+          "id": "LookupTransition.35",
+          "kind": "name",
+          "detail": "result",
+          "source_span": {
+            "line": 80,
+            "column": 70
+          }
+        },
+        {
+          "id": "LookupTransition.36",
+          "kind": "assign",
+          "type": "cursor",
+          "detail": "cursor",
+          "source_span": {
+            "line": 81,
+            "column": 9
+          }
+        },
+        {
+          "id": "LookupTransition.37",
+          "kind": "name",
+          "detail": "cursor",
+          "source_span": {
+            "line": 81,
+            "column": 9
+          }
+        },
+        {
+          "id": "LookupTransition.38",
+          "kind": "binary",
+          "detail": "+",
+          "source_span": {
+            "line": 81,
+            "column": 25
+          }
+        },
+        {
+          "id": "LookupTransition.39",
+          "kind": "name",
+          "detail": "cursor",
+          "source_span": {
+            "line": 81,
+            "column": 18
+          }
+        },
+        {
+          "id": "LookupTransition.40",
+          "kind": "literal",
+          "detail": "1",
+          "source_span": {
+            "line": 81,
+            "column": 27
+          }
+        },
+        {
+          "id": "LookupTransition.41",
+          "kind": "return",
+          "type": "LifecycleState",
+          "source_span": {
+            "line": 83,
+            "column": 5
+          }
+        },
+        {
+          "id": "LookupTransition.42",
+          "kind": "name",
+          "detail": "result",
+          "source_span": {
+            "line": 83,
+            "column": 12
+          }
+        }
+      ],
+      "source_span": {
+        "line": 72,
+        "column": 25
+      }
+    }
+  ]
+}

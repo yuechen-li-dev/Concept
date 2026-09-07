@@ -1,0 +1,29 @@
+{
+  "compiler": "concept-evt1-stage0-go",
+  "files": [
+    {
+      "path": "evt1_m1b_c_language.generated.h",
+      "sha256": "485fa6095564488017d2451899aeaac78ff4876d8c149d280bee260dcac17e88"
+    },
+    {
+      "path": "evt1_m1b_c_language.generated.c",
+      "sha256": "47abef2736b88b78344343eec7915cd676b754e6eb8a7f6a71a1e1b0aa602b58"
+    },
+    {
+      "path": "evt1_m1b_c_language.mir.json",
+      "sha256": "f0359f6d2c7ca34457d44d9ef709c1798df42ee7f0c39e530ea5914367aba6fb"
+    },
+    {
+      "path": "evt1_m1b_c_language.map.json",
+      "sha256": "454b60ade9acafd679e47a9b7c169e595de9f29c57e8ff696cc4271c7fa5ac26"
+    }
+  ],
+  "options": {
+    "paths": "repository-relative",
+    "timestamps": "forbidden"
+  },
+  "profile": "Vulkan",
+  "schema": "concept-evt1-generation-manifest.v1",
+  "source": "Examples/Concept-Vulkan/evt1_m1b_c_language.concept",
+  "source_sha256": "5c65f9d5220f3b46520f18dfa2e2d8966fc7af9f64ef4b5cd45c47f6f7977fac"
+}

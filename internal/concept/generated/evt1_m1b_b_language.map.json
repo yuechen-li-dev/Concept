@@ -1,0 +1,2056 @@
+{
+  "actuators": null,
+  "assertions": [
+    {
+      "concept_name": "VulkanResource",
+      "concrete_type": {
+        "name": "BufferRange",
+        "kind": "struct",
+        "span": {
+          "line": 47,
+          "column": 25
+        }
+      },
+      "satisfied": true,
+      "source_span": {
+        "line": 47,
+        "column": 1
+      }
+    },
+    {
+      "concept_name": "VulkanResource",
+      "concrete_type": {
+        "name": "PipelineState",
+        "kind": "struct",
+        "span": {
+          "line": 48,
+          "column": 25
+        }
+      },
+      "satisfied": true,
+      "source_span": {
+        "line": 48,
+        "column": 1
+      }
+    }
+  ],
+  "automata": null,
+  "comptime_decls": null,
+  "concepts": [
+    {
+      "name": "Measurable",
+      "type_param": "T",
+      "requirements": [
+        {
+          "kind": "operation",
+          "name": "Measure",
+          "return_type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 25,
+              "column": 14
+            }
+          },
+          "params": [
+            {
+              "name": "value",
+              "type": {
+                "name": "T",
+                "kind": "concept_param",
+                "ownership": "borrow",
+                "const": true,
+                "span": {
+                  "line": 25,
+                  "column": 26
+                }
+              }
+            }
+          ],
+          "source_span": {
+            "line": 25,
+            "column": 5
+          }
+        }
+      ],
+      "source_span": {
+        "line": 23,
+        "column": 1
+      }
+    },
+    {
+      "name": "Destroyable",
+      "type_param": "T",
+      "requirements": [
+        {
+          "kind": "operation",
+          "name": "Destroy",
+          "return_type": {
+            "name": "void",
+            "kind": "builtin",
+            "span": {
+              "line": 30,
+              "column": 14
+            }
+          },
+          "params": [
+            {
+              "name": "value",
+              "type": {
+                "name": "T",
+                "kind": "concept_param",
+                "ownership": "borrow",
+                "span": {
+                  "line": 30,
+                  "column": 27
+                }
+              }
+            }
+          ],
+          "source_span": {
+            "line": 30,
+            "column": 5
+          }
+        }
+      ],
+      "source_span": {
+        "line": 28,
+        "column": 1
+      }
+    },
+    {
+      "name": "VulkanResource",
+      "type_param": "T",
+      "requirements": [
+        {
+          "kind": "prerequisite",
+          "name": "Measurable",
+          "detail": "T",
+          "source_span": {
+            "line": 35,
+            "column": 5
+          }
+        },
+        {
+          "kind": "prerequisite",
+          "name": "Destroyable",
+          "detail": "T",
+          "source_span": {
+            "line": 36,
+            "column": 5
+          }
+        }
+      ],
+      "source_span": {
+        "line": 33,
+        "column": 1
+      }
+    }
+  ],
+  "functions": [
+    {
+      "name": "Measure",
+      "span": {
+        "line": 39,
+        "column": 5
+      },
+      "symbol": "concept_evt1_m1b_b_language_measure__buffer_range"
+    },
+    {
+      "name": "Measure",
+      "span": {
+        "line": 40,
+        "column": 5
+      },
+      "symbol": "concept_evt1_m1b_b_language_measure__pipeline_state"
+    },
+    {
+      "name": "Destroy",
+      "span": {
+        "line": 41,
+        "column": 6
+      },
+      "symbol": "concept_evt1_m1b_b_language_destroy__buffer_range"
+    },
+    {
+      "name": "Destroy",
+      "span": {
+        "line": 42,
+        "column": 6
+      },
+      "symbol": "concept_evt1_m1b_b_language_destroy__pipeline_state"
+    },
+    {
+      "name": "NextDestroySlot",
+      "span": {
+        "line": 43,
+        "column": 5
+      },
+      "symbol": "concept_evt1_m1b_b_language_next_destroy_slot"
+    },
+    {
+      "name": "RecordDestroy",
+      "span": {
+        "line": 44,
+        "column": 6
+      },
+      "symbol": "concept_evt1_m1b_b_language_record_destroy"
+    },
+    {
+      "name": "SetAlive",
+      "span": {
+        "line": 45,
+        "column": 6
+      },
+      "symbol": "concept_evt1_m1b_b_language_set_alive"
+    },
+    {
+      "name": "RepeatedScore",
+      "span": {
+        "line": 64,
+        "column": 5
+      },
+      "symbol": "concept_evt1_m1b_b_language_repeated_score"
+    },
+    {
+      "name": "ScorePipeline",
+      "span": {
+        "line": 71,
+        "column": 5
+      },
+      "symbol": "concept_evt1_m1b_b_language_score_pipeline"
+    },
+    {
+      "name": "UseDestroyers",
+      "span": {
+        "line": 77,
+        "column": 14
+      },
+      "symbol": "concept_evt1_m1b_b_language_use_destroyers"
+    },
+    {
+      "name": "UseImmovable",
+      "span": {
+        "line": 88,
+        "column": 6
+      },
+      "symbol": "concept_evt1_m1b_b_language_use_immovable"
+    },
+    {
+      "name": "CompareTemplateScore",
+      "span": {
+        "line": 96,
+        "column": 6
+      },
+      "symbol": "concept_evt1_m1b_b_language_compare_template_score"
+    }
+  ],
+  "instances": [
+    {
+      "id": "ScoreResource|buffer_range",
+      "template_name": "ScoreResource",
+      "concrete_type": {
+        "name": "BufferRange",
+        "kind": "struct",
+        "span": {
+          "line": 68,
+          "column": 26
+        }
+      },
+      "generated_symbol": "concept_template_score_resource__buffer_range",
+      "constraint_concept": "VulkanResource",
+      "closure": [
+        {
+          "concept_name": "VulkanResource",
+          "path": [
+            "VulkanResource"
+          ]
+        },
+        {
+          "concept_name": "Measurable",
+          "path": [
+            "VulkanResource",
+            "Measurable"
+          ]
+        },
+        {
+          "concept_name": "Destroyable",
+          "path": [
+            "VulkanResource",
+            "Destroyable"
+          ]
+        }
+      ],
+      "requirement_bindings": [
+        {
+          "requirement_id": "ScoreResource.req.01",
+          "concept_name": "Measurable",
+          "name": "Measure",
+          "signature": "int Measure(borrow const BufferRange)",
+          "path": [
+            "VulkanResource",
+            "Measurable"
+          ]
+        },
+        {
+          "requirement_id": "ScoreResource.req.02",
+          "concept_name": "Destroyable",
+          "name": "Destroy",
+          "signature": "void Destroy(borrow BufferRange)",
+          "path": [
+            "VulkanResource",
+            "Destroyable"
+          ]
+        }
+      ],
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 52,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "value",
+          "type": {
+            "name": "BufferRange",
+            "kind": "struct",
+            "ownership": "borrow",
+            "const": true,
+            "span": {
+              "line": 68,
+              "column": 26
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "concept_template_score_resource__buffer_range.01",
+          "kind": "return",
+          "source_span": {
+            "line": 54,
+            "column": 5
+          }
+        },
+        {
+          "id": "concept_template_score_resource__buffer_range.02",
+          "kind": "call",
+          "detail": "Measure",
+          "source_span": {
+            "line": 54,
+            "column": 12
+          }
+        },
+        {
+          "id": "concept_template_score_resource__buffer_range.03",
+          "kind": "name",
+          "detail": "value",
+          "source_span": {
+            "line": 54,
+            "column": 20
+          }
+        }
+      ],
+      "invocation_spans": [
+        {
+          "line": 68,
+          "column": 12
+        },
+        {
+          "line": 68,
+          "column": 48
+        },
+        {
+          "line": 99,
+          "column": 12
+        }
+      ],
+      "source_span": {
+        "line": 50,
+        "column": 1
+      }
+    },
+    {
+      "id": "ScoreResource|pipeline_state",
+      "template_name": "ScoreResource",
+      "concrete_type": {
+        "name": "PipelineState",
+        "kind": "struct",
+        "span": {
+          "line": 74,
+          "column": 26
+        }
+      },
+      "generated_symbol": "concept_template_score_resource__pipeline_state",
+      "constraint_concept": "VulkanResource",
+      "closure": [
+        {
+          "concept_name": "VulkanResource",
+          "path": [
+            "VulkanResource"
+          ]
+        },
+        {
+          "concept_name": "Measurable",
+          "path": [
+            "VulkanResource",
+            "Measurable"
+          ]
+        },
+        {
+          "concept_name": "Destroyable",
+          "path": [
+            "VulkanResource",
+            "Destroyable"
+          ]
+        }
+      ],
+      "requirement_bindings": [
+        {
+          "requirement_id": "ScoreResource.req.01",
+          "concept_name": "Measurable",
+          "name": "Measure",
+          "signature": "int Measure(borrow const PipelineState)",
+          "path": [
+            "VulkanResource",
+            "Measurable"
+          ]
+        },
+        {
+          "requirement_id": "ScoreResource.req.02",
+          "concept_name": "Destroyable",
+          "name": "Destroy",
+          "signature": "void Destroy(borrow PipelineState)",
+          "path": [
+            "VulkanResource",
+            "Destroyable"
+          ]
+        }
+      ],
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 52,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "value",
+          "type": {
+            "name": "PipelineState",
+            "kind": "struct",
+            "ownership": "borrow",
+            "const": true,
+            "span": {
+              "line": 74,
+              "column": 26
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "concept_template_score_resource__pipeline_state.01",
+          "kind": "return",
+          "source_span": {
+            "line": 54,
+            "column": 5
+          }
+        },
+        {
+          "id": "concept_template_score_resource__pipeline_state.02",
+          "kind": "call",
+          "detail": "Measure",
+          "source_span": {
+            "line": 54,
+            "column": 12
+          }
+        },
+        {
+          "id": "concept_template_score_resource__pipeline_state.03",
+          "kind": "name",
+          "detail": "value",
+          "source_span": {
+            "line": 54,
+            "column": 20
+          }
+        }
+      ],
+      "invocation_spans": [
+        {
+          "line": 74,
+          "column": 12
+        }
+      ],
+      "source_span": {
+        "line": 50,
+        "column": 1
+      }
+    },
+    {
+      "id": "DestroyResource|buffer_range",
+      "template_name": "DestroyResource",
+      "concrete_type": {
+        "name": "BufferRange",
+        "kind": "struct",
+        "span": {
+          "line": 81,
+          "column": 21
+        }
+      },
+      "generated_symbol": "concept_template_destroy_resource__buffer_range",
+      "constraint_concept": "VulkanResource",
+      "closure": [
+        {
+          "concept_name": "VulkanResource",
+          "path": [
+            "VulkanResource"
+          ]
+        },
+        {
+          "concept_name": "Measurable",
+          "path": [
+            "VulkanResource",
+            "Measurable"
+          ]
+        },
+        {
+          "concept_name": "Destroyable",
+          "path": [
+            "VulkanResource",
+            "Destroyable"
+          ]
+        }
+      ],
+      "requirement_bindings": [
+        {
+          "requirement_id": "DestroyResource.req.01",
+          "concept_name": "Measurable",
+          "name": "Measure",
+          "signature": "int Measure(borrow const BufferRange)",
+          "path": [
+            "VulkanResource",
+            "Measurable"
+          ]
+        },
+        {
+          "requirement_id": "DestroyResource.req.02",
+          "concept_name": "Destroyable",
+          "name": "Destroy",
+          "signature": "void Destroy(borrow BufferRange)",
+          "path": [
+            "VulkanResource",
+            "Destroyable"
+          ]
+        }
+      ],
+      "return_type": {
+        "name": "void",
+        "kind": "builtin",
+        "span": {
+          "line": 59,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "value",
+          "type": {
+            "name": "BufferRange",
+            "kind": "struct",
+            "ownership": "borrow",
+            "span": {
+              "line": 81,
+              "column": 21
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "concept_template_destroy_resource__buffer_range.01",
+          "kind": "expr_stmt",
+          "source_span": {
+            "line": 61,
+            "column": 5
+          }
+        },
+        {
+          "id": "concept_template_destroy_resource__buffer_range.02",
+          "kind": "call",
+          "detail": "Destroy",
+          "source_span": {
+            "line": 61,
+            "column": 5
+          }
+        },
+        {
+          "id": "concept_template_destroy_resource__buffer_range.03",
+          "kind": "name",
+          "detail": "value",
+          "source_span": {
+            "line": 61,
+            "column": 13
+          }
+        }
+      ],
+      "invocation_spans": [
+        {
+          "line": 81,
+          "column": 5
+        }
+      ],
+      "source_span": {
+        "line": 57,
+        "column": 1
+      }
+    },
+    {
+      "id": "DestroyResource|pipeline_state",
+      "template_name": "DestroyResource",
+      "concrete_type": {
+        "name": "PipelineState",
+        "kind": "struct",
+        "span": {
+          "line": 82,
+          "column": 21
+        }
+      },
+      "generated_symbol": "concept_template_destroy_resource__pipeline_state",
+      "constraint_concept": "VulkanResource",
+      "closure": [
+        {
+          "concept_name": "VulkanResource",
+          "path": [
+            "VulkanResource"
+          ]
+        },
+        {
+          "concept_name": "Measurable",
+          "path": [
+            "VulkanResource",
+            "Measurable"
+          ]
+        },
+        {
+          "concept_name": "Destroyable",
+          "path": [
+            "VulkanResource",
+            "Destroyable"
+          ]
+        }
+      ],
+      "requirement_bindings": [
+        {
+          "requirement_id": "DestroyResource.req.01",
+          "concept_name": "Measurable",
+          "name": "Measure",
+          "signature": "int Measure(borrow const PipelineState)",
+          "path": [
+            "VulkanResource",
+            "Measurable"
+          ]
+        },
+        {
+          "requirement_id": "DestroyResource.req.02",
+          "concept_name": "Destroyable",
+          "name": "Destroy",
+          "signature": "void Destroy(borrow PipelineState)",
+          "path": [
+            "VulkanResource",
+            "Destroyable"
+          ]
+        }
+      ],
+      "return_type": {
+        "name": "void",
+        "kind": "builtin",
+        "span": {
+          "line": 59,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "value",
+          "type": {
+            "name": "PipelineState",
+            "kind": "struct",
+            "ownership": "borrow",
+            "span": {
+              "line": 82,
+              "column": 21
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "concept_template_destroy_resource__pipeline_state.01",
+          "kind": "expr_stmt",
+          "source_span": {
+            "line": 61,
+            "column": 5
+          }
+        },
+        {
+          "id": "concept_template_destroy_resource__pipeline_state.02",
+          "kind": "call",
+          "detail": "Destroy",
+          "source_span": {
+            "line": 61,
+            "column": 5
+          }
+        },
+        {
+          "id": "concept_template_destroy_resource__pipeline_state.03",
+          "kind": "name",
+          "detail": "value",
+          "source_span": {
+            "line": 61,
+            "column": 13
+          }
+        }
+      ],
+      "invocation_spans": [
+        {
+          "line": 82,
+          "column": 5
+        },
+        {
+          "line": 83,
+          "column": 5
+        },
+        {
+          "line": 92,
+          "column": 5
+        }
+      ],
+      "source_span": {
+        "line": 57,
+        "column": 1
+      }
+    }
+  ],
+  "mir": [
+    {
+      "name": "Measure",
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 39,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "value",
+          "type": {
+            "name": "BufferRange",
+            "kind": "struct",
+            "ownership": "borrow",
+            "const": true,
+            "span": {
+              "line": 39,
+              "column": 13
+            }
+          }
+        }
+      ],
+      "operations": null,
+      "source_span": {
+        "line": 39,
+        "column": 5
+      }
+    },
+    {
+      "name": "Measure",
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 40,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "value",
+          "type": {
+            "name": "PipelineState",
+            "kind": "struct",
+            "ownership": "borrow",
+            "const": true,
+            "span": {
+              "line": 40,
+              "column": 13
+            }
+          }
+        }
+      ],
+      "operations": null,
+      "source_span": {
+        "line": 40,
+        "column": 5
+      }
+    },
+    {
+      "name": "Destroy",
+      "return_type": {
+        "name": "void",
+        "kind": "builtin",
+        "span": {
+          "line": 41,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "value",
+          "type": {
+            "name": "BufferRange",
+            "kind": "struct",
+            "ownership": "borrow",
+            "span": {
+              "line": 41,
+              "column": 14
+            }
+          }
+        }
+      ],
+      "operations": null,
+      "source_span": {
+        "line": 41,
+        "column": 6
+      }
+    },
+    {
+      "name": "Destroy",
+      "return_type": {
+        "name": "void",
+        "kind": "builtin",
+        "span": {
+          "line": 42,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "value",
+          "type": {
+            "name": "PipelineState",
+            "kind": "struct",
+            "ownership": "borrow",
+            "span": {
+              "line": 42,
+              "column": 14
+            }
+          }
+        }
+      ],
+      "operations": null,
+      "source_span": {
+        "line": 42,
+        "column": 6
+      }
+    },
+    {
+      "name": "NextDestroySlot",
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 43,
+          "column": 1
+        }
+      },
+      "operations": null,
+      "source_span": {
+        "line": 43,
+        "column": 5
+      }
+    },
+    {
+      "name": "RecordDestroy",
+      "return_type": {
+        "name": "void",
+        "kind": "builtin",
+        "span": {
+          "line": 44,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "slot",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 44,
+              "column": 20
+            }
+          }
+        },
+        {
+          "name": "code",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 44,
+              "column": 30
+            }
+          }
+        }
+      ],
+      "operations": null,
+      "source_span": {
+        "line": 44,
+        "column": 6
+      }
+    },
+    {
+      "name": "SetAlive",
+      "return_type": {
+        "name": "void",
+        "kind": "builtin",
+        "span": {
+          "line": 45,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "value",
+          "type": {
+            "name": "PipelineState",
+            "kind": "struct",
+            "ownership": "borrow",
+            "span": {
+              "line": 45,
+              "column": 15
+            }
+          }
+        }
+      ],
+      "operations": null,
+      "source_span": {
+        "line": 45,
+        "column": 6
+      }
+    },
+    {
+      "name": "RepeatedScore",
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 64,
+          "column": 1
+        }
+      },
+      "operations": [
+        {
+          "id": "RepeatedScore.01",
+          "kind": "struct_construct",
+          "type": "BufferRange",
+          "detail": "first",
+          "source_span": {
+            "line": 66,
+            "column": 17
+          }
+        },
+        {
+          "id": "RepeatedScore.02",
+          "kind": "struct_construct",
+          "detail": "BufferRange",
+          "source_span": {
+            "line": 66,
+            "column": 25
+          }
+        },
+        {
+          "id": "RepeatedScore.03",
+          "kind": "literal",
+          "detail": "7",
+          "source_span": {
+            "line": 66,
+            "column": 37
+          }
+        },
+        {
+          "id": "RepeatedScore.04",
+          "kind": "literal",
+          "detail": "2",
+          "source_span": {
+            "line": 66,
+            "column": 40
+          }
+        },
+        {
+          "id": "RepeatedScore.05",
+          "kind": "literal",
+          "detail": "3",
+          "source_span": {
+            "line": 66,
+            "column": 43
+          }
+        },
+        {
+          "id": "RepeatedScore.06",
+          "kind": "struct_construct",
+          "type": "BufferRange",
+          "detail": "second",
+          "source_span": {
+            "line": 67,
+            "column": 17
+          }
+        },
+        {
+          "id": "RepeatedScore.07",
+          "kind": "struct_construct",
+          "detail": "BufferRange",
+          "source_span": {
+            "line": 67,
+            "column": 26
+          }
+        },
+        {
+          "id": "RepeatedScore.08",
+          "kind": "literal",
+          "detail": "8",
+          "source_span": {
+            "line": 67,
+            "column": 38
+          }
+        },
+        {
+          "id": "RepeatedScore.09",
+          "kind": "literal",
+          "detail": "4",
+          "source_span": {
+            "line": 67,
+            "column": 41
+          }
+        },
+        {
+          "id": "RepeatedScore.10",
+          "kind": "literal",
+          "detail": "5",
+          "source_span": {
+            "line": 67,
+            "column": 44
+          }
+        },
+        {
+          "id": "RepeatedScore.11",
+          "kind": "return",
+          "type": "int",
+          "source_span": {
+            "line": 68,
+            "column": 5
+          }
+        },
+        {
+          "id": "RepeatedScore.12",
+          "kind": "binary",
+          "detail": "+",
+          "source_span": {
+            "line": 68,
+            "column": 46
+          }
+        },
+        {
+          "id": "RepeatedScore.13",
+          "kind": "template_call",
+          "detail": "ScoreResource\u003cBufferRange\u003e",
+          "source_span": {
+            "line": 68,
+            "column": 12
+          }
+        },
+        {
+          "id": "RepeatedScore.14",
+          "kind": "name",
+          "detail": "first",
+          "source_span": {
+            "line": 68,
+            "column": 39
+          }
+        },
+        {
+          "id": "RepeatedScore.15",
+          "kind": "template_call",
+          "detail": "ScoreResource\u003cBufferRange\u003e",
+          "source_span": {
+            "line": 68,
+            "column": 48
+          }
+        },
+        {
+          "id": "RepeatedScore.16",
+          "kind": "name",
+          "detail": "second",
+          "source_span": {
+            "line": 68,
+            "column": 75
+          }
+        }
+      ],
+      "source_span": {
+        "line": 64,
+        "column": 5
+      }
+    },
+    {
+      "name": "ScorePipeline",
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 71,
+          "column": 1
+        }
+      },
+      "operations": [
+        {
+          "id": "ScorePipeline.01",
+          "kind": "final_storage_construct",
+          "type": "PipelineState",
+          "detail": "state",
+          "source_span": {
+            "line": 73,
+            "column": 19
+          }
+        },
+        {
+          "id": "ScorePipeline.02",
+          "kind": "noncopyable_struct_construct",
+          "detail": "PipelineState",
+          "source_span": {
+            "line": 73,
+            "column": 27
+          }
+        },
+        {
+          "id": "ScorePipeline.03",
+          "kind": "literal",
+          "detail": "11",
+          "source_span": {
+            "line": 73,
+            "column": 41
+          }
+        },
+        {
+          "id": "ScorePipeline.04",
+          "kind": "bool_literal",
+          "detail": "true",
+          "source_span": {
+            "line": 73,
+            "column": 45
+          }
+        },
+        {
+          "id": "ScorePipeline.05",
+          "kind": "return",
+          "type": "int",
+          "source_span": {
+            "line": 74,
+            "column": 5
+          }
+        },
+        {
+          "id": "ScorePipeline.06",
+          "kind": "template_call",
+          "detail": "ScoreResource\u003cPipelineState\u003e",
+          "source_span": {
+            "line": 74,
+            "column": 12
+          }
+        },
+        {
+          "id": "ScorePipeline.07",
+          "kind": "name",
+          "detail": "state",
+          "source_span": {
+            "line": 74,
+            "column": 41
+          }
+        }
+      ],
+      "source_span": {
+        "line": 71,
+        "column": 5
+      }
+    },
+    {
+      "name": "UseDestroyers",
+      "return_type": {
+        "name": "DestroyAudit",
+        "kind": "struct",
+        "span": {
+          "line": 77,
+          "column": 1
+        }
+      },
+      "operations": [
+        {
+          "id": "UseDestroyers.01",
+          "kind": "struct_construct",
+          "type": "BufferRange",
+          "detail": "range",
+          "source_span": {
+            "line": 79,
+            "column": 17
+          }
+        },
+        {
+          "id": "UseDestroyers.02",
+          "kind": "struct_construct",
+          "detail": "BufferRange",
+          "source_span": {
+            "line": 79,
+            "column": 25
+          }
+        },
+        {
+          "id": "UseDestroyers.03",
+          "kind": "literal",
+          "detail": "9",
+          "source_span": {
+            "line": 79,
+            "column": 37
+          }
+        },
+        {
+          "id": "UseDestroyers.04",
+          "kind": "literal",
+          "detail": "1",
+          "source_span": {
+            "line": 79,
+            "column": 40
+          }
+        },
+        {
+          "id": "UseDestroyers.05",
+          "kind": "literal",
+          "detail": "2",
+          "source_span": {
+            "line": 79,
+            "column": 43
+          }
+        },
+        {
+          "id": "UseDestroyers.06",
+          "kind": "final_storage_construct",
+          "type": "PipelineState",
+          "detail": "state",
+          "source_span": {
+            "line": 80,
+            "column": 19
+          }
+        },
+        {
+          "id": "UseDestroyers.07",
+          "kind": "noncopyable_struct_construct",
+          "detail": "PipelineState",
+          "source_span": {
+            "line": 80,
+            "column": 27
+          }
+        },
+        {
+          "id": "UseDestroyers.08",
+          "kind": "literal",
+          "detail": "13",
+          "source_span": {
+            "line": 80,
+            "column": 41
+          }
+        },
+        {
+          "id": "UseDestroyers.09",
+          "kind": "bool_literal",
+          "detail": "true",
+          "source_span": {
+            "line": 80,
+            "column": 45
+          }
+        },
+        {
+          "id": "UseDestroyers.10",
+          "kind": "expr_stmt",
+          "source_span": {
+            "line": 81,
+            "column": 5
+          }
+        },
+        {
+          "id": "UseDestroyers.11",
+          "kind": "template_call",
+          "detail": "DestroyResource\u003cBufferRange\u003e",
+          "source_span": {
+            "line": 81,
+            "column": 5
+          }
+        },
+        {
+          "id": "UseDestroyers.12",
+          "kind": "name",
+          "detail": "range",
+          "source_span": {
+            "line": 81,
+            "column": 34
+          }
+        },
+        {
+          "id": "UseDestroyers.13",
+          "kind": "expr_stmt",
+          "source_span": {
+            "line": 82,
+            "column": 5
+          }
+        },
+        {
+          "id": "UseDestroyers.14",
+          "kind": "template_call",
+          "detail": "DestroyResource\u003cPipelineState\u003e",
+          "source_span": {
+            "line": 82,
+            "column": 5
+          }
+        },
+        {
+          "id": "UseDestroyers.15",
+          "kind": "name",
+          "detail": "state",
+          "source_span": {
+            "line": 82,
+            "column": 36
+          }
+        },
+        {
+          "id": "UseDestroyers.16",
+          "kind": "expr_stmt",
+          "source_span": {
+            "line": 83,
+            "column": 5
+          }
+        },
+        {
+          "id": "UseDestroyers.17",
+          "kind": "template_call",
+          "detail": "DestroyResource\u003cPipelineState\u003e",
+          "source_span": {
+            "line": 83,
+            "column": 5
+          }
+        },
+        {
+          "id": "UseDestroyers.18",
+          "kind": "name",
+          "detail": "state",
+          "source_span": {
+            "line": 83,
+            "column": 36
+          }
+        },
+        {
+          "id": "UseDestroyers.19",
+          "kind": "struct_construct",
+          "type": "DestroyAudit",
+          "detail": "audit",
+          "source_span": {
+            "line": 84,
+            "column": 18
+          }
+        },
+        {
+          "id": "UseDestroyers.20",
+          "kind": "struct_construct",
+          "detail": "DestroyAudit",
+          "source_span": {
+            "line": 84,
+            "column": 26
+          }
+        },
+        {
+          "id": "UseDestroyers.21",
+          "kind": "field_access",
+          "detail": "offset",
+          "source_span": {
+            "line": 84,
+            "column": 45
+          }
+        },
+        {
+          "id": "UseDestroyers.22",
+          "kind": "name",
+          "detail": "range",
+          "source_span": {
+            "line": 84,
+            "column": 39
+          }
+        },
+        {
+          "id": "UseDestroyers.23",
+          "kind": "field_access",
+          "detail": "handle",
+          "source_span": {
+            "line": 84,
+            "column": 59
+          }
+        },
+        {
+          "id": "UseDestroyers.24",
+          "kind": "name",
+          "detail": "state",
+          "source_span": {
+            "line": 84,
+            "column": 53
+          }
+        },
+        {
+          "id": "UseDestroyers.25",
+          "kind": "field_access",
+          "detail": "alive",
+          "source_span": {
+            "line": 84,
+            "column": 73
+          }
+        },
+        {
+          "id": "UseDestroyers.26",
+          "kind": "name",
+          "detail": "state",
+          "source_span": {
+            "line": 84,
+            "column": 67
+          }
+        },
+        {
+          "id": "UseDestroyers.27",
+          "kind": "return",
+          "type": "DestroyAudit",
+          "source_span": {
+            "line": 85,
+            "column": 5
+          }
+        },
+        {
+          "id": "UseDestroyers.28",
+          "kind": "name",
+          "detail": "audit",
+          "source_span": {
+            "line": 85,
+            "column": 12
+          }
+        }
+      ],
+      "source_span": {
+        "line": 77,
+        "column": 14
+      }
+    },
+    {
+      "name": "UseImmovable",
+      "return_type": {
+        "name": "bool",
+        "kind": "builtin",
+        "span": {
+          "line": 88,
+          "column": 1
+        }
+      },
+      "operations": [
+        {
+          "id": "UseImmovable.01",
+          "kind": "final_storage_construct",
+          "type": "PipelineState",
+          "detail": "state",
+          "source_span": {
+            "line": 90,
+            "column": 19
+          }
+        },
+        {
+          "id": "UseImmovable.02",
+          "kind": "noncopyable_struct_construct",
+          "detail": "PipelineState",
+          "source_span": {
+            "line": 90,
+            "column": 27
+          }
+        },
+        {
+          "id": "UseImmovable.03",
+          "kind": "literal",
+          "detail": "5",
+          "source_span": {
+            "line": 90,
+            "column": 41
+          }
+        },
+        {
+          "id": "UseImmovable.04",
+          "kind": "bool_literal",
+          "detail": "false",
+          "source_span": {
+            "line": 90,
+            "column": 44
+          }
+        },
+        {
+          "id": "UseImmovable.05",
+          "kind": "expr_stmt",
+          "source_span": {
+            "line": 91,
+            "column": 5
+          }
+        },
+        {
+          "id": "UseImmovable.06",
+          "kind": "call",
+          "detail": "SetAlive",
+          "source_span": {
+            "line": 91,
+            "column": 5
+          }
+        },
+        {
+          "id": "UseImmovable.07",
+          "kind": "name",
+          "detail": "state",
+          "source_span": {
+            "line": 91,
+            "column": 14
+          }
+        },
+        {
+          "id": "UseImmovable.08",
+          "kind": "expr_stmt",
+          "source_span": {
+            "line": 92,
+            "column": 5
+          }
+        },
+        {
+          "id": "UseImmovable.09",
+          "kind": "template_call",
+          "detail": "DestroyResource\u003cPipelineState\u003e",
+          "source_span": {
+            "line": 92,
+            "column": 5
+          }
+        },
+        {
+          "id": "UseImmovable.10",
+          "kind": "name",
+          "detail": "state",
+          "source_span": {
+            "line": 92,
+            "column": 36
+          }
+        },
+        {
+          "id": "UseImmovable.11",
+          "kind": "return",
+          "type": "bool",
+          "source_span": {
+            "line": 93,
+            "column": 5
+          }
+        },
+        {
+          "id": "UseImmovable.12",
+          "kind": "field_access",
+          "detail": "alive",
+          "source_span": {
+            "line": 93,
+            "column": 18
+          }
+        },
+        {
+          "id": "UseImmovable.13",
+          "kind": "name",
+          "detail": "state",
+          "source_span": {
+            "line": 93,
+            "column": 12
+          }
+        }
+      ],
+      "source_span": {
+        "line": 88,
+        "column": 6
+      }
+    },
+    {
+      "name": "CompareTemplateScore",
+      "return_type": {
+        "name": "bool",
+        "kind": "builtin",
+        "span": {
+          "line": 96,
+          "column": 1
+        }
+      },
+      "operations": [
+        {
+          "id": "CompareTemplateScore.01",
+          "kind": "struct_construct",
+          "type": "BufferRange",
+          "detail": "range",
+          "source_span": {
+            "line": 98,
+            "column": 17
+          }
+        },
+        {
+          "id": "CompareTemplateScore.02",
+          "kind": "struct_construct",
+          "detail": "BufferRange",
+          "source_span": {
+            "line": 98,
+            "column": 25
+          }
+        },
+        {
+          "id": "CompareTemplateScore.03",
+          "kind": "literal",
+          "detail": "3",
+          "source_span": {
+            "line": 98,
+            "column": 37
+          }
+        },
+        {
+          "id": "CompareTemplateScore.04",
+          "kind": "literal",
+          "detail": "6",
+          "source_span": {
+            "line": 98,
+            "column": 40
+          }
+        },
+        {
+          "id": "CompareTemplateScore.05",
+          "kind": "literal",
+          "detail": "1",
+          "source_span": {
+            "line": 98,
+            "column": 43
+          }
+        },
+        {
+          "id": "CompareTemplateScore.06",
+          "kind": "return",
+          "type": "bool",
+          "source_span": {
+            "line": 99,
+            "column": 5
+          }
+        },
+        {
+          "id": "CompareTemplateScore.07",
+          "kind": "binary",
+          "detail": "\u003e",
+          "source_span": {
+            "line": 99,
+            "column": 46
+          }
+        },
+        {
+          "id": "CompareTemplateScore.08",
+          "kind": "template_call",
+          "detail": "ScoreResource\u003cBufferRange\u003e",
+          "source_span": {
+            "line": 99,
+            "column": 12
+          }
+        },
+        {
+          "id": "CompareTemplateScore.09",
+          "kind": "name",
+          "detail": "range",
+          "source_span": {
+            "line": 99,
+            "column": 39
+          }
+        },
+        {
+          "id": "CompareTemplateScore.10",
+          "kind": "literal",
+          "detail": "0",
+          "source_span": {
+            "line": 99,
+            "column": 48
+          }
+        }
+      ],
+      "source_span": {
+        "line": 96,
+        "column": 6
+      }
+    }
+  ],
+  "schema": "concept-evt1-source-map.v1",
+  "source": "Examples/Concept-Vulkan/evt1_m1b_b_language.concept",
+  "static_asserts": null,
+  "structs": [
+    {
+      "name": "BufferRange",
+      "c_name": "concept_buffer_range",
+      "immovable": false,
+      "copyable": true,
+      "fields": [
+        {
+          "name": "bufferId",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 5,
+              "column": 5
+            }
+          }
+        },
+        {
+          "name": "offset",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 6,
+              "column": 5
+            }
+          }
+        },
+        {
+          "name": "size",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 7,
+              "column": 5
+            }
+          }
+        }
+      ],
+      "source_span": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "name": "PipelineState",
+      "c_name": "concept_pipeline_state",
+      "immovable": true,
+      "copyable": false,
+      "fields": [
+        {
+          "name": "handle",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 12,
+              "column": 5
+            }
+          }
+        },
+        {
+          "name": "alive",
+          "type": {
+            "name": "bool",
+            "kind": "builtin",
+            "span": {
+              "line": 13,
+              "column": 5
+            }
+          }
+        }
+      ],
+      "source_span": {
+        "line": 10,
+        "column": 1
+      }
+    },
+    {
+      "name": "DestroyAudit",
+      "c_name": "concept_destroy_audit",
+      "immovable": false,
+      "copyable": true,
+      "fields": [
+        {
+          "name": "first",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 18,
+              "column": 5
+            }
+          }
+        },
+        {
+          "name": "second",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 19,
+              "column": 5
+            }
+          }
+        },
+        {
+          "name": "third",
+          "type": {
+            "name": "bool",
+            "kind": "builtin",
+            "span": {
+              "line": 20,
+              "column": 5
+            }
+          }
+        }
+      ],
+      "source_span": {
+        "line": 16,
+        "column": 1
+      }
+    }
+  ],
+  "templates": [
+    {
+      "name": "ScoreResource",
+      "type_param": "T",
+      "constraint": {
+        "concept_name": "VulkanResource",
+        "type_param": "T",
+        "source_span": {
+          "line": 51,
+          "column": 1
+        }
+      },
+      "closure": [
+        {
+          "concept_name": "VulkanResource",
+          "path": [
+            "VulkanResource"
+          ]
+        },
+        {
+          "concept_name": "Measurable",
+          "path": [
+            "VulkanResource",
+            "Measurable"
+          ]
+        },
+        {
+          "concept_name": "Destroyable",
+          "path": [
+            "VulkanResource",
+            "Destroyable"
+          ]
+        }
+      ],
+      "requirements": [
+        {
+          "requirement_id": "ScoreResource.req.01",
+          "concept_name": "Measurable",
+          "name": "Measure",
+          "signature": "int Measure(borrow const T)",
+          "path": [
+            "VulkanResource",
+            "Measurable"
+          ]
+        },
+        {
+          "requirement_id": "ScoreResource.req.02",
+          "concept_name": "Destroyable",
+          "name": "Destroy",
+          "signature": "void Destroy(borrow T)",
+          "path": [
+            "VulkanResource",
+            "Destroyable"
+          ]
+        }
+      ],
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 52,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "value",
+          "type": {
+            "name": "T",
+            "kind": "concept_param",
+            "ownership": "borrow",
+            "const": true,
+            "span": {
+              "line": 52,
+              "column": 19
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "ScoreResource.01",
+          "kind": "return",
+          "source_span": {
+            "line": 54,
+            "column": 5
+          }
+        },
+        {
+          "id": "ScoreResource.02",
+          "kind": "requirement_call",
+          "detail": "ScoreResource.req.01 -\u003e Measure",
+          "source_span": {
+            "line": 54,
+            "column": 12
+          }
+        },
+        {
+          "id": "ScoreResource.03",
+          "kind": "name",
+          "detail": "value",
+          "source_span": {
+            "line": 54,
+            "column": 20
+          }
+        }
+      ],
+      "source_span": {
+        "line": 50,
+        "column": 1
+      }
+    },
+    {
+      "name": "DestroyResource",
+      "type_param": "T",
+      "constraint": {
+        "concept_name": "VulkanResource",
+        "type_param": "T",
+        "source_span": {
+          "line": 58,
+          "column": 1
+        }
+      },
+      "closure": [
+        {
+          "concept_name": "VulkanResource",
+          "path": [
+            "VulkanResource"
+          ]
+        },
+        {
+          "concept_name": "Measurable",
+          "path": [
+            "VulkanResource",
+            "Measurable"
+          ]
+        },
+        {
+          "concept_name": "Destroyable",
+          "path": [
+            "VulkanResource",
+            "Destroyable"
+          ]
+        }
+      ],
+      "requirements": [
+        {
+          "requirement_id": "DestroyResource.req.01",
+          "concept_name": "Measurable",
+          "name": "Measure",
+          "signature": "int Measure(borrow const T)",
+          "path": [
+            "VulkanResource",
+            "Measurable"
+          ]
+        },
+        {
+          "requirement_id": "DestroyResource.req.02",
+          "concept_name": "Destroyable",
+          "name": "Destroy",
+          "signature": "void Destroy(borrow T)",
+          "path": [
+            "VulkanResource",
+            "Destroyable"
+          ]
+        }
+      ],
+      "return_type": {
+        "name": "void",
+        "kind": "builtin",
+        "span": {
+          "line": 59,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "value",
+          "type": {
+            "name": "T",
+            "kind": "concept_param",
+            "ownership": "borrow",
+            "span": {
+              "line": 59,
+              "column": 22
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "DestroyResource.01",
+          "kind": "expr_stmt",
+          "source_span": {
+            "line": 61,
+            "column": 5
+          }
+        },
+        {
+          "id": "DestroyResource.02",
+          "kind": "requirement_call",
+          "detail": "DestroyResource.req.02 -\u003e Destroy",
+          "source_span": {
+            "line": 61,
+            "column": 5
+          }
+        },
+        {
+          "id": "DestroyResource.03",
+          "kind": "name",
+          "detail": "value",
+          "source_span": {
+            "line": 61,
+            "column": 13
+          }
+        }
+      ],
+      "source_span": {
+        "line": 57,
+        "column": 1
+      }
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+profile Core;
+
+enum Status
+{
+    Empty,
+    Ready(int value)
+}
+
+struct Reading
+{
+    int value;
+};
+
+int Read(Status status)
+{
+    return match (status)
+    {
+        Status::Empty => 0,
+        Status::Ready(value) => value,
+    };
+}

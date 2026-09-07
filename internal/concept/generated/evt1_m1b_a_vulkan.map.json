@@ -1,0 +1,1050 @@
+{
+  "actuators": null,
+  "assertions": [
+    {
+      "concept_name": "VulkanResource",
+      "concrete_type": {
+        "name": "CommandPoolState",
+        "kind": "struct",
+        "span": {
+          "line": 42,
+          "column": 25
+        }
+      },
+      "satisfied": true,
+      "source_span": {
+        "line": 42,
+        "column": 1
+      }
+    }
+  ],
+  "automata": null,
+  "comptime_decls": null,
+  "concepts": [
+    {
+      "name": "Validatable",
+      "type_param": "T",
+      "requirements": [
+        {
+          "kind": "operation",
+          "name": "IsValid",
+          "return_type": {
+            "name": "bool",
+            "kind": "builtin",
+            "span": {
+              "line": 25,
+              "column": 14
+            }
+          },
+          "params": [
+            {
+              "name": "value",
+              "type": {
+                "name": "T",
+                "kind": "concept_param",
+                "ownership": "borrow",
+                "const": true,
+                "span": {
+                  "line": 25,
+                  "column": 27
+                }
+              }
+            }
+          ],
+          "source_span": {
+            "line": 25,
+            "column": 5
+          }
+        }
+      ],
+      "source_span": {
+        "line": 23,
+        "column": 1
+      }
+    },
+    {
+      "name": "Destroyable",
+      "type_param": "T",
+      "requirements": [
+        {
+          "kind": "operation",
+          "name": "Destroy",
+          "return_type": {
+            "name": "void",
+            "kind": "builtin",
+            "span": {
+              "line": 30,
+              "column": 14
+            }
+          },
+          "params": [
+            {
+              "name": "value",
+              "type": {
+                "name": "T",
+                "kind": "concept_param",
+                "ownership": "borrow",
+                "span": {
+                  "line": 30,
+                  "column": 27
+                }
+              }
+            }
+          ],
+          "source_span": {
+            "line": 30,
+            "column": 5
+          }
+        }
+      ],
+      "source_span": {
+        "line": 28,
+        "column": 1
+      }
+    },
+    {
+      "name": "VulkanResource",
+      "type_param": "T",
+      "requirements": [
+        {
+          "kind": "prerequisite",
+          "name": "Validatable",
+          "detail": "T",
+          "source_span": {
+            "line": 35,
+            "column": 5
+          }
+        },
+        {
+          "kind": "prerequisite",
+          "name": "Destroyable",
+          "detail": "T",
+          "source_span": {
+            "line": 36,
+            "column": 5
+          }
+        }
+      ],
+      "source_span": {
+        "line": 33,
+        "column": 1
+      }
+    }
+  ],
+  "functions": [
+    {
+      "name": "IsValid",
+      "span": {
+        "line": 39,
+        "column": 6
+      },
+      "symbol": "concept_evt1_m1b_a_vulkan_is_valid"
+    },
+    {
+      "name": "Destroy",
+      "span": {
+        "line": 40,
+        "column": 6
+      },
+      "symbol": "concept_evt1_m1b_a_vulkan_destroy"
+    },
+    {
+      "name": "MakeRange",
+      "span": {
+        "line": 44,
+        "column": 13
+      },
+      "symbol": "concept_evt1_m1b_a_vulkan_make_range"
+    },
+    {
+      "name": "MarkInitialized",
+      "span": {
+        "line": 50,
+        "column": 6
+      },
+      "symbol": "concept_evt1_m1b_a_vulkan_mark_initialized"
+    },
+    {
+      "name": "BuildAndValidate",
+      "span": {
+        "line": 55,
+        "column": 6
+      },
+      "symbol": "concept_evt1_m1b_a_vulkan_build_and_validate"
+    },
+    {
+      "name": "DescribeEvent",
+      "span": {
+        "line": 62,
+        "column": 5
+      },
+      "symbol": "concept_evt1_m1b_a_vulkan_describe_event"
+    },
+    {
+      "name": "ClassifyRange",
+      "span": {
+        "line": 72,
+        "column": 5
+      },
+      "symbol": "concept_evt1_m1b_a_vulkan_classify_range"
+    },
+    {
+      "name": "CleanupState",
+      "span": {
+        "line": 79,
+        "column": 6
+      },
+      "symbol": "concept_evt1_m1b_a_vulkan_cleanup_state"
+    }
+  ],
+  "instances": null,
+  "mir": [
+    {
+      "name": "IsValid",
+      "return_type": {
+        "name": "bool",
+        "kind": "builtin",
+        "span": {
+          "line": 39,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "value",
+          "type": {
+            "name": "CommandPoolState",
+            "kind": "struct",
+            "ownership": "borrow",
+            "const": true,
+            "span": {
+              "line": 39,
+              "column": 14
+            }
+          }
+        }
+      ],
+      "operations": null,
+      "source_span": {
+        "line": 39,
+        "column": 6
+      }
+    },
+    {
+      "name": "Destroy",
+      "return_type": {
+        "name": "void",
+        "kind": "builtin",
+        "span": {
+          "line": 40,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "value",
+          "type": {
+            "name": "CommandPoolState",
+            "kind": "struct",
+            "ownership": "borrow",
+            "span": {
+              "line": 40,
+              "column": 14
+            }
+          }
+        }
+      ],
+      "operations": null,
+      "source_span": {
+        "line": 40,
+        "column": 6
+      }
+    },
+    {
+      "name": "MakeRange",
+      "return_type": {
+        "name": "BufferRange",
+        "kind": "struct",
+        "span": {
+          "line": 44,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "buffer",
+          "type": {
+            "name": "VkBuffer",
+            "kind": "builtin",
+            "span": {
+              "line": 44,
+              "column": 23
+            }
+          }
+        },
+        {
+          "name": "offset",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 44,
+              "column": 40
+            }
+          }
+        },
+        {
+          "name": "size",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 44,
+              "column": 52
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "MakeRange.01",
+          "kind": "struct_construct",
+          "type": "BufferRange",
+          "detail": "range",
+          "source_span": {
+            "line": 46,
+            "column": 17
+          }
+        },
+        {
+          "id": "MakeRange.02",
+          "kind": "struct_construct",
+          "detail": "BufferRange",
+          "source_span": {
+            "line": 46,
+            "column": 25
+          }
+        },
+        {
+          "id": "MakeRange.03",
+          "kind": "name",
+          "detail": "buffer",
+          "source_span": {
+            "line": 46,
+            "column": 37
+          }
+        },
+        {
+          "id": "MakeRange.04",
+          "kind": "name",
+          "detail": "offset",
+          "source_span": {
+            "line": 46,
+            "column": 45
+          }
+        },
+        {
+          "id": "MakeRange.05",
+          "kind": "name",
+          "detail": "size",
+          "source_span": {
+            "line": 46,
+            "column": 53
+          }
+        },
+        {
+          "id": "MakeRange.06",
+          "kind": "return",
+          "type": "BufferRange",
+          "source_span": {
+            "line": 47,
+            "column": 5
+          }
+        },
+        {
+          "id": "MakeRange.07",
+          "kind": "name",
+          "detail": "range",
+          "source_span": {
+            "line": 47,
+            "column": 12
+          }
+        }
+      ],
+      "source_span": {
+        "line": 44,
+        "column": 13
+      }
+    },
+    {
+      "name": "MarkInitialized",
+      "return_type": {
+        "name": "void",
+        "kind": "builtin",
+        "span": {
+          "line": 50,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "state",
+          "type": {
+            "name": "CommandPoolState",
+            "kind": "struct",
+            "ownership": "borrow",
+            "span": {
+              "line": 50,
+              "column": 22
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "MarkInitialized.01",
+          "kind": "assign",
+          "type": "state.initialized",
+          "detail": "state.initialized",
+          "source_span": {
+            "line": 52,
+            "column": 11
+          }
+        },
+        {
+          "id": "MarkInitialized.02",
+          "kind": "field_access",
+          "detail": "initialized",
+          "source_span": {
+            "line": 52,
+            "column": 11
+          }
+        },
+        {
+          "id": "MarkInitialized.03",
+          "kind": "name",
+          "detail": "state",
+          "source_span": {
+            "line": 52,
+            "column": 5
+          }
+        },
+        {
+          "id": "MarkInitialized.04",
+          "kind": "bool_literal",
+          "detail": "true",
+          "source_span": {
+            "line": 52,
+            "column": 25
+          }
+        }
+      ],
+      "source_span": {
+        "line": 50,
+        "column": 6
+      }
+    },
+    {
+      "name": "BuildAndValidate",
+      "return_type": {
+        "name": "bool",
+        "kind": "builtin",
+        "span": {
+          "line": 55,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "pool",
+          "type": {
+            "name": "VkCommandPool",
+            "kind": "builtin",
+            "span": {
+              "line": 55,
+              "column": 23
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "BuildAndValidate.01",
+          "kind": "final_storage_construct",
+          "type": "CommandPoolState",
+          "detail": "state",
+          "source_span": {
+            "line": 57,
+            "column": 22
+          }
+        },
+        {
+          "id": "BuildAndValidate.02",
+          "kind": "noncopyable_struct_construct",
+          "detail": "CommandPoolState",
+          "source_span": {
+            "line": 57,
+            "column": 30
+          }
+        },
+        {
+          "id": "BuildAndValidate.03",
+          "kind": "name",
+          "detail": "pool",
+          "source_span": {
+            "line": 57,
+            "column": 47
+          }
+        },
+        {
+          "id": "BuildAndValidate.04",
+          "kind": "bool_literal",
+          "detail": "false",
+          "source_span": {
+            "line": 57,
+            "column": 53
+          }
+        },
+        {
+          "id": "BuildAndValidate.05",
+          "kind": "expr_stmt",
+          "source_span": {
+            "line": 58,
+            "column": 5
+          }
+        },
+        {
+          "id": "BuildAndValidate.06",
+          "kind": "call",
+          "detail": "MarkInitialized",
+          "source_span": {
+            "line": 58,
+            "column": 5
+          }
+        },
+        {
+          "id": "BuildAndValidate.07",
+          "kind": "name",
+          "detail": "state",
+          "source_span": {
+            "line": 58,
+            "column": 21
+          }
+        },
+        {
+          "id": "BuildAndValidate.08",
+          "kind": "return",
+          "type": "bool",
+          "source_span": {
+            "line": 59,
+            "column": 5
+          }
+        },
+        {
+          "id": "BuildAndValidate.09",
+          "kind": "call",
+          "detail": "IsValid",
+          "source_span": {
+            "line": 59,
+            "column": 12
+          }
+        },
+        {
+          "id": "BuildAndValidate.10",
+          "kind": "name",
+          "detail": "state",
+          "source_span": {
+            "line": 59,
+            "column": 20
+          }
+        }
+      ],
+      "source_span": {
+        "line": 55,
+        "column": 6
+      }
+    },
+    {
+      "name": "DescribeEvent",
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 62,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "event",
+          "type": {
+            "name": "ResourceEvent",
+            "kind": "enum",
+            "span": {
+              "line": 62,
+              "column": 19
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "DescribeEvent.01",
+          "kind": "return",
+          "type": "int",
+          "source_span": {
+            "line": 64,
+            "column": 5
+          }
+        },
+        {
+          "id": "DescribeEvent.02",
+          "kind": "match_expr",
+          "detail": "3 arms",
+          "source_span": {
+            "line": 64,
+            "column": 12
+          }
+        },
+        {
+          "id": "DescribeEvent.03",
+          "kind": "name",
+          "detail": "event",
+          "source_span": {
+            "line": 64,
+            "column": 19
+          }
+        },
+        {
+          "id": "DescribeEvent.04",
+          "kind": "pattern",
+          "detail": "ResourceEvent::Idle",
+          "source_span": {
+            "line": 66,
+            "column": 9
+          }
+        },
+        {
+          "id": "DescribeEvent.05",
+          "kind": "literal",
+          "detail": "0",
+          "source_span": {
+            "line": 66,
+            "column": 32
+          }
+        },
+        {
+          "id": "DescribeEvent.06",
+          "kind": "pattern",
+          "detail": "ResourceEvent::Range",
+          "source_span": {
+            "line": 67,
+            "column": 9
+          }
+        },
+        {
+          "id": "DescribeEvent.07",
+          "kind": "binary",
+          "detail": "+",
+          "source_span": {
+            "line": 67,
+            "column": 53
+          }
+        },
+        {
+          "id": "DescribeEvent.08",
+          "kind": "field_access",
+          "detail": "offset",
+          "source_span": {
+            "line": 67,
+            "column": 46
+          }
+        },
+        {
+          "id": "DescribeEvent.09",
+          "kind": "name",
+          "detail": "range",
+          "source_span": {
+            "line": 67,
+            "column": 40
+          }
+        },
+        {
+          "id": "DescribeEvent.10",
+          "kind": "field_access",
+          "detail": "size",
+          "source_span": {
+            "line": 67,
+            "column": 61
+          }
+        },
+        {
+          "id": "DescribeEvent.11",
+          "kind": "name",
+          "detail": "range",
+          "source_span": {
+            "line": 67,
+            "column": 55
+          }
+        },
+        {
+          "id": "DescribeEvent.12",
+          "kind": "pattern",
+          "detail": "ResourceEvent::Failed",
+          "source_span": {
+            "line": 68,
+            "column": 9
+          }
+        },
+        {
+          "id": "DescribeEvent.13",
+          "kind": "name",
+          "detail": "code",
+          "source_span": {
+            "line": 68,
+            "column": 40
+          }
+        }
+      ],
+      "source_span": {
+        "line": 62,
+        "column": 5
+      }
+    },
+    {
+      "name": "ClassifyRange",
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 72,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "buffer",
+          "type": {
+            "name": "VkBuffer",
+            "kind": "builtin",
+            "span": {
+              "line": 72,
+              "column": 19
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "ClassifyRange.01",
+          "kind": "struct_construct",
+          "type": "BufferRange",
+          "detail": "range",
+          "source_span": {
+            "line": 74,
+            "column": 17
+          }
+        },
+        {
+          "id": "ClassifyRange.02",
+          "kind": "struct_construct",
+          "detail": "BufferRange",
+          "source_span": {
+            "line": 74,
+            "column": 25
+          }
+        },
+        {
+          "id": "ClassifyRange.03",
+          "kind": "name",
+          "detail": "buffer",
+          "source_span": {
+            "line": 74,
+            "column": 37
+          }
+        },
+        {
+          "id": "ClassifyRange.04",
+          "kind": "literal",
+          "detail": "2",
+          "source_span": {
+            "line": 74,
+            "column": 45
+          }
+        },
+        {
+          "id": "ClassifyRange.05",
+          "kind": "literal",
+          "detail": "3",
+          "source_span": {
+            "line": 74,
+            "column": 48
+          }
+        },
+        {
+          "id": "ClassifyRange.06",
+          "kind": "var_decl",
+          "type": "ResourceEvent",
+          "detail": "event",
+          "source_span": {
+            "line": 75,
+            "column": 19
+          }
+        },
+        {
+          "id": "ClassifyRange.07",
+          "kind": "enum_construct",
+          "detail": "ResourceEvent::Range",
+          "source_span": {
+            "line": 75,
+            "column": 27
+          }
+        },
+        {
+          "id": "ClassifyRange.08",
+          "kind": "name",
+          "detail": "range",
+          "source_span": {
+            "line": 75,
+            "column": 48
+          }
+        },
+        {
+          "id": "ClassifyRange.09",
+          "kind": "return",
+          "type": "int",
+          "source_span": {
+            "line": 76,
+            "column": 5
+          }
+        },
+        {
+          "id": "ClassifyRange.10",
+          "kind": "call",
+          "detail": "DescribeEvent",
+          "source_span": {
+            "line": 76,
+            "column": 12
+          }
+        },
+        {
+          "id": "ClassifyRange.11",
+          "kind": "name",
+          "detail": "event",
+          "source_span": {
+            "line": 76,
+            "column": 26
+          }
+        }
+      ],
+      "source_span": {
+        "line": 72,
+        "column": 5
+      }
+    },
+    {
+      "name": "CleanupState",
+      "return_type": {
+        "name": "void",
+        "kind": "builtin",
+        "span": {
+          "line": 79,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "pool",
+          "type": {
+            "name": "VkCommandPool",
+            "kind": "builtin",
+            "span": {
+              "line": 79,
+              "column": 19
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "CleanupState.01",
+          "kind": "final_storage_construct",
+          "type": "CommandPoolState",
+          "detail": "state",
+          "source_span": {
+            "line": 81,
+            "column": 22
+          }
+        },
+        {
+          "id": "CleanupState.02",
+          "kind": "noncopyable_struct_construct",
+          "detail": "CommandPoolState",
+          "source_span": {
+            "line": 81,
+            "column": 30
+          }
+        },
+        {
+          "id": "CleanupState.03",
+          "kind": "name",
+          "detail": "pool",
+          "source_span": {
+            "line": 81,
+            "column": 47
+          }
+        },
+        {
+          "id": "CleanupState.04",
+          "kind": "bool_literal",
+          "detail": "false",
+          "source_span": {
+            "line": 81,
+            "column": 53
+          }
+        },
+        {
+          "id": "CleanupState.05",
+          "kind": "expr_stmt",
+          "source_span": {
+            "line": 82,
+            "column": 5
+          }
+        },
+        {
+          "id": "CleanupState.06",
+          "kind": "call",
+          "detail": "MarkInitialized",
+          "source_span": {
+            "line": 82,
+            "column": 5
+          }
+        },
+        {
+          "id": "CleanupState.07",
+          "kind": "name",
+          "detail": "state",
+          "source_span": {
+            "line": 82,
+            "column": 21
+          }
+        },
+        {
+          "id": "CleanupState.08",
+          "kind": "expr_stmt",
+          "source_span": {
+            "line": 83,
+            "column": 5
+          }
+        },
+        {
+          "id": "CleanupState.09",
+          "kind": "call",
+          "detail": "Destroy",
+          "source_span": {
+            "line": 83,
+            "column": 5
+          }
+        },
+        {
+          "id": "CleanupState.10",
+          "kind": "name",
+          "detail": "state",
+          "source_span": {
+            "line": 83,
+            "column": 13
+          }
+        }
+      ],
+      "source_span": {
+        "line": 79,
+        "column": 6
+      }
+    }
+  ],
+  "schema": "concept-evt1-source-map.v1",
+  "source": "Examples/Concept-Vulkan/evt1_m1b_a_vulkan.concept",
+  "static_asserts": null,
+  "structs": [
+    {
+      "name": "BufferRange",
+      "c_name": "concept_buffer_range",
+      "immovable": false,
+      "copyable": true,
+      "fields": [
+        {
+          "name": "buffer",
+          "type": {
+            "name": "VkBuffer",
+            "kind": "builtin",
+            "span": {
+              "line": 5,
+              "column": 5
+            }
+          }
+        },
+        {
+          "name": "offset",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 6,
+              "column": 5
+            }
+          }
+        },
+        {
+          "name": "size",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 7,
+              "column": 5
+            }
+          }
+        }
+      ],
+      "source_span": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "name": "CommandPoolState",
+      "c_name": "concept_command_pool_state",
+      "immovable": true,
+      "copyable": false,
+      "fields": [
+        {
+          "name": "pool",
+          "type": {
+            "name": "VkCommandPool",
+            "kind": "builtin",
+            "span": {
+              "line": 12,
+              "column": 5
+            }
+          }
+        },
+        {
+          "name": "initialized",
+          "type": {
+            "name": "bool",
+            "kind": "builtin",
+            "span": {
+              "line": 13,
+              "column": 5
+            }
+          }
+        }
+      ],
+      "source_span": {
+        "line": 10,
+        "column": 1
+      }
+    }
+  ],
+  "templates": null
+}

@@ -1,0 +1,666 @@
+{
+  "actuators": null,
+  "assertions": null,
+  "automata": null,
+  "comptime_decls": [
+    {
+      "name": "DefaultBound",
+      "type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 9,
+          "column": 10
+        }
+      },
+      "value": "3",
+      "source_span": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "name": "PackageEntry",
+      "type": {
+        "name": "string",
+        "kind": "builtin",
+        "span": {
+          "line": 10,
+          "column": 10
+        }
+      },
+      "value": "\"kernel-54-default\"",
+      "source_span": {
+        "line": 10,
+        "column": 1
+      }
+    },
+    {
+      "name": "DefaultConfig",
+      "type": {
+        "name": "RangeConfig",
+        "kind": "struct",
+        "span": {
+          "line": 11,
+          "column": 10
+        }
+      },
+      "value": "RangeConfig{active=true, step=2}",
+      "source_span": {
+        "line": 11,
+        "column": 1
+      }
+    }
+  ],
+  "concepts": null,
+  "functions": [
+    {
+      "name": "ClassifyRange",
+      "span": {
+        "line": 24,
+        "column": 5
+      },
+      "symbol": "concept_evt1_m1b_c_vulkan_classify_range"
+    },
+    {
+      "name": "PoolReady",
+      "span": {
+        "line": 37,
+        "column": 6
+      },
+      "symbol": "concept_evt1_m1b_c_vulkan_pool_ready"
+    }
+  ],
+  "instances": null,
+  "mir": [
+    {
+      "name": "ClassifyRange",
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 24,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "buffer",
+          "type": {
+            "name": "VkBuffer",
+            "kind": "builtin",
+            "span": {
+              "line": 24,
+              "column": 19
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "ClassifyRange.01",
+          "kind": "comptime_decl",
+          "type": "int",
+          "detail": "LocalBound",
+          "source_span": {
+            "line": 26,
+            "column": 5
+          }
+        },
+        {
+          "id": "ClassifyRange.02",
+          "kind": "call",
+          "detail": "ClampIterations",
+          "source_span": {
+            "line": 26,
+            "column": 31
+          }
+        },
+        {
+          "id": "ClassifyRange.03",
+          "kind": "literal",
+          "detail": "5",
+          "source_span": {
+            "line": 26,
+            "column": 47
+          }
+        },
+        {
+          "id": "ClassifyRange.04",
+          "kind": "var_decl",
+          "type": "int",
+          "detail": "total",
+          "source_span": {
+            "line": 27,
+            "column": 9
+          }
+        },
+        {
+          "id": "ClassifyRange.05",
+          "kind": "literal",
+          "detail": "0",
+          "source_span": {
+            "line": 27,
+            "column": 17
+          }
+        },
+        {
+          "id": "ClassifyRange.06",
+          "kind": "var_decl",
+          "type": "int",
+          "detail": "cursor",
+          "source_span": {
+            "line": 28,
+            "column": 9
+          }
+        },
+        {
+          "id": "ClassifyRange.07",
+          "kind": "literal",
+          "detail": "0",
+          "source_span": {
+            "line": 28,
+            "column": 18
+          }
+        },
+        {
+          "id": "ClassifyRange.08",
+          "kind": "bounded_while",
+          "source_span": {
+            "line": 29,
+            "column": 5
+          }
+        },
+        {
+          "id": "ClassifyRange.09",
+          "kind": "binary",
+          "detail": "\u003c",
+          "source_span": {
+            "line": 29,
+            "column": 19
+          }
+        },
+        {
+          "id": "ClassifyRange.10",
+          "kind": "name",
+          "detail": "cursor",
+          "source_span": {
+            "line": 29,
+            "column": 12
+          }
+        },
+        {
+          "id": "ClassifyRange.11",
+          "kind": "name",
+          "detail": "LocalBound",
+          "source_span": {
+            "line": 29,
+            "column": 21
+          }
+        },
+        {
+          "id": "ClassifyRange.12",
+          "kind": "binary",
+          "detail": "+",
+          "source_span": {
+            "line": 29,
+            "column": 60
+          }
+        },
+        {
+          "id": "ClassifyRange.13",
+          "kind": "field_access",
+          "detail": "step",
+          "source_span": {
+            "line": 29,
+            "column": 55
+          }
+        },
+        {
+          "id": "ClassifyRange.14",
+          "kind": "name",
+          "detail": "DefaultConfig",
+          "source_span": {
+            "line": 29,
+            "column": 41
+          }
+        },
+        {
+          "id": "ClassifyRange.15",
+          "kind": "literal",
+          "detail": "1",
+          "source_span": {
+            "line": 29,
+            "column": 62
+          }
+        },
+        {
+          "id": "ClassifyRange.16",
+          "kind": "assign",
+          "type": "total",
+          "detail": "total",
+          "source_span": {
+            "line": 31,
+            "column": 9
+          }
+        },
+        {
+          "id": "ClassifyRange.17",
+          "kind": "name",
+          "detail": "total",
+          "source_span": {
+            "line": 31,
+            "column": 9
+          }
+        },
+        {
+          "id": "ClassifyRange.18",
+          "kind": "binary",
+          "detail": "+",
+          "source_span": {
+            "line": 31,
+            "column": 23
+          }
+        },
+        {
+          "id": "ClassifyRange.19",
+          "kind": "name",
+          "detail": "total",
+          "source_span": {
+            "line": 31,
+            "column": 17
+          }
+        },
+        {
+          "id": "ClassifyRange.20",
+          "kind": "literal",
+          "detail": "1",
+          "source_span": {
+            "line": 31,
+            "column": 25
+          }
+        },
+        {
+          "id": "ClassifyRange.21",
+          "kind": "assign",
+          "type": "cursor",
+          "detail": "cursor",
+          "source_span": {
+            "line": 32,
+            "column": 9
+          }
+        },
+        {
+          "id": "ClassifyRange.22",
+          "kind": "name",
+          "detail": "cursor",
+          "source_span": {
+            "line": 32,
+            "column": 9
+          }
+        },
+        {
+          "id": "ClassifyRange.23",
+          "kind": "binary",
+          "detail": "+",
+          "source_span": {
+            "line": 32,
+            "column": 25
+          }
+        },
+        {
+          "id": "ClassifyRange.24",
+          "kind": "name",
+          "detail": "cursor",
+          "source_span": {
+            "line": 32,
+            "column": 18
+          }
+        },
+        {
+          "id": "ClassifyRange.25",
+          "kind": "literal",
+          "detail": "1",
+          "source_span": {
+            "line": 32,
+            "column": 27
+          }
+        },
+        {
+          "id": "ClassifyRange.26",
+          "kind": "return",
+          "type": "int",
+          "source_span": {
+            "line": 34,
+            "column": 5
+          }
+        },
+        {
+          "id": "ClassifyRange.27",
+          "kind": "if_expr",
+          "source_span": {
+            "line": 34,
+            "column": 12
+          }
+        },
+        {
+          "id": "ClassifyRange.28",
+          "kind": "field_access",
+          "detail": "active",
+          "source_span": {
+            "line": 34,
+            "column": 30
+          }
+        },
+        {
+          "id": "ClassifyRange.29",
+          "kind": "name",
+          "detail": "DefaultConfig",
+          "source_span": {
+            "line": 34,
+            "column": 16
+          }
+        },
+        {
+          "id": "ClassifyRange.30",
+          "kind": "name",
+          "detail": "total",
+          "source_span": {
+            "line": 34,
+            "column": 38
+          }
+        },
+        {
+          "id": "ClassifyRange.31",
+          "kind": "literal",
+          "detail": "0",
+          "source_span": {
+            "line": 34,
+            "column": 49
+          }
+        }
+      ],
+      "source_span": {
+        "line": 24,
+        "column": 5
+      }
+    },
+    {
+      "name": "PoolReady",
+      "return_type": {
+        "name": "bool",
+        "kind": "builtin",
+        "span": {
+          "line": 37,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "pool",
+          "type": {
+            "name": "VkCommandPool",
+            "kind": "builtin",
+            "span": {
+              "line": 37,
+              "column": 16
+            }
+          }
+        },
+        {
+          "name": "ready",
+          "type": {
+            "name": "bool",
+            "kind": "builtin",
+            "span": {
+              "line": 37,
+              "column": 36
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "PoolReady.01",
+          "kind": "var_decl",
+          "type": "int",
+          "detail": "count",
+          "source_span": {
+            "line": 39,
+            "column": 9
+          }
+        },
+        {
+          "id": "PoolReady.02",
+          "kind": "literal",
+          "detail": "0",
+          "source_span": {
+            "line": 39,
+            "column": 17
+          }
+        },
+        {
+          "id": "PoolReady.03",
+          "kind": "while",
+          "source_span": {
+            "line": 40,
+            "column": 5
+          }
+        },
+        {
+          "id": "PoolReady.04",
+          "kind": "binary",
+          "detail": "\u003c",
+          "source_span": {
+            "line": 40,
+            "column": 18
+          }
+        },
+        {
+          "id": "PoolReady.05",
+          "kind": "name",
+          "detail": "count",
+          "source_span": {
+            "line": 40,
+            "column": 12
+          }
+        },
+        {
+          "id": "PoolReady.06",
+          "kind": "literal",
+          "detail": "2",
+          "source_span": {
+            "line": 40,
+            "column": 20
+          }
+        },
+        {
+          "id": "PoolReady.07",
+          "kind": "assign",
+          "type": "count",
+          "detail": "count",
+          "source_span": {
+            "line": 42,
+            "column": 9
+          }
+        },
+        {
+          "id": "PoolReady.08",
+          "kind": "name",
+          "detail": "count",
+          "source_span": {
+            "line": 42,
+            "column": 9
+          }
+        },
+        {
+          "id": "PoolReady.09",
+          "kind": "binary",
+          "detail": "+",
+          "source_span": {
+            "line": 42,
+            "column": 23
+          }
+        },
+        {
+          "id": "PoolReady.10",
+          "kind": "name",
+          "detail": "count",
+          "source_span": {
+            "line": 42,
+            "column": 17
+          }
+        },
+        {
+          "id": "PoolReady.11",
+          "kind": "literal",
+          "detail": "1",
+          "source_span": {
+            "line": 42,
+            "column": 25
+          }
+        },
+        {
+          "id": "PoolReady.12",
+          "kind": "return",
+          "type": "bool",
+          "source_span": {
+            "line": 44,
+            "column": 5
+          }
+        },
+        {
+          "id": "PoolReady.13",
+          "kind": "if_expr",
+          "source_span": {
+            "line": 44,
+            "column": 12
+          }
+        },
+        {
+          "id": "PoolReady.14",
+          "kind": "name",
+          "detail": "ready",
+          "source_span": {
+            "line": 44,
+            "column": 16
+          }
+        },
+        {
+          "id": "PoolReady.15",
+          "kind": "binary",
+          "detail": "\u003e",
+          "source_span": {
+            "line": 44,
+            "column": 29
+          }
+        },
+        {
+          "id": "PoolReady.16",
+          "kind": "name",
+          "detail": "count",
+          "source_span": {
+            "line": 44,
+            "column": 23
+          }
+        },
+        {
+          "id": "PoolReady.17",
+          "kind": "literal",
+          "detail": "0",
+          "source_span": {
+            "line": 44,
+            "column": 31
+          }
+        },
+        {
+          "id": "PoolReady.18",
+          "kind": "bool_literal",
+          "detail": "false",
+          "source_span": {
+            "line": 44,
+            "column": 38
+          }
+        }
+      ],
+      "source_span": {
+        "line": 37,
+        "column": 6
+      }
+    }
+  ],
+  "schema": "concept-evt1-source-map.v1",
+  "source": "Examples/Concept-Vulkan/evt1_m1b_c_vulkan.concept",
+  "static_asserts": [
+    {
+      "condition": "expression",
+      "satisfied": true,
+      "source_span": {
+        "line": 13,
+        "column": 1
+      }
+    },
+    {
+      "condition": "expression",
+      "satisfied": true,
+      "source_span": {
+        "line": 14,
+        "column": 1
+      }
+    },
+    {
+      "condition": "expression",
+      "message": "\"step mismatch\"",
+      "satisfied": true,
+      "source_span": {
+        "line": 15,
+        "column": 1
+      }
+    },
+    {
+      "condition": "expression",
+      "satisfied": true,
+      "source_span": {
+        "line": 22,
+        "column": 1
+      }
+    }
+  ],
+  "structs": [
+    {
+      "name": "RangeConfig",
+      "c_name": "concept_range_config",
+      "immovable": false,
+      "copyable": true,
+      "fields": [
+        {
+          "name": "step",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 5,
+              "column": 5
+            }
+          }
+        },
+        {
+          "name": "active",
+          "type": {
+            "name": "bool",
+            "kind": "builtin",
+            "span": {
+              "line": 6,
+              "column": 5
+            }
+          }
+        }
+      ],
+      "source_span": {
+        "line": 3,
+        "column": 1
+      }
+    }
+  ],
+  "templates": null
+}

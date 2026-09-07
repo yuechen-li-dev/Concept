@@ -1,0 +1,890 @@
+{
+  "actuators": null,
+  "assertions": null,
+  "automata": null,
+  "comptime_decls": [
+    {
+      "name": "MaxIterations",
+      "type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 9,
+          "column": 10
+        }
+      },
+      "value": "4",
+      "source_span": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "name": "UseFastPath",
+      "type": {
+        "name": "bool",
+        "kind": "builtin",
+        "span": {
+          "line": 10,
+          "column": 10
+        }
+      },
+      "value": "true",
+      "source_span": {
+        "line": 10,
+        "column": 1
+      }
+    },
+    {
+      "name": "KernelEntry",
+      "type": {
+        "name": "string",
+        "kind": "builtin",
+        "span": {
+          "line": 11,
+          "column": 10
+        }
+      },
+      "value": "\"kernel-54-default\"",
+      "source_span": {
+        "line": 11,
+        "column": 1
+      }
+    },
+    {
+      "name": "DefaultLimits",
+      "type": {
+        "name": "Limits",
+        "kind": "struct",
+        "span": {
+          "line": 12,
+          "column": 10
+        }
+      },
+      "value": "Limits{bound=3, fast=true}",
+      "source_span": {
+        "line": 12,
+        "column": 1
+      }
+    }
+  ],
+  "concepts": null,
+  "functions": [
+    {
+      "name": "SelectedArm",
+      "span": {
+        "line": 38,
+        "column": 5
+      },
+      "symbol": "concept_evt1_m1b_c_language_selected_arm"
+    },
+    {
+      "name": "CountUp",
+      "span": {
+        "line": 43,
+        "column": 5
+      },
+      "symbol": "concept_evt1_m1b_c_language_count_up"
+    },
+    {
+      "name": "ZeroBound",
+      "span": {
+        "line": 60,
+        "column": 5
+      },
+      "symbol": "concept_evt1_m1b_c_language_zero_bound"
+    },
+    {
+      "name": "DefaultBound",
+      "span": {
+        "line": 70,
+        "column": 5
+      },
+      "symbol": "concept_evt1_m1b_c_language_default_bound"
+    }
+  ],
+  "instances": null,
+  "mir": [
+    {
+      "name": "SelectedArm",
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 38,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "chooseThen",
+          "type": {
+            "name": "bool",
+            "kind": "builtin",
+            "span": {
+              "line": 38,
+              "column": 17
+            }
+          }
+        },
+        {
+          "name": "thenValue",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 38,
+              "column": 34
+            }
+          }
+        },
+        {
+          "name": "elseValue",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 38,
+              "column": 49
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "SelectedArm.01",
+          "kind": "return",
+          "type": "int",
+          "source_span": {
+            "line": 40,
+            "column": 5
+          }
+        },
+        {
+          "id": "SelectedArm.02",
+          "kind": "if_expr",
+          "source_span": {
+            "line": 40,
+            "column": 12
+          }
+        },
+        {
+          "id": "SelectedArm.03",
+          "kind": "name",
+          "detail": "chooseThen",
+          "source_span": {
+            "line": 40,
+            "column": 16
+          }
+        },
+        {
+          "id": "SelectedArm.04",
+          "kind": "name",
+          "detail": "thenValue",
+          "source_span": {
+            "line": 40,
+            "column": 28
+          }
+        },
+        {
+          "id": "SelectedArm.05",
+          "kind": "name",
+          "detail": "elseValue",
+          "source_span": {
+            "line": 40,
+            "column": 43
+          }
+        }
+      ],
+      "source_span": {
+        "line": 38,
+        "column": 5
+      }
+    },
+    {
+      "name": "CountUp",
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 43,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "input",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 43,
+              "column": 13
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "CountUp.01",
+          "kind": "comptime_decl",
+          "type": "int",
+          "detail": "RuntimeBound",
+          "source_span": {
+            "line": 45,
+            "column": 5
+          }
+        },
+        {
+          "id": "CountUp.02",
+          "kind": "call",
+          "detail": "ClampCount",
+          "source_span": {
+            "line": 45,
+            "column": 33
+          }
+        },
+        {
+          "id": "CountUp.03",
+          "kind": "binary",
+          "detail": "*",
+          "source_span": {
+            "line": 45,
+            "column": 58
+          }
+        },
+        {
+          "id": "CountUp.04",
+          "kind": "name",
+          "detail": "MaxIterations",
+          "source_span": {
+            "line": 45,
+            "column": 44
+          }
+        },
+        {
+          "id": "CountUp.05",
+          "kind": "literal",
+          "detail": "2",
+          "source_span": {
+            "line": 45,
+            "column": 60
+          }
+        },
+        {
+          "id": "CountUp.06",
+          "kind": "literal",
+          "detail": "6",
+          "source_span": {
+            "line": 45,
+            "column": 63
+          }
+        },
+        {
+          "id": "CountUp.07",
+          "kind": "var_decl",
+          "type": "int",
+          "detail": "value",
+          "source_span": {
+            "line": 46,
+            "column": 9
+          }
+        },
+        {
+          "id": "CountUp.08",
+          "kind": "literal",
+          "detail": "0",
+          "source_span": {
+            "line": 46,
+            "column": 17
+          }
+        },
+        {
+          "id": "CountUp.09",
+          "kind": "var_decl",
+          "type": "int",
+          "detail": "cursor",
+          "source_span": {
+            "line": 47,
+            "column": 9
+          }
+        },
+        {
+          "id": "CountUp.10",
+          "kind": "literal",
+          "detail": "0",
+          "source_span": {
+            "line": 47,
+            "column": 18
+          }
+        },
+        {
+          "id": "CountUp.11",
+          "kind": "bounded_while",
+          "source_span": {
+            "line": 48,
+            "column": 5
+          }
+        },
+        {
+          "id": "CountUp.12",
+          "kind": "binary",
+          "detail": "\u003c",
+          "source_span": {
+            "line": 48,
+            "column": 19
+          }
+        },
+        {
+          "id": "CountUp.13",
+          "kind": "name",
+          "detail": "cursor",
+          "source_span": {
+            "line": 48,
+            "column": 12
+          }
+        },
+        {
+          "id": "CountUp.14",
+          "kind": "name",
+          "detail": "input",
+          "source_span": {
+            "line": 48,
+            "column": 21
+          }
+        },
+        {
+          "id": "CountUp.15",
+          "kind": "name",
+          "detail": "RuntimeBound",
+          "source_span": {
+            "line": 48,
+            "column": 36
+          }
+        },
+        {
+          "id": "CountUp.16",
+          "kind": "assign",
+          "type": "value",
+          "detail": "value",
+          "source_span": {
+            "line": 50,
+            "column": 9
+          }
+        },
+        {
+          "id": "CountUp.17",
+          "kind": "name",
+          "detail": "value",
+          "source_span": {
+            "line": 50,
+            "column": 9
+          }
+        },
+        {
+          "id": "CountUp.18",
+          "kind": "binary",
+          "detail": "+",
+          "source_span": {
+            "line": 50,
+            "column": 23
+          }
+        },
+        {
+          "id": "CountUp.19",
+          "kind": "name",
+          "detail": "value",
+          "source_span": {
+            "line": 50,
+            "column": 17
+          }
+        },
+        {
+          "id": "CountUp.20",
+          "kind": "literal",
+          "detail": "1",
+          "source_span": {
+            "line": 50,
+            "column": 25
+          }
+        },
+        {
+          "id": "CountUp.21",
+          "kind": "assign",
+          "type": "cursor",
+          "detail": "cursor",
+          "source_span": {
+            "line": 51,
+            "column": 9
+          }
+        },
+        {
+          "id": "CountUp.22",
+          "kind": "name",
+          "detail": "cursor",
+          "source_span": {
+            "line": 51,
+            "column": 9
+          }
+        },
+        {
+          "id": "CountUp.23",
+          "kind": "binary",
+          "detail": "+",
+          "source_span": {
+            "line": 51,
+            "column": 25
+          }
+        },
+        {
+          "id": "CountUp.24",
+          "kind": "name",
+          "detail": "cursor",
+          "source_span": {
+            "line": 51,
+            "column": 18
+          }
+        },
+        {
+          "id": "CountUp.25",
+          "kind": "literal",
+          "detail": "1",
+          "source_span": {
+            "line": 51,
+            "column": 27
+          }
+        },
+        {
+          "id": "CountUp.26",
+          "kind": "while",
+          "source_span": {
+            "line": 53,
+            "column": 5
+          }
+        },
+        {
+          "id": "CountUp.27",
+          "kind": "binary",
+          "detail": "\u003c",
+          "source_span": {
+            "line": 53,
+            "column": 18
+          }
+        },
+        {
+          "id": "CountUp.28",
+          "kind": "name",
+          "detail": "value",
+          "source_span": {
+            "line": 53,
+            "column": 12
+          }
+        },
+        {
+          "id": "CountUp.29",
+          "kind": "name",
+          "detail": "MaxIterations",
+          "source_span": {
+            "line": 53,
+            "column": 20
+          }
+        },
+        {
+          "id": "CountUp.30",
+          "kind": "assign",
+          "type": "value",
+          "detail": "value",
+          "source_span": {
+            "line": 55,
+            "column": 9
+          }
+        },
+        {
+          "id": "CountUp.31",
+          "kind": "name",
+          "detail": "value",
+          "source_span": {
+            "line": 55,
+            "column": 9
+          }
+        },
+        {
+          "id": "CountUp.32",
+          "kind": "binary",
+          "detail": "+",
+          "source_span": {
+            "line": 55,
+            "column": 23
+          }
+        },
+        {
+          "id": "CountUp.33",
+          "kind": "name",
+          "detail": "value",
+          "source_span": {
+            "line": 55,
+            "column": 17
+          }
+        },
+        {
+          "id": "CountUp.34",
+          "kind": "literal",
+          "detail": "1",
+          "source_span": {
+            "line": 55,
+            "column": 25
+          }
+        },
+        {
+          "id": "CountUp.35",
+          "kind": "return",
+          "type": "int",
+          "source_span": {
+            "line": 57,
+            "column": 5
+          }
+        },
+        {
+          "id": "CountUp.36",
+          "kind": "if_expr",
+          "source_span": {
+            "line": 57,
+            "column": 12
+          }
+        },
+        {
+          "id": "CountUp.37",
+          "kind": "name",
+          "detail": "UseFastPath",
+          "source_span": {
+            "line": 57,
+            "column": 16
+          }
+        },
+        {
+          "id": "CountUp.38",
+          "kind": "name",
+          "detail": "value",
+          "source_span": {
+            "line": 57,
+            "column": 29
+          }
+        },
+        {
+          "id": "CountUp.39",
+          "kind": "name",
+          "detail": "input",
+          "source_span": {
+            "line": 57,
+            "column": 40
+          }
+        }
+      ],
+      "source_span": {
+        "line": 43,
+        "column": 5
+      }
+    },
+    {
+      "name": "ZeroBound",
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 60,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "input",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 60,
+              "column": 15
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "ZeroBound.01",
+          "kind": "var_decl",
+          "type": "int",
+          "detail": "value",
+          "source_span": {
+            "line": 62,
+            "column": 9
+          }
+        },
+        {
+          "id": "ZeroBound.02",
+          "kind": "literal",
+          "detail": "99",
+          "source_span": {
+            "line": 62,
+            "column": 17
+          }
+        },
+        {
+          "id": "ZeroBound.03",
+          "kind": "bounded_while",
+          "source_span": {
+            "line": 63,
+            "column": 5
+          }
+        },
+        {
+          "id": "ZeroBound.04",
+          "kind": "binary",
+          "detail": "\u003e",
+          "source_span": {
+            "line": 63,
+            "column": 18
+          }
+        },
+        {
+          "id": "ZeroBound.05",
+          "kind": "name",
+          "detail": "input",
+          "source_span": {
+            "line": 63,
+            "column": 12
+          }
+        },
+        {
+          "id": "ZeroBound.06",
+          "kind": "literal",
+          "detail": "0",
+          "source_span": {
+            "line": 63,
+            "column": 20
+          }
+        },
+        {
+          "id": "ZeroBound.07",
+          "kind": "literal",
+          "detail": "0",
+          "source_span": {
+            "line": 63,
+            "column": 31
+          }
+        },
+        {
+          "id": "ZeroBound.08",
+          "kind": "assign",
+          "type": "value",
+          "detail": "value",
+          "source_span": {
+            "line": 65,
+            "column": 9
+          }
+        },
+        {
+          "id": "ZeroBound.09",
+          "kind": "name",
+          "detail": "value",
+          "source_span": {
+            "line": 65,
+            "column": 9
+          }
+        },
+        {
+          "id": "ZeroBound.10",
+          "kind": "literal",
+          "detail": "0",
+          "source_span": {
+            "line": 65,
+            "column": 17
+          }
+        },
+        {
+          "id": "ZeroBound.11",
+          "kind": "return",
+          "type": "int",
+          "source_span": {
+            "line": 67,
+            "column": 5
+          }
+        },
+        {
+          "id": "ZeroBound.12",
+          "kind": "name",
+          "detail": "value",
+          "source_span": {
+            "line": 67,
+            "column": 12
+          }
+        }
+      ],
+      "source_span": {
+        "line": 60,
+        "column": 5
+      }
+    },
+    {
+      "name": "DefaultBound",
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 70,
+          "column": 1
+        }
+      },
+      "operations": [
+        {
+          "id": "DefaultBound.01",
+          "kind": "return",
+          "type": "int",
+          "source_span": {
+            "line": 72,
+            "column": 5
+          }
+        },
+        {
+          "id": "DefaultBound.02",
+          "kind": "if_expr",
+          "source_span": {
+            "line": 72,
+            "column": 12
+          }
+        },
+        {
+          "id": "DefaultBound.03",
+          "kind": "field_access",
+          "detail": "fast",
+          "source_span": {
+            "line": 72,
+            "column": 30
+          }
+        },
+        {
+          "id": "DefaultBound.04",
+          "kind": "name",
+          "detail": "DefaultLimits",
+          "source_span": {
+            "line": 72,
+            "column": 16
+          }
+        },
+        {
+          "id": "DefaultBound.05",
+          "kind": "field_access",
+          "detail": "bound",
+          "source_span": {
+            "line": 72,
+            "column": 50
+          }
+        },
+        {
+          "id": "DefaultBound.06",
+          "kind": "name",
+          "detail": "DefaultLimits",
+          "source_span": {
+            "line": 72,
+            "column": 36
+          }
+        },
+        {
+          "id": "DefaultBound.07",
+          "kind": "literal",
+          "detail": "0",
+          "source_span": {
+            "line": 72,
+            "column": 61
+          }
+        }
+      ],
+      "source_span": {
+        "line": 70,
+        "column": 5
+      }
+    }
+  ],
+  "schema": "concept-evt1-source-map.v1",
+  "source": "Examples/Concept-Vulkan/evt1_m1b_c_language.concept",
+  "static_asserts": [
+    {
+      "condition": "expression",
+      "satisfied": true,
+      "source_span": {
+        "line": 14,
+        "column": 1
+      }
+    },
+    {
+      "condition": "expression",
+      "message": "\"default bound\"",
+      "satisfied": true,
+      "source_span": {
+        "line": 15,
+        "column": 1
+      }
+    },
+    {
+      "condition": "expression",
+      "satisfied": true,
+      "source_span": {
+        "line": 16,
+        "column": 1
+      }
+    },
+    {
+      "condition": "expression",
+      "satisfied": true,
+      "source_span": {
+        "line": 35,
+        "column": 1
+      }
+    },
+    {
+      "condition": "expression",
+      "message": "\"sum mismatch\"",
+      "satisfied": true,
+      "source_span": {
+        "line": 36,
+        "column": 1
+      }
+    }
+  ],
+  "structs": [
+    {
+      "name": "Limits",
+      "c_name": "concept_limits",
+      "immovable": false,
+      "copyable": true,
+      "fields": [
+        {
+          "name": "bound",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 5,
+              "column": 5
+            }
+          }
+        },
+        {
+          "name": "fast",
+          "type": {
+            "name": "bool",
+            "kind": "builtin",
+            "span": {
+              "line": 6,
+              "column": 5
+            }
+          }
+        }
+      ],
+      "source_span": {
+        "line": 3,
+        "column": 1
+      }
+    }
+  ],
+  "templates": null
+}

@@ -1,0 +1,538 @@
+{
+  "actuators": null,
+  "assertions": null,
+  "automata": null,
+  "comptime_decls": [
+    {
+      "name": "Bindings",
+      "type": {
+        "name": "DescriptorBinding[]",
+        "kind": "array",
+        "array_elem": {
+          "name": "DescriptorBinding",
+          "kind": "struct",
+          "span": {
+            "line": 15,
+            "column": 10
+          }
+        },
+        "array_length": 3,
+        "span": {
+          "line": 15,
+          "column": 10
+        }
+      },
+      "value": "[DescriptorBinding{binding=0, set=0, write=false}, DescriptorBinding{binding=1, set=0, write=true}, DescriptorBinding{binding=0, set=1, write=true}]",
+      "source_span": {
+        "line": 15,
+        "column": 1
+      }
+    },
+    {
+      "name": "Summary",
+      "type": {
+        "name": "BindingSummary",
+        "kind": "struct",
+        "span": {
+          "line": 21,
+          "column": 10
+        }
+      },
+      "value": "BindingSummary{slots=[3, 0]}",
+      "source_span": {
+        "line": 21,
+        "column": 1
+      }
+    },
+    {
+      "name": "StageMatrix",
+      "type": {
+        "name": "int[2][]",
+        "kind": "array",
+        "array_elem": {
+          "name": "int[]",
+          "kind": "array",
+          "array_elem": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 22,
+              "column": 10
+            }
+          },
+          "array_length": 2,
+          "span": {
+            "line": 22,
+            "column": 10
+          }
+        },
+        "array_length": 2,
+        "span": {
+          "line": 22,
+          "column": 10
+        }
+      },
+      "value": "[[1, 2], [3, 4]]",
+      "source_span": {
+        "line": 22,
+        "column": 1
+      }
+    },
+    {
+      "name": "WriteCount",
+      "type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 23,
+          "column": 10
+        }
+      },
+      "value": "2",
+      "source_span": {
+        "line": 23,
+        "column": 1
+      }
+    }
+  ],
+  "concepts": null,
+  "functions": [
+    {
+      "name": "ClassifyRange",
+      "span": {
+        "line": 62,
+        "column": 5
+      },
+      "symbol": "concept_evt1_m1b_d_vulkan_classify_range"
+    },
+    {
+      "name": "PipelineStride",
+      "span": {
+        "line": 67,
+        "column": 5
+      },
+      "symbol": "concept_evt1_m1b_d_vulkan_pipeline_stride"
+    },
+    {
+      "name": "PoolReady",
+      "span": {
+        "line": 72,
+        "column": 6
+      },
+      "symbol": "concept_evt1_m1b_d_vulkan_pool_ready"
+    }
+  ],
+  "instances": null,
+  "mir": [
+    {
+      "name": "ClassifyRange",
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 62,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "buffer",
+          "type": {
+            "name": "VkBuffer",
+            "kind": "builtin",
+            "span": {
+              "line": 62,
+              "column": 19
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "ClassifyRange.01",
+          "kind": "return",
+          "type": "int",
+          "source_span": {
+            "line": 64,
+            "column": 5
+          }
+        },
+        {
+          "id": "ClassifyRange.02",
+          "kind": "binary",
+          "detail": "+",
+          "source_span": {
+            "line": 64,
+            "column": 29
+          }
+        },
+        {
+          "id": "ClassifyRange.03",
+          "kind": "array_index",
+          "source_span": {
+            "line": 64,
+            "column": 12
+          }
+        },
+        {
+          "id": "ClassifyRange.04",
+          "kind": "field_access",
+          "detail": "slots",
+          "source_span": {
+            "line": 64,
+            "column": 20
+          }
+        },
+        {
+          "id": "ClassifyRange.05",
+          "kind": "name",
+          "detail": "Summary",
+          "source_span": {
+            "line": 64,
+            "column": 12
+          }
+        },
+        {
+          "id": "ClassifyRange.06",
+          "kind": "literal",
+          "detail": "0",
+          "source_span": {
+            "line": 64,
+            "column": 26
+          }
+        },
+        {
+          "id": "ClassifyRange.07",
+          "kind": "name",
+          "detail": "WriteCount",
+          "source_span": {
+            "line": 64,
+            "column": 31
+          }
+        }
+      ],
+      "source_span": {
+        "line": 62,
+        "column": 5
+      }
+    },
+    {
+      "name": "PipelineStride",
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 67,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "buffer",
+          "type": {
+            "name": "VkBuffer",
+            "kind": "builtin",
+            "span": {
+              "line": 67,
+              "column": 20
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "PipelineStride.01",
+          "kind": "return",
+          "type": "int",
+          "source_span": {
+            "line": 69,
+            "column": 5
+          }
+        },
+        {
+          "id": "PipelineStride.02",
+          "kind": "array_index",
+          "source_span": {
+            "line": 69,
+            "column": 12
+          }
+        },
+        {
+          "id": "PipelineStride.03",
+          "kind": "array_index",
+          "source_span": {
+            "line": 69,
+            "column": 12
+          }
+        },
+        {
+          "id": "PipelineStride.04",
+          "kind": "name",
+          "detail": "StageMatrix",
+          "source_span": {
+            "line": 69,
+            "column": 12
+          }
+        },
+        {
+          "id": "PipelineStride.05",
+          "kind": "literal",
+          "detail": "1",
+          "source_span": {
+            "line": 69,
+            "column": 24
+          }
+        },
+        {
+          "id": "PipelineStride.06",
+          "kind": "literal",
+          "detail": "1",
+          "source_span": {
+            "line": 69,
+            "column": 27
+          }
+        }
+      ],
+      "source_span": {
+        "line": 67,
+        "column": 5
+      }
+    },
+    {
+      "name": "PoolReady",
+      "return_type": {
+        "name": "bool",
+        "kind": "builtin",
+        "span": {
+          "line": 72,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "pool",
+          "type": {
+            "name": "VkCommandPool",
+            "kind": "builtin",
+            "span": {
+              "line": 72,
+              "column": 16
+            }
+          }
+        },
+        {
+          "name": "ready",
+          "type": {
+            "name": "bool",
+            "kind": "builtin",
+            "span": {
+              "line": 72,
+              "column": 36
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "PoolReady.01",
+          "kind": "return",
+          "type": "bool",
+          "source_span": {
+            "line": 74,
+            "column": 5
+          }
+        },
+        {
+          "id": "PoolReady.02",
+          "kind": "if_expr",
+          "source_span": {
+            "line": 74,
+            "column": 12
+          }
+        },
+        {
+          "id": "PoolReady.03",
+          "kind": "name",
+          "detail": "ready",
+          "source_span": {
+            "line": 74,
+            "column": 16
+          }
+        },
+        {
+          "id": "PoolReady.04",
+          "kind": "field_access",
+          "detail": "write",
+          "source_span": {
+            "line": 74,
+            "column": 35
+          }
+        },
+        {
+          "id": "PoolReady.05",
+          "kind": "array_index",
+          "source_span": {
+            "line": 74,
+            "column": 23
+          }
+        },
+        {
+          "id": "PoolReady.06",
+          "kind": "name",
+          "detail": "Bindings",
+          "source_span": {
+            "line": 74,
+            "column": 23
+          }
+        },
+        {
+          "id": "PoolReady.07",
+          "kind": "literal",
+          "detail": "1",
+          "source_span": {
+            "line": 74,
+            "column": 32
+          }
+        },
+        {
+          "id": "PoolReady.08",
+          "kind": "bool_literal",
+          "detail": "false",
+          "source_span": {
+            "line": 74,
+            "column": 46
+          }
+        }
+      ],
+      "source_span": {
+        "line": 72,
+        "column": 6
+      }
+    }
+  ],
+  "schema": "concept-evt1-source-map.v1",
+  "source": "Examples/Concept-Vulkan/evt1_m1b_d_vulkan.concept",
+  "static_asserts": [
+    {
+      "condition": "expression",
+      "message": "\"duplicate binding key\"",
+      "satisfied": true,
+      "source_span": {
+        "line": 56,
+        "column": 1
+      }
+    },
+    {
+      "condition": "expression",
+      "satisfied": true,
+      "source_span": {
+        "line": 57,
+        "column": 1
+      }
+    },
+    {
+      "condition": "expression",
+      "satisfied": true,
+      "source_span": {
+        "line": 58,
+        "column": 1
+      }
+    },
+    {
+      "condition": "expression",
+      "satisfied": true,
+      "source_span": {
+        "line": 59,
+        "column": 1
+      }
+    },
+    {
+      "condition": "expression",
+      "satisfied": true,
+      "source_span": {
+        "line": 60,
+        "column": 1
+      }
+    }
+  ],
+  "structs": [
+    {
+      "name": "DescriptorBinding",
+      "c_name": "concept_descriptor_binding",
+      "immovable": false,
+      "copyable": true,
+      "fields": [
+        {
+          "name": "set",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 5,
+              "column": 5
+            }
+          }
+        },
+        {
+          "name": "binding",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 6,
+              "column": 5
+            }
+          }
+        },
+        {
+          "name": "write",
+          "type": {
+            "name": "bool",
+            "kind": "builtin",
+            "span": {
+              "line": 7,
+              "column": 5
+            }
+          }
+        }
+      ],
+      "source_span": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "name": "BindingSummary",
+      "c_name": "concept_binding_summary",
+      "immovable": false,
+      "copyable": true,
+      "fields": [
+        {
+          "name": "slots",
+          "type": {
+            "name": "int[]",
+            "kind": "array",
+            "array_elem": {
+              "name": "int",
+              "kind": "builtin",
+              "span": {
+                "line": 12,
+                "column": 5
+              }
+            },
+            "array_length": 2,
+            "span": {
+              "line": 12,
+              "column": 5
+            }
+          }
+        }
+      ],
+      "source_span": {
+        "line": 10,
+        "column": 1
+      }
+    }
+  ],
+  "templates": null
+}
