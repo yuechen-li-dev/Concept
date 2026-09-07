@@ -129,6 +129,28 @@ func (d Diagnostic) SemanticCategory() string {
 		return "RELATIONAL_REQUIREMENT_INVALID_SUBJECT"
 	case "CV4533":
 		return "RELATIONAL_REQUIREMENT_UNSUPPORTED"
+	case "CV4540":
+		return "FAILURE_TYPE_INVALID"
+	case "CV4541":
+		return "QUESTION_REQUIRES_OPTION_OR_RESULT"
+	case "CV4542":
+		return "QUESTION_INCOMPATIBLE_RETURN_CHANNEL"
+	case "CV4543":
+		return "RESULT_ERROR_TYPE_MISMATCH"
+	case "CV4544":
+		return "BANG_REQUIRES_OPTION_OR_RESULT"
+	case "CV4545":
+		return "TRY_EXCEPT_UNHANDLED_ERROR"
+	case "CV4546":
+		return "ASSERT_REQUIRES_BOOL"
+	case "CV4547":
+		return "TRY_EXCEPT_DUPLICATE_ERROR"
+	case "CV4548":
+		return "RESULT_PAYLOAD_NONTRANSFERABLE"
+	case "CV4549":
+		return "FAILURE_PAYLOAD_IMMOVABLE"
+	case "CV4550":
+		return "TRY_EXCEPT_UNKNOWN_ERROR_TYPE"
 	default:
 		return d.Code
 	}

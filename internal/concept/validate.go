@@ -7,10 +7,12 @@ import (
 )
 
 type evt1Scope struct {
-	parent  *evt1Scope
-	values  map[string]evt1ValueBinding
-	borrows []evt1RetainedBorrow
-	depth   int
+	parent      *evt1Scope
+	values      map[string]evt1ValueBinding
+	borrows     []evt1RetainedBorrow
+	depth       int
+	returnType  Type
+	tryHandlers map[string]Type
 }
 
 type evt1ProvenanceKind string
@@ -93,7 +95,12 @@ func newEVT1Scope(parent *evt1Scope) *evt1Scope {
 	if parent != nil {
 		depth = parent.depth + 1
 	}
-	return &evt1Scope{parent: parent, values: map[string]evt1ValueBinding{}, depth: depth}
+	s := &evt1Scope{parent: parent, values: map[string]evt1ValueBinding{}, depth: depth}
+	if parent != nil {
+		s.returnType = parent.returnType
+		s.tryHandlers = parent.tryHandlers
+	}
+	return s
 }
 
 func (s *evt1Scope) declare(name string, binding evt1ValueBinding) {
@@ -534,6 +541,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		if err != nil {
 			return nil, err
 		}
+		scope.returnType = resolvedReturn
 		for paramIndex, param := range templateDecl.Params {
 			resolvedParam, err := evt1ResolveType(env, nil, param.Type)
 			if err != nil {
@@ -559,6 +567,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		if err != nil {
 			return nil, err
 		}
+		scope.returnType = resolvedReturn
 		for paramIndex, param := range fn.Params {
 			resolvedParam, err := evt1ResolveType(env, nil, param.Type)
 			if err != nil {
@@ -582,6 +591,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		if err != nil {
 			return nil, err
 		}
+		scope.returnType = resolvedReturn
 		for paramIndex, param := range fn.Params {
 			resolvedParam, err := evt1ResolveType(env, nil, param.Type)
 			if err != nil {
@@ -1186,6 +1196,53 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 			if _, err := validateExpr(env, local, s.Value, templateInfo, inComptimeFn); err != nil {
 				return err
 			}
+		case *AssertStmt:
+			conditionType, err := validateExpr(env, local, s.Condition, templateInfo, inComptimeFn)
+			if err != nil {
+				return err
+			}
+			if conditionType.Name != "bool" {
+				return evt1Diagnostic("CV4546", "assert requires a bool condition", s.Condition.exprSpan())
+			}
+			if s.Reason != nil {
+				reasonType, err := validateExpr(env, local, s.Reason, templateInfo, inComptimeFn)
+				if err != nil {
+					return err
+				}
+				if reasonType.Name != "string" {
+					return evt1Diagnostic("CV4546", "assert reason must be string", s.Reason.exprSpan())
+				}
+			}
+		case *TryStmt:
+			handlers := map[string]Type{}
+			combinedHandlers := map[string]Type{}
+			for key, t := range local.tryHandlers {
+				combinedHandlers[key] = t
+			}
+			for _, arm := range s.Except {
+				if err := validateKnownType(env, arm.ErrorType, arm.Span, "", false); err != nil {
+					return evt1Diagnostic("CV4550", fmt.Sprintf("unknown except error type %s", arm.ErrorType.String()), arm.Span)
+				}
+				resolved := evt1CanonicalType(env, arm.ErrorType)
+				key := evt1TypeIdentity(resolved)
+				if _, exists := handlers[key]; exists {
+					return evt1Diagnostic("CV4547", fmt.Sprintf("duplicate except arm for %s", resolved.String()), arm.Span)
+				}
+				handlers[key] = resolved
+				combinedHandlers[key] = resolved
+			}
+			tryScope := evt1CloneScope(local)
+			tryScope.tryHandlers = combinedHandlers
+			if err := validateBlock(env, tryScope, returnType, s.Body, templateInfo, inComptimeFn); err != nil {
+				return err
+			}
+			for _, arm := range s.Except {
+				armScope := evt1CloneScope(local)
+				armScope.declare(arm.Binding, evt1ValueBinding{t: evt1CanonicalType(env, arm.ErrorType), mutable: false, state: evt1StorageInitialized})
+				if err := validateBlock(env, armScope, returnType, arm.Body, templateInfo, inComptimeFn); err != nil {
+					return err
+				}
+			}
 		case *StaticAssertStmt:
 			if _, err := validateExpr(env, local, s.Condition, templateInfo, true); err != nil {
 				return err
@@ -1277,6 +1334,25 @@ func evt1EvalScopeFromValidation(scope *evt1Scope, env *semanticEnv) *evt1EvalSc
 func validateExprAgainstExpected(env *semanticEnv, scope *evt1Scope, expr Expr, expected Type, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
 	if lit, ok := expr.(*ArrayLiteralExpr); ok && expected.ArrayElem != nil {
 		return validateArrayLiteralExpr(env, scope, *lit, &expected, templateInfo, inComptimeFn)
+	}
+	if construct, ok := expr.(*ConstructExpr); ok && evt1IsFailureType(expected) {
+		return validateFailureConstructExpr(env, scope, construct, expected, templateInfo, inComptimeFn)
+	}
+	if conditional, ok := expr.(*IfExpr); ok && evt1IsFailureType(expected) {
+		conditionType, err := validateExpr(env, scope, conditional.Condition, templateInfo, inComptimeFn)
+		if err != nil {
+			return Type{}, err
+		}
+		if conditionType.Name != "bool" {
+			return Type{}, evt1Diagnostic("CV4186", "if expression condition must be bool", conditional.Condition.exprSpan())
+		}
+		if _, err := validateExprAgainstExpected(env, scope, conditional.Then, expected, templateInfo, inComptimeFn); err != nil {
+			return Type{}, err
+		}
+		if _, err := validateExprAgainstExpected(env, scope, conditional.Else, expected, templateInfo, inComptimeFn); err != nil {
+			return Type{}, err
+		}
+		return expected, nil
 	}
 	return validateExpr(env, scope, expr, templateInfo, inComptimeFn)
 }
@@ -1511,21 +1587,21 @@ func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string,
 		return evt1Diagnostic("CV4148", fmt.Sprintf("unknown concept parameter %s", t.Name), span)
 	}
 	if len(t.TypeArgs) > 0 {
-		if t.Name == "Result" {
-			if len(t.TypeArgs) != 2 {
-				return evt1Diagnostic("CV4322", fmt.Sprintf("Result requires exactly two type arguments, got %d", len(t.TypeArgs)), span)
+		if t.Name == "Option" || t.Name == "Result" {
+			required := 1
+			if t.Name == "Result" {
+				required = 2
 			}
-			if err := validateKnownType(env, t.TypeArgs[0], span, conceptParam, false); err != nil {
-				return err
+			if len(t.TypeArgs) != required {
+				return evt1Diagnostic("CV4540", fmt.Sprintf("%s requires exactly %d type argument(s), got %d", t.Name, required, len(t.TypeArgs)), span)
 			}
-			if err := validateKnownType(env, t.TypeArgs[1], span, conceptParam, false); err != nil {
-				return err
-			}
-			if t.TypeArgs[0].Name != "void" {
-				return evt1Diagnostic("CV4322", fmt.Sprintf("EVT1 M4 supports only Result<void, Error>, got %s", t.String()), span)
-			}
-			if !evt1ActuatorErrorTypeAllowed(env, evt1CanonicalType(env, t.TypeArgs[1])) {
-				return evt1Diagnostic("CV4322", fmt.Sprintf("Result error type must be a fixed copyable runtime value, got %s", t.TypeArgs[1].String()), span)
+			for _, arg := range t.TypeArgs {
+				if err := validateKnownType(env, arg, span, conceptParam, false); err != nil {
+					return err
+				}
+				if evt1IsImmovableValueType(env, arg) {
+					return evt1Diagnostic("CV4549", fmt.Sprintf("%s payload type %s is immovable and cannot be embedded by value", t.Name, arg.String()), span)
+				}
 			}
 			return nil
 		}
@@ -1906,7 +1982,50 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		return Type{}, evt1Diagnostic("CV4028", "only int/uint64 additive and comparison expressions are supported in EVT1", e.Span)
 	case *ConstructExpr:
+		if e.EnumName == "Option" || e.EnumName == "Result" {
+			if evt1IsFailureType(e.ResolvedType) {
+				return e.ResolvedType, nil
+			}
+			return Type{}, evt1Diagnostic("CV4540", fmt.Sprintf("%s constructor requires an Option/Result expected type", e.EnumName), e.Span)
+		}
 		return validateConstructExpr(env, scope, *e)
+	case *FailureExpr:
+		operand, err := validateExpr(env, scope, e.Value, templateInfo, inComptimeFn)
+		if err != nil {
+			return Type{}, err
+		}
+		if !evt1IsFailureType(operand) {
+			code := "CV4541"
+			if e.Op == "!" {
+				code = "CV4544"
+			}
+			return Type{}, evt1Diagnostic(code, fmt.Sprintf("%s requires Option or Result, got %s", e.Op, operand.String()), e.Span)
+		}
+		e.ResolvedType = operand
+		if !evt1TypeCopyable(env, operand) && !evt1CanTransferInitialize(env, operand, e.Value) {
+			return Type{}, evt1Diagnostic("CV4548", fmt.Sprintf("%s consumes non-copyable %s; use move for an existing owner", e.Op, operand.String()), e.Value.exprSpan())
+		}
+		if e.Op == "?" {
+			if evt1IsOptionType(operand) {
+				if !evt1IsOptionType(scope.returnType) {
+					return Type{}, evt1Diagnostic("CV4542", "Option propagation requires an Option-returning function", e.Span)
+				}
+			} else {
+				errType := evt1FailureErrorType(operand)
+				if handled, ok := scope.tryHandlers[evt1TypeIdentity(evt1CanonicalType(env, errType))]; !ok || !handled.Equal(evt1CanonicalType(env, errType)) {
+					if !evt1IsResultType(scope.returnType) {
+						if scope.tryHandlers != nil {
+							return Type{}, evt1Diagnostic("CV4545", fmt.Sprintf("try has no except arm for %s", errType.String()), e.Span)
+						}
+						return Type{}, evt1Diagnostic("CV4542", "Result propagation requires a Result-returning function or matching local except arm", e.Span)
+					}
+					if !evt1CanonicalType(env, evt1FailureErrorType(scope.returnType)).Equal(evt1CanonicalType(env, errType)) {
+						return Type{}, evt1Diagnostic("CV4543", fmt.Sprintf("Result error type mismatch: %s cannot propagate into %s", errType.String(), evt1FailureErrorType(scope.returnType).String()), e.Span)
+					}
+				}
+			}
+		}
+		return evt1CanonicalType(env, evt1FailureSuccessType(operand)), nil
 	case *StructConstructExpr:
 		return validateStructConstructExpr(env, scope, *e)
 	case *WithExpr:
@@ -2205,6 +2324,14 @@ func validateStructConstructExpr(env *semanticEnv, scope *evt1Scope, expr Struct
 }
 
 func evt1IsRefStructType(env *semanticEnv, t Type) bool {
+	if evt1IsFailureType(t) {
+		for _, arg := range t.TypeArgs {
+			if arg.isReference() || evt1IsRefStructType(env, arg) {
+				return true
+			}
+		}
+		return false
+	}
 	decl, ok := env.structs[t.valueType().Name]
 	return ok && decl.Ref
 }
@@ -2367,6 +2494,8 @@ func evt1DeriveExprResultProvenance(env *semanticEnv, expr Expr, bindings map[st
 		return evt1DeriveExprResultProvenance(env, e.Value, bindings, derive)
 	case *MoveExpr:
 		return evt1DeriveExprResultProvenance(env, e.Value, bindings, derive)
+	case *FailureExpr:
+		return evt1DeriveExprResultProvenance(env, e.Value, bindings, derive)
 	case *NameExpr:
 		if summary, ok := bindings[e.Name]; ok {
 			return summary
@@ -2388,6 +2517,10 @@ func evt1DeriveExprResultProvenance(env *semanticEnv, expr Expr, bindings map[st
 		}
 		if len(parts) > 0 {
 			return evt1CombineResultProvenance(parts...)
+		}
+	case *ConstructExpr:
+		if e.EnumName == "Result" && e.VariantName == "Ok" && len(e.Args) > 0 {
+			return evt1DeriveExprResultProvenance(env, e.Args[0], bindings, derive)
 		}
 	case *CallExpr:
 		var candidates []FunctionDecl
@@ -2420,6 +2553,8 @@ func evt1ExprProvenance(env *semanticEnv, scope *evt1Scope, expr Expr) evt1Lifet
 	case *ParenExpr:
 		return evt1ExprProvenance(env, scope, e.Value)
 	case *MoveExpr:
+		return evt1ExprProvenance(env, scope, e.Value)
+	case *FailureExpr:
 		return evt1ExprProvenance(env, scope, e.Value)
 	case *NameExpr:
 		if binding, ok := scope.lookup(e.Name); ok {
@@ -2459,6 +2594,10 @@ func evt1ExprProvenance(env *semanticEnv, scope *evt1Scope, expr Expr) evt1Lifet
 			if found {
 				return result
 			}
+		}
+	case *ConstructExpr:
+		if evt1IsFailureType(e.ResolvedType) && len(e.Args) > 0 && evt1IsRefStructType(env, evt1FailureSuccessType(e.ResolvedType)) {
+			return evt1ExprProvenance(env, scope, e.Args[0])
 		}
 	case *CallExpr:
 		argTypes := make([]Type, 0, len(e.Args))
@@ -2544,6 +2683,9 @@ func validateMatchExpr(env *semanticEnv, scope *evt1Scope, expr MatchExpr, templ
 		if err != nil {
 			return Type{}, err
 		}
+		for _, binding := range arm.Pattern.Bindings {
+			armScope.setProvenance(binding, evt1ExprProvenance(env, scope, expr.Subject))
+		}
 		valueType, err := validateExpr(env, armScope, arm.Value, templateInfo, inComptimeFn)
 		if err != nil {
 			return Type{}, err
@@ -2571,6 +2713,9 @@ func validateMatchStmt(env *semanticEnv, scope *evt1Scope, stmt MatchStmt, retur
 		if err != nil {
 			return err
 		}
+		for _, binding := range arm.Pattern.Bindings {
+			armScope.setProvenance(binding, evt1ExprProvenance(env, scope, stmt.Subject))
+		}
 		if err := validateBlock(env, armScope, returnType, arm.Block, templateInfo, inComptimeFn); err != nil {
 			return err
 		}
@@ -2585,6 +2730,14 @@ func validateMatchSubject(env *semanticEnv, scope *evt1Scope, subject Expr, temp
 	subjectType, err := validateExpr(env, scope, subject, templateInfo, inComptimeFn)
 	if err != nil {
 		return Type{}, EnumDecl{}, err
+	}
+	if !evt1TypeCopyable(env, subjectType) {
+		if _, moving := subject.(*MoveExpr); !moving {
+			return Type{}, EnumDecl{}, evt1Diagnostic("CV4548", fmt.Sprintf("matching %s by value requires explicit move", subjectType.String()), subject.exprSpan())
+		}
+	}
+	if decl, ok := evt1FailureEnumDecl(subjectType); ok {
+		return subjectType, decl, nil
 	}
 	if subjectType.Kind != TypeEnum {
 		enumDecl, ok := env.enums[subjectType.Name]
@@ -2625,7 +2778,9 @@ func validatePattern(env *semanticEnv, scope *evt1Scope, subjectType Type, enumD
 			return nil, VariantDecl{}, evt1Diagnostic("CV4112", fmt.Sprintf("duplicate payload binding name %s", binding), pattern.Span)
 		}
 		seenBindings[binding] = true
-		armScope.declare(binding, evt1ValueBinding{t: evt1CanonicalType(env, variant.Payload[i].Type), mutable: true})
+		payloadType := evt1CanonicalType(env, variant.Payload[i].Type)
+		provenance := evt1LifetimeProvenance{Kind: evt1ProvenanceLocal, Depth: armScope.depth}
+		armScope.declare(binding, evt1ValueBinding{t: payloadType, mutable: true, state: evt1StorageInitialized, provenance: provenance})
 	}
 	return armScope, variant, nil
 }
@@ -3133,8 +3288,13 @@ func evt1TypeCopyable(env *semanticEnv, t Type) bool {
 	if t.isOwned() {
 		return false
 	}
-	if t.Name == "Result" && len(t.TypeArgs) == 2 {
-		return evt1CanonicalType(env, t.TypeArgs[0]).Name == "void" && evt1TypeCopyable(env, t.TypeArgs[1])
+	if evt1IsFailureType(t) {
+		for _, arg := range t.TypeArgs {
+			if !evt1TypeCopyable(env, arg) {
+				return false
+			}
+		}
+		return true
 	}
 	if len(t.TypeArgs) > 0 {
 		return false
@@ -3192,11 +3352,25 @@ func evt1DropFunction(env *semanticEnv, t Type) *FunctionDecl {
 }
 
 func evt1TypeHasDrop(env *semanticEnv, t Type) bool {
+	if evt1IsFailureType(t) {
+		return evt1FailureNeedsDrop(env, t)
+	}
 	return t.isOwned() && evt1DropFunction(env, t) != nil
 }
 
 func evt1IsImmovableValueType(env *semanticEnv, t Type) bool {
-	if t.isBorrowLike() || len(t.TypeArgs) > 0 {
+	if t.isBorrowLike() {
+		return false
+	}
+	if evt1IsFailureType(t) {
+		for _, arg := range t.TypeArgs {
+			if evt1IsImmovableValueType(env, arg) {
+				return true
+			}
+		}
+		return false
+	}
+	if len(t.TypeArgs) > 0 {
 		return false
 	}
 	if structDecl, ok := env.structs[t.Name]; ok {
@@ -3211,6 +3385,9 @@ func evt1CanDirectInitialize(env *semanticEnv, t Type, expr Expr) bool {
 	}
 	construct, ok := expr.(*StructConstructExpr)
 	if !ok {
+		if e, ok := expr.(*ConstructExpr); ok {
+			return evt1IsFailureType(t) && evt1IsFailureType(e.ResolvedType) && t.SameValueType(e.ResolvedType)
+		}
 		return false
 	}
 	return construct.StructName == t.Name && evt1LookupStruct(env, t.Name)
@@ -3220,9 +3397,11 @@ func evt1CanTransferInitialize(env *semanticEnv, t Type, expr Expr) bool {
 	if evt1CanDirectInitialize(env, t, expr) {
 		return true
 	}
-	switch expr.(type) {
-	case *MoveExpr, *CallExpr, *TemplateCallExpr, *ConstructExpr:
+	switch e := expr.(type) {
+	case *MoveExpr, *CallExpr, *TemplateCallExpr, *ConstructExpr, *FailureExpr:
 		return true
+	case *ParenExpr:
+		return evt1CanTransferInitialize(env, t, e.Value)
 	default:
 		return false
 	}
@@ -3883,6 +4062,7 @@ func instantiateTemplate(env *semanticEnv, templateName string, concreteType Typ
 		return nil, err
 	}
 	scope := newEVT1Scope(nil)
+	scope.returnType = instFn.ReturnType
 	for paramIndex, param := range instFn.Params {
 		scope.declare(param.Name, evt1ValueBinding{
 			t:          evt1CanonicalType(env, param.Type),

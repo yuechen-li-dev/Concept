@@ -1,0 +1,17 @@
+profile Core;
+
+ref struct View {
+    ref const int data;
+}
+
+enum ViewError { Missing, }
+
+Result<View, ViewError> Borrow(ref const int source) {
+    View view = View { ref const source };
+    return Result::Ok(view);
+}
+
+Result<View, ViewError> Invalid() {
+    int local = 3;
+    return Borrow(ref const local);
+}

@@ -1,0 +1,14 @@
+profile Core;
+
+Option<int> SomeValue() {
+    return Option::Some(7);
+}
+
+Option<int> NoValue() {
+    return Option::None;
+}
+
+Option<Option<int>> NestedValue() {
+    Option<int> inner = Option::Some(8);
+    return Option::Some(inner);
+}

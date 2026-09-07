@@ -1,6 +1,6 @@
 # EVT1 semantic reconciliation matrix
 
-Status: R0 authority ledger with R1-R4b executable evidence
+Status: R0 authority ledger with R1-R4c executable evidence
 
 `Port required?` means implementation or conformance work remains after R0; it
 does not authorize that work in this milestone. Status is one of `Keep PoC3`,
@@ -36,8 +36,8 @@ does not authorize that work in this milestone. Status is one of `Keep PoC3`,
 | indexing | runtime and array indexing pressure | bounded compile-time array indexing | keep bounded subset | Merge | Yes | phase21; M1B-D diagnostics | runtime bounds law deferred |
 | slices | read-only `Slice<T>` implemented | absent | redesign against explicit references, R4b relational proofs, and future lifetime-bound spans | Redesign | Yes | phase21 fixtures; R4b direction note | do not port mechanically; no Slice/Span in R4b |
 | FixedBuffer | compiler-known bounded buffer implemented | absent | preserve design and fixtures; do not port in R0 | Keep PoC3 | Yes | phase21/22 fixtures | helper spree prohibited |
-| Option | compiler-known `Option<T>` plus exhaustive Some/None match | absent | preserve PoC3 reference; defer EVT1 adoption | Keep PoC3 | Yes | phase22 fixtures | not R0 |
-| Result | design only/incomplete at cutover; function fallibility exists | profile signatures use `Result<T,E>` shape | redesign unified failure model before core adoption | Redesign | Yes | phase5/22; Vulkan examples | no general Result implementation in R0 |
+| Option | compiler-known `Option<T>` plus exhaustive Some/None match | canonical compiler-known payload enum | adopt qualified `Option::Some/None`, exhaustive match, `?`, and `!` | Merge / adopt | Yes | phase22 plus R4c corpus | canonical in R4c |
+| Result | design only/incomplete at cutover; function fallibility exists | canonical generic payload enum | adopt `Result::Ok/Error` as the only recoverable typed failure value | Redesign -> canonical payload enum | Partial | phase5/22 plus R4c corpus | `Error`, not PoC3 concrete `Err`, is canonical |
 | ownership vocabulary | broad values/references/pointers/store doctrine | `owned`, compatibility `borrow`, canonical `ref`, imported/unsafe | make bounded local ownership/reference spellings canonical without claiming allocation or lifetime completeness | Merge | Yes beyond R3 | phase6/10; R2-R3 diagnostics | vocabulary is not a generalized ownership system |
 | copyability | opt-in `Copy` for structs | structural copyability for ordinary values | ordinary values copy structurally; `owned T` is non-copyable | Keep Go | No for R3 subset | Phase 10; R2-R3 corpus | deliberate ordinary-struct divergence remains |
 | movability | non-Copy values move explicitly | `owned T` supplies movable-only category | movability is broader than copyability; immovable is the exception | Merge | No for R3 subset | Phase 10; R3 corpus | no implicit move or partial move |
@@ -51,8 +51,11 @@ does not authorize that work in this milestone. Status is one of `Keep PoC3`,
 | scoped result propagation | lifetime analysis deferred | scoped formal/actual provenance survives call-result instantiation | helpers cannot hide a non-escape restriction | Redesign | Yes beyond R4b | R4b valid/invalid scoped cases | no general reborrow lattice |
 | unsafe | explicit unsafe blocks/operations | qualifier used for admitted foreign/Vulkan types | reconcile core escape hatch and profile admission | Merge | Yes | phase6; Vulkan examples | no broad allowlist yet |
 | allocation | arenas/stores/allocators and allocation effects | no general model | retain PoC3 as design/reference pressure | Keep PoC3 | Yes | phase12 fixtures | no hidden heap |
-| fallible functions | PoC3 fallible calls and propagation | profile `Result`/`?` direction | redesign with Result/panic distinction | Redesign | Yes | phase5/22; kernel examples | not canonical core |
-| panic/assert | stable runtime panic/assert and test behavior | only compile-time `static_assert` | preserve PoC3 reference; defer runtime adoption | Keep PoC3 | Yes | phase17 fixtures | static_assert stays canonical |
+| fallible functions | PoC3 separate fallible syntax/channel | explicit `Result<T,E>` return type | canonicalize as Result-returning functions; legacy syntax is deferred sugar | Merge / Redesign | Translation | phase5 plus R4c | no second hidden failure channel |
+| propagation | PoC3 concrete Result-shaped prefix `try` | postfix `?` over Option/Result | exact channel and exact `E`; no implicit conversion | Redesign | Partial | phase5 plus R4c | `?` never panics |
+| try/except | no closed local typed handler subsystem | lexical exact-type Result handler boundary | EVT1-new ordinary branch/goto lowering | Redesign / EVT1-new | No | R4c corpus | no throw, cross-frame catch, or unwind |
+| panic/assert | stable runtime panic/assert and test behavior | terminal helper, runtime assert, existing static_assert | merge stable reason pressure; assert/static_assert are Assert.True sugar | Merge | Partial | phase17 plus R4c | panic is not recoverable control flow |
+| error conversion | no closed general conversion law | exact `E` only | defer concept-driven `ErrorConvertible<From,To>` | Deferred concept-driven | No | R4c negative corpus | no From/Into or residual machinery |
 | C ABI | extern/export/repr(C) implemented | emits C/H but does not define Concept FFI law | preserve PoC3 pressure; specify anew atop C11 backend | Redesign | Yes | phase15 fixtures | backend is not ABI spec |
 | interfaces/dyn | implemented bounded interface/dyn dispatch | absent | redesign as semantic concept + operation/semantic-proof witness + downstream runtime witness reification; interface may be sugar/marker | Redesign | Yes | phase14 fixtures; R4b witness direction | relational lifetime proof stays compile-time; dyn is not implemented |
 | machines | `machine`, states, transitions, completion/result | nested `machine` declarations inside automata | do not alias surfaces in R0 | Deferred | Yes | phase13/18; DragonGod tests | general semantics likely core |
@@ -135,3 +138,13 @@ relations; rejects disproven or unknown proofs; and records deterministic MIR
 subjects, facts, outcomes, and result summaries. Slice remains `Redesign`, and
 Span, dyn, interface syntax, named/NLL lifetimes, and generalized alias
 analysis remain unimplemented.
+
+## R4c executable evidence
+
+R4c adds 24 `PASS` cases: 14 valid and 10 invalid. PoC3 Phase 5 supplies
+concrete early-return propagation pressure, Phase 17 supplies stable
+panic/assert pressure, and Phase 22 supplies Option construction/match pressure.
+Generic Result, postfix `?`/`!`, and local typed `try`/`except` are EVT1-new;
+the matrix does not fabricate parity for them. The active rule is exact error
+identity only. A future `ErrorConvertible<From, To>` concept may authorize an
+explicit conversion witness, but R4c implements no generalized conversion.

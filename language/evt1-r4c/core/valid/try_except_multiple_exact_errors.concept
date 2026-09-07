@@ -1,0 +1,28 @@
+profile Core;
+
+enum ConfigError { Missing, }
+enum DeviceError { Closed, }
+
+Result<int, ConfigError> LoadConfig(bool valid) {
+    return if (valid) Result::Ok(2) else Result::Error(ConfigError::Missing);
+}
+
+Result<int, DeviceError> OpenDevice(bool valid) {
+    return if (valid) Result::Ok(3) else Result::Error(DeviceError::Closed);
+}
+
+int Run(bool configValid, bool deviceValid) {
+    int answer = 0;
+    try {
+        int config = LoadConfig(configValid)?;
+        int device = OpenDevice(deviceValid)?;
+        answer = config + device;
+    }
+    except (ConfigError error) {
+        answer = 10;
+    }
+    except (DeviceError error) {
+        answer = 20;
+    }
+    return answer;
+}

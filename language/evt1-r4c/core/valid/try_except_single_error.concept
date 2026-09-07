@@ -1,0 +1,21 @@
+profile Core;
+
+enum LoadError {
+    Missing,
+}
+
+Result<int, LoadError> Load(bool available) {
+    return if (available) Result::Ok(15) else Result::Error(LoadError::Missing);
+}
+
+int Run(bool available) {
+    int answer = 0;
+    try {
+        int value = Load(available)?;
+        answer = value;
+    }
+    except (LoadError error) {
+        answer = 1;
+    }
+    return answer;
+}

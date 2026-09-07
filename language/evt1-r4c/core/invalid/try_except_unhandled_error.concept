@@ -1,0 +1,16 @@
+profile Core;
+
+enum ConfigError { Missing, }
+enum DeviceError { Closed, }
+
+Result<int, DeviceError> OpenDevice();
+
+int Invalid() {
+    try {
+        int device = OpenDevice()?;
+    }
+    except (ConfigError error) {
+        return 1;
+    }
+    return 0;
+}

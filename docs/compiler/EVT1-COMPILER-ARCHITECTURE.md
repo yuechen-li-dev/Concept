@@ -290,7 +290,36 @@ silently broaden core parsing or typing. A profile-specific construct must be
 rejected outside its profile or explicitly promoted through the specification
 and reconciliation process.
 
-## R4b limitations
+## R4c failure lowering
+
+```text
+ordinary payload-enum semantics
+  -> compiler-known Option<T> / Result<T,E> specialization
+  -> explicit match or sugar (? / ! / try / except)
+  -> ordinary MIR tag branches, extraction, return, local goto, or panic
+  -> deterministic strict-C11 tagged aggregate lowering
+```
+
+The semantic checker supplies specialized payload fields to the existing
+match validator. It also validates exact return channels and exact error-type
+handler selection. MIR retains `option_propagate`, `result_propagate`,
+`option_unroll`, `result_unroll`, `try_handler`, and `assert` provenance while
+the backend reuses ordinary tag/payload control flow. There are no runtime
+exception tables, SEH, `setjmp`/`longjmp`, personality functions, or unwinding.
+
+```text
+assert        -> runtime Assert.True -> terminal concept_panic on false
+static_assert -> comptime Assert.True -> no runtime code
+```
+
+Generic carriers recursively inherit copyability, transfer, immovable, and
+lifetime-bound status from their payloads. `?` and match extraction preserve
+the R4b provenance associated with the carrier; they do not create a new
+static lifetime. Carriers with droppable payloads synthesize a deterministic
+tag-dispatching cleanup that invokes ordinary `Drop` only for the active
+variant.
+
+## R4c limitations
 
 - The package remains deliberately cohesive rather than prematurely split.
 - Effect/actuator validation and C runtime emission remain in-package profile
@@ -309,9 +338,10 @@ and reconciliation process.
 - Named lifetimes, generalized borrow checking, non-lexical lifetimes, mutable
   alias analysis, Span types, and unrestricted reference-containing
   aggregates are not implemented.
-- The remaining PoC3 allocation, C ABI, testing, panic/assert,
-  interfaces/dyn, slices, FixedBuffer, Option, and Result surfaces are not
-  ported.
+- The remaining PoC3 allocation, stable C ABI, testing framework,
+  interfaces/dyn, slices, and FixedBuffer surfaces are not ported. R4c has no
+  `throw`, unwinding, Option handler arm, implicit error conversion, or
+  generalized panic runtime.
 
 R4b does not add a generalized place lattice or prove global alias/lifetime
 safety. `borrow` compatibility behavior remains narrower than the canonical
@@ -359,3 +389,12 @@ ref-struct call results, nested and multi-source summaries, acyclic
 pass-through, scoped propagation, longer-place rejection, relational
 pass/fail/unknown outcomes, deterministic proof identity, MIR inspection, and
 three native C11 executions.
+
+## R4c executable evidence
+
+`internal/concept/r4c_conformance_test.go` and `language/evt1-r4c/core`
+provide 24 readable cases: 14 valid and 10 invalid, all classified PASS.
+Evidence includes deterministic MIR sugar operations, nine successful native C11 paths,
+exact typed local handlers, owned success transfer, immovable rejection, and a
+valid/invalid pair proving Result success payloads do not launder R4b lifetime
+provenance.

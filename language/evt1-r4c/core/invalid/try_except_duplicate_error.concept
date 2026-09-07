@@ -1,0 +1,15 @@
+profile Core;
+
+enum LoadError { Missing, }
+
+int Invalid() {
+    try {
+        return 0;
+    }
+    except (LoadError first) {
+        return 1;
+    }
+    except (LoadError second) {
+        return 2;
+    }
+}

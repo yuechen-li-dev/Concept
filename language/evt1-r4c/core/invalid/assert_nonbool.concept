@@ -1,0 +1,6 @@
+profile Core;
+
+int Invalid() {
+    assert(1, "not boolean");
+    return 0;
+}

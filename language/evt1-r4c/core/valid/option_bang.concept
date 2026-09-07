@@ -1,0 +1,10 @@
+profile Core;
+
+Option<int> Find(bool present) {
+    return if (present) Option::Some(11) else Option::None;
+}
+
+int Require(bool present) {
+    int value = Find(present)!;
+    return value;
+}

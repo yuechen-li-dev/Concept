@@ -1,0 +1,10 @@
+profile Core;
+
+Option<int> Find(bool present) {
+    return if (present) Option::Some(9) else Option::None;
+}
+
+Option<bool> HasValue(bool present) {
+    int value = Find(present)?;
+    return Option::Some(value > 0);
+}

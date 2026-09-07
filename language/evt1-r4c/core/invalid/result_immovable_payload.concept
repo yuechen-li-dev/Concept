@@ -1,0 +1,9 @@
+profile Core;
+
+immovable struct Device {
+    int id;
+}
+
+enum DeviceError { Missing, }
+
+Result<Device, DeviceError> Invalid();

@@ -415,6 +415,35 @@ type ExprStmt struct {
 	Span  Span `json:"span"`
 }
 
+// AssertStmt is runtime assertion sugar. It lowers to the same terminal panic
+// primitive used by explicit failure escalation; it is not a testing API.
+type AssertStmt struct {
+	Condition Expr `json:"condition"`
+	Reason    Expr `json:"reason,omitempty"`
+	Span      Span `json:"span"`
+}
+
+func (*AssertStmt) evt1Statement()        {}
+func (s *AssertStmt) statementSpan() Span { return s.Span }
+
+// TryStmt is a lexical propagation boundary. Except arms are selected by the
+// statically known Result error type of each ? expression in Body.
+type TryStmt struct {
+	Body   Block       `json:"body"`
+	Except []ExceptArm `json:"except"`
+	Span   Span        `json:"span"`
+}
+
+func (*TryStmt) evt1Statement()        {}
+func (s *TryStmt) statementSpan() Span { return s.Span }
+
+type ExceptArm struct {
+	ErrorType Type   `json:"error_type"`
+	Binding   string `json:"binding"`
+	Body      Block  `json:"body"`
+	Span      Span   `json:"span"`
+}
+
 func (*ExprStmt) evt1Statement()        {}
 func (s *ExprStmt) statementSpan() Span { return s.Span }
 
@@ -571,10 +600,11 @@ func (*RefExpr) evt1Expr()        {}
 func (e *RefExpr) exprSpan() Span { return e.Span }
 
 type ConstructExpr struct {
-	EnumName    string `json:"enum_name"`
-	VariantName string `json:"variant_name"`
-	Args        []Expr `json:"args,omitempty"`
-	Span        Span   `json:"span"`
+	EnumName     string `json:"enum_name"`
+	VariantName  string `json:"variant_name"`
+	Args         []Expr `json:"args,omitempty"`
+	ResolvedType Type   `json:"resolved_type,omitempty"`
+	Span         Span   `json:"span"`
 }
 
 func (*ConstructExpr) evt1Expr()        {}
@@ -650,6 +680,16 @@ type ParenExpr struct {
 	Value Expr `json:"value"`
 	Span  Span `json:"span"`
 }
+
+type FailureExpr struct {
+	Op           string `json:"op"` // ? propagates; ! escalates.
+	Value        Expr   `json:"value"`
+	ResolvedType Type   `json:"resolved_type,omitempty"`
+	Span         Span   `json:"span"`
+}
+
+func (*FailureExpr) evt1Expr()        {}
+func (e *FailureExpr) exprSpan() Span { return e.Span }
 
 func (*ParenExpr) evt1Expr()        {}
 func (e *ParenExpr) exprSpan() Span { return e.Span }

@@ -1,0 +1,8 @@
+profile Core;
+
+int Read(Option<int> value) {
+    return match (value) {
+        Option::Some(number) => number,
+        Option::None => 0,
+    };
+}

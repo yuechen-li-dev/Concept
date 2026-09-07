@@ -1,0 +1,8 @@
+profile Core;
+
+comptime int Expected = 42;
+static_assert(Expected == 42, "compile-time invariant");
+
+int Answer() {
+    return Expected;
+}

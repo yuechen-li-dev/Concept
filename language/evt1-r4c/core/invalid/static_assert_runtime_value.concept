@@ -1,0 +1,5 @@
+profile Core;
+
+int RuntimeValue();
+
+static_assert(RuntimeValue() == 1, "runtime value is unavailable at comptime");

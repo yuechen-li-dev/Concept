@@ -115,7 +115,7 @@ func lexEVT1(text string) ([]Token, error) {
 			tokens = append(tokens, Token{Lexeme: "=>", Span: start})
 			i += 2
 			column += 2
-		case strings.ContainsRune("(){}[];,:.*+-=<>!", rune(c)):
+		case strings.ContainsRune("(){}[];,:.*+-=<>!?", rune(c)):
 			tokens = append(tokens, Token{Lexeme: string(c), Span: start})
 			i++
 			column++
@@ -1317,6 +1317,10 @@ func (p *parser) parseStatement() (Statement, error) {
 			return nil, err
 		}
 		return &StaticAssertStmt{Condition: assertion.Condition, Message: assertion.Message, Span: assertion.Span}, nil
+	case "assert":
+		return p.parseAssertStmt()
+	case "try":
+		return p.parseTryStmt()
 	case "effects":
 		return p.parseEffectsDecl()
 	case "actuation":
@@ -1375,6 +1379,67 @@ func (p *parser) parseStatement() (Statement, error) {
 		}
 		return &ExprStmt{Value: value, Span: value.exprSpan()}, nil
 	}
+}
+
+func (p *parser) parseAssertStmt() (Statement, error) {
+	start, _ := p.expect("assert")
+	if _, err := p.expect("("); err != nil {
+		return nil, err
+	}
+	condition, err := p.parseExpr()
+	if err != nil {
+		return nil, err
+	}
+	var reason Expr
+	if p.peekLexeme() == "," {
+		p.next()
+		reason, err = p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+	}
+	if _, err := p.expect(")"); err != nil {
+		return nil, err
+	}
+	if _, err := p.expect(";"); err != nil {
+		return nil, err
+	}
+	return &AssertStmt{Condition: condition, Reason: reason, Span: start.Span}, nil
+}
+
+func (p *parser) parseTryStmt() (Statement, error) {
+	start, _ := p.expect("try")
+	body, err := p.parseBlock()
+	if err != nil {
+		return nil, err
+	}
+	stmt := &TryStmt{Body: body, Span: start.Span}
+	for p.peekLexeme() == "except" {
+		exceptTok := p.next()
+		if _, err := p.expect("("); err != nil {
+			return nil, err
+		}
+		errorType, err := p.parseType("")
+		if err != nil {
+			return nil, err
+		}
+		binding, err := p.expectIdentifier("CV4547", "expected error binding in except arm")
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.expect(")"); err != nil {
+			return nil, err
+		}
+		armBody, err := p.parseBlock()
+		if err != nil {
+			return nil, err
+		}
+		stmt.Except = append(stmt.Except, ExceptArm{ErrorType: errorType, Binding: binding.Lexeme, Body: armBody, Span: exceptTok.Span})
+	}
+	if len(stmt.Except) == 0 {
+		return nil, evt1Diagnostic("CV4545", "try requires at least one except arm", start.Span)
+	}
+	return stmt, nil
 }
 
 func (p *parser) parseEffectsDecl() (Statement, error) {
@@ -2125,6 +2190,9 @@ func (p *parser) parseArrayLiteralExpr() (Expr, error) {
 func (p *parser) parsePostfixExpr(expr Expr, span Span) (Expr, error) {
 	for {
 		switch p.peekLexeme() {
+		case "?", "!":
+			op := p.next()
+			expr = &FailureExpr{Op: op.Lexeme, Value: expr, Span: op.Span}
 		case "<":
 			nameExpr, ok := expr.(*NameExpr)
 			if !ok || !p.looksLikeTemplateInvocation() {

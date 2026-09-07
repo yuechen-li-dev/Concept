@@ -1,6 +1,6 @@
 # EVT1 diagnostic reconciliation
 
-Status: R4b relational lifetime and call-result provenance slice
+Status: R4c canonical failure semantics
 
 Concept EVT1 compares diagnostics by semantic family. The active Go compiler
 retains `CV` numbers and the retired PoC3 compiler retains `CON` numbers; R2
@@ -51,6 +51,21 @@ the executable mapping used by the R2 conformance harness.
 | scoped result escape | lifetime system deferred | `CV4531` | `SCOPED_RESULT_ESCAPE` | EVT1-new | derived call result retains scoped state |
 | invalid relational subject | no source counterpart | `CV4532` | `RELATIONAL_REQUIREMENT_INVALID_SUBJECT` | EVT1-new | subjects must select one required operation parameter/result relation |
 | unsupported relational requirement | no source counterpart | `CV4533` | `RELATIONAL_REQUIREMENT_UNSUPPORTED` | reserved EVT1-new | bounded subject model rejects unsupported relation shapes |
+| invalid `?` operand | PoC3 concrete `try` operand pressure | `CV4541` | `QUESTION_REQUIRES_OPTION_OR_RESULT` | EVT1-new | parser succeeds; semantic type is diagnosed |
+| incompatible propagation channel | PoC3 nominal Result mismatch pressure | `CV4542` | `QUESTION_INCOMPATIBLE_RETURN_CHANNEL` | EVT1-new | includes Option/Result mixing |
+| Result error mismatch | PoC3 same-nominal propagation pressure | `CV4543` | `RESULT_ERROR_TYPE_MISMATCH` | EVT1-new | exact `E` only |
+| invalid `!` operand | Phase 17 panic pressure only | `CV4544` | `BANG_REQUIRES_OPTION_OR_RESULT` | EVT1-new | escalation requires a carrier |
+| unhandled local error | no closed counterpart | `CV4545` | `TRY_EXCEPT_UNHANDLED_ERROR` | EVT1-new | exact typed arm or identical outer Result required |
+| runtime assert condition | PoC3 assert bool family | `CV4546` | `ASSERT_REQUIRES_BOOL` | both namespaces retained | reason must also be string |
+| duplicate except error | no closed counterpart | `CV4547` | `TRY_EXCEPT_DUPLICATE_ERROR` | EVT1-new | duplicate concrete type is rejected statically |
+| nontransferable failure payload | PoC3 non-copyable family | `CV4548` | `RESULT_PAYLOAD_NONTRANSFERABLE` | EVT1-new | explicit move required |
+| immovable failure payload | R2 immovable law | `CV4549` | `FAILURE_PAYLOAD_IMMOVABLE` | EVT1-new | Option/Result do not weaken embedding law |
+| unknown except type | no closed counterpart | `CV4550` | `TRY_EXCEPT_UNKNOWN_ERROR_TYPE` | EVT1-new | no runtime type test |
+
+`static_assert` continues to reuse the bounded comptime diagnostic path:
+runtime calls are `CV4210`, a non-boolean evaluated condition is `CV4207`, and
+a false assertion is `CV4207` with its deterministic reason. R4c deliberately
+does not add a second static-assert evaluator or mass-renumber those families.
 
 `VALUE_TYPE_MISMATCH` maps the existing Go `CV4107` assignment family to
 PoC3 `CON0078`/`CON0082` aggregate and field mismatch evidence.

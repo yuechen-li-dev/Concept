@@ -1,0 +1,12 @@
+profile Core;
+
+enum ParseError {
+    Invalid,
+}
+
+int Read(Result<int, ParseError> result) {
+    return match (result) {
+        Result::Ok(value) => value,
+        Result::Error(error) => 0,
+    };
+}

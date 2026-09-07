@@ -1,0 +1,11 @@
+profile Core;
+
+enum FirstError { Failed, }
+enum SecondError { Failed, }
+
+Result<int, FirstError> Source();
+
+Result<int, SecondError> Invalid() {
+    int value = Source()?;
+    return Result::Ok(value);
+}

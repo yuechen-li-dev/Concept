@@ -499,8 +499,13 @@ func evt1MIRCleanups(env *semanticEnv, fn FunctionDecl) []MIRCleanup {
 	var cleanups []MIRCleanup
 	for i := len(declarationOrder) - 1; i >= 0; i-- {
 		name := declarationOrder[i]
-		dropFn := evt1DropFunction(env, types[name])
-		cleanups = append(cleanups, MIRCleanup{Owner: name, Type: types[name].String(), DropFunction: dropFn.Name, State: state[name], Order: len(cleanups) + 1})
+		dropName := ""
+		if evt1IsFailureType(types[name]) && evt1FailureNeedsDrop(env, types[name]) {
+			dropName = evt1FailureDropName(types[name])
+		} else if dropFn := evt1DropFunction(env, types[name]); dropFn != nil {
+			dropName = dropFn.Name
+		}
+		cleanups = append(cleanups, MIRCleanup{Owner: name, Type: types[name].String(), DropFunction: dropName, State: state[name], Order: len(cleanups) + 1})
 	}
 	return cleanups
 }
@@ -546,6 +551,15 @@ func collectMIROps(env *semanticEnv, block *Block, fn *MIRFunction, templateInfo
 		case *ExprStmt:
 			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "expr_stmt", SourceSpan: s.Span})
 			collectExprMIROps(env, s.Value, fn, templateInfo)
+		case *AssertStmt:
+			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "assert", Detail: "Assert.True", SourceSpan: s.Span})
+			collectExprMIROps(env, s.Condition, fn, templateInfo)
+		case *TryStmt:
+			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "try_handler", Detail: fmt.Sprintf("%d exact error arm(s)", len(s.Except)), SourceSpan: s.Span})
+			collectMIROps(env, &s.Body, fn, templateInfo)
+			for _, arm := range s.Except {
+				collectMIROps(env, &arm.Body, fn, templateInfo)
+			}
 		case *StaticAssertStmt:
 			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "static_assert", SourceSpan: s.Span})
 			collectExprMIROps(env, s.Condition, fn, templateInfo)
@@ -591,6 +605,20 @@ func collectMIROps(env *semanticEnv, block *Block, fn *MIRFunction, templateInfo
 func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInfo *evt1TemplateInfo) {
 	id := fmt.Sprintf("%s.%02d", fn.Name, len(fn.Operations)+1)
 	switch e := expr.(type) {
+	case *FailureExpr:
+		kind := "result_propagate"
+		if evt1IsOptionType(e.ResolvedType) {
+			kind = "option_propagate"
+		}
+		if e.Op == "!" {
+			if evt1IsOptionType(e.ResolvedType) {
+				kind = "option_unroll"
+			} else {
+				kind = "result_unroll"
+			}
+		}
+		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: kind, Type: e.ResolvedType.String(), SourceSpan: e.Span})
+		collectExprMIROps(env, e.Value, fn, templateInfo)
 	case *MoveExpr:
 		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "move", Detail: exprLabel(e.Value), SourceSpan: e.Span})
 		collectExprMIROps(env, e.Value, fn, templateInfo)
@@ -765,8 +793,13 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 			header.WriteString(l.enumHeader(*decl.Enum))
 		}
 	}
-	for _, resultType := range l.resultTypesUsed() {
-		header.WriteString(l.resultTypeDecl(resultType))
+	canonicalFailureTypes := evt1CanonicalFailureTypeKeys(l.module)
+	for _, failureType := range evt1CollectFailureTypes(l.module) {
+		if _, legacy := evt1IsResultVoidErrorType(l.env, failureType); legacy && !canonicalFailureTypes[evt1FailureTypeKey(failureType)] {
+			header.WriteString(l.resultTypeDecl(failureType))
+		} else {
+			header.WriteString(evt1FailureTypeDecl(failureType))
+		}
 	}
 	header.WriteString(l.actuatorSupportDecls())
 	var symbols []evt1FunctionSymbols
@@ -781,6 +814,11 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 	body.WriteString("static void concept_abort_invalid_tag(const char* enum_name) {\n")
 	body.WriteString("  fprintf(stderr, \"invalid enum tag for %s\\n\", enum_name);\n")
 	body.WriteString("  abort();\n}\n\n")
+	if evt1ModuleUsesFailurePanic(l.module) {
+		body.WriteString("static void concept_panic(const char* reason, int line, int column) {\n")
+		body.WriteString("  fprintf(stderr, \"Concept panic at %d:%d: %s\\n\", line, column, reason);\n")
+		body.WriteString("  abort();\n}\n\n")
+	}
 	if len(evt1RuntimeAutomataUsage(l.module)) > 0 {
 		body.WriteString("static void concept_abort_invalid_automata_state(const char* automata_name, int machine, int state) {\n")
 		body.WriteString("  fprintf(stderr, \"invalid automata state for %s: machine=%d state=%d\\n\", automata_name, machine, state);\n")
@@ -800,6 +838,12 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 	for _, enumDecl := range l.module.Enums {
 		if evt1RuntimeTypeSafe(l.env, Type{Name: enumDecl.Name, Kind: TypeEnum}) {
 			body.WriteString(l.enumConstructors(enumDecl))
+		}
+	}
+	for _, failureType := range evt1CollectFailureTypes(l.module) {
+		if canonicalFailureTypes[evt1FailureTypeKey(failureType)] {
+			body.WriteString(evt1FailureConstructors(failureType))
+			body.WriteString(evt1FailureDropFunction(l.env, failureType, l.outputBase))
 		}
 	}
 	if evt1ModuleUsesAutomataDispatchOutcome(l.module) {
@@ -1760,15 +1804,15 @@ func (l *lowering) actuatorRuntimeSupport(actuatorName string) string {
 			args = append(args, fmt.Sprintf("item->payload.%s.%s", evt1PayloadFieldName(mapping.EffectName), param.Name))
 		}
 		b.WriteString(strings.Join(args, ", ") + ");\n")
-		b.WriteString(ind(5) + "if (result.is_error) {\n")
+		b.WriteString(ind(5) + "if (result.tag == 1 || result.is_error) {\n")
 		b.WriteString(ind(6) + "batch->failed_index = batch->cursor;\n")
 		b.WriteString(ind(6) + fmt.Sprintf("batch->failure_actuator = %d;\n", failureOrdinal))
-		b.WriteString(ind(6) + fmt.Sprintf("batch->failure.%s = result.error;\n", info.FailureSlot))
+		b.WriteString(ind(6) + fmt.Sprintf("batch->failure.%s = result.is_error ? result.error : result.payload.error.error;\n", info.FailureSlot))
 		b.WriteString(ind(6) + fmt.Sprintf("batch->state = %s;\n", evt1AutomataEffectBatchStateConstName(info.Automata.Decl.Name, "Failed")))
 		b.WriteString(ind(6) + fmt.Sprintf("out.outcome = %s();\n", evt1ConstructorName(evt1ActuationOutcomeTypeName, "Failed")))
 		b.WriteString(ind(6) + "out.completedCount = batch->cursor;\n")
 		b.WriteString(ind(6) + "out.failedIndex = batch->cursor;\n")
-		b.WriteString(ind(6) + "out.error = result.error;\n")
+		b.WriteString(ind(6) + "out.error = result.is_error ? result.error : result.payload.error.error;\n")
 		b.WriteString(ind(6) + "return out;\n")
 		b.WriteString(ind(5) + "}\n")
 		b.WriteString(ind(5) + "break;\n")
@@ -1960,8 +2004,8 @@ func evt1CType(t Type) string {
 		}
 		return base + "*"
 	}
-	if t.Name == "Result" && len(t.TypeArgs) == 2 {
-		return evt1CName("Result_" + t.TypeArgs[0].String() + "_" + t.TypeArgs[1].String())
+	if evt1IsFailureType(t) {
+		return evt1FailureCName(t)
 	}
 	if builtin, ok := evt1BuiltinDefinition(t.Name); ok {
 		return builtin.CType
@@ -2095,6 +2139,14 @@ type evt1FunctionLowerer struct {
 	ownedOrder  [][]string
 	liveOwners  map[string]bool
 	tempCounter int
+	tryHandlers []map[string]evt1LoweredTryHandler
+}
+
+type evt1LoweredTryHandler struct {
+	label       string
+	errorName   string
+	errorType   Type
+	cleanupFrom int
 }
 
 type evt1Binding struct {
@@ -2165,7 +2217,7 @@ func (f *evt1FunctionLowerer) lowerStatement(stmt Statement, indent int) string 
 		if construct, ok := s.Value.(*StructConstructExpr); ok && construct.StructName == s.Type.Name {
 			return f.lowerLocalStructConstruct(s.Type, s.Name, *construct, indent)
 		}
-		prelude, value, _ := f.lowerExpr(s.Value, indent)
+		prelude, value, _ := f.lowerExprExpected(s.Value, s.Type, indent)
 		cName := f.bindName(s.Name, s.Type)
 		return prelude + ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(s.Type), cName, value)
 	case *EffectsDecl:
@@ -2219,9 +2271,7 @@ func (f *evt1FunctionLowerer) lowerStatement(stmt Statement, indent int) string 
 		if name, ok := s.Target.(*NameExpr); ok {
 			if binding, found := scopeLookup(name.Name, f.scope); found && evt1TypeHasDrop(f.l.env, binding.t) {
 				if f.liveOwners[binding.cName] {
-					if dropFn := evt1DropFunction(f.l.env, binding.t); dropFn != nil {
-						replacementDrop = ind(indent) + fmt.Sprintf("%s(%s);\n", evt1FunctionSymbolForDecl(f.l.outputBase, f.l.env, *dropFn), binding.cName)
-					}
+					replacementDrop = f.lowerDropValue(binding.t, binding.cName, indent)
 				}
 				f.liveOwners[binding.cName] = true
 			}
@@ -2231,7 +2281,7 @@ func (f *evt1FunctionLowerer) lowerStatement(stmt Statement, indent int) string 
 		if s.Value == nil {
 			return f.lowerAllScopeDrops(indent) + ind(indent) + "return;\n"
 		}
-		prelude, value, valueType := f.lowerExpr(s.Value, indent)
+		prelude, value, valueType := f.lowerExprExpected(s.Value, f.fn.ReturnType, indent)
 		if !f.hasLiveOwner() {
 			return prelude + ind(indent) + fmt.Sprintf("return %s;\n", value)
 		}
@@ -2243,6 +2293,17 @@ func (f *evt1FunctionLowerer) lowerStatement(stmt Statement, indent int) string 
 			return prelude + ind(indent) + value + ";\n"
 		}
 		return prelude + ind(indent) + "(void)" + value + ";\n"
+	case *AssertStmt:
+		prelude, condition, _ := f.lowerExpr(s.Condition, indent)
+		reason := fmt.Sprintf("%q", "Concept assertion failed")
+		if s.Reason != nil {
+			reasonPrelude, reasonExpr, _ := f.lowerExpr(s.Reason, indent)
+			prelude += reasonPrelude
+			reason = reasonExpr
+		}
+		return prelude + ind(indent) + fmt.Sprintf("if (!(%s)) { concept_panic(%s, %d, %d); }\n", condition, reason, s.Span.Line, s.Span.Column)
+	case *TryStmt:
+		return f.lowerTryStmt(*s, indent)
 	case *StaticAssertStmt:
 		return ""
 	case *MatchStmt:
@@ -2260,6 +2321,40 @@ func (f *evt1FunctionLowerer) lowerStatement(stmt Statement, indent int) string 
 	default:
 		return ind(indent) + "/* unsupported statement */\n"
 	}
+}
+
+func (f *evt1FunctionLowerer) lowerTryStmt(stmt TryStmt, indent int) string {
+	endLabel := f.nextTemp("try_end")
+	handlers := map[string]evt1LoweredTryHandler{}
+	var b strings.Builder
+	b.WriteString(ind(indent) + "{\n")
+	for _, arm := range stmt.Except {
+		t := evt1CanonicalType(f.l.env, arm.ErrorType)
+		h := evt1LoweredTryHandler{label: f.nextTemp("except"), errorName: f.nextTemp("error"), errorType: t, cleanupFrom: len(f.ownedOrder)}
+		handlers[evt1TypeIdentity(t)] = h
+		b.WriteString(ind(indent+1) + fmt.Sprintf("%s %s;\n", evt1CType(t), h.errorName))
+	}
+	f.tryHandlers = append(f.tryHandlers, handlers)
+	b.WriteString(f.lowerBlock(stmt.Body, indent+1))
+	f.tryHandlers = f.tryHandlers[:len(f.tryHandlers)-1]
+	b.WriteString(ind(indent+1) + "goto " + endLabel + ";\n")
+	for _, arm := range stmt.Except {
+		t := evt1CanonicalType(f.l.env, arm.ErrorType)
+		h := handlers[evt1TypeIdentity(t)]
+		b.WriteString(ind(indent) + h.label + ":\n")
+		b.WriteString(ind(indent+1) + "{\n")
+		f.pushScope()
+		cName := f.bindName(arm.Binding, t)
+		b.WriteString(ind(indent+2) + fmt.Sprintf("%s %s = %s;\n", evt1CType(t), cName, h.errorName))
+		b.WriteString(f.lowerBlock(arm.Body, indent+2))
+		b.WriteString(f.lowerCurrentScopeDrops(indent + 2))
+		f.popScope()
+		b.WriteString(ind(indent+2) + "goto " + endLabel + ";\n")
+		b.WriteString(ind(indent+1) + "}\n")
+	}
+	b.WriteString(ind(indent) + endLabel + ": ;\n")
+	b.WriteString(ind(indent) + "}\n")
+	return b.String()
 }
 
 func (f *evt1FunctionLowerer) lowerWhileStmt(stmt WhileStmt, indent int) string {
@@ -2339,6 +2434,9 @@ func (f *evt1FunctionLowerer) lowerLocalStructConstruct(targetType Type, name st
 func (f *evt1FunctionLowerer) lowerMatchStmt(stmt MatchStmt, indent int) string {
 	subPrelude, subjectExpr, subjectType := f.lowerExpr(stmt.Subject, indent)
 	enumDecl := f.l.env.enums[subjectType.Name]
+	if decl, ok := evt1FailureEnumDecl(subjectType); ok {
+		enumDecl = decl
+	}
 	subjectTemp := f.nextTemp("subject")
 	var b strings.Builder
 	b.WriteString(subPrelude)
@@ -2346,7 +2444,11 @@ func (f *evt1FunctionLowerer) lowerMatchStmt(stmt MatchStmt, indent int) string 
 	b.WriteString(ind(indent) + fmt.Sprintf("switch (%s.tag) {\n", subjectTemp))
 	for _, arm := range stmt.Arms {
 		variant, _ := evt1LookupVariant(enumDecl, arm.Pattern.VariantName)
-		b.WriteString(ind(indent) + fmt.Sprintf("case %s:\n", evt1TagName(enumDecl.Name, variant.Name)))
+		tag := evt1TagName(enumDecl.Name, variant.Name)
+		if evt1IsFailureType(subjectType) {
+			tag = fmt.Sprintf("%d", variant.Tag)
+		}
+		b.WriteString(ind(indent) + fmt.Sprintf("case %s:\n", tag))
 		b.WriteString(ind(indent+1) + "{\n")
 		f.pushScope()
 		for i, binding := range arm.Pattern.Bindings {
@@ -2355,6 +2457,7 @@ func (f *evt1FunctionLowerer) lowerMatchStmt(stmt MatchStmt, indent int) string 
 			b.WriteString(ind(indent+2) + fmt.Sprintf("%s %s = %s.payload.%s.%s;\n", evt1CType(field.Type), cName, subjectTemp, evt1PayloadFieldName(variant.Name), field.Name))
 		}
 		b.WriteString(f.lowerBlock(arm.Block, indent+2))
+		b.WriteString(f.lowerCurrentScopeDrops(indent + 2))
 		f.popScope()
 		b.WriteString(ind(indent+2) + "break;\n")
 		b.WriteString(ind(indent+1) + "}\n")
@@ -2366,7 +2469,11 @@ func (f *evt1FunctionLowerer) lowerMatchStmt(stmt MatchStmt, indent int) string 
 }
 
 func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, Type) {
-	if value, ok := evt1TryEvalRuntimeExpr(f.l.env, f.evalScope(), expr); ok && evt1RuntimeTypeSafe(f.l.env, value.Type) {
+	_, failureConstruct := expr.(*ConstructExpr)
+	if construct, ok := expr.(*ConstructExpr); ok {
+		failureConstruct = evt1IsFailureType(construct.ResolvedType)
+	}
+	if value, ok := evt1TryEvalRuntimeExpr(f.l.env, f.evalScope(), expr); !failureConstruct && ok && evt1RuntimeTypeSafe(f.l.env, value.Type) {
 		return "", evt1RenderCValue(f.l.env, value), value.Type
 	}
 	switch e := expr.(type) {
@@ -2454,6 +2561,54 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		out.Ownership = "ref"
 		out.Const = e.Const
 		return prelude, "&(" + target + ")", out
+	case *FailureExpr:
+		prelude, value, carrierType := f.lowerExpr(e.Value, indent)
+		carrierType = e.ResolvedType
+		carrierTemp := f.nextTemp("failure")
+		var b strings.Builder
+		b.WriteString(prelude)
+		b.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(carrierType), carrierTemp, value))
+		failureTag := 1
+		b.WriteString(ind(indent) + fmt.Sprintf("if (%s.tag == %d) {\n", carrierTemp, failureTag))
+		if e.Op == "!" {
+			reason := "explicit Option absence escalation"
+			if evt1IsResultType(carrierType) {
+				reason = "explicit Result error escalation"
+			}
+			b.WriteString(ind(indent+1) + fmt.Sprintf("concept_panic(%q, %d, %d);\n", reason, e.Span.Line, e.Span.Column))
+		} else if evt1IsResultType(carrierType) {
+			errType := evt1FailureErrorType(carrierType)
+			if handler, ok := f.lookupTryHandler(errType); ok {
+				b.WriteString(ind(indent+1) + fmt.Sprintf("%s = %s.payload.error.error;\n", handler.errorName, carrierTemp))
+				before := f.cloneLiveOwners()
+				for scopeIndex := len(f.ownedOrder) - 1; scopeIndex >= handler.cleanupFrom; scopeIndex-- {
+					b.WriteString(f.lowerScopeDrops(scopeIndex, indent+1))
+				}
+				f.liveOwners = before
+				b.WriteString(ind(indent+1) + "goto " + handler.label + ";\n")
+			} else {
+				before := f.cloneLiveOwners()
+				drops := f.lowerAllScopeDrops(indent + 1)
+				f.liveOwners = before
+				b.WriteString(drops)
+				b.WriteString(ind(indent+1) + fmt.Sprintf("return %s(%s.payload.error.error);\n", evt1FailureConstructorName(f.fn.ReturnType, "Error"), carrierTemp))
+			}
+		} else {
+			before := f.cloneLiveOwners()
+			drops := f.lowerAllScopeDrops(indent + 1)
+			f.liveOwners = before
+			b.WriteString(drops)
+			b.WriteString(ind(indent+1) + fmt.Sprintf("return %s();\n", evt1FailureConstructorName(f.fn.ReturnType, "None")))
+		}
+		b.WriteString(ind(indent) + "}\n")
+		field := "some.value"
+		if evt1IsResultType(carrierType) {
+			if evt1FailureSuccessType(carrierType).Name == "void" {
+				return b.String(), "(void)0", evt1FailureSuccessType(carrierType)
+			}
+			field = "ok.value"
+		}
+		return b.String(), carrierTemp + ".payload." + field, evt1FailureSuccessType(carrierType)
 	case *CallExpr:
 		if e.Callee == "discard" && len(e.Args) == 1 {
 			if nameExpr, ok := e.Args[0].(*NameExpr); ok {
@@ -2534,6 +2689,9 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		return prelude.String(), instance.GeneratedSymbol + "(" + strings.Join(args, ", ") + ")", instance.Function.ReturnType
 	case *ConstructExpr:
 		enumType := Type{Name: e.EnumName, Kind: TypeEnum, Span: e.Span}
+		if evt1IsFailureType(e.ResolvedType) {
+			enumType = e.ResolvedType
+		}
 		var prelude strings.Builder
 		var args []string
 		for _, arg := range e.Args {
@@ -2543,7 +2701,11 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 			prelude.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(argType), temp, argExpr))
 			args = append(args, temp)
 		}
-		return prelude.String(), evt1ConstructorName(e.EnumName, e.VariantName) + "(" + strings.Join(args, ", ") + ")", enumType
+		ctor := evt1ConstructorName(e.EnumName, e.VariantName)
+		if evt1IsFailureType(enumType) {
+			ctor = evt1FailureConstructorName(enumType, e.VariantName)
+		}
+		return prelude.String(), ctor + "(" + strings.Join(args, ", ") + ")", enumType
 	case *StructConstructExpr:
 		structType := Type{Name: e.StructName, Kind: TypeStruct, Span: e.Span}
 		var prelude strings.Builder
@@ -2574,6 +2736,9 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 	case *MatchExpr:
 		subPrelude, subjectExpr, subjectType := f.lowerExpr(e.Subject, indent)
 		enumDecl := f.l.env.enums[subjectType.Name]
+		if decl, ok := evt1FailureEnumDecl(subjectType); ok {
+			enumDecl = decl
+		}
 		scope := f.typeScope()
 		resultType, _ := validateMatchExpr(f.l.env, scope, *e, nil, false)
 		subjectTemp := f.nextTemp("match_subject")
@@ -2585,7 +2750,11 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		b.WriteString(ind(indent) + fmt.Sprintf("switch (%s.tag) {\n", subjectTemp))
 		for _, arm := range e.Arms {
 			variant, _ := evt1LookupVariant(enumDecl, arm.Pattern.VariantName)
-			b.WriteString(ind(indent) + fmt.Sprintf("case %s:\n", evt1TagName(enumDecl.Name, variant.Name)))
+			tag := evt1TagName(enumDecl.Name, variant.Name)
+			if evt1IsFailureType(subjectType) {
+				tag = fmt.Sprintf("%d", variant.Tag)
+			}
+			b.WriteString(ind(indent) + fmt.Sprintf("case %s:\n", tag))
 			b.WriteString(ind(indent+1) + "{\n")
 			f.pushScope()
 			for i, binding := range arm.Pattern.Bindings {
@@ -2596,6 +2765,7 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 			armPrelude, armExpr, _ := f.lowerExpr(arm.Value, indent+2)
 			b.WriteString(armPrelude)
 			b.WriteString(ind(indent+2) + fmt.Sprintf("%s = %s;\n", resultTemp, armExpr))
+			b.WriteString(f.lowerCurrentScopeDrops(indent + 2))
 			f.popScope()
 			b.WriteString(ind(indent+2) + "break;\n")
 			b.WriteString(ind(indent+1) + "}\n")
@@ -2613,11 +2783,11 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		b.WriteString(conditionPrelude)
 		b.WriteString(ind(indent) + fmt.Sprintf("%s %s;\n", evt1CType(resultType), resultTemp))
 		b.WriteString(ind(indent) + fmt.Sprintf("if (%s) {\n", conditionExpr))
-		thenPrelude, thenExpr, _ := f.lowerExpr(e.Then, indent+1)
+		thenPrelude, thenExpr, _ := f.lowerExprExpected(e.Then, resultType, indent+1)
 		b.WriteString(thenPrelude)
 		b.WriteString(ind(indent+1) + fmt.Sprintf("%s = %s;\n", resultTemp, thenExpr))
 		b.WriteString(ind(indent) + "} else {\n")
-		elsePrelude, elseExpr, _ := f.lowerExpr(e.Else, indent+1)
+		elsePrelude, elseExpr, _ := f.lowerExprExpected(e.Else, resultType, indent+1)
 		b.WriteString(elsePrelude)
 		b.WriteString(ind(indent+1) + fmt.Sprintf("%s = %s;\n", resultTemp, elseExpr))
 		b.WriteString(ind(indent) + "}\n")
@@ -2625,6 +2795,23 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 	default:
 		return "", "0", Type{Name: "int", Kind: TypeBuiltin}
 	}
+}
+
+func (f *evt1FunctionLowerer) lowerExprExpected(expr Expr, expected Type, indent int) (string, string, Type) {
+	if evt1IsFailureType(expected) {
+		switch e := expr.(type) {
+		case *ConstructExpr:
+			e.ResolvedType = expected
+		case *IfExpr:
+			if c, ok := e.Then.(*ConstructExpr); ok {
+				c.ResolvedType = expected
+			}
+			if c, ok := e.Else.(*ConstructExpr); ok {
+				c.ResolvedType = expected
+			}
+		}
+	}
+	return f.lowerExpr(expr, indent)
 }
 
 func (f *evt1FunctionLowerer) lowerLValue(expr Expr, indent int) (string, string, Type, bool) {
@@ -2735,13 +2922,20 @@ func (f *evt1FunctionLowerer) lowerScopeDrops(scopeIndex, indent int) string {
 				}
 			}
 		}
-		dropFn := evt1DropFunction(f.l.env, binding.t)
-		if dropFn != nil {
-			b.WriteString(ind(indent) + fmt.Sprintf("%s(%s);\n", evt1FunctionSymbolForDecl(f.l.outputBase, f.l.env, *dropFn), name))
-		}
+		b.WriteString(f.lowerDropValue(binding.t, name, indent))
 		f.liveOwners[name] = false
 	}
 	return b.String()
+}
+
+func (f *evt1FunctionLowerer) lowerDropValue(t Type, value string, indent int) string {
+	if evt1IsFailureType(t) && evt1FailureNeedsDrop(f.l.env, t) {
+		return ind(indent) + fmt.Sprintf("%s(%s);\n", evt1FailureDropName(t), value)
+	}
+	if dropFn := evt1DropFunction(f.l.env, t); dropFn != nil {
+		return ind(indent) + fmt.Sprintf("%s(%s);\n", evt1FunctionSymbolForDecl(f.l.outputBase, f.l.env, *dropFn), value)
+	}
+	return ""
 }
 
 func (f *evt1FunctionLowerer) bindInstanceName(name, automataName string) string {
@@ -2818,6 +3012,16 @@ func (f *evt1FunctionLowerer) evalScope() *evt1EvalScope {
 func (f *evt1FunctionLowerer) nextTemp(prefix string) string {
 	f.tempCounter++
 	return fmt.Sprintf("cv_%s_%02d", prefix, f.tempCounter)
+}
+
+func (f *evt1FunctionLowerer) lookupTryHandler(t Type) (evt1LoweredTryHandler, bool) {
+	key := evt1TypeIdentity(evt1CanonicalType(f.l.env, t))
+	for i := len(f.tryHandlers) - 1; i >= 0; i-- {
+		if h, ok := f.tryHandlers[i][key]; ok {
+			return h, true
+		}
+	}
+	return evt1LoweredTryHandler{}, false
 }
 
 func scopeLookup(name string, scopes []map[string]evt1Binding) (evt1Binding, bool) {

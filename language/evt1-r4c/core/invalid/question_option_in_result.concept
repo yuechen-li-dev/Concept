@@ -1,0 +1,10 @@
+profile Core;
+
+enum LookupError { Missing, }
+
+Option<int> Find();
+
+Result<int, LookupError> Invalid() {
+    int value = Find()?;
+    return Result::Ok(value);
+}

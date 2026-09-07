@@ -179,3 +179,15 @@ ordinary concept satisfaction produces the compile-time evidence that may
 later be reified for `dyn C`. R4a does not port interface declarations, vtables,
 or dyn storage. Slice fixtures likewise remain deferred until Span is designed
 against the now-active lifetime machinery.
+
+## R4c failure-model audit
+
+R4c inspected Phase 5 concrete Result-shaped propagation, Phase 17
+panic/assert and stable reasons, and Phase 22 compiler-known Option plus Option
+match. These are evidence and pressure, not executable authority. Option is
+adopted with canonical qualified constructors. PoC3's concrete nominal
+Result-shaped enums and prefix `try` inform early-return lowering, but EVT1
+uses generic `Result<T,E>`, postfix `?`, and reserves `try`/`except` for a local
+typed boundary. No closed PoC3 evidence was found for generic Result,
+heterogeneous exact handlers, implicit error conversion, or unwinding; those
+R4c cases are recorded as EVT1-new rather than parity.

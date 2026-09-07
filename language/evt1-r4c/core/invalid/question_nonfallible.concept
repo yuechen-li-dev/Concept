@@ -1,0 +1,6 @@
+profile Core;
+
+int Invalid() {
+    int value = 1?;
+    return value;
+}

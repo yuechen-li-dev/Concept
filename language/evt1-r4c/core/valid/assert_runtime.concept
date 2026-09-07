@@ -1,0 +1,7 @@
+profile Core;
+
+int RequirePositive(int value) {
+    string reason = "value must be positive";
+    assert(value > 0, reason);
+    return value;
+}

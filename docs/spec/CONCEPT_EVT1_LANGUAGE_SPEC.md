@@ -1,6 +1,6 @@
 # Concept EVT1 language specification foundation
 
-Status: R4b relational lifetime proofs and selected call-result provenance
+Status: R4c canonical failure semantics
 
 This document defines the authority categories and the smallest currently
 executable EVT1 language foundation. It is derived from the retired Concept
@@ -312,7 +312,9 @@ enum Status
 Status status = Status::Ready(7);
 ```
 
-Generic built-in Option/Result semantics are not implied by this facility.
+R4c specializes this same facility for the canonical compiler-known
+`Option<T>` and `Result<T,E>` forms described in Section 24; it does not add a
+second enum or match system.
 
 ## 10. Match
 
@@ -351,16 +353,16 @@ may initialize an owner directly. No NRVO or implicit-move law is specified.
 
 ## 12. Failure model
 
-**Provisional/Profile-specific.** The extracted Vulkan line uses
-`Result<T, E>`-shaped fallible signatures and `?` in admitted mechanisms. That
-evidence does not canonize a general core Result value type or complete
-propagation law.
+**Canonical EVT1 R4c.** Core has one explicit failure calculus. `Option<T>` is
+expected absence, `Result<T,E>` is typed recoverable failure, and `panic` is a
+terminal invariant failure. Explicit `match` is the ground truth; postfix `?`,
+postfix `!`, lexical `try`/`except`, `assert`, and `static_assert` are bounded
+sugar over ordinary payload-enum control flow and assertion evaluation. The
+complete laws and source forms are specified in Section 24.
 
-**Legacy PoC3.** PoC3 has function-level fallibility and a compiler-known
-Option subset. PoC3 Result was still deferred at cutover.
-
-**Deferred reconciliation.** EVT1 must distinguish absence, recoverable value
-errors, function-level propagation, and panic before Result becomes canonical.
+The pre-R4c Vulkan `Result<void,E>` signature bridge remains an isolated ABI
+compatibility seam. Legacy PoC3 fallible syntax is evidence only and does not
+create a second failure channel.
 
 ## 13. Concepts
 
@@ -526,15 +528,55 @@ not automatic adoption of the PoC3 testing surface.
 
 ## 24. Panic and assert
 
-**Legacy PoC3.** PoC3 implements runtime `panic`, runtime `assert`, test
-assertions, stable reasons, and a deterministic failure path.
+**Canonical EVT1.** Absence, recoverable failure, assertion failure, and panic
+are distinct. `Option<T>` is expected absence and carries no error information.
+`Result<T, E>` is recoverable success or typed error. Both are compiler-known
+generic payload-enum forms and obey ordinary exhaustive match, value,
+copy/move/drop, immovable-embedding, and lifetime-provenance laws:
 
-**Provisional EVT1.** `static_assert` is canonical only in the compile-time
-domain described above.
+```concept
+Option::Some(value)
+Option::None
+Result::Ok(value)
+Result::Error(error)
+```
 
-**Deferred reconciliation.** Runtime panic/assert syntax, exit behavior,
-reason representation, and interaction with Result/fallibility are not yet Go
-EVT1 features.
+These qualified spellings are canonical; there is no competing unqualified
+built-in constructor surface. `match` is the fully explicit ground truth.
+
+Postfix `?` unwraps success or returns `None`/`Error(error)` from the current
+function. `Option<T>?` requires an `Option<U>` return channel.
+`Result<T,E>?` requires `Result<U,E>` with the exact same `E`, unless a lexical
+`try` block has an exact matching `except (E error)` arm. Option and Result do
+not convert into one another, and cross-error conversion is not implicit.
+
+Postfix `!` unwraps success or calls the terminal panic path at its source
+span. Therefore `?` never panics and `!` never silently propagates.
+
+`try` establishes only a local propagation boundary. A `?` inside it branches
+to an exact statically selected Result error arm. If no arm matches, the error
+may propagate outward only through an identical enclosing Result error type;
+otherwise compilation fails. R4c does not route Option through try/except.
+There is no `throw`, exception object, runtime type test, exception table,
+cross-frame catch, or stack unwinding. In particular:
+
+```text
+try/except is structured Result handling, not exceptions.
+```
+
+Panic terminates the current execution path without unwinding. The C bootstrap
+helper reports a deterministic reason and one-based source line/column, then
+aborts. It performs no allocation and implies no generalized panic runtime.
+
+`assert(condition, reason)` is runtime sugar for
+`Assert.True(condition, reason)`; the one-argument form uses the deterministic
+reason `Concept assertion failed`. False escalates to the same terminal panic
+primitive and true continues. `Assert.True` is the only required primitive;
+this is not a testing framework.
+
+`static_assert(condition, reason)` is exactly compile-time sugar for
+`comptime Assert.True(condition, reason)`. It uses the existing bounded
+comptime evaluator and emits no runtime code. Runtime values are rejected.
 
 ## 25. Backend and runtime boundaries
 
@@ -561,14 +603,14 @@ The following remain explicit reconciliation or implementation work:
   accounting;
 - generalized borrow checking, named lifetimes, non-lexical lifetimes,
 `Span<T>`, and `ReadOnlySpan<T>`;
-- the failure-model relationship among Option, Result, fallibility, and panic;
 - runtime arrays, slices, FixedBuffer, and bounded mutation;
 - witness reification, interfaces, and dyn storage/dispatch;
 - allocation, allocator effects, arenas, and stores;
 - stable C ABI and layout law;
 - canonical machine/automata syntax and decide/yield semantics;
 - general effects versus profile-owned effects/actuators;
-- Concept-native testing and runtime panic/assert;
+- Concept-native testing (runtime assertion sugar is canonical, but no testing
+  framework is implied);
 - broader concepts/templates and capability-based comptime.
 
 EVT1 intentionally adds none of these merely because they were next on the PoC3

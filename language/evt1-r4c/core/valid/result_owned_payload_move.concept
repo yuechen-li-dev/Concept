@@ -1,0 +1,58 @@
+profile Core;
+
+struct Resource {
+    int id;
+}
+
+void Drop(owned Resource resource) {
+    assert(resource.id > 0, "owned Resource must remain valid until Drop");
+}
+
+enum ResourceError { Missing, }
+
+Result<owned Resource, ResourceError> Acquire() {
+    owned Resource resource = Resource { 21 };
+    return Result::Ok(move resource);
+}
+
+Result<owned Resource, ResourceError> Forward() {
+    owned Resource resource = Acquire()?;
+    return Result::Ok(move resource);
+}
+
+Result<owned Resource, ResourceError> ForwardExisting() {
+    Result<owned Resource, ResourceError> result = Acquire();
+    owned Resource resource = (move result)?;
+    return Result::Ok(move resource);
+}
+
+int ReadOwned(Result<owned Resource, ResourceError> result) {
+    return match (move result) {
+        Result::Ok(resource) => resource.id,
+        Result::Error(error) => 0,
+    };
+}
+
+Option<owned Resource> Optional() {
+    owned Resource resource = Resource { 22 };
+    return Option::Some(move resource);
+}
+
+Option<owned Resource> EmptyOptional() {
+    return Option::None;
+}
+
+Result<owned Resource, ResourceError> Missing() {
+    return Result::Error(ResourceError::Missing);
+}
+
+int DropOptionalCarrier() {
+    Option<owned Resource> optional = Optional();
+    return 1;
+}
+
+int DropInactiveCarriers() {
+    Option<owned Resource> optional = EmptyOptional();
+    Result<owned Resource, ResourceError> result = Missing();
+    return 2;
+}
