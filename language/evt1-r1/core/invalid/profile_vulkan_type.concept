@@ -1,0 +1,4 @@
+// Profile-only evidence: reconciliation matrix row "primitive types".
+profile Core;
+
+PipelineLayout Read();

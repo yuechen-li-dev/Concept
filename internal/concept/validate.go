@@ -91,26 +91,20 @@ func validateModule(module Module) error {
 }
 
 func analyzeModule(module Module) (*semanticEnv, error) {
-	if module.Profile != "Core" && module.Profile != "Vulkan" {
+	profile, ok := evt1ProfileDefinition(module.Profile)
+	if !ok {
 		return nil, evt1Diagnostic("CV4001", "module profile must be Core or Vulkan", Span{Line: 1, Column: 1})
 	}
-	if module.Profile == "Core" {
-		if len(module.Imports) != 0 {
-			return nil, evt1Diagnostic("CV4401", "profile Core does not admit domain imports", Span{Line: 1, Column: 1})
-		}
-		if len(module.Effects) != 0 || len(module.Actuators) != 0 {
-			return nil, evt1Diagnostic("CV4402", "effect and actuator declarations require profile Vulkan in R0", Span{Line: 1, Column: 1})
-		}
-		if evt1TypeUsed(module, func(t Type) bool {
-			return t.Name == "PipelineLayout" || t.Name == "Pipeline" || t.Name == "VulkanError" || strings.HasPrefix(t.Name, "Vk")
-		}) {
-			return nil, evt1Diagnostic("CV4403", "Vulkan runtime types require profile Vulkan", Span{Line: 1, Column: 1})
-		}
+	if len(module.Imports) != 0 && !profile.AllowDomainImports {
+		return nil, evt1Diagnostic("CV4401", fmt.Sprintf("profile %s does not admit domain imports", profile.Name), Span{Line: 1, Column: 1})
 	}
-	env := newSemanticEnv()
+	if len(module.Effects) != 0 && !profile.AllowEffects || len(module.Actuators) != 0 && !profile.AllowActuators {
+		return nil, evt1Diagnostic("CV4402", fmt.Sprintf("effect and actuator declarations are not admitted by profile %s", profile.Name), Span{Line: 1, Column: 1})
+	}
+	env := newSemanticEnv(profile)
 	typeNames := map[string]Span{}
 	for _, enumDecl := range module.Enums {
-		if enumDecl.Name == evt1AutomataDispatchOutcomeTypeName || enumDecl.Name == evt1ActuationOutcomeTypeName {
+		if profile.compilerOwnedType(enumDecl.Name) {
 			return nil, evt1Diagnostic("CV4267", fmt.Sprintf("%s is a compiler-owned runtime type and cannot be redeclared", enumDecl.Name), enumDecl.Span)
 		}
 		if _, exists := env.enums[enumDecl.Name]; exists {
@@ -123,7 +117,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		env.enums[enumDecl.Name] = enumDecl
 	}
 	for _, structDecl := range module.Structs {
-		if structDecl.Name == evt1AutomataDispatchOutcomeTypeName || structDecl.Name == evt1ActuationOutcomeTypeName {
+		if profile.compilerOwnedType(structDecl.Name) {
 			return nil, evt1Diagnostic("CV4267", fmt.Sprintf("%s is a compiler-owned runtime type and cannot be redeclared", structDecl.Name), structDecl.Span)
 		}
 		if _, exists := env.structs[structDecl.Name]; exists {
@@ -149,7 +143,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		env.effectOrder = append(env.effectOrder, effectDecl.Name)
 	}
 	for _, actuatorDecl := range module.Actuators {
-		if actuatorDecl.Name == evt1AutomataDispatchOutcomeTypeName || actuatorDecl.Name == evt1ActuationOutcomeTypeName {
+		if profile.compilerOwnedType(actuatorDecl.Name) {
 			return nil, evt1Diagnostic("CV4267", fmt.Sprintf("%s is a compiler-owned runtime type and cannot be redeclared", actuatorDecl.Name), actuatorDecl.Span)
 		}
 		if _, exists := env.actuators[actuatorDecl.Name]; exists {
@@ -161,7 +155,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		env.actuators[actuatorDecl.Name] = actuatorDecl
 	}
 	for _, automataDecl := range module.Automata {
-		if automataDecl.Name == evt1AutomataDispatchOutcomeTypeName || automataDecl.Name == evt1ActuationOutcomeTypeName {
+		if profile.compilerOwnedType(automataDecl.Name) {
 			return nil, evt1Diagnostic("CV4267", fmt.Sprintf("%s is a compiler-owned runtime type and cannot be redeclared", automataDecl.Name), automataDecl.Span)
 		}
 		if _, exists := env.automata[automataDecl.Name]; exists {
@@ -173,7 +167,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		env.automata[automataDecl.Name] = automataDecl
 	}
 	for _, conceptDecl := range module.Concepts {
-		if conceptDecl.Name == evt1AutomataDispatchOutcomeTypeName || conceptDecl.Name == evt1ActuationOutcomeTypeName {
+		if profile.compilerOwnedType(conceptDecl.Name) {
 			return nil, evt1Diagnostic("CV4267", fmt.Sprintf("%s is a compiler-owned runtime type and cannot be redeclared", conceptDecl.Name), conceptDecl.Span)
 		}
 		if _, exists := env.concepts[conceptDecl.Name]; exists {
@@ -185,7 +179,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		env.concepts[conceptDecl.Name] = conceptDecl
 	}
 	for _, templateDecl := range module.Templates {
-		if templateDecl.Name == evt1AutomataDispatchOutcomeTypeName || templateDecl.Name == evt1ActuationOutcomeTypeName {
+		if profile.compilerOwnedType(templateDecl.Name) {
 			return nil, evt1Diagnostic("CV4267", fmt.Sprintf("%s is a compiler-owned runtime type and cannot be redeclared", templateDecl.Name), templateDecl.Span)
 		}
 		if templateDecl.Name == "dispatch" || templateDecl.Name == "actuate" || templateDecl.Name == "discard" {
@@ -1164,7 +1158,7 @@ func evt1TypeEqualityAvailable(env *semanticEnv, t Type) bool {
 	if t.ArrayElem != nil {
 		return evt1TypeEqualityAvailable(env, *t.ArrayElem)
 	}
-	if _, ok := evt1BuiltinType(t.Name, t.Span); ok {
+	if _, ok := env.profile.builtinType(t.Name, t.Span); ok {
 		return t.Name == "int" || t.Name == "bool" || t.Name == "string"
 	}
 	if _, ok := env.enums[t.Name]; ok {
@@ -1274,7 +1268,7 @@ func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string,
 		}
 		return evt1Diagnostic("CV4102", fmt.Sprintf("unknown type application %s", t.String()), span)
 	}
-	if _, ok := evt1BuiltinType(t.Name, span); ok {
+	if _, ok := env.profile.builtinType(t.Name, span); ok {
 		return nil
 	}
 	if _, ok := env.enums[t.Name]; ok {
@@ -2381,7 +2375,7 @@ func evt1TypeCopyable(env *semanticEnv, t Type) bool {
 	if len(t.TypeArgs) > 0 {
 		return false
 	}
-	if _, ok := evt1BuiltinType(t.Name, t.Span); ok {
+	if _, ok := env.profile.builtinType(t.Name, t.Span); ok {
 		return true
 	}
 	if cached, ok := env.copyableCache[t.Name]; ok {
@@ -2669,7 +2663,7 @@ func evt1CanonicalType(env *semanticEnv, t Type) Type {
 	if env == nil {
 		return t
 	}
-	if _, ok := evt1BuiltinType(t.Name, t.Span); ok {
+	if _, ok := env.profile.builtinType(t.Name, t.Span); ok {
 		t.Kind = TypeBuiltin
 		return t
 	}

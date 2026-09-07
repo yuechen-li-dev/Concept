@@ -8,9 +8,10 @@ import (
 )
 
 type parser struct {
-	path   string
-	tokens []Token
-	pos    int
+	path       string
+	tokens     []Token
+	pos        int
+	profileDef *ProfileDefinition
 }
 
 func Parse(path, text string) (Module, error) {
@@ -134,10 +135,12 @@ func (p *parser) parseModule() (Module, error) {
 	if err != nil {
 		return module, err
 	}
-	if profile.Lexeme != "Core" && profile.Lexeme != "Vulkan" {
+	profileDef, ok := evt1ProfileDefinition(profile.Lexeme)
+	if !ok {
 		return module, evt1Diagnostic("CV4001", "expected `profile Core;` or `profile Vulkan;`", profile.Span)
 	}
 	module.Profile = profile.Lexeme
+	p.profileDef = profileDef
 	if _, err := p.expect(";"); err != nil {
 		return module, err
 	}
@@ -1120,7 +1123,7 @@ done:
 	if err != nil {
 		return Type{}, err
 	}
-	if builtin, ok := evt1BuiltinType(nameTok.Lexeme, nameTok.Span); ok {
+	if builtin, ok := p.profileDef.builtinType(nameTok.Lexeme, nameTok.Span); ok {
 		t.Name = builtin.Name
 		t.Kind = builtin.Kind
 	} else if conceptParam != "" && nameTok.Lexeme == conceptParam {

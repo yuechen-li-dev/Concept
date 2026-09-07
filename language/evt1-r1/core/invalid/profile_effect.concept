@@ -1,0 +1,9 @@
+// Profile-only evidence: reconciliation matrix row "effects".
+profile Core;
+
+effect Mark(int value);
+
+int Read()
+{
+    return 0;
+}

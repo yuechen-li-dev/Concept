@@ -1,0 +1,19 @@
+// Profile-only evidence: reconciliation matrix row "actuators".
+profile Core;
+
+struct Mechanism
+{
+    int value;
+};
+
+actuator Runner(
+    MissingAutomata,
+    borrow Mechanism mechanism,
+    int)
+{
+}
+
+int Read()
+{
+    return 0;
+}

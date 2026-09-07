@@ -1,0 +1,17 @@
+// PoC3 reference: language/phase9-compile-time/valid/compile_time_function_while_sum_run.valid.conception
+// Expected divergence: EVT1 requires an explicit bounded(limit) clause.
+profile Core;
+
+comptime int Sum(int limit)
+{
+    int cursor = 0;
+    int total = 0;
+    while (cursor < limit)
+    {
+        total = total + cursor;
+        cursor = cursor + 1;
+    }
+    return total;
+}
+
+static_assert(Sum(4) == 6);

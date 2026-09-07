@@ -1,0 +1,17 @@
+// PoC3 reference: language/phase3-semantics/invalid/hir_check_return_type_mismatch.invalid.conception
+profile Core;
+
+enum Status
+{
+    Empty,
+    Ready
+}
+
+int Bad(Status status)
+{
+    return match (status)
+    {
+        Status::Empty => 0,
+        Status::Ready => true,
+    };
+}

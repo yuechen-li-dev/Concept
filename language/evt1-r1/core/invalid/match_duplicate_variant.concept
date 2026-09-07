@@ -1,0 +1,18 @@
+// PoC3 reference: language/phase5-sum-types/invalid/enum_match_duplicate_variant.invalid.conception
+profile Core;
+
+enum Status
+{
+    Empty,
+    Ready(int value)
+}
+
+int Bad(Status status)
+{
+    return match (status)
+    {
+        Status::Empty => 0,
+        Status::Empty => 1,
+        Status::Ready(value) => value,
+    };
+}

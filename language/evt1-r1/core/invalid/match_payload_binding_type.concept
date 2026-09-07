@@ -1,0 +1,17 @@
+// PoC3 reference: language/phase5-sum-types/valid/enum_match_payload_bind_int.valid.conception
+profile Core;
+
+enum Status
+{
+    Empty,
+    Ready(int value)
+}
+
+bool Bad(Status status)
+{
+    return match (status)
+    {
+        Status::Empty => false,
+        Status::Ready(value) => value,
+    };
+}

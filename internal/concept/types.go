@@ -756,6 +756,7 @@ type MIROperation struct {
 }
 
 type semanticEnv struct {
+	profile           *ProfileDefinition
 	enums             map[string]EnumDecl
 	structs           map[string]StructDecl
 	effects           map[string]EffectDecl
@@ -778,7 +779,6 @@ type semanticEnv struct {
 }
 
 const evt1AutomataDispatchOutcomeTypeName = "AutomataDispatchOutcome"
-const evt1ActuationOutcomeTypeName = "ActuationOutcome"
 
 func evt1BuiltinAutomataDispatchOutcomeEnum() EnumDecl {
 	return EnumDecl{
@@ -794,27 +794,20 @@ func evt1BuiltinAutomataDispatchOutcomeEnum() EnumDecl {
 	}
 }
 
-func evt1BuiltinActuationOutcomeEnum() EnumDecl {
-	return EnumDecl{
-		Name: evt1ActuationOutcomeTypeName,
-		Variants: []VariantDecl{
-			{Name: "Completed", Tag: 0},
-			{Name: "Failed", Tag: 1},
-			{Name: "NoBatch", Tag: 2},
-			{Name: "AlreadyConsumed", Tag: 3},
-		},
+func newSemanticEnv(profile *ProfileDefinition) *semanticEnv {
+	enums := map[string]EnumDecl{}
+	fieldSets := map[string]map[string]Type{}
+	for _, enumDecl := range profile.BuiltinEnums {
+		enums[enumDecl.Name] = enumDecl
 	}
-}
-
-func newSemanticEnv() *semanticEnv {
-	intType := Type{Name: "int", Kind: TypeBuiltin}
-	outcome := evt1BuiltinAutomataDispatchOutcomeEnum()
-	actuationOutcome := evt1BuiltinActuationOutcomeEnum()
+	for name, builtin := range profile.BuiltinTypes {
+		if len(builtin.Fields) != 0 {
+			fieldSets[name] = builtin.Fields
+		}
+	}
 	return &semanticEnv{
-		enums: map[string]EnumDecl{
-			outcome.Name:          outcome,
-			actuationOutcome.Name: actuationOutcome,
-		},
+		profile:           profile,
+		enums:             enums,
 		structs:           map[string]StructDecl{},
 		effects:           map[string]EffectDecl{},
 		effectOrder:       nil,
@@ -828,11 +821,7 @@ func newSemanticEnv() *semanticEnv {
 		concepts:          map[string]ConceptDecl{},
 		comptimeDecls:     map[string]ComptimeDecl{},
 		comptimeValues:    map[string]Value{},
-		fieldSets: map[string]map[string]Type{
-			"VulkanError": {
-				"Code": intType,
-			},
-		},
+		fieldSets:         fieldSets,
 		escapedArmBinding: map[string]Span{},
 		copyableCache:     map[string]bool{},
 		templateInfos:     map[string]*evt1TemplateInfo{},
@@ -881,15 +870,6 @@ type evt1TemplateInstance struct {
 	Function            FunctionDecl
 	InvocationSpans     []Span
 	SourceSpan          Span
-}
-
-func evt1BuiltinType(name string, span Span) (Type, bool) {
-	switch name {
-	case "int", "void", "bool", "string", "uint64", "PipelineLayout", "Pipeline", "VulkanError", "VkBuffer", "VkCommandPool":
-		return Type{Name: name, Kind: TypeBuiltin, Span: span}, true
-	default:
-		return Type{}, false
-	}
 }
 
 type ValueKind string

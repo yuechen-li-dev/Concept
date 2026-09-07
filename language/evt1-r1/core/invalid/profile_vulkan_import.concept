@@ -1,0 +1,8 @@
+// Profile-only evidence: reconciliation matrix row "imports".
+profile Core;
+import Prometheus.Vulkan;
+
+int Read()
+{
+    return 0;
+}

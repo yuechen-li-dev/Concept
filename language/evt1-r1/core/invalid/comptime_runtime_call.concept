@@ -1,0 +1,11 @@
+// PoC3 reference: language/phase9-compile-time/invalid/compile_time_function_runtime_call.invalid.conception
+profile Core;
+
+int RuntimeValue();
+
+comptime int Bad()
+{
+    return RuntimeValue();
+}
+
+static_assert(Bad() == 0);

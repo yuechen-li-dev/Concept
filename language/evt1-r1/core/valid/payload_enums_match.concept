@@ -1,0 +1,27 @@
+// PoC3 reference: language/phase5-sum-types/valid/enum_match_payload_bind_two.valid.conception
+profile Core;
+
+enum Outcome
+{
+    Empty,
+    Ready(int value),
+    Pair(int left, int right)
+}
+
+int Read(Outcome outcome)
+{
+    return match (outcome)
+    {
+        Outcome::Empty => 0,
+        Outcome::Ready(value) => value,
+        Outcome::Pair(left, right) => left + right,
+    };
+}
+
+int Construct()
+{
+    Outcome empty = Outcome::Empty;
+    Outcome ready = Outcome::Ready(4);
+    Outcome pair = Outcome::Pair(2, 3);
+    return Read(empty) + Read(ready) + Read(pair);
+}

@@ -1,6 +1,6 @@
 # EVT1 semantic reconciliation matrix
 
-Status: R0 authority ledger
+Status: R0 authority ledger with R1 executable evidence
 
 `Port required?` means implementation or conformance work remains after R0; it
 does not authorize that work in this milestone. Status is one of `Keep PoC3`,
@@ -66,3 +66,34 @@ working Go architecture or syntax direction, not every historical
 Concept/Vulkan restriction. `Merge`, `Redesign`, and `Deferred` rows require an
 explicit later specification change and executable evidence. `Profile-only`
 rows must remain rejected by `profile Core;`.
+
+## R1 executable evidence
+
+R1 preserves every R0 decision above and adds evidence only for the bounded
+overlap. Full case metadata and provenance live in
+`internal/concept/conformance_test.go`; the human summary is
+`docs/conformance/EVT1-R1-CONFORMANCE.md`.
+
+| Matrix area | R1 executable evidence | Conformance status | Remaining port requirement |
+|---|---|---|---|
+| primitive types | yes | PASS for `int`/`bool` values used by the corpus; profile denial PASS | widths and runtime string rules remain open |
+| structs | yes | PASS | broader place/layout/drop law remains |
+| payload enums | yes | PASS | generic built-in Option/Result remains excluded |
+| variant construction | yes | PASS after qualified EVT1 translation | historical syntax remains translation-only |
+| match syntax and exhaustiveness | yes | PASS | guards/wildcards/recursive patterns remain deferred |
+| while | yes | PASS at runtime; EXPECTED-DIVERGENCE for missing compile-time `bounded(limit)` | wider loop surface remains deferred |
+| if expressions | yes | PASS | statement/expression closure remains deferred |
+| concept declarations/assertions | yes | PASS for one parameter, operation, prerequisite, and explicit assertion | broader concept system remains |
+| templates/constraints | yes | PASS for one named constraint and explicit concrete invocation | broader templates remain |
+| monomorphization | yes | PASS for deterministic two-type identity and duplicate reuse | none for selected subset |
+| comptime/static_assert | yes | PASS for bounded pure subset and runtime-call rejection | capability model remains deferred |
+| arrays/indexing | yes | PASS only in compile-time domain | runtime arrays remain a separate Keep PoC3 row |
+| effects/actuators | yes | PASS Core denial; Vulkan preservation suite PASS | general effect law remains deferred |
+| profiles | yes | PASS through registered admissions and Core denial corpus | future profile API breadth remains deferred |
+| MIR/C backend | yes | PASS via semantic MIR facts, deterministic goldens, and native C tests | broader feature lowering remains row-specific |
+| diagnostics/provenance | yes | PASS by active semantic category | `CON`/`CV` namespace reconciliation remains |
+
+Rows not listed in this R1 table are untouched. In particular, no evidence in
+R1 changes the status of runtime arrays, Slice, FixedBuffer, Option/Result,
+ownership, allocation, C ABI, interfaces/dyn, machines, decide, yield, testing,
+or multi-module compilation.

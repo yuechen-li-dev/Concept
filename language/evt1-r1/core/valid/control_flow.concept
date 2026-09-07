@@ -1,0 +1,12 @@
+// PoC3 reference: language/phase2-execution/valid/while_with_if.valid.conception
+profile Core;
+
+int Count(bool addTwo, int limit)
+{
+    int value = if (addTwo) 2 else 0;
+    while (value < limit)
+    {
+        value = value + 1;
+    }
+    return if (value == limit and addTwo) value else 0;
+}

@@ -1,0 +1,6 @@
+// PoC3 reference: language/phase21-arrays-slices-fixed-buffers/invalid/array_index_constant_high.invalid.conception
+profile Core;
+
+comptime int[2] Values = [1, 2];
+
+static_assert(Values[2] == 0);

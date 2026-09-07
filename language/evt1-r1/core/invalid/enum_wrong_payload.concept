@@ -1,0 +1,12 @@
+// PoC3 reference: language/phase5-sum-types/invalid/enum_constructor_payload_type_mismatch.invalid.conception
+profile Core;
+
+enum Status
+{
+    Ready(bool value)
+}
+
+Status Bad()
+{
+    return Status::Ready(1);
+}

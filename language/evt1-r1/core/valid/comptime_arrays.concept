@@ -1,0 +1,29 @@
+// PoC3 reference: language/phase9-compile-time/valid/static_assert_compile_time_while.valid.conception
+// PoC3 reference: language/phase21-arrays-slices-fixed-buffers/valid/array_literal_nested.valid.conception
+profile Core;
+
+comptime int[3] Values = [1, 2, 4];
+comptime int[2][2] Matrix = [[1, 2], [3, 4]];
+
+comptime int Sum(int[3] values)
+{
+    int cursor = 0;
+    int total = 0;
+    while (cursor < Len(values)) bounded(8)
+    {
+        total = total + values[cursor];
+        cursor = cursor + 1;
+    }
+    return total;
+}
+
+static_assert(Len(Values) == 3);
+static_assert(Values[2] == 4);
+static_assert(Matrix[1][0] == 3);
+static_assert(Values == [1, 2, 4]);
+static_assert(Sum(Values) == 7);
+
+int Result()
+{
+    return Values[1] + Matrix[1][1];
+}

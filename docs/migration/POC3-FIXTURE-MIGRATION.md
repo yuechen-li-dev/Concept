@@ -1,6 +1,6 @@
 # PoC3 fixture migration inventory
 
-Status: R0 inventory; no bulk port attempted
+Status: R1 bounded migration evidence; no bulk port attempted
 
 ## Corpus snapshot
 
@@ -113,3 +113,24 @@ Start with a bounded representative set: declarations, ordinary functions,
 control flow, structs, payload enums, exhaustive match, concepts, one template
 specialization, and bounded comptime. Do not bulk-convert all 1,296 primary
 fixtures before the translation rules and oracle mapping are proven.
+
+## R1 bounded inventory
+
+R1 inspected 17 distinct PoC3 reference fixtures across phases 2, 3, 5, 7,
+8, 9, and 21. Sixteen canonical EVT1 sources retain direct PoC3 provenance;
+one canonical source intentionally combines two closely related array
+references. Five additional Core-denial sources use the R0 matrix and Vulkan
+constitution as their authority, for 21 new `.concept` sources total.
+
+| R1 classification | Count | Meaning |
+|---|---:|---|
+| reference fixtures inspected | 17 | Distinct PoC3 source oracles read for the bounded subset. |
+| canonical EVT1 sources with PoC3 provenance | 16 | Hand translations; original fixtures are unchanged. |
+| portable semantic references | 17 | Meaning can be tested after explicit surface translation. |
+| references requiring syntax translation | 17 | Module/profile, declaration, constraint, comptime-loop, aggregate, or match spelling differs. |
+| selected references blocked by missing Go features | 0 | Deferred feature families were not selected into the R1 harness. |
+| selected references classified legacy-only | 0 | No R1 matrix decision rejected an entire selected behavior. |
+
+The one executable disagreement is the historical unannotated compile-time
+loop. It is classified `EXPECTED-DIVERGENCE`, because canonical EVT1 requires
+`bounded(limit)`. It is not counted as an EVT1 feature gap.

@@ -1,0 +1,19 @@
+// PoC3 reference: language/phase8-concepts-templates/invalid/impl_missing_requirement.invalid.conception
+profile Core;
+
+struct Sample
+{
+    int value;
+};
+
+concept Measurable<T>
+{
+    requires int Measure(T value);
+}
+
+requires Measurable<Sample>;
+
+int Read()
+{
+    return 0;
+}

@@ -1,0 +1,25 @@
+// PoC3 reference: language/phase8-concepts-templates/invalid/constrained_missing_impl.invalid.conception
+profile Core;
+
+struct Sample
+{
+    int value;
+};
+
+concept Measurable<T>
+{
+    requires int Measure(T value);
+}
+
+template <typename T>
+requires Measurable<T>
+int Score(T value)
+{
+    return Measure(value);
+}
+
+int Bad()
+{
+    Sample sample = Sample{1};
+    return Score<Sample>(sample);
+}

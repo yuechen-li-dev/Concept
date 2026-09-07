@@ -1,0 +1,42 @@
+// PoC3 reference: language/phase8-concepts-templates/valid/template_constrained_equal.valid.conception
+profile Core;
+
+struct Sample
+{
+    int value;
+};
+
+enum Level
+{
+    Low,
+    High
+}
+
+concept Measurable<T>
+{
+    requires int Measure(T value);
+}
+
+concept Scorable<T>
+{
+    requires Measurable<T>;
+}
+
+int Measure(Sample value);
+int Measure(Level value);
+
+requires Scorable<Sample>;
+requires Scorable<Level>;
+
+template <typename T>
+requires Scorable<T>
+int Score(T value)
+{
+    return Measure(value);
+}
+
+int UseTemplates()
+{
+    Sample sample = Sample{7};
+    return Score<Sample>(sample) + Score<Sample>(sample) + Score<Level>(Level::High);
+}

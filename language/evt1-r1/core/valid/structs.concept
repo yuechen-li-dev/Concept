@@ -1,0 +1,17 @@
+// PoC3 reference: language/phase7-runtime-structs/valid/struct_literal_basic.valid.conception
+// PoC3 reference: language/phase7-runtime-structs/valid/field_access_run.valid.conception
+profile Core;
+
+struct Point
+{
+    int x;
+    int y;
+};
+
+int CopyAndRead()
+{
+    Point first = Point{3, 4};
+    Point second = first;
+    second.x = 9;
+    return first.x + second.y;
+}

@@ -1,0 +1,7 @@
+// Profile-only evidence: Vulkan mechanisms remain explicit imported declarations.
+profile Core;
+
+int Read()
+{
+    return CreatePipeline();
+}

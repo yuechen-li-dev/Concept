@@ -1,6 +1,6 @@
 # Concept EVT1 Stage 0 compiler architecture
 
-Status: R0 bootstrap foundation
+Status: R1 conformance and profile-isolation foundation
 
 ## Authority
 
@@ -56,9 +56,25 @@ and `concept.Write`. Public representation names are neutral (`Module`, `Type`,
 
 ## Profiles and the Vulkan boundary
 
-Every R0 source unit explicitly selects `profile Core;` or `profile Vulkan;`.
+Every EVT1 source unit explicitly selects `profile Core;` or `profile Vulkan;`.
 Core modules cannot admit domain imports, Vulkan runtime types, effects, or
 actuators. This is enforced before ordinary semantic analysis.
+
+R1 introduces a deliberately small data-owned `ProfileDefinition`:
+
+```text
+lexer / parser
+    -> core semantic environment + selected ProfileDefinition
+    -> validation
+    -> typed MIR
+    -> core C lowering + selected profile data/hooks
+```
+
+The definition registers builtin type identity, C spelling, required headers,
+synthetic fields/declarations, compiler-owned profile enums, import markers,
+and effect/actuator admission. The parser and validator no longer contain a
+switch or prefix test for Vulkan builtin names, and the C lowerer no longer
+contains Vulkan type-name cases.
 
 `internal/concept/profile/vulkan` is the public in-repository Vulkan consumer
 boundary. It admits only Vulkan modules, then delegates parsing, MIR, and C11
@@ -67,15 +83,25 @@ temporarily in `internal/concept/profile_vulkan.go`; the file is explicitly
 marked as a profile implementation seam because it depends on private semantic
 environment types.
 
+Likewise, dense effect-batch and actuator C emission remains in the cohesive
+lowerer behind profile admission. R1 records this as a profile lowering hook,
+not as Core language law. Splitting it would require exporting unstable private
+semantic state and is outside this isolation milestone.
+
 Automata are not assigned to Vulkan by file location. Both implementation
 lines contain machine-like semantics, but their surface and execution laws are
 not yet reconciled. R0 therefore preserves the Go automata implementation as a
 provisional core candidate and records the unresolved decision in the language
 specification and matrix.
 
-Vulkan C types and includes are emitted only when a Vulkan-profile module uses
-those types. Core-profile proof tests reject Vulkan vocabulary and assert that
-generated artifacts contain no Vulkan coupling.
+Vulkan C types, declarations, and includes are emitted only when a
+Vulkan-profile module uses registered types. Core-profile proof tests reject
+Vulkan vocabulary and assert that generated artifacts contain no Vulkan
+coupling. Prometheus contributes only an admitted import marker; the compiler
+has no Prometheus package, builtin type, or application binding dependency.
+
+**Vulkan is an extension of Concept EVT1. Concept EVT1 is not an extension of
+Vulkan.**
 
 ## CLI and artifacts
 
@@ -115,9 +141,12 @@ silently broaden core parsing or typing. A profile-specific construct must be
 rejected outside its profile or explicitly promoted through the specification
 and reconciliation process.
 
-## R0 limitations
+## R1 limitations
 
 - The package remains deliberately cohesive rather than prematurely split.
+- Effect/actuator validation and C runtime emission remain in-package profile
+  hooks; their complete physical extraction is deferred until the private
+  semantic boundary stabilizes.
 - Diagnostic codes retain the historical `CV` namespace for compatibility;
   renumbering is deferred.
 - The backend is the extracted strict-C11 path only.
@@ -128,12 +157,12 @@ and reconciliation process.
   interfaces/dyn, slices, FixedBuffer, Option, and Result surfaces are not
   ported.
 
-## Recommended R1 scope
+## R1 executable evidence
 
-R1 should build a differential conformance harness, not add a new feature
-family. Select a small cross-line corpus for structs, payload enums, exhaustive
-match, ordinary control flow, concepts/templates, and bounded comptime; define
-syntax translations explicitly; run the retired Zig and active Go compilers;
-and turn each agreed semantic decision into an EVT1 fixture plus diagnostic or
-artifact oracle. R1 should also isolate Vulkan builtin registration behind a
-profile-owned table once those first core tests prove the required boundary.
+`internal/concept/conformance_test.go` and `language/evt1-r1/core` provide the
+bounded differential harness and canonical source corpus. The evidence covers
+structs, payload enums, exhaustive match, ordinary control flow, concepts,
+templates, deterministic monomorphization, bounded comptime, and compile-time
+fixed arrays. `docs/conformance/EVT1-R1-CONFORMANCE.md` records classifications
+and provenance; `docs/compiler/EVT1-R1-VULKAN-ISOLATION.md` records the complete
+R1 leakage audit.
