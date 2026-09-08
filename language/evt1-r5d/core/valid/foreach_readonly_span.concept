@@ -1,0 +1,13 @@
+profile Core;
+
+int Main()
+{
+    const int<array>[3] storage = [4, 5, 6];
+    ReadOnlySpan<int> values = ReadOnlySpan(storage);
+    int total = 0;
+    foreach (ref const int value in values)
+    {
+        total = total + value;
+    }
+    return total;
+}

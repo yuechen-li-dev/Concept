@@ -1,0 +1,13 @@
+profile Core;
+
+int Main()
+{
+    int<array>[4] storage = [1, 2, 3, 4];
+    Span<int> values = Span(storage);
+    int total = 0;
+    foreach (int value in values)
+    {
+        total = total + value;
+    }
+    return total;
+}

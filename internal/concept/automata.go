@@ -153,6 +153,8 @@ type MIRState struct {
 	TransitionMatches    []MIRTransitionMatch   `json:"transition_matches,omitempty"`
 	TransitionDecisions  []MIRTransitionDecide  `json:"transition_decisions,omitempty"`
 	TransitionInferences []MIRTransitionInfer   `json:"transition_inferences,omitempty"`
+	Yields               []MIRYield             `json:"yields,omitempty"`
+	Foreaches            []MIRForeach           `json:"foreach,omitempty"`
 	Operations           []MIROperation         `json:"operations,omitempty"`
 	Storage              []MIRPersistentStorage `json:"storage,omitempty"`
 }

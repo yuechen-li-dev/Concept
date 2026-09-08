@@ -1,0 +1,21 @@
+profile Core;
+
+struct Resource
+{
+    int handle;
+}
+
+void Drop(owned Resource value)
+{
+    return;
+}
+
+int Main()
+{
+    owned Resource<array>[2] values = [Resource{1}, Resource{2}];
+    foreach (owned Resource value in values)
+    {
+        return value.handle;
+    }
+    return 0;
+}

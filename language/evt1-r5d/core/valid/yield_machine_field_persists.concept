@@ -1,0 +1,24 @@
+profile Core;
+
+automata Worker
+{
+    machine Run
+    {
+        int attempts;
+
+        state Waiting
+        {
+            machine.attempts = machine.attempts + 1;
+            yield;
+        }
+    }
+}
+
+int Main()
+{
+    instance Worker worker();
+    Step(worker, Run);
+    Step(worker, Run);
+    Step(worker, Run);
+    return worker.Run.attempts;
+}

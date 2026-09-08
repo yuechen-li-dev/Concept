@@ -275,7 +275,9 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 					tmp := MIRFunction{Name: resolvedDecl.Name + "." + machine.Name + "." + state.Name}
 					collectMIROps(env, state.Body, &tmp, nil)
 					mirState.Operations = append(mirState.Operations, tmp.Operations...)
+					mirState.Foreaches = append(mirState.Foreaches, tmp.Foreaches...)
 					collectTransitionMIR(state.Body, &mirState)
+					collectYieldMIR(state.Body, resolvedDecl.Name, machine.Name, state.Name, &mirState)
 					ordinal := 0
 					for _, stmt := range state.Body.Statements {
 						if local, ok := stmt.(*VarDecl); ok {
@@ -640,6 +642,16 @@ func evt1ValidateMIR(mir MIR) error {
 				}
 			}
 			for _, state := range machine.States {
+				for _, y := range state.Yields {
+					if y.MachineIdentity != automata.Name+"."+machine.Name || y.StateIdentity != automata.Name+"."+machine.Name+"."+state.Name || y.CleanupEdge != "TransientBeforeStepReturn" || !y.PreserveCurrentState || !y.PreservePersistentStorage || y.WriteResult || y.MarkComplete {
+						return evt1Diagnostic("YIELD_MIR_INVALID", "yield MIR must drop transients, preserve persistent state, and leave result/completion untouched", y.SourceSpan)
+					}
+				}
+				for _, each := range state.Foreaches {
+					if err := validateForeachMIR(each); err != nil {
+						return err
+					}
+				}
 				for _, local := range state.Storage {
 					if local.Identity == "" || local.Classification != "TransientLocal" || seenStorage[local.Identity] {
 						return evt1Diagnostic("MACHINE_MIR_INVALID", "state local MIR has invalid transient classification", local.SourceSpan)
@@ -688,6 +700,11 @@ func evt1ValidateMIR(mir MIR) error {
 	}
 	allFunctions := append(append([]MIRFunction{}, mir.Functions...), mir.ComptimeFns...)
 	for _, fn := range allFunctions {
+		for _, each := range fn.Foreaches {
+			if err := validateForeachMIR(each); err != nil {
+				return err
+			}
+		}
 		for _, inference := range fn.Inferences {
 			if inference.CandidateType.Name == "" || len(inference.Candidates) == 0 || inference.ScoreType != "float" || inference.Normalization != "StableSoftMax" || inference.Temperature != 1.0 || inference.NoEnabledPolicy != "Panic" || inference.NaNPolicy != "Panic" || inference.InfinityPolicy != "EqualPositiveInfinityElseNegativeInfinityZero" {
 				return evt1Diagnostic("INFER_MIR_INVALID", fmt.Sprintf("infer MIR in %s is incomplete", fn.Name), inference.SourceSpan)
@@ -770,6 +787,16 @@ func evt1ValidateMIR(mir MIR) error {
 	return nil
 }
 
+func validateForeachMIR(each MIRForeach) error {
+	if each.Source == "" || each.SourceKind == "" || each.SourceType.Name == "" || each.IteratorType.Name == "" || each.ElementType.Name == "" || each.ItemType.Name == "" || each.ItemName == "" || each.SourceEvaluation != "ExactlyOnce" || each.IteratorCleanup != "Deterministic" || each.ItemCleanup != "PerIteration" || !each.NoAllocation || !each.NoOwnershipTransfer {
+		return evt1Diagnostic("FOREACH_MIR_INVALID", "foreach MIR omits protocol, evaluation, cleanup, or allocation facts", each.SourceSpan)
+	}
+	if each.IteratorStrategy != "ExplicitProtocol" && each.IteratorStrategy != "BuiltinInlineIterator" {
+		return evt1Diagnostic("FOREACH_MIR_INVALID", "foreach MIR has an unknown iterator strategy", each.SourceSpan)
+	}
+	return nil
+}
+
 func evt1MIRCleanups(env *semanticEnv, fn FunctionDecl) []MIRCleanup {
 	types := map[string]Type{}
 	var declarationOrder []string
@@ -824,6 +851,20 @@ func evt1MIRCleanups(env *semanticEnv, fn FunctionDecl) []MIRCleanup {
 				visitBlock(s.Then)
 				if s.Else != nil {
 					visitBlock(*s.Else)
+				}
+			case *WhileStmt:
+				visitBlock(s.Body)
+			case *ForeachStmt:
+				visitExpr(s.Source)
+				visitBlock(s.Body)
+			case *MatchStmt:
+				for _, arm := range s.Arms {
+					visitBlock(arm.Block)
+				}
+			case *TryStmt:
+				visitBlock(s.Body)
+				for _, arm := range s.Except {
+					visitBlock(arm.Body)
 				}
 			}
 		}
@@ -898,6 +939,24 @@ func collectMIROps(env *semanticEnv, block *Block, fn *MIRFunction, templateInfo
 			collectExprMIROps(env, s.Value, fn, templateInfo)
 		case *TransitionStmt:
 			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "state_transition", Detail: s.Target, SourceSpan: s.Span})
+		case *YieldStmt:
+			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "yield_state", Detail: "preserve-current-state", NoAllocation: true, NoCopy: true, NoOwnershipTransfer: true, SourceSpan: s.Span})
+		case *ForeachStmt:
+			mode := "Value"
+			if s.ItemType.Ownership == "ref" {
+				mode = "Ref"
+				if s.ItemType.Const {
+					mode = "RefConst"
+				}
+			}
+			strategy := "ExplicitProtocol"
+			if s.SourceKind != "custom" {
+				strategy = "BuiltinInlineIterator"
+			}
+			fn.Foreaches = append(fn.Foreaches, MIRForeach{Source: evt1ExprIdentity(s.Source), SourceKind: s.SourceKind, SourceType: s.SourceType, IteratorType: s.IteratorType, ElementType: s.ElementType, ItemType: s.ItemType, ItemName: s.ItemName, IterationMode: mode, IteratorStrategy: strategy, SourceEvaluation: "ExactlyOnce", IteratorCleanup: "Deterministic", ItemCleanup: "PerIteration", NoAllocation: true, NoOwnershipTransfer: true, SourceSpan: s.Span})
+			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "foreach", Type: s.SourceType.String(), Detail: strategy, NoAllocation: true, NoCopy: true, NoOwnershipTransfer: true, SourceSpan: s.Span})
+			collectExprMIROps(env, s.Source, fn, templateInfo)
+			collectMIROps(env, &s.Body, fn, templateInfo)
 		case *TransitionMatchStmt:
 			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "transition_match", Detail: fmt.Sprintf("%d exhaustive arm(s)", len(s.Arms)), SourceSpan: s.Span})
 			collectExprMIROps(env, s.Subject, fn, templateInfo)
@@ -976,6 +1035,35 @@ func collectMIROps(env *semanticEnv, block *Block, fn *MIRFunction, templateInfo
 	}
 }
 
+func collectYieldMIR(block *Block, automata, machine, state string, out *MIRState) {
+	for _, stmt := range block.Statements {
+		switch s := stmt.(type) {
+		case *YieldStmt:
+			out.Yields = append(out.Yields, MIRYield{MachineIdentity: automata + "." + machine, StateIdentity: automata + "." + machine + "." + state, CleanupEdge: "TransientBeforeStepReturn", PreserveCurrentState: true, PreservePersistentStorage: true, WriteResult: false, MarkComplete: false, SourceSpan: s.Span})
+		case *IfStmt:
+			collectYieldMIR(&s.Then, automata, machine, state, out)
+			if s.Else != nil {
+				collectYieldMIR(s.Else, automata, machine, state, out)
+			}
+		case *MatchStmt:
+			for i := range s.Arms {
+				collectYieldMIR(&s.Arms[i].Block, automata, machine, state, out)
+			}
+		case *TryStmt:
+			collectYieldMIR(&s.Body, automata, machine, state, out)
+			for i := range s.Except {
+				collectYieldMIR(&s.Except[i].Body, automata, machine, state, out)
+			}
+		case *WhileStmt:
+			collectYieldMIR(&s.Body, automata, machine, state, out)
+		case *ForeachStmt:
+			collectYieldMIR(&s.Body, automata, machine, state, out)
+		case *Block:
+			collectYieldMIR(s, automata, machine, state, out)
+		}
+	}
+}
+
 func collectTransitionMIR(block *Block, state *MIRState) {
 	for _, stmt := range block.Statements {
 		switch s := stmt.(type) {
@@ -1020,6 +1108,8 @@ func collectTransitionMIR(block *Block, state *MIRState) {
 				collectTransitionMIR(&s.Except[i].Body, state)
 			}
 		case *WhileStmt:
+			collectTransitionMIR(&s.Body, state)
+		case *ForeachStmt:
 			collectTransitionMIR(&s.Body, state)
 		case *Block:
 			collectTransitionMIR(s, state)
@@ -1786,6 +1876,8 @@ func evt1RuntimeAutomataUsage(module Module) map[string]bool {
 				}
 			case *WhileStmt:
 				visitBlock(s.Body)
+			case *ForeachStmt:
+				visitBlock(s.Body)
 			case *Block:
 				visitBlock(*s)
 			}
@@ -1929,6 +2021,10 @@ func evt1ModuleUsesAutomataDispatchOutcome(module Module) bool {
 				}
 			case *WhileStmt:
 				if usesExpr(s.Condition) || (s.Bound != nil && usesExpr(s.Bound)) || visitBlock(s.Body) {
+					return true
+				}
+			case *ForeachStmt:
+				if usesExpr(s.Source) || visitBlock(s.Body) {
 					return true
 				}
 			case *Block:
@@ -3297,6 +3393,13 @@ func (f *evt1FunctionLowerer) lowerStatement(stmt Statement, indent int) string 
 			return ind(indent) + "/* invalid transition */\n"
 		}
 		return f.lowerAllScopeDrops(indent) + ind(indent) + fmt.Sprintf("instance->%s.current_state = %s;\n", evt1PayloadFieldName(f.machineStepName), evt1AutomataStateConstName(f.automataStepName, f.machineStepName, s.Target)) + ind(indent) + "return;\n"
+	case *YieldStmt:
+		if f.automataStepName == "" {
+			return ind(indent) + "/* invalid yield */\n"
+		}
+		return f.lowerAllScopeDrops(indent) + ind(indent) + "return; /* CONCEPT_STEP_YIELDED: re-enter current state */\n"
+	case *ForeachStmt:
+		return f.lowerForeachStmt(*s, indent)
 	case *TransitionMatchStmt:
 		return f.lowerTransitionMatchStmt(*s, indent)
 	case *TransitionDecideStmt:

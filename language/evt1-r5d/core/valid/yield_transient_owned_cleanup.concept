@@ -1,0 +1,30 @@
+profile Core;
+
+struct Temp
+{
+    int handle;
+}
+
+void Drop(owned Temp value)
+{
+    return;
+}
+
+automata Worker
+{
+    machine Run
+    {
+        state Waiting
+        {
+            owned Temp temporary = Temp{7};
+            yield;
+        }
+    }
+}
+
+int Main()
+{
+    instance Worker worker();
+    Step(worker, Run);
+    return 0;
+}

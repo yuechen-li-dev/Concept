@@ -1036,8 +1036,45 @@ scores, and order, `HardMax(infer(scores))` agrees with direct `decide`, but
 policy. It infers, selects, cleans transients, updates the tag, and returns from
 `Step`. Missing or unknown policy is invalid. Randomness is never implicit;
 sampling and explicit RNG are deferred. The older typed-signal automata form
-remains compatibility surface. Plain value-level decide, yield,
+remains compatibility surface. Plain value-level decide,
 completion/result, nested machine values, and effects/actuators remain later.
+
+**Canonical EVT1 R5d yield.** Bare `yield;` is valid only in a runtime machine
+state body. Taking it cleans transient locals in reverse lexical declaration
+order, preserves the current-state tag and all explicit automata/machine
+persistent storage, leaves completion and result storage untouched, and ends
+the current `Step`. The next explicit `Step(instance, Machine)` enters that
+same state from its first statement. It does not resume after the yield site.
+
+`yield` does not preserve ordinary transient locals and does not extend or
+launder reference provenance. An owned transient local drops before Step
+returns; an owned persistent field does not drop at yield. `yield value`, saved
+program counters, coroutine frames, schedulers, async, and generator semantics
+are not part of R5d.
+
+**Canonical EVT1 R5d foreach.** The required spelling is
+`foreach (Item item in source) { ... }`; the item type is explicit. Its
+semantic expansion obtains iterator state once, calls `MoveNext(ref iterator)`
+once per attempt, calls `Current(ref const iterator)` once per successful
+attempt, recreates the item binding for each iteration, and cleans item and
+iterator storage by ordinary lexical cleanup. The source expression is
+evaluated exactly once.
+
+Fixed arrays, ndarrays, `Span<T>`, and `ReadOnlySpan<T>` have compiler-known
+inline iterators. Ndarrays iterate scalar elements in canonical row-major
+storage order. User types participate through ordinary free functions
+`GetIterator(source)`, `MoveNext(ref iterator) -> bool`, and
+`Current(ref const iterator) -> Element` (or a compatible reference). No
+backing array is copied and no iterator heap object, registry, or virtual
+dispatch is implicit. Value iteration copies only copyable elements; movable-
+only elements require explicit reference iteration. Mutable references cannot
+be obtained from readonly sources.
+
+A foreach inside a state body is transient. If its body yields, its iterator is
+cleaned and the next Step restarts the state and therefore the foreach from the
+beginning. If iteration progress matters across Steps, iterator state must be
+stored explicitly in automata or machine persistent storage and advanced with
+the protocol operations directly.
 
 ## 23. Effects, actuators, and profiles
 
@@ -1140,7 +1177,7 @@ The following remain explicit reconciliation or implementation work:
 - owning dyn and explicit erased-storage policies;
 - allocation, allocator effects, arenas, and stores;
 - stable C ABI and layout law;
-- plain value-level `decide`, infer/transition infer, yield/resume,
+- plain value-level `decide`, continuation resume, generator yield,
   completion/result, and nested machine-value reconciliation;
 - general effects versus profile-owned effects/actuators;
 - Concept-native testing (runtime assertion sugar is canonical, but no testing

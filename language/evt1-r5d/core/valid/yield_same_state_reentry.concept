@@ -1,0 +1,27 @@
+profile Core;
+
+automata Worker
+with state
+{
+    int entries;
+}
+{
+    machine Run
+    {
+        state Waiting
+        {
+            state.entries = state.entries + 1;
+            yield;
+        }
+    }
+}
+
+int Main()
+{
+    instance Worker worker(0);
+    int before = State(worker, Run);
+    Step(worker, Run);
+    int after = State(worker, Run);
+    Step(worker, Run);
+    return worker.state.entries * 10 + after - before;
+}

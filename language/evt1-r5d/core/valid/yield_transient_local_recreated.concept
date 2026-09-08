@@ -1,0 +1,26 @@
+profile Core;
+
+automata Worker
+with state
+{
+    int total;
+}
+{
+    machine Run
+    {
+        state Waiting
+        {
+            int sample = 3;
+            state.total = state.total + sample;
+            yield;
+        }
+    }
+}
+
+int Main()
+{
+    instance Worker worker(0);
+    Step(worker, Run);
+    Step(worker, Run);
+    return worker.state.total;
+}

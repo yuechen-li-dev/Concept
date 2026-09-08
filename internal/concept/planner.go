@@ -183,6 +183,30 @@ type MachinePlan struct {
 	TransitionMatches    []TransitionMatchPlan  `json:"transition_match_plans,omitempty"`
 	TransitionDecisions  []TransitionDecidePlan `json:"transition_decide_plans,omitempty"`
 	TransitionInferences []TransitionInferPlan  `json:"transition_infer_plans,omitempty"`
+	Yields               []YieldPlan            `json:"yield_plans,omitempty"`
+	Foreaches            []ForeachPlan          `json:"foreach_plans,omitempty"`
+}
+
+type YieldPlan struct {
+	State                     string `json:"state"`
+	Strategy                  string `json:"strategy"`
+	PreserveStateTag          bool   `json:"preserve_state_tag"`
+	PreservePersistentStorage bool   `json:"preserve_persistent_storage"`
+	PreserveTransientLocals   bool   `json:"preserve_transient_locals"`
+	Scheduler                 string `json:"scheduler"`
+	CoroutineFrame            string `json:"coroutine_frame"`
+	CleanupStrategy           string `json:"cleanup_strategy"`
+}
+
+type ForeachPlan struct {
+	SourceKind          string `json:"source_kind"`
+	IteratorStrategy    string `json:"iterator_strategy"`
+	IterationMode       string `json:"iteration_mode"`
+	BoundsStrategy      string `json:"bounds_strategy"`
+	CleanupStrategy     string `json:"cleanup_strategy"`
+	DirectIndexEligible bool   `json:"direct_index_eligible"`
+	SelectedDirectIndex bool   `json:"selected_direct_index"`
+	NoAllocation        bool   `json:"no_allocation"`
 }
 
 type InferencePlan struct {
@@ -252,6 +276,7 @@ type FunctionPlan struct {
 	Dispatch    []DispatchPlan     `json:"dispatch_plans,omitempty"`
 	Failure     []PlanningDecision `json:"failure_plans,omitempty"`
 	ControlFlow []PlanningDecision `json:"control_flow_plans,omitempty"`
+	Foreaches   []ForeachPlan      `json:"foreach_plans,omitempty"`
 }
 
 type LoweringPlan struct {
@@ -337,6 +362,9 @@ func planFunction(fn MIRFunction, facts SemanticFactSet, target TargetCapabiliti
 	for _, inference := range fn.Inferences {
 		fp.Inferences = append(fp.Inferences, InferencePlan{CandidateType: inference.CandidateType.String(), Normalization: inference.Normalization, MaxSubtraction: true, CandidateCount: len(inference.Candidates), Storage: "InlineFixed", SIMDEligibility: "Deferred", SelectedSIMD: false})
 	}
+	for _, each := range fn.Foreaches {
+		fp.Foreaches = append(fp.Foreaches, planForeach(each))
+	}
 	for _, cleanup := range fn.Cleanups {
 		if cleanup.State == "transferred" {
 			fp.Cleanup.Suppressed = append(fp.Cleanup.Suppressed, cleanup.Owner)
@@ -384,6 +412,12 @@ func planOperation(op MIROperation, facts SemanticFactSet) PlanningDecision {
 	case "transition_infer":
 		d.Category, d.Strategy, d.Certainty = "InferenceTransitionPlan", "ScalarStableSoftMaxThenHardMax", DecisionSelected
 		d.Evidence = PlanningEvidence{Claims: []string{"ExplicitPolicy", "NoRandomness", "TransientBeforeStateUpdate"}}
+	case "yield_state":
+		d.Category, d.Strategy, d.Certainty = "YieldPlan", "ReenterStateFromStart", DecisionRequired
+		d.Evidence = PlanningEvidence{Claims: []string{"PreserveStateTag", "PreservePersistentStorage", "DropTransients", "NoCoroutineFrame", "NoScheduler"}}
+	case "foreach":
+		d.Category, d.Strategy, d.Certainty = "ForeachPlan", op.Detail, DecisionRequired
+		d.Evidence = PlanningEvidence{Claims: []string{"SourceExactlyOnce", "DeterministicCleanup", "NoAllocation", "NoOwnershipTransfer"}}
 	case "span_index", "array_index", "ndarray_index", "tensor_index":
 		d.Category, d.Strategy, d.Certainty = "BoundsPlan", "PerAccessRuntime", DecisionRequired
 		d.RuntimeGuards = []string{op.BoundsCheck}
@@ -443,6 +477,11 @@ func planOperation(op MIROperation, facts SemanticFactSet) PlanningDecision {
 	}
 	d.ID = "decision-" + digest([]byte(op.ID + "|" + d.Category + "|" + d.Strategy))[:16]
 	return d
+}
+
+func planForeach(each MIRForeach) ForeachPlan {
+	eligible := each.SourceKind == "array" || each.SourceKind == "ndarray" || each.SourceKind == "span" || each.SourceKind == "readonly_span"
+	return ForeachPlan{SourceKind: each.SourceKind, IteratorStrategy: each.IteratorStrategy, IterationMode: each.IterationMode, BoundsStrategy: "MoveNextGuard", CleanupStrategy: "ReverseLexical", DirectIndexEligible: eligible, SelectedDirectIndex: false, NoAllocation: each.NoAllocation}
 }
 
 func planTensor(index int, tensor MIRTensorOperation, facts SemanticFactSet) TensorPlan {
@@ -529,7 +568,7 @@ func planAutomata(mir *MIR) []AutomataPlan {
 		if automata.StateEnvironment == nil {
 			continue
 		}
-		plan := AutomataPlan{Identity: automata.Name, StateEnvironment: automata.StateEnvironment.Identity, EnvironmentStrategy: "InlineExplicitStruct", Scheduler: "None", YieldStrategy: "Deferred"}
+		plan := AutomataPlan{Identity: automata.Name, StateEnvironment: automata.StateEnvironment.Identity, EnvironmentStrategy: "InlineExplicitStruct", Scheduler: "None", YieldStrategy: "ReenterStateFromStart"}
 		for _, field := range automata.StateEnvironment.Fields {
 			plan.StateFields = append(plan.StateFields, AutomataStoragePlan{Identity: field.Identity, Name: field.Name, Type: field.Type.String(), Classification: field.Classification, Strategy: "InlineField", HasDrop: field.HasDrop})
 		}
@@ -540,6 +579,12 @@ func planAutomata(mir *MIR) []AutomataPlan {
 			}
 			for _, state := range machine.States {
 				mp.StateIdentities = append(mp.StateIdentities, automata.Name+"."+machine.Name+"."+state.Name)
+				for range state.Yields {
+					mp.Yields = append(mp.Yields, YieldPlan{State: state.Name, Strategy: "ReenterStateFromStart", PreserveStateTag: true, PreservePersistentStorage: true, PreserveTransientLocals: false, Scheduler: "None", CoroutineFrame: "None", CleanupStrategy: "ReverseLexicalTransientDrop"})
+				}
+				for _, each := range state.Foreaches {
+					mp.Foreaches = append(mp.Foreaches, planForeach(each))
+				}
 				for _, op := range state.Operations {
 					if op.Kind == "state_transition" {
 						mp.Transitions = append(mp.Transitions, state.Name+"->"+op.Detail)
@@ -640,7 +685,7 @@ func ValidateLoweringPlan(mir *MIR, facts *SemanticFactSet, plan *LoweringPlan) 
 		return fail("PLAN_AUTOMATA_INVALID", "lowering plan does not cover every explicit-state automata")
 	}
 	for _, automata := range plan.Automata {
-		if automata.Identity == "" || automata.StateEnvironment == "" || automata.EnvironmentStrategy != "InlineExplicitStruct" || automata.Scheduler != "None" || automata.YieldStrategy != "Deferred" || len(automata.Machines) == 0 {
+		if automata.Identity == "" || automata.StateEnvironment == "" || automata.EnvironmentStrategy != "InlineExplicitStruct" || automata.Scheduler != "None" || automata.YieldStrategy != "ReenterStateFromStart" || len(automata.Machines) == 0 {
 			return fail("PLAN_AUTOMATA_INVALID", "automata plan invents runtime policy or omits explicit storage")
 		}
 		for _, machine := range automata.Machines {

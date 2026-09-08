@@ -747,6 +747,8 @@ func evt1CollectTensorTypes(module Module) []Type {
 				}
 			case *WhileStmt:
 				block(x.Body)
+			case *ForeachStmt:
+				block(x.Body)
 			}
 		}
 	}

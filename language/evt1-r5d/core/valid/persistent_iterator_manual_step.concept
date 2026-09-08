@@ -1,0 +1,54 @@
+profile Core;
+
+struct RangeIterator
+{
+    int current;
+    int end;
+}
+
+bool MoveNext(ref RangeIterator iterator)
+{
+    iterator.current = iterator.current + 1;
+    return iterator.current < iterator.end;
+}
+
+int Current(ref const RangeIterator iterator)
+{
+    return iterator.current;
+}
+
+automata Worker
+with state
+{
+    int total;
+}
+{
+    machine Run
+    {
+        RangeIterator iterator = RangeIterator{-1, 3};
+
+        state Working
+        {
+            if (MoveNext(ref machine.iterator))
+            {
+                state.total = state.total + Current(ref const machine.iterator);
+                yield;
+            }
+            transition Done;
+        }
+
+        state Done
+        {
+        }
+    }
+}
+
+int Main()
+{
+    instance Worker worker(0);
+    Step(worker, Run);
+    Step(worker, Run);
+    Step(worker, Run);
+    Step(worker, Run);
+    return worker.state.total;
+}

@@ -1,0 +1,11 @@
+profile Core;
+
+int Main()
+{
+    int value = 3;
+    foreach (int item in value)
+    {
+        value = value + item;
+    }
+    return value;
+}

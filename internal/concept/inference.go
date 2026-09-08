@@ -194,6 +194,9 @@ func evt1InferenceCandidateTypes(module Module) map[string]bool {
 			case *WhileStmt:
 				visitExpr(s.Condition)
 				visitBlock(s.Body)
+			case *ForeachStmt:
+				visitExpr(s.Source)
+				visitBlock(s.Body)
 			case *MatchStmt:
 				visitExpr(s.Subject)
 				for _, arm := range s.Arms {

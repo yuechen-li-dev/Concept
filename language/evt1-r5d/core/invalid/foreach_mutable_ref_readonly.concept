@@ -1,0 +1,12 @@
+profile Core;
+
+int Main()
+{
+    const int<array>[2] storage = [1, 2];
+    ReadOnlySpan<int> values = ReadOnlySpan(storage);
+    foreach (ref int value in values)
+    {
+        value = 3;
+    }
+    return 0;
+}

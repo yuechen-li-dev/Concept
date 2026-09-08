@@ -1,0 +1,11 @@
+profile Core;
+
+int Main()
+{
+    int<array>[2] values = [1, 2];
+    foreach (float value in values)
+    {
+        return 1;
+    }
+    return 0;
+}

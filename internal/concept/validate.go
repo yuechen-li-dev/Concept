@@ -177,6 +177,10 @@ func evt1CloneScope(scope *evt1Scope) *evt1Scope {
 		return nil
 	}
 	out := newEVT1Scope(evt1CloneScope(scope.parent))
+	out.returnType = scope.returnType
+	out.tryHandlers = scope.tryHandlers
+	out.transitionTargets = scope.transitionTargets
+	out.inAutomataState = scope.inAutomataState
 	for name, binding := range scope.values {
 		out.values[name] = binding
 	}
@@ -833,6 +837,9 @@ func evt1CollectComptimeCallsFromBlock(block Block, env *semanticEnv) []string {
 				out = append(out, evt1CollectComptimeCallsFromExpr(s.Bound, env)...)
 			}
 			out = append(out, evt1CollectComptimeCallsFromBlock(s.Body, env)...)
+		case *ForeachStmt:
+			out = append(out, evt1CollectComptimeCallsFromExpr(s.Source, env)...)
+			out = append(out, evt1CollectComptimeCallsFromBlock(s.Body, env)...)
 		case *Block:
 			out = append(out, evt1CollectComptimeCallsFromBlock(*s, env)...)
 		}
@@ -1141,6 +1148,14 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 			}
 			if !local.transitionTargets[s.Target] {
 				return evt1Diagnostic("MACHINE_UNKNOWN_STATE", fmt.Sprintf("unknown transition target %s in current machine", s.Target), s.Span)
+			}
+		case *YieldStmt:
+			if !local.inAutomataState || inComptimeFn {
+				return evt1Diagnostic("YIELD_OUTSIDE_STATE", "yield is only valid inside a runtime machine state body", s.Span)
+			}
+		case *ForeachStmt:
+			if err := validateForeachStmt(env, local, s, returnType, templateInfo, inComptimeFn); err != nil {
+				return err
 			}
 		case *TransitionMatchStmt:
 			if err := validateTransitionMatchStmt(env, local, s, templateInfo, inComptimeFn); err != nil {
@@ -4042,6 +4057,10 @@ func evt1GuardStatementLabel(stmt Statement) string {
 		return "statement-form match"
 	case *WhileStmt:
 		return "while loops"
+	case *ForeachStmt:
+		return "foreach loops"
+	case *YieldStmt:
+		return "yield"
 	case *StaticAssertStmt:
 		return "static_assert"
 	default:

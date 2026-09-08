@@ -1,6 +1,6 @@
 # EVT1 automata state-capture direction
 
-Status: R5c inference transitions implemented; yield and effects deferred
+Status: R5d bounded yield/re-entry implemented; effects deferred
 
 ## Reconciliation
 
@@ -126,7 +126,9 @@ guards and scores through existing R5a lookup; inference adds no capture model.
 Semantic analysis fixes persistence before planning. `AutomataPlan` records
 an `InlineExplicitStruct` environment, `MachinePlan` records one explicit
 current-state slot and `Switch` dispatch, and the artifact says
-`scheduler: None`, `yield_strategy: Deferred`. The strict-C11 bootstrap emits
+`scheduler: None`, `yield_strategy: ReenterStateFromStart`. Each `YieldPlan`
+pins state-tag/persistent-storage preservation, transient cleanup, and
+`coroutine_frame: None`. The strict-C11 bootstrap emits
 inline structs, deterministic enums, and one switch function per machine.
 This is proof lowering, not a permanent choice against future direct-branch or
 jump-table plans.
@@ -160,8 +162,11 @@ R5c fixes score as scalar evidence, decide as raw hardmax, infer as normalized
 soft belief, and transition infer as belief plus explicit policy. Sampling,
 temperature syntax, TopK, and DragonGod stateful policy remain deferred.
 
-Recommended R5d scope is yield over the storage law established in R5a:
+R5d implements bare `yield;` over the storage law established in R5a:
 automata state, machine fields, and current-state tags survive; transient locals
-do not.
+do not. The next Step re-enters the state body from its beginning. A foreach
+inside that body is likewise transient and restarts. Persistent iteration is
+authored explicitly by storing iterator state in `with state` or a machine
+field and calling `MoveNext`/`Current` directly.
 Complete/Result, nested machine values, effects, and actuators remain separate
 later decisions.

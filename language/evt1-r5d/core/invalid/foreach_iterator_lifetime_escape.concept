@@ -1,0 +1,38 @@
+profile Core;
+
+struct Source
+{
+    int count;
+}
+
+ref struct BadIterator
+{
+    ref int current;
+}
+
+BadIterator GetIterator(ref const Source source)
+{
+    int local = source.count;
+    BadIterator iterator = BadIterator{ref local};
+    return iterator;
+}
+
+bool MoveNext(ref BadIterator iterator)
+{
+    return false;
+}
+
+int Current(ref const BadIterator iterator)
+{
+    return iterator.current;
+}
+
+int Main()
+{
+    Source source = Source{1};
+    foreach (int value in source)
+    {
+        return value;
+    }
+    return 0;
+}

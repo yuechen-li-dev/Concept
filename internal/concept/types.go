@@ -513,6 +513,15 @@ type TransitionStmt struct {
 	Span   Span   `json:"span"`
 }
 
+// YieldStmt ends the current explicit machine Step while preserving the
+// machine's current state tag. It never denotes a value or continuation.
+type YieldStmt struct {
+	Span Span `json:"span"`
+}
+
+func (*YieldStmt) evt1Statement()        {}
+func (s *YieldStmt) statementSpan() Span { return s.Span }
+
 func (*TransitionStmt) evt1Statement()        {}
 func (s *TransitionStmt) statementSpan() Span { return s.Span }
 
@@ -674,6 +683,23 @@ type WhileStmt struct {
 
 func (*WhileStmt) evt1Statement()        {}
 func (s *WhileStmt) statementSpan() Span { return s.Span }
+
+// ForeachStmt retains the explicit iterator contract selected by validation.
+// IteratorType is empty only before semantic analysis.
+type ForeachStmt struct {
+	ItemType     Type   `json:"item_type"`
+	ItemName     string `json:"item_name"`
+	Source       Expr   `json:"source"`
+	Body         Block  `json:"body"`
+	SourceType   Type   `json:"source_type,omitempty"`
+	IteratorType Type   `json:"iterator_type,omitempty"`
+	ElementType  Type   `json:"element_type,omitempty"`
+	SourceKind   string `json:"source_kind,omitempty"`
+	Span         Span   `json:"span"`
+}
+
+func (*ForeachStmt) evt1Statement()        {}
+func (s *ForeachStmt) statementSpan() Span { return s.Span }
 
 type Pattern struct {
 	EnumName    string   `json:"enum_name"`
@@ -1191,8 +1217,38 @@ type MIRFunction struct {
 	Operations       []MIROperation              `json:"operations"`
 	TensorOperations []MIRTensorOperation        `json:"tensor_operations,omitempty"`
 	Inferences       []MIRInference              `json:"inferences,omitempty"`
+	Foreaches        []MIRForeach                `json:"foreach,omitempty"`
 	Cleanups         []MIRCleanup                `json:"cleanups,omitempty"`
 	SourceSpan       Span                        `json:"source_span"`
+}
+
+type MIRYield struct {
+	MachineIdentity           string `json:"machine_identity"`
+	StateIdentity             string `json:"state_identity"`
+	CleanupEdge               string `json:"cleanup_edge"`
+	PreserveCurrentState      bool   `json:"preserve_current_state"`
+	PreservePersistentStorage bool   `json:"preserve_persistent_storage"`
+	WriteResult               bool   `json:"write_result"`
+	MarkComplete              bool   `json:"mark_complete"`
+	SourceSpan                Span   `json:"source_span"`
+}
+
+type MIRForeach struct {
+	Source              string `json:"source"`
+	SourceKind          string `json:"source_kind"`
+	SourceType          Type   `json:"source_type"`
+	IteratorType        Type   `json:"iterator_type"`
+	ElementType         Type   `json:"element_type"`
+	ItemType            Type   `json:"item_type"`
+	ItemName            string `json:"item_name"`
+	IterationMode       string `json:"iteration_mode"`
+	IteratorStrategy    string `json:"iterator_strategy"`
+	SourceEvaluation    string `json:"source_evaluation"`
+	IteratorCleanup     string `json:"iterator_cleanup"`
+	ItemCleanup         string `json:"item_cleanup"`
+	NoAllocation        bool   `json:"no_allocation"`
+	NoOwnershipTransfer bool   `json:"no_ownership_transfer"`
+	SourceSpan          Span   `json:"source_span"`
 }
 
 type MIRInference struct {

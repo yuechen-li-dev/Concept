@@ -37,7 +37,7 @@ The 1,296 primary fixtures are distributed as follows:
 | phase16-imports | 73 | multi-module implementation missing |
 | phase17-runtime-failure | 57 | semantic feature missing in Go EVT1 |
 | phase18-machines | 66 | R5b translates machine fields/basic Step/match/decide; nested values/completion/result deferred |
-| phase19-yielding-machines | 23 | R5a adopts explicit persistence/re-entry law; yield surface deferred to R5c |
+| phase19-yielding-machines | 23 | R5d adopts bare state-only yield, same-state re-entry, no-result/no-completion writes, and no hidden runtime; iterator/foreach are EVT1-new |
 | phase20-dragongod-kernel | 99 | mixed core, automata, and application pressure |
 | phase21-arrays-slices-fixed-buffers | 50 | fixed-array subset review; slices/buffer missing |
 | phase22-option-result-bounded-collection-mutation | 22 | Option exists only in retired line; remainder deferred |

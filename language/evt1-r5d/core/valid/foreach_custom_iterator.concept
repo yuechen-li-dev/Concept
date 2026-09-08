@@ -1,0 +1,40 @@
+profile Core;
+
+struct Range
+{
+    int first;
+    int end;
+}
+
+struct RangeIterator
+{
+    int current;
+    int end;
+}
+
+RangeIterator GetIterator(ref const Range source)
+{
+    return RangeIterator{source.first - 1, source.end};
+}
+
+bool MoveNext(ref RangeIterator iterator)
+{
+    iterator.current = iterator.current + 1;
+    return iterator.current < iterator.end;
+}
+
+int Current(ref const RangeIterator iterator)
+{
+    return iterator.current;
+}
+
+int Main()
+{
+    Range values = Range{2, 5};
+    int total = 0;
+    foreach (int value in values)
+    {
+        total = total + value;
+    }
+    return total;
+}

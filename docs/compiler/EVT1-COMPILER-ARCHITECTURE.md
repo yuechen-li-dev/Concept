@@ -639,7 +639,8 @@ automata source
 
 Semantic analysis decides what persists. The Planner consumes that
 classification and records inline environment layout, one current-state slot
-per machine, switch dispatch, no scheduler, and deferred yield lowering. It may
+per machine, switch dispatch, no scheduler, and `ReenterStateFromStart` yield
+lowering. It may
 later choose branch or jump-table realization, but it may not lift locals,
 invent captures, allocation, scheduling, or suspension policy.
 
@@ -697,6 +698,27 @@ registry, scheduler, or RNG. Future Planner work may prove
 `HardMax(SoftMax(scores)) == HardMax(scores)`, but R5c does not eliminate
 normalization.
 
+## R5d yield and foreach planning pipeline
+
+```text
+yield source -> Yield MIR -> YieldPlan -> transient cleanup + Step return
+foreach source -> iterator semantic MIR -> ForeachPlan -> iterator loop
+```
+
+Yield MIR retains machine/state identity, `TransientBeforeStepReturn`, current
+tag and persistent-storage preservation, and explicit false result/completion
+writes. `YieldPlan` selects `ReenterStateFromStart`, `Scheduler=None`, and
+`CoroutineFrame=None`. Strict C11 emits reverse lexical drops followed by a
+direct return; the existing state switch naturally re-enters from the top.
+
+Foreach MIR retains source/iterator/element/item types, value/ref/ref-const
+mode, exactly-once source evaluation, per-item and iterator cleanup, and the
+no-allocation/no-transfer law. `ForeachPlan` selects either the explicit
+`GetIterator`/`MoveNext`/`Current` protocol or a compiler-known inline iterator
+for contiguous builtins. Direct-index eligibility is recorded for arrays and
+spans but remains unselected. There is no LIR, runtime iterator registry,
+coroutine frame, or hidden persistent iterator.
+
 ## General limitations after R5c
 
 - The package remains deliberately cohesive rather than prematurely split.
@@ -710,7 +732,7 @@ normalization.
 - R5b automata hierarchy, explicit state capture, machine-local fields,
   caller-directed stepping, basic transition, categorical transition match,
   guarded hardmax transition decide, first-class inference, and explicit-policy
-  transition infer are canonical. Plain value-level decide, yield,
+  transition infer, bounded yield, and foreach are canonical. Plain value-level decide,
   completion/result, nested machine values, and effect/actuator reconciliation
   remain deferred.
 - Ownership beyond whole-local explicit transfer, deterministic local/

@@ -1,0 +1,12 @@
+profile Core;
+
+comptime int Invalid()
+{
+    yield;
+    return 0;
+}
+
+int Main()
+{
+    return 0;
+}

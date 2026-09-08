@@ -1,6 +1,6 @@
 # EVT1 LIR Planner direction
 
-Status: R5c inference planning consumer; LIR is future work
+Status: R5d yield/foreach planning consumer; LIR is future work
 
 ## Authority pipeline
 
@@ -37,9 +37,9 @@ R5a adds automata as a bounded Planner consumer. Semantic MIR, not the Planner,
 classifies `AutomataState`, `MachinePersistent`, and `TransientLocal` storage.
 `AutomataPlan` records an inline explicit environment; each `MachinePlan`
 records its current-state slot, initial symbolic identity, transition edges,
-and switch dispatch. The plan explicitly records no scheduler and defers yield.
-A later Planner may select branches or jump tables and may define resume-frame
-realization after R5c, but it cannot invent persistence or lift locals.
+and switch dispatch. R5d selects `ReenterStateFromStart` for bare yield and
+explicitly records no scheduler or coroutine frame. A later Planner may select
+branches or jump tables, but it cannot invent persistence or lift locals.
 
 R5b adds explicit `TransitionMatchPlan` and `TransitionDecidePlan` records.
 Match planning preserves categorical arms, one scrutinee evaluation, local
@@ -57,6 +57,14 @@ no-enabled/NaN/infinity policy, cleanup, and explicit HardMax. Scalar
 realization is selected; SIMD and hardmax-softmax elimination are not. A later
 Planner may recognize linear models, tiny MLPs, lookup models, decision trees,
 or quantized inference without changing distribution semantics.
+
+R5d adds `YieldPlan` and `ForeachPlan`. Yield planning preserves the current
+state tag and persistent storage, drops transient locals, and selects a direct
+Step return. Foreach planning preserves exactly-once source evaluation,
+value/ref/ref-const mode, deterministic item/iterator cleanup, and an inline
+or explicit-protocol iterator strategy. Contiguous builtins record direct-index
+eligibility without selecting a distinct optimization. Neither plan admits
+allocation, a scheduler, a continuation frame, or hidden iterator persistence.
 
 The 64-byte alignment of fixed inline storage remains a semantic guarantee
 because current storage binding and qualified facts rely on it. A target's
@@ -95,8 +103,8 @@ translation.
 
 ## Deferred
 
-R4l/R5c deliberately exclude SIMD generation, vectorization transforms, tiling,
+R4l/R5d deliberately exclude SIMD generation, vectorization transforms, tiling,
 fusion, SSA, virtual registers, register allocation, MachineIR, LLVM, MLIR,
 native encoders, generalized alias solving, allocation policy, decompilation,
-yield/resume frames, scheduler policy, branchless hardmax transforms, sampling,
+continuation/resume frames, scheduler policy, generator yield, branchless hardmax transforms, sampling,
 and inference-model recognition.

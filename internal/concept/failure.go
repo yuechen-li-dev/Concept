@@ -412,6 +412,10 @@ func evt1ModuleUsesTransitionPanic(module Module) bool {
 				if blockUses(s.Body) {
 					return true
 				}
+			case *ForeachStmt:
+				if blockUses(s.Body) {
+					return true
+				}
 			case *Block:
 				if blockUses(*s) {
 					return true

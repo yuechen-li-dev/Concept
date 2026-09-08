@@ -203,6 +203,10 @@ func evt1CollectStorageTypes(module Module, env *semanticEnv) []Type {
 				}
 			case *WhileStmt:
 				visitBlock(s.Body)
+			case *ForeachStmt:
+				add(s.SourceType)
+				add(s.ItemType)
+				visitBlock(s.Body)
 			case *MatchStmt:
 				for _, arm := range s.Arms {
 					visitBlock(arm.Block)
@@ -222,6 +226,21 @@ func evt1CollectStorageTypes(module Module, env *semanticEnv) []Type {
 		}
 		if fn.Body != nil {
 			visitBlock(*fn.Body)
+		}
+	}
+	for _, automata := range module.Automata {
+		for _, field := range automata.StateFields {
+			add(field.Type)
+		}
+		for _, machine := range automata.Machines {
+			for _, field := range machine.Fields {
+				add(field.Type)
+			}
+			for _, state := range machine.States {
+				if state.Body != nil {
+					visitBlock(*state.Body)
+				}
+			}
 		}
 	}
 	keys := make([]string, 0, len(types))
@@ -279,6 +298,10 @@ func evt1CollectStorageViewTypes(module Module, env *semanticEnv) []Type {
 				}
 			case *WhileStmt:
 				visitBlock(s.Body)
+			case *ForeachStmt:
+				add(s.SourceType)
+				add(s.ItemType)
+				visitBlock(s.Body)
 			case *MatchStmt:
 				for _, arm := range s.Arms {
 					visitBlock(arm.Block)
@@ -310,6 +333,21 @@ func evt1CollectStorageViewTypes(module Module, env *semanticEnv) []Type {
 		}
 		if fn.Body != nil {
 			visitBlock(*fn.Body)
+		}
+	}
+	for _, automata := range module.Automata {
+		for _, field := range automata.StateFields {
+			add(field.Type)
+		}
+		for _, machine := range automata.Machines {
+			for _, field := range machine.Fields {
+				add(field.Type)
+			}
+			for _, state := range machine.States {
+				if state.Body != nil {
+					visitBlock(*state.Body)
+				}
+			}
 		}
 	}
 	for _, layout := range env.layouts {
@@ -422,6 +460,10 @@ func evt1ModuleUsesStorageBounds(module Module) bool {
 				}
 			case *WhileStmt:
 				if usesExpr(s.Condition) || visitBlock(s.Body) {
+					return true
+				}
+			case *ForeachStmt:
+				if usesExpr(s.Source) || visitBlock(s.Body) {
 					return true
 				}
 			case *Block:

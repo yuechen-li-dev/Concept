@@ -1,0 +1,12 @@
+profile Core;
+
+int Main()
+{
+    int<ndarray>[2, 3] values = [[1, 2, 3], [4, 5, 6]];
+    int total = 0;
+    foreach (int value in values)
+    {
+        total = total * 10 + value;
+    }
+    return total;
+}

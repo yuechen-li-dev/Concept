@@ -1,0 +1,7 @@
+profile Core;
+
+int Main()
+{
+    yield;
+    return 0;
+}

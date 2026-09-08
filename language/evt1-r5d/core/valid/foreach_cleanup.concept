@@ -1,0 +1,16 @@
+profile Core;
+
+int First(ref const int<array>[3] source)
+{
+    foreach (int value in source)
+    {
+        return value;
+    }
+    return 0;
+}
+
+int Main()
+{
+    int<array>[3] values = [7, 8, 9];
+    return First(ref const values);
+}

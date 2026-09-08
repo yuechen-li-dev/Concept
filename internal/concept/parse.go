@@ -178,6 +178,8 @@ func (p *parser) parseModule() (Module, error) {
 	}
 	for !p.done() {
 		switch p.peekLexeme() {
+		case "yield":
+			return module, evt1Diagnostic("YIELD_OUTSIDE_STATE", "yield is only valid inside a runtime machine state body", p.currentSpan())
 		case "comptime":
 			isFunction, err := p.looksLikeComptimeFunction()
 			if err != nil {
@@ -1794,6 +1796,15 @@ func (p *parser) parseStatement() (Statement, error) {
 			return nil, err
 		}
 		return &TransitionStmt{Target: target.Lexeme, Span: start}, nil
+	case "yield":
+		start := p.next().Span
+		if p.peekLexeme() != ";" {
+			return nil, evt1Diagnostic("YIELD_INVALID_CONTEXT", "yield is bare machine-step control; values and continuations are not supported", start)
+		}
+		p.next()
+		return &YieldStmt{Span: start}, nil
+	case "foreach":
+		return p.parseForeachStmt()
 	case "return":
 		start := p.next().Span
 		if p.peekLexeme() == ";" {
@@ -1853,6 +1864,36 @@ func (p *parser) parseStatement() (Statement, error) {
 		}
 		return &ExprStmt{Value: value, Span: value.exprSpan()}, nil
 	}
+}
+
+func (p *parser) parseForeachStmt() (Statement, error) {
+	start, _ := p.expect("foreach")
+	if _, err := p.expect("("); err != nil {
+		return nil, err
+	}
+	itemType, err := p.parseType("")
+	if err != nil {
+		return nil, err
+	}
+	item, err := p.expectIdentifier("FOREACH_ITERATOR_INVALID", "expected foreach item name")
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.expect("in"); err != nil {
+		return nil, evt1Diagnostic("FOREACH_ITERATOR_INVALID", "expected `in` in foreach", p.currentSpan())
+	}
+	source, err := p.parseExpr()
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.expect(")"); err != nil {
+		return nil, err
+	}
+	body, err := p.parseBlock()
+	if err != nil {
+		return nil, err
+	}
+	return &ForeachStmt{ItemType: itemType, ItemName: item.Lexeme, Source: source, Body: body, Span: start.Span}, nil
 }
 
 func (p *parser) parseTransitionMatchStmt(start Span) (Statement, error) {

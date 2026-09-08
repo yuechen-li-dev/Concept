@@ -1,0 +1,11 @@
+profile Core;
+
+int Main()
+{
+    int<array>[3] values = [1, 2, 3];
+    foreach (ref int value in values)
+    {
+        value = value + 4;
+    }
+    return values[0] + values[1] + values[2];
+}
