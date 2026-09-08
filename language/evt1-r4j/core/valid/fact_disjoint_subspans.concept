@@ -1,0 +1,11 @@
+profile Core;
+
+int IndependentSubspans()
+{
+    int<array>[8] storage = [0, 1, 2, 3, 4, 5, 6, 7];
+    Span<int> whole = Span(storage);
+    Span<int> left = Subspan(whole, 0, 4);
+    Span<int> right = Subspan(whole, 4, 4);
+    return left[0] + right[0];
+}
+

@@ -1,0 +1,9 @@
+profile Core;
+
+concept ContiguousBuffer<T>
+{
+    requires compiler.Contiguous<T>();
+    requires compiler.Bounded<T>();
+}
+
+requires ContiguousBuffer<int<array>[4]>;

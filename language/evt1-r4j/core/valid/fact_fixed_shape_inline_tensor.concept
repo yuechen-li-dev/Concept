@@ -1,0 +1,8 @@
+profile Core;
+
+int FixedInlineTensor()
+{
+    matrix<int> values[2, 2] = [[1, 2], [3, 4]];
+    return values[1, 1];
+}
+

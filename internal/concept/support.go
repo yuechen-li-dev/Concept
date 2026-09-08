@@ -275,6 +275,26 @@ func (d Diagnostic) SemanticCategory() string {
 		return "TENSOR_INLINE_ELEMENT_TYPE_MISMATCH"
 	case "CV4632":
 		return "TENSOR_SCALAR_RESULT_TYPE_MISMATCH"
+	case "CV4640":
+		return "SEMANTIC_FACT_UNSATISFIED"
+	case "CV4641":
+		return "SEMANTIC_FACT_UNKNOWN"
+	case "CV4642":
+		return "SEMANTIC_FACT_INVALID_SUBJECT"
+	case "CV4643":
+		return "SEMANTIC_FACT_INVALID_PARAMETER"
+	case "CV4644":
+		return "ALIGNMENT_REQUIREMENT_FAILED"
+	case "CV4645":
+		return "DISJOINT_REQUIREMENT_FAILED"
+	case "CV4646":
+		return "CONTIGUITY_REQUIREMENT_FAILED"
+	case "CV4647":
+		return "SHAPE_REQUIREMENT_FAILED"
+	case "CV4648":
+		return "MUTABILITY_REQUIREMENT_FAILED"
+	case "CV4649":
+		return "SEMANTIC_FACT_MIR_INVALID"
 	default:
 		return d.Code
 	}

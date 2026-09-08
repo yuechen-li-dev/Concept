@@ -1,0 +1,7 @@
+profile Core;
+
+concept InvalidAlignment<T>
+{
+    requires compiler.Aligned<T>(3);
+}
+

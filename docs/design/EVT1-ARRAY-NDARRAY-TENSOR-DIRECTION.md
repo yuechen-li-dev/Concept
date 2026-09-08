@@ -1,6 +1,6 @@
 # EVT1 array, ndarray, and tensor direction
 
-Status: R4i fixed tensor declaration ergonomics canonical; optimization deferred
+Status: R4j semantic facts canonical; optimization deferred
 
 ## Layering
 
@@ -175,8 +175,15 @@ their meaning retroactively.
 
 ## Subsequent milestone boundary
 
-The next tensor milestone should consume the now-explicit backing witnesses for
-bounded qualification or optimization evidence without changing storage
-ownership. A tensor group/columnar record remains design direction only and
+R4j consumes the explicit backing witnesses for bounded fact qualification
+without changing storage ownership. A later tensor group/columnar record
+remains design direction only and
 must reuse layout semantics. Allocator-backed owned dynamic storage remains
 separate work.
+
+R4j realizes the bounded qualification step: arrays/ndarrays contribute
+contiguity, bounded extent, rank, and fixed/runtime shape; tensor backing
+preserves those storage facts and adds mathematical interpretation. Facts are
+typed MIR evidence for concept and future optimizer consumers, not runtime
+metadata. Exact variadic source-level shape predicates remain deferred because
+rank and full shape are already inspectable without adding awkward syntax.

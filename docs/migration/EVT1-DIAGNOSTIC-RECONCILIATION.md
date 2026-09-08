@@ -1,6 +1,6 @@
 # EVT1 diagnostic reconciliation
 
-Status: R4g bounded Span and ReadOnlySpan semantics
+Status: R4j semantic fact qualification
 
 Concept EVT1 compares diagnostics by semantic family. The active Go compiler
 retains `CV` numbers and the retired PoC3 compiler retains `CON` numbers; R2
@@ -91,6 +91,10 @@ the executable mapping used by the R2 conformance harness.
 | invalid inline shape | fixed ndarray pressure | `CV4630` | `TENSOR_INLINE_SHAPE_INVALID` | EVT1-new / reused law | every inline extent is positive and fixed |
 | inline fill element mismatch | tensor exact element law | `CV4631` | `TENSOR_INLINE_ELEMENT_TYPE_MISMATCH` | EVT1-new / reused law | no scalar conversion or broadcasting |
 | scalar contraction destination mismatch | scalar type law | `CV4632` | `TENSOR_SCALAR_RESULT_TYPE_MISMATCH` | reserved R4i family | dot result is exact element scalar |
+| unsatisfied or unknown semantic fact | no direct counterpart | `CV4640`-`CV4641` | `SEMANTIC_FACT_UNSATISFIED` / `SEMANTIC_FACT_UNKNOWN` | EVT1-new | unknown never satisfies a required proof |
+| invalid semantic subject or parameter | bounded analysis subject precedent | `CV4642`-`CV4643` | `SEMANTIC_FACT_INVALID_SUBJECT` / `SEMANTIC_FACT_INVALID_PARAMETER` | EVT1-new / R4b-derived | alignment is positive power-of-two through 4096 |
+| specialized fact failure | no direct counterpart | `CV4644`-`CV4648` | alignment/disjoint/contiguity/shape/mutability requirement families | EVT1-new | preserves useful semantic diagnostic families |
+| malformed semantic fact MIR | MIR invariant precedent | `CV4649` | `SEMANTIC_FACT_MIR_INVALID` | EVT1-new | typed subject, origin, certainty, and stable unique ID required |
 
 `static_assert` continues to reuse the bounded comptime diagnostic path:
 runtime calls are `CV4210`, a non-boolean evaluated condition is `CV4207`, and

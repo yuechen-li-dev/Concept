@@ -1,6 +1,6 @@
 # EVT1 tensor and Einstein direction
 
-Status: R4i bounded implementation
+Status: R4j fact-qualified bounded implementation
 
 ## Purpose and lineage
 
@@ -183,3 +183,17 @@ another storage system. Explicit noncanonical contraction syntax,
 broadcasting, strides, transposes, slicing, sparse/tiled storage, owned dynamic
 tensor allocation, named axes, autograd, BLAS, SIMD, GPU kernels, MLIR, and
 generalized semirings remain deferred.
+
+## R4j backing qualification
+
+R4j centralizes fact qualification around the closed `TensorBackingKind`
+classification. `Inline`, `NDArray`, `BoundNDArray`, `Span`, `LayoutRegion`,
+and `StreamChannel` each supply one backing witness; tensor adds rank and
+mathematical shape while preserving region identity, interval, alignment,
+contiguity, mutability, provenance, and no-allocation/no-copy/no-transfer
+evidence. Inline backing supplies a distinct stable region and fixed shape;
+runtime-bound backing supplies explicit runtime shape.
+
+Future tensor optimization consumes these MIR facts and proven operand/output
+disjointness. R4j does not alter contraction lowering and adds no vectorizer,
+SIMD, BLAS, GPU, MLIR, or noalias syntax.

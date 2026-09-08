@@ -1,0 +1,14 @@
+profile Core;
+
+layout AlignedBuffers
+{
+    align(64) int<array>[16] input;
+    align(64) int<array>[16] output;
+}
+
+concept AlignedLayout<T>
+{
+    requires compiler.Aligned<T>(64);
+}
+
+requires AlignedLayout<ref AlignedBuffers>;

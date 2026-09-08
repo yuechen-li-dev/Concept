@@ -514,8 +514,13 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 				if !ok {
 					return nil, evt1Diagnostic("CV4526", fmt.Sprintf("unknown compiler analysis %s", r.Analysis), r.Span)
 				}
-				if len(r.TypeArgs) != analysis.TypeArity || len(r.SubjectArgs) != analysis.SubjectArity {
-					return nil, evt1Diagnostic("CV4526", fmt.Sprintf("compiler analysis %s requires %d type argument(s) and %d semantic subject(s)", r.Analysis, analysis.TypeArity, analysis.SubjectArity), r.Span)
+				if len(r.TypeArgs) != analysis.TypeArity || len(r.SubjectArgs) != analysis.SubjectArity || len(r.Parameters) != analysis.ParameterArity {
+					return nil, evt1Diagnostic("CV4642", fmt.Sprintf("compiler analysis %s requires %d type argument(s), %d semantic subject(s), and %d parameter(s)", r.Analysis, analysis.TypeArity, analysis.SubjectArity, analysis.ParameterArity), r.Span)
+				}
+				if analysis.ValidateParameters != nil {
+					if err := analysis.ValidateParameters(r.Parameters, r.Span); err != nil {
+						return nil, err
+					}
 				}
 				for _, arg := range r.TypeArgs {
 					if err := validateKnownType(env, arg, r.Span, conceptDecl.TypeParam, false); err != nil {
@@ -530,6 +535,9 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 						return nil, evt1Diagnostic("CV4533", fmt.Sprintf("compiler analysis %s does not support semantic subjects", r.Analysis), r.Span)
 					}
 					if _, err := evt1FindRelationalRequirementOperation(conceptDecl, r.SubjectArgs, r.Span); err != nil {
+						if r.Analysis != "Outlives" {
+							return nil, evt1Diagnostic("CV4642", fmt.Sprintf("semantic subjects for %s do not identify one required operation", r.Analysis), r.Span)
+						}
 						return nil, err
 					}
 				}
@@ -4099,7 +4107,7 @@ func checkConceptSatisfaction(env *semanticEnv, conceptName string, concreteType
 			}
 		case *CompilerAnalysisRequirement:
 			analysis := evt1SemanticAnalysisRegistry[r.Analysis]
-			proof := MIRSemanticProof{Concept: conceptName, Analysis: r.Analysis, ConcreteType: concreteType.String(), SourceSpan: r.Span}
+			proof := MIRSemanticProof{Concept: conceptName, Analysis: r.Analysis, FactKind: evt1FactKind(r.Analysis), ConcreteType: concreteType.String(), Parameters: append([]int{}, r.Parameters...), SourceSpan: r.Span}
 			if len(r.SubjectArgs) > 0 {
 				subjects, err := evt1BindRelationalRequirementSubjects(env, conceptDecl, concreteType, r.SubjectArgs, span)
 				if err != nil {
@@ -4110,12 +4118,19 @@ func checkConceptSatisfaction(env *semanticEnv, conceptName string, concreteType
 				proof.Outcome = string(outcome)
 				proof.Satisfied = outcome == evt1AnalysisProven
 				proof.ProvenanceFacts = facts
-				proof.ID = evt1SemanticProofID(conceptName, concreteType, r.Analysis, proof.Subjects)
+				proof.Origin = FactOriginCompilerAnalysis
+				proof.ID = evt1SemanticProofID(conceptName, concreteType, r.Analysis, proof.Subjects, r.Parameters)
 				env.semanticProofs = append(env.semanticProofs, proof)
 				if outcome == evt1AnalysisUnknown {
+					if r.Analysis != "Outlives" {
+						return evt1Diagnostic("CV4641", fmt.Sprintf("%s requires %s, but the semantic fact is unknown", strings.Join(path, " -> "), r.Analysis), span)
+					}
 					return evt1Diagnostic("CV4528", fmt.Sprintf("%s requires %s, but result provenance is unknown", strings.Join(path, " -> "), r.Analysis), span)
 				}
 				if outcome != evt1AnalysisProven {
+					if r.Analysis != "Outlives" {
+						return evt1Diagnostic(evt1SemanticFactDiagnostic(r.Analysis, FactDisproven), fmt.Sprintf("%s failed semantic fact requirement %s", strings.Join(path, " -> "), r.Analysis), span)
+					}
 					return evt1Diagnostic("CV4527", fmt.Sprintf("%s failed relational requirement %s", strings.Join(path, " -> "), r.Analysis), span)
 				}
 				continue
@@ -4127,15 +4142,20 @@ func checkConceptSatisfaction(env *semanticEnv, conceptName string, concreteType
 			for _, arg := range args {
 				proof.Subjects = append(proof.Subjects, MIRSemanticSubject{Kind: "type", Name: arg.String(), Type: arg.String()})
 			}
-			proof.ID = evt1SemanticProofID(conceptName, concreteType, r.Analysis, proof.Subjects)
-			proof.Satisfied = analysis.CheckTypes(env, args)
-			proof.Outcome = string(evt1AnalysisDisproven)
-			if proof.Satisfied {
-				proof.Outcome = string(evt1AnalysisProven)
-			}
+			proof.ID = evt1SemanticProofID(conceptName, concreteType, r.Analysis, proof.Subjects, r.Parameters)
+			result := analysis.CheckTypes(env, args, r.Parameters)
+			proof.Satisfied = result.Outcome == FactProven
+			proof.Outcome = string(result.Outcome)
+			proof.Origin = result.Origin
+			proof.Evidence = &result.Evidence
+			proof.RegionIDs = append([]string{}, result.Evidence.RegionIDs...)
 			env.semanticProofs = append(env.semanticProofs, proof)
 			if !proof.Satisfied {
-				return evt1Diagnostic("CV4524", fmt.Sprintf("%s failed compiler analysis requirement %s<%s>", strings.Join(path, " -> "), r.Analysis, concreteType.String()), span)
+				code := "CV4524"
+				if r.Analysis != "LifetimeSafe" && r.Analysis != "NonEscaping" {
+					code = evt1SemanticFactDiagnostic(r.Analysis, result.Outcome)
+				}
+				return evt1Diagnostic(code, fmt.Sprintf("%s requires %s for %s, but the fact is %s", strings.Join(path, " -> "), r.Analysis, concreteType.String(), result.Outcome), span)
 			}
 		}
 	}
@@ -4143,10 +4163,12 @@ func checkConceptSatisfaction(env *semanticEnv, conceptName string, concreteType
 }
 
 type evt1SemanticAnalysis struct {
-	TypeArity     int
-	SubjectArity  int
-	CheckTypes    func(*semanticEnv, []Type) bool
-	CheckSubjects func(*semanticEnv, []evt1BoundSemanticSubject) (evt1SemanticAnalysisOutcome, []string)
+	TypeArity          int
+	SubjectArity       int
+	ParameterArity     int
+	ValidateParameters func([]int, Span) error
+	CheckTypes         func(*semanticEnv, []Type, []int) semanticFactResult
+	CheckSubjects      func(*semanticEnv, []evt1BoundSemanticSubject) (evt1SemanticAnalysisOutcome, []string)
 }
 
 type evt1SemanticAnalysisOutcome string
@@ -4165,14 +4187,16 @@ type evt1BoundSemanticSubject struct {
 	Type           Type
 }
 
-var evt1SemanticAnalysisRegistry = map[string]evt1SemanticAnalysis{
-	"LifetimeSafe": {TypeArity: 1, CheckTypes: func(env *semanticEnv, args []Type) bool {
-		return len(args) == 1 && (args[0].isReference() || args[0].Scoped || evt1IsRefStructType(env, args[0]))
-	}},
-	"NonEscaping": {TypeArity: 1, CheckTypes: func(env *semanticEnv, args []Type) bool {
-		return len(args) == 1 && (args[0].Scoped || evt1IsRefStructType(env, args[0]))
-	}},
-	"Outlives": {SubjectArity: 2, CheckSubjects: func(env *semanticEnv, subjects []evt1BoundSemanticSubject) (evt1SemanticAnalysisOutcome, []string) {
+var evt1SemanticAnalysisRegistry = map[string]evt1SemanticAnalysis{}
+
+func init() {
+	evt1SemanticAnalysisRegistry["LifetimeSafe"] = evt1SemanticAnalysis{TypeArity: 1, CheckTypes: func(env *semanticEnv, args []Type, parameters []int) semanticFactResult {
+		return evt1TypeFact(env, FactLifetimeSafe, args[0], parameters)
+	}}
+	evt1SemanticAnalysisRegistry["NonEscaping"] = evt1SemanticAnalysis{TypeArity: 1, CheckTypes: func(env *semanticEnv, args []Type, parameters []int) semanticFactResult {
+		return evt1TypeFact(env, FactNonEscaping, args[0], parameters)
+	}}
+	evt1SemanticAnalysisRegistry["Outlives"] = evt1SemanticAnalysis{SubjectArity: 2, CheckSubjects: func(env *semanticEnv, subjects []evt1BoundSemanticSubject) (evt1SemanticAnalysisOutcome, []string) {
 		if len(subjects) != 2 || subjects[0].Kind != "parameter" || subjects[1].Kind != "result" || evt1FunctionProvenanceKey(subjects[0].Function) != evt1FunctionProvenanceKey(subjects[1].Function) {
 			return evt1AnalysisDisproven, []string{"Outlives requires a parameter and result from one selected operation"}
 		}
@@ -4187,7 +4211,74 @@ var evt1SemanticAnalysisRegistry = map[string]evt1SemanticAnalysis{
 			}
 		}
 		return evt1AnalysisDisproven, []string{fact}
-	}},
+	}}
+	for _, kind := range []SemanticFactKind{FactContiguous, FactBounded, FactMutable, FactReadonly, FactFixedShape, FactRuntimeShape, FactNoAllocation, FactNoCopy, FactNoOwnershipTransfer} {
+		factKind := kind
+		evt1SemanticAnalysisRegistry[string(kind)] = evt1SemanticAnalysis{TypeArity: 1, CheckTypes: func(env *semanticEnv, args []Type, parameters []int) semanticFactResult {
+			return evt1TypeFact(env, factKind, args[0], parameters)
+		}}
+	}
+	for _, kind := range []SemanticFactKind{FactAligned, FactRank} {
+		factKind := kind
+		evt1SemanticAnalysisRegistry[string(kind)] = evt1SemanticAnalysis{TypeArity: 1, ParameterArity: 1, ValidateParameters: func(parameters []int, span Span) error {
+			if len(parameters) != 1 || parameters[0] <= 0 {
+				return evt1Diagnostic("CV4643", string(factKind)+" requires a positive integer parameter", span)
+			}
+			if factKind == FactAligned && (parameters[0] > 4096 || parameters[0]&(parameters[0]-1) != 0) {
+				return evt1Diagnostic("CV4643", "Aligned requires a power-of-two byte alignment from 1 through 4096", span)
+			}
+			return nil
+		}, CheckTypes: func(env *semanticEnv, args []Type, parameters []int) semanticFactResult {
+			return evt1TypeFact(env, factKind, args[0], parameters)
+		}}
+	}
+	evt1SemanticAnalysisRegistry[string(FactSameRegion)] = evt1SemanticAnalysis{SubjectArity: 2, CheckSubjects: evt1CheckSameRegionSubjects}
+	evt1SemanticAnalysisRegistry[string(FactDisjoint)] = evt1SemanticAnalysis{SubjectArity: 2, CheckSubjects: func(env *semanticEnv, subjects []evt1BoundSemanticSubject) (evt1SemanticAnalysisOutcome, []string) {
+		if len(subjects) == 2 && subjects[0].Kind == "parameter" && subjects[1].Kind == "result" && evt1FunctionProvenanceKey(subjects[0].Function) == evt1FunctionProvenanceKey(subjects[1].Function) {
+			summary := env.resultProvenance[evt1FunctionProvenanceKey(subjects[1].Function)]
+			if len(summary.ParameterIndices) == 1 && summary.ParameterIndices[0] == subjects[0].ParameterIndex {
+				return evt1AnalysisDisproven, []string{"result preserves the source region and cannot be disjoint from it"}
+			}
+		}
+		return evt1AnalysisUnknown, []string{"distinct parameter bindings do not prove disjoint storage"}
+	}}
+}
+
+func evt1CheckSameRegionSubjects(env *semanticEnv, subjects []evt1BoundSemanticSubject) (evt1SemanticAnalysisOutcome, []string) {
+	if len(subjects) != 2 {
+		return evt1AnalysisDisproven, []string{"SameRegion requires two semantic subjects"}
+	}
+	if subjects[0].Kind == "parameter" && subjects[1].Kind == "result" && evt1FunctionProvenanceKey(subjects[0].Function) == evt1FunctionProvenanceKey(subjects[1].Function) {
+		summary := env.resultProvenance[evt1FunctionProvenanceKey(subjects[1].Function)]
+		if summary.Kind == evt1ResultProvenanceUnknown {
+			return evt1AnalysisUnknown, []string{evt1ResultProvenanceFact(subjects[1].Function.Name, summary)}
+		}
+		if len(summary.ParameterIndices) == 1 && summary.ParameterIndices[0] == subjects[0].ParameterIndex {
+			return evt1AnalysisProven, []string{"result preserves source region identity"}
+		}
+		return evt1AnalysisDisproven, []string{"result is not derived solely from the selected source"}
+	}
+	return evt1AnalysisUnknown, []string{"region identity is unavailable for these semantic subjects"}
+}
+
+func evt1SemanticFactDiagnostic(name string, outcome SemanticFactCertainty) string {
+	if outcome == FactUnknown {
+		return "CV4641"
+	}
+	switch SemanticFactKind(name) {
+	case FactAligned:
+		return "CV4644"
+	case FactDisjoint:
+		return "CV4645"
+	case FactContiguous:
+		return "CV4646"
+	case FactFixedShape, FactRuntimeShape, FactRank, FactShape:
+		return "CV4647"
+	case FactMutable, FactReadonly:
+		return "CV4648"
+	default:
+		return "CV4640"
+	}
 }
 
 func evt1FindRelationalRequirementOperation(conceptDecl ConceptDecl, refs []SemanticSubjectRef, span Span) (*OperationRequirement, error) {
@@ -4262,7 +4353,7 @@ func evt1MIRSemanticSubjects(subjects []evt1BoundSemanticSubject) []MIRSemanticS
 	return result
 }
 
-func evt1SemanticProofID(conceptName string, concreteType Type, analysis string, subjects []MIRSemanticSubject) string {
+func evt1SemanticProofID(conceptName string, concreteType Type, analysis string, subjects []MIRSemanticSubject, parameters []int) string {
 	parts := []string{conceptName + "<" + concreteType.String() + ">", analysis}
 	for _, subject := range subjects {
 		label := subject.Function + "." + subject.Kind
@@ -4273,6 +4364,9 @@ func evt1SemanticProofID(conceptName string, concreteType Type, analysis string,
 			label += fmt.Sprintf("[%d]", *subject.ParameterIndex)
 		}
 		parts = append(parts, label)
+	}
+	for _, parameter := range parameters {
+		parts = append(parts, fmt.Sprintf("parameter[%d]", parameter))
 	}
 	return strings.Join(parts, "|")
 }

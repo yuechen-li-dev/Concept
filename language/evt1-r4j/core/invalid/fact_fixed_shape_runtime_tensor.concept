@@ -1,0 +1,16 @@
+profile Core;
+
+concept CompileTimeShape<T>
+{
+    requires compiler.FixedShape<T>();
+}
+
+int RuntimeShape(int rows, int columns)
+{
+    int<array>[16] storage = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    ref int<ndarray>[rows, columns] shaped = bind storage;
+    matrix<int> values = Tensor(shaped);
+    return values[0, 0];
+}
+
+requires CompileTimeShape<tensor<int, 2>>;

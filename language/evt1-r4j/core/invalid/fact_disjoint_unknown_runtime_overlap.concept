@@ -1,0 +1,14 @@
+profile Core;
+
+void Pair(Span<int> left, Span<int> right)
+{
+}
+
+concept Independent<T>
+{
+    requires void Pair(T left, T right);
+    requires compiler.Disjoint(left, right);
+}
+
+requires Independent<Span<int>>;
+

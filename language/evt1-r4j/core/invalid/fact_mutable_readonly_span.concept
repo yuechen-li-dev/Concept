@@ -1,0 +1,9 @@
+profile Core;
+
+concept Writable<T>
+{
+    requires compiler.Mutable<T>();
+}
+
+requires Writable<ReadOnlySpan<int>>;
+

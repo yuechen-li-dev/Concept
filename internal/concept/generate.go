@@ -35,6 +35,7 @@ func Generate(module Module, source []byte) (Outputs, error) {
 		outputBase: evt1OutputBase(module.Path),
 	}
 	l.mir = buildMIR(module, env)
+	evt1QualifyMIRFacts(&l.mir)
 	if err := evt1ValidateMIR(l.mir); err != nil {
 		return nil, err
 	}
@@ -67,6 +68,9 @@ func Generate(module Module, source []byte) (Outputs, error) {
 	}
 	if len(l.mir.Streams) > 0 {
 		l.mapDoc["streams"] = l.mir.Streams
+	}
+	if len(l.mir.SemanticFacts) > 0 {
+		l.mapDoc["semantic_facts"] = l.mir.SemanticFacts
 	}
 	mapJSON, err := json.MarshalIndent(l.mapDoc, "", "  ")
 	if err != nil {
@@ -299,6 +303,9 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 				for _, subject := range r.SubjectArgs {
 					args = append(args, subject.Name)
 				}
+				for _, parameter := range r.Parameters {
+					args = append(args, fmt.Sprint(parameter))
+				}
 				mirConcept.Requirements = append(mirConcept.Requirements, MIRConceptRequirement{
 					Kind: "compiler_analysis", Name: r.Analysis, Detail: strings.Join(args, ", "), SourceSpan: r.Span,
 				})
@@ -465,6 +472,9 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 }
 
 func evt1ValidateMIR(mir MIR) error {
+	if err := evt1ValidateSemanticFacts(mir.SemanticFacts); err != nil {
+		return err
+	}
 	regions := map[string]MIRLayoutRegion{}
 	for _, layout := range mir.Layouts {
 		if layout.Name == "" || layout.Size < 1 || layout.Alignment < 1 || len(layout.Regions) == 0 {

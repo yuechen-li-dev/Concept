@@ -1,0 +1,9 @@
+profile Core;
+
+concept ReadonlyBuffer<T>
+{
+    requires compiler.Readonly<T>();
+}
+
+requires ReadonlyBuffer<ReadOnlySpan<int>>;
+

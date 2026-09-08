@@ -1,0 +1,9 @@
+profile Core;
+
+concept Aligned16<T>
+{
+    requires compiler.Aligned<T>(16);
+}
+
+requires Aligned16<int<array>[4]>;
+

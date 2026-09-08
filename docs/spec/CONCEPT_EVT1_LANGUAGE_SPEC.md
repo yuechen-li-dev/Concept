@@ -764,7 +764,35 @@ strict-C11 backend. R4i adds no tensor runtime, heap allocator, BLAS, MLIR,
 SIMD, GPU lowering, broadcasting, strides, sparse storage, autograd, named
 axes, tensor slicing, or separate vector/matrix MIR.
 
-## 17. Slices and bounded collections
+## 17. Semantic facts and proof requirements
+
+EVT1 exposes a bounded compiler-owned semantic-fact vocabulary:
+`Contiguous`, `Bounded`, `FixedShape`, `RuntimeShape`, `Rank`, `Aligned`,
+`Mutable`, `Readonly`, `SameRegion`, `Disjoint`, `NoAllocation`, `NoCopy`, and
+`NoOwnershipTransfer`. Existing `LifetimeSafe`, `NonEscaping`, and `Outlives`
+analyses use the same certainty discipline.
+
+A fact is `Proven`, `Disproven`, or `Unknown`. A required compiler analysis
+succeeds only for `Proven`; `Unknown` fails conservatively. Parameterized facts
+use positive compile-time integers. Alignment parameters must be powers of two
+from 1 through 4096, and a proven alignment implies divisible weaker
+alignments.
+
+Type-level requirements consume only guarantees true for every value of the
+type. Value and region facts retain concrete subject identity and evidence in
+MIR. Thus `Contiguous<Span<int>>` and `Rank<Span<int>>(1)` are type guarantees,
+while alignment of a particular Span depends on its source and offset.
+`FixedShape` is distinct from finite runtime-carried `Bounded` extent.
+
+Relational facts use the bounded semantic-subject mechanism. `SameRegion`
+means stable parent region identity, not equal subranges. `Disjoint` is proven
+only from declared distinct regions or statically known non-overlapping
+half-open intervals. No general alias inference is implied.
+
+Semantic fact proofs erase before C lowering. Optimization behavior is not
+normative in R4j.
+
+## 18. Slices and bounded collections
 
 **Legacy PoC3.** PoC3 implemented read-only `Slice<T>` and
 `FixedBuffer<T, N>` foundations.
@@ -776,7 +804,7 @@ and stream model. Slice remains legacy evidence only. FixedBuffer mutation and
 collection rules, stack allocation, and owned dynamic storage remain future
 work; `bind` remains an exact whole-storage association rather than a subregion.
 
-## 18. Interfaces and dyn
+## 19. Interfaces and dyn
 
 **Legacy PoC3.** PoC3 contains interface declarations and bounded dynamic
 dispatch fixtures.
@@ -791,7 +819,7 @@ lifetime proofs remain compile-time evidence and do not become runtime witness
 baggage. R4b does not
 implement dyn, interface objects, or a vtable ABI.
 
-## 19. Allocation
+## 20. Allocation
 
 **Legacy PoC3.** PoC3 explored explicit allocator, arena, store, allocation
 effect, and index-based identity semantics.
@@ -800,7 +828,7 @@ effect, and index-based identity semantics.
 EVT1 has no implied heap or default allocator. Profile-generated native code
 may call admitted mechanisms without making those calls core allocation law.
 
-## 20. C ABI
+## 21. C ABI
 
 **Legacy PoC3.** PoC3 implements `extern`, export, and `repr(C)` pressure with
 fixtures.
@@ -809,7 +837,7 @@ fixtures.
 not a finalized Concept C ABI. Export naming, layout guarantees, header
 contracts, and FFI-safe type derivation require explicit EVT1 decisions.
 
-## 21. Machines and automata
+## 22. Machines and automata
 
 **Provisional EVT1 / deferred reconciliation.** PoC3 defines core `machine`,
 states, transitions, `decide`, nested machine composition, and `yield` behavior.
@@ -822,7 +850,7 @@ both lines demonstrate general control semantics. It does not declare either
 surface canonical, does not alias `machine` and `automata`, and does not import
 PoC3 decide/yield semantics into the Go model.
 
-## 22. Effects, actuators, and profiles
+## 23. Effects, actuators, and profiles
 
 **Profile-specific.** R0 admits `effect`, ordered emitted-effect batches, and
 `actuator` mappings only under `profile Vulkan;`. The Vulkan profile owns
@@ -833,7 +861,7 @@ bindings.
 laws, but R0 does not promote the Vulkan spelling or implementation to core.
 Any general effect system requires a separate cross-line decision.
 
-## 23. Testing
+## 24. Testing
 
 **Legacy PoC3.** `.con_test`, discovery, facts/theories, expectations, and the
 Zig-hosted test runner remain executable reference behavior.
@@ -842,7 +870,7 @@ Zig-hosted test runner remain executable reference behavior.
 canonical Concept testing language. R1 differential tests are infrastructure,
 not automatic adoption of the PoC3 testing surface.
 
-## 24. Panic and assert
+## 25. Panic and assert
 
 **Canonical EVT1.** Absence, recoverable failure, assertion failure, and panic
 are distinct. `Option<T>` is expected absence and carries no error information.
@@ -894,7 +922,7 @@ this is not a testing framework.
 `comptime Assert.True(condition, reason)`. It uses the existing bounded
 comptime evaluator and emits no runtime code. Runtime values are rejected.
 
-## 25. Backend and runtime boundaries
+## 26. Backend and runtime boundaries
 
 **Canonical EVT1 foundation.** The active bootstrap backend produces strict
 C11 C/H, deterministic MIR JSON, a source map, and a hash manifest. Backend
@@ -909,7 +937,7 @@ The C representation is not itself a language specification. Runtime services,
 Oct, and Prometheus are consumers and may not become hidden compiler build
 dependencies.
 
-## 26. Deferred EVT1 items
+## 27. Deferred EVT1 items
 
 The following remain explicit reconciliation or implementation work:
 

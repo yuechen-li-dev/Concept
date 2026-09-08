@@ -328,6 +328,7 @@ type CompilerAnalysisRequirement struct {
 	Analysis    string               `json:"analysis"`
 	TypeArgs    []Type               `json:"type_args,omitempty"`
 	SubjectArgs []SemanticSubjectRef `json:"subject_args,omitempty"`
+	Parameters  []int                `json:"parameters,omitempty"`
 	Span        Span                 `json:"span"`
 }
 
@@ -898,6 +899,7 @@ type MIR struct {
 	Functions      []MIRFunction      `json:"functions"`
 	ComptimeFns    []MIRFunction      `json:"comptime_functions,omitempty"`
 	SemanticProofs []MIRSemanticProof `json:"semantic_proofs,omitempty"`
+	SemanticFacts  []MIRSemanticFact  `json:"semantic_facts,omitempty"`
 	StorageTypes   []MIRStorageType   `json:"storage_types,omitempty"`
 	Layouts        []MIRLayout        `json:"layouts,omitempty"`
 	Streams        []MIRStream        `json:"streams,omitempty"`
@@ -1075,15 +1077,20 @@ type MIRFunction struct {
 }
 
 type MIRSemanticProof struct {
-	ID              string               `json:"id,omitempty"`
-	Concept         string               `json:"concept"`
-	Analysis        string               `json:"analysis"`
-	ConcreteType    string               `json:"concrete_type"`
-	Subjects        []MIRSemanticSubject `json:"subjects,omitempty"`
-	Satisfied       bool                 `json:"satisfied"`
-	Outcome         string               `json:"outcome,omitempty"`
-	ProvenanceFacts []string             `json:"provenance_facts,omitempty"`
-	SourceSpan      Span                 `json:"source_span"`
+	ID              string                `json:"id,omitempty"`
+	Concept         string                `json:"concept"`
+	Analysis        string                `json:"analysis"`
+	ConcreteType    string                `json:"concrete_type"`
+	Subjects        []MIRSemanticSubject  `json:"subjects,omitempty"`
+	Satisfied       bool                  `json:"satisfied"`
+	Outcome         string                `json:"outcome,omitempty"`
+	FactKind        SemanticFactKind      `json:"fact_kind,omitempty"`
+	Parameters      []int                 `json:"parameters,omitempty"`
+	Origin          SemanticFactOrigin    `json:"origin,omitempty"`
+	RegionIDs       []string              `json:"supporting_region_ids,omitempty"`
+	Evidence        *SemanticFactEvidence `json:"evidence,omitempty"`
+	ProvenanceFacts []string              `json:"provenance_facts,omitempty"`
+	SourceSpan      Span                  `json:"source_span"`
 }
 
 type MIRSemanticSubject struct {

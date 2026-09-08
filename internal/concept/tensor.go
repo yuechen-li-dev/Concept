@@ -157,6 +157,9 @@ func validateInlineTensorDeclaration(env *semanticEnv, scope *evt1Scope, decl *V
 	if geometryErr != nil {
 		alignment = 1
 	}
+	if alignment < evt1InlineStorageAlignment {
+		alignment = evt1InlineStorageAlignment
+	}
 	backingID := fmt.Sprintf("inline:%s#storage@%d:%d", decl.Name, decl.Span.Line, decl.Span.Column)
 	mutability := "mutable"
 	if tensorType.Const {

@@ -1,0 +1,21 @@
+profile Core;
+
+layout Buffers
+{
+    align(64) int<array>[16] input;
+    align(64) int<array>[16] output;
+}
+
+stream BufferStream over Buffers
+{
+    Input = input;
+    Output = output;
+}
+
+concept ZeroCopy<T>
+{
+    requires compiler.NoCopy<T>();
+    requires compiler.NoOwnershipTransfer<T>();
+}
+
+requires ZeroCopy<ref BufferStream>;

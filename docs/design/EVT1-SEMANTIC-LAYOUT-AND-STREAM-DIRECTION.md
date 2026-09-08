@@ -164,3 +164,14 @@ runtime-sized layout declarations, vector/matrix/tensor mathematics, TensorIR,
 general stream concepts, stream composition, a stream runtime, GPU lowering, or
 a stable C ABI/layout contract. Generated strict C11 is executable bootstrap
 evidence, not a public ABI promise.
+
+## R4j fact contribution
+
+Layout contributes stable region identity, byte interval, effective alignment,
+fixed type/shape, and sibling disjointness. A stream channel preserves those
+facts under its semantic channel name; it creates no storage. Span construction
+preserves the mapped identity and interval evidence, and Subspan narrows the
+interval and degrades alignment conservatively. Tensor then preserves the same
+backing facts while adding rank and mathematical shape. The MIR fact registry
+is the future optimizer authority; no pointer-intent reconstruction or runtime
+stream/fact object is introduced.

@@ -1,0 +1,8 @@
+profile Core;
+
+layout Buffers
+{
+    align(64) int<array>[16] input;
+    align(64) int<array>[16] output;
+}
+

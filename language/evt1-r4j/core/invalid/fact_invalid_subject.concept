@@ -1,0 +1,13 @@
+profile Core;
+
+ReadOnlySpan<int> Forward(ReadOnlySpan<int> source)
+{
+    return source;
+}
+
+concept InvalidSubject<T>
+{
+    requires T Forward(T source);
+    requires compiler.SameRegion(missing, result);
+}
+

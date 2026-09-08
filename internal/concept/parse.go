@@ -1170,6 +1170,19 @@ func (p *parser) parseConceptRequirement(typeParam string) (ConceptRequirement, 
 		}
 		if p.peekLexeme() != ")" {
 			for {
+				if isNumber(p.peekLexeme()) {
+					token := p.next()
+					value, parseErr := strconv.ParseInt(token.Lexeme, 0, 32)
+					if parseErr != nil {
+						return nil, evt1Diagnostic("CV4643", "semantic fact parameter must be an integer", token.Span)
+					}
+					req.Parameters = append(req.Parameters, int(value))
+					if p.peekLexeme() != "," {
+						break
+					}
+					p.next()
+					continue
+				}
 				subject, err := p.expectIdentifier("CV4527", "expected semantic subject name")
 				if err != nil {
 					return nil, err

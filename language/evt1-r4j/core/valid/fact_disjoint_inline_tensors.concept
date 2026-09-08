@@ -1,0 +1,11 @@
+profile Core;
+
+int IndependentInlineTensors()
+{
+    matrix<int> left[2, 2] = [[1, 2], [3, 4]];
+    matrix<int> right[2, 2] = [[5, 6], [7, 8]];
+    matrix<int> output[2, 2] = 0;
+    output = left @ right;
+    return output[0, 0];
+}
+

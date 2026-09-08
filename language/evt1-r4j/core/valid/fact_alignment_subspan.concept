@@ -1,0 +1,15 @@
+profile Core;
+
+layout AlignedStorage
+{
+    align(64) int<array>[8] values;
+}
+
+int NarrowAlignment()
+{
+    int<array>[16] storage = [0, 1, 2, 3, 4, 5, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0];
+    ref AlignedStorage layout = bind storage;
+    Span<int> whole = Span(layout.values);
+    Span<int> tail = Subspan(whole, 1, 4);
+    return tail[0];
+}

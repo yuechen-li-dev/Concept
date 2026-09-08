@@ -529,7 +529,38 @@ output and two rank-one operands. The backend lowers it directly to one scalar
 accumulator and reduction loop. Source-level rank-zero tensor variables remain
 absent.
 
-## General limitations after R4i
+## R4j semantic fact qualification
+
+R4j extends the existing analysis registry and MIR proof objects with one typed
+fact model:
+
+```text
+storage/layout/view/tensor semantics
+    -> semantic fact qualification
+    -> fact/proof registry
+    -> concept requirement resolver
+    -> MIR semantic facts
+    -> future optimizer / LIR
+```
+
+`SemanticFactKind`, typed subjects, integer parameters,
+`SemanticFactCertainty`, origins, and bounded evidence are shared by concept
+proofs and MIR. Qualification reads the existing `LayoutRegion`, span interval,
+`TensorViewFacts`, and closed `TensorBackingKind` witnesses. It does not infer a
+second representation. Proof/fact IDs use stable source and semantic identity,
+never runtime addresses.
+
+The concept registry accepts unary type guarantees, parameterized alignment
+and rank, and bounded relational subjects. Unknown is a first-class outcome
+and never satisfies a requirement. MIR validation checks fact identity,
+subjects, origin, and certainty before lowering.
+
+`SemanticFactSet` is the backend-independent consumer surface: `FactsFor`,
+`Prove`, `KnownAlignment`, `RegionOf`, and `AreDisjoint`. Future optimization
+passes consume these retained facts instead of re-running validation. R4j adds
+no optimizer, SIMD, noalias syntax, runtime tables, or C metadata.
+
+## General limitations after R4j
 
 - The package remains deliberately cohesive rather than prematurely split.
 - Effect/actuator validation and C runtime emission remain in-package profile
@@ -668,3 +699,13 @@ all six backing classifications, stable/disjoint inline regions, exact alias
 identity, rank-zero Tensor MIR, malformed inline MIR rejection, default and
 const laws, and 12 strict-C11 numeric paths. Generated evidence contains no
 heap, backing-copy, BLAS, MLIR, or separate vector/matrix path.
+
+## R4j executable evidence
+
+`internal/concept/r4j_conformance_test.go` and `language/evt1-r4j/core`
+provide 24 readable cases: 17 valid and 7 statically rejected, all classified
+`PASS`. The suite checks typed concept proofs, deterministic fact identities,
+malformed fact rejection, declared and interval disjointness, fixed/runtime
+tensor shapes, inline backing independence, safe alignment degradation, and
+the layout-to-stream-to-Span-to-tensor preservation chain. Generated C is
+checked to contain no runtime fact tables, allocation, noalias, or SIMD path.

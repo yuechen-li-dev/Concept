@@ -1,0 +1,11 @@
+profile Core;
+
+concept ContiguousSpan<T>
+{
+    requires compiler.Contiguous<T>();
+    requires compiler.Bounded<T>();
+    requires compiler.Rank<T>(1);
+}
+
+requires ContiguousSpan<Span<int>>;
+

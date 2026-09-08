@@ -1,0 +1,23 @@
+profile Core;
+
+layout Buffers
+{
+    align(64) int<array>[16] input;
+    align(64) int<array>[16] output;
+}
+
+stream BufferStream over Buffers
+{
+    Input = input;
+    Output = output;
+}
+
+int PreserveFacts()
+{
+    int<array>[32] backing = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    ref Buffers layout = bind backing;
+    ref BufferStream channels = bind layout;
+    Span<int> span = Span(channels.Input);
+    tensor<int, 1> values = Tensor(span);
+    return values[0];
+}

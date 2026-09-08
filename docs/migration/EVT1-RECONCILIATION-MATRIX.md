@@ -50,6 +50,11 @@ does not authorize that work in this milestone. Status is one of `Keep PoC3`,
 | Tensor backing witness | absent | closed Inline/NDArray/BoundNDArray/Span/LayoutRegion/StreamChannel classification | retain structured shape/provenance/region/alignment/mutability evidence | Keep Go / EVT1-new | No for R4i subset | R4i MIR inspection | compile-time classification; no runtime vtable |
 | Tensor MIR | absent | explicit tensor views, rank-zero scalar contraction, and per-function semantic operations before loop lowering | retain math intent through validation, then lower deliberately | Keep Go / EVT1-new | No for R4i subset | R4h-R4i MIR validation | no separate vector/matrix MIR |
 | vector / matrix aliases | no canonical split | exact parser normalization to `tensor<T,1>` / `tensor<T,2>` | adopt spelling-only identity | EVT1-new / R4h-derived | No for R4i subset | R4i API/native corpus | no separate semantics, witnesses, or storage |
+| semantic fact qualification | scattered retained semantic fields | one typed fact/proof vocabulary with certainty, provenance, subjects, and deterministic evidence | expose known R4 storage/view/tensor facts without reinference | EVT1-new / R4-derived | No for R4j subset | R4j concept, MIR, and preservation corpus | optimizer consumes facts later; no optimizer now |
+| contiguity/alignment qualification | layout and storage fields | `Contiguous` and parameterized `Aligned` proof | preserve structural and value-level guarantees separately | EVT1-new / R4-derived | No for R4j subset | R4j array/Span/layout/tensor cases | Subspan may reduce alignment |
+| region identity and disjointness | layout sibling identity; tensor alias checks | `RegionIdentity`, `SameRegion`, and bounded `Disjoint` facts | retain declared regions and fixed half-open interval proof | EVT1-new / R4-derived | No for R4j subset | R4j layout/stream/Subspan/inline tensor cases | runtime overlap remains unknown; no alias solver |
+| storage-neutrality qualification | per-operation booleans | `NoAllocation`, `NoCopy`, `NoOwnershipTransfer` facts | make bind/stream/Span/tensor evidence queryable | EVT1-new / R4-derived | No for R4j subset | R4j MIR and C erasure checks | fact applies to the qualified view/construction |
+| optimizer fact consumer | absent | `SemanticFactSet` query API over MIR facts | future backend-independent consumption | EVT1-new | No for R4j subset | deterministic query tests | SIMD/LIR/noalias lowering deferred |
 | indexing | runtime fixed-array indexing and bounds pressure | checked rank-1 and comma-separated rank-N indexing | merge array behavior; add EVT1-new ndarray arity/linearization | Merge / EVT1-new | No for fixed subset | phase21; R4d native/MIR tests | terminal panic, no Result default |
 | slices | read-only `Slice<T>` implemented | superseded by R4g spans | preserve fixtures as pressure; do not port the old surface | Redesign -> superseded by Span/ReadOnlySpan | No direct port | phase21 fixtures; R4g corpus | bounds/read-only evidence only |
 | Span | no canonical counterpart; Slice supplies pressure | mutable bounded borrowed contiguous interval | canonical EVT1 compiler-known ref-struct-like descriptor | EVT1 canonical / C#-inspired | No for R4g subset | R4g MIR/native corpus | same provenance and parent-region identity; no ownership/allocation |
@@ -249,3 +254,14 @@ shape, literal mismatch, unsupported element type, shorthand rank mismatch,
 broadcasting, and contraction aliasing reject. MIR proves deterministic
 disjoint inline regions and one existing Tensor MIR path; strict-C11 numeric
 evidence proves results without allocation or tensor runtime calls.
+
+## R4j executable evidence
+
+R4j adds 24 `PASS` cases: 17 valid and 7 static rejection programs. It exposes
+facts already established by R4 storage, layout, stream, Span, and tensor
+semantics through a typed three-certainty model. The corpus proves unary and
+bounded relational concept consumption, stable proof/fact identities,
+layout/stream/Span/tensor preservation, alignment degradation, declared and
+fixed-interval disjointness, fixed/runtime tensor qualification, and total C
+erasure. Exact source-level shape tuples, general alias solving, optimization,
+SIMD, noalias syntax, MLIR, and native backend work remain deferred.

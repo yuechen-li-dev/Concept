@@ -1,0 +1,14 @@
+profile Core;
+
+ReadOnlySpan<int> SameInterval(ReadOnlySpan<int> source)
+{
+    return source;
+}
+
+concept Independent<T>
+{
+    requires T SameInterval(T source);
+    requires compiler.Disjoint(source, result);
+}
+
+requires Independent<ReadOnlySpan<int>>;

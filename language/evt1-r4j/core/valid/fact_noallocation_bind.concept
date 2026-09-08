@@ -1,0 +1,9 @@
+profile Core;
+
+concept RealtimeSafe<T>
+{
+    requires compiler.NoAllocation<T>();
+}
+
+requires RealtimeSafe<ref int<ndarray>[2, 2]>;
+

@@ -80,3 +80,11 @@ not a mechanical Slice port.
 R4g adds no named lifetimes, non-lexical lifetime inference, reborrow lattice,
 mutable-alias solver, generalized noalias checker, raw-pointer constructor,
 strided or multidimensional span, stack allocation, or owned dynamic vector.
+
+R4j exposes the facts already established here. Span contributes contiguous,
+bounded rank-one storage, parent region, interval, conservative alignment,
+mutability/readonly, provenance, and no-allocation/no-copy/no-transfer evidence.
+`Subspan` computes safe alignment from the parent alignment and byte offset;
+it never retains a stronger stale value. Two fixed half-open intervals in one
+parent can be proven disjoint by overflow-safe endpoint comparison. Runtime
+intervals without existing decidable constraints remain unknown.
