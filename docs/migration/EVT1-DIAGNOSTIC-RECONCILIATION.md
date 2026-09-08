@@ -1,6 +1,6 @@
 # EVT1 diagnostic reconciliation
 
-Status: R4e explicit storage-binding semantics
+Status: R4f semantic layout and stream semantics
 
 Concept EVT1 compares diagnostics by semantic family. The active Go compiler
 retains `CV` numbers and the retired PoC3 compiler retains `CON` numbers; R2
@@ -68,6 +68,10 @@ the executable mapping used by the R2 conformance harness.
 | fixed bind count differs | no counterpart | `CV4566` | `BIND_SHAPE_SIZE_MISMATCH` | EVT1-new | compile-time exact-count proof |
 | mutable bind from const | no counterpart | `CV4567` | `BIND_MUTABLE_FROM_CONST` | EVT1-new | ordinary const/ref law |
 | malformed bind MIR | no counterpart | `CV4568` | `BIND_MIR_INVALID` | EVT1-new | compiler invariant, not source recovery |
+| invalid layout declaration | SDSL-V graph pressure | `CV4570`-`CV4576` | `LAYOUT_*` | SDSL-derived / EVT1-new surface | unique fixed, aligned, non-overlapping regions; runtime parameters deferred |
+| invalid layout bind | no direct counterpart | `CV4577`-`CV4579`, `CV4590`-`CV4591` | `LAYOUT_BIND_*` | EVT1-new composition | whole contiguous storage, const, exact bytes, and alignment |
+| invalid stream declaration or bind | SDSL-V channel pressure | `CV4580`-`CV4586` | `STREAM_*` | SDSL-derived / EVT1-new composition | known layout/regions, unique channels, exact layout, no const escalation |
+| invalid layout query or semantic MIR | semantic graph invariant | `CV4592`-`CV4594` | `LAYOUT_QUERY_INVALID` / `*_MIR_INVALID` | EVT1-new | bounded queries and complete layout/stream graphs |
 
 `static_assert` continues to reuse the bounded comptime diagnostic path:
 runtime calls are `CV4210`, a non-boolean evaluated condition is `CV4207`, and

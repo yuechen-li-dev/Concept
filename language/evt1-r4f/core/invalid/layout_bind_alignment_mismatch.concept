@@ -1,0 +1,14 @@
+profile Core;
+
+layout OverAlignedLayout
+{
+    align(128) int value;
+}
+
+int BadAlignment()
+{
+    int<array>[32] backing = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    ref OverAlignedLayout layout = bind backing;
+    return layout.value;
+}

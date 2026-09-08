@@ -1,0 +1,11 @@
+profile Core;
+
+layout PacketLayout
+{
+    uint magic;
+    uint length;
+    byte<array>[256] payload;
+}
+
+static_assert(LayoutSize<PacketLayout>() == 264, "packet size");
+static_assert(LayoutOffset<PacketLayout>("payload") == 8, "payload offset");

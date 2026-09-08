@@ -254,6 +254,20 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		typeNames[structDecl.Name] = structDecl.Span
 		env.structs[structDecl.Name] = structDecl
 	}
+	for _, layoutDecl := range module.Layouts {
+		if _, exists := typeNames[layoutDecl.Name]; exists {
+			return nil, evt1Diagnostic("CV4570", fmt.Sprintf("duplicate type declaration %s", layoutDecl.Name), layoutDecl.Span)
+		}
+		typeNames[layoutDecl.Name] = layoutDecl.Span
+		env.layouts[layoutDecl.Name] = layoutDecl
+	}
+	for _, streamDecl := range module.Streams {
+		if _, exists := typeNames[streamDecl.Name]; exists {
+			return nil, evt1Diagnostic("CV4580", fmt.Sprintf("duplicate type declaration %s", streamDecl.Name), streamDecl.Span)
+		}
+		typeNames[streamDecl.Name] = streamDecl.Span
+		env.streams[streamDecl.Name] = streamDecl
+	}
 	for _, effectDecl := range module.Effects {
 		if effectDecl.Name == "dispatch" || effectDecl.Name == "actuate" || effectDecl.Name == "discard" {
 			return nil, evt1Diagnostic("CV4268", fmt.Sprintf("%s is a compiler-owned operation name and cannot be redeclared", effectDecl.Name), effectDecl.Span)
@@ -393,6 +407,12 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		env.enums[enumDecl.Name] = module.Enums[i]
 	}
 	if err := validateValueLayoutCycles(env); err != nil {
+		return nil, err
+	}
+	if err := evt1AnalyzeLayouts(env, module.Layouts); err != nil {
+		return nil, err
+	}
+	if err := evt1AnalyzeStreams(env, module.Streams); err != nil {
 		return nil, err
 	}
 	for _, structDecl := range module.Structs {
@@ -1367,6 +1387,60 @@ func validateExprAgainstExpected(env *semanticEnv, scope *evt1Scope, expr Expr, 
 }
 
 func validateBindExpr(env *semanticEnv, scope *evt1Scope, bind *BindExpr, expected Type, templateInfo *evt1TemplateInfo) (Type, error) {
+	if expected.Kind == TypeStream || env.streams[expected.Name].Name != "" {
+		if !expected.isReference() {
+			return Type{}, evt1Diagnostic("CV4584", "stream bind target must be ref or ref const", bind.Span)
+		}
+		stream := env.streams[expected.Name]
+		sourceExprType, err := validateExpr(env, scope, bind.Source, templateInfo, false)
+		if err != nil {
+			return Type{}, err
+		}
+		sourcePlace, err := validateAssignable(env, scope, bind.Source, templateInfo)
+		if err != nil || sourcePlace.t.Kind != TypeLayout || sourcePlace.t.Name != stream.LayoutName {
+			return Type{}, evt1Diagnostic("CV4585", fmt.Sprintf("stream %s requires a bound %s layout", stream.Name, stream.LayoutName), bind.Source.exprSpan())
+		}
+		if !expected.Const && !sourcePlace.mutable {
+			return Type{}, evt1Diagnostic("CV4586", "mutable stream bind cannot originate from a const layout", bind.Source.exprSpan())
+		}
+		provenance := evt1ExprProvenance(env, scope, bind.Source)
+		bind.BindKind, bind.LayoutName = "stream", stream.LayoutName
+		bind.TargetType, bind.SourceType = expected, sourceExprType
+		bind.ProvenanceKind, bind.ProvenanceScoped = string(provenance.Kind), provenance.Scoped
+		return expected, nil
+	}
+	if expected.Kind == TypeLayout || env.layouts[expected.Name].Name != "" {
+		if !expected.isReference() {
+			return Type{}, evt1Diagnostic("CV4577", "layout bind target must be ref or ref const", bind.Span)
+		}
+		layout := env.layouts[expected.Name]
+		sourceExprType, err := validateExpr(env, scope, bind.Source, templateInfo, false)
+		if err != nil {
+			return Type{}, err
+		}
+		sourcePlace, err := validateAssignable(env, scope, bind.Source, templateInfo)
+		if err != nil || sourcePlace.t.ArrayElem == nil || !sourcePlace.t.Contiguous {
+			return Type{}, evt1Diagnostic("CV4578", "layout bind source must be existing contiguous storage", bind.Source.exprSpan())
+		}
+		if !expected.Const && !sourcePlace.mutable {
+			return Type{}, evt1Diagnostic("CV4579", "mutable layout bind cannot originate from const storage", bind.Source.exprSpan())
+		}
+		sourceBytes, _, err := evt1TypeGeometry(env, sourcePlace.t)
+		if err != nil {
+			return Type{}, err
+		}
+		if sourceBytes != layout.Size {
+			return Type{}, evt1Diagnostic("CV4590", fmt.Sprintf("layout %s requires %d backing bytes but source has %d", layout.Name, layout.Size, sourceBytes), bind.Span)
+		}
+		if layout.Alignment > evt1InlineStorageAlignment {
+			return Type{}, evt1Diagnostic("CV4591", fmt.Sprintf("layout %s requires alignment %d but fixed inline storage guarantees %d", layout.Name, layout.Alignment, evt1InlineStorageAlignment), bind.Span)
+		}
+		provenance := evt1ExprProvenance(env, scope, bind.Source)
+		bind.BindKind, bind.LayoutName = "layout", layout.Name
+		bind.TargetType, bind.SourceType = expected, sourceExprType
+		bind.ProvenanceKind, bind.ProvenanceScoped = string(provenance.Kind), provenance.Scoped
+		return expected, nil
+	}
 	if !expected.isReference() || expected.ArrayElem == nil {
 		return Type{}, evt1Diagnostic("CV4563", fmt.Sprintf("bind target must be ref or ref const array/ndarray storage, got %s", expected.String()), bind.Span)
 	}
@@ -1401,6 +1475,7 @@ func validateBindExpr(env *semanticEnv, scope *evt1Scope, bind *BindExpr, expect
 	}
 	provenance := evt1ExprProvenance(env, scope, bind.Source)
 	bind.TargetType = expected
+	bind.BindKind = "storage"
 	bind.SourceType = sourceExprType
 	bind.RuntimeCheck = runtimeCheck
 	bind.ProvenanceKind = string(provenance.Kind)
@@ -1455,8 +1530,8 @@ func evt1ResolveType(env *semanticEnv, scope *evt1Scope, t Type) (Type, error) {
 				if value.IntValue < 0 {
 					return Type{}, evt1Diagnostic("CV4222", fmt.Sprintf("storage extent %d must be non-negative", value.IntValue), expr.exprSpan())
 				}
-				if value.IntValue > evt1ComptimeMaxArrayLength {
-					return Type{}, evt1Diagnostic("CV4223", fmt.Sprintf("storage extent %d exceeds limit %d", value.IntValue, evt1ComptimeMaxArrayLength), expr.exprSpan())
+				if value.IntValue > evt1StorageMaxFixedExtent {
+					return Type{}, evt1Diagnostic("CV4223", fmt.Sprintf("storage extent %d exceeds limit %d", value.IntValue, evt1StorageMaxFixedExtent), expr.exprSpan())
 				}
 				resolvedShape = append(resolvedShape, StorageDimension{Extent: value.IntValue, Expression: fmt.Sprintf("%d", value.IntValue), Expr: expr})
 				continue
@@ -1798,6 +1873,18 @@ func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string,
 	if _, ok := env.structs[t.Name]; ok {
 		return nil
 	}
+	if _, ok := env.layouts[t.Name]; ok {
+		if !t.isReference() {
+			return evt1Diagnostic("CV4577", fmt.Sprintf("layout %s is a non-owning view and must be used through ref or ref const", t.Name), span)
+		}
+		return nil
+	}
+	if _, ok := env.streams[t.Name]; ok {
+		if !t.isReference() {
+			return evt1Diagnostic("CV4584", fmt.Sprintf("stream %s is a zero-storage view and must be used through ref or ref const", t.Name), span)
+		}
+		return nil
+	}
 	if _, ok := env.automata[t.Name]; ok {
 		return evt1Diagnostic("CV4263", fmt.Sprintf("automata %s cannot be used as a runtime type", t.Name), span)
 	}
@@ -1849,6 +1936,13 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		receiverType, err := validateExpr(env, scope, e.Receiver, templateInfo, inComptimeFn)
 		if err != nil {
 			return Type{}, err
+		}
+		if region, ok := evt1LayoutRegion(env, receiverType.Name, e.Field); ok {
+			layoutName := receiverType.Name
+			if stream, isStream := env.streams[receiverType.Name]; isStream {
+				layoutName = stream.LayoutName
+			}
+			e.RegionID, e.LayoutName, e.RegionOffset, e.RegionExtent, e.RegionAlignment = region.ID, layoutName, region.Offset, region.ByteExtent, region.Alignment
 		}
 		if templateInfo != nil && evt1TypeDependsOnParam(receiverType, templateInfo.Decl.TypeParam) {
 			return Type{}, evt1Diagnostic("CV4172", "dependent field access is not allowed in EVT1 M1B-B templates", e.Span)
@@ -2008,6 +2102,13 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		return Type{Name: evt1AutomataDispatchOutcomeTypeName, Kind: TypeEnum, Span: e.Span}, nil
 	case *TemplateCallExpr:
+		if e.Callee == "LayoutSize" || e.Callee == "LayoutAlign" || e.Callee == "LayoutOffset" {
+			if _, err := evt1LayoutQuery(env, e.Callee, e.TypeArg, e.Args); err != nil {
+				return Type{}, err
+			}
+			out, _ := evt1BuiltinType("int", e.Span)
+			return out, nil
+		}
 		if inComptimeFn {
 			return Type{}, evt1Diagnostic("CV4201", "templates are not available during comptime evaluation", e.Span)
 		}
@@ -2393,6 +2494,13 @@ func validateAssignable(env *semanticEnv, scope *evt1Scope, expr Expr, templateI
 		fieldType, ok := fields[e.Field]
 		if !ok {
 			return evt1LValue{}, evt1Diagnostic("CV4026", fmt.Sprintf("unknown field %s on %s", e.Field, baseName), e.Span)
+		}
+		if region, ok := evt1LayoutRegion(env, receiver.t.Name, e.Field); ok {
+			layoutName := receiver.t.Name
+			if stream, isStream := env.streams[receiver.t.Name]; isStream {
+				layoutName = stream.LayoutName
+			}
+			e.RegionID, e.LayoutName, e.RegionOffset, e.RegionExtent, e.RegionAlignment = region.ID, layoutName, region.Offset, region.ByteExtent, region.Alignment
 		}
 		path := receiver.path
 		path.Fields = append(append([]string{}, receiver.path.Fields...), e.Field)
@@ -4127,6 +4235,14 @@ func evt1CanonicalType(env *semanticEnv, t Type) Type {
 	}
 	if _, ok := env.structs[t.Name]; ok {
 		t.Kind = TypeStruct
+		return t
+	}
+	if _, ok := env.layouts[t.Name]; ok {
+		t.Kind = TypeLayout
+		return t
+	}
+	if _, ok := env.streams[t.Name]; ok {
+		t.Kind = TypeStream
 		return t
 	}
 	return t

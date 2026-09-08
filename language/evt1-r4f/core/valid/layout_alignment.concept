@@ -1,0 +1,17 @@
+profile Core;
+
+layout CacheLine
+{
+    align(64) int value;
+}
+
+static_assert(LayoutAlign<CacheLine>() == 64, "cache-line alignment");
+static_assert(LayoutSize<CacheLine>() == 64, "final padding");
+
+int UseAlignedLayout()
+{
+    int<array>[16] backing = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    ref CacheLine line = bind backing;
+    line.value = 11;
+    return backing[0];
+}

@@ -1,0 +1,19 @@
+profile Core;
+
+layout ConstSourceLayout
+{
+    int value;
+}
+
+stream MutableStream over ConstSourceLayout
+{
+    Value = value;
+}
+
+int BadMutableStream()
+{
+    int<array>[1] backing = [1];
+    ref const ConstSourceLayout layout = bind backing;
+    ref MutableStream stream = bind layout;
+    return stream.Value;
+}

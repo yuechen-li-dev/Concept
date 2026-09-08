@@ -1,0 +1,6 @@
+profile Core;
+
+stream LostStream over MissingLayout
+{
+    Value = value;
+}

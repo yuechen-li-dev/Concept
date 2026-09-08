@@ -1,0 +1,24 @@
+profile Core;
+
+layout ExpectedLayout
+{
+    int value;
+}
+
+layout OtherLayout
+{
+    int value;
+}
+
+stream ExpectedStream over ExpectedLayout
+{
+    Value = value;
+}
+
+int BadStreamBind()
+{
+    int<array>[1] backing = [1];
+    ref OtherLayout other = bind backing;
+    ref ExpectedStream stream = bind other;
+    return stream.Value;
+}

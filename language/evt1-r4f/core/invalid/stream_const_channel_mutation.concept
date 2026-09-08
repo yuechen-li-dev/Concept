@@ -1,0 +1,20 @@
+profile Core;
+
+layout ReadOnlyLayout
+{
+    int<array>[2] values;
+}
+
+stream ReadOnlyStream over ReadOnlyLayout
+{
+    Values = values;
+}
+
+int MutateConstChannel()
+{
+    int<array>[2] backing = [1, 2];
+    ref const ReadOnlyLayout layout = bind backing;
+    ref const ReadOnlyStream stream = bind layout;
+    stream.Values[0] = 9;
+    return stream.Values[0];
+}

@@ -1,0 +1,7 @@
+profile Core;
+
+layout OverlapLayout
+{
+    at(0) int first;
+    at(0) int second;
+}

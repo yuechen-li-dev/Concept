@@ -1,0 +1,6 @@
+profile Core;
+
+layout RuntimeLayout(int count)
+{
+    int<array>[count] values;
+}

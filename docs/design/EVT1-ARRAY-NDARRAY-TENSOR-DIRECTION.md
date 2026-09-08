@@ -1,6 +1,6 @@
 # EVT1 array, ndarray, and tensor direction
 
-Status: R4e storage binding canonical; subviews, mathematics, and optimization deferred
+Status: R4f semantic layout regions canonical; spans, mathematics, and optimization deferred
 
 ## Layering
 
@@ -11,6 +11,10 @@ storage
 
 storage binding
   bind        entire-storage non-owning reshape
+
+semantic geometry
+  layout      fixed named regions over one bound storage object
+  stream      zero-storage channels aliasing layout regions
 
 borrowed views
   Span<T>           deferred
@@ -96,19 +100,28 @@ rectangularity, dimensions, and element types, then flattens elements in
 row-major source order into one ndarray value. Jagged storage is not part of
 this family.
 
+## R4f layout composition
+
+A fixed array or ndarray may be one region in an R4f semantic layout. Layout
+binding compares total byte extent and alignment against one whole contiguous
+backing object; projection reuses the ordinary typed storage descriptor, shape,
+row-major indexing, and provenance. This is fixed semantic geometry, not a
+general subview: offsets and extents are compile-time declarations, and stream
+channels only rename declared regions. Layout/stream compose above R4d/R4e
+storage without changing array, ndarray, or future tensor meaning.
+
 ## Deferred work
 
-R4e does not port PoC3 Slice or FixedBuffer and does not implement Span,
+R4f does not port PoC3 Slice or FixedBuffer and does not implement Span,
 ReadOnlySpan, vector, matrix, tensor, Einstein notation, TensorIR, an allocator
 framework, stack allocation, `dyn`, generalized alias/noalias analysis,
 strided/sparse/tiled layouts, SIMD, GPU lowering, or a native backend. Those
 features must consume the storage facts established here without changing
 their meaning retroactively.
 
-## Recommended next milestone
+## Subsequent milestone boundary
 
-R4f should specify borrowed subregions with `Span<T>` and `ReadOnlySpan<T>` on
-top of the same provenance machinery. It should add explicit length and bounded
-subregion construction without changing `bind`'s exact-whole-storage law.
-Allocator-backed owned dynamic storage and mathematical vector/matrix/tensor
-interpretations should remain later work.
+Future Span/ReadOnlySpan work may specify arbitrary bounded subregions on the
+same provenance machinery, but must not reinterpret R4f declared geometry as a
+runtime slicing facility. Allocator-backed owned dynamic storage and
+mathematical vector/matrix/tensor interpretations remain separate work.

@@ -10,6 +10,7 @@ const (
 	evt1ComptimeMaxLoopBound       = 256
 	evt1ComptimeMaxCallDepth       = 32
 	evt1ComptimeMaxArrayLength     = 64
+	evt1StorageMaxFixedExtent      = 1048576
 	evt1ComptimeMaxArrayNesting    = 8
 	evt1ComptimeMaxArrayCells      = 512
 	evt1ComptimeMaxLiteralElements = 512
@@ -407,6 +408,14 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 		}
 		return evt1EvalComptimeCall(state, scope, e.Callee, e.Args, e.Span)
 	case *TemplateCallExpr:
+		if e.Callee == "LayoutSize" || e.Callee == "LayoutAlign" || e.Callee == "LayoutOffset" {
+			value, err := evt1LayoutQuery(state.env, e.Callee, e.TypeArg, e.Args)
+			if err != nil {
+				return Value{}, err
+			}
+			t, _ := evt1BuiltinType("int", e.Span)
+			return Value{Kind: ValueInt, Type: t, IntValue: value}, nil
+		}
 		return Value{}, evt1Diagnostic("CV4201", "templates are not available during comptime evaluation", e.Span)
 	default:
 		return Value{}, evt1Diagnostic("CV4201", "unsupported comptime expression", expr.exprSpan())

@@ -1,0 +1,19 @@
+profile Core;
+
+layout VertexLayout
+{
+    int<array>[3] position;
+}
+
+stream PositionStream over VertexLayout
+{
+    Position = position;
+}
+
+int UseBasicStream()
+{
+    int<array>[3] backing = [1, 2, 3];
+    ref VertexLayout layout = bind backing;
+    ref PositionStream vertices = bind layout;
+    return vertices.Position[2];
+}

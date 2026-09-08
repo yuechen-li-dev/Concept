@@ -1,0 +1,6 @@
+profile Core;
+
+layout BadAlignment
+{
+    align(3) int value;
+}

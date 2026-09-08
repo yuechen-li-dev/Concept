@@ -309,6 +309,18 @@ func evt1CollectStorageViewTypes(module Module, env *semanticEnv) []Type {
 			visitBlock(*fn.Body)
 		}
 	}
+	for _, layout := range env.layouts {
+		for _, region := range layout.Regions {
+			if region.Type.ArrayElem == nil {
+				continue
+			}
+			view := region.Type
+			view.Ownership = "ref"
+			types[evt1StorageViewCName(view)] = view
+			view.Const = true
+			types[evt1StorageViewCName(view)] = view
+		}
+	}
 	keys := make([]string, 0, len(types))
 	for key := range types {
 		keys = append(keys, key)

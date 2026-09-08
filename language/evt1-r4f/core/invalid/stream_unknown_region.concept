@@ -1,0 +1,11 @@
+profile Core;
+
+layout OneRegion
+{
+    int value;
+}
+
+stream BrokenStream over OneRegion
+{
+    Missing = absent;
+}

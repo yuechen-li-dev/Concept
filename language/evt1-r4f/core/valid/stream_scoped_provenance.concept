@@ -1,0 +1,24 @@
+profile Core;
+
+layout ScopedLayout
+{
+    int value;
+}
+
+stream ScopedStream over ScopedLayout
+{
+    Value = value;
+}
+
+int ReadScoped(scoped ref ScopedLayout layout)
+{
+    scoped ref ScopedStream stream = bind layout;
+    return stream.Value;
+}
+
+int UseScopedProvenance()
+{
+    int<array>[1] backing = [34];
+    ref ScopedLayout layout = bind backing;
+    return ReadScoped(ref layout);
+}

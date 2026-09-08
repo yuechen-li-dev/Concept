@@ -1,0 +1,19 @@
+profile Core;
+
+layout ConstLayout
+{
+    int<array>[2] values;
+}
+
+stream ConstStream over ConstLayout
+{
+    Values = values;
+}
+
+int ReadConstStream()
+{
+    int<array>[2] backing = [6, 7];
+    ref const ConstLayout layout = bind backing;
+    ref const ConstStream stream = bind layout;
+    return stream.Values[1];
+}

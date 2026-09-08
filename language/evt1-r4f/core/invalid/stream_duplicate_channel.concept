@@ -1,0 +1,13 @@
+profile Core;
+
+layout TwoRegions
+{
+    int first;
+    int second;
+}
+
+stream DuplicateStream over TwoRegions
+{
+    Value = first;
+    Value = second;
+}

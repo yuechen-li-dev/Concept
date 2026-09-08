@@ -1,0 +1,18 @@
+profile Core;
+
+layout HeaderLayout
+{
+    at(0x00) int version;
+    at(0x08) int payloadLength;
+}
+
+static_assert(LayoutOffset<HeaderLayout>("payloadLength") == 8, "explicit gap");
+static_assert(LayoutSize<HeaderLayout>() == 12, "explicit layout size");
+
+int WritePayloadLength()
+{
+    int<array>[3] backing = [0, 0, 0];
+    ref HeaderLayout header = bind backing;
+    header.payloadLength = 37;
+    return backing[2];
+}

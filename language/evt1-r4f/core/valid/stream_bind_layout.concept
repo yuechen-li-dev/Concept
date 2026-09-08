@@ -1,0 +1,20 @@
+profile Core;
+
+layout ColorLayout
+{
+    int<array>[4] color;
+}
+
+stream ColorStream over ColorLayout
+{
+    Color = color;
+}
+
+int BindStreamLayout()
+{
+    int<array>[4] backing = [1, 2, 3, 4];
+    ref ColorLayout layout = bind backing;
+    ref ColorStream stream = bind layout;
+    stream.Color[3] = 9;
+    return backing[3];
+}

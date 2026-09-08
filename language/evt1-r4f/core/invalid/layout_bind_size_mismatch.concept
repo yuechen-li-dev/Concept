@@ -1,0 +1,13 @@
+profile Core;
+
+layout SizedLayout
+{
+    int<array>[2] values;
+}
+
+int BadSize()
+{
+    int<array>[3] backing = [1, 2, 3];
+    ref SizedLayout layout = bind backing;
+    return layout.values[0];
+}

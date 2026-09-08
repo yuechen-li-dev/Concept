@@ -1,6 +1,6 @@
 # EVT1 reference and span direction
 
-Status: R4e provenance-preserving storage binding; active rules in the language
+Status: R4f layout/stream projections preserve R4b provenance; active rules in the language
 specification are normative.
 
 R3 establishes `ref T` and `ref const T` as explicit, non-owning aliases of
@@ -67,3 +67,18 @@ surface or lifetime contract for EVT1. R3 therefore marks `Slice<T>` for
 redesign and does not port Slice or Span. R4b establishes the relational
 machinery those future views require; R4e still does not implement
 `Span<T>`, `ReadOnlySpan<T>`, `stackalloc`, or runtime `Slice<T>`.
+
+R4f adds no new borrowing system. A bound layout aliases one exact whole
+backing object; region and stream-channel projections retain that same backing
+identity, constness, lexical/call-result provenance, and scoped flag. A stream
+itself has zero storage. A helper therefore cannot launder local or scoped
+backing into an outward reference, and a const layout/stream cannot yield a
+mutable region.
+
+Declared layout regions are not Span. Their offsets and extents are fixed by a
+compile-time semantic graph rather than chosen per view at runtime. Future Span
+work must still define arbitrary source/offset/length construction and bounds.
+When constructed from a region/channel, its semantic payload should directly
+retain backing provenance, region identity, offset, extent, alignment, and
+mutability rather than infer them again. It should consume the same provenance
+facts rather than create a parallel view or lifetime system.

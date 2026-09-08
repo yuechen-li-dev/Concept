@@ -1,6 +1,6 @@
 # Concept EVT1 language specification foundation
 
-Status: R4e explicit storage binding for array and ndarray views
+Status: R4f semantic layout declarations and zero-storage streams
 
 This document defines the authority categories and the smallest currently
 executable EVT1 language foundation. It is derived from the retired Concept
@@ -90,8 +90,11 @@ implemented subset are not fixed here.
 
 ## 6. Primitive types
 
-**Canonical EVT1 foundation.** `int`, `bool`, and `void` are core primitive
-types in the implemented subset.
+**Canonical EVT1 foundation.** `int`, `uint`, `byte`, `float`, `bool`, and
+`void` are core primitive types in the implemented subset. R4f fixes bootstrap
+geometry for semantic layouts as `byte` as 8-bit/alignment 1, `int`, `uint`, and
+`float` as 32-bit/alignment 4, and `uint64` as 64-bit/alignment 8. These are
+Concept layout facts; they do not claim a general foreign ABI mapping.
 
 **Provisional EVT1.** `string` is available to bounded compile-time evaluation
 and diagnostics but does not establish a general runtime string model.
@@ -535,6 +538,53 @@ shape, including runtime descriptor dimensions.
 R4e preserves the R4d zero-extent law rather than defining a new one: an extent
 is nonnegative, exact total-count equality still applies, and executable binding
 requires backing storage already representable by the active backend.
+
+### 16.2 Semantic layouts and streams
+
+**Canonical EVT1 R4f.** A `layout` declares ordered, named regions with fixed
+compile-time byte geometry. Region types are ordinary fixed-size Core value
+types, including fixed arrays and ndarrays:
+
+```concept
+layout PacketLayout
+{
+    uint header;
+    align(16) byte<array>[256] payload;
+    at(272) uint checksum;
+}
+
+stream PacketStream over PacketLayout
+{
+    Header = header;
+    Payload = payload;
+}
+```
+
+Default placement aligns the next free byte offset to the region's natural
+alignment. `align(N)` requests a stronger power-of-two alignment; `at(N)`
+requests an explicit aligned byte offset. Regions may not overlap, and layout
+size includes tail padding to the greatest region alignment. Stable identity,
+type, byte offset, byte extent, alignment, and disjointness survive into MIR.
+`LayoutSize<T>()`, `LayoutAlign<T>()`, and `LayoutOffset<T>("region")` are
+bounded compile-time queries over this closed graph. Runtime-parameterized
+layout geometry is rejected.
+
+`ref Layout = bind storage` binds one whole contiguous fixed array/ndarray
+backing object with exactly the layout's byte size and sufficient alignment.
+`ref const Layout` is read-only. `layout.region` projects the region's exact
+ordinary type over the same bytes. Binding and projection do not allocate,
+copy, move, resize, transfer ownership, or extend lifetime; they preserve
+backing identity, constness, provenance, and `scoped` state.
+
+A `stream` declares named channels that alias regions of exactly one layout.
+`ref Stream = bind layoutRef` creates a zero-storage semantic view, and channel
+projection is the corresponding region projection. Unknown regions, duplicate
+channels, layout mismatch, and const escalation are ill-formed. Streams do not
+imply iteration, queues, scheduling, transport, ownership, or execution.
+
+R4f adds no Span/ReadOnlySpan, Slice, FixedBuffer, `stackalloc`, allocation,
+raw-pointer binding, runtime layout parameters, tensor mathematics, general
+reflection, stream composition/runtime, GPU lowering, or stable ABI law.
 
 ## 17. Slices and bounded collections
 

@@ -1,0 +1,18 @@
+profile Core;
+
+layout ReadLayout
+{
+    int value;
+}
+
+int ReadProjected(ref const ReadLayout view)
+{
+    return view.value;
+}
+
+int BindConstProjection()
+{
+    int<array>[1] backing = [13];
+    ref const ReadLayout view = bind backing;
+    return ReadProjected(ref const view);
+}

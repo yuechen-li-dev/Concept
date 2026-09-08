@@ -1,0 +1,10 @@
+profile Core;
+
+layout ArrayRegions
+{
+    int<array>[2] first;
+    int<array>[3] second;
+}
+
+static_assert(LayoutOffset<ArrayRegions>("second") == 8, "array region offset");
+static_assert(LayoutSize<ArrayRegions>() == 20, "array region size");

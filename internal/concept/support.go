@@ -165,6 +165,50 @@ func (d Diagnostic) SemanticCategory() string {
 		return "BIND_MUTABLE_FROM_CONST"
 	case "CV4568":
 		return "BIND_MIR_INVALID"
+	case "CV4570":
+		return "LAYOUT_DECLARATION_INVALID"
+	case "CV4571":
+		return "LAYOUT_DUPLICATE_REGION"
+	case "CV4572":
+		return "LAYOUT_INVALID_ALIGNMENT"
+	case "CV4573":
+		return "LAYOUT_EXTENT_INVALID"
+	case "CV4574":
+		return "LAYOUT_OFFSET_MISALIGNED"
+	case "CV4575":
+		return "LAYOUT_RUNTIME_PARAMETER_DEFERRED"
+	case "CV4576":
+		return "LAYOUT_REGION_OVERLAP"
+	case "CV4577":
+		return "LAYOUT_REFERENCE_REQUIRED"
+	case "CV4578":
+		return "LAYOUT_BIND_REQUIRES_STORAGE"
+	case "CV4579":
+		return "LAYOUT_MUTABLE_FROM_CONST"
+	case "CV4580":
+		return "STREAM_DECLARATION_INVALID"
+	case "CV4581":
+		return "STREAM_UNKNOWN_LAYOUT"
+	case "CV4582":
+		return "STREAM_UNKNOWN_REGION"
+	case "CV4583":
+		return "STREAM_DUPLICATE_CHANNEL"
+	case "CV4584":
+		return "STREAM_REFERENCE_REQUIRED"
+	case "CV4585":
+		return "STREAM_BIND_LAYOUT_MISMATCH"
+	case "CV4586":
+		return "STREAM_MUTABLE_FROM_CONST"
+	case "CV4590":
+		return "LAYOUT_BIND_SIZE_MISMATCH"
+	case "CV4591":
+		return "LAYOUT_BIND_ALIGNMENT_MISMATCH"
+	case "CV4592":
+		return "LAYOUT_QUERY_INVALID"
+	case "CV4593":
+		return "LAYOUT_MIR_INVALID"
+	case "CV4594":
+		return "STREAM_MIR_INVALID"
 	default:
 		return d.Code
 	}

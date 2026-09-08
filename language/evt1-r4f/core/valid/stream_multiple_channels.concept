@@ -1,0 +1,23 @@
+profile Core;
+
+layout VertexLayout
+{
+    int<array>[3] position;
+    int<array>[3] normal;
+    int<array>[2] uv;
+}
+
+stream VertexStream over VertexLayout
+{
+    Position = position;
+    Normal = normal;
+    TexCoord = uv;
+}
+
+int UseMultipleChannels()
+{
+    int<array>[8] backing = [1, 2, 3, 4, 5, 6, 7, 8];
+    ref VertexLayout layout = bind backing;
+    ref VertexStream vertices = bind layout;
+    return vertices.Position[0] + vertices.Normal[0] + vertices.TexCoord[0];
+}

@@ -1,0 +1,15 @@
+profile Core;
+
+layout BoundLayout
+{
+    int header;
+    int<array>[2] values;
+}
+
+int BindFixedStorage()
+{
+    int<array>[3] backing = [1, 2, 3];
+    ref BoundLayout view = bind backing;
+    view.values[0] = 8;
+    return backing[1];
+}

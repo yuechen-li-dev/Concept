@@ -1,0 +1,11 @@
+profile Core;
+
+layout DeviceRegisters
+{
+    at(0x00) uint control;
+    at(0x04) uint status;
+    at(0x10) uint command;
+}
+
+static_assert(LayoutOffset<DeviceRegisters>("command") == 0x10, "command offset");
+static_assert(LayoutSize<DeviceRegisters>() == 0x14, "device register layout changed");

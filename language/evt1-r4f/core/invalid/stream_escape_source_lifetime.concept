@@ -1,0 +1,19 @@
+profile Core;
+
+layout LocalLayout
+{
+    int value;
+}
+
+stream LocalStream over LocalLayout
+{
+    Value = value;
+}
+
+ref LocalStream EscapeLocalStream()
+{
+    int<array>[1] backing = [1];
+    ref LocalLayout layout = bind backing;
+    ref LocalStream stream = bind layout;
+    return stream;
+}

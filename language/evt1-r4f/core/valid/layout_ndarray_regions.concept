@@ -1,0 +1,13 @@
+profile Core;
+
+layout MatrixLayout
+{
+    int<ndarray>[2, 3] values;
+}
+
+int UseMatrixLayout()
+{
+    int<array>[6] backing = [1, 2, 3, 4, 5, 6];
+    ref MatrixLayout matrix = bind backing;
+    return matrix.values[1, 2];
+}

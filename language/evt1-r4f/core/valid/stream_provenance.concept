@@ -1,0 +1,25 @@
+profile Core;
+
+layout ProvenanceLayout
+{
+    int value;
+}
+
+stream ProvenanceStream over ProvenanceLayout
+{
+    Value = value;
+}
+
+ref ProvenanceStream Reproject(ref ProvenanceLayout layout)
+{
+    ref ProvenanceStream stream = bind layout;
+    return stream;
+}
+
+int UseProvenance()
+{
+    int<array>[1] backing = [21];
+    ref ProvenanceLayout layout = bind backing;
+    ref ProvenanceStream stream = Reproject(ref layout);
+    return stream.Value;
+}

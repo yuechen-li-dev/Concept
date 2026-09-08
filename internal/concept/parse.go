@@ -70,8 +70,15 @@ func lexEVT1(text string) ([]Token, error) {
 			i = j
 		case c >= '0' && c <= '9':
 			j := i + 1
-			for j < len(text) && text[j] >= '0' && text[j] <= '9' {
+			if c == '0' && j < len(text) && (text[j] == 'x' || text[j] == 'X') {
 				j++
+				for j < len(text) && ((text[j] >= '0' && text[j] <= '9') || (text[j] >= 'a' && text[j] <= 'f') || (text[j] >= 'A' && text[j] <= 'F')) {
+					j++
+				}
+			} else {
+				for j < len(text) && text[j] >= '0' && text[j] <= '9' {
+					j++
+				}
 			}
 			tokens = append(tokens, Token{Lexeme: text[i:j], Span: start})
 			column += j - i
@@ -227,6 +234,18 @@ func (p *parser) parseModule() (Module, error) {
 				return module, err
 			}
 			module.Structs = append(module.Structs, structDecl)
+		case "layout":
+			decl, err := p.parseLayoutDecl()
+			if err != nil {
+				return module, err
+			}
+			module.Layouts = append(module.Layouts, decl)
+		case "stream":
+			decl, err := p.parseStreamDecl()
+			if err != nil {
+				return module, err
+			}
+			module.Streams = append(module.Streams, decl)
 		case "enum":
 			enumDecl, err := p.parseEnumDecl()
 			if err != nil {
@@ -910,6 +929,113 @@ func (p *parser) parseStructDecl(immovable, record, refStruct bool) (StructDecl,
 	}
 	if _, err := p.expect("}"); err != nil {
 		return StructDecl{}, err
+	}
+	if p.peekLexeme() == ";" {
+		p.next()
+	}
+	return decl, nil
+}
+
+func (p *parser) parseLayoutDecl() (LayoutDecl, error) {
+	start, err := p.expect("layout")
+	if err != nil {
+		return LayoutDecl{}, err
+	}
+	name, err := p.expectIdentifier("CV4570", "expected layout name")
+	if err != nil {
+		return LayoutDecl{}, err
+	}
+	if p.peekLexeme() == "(" {
+		return LayoutDecl{}, evt1Diagnostic("CV4575", "runtime-parameterized layouts are deferred beyond R4f", p.currentSpan())
+	}
+	if _, err := p.expect("{"); err != nil {
+		return LayoutDecl{}, err
+	}
+	decl := LayoutDecl{Name: name.Lexeme, Span: start.Span}
+	for !p.done() && p.peekLexeme() != "}" {
+		region := LayoutRegion{}
+		for p.peekLexeme() == "align" || p.peekLexeme() == "at" {
+			modifier := p.next()
+			if _, err := p.expect("("); err != nil {
+				return LayoutDecl{}, err
+			}
+			valueTok := p.next()
+			value, parseErr := strconv.ParseInt(valueTok.Lexeme, 0, 32)
+			if parseErr != nil {
+				return LayoutDecl{}, evt1Diagnostic("CV4572", modifier.Lexeme+" requires an integer constant", valueTok.Span)
+			}
+			if _, err := p.expect(")"); err != nil {
+				return LayoutDecl{}, err
+			}
+			if modifier.Lexeme == "align" {
+				region.RequestedAlign = int(value)
+			} else {
+				v := int(value)
+				region.ExplicitOffset = &v
+			}
+		}
+		regionType, err := p.parseType("")
+		if err != nil {
+			return LayoutDecl{}, err
+		}
+		regionName, err := p.expectIdentifier("CV4570", "expected layout region name")
+		if err != nil {
+			return LayoutDecl{}, err
+		}
+		if _, err := p.expect(";"); err != nil {
+			return LayoutDecl{}, err
+		}
+		region.Type, region.Name, region.Span = regionType, regionName.Lexeme, regionName.Span
+		decl.Regions = append(decl.Regions, region)
+	}
+	if _, err := p.expect("}"); err != nil {
+		return LayoutDecl{}, err
+	}
+	if p.peekLexeme() == ";" {
+		p.next()
+	}
+	return decl, nil
+}
+
+func (p *parser) parseStreamDecl() (StreamDecl, error) {
+	start, err := p.expect("stream")
+	if err != nil {
+		return StreamDecl{}, err
+	}
+	name, err := p.expectIdentifier("CV4580", "expected stream name")
+	if err != nil {
+		return StreamDecl{}, err
+	}
+	if _, err := p.expect("over"); err != nil {
+		return StreamDecl{}, err
+	}
+	layout, err := p.expectIdentifier("CV4580", "expected layout name after over")
+	if err != nil {
+		return StreamDecl{}, err
+	}
+	if _, err := p.expect("{"); err != nil {
+		return StreamDecl{}, err
+	}
+	decl := StreamDecl{Name: name.Lexeme, LayoutName: layout.Lexeme, Span: start.Span}
+	for !p.done() && p.peekLexeme() != "}" {
+		channel, err := p.expectIdentifier("CV4580", "expected stream channel name")
+		if err != nil {
+			return StreamDecl{}, err
+		}
+		if _, err := p.expect("="); err != nil {
+			return StreamDecl{}, err
+		}
+		region, err := p.expectIdentifier("CV4580", "expected layout region alias")
+		if err != nil {
+			return StreamDecl{}, err
+		}
+		if _, err := p.expect(";"); err != nil {
+			return StreamDecl{}, err
+		}
+		decl.Channels = append(decl.Channels, StreamChannel{Name: channel.Lexeme, RegionName: region.Lexeme, Span: channel.Span})
+	}
+	if _, err := p.expect("}"); err != nil {
+		return StreamDecl{}, err
 	}
 	if p.peekLexeme() == ";" {
 		p.next()
@@ -2034,7 +2160,8 @@ func (p *parser) parsePrimary() (Expr, error) {
 		return p.parsePostfixExpr(&StringLiteral{Value: value, Span: tok.Span}, tok.Span)
 	case isNumber(p.peekLexeme()):
 		tok := p.next()
-		value, _ := strconv.Atoi(tok.Lexeme)
+		parsed, _ := strconv.ParseInt(tok.Lexeme, 0, 32)
+		value := int(parsed)
 		return p.parsePostfixExpr(&IntLiteral{Value: value, Span: tok.Span}, tok.Span)
 	default:
 		return p.parseNameLikeExpr()
@@ -2450,6 +2577,10 @@ func isIdentifier(s string) bool {
 func isNumber(s string) bool {
 	if s == "" {
 		return false
+	}
+	if len(s) > 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X') {
+		_, err := strconv.ParseInt(s, 0, 32)
+		return err == nil
 	}
 	for i := 0; i < len(s); i++ {
 		if s[i] < '0' || s[i] > '9' {

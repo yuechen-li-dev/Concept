@@ -1,6 +1,6 @@
 # EVT1 semantic reconciliation matrix
 
-Status: R0 authority ledger with R1-R4e executable evidence
+Status: R0 authority ledger with R1-R4f executable evidence
 
 `Port required?` means implementation or conformance work remains after R0; it
 does not authorize that work in this milestone. Status is one of `Keep PoC3`,
@@ -35,6 +35,13 @@ does not authorize that work in this milestone. Status is one of `Keep PoC3`,
 | runtime arrays | implemented only as fixed-shape values in PoC3 | runtime extent is typed; non-owning exact-storage bind is active; owning declaration still rejects | redesign around explicit storage and later allocator-backed ownership | Redesign / active R4e subset | Yes for owned dynamic storage | R4d-R4e corpus | no hidden heap or VLA |
 | ndarray | absent | canonical rank-N contiguous storage with row-major layout and exact-storage binding | EVT1-new storage family | EVT1-new | No for fixed/bound subset | R4d-R4e corpus; SDSL-V direction | not nested arrays; math layer deferred |
 | explicit storage binding | absent | unary destination-typed `bind` reshapes entire contiguous storage without ownership | EVT1-new provenance-preserving view operation | EVT1-new / Keep Go | No for R4e subset | R4e MIR/native corpus | exact count; no allocation/copy/transfer |
+| semantic layout | SDSL-V/Oct lineage carries semantic region graphs | fixed named regions with derived geometry and whole-storage binding | adopt bounded fixed graph in active Go compiler; no Oct dependency | SDSL-derived / EVT1-new surface | No for R4f fixed subset | R4f MIR/native corpus | runtime parameters and ABI deferred |
+| layout alignment | explicit shader/storage alignment pressure | natural placement plus power-of-two `align(N)`, maximum total alignment, and tail padding | make requested alignment semantic and padding mechanical | SDSL-derived / EVT1-new | No for R4f subset | R4f align corpus/native C | executable inline backing guarantee is 64 bytes |
+| layout explicit offset | register/packed-interface pressure | `at(N)` pins an aligned region; gaps allowed and overlap rejected | bounded explicit geometry without volatile/MMIO implication | EVT1-new | No for R4f subset | R4f offset/overlap corpus | unions and overlap deferred |
+| layout region identity | semantic field/channel identity | stable `Layout.region` ID with parent, type, offset, extent, alignment, disjointness | preserve in typed model and MIR | SDSL-derived / Keep Go MIR | No for R4f subset | R4f MIR inspection | future noalias may consume; no solver yet |
+| stream declaration | SDSL-V stream records | zero-storage named channel map over exactly one layout | generalize for Core CPU/GPU meaning | SDSL-derived / EVT1-new surface | No for R4f subset | R4f corpus | not iterator, I/O stream, or runtime process |
+| stream channel mapping | channel-to-field maps | aliases declared regions without changing type/shape/identity | preserve semantic aliases and reject fabrication | SDSL-derived | No for R4f subset | R4f MIR/native alias evidence | composition/transforms deferred |
+| stream binding | lineage mapping realized downstream | unary `bind` from matching bound layout, preserving const/provenance | reuse R4e verb and reference laws | EVT1-new composition | No for R4f subset | R4f native/provenance corpus | direct storage-to-stream bind deferred |
 | vector / matrix / tensor | no canonical storage/interpretation split | absent | defer mathematical interpretations above storage and views | Deferred | Yes | R4d direction note | no TensorIR or Einstein notation |
 | indexing | runtime fixed-array indexing and bounds pressure | checked rank-1 and comma-separated rank-N indexing | merge array behavior; add EVT1-new ndarray arity/linearization | Merge / EVT1-new | No for fixed subset | phase21; R4d native/MIR tests | terminal panic, no Result default |
 | slices | read-only `Slice<T>` implemented | absent | redesign against explicit references, bound-storage evidence, and future lifetime-bound spans | Redesign | Yes | phase21 fixtures; R4e direction note | do not port mechanically; bind is whole-storage only |
@@ -177,3 +184,16 @@ bound-view rebinding, call-result provenance, and bind after `?`. PoC3 supplies
 only supporting fixed-wrapper/value evidence; this matrix does not fabricate a
 PoC3 bind equivalent. Slice, FixedBuffer, Span/ReadOnlySpan, allocator-backed
 dynamic ownership, and vector/matrix/tensor remain deferred.
+
+## R4f executable evidence
+
+R4f adds 29 `PASS` cases: 16 valid and 13 invalid. Fixed semantic layout
+geometry and zero-storage channel maps are informed by SDSL-V lineage, but the
+canonical source surface, ordinary Core region types, layout/stream `bind`, and
+strict-C11 lowering are implemented in the active Go compiler. MIR retains
+stable region identity, size/alignment/offset/extent/disjointness,
+channel-to-region maps, backing identity, constness, provenance, and explicit
+no-copy/no-allocation/no-transfer facts. Native evidence demonstrates mutable
+and const aliases plus lexical, call-result, and scoped provenance. There is no
+Oct build/runtime dependency and no claim of ABI, Span, allocation, stream
+runtime, GPU, or tensor support.

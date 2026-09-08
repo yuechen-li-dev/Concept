@@ -1,6 +1,6 @@
 # Concept EVT1 Stage 0 compiler architecture
 
-Status: R4e explicit storage binding for runtime-shaped views
+Status: R4f semantic layout and stream lowering
 
 ## Authority
 
@@ -382,7 +382,33 @@ R4a/R4b representation. Scoped state survives, function-result summaries may
 select a bound source parameter, and ref-struct lifetime derivation remains
 unchanged. R4e does not introduce a second view, borrow, or indexing system.
 
-## R4e limitations
+## R4f semantic layout and stream lowering
+
+```text
+layout declaration -> fixed geometry/disjointness -> MIR layout graph
+fixed storage + ref Layout -> layout_bind -> same-backing descriptor
+stream over Layout -> checked channel map -> zero-storage MIR stream graph
+bound layout + ref Stream -> stream_bind -> channel region_projection
+```
+
+Semantic analysis computes canonical byte size, alignment, offsets, extents,
+stable identities, and pairwise disjointness. Runtime-dependent geometry is
+rejected before MIR. Closed layout queries execute in the bounded comptime
+evaluator rather than through runtime reflection.
+
+Layout bind validates whole-storage byte size, the executable inline alignment
+guarantee, constness, and source provenance. Stream bind validates declared
+layout identity and reuses that provenance. `layout_bind`, `stream_bind`, and
+`region_projection` remain explicit in MIR with no-copy, no-allocation,
+no-transfer, and same-backing facts; MIR validation rejects inconsistency.
+
+Strict C11 emits typed pointer descriptors and constant offset arithmetic over
+the original fixed wrapper. Array/ndarray regions reuse the existing view and
+row-major indexing. Layout-bearing modules align fixed wrappers to 64 bytes;
+stronger requirements reject until explicit aligned storage exists. Streams
+emit no backing storage or dispatch. This is backend evidence, not stable ABI.
+
+## R4f limitations
 
 - The package remains deliberately cohesive rather than prematurely split.
 - Effect/actuator validation and C runtime emission remain in-package profile
@@ -402,7 +428,7 @@ unchanged. R4e does not introduce a second view, borrow, or indexing system.
   alias analysis, Span types, and unrestricted reference-containing
   aggregates are not implemented.
 - The remaining PoC3 allocation, stable C ABI, testing framework,
-  interfaces/dyn, slices, and FixedBuffer surfaces are not ported. R4e has no
+  interfaces/dyn, slices, and FixedBuffer surfaces are not ported. R4f has no
   `throw`, unwinding, Option handler arm, implicit error conversion, or
   generalized panic runtime.
 
@@ -481,3 +507,13 @@ suite inspects explicit bind MIR and generated non-owning descriptors, executes
 terminal processes for exact-count mismatch and checked-product overflow.
 PoC3 supplies no bind counterpart; R4e composes its wrapper evidence with the
 active R4a/R4b provenance model and R4d row-major storage model.
+
+## R4f executable evidence
+
+`internal/concept/r4f_conformance_test.go` and `language/evt1-r4f/core`
+provide 29 readable cases: 16 valid and 13 invalid, all classified PASS. The
+suite inspects semantic layout/stream graphs, bind/projection MIR, and forbidden
+runtime mechanisms. Strict-C11 harnesses execute scalar, array/ndarray,
+alignment, mutable/const alias, and lexical/call-result/scoped provenance paths.
+The conformance record distinguishes SDSL-derived semantic structure from the
+EVT1-new surface and ordinary Go-compiler lowering.

@@ -62,6 +62,12 @@ func Generate(module Module, source []byte) (Outputs, error) {
 		"functions":      evt1MapFunctions(module, env),
 		"mir":            l.mir.Functions,
 	}
+	if len(l.mir.Layouts) > 0 {
+		l.mapDoc["layouts"] = l.mir.Layouts
+	}
+	if len(l.mir.Streams) > 0 {
+		l.mapDoc["streams"] = l.mir.Streams
+	}
 	mapJSON, err := json.MarshalIndent(l.mapDoc, "", "  ")
 	if err != nil {
 		return nil, err
@@ -117,6 +123,28 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 			mirStruct.Fields = append(mirStruct.Fields, MIRName{Name: field.Name, Type: evt1MIRType(env, field.Type)})
 		}
 		mir.Structs = append(mir.Structs, mirStruct)
+	}
+	for _, source := range module.Layouts {
+		layout := env.layouts[source.Name]
+		entry := MIRLayout{Name: layout.Name, Size: layout.Size, Alignment: layout.Alignment, SourceSpan: layout.Span}
+		for _, region := range layout.Regions {
+			disjoint := make([]string, 0, len(layout.Regions)-1)
+			for _, other := range layout.Regions {
+				if other.ID != region.ID {
+					disjoint = append(disjoint, other.ID)
+				}
+			}
+			entry.Regions = append(entry.Regions, MIRLayoutRegion{ID: region.ID, Name: region.Name, Type: evt1MIRType(env, region.Type), Offset: region.Offset, ByteExtent: region.ByteExtent, Alignment: region.Alignment, Shape: region.Type.Shape, DisjointWith: disjoint})
+		}
+		mir.Layouts = append(mir.Layouts, entry)
+	}
+	for _, source := range module.Streams {
+		stream := env.streams[source.Name]
+		entry := MIRStream{Name: stream.Name, LayoutName: stream.LayoutName, ZeroStorage: true, SourceSpan: stream.Span}
+		for _, channel := range stream.Channels {
+			entry.Channels = append(entry.Channels, MIRStreamChannel{Name: channel.Name, RegionID: channel.RegionID, Type: evt1MIRType(env, channel.Type)})
+		}
+		mir.Streams = append(mir.Streams, entry)
 	}
 	for _, enumDecl := range module.Enums {
 		mirEnum := MIREnum{Name: enumDecl.Name, CName: evt1CName(enumDecl.Name), SourceSpan: enumDecl.Span}
@@ -437,6 +465,28 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 }
 
 func evt1ValidateMIR(mir MIR) error {
+	regions := map[string]MIRLayoutRegion{}
+	for _, layout := range mir.Layouts {
+		if layout.Name == "" || layout.Size < 1 || layout.Alignment < 1 || len(layout.Regions) == 0 {
+			return evt1Diagnostic("CV4593", "MIR layout omits required geometry", layout.SourceSpan)
+		}
+		for _, region := range layout.Regions {
+			if region.ID == "" || region.ByteExtent < 1 || region.Alignment < 1 || region.Offset%region.Alignment != 0 {
+				return evt1Diagnostic("CV4593", "MIR layout region omits required geometry", layout.SourceSpan)
+			}
+			regions[region.ID] = region
+		}
+	}
+	for _, stream := range mir.Streams {
+		if stream.Name == "" || stream.LayoutName == "" || !stream.ZeroStorage {
+			return evt1Diagnostic("CV4594", "MIR stream omits its zero-storage layout mapping", stream.SourceSpan)
+		}
+		for _, channel := range stream.Channels {
+			if channel.Name == "" || regions[channel.RegionID].ID == "" {
+				return evt1Diagnostic("CV4594", "MIR stream channel omits a valid region identity", stream.SourceSpan)
+			}
+		}
+	}
 	for _, fn := range mir.Functions {
 		seen := map[string]bool{}
 		for i, cleanup := range fn.Cleanups {
@@ -449,6 +499,15 @@ func evt1ValidateMIR(mir MIR) error {
 			seen[cleanup.Owner] = true
 		}
 		for _, operation := range fn.Operations {
+			if operation.Kind == "layout_bind" || operation.Kind == "stream_bind" {
+				if operation.LayoutName == "" || operation.Provenance == "" || !operation.NoCopy || !operation.NoAllocation || !operation.NoOwnershipTransfer || !operation.SameBackingRegion {
+					return evt1Diagnostic("CV4594", fmt.Sprintf("MIR %s operation %s omits zero-storage binding facts", operation.Kind, operation.ID), operation.SourceSpan)
+				}
+				continue
+			}
+			if operation.Kind == "region_projection" && (operation.RegionID == "" || !operation.SameBackingRegion) {
+				return evt1Diagnostic("CV4593", fmt.Sprintf("MIR region projection %s omits identity or backing fact", operation.ID), operation.SourceSpan)
+			}
 			if operation.Kind != "bind_storage" {
 				continue
 			}
@@ -654,6 +713,16 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 		}
 		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: kind, Detail: exprLabel(e.Value), SourceSpan: e.Span})
 	case *BindExpr:
+		if e.BindKind == "layout" || e.BindKind == "stream" {
+			kind := e.BindKind + "_bind"
+			provenance := e.ProvenanceKind
+			if e.ProvenanceScoped {
+				provenance += ":scoped"
+			}
+			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: kind, Type: e.TargetType.String(), Detail: exprLabel(e.Source), LayoutName: e.LayoutName, Mutability: map[bool]string{true: "const", false: "mutable"}[e.TargetType.Const], Provenance: provenance, NoCopy: true, NoAllocation: true, NoOwnershipTransfer: true, SameBackingRegion: true, SourceSpan: e.Span})
+			collectExprMIROps(env, e.Source, fn, templateInfo)
+			return
+		}
 		countCheck := "comptime_equal"
 		if e.RuntimeCheck {
 			countCheck = "runtime_overflow_safe_equal"
@@ -749,7 +818,12 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 			collectExprMIROps(env, arg, fn, templateInfo)
 		}
 	case *FieldExpr:
-		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "field_access", Detail: e.Field, SourceSpan: e.Span})
+		kind := "field_access"
+		op := MIROperation{ID: id, Kind: kind, Detail: e.Field, SourceSpan: e.Span}
+		if e.RegionID != "" {
+			op.Kind, op.LayoutName, op.RegionID, op.Offset, op.ByteExtent, op.Alignment, op.SameBackingRegion = "region_projection", e.LayoutName, e.RegionID, e.RegionOffset, e.RegionExtent, e.RegionAlignment, true
+		}
+		fn.Operations = append(fn.Operations, op)
 		collectExprMIROps(env, e.Receiver, fn, templateInfo)
 	case *ArrayLiteralExpr:
 		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "array_literal", Detail: fmt.Sprintf("%d elements", len(e.Elements)), SourceSpan: e.Span})
@@ -860,6 +934,7 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 	if err := l.writeRuntimeStorageAndTypeDecls(&header, typeDecls, evt1CollectStorageTypes(l.module, l.env), storageViewTypes); err != nil {
 		return nil, nil, err
 	}
+	header.WriteString(l.semanticViewDeclarations())
 	canonicalFailureTypes := evt1CanonicalFailureTypeKeys(l.module)
 	for _, failureType := range evt1CollectFailureTypes(l.module) {
 		if _, legacy := evt1IsResultVoidErrorType(l.env, failureType); legacy && !canonicalFailureTypes[evt1FailureTypeKey(failureType)] {
@@ -1041,6 +1116,9 @@ func (l *lowering) writeRuntimeStorageAndTypeDecls(out *strings.Builder, typeDec
 			key:  "storage:" + evt1TypeIdentity(storageType),
 			deps: deps,
 			emit: func() string {
+				if len(l.module.Layouts) > 0 {
+					return fmt.Sprintf("typedef struct { _Alignas(%d) %s data[%d]; } %s;\n\n", evt1InlineStorageAlignment, evt1CType(*current.ArrayElem), evt1StorageElementCount(current), evt1StorageCName(current))
+				}
 				return fmt.Sprintf("typedef struct { %s data[%d]; } %s;\n\n", evt1CType(*current.ArrayElem), evt1StorageElementCount(current), evt1StorageCName(current))
 			},
 		})
@@ -2119,6 +2197,31 @@ func (l *lowering) structHeader(structDecl StructDecl) string {
 	return b.String()
 }
 
+func (l *lowering) semanticViewDeclarations() string {
+	var b strings.Builder
+	for _, layout := range l.module.Layouts {
+		mut := Type{Name: layout.Name, Kind: TypeLayout, Ownership: "ref"}
+		read := mut
+		read.Const = true
+		b.WriteString(fmt.Sprintf("typedef struct { unsigned char* data; } %s;\n", evt1SemanticViewCName(mut)))
+		b.WriteString(fmt.Sprintf("typedef struct { const unsigned char* data; } %s;\n", evt1SemanticViewCName(read)))
+	}
+	for _, stream := range l.module.Streams {
+		mut := Type{Name: stream.Name, Kind: TypeStream, Ownership: "ref"}
+		read := mut
+		read.Const = true
+		layoutMut := Type{Name: stream.LayoutName, Kind: TypeLayout, Ownership: "ref"}
+		layoutRead := layoutMut
+		layoutRead.Const = true
+		b.WriteString(fmt.Sprintf("typedef %s %s;\n", evt1SemanticViewCName(layoutMut), evt1SemanticViewCName(mut)))
+		b.WriteString(fmt.Sprintf("typedef %s %s;\n", evt1SemanticViewCName(layoutRead), evt1SemanticViewCName(read)))
+	}
+	if len(l.module.Layouts)+len(l.module.Streams) > 0 {
+		b.WriteByte('\n')
+	}
+	return b.String()
+}
+
 func (l *lowering) structConstructor(structDecl StructDecl) string {
 	var b strings.Builder
 	typeName := evt1CName(structDecl.Name)
@@ -2203,6 +2306,9 @@ func evt1ConstructorName(enumName, variantName string) string {
 }
 
 func evt1CType(t Type) string {
+	if t.isReference() && (t.Kind == TypeLayout || t.Kind == TypeStream) {
+		return evt1SemanticViewCName(t)
+	}
 	if t.PointerTo != nil {
 		base := evt1CType(*t.PointerTo)
 		if t.Const {
@@ -2720,7 +2826,7 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 			if binding.comptime {
 				return "", evt1RenderCValue(f.l.env, binding.value), binding.t
 			}
-			if binding.t.isReference() && binding.t.ArrayElem != nil {
+			if binding.t.isReference() && (binding.t.ArrayElem != nil || evt1IsSemanticViewType(f.l.env, binding.t)) {
 				return "", binding.cName, binding.t
 			}
 			if binding.t.isReference() {
@@ -2737,6 +2843,9 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		return "", e.Name, Type{}
 	case *FieldExpr:
 		prelude, recv, recvType := f.lowerExpr(e.Receiver, indent)
+		if region, ok := evt1LayoutRegion(f.l.env, recvType.Name, e.Field); ok {
+			return f.lowerRegionProjection(prelude, recv, recvType, region)
+		}
 		fieldType := f.l.env.fieldSets[recvType.borrowBase().Name][e.Field]
 		op := "."
 		if recvType.isBorrowLike() {
@@ -2793,6 +2902,9 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		out := targetType.valueType()
 		out.Ownership = "ref"
 		out.Const = e.Const
+		if evt1IsSemanticViewType(f.l.env, out) {
+			return prelude, target, out
+		}
 		if out.ArrayElem != nil {
 			return f.lowerStorageView(e.Value, out, false, e.Span, indent)
 		}
@@ -2904,6 +3016,11 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 			dispatchCall,
 			Type{Name: evt1AutomataDispatchOutcomeTypeName, Kind: TypeEnum, Span: e.Span}
 	case *TemplateCallExpr:
+		if e.Callee == "LayoutSize" || e.Callee == "LayoutAlign" || e.Callee == "LayoutOffset" {
+			value, _ := evt1LayoutQuery(f.l.env, e.Callee, e.TypeArg, e.Args)
+			t, _ := evt1BuiltinType("int", e.Span)
+			return "", fmt.Sprintf("%d", value), t
+		}
 		instance, ok := f.l.env.templateInstances[e.Callee+"|"+evt1TypeIdentity(evt1CanonicalType(f.l.env, e.TypeArg))]
 		if !ok {
 			return "", "/* missing_template_instance */", Type{Name: "int", Kind: TypeBuiltin}
@@ -3055,6 +3172,9 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 
 func (f *evt1FunctionLowerer) lowerExprExpected(expr Expr, expected Type, indent int) (string, string, Type) {
 	if bind, ok := expr.(*BindExpr); ok {
+		if evt1IsSemanticViewType(f.l.env, expected) {
+			return f.lowerSemanticView(bind.Source, expected, indent)
+		}
 		return f.lowerStorageView(bind.Source, expected, bind.RuntimeCheck, bind.Span, indent)
 	}
 	if literal, ok := expr.(*ArrayLiteralExpr); ok && expected.ArrayElem != nil {
@@ -3076,11 +3196,47 @@ func (f *evt1FunctionLowerer) lowerExprExpected(expr Expr, expected Type, indent
 	return f.lowerExpr(expr, indent)
 }
 
+func (f *evt1FunctionLowerer) lowerSemanticView(source Expr, target Type, indent int) (string, string, Type) {
+	prelude, value, sourceType := f.lowerExpr(source, indent)
+	data := fmt.Sprintf("(%s).data", value)
+	if sourceType.ArrayElem != nil {
+		data = fmt.Sprintf("(unsigned char*)(%s).data", value)
+	}
+	if target.Const {
+		data = fmt.Sprintf("(const unsigned char*)%s", data)
+	}
+	return prelude, fmt.Sprintf("(%s){ .data = %s }", evt1CType(target), data), target
+}
+
+func (f *evt1FunctionLowerer) lowerRegionProjection(prelude, receiver string, receiverType Type, region LayoutRegion) (string, string, Type) {
+	if region.Type.ArrayElem != nil {
+		view := region.Type
+		view.Ownership = "ref"
+		view.Const = receiverType.Const
+		pointerType := evt1CType(*region.Type.ArrayElem)
+		if view.Const {
+			pointerType = "const " + pointerType
+		}
+		shape := make([]string, 0, len(region.Type.Shape))
+		for _, dimension := range region.Type.Shape {
+			shape = append(shape, fmt.Sprintf("%d", dimension.Extent))
+		}
+		expr := fmt.Sprintf("(%s){ .data = (%s*)((%s).data + %d), .shape = { %s } }", evt1CType(view), pointerType, receiver, region.Offset, strings.Join(shape, ", "))
+		return prelude, expr, view
+	}
+	pointerType := evt1CType(region.Type)
+	if receiverType.Const {
+		pointerType = "const " + pointerType
+	}
+	expr := fmt.Sprintf("(*((%s*)((%s).data + %d)))", pointerType, receiver, region.Offset)
+	return prelude, expr, region.Type
+}
+
 func (f *evt1FunctionLowerer) lowerLValue(expr Expr, indent int) (string, string, Type, bool) {
 	switch e := expr.(type) {
 	case *NameExpr:
 		binding, _ := scopeLookup(e.Name, f.scope)
-		if binding.t.isReference() && binding.t.ArrayElem != nil {
+		if binding.t.isReference() && (binding.t.ArrayElem != nil || evt1IsSemanticViewType(f.l.env, binding.t)) {
 			return "", binding.cName, binding.t, false
 		}
 		if binding.t.isReference() {
@@ -3089,6 +3245,10 @@ func (f *evt1FunctionLowerer) lowerLValue(expr Expr, indent int) (string, string
 		return "", binding.cName, binding.t, true
 	case *FieldExpr:
 		prelude, recv, recvType, _ := f.lowerLValue(e.Receiver, indent)
+		if region, ok := evt1LayoutRegion(f.l.env, recvType.Name, e.Field); ok {
+			projectionPrelude, value, t := f.lowerRegionProjection(prelude, recv, recvType, region)
+			return projectionPrelude, value, t, false
+		}
 		fieldType := f.l.env.fieldSets[recvType.borrowBase().Name][e.Field]
 		op := "."
 		if recvType.isBorrowLike() {

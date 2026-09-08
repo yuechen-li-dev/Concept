@@ -18,6 +18,8 @@ const (
 	TypePointer      TypeKind = "pointer"
 	TypeArray        TypeKind = "array"
 	TypeNDArray      TypeKind = "ndarray"
+	TypeLayout       TypeKind = "layout"
+	TypeStream       TypeKind = "stream"
 	TypeConceptParam TypeKind = "concept_param"
 	TypeApplied      TypeKind = "applied"
 )
@@ -201,6 +203,43 @@ type Field struct {
 	Span Span   `json:"span"`
 }
 
+// LayoutDecl is a zero-allocation semantic description of fixed memory
+// geometry. Region offsets and extents are derived during semantic analysis.
+type LayoutDecl struct {
+	Name      string         `json:"name"`
+	Regions   []LayoutRegion `json:"regions"`
+	Size      int            `json:"size"`
+	Alignment int            `json:"alignment"`
+	Span      Span           `json:"span"`
+}
+
+type LayoutRegion struct {
+	ID             string `json:"id,omitempty"`
+	Name           string `json:"name"`
+	Type           Type   `json:"type"`
+	RequestedAlign int    `json:"requested_alignment,omitempty"`
+	ExplicitOffset *int   `json:"explicit_offset,omitempty"`
+	Offset         int    `json:"offset,omitempty"`
+	ByteExtent     int    `json:"byte_extent,omitempty"`
+	Alignment      int    `json:"alignment,omitempty"`
+	Span           Span   `json:"span"`
+}
+
+type StreamDecl struct {
+	Name       string          `json:"name"`
+	LayoutName string          `json:"layout_name"`
+	Channels   []StreamChannel `json:"channels"`
+	Span       Span            `json:"span"`
+}
+
+type StreamChannel struct {
+	Name       string `json:"name"`
+	RegionName string `json:"region_name"`
+	RegionID   string `json:"region_id,omitempty"`
+	Type       Type   `json:"type,omitempty"`
+	Span       Span   `json:"span"`
+}
+
 type StructDecl struct {
 	Name       string  `json:"name"`
 	Immovable  bool    `json:"immovable"`
@@ -350,6 +389,8 @@ type Module struct {
 	Profile       string             `json:"profile"`
 	Imports       []string           `json:"imports,omitempty"`
 	Structs       []StructDecl       `json:"structs,omitempty"`
+	Layouts       []LayoutDecl       `json:"layouts,omitempty"`
+	Streams       []StreamDecl       `json:"streams,omitempty"`
 	Enums         []EnumDecl         `json:"enums,omitempty"`
 	Effects       []EffectDecl       `json:"effects,omitempty"`
 	Actuators     []ActuatorDecl     `json:"actuators,omitempty"`
@@ -572,9 +613,14 @@ func (*BoolLiteral) evt1Expr()        {}
 func (e *BoolLiteral) exprSpan() Span { return e.Span }
 
 type FieldExpr struct {
-	Receiver Expr   `json:"receiver"`
-	Field    string `json:"field"`
-	Span     Span   `json:"span"`
+	Receiver        Expr   `json:"receiver"`
+	Field           string `json:"field"`
+	RegionID        string `json:"region_id,omitempty"`
+	LayoutName      string `json:"layout_name,omitempty"`
+	RegionOffset    int    `json:"region_offset,omitempty"`
+	RegionExtent    int    `json:"region_extent,omitempty"`
+	RegionAlignment int    `json:"region_alignment,omitempty"`
+	Span            Span   `json:"span"`
 }
 
 func (*FieldExpr) evt1Expr()        {}
@@ -647,6 +693,8 @@ func (e *RefExpr) exprSpan() Span { return e.Span }
 
 type BindExpr struct {
 	Source           Expr   `json:"source"`
+	BindKind         string `json:"bind_kind,omitempty"`
+	LayoutName       string `json:"layout_name,omitempty"`
 	TargetType       Type   `json:"target_type,omitempty"`
 	SourceType       Type   `json:"source_type,omitempty"`
 	RuntimeCheck     bool   `json:"runtime_check,omitempty"`
@@ -799,6 +847,41 @@ type MIR struct {
 	ComptimeFns    []MIRFunction      `json:"comptime_functions,omitempty"`
 	SemanticProofs []MIRSemanticProof `json:"semantic_proofs,omitempty"`
 	StorageTypes   []MIRStorageType   `json:"storage_types,omitempty"`
+	Layouts        []MIRLayout        `json:"layouts,omitempty"`
+	Streams        []MIRStream        `json:"streams,omitempty"`
+}
+
+type MIRLayout struct {
+	Name       string            `json:"name"`
+	Size       int               `json:"size"`
+	Alignment  int               `json:"alignment"`
+	Regions    []MIRLayoutRegion `json:"regions"`
+	SourceSpan Span              `json:"source_span"`
+}
+
+type MIRLayoutRegion struct {
+	ID           string             `json:"id"`
+	Name         string             `json:"name"`
+	Type         Type               `json:"type"`
+	Offset       int                `json:"offset"`
+	ByteExtent   int                `json:"byte_extent"`
+	Alignment    int                `json:"alignment"`
+	Shape        []StorageDimension `json:"shape,omitempty"`
+	DisjointWith []string           `json:"disjoint_with,omitempty"`
+}
+
+type MIRStream struct {
+	Name        string             `json:"name"`
+	LayoutName  string             `json:"layout_name"`
+	Channels    []MIRStreamChannel `json:"channels"`
+	ZeroStorage bool               `json:"zero_storage"`
+	SourceSpan  Span               `json:"source_span"`
+}
+
+type MIRStreamChannel struct {
+	Name     string `json:"name"`
+	RegionID string `json:"region_id"`
+	Type     Type   `json:"type"`
 }
 
 type MIRStorageType struct {
@@ -986,6 +1069,12 @@ type MIROperation struct {
 	NoCopy              bool               `json:"no_copy,omitempty"`
 	NoAllocation        bool               `json:"no_allocation,omitempty"`
 	NoOwnershipTransfer bool               `json:"no_ownership_transfer,omitempty"`
+	LayoutName          string             `json:"layout_name,omitempty"`
+	RegionID            string             `json:"region_id,omitempty"`
+	Offset              int                `json:"offset,omitempty"`
+	ByteExtent          int                `json:"byte_extent,omitempty"`
+	Alignment           int                `json:"alignment,omitempty"`
+	SameBackingRegion   bool               `json:"same_backing_region,omitempty"`
 	SourceSpan          Span               `json:"source_span"`
 }
 
@@ -993,6 +1082,8 @@ type semanticEnv struct {
 	profile           *ProfileDefinition
 	enums             map[string]EnumDecl
 	structs           map[string]StructDecl
+	layouts           map[string]LayoutDecl
+	streams           map[string]StreamDecl
 	effects           map[string]EffectDecl
 	effectOrder       []string
 	actuators         map[string]ActuatorDecl
@@ -1045,6 +1136,8 @@ func newSemanticEnv(profile *ProfileDefinition) *semanticEnv {
 		profile:           profile,
 		enums:             enums,
 		structs:           map[string]StructDecl{},
+		layouts:           map[string]LayoutDecl{},
+		streams:           map[string]StreamDecl{},
 		effects:           map[string]EffectDecl{},
 		effectOrder:       nil,
 		actuators:         map[string]ActuatorDecl{},

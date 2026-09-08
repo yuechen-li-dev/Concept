@@ -1,0 +1,7 @@
+profile Core;
+
+layout DuplicateLayout
+{
+    int value;
+    int value;
+}
