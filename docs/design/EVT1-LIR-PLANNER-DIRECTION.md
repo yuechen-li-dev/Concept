@@ -1,6 +1,6 @@
 # EVT1 LIR Planner direction
 
-Status: R5b transition planning consumer; LIR is future work
+Status: R5c inference planning consumer; LIR is future work
 
 ## Authority pipeline
 
@@ -49,8 +49,14 @@ no-enabled panic, and cleanup. GenericC11 uses switch/branches and static
 hardmax temporaries. Native target records do not yet select branchless or
 vectorized decisions; purity is not required, and Unknown purity therefore
 forbids reordering. Future optimization may become eligible only when semantic
-facts prove that guards and scores are pure. `infer` belongs to a later soft
-distribution plan and is not an R5b operation.
+facts prove that guards and scores are pure.
+
+R5c adds `InferencePlan` and `TransitionInferPlan`. They retain stable
+softmax, max subtraction, fixed candidate count, inline storage,
+no-enabled/NaN/infinity policy, cleanup, and explicit HardMax. Scalar
+realization is selected; SIMD and hardmax-softmax elimination are not. A later
+Planner may recognize linear models, tiny MLPs, lookup models, decision trees,
+or quantized inference without changing distribution semantics.
 
 The 64-byte alignment of fixed inline storage remains a semantic guarantee
 because current storage binding and qualified facts rely on it. A target's
@@ -89,7 +95,8 @@ translation.
 
 ## Deferred
 
-R4l/R5b deliberately exclude SIMD generation, vectorization transforms, tiling,
+R4l/R5c deliberately exclude SIMD generation, vectorization transforms, tiling,
 fusion, SSA, virtual registers, register allocation, MachineIR, LLVM, MLIR,
 native encoders, generalized alias solving, allocation policy, decompilation,
-yield/resume frames, scheduler policy, branchless hardmax transforms, and infer.
+yield/resume frames, scheduler policy, branchless hardmax transforms, sampling,
+and inference-model recognition.

@@ -1,0 +1,17 @@
+profile Core;
+enum Action
+{
+    Attack,
+    Retreat
+}
+float Main(float threat, float health)
+{
+    float attackScore = threat * 0.8 + health * -0.2 + 0.1;
+    float retreatScore = threat * -0.4 + health * 0.9 - 0.3;
+    Inference<Action> belief = infer
+    {
+        Attack score attackScore;
+        Retreat score retreatScore;
+    };
+    return belief[Action::Attack];
+}

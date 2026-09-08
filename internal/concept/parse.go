@@ -1783,6 +1783,9 @@ func (p *parser) parseStatement() (Statement, error) {
 		if p.peekLexeme() == "decide" {
 			return p.parseTransitionDecideStmt(start)
 		}
+		if p.peekLexeme() == "infer" {
+			return p.parseTransitionInferStmt(start)
+		}
 		target, err := p.expectIdentifier("MACHINE_TRANSITION_INVALID", "expected local state name after transition")
 		if err != nil {
 			return nil, err
@@ -1901,27 +1904,8 @@ func (p *parser) parseTransitionDecideStmt(start Span) (Statement, error) {
 	}
 	stmt := &TransitionDecideStmt{Span: start}
 	for !p.done() && p.peekLexeme() != "}" {
-		target, err := p.expectIdentifier("TRANSITION_DECIDE_UNKNOWN_TARGET", "expected local state candidate")
+		candidate, err := p.parseScoredCandidate("TRANSITION_DECIDE_UNKNOWN_TARGET", "expected local state candidate", len(stmt.Candidates))
 		if err != nil {
-			return nil, err
-		}
-		candidate := DecisionCandidate{Target: target.Lexeme, DeclarationOrder: len(stmt.Candidates), Span: target.Span}
-		if p.peekLexeme() == "when" {
-			p.next()
-			candidate.Guard, err = p.parseExpr()
-			if err != nil {
-				return nil, err
-			}
-		}
-		if p.peekLexeme() != "score" {
-			return nil, evt1Diagnostic("TRANSITION_DECIDE_SCORE_TYPE_INVALID", "expected `score` in transition decide candidate", p.currentSpan())
-		}
-		p.next()
-		candidate.Score, err = p.parseExpr()
-		if err != nil {
-			return nil, err
-		}
-		if _, err := p.expect(";"); err != nil {
 			return nil, err
 		}
 		stmt.Candidates = append(stmt.Candidates, candidate)
@@ -1933,6 +1917,67 @@ func (p *parser) parseTransitionDecideStmt(start Span) (Statement, error) {
 		p.next()
 	}
 	return stmt, nil
+}
+
+func (p *parser) parseTransitionInferStmt(start Span) (Statement, error) {
+	p.next() // infer
+	if p.peekLexeme() != "with" {
+		return nil, evt1Diagnostic("TRANSITION_INFER_REQUIRES_POLICY", "transition infer requires an explicit policy introduced by `with`", p.currentSpan())
+	}
+	p.next()
+	policy, err := p.expectIdentifier("TRANSITION_INFER_UNKNOWN_POLICY", "expected transition inference policy")
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.expect("{"); err != nil {
+		return nil, err
+	}
+	stmt := &TransitionInferStmt{Policy: policy.Lexeme, Span: start}
+	for !p.done() && p.peekLexeme() != "}" {
+		candidate, err := p.parseScoredCandidate("TRANSITION_INFER_UNKNOWN_TARGET", "expected local state candidate", len(stmt.Candidates))
+		if err != nil {
+			return nil, err
+		}
+		stmt.Candidates = append(stmt.Candidates, candidate)
+	}
+	if _, err := p.expect("}"); err != nil {
+		return nil, err
+	}
+	if p.peekLexeme() == ";" {
+		p.next()
+	}
+	return stmt, nil
+}
+
+func (p *parser) parseScoredCandidate(code, message string, order int) (ScoredCandidate, error) {
+	name, err := p.expectIdentifier(code, message)
+	if err != nil {
+		return ScoredCandidate{}, err
+	}
+	candidate := ScoredCandidate{Identity: name.Lexeme, DeclarationOrder: order, Span: name.Span}
+	if p.peekLexeme() == "when" {
+		p.next()
+		candidate.Guard, err = p.parseExpr()
+		if err != nil {
+			return ScoredCandidate{}, err
+		}
+	}
+	if p.peekLexeme() != "score" {
+		scoreCode := "INFER_SCORE_REQUIRES_FLOAT"
+		if strings.HasPrefix(code, "TRANSITION_DECIDE") {
+			scoreCode = "TRANSITION_DECIDE_SCORE_TYPE_INVALID"
+		}
+		return ScoredCandidate{}, evt1Diagnostic(scoreCode, "expected `score` in scored candidate", p.currentSpan())
+	}
+	p.next()
+	candidate.Score, err = p.parseExpr()
+	if err != nil {
+		return ScoredCandidate{}, err
+	}
+	if _, err := p.expect(";"); err != nil {
+		return ScoredCandidate{}, err
+	}
+	return candidate, nil
 }
 
 func (p *parser) parseAssertStmt() (Statement, error) {
@@ -2562,6 +2607,8 @@ func (p *parser) parsePrimary() (Expr, error) {
 		return p.parseIfExpr()
 	case p.peekLexeme() == "match":
 		return p.parseMatchExpr()
+	case p.peekLexeme() == "infer":
+		return p.parseInferExpr()
 	case p.peekLexeme() == "true" || p.peekLexeme() == "false":
 		tok := p.next()
 		return p.parsePostfixExpr(&BoolLiteral{Value: tok.Lexeme == "true", Span: tok.Span}, tok.Span)
@@ -2584,6 +2631,25 @@ func (p *parser) parsePrimary() (Expr, error) {
 	default:
 		return p.parseNameLikeExpr()
 	}
+}
+
+func (p *parser) parseInferExpr() (Expr, error) {
+	start := p.next().Span
+	if _, err := p.expect("{"); err != nil {
+		return nil, err
+	}
+	expr := &InferExpr{Span: start}
+	for !p.done() && p.peekLexeme() != "}" {
+		candidate, err := p.parseScoredCandidate("INFER_UNKNOWN_CANDIDATE", "expected inference candidate", len(expr.Candidates))
+		if err != nil {
+			return nil, err
+		}
+		expr.Candidates = append(expr.Candidates, candidate)
+	}
+	if _, err := p.expect("}"); err != nil {
+		return nil, err
+	}
+	return p.parsePostfixExpr(expr, start)
 }
 
 func (p *parser) parseWhileStmt() (Statement, error) {

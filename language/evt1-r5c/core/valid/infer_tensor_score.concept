@@ -1,0 +1,20 @@
+profile Core;
+
+enum Action
+{
+    Attack,
+    Idle
+}
+
+float Main()
+{
+    vector<float> features[2] = [2.0, 1.0];
+    vector<float> attackWeights[2] = [1.0, 0.0];
+    vector<float> idleWeights[2] = [0.0, 1.0];
+    Inference<Action> belief = infer
+    {
+        Attack score features @ attackWeights;
+        Idle score features @ idleWeights;
+    };
+    return belief[Action::Attack];
+}

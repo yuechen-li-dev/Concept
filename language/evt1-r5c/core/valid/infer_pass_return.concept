@@ -1,0 +1,27 @@
+profile Core;
+
+enum Action
+{
+    Attack,
+    Idle
+}
+
+Inference<Action> BuildBelief()
+{
+    return infer
+    {
+        Attack score 1.0;
+        Idle score 0.0;
+    };
+}
+
+float AttackProbability(Inference<Action> belief)
+{
+    return belief[Action::Attack];
+}
+
+float Main()
+{
+    Inference<Action> belief = BuildBelief();
+    return AttackProbability(belief);
+}

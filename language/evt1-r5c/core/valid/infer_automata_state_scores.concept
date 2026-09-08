@@ -1,0 +1,30 @@
+profile Core;
+enum Action
+{
+    Attack,
+    Idle
+}
+automata Brain
+with state
+{
+    float urgency;
+}
+{
+    machine Run
+    {
+        state Idle
+        {
+            Inference<Action> belief = infer
+            {
+                Attack score urgency;
+                Idle score 0.0;
+            };
+        }
+    }
+}
+
+void Main()
+{
+    instance Brain brain(3.0);
+    Step(brain, Run);
+}

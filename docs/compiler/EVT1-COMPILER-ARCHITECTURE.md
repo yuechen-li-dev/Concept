@@ -1,6 +1,6 @@
 # Concept EVT1 Stage 0 compiler architecture
 
-Status: R5b deterministic transition matching and hardmax planning
+Status: R5c first-class inference and policy-driven transition planning
 
 ## Authority
 
@@ -678,7 +678,26 @@ allocation, scheduler, or runtime decision object. X86_64_Generic and
 AArch64_Generic retain the same plan; branchless selection stays unselected
 until existing semantic facts can prove purity and reordering legality.
 
-## General limitations after R5b
+## R5c inference planning pipeline
+
+```text
+shared scored candidates -> Infer / TransitionInfer AST
+    -> explicit inference MIR -> InferencePlan / TransitionInferPlan
+    -> scalar stable-softmax C11 -> explicit HardMax query or policy
+```
+
+Sema resolves `Inference<T>` against a payload-free enum and validates unique
+identities, bool guards, and exact float scores. MIR retains candidate order,
+temperature 1, normalization, no-enabled, NaN, infinity, and cleanup policies.
+Planner selects `InlineFixed`, `ScalarStableSoftMax`, max subtraction, and no
+SIMD. Transition plans retain explicit HardMax.
+
+GenericC11 emits fixed scalar arrays and `expf`, with no heap, model runtime,
+registry, scheduler, or RNG. Future Planner work may prove
+`HardMax(SoftMax(scores)) == HardMax(scores)`, but R5c does not eliminate
+normalization.
+
+## General limitations after R5c
 
 - The package remains deliberately cohesive rather than prematurely split.
 - Effect/actuator validation and C runtime emission remain in-package profile
@@ -690,9 +709,10 @@ until existing semantic facts can prove purity and reordering legality.
 - Imports are represented, but Core multi-module compilation is not yet active.
 - R5b automata hierarchy, explicit state capture, machine-local fields,
   caller-directed stepping, basic transition, categorical transition match,
-  and guarded hardmax transition decide are canonical. Plain value-level
-  decide, infer, transition infer, yield, completion/result, nested machine
-  values, and effect/actuator reconciliation remain deferred.
+  guarded hardmax transition decide, first-class inference, and explicit-policy
+  transition infer are canonical. Plain value-level decide, yield,
+  completion/result, nested machine values, and effect/actuator reconciliation
+  remain deferred.
 - Ownership beyond whole-local explicit transfer, deterministic local/
   parameter cleanup, and live whole-owner replacement remains deferred. There
   is no implicit move, field move, partial drop, unwinding, or dynamic cleanup
@@ -860,3 +880,14 @@ pins evaluation counts and transient cleanup, validates MIR and all three
 planning targets, checks deterministic panic reasons, and rejects malformed
 transition MIR. Generated evidence contains no allocation, scheduler,
 coroutine, dynamic candidate collection, or runtime decision object.
+
+## R5c executable evidence
+
+`internal/concept/r5c_conformance_test.go` and `language/evt1-r5c/core`
+provide 30 readable cases: 17 accepted programs, ten static rejections, and
+three runtime-negative programs. The suite executes stable softmax, explicit
+queries, exceptional-value policy, tiny linear expert scores, direct-decide
+equivalence, and transition inference through strict C11. It validates infer
+and transition-infer MIR/Planner records, exactly-once evaluation, cleanup,
+and deterministic panics. Generated evidence contains no allocation, model
+runtime, RNG, scheduler, SIMD, or GPU path.

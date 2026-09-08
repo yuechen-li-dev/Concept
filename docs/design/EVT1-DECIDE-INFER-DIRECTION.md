@@ -1,6 +1,6 @@
 # EVT1 decide and infer direction
 
-Status: R5b hardmax implemented; inference is design-only
+Status: R5c hardmax and normalized inference implemented
 
 ## Conceptual ladder
 
@@ -12,17 +12,17 @@ score
 decide
     hardmax / argmax over enabled scores
 infer
-    future normalized soft belief or distribution
+    normalized soft belief distribution
 transition decide
     hard selected local state transition
 transition infer
-    future inference-policy-driven transition
+    belief plus explicit policy to transition
 ```
 
 These layers are intentionally distinct. `match` answers which closed pattern
 is present. A `score` is one ordered scalar, not a probability. `decide`
-compares all enabled candidate scores and returns the hard maximum. Future
-`infer` would retain uncertainty across candidates rather than discarding it.
+compares all enabled candidate scores and returns the hard maximum. `infer`
+retains normalized uncertainty across candidates rather than discarding it.
 
 ## R5b normative boundary
 
@@ -43,10 +43,25 @@ minimum commitment, temporal smoothing, current-choice preference, tie memory,
 and policy history belong to its explicit application-owned state. The language
 hardmax primitive contains none of them and cannot silently consult them.
 
-## Future inference boundary
+## R5c normative inference boundary
 
-`infer` and `transition infer` remain non-normative. A later milestone must
-separately define candidate identity, normalization, numeric stability,
-zero-mass behavior, distribution representation, sampling policy, ownership,
-and Planner/backend contracts. R5b implements no softmax, probability
-distribution, temperature, entropy, TopK, random sampling, or inference policy.
+`infer` returns `Inference<T>`, a fixed-inline distribution over a unique,
+closed, source-ordered subset of payload-free enum candidates. Guards reuse
+R5b ordering; scores are exactly float logits. Temperature-1 stable softmax
+uses maximum subtraction. NaN and an empty enabled set panic. Positive
+infinities split mass equally, negative infinity has zero mass, and
+all-negative-infinity support panics.
+
+`belief[Type::Candidate]`, `HardMax(belief)`, and `Confidence(belief)` are
+the complete R5c query surface. Inference has no truthiness. Direct decide
+remains the cheaper raw-score argmax.
+
+`transition infer with HardMax` remains distinct MIR and Planner intent. The
+baseline C11 path performs normalization before policy selection and uses the
+ordinary cleanup edge. Future `Sample(ref rng)`, `Threshold`, and
+`DeferBelow` must expose every dependency. Temperature syntax, TopK, entropy,
+model declarations, and model runtimes remain absent.
+
+DragonGod may consume beliefs through explicit state for hysteresis,
+confidence thresholds, smoothing, or commitment. That state stays library
+owned.

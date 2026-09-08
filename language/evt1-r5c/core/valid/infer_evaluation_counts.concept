@@ -1,0 +1,34 @@
+profile Core;
+
+enum Action
+{
+    Attack,
+    Search,
+    Idle
+}
+
+bool CountGuard(ref int count, bool enabled)
+{
+    count = count + 1;
+    return enabled;
+}
+
+float CountScore(ref int count, float score)
+{
+    count = count + 1;
+    return score;
+}
+
+int Main()
+{
+    int guards = 0;
+    int scores = 0;
+    Inference<Action> belief = infer
+    {
+        Attack when CountGuard(ref guards, false) score CountScore(ref scores, 100.0);
+        Search when CountGuard(ref guards, true) score CountScore(ref scores, 2.0);
+        Idle score CountScore(ref scores, 1.0);
+    };
+    float confidence = Confidence(belief);
+    return guards * 10 + scores;
+}

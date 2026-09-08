@@ -536,18 +536,38 @@ func (s *TransitionMatchStmt) statementSpan() Span { return s.Span }
 // TransitionDecideStmt is a declaration-ordered hardmax over guarded,
 // statically-known candidates. ScoreType is filled by semantic validation.
 type TransitionDecideStmt struct {
-	Candidates []DecisionCandidate `json:"candidates"`
-	ScoreType  Type                `json:"score_type"`
-	Span       Span                `json:"span"`
+	Candidates []ScoredCandidate `json:"candidates"`
+	ScoreType  Type              `json:"score_type"`
+	Span       Span              `json:"span"`
 }
 
-type DecisionCandidate struct {
-	Target           string `json:"target_state"`
+// ScoredCandidate is shared by decide and infer; the enclosing operation
+// determines whether Identity names a state target or an enum candidate.
+type ScoredCandidate struct {
+	Identity         string `json:"identity"`
 	Guard            Expr   `json:"guard,omitempty"`
 	Score            Expr   `json:"score"`
 	DeclarationOrder int    `json:"declaration_order"`
 	Span             Span   `json:"span"`
 }
+
+type InferExpr struct {
+	Candidates    []ScoredCandidate `json:"candidates"`
+	CandidateType Type              `json:"candidate_type,omitempty"`
+	Span          Span              `json:"span"`
+}
+
+func (*InferExpr) evt1Expr()        {}
+func (e *InferExpr) exprSpan() Span { return e.Span }
+
+type TransitionInferStmt struct {
+	Candidates []ScoredCandidate `json:"candidates"`
+	Policy     string            `json:"policy"`
+	Span       Span              `json:"span"`
+}
+
+func (*TransitionInferStmt) evt1Statement()        {}
+func (s *TransitionInferStmt) statementSpan() Span { return s.Span }
 
 func (*TransitionDecideStmt) evt1Statement()        {}
 func (s *TransitionDecideStmt) statementSpan() Span { return s.Span }
@@ -884,6 +904,8 @@ type IndexExpr struct {
 	ProvenanceKind   string   `json:"provenance_kind,omitempty"`
 	ProvenanceScoped bool     `json:"provenance_scoped,omitempty"`
 	TensorIndex      bool     `json:"tensor_index,omitempty"`
+	InferenceIndex   bool     `json:"inference_index,omitempty"`
+	CandidateTag     int      `json:"candidate_tag,omitempty"`
 	SymbolicIndices  []string `json:"symbolic_indices,omitempty"`
 	Span             Span     `json:"span"`
 }
@@ -1168,8 +1190,29 @@ type MIRFunction struct {
 	ResultProvenance *MIRResultProvenanceSummary `json:"result_provenance,omitempty"`
 	Operations       []MIROperation              `json:"operations"`
 	TensorOperations []MIRTensorOperation        `json:"tensor_operations,omitempty"`
+	Inferences       []MIRInference              `json:"inferences,omitempty"`
 	Cleanups         []MIRCleanup                `json:"cleanups,omitempty"`
 	SourceSpan       Span                        `json:"source_span"`
+}
+
+type MIRInference struct {
+	CandidateType   Type                    `json:"candidate_type"`
+	Candidates      []MIRInferenceCandidate `json:"candidates"`
+	ScoreType       string                  `json:"score_type"`
+	Normalization   string                  `json:"normalization"`
+	Temperature     float64                 `json:"temperature"`
+	NoEnabledPolicy string                  `json:"no_enabled_policy"`
+	NaNPolicy       string                  `json:"nan_policy"`
+	InfinityPolicy  string                  `json:"infinity_policy"`
+	SourceSpan      Span                    `json:"source_span"`
+}
+
+type MIRInferenceCandidate struct {
+	Identity         string `json:"identity"`
+	Guard            string `json:"guard,omitempty"`
+	Score            string `json:"score"`
+	DeclarationOrder int    `json:"declaration_order"`
+	SourceSpan       Span   `json:"source_span"`
 }
 
 type MIRSemanticProof struct {

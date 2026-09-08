@@ -1,0 +1,15 @@
+profile Core;
+enum Action
+{
+    Attack,
+    Search
+}
+float Main()
+{
+    Inference<Action> belief = infer
+    {
+        Attack score 0.0;
+        Search score 1.0986123;
+    };
+    return belief[Action::Search];
+}

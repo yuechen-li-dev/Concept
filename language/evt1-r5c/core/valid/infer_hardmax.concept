@@ -1,0 +1,23 @@
+profile Core;
+enum Action
+{
+    Attack,
+    Search,
+    Idle
+}
+int Main()
+{
+    Inference<Action> belief = infer
+    {
+        Search score 2.0;
+        Attack score 2.0;
+        Idle score 0.0;
+    };
+    Action selected = HardMax(belief);
+    return match (selected)
+    {
+        Action::Attack => 1,
+        Action::Search => 2,
+        Action::Idle => 3,
+    };
+}

@@ -1,0 +1,13 @@
+profile Core;
+
+enum Action
+{
+    Idle
+}
+
+void Main()
+{
+    Inference<Action> belief = infer
+    {
+    };
+}

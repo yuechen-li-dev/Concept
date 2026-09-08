@@ -1,0 +1,12 @@
+profile Core;
+enum Action
+{
+    Attack
+}
+void Main()
+{
+    Inference<Action> belief = infer
+    {
+        Attack when 1 score 0.0;
+    };
+}

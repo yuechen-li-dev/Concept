@@ -1,0 +1,13 @@
+profile Core;
+enum Action
+{
+    Attack
+}
+float Main(float score)
+{
+    Inference<Action> belief = infer
+    {
+        Attack score score;
+    };
+    return Confidence(belief);
+}

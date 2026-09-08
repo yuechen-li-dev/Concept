@@ -1,6 +1,6 @@
 # EVT1 automata state-capture direction
 
-Status: R5b implemented; yield and effect reconciliation deferred
+Status: R5c inference transitions implemented; yield and effects deferred
 
 ## Reconciliation
 
@@ -112,6 +112,15 @@ candidates. No enabled candidate and NaN float score are deterministic terminal
 failures. Neither form introduces scheduling, suspension, allocation, a
 runtime candidate collection, or new capture rules.
 
+## Inference transitions
+
+R5c adds `transition infer with HardMax { State [when guard] score logit; }`.
+It reuses R5b candidate ordering and state lookup, requires float logits,
+computes a stable normalized distribution, and applies the explicit policy.
+No RNG, scheduler, or stateful decision memory is ambient. Transient cleanup
+still precedes the state-tag update. Automata state and machine fields feed
+guards and scores through existing R5a lookup; inference adds no capture model.
+
 ## Planner and C realization
 
 Semantic analysis fixes persistence before planning. `AutomataPlan` records
@@ -147,12 +156,11 @@ DragonGod Decision remains a later library-level stateful policy across Steps:
 hysteresis, minimum commitment, temporal smoothing, tie memory, and policy
 memory. None of that state is implicit in `transition decide`.
 
-The conceptual next layer is deliberately non-normative: `score` is scalar
-evidence/utility; `decide` is hardmax; future `infer` is a normalized soft
-belief/distribution. R5b implements neither plain value-level `decide` nor
-`infer`, softmax, sampling, temperature, TopK, or `transition infer`.
+R5c fixes score as scalar evidence, decide as raw hardmax, infer as normalized
+soft belief, and transition infer as belief plus explicit policy. Sampling,
+temperature syntax, TopK, and DragonGod stateful policy remain deferred.
 
-Recommended R5c scope is yield over the storage law established in R5a:
+Recommended R5d scope is yield over the storage law established in R5a:
 automata state, machine fields, and current-state tags survive; transient locals
 do not.
 Complete/Result, nested machine values, effects, and actuators remain separate

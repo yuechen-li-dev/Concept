@@ -173,15 +173,38 @@ type AutomataStoragePlan struct {
 }
 
 type MachinePlan struct {
-	Identity            string                 `json:"identity"`
-	CurrentStateSlot    string                 `json:"current_state_slot"`
-	InitialState        string                 `json:"initial_state"`
-	DispatchStrategy    string                 `json:"dispatch_strategy"`
-	Fields              []AutomataStoragePlan  `json:"fields,omitempty"`
-	StateIdentities     []string               `json:"state_identities"`
-	Transitions         []string               `json:"transitions,omitempty"`
-	TransitionMatches   []TransitionMatchPlan  `json:"transition_match_plans,omitempty"`
-	TransitionDecisions []TransitionDecidePlan `json:"transition_decide_plans,omitempty"`
+	Identity             string                 `json:"identity"`
+	CurrentStateSlot     string                 `json:"current_state_slot"`
+	InitialState         string                 `json:"initial_state"`
+	DispatchStrategy     string                 `json:"dispatch_strategy"`
+	Fields               []AutomataStoragePlan  `json:"fields,omitempty"`
+	StateIdentities      []string               `json:"state_identities"`
+	Transitions          []string               `json:"transitions,omitempty"`
+	TransitionMatches    []TransitionMatchPlan  `json:"transition_match_plans,omitempty"`
+	TransitionDecisions  []TransitionDecidePlan `json:"transition_decide_plans,omitempty"`
+	TransitionInferences []TransitionInferPlan  `json:"transition_infer_plans,omitempty"`
+}
+
+type InferencePlan struct {
+	CandidateType   string `json:"candidate_type"`
+	Normalization   string `json:"normalization"`
+	MaxSubtraction  bool   `json:"max_subtraction"`
+	CandidateCount  int    `json:"candidate_count"`
+	Storage         string `json:"storage"`
+	SIMDEligibility string `json:"simd_eligibility"`
+	SelectedSIMD    bool   `json:"selected_simd"`
+}
+
+type TransitionInferPlan struct {
+	State                string   `json:"state"`
+	Strategy             string   `json:"strategy"`
+	Policy               string   `json:"policy"`
+	Normalization        string   `json:"normalization"`
+	ScoreType            string   `json:"score_type"`
+	GuardEvaluationOrder string   `json:"guard_evaluation_order"`
+	ScoreEvaluationOrder string   `json:"score_evaluation_order"`
+	Targets              []string `json:"targets"`
+	CleanupEdge          string   `json:"cleanup_edge"`
 }
 
 type TransitionMatchPlan struct {
@@ -223,6 +246,7 @@ type FunctionPlan struct {
 	Target      TargetArchitecture `json:"target"`
 	Decisions   []PlanningDecision `json:"decisions"`
 	Tensors     []TensorPlan       `json:"tensor_plans,omitempty"`
+	Inferences  []InferencePlan    `json:"inference_plans,omitempty"`
 	Bounds      []BoundsPlan       `json:"bounds_plans,omitempty"`
 	Cleanup     CleanupPlan        `json:"cleanup_plan"`
 	Dispatch    []DispatchPlan     `json:"dispatch_plans,omitempty"`
@@ -310,6 +334,9 @@ func GeneratePlan(module Module, target TargetCapabilities) ([]byte, error) {
 func planFunction(fn MIRFunction, facts SemanticFactSet, target TargetCapabilities) FunctionPlan {
 	encoded, _ := json.Marshal(fn)
 	fp := FunctionPlan{Function: fn.Name, MIRIdentity: digest(encoded), Target: target.Architecture, Cleanup: CleanupPlan{Strategy: "ReverseDeclarationOrder"}}
+	for _, inference := range fn.Inferences {
+		fp.Inferences = append(fp.Inferences, InferencePlan{CandidateType: inference.CandidateType.String(), Normalization: inference.Normalization, MaxSubtraction: true, CandidateCount: len(inference.Candidates), Storage: "InlineFixed", SIMDEligibility: "Deferred", SelectedSIMD: false})
+	}
 	for _, cleanup := range fn.Cleanups {
 		if cleanup.State == "transferred" {
 			fp.Cleanup.Suppressed = append(fp.Cleanup.Suppressed, cleanup.Owner)
@@ -351,6 +378,12 @@ func planFunction(fn MIRFunction, facts SemanticFactSet, target TargetCapabiliti
 func planOperation(op MIROperation, facts SemanticFactSet) PlanningDecision {
 	d := PlanningDecision{MIRID: op.ID, Category: "CallPlan", Operation: op.Kind, Strategy: "Direct", Certainty: DecisionSelected, Evidence: PlanningEvidence{Detail: "ordinary MIR operation preserves semantic order"}, SourceSpan: op.SourceSpan}
 	switch op.Kind {
+	case "infer":
+		d.Category, d.Strategy, d.Certainty = "InferencePlan", "ScalarStableSoftMax", DecisionSelected
+		d.Evidence = PlanningEvidence{Claims: []string{"MaxSubtraction", "InlineFixed", "NoSIMD", "NoAllocation"}}
+	case "transition_infer":
+		d.Category, d.Strategy, d.Certainty = "InferenceTransitionPlan", "ScalarStableSoftMaxThenHardMax", DecisionSelected
+		d.Evidence = PlanningEvidence{Claims: []string{"ExplicitPolicy", "NoRandomness", "TransientBeforeStateUpdate"}}
 	case "span_index", "array_index", "ndarray_index", "tensor_index":
 		d.Category, d.Strategy, d.Certainty = "BoundsPlan", "PerAccessRuntime", DecisionRequired
 		d.RuntimeGuards = []string{op.BoundsCheck}
@@ -525,6 +558,13 @@ func planAutomata(mir *MIR) []AutomataPlan {
 						planned.Targets = append(planned.Targets, candidate.TargetState)
 					}
 					mp.TransitionDecisions = append(mp.TransitionDecisions, planned)
+				}
+				for _, inference := range state.TransitionInferences {
+					planned := TransitionInferPlan{State: state.Name, Strategy: "ScalarStableSoftMaxThenPolicy", Policy: inference.Policy, Normalization: inference.Normalization, ScoreType: inference.ScoreType, GuardEvaluationOrder: "DeclarationOrderOnce", ScoreEvaluationOrder: "EnabledDeclarationOrderOnce", CleanupEdge: inference.CleanupEdge}
+					for _, candidate := range inference.Candidates {
+						planned.Targets = append(planned.Targets, candidate.TargetState)
+					}
+					mp.TransitionInferences = append(mp.TransitionInferences, planned)
 				}
 			}
 			plan.Machines = append(plan.Machines, mp)

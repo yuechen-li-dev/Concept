@@ -1,0 +1,57 @@
+profile Core;
+
+enum Action
+{
+    Attack,
+    Search
+}
+
+automata Equivalence
+{
+    machine Decide
+    {
+        state Idle
+        {
+            transition decide
+            {
+                Attack score 2.0;
+                Search score 2.0;
+            }
+        }
+        state Attack { }
+        state Search { }
+    }
+
+    machine Infer
+    {
+        state Idle
+        {
+            transition infer with HardMax
+            {
+                Attack score 2.0;
+                Search score 2.0;
+            }
+        }
+        state Attack { }
+        state Search { }
+    }
+}
+
+int Main()
+{
+    Inference<Action> belief = infer
+    {
+        Attack score 2.0;
+        Search score 2.0;
+    };
+    Action selected = HardMax(belief);
+    int selectedCode = match (selected)
+    {
+        Action::Attack => 1,
+        Action::Search => 2,
+    };
+    instance Equivalence evidence();
+    Step(evidence, Decide);
+    Step(evidence, Infer);
+    return selectedCode * 100 + State(evidence, Decide) * 10 + State(evidence, Infer);
+}

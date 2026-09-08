@@ -1,0 +1,18 @@
+profile Core;
+enum Action
+{
+    Attack
+}
+
+enum Other
+{
+    Idle
+}
+float Main()
+{
+    Inference<Action> belief = infer
+    {
+        Attack score 0.0;
+    };
+    return belief[Other::Idle];
+}

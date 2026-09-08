@@ -1,6 +1,6 @@
 # Concept EVT1 language specification foundation
 
-Status: R5b canonical deterministic transition match and decide
+Status: R5c canonical first-class inference and policy-driven transitions
 
 This document defines the authority categories and the smallest currently
 executable EVT1 language foundation. It is derived from the retired Concept
@@ -999,12 +999,45 @@ is not a scheduler or DragonGod's stateful Decision policy. Guards and scores
 are ordinary expressions and retain source-order side effects, ownership,
 reference, and explicit failure behavior.
 
-The older typed-signal `automata Name(Signal)` form remains compatibility
-surface for DragonGod/Vulkan evidence; its effect coupling is not promoted into
-Core law. Plain value-level `decide`, `infer`, `transition infer`, `yield`,
-completion/result reconciliation, nested machine values, and effects/actuators
-remain later work. Future `infer` denotes normalized soft belief rather than
-hardmax and is not normative in R5b.
+**Canonical EVT1 R5c inference.** `Inference<T>` is an ordinary non-owning,
+copyable value over a payload-free enum candidate type. It contains fixed
+inline probabilities, source-order candidate identities, and a fixed count.
+
+```concept
+Inference<Action> belief = infer
+{
+    Attack when CanAttack() score AttackLogit();
+    Search score SearchLogit();
+    Idle score IdleLogit();
+};
+
+float attackProbability = belief[Action::Attack];
+Action selected = HardMax(belief);
+float confidence = Confidence(belief);
+```
+
+Candidate names are unique variants of `T`. Guards run once in source order;
+a disabled score does not run. Enabled scores run once in source order and
+must be exactly `float`. NaN and no-enabled paths terminate with `inference
+score is NaN` and `inference has no enabled candidates`.
+
+`infer` applies temperature-1 stable softmax with maximum subtraction.
+Disabled and `-Inf` candidates have zero probability. One `+Inf` receives
+all mass; multiple `+Inf` candidates split mass equally. All enabled
+`-Inf` terminates with `inference normalization has no finite support`.
+
+Indexed access requires a qualified candidate of `T`. `HardMax` selects the
+first source-declared maximum; `Confidence` returns that probability.
+Inference has no truthiness. For identical finite candidates, guards, float
+scores, and order, `HardMax(infer(scores))` agrees with direct `decide`, but
+`decide` remains raw-score argmax and need not normalize.
+
+`transition infer with HardMax { ... }` is the only R5c transition-inference
+policy. It infers, selects, cleans transients, updates the tag, and returns from
+`Step`. Missing or unknown policy is invalid. Randomness is never implicit;
+sampling and explicit RNG are deferred. The older typed-signal automata form
+remains compatibility surface. Plain value-level decide, yield,
+completion/result, nested machine values, and effects/actuators remain later.
 
 ## 23. Effects, actuators, and profiles
 

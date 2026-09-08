@@ -1150,6 +1150,10 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 			if err := validateTransitionDecideStmt(env, local, s, templateInfo, inComptimeFn); err != nil {
 				return err
 			}
+		case *TransitionInferStmt:
+			if err := validateTransitionInferStmt(env, local, s, templateInfo, inComptimeFn); err != nil {
+				return err
+			}
 		case *EffectsDecl:
 			if inComptimeFn {
 				return evt1Diagnostic("CV4304", fmt.Sprintf("effects batch %s cannot be declared in comptime code", s.Name), s.Span)
@@ -1531,6 +1535,9 @@ func evt1EvalScopeFromValidation(scope *evt1Scope, env *semanticEnv) *evt1EvalSc
 }
 
 func validateExprAgainstExpected(env *semanticEnv, scope *evt1Scope, expr Expr, expected Type, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
+	if inference, ok := expr.(*InferExpr); ok {
+		return validateInferExpr(env, scope, inference, expected, templateInfo, inComptimeFn)
+	}
 	if call, ok := expr.(*CallExpr); ok && call.Callee == "Tensor" {
 		return validateTensorConstruction(env, scope, call, expected, templateInfo, inComptimeFn)
 	}
@@ -2024,6 +2031,24 @@ func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string,
 		return evt1Diagnostic("CV4148", fmt.Sprintf("unknown concept parameter %s", t.Name), span)
 	}
 	if len(t.TypeArgs) > 0 {
+		if t.Name == evt1InferenceName {
+			if len(t.TypeArgs) != 1 {
+				return evt1Diagnostic("INFERENCE_TYPE_INVALID", "Inference requires exactly one candidate type", span)
+			}
+			if err := validateKnownType(env, t.TypeArgs[0], span, conceptParam, false); err != nil {
+				return err
+			}
+			decl, ok := env.enums[t.TypeArgs[0].Name]
+			if !ok {
+				return evt1Diagnostic("INFERENCE_TYPE_INVALID", fmt.Sprintf("Inference candidate type must be an enum, got %s", t.TypeArgs[0].String()), span)
+			}
+			for _, variant := range decl.Variants {
+				if len(variant.Payload) != 0 {
+					return evt1Diagnostic("INFERENCE_TYPE_INVALID", fmt.Sprintf("Inference candidate enum %s must contain only payload-free variants", decl.Name), variant.Span)
+				}
+			}
+			return nil
+		}
 		if t.Name == evt1SpanMutableName || t.Name == evt1SpanReadonlyName {
 			if len(t.TypeArgs) != 1 {
 				return evt1Diagnostic("CV4601", fmt.Sprintf("%s requires exactly one element type", t.Name), span)
@@ -2108,6 +2133,8 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		return t, nil
 	case *ArrayLiteralExpr:
 		return validateArrayLiteralExpr(env, scope, *e, nil, templateInfo, inComptimeFn)
+	case *InferExpr:
+		return Type{}, evt1Diagnostic("INFER_REQUIRES_INFERENCE_CONTEXT", "infer requires an expected Inference<T> type", e.Span)
 	case *ParenExpr:
 		return validateExpr(env, scope, e.Value, templateInfo, inComptimeFn)
 	case *NameExpr:
@@ -2248,6 +2275,24 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		if e.Callee == "Tensor" {
 			return Type{}, evt1Diagnostic("CV4611", "Tensor(source) requires an explicit tensor<T, Rank> destination type", e.Span)
+		}
+		if e.Callee == "HardMax" || e.Callee == "Confidence" {
+			if len(e.Args) != 1 {
+				return Type{}, evt1Diagnostic("INFERENCE_QUERY_INVALID", fmt.Sprintf("%s requires exactly one Inference argument", e.Callee), e.Span)
+			}
+			argType, err := validateExpr(env, scope, e.Args[0], templateInfo, inComptimeFn)
+			if err != nil {
+				return Type{}, err
+			}
+			if !evt1IsInferenceType(argType) {
+				return Type{}, evt1Diagnostic("INFERENCE_QUERY_INVALID", fmt.Sprintf("%s requires Inference<T>, got %s", e.Callee, argType.String()), e.Args[0].exprSpan())
+			}
+			e.Intrinsic = "inference_" + e.Callee
+			if e.Callee == "Confidence" {
+				out, _ := evt1BuiltinType("float", e.Span)
+				return out, nil
+			}
+			return evt1CanonicalType(env, evt1InferenceCandidateType(argType)), nil
 		}
 		if e.Callee == evt1SpanMutableName || e.Callee == evt1SpanReadonlyName || e.Callee == "Subspan" {
 			return validateSpanCall(env, scope, e, nil, templateInfo, inComptimeFn)
@@ -2432,6 +2477,24 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		baseType, err := validateExpr(env, scope, e.Base, templateInfo, inComptimeFn)
 		if err != nil {
 			return Type{}, err
+		}
+		if evt1IsInferenceType(baseType) {
+			indices := evt1StorageIndices(e)
+			if len(indices) != 1 {
+				return Type{}, evt1Diagnostic("INFERENCE_UNKNOWN_CANDIDATE", "Inference access requires exactly one semantic candidate", e.Span)
+			}
+			candidate, ok := indices[0].(*ConstructExpr)
+			candidateType := evt1InferenceCandidateType(baseType)
+			if !ok || candidate.EnumName != candidateType.Name || len(candidate.Args) != 0 {
+				return Type{}, evt1Diagnostic("INFERENCE_UNKNOWN_CANDIDATE", fmt.Sprintf("Inference<%s> access requires a %s::Candidate identity", candidateType.Name, candidateType.Name), indices[0].exprSpan())
+			}
+			variant, exists := evt1EnumVariant(env, candidateType, candidate.VariantName)
+			if !exists || len(variant.Payload) != 0 {
+				return Type{}, evt1Diagnostic("INFERENCE_UNKNOWN_CANDIDATE", fmt.Sprintf("unknown candidate %s::%s", candidate.EnumName, candidate.VariantName), candidate.Span)
+			}
+			e.InferenceIndex, e.CandidateTag = true, variant.Tag
+			out, _ := evt1BuiltinType("float", e.Span)
+			return out, nil
 		}
 		if evt1IsSpanType(baseType) {
 			indices := evt1StorageIndices(e)
@@ -3555,8 +3618,8 @@ func validateTransitionDecideStmt(env *semanticEnv, scope *evt1Scope, stmt *Tran
 		if candidate.DeclarationOrder != i {
 			return evt1Diagnostic("TRANSITION_DECIDE_MIR_INVALID", "transition decide candidate order is not declaration order", candidate.Span)
 		}
-		if !scope.transitionTargets[candidate.Target] {
-			return evt1Diagnostic("TRANSITION_DECIDE_UNKNOWN_TARGET", fmt.Sprintf("unknown transition decide target %s in current machine", candidate.Target), candidate.Span)
+		if !scope.transitionTargets[candidate.Identity] {
+			return evt1Diagnostic("TRANSITION_DECIDE_UNKNOWN_TARGET", fmt.Sprintf("unknown transition decide target %s in current machine", candidate.Identity), candidate.Span)
 		}
 		if candidate.Guard != nil {
 			guardType, err := validateExpr(env, scope, candidate.Guard, templateInfo, inComptimeFn)
@@ -3581,6 +3644,43 @@ func validateTransitionDecideStmt(env *semanticEnv, scope *evt1Scope, stmt *Tran
 		}
 	}
 	stmt.ScoreType = scoreType
+	return nil
+}
+
+func validateTransitionInferStmt(env *semanticEnv, scope *evt1Scope, stmt *TransitionInferStmt, templateInfo *evt1TemplateInfo, inComptimeFn bool) error {
+	if !scope.inAutomataState {
+		return evt1Diagnostic("MACHINE_TRANSITION_INVALID", "transition infer is only valid inside a machine state body", stmt.Span)
+	}
+	if stmt.Policy != "HardMax" {
+		return evt1Diagnostic("TRANSITION_INFER_UNKNOWN_POLICY", fmt.Sprintf("unknown transition inference policy %s", stmt.Policy), stmt.Span)
+	}
+	if len(stmt.Candidates) == 0 {
+		return evt1Diagnostic("INFER_EMPTY", "transition infer requires at least one candidate", stmt.Span)
+	}
+	for i, candidate := range stmt.Candidates {
+		if candidate.DeclarationOrder != i {
+			return evt1Diagnostic("TRANSITION_INFER_MIR_INVALID", "transition infer candidate order is not declaration order", candidate.Span)
+		}
+		if !scope.transitionTargets[candidate.Identity] {
+			return evt1Diagnostic("TRANSITION_INFER_UNKNOWN_TARGET", fmt.Sprintf("unknown transition infer target %s in current machine", candidate.Identity), candidate.Span)
+		}
+		if candidate.Guard != nil {
+			guardType, err := validateExpr(env, scope, candidate.Guard, templateInfo, inComptimeFn)
+			if err != nil {
+				return err
+			}
+			if guardType.Name != "bool" {
+				return evt1Diagnostic("INFER_GUARD_REQUIRES_BOOL", fmt.Sprintf("transition infer guard must be bool, got %s", guardType.String()), candidate.Guard.exprSpan())
+			}
+		}
+		scoreType, err := validateExpr(env, scope, candidate.Score, templateInfo, inComptimeFn)
+		if err != nil {
+			return err
+		}
+		if scoreType.Name != "float" {
+			return evt1Diagnostic("INFER_SCORE_REQUIRES_FLOAT", fmt.Sprintf("transition infer score must be float, got %s", scoreType.String()), candidate.Score.exprSpan())
+		}
+	}
 	return nil
 }
 
@@ -4014,6 +4114,8 @@ func evt1ExprIdentity(expr Expr) string {
 		return e.Name
 	case *IntLiteral:
 		return fmt.Sprintf("%d", e.Value)
+	case *FloatLiteral:
+		return fmt.Sprintf("%g", e.Value)
 	case *StringLiteral:
 		return fmt.Sprintf("%q", e.Value)
 	case *BoolLiteral:
@@ -4064,6 +4166,8 @@ func evt1ExprIdentity(expr Expr) string {
 			parts = append(parts, update.Name+"="+evt1ExprIdentity(update.Value))
 		}
 		return "with(" + strings.Join(parts, ",") + ")"
+	case *InferExpr:
+		return fmt.Sprintf("infer<%s:%d>", e.CandidateType.Name, len(e.Candidates))
 	case *ArrayLiteralExpr:
 		var parts []string
 		for _, element := range e.Elements {
@@ -4153,6 +4257,9 @@ func evt1ByValueTypeName(t Type) (string, bool) {
 
 func evt1TypeCopyable(env *semanticEnv, t Type) bool {
 	if evt1IsTensorType(t) {
+		return true
+	}
+	if evt1IsInferenceType(t) {
 		return true
 	}
 	if t.isBorrowLike() {

@@ -106,6 +106,11 @@ the executable mapping used by the R2 conformance harness.
 | dyn const violation | ownership qualifier pressure | `DYN_MUTABLE_FROM_CONST`, `DYN_READONLY_FIELD_MUTATION` | same semantic families | EVT1-new | no mutation capability is recovered through erasure |
 | unknown dyn member | Phase 14 interface-call diagnostics | `DYN_METHOD_NOT_IN_INTERFACE`, `DYN_FIELD_NOT_IN_INTERFACE` | same semantic families | Redesigned | witness surface is closed by the declared interface |
 | dyn lifetime escape | no closed Phase 14 lifetime system | `CV4511` and existing scoped/outlives families | `DYN_ESCAPE_SOURCE_LIFETIME` family | reused provenance diagnostics | dyn has no separate lifetime checker |
+| invalid inference type/candidate | no counterpart | `INFERENCE_TYPE_INVALID`, `INFER_UNKNOWN_CANDIDATE`, `INFER_DUPLICATE_CANDIDATE` | same semantic families | EVT1-new | closed payload-free enum identity |
+| invalid inference guard/score | R5b decision pressure | `INFER_GUARD_REQUIRES_BOOL`, `INFER_SCORE_REQUIRES_FLOAT` | same semantic families | EVT1-new / reused ordering law | inference logits are exactly float |
+| invalid inference query | no counterpart | `INFERENCE_UNKNOWN_CANDIDATE`, `INFERENCE_QUERY_INVALID` | same semantic families | EVT1-new | no integer indexing or truthiness |
+| malformed inference MIR | MIR invariant precedent | `INFER_MIR_INVALID`, `TRANSITION_INFER_MIR_INVALID` | same semantic families | EVT1-new | normalization and policies remain explicit |
+| invalid transition inference | no counterpart | `TRANSITION_INFER_REQUIRES_POLICY`, `TRANSITION_INFER_UNKNOWN_POLICY`, `TRANSITION_INFER_UNKNOWN_TARGET` | same semantic families | EVT1-new | R5c admits HardMax only |
 
 `static_assert` continues to reuse the bounded comptime diagnostic path:
 runtime calls are `CV4210`, a non-boolean evaluated condition is `CV4207`, and

@@ -1,0 +1,15 @@
+profile Core;
+
+automata Bad
+{
+    machine Run
+    {
+        state Idle
+        {
+            transition infer with HardMax
+            {
+                Missing score 0.0;
+            }
+        }
+    }
+}

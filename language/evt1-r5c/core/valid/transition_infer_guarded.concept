@@ -1,0 +1,24 @@
+profile Core;
+automata Chooser
+{
+    machine Run
+    {
+        state Idle
+        {
+            transition infer with HardMax
+            {
+                Waiting when false score 1000.0;
+                Running score 0.0;
+            }
+        }
+        state Waiting { }
+        state Running { }
+    }
+}
+
+int Main()
+{
+    instance Chooser chooser();
+    Step(chooser, Run);
+    return State(chooser, Run);
+}

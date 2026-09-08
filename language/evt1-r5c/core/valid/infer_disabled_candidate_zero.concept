@@ -1,0 +1,15 @@
+profile Core;
+enum Action
+{
+    Attack,
+    Idle
+}
+float Main()
+{
+    Inference<Action> belief = infer
+    {
+        Attack when false score 1000.0;
+        Idle score 0.0;
+    };
+    return belief[Action::Attack];
+}

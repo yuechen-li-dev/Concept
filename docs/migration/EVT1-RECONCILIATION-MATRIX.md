@@ -1,6 +1,6 @@
 # EVT1 semantic reconciliation matrix
 
-Status: R0 authority ledger with R1-R5b executable evidence
+Status: R0 authority ledger with R1-R5c executable evidence
 
 `Port required?` means implementation or conformance work remains after R0; it
 does not authorize that work in this milestone. Status is one of `Keep PoC3`,
@@ -106,8 +106,9 @@ does not authorize that work in this milestone. Status is one of `Keep PoC3`,
 | Step | explicit caller-invoked machine step | signal-driven dispatch | `Step(instance, Machine)` executes one selected contained machine | Merge / implemented R5a | Translation only | phase13/18; R5a native corpus | no implicit tick-all order |
 | Complete/Result | explicit completed/result frame operations | dispatch outcomes | reconcile user surface later | Deferred after R5a | Yes | phase13/18 and Go outcome evidence | not required for persistent-state law |
 | DragonGod Decision | stateful kernel decision policy | application subsystem pressure | library-level hysteresis/commitment/tie-memory policy | Library-level / deferred | Yes | phase20 DragonGod evidence | never implicit in transition decide |
-| infer | absent | absent | future normalized soft belief/distribution | Deferred / new direction | Yes | R5b decide/infer direction | no softmax or distribution in R5b |
-| transition infer | absent | absent | future inference-policy-driven transition | Deferred / new direction | Yes | R5b decide/infer direction | non-normative |
+| infer | absent | absent | normalized float-logit soft belief in `Inference<T>` | EVT1-new / implemented R5c | No | R5c corpus/native evidence | stable softmax; fixed inline storage |
+| transition infer | absent | absent | explicit-policy inference transition | EVT1-new / implemented R5c | No | R5c MIR/Planner/native evidence | HardMax only in R5c |
+| inference sampling | absent | absent | explicit RNG-dependent policy | Deferred | Yes | R5c direction | randomness is never implicit |
 | yield | explicit re-entry suspension without lifted locals | absent | preserve R5a storage law; define resume behavior in R5c | Deferred to R5c | Yes | phase19 fixtures | future yield preserves explicit persistent storage only |
 | effects | general design plus allocation/effect vocabulary | ordered typed effect batches in automata | keep Go implementation Vulkan-only in R0 | Profile-only | No for profile subset | DragonGod M3 tests | general effect law deferred |
 | actuators | not the same extracted mapping construct | typed exact effect-to-mechanism mapping | Vulkan profile only | Profile-only | No for profile subset | actuator tests | not core Concept |
@@ -330,3 +331,13 @@ automata, extends matching through ordinary payload enums/Result, and makes
 `int`/`float` score type and NaN policy explicit. MIR and Planner preserve
 candidate order, tie/no-enabled/cleanup policy, and strict-C11 evidence proves
 exactly-once evaluation without a scheduler or decision runtime object.
+
+## R5c executable evidence
+
+R5c adds 30 `PASS` cases: 17 accepted programs, ten static rejections, and
+three runtime-negative programs. It is EVT1-new and fabricates no PoC3 parity.
+Evidence covers fixed-inline `Inference<T>`, exactly-once float logits, stable
+softmax, probability queries, declaration-order HardMax, decide equivalence
+including ties, explicit-policy transitions, deterministic exceptional values,
+automata inputs, cleanup, and absence of allocation, RNG, scheduler, SIMD, GPU,
+or model runtime.

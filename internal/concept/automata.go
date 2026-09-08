@@ -142,18 +142,31 @@ type MIRMachine struct {
 }
 
 type MIRState struct {
-	Name                string                 `json:"name"`
-	Initial             bool                   `json:"initial,omitempty"`
-	Terminal            bool                   `json:"terminal,omitempty"`
-	RuntimeOrdinal      int                    `json:"runtime_ordinal"`
-	Reachable           bool                   `json:"reachable,omitempty"`
-	Completion          string                 `json:"completion,omitempty"`
-	SourceSpan          Span                   `json:"source_span"`
-	Handlers            []MIRTransition        `json:"handlers,omitempty"`
-	TransitionMatches   []MIRTransitionMatch   `json:"transition_matches,omitempty"`
-	TransitionDecisions []MIRTransitionDecide  `json:"transition_decisions,omitempty"`
-	Operations          []MIROperation         `json:"operations,omitempty"`
-	Storage             []MIRPersistentStorage `json:"storage,omitempty"`
+	Name                 string                 `json:"name"`
+	Initial              bool                   `json:"initial,omitempty"`
+	Terminal             bool                   `json:"terminal,omitempty"`
+	RuntimeOrdinal       int                    `json:"runtime_ordinal"`
+	Reachable            bool                   `json:"reachable,omitempty"`
+	Completion           string                 `json:"completion,omitempty"`
+	SourceSpan           Span                   `json:"source_span"`
+	Handlers             []MIRTransition        `json:"handlers,omitempty"`
+	TransitionMatches    []MIRTransitionMatch   `json:"transition_matches,omitempty"`
+	TransitionDecisions  []MIRTransitionDecide  `json:"transition_decisions,omitempty"`
+	TransitionInferences []MIRTransitionInfer   `json:"transition_inferences,omitempty"`
+	Operations           []MIROperation         `json:"operations,omitempty"`
+	Storage              []MIRPersistentStorage `json:"storage,omitempty"`
+}
+
+type MIRTransitionInfer struct {
+	Candidates      []MIRDecisionCandidate `json:"candidates"`
+	ScoreType       string                 `json:"score_type"`
+	Normalization   string                 `json:"normalization"`
+	Policy          string                 `json:"policy"`
+	NoEnabledPolicy string                 `json:"no_enabled_policy"`
+	NaNPolicy       string                 `json:"nan_policy"`
+	InfinityPolicy  string                 `json:"infinity_policy"`
+	CleanupEdge     string                 `json:"cleanup_edge"`
+	SourceSpan      Span                   `json:"source_span"`
 }
 
 type MIRTransitionMatch struct {

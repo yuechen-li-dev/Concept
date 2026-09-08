@@ -673,11 +673,31 @@ func evt1ValidateMIR(mir MIR) error {
 						}
 					}
 				}
+				for _, inference := range state.TransitionInferences {
+					if len(inference.Candidates) == 0 || inference.ScoreType != "float" || inference.Normalization != "StableSoftMax" || inference.Policy != "HardMax" || inference.NoEnabledPolicy != "Panic" || inference.NaNPolicy != "Panic" || inference.InfinityPolicy != "EqualPositiveInfinityElseNegativeInfinityZero" || inference.CleanupEdge != "TransientBeforeStateUpdate" {
+						return evt1Diagnostic("TRANSITION_INFER_MIR_INVALID", "transition infer MIR omits normalization, policy, panic, or cleanup semantics", inference.SourceSpan)
+					}
+					for i, candidate := range inference.Candidates {
+						if candidate.Score == "" || candidate.DeclarationOrder != i || !stateNames[candidate.TargetState] {
+							return evt1Diagnostic("TRANSITION_INFER_MIR_INVALID", "transition infer MIR contains an invalid candidate, order, score, or local target", candidate.SourceSpan)
+						}
+					}
+				}
 			}
 		}
 	}
 	allFunctions := append(append([]MIRFunction{}, mir.Functions...), mir.ComptimeFns...)
 	for _, fn := range allFunctions {
+		for _, inference := range fn.Inferences {
+			if inference.CandidateType.Name == "" || len(inference.Candidates) == 0 || inference.ScoreType != "float" || inference.Normalization != "StableSoftMax" || inference.Temperature != 1.0 || inference.NoEnabledPolicy != "Panic" || inference.NaNPolicy != "Panic" || inference.InfinityPolicy != "EqualPositiveInfinityElseNegativeInfinityZero" {
+				return evt1Diagnostic("INFER_MIR_INVALID", fmt.Sprintf("infer MIR in %s is incomplete", fn.Name), inference.SourceSpan)
+			}
+			for i, candidate := range inference.Candidates {
+				if candidate.Identity == "" || candidate.Score == "" || candidate.DeclarationOrder != i {
+					return evt1Diagnostic("INFER_MIR_INVALID", fmt.Sprintf("infer MIR candidate in %s is invalid", fn.Name), candidate.SourceSpan)
+				}
+			}
+		}
 		for _, tensor := range fn.TensorOperations {
 			if err := validateTensorMIRSemantic(tensor); err != nil {
 				return evt1Diagnostic("CV4626", fmt.Sprintf("Tensor MIR in %s is invalid: %s", fn.Name, err), tensor.SourceSpan)
@@ -889,6 +909,14 @@ func collectMIROps(env *semanticEnv, block *Block, fn *MIRFunction, templateInfo
 				}
 				collectExprMIROps(env, candidate.Score, fn, templateInfo)
 			}
+		case *TransitionInferStmt:
+			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "transition_infer", Type: "float", Detail: s.Policy, SourceSpan: s.Span})
+			for _, candidate := range s.Candidates {
+				if candidate.Guard != nil {
+					collectExprMIROps(env, candidate.Guard, fn, templateInfo)
+				}
+				collectExprMIROps(env, candidate.Score, fn, templateInfo)
+			}
 		case *ReturnStmt:
 			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "return", Type: fn.ReturnType.String(), SourceSpan: s.Span})
 			if s.Value != nil {
@@ -960,13 +988,23 @@ func collectTransitionMIR(block *Block, state *MIRState) {
 		case *TransitionDecideStmt:
 			entry := MIRTransitionDecide{ScoreType: s.ScoreType, TiePolicy: "DeclarationOrderFirstMax", NoEnabledPolicy: "Panic", CleanupEdge: "TransientBeforeStateUpdate", SourceSpan: s.Span}
 			for _, candidate := range s.Candidates {
-				mirCandidate := MIRDecisionCandidate{TargetState: candidate.Target, Score: evt1ExprIdentity(candidate.Score), DeclarationOrder: candidate.DeclarationOrder, SourceSpan: candidate.Span}
+				mirCandidate := MIRDecisionCandidate{TargetState: candidate.Identity, Score: evt1ExprIdentity(candidate.Score), DeclarationOrder: candidate.DeclarationOrder, SourceSpan: candidate.Span}
 				if candidate.Guard != nil {
 					mirCandidate.Guard = evt1ExprIdentity(candidate.Guard)
 				}
 				entry.Candidates = append(entry.Candidates, mirCandidate)
 			}
 			state.TransitionDecisions = append(state.TransitionDecisions, entry)
+		case *TransitionInferStmt:
+			entry := MIRTransitionInfer{ScoreType: "float", Normalization: "StableSoftMax", Policy: s.Policy, NoEnabledPolicy: "Panic", NaNPolicy: "Panic", InfinityPolicy: "EqualPositiveInfinityElseNegativeInfinityZero", CleanupEdge: "TransientBeforeStateUpdate", SourceSpan: s.Span}
+			for _, candidate := range s.Candidates {
+				mirCandidate := MIRDecisionCandidate{TargetState: candidate.Identity, Score: evt1ExprIdentity(candidate.Score), DeclarationOrder: candidate.DeclarationOrder, SourceSpan: candidate.Span}
+				if candidate.Guard != nil {
+					mirCandidate.Guard = evt1ExprIdentity(candidate.Guard)
+				}
+				entry.Candidates = append(entry.Candidates, mirCandidate)
+			}
+			state.TransitionInferences = append(state.TransitionInferences, entry)
 		case *IfStmt:
 			collectTransitionMIR(&s.Then, state)
 			if s.Else != nil {
@@ -992,6 +1030,23 @@ func collectTransitionMIR(block *Block, state *MIRState) {
 func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInfo *evt1TemplateInfo) {
 	id := fmt.Sprintf("%s.%02d", fn.Name, len(fn.Operations)+1)
 	switch e := expr.(type) {
+	case *InferExpr:
+		entry := MIRInference{CandidateType: e.CandidateType, ScoreType: "float", Normalization: "StableSoftMax", Temperature: 1.0, NoEnabledPolicy: "Panic", NaNPolicy: "Panic", InfinityPolicy: "EqualPositiveInfinityElseNegativeInfinityZero", SourceSpan: e.Span}
+		for _, candidate := range e.Candidates {
+			item := MIRInferenceCandidate{Identity: candidate.Identity, Score: evt1ExprIdentity(candidate.Score), DeclarationOrder: candidate.DeclarationOrder, SourceSpan: candidate.Span}
+			if candidate.Guard != nil {
+				item.Guard = evt1ExprIdentity(candidate.Guard)
+			}
+			entry.Candidates = append(entry.Candidates, item)
+		}
+		fn.Inferences = append(fn.Inferences, entry)
+		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "infer", Detail: "StableSoftMax", SourceSpan: e.Span})
+		for _, candidate := range e.Candidates {
+			if candidate.Guard != nil {
+				collectExprMIROps(env, candidate.Guard, fn, templateInfo)
+			}
+			collectExprMIROps(env, candidate.Score, fn, templateInfo)
+		}
 	case *FailureExpr:
 		kind := "result_propagate"
 		if evt1IsOptionType(e.ResolvedType) {
@@ -1097,6 +1152,13 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 			collectExprMIROps(env, arm.Value, fn, templateInfo)
 		}
 	case *CallExpr:
+		if strings.HasPrefix(e.Intrinsic, "inference_") {
+			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: e.Intrinsic, Detail: "explicit inference query", NoCopy: true, NoAllocation: true, NoOwnershipTransfer: true, SourceSpan: e.Span})
+			for _, arg := range e.Args {
+				collectExprMIROps(env, arg, fn, templateInfo)
+			}
+			return
+		}
 		if e.Member {
 			kind := "class_method_call"
 			if e.DynDispatch {
@@ -1198,6 +1260,11 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 			collectExprMIROps(env, element, fn, templateInfo)
 		}
 	case *IndexExpr:
+		if e.InferenceIndex {
+			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "inference_probability", Detail: fmt.Sprintf("candidate_tag=%d", e.CandidateTag), NoCopy: true, NoAllocation: true, NoOwnershipTransfer: true, SourceSpan: e.Span})
+			collectExprMIROps(env, e.Base, fn, templateInfo)
+			return
+		}
 		if e.TensorIndex {
 			kind := "tensor_index"
 			if len(e.SymbolicIndices) > 0 {
@@ -1302,8 +1369,12 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 	storageViewTypes := evt1CollectStorageViewTypes(l.module, l.env)
 	spanTypes := evt1CollectSpanTypes(l.module)
 	tensorTypes := evt1CollectTensorTypes(l.module)
+	inferenceTypes := evt1InferenceCandidateTypes(l.module)
 	body.WriteString(fmt.Sprintf("/* Generated by %s. DO NOT EDIT. Source: %s */\n", CompilerID, l.module.Path))
 	body.WriteString(fmt.Sprintf("#include \"%s.generated.h\"\n", l.outputBase))
+	if len(inferenceTypes) > 0 {
+		body.WriteString("#include <math.h>\n")
+	}
 	body.WriteString("#include <stdio.h>\n#include <stdlib.h>\n\n")
 	header.WriteString(fmt.Sprintf("/* Generated by %s. DO NOT EDIT. */\n", CompilerID))
 	header.WriteString(fmt.Sprintf("#ifndef %s\n#define %s\n", guard, guard))
@@ -1328,6 +1399,11 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 	}
 	if err := l.writeRuntimeStorageAndTypeDecls(&header, typeDecls, evt1CollectStorageTypes(l.module, l.env), storageViewTypes); err != nil {
 		return nil, nil, err
+	}
+	for _, enumDecl := range l.module.Enums {
+		if inferenceTypes[enumDecl.Name] && len(enumDecl.Variants) > 0 {
+			header.WriteString(fmt.Sprintf("typedef struct { float probabilities[%d]; uint32_t candidate_order[%d]; uint32_t candidate_count; } concept_inference_%s;\n\n", len(enumDecl.Variants), len(enumDecl.Variants), evt1TypeIdentity(Type{Name: enumDecl.Name, Kind: TypeEnum})))
+		}
 	}
 	header.WriteString(evt1SpanDeclarations(spanTypes))
 	header.WriteString(evt1TensorDeclarations(tensorTypes))
@@ -1354,7 +1430,7 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 	body.WriteString("static void concept_abort_invalid_tag(const char* enum_name) {\n")
 	body.WriteString("  fprintf(stderr, \"invalid enum tag for %s\\n\", enum_name);\n")
 	body.WriteString("  abort();\n}\n\n")
-	if evt1ModuleUsesFailurePanic(l.module) || evt1ModuleUsesStorageBounds(l.module) || evt1ModuleUsesTransitionPanic(l.module) {
+	if evt1ModuleUsesFailurePanic(l.module) || evt1ModuleUsesStorageBounds(l.module) || evt1ModuleUsesTransitionPanic(l.module) || len(inferenceTypes) > 0 {
 		body.WriteString("static void concept_panic(const char* reason, int line, int column) {\n")
 		body.WriteString("  fprintf(stderr, \"Concept panic at %d:%d: %s\\n\", line, column, reason);\n")
 		body.WriteString("  abort();\n}\n\n")
@@ -2820,6 +2896,9 @@ func evt1ConstructorName(enumName, variantName string) string {
 }
 
 func evt1CType(t Type) string {
+	if evt1IsInferenceType(t) {
+		return evt1InferenceCName(t)
+	}
 	if t.Kind == TypeDyn {
 		return evt1DynCName(t)
 	}
@@ -3222,6 +3301,8 @@ func (f *evt1FunctionLowerer) lowerStatement(stmt Statement, indent int) string 
 		return f.lowerTransitionMatchStmt(*s, indent)
 	case *TransitionDecideStmt:
 		return f.lowerTransitionDecideStmt(*s, indent)
+	case *TransitionInferStmt:
+		return f.lowerTransitionInferStmt(*s, indent)
 	case *ReturnStmt:
 		if s.Value == nil {
 			return f.lowerAllScopeDrops(indent) + ind(indent) + "return;\n"
@@ -3473,7 +3554,7 @@ func (f *evt1FunctionLowerer) lowerTransitionDecideStmt(stmt TransitionDecideStm
 		b.WriteString(ind(candidateIndent) + fmt.Sprintf("if (!%s || %s > %s) {\n", hasBest, scoreTemp, bestScore))
 		b.WriteString(ind(candidateIndent+1) + fmt.Sprintf("%s = true;\n", hasBest))
 		b.WriteString(ind(candidateIndent+1) + fmt.Sprintf("%s = %s;\n", bestScore, scoreTemp))
-		b.WriteString(ind(candidateIndent+1) + fmt.Sprintf("%s = %s;\n", bestState, evt1AutomataStateConstName(f.automataStepName, f.machineStepName, candidate.Target)))
+		b.WriteString(ind(candidateIndent+1) + fmt.Sprintf("%s = %s;\n", bestState, evt1AutomataStateConstName(f.automataStepName, f.machineStepName, candidate.Identity)))
 		b.WriteString(ind(candidateIndent) + "}\n")
 		if candidate.Guard != nil {
 			b.WriteString(ind(indent+1) + "}\n")
@@ -3482,6 +3563,94 @@ func (f *evt1FunctionLowerer) lowerTransitionDecideStmt(stmt TransitionDecideStm
 	b.WriteString(ind(indent+1) + fmt.Sprintf("if (!%s) { concept_panic(%q, %d, %d); }\n", hasBest, "machine decision transition has no enabled candidates", stmt.Span.Line, stmt.Span.Column))
 	b.WriteString(f.lowerAllScopeDrops(indent + 1))
 	b.WriteString(ind(indent+1) + fmt.Sprintf("instance->%s.current_state = %s;\n", evt1PayloadFieldName(f.machineStepName), bestState))
+	b.WriteString(ind(indent+1) + "return;\n")
+	b.WriteString(ind(indent) + "}\n")
+	return b.String()
+}
+
+func (f *evt1FunctionLowerer) lowerInferenceCore(candidates []ScoredCandidate, indent int) (string, string) {
+	n := len(candidates)
+	scores := f.nextTemp("inference_scores")
+	enabled := f.nextTemp("inference_enabled")
+	probabilities := f.nextTemp("inference_probabilities")
+	enabledCount := f.nextTemp("inference_enabled_count")
+	positiveInfCount := f.nextTemp("inference_positive_inf_count")
+	var b strings.Builder
+	b.WriteString(ind(indent) + fmt.Sprintf("float %s[%d] = {0};\n", scores, n))
+	b.WriteString(ind(indent) + fmt.Sprintf("bool %s[%d] = {0};\n", enabled, n))
+	b.WriteString(ind(indent) + fmt.Sprintf("float %s[%d] = {0};\n", probabilities, n))
+	b.WriteString(ind(indent) + fmt.Sprintf("uint32_t %s = 0u;\n", enabledCount))
+	b.WriteString(ind(indent) + fmt.Sprintf("uint32_t %s = 0u;\n", positiveInfCount))
+	for i, candidate := range candidates {
+		candidateIndent := indent
+		if candidate.Guard != nil {
+			guardPrelude, guardExpr, _ := f.lowerExpr(candidate.Guard, candidateIndent)
+			guardTemp := f.nextTemp("inference_guard")
+			b.WriteString(guardPrelude)
+			b.WriteString(ind(candidateIndent) + fmt.Sprintf("bool %s = %s;\n", guardTemp, guardExpr))
+			b.WriteString(ind(candidateIndent) + fmt.Sprintf("if (%s) {\n", guardTemp))
+			candidateIndent++
+		}
+		scorePrelude, scoreExpr, _ := f.lowerExpr(candidate.Score, candidateIndent)
+		b.WriteString(scorePrelude)
+		scoreTemp := f.nextTemp("inference_score")
+		b.WriteString(ind(candidateIndent) + fmt.Sprintf("float %s = %s;\n", scoreTemp, scoreExpr))
+		b.WriteString(ind(candidateIndent) + fmt.Sprintf("if (%s != %s) { concept_panic(%q, %d, %d); }\n", scoreTemp, scoreTemp, "inference score is NaN", candidate.Span.Line, candidate.Span.Column))
+		b.WriteString(ind(candidateIndent) + fmt.Sprintf("%s[%d] = %s; %s[%d] = true; ++%s;\n", scores, i, scoreTemp, enabled, i, enabledCount))
+		b.WriteString(ind(candidateIndent) + fmt.Sprintf("if (isinf(%s) && %s > 0.0f) { ++%s; }\n", scoreTemp, scoreTemp, positiveInfCount))
+		if candidate.Guard != nil {
+			b.WriteString(ind(indent) + "}\n")
+		}
+	}
+	b.WriteString(ind(indent) + fmt.Sprintf("if (%s == 0u) { concept_panic(%q, 0, 0); }\n", enabledCount, "inference has no enabled candidates"))
+	b.WriteString(ind(indent) + fmt.Sprintf("if (%s > 0u) {\n", positiveInfCount))
+	b.WriteString(ind(indent+1) + fmt.Sprintf("for (uint32_t i = 0u; i < %du; ++i) { if (%s[i] && isinf(%s[i]) && %s[i] > 0.0f) { %s[i] = 1.0f / (float)%s; } }\n", n, enabled, scores, scores, probabilities, positiveInfCount))
+	b.WriteString(ind(indent) + "} else {\n")
+	maxScore := f.nextTemp("inference_max_score")
+	hasFinite := f.nextTemp("inference_has_finite")
+	b.WriteString(ind(indent+1) + fmt.Sprintf("float %s = -INFINITY; bool %s = false;\n", maxScore, hasFinite))
+	b.WriteString(ind(indent+1) + fmt.Sprintf("for (uint32_t i = 0u; i < %du; ++i) { if (%s[i] && !isinf(%s[i])) { if (!%s || %s[i] > %s) { %s = %s[i]; } %s = true; } }\n", n, enabled, scores, hasFinite, scores, maxScore, maxScore, scores, hasFinite))
+	b.WriteString(ind(indent+1) + fmt.Sprintf("if (!%s) { concept_panic(%q, 0, 0); }\n", hasFinite, "inference normalization has no finite support"))
+	sum := f.nextTemp("inference_sum")
+	b.WriteString(ind(indent+1) + fmt.Sprintf("float %s = 0.0f;\n", sum))
+	b.WriteString(ind(indent+1) + fmt.Sprintf("for (uint32_t i = 0u; i < %du; ++i) { if (%s[i]) { %s[i] = expf(%s[i] - %s); %s += %s[i]; } }\n", n, enabled, probabilities, scores, maxScore, sum, probabilities))
+	b.WriteString(ind(indent+1) + fmt.Sprintf("if (!(%s > 0.0f) || !isfinite(%s)) { concept_panic(%q, 0, 0); }\n", sum, sum, "inference normalization failed"))
+	b.WriteString(ind(indent+1) + fmt.Sprintf("for (uint32_t i = 0u; i < %du; ++i) { %s[i] /= %s; }\n", n, probabilities, sum))
+	b.WriteString(ind(indent) + "}\n")
+	return b.String(), probabilities
+}
+
+func (f *evt1FunctionLowerer) lowerInferenceExpr(expr *InferExpr, indent int) (string, string, Type) {
+	t := Type{Name: evt1InferenceName, Kind: TypeApplied, TypeArgs: []Type{expr.CandidateType}, Span: expr.Span}
+	result := f.nextTemp("inference")
+	core, probabilities := f.lowerInferenceCore(expr.Candidates, indent)
+	var b strings.Builder
+	b.WriteString(core)
+	b.WriteString(ind(indent) + fmt.Sprintf("%s %s = {0};\n", evt1CType(t), result))
+	decl := f.l.env.enums[expr.CandidateType.Name]
+	for i, candidate := range expr.Candidates {
+		variant, _ := evt1LookupVariant(decl, candidate.Identity)
+		b.WriteString(ind(indent) + fmt.Sprintf("%s.probabilities[%d] = %s[%d]; %s.candidate_order[%d] = %d;\n", result, variant.Tag, probabilities, i, result, i, variant.Tag))
+	}
+	b.WriteString(ind(indent) + fmt.Sprintf("%s.candidate_count = %du;\n", result, len(expr.Candidates)))
+	return b.String(), result, t
+}
+
+func (f *evt1FunctionLowerer) lowerTransitionInferStmt(stmt TransitionInferStmt, indent int) string {
+	core, probabilities := f.lowerInferenceCore(stmt.Candidates, indent+1)
+	best := f.nextTemp("inference_best")
+	var b strings.Builder
+	b.WriteString(ind(indent) + "{\n")
+	b.WriteString(core)
+	b.WriteString(ind(indent+1) + fmt.Sprintf("uint32_t %s = 0u;\n", best))
+	b.WriteString(ind(indent+1) + fmt.Sprintf("for (uint32_t i = 1u; i < %du; ++i) { if (%s[i] > %s[%s]) { %s = i; } }\n", len(stmt.Candidates), probabilities, probabilities, best, best))
+	b.WriteString(f.lowerAllScopeDrops(indent + 1))
+	b.WriteString(ind(indent+1) + fmt.Sprintf("switch (%s) {\n", best))
+	for i, candidate := range stmt.Candidates {
+		b.WriteString(ind(indent+2) + fmt.Sprintf("case %d: instance->%s.current_state = %s; break;\n", i, evt1PayloadFieldName(f.machineStepName), evt1AutomataStateConstName(f.automataStepName, f.machineStepName, candidate.Identity)))
+	}
+	b.WriteString(ind(indent+2) + "default: concept_panic(\"inference policy selected invalid candidate\", 0, 0);\n")
+	b.WriteString(ind(indent+1) + "}\n")
 	b.WriteString(ind(indent+1) + "return;\n")
 	b.WriteString(ind(indent) + "}\n")
 	return b.String()
@@ -3603,6 +3772,10 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		}
 		return prelude, fieldExpr, fieldType
 	case *IndexExpr:
+		if e.InferenceIndex {
+			prelude, base, _ := f.lowerExpr(e.Base, indent)
+			return prelude, fmt.Sprintf("(%s).probabilities[%d]", base, e.CandidateTag), Type{Name: "float", Kind: TypeBuiltin, Span: e.Span}
+		}
 		if e.TensorIndex {
 			return f.lowerTensorIndex(e, indent)
 		}
@@ -3619,6 +3792,8 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		}
 		floatType, _ := evt1BuiltinType("float", e.Span)
 		return "", literal + "f", floatType
+	case *InferExpr:
+		return f.lowerInferenceExpr(e, indent)
 	case *BinaryExpr:
 		if e.Tensor != nil && e.Tensor.Kind == "tensor_scalar_contract" {
 			return f.lowerScalarTensorContract(e, indent)
@@ -3728,6 +3903,30 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		}
 		return b.String(), carrierTemp + ".payload." + field, evt1FailureSuccessType(carrierType)
 	case *CallExpr:
+		if e.Intrinsic == "inference_HardMax" || e.Intrinsic == "inference_Confidence" {
+			prelude, value, inferenceType := f.lowerExpr(e.Args[0], indent)
+			valueTemp := f.nextTemp("inference_query")
+			indexTemp := f.nextTemp("inference_index")
+			bestTemp := f.nextTemp("inference_best")
+			var b strings.Builder
+			b.WriteString(prelude)
+			b.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(inferenceType), valueTemp, value))
+			b.WriteString(ind(indent) + fmt.Sprintf("uint32_t %s = 0u;\n", indexTemp))
+			b.WriteString(ind(indent) + fmt.Sprintf("float %s = %s.probabilities[%s.candidate_order[0]];\n", bestTemp, valueTemp, valueTemp))
+			loopTemp := f.nextTemp("inference_i")
+			b.WriteString(ind(indent) + fmt.Sprintf("for (uint32_t %s = 1u; %s < %s.candidate_count; ++%s) {\n", loopTemp, loopTemp, valueTemp, loopTemp))
+			b.WriteString(ind(indent+1) + fmt.Sprintf("float probability = %s.probabilities[%s.candidate_order[%s]];\n", valueTemp, valueTemp, loopTemp))
+			b.WriteString(ind(indent+1) + fmt.Sprintf("if (probability > %s) { %s = probability; %s = %s; }\n", bestTemp, bestTemp, indexTemp, loopTemp))
+			b.WriteString(ind(indent) + "}\n")
+			if e.Intrinsic == "inference_Confidence" {
+				return b.String(), bestTemp, Type{Name: "float", Kind: TypeBuiltin, Span: e.Span}
+			}
+			candidateType := evt1InferenceCandidateType(inferenceType)
+			resultTemp := f.nextTemp("inference_candidate")
+			b.WriteString(ind(indent) + fmt.Sprintf("%s %s = {0};\n", evt1CType(candidateType), resultTemp))
+			b.WriteString(ind(indent) + fmt.Sprintf("%s.tag = %s.candidate_order[%s];\n", resultTemp, valueTemp, indexTemp))
+			return b.String(), resultTemp, candidateType
+		}
 		if e.Intrinsic == "step_machine" || e.Intrinsic == "state_machine" {
 			instanceName := e.Args[0].(*NameExpr).Name
 			machineName := e.Args[1].(*NameExpr).Name
