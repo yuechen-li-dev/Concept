@@ -1,6 +1,6 @@
 # EVT1 semantic layout and stream direction
 
-Status: R4f fixed semantic layout graphs and zero-storage streams canonical; broader SDSL-V, ABI, and runtime layout work deferred
+Status: R4g spans consume R4f fixed semantic layout and zero-storage stream facts
 
 ## Purpose and lineage
 
@@ -120,9 +120,9 @@ Layouts, regions, streams, and channels are non-owning projections and never
 drop independently. This preserves the law: one backing owner, many semantic
 projections, one destruction responsibility.
 
-A future Span/ReadOnlySpan constructed from an array, ndarray linear region,
-layout region, or stream channel should receive backing provenance, region
-identity, offset, extent, alignment, and mutability directly from this graph.
+R4g Span/ReadOnlySpan constructed from an array, ndarray linear region, layout
+region, or stream channel receives backing provenance, region identity, offset,
+extent, alignment, and mutability directly from this graph.
 Future allocator-backed storage may provide a backing object without changing
 layout ownership. Future vector/matrix/tensor interpretations may consume the
 same region shape without becoming storage. Future noalias optimization may
@@ -139,10 +139,27 @@ Future MMIO use also requires a separately specified `volatile`/raw-address
 acquisition law; R4f does not infer those semantics from `at(N)` and does not
 bind device addresses.
 
+The active semantic projection chain is:
+
+```text
+layout region
+    down
+stream channel
+    down
+Span / ReadOnlySpan
+```
+
+The stream name remains a zero-storage alias. Span construction consumes the
+mapped layout region's exact stable identity, backing provenance, byte offset,
+extent, alignment, shape-derived scalar count, constness, and contiguity. It
+does not rediscover geometry or introduce a stream object translation layer.
+Subspan retains that parent identity with a relative half-open interval, so
+declared disjoint parent regions remain distinguishable for later optimization.
+
 ## Deliberate boundary
 
-R4f does not implement `Span<T>`, `ReadOnlySpan<T>`, Slice, FixedBuffer,
-`stackalloc`, allocator-backed storage, raw pointers, implicit allocation,
+R4g does not implement Slice, FixedBuffer, `stackalloc`, allocator-backed
+storage, raw pointers, implicit allocation,
 runtime-sized layout declarations, vector/matrix/tensor mathematics, TensorIR,
 general stream concepts, stream composition, a stream runtime, GPU lowering, or
 a stable C ABI/layout contract. Generated strict C11 is executable bootstrap

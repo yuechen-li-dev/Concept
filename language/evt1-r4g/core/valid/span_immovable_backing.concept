@@ -1,0 +1,15 @@
+profile Core;
+
+immovable struct StableBuffer
+{
+    int<array>[3] values;
+}
+
+int SpanImmovableBacking()
+{
+	int<array>[3] initial = [3, 4, 5];
+	StableBuffer buffer = StableBuffer{initial};
+    Span<int> span = Span(buffer.values);
+    span[1] = 8;
+    return buffer.values[1];
+}

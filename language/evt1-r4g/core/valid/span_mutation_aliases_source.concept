@@ -1,0 +1,10 @@
+profile Core;
+
+int SpanMutationAliasesSource()
+{
+    int<array>[8] values = [1, 2, 3, 4, 5, 6, 7, 8];
+    Span<int> span = Span(values);
+    span[3] = 99;
+    values[4] = 41;
+    return values[3] + span[4];
+}

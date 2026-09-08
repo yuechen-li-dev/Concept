@@ -1,0 +1,10 @@
+profile Core;
+
+int SpanSubspan()
+{
+    int<array>[6] values = [1, 2, 3, 4, 5, 6];
+    Span<int> whole = Span(values);
+    Span<int> middle = Subspan(whole, 2, 3);
+    middle[1] = 40;
+    return values[3] + Len(middle);
+}

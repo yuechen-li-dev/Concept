@@ -1,0 +1,19 @@
+profile Core;
+
+layout EscapeLayout
+{
+    int<array>[2] values;
+}
+
+stream EscapeStream over EscapeLayout
+{
+    Values = values;
+}
+
+Span<int> InvalidStreamEscape()
+{
+    int<array>[2] backing = [1, 2];
+    ref EscapeLayout layout = bind backing;
+    ref EscapeStream stream = bind layout;
+    return Span(stream.Values);
+}

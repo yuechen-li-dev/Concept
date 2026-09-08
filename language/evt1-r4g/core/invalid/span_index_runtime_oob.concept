@@ -1,0 +1,8 @@
+profile Core;
+
+int RuntimeSpanIndex(int index)
+{
+    int<array>[4] values = [1, 2, 3, 4];
+    Span<int> span = Span(values);
+    return span[index];
+}

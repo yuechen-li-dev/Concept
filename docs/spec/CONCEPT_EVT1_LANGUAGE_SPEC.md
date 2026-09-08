@@ -1,6 +1,6 @@
 # Concept EVT1 language specification foundation
 
-Status: R4f semantic layout declarations and zero-storage streams
+Status: R4g bounded borrowed contiguous spans
 
 This document defines the authority categories and the smallest currently
 executable EVT1 language foundation. It is derived from the retired Concept
@@ -582,9 +582,72 @@ projection is the corresponding region projection. Unknown regions, duplicate
 channels, layout mismatch, and const escalation are ill-formed. Streams do not
 imply iteration, queues, scheduling, transport, ownership, or execution.
 
-R4f adds no Span/ReadOnlySpan, Slice, FixedBuffer, `stackalloc`, allocation,
+R4f adds no Slice, FixedBuffer, `stackalloc`, allocation,
 raw-pointer binding, runtime layout parameters, tensor mathematics, general
 reflection, stream composition/runtime, GPU lowering, or stable ABI law.
+
+### 16.3 Bounded borrowed spans
+
+**Canonical EVT1 R4g.** `Span<T>` is a mutable bounded borrowed contiguous
+interval and `ReadOnlySpan<T>` is its readonly counterpart. Both are
+compiler-known generic, ref-struct-like value descriptors. The canonical
+constructors are `Span(source)` and `ReadOnlySpan(source)`; the destination or
+inferred source element type supplies `T`. Sources are existing contiguous
+array or ndarray storage, bound array/ndarray views, contiguous layout regions,
+stream channels, or another compatible span. A mutable source may form either
+kind. A const or readonly source may form only `ReadOnlySpan<T>`.
+
+The canonical bounded narrowing operation is the free function
+`Subspan(parent, offset, length)`, matching EVT1's current free-function call
+surface. Its interval is half open:
+
+```text
+[baseOffset + offset, baseOffset + offset + length)
+```
+
+`offset` and `length` must be nonnegative and `length` must not exceed the
+remaining parent extent. `offset == parent.length` with zero length is valid.
+Provably invalid constant bounds reject with `SPAN_BOUNDS_OUT_OF_RANGE`.
+Dynamic bounds use overflow-safe subtraction and terminate with `Concept span
+bounds out of range`; element-to-byte offset and extent arithmetic also guards
+overflow.
+
+`span[index]` is rank-one linear indexing with `0 <= index < Len(span)`.
+`Span<T>` permits reads and writes; `ReadOnlySpan<T>` permits reads only.
+Provable constant failure is `SPAN_INDEX_OUT_OF_BOUNDS`; dynamic failure
+terminates with `Concept span index out of bounds`. Span has no `Rank` or
+`Shape` surface in R4g.
+
+Every span retains its element type, source provenance, stable parent-region
+identity, relative base offset, length, byte extent, safe starting alignment,
+mutability, and contiguity. Layout-region and stream-channel construction
+consumes the exact R4f region identity and geometry. Subspan narrows the same
+parent region; it does not manufacture an independent identity. Its alignment
+is conservatively derived from the parent alignment and element byte offset.
+Distinct declared-disjoint parent regions therefore remain distinguishable,
+while same-parent intervals retain enough facts for later analysis without
+R4g adding a noalias solver.
+
+`Span<T>` converts to `ReadOnlySpan<T>` through the explicit canonical
+constructor `ReadOnlySpan(mutableSpan)`. The reverse conversion is invalid.
+Construction and narrowing preserve R4a/R4b lexical, scoped, and call-result
+provenance. They do not extend lifetime or add Span-specific lifetimes,
+named lifetimes, NLL, or a second borrow checker.
+
+Span owns no storage, allocates nothing, copies no backing elements, transfers
+no ownership, and never drops backing storage. Copying its descriptor follows
+the existing ref-struct value rule and does not copy or move elements. An
+immovable backing object may be viewed because construction does not relocate
+it. In compact form:
+
+```text
+Span is a bounded borrowed contiguous interval.
+Span does not own, allocate, copy backing storage, or extend lifetime.
+
+ReadOnlySpan is the readonly counterpart of Span.
+Span may convert to ReadOnlySpan.
+ReadOnlySpan may not convert to Span.
+```
 
 ## 17. Slices and bounded collections
 
@@ -592,12 +655,11 @@ reflection, stream composition/runtime, GPU lowering, or stable ABI law.
 `FixedBuffer<T, N>` foundations.
 
 **Redesign.** The old `Slice<T>` surface is design pressure, not a direct-port
-candidate. It must be reconciled against `ref`, `ref const`, `ref struct`,
-`scoped`, `bind`, `Span<T>`, and `ReadOnlySpan<T>`. R4b supplies selected
-call-result provenance and relational `Outlives` evidence, but implements no
-Span, Slice, stack allocation, or runtime collection type. FixedBuffer mutation
-and collection rules remain future work. R4e does not port Slice or
-FixedBuffer; `bind` is an exact whole-storage view and is not a subregion type.
+candidate. R4g supersedes its direction with canonical `Span<T>` and
+`ReadOnlySpan<T>` over the active reference, provenance, storage, bind, layout,
+and stream model. Slice remains legacy evidence only. FixedBuffer mutation and
+collection rules, stack allocation, and owned dynamic storage remain future
+work; `bind` remains an exact whole-storage association rather than a subregion.
 
 ## 18. Interfaces and dyn
 
@@ -740,8 +802,7 @@ The following remain explicit reconciliation or implementation work:
 - complete primitive widths and conversion rules;
 - ownership beyond bounded local move/drop/reference and live-replacement
   accounting;
-- generalized borrow checking, named lifetimes, non-lexical lifetimes,
-`Span<T>`, and `ReadOnlySpan<T>`;
+- generalized borrow checking, named lifetimes, and non-lexical lifetimes;
 - explicit external runtime-array/ndarray descriptors, slices, FixedBuffer,
   and bounded dynamic storage construction;
 - witness reification, interfaces, and dyn storage/dispatch;

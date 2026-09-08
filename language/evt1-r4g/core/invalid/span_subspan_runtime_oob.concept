@@ -1,0 +1,9 @@
+profile Core;
+
+int RuntimeSubspan(int offset, int length)
+{
+    int<array>[4] values = [1, 2, 3, 4];
+    Span<int> span = Span(values);
+    Span<int> selected = Subspan(span, offset, length);
+    return Len(selected);
+}

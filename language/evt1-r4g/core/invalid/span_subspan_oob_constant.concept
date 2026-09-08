@@ -1,0 +1,9 @@
+profile Core;
+
+int InvalidConstantSubspan()
+{
+    int<array>[4] values = [1, 2, 3, 4];
+    Span<int> span = Span(values);
+    Span<int> invalid = Subspan(span, 3, 2);
+    return Len(invalid);
+}

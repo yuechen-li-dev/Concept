@@ -1,0 +1,9 @@
+profile Core;
+
+int InvalidReadonlyToMutable()
+{
+    int<array>[2] values = [1, 2];
+    ReadOnlySpan<int> readonlySpan = ReadOnlySpan(values);
+    Span<int> mutableSpan = Span(readonlySpan);
+    return Len(mutableSpan);
+}

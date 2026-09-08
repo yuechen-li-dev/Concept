@@ -1,0 +1,18 @@
+profile Core;
+
+layout FrameMemory
+{
+    uint marker;
+    align(16) float<array>[4] vertices;
+}
+
+float SpanFromLayoutRegion(float initial, float replacement)
+{
+    float<array>[8] backing = [initial, initial, initial, initial, initial, initial, initial, initial];
+    ref FrameMemory frame = bind backing;
+    Span<float> vertices = Span(frame.vertices);
+    Span<float> tail = Subspan(vertices, 1, 3);
+    vertices[0] = replacement;
+    tail[0] = replacement;
+    return backing[4];
+}

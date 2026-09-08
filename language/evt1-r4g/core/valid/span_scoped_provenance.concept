@@ -1,0 +1,14 @@
+profile Core;
+
+int ReadScopedSpan(scoped ref const int<array>[4] source)
+{
+    ReadOnlySpan<int> whole = ReadOnlySpan(source);
+    ReadOnlySpan<int> tail = Subspan(whole, 2, 2);
+    return tail[0] + tail[1];
+}
+
+int SpanScopedProvenance()
+{
+    int<array>[4] values = [2, 3, 5, 7];
+    return ReadScopedSpan(ref const values);
+}

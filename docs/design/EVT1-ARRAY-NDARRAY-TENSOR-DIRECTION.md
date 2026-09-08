@@ -1,6 +1,6 @@
 # EVT1 array, ndarray, and tensor direction
 
-Status: R4f semantic layout regions canonical; spans, mathematics, and optimization deferred
+Status: R4g bounded borrowed spans canonical; mathematics and optimization deferred
 
 ## Layering
 
@@ -17,8 +17,8 @@ semantic geometry
   stream      zero-storage channels aliasing layout regions
 
 borrowed views
-  Span<T>           deferred
-  ReadOnlySpan<T>   deferred
+  Span<T>           mutable bounded contiguous subregion
+  ReadOnlySpan<T>   readonly bounded contiguous subregion
 
 mathematical interpretations
   vector      deferred rank-1 mathematics
@@ -62,8 +62,8 @@ Runtime extent is a value-level shape fact, not an allocation request. The
 semantic ownership categories are:
 
 - fixed inline storage, executable in R4d;
-- external/non-owning storage, reserved for an explicit provenance-preserving
-  constructor or future Span-based view;
+- external/non-owning storage, supplied by explicit provenance-preserving bind
+  descriptors and bounded Span views;
 - owned dynamic storage, reserved for explicit allocator integration.
 
 The array/ndarray type family does not select one universal ownership category.
@@ -110,10 +110,41 @@ general subview: offsets and extents are compile-time declarations, and stream
 channels only rename declared regions. Layout/stream compose above R4d/R4e
 storage without changing array, ndarray, or future tensor meaning.
 
+## R4g bounded subregions
+
+`Span<T>` and `ReadOnlySpan<T>` are rank-one borrowed views over a contiguous
+source interval. They may consume whole array/ndarray storage, an R4e bound
+view, or an R4f layout region/stream channel. Ndarray construction linearizes
+the already row-major scalar storage and does not preserve rank-aware indexing.
+`Subspan` narrows the same parent region using half-open bounds; it neither
+reshapes whole storage nor introduces mathematical interpretation.
+
+The resulting layering is:
+
+```text
+array / ndarray
+    physical storage
+
+layout
+    memory geometry
+
+bind
+    whole-storage association
+
+stream
+    semantic channels
+
+Span / ReadOnlySpan
+    borrowed bounded subregions
+
+vector / matrix / tensor
+    mathematical interpretation
+```
+
 ## Deferred work
 
-R4f does not port PoC3 Slice or FixedBuffer and does not implement Span,
-ReadOnlySpan, vector, matrix, tensor, Einstein notation, TensorIR, an allocator
+R4g does not port PoC3 Slice or FixedBuffer and does not implement vector,
+matrix, tensor, Einstein notation, TensorIR, an allocator
 framework, stack allocation, `dyn`, generalized alias/noalias analysis,
 strided/sparse/tiled layouts, SIMD, GPU lowering, or a native backend. Those
 features must consume the storage facts established here without changing
@@ -121,7 +152,7 @@ their meaning retroactively.
 
 ## Subsequent milestone boundary
 
-Future Span/ReadOnlySpan work may specify arbitrary bounded subregions on the
-same provenance machinery, but must not reinterpret R4f declared geometry as a
-runtime slicing facility. Allocator-backed owned dynamic storage and
-mathematical vector/matrix/tensor interpretations remain separate work.
+R4g Span/ReadOnlySpan specifies bounded contiguous subregions on the same
+provenance machinery without reinterpreting R4f declared geometry as a runtime
+layout facility. Allocator-backed owned dynamic storage and mathematical
+vector/matrix/tensor interpretations remain separate work.

@@ -340,6 +340,9 @@ func evt1ModuleUsesStorageBounds(module Module) bool {
 		case *IndexExpr:
 			return true
 		case *CallExpr:
+			if e.Callee == "Subspan" || e.Callee == evt1SpanMutableName || e.Callee == evt1SpanReadonlyName {
+				return true
+			}
 			if e.Callee == "Shape" {
 				return true
 			}

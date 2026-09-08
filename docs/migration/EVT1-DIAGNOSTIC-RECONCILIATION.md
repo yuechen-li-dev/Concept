@@ -1,6 +1,6 @@
 # EVT1 diagnostic reconciliation
 
-Status: R4f semantic layout and stream semantics
+Status: R4g bounded Span and ReadOnlySpan semantics
 
 Concept EVT1 compares diagnostics by semantic family. The active Go compiler
 retains `CV` numbers and the retired PoC3 compiler retains `CON` numbers; R2
@@ -72,6 +72,14 @@ the executable mapping used by the R2 conformance harness.
 | invalid layout bind | no direct counterpart | `CV4577`-`CV4579`, `CV4590`-`CV4591` | `LAYOUT_BIND_*` | EVT1-new composition | whole contiguous storage, const, exact bytes, and alignment |
 | invalid stream declaration or bind | SDSL-V channel pressure | `CV4580`-`CV4586` | `STREAM_*` | SDSL-derived / EVT1-new composition | known layout/regions, unique channels, exact layout, no const escalation |
 | invalid layout query or semantic MIR | semantic graph invariant | `CV4592`-`CV4594` | `LAYOUT_QUERY_INVALID` / `*_MIR_INVALID` | EVT1-new | bounded queries and complete layout/stream graphs |
+| Span source is not contiguous | Slice construction pressure | `CV4600` | `SPAN_REQUIRES_CONTIGUOUS_SOURCE` | reconciled pressure / EVT1-new | only existing arrays, ndarrays, bound views, regions, channels, and spans |
+| Span element mismatch | Slice element identity pressure | `CV4601` | `SPAN_ELEMENT_TYPE_MISMATCH` | reconciled pressure / EVT1-new | exact element identity; no reinterpretation |
+| mutable Span from const | readonly Slice pressure | `CV4602` | `SPAN_MUTABLE_FROM_CONST` | EVT1-new | composes with ref/ref const and place constness |
+| invalid Subspan interval | bounds pressure | `CV4603` | `SPAN_BOUNDS_OUT_OF_RANGE` | reconciled pressure / EVT1-new | constant half-open failure diagnosed; runtime path panics |
+| invalid Span index | bounds pressure | `CV4604` | `SPAN_INDEX_OUT_OF_BOUNDS` | reconciled pressure / EVT1-new | constant failure diagnosed; runtime path panics |
+| ReadOnlySpan mutation | readonly Slice pressure | `CV4605` | `READONLY_SPAN_MUTATION` | reconciled pressure / EVT1-new | no const stripping |
+| Span arithmetic overflow | no closed counterpart | `CV4606`-`CV4607` | `SPAN_OFFSET_OVERFLOW` / `SPAN_LENGTH_OVERFLOW` | EVT1-new | runtime uses deterministic panic reasons |
+| malformed Span MIR | semantic descriptor invariant | `CV4608` | `SPAN_MIR_INVALID` | EVT1-new | complete borrowed-region facts required |
 
 `static_assert` continues to reuse the bounded comptime diagnostic path:
 runtime calls are `CV4210`, a non-boolean evaluated condition is `CV4207`, and

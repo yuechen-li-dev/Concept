@@ -1,0 +1,8 @@
+profile Core;
+
+int SpanLength()
+{
+    int<array>[5] values = [1, 2, 3, 4, 5];
+    ReadOnlySpan<int> span = ReadOnlySpan(values);
+    return Len(span);
+}

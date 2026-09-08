@@ -1,6 +1,6 @@
 # EVT1 semantic reconciliation matrix
 
-Status: R0 authority ledger with R1-R4f executable evidence
+Status: R0 authority ledger with R1-R4g executable evidence
 
 `Port required?` means implementation or conformance work remains after R0; it
 does not authorize that work in this milestone. Status is one of `Keep PoC3`,
@@ -44,7 +44,9 @@ does not authorize that work in this milestone. Status is one of `Keep PoC3`,
 | stream binding | lineage mapping realized downstream | unary `bind` from matching bound layout, preserving const/provenance | reuse R4e verb and reference laws | EVT1-new composition | No for R4f subset | R4f native/provenance corpus | direct storage-to-stream bind deferred |
 | vector / matrix / tensor | no canonical storage/interpretation split | absent | defer mathematical interpretations above storage and views | Deferred | Yes | R4d direction note | no TensorIR or Einstein notation |
 | indexing | runtime fixed-array indexing and bounds pressure | checked rank-1 and comma-separated rank-N indexing | merge array behavior; add EVT1-new ndarray arity/linearization | Merge / EVT1-new | No for fixed subset | phase21; R4d native/MIR tests | terminal panic, no Result default |
-| slices | read-only `Slice<T>` implemented | absent | redesign against explicit references, bound-storage evidence, and future lifetime-bound spans | Redesign | Yes | phase21 fixtures; R4e direction note | do not port mechanically; bind is whole-storage only |
+| slices | read-only `Slice<T>` implemented | superseded by R4g spans | preserve fixtures as pressure; do not port the old surface | Redesign -> superseded by Span/ReadOnlySpan | No direct port | phase21 fixtures; R4g corpus | bounds/read-only evidence only |
+| Span | no canonical counterpart; Slice supplies pressure | mutable bounded borrowed contiguous interval | canonical EVT1 compiler-known ref-struct-like descriptor | EVT1 canonical / C#-inspired | No for R4g subset | R4g MIR/native corpus | same provenance and parent-region identity; no ownership/allocation |
+| ReadOnlySpan | read-only Slice supplies pressure | readonly bounded borrowed contiguous interval | canonical readonly counterpart with explicit Span-to-ReadOnlySpan conversion | EVT1 canonical / reconciled pressure | No for R4g subset | R4g MIR/native corpus | no reverse conversion or const stripping |
 | FixedBuffer | compiler-known bounded buffer implemented | absent | preserve pressure; redesign after explicit views/storage construction | Redesign / deferred | Yes | phase21/22 fixtures | not ported in R4d |
 | Option | compiler-known `Option<T>` plus exhaustive Some/None match | canonical compiler-known payload enum | adopt qualified `Option::Some/None`, exhaustive match, `?`, and `!` | Merge / adopt | Yes | phase22 plus R4c corpus | canonical in R4c |
 | Result | design only/incomplete at cutover; function fallibility exists | canonical generic payload enum | adopt `Result::Ok/Error` as the only recoverable typed failure value | Redesign -> canonical payload enum | Partial | phase5/22 plus R4c corpus | `Error`, not PoC3 concrete `Err`, is canonical |
@@ -168,8 +170,8 @@ Ndarray, comma-separated rank-aware indexing, rectangular nested-literal
 flattening, `Rank`/`Shape`, and row-major linearization are EVT1-new and are not
 misclassified as PoC3 parity. Runtime extents are value-level type facts, but
 both bare runtime array and ndarray locals reject with explicit-storage
-diagnostics. Slice and FixedBuffer remain redesign/deferred, while
-Span/ReadOnlySpan and vector/matrix/tensor remain future layers.
+diagnostics. Slice is superseded by the later R4g Span direction; FixedBuffer
+and vector/matrix/tensor remain future layers.
 
 ## R4e executable evidence
 
@@ -182,8 +184,8 @@ array-to-ndarray binding, flattening, ndarray reshape, bidirectional alias
 visibility, readonly access, runtime `Rank`/`Shape`, ref-struct storage, prior
 bound-view rebinding, call-result provenance, and bind after `?`. PoC3 supplies
 only supporting fixed-wrapper/value evidence; this matrix does not fabricate a
-PoC3 bind equivalent. Slice, FixedBuffer, Span/ReadOnlySpan, allocator-backed
-dynamic ownership, and vector/matrix/tensor remain deferred.
+PoC3 bind equivalent. Slice and FixedBuffer remain redesign evidence;
+allocator-backed dynamic ownership and vector/matrix/tensor remain deferred.
 
 ## R4f executable evidence
 
@@ -195,5 +197,18 @@ stable region identity, size/alignment/offset/extent/disjointness,
 channel-to-region maps, backing identity, constness, provenance, and explicit
 no-copy/no-allocation/no-transfer facts. Native evidence demonstrates mutable
 and const aliases plus lexical, call-result, and scoped provenance. There is no
-Oct build/runtime dependency and no claim of ABI, Span, allocation, stream
-runtime, GPU, or tensor support.
+Oct build/runtime dependency and no claim of ABI, allocation, stream runtime,
+GPU, or tensor support.
+
+## R4g executable evidence
+
+R4g adds 29 `PASS` cases: 15 valid and 14 invalid-path programs. PoC3 Slice
+fixtures contribute design pressure for pointer-plus-length representation,
+bounds checks, and readonly access; R4g is not a direct Slice port. The
+canonical Span/ReadOnlySpan surface is C#-inspired and composed with R4a/R4b
+provenance, R4d storage, R4e bind, and R4f region/channel facts. MIR retains
+parent identity, relative interval, byte extent, safe alignment, mutability,
+contiguity, provenance, and no-copy/no-allocation/no-transfer facts. Native
+evidence proves bidirectional alias visibility, correct Subspan writes,
+readonly access, immovable backing, and deterministic terminal bounds paths.
+Slice is now superseded direction; FixedBuffer remains redesign/deferred.

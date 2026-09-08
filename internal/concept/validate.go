@@ -57,6 +57,8 @@ type evt1ValueBinding struct {
 	batchAutomata    string
 	actuatorName     string
 	provenance       evt1LifetimeProvenance
+	spanFacts        *evt1SpanFacts
+	regionFacts      *evt1SpanFacts
 }
 
 type evt1StorageState string
@@ -136,6 +138,17 @@ func (s *evt1Scope) setProvenance(name string, provenance evt1LifetimeProvenance
 	for scope := s; scope != nil; scope = scope.parent {
 		if binding, ok := scope.values[name]; ok {
 			binding.provenance = provenance
+			scope.values[name] = binding
+			return true
+		}
+	}
+	return false
+}
+
+func (s *evt1Scope) setSpanFacts(name string, facts *evt1SpanFacts) bool {
+	for scope := s; scope != nil; scope = scope.parent {
+		if binding, ok := scope.values[name]; ok {
+			binding.spanFacts = facts
 			scope.values[name] = binding
 			return true
 		}
@@ -568,11 +581,13 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 			if err != nil {
 				return nil, err
 			}
+			parameterProvenance := evt1InitialParameterProvenance(env, resolvedParam, paramIndex, scope.depth)
 			scope.declare(param.Name, evt1ValueBinding{
 				t:          resolvedParam,
 				mutable:    !param.Type.Const,
 				state:      evt1StorageInitialized,
-				provenance: evt1InitialParameterProvenance(env, resolvedParam, paramIndex, scope.depth),
+				provenance: parameterProvenance,
+				spanFacts:  evt1ParameterSpanFacts(env, param.Name, resolvedParam, parameterProvenance),
 			})
 		}
 		if err := validateBlock(env, scope, resolvedReturn, *templateDecl.Body, env.templateInfos[templateDecl.Name], false); err != nil {
@@ -594,11 +609,13 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 			if err != nil {
 				return nil, err
 			}
+			parameterProvenance := evt1InitialParameterProvenance(env, resolvedParam, paramIndex, scope.depth)
 			scope.declare(param.Name, evt1ValueBinding{
 				t:          resolvedParam,
 				mutable:    !param.Type.Const,
 				state:      evt1StorageInitialized,
-				provenance: evt1InitialParameterProvenance(env, resolvedParam, paramIndex, scope.depth),
+				provenance: parameterProvenance,
+				spanFacts:  evt1ParameterSpanFacts(env, param.Name, resolvedParam, parameterProvenance),
 			})
 		}
 		collectEscapedArmBindings(fn.Body, env)
@@ -618,12 +635,14 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 			if err != nil {
 				return nil, err
 			}
+			parameterProvenance := evt1InitialParameterProvenance(env, resolvedParam, paramIndex, scope.depth)
 			scope.declare(param.Name, evt1ValueBinding{
 				t:          resolvedParam,
 				mutable:    !param.Type.Const,
 				state:      evt1StorageInitialized,
 				comptime:   true,
-				provenance: evt1InitialParameterProvenance(env, resolvedParam, paramIndex, scope.depth),
+				provenance: parameterProvenance,
+				spanFacts:  evt1ParameterSpanFacts(env, param.Name, resolvedParam, parameterProvenance),
 			})
 		}
 		collectEscapedArmBindings(fn.Body, env)
@@ -1013,7 +1032,12 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				provenance = evt1ExprProvenance(env, local, s.Value)
 				provenance.Scoped = provenance.Scoped || resolvedType.Scoped
 			}
-			local.declare(s.Name, evt1ValueBinding{t: resolvedType, mutable: !s.Const, state: evt1StorageInitialized, comptime: inComptimeFn, provenance: provenance})
+			local.declare(s.Name, evt1ValueBinding{
+				t: resolvedType, mutable: !s.Const, state: evt1StorageInitialized, comptime: inComptimeFn,
+				provenance:  provenance,
+				spanFacts:   evt1SpanFactsForValue(env, local, s.Value, resolvedType),
+				regionFacts: evt1RegionFactsForValue(env, local, s.Value, resolvedType),
+			})
 		case *EffectsDecl:
 			if inComptimeFn {
 				return evt1Diagnostic("CV4304", fmt.Sprintf("effects batch %s cannot be declared in comptime code", s.Name), s.Span)
@@ -1119,6 +1143,9 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				if target.readOnlyReason == "record" {
 					return evt1Diagnostic("CV4142", "record fields are read-only after construction", s.Target.exprSpan())
 				}
+				if target.readOnlyReason == "readonly_span" {
+					return evt1Diagnostic("CV4605", "mutation through ReadOnlySpan is not allowed", s.Target.exprSpan())
+				}
 				if target.readOnlyReason == "ref_const" {
 					return evt1Diagnostic("CV4513", "mutation through ref const is not allowed", s.Target.exprSpan())
 				}
@@ -1154,6 +1181,9 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 					sourceProvenance.Scoped = true
 				}
 				local.setProvenance(name.Name, sourceProvenance)
+				if evt1IsSpanType(target.t) {
+					local.setSpanFacts(name.Name, evt1SpanFactsForValue(env, local, s.Value, target.t))
+				}
 			}
 			if !evt1TypeCopyable(env, target.t) && !evt1TypeDependsOnParam(target.t, typeParam) {
 				if evt1IsImmovableValueType(env, target.t) && target.wholeValue {
@@ -1358,6 +1388,9 @@ func evt1EvalScopeFromValidation(scope *evt1Scope, env *semanticEnv) *evt1EvalSc
 }
 
 func validateExprAgainstExpected(env *semanticEnv, scope *evt1Scope, expr Expr, expected Type, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
+	if call, ok := expr.(*CallExpr); ok && (call.Callee == evt1SpanMutableName || call.Callee == evt1SpanReadonlyName || call.Callee == "Subspan") {
+		return validateSpanCall(env, scope, call, &expected, templateInfo, inComptimeFn)
+	}
 	if bind, ok := expr.(*BindExpr); ok {
 		return validateBindExpr(env, scope, bind, expected, templateInfo)
 	}
@@ -1835,6 +1868,18 @@ func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string,
 		return evt1Diagnostic("CV4148", fmt.Sprintf("unknown concept parameter %s", t.Name), span)
 	}
 	if len(t.TypeArgs) > 0 {
+		if t.Name == evt1SpanMutableName || t.Name == evt1SpanReadonlyName {
+			if len(t.TypeArgs) != 1 {
+				return evt1Diagnostic("CV4601", fmt.Sprintf("%s requires exactly one element type", t.Name), span)
+			}
+			if err := validateKnownType(env, t.TypeArgs[0], span, conceptParam, false); err != nil {
+				return err
+			}
+			if t.TypeArgs[0].Name == "void" || t.TypeArgs[0].isReference() || evt1IsSpanType(t.TypeArgs[0]) {
+				return evt1Diagnostic("CV4601", fmt.Sprintf("%s element type %s is not a fixed scalar element", t.Name, t.TypeArgs[0].String()), span)
+			}
+			return nil
+		}
 		if t.Name == "Option" || t.Name == "Result" {
 			required := 1
 			if t.Name == "Result" {
@@ -1960,6 +2005,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		return evt1CanonicalType(env, fieldType), nil
 	case *CallExpr:
+		if e.Callee == evt1SpanMutableName || e.Callee == evt1SpanReadonlyName || e.Callee == "Subspan" {
+			return validateSpanCall(env, scope, e, nil, templateInfo, inComptimeFn)
+		}
 		if e.Callee == "discard" {
 			if len(e.Args) != 1 {
 				return Type{}, evt1Diagnostic("CV4323", fmt.Sprintf("discard requires exactly one batch argument, got %d", len(e.Args)), e.Span)
@@ -1982,7 +2030,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			if err != nil {
 				return Type{}, err
 			}
-			if argType.ArrayElem == nil || evt1StorageRank(argType) != 1 {
+			if !evt1IsSpanType(argType) && (argType.ArrayElem == nil || evt1StorageRank(argType) != 1) {
 				return Type{}, evt1Diagnostic("CV4235", "Len requires a rank-1 array argument", e.Args[0].exprSpan())
 			}
 			out, _ := evt1BuiltinType("int", e.Span)
@@ -2137,6 +2185,37 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		baseType, err := validateExpr(env, scope, e.Base, templateInfo, inComptimeFn)
 		if err != nil {
 			return Type{}, err
+		}
+		if evt1IsSpanType(baseType) {
+			indices := evt1StorageIndices(e)
+			if len(indices) != 1 {
+				return Type{}, evt1Diagnostic("CV4604", fmt.Sprintf("Span index requires exactly one index, got %d", len(indices)), e.Span)
+			}
+			indexType, err := validateExpr(env, scope, indices[0], templateInfo, inComptimeFn)
+			if err != nil {
+				return Type{}, err
+			}
+			if indexType.Name != "int" {
+				return Type{}, evt1Diagnostic("CV4604", "Span index must be int", indices[0].exprSpan())
+			}
+			facts, known := evt1KnownSpanFacts(scope, e.Base)
+			if index, static := evt1StaticInt(env, scope, indices[0]); static && known && facts.LengthStatic && (index < 0 || index >= facts.StaticLength) {
+				return Type{}, evt1Diagnostic("CV4604", fmt.Sprintf("Span index %d is out of bounds for length %d", index, facts.StaticLength), indices[0].exprSpan())
+			}
+			element := evt1SpanElement(baseType)
+			e.SpanIndex, e.SpanElementType = true, &element
+			e.SpanMutability = "readonly"
+			if evt1SpanMutable(baseType) {
+				e.SpanMutability = "mutable"
+			}
+			if known {
+				e.RegionID, e.LengthExpression, e.SpanAlignment = facts.RegionID, facts.LengthExpression, facts.Alignment
+				e.ProvenanceKind, e.ProvenanceScoped = string(facts.Provenance.Kind), facts.Provenance.Scoped
+			} else {
+				e.RegionID, e.LengthExpression, e.SpanAlignment = "derived:"+exprLabel(e.Base), "runtime", 1
+				e.ProvenanceKind = string(evt1ExprProvenance(env, scope, e.Base).Kind)
+			}
+			return evt1CanonicalType(env, element), nil
 		}
 		if baseType.ArrayElem == nil {
 			return Type{}, evt1Diagnostic("CV4231", fmt.Sprintf("index target %s is not array or ndarray storage", baseType.String()), e.Base.exprSpan())
@@ -2524,6 +2603,20 @@ func validateAssignable(env *semanticEnv, scope *evt1Scope, expr Expr, templateI
 		if err != nil {
 			return evt1LValue{}, evt1Diagnostic("CV4231", "array index assignment requires an assignable storage place", expr.exprSpan())
 		}
+		if evt1IsSpanType(receiver.t) {
+			if _, err := validateExpr(env, scope, e, templateInfo, false); err != nil {
+				return evt1LValue{}, err
+			}
+			mutable := receiver.mutable && evt1SpanMutable(receiver.t)
+			reason := receiver.readOnlyReason
+			if !evt1SpanMutable(receiver.t) {
+				reason = "readonly_span"
+			}
+			path := receiver.path
+			path.Fields = append(append([]string{}, path.Fields...), "[span_index]")
+			path.Span = e.Span
+			return evt1LValue{t: evt1CanonicalType(env, evt1SpanElement(receiver.t)), mutable: mutable, wholeValue: false, readOnlyReason: reason, path: path}, nil
+		}
 		if receiver.t.ArrayElem == nil {
 			return evt1LValue{}, evt1Diagnostic("CV4231", "array index assignment requires array or ndarray storage", expr.exprSpan())
 		}
@@ -2671,6 +2764,9 @@ func validateStructConstructExpr(env *semanticEnv, scope *evt1Scope, expr Struct
 }
 
 func evt1IsRefStructType(env *semanticEnv, t Type) bool {
+	if evt1IsSpanType(t) {
+		return true
+	}
 	if evt1IsFailureType(t) {
 		for _, arg := range t.TypeArgs {
 			if arg.isReference() || evt1IsRefStructType(env, arg) {
@@ -2697,6 +2793,9 @@ func evt1IsCallResultExpr(expr Expr) bool {
 	case *MoveExpr:
 		return evt1IsCallResultExpr(e.Value)
 	case *CallExpr:
+		if e.Callee == evt1SpanMutableName || e.Callee == evt1SpanReadonlyName || e.Callee == "Subspan" {
+			return false
+		}
 		return true
 	default:
 		return false
@@ -2872,6 +2971,9 @@ func evt1DeriveExprResultProvenance(env *semanticEnv, expr Expr, bindings map[st
 			return evt1DeriveExprResultProvenance(env, e.Args[0], bindings, derive)
 		}
 	case *CallExpr:
+		if (e.Callee == evt1SpanMutableName || e.Callee == evt1SpanReadonlyName || e.Callee == "Subspan") && len(e.Args) > 0 {
+			return evt1DeriveExprResultProvenance(env, e.Args[0], bindings, derive)
+		}
 		var candidates []FunctionDecl
 		for _, fn := range env.functions[e.Callee] {
 			if len(fn.Params) == len(e.Args) {
@@ -2905,6 +3007,10 @@ func evt1ExprProvenance(env *semanticEnv, scope *evt1Scope, expr Expr) evt1Lifet
 		return evt1ExprProvenance(env, scope, e.Value)
 	case *BindExpr:
 		return evt1ExprProvenance(env, scope, e.Source)
+	case *FieldExpr:
+		return evt1ExprProvenance(env, scope, e.Receiver)
+	case *IndexExpr:
+		return evt1ExprProvenance(env, scope, e.Base)
 	case *FailureExpr:
 		return evt1ExprProvenance(env, scope, e.Value)
 	case *NameExpr:
@@ -2951,6 +3057,9 @@ func evt1ExprProvenance(env *semanticEnv, scope *evt1Scope, expr Expr) evt1Lifet
 			return evt1ExprProvenance(env, scope, e.Args[0])
 		}
 	case *CallExpr:
+		if (e.Callee == evt1SpanMutableName || e.Callee == evt1SpanReadonlyName || e.Callee == "Subspan") && len(e.Args) > 0 {
+			return evt1ExprProvenance(env, scope, e.Args[0])
+		}
 		argTypes := make([]Type, 0, len(e.Args))
 		for _, arg := range e.Args {
 			argType, err := validateExpr(env, scope, arg, nil, false)
@@ -3662,6 +3771,9 @@ func evt1TypeCopyable(env *semanticEnv, t Type) bool {
 		}
 		return true
 	}
+	if evt1IsSpanType(t) {
+		return true
+	}
 	if len(t.TypeArgs) > 0 {
 		return false
 	}
@@ -4218,6 +4330,10 @@ func evt1CanonicalType(env *semanticEnv, t Type) Type {
 	}
 	for i := range t.TypeArgs {
 		t.TypeArgs[i] = evt1CanonicalType(env, t.TypeArgs[i])
+	}
+	if evt1IsSpanType(t) {
+		t.Kind = TypeSpan
+		return t
 	}
 	if t.Kind == TypeConceptParam || len(t.TypeArgs) > 0 {
 		return t

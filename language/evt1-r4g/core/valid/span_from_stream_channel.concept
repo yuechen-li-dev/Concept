@@ -1,0 +1,21 @@
+profile Core;
+
+layout VertexLayout
+{
+    float<array>[3] positions;
+}
+
+stream VertexStream over VertexLayout
+{
+    Position = positions;
+}
+
+float SpanFromStreamChannel(float initial, float replacement)
+{
+	float<array>[3] backing = [initial, initial, initial];
+    ref VertexLayout layout = bind backing;
+    ref VertexStream stream = bind layout;
+    Span<float> positions = Span(stream.Position);
+	positions[1] = replacement;
+	return backing[1];
+}

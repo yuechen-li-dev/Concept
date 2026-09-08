@@ -1,0 +1,8 @@
+profile Core;
+
+int ReadonlySpanFromConst()
+{
+    const int<array>[4] values = [1, 2, 3, 4];
+    ReadOnlySpan<int> span = ReadOnlySpan(values);
+    return span[2];
+}

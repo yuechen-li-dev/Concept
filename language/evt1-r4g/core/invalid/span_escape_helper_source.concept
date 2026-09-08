@@ -1,0 +1,12 @@
+profile Core;
+
+Span<int> ForwardSpan(ref int<array>[4] source)
+{
+    return Span(source);
+}
+
+Span<int> InvalidHelperEscape()
+{
+    int<array>[4] values = [1, 2, 3, 4];
+    return ForwardSpan(ref values);
+}

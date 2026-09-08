@@ -1,0 +1,24 @@
+profile Core;
+
+enum SpanError
+{
+    Missing
+}
+
+Result<Span<int>, SpanError> BorrowSpan(ref int<array>[3] source)
+{
+    Span<int> span = Span(source);
+    return Result::Ok(span);
+}
+
+Result<int, SpanError> ReadAfterQuestion(ref int<array>[3] source)
+{
+    Span<int> span = BorrowSpan(ref source)?;
+    return Result::Ok(span[1]);
+}
+
+int SpanAfterQuestion()
+{
+    int<array>[3] values = [4, 8, 12];
+    return ReadAfterQuestion(ref values)!;
+}

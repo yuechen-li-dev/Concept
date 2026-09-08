@@ -1,6 +1,6 @@
 # Concept EVT1 Stage 0 compiler architecture
 
-Status: R4f semantic layout and stream lowering
+Status: R4g bounded Span and ReadOnlySpan lowering
 
 ## Authority
 
@@ -408,7 +408,41 @@ row-major indexing. Layout-bearing modules align fixed wrappers to 64 bytes;
 stronger requirements reject until explicit aligned storage exists. Streams
 emit no backing storage or dispatch. This is backend evidence, not stable ABI.
 
-## R4f limitations
+## R4g bounded-span lowering
+
+```text
+known contiguous storage or R4f region/channel
+  -> Span / ReadOnlySpan construction
+  -> interval and element-identity validation
+  -> existing lexical/call-result provenance + stable parent-region identity
+  -> Subspan narrowing over the same half-open parent interval
+  -> explicit MIR borrowed-region facts
+  -> guarded pointer-plus-length strict-C11 descriptor
+```
+
+`Span<T>` and `ReadOnlySpan<T>` reuse the applied-type architecture and are
+recognized as compiler-known ref-struct-like descriptors. Scope bindings carry
+the same lifetime provenance used by R4a/R4b plus a compact region payload:
+element type, stable parent identity, backing byte offset, relative element
+offset, length, byte extent, safe alignment, mutability, and contiguity. Bound
+storage descriptors retain their backing identity; layout and stream
+projections consume the R4f region facts directly.
+
+MIR keeps `span_from_region`, `span_to_readonly`, `span_subregion`, and
+`span_index` operations until validation. Each operation must retain region,
+provenance, interval, alignment, mutability, contiguity, same-backing, and
+no-copy/no-allocation/no-transfer facts. Subregions additionally require the
+overflow-safe half-open bounds proof. Malformed operations reject before C
+generation.
+
+The C bootstrap representation is a typed pointer and `size_t length`.
+Readonly pointers are const-qualified. Construction points at existing
+storage, Subspan adjusts that pointer only after guarded bounds and byte-offset
+checks, and indexing guards before dereference. There is no allocation,
+backing copy, ownership hook, or Drop obligation. The runtime descriptor is a
+lowering detail; the richer MIR facts remain compiler authority.
+
+## R4g limitations
 
 - The package remains deliberately cohesive rather than prematurely split.
 - Effect/actuator validation and C runtime emission remain in-package profile
@@ -425,7 +459,7 @@ emit no backing storage or dispatch. This is backend evidence, not stable ABI.
   is no implicit move, field move, partial drop, unwinding, or dynamic cleanup
   stack.
 - Named lifetimes, generalized borrow checking, non-lexical lifetimes, mutable
-  alias analysis, Span types, and unrestricted reference-containing
+  alias analysis, and unrestricted reference-containing
   aggregates are not implemented.
 - The remaining PoC3 allocation, stable C ABI, testing framework,
   interfaces/dyn, slices, and FixedBuffer surfaces are not ported. R4f has no
@@ -517,3 +551,14 @@ runtime mechanisms. Strict-C11 harnesses execute scalar, array/ndarray,
 alignment, mutable/const alias, and lexical/call-result/scoped provenance paths.
 The conformance record distinguishes SDSL-derived semantic structure from the
 EVT1-new surface and ordinary Go-compiler lowering.
+
+## R4g executable evidence
+
+`internal/concept/r4g_conformance_test.go` and `language/evt1-r4g/core`
+provide 29 readable cases: 15 valid and 14 invalid-path programs, all
+classified PASS. Runtime-failure sources remain in the invalid-path directory
+but compile successfully and are executed in isolated terminal-process tests.
+The suite inspects explicit borrowed-region MIR, compiles and runs 15 strict-C11
+success paths, executes runtime Subspan and index failures, and checks the
+generated path for pointer-plus-length descriptors with no allocation or
+backing copy.

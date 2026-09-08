@@ -1,0 +1,14 @@
+profile Core;
+
+Span<int> FirstThree(ref int<array>[5] source)
+{
+    Span<int> whole = Span(source);
+    return Subspan(whole, 0, 3);
+}
+
+int SpanHelperProvenance()
+{
+    int<array>[5] values = [2, 4, 6, 8, 10];
+    Span<int> first = FirstThree(ref values);
+    return first[2];
+}

@@ -1,15 +1,14 @@
 # EVT1 reference and span direction
 
-Status: R4f layout/stream projections preserve R4b provenance; active rules in the language
-specification are normative.
+Status: R4g Span and ReadOnlySpan are implemented bounded EVT1 semantics; the language specification is normative.
 
-R3 establishes `ref T` and `ref const T` as explicit, non-owning aliases of
-existing places. A mutable reference permits the mutations already permitted
-by the referent type and place. A const reference is a read-only view. Neither
-form copies or transfers the referent, extends a temporary lifetime, or proves
-a general lifetime relationship.
+R3 establishes `ref T` and `ref const T` as explicit non-owning aliases of
+existing places. R4a adds ref-struct lifetime bounds and `scoped`; R4b adds
+source-derived call-result summaries and demand-driven relational `Outlives`
+proof. R4g composes those authorities rather than adding a second borrowing
+system.
 
-The intended later vocabulary is:
+The active bounded vocabulary is:
 
 ```text
 ref T
@@ -20,65 +19,64 @@ Span<T>
 ReadOnlySpan<T>
 ```
 
-R4a activates `ref struct` for lifetime-bound aggregate values and `scoped`
-for an explicit non-escape constraint. The compiler tracks bounded lexical
-provenance (`Local`, `Parameter`, static/global where available, or `Unknown`),
-derives a ref struct bound from its shortest-lived referenced field, and
-conservatively rejects uncertain outward flow. This is deliberately not a
-global borrow checker and introduces no named lifetimes or alias-exclusivity
-solver.
+`Span<T>` is a mutable bounded borrowed contiguous interval.
+`ReadOnlySpan<T>` is its readonly counterpart. The canonical source forms are:
 
-R4b adds compact result provenance without adding lifetime syntax. Selected
-function bodies summarize a lifetime-bound result as deriving from one
-parameter, the shortest of a finite parameter set, a static source, or
-unknown. At each call, the summary is instantiated from actual argument
-provenance. Function boundaries therefore preserve rather than reset bounds,
-and scoped inputs remain scoped through derived results.
+```concept
+Span<int> values = Span(storage);
+ReadOnlySpan<int> readonly = ReadOnlySpan(values);
+Span<int> middle = Subspan(values, offset, length);
+```
 
-`Outlives(source, result)` is a demand-driven semantic relation over the
-parameter and result of a concept-required operation. It succeeds only from a
-proven summary relationship. A different source disproves it and unknown
-provenance rejects it conservatively. The proof and its subjects are retained
-in MIR, but no runtime lifetime object is emitted.
+The explicit `ReadOnlySpan(mutableSpan)` constructor is the one-way
+mutable-to-readonly conversion. No reverse conversion or const stripping is
+allowed. `Subspan` is a free function because the current EVT1 expression
+surface has ordinary free-function calls but no general method-call facility.
 
-`Span<T>` and `ReadOnlySpan<T>` are intended to be lifetime-bound borrowed
-contiguous views, not owning collections and not hidden heap abstractions.
-Their construction, variance, slicing, storage, call, return, and escape rules
-must be designed against the active reference model before implementation.
-In particular, future span safety depends on source-derived call results,
-`Outlives`, scoped/non-escaping constraints, and ref-struct lifetime bounds.
+R4e `bind` remains narrower: it associates an expected array/ndarray shape
+with an entire contiguous source. It has no partial offset or length. Span
+adds bounded half-open subregions without changing bind, storage, or lifetime
+law. Arrays and ndarrays supply physical storage; R4f layout regions and stream
+channels supply semantic region facts; Span consumes those facts.
 
-R4e adds `bind` as a deliberately narrower storage-view operation. It binds an
-expected array/ndarray reference shape to the entire contiguous source storage;
-it has no offset, partial length, stride, or raw-pointer form. The resulting
-descriptor preserves the source provenance and scoped flag, so it cannot extend
-or launder lifetime across a local, helper-call, or ref-struct boundary. Bind is
-therefore reusable evidence for pointer-plus-shape lowering, but is not a
-replacement for Span.
+The compiler-visible region payload is:
 
-A later `Span<T>` or `ReadOnlySpan<T>` represents bounded subregions and must
-state the source, offset, and length laws that `bind` intentionally omits. It
-should build on the same provenance summaries and escape checks rather than
-introduce a parallel lifetime system.
+```text
+element type
+provenance
+region identity
+backing byte offset
+relative element offset
+length
+byte extent
+alignment
+mutability
+contiguity
+```
 
-The retired PoC3 `Slice<T>` fixtures remain useful pressure for pointer-plus-
-length representation, bounds checks, and read-only access. They are not a
-surface or lifetime contract for EVT1. R3 therefore marks `Slice<T>` for
-redesign and does not port Slice or Span. R4b establishes the relational
-machinery those future views require; R4e still does not implement
-`Span<T>`, `ReadOnlySpan<T>`, `stackalloc`, or runtime `Slice<T>`.
+Construction preserves the source provenance and region identity. Subspan
+retains the same parent identity and narrows only the relative offset and
+extent. Its interval is `[baseOffset, baseOffset + length)`. An empty interval
+at the parent's end is valid. Alignment is derived conservatively from parent
+alignment and element byte offset; arbitrary offsets never retain an unsafe
+stronger claim.
 
-R4f adds no new borrowing system. A bound layout aliases one exact whole
-backing object; region and stream-channel projections retain that same backing
-identity, constness, lexical/call-result provenance, and scoped flag. A stream
-itself has zero storage. A helper therefore cannot launder local or scoped
-backing into an outward reference, and a const layout/stream cannot yield a
-mutable region.
+Local, parameter, scoped, layout-region, stream-channel, and helper-result
+paths all flow through the R4a/R4b provenance representation and existing
+escape checks. A helper cannot launder a local or scoped backing lifetime.
+No runtime lifetime object is emitted.
 
-Declared layout regions are not Span. Their offsets and extents are fixed by a
-compile-time semantic graph rather than chosen per view at runtime. Future Span
-work must still define arbitrary source/offset/length construction and bounds.
-When constructed from a region/channel, its semantic payload should directly
-retain backing provenance, region identity, offset, extent, alignment, and
-mutability rather than infer them again. It should consume the same provenance
-facts rather than create a parallel view or lifetime system.
+Span copies or moves only its non-owning descriptor. It never copies, moves,
+owns, allocates, or drops backing storage. Viewing an immovable backing object
+is valid because construction does not relocate it. Option/Result composition
+uses the existing ref-struct carrier rule and preserves provenance through
+success extraction.
+
+The retired PoC3 `Slice<T>` fixtures remain pressure for pointer-plus-length
+lowering, bounds checks, and readonly access. They are not an EVT1 surface or
+lifetime contract. R4g supersedes their direction with Span/ReadOnlySpan; it is
+not a mechanical Slice port.
+
+R4g adds no named lifetimes, non-lexical lifetime inference, reborrow lattice,
+mutable-alias solver, generalized noalias checker, raw-pointer constructor,
+strided or multidimensional span, stack allocation, or owned dynamic vector.

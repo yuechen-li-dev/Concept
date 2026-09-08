@@ -1,0 +1,9 @@
+profile Core;
+
+int SpanFromBoundNdarray(int rows, int columns)
+{
+    int<array>[6] storage = [1, 2, 3, 4, 5, 6];
+    ref int<ndarray>[rows, columns] matrix = bind storage;
+    Span<int> span = Span(matrix);
+    return Len(span);
+}

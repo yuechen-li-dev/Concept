@@ -1,0 +1,9 @@
+profile Core;
+
+int SpanToReadonly()
+{
+    int<array>[3] values = [5, 6, 7];
+    Span<int> mutableSpan = Span(values);
+    ReadOnlySpan<int> readonlySpan = ReadOnlySpan(mutableSpan);
+    return readonlySpan[1];
+}

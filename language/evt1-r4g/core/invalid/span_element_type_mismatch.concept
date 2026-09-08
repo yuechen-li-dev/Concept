@@ -1,0 +1,8 @@
+profile Core;
+
+int InvalidElementTypeMismatch()
+{
+    int<array>[2] values = [1, 2];
+    Span<float> span = Span(values);
+    return Len(span);
+}

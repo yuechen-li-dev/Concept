@@ -1,0 +1,9 @@
+profile Core;
+
+int InvalidReadonlyMutation()
+{
+    int<array>[3] values = [1, 2, 3];
+    ReadOnlySpan<int> span = ReadOnlySpan(values);
+    span[0] = 9;
+    return values[0];
+}

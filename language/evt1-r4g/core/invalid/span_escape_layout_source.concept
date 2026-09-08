@@ -1,0 +1,13 @@
+profile Core;
+
+layout LocalLayout
+{
+    int<array>[2] values;
+}
+
+Span<int> InvalidLayoutEscape()
+{
+    int<array>[2] backing = [1, 2];
+    ref LocalLayout layout = bind backing;
+    return Span(layout.values);
+}

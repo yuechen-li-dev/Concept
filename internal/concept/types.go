@@ -20,6 +20,7 @@ const (
 	TypeNDArray      TypeKind = "ndarray"
 	TypeLayout       TypeKind = "layout"
 	TypeStream       TypeKind = "stream"
+	TypeSpan         TypeKind = "span"
 	TypeConceptParam TypeKind = "concept_param"
 	TypeApplied      TypeKind = "applied"
 )
@@ -627,9 +628,21 @@ func (*FieldExpr) evt1Expr()        {}
 func (e *FieldExpr) exprSpan() Span { return e.Span }
 
 type CallExpr struct {
-	Callee string `json:"callee"`
-	Args   []Expr `json:"args,omitempty"`
-	Span   Span   `json:"span"`
+	Callee               string `json:"callee"`
+	Args                 []Expr `json:"args,omitempty"`
+	Intrinsic            string `json:"intrinsic,omitempty"`
+	SpanElementType      *Type  `json:"span_element_type,omitempty"`
+	RegionID             string `json:"region_id,omitempty"`
+	BackingByteOffset    int    `json:"backing_byte_offset,omitempty"`
+	BaseOffsetExpression string `json:"base_offset_expression,omitempty"`
+	LengthExpression     string `json:"length_expression,omitempty"`
+	ByteExtentExpression string `json:"byte_extent_expression,omitempty"`
+	Alignment            int    `json:"alignment,omitempty"`
+	Mutability           string `json:"mutability,omitempty"`
+	ProvenanceKind       string `json:"provenance_kind,omitempty"`
+	ProvenanceScoped     bool   `json:"provenance_scoped,omitempty"`
+	RuntimeBounds        bool   `json:"runtime_bounds,omitempty"`
+	Span                 Span   `json:"span"`
 }
 
 func (*CallExpr) evt1Expr()        {}
@@ -750,10 +763,18 @@ func (*ArrayLiteralExpr) evt1Expr()        {}
 func (e *ArrayLiteralExpr) exprSpan() Span { return e.Span }
 
 type IndexExpr struct {
-	Base    Expr   `json:"base"`
-	Index   Expr   `json:"index"` // first index retained for the legacy rank-1 evaluator
-	Indices []Expr `json:"indices,omitempty"`
-	Span    Span   `json:"span"`
+	Base             Expr   `json:"base"`
+	Index            Expr   `json:"index"` // first index retained for the legacy rank-1 evaluator
+	Indices          []Expr `json:"indices,omitempty"`
+	SpanIndex        bool   `json:"span_index,omitempty"`
+	SpanElementType  *Type  `json:"span_element_type,omitempty"`
+	RegionID         string `json:"region_id,omitempty"`
+	LengthExpression string `json:"length_expression,omitempty"`
+	SpanMutability   string `json:"span_mutability,omitempty"`
+	SpanAlignment    int    `json:"span_alignment,omitempty"`
+	ProvenanceKind   string `json:"provenance_kind,omitempty"`
+	ProvenanceScoped bool   `json:"provenance_scoped,omitempty"`
+	Span             Span   `json:"span"`
 }
 
 func (*IndexExpr) evt1Expr()        {}
@@ -1055,27 +1076,33 @@ type MIRCleanup struct {
 }
 
 type MIROperation struct {
-	ID                  string             `json:"id"`
-	Kind                string             `json:"kind"`
-	Type                string             `json:"type,omitempty"`
-	Detail              string             `json:"detail,omitempty"`
-	SourceStorageKind   StorageKind        `json:"source_storage_kind,omitempty"`
-	TargetStorageKind   StorageKind        `json:"target_storage_kind,omitempty"`
-	TargetRank          int                `json:"target_rank,omitempty"`
-	TargetShape         []StorageDimension `json:"target_shape,omitempty"`
-	CountCheck          string             `json:"count_check,omitempty"`
-	Mutability          string             `json:"mutability,omitempty"`
-	Provenance          string             `json:"provenance,omitempty"`
-	NoCopy              bool               `json:"no_copy,omitempty"`
-	NoAllocation        bool               `json:"no_allocation,omitempty"`
-	NoOwnershipTransfer bool               `json:"no_ownership_transfer,omitempty"`
-	LayoutName          string             `json:"layout_name,omitempty"`
-	RegionID            string             `json:"region_id,omitempty"`
-	Offset              int                `json:"offset,omitempty"`
-	ByteExtent          int                `json:"byte_extent,omitempty"`
-	Alignment           int                `json:"alignment,omitempty"`
-	SameBackingRegion   bool               `json:"same_backing_region,omitempty"`
-	SourceSpan          Span               `json:"source_span"`
+	ID                   string             `json:"id"`
+	Kind                 string             `json:"kind"`
+	Type                 string             `json:"type,omitempty"`
+	Detail               string             `json:"detail,omitempty"`
+	SourceStorageKind    StorageKind        `json:"source_storage_kind,omitempty"`
+	TargetStorageKind    StorageKind        `json:"target_storage_kind,omitempty"`
+	TargetRank           int                `json:"target_rank,omitempty"`
+	TargetShape          []StorageDimension `json:"target_shape,omitempty"`
+	CountCheck           string             `json:"count_check,omitempty"`
+	Mutability           string             `json:"mutability,omitempty"`
+	Provenance           string             `json:"provenance,omitempty"`
+	NoCopy               bool               `json:"no_copy,omitempty"`
+	NoAllocation         bool               `json:"no_allocation,omitempty"`
+	NoOwnershipTransfer  bool               `json:"no_ownership_transfer,omitempty"`
+	LayoutName           string             `json:"layout_name,omitempty"`
+	RegionID             string             `json:"region_id,omitempty"`
+	Offset               int                `json:"offset,omitempty"`
+	ByteExtent           int                `json:"byte_extent,omitempty"`
+	Alignment            int                `json:"alignment,omitempty"`
+	SameBackingRegion    bool               `json:"same_backing_region,omitempty"`
+	ElementType          *Type              `json:"element_type,omitempty"`
+	BaseOffset           string             `json:"base_offset,omitempty"`
+	Length               string             `json:"length,omitempty"`
+	ByteExtentExpression string             `json:"byte_extent_expression,omitempty"`
+	Contiguous           bool               `json:"contiguous,omitempty"`
+	BoundsCheck          string             `json:"bounds_check,omitempty"`
+	SourceSpan           Span               `json:"source_span"`
 }
 
 type semanticEnv struct {

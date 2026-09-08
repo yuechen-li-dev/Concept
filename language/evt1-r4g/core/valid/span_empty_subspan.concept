@@ -1,0 +1,9 @@
+profile Core;
+
+int SpanEmptySubspan()
+{
+    int<array>[4] values = [1, 2, 3, 4];
+    Span<int> span = Span(values);
+    Span<int> empty = Subspan(span, 4, 0);
+    return Len(empty);
+}

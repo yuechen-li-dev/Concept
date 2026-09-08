@@ -1,0 +1,17 @@
+profile Core;
+
+enum SpanError
+{
+    Missing
+}
+
+Result<Span<int>, SpanError> BorrowSpan(ref int<array>[2] source)
+{
+    return Result::Ok(Span(source));
+}
+
+Result<Span<int>, SpanError> InvalidResultLaunder()
+{
+    int<array>[2] local = [1, 2];
+    return BorrowSpan(ref local);
+}

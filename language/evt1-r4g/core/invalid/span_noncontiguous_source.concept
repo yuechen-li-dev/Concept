@@ -1,0 +1,8 @@
+profile Core;
+
+int InvalidNoncontiguousSource()
+{
+    int value = 1;
+    Span<int> span = Span(value);
+    return Len(span);
+}

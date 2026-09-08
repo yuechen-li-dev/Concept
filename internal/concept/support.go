@@ -209,6 +209,24 @@ func (d Diagnostic) SemanticCategory() string {
 		return "LAYOUT_MIR_INVALID"
 	case "CV4594":
 		return "STREAM_MIR_INVALID"
+	case "CV4600":
+		return "SPAN_REQUIRES_CONTIGUOUS_SOURCE"
+	case "CV4601":
+		return "SPAN_ELEMENT_TYPE_MISMATCH"
+	case "CV4602":
+		return "SPAN_MUTABLE_FROM_CONST"
+	case "CV4603":
+		return "SPAN_BOUNDS_OUT_OF_RANGE"
+	case "CV4604":
+		return "SPAN_INDEX_OUT_OF_BOUNDS"
+	case "CV4605":
+		return "READONLY_SPAN_MUTATION"
+	case "CV4606":
+		return "SPAN_OFFSET_OVERFLOW"
+	case "CV4607":
+		return "SPAN_LENGTH_OVERFLOW"
+	case "CV4608":
+		return "SPAN_MIR_INVALID"
 	default:
 		return d.Code
 	}
