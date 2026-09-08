@@ -1,6 +1,6 @@
 # EVT1 array, ndarray, and tensor direction
 
-Status: R4g bounded borrowed spans canonical; mathematics and optimization deferred
+Status: R4h tensor mathematics canonical; shorthands and optimization deferred
 
 ## Layering
 
@@ -23,20 +23,19 @@ borrowed views
 mathematical interpretations
   vector      deferred rank-1 mathematics
   matrix      deferred rank-2 mathematics
-  tensor      deferred rank-N indexed algebra
+  tensor      canonical rank-N indexed algebra over existing storage
 
 future optimization
   shape-aware lowering
-  Einstein contraction and loop synthesis
   SIMD, GPU, and native backend selection
 ```
 
 These layers must not collapse into one another. An ndarray is one contiguous
 storage object, not `Array<Array<...>>`, and multidimensional shape does not
 grant matrix/tensor algebra. Conversely, a tensor does not own storage merely
-because it is a tensor. A future vector, matrix, or tensor interpretation may
-refer to array/ndarray storage or a borrowed view without redefining its
-allocation policy.
+because it is a tensor. The R4h tensor interpretation refers to array/ndarray
+storage or a borrowed view without redefining its allocation policy; future
+vector and matrix aliases follow the same law.
 
 ## R4d storage law
 
@@ -108,7 +107,7 @@ backing object; projection reuses the ordinary typed storage descriptor, shape,
 row-major indexing, and provenance. This is fixed semantic geometry, not a
 general subview: offsets and extents are compile-time declarations, and stream
 channels only rename declared regions. Layout/stream compose above R4d/R4e
-storage without changing array, ndarray, or future tensor meaning.
+storage without changing array, ndarray, or the R4h tensor meaning layered above it.
 
 ## R4g bounded subregions
 
@@ -141,18 +140,40 @@ vector / matrix / tensor
     mathematical interpretation
 ```
 
+## R4h tensor interpretation
+
+`tensor<T, Rank>` is now the bounded mathematical layer above storage and
+borrowed views. `Tensor(source)` preserves shape, region identity, base offset,
+alignment, mutability, contiguity, and provenance while adding no allocation,
+copy, ownership, or lifetime. Ordinary indices remain zero-based.
+
+Exact-shape elementwise `+`, `-`, and `*`, exact-type scalar multiplication,
+statement-local Einstein indexed assignment, and generalized last-axis/
+first-axis `@` contraction lower through explicit Tensor MIR and a dedicated
+loop-synthesis stage. Broadcasting is forbidden. Contraction destination/input
+overlap is rejected conservatively; declared-disjoint R4f regions retain the
+identities needed to prove separation.
+
+```text
+vector<T>  future shorthand for tensor<T, 1>
+matrix<T>  future shorthand for tensor<T, 2>
+```
+
+These names remain deferred to R4i and will not acquire separate storage or
+algebra laws.
+
 ## Deferred work
 
-R4g does not port PoC3 Slice or FixedBuffer and does not implement vector,
-matrix, tensor, Einstein notation, TensorIR, an allocator
-framework, stack allocation, `dyn`, generalized alias/noalias analysis,
+R4h does not port PoC3 Slice or FixedBuffer and does not implement vector or
+matrix aliases, an allocator framework, stack allocation, `dyn`, generalized alias/noalias analysis,
 strided/sparse/tiled layouts, SIMD, GPU lowering, or a native backend. Those
 features must consume the storage facts established here without changing
 their meaning retroactively.
 
 ## Subsequent milestone boundary
 
-R4g Span/ReadOnlySpan specifies bounded contiguous subregions on the same
-provenance machinery without reinterpreting R4f declared geometry as a runtime
-layout facility. Allocator-backed owned dynamic storage and mathematical
-vector/matrix/tensor interpretations remain separate work.
+R4i should remain a shorthand-and-qualification milestone: introduce
+`vector<T>`/`matrix<T>` only as literal aliases if consumer evidence warrants
+them, close scalar-result and explicit noncanonical contraction direction, and
+avoid optimizer or runtime expansion. Allocator-backed owned dynamic storage
+remains separate work.

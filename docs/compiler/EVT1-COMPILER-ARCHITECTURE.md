@@ -1,6 +1,6 @@
 # Concept EVT1 Stage 0 compiler architecture
 
-Status: R4g bounded Span and ReadOnlySpan lowering
+Status: R4h Tensor MIR and dedicated contraction lowering
 
 ## Authority
 
@@ -442,7 +442,55 @@ checks, and indexing guards before dereference. There is no allocation,
 backing copy, ownership hook, or Drop obligation. The runtime descriptor is a
 lowering detail; the richer MIR facts remain compiler authority.
 
-## R4g limitations
+## R4h tensor semantic MIR and lowering
+
+R4h adds one mathematical consumer of the established storage/region facts:
+
+```text
+array / ndarray / bound storage / layout region / stream channel / rank-1 Span
+  -> Tensor(source), preserving shape + region + provenance + alignment
+  -> Tensor semantic MIR
+  -> exact-shape, symbolic-index, contraction, mutability, and alias validation
+  -> dedicated tensor lowering
+  -> explicit zero-based loop/reduction code
+  -> existing strict-C11 backend
+```
+
+The parser records `@` and indexed expressions; it does not synthesize loops.
+Semantic analysis creates statement-local symbolic index scopes and attaches a
+validated `TensorSemantic` plan to tensor assignments. `MIRFunction` exposes
+those plans separately as `tensor_operations`, while ordinary MIR operations
+retain `tensor_view`, `tensor_index`, and `tensor_symbolic_index` facts. MIR
+validation requires rank, shape, region, provenance, mutability, alignment,
+alias policy, and the selected lowering stage before code generation.
+
+The C representation is a typed pointer plus a fixed-rank `size_t shape[]`
+descriptor. Construction points at existing storage. Elementwise lowering uses
+one checked linear loop. Default `@` and Einstein contraction use explicit
+free-index loops, an arithmetic-zero accumulator, and reduction loops.
+Runtime shape products and extent equalities are guarded deterministically.
+No parser-time loop rewriting, heap temporary, tensor runtime, BLAS, MLIR,
+SIMD, or GPU kernel path is present.
+
+Fixed symbolic initialization reuses the same validated TensorSemantic plan in
+the bounded comptime evaluator. The evaluator mutates the aliased fixed-array
+value and therefore proves that symbolic indexing removes manual nested source
+loops without creating persistent hidden state.
+
+## R4h limitations
+
+- Tensor ranks are positive; rank-zero result tensors and vector dot-product
+  scalar results are deferred.
+- `vector<T>` and `matrix<T>` remain future shorthands for `tensor<T,1>` and
+  `tensor<T,2>` and introduce no separate intended semantics.
+- The Einstein subset accepts unambiguous multiplication-sum reductions and
+  fixed symbolic initialization; explicit index-declaration syntax and
+  noncanonical multi-axis `Contract` syntax remain future work.
+- Tensor sources are contiguous and shape-aware. Arbitrary strides, slicing,
+  sparse/tiled storage, named axes, broadcasting, autograd, and allocator-owned
+  dynamic tensors are absent.
+
+## General limitations after R4h
 
 - The package remains deliberately cohesive rather than prematurely split.
 - Effect/actuator validation and C runtime emission remain in-package profile
@@ -562,3 +610,12 @@ The suite inspects explicit borrowed-region MIR, compiles and runs 15 strict-C11
 success paths, executes runtime Subspan and index failures, and checks the
 generated path for pointer-plus-length descriptors with no allocation or
 backing copy.
+
+## R4h executable evidence
+
+`internal/concept/r4h_conformance_test.go` and `language/evt1-r4h/core`
+provide 29 readable conformance cases: 17 valid and 12 statically rejected,
+all classified `PASS`. The suite separately checks Tensor MIR validation,
+15 successful strict-C11 numeric paths, runtime index/contraction guards, and
+bounded comptime symbolic initialization. Generated evidence contains no heap,
+copy helper, BLAS, MLIR, SIMD, or GPU tensor path.

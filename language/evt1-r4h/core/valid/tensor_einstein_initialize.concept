@@ -1,0 +1,11 @@
+profile Core;
+
+comptime int IdentityCorner()
+{
+    int<ndarray>[3, 3] storage = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+    tensor<int, 2> T = Tensor(storage);
+    T[i, j] = if (i == j) 1 else 0;
+    return storage[2, 2];
+}
+
+static_assert(IdentityCorner() == 1, "symbolic tensor initialization must execute at comptime");

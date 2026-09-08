@@ -1,0 +1,11 @@
+profile Core;
+
+int TensorScalarMul(int scale)
+{
+    int<ndarray>[2, 2] aStorage = [[1, 2], [3, 4]];
+    int<ndarray>[2, 2] cStorage = [[0, 0], [0, 0]];
+    tensor<int, 2> A = Tensor(aStorage);
+    tensor<int, 2> C = Tensor(cStorage);
+    C = scale * A;
+    return C[1, 1];
+}

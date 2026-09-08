@@ -80,6 +80,11 @@ the executable mapping used by the R2 conformance harness.
 | ReadOnlySpan mutation | readonly Slice pressure | `CV4605` | `READONLY_SPAN_MUTATION` | reconciled pressure / EVT1-new | no const stripping |
 | Span arithmetic overflow | no closed counterpart | `CV4606`-`CV4607` | `SPAN_OFFSET_OVERFLOW` / `SPAN_LENGTH_OVERFLOW` | EVT1-new | runtime uses deterministic panic reasons |
 | malformed Span MIR | semantic descriptor invariant | `CV4608` | `SPAN_MIR_INVALID` | EVT1-new | complete borrowed-region facts required |
+| invalid tensor type/source | SDSL-V tensor pressure | `CV4610`-`CV4615` | `TENSOR_*` type/source/rank/element families | EVT1-new / SDSL-V-derived | positive rank, exact element identity, shaped contiguous source |
+| invalid tensor destination/shape/index | no closed counterpart | `CV4616`-`CV4618` | `TENSOR_READONLY_DESTINATION` / `TENSOR_SHAPE_MISMATCH` / `TENSOR_INDEX_ARITY_MISMATCH` | EVT1-new | exact shape and zero-based rank-exact indexing; no broadcasting |
+| invalid Einstein index relation | SDSL-V indexed-expression pressure | `CV4619`-`CV4622` | `TENSOR_SYMBOLIC_INDEX_*` / `TENSOR_OUTPUT_INDEX_INVALID` / `TENSOR_REDUCTION_INDEX_INVALID` | EVT1-new / SDSL-V-derived | statement-local symbols with exact extent and multiplicity laws |
+| invalid generalized contraction | no closed counterpart | `CV4624`-`CV4625` | `TENSOR_CONTRACTION_SHAPE_MISMATCH` / `TENSOR_ALIAS_HAZARD` | EVT1-new | last/first axis equality and conservative destination disjointness |
+| malformed Tensor MIR | semantic operation invariant | `CV4626` | `TENSOR_MIR_INVALID` | EVT1-new | complete rank/shape/region/provenance/lowering facts required |
 
 `static_assert` continues to reuse the bounded comptime diagnostic path:
 runtime calls are `CV4210`, a non-boolean evaluated condition is `CV4207`, and

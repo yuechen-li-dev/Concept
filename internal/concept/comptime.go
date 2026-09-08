@@ -374,6 +374,9 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 	case *MatchExpr:
 		return evt1EvalMatchExpr(state, scope, *e)
 	case *CallExpr:
+		if e.Callee == "Tensor" && len(e.Args) == 1 {
+			return evt1EvalExpr(state, scope, e.Args[0])
+		}
 		if e.Callee == "Len" {
 			if len(e.Args) != 1 {
 				return Value{}, evt1Diagnostic("CV4234", fmt.Sprintf("Len expects exactly one argument, got %d", len(e.Args)), e.Span)
@@ -634,6 +637,12 @@ func evt1ExecComptimeBlock(state *evt1ComptimeState, scope *evt1EvalScope, block
 		case *InstanceDecl:
 			return nil, evt1Diagnostic("CV4271", fmt.Sprintf("instance %s cannot be declared in comptime code", s.Name), s.Span)
 		case *AssignStmt:
+			if s.Tensor != nil {
+				if err := evt1ExecComptimeTensorAssignment(state, local, s); err != nil {
+					return nil, err
+				}
+				continue
+			}
 			nameExpr, ok := s.Target.(*NameExpr)
 			if !ok {
 				return nil, evt1Diagnostic("CV4213", "comptime assignment requires a named local", s.Target.exprSpan())

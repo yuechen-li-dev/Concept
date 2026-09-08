@@ -1,0 +1,13 @@
+profile Core;
+
+float TensorFloatEinstein(float a, float b, float c, float d, float zero)
+{
+    float<ndarray>[2, 2] aStorage = [[a, b], [c, d]];
+    float<ndarray>[2, 2] bStorage = [[a, zero], [zero, a]];
+    float<ndarray>[2, 2] cStorage = [[zero, zero], [zero, zero]];
+    tensor<float, 2> A = Tensor(aStorage);
+    tensor<float, 2> B = Tensor(bStorage);
+    tensor<float, 2> C = Tensor(cStorage);
+    C[i, j] = A[i, k] * B[k, j];
+    return C[1, 1];
+}

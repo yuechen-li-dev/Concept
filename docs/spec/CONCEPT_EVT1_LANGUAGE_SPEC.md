@@ -1,6 +1,6 @@
 # Concept EVT1 language specification foundation
 
-Status: R4g bounded borrowed contiguous spans
+Status: R4h first-class tensor semantics and symbolic contraction
 
 This document defines the authority categories and the smallest currently
 executable EVT1 language foundation. It is derived from the retired Concept
@@ -648,6 +648,82 @@ ReadOnlySpan is the readonly counterpart of Span.
 Span may convert to ReadOnlySpan.
 ReadOnlySpan may not convert to Span.
 ```
+
+### 16.4 Tensor mathematics and Einstein indexing
+
+**Canonical EVT1 R4h.** `tensor<T, Rank>` is a mathematical rank-`Rank` view
+over existing shaped contiguous storage. `Rank` is a positive compile-time
+integer and `T` is a supported scalar arithmetic type. Tensor is not nested
+array storage: it owns no storage, allocates nothing, copies no backing
+elements, transfers no ownership, and does not alter lifetime provenance or
+region identity.
+
+```concept
+int<ndarray>[2, 3] storage = [[1, 2, 3], [4, 5, 6]];
+tensor<int, 2> values = Tensor(storage);
+int item = values[1, 2];
+```
+
+`Tensor(source)` requires an explicit tensor destination and a shaped
+contiguous source of the same rank and element type. Fixed or bound ndarrays,
+shaped layout regions, and shaped stream channels are admitted. A `Span<T>`
+may form only `tensor<T, 1>`; R4h never invents a multidimensional shape from
+a length. The view retains ordered shape, parent region, base offset,
+alignment, mutability, contiguity, and lexical/call-result provenance.
+Readonly storage produces a readonly tensor destination capability.
+
+Ordinary indexing is zero-based, has exactly one integer index per rank, and
+uses the existing deterministic bounds behavior. Tensor operations write into
+an existing mutable destination; they never conjure result storage.
+
+An indexed tensor assignment creates a statement-local symbolic-index scope:
+
+```concept
+C[i, j] = A[i, k] * B[k, j];
+```
+
+The compiler owns the hidden `extent`, `current`, and reduction accumulator
+state. Those names are integer-like only within this statement and do not
+escape as ordinary locals. LHS indices are distinct free indices. Every free
+index must occur on the RHS. An RHS-only index must occur exactly twice in the
+bounded R4h Einstein subset and is a reduction index. Every occurrence of an
+index has one compatible extent. Mixed ordinary and symbolic indices,
+duplicate output indices, missing output indices, inconsistent extents, and
+other multiplicities reject rather than being guessed.
+
+The non-contraction indexed form synthesizes a loop nest and can populate
+fixed storage during bounded comptime evaluation:
+
+```concept
+T[i, j] = if (i == j) 1 else 0;
+```
+
+Outside indexed Einstein notation, `+`, `-`, and `*` are elementwise tensor
+operators and require exact operand and destination shapes. Tensor-times-scalar
+is supported for exact element scalar type. This scalar application is not
+broadcasting. Concept tensor operations do not broadcast implicitly.
+
+`A @ B` is generalized tensor contraction: the last axis of `A` contracts
+with the first axis of `B`. For shapes `[a0, ..., aN]` and
+`[b0, ..., bM]`, `aN == b0` is required and the result shape is
+`[a0, ..., aN-1, b1, ..., bM]`. Therefore `[M,K] @ [K,N]` is matrix
+multiplication, while `[A,B,K] @ [K,C,D]` produces `[A,B,C,D]`. Rank-one
+dot-product scalar results are deferred because R4h tensor ranks are positive.
+Einstein indexing is the explicit general contraction form; `@` is the
+canonical last/first-axis shorthand.
+
+Fixed mismatches reject statically. Runtime extents receive exact deterministic
+guards before loop execution. Contraction rejects destination/input region
+overlap. Exact corresponding-element operations may be in-place. The compiler
+does not allocate scratch storage for uncertain aliases.
+
+Tensor semantic MIR retains views, operands, symbolic maps, free/reduction
+sets, shape relations, provenance/region/alignment/mutability, and alias
+policy. A dedicated tensor lowering stage then synthesizes zero-based loops,
+with arithmetic zero as the multiplication-sum reduction identity, before the
+strict-C11 backend. R4h adds no tensor runtime, heap allocator, BLAS, MLIR,
+SIMD, GPU lowering, broadcasting, strides, sparse storage, autograd, named
+axes, or `vector`/`matrix` aliases.
 
 ## 17. Slices and bounded collections
 

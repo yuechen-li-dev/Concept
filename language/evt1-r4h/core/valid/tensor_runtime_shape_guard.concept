@@ -1,0 +1,16 @@
+profile Core;
+
+int TensorRuntimeShapeGuard(int rows, int leftInner, int rightInner, int columns)
+{
+    int<array>[6] aStorage = [1, 2, 3, 4, 5, 6];
+    int<array>[6] bStorage = [1, 2, 3, 4, 5, 6];
+    int<array>[6] cStorage = [0, 0, 0, 0, 0, 0];
+    ref int<ndarray>[rows, leftInner] aView = bind aStorage;
+    ref int<ndarray>[rightInner, columns] bView = bind bStorage;
+    ref int<ndarray>[rows, columns] cView = bind cStorage;
+    tensor<int, 2> A = Tensor(aView);
+    tensor<int, 2> B = Tensor(bView);
+    tensor<int, 2> C = Tensor(cView);
+    C = A @ B;
+    return C[0, 0];
+}

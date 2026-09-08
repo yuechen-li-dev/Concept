@@ -1,0 +1,9 @@
+profile Core;
+
+int TensorFromSpanRank1()
+{
+    int<array>[4] storage = [3, 5, 7, 9];
+    Span<int> span = Span(storage);
+    tensor<int, 1> values = Tensor(span);
+    return values[2];
+}

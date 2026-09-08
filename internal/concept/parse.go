@@ -122,7 +122,7 @@ func lexEVT1(text string) ([]Token, error) {
 			tokens = append(tokens, Token{Lexeme: "=>", Span: start})
 			i += 2
 			column += 2
-		case strings.ContainsRune("(){}[];,:.*+-=<>!?", rune(c)):
+		case strings.ContainsRune("(){}[];,:.*+-=<>!?@", rune(c)):
 			tokens = append(tokens, Token{Lexeme: string(c), Span: start})
 			i++
 			column++
@@ -1346,6 +1346,29 @@ done:
 	if p.peekLexeme() == "<" {
 		storageElement = t
 		p.next()
+		if t.Name == "tensor" {
+			element, err := p.parseType(conceptParam)
+			if err != nil {
+				return Type{}, err
+			}
+			if _, err := p.expect(","); err != nil {
+				return Type{}, evt1Diagnostic("CV4610", "tensor<T, Rank> requires an element type and positive integer rank", nameTok.Span)
+			}
+			rankTok := p.current()
+			if !isNumber(rankTok.Lexeme) {
+				return Type{}, evt1Diagnostic("CV4610", "tensor rank must be a positive compile-time integer", rankTok.Span)
+			}
+			p.next()
+			rank64, _ := strconv.ParseInt(rankTok.Lexeme, 10, 32)
+			if rank64 <= 0 {
+				return Type{}, evt1Diagnostic("CV4610", "tensor rank must be positive in R4h", rankTok.Span)
+			}
+			if _, err := p.expect(">"); err != nil {
+				return Type{}, err
+			}
+			t.Name, t.Kind, t.TypeArgs, t.TensorRank = "tensor", TypeTensor, []Type{element}, int(rank64)
+			return t, nil
+		}
 		for {
 			arg, err := p.parseType(conceptParam)
 			if err != nil {
@@ -2045,7 +2068,7 @@ func (p *parser) parseMultiplicative() (Expr, error) {
 	if err != nil {
 		return nil, err
 	}
-	for p.peekLexeme() == "*" {
+	for p.peekLexeme() == "*" || p.peekLexeme() == "@" {
 		op := p.next()
 		right, err := p.parseUnary()
 		if err != nil {

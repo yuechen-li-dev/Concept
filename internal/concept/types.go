@@ -21,6 +21,7 @@ const (
 	TypeLayout       TypeKind = "layout"
 	TypeStream       TypeKind = "stream"
 	TypeSpan         TypeKind = "span"
+	TypeTensor       TypeKind = "tensor"
 	TypeConceptParam TypeKind = "concept_param"
 	TypeApplied      TypeKind = "applied"
 )
@@ -49,6 +50,7 @@ type Type struct {
 	Unsafe          bool               `json:"unsafe,omitempty"`
 	PointerTo       *Type              `json:"pointer_to,omitempty"`
 	TypeArgs        []Type             `json:"type_args,omitempty"`
+	TensorRank      int                `json:"tensor_rank,omitempty"`
 	ArrayElem       *Type              `json:"array_elem,omitempty"`
 	ArrayLength     int                `json:"array_length,omitempty"`
 	ArrayLengthExpr Expr               `json:"-"`
@@ -89,6 +91,8 @@ func (t Type) String() string {
 		} else {
 			base = fmt.Sprintf("%s[%s]", t.ArrayElem.String(), evt1ArrayLengthString(t))
 		}
+	} else if t.Kind == TypeTensor && len(t.TypeArgs) == 1 {
+		base = fmt.Sprintf("tensor<%s, %d>", t.TypeArgs[0].String(), t.TensorRank)
 	} else if len(t.TypeArgs) > 0 {
 		var args []string
 		for _, arg := range t.TypeArgs {
@@ -109,6 +113,7 @@ func (t Type) Equal(other Type) bool {
 		t.Imported != other.Imported ||
 		t.Unsafe != other.Unsafe ||
 		len(t.TypeArgs) != len(other.TypeArgs) ||
+		t.TensorRank != other.TensorRank ||
 		t.StorageKind != other.StorageKind ||
 		len(t.Shape) != len(other.Shape) {
 		return false
@@ -482,9 +487,10 @@ func (*ActuationDecl) evt1Statement()        {}
 func (s *ActuationDecl) statementSpan() Span { return s.Span }
 
 type AssignStmt struct {
-	Target Expr `json:"target"`
-	Value  Expr `json:"value"`
-	Span   Span `json:"span"`
+	Target Expr            `json:"target"`
+	Value  Expr            `json:"value"`
+	Tensor *TensorSemantic `json:"tensor,omitempty"`
+	Span   Span            `json:"span"`
 }
 
 func (*AssignStmt) evt1Statement()        {}
@@ -628,21 +634,22 @@ func (*FieldExpr) evt1Expr()        {}
 func (e *FieldExpr) exprSpan() Span { return e.Span }
 
 type CallExpr struct {
-	Callee               string `json:"callee"`
-	Args                 []Expr `json:"args,omitempty"`
-	Intrinsic            string `json:"intrinsic,omitempty"`
-	SpanElementType      *Type  `json:"span_element_type,omitempty"`
-	RegionID             string `json:"region_id,omitempty"`
-	BackingByteOffset    int    `json:"backing_byte_offset,omitempty"`
-	BaseOffsetExpression string `json:"base_offset_expression,omitempty"`
-	LengthExpression     string `json:"length_expression,omitempty"`
-	ByteExtentExpression string `json:"byte_extent_expression,omitempty"`
-	Alignment            int    `json:"alignment,omitempty"`
-	Mutability           string `json:"mutability,omitempty"`
-	ProvenanceKind       string `json:"provenance_kind,omitempty"`
-	ProvenanceScoped     bool   `json:"provenance_scoped,omitempty"`
-	RuntimeBounds        bool   `json:"runtime_bounds,omitempty"`
-	Span                 Span   `json:"span"`
+	Callee               string           `json:"callee"`
+	Args                 []Expr           `json:"args,omitempty"`
+	Intrinsic            string           `json:"intrinsic,omitempty"`
+	SpanElementType      *Type            `json:"span_element_type,omitempty"`
+	RegionID             string           `json:"region_id,omitempty"`
+	BackingByteOffset    int              `json:"backing_byte_offset,omitempty"`
+	BaseOffsetExpression string           `json:"base_offset_expression,omitempty"`
+	LengthExpression     string           `json:"length_expression,omitempty"`
+	ByteExtentExpression string           `json:"byte_extent_expression,omitempty"`
+	Alignment            int              `json:"alignment,omitempty"`
+	Mutability           string           `json:"mutability,omitempty"`
+	ProvenanceKind       string           `json:"provenance_kind,omitempty"`
+	ProvenanceScoped     bool             `json:"provenance_scoped,omitempty"`
+	RuntimeBounds        bool             `json:"runtime_bounds,omitempty"`
+	TensorFacts          *TensorViewFacts `json:"tensor_facts,omitempty"`
+	Span                 Span             `json:"span"`
 }
 
 func (*CallExpr) evt1Expr()        {}
@@ -763,18 +770,20 @@ func (*ArrayLiteralExpr) evt1Expr()        {}
 func (e *ArrayLiteralExpr) exprSpan() Span { return e.Span }
 
 type IndexExpr struct {
-	Base             Expr   `json:"base"`
-	Index            Expr   `json:"index"` // first index retained for the legacy rank-1 evaluator
-	Indices          []Expr `json:"indices,omitempty"`
-	SpanIndex        bool   `json:"span_index,omitempty"`
-	SpanElementType  *Type  `json:"span_element_type,omitempty"`
-	RegionID         string `json:"region_id,omitempty"`
-	LengthExpression string `json:"length_expression,omitempty"`
-	SpanMutability   string `json:"span_mutability,omitempty"`
-	SpanAlignment    int    `json:"span_alignment,omitempty"`
-	ProvenanceKind   string `json:"provenance_kind,omitempty"`
-	ProvenanceScoped bool   `json:"provenance_scoped,omitempty"`
-	Span             Span   `json:"span"`
+	Base             Expr     `json:"base"`
+	Index            Expr     `json:"index"` // first index retained for the legacy rank-1 evaluator
+	Indices          []Expr   `json:"indices,omitempty"`
+	SpanIndex        bool     `json:"span_index,omitempty"`
+	SpanElementType  *Type    `json:"span_element_type,omitempty"`
+	RegionID         string   `json:"region_id,omitempty"`
+	LengthExpression string   `json:"length_expression,omitempty"`
+	SpanMutability   string   `json:"span_mutability,omitempty"`
+	SpanAlignment    int      `json:"span_alignment,omitempty"`
+	ProvenanceKind   string   `json:"provenance_kind,omitempty"`
+	ProvenanceScoped bool     `json:"provenance_scoped,omitempty"`
+	TensorIndex      bool     `json:"tensor_index,omitempty"`
+	SymbolicIndices  []string `json:"symbolic_indices,omitempty"`
+	Span             Span     `json:"span"`
 }
 
 func (*IndexExpr) evt1Expr()        {}
@@ -1038,6 +1047,7 @@ type MIRFunction struct {
 	Params           []MIRName                   `json:"params,omitempty"`
 	ResultProvenance *MIRResultProvenanceSummary `json:"result_provenance,omitempty"`
 	Operations       []MIROperation              `json:"operations"`
+	TensorOperations []MIRTensorOperation        `json:"tensor_operations,omitempty"`
 	Cleanups         []MIRCleanup                `json:"cleanups,omitempty"`
 	SourceSpan       Span                        `json:"source_span"`
 }

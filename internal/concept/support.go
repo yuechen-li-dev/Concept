@@ -39,6 +39,8 @@ type Diagnostic struct {
 // reconciliation.
 func (d Diagnostic) SemanticCategory() string {
 	switch d.Code {
+	case "CV4024":
+		return "UNKNOWN_NAME"
 	case "CV4127":
 		return "NOT_ASSIGNABLE"
 	case "CV4128":
@@ -227,6 +229,38 @@ func (d Diagnostic) SemanticCategory() string {
 		return "SPAN_LENGTH_OVERFLOW"
 	case "CV4608":
 		return "SPAN_MIR_INVALID"
+	case "CV4610":
+		return "TENSOR_RANK_INVALID"
+	case "CV4611":
+		return "TENSOR_DESTINATION_STORAGE_REQUIRED"
+	case "CV4612":
+		return "TENSOR_ELEMENT_TYPE_UNSUPPORTED"
+	case "CV4613":
+		return "TENSOR_REQUIRES_SHAPED_CONTIGUOUS_SOURCE"
+	case "CV4614":
+		return "TENSOR_RANK_MISMATCH"
+	case "CV4615":
+		return "TENSOR_ELEMENT_TYPE_MISMATCH"
+	case "CV4616":
+		return "TENSOR_READONLY_DESTINATION"
+	case "CV4617":
+		return "TENSOR_SHAPE_MISMATCH"
+	case "CV4618":
+		return "TENSOR_INDEX_ARITY_MISMATCH"
+	case "CV4619":
+		return "TENSOR_SYMBOLIC_INDEX_INVALID"
+	case "CV4620":
+		return "TENSOR_SYMBOLIC_INDEX_EXTENT_MISMATCH"
+	case "CV4621":
+		return "TENSOR_OUTPUT_INDEX_INVALID"
+	case "CV4622":
+		return "TENSOR_REDUCTION_INDEX_INVALID"
+	case "CV4624":
+		return "TENSOR_CONTRACTION_SHAPE_MISMATCH"
+	case "CV4625":
+		return "TENSOR_ALIAS_HAZARD"
+	case "CV4626":
+		return "TENSOR_MIR_INVALID"
 	default:
 		return d.Code
 	}

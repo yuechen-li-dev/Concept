@@ -59,6 +59,7 @@ type evt1ValueBinding struct {
 	provenance       evt1LifetimeProvenance
 	spanFacts        *evt1SpanFacts
 	regionFacts      *evt1SpanFacts
+	tensorFacts      *TensorViewFacts
 }
 
 type evt1StorageState string
@@ -149,6 +150,17 @@ func (s *evt1Scope) setSpanFacts(name string, facts *evt1SpanFacts) bool {
 	for scope := s; scope != nil; scope = scope.parent {
 		if binding, ok := scope.values[name]; ok {
 			binding.spanFacts = facts
+			scope.values[name] = binding
+			return true
+		}
+	}
+	return false
+}
+
+func (s *evt1Scope) setTensorFacts(name string, facts *TensorViewFacts) bool {
+	for scope := s; scope != nil; scope = scope.parent {
+		if binding, ok := scope.values[name]; ok {
+			binding.tensorFacts = facts
 			scope.values[name] = binding
 			return true
 		}
@@ -1004,6 +1016,11 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 			if err != nil {
 				return err
 			}
+			if call, ok := s.Value.(*CallExpr); ok && evt1IsTensorType(resolvedType) && call.TensorFacts != nil && call.TensorFacts.Mutability == "readonly" {
+				resolvedType.Const = true
+				s.Type = resolvedType
+				valueType.Const = true
+			}
 			if !evt1TypesCompatible(env, resolvedType, valueType, typeParam) {
 				return evt1Diagnostic("CV4106", fmt.Sprintf("constructor or initializer for %s expected %s but got %s", s.Name, resolvedType.String(), valueType.String()), s.Value.exprSpan())
 			}
@@ -1037,6 +1054,7 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				provenance:  provenance,
 				spanFacts:   evt1SpanFactsForValue(env, local, s.Value, resolvedType),
 				regionFacts: evt1RegionFactsForValue(env, local, s.Value, resolvedType),
+				tensorFacts: evt1TensorFactsForValue(local, s.Value, resolvedType),
 			})
 		case *EffectsDecl:
 			if inComptimeFn {
@@ -1135,6 +1153,12 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				mutable: false,
 			})
 		case *AssignStmt:
+			if handled, err := validateTensorAssignment(env, local, s, templateInfo, inComptimeFn); handled {
+				if err != nil {
+					return err
+				}
+				continue
+			}
 			target, err := validateAssignable(env, local, s.Target, templateInfo)
 			if err != nil {
 				return err
@@ -1388,6 +1412,9 @@ func evt1EvalScopeFromValidation(scope *evt1Scope, env *semanticEnv) *evt1EvalSc
 }
 
 func validateExprAgainstExpected(env *semanticEnv, scope *evt1Scope, expr Expr, expected Type, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
+	if call, ok := expr.(*CallExpr); ok && call.Callee == "Tensor" {
+		return validateTensorConstruction(env, scope, call, expected, templateInfo, inComptimeFn)
+	}
 	if call, ok := expr.(*CallExpr); ok && (call.Callee == evt1SpanMutableName || call.Callee == evt1SpanReadonlyName || call.Callee == "Subspan") {
 		return validateSpanCall(env, scope, call, &expected, templateInfo, inComptimeFn)
 	}
@@ -1846,6 +1873,9 @@ func evt1NestedLiteralShape(expr Expr) ([]int, []Expr, bool, bool) {
 }
 
 func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string, allowConceptApp bool) error {
+	if evt1IsTensorType(t) {
+		return evt1ValidateTensorType(env, t, span, conceptParam)
+	}
 	if t.Scoped && !t.isReference() && t.Kind != TypeConceptParam && !evt1IsRefStructType(env, t) {
 		return evt1Diagnostic("CV4525", fmt.Sprintf("scoped requires a reference or ref struct type, got %s", t.String()), span)
 	}
@@ -2005,6 +2035,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		return evt1CanonicalType(env, fieldType), nil
 	case *CallExpr:
+		if e.Callee == "Tensor" {
+			return Type{}, evt1Diagnostic("CV4611", "Tensor(source) requires an explicit tensor<T, Rank> destination type", e.Span)
+		}
 		if e.Callee == evt1SpanMutableName || e.Callee == evt1SpanReadonlyName || e.Callee == "Subspan" {
 			return validateSpanCall(env, scope, e, nil, templateInfo, inComptimeFn)
 		}
@@ -2182,6 +2215,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		instance.InvocationSpans = append(instance.InvocationSpans, e.Span)
 		return evt1CanonicalType(env, instance.Function.ReturnType), nil
 	case *IndexExpr:
+		if facts, ok := evt1TensorFactsForExpr(scope, e.Base); ok {
+			return validateOrdinaryTensorIndex(env, scope, e, facts, templateInfo, inComptimeFn)
+		}
 		baseType, err := validateExpr(env, scope, e.Base, templateInfo, inComptimeFn)
 		if err != nil {
 			return Type{}, err
@@ -2259,8 +2295,8 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		switch e.Op {
 		case "-":
-			if valueType.Name != "int" {
-				return Type{}, evt1Diagnostic("CV4028", "unary - requires int", e.Span)
+			if valueType.Name != "int" && valueType.Name != "float" {
+				return Type{}, evt1Diagnostic("CV4028", "unary - requires int or float", e.Span)
 			}
 			return valueType, nil
 		case "not":
@@ -2352,6 +2388,15 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 				return leftType, nil
 			}
 		}
+		if leftType.Name == rightType.Name && (leftType.Name == "float" || leftType.Name == "uint" || leftType.Name == "byte") {
+			if e.Op == "<" || e.Op == ">" || e.Op == "<=" || e.Op == ">=" || e.Op == "==" || e.Op == "!=" {
+				out, _ := evt1BuiltinType("bool", e.Span)
+				return out, nil
+			}
+			if e.Op == "+" || e.Op == "-" || e.Op == "*" {
+				return leftType, nil
+			}
+		}
 		if leftType.Name == "bool" && rightType.Name == "bool" {
 			if e.Op == "==" || e.Op == "!=" {
 				out, _ := evt1BuiltinType("bool", e.Span)
@@ -2386,7 +2431,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			}
 			return leftType, nil
 		}
-		return Type{}, evt1Diagnostic("CV4028", "only int/uint64 additive and comparison expressions are supported in EVT1", e.Span)
+		return Type{}, evt1Diagnostic("CV4028", "only identical scalar arithmetic and comparison operands are supported in EVT1", e.Span)
 	case *ConstructExpr:
 		if e.EnumName == "Option" || e.EnumName == "Result" {
 			if evt1IsFailureType(e.ResolvedType) {
@@ -2603,6 +2648,20 @@ func validateAssignable(env *semanticEnv, scope *evt1Scope, expr Expr, templateI
 		if err != nil {
 			return evt1LValue{}, evt1Diagnostic("CV4231", "array index assignment requires an assignable storage place", expr.exprSpan())
 		}
+		if facts, ok := evt1TensorFactsForExpr(scope, e.Base); ok {
+			if _, err := validateOrdinaryTensorIndex(env, scope, e, facts, templateInfo, false); err != nil {
+				return evt1LValue{}, err
+			}
+			path := receiver.path
+			path.Fields = append(append([]string{}, path.Fields...), "[tensor_index]")
+			path.Span = e.Span
+			reason := receiver.readOnlyReason
+			mutable := receiver.mutable && facts.Mutability == "mutable"
+			if facts.Mutability != "mutable" {
+				reason = "readonly_tensor"
+			}
+			return evt1LValue{t: evt1CanonicalType(env, facts.ElementType), mutable: mutable, wholeValue: false, readOnlyReason: reason, path: path}, nil
+		}
 		if evt1IsSpanType(receiver.t) {
 			if _, err := validateExpr(env, scope, e, templateInfo, false); err != nil {
 				return evt1LValue{}, err
@@ -2764,7 +2823,7 @@ func validateStructConstructExpr(env *semanticEnv, scope *evt1Scope, expr Struct
 }
 
 func evt1IsRefStructType(env *semanticEnv, t Type) bool {
-	if evt1IsSpanType(t) {
+	if evt1IsSpanType(t) || evt1IsTensorType(t) {
 		return true
 	}
 	if evt1IsFailureType(t) {
@@ -2793,7 +2852,7 @@ func evt1IsCallResultExpr(expr Expr) bool {
 	case *MoveExpr:
 		return evt1IsCallResultExpr(e.Value)
 	case *CallExpr:
-		if e.Callee == evt1SpanMutableName || e.Callee == evt1SpanReadonlyName || e.Callee == "Subspan" {
+		if e.Callee == evt1SpanMutableName || e.Callee == evt1SpanReadonlyName || e.Callee == "Subspan" || e.Callee == "Tensor" {
 			return false
 		}
 		return true
@@ -2971,7 +3030,7 @@ func evt1DeriveExprResultProvenance(env *semanticEnv, expr Expr, bindings map[st
 			return evt1DeriveExprResultProvenance(env, e.Args[0], bindings, derive)
 		}
 	case *CallExpr:
-		if (e.Callee == evt1SpanMutableName || e.Callee == evt1SpanReadonlyName || e.Callee == "Subspan") && len(e.Args) > 0 {
+		if (e.Callee == evt1SpanMutableName || e.Callee == evt1SpanReadonlyName || e.Callee == "Subspan" || e.Callee == "Tensor") && len(e.Args) > 0 {
 			return evt1DeriveExprResultProvenance(env, e.Args[0], bindings, derive)
 		}
 		var candidates []FunctionDecl
@@ -3057,7 +3116,7 @@ func evt1ExprProvenance(env *semanticEnv, scope *evt1Scope, expr Expr) evt1Lifet
 			return evt1ExprProvenance(env, scope, e.Args[0])
 		}
 	case *CallExpr:
-		if (e.Callee == evt1SpanMutableName || e.Callee == evt1SpanReadonlyName || e.Callee == "Subspan") && len(e.Args) > 0 {
+		if (e.Callee == evt1SpanMutableName || e.Callee == evt1SpanReadonlyName || e.Callee == "Subspan" || e.Callee == "Tensor") && len(e.Args) > 0 {
 			return evt1ExprProvenance(env, scope, e.Args[0])
 		}
 		argTypes := make([]Type, 0, len(e.Args))
@@ -3754,6 +3813,9 @@ func evt1ByValueTypeName(t Type) (string, bool) {
 }
 
 func evt1TypeCopyable(env *semanticEnv, t Type) bool {
+	if evt1IsTensorType(t) {
+		return true
+	}
 	if t.isBorrowLike() {
 		return true
 	}
@@ -4614,6 +4676,9 @@ func validateTemplateTypeArgument(env *semanticEnv, concreteType Type, span Span
 }
 
 func evt1TypeIdentity(t Type) string {
+	if evt1IsTensorType(t) && len(t.TypeArgs) == 1 {
+		return fmt.Sprintf("tensor_%s_%d", evt1TypeIdentity(t.TypeArgs[0]), t.TensorRank)
+	}
 	if t.PointerTo != nil {
 		return "ptr_" + evt1TypeIdentity(*t.PointerTo)
 	}

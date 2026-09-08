@@ -124,8 +124,8 @@ R4g Span/ReadOnlySpan constructed from an array, ndarray linear region, layout
 region, or stream channel receives backing provenance, region identity, offset,
 extent, alignment, and mutability directly from this graph.
 Future allocator-backed storage may provide a backing object without changing
-layout ownership. Future vector/matrix/tensor interpretations may consume the
-same region shape without becoming storage. Future noalias optimization may
+layout ownership. The R4h tensor interpretation consumes the same region shape
+without becoming storage; future vector/matrix aliases may do likewise. Future noalias optimization may
 consume stable identity, common parent, and declared disjointness without R4f
 claiming a generalized alias solver.
 

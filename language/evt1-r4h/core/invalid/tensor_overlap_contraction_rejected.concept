@@ -1,0 +1,11 @@
+profile Core;
+
+int TensorOverlapContractionRejected()
+{
+    int<ndarray>[2, 2] storage = [[1, 2], [3, 4]];
+    int<ndarray>[2, 2] bStorage = [[5, 6], [7, 8]];
+    tensor<int, 2> A = Tensor(storage);
+    tensor<int, 2> B = Tensor(bStorage);
+    A = A @ B;
+    return 0;
+}

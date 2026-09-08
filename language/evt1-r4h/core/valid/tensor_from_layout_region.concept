@@ -1,0 +1,15 @@
+profile Core;
+
+layout TensorFrame
+{
+    uint marker;
+    align(16) int<ndarray>[2, 2] values;
+}
+
+int TensorFromLayoutRegion()
+{
+    int<array>[8] backing = [0, 0, 0, 0, 1, 2, 3, 4];
+    ref TensorFrame frame = bind backing;
+    tensor<int, 2> values = Tensor(frame.values);
+    return values[1, 1];
+}

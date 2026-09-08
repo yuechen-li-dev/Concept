@@ -1,0 +1,9 @@
+profile Core;
+
+int TensorSpanRank2WithoutShape()
+{
+    int<array>[4] storage = [1, 2, 3, 4];
+    Span<int> span = Span(storage);
+    tensor<int, 2> matrix = Tensor(span);
+    return 0;
+}

@@ -1,0 +1,13 @@
+profile Core;
+
+int TensorRank3At()
+{
+    int<ndarray>[2, 2, 2] aStorage = [[[1, 2], [3, 4]], [[5, 6], [7, 8]]];
+    int<ndarray>[2, 2, 1] bStorage = [[[1], [2]], [[3], [4]]];
+    int<ndarray>[2, 2, 2, 1] cStorage = [[[[0], [0]], [[0], [0]]], [[[0], [0]], [[0], [0]]]];
+    tensor<int, 3> A = Tensor(aStorage);
+    tensor<int, 3> B = Tensor(bStorage);
+    tensor<int, 4> C = Tensor(cStorage);
+    C = A @ B;
+    return C[1, 1, 1, 0];
+}

@@ -1,0 +1,8 @@
+profile Core;
+
+tensor<int, 1> InvalidTensorEscape()
+{
+    int<ndarray>[2] storage = [1, 2];
+    tensor<int, 1> values = Tensor(storage);
+    return values;
+}

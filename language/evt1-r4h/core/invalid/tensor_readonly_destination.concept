@@ -1,0 +1,11 @@
+profile Core;
+
+int TensorReadonlyDestination()
+{
+    const int<ndarray>[2, 2] outStorage = [[0, 0], [0, 0]];
+    int<ndarray>[2, 2] inStorage = [[1, 2], [3, 4]];
+    tensor<int, 2> Out = Tensor(outStorage);
+    tensor<int, 2> Input = Tensor(inStorage);
+    Out = Input + Input;
+    return 0;
+}
