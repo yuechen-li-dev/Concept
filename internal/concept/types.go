@@ -209,10 +209,11 @@ func (t Type) borrowBase() Type {
 }
 
 type Field struct {
-	Type       Type   `json:"type"`
-	Name       string `json:"name"`
-	Visibility string `json:"visibility,omitempty"`
-	Span       Span   `json:"span"`
+	Type        Type   `json:"type"`
+	Name        string `json:"name"`
+	Visibility  string `json:"visibility,omitempty"`
+	Span        Span   `json:"span"`
+	Initializer Expr   `json:"initializer,omitempty"`
 }
 
 // LayoutDecl is a zero-allocation semantic description of fixed memory
@@ -503,8 +504,17 @@ type InstanceDecl struct {
 	AutomataName string `json:"automata_name"`
 	Name         string `json:"name"`
 	Context      Expr   `json:"context,omitempty"`
+	StateArgs    []Expr `json:"state_args,omitempty"`
 	Span         Span   `json:"span"`
 }
+
+type TransitionStmt struct {
+	Target string `json:"target"`
+	Span   Span   `json:"span"`
+}
+
+func (*TransitionStmt) evt1Statement()        {}
+func (s *TransitionStmt) statementSpan() Span { return s.Span }
 
 func (*InstanceDecl) evt1Statement()        {}
 func (s *InstanceDecl) statementSpan() Span { return s.Span }
@@ -671,6 +681,7 @@ type FieldExpr struct {
 	RegionAlignment int    `json:"region_alignment,omitempty"`
 	DynInterface    string `json:"dyn_interface,omitempty"`
 	DynReadonly     bool   `json:"dyn_readonly,omitempty"`
+	AutomataStorage string `json:"automata_storage,omitempty"`
 	Span            Span   `json:"span"`
 }
 

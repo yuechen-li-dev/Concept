@@ -1,6 +1,6 @@
 # EVT1 semantic reconciliation matrix
 
-Status: R0 authority ledger with R1-R4k executable evidence
+Status: R0 authority ledger with R1-R5a executable evidence
 
 `Port required?` means implementation or conformance work remains after R0; it
 does not authorize that work in this milestone. Status is one of `Keep PoC3`,
@@ -90,10 +90,17 @@ does not authorize that work in this milestone. Status is one of `Keep PoC3`,
 | dyn | bounded runtime dispatch | explicit non-owning erased reference plus witness | Redesign -> witness reification | Redesign / implemented R4k | No for borrowed R4k subset | phase14 pressure; R4k native corpus | source provenance and constness preserved |
 | owning dyn | legacy runtime-storage pressure | absent | require explicit erased-storage and allocator policy | Deferred | Yes | phase14 evidence only | no hidden allocation |
 | inheritance | object-model lineage pressure | absent | reject from EVT1 narrow class model | Rejected | No | R4k parser/spec boundary | use interface composition |
-| machines | `machine`, states, transitions, completion/result | nested `machine` declarations inside automata | do not alias surfaces in R0 | Deferred | Yes | phase13/18; DragonGod tests | general semantics likely core |
-| automata | PoC3 uses Automata mainly in application architecture | bounded `automata -> machine -> state` runtime model | preserve provisionally pending reconciliation | Deferred | Yes | phase20; DragonGod M0-M4 | not automatically Vulkan-only |
-| decide | judgment-driven deterministic transition selection | absent | preserve PoC3 reference | Keep PoC3 | Yes | phase5a/13/18 | compare with guarded candidates later |
-| yield | explicit state-preserving suspension | absent | preserve PoC3 reference; defer | Keep PoC3 | Yes | phase19 fixtures | no scheduler implied |
+| automata | application composition pressure | bounded outer runtime model | canonical outer persistent composition unit | Merge / implemented R5a | No for R5a subset | R5a corpus; DragonGod M0-M4 | no scheduler or hidden runtime |
+| machine | stepping frames, fields, transitions, nested values | contained declarations and one active stack | canonical independently stepped unit contained by automata | Merge / implemented R5a | Yes beyond direct fields | phase13/18; R5a native corpus | nested machine values and completion/result deferred |
+| state | named executable machine states | named signal-handler states | canonical named execution state with deterministic identity | Merge / implemented R5a | Translation | phase13/18; R5a MIR | first declaration is initial in R5a canonical form |
+| automata shared state | implicit/application-owned pressure | one optional borrowed context | explicit `with state` environment shared by contained machines | EVT1-new / implemented R5a | No for R5a subset | R5a value/ref/owned/dyn/Span cases | identity is `Automata#state` |
+| machine persistent field | PoC3 machine frame fields | absent from declarative Go lineage | inline machine-local persistent field | Merge / implemented R5a | No for R5a subset | phase18 pressure; R5a corpus | sibling access rejected |
+| transient state local | re-entered state-body local | handlers did not admit ordinary bodies | ordinary local recreated per Step and cleaned at exit | Redesign / clarified R5a | No | phase19 re-entry pressure; R5a MIR/C | never compiler-lifted |
+| basic transition | literal local target | signal handler `goto` | `transition Target;` changes only current machine state | Merge / implemented R5a | Translation only | phase13; R5a transition cases | transition exits the current Step after cleanup |
+| Step | explicit caller-invoked machine step | signal-driven dispatch | `Step(instance, Machine)` executes one selected contained machine | Merge / implemented R5a | Translation only | phase13/18; R5a native corpus | no implicit tick-all order |
+| Complete/Result | explicit completed/result frame operations | dispatch outcomes | reconcile user surface later | Deferred after R5a | Yes | phase13/18 and Go outcome evidence | not required for persistent-state law |
+| decide | judgment-driven deterministic transition selection | guarded signal candidates | preserve both evidence sets; define local/stateless law in R5b | Deferred to R5b | Yes | phase5a/13/18; DragonGod Decision | do not conflate with stateful policy subsystem |
+| yield | explicit re-entry suspension without lifted locals | absent | preserve R5a storage law; define resume behavior in R5c | Deferred to R5c | Yes | phase19 fixtures | future yield preserves explicit persistent storage only |
 | effects | general design plus allocation/effect vocabulary | ordered typed effect batches in automata | keep Go implementation Vulkan-only in R0 | Profile-only | No for profile subset | DragonGod M3 tests | general effect law deferred |
 | actuators | not the same extracted mapping construct | typed exact effect-to-mechanism mapping | Vulkan profile only | Profile-only | No for profile subset | actuator tests | not core Concept |
 | profiles | PoC3 general profile and effect-default design | only Vulkan profile | explicit Core/Vulkan admission with no silent broadening | Merge | Yes | profile tests; PoC3 docs | future profiles require registration design |
@@ -293,3 +300,15 @@ shape only; no nominal impl table or object model was mechanically ported.
 Static templates remain monomorphized, while dyn explicitly reifies a borrowed
 two-pointer value and one deterministic static witness per concrete/interface
 pair. Owning dyn is deferred and inheritance is rejected.
+
+## R5a executable evidence
+
+R5a adds 20 required `PASS` cases: 12 accepted and 8 statically rejected. It
+merges the outer Go automata hierarchy with PoC3 machine/state/Step/field and
+basic-transition pressure while adding explicit `with state` capture. MIR
+retains stable environment, machine, state, field, and local identities plus
+`AutomataState`, `MachinePersistent`, and `TransientLocal`. Planner and native
+C11 evidence prove inline storage, independently stepped machines, shared
+state, transition cleanup, ref aliasing, owned cleanup, no lifted locals, and
+no heap/scheduler/coroutine runtime. Decide, yield, Complete/Result, nested
+machine values, effects, and actuators remain explicitly deferred.

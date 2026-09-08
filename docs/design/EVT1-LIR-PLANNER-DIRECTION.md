@@ -1,6 +1,6 @@
 # EVT1 LIR Planner direction
 
-Status: R4l planner foundation; LIR is future work
+Status: R5a automata planning consumer; LIR is future work
 
 ## Authority pipeline
 
@@ -32,6 +32,14 @@ GenericC11 preserves the current correct backend path. X86_64_Generic and
 AArch64_Generic prove target-independent planning without emitting machine
 code. Unknown facts select conservative fallback. No allocation, copy, or
 ownership transfer may be introduced silently.
+
+R5a adds automata as a bounded Planner consumer. Semantic MIR, not the Planner,
+classifies `AutomataState`, `MachinePersistent`, and `TransientLocal` storage.
+`AutomataPlan` records an inline explicit environment; each `MachinePlan`
+records its current-state slot, initial symbolic identity, transition edges,
+and switch dispatch. The plan explicitly records no scheduler and defers yield.
+A later Planner may select branches or jump tables and may define resume-frame
+realization after R5c, but it cannot invent persistence or lift locals.
 
 The 64-byte alignment of fixed inline storage remains a semantic guarantee
 because current storage binding and qualified facts rely on it. A target's
@@ -70,6 +78,7 @@ translation.
 
 ## Deferred
 
-R4l deliberately excludes SIMD generation, vectorization transforms, tiling,
+R4l/R5a deliberately exclude SIMD generation, vectorization transforms, tiling,
 fusion, SSA, virtual registers, register allocation, MachineIR, LLVM, MLIR,
-native encoders, generalized alias solving, allocation policy, and decompilation.
+native encoders, generalized alias solving, allocation policy, decompilation,
+yield/resume frames, and scheduler policy.

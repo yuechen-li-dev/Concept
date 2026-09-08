@@ -1,0 +1,21 @@
+profile Core;
+
+automata Worker
+{
+    machine Left
+    {
+        int privateValue;
+
+        state Idle
+        {
+        }
+    }
+
+    machine Right
+    {
+        state Idle
+        {
+            int copy = privateValue;
+        }
+    }
+}

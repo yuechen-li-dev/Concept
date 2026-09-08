@@ -1,0 +1,34 @@
+profile Core;
+
+automata Counter
+with state
+{
+    int count;
+}
+{
+    machine Run
+    {
+        int attempts;
+
+        state Idle
+        {
+            int transient = count;
+            count = transient + 1;
+            attempts = attempts + 1;
+            transition Working;
+        }
+
+        state Working
+        {
+            count = count + 10;
+        }
+    }
+}
+
+int main()
+{
+    instance Counter counter(0);
+    Step(counter, Run);
+    Step(counter, Run);
+    return counter.state.count;
+}

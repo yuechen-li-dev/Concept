@@ -1,0 +1,24 @@
+profile Core;
+
+automata Worker
+with state
+{
+    int retryCount;
+    const int limit;
+}
+{
+    machine Run
+    {
+        state Idle
+        {
+            state.retryCount = state.retryCount + limit;
+        }
+    }
+}
+
+int Main()
+{
+    instance Worker worker(1, 2);
+    Step(worker, Run);
+    return worker.state.retryCount;
+}

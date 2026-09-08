@@ -1,0 +1,12 @@
+profile Core;
+
+automata Worker
+{
+    machine Run
+    {
+        state Idle
+        {
+            int copy = local;
+        }
+    }
+}

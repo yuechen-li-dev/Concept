@@ -1,0 +1,22 @@
+profile Core;
+
+automata Worker
+with state
+{
+    scoped ref int value;
+}
+{
+    machine Run
+    {
+        state Idle
+        {
+        }
+    }
+}
+
+int Main()
+{
+    int value = 1;
+    instance Worker worker(ref value);
+    return worker;
+}

@@ -1,0 +1,18 @@
+profile Core;
+
+automata Worker
+{
+    machine Run
+    {
+        state Idle
+        {
+        }
+    }
+
+    machine Run
+    {
+        state Other
+        {
+        }
+    }
+}

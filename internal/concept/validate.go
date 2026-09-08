@@ -8,12 +8,14 @@ import (
 )
 
 type evt1Scope struct {
-	parent      *evt1Scope
-	values      map[string]evt1ValueBinding
-	borrows     []evt1RetainedBorrow
-	depth       int
-	returnType  Type
-	tryHandlers map[string]Type
+	parent            *evt1Scope
+	values            map[string]evt1ValueBinding
+	borrows           []evt1RetainedBorrow
+	depth             int
+	returnType        Type
+	tryHandlers       map[string]Type
+	transitionTargets map[string]bool
+	inAutomataState   bool
 }
 
 type evt1ProvenanceKind string
@@ -103,6 +105,8 @@ func newEVT1Scope(parent *evt1Scope) *evt1Scope {
 	if parent != nil {
 		s.returnType = parent.returnType
 		s.tryHandlers = parent.tryHandlers
+		s.transitionTargets = parent.transitionTargets
+		s.inAutomataState = parent.inAutomataState
 	}
 	return s
 }
@@ -1131,6 +1135,13 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				regionFacts: evt1RegionFactsForValue(env, local, s.Value, resolvedType),
 				tensorFacts: evt1TensorFactsForValue(local, s.Value, resolvedType),
 			})
+		case *TransitionStmt:
+			if !local.inAutomataState {
+				return evt1Diagnostic("MACHINE_TRANSITION_INVALID", "transition is only valid inside a machine state body", s.Span)
+			}
+			if !local.transitionTargets[s.Target] {
+				return evt1Diagnostic("MACHINE_UNKNOWN_STATE", fmt.Sprintf("unknown transition target %s in current machine", s.Target), s.Span)
+			}
 		case *EffectsDecl:
 			if inComptimeFn {
 				return evt1Diagnostic("CV4304", fmt.Sprintf("effects batch %s cannot be declared in comptime code", s.Name), s.Span)
@@ -1170,7 +1181,29 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 			if !ok {
 				return evt1Diagnostic("CV4270", fmt.Sprintf("instance declaration requires an automata name, got %s", s.AutomataName), s.Span)
 			}
-			if info.Decl.Context != nil {
+			if info.Decl.SignalType.Name == "" {
+				if len(s.StateArgs) != len(info.Decl.StateFields) {
+					return evt1Diagnostic("AUTOMATA_CAPTURE_INVALID", fmt.Sprintf("instance %s of automata %s requires %d explicit state value(s), got %d", s.Name, s.AutomataName, len(info.Decl.StateFields), len(s.StateArgs)), s.Span)
+				}
+				for i, field := range info.Decl.StateFields {
+					arg := s.StateArgs[i]
+					if field.Type.Kind == TypeDyn {
+						if err := evt1PrepareDynInitializer(env, field.Type, arg, field.Span); err != nil {
+							return err
+						}
+					}
+					argType, err := validateExprAgainstExpected(env, local, arg, field.Type, templateInfo, false)
+					if err != nil {
+						return err
+					}
+					if err := validateCallArgument(env, local, field.Type, arg, argType, templateInfo); err != nil {
+						return err
+					}
+					if field.Type.isOwned() && !evt1CanTransferInitialize(env, field.Type, arg) {
+						return evt1Diagnostic("AUTOMATA_CAPTURE_MOVE_REQUIRED", fmt.Sprintf("owned automata state field %s.%s requires explicit move", s.AutomataName, field.Name), arg.exprSpan())
+					}
+				}
+			} else if info.Decl.Context != nil {
 				if s.Context == nil {
 					return evt1Diagnostic("CV4283", fmt.Sprintf("instance %s of automata %s requires a context argument", s.Name, s.AutomataName), s.Span)
 				}
@@ -1197,8 +1230,8 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 					Type:         contextType,
 					Span:         s.Span,
 				})
-			} else if s.Context != nil {
-				return evt1Diagnostic("CV4284", fmt.Sprintf("contextless automata %s does not accept a context argument", s.AutomataName), s.Context.exprSpan())
+			} else if len(s.StateArgs) != 0 {
+				return evt1Diagnostic("CV4284", fmt.Sprintf("contextless automata %s does not accept a context argument", s.AutomataName), s.StateArgs[0].exprSpan())
 			}
 			local.declare(s.Name, evt1ValueBinding{
 				mutable:          true,
@@ -2075,6 +2108,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 				return Type{}, err
 			}
 			if binding.isInstance() {
+				if env.automataInfo[binding.instanceAutomata].Decl.SignalType.Name == "" {
+					return Type{}, evt1Diagnostic("AUTOMATA_CAPTURE_LIFETIME_INVALID", fmt.Sprintf("automata instance %s cannot escape its explicit captured state lifetime", e.Name), e.Span)
+				}
 				return Type{}, evt1Diagnostic("CV4272", fmt.Sprintf("instance %s of automata %s cannot be used as an ordinary value; use dispatch(%s, signal)", e.Name, binding.instanceAutomata, e.Name), e.Span)
 			}
 			if binding.isBatch() {
@@ -2094,8 +2130,40 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		if bindingSpan, ok := env.escapedArmBinding[e.Name]; ok {
 			return Type{}, evt1Diagnostic("CV4114", fmt.Sprintf("payload binding %s is scoped to its match arm", e.Name), bindingSpan)
 		}
+		if scope.inAutomataState {
+			return Type{}, evt1Diagnostic("AUTOMATA_CAPTURE_IMPLICIT_FORBIDDEN", fmt.Sprintf("name %s is not explicit automata state, machine state, or a transient local", e.Name), e.Span)
+		}
 		return Type{}, evt1Diagnostic("CV4024", fmt.Sprintf("unknown name %s", e.Name), e.Span)
 	case *FieldExpr:
+		if qualifier, ok := e.Receiver.(*FieldExpr); ok {
+			if instance, ok := qualifier.Receiver.(*NameExpr); ok {
+				if binding, found := scope.lookup(instance.Name); found && binding.isInstance() {
+					info := env.automataInfo[binding.instanceAutomata]
+					if info.Decl.SignalType.Name == "" {
+						if qualifier.Field == "state" {
+							for _, field := range info.Decl.StateFields {
+								if field.Name == e.Field {
+									e.AutomataStorage = "state:" + instance.Name
+									return evt1CanonicalType(env, field.Type), nil
+								}
+							}
+							return Type{}, evt1Diagnostic("MACHINE_STATE_ACCESS_INVALID", fmt.Sprintf("unknown automata state field %s.%s", info.Decl.Name, e.Field), e.Span)
+						}
+						for _, machine := range info.Decl.Machines {
+							if machine.Name == qualifier.Field {
+								for _, field := range machine.Fields {
+									if field.Name == e.Field {
+										e.AutomataStorage = "machine:" + instance.Name + ":" + machine.Name
+										return evt1CanonicalType(env, field.Type), nil
+									}
+								}
+								return Type{}, evt1Diagnostic("MACHINE_STATE_ACCESS_INVALID", fmt.Sprintf("unknown machine field %s.%s", machine.Name, e.Field), e.Span)
+							}
+						}
+					}
+				}
+			}
+		}
 		receiverType, err := validateExpr(env, scope, e.Receiver, templateInfo, inComptimeFn)
 		if err != nil {
 			return Type{}, err
@@ -2139,6 +2207,36 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 	case *CallExpr:
 		if e.Member {
 			return evt1ValidateMemberCall(env, scope, e, templateInfo, inComptimeFn)
+		}
+		if e.Callee == "Step" || e.Callee == "State" {
+			if inComptimeFn {
+				return Type{}, evt1Diagnostic("MACHINE_STATE_ACCESS_INVALID", e.Callee+" is not available during comptime evaluation", e.Span)
+			}
+			if len(e.Args) != 2 {
+				return Type{}, evt1Diagnostic("MACHINE_STATE_ACCESS_INVALID", fmt.Sprintf("%s requires an automata instance and machine name", e.Callee), e.Span)
+			}
+			instanceName, instanceOK := e.Args[0].(*NameExpr)
+			machineName, machineOK := e.Args[1].(*NameExpr)
+			if !instanceOK || !machineOK {
+				return Type{}, evt1Diagnostic("MACHINE_STATE_ACCESS_INVALID", fmt.Sprintf("%s requires local instance and declared machine names", e.Callee), e.Span)
+			}
+			binding, ok := scope.lookup(instanceName.Name)
+			if !ok || !binding.isInstance() {
+				return Type{}, evt1Diagnostic("MACHINE_STATE_ACCESS_INVALID", fmt.Sprintf("%s requires a local automata instance", e.Callee), instanceName.Span)
+			}
+			info := env.automataInfo[binding.instanceAutomata]
+			if info.Decl.SignalType.Name != "" {
+				return Type{}, evt1Diagnostic("MACHINE_STATE_ACCESS_INVALID", fmt.Sprintf("%s is reserved for explicit R5a machines; signal automata use dispatch", e.Callee), e.Span)
+			}
+			if _, ok := info.MachineOrdinal[machineName.Name]; !ok {
+				return Type{}, evt1Diagnostic("MACHINE_STATE_ACCESS_INVALID", fmt.Sprintf("unknown machine %s in automata %s", machineName.Name, info.Decl.Name), machineName.Span)
+			}
+			if e.Callee == "Step" {
+				e.Intrinsic = "step_machine"
+				return Type{Name: "void", Kind: TypeBuiltin, Span: e.Span}, nil
+			}
+			e.Intrinsic = "state_machine"
+			return Type{Name: "int", Kind: TypeBuiltin, Span: e.Span}, nil
 		}
 		if e.Callee == "Tensor" {
 			return Type{}, evt1Diagnostic("CV4611", "Tensor(source) requires an explicit tensor<T, Rank> destination type", e.Span)

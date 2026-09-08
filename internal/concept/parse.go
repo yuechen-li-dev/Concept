@@ -325,15 +325,17 @@ func (p *parser) parseAutomataDecl() (AutomataDecl, error) {
 	if err != nil {
 		return AutomataDecl{}, err
 	}
-	if _, err := p.expect("("); err != nil {
-		return AutomataDecl{}, err
-	}
-	signalType, err := p.parseType("")
-	if err != nil {
-		return AutomataDecl{}, err
-	}
+	canonical := p.peekLexeme() != "("
+	var signalType Type
 	var context *Field
-	if p.peekLexeme() == "," {
+	if !canonical {
+		p.next()
+		signalType, err = p.parseType("")
+		if err != nil {
+			return AutomataDecl{}, err
+		}
+	}
+	if !canonical && p.peekLexeme() == "," {
 		p.next()
 		if p.peekLexeme() != "borrow" {
 			return AutomataDecl{}, evt1Diagnostic("CV4276", "automata context parameter must use `borrow name: Type`", p.currentSpan())
@@ -355,15 +357,36 @@ func (p *parser) parseAutomataDecl() (AutomataDecl, error) {
 			return AutomataDecl{}, evt1Diagnostic("CV4278", "automata declarations admit at most one borrowed context parameter", p.currentSpan())
 		}
 	}
-	if _, err := p.expect(")"); err != nil {
-		return AutomataDecl{}, err
+	if !canonical {
+		if _, err := p.expect(")"); err != nil {
+			return AutomataDecl{}, err
+		}
+	}
+	decl := AutomataDecl{Name: nameTok.Lexeme, SignalType: signalType, Context: context, Span: start.Span}
+	if canonical && p.peekLexeme() == "with" {
+		p.next()
+		if _, err := p.expect("state"); err != nil {
+			return AutomataDecl{}, evt1Diagnostic("AUTOMATA_CAPTURE_INVALID", "automata `with` must be followed by `state`", p.currentSpan())
+		}
+		if _, err := p.expect("{"); err != nil {
+			return AutomataDecl{}, err
+		}
+		for !p.done() && p.peekLexeme() != "}" {
+			field, err := p.parseAutomataStorageField("AUTOMATA_CAPTURE_INVALID", false)
+			if err != nil {
+				return AutomataDecl{}, err
+			}
+			decl.StateFields = append(decl.StateFields, field)
+		}
+		if _, err := p.expect("}"); err != nil {
+			return AutomataDecl{}, err
+		}
 	}
 	if _, err := p.expect("{"); err != nil {
 		return AutomataDecl{}, err
 	}
-	decl := AutomataDecl{Name: nameTok.Lexeme, SignalType: signalType, Context: context, Span: start.Span}
 	for !p.done() && p.peekLexeme() != "}" {
-		machine, err := p.parseMachineDecl()
+		machine, err := p.parseMachineDecl(canonical)
 		if err != nil {
 			return AutomataDecl{}, err
 		}
@@ -372,7 +395,41 @@ func (p *parser) parseAutomataDecl() (AutomataDecl, error) {
 	if _, err := p.expect("}"); err != nil {
 		return AutomataDecl{}, err
 	}
+	if canonical && len(decl.Machines) > 0 {
+		for i := range decl.Machines {
+			decl.Machines[i].Initial = i == 0
+			for stateIndex := range decl.Machines[i].States {
+				decl.Machines[i].States[stateIndex].Initial = stateIndex == 0
+			}
+		}
+	}
 	return decl, nil
+}
+
+func (p *parser) parseAutomataStorageField(code string, allowInitializer bool) (Field, error) {
+	t, err := p.parseType("")
+	if err != nil {
+		return Field{}, err
+	}
+	name, err := p.expectIdentifier(code, "expected persistent state field name")
+	if err != nil {
+		return Field{}, err
+	}
+	var initializer Expr
+	if p.peekLexeme() == "=" {
+		if !allowInitializer {
+			return Field{}, evt1Diagnostic(code, "automata `with state` fields are initialized explicitly by each instance", p.currentSpan())
+		}
+		p.next()
+		initializer, err = p.parseExpr()
+		if err != nil {
+			return Field{}, err
+		}
+	}
+	if _, err := p.expect(";"); err != nil {
+		return Field{}, err
+	}
+	return Field{Type: t, Name: name.Lexeme, Visibility: "private", Span: name.Span, Initializer: initializer}, nil
 }
 
 func (p *parser) parseEffectDecl() (EffectDecl, error) {
@@ -527,7 +584,7 @@ func (p *parser) parseActuatorMapping() (ActuatorMapping, error) {
 	return mapping, nil
 }
 
-func (p *parser) parseMachineDecl() (MachineDecl, error) {
+func (p *parser) parseMachineDecl(canonical bool) (MachineDecl, error) {
 	start := p.currentSpan()
 	machine := MachineDecl{Span: start}
 	if p.peekLexeme() == "initial" {
@@ -546,7 +603,15 @@ func (p *parser) parseMachineDecl() (MachineDecl, error) {
 		return MachineDecl{}, err
 	}
 	for !p.done() && p.peekLexeme() != "}" {
-		state, err := p.parseStateDecl()
+		if canonical && p.peekLexeme() != "state" && p.peekLexeme() != "initial" && p.peekLexeme() != "terminal" {
+			field, err := p.parseAutomataStorageField("MACHINE_STATE_ACCESS_INVALID", true)
+			if err != nil {
+				return MachineDecl{}, err
+			}
+			machine.Fields = append(machine.Fields, field)
+			continue
+		}
+		state, err := p.parseStateDecl(canonical)
 		if err != nil {
 			return MachineDecl{}, err
 		}
@@ -558,7 +623,7 @@ func (p *parser) parseMachineDecl() (MachineDecl, error) {
 	return machine, nil
 }
 
-func (p *parser) parseStateDecl() (StateDecl, error) {
+func (p *parser) parseStateDecl(canonical bool) (StateDecl, error) {
 	start := p.currentSpan()
 	state := StateDecl{Span: start}
 	if p.peekLexeme() == "initial" {
@@ -585,6 +650,21 @@ func (p *parser) parseStateDecl() (StateDecl, error) {
 	state.Name = nameTok.Lexeme
 	if _, err := p.expect("{"); err != nil {
 		return StateDecl{}, err
+	}
+	if canonical {
+		body := Block{Span: state.Span}
+		for !p.done() && p.peekLexeme() != "}" {
+			stmt, err := p.parseStatement()
+			if err != nil {
+				return StateDecl{}, err
+			}
+			body.Statements = append(body.Statements, stmt)
+		}
+		state.Body = &body
+		if _, err := p.expect("}"); err != nil {
+			return StateDecl{}, err
+		}
+		return state, nil
 	}
 	for !p.done() && p.peekLexeme() != "}" {
 		switch p.peekLexeme() {
@@ -1695,6 +1775,16 @@ func (p *parser) parseStatement() (Statement, error) {
 		return p.parseActuatorLocalDecl()
 	case "instance":
 		return p.parseInstanceDecl()
+	case "transition":
+		start := p.next().Span
+		target, err := p.expectIdentifier("MACHINE_TRANSITION_INVALID", "expected local state name after transition")
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.expect(";"); err != nil {
+			return nil, err
+		}
+		return &TransitionStmt{Target: target.Lexeme, Span: start}, nil
 	case "return":
 		start := p.next().Span
 		if p.peekLexeme() == ";" {
@@ -1879,20 +1969,33 @@ func (p *parser) parseInstanceDecl() (Statement, error) {
 		return nil, err
 	}
 	var context Expr
+	var args []Expr
 	if p.peekLexeme() == "(" {
 		p.next()
-		context, err = p.parseExpr()
-		if err != nil {
-			return nil, err
+		if p.peekLexeme() != ")" {
+			for {
+				arg, argErr := p.parseExpr()
+				if argErr != nil {
+					return nil, argErr
+				}
+				args = append(args, arg)
+				if p.peekLexeme() != "," {
+					break
+				}
+				p.next()
+			}
 		}
 		if _, err := p.expect(")"); err != nil {
 			return nil, err
 		}
 	}
+	if len(args) == 1 {
+		context = args[0]
+	}
 	if _, err := p.expect(";"); err != nil {
 		return nil, err
 	}
-	return &InstanceDecl{AutomataName: automataTok.Lexeme, Name: nameTok.Lexeme, Context: context, Span: start.Span}, nil
+	return &InstanceDecl{AutomataName: automataTok.Lexeme, Name: nameTok.Lexeme, Context: context, StateArgs: args, Span: start.Span}, nil
 }
 
 func (p *parser) parseActuationDecl() (Statement, error) {

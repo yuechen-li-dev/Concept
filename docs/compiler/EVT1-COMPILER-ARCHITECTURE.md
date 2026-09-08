@@ -1,6 +1,6 @@
 # Concept EVT1 Stage 0 compiler architecture
 
-Status: R4l explicit General Planner foundation
+Status: R5a canonical automata hierarchy and explicit persistent state
 
 ## Authority
 
@@ -120,11 +120,12 @@ lowerer behind profile admission. R1 records this as a profile lowering hook,
 not as Core language law. Splitting it would require exporting unstable private
 semantic state and is outside this isolation milestone.
 
-Automata are not assigned to Vulkan by file location. Both implementation
-lines contain machine-like semantics, but their surface and execution laws are
-not yet reconciled. R0 therefore preserves the Go automata implementation as a
-provisional core candidate and records the unresolved decision in the language
-specification and matrix.
+R5a makes `automata -> machine -> state` the canonical Core hierarchy while
+retaining the older signal-driven form as compatibility evidence. Explicit
+`with state` capture lowers before planning into one named shared environment;
+machine fields and state locals remain distinct persistent/transient storage
+classes. Vulkan effect/actuator admission stays a profile seam and does not
+become Core automata meaning.
 
 Vulkan C types, declarations, and includes are emitted only when a
 Vulkan-profile module uses registered types. Core-profile proof tests reject
@@ -624,7 +625,32 @@ witness table per used specialization, adapter functions, and a two-pointer dyn
 value. Semantic compiler facts remain compile-time proofs and add no runtime
 table fields.
 
-## General limitations after R4k
+## R5a automata state pipeline
+
+```text
+automata source
+    -> explicit AutomataName#state environment
+    -> machine-local persistent fields and current-state slot
+    -> state MIR with AutomataState / MachinePersistent / TransientLocal
+    -> Planner AutomataPlan / MachinePlan
+    -> strict-C11 inline structs and switch dispatch
+```
+
+Semantic analysis decides what persists. The Planner consumes that
+classification and records inline environment layout, one current-state slot
+per machine, switch dispatch, no scheduler, and deferred yield lowering. It may
+later choose branch or jump-table realization, but it may not lift locals,
+invent captures, allocation, scheduling, or suspension policy.
+
+The C bootstrap uses one inline shared-state struct plus one inline storage
+struct per machine. `Step(instance, Machine)` calls only that machine's switch.
+Transitions clean transient locals before changing the state tag. Automata and
+machine owned fields use the ordinary reverse-order Drop path; state locals use
+ordinary block cleanup. The implementation introduces no heap or runtime
+registration. The legacy signal-dispatch implementation remains beside this
+path for compatibility and is not the semantic owner of R5a state capture.
+
+## General limitations after R5a
 
 - The package remains deliberately cohesive rather than prematurely split.
 - Effect/actuator validation and C runtime emission remain in-package profile
@@ -634,8 +660,10 @@ table fields.
   R2 maps its bounded slice to semantic family names and defers renumbering.
 - The backend is the extracted strict-C11 path only.
 - Imports are represented, but Core multi-module compilation is not yet active.
-- Automata are implemented but provisional; PoC3 machine/decide/yield laws are
-  not merged.
+- R5a automata hierarchy, explicit state capture, machine-local fields,
+  caller-directed stepping, and basic transition are canonical. Decide, yield,
+  completion/result, nested machine values, and effect/actuator reconciliation
+  remain deferred.
 - Ownership beyond whole-local explicit transfer, deterministic local/
   parameter cleanup, and live whole-owner replacement remains deferred. There
   is no implicit move, field move, partial drop, unwinding, or dynamic cleanup
@@ -783,3 +811,12 @@ inspects direct/dynamic MIR and static witness C shape, and executes strict-C11
 class, private-member, struct/class dyn dispatch, field get/set, composition,
 immovable-reference, and scoped-provenance paths. Generated evidence contains
 no allocation, per-object vtable, RTTI, object registry, or GC path.
+
+## R5a executable evidence
+
+`internal/concept/r5a_conformance_test.go` and `language/evt1-r5a/core`
+provide 20 readable cases: 12 accepted and 8 statically rejected. The suite
+executes all accepted cases through strict C11, validates explicit automata
+MIR and Planner artifacts, checks persistent/transient Drop placement, and
+rejects implicit capture, lifetime escape, missing move, duplicate identities,
+unknown transitions, sibling state access, and cross-state local use.

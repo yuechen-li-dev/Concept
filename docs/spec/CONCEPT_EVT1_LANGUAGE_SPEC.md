@@ -1,6 +1,6 @@
 # Concept EVT1 language specification foundation
 
-Status: R4h first-class tensor semantics and symbolic contraction
+Status: R5a canonical automata hierarchy and explicit persistent state
 
 This document defines the authority categories and the smallest currently
 executable EVT1 language foundation. It is derived from the retired Concept
@@ -876,18 +876,77 @@ fixtures.
 not a finalized Concept C ABI. Export naming, layout guarantees, header
 contracts, and FFI-safe type derivation require explicit EVT1 decisions.
 
-## 22. Machines and automata
+## 22. Automata, machines, states, and persistent capture
 
-**Provisional EVT1 / deferred reconciliation.** PoC3 defines core `machine`,
-states, transitions, `decide`, nested machine composition, and `yield` behavior.
-The Go seed defines bounded `automata -> machine -> state`, typed fixed local
-instances, guarded deterministic dispatch, push/pop continuation constraints,
-and compiler-owned outcome values.
+**Canonical EVT1 R5a.** `automata` is the outer persistent composition unit;
+`machine` is an independently stepped state machine contained by that unit;
+`state` is a named execution state inside one machine; and `transition` changes
+only the current state of that machine. These levels are distinct and are not
+called HFSMs in the canonical language.
 
-R0 preserves the Go implementation as a provisional core candidate because
-both lines demonstrate general control semantics. It does not declare either
-surface canonical, does not alias `machine` and `automata`, and does not import
-PoC3 decide/yield semantics into the Go model.
+```concept
+automata Worker
+with state
+{
+    ref Device device;
+    owned Buffer scratch;
+    int retryCount;
+}
+{
+    machine Run
+    {
+        int attempts;
+
+        state Idle
+        {
+            retryCount = retryCount + 1;
+            transition Working;
+        }
+
+        state Working
+        {
+        }
+    }
+}
+```
+
+`with state` materializes one deterministic environment with identity
+`Worker#state`, shared by all contained machines. Machine fields are separate
+machine-local persistent storage. Ordinary state-body locals are transient:
+every `Step(instance, Machine)` invocation creates them anew and destroys them
+at state-body/step exit. Persistent state must be declared. A value survives a
+step, transition, or future suspension boundary only in automata state, a
+machine field, or another explicitly persistent object reachable by ordinary
+legal reference/ownership state.
+
+State fields use ordinary value, `const`, `ref`, `ref const`, `scoped`,
+`owned`, dyn, Span, array, and tensor storage laws. Capture mode is never
+inferred. Instance construction uses the narrow existing instance form with
+arguments in state-field declaration order, for example
+`instance Worker worker(ref device, move scratch, 0);`. Owned arguments require
+explicit move and are dropped exactly once in reverse field order. Borrowed
+fields preserve ordinary provenance and cannot launder an escaping or scoped
+reference.
+
+Name lookup inside a state body is transient local, then machine field, then
+automata state field. `state.field` explicitly selects shared state and
+`machine.field` selects the current machine's storage. Sibling machine fields
+are private. Outside a body, `instance.state.field` and
+`instance.Machine.field` provide explicit inspection; an instance is otherwise
+not copyable or returnable as an ordinary value in R5a.
+
+The first declared state is initial. Symbolic identity is
+`Automata.Machine.State`; numeric tags use declaration order.
+`Step(instance, Machine)` executes exactly one current state body and never
+steps siblings. `State(instance, Machine)` reads its current tag.
+`transition Target;` targets only the current machine, performs transient
+cleanup, updates the tag, and returns from the step. No hidden heap,
+closure/coroutine frame, scheduler, event loop, or runtime registration exists.
+
+The older typed-signal `automata Name(Signal)` form remains compatibility
+surface for DragonGod/Vulkan evidence; its effect coupling is not promoted into
+Core law. `transition decide`, `yield`, completion/result reconciliation,
+nested machine values, and effects/actuators remain later R5 work.
 
 ## 23. Effects, actuators, and profiles
 
@@ -990,7 +1049,7 @@ The following remain explicit reconciliation or implementation work:
 - owning dyn and explicit erased-storage policies;
 - allocation, allocator effects, arenas, and stores;
 - stable C ABI and layout law;
-- canonical machine/automata syntax and decide/yield semantics;
+- `transition decide`, yield/resume, completion/result, and nested machine-value reconciliation;
 - general effects versus profile-owned effects/actuators;
 - Concept-native testing (runtime assertion sugar is canonical, but no testing
   framework is implied);

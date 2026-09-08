@@ -1,0 +1,32 @@
+profile Core;
+
+automata Agent
+with state
+{
+    int targetId;
+}
+{
+    machine Movement
+    {
+        state Idle
+        {
+            targetId = targetId + 2;
+        }
+    }
+
+    machine Combat
+    {
+        state Idle
+        {
+            targetId = targetId + 3;
+        }
+    }
+}
+
+int Main()
+{
+    instance Agent agent(10);
+    Step(agent, Movement);
+    Step(agent, Combat);
+    return agent.state.targetId;
+}

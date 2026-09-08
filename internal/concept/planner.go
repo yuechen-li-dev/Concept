@@ -163,6 +163,35 @@ type AggregatePlan struct {
 	Evidence       PlanningEvidence `json:"evidence"`
 }
 
+type AutomataStoragePlan struct {
+	Identity       string `json:"identity"`
+	Name           string `json:"name"`
+	Type           string `json:"type"`
+	Classification string `json:"classification"`
+	Strategy       string `json:"strategy"`
+	HasDrop        bool   `json:"has_drop,omitempty"`
+}
+
+type MachinePlan struct {
+	Identity         string                `json:"identity"`
+	CurrentStateSlot string                `json:"current_state_slot"`
+	InitialState     string                `json:"initial_state"`
+	DispatchStrategy string                `json:"dispatch_strategy"`
+	Fields           []AutomataStoragePlan `json:"fields,omitempty"`
+	StateIdentities  []string              `json:"state_identities"`
+	Transitions      []string              `json:"transitions,omitempty"`
+}
+
+type AutomataPlan struct {
+	Identity            string                `json:"identity"`
+	StateEnvironment    string                `json:"state_environment"`
+	EnvironmentStrategy string                `json:"environment_strategy"`
+	StateFields         []AutomataStoragePlan `json:"state_fields,omitempty"`
+	Machines            []MachinePlan         `json:"machines"`
+	Scheduler           string                `json:"scheduler"`
+	YieldStrategy       string                `json:"yield_strategy"`
+}
+
 type FunctionPlan struct {
 	ID          string             `json:"id"`
 	Function    string             `json:"function"`
@@ -188,6 +217,7 @@ type LoweringPlan struct {
 	Policy      CompilationPolicy  `json:"compilation_policy"`
 	Functions   []FunctionPlan     `json:"functions"`
 	Aggregates  []AggregatePlan    `json:"aggregate_plans,omitempty"`
+	Automata    []AutomataPlan     `json:"automata_plans,omitempty"`
 }
 
 func PlanModule(module *MIR, facts *SemanticFactSet, target TargetCapabilities, profile ProfileDefinition, policy CompilationPolicy) (*LoweringPlan, error) {
@@ -204,6 +234,7 @@ func PlanModule(module *MIR, facts *SemanticFactSet, target TargetCapabilities, 
 		plan.Functions = append(plan.Functions, fp)
 	}
 	plan.Aggregates = planAggregates(module)
+	plan.Automata = planAutomata(module)
 	plan.PlanID = loweringPlanIdentity(plan)
 	if err := ValidateLoweringPlan(module, facts, plan); err != nil {
 		return nil, err
@@ -219,7 +250,8 @@ func loweringPlanIdentity(plan *LoweringPlan) string {
 		Policy     CompilationPolicy
 		Functions  []FunctionPlan
 		Aggregates []AggregatePlan
-	}{plan.MIRIdentity, plan.Target, plan.Profile, plan.Policy, plan.Functions, plan.Aggregates})
+		Automata   []AutomataPlan
+	}{plan.MIRIdentity, plan.Target, plan.Profile, plan.Policy, plan.Functions, plan.Aggregates, plan.Automata})
 	return "plan-" + digest(identityInput)[:16]
 }
 
@@ -318,6 +350,12 @@ func planOperation(op MIROperation, facts SemanticFactSet) PlanningDecision {
 	case "dyn_field_get", "dyn_field_set":
 		d.Category, d.Strategy = "DispatchPlan", "WitnessFieldAccessor"
 		d.Evidence = PlanningEvidence{Claims: []string{"NoAllocation", "NoCopy", "NoOwnershipTransfer"}}
+	case "step_machine":
+		d.Category, d.Strategy = "AutomataPlan", "ExplicitMachineSwitch"
+		d.Evidence = PlanningEvidence{Claims: []string{"NoScheduler", "OneMachineOnly"}, Detail: "machine identity and current-state storage were fixed before planning"}
+	case "state_machine":
+		d.Category, d.Strategy = "AutomataPlan", "ReadCurrentStateTag"
+		d.Evidence = PlanningEvidence{Claims: []string{"StableDeclarationOrder"}}
 	case "result_propagate", "option_propagate":
 		d.Category, d.Strategy, d.Certainty = "FailurePlan", "BranchAndEarlyReturn", DecisionRequired
 	case "result_unroll", "option_unroll":
@@ -428,6 +466,36 @@ func planTensor(index int, tensor MIRTensorOperation, facts SemanticFactSet) Ten
 	return tp
 }
 
+func planAutomata(mir *MIR) []AutomataPlan {
+	var out []AutomataPlan
+	for _, automata := range mir.Automata {
+		if automata.StateEnvironment == nil {
+			continue
+		}
+		plan := AutomataPlan{Identity: automata.Name, StateEnvironment: automata.StateEnvironment.Identity, EnvironmentStrategy: "InlineExplicitStruct", Scheduler: "None", YieldStrategy: "Deferred"}
+		for _, field := range automata.StateEnvironment.Fields {
+			plan.StateFields = append(plan.StateFields, AutomataStoragePlan{Identity: field.Identity, Name: field.Name, Type: field.Type.String(), Classification: field.Classification, Strategy: "InlineField", HasDrop: field.HasDrop})
+		}
+		for _, machine := range automata.Machines {
+			mp := MachinePlan{Identity: automata.Name + "." + machine.Name, CurrentStateSlot: automata.Name + "." + machine.Name + "#current-state", DispatchStrategy: "Switch", InitialState: automata.Name + "." + machine.Name + "." + machine.States[0].Name}
+			for _, field := range machine.Fields {
+				mp.Fields = append(mp.Fields, AutomataStoragePlan{Identity: field.Identity, Name: field.Name, Type: field.Type.String(), Classification: field.Classification, Strategy: "InlineField", HasDrop: field.HasDrop})
+			}
+			for _, state := range machine.States {
+				mp.StateIdentities = append(mp.StateIdentities, automata.Name+"."+machine.Name+"."+state.Name)
+				for _, op := range state.Operations {
+					if op.Kind == "state_transition" {
+						mp.Transitions = append(mp.Transitions, state.Name+"->"+op.Detail)
+					}
+				}
+			}
+			plan.Machines = append(plan.Machines, mp)
+		}
+		out = append(out, plan)
+	}
+	return out
+}
+
 func planAggregates(mir *MIR) []AggregatePlan {
 	var out []AggregatePlan
 	for _, s := range mir.Structs {
@@ -488,6 +556,25 @@ func ValidateLoweringPlan(mir *MIR, facts *SemanticFactSet, plan *LoweringPlan) 
 	}
 	if len(plan.Functions) != len(mir.Functions) {
 		return fail("PLAN_ARTIFACT_INVALID", "lowering plan does not cover every MIR function")
+	}
+	expectedAutomataPlans := planAutomata(mir)
+	if len(plan.Automata) != len(expectedAutomataPlans) {
+		return fail("PLAN_AUTOMATA_INVALID", "lowering plan does not cover every explicit-state automata")
+	}
+	for _, automata := range plan.Automata {
+		if automata.Identity == "" || automata.StateEnvironment == "" || automata.EnvironmentStrategy != "InlineExplicitStruct" || automata.Scheduler != "None" || automata.YieldStrategy != "Deferred" || len(automata.Machines) == 0 {
+			return fail("PLAN_AUTOMATA_INVALID", "automata plan invents runtime policy or omits explicit storage")
+		}
+		for _, machine := range automata.Machines {
+			if machine.CurrentStateSlot == "" || machine.DispatchStrategy != "Switch" || len(machine.StateIdentities) == 0 {
+				return fail("PLAN_AUTOMATA_INVALID", "machine plan omits state identity or explicit dispatch")
+			}
+		}
+	}
+	expectedAutomataJSON, _ := json.Marshal(expectedAutomataPlans)
+	actualAutomataJSON, _ := json.Marshal(plan.Automata)
+	if string(actualAutomataJSON) != string(expectedAutomataJSON) {
+		return fail("PLAN_AUTOMATA_INVALID", "automata plan does not preserve MIR storage, identity, transition, or dispatch evidence")
 	}
 	witnesses := map[string]bool{}
 	for _, w := range mir.Witnesses {

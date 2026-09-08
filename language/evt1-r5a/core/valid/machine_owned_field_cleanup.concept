@@ -1,0 +1,29 @@
+profile Core;
+
+struct Resource
+{
+    int handle;
+}
+
+void Drop(owned Resource resource)
+{
+    return;
+}
+
+automata Worker
+{
+    machine Run
+    {
+        owned Resource resource = Resource{9};
+
+        state Idle
+        {
+        }
+    }
+}
+
+int Main()
+{
+    instance Worker worker();
+    return 0;
+}

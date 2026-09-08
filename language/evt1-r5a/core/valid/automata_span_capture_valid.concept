@@ -1,0 +1,26 @@
+profile Core;
+
+automata Reader
+with state
+{
+    Span<int> values;
+    int length;
+}
+{
+    machine Run
+    {
+        state Idle
+        {
+            length = Len(values);
+        }
+    }
+}
+
+int Main()
+{
+    int<array>[3] values = [1, 2, 3];
+    Span<int> span = Span(values);
+    instance Reader reader(span, 0);
+    Step(reader, Run);
+    return reader.state.length;
+}

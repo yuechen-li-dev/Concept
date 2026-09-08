@@ -1,0 +1,23 @@
+profile Core;
+
+automata Worker
+{
+    machine Run
+    {
+        state Idle
+        {
+            transition Working;
+        }
+
+        state Working
+        {
+        }
+    }
+}
+
+int Main()
+{
+    instance Worker worker();
+    Step(worker, Run);
+    return State(worker, Run);
+}

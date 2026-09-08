@@ -1,0 +1,18 @@
+profile Core;
+
+automata Worker
+{
+    machine Run
+    {
+        state Idle
+        {
+            int current = 1;
+            transition Working;
+        }
+
+        state Working
+        {
+            int copy = current;
+        }
+    }
+}

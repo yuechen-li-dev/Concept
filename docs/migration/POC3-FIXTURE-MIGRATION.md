@@ -1,6 +1,6 @@
 # PoC3 fixture migration inventory
 
-Status: R4k bounded migration evidence; no bulk port attempted
+Status: R5a bounded migration evidence; no bulk port attempted
 
 ## Corpus snapshot
 
@@ -31,13 +31,13 @@ The 1,296 primary fixtures are distributed as follows:
 | phase10-ownership | 54 | semantic feature missing in Go EVT1 |
 | phase11-testing | 85 | semantic feature missing in Go EVT1 |
 | phase12-allocation | 83 | semantic feature missing in Go EVT1 |
-| phase13-machines | 71 | machine/automata reconciliation required |
+| phase13-machines | 71 | R5a translates hierarchy/basic transition/Step; decide/result remain deferred |
 | phase14-interfaces | 97 | semantic feature missing in Go EVT1 |
 | phase15-c-abi | 108 | semantic feature missing in Go EVT1 |
 | phase16-imports | 73 | multi-module implementation missing |
 | phase17-runtime-failure | 57 | semantic feature missing in Go EVT1 |
-| phase18-machines | 66 | machine/automata reconciliation required |
-| phase19-yielding-machines | 23 | semantic feature missing in Go EVT1 |
+| phase18-machines | 66 | R5a translates machine fields/basic Step; nested values/completion/result deferred |
+| phase19-yielding-machines | 23 | R5a adopts explicit persistence/re-entry law; yield surface deferred to R5c |
 | phase20-dragongod-kernel | 99 | mixed core, automata, and application pressure |
 | phase21-arrays-slices-fixed-buffers | 50 | fixed-array subset review; slices/buffer missing |
 | phase22-option-result-bounded-collection-mutation | 22 | Option exists only in retired line; remainder deferred |
@@ -85,8 +85,10 @@ directory-name inference.
 The extracted Vulkan examples are profile-specific even when their filenames
 contain `language`; they all explicitly select `profile Vulkan;`. Effect,
 actuator, Prometheus import, and Vulkan runtime-type cases must remain behind
-the Vulkan profile. General automata cases remain provisional pending machine
-reconciliation.
+the Vulkan profile. R5a now supplies canonical Core automata hierarchy,
+explicit shared/machine persistence, direct Step, and basic transition cases;
+signal/effect, decide, yield, nested-machine, and completion/result fixtures
+remain separately classified rather than bulk-ported.
 
 ### Invalid and diagnostic oracles
 

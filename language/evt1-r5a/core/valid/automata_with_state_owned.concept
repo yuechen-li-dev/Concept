@@ -1,0 +1,34 @@
+profile Core;
+
+struct Resource
+{
+    int handle;
+}
+
+void Drop(owned Resource resource)
+{
+    return;
+}
+
+automata Owner
+with state
+{
+    owned Resource resource;
+}
+{
+    machine Run
+    {
+        state Idle
+        {
+            int observed = resource.handle;
+        }
+    }
+}
+
+int Main()
+{
+    owned Resource resource = Resource{7};
+    instance Owner owner(move resource);
+    Step(owner, Run);
+    return 0;
+}

@@ -1,0 +1,26 @@
+profile Core;
+
+automata Agent
+{
+    machine Movement
+    {
+        state Idle
+        {
+        }
+    }
+
+    machine Combat
+    {
+        state Idle
+        {
+        }
+    }
+}
+
+int Main()
+{
+    instance Agent agent();
+    Step(agent, Movement);
+    Step(agent, Combat);
+    return State(agent, Movement) + State(agent, Combat);
+}

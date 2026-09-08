@@ -65,22 +65,25 @@ type StateDecl struct {
 	Terminal   bool             `json:"terminal,omitempty"`
 	Handlers   []TransitionDecl `json:"handlers,omitempty"`
 	Completion []CompletionDecl `json:"completion,omitempty"`
+	Body       *Block           `json:"body,omitempty"`
 	Span       Span             `json:"span"`
 }
 
 type MachineDecl struct {
 	Name    string      `json:"name"`
 	Initial bool        `json:"initial,omitempty"`
+	Fields  []Field     `json:"fields,omitempty"`
 	States  []StateDecl `json:"states,omitempty"`
 	Span    Span        `json:"span"`
 }
 
 type AutomataDecl struct {
-	Name       string        `json:"name"`
-	SignalType Type          `json:"signal_type"`
-	Context    *Field        `json:"context,omitempty"`
-	Machines   []MachineDecl `json:"machines,omitempty"`
-	Span       Span          `json:"span"`
+	Name        string        `json:"name"`
+	SignalType  Type          `json:"signal_type"`
+	Context     *Field        `json:"context,omitempty"`
+	StateFields []Field       `json:"state_fields,omitempty"`
+	Machines    []MachineDecl `json:"machines,omitempty"`
+	Span        Span          `json:"span"`
 }
 
 type evt1AutomataInfo struct {
@@ -108,43 +111,67 @@ type evt1AutomataInfo struct {
 }
 
 type MIRAutomata struct {
-	Name                 string       `json:"name"`
-	SignalEnum           string       `json:"signal_enum"`
-	ContextName          string       `json:"context_name,omitempty"`
-	ContextType          *Type        `json:"context_type,omitempty"`
-	RootMachine          string       `json:"root_machine"`
-	MaxActiveDepth       int          `json:"max_active_depth"`
-	ContinuationCapacity int          `json:"continuation_capacity"`
-	CompletionStepBound  int          `json:"completion_step_bound"`
-	GraphIdentity        string       `json:"graph_identity"`
-	TopologyIdentity     string       `json:"topology_identity,omitempty"`
-	GuardIdentity        string       `json:"guard_identity,omitempty"`
-	EffectIdentity       string       `json:"effect_identity,omitempty"`
-	RuntimeIdentity      string       `json:"runtime_identity,omitempty"`
-	EffectSet            []string     `json:"effect_set,omitempty"`
-	MaxEffectBatch       int          `json:"max_effect_batch,omitempty"`
-	SourceSpan           Span         `json:"source_span"`
-	Machines             []MIRMachine `json:"machines,omitempty"`
+	Name                 string                       `json:"name"`
+	SignalEnum           string                       `json:"signal_enum"`
+	ContextName          string                       `json:"context_name,omitempty"`
+	ContextType          *Type                        `json:"context_type,omitempty"`
+	RootMachine          string                       `json:"root_machine"`
+	MaxActiveDepth       int                          `json:"max_active_depth"`
+	ContinuationCapacity int                          `json:"continuation_capacity"`
+	CompletionStepBound  int                          `json:"completion_step_bound"`
+	GraphIdentity        string                       `json:"graph_identity"`
+	TopologyIdentity     string                       `json:"topology_identity,omitempty"`
+	GuardIdentity        string                       `json:"guard_identity,omitempty"`
+	EffectIdentity       string                       `json:"effect_identity,omitempty"`
+	RuntimeIdentity      string                       `json:"runtime_identity,omitempty"`
+	EffectSet            []string                     `json:"effect_set,omitempty"`
+	MaxEffectBatch       int                          `json:"max_effect_batch,omitempty"`
+	SourceSpan           Span                         `json:"source_span"`
+	StateEnvironment     *MIRAutomataStateEnvironment `json:"state_environment,omitempty"`
+	Machines             []MIRMachine                 `json:"machines,omitempty"`
 }
 
 type MIRMachine struct {
-	Name           string     `json:"name"`
-	Initial        bool       `json:"initial,omitempty"`
-	RuntimeOrdinal int        `json:"runtime_ordinal"`
-	Reachable      bool       `json:"reachable,omitempty"`
-	SourceSpan     Span       `json:"source_span"`
-	States         []MIRState `json:"states,omitempty"`
+	Name           string                 `json:"name"`
+	Initial        bool                   `json:"initial,omitempty"`
+	RuntimeOrdinal int                    `json:"runtime_ordinal"`
+	Reachable      bool                   `json:"reachable,omitempty"`
+	SourceSpan     Span                   `json:"source_span"`
+	Fields         []MIRPersistentStorage `json:"fields,omitempty"`
+	States         []MIRState             `json:"states,omitempty"`
 }
 
 type MIRState struct {
-	Name           string          `json:"name"`
-	Initial        bool            `json:"initial,omitempty"`
-	Terminal       bool            `json:"terminal,omitempty"`
-	RuntimeOrdinal int             `json:"runtime_ordinal"`
-	Reachable      bool            `json:"reachable,omitempty"`
-	Completion     string          `json:"completion,omitempty"`
-	SourceSpan     Span            `json:"source_span"`
-	Handlers       []MIRTransition `json:"handlers,omitempty"`
+	Name           string                 `json:"name"`
+	Initial        bool                   `json:"initial,omitempty"`
+	Terminal       bool                   `json:"terminal,omitempty"`
+	RuntimeOrdinal int                    `json:"runtime_ordinal"`
+	Reachable      bool                   `json:"reachable,omitempty"`
+	Completion     string                 `json:"completion,omitempty"`
+	SourceSpan     Span                   `json:"source_span"`
+	Handlers       []MIRTransition        `json:"handlers,omitempty"`
+	Operations     []MIROperation         `json:"operations,omitempty"`
+	Storage        []MIRPersistentStorage `json:"storage,omitempty"`
+}
+
+type MIRAutomataStateEnvironment struct {
+	Identity   string                 `json:"identity"`
+	Fields     []MIRPersistentStorage `json:"fields"`
+	Shared     bool                   `json:"shared"`
+	Explicit   bool                   `json:"explicit"`
+	SourceSpan Span                   `json:"source_span"`
+}
+
+type MIRPersistentStorage struct {
+	Identity       string `json:"identity"`
+	Name           string `json:"name"`
+	Type           Type   `json:"type"`
+	Classification string `json:"classification"`
+	Ordinal        int    `json:"ordinal"`
+	Mutable        bool   `json:"mutable"`
+	HasDrop        bool   `json:"has_drop,omitempty"`
+	Provenance     string `json:"provenance,omitempty"`
+	SourceSpan     Span   `json:"source_span"`
 }
 
 type MIRTransition struct {
@@ -186,6 +213,9 @@ func evt1ValidateAutomataDecls(env *semanticEnv, module Module) error {
 }
 
 func evt1ValidateAutomataDecl(env *semanticEnv, decl AutomataDecl) (*evt1AutomataInfo, error) {
+	if decl.SignalType.Name == "" {
+		return evt1ValidateCanonicalAutomata(env, decl)
+	}
 	if err := validateKnownType(env, decl.SignalType, decl.SignalType.Span, "", false); err != nil {
 		return nil, err
 	}
@@ -343,6 +373,135 @@ func evt1ValidateAutomataDecl(env *semanticEnv, decl AutomataDecl) (*evt1Automat
 	info.EffectIdentity = evt1AutomataEffectIdentity(env, info)
 	info.RuntimeIdentity = digest([]byte(info.TopologyIdentity + "|" + info.GuardIdentity + "|" + info.EffectIdentity))
 	return info, nil
+}
+
+func evt1ValidateCanonicalAutomata(env *semanticEnv, decl AutomataDecl) (*evt1AutomataInfo, error) {
+	if len(decl.Machines) == 0 {
+		return nil, evt1Diagnostic("AUTOMATA_MIR_INVALID", fmt.Sprintf("automata %s requires at least one machine", decl.Name), decl.Span)
+	}
+	info := &evt1AutomataInfo{Decl: decl, RootMachine: decl.Machines[0].Name, MachineOrdinal: map[string]int{}, StateOrdinal: map[string]map[string]int{}, MachineReachable: map[string]bool{}, StateReachable: map[string]map[string]bool{}, ReachablePushTargets: map[string]bool{}, HasReachableFinish: map[string]bool{}, HasReachablePop: map[string]bool{}, EffectOrdinal: map[string]int{}}
+	stateEnvName := decl.Name + "#state"
+	stateTypes := map[string]Type{}
+	for i := range decl.StateFields {
+		field := &decl.StateFields[i]
+		if _, exists := stateTypes[field.Name]; exists {
+			return nil, evt1Diagnostic("AUTOMATA_STATE_DUPLICATE_FIELD", fmt.Sprintf("duplicate automata state field %s.%s", decl.Name, field.Name), field.Span)
+		}
+		if err := validateKnownType(env, field.Type, field.Span, "", false); err != nil {
+			return nil, err
+		}
+		resolved, err := evt1ResolveType(env, nil, field.Type)
+		if err != nil {
+			return nil, err
+		}
+		field.Type = resolved
+		stateTypes[field.Name] = resolved
+	}
+	env.fieldSets[stateEnvName] = stateTypes
+	machineNames := map[string]bool{}
+	for mi := range decl.Machines {
+		machine := &decl.Machines[mi]
+		if machineNames[machine.Name] {
+			return nil, evt1Diagnostic("AUTOMATA_DUPLICATE_MACHINE", fmt.Sprintf("duplicate machine %s in automata %s", machine.Name, decl.Name), machine.Span)
+		}
+		machineNames[machine.Name] = true
+		info.MachineOrdinal[machine.Name] = mi
+		info.MachineReachable[machine.Name] = true
+		info.StateOrdinal[machine.Name] = map[string]int{}
+		info.StateReachable[machine.Name] = map[string]bool{}
+		machineTypeName := decl.Name + "#" + machine.Name + "#machine"
+		machineTypes := map[string]Type{}
+		for fi := range machine.Fields {
+			field := &machine.Fields[fi]
+			if _, exists := machineTypes[field.Name]; exists {
+				return nil, evt1Diagnostic("MACHINE_STATE_ACCESS_INVALID", fmt.Sprintf("duplicate machine field %s.%s", machine.Name, field.Name), field.Span)
+			}
+			if err := validateKnownType(env, field.Type, field.Span, "", false); err != nil {
+				return nil, err
+			}
+			resolved, err := evt1ResolveType(env, nil, field.Type)
+			if err != nil {
+				return nil, err
+			}
+			field.Type = resolved
+			if field.Initializer == nil && !evt1TypeCopyable(env, resolved) {
+				return nil, evt1Diagnostic("MACHINE_STATE_ACCESS_INVALID", fmt.Sprintf("non-copyable machine field %s.%s requires an explicit initializer", machine.Name, field.Name), field.Span)
+			}
+			if field.Initializer != nil {
+				initType, err := validateExprAgainstExpected(env, evt1ModuleScope(env), field.Initializer, resolved, nil, false)
+				if err != nil {
+					return nil, err
+				}
+				if !evt1TypesCompatible(env, resolved, initType, "") {
+					return nil, evt1Diagnostic("MACHINE_STATE_ACCESS_INVALID", fmt.Sprintf("initializer for machine field %s.%s has type %s, expected %s", machine.Name, field.Name, initType.String(), resolved.String()), field.Initializer.exprSpan())
+				}
+				if !evt1CanTransferInitialize(env, resolved, field.Initializer) && !evt1TypeCopyable(env, resolved) {
+					return nil, evt1Diagnostic("AUTOMATA_CAPTURE_MOVE_REQUIRED", fmt.Sprintf("machine field %s.%s initializer would copy non-copyable state", machine.Name, field.Name), field.Initializer.exprSpan())
+				}
+			}
+			machineTypes[field.Name] = resolved
+		}
+		env.fieldSets[machineTypeName] = machineTypes
+		if len(machine.States) == 0 {
+			return nil, evt1Diagnostic("MACHINE_MIR_INVALID", fmt.Sprintf("machine %s requires at least one state", machine.Name), machine.Span)
+		}
+		stateNames := map[string]bool{}
+		for si := range machine.States {
+			state := &machine.States[si]
+			if stateNames[state.Name] {
+				return nil, evt1Diagnostic("MACHINE_DUPLICATE_STATE", fmt.Sprintf("duplicate state %s in machine %s", state.Name, machine.Name), state.Span)
+			}
+			stateNames[state.Name] = true
+			info.StateOrdinal[machine.Name][state.Name] = si
+			info.StateReachable[machine.Name][state.Name] = true
+		}
+		for si := range machine.States {
+			state := &machine.States[si]
+			if state.Body == nil {
+				return nil, evt1Diagnostic("MACHINE_MIR_INVALID", fmt.Sprintf("state %s.%s requires a body", machine.Name, state.Name), state.Span)
+			}
+			automataScope := evt1ModuleScope(env)
+			automataScope.inAutomataState = true
+			automataScope.transitionTargets = stateNames
+			automataScope.declare("state", evt1ValueBinding{t: Type{Name: stateEnvName, Kind: TypeStruct}, mutable: true, state: evt1StorageInitialized})
+			for _, field := range decl.StateFields {
+				automataScope.declare(field.Name, evt1ValueBinding{t: field.Type, mutable: !field.Type.Const, state: evt1StorageInitialized, provenance: evt1LifetimeProvenance{Kind: evt1ProvenanceParameter}})
+			}
+			machineScope := newEVT1Scope(automataScope)
+			machineScope.declare("machine", evt1ValueBinding{t: Type{Name: machineTypeName, Kind: TypeStruct}, mutable: true, state: evt1StorageInitialized})
+			for _, field := range machine.Fields {
+				machineScope.declare(field.Name, evt1ValueBinding{t: field.Type, mutable: !field.Type.Const, state: evt1StorageInitialized, provenance: evt1LifetimeProvenance{Kind: evt1ProvenanceParameter}})
+			}
+			if err := validateBlock(env, machineScope, Type{Name: "void", Kind: TypeBuiltin}, *state.Body, nil, false); err != nil {
+				return nil, err
+			}
+		}
+	}
+	info.Decl = decl
+	info.MaxActiveDepth = 1
+	info.CompletionStepBound = 1
+	info.GraphIdentity = "automata-" + digest([]byte(evt1CanonicalAutomataIdentity(decl)))[:16]
+	info.TopologyIdentity = info.GraphIdentity
+	info.RuntimeIdentity = "runtime-" + digest([]byte(info.GraphIdentity + "|explicit-state"))[:16]
+	return info, nil
+}
+
+func evt1CanonicalAutomataIdentity(decl AutomataDecl) string {
+	var b strings.Builder
+	b.WriteString(decl.Name + "#state")
+	for _, field := range decl.StateFields {
+		b.WriteString("|" + field.Name + ":" + field.Type.String())
+	}
+	for _, machine := range decl.Machines {
+		b.WriteString("|machine:" + machine.Name)
+		for _, field := range machine.Fields {
+			b.WriteString("|field:" + field.Name + ":" + field.Type.String())
+		}
+		for _, state := range machine.States {
+			b.WriteString("|state:" + state.Name)
+		}
+	}
+	return b.String()
 }
 
 func evt1ValidateAutomataReferences(info *evt1AutomataInfo) error {

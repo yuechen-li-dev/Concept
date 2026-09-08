@@ -1,0 +1,46 @@
+profile Core;
+
+struct Resource
+{
+    int handle;
+}
+
+void Drop(owned Resource resource)
+{
+    return;
+}
+
+automata Worker
+with state
+{
+    int total;
+}
+{
+    machine Run
+    {
+        state Idle
+        {
+            int current = 1;
+            owned Resource temporary = Resource{current};
+            current = current + 1;
+            total = total + current;
+            transition Working;
+        }
+
+        state Working
+        {
+            int current = 1;
+            owned Resource temporary = Resource{current};
+            current = current + 1;
+            total = total + current;
+        }
+    }
+}
+
+int Main()
+{
+    instance Worker worker(0);
+    Step(worker, Run);
+    Step(worker, Run);
+    return worker.state.total;
+}

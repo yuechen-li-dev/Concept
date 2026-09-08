@@ -1,0 +1,41 @@
+profile Core;
+
+interface CounterLike<T>
+{
+    requires void Increment(ref T self);
+}
+
+struct Counter
+{
+    int value;
+
+    void Increment(ref Counter self)
+    {
+        self.value = self.value + 1;
+    }
+}
+
+requires CounterLike<Counter>;
+
+automata Worker
+with state
+{
+    dyn CounterLike counter;
+}
+{
+    machine Run
+    {
+        state Idle
+        {
+            counter.Increment();
+        }
+    }
+}
+
+int Main()
+{
+    Counter counter = Counter{1};
+    instance Worker worker(ref counter);
+    Step(worker, Run);
+    return counter.value;
+}
