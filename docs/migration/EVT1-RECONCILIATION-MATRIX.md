@@ -1,6 +1,6 @@
 # EVT1 semantic reconciliation matrix
 
-Status: R0 authority ledger with R1-R4i executable evidence
+Status: R0 authority ledger with R1-R4k executable evidence
 
 `Port required?` means implementation or conformance work remains after R0; it
 does not authorize that work in this milestone. Status is one of `Keep PoC3`,
@@ -81,7 +81,15 @@ does not authorize that work in this milestone. Status is one of `Keep PoC3`,
 | panic/assert | stable runtime panic/assert and test behavior | terminal helper, runtime assert, existing static_assert | merge stable reason pressure; assert/static_assert are Assert.True sugar | Merge | Partial | phase17 plus R4c | panic is not recoverable control flow |
 | error conversion | no closed general conversion law | exact `E` only | defer concept-driven `ErrorConvertible<From,To>` | Deferred concept-driven | No | R4c negative corpus | no From/Into or residual machinery |
 | C ABI | extern/export/repr(C) implemented | emits C/H but does not define Concept FFI law | preserve PoC3 pressure; specify anew atop C11 backend | Redesign | Yes | phase15 fixtures | backend is not ABI spec |
-| interfaces/dyn | implemented bounded interface/dyn dispatch | absent | redesign as semantic concept + operation/semantic-proof witness + downstream runtime witness reification; interface may be sugar/marker | Redesign | Yes | phase14 fixtures; R4b witness direction | relational lifetime proof stays compile-time; dyn is not implemented |
+| class | no canonical lightweight class model | ordinary value aggregate plus methods and access control | EVT1-new narrow encapsulation model | EVT1-new | No for R4k subset | R4k corpus | no implicit heap, identity, header, or inheritance |
+| access control | broader object-model pressure | public/private class member boundaries | adopt public/private only; class defaults private and struct defaults public | EVT1-new | No for R4k subset | R4k valid/invalid corpus | no protected, friend, or package-private |
+| methods | interface/function machinery | aggregate methods normalized to explicit receiver functions | reuse ordinary callable and value semantics | Redesign / EVT1-new | No for R4k subset | R4k MIR/native corpus | concrete calls are static; no virtual keyword |
+| interface | implemented nominal bounded interface subsystem | specialized concept using ordinary requirement satisfaction | Redesign -> specialized concept | Redesign / implemented R4k | No for bounded R4k subset | phase14 pressure; R4k corpus | all interfaces are concepts; no parallel satisfaction engine |
+| interface fields/composition | method-oriented legacy pressure | mechanical field accessors and prerequisite flattening | adopt as fixed-shape witness mechanics and concept composition | EVT1-new | No for R4k subset | R4k field/composition corpus | composition is not inheritance |
+| witness | implementation records and dynamic call slots | deterministic concept proof reified only for dyn | one `(interface, concrete type)` static table | Redesign / implemented R4k | No for R4k subset | R4k MIR/C inspection | semantic facts erase; no per-object vtable |
+| dyn | bounded runtime dispatch | explicit non-owning erased reference plus witness | Redesign -> witness reification | Redesign / implemented R4k | No for borrowed R4k subset | phase14 pressure; R4k native corpus | source provenance and constness preserved |
+| owning dyn | legacy runtime-storage pressure | absent | require explicit erased-storage and allocator policy | Deferred | Yes | phase14 evidence only | no hidden allocation |
+| inheritance | object-model lineage pressure | absent | reject from EVT1 narrow class model | Rejected | No | R4k parser/spec boundary | use interface composition |
 | machines | `machine`, states, transitions, completion/result | nested `machine` declarations inside automata | do not alias surfaces in R0 | Deferred | Yes | phase13/18; DragonGod tests | general semantics likely core |
 | automata | PoC3 uses Automata mainly in application architecture | bounded `automata -> machine -> state` runtime model | preserve provisionally pending reconciliation | Deferred | Yes | phase20; DragonGod M0-M4 | not automatically Vulkan-only |
 | decide | judgment-driven deterministic transition selection | absent | preserve PoC3 reference | Keep PoC3 | Yes | phase5a/13/18 | compare with guarded candidates later |
@@ -265,3 +273,14 @@ layout/stream/Span/tensor preservation, alignment degradation, declared and
 fixed-interval disjointness, fixed/runtime tensor qualification, and total C
 erasure. Exact source-level shape tuples, general alias solving, optimization,
 SIMD, noalias syntax, MLIR, and native backend work remain deferred.
+
+## R4k executable evidence
+
+R4k adds 30 required `PASS` cases: 16 valid and 14 statically rejected. Class,
+access control, implicit receiver ergonomics, field witnesses, and concept-based
+interface satisfaction are EVT1-new or redesigned semantics. PoC3 Phase 14 is
+reference pressure for declaration, diagnostic, erased-storage, and dispatch
+shape only; no nominal impl table or object model was mechanically ported.
+Static templates remain monomorphized, while dyn explicitly reifies a borrowed
+two-pointer value and one deterministic static witness per concrete/interface
+pair. Owning dyn is deferred and inheritance is rejected.

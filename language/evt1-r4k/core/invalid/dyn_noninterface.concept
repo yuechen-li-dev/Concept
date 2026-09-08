@@ -1,0 +1,11 @@
+profile Core;
+
+concept Resettable<T>
+{
+    requires void Reset(ref T self);
+}
+
+void InvalidDyn()
+{
+    dyn Resettable value;
+}

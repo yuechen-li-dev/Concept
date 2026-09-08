@@ -1,0 +1,17 @@
+profile Core;
+
+interface Positioned<T>
+{
+    requires const float x;
+}
+
+struct Point
+{
+    float x;
+}
+
+void InvalidMutation(ref Point point)
+{
+    dyn Positioned positioned = ref point;
+    positioned.x = 4.0;
+}

@@ -1,0 +1,18 @@
+profile Core;
+
+class Device
+{
+public:
+    int state;
+
+private:
+    void Reset()
+    {
+        state = 0;
+    }
+}
+
+void InvalidCall(ref Device device)
+{
+    device.Reset();
+}

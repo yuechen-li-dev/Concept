@@ -381,6 +381,9 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		}
 		for _, existing := range env.functions[fn.Name] {
 			if evt1FunctionParamSignature(existing) == evt1FunctionParamSignature(fn) {
+				if fn.MethodOf != "" && existing.MethodOf == fn.MethodOf {
+					return nil, evt1Diagnostic("CLASS_DUPLICATE_MEMBER", fmt.Sprintf("duplicate method %s.%s", fn.MethodOf, fn.Name), fn.Span)
+				}
 				return nil, evt1Diagnostic("CV4021", fmt.Sprintf("duplicate function declaration %s", fn.Name), fn.Span)
 			}
 		}
@@ -414,6 +417,13 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 			fields[field.Name] = resolved
 		}
 		env.fieldSets[structDecl.Name] = fields
+		methodNames := map[string]bool{}
+		for _, method := range structDecl.Methods {
+			if methodNames[evt1FunctionParamSignature(method)] {
+				return nil, evt1Diagnostic("CLASS_DUPLICATE_MEMBER", fmt.Sprintf("duplicate method %s.%s", structDecl.Name, method.Name), method.Span)
+			}
+			methodNames[evt1FunctionParamSignature(method)] = true
+		}
 	}
 	for i, enumDecl := range module.Enums {
 		seen := map[string]bool{}
@@ -491,9 +501,15 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		return nil, err
 	}
 	for _, conceptDecl := range module.Concepts {
+		seenMembers := map[string]bool{}
 		for _, req := range conceptDecl.Requirements {
 			switch r := req.(type) {
 			case *OperationRequirement:
+				key := "method:" + r.Name
+				if seenMembers[key] {
+					return nil, evt1Diagnostic("INTERFACE_DUPLICATE_MEMBER", fmt.Sprintf("duplicate requirement %s.%s", conceptDecl.Name, r.Name), r.Span)
+				}
+				seenMembers[key] = true
 				if err := validateKnownType(env, r.ReturnType, r.Span, conceptDecl.TypeParam, false); err != nil {
 					return nil, err
 				}
@@ -501,6 +517,34 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 					if err := validateKnownType(env, param.Type, param.Span, conceptDecl.TypeParam, false); err != nil {
 						return nil, err
 					}
+				}
+				if conceptDecl.Interface {
+					if len(r.Params) == 0 || !r.Params[0].Type.isReference() || r.Params[0].Type.Kind != TypeConceptParam || r.Params[0].Type.Name != conceptDecl.TypeParam {
+						return nil, evt1Diagnostic("INTERFACE_NOT_DYN_COMPATIBLE", fmt.Sprintf("interface method %s must begin with ref %s self", r.Name, conceptDecl.TypeParam), r.Span)
+					}
+					if evt1TypeDependsOnParam(r.ReturnType, conceptDecl.TypeParam) {
+						return nil, evt1Diagnostic("INTERFACE_NOT_DYN_COMPATIBLE", fmt.Sprintf("interface method %s cannot return the erased type", r.Name), r.Span)
+					}
+					for _, param := range r.Params[1:] {
+						if evt1TypeDependsOnParam(param.Type, conceptDecl.TypeParam) {
+							return nil, evt1Diagnostic("INTERFACE_NOT_DYN_COMPATIBLE", fmt.Sprintf("interface method %s cannot expose erased type %s outside its receiver", r.Name, conceptDecl.TypeParam), r.Span)
+						}
+					}
+				}
+			case *FieldRequirement:
+				key := "field:" + r.Name
+				if seenMembers[key] {
+					return nil, evt1Diagnostic("INTERFACE_DUPLICATE_MEMBER", fmt.Sprintf("duplicate field requirement %s.%s", conceptDecl.Name, r.Name), r.Span)
+				}
+				seenMembers[key] = true
+				if !conceptDecl.Interface {
+					return nil, evt1Diagnostic("CV4147", "field requirements are restricted to interfaces", r.Span)
+				}
+				if err := validateKnownType(env, r.Type, r.Span, conceptDecl.TypeParam, false); err != nil {
+					return nil, err
+				}
+				if evt1TypeDependsOnParam(r.Type, conceptDecl.TypeParam) {
+					return nil, evt1Diagnostic("INTERFACE_NOT_DYN_COMPATIBLE", fmt.Sprintf("interface field %s cannot have erased type %s", r.Name, conceptDecl.TypeParam), r.Span)
 				}
 			case *PrerequisiteRequirement:
 				if _, ok := env.concepts[r.ConceptName]; !ok {
@@ -639,9 +683,12 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 			})
 		}
 		collectEscapedArmBindings(fn.Body, env)
+		env.validatingMethod = fn.MethodOf
 		if err := validateBlock(env, scope, resolvedReturn, *fn.Body, nil, false); err != nil {
+			env.validatingMethod = ""
 			return nil, err
 		}
+		env.validatingMethod = ""
 	}
 	for _, fn := range module.ComptimeFns {
 		scope := evt1ModuleScope(env)
@@ -1019,6 +1066,11 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				return err
 			}
 			s.Type = resolvedType
+			if resolvedType.Kind == TypeDyn {
+				if err := evt1PrepareDynInitializer(env, resolvedType, s.Value, s.Span); err != nil {
+					return err
+				}
+			}
 			_, bindingRuntimeStorage := s.Value.(*BindExpr)
 			if evt1StorageHasRuntimeShape(resolvedType) && !inComptimeFn && !s.Comptime && !(resolvedType.isReference() && bindingRuntimeStorage) {
 				code := "CV4558"
@@ -1068,7 +1120,7 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				continue
 			}
 			provenance := evt1LifetimeProvenance{Kind: evt1ProvenanceLocal, Depth: local.depth, Scoped: resolvedType.Scoped}
-			if resolvedType.isReference() || evt1IsRefStructType(env, resolvedType) {
+			if resolvedType.isReference() || evt1IsRefStructType(env, resolvedType) || resolvedType.Kind == TypeDyn {
 				provenance = evt1ExprProvenance(env, local, s.Value)
 				provenance.Scoped = provenance.Scoped || resolvedType.Scoped
 			}
@@ -1195,6 +1247,9 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				}
 				if target.readOnlyReason == "ref_const" {
 					return evt1Diagnostic("CV4513", "mutation through ref const is not allowed", s.Target.exprSpan())
+				}
+				if target.readOnlyReason == "readonly_dyn" {
+					return evt1Diagnostic("DYN_READONLY_FIELD_MUTATION", "mutation through readonly dyn field is not allowed", s.Target.exprSpan())
 				}
 				return evt1Diagnostic("CV4128", "mutation through a const access path is not allowed", s.Target.exprSpan())
 			}
@@ -1899,6 +1954,13 @@ func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string,
 	if evt1IsTensorType(t) {
 		return evt1ValidateTensorType(env, t, span, conceptParam)
 	}
+	if t.Kind == TypeDyn {
+		decl, ok := env.concepts[t.Name]
+		if !ok || !decl.Interface {
+			return evt1Diagnostic("DYN_REQUIRES_INTERFACE", fmt.Sprintf("dyn requires an interface, got %s", t.Name), span)
+		}
+		return nil
+	}
 	if t.Scoped && !t.isReference() && t.Kind != TypeConceptParam && !evt1IsRefStructType(env, t) {
 		return evt1Diagnostic("CV4525", fmt.Sprintf("scoped requires a reference or ref struct type, got %s", t.String()), span)
 	}
@@ -2048,6 +2110,17 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		if templateInfo != nil && evt1TypeDependsOnParam(receiverType, templateInfo.Decl.TypeParam) {
 			return Type{}, evt1Diagnostic("CV4172", "dependent field access is not allowed in EVT1 M1B-B templates", e.Span)
 		}
+		if receiverType.Kind == TypeDyn {
+			_, requirements, _ := evt1InterfaceRuntimeRequirements(env, receiverType.Name, map[string]bool{})
+			for _, req := range requirements {
+				if req.Name == e.Field {
+					e.DynInterface, e.DynReadonly = receiverType.Name, req.Readonly || receiverType.Const
+					out := evt1CanonicalType(env, req.Type.valueType())
+					return out, nil
+				}
+			}
+			return Type{}, evt1Diagnostic("DYN_FIELD_NOT_IN_INTERFACE", fmt.Sprintf("field %s is not in interface %s", e.Field, receiverType.Name), e.Span)
+		}
 		fields, baseName, err := evt1FieldSet(env, receiverType)
 		if err != nil {
 			return Type{}, evt1Diagnostic("CV4025", err.Error(), e.Span)
@@ -2056,11 +2129,17 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		if !ok {
 			return Type{}, evt1Diagnostic("CV4026", fmt.Sprintf("unknown field %s on %s", e.Field, baseName), e.Span)
 		}
+		if decl, ok := env.structs[baseName]; ok && evt1FieldVisibility(decl, e.Field) == "private" && env.validatingMethod != baseName {
+			return Type{}, evt1Diagnostic("CLASS_PRIVATE_MEMBER_ACCESS", fmt.Sprintf("field %s.%s is private", baseName, e.Field), e.Span)
+		}
 		if fieldType.isReference() {
 			return evt1CanonicalType(env, fieldType.borrowBase()), nil
 		}
 		return evt1CanonicalType(env, fieldType), nil
 	case *CallExpr:
+		if e.Member {
+			return evt1ValidateMemberCall(env, scope, e, templateInfo, inComptimeFn)
+		}
 		if e.Callee == "Tensor" {
 			return Type{}, evt1Diagnostic("CV4611", "Tensor(source) requires an explicit tensor<T, Rank> destination type", e.Span)
 		}
@@ -2377,6 +2456,18 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		if !e.Const && !lvalue.mutable {
 			return Type{}, evt1Diagnostic("CV4509", "mutable ref cannot bind a const or read-only place", e.Value.exprSpan())
 		}
+		if e.DynInterface != "" {
+			concrete := evt1CanonicalType(env, lvalue.t.valueType())
+			witness, err := evt1BuildInterfaceWitness(env, e.DynInterface, concrete, e.Span)
+			if err != nil {
+				return Type{}, err
+			}
+			e.DynConcrete, e.WitnessID = concrete, witness.ID
+			if binding, ok := scope.lookup(lvalue.path.Root); ok {
+				e.DynProvenance, e.DynScoped = string(binding.provenance.Kind), binding.provenance.Scoped
+			}
+			return Type{Name: e.DynInterface, Kind: TypeDyn, Const: e.Const || !lvalue.mutable, Span: e.Span}, nil
+		}
 		out := lvalue.t.valueType()
 		out.Ownership = "ref"
 		out.Const = e.Const || !lvalue.mutable
@@ -2664,6 +2755,17 @@ func validateAssignable(env *semanticEnv, scope *evt1Scope, expr Expr, templateI
 		if templateInfo != nil && evt1TypeDependsOnParam(receiver.t, templateInfo.Decl.TypeParam) {
 			return evt1LValue{}, evt1Diagnostic("CV4172", "dependent field access is not allowed in EVT1 M1B-B templates", e.Span)
 		}
+		if receiver.t.Kind == TypeDyn {
+			_, requirements, _ := evt1InterfaceRuntimeRequirements(env, receiver.t.Name, map[string]bool{})
+			for _, req := range requirements {
+				if req.Name != e.Field {
+					continue
+				}
+				e.DynInterface, e.DynReadonly = receiver.t.Name, req.Readonly || receiver.t.Const
+				return evt1LValue{t: evt1CanonicalType(env, req.Type.valueType()), mutable: receiver.mutable && !e.DynReadonly, wholeValue: false, readOnlyReason: map[bool]string{true: "readonly_dyn", false: ""}[e.DynReadonly], path: receiver.path}, nil
+			}
+			return evt1LValue{}, evt1Diagnostic("DYN_FIELD_NOT_IN_INTERFACE", fmt.Sprintf("field %s is not in interface %s", e.Field, receiver.t.Name), e.Span)
+		}
 		fields, baseName, err := evt1FieldSet(env, receiver.t)
 		if err != nil {
 			return evt1LValue{}, evt1Diagnostic("CV4025", err.Error(), e.Span)
@@ -2671,6 +2773,9 @@ func validateAssignable(env *semanticEnv, scope *evt1Scope, expr Expr, templateI
 		fieldType, ok := fields[e.Field]
 		if !ok {
 			return evt1LValue{}, evt1Diagnostic("CV4026", fmt.Sprintf("unknown field %s on %s", e.Field, baseName), e.Span)
+		}
+		if decl, ok := env.structs[baseName]; ok && evt1FieldVisibility(decl, e.Field) == "private" && env.validatingMethod != baseName {
+			return evt1LValue{}, evt1Diagnostic("CLASS_PRIVATE_MEMBER_ACCESS", fmt.Sprintf("field %s.%s is private", baseName, e.Field), e.Span)
 		}
 		if region, ok := evt1LayoutRegion(env, receiver.t.Name, e.Field); ok {
 			layoutName := receiver.t.Name
@@ -2852,6 +2957,13 @@ func validateStructConstructExpr(env *semanticEnv, scope *evt1Scope, expr Struct
 	structDecl, ok := env.structs[expr.StructName]
 	if !ok {
 		return Type{}, evt1Diagnostic("CV4125", fmt.Sprintf("unknown struct type %s", expr.StructName), expr.Span)
+	}
+	if structDecl.Class && env.validatingMethod != structDecl.Name {
+		for _, field := range structDecl.Fields {
+			if evt1FieldVisibility(structDecl, field.Name) == "private" {
+				return Type{}, evt1Diagnostic("CLASS_PRIVATE_MEMBER_ACCESS", fmt.Sprintf("aggregate construction cannot initialize private field %s.%s", structDecl.Name, field.Name), expr.Span)
+			}
+		}
 	}
 	if len(structDecl.Fields) != len(expr.Args) {
 		return Type{}, evt1Diagnostic("CV4126", fmt.Sprintf("wrong initializer count for %s: expected %d but got %d", expr.StructName, len(structDecl.Fields), len(expr.Args)), expr.Span)
@@ -4105,6 +4217,25 @@ func checkConceptSatisfaction(env *semanticEnv, conceptName string, concreteType
 			if _, err := evt1LookupRequiredOperation(env, required, span, strings.Join(path, " -> ")); err != nil {
 				return err
 			}
+		case *FieldRequirement:
+			decl, ok := env.structs[concreteType.valueType().Name]
+			if !ok {
+				return evt1Diagnostic("INTERFACE_REQUIREMENT_UNSATISFIED", fmt.Sprintf("%s requires field %s", strings.Join(path, " -> "), r.Name), span)
+			}
+			actual, ok := env.fieldSets[decl.Name][r.Name]
+			if !ok {
+				return evt1Diagnostic("INTERFACE_REQUIREMENT_UNSATISFIED", fmt.Sprintf("%s requires field %s", strings.Join(path, " -> "), r.Name), span)
+			}
+			if evt1FieldVisibility(decl, r.Name) == "private" {
+				return evt1Diagnostic("INTERFACE_PRIVATE_MEMBER_CANNOT_SATISFY", fmt.Sprintf("%s requires accessible field %s", strings.Join(path, " -> "), r.Name), span)
+			}
+			expected := evt1SubstituteType(r.Type.valueType(), conceptDecl.TypeParam, concreteType.valueType())
+			if !evt1CanonicalType(env, actual.valueType()).Equal(evt1CanonicalType(env, expected)) {
+				return evt1Diagnostic("INTERFACE_REQUIREMENT_UNSATISFIED", fmt.Sprintf("%s field %s requires %s but found %s", strings.Join(path, " -> "), r.Name, expected.String(), actual.String()), span)
+			}
+			if !r.Readonly && decl.Record {
+				return evt1Diagnostic("INTERFACE_REQUIREMENT_UNSATISFIED", fmt.Sprintf("%s requires mutable field %s but %s is readonly", strings.Join(path, " -> "), r.Name, decl.Name), span)
+			}
 		case *CompilerAnalysisRequirement:
 			analysis := evt1SemanticAnalysisRegistry[r.Analysis]
 			proof := MIRSemanticProof{Concept: conceptName, Analysis: r.Analysis, FactKind: evt1FactKind(r.Analysis), ConcreteType: concreteType.String(), Parameters: append([]int{}, r.Parameters...), SourceSpan: r.Span}
@@ -4386,7 +4517,15 @@ func evt1ResultProvenanceFact(functionName string, summary evt1ResultProvenanceS
 }
 
 func evt1LookupRequiredOperation(env *semanticEnv, required OperationRequirement, span Span, prefix string) (FunctionDecl, error) {
-	candidates := env.functions[required.Name]
+	var candidates []FunctionDecl
+	for _, fn := range env.functions[required.Name] {
+		if fn.Visibility == "private" && evt1FunctionParamSignature(fn) == evt1FunctionParamSignature(FunctionDecl{Name: required.Name, Params: required.Params}) && evt1CanonicalType(env, fn.ReturnType).Equal(evt1CanonicalType(env, required.ReturnType)) {
+			return FunctionDecl{}, evt1Diagnostic("INTERFACE_PRIVATE_MEMBER_CANNOT_SATISFY", fmt.Sprintf("%s requires public capability %s, but the matching member is private", prefix, required.Name), span)
+		}
+		if fn.Visibility != "private" {
+			candidates = append(candidates, fn)
+		}
+	}
 	if len(candidates) == 0 {
 		return FunctionDecl{}, evt1Diagnostic("CV4153", fmt.Sprintf("%s is missing required operation %s", prefix, evt1Signature(required.ReturnType, required.Name, required.Params)), span)
 	}
@@ -4976,9 +5115,16 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 		if err != nil {
 			return nil, err
 		}
-		return &FieldExpr{Receiver: receiver, Field: e.Field, Span: e.Span}, nil
+		return &FieldExpr{Receiver: receiver, Field: e.Field, DynInterface: e.DynInterface, DynReadonly: e.DynReadonly, Span: e.Span}, nil
 	case *CallExpr:
-		out := &CallExpr{Callee: e.Callee, Span: e.Span}
+		out := &CallExpr{Callee: e.Callee, Member: e.Member, DynDispatch: e.DynDispatch, DynInterface: e.DynInterface, WitnessID: e.WitnessID, Span: e.Span}
+		if e.Receiver != nil {
+			receiver, err := evt1SubstituteExpr(e.Receiver, typeParam, concreteType)
+			if err != nil {
+				return nil, err
+			}
+			out.Receiver = receiver
+		}
 		for _, arg := range e.Args {
 			sub, err := evt1SubstituteExpr(arg, typeParam, concreteType)
 			if err != nil {
@@ -5056,7 +5202,7 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 		if err != nil {
 			return nil, err
 		}
-		return &RefExpr{Value: value, Const: e.Const, Span: e.Span}, nil
+		return &RefExpr{Value: value, Const: e.Const, DynInterface: e.DynInterface, DynConcrete: e.DynConcrete, DynProvenance: e.DynProvenance, DynScoped: e.DynScoped, WitnessID: e.WitnessID, Span: e.Span}, nil
 	case *MatchExpr:
 		subject, err := evt1SubstituteExpr(e.Subject, typeParam, concreteType)
 		if err != nil {

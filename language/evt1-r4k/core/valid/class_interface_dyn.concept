@@ -1,0 +1,98 @@
+profile Core;
+
+struct Canvas
+{
+    int marks;
+}
+
+interface Drawable<T>
+{
+    requires void Draw(ref T self, ref Canvas canvas);
+}
+
+interface Positioned<T>
+{
+    requires float x;
+    requires const float y;
+}
+
+interface SpriteLike<T>
+{
+    requires Drawable<T>;
+    requires Positioned<T>;
+}
+
+interface Incrementable<T>
+{
+    requires void Increment(ref T self);
+}
+
+interface Inspectable<T>
+{
+    requires int Inspect(ref const T self);
+}
+
+struct Circle
+{
+    float x;
+    float y;
+
+    void Draw(ref Circle self, ref Canvas canvas)
+    {
+        canvas.marks = canvas.marks + 1;
+    }
+}
+
+class Counter
+{
+public:
+    int value;
+
+    void Increment()
+    {
+        value = value + 1;
+    }
+
+    int Inspect(ref const Counter self)
+    {
+        return self.value;
+    }
+
+private:
+    void Reset()
+    {
+        value = 0;
+    }
+}
+
+requires SpriteLike<Circle>;
+requires Incrementable<Counter>;
+
+template <typename T>
+requires Drawable<T>
+void Render(ref T object, ref Canvas canvas)
+{
+    object.Draw(ref canvas);
+}
+
+int Exercise()
+{
+    Canvas canvas = Canvas{0};
+    Circle circle = Circle{1.0, 2.0};
+    Counter counter = Counter{0};
+    counter.Increment();
+    Render<Circle>(ref circle, ref canvas);
+    dyn Incrementable incrementable = ref counter;
+    incrementable.Increment();
+    dyn const Inspectable inspectable = ref const counter;
+    int observed = inspectable.Inspect();
+    dyn Drawable drawable = ref circle;
+    drawable.Draw(ref canvas);
+    dyn Positioned positioned = ref circle;
+    float before = positioned.x;
+    positioned.x = before + 3.0;
+    dyn SpriteLike sprite = ref circle;
+    sprite.Draw(ref canvas);
+    sprite.x = sprite.x + 1.0;
+    return observed + canvas.marks;
+}

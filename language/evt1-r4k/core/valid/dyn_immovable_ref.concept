@@ -1,0 +1,22 @@
+profile Core;
+
+interface Resettable<T>
+{
+    requires void Reset(ref T self);
+}
+
+immovable struct Device
+{
+    int state;
+
+    void Reset(ref Device self)
+    {
+        self.state = 0;
+    }
+}
+
+void ResetImmovable(ref Device device)
+{
+    dyn Resettable resettable = ref device;
+    resettable.Reset();
+}

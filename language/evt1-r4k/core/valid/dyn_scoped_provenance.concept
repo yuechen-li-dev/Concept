@@ -1,0 +1,22 @@
+profile Core;
+
+interface Inspectable<T>
+{
+    requires int Inspect(ref const T self);
+}
+
+struct Item
+{
+    int value;
+
+    int Inspect(ref const Item self)
+    {
+        return self.value;
+    }
+}
+
+int InspectScoped(scoped ref const Item item)
+{
+    dyn const Inspectable inspectable = ref const item;
+    return inspectable.Inspect();
+}

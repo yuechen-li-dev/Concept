@@ -1,0 +1,17 @@
+profile Core;
+
+interface Positioned<T>
+{
+    requires const float x;
+}
+
+struct Point
+{
+    float x;
+}
+
+float ReadX(ref const Point point)
+{
+    dyn const Positioned positioned = ref const point;
+    return positioned.x;
+}

@@ -809,15 +809,54 @@ work; `bind` remains an exact whole-storage association rather than a subregion.
 **Legacy PoC3.** PoC3 contains interface declarations and bounded dynamic
 dispatch fixtures.
 
-**Redesign.** A concept is the semantic contract, compile-time satisfaction
-produces a witness, and `template<T satisfies C>` consumes operation and
-semantic-proof evidence statically. Future `dyn C` is a runtime-erased value/reference paired with a
-reified witness; `interface` may become optional sugar or a marker for a
-dyn-compatible concept. Runtime witness reification is downstream of
-compile-time satisfaction and must not imply hidden allocation. Relational
-lifetime proofs remain compile-time evidence and do not become runtime witness
-baggage. R4b does not
-implement dyn, interface objects, or a vtable ABI.
+**Canonical EVT1 / R4k.** `interface C<T>` is a specialized concept whose
+requirements have a fixed runtime witness shape. All interfaces are concepts;
+not all concepts are interfaces. Interface satisfaction uses the ordinary
+concept requirement resolver. Instance methods must begin with `ref T self` or
+`ref const T self`; concrete field requirements use `requires U field;`, and
+`requires const U field;` is getter-only. Interface composition is ordinary
+`requires Other<T>;` composition, not inheritance.
+
+`template<T satisfies I>` consumes the compile-time witness and remains
+statically dispatched. `dyn I` is an explicit, non-owning erased reference plus
+a runtime-reified witness. It is constructed only with `ref place` or `ref const
+place`, preserves that place's provenance and mutability, performs no allocation
+or object copy, and owns no backing storage. One deterministic static witness
+table is emitted per `(interface, concrete type)` specialization. Required
+fields mechanically synthesize getter and, for mutable requirements, setter
+entries. Compiler semantic requirements are proven when dyn is constructed and
+have no runtime payload.
+
+Objects carry no vtable, header, RTTI, registry, or universal base. R4k has no
+downcast or owning dyn. `dyn const I` cannot call mutable receiver methods or
+write fields.
+
+## 19a. Lightweight classes
+
+**Canonical EVT1 / R4k.** A `class` groups ordinary fields and methods behind
+`public:` and `private:` sections. Class members default private; struct members
+remain public. External access to a private field or method is rejected
+semantically, while methods of the declaring class may use private members.
+Interface satisfaction considers only public capability.
+
+Class storage is ordinary Concept value storage. A class does not imply heap
+allocation, identity, reference semantics, GC, an object header, RTTI, or a
+vtable. Copy, move, immovability, and Drop behavior derive from fields under the
+existing rules. Existing aggregate construction remains the only constructor
+mechanism and may not externally initialize private fields.
+
+Methods normalize before semantic matching to ordinary functions with an
+explicit first receiver parameter. An omitted receiver becomes `ref Class self`;
+an explicit `ref const Class self` supplies a readonly method. Member-call syntax
+inserts the receiver reference. Bare member names inside a method normalize to
+`self.member` when unambiguous. There is no `virtual`, override hierarchy,
+abstract class, protected access, friend access, or inheritance syntax.
+
+> A class is encapsulation, not an allocation or inheritance model.
+>
+> An interface is a dyn-reifiable specialized concept.
+>
+> `dyn Interface` is a non-owning erased reference plus runtime witness.
 
 ## 20. Allocation
 
@@ -948,7 +987,7 @@ The following remain explicit reconciliation or implementation work:
 - generalized borrow checking, named lifetimes, and non-lexical lifetimes;
 - explicit external runtime-array/ndarray descriptors, slices, FixedBuffer,
   and bounded dynamic storage construction;
-- witness reification, interfaces, and dyn storage/dispatch;
+- owning dyn and explicit erased-storage policies;
 - allocation, allocator effects, arenas, and stores;
 - stable C ABI and layout law;
 - canonical machine/automata syntax and decide/yield semantics;

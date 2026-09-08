@@ -22,6 +22,7 @@ const (
 	TypeStream       TypeKind = "stream"
 	TypeSpan         TypeKind = "span"
 	TypeTensor       TypeKind = "tensor"
+	TypeDyn          TypeKind = "dyn"
 	TypeConceptParam TypeKind = "concept_param"
 	TypeApplied      TypeKind = "applied"
 )
@@ -80,6 +81,9 @@ func (t Type) String() string {
 		parts = append(parts, "const")
 	}
 	base := t.Name
+	if t.Kind == TypeDyn {
+		base = "dyn " + t.Name
+	}
 	if t.PointerTo != nil {
 		base = t.PointerTo.String() + "*"
 	} else if t.ArrayElem != nil {
@@ -192,7 +196,7 @@ func (t Type) isOwned() bool {
 }
 
 func (t Type) isBorrowLike() bool {
-	return t.isBorrow() || t.isReference() || t.PointerTo != nil
+	return t.isBorrow() || t.isReference() || t.PointerTo != nil || t.Kind == TypeDyn
 }
 
 func (t Type) borrowBase() Type {
@@ -205,9 +209,10 @@ func (t Type) borrowBase() Type {
 }
 
 type Field struct {
-	Type Type   `json:"type"`
-	Name string `json:"name"`
-	Span Span   `json:"span"`
+	Type       Type   `json:"type"`
+	Name       string `json:"name"`
+	Visibility string `json:"visibility,omitempty"`
+	Span       Span   `json:"span"`
 }
 
 // LayoutDecl is a zero-allocation semantic description of fixed memory
@@ -248,13 +253,15 @@ type StreamChannel struct {
 }
 
 type StructDecl struct {
-	Name       string  `json:"name"`
-	Immovable  bool    `json:"immovable"`
-	Record     bool    `json:"record"`
-	Ref        bool    `json:"ref,omitempty"`
-	Fields     []Field `json:"fields"`
-	Span       Span    `json:"span"`
-	RecordSpan Span    `json:"record_span,omitempty"`
+	Name       string         `json:"name"`
+	Immovable  bool           `json:"immovable"`
+	Record     bool           `json:"record"`
+	Ref        bool           `json:"ref,omitempty"`
+	Class      bool           `json:"class,omitempty"`
+	Fields     []Field        `json:"fields"`
+	Methods    []FunctionDecl `json:"methods,omitempty"`
+	Span       Span           `json:"span"`
+	RecordSpan Span           `json:"record_span,omitempty"`
 }
 
 type VariantDecl struct {
@@ -332,6 +339,16 @@ type CompilerAnalysisRequirement struct {
 	Span        Span                 `json:"span"`
 }
 
+type FieldRequirement struct {
+	Type     Type   `json:"type"`
+	Name     string `json:"name"`
+	Readonly bool   `json:"readonly,omitempty"`
+	Span     Span   `json:"span"`
+}
+
+func (*FieldRequirement) evt1ConceptRequirement() {}
+func (r *FieldRequirement) requirementSpan() Span { return r.Span }
+
 type SemanticSubjectRef struct {
 	Name string `json:"name"`
 	Span Span   `json:"span"`
@@ -344,6 +361,7 @@ type ConceptDecl struct {
 	Name         string               `json:"name"`
 	TypeParam    string               `json:"type_param"`
 	Requirements []ConceptRequirement `json:"requirements,omitempty"`
+	Interface    bool                 `json:"interface,omitempty"`
 	Span         Span                 `json:"span"`
 }
 
@@ -376,6 +394,8 @@ type FunctionDecl struct {
 	ReturnType Type    `json:"return_type"`
 	Params     []Param `json:"params,omitempty"`
 	Body       *Block  `json:"body,omitempty"`
+	MethodOf   string  `json:"method_of,omitempty"`
+	Visibility string  `json:"visibility,omitempty"`
 	Span       Span    `json:"span"`
 }
 
@@ -649,6 +669,8 @@ type FieldExpr struct {
 	RegionOffset    int    `json:"region_offset,omitempty"`
 	RegionExtent    int    `json:"region_extent,omitempty"`
 	RegionAlignment int    `json:"region_alignment,omitempty"`
+	DynInterface    string `json:"dyn_interface,omitempty"`
+	DynReadonly     bool   `json:"dyn_readonly,omitempty"`
 	Span            Span   `json:"span"`
 }
 
@@ -657,6 +679,11 @@ func (e *FieldExpr) exprSpan() Span { return e.Span }
 
 type CallExpr struct {
 	Callee               string           `json:"callee"`
+	Receiver             Expr             `json:"receiver,omitempty"`
+	Member               bool             `json:"member,omitempty"`
+	DynDispatch          bool             `json:"dyn_dispatch,omitempty"`
+	DynInterface         string           `json:"dyn_interface,omitempty"`
+	WitnessID            string           `json:"witness_id,omitempty"`
 	Args                 []Expr           `json:"args,omitempty"`
 	Intrinsic            string           `json:"intrinsic,omitempty"`
 	SpanElementType      *Type            `json:"span_element_type,omitempty"`
@@ -726,9 +753,14 @@ func (*MoveExpr) evt1Expr()        {}
 func (e *MoveExpr) exprSpan() Span { return e.Span }
 
 type RefExpr struct {
-	Value Expr `json:"value"`
-	Const bool `json:"const,omitempty"`
-	Span  Span `json:"span"`
+	Value         Expr   `json:"value"`
+	Const         bool   `json:"const,omitempty"`
+	DynInterface  string `json:"dyn_interface,omitempty"`
+	DynConcrete   Type   `json:"dyn_concrete,omitempty"`
+	DynProvenance string `json:"dyn_provenance,omitempty"`
+	DynScoped     bool   `json:"dyn_scoped,omitempty"`
+	WitnessID     string `json:"witness_id,omitempty"`
+	Span          Span   `json:"span"`
 }
 
 func (*RefExpr) evt1Expr()        {}
@@ -882,27 +914,39 @@ type MIRActuatorMapping struct {
 }
 
 type MIR struct {
-	Schema         string             `json:"schema"`
-	Module         string             `json:"module"`
-	Profile        string             `json:"profile"`
-	Structs        []MIRStruct        `json:"structs,omitempty"`
-	Enums          []MIREnum          `json:"enums,omitempty"`
-	Effects        []MIREffect        `json:"effects,omitempty"`
-	Actuators      []MIRActuator      `json:"actuators,omitempty"`
-	Automata       []MIRAutomata      `json:"automata,omitempty"`
-	Concepts       []MIRConcept       `json:"concepts,omitempty"`
-	Assertions     []MIRAssertion     `json:"assertions,omitempty"`
-	ComptimeDecls  []MIRComptimeDecl  `json:"comptime_decls,omitempty"`
-	StaticAsserts  []MIRStaticAssert  `json:"static_asserts,omitempty"`
-	Templates      []MIRTemplate      `json:"templates,omitempty"`
-	Instances      []MIRInstance      `json:"instances,omitempty"`
-	Functions      []MIRFunction      `json:"functions"`
-	ComptimeFns    []MIRFunction      `json:"comptime_functions,omitempty"`
-	SemanticProofs []MIRSemanticProof `json:"semantic_proofs,omitempty"`
-	SemanticFacts  []MIRSemanticFact  `json:"semantic_facts,omitempty"`
-	StorageTypes   []MIRStorageType   `json:"storage_types,omitempty"`
-	Layouts        []MIRLayout        `json:"layouts,omitempty"`
-	Streams        []MIRStream        `json:"streams,omitempty"`
+	Schema         string                `json:"schema"`
+	Module         string                `json:"module"`
+	Profile        string                `json:"profile"`
+	Structs        []MIRStruct           `json:"structs,omitempty"`
+	Enums          []MIREnum             `json:"enums,omitempty"`
+	Effects        []MIREffect           `json:"effects,omitempty"`
+	Actuators      []MIRActuator         `json:"actuators,omitempty"`
+	Automata       []MIRAutomata         `json:"automata,omitempty"`
+	Concepts       []MIRConcept          `json:"concepts,omitempty"`
+	Assertions     []MIRAssertion        `json:"assertions,omitempty"`
+	ComptimeDecls  []MIRComptimeDecl     `json:"comptime_decls,omitempty"`
+	StaticAsserts  []MIRStaticAssert     `json:"static_asserts,omitempty"`
+	Templates      []MIRTemplate         `json:"templates,omitempty"`
+	Instances      []MIRInstance         `json:"instances,omitempty"`
+	Functions      []MIRFunction         `json:"functions"`
+	ComptimeFns    []MIRFunction         `json:"comptime_functions,omitempty"`
+	SemanticProofs []MIRSemanticProof    `json:"semantic_proofs,omitempty"`
+	SemanticFacts  []MIRSemanticFact     `json:"semantic_facts,omitempty"`
+	StorageTypes   []MIRStorageType      `json:"storage_types,omitempty"`
+	Layouts        []MIRLayout           `json:"layouts,omitempty"`
+	Streams        []MIRStream           `json:"streams,omitempty"`
+	Witnesses      []MIRInterfaceWitness `json:"interface_witnesses,omitempty"`
+}
+
+type MIRInterfaceWitness struct {
+	ID            string   `json:"id"`
+	Interface     string   `json:"interface"`
+	ConcreteType  string   `json:"concrete_type"`
+	Methods       []string `json:"methods,omitempty"`
+	FieldGetters  []string `json:"field_getters,omitempty"`
+	FieldSetters  []string `json:"field_setters,omitempty"`
+	Prerequisites []string `json:"prerequisites,omitempty"`
+	NoAllocation  bool     `json:"no_allocation"`
 }
 
 type MIRLayout struct {
@@ -955,6 +999,7 @@ type MIRStruct struct {
 	Immovable  bool      `json:"immovable"`
 	Record     bool      `json:"record,omitempty"`
 	Ref        bool      `json:"ref,omitempty"`
+	Class      bool      `json:"class,omitempty"`
 	Copyable   bool      `json:"copyable"`
 	Movable    bool      `json:"movable"`
 	HasDrop    bool      `json:"has_drop"`
@@ -978,13 +1023,15 @@ type MIRVariant struct {
 }
 
 type MIRName struct {
-	Name string `json:"name"`
-	Type Type   `json:"type"`
+	Name       string `json:"name"`
+	Type       Type   `json:"type"`
+	Visibility string `json:"visibility,omitempty"`
 }
 
 type MIRConcept struct {
 	Name         string                  `json:"name"`
 	TypeParam    string                  `json:"type_param"`
+	Interface    bool                    `json:"interface,omitempty"`
 	Requirements []MIRConceptRequirement `json:"requirements,omitempty"`
 	SourceSpan   Span                    `json:"source_span"`
 }
@@ -1067,6 +1114,8 @@ type MIRInstance struct {
 
 type MIRFunction struct {
 	Name             string                      `json:"name"`
+	MethodOf         string                      `json:"method_of,omitempty"`
+	Visibility       string                      `json:"visibility,omitempty"`
 	ReturnType       Type                        `json:"return_type"`
 	Params           []MIRName                   `json:"params,omitempty"`
 	ResultProvenance *MIRResultProvenanceSummary `json:"result_provenance,omitempty"`
@@ -1170,6 +1219,8 @@ type semanticEnv struct {
 	templateInstances map[string]*evt1TemplateInstance
 	semanticProofs    []MIRSemanticProof
 	resultProvenance  map[string]evt1ResultProvenanceSummary
+	dynWitnesses      map[string]*evt1InterfaceWitness
+	validatingMethod  string
 }
 
 const evt1AutomataDispatchOutcomeTypeName = "AutomataDispatchOutcome"
@@ -1224,6 +1275,7 @@ func newSemanticEnv(profile *ProfileDefinition) *semanticEnv {
 		templateInstances: map[string]*evt1TemplateInstance{},
 		semanticProofs:    nil,
 		resultProvenance:  map[string]evt1ResultProvenanceSummary{},
+		dynWitnesses:      map[string]*evt1InterfaceWitness{},
 	}
 }
 

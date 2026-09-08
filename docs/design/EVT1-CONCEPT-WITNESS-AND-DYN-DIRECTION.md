@@ -1,64 +1,69 @@
 # EVT1 concept witness and dyn direction
 
-Status: R4b semantic-proof direction; runtime reification is not implemented
+Status: R4k bounded non-owning runtime reification implemented
 
-## Model
+## One contract system
 
 ```text
 concept C
-    semantic contract
+    generalized semantic contract
 
-witness(T, C)
-    evidence that concrete T satisfies C
+interface I<T>
+    dyn-compatible specialized concept
 
-template <T satisfies C>
-    consumes a compile-time witness
+Witness<I, T>
+    deterministic evidence that T satisfies I
 
-dyn C
-    runtime-erased value or reference + reified witness
+template<T satisfies I>
+    compile-time witness consumer and static dispatch
 
-interface
-    optional sugar or marker for a dyn-compatible concept
+dyn I
+    erased non-owning reference plus runtime witness
 ```
 
-Concept requirements may be ordinary operation signatures, prerequisite
-concepts, static predicates in a future bounded form, or compiler-known
-semantic analyses. R4a implements a small internal compiler-analysis registry
-and proves `LifetimeSafe<T>` through the ordinary concept-satisfaction path.
-The requirement resolver remains the single owner of satisfaction; templates
-do not contain a parallel lifetime checker.
+The ordinary concept resolver is the sole satisfaction authority. An
+interface does not create an `implements` table or a second matching engine.
+Public struct and class methods are normalized to ordinary callable signatures
+before matching. Compiler semantic-fact requirements are proven by the same
+resolver at dyn construction and erase before runtime.
 
-R4b permits a compiler analysis to consume bounded semantic subjects from one
-required operation. `Outlives(source, result)` produces inspectable relational
-proof evidence containing the selected parameter, result, provenance facts,
-outcome, and requirement origin. This extends the compile-time witness with a
-semantic proof; it does not expand source concepts beyond one type parameter.
+## Static and runtime witnesses
 
-Compile-time satisfaction is authoritative. A template specialization uses
-the selected operations and semantic proof results statically. Runtime witness
-reification, if added, is downstream of that same satisfaction result rather
-than an independent interface implementation subsystem.
+Static template specialization consumes the resolved operations and proofs
+without emitting runtime dispatch. A concrete `ref T` to `dyn I` conversion
+reifies the same satisfaction result as one deterministic witness identified
+by `(I, T)`. Its runtime entries bind required methods and mechanically
+synthesized field getters/setters. Interface prerequisites are flattened into
+the witness entries; their semantic proof identity remains inspectable in MIR.
 
-Runtime dyn reification must therefore originate from an already-satisfied
-compile-time semantic contract. Relational lifetime evidence is compile-time
-only and must not be copied into a runtime witness table unless a future,
-separately specified runtime invariant actually needs it.
+Mutable field requirements receive getter and setter entries. `requires const`
+fields receive only a getter. Readonly dyn values use `const void*` storage and
+cannot recover mutation through a method receiver or field setter.
 
-## Runtime direction
+## Representation and lifetime
 
-A future `dyn C` contains or references erased data and carries a reified
-witness sufficient for the operations admitted by `C`. Storage policy must be
-explicit: dyn must not imply hidden allocation. Inline, borrowed, owned,
-arena-backed, or other representations require their own visible laws.
+```c
+typedef struct {
+    void* object;
+    const concept_I_Witness* witness;
+} concept_dyn_I;
+```
 
-An `interface` declaration is therefore not planned as a parallel nominal
-abstraction hierarchy. It may become syntax for declaring that a concept is
-dyn-reifiable, or remain unnecessary if `dyn C` is sufficient.
+`dyn I value = ref place;` stores the place address and the address of a static
+const witness table. It performs no allocation, copy, relocation, or ownership
+transfer. The dyn local retains the source place's lexical/scoped provenance,
+so the existing reference escape analysis rejects an outward escape. This also
+allows an immovable value to be viewed through dyn because the value never
+moves.
 
-## Boundaries
+Objects do not carry vtables, headers, RTTI, registries, or universal base-type
+metadata. Runtime dispatch can recover only the interface operations present
+in its witness; there is no downcast or type recovery.
 
-R4b does not implement `dyn`, interface syntax, witness tables, object safety,
-associated types, multi-parameter source concepts, ABI layout, allocation, or
-ownership rules for erased values. Future unsafe should ideally bypass a
-specific semantic requirement, for example `unsafe(LifetimeSafety)`, rather
-than disabling all compiler checking. No unsafe bypass is implemented here.
+## Boundary
+
+R4k implements only borrowed runtime erasure. `owned dyn`, inline erased
+storage, heap-backed erasure, and allocator integration remain deferred and
+must name an explicit storage policy. Associated types, open generic runtime
+methods, arbitrary compile-time runtime payloads, inheritance, and a generalized
+object model are outside this design.

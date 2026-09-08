@@ -1,0 +1,12 @@
+profile Core;
+
+class Device
+{
+public:
+    int id;
+}
+
+int ReadDevice(ref const Device device)
+{
+    return device.id;
+}

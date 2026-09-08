@@ -1,0 +1,28 @@
+profile Core;
+
+interface Resettable<T>
+{
+    requires void Reset(ref T self);
+}
+
+struct Item
+{
+    int state;
+
+    void Reset(ref Item self)
+    {
+        self.state = 0;
+    }
+}
+
+template <typename T>
+requires Resettable<T>
+void ResetStatic(ref T item)
+{
+    item.Reset();
+}
+
+void UseStaticInterface(ref Item item)
+{
+    ResetStatic<Item>(ref item);
+}

@@ -1,0 +1,20 @@
+profile Core;
+
+class Device
+{
+public:
+    int id;
+
+    int ReadState(ref const Device self)
+    {
+        return state;
+    }
+
+private:
+    int state;
+}
+
+int ReadPrivateThroughPublicMethod(ref const Device device)
+{
+    return device.ReadState();
+}

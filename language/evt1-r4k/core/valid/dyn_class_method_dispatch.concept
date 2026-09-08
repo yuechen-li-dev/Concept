@@ -1,0 +1,23 @@
+profile Core;
+
+interface Resettable<T>
+{
+    requires void Reset(ref T self);
+}
+
+class Item
+{
+public:
+    int state;
+
+    void Reset()
+    {
+        state = 0;
+    }
+}
+
+void ResetClass(ref Item item)
+{
+    dyn Resettable resettable = ref item;
+    resettable.Reset();
+}

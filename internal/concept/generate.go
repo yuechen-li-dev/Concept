@@ -72,6 +72,9 @@ func Generate(module Module, source []byte) (Outputs, error) {
 	if len(l.mir.SemanticFacts) > 0 {
 		l.mapDoc["semantic_facts"] = l.mir.SemanticFacts
 	}
+	if len(l.mir.Witnesses) > 0 {
+		l.mapDoc["interface_witnesses"] = l.mir.Witnesses
+	}
 	mapJSON, err := json.MarshalIndent(l.mapDoc, "", "  ")
 	if err != nil {
 		return nil, err
@@ -118,13 +121,18 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 			Immovable:  structDecl.Immovable,
 			Record:     structDecl.Record,
 			Ref:        structDecl.Ref,
+			Class:      structDecl.Class,
 			Copyable:   evt1TypeCopyable(env, Type{Name: structDecl.Name, Kind: TypeStruct}),
 			Movable:    !structDecl.Immovable,
 			HasDrop:    evt1DropFunction(env, Type{Name: structDecl.Name, Kind: TypeStruct}) != nil,
 			SourceSpan: structDecl.Span,
 		}
 		for _, field := range structDecl.Fields {
-			mirStruct.Fields = append(mirStruct.Fields, MIRName{Name: field.Name, Type: evt1MIRType(env, field.Type)})
+			visibility := ""
+			if structDecl.Class {
+				visibility = field.Visibility
+			}
+			mirStruct.Fields = append(mirStruct.Fields, MIRName{Name: field.Name, Type: evt1MIRType(env, field.Type), Visibility: visibility})
 		}
 		mir.Structs = append(mir.Structs, mirStruct)
 	}
@@ -274,7 +282,7 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 		mir.Automata = append(mir.Automata, mirAutomata)
 	}
 	for _, conceptDecl := range module.Concepts {
-		mirConcept := MIRConcept{Name: conceptDecl.Name, TypeParam: conceptDecl.TypeParam, SourceSpan: conceptDecl.Span}
+		mirConcept := MIRConcept{Name: conceptDecl.Name, TypeParam: conceptDecl.TypeParam, Interface: conceptDecl.Interface, SourceSpan: conceptDecl.Span}
 		for _, req := range conceptDecl.Requirements {
 			switch r := req.(type) {
 			case *OperationRequirement:
@@ -295,6 +303,9 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 					Detail:     r.TypeArg.String(),
 					SourceSpan: r.Span,
 				})
+			case *FieldRequirement:
+				t := r.Type
+				mirConcept.Requirements = append(mirConcept.Requirements, MIRConceptRequirement{Kind: "field", Name: r.Name, ReturnType: &t, Detail: map[bool]string{true: "readonly", false: "mutable"}[r.Readonly], SourceSpan: r.Span})
 			case *CompilerAnalysisRequirement:
 				var args []string
 				for _, arg := range r.TypeArgs {
@@ -312,6 +323,19 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 			}
 		}
 		mir.Concepts = append(mir.Concepts, mirConcept)
+	}
+	for _, witness := range evt1SortedWitnesses(env) {
+		entry := MIRInterfaceWitness{ID: witness.ID, Interface: witness.Interface.Name, ConcreteType: witness.Concrete.String(), Prerequisites: append([]string{}, witness.Prerequisites...), NoAllocation: true}
+		for _, method := range witness.Methods {
+			entry.Methods = append(entry.Methods, method.Name)
+		}
+		for _, field := range witness.Fields {
+			entry.FieldGetters = append(entry.FieldGetters, field.Name)
+			if !field.Readonly {
+				entry.FieldSetters = append(entry.FieldSetters, field.Name)
+			}
+		}
+		mir.Witnesses = append(mir.Witnesses, entry)
 	}
 	for _, assertion := range module.Assertions {
 		mir.Assertions = append(mir.Assertions, MIRAssertion{
@@ -432,6 +456,9 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 	}
 	for _, fn := range module.Functions {
 		mirFn := MIRFunction{Name: fn.Name, ReturnType: evt1MIRType(env, fn.ReturnType), SourceSpan: fn.Span}
+		if fn.MethodOf != "" {
+			mirFn.MethodOf, mirFn.Visibility = fn.MethodOf, fn.Visibility
+		}
 		if fn.ReturnType.isReference() || evt1IsRefStructType(env, fn.ReturnType) {
 			summary := env.resultProvenance[evt1FunctionProvenanceKey(fn)]
 			mirFn.ResultProvenance = &MIRResultProvenanceSummary{Kind: string(summary.Kind), ParameterIndices: append([]int{}, summary.ParameterIndices...)}
@@ -475,6 +502,22 @@ func evt1ValidateMIR(mir MIR) error {
 	if err := evt1ValidateSemanticFacts(mir.SemanticFacts); err != nil {
 		return err
 	}
+	seenWitnesses := map[string]bool{}
+	for _, witness := range mir.Witnesses {
+		if witness.ID == "" || witness.Interface == "" || witness.ConcreteType == "" || !witness.NoAllocation || seenWitnesses[witness.ID] {
+			return evt1Diagnostic("INTERFACE_WITNESS_INVALID", "interface witness MIR omits its unique identity, type pair, or no-allocation law", Span{})
+		}
+		seenWitnesses[witness.ID] = true
+		for _, entries := range [][]string{witness.Methods, witness.FieldGetters, witness.FieldSetters, witness.Prerequisites} {
+			seenEntries := map[string]bool{}
+			for _, entry := range entries {
+				if entry == "" || seenEntries[entry] {
+					return evt1Diagnostic("INTERFACE_WITNESS_INVALID", fmt.Sprintf("interface witness %s contains an empty or duplicate runtime entry", witness.ID), Span{})
+				}
+				seenEntries[entry] = true
+			}
+		}
+	}
 	regions := map[string]MIRLayoutRegion{}
 	for _, layout := range mir.Layouts {
 		if layout.Name == "" || layout.Size < 1 || layout.Alignment < 1 || len(layout.Regions) == 0 {
@@ -515,6 +558,18 @@ func evt1ValidateMIR(mir MIR) error {
 			seen[cleanup.Owner] = true
 		}
 		for _, operation := range fn.Operations {
+			if operation.Kind == "dyn_make" {
+				if operation.Type == "" || operation.Detail == "" || operation.Provenance == "" || !operation.NoCopy || !operation.NoAllocation || !operation.NoOwnershipTransfer {
+					return evt1Diagnostic("DYN_MIR_INVALID", fmt.Sprintf("MIR dyn construction %s omits witness, provenance, or storage-neutrality facts", operation.ID), operation.SourceSpan)
+				}
+				continue
+			}
+			if operation.Kind == "dyn_call" || operation.Kind == "dyn_field_get" || operation.Kind == "dyn_field_set" {
+				if operation.Type == "" || operation.Detail == "" || !operation.NoCopy || !operation.NoAllocation || !operation.NoOwnershipTransfer {
+					return evt1Diagnostic("DYN_MIR_INVALID", fmt.Sprintf("MIR %s operation %s omits interface or storage-neutrality facts", operation.Kind, operation.ID), operation.SourceSpan)
+				}
+				continue
+			}
 			if operation.Kind == "tensor_inline_storage" {
 				if operation.TensorBackingKind != TensorBackingInline || operation.TargetStorageKind != StorageNDArray || operation.TargetRank < 1 || len(operation.TargetShape) != operation.TargetRank || operation.RegionID == "" || operation.Provenance != "local" || operation.Mutability == "" || operation.Alignment < 1 || !operation.Contiguous || !operation.NoCopy || !operation.NoAllocation || !operation.NoOwnershipTransfer {
 					return evt1Diagnostic("CV4626", fmt.Sprintf("MIR inline tensor storage %s omits fixed backing facts", operation.ID), operation.SourceSpan)
@@ -674,8 +729,16 @@ func collectMIROps(env *semanticEnv, block *Block, fn *MIRFunction, templateInfo
 			if s.Tensor != nil {
 				fn.TensorOperations = append(fn.TensorOperations, *s.Tensor)
 			}
-			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "assign", Type: exprLabel(s.Target), Detail: exprLabel(s.Target), SourceSpan: s.Span})
-			collectExprMIROps(env, s.Target, fn, templateInfo)
+			op := MIROperation{ID: id, Kind: "assign", Type: exprLabel(s.Target), Detail: exprLabel(s.Target), SourceSpan: s.Span}
+			if field, ok := s.Target.(*FieldExpr); ok && field.DynInterface != "" {
+				op.Kind, op.Type, op.Detail = "dyn_field_set", field.DynInterface, field.Field
+				op.NoCopy, op.NoAllocation, op.NoOwnershipTransfer = true, true, true
+				fn.Operations = append(fn.Operations, op)
+				collectExprMIROps(env, field.Receiver, fn, templateInfo)
+			} else {
+				fn.Operations = append(fn.Operations, op)
+				collectExprMIROps(env, s.Target, fn, templateInfo)
+			}
 			collectExprMIROps(env, s.Value, fn, templateInfo)
 		case *ReturnStmt:
 			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "return", Type: fn.ReturnType.String(), SourceSpan: s.Span})
@@ -761,7 +824,15 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 		if e.Const {
 			kind = "ref_const"
 		}
-		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: kind, Detail: exprLabel(e.Value), SourceSpan: e.Span})
+		op := MIROperation{ID: id, Kind: kind, Detail: exprLabel(e.Value), SourceSpan: e.Span}
+		if e.DynInterface != "" {
+			op.Kind, op.Type, op.Detail, op.Provenance = "dyn_make", "dyn "+e.DynInterface, e.WitnessID+" <- "+exprLabel(e.Value), e.DynProvenance
+			if e.DynScoped {
+				op.Provenance += ":scoped"
+			}
+			op.NoCopy, op.NoAllocation, op.NoOwnershipTransfer = true, true, true
+		}
+		fn.Operations = append(fn.Operations, op)
 	case *BindExpr:
 		if e.BindKind == "layout" || e.BindKind == "stream" {
 			kind := e.BindKind + "_bind"
@@ -836,6 +907,22 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 			collectExprMIROps(env, arm.Value, fn, templateInfo)
 		}
 	case *CallExpr:
+		if e.Member {
+			kind := "class_method_call"
+			if e.DynDispatch {
+				kind = "dyn_call"
+			}
+			op := MIROperation{ID: id, Kind: kind, Detail: e.Callee, SourceSpan: e.Span}
+			if e.DynDispatch {
+				op.Type, op.NoCopy, op.NoAllocation, op.NoOwnershipTransfer = e.DynInterface, true, true, true
+			}
+			fn.Operations = append(fn.Operations, op)
+			collectExprMIROps(env, e.Receiver, fn, templateInfo)
+			for _, arg := range e.Args {
+				collectExprMIROps(env, arg, fn, templateInfo)
+			}
+			return
+		}
 		if e.Intrinsic == "tensor_view" && e.TensorFacts != nil {
 			facts := e.TensorFacts
 			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "tensor_view", Type: fmt.Sprintf("tensor<%s, %d>", facts.ElementType.String(), facts.Rank), Detail: facts.Source, TargetRank: facts.Rank, TargetShape: append([]StorageDimension{}, facts.Shape...), Mutability: facts.Mutability, Provenance: facts.Provenance, RegionID: facts.RegionID, BaseOffset: facts.BaseOffset, Alignment: facts.Alignment, TensorBackingKind: facts.BackingKind, Contiguous: true, NoCopy: true, NoAllocation: true, NoOwnershipTransfer: true, SameBackingRegion: true, SourceSpan: e.Span})
@@ -898,7 +985,13 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 		}
 	case *FieldExpr:
 		kind := "field_access"
+		if e.DynInterface != "" {
+			kind = "dyn_field_get"
+		}
 		op := MIROperation{ID: id, Kind: kind, Detail: e.Field, SourceSpan: e.Span}
+		if e.DynInterface != "" {
+			op.Type, op.NoCopy, op.NoAllocation, op.NoOwnershipTransfer = e.DynInterface, true, true, true
+		}
 		if e.RegionID != "" {
 			op.Kind, op.LayoutName, op.RegionID, op.Offset, op.ByteExtent, op.Alignment, op.SameBackingRegion = "region_projection", e.LayoutName, e.RegionID, e.RegionOffset, e.RegionExtent, e.RegionAlignment, true
 		}
@@ -1044,6 +1137,7 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 	header.WriteString(evt1SpanDeclarations(spanTypes))
 	header.WriteString(evt1TensorDeclarations(tensorTypes))
 	header.WriteString(l.semanticViewDeclarations())
+	header.WriteString(l.interfaceWitnessDeclarations())
 	canonicalFailureTypes := evt1CanonicalFailureTypeKeys(l.module)
 	for _, failureType := range evt1CollectFailureTypes(l.module) {
 		if _, legacy := evt1IsResultVoidErrorType(l.env, failureType); legacy && !canonicalFailureTypes[evt1FailureTypeKey(failureType)] {
@@ -1109,6 +1203,7 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 	for _, actuatorDecl := range l.module.Actuators {
 		body.WriteString(l.actuatorRuntimeSupport(actuatorDecl.Name))
 	}
+	body.WriteString(l.interfaceWitnessDefinitions())
 	for _, templateDecl := range l.module.Templates {
 		var instances []*evt1TemplateInstance
 		for _, instance := range l.env.templateInstances {
@@ -2415,6 +2510,9 @@ func evt1ConstructorName(enumName, variantName string) string {
 }
 
 func evt1CType(t Type) string {
+	if t.Kind == TypeDyn {
+		return evt1DynCName(t)
+	}
 	if evt1IsTensorType(t) {
 		return evt1TensorCName(t)
 	}
@@ -2717,6 +2815,11 @@ func (f *evt1FunctionLowerer) lowerStatement(stmt Statement, indent int) string 
 		if s.Tensor != nil {
 			return f.lowerTensorAssignment(s, indent)
 		}
+		if field, ok := s.Target.(*FieldExpr); ok && field.DynInterface != "" {
+			recvPrelude, recv, _ := f.lowerExpr(field.Receiver, indent)
+			valuePrelude, value, _ := f.lowerExpr(s.Value, indent)
+			return recvPrelude + valuePrelude + ind(indent) + fmt.Sprintf("(%s).witness->set_%s((%s).object, %s);\n", recv, field.Field, recv, value)
+		}
 		prelude, target, _, _ := f.lowerLValue(s.Target, indent)
 		rhsPrelude, value, _ := f.lowerExpr(s.Value, indent)
 		replacementDrop := ""
@@ -2970,6 +3073,14 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		return "", e.Name, Type{}
 	case *FieldExpr:
 		prelude, recv, recvType := f.lowerExpr(e.Receiver, indent)
+		if e.DynInterface != "" {
+			_, fields, _ := evt1InterfaceRuntimeRequirements(f.l.env, e.DynInterface, map[string]bool{})
+			for _, field := range fields {
+				if field.Name == e.Field {
+					return prelude, fmt.Sprintf("(%s).witness->get_%s((%s).object)", recv, e.Field, recv), field.Type.valueType()
+				}
+			}
+		}
 		if region, ok := evt1LayoutRegion(f.l.env, recvType.Name, e.Field); ok {
 			return f.lowerRegionProjection(prelude, recv, recvType, region)
 		}
@@ -3042,6 +3153,14 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		return "", "/* bind_requires_target */", Type{}
 	case *RefExpr:
 		prelude, target, targetType, _ := f.lowerLValue(e.Value, indent)
+		if e.DynInterface != "" {
+			dynType := Type{Name: e.DynInterface, Kind: TypeDyn, Const: e.Const, Span: e.Span}
+			object := "(void*)&(" + target + ")"
+			if e.Const {
+				object = "(const void*)&(" + target + ")"
+			}
+			return prelude, fmt.Sprintf("(%s){ .object = %s, .witness = &%s }", evt1CType(dynType), object, evt1WitnessTableCName(e.WitnessID)), dynType
+		}
 		out := targetType.valueType()
 		out.Ownership = "ref"
 		out.Const = e.Const
@@ -3101,6 +3220,43 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		}
 		return b.String(), carrierTemp + ".payload." + field, evt1FailureSuccessType(carrierType)
 	case *CallExpr:
+		if e.Member {
+			if e.DynDispatch {
+				recvPrelude, recv, recvType := f.lowerExpr(e.Receiver, indent)
+				decl := f.l.env.concepts[recvType.Name]
+				methods, _, _ := evt1InterfaceRuntimeRequirements(f.l.env, recvType.Name, map[string]bool{})
+				var req OperationRequirement
+				for _, candidate := range methods {
+					if candidate.Name == e.Callee {
+						req = candidate
+						break
+					}
+				}
+				var prelude strings.Builder
+				prelude.WriteString(recvPrelude)
+				args := []string{"(" + recv + ").object"}
+				for i, arg := range e.Args {
+					argPrelude, argExpr, argType := f.lowerExpr(arg, indent)
+					prelude.WriteString(argPrelude)
+					param := evt1SubstituteType(req.Params[i+1].Type, decl.TypeParam, Type{Name: "void", Kind: TypeBuiltin})
+					if param.isBorrowLike() && !argType.isBorrowLike() {
+						argExpr = "&" + argExpr
+					}
+					args = append(args, argExpr)
+				}
+				return prelude.String(), fmt.Sprintf("(%s).witness->%s(%s)", recv, e.Callee, strings.Join(args, ", ")), req.ReturnType
+			}
+			copy := *e
+			copy.Member, copy.Receiver = false, nil
+			selfConst := false
+			if t, err := validateExpr(f.l.env, f.typeScope(), e.Receiver, nil, false); err == nil {
+				if place, placeErr := validateAssignable(f.l.env, f.typeScope(), e.Receiver, nil); placeErr == nil {
+					selfConst = !place.mutable || t.Const
+				}
+			}
+			copy.Args = append([]Expr{&RefExpr{Value: e.Receiver, Const: selfConst, Span: e.Span}}, e.Args...)
+			return f.lowerExpr(&copy, indent)
+		}
 		if e.Intrinsic == "tensor_view" {
 			return f.lowerTensorView(e, indent)
 		}
@@ -3745,6 +3901,18 @@ func ind(level int) string {
 
 func MIRText(m MIR) string {
 	var lines []string
+	for _, witness := range m.Witnesses {
+		lines = append(lines, fmt.Sprintf("interface_witness %s interface %s concrete %s no_allocation=%t", witness.ID, witness.Interface, witness.ConcreteType, witness.NoAllocation))
+		for _, method := range witness.Methods {
+			lines = append(lines, fmt.Sprintf("interface_witness %s method %s", witness.ID, method))
+		}
+		for _, field := range witness.FieldGetters {
+			lines = append(lines, fmt.Sprintf("interface_witness %s field_get %s", witness.ID, field))
+		}
+		for _, field := range witness.FieldSetters {
+			lines = append(lines, fmt.Sprintf("interface_witness %s field_set %s", witness.ID, field))
+		}
+	}
 	for _, automata := range m.Automata {
 		line := fmt.Sprintf("automata %s identity %s depth %d", automata.Name, automata.GraphIdentity, automata.MaxActiveDepth)
 		if automata.ContextType != nil {

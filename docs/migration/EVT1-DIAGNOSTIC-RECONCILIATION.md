@@ -1,6 +1,6 @@
 # EVT1 diagnostic reconciliation
 
-Status: R4j semantic fact qualification
+Status: R4k class, interface, and dyn reconciliation
 
 Concept EVT1 compares diagnostics by semantic family. The active Go compiler
 retains `CV` numbers and the retired PoC3 compiler retains `CON` numbers; R2
@@ -95,6 +95,17 @@ the executable mapping used by the R2 conformance harness.
 | invalid semantic subject or parameter | bounded analysis subject precedent | `CV4642`-`CV4643` | `SEMANTIC_FACT_INVALID_SUBJECT` / `SEMANTIC_FACT_INVALID_PARAMETER` | EVT1-new / R4b-derived | alignment is positive power-of-two through 4096 |
 | specialized fact failure | no direct counterpart | `CV4644`-`CV4648` | alignment/disjoint/contiguity/shape/mutability requirement families | EVT1-new | preserves useful semantic diagnostic families |
 | malformed semantic fact MIR | MIR invariant precedent | `CV4649` | `SEMANTIC_FACT_MIR_INVALID` | EVT1-new | typed subject, origin, certainty, and stable unique ID required |
+| invalid or duplicate class member | Phase 7 member pressure | `CLASS_DUPLICATE_MEMBER`, `CLASS_METHOD_RECEIVER_INVALID`, `CLASS_MEMBER_TYPE_INVALID` | same semantic family | EVT1-new names | class validation is independent of name-resolution accidents |
+| private class access | no matching closed Phase 14 access family | `CLASS_PRIVATE_MEMBER_ACCESS` | `CLASS_PRIVATE_MEMBER_ACCESS` | EVT1-new | covers external field and method access |
+| unsatisfied interface method | Phase 14 signature/implementation diagnostics | `CV4153`, `CV4156` | `INTERFACE_REQUIREMENT_UNSATISFIED` family | preserved Go numbers | missing and wrong-signature operations reuse ordinary concept matching |
+| unsatisfied interface field | no direct counterpart | `INTERFACE_REQUIREMENT_UNSATISFIED` | same semantic family | EVT1-new name | exact visible field type required |
+| private-only interface satisfaction | Phase 14 implementation visibility pressure | `INTERFACE_PRIVATE_MEMBER_CANNOT_SATISFY` | same semantic family | EVT1-new name | public contract capability cannot be supplied privately |
+| invalid interface runtime shape | Phase 14 dyn compatibility pressure | `INTERFACE_NOT_DYN_COMPATIBLE` | same semantic family | Redesigned | rejects erased returns/parameters and invalid receivers |
+| malformed interface witness MIR | Phase 14 MIR validation pressure | `INTERFACE_WITNESS_INVALID` | same semantic family | Redesigned | requires unique type-pair identity, entries, and no-allocation law |
+| dyn target/concrete mismatch | Phase 14 coercion diagnostics | `DYN_REQUIRES_INTERFACE`, `DYN_CONCRETE_TYPE_DOES_NOT_SATISFY` | same semantic families | Redesigned | explicit ref conversion reuses concept satisfaction |
+| dyn const violation | ownership qualifier pressure | `DYN_MUTABLE_FROM_CONST`, `DYN_READONLY_FIELD_MUTATION` | same semantic families | EVT1-new | no mutation capability is recovered through erasure |
+| unknown dyn member | Phase 14 interface-call diagnostics | `DYN_METHOD_NOT_IN_INTERFACE`, `DYN_FIELD_NOT_IN_INTERFACE` | same semantic families | Redesigned | witness surface is closed by the declared interface |
+| dyn lifetime escape | no closed Phase 14 lifetime system | `CV4511` and existing scoped/outlives families | `DYN_ESCAPE_SOURCE_LIFETIME` family | reused provenance diagnostics | dyn has no separate lifetime checker |
 
 `static_assert` continues to reuse the bounded comptime diagnostic path:
 runtime calls are `CV4210`, a non-boolean evaluated condition is `CV4207`, and

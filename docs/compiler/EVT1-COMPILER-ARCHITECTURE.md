@@ -560,7 +560,42 @@ subjects, origin, and certainty before lowering.
 passes consume these retained facts instead of re-running validation. R4j adds
 no optimizer, SIMD, noalias syntax, runtime tables, or C metadata.
 
-## General limitations after R4j
+## R4k class, interface, and dyn path
+
+```text
+class declaration
+    -> aggregate member/access table
+    -> method receiver normalization
+    -> ordinary value/storage analysis
+    -> direct strict-C11 struct and functions
+
+interface declaration
+    -> ordinary concept requirements
+    -> fixed-shape dyn compatibility validation
+    -> ordinary satisfaction proof
+    -> deterministic static witness description
+
+concrete ref -> dyn Interface
+    -> validate satisfaction, constness, and provenance
+    -> reify (interface, concrete type) witness
+    -> erased object pointer + witness pointer
+    -> dyn method/field dispatch
+```
+
+Classes reuse aggregate layout, copy/move/Drop, reference, and C lowering. The
+parser hoists their methods as ordinary functions with `MethodOf`, visibility,
+and an explicit first receiver; semantic lookup enforces private access before
+lowering. No class-specific allocator or runtime exists.
+
+Interfaces reuse the concept resolver. Runtime witness MIR records interface
+and concrete identities, method/field entries, prerequisite links, and the
+no-allocation invariant. MIR validation rejects missing/duplicate identities,
+runtime entries, or allocation-law metadata. C lowering emits one static const
+witness table per used specialization, adapter functions, and a two-pointer dyn
+value. Semantic compiler facts remain compile-time proofs and add no runtime
+table fields.
+
+## General limitations after R4k
 
 - The package remains deliberately cohesive rather than prematurely split.
 - Effect/actuator validation and C runtime emission remain in-package profile
@@ -579,8 +614,8 @@ no optimizer, SIMD, noalias syntax, runtime tables, or C metadata.
 - Named lifetimes, generalized borrow checking, non-lexical lifetimes, mutable
   alias analysis, and unrestricted reference-containing
   aggregates are not implemented.
-- The remaining PoC3 allocation, stable C ABI, testing framework,
-  interfaces/dyn, slices, and FixedBuffer surfaces are not ported. R4f has no
+- The remaining PoC3 allocation, stable C ABI, testing framework, owning dyn,
+  slices, and FixedBuffer surfaces are not ported. R4f has no
   `throw`, unwinding, Option handler arm, implicit error conversion, or
   generalized panic runtime.
 
@@ -709,3 +744,13 @@ malformed fact rejection, declared and interval disjointness, fixed/runtime
 tensor shapes, inline backing independence, safe alignment degradation, and
 the layout-to-stream-to-Span-to-tensor preservation chain. Generated C is
 checked to contain no runtime fact tables, allocation, noalias, or SIMD path.
+
+## R4k executable evidence
+
+`internal/concept/r4k_conformance_test.go` and `language/evt1-r4k/core`
+provide 30 required readable cases: 16 accepted and 14 statically rejected,
+all classified `PASS`. The suite additionally validates malformed witness MIR,
+inspects direct/dynamic MIR and static witness C shape, and executes strict-C11
+class, private-member, struct/class dyn dispatch, field get/set, composition,
+immovable-reference, and scoped-provenance paths. Generated evidence contains
+no allocation, per-object vtable, RTTI, object registry, or GC path.

@@ -1,0 +1,15 @@
+profile Core;
+
+class Counter
+{
+public:
+    int value;
+}
+
+int CopyClassValue()
+{
+    Counter first = Counter{3};
+    Counter second = first;
+    second.value = 8;
+    return first.value;
+}

@@ -1,0 +1,15 @@
+profile Core;
+
+class Device
+{
+public:
+    int id;
+
+private:
+    int state;
+}
+
+int InvalidAccess(ref Device device)
+{
+    return device.state;
+}

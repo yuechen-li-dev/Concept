@@ -1,0 +1,29 @@
+profile Core;
+
+interface Positioned<T>
+{
+    requires float x;
+}
+
+interface Resettable<T>
+{
+    requires void Reset(ref T self);
+}
+
+interface PositionedResettable<T>
+{
+    requires Positioned<T>;
+    requires Resettable<T>;
+}
+
+struct Item
+{
+    float x;
+
+    void Reset(ref Item self)
+    {
+        self.x = 0.0;
+    }
+}
+
+requires PositionedResettable<Item>;

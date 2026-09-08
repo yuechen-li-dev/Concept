@@ -1,0 +1,17 @@
+profile Core;
+
+class Device
+{
+public:
+    int state;
+
+    void Reset()
+    {
+        state = 0;
+    }
+
+    void Reset()
+    {
+        state = 1;
+    }
+}

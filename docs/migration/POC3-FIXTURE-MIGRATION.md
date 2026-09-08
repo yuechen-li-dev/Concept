@@ -1,6 +1,6 @@
 # PoC3 fixture migration inventory
 
-Status: R4a bounded migration evidence; no bulk port attempted
+Status: R4k bounded migration evidence; no bulk port attempted
 
 ## Corpus snapshot
 
@@ -179,6 +179,22 @@ ordinary concept satisfaction produces the compile-time evidence that may
 later be reified for `dyn C`. R4a does not port interface declarations, vtables,
 or dyn storage. Slice fixtures likewise remain deferred until Span is designed
 against the now-active lifetime machinery.
+
+## R4k Phase 14 evidence audit
+
+R4k closes the selected borrowed-dispatch pressure with separately authored
+EVT1 sources. Phase 14's 97-fixture family established evidence for interface
+declarations, implementation matching, erased storage, interface calls, and
+diagnostics. Its nominal implementation records and broader legacy object
+model were not copied.
+
+The active design instead makes `interface` a specialized ordinary concept,
+derives witnesses through existing satisfaction, and represents `dyn I` as a
+non-owning object pointer plus static witness pointer. Class encapsulation,
+interface field accessors, composition through prerequisites, semantic-fact
+proof erasure, and provenance-preserving dyn are classified EVT1-new/redesign.
+Owning dyn remains deferred; inheritance is rejected. The original PoC3
+fixtures and compiler remain unchanged and continue to serve only as evidence.
 
 ## R4c failure-model audit
 

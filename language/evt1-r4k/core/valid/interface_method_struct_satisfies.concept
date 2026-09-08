@@ -1,0 +1,18 @@
+profile Core;
+
+interface Resettable<T>
+{
+    requires void Reset(ref T self);
+}
+
+struct Device
+{
+    int state;
+
+    void Reset(ref Device self)
+    {
+        self.state = 0;
+    }
+}
+
+requires Resettable<Device>;

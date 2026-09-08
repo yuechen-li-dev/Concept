@@ -214,12 +214,14 @@ func (p *parser) parseModule() (Module, error) {
 				return module, err
 			}
 			module.Structs = append(module.Structs, structDecl)
+			module.Functions = append(module.Functions, structDecl.Methods...)
 		case "record":
 			structDecl, err := p.parseStructDecl(false, true, false)
 			if err != nil {
 				return module, err
 			}
 			module.Structs = append(module.Structs, structDecl)
+			module.Functions = append(module.Functions, structDecl.Methods...)
 		case "ref":
 			if p.peekLexemeN(1) != "struct" {
 				fn, err := p.parseFunctionDecl("", false)
@@ -234,12 +236,21 @@ func (p *parser) parseModule() (Module, error) {
 				return module, err
 			}
 			module.Structs = append(module.Structs, structDecl)
+			module.Functions = append(module.Functions, structDecl.Methods...)
 		case "struct":
 			structDecl, err := p.parseStructDecl(false, false, false)
 			if err != nil {
 				return module, err
 			}
 			module.Structs = append(module.Structs, structDecl)
+			module.Functions = append(module.Functions, structDecl.Methods...)
+		case "class":
+			decl, err := p.parseClassDecl()
+			if err != nil {
+				return module, err
+			}
+			module.Structs = append(module.Structs, decl)
+			module.Functions = append(module.Functions, decl.Methods...)
 		case "layout":
 			decl, err := p.parseLayoutDecl()
 			if err != nil {
@@ -282,6 +293,12 @@ func (p *parser) parseModule() (Module, error) {
 				return module, err
 			}
 			module.Concepts = append(module.Concepts, conceptDecl)
+		case "interface":
+			interfaceDecl, err := p.parseInterfaceDecl()
+			if err != nil {
+				return module, err
+			}
+			module.Concepts = append(module.Concepts, interfaceDecl)
 		case "requires":
 			assertion, err := p.parseConceptAssertion()
 			if err != nil {
@@ -919,7 +936,13 @@ func (p *parser) parseStructDecl(immovable, record, refStruct bool) (StructDecl,
 		return StructDecl{}, err
 	}
 	decl := StructDecl{Name: nameTok.Lexeme, Immovable: immovable, Record: record, Ref: refStruct, Span: start, RecordSpan: recordSpan}
+	visibility := "public"
 	for !p.done() && p.peekLexeme() != "}" {
+		if (p.peekLexeme() == "public" || p.peekLexeme() == "private") && p.peekLexemeN(1) == ":" {
+			visibility = p.next().Lexeme
+			p.next()
+			continue
+		}
 		fieldType, err := p.parseType("")
 		if err != nil {
 			return StructDecl{}, err
@@ -928,10 +951,18 @@ func (p *parser) parseStructDecl(immovable, record, refStruct bool) (StructDecl,
 		if err != nil {
 			return StructDecl{}, err
 		}
+		if p.peekLexeme() == "(" {
+			method, err := p.parseAggregateMethodTail(decl.Name, visibility, fieldType, fieldName)
+			if err != nil {
+				return StructDecl{}, err
+			}
+			decl.Methods = append(decl.Methods, method)
+			continue
+		}
 		if _, err := p.expect(";"); err != nil {
 			return StructDecl{}, err
 		}
-		decl.Fields = append(decl.Fields, Field{Type: fieldType, Name: fieldName.Lexeme, Span: fieldName.Span})
+		decl.Fields = append(decl.Fields, Field{Type: fieldType, Name: fieldName.Lexeme, Visibility: visibility, Span: fieldName.Span})
 	}
 	if _, err := p.expect("}"); err != nil {
 		return StructDecl{}, err
@@ -939,7 +970,100 @@ func (p *parser) parseStructDecl(immovable, record, refStruct bool) (StructDecl,
 	if p.peekLexeme() == ";" {
 		p.next()
 	}
+	evt1RewriteAggregateMethods(&decl)
 	return decl, nil
+}
+
+func (p *parser) parseClassDecl() (StructDecl, error) {
+	start, err := p.expect("class")
+	if err != nil {
+		return StructDecl{}, err
+	}
+	name, err := p.expectIdentifier("CV4650", "expected class name")
+	if err != nil {
+		return StructDecl{}, err
+	}
+	if _, err := p.expect("{"); err != nil {
+		return StructDecl{}, err
+	}
+	decl := StructDecl{Name: name.Lexeme, Class: true, Span: start.Span}
+	visibility := "private"
+	for !p.done() && p.peekLexeme() != "}" {
+		if (p.peekLexeme() == "public" || p.peekLexeme() == "private") && p.peekLexemeN(1) == ":" {
+			visibility = p.next().Lexeme
+			p.next()
+			continue
+		}
+		memberType, err := p.parseType("")
+		if err != nil {
+			return StructDecl{}, err
+		}
+		member, err := p.expectIdentifier("CV4651", "expected class member name")
+		if err != nil {
+			return StructDecl{}, err
+		}
+		if p.peekLexeme() == "(" {
+			method, err := p.parseAggregateMethodTail(decl.Name, visibility, memberType, member)
+			if err != nil {
+				return StructDecl{}, err
+			}
+			decl.Methods = append(decl.Methods, method)
+			continue
+		}
+		if _, err := p.expect(";"); err != nil {
+			return StructDecl{}, err
+		}
+		decl.Fields = append(decl.Fields, Field{Type: memberType, Name: member.Lexeme, Visibility: visibility, Span: member.Span})
+	}
+	if _, err := p.expect("}"); err != nil {
+		return StructDecl{}, err
+	}
+	if p.peekLexeme() == ";" {
+		p.next()
+	}
+	evt1RewriteAggregateMethods(&decl)
+	return decl, nil
+}
+
+func (p *parser) parseAggregateMethodTail(owner, visibility string, returnType Type, name Token) (FunctionDecl, error) {
+	if _, err := p.expect("("); err != nil {
+		return FunctionDecl{}, err
+	}
+	fn := FunctionDecl{Name: name.Lexeme, ReturnType: returnType, Span: name.Span, MethodOf: owner, Visibility: visibility}
+	if p.peekLexeme() != ")" {
+		for {
+			paramType, err := p.parseType("")
+			if err != nil {
+				return FunctionDecl{}, err
+			}
+			paramName, err := p.expectIdentifier("CV4652", "expected method parameter name")
+			if err != nil {
+				return FunctionDecl{}, err
+			}
+			fn.Params = append(fn.Params, Param{Type: paramType, Name: paramName.Lexeme, Span: paramName.Span})
+			if p.peekLexeme() != "," {
+				break
+			}
+			p.next()
+		}
+	}
+	if _, err := p.expect(")"); err != nil {
+		return FunctionDecl{}, err
+	}
+	if len(fn.Params) == 0 || !fn.Params[0].Type.isReference() || fn.Params[0].Type.valueType().Name != owner {
+		selfType := Type{Name: owner, Kind: TypeStruct, Ownership: "ref", Span: name.Span}
+		fn.Params = append([]Param{{Type: selfType, Name: "self", Span: name.Span}}, fn.Params...)
+	}
+	if p.peekLexeme() == ";" {
+		p.next()
+		return fn, nil
+	}
+	body, err := p.parseBlock()
+	if err != nil {
+		return FunctionDecl{}, err
+	}
+	fn.Body = &body
+	return fn, nil
 }
 
 func (p *parser) parseLayoutDecl() (LayoutDecl, error) {
@@ -1132,6 +1256,15 @@ func (p *parser) parseConceptDecl() (ConceptDecl, error) {
 	return decl, nil
 }
 
+func (p *parser) parseInterfaceDecl() (ConceptDecl, error) {
+	decl, err := p.parseConceptDecl()
+	if err != nil {
+		return ConceptDecl{}, err
+	}
+	decl.Interface = true
+	return decl, nil
+}
+
 func (p *parser) parseConceptRequirement(typeParam string) (ConceptRequirement, error) {
 	start, err := p.expect("requires")
 	if err != nil {
@@ -1219,6 +1352,10 @@ func (p *parser) parseConceptRequirement(typeParam string) (ConceptRequirement, 
 	nameTok, err := p.expectIdentifier("CV4143", "expected required operation name")
 	if err != nil {
 		return nil, err
+	}
+	if p.peekLexeme() == ";" {
+		p.next()
+		return &FieldRequirement{Type: retType, Name: nameTok.Lexeme, Readonly: retType.Const, Span: start.Span}, nil
 	}
 	if _, err := p.expect("("); err != nil {
 		return nil, err
@@ -1318,6 +1455,11 @@ func (p *parser) parseFunctionDecl(conceptParam string, comptime bool) (Function
 func (p *parser) parseType(conceptParam string) (Type, error) {
 	start := p.currentSpan()
 	t := Type{Span: start}
+	dyn := false
+	if p.peekLexeme() == "dyn" {
+		dyn = true
+		p.next()
+	}
 	for {
 		switch p.peekLexeme() {
 		case "unsafe":
@@ -1346,11 +1488,19 @@ func (p *parser) parseType(conceptParam string) (Type, error) {
 		}
 	}
 done:
+	if dyn && p.peekLexeme() == "const" {
+		t.Const = true
+		p.next()
+	}
 	nameTok, err := p.expectIdentifier("CV4008", "expected type name")
 	if err != nil {
 		return Type{}, err
 	}
-	if builtin, ok := p.profileDef.builtinType(nameTok.Lexeme, nameTok.Span); ok {
+	if dyn {
+		t.Name = nameTok.Lexeme
+		t.Kind = TypeDyn
+		return t, nil
+	} else if builtin, ok := p.profileDef.builtinType(nameTok.Lexeme, nameTok.Span); ok {
 		t.Name = builtin.Name
 		t.Kind = builtin.Kind
 	} else if conceptParam != "" && nameTok.Lexeme == conceptParam {
@@ -2490,9 +2640,10 @@ func (p *parser) parsePostfixExpr(expr Expr, span Span) (Expr, error) {
 			}
 			expr = &TemplateCallExpr{Callee: nameExpr.Name, TypeArg: typeArg, Args: args, Span: span}
 		case "(":
-			nameExpr, ok := expr.(*NameExpr)
-			if !ok {
-				return nil, evt1Diagnostic("CV4017", "only simple function calls are supported in EVT1 expressions", p.currentSpan())
+			nameExpr, nameCall := expr.(*NameExpr)
+			fieldExpr, memberCall := expr.(*FieldExpr)
+			if !nameCall && !memberCall {
+				return nil, evt1Diagnostic("CV4017", "call target must be a function or member", p.currentSpan())
 			}
 			p.next()
 			var args []Expr
@@ -2512,7 +2663,11 @@ func (p *parser) parsePostfixExpr(expr Expr, span Span) (Expr, error) {
 			if _, err := p.expect(")"); err != nil {
 				return nil, err
 			}
-			expr = &CallExpr{Callee: nameExpr.Name, Args: args, Span: span}
+			if memberCall {
+				expr = &CallExpr{Callee: fieldExpr.Field, Receiver: fieldExpr.Receiver, Member: true, Args: args, Span: fieldExpr.Span}
+			} else {
+				expr = &CallExpr{Callee: nameExpr.Name, Args: args, Span: span}
+			}
 		case ".":
 			p.next()
 			fieldTok, err := p.expectIdentifier("CV4018", "expected field name after .")

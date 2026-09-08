@@ -1,0 +1,20 @@
+profile Core;
+
+struct Resource
+{
+    int handle;
+}
+
+class Holder
+{
+public:
+    owned Resource resource;
+}
+
+void Drop(owned Resource value);
+
+Holder MakeHolder(owned Resource resource)
+{
+    Holder holder = Holder{move resource};
+    return move holder;
+}

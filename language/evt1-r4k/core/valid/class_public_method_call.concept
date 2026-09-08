@@ -1,0 +1,19 @@
+profile Core;
+
+class Counter
+{
+public:
+    int value;
+
+    void Increment()
+    {
+        value = value + 1;
+    }
+}
+
+int IncrementOnce()
+{
+    Counter counter = Counter{0};
+    counter.Increment();
+    return counter.value;
+}

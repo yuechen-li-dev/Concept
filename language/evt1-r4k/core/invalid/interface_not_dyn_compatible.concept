@@ -1,0 +1,6 @@
+profile Core;
+
+interface Factory<T>
+{
+    requires T Create();
+}

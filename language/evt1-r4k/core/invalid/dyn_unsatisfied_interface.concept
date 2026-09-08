@@ -1,0 +1,16 @@
+profile Core;
+
+interface Resettable<T>
+{
+    requires void Reset(ref T self);
+}
+
+struct Device
+{
+    int state;
+}
+
+void InvalidDyn(ref Device device)
+{
+    dyn Resettable resettable = ref device;
+}
