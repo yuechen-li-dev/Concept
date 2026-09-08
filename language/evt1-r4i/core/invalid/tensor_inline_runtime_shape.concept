@@ -1,0 +1,7 @@
+profile Core;
+
+int TensorInlineRuntimeShape(int rows)
+{
+    tensor<int> values[rows, 2] = 0;
+    return 0;
+}

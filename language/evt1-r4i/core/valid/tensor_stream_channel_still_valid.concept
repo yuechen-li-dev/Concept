@@ -1,0 +1,20 @@
+profile Core;
+
+layout R4iTensorStreamLayout
+{
+    int<ndarray>[2, 2] values;
+}
+
+stream R4iTensorStream over R4iTensorStreamLayout
+{
+    Values = values;
+}
+
+int TensorStreamChannelStillValid()
+{
+    int<array>[4] backing = [1, 2, 3, 4];
+    ref R4iTensorStreamLayout layout = bind backing;
+    ref R4iTensorStream stream = bind layout;
+    tensor<int, 2> values = Tensor(stream.Values);
+    return values[0, 1];
+}

@@ -672,6 +672,44 @@ a length. The view retains ordered shape, parent region, base offset,
 alignment, mutability, contiguity, and lexical/call-result provenance.
 Readonly storage produces a readonly tensor destination capability.
 
+**Canonical EVT1 R4i.** A concrete fixed tensor may instead state its shape
+after the declared name:
+
+```concept
+tensor<int> A[2, 2] = [[1, 2], [3, 4]];
+vector<float> v[3] = [1.0, 2.0, 3.0];
+matrix<float> m[2, 2] = [[1.0, 0.0], [0.0, 1.0]];
+```
+
+For `tensor<T> name[d0, ..., dN]`, the element type is `T`, rank is the
+number of dimensions, and every dimension must be a positive compile-time
+integer accepted by the fixed-storage rules. The compiler synthesizes one
+fixed `T<ndarray>[d0, ..., dN]` backing region, initializes it, and constructs
+the ordinary tensor view over that region. A fixed shaped tensor declaration
+may synthesize its backing storage because the declaration fully determines
+that storage. It does not create an owning tensor type, heap allocation,
+allocator call, runtime tensor object, ownership transfer, or backing copy.
+
+Nested initialization reuses the ndarray literal laws for exact rank, shape,
+rectangularity, and element type. An exact element-typed scalar initializer
+fills every fixed backing element; this is initialization sugar, not
+broadcasting. An omitted initializer remains ill-formed under the existing
+local fixed-storage initialization law. `const` makes both the declared tensor
+capability and its synthesized backing readonly through that declaration.
+
+`vector<T>` is exactly `tensor<T, 1>` and `matrix<T>` is exactly
+`tensor<T, 2>`. They are type identities, not nominal wrappers, and therefore
+have identical parameter compatibility, concept satisfaction, Tensor MIR,
+operators, and storage behavior. Their shaped declarations require exactly
+one and two dimensions respectively. Shape remains explicit; R4i does not
+infer it from a literal alone.
+
+Runtime or external storage remains explicit. A runtime-shaped inline tensor
+declaration is rejected; existing storage, layout regions, stream channels,
+bound ndarrays, and Span sources continue to use `tensor<T, Rank> name =
+Tensor(source)`. This preserves source provenance, region, alignment,
+mutability, and storage-policy decisions.
+
 Ordinary indexing is zero-based, has exactly one integer index per rank, and
 uses the existing deterministic bounds behavior. Tensor operations write into
 an existing mutable destination; they never conjure result storage.
@@ -708,7 +746,8 @@ with the first axis of `B`. For shapes `[a0, ..., aN]` and
 `[b0, ..., bM]`, `aN == b0` is required and the result shape is
 `[a0, ..., aN-1, b1, ..., bM]`. Therefore `[M,K] @ [K,N]` is matrix
 multiplication, while `[A,B,K] @ [K,C,D]` produces `[A,B,C,D]`. Rank-one
-dot-product scalar results are deferred because R4h tensor ranks are positive.
+`[K] @ [K]` contracts directly to scalar `T`; rank-zero exists in Tensor MIR
+for this result but R4i adds no source-level `tensor<T, 0>` variable form.
 Einstein indexing is the explicit general contraction form; `@` is the
 canonical last/first-axis shorthand.
 
@@ -721,9 +760,9 @@ Tensor semantic MIR retains views, operands, symbolic maps, free/reduction
 sets, shape relations, provenance/region/alignment/mutability, and alias
 policy. A dedicated tensor lowering stage then synthesizes zero-based loops,
 with arithmetic zero as the multiplication-sum reduction identity, before the
-strict-C11 backend. R4h adds no tensor runtime, heap allocator, BLAS, MLIR,
+strict-C11 backend. R4i adds no tensor runtime, heap allocator, BLAS, MLIR,
 SIMD, GPU lowering, broadcasting, strides, sparse storage, autograd, named
-axes, or `vector`/`matrix` aliases.
+axes, tensor slicing, or separate vector/matrix MIR.
 
 ## 17. Slices and bounded collections
 

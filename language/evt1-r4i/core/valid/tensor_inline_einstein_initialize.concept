@@ -1,0 +1,8 @@
+profile Core;
+
+float TensorInlineEinsteinInitialize()
+{
+    tensor<float> identity[4, 4] = 0.0;
+    identity[i, j] = if (i == j) 1.0 else 0.0;
+    return identity[3, 3];
+}

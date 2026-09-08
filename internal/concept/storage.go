@@ -191,6 +191,9 @@ func evt1CollectStorageTypes(module Module, env *semanticEnv) []Type {
 			switch s := statement.(type) {
 			case *VarDecl:
 				add(s.Type)
+				if s.InlineTensor != nil {
+					add(s.InlineTensor.BackingType)
+				}
 			case *Block:
 				visitBlock(*s)
 			case *IfStmt:

@@ -79,6 +79,12 @@ func lexEVT1(text string) ([]Token, error) {
 				for j < len(text) && text[j] >= '0' && text[j] <= '9' {
 					j++
 				}
+				if j < len(text) && text[j] == '.' && j+1 < len(text) && text[j+1] >= '0' && text[j+1] <= '9' {
+					j++
+					for j < len(text) && text[j] >= '0' && text[j] <= '9' {
+						j++
+					}
+				}
 			}
 			tokens = append(tokens, Token{Lexeme: text[i:j], Span: start})
 			column += j - i
@@ -1346,27 +1352,34 @@ done:
 	if p.peekLexeme() == "<" {
 		storageElement = t
 		p.next()
-		if t.Name == "tensor" {
+		if t.Name == "tensor" || t.Name == "vector" || t.Name == "matrix" {
+			spelling := t.Name
 			element, err := p.parseType(conceptParam)
 			if err != nil {
 				return Type{}, err
 			}
-			if _, err := p.expect(","); err != nil {
-				return Type{}, evt1Diagnostic("CV4610", "tensor<T, Rank> requires an element type and positive integer rank", nameTok.Span)
-			}
-			rankTok := p.current()
-			if !isNumber(rankTok.Lexeme) {
-				return Type{}, evt1Diagnostic("CV4610", "tensor rank must be a positive compile-time integer", rankTok.Span)
-			}
-			p.next()
-			rank64, _ := strconv.ParseInt(rankTok.Lexeme, 10, 32)
-			if rank64 <= 0 {
-				return Type{}, evt1Diagnostic("CV4610", "tensor rank must be positive in R4h", rankTok.Span)
+			rank := 0
+			if spelling == "vector" {
+				rank = 1
+			} else if spelling == "matrix" {
+				rank = 2
+			} else if p.peekLexeme() == "," {
+				p.next()
+				rankTok := p.current()
+				if !isNumber(rankTok.Lexeme) {
+					return Type{}, evt1Diagnostic("CV4610", "tensor rank must be a positive compile-time integer", rankTok.Span)
+				}
+				p.next()
+				rank64, _ := strconv.ParseInt(rankTok.Lexeme, 10, 32)
+				if rank64 <= 0 {
+					return Type{}, evt1Diagnostic("CV4610", "tensor rank must be positive", rankTok.Span)
+				}
+				rank = int(rank64)
 			}
 			if _, err := p.expect(">"); err != nil {
 				return Type{}, err
 			}
-			t.Name, t.Kind, t.TypeArgs, t.TensorRank = "tensor", TypeTensor, []Type{element}, int(rank64)
+			t.Name, t.Kind, t.TypeArgs, t.TensorRank, t.TensorSpelling = "tensor", TypeTensor, []Type{element}, rank, spelling
 			return t, nil
 		}
 		for {
@@ -1791,7 +1804,7 @@ func (p *parser) looksLikeVarDecl() bool {
 		return false
 	}
 	p.next()
-	return p.peekLexeme() == "=" || p.peekLexeme() == ";"
+	return p.peekLexeme() == "[" || p.peekLexeme() == "=" || p.peekLexeme() == ";"
 }
 
 func (p *parser) parseVarDecl() (Statement, error) {
@@ -1809,6 +1822,29 @@ func (p *parser) parseVarDecl() (Statement, error) {
 	if err != nil {
 		return nil, err
 	}
+	var inline *InlineTensorDecl
+	if evt1IsTensorType(t) && p.peekLexeme() == "[" {
+		p.next()
+		var shape []StorageDimension
+		for {
+			dimension, err := p.parseExpr()
+			if err != nil {
+				return nil, err
+			}
+			shape = append(shape, StorageDimension{Expr: dimension})
+			if p.peekLexeme() != "," {
+				break
+			}
+			p.next()
+		}
+		if _, err := p.expect("]"); err != nil {
+			return nil, err
+		}
+		inline = &InlineTensorDecl{Spelling: t.TensorSpelling, Shape: shape}
+		if t.TensorRank == 0 {
+			t.TensorRank = len(shape)
+		}
+	}
 	var value Expr
 	if p.peekLexeme() == "=" {
 		p.next()
@@ -1820,7 +1856,7 @@ func (p *parser) parseVarDecl() (Statement, error) {
 	if _, err := p.expect(";"); err != nil {
 		return nil, err
 	}
-	return &VarDecl{Const: isConst, Type: t, Name: nameTok.Lexeme, Value: value, Span: nameTok.Span, ConstSpan: constSpan}, nil
+	return &VarDecl{Const: isConst, Type: t, Name: nameTok.Lexeme, Value: value, InlineTensor: inline, Span: nameTok.Span, ConstSpan: constSpan}, nil
 }
 
 func (p *parser) parseMatchStmt() (Statement, error) {
@@ -2181,6 +2217,10 @@ func (p *parser) parsePrimary() (Expr, error) {
 			return nil, evt1Diagnostic("CV4000", "invalid string literal", tok.Span)
 		}
 		return p.parsePostfixExpr(&StringLiteral{Value: value, Span: tok.Span}, tok.Span)
+	case isFloatNumber(p.peekLexeme()):
+		tok := p.next()
+		value, _ := strconv.ParseFloat(tok.Lexeme, 64)
+		return p.parsePostfixExpr(&FloatLiteral{Value: value, Span: tok.Span}, tok.Span)
 	case isNumber(p.peekLexeme()):
 		tok := p.next()
 		parsed, _ := strconv.ParseInt(tok.Lexeme, 0, 32)
@@ -2611,4 +2651,11 @@ func isNumber(s string) bool {
 		}
 	}
 	return true
+}
+
+func isFloatNumber(s string) bool {
+	return strings.Contains(s, ".") && func() bool {
+		_, err := strconv.ParseFloat(s, 64)
+		return err == nil
+	}()
 }

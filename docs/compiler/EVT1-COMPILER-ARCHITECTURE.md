@@ -1,6 +1,6 @@
 # Concept EVT1 Stage 0 compiler architecture
 
-Status: R4h Tensor MIR and dedicated contraction lowering
+Status: R4i inline tensor backing synthesis and rank-zero contraction lowering
 
 ## Authority
 
@@ -477,12 +477,12 @@ the bounded comptime evaluator. The evaluator mutates the aliased fixed-array
 value and therefore proves that symbolic indexing removes manual nested source
 loops without creating persistent hidden state.
 
-## R4h limitations
+## R4h boundary inherited by R4i
 
-- Tensor ranks are positive; rank-zero result tensors and vector dot-product
-  scalar results are deferred.
-- `vector<T>` and `matrix<T>` remain future shorthands for `tensor<T,1>` and
-  `tensor<T,2>` and introduce no separate intended semantics.
+- Source-level tensor ranks remain positive. R4i admits rank zero only as the
+  internal scalar result of vector dot product.
+- R4i closes the R4h shorthand deferral by normalizing `vector<T>` and
+  `matrix<T>` exactly to `tensor<T,1>` and `tensor<T,2>`.
 - The Einstein subset accepts unambiguous multiplication-sum reductions and
   fixed symbolic initialization; explicit index-declaration syntax and
   noncanonical multi-axis `Contract` syntax remain future work.
@@ -490,7 +490,46 @@ loops without creating persistent hidden state.
   sparse/tiled storage, named axes, broadcasting, autograd, and allocator-owned
   dynamic tensors are absent.
 
-## General limitations after R4h
+## R4i shaped declarations and aliases
+
+R4i adds one front-end normalization path above the existing R4h machinery:
+
+```text
+tensor<T> name[fixed shape] / vector<T> / matrix<T>
+  -> derive and enforce rank
+  -> synthesize fixed ndarray backing with stable source identity
+  -> validate ndarray literal or exact scalar fill
+  -> construct ordinary tensor semantic view
+  -> existing Tensor MIR
+  -> existing tensor-to-loop and strict-C11 lowering
+```
+
+The AST retains `InlineTensorDecl` source metadata for diagnostics and MIR
+provenance. Semantic analysis resolves its shape through the ordinary fixed
+storage resolver, rejects runtime extents, records an `Inline` backing witness,
+and gives every declaration a deterministic region identity. Ordinary MIR
+contains `tensor_inline_storage` followed by `tensor_view`; the latter retains
+same-region/no-copy/no-allocation/no-transfer facts. Independent identities
+make ordinary inline destinations disjoint from their operands.
+
+Backing origins use the closed `TensorBackingKind` classification: `Inline`,
+`NDArray`, `BoundNDArray`, `Span`, `LayoutRegion`, and `StreamChannel`. These
+are compile-time facts, not runtime tags or user-facing matching syntax.
+`vector<T>` and `matrix<T>` normalize to rank-one/rank-two tensor types in the
+parser and never reach MIR as distinct types.
+
+The C backend emits the existing fixed ndarray wrapper as the synthesized
+local, initializes its flat data from the reused literal path or one evaluated
+fill scalar, and constructs the existing tensor pointer/shape descriptor over
+that local. No allocator, heap ownership, tensor runtime, or backing copy is
+introduced.
+
+Rank-one `@` validation produces `tensor_scalar_contract` with a rank-zero MIR
+output and two rank-one operands. The backend lowers it directly to one scalar
+accumulator and reduction loop. Source-level rank-zero tensor variables remain
+absent.
+
+## General limitations after R4i
 
 - The package remains deliberately cohesive rather than prematurely split.
 - Effect/actuator validation and C runtime emission remain in-package profile
@@ -619,3 +658,13 @@ all classified `PASS`. The suite separately checks Tensor MIR validation,
 15 successful strict-C11 numeric paths, runtime index/contraction guards, and
 bounded comptime symbolic initialization. Generated evidence contains no heap,
 copy helper, BLAS, MLIR, SIMD, or GPU tensor path.
+
+## R4i executable evidence
+
+`internal/concept/r4i_conformance_test.go` and `language/evt1-r4i/core`
+provide 27 readable conformance cases: 16 valid and 11 statically rejected,
+all classified `PASS`. The suite checks shaped-declaration rank inference,
+all six backing classifications, stable/disjoint inline regions, exact alias
+identity, rank-zero Tensor MIR, malformed inline MIR rejection, default and
+const laws, and 12 strict-C11 numeric paths. Generated evidence contains no
+heap, backing-copy, BLAS, MLIR, or separate vector/matrix path.

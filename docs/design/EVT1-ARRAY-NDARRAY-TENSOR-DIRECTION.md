@@ -1,6 +1,6 @@
 # EVT1 array, ndarray, and tensor direction
 
-Status: R4h tensor mathematics canonical; shorthands and optimization deferred
+Status: R4i fixed tensor declaration ergonomics canonical; optimization deferred
 
 ## Layering
 
@@ -21,8 +21,8 @@ borrowed views
   ReadOnlySpan<T>   readonly bounded contiguous subregion
 
 mathematical interpretations
-  vector      deferred rank-1 mathematics
-  matrix      deferred rank-2 mathematics
+  vector      exact rank-1 tensor shorthand
+  matrix      exact rank-2 tensor shorthand
   tensor      canonical rank-N indexed algebra over existing storage
 
 future optimization
@@ -142,7 +142,7 @@ vector / matrix / tensor
 
 ## R4h tensor interpretation
 
-`tensor<T, Rank>` is now the bounded mathematical layer above storage and
+`tensor<T, Rank>` is the bounded mathematical layer above storage and
 borrowed views. `Tensor(source)` preserves shape, region identity, base offset,
 alignment, mutability, contiguity, and provenance while adding no allocation,
 copy, ownership, or lifetime. Ordinary indices remain zero-based.
@@ -154,26 +154,29 @@ loop-synthesis stage. Broadcasting is forbidden. Contraction destination/input
 overlap is rejected conservatively; declared-disjoint R4f regions retain the
 identities needed to prove separation.
 
-```text
-vector<T>  future shorthand for tensor<T, 1>
-matrix<T>  future shorthand for tensor<T, 2>
-```
+R4i adds `tensor<T> name[shape...]` as declaration sugar only. It derives rank,
+synthesizes the mechanically determined fixed `T<ndarray>[shape...]` backing,
+initializes that storage, and forms the ordinary tensor view. Thus `ndarray`
+remains the storage type, `tensor` remains the mathematical interpretation,
+and the fixed shaped declaration connects them only where storage is fully
+determined. Runtime and external sources remain explicit.
 
-These names remain deferred to R4i and will not acquire separate storage or
-algebra laws.
+`vector<T>` and `matrix<T>` are exact spellings of `tensor<T, 1>` and
+`tensor<T, 2>`, with no separate storage, type identity, algebra, witness, or
+MIR. Scalar fill is fixed-storage initialization, not broadcasting.
 
 ## Deferred work
 
-R4h does not port PoC3 Slice or FixedBuffer and does not implement vector or
-matrix aliases, an allocator framework, stack allocation, `dyn`, generalized alias/noalias analysis,
+R4i does not port PoC3 Slice or FixedBuffer and does not implement an allocator
+framework, stack-allocation surface, `dyn`, generalized alias/noalias analysis,
 strided/sparse/tiled layouts, SIMD, GPU lowering, or a native backend. Those
 features must consume the storage facts established here without changing
 their meaning retroactively.
 
 ## Subsequent milestone boundary
 
-R4i should remain a shorthand-and-qualification milestone: introduce
-`vector<T>`/`matrix<T>` only as literal aliases if consumer evidence warrants
-them, close scalar-result and explicit noncanonical contraction direction, and
-avoid optimizer or runtime expansion. Allocator-backed owned dynamic storage
-remains separate work.
+The next tensor milestone should consume the now-explicit backing witnesses for
+bounded qualification or optimization evidence without changing storage
+ownership. A tensor group/columnar record remains design direction only and
+must reuse layout semantics. Allocator-backed owned dynamic storage remains
+separate work.

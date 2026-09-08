@@ -85,6 +85,12 @@ the executable mapping used by the R2 conformance harness.
 | invalid Einstein index relation | SDSL-V indexed-expression pressure | `CV4619`-`CV4622` | `TENSOR_SYMBOLIC_INDEX_*` / `TENSOR_OUTPUT_INDEX_INVALID` / `TENSOR_REDUCTION_INDEX_INVALID` | EVT1-new / SDSL-V-derived | statement-local symbols with exact extent and multiplicity laws |
 | invalid generalized contraction | no closed counterpart | `CV4624`-`CV4625` | `TENSOR_CONTRACTION_SHAPE_MISMATCH` / `TENSOR_ALIAS_HAZARD` | EVT1-new | last/first axis equality and conservative destination disjointness |
 | malformed Tensor MIR | semantic operation invariant | `CV4626` | `TENSOR_MIR_INVALID` | EVT1-new | complete rank/shape/region/provenance/lowering facts required |
+| inline tensor runtime shape | no counterpart | `CV4627` | `TENSOR_INLINE_REQUIRES_FIXED_SHAPE` | EVT1-new / R4h-derived | runtime/external backing must remain explicit |
+| vector shaped rank mismatch | no counterpart | `CV4628` | `VECTOR_RANK_MISMATCH` | EVT1-new | exact rank-one shorthand |
+| matrix shaped rank mismatch | no counterpart | `CV4629` | `MATRIX_RANK_MISMATCH` | EVT1-new | exact rank-two shorthand |
+| invalid inline shape | fixed ndarray pressure | `CV4630` | `TENSOR_INLINE_SHAPE_INVALID` | EVT1-new / reused law | every inline extent is positive and fixed |
+| inline fill element mismatch | tensor exact element law | `CV4631` | `TENSOR_INLINE_ELEMENT_TYPE_MISMATCH` | EVT1-new / reused law | no scalar conversion or broadcasting |
+| scalar contraction destination mismatch | scalar type law | `CV4632` | `TENSOR_SCALAR_RESULT_TYPE_MISMATCH` | reserved R4i family | dot result is exact element scalar |
 
 `static_assert` continues to reuse the bounded comptime diagnostic path:
 runtime calls are `CV4210`, a non-boolean evaluated condition is `CV4207`, and

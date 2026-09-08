@@ -1,0 +1,7 @@
+profile Core;
+
+int TensorInlineLiteral()
+{
+    tensor<int> values[2, 3] = [[1, 2, 3], [4, 5, 6]];
+    return values[1, 2];
+}

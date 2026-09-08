@@ -1,0 +1,14 @@
+profile Core;
+
+layout R4iTensorFrame
+{
+    int<ndarray>[2, 2] values;
+}
+
+int TensorLayoutRegionStillValid()
+{
+    int<array>[4] backing = [1, 2, 3, 4];
+    ref R4iTensorFrame frame = bind backing;
+    tensor<int, 2> values = Tensor(frame.values);
+    return values[1, 0];
+}

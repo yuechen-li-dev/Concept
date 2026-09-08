@@ -1,0 +1,12 @@
+profile Core;
+
+float AcceptMatrix(tensor<float, 2> values)
+{
+    return 1.0;
+}
+
+float MatrixBasic()
+{
+    matrix<float> identity[2, 2] = [[1.0, 0.0], [0.0, 1.0]];
+    return AcceptMatrix(identity);
+}

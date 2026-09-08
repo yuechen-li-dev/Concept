@@ -1,0 +1,7 @@
+profile Core;
+
+int MatrixRankMismatch()
+{
+    matrix<float> bad[4] = [1.0, 2.0, 3.0, 4.0];
+    return 0;
+}

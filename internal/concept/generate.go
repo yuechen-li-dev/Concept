@@ -505,8 +505,14 @@ func evt1ValidateMIR(mir MIR) error {
 			seen[cleanup.Owner] = true
 		}
 		for _, operation := range fn.Operations {
+			if operation.Kind == "tensor_inline_storage" {
+				if operation.TensorBackingKind != TensorBackingInline || operation.TargetStorageKind != StorageNDArray || operation.TargetRank < 1 || len(operation.TargetShape) != operation.TargetRank || operation.RegionID == "" || operation.Provenance != "local" || operation.Mutability == "" || operation.Alignment < 1 || !operation.Contiguous || !operation.NoCopy || !operation.NoAllocation || !operation.NoOwnershipTransfer {
+					return evt1Diagnostic("CV4626", fmt.Sprintf("MIR inline tensor storage %s omits fixed backing facts", operation.ID), operation.SourceSpan)
+				}
+				continue
+			}
 			if operation.Kind == "tensor_view" {
-				if operation.TargetRank < 1 || len(operation.TargetShape) != operation.TargetRank || operation.RegionID == "" || operation.Provenance == "" || operation.Mutability == "" || operation.Alignment < 1 || !operation.Contiguous || !operation.NoCopy || !operation.NoAllocation || !operation.NoOwnershipTransfer || !operation.SameBackingRegion {
+				if operation.TensorBackingKind == "" || operation.TargetRank < 1 || len(operation.TargetShape) != operation.TargetRank || operation.RegionID == "" || operation.Provenance == "" || operation.Mutability == "" || operation.Alignment < 1 || !operation.Contiguous || !operation.NoCopy || !operation.NoAllocation || !operation.NoOwnershipTransfer || !operation.SameBackingRegion {
 					return evt1Diagnostic("CV4626", fmt.Sprintf("MIR tensor view %s omits storage facts", operation.ID), operation.SourceSpan)
 				}
 				continue
@@ -623,6 +629,13 @@ func collectMIROps(env *semanticEnv, block *Block, fn *MIRFunction, templateInfo
 		id := fmt.Sprintf("%s.%02d", fn.Name, len(fn.Operations)+1)
 		switch s := stmt.(type) {
 		case *VarDecl:
+			if s.InlineTensor != nil {
+				facts := s.InlineTensor.Facts
+				fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "tensor_inline_storage", Type: s.InlineTensor.BackingType.String(), Detail: s.InlineTensor.BackingID + " init=" + s.InlineTensor.InitializerKind, TargetStorageKind: StorageNDArray, TargetRank: len(s.InlineTensor.BackingType.Shape), TargetShape: append([]StorageDimension{}, s.InlineTensor.BackingType.Shape...), Mutability: facts.Mutability, Provenance: facts.Provenance, RegionID: facts.RegionID, BaseOffset: "0", Alignment: facts.Alignment, TensorBackingKind: facts.BackingKind, Contiguous: true, NoCopy: true, NoAllocation: true, NoOwnershipTransfer: true, SourceSpan: s.Span})
+				fn.Operations = append(fn.Operations, MIROperation{ID: fmt.Sprintf("%s.%02d", fn.Name, len(fn.Operations)+1), Kind: "tensor_view", Type: s.Type.String(), Detail: s.Name + " over " + s.InlineTensor.BackingID, TargetRank: facts.Rank, TargetShape: append([]StorageDimension{}, facts.Shape...), Mutability: facts.Mutability, Provenance: facts.Provenance, RegionID: facts.RegionID, BaseOffset: facts.BaseOffset, Alignment: facts.Alignment, TensorBackingKind: facts.BackingKind, Contiguous: true, NoCopy: true, NoAllocation: true, NoOwnershipTransfer: true, SameBackingRegion: true, SourceSpan: s.Span})
+				collectExprMIROps(env, s.Value, fn, templateInfo)
+				continue
+			}
 			kind := "var_decl"
 			if s.Comptime {
 				kind = "comptime_decl"
@@ -815,7 +828,7 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 	case *CallExpr:
 		if e.Intrinsic == "tensor_view" && e.TensorFacts != nil {
 			facts := e.TensorFacts
-			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "tensor_view", Type: fmt.Sprintf("tensor<%s, %d>", facts.ElementType.String(), facts.Rank), Detail: facts.Source, TargetRank: facts.Rank, TargetShape: append([]StorageDimension{}, facts.Shape...), Mutability: facts.Mutability, Provenance: facts.Provenance, RegionID: facts.RegionID, BaseOffset: facts.BaseOffset, Alignment: facts.Alignment, Contiguous: true, NoCopy: true, NoAllocation: true, NoOwnershipTransfer: true, SameBackingRegion: true, SourceSpan: e.Span})
+			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "tensor_view", Type: fmt.Sprintf("tensor<%s, %d>", facts.ElementType.String(), facts.Rank), Detail: facts.Source, TargetRank: facts.Rank, TargetShape: append([]StorageDimension{}, facts.Shape...), Mutability: facts.Mutability, Provenance: facts.Provenance, RegionID: facts.RegionID, BaseOffset: facts.BaseOffset, Alignment: facts.Alignment, TensorBackingKind: facts.BackingKind, Contiguous: true, NoCopy: true, NoAllocation: true, NoOwnershipTransfer: true, SameBackingRegion: true, SourceSpan: e.Span})
 			for _, arg := range e.Args {
 				collectExprMIROps(env, arg, fn, templateInfo)
 			}
@@ -919,6 +932,9 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 			collectExprMIROps(env, index, fn, templateInfo)
 		}
 	case *BinaryExpr:
+		if e.Tensor != nil {
+			fn.TensorOperations = append(fn.TensorOperations, *e.Tensor)
+		}
 		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "binary", Detail: e.Op, SourceSpan: e.Span})
 		collectExprMIROps(env, e.Left, fn, templateInfo)
 		collectExprMIROps(env, e.Right, fn, templateInfo)
@@ -929,6 +945,8 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "name", Detail: e.Name, SourceSpan: e.Span})
 	case *IntLiteral:
 		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "literal", Detail: fmt.Sprintf("%d", e.Value), SourceSpan: e.Span})
+	case *FloatLiteral:
+		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "literal", Detail: fmt.Sprintf("%g", e.Value), SourceSpan: e.Span})
 	case *StringLiteral:
 		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "string_literal", Detail: e.Value, SourceSpan: e.Span})
 	case *BoolLiteral:
@@ -2627,6 +2645,9 @@ func (f *evt1FunctionLowerer) lowerStatement(stmt Statement, indent int) string 
 			}
 			return ""
 		}
+		if s.InlineTensor != nil {
+			return f.lowerInlineTensorDeclaration(s, indent)
+		}
 		if construct, ok := s.Value.(*StructConstructExpr); ok && construct.StructName == s.Type.Name {
 			return f.lowerLocalStructConstruct(s.Type, s.Name, *construct, indent)
 		}
@@ -2965,7 +2986,17 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		return f.lowerStorageIndex(e, indent, false)
 	case *ArrayLiteralExpr:
 		return "", "/* array_literal_requires_target */", Type{}
+	case *FloatLiteral:
+		literal := fmt.Sprintf("%g", e.Value)
+		if !strings.ContainsAny(literal, ".eE") {
+			literal += ".0"
+		}
+		floatType, _ := evt1BuiltinType("float", e.Span)
+		return "", literal + "f", floatType
 	case *BinaryExpr:
+		if e.Tensor != nil && e.Tensor.Kind == "tensor_scalar_contract" {
+			return f.lowerScalarTensorContract(e, indent)
+		}
 		leftPrelude, left, leftType := f.lowerExpr(e.Left, indent)
 		rightPrelude, right, _ := f.lowerExpr(e.Right, indent)
 		if e.Op == "<" || e.Op == ">" || e.Op == "<=" || e.Op == ">=" || e.Op == "==" || e.Op == "!=" || e.Op == "and" || e.Op == "or" {

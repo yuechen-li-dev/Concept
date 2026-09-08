@@ -1,6 +1,6 @@
 # EVT1 semantic reconciliation matrix
 
-Status: R0 authority ledger with R1-R4h executable evidence
+Status: R0 authority ledger with R1-R4i executable evidence
 
 `Port required?` means implementation or conformance work remains after R0; it
 does not authorize that work in this milestone. Status is one of `Keep PoC3`,
@@ -44,10 +44,12 @@ does not authorize that work in this milestone. Status is one of `Keep PoC3`,
 | stream binding | lineage mapping realized downstream | unary `bind` from matching bound layout, preserving const/provenance | reuse R4e verb and reference laws | EVT1-new composition | No for R4f subset | R4f native/provenance corpus | direct storage-to-stream bind deferred |
 | tensor type | no canonical storage/interpretation split | non-owning `tensor<T,Rank>` over existing shaped storage | adopt mathematical interpretation without storage ownership | EVT1-new / SDSL-V-derived | No for R4h subset | R4h corpus and Tensor MIR | preserves shape, region, alignment, mutability, and provenance |
 | symbolic Einstein indexing | no active PoC3 counterpart | statement-local inferred symbols with free/reduction validation | adopt bounded explicit contraction and initialization form | EVT1-new / SDSL-V-derived | No for R4h subset | R4h Einstein/native/comptime evidence | no persistent hidden state |
-| tensor `@` | no active PoC3 counterpart | last-axis/first-axis generalized contraction | canonical deterministic default; matrix multiply is rank-2 case | EVT1-new / SDSL-V-derived | No for R4h subset | R4h rank-2/rank-3 native evidence | rank-1 scalar result deferred |
+| tensor `@` | no active PoC3 counterpart | last-axis/first-axis generalized contraction plus rank-one scalar result | canonical deterministic default; matrix multiply and dot product are derived cases | EVT1-new / SDSL-V-derived | No for R4i subset | R4h rank-2/rank-3 and R4i rank-zero native evidence | no special dot operator |
 | tensor elementwise shape law | no active PoC3 counterpart | `+`, `-`, `*` require exact shapes; exact-type scalar multiply | prohibit implicit broadcasting | EVT1-new | No for R4h subset | R4h valid/invalid corpus | no row/column/singleton promotion |
-| Tensor MIR | absent | explicit tensor views and per-function semantic operations before loop lowering | retain math intent through validation, then lower deliberately | Keep Go / EVT1-new | No for R4h subset | R4h MIR validation | future optimization may consume; none implemented |
-| vector / matrix aliases | no canonical split | absent; tensor rank already expresses semantics | reserve spelling-only `tensor<T,1>` / `tensor<T,2>` shorthands | Deferred to R4i | Yes | R4h direction note | no separate semantics or storage |
+| inline tensor backing synthesis | absent | `tensor<T> name[fixed shape]` derives rank and fixed ndarray backing | adopt as sugar over R4h view semantics | EVT1-new / R4h-derived | No for R4i subset | R4i corpus, MIR, native C11 | runtime/external source remains explicit |
+| Tensor backing witness | absent | closed Inline/NDArray/BoundNDArray/Span/LayoutRegion/StreamChannel classification | retain structured shape/provenance/region/alignment/mutability evidence | Keep Go / EVT1-new | No for R4i subset | R4i MIR inspection | compile-time classification; no runtime vtable |
+| Tensor MIR | absent | explicit tensor views, rank-zero scalar contraction, and per-function semantic operations before loop lowering | retain math intent through validation, then lower deliberately | Keep Go / EVT1-new | No for R4i subset | R4h-R4i MIR validation | no separate vector/matrix MIR |
+| vector / matrix aliases | no canonical split | exact parser normalization to `tensor<T,1>` / `tensor<T,2>` | adopt spelling-only identity | EVT1-new / R4h-derived | No for R4i subset | R4i API/native corpus | no separate semantics, witnesses, or storage |
 | indexing | runtime fixed-array indexing and bounds pressure | checked rank-1 and comma-separated rank-N indexing | merge array behavior; add EVT1-new ndarray arity/linearization | Merge / EVT1-new | No for fixed subset | phase21; R4d native/MIR tests | terminal panic, no Result default |
 | slices | read-only `Slice<T>` implemented | superseded by R4g spans | preserve fixtures as pressure; do not port the old surface | Redesign -> superseded by Span/ReadOnlySpan | No direct port | phase21 fixtures; R4g corpus | bounds/read-only evidence only |
 | Span | no canonical counterpart; Slice supplies pressure | mutable bounded borrowed contiguous interval | canonical EVT1 compiler-known ref-struct-like descriptor | EVT1 canonical / C#-inspired | No for R4g subset | R4g MIR/native corpus | same provenance and parent-region identity; no ownership/allocation |
@@ -177,7 +179,7 @@ misclassified as PoC3 parity. Runtime extents are value-level type facts, but
 both bare runtime array and ndarray locals reject with explicit-storage
 diagnostics. Slice is superseded by the later R4g Span direction; FixedBuffer
 and vector/matrix/tensor were still future layers at R4d; R4h now supplies the
-tensor layer while vector/matrix aliases remain deferred.
+tensor layer; R4i now supplies exact vector/matrix aliases.
 
 ## R4e executable evidence
 
@@ -192,7 +194,7 @@ bound-view rebinding, call-result provenance, and bind after `?`. PoC3 supplies
 only supporting fixed-wrapper/value evidence; this matrix does not fabricate a
 PoC3 bind equivalent. Slice and FixedBuffer remain redesign evidence;
 allocator-backed dynamic ownership and vector/matrix/tensor were deferred at
-R4e; R4h now supplies the tensor layer while vector/matrix aliases remain deferred.
+R4e; R4h supplies the tensor layer and R4i supplies exact vector/matrix aliases.
 
 ## R4f executable evidence
 
@@ -234,3 +236,16 @@ ordinary bounds, runtime contraction guards, readonly operands, and
 statement-local comptime initialization. Broadcasting, contraction overlap,
 invalid symbolic mappings, and unshaped rank-greater-than-one Span conversion
 reject. PoC3 parity is not fabricated; SDSL-V is lineage evidence only.
+
+## R4i executable evidence
+
+R4i adds 27 `PASS` cases: 16 valid and 11 static rejection programs. It is
+EVT1-new ergonomic sugar derived from R4h semantics, not a PoC3 source-form
+divergence. The corpus covers fixed inline rank one through three, nested
+literals, exact scalar fill, const access, Einstein initialization, matrix and
+rank-three contraction, exact vector/matrix aliases, scalar dot product, and
+preservation of ndarray/layout/stream `Tensor(source)` forms. Runtime inline
+shape, literal mismatch, unsupported element type, shorthand rank mismatch,
+broadcasting, and contraction aliasing reject. MIR proves deterministic
+disjoint inline regions and one existing Tensor MIR path; strict-C11 numeric
+evidence proves results without allocation or tensor runtime calls.

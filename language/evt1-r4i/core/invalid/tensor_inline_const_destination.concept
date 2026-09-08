@@ -1,0 +1,8 @@
+profile Core;
+
+int TensorInlineConstDestination()
+{
+    const tensor<int> values[2, 2] = [[1, 2], [3, 4]];
+    values[i, j] = if (i == j) 1 else 0;
+    return 0;
+}

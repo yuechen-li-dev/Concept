@@ -1,0 +1,7 @@
+profile Core;
+
+int TensorInlineScalarFillTypeMismatch()
+{
+    tensor<float> values[2, 2] = 0;
+    return 0;
+}

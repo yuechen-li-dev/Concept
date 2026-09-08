@@ -1,0 +1,9 @@
+profile Core;
+
+int VectorDotProduct()
+{
+    vector<int> A[3] = [1, 2, 3];
+    vector<int> B[3] = [4, 5, 6];
+    int result = A @ B;
+    return result;
+}

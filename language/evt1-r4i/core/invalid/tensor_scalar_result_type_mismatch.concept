@@ -1,0 +1,9 @@
+profile Core;
+
+int TensorScalarResultTypeMismatch()
+{
+    vector<int> A[2] = [1, 2];
+    vector<int> B[2] = [3, 4];
+    float result = A @ B;
+    return 0;
+}

@@ -1,6 +1,6 @@
 # EVT1 tensor and Einstein direction
 
-Status: R4h bounded implementation
+Status: R4i bounded implementation
 
 ## Purpose and lineage
 
@@ -39,6 +39,32 @@ shape and storage facts. Fixed/bound ndarrays and shaped layout/stream regions
 are direct sources. Span supplies exactly one dimension and therefore forms
 only rank one; higher-rank Span conversion requires a future explicit shape
 operation and is never inferred from length.
+
+R4i adds the concrete fixed form:
+
+```concept
+tensor<int> A[2, 2] = [[1, 2], [3, 4]];
+```
+
+This follows the explicit-decision/automatic-consequence doctrine: source
+states element type and shape, and the compiler derives rank and one fixed
+inline ndarray backing because no allocator or storage-source decision remains.
+The backing is a normal local/global value region, and the tensor is the
+ordinary non-owning view over it. Runtime/external storage continues to require
+`Tensor(source)`.
+
+Nested literals reuse ndarray validation. An exact scalar initializer fills
+the fixed backing once per element as initialization sugar. Omission follows
+the existing rule that fixed locals require an initializer. Each synthesized
+region has a deterministic source-derived identity such as
+`inline:A#storage@line:column`; distinct declarations are disjoint. `const`
+propagates readonly access to both backing and view. Structural element
+copy/move/drop law remains the ndarray law; the view never independently drops
+the backing.
+
+`vector<T>` and `matrix<T>` normalize exactly to `tensor<T, 1>` and
+`tensor<T, 2>` before semantic use. They add neither types nor witnesses nor
+MIR systems. Rank mismatch is diagnosed at the shaped declaration.
 
 Ordinary `A[0, 1]` indexing is zero-based and rank-exact. Whole-tensor
 assignment computes into existing mutable storage. An expression never creates
@@ -86,6 +112,11 @@ Reduction is multiplication plus addition from arithmetic zero for the
 supported scalar types. General semirings are future concept pressure, not an
 R4h typeclass project.
 
+The rank-one/rank-one case has no remaining free axis and therefore yields the
+element scalar directly. Tensor MIR retains the two rank-one region operands,
+the reduction axis, element type, and multiply-add accumulator while giving the
+result rank zero. No source-level rank-zero tensor object is introduced.
+
 ## Tensor MIR and lowering
 
 Tensor views remain ordinary MIR operations with complete storage facts.
@@ -105,6 +136,18 @@ flows through the existing strict-C11 backend. This boundary preserves future
 tiling, vectorization, GEMM recognition, GPU, or native-LIR opportunities
 without implementing them now.
 
+Inline declarations add `tensor_inline_storage` and the same `tensor_view`
+operation to ordinary MIR. Vector/matrix spellings are already normalized.
+Tensor computation still has exactly one Tensor MIR system. C lowering emits a
+fixed ndarray wrapper and a descriptor pointing at its data; scalar fill and
+literal initialization write that fixed value storage with no allocation.
+
+Backing origin is a closed semantic classification: `Inline`, `NDArray`,
+`BoundNDArray`, `Span`, `LayoutRegion`, or `StreamChannel`. The corresponding
+`TensorBacking` evidence supplies shape, contiguous storage, provenance,
+region identity, alignment, and mutability. Tensor algebra consumes that
+evidence without runtime witness objects or source-level backing matching.
+
 ## Alias and runtime policy
 
 Elementwise corresponding-index in-place writes are allowed. Contraction
@@ -116,10 +159,27 @@ Fixed shape incompatibility rejects statically. Runtime shape equality,
 contraction axes, output axes, index bounds, and shape products are checked
 before access with deterministic terminal reasons.
 
-## Deferred direction
+## Ergonomics evidence and deferred direction
 
-`vector<T>` and `matrix<T>` are future spelling-only shorthands for
-`tensor<T,1>` and `tensor<T,2>`. Rank-zero tensor results, explicit
-noncanonical contraction syntax, broadcasting, strides, sparse/tiled storage,
-owned dynamic tensor allocation, named axes, autograd, BLAS, SIMD, GPU kernels,
-MLIR, and generalized semirings remain outside R4h.
+Before R4i, fixed matrix multiplication required three storage declarations
+and three `Tensor(...)` views. The same program is now:
+
+```concept
+matrix<int> A[2, 2] = [[1, 2], [3, 4]];
+matrix<int> B[2, 2] = [[5, 6], [7, 8]];
+matrix<int> C[2, 2] = 0;
+C = A @ B;
+```
+
+The generalized spelling remains visible when it matters:
+
+```concept
+tensor<int> A[2, 2, 2] = [[[1, 2], [3, 4]], [[5, 6], [7, 8]]];
+```
+
+A future tensor group/columnar record may group related shaped fields and must
+lower through existing layout semantics. R4i does not implement that syntax or
+another storage system. Explicit noncanonical contraction syntax,
+broadcasting, strides, transposes, slicing, sparse/tiled storage, owned dynamic
+tensor allocation, named axes, autograd, BLAS, SIMD, GPU kernels, MLIR, and
+generalized semirings remain deferred.

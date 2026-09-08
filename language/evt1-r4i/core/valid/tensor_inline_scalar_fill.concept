@@ -1,0 +1,7 @@
+profile Core;
+
+int TensorInlineScalarFill()
+{
+    tensor<int> values[2, 2] = 7;
+    return values[1, 1];
+}

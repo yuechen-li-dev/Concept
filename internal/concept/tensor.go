@@ -9,6 +9,7 @@ import (
 // TensorViewFacts are the storage-neutral facts retained by a tensor view.
 // Shape expressions are deliberately preserved until tensor lowering.
 type TensorViewFacts struct {
+	BackingKind         TensorBackingKind  `json:"backing_kind"`
 	ElementType         Type               `json:"element_type"`
 	Rank                int                `json:"rank"`
 	Shape               []StorageDimension `json:"shape"`
@@ -25,6 +26,7 @@ type TensorViewFacts struct {
 }
 
 type MIRTensorOperand struct {
+	BackingKind         TensorBackingKind  `json:"backing_kind"`
 	Name                string             `json:"name"`
 	ElementType         Type               `json:"element_type"`
 	Indices             []string           `json:"indices,omitempty"`
@@ -58,6 +60,17 @@ type TensorSemantic struct {
 
 type MIRTensorOperation = TensorSemantic
 
+type TensorBackingKind string
+
+const (
+	TensorBackingInline        TensorBackingKind = "Inline"
+	TensorBackingNDArray       TensorBackingKind = "NDArray"
+	TensorBackingBoundNDArray  TensorBackingKind = "BoundNDArray"
+	TensorBackingSpan          TensorBackingKind = "Span"
+	TensorBackingLayoutRegion  TensorBackingKind = "LayoutRegion"
+	TensorBackingStreamChannel TensorBackingKind = "StreamChannel"
+)
+
 func evt1IsTensorType(t Type) bool  { return t.Kind == TypeTensor || t.Name == "tensor" }
 func evt1TensorElement(t Type) Type { return t.TypeArgs[0] }
 
@@ -85,6 +98,73 @@ func evt1TensorCName(t Type) string {
 		mutability = "const"
 	}
 	return fmt.Sprintf("concept_tensor_%s_%s_%d", mutability, evt1TypeIdentity(evt1TensorElement(t)), t.TensorRank)
+}
+
+func validateInlineTensorDeclaration(env *semanticEnv, scope *evt1Scope, decl *VarDecl, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, *TensorViewFacts, error) {
+	inline := decl.InlineTensor
+	rank := len(inline.Shape)
+	if rank == 0 {
+		return Type{}, nil, evt1Diagnostic("CV4630", "inline tensor shape must contain at least one positive extent", decl.Span)
+	}
+	if inline.Spelling == "vector" && rank != 1 {
+		return Type{}, nil, evt1Diagnostic("CV4628", fmt.Sprintf("vector<T> requires rank 1, but declaration has rank %d", rank), decl.Span)
+	}
+	if inline.Spelling == "matrix" && rank != 2 {
+		return Type{}, nil, evt1Diagnostic("CV4629", fmt.Sprintf("matrix<T> requires rank 2, but declaration has rank %d", rank), decl.Span)
+	}
+	if decl.Type.TensorRank != rank {
+		return Type{}, nil, evt1Diagnostic("CV4614", fmt.Sprintf("tensor rank %d does not match shaped declaration rank %d", decl.Type.TensorRank, rank), decl.Span)
+	}
+	if err := validateKnownType(env, decl.Type, decl.Span, "", false); err != nil {
+		return Type{}, nil, err
+	}
+	element := evt1TensorElement(decl.Type).valueType()
+	backing := Type{Name: element.String() + "[]", Kind: TypeNDArray, ArrayElem: &element, StorageKind: StorageNDArray, Shape: append([]StorageDimension{}, inline.Shape...), Contiguous: true, Layout: "row-major", Span: decl.Span}
+	resolvedBacking, err := evt1ResolveType(env, scope, backing)
+	if err != nil {
+		return Type{}, nil, err
+	}
+	if evt1StorageHasRuntimeShape(resolvedBacking) {
+		return Type{}, nil, evt1Diagnostic("CV4627", "inline tensor backing requires a fully fixed compile-time shape; runtime or external storage requires Tensor(source)", decl.Span)
+	}
+	for _, dimension := range resolvedBacking.Shape {
+		if dimension.Extent <= 0 {
+			return Type{}, nil, evt1Diagnostic("CV4630", fmt.Sprintf("inline tensor extent %d must be positive", dimension.Extent), decl.Span)
+		}
+	}
+	if decl.Value == nil {
+		return Type{}, nil, evt1Diagnostic("CV4560", fmt.Sprintf("fixed storage local %s requires an initializer", decl.Name), decl.Span)
+	}
+	initializerKind := "scalar_fill"
+	if literal, ok := decl.Value.(*ArrayLiteralExpr); ok {
+		initializerKind = "nested_literal"
+		if _, err := validateArrayLiteralExpr(env, scope, *literal, &resolvedBacking, templateInfo, inComptimeFn || decl.Comptime); err != nil {
+			return Type{}, nil, err
+		}
+	} else {
+		valueType, err := validateExpr(env, scope, decl.Value, templateInfo, inComptimeFn || decl.Comptime)
+		if err != nil {
+			return Type{}, nil, err
+		}
+		if !evt1CanonicalType(env, valueType).Equal(evt1CanonicalType(env, element)) {
+			return Type{}, nil, evt1Diagnostic("CV4631", fmt.Sprintf("inline tensor scalar fill requires exact element type %s but got %s", element.String(), valueType.String()), decl.Value.exprSpan())
+		}
+	}
+	tensorType := evt1TensorType(element, rank, decl.Type.Span)
+	tensorType.Const = decl.Const || decl.Type.Const
+	resolvedBacking.Const = tensorType.Const
+	_, alignment, geometryErr := evt1TypeGeometry(env, element)
+	if geometryErr != nil {
+		alignment = 1
+	}
+	backingID := fmt.Sprintf("inline:%s#storage@%d:%d", decl.Name, decl.Span.Line, decl.Span.Column)
+	mutability := "mutable"
+	if tensorType.Const {
+		mutability = "readonly"
+	}
+	facts := &TensorViewFacts{BackingKind: TensorBackingInline, ElementType: element, Rank: rank, Shape: append([]StorageDimension{}, resolvedBacking.Shape...), RegionID: backingID, BaseOffset: "0", Alignment: alignment, Mutability: mutability, Contiguous: true, Provenance: "local", Source: backingID, NoCopy: true, NoAllocation: true, NoOwnershipTransfer: true}
+	inline.BackingType, inline.BackingID, inline.InitializerKind, inline.Facts = resolvedBacking, backingID, initializerKind, facts
+	return tensorType, facts, nil
 }
 
 func evt1TensorFactsForValue(scope *evt1Scope, expr Expr, t Type) *TensorViewFacts {
@@ -175,8 +255,31 @@ func validateTensorConstruction(env *semanticEnv, scope *evt1Scope, call *CallEx
 		mutability = "mutable"
 	}
 	call.Intrinsic = "tensor_view"
-	call.TensorFacts = &TensorViewFacts{ElementType: element.valueType(), Rank: expected.TensorRank, Shape: shape, RegionID: regionID, BaseOffset: baseOffset, Alignment: alignment, Mutability: mutability, Contiguous: true, Provenance: provText, Source: exprLabel(call.Args[0]), NoCopy: true, NoAllocation: true, NoOwnershipTransfer: true}
+	call.TensorFacts = &TensorViewFacts{BackingKind: evt1TensorBackingKind(env, scope, call.Args[0], sourceType), ElementType: element.valueType(), Rank: expected.TensorRank, Shape: shape, RegionID: regionID, BaseOffset: baseOffset, Alignment: alignment, Mutability: mutability, Contiguous: true, Provenance: provText, Source: exprLabel(call.Args[0]), NoCopy: true, NoAllocation: true, NoOwnershipTransfer: true}
 	return expected, nil
+}
+
+func evt1TensorBackingKind(env *semanticEnv, scope *evt1Scope, source Expr, sourceType Type) TensorBackingKind {
+	if evt1IsSpanType(sourceType) {
+		return TensorBackingSpan
+	}
+	if field, ok := source.(*FieldExpr); ok {
+		if receiverType, err := validateExpr(env, scope, field.Receiver, nil, false); err == nil {
+			if _, ok := env.streams[receiverType.Name]; ok {
+				return TensorBackingStreamChannel
+			}
+		}
+		return TensorBackingLayoutRegion
+	}
+	if name, ok := source.(*NameExpr); ok {
+		if binding, found := scope.lookup(name.Name); found && binding.t.isReference() {
+			return TensorBackingBoundNDArray
+		}
+	}
+	if sourceType.isReference() {
+		return TensorBackingBoundNDArray
+	}
+	return TensorBackingNDArray
 }
 
 func validateOrdinaryTensorIndex(env *semanticEnv, scope *evt1Scope, index *IndexExpr, facts TensorViewFacts, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
@@ -201,7 +304,7 @@ func validateOrdinaryTensorIndex(env *semanticEnv, scope *evt1Scope, index *Inde
 }
 
 func tensorOperand(name string, indices []string, facts TensorViewFacts) MIRTensorOperand {
-	return MIRTensorOperand{Name: name, ElementType: facts.ElementType, Indices: indices, Rank: facts.Rank, Shape: append([]StorageDimension{}, facts.Shape...), RegionID: facts.RegionID, BaseOffset: facts.BaseOffset, Alignment: facts.Alignment, Mutability: facts.Mutability, Contiguous: facts.Contiguous, Provenance: facts.Provenance, NoCopy: facts.NoCopy, NoAllocation: facts.NoAllocation, NoOwnershipTransfer: facts.NoOwnershipTransfer}
+	return MIRTensorOperand{BackingKind: facts.BackingKind, Name: name, ElementType: facts.ElementType, Indices: indices, Rank: facts.Rank, Shape: append([]StorageDimension{}, facts.Shape...), RegionID: facts.RegionID, BaseOffset: facts.BaseOffset, Alignment: facts.Alignment, Mutability: facts.Mutability, Contiguous: facts.Contiguous, Provenance: facts.Provenance, NoCopy: facts.NoCopy, NoAllocation: facts.NoAllocation, NoOwnershipTransfer: facts.NoOwnershipTransfer}
 }
 
 func tensorShapeEqual(a, b []StorageDimension) (bool, bool) {
@@ -493,7 +596,7 @@ func validateEinsteinAssignment(env *semanticEnv, scope *evt1Scope, stmt *Assign
 func validateTensorMIRSemantic(tensor MIRTensorOperation) error {
 	fail := func(message string) error { return evt1Diagnostic("CV4626", message, tensor.SourceSpan) }
 	validOperand := func(operand MIRTensorOperand) bool {
-		if operand.Name == "" || operand.Rank < 1 || len(operand.Shape) != operand.Rank || operand.RegionID == "" || operand.BaseOffset == "" || operand.Alignment < 1 || operand.Mutability == "" || operand.Provenance == "" || !operand.Contiguous || !operand.NoCopy || !operand.NoAllocation || !operand.NoOwnershipTransfer {
+		if operand.BackingKind == "" || operand.Name == "" || operand.Rank < 1 || len(operand.Shape) != operand.Rank || operand.RegionID == "" || operand.BaseOffset == "" || operand.Alignment < 1 || operand.Mutability == "" || operand.Provenance == "" || !operand.Contiguous || !operand.NoCopy || !operand.NoAllocation || !operand.NoOwnershipTransfer {
 			return false
 		}
 		for _, dimension := range operand.Shape {
@@ -502,6 +605,15 @@ func validateTensorMIRSemantic(tensor MIRTensorOperation) error {
 			}
 		}
 		return true
+	}
+	if tensor.Kind == "tensor_scalar_contract" {
+		if tensor.Lowering == "" || tensor.AliasPolicy == "" || tensor.Output.Rank != 0 || tensor.Output.Name == "" || tensor.Output.ElementType.Name == "" || len(tensor.Operands) != 2 || !validOperand(tensor.Operands[0]) || !validOperand(tensor.Operands[1]) {
+			return fail("rank-zero contraction Tensor MIR omits scalar output or operand facts")
+		}
+		if tensor.Operands[0].Rank != 1 || tensor.Operands[1].Rank != 1 || tensor.ElementOp != "multiply_add" {
+			return fail("rank-zero contraction Tensor MIR requires two rank-one operands and multiply-add reduction")
+		}
+		return nil
 	}
 	if tensor.Kind == "" || tensor.Lowering == "" || tensor.AliasPolicy == "" || !validOperand(tensor.Output) || tensor.Output.Mutability != "mutable" {
 		return fail("Tensor MIR omits rank, shape, region, mutability, storage-neutral, or lowering facts")
@@ -697,6 +809,61 @@ func (f *evt1FunctionLowerer) lowerTensorView(call *CallExpr, indent int) (strin
 		pointer = "const " + evt1CType(facts.ElementType) + "*"
 	}
 	return pre, fmt.Sprintf("(%s){ .data = (%s)%s, .shape = { %s } }", evt1TensorCName(t), pointer, data, strings.Join(dims, ", ")), t
+}
+
+func (f *evt1FunctionLowerer) lowerInlineTensorDeclaration(decl *VarDecl, indent int) string {
+	inline := decl.InlineTensor
+	cName := f.bindName(decl.Name, decl.Type)
+	backingName := f.nextTemp("tensor_storage")
+	var b strings.Builder
+	var initializer string
+	if inline.InitializerKind == "nested_literal" {
+		prelude, value, _ := f.lowerExprExpected(decl.Value, inline.BackingType, indent)
+		b.WriteString(prelude)
+		initializer = value
+	} else {
+		prelude, value, _ := f.lowerExpr(decl.Value, indent)
+		b.WriteString(prelude)
+		fillName := f.nextTemp("tensor_fill")
+		b.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(*inline.BackingType.ArrayElem), fillName, value))
+		values := make([]string, evt1StorageElementCount(inline.BackingType))
+		for i := range values {
+			values[i] = fillName
+		}
+		initializer = fmt.Sprintf("(%s){ .data = { %s } }", evt1CType(inline.BackingType), strings.Join(values, ", "))
+	}
+	qualifier := ""
+	if decl.Type.Const {
+		qualifier = "const "
+	}
+	b.WriteString(ind(indent) + fmt.Sprintf("%s%s %s = %s;\n", qualifier, evt1CType(inline.BackingType), backingName, initializer))
+	dimensions := make([]string, len(inline.BackingType.Shape))
+	for i, dimension := range inline.BackingType.Shape {
+		dimensions[i] = fmt.Sprint(dimension.Extent)
+	}
+	b.WriteString(ind(indent) + fmt.Sprintf("%s %s = (%s){ .data = %s.data, .shape = { %s } };\n", evt1CType(decl.Type), cName, evt1CType(decl.Type), backingName, strings.Join(dimensions, ", ")))
+	binding := f.currentScope()[decl.Name]
+	binding.tensorFacts = inline.Facts
+	f.currentScope()[decl.Name] = binding
+	return b.String()
+}
+
+func (f *evt1FunctionLowerer) lowerScalarTensorContract(expr *BinaryExpr, indent int) (string, string, Type) {
+	semantic := expr.Tensor
+	left := f.tensorBinding(semantic.Operands[0].Name)
+	right := f.tensorBinding(semantic.Operands[1].Name)
+	resultType := semantic.Output.ElementType
+	accumulator := f.nextTemp("tensor_acc")
+	index := f.nextTemp("tensor_k")
+	var b strings.Builder
+	if left.tensorFacts.Shape[0].Runtime || right.tensorFacts.Shape[0].Runtime {
+		b.WriteString(ind(indent) + fmt.Sprintf("if (%s.shape[0] != %s.shape[0]) { concept_panic(%q, %d, %d); }\n", left.cName, right.cName, "Concept tensor contraction shape mismatch", expr.Span.Line, expr.Span.Column))
+	}
+	b.WriteString(ind(indent) + fmt.Sprintf("%s %s = (%s)0;\n", evt1CType(resultType), accumulator, evt1CType(resultType)))
+	b.WriteString(ind(indent) + fmt.Sprintf("for (size_t %s = 0; %s < %s.shape[0]; ++%s) {\n", index, index, left.cName, index))
+	b.WriteString(ind(indent+1) + fmt.Sprintf("%s += %s.data[%s] * %s.data[%s];\n", accumulator, left.cName, index, right.cName, index))
+	b.WriteString(ind(indent) + "}\n")
+	return b.String(), accumulator, resultType
 }
 
 func (f *evt1FunctionLowerer) lowerTensorIndex(index *IndexExpr, indent int) (string, string, Type) {
@@ -902,6 +1069,12 @@ func (f *evt1FunctionLowerer) renderTensorScalar(expr Expr, loops map[string]str
 		return e.Name
 	case *IntLiteral:
 		return fmt.Sprint(e.Value)
+	case *FloatLiteral:
+		literal := fmt.Sprintf("%g", e.Value)
+		if !strings.ContainsAny(literal, ".eE") {
+			literal += ".0"
+		}
+		return literal + "f"
 	case *ParenExpr:
 		return "(" + f.renderTensorScalar(e.Value, loops) + ")"
 	case *UnaryExpr:

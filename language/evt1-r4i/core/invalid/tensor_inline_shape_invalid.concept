@@ -1,0 +1,7 @@
+profile Core;
+
+int TensorInlineShapeInvalid()
+{
+    tensor<int> values[0] = [];
+    return 0;
+}

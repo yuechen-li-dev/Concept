@@ -51,6 +51,7 @@ type Type struct {
 	PointerTo       *Type              `json:"pointer_to,omitempty"`
 	TypeArgs        []Type             `json:"type_args,omitempty"`
 	TensorRank      int                `json:"tensor_rank,omitempty"`
+	TensorSpelling  string             `json:"-"`
 	ArrayElem       *Type              `json:"array_elem,omitempty"`
 	ArrayLength     int                `json:"array_length,omitempty"`
 	ArrayLengthExpr Expr               `json:"-"`
@@ -434,13 +435,25 @@ type Statement interface {
 }
 
 type VarDecl struct {
-	Comptime  bool   `json:"comptime,omitempty"`
-	Const     bool   `json:"const,omitempty"`
-	Type      Type   `json:"type"`
-	Name      string `json:"name"`
-	Value     Expr   `json:"value"`
-	Span      Span   `json:"span"`
-	ConstSpan Span   `json:"const_span,omitempty"`
+	Comptime     bool              `json:"comptime,omitempty"`
+	Const        bool              `json:"const,omitempty"`
+	Type         Type              `json:"type"`
+	Name         string            `json:"name"`
+	Value        Expr              `json:"value"`
+	InlineTensor *InlineTensorDecl `json:"inline_tensor,omitempty"`
+	Span         Span              `json:"span"`
+	ConstSpan    Span              `json:"const_span,omitempty"`
+}
+
+// InlineTensorDecl retains the source identity of shaped tensor declaration
+// sugar while semantic analysis derives its ordinary fixed ndarray backing.
+type InlineTensorDecl struct {
+	Spelling        string             `json:"spelling"`
+	Shape           []StorageDimension `json:"shape"`
+	BackingType     Type               `json:"backing_type"`
+	BackingID       string             `json:"backing_id"`
+	InitializerKind string             `json:"initializer_kind"`
+	Facts           *TensorViewFacts   `json:"facts,omitempty"`
 }
 
 func (*VarDecl) evt1Statement()        {}
@@ -603,6 +616,14 @@ type IntLiteral struct {
 func (*IntLiteral) evt1Expr()        {}
 func (e *IntLiteral) exprSpan() Span { return e.Span }
 
+type FloatLiteral struct {
+	Value float64 `json:"value"`
+	Span  Span    `json:"span"`
+}
+
+func (*FloatLiteral) evt1Expr()        {}
+func (e *FloatLiteral) exprSpan() Span { return e.Span }
+
 type StringLiteral struct {
 	Value string `json:"value"`
 	Span  Span   `json:"span"`
@@ -676,10 +697,11 @@ func (*TemplateCallExpr) evt1Expr()        {}
 func (e *TemplateCallExpr) exprSpan() Span { return e.Span }
 
 type BinaryExpr struct {
-	Op    string `json:"op"`
-	Left  Expr   `json:"left"`
-	Right Expr   `json:"right"`
-	Span  Span   `json:"span"`
+	Op     string          `json:"op"`
+	Left   Expr            `json:"left"`
+	Right  Expr            `json:"right"`
+	Tensor *TensorSemantic `json:"tensor,omitempty"`
+	Span   Span            `json:"span"`
 }
 
 func (*BinaryExpr) evt1Expr()        {}
@@ -1110,6 +1132,7 @@ type MIROperation struct {
 	BaseOffset           string             `json:"base_offset,omitempty"`
 	Length               string             `json:"length,omitempty"`
 	ByteExtentExpression string             `json:"byte_extent_expression,omitempty"`
+	TensorBackingKind    TensorBackingKind  `json:"tensor_backing_kind,omitempty"`
 	Contiguous           bool               `json:"contiguous,omitempty"`
 	BoundsCheck          string             `json:"bounds_check,omitempty"`
 	SourceSpan           Span               `json:"source_span"`

@@ -991,6 +991,18 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 			if templateInfo != nil {
 				typeParam = templateInfo.Decl.TypeParam
 			}
+			if s.InlineTensor != nil {
+				resolvedType, facts, err := validateInlineTensorDeclaration(env, local, s, templateInfo, inComptimeFn)
+				if err != nil {
+					return err
+				}
+				s.Type = resolvedType
+				local.declare(s.Name, evt1ValueBinding{
+					t: resolvedType, mutable: !s.Const, state: evt1StorageInitialized, comptime: inComptimeFn,
+					provenance: evt1LifetimeProvenance{Kind: evt1ProvenanceLocal, Depth: local.depth}, tensorFacts: facts,
+				})
+				continue
+			}
 			if err := validateKnownType(env, s.Type, s.Span, typeParam, false); err != nil {
 				return err
 			}
@@ -1022,6 +1034,9 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				valueType.Const = true
 			}
 			if !evt1TypesCompatible(env, resolvedType, valueType, typeParam) {
+				if binary, ok := s.Value.(*BinaryExpr); ok && binary.Tensor != nil && binary.Tensor.Kind == "tensor_scalar_contract" {
+					return evt1Diagnostic("CV4632", fmt.Sprintf("tensor scalar contraction produces %s but destination is %s", valueType.String(), resolvedType.String()), s.Value.exprSpan())
+				}
 				return evt1Diagnostic("CV4106", fmt.Sprintf("constructor or initializer for %s expected %s but got %s", s.Name, resolvedType.String(), valueType.String()), s.Value.exprSpan())
 			}
 			if !s.Comptime && valueType.isOwned() && !evt1CanTransferInitialize(env, resolvedType, s.Value) && !evt1TypeDependsOnParam(valueType, typeParam) {
@@ -1971,6 +1986,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 	case *IntLiteral:
 		t, _ := evt1BuiltinType("int", e.Span)
 		return t, nil
+	case *FloatLiteral:
+		t, _ := evt1BuiltinType("float", e.Span)
+		return t, nil
 	case *StringLiteral:
 		t, _ := evt1BuiltinType("string", e.Span)
 		return t, nil
@@ -2367,6 +2385,33 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		if templateInfo != nil && (evt1TypeDependsOnParam(leftType, templateInfo.Decl.TypeParam) || evt1TypeDependsOnParam(rightType, templateInfo.Decl.TypeParam)) {
 			return Type{}, evt1Diagnostic("CV4175", "dependent operators are not allowed in EVT1 M1B-B templates", e.Span)
+		}
+		if e.Op == "@" {
+			leftName, leftFacts, leftTensor := tensorNameFacts(scope, e.Left)
+			rightName, rightFacts, rightTensor := tensorNameFacts(scope, e.Right)
+			if !leftTensor || !rightTensor {
+				return Type{}, evt1Diagnostic("CV4624", "@ requires two tensor operands", e.Span)
+			}
+			if leftFacts.Rank != 1 || rightFacts.Rank != 1 {
+				return Type{}, evt1Diagnostic("CV4624", "a tensor-valued @ result must be assigned into an existing tensor destination", e.Span)
+			}
+			if !evt1CanonicalType(env, leftFacts.ElementType).Equal(evt1CanonicalType(env, rightFacts.ElementType)) {
+				return Type{}, evt1Diagnostic("CV4615", "tensor contraction operands require identical element type", e.Span)
+			}
+			if equal, _ := tensorShapeEqual(leftFacts.Shape, rightFacts.Shape); !equal {
+				return Type{}, evt1Diagnostic("CV4624", "vector contraction extents must match exactly", e.Span)
+			}
+			e.Tensor = &TensorSemantic{
+				Kind:          "tensor_scalar_contract",
+				Output:        MIRTensorOperand{Name: "scalar", ElementType: leftFacts.ElementType, Rank: 0, Mutability: "value"},
+				Operands:      []MIRTensorOperand{tensorOperand(leftName, nil, leftFacts), tensorOperand(rightName, nil, rightFacts)},
+				ReduceIndices: []string{"k"}, ElementOp: "multiply_add", AliasPolicy: "scalar result has no backing region",
+				Lowering: "dedicated tensor lowering to strict-C11 scalar reduction", SourceSpan: e.Span,
+			}
+			if leftFacts.Shape[0].Runtime || rightFacts.Shape[0].Runtime {
+				e.Tensor.ShapeGuards = []string{"left.shape[0] == right.shape[0]"}
+			}
+			return evt1CanonicalType(env, leftFacts.ElementType), nil
 		}
 		if leftType.Name == "bool" && rightType.Name == "bool" && (e.Op == "and" || e.Op == "or" || e.Op == "==" || e.Op == "!=") {
 			out, _ := evt1BuiltinType("bool", e.Span)

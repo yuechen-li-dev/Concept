@@ -1,0 +1,10 @@
+profile Core;
+
+int TensorInlineMatmul()
+{
+    tensor<int> A[2, 2] = [[1, 2], [3, 4]];
+    tensor<int> B[2, 2] = [[5, 6], [7, 8]];
+    tensor<int> C[2, 2] = 0;
+    C = A @ B;
+    return C[1, 1];
+}

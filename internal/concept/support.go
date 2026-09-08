@@ -153,6 +153,8 @@ func (d Diagnostic) SemanticCategory() string {
 		return "FAILURE_PAYLOAD_IMMOVABLE"
 	case "CV4550":
 		return "TRY_EXCEPT_UNKNOWN_ERROR_TYPE"
+	case "CV4555":
+		return "NDARRAY_LITERAL_SHAPE_MISMATCH"
 	case "CV4562":
 		return "BIND_REQUIRES_CONTEXTUAL_TARGET"
 	case "CV4563":
@@ -261,6 +263,18 @@ func (d Diagnostic) SemanticCategory() string {
 		return "TENSOR_ALIAS_HAZARD"
 	case "CV4626":
 		return "TENSOR_MIR_INVALID"
+	case "CV4627":
+		return "TENSOR_INLINE_REQUIRES_FIXED_SHAPE"
+	case "CV4628":
+		return "VECTOR_RANK_MISMATCH"
+	case "CV4629":
+		return "MATRIX_RANK_MISMATCH"
+	case "CV4630":
+		return "TENSOR_INLINE_SHAPE_INVALID"
+	case "CV4631":
+		return "TENSOR_INLINE_ELEMENT_TYPE_MISMATCH"
+	case "CV4632":
+		return "TENSOR_SCALAR_RESULT_TYPE_MISMATCH"
 	default:
 		return d.Code
 	}

@@ -1,0 +1,7 @@
+profile Core;
+
+int TensorInlineRank1()
+{
+    tensor<int> values[3] = [2, 4, 6];
+    return values[2];
+}

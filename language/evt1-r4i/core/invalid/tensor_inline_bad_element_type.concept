@@ -1,0 +1,7 @@
+profile Core;
+
+int TensorInlineBadElementType()
+{
+    tensor<string> values[1] = ["not arithmetic"];
+    return 0;
+}

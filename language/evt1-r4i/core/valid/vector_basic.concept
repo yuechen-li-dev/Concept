@@ -1,0 +1,12 @@
+profile Core;
+
+float AcceptVector(tensor<float, 1> values)
+{
+    return 3.0;
+}
+
+float VectorBasic()
+{
+    vector<float> values[3] = [1.0, 2.0, 3.0];
+    return AcceptVector(values);
+}
