@@ -447,7 +447,13 @@ func evt1QualifyMIRFacts(mir *MIR) {
 			subject  SemanticFactSubject
 			evidence SemanticFactEvidence
 		}
-		for _, values := range regionValues {
+		regionIDs := make([]string, 0, len(regionValues))
+		for regionID := range regionValues {
+			regionIDs = append(regionIDs, regionID)
+		}
+		sort.Strings(regionIDs)
+		for _, regionID := range regionIDs {
+			values := regionValues[regionID]
 			for i := 0; i < len(values); i++ {
 				for j := i + 1; j < len(values); j++ {
 					evt1AppendFact(&mir.SemanticFacts, FactSameRegion, []SemanticFactSubject{values[i].subject, values[j].subject}, nil, FactOriginCompilerAnalysis, SemanticFactEvidence{RegionIDs: []string{values[i].subject.RegionID}, Detail: "stable parent region identity"}, fn.SourceSpan)
