@@ -1,6 +1,6 @@
 # Concept EVT1 Stage 0 compiler architecture
 
-Status: R4i inline tensor backing synthesis and rank-zero contraction lowering
+Status: R4l explicit General Planner foundation
 
 ## Authority
 
@@ -24,7 +24,10 @@ Concept source
   -> bounded comptime evaluation
   -> concept closure and constrained template monomorphization
   -> typed deterministic MIR
-  -> core C11 lowering plus selected profile admissions
+  -> semantic fact qualification
+  -> General Planner
+  -> deterministic LoweringPlan
+  -> core C11 backend plus selected profile admissions
   -> generated C/H
   -> source map and generation manifest
 ```
@@ -56,6 +59,32 @@ The general core API is `concept.Parse`, `concept.Generate`, `concept.Check`,
 and `concept.Write`. Public representation names are neutral (`Module`, `Type`,
 `MIR`, and declaration-specific types). The active compiler ID is
 `concept-evt1-stage0-go`.
+
+## R4l General Planner
+
+R4l inserts an explicit, backend-independent planning stage after qualified
+MIR. `PlanModule` receives only the MIR module, `SemanticFactSet`, a bounded
+`TargetCapabilities`, the selected `ProfileDefinition`, and an explicit
+`CompilationPolicy`. It produces versioned `concept-evt1-plan.v1` JSON with a
+content-derived plan identity, per-function MIR identities, selected
+strategies, required runtime guards, and supporting fact IDs.
+
+The planner consumes facts; it does not repeat type, ownership, lifetime,
+layout, tensor-shape, constness, or interface-satisfaction analysis. Unknown
+optimization evidence selects a conservative scalar plan. It never makes
+source invalid merely because an optimization fact is unknown.
+
+The strict-C11 backend is still the only emitting backend. It now receives the
+validated GenericC11 plan and consumes its direct-loop tensor strategy,
+bounds-guard strategy, reverse-declaration cleanup strategy, and witness
+dispatch strategy. X86_64_Generic and AArch64_Generic are planning-only target
+descriptions; they do not enable native code generation.
+
+Fixed inline storage's 64-byte alignment is an existing EVT1 semantic
+guarantee, not a target preference: semantic bind validation and qualified MIR
+facts already depend on it. R4l therefore preserves it as Proven evidence.
+`PreferredAlignment` is separate target policy and cannot weaken that semantic
+guarantee.
 
 ## Profiles and the Vulkan boundary
 

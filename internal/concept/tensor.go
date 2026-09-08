@@ -853,6 +853,9 @@ func (f *evt1FunctionLowerer) lowerInlineTensorDeclaration(decl *VarDecl, indent
 
 func (f *evt1FunctionLowerer) lowerScalarTensorContract(expr *BinaryExpr, indent int) (string, string, Type) {
 	semantic := expr.Tensor
+	if f.tensorStrategy(semantic.Kind) != "DirectLoopNest" {
+		return ind(indent) + "/* invalid tensor plan */\n", "0", semantic.Output.ElementType
+	}
 	left := f.tensorBinding(semantic.Operands[0].Name)
 	right := f.tensorBinding(semantic.Operands[1].Name)
 	resultType := semantic.Output.ElementType
@@ -876,13 +879,16 @@ func (f *evt1FunctionLowerer) lowerTensorIndex(index *IndexExpr, indent int) (st
 	b.WriteString(basePrelude)
 	b.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(baseType), baseName, baseValue))
 	indices := evt1StorageIndices(index)
+	boundsStrategy := f.plannedStrategyAt("tensor_index", index.Span, "PerAccessRuntime")
 	indexNames := make([]string, len(indices))
 	for axis, expr := range indices {
 		pre, value, _ := f.lowerExpr(expr, indent)
 		name := f.nextTemp("tensor_index")
 		b.WriteString(pre)
 		b.WriteString(ind(indent) + fmt.Sprintf("int %s = %s;\n", name, value))
-		b.WriteString(ind(indent) + fmt.Sprintf("if (%s < 0 || (size_t)%s >= %s.shape[%d]) { concept_panic(%q, %d, %d); }\n", name, name, baseName, axis, "Concept tensor index out of bounds", index.Span.Line, index.Span.Column))
+		if boundsStrategy == "PerAccessRuntime" {
+			b.WriteString(ind(indent) + fmt.Sprintf("if (%s < 0 || (size_t)%s >= %s.shape[%d]) { concept_panic(%q, %d, %d); }\n", name, name, baseName, axis, "Concept tensor index out of bounds", index.Span.Line, index.Span.Column))
+		}
 		indexNames[axis] = name
 	}
 	return b.String(), fmt.Sprintf("%s.data[%s]", baseName, tensorOffset(baseName, indexNames, len(indices))), evt1TensorElement(baseType)
@@ -906,6 +912,9 @@ func tensorOffset(base string, indices []string, rank int) string {
 
 func (f *evt1FunctionLowerer) lowerTensorAssignment(stmt *AssignStmt, indent int) string {
 	s := stmt.Tensor
+	if f.tensorStrategy(s.Kind) != "DirectLoopNest" {
+		return ind(indent) + "/* invalid tensor plan */\n"
+	}
 	out := f.tensorBinding(s.Output.Name)
 	var b strings.Builder
 	for _, guard := range s.ShapeGuards {

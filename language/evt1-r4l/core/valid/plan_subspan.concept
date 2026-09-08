@@ -1,0 +1,9 @@
+profile Core;
+
+int PlanSubspan(int offset, int length)
+{
+    int<array>[6] values = [1, 2, 3, 4, 5, 6];
+    Span<int> whole = Span(values);
+    Span<int> part = Subspan(whole, offset, length);
+    return Len(part);
+}

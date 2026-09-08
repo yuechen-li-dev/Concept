@@ -129,10 +129,12 @@ Validated computations also appear in `MIRFunction.tensor_operations` with:
 - shape guards and alias policy;
 - the dedicated tensor-lowering contract.
 
-Only after MIR validation does tensor lowering synthesize loops. Elementwise
-operations use a checked linear traversal. Contractions use ordered free loops,
-an arithmetic-zero accumulator, and ordered reduction loops. The result then
-flows through the existing strict-C11 backend. This boundary preserves future
+Only after MIR validation and semantic-fact qualification does the R4l Planner
+select `DirectLoopNest`. It owns the canonical free-indices-first,
+reduction-indices-innermost traversal order and retains runtime shape guards.
+Elementwise operations use a checked linear traversal. Contractions use an
+arithmetic-zero accumulator. The validated plan then flows through the existing
+strict-C11 backend. This boundary preserves future
 tiling, vectorization, GEMM recognition, GPU, or native-LIR opportunities
 without implementing them now.
 
@@ -194,6 +196,7 @@ contiguity, mutability, provenance, and no-allocation/no-copy/no-transfer
 evidence. Inline backing supplies a distinct stable region and fixed shape;
 runtime-bound backing supplies explicit runtime shape.
 
-Future tensor optimization consumes these MIR facts and proven operand/output
-disjointness. R4j does not alter contraction lowering and adds no vectorizer,
-SIMD, BLAS, GPU, MLIR, or noalias syntax.
+R4l consumes these facts to record vectorization eligibility, known alignment,
+fixed/runtime shape, and proven or unknown disjointness. Eligibility is not
+selection: R4l emits the same direct scalar loops and adds no vectorizer, SIMD,
+BLAS, GPU, MLIR, or noalias syntax.

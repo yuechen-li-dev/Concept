@@ -468,6 +468,11 @@ func (f *evt1FunctionLowerer) lowerStorageIndex(index *IndexExpr, indent int, pl
 		base, baseType = baseValue, resolvedType
 	}
 	indices := evt1StorageIndices(index)
+	operation := "array_index"
+	if len(indices) > 1 {
+		operation = "ndarray_index"
+	}
+	boundsStrategy := f.plannedStrategyAt(operation, index.Span, "PerAccessRuntime")
 	indexNames := make([]string, 0, len(indices))
 	for i, indexExpr := range indices {
 		indexPrelude, indexValue, _ := f.lowerExpr(indexExpr, indent)
@@ -475,7 +480,9 @@ func (f *evt1FunctionLowerer) lowerStorageIndex(index *IndexExpr, indent int, pl
 		name := f.nextTemp(fmt.Sprintf("index_%d", i+1))
 		prelude.WriteString(ind(indent) + fmt.Sprintf("int %s = %s;\n", name, indexValue))
 		extent := f.lowerStorageExtent(base, baseType, i)
-		prelude.WriteString(ind(indent) + fmt.Sprintf("if (%s < 0 || (size_t)%s >= %s) { concept_panic(%q, %d, %d); }\n", name, name, extent, evt1StoragePanicReason(baseType), index.Span.Line, index.Span.Column))
+		if boundsStrategy == "PerAccessRuntime" {
+			prelude.WriteString(ind(indent) + fmt.Sprintf("if (%s < 0 || (size_t)%s >= %s) { concept_panic(%q, %d, %d); }\n", name, name, extent, evt1StoragePanicReason(baseType), index.Span.Line, index.Span.Column))
+		}
 		indexNames = append(indexNames, name)
 	}
 	offset := indexNames[0]

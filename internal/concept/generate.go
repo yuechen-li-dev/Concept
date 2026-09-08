@@ -18,10 +18,18 @@ type lowering struct {
 	env        *semanticEnv
 	outputBase string
 	mir        MIR
+	plan       *LoweringPlan
 	mapDoc     map[string]any
 }
 
 func Generate(module Module, source []byte) (Outputs, error) {
+	return GenerateForTarget(module, source, GenericC11Target())
+}
+
+// GenerateForTarget runs the explicit MIR -> facts -> Planner pipeline. Native
+// target descriptions are planning evidence only in R4l; strict-C11 remains the
+// sole emitting backend.
+func GenerateForTarget(module Module, source []byte, target TargetCapabilities) (Outputs, error) {
 	env, err := analyzeModule(module)
 	if err != nil {
 		return nil, err
@@ -37,6 +45,11 @@ func Generate(module Module, source []byte) (Outputs, error) {
 	l.mir = buildMIR(module, env)
 	evt1QualifyMIRFacts(&l.mir)
 	if err := evt1ValidateMIR(l.mir); err != nil {
+		return nil, err
+	}
+	facts := NewSemanticFactSet(l.mir.SemanticFacts)
+	l.plan, err = PlanModule(&l.mir, &facts, target, *env.profile, ConservativeCompilationPolicy())
+	if err != nil {
 		return nil, err
 	}
 	header, body, err := l.generateC()
@@ -2671,6 +2684,7 @@ func (l *lowering) templateInstanceBody(instance *evt1TemplateInstance) string {
 type evt1FunctionLowerer struct {
 	l           *lowering
 	fn          FunctionDecl
+	plan        *FunctionPlan
 	symbol      string
 	private     bool
 	scope       []map[string]evt1Binding
@@ -2709,7 +2723,42 @@ func newEVT1FunctionLowerer(l *lowering, fn FunctionDecl, symbol string, private
 			liveOwners[param.Name] = true
 		}
 	}
-	return &evt1FunctionLowerer{l: l, fn: fn, symbol: symbol, private: private, scope: scope, ownedOrder: ownedOrder, liveOwners: liveOwners}
+	var plan *FunctionPlan
+	if l.plan != nil {
+		plan = l.plan.Function(fn.Name)
+	}
+	return &evt1FunctionLowerer{l: l, fn: fn, plan: plan, symbol: symbol, private: private, scope: scope, ownedOrder: ownedOrder, liveOwners: liveOwners}
+}
+
+func (f *evt1FunctionLowerer) plannedStrategy(operation, fallback string) string {
+	if f.plan == nil {
+		return fallback
+	}
+	if strategy, ok := f.plan.Strategy(operation); ok {
+		return strategy
+	}
+	return fallback
+}
+
+func (f *evt1FunctionLowerer) plannedStrategyAt(operation string, span Span, fallback string) string {
+	if f.plan == nil {
+		return fallback
+	}
+	if strategy, ok := f.plan.StrategyAt(operation, span); ok {
+		return strategy
+	}
+	return fallback
+}
+
+func (f *evt1FunctionLowerer) tensorStrategy(kind string) string {
+	if f.plan != nil {
+		for _, tensor := range f.plan.Tensors {
+			if tensor.Operation == kind {
+				return tensor.Strategy
+			}
+		}
+	}
+	return "DirectLoopNest"
 }
 
 func (f *evt1FunctionLowerer) lower() string {
@@ -2818,6 +2867,9 @@ func (f *evt1FunctionLowerer) lowerStatement(stmt Statement, indent int) string 
 		if field, ok := s.Target.(*FieldExpr); ok && field.DynInterface != "" {
 			recvPrelude, recv, _ := f.lowerExpr(field.Receiver, indent)
 			valuePrelude, value, _ := f.lowerExpr(s.Value, indent)
+			if f.plannedStrategy("dyn_field_set", "WitnessFieldAccessor") != "WitnessFieldAccessor" {
+				return ind(indent) + "/* invalid dyn field-set plan */\n"
+			}
 			return recvPrelude + valuePrelude + ind(indent) + fmt.Sprintf("(%s).witness->set_%s((%s).object, %s);\n", recv, field.Field, recv, value)
 		}
 		prelude, target, _, _ := f.lowerLValue(s.Target, indent)
@@ -3074,6 +3126,9 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 	case *FieldExpr:
 		prelude, recv, recvType := f.lowerExpr(e.Receiver, indent)
 		if e.DynInterface != "" {
+			if f.plannedStrategy("dyn_field_get", "WitnessFieldAccessor") != "WitnessFieldAccessor" {
+				return prelude, "0", Type{Name: "int", Kind: TypeBuiltin}
+			}
 			_, fields, _ := evt1InterfaceRuntimeRequirements(f.l.env, e.DynInterface, map[string]bool{})
 			for _, field := range fields {
 				if field.Name == e.Field {
@@ -3154,6 +3209,9 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 	case *RefExpr:
 		prelude, target, targetType, _ := f.lowerLValue(e.Value, indent)
 		if e.DynInterface != "" {
+			if f.plannedStrategy("dyn_make", "ObjectWitnessPair") != "ObjectWitnessPair" {
+				return prelude, "0", Type{Name: "int", Kind: TypeBuiltin}
+			}
 			dynType := Type{Name: e.DynInterface, Kind: TypeDyn, Const: e.Const, Span: e.Span}
 			object := "(void*)&(" + target + ")"
 			if e.Const {
@@ -3222,6 +3280,9 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 	case *CallExpr:
 		if e.Member {
 			if e.DynDispatch {
+				if f.plannedStrategy("dyn_call", "WitnessIndirect") != "WitnessIndirect" {
+					return "", "0", Type{Name: "int", Kind: TypeBuiltin}
+				}
 				recvPrelude, recv, recvType := f.lowerExpr(e.Receiver, indent)
 				decl := f.l.env.concepts[recvType.Name]
 				methods, _, _ := evt1InterfaceRuntimeRequirements(f.l.env, recvType.Name, map[string]bool{})
@@ -3653,6 +3714,9 @@ func (f *evt1FunctionLowerer) lowerAllScopeDrops(indent int) string {
 }
 
 func (f *evt1FunctionLowerer) lowerScopeDrops(scopeIndex, indent int) string {
+	if f.plan != nil && f.plan.Cleanup.Strategy != "ReverseDeclarationOrder" {
+		return ind(indent) + "/* invalid cleanup plan */\n"
+	}
 	var b strings.Builder
 	order := f.ownedOrder[scopeIndex]
 	for i := len(order) - 1; i >= 0; i-- {

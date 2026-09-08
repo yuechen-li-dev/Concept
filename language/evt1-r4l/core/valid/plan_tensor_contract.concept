@@ -1,0 +1,10 @@
+profile Core;
+
+float TensorContract()
+{
+    matrix<float> A[4, 4] = 1.0;
+    matrix<float> B[4, 4] = 2.0;
+    matrix<float> C[4, 4] = 0.0;
+    C = A @ B;
+    return C[0, 0];
+}

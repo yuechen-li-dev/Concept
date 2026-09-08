@@ -17,11 +17,13 @@ Usage:
   concept check <file>
   concept emit-c <file>
   concept mir <file>
+  concept plan <file>
 
 Commands:
   check   parse and semantically validate a Concept source file
   emit-c  write generated strict-C11 implementation to stdout
   mir     write deterministic MIR JSON to stdout
+  plan    write deterministic LoweringPlan JSON to stdout
 `
 
 func main() {
@@ -47,6 +49,12 @@ func main() {
 	switch command {
 	case "check":
 		fmt.Printf("%s: ok (%s, %s)\n", filepath.ToSlash(sourcePath), module.Profile, concept.CompilerID)
+	case "plan":
+		output, err := concept.GeneratePlan(module, concept.GenericC11Target())
+		if err != nil {
+			fail(err)
+		}
+		_, _ = os.Stdout.Write(output)
 	case "emit-c", "mir":
 		outputs, err := concept.Generate(module, body)
 		if err != nil {

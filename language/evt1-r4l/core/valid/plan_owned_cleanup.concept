@@ -1,0 +1,25 @@
+profile Core;
+
+struct Resource
+{
+    int handle;
+}
+
+void Drop(owned Resource resource)
+{
+    return;
+}
+
+int Cleanup()
+{
+    owned Resource first = Resource{1};
+    owned Resource second = Resource{2};
+    first = Resource{3};
+    return first.handle + second.handle;
+}
+
+owned Resource MoveOut()
+{
+    owned Resource value = Resource{4};
+    return move value;
+}

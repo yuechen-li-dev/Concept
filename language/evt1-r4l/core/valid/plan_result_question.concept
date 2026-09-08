@@ -1,0 +1,17 @@
+profile Core;
+
+enum ParseError
+{
+    Invalid,
+}
+
+Result<int, ParseError> Parse(bool valid)
+{
+    return if (valid) Result::Ok(13) else Result::Error(ParseError::Invalid);
+}
+
+Result<bool, ParseError> IsPositive(bool valid)
+{
+    int value = Parse(valid)?;
+    return Result::Ok(value > 0);
+}

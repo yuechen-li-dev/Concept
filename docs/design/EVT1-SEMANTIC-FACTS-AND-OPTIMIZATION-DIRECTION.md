@@ -64,16 +64,21 @@ unconstrained parameters fails as unknown.
 
 MIR contains a deterministic `semantic_facts` registry plus enriched
 `semantic_proofs`. `SemanticFactSet` exposes `FactsFor`, `Prove`,
-`KnownAlignment`, `RegionOf`, and `AreDisjoint`; future passes consume this
-registry without rerunning front-end inference.
+`KnownAlignment`, `RegionOf`, and `AreDisjoint`. The R4l Planner is the first
+general consumer of this registry and does not rerun front-end inference.
 
-A future vectorization policy can require contiguous, sufficiently aligned
+The R4l tensor eligibility record requires contiguous, bounded, sufficiently aligned
 inputs and output, plus proven output/input disjointness. A future Fortran-like
 mutable output plus readonly inputs can yield noalias-like lowering only when
 region identity and disjointness prove it. Concept does not add `restrict`, a
 `noalias` keyword, SIMD, tiling, GPU lowering, MLIR, or speculative heuristics
-in R4j.
+in R4j. R4l records eligibility but selects no SIMD or other transform.
+
+The authority law is strict: semantic facts prove legality; the Planner chooses
+realization; later optimization and native lowering may consume the validated
+plan. A missing or Unknown fact produces a conservative fallback. The Planner
+cannot fabricate evidence or turn a guess about aliasing into a selected
+strategy.
 
 Exact variadic source-level `Shape<T>(...)` and broader local-value subjects are
 deliberately deferred. Exact shape evidence is already retained in MIR.
-

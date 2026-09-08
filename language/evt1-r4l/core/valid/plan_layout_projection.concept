@@ -1,0 +1,15 @@
+profile Core;
+
+layout ProjectionLayout
+{
+    int left;
+    int right;
+}
+
+int ProjectRegions()
+{
+    int<array>[2] backing = [3, 4];
+    ref ProjectionLayout view = bind backing;
+    view.right = 9;
+    return backing[1] + view.left;
+}

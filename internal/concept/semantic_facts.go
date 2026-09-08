@@ -248,6 +248,9 @@ func NewSemanticFactSet(facts []MIRSemanticFact) SemanticFactSet {
 }
 
 func (s SemanticFactSet) FactsFor(subject string) []MIRSemanticFact {
+	if subject == "" {
+		return nil
+	}
 	var out []MIRSemanticFact
 	for _, fact := range s.facts {
 		for _, candidate := range fact.Subjects {
@@ -269,7 +272,14 @@ func (s SemanticFactSet) Prove(kind SemanticFactKind, subjects ...string) Semant
 		}
 		got := make([]string, 0, len(fact.Subjects))
 		for _, subject := range fact.Subjects {
-			got = append(got, subject.Name)
+			identity := subject.Name
+			for _, requested := range want {
+				if subject.RegionID != "" && requested == subject.RegionID {
+					identity = subject.RegionID
+					break
+				}
+			}
+			got = append(got, identity)
 		}
 		sort.Strings(got)
 		if strings.Join(got, "\x00") == strings.Join(want, "\x00") {

@@ -1,0 +1,6 @@
+profile Core;
+
+int AddOne(int value)
+{
+    return value + 1;
+}

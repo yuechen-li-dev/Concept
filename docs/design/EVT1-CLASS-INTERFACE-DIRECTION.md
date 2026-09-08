@@ -40,3 +40,11 @@ override keyword, constructor/destructor subsystem, implicit reference
 semantics, hidden heap, object header, GC, RTTI, reflection registry, downcast,
 or owning dyn. Drop remains the only lifecycle mechanism. A future owning dyn
 must first choose explicit erased storage and allocator policies.
+
+## Planner boundary
+
+R4l classifies ordinary class/struct method calls as direct calls. Runtime dyn
+method or field access is planned separately from interface satisfaction as
+witness-indirect dispatch or a witness field accessor. The Planner consumes
+the deterministic witness identity already present in MIR and cannot add
+inheritance, RTTI, allocation, or a per-object vtable.

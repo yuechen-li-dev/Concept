@@ -1,0 +1,14 @@
+profile Core;
+
+struct Pair
+{
+    int left;
+    int right;
+}
+
+int CopyPair()
+{
+    Pair first = Pair{2, 3};
+    Pair second = first;
+    return second.left + second.right;
+}

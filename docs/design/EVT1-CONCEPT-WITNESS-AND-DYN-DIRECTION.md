@@ -60,6 +60,12 @@ Objects do not carry vtables, headers, RTTI, registries, or universal base-type
 metadata. Runtime dispatch can recover only the interface operations present
 in its witness; there is no downcast or type recovery.
 
+R4l leaves satisfaction and deterministic witness construction entirely in
+semantic analysis. The Planner consumes the witness-bearing MIR and selects
+`ObjectWitnessPair`, `WitnessIndirect`, or `WitnessFieldAccessor`; the C backend
+consumes those strategies. Planning cannot create a witness, change an entry,
+allocate an object, or add a per-object vtable.
+
 ## Boundary
 
 R4k implements only borrowed runtime erasure. `owned dyn`, inline erased

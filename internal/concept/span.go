@@ -525,7 +525,9 @@ func (f *evt1FunctionLowerer) lowerSpanCall(call *CallExpr, indent int) (string,
 		out.WriteString(ind(indent) + fmt.Sprintf("int %s = %s;\n", offsetName, offsetValue))
 		out.WriteString(lengthPrelude)
 		out.WriteString(ind(indent) + fmt.Sprintf("int %s = %s;\n", lengthName, lengthValue))
-		out.WriteString(ind(indent) + fmt.Sprintf("if (%s < 0 || %s < 0 || (size_t)%s > %s.length || (size_t)%s > %s.length - (size_t)%s) { concept_panic(%q, %d, %d); }\n", offsetName, lengthName, offsetName, parentName, lengthName, parentName, offsetName, "Concept span bounds out of range", call.Span.Line, call.Span.Column))
+		if f.plannedStrategy("span_subregion", "HoistedRuntime") == "HoistedRuntime" {
+			out.WriteString(ind(indent) + fmt.Sprintf("if (%s < 0 || %s < 0 || (size_t)%s > %s.length || (size_t)%s > %s.length - (size_t)%s) { concept_panic(%q, %d, %d); }\n", offsetName, lengthName, offsetName, parentName, lengthName, parentName, offsetName, "Concept span bounds out of range", call.Span.Line, call.Span.Column))
+		}
 		out.WriteString(ind(indent) + fmt.Sprintf("if ((size_t)%s != 0u && sizeof(%s) > SIZE_MAX / (size_t)%s) { concept_panic(%q, %d, %d); }\n", offsetName, evt1CType(*call.SpanElementType), offsetName, "Concept span offset overflow", call.Span.Line, call.Span.Column))
 		out.WriteString(ind(indent) + fmt.Sprintf("if ((size_t)%s != 0u && sizeof(%s) > SIZE_MAX / (size_t)%s) { concept_panic(%q, %d, %d); }\n", lengthName, evt1CType(*call.SpanElementType), lengthName, "Concept span length overflow", call.Span.Line, call.Span.Column))
 		data := fmt.Sprintf("%s.data + (size_t)%s", parentName, offsetName)
@@ -596,6 +598,8 @@ func (f *evt1FunctionLowerer) lowerSpanIndex(index *IndexExpr, indent int) (stri
 	out.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(baseType), baseName, baseValue))
 	out.WriteString(indexPrelude)
 	out.WriteString(ind(indent) + fmt.Sprintf("int %s = %s;\n", indexName, indexValue))
-	out.WriteString(ind(indent) + fmt.Sprintf("if (%s < 0 || (size_t)%s >= %s.length) { concept_panic(%q, %d, %d); }\n", indexName, indexName, baseName, "Concept span index out of bounds", index.Span.Line, index.Span.Column))
+	if f.plannedStrategy("span_index", "PerAccessRuntime") == "PerAccessRuntime" {
+		out.WriteString(ind(indent) + fmt.Sprintf("if (%s < 0 || (size_t)%s >= %s.length) { concept_panic(%q, %d, %d); }\n", indexName, indexName, baseName, "Concept span index out of bounds", index.Span.Line, index.Span.Column))
+	}
 	return out.String(), fmt.Sprintf("%s.data[(size_t)%s]", baseName, indexName), evt1SpanElement(baseType)
 }
