@@ -1,0 +1,8 @@
+profile Core;
+
+int BoundShape(int rows, int columns)
+{
+    int<array>[6] storage = [1, 2, 3, 4, 5, 6];
+    ref const int<ndarray>[rows, columns] matrix = bind storage;
+    return Rank(matrix) + Shape(matrix, 0) + Shape(matrix, 1) + matrix[1, 2];
+}

@@ -1,0 +1,8 @@
+profile Core;
+
+int RejectFixedMismatch()
+{
+    int<array>[3] storage = [1, 2, 3];
+    ref int<ndarray>[2, 2] matrix = bind storage;
+    return 0;
+}

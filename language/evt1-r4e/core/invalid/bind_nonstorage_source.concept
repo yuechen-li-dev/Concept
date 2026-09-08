@@ -1,0 +1,8 @@
+profile Core;
+
+int RejectNonstorage()
+{
+    int value = 4;
+    ref int<array>[1] view = bind value;
+    return 0;
+}

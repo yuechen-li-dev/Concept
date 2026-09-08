@@ -1,0 +1,13 @@
+profile Core;
+
+int ReadScoped(scoped ref const int<array>[4] source)
+{
+    ref const int<ndarray>[2, 2] matrix = bind source;
+    return matrix[1, 0];
+}
+
+int UseScopedBind()
+{
+    int<array>[4] storage = [8, 9, 10, 11];
+    return ReadScoped(ref const storage);
+}

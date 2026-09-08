@@ -1,0 +1,8 @@
+profile Core;
+
+int RejectElementMismatch()
+{
+    bool<array>[4] storage = [true, false, true, false];
+    ref int<ndarray>[2, 2] matrix = bind storage;
+    return 0;
+}

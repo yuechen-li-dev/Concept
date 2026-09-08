@@ -1,0 +1,23 @@
+profile Core;
+
+enum LoadError
+{
+    Missing
+}
+
+Result<int<array>[4], LoadError> LoadStorage()
+{
+    return Result::Ok([1, 2, 3, 4]);
+}
+
+Result<int, LoadError> ReadBound()
+{
+    int<array>[4] storage = LoadStorage()?;
+    ref const int<ndarray>[2, 2] matrix = bind storage;
+    return Result::Ok(matrix[1, 0]);
+}
+
+int RunBoundResult()
+{
+    return ReadBound()!;
+}

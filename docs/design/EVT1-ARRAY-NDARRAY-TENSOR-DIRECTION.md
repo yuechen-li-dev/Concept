@@ -1,6 +1,6 @@
 # EVT1 array, ndarray, and tensor direction
 
-Status: R4d storage layer canonical; views, mathematics, and optimization deferred
+Status: R4e storage binding canonical; subviews, mathematics, and optimization deferred
 
 ## Layering
 
@@ -8,6 +8,9 @@ Status: R4d storage layer canonical; views, mathematics, and optimization deferr
 storage
   array       rank-1 contiguous storage
   ndarray     rank-N contiguous storage
+
+storage binding
+  bind        entire-storage non-owning reshape
 
 borrowed views
   Span<T>           deferred
@@ -64,6 +67,21 @@ Until an explicit storage source exists, a bare runtime-shaped declaration is
 rejected. The compiler must not lower it to `malloc`, a hidden arena, a C VLA,
 or an unproven pointer descriptor.
 
+## R4e binding law
+
+`bind source` connects an expected `ref` or `ref const` array/ndarray target to
+the source's entire contiguous storage. The target supplies rank and shape;
+the source supplies storage and lifetime provenance. Exact element identity and
+exact total element count are required. Fixed counts are compile-time proofs;
+runtime counts use overflow-safe deterministic guards.
+
+Binding may reshape array to ndarray, flatten ndarray to array, or reshape one
+ndarray into another without reordering elements. It creates only a non-owning
+access path: no allocation, element copy, move, resize, ownership transfer, or
+lifetime extension occurs. A bound view is storage interpretation, not tensor
+semantics. Mutable and const access compose with ordinary place rules, while
+scoped and call-result provenance remain attached to the original storage.
+
 ## Index and shape surface
 
 Rank-1 storage uses `values[index]`. Ndarray uses one comma-separated index per
@@ -80,7 +98,7 @@ this family.
 
 ## Deferred work
 
-R4d does not port PoC3 Slice or FixedBuffer and does not implement Span,
+R4e does not port PoC3 Slice or FixedBuffer and does not implement Span,
 ReadOnlySpan, vector, matrix, tensor, Einstein notation, TensorIR, an allocator
 framework, stack allocation, `dyn`, generalized alias/noalias analysis,
 strided/sparse/tiled layouts, SIMD, GPU lowering, or a native backend. Those
@@ -89,9 +107,8 @@ their meaning retroactively.
 
 ## Recommended next milestone
 
-R4e should close one boundary only: an explicit provenance-preserving way to
-bind runtime shape to existing storage. It should choose whether that surface
-is a restricted external descriptor constructor or the first Span/
-ReadOnlySpan view milestone. It must reuse R4a/R4b lifetime provenance, reject
-escape/laundering, and still introduce no allocator or mathematical tensor
-semantics. Allocator-backed owned dynamic storage should remain later work.
+R4f should specify borrowed subregions with `Span<T>` and `ReadOnlySpan<T>` on
+top of the same provenance machinery. It should add explicit length and bounded
+subregion construction without changing `bind`'s exact-whole-storage law.
+Allocator-backed owned dynamic storage and mathematical vector/matrix/tensor
+interpretations should remain later work.

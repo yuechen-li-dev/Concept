@@ -1,0 +1,8 @@
+profile Core;
+
+int BindRuntimeShape(int rows, int columns)
+{
+    int<array>[6] storage = [1, 2, 3, 4, 5, 6];
+    ref int<ndarray>[rows, columns] matrix = bind storage;
+    return matrix[1, 2];
+}

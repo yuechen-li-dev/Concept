@@ -151,6 +151,20 @@ func (d Diagnostic) SemanticCategory() string {
 		return "FAILURE_PAYLOAD_IMMOVABLE"
 	case "CV4550":
 		return "TRY_EXCEPT_UNKNOWN_ERROR_TYPE"
+	case "CV4562":
+		return "BIND_REQUIRES_CONTEXTUAL_TARGET"
+	case "CV4563":
+		return "BIND_REQUIRES_ARRAY_TARGET"
+	case "CV4564":
+		return "BIND_REQUIRES_STORAGE"
+	case "CV4565":
+		return "BIND_ELEMENT_TYPE_MISMATCH"
+	case "CV4566":
+		return "BIND_SHAPE_SIZE_MISMATCH"
+	case "CV4567":
+		return "BIND_MUTABLE_FROM_CONST"
+	case "CV4568":
+		return "BIND_MIR_INVALID"
 	default:
 		return d.Code
 	}

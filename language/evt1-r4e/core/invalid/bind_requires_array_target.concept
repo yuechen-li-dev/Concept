@@ -1,0 +1,8 @@
+profile Core;
+
+int RejectNonstorageTarget()
+{
+    int<array>[1] storage = [1];
+    int value = bind storage;
+    return value;
+}

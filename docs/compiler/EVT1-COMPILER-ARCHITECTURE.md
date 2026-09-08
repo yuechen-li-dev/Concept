@@ -1,6 +1,6 @@
 # Concept EVT1 Stage 0 compiler architecture
 
-Status: R4d runtime array and ndarray storage semantics
+Status: R4e explicit storage binding for runtime-shaped views
 
 ## Authority
 
@@ -351,7 +351,38 @@ R4d adds no TensorIR. Span/ReadOnlySpan, Slice, FixedBuffer, vector, matrix,
 tensor, alternative layouts, alias analysis, vectorization, GPU lowering, and
 allocator integration remain separate milestones.
 
-## R4d limitations
+## R4e storage-binding lowering
+
+```text
+source contiguous array / ndarray storage
+  -> unary bind with an expected ref/ref const storage target
+  -> exact element/count, const, and provenance validation
+  -> MIR bind_storage with target rank/shape and proof mode
+  -> non-owning C descriptor over the original data member
+  -> existing guarded array/ndarray indexing and shape queries
+```
+
+`bind_storage` remains explicit in MIR. It records source and target storage
+kinds, target rank and ordered shape, fixed proof or overflow-safe runtime
+equality check, mutability, provenance, and the facts `no_copy`,
+`no_allocation`, and `no_ownership_transfer`. MIR validation rejects an
+operation missing those storage or provenance facts.
+
+The C representation of a bound view is a local descriptor containing an
+element pointer and an inline `size_t shape[rank]`. Const targets use a pointer
+to const elements. Runtime shape expressions are evaluated once; checked
+multiplication and exact source-count equality precede descriptor construction.
+Fixed extents may be constant-folded. Descriptor assignment never copies
+backing elements, and no `malloc`, VLA, metadata allocation, or ownership hook
+is emitted. Both directions continue through the original wrapper's `data`
+member, so source and view observe the same bytes in the same linear order.
+
+Bind provenance is derived from the source expression using the existing
+R4a/R4b representation. Scoped state survives, function-result summaries may
+select a bound source parameter, and ref-struct lifetime derivation remains
+unchanged. R4e does not introduce a second view, borrow, or indexing system.
+
+## R4e limitations
 
 - The package remains deliberately cohesive rather than prematurely split.
 - Effect/actuator validation and C runtime emission remain in-package profile
@@ -371,7 +402,7 @@ allocator integration remain separate milestones.
   alias analysis, Span types, and unrestricted reference-containing
   aggregates are not implemented.
 - The remaining PoC3 allocation, stable C ABI, testing framework,
-  interfaces/dyn, slices, and FixedBuffer surfaces are not ported. R4d has no
+  interfaces/dyn, slices, and FixedBuffer surfaces are not ported. R4e has no
   `throw`, unwinding, Option handler arm, implicit error conversion, or
   generalized panic runtime.
 
@@ -440,3 +471,13 @@ The suite inspects rank/shape/contiguity/layout/ownership MIR, compiles and runs
 to prove the deterministic terminal panic reason. PoC3 Phase 21 supplies array
 value/index/bounds/wrapper evidence; ndarray and its rank-aware row-major
 surface are EVT1-new storage semantics.
+
+## R4e executable evidence
+
+`internal/concept/r4e_conformance_test.go` and `language/evt1-r4e/core`
+provide 23 readable cases: 12 valid and 11 invalid, all classified PASS. The
+suite inspects explicit bind MIR and generated non-owning descriptors, executes
+12 successful strict-C11 alias/shape/provenance compositions, and executes two
+terminal processes for exact-count mismatch and checked-product overflow.
+PoC3 supplies no bind counterpart; R4e composes its wrapper evidence with the
+active R4a/R4b provenance model and R4d row-major storage model.

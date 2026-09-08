@@ -1,6 +1,6 @@
 # Concept EVT1 language specification foundation
 
-Status: R4d canonical array and ndarray storage semantics
+Status: R4e explicit storage binding for array and ndarray views
 
 This document defines the authority categories and the smallest currently
 executable EVT1 language foundation. It is derived from the retired Concept
@@ -483,10 +483,10 @@ dimensions, rectangularity, and element types are checked; ragged literals are
 not ndarray values.
 
 Extents may be compile-time or value-level runtime expressions. A runtime
-extent does not choose storage or allocation policy. R4d distinguishes fixed
-inline storage, future external/non-owning storage descriptors, and future
+extent does not choose storage or allocation policy. EVT1 distinguishes fixed
+inline storage, external/non-owning storage descriptors, and future
 allocator-backed owned dynamic storage. Because EVT1 currently has no explicit
-runtime storage constructor, a bare runtime-shaped local is rejected with
+owned runtime storage constructor, a bare owning runtime-shaped local is rejected with
 `RUNTIME_ARRAY_REQUIRES_EXPLICIT_STORAGE` or
 `RUNTIME_NDARRAY_REQUIRES_EXPLICIT_STORAGE`. In particular:
 
@@ -499,18 +499,55 @@ The C bootstrap backend represents fixed storage as an assignable wrapper
 struct containing one C array. Ndarray data is one flat element array, never a
 nested wrapper tree. Concept values therefore do not acquire C array decay.
 
+### 16.1 Explicit storage binding
+
+**Canonical EVT1 R4e.** Unary `bind` creates a non-owning shaped reference to
+existing contiguous array or ndarray storage. Its destination supplies the
+target type and shape; its source supplies the backing storage:
+
+```concept
+float<array>[16] storage;
+ref float<ndarray>[4, 4] matrix = bind storage;
+```
+
+The destination must be `ref T<array>[...]`, `ref const T<array>[...]`,
+`ref T<ndarray>[...]`, or `ref const T<ndarray>[...]`. The source must be an
+assignable whole contiguous array/ndarray place. Element types must be
+identical. A mutable source may produce either mutable or const access; a const
+source may produce only `ref const`. A contextless `bind source` is ill-formed
+because R4e does not infer the target shape.
+
+`bind` consumes the entire source storage. The product of the target dimensions
+must equal the source element count exactly. Fixed counts are proved at compile
+time. Runtime dimensions are multiplied with overflow checks and compared
+before the view is formed; mismatch terminates through the deterministic panic
+path with `Concept bind shape does not match storage size`, and overflow uses
+`Concept bind shape product overflow`. Prefix, offset, partial, strided, and raw
+pointer binding are not part of R4e.
+
+The result aliases the source in unchanged row-major linear order. `bind` does
+not allocate, copy, move, resize, transfer ownership, or extend lifetime. It
+preserves the source's lexical and call-result provenance and its scoped status;
+therefore binding cannot launder a local or scoped source into an escaping
+reference. Existing indexing, `Len`, `Rank`, and `Shape` operate on the target
+shape, including runtime descriptor dimensions.
+
+R4e preserves the R4d zero-extent law rather than defining a new one: an extent
+is nonnegative, exact total-count equality still applies, and executable binding
+requires backing storage already representable by the active backend.
+
 ## 17. Slices and bounded collections
 
 **Legacy PoC3.** PoC3 implemented read-only `Slice<T>` and
 `FixedBuffer<T, N>` foundations.
 
 **Redesign.** The old `Slice<T>` surface is design pressure, not a direct-port
-candidate. It must be reconciled against `ref`, `ref const`, future `ref
-struct`, `scoped`, `Span<T>`, and `ReadOnlySpan<T>`. R4b supplies selected
+candidate. It must be reconciled against `ref`, `ref const`, `ref struct`,
+`scoped`, `bind`, `Span<T>`, and `ReadOnlySpan<T>`. R4b supplies selected
 call-result provenance and relational `Outlives` evidence, but implements no
 Span, Slice, stack allocation, or runtime collection type. FixedBuffer mutation
-and collection rules remain future work. R4d does not port Slice or
-FixedBuffer and does not treat ndarray as a borrowed view.
+and collection rules remain future work. R4e does not port Slice or
+FixedBuffer; `bind` is an exact whole-storage view and is not a subregion type.
 
 ## 18. Interfaces and dyn
 

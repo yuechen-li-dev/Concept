@@ -1,0 +1,8 @@
+profile Core;
+
+int FlattenNDArray()
+{
+    int<ndarray>[2, 2] source = [[3, 4], [5, 6]];
+    ref int<array>[4] flat = bind source;
+    return flat[3];
+}

@@ -1,0 +1,14 @@
+profile Core;
+
+ref struct GridView
+{
+    ref const int<ndarray>[2, 2] storage;
+}
+
+int BindIntoRefStruct()
+{
+    int<array>[4] storage = [2, 4, 6, 8];
+    ref const int<ndarray>[2, 2] matrix = bind storage;
+    GridView view = GridView{ref const matrix};
+    return view.storage[1, 0];
+}

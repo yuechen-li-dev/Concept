@@ -1,0 +1,13 @@
+profile Core;
+
+ref const int<ndarray>[2, 2] Reshape(ref const int<array>[4] source)
+{
+    return bind source;
+}
+
+int UseReshapeCall()
+{
+    int<array>[4] storage = [1, 2, 3, 4];
+    ref const int<ndarray>[2, 2] matrix = Reshape(ref const storage);
+    return matrix[1, 1];
+}

@@ -1,6 +1,6 @@
 # EVT1 semantic reconciliation matrix
 
-Status: R0 authority ledger with R1-R4d executable evidence
+Status: R0 authority ledger with R1-R4e executable evidence
 
 `Port required?` means implementation or conformance work remains after R0; it
 does not authorize that work in this milestone. Status is one of `Keep PoC3`,
@@ -32,11 +32,12 @@ does not authorize that work in this milestone. Status is one of `Keep PoC3`,
 | while | runtime and compile-time loops | foundational runtime loop; comptime requires `bounded(limit)` | retain Go bounded compile-time law | Merge | Translation | phase2/9; M1B-C tests | wider loop surface deferred |
 | if expressions | PoC3 control flow variants | typed `if (...) value else value` plus statements | retain Go implemented subset | Merge | Translation | phase2; M1B-C tests | statement/expression closure later |
 | arrays | runtime fixed arrays and wrapper values | canonical rank-1 contiguous fixed-inline storage | expand to explicit `T<array>[N]`; retain `T[N]` compatibility | Merge / canonical R4d | No for fixed subset | phase21; R4d corpus | shape does not choose allocation |
-| runtime arrays | implemented only as fixed-shape values in PoC3 | runtime extent is typed; owning declaration rejected without storage | redesign around explicit storage construction | Redesign / active R4d subset | Yes | phase21 pressure; R4d no-allocation diagnostics | no hidden heap or VLA |
-| ndarray | absent | canonical rank-N contiguous storage with row-major layout | EVT1-new storage family | EVT1-new | No for fixed subset | R4d corpus; SDSL-V direction | not nested arrays; math layer deferred |
+| runtime arrays | implemented only as fixed-shape values in PoC3 | runtime extent is typed; non-owning exact-storage bind is active; owning declaration still rejects | redesign around explicit storage and later allocator-backed ownership | Redesign / active R4e subset | Yes for owned dynamic storage | R4d-R4e corpus | no hidden heap or VLA |
+| ndarray | absent | canonical rank-N contiguous storage with row-major layout and exact-storage binding | EVT1-new storage family | EVT1-new | No for fixed/bound subset | R4d-R4e corpus; SDSL-V direction | not nested arrays; math layer deferred |
+| explicit storage binding | absent | unary destination-typed `bind` reshapes entire contiguous storage without ownership | EVT1-new provenance-preserving view operation | EVT1-new / Keep Go | No for R4e subset | R4e MIR/native corpus | exact count; no allocation/copy/transfer |
 | vector / matrix / tensor | no canonical storage/interpretation split | absent | defer mathematical interpretations above storage and views | Deferred | Yes | R4d direction note | no TensorIR or Einstein notation |
 | indexing | runtime fixed-array indexing and bounds pressure | checked rank-1 and comma-separated rank-N indexing | merge array behavior; add EVT1-new ndarray arity/linearization | Merge / EVT1-new | No for fixed subset | phase21; R4d native/MIR tests | terminal panic, no Result default |
-| slices | read-only `Slice<T>` implemented | absent | redesign against explicit references, R4b relational proofs, and future lifetime-bound spans | Redesign | Yes | phase21 fixtures; R4b direction note | do not port mechanically; no Slice/Span in R4b |
+| slices | read-only `Slice<T>` implemented | absent | redesign against explicit references, bound-storage evidence, and future lifetime-bound spans | Redesign | Yes | phase21 fixtures; R4e direction note | do not port mechanically; bind is whole-storage only |
 | FixedBuffer | compiler-known bounded buffer implemented | absent | preserve pressure; redesign after explicit views/storage construction | Redesign / deferred | Yes | phase21/22 fixtures | not ported in R4d |
 | Option | compiler-known `Option<T>` plus exhaustive Some/None match | canonical compiler-known payload enum | adopt qualified `Option::Some/None`, exhaustive match, `?`, and `!` | Merge / adopt | Yes | phase22 plus R4c corpus | canonical in R4c |
 | Result | design only/incomplete at cutover; function fallibility exists | canonical generic payload enum | adopt `Result::Ok/Error` as the only recoverable typed failure value | Redesign -> canonical payload enum | Partial | phase5/22 plus R4c corpus | `Error`, not PoC3 concrete `Err`, is canonical |
@@ -162,3 +163,17 @@ misclassified as PoC3 parity. Runtime extents are value-level type facts, but
 both bare runtime array and ndarray locals reject with explicit-storage
 diagnostics. Slice and FixedBuffer remain redesign/deferred, while
 Span/ReadOnlySpan and vector/matrix/tensor remain future layers.
+
+## R4e executable evidence
+
+R4e adds 23 `PASS` cases: 12 valid and 11 invalid. It is primarily EVT1-new:
+destination-typed unary `bind` reshapes an entire array/ndarray storage object,
+preserves provenance and scoped state, and emits an explicit non-owning MIR/C
+descriptor. Fixed mismatches are rejected statically; runtime products are
+checked for overflow and exact equality before binding. Native evidence covers
+array-to-ndarray binding, flattening, ndarray reshape, bidirectional alias
+visibility, readonly access, runtime `Rank`/`Shape`, ref-struct storage, prior
+bound-view rebinding, call-result provenance, and bind after `?`. PoC3 supplies
+only supporting fixed-wrapper/value evidence; this matrix does not fabricate a
+PoC3 bind equivalent. Slice, FixedBuffer, Span/ReadOnlySpan, allocator-backed
+dynamic ownership, and vector/matrix/tensor remain deferred.

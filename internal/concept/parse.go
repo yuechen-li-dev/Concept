@@ -1390,6 +1390,15 @@ func (p *parser) parseStatement() (Statement, error) {
 		return p.parseMatchStmt()
 	case "while":
 		return p.parseWhileStmt()
+	case "bind":
+		value, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.expect(";"); err != nil {
+			return nil, err
+		}
+		return &ExprStmt{Value: value, Span: value.exprSpan()}, nil
 	case "{":
 		block, err := p.parseBlock()
 		if err != nil {
@@ -1922,6 +1931,14 @@ func (p *parser) parseMultiplicative() (Expr, error) {
 }
 
 func (p *parser) parseUnary() (Expr, error) {
+	if p.peekLexeme() == "bind" {
+		op := p.next()
+		source, err := p.parseUnary()
+		if err != nil {
+			return nil, err
+		}
+		return &BindExpr{Source: source, Span: op.Span}, nil
+	}
 	if p.peekLexeme() == "move" {
 		op := p.next()
 		value, err := p.parseUnary()

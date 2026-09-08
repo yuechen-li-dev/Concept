@@ -1,0 +1,8 @@
+profile Core;
+
+int ReshapeNDArray()
+{
+    int<ndarray>[2, 4] source = [[1, 2, 3, 4], [5, 6, 7, 8]];
+    ref int<ndarray>[4, 2] reshaped = bind source;
+    return reshaped[2, 1];
+}

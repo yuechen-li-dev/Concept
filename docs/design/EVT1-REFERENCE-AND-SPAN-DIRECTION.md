@@ -1,6 +1,6 @@
 # EVT1 reference and span direction
 
-Status: R4b relational lifetime foundation; active rules in the language
+Status: R4e provenance-preserving storage binding; active rules in the language
 specification are normative.
 
 R3 establishes `ref T` and `ref const T` as explicit, non-owning aliases of
@@ -48,9 +48,22 @@ must be designed against the active reference model before implementation.
 In particular, future span safety depends on source-derived call results,
 `Outlives`, scoped/non-escaping constraints, and ref-struct lifetime bounds.
 
+R4e adds `bind` as a deliberately narrower storage-view operation. It binds an
+expected array/ndarray reference shape to the entire contiguous source storage;
+it has no offset, partial length, stride, or raw-pointer form. The resulting
+descriptor preserves the source provenance and scoped flag, so it cannot extend
+or launder lifetime across a local, helper-call, or ref-struct boundary. Bind is
+therefore reusable evidence for pointer-plus-shape lowering, but is not a
+replacement for Span.
+
+A later `Span<T>` or `ReadOnlySpan<T>` represents bounded subregions and must
+state the source, offset, and length laws that `bind` intentionally omits. It
+should build on the same provenance summaries and escape checks rather than
+introduce a parallel lifetime system.
+
 The retired PoC3 `Slice<T>` fixtures remain useful pressure for pointer-plus-
 length representation, bounds checks, and read-only access. They are not a
 surface or lifetime contract for EVT1. R3 therefore marks `Slice<T>` for
 redesign and does not port Slice or Span. R4b establishes the relational
-machinery those future views require; it does not implement
+machinery those future views require; R4e still does not implement
 `Span<T>`, `ReadOnlySpan<T>`, `stackalloc`, or runtime `Slice<T>`.

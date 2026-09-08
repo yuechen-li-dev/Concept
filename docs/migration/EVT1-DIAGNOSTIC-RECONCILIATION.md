@@ -1,6 +1,6 @@
 # EVT1 diagnostic reconciliation
 
-Status: R4c canonical failure semantics
+Status: R4e explicit storage-binding semantics
 
 Concept EVT1 compares diagnostics by semantic family. The active Go compiler
 retains `CV` numbers and the retired PoC3 compiler retains `CON` numbers; R2
@@ -61,11 +61,24 @@ the executable mapping used by the R2 conformance harness.
 | nontransferable failure payload | PoC3 non-copyable family | `CV4548` | `RESULT_PAYLOAD_NONTRANSFERABLE` | EVT1-new | explicit move required |
 | immovable failure payload | R2 immovable law | `CV4549` | `FAILURE_PAYLOAD_IMMOVABLE` | EVT1-new | Option/Result do not weaken embedding law |
 | unknown except type | no closed counterpart | `CV4550` | `TRY_EXCEPT_UNKNOWN_ERROR_TYPE` | EVT1-new | no runtime type test |
+| bind without contextual target | no counterpart | `CV4562` | `BIND_REQUIRES_CONTEXTUAL_TARGET` | EVT1-new | destination type must supply shape |
+| bind target is not storage reference | no counterpart | `CV4563` | `BIND_REQUIRES_ARRAY_TARGET` | EVT1-new | target is ref/ref const array or ndarray |
+| bind source is not contiguous storage | no counterpart | `CV4564` | `BIND_REQUIRES_STORAGE` | EVT1-new | arbitrary pointers/scalars reject |
+| bind element type differs | no counterpart | `CV4565` | `BIND_ELEMENT_TYPE_MISMATCH` | EVT1-new | exact identity; no reinterpretation |
+| fixed bind count differs | no counterpart | `CV4566` | `BIND_SHAPE_SIZE_MISMATCH` | EVT1-new | compile-time exact-count proof |
+| mutable bind from const | no counterpart | `CV4567` | `BIND_MUTABLE_FROM_CONST` | EVT1-new | ordinary const/ref law |
+| malformed bind MIR | no counterpart | `CV4568` | `BIND_MIR_INVALID` | EVT1-new | compiler invariant, not source recovery |
 
 `static_assert` continues to reuse the bounded comptime diagnostic path:
 runtime calls are `CV4210`, a non-boolean evaluated condition is `CV4207`, and
 a false assertion is `CV4207` with its deterministic reason. R4c deliberately
 does not add a second static-assert evaluator or mass-renumber those families.
+
+Runtime bind failures use stable terminal reasons rather than recoverable
+diagnostics: `Concept bind shape does not match storage size` for unequal
+runtime totals and `Concept bind shape product overflow` for invalid or
+overflowing runtime multiplication. `bind` does not introduce a Result channel
+or exception family.
 
 `VALUE_TYPE_MISMATCH` maps the existing Go `CV4107` assignment family to
 PoC3 `CON0078`/`CON0082` aggregate and field mismatch evidence.

@@ -1,0 +1,6 @@
+profile Core;
+
+ref const int<ndarray>[2, 2] RejectScopedEscape(scoped ref const int<array>[4] source)
+{
+    return bind source;
+}

@@ -65,6 +65,14 @@ func evt1StorageCName(t Type) string {
 	return "concept_" + string(kind) + "_" + strings.Join(shape, "_x_") + "_" + evt1TypeIdentity(*t.ArrayElem)
 }
 
+func evt1StorageViewCName(t Type) string {
+	mutability := "mut"
+	if t.Const {
+		mutability = "const"
+	}
+	return fmt.Sprintf("concept_ref_%s_%s_%d_%s", mutability, t.StorageKind, evt1StorageRank(t), evt1TypeIdentity(*t.ArrayElem))
+}
+
 func evt1StorageOwnership(t Type) string {
 	if evt1StorageHasRuntimeShape(t) {
 		return "external"
@@ -232,6 +240,87 @@ func evt1CollectStorageTypes(module Module, env *semanticEnv) []Type {
 	return out
 }
 
+func evt1CollectStorageViewTypes(module Module, env *semanticEnv) []Type {
+	types := map[string]Type{}
+	var add func(Type)
+	add = func(t Type) {
+		resolved, err := evt1ResolveType(env, nil, t)
+		if err == nil {
+			t = resolved
+		}
+		if t.PointerTo != nil {
+			add(*t.PointerTo)
+		}
+		for _, arg := range t.TypeArgs {
+			add(arg)
+		}
+		if t.ArrayElem != nil {
+			if t.isReference() {
+				types[evt1StorageViewCName(t)] = t
+			}
+			add(*t.ArrayElem)
+		}
+	}
+	var visitBlock func(Block)
+	visitBlock = func(block Block) {
+		for _, statement := range block.Statements {
+			switch s := statement.(type) {
+			case *VarDecl:
+				add(s.Type)
+			case *Block:
+				visitBlock(*s)
+			case *IfStmt:
+				visitBlock(s.Then)
+				if s.Else != nil {
+					visitBlock(*s.Else)
+				}
+			case *WhileStmt:
+				visitBlock(s.Body)
+			case *MatchStmt:
+				for _, arm := range s.Arms {
+					visitBlock(arm.Block)
+				}
+			case *TryStmt:
+				visitBlock(s.Body)
+				for _, arm := range s.Except {
+					visitBlock(arm.Body)
+				}
+			}
+		}
+	}
+	for _, decl := range module.Structs {
+		for _, field := range decl.Fields {
+			add(field.Type)
+		}
+	}
+	for _, decl := range module.Enums {
+		for _, variant := range decl.Variants {
+			for _, field := range variant.Payload {
+				add(field.Type)
+			}
+		}
+	}
+	for _, fn := range module.Functions {
+		add(fn.ReturnType)
+		for _, param := range fn.Params {
+			add(param.Type)
+		}
+		if fn.Body != nil {
+			visitBlock(*fn.Body)
+		}
+	}
+	keys := make([]string, 0, len(types))
+	for key := range types {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	out := make([]Type, 0, len(keys))
+	for _, key := range keys {
+		out = append(out, types[key])
+	}
+	return out
+}
+
 func evt1ModuleUsesStorageBounds(module Module) bool {
 	var usesExpr func(Expr) bool
 	usesExpr = func(expr Expr) bool {
@@ -263,6 +352,8 @@ func evt1ModuleUsesStorageBounds(module Module) bool {
 			return usesExpr(e.Left) || usesExpr(e.Right)
 		case *RefExpr:
 			return usesExpr(e.Value)
+		case *BindExpr:
+			return true
 		case *MoveExpr:
 			return usesExpr(e.Value)
 		case *IfExpr:
@@ -365,29 +456,36 @@ func (f *evt1FunctionLowerer) lowerStorageIndex(index *IndexExpr, indent int, pl
 		prelude.WriteString(indexPrelude)
 		name := f.nextTemp(fmt.Sprintf("index_%d", i+1))
 		prelude.WriteString(ind(indent) + fmt.Sprintf("int %s = %s;\n", name, indexValue))
-		extent := baseType.Shape[i].Extent
-		prelude.WriteString(ind(indent) + fmt.Sprintf("if (%s < 0 || %s >= %d) { concept_panic(%q, %d, %d); }\n", name, name, extent, evt1StoragePanicReason(baseType), index.Span.Line, index.Span.Column))
+		extent := f.lowerStorageExtent(base, baseType, i)
+		prelude.WriteString(ind(indent) + fmt.Sprintf("if (%s < 0 || (size_t)%s >= %s) { concept_panic(%q, %d, %d); }\n", name, name, extent, evt1StoragePanicReason(baseType), index.Span.Line, index.Span.Column))
 		indexNames = append(indexNames, name)
 	}
 	offset := indexNames[0]
 	for i := 1; i < len(indexNames); i++ {
-		offset = fmt.Sprintf("((%s) * %d + %s)", offset, baseType.Shape[i].Extent, indexNames[i])
+		offset = fmt.Sprintf("((%s) * %s + %s)", offset, f.lowerStorageExtent(base, baseType, i), indexNames[i])
 	}
 	return prelude.String(), fmt.Sprintf("(%s).data[%s]", base, offset), *baseType.ArrayElem
 }
 
+func (f *evt1FunctionLowerer) lowerStorageExtent(base string, storageType Type, dimension int) string {
+	if storageType.isReference() && storageType.Shape[dimension].Runtime {
+		return fmt.Sprintf("(%s).shape[%d]", base, dimension)
+	}
+	return fmt.Sprintf("%d", storageType.Shape[dimension].Extent)
+}
+
 func (f *evt1FunctionLowerer) lowerStorageQuery(call *CallExpr, indent int) (string, string, Type) {
 	intType, _ := evt1BuiltinType("int", call.Span)
-	prelude, _, storageType := f.lowerExpr(call.Args[0], indent)
+	prelude, base, storageType := f.lowerExpr(call.Args[0], indent)
 	switch call.Callee {
 	case "Len":
-		return prelude, fmt.Sprintf("%d", storageType.Shape[0].Extent), intType
+		return prelude, f.lowerStorageExtent(base, storageType, 0), intType
 	case "Rank":
 		return prelude, fmt.Sprintf("%d", evt1StorageRank(storageType)), intType
 	case "Shape":
 		dimensionPrelude, dimensionValue, _ := f.lowerExpr(call.Args[1], indent)
 		if dimension, err := evt1EvalExpr(newEVT1ComptimeState(f.l.env), f.evalScope(), call.Args[1]); err == nil {
-			return prelude + dimensionPrelude, fmt.Sprintf("%d", storageType.Shape[dimension.IntValue].Extent), intType
+			return prelude + dimensionPrelude, f.lowerStorageExtent(base, storageType, dimension.IntValue), intType
 		}
 		var out strings.Builder
 		out.WriteString(prelude)
@@ -395,11 +493,58 @@ func (f *evt1FunctionLowerer) lowerStorageQuery(call *CallExpr, indent int) (str
 		name := f.nextTemp("shape_dimension")
 		out.WriteString(ind(indent) + fmt.Sprintf("int %s = %s;\n", name, dimensionValue))
 		out.WriteString(ind(indent) + fmt.Sprintf("if (%s < 0 || %s >= %d) { concept_panic(%q, %d, %d); }\n", name, name, evt1StorageRank(storageType), evt1StoragePanicReason(storageType), call.Span.Line, call.Span.Column))
-		expression := fmt.Sprintf("%d", storageType.Shape[len(storageType.Shape)-1].Extent)
+		expression := f.lowerStorageExtent(base, storageType, len(storageType.Shape)-1)
 		for i := len(storageType.Shape) - 2; i >= 0; i-- {
-			expression = fmt.Sprintf("(%s == %d ? %d : %s)", name, i, storageType.Shape[i].Extent, expression)
+			expression = fmt.Sprintf("(%s == %d ? %s : %s)", name, i, f.lowerStorageExtent(base, storageType, i), expression)
 		}
 		return out.String(), expression, intType
 	}
 	return prelude, "0", intType
+}
+
+func (f *evt1FunctionLowerer) lowerStorageView(source Expr, target Type, checked bool, span Span, indent int) (string, string, Type) {
+	sourcePrelude, sourceValue, sourceType := f.lowerExpr(source, indent)
+	var b strings.Builder
+	b.WriteString(sourcePrelude)
+	dimensions := make([]string, 0, len(target.Shape))
+	for i, dimension := range target.Shape {
+		if !dimension.Runtime {
+			dimensions = append(dimensions, fmt.Sprintf("%d", dimension.Extent))
+			continue
+		}
+		prelude, value, _ := f.lowerExpr(dimension.Expr, indent)
+		b.WriteString(prelude)
+		name := f.nextTemp(fmt.Sprintf("bind_extent_%d", i+1))
+		b.WriteString(ind(indent) + fmt.Sprintf("int %s = %s;\n", name, value))
+		dimensions = append(dimensions, name)
+	}
+	if checked {
+		targetCount := f.lowerCheckedShapeProduct(&b, dimensions, "bind_target_count", span, indent, true)
+		sourceCount := fmt.Sprintf("%d", evt1StorageElementCount(sourceType))
+		if sourceType.isReference() {
+			sourceDimensions := make([]string, 0, len(sourceType.Shape))
+			for i := range sourceType.Shape {
+				sourceDimensions = append(sourceDimensions, fmt.Sprintf("(%s).shape[%d]", sourceValue, i))
+			}
+			sourceCount = f.lowerCheckedShapeProduct(&b, sourceDimensions, "bind_source_count", span, indent, false)
+		}
+		b.WriteString(ind(indent) + fmt.Sprintf("if (%s != %s) { concept_panic(%q, %d, %d); }\n", targetCount, sourceCount, "Concept bind shape does not match storage size", span.Line, span.Column))
+	}
+	data := fmt.Sprintf("(%s).data", sourceValue)
+	expression := fmt.Sprintf("(%s){ .data = %s, .shape = { %s } }", evt1StorageViewCName(target), data, strings.Join(dimensions, ", "))
+	return b.String(), expression, target
+}
+
+func (f *evt1FunctionLowerer) lowerCheckedShapeProduct(b *strings.Builder, dimensions []string, hint string, span Span, indent int, signed bool) string {
+	name := f.nextTemp(hint)
+	b.WriteString(ind(indent) + fmt.Sprintf("size_t %s = 1u;\n", name))
+	for _, dimension := range dimensions {
+		negative := ""
+		if signed {
+			negative = fmt.Sprintf("%s < 0 || ", dimension)
+		}
+		b.WriteString(ind(indent) + fmt.Sprintf("if (%s((size_t)%s != 0u && %s > SIZE_MAX / (size_t)%s)) { concept_panic(%q, %d, %d); }\n", negative, dimension, name, dimension, "Concept bind shape product overflow", span.Line, span.Column))
+		b.WriteString(ind(indent) + fmt.Sprintf("%s *= (size_t)%s;\n", name, dimension))
+	}
+	return name
 }

@@ -1,0 +1,10 @@
+profile Core;
+
+int MutableAlias()
+{
+    int<array>[4] storage = [1, 2, 3, 4];
+    ref int<ndarray>[2, 2] matrix = bind storage;
+    matrix[0, 1] = 9;
+    storage[2] = 7;
+    return storage[1] + matrix[1, 0];
+}

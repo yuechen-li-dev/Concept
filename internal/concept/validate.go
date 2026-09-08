@@ -736,6 +736,8 @@ func evt1CollectComptimeCallsFromExpr(expr Expr, env *semanticEnv) []string {
 		return evt1CollectComptimeCallsFromExpr(e.Value, env)
 	case *UnaryExpr:
 		return evt1CollectComptimeCallsFromExpr(e.Value, env)
+	case *BindExpr:
+		return evt1CollectComptimeCallsFromExpr(e.Source, env)
 	case *FieldExpr:
 		return evt1CollectComptimeCallsFromExpr(e.Receiver, env)
 	case *IndexExpr:
@@ -946,7 +948,8 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				return err
 			}
 			s.Type = resolvedType
-			if evt1StorageHasRuntimeShape(resolvedType) && !inComptimeFn && !s.Comptime {
+			_, bindingRuntimeStorage := s.Value.(*BindExpr)
+			if evt1StorageHasRuntimeShape(resolvedType) && !inComptimeFn && !s.Comptime && !(resolvedType.isReference() && bindingRuntimeStorage) {
 				code := "CV4558"
 				family := "array"
 				if resolvedType.StorageKind == StorageNDArray {
@@ -1335,6 +1338,9 @@ func evt1EvalScopeFromValidation(scope *evt1Scope, env *semanticEnv) *evt1EvalSc
 }
 
 func validateExprAgainstExpected(env *semanticEnv, scope *evt1Scope, expr Expr, expected Type, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
+	if bind, ok := expr.(*BindExpr); ok {
+		return validateBindExpr(env, scope, bind, expected, templateInfo)
+	}
 	if lit, ok := expr.(*ArrayLiteralExpr); ok && expected.ArrayElem != nil {
 		return validateArrayLiteralExpr(env, scope, *lit, &expected, templateInfo, inComptimeFn)
 	}
@@ -1358,6 +1364,48 @@ func validateExprAgainstExpected(env *semanticEnv, scope *evt1Scope, expr Expr, 
 		return expected, nil
 	}
 	return validateExpr(env, scope, expr, templateInfo, inComptimeFn)
+}
+
+func validateBindExpr(env *semanticEnv, scope *evt1Scope, bind *BindExpr, expected Type, templateInfo *evt1TemplateInfo) (Type, error) {
+	if !expected.isReference() || expected.ArrayElem == nil {
+		return Type{}, evt1Diagnostic("CV4563", fmt.Sprintf("bind target must be ref or ref const array/ndarray storage, got %s", expected.String()), bind.Span)
+	}
+	sourceExprType, err := validateExpr(env, scope, bind.Source, templateInfo, false)
+	if err != nil {
+		return Type{}, err
+	}
+	sourcePlace, err := validateAssignable(env, scope, bind.Source, templateInfo)
+	if err != nil || sourcePlace.t.ArrayElem == nil || !sourcePlace.t.Contiguous {
+		return Type{}, evt1Diagnostic("CV4564", "bind source must be an existing contiguous array or ndarray storage place", bind.Source.exprSpan())
+	}
+	if binding, ok := scope.lookup(sourcePlace.path.Root); ok {
+		if err := evt1CheckReadableBinding(sourcePlace.path.Root, binding, bind.Source.exprSpan()); err != nil {
+			return Type{}, err
+		}
+	}
+	if !expected.Const && !sourcePlace.mutable {
+		return Type{}, evt1Diagnostic("CV4567", "mutable bind cannot originate from const or read-only storage", bind.Source.exprSpan())
+	}
+	sourceElement := evt1CanonicalType(env, sourcePlace.t.ArrayElem.valueType())
+	targetElement := evt1CanonicalType(env, expected.ArrayElem.valueType())
+	if !sourceElement.Equal(targetElement) {
+		return Type{}, evt1Diagnostic("CV4565", fmt.Sprintf("bind element type mismatch: source %s cannot back target %s", sourceElement.String(), targetElement.String()), bind.Source.exprSpan())
+	}
+	runtimeCheck := evt1StorageHasRuntimeShape(sourcePlace.t) || evt1StorageHasRuntimeShape(expected)
+	if !runtimeCheck {
+		sourceCount := evt1StorageElementCount(sourcePlace.t)
+		targetCount := evt1StorageElementCount(expected)
+		if sourceCount != targetCount {
+			return Type{}, evt1Diagnostic("CV4566", fmt.Sprintf("bind target shape has %d elements but source storage has %d", targetCount, sourceCount), bind.Span)
+		}
+	}
+	provenance := evt1ExprProvenance(env, scope, bind.Source)
+	bind.TargetType = expected
+	bind.SourceType = sourceExprType
+	bind.RuntimeCheck = runtimeCheck
+	bind.ProvenanceKind = string(provenance.Kind)
+	bind.ProvenanceScoped = provenance.Scoped
+	return expected, nil
 }
 
 func evt1ResolveType(env *semanticEnv, scope *evt1Scope, t Type) (Type, error) {
@@ -2072,6 +2120,8 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			scope.setState(name.Name, evt1StorageMoved)
 		}
 		return evt1CanonicalType(env, binding.t), nil
+	case *BindExpr:
+		return Type{}, evt1Diagnostic("CV4562", "bind requires an explicit contextual ref array/ndarray target type", e.Span)
 	case *RefExpr:
 		lvalue, err := validateAssignable(env, scope, e.Value, templateInfo)
 		if err != nil {
@@ -2683,6 +2733,8 @@ func evt1DeriveExprResultProvenance(env *semanticEnv, expr Expr, bindings map[st
 		return evt1DeriveExprResultProvenance(env, e.Value, bindings, derive)
 	case *MoveExpr:
 		return evt1DeriveExprResultProvenance(env, e.Value, bindings, derive)
+	case *BindExpr:
+		return evt1DeriveExprResultProvenance(env, e.Source, bindings, derive)
 	case *FailureExpr:
 		return evt1DeriveExprResultProvenance(env, e.Value, bindings, derive)
 	case *NameExpr:
@@ -2743,6 +2795,8 @@ func evt1ExprProvenance(env *semanticEnv, scope *evt1Scope, expr Expr) evt1Lifet
 		return evt1ExprProvenance(env, scope, e.Value)
 	case *MoveExpr:
 		return evt1ExprProvenance(env, scope, e.Value)
+	case *BindExpr:
+		return evt1ExprProvenance(env, scope, e.Source)
 	case *FailureExpr:
 		return evt1ExprProvenance(env, scope, e.Value)
 	case *NameExpr:
@@ -3305,6 +3359,8 @@ func evt1GuardExprNodeCount(expr Expr) int {
 		count += evt1GuardExprNodeCount(e.Right)
 	case *UnaryExpr:
 		count += evt1GuardExprNodeCount(e.Value)
+	case *BindExpr:
+		count += evt1GuardExprNodeCount(e.Source)
 	case *ConstructExpr:
 		for _, arg := range e.Args {
 			count += evt1GuardExprNodeCount(arg)
@@ -3373,6 +3429,8 @@ func evt1ExprIdentity(expr Expr) string {
 		return "(" + evt1ExprIdentity(e.Left) + " " + e.Op + " " + evt1ExprIdentity(e.Right) + ")"
 	case *UnaryExpr:
 		return "(" + e.Op + " " + evt1ExprIdentity(e.Value) + ")"
+	case *BindExpr:
+		return "bind " + evt1ExprIdentity(e.Source)
 	case *ConstructExpr:
 		var args []string
 		for _, arg := range e.Args {
@@ -4551,6 +4609,12 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 			return nil, err
 		}
 		return &MoveExpr{Value: value, Span: e.Span}, nil
+	case *BindExpr:
+		source, err := evt1SubstituteExpr(e.Source, typeParam, concreteType)
+		if err != nil {
+			return nil, err
+		}
+		return &BindExpr{Source: source, Span: e.Span}, nil
 	case *RefExpr:
 		value, err := evt1SubstituteExpr(e.Value, typeParam, concreteType)
 		if err != nil {

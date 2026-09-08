@@ -645,6 +645,19 @@ type RefExpr struct {
 func (*RefExpr) evt1Expr()        {}
 func (e *RefExpr) exprSpan() Span { return e.Span }
 
+type BindExpr struct {
+	Source           Expr   `json:"source"`
+	TargetType       Type   `json:"target_type,omitempty"`
+	SourceType       Type   `json:"source_type,omitempty"`
+	RuntimeCheck     bool   `json:"runtime_check,omitempty"`
+	ProvenanceKind   string `json:"provenance_kind,omitempty"`
+	ProvenanceScoped bool   `json:"provenance_scoped,omitempty"`
+	Span             Span   `json:"span"`
+}
+
+func (*BindExpr) evt1Expr()        {}
+func (e *BindExpr) exprSpan() Span { return e.Span }
+
 type ConstructExpr struct {
 	EnumName     string `json:"enum_name"`
 	VariantName  string `json:"variant_name"`
@@ -959,11 +972,21 @@ type MIRCleanup struct {
 }
 
 type MIROperation struct {
-	ID         string `json:"id"`
-	Kind       string `json:"kind"`
-	Type       string `json:"type,omitempty"`
-	Detail     string `json:"detail,omitempty"`
-	SourceSpan Span   `json:"source_span"`
+	ID                  string             `json:"id"`
+	Kind                string             `json:"kind"`
+	Type                string             `json:"type,omitempty"`
+	Detail              string             `json:"detail,omitempty"`
+	SourceStorageKind   StorageKind        `json:"source_storage_kind,omitempty"`
+	TargetStorageKind   StorageKind        `json:"target_storage_kind,omitempty"`
+	TargetRank          int                `json:"target_rank,omitempty"`
+	TargetShape         []StorageDimension `json:"target_shape,omitempty"`
+	CountCheck          string             `json:"count_check,omitempty"`
+	Mutability          string             `json:"mutability,omitempty"`
+	Provenance          string             `json:"provenance,omitempty"`
+	NoCopy              bool               `json:"no_copy,omitempty"`
+	NoAllocation        bool               `json:"no_allocation,omitempty"`
+	NoOwnershipTransfer bool               `json:"no_ownership_transfer,omitempty"`
+	SourceSpan          Span               `json:"source_span"`
 }
 
 type semanticEnv struct {

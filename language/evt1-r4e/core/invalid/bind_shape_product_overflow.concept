@@ -1,0 +1,8 @@
+profile Core;
+
+int RuntimeShapeOverflow(int first, int second, int third)
+{
+    int<array>[1] storage = [1];
+    ref int<ndarray>[first, second, third] view = bind storage;
+    return view[0, 0, 0];
+}
