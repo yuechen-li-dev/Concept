@@ -1,0 +1,16 @@
+profile Core;
+
+struct Resource
+{
+    owned int id;
+}
+
+void Drop(owned Resource resource)
+{
+}
+
+int DropArrayElements()
+{
+    Resource<array>[3] values = [Resource{1}, Resource{2}, Resource{3}];
+    return 0;
+}

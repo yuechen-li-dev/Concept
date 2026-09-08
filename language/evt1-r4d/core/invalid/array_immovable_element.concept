@@ -1,0 +1,13 @@
+profile Core;
+
+immovable struct Pinned
+{
+    int value;
+}
+
+int RejectImmovableArrayValue()
+{
+    Pinned<array>[1] values = [Pinned{1}];
+    Pinned<array>[1] copy = values;
+    return 0;
+}

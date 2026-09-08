@@ -191,3 +191,21 @@ uses generic `Result<T,E>`, postfix `?`, and reserves `try`/`except` for a local
 typed boundary. No closed PoC3 evidence was found for generic Result,
 heterogeneous exact handlers, implicit error conversion, or unwinding; those
 R4c cases are recorded as EVT1-new rather than parity.
+
+## R4d contiguous-storage audit
+
+R4d inspected the complete Phase 21 fixed-array, array-literal, indexing,
+mutable-indexing, `Len`, bounds, value-copy, parameter/return/field, Slice, and
+FixedBuffer evidence. Fixed arrays contribute durable semantic and C-wrapper
+pressure: Concept arrays remain assignable values, indexing is checked, and C
+array decay is not language law. These cases inform the canonical rank-1
+`array` family.
+
+PoC3 Slice and FixedBuffer are not ported. They remain pressure for the later
+borrowed-view and bounded-collection layers after explicit storage provenance
+and construction are designed. PoC3 did not implement the R4d ndarray family,
+comma-separated rank-aware indexing, one-object row-major linearization, or
+`Rank`/`Shape`; those cases are recorded as EVT1-new/SDSL-V-derived evidence.
+Runtime shape expressions are accepted as semantic type facts only far enough
+to issue the explicit-storage diagnostic. No PoC3 allocation behavior is used
+to fabricate an implicit allocator in EVT1.

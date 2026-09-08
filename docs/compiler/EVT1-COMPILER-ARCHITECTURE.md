@@ -1,6 +1,6 @@
 # Concept EVT1 Stage 0 compiler architecture
 
-Status: R4b relational lifetime proofs and selected result provenance
+Status: R4d runtime array and ndarray storage semantics
 
 ## Authority
 
@@ -48,7 +48,7 @@ The following mechanisms are compiler-core responsibilities:
 - named concept requirements, constraint closure, and bounded template
   specialization;
 - deterministic, fuel-bounded compile-time evaluation;
-- fixed-array validation in the supported compile-time domain;
+- typed array/ndarray rank, shape, contiguity, and row-major storage facts;
 - MIR construction with source spans and stable ordering;
 - artifact hashing, deterministic output ordering, and strict-C11 generation.
 
@@ -319,7 +319,39 @@ static lifetime. Carriers with droppable payloads synthesize a deterministic
 tag-dispatching cleanup that invokes ordinary `Drop` only for the active
 variant.
 
-## R4c limitations
+## R4d storage lowering
+
+```text
+source array / ndarray
+  -> typed StorageKind + element + rank + shape
+  -> MIR storage type and index/query operations
+  -> fixed C wrapper with contiguous data[N0 * ... * Nk]
+  -> guarded row-major scalar projection
+```
+
+`array` and `ndarray` share ordinary value/place analysis but retain distinct
+storage identities. The type record carries `StorageKind`, ordered dimensions,
+the fixed/runtime status of each extent, contiguity, and row-major layout.
+`MIR.storage_types` repeats these facts explicitly with the storage ownership
+category (`fixed_inline` for the executable R4d subset). `array_index`,
+`ndarray_index`, `rank_query`, and `shape_query` operations retain intent and
+source spans; ndarray is never rewritten into nested array types.
+
+The C backend dependency-orders fixed storage wrappers with user structs and
+enums, then declares failure carriers and function prototypes. Wrapper assignment supplies Concept
+copy semantics without C array decay. Ndarray literals flatten in source order,
+and comma-separated indices lower to a checked row-major offset. Runtime shape
+expressions are typed as value-level shape facts, but a local with such a shape
+is rejected before lowering because no explicit storage constructor exists.
+Fixed storage with droppable elements lowers cleanup in reverse linear order.
+There is no `malloc`, allocator selection, variable-length C array, descriptor
+fabrication, or hidden runtime in this path.
+
+R4d adds no TensorIR. Span/ReadOnlySpan, Slice, FixedBuffer, vector, matrix,
+tensor, alternative layouts, alias analysis, vectorization, GPU lowering, and
+allocator integration remain separate milestones.
+
+## R4d limitations
 
 - The package remains deliberately cohesive rather than prematurely split.
 - Effect/actuator validation and C runtime emission remain in-package profile
@@ -339,7 +371,7 @@ variant.
   alias analysis, Span types, and unrestricted reference-containing
   aggregates are not implemented.
 - The remaining PoC3 allocation, stable C ABI, testing framework,
-  interfaces/dyn, slices, and FixedBuffer surfaces are not ported. R4c has no
+  interfaces/dyn, slices, and FixedBuffer surfaces are not ported. R4d has no
   `throw`, unwinding, Option handler arm, implicit error conversion, or
   generalized panic runtime.
 
@@ -398,3 +430,13 @@ Evidence includes deterministic MIR sugar operations, nine successful native C11
 exact typed local handlers, owned success transfer, immovable rejection, and a
 valid/invalid pair proving Result success payloads do not launder R4b lifetime
 provenance.
+
+## R4d executable evidence
+
+`internal/concept/r4d_conformance_test.go` and `language/evt1-r4d/core`
+provide 30 readable cases: 17 valid and 13 invalid, all classified PASS.
+The suite inspects rank/shape/contiguity/layout/ownership MIR, compiles and runs
+16 strict-C11 value paths, and executes a separate native out-of-bounds process
+to prove the deterministic terminal panic reason. PoC3 Phase 21 supplies array
+value/index/bounds/wrapper evidence; ndarray and its rank-aware row-major
+surface are EVT1-new storage semantics.

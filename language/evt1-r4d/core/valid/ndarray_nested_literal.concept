@@ -1,0 +1,7 @@
+profile Core;
+
+int NestedLiteral()
+{
+    int<ndarray>[2, 2] values = [[10, 20], [30, 40]];
+    return values[0, 1] + values[1, 0];
+}

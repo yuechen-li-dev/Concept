@@ -1,0 +1,26 @@
+profile Core;
+
+enum StorageError
+{
+    Missing
+}
+
+Option<int<array>[2]> MakeOptionalValues()
+{
+    return Option::Some([5, 6]);
+}
+
+Result<int<array>[4], StorageError> MakeValues()
+{
+    return Result::Ok([1, 2, 3, 4]);
+}
+
+int ReadPayload()
+{
+    Result<int<array>[4], StorageError> result = MakeValues();
+    return match (result)
+    {
+        Result::Ok(values) => values[3],
+        Result::Error(error) => 0,
+    };
+}

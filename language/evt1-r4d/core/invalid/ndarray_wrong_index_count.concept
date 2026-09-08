@@ -1,0 +1,7 @@
+profile Core;
+
+int RejectWrongArity()
+{
+    int<ndarray>[2, 2] values = [[1, 2], [3, 4]];
+    return values[1];
+}

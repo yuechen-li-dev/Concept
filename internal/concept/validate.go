@@ -2,6 +2,7 @@ package concept
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -738,7 +739,11 @@ func evt1CollectComptimeCallsFromExpr(expr Expr, env *semanticEnv) []string {
 	case *FieldExpr:
 		return evt1CollectComptimeCallsFromExpr(e.Receiver, env)
 	case *IndexExpr:
-		return append(evt1CollectComptimeCallsFromExpr(e.Base, env), evt1CollectComptimeCallsFromExpr(e.Index, env)...)
+		out := evt1CollectComptimeCallsFromExpr(e.Base, env)
+		for _, index := range evt1StorageIndices(e) {
+			out = append(out, evt1CollectComptimeCallsFromExpr(index, env)...)
+		}
+		return out
 	case *BinaryExpr:
 		return append(evt1CollectComptimeCallsFromExpr(e.Left, env), evt1CollectComptimeCallsFromExpr(e.Right, env)...)
 	case *CallExpr:
@@ -802,18 +807,12 @@ func validateFunctionSignature(env *semanticEnv, fn FunctionDecl) error {
 	if err := validateKnownType(env, fn.ReturnType, fn.Span, "", false); err != nil {
 		return err
 	}
-	if !fn.Comptime && evt1TypeContainsArray(env, fn.ReturnType) {
-		return evt1Diagnostic("CV4228", fmt.Sprintf("runtime function return type %s cannot contain fixed compile-time arrays", fn.ReturnType.String()), fn.Span)
-	}
 	if err := validateByValueBoundary(env, fn.ReturnType, fn.Span, "return"); err != nil {
 		return err
 	}
 	for _, param := range fn.Params {
 		if err := validateKnownType(env, param.Type, param.Span, "", false); err != nil {
 			return err
-		}
-		if !fn.Comptime && evt1TypeContainsArray(env, param.Type) {
-			return evt1Diagnostic("CV4229", fmt.Sprintf("runtime function parameter type %s cannot contain fixed compile-time arrays", param.Type.String()), param.Span)
 		}
 		if err := validateByValueBoundary(env, param.Type, param.Span, "parameter"); err != nil {
 			return err
@@ -833,9 +832,6 @@ func validateTemplateSignature(env *semanticEnv, templateDecl TemplateDecl) erro
 	if err := validateKnownType(env, templateDecl.ReturnType, templateDecl.ReturnType.Span, templateDecl.TypeParam, false); err != nil {
 		return err
 	}
-	if evt1TypeContainsArray(env, templateDecl.ReturnType) {
-		return evt1Diagnostic("CV4228", fmt.Sprintf("runtime template return type %s cannot contain fixed compile-time arrays", templateDecl.ReturnType.String()), templateDecl.Span)
-	}
 	if err := validateTemplateByValueBoundary(env, templateDecl.ReturnType, templateDecl.Span, "return", templateDecl.TypeParam); err != nil {
 		return err
 	}
@@ -845,9 +841,6 @@ func validateTemplateSignature(env *semanticEnv, templateDecl TemplateDecl) erro
 	for _, param := range templateDecl.Params {
 		if err := validateKnownType(env, param.Type, param.Span, templateDecl.TypeParam, false); err != nil {
 			return err
-		}
-		if evt1TypeContainsArray(env, param.Type) {
-			return evt1Diagnostic("CV4229", fmt.Sprintf("runtime template parameter type %s cannot contain fixed compile-time arrays", param.Type.String()), param.Span)
 		}
 		if err := validateTemplateByValueBoundary(env, param.Type, param.Span, "parameter", templateDecl.TypeParam); err != nil {
 			return err
@@ -952,8 +945,18 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 			if err != nil {
 				return err
 			}
-			if evt1TypeContainsArray(env, resolvedType) && !inComptimeFn && !s.Comptime {
-				return evt1Diagnostic("CV4230", fmt.Sprintf("runtime local %s cannot use fixed compile-time array type %s", s.Name, resolvedType.String()), s.Span)
+			s.Type = resolvedType
+			if evt1StorageHasRuntimeShape(resolvedType) && !inComptimeFn && !s.Comptime {
+				code := "CV4558"
+				family := "array"
+				if resolvedType.StorageKind == StorageNDArray {
+					code = "CV4559"
+					family = "ndarray"
+				}
+				return evt1Diagnostic(code, fmt.Sprintf("runtime %s %s requires explicit storage; shape does not allocate", family, resolvedType.String()), s.Span)
+			}
+			if s.Value == nil {
+				return evt1Diagnostic("CV4560", fmt.Sprintf("fixed storage local %s requires an initializer", s.Name), s.Span)
 			}
 			valueType, err := validateExprAgainstExpected(env, local, s.Value, resolvedType, templateInfo, inComptimeFn || s.Comptime)
 			if err != nil {
@@ -1378,24 +1381,81 @@ func evt1ResolveType(env *semanticEnv, scope *evt1Scope, t Type) (Type, error) {
 		if err != nil {
 			return Type{}, err
 		}
-		length, err := evt1ResolveArrayLength(env, scope, t.ArrayLengthExpr, t.Span)
-		if err != nil {
-			return Type{}, err
+		dimensions := t.Shape
+		if len(dimensions) == 0 && t.ArrayLengthExpr != nil {
+			dimensions = []StorageDimension{{Expr: t.ArrayLengthExpr}}
+		}
+		if len(dimensions) == 0 {
+			return Type{}, evt1Diagnostic("CV4220", "storage types require an explicit shape", t.Span)
+		}
+		resolvedShape := make([]StorageDimension, 0, len(dimensions))
+		for _, dimension := range dimensions {
+			expr := dimension.Expr
+			if expr == nil {
+				resolvedShape = append(resolvedShape, dimension)
+				continue
+			}
+			evalScope := evt1SeedComptimeScope(env)
+			if scope != nil {
+				evalScope = evt1EvalScopeFromValidation(scope, env)
+			}
+			value, evalErr := evt1EvalExpr(newEVT1ComptimeState(env), evalScope, expr)
+			if evalErr == nil {
+				if value.Kind != ValueInt {
+					return Type{}, evt1Diagnostic("CV4221", "storage extent must evaluate to int", expr.exprSpan())
+				}
+				if value.IntValue < 0 {
+					return Type{}, evt1Diagnostic("CV4222", fmt.Sprintf("storage extent %d must be non-negative", value.IntValue), expr.exprSpan())
+				}
+				if value.IntValue > evt1ComptimeMaxArrayLength {
+					return Type{}, evt1Diagnostic("CV4223", fmt.Sprintf("storage extent %d exceeds limit %d", value.IntValue, evt1ComptimeMaxArrayLength), expr.exprSpan())
+				}
+				resolvedShape = append(resolvedShape, StorageDimension{Extent: value.IntValue, Expression: fmt.Sprintf("%d", value.IntValue), Expr: expr})
+				continue
+			}
+			if scope == nil {
+				return Type{}, evalErr
+			}
+			extentType, typeErr := validateExpr(env, scope, expr, nil, false)
+			if typeErr != nil {
+				return Type{}, typeErr
+			}
+			if extentType.Name != "int" {
+				return Type{}, evt1Diagnostic("CV4221", "runtime storage extent must be int", expr.exprSpan())
+			}
+			resolvedShape = append(resolvedShape, StorageDimension{Runtime: true, Expression: evt1ExprIdentity(expr), Expr: expr})
+		}
+		kind := t.StorageKind
+		if kind == "" {
+			kind = StorageArray
 		}
 		resolved := Type{
 			Name:        elem.String() + "[]",
 			Kind:        TypeArray,
+			Ownership:   t.Ownership,
+			Const:       t.Const,
+			Scoped:      t.Scoped,
 			ArrayElem:   &elem,
-			ArrayLength: length,
+			StorageKind: kind,
+			Shape:       resolvedShape,
+			Contiguous:  true,
+			Layout:      "row-major",
 			Span:        t.Span,
 		}
-		if depth := evt1ArrayDepth(resolved); depth > evt1ComptimeMaxArrayNesting {
-			return Type{}, evt1Diagnostic("CV4223", fmt.Sprintf("array nesting depth %d exceeds limit %d", depth, evt1ComptimeMaxArrayNesting), t.Span)
+		if kind == StorageNDArray {
+			resolved.Kind = TypeNDArray
 		}
-		if cells, err := evt1ComptimeTypeCellCount(env, resolved); err != nil {
-			return Type{}, err
-		} else if cells > evt1ComptimeMaxArrayCells {
-			return Type{}, evt1Diagnostic("CV4224", fmt.Sprintf("array cell count %d exceeds limit %d", cells, evt1ComptimeMaxArrayCells), t.Span)
+		if len(resolvedShape) == 1 && !resolvedShape[0].Runtime {
+			resolved.ArrayLength = resolvedShape[0].Extent
+		}
+		if len(resolvedShape) > evt1ComptimeMaxArrayNesting {
+			return Type{}, evt1Diagnostic("CV4223", fmt.Sprintf("storage rank %d exceeds limit %d", len(resolvedShape), evt1ComptimeMaxArrayNesting), t.Span)
+		}
+		if !evt1StorageHasRuntimeShape(resolved) {
+			cells := evt1StorageElementCount(resolved)
+			if cells > evt1ComptimeMaxArrayCells {
+				return Type{}, evt1Diagnostic("CV4224", fmt.Sprintf("storage cell count %d exceeds limit %d", cells, evt1ComptimeMaxArrayCells), t.Span)
+			}
 		}
 		return resolved, nil
 	}
@@ -1522,6 +1582,9 @@ func evt1TypeEqualityAvailable(env *semanticEnv, t Type) bool {
 }
 
 func validateArrayLiteralExpr(env *semanticEnv, scope *evt1Scope, expr ArrayLiteralExpr, expected *Type, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
+	if expected != nil && expected.StorageKind == StorageNDArray {
+		return validateNDArrayLiteralExpr(env, scope, expr, *expected, templateInfo, inComptimeFn)
+	}
 	if len(expr.Elements) > evt1ComptimeMaxLiteralElements {
 		return Type{}, evt1Diagnostic("CV4224", fmt.Sprintf("array literal element count %d exceeds limit %d", len(expr.Elements), evt1ComptimeMaxLiteralElements), expr.Span)
 	}
@@ -1550,6 +1613,10 @@ func validateArrayLiteralExpr(env *semanticEnv, scope *evt1Scope, expr ArrayLite
 				Kind:        TypeArray,
 				ArrayElem:   &elem,
 				ArrayLength: len(expr.Elements),
+				StorageKind: StorageArray,
+				Shape:       []StorageDimension{{Extent: len(expr.Elements), Expression: fmt.Sprintf("%d", len(expr.Elements))}},
+				Contiguous:  true,
+				Layout:      "row-major",
 				Span:        expr.Span,
 			}
 		}
@@ -1566,6 +1633,62 @@ func validateArrayLiteralExpr(env *semanticEnv, scope *evt1Scope, expr ArrayLite
 	return arrayType, nil
 }
 
+func validateNDArrayLiteralExpr(env *semanticEnv, scope *evt1Scope, expr ArrayLiteralExpr, expected Type, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
+	shape, leaves, ragged, rankMismatch := evt1NestedLiteralShape(&expr)
+	if ragged {
+		return Type{}, evt1Diagnostic("CV4556", "ndarray literal is ragged; every dimension must be rectangular", expr.Span)
+	}
+	if rankMismatch || len(shape) != evt1StorageRank(expected) {
+		return Type{}, evt1Diagnostic("CV4554", fmt.Sprintf("ndarray literal rank %d does not match rank %d", len(shape), evt1StorageRank(expected)), expr.Span)
+	}
+	for i := range shape {
+		if expected.Shape[i].Runtime || shape[i] != expected.Shape[i].Extent {
+			return Type{}, evt1Diagnostic("CV4555", fmt.Sprintf("ndarray literal shape %v does not match %s", shape, expected.String()), expr.Span)
+		}
+	}
+	for i, leaf := range leaves {
+		leafType, err := validateExpr(env, scope, leaf, templateInfo, inComptimeFn)
+		if err != nil {
+			return Type{}, err
+		}
+		if !expected.ArrayElem.valueType().Equal(leafType.valueType()) {
+			return Type{}, evt1Diagnostic("CV4227", fmt.Sprintf("ndarray literal element %d expected %s but got %s", i+1, expected.ArrayElem.String(), leafType.String()), leaf.exprSpan())
+		}
+	}
+	return expected, nil
+}
+
+func evt1NestedLiteralShape(expr Expr) ([]int, []Expr, bool, bool) {
+	literal, ok := expr.(*ArrayLiteralExpr)
+	if !ok {
+		return nil, []Expr{expr}, false, false
+	}
+	shape := []int{len(literal.Elements)}
+	var leaves []Expr
+	var childShape []int
+	childrenAreLiterals := false
+	childrenAreScalars := false
+	for i, element := range literal.Elements {
+		_, childIsLiteral := element.(*ArrayLiteralExpr)
+		childrenAreLiterals = childrenAreLiterals || childIsLiteral
+		childrenAreScalars = childrenAreScalars || !childIsLiteral
+		subShape, subLeaves, ragged, rankMismatch := evt1NestedLiteralShape(element)
+		if ragged || rankMismatch {
+			return nil, nil, ragged, rankMismatch
+		}
+		if i == 0 {
+			childShape = subShape
+		} else if !slices.Equal(childShape, subShape) {
+			return nil, nil, true, false
+		}
+		leaves = append(leaves, subLeaves...)
+	}
+	if childrenAreLiterals && childrenAreScalars {
+		return nil, nil, true, false
+	}
+	return append(shape, childShape...), leaves, false, false
+}
+
 func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string, allowConceptApp bool) error {
 	if t.Scoped && !t.isReference() && t.Kind != TypeConceptParam && !evt1IsRefStructType(env, t) {
 		return evt1Diagnostic("CV4525", fmt.Sprintf("scoped requires a reference or ref struct type, got %s", t.String()), span)
@@ -1577,8 +1700,10 @@ func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string,
 		if err := validateKnownType(env, *t.ArrayElem, span, conceptParam, allowConceptApp); err != nil {
 			return err
 		}
-		_, err := evt1ResolveArrayLength(env, nil, t.ArrayLengthExpr, span)
-		return err
+		if len(t.Shape) == 0 && t.ArrayLengthExpr == nil {
+			return evt1Diagnostic("CV4220", "storage types require an explicit shape", span)
+		}
+		return nil
 	}
 	if t.Kind == TypeConceptParam {
 		if conceptParam != "" && t.Name == conceptParam {
@@ -1715,8 +1840,46 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			if err != nil {
 				return Type{}, err
 			}
+			if argType.ArrayElem == nil || evt1StorageRank(argType) != 1 {
+				return Type{}, evt1Diagnostic("CV4235", "Len requires a rank-1 array argument", e.Args[0].exprSpan())
+			}
+			out, _ := evt1BuiltinType("int", e.Span)
+			return out, nil
+		}
+		if e.Callee == "Rank" {
+			if len(e.Args) != 1 {
+				return Type{}, evt1Diagnostic("CV4551", fmt.Sprintf("Rank expects exactly one argument, got %d", len(e.Args)), e.Span)
+			}
+			argType, err := validateExpr(env, scope, e.Args[0], templateInfo, inComptimeFn)
+			if err != nil {
+				return Type{}, err
+			}
 			if argType.ArrayElem == nil {
-				return Type{}, evt1Diagnostic("CV4235", "Len requires a fixed compile-time array argument", e.Args[0].exprSpan())
+				return Type{}, evt1Diagnostic("CV4551", "Rank requires array or ndarray storage", e.Args[0].exprSpan())
+			}
+			out, _ := evt1BuiltinType("int", e.Span)
+			return out, nil
+		}
+		if e.Callee == "Shape" {
+			if len(e.Args) != 2 {
+				return Type{}, evt1Diagnostic("CV4552", fmt.Sprintf("Shape expects storage and dimension arguments, got %d argument(s)", len(e.Args)), e.Span)
+			}
+			argType, err := validateExpr(env, scope, e.Args[0], templateInfo, inComptimeFn)
+			if err != nil {
+				return Type{}, err
+			}
+			if argType.ArrayElem == nil {
+				return Type{}, evt1Diagnostic("CV4552", "Shape requires array or ndarray storage", e.Args[0].exprSpan())
+			}
+			dimType, err := validateExpr(env, scope, e.Args[1], templateInfo, inComptimeFn)
+			if err != nil {
+				return Type{}, err
+			}
+			if dimType.Name != "int" {
+				return Type{}, evt1Diagnostic("CV4552", "Shape dimension must be int", e.Args[1].exprSpan())
+			}
+			if value, err := evt1EvalExpr(newEVT1ComptimeState(env), evt1EvalScopeFromValidation(scope, env), e.Args[1]); err == nil && (value.IntValue < 0 || value.IntValue >= evt1StorageRank(argType)) {
+				return Type{}, evt1Diagnostic("CV4553", fmt.Sprintf("shape dimension %d is out of range for rank %d", value.IntValue, evt1StorageRank(argType)), e.Args[1].exprSpan())
 			}
 			out, _ := evt1BuiltinType("int", e.Span)
 			return out, nil
@@ -1827,25 +1990,38 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			return Type{}, err
 		}
 		if baseType.ArrayElem == nil {
-			return Type{}, evt1Diagnostic("CV4231", fmt.Sprintf("index target %s is not a fixed compile-time array", baseType.String()), e.Base.exprSpan())
+			return Type{}, evt1Diagnostic("CV4231", fmt.Sprintf("index target %s is not array or ndarray storage", baseType.String()), e.Base.exprSpan())
 		}
-		indexType, err := validateExpr(env, scope, e.Index, templateInfo, true)
-		if err != nil {
-			return Type{}, err
-		}
-		if indexType.Name != "int" {
-			return Type{}, evt1Diagnostic("CV4232", "array index must be int", e.Index.exprSpan())
-		}
-		indexValue, err := evt1EvalExpr(newEVT1ComptimeState(env), evt1EvalScopeFromValidation(scope, env), e.Index)
-		if err == nil {
-			if indexValue.Kind != ValueInt {
-				return Type{}, evt1Diagnostic("CV4232", "array index must evaluate to int", e.Index.exprSpan())
+		indices := evt1StorageIndices(e)
+		rank := evt1StorageRank(baseType)
+		if len(indices) != rank {
+			code := "CV4550"
+			if baseType.StorageKind == StorageNDArray {
+				code = "CV4557"
 			}
-			if indexValue.IntValue < 0 || indexValue.IntValue >= baseType.ArrayLength {
-				return Type{}, evt1Diagnostic("CV4233", fmt.Sprintf("array index %d is out of range for length %d", indexValue.IntValue, baseType.ArrayLength), e.Index.exprSpan())
+			return Type{}, evt1Diagnostic(code, fmt.Sprintf("%s index requires %d index(es), got %d", baseType.StorageKind, rank, len(indices)), e.Span)
+		}
+		for i, indexExpr := range indices {
+			indexType, err := validateExpr(env, scope, indexExpr, templateInfo, true)
+			if err != nil {
+				return Type{}, err
 			}
-		} else if !inComptimeFn {
-			return Type{}, err
+			if indexType.Name != "int" {
+				return Type{}, evt1Diagnostic("CV4232", "storage index must be int", indexExpr.exprSpan())
+			}
+			indexValue, evalErr := evt1EvalExpr(newEVT1ComptimeState(env), evt1EvalScopeFromValidation(scope, env), indexExpr)
+			if evalErr == nil && !baseType.Shape[i].Runtime {
+				if indexValue.Kind != ValueInt {
+					return Type{}, evt1Diagnostic("CV4232", "storage index must evaluate to int", indexExpr.exprSpan())
+				}
+				if indexValue.IntValue < 0 || indexValue.IntValue >= baseType.Shape[i].Extent {
+					code := "CV4233"
+					if baseType.StorageKind == StorageNDArray {
+						code = "CV4561"
+					}
+					return Type{}, evt1Diagnostic(code, fmt.Sprintf("%s index %d is out of bounds for dimension %d extent %d", baseType.StorageKind, indexValue.IntValue, i, baseType.Shape[i].Extent), indexExpr.exprSpan())
+				}
+			}
 		}
 		return evt1CanonicalType(env, *baseType.ArrayElem), nil
 	case *UnaryExpr:
@@ -2186,7 +2362,20 @@ func validateAssignable(env *semanticEnv, scope *evt1Scope, expr Expr, templateI
 		}
 		return evt1LValue{t: evt1CanonicalType(env, fieldType), mutable: mutable, wholeValue: false, readOnlyReason: readOnlyReason, path: path}, nil
 	case *IndexExpr:
-		return evt1LValue{}, evt1Diagnostic("CV4231", "fixed compile-time array elements are immutable in EVT1 M1B-D", expr.exprSpan())
+		receiver, err := validateAssignable(env, scope, e.Base, templateInfo)
+		if err != nil {
+			return evt1LValue{}, evt1Diagnostic("CV4231", "array index assignment requires an assignable storage place", expr.exprSpan())
+		}
+		if receiver.t.ArrayElem == nil {
+			return evt1LValue{}, evt1Diagnostic("CV4231", "array index assignment requires array or ndarray storage", expr.exprSpan())
+		}
+		if _, err := validateExpr(env, scope, e, templateInfo, false); err != nil {
+			return evt1LValue{}, err
+		}
+		path := receiver.path
+		path.Fields = append(append([]string{}, path.Fields...), "[index]")
+		path.Span = e.Span
+		return evt1LValue{t: evt1CanonicalType(env, *receiver.t.ArrayElem), mutable: receiver.mutable, wholeValue: false, readOnlyReason: receiver.readOnlyReason, path: path}, nil
 	default:
 		return evt1LValue{}, evt1Diagnostic("CV4127", "assignment requires a local or field access target", expr.exprSpan())
 	}
@@ -2935,7 +3124,12 @@ func evt1ValidateGuardExpr(env *semanticEnv, scope *evt1Scope, expr Expr, state 
 		if err := evt1ValidateGuardExpr(env, scope, e.Base, state, depth); err != nil {
 			return err
 		}
-		return evt1ValidateGuardExpr(env, scope, e.Index, state, depth)
+		for _, index := range evt1StorageIndices(e) {
+			if err := evt1ValidateGuardExpr(env, scope, index, state, depth); err != nil {
+				return err
+			}
+		}
+		return nil
 	case *DispatchExpr:
 		return evt1Diagnostic("CV4292", "dispatch is not allowed in automata guards", e.Span)
 	case *TemplateCallExpr:
@@ -3125,7 +3319,9 @@ func evt1GuardExprNodeCount(expr Expr) int {
 		}
 	case *IndexExpr:
 		count += evt1GuardExprNodeCount(e.Base)
-		count += evt1GuardExprNodeCount(e.Index)
+		for _, index := range evt1StorageIndices(e) {
+			count += evt1GuardExprNodeCount(index)
+		}
 	case *MatchExpr:
 		count += evt1GuardExprNodeCount(e.Subject)
 		for _, arm := range e.Arms {
@@ -3202,7 +3398,11 @@ func evt1ExprIdentity(expr Expr) string {
 		}
 		return "[" + strings.Join(parts, ",") + "]"
 	case *IndexExpr:
-		return evt1ExprIdentity(e.Base) + "[" + evt1ExprIdentity(e.Index) + "]"
+		indices := make([]string, 0, len(evt1StorageIndices(e)))
+		for _, index := range evt1StorageIndices(e) {
+			indices = append(indices, evt1ExprIdentity(index))
+		}
+		return evt1ExprIdentity(e.Base) + "[" + strings.Join(indices, ",") + "]"
 	case *MatchExpr:
 		var arms []string
 		for _, arm := range e.Arms {
@@ -3282,11 +3482,11 @@ func evt1TypeCopyable(env *semanticEnv, t Type) bool {
 	if t.isBorrowLike() {
 		return true
 	}
-	if t.ArrayElem != nil {
-		return evt1TypeCopyable(env, *t.ArrayElem)
-	}
 	if t.isOwned() {
 		return false
+	}
+	if t.ArrayElem != nil {
+		return evt1TypeCopyable(env, *t.ArrayElem)
 	}
 	if evt1IsFailureType(t) {
 		for _, arg := range t.TypeArgs {
@@ -3355,12 +3555,28 @@ func evt1TypeHasDrop(env *semanticEnv, t Type) bool {
 	if evt1IsFailureType(t) {
 		return evt1FailureNeedsDrop(env, t)
 	}
-	return t.isOwned() && evt1DropFunction(env, t) != nil
+	if t.isOwned() && evt1DropFunction(env, t) != nil {
+		return true
+	}
+	return t.ArrayElem != nil && evt1StorageElementHasDrop(env, *t.ArrayElem)
+}
+
+func evt1StorageElementHasDrop(env *semanticEnv, t Type) bool {
+	if evt1IsFailureType(t) {
+		return evt1FailureNeedsDrop(env, t)
+	}
+	if evt1DropFunction(env, t) != nil {
+		return true
+	}
+	return t.ArrayElem != nil && evt1StorageElementHasDrop(env, *t.ArrayElem)
 }
 
 func evt1IsImmovableValueType(env *semanticEnv, t Type) bool {
 	if t.isBorrowLike() {
 		return false
+	}
+	if t.ArrayElem != nil {
+		return evt1IsImmovableValueType(env, *t.ArrayElem)
 	}
 	if evt1IsFailureType(t) {
 		for _, arg := range t.TypeArgs {
@@ -3771,6 +3987,10 @@ func evt1SubstituteType(t Type, typeParam string, concreteType Type) Type {
 		t.PointerTo = &base
 		return t
 	}
+	if t.ArrayElem != nil {
+		elem := evt1SubstituteType(*t.ArrayElem, typeParam, concreteType)
+		t.ArrayElem = &elem
+	}
 	for i := range t.TypeArgs {
 		t.TypeArgs[i] = evt1SubstituteType(t.TypeArgs[i], typeParam, concreteType)
 	}
@@ -3823,7 +4043,11 @@ func evt1CanonicalType(env *semanticEnv, t Type) Type {
 	if t.ArrayElem != nil {
 		elem := evt1CanonicalType(env, *t.ArrayElem)
 		t.ArrayElem = &elem
-		t.Kind = TypeArray
+		if t.StorageKind == StorageNDArray {
+			t.Kind = TypeNDArray
+		} else {
+			t.Kind = TypeArray
+		}
 		return t
 	}
 	for i := range t.TypeArgs {
@@ -3898,7 +4122,9 @@ func evt1SymbolicTypeEqual(a Type, b Type, typeParam string) bool {
 		return false
 	}
 	if a.ArrayElem != nil {
-		return a.ArrayLength == b.ArrayLength && evt1SymbolicTypeEqual(*a.ArrayElem, *b.ArrayElem, typeParam)
+		return a.ArrayLength == b.ArrayLength && a.StorageKind == b.StorageKind && slices.EqualFunc(a.Shape, b.Shape, func(left, right StorageDimension) bool {
+			return left.Extent == right.Extent && left.Runtime == right.Runtime && left.Expression == right.Expression
+		}) && evt1SymbolicTypeEqual(*a.ArrayElem, *b.ArrayElem, typeParam)
 	}
 	if a.Name != b.Name || a.Kind != b.Kind || a.Ownership != b.Ownership || a.Const != b.Const || a.Imported != b.Imported || a.Unsafe != b.Unsafe || len(a.TypeArgs) != len(b.TypeArgs) {
 		return false
@@ -4102,7 +4328,19 @@ func evt1TypeIdentity(t Type) string {
 		return "ptr_" + evt1TypeIdentity(*t.PointerTo)
 	}
 	if t.ArrayElem != nil {
-		return fmt.Sprintf("array_%d_%s", t.ArrayLength, evt1TypeIdentity(*t.ArrayElem))
+		shape := make([]string, 0, len(t.Shape))
+		for _, dimension := range t.Shape {
+			if dimension.Runtime {
+				shape = append(shape, "runtime")
+			} else {
+				shape = append(shape, fmt.Sprintf("%d", dimension.Extent))
+			}
+		}
+		kind := t.StorageKind
+		if kind == "" {
+			kind = StorageArray
+		}
+		return string(kind) + "_" + strings.Join(shape, "_x_") + "_" + evt1TypeIdentity(*t.ArrayElem)
 	}
 	if len(t.TypeArgs) > 0 {
 		var parts []string

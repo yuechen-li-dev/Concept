@@ -1,6 +1,6 @@
 # Concept EVT1 language specification foundation
 
-Status: R4c canonical failure semantics
+Status: R4d canonical array and ndarray storage semantics
 
 This document defines the authority categories and the smallest currently
 executable EVT1 language foundation. It is derived from the retired Concept
@@ -441,12 +441,63 @@ part of the current canonical subset.
 
 ## 16. Arrays and indexing
 
-**Canonical EVT1 foundation.** Fixed `T[N]` arrays, literals, `Len`, and
-indexing are supported in the bounded compile-time domain, with exact length,
-element-type, and bounds checks.
+**Canonical EVT1 R4d.** `array` is rank-1 contiguous storage. `ndarray` is
+rank-N contiguous storage and is not recursively nested array. The canonical
+explicit spellings are:
 
-**Legacy PoC3 / deferred reconciliation.** PoC3 runtime arrays and their MIR/C
-behavior are not ported. Runtime array law must be reconciled before promotion.
+```concept
+int<array>[4] values = [1, 2, 3, 4];
+int<ndarray>[2, 3] grid = [[1, 2, 3], [4, 5, 6]];
+```
+
+The earlier `T[N]` spelling remains accepted as a rank-1 compatibility form;
+nested compatibility arrays remain semantically distinct from one ndarray.
+An `array` shape contains exactly one dimension. An `ndarray` shape contains
+one or more dimensions. Shape is semantic information retained in the typed
+model and MIR; it is not merely parser syntax. Both families are contiguous by
+definition. Fixed shapes use inline value storage. Copyability and movability
+are structural, immovability propagates from the element type, and `owned`,
+move, deterministic Drop, Option, and Result use the ordinary value rules.
+When an element type has a `Drop` witness, fixed storage drops live elements
+in reverse linear storage order; a moved-from container performs no cleanup.
+
+`values[index]` indexes rank-1 storage. `grid[row, column]` indexes ndarray
+storage with exactly one integer index per rank. `grid[row][column]` denotes
+repeated indexing of nested rank-1 arrays and is not ndarray syntax. A
+provably out-of-bounds constant is rejected. A runtime index emits a bounds
+guard and terminal panic with `Concept array index out of bounds` or `Concept
+ndarray index out of bounds`; it does not produce Result and does not unwind.
+
+Ndarray linearization is row-major with the last index contiguous. For shape
+`[rows, columns]`, `[row, column]` has offset `row * columns + column`. R4d has
+no configurable layout, stride, sparse, tiled, or jagged storage policy.
+
+`Len(x)` returns the extent of rank-1 storage. `Rank(x)` returns storage rank,
+and `Shape(x, dimension)` returns one dimension without constructing a shape
+object. Fixed-shape queries lower to constants. The dimension argument is
+integer and bounds-checked.
+
+Rank-1 literals retain ordered value semantics. Nested ndarray literal syntax
+is only source convenience for one flat contiguous value. Its rank, exact
+dimensions, rectangularity, and element types are checked; ragged literals are
+not ndarray values.
+
+Extents may be compile-time or value-level runtime expressions. A runtime
+extent does not choose storage or allocation policy. R4d distinguishes fixed
+inline storage, future external/non-owning storage descriptors, and future
+allocator-backed owned dynamic storage. Because EVT1 currently has no explicit
+runtime storage constructor, a bare runtime-shaped local is rejected with
+`RUNTIME_ARRAY_REQUIRES_EXPLICIT_STORAGE` or
+`RUNTIME_NDARRAY_REQUIRES_EXPLICIT_STORAGE`. In particular:
+
+```text
+Declaring a runtime-sized array or ndarray does not imply heap allocation.
+Shape does not imply allocation policy.
+```
+
+The C bootstrap backend represents fixed storage as an assignable wrapper
+struct containing one C array. Ndarray data is one flat element array, never a
+nested wrapper tree. Concept values therefore do not acquire C array decay.
 
 ## 17. Slices and bounded collections
 
@@ -458,7 +509,8 @@ candidate. It must be reconciled against `ref`, `ref const`, future `ref
 struct`, `scoped`, `Span<T>`, and `ReadOnlySpan<T>`. R4b supplies selected
 call-result provenance and relational `Outlives` evidence, but implements no
 Span, Slice, stack allocation, or runtime collection type. FixedBuffer mutation
-and collection rules remain future work.
+and collection rules remain future work. R4d does not port Slice or
+FixedBuffer and does not treat ndarray as a borrowed view.
 
 ## 18. Interfaces and dyn
 
@@ -603,7 +655,8 @@ The following remain explicit reconciliation or implementation work:
   accounting;
 - generalized borrow checking, named lifetimes, non-lexical lifetimes,
 `Span<T>`, and `ReadOnlySpan<T>`;
-- runtime arrays, slices, FixedBuffer, and bounded mutation;
+- explicit external runtime-array/ndarray descriptors, slices, FixedBuffer,
+  and bounded dynamic storage construction;
 - witness reification, interfaces, and dyn storage/dispatch;
 - allocation, allocator effects, arenas, and stores;
 - stable C ABI and layout law;

@@ -1,0 +1,7 @@
+profile Core;
+
+int RejectShapeMismatch()
+{
+    int<ndarray>[2, 3] values = [[1, 2], [3, 4]];
+    return 0;
+}

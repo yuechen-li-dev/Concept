@@ -72,6 +72,15 @@
               }
             },
             "array_length": 2,
+            "storage_kind": "array",
+            "shape": [
+              {
+                "extent": 2,
+                "expression": "2"
+              }
+            ],
+            "contiguous": true,
+            "layout": "row-major",
             "span": {
               "line": 19,
               "column": 5
@@ -138,6 +147,14 @@
             "column": 10
           }
         },
+        "storage_kind": "array",
+        "shape": [
+          {
+            "expression": "0"
+          }
+        ],
+        "contiguous": true,
+        "layout": "row-major",
         "span": {
           "line": 22,
           "column": 10
@@ -163,6 +180,15 @@
           }
         },
         "array_length": 3,
+        "storage_kind": "array",
+        "shape": [
+          {
+            "extent": 3,
+            "expression": "3"
+          }
+        ],
+        "contiguous": true,
+        "layout": "row-major",
         "span": {
           "line": 23,
           "column": 10
@@ -177,7 +203,7 @@
     {
       "name": "RetryMatrix",
       "type": {
-        "name": "int[2][]",
+        "name": "int\u003carray\u003e[2][]",
         "kind": "array",
         "array_elem": {
           "name": "int[]",
@@ -191,12 +217,30 @@
             }
           },
           "array_length": 2,
+          "storage_kind": "array",
+          "shape": [
+            {
+              "extent": 2,
+              "expression": "2"
+            }
+          ],
+          "contiguous": true,
+          "layout": "row-major",
           "span": {
             "line": 24,
             "column": 10
           }
         },
         "array_length": 3,
+        "storage_kind": "array",
+        "shape": [
+          {
+            "extent": 3,
+            "expression": "3"
+          }
+        ],
+        "contiguous": true,
+        "layout": "row-major",
         "span": {
           "line": 24,
           "column": 10
@@ -222,6 +266,15 @@
           }
         },
         "array_length": 4,
+        "storage_kind": "array",
+        "shape": [
+          {
+            "extent": 4,
+            "expression": "4"
+          }
+        ],
+        "contiguous": true,
+        "layout": "row-major",
         "span": {
           "line": 25,
           "column": 10
@@ -389,6 +442,7 @@
         {
           "id": "DefaultRetryBudget.02",
           "kind": "array_index",
+          "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
             "line": 99,
             "column": 12
@@ -441,6 +495,7 @@
         {
           "id": "MatrixCorner.02",
           "kind": "array_index",
+          "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
             "line": 104,
             "column": 12
@@ -449,6 +504,7 @@
         {
           "id": "MatrixCorner.03",
           "kind": "array_index",
+          "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
             "line": 104,
             "column": 12
@@ -519,6 +575,7 @@
         {
           "id": "SummaryValue.03",
           "kind": "array_index",
+          "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
             "line": 109,
             "column": 12
@@ -554,6 +611,7 @@
         {
           "id": "SummaryValue.07",
           "kind": "array_index",
+          "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
             "line": 109,
             "column": 32
@@ -678,6 +736,15 @@
           }
         },
         "array_length": 3,
+        "storage_kind": "array",
+        "shape": [
+          {
+            "extent": 3,
+            "expression": "3"
+          }
+        ],
+        "contiguous": true,
+        "layout": "row-major",
         "span": {
           "line": 36,
           "column": 10
@@ -687,7 +754,7 @@
         {
           "id": "CanonicalRetryBudgets.01",
           "kind": "return",
-          "type": "int[3]",
+          "type": "int\u003carray\u003e[3]",
           "source_span": {
             "line": 38,
             "column": 5
@@ -760,6 +827,15 @@
               }
             },
             "array_length": 3,
+            "storage_kind": "array",
+            "shape": [
+              {
+                "extent": 3,
+                "expression": "3"
+              }
+            ],
+            "contiguous": true,
+            "layout": "row-major",
             "span": {
               "line": 41,
               "column": 25
@@ -899,6 +975,7 @@
         {
           "id": "SumBudgets.15",
           "kind": "array_index",
+          "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
             "line": 47,
             "column": 25
@@ -1017,6 +1094,15 @@
               }
             },
             "array_length": 4,
+            "storage_kind": "array",
+            "shape": [
+              {
+                "extent": 4,
+                "expression": "4"
+              }
+            ],
+            "contiguous": true,
+            "layout": "row-major",
             "span": {
               "line": 53,
               "column": 42
@@ -1237,6 +1323,7 @@
         {
           "id": "HasDuplicateTransitionKeys.24",
           "kind": "array_index",
+          "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
             "line": 62,
             "column": 29
@@ -1272,6 +1359,7 @@
         {
           "id": "HasDuplicateTransitionKeys.28",
           "kind": "array_index",
+          "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
             "line": 62,
             "column": 51
@@ -1326,6 +1414,7 @@
         {
           "id": "HasDuplicateTransitionKeys.34",
           "kind": "array_index",
+          "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
             "line": 63,
             "column": 31
@@ -1361,6 +1450,7 @@
         {
           "id": "HasDuplicateTransitionKeys.38",
           "kind": "array_index",
+          "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
             "line": 63,
             "column": 55
@@ -1589,6 +1679,15 @@
               }
             },
             "array_length": 4,
+            "storage_kind": "array",
+            "shape": [
+              {
+                "extent": 4,
+                "expression": "4"
+              }
+            ],
+            "contiguous": true,
+            "layout": "row-major",
             "span": {
               "line": 72,
               "column": 42
@@ -1741,6 +1840,7 @@
         {
           "id": "LookupTransition.14",
           "kind": "array_index",
+          "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
             "line": 78,
             "column": 25
@@ -1804,6 +1904,7 @@
         {
           "id": "LookupTransition.21",
           "kind": "array_index",
+          "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
             "line": 79,
             "column": 27
@@ -1902,6 +2003,7 @@
         {
           "id": "LookupTransition.32",
           "kind": "array_index",
+          "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
             "line": 80,
             "column": 47
@@ -2003,6 +2105,55 @@
         "line": 72,
         "column": 25
       }
+    }
+  ],
+  "storage_types": [
+    {
+      "type": {
+        "name": "int[]",
+        "kind": "array",
+        "array_elem": {
+          "name": "int",
+          "kind": "builtin",
+          "span": {
+            "line": 19,
+            "column": 5
+          }
+        },
+        "array_length": 2,
+        "storage_kind": "array",
+        "shape": [
+          {
+            "extent": 2,
+            "expression": "2"
+          }
+        ],
+        "contiguous": true,
+        "layout": "row-major",
+        "span": {
+          "line": 19,
+          "column": 5
+        }
+      },
+      "element_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 19,
+          "column": 5
+        }
+      },
+      "storage_kind": "array",
+      "rank": 1,
+      "shape": [
+        {
+          "extent": 2,
+          "expression": "2"
+        }
+      ],
+      "contiguous": true,
+      "layout": "row-major",
+      "ownership": "fixed_inline"
     }
   ]
 }

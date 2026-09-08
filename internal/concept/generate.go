@@ -26,6 +26,9 @@ func Generate(module Module, source []byte) (Outputs, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := evt1NormalizeModuleStorageTypes(&module, env); err != nil {
+		return nil, err
+	}
 	l := &lowering{
 		module:     module,
 		env:        env,
@@ -418,6 +421,18 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 		mir.ComptimeFns = append(mir.ComptimeFns, mirFn)
 	}
 	mir.SemanticProofs = append(mir.SemanticProofs, env.semanticProofs...)
+	for _, storageType := range evt1CollectStorageTypes(module, env) {
+		mir.StorageTypes = append(mir.StorageTypes, MIRStorageType{
+			Type:        storageType,
+			ElementType: *storageType.ArrayElem,
+			StorageKind: storageType.StorageKind,
+			Rank:        evt1StorageRank(storageType),
+			Shape:       append([]StorageDimension{}, storageType.Shape...),
+			Contiguous:  true,
+			Layout:      "row-major",
+			Ownership:   evt1StorageOwnership(storageType),
+		})
+	}
 	return mir
 }
 
@@ -504,6 +519,8 @@ func evt1MIRCleanups(env *semanticEnv, fn FunctionDecl) []MIRCleanup {
 			dropName = evt1FailureDropName(types[name])
 		} else if dropFn := evt1DropFunction(env, types[name]); dropFn != nil {
 			dropName = dropFn.Name
+		} else if types[name].ArrayElem != nil && evt1StorageElementHasDrop(env, *types[name].ArrayElem) {
+			dropName = "DropElementsReverse"
 		}
 		cleanups = append(cleanups, MIRCleanup{Owner: name, Type: types[name].String(), DropFunction: dropName, State: state[name], Order: len(cleanups) + 1})
 	}
@@ -665,6 +682,10 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 		detail := e.Callee
 		if e.Callee == "Len" {
 			kind = "array_len"
+		} else if e.Callee == "Rank" {
+			kind = "rank_query"
+		} else if e.Callee == "Shape" {
+			kind = "shape_query"
 		}
 		if templateInfo != nil {
 			if binding, ok := templateInfo.CallBindings[evt1SpanKey(e.Span)]; ok {
@@ -697,9 +718,16 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 			collectExprMIROps(env, element, fn, templateInfo)
 		}
 	case *IndexExpr:
-		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "array_index", SourceSpan: e.Span})
+		indices := evt1StorageIndices(e)
+		kind := "array_index"
+		if len(indices) > 1 {
+			kind = "ndarray_index"
+		}
+		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: kind, Detail: fmt.Sprintf("rank=%d bounds=checked layout=row-major", len(indices)), SourceSpan: e.Span})
 		collectExprMIROps(env, e.Base, fn, templateInfo)
-		collectExprMIROps(env, e.Index, fn, templateInfo)
+		for _, index := range indices {
+			collectExprMIROps(env, index, fn, templateInfo)
+		}
 	case *BinaryExpr:
 		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "binary", Detail: e.Op, SourceSpan: e.Span})
 		collectExprMIROps(env, e.Left, fn, templateInfo)
@@ -785,13 +813,8 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 			header.WriteString(builtin.CDeclaration + "\n")
 		}
 	}
-	for _, decl := range typeDecls {
-		switch {
-		case decl.Struct != nil:
-			header.WriteString(l.structHeader(*decl.Struct))
-		case decl.Enum != nil:
-			header.WriteString(l.enumHeader(*decl.Enum))
-		}
+	if err := l.writeRuntimeStorageAndTypeDecls(&header, typeDecls, evt1CollectStorageTypes(l.module, l.env)); err != nil {
+		return nil, nil, err
 	}
 	canonicalFailureTypes := evt1CanonicalFailureTypeKeys(l.module)
 	for _, failureType := range evt1CollectFailureTypes(l.module) {
@@ -814,7 +837,7 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 	body.WriteString("static void concept_abort_invalid_tag(const char* enum_name) {\n")
 	body.WriteString("  fprintf(stderr, \"invalid enum tag for %s\\n\", enum_name);\n")
 	body.WriteString("  abort();\n}\n\n")
-	if evt1ModuleUsesFailurePanic(l.module) {
+	if evt1ModuleUsesFailurePanic(l.module) || evt1ModuleUsesStorageBounds(l.module) {
 		body.WriteString("static void concept_panic(const char* reason, int line, int column) {\n")
 		body.WriteString("  fprintf(stderr, \"Concept panic at %d:%d: %s\\n\", line, column, reason);\n")
 		body.WriteString("  abort();\n}\n\n")
@@ -888,6 +911,119 @@ type evt1RuntimeTypeDecl struct {
 	Name   string
 	Struct *StructDecl
 	Enum   *EnumDecl
+}
+
+type evt1RuntimeHeaderDecl struct {
+	key  string
+	deps []string
+	emit func() string
+}
+
+func (l *lowering) writeRuntimeStorageAndTypeDecls(out *strings.Builder, typeDecls []evt1RuntimeTypeDecl, storageTypes []Type) error {
+	knownNamed := make(map[string]bool, len(typeDecls))
+	knownStorage := make(map[string]bool, len(storageTypes))
+	for _, decl := range typeDecls {
+		knownNamed[decl.Name] = true
+	}
+	for _, storageType := range storageTypes {
+		knownStorage[evt1TypeIdentity(storageType)] = true
+	}
+
+	var typeDeps func(Type) []string
+	typeDeps = func(t Type) []string {
+		if t.PointerTo != nil {
+			return typeDeps(*t.PointerTo)
+		}
+		if t.ArrayElem != nil {
+			key := evt1TypeIdentity(t.valueType())
+			if knownStorage[key] {
+				return []string{"storage:" + key}
+			}
+			return nil
+		}
+		if knownNamed[t.Name] {
+			return []string{"named:" + t.Name}
+		}
+		return nil
+	}
+
+	decls := make([]evt1RuntimeHeaderDecl, 0, len(typeDecls)+len(storageTypes))
+	for i := range typeDecls {
+		decl := typeDecls[i]
+		deps := make([]string, 0)
+		seen := map[string]bool{"named:" + decl.Name: true}
+		add := func(t Type) {
+			for _, dep := range typeDeps(t) {
+				if !seen[dep] {
+					seen[dep] = true
+					deps = append(deps, dep)
+				}
+			}
+		}
+		if decl.Struct != nil {
+			for _, field := range decl.Struct.Fields {
+				add(field.Type)
+			}
+		} else {
+			for _, variant := range decl.Enum.Variants {
+				for _, field := range variant.Payload {
+					add(field.Type)
+				}
+			}
+		}
+		current := decl
+		decls = append(decls, evt1RuntimeHeaderDecl{key: "named:" + decl.Name, deps: deps, emit: func() string {
+			if current.Struct != nil {
+				return l.structHeader(*current.Struct)
+			}
+			return l.enumHeader(*current.Enum)
+		}})
+	}
+	for i := range storageTypes {
+		storageType := storageTypes[i]
+		current := storageType
+		deps := typeDeps(*storageType.ArrayElem)
+		decls = append(decls, evt1RuntimeHeaderDecl{
+			key:  "storage:" + evt1TypeIdentity(storageType),
+			deps: deps,
+			emit: func() string {
+				return fmt.Sprintf("typedef struct { %s data[%d]; } %s;\n\n", evt1CType(*current.ArrayElem), evt1StorageElementCount(current), evt1StorageCName(current))
+			},
+		})
+	}
+
+	emitted := make(map[string]bool, len(decls))
+	for len(emitted) < len(decls) {
+		progress := false
+		for _, decl := range decls {
+			if emitted[decl.key] {
+				continue
+			}
+			ready := true
+			for _, dep := range decl.deps {
+				if !emitted[dep] {
+					ready = false
+					break
+				}
+			}
+			if !ready {
+				continue
+			}
+			out.WriteString(decl.emit())
+			emitted[decl.key] = true
+			progress = true
+		}
+		if !progress {
+			var blocked []string
+			for _, decl := range decls {
+				if !emitted[decl.key] {
+					blocked = append(blocked, decl.key)
+				}
+			}
+			return fmt.Errorf("Concept/Vulkan EVT1 runtime storage type cycle is not representable by value: %s", strings.Join(blocked, ", "))
+		}
+	}
+	return nil
 }
 
 func (l *lowering) runtimeTypeDeclarations() ([]evt1RuntimeTypeDecl, error) {
@@ -1059,7 +1195,14 @@ func evt1ModuleUsesAutomataDispatchOutcome(module Module) bool {
 		case *FieldExpr:
 			return usesExpr(e.Receiver)
 		case *IndexExpr:
-			return usesExpr(e.Base) || usesExpr(e.Index)
+			if usesExpr(e.Base) {
+				return true
+			}
+			for _, index := range evt1StorageIndices(e) {
+				if usesExpr(index) {
+					return true
+				}
+			}
 		case *BinaryExpr:
 			return usesExpr(e.Left) || usesExpr(e.Right)
 		case *CallExpr:
@@ -2004,6 +2147,9 @@ func evt1CType(t Type) string {
 		}
 		return base + "*"
 	}
+	if t.ArrayElem != nil {
+		return evt1StorageCName(t.valueType())
+	}
 	if evt1IsFailureType(t) {
 		return evt1FailureCName(t)
 	}
@@ -2473,7 +2619,11 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 	if construct, ok := expr.(*ConstructExpr); ok {
 		failureConstruct = evt1IsFailureType(construct.ResolvedType)
 	}
-	if value, ok := evt1TryEvalRuntimeExpr(f.l.env, f.evalScope(), expr); !failureConstruct && ok && evt1RuntimeTypeSafe(f.l.env, value.Type) {
+	freshNoncopyableConstruct := false
+	if construct, ok := expr.(*StructConstructExpr); ok {
+		freshNoncopyableConstruct = !evt1TypeCopyable(f.l.env, Type{Name: construct.StructName, Kind: TypeStruct})
+	}
+	if value, ok := evt1TryEvalRuntimeExpr(f.l.env, f.evalScope(), expr); !failureConstruct && !freshNoncopyableConstruct && ok && evt1RuntimeTypeSafe(f.l.env, value.Type) {
 		return "", evt1RenderCValue(f.l.env, value), value.Type
 	}
 	switch e := expr.(type) {
@@ -2522,7 +2672,9 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		}
 		return prelude, fieldExpr, fieldType
 	case *IndexExpr:
-		return "", "/* comptime_array_index */", Type{Name: "int", Kind: TypeBuiltin}
+		return f.lowerStorageIndex(e, indent, false)
+	case *ArrayLiteralExpr:
+		return "", "/* array_literal_requires_target */", Type{}
 	case *BinaryExpr:
 		leftPrelude, left, leftType := f.lowerExpr(e.Left, indent)
 		rightPrelude, right, _ := f.lowerExpr(e.Right, indent)
@@ -2610,6 +2762,9 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		}
 		return b.String(), carrierTemp + ".payload." + field, evt1FailureSuccessType(carrierType)
 	case *CallExpr:
+		if e.Callee == "Len" || e.Callee == "Rank" || e.Callee == "Shape" {
+			return f.lowerStorageQuery(e, indent)
+		}
 		if e.Callee == "discard" && len(e.Args) == 1 {
 			if nameExpr, ok := e.Args[0].(*NameExpr); ok {
 				if binding, found := scopeLookup(nameExpr.Name, f.scope); found && binding.batchAutomata != "" {
@@ -2694,8 +2849,20 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		}
 		var prelude strings.Builder
 		var args []string
-		for _, arg := range e.Args {
-			argPrelude, argExpr, argType := f.lowerExpr(arg, indent)
+		var payload []Field
+		if decl, ok := evt1FailureEnumDecl(enumType); ok {
+			if variant, found := evt1LookupVariant(decl, e.VariantName); found {
+				payload = variant.Payload
+			}
+		}
+		for i, arg := range e.Args {
+			var argPrelude, argExpr string
+			var argType Type
+			if i < len(payload) {
+				argPrelude, argExpr, argType = f.lowerExprExpected(arg, payload[i].Type, indent)
+			} else {
+				argPrelude, argExpr, argType = f.lowerExpr(arg, indent)
+			}
 			prelude.WriteString(argPrelude)
 			temp := f.nextTemp("payload")
 			prelude.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(argType), temp, argExpr))
@@ -2710,6 +2877,7 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		structType := Type{Name: e.StructName, Kind: TypeStruct, Span: e.Span}
 		var prelude strings.Builder
 		var args []string
+		var initializers []string
 		structDecl := f.l.env.structs[e.StructName]
 		for i, arg := range e.Args {
 			argPrelude, argExpr, argType := f.lowerExpr(arg, indent)
@@ -2718,7 +2886,11 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 			prelude.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(argType), temp, argExpr))
 			if i < len(structDecl.Fields) {
 				args = append(args, temp)
+				initializers = append(initializers, "."+structDecl.Fields[i].Name+" = "+temp)
 			}
+		}
+		if !evt1TypeCopyable(f.l.env, structType) {
+			return prelude.String(), "(" + evt1CType(structType) + "){ " + strings.Join(initializers, ", ") + " }", structType
 		}
 		return prelude.String(), evt1StructConstructorName(e.StructName) + "(" + strings.Join(args, ", ") + ")", structType
 	case *WithExpr:
@@ -2798,6 +2970,9 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 }
 
 func (f *evt1FunctionLowerer) lowerExprExpected(expr Expr, expected Type, indent int) (string, string, Type) {
+	if literal, ok := expr.(*ArrayLiteralExpr); ok && expected.ArrayElem != nil {
+		return f.lowerStorageLiteral(*literal, expected, indent)
+	}
 	if evt1IsFailureType(expected) {
 		switch e := expr.(type) {
 		case *ConstructExpr:
@@ -2834,6 +3009,9 @@ func (f *evt1FunctionLowerer) lowerLValue(expr Expr, indent int) (string, string
 			return prelude, "(*(" + fieldExpr + "))", fieldType.borrowBase(), false
 		}
 		return prelude, fieldExpr, fieldType, false
+	case *IndexExpr:
+		prelude, value, valueType := f.lowerStorageIndex(e, indent, true)
+		return prelude, value, valueType, false
 	default:
 		return "", "/* invalid */", Type{}, false
 	}
@@ -2934,6 +3112,13 @@ func (f *evt1FunctionLowerer) lowerDropValue(t Type, value string, indent int) s
 	}
 	if dropFn := evt1DropFunction(f.l.env, t); dropFn != nil {
 		return ind(indent) + fmt.Sprintf("%s(%s);\n", evt1FunctionSymbolForDecl(f.l.outputBase, f.l.env, *dropFn), value)
+	}
+	if t.ArrayElem != nil && evt1StorageElementHasDrop(f.l.env, *t.ArrayElem) {
+		var b strings.Builder
+		for index := evt1StorageElementCount(t) - 1; index >= 0; index-- {
+			b.WriteString(f.lowerDropValue(*t.ArrayElem, fmt.Sprintf("(%s).data[%d]", value, index), indent))
+		}
+		return b.String()
 	}
 	return ""
 }
@@ -3102,7 +3287,7 @@ func evt1TryEvalRuntimeExpr(env *semanticEnv, scope *evt1EvalScope, expr Expr) (
 
 func evt1RuntimeTypeSafe(env *semanticEnv, t Type) bool {
 	if t.ArrayElem != nil {
-		return false
+		return !evt1StorageHasRuntimeShape(t) && evt1RuntimeTypeSafe(env, *t.ArrayElem)
 	}
 	if t.PointerTo != nil {
 		return evt1RuntimeTypeSafe(env, *t.PointerTo)

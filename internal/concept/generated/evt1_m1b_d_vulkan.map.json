@@ -17,6 +17,15 @@
           }
         },
         "array_length": 3,
+        "storage_kind": "array",
+        "shape": [
+          {
+            "extent": 3,
+            "expression": "3"
+          }
+        ],
+        "contiguous": true,
+        "layout": "row-major",
         "span": {
           "line": 15,
           "column": 10
@@ -47,7 +56,7 @@
     {
       "name": "StageMatrix",
       "type": {
-        "name": "int[2][]",
+        "name": "int\u003carray\u003e[2][]",
         "kind": "array",
         "array_elem": {
           "name": "int[]",
@@ -61,12 +70,30 @@
             }
           },
           "array_length": 2,
+          "storage_kind": "array",
+          "shape": [
+            {
+              "extent": 2,
+              "expression": "2"
+            }
+          ],
+          "contiguous": true,
+          "layout": "row-major",
           "span": {
             "line": 22,
             "column": 10
           }
         },
         "array_length": 2,
+        "storage_kind": "array",
+        "shape": [
+          {
+            "extent": 2,
+            "expression": "2"
+          }
+        ],
+        "contiguous": true,
+        "layout": "row-major",
         "span": {
           "line": 22,
           "column": 10
@@ -169,6 +196,7 @@
         {
           "id": "ClassifyRange.03",
           "kind": "array_index",
+          "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
             "line": 64,
             "column": 12
@@ -252,6 +280,7 @@
         {
           "id": "PipelineStride.02",
           "kind": "array_index",
+          "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
             "line": 69,
             "column": 12
@@ -260,6 +289,7 @@
         {
           "id": "PipelineStride.03",
           "kind": "array_index",
+          "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
             "line": 69,
             "column": 12
@@ -371,6 +401,7 @@
         {
           "id": "PoolReady.05",
           "kind": "array_index",
+          "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
             "line": 74,
             "column": 23
@@ -525,6 +556,15 @@
               }
             },
             "array_length": 2,
+            "storage_kind": "array",
+            "shape": [
+              {
+                "extent": 2,
+                "expression": "2"
+              }
+            ],
+            "contiguous": true,
+            "layout": "row-major",
             "span": {
               "line": 12,
               "column": 5

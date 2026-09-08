@@ -1,0 +1,7 @@
+profile Core;
+
+int RejectNonIntegerIndex()
+{
+    int<array>[2] values = [1, 2];
+    return values[true];
+}

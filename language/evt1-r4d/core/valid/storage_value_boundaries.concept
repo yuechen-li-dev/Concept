@@ -1,0 +1,26 @@
+profile Core;
+
+int<array>[2] MakeArray()
+{
+    return [1, 2];
+}
+
+int ReadArray(int<array>[2] values)
+{
+    return values[1];
+}
+
+int<ndarray>[2, 2] MakeGrid()
+{
+    return [[1, 2], [3, 4]];
+}
+
+int ReadGrid(int<ndarray>[2, 2] values)
+{
+    return values[1, 0];
+}
+
+int ValueBoundaries()
+{
+    return ReadArray(MakeArray()) + ReadGrid(MakeGrid());
+}

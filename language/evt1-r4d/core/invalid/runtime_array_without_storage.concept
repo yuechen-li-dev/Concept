@@ -1,0 +1,7 @@
+profile Core;
+
+int RejectRuntimeArray(int count)
+{
+    int<array>[count] values;
+    return 0;
+}

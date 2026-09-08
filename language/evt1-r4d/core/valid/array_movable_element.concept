@@ -1,0 +1,13 @@
+profile Core;
+
+struct Box
+{
+    owned int value;
+}
+
+int MoveElementArray()
+{
+    Box<array>[1] first = [Box{7}];
+    Box<array>[1] second = move first;
+    return second[0].value;
+}

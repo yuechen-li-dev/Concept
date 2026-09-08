@@ -8,11 +8,22 @@ static void concept_abort_invalid_tag(const char* enum_name) {
   abort();
 }
 
+static void concept_panic(const char* reason, int line, int column) {
+  fprintf(stderr, "Concept panic at %d:%d: %s\n", line, column, reason);
+  abort();
+}
+
 static concept_descriptor_binding concept_descriptor_binding_make(int set, int binding, bool write) {
   concept_descriptor_binding out;
   out.set = set;
   out.binding = binding;
   out.write = write;
+  return out;
+}
+
+static concept_binding_summary concept_binding_summary_make(concept_array_2_int slots) {
+  concept_binding_summary out;
+  out.slots = slots;
   return out;
 }
 

@@ -11,6 +11,12 @@ typedef struct concept_descriptor_binding {
   bool write;
 } concept_descriptor_binding;
 
+typedef struct { int data[2]; } concept_array_2_int;
+
+typedef struct concept_binding_summary {
+  concept_array_2_int slots;
+} concept_binding_summary;
+
 int concept_evt1_m1b_d_vulkan_classify_range(VkBuffer buffer);
 
 int concept_evt1_m1b_d_vulkan_pipeline_stride(VkBuffer buffer);

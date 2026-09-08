@@ -1,0 +1,12 @@
+profile Core;
+
+int ReadThroughConstRef(ref const int<ndarray>[2, 2] values)
+{
+    return values[0, 0] + values[1, 1];
+}
+
+int UseConstRef()
+{
+    int<ndarray>[2, 2] values = [[1, 2], [3, 4]];
+    return ReadThroughConstRef(ref const values);
+}

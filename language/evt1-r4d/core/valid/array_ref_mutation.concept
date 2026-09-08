@@ -1,0 +1,13 @@
+profile Core;
+
+void SetFirst(ref int<array>[4] values)
+{
+    values[0] = 7;
+}
+
+int MutateThroughRef()
+{
+    int<array>[4] values = [1, 2, 3, 4];
+    SetFirst(ref values);
+    return values[0];
+}

@@ -1,0 +1,7 @@
+profile Core;
+
+int RejectRuntimeNDArray(int rows, int columns)
+{
+    int<ndarray>[rows, columns] values;
+    return 0;
+}

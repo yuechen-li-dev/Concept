@@ -72,6 +72,15 @@
               }
             },
             "array_length": 2,
+            "storage_kind": "array",
+            "shape": [
+              {
+                "extent": 2,
+                "expression": "2"
+              }
+            ],
+            "contiguous": true,
+            "layout": "row-major",
             "span": {
               "line": 12,
               "column": 5
@@ -100,6 +109,15 @@
           }
         },
         "array_length": 3,
+        "storage_kind": "array",
+        "shape": [
+          {
+            "extent": 3,
+            "expression": "3"
+          }
+        ],
+        "contiguous": true,
+        "layout": "row-major",
         "span": {
           "line": 15,
           "column": 10
@@ -130,7 +148,7 @@
     {
       "name": "StageMatrix",
       "type": {
-        "name": "int[2][]",
+        "name": "int\u003carray\u003e[2][]",
         "kind": "array",
         "array_elem": {
           "name": "int[]",
@@ -144,12 +162,30 @@
             }
           },
           "array_length": 2,
+          "storage_kind": "array",
+          "shape": [
+            {
+              "extent": 2,
+              "expression": "2"
+            }
+          ],
+          "contiguous": true,
+          "layout": "row-major",
           "span": {
             "line": 22,
             "column": 10
           }
         },
         "array_length": 2,
+        "storage_kind": "array",
+        "shape": [
+          {
+            "extent": 2,
+            "expression": "2"
+          }
+        ],
+        "contiguous": true,
+        "layout": "row-major",
         "span": {
           "line": 22,
           "column": 10
@@ -267,6 +303,7 @@
         {
           "id": "ClassifyRange.03",
           "kind": "array_index",
+          "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
             "line": 64,
             "column": 12
@@ -350,6 +387,7 @@
         {
           "id": "PipelineStride.02",
           "kind": "array_index",
+          "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
             "line": 69,
             "column": 12
@@ -358,6 +396,7 @@
         {
           "id": "PipelineStride.03",
           "kind": "array_index",
+          "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
             "line": 69,
             "column": 12
@@ -469,6 +508,7 @@
         {
           "id": "PoolReady.05",
           "kind": "array_index",
+          "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
             "line": 74,
             "column": 23
@@ -534,6 +574,15 @@
               }
             },
             "array_length": 3,
+            "storage_kind": "array",
+            "shape": [
+              {
+                "extent": 3,
+                "expression": "3"
+              }
+            ],
+            "contiguous": true,
+            "layout": "row-major",
             "span": {
               "line": 25,
               "column": 36
@@ -754,6 +803,7 @@
         {
           "id": "HasDuplicateBindings.24",
           "kind": "array_index",
+          "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
             "line": 34,
             "column": 28
@@ -789,6 +839,7 @@
         {
           "id": "HasDuplicateBindings.28",
           "kind": "array_index",
+          "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
             "line": 34,
             "column": 49
@@ -843,6 +894,7 @@
         {
           "id": "HasDuplicateBindings.34",
           "kind": "array_index",
+          "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
             "line": 35,
             "column": 32
@@ -878,6 +930,7 @@
         {
           "id": "HasDuplicateBindings.38",
           "kind": "array_index",
+          "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
             "line": 35,
             "column": 57
@@ -1106,6 +1159,15 @@
               }
             },
             "array_length": 3,
+            "storage_kind": "array",
+            "shape": [
+              {
+                "extent": 3,
+                "expression": "3"
+              }
+            ],
+            "contiguous": true,
+            "layout": "row-major",
             "span": {
               "line": 44,
               "column": 31
@@ -1262,6 +1324,7 @@
         {
           "id": "ActiveWriteCount.17",
           "kind": "array_index",
+          "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
             "line": 50,
             "column": 29
@@ -1372,6 +1435,55 @@
         "line": 44,
         "column": 14
       }
+    }
+  ],
+  "storage_types": [
+    {
+      "type": {
+        "name": "int[]",
+        "kind": "array",
+        "array_elem": {
+          "name": "int",
+          "kind": "builtin",
+          "span": {
+            "line": 12,
+            "column": 5
+          }
+        },
+        "array_length": 2,
+        "storage_kind": "array",
+        "shape": [
+          {
+            "extent": 2,
+            "expression": "2"
+          }
+        ],
+        "contiguous": true,
+        "layout": "row-major",
+        "span": {
+          "line": 12,
+          "column": 5
+        }
+      },
+      "element_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 12,
+          "column": 5
+        }
+      },
+      "storage_kind": "array",
+      "rank": 1,
+      "shape": [
+        {
+          "extent": 2,
+          "expression": "2"
+        }
+      ],
+      "contiguous": true,
+      "layout": "row-major",
+      "ownership": "fixed_inline"
     }
   ]
 }

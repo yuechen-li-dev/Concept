@@ -17,24 +17,43 @@ const (
 	TypeStruct       TypeKind = "struct"
 	TypePointer      TypeKind = "pointer"
 	TypeArray        TypeKind = "array"
+	TypeNDArray      TypeKind = "ndarray"
 	TypeConceptParam TypeKind = "concept_param"
 	TypeApplied      TypeKind = "applied"
 )
 
+type StorageKind string
+
+const (
+	StorageArray   StorageKind = "array"
+	StorageNDArray StorageKind = "ndarray"
+)
+
+type StorageDimension struct {
+	Extent     int    `json:"extent,omitempty"`
+	Runtime    bool   `json:"runtime,omitempty"`
+	Expression string `json:"expression"`
+	Expr       Expr   `json:"-"`
+}
+
 type Type struct {
-	Name            string   `json:"name"`
-	Kind            TypeKind `json:"kind"`
-	Ownership       string   `json:"ownership,omitempty"`
-	Const           bool     `json:"const,omitempty"`
-	Scoped          bool     `json:"scoped,omitempty"`
-	Imported        bool     `json:"imported,omitempty"`
-	Unsafe          bool     `json:"unsafe,omitempty"`
-	PointerTo       *Type    `json:"pointer_to,omitempty"`
-	TypeArgs        []Type   `json:"type_args,omitempty"`
-	ArrayElem       *Type    `json:"array_elem,omitempty"`
-	ArrayLength     int      `json:"array_length,omitempty"`
-	ArrayLengthExpr Expr     `json:"-"`
-	Span            Span     `json:"span"`
+	Name            string             `json:"name"`
+	Kind            TypeKind           `json:"kind"`
+	Ownership       string             `json:"ownership,omitempty"`
+	Const           bool               `json:"const,omitempty"`
+	Scoped          bool               `json:"scoped,omitempty"`
+	Imported        bool               `json:"imported,omitempty"`
+	Unsafe          bool               `json:"unsafe,omitempty"`
+	PointerTo       *Type              `json:"pointer_to,omitempty"`
+	TypeArgs        []Type             `json:"type_args,omitempty"`
+	ArrayElem       *Type              `json:"array_elem,omitempty"`
+	ArrayLength     int                `json:"array_length,omitempty"`
+	ArrayLengthExpr Expr               `json:"-"`
+	StorageKind     StorageKind        `json:"storage_kind,omitempty"`
+	Shape           []StorageDimension `json:"shape,omitempty"`
+	Contiguous      bool               `json:"contiguous,omitempty"`
+	Layout          string             `json:"layout,omitempty"`
+	Span            Span               `json:"span"`
 }
 
 func (t Type) String() string {
@@ -58,7 +77,15 @@ func (t Type) String() string {
 	if t.PointerTo != nil {
 		base = t.PointerTo.String() + "*"
 	} else if t.ArrayElem != nil {
-		base = fmt.Sprintf("%s[%s]", t.ArrayElem.String(), evt1ArrayLengthString(t))
+		if t.StorageKind != "" {
+			dimensions := make([]string, 0, len(t.Shape))
+			for _, dimension := range t.Shape {
+				dimensions = append(dimensions, dimension.String())
+			}
+			base = fmt.Sprintf("%s<%s>[%s]", t.ArrayElem.String(), t.StorageKind, strings.Join(dimensions, ", "))
+		} else {
+			base = fmt.Sprintf("%s[%s]", t.ArrayElem.String(), evt1ArrayLengthString(t))
+		}
 	} else if len(t.TypeArgs) > 0 {
 		var args []string
 		for _, arg := range t.TypeArgs {
@@ -79,13 +106,22 @@ func (t Type) Equal(other Type) bool {
 		t.Imported != other.Imported ||
 		t.Unsafe != other.Unsafe ||
 		len(t.TypeArgs) != len(other.TypeArgs) ||
-		t.ArrayLength != other.ArrayLength {
+		t.StorageKind != other.StorageKind ||
+		len(t.Shape) != len(other.Shape) {
 		return false
 	}
 	for i := range t.TypeArgs {
 		if !t.TypeArgs[i].Equal(other.TypeArgs[i]) {
 			return false
 		}
+	}
+	for i := range t.Shape {
+		if t.Shape[i].String() != other.Shape[i].String() {
+			return false
+		}
+	}
+	if len(t.Shape) == 0 && t.ArrayLength != other.ArrayLength {
+		return false
 	}
 	if t.PointerTo == nil || other.PointerTo == nil {
 		if t.PointerTo != nil || other.PointerTo != nil {
@@ -98,6 +134,16 @@ func (t Type) Equal(other Type) bool {
 		return t.ArrayElem == nil && other.ArrayElem == nil
 	}
 	return t.ArrayElem.Equal(*other.ArrayElem)
+}
+
+func (d StorageDimension) String() string {
+	if d.Expression != "" {
+		return d.Expression
+	}
+	if d.Expr != nil {
+		return evt1ExprIdentity(d.Expr)
+	}
+	return fmt.Sprintf("%d", d.Extent)
 }
 
 func (t Type) SameValueType(other Type) bool {
@@ -643,9 +689,10 @@ func (*ArrayLiteralExpr) evt1Expr()        {}
 func (e *ArrayLiteralExpr) exprSpan() Span { return e.Span }
 
 type IndexExpr struct {
-	Base  Expr `json:"base"`
-	Index Expr `json:"index"`
-	Span  Span `json:"span"`
+	Base    Expr   `json:"base"`
+	Index   Expr   `json:"index"` // first index retained for the legacy rank-1 evaluator
+	Indices []Expr `json:"indices,omitempty"`
+	Span    Span   `json:"span"`
 }
 
 func (*IndexExpr) evt1Expr()        {}
@@ -738,6 +785,18 @@ type MIR struct {
 	Functions      []MIRFunction      `json:"functions"`
 	ComptimeFns    []MIRFunction      `json:"comptime_functions,omitempty"`
 	SemanticProofs []MIRSemanticProof `json:"semantic_proofs,omitempty"`
+	StorageTypes   []MIRStorageType   `json:"storage_types,omitempty"`
+}
+
+type MIRStorageType struct {
+	Type        Type               `json:"type"`
+	ElementType Type               `json:"element_type"`
+	StorageKind StorageKind        `json:"storage_kind"`
+	Rank        int                `json:"rank"`
+	Shape       []StorageDimension `json:"shape"`
+	Contiguous  bool               `json:"contiguous"`
+	Layout      string             `json:"layout"`
+	Ownership   string             `json:"ownership"`
 }
 
 type MIRStruct struct {

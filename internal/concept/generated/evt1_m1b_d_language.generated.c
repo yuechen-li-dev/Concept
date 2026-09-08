@@ -8,11 +8,22 @@ static void concept_abort_invalid_tag(const char* enum_name) {
   abort();
 }
 
+static void concept_panic(const char* reason, int line, int column) {
+  fprintf(stderr, "Concept panic at %d:%d: %s\n", line, column, reason);
+  abort();
+}
+
 static concept_transition concept_transition_make(concept_lifecycle_state from, int signal, concept_lifecycle_state to) {
   concept_transition out;
   out.from = from;
   out.signal = signal;
   out.to = to;
+  return out;
+}
+
+static concept_retry_summary concept_retry_summary_make(concept_array_2_int values) {
+  concept_retry_summary out;
+  out.values = values;
   return out;
 }
 

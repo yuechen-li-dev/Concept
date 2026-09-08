@@ -1,0 +1,14 @@
+profile Core;
+
+comptime int<ndarray>[2, 2] FixedGrid = [[1, 2], [3, 4]];
+
+static_assert(Rank(FixedGrid) == 2);
+static_assert(Shape(FixedGrid, 0) == 2);
+static_assert(Shape(FixedGrid, 1) == 2);
+static_assert(FixedGrid[1, 0] == 3);
+
+int QueryShape()
+{
+    int<ndarray>[2, 3, 4] values = [[[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]], [[13, 14, 15, 16], [17, 18, 19, 20], [21, 22, 23, 24]]];
+    return Rank(values) + Shape(values, 0) + Shape(values, 1) + Shape(values, 2) + values[0, 0, 0];
+}

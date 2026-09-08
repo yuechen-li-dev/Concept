@@ -1215,7 +1215,10 @@ done:
 		t.Name = nameTok.Lexeme
 		t.Kind = TypeStruct
 	}
+	storageMarker := StorageKind("")
+	storageElement := Type{}
 	if p.peekLexeme() == "<" {
+		storageElement = t
 		p.next()
 		for {
 			arg, err := p.parseType(conceptParam)
@@ -1232,6 +1235,10 @@ done:
 			return Type{}, err
 		}
 		t.Kind = TypeApplied
+		if len(t.TypeArgs) == 1 && (t.TypeArgs[0].Name == string(StorageArray) || t.TypeArgs[0].Name == string(StorageNDArray)) {
+			storageMarker = StorageKind(t.TypeArgs[0].Name)
+			t = storageElement
+		}
 	}
 	if p.peekLexeme() == "*" {
 		p.next()
@@ -1249,21 +1256,55 @@ done:
 	}
 	for p.peekLexeme() == "[" {
 		p.next()
-		lengthExpr, err := p.parseExpr()
-		if err != nil {
-			return Type{}, err
+		var dimensions []Expr
+		for {
+			dimension, err := p.parseExpr()
+			if err != nil {
+				return Type{}, err
+			}
+			dimensions = append(dimensions, dimension)
+			if p.peekLexeme() != "," {
+				break
+			}
+			p.next()
 		}
 		if _, err := p.expect("]"); err != nil {
 			return Type{}, err
 		}
-		elem := t
-		t = Type{
-			Name:            elem.String() + "[]",
-			Kind:            TypeArray,
-			ArrayElem:       &elem,
-			ArrayLengthExpr: lengthExpr,
-			Span:            nameTok.Span,
+		if (storageMarker == StorageArray || storageMarker == "") && len(dimensions) != 1 {
+			return Type{}, evt1Diagnostic("CV4550", fmt.Sprintf("array storage requires exactly one extent, got %d", len(dimensions)), nameTok.Span)
 		}
+		elem := t
+		ownership, isConst, scoped := elem.Ownership, elem.Const, elem.Scoped
+		elem.Ownership, elem.Const, elem.Scoped = "", false, false
+		kind := storageMarker
+		if kind == "" {
+			kind = StorageArray
+		}
+		shape := make([]StorageDimension, 0, len(dimensions))
+		for _, dimension := range dimensions {
+			shape = append(shape, StorageDimension{Expr: dimension})
+		}
+		t = Type{
+			Name:        elem.String() + "[]",
+			Kind:        TypeArray,
+			Ownership:   ownership,
+			Const:       isConst,
+			Scoped:      scoped,
+			ArrayElem:   &elem,
+			StorageKind: kind,
+			Shape:       shape,
+			Contiguous:  true,
+			Layout:      "row-major",
+			Span:        nameTok.Span,
+		}
+		if len(dimensions) == 1 {
+			t.ArrayLengthExpr = dimensions[0]
+		}
+		storageMarker = ""
+	}
+	if storageMarker != "" {
+		return Type{}, evt1Diagnostic("CV4550", fmt.Sprintf("%s storage requires an extent list", storageMarker), nameTok.Span)
 	}
 	return t, nil
 }
@@ -1592,7 +1633,7 @@ func (p *parser) looksLikeVarDecl() bool {
 		return false
 	}
 	p.next()
-	return p.peekLexeme() == "="
+	return p.peekLexeme() == "=" || p.peekLexeme() == ";"
 }
 
 func (p *parser) parseVarDecl() (Statement, error) {
@@ -1610,12 +1651,13 @@ func (p *parser) parseVarDecl() (Statement, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err := p.expect("="); err != nil {
-		return nil, err
-	}
-	value, err := p.parseExpr()
-	if err != nil {
-		return nil, err
+	var value Expr
+	if p.peekLexeme() == "=" {
+		p.next()
+		value, err = p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
 	}
 	if _, err := p.expect(";"); err != nil {
 		return nil, err
@@ -2260,14 +2302,22 @@ func (p *parser) parsePostfixExpr(expr Expr, span Span) (Expr, error) {
 			expr = &FieldExpr{Receiver: expr, Field: fieldTok.Lexeme, Span: fieldTok.Span}
 		case "[":
 			p.next()
-			index, err := p.parseExpr()
-			if err != nil {
-				return nil, err
+			var indices []Expr
+			for {
+				index, err := p.parseExpr()
+				if err != nil {
+					return nil, err
+				}
+				indices = append(indices, index)
+				if p.peekLexeme() != "," {
+					break
+				}
+				p.next()
 			}
 			if _, err := p.expect("]"); err != nil {
 				return nil, err
 			}
-			expr = &IndexExpr{Base: expr, Index: index, Span: span}
+			expr = &IndexExpr{Base: expr, Index: indices[0], Indices: indices, Span: span}
 		default:
 			return expr, nil
 		}

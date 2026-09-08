@@ -1,0 +1,7 @@
+profile Core;
+
+int ReadFixed()
+{
+    int<array>[4] values = [1, 2, 3, 4];
+    return values[2];
+}

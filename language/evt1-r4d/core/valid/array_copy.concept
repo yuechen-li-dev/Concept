@@ -1,0 +1,9 @@
+profile Core;
+
+int CopyIsIndependent()
+{
+    int<array>[3] source = [2, 4, 6];
+    int<array>[3] copy = source;
+    copy[0] = 9;
+    return source[0] + copy[0];
+}

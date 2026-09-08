@@ -495,11 +495,6 @@ func TestEVT1M1BDDiagnosticsAreStable(t *testing.T) {
 			code: "CV4227",
 		},
 		{
-			name: "runtime local array rejected",
-			src:  "profile Vulkan;\nint Use() { int[2] values = [1, 2]; return 0; }\n",
-			code: "CV4230",
-		},
-		{
 			name: "non array index target",
 			src:  "profile Vulkan;\ncomptime int Value = 3;\nstatic_assert(Value[0] == 0);\n",
 			code: "CV4231",

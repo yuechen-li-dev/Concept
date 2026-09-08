@@ -1,0 +1,13 @@
+profile Core;
+
+struct Box
+{
+    owned int value;
+}
+
+int RejectNoncopyableElementCopy()
+{
+    Box<array>[1] source = [Box{1}];
+    Box<array>[1] copy = source;
+    return 0;
+}

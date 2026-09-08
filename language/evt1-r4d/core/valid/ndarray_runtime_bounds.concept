@@ -1,0 +1,12 @@
+profile Core;
+
+int ReadAt(int row, int column)
+{
+    int<ndarray>[2, 2] values = [[1, 2], [3, 4]];
+    return values[row, column];
+}
+
+int RuntimeIndex()
+{
+    return ReadAt(1, 1);
+}

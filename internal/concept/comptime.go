@@ -291,17 +291,23 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 		if base.Kind != ValueArray {
 			return Value{}, evt1Diagnostic("CV4231", "indexing requires a fixed compile-time array", e.Base.exprSpan())
 		}
-		index, err := evt1EvalExpr(state, scope, e.Index)
-		if err != nil {
-			return Value{}, err
+		indices := evt1StorageIndices(e)
+		offset := 0
+		for i, indexExpr := range indices {
+			index, err := evt1EvalExpr(state, scope, indexExpr)
+			if err != nil {
+				return Value{}, err
+			}
+			if index.Kind != ValueInt {
+				return Value{}, evt1Diagnostic("CV4232", "storage index must evaluate to int", indexExpr.exprSpan())
+			}
+			extent := base.Type.Shape[i].Extent
+			if index.IntValue < 0 || index.IntValue >= extent {
+				return Value{}, evt1Diagnostic("CV4233", fmt.Sprintf("storage index %d is out of range for extent %d", index.IntValue, extent), indexExpr.exprSpan())
+			}
+			offset = offset*extent + index.IntValue
 		}
-		if index.Kind != ValueInt {
-			return Value{}, evt1Diagnostic("CV4232", "array index must evaluate to int", e.Index.exprSpan())
-		}
-		if index.IntValue < 0 || index.IntValue >= len(base.Elements) {
-			return Value{}, evt1Diagnostic("CV4233", fmt.Sprintf("array index %d is out of range for length %d", index.IntValue, len(base.Elements)), e.Index.exprSpan())
-		}
-		return base.Elements[index.IntValue], nil
+		return base.Elements[offset], nil
 	case *StructConstructExpr:
 		structDecl := state.env.structs[e.StructName]
 		fields := map[string]Value{}
@@ -380,6 +386,24 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 			}
 			t, _ := evt1BuiltinType("int", e.Span)
 			return Value{Kind: ValueInt, Type: t, IntValue: len(value.Elements)}, nil
+		}
+		if e.Callee == "Rank" || e.Callee == "Shape" {
+			value, err := evt1EvalExpr(state, scope, e.Args[0])
+			if err != nil {
+				return Value{}, err
+			}
+			t, _ := evt1BuiltinType("int", e.Span)
+			if e.Callee == "Rank" {
+				return Value{Kind: ValueInt, Type: t, IntValue: evt1StorageRank(value.Type)}, nil
+			}
+			dimension, err := evt1EvalExpr(state, scope, e.Args[1])
+			if err != nil {
+				return Value{}, err
+			}
+			if dimension.IntValue < 0 || dimension.IntValue >= len(value.Type.Shape) {
+				return Value{}, evt1Diagnostic("CV4553", "shape dimension is out of range", e.Args[1].exprSpan())
+			}
+			return Value{Kind: ValueInt, Type: t, IntValue: value.Type.Shape[dimension.IntValue].Extent}, nil
 		}
 		return evt1EvalComptimeCall(state, scope, e.Callee, e.Args, e.Span)
 	case *TemplateCallExpr:
@@ -724,7 +748,7 @@ func evt1EvalArrayLiteral(state *evt1ComptimeState, scope *evt1EvalScope, expr A
 	var arrayType Type
 	if expected != nil && expected.ArrayElem != nil {
 		arrayType = expected.valueType()
-		if len(expr.Elements) != arrayType.ArrayLength {
+		if arrayType.StorageKind != StorageNDArray && len(expr.Elements) != arrayType.ArrayLength {
 			return Value{}, evt1Diagnostic("CV4226", fmt.Sprintf("array literal expected %d elements but got %d", arrayType.ArrayLength, len(expr.Elements)), expr.Span)
 		}
 	} else if len(expr.Elements) == 0 {
@@ -733,8 +757,12 @@ func evt1EvalArrayLiteral(state *evt1ComptimeState, scope *evt1EvalScope, expr A
 	if len(expr.Elements) > evt1ComptimeMaxLiteralElements {
 		return Value{}, evt1Diagnostic("CV4224", fmt.Sprintf("array literal element count %d exceeds limit %d", len(expr.Elements), evt1ComptimeMaxLiteralElements), expr.Span)
 	}
-	elements := make([]Value, 0, len(expr.Elements))
-	for i, element := range expr.Elements {
+	literalElements := expr.Elements
+	if arrayType.StorageKind == StorageNDArray {
+		literalElements = evt1FlattenArrayLiteral(&expr)
+	}
+	elements := make([]Value, 0, len(literalElements))
+	for i, element := range literalElements {
 		var elemExpected *Type
 		if arrayType.ArrayElem != nil {
 			elemExpected = arrayType.ArrayElem
@@ -750,6 +778,10 @@ func evt1EvalArrayLiteral(state *evt1ComptimeState, scope *evt1EvalScope, expr A
 				Kind:        TypeArray,
 				ArrayElem:   &elemType,
 				ArrayLength: len(expr.Elements),
+				StorageKind: StorageArray,
+				Shape:       []StorageDimension{{Extent: len(expr.Elements), Expression: fmt.Sprintf("%d", len(expr.Elements))}},
+				Contiguous:  true,
+				Layout:      "row-major",
 				Span:        expr.Span,
 			}
 		}

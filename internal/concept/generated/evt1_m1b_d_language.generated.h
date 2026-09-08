@@ -23,6 +23,12 @@ typedef struct concept_transition {
   concept_lifecycle_state to;
 } concept_transition;
 
+typedef struct { int data[2]; } concept_array_2_int;
+
+typedef struct concept_retry_summary {
+  concept_array_2_int values;
+} concept_retry_summary;
+
 int concept_evt1_m1b_d_language_default_retry_budget();
 
 int concept_evt1_m1b_d_language_matrix_corner();
