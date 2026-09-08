@@ -1,0 +1,51 @@
+profile Core;
+
+enum Choice
+{
+    Advance,
+    Remain,
+}
+
+struct Resource
+{
+    int handle;
+}
+
+void Drop(owned Resource resource)
+{
+    return;
+}
+
+automata Toggle
+with state
+{
+    int visits;
+}
+{
+    machine Run
+    {
+        state Idle
+        {
+            owned Resource temporary = Resource{7};
+            visits = visits + 1;
+            transition match (Choice::Advance)
+            {
+                Choice::Advance => Running;
+                Choice::Remain => Idle;
+            }
+        }
+
+        state Running
+        {
+            visits = visits + 10;
+        }
+    }
+}
+
+int Main()
+{
+    instance Toggle toggle(0);
+    Step(toggle, Run);
+    Step(toggle, Run);
+    return toggle.state.visits;
+}

@@ -1,0 +1,27 @@
+profile Core;
+
+automata Chooser
+{
+    machine Run
+    {
+        state Idle
+        {
+            transition decide
+            {
+                Running when false score 100;
+                Running score 3;
+                Waiting score 2;
+            }
+        }
+
+        state Running { }
+        state Waiting { }
+    }
+}
+
+int Main()
+{
+    instance Chooser chooser();
+    Step(chooser, Run);
+    return State(chooser, Run);
+}

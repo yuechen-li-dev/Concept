@@ -1,0 +1,20 @@
+profile Core;
+
+automata Bad
+{
+    machine Run
+    {
+        state Idle
+        {
+            transition decide
+            {
+                Idle score 1;
+                Other score 2.0;
+            }
+        }
+
+        state Other
+        {
+        }
+    }
+}

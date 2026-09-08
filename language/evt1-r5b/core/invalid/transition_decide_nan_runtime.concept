@@ -1,0 +1,26 @@
+profile Core;
+
+automata Bad
+with state
+{
+    float candidateScore;
+}
+{
+    machine Run
+    {
+        state Idle
+        {
+            transition decide
+            {
+                Idle score candidateScore;
+            }
+        }
+    }
+}
+
+int Main(float score)
+{
+    instance Bad bad(score);
+    Step(bad, Run);
+    return 0;
+}

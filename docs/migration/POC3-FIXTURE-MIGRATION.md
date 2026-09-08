@@ -1,6 +1,6 @@
 # PoC3 fixture migration inventory
 
-Status: R5a bounded migration evidence; no bulk port attempted
+Status: R5b bounded migration evidence; no bulk port attempted
 
 ## Corpus snapshot
 
@@ -31,12 +31,12 @@ The 1,296 primary fixtures are distributed as follows:
 | phase10-ownership | 54 | semantic feature missing in Go EVT1 |
 | phase11-testing | 85 | semantic feature missing in Go EVT1 |
 | phase12-allocation | 83 | semantic feature missing in Go EVT1 |
-| phase13-machines | 71 | R5a translates hierarchy/basic transition/Step; decide/result remain deferred |
+| phase13-machines | 71 | R5b translates hierarchy/basic transition/Step/decide; result remains deferred |
 | phase14-interfaces | 97 | semantic feature missing in Go EVT1 |
 | phase15-c-abi | 108 | semantic feature missing in Go EVT1 |
 | phase16-imports | 73 | multi-module implementation missing |
 | phase17-runtime-failure | 57 | semantic feature missing in Go EVT1 |
-| phase18-machines | 66 | R5a translates machine fields/basic Step; nested values/completion/result deferred |
+| phase18-machines | 66 | R5b translates machine fields/basic Step/match/decide; nested values/completion/result deferred |
 | phase19-yielding-machines | 23 | R5a adopts explicit persistence/re-entry law; yield surface deferred to R5c |
 | phase20-dragongod-kernel | 99 | mixed core, automata, and application pressure |
 | phase21-arrays-slices-fixed-buffers | 50 | fixed-array subset review; slices/buffer missing |
@@ -85,10 +85,11 @@ directory-name inference.
 The extracted Vulkan examples are profile-specific even when their filenames
 contain `language`; they all explicitly select `profile Vulkan;`. Effect,
 actuator, Prometheus import, and Vulkan runtime-type cases must remain behind
-the Vulkan profile. R5a now supplies canonical Core automata hierarchy,
-explicit shared/machine persistence, direct Step, and basic transition cases;
-signal/effect, decide, yield, nested-machine, and completion/result fixtures
-remain separately classified rather than bulk-ported.
+the Vulkan profile. R5b now supplies canonical Core automata hierarchy,
+explicit shared/machine persistence, direct Step, basic transition,
+categorical transition match, and hardmax transition decide cases;
+signal/effect, yield, nested-machine, and completion/result fixtures remain
+separately classified rather than bulk-ported.
 
 ### Invalid and diagnostic oracles
 
@@ -227,3 +228,20 @@ comma-separated rank-aware indexing, one-object row-major linearization, or
 Runtime shape expressions are accepted as semantic type facts only far enough
 to issue the explicit-storage diagnostic. No PoC3 allocation behavior is used
 to fabricate an implicit allocator in EVT1.
+
+## R5b Phase 18 transition audit
+
+R5b inspected Phase 13 syntax scaffolding and Phase 18 executable match/decide
+fixtures and MIR lowering. The retained semantic core is deterministic:
+runtime categorical selection, declaration-order guards and enabled scores,
+strict-greater-than hardmax replacement, first-source-order ties, distinct
+duplicate candidates, and stable terminal failure when no candidate is
+enabled. The stable no-match and no-enabled reason strings are preserved.
+
+EVT1 does not copy PoC3's bool-only Phase 18 match checker or standalone
+machine-frame syntax. `transition match` instead delegates to EVT1's ordinary
+closed payload-enum/Option/Result pattern machinery inside the R5a automata
+hierarchy. `transition decide` adds exact float scores and deterministic NaN
+rejection while keeping the PoC3 hardmax behavior. DragonGod's later stateful
+Decision fixtures, yield, Complete/Result, and plain value-level decide are not
+R5b parity targets.

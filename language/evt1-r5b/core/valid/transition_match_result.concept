@@ -1,0 +1,41 @@
+profile Core;
+
+enum AcquireError
+{
+    Busy,
+}
+
+Result<int, AcquireError> TryAcquire()
+{
+    return Result::Ok(7);
+}
+
+automata Controller
+{
+    machine Run
+    {
+        state Idle
+        {
+            transition match (TryAcquire())
+            {
+                Result::Ok(value) => Running;
+                Result::Error(error) => Failed;
+            }
+        }
+
+        state Running
+        {
+        }
+
+        state Failed
+        {
+        }
+    }
+}
+
+int Main()
+{
+    instance Controller controller();
+    Step(controller, Run);
+    return State(controller, Run);
+}

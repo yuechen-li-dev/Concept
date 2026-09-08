@@ -1,6 +1,6 @@
 # EVT1 semantic reconciliation matrix
 
-Status: R0 authority ledger with R1-R5a executable evidence
+Status: R0 authority ledger with R1-R5b executable evidence
 
 `Port required?` means implementation or conformance work remains after R0; it
 does not authorize that work in this milestone. Status is one of `Keep PoC3`,
@@ -97,9 +97,17 @@ does not authorize that work in this milestone. Status is one of `Keep PoC3`,
 | machine persistent field | PoC3 machine frame fields | absent from declarative Go lineage | inline machine-local persistent field | Merge / implemented R5a | No for R5a subset | phase18 pressure; R5a corpus | sibling access rejected |
 | transient state local | re-entered state-body local | handlers did not admit ordinary bodies | ordinary local recreated per Step and cleaned at exit | Redesign / clarified R5a | No | phase19 re-entry pressure; R5a MIR/C | never compiler-lifted |
 | basic transition | literal local target | signal handler `goto` | `transition Target;` changes only current machine state | Merge / implemented R5a | Translation only | phase13; R5a transition cases | transition exits the current Step after cleanup |
+| transition match | runtime bool categorical transition | guarded signal and ordinary payload-enum match | exhaustive ordinary payload-enum pattern dispatch to local state | Merge / implemented R5b | Translation | phase13/18; R5b enum/Result native corpus | scrutinee once; no ranking |
+| transition decide | deterministic int utility transition | guarded signal candidates | local stateless hardmax over exact `int` or `float` scores | Keep PoC3 semantic core / implemented R5b | Translation | phase5a/13/18; R5b native corpus | not DragonGod stateful policy |
+| decision guard | optional bool candidate condition | handler guard | declaration-order bool gate evaluated once | Merge / implemented R5b | Translation | phase18; R5b evaluation counters | disabled score is not evaluated |
+| decision score | scalar int utility | no scored transition primitive | exact per-block `int` or `float` candidate utility | Merge / implemented R5b | Partial | phase5a/18; R5b int/float cases | NaN is terminal invalid score |
+| hardmax and ties | highest int; first source-order tie | ordered guarded selection without scores | first declared enabled candidate with maximum score | Canonical / implemented R5b | Translation | phase18; R5b tie case | strict `>` replacement |
+| no enabled decision | stable runtime panic | dispatch may report unhandled | terminal `machine decision transition has no enabled candidates` | Merge / implemented R5b | Translation | phase18; R5b native panic | no implicit stay |
 | Step | explicit caller-invoked machine step | signal-driven dispatch | `Step(instance, Machine)` executes one selected contained machine | Merge / implemented R5a | Translation only | phase13/18; R5a native corpus | no implicit tick-all order |
 | Complete/Result | explicit completed/result frame operations | dispatch outcomes | reconcile user surface later | Deferred after R5a | Yes | phase13/18 and Go outcome evidence | not required for persistent-state law |
-| decide | judgment-driven deterministic transition selection | guarded signal candidates | preserve both evidence sets; define local/stateless law in R5b | Deferred to R5b | Yes | phase5a/13/18; DragonGod Decision | do not conflate with stateful policy subsystem |
+| DragonGod Decision | stateful kernel decision policy | application subsystem pressure | library-level hysteresis/commitment/tie-memory policy | Library-level / deferred | Yes | phase20 DragonGod evidence | never implicit in transition decide |
+| infer | absent | absent | future normalized soft belief/distribution | Deferred / new direction | Yes | R5b decide/infer direction | no softmax or distribution in R5b |
+| transition infer | absent | absent | future inference-policy-driven transition | Deferred / new direction | Yes | R5b decide/infer direction | non-normative |
 | yield | explicit re-entry suspension without lifted locals | absent | preserve R5a storage law; define resume behavior in R5c | Deferred to R5c | Yes | phase19 fixtures | future yield preserves explicit persistent storage only |
 | effects | general design plus allocation/effect vocabulary | ordered typed effect batches in automata | keep Go implementation Vulkan-only in R0 | Profile-only | No for profile subset | DragonGod M3 tests | general effect law deferred |
 | actuators | not the same extracted mapping construct | typed exact effect-to-mechanism mapping | Vulkan profile only | Profile-only | No for profile subset | actuator tests | not core Concept |
@@ -312,3 +320,13 @@ C11 evidence prove inline storage, independently stepped machines, shared
 state, transition cleanup, ref aliasing, owned cleanup, no lifted locals, and
 no heap/scheduler/coroutine runtime. Decide, yield, Complete/Result, nested
 machine values, effects, and actuators remain explicitly deferred.
+
+## R5b executable evidence
+
+R5b adds 26 `PASS` cases: 14 accepted positive programs, ten statically
+rejected programs, and two accepted runtime-negative programs. It translates
+PoC3 Phase 18 categorical and source-order hardmax behavior into canonical R5a
+automata, extends matching through ordinary payload enums/Result, and makes
+`int`/`float` score type and NaN policy explicit. MIR and Planner preserve
+candidate order, tie/no-enabled/cleanup policy, and strict-C11 evidence proves
+exactly-once evaluation without a scheduler or decision runtime object.

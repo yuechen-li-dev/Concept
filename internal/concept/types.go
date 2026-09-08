@@ -516,6 +516,42 @@ type TransitionStmt struct {
 func (*TransitionStmt) evt1Statement()        {}
 func (s *TransitionStmt) statementSpan() Span { return s.Span }
 
+// TransitionMatchStmt retains ordinary enum-pattern structure while making
+// every selected arm a Step-ending state transition.
+type TransitionMatchStmt struct {
+	Subject Expr                 `json:"subject"`
+	Arms    []TransitionMatchArm `json:"arms"`
+	Span    Span                 `json:"span"`
+}
+
+type TransitionMatchArm struct {
+	Pattern Pattern `json:"pattern"`
+	Target  string  `json:"target"`
+	Span    Span    `json:"span"`
+}
+
+func (*TransitionMatchStmt) evt1Statement()        {}
+func (s *TransitionMatchStmt) statementSpan() Span { return s.Span }
+
+// TransitionDecideStmt is a declaration-ordered hardmax over guarded,
+// statically-known candidates. ScoreType is filled by semantic validation.
+type TransitionDecideStmt struct {
+	Candidates []DecisionCandidate `json:"candidates"`
+	ScoreType  Type                `json:"score_type"`
+	Span       Span                `json:"span"`
+}
+
+type DecisionCandidate struct {
+	Target           string `json:"target_state"`
+	Guard            Expr   `json:"guard,omitempty"`
+	Score            Expr   `json:"score"`
+	DeclarationOrder int    `json:"declaration_order"`
+	Span             Span   `json:"span"`
+}
+
+func (*TransitionDecideStmt) evt1Statement()        {}
+func (s *TransitionDecideStmt) statementSpan() Span { return s.Span }
+
 func (*InstanceDecl) evt1Statement()        {}
 func (s *InstanceDecl) statementSpan() Span { return s.Span }
 

@@ -173,13 +173,37 @@ type AutomataStoragePlan struct {
 }
 
 type MachinePlan struct {
-	Identity         string                `json:"identity"`
-	CurrentStateSlot string                `json:"current_state_slot"`
-	InitialState     string                `json:"initial_state"`
-	DispatchStrategy string                `json:"dispatch_strategy"`
-	Fields           []AutomataStoragePlan `json:"fields,omitempty"`
-	StateIdentities  []string              `json:"state_identities"`
-	Transitions      []string              `json:"transitions,omitempty"`
+	Identity            string                 `json:"identity"`
+	CurrentStateSlot    string                 `json:"current_state_slot"`
+	InitialState        string                 `json:"initial_state"`
+	DispatchStrategy    string                 `json:"dispatch_strategy"`
+	Fields              []AutomataStoragePlan  `json:"fields,omitempty"`
+	StateIdentities     []string               `json:"state_identities"`
+	Transitions         []string               `json:"transitions,omitempty"`
+	TransitionMatches   []TransitionMatchPlan  `json:"transition_match_plans,omitempty"`
+	TransitionDecisions []TransitionDecidePlan `json:"transition_decide_plans,omitempty"`
+}
+
+type TransitionMatchPlan struct {
+	State           string   `json:"state"`
+	Strategy        string   `json:"strategy"`
+	EvaluationOrder string   `json:"evaluation_order"`
+	Targets         []string `json:"targets"`
+	NoMatchPolicy   string   `json:"no_match_policy"`
+	CleanupEdge     string   `json:"cleanup_edge"`
+}
+
+type TransitionDecidePlan struct {
+	State                string   `json:"state"`
+	Strategy             string   `json:"strategy"`
+	GuardEvaluationOrder string   `json:"guard_evaluation_order"`
+	ScoreEvaluationOrder string   `json:"score_evaluation_order"`
+	Targets              []string `json:"targets"`
+	ScoreType            string   `json:"score_type"`
+	TiePolicy            string   `json:"tie_policy"`
+	NoEnabledPolicy      string   `json:"no_enabled_policy"`
+	CleanupEdge          string   `json:"cleanup_edge"`
+	BranchlessEligible   bool     `json:"branchless_eligible"`
 }
 
 type AutomataPlan struct {
@@ -487,6 +511,20 @@ func planAutomata(mir *MIR) []AutomataPlan {
 					if op.Kind == "state_transition" {
 						mp.Transitions = append(mp.Transitions, state.Name+"->"+op.Detail)
 					}
+				}
+				for _, match := range state.TransitionMatches {
+					planned := TransitionMatchPlan{State: state.Name, Strategy: "CategoricalSwitch", EvaluationOrder: "ScrutineeOnceThenSelectedTarget", NoMatchPolicy: match.NoMatchPolicy, CleanupEdge: match.CleanupEdge}
+					for _, arm := range match.Arms {
+						planned.Targets = append(planned.Targets, arm.TargetState)
+					}
+					mp.TransitionMatches = append(mp.TransitionMatches, planned)
+				}
+				for _, decision := range state.TransitionDecisions {
+					planned := TransitionDecidePlan{State: state.Name, Strategy: "GuardedStraightLineHardmax", GuardEvaluationOrder: "DeclarationOrderOnce", ScoreEvaluationOrder: "EnabledDeclarationOrderOnce", ScoreType: decision.ScoreType.String(), TiePolicy: decision.TiePolicy, NoEnabledPolicy: decision.NoEnabledPolicy, CleanupEdge: decision.CleanupEdge, BranchlessEligible: false}
+					for _, candidate := range decision.Candidates {
+						planned.Targets = append(planned.Targets, candidate.TargetState)
+					}
+					mp.TransitionDecisions = append(mp.TransitionDecisions, planned)
 				}
 			}
 			plan.Machines = append(plan.Machines, mp)

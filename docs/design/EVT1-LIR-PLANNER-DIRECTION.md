@@ -1,6 +1,6 @@
 # EVT1 LIR Planner direction
 
-Status: R5a automata planning consumer; LIR is future work
+Status: R5b transition planning consumer; LIR is future work
 
 ## Authority pipeline
 
@@ -41,6 +41,17 @@ and switch dispatch. The plan explicitly records no scheduler and defers yield.
 A later Planner may select branches or jump tables and may define resume-frame
 realization after R5c, but it cannot invent persistence or lift locals.
 
+R5b adds explicit `TransitionMatchPlan` and `TransitionDecidePlan` records.
+Match planning preserves categorical arms, one scrutinee evaluation, local
+targets, panic policy, and cleanup. Decide planning preserves guard and enabled
+score source order, exact score type, declaration-order-first-maximum ties,
+no-enabled panic, and cleanup. GenericC11 uses switch/branches and static
+hardmax temporaries. Native target records do not yet select branchless or
+vectorized decisions; purity is not required, and Unknown purity therefore
+forbids reordering. Future optimization may become eligible only when semantic
+facts prove that guards and scores are pure. `infer` belongs to a later soft
+distribution plan and is not an R5b operation.
+
 The 64-byte alignment of fixed inline storage remains a semantic guarantee
 because current storage binding and qualified facts rely on it. A target's
 preferred alignment is merely planning policy and cannot reduce proven
@@ -78,7 +89,7 @@ translation.
 
 ## Deferred
 
-R4l/R5a deliberately exclude SIMD generation, vectorization transforms, tiling,
+R4l/R5b deliberately exclude SIMD generation, vectorization transforms, tiling,
 fusion, SSA, virtual registers, register allocation, MachineIR, LLVM, MLIR,
 native encoders, generalized alias solving, allocation policy, decompilation,
-yield/resume frames, and scheduler policy.
+yield/resume frames, scheduler policy, branchless hardmax transforms, and infer.

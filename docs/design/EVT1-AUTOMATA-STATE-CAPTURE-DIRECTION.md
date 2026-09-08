@@ -1,6 +1,6 @@
 # EVT1 automata state-capture direction
 
-Status: R5a implemented; decide, yield, and effect reconciliation deferred
+Status: R5b implemented; yield and effect reconciliation deferred
 
 ## Reconciliation
 
@@ -97,6 +97,21 @@ unknown or cross-machine targets. Lowering cleans transient locals, writes the
 new tag, and returns from the current Step. Persistent automata and machine
 fields remain live.
 
+## Match and decide authoring
+
+R5b prefers `transition match (value) { Pattern => State; }` for categorical
+selection and `transition decide { State when guard score utility; }` for a
+scored candidate set. Match reuses the ordinary exhaustive payload-enum
+checker. Decide evaluates guards in declaration order, skips scores for false
+guards, evaluates every enabled score once in declaration order, and selects
+the first candidate with the maximum exact-typed `int` or `float` score.
+
+Both forms are local Step-ending transitions: transient cleanup, state update,
+return. Repeated targets and an explicit current-state target are ordinary
+candidates. No enabled candidate and NaN float score are deterministic terminal
+failures. Neither form introduces scheduling, suspension, allocation, a
+runtime candidate collection, or new capture rules.
+
 ## Planner and C realization
 
 Semantic analysis fixes persistence before planning. `AutomataPlan` records
@@ -107,12 +122,19 @@ inline structs, deterministic enums, and one switch function per machine.
 This is proof lowering, not a permanent choice against future direct-branch or
 jump-table plans.
 
+R5b retains match arms and decision candidates in MIR. `TransitionMatchPlan`
+records categorical switch realization and scrutinee-once order;
+`TransitionDecidePlan` records guarded straight-line hardmax, declaration-order
+guard/score evaluation, first-maximum ties, panic policy, and the cleanup edge.
+GenericC11 emits static branches and comparisons. Native target plans may later
+record stronger eligibility, but R5b selects no branchless transform.
+
 ## DragonGod boundary
 
 DragonGod remains a library/application consumer using Automata, Machine,
 State, AutomataSignal, Mind, and Memory vocabulary. Its Decision, Actuation,
 Events, Trace, Replay, Persistence, and graph subsystems do not become language
-semantics. The older typed-signal automata path stays compatible during R5a;
+semantics. The older typed-signal automata path stays compatible during R5b;
 its effect/actuator assumptions do not define the new Core environment.
 
 ## Future unification and deferred work
@@ -121,10 +143,17 @@ Automata capture, closure capture, callback environments, and deferred-callable
 state should share one explicit environment model where their laws genuinely
 match. R5a does not implement closures or callbacks to force that abstraction.
 
-Recommended R5b scope is only deterministic local/stateless
-`transition decide`, reconciled against PoC3 candidate order and guarded Go
-evidence without importing DragonGod's stateful Decision subsystem. R5c may
-then define yield over the storage law established here: automata state,
-machine fields, and current-state tags survive; transient locals do not.
+DragonGod Decision remains a later library-level stateful policy across Steps:
+hysteresis, minimum commitment, temporal smoothing, tie memory, and policy
+memory. None of that state is implicit in `transition decide`.
+
+The conceptual next layer is deliberately non-normative: `score` is scalar
+evidence/utility; `decide` is hardmax; future `infer` is a normalized soft
+belief/distribution. R5b implements neither plain value-level `decide` nor
+`infer`, softmax, sampling, temperature, TopK, or `transition infer`.
+
+Recommended R5c scope is yield over the storage law established in R5a:
+automata state, machine fields, and current-state tags survive; transient locals
+do not.
 Complete/Result, nested machine values, effects, and actuators remain separate
 later decisions.

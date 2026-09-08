@@ -1142,6 +1142,14 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 			if !local.transitionTargets[s.Target] {
 				return evt1Diagnostic("MACHINE_UNKNOWN_STATE", fmt.Sprintf("unknown transition target %s in current machine", s.Target), s.Span)
 			}
+		case *TransitionMatchStmt:
+			if err := validateTransitionMatchStmt(env, local, s, templateInfo, inComptimeFn); err != nil {
+				return err
+			}
+		case *TransitionDecideStmt:
+			if err := validateTransitionDecideStmt(env, local, s, templateInfo, inComptimeFn); err != nil {
+				return err
+			}
 		case *EffectsDecl:
 			if inComptimeFn {
 				return evt1Diagnostic("CV4304", fmt.Sprintf("effects batch %s cannot be declared in comptime code", s.Name), s.Span)
@@ -3505,6 +3513,74 @@ func validateMatchStmt(env *semanticEnv, scope *evt1Scope, stmt MatchStmt, retur
 	if missing := evt1MissingVariants(enumDecl, seen); len(missing) > 0 {
 		return evt1Diagnostic("CV4115", "non-exhaustive match, missing variants: "+strings.Join(missing, ", "), stmt.Span)
 	}
+	return nil
+}
+
+func validateTransitionMatchStmt(env *semanticEnv, scope *evt1Scope, stmt *TransitionMatchStmt, templateInfo *evt1TemplateInfo, inComptimeFn bool) error {
+	if !scope.inAutomataState {
+		return evt1Diagnostic("MACHINE_TRANSITION_INVALID", "transition match is only valid inside a machine state body", stmt.Span)
+	}
+	subjectType, enumDecl, err := validateMatchSubject(env, scope, stmt.Subject, templateInfo, inComptimeFn)
+	if err != nil {
+		return evt1Diagnostic("TRANSITION_MATCH_REQUIRES_MATCHABLE", err.Error(), stmt.Subject.exprSpan())
+	}
+	seen := map[string]bool{}
+	for _, arm := range stmt.Arms {
+		key := arm.Pattern.EnumName + "::" + arm.Pattern.VariantName
+		if seen[key] {
+			return evt1Diagnostic("TRANSITION_MATCH_DUPLICATE_ARM", fmt.Sprintf("duplicate transition match arm %s", key), arm.Pattern.Span)
+		}
+		if _, _, err := validatePattern(env, scope, subjectType, enumDecl, arm.Pattern, seen); err != nil {
+			return err
+		}
+		if !scope.transitionTargets[arm.Target] {
+			return evt1Diagnostic("TRANSITION_MATCH_UNKNOWN_TARGET", fmt.Sprintf("unknown transition match target %s in current machine", arm.Target), arm.Span)
+		}
+	}
+	if missing := evt1MissingVariants(enumDecl, seen); len(missing) > 0 {
+		return evt1Diagnostic("TRANSITION_MATCH_NONEXHAUSTIVE", "non-exhaustive transition match, missing variants: "+strings.Join(missing, ", "), stmt.Span)
+	}
+	return nil
+}
+
+func validateTransitionDecideStmt(env *semanticEnv, scope *evt1Scope, stmt *TransitionDecideStmt, templateInfo *evt1TemplateInfo, inComptimeFn bool) error {
+	if !scope.inAutomataState {
+		return evt1Diagnostic("MACHINE_TRANSITION_INVALID", "transition decide is only valid inside a machine state body", stmt.Span)
+	}
+	if len(stmt.Candidates) == 0 {
+		return evt1Diagnostic("TRANSITION_DECIDE_EMPTY", "transition decide requires at least one candidate", stmt.Span)
+	}
+	var scoreType Type
+	for i, candidate := range stmt.Candidates {
+		if candidate.DeclarationOrder != i {
+			return evt1Diagnostic("TRANSITION_DECIDE_MIR_INVALID", "transition decide candidate order is not declaration order", candidate.Span)
+		}
+		if !scope.transitionTargets[candidate.Target] {
+			return evt1Diagnostic("TRANSITION_DECIDE_UNKNOWN_TARGET", fmt.Sprintf("unknown transition decide target %s in current machine", candidate.Target), candidate.Span)
+		}
+		if candidate.Guard != nil {
+			guardType, err := validateExpr(env, scope, candidate.Guard, templateInfo, inComptimeFn)
+			if err != nil {
+				return err
+			}
+			if guardType.Name != "bool" {
+				return evt1Diagnostic("TRANSITION_DECIDE_GUARD_REQUIRES_BOOL", fmt.Sprintf("transition decide guard must be bool, got %s", guardType.String()), candidate.Guard.exprSpan())
+			}
+		}
+		candidateType, err := validateExpr(env, scope, candidate.Score, templateInfo, inComptimeFn)
+		if err != nil {
+			return err
+		}
+		if candidateType.Name != "int" && candidateType.Name != "float" {
+			return evt1Diagnostic("TRANSITION_DECIDE_SCORE_TYPE_INVALID", fmt.Sprintf("transition decide score must be int or float, got %s", candidateType.String()), candidate.Score.exprSpan())
+		}
+		if i == 0 {
+			scoreType = candidateType
+		} else if evt1TypeIdentity(candidateType) != evt1TypeIdentity(scoreType) {
+			return evt1Diagnostic("TRANSITION_DECIDE_SCORE_TYPE_MISMATCH", fmt.Sprintf("transition decide scores must have one exact type; first is %s but candidate %d is %s", scoreType.String(), i+1, candidateType.String()), candidate.Score.exprSpan())
+		}
+	}
+	stmt.ScoreType = scoreType
 	return nil
 }
 

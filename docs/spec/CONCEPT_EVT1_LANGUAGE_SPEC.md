@@ -1,6 +1,6 @@
 # Concept EVT1 language specification foundation
 
-Status: R5a canonical automata hierarchy and explicit persistent state
+Status: R5b canonical deterministic transition match and decide
 
 This document defines the authority categories and the smallest currently
 executable EVT1 language foundation. It is derived from the retired Concept
@@ -943,10 +943,68 @@ steps siblings. `State(instance, Machine)` reads its current tag.
 cleanup, updates the tag, and returns from the step. No hidden heap,
 closure/coroutine frame, scheduler, event loop, or runtime registration exists.
 
+**Canonical EVT1 R5b transition match.** A state body may perform categorical
+dispatch directly to local states:
+
+```concept
+transition match (signal)
+{
+    Signal::Start => Running;
+    Signal::Stop => Idle;
+    Signal::Fault(code) => Failed;
+}
+```
+
+The scrutinee is evaluated exactly once. Arms use the ordinary payload-enum,
+`Option`, or `Result` pattern validator, including payload arity and binding
+types, duplicate rejection, and exhaustive coverage of closed variants. Every
+target resolves in the current machine. Selection performs ordinary transient
+cleanup, updates the current-state tag, and returns from the current `Step`.
+There is no arm fallthrough, scoring, or ranking. The stable defensive runtime
+failure is `machine transition match found no matching case`.
+
+**Canonical EVT1 R5b transition decide.** The canonical non-redundant candidate
+syntax is:
+
+```concept
+transition decide
+{
+    Running when CanRun() score RunScore();
+    Waiting when CanWait() score WaitScore();
+    Failed score FailureScore();
+}
+```
+
+Candidates are visited in declaration order. A candidate without `when` is
+always enabled. A guard is evaluated exactly once and must be `bool`; a false
+guard excludes the candidate and its score is not evaluated. Each enabled
+score is then evaluated exactly once, in declaration order. All scores in one
+block have one exact type, either `int` or `float`; there is no implicit mixed
+numeric promotion. Float NaN terminates with `machine decision transition
+score is NaN`.
+
+The selected candidate is the hard maximum over all enabled candidates:
+`transition decide` selects the first declared enabled candidate whose score
+equals the maximum enabled score. Equality therefore never replaces the
+current best. Duplicate target states remain distinct candidates, and the
+current state may be named explicitly without special semantics. If no
+candidate is enabled, execution terminates with `machine decision transition
+has no enabled candidates`; remaining in the current state is never implicit.
+After selection, transient cleanup precedes the state-tag update and the
+current `Step` returns.
+
+`transition decide` is a local, stateless hardmax primitive. It is not ordinary
+`if`/`else`, because all enabled scores participate in the global maximum; it
+is not a scheduler or DragonGod's stateful Decision policy. Guards and scores
+are ordinary expressions and retain source-order side effects, ownership,
+reference, and explicit failure behavior.
+
 The older typed-signal `automata Name(Signal)` form remains compatibility
 surface for DragonGod/Vulkan evidence; its effect coupling is not promoted into
-Core law. `transition decide`, `yield`, completion/result reconciliation,
-nested machine values, and effects/actuators remain later R5 work.
+Core law. Plain value-level `decide`, `infer`, `transition infer`, `yield`,
+completion/result reconciliation, nested machine values, and effects/actuators
+remain later work. Future `infer` denotes normalized soft belief rather than
+hardmax and is not normative in R5b.
 
 ## 23. Effects, actuators, and profiles
 
@@ -1049,7 +1107,8 @@ The following remain explicit reconciliation or implementation work:
 - owning dyn and explicit erased-storage policies;
 - allocation, allocator effects, arenas, and stores;
 - stable C ABI and layout law;
-- `transition decide`, yield/resume, completion/result, and nested machine-value reconciliation;
+- plain value-level `decide`, infer/transition infer, yield/resume,
+  completion/result, and nested machine-value reconciliation;
 - general effects versus profile-owned effects/actuators;
 - Concept-native testing (runtime assertion sugar is canonical, but no testing
   framework is implied);

@@ -1,0 +1,39 @@
+profile Core;
+
+struct Resource
+{
+    int handle;
+}
+
+void Drop(owned Resource resource)
+{
+    return;
+}
+
+automata Chooser
+{
+    machine Run
+    {
+        state Idle
+        {
+            owned Resource temporary = Resource{7};
+            transition decide
+            {
+                Waiting score 4;
+                Running score 9;
+                Failed score 2;
+            }
+        }
+
+        state Waiting { }
+        state Running { }
+        state Failed { }
+    }
+}
+
+int Main()
+{
+    instance Chooser chooser();
+    Step(chooser, Run);
+    return State(chooser, Run);
+}

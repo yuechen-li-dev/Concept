@@ -382,6 +382,56 @@ func evt1ModuleUsesFailurePanic(module Module) bool {
 	return false
 }
 
+func evt1ModuleUsesTransitionPanic(module Module) bool {
+	var blockUses func(Block) bool
+	blockUses = func(block Block) bool {
+		for _, stmt := range block.Statements {
+			switch s := stmt.(type) {
+			case *TransitionMatchStmt, *TransitionDecideStmt:
+				return true
+			case *IfStmt:
+				if blockUses(s.Then) || (s.Else != nil && blockUses(*s.Else)) {
+					return true
+				}
+			case *MatchStmt:
+				for _, arm := range s.Arms {
+					if blockUses(arm.Block) {
+						return true
+					}
+				}
+			case *TryStmt:
+				if blockUses(s.Body) {
+					return true
+				}
+				for _, arm := range s.Except {
+					if blockUses(arm.Body) {
+						return true
+					}
+				}
+			case *WhileStmt:
+				if blockUses(s.Body) {
+					return true
+				}
+			case *Block:
+				if blockUses(*s) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	for _, automata := range module.Automata {
+		for _, machine := range automata.Machines {
+			for _, state := range machine.States {
+				if state.Body != nil && blockUses(*state.Body) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 func validateFailureConstructExpr(env *semanticEnv, scope *evt1Scope, expr *ConstructExpr, expected Type, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
 	expected = evt1CanonicalType(env, expected)
 	if expr.EnumName != expected.Name {

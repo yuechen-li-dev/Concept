@@ -1,0 +1,39 @@
+profile Core;
+
+enum Signal
+{
+    Start,
+    Stop,
+    Fault,
+}
+
+automata Controller
+{
+    machine Run
+    {
+        state Idle
+        {
+            transition match (Signal::Start)
+            {
+                Signal::Start => Running;
+                Signal::Stop => Idle;
+                Signal::Fault => Failed;
+            }
+        }
+
+        state Running
+        {
+        }
+
+        state Failed
+        {
+        }
+    }
+}
+
+int Main()
+{
+    instance Controller controller();
+    Step(controller, Run);
+    return State(controller, Run);
+}

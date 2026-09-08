@@ -1,0 +1,22 @@
+profile Core;
+
+automata Bad
+{
+    machine Run
+    {
+        state Idle
+        {
+            transition decide
+            {
+                Idle when false score 1;
+            }
+        }
+    }
+}
+
+int Main()
+{
+    instance Bad bad();
+    Step(bad, Run);
+    return 0;
+}

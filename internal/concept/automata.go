@@ -142,16 +142,52 @@ type MIRMachine struct {
 }
 
 type MIRState struct {
-	Name           string                 `json:"name"`
-	Initial        bool                   `json:"initial,omitempty"`
-	Terminal       bool                   `json:"terminal,omitempty"`
-	RuntimeOrdinal int                    `json:"runtime_ordinal"`
-	Reachable      bool                   `json:"reachable,omitempty"`
-	Completion     string                 `json:"completion,omitempty"`
-	SourceSpan     Span                   `json:"source_span"`
-	Handlers       []MIRTransition        `json:"handlers,omitempty"`
-	Operations     []MIROperation         `json:"operations,omitempty"`
-	Storage        []MIRPersistentStorage `json:"storage,omitempty"`
+	Name                string                 `json:"name"`
+	Initial             bool                   `json:"initial,omitempty"`
+	Terminal            bool                   `json:"terminal,omitempty"`
+	RuntimeOrdinal      int                    `json:"runtime_ordinal"`
+	Reachable           bool                   `json:"reachable,omitempty"`
+	Completion          string                 `json:"completion,omitempty"`
+	SourceSpan          Span                   `json:"source_span"`
+	Handlers            []MIRTransition        `json:"handlers,omitempty"`
+	TransitionMatches   []MIRTransitionMatch   `json:"transition_matches,omitempty"`
+	TransitionDecisions []MIRTransitionDecide  `json:"transition_decisions,omitempty"`
+	Operations          []MIROperation         `json:"operations,omitempty"`
+	Storage             []MIRPersistentStorage `json:"storage,omitempty"`
+}
+
+type MIRTransitionMatch struct {
+	Scrutinee     string                  `json:"scrutinee"`
+	Arms          []MIRTransitionMatchArm `json:"arms"`
+	Exhaustive    bool                    `json:"exhaustive"`
+	NoMatchPolicy string                  `json:"no_match_policy"`
+	CleanupEdge   string                  `json:"cleanup_edge"`
+	SourceSpan    Span                    `json:"source_span"`
+}
+
+type MIRTransitionMatchArm struct {
+	Pattern          string   `json:"pattern"`
+	PayloadBindings  []string `json:"payload_bindings,omitempty"`
+	TargetState      string   `json:"target_state"`
+	DeclarationOrder int      `json:"declaration_order"`
+	SourceSpan       Span     `json:"source_span"`
+}
+
+type MIRTransitionDecide struct {
+	Candidates      []MIRDecisionCandidate `json:"candidates"`
+	ScoreType       Type                   `json:"score_type"`
+	TiePolicy       string                 `json:"tie_policy"`
+	NoEnabledPolicy string                 `json:"no_enabled_policy"`
+	CleanupEdge     string                 `json:"cleanup_edge"`
+	SourceSpan      Span                   `json:"source_span"`
+}
+
+type MIRDecisionCandidate struct {
+	TargetState      string `json:"target_state"`
+	Guard            string `json:"guard,omitempty"`
+	Score            string `json:"score"`
+	DeclarationOrder int    `json:"declaration_order"`
+	SourceSpan       Span   `json:"source_span"`
 }
 
 type MIRAutomataStateEnvironment struct {

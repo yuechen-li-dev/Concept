@@ -1777,6 +1777,12 @@ func (p *parser) parseStatement() (Statement, error) {
 		return p.parseInstanceDecl()
 	case "transition":
 		start := p.next().Span
+		if p.peekLexeme() == "match" {
+			return p.parseTransitionMatchStmt(start)
+		}
+		if p.peekLexeme() == "decide" {
+			return p.parseTransitionDecideStmt(start)
+		}
 		target, err := p.expectIdentifier("MACHINE_TRANSITION_INVALID", "expected local state name after transition")
 		if err != nil {
 			return nil, err
@@ -1844,6 +1850,89 @@ func (p *parser) parseStatement() (Statement, error) {
 		}
 		return &ExprStmt{Value: value, Span: value.exprSpan()}, nil
 	}
+}
+
+func (p *parser) parseTransitionMatchStmt(start Span) (Statement, error) {
+	p.next() // match
+	if _, err := p.expect("("); err != nil {
+		return nil, err
+	}
+	subject, err := p.parseExpr()
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.expect(")"); err != nil {
+		return nil, err
+	}
+	if _, err := p.expect("{"); err != nil {
+		return nil, err
+	}
+	stmt := &TransitionMatchStmt{Subject: subject, Span: start}
+	for !p.done() && p.peekLexeme() != "}" {
+		pattern, err := p.parsePattern()
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.expect("=>"); err != nil {
+			return nil, err
+		}
+		target, err := p.expectIdentifier("TRANSITION_MATCH_UNKNOWN_TARGET", "expected local state target after `=>`")
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.expect(";"); err != nil {
+			return nil, err
+		}
+		stmt.Arms = append(stmt.Arms, TransitionMatchArm{Pattern: pattern, Target: target.Lexeme, Span: pattern.Span})
+	}
+	if _, err := p.expect("}"); err != nil {
+		return nil, err
+	}
+	if p.peekLexeme() == ";" {
+		p.next()
+	}
+	return stmt, nil
+}
+
+func (p *parser) parseTransitionDecideStmt(start Span) (Statement, error) {
+	p.next() // decide
+	if _, err := p.expect("{"); err != nil {
+		return nil, err
+	}
+	stmt := &TransitionDecideStmt{Span: start}
+	for !p.done() && p.peekLexeme() != "}" {
+		target, err := p.expectIdentifier("TRANSITION_DECIDE_UNKNOWN_TARGET", "expected local state candidate")
+		if err != nil {
+			return nil, err
+		}
+		candidate := DecisionCandidate{Target: target.Lexeme, DeclarationOrder: len(stmt.Candidates), Span: target.Span}
+		if p.peekLexeme() == "when" {
+			p.next()
+			candidate.Guard, err = p.parseExpr()
+			if err != nil {
+				return nil, err
+			}
+		}
+		if p.peekLexeme() != "score" {
+			return nil, evt1Diagnostic("TRANSITION_DECIDE_SCORE_TYPE_INVALID", "expected `score` in transition decide candidate", p.currentSpan())
+		}
+		p.next()
+		candidate.Score, err = p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.expect(";"); err != nil {
+			return nil, err
+		}
+		stmt.Candidates = append(stmt.Candidates, candidate)
+	}
+	if _, err := p.expect("}"); err != nil {
+		return nil, err
+	}
+	if p.peekLexeme() == ";" {
+		p.next()
+	}
+	return stmt, nil
 }
 
 func (p *parser) parseAssertStmt() (Statement, error) {

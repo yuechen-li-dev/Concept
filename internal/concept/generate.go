@@ -275,6 +275,7 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 					tmp := MIRFunction{Name: resolvedDecl.Name + "." + machine.Name + "." + state.Name}
 					collectMIROps(env, state.Body, &tmp, nil)
 					mirState.Operations = append(mirState.Operations, tmp.Operations...)
+					collectTransitionMIR(state.Body, &mirState)
 					ordinal := 0
 					for _, stmt := range state.Body.Statements {
 						if local, ok := stmt.(*VarDecl); ok {
@@ -650,6 +651,28 @@ func evt1ValidateMIR(mir MIR) error {
 						return evt1Diagnostic("MACHINE_MIR_INVALID", "state transition MIR targets an unknown local state", op.SourceSpan)
 					}
 				}
+				for _, match := range state.TransitionMatches {
+					if match.Scrutinee == "" || !match.Exhaustive || match.NoMatchPolicy != "Panic" || match.CleanupEdge != "TransientBeforeStateUpdate" || len(match.Arms) == 0 {
+						return evt1Diagnostic("TRANSITION_MATCH_MIR_INVALID", "transition match MIR omits categorical or cleanup policy", match.SourceSpan)
+					}
+					seenPatterns := map[string]bool{}
+					for i, arm := range match.Arms {
+						if arm.Pattern == "" || seenPatterns[arm.Pattern] || arm.DeclarationOrder != i || !stateNames[arm.TargetState] {
+							return evt1Diagnostic("TRANSITION_MATCH_MIR_INVALID", "transition match MIR contains an invalid arm, order, or local target", arm.SourceSpan)
+						}
+						seenPatterns[arm.Pattern] = true
+					}
+				}
+				for _, decision := range state.TransitionDecisions {
+					if len(decision.Candidates) == 0 || (decision.ScoreType.Name != "int" && decision.ScoreType.Name != "float") || decision.TiePolicy != "DeclarationOrderFirstMax" || decision.NoEnabledPolicy != "Panic" || decision.CleanupEdge != "TransientBeforeStateUpdate" {
+						return evt1Diagnostic("TRANSITION_DECIDE_MIR_INVALID", "transition decide MIR omits hardmax, score, panic, or cleanup policy", decision.SourceSpan)
+					}
+					for i, candidate := range decision.Candidates {
+						if candidate.Score == "" || candidate.DeclarationOrder != i || !stateNames[candidate.TargetState] {
+							return evt1Diagnostic("TRANSITION_DECIDE_MIR_INVALID", "transition decide MIR contains an invalid candidate, order, score, or local target", candidate.SourceSpan)
+						}
+					}
+				}
 			}
 		}
 	}
@@ -855,6 +878,17 @@ func collectMIROps(env *semanticEnv, block *Block, fn *MIRFunction, templateInfo
 			collectExprMIROps(env, s.Value, fn, templateInfo)
 		case *TransitionStmt:
 			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "state_transition", Detail: s.Target, SourceSpan: s.Span})
+		case *TransitionMatchStmt:
+			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "transition_match", Detail: fmt.Sprintf("%d exhaustive arm(s)", len(s.Arms)), SourceSpan: s.Span})
+			collectExprMIROps(env, s.Subject, fn, templateInfo)
+		case *TransitionDecideStmt:
+			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "transition_decide", Type: s.ScoreType.String(), Detail: fmt.Sprintf("%d declaration-order candidate(s)", len(s.Candidates)), SourceSpan: s.Span})
+			for _, candidate := range s.Candidates {
+				if candidate.Guard != nil {
+					collectExprMIROps(env, candidate.Guard, fn, templateInfo)
+				}
+				collectExprMIROps(env, candidate.Score, fn, templateInfo)
+			}
 		case *ReturnStmt:
 			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "return", Type: fn.ReturnType.String(), SourceSpan: s.Span})
 			if s.Value != nil {
@@ -910,6 +944,47 @@ func collectMIROps(env *semanticEnv, block *Block, fn *MIRFunction, templateInfo
 			if s.Else != nil {
 				collectMIROps(env, s.Else, fn, templateInfo)
 			}
+		}
+	}
+}
+
+func collectTransitionMIR(block *Block, state *MIRState) {
+	for _, stmt := range block.Statements {
+		switch s := stmt.(type) {
+		case *TransitionMatchStmt:
+			entry := MIRTransitionMatch{Scrutinee: evt1ExprIdentity(s.Subject), Exhaustive: true, NoMatchPolicy: "Panic", CleanupEdge: "TransientBeforeStateUpdate", SourceSpan: s.Span}
+			for i, arm := range s.Arms {
+				entry.Arms = append(entry.Arms, MIRTransitionMatchArm{Pattern: arm.Pattern.EnumName + "::" + arm.Pattern.VariantName, PayloadBindings: append([]string{}, arm.Pattern.Bindings...), TargetState: arm.Target, DeclarationOrder: i, SourceSpan: arm.Span})
+			}
+			state.TransitionMatches = append(state.TransitionMatches, entry)
+		case *TransitionDecideStmt:
+			entry := MIRTransitionDecide{ScoreType: s.ScoreType, TiePolicy: "DeclarationOrderFirstMax", NoEnabledPolicy: "Panic", CleanupEdge: "TransientBeforeStateUpdate", SourceSpan: s.Span}
+			for _, candidate := range s.Candidates {
+				mirCandidate := MIRDecisionCandidate{TargetState: candidate.Target, Score: evt1ExprIdentity(candidate.Score), DeclarationOrder: candidate.DeclarationOrder, SourceSpan: candidate.Span}
+				if candidate.Guard != nil {
+					mirCandidate.Guard = evt1ExprIdentity(candidate.Guard)
+				}
+				entry.Candidates = append(entry.Candidates, mirCandidate)
+			}
+			state.TransitionDecisions = append(state.TransitionDecisions, entry)
+		case *IfStmt:
+			collectTransitionMIR(&s.Then, state)
+			if s.Else != nil {
+				collectTransitionMIR(s.Else, state)
+			}
+		case *MatchStmt:
+			for i := range s.Arms {
+				collectTransitionMIR(&s.Arms[i].Block, state)
+			}
+		case *TryStmt:
+			collectTransitionMIR(&s.Body, state)
+			for i := range s.Except {
+				collectTransitionMIR(&s.Except[i].Body, state)
+			}
+		case *WhileStmt:
+			collectTransitionMIR(&s.Body, state)
+		case *Block:
+			collectTransitionMIR(s, state)
 		}
 	}
 }
@@ -1279,7 +1354,7 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 	body.WriteString("static void concept_abort_invalid_tag(const char* enum_name) {\n")
 	body.WriteString("  fprintf(stderr, \"invalid enum tag for %s\\n\", enum_name);\n")
 	body.WriteString("  abort();\n}\n\n")
-	if evt1ModuleUsesFailurePanic(l.module) || evt1ModuleUsesStorageBounds(l.module) {
+	if evt1ModuleUsesFailurePanic(l.module) || evt1ModuleUsesStorageBounds(l.module) || evt1ModuleUsesTransitionPanic(l.module) {
 		body.WriteString("static void concept_panic(const char* reason, int line, int column) {\n")
 		body.WriteString("  fprintf(stderr, \"Concept panic at %d:%d: %s\\n\", line, column, reason);\n")
 		body.WriteString("  abort();\n}\n\n")
@@ -3143,6 +3218,10 @@ func (f *evt1FunctionLowerer) lowerStatement(stmt Statement, indent int) string 
 			return ind(indent) + "/* invalid transition */\n"
 		}
 		return f.lowerAllScopeDrops(indent) + ind(indent) + fmt.Sprintf("instance->%s.current_state = %s;\n", evt1PayloadFieldName(f.machineStepName), evt1AutomataStateConstName(f.automataStepName, f.machineStepName, s.Target)) + ind(indent) + "return;\n"
+	case *TransitionMatchStmt:
+		return f.lowerTransitionMatchStmt(*s, indent)
+	case *TransitionDecideStmt:
+		return f.lowerTransitionDecideStmt(*s, indent)
 	case *ReturnStmt:
 		if s.Value == nil {
 			return f.lowerAllScopeDrops(indent) + ind(indent) + "return;\n"
@@ -3332,6 +3411,88 @@ func (f *evt1FunctionLowerer) lowerMatchStmt(stmt MatchStmt, indent int) string 
 	b.WriteString(ind(indent+1) + fmt.Sprintf("concept_abort_invalid_tag(\"%s\");\n", enumDecl.Name))
 	b.WriteString(ind(indent) + "}\n")
 	return b.String()
+}
+
+func (f *evt1FunctionLowerer) lowerTransitionMatchStmt(stmt TransitionMatchStmt, indent int) string {
+	subPrelude, subjectExpr, subjectType := f.lowerExpr(stmt.Subject, indent)
+	enumDecl := f.l.env.enums[subjectType.Name]
+	if decl, ok := evt1FailureEnumDecl(subjectType); ok {
+		enumDecl = decl
+	}
+	subjectTemp := f.nextTemp("transition_subject")
+	before := f.cloneLiveOwners()
+	var b strings.Builder
+	b.WriteString(subPrelude)
+	b.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(subjectType), subjectTemp, subjectExpr))
+	b.WriteString(ind(indent) + fmt.Sprintf("switch (%s.tag) {\n", subjectTemp))
+	for _, arm := range stmt.Arms {
+		variant, _ := evt1LookupVariant(enumDecl, arm.Pattern.VariantName)
+		tag := evt1TagName(enumDecl.Name, variant.Name)
+		if evt1IsFailureType(subjectType) {
+			tag = fmt.Sprintf("%d", variant.Tag)
+		}
+		f.liveOwners = f.cloneOwnerState(before)
+		b.WriteString(ind(indent) + fmt.Sprintf("case %s:\n", tag))
+		b.WriteString(f.lowerAllScopeDrops(indent + 1))
+		b.WriteString(ind(indent+1) + fmt.Sprintf("instance->%s.current_state = %s;\n", evt1PayloadFieldName(f.machineStepName), evt1AutomataStateConstName(f.automataStepName, f.machineStepName, arm.Target)))
+		b.WriteString(ind(indent+1) + "return;\n")
+	}
+	f.liveOwners = before
+	b.WriteString(ind(indent) + "default:\n")
+	b.WriteString(ind(indent+1) + fmt.Sprintf("concept_panic(%q, %d, %d);\n", "machine transition match found no matching case", stmt.Span.Line, stmt.Span.Column))
+	b.WriteString(ind(indent) + "}\n")
+	return b.String()
+}
+
+func (f *evt1FunctionLowerer) lowerTransitionDecideStmt(stmt TransitionDecideStmt, indent int) string {
+	hasBest := f.nextTemp("decision_has_best")
+	bestScore := f.nextTemp("decision_best_score")
+	bestState := f.nextTemp("decision_best_state")
+	var b strings.Builder
+	b.WriteString(ind(indent) + "{\n")
+	b.WriteString(ind(indent+1) + fmt.Sprintf("bool %s = false;\n", hasBest))
+	b.WriteString(ind(indent+1) + fmt.Sprintf("%s %s = (%s)0;\n", evt1CType(stmt.ScoreType), bestScore, evt1CType(stmt.ScoreType)))
+	b.WriteString(ind(indent+1) + fmt.Sprintf("uint8_t %s = 0u;\n", bestState))
+	for _, candidate := range stmt.Candidates {
+		candidateIndent := indent + 1
+		if candidate.Guard != nil {
+			guardPrelude, guardExpr, _ := f.lowerExpr(candidate.Guard, candidateIndent)
+			guardTemp := f.nextTemp("decision_guard")
+			b.WriteString(guardPrelude)
+			b.WriteString(ind(candidateIndent) + fmt.Sprintf("bool %s = %s;\n", guardTemp, guardExpr))
+			b.WriteString(ind(candidateIndent) + fmt.Sprintf("if (%s) {\n", guardTemp))
+			candidateIndent++
+		}
+		scorePrelude, scoreExpr, _ := f.lowerExpr(candidate.Score, candidateIndent)
+		scoreTemp := f.nextTemp("decision_score")
+		b.WriteString(scorePrelude)
+		b.WriteString(ind(candidateIndent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(stmt.ScoreType), scoreTemp, scoreExpr))
+		if stmt.ScoreType.Name == "float" {
+			b.WriteString(ind(candidateIndent) + fmt.Sprintf("if (%s != %s) { concept_panic(%q, %d, %d); }\n", scoreTemp, scoreTemp, "machine decision transition score is NaN", candidate.Span.Line, candidate.Span.Column))
+		}
+		b.WriteString(ind(candidateIndent) + fmt.Sprintf("if (!%s || %s > %s) {\n", hasBest, scoreTemp, bestScore))
+		b.WriteString(ind(candidateIndent+1) + fmt.Sprintf("%s = true;\n", hasBest))
+		b.WriteString(ind(candidateIndent+1) + fmt.Sprintf("%s = %s;\n", bestScore, scoreTemp))
+		b.WriteString(ind(candidateIndent+1) + fmt.Sprintf("%s = %s;\n", bestState, evt1AutomataStateConstName(f.automataStepName, f.machineStepName, candidate.Target)))
+		b.WriteString(ind(candidateIndent) + "}\n")
+		if candidate.Guard != nil {
+			b.WriteString(ind(indent+1) + "}\n")
+		}
+	}
+	b.WriteString(ind(indent+1) + fmt.Sprintf("if (!%s) { concept_panic(%q, %d, %d); }\n", hasBest, "machine decision transition has no enabled candidates", stmt.Span.Line, stmt.Span.Column))
+	b.WriteString(f.lowerAllScopeDrops(indent + 1))
+	b.WriteString(ind(indent+1) + fmt.Sprintf("instance->%s.current_state = %s;\n", evt1PayloadFieldName(f.machineStepName), bestState))
+	b.WriteString(ind(indent+1) + "return;\n")
+	b.WriteString(ind(indent) + "}\n")
+	return b.String()
+}
+
+func (f *evt1FunctionLowerer) cloneOwnerState(source map[string]bool) map[string]bool {
+	out := make(map[string]bool, len(source))
+	for name, live := range source {
+		out[name] = live
+	}
+	return out
 }
 
 func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, Type) {

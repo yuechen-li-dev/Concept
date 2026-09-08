@@ -1,0 +1,73 @@
+profile Core;
+
+enum Signal
+{
+    Go,
+    Stop,
+}
+
+Signal ReadSignal(ref int count)
+{
+    count = count + 1;
+    return Signal::Go;
+}
+
+bool CountGuard(ref int count, bool enabled)
+{
+    count = count + 1;
+    return enabled;
+}
+
+int CountScore(ref int count, int value)
+{
+    count = count + 1;
+    return value;
+}
+
+automata Evidence
+with state
+{
+    int scrutinees;
+    int guards;
+    int scores;
+}
+{
+    machine Match
+    {
+        state Idle
+        {
+            transition match (ReadSignal(ref scrutinees))
+            {
+                Signal::Go => Running;
+                Signal::Stop => Idle;
+            }
+        }
+
+        state Running { }
+    }
+
+    machine Decide
+    {
+        state Idle
+        {
+            transition decide
+            {
+                Disabled when CountGuard(ref guards, false) score CountScore(ref scores, 100);
+                Enabled when CountGuard(ref guards, true) score CountScore(ref scores, 7);
+                Fallback score CountScore(ref scores, 1);
+            }
+        }
+
+        state Disabled { }
+        state Enabled { }
+        state Fallback { }
+    }
+}
+
+int Main()
+{
+    instance Evidence evidence(0, 0, 0);
+    Step(evidence, Match);
+    Step(evidence, Decide);
+    return evidence.state.scrutinees * 100 + evidence.state.guards * 10 + evidence.state.scores;
+}

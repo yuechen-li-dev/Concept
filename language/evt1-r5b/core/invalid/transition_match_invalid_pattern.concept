@@ -1,0 +1,20 @@
+profile Core;
+
+enum Signal
+{
+    Start,
+}
+
+automata Bad
+{
+    machine Run
+    {
+        state Idle
+        {
+            transition match (Signal::Start)
+            {
+                Signal::Missing => Idle;
+            }
+        }
+    }
+}

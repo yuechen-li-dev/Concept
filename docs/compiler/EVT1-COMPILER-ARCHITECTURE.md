@@ -1,6 +1,6 @@
 # Concept EVT1 Stage 0 compiler architecture
 
-Status: R5a canonical automata hierarchy and explicit persistent state
+Status: R5b deterministic transition matching and hardmax planning
 
 ## Authority
 
@@ -120,12 +120,13 @@ lowerer behind profile admission. R1 records this as a profile lowering hook,
 not as Core language law. Splitting it would require exporting unstable private
 semantic state and is outside this isolation milestone.
 
-R5a makes `automata -> machine -> state` the canonical Core hierarchy while
+R5b retains the R5a `automata -> machine -> state` canonical Core hierarchy while
 retaining the older signal-driven form as compatibility evidence. Explicit
 `with state` capture lowers before planning into one named shared environment;
 machine fields and state locals remain distinct persistent/transient storage
-classes. Vulkan effect/actuator admission stays a profile seam and does not
-become Core automata meaning.
+classes. Categorical transition match and guarded hardmax decide remain local
+Step primitives. Vulkan effect/actuator admission stays a profile seam and
+does not become Core automata meaning.
 
 Vulkan C types, declarations, and includes are emitted only when a
 Vulkan-profile module uses registered types. Core-profile proof tests reject
@@ -650,7 +651,34 @@ ordinary block cleanup. The implementation introduces no heap or runtime
 registration. The legacy signal-dispatch implementation remains beside this
 path for compatibility and is not the semantic owner of R5a state capture.
 
-## General limitations after R5a
+## R5b transition planning pipeline
+
+```text
+transition source
+    -> explicit TransitionMatch / TransitionDecide AST
+    -> categorical arms or guarded scored candidates in automata MIR
+    -> Planner TransitionMatchPlan / TransitionDecidePlan
+    -> strict-C11 switch or straight-line hardmax lowering
+```
+
+Semantic validation reuses ordinary exhaustive enum/payload matching for
+`transition match`; it retains scrutinee, arms, payload bindings, local targets,
+coverage, no-match policy, and cleanup edge. Decision MIR retains every
+candidate independently with its target, optional guard, score, exact common
+score type, declaration order, `DeclarationOrderFirstMax` tie policy,
+no-enabled panic policy, and cleanup edge. Sema does not flatten either form to
+ad-hoc branches.
+
+The Planner selects `CategoricalSwitch` for match and
+`GuardedStraightLineHardmax` for decide. It records scrutinee-once behavior,
+declaration-order guard evaluation, enabled-only score evaluation, strict `>`
+replacement, stable panic paths, and cleanup-before-state-update. GenericC11
+emits only static locals, branches, and comparisons: no candidate vector,
+allocation, scheduler, or runtime decision object. X86_64_Generic and
+AArch64_Generic retain the same plan; branchless selection stays unselected
+until existing semantic facts can prove purity and reordering legality.
+
+## General limitations after R5b
 
 - The package remains deliberately cohesive rather than prematurely split.
 - Effect/actuator validation and C runtime emission remain in-package profile
@@ -660,10 +688,11 @@ path for compatibility and is not the semantic owner of R5a state capture.
   R2 maps its bounded slice to semantic family names and defers renumbering.
 - The backend is the extracted strict-C11 path only.
 - Imports are represented, but Core multi-module compilation is not yet active.
-- R5a automata hierarchy, explicit state capture, machine-local fields,
-  caller-directed stepping, and basic transition are canonical. Decide, yield,
-  completion/result, nested machine values, and effect/actuator reconciliation
-  remain deferred.
+- R5b automata hierarchy, explicit state capture, machine-local fields,
+  caller-directed stepping, basic transition, categorical transition match,
+  and guarded hardmax transition decide are canonical. Plain value-level
+  decide, infer, transition infer, yield, completion/result, nested machine
+  values, and effect/actuator reconciliation remain deferred.
 - Ownership beyond whole-local explicit transfer, deterministic local/
   parameter cleanup, and live whole-owner replacement remains deferred. There
   is no implicit move, field move, partial drop, unwinding, or dynamic cleanup
@@ -820,3 +849,14 @@ executes all accepted cases through strict C11, validates explicit automata
 MIR and Planner artifacts, checks persistent/transient Drop placement, and
 rejects implicit capture, lifetime escape, missing move, duplicate identities,
 unknown transitions, sibling state access, and cross-state local use.
+
+## R5b executable evidence
+
+`internal/concept/r5b_conformance_test.go` and `language/evt1-r5b/core`
+provide 26 readable cases: 14 accepted positive programs, ten statically
+rejected programs, and two accepted runtime-negative programs. The suite
+executes enum/payload/Result match and int/float decide through strict C11,
+pins evaluation counts and transient cleanup, validates MIR and all three
+planning targets, checks deterministic panic reasons, and rejects malformed
+transition MIR. Generated evidence contains no allocation, scheduler,
+coroutine, dynamic candidate collection, or runtime decision object.
