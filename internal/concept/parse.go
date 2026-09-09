@@ -184,6 +184,25 @@ func (p *parser) parseModule() (Module, error) {
 		module.Imports = append(module.Imports, strings.Join(parts, "."))
 	}
 	for !p.done() {
+		if p.peekLexeme() == "[" && p.peekLexemeN(1) == "[" {
+			attributes, err := p.parseAttributes()
+			if err != nil {
+				return module, err
+			}
+			async := false
+			if p.peekLexeme() == "async" || p.peekLexeme() == "asynchronous" {
+				async = true
+				p.next()
+			}
+			fn, err := p.parseFunctionDecl("", false)
+			if err != nil {
+				return module, err
+			}
+			fn.Attributes = attributes
+			fn.Async = async
+			module.Functions = append(module.Functions, fn)
+			continue
+		}
 		switch p.peekLexeme() {
 		case "await", "awaitchronous":
 			return module, evt1Diagnostic("AWAIT_OUTSIDE_ASYNC", "await is only valid inside an async function", p.currentSpan())
@@ -339,6 +358,46 @@ func (p *parser) parseModule() (Module, error) {
 		}
 	}
 	return module, nil
+}
+
+func (p *parser) parseAttributes() ([]Attribute, error) {
+	var attributes []Attribute
+	for p.peekLexeme() == "[" && p.peekLexemeN(1) == "[" {
+		start := p.next().Span
+		p.next()
+		name, err := p.expectIdentifier("TEST_ATTRIBUTE_INVALID", "expected test attribute name")
+		if err != nil {
+			return nil, err
+		}
+		attribute := Attribute{Name: name.Lexeme, Span: start}
+		if p.peekLexeme() == "(" {
+			p.next()
+			if p.peekLexeme() != ")" {
+				for {
+					arg, err := p.parseExpr()
+					if err != nil {
+						return nil, err
+					}
+					attribute.Args = append(attribute.Args, arg)
+					if p.peekLexeme() != "," {
+						break
+					}
+					p.next()
+				}
+			}
+			if _, err := p.expect(")"); err != nil {
+				return nil, err
+			}
+		}
+		if _, err := p.expect("]"); err != nil {
+			return nil, err
+		}
+		if _, err := p.expect("]"); err != nil {
+			return nil, err
+		}
+		attributes = append(attributes, attribute)
+	}
+	return attributes, nil
 }
 
 func (p *parser) parseTypeAliasDecl(spelling string) (TypeAliasDecl, error) {

@@ -1,0 +1,7 @@
+profile Core;
+
+[[fact]]
+void LGTMOnBool()
+{
+    Assert.LGTM(true, "boolean has no ordinary error channel");
+}

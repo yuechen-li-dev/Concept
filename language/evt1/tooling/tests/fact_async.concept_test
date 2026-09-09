@@ -1,0 +1,14 @@
+profile Core;
+
+async void Child()
+{
+    return;
+}
+
+[[fact]]
+async void AsyncFactRunsToCompletion()
+{
+    await Child();
+    Assert.True(true, "async fact should resume after its awaited child");
+    return;
+}

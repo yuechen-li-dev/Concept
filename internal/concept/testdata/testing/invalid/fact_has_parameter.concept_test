@@ -1,0 +1,6 @@
+profile Core;
+
+[[fact]]
+void HasParameter(int value)
+{
+}

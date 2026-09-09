@@ -313,6 +313,10 @@ func evt1VisitFailureTypesExpr(expr Expr, add func(Type)) {
 	case *BinaryExpr:
 		evt1VisitFailureTypesExpr(e.Left, add)
 		evt1VisitFailureTypesExpr(e.Right, add)
+	case *IfExpr:
+		evt1VisitFailureTypesExpr(e.Condition, add)
+		evt1VisitFailureTypesExpr(e.Then, add)
+		evt1VisitFailureTypesExpr(e.Else, add)
 	case *ParenExpr:
 		evt1VisitFailureTypesExpr(e.Value, add)
 	}

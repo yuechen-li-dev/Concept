@@ -1,0 +1,7 @@
+profile Core;
+
+[[fact]]
+void NumericNearWorks()
+{
+    Assert.Near(1.01, 1.0, 0.02, "absolute float error should be within tolerance");
+}

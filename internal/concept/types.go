@@ -437,15 +437,25 @@ type TemplateDecl struct {
 }
 
 type FunctionDecl struct {
-	Comptime   bool    `json:"comptime,omitempty"`
-	Async      bool    `json:"async,omitempty"`
-	Name       string  `json:"name"`
-	ReturnType Type    `json:"return_type"`
-	Params     []Param `json:"params,omitempty"`
-	Body       *Block  `json:"body,omitempty"`
-	MethodOf   string  `json:"method_of,omitempty"`
-	Visibility string  `json:"visibility,omitempty"`
-	Span       Span    `json:"span"`
+	Comptime   bool        `json:"comptime,omitempty"`
+	Async      bool        `json:"async,omitempty"`
+	Attributes []Attribute `json:"attributes,omitempty"`
+	Name       string      `json:"name"`
+	ReturnType Type        `json:"return_type"`
+	Params     []Param     `json:"params,omitempty"`
+	Body       *Block      `json:"body,omitempty"`
+	MethodOf   string      `json:"method_of,omitempty"`
+	Visibility string      `json:"visibility,omitempty"`
+	Span       Span        `json:"span"`
+}
+
+// Attribute is bounded tooling metadata attached to an ordinary function.
+// EVT1 R6a deliberately does not expose a runtime annotation or reflection
+// object; later compiler/tooling stages consume this source-ordered record.
+type Attribute struct {
+	Name string `json:"name"`
+	Args []Expr `json:"args,omitempty"`
+	Span Span   `json:"span"`
 }
 
 // AwaitExpr is retained as source-level semantic intent until the dedicated
@@ -1165,6 +1175,17 @@ type MIR struct {
 	Streams           []MIRStream           `json:"streams,omitempty"`
 	Witnesses         []MIRInterfaceWitness `json:"interface_witnesses,omitempty"`
 	CallbackWitnesses []MIRCallbackWitness  `json:"callback_witnesses,omitempty"`
+	Tests             []MIRTestDeclaration  `json:"test_declarations,omitempty"`
+}
+
+type MIRTestDeclaration struct {
+	Function         string          `json:"function"`
+	Kind             string          `json:"kind"`
+	SourceSpan       Span            `json:"source_span"`
+	Artifacts        []string        `json:"artifacts,omitempty"`
+	TheoryParameters []TestParameter `json:"theory_parameters,omitempty"`
+	Async            bool            `json:"async"`
+	Foretold         bool            `json:"foretold"`
 }
 
 type MIRTypeAlias struct {

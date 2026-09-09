@@ -1,0 +1,13 @@
+profile Core;
+
+[[fact]]
+void CallbackCompositionWorks()
+{
+    int multiplier = 3;
+    const auto scale = callback(int value)
+    with (multiplier)
+    {
+        return value * multiplier;
+    };
+    Assert.Equals(scale(4), 12, "captured callback should use its copied environment");
+}

@@ -1,0 +1,8 @@
+profile Core;
+
+[[theory]]
+[[artifact("cases.json")]]
+int TheoryReturns(int value)
+{
+    return value;
+}

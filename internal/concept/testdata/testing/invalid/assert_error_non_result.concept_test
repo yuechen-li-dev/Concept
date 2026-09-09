@@ -1,0 +1,7 @@
+profile Core;
+
+[[fact]]
+void ErrorOnInt()
+{
+    Assert.Error(1, "integer has no ordinary error channel");
+}

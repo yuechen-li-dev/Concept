@@ -1,0 +1,8 @@
+profile Core;
+
+[[theory]]
+[[artifact("cases/addition.json")]]
+void AdditionCases(int left, int right, int expected)
+{
+    Assert.Equals(left + right, expected, "artifact row should describe correct integer addition");
+}

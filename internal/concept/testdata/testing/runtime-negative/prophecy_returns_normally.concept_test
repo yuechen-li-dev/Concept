@@ -1,0 +1,6 @@
+profile Core;
+
+[[prophecy]]
+void DoomDoesNotOccur()
+{
+}

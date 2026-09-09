@@ -32,7 +32,8 @@ inline compiler tests.
 
 | Feature | Owner / phase | Classification | R5 decision |
 |---|---|---|---|
-| test discovery, `[[fact]]`, `[[theory]]`, `[[artifact]]`, `[[benchmark]]`, `[[prophecy]]`, `Assert.*` | R6 tooling/library | Deferred | first tooling milestone; no R5 parser surface |
+| `.concept_test`, test attributes, deterministic test runner, `Assert.*` | R6a tooling/library | Canonical tooling | implemented without changing frozen function/body semantics |
+| richer theory providers, exact prophecy termination matching, parallel tests, lifecycle hooks, statistical benchmark framework | later R6 tooling | Deferred | R6a keeps JSON positional rows, sequential reporting, and lightweight timing |
 | formatter, lint, diagnostics UX, build/package tooling, LSP | R6 tooling | Deferred | consume the frozen semantic model |
 | owning `dyn` | later language/runtime | Deferred | requires explicit erased storage and allocation policy |
 | owning erased callback | later language/runtime | Deferred | no hidden closure box |
@@ -52,15 +53,17 @@ inline compiler tests.
 R6 may fix bugs, diagnostics, contradictions, or specification errors. Any new
 language feature requires an explicit post-freeze proposal.
 
-## R6 test direction (non-normative)
+## R6a test tooling
 
 ```concept
 [[fact]]
 void AdditionWorks()
 {
-    Assert.Equals(Add(2, 3), 5);
+    Assert.Equals(Add(2, 3), 5, "integer addition should remain exact");
 }
 ```
 
-This is direction only. R5k adds no attribute parser, discovery runtime, or
-assertion library.
+`.concept_test` is canonical and `.con_test` is historical PoC3 evidence only.
+All `Assert.*` calls require a non-empty reason string. The attributes and
+assertion surface are tooling/compiler metadata and calls; they do not create
+runtime reflection or reopen frozen R5 language-core semantics.

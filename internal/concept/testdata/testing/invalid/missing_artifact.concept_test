@@ -1,0 +1,7 @@
+profile Core;
+
+[[fact]]
+[[artifact("not-there.bin")]]
+void MissingArtifact()
+{
+}

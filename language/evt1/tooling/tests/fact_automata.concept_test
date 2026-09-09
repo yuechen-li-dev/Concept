@@ -1,0 +1,27 @@
+profile Core;
+
+automata Chooser
+{
+    machine Run
+    {
+        state Idle
+        {
+            transition decide
+            {
+                Waiting score 2;
+                Running score 9;
+            }
+        }
+
+        state Waiting { }
+        state Running { }
+    }
+}
+
+[[fact]]
+void AutomataCompositionWorks()
+{
+    instance Chooser chooser();
+    Step(chooser, Run);
+    Assert.Equals(State(chooser, Run), 2, "hardmax transition should select declaration-order state Running");
+}

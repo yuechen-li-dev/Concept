@@ -1,0 +1,9 @@
+profile Core;
+
+[[prophecy]]
+[[foretold]]
+void ControlledCrash()
+{
+    Foretell.Checkpoint("immediately before controlled abort");
+    assert(false, "controlled native abort");
+}

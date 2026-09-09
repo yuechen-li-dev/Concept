@@ -1,0 +1,8 @@
+profile Core;
+
+[[prophecy]]
+[[artifact("cases/corrupt.bin")]]
+void ArtifactBackedProphecy()
+{
+    assert(false, "controlled corrupt artifact path");
+}

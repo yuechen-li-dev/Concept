@@ -22,6 +22,7 @@ facts, and C11 output is derived evidence.
 | Semantic facts | `semantic_facts.go` | section 17 | facts/optimization direction record | `language/evt1/semantic-facts` | `semantic_facts_test.go` |
 | Planner | `planner.go` | section 28 | Planner direction record | `language/evt1/planner` | `planner_test.go` |
 | Composition | all semantic owners above | all relevant sections | R5k freeze report | `language/evt1/composition` | `semantic_corpus_test.go` |
+| Test tooling | `testing_metadata.go`, `testing_assert.go`, `testing_lowering.go`, `testing_runner.go` | section 24 | `EVT1-TEST-PROPHECY-DIRECTION.md` | `language/evt1/tooling/tests`, `internal/concept/testdata/testing` | `testing_runner_test.go` |
 
 The three explicit state-bearing forms remain distinct: `automata with state`
 is application-authored persistent state, callable `with (...)` is an explicit
@@ -33,3 +34,8 @@ Planner families consume semantic facts for tensor strategy, bounds, cleanup,
 failure, dispatch, layout/stream/Span, automata/machine stack, async, and
 callables. Planner validation rejects impossible strategies; it never creates
 language legality.
+
+Test attributes are source-ordered Module/MIR metadata. The runner consumes a
+static manifest and generated C11 symbols; it does not add runtime reflection,
+a registry, or a second evaluator. Assertion calls retain ordinary expression
+semantics and evaluate each value argument exactly once.

@@ -1,0 +1,8 @@
+profile Core;
+
+[[fact]]
+void BooleanAssertionsWork()
+{
+    Assert.True(true, "true should satisfy Assert.True");
+    Assert.False(false, "false should satisfy Assert.False");
+}

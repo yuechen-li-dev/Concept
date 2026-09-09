@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/yuechen-li-dev/Concept/internal/concept"
 )
@@ -18,17 +19,31 @@ Usage:
   concept emit-c <file>
   concept mir <file>
   concept plan <file>
+  concept test [path-or-filter] [--filter text] [--list] [--verbose]
 
 Commands:
   check   parse and semantically validate a Concept source file
   emit-c  write generated strict-C11 implementation to stdout
   mir     write deterministic MIR JSON to stdout
   plan    write deterministic LoweringPlan JSON to stdout
+  test    discover and execute .concept_test sources through strict C11
+`
+
+const testUsage = `Usage:
+  concept test
+  concept test <path-or-filter>
+  concept test --filter <text>
+  concept test --list
+  concept test --verbose
 `
 
 func main() {
 	if len(os.Args) == 2 && (os.Args[1] == "--help" || os.Args[1] == "-h" || os.Args[1] == "help") {
 		fmt.Print(usage)
+		return
+	}
+	if len(os.Args) >= 2 && os.Args[1] == "test" {
+		runTestCommand(os.Args[2:])
 		return
 	}
 	if len(os.Args) != 3 {
@@ -72,6 +87,69 @@ func main() {
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command %q\n\n%s", command, usage)
 		os.Exit(2)
+	}
+}
+
+func runTestCommand(args []string) {
+	root, filter, list, verbose := ".", "", false, false
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--help", "-h":
+			fmt.Print(testUsage)
+			return
+		case "--list":
+			list = true
+		case "--verbose":
+			verbose = true
+		case "--filter":
+			if i+1 >= len(args) {
+				fmt.Fprint(os.Stderr, testUsage)
+				os.Exit(2)
+			}
+			i++
+			filter = args[i]
+		default:
+			if _, err := os.Stat(args[i]); err == nil {
+				root = args[i]
+			} else if filter == "" {
+				filter = args[i]
+			} else {
+				fmt.Fprint(os.Stderr, testUsage)
+				os.Exit(2)
+			}
+		}
+	}
+	manifest, err := concept.DiscoverTests(root)
+	if err != nil {
+		fail(err)
+	}
+	if list {
+		for _, test := range manifest.Tests {
+			if filter == "" || strings.Contains(strings.ToLower(test.TestID), strings.ToLower(filter)) {
+				fmt.Printf("%-10s %s  %s:%d\n", strings.ToUpper(string(test.Kind)), test.TestID, test.Source, test.SourceLine)
+			}
+		}
+		return
+	}
+	run, err := concept.RunTests(manifest, concept.TestRunOptions{Filter: filter, BenchmarkWarmup: 1, BenchmarkIterations: 5})
+	if err != nil {
+		fail(err)
+	}
+	for _, result := range run.Results {
+		fmt.Printf("%-20s %s\n", result.Status, result.TestID)
+		if result.Failure != nil {
+			fmt.Printf("  %s: %s\n", result.Failure.Kind, result.Failure.Message)
+		}
+		if verbose && result.Stderr != "" {
+			fmt.Print("  stderr: ", strings.ReplaceAll(strings.TrimSpace(result.Stderr), "\n", "\n          "), "\n")
+		}
+		if result.Benchmark != nil {
+			fmt.Printf("  %d iterations; total=%s mean=%s min=%s median=%s max=%s\n", result.Benchmark.Iterations, time.Duration(result.Benchmark.TotalNanos), time.Duration(result.Benchmark.MeanNanos), time.Duration(result.Benchmark.MinNanos), time.Duration(result.Benchmark.MedianNanos), time.Duration(result.Benchmark.MaxNanos))
+		}
+	}
+	fmt.Printf("\n%d passed, %d failed, %d prophecies fulfilled, %d benchmarks\n", run.Passed, run.Failed, run.Fulfilled, run.Benchmarks)
+	if run.Failed != 0 {
+		os.Exit(1)
 	}
 }
 

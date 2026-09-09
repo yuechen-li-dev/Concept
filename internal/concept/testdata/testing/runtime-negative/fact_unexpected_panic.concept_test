@@ -1,0 +1,7 @@
+profile Core;
+
+[[fact]]
+void UnexpectedPanic()
+{
+    assert(false, "intentional unexpected panic");
+}

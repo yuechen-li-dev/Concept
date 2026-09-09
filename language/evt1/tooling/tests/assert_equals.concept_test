@@ -1,0 +1,15 @@
+profile Core;
+
+enum Color
+{
+    Red,
+    Blue,
+}
+
+[[fact]]
+void EqualityWorks()
+{
+    Assert.Equals(7, 7, "equal integers should compare equal");
+    Assert.Equals("Concept", "Concept", "equal strings should compare by value");
+    Assert.Equals(Color::Blue, Color::Blue, "payload-free enums should compare by declared tag");
+}

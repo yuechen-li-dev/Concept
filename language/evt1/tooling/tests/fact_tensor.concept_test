@@ -1,0 +1,12 @@
+profile Core;
+
+[[fact]]
+void TensorCompositionWorks()
+{
+    int<ndarray>[2, 2] sourceStorage = [[1, 2], [3, 4]];
+    int<ndarray>[2, 2] outputStorage = [[0, 0], [0, 0]];
+    tensor<int, 2> Source = Tensor(sourceStorage);
+    tensor<int, 2> Output = Tensor(outputStorage);
+    Output = 3 * Source;
+    Assert.Equals(Output[1, 1], 12, "tensor scalar multiplication should use frozen R4 tensor semantics");
+}

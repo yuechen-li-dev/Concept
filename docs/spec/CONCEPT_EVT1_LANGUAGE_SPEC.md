@@ -36,8 +36,9 @@ system is implied by syntax.
 
 ## 3. Source files and modules
 
-**Canonical EVT1 foundation.** Source uses `.concept`. An EVT1 source unit begins
-with exactly one explicit profile declaration:
+**Canonical EVT1 foundation.** Ordinary source uses `.concept`; R6a test tooling
+discovers ordinary-language test units using `.concept_test`. An EVT1 source
+unit begins with exactly one explicit profile declaration:
 
 ```concept
 profile Core;
@@ -1222,9 +1223,33 @@ Any general effect system requires a separate cross-line decision.
 **Legacy PoC3.** `.con_test`, discovery, facts/theories, expectations, and the
 Zig-hosted test runner remain executable reference behavior.
 
-**Deferred reconciliation.** The Go compiler has Go-level compiler tests but no
-canonical Concept testing language. foundation conformance differential tests are infrastructure,
-not automatic adoption of the PoC3 testing surface.
+**Canonical R6a tooling.** `.concept_test` contains ordinary Concept source and
+is the only extension discovered by `concept test`. Source-ordered
+`[[fact]]`, `[[theory]]`, `[[artifact("relative/path")]]`, `[[benchmark]]`,
+`[[prophecy]]`, and `[[foretold]]` attributes are retained as typed Module/MIR
+metadata. They do not alter function-body semantics or create runtime
+reflection. Discovery orders normalized paths and then declarations.
+
+Facts, benchmarks, and prophecies return `void` and initially take no
+parameters. Theories return `void`; R6a binds primitive parameters from
+positional rows in one JSON artifact. Artifact paths are source-relative,
+must remain beneath the selected test root, are hashed, and retain source
+order. Benchmarks use deterministic warmup/iteration counts and report basic
+wall timing; they are regression evidence, not a statistical framework.
+
+`[[prophecy]]` means abnormal termination is expected; normal return fails.
+`[[foretold]]` requires prophecy and preserves a bounded crash envelope,
+including process termination, streams, artifact identities, build/compiler/
+target identities, and the last 16 `Foretell.Checkpoint` records. Test
+executables run as bounded child processes, so an abort cannot terminate the
+host runner.
+
+The compiler-known testing surface is `Assert.True`, `Assert.False`,
+`Assert.Equals`, `Assert.Near`, `Assert.Error`, and `Assert.LGTM`. Every call
+requires a non-empty string-literal reason as its final argument. All value
+arguments evaluate exactly once, left to right. `Near` is absolute numeric
+tolerance. `Error` and `LGTM` accept only `Result<T,E>` and respectively require
+the Error and Ok channel; neither unwraps or re-evaluates the carrier.
 
 ## 25. Panic and assert
 
@@ -1271,7 +1296,7 @@ aborts. It performs no allocation and implies no generalized panic runtime.
 `assert(condition, reason)` is the runtime assertion form; the one-argument
 form uses the deterministic reason `Concept assertion failed`. False escalates
 to the same terminal panic primitive and true continues. The future R6
-`Assert.*` test-library surface is not part of the R5 language core.
+`Assert.*` test-tooling surface is layered above the frozen R5 language core.
 
 `static_assert(condition, reason)` is the compile-time assertion form. It uses
 the existing bounded comptime evaluator and emits no runtime code. Runtime
@@ -1390,7 +1415,8 @@ The following remain explicit reconciliation or implementation work:
 - stable C ABI and layout law;
 - plain value-level `decide` and continuation-resume library policy;
 - general effects versus profile-owned effects/actuators;
-- Concept-native test discovery, attributes, and the `Assert.*` test library;
+- richer theory providers, test lifecycle hooks, parallel execution, exact
+  prophecy termination matching, and statistical benchmark analysis;
 - broader concepts/templates and capability-based comptime.
 
 EVT1 intentionally adds none of these merely because they were next on the PoC3

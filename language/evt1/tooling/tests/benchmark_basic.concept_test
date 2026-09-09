@@ -1,0 +1,7 @@
+profile Core;
+
+[[benchmark]]
+void LightweightBenchmark()
+{
+    Assert.Equals(6 * 7, 42, "benchmark assertions must remain authoritative");
+}

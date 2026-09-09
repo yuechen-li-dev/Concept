@@ -649,6 +649,9 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 			return nil, err
 		}
 	}
+	if err := evt1ValidateTestMetadata(module); err != nil {
+		return nil, err
+	}
 	evt1DeriveResultProvenanceSummaries(env, module.Functions)
 	for _, fn := range module.ComptimeFns {
 		if err := validateFunctionSignature(env, fn); err != nil {

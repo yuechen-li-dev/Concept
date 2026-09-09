@@ -742,10 +742,35 @@ coroutine frame, or hidden persistent iterator.
 - Named lifetimes, generalized borrow checking, non-lexical lifetimes, mutable
   alias analysis, and unrestricted reference-containing
   aggregates are not implemented.
-- The remaining PoC3 allocation, stable C ABI, testing framework, owning dyn,
-  slices, and FixedBuffer surfaces are not ported. layout and stream semantics has no
+- The remaining PoC3 allocation, stable C ABI, owning dyn, slices, and
+  FixedBuffer surfaces are not ported. Richer test providers, lifecycle hooks,
+  exact crash matching, and parallel scheduling remain deferred. Layout and stream semantics has no
   `throw`, unwinding, Option handler arm, implicit error conversion, or
   generalized panic runtime.
+
+## R6a test tooling pipeline
+
+```text
+.concept_test source
+    -> ordinary Concept parse and semantic validation
+    + source-ordered bounded test attributes
+    -> TestDeclaration MIR + concept-test-manifest.v1
+    -> ordinary strict-C11 generation + static harness
+    -> bounded child process execution
+    -> concept-test-results.v1 + concise deterministic reporting
+```
+
+`testing_metadata.go` validates attribute combinations and signatures;
+`testing_assert.go` types the compiler-known `Assert.*` calls while preserving
+ordinary evaluation order; `testing_lowering.go` emits structured failure and
+checkpoint records; and `testing_runner.go` owns file discovery, JSON theory
+binding, native compilation, process isolation, timing, and evidence files.
+The Planner remains unchanged because testing selects entry points and
+execution policy rather than inventing language legality or optimization.
+
+The generated harness is static. No test registry, reflection scan, dynamic
+loader, scheduler, exception runtime, or second evaluator exists. Async tests
+drive the existing `concept_async_step`/`concept_async_complete` substrate.
 
 relational lifetime analysis does not add a generalized place lattice or prove global alias/lifetime
 safety. `borrow` compatibility behavior remains narrower than the canonical

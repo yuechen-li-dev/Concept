@@ -1,0 +1,7 @@
+profile Core;
+
+[[fact]]
+[[foretold]]
+void InvalidForetold()
+{
+}

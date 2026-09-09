@@ -1,0 +1,7 @@
+profile Core;
+
+[[fact]]
+void NonBoolTrue()
+{
+    Assert.True(1, "integer is not a boolean condition");
+}

@@ -1,0 +1,7 @@
+profile Core;
+
+[[prophecy]]
+void PanicIsFulfilled()
+{
+    assert(false, "intentional prophecy panic");
+}

@@ -1,0 +1,27 @@
+profile Core;
+
+interface Flusher<T>
+{
+    requires async void Flush(ref T self);
+}
+
+struct Device
+{
+    int count;
+
+    async void Flush(ref Device self)
+    {
+        self.count = self.count + 1;
+        return;
+    }
+}
+
+[[fact]]
+async void DynAsyncCompositionWorks()
+{
+    Device device = Device{0};
+    dyn Flusher flusher = ref device;
+    await flusher.Flush();
+    Assert.Equals(device.count, 1, "dyn async dispatch should mutate the referenced device once");
+    return;
+}

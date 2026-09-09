@@ -1,0 +1,7 @@
+profile Core;
+
+[[fact]]
+void StringNear()
+{
+    Assert.Near("a", "a", "a", "strings do not have numeric distance");
+}

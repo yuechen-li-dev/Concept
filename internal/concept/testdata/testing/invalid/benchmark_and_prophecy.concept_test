@@ -1,0 +1,7 @@
+profile Core;
+
+[[benchmark]]
+[[prophecy]]
+void ConflictingMode()
+{
+}

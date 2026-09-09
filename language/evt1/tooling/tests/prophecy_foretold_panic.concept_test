@@ -1,0 +1,10 @@
+profile Core;
+
+[[prophecy]]
+[[foretold]]
+[[artifact("cases/corrupt.bin")]]
+void ForetoldPanicIsCaptured()
+{
+    Foretell.Checkpoint("after prophecy harness entry");
+    assert(false, "intentional foretold panic");
+}

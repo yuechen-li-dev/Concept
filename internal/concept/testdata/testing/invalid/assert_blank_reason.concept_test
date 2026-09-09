@@ -1,0 +1,7 @@
+profile Core;
+
+[[fact]]
+void BlankReason()
+{
+    Assert.Equals(1, 1, "   ");
+}

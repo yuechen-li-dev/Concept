@@ -126,6 +126,14 @@ func evt1PrepareDynInitializer(env *semanticEnv, target Type, value Expr, span S
 }
 
 func evt1ValidateMemberCall(env *semanticEnv, scope *evt1Scope, call *CallExpr, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
+	if receiver, ok := call.Receiver.(*NameExpr); ok {
+		if receiver.Name == "Assert" {
+			return evt1ValidateTestAssertion(env, scope, call, templateInfo, inComptimeFn)
+		}
+		if receiver.Name == "Foretell" {
+			return evt1ValidateForetellCall(env, scope, call, templateInfo, inComptimeFn)
+		}
+	}
 	receiverType, err := validateExpr(env, scope, call.Receiver, templateInfo, inComptimeFn)
 	if err != nil {
 		return Type{}, err

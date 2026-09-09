@@ -1,0 +1,25 @@
+profile Core;
+
+enum ParseError
+{
+    Invalid,
+}
+
+Result<int, ParseError> Parse(bool valid)
+{
+    return if (valid) Result::Ok(42) else Result::Error(ParseError::Invalid);
+}
+
+Result<int, ParseError> Observe(ref int count, bool valid)
+{
+    count = count + 1;
+    return Parse(valid);
+}
+
+[[fact]]
+void LGTMRecognizesOrdinarySuccessChannel()
+{
+    int evaluations = 0;
+    Assert.LGTM(Observe(ref evaluations, true), "valid input should avoid the Result error path");
+    Assert.Equals(evaluations, 1, "Assert.LGTM should evaluate its Result expression exactly once");
+}

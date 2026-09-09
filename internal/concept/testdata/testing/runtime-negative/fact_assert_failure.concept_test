@@ -1,0 +1,7 @@
+profile Core;
+
+[[fact]]
+void AssertionFails()
+{
+    Assert.Equals(4, 5, "intentional structured assertion failure");
+}

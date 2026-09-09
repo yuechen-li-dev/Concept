@@ -1,0 +1,25 @@
+profile Core;
+
+enum ParseError
+{
+    Invalid,
+}
+
+Result<int, ParseError> Parse(bool valid)
+{
+    return if (valid) Result::Ok(42) else Result::Error(ParseError::Invalid);
+}
+
+Result<int, ParseError> Observe(ref int count, bool valid)
+{
+    count = count + 1;
+    return Parse(valid);
+}
+
+[[fact]]
+void ErrorRecognizesOrdinaryErrorChannel()
+{
+    int evaluations = 0;
+    Assert.Error(Observe(ref evaluations, false), "invalid input should take the Result error path");
+    Assert.Equals(evaluations, 1, "Assert.Error should evaluate its Result expression exactly once");
+}
