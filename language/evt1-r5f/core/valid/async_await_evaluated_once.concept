@@ -1,0 +1,32 @@
+profile Core;
+
+int Next(ref int calls)
+{
+    calls = calls + 1;
+    return 40;
+}
+
+async int Child(int value)
+{
+    return value + 2;
+}
+
+async int Parent(ref int calls)
+{
+    return await Child(Next(ref calls));
+}
+
+int Main()
+{
+    int calls = 0;
+    Async<int> work = Parent(ref calls);
+    while (not Complete(work)) bounded(4)
+    {
+        Step(work);
+    }
+    if (Result(work) == 42 and calls == 1)
+    {
+        return 0;
+    }
+    return 1;
+}

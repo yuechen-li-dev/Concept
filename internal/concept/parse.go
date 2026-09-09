@@ -178,6 +178,16 @@ func (p *parser) parseModule() (Module, error) {
 	}
 	for !p.done() {
 		switch p.peekLexeme() {
+		case "await", "awaitchronous":
+			return module, evt1Diagnostic("AWAIT_OUTSIDE_ASYNC", "await is only valid inside an async function", p.currentSpan())
+		case "async", "asynchronous":
+			p.next() // exact lexical aliases normalize to FunctionDecl.Async
+			fn, err := p.parseFunctionDecl("", false)
+			if err != nil {
+				return module, err
+			}
+			fn.Async = true
+			module.Functions = append(module.Functions, fn)
 		case "yield":
 			return module, evt1Diagnostic("YIELD_OUTSIDE_STATE", "yield is only valid inside a runtime machine state body", p.currentSpan())
 		case "comptime":
@@ -1092,6 +1102,11 @@ func (p *parser) parseClassDecl() (StructDecl, error) {
 			p.next()
 			continue
 		}
+		async := false
+		if p.peekLexeme() == "async" || p.peekLexeme() == "asynchronous" {
+			p.next()
+			async = true
+		}
 		memberType, err := p.parseType("")
 		if err != nil {
 			return StructDecl{}, err
@@ -1105,8 +1120,12 @@ func (p *parser) parseClassDecl() (StructDecl, error) {
 			if err != nil {
 				return StructDecl{}, err
 			}
+			method.Async = async
 			decl.Methods = append(decl.Methods, method)
 			continue
+		}
+		if async {
+			return StructDecl{}, evt1Diagnostic("ASYNC_RETURN_TYPE_INVALID", "async is valid only on a function or method declaration", member.Span)
 		}
 		if _, err := p.expect(";"); err != nil {
 			return StructDecl{}, err
@@ -1658,6 +1677,9 @@ done:
 			return Type{}, err
 		}
 		t.Kind = TypeApplied
+		if t.Name == "Async" {
+			t.Kind = TypeAsync
+		}
 		if len(t.TypeArgs) == 1 && (t.TypeArgs[0].Name == string(StorageArray) || t.TypeArgs[0].Name == string(StorageNDArray)) {
 			storageMarker = StorageKind(t.TypeArgs[0].Name)
 			t = storageElement
@@ -2610,6 +2632,20 @@ func (p *parser) parseMultiplicative() (Expr, error) {
 }
 
 func (p *parser) parseUnary() (Expr, error) {
+	if p.peekLexeme() == "await" || p.peekLexeme() == "awaitchronous" {
+		op := p.next()
+		value, err := p.parseUnary()
+		if err != nil {
+			return nil, err
+		}
+		// Postfix failure propagation binds to the awaited value, not to the
+		// Async<T> operand: `await Child()?` == `(await Child())?`.
+		if failure, ok := value.(*FailureExpr); ok {
+			awaited := &AwaitExpr{Value: failure.Value, Span: op.Span}
+			return &FailureExpr{Op: failure.Op, Value: awaited, Span: failure.Span}, nil
+		}
+		return &AwaitExpr{Value: value, Span: op.Span}, nil
+	}
 	if p.peekLexeme() == "bind" {
 		op := p.next()
 		source, err := p.parseUnary()

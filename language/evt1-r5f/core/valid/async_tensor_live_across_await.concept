@@ -1,0 +1,24 @@
+profile Core;
+
+async int Child()
+{
+    return 2;
+}
+
+async int TensorAfterAwait()
+{
+    int<ndarray>[2] storage = [40, 1];
+    tensor<int, 1> values = Tensor(storage);
+    int child = await Child();
+    return values[0] + child;
+}
+
+int Main()
+{
+    Async<int> work = TensorAfterAwait();
+    while (not Complete(work)) bounded(4)
+    {
+        Step(work);
+    }
+    return Result(work);
+}

@@ -107,7 +107,14 @@ does not authorize that work in this milestone. Status is one of `Keep PoC3`,
 | Complete/Result | explicit completed/result frame operations | dispatch outcomes | completion is frame pop carrying Neutral/Success/Failure; Result is completion-gated | Merge / redesigned R5e | Translation | phase13/18; R5e native/runtime-negative corpus | machine outcome is not `Result<T,E>` |
 | push/pop machine frames | hierarchical by-value child pressure | bounded continuation stack | fixed specialized frame stack; `push Child goto Resume`; pop reveals parent | Merge / canonical core R5e | Translation | phase18, DragonGod DG5, R5e nested corpus | no heap or saved PC |
 | Remember/Resume | deferred machine orchestration | DragonGod/Oct policy vocabulary | library workflow over parent preservation and explicit resume state | Library layer over R5e | Yes | DragonGod stack and Oct reference inventory | no second hidden stack |
-| async mapping | deferred | deferred | future compiler-generated state plus R5e push/outcome/pop | Deferred R5f | Yes | R5e design proof | no async syntax or scheduler in R5e |
+| async function | deferred | deferred | compiler-generated machine returning `Async<T>` | EVT1-new / implemented R5f | No | R5f MIR/Planner/native corpus | body starts only on explicit Step |
+| Async<T> | deferred | absent | movable-only inline operation with completion/result | EVT1-new / implemented R5f | No | R5f manual-driving and move cases | no heap or scheduler ownership |
+| await | deferred | deferred | generated continuation state plus child push/outcome/pop | EVT1-new over R5e / implemented R5f | No | R5f nested/yield/Result corpus | operand once; parent resumes later |
+| generated continuation state | manual state pressure | bounded continuation stack | deterministic compiler-authored state identity | Merge / implemented R5f | Translation | R5e manual equivalence plus R5f MIR | no saved instruction pointer |
+| async frame storage | machine fields | fixed bounded stack pressure | compiler-derived live-across fields in fixed inline frames | Merge / implemented R5f | No | R5f liveness/C static assertions | unrelated locals are not captured |
+| async lifetime | ordinary ownership/ref pressure | ordinary borrowed context pressure | existing provenance and Drop law across generated fields | Merge / implemented R5f | No | R5f ref/owned/move cases | invalid escaping refs reject |
+| scheduler | deferred policy | application/library policy | not a language primitive; explicit Step remains authority | Library layer / deferred | Yes | R5f forbidden-runtime scan | no executor, thread, or event loop |
+| asynchronous/awaitchronous | absent | absent | exact lexical aliases of async/await | EVT1-new / implemented R5f | No | alias MIR and native equivalence | one AST and lowering path |
 | DragonGod Decision | stateful kernel decision policy | application subsystem pressure | library-level hysteresis/commitment/tie-memory policy | Library-level / deferred | Yes | phase20 DragonGod evidence | never implicit in transition decide |
 | infer | absent | absent | normalized float-logit soft belief in `Inference<T>` | EVT1-new / implemented R5c | No | R5c corpus/native evidence | stable softmax; fixed inline storage |
 | transition infer | absent | absent | explicit-policy inference transition | EVT1-new / implemented R5c | No | R5c MIR/Planner/native evidence | HardMax only in R5c |
@@ -363,3 +370,17 @@ and outcomes. Native C11 covers yield/transition, Neutral/Success/Failure,
 parent restoration, shared/private fields, three-level and same-machine
 nesting, cleanup, overflow, and result gating. Generated code has no heap,
 scheduler, or saved program counter.
+
+## R5f executable evidence
+
+R5f adds 31 canonical sources: 23 accepted, six statically rejected, and two
+runtime-negative. The suite proves exact short/long alias normalization,
+single/sequential/nested await, yielded-child top-frame behavior, explicit
+continuation states, liveness-selected storage, owned cleanup, reference
+lifetime rejection, `await` plus `?`, manual Step/Complete/Result driving,
+simple if/while/foreach continuation state, class receiver and tensor backing
+persistence, exactly-once operand evaluation, and manual-machine equivalence.
+MIR and Planner mutation tests reject invented runtime policy. Strict-C11
+native evidence and generated-code scans prove fixed inline storage with no
+heap, scheduler, executor, thread pool, event loop, coroutine ABI, setjmp,
+longjmp, or saved PC.

@@ -1,0 +1,17 @@
+profile Core;
+
+async int Recurse()
+{
+    int value = await Recurse();
+    return value;
+}
+
+int Main()
+{
+    Async<int> work = Recurse();
+    while (not Complete(work)) bounded(16)
+    {
+        Step(work);
+    }
+    return 0;
+}

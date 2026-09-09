@@ -1,0 +1,6 @@
+profile Core;
+
+async int Invalid()
+{
+    return;
+}

@@ -501,6 +501,7 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 	}
 	for _, fn := range module.Functions {
 		mirFn := MIRFunction{Name: fn.Name, ReturnType: evt1MIRType(env, fn.ReturnType), SourceSpan: fn.Span}
+		mirFn.Async = evt1BuildMIRAsync(fn, env)
 		if fn.MethodOf != "" {
 			mirFn.MethodOf, mirFn.Visibility = fn.MethodOf, fn.Visibility
 		}
@@ -709,6 +710,17 @@ func evt1ValidateMIR(mir MIR) error {
 	}
 	allFunctions := append(append([]MIRFunction{}, mir.Functions...), mir.ComptimeFns...)
 	for _, fn := range allFunctions {
+		if fn.Async != nil {
+			a := fn.Async
+			if a.Identity != fn.Name+"#async" || a.MachineIdentity == "" || a.StateIdentity == "" || a.FrameStorage != "Inline" || a.ContinuationStrategy != "ExplicitGeneratedState" || a.ChildInvocation != "MachinePush" || a.Scheduler != "None" || a.SavedPC != "None" || len(a.GeneratedStates) < len(a.AwaitPoints)+2 {
+				return evt1Diagnostic("AWAIT_MIR_INVALID", fmt.Sprintf("async MIR in %s omits generated-machine invariants", fn.Name), fn.SourceSpan)
+			}
+			for i, await := range a.AwaitPoints {
+				if await.Index != i || await.Continuation == "" || await.Evaluation != "ExactlyOnce" || await.ChildPush != "BoundedMachineFramePush" || await.OutcomeConsume != "ExactlyOnce" || await.OperandType.Kind != TypeAsync {
+					return evt1Diagnostic("AWAIT_MIR_INVALID", fmt.Sprintf("await point %d in %s is malformed", i, fn.Name), await.SourceSpan)
+				}
+			}
+		}
 		for _, each := range fn.Foreaches {
 			if err := validateForeachMIR(each); err != nil {
 				return err
@@ -1136,6 +1148,9 @@ func collectTransitionMIR(block *Block, state *MIRState) {
 func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInfo *evt1TemplateInfo) {
 	id := fmt.Sprintf("%s.%02d", fn.Name, len(fn.Operations)+1)
 	switch e := expr.(type) {
+	case *AwaitExpr:
+		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "await_point", Type: e.ResultType.String(), Detail: "explicit_generated_state+machine_push+outcome_consume", NoAllocation: true, SourceSpan: e.Span})
+		collectExprMIROps(env, e.Value, fn, templateInfo)
 	case *InferExpr:
 		entry := MIRInference{CandidateType: e.CandidateType, ScoreType: "float", Normalization: "StableSoftMax", Temperature: 1.0, NoEnabledPolicy: "Panic", NaNPolicy: "Panic", InfinityPolicy: "EqualPositiveInfinityElseNegativeInfinityZero", SourceSpan: e.Span}
 		for _, candidate := range e.Candidates {
@@ -1492,6 +1507,10 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 		header.WriteString("#include <stddef.h>\n")
 	}
 	header.WriteString("#include <stdint.h>\n\n")
+	if evt1ModuleHasAsync(l.module) {
+		header.WriteString(evt1AsyncRuntimeDeclarations())
+		body.WriteString("#include <string.h>\n")
+	}
 	var builtinNames []string
 	for name := range l.env.profile.BuiltinTypes {
 		builtinNames = append(builtinNames, name)
@@ -1536,6 +1555,10 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 	body.WriteString("static void concept_abort_invalid_tag(const char* enum_name) {\n")
 	body.WriteString("  fprintf(stderr, \"invalid enum tag for %s\\n\", enum_name);\n")
 	body.WriteString("  abort();\n}\n\n")
+	if evt1ModuleHasAsync(l.module) {
+		body.WriteString(evt1AsyncRuntimeDefinitions())
+		body.WriteString(l.asyncForwardDeclarations())
+	}
 	if evt1ModuleUsesFailurePanic(l.module) || evt1ModuleUsesStorageBounds(l.module) || evt1ModuleUsesTransitionPanic(l.module) || len(inferenceTypes) > 0 {
 		body.WriteString("static void concept_panic(const char* reason, int line, int column) {\n")
 		body.WriteString("  fprintf(stderr, \"Concept panic at %d:%d: %s\\n\", line, column, reason);\n")
@@ -3001,6 +3024,9 @@ func evt1ConstructorName(enumName, variantName string) string {
 }
 
 func evt1CType(t Type) string {
+	if t.Kind == TypeAsync || t.Name == "Async" {
+		return "concept_async_operation"
+	}
 	if evt1IsInferenceType(t) {
 		return evt1InferenceCName(t)
 	}
@@ -3150,6 +3176,9 @@ func evt1TypeUsed(module Module, match func(Type) bool) bool {
 }
 
 func (l *lowering) functionSymbols(fn FunctionDecl) evt1FunctionSymbols {
+	if fn.Async {
+		return l.asyncFunctionSymbols(fn)
+	}
 	var prototype strings.Builder
 	cReturn := evt1CType(fn.ReturnType)
 	name := evt1FunctionSymbolForDecl(l.outputBase, l.env, fn)
@@ -4038,6 +4067,20 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		}
 		return b.String(), carrierTemp + ".payload." + field, evt1FailureSuccessType(carrierType)
 	case *CallExpr:
+		if e.Intrinsic == "async_step" || e.Intrinsic == "async_complete" || e.Intrinsic == "async_result" {
+			prelude, value, valueType := f.lowerExpr(e.Args[0], indent)
+			if e.Intrinsic == "async_step" {
+				return prelude, "concept_async_step(&" + value + ")", Type{Name: "void", Kind: TypeBuiltin, Span: e.Span}
+			}
+			if e.Intrinsic == "async_complete" {
+				return prelude, "concept_async_complete(&" + value + ")", Type{Name: "bool", Kind: TypeBuiltin, Span: e.Span}
+			}
+			resultType := valueType.TypeArgs[0]
+			temp := f.nextTemp("async_result")
+			prelude += ind(indent) + fmt.Sprintf("%s %s;\n", evt1CType(resultType), temp)
+			prelude += ind(indent) + fmt.Sprintf("concept_async_result(&%s, &%s, sizeof(%s));\n", value, temp, temp)
+			return prelude, temp, resultType
+		}
 		if e.Intrinsic == "machine_result" || e.Intrinsic == "machine_result_inner" {
 			var automataName, instanceExpr, machineName string
 			if e.Intrinsic == "machine_result_inner" {
@@ -4178,7 +4221,11 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 			prelude.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(argType), temp, argExpr))
 			args = append(args, temp)
 		}
-		return prelude.String(), evt1FunctionSymbolForDecl(f.l.outputBase, f.l.env, fn) + "(" + strings.Join(args, ", ") + ")", fn.ReturnType
+		resultType := fn.ReturnType
+		if fn.Async {
+			resultType = evt1AsyncType(fn.ReturnType, fn.Name, e.Span)
+		}
+		return prelude.String(), evt1FunctionSymbolForDecl(f.l.outputBase, f.l.env, fn) + "(" + strings.Join(args, ", ") + ")", resultType
 	case *DispatchExpr:
 		binding, _ := scopeLookup(e.InstanceName, f.scope)
 		info := f.l.env.automataInfo[binding.instanceAutomata]

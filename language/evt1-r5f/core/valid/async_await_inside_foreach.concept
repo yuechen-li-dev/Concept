@@ -1,0 +1,28 @@
+profile Core;
+
+async int Child(int value)
+{
+    return value;
+}
+
+async int Sum()
+{
+    int<array>[3] values = [10, 12, 20];
+    int total = 0;
+    foreach (int value in values)
+    {
+        int observed = await Child(value);
+        total = total + observed;
+    }
+    return total;
+}
+
+int Main()
+{
+    Async<int> work = Sum();
+    while (not Complete(work)) bounded(16)
+    {
+        Step(work);
+    }
+    return Result(work);
+}

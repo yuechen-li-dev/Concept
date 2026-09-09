@@ -1,0 +1,28 @@
+profile Core;
+
+async int Leaf()
+{
+    return 40;
+}
+
+async int Middle()
+{
+    int value = await Leaf();
+    return value + 1;
+}
+
+async int Outer()
+{
+    int value = await Middle();
+    return value + 1;
+}
+
+int main()
+{
+    Async<int> work = Outer();
+    while (not Complete(work)) bounded(12)
+    {
+        Step(work);
+    }
+    return Result(work) - 42;
+}

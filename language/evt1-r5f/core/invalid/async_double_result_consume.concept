@@ -1,0 +1,28 @@
+profile Core;
+
+struct Ticket
+{
+    int value;
+}
+
+void Drop(owned Ticket ticket)
+{
+}
+
+async owned Ticket Child()
+{
+    owned Ticket ticket = Ticket{7};
+    return move ticket;
+}
+
+int Main()
+{
+    Async<owned Ticket> work = Child();
+    while (not Complete(work)) bounded(4)
+    {
+        Step(work);
+    }
+    owned Ticket first = Result(work);
+    owned Ticket second = Result(work);
+    return 0;
+}

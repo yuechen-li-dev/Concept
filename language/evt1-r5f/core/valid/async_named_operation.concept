@@ -1,0 +1,24 @@
+profile Core;
+
+async int Child()
+{
+    return 41;
+}
+
+async int Outer()
+{
+    Async<int> operation = Child();
+    Step(operation);
+    int value = await move operation;
+    return value + 1;
+}
+
+int main()
+{
+    Async<int> work = Outer();
+    while (not Complete(work)) bounded(8)
+    {
+        Step(work);
+    }
+    return Result(work) - 42;
+}

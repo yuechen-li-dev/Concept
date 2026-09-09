@@ -1,0 +1,29 @@
+profile Core;
+
+async int Child()
+{
+    return 2;
+}
+
+class Client
+{
+public:
+    int base;
+
+    async int Load()
+    {
+        int child = await Child();
+        return base + child;
+    }
+}
+
+int Main()
+{
+    Client client = Client{40};
+    Async<int> work = client.Load();
+    while (not Complete(work)) bounded(4)
+    {
+        Step(work);
+    }
+    return Result(work);
+}

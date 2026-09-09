@@ -1,6 +1,6 @@
 # EVT1 LIR Planner direction
 
-Status: R5e machine-stack/completion planning consumer; LIR is future work
+Status: R5f async planning consumer; LIR is future work
 
 ## Authority pipeline
 
@@ -117,3 +117,17 @@ Canonical automata carry `MachineStackPlan`, `FramePlan`, `PushPlan`, and
 specialized slot. Completion evaluates/transfers its payload, cleans the frame,
 stores the outcome, and decrements depth. Native target plans retain these
 semantics; R5e emits no LIR.
+
+## R5f async plan
+
+Every async MIR function produces one `AsyncPlan`. It exposes generated state
+identities, await count and per-await continuation/live set, the fixed 1024-byte
+inline frame slot, target alignment, capacity-eight maximum child depth,
+exactly-once evaluation/outcome consumption, and cleanup strategy. Its selected
+contract is `GeneratedMachine`, `Inline`, `ExplicitGeneratedState`,
+`MachinePush`, `Scheduler: None`, and `SavedPC: None`. Plan validation rejects
+mutation of those authority fields.
+
+A future target planner may select switch, direct-branch, or jump-table state
+dispatch after proving equivalence. It cannot change persistence, cleanup,
+stack depth, source order, or invent scheduling. R5f still emits no LIR.

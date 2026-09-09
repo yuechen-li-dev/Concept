@@ -25,6 +25,7 @@ const (
 	TypeDyn          TypeKind = "dyn"
 	TypeConceptParam TypeKind = "concept_param"
 	TypeApplied      TypeKind = "applied"
+	TypeAsync        TypeKind = "async"
 )
 
 type StorageKind string
@@ -53,6 +54,7 @@ type Type struct {
 	TypeArgs        []Type             `json:"type_args,omitempty"`
 	TensorRank      int                `json:"tensor_rank,omitempty"`
 	TensorSpelling  string             `json:"-"`
+	AsyncOrigin     string             `json:"async_origin,omitempty"`
 	ArrayElem       *Type              `json:"array_elem,omitempty"`
 	ArrayLength     int                `json:"array_length,omitempty"`
 	ArrayLengthExpr Expr               `json:"-"`
@@ -391,6 +393,7 @@ type TemplateDecl struct {
 
 type FunctionDecl struct {
 	Comptime   bool    `json:"comptime,omitempty"`
+	Async      bool    `json:"async,omitempty"`
 	Name       string  `json:"name"`
 	ReturnType Type    `json:"return_type"`
 	Params     []Param `json:"params,omitempty"`
@@ -399,6 +402,17 @@ type FunctionDecl struct {
 	Visibility string  `json:"visibility,omitempty"`
 	Span       Span    `json:"span"`
 }
+
+// AwaitExpr is retained as source-level semantic intent until the dedicated
+// async state-machine lowering pass. Both lexical spellings normalize here.
+type AwaitExpr struct {
+	Value      Expr `json:"value"`
+	ResultType Type `json:"result_type,omitempty"`
+	Span       Span `json:"span"`
+}
+
+func (*AwaitExpr) evt1Expr()        {}
+func (e *AwaitExpr) exprSpan() Span { return e.Span }
 
 type ComptimeDecl struct {
 	Type  Type   `json:"type"`
@@ -1232,6 +1246,7 @@ type MIRFunction struct {
 	Name             string                      `json:"name"`
 	MethodOf         string                      `json:"method_of,omitempty"`
 	Visibility       string                      `json:"visibility,omitempty"`
+	Async            *MIRAsyncFunction           `json:"async,omitempty"`
 	ReturnType       Type                        `json:"return_type"`
 	Params           []MIRName                   `json:"params,omitempty"`
 	ResultProvenance *MIRResultProvenanceSummary `json:"result_provenance,omitempty"`
@@ -1241,6 +1256,35 @@ type MIRFunction struct {
 	Foreaches        []MIRForeach                `json:"foreach,omitempty"`
 	Cleanups         []MIRCleanup                `json:"cleanups,omitempty"`
 	SourceSpan       Span                        `json:"source_span"`
+}
+
+type MIRAsyncFunction struct {
+	Identity             string          `json:"identity"`
+	MachineIdentity      string          `json:"machine_identity"`
+	StateIdentity        string          `json:"state_identity"`
+	OperationType        Type            `json:"operation_type"`
+	EventualType         Type            `json:"eventual_type"`
+	AwaitPoints          []MIRAwaitPoint `json:"await_points,omitempty"`
+	GeneratedStates      []string        `json:"generated_states"`
+	PersistentFields     []MIRName       `json:"persistent_fields,omitempty"`
+	FrameStorage         string          `json:"frame_storage"`
+	ContinuationStrategy string          `json:"continuation_strategy"`
+	ChildInvocation      string          `json:"child_invocation"`
+	Scheduler            string          `json:"scheduler"`
+	SavedPC              string          `json:"saved_pc"`
+}
+
+type MIRAwaitPoint struct {
+	Index          int      `json:"index"`
+	Continuation   string   `json:"continuation"`
+	Operand        string   `json:"operand"`
+	OperandType    Type     `json:"operand_type"`
+	ResultType     Type     `json:"result_type"`
+	LiveAcross     []string `json:"live_across,omitempty"`
+	Evaluation     string   `json:"evaluation"`
+	ChildPush      string   `json:"child_push"`
+	OutcomeConsume string   `json:"outcome_consume"`
+	SourceSpan     Span     `json:"source_span"`
 }
 
 type MIRYield struct {

@@ -1,0 +1,29 @@
+profile Core;
+
+async int Child()
+{
+    return 14;
+}
+
+async int Count()
+{
+    int total = 0;
+    int index = 0;
+    while (index < 3) bounded(3)
+    {
+        int value = await Child();
+        total = total + value;
+        index = index + 1;
+    }
+    return total;
+}
+
+int Main()
+{
+    Async<int> work = Count();
+    while (not Complete(work)) bounded(12)
+    {
+        Step(work);
+    }
+    return Result(work);
+}

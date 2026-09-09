@@ -1,0 +1,62 @@
+profile Core;
+
+automata Manual
+with state
+{
+    int value;
+}
+{
+    machine Parent
+    {
+        state Start
+        {
+            push Child goto Resumed;
+        }
+
+        state Resumed
+        {
+            state.value = state.value + 2;
+            complete;
+        }
+    }
+
+    machine Child
+    {
+        state Done
+        {
+            state.value = 40;
+            complete;
+        }
+    }
+}
+
+async int Child()
+{
+    return 40;
+}
+
+async int Parent()
+{
+    int value = await Child();
+    return value + 2;
+}
+
+int Main()
+{
+    instance Manual manual(0);
+    Step(manual, Parent);
+    Step(manual, Parent);
+    Step(manual, Parent);
+
+    Async<int> generated = Parent();
+    while (not Complete(generated)) bounded(4)
+    {
+        Step(generated);
+    }
+
+    if (manual.state.value == Result(generated))
+    {
+        return 0;
+    }
+    return 1;
+}

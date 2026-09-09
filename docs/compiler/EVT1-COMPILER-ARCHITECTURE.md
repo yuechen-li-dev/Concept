@@ -1,6 +1,6 @@
 # Concept EVT1 Stage 0 compiler architecture
 
-Status: R5c first-class inference and policy-driven transition planning
+Status: R5f bounded automata-native async/await lowering
 
 ## Authority
 
@@ -913,3 +913,20 @@ equivalence, and transition inference through strict C11. It validates infer
 and transition-infer MIR/Planner records, exactly-once evaluation, cleanup,
 and deterministic panics. Generated evidence contains no allocation, model
 runtime, RNG, scheduler, SIMD, or GPU path.
+
+## R5f async lowering boundary
+
+Parsing normalizes `async`/`asynchronous` and `await`/`awaitchronous` into one
+declaration/expression representation. Semantic analysis types calls as
+`Async<T>`, enforces movable operation use, checks ref persistence, and computes
+the locals and backing dependencies live across each await. MIR then records
+the generated machine/state identities, await points, continuation states,
+persistent fields, and no-scheduler/no-saved-PC invariants.
+
+The General Planner consumes those semantics as `AsyncPlan`; it does not infer
+liveness or scheduling policy. The C11 backend materializes capacity-eight
+inline frame storage, function-specific init/step functions, explicit state
+switches, top-frame child pushes, pop/outcome transfer, and one-shot completion
+access. Frame and result capacities have C static assertions. This generated
+substrate is scheduler-free and allocation-free and does not introduce a VM or
+C/C++ coroutine ABI.

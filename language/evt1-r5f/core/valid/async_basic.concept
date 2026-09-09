@@ -1,0 +1,23 @@
+profile Core;
+
+async int Child()
+{
+    return 41;
+}
+
+async int Outer()
+{
+    int value = await Child();
+    int second = await Child();
+    return value + second - 40;
+}
+
+int main()
+{
+    Async<int> work = Outer();
+    while (not Complete(work)) bounded(8)
+    {
+        Step(work);
+    }
+    return Result(work) - 42;
+}

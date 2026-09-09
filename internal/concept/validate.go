@@ -21,6 +21,7 @@ type evt1Scope struct {
 	machineNames      map[string]bool
 	machineResultType Type
 	machineErrorType  Type
+	inAsync           bool
 }
 
 type evt1ProvenanceKind string
@@ -117,6 +118,7 @@ func newEVT1Scope(parent *evt1Scope) *evt1Scope {
 		s.machineNames = parent.machineNames
 		s.machineResultType = parent.machineResultType
 		s.machineErrorType = parent.machineErrorType
+		s.inAsync = parent.inAsync
 	}
 	return s
 }
@@ -196,6 +198,7 @@ func evt1CloneScope(scope *evt1Scope) *evt1Scope {
 	out.machineNames = scope.machineNames
 	out.machineResultType = scope.machineResultType
 	out.machineErrorType = scope.machineErrorType
+	out.inAsync = scope.inAsync
 	for name, binding := range scope.values {
 		out.values[name] = binding
 	}
@@ -630,6 +633,9 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		if err := validateFunctionSignature(env, fn); err != nil {
 			return nil, err
 		}
+		if err := evt1ValidateAsyncShape(fn); err != nil {
+			return nil, err
+		}
 	}
 	evt1DeriveResultProvenanceSummaries(env, module.Functions)
 	for _, fn := range module.ComptimeFns {
@@ -691,6 +697,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 			return nil, err
 		}
 		scope.returnType = resolvedReturn
+		scope.inAsync = fn.Async
 		for paramIndex, param := range fn.Params {
 			resolvedParam, err := evt1ResolveType(env, nil, param.Type)
 			if err != nil {
@@ -708,6 +715,10 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		collectEscapedArmBindings(fn.Body, env)
 		env.validatingMethod = fn.MethodOf
 		if err := validateBlock(env, scope, resolvedReturn, *fn.Body, nil, false); err != nil {
+			env.validatingMethod = ""
+			return nil, err
+		}
+		if err := evt1ValidateAsyncPersistence(fn); err != nil {
 			env.validatingMethod = ""
 			return nil, err
 		}
@@ -1125,6 +1136,15 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				}
 				return evt1Diagnostic("CV4106", fmt.Sprintf("constructor or initializer for %s expected %s but got %s", s.Name, resolvedType.String(), valueType.String()), s.Value.exprSpan())
 			}
+			if resolvedType.Kind == TypeAsync && valueType.AsyncOrigin != "" {
+				resolvedType.AsyncOrigin = valueType.AsyncOrigin
+				s.Type = resolvedType
+			}
+			if resolvedType.Kind == TypeAsync {
+				if _, named := s.Value.(*NameExpr); named {
+					return evt1Diagnostic("ASYNC_COPY_INVALID", "active Async values are movable-only; use move to transfer the operation", s.Value.exprSpan())
+				}
+			}
 			if !s.Comptime && valueType.isOwned() && !evt1CanTransferInitialize(env, resolvedType, s.Value) && !evt1TypeDependsOnParam(valueType, typeParam) {
 				return evt1Diagnostic("CV4501", fmt.Sprintf("copy of non-copyable type %s requires move", valueType.String()), s.Value.exprSpan())
 			}
@@ -1424,6 +1444,9 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 		case *ReturnStmt:
 			if s.Value == nil {
 				if returnType.Name != "void" {
+					if local.inAsync {
+						return evt1Diagnostic("ASYNC_NEUTRAL_VALUE_MISMATCH", fmt.Sprintf("value-bearing async function requires a %s completion value", returnType.String()), s.Span)
+					}
 					return evt1Diagnostic("CV4022", fmt.Sprintf("return requires a %s value", returnType.String()), s.Span)
 				}
 				continue
@@ -2102,6 +2125,15 @@ func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string,
 		return evt1Diagnostic("CV4148", fmt.Sprintf("unknown concept parameter %s", t.Name), span)
 	}
 	if len(t.TypeArgs) > 0 {
+		if t.Name == "Async" {
+			if len(t.TypeArgs) != 1 {
+				return evt1Diagnostic("ASYNC_RETURN_TYPE_INVALID", "Async requires exactly one eventual value type", span)
+			}
+			if err := validateKnownType(env, t.TypeArgs[0], span, conceptParam, false); err != nil {
+				return err
+			}
+			return nil
+		}
 		if t.Name == evt1InferenceName {
 			if len(t.TypeArgs) != 1 {
 				return evt1Diagnostic("INFERENCE_TYPE_INVALID", "Inference requires exactly one candidate type", span)
@@ -2190,6 +2222,24 @@ func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string,
 
 func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
 	switch e := expr.(type) {
+	case *AwaitExpr:
+		if !scope.inAsync || inComptimeFn || scope.inAutomataState {
+			return Type{}, evt1Diagnostic("AWAIT_OUTSIDE_ASYNC", "await is only valid inside an async function", e.Span)
+		}
+		if name, named := e.Value.(*NameExpr); named {
+			if binding, found := scope.lookup(name.Name); found && binding.t.Kind == TypeAsync {
+				return Type{}, evt1Diagnostic("ASYNC_COPY_INVALID", "awaiting a named Async operation transfers it into the machine stack; use await move operation", e.Span)
+			}
+		}
+		operand, err := validateExpr(env, scope, e.Value, templateInfo, inComptimeFn)
+		if err != nil {
+			return Type{}, err
+		}
+		if operand.Kind != TypeAsync || operand.Name != "Async" || len(operand.TypeArgs) != 1 {
+			return Type{}, evt1Diagnostic("AWAIT_REQUIRES_ASYNC_VALUE", fmt.Sprintf("await requires Async<T>, got %s", operand.String()), e.Span)
+		}
+		e.ResultType = evt1CanonicalType(env, operand.TypeArgs[0])
+		return e.ResultType, nil
 	case *IntLiteral:
 		t, _ := evt1BuiltinType("int", e.Span)
 		return t, nil
@@ -2313,6 +2363,52 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 	case *CallExpr:
 		if e.Member {
 			return evt1ValidateMemberCall(env, scope, e, templateInfo, inComptimeFn)
+		}
+		if e.Callee == "Step" || e.Callee == "Complete" || e.Callee == "Result" {
+			asyncOperand := false
+			if len(e.Args) == 1 {
+				switch arg := e.Args[0].(type) {
+				case *NameExpr:
+					binding, found := scope.lookup(arg.Name)
+					asyncOperand = found && binding.t.Kind == TypeAsync
+				case *CallExpr:
+					for _, candidate := range env.functions[arg.Callee] {
+						if candidate.Async {
+							asyncOperand = true
+							break
+						}
+					}
+				}
+			}
+			if len(e.Args) == 1 && asyncOperand {
+				if e.Callee == "Result" {
+					if name, ok := e.Args[0].(*NameExpr); ok {
+						binding, _ := scope.lookup(name.Name)
+						if len(binding.t.TypeArgs) == 1 && !evt1TypeCopyable(env, binding.t.TypeArgs[0]) && binding.state == evt1StorageMoved {
+							return Type{}, evt1Diagnostic("ASYNC_DOUBLE_RESULT_CONSUME", "movable-only async result was already consumed", e.Span)
+						}
+					}
+				}
+				argType, err := validateExpr(env, scope, e.Args[0], templateInfo, inComptimeFn)
+				if err != nil {
+					return Type{}, err
+				}
+				if argType.Kind == TypeAsync && len(argType.TypeArgs) == 1 {
+					if e.Callee == "Step" {
+						e.Intrinsic = "async_step"
+						return Type{Name: "void", Kind: TypeBuiltin, Span: e.Span}, nil
+					}
+					if e.Callee == "Complete" {
+						e.Intrinsic = "async_complete"
+						return Type{Name: "bool", Kind: TypeBuiltin, Span: e.Span}, nil
+					}
+					e.Intrinsic = "async_result"
+					if name, ok := e.Args[0].(*NameExpr); ok && !evt1TypeCopyable(env, argType.TypeArgs[0]) {
+						scope.setState(name.Name, evt1StorageMoved)
+					}
+					return evt1CanonicalType(env, argType.TypeArgs[0]), nil
+				}
+			}
 		}
 		if e.Callee == "Result" {
 			if inComptimeFn {
@@ -2511,6 +2607,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			if err := validateCallArgument(env, scope, fn.Params[i].Type, arg, argTypes[i], templateInfo); err != nil {
 				return Type{}, err
 			}
+		}
+		if fn.Async {
+			return Type{Name: "Async", Kind: TypeAsync, TypeArgs: []Type{evt1CanonicalType(env, fn.ReturnType)}, AsyncOrigin: fn.Name, Span: e.Span}, nil
 		}
 		return evt1CanonicalType(env, fn.ReturnType), nil
 	case *DispatchExpr:
@@ -4370,6 +4469,9 @@ func evt1ByValueTypeName(t Type) (string, bool) {
 }
 
 func evt1TypeCopyable(env *semanticEnv, t Type) bool {
+	if t.Kind == TypeAsync || t.Name == "Async" {
+		return false
+	}
 	if evt1IsTensorType(t) {
 		return true
 	}

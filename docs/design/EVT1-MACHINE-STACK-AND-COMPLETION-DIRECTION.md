@@ -1,6 +1,6 @@
 # EVT1 machine stack and completion direction
 
-Status: R5e implemented
+Status: R5f async mapping implemented over the R5e stack law
 
 R5e finishes the partial substrate already present in Concept. The older
 signal automata compiler had a bounded continuation stack, PoC3 Phase 13/18 had
@@ -44,6 +44,10 @@ name or apply policy to this workflow without another stack. Current Oct
 `remember`/`resume` is one overwriting state-target slot, cleared by resume;
 that policy is not promoted into Concept core.
 
-A future async compiler can generate a parent continuation state, push a child,
-Step it until pop, inspect its outcome, and Step the revealed parent. R5e adds
-no async/await, futures, task runtime, event loop, scheduler, or LIR.
+R5f generates a parent continuation state, pushes the child, leaves a yielded
+child on top, consumes its completion outcome once, and resumes the revealed
+parent on a later explicit Step. A direct async call constructs an inline
+operation; it does not run the body. A named operation may be adopted only by
+explicit move. This is the same bounded LIFO and completion law, specialized
+as generated frames; there is still no saved PC, futures framework, task
+runtime, event loop, scheduler, hidden heap, or LIR.

@@ -1,0 +1,17 @@
+profile Core;
+
+async int Work()
+{
+    return 42;
+}
+
+int Main()
+{
+    Async<int> first = Work();
+    Async<int> second = move first;
+    while (not Complete(second)) bounded(2)
+    {
+        Step(second);
+    }
+    return Result(second);
+}

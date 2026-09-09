@@ -1,6 +1,6 @@
 # Concept EVT1 language specification foundation
 
-Status: R5c canonical first-class inference and policy-driven transitions
+Status: R5f bounded automata-native async/await
 
 This document defines the authority categories and the smallest currently
 executable EVT1 language foundation. It is derived from the retired Concept
@@ -1101,8 +1101,56 @@ parent-state form. Tags are 1 Neutral, 2 Success, and 3 Failure, with typed
 `success`/`failure` fields when declared. A pre-completion read panics with
 `machine result cannot be read before completion`. Machine outcome is not
 `Result<T,E>`, and Neutral fabricates no value. Internal Step status remains
-distinct and non-public. Future async may generate explicit states and use
-this same stack; async syntax is not R5e.
+distinct and non-public.
+
+**Canonical EVT1 R5f async/await.** `async` and `asynchronous` are exact
+lexical aliases on a function declaration. `await` and `awaitchronous` are
+likewise exact aliases. Parsing normalizes each pair to one AST form, so they
+have identical typing, MIR, diagnostics, and lowering.
+
+Calling `async T F(...)` constructs an explicit movable-only `Async<T>` value.
+Construction initializes fixed inline generated-machine storage but executes
+no function body. The caller advances it with `Step(operation)`, tests it with
+`Complete(operation)`, and reads its eventual value with `Result(operation)`.
+A copyable result may be read again; a movable-only result is consumed once.
+Reading a result before completion, copying an active operation, consuming a
+movable result twice, or exceeding the bounded depth
+of eight frames is a deterministic error. There is no truth conversion.
+
+An async function has stable generated identities `F#async`,
+`F#async#state`, and `F#async#machine`. Each await point has an explicit
+generated continuation state. Its operand is evaluated once, the child
+machine is pushed, and only the top frame is advanced. Child yield leaves the
+child active. Child completion pops it, records one outcome, and a later Step
+dispatches the revealed parent continuation, which consumes that outcome
+once. Awaiting an already-completed moved operation uses the same outcome law
+without another child step.
+
+Parameters and locals live across an await become fields of the generated
+inline frame. Transitive backing objects needed by ref, Span, tensor, or
+storage views are retained as required by ordinary provenance. Dead locals
+remain lexical and are cleaned before the child push. Persistent owned values
+are cleaned once at function completion or transferred by explicit `move`.
+References stored across await must be proven to outlive the operation; no
+unrelated lexical value is captured.
+
+`await Child()?` first awaits `Async<Result<T,E>>` and then applies the
+ordinary exact-error `?` law to the resulting `Result<T,E>`. Async machine
+Success carrying a `Result` is not `Result::Ok`; these are distinct layers.
+Value-returning async functions complete with a value, while `async void`
+completes neutrally. Bare return from a value-returning async function is
+invalid.
+
+R5f admits sequential awaits and bounded generated states for simple `if`,
+`while`, and fixed contiguous `foreach`. Foreach iterator index and current
+item persist when live. Await in a match arm and more than one await in a
+single simple branch/loop body are deferred with an explicit diagnostic.
+
+Async/await is source-level automation of explicit machine-stack state
+progression. Await continues after the suspension point; bare machine yield
+re-enters the state from its beginning. Async implies no scheduler, executor,
+thread, event loop, VM, coroutine ABI, saved instruction pointer, or hidden
+heap allocation.
 
 ## 23. Effects, actuators, and profiles
 

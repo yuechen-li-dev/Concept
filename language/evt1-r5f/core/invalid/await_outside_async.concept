@@ -1,0 +1,11 @@
+profile Core;
+
+async int Child()
+{
+    return 1;
+}
+
+int Main()
+{
+    return await Child();
+}

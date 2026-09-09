@@ -1,0 +1,22 @@
+profile Core;
+
+async void Child()
+{
+    return;
+}
+
+async int Parent()
+{
+    await Child();
+    return 42;
+}
+
+int Main()
+{
+    Async<int> work = Parent();
+    while (not Complete(work)) bounded(4)
+    {
+        Step(work);
+    }
+    return Result(work);
+}

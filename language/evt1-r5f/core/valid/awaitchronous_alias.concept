@@ -1,0 +1,12 @@
+profile Core;
+
+asynchronous int Child()
+{
+    return 7;
+}
+
+asynchronous int AwaitBasic()
+{
+    int value = awaitchronous Child();
+    return value;
+}

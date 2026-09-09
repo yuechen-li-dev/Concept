@@ -1,0 +1,12 @@
+profile Core;
+
+async int Work()
+{
+    return 42;
+}
+
+int Main()
+{
+    Async<int> work = Work();
+    return Result(work);
+}

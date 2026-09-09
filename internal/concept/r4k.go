@@ -210,6 +210,9 @@ func evt1ValidateMemberCall(env *semanticEnv, scope *evt1Scope, call *CallExpr, 
 			return Type{}, err
 		}
 	}
+	if fn.Async {
+		return evt1AsyncType(evt1CanonicalType(env, fn.ReturnType), fn.Name, call.Span), nil
+	}
 	return evt1CanonicalType(env, fn.ReturnType), nil
 }
 

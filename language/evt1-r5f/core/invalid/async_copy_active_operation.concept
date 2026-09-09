@@ -1,0 +1,13 @@
+profile Core;
+
+async int Child()
+{
+    return 1;
+}
+
+int Main()
+{
+    Async<int> first = Child();
+    Async<int> second = first;
+    return 0;
+}

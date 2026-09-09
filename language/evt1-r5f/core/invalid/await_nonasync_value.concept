@@ -1,0 +1,7 @@
+profile Core;
+
+async int Main()
+{
+    int value = 1;
+    return await value;
+}

@@ -1,0 +1,23 @@
+profile Core;
+
+async int Child()
+{
+    return 2;
+}
+
+async int ReadAfterAwait(ref const int retained)
+{
+    int child = await Child();
+    return retained + child;
+}
+
+int Main()
+{
+    int retained = 40;
+    Async<int> work = ReadAfterAwait(ref const retained);
+    while (not Complete(work)) bounded(4)
+    {
+        Step(work);
+    }
+    return Result(work);
+}

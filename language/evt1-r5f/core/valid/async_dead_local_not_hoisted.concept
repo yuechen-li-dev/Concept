@@ -1,0 +1,23 @@
+profile Core;
+
+async int Child()
+{
+    return 42;
+}
+
+async int DeadLocal()
+{
+    int dead = 7;
+    int child = await Child();
+    return child;
+}
+
+int Main()
+{
+    Async<int> work = DeadLocal();
+    while (not Complete(work)) bounded(4)
+    {
+        Step(work);
+    }
+    return Result(work);
+}

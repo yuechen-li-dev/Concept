@@ -1,0 +1,32 @@
+profile Core;
+
+struct Resource
+{
+    int value;
+}
+
+void Drop(owned Resource resource)
+{
+}
+
+async int Child()
+{
+    return 2;
+}
+
+async int OwnedLocal()
+{
+    owned Resource retained = Resource{40};
+    int child = await Child();
+    return retained.value + child;
+}
+
+int Main()
+{
+    Async<int> work = OwnedLocal();
+    while (not Complete(work)) bounded(4)
+    {
+        Step(work);
+    }
+    return Result(work);
+}

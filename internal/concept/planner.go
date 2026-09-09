@@ -304,6 +304,34 @@ type FunctionPlan struct {
 	Failure     []PlanningDecision `json:"failure_plans,omitempty"`
 	ControlFlow []PlanningDecision `json:"control_flow_plans,omitempty"`
 	Foreaches   []ForeachPlan      `json:"foreach_plans,omitempty"`
+	Async       *AsyncPlan         `json:"async_plan,omitempty"`
+}
+
+type AsyncPlan struct {
+	Identity            string      `json:"identity"`
+	Lowering            string      `json:"lowering"`
+	FrameStorage        string      `json:"frame_storage"`
+	Continuation        string      `json:"continuation"`
+	ChildInvocation     string      `json:"child_invocation"`
+	Scheduler           string      `json:"scheduler"`
+	SavedPC             string      `json:"saved_pc"`
+	AwaitCount          int         `json:"await_count"`
+	GeneratedStates     []string    `json:"generated_states"`
+	PersistentFields    []MIRName   `json:"persistent_fields,omitempty"`
+	AsyncFrameSize      int         `json:"async_frame_size"`
+	AsyncFrameAlignment int         `json:"async_frame_alignment"`
+	MaxChildDepth       int         `json:"max_child_depth"`
+	CleanupStrategy     string      `json:"cleanup_strategy"`
+	Awaits              []AwaitPlan `json:"await_plans,omitempty"`
+}
+
+type AwaitPlan struct {
+	Index          int      `json:"index"`
+	Continuation   string   `json:"continuation"`
+	LiveAcross     []string `json:"live_across,omitempty"`
+	Evaluation     string   `json:"evaluation"`
+	ChildPush      string   `json:"child_push"`
+	OutcomeConsume string   `json:"outcome_consume"`
 }
 
 type LoweringPlan struct {
@@ -386,6 +414,14 @@ func GeneratePlan(module Module, target TargetCapabilities) ([]byte, error) {
 func planFunction(fn MIRFunction, facts SemanticFactSet, target TargetCapabilities) FunctionPlan {
 	encoded, _ := json.Marshal(fn)
 	fp := FunctionPlan{Function: fn.Name, MIRIdentity: digest(encoded), Target: target.Architecture, Cleanup: CleanupPlan{Strategy: "ReverseDeclarationOrder"}}
+	if fn.Async != nil {
+		a := fn.Async
+		ap := &AsyncPlan{Identity: a.Identity, Lowering: "GeneratedMachine", FrameStorage: "Inline", Continuation: "ExplicitGeneratedState", ChildInvocation: "MachinePush", Scheduler: "None", SavedPC: "None", AwaitCount: len(a.AwaitPoints), GeneratedStates: append([]string{}, a.GeneratedStates...), PersistentFields: append([]MIRName{}, a.PersistentFields...), AsyncFrameSize: evt1AsyncFrameBytes, AsyncFrameAlignment: target.PreferredAlignment, MaxChildDepth: evt1MachineStackCapacity, CleanupStrategy: "LexicalDeadBeforePushPersistentAtCompletion"}
+		for _, await := range a.AwaitPoints {
+			ap.Awaits = append(ap.Awaits, AwaitPlan{Index: await.Index, Continuation: await.Continuation, LiveAcross: append([]string{}, await.LiveAcross...), Evaluation: await.Evaluation, ChildPush: await.ChildPush, OutcomeConsume: await.OutcomeConsume})
+		}
+		fp.Async = ap
+	}
 	for _, inference := range fn.Inferences {
 		fp.Inferences = append(fp.Inferences, InferencePlan{CandidateType: inference.CandidateType.String(), Normalization: inference.Normalization, MaxSubtraction: true, CandidateCount: len(inference.Candidates), Storage: "InlineFixed", SIMDEligibility: "Deferred", SelectedSIMD: false})
 	}
@@ -751,6 +787,19 @@ func ValidateLoweringPlan(mir *MIR, facts *SemanticFactSet, plan *LoweringPlan) 
 		encoded, _ := json.Marshal(fn)
 		if fp.Function != fn.Name || fp.MIRIdentity != digest(encoded) {
 			return fail("PLAN_ARTIFACT_INVALID", "function plan references stale or reordered MIR")
+		}
+		if fn.Async != nil {
+			if fp.Async == nil || fp.Async.Identity != fn.Async.Identity || fp.Async.Lowering != "GeneratedMachine" || fp.Async.FrameStorage != "Inline" || fp.Async.Continuation != "ExplicitGeneratedState" || fp.Async.ChildInvocation != "MachinePush" || fp.Async.Scheduler != "None" || fp.Async.SavedPC != "None" || fp.Async.AwaitCount != len(fn.Async.AwaitPoints) || len(fp.Async.GeneratedStates) != len(fn.Async.GeneratedStates) {
+				return fail("PLAN_ASYNC_INVALID", "async plan invents runtime policy or omits generated-state evidence")
+			}
+			expectedAsync := planFunction(fn, *facts, plan.Target).Async
+			expectedJSON, _ := json.Marshal(expectedAsync)
+			actualJSON, _ := json.Marshal(fp.Async)
+			if string(actualJSON) != string(expectedJSON) {
+				return fail("PLAN_ASYNC_INVALID", "async plan does not preserve MIR continuation, storage, liveness, depth, or cleanup evidence")
+			}
+		} else if fp.Async != nil {
+			return fail("PLAN_ASYNC_INVALID", "sync function has an async lowering plan")
 		}
 		ops := map[string]MIROperation{}
 		for _, op := range fn.Operations {

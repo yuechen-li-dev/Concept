@@ -1,0 +1,18 @@
+profile Core;
+
+async int Leaf()
+{
+    return 40;
+}
+
+async int Child()
+{
+    int value = await Leaf();
+    return value + 1;
+}
+
+async int Parent()
+{
+    int value = await Child();
+    return value + 1;
+}

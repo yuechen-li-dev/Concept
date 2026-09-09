@@ -1,6 +1,6 @@
 # EVT1 automata state-capture direction
 
-Status: R5e bounded machine stack and completion implemented; effects deferred
+Status: R5f async generated-state capture implemented; effects deferred
 
 ## Reconciliation
 
@@ -178,4 +178,11 @@ DragonGod's fixed `AutomataStack` supplied bounded-LIFO pressure, but its
 StateId/Reason policy records are not compiler machine storage. Remember/Resume
 remains library vocabulary over parent preservation and explicit resume state;
 there is no second stack or arbitrary saved instruction pointer. Future await
-may generate the state/push/outcome workflow, but R5e adds no async scheduler.
+R5f now generates that same state/push/outcome workflow for async functions.
+Unlike explicit `with state`, which is an authored shared automata environment,
+an async frame contains only parameters and compiler-proven live-across-await
+locals plus required backing dependencies. This is mechanically derived state,
+not arbitrary implicit capture. Both forms use typed inline persistent storage,
+ordinary provenance and Drop law, and explicit state identity. Await resumes in
+a generated continuation state; it does not save an instruction pointer or add
+a scheduler.

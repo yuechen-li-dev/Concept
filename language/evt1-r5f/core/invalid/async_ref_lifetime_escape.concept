@@ -1,0 +1,14 @@
+profile Core;
+
+async int Child()
+{
+    return 1;
+}
+
+async int Invalid()
+{
+    int local = 40;
+    ref int retained = ref local;
+    int value = await Child();
+    return retained + value;
+}

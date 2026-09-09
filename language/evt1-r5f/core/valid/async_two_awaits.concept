@@ -1,0 +1,23 @@
+profile Core;
+
+async int Child(int value)
+{
+    return value + 1;
+}
+
+async int TwoAwaits()
+{
+    int first = await Child(19);
+    int second = await Child(first);
+    return second + 21;
+}
+
+int Main()
+{
+    Async<int> work = TwoAwaits();
+    while (not Complete(work)) bounded(8)
+    {
+        Step(work);
+    }
+    return Result(work);
+}
