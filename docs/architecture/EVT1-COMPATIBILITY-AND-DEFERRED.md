@@ -34,6 +34,7 @@ inline compiler tests.
 |---|---|---|---|
 | `.concept_test`, test attributes, deterministic test runner, `Assert.*` | R6a tooling/library | Canonical tooling | implemented without changing frozen function/body semantics |
 | `Assert.Concept`, proof diagnostics, `concept explain`, `concept-proof.v1` | R6b tooling | Canonical tooling | compile-time semantic query with no runtime lowering |
+| reference allocator framework and authoritative allocation summaries | post-freeze language/library prerequisite, then R6c | Blocked after feasibility audit | ordinary allocator implementation requires generic runtime types, generic type geometry, applied-type ownership/Drop, Core library composition, a hosted external-operation seam, and operation summaries; see `docs/design/EVT1-ALLOCATOR-DIRECTION.md` |
 | richer theory providers, exact prophecy termination matching, parallel tests, lifecycle hooks, statistical benchmark framework | later R6 tooling | Deferred | R6a keeps JSON positional rows, sequential reporting, and lightweight timing |
 | formatter, lint, diagnostics UX, build/package tooling, LSP | R6 tooling | Deferred | consume the frozen semantic model |
 | source auto-fix, IDE proof visualization, arbitrary proof queries, solver edits, LLM-ranked repairs, Planner explanations | post-R6b tooling | Deferred | consume authoritative proof graphs without moving semantic authority |
