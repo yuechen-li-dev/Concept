@@ -120,6 +120,14 @@ func TestAutomataStateMIRAndPlanner(t *testing.T) {
 	}
 }
 
+func TestAutomataStateStableInvalidStateReason(t *testing.T) {
+	outputs := automataStateFixture(t, "valid", "automata_basic.concept")
+	generated := string(outputs["automata_basic.generated.c"])
+	if !strings.Contains(generated, "invalid machine state reached") {
+		t.Fatal("stable invalid-machine-state reason is missing")
+	}
+}
+
 func hasMIROperation(operations []MIROperation, kind string) bool {
 	for _, operation := range operations {
 		if operation.Kind == kind {

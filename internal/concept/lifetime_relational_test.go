@@ -76,7 +76,7 @@ func TestRelationalLifetimeConformance(t *testing.T) {
 }
 
 func TestRelationalLifetimeMIRRelationalEvidence(t *testing.T) {
-	outputs := generateR4bFixture(t, "outlives_requirement_pass.concept")
+	outputs := generateRelationalLifetimeFixture(t, "outlives_requirement_pass.concept")
 	var mir MIR
 	if err := json.Unmarshal(outputs["outlives_requirement_pass.mir.json"], &mir); err != nil {
 		t.Fatal(err)
@@ -101,14 +101,14 @@ func TestRelationalLifetimeMIRRelationalEvidence(t *testing.T) {
 		t.Fatalf("deterministic proof identity lacks its parameter subject: %+v", proof)
 	}
 
-	second := generateR4bFixture(t, "outlives_requirement_pass.concept")
+	second := generateRelationalLifetimeFixture(t, "outlives_requirement_pass.concept")
 	if !bytes.Equal(outputs["outlives_requirement_pass.mir.json"], second["outlives_requirement_pass.mir.json"]) {
 		t.Fatal("R4b MIR proof serialization is not deterministic")
 	}
 }
 
 func TestRelationalLifetimeNestedResultSummary(t *testing.T) {
-	outputs := generateR4bFixture(t, "nested_ref_struct_provenance.concept")
+	outputs := generateRelationalLifetimeFixture(t, "nested_ref_struct_provenance.concept")
 	var mir MIR
 	if err := json.Unmarshal(outputs["nested_ref_struct_provenance.mir.json"], &mir); err != nil {
 		t.Fatal(err)
@@ -122,7 +122,7 @@ func TestRelationalLifetimeNestedResultSummary(t *testing.T) {
 }
 
 func TestRelationalLifetimePassThroughResultSummary(t *testing.T) {
-	outputs := generateR4bFixture(t, "call_result_ref_struct.concept")
+	outputs := generateRelationalLifetimeFixture(t, "call_result_ref_struct.concept")
 	var mir MIR
 	if err := json.Unmarshal(outputs["call_result_ref_struct.mir.json"], &mir); err != nil {
 		t.Fatal(err)
@@ -136,7 +136,7 @@ func TestRelationalLifetimePassThroughResultSummary(t *testing.T) {
 }
 
 func TestRelationalLifetimeShortestOfParametersSummary(t *testing.T) {
-	outputs := generateR4bFixture(t, "multi_source_shortest_lifetime.concept")
+	outputs := generateRelationalLifetimeFixture(t, "multi_source_shortest_lifetime.concept")
 	var mir MIR
 	if err := json.Unmarshal(outputs["multi_source_shortest_lifetime.mir.json"], &mir); err != nil {
 		t.Fatal(err)
@@ -188,7 +188,7 @@ func TestRelationalLifetimeNativeC11(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.fixture, func(t *testing.T) {
-			outputs := generateR4bFixture(t, tc.fixture)
+			outputs := generateRelationalLifetimeFixture(t, tc.fixture)
 			base := strings.TrimSuffix(tc.fixture, ".concept")
 			harness := "#include \"" + base + ".generated.h\"\n\nint main(void) { return " + tc.call + "() == " + strconv.Itoa(tc.want) + " ? 0 : 1; }\n"
 			runFoundationNativeHarness(t, outputs, base+"_harness.c", harness)
@@ -196,7 +196,7 @@ func TestRelationalLifetimeNativeC11(t *testing.T) {
 	}
 }
 
-func generateR4bFixture(t *testing.T, fixture string) Outputs {
+func generateRelationalLifetimeFixture(t *testing.T, fixture string) Outputs {
 	t.Helper()
 	path := filepath.Join("..", "..", "language", "evt1", "lifetime", "relational", "valid", fixture)
 	source, err := os.ReadFile(path)

@@ -2,7 +2,7 @@
   "schema": "concept-evt1-semantic-corpus-v1",
   "compiler_id": "concept-evt1-stage0-go",
   "totals": {
-    "valid": 376,
+    "valid": 379,
     "static_invalid": 243,
     "runtime_negative": 13,
     "compatibility": 5,
@@ -33,7 +33,8 @@
     { "subsystem": "Async control flow", "path": "async/control-flow", "valid": 23, "static_invalid": 5, "runtime_negative": [], "historical_milestones": ["R5g"] },
     { "subsystem": "Async interfaces", "path": "async/interface", "valid": 19, "static_invalid": 10, "runtime_negative": [], "historical_milestones": ["R5h"] },
     { "subsystem": "Callable capture", "path": "callable/capture", "valid": 20, "static_invalid": 12, "runtime_negative": [], "historical_milestones": ["R5i"] },
-    { "subsystem": "Callable types", "path": "callable/types", "valid": 18, "static_invalid": 8, "runtime_negative": [], "historical_milestones": ["R5j"] }
+    { "subsystem": "Callable types", "path": "callable/types", "valid": 18, "static_invalid": 8, "runtime_negative": [], "historical_milestones": ["R5j"] },
+    { "subsystem": "Cross-domain composition", "path": "composition", "valid": 3, "static_invalid": 0, "runtime_negative": [], "historical_milestones": ["R5k"] }
   ],
   "compatibility_fixtures": [
     "values/valid/let_const_alias.concept",

@@ -1,6 +1,6 @@
 # Concept EVT1 Stage 0 compiler architecture
 
-Status: R5j exact callable type aliases and storage
+Status: R5 language-core semantics frozen for R6 tooling
 
 ## Authority
 
@@ -32,7 +32,7 @@ Concept source
   -> source map and generation manifest
 ```
 
-`internal/concept` is intentionally one coherent package in R0. Parser,
+`internal/concept` is intentionally one coherent package in foundation. Parser,
 semantic, template, comptime, automata, MIR, and C-generation code share dense
 private invariants inherited from the working compiler. Splitting them before
 those boundaries stabilize would replace known coupling with exported coupling.
@@ -60,9 +60,9 @@ and `concept.Write`. Public representation names are neutral (`Module`, `Type`,
 `MIR`, and declaration-specific types). The active compiler ID is
 `concept-evt1-stage0-go`.
 
-## R4l General Planner
+## General Planner
 
-R4l inserts an explicit, backend-independent planning stage after qualified
+Planner semantics inserts an explicit, backend-independent planning stage after qualified
 MIR. `PlanModule` receives only the MIR module, `SemanticFactSet`, a bounded
 `TargetCapabilities`, the selected `ProfileDefinition`, and an explicit
 `CompilationPolicy`. It produces versioned `concept-evt1-plan.v1` JSON with a
@@ -82,7 +82,7 @@ descriptions; they do not enable native code generation.
 
 Fixed inline storage's 64-byte alignment is an existing EVT1 semantic
 guarantee, not a target preference: semantic bind validation and qualified MIR
-facts already depend on it. R4l therefore preserves it as Proven evidence.
+facts already depend on it. Planner semantics therefore preserves it as Proven evidence.
 `PreferredAlignment` is separate target policy and cannot weaken that semantic
 guarantee.
 
@@ -92,7 +92,7 @@ Every EVT1 source unit explicitly selects `profile Core;` or `profile Vulkan;`.
 Core modules cannot admit domain imports, Vulkan runtime types, effects, or
 actuators. This is enforced before ordinary semantic analysis.
 
-R1 introduces a deliberately small data-owned `ProfileDefinition`:
+foundation conformance introduces a deliberately small data-owned `ProfileDefinition`:
 
 ```text
 lexer / parser
@@ -116,11 +116,11 @@ marked as a profile implementation seam because it depends on private semantic
 environment types.
 
 Likewise, dense effect-batch and actuator C emission remains in the cohesive
-lowerer behind profile admission. R1 records this as a profile lowering hook,
+lowerer behind profile admission. foundation conformance records this as a profile lowering hook,
 not as Core language law. Splitting it would require exporting unstable private
 semantic state and is outside this isolation milestone.
 
-R5b retains the R5a `automata -> machine -> state` canonical Core hierarchy while
+transition semantics retains the automata state semantics `automata -> machine -> state` canonical Core hierarchy while
 retaining the older signal-driven form as compatibility evidence. Explicit
 `with state` capture lowers before planning into one named shared environment;
 machine fields and state locals remain distinct persistent/transient storage
@@ -137,9 +137,9 @@ has no Prometheus package, builtin type, or application binding dependency.
 **Vulkan is an extension of Concept EVT1. Concept EVT1 is not an extension of
 Vulkan.**
 
-## R2 value/place implementation
+## Value and place implementation
 
-R2 keeps these semantics in compiler core:
+value semantics keeps these semantics in compiler core:
 
 - `parse.go` recognizes `record struct`, binding `const`/typed `let`, and
   `WithExpr`, preserving modifier, keyword, field-name, and value spans;
@@ -165,13 +165,13 @@ immovable structs. C mutation used to construct a fresh record is not exposed
 as Concept-level mutability. C `const` is not relied upon for correctness; the
 semantic validator is authoritative.
 
-No R2 rule is registered in `ProfileDefinition` or implemented by the Vulkan
+No value semantics rule is registered in `ProfileDefinition` or implemented by the Vulkan
 package. A Vulkan-positive corpus case proves that the profile inherits these
 core semantics unchanged.
 
-## R3 move, drop, and reference implementation
+## Move, Drop, and reference implementation
 
-R3 remains entirely in compiler core:
+ownership semantics remains entirely in compiler core:
 
 - `parse.go` recognizes `move` and `ref` prefix expressions, `ref T` / `ref
   const T` types, and statement-form `if`, retaining keyword and operand spans;
@@ -188,10 +188,10 @@ R3 remains entirely in compiler core:
 - call and return validation distinguishes fresh values, copyable reads, and
   explicit transfer from an existing owner. The type checker rejects implicit
   copies before C lowering;
-- reference binding reuses the R2 lvalue classifier. It requires an existing
+- reference binding reuses the value semantics lvalue classifier. It requires an existing
   place, checks const-to-mutable binding, preserves record-field read-only
   status, and allows immovable final storage to be mutated through `ref`;
-- all reference returns are rejected in R3. This is an explicit bounded escape
+- all reference returns are rejected in ownership semantics. This is an explicit bounded escape
   rule, not a lifetime inference framework;
 - MIR operations expose `move`, `ref`, and `ref_const`. Function cleanup
   metadata lists each Drop owner in reverse declaration order with its witness
@@ -202,13 +202,13 @@ R3 remains entirely in compiler core:
   and the backend uses the validated Drop witness rather than inferring C
   destructors.
 
-No R3 rule is registered in `ProfileDefinition`. The Vulkan-positive immovable
+No ownership semantics rule is registered in `ProfileDefinition`. The Vulkan-positive immovable
 reference case passes through the same parser, validator, MIR, and C lowerer as
 Core.
 
-## R4a-R4b lifetime and semantic-requirement implementation
+## Lifetime and semantic-requirement implementation
 
-R4a extends the existing concept resolver rather than adding a template-local
+lexical lifetime analysis extends the existing concept resolver rather than adding a template-local
 lifetime subsystem:
 
 ```text
@@ -226,7 +226,7 @@ lifetime proof runs because the selected concept requests it. Successful
 proofs are retained in MIR as `semantic_proofs`; compiler-analysis
 requirements remain compile-time-only and have no C representation.
 
-R4b generalizes only the compiler-analysis argument boundary. A requirement
+relational lifetime analysis generalizes only the compiler-analysis argument boundary. A requirement
 may name bounded semantic subjects while concepts and templates retain one
 type parameter. `requires compiler.Outlives(source, result);` resolves
 `source` to a named parameter and `result` to the result of exactly one
@@ -254,7 +254,7 @@ expressions become `unknown`; there is no fixed-point region inference.
 
 At a call site, parameter indices select actual argument provenance. Scoped
 state from either the actual value or formal parameter is retained. Existing
-R4a assignment/return checks then operate on that instantiated provenance, so
+lexical lifetime analysis assignment/return checks then operate on that instantiated provenance, so
 a helper call cannot extend an inner local or hide scoped state.
 
 The `Outlives` evaluator is invoked only during concept satisfaction. It
@@ -277,7 +277,7 @@ reference fields as pointers. No lifetime metadata is emitted at runtime.
 Scoped parameters use the same pointer ABI as references after semantic
 validation.
 
-R4a also validates MIR cleanup obligations before artifact generation. Each
+lexical lifetime analysis also validates MIR cleanup obligations before artifact generation. Each
 recorded Drop owner must be unique, ordered, and either live or transferred.
 Live `owned T` replacement emits the old Drop call before evaluation/assignment
 of the new initializer and retains one final cleanup obligation for the new
@@ -321,7 +321,7 @@ silently broaden core parsing or typing. A profile-specific construct must be
 rejected outside its profile or explicitly promoted through the specification
 and reconciliation process.
 
-## R4c failure lowering
+## Failure lowering
 
 ```text
 ordinary payload-enum semantics
@@ -345,12 +345,12 @@ static_assert -> comptime Assert.True -> no runtime code
 
 Generic carriers recursively inherit copyability, transfer, immovable, and
 lifetime-bound status from their payloads. `?` and match extraction preserve
-the R4b provenance associated with the carrier; they do not create a new
+the relational lifetime analysis provenance associated with the carrier; they do not create a new
 static lifetime. Carriers with droppable payloads synthesize a deterministic
 tag-dispatching cleanup that invokes ordinary `Drop` only for the active
 variant.
 
-## R4d storage lowering
+## Array and ndarray storage lowering
 
 ```text
 source array / ndarray
@@ -364,7 +364,7 @@ source array / ndarray
 storage identities. The type record carries `StorageKind`, ordered dimensions,
 the fixed/runtime status of each extent, contiguity, and row-major layout.
 `MIR.storage_types` repeats these facts explicitly with the storage ownership
-category (`fixed_inline` for the executable R4d subset). `array_index`,
+category (`fixed_inline` for the executable array storage semantics subset). `array_index`,
 `ndarray_index`, `rank_query`, and `shape_query` operations retain intent and
 source spans; ndarray is never rewritten into nested array types.
 
@@ -378,11 +378,11 @@ Fixed storage with droppable elements lowers cleanup in reverse linear order.
 There is no `malloc`, allocator selection, variable-length C array, descriptor
 fabrication, or hidden runtime in this path.
 
-R4d adds no TensorIR. Span/ReadOnlySpan, Slice, FixedBuffer, vector, matrix,
+array storage semantics adds no TensorIR. Span/ReadOnlySpan, Slice, FixedBuffer, vector, matrix,
 tensor, alternative layouts, alias analysis, vectorization, GPU lowering, and
 allocator integration remain separate milestones.
 
-## R4e storage-binding lowering
+## Storage-binding lowering
 
 ```text
 source contiguous array / ndarray storage
@@ -409,11 +409,11 @@ is emitted. Both directions continue through the original wrapper's `data`
 member, so source and view observe the same bytes in the same linear order.
 
 Bind provenance is derived from the source expression using the existing
-R4a/R4b representation. Scoped state survives, function-result summaries may
+lexical lifetime analysis/relational lifetime analysis representation. Scoped state survives, function-result summaries may
 select a bound source parameter, and ref-struct lifetime derivation remains
-unchanged. R4e does not introduce a second view, borrow, or indexing system.
+unchanged. storage binding does not introduce a second view, borrow, or indexing system.
 
-## R4f semantic layout and stream lowering
+## Semantic layout and stream lowering
 
 ```text
 layout declaration -> fixed geometry/disjointness -> MIR layout graph
@@ -439,10 +439,10 @@ row-major indexing. Layout-bearing modules align fixed wrappers to 64 bytes;
 stronger requirements reject until explicit aligned storage exists. Streams
 emit no backing storage or dispatch. This is backend evidence, not stable ABI.
 
-## R4g bounded-span lowering
+## Bounded-span lowering
 
 ```text
-known contiguous storage or R4f region/channel
+known contiguous storage or layout and stream semantics region/channel
   -> Span / ReadOnlySpan construction
   -> interval and element-identity validation
   -> existing lexical/call-result provenance + stable parent-region identity
@@ -453,11 +453,11 @@ known contiguous storage or R4f region/channel
 
 `Span<T>` and `ReadOnlySpan<T>` reuse the applied-type architecture and are
 recognized as compiler-known ref-struct-like descriptors. Scope bindings carry
-the same lifetime provenance used by R4a/R4b plus a compact region payload:
+the same lifetime provenance used by lexical lifetime analysis/relational lifetime analysis plus a compact region payload:
 element type, stable parent identity, backing byte offset, relative element
 offset, length, byte extent, safe alignment, mutability, and contiguity. Bound
 storage descriptors retain their backing identity; layout and stream
-projections consume the R4f region facts directly.
+projections consume the layout and stream semantics region facts directly.
 
 MIR keeps `span_from_region`, `span_to_readonly`, `span_subregion`, and
 `span_index` operations until validation. Each operation must retain region,
@@ -473,9 +473,9 @@ checks, and indexing guards before dereference. There is no allocation,
 backing copy, ownership hook, or Drop obligation. The runtime descriptor is a
 lowering detail; the richer MIR facts remain compiler authority.
 
-## R4h tensor semantic MIR and lowering
+## Tensor semantic MIR and lowering
 
-R4h adds one mathematical consumer of the established storage/region facts:
+tensor semantics adds one mathematical consumer of the established storage/region facts:
 
 ```text
 array / ndarray / bound storage / layout region / stream channel / rank-1 Span
@@ -508,11 +508,11 @@ the bounded comptime evaluator. The evaluator mutates the aliased fixed-array
 value and therefore proves that symbolic indexing removes manual nested source
 loops without creating persistent hidden state.
 
-## R4h boundary inherited by R4i
+## Tensor semantic boundary
 
-- Source-level tensor ranks remain positive. R4i admits rank zero only as the
+- Source-level tensor ranks remain positive. tensor backing semantics admits rank zero only as the
   internal scalar result of vector dot product.
-- R4i closes the R4h shorthand deferral by normalizing `vector<T>` and
+- tensor backing semantics closes the tensor semantics shorthand deferral by normalizing `vector<T>` and
   `matrix<T>` exactly to `tensor<T,1>` and `tensor<T,2>`.
 - The Einstein subset accepts unambiguous multiplication-sum reductions and
   fixed symbolic initialization; explicit index-declaration syntax and
@@ -521,9 +521,9 @@ loops without creating persistent hidden state.
   sparse/tiled storage, named axes, broadcasting, autograd, and allocator-owned
   dynamic tensors are absent.
 
-## R4i shaped declarations and aliases
+## Tensor shaped declarations and aliases
 
-R4i adds one front-end normalization path above the existing R4h machinery:
+tensor backing semantics adds one front-end normalization path above the existing tensor semantics machinery:
 
 ```text
 tensor<T> name[fixed shape] / vector<T> / matrix<T>
@@ -560,9 +560,9 @@ output and two rank-one operands. The backend lowers it directly to one scalar
 accumulator and reduction loop. Source-level rank-zero tensor variables remain
 absent.
 
-## R4j semantic fact qualification
+## Semantic fact qualification
 
-R4j extends the existing analysis registry and MIR proof objects with one typed
+semantic fact qualification extends the existing analysis registry and MIR proof objects with one typed
 fact model:
 
 ```text
@@ -588,10 +588,10 @@ subjects, origin, and certainty before lowering.
 
 `SemanticFactSet` is the backend-independent consumer surface: `FactsFor`,
 `Prove`, `KnownAlignment`, `RegionOf`, and `AreDisjoint`. Future optimization
-passes consume these retained facts instead of re-running validation. R4j adds
+passes consume these retained facts instead of re-running validation. semantic fact qualification adds
 no optimizer, SIMD, noalias syntax, runtime tables, or C metadata.
 
-## R4k class, interface, and dyn path
+## Class, interface, and dyn path
 
 ```text
 class declaration
@@ -626,7 +626,7 @@ witness table per used specialization, adapter functions, and a two-pointer dyn
 value. Semantic compiler facts remain compile-time proofs and add no runtime
 table fields.
 
-## R5a automata state pipeline
+## Automata state pipeline
 
 ```text
 automata source
@@ -650,9 +650,9 @@ Transitions clean transient locals before changing the state tag. Automata and
 machine owned fields use the ordinary reverse-order Drop path; state locals use
 ordinary block cleanup. The implementation introduces no heap or runtime
 registration. The legacy signal-dispatch implementation remains beside this
-path for compatibility and is not the semantic owner of R5a state capture.
+path for compatibility and is not the semantic owner of automata state semantics state capture.
 
-## R5b transition planning pipeline
+## Transition planning pipeline
 
 ```text
 transition source
@@ -679,7 +679,7 @@ allocation, scheduler, or runtime decision object. X86_64_Generic and
 AArch64_Generic retain the same plan; branchless selection stays unselected
 until existing semantic facts can prove purity and reordering legality.
 
-## R5c inference planning pipeline
+## Inference planning pipeline
 
 ```text
 shared scored candidates -> Infer / TransitionInfer AST
@@ -695,10 +695,10 @@ SIMD. Transition plans retain explicit HardMax.
 
 GenericC11 emits fixed scalar arrays and `expf`, with no heap, model runtime,
 registry, scheduler, or RNG. Future Planner work may prove
-`HardMax(SoftMax(scores)) == HardMax(scores)`, but R5c does not eliminate
+`HardMax(SoftMax(scores)) == HardMax(scores)`, but inference semantics does not eliminate
 normalization.
 
-## R5d yield and foreach planning pipeline
+## Yield and foreach planning pipeline
 
 ```text
 yield source -> Yield MIR -> YieldPlan -> transient cleanup + Step return
@@ -719,17 +719,17 @@ for contiguous builtins. Direct-index eligibility is recorded for arrays and
 spans but remains unselected. There is no LIR, runtime iterator registry,
 coroutine frame, or hidden persistent iterator.
 
-## General limitations after R5c
+## Frozen language-core limitations
 
 - The package remains deliberately cohesive rather than prematurely split.
 - Effect/actuator validation and C runtime emission remain in-package profile
   hooks; their complete physical extraction is deferred until the private
   semantic boundary stabilizes.
 - Diagnostic codes retain the historical `CV` namespace for compatibility;
-  R2 maps its bounded slice to semantic family names and defers renumbering.
+  value semantics maps its bounded slice to semantic family names and defers renumbering.
 - The backend is the extracted strict-C11 path only.
 - Imports are represented, but Core multi-module compilation is not yet active.
-- R5b automata hierarchy, explicit state capture, machine-local fields,
+- transition semantics automata hierarchy, explicit state capture, machine-local fields,
   caller-directed stepping, basic transition, categorical transition match,
   guarded hardmax transition decide, first-class inference, and explicit-policy
   transition infer, bounded yield, and foreach are canonical. Plain value-level decide,
@@ -743,32 +743,32 @@ coroutine frame, or hidden persistent iterator.
   alias analysis, and unrestricted reference-containing
   aggregates are not implemented.
 - The remaining PoC3 allocation, stable C ABI, testing framework, owning dyn,
-  slices, and FixedBuffer surfaces are not ported. R4f has no
+  slices, and FixedBuffer surfaces are not ported. layout and stream semantics has no
   `throw`, unwinding, Option handler arm, implicit error conversion, or
   generalized panic runtime.
 
-R4b does not add a generalized place lattice or prove global alias/lifetime
+relational lifetime analysis does not add a generalized place lattice or prove global alias/lifetime
 safety. `borrow` compatibility behavior remains narrower than the canonical
 explicit `ref` spelling.
 
-## R1 executable evidence
+## Foundation differential evidence
 
 `internal/concept/conformance_test.go` and `language/evt1/foundation` provide the
 bounded differential harness and canonical source corpus. The evidence covers
 structs, payload enums, exhaustive match, ordinary control flow, concepts,
 templates, deterministic monomorphization, bounded comptime, and compile-time
 fixed arrays. `docs/conformance/EVT1-R1-CONFORMANCE.md` records classifications
-and provenance; `docs/compiler/EVT1-R1-VULKAN-ISOLATION.md` records the complete
-R1 leakage audit.
+and provenance; `docs/compiler/EVT1-VULKAN-PROFILE-ISOLATION.md` records the complete
+foundation conformance leakage audit.
 
-## R2 executable evidence
+## Values and records executable evidence
 
 `internal/concept/values_records_test.go` and `language/evt1/values` provide
 32 readable cases with semantic-family diagnostics, MIR checks, exactly-once
 base lowering proof, Core/Vulkan inheritance evidence, and native C11 runs for
 mutable struct, record update, and immovable final-storage paths.
 
-## R3 executable evidence
+## Ownership and references executable evidence
 
 `internal/concept/ownership_references_test.go` and `language/evt1/ownership` cover 31
 readable cases: 30 PASS and one retained ordinary-struct-copy
@@ -777,7 +777,7 @@ call/return transfer, MIR cleanup ownership, generated-C ordering and
 suppression, mutable and const references, record/const interaction,
 immovable-by-reference use, Vulkan inheritance, and native C11 execution.
 
-## R4a executable evidence
+## Lexical lifetime executable evidence
 
 `internal/concept/lifetime_lexical_test.go` and `language/evt1/lifetime/lexical`
 provide six valid and five invalid readable cases. They cover local and
@@ -785,7 +785,7 @@ downward-passed ref structs, scoped calls, concept-triggered lifetime proof,
 local/ref-struct/scoped/outlives rejection, unrestricted aggregate rejection,
 live owned replacement ordering, MIR proof metadata, and native C11 execution.
 
-## R4b executable evidence
+## Relational lifetime executable evidence
 
 `internal/concept/lifetime_relational_test.go` and `language/evt1/lifetime/relational`
 provide six valid and five invalid readable cases. They cover direct and
@@ -794,16 +794,16 @@ pass-through, scoped propagation, longer-place rejection, relational
 pass/fail/unknown outcomes, deterministic proof identity, MIR inspection, and
 three native C11 executions.
 
-## R4c executable evidence
+## Failure executable evidence
 
 `internal/concept/failure_test.go` and `language/evt1/failure`
 provide 24 readable cases: 14 valid and 10 invalid, all classified PASS.
 Evidence includes deterministic MIR sugar operations, nine successful native C11 paths,
 exact typed local handlers, owned success transfer, immovable rejection, and a
-valid/invalid pair proving Result success payloads do not launder R4b lifetime
+valid/invalid pair proving Result success payloads do not launder relational lifetime analysis lifetime
 provenance.
 
-## R4d executable evidence
+## Array storage executable evidence
 
 `internal/concept/storage_arrays_test.go` and `language/evt1/storage/arrays`
 provide 30 readable cases: 17 valid and 13 invalid, all classified PASS.
@@ -813,17 +813,17 @@ to prove the deterministic terminal panic reason. PoC3 Phase 21 supplies array
 value/index/bounds/wrapper evidence; ndarray and its rank-aware row-major
 surface are EVT1-new storage semantics.
 
-## R4e executable evidence
+## Storage binding executable evidence
 
 `internal/concept/storage_binding_test.go` and `language/evt1/storage/binding`
 provide 23 readable cases: 12 valid and 11 invalid, all classified PASS. The
 suite inspects explicit bind MIR and generated non-owning descriptors, executes
 12 successful strict-C11 alias/shape/provenance compositions, and executes two
 terminal processes for exact-count mismatch and checked-product overflow.
-PoC3 supplies no bind counterpart; R4e composes its wrapper evidence with the
-active R4a/R4b provenance model and R4d row-major storage model.
+PoC3 supplies no bind counterpart; storage binding composes its wrapper evidence with the
+active lexical lifetime analysis/relational lifetime analysis provenance model and array storage semantics row-major storage model.
 
-## R4f executable evidence
+## Layout and stream executable evidence
 
 `internal/concept/layout_stream_test.go` and `language/evt1/storage/layout-stream`
 provide 29 readable cases: 16 valid and 13 invalid, all classified PASS. The
@@ -833,7 +833,7 @@ alignment, mutable/const alias, and lexical/call-result/scoped provenance paths.
 The conformance record distinguishes SDSL-derived semantic structure from the
 EVT1-new surface and ordinary Go-compiler lowering.
 
-## R4g executable evidence
+## Span executable evidence
 
 `internal/concept/span_test.go` and `language/evt1/storage/span`
 provide 29 readable cases: 15 valid and 14 invalid-path programs, all
@@ -844,7 +844,7 @@ success paths, executes runtime Subspan and index failures, and checks the
 generated path for pointer-plus-length descriptors with no allocation or
 backing copy.
 
-## R4h executable evidence
+## Tensor semantics executable evidence
 
 `internal/concept/tensor_semantics_test.go` and `language/evt1/tensor/semantics`
 provide 29 readable conformance cases: 17 valid and 12 statically rejected,
@@ -853,7 +853,7 @@ all classified `PASS`. The suite separately checks Tensor MIR validation,
 bounded comptime symbolic initialization. Generated evidence contains no heap,
 copy helper, BLAS, MLIR, SIMD, or GPU tensor path.
 
-## R4i executable evidence
+## Tensor backing executable evidence
 
 `internal/concept/tensor_backing_test.go` and `language/evt1/tensor/backing`
 provide 27 readable conformance cases: 16 valid and 11 statically rejected,
@@ -863,7 +863,7 @@ identity, rank-zero Tensor MIR, malformed inline MIR rejection, default and
 const laws, and 12 strict-C11 numeric paths. Generated evidence contains no
 heap, backing-copy, BLAS, MLIR, or separate vector/matrix path.
 
-## R4j executable evidence
+## Semantic facts executable evidence
 
 `internal/concept/semantic_facts_test.go` and `language/evt1/semantic-facts`
 provide 24 readable cases: 17 valid and 7 statically rejected, all classified
@@ -873,7 +873,7 @@ tensor shapes, inline backing independence, safe alignment degradation, and
 the layout-to-stream-to-Span-to-tensor preservation chain. Generated C is
 checked to contain no runtime fact tables, allocation, noalias, or SIMD path.
 
-## R4k executable evidence
+## Interfaces and dyn executable evidence
 
 `internal/concept/interface_dyn_test.go` and `language/evt1/interface`
 provide 30 required readable cases: 16 accepted and 14 statically rejected,
@@ -883,7 +883,7 @@ class, private-member, struct/class dyn dispatch, field get/set, composition,
 immovable-reference, and scoped-provenance paths. Generated evidence contains
 no allocation, per-object vtable, RTTI, object registry, or GC path.
 
-## R5a executable evidence
+## Automata state executable evidence
 
 `internal/concept/automata_state_test.go` and `language/evt1/automata/state`
 provide 20 readable cases: 12 accepted and 8 statically rejected. The suite
@@ -892,7 +892,7 @@ MIR and Planner artifacts, checks persistent/transient Drop placement, and
 rejects implicit capture, lifetime escape, missing move, duplicate identities,
 unknown transitions, sibling state access, and cross-state local use.
 
-## R5b executable evidence
+## Automata transitions executable evidence
 
 `internal/concept/automata_transitions_test.go` and `language/evt1/automata/transitions`
 provide 26 readable cases: 14 accepted positive programs, ten statically
@@ -903,7 +903,7 @@ planning targets, checks deterministic panic reasons, and rejects malformed
 transition MIR. Generated evidence contains no allocation, scheduler,
 coroutine, dynamic candidate collection, or runtime decision object.
 
-## R5c executable evidence
+## Inference executable evidence
 
 `internal/concept/inference_test.go` and `language/evt1/inference`
 provide 30 readable cases: 17 accepted programs, ten static rejections, and
@@ -914,7 +914,7 @@ and transition-infer MIR/Planner records, exactly-once evaluation, cleanup,
 and deterministic panics. Generated evidence contains no allocation, model
 runtime, RNG, scheduler, SIMD, or GPU path.
 
-## R5f async lowering boundary
+## Async lowering boundary
 
 Parsing normalizes `async`/`asynchronous` and `await`/`awaitchronous` into one
 declaration/expression representation. Semantic analysis types calls as
@@ -931,9 +931,9 @@ access. Frame and result capacities have C static assertions. This generated
 substrate is scheduler-free and allocation-free and does not introduce a VM or
 C/C++ coroutine ABI.
 
-## R5g structured async CFG boundary
+## Structured async CFG boundary
 
-R5g makes the normalization stage explicit:
+structured async semantics makes the normalization stage explicit:
 
 ```text
 Async source MIR
@@ -963,7 +963,7 @@ expressions reject rather than falling back to a program counter. No LIR,
 scheduler, heap frame, continuation pointer, or exception-unwind runtime is
 introduced.
 
-## R5h async interface composition boundary
+## Async interface composition boundary
 
 ```text
 interface requirement
@@ -976,14 +976,14 @@ dyn async call
     -> ordinary WitnessIndirect dispatch
     -> concrete Async<T> constructor once
     -> concrete generated machine value
-    -> ordinary R5f/R5g push, Step, completion, and result
+    -> ordinary async semantics/structured async semantics push, Step, completion, and result
 ```
 
 Required-operation lookup compares an async concrete method through its
 ordinary callable return `Async<T>`; there is no async implementation registry.
 Witness MIR records its normalized signature, eventual type, and concrete
 generated-machine identity. Dyn-call MIR records `ExactlyOnce` construction
-and `MoveOnce` transfer alongside the R4k storage-neutrality facts.
+and `MoveOnce` transfer alongside the interface and dyn semantics storage-neutrality facts.
 
 `DispatchPlan` retains `WitnessIndirect` and annotates the `Async<T>` return.
 The callee keeps its concrete `AsyncPlan`; an async caller keeps `MachinePush`,
@@ -993,7 +993,7 @@ persisted `self` reference carries ordinary provenance; the witness is not
 retained for subsequent Steps. No scheduler, virtual operation, allocation,
 or second dispatch path is introduced.
 
-## R5i callable capture pipeline
+## Callable capture pipeline
 
 ```text
 callable source
@@ -1008,10 +1008,10 @@ Analysis isolates the body from uncaptured lexical bindings and derives
 copyability, Drop, mutability, consumption, region identity, and provenance
 from existing rules. MIR is the semantic handoff: planning cannot add a
 capture, witness, allocation, or lifetime extension. GenericC11 emits inline
-environment structs and statically named functions. R5i adds no LIR or callable
+environment structs and statically named functions. Callable lowering adds no LIR or callable
 runtime.
 
-R5j adds one compile-time prepass around that established representation:
+Exact callable typing adds one compile-time prepass around that established representation:
 
 ```text
 callable literal

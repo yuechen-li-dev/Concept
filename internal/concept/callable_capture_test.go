@@ -38,7 +38,7 @@ func callableCaptureFixture(t *testing.T, kind, name string) (Module, []byte) {
 	return module, source
 }
 
-func generateR5iFixture(t *testing.T, name string) (Module, Outputs) {
+func generateCallableCaptureOutputs(t *testing.T, name string) (Module, Outputs) {
 	t.Helper()
 	module, source := callableCaptureFixture(t, "valid", name)
 	outputs, err := Generate(module, source)
@@ -81,7 +81,7 @@ func TestCallableCaptureCorpusConformance(t *testing.T) {
 }
 
 func TestCallableCaptureMIRPlannerAndRepresentation(t *testing.T) {
-	module, outputs := generateR5iFixture(t, "callback_evaluation_order.concept")
+	module, outputs := generateCallableCaptureOutputs(t, "callback_evaluation_order.concept")
 	var mir MIR
 	for name, body := range outputs {
 		if strings.HasSuffix(name, ".mir.json") {
@@ -124,7 +124,7 @@ func TestCallableCaptureMIRPlannerAndRepresentation(t *testing.T) {
 	if cp.Representation != "InlineEnvironment" || cp.Dispatch != "DirectCallable" || cp.Allocation != "None" || cp.EnvironmentAlignment < 1 {
 		t.Fatalf("callable plan=%+v", cp)
 	}
-	_, erasedOutputs := generateR5iFixture(t, "callback_erased_borrow.concept")
+	_, erasedOutputs := generateCallableCaptureOutputs(t, "callback_erased_borrow.concept")
 	var erasedMIR MIR
 	for name, body := range erasedOutputs {
 		if strings.HasSuffix(name, ".mir.json") {
@@ -174,7 +174,7 @@ func TestCallableCaptureExactEnvironmentGeometry(t *testing.T) {
 		"callback_dyn_capture.concept":      {16, 8},
 	}
 	for name, want := range cases {
-		_, outputs := generateR5iFixture(t, name)
+		_, outputs := generateCallableCaptureOutputs(t, name)
 		for outputName, body := range outputs {
 			if !strings.HasSuffix(outputName, ".mir.json") {
 				continue
@@ -302,7 +302,7 @@ func TestCallableCaptureNativeC11(t *testing.T) {
 	}
 	for name, want := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, outputs := generateR5iFixture(t, name+".concept")
+			_, outputs := generateCallableCaptureOutputs(t, name+".concept")
 			for outputName, body := range outputs {
 				if !strings.HasSuffix(outputName, ".generated.c") {
 					continue

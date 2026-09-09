@@ -76,7 +76,7 @@ func TestStorageArraysConformance(t *testing.T) {
 }
 
 func TestStorageArraysMIRPreservesStorageFacts(t *testing.T) {
-	outputs := generateR4dFixture(t, "ndarray_rank_shape_query.concept")
+	outputs := generateStorageArrayFixture(t, "ndarray_rank_shape_query.concept")
 	var mir MIR
 	var header, body string
 	for name, artifact := range outputs {
@@ -143,7 +143,7 @@ func TestStorageArraysNativeC11(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.file, func(t *testing.T) {
-			outputs := generateR4dFixture(t, tc.file)
+			outputs := generateStorageArrayFixture(t, tc.file)
 			harness := "#include \"" + strings.TrimSuffix(tc.file, ".concept") + ".generated.h\"\nint main(void) { return " + tc.symbol + "() == " + fmt.Sprint(tc.want) + " ? 0 : 1; }\n"
 			runFoundationNativeHarness(t, outputs, "storage_arrays_harness.c", harness)
 		})
@@ -155,7 +155,7 @@ func TestStorageArraysRuntimeBoundsPanic(t *testing.T) {
 	if err != nil {
 		t.Skip("gcc unavailable")
 	}
-	outputs := generateR4dFixture(t, "array_runtime_bounds.concept")
+	outputs := generateStorageArrayFixture(t, "array_runtime_bounds.concept")
 	dir := t.TempDir()
 	if err := Write(dir, outputs); err != nil {
 		t.Fatal(err)
@@ -176,7 +176,7 @@ func TestStorageArraysRuntimeBoundsPanic(t *testing.T) {
 }
 
 func TestStorageArraysOwnedArrayTransfersAndDropsOnce(t *testing.T) {
-	outputs := generateR4dFixture(t, "array_owned_move_drop.concept")
+	outputs := generateStorageArrayFixture(t, "array_owned_move_drop.concept")
 	body := string(outputs["array_owned_move_drop.generated.c"])
 	if strings.Count(body, "concept_array_owned_move_drop_drop(second);") != 1 {
 		t.Fatalf("moved-to array must drop exactly once\n%s", body)
@@ -185,7 +185,7 @@ func TestStorageArraysOwnedArrayTransfersAndDropsOnce(t *testing.T) {
 		t.Fatalf("moved-from array was dropped\n%s", body)
 	}
 
-	elementOutputs := generateR4dFixture(t, "array_element_drop_order.concept")
+	elementOutputs := generateStorageArrayFixture(t, "array_element_drop_order.concept")
 	elementBody := string(elementOutputs["array_element_drop_order.generated.c"])
 	third := strings.Index(elementBody, "concept_array_element_drop_order_drop((values).data[2]);")
 	second := strings.Index(elementBody, "concept_array_element_drop_order_drop((values).data[1]);")
@@ -195,7 +195,7 @@ func TestStorageArraysOwnedArrayTransfersAndDropsOnce(t *testing.T) {
 	}
 }
 
-func generateR4dFixture(t *testing.T, file string) Outputs {
+func generateStorageArrayFixture(t *testing.T, file string) Outputs {
 	t.Helper()
 	path := filepath.Join("..", "..", "language", "evt1", "storage", "arrays", "valid", file)
 	source, err := os.ReadFile(path)

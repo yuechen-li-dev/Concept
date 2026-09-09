@@ -198,7 +198,7 @@ func (l *lowering) canonicalAutomataStackRuntimeSupport(info *evt1AutomataInfo) 
 	for _, machine := range info.Decl.Machines {
 		b.WriteString(fmt.Sprintf("    case %d: %s(instance); return;\n", info.MachineOrdinal[machine.Name], evt1MachineExecuteCName(automata, machine.Name)))
 	}
-	b.WriteString(fmt.Sprintf("    default: concept_abort_automata_stack(\"%s\", \"invalid machine frame\");\n  }\n}\n\n", automata))
+	b.WriteString(fmt.Sprintf("    default: concept_abort_automata_stack(\"%s\", \"invalid machine state reached\");\n  }\n}\n\n", automata))
 	for _, machine := range info.Decl.Machines {
 		b.WriteString(fmt.Sprintf("static void %s(%s* instance) { if (instance->depth == 1u) instance->machine_tags[0] = %d; %s(instance); }\n", evt1AutomataStepCName(automata, machine.Name), instanceType, info.MachineOrdinal[machine.Name], topStep))
 	}

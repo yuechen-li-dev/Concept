@@ -38,7 +38,7 @@ func asyncInterfaceFixture(t *testing.T, kind, name string) (Module, []byte) {
 	return module, source
 }
 
-func generateR5hFixture(t *testing.T, name string) (Module, Outputs) {
+func generateAsyncInterfaceOutputs(t *testing.T, name string) (Module, Outputs) {
 	t.Helper()
 	module, source := asyncInterfaceFixture(t, "valid", name)
 	outputs, err := Generate(module, source)
@@ -95,7 +95,7 @@ func TestAsyncInterfaceCorpusConformance(t *testing.T) {
 }
 
 func TestAsyncInterfaceWitnessMIRPlanAndC(t *testing.T) {
-	module, outputs := generateR5hFixture(t, "dyn_async_method_await.concept")
+	module, outputs := generateAsyncInterfaceOutputs(t, "dyn_async_method_await.concept")
 	var mir MIR
 	if err := json.Unmarshal(outputs["dyn_async_method_await.mir.json"], &mir); err != nil {
 		t.Fatal(err)
@@ -198,7 +198,7 @@ func TestAsyncInterfaceRejectsMalformedAsyncWitnessAndPlan(t *testing.T) {
 	if code := diagnosticCode(evt1ValidateMIR(MIR{Witnesses: []MIRInterfaceWitness{broken}})); code != "DYN_ASYNC_WITNESS_INVALID" {
 		t.Fatalf("malformed witness diagnostic = %s", code)
 	}
-	module, outputs := generateR5hFixture(t, "dyn_async_method_await.concept")
+	module, outputs := generateAsyncInterfaceOutputs(t, "dyn_async_method_await.concept")
 	var mir MIR
 	if err := json.Unmarshal(outputs["dyn_async_method_await.mir.json"], &mir); err != nil {
 		t.Fatal(err)
@@ -245,7 +245,7 @@ func TestAsyncInterfaceNativeC11(t *testing.T) {
 		"static_dyn_async_equivalence",
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, outputs := generateR5hFixture(t, name+".concept")
+			_, outputs := generateAsyncInterfaceOutputs(t, name+".concept")
 			harness := fmt.Sprintf("#include \"%s.generated.h\"\nint main(void) { return concept_%s_main() == 42 ? 0 : 1; }\n", name, name)
 			runFoundationNativeHarness(t, outputs, "async_interface_"+name+"_harness.c", harness)
 		})

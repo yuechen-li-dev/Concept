@@ -1,5 +1,33 @@
 # EVT1 diagnostic reconciliation
 
+## R5k freeze audit
+
+The active compiler declares 425 unique semantic diagnostic codes. R5k found
+no duplicate active identifiers and removed milestone labels from user-facing
+diagnostics, Planner validation failures, and generated runtime aborts. Numeric
+`CV` codes remain stable where historical fixtures pin them; newer subsystem
+codes use semantic families. Test provenance may still name R0-R5 because it
+describes conformance history.
+
+The authoritative stable runtime reasons are:
+
+- `machine result cannot be read before completion`
+- `machine decision transition has no enabled candidates`
+- `machine transition match found no matching case`
+- `invalid machine state reached`
+- `machine decision transition score is NaN`
+- `inference score is NaN`
+- `inference has no enabled candidates`
+- `inference normalization has no finite support`
+- `automata machine stack capacity exceeded`
+- `machine stack capacity exceeded`
+- `result requested before completion`
+- `invalid generated async state`
+
+Generated failures contain source locations or source-level construct names
+where relevant, but no Go function names, retired Zig labels, parser traces, or
+active milestone implementation identifiers.
+
 Status: R5h async interface/dyn reconciliation
 
 Concept EVT1 compares diagnostics by semantic family. The active Go compiler

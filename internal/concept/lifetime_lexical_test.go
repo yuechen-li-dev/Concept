@@ -73,7 +73,7 @@ func TestLexicalLifetimeConformance(t *testing.T) {
 }
 
 func TestLexicalLifetimeMIRLifetimeAndProofFacts(t *testing.T) {
-	outputs := generateR4aFixture(t, "lifetime_concept_satisfied.concept")
+	outputs := generateLexicalLifetimeFixture(t, "lifetime_concept_satisfied.concept")
 	var mir MIR
 	if err := json.Unmarshal(outputs["lifetime_concept_satisfied.mir.json"], &mir); err != nil {
 		t.Fatal(err)
@@ -94,7 +94,7 @@ func TestLexicalLifetimeMIRLifetimeAndProofFacts(t *testing.T) {
 }
 
 func TestLexicalLifetimeOwnedReplacementDropsOldFirst(t *testing.T) {
-	body := string(generateR4aFixture(t, "owned_replacement_drop.concept")["owned_replacement_drop.generated.c"])
+	body := string(generateLexicalLifetimeFixture(t, "owned_replacement_drop.concept")["owned_replacement_drop.generated.c"])
 	mainAt := strings.Index(body, "int concept_owned_replacement_drop_main")
 	if mainAt < 0 {
 		t.Fatal("generated Main missing")
@@ -137,7 +137,7 @@ func TestLexicalLifetimeNativeC11(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.fixture, func(t *testing.T) {
-			outputs := generateR4aFixture(t, tc.fixture)
+			outputs := generateLexicalLifetimeFixture(t, tc.fixture)
 			base := strings.TrimSuffix(tc.fixture, ".concept")
 			harness := "#include \"" + base + ".generated.h\"\n\nint main(void) { return " + tc.call + "() == " + strconv.Itoa(tc.want) + " ? 0 : 1; }\n"
 			runFoundationNativeHarness(t, outputs, base+"_harness.c", harness)
@@ -145,7 +145,7 @@ func TestLexicalLifetimeNativeC11(t *testing.T) {
 	}
 }
 
-func generateR4aFixture(t *testing.T, fixture string) Outputs {
+func generateLexicalLifetimeFixture(t *testing.T, fixture string) Outputs {
 	t.Helper()
 	path := filepath.Join("..", "..", "language", "evt1", "lifetime", "lexical", "valid", fixture)
 	source, err := os.ReadFile(path)

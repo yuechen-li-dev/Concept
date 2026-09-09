@@ -36,7 +36,7 @@ var semanticFactConformanceCases = []ConformanceCase{
 	{Name: "invalid alignment", Source: "invalid/fact_invalid_alignment_parameter.concept", Expected: ConformancePass, DiagnosticCategory: "CV4643", MatrixStatus: "EVT1-new"},
 }
 
-func generateR4jFixture(t *testing.T, class, file string) Outputs {
+func generateSemanticFactFixture(t *testing.T, class, file string) Outputs {
 	t.Helper()
 	path := filepath.Join("..", "..", "language", "evt1", "semantic-facts", class, file)
 	source, err := os.ReadFile(path)
@@ -56,7 +56,7 @@ func generateR4jFixture(t *testing.T, class, file string) Outputs {
 
 func semanticFactsMIR(t *testing.T, file string) (MIR, Outputs) {
 	t.Helper()
-	outputs := generateR4jFixture(t, "valid", file)
+	outputs := generateSemanticFactFixture(t, "valid", file)
 	base := strings.TrimSuffix(file, ".concept")
 	var mir MIR
 	if err := json.Unmarshal(outputs[base+".mir.json"], &mir); err != nil {
@@ -100,8 +100,8 @@ func TestSemanticFactsConformance(t *testing.T) {
 }
 
 func TestSemanticFactsProofsAreTypedAndDeterministic(t *testing.T) {
-	first := generateR4jFixture(t, "valid", "fact_concept_aligned.concept")
-	second := generateR4jFixture(t, "valid", "fact_concept_aligned.concept")
+	first := generateSemanticFactFixture(t, "valid", "fact_concept_aligned.concept")
+	second := generateSemanticFactFixture(t, "valid", "fact_concept_aligned.concept")
 	if string(first["fact_concept_aligned.mir.json"]) != string(second["fact_concept_aligned.mir.json"]) {
 		t.Fatal("semantic proof MIR is nondeterministic")
 	}

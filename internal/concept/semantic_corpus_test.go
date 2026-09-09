@@ -50,16 +50,20 @@ func loadSemanticCorpusManifest(t *testing.T) ([]byte, semanticCorpusManifest) {
 }
 
 func compileSemanticCorpusFile(path string) error {
+	_, err := generateSemanticCorpusFile(path)
+	return err
+}
+
+func generateSemanticCorpusFile(path string) (Outputs, error) {
 	source, err := os.ReadFile(path)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	module, err := Parse(filepath.ToSlash(path), string(source))
 	if err != nil {
-		return err
+		return nil, err
 	}
-	_, err = Generate(module, source)
-	return err
+	return Generate(module, source)
 }
 
 func TestSemanticCorpusManifest(t *testing.T) {
@@ -156,6 +160,35 @@ func TestSemanticCorpusManifestDeterminism(t *testing.T) {
 	}
 }
 
+func TestSemanticCorpusForbiddenRuntime(t *testing.T) {
+	_, manifest := loadSemanticCorpusManifest(t)
+	root := filepath.Join("..", "..", "language", "evt1")
+	forbidden := []string{"malloc(", "calloc(", "realloc(", "setjmp", "longjmp", "garbage collector", "rtti", "per-object vtable", "promise runtime", "future runtime", "executor", "scheduler", "event loop", "coroutine abi", "closure box"}
+	for _, subsystem := range manifest.Subsystems {
+		valid, err := filepath.Glob(filepath.Join(root, filepath.FromSlash(subsystem.Path), "valid", "*.concept"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, path := range valid {
+			outputs, err := generateSemanticCorpusFile(path)
+			if err != nil {
+				t.Fatalf("%s: %v", path, err)
+			}
+			for name, output := range outputs {
+				if !strings.HasSuffix(name, ".generated.c") {
+					continue
+				}
+				body := strings.ToLower(string(output))
+				for _, token := range forbidden {
+					if strings.Contains(body, token) {
+						t.Fatalf("%s generated forbidden runtime token %q", path, token)
+					}
+				}
+			}
+		}
+	}
+}
+
 func TestCrossFeatureFreezeCompositions(t *testing.T) {
 	root := filepath.Join("..", "..", "language", "evt1")
 	cases := []struct {
@@ -163,9 +196,9 @@ func TestCrossFeatureFreezeCompositions(t *testing.T) {
 		paths []string
 	}{
 		{"DragonGod-style automata policy", []string{"automata/state/valid/automata_with_state_owned.concept", "machine-stack/valid/machine_multiple_nested_frames.concept", "inference/valid/transition_infer_hardmax.concept", "callable/types/valid/callable_machine_field_owned_capture.concept"}},
-		{"Prometheus-style storage and planning", []string{"semantic-facts/valid/fact_preservation_chain.concept", "tensor/semantics/valid/tensor_einstein_matmul.concept", "planner/valid/plan_tensor_contract.concept"}},
-		{"Aetheris-style edge policy", []string{"automata/transitions/valid/transition_decide_float_scores.concept"}},
-		{"OctetDB-style transaction workflow", []string{"machine-stack/valid/machine_child_failure.concept", "async/basic/valid/async_result_question.concept", "automata/transitions/valid/transition_match_result.concept"}},
+		{"Prometheus-style storage and planning", []string{"composition/valid/prometheus_storage_planning.concept"}},
+		{"Aetheris-style edge policy", []string{"composition/valid/aetheris_edge_policy.concept"}},
+		{"OctetDB-style transaction workflow", []string{"composition/valid/octetdb_transaction_policy.concept"}},
 		{"async dyn callable", []string{"callable/capture/valid/callback_async_interface_composition.concept"}},
 		{"callable span lifetime async", []string{"callable/capture/valid/callback_span_capture.concept", "callable/capture/valid/callback_async_live_across_await.concept"}},
 	}

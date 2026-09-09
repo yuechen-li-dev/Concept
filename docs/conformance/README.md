@@ -34,7 +34,7 @@ their fixtures now have exactly one authority under `language/evt1`.
 | R5j | exact concrete callable storage | `01d90e0` | `language/evt1/callable/types` |
 | R5k | semantic reconciliation and language-core freeze | this report's commit | all paths in `language/evt1/manifest.json` |
 
-The manifest records 376 valid, 243 static-invalid, and 13 runtime-negative
+The manifest records 379 valid, 243 static-invalid, and 13 runtime-negative
 fixtures. Four retained expected-divergence cases compare the frozen EVT1
 structural-copy and bounded-comptime decisions against PoC3. No EVT1 gap or
 unresolved specification ambiguity remains in the R5 core.

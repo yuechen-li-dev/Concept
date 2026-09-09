@@ -69,7 +69,7 @@ func TestStorageBindingConformance(t *testing.T) {
 }
 
 func TestStorageBindingMIRAndDescriptorFacts(t *testing.T) {
-	outputs := generateR4eFixture(t, "valid", "bind_array_to_ndarray_runtime_shape.concept")
+	outputs := generateStorageBindingFixture(t, "valid", "bind_array_to_ndarray_runtime_shape.concept")
 	var mir MIR
 	var header, body string
 	for name, artifact := range outputs {
@@ -102,7 +102,7 @@ func TestStorageBindingMIRAndDescriptorFacts(t *testing.T) {
 		}
 	}
 
-	fixedOutputs := generateR4eFixture(t, "valid", "bind_array_to_ndarray_fixed.concept")
+	fixedOutputs := generateStorageBindingFixture(t, "valid", "bind_array_to_ndarray_fixed.concept")
 	for name, artifact := range fixedOutputs {
 		switch {
 		case strings.HasSuffix(name, ".mir.json"):
@@ -144,7 +144,7 @@ func TestStorageBindingNativeC11(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.file, func(t *testing.T) {
-			outputs := generateR4eFixture(t, "valid", tc.file)
+			outputs := generateStorageBindingFixture(t, "valid", tc.file)
 			harness := "#include \"" + strings.TrimSuffix(tc.file, ".concept") + ".generated.h\"\nint main(void) { return " + tc.call + " == " + fmt.Sprint(tc.want) + " ? 0 : 1; }\n"
 			runFoundationNativeHarness(t, outputs, "storage_binding_harness.c", harness)
 		})
@@ -164,7 +164,7 @@ func TestStorageBindingRuntimeBindPanics(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.file, func(t *testing.T) {
-			outputs := generateR4eFixture(t, "invalid", tc.file)
+			outputs := generateStorageBindingFixture(t, "invalid", tc.file)
 			dir := t.TempDir()
 			if err := Write(dir, outputs); err != nil {
 				t.Fatal(err)
@@ -188,7 +188,7 @@ func TestStorageBindingRuntimeBindPanics(t *testing.T) {
 }
 
 func TestStorageBindingProvenanceSummaries(t *testing.T) {
-	outputs := generateR4eFixture(t, "valid", "bind_call_result_provenance.concept")
+	outputs := generateStorageBindingFixture(t, "valid", "bind_call_result_provenance.concept")
 	var mir MIR
 	for name, artifact := range outputs {
 		if strings.HasSuffix(name, ".mir.json") {
@@ -202,7 +202,7 @@ func TestStorageBindingProvenanceSummaries(t *testing.T) {
 		t.Fatalf("bind helper lost parameter provenance: %+v", summary)
 	}
 
-	scopedOutputs := generateR4eFixture(t, "valid", "bind_scoped_provenance.concept")
+	scopedOutputs := generateStorageBindingFixture(t, "valid", "bind_scoped_provenance.concept")
 	for name, artifact := range scopedOutputs {
 		if !strings.HasSuffix(name, ".mir.json") {
 			continue
@@ -220,7 +220,7 @@ func TestStorageBindingProvenanceSummaries(t *testing.T) {
 	}
 }
 
-func generateR4eFixture(t *testing.T, class, file string) Outputs {
+func generateStorageBindingFixture(t *testing.T, class, file string) Outputs {
 	t.Helper()
 	path := filepath.Join("..", "..", "language", "evt1", "storage", "binding", class, file)
 	source, err := os.ReadFile(path)

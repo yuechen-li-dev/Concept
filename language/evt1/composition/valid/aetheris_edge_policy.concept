@@ -1,0 +1,29 @@
+profile Core;
+
+automata EdgePlanner
+{
+    machine Choose
+    {
+        float clearance = 4.0;
+        float cornerPenalty = 1.5;
+
+        state Inspect
+        {
+            transition decide
+            {
+                Straight score clearance;
+                Corner score clearance - cornerPenalty;
+            }
+        }
+
+        state Straight { }
+        state Corner { }
+    }
+}
+
+int Main()
+{
+    instance EdgePlanner planner();
+    Step(planner, Choose);
+    return State(planner, Choose);
+}

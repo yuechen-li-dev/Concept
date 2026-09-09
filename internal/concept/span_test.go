@@ -77,7 +77,7 @@ func TestSpanConformance(t *testing.T) {
 	}
 }
 
-func generateR4gFixture(t *testing.T, class, file string) Outputs {
+func generateSpanFixture(t *testing.T, class, file string) Outputs {
 	t.Helper()
 	path := filepath.Join("..", "..", "language", "evt1", "storage", "span", class, file)
 	source, err := os.ReadFile(path)
@@ -96,7 +96,7 @@ func generateR4gFixture(t *testing.T, class, file string) Outputs {
 }
 
 func TestSpanMIRPreservesBorrowedRegionFacts(t *testing.T) {
-	outputs := generateR4gFixture(t, "valid", "span_from_stream_channel.concept")
+	outputs := generateSpanFixture(t, "valid", "span_from_stream_channel.concept")
 	var mir MIR
 	var emitted strings.Builder
 	for name, artifact := range outputs {
@@ -132,7 +132,7 @@ func TestSpanMIRPreservesBorrowedRegionFacts(t *testing.T) {
 		}
 	}
 
-	subspanOutputs := generateR4gFixture(t, "valid", "span_subspan.concept")
+	subspanOutputs := generateSpanFixture(t, "valid", "span_subspan.concept")
 	var subspanMIR MIR
 	if err := json.Unmarshal(subspanOutputs["span_subspan.mir.json"], &subspanMIR); err != nil {
 		t.Fatal(err)
@@ -150,7 +150,7 @@ func TestSpanMIRPreservesBorrowedRegionFacts(t *testing.T) {
 		t.Fatal("span_subregion MIR operation missing")
 	}
 
-	layoutOutputs := generateR4gFixture(t, "valid", "span_from_layout_region.concept")
+	layoutOutputs := generateSpanFixture(t, "valid", "span_from_layout_region.concept")
 	var layoutMIR MIR
 	if err := json.Unmarshal(layoutOutputs["span_from_layout_region.mir.json"], &layoutMIR); err != nil {
 		t.Fatal(err)
@@ -168,7 +168,7 @@ func TestSpanMIRPreservesBorrowedRegionFacts(t *testing.T) {
 		t.Fatalf("layout offset/alignment facts were not preserved and narrowed: %+v", layoutMIR.Functions[0].Operations)
 	}
 
-	helperOutputs := generateR4gFixture(t, "valid", "span_helper_provenance.concept")
+	helperOutputs := generateSpanFixture(t, "valid", "span_helper_provenance.concept")
 	var helperMIR MIR
 	if err := json.Unmarshal(helperOutputs["span_helper_provenance.mir.json"], &helperMIR); err != nil {
 		t.Fatal(err)
@@ -227,7 +227,7 @@ func TestSpanNativeC11(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.file, func(t *testing.T) {
-			outputs := generateR4gFixture(t, "valid", tc.file)
+			outputs := generateSpanFixture(t, "valid", tc.file)
 			base := strings.TrimSuffix(tc.file, ".concept")
 			harness := "#include \"" + base + ".generated.h\"\nint main(void) { return " + tc.call + " == " + fmt.Sprint(tc.want) + " ? 0 : 1; }\n"
 			runFoundationNativeHarness(t, outputs, "span_harness.c", harness)
@@ -248,7 +248,7 @@ func TestSpanRuntimeBoundsPanics(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.file, func(t *testing.T) {
-			outputs := generateR4gFixture(t, "invalid", tc.file)
+			outputs := generateSpanFixture(t, "invalid", tc.file)
 			dir := t.TempDir()
 			if err := Write(dir, outputs); err != nil {
 				t.Fatal(err)

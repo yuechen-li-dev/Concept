@@ -77,7 +77,7 @@ func TestLayoutStreamConformance(t *testing.T) {
 }
 
 func TestLayoutStreamMIRSemanticGraphs(t *testing.T) {
-	outputs := generateR4fFixture(t, "valid", "stream_multiple_channels.concept")
+	outputs := generateLayoutStreamFixture(t, "valid", "stream_multiple_channels.concept")
 	var mir MIR
 	var emitted strings.Builder
 	for name, artifact := range outputs {
@@ -124,7 +124,7 @@ func TestLayoutStreamMIRSemanticGraphs(t *testing.T) {
 		t.Fatal("stream unexpectedly emitted independent runtime storage")
 	}
 
-	scopedOutputs := generateR4fFixture(t, "valid", "stream_scoped_provenance.concept")
+	scopedOutputs := generateLayoutStreamFixture(t, "valid", "stream_scoped_provenance.concept")
 	var scopedMIR MIR
 	for name, artifact := range scopedOutputs {
 		if strings.HasSuffix(name, ".mir.json") {
@@ -144,7 +144,7 @@ func TestLayoutStreamMIRSemanticGraphs(t *testing.T) {
 	}
 }
 
-func generateR4fFixture(t *testing.T, class, file string) Outputs {
+func generateLayoutStreamFixture(t *testing.T, class, file string) Outputs {
 	t.Helper()
 	path := filepath.Join("..", "..", "language", "evt1", "storage", "layout-stream", class, file)
 	source, err := os.ReadFile(path)
@@ -180,13 +180,13 @@ func TestLayoutStreamNativeC11(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.file, func(t *testing.T) {
-			outputs := generateR4fFixture(t, "valid", tc.file)
+			outputs := generateLayoutStreamFixture(t, "valid", tc.file)
 			base := strings.TrimSuffix(tc.file, ".concept")
 			harness := "#include \"" + base + ".generated.h\"\nint main(void) { return " + tc.call + " == " + fmt.Sprint(tc.want) + " ? 0 : 1; }\n"
 			runFoundationNativeHarness(t, outputs, "layout_stream_harness.c", harness)
 		})
 	}
-	outputs := generateR4fFixture(t, "valid", "layout_alignment.concept")
+	outputs := generateLayoutStreamFixture(t, "valid", "layout_alignment.concept")
 	harness := "#include \"layout_alignment.generated.h\"\nint main(void) { return _Alignof(concept_array_16_int) >= 64 ? 0 : 1; }\n"
 	runFoundationNativeHarness(t, outputs, "layout_alignment_harness.c", harness)
 }

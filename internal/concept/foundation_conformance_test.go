@@ -173,7 +173,7 @@ int main(void) {
   return concept_structs_copy_and_read() == 7 ? 0 : 1;
 }
 `
-	runFoundationNativeHarness(t, outputs, "evt1_r1_structs_harness.c", harness)
+	runFoundationNativeHarness(t, outputs, "foundation_structs_harness.c", harness)
 }
 
 func runFoundationNativeHarness(t *testing.T, outputs Outputs, harnessName, harnessSource string) {

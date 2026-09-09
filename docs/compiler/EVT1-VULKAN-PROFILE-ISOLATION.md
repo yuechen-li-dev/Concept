@@ -1,6 +1,6 @@
-# EVT1 R1 Vulkan profile isolation
+# EVT1 Vulkan profile isolation
 
-Status: R1 audited and executable
+Status: audited, executable, and preserved at the R5 freeze
 
 ## Architectural result
 
@@ -17,7 +17,7 @@ compiler binary also supports Vulkan.
 
 ## Source inventory
 
-| Location | Classification | R1 disposition |
+| Location | Classification | EVT1 disposition |
 |---|---|---|
 | `profile_definition.go` | core language infrastructure | Small data contract and Core definition. |
 | `profile_vulkan_definition.go` | profile-owned registration | Owns Vulkan type names, C mappings, header needs, synthetic error field, ActuationOutcome, feature admissions, and `Prometheus.Vulkan`. |

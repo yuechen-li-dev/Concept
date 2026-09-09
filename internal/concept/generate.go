@@ -1687,7 +1687,8 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 	runtimeAutomata := evt1RuntimeAutomataUsage(l.module)
 	if len(runtimeAutomata) > 0 {
 		body.WriteString("static void concept_abort_invalid_automata_state(const char* automata_name, int machine, int state) {\n")
-		body.WriteString("  fprintf(stderr, \"invalid automata state for %s: machine=%d state=%d\\n\", automata_name, machine, state);\n")
+		body.WriteString("  (void)automata_name; (void)machine; (void)state;\n")
+		body.WriteString("  fprintf(stderr, \"invalid machine state reached\\n\");\n")
 		body.WriteString("  abort();\n}\n\n")
 	}
 	if len(runtimeAutomata) > 0 {

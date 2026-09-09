@@ -1,6 +1,31 @@
 # EVT1 semantic reconciliation matrix
 
-Status: R0 authority ledger with R1-R5j executable evidence
+Status: final EVT1 pre-tooling authority ledger with R0-R5k executable evidence
+
+## R5k closed classification
+
+The detailed historical comparison below preserves the decision path. For the
+R5 freeze, every core family has one current classification:
+
+| Family | R5k classification | Authority |
+|---|---|---|
+| declarations, primitive values, structs, records, classes | Canonical | specification sections 5-11 and semantic corpus |
+| ownership, move, Drop, references, lifetimes | Canonical | specification sections 7-8 and shared validator/cleanup model |
+| Option, Result, `?`, `!`, try/except, assert/static_assert | Canonical | specification sections 12 and 25 |
+| arrays, ndarray, bind, layout, stream, Span, tensor | Canonical | specification section 16 and typed storage/view facts |
+| concepts, interfaces, witnesses, borrowed `dyn` | Canonical | specification sections 13 and 19 |
+| automata, machines, transitions, decide, infer, yield, foreach, stack outcomes | Canonical | specification section 22 |
+| `Async<T>`, async/await, structured CFG, async interface dispatch | Canonical | specification section 22 async subsections |
+| callable capture, erased borrowed callbacks, exact callable types | Canonical | specification sections 26-27 |
+| `let`, `var`, `type`, `asynchronous` | Compatibility | compatibility ledger; one canonical semantic path |
+| `awaitchronous` | Joke-but-permanent | exact `await` alias; formatter preserves by default |
+| PoC3 milestone syntax and retired Zig compiler | Historical-only | `legacy/poc3-zig`, conformance reports, and Git history |
+| owning dyn/callback, scheduler/cancellation/channels, runtime globals, native backend | Deferred | classified post-R5 ledger |
+| inheritance, RTTI, per-object vtables, hidden boxes/allocation, saved-PC fallback | Rejected | frozen backend/runtime boundaries |
+
+There are no unclassified core-semantics TBDs. A row described as deferred is
+outside the R5 core and is assigned in
+`docs/architecture/EVT1-COMPATIBILITY-AND-DEFERRED.md`.
 
 `Port required?` means implementation or conformance work remains after R0; it
 does not authorize that work in this milestone. Status is one of `Keep PoC3`,
@@ -13,8 +38,8 @@ does not authorize that work in this milestone. Status is one of `Keep PoC3`,
 | naming | C++ lineage, but fixtures include older surface conventions | PascalCase types/functions/operations; camelCase locals/parameters | use Go line's explicit naming law | Keep Go | Translation | extracted examples | backend/MIR names may remain snake_case |
 | declaration syntax | includes `fn`, `name: Type`, arrows, `let`/`var` in historical fixtures | return type first; `Type name`; braces | canonical C++-shaped syntax; R5i uses `auto`/`const auto` for unspellable generated callable types; `var`/inferred `let` are compatibility aliases | Keep Go | Translation | phase1/2, R2, and R5i corpus | general inference remains absent |
 | primitive types | broader general systems-language set | `int`, `bool`, `void`, compile-time `string`, `uint64`, profile handles | canonize minimal core; widths/string runtime remain open | Merge | Yes | phase1; Go type tests | Vulkan handles are not core |
-| structs | runtime structs and places; PoC3 later requires explicit `Copy` conformance | mutable structs, positional construction, field checks, structural copy | ordinary structs are mutable values and copy when all fields are copyable | Merge | No for R2 subset | phase7; R2 corpus | default structural copy is an expected PoC3 divergence; drop remains open |
-| record struct | no corresponding syntax or type-level record immutability | absent before R2 | immutable value aggregate with copy/update construction | Keep Go | No for R2 subset | `language/evt1-r2/core` | EVT1-new evidence, not a PoC3 divergence |
+| structs | runtime structs and places; PoC3 later requires explicit `Copy` conformance | mutable structs, positional construction, field checks, structural copy | ordinary structs are mutable values and copy when all fields are copyable | Merge | No for R2 subset | phase7; R2 corpus | default structural copy is an expected PoC3 divergence; shared Drop law is frozen |
+| record struct | no corresponding syntax or type-level record immutability | absent before R2 | immutable value aggregate with copy/update construction | Keep Go | No for R2 subset | `language/evt1/values` | EVT1-new evidence, not a PoC3 divergence |
 | const binding/place | historical qualifiers and ownership-era place rules | type qualifier existed; local binding was mutable before R2 | `const` freezes reassignment and projected mutable places, independently of record type immutability | Merge | No for local and natural parameter subset | R2 const corpus | full borrow/alias law remains deferred |
 | with expression | no corresponding syntax | absent before R2 | fresh copyable-record update; source evaluated once and preserved | Keep Go | No for R2 subset | R2 MIR/C/native tests | ordinary structs and non-copyable records rejected |
 | immovable/value types | design pressure but no closed PoC3 fixture implementation; ownership fixtures cover non-copyable flow | bounded `immovable struct`, final-storage construction and reference access | canonize final-storage law: no copy or relocation, mutable access through `ref` | Merge | Yes beyond R3 subset | phase10 pressure; M1B-A; R2-R3 tests | generalized pinning and reference aggregates remain deferred |

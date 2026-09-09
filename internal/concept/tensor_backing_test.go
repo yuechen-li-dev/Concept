@@ -39,7 +39,7 @@ var tensorBackingConformanceCases = []ConformanceCase{
 	{Name: "const inline destination", Source: "invalid/tensor_inline_const_destination.concept", Expected: ConformancePass, DiagnosticCategory: "CV4616", MatrixStatus: "R3/R4h preserved"},
 }
 
-func generateR4iFixture(t *testing.T, class, file string) Outputs {
+func generateTensorBackingFixture(t *testing.T, class, file string) Outputs {
 	t.Helper()
 	path := filepath.Join("..", "..", "language", "evt1", "tensor", "backing", class, file)
 	source, err := os.ReadFile(path)
@@ -92,7 +92,7 @@ func TestTensorBackingConformance(t *testing.T) {
 }
 
 func TestTensorBackingInlineBackingAndTensorMIR(t *testing.T) {
-	outputs := generateR4iFixture(t, "valid", "tensor_inline_matmul.concept")
+	outputs := generateTensorBackingFixture(t, "valid", "tensor_inline_matmul.concept")
 	var mir MIR
 	if err := json.Unmarshal(outputs["tensor_inline_matmul.mir.json"], &mir); err != nil {
 		t.Fatal(err)
@@ -129,7 +129,7 @@ func TestTensorBackingInlineBackingAndTensorMIR(t *testing.T) {
 }
 
 func TestTensorBackingRankZeroTensorMIR(t *testing.T) {
-	outputs := generateR4iFixture(t, "valid", "vector_dot_product.concept")
+	outputs := generateTensorBackingFixture(t, "valid", "vector_dot_product.concept")
 	var mir MIR
 	if err := json.Unmarshal(outputs["vector_dot_product.mir.json"], &mir); err != nil {
 		t.Fatal(err)
@@ -170,7 +170,7 @@ func TestTensorBackingNativeC11(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.file, func(t *testing.T) {
-			outputs := generateR4iFixture(t, "valid", tc.file)
+			outputs := generateTensorBackingFixture(t, "valid", tc.file)
 			base := strings.TrimSuffix(tc.file, ".concept")
 			harness := "#include \"" + base + ".generated.h\"\nint main(void) { return " + tc.call + " == " + tc.want + " ? 0 : 1; }\n"
 			runFoundationNativeHarness(t, outputs, "tensor_backing_harness.c", harness)
@@ -211,7 +211,7 @@ func TestTensorBackingBackingClassification(t *testing.T) {
 		{"valid", "tensor_stream_channel_still_valid.concept", TensorBackingStreamChannel},
 	}
 	for _, tc := range cases {
-		outputs := generateR4iFixture(t, tc.class, tc.file)
+		outputs := generateTensorBackingFixture(t, tc.class, tc.file)
 		base := strings.TrimSuffix(tc.file, ".concept")
 		var mir MIR
 		if err := json.Unmarshal(outputs[base+".mir.json"], &mir); err != nil {
@@ -241,7 +241,7 @@ func TestTensorBackingPreservedBackingClassification(t *testing.T) {
 		{"tensor_from_span_rank1.concept", TensorBackingSpan},
 	}
 	for _, tc := range cases {
-		outputs := generateR4hFixture(t, "valid", tc.file)
+		outputs := generateTensorFixture(t, "valid", tc.file)
 		base := strings.TrimSuffix(tc.file, ".concept")
 		var mir MIR
 		if err := json.Unmarshal(outputs[base+".mir.json"], &mir); err != nil {

@@ -87,7 +87,7 @@ func TestFailureConformance(t *testing.T) {
 }
 
 func TestFailureMIREvidence(t *testing.T) {
-	outputs := generateR4cFixture(t, "result_question_propagate.concept")
+	outputs := generateFailureFixture(t, "result_question_propagate.concept")
 	var mir MIR
 	if err := json.Unmarshal(outputs["result_question_propagate.mir.json"], &mir); err != nil {
 		t.Fatal(err)
@@ -103,7 +103,7 @@ func TestFailureMIREvidence(t *testing.T) {
 	if !found {
 		t.Fatal("result_propagate proof operation missing")
 	}
-	tryOutputs := generateR4cFixture(t, "try_except_multiple_exact_errors.concept")
+	tryOutputs := generateFailureFixture(t, "try_except_multiple_exact_errors.concept")
 	if !strings.Contains(string(tryOutputs["try_except_multiple_exact_errors.mir.json"]), `"kind": "try_handler"`) {
 		t.Fatal("try_handler MIR evidence missing")
 	}
@@ -136,7 +136,7 @@ func TestFailureOwnedPropagationRequiresMove(t *testing.T) {
 }
 
 func TestFailureCarrierCleanupEvidence(t *testing.T) {
-	outputs := generateR4cFixture(t, "result_owned_payload_move.concept")
+	outputs := generateFailureFixture(t, "result_owned_payload_move.concept")
 	c := string(outputs["result_owned_payload_move.generated.c"])
 	if !strings.Contains(c, "concept_option_owned_resource_drop") ||
 		!strings.Contains(c, "concept_result_owned_resource_resource_error_drop") ||
@@ -209,7 +209,7 @@ func TestFailureNativeC11(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.fixture, func(t *testing.T) {
-			outputs := generateR4cFixture(t, tc.fixture)
+			outputs := generateFailureFixture(t, tc.fixture)
 			base := strings.TrimSuffix(tc.fixture, ".concept")
 			runFoundationNativeHarness(t, outputs, base+"_harness.c", "#include \""+base+".generated.h\"\n"+tc.harness+"\n")
 		})
@@ -230,7 +230,7 @@ func TestFailureTerminalPanicPaths(t *testing.T) {
 			if err != nil {
 				t.Skip("C compiler unavailable")
 			}
-			outputs := generateR4cFixture(t, tc.fixture)
+			outputs := generateFailureFixture(t, tc.fixture)
 			base := strings.TrimSuffix(tc.fixture, ".concept")
 			dir := t.TempDir()
 			if err := Write(dir, outputs); err != nil {
@@ -256,7 +256,7 @@ func TestFailureTerminalPanicPaths(t *testing.T) {
 	}
 }
 
-func generateR4cFixture(t *testing.T, fixture string) Outputs {
+func generateFailureFixture(t *testing.T, fixture string) Outputs {
 	t.Helper()
 	path := filepath.Join("..", "..", "language", "evt1", "failure", "valid", fixture)
 	source, err := os.ReadFile(path)

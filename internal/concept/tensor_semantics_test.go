@@ -43,7 +43,7 @@ var tensorConformanceCases = []ConformanceCase{
 	{Name: "symbolic index escape", Source: "invalid/tensor_symbolic_index_escape.concept", Expected: ConformancePass, DiagnosticCategory: "CV4024", MatrixStatus: "EVT1-new"},
 }
 
-func generateR4hFixture(t *testing.T, class, file string) Outputs {
+func generateTensorFixture(t *testing.T, class, file string) Outputs {
 	t.Helper()
 	path := filepath.Join("..", "..", "language", "evt1", "tensor", "semantics", class, file)
 	source, err := os.ReadFile(path)
@@ -96,7 +96,7 @@ func TestTensorSemanticsConformance(t *testing.T) {
 }
 
 func TestTensorSemanticsTensorMIRAndLowering(t *testing.T) {
-	outputs := generateR4hFixture(t, "valid", "tensor_einstein_matmul.concept")
+	outputs := generateTensorFixture(t, "valid", "tensor_einstein_matmul.concept")
 	var mir MIR
 	if err := json.Unmarshal(outputs["tensor_einstein_matmul.mir.json"], &mir); err != nil {
 		t.Fatal(err)
@@ -171,7 +171,7 @@ func TestTensorSemanticsNativeC11(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.file, func(t *testing.T) {
-			outputs := generateR4hFixture(t, "valid", tc.file)
+			outputs := generateTensorFixture(t, "valid", tc.file)
 			base := strings.TrimSuffix(tc.file, ".concept")
 			harness := "#include \"" + base + ".generated.h\"\nint main(void) { return " + tc.call + " == " + fmt.Sprint(tc.want) + " ? 0 : 1; }\n"
 			runFoundationNativeHarness(t, outputs, "tensor_semantics_harness.c", harness)
@@ -187,7 +187,7 @@ func TestTensorSemanticsRuntimeGuards(t *testing.T) {
 	cases := []struct{ file, call, reason string }{{"tensor_from_ndarray_rank1.concept", "concept_tensor_from_ndarray_rank1_tensor_from_ndarray_rank1(3)", "Concept tensor index out of bounds"}, {"tensor_runtime_shape_guard.concept", "concept_tensor_runtime_shape_guard_tensor_runtime_shape_guard(2, 3, 2, 3)", "Concept tensor contraction shape mismatch"}}
 	for _, tc := range cases {
 		t.Run(tc.file, func(t *testing.T) {
-			outputs := generateR4hFixture(t, "valid", tc.file)
+			outputs := generateTensorFixture(t, "valid", tc.file)
 			dir := t.TempDir()
 			if err := Write(dir, outputs); err != nil {
 				t.Fatal(err)
@@ -211,7 +211,7 @@ func TestTensorSemanticsRuntimeGuards(t *testing.T) {
 }
 
 func TestTensorSemanticsComptimeSymbolicInitialization(t *testing.T) {
-	outputs := generateR4hFixture(t, "valid", "tensor_einstein_initialize.concept")
+	outputs := generateTensorFixture(t, "valid", "tensor_einstein_initialize.concept")
 	var mir MIR
 	if err := json.Unmarshal(outputs["tensor_einstein_initialize.mir.json"], &mir); err != nil {
 		t.Fatal(err)

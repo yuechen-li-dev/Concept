@@ -1,0 +1,18 @@
+{
+  "schema": "concept-evt1-canonicalization-v1",
+  "bindings": {
+    "let_typed": "const_typed",
+    "let_inferred": "const_auto",
+    "var_inferred": "auto"
+  },
+  "aliases": {
+    "type": { "canonical": "using", "rewrite_by_default": true },
+    "asynchronous": { "canonical": "async", "rewrite_by_default": true },
+    "awaitchronous": { "canonical": "await", "rewrite_by_default": false, "classification": "joke-but-permanent" }
+  },
+  "naming": {
+    "public_and_compiler_known": "PascalCase",
+    "locals_parameters_fields": "camelCase",
+    "enforcement": "R6 lint and formatter, not grammar"
+  }
+}

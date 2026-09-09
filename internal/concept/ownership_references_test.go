@@ -135,7 +135,7 @@ func TestOwnershipReferencesMIRMoveReferenceAndCleanupFacts(t *testing.T) {
 		t.Fatal("move operation missing from MIR")
 	}
 
-	refOutputs := generateR3Fixture(t, "ref_const_parameter.concept")
+	refOutputs := generateOwnershipFixture(t, "ref_const_parameter.concept")
 	var refMIR MIR
 	if err := json.Unmarshal(refOutputs["ref_const_parameter.mir.json"], &refMIR); err != nil {
 		t.Fatal(err)
@@ -183,7 +183,7 @@ func TestOwnershipReferencesMoveAndReferenceSpans(t *testing.T) {
 }
 
 func TestOwnershipReferencesDropLoweringOrderAndTransfer(t *testing.T) {
-	outputs := generateR3Fixture(t, "drop_scope_order.concept")
+	outputs := generateOwnershipFixture(t, "drop_scope_order.concept")
 	body := string(outputs["drop_scope_order.generated.c"])
 	mainAt := strings.Index(body, "int concept_drop_scope_order_main()")
 	mainBody := body[mainAt:]
@@ -194,14 +194,14 @@ func TestOwnershipReferencesDropLoweringOrderAndTransfer(t *testing.T) {
 		t.Fatalf("return evaluation and reverse drop order are not explicit:\n%s", mainBody)
 	}
 
-	movedOutputs := generateR3Fixture(t, "drop_moved_source.concept")
+	movedOutputs := generateOwnershipFixture(t, "drop_moved_source.concept")
 	movedBody := string(movedOutputs["drop_moved_source.generated.c"])
 	movedMain := movedBody[strings.Index(movedBody, "int concept_drop_moved_source_main()"):]
 	if strings.Contains(movedMain, "concept_drop_moved_source_drop(first);") || strings.Count(movedMain, "concept_drop_moved_source_drop(second);") != 1 {
 		t.Fatalf("moved source cleanup was not suppressed:\n%s", movedMain)
 	}
 
-	callBody := string(generateR3Fixture(t, "move_call_transfer.concept")["move_call_transfer.generated.c"])
+	callBody := string(generateOwnershipFixture(t, "move_call_transfer.concept")["move_call_transfer.generated.c"])
 	consumeAt := strings.Index(callBody, "int concept_move_call_transfer_consume")
 	mainAt = strings.Index(callBody, "int concept_move_call_transfer_main")
 	if consumeAt < 0 || mainAt < 0 || !strings.Contains(callBody[consumeAt:mainAt], "concept_move_call_transfer_drop(resource);") || strings.Contains(callBody[mainAt:], "concept_move_call_transfer_drop(resource);") {
@@ -228,7 +228,7 @@ func TestOwnershipReferencesNativeC11(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.fixture, func(t *testing.T) {
-			outputs := generateR3Fixture(t, tc.fixture)
+			outputs := generateOwnershipFixture(t, tc.fixture)
 			base := strings.TrimSuffix(tc.fixture, ".concept")
 			harness := "#include \"" + base + ".generated.h\"\n\nint main(void) { return " + tc.call + "() == " + strconv.Itoa(tc.want) + " ? 0 : 1; }\n"
 			runFoundationNativeHarness(t, outputs, base+"_harness.c", harness)
@@ -236,7 +236,7 @@ func TestOwnershipReferencesNativeC11(t *testing.T) {
 	}
 }
 
-func generateR3Fixture(t *testing.T, fixture string) Outputs {
+func generateOwnershipFixture(t *testing.T, fixture string) Outputs {
 	t.Helper()
 	path := filepath.Join("..", "..", "language", "evt1", "ownership", "valid", fixture)
 	source, err := os.ReadFile(path)

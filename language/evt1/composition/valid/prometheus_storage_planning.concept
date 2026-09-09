@@ -1,0 +1,26 @@
+profile Core;
+
+layout PrometheusBuffers
+{
+    align(64) int<array>[16] input;
+    align(64) int<array>[16] output;
+}
+
+stream PrometheusStream over PrometheusBuffers
+{
+    Input = input;
+    Output = output;
+}
+
+int Main()
+{
+    int<array>[32] backing = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    ref PrometheusBuffers layout = bind backing;
+    ref PrometheusStream channels = bind layout;
+    Span<int> input = Span(channels.Input);
+    Span<int> output = Span(channels.Output);
+    tensor<int, 1> inputValues = Tensor(input);
+    tensor<int, 1> outputValues = Tensor(output);
+    outputValues[i] = inputValues[i] + inputValues[i];
+    return outputValues[0];
+}

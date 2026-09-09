@@ -4843,7 +4843,7 @@ func evt1ResolveOrdinaryCall(env *semanticEnv, scope *evt1Scope, name string, ar
 		return FunctionDecl{}, evt1Diagnostic("CV4027", fmt.Sprintf("unknown function %s", name), span)
 	}
 	var matches []FunctionDecl
-	var r3Error error
+	var semanticArgumentError error
 	for _, fn := range candidates {
 		if len(fn.Params) != len(args) {
 			continue
@@ -4852,7 +4852,7 @@ func evt1ResolveOrdinaryCall(env *semanticEnv, scope *evt1Scope, name string, ar
 		for i, arg := range args {
 			if err := validateCallArgument(env, scope, fn.Params[i].Type, arg, argTypes[i], templateInfo); err != nil {
 				if diagnostic, ok := err.(Diagnostic); ok && strings.HasPrefix(diagnostic.Code, "CV45") {
-					r3Error = err
+					semanticArgumentError = err
 				}
 				match = false
 				break
@@ -4868,8 +4868,8 @@ func evt1ResolveOrdinaryCall(env *semanticEnv, scope *evt1Scope, name string, ar
 	if len(matches) > 1 {
 		return FunctionDecl{}, evt1Diagnostic("CV4182", fmt.Sprintf("call %s is ambiguous under exact-signature matching", name), span)
 	}
-	if r3Error != nil {
-		return FunctionDecl{}, r3Error
+	if semanticArgumentError != nil {
+		return FunctionDecl{}, semanticArgumentError
 	}
 	return FunctionDecl{}, evt1Diagnostic("CV4107", fmt.Sprintf("no exact call target matched %s", name), span)
 }

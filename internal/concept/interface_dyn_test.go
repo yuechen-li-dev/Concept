@@ -46,7 +46,7 @@ var interfaceDynConformanceCases = []struct {
 	{"invalid/dyn_readonly_field_mutation.concept", false, "DYN_READONLY_FIELD_MUTATION"},
 }
 
-func generateR4kFixture(t *testing.T, class, file string) Outputs {
+func generateInterfaceDynFixture(t *testing.T, class, file string) Outputs {
 	t.Helper()
 	path := filepath.Join("..", "..", "language", "evt1", "interface", class, file)
 	source, err := os.ReadFile(path)
@@ -103,7 +103,7 @@ func TestInterfaceDynClassMembersDefaultPrivate(t *testing.T) {
 }
 
 func TestInterfaceDynWitnessMIRAndCShape(t *testing.T) {
-	outputs := generateR4kFixture(t, "valid", "class_interface_dyn.concept")
+	outputs := generateInterfaceDynFixture(t, "valid", "class_interface_dyn.concept")
 	var mir MIR
 	if err := json.Unmarshal(outputs["class_interface_dyn.mir.json"], &mir); err != nil {
 		t.Fatal(err)
@@ -154,7 +154,7 @@ func TestInterfaceDynRejectsMalformedDynMIR(t *testing.T) {
 }
 
 func TestInterfaceDynNativeC11(t *testing.T) {
-	outputs := generateR4kFixture(t, "valid", "class_interface_dyn.concept")
+	outputs := generateInterfaceDynFixture(t, "valid", "class_interface_dyn.concept")
 	harness := "#include \"class_interface_dyn.generated.h\"\nint main(void) { return concept_class_interface_dyn_exercise() == 5 ? 0 : 1; }\n"
 	runFoundationNativeHarness(t, outputs, "interface_dyn_harness.c", harness)
 	cases := []struct {
@@ -167,7 +167,7 @@ func TestInterfaceDynNativeC11(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.file, func(t *testing.T) {
-			fixture := generateR4kFixture(t, "valid", tc.file)
+			fixture := generateInterfaceDynFixture(t, "valid", tc.file)
 			runFoundationNativeHarness(t, fixture, "interface_dyn_"+tc.file+".c", tc.harness)
 		})
 	}

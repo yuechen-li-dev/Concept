@@ -1,0 +1,48 @@
+profile Core;
+
+enum TransactionError
+{
+    Conflict,
+}
+
+Result<int, TransactionError> TryCommit()
+{
+    return Result::Error(TransactionError::Conflict);
+}
+
+automata TransactionAgent
+{
+    machine Execute
+    {
+        int retryUtility = 2;
+
+        state Validate
+        {
+            transition match (TryCommit())
+            {
+                Result::Ok(version) => Committed;
+                Result::Error(error) => Retry;
+            }
+        }
+
+        state Retry
+        {
+            transition decide
+            {
+                Aborted score 1;
+                Validate score retryUtility;
+            }
+        }
+
+        state Committed { }
+        state Aborted { }
+    }
+}
+
+int Main()
+{
+    instance TransactionAgent transaction();
+    Step(transaction, Execute);
+    Step(transaction, Execute);
+    return State(transaction, Execute);
+}

@@ -1,21 +1,21 @@
-# Concept EVT1 language specification foundation
+# Concept EVT1 language specification
 
-Status: R5j exact concrete callable type storage
+Status: R5 language-core semantics frozen for R6 tooling
 
 This document defines the authority categories and the smallest currently
 executable EVT1 language foundation. It is derived from the retired Concept
 PoC3/Zig implementation and the extracted Concept/Vulkan/Go implementation.
-Where they disagree, this document records a direction or defers the decision;
-it does not treat implementation accident as language law.
+Where they disagree, this document records the frozen EVT1 R5 decision or an
+explicit post-R5 deferral; implementation accident is not language law.
 
 The classifications used throughout are:
 
 - **Canonical EVT1**: selected language law with an active Go proof.
-- **Provisional EVT1**: implemented or strongly indicated, but not yet closed
-  against both implementation lines.
+- **Deferred EVT1**: explicitly outside the frozen R5 core and assigned to a
+  later proposal or tooling/runtime owner.
 - **Profile-specific**: admitted by a named profile and not general core.
 - **Legacy PoC3**: preserved behavior with no current EVT1 promise.
-- **Deferred reconciliation**: an open cross-line design decision.
+- **Deferred reconciliation**: an explicitly classified post-R5 decision.
 
 ## 1. Language identity
 
@@ -49,7 +49,7 @@ or:
 profile Vulkan;
 ```
 
-**Provisional EVT1.** Dotted imports are represented after the profile line.
+**Deferred EVT1.** Dotted imports are represented after the profile line.
 Core multi-module resolution is not implemented, and Core currently rejects
 domain imports. PoC3 module/import fixtures remain the authority pressure for a
 later multi-module decision.
@@ -71,17 +71,17 @@ Result<ProbeEvidence, PrometheusError> Execute(
 
 Return type precedes function name. EVT1 does not use `fn`, `name: Type`, or
 `-> ReturnType`. Ordinary declarations remain `Type name` and
-`const Type name`. R5i admits inferred `auto name = value` and
+`const Type name`. callable capture semantics admits inferred `auto name = value` and
 `const auto name = value` only for generated concrete callable types that users
 cannot spell. `var` and inferred `let` are compatibility aliases for `auto` and
-`const auto`; canonical documentation must use the C/C++-shaped forms. R2's
+`const auto`; canonical documentation must use the C/C++-shaped forms. value semantics's
 typed `let Type name = value;` remains an exact compatibility alias of
 `const Type name = value;`. Braces and indentation remain human-readable, with
 one statement per line.
 
 ## 5. Declarations
 
-**Canonical EVT1 foundation.** R2 parses named structs, record structs, immovable structs,
+**Canonical EVT1 foundation.** value semantics parses named structs, record structs, immovable structs,
 enums, concepts, constrained function templates, compile-time declarations,
 static assertions, ordinary functions, and profile-admitted declarations.
 Declarations use explicit types and semicolon-terminated fields/statements.
@@ -93,12 +93,12 @@ implemented subset are not fixed here.
 ## 6. Primitive types
 
 **Canonical EVT1 foundation.** `int`, `uint`, `byte`, `float`, `bool`, and
-`void` are core primitive types in the implemented subset. R4f fixes bootstrap
+`void` are core primitive types in the implemented subset. layout and stream semantics fixes bootstrap
 geometry for semantic layouts as `byte` as 8-bit/alignment 1, `int`, `uint`, and
 `float` as 32-bit/alignment 4, and `uint64` as 64-bit/alignment 8. These are
 Concept layout facts; they do not claim a general foreign ABI mapping.
 
-**Provisional EVT1.** `string` is available to bounded compile-time evaluation
+**Deferred EVT1.** `string` is available to bounded compile-time evaluation
 and diagnostics but does not establish a general runtime string model.
 `uint64` exists in the seed implementation but awaits cross-line primitive and
 width rules.
@@ -108,28 +108,28 @@ and `VkCommandPool` are Vulkan admissions, not core primitives.
 
 ## 7. Ownership and storage vocabulary
 
-**Canonical EVT1 R2-R3.** In a local declaration, `const` qualifies the binding
+**Canonical EVT1 value and ownership.** In a local declaration, `const` qualifies the binding
 and its projected places, not the value type. A const local can be read and a
 copyable value can be copied from it, but the local cannot be reassigned and a
-mutable struct field cannot be written through it. R2 also applies the same
+mutable struct field cannot be written through it. value semantics also applies the same
 place rule to the already-natural `const Type parameter` qualifier. This is a
 parameter-place rule, not a full borrowing model.
 
-**Canonical EVT1 R3.** `owned T` is the bounded movable-only representation.
+**Canonical EVT1 ownership semantics.** `owned T` is the bounded movable-only representation.
 It owns a `T`, is not copyable, is movable when `T` is not immovable, and may
 carry deterministic drop responsibility. This reuses the existing ownership
 vocabulary without adding a trait or derive system. Unqualified ordinary
 values retain structural copyability. `borrow` remains accepted compatibility
-vocabulary; `ref` is the canonical R3 reference spelling.
+vocabulary; `ref` is the canonical ownership semantics reference spelling.
 
 **Deferred reconciliation.** Allocation/store ownership, partial moves,
 general borrow checking, and named lifetime parameters are not implied by
-R4a. Reference-containing aggregates are admitted only through the bounded
+lexical lifetime analysis. Reference-containing aggregates are admitted only through the bounded
 `ref struct` rules below.
 
 ## 8. Values, structs, records, and places
 
-**Canonical EVT1 R2.** `struct Name { Type field; }` declares an ordinary
+**Canonical EVT1 value semantics.** `struct Name { Type field; }` declares an ordinary
 mutable value type. Fields retain declaration order. Positional construction,
 field reads, field writes through mutable places, whole-value assignment, and
 copying are supported when every contained field is copyable. A struct that
@@ -143,7 +143,7 @@ immutability; it is distinct from binding/place immutability supplied by
 `const`. A non-const record binding may therefore be rebound as a whole to a
 new copyable record value even though none of its field projections is mutable.
 
-The bounded R2 place classes are:
+The bounded value semantics place classes are:
 
 - mutable local place;
 - const local or const parameter place;
@@ -163,7 +163,7 @@ future ownership/place lattice and establishes no general alias or borrow law.
 copyable record value, copies its fields, evaluates replacements in source
 order, and produces a fresh record value. Unspecified fields retain their
 source values and the source is unchanged. Fields must exist, may appear only
-once, and replacement types must match. R2 rejects `with` on ordinary structs,
+once, and replacement types must match. value semantics rejects `with` on ordinary structs,
 non-record values, and records containing a non-copyable field. Dotted update
 targets are not syntax; nested updates compose as nested `with` expressions.
 
@@ -174,7 +174,7 @@ mutable in Concept.
 
 ### 8.2 Immovable structs
 
-**Canonical EVT1 R2 subset.** `immovable struct` declares mutable,
+**Canonical EVT1 value semantics subset.** `immovable struct` declares mutable,
 storage-bound data. It may be constructed directly in final local storage and
 its fields may be mutated through that mutable place. Whole-value copy and
 assignment, pass-by-value, return-by-value, struct or record embedding by
@@ -185,12 +185,12 @@ implicit relocation is permitted.
 ### 8.3 Structural equality
 
 The existing bounded compile-time structural equality implementation applies
-to record structs when every field supports equality. R2 adds no generated
+to record structs when every field supports equality. value semantics adds no generated
 runtime operators.
 
 ### 8.4 Move state and deterministic drop
 
-**Canonical EVT1 R3.** Copyability is structural, while movability is broader.
+**Canonical EVT1 ownership semantics.** Copyability is structural, while movability is broader.
 An ordinary copyable value may be assigned or passed by value without consuming
 its source. `move place` is semantically unnecessary but legal for such a value
 and does not make the source moved-from.
@@ -206,29 +206,29 @@ The source becomes moved-from. Reading, projecting, passing, returning, or
 moving it again is invalid until legal whole-place reassignment initializes it
 again. Straight-line state and simple `if`/`while` joins use the bounded states
 `Uninitialized`, `Initialized`, `Moved`, and `MaybeMoved`; a value initialized
-on one path and moved on another is not usable after the join. R3 has no partial
+on one path and moved on another is not usable after the join. ownership semantics has no partial
 or field-level moves.
 
 An immovable value cannot be relocated, including with `move`, but remains
 usable in final storage and through references.
 
-`void Drop(owned T value)` is the narrow R3 drop witness. A live owning local
+`void Drop(owned T value)` is the narrow ownership semantics drop witness. A live owning local
 or by-value owning parameter with that witness is dropped exactly once at scope
 exit, including early return, unless ownership was transferred. Return values
 are evaluated before cleanup. Cleanup proceeds in reverse declaration order.
 The MIR records owner, witness, order, and whether an owner is live or
-transferred; the C backend emits only those deterministic cleanup calls. R4a
+transferred; the C backend emits only those deterministic cleanup calls. lexical lifetime analysis
 validates those obligations as MIR invariants: every recorded owner has one
 ordered obligation and is either live (drop exactly once) or transferred (no
 drop). A `MaybeMoved` Drop owner remains rejected because conditional cleanup
 is not implemented. Assigning a fresh or explicitly transferred value to a
 live `owned T` local performs `Drop` on the old value and then initializes the
-same storage with the new value. R4a does not define unwinding, partial-field
+same storage with the new value. lexical lifetime analysis does not define unwinding, partial-field
 drop, or dynamic cleanup stacks.
 
 ### 8.5 References
 
-**Canonical EVT1 R3.** `ref T` aliases an existing mutable `T` place; `ref const
+**Canonical EVT1 ownership semantics.** `ref T` aliases an existing mutable `T` place; `ref const
 T` aliases an existing place as a read-only view. References do not copy or own
 the referent and do not transfer ownership. Binding is explicit at the call or
 local initializer site:
@@ -249,11 +249,11 @@ The bounded binding rules are:
 No temporary lifetime extension occurs. Mutation through `ref const` is
 rejected. Record fields remain immutable through both reference forms because
 record immutability is type-level. A mutable immovable final-storage value may
-bind to `ref T`; this is the normal R3 way to manipulate it without relocation.
+bind to `ref T`; this is the normal ownership semantics way to manipulate it without relocation.
 Borrowing an `owned T` does not change its ownership state, so it may later be
 transferred with `move`.
 
-**Canonical EVT1 R4a.** References carry bounded compile-time provenance:
+**Canonical EVT1 lexical lifetime analysis.** References carry bounded compile-time provenance:
 `Local(scope)`, `Parameter(scope)`, static/global where supported, or
 `Unknown`. Lexical checks reject a local reference returned from its function
 and reject assignment of a shorter-lived reference into a longer-lived slot.
@@ -271,11 +271,11 @@ provenance proof as a reference.
 
 `scoped ref T` and `scoped ref const T` state that the reference must not
 escape the current semantic scope. Scoped parameters may be used and passed
-downward, but cannot be returned or embedded into unrestricted storage. R4a
+downward, but cannot be returned or embedded into unrestricted storage. lexical lifetime analysis
 adds no named lifetimes, non-lexical lifetime inference, reborrow lattice, or
 general mutable-alias analysis.
 
-**Canonical EVT1 R4b.** A function returning a reference or ref struct has a
+**Canonical EVT1 relational lifetime analysis.** A function returning a reference or ref struct has a
 compile-time result-provenance summary when its body proves one by a bounded,
 syntax-directed rule. The supported summaries are `Parameter(index)`,
 `ShortestOfParameters(indices)`, and `Unknown`; `Static` is reserved for a
@@ -295,7 +295,7 @@ A function call does not erase or extend reference provenance.
 Result provenance is derived, not reset.
 ```
 
-Assignment and return apply the R4a lexical rules to that instantiated result.
+Assignment and return apply the lexical lifetime analysis lexical rules to that instantiated result.
 A call derived from an inner local cannot initialize an outer lifetime-bound
 place, and a result derived from scoped provenance remains non-escaping.
 Unknown result provenance remains conservative and cannot justify outward
@@ -317,7 +317,7 @@ enum Status
 Status status = Status::Ready(7);
 ```
 
-R4c specializes this same facility for the canonical compiler-known
+failure semantics specializes this same facility for the canonical compiler-known
 `Option<T>` and `Result<T,E>` forms described in Section 24; it does not add a
 second enum or match system.
 
@@ -346,11 +346,11 @@ calls, local declarations, assignment, foundational `while`, and `if`
 expressions. Function names are PascalCase; parameters and locals are
 camelCase.
 
-**Provisional EVT1.** Overload resolution is bounded to the implemented exact
+**Deferred EVT1.** Overload resolution is bounded to the implemented exact
 signature and template requirement rules. Full PoC3 callable and module rules
 are deferred.
 
-**Canonical EVT1 R3.** An `owned T` by-value parameter receives ownership.
+**Canonical EVT1 ownership semantics.** An `owned T` by-value parameter receives ownership.
 Passing an existing movable-only owner requires `move`; the callee drops its
 live parameter unless it transfers ownership onward. Returning an `owned T`
 local likewise requires explicit `return move value;`. Fresh function results
@@ -358,20 +358,20 @@ may initialize an owner directly. No NRVO or implicit-move law is specified.
 
 ## 12. Failure model
 
-**Canonical EVT1 R4c.** Core has one explicit failure calculus. `Option<T>` is
+**Canonical EVT1 failure semantics.** Core has one explicit failure calculus. `Option<T>` is
 expected absence, `Result<T,E>` is typed recoverable failure, and `panic` is a
 terminal invariant failure. Explicit `match` is the ground truth; postfix `?`,
 postfix `!`, lexical `try`/`except`, `assert`, and `static_assert` are bounded
 sugar over ordinary payload-enum control flow and assertion evaluation. The
 complete laws and source forms are specified in Section 24.
 
-The pre-R4c Vulkan `Result<void,E>` signature bridge remains an isolated ABI
+The pre-failure semantics Vulkan `Result<void,E>` signature bridge remains an isolated ABI
 compatibility seam. Legacy PoC3 fallible syntax is evidence only and does not
 create a second failure channel.
 
 ## 13. Concepts
 
-**Canonical EVT1 R4b.** Named concepts have one type parameter and a finite set
+**Canonical EVT1.** Named concepts have one type parameter and a finite set
 of named operation, prerequisite-concept, or compiler-analysis requirements.
 The bounded compiler-analysis spelling is:
 
@@ -382,7 +382,7 @@ concept LifetimeBound<T>
 }
 ```
 
-R4b keeps source concepts and templates single-parameter, but compiler-analysis
+relational lifetime analysis keeps source concepts and templates single-parameter, but compiler-analysis
 requirements may consume a bounded list of semantic subjects. `Outlives`
 binds the named parameter and `result` subjects of exactly one required
 operation:
@@ -402,7 +402,7 @@ summary, proves the relation. A result derived only from another parameter
 disproves it. `Unknown` is rejection for a required proof; there is no
 maybe-satisfied outcome.
 
-The semantic subjects implemented in R4b are operation parameters, operation
+The semantic subjects implemented in relational lifetime analysis are operation parameters, operation
 results, and concrete types for the existing unary analyses. Local/ref-struct
 bindings participate through their instantiated provenance at call sites.
 Relational analyses run only because concept satisfaction requests them. Their
@@ -419,7 +419,7 @@ code.
 
 **Deferred reconciliation.** Multiple parameters, specialization, negative
 concepts, orphan/coherence breadth, and the full PoC3 marker-concept system are
-not admitted by R0.
+not admitted by foundation.
 
 ## 14. Templates
 
@@ -429,7 +429,7 @@ the requirement closure and monomorphized deterministically into MIR/C symbols.
 
 **Deferred reconciliation.** Template types, template structs/enums, multiple
 type parameters, partial specialization, unconstrained templates, and broad
-overload interaction remain outside the R0 subset.
+overload interaction remain outside the foundation subset.
 
 ## 15. Compile-time evaluation
 
@@ -446,7 +446,7 @@ part of the current canonical subset.
 
 ## 16. Arrays and indexing
 
-**Canonical EVT1 R4d.** `array` is rank-1 contiguous storage. `ndarray` is
+**Canonical EVT1 array storage semantics.** `array` is rank-1 contiguous storage. `ndarray` is
 rank-N contiguous storage and is not recursively nested array. The canonical
 explicit spellings are:
 
@@ -474,7 +474,7 @@ guard and terminal panic with `Concept array index out of bounds` or `Concept
 ndarray index out of bounds`; it does not produce Result and does not unwind.
 
 Ndarray linearization is row-major with the last index contiguous. For shape
-`[rows, columns]`, `[row, column]` has offset `row * columns + column`. R4d has
+`[rows, columns]`, `[row, column]` has offset `row * columns + column`. array storage semantics has
 no configurable layout, stride, sparse, tiled, or jagged storage policy.
 
 `Len(x)` returns the extent of rank-1 storage. `Rank(x)` returns storage rank,
@@ -506,7 +506,7 @@ nested wrapper tree. Concept values therefore do not acquire C array decay.
 
 ### 16.1 Explicit storage binding
 
-**Canonical EVT1 R4e.** Unary `bind` creates a non-owning shaped reference to
+**Canonical EVT1 storage binding.** Unary `bind` creates a non-owning shaped reference to
 existing contiguous array or ndarray storage. Its destination supplies the
 target type and shape; its source supplies the backing storage:
 
@@ -520,7 +520,7 @@ The destination must be `ref T<array>[...]`, `ref const T<array>[...]`,
 assignable whole contiguous array/ndarray place. Element types must be
 identical. A mutable source may produce either mutable or const access; a const
 source may produce only `ref const`. A contextless `bind source` is ill-formed
-because R4e does not infer the target shape.
+because storage binding does not infer the target shape.
 
 `bind` consumes the entire source storage. The product of the target dimensions
 must equal the source element count exactly. Fixed counts are proved at compile
@@ -528,7 +528,7 @@ time. Runtime dimensions are multiplied with overflow checks and compared
 before the view is formed; mismatch terminates through the deterministic panic
 path with `Concept bind shape does not match storage size`, and overflow uses
 `Concept bind shape product overflow`. Prefix, offset, partial, strided, and raw
-pointer binding are not part of R4e.
+pointer binding are not part of storage binding.
 
 The result aliases the source in unchanged row-major linear order. `bind` does
 not allocate, copy, move, resize, transfer ownership, or extend lifetime. It
@@ -537,13 +537,13 @@ therefore binding cannot launder a local or scoped source into an escaping
 reference. Existing indexing, `Len`, `Rank`, and `Shape` operate on the target
 shape, including runtime descriptor dimensions.
 
-R4e preserves the R4d zero-extent law rather than defining a new one: an extent
+storage binding preserves the array storage semantics zero-extent law rather than defining a new one: an extent
 is nonnegative, exact total-count equality still applies, and executable binding
 requires backing storage already representable by the active backend.
 
 ### 16.2 Semantic layouts and streams
 
-**Canonical EVT1 R4f.** A `layout` declares ordered, named regions with fixed
+**Canonical EVT1 layout and stream semantics.** A `layout` declares ordered, named regions with fixed
 compile-time byte geometry. Region types are ordinary fixed-size Core value
 types, including fixed arrays and ndarrays:
 
@@ -584,13 +584,13 @@ projection is the corresponding region projection. Unknown regions, duplicate
 channels, layout mismatch, and const escalation are ill-formed. Streams do not
 imply iteration, queues, scheduling, transport, ownership, or execution.
 
-R4f adds no Slice, FixedBuffer, `stackalloc`, allocation,
+layout and stream semantics adds no Slice, FixedBuffer, `stackalloc`, allocation,
 raw-pointer binding, runtime layout parameters, tensor mathematics, general
 reflection, stream composition/runtime, GPU lowering, or stable ABI law.
 
 ### 16.3 Bounded borrowed spans
 
-**Canonical EVT1 R4g.** `Span<T>` is a mutable bounded borrowed contiguous
+**Canonical EVT1 Span semantics.** `Span<T>` is a mutable bounded borrowed contiguous
 interval and `ReadOnlySpan<T>` is its readonly counterpart. Both are
 compiler-known generic, ref-struct-like value descriptors. The canonical
 constructors are `Span(source)` and `ReadOnlySpan(source)`; the destination or
@@ -618,21 +618,21 @@ overflow.
 `Span<T>` permits reads and writes; `ReadOnlySpan<T>` permits reads only.
 Provable constant failure is `SPAN_INDEX_OUT_OF_BOUNDS`; dynamic failure
 terminates with `Concept span index out of bounds`. Span has no `Rank` or
-`Shape` surface in R4g.
+`Shape` surface in Span semantics.
 
 Every span retains its element type, source provenance, stable parent-region
 identity, relative base offset, length, byte extent, safe starting alignment,
 mutability, and contiguity. Layout-region and stream-channel construction
-consumes the exact R4f region identity and geometry. Subspan narrows the same
+consumes the exact layout and stream semantics region identity and geometry. Subspan narrows the same
 parent region; it does not manufacture an independent identity. Its alignment
 is conservatively derived from the parent alignment and element byte offset.
 Distinct declared-disjoint parent regions therefore remain distinguishable,
 while same-parent intervals retain enough facts for later analysis without
-R4g adding a noalias solver.
+Span semantics adding a noalias solver.
 
 `Span<T>` converts to `ReadOnlySpan<T>` through the explicit canonical
 constructor `ReadOnlySpan(mutableSpan)`. The reverse conversion is invalid.
-Construction and narrowing preserve R4a/R4b lexical, scoped, and call-result
+Construction and narrowing preserve lifetime lexical, scoped, and call-result
 provenance. They do not extend lifetime or add Span-specific lifetimes,
 named lifetimes, NLL, or a second borrow checker.
 
@@ -653,7 +653,7 @@ ReadOnlySpan may not convert to Span.
 
 ### 16.4 Tensor mathematics and Einstein indexing
 
-**Canonical EVT1 R4h.** `tensor<T, Rank>` is a mathematical rank-`Rank` view
+**Canonical EVT1 tensor semantics.** `tensor<T, Rank>` is a mathematical rank-`Rank` view
 over existing shaped contiguous storage. `Rank` is a positive compile-time
 integer and `T` is a supported scalar arithmetic type. Tensor is not nested
 array storage: it owns no storage, allocates nothing, copies no backing
@@ -669,12 +669,12 @@ int item = values[1, 2];
 `Tensor(source)` requires an explicit tensor destination and a shaped
 contiguous source of the same rank and element type. Fixed or bound ndarrays,
 shaped layout regions, and shaped stream channels are admitted. A `Span<T>`
-may form only `tensor<T, 1>`; R4h never invents a multidimensional shape from
+may form only `tensor<T, 1>`; tensor semantics never invents a multidimensional shape from
 a length. The view retains ordered shape, parent region, base offset,
 alignment, mutability, contiguity, and lexical/call-result provenance.
 Readonly storage produces a readonly tensor destination capability.
 
-**Canonical EVT1 R4i.** A concrete fixed tensor may instead state its shape
+**Canonical EVT1 tensor backing semantics.** A concrete fixed tensor may instead state its shape
 after the declared name:
 
 ```concept
@@ -703,7 +703,7 @@ capability and its synthesized backing readonly through that declaration.
 `tensor<T, 2>`. They are type identities, not nominal wrappers, and therefore
 have identical parameter compatibility, concept satisfaction, Tensor MIR,
 operators, and storage behavior. Their shaped declarations require exactly
-one and two dimensions respectively. Shape remains explicit; R4i does not
+one and two dimensions respectively. Shape remains explicit; tensor backing semantics does not
 infer it from a literal alone.
 
 Runtime or external storage remains explicit. A runtime-shaped inline tensor
@@ -726,7 +726,7 @@ The compiler owns the hidden `extent`, `current`, and reduction accumulator
 state. Those names are integer-like only within this statement and do not
 escape as ordinary locals. LHS indices are distinct free indices. Every free
 index must occur on the RHS. An RHS-only index must occur exactly twice in the
-bounded R4h Einstein subset and is a reduction index. Every occurrence of an
+bounded tensor semantics Einstein subset and is a reduction index. Every occurrence of an
 index has one compatible extent. Mixed ordinary and symbolic indices,
 duplicate output indices, missing output indices, inconsistent extents, and
 other multiplicities reject rather than being guessed.
@@ -749,7 +749,7 @@ with the first axis of `B`. For shapes `[a0, ..., aN]` and
 `[a0, ..., aN-1, b1, ..., bM]`. Therefore `[M,K] @ [K,N]` is matrix
 multiplication, while `[A,B,K] @ [K,C,D]` produces `[A,B,C,D]`. Rank-one
 `[K] @ [K]` contracts directly to scalar `T`; rank-zero exists in Tensor MIR
-for this result but R4i adds no source-level `tensor<T, 0>` variable form.
+for this result but tensor backing semantics adds no source-level `tensor<T, 0>` variable form.
 Einstein indexing is the explicit general contraction form; `@` is the
 canonical last/first-axis shorthand.
 
@@ -762,7 +762,7 @@ Tensor semantic MIR retains views, operands, symbolic maps, free/reduction
 sets, shape relations, provenance/region/alignment/mutability, and alias
 policy. A dedicated tensor lowering stage then synthesizes zero-based loops,
 with arithmetic zero as the multiplication-sum reduction identity, before the
-strict-C11 backend. R4i adds no tensor runtime, heap allocator, BLAS, MLIR,
+strict-C11 backend. tensor backing semantics adds no tensor runtime, heap allocator, BLAS, MLIR,
 SIMD, GPU lowering, broadcasting, strides, sparse storage, autograd, named
 axes, tensor slicing, or separate vector/matrix MIR.
 
@@ -792,7 +792,7 @@ only from declared distinct regions or statically known non-overlapping
 half-open intervals. No general alias inference is implied.
 
 Semantic fact proofs erase before C lowering. Optimization behavior is not
-normative in R4j.
+normative in semantic fact qualification.
 
 ## 18. Slices and bounded collections
 
@@ -800,7 +800,7 @@ normative in R4j.
 `FixedBuffer<T, N>` foundations.
 
 **Redesign.** The old `Slice<T>` surface is design pressure, not a direct-port
-candidate. R4g supersedes its direction with canonical `Span<T>` and
+candidate. Span semantics supersedes its direction with canonical `Span<T>` and
 `ReadOnlySpan<T>` over the active reference, provenance, storage, bind, layout,
 and stream model. Slice remains legacy evidence only. FixedBuffer mutation and
 collection rules, stack allocation, and owned dynamic storage remain future
@@ -811,7 +811,7 @@ work; `bind` remains an exact whole-storage association rather than a subregion.
 **Legacy PoC3.** PoC3 contains interface declarations and bounded dynamic
 dispatch fixtures.
 
-**Canonical EVT1 / R4k.** `interface C<T>` is a specialized concept whose
+**Canonical EVT1 / interface and dyn semantics.** `interface C<T>` is a specialized concept whose
 requirements have a fixed runtime witness shape. All interfaces are concepts;
 not all concepts are interfaces. Interface satisfaction uses the ordinary
 concept requirement resolver. Instance methods must begin with `ref T self` or
@@ -829,13 +829,13 @@ fields mechanically synthesize getter and, for mutable requirements, setter
 entries. Compiler semantic requirements are proven when dyn is constructed and
 have no runtime payload.
 
-Objects carry no vtable, header, RTTI, registry, or universal base. R4k has no
+Objects carry no vtable, header, RTTI, registry, or universal base. interface and dyn semantics has no
 downcast or owning dyn. `dyn const I` cannot call mutable receiver methods or
 write fields.
 
 ## 19a. Lightweight classes
 
-**Canonical EVT1 / R4k.** A `class` groups ordinary fields and methods behind
+**Canonical EVT1 / interface and dyn semantics.** A `class` groups ordinary fields and methods behind
 `public:` and `private:` sections. Class members default private; struct members
 remain public. External access to a private field or method is rejected
 semantically, while methods of the declaring class may use private members.
@@ -880,7 +880,7 @@ contracts, and FFI-safe type derivation require explicit EVT1 decisions.
 
 ## 22. Automata, machines, states, and persistent capture
 
-**Canonical EVT1 R5a.** `automata` is the outer persistent composition unit;
+**Canonical EVT1 automata state semantics.** `automata` is the outer persistent composition unit;
 `machine` is an independently stepped state machine contained by that unit;
 `state` is a named execution state inside one machine; and `transition` changes
 only the current state of that machine. These levels are distinct and are not
@@ -935,7 +935,7 @@ automata state field. `state.field` explicitly selects shared state and
 `machine.field` selects the current machine's storage. Sibling machine fields
 are private. Outside a body, `instance.state.field` and
 `instance.Machine.field` provide explicit inspection; an instance is otherwise
-not copyable or returnable as an ordinary value in R5a.
+not copyable or returnable as an ordinary value in automata state semantics.
 
 The first declared state is initial. Symbolic identity is
 `Automata.Machine.State`; numeric tags use declaration order.
@@ -945,7 +945,7 @@ steps siblings. `State(instance, Machine)` reads its current tag.
 cleanup, updates the tag, and returns from the step. No hidden heap,
 closure/coroutine frame, scheduler, event loop, or runtime registration exists.
 
-**Canonical EVT1 R5b transition match.** A state body may perform categorical
+**Canonical EVT1 transition semantics transition match.** A state body may perform categorical
 dispatch directly to local states:
 
 ```concept
@@ -965,7 +965,7 @@ cleanup, updates the current-state tag, and returns from the current `Step`.
 There is no arm fallthrough, scoring, or ranking. The stable defensive runtime
 failure is `machine transition match found no matching case`.
 
-**Canonical EVT1 R5b transition decide.** The canonical non-redundant candidate
+**Canonical EVT1 transition semantics transition decide.** The canonical non-redundant candidate
 syntax is:
 
 ```concept
@@ -1001,7 +1001,7 @@ is not a scheduler or DragonGod's stateful Decision policy. Guards and scores
 are ordinary expressions and retain source-order side effects, ownership,
 reference, and explicit failure behavior.
 
-**Canonical EVT1 R5c inference.** `Inference<T>` is an ordinary non-owning,
+**Canonical EVT1 inference semantics inference.** `Inference<T>` is an ordinary non-owning,
 copyable value over a payload-free enum candidate type. It contains fixed
 inline probabilities, source-order candidate identities, and a fixed count.
 
@@ -1034,14 +1034,14 @@ Inference has no truthiness. For identical finite candidates, guards, float
 scores, and order, `HardMax(infer(scores))` agrees with direct `decide`, but
 `decide` remains raw-score argmax and need not normalize.
 
-`transition infer with HardMax { ... }` is the only R5c transition-inference
+`transition infer with HardMax { ... }` is the only inference semantics transition-inference
 policy. It infers, selects, cleans transients, updates the tag, and returns from
 `Step`. Missing or unknown policy is invalid. Randomness is never implicit;
 sampling and explicit RNG are deferred. The older typed-signal automata form
 remains compatibility surface. Plain value-level decide,
 completion/result, nested machine values, and effects/actuators remain later.
 
-**Canonical EVT1 R5d yield.** Bare `yield;` is valid only in a runtime machine
+**Canonical EVT1 iteration and yield semantics yield.** Bare `yield;` is valid only in a runtime machine
 state body. Taking it cleans transient locals in reverse lexical declaration
 order, preserves the current-state tag and all explicit automata/machine
 persistent storage, leaves completion and result storage untouched, and ends
@@ -1052,9 +1052,9 @@ same state from its first statement. It does not resume after the yield site.
 launder reference provenance. An owned transient local drops before Step
 returns; an owned persistent field does not drop at yield. `yield value`, saved
 program counters, coroutine frames, schedulers, async, and generator semantics
-are not part of R5d.
+are not part of iteration and yield semantics.
 
-**Canonical EVT1 R5d foreach.** The required spelling is
+**Canonical EVT1 iteration and yield semantics foreach.** The required spelling is
 `foreach (Item item in source) { ... }`; the item type is explicit. Its
 semantic expansion obtains iterator state once, calls `MoveNext(ref iterator)`
 once per attempt, calls `Current(ref const iterator)` once per successful
@@ -1078,13 +1078,13 @@ beginning. If iteration progress matters across Steps, iterator state must be
 stored explicitly in automata or machine persistent storage and advanced with
 the protocol operations directly.
 
-**Canonical EVT1 R5e machine stack and completion.** Each automata instance has
+**Canonical EVT1 machine-stack semantics machine stack and completion.** Each automata instance has
 an inline bounded stack of at most eight machine frames. A frame contains a
 machine declaration tag, current state, and that frame's machine-persistent
 fields. All frames reference the one outer `with state` environment. The stack
 contains no saved instruction pointer and implies no scheduler or heap.
 
-At depth one, `Step(instance, Machine)` retains R5a's explicit top-level
+At depth one, `Step(instance, Machine)` retains automata state semantics's explicit top-level
 machine selection. At greater depth every Step spelling advances the active
 top frame exactly once. `yield;` keeps that frame; `transition Target;` changes
 only its state. The child call is `push Child goto ResumeState;`: initialize a
@@ -1105,7 +1105,7 @@ parent-state form. Tags are 1 Neutral, 2 Success, and 3 Failure, with typed
 `Result<T,E>`, and Neutral fabricates no value. Internal Step status remains
 distinct and non-public.
 
-**Canonical EVT1 R5g async/await.** `async` and `asynchronous` are exact
+**Canonical EVT1 async/await.** `async` and `asynchronous` are exact
 lexical aliases on a function declaration. `await` and `awaitchronous` are
 likewise exact aliases. Parsing normalizes each pair to one AST form, so they
 have identical typing, MIR, diagnostics, and lowering.
@@ -1174,7 +1174,7 @@ re-enters the state from its beginning. Async implies no scheduler, executor,
 thread, event loop, VM, coroutine ABI, saved instruction pointer, or hidden
 heap allocation.
 
-**Canonical EVT1 R5h async interface composition.** An async interface method
+**Canonical EVT1 async interface semantics async interface composition.** An async interface method
 is an ordinary interface method whose result is `Async<T>`. The spellings
 `requires async T F(ref U self);` and `requires asynchronous T F(ref U self);`
 normalize to `(ref U) -> Async<T>` before ordinary concept satisfaction and
@@ -1192,7 +1192,7 @@ ordinary `(interface, concrete type)` witness. Construction evaluates its
 operands once, executes no async body, allocates nothing, and transfers the
 fresh operation once. The returned operation contains concrete generated
 machine behavior; later `Step`, `Complete`, `Result`, or `await` uses ordinary
-R5f/R5g machinery and does not redispatch through the interface.
+async machinery and does not redispatch through the interface.
 
 A dyn receiver remains non-owning. A generated frame that retains `self` must
 not outlive its backing object; local and scoped dyn provenance cannot be
@@ -1200,7 +1200,7 @@ laundered into an escaping operation. `dyn const I` may invoke only readonly
 receivers. Interface composition and compiler facts remain unchanged: static
 facts erase, while one mixed sync/async witness carries fixed runtime entries.
 
-R5h defines no async vtable, virtual `Step`, task/promise/future runtime,
+async interface semantics defines no async vtable, virtual `Step`, task/promise/future runtime,
 scheduler, executor, continuation allocation, hidden heap, RTTI registry, or
 stable public C ABI. Open generic runtime async methods remain rejected. A
 future internal ABI may construct into caller-provided storage only with the
@@ -1208,13 +1208,13 @@ same explicit allocation-free semantics.
 
 ## 23. Effects, actuators, and profiles
 
-**Profile-specific.** R0 admits `effect`, ordered emitted-effect batches, and
+**Profile-specific.** foundation admits `effect`, ordered emitted-effect batches, and
 `actuator` mappings only under `profile Vulkan;`. The Vulkan profile owns
 mechanism types, Prometheus imports, mapping admissibility, and Vulkan C
 bindings.
 
 **Deferred reconciliation.** PoC3 discusses broader effect/default-profile
-laws, but R0 does not promote the Vulkan spelling or implementation to core.
+laws, but foundation does not promote the Vulkan spelling or implementation to core.
 Any general effect system requires a separate cross-line decision.
 
 ## 24. Testing
@@ -1223,7 +1223,7 @@ Any general effect system requires a separate cross-line decision.
 Zig-hosted test runner remain executable reference behavior.
 
 **Deferred reconciliation.** The Go compiler has Go-level compiler tests but no
-canonical Concept testing language. R1 differential tests are infrastructure,
+canonical Concept testing language. foundation conformance differential tests are infrastructure,
 not automatic adoption of the PoC3 testing surface.
 
 ## 25. Panic and assert
@@ -1256,7 +1256,7 @@ span. Therefore `?` never panics and `!` never silently propagates.
 `try` establishes only a local propagation boundary. A `?` inside it branches
 to an exact statically selected Result error arm. If no arm matches, the error
 may propagate outward only through an identical enclosing Result error type;
-otherwise compilation fails. R4c does not route Option through try/except.
+otherwise compilation fails. failure semantics does not route Option through try/except.
 There is no `throw`, exception object, runtime type test, exception table,
 cross-frame catch, or stack unwinding. In particular:
 
@@ -1268,15 +1268,14 @@ Panic terminates the current execution path without unwinding. The C bootstrap
 helper reports a deterministic reason and one-based source line/column, then
 aborts. It performs no allocation and implies no generalized panic runtime.
 
-`assert(condition, reason)` is runtime sugar for
-`Assert.True(condition, reason)`; the one-argument form uses the deterministic
-reason `Concept assertion failed`. False escalates to the same terminal panic
-primitive and true continues. `Assert.True` is the only required primitive;
-this is not a testing framework.
+`assert(condition, reason)` is the runtime assertion form; the one-argument
+form uses the deterministic reason `Concept assertion failed`. False escalates
+to the same terminal panic primitive and true continues. The future R6
+`Assert.*` test-library surface is not part of the R5 language core.
 
-`static_assert(condition, reason)` is exactly compile-time sugar for
-`comptime Assert.True(condition, reason)`. It uses the existing bounded
-comptime evaluator and emits no runtime code. Runtime values are rejected.
+`static_assert(condition, reason)` is the compile-time assertion form. It uses
+the existing bounded comptime evaluator and emits no runtime code. Runtime
+values are rejected.
 
 ## 26. Explicit callable capture environments
 
@@ -1331,7 +1330,34 @@ Record `with`, automata `with state`, and callable `with (...)` are distinct
 grammar productions. They share only the principle that attached state is
 explicit.
 
-## 27. Backend and runtime boundaries
+## 27. Exact concrete callable types
+
+Concrete callable types have fixed compile-time layout and identity. A callable
+literal's type consists of its exact call signature, deterministic code
+identity, and generated capture-environment type. Different callable literals
+are different concrete types even when their call signatures and environment
+geometry are identical.
+
+The canonical transparent alias is `using ScaleCallback =
+typeof(MakeScaler(1));`. `type ScaleCallback = typeof(MakeScaler(1));` is a
+compatibility spelling. `concept` remains reserved for semantic
+constraints/interfaces and is not a type-declaration catchall. `typeof(expr)`
+is permitted only in a module-scoped exact alias. It yields the expression's
+value type, is compile-time-only, and does not evaluate the expression. A
+unique function name may query its exact callable return type, supporting
+reference-parameter factories.
+
+An `auto` function return is inferred only when every value return has the same
+exact callable identity. Exact aliases may name function returns, by-value or
+`ref` parameters, struct/class fields, and machine fields. Ordinary copy, move,
+const receiver, provenance, and reverse-drop rules remain authoritative.
+
+`auto` in a stored field or explicit parameter is rejected because its layout
+would be existential. Exact assignment requires the same callable identity; an
+erased callback cannot recover a concrete type. Use an erased callback when
+heterogeneous concrete callable identities must share one runtime type.
+
+## 28. Backend and runtime boundaries
 
 **Canonical EVT1 foundation.** The active bootstrap backend produces strict
 C11 C/H, deterministic MIR JSON, a source map, and a hash manifest. Backend
@@ -1346,7 +1372,7 @@ The C representation is not itself a language specification. Runtime services,
 Oct, and Prometheus are consumers and may not become hidden compiler build
 dependencies.
 
-## 28. Deferred EVT1 items
+## 29. Deferred EVT1 items
 
 The following remain explicit reconciliation or implementation work:
 
@@ -1362,40 +1388,19 @@ The following remain explicit reconciliation or implementation work:
   callback literal syntax;
 - allocation, allocator effects, arenas, and stores;
 - stable C ABI and layout law;
-- plain value-level `decide`, continuation resume, generator yield,
-  completion/result, and nested machine-value reconciliation;
+- plain value-level `decide` and continuation-resume library policy;
 - general effects versus profile-owned effects/actuators;
-- Concept-native testing (runtime assertion sugar is canonical, but no testing
-  framework is implied);
+- Concept-native test discovery, attributes, and the `Assert.*` test library;
 - broader concepts/templates and capability-based comptime.
 
 EVT1 intentionally adds none of these merely because they were next on the PoC3
-roadmap. Promotion requires a matrix decision, a specification update, and
-executable EVT1 evidence.
+roadmap. Promotion requires a post-freeze proposal, a matrix decision, a
+specification update, and executable EVT1 evidence. The classified post-R5
+ledger is `docs/architecture/EVT1-COMPATIBILITY-AND-DEFERRED.md`.
 
-## R5j exact concrete callable types
+## 30. R5 language-core freeze
 
-Concrete callable types have fixed compile-time layout and identity. A callable
-literal's type consists of its exact call signature, deterministic code
-identity, and generated capture-environment type. Different callable literals
-are different concrete types even when their call signatures and environment
-geometry are identical.
-
-The canonical transparent alias is `using ScaleCallback =
-typeof(MakeScaler(1));`. `type ScaleCallback = typeof(MakeScaler(1));` is a
-compatibility spelling. `concept` remains reserved for semantic
-constraints/interfaces and is not a type-declaration catchall. `typeof(expr)`
-is permitted only in a module-scoped exact alias in R5j. It yields the
-expression's value type, is compile-time-only, and does not evaluate the
-expression. A unique function name may query its exact callable return type,
-supporting reference-parameter factories.
-
-An `auto` function return is inferred only when every value return has the same
-exact callable identity. Exact aliases may name function returns, by-value or
-`ref` parameters, struct/class fields, and machine fields. Ordinary copy, move,
-const receiver, provenance, and reverse-drop rules remain authoritative.
-
-`auto` in a stored field or explicit parameter is rejected because its layout
-would be existential. Exact assignment requires the same callable identity; an
-erased callback cannot recover a concrete type. Use an erased callback when
-heterogeneous concrete callable identities must share one runtime type.
+EVT1 R5 language-core semantics are frozen for the transition into R6 tooling.
+R6 may fix bugs, diagnostics, contradictions, or specification errors, but
+should not casually expand the language surface. New language features require
+an explicit post-freeze proposal.
