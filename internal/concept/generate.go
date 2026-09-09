@@ -27,7 +27,7 @@ func Generate(module Module, source []byte) (Outputs, error) {
 }
 
 // GenerateForTarget runs the explicit MIR -> facts -> Planner pipeline. Native
-// target descriptions are planning evidence only in R4l; strict-C11 remains the
+// target descriptions are planning evidence only; strict-C11 remains the
 // sole emitting backend.
 func GenerateForTarget(module Module, source []byte, target TargetCapabilities) (Outputs, error) {
 	env, err := analyzeModule(module)

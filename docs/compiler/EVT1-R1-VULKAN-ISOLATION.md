@@ -70,7 +70,7 @@ ordinary unknown function; R1 does not invent a builtin merely to test denial.
   the absence of Prometheus application types.
 - `TestVulkanProfileBuiltinLoweringUsesRegistration` checks the registered
   import/type path and generated Vulkan C spellings.
-- `TestEVT1R1DifferentialConformance` includes five Core profile denial cases.
+- `TestFoundationDifferentialConformance` includes five Core profile denial cases.
 - Existing exact generated-output, deterministic double-generation, native
   C11, and Vulkan-profile tests remain the preservation suite.
 

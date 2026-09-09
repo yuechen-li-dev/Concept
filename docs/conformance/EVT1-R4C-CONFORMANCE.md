@@ -33,7 +33,7 @@ functions before R4c.
 0 SPEC-AMBIGUITY
 ```
 
-The readable corpus is under `language/evt1-r4c/core`. PoC3 Phase 5 concrete
+The readable corpus is under `language/evt1/failure`. PoC3 Phase 5 concrete
 Result-shaped propagation, Phase 17 panic/assert, and Phase 22 Option/match are
 recorded as evidence. Generic Result, postfix `?`/`!`, exact typed
 `try`/`except`, ownership integration, and fallible lifetime payloads are

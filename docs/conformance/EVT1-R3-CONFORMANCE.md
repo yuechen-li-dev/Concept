@@ -54,7 +54,7 @@ All reference returns are conservatively rejected in R3.
 | owned borrow then move | references preserve ownership state | EVT1-new | `PASS` |
 | obvious escape | reference return rejected | EVT1-new | `PASS` |
 
-The executable corpus is under `language/evt1-r3/core`. The table-driven
+The executable corpus is under `language/evt1/ownership`. The table-driven
 harness requires provenance and semantic-family diagnostics for every negative
 case. New reference behavior is labeled EVT1-new rather than presented as a
 PoC3 divergence.

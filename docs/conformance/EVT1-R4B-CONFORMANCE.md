@@ -33,7 +33,7 @@ and scoped state.
 0 SPEC-AMBIGUITY
 ```
 
-The readable corpus is under `language/evt1-r4b/core`. Each harness entry
+The readable corpus is under `language/evt1/lifetime/relational`. Each harness entry
 records `R4a foundation plus EVT1-new relational semantics` or `EVT1-new
 relational semantics`; R4b does not fabricate PoC3 equivalence.
 

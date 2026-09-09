@@ -38,7 +38,7 @@ func evt1TypeGeometry(env *semanticEnv, t Type) (int, int, error) {
 	}
 	if resolved.ArrayElem != nil {
 		if evt1StorageHasRuntimeShape(resolved) {
-			return 0, 0, evt1Diagnostic("CV4573", "R4f layout extents must be compile-time fixed", t.Span)
+			return 0, 0, evt1Diagnostic("CV4573", "layout extents must be compile-time fixed", t.Span)
 		}
 		size, alignment, err := evt1TypeGeometry(env, *resolved.ArrayElem)
 		if err != nil {

@@ -373,7 +373,7 @@ func validateTensorAssignment(env *semanticEnv, scope *evt1Scope, stmt *AssignSt
 			return true, evt1Diagnostic("CV4624", "@ requires two tensor operands", bin.Span)
 		}
 		if leftFacts.Rank == 1 && rightFacts.Rank == 1 {
-			return true, evt1Diagnostic("CV4624", "rank-1 @ rank-1 scalar result is deferred because R4h tensor rank is positive", bin.Span)
+			return true, evt1Diagnostic("CV4624", "rank-1 @ rank-1 scalar result is deferred because EVT1 tensor rank is positive", bin.Span)
 		}
 		if leftFacts.RegionID == outFacts.RegionID || rightFacts.RegionID == outFacts.RegionID {
 			return true, evt1Diagnostic("CV4625", "tensor contraction destination overlaps an input region", stmt.Span)
@@ -555,7 +555,7 @@ func validateEinsteinAssignment(env *semanticEnv, scope *evt1Scope, stmt *Assign
 		}
 		if !isFree {
 			if count != 2 {
-				return evt1Diagnostic("CV4622", fmt.Sprintf("reduction index %s appears %d times; R4h requires exactly twice", name, count), stmt.Value.exprSpan())
+				return evt1Diagnostic("CV4622", fmt.Sprintf("reduction index %s appears %d times; contraction requires exactly twice", name, count), stmt.Value.exprSpan())
 			}
 			reduce = append(reduce, name)
 		}
@@ -1165,7 +1165,7 @@ func evt1ExecComptimeTensorAssignment(state *evt1ComptimeState, scope *evt1EvalS
 			iter.declare(name, evt1EvalBinding{value: Value{Kind: ValueInt, Type: intType, IntValue: indices[i]}, comptime: true})
 		}
 		if len(stmt.Tensor.ReduceIndices) != 0 {
-			return evt1Diagnostic("CV4626", "comptime contraction evaluation is deferred; R4h comptime proof covers fixed symbolic initialization", stmt.Span)
+			return evt1Diagnostic("CV4626", "comptime contraction evaluation is deferred; EVT1 comptime proof covers fixed symbolic initialization", stmt.Span)
 		}
 		cell, err := evt1EvalExpr(state, iter, stmt.Value)
 		if err != nil {

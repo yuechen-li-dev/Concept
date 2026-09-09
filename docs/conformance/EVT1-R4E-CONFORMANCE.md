@@ -11,7 +11,7 @@ corpus was 30/30 `PASS` (17 valid, 13 invalid), and both Zig suites passed.
 
 ## Corpus and classification
 
-R4e contains 23 readable Concept sources under `language/evt1-r4e/core`:
+R4e contains 23 readable Concept sources under `language/evt1/storage/binding`:
 
 - 12 valid cases;
 - 9 statically invalid cases with exact diagnostics;

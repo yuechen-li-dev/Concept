@@ -1,6 +1,6 @@
 package concept
 
-// This file is the R0 in-package implementation seam for profile-specific
+// This file is the in-package implementation seam for profile-specific
 // effect and actuator semantics. It remains in the core package only because
 // those validators share the extracted semantic environment's private types.
 // The public Vulkan consumer boundary is internal/concept/profile/vulkan.

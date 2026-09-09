@@ -8,7 +8,7 @@ PoC3 compiler.
 
 ## Corpus and classification
 
-R4g contains 29 `PASS` cases under `language/evt1-r4g/core`: 15 valid programs
+R4g contains 29 `PASS` cases under `language/evt1/storage/span`: 15 valid programs
 and 14 invalid-path programs. Two invalid-path programs compile intentionally
 and are executed as isolated terminal panic evidence. There are zero
 `EXPECTED-DIVERGENCE`, `EVT1-GAP`, `POC3-LEGACY`, or `SPEC-AMBIGUITY` cases.

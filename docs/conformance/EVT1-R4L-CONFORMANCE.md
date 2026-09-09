@@ -14,7 +14,7 @@ Status: complete General Planner foundation
 - post-R4l Go inventory: 135 top-level tests across the compiler packages
 - baseline worktree: clean
 
-R4l adds 13 required readable valid programs under `language/evt1-r4l/core`.
+R4l adds 13 required readable valid programs under `language/evt1/planner`.
 They cover scalar and aggregate code, owned cleanup, Result `?`, try/except,
 Span index/Subspan, fixed layout, zero-storage stream, dyn dispatch, tensor
 elementwise/contraction, and runtime-shaped contraction.

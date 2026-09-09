@@ -1252,7 +1252,7 @@ func (p *parser) parseLayoutDecl() (LayoutDecl, error) {
 		return LayoutDecl{}, err
 	}
 	if p.peekLexeme() == "(" {
-		return LayoutDecl{}, evt1Diagnostic("CV4575", "runtime-parameterized layouts are deferred beyond R4f", p.currentSpan())
+		return LayoutDecl{}, evt1Diagnostic("CV4575", "runtime-parameterized layouts are deferred beyond EVT1", p.currentSpan())
 	}
 	if _, err := p.expect("{"); err != nil {
 		return LayoutDecl{}, err

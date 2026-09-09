@@ -753,7 +753,7 @@ explicit `ref` spelling.
 
 ## R1 executable evidence
 
-`internal/concept/conformance_test.go` and `language/evt1-r1/core` provide the
+`internal/concept/conformance_test.go` and `language/evt1/foundation` provide the
 bounded differential harness and canonical source corpus. The evidence covers
 structs, payload enums, exhaustive match, ordinary control flow, concepts,
 templates, deterministic monomorphization, bounded comptime, and compile-time
@@ -763,14 +763,14 @@ R1 leakage audit.
 
 ## R2 executable evidence
 
-`internal/concept/r2_conformance_test.go` and `language/evt1-r2/core` provide
+`internal/concept/values_records_test.go` and `language/evt1/values` provide
 32 readable cases with semantic-family diagnostics, MIR checks, exactly-once
 base lowering proof, Core/Vulkan inheritance evidence, and native C11 runs for
 mutable struct, record update, and immovable final-storage paths.
 
 ## R3 executable evidence
 
-`internal/concept/r3_conformance_test.go` and `language/evt1-r3/core` cover 31
+`internal/concept/ownership_references_test.go` and `language/evt1/ownership` cover 31
 readable cases: 30 PASS and one retained ordinary-struct-copy
 EXPECTED-DIVERGENCE. Evidence includes moved-state diagnostics and joins,
 call/return transfer, MIR cleanup ownership, generated-C ordering and
@@ -779,7 +779,7 @@ immovable-by-reference use, Vulkan inheritance, and native C11 execution.
 
 ## R4a executable evidence
 
-`internal/concept/r4a_conformance_test.go` and `language/evt1-r4a/core`
+`internal/concept/lifetime_lexical_test.go` and `language/evt1/lifetime/lexical`
 provide six valid and five invalid readable cases. They cover local and
 downward-passed ref structs, scoped calls, concept-triggered lifetime proof,
 local/ref-struct/scoped/outlives rejection, unrestricted aggregate rejection,
@@ -787,7 +787,7 @@ live owned replacement ordering, MIR proof metadata, and native C11 execution.
 
 ## R4b executable evidence
 
-`internal/concept/r4b_conformance_test.go` and `language/evt1-r4b/core`
+`internal/concept/lifetime_relational_test.go` and `language/evt1/lifetime/relational`
 provide six valid and five invalid readable cases. They cover direct and
 ref-struct call results, nested and multi-source summaries, acyclic
 pass-through, scoped propagation, longer-place rejection, relational
@@ -796,7 +796,7 @@ three native C11 executions.
 
 ## R4c executable evidence
 
-`internal/concept/r4c_conformance_test.go` and `language/evt1-r4c/core`
+`internal/concept/failure_test.go` and `language/evt1/failure`
 provide 24 readable cases: 14 valid and 10 invalid, all classified PASS.
 Evidence includes deterministic MIR sugar operations, nine successful native C11 paths,
 exact typed local handlers, owned success transfer, immovable rejection, and a
@@ -805,7 +805,7 @@ provenance.
 
 ## R4d executable evidence
 
-`internal/concept/r4d_conformance_test.go` and `language/evt1-r4d/core`
+`internal/concept/storage_arrays_test.go` and `language/evt1/storage/arrays`
 provide 30 readable cases: 17 valid and 13 invalid, all classified PASS.
 The suite inspects rank/shape/contiguity/layout/ownership MIR, compiles and runs
 16 strict-C11 value paths, and executes a separate native out-of-bounds process
@@ -815,7 +815,7 @@ surface are EVT1-new storage semantics.
 
 ## R4e executable evidence
 
-`internal/concept/r4e_conformance_test.go` and `language/evt1-r4e/core`
+`internal/concept/storage_binding_test.go` and `language/evt1/storage/binding`
 provide 23 readable cases: 12 valid and 11 invalid, all classified PASS. The
 suite inspects explicit bind MIR and generated non-owning descriptors, executes
 12 successful strict-C11 alias/shape/provenance compositions, and executes two
@@ -825,7 +825,7 @@ active R4a/R4b provenance model and R4d row-major storage model.
 
 ## R4f executable evidence
 
-`internal/concept/r4f_conformance_test.go` and `language/evt1-r4f/core`
+`internal/concept/layout_stream_test.go` and `language/evt1/storage/layout-stream`
 provide 29 readable cases: 16 valid and 13 invalid, all classified PASS. The
 suite inspects semantic layout/stream graphs, bind/projection MIR, and forbidden
 runtime mechanisms. Strict-C11 harnesses execute scalar, array/ndarray,
@@ -835,7 +835,7 @@ EVT1-new surface and ordinary Go-compiler lowering.
 
 ## R4g executable evidence
 
-`internal/concept/r4g_conformance_test.go` and `language/evt1-r4g/core`
+`internal/concept/span_test.go` and `language/evt1/storage/span`
 provide 29 readable cases: 15 valid and 14 invalid-path programs, all
 classified PASS. Runtime-failure sources remain in the invalid-path directory
 but compile successfully and are executed in isolated terminal-process tests.
@@ -846,7 +846,7 @@ backing copy.
 
 ## R4h executable evidence
 
-`internal/concept/r4h_conformance_test.go` and `language/evt1-r4h/core`
+`internal/concept/tensor_semantics_test.go` and `language/evt1/tensor/semantics`
 provide 29 readable conformance cases: 17 valid and 12 statically rejected,
 all classified `PASS`. The suite separately checks Tensor MIR validation,
 15 successful strict-C11 numeric paths, runtime index/contraction guards, and
@@ -855,7 +855,7 @@ copy helper, BLAS, MLIR, SIMD, or GPU tensor path.
 
 ## R4i executable evidence
 
-`internal/concept/r4i_conformance_test.go` and `language/evt1-r4i/core`
+`internal/concept/tensor_backing_test.go` and `language/evt1/tensor/backing`
 provide 27 readable conformance cases: 16 valid and 11 statically rejected,
 all classified `PASS`. The suite checks shaped-declaration rank inference,
 all six backing classifications, stable/disjoint inline regions, exact alias
@@ -865,7 +865,7 @@ heap, backing-copy, BLAS, MLIR, or separate vector/matrix path.
 
 ## R4j executable evidence
 
-`internal/concept/r4j_conformance_test.go` and `language/evt1-r4j/core`
+`internal/concept/semantic_facts_test.go` and `language/evt1/semantic-facts`
 provide 24 readable cases: 17 valid and 7 statically rejected, all classified
 `PASS`. The suite checks typed concept proofs, deterministic fact identities,
 malformed fact rejection, declared and interval disjointness, fixed/runtime
@@ -875,7 +875,7 @@ checked to contain no runtime fact tables, allocation, noalias, or SIMD path.
 
 ## R4k executable evidence
 
-`internal/concept/r4k_conformance_test.go` and `language/evt1-r4k/core`
+`internal/concept/interface_dyn_test.go` and `language/evt1/interface`
 provide 30 required readable cases: 16 accepted and 14 statically rejected,
 all classified `PASS`. The suite additionally validates malformed witness MIR,
 inspects direct/dynamic MIR and static witness C shape, and executes strict-C11
@@ -885,7 +885,7 @@ no allocation, per-object vtable, RTTI, object registry, or GC path.
 
 ## R5a executable evidence
 
-`internal/concept/r5a_conformance_test.go` and `language/evt1-r5a/core`
+`internal/concept/automata_state_test.go` and `language/evt1/automata/state`
 provide 20 readable cases: 12 accepted and 8 statically rejected. The suite
 executes all accepted cases through strict C11, validates explicit automata
 MIR and Planner artifacts, checks persistent/transient Drop placement, and
@@ -894,7 +894,7 @@ unknown transitions, sibling state access, and cross-state local use.
 
 ## R5b executable evidence
 
-`internal/concept/r5b_conformance_test.go` and `language/evt1-r5b/core`
+`internal/concept/automata_transitions_test.go` and `language/evt1/automata/transitions`
 provide 26 readable cases: 14 accepted positive programs, ten statically
 rejected programs, and two accepted runtime-negative programs. The suite
 executes enum/payload/Result match and int/float decide through strict C11,
@@ -905,7 +905,7 @@ coroutine, dynamic candidate collection, or runtime decision object.
 
 ## R5c executable evidence
 
-`internal/concept/r5c_conformance_test.go` and `language/evt1-r5c/core`
+`internal/concept/inference_test.go` and `language/evt1/inference`
 provide 30 readable cases: 17 accepted programs, ten static rejections, and
 three runtime-negative programs. The suite executes stable softmax, explicit
 queries, exceptional-value policy, tiny linear expert scores, direct-decide

@@ -4,8 +4,8 @@ Status: complete bounded R2 evidence
 
 - Baseline: `43fc5164f281a57432255aa9f27e52a8befb8904`
 - Active compiler: `concept-evt1-stage0-go`
-- Corpus: `language/evt1-r2/core`
-- Harness: `internal/concept/r2_conformance_test.go`
+- Corpus: `language/evt1/values`
+- Harness: `internal/concept/values_records_test.go`
 - Total: 32
 - `PASS`: 30
 - `EXPECTED-DIVERGENCE`: 2

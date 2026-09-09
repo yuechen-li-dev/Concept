@@ -141,9 +141,9 @@ func evt1FailureTypeDecl(t Type) string {
 		b.WriteString(fmt.Sprintf("    } %s;\n", evt1PayloadFieldName(variant.Name)))
 	}
 	b.WriteString("  } payload;\n")
-	// The Vulkan actuator bridge predates R4c and initializes Result<void,E>
+	// The Vulkan actuator bridge predates the canonical failure model and initializes Result<void,E>
 	// from handwritten C. Keep its two fields as an ABI compatibility seam;
-	// Concept source and all R4c lowering use the canonical tag/payload form.
+	// Concept source and failure lowering use the canonical tag/payload form.
 	if evt1IsResultType(t) {
 		b.WriteString(fmt.Sprintf("  bool is_error;\n  %s error;\n", evt1CType(t.TypeArgs[1])))
 	}

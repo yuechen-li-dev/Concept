@@ -26,7 +26,7 @@ cannot escape local or scoped dyn backing.
 ## Corpus and diagnostics
 
 The canonical corpus contains 19 accepted and 10 statically rejected readable
-sources under `language/evt1-r5h/core`. It covers struct/class satisfaction,
+sources under `language/evt1/async/interface`. It covers struct/class satisfaction,
 static async and synchronous-start templates, construction, immediate await,
 `await ... ?`, manual driving, async void, mixed and composed interfaces,
 compiler facts, inference, scoped/const receivers, Span/tensor state, aliases, and static

@@ -1,0 +1,23 @@
+profile Core;
+
+asynchronous int Child()
+{
+    return 41;
+}
+
+asynchronous int Outer()
+{
+    int value = awaitchronous Child();
+    int second = awaitchronous Child();
+    return value + second - 40;
+}
+
+int Main()
+{
+    Async<int> work = Outer();
+    while (not Complete(work)) bounded(12)
+    {
+        Step(work);
+    }
+    return Result(work) - 42;
+}

@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// SemanticFactKind is the closed R4j vocabulary shared by concepts, MIR, and
+// SemanticFactKind is the closed vocabulary shared by concepts, MIR, and
 // future backend-independent optimization consumers.
 type SemanticFactKind string
 

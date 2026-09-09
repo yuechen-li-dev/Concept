@@ -1123,7 +1123,7 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 					return err
 				}
 				if valueType.Kind != TypeCallable {
-					return evt1Diagnostic("CV4009", "inferred locals are bounded to concrete callable initializers in R5i", s.Span)
+					return evt1Diagnostic("CV4009", "inferred locals are bounded to concrete callable initializers", s.Span)
 				}
 				if _, copiesNamedCallable := s.Value.(*NameExpr); copiesNamedCallable && !evt1TypeCopyable(env, valueType) {
 					return evt1Diagnostic("CV4501", fmt.Sprintf("copy of non-copyable callable %s requires move", valueType.String()), s.Value.exprSpan())
@@ -2562,7 +2562,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			}
 			info := env.automataInfo[binding.instanceAutomata]
 			if info.Decl.SignalType.Name != "" {
-				return Type{}, evt1Diagnostic("MACHINE_STATE_ACCESS_INVALID", fmt.Sprintf("%s is reserved for explicit R5a machines; signal automata use dispatch", e.Callee), e.Span)
+				return Type{}, evt1Diagnostic("MACHINE_STATE_ACCESS_INVALID", fmt.Sprintf("%s is reserved for explicit stateful machines; signal automata use dispatch", e.Callee), e.Span)
 			}
 			if _, ok := info.MachineOrdinal[machineName.Name]; !ok {
 				return Type{}, evt1Diagnostic("MACHINE_STATE_ACCESS_INVALID", fmt.Sprintf("unknown machine %s in automata %s", machineName.Name, info.Decl.Name), machineName.Span)
@@ -2933,7 +2933,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		lvalue, err := validateAssignable(env, scope, e.Value, templateInfo)
 		if err != nil {
-			return Type{}, evt1Diagnostic("CV4508", "ref requires an existing place; temporaries are not referenceable in R3", e.Value.exprSpan())
+			return Type{}, evt1Diagnostic("CV4508", "ref requires an existing place; temporaries are not referenceable", e.Value.exprSpan())
 		}
 		if binding, ok := scope.lookup(lvalue.path.Root); ok {
 			if err := evt1CheckReadableBinding(lvalue.path.Root, binding, e.Value.exprSpan()); err != nil {

@@ -1,0 +1,27 @@
+profile Core;
+
+enum LoadError
+{
+    Missing,
+}
+
+async Result<int, LoadError> Child(bool valid)
+{
+    return if (valid) Result::Ok(41) else Result::Error(LoadError::Missing);
+}
+
+async Result<int, LoadError> Outer(bool valid)
+{
+    int value = await Child(valid)?;
+    return Result::Ok(value + 1);
+}
+
+int Main()
+{
+    Async<Result<int, LoadError>> work = Outer(true);
+    while (not Complete(work)) bounded(8)
+    {
+        Step(work);
+    }
+    return Result(work)! - 42;
+}

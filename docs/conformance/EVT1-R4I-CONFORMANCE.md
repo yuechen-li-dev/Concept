@@ -8,7 +8,7 @@ parse/validate/storage-witness/Tensor-MIR/tensor-lowering/strict-C11 path.
 
 ## Corpus and classification
 
-The corpus contains 27 `PASS` cases under `language/evt1-r4i/core`: 16 valid
+The corpus contains 27 `PASS` cases under `language/evt1/tensor/backing`: 16 valid
 programs and 11 static rejection programs. There are zero
 `EXPECTED-DIVERGENCE`, `EVT1-GAP`, `POC3-LEGACY`, or `SPEC-AMBIGUITY` cases.
 R4i is EVT1-new ergonomic sugar over R4h semantics. Missing PoC3 source syntax

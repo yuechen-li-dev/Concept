@@ -18,7 +18,7 @@ Status: executable R1 evidence
 The R1 harness is `internal/concept/conformance_test.go`. It uses paired
 semantic evidence rather than source-text equality: each table entry names a
 PoC3 fixture or authority row, its canonical EVT1 translation under
-`language/evt1-r1/core`, the reconciliation status, the expected
+`language/evt1/foundation`, the reconciliation status, the expected
 classification, and an accepted/rejected or MIR/C semantic oracle. Diagnostic
 comparisons use the active `CV` semantic category; they do not require PoC3
 `CON` number equality.
@@ -74,7 +74,7 @@ semantic oracle and divergence classification
 - Source evidence:
   `language/phase9-compile-time/valid/compile_time_function_while_sum_run.valid.conception`
 - EVT1 translation:
-  `language/evt1-r1/core/invalid/comptime_unbounded_loop.concept`
+  `language/evt1/foundation/invalid/comptime_unbounded_loop.concept`
 - Matrix row: `while`, status `Merge`.
 - Observed difference: PoC3 accepts its fuel-bounded historical spelling;
   EVT1 rejects the corresponding compile-time loop with `CV4205` unless it

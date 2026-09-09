@@ -473,7 +473,7 @@ type StaticAssert struct {
 }
 
 // TypeAliasDecl binds a source name to the exact static value type of an
-// unevaluated expression. R5j deliberately keeps this surface module-scoped:
+// unevaluated expression. Exact callable typing deliberately keeps this surface module-scoped:
 // it is a compile-time name, not a runtime reflection object.
 type TypeAliasDecl struct {
 	Name         string `json:"name"`

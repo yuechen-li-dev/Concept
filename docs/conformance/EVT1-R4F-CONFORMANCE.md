@@ -8,7 +8,7 @@ lineage and is not a build or runtime dependency.
 
 ## Corpus and classification
 
-R4f contains 29 `PASS` cases under `language/evt1-r4f/core`: 16 valid programs
+R4f contains 29 `PASS` cases under `language/evt1/storage/layout-stream`: 16 valid programs
 and 13 invalid programs. The valid corpus covers fixed scalar/array/ndarray
 regions, canonical and explicit geometry, compile-time queries, exact backing
 binding, mutable and const projections, basic and multi-channel streams,

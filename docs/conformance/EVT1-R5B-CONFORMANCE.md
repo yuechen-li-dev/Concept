@@ -40,7 +40,7 @@ Decision behavior is explicitly not a parity target.
 
 ## Semantic and native evidence
 
-The corpus under `language/evt1-r5b/core` proves:
+The corpus under `language/evt1/automata/transitions` proves:
 
 - exhaustive enum, payload-enum, and Result transition matching;
 - duplicate arm, missing arm, invalid pattern, and unknown local target checks;

@@ -8,7 +8,7 @@ parse/validate/Tensor-MIR/tensor-lowering/strict-C11 path.
 
 ## Corpus and classification
 
-The corpus contains 29 `PASS` cases under `language/evt1-r4h/core`: 17 valid
+The corpus contains 29 `PASS` cases under `language/evt1/tensor/semantics`: 17 valid
 programs and 12 static rejection programs. There are zero
 `EXPECTED-DIVERGENCE`, `EVT1-GAP`, `POC3-LEGACY`, or `SPEC-AMBIGUITY` cases.
 PoC3 has no tensor parity claim. SDSL-V contributes semantic lineage for

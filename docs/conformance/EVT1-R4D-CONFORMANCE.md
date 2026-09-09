@@ -27,7 +27,7 @@ This classification does not pretend PoC3 implemented ndarray.
 
 ## Executable evidence
 
-`internal/concept/r4d_conformance_test.go` checks every source and exact invalid
+`internal/concept/storage_arrays_test.go` checks every source and exact invalid
 diagnostic category. MIR inspection requires a rank-3 ndarray storage record
 with ordered `[2,3,4]` shape, `contiguous=true`, `layout=row-major`, and
 `ownership=fixed_inline`; it also requires `ndarray_index`, `rank_query`, and

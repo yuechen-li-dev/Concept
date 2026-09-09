@@ -5,7 +5,7 @@ Status: complete bounded class/interface/non-owning-dyn slice
 ## Classification
 
 The canonical corpus contains 30 required human-readable sources under
-`language/evt1-r4k/core`: 16 accepted and 14 statically rejected. Every case is
+`language/evt1/interface`: 16 accepted and 14 statically rejected. Every case is
 classified `PASS`; there are no `EXPECTED-DIVERGENCE`, `EVT1-GAP`,
 `POC3-LEGACY`, or `SPEC-AMBIGUITY` results in the selected slice. The additional
 `class_interface_dyn.concept` specimen combines the runtime acceptance paths.
@@ -18,7 +18,7 @@ tables, and ordinary value storage.
 
 ## Executable evidence
 
-`internal/concept/r4k_conformance_test.go` checks all 30 required sources and
+`internal/concept/interface_dyn_test.go` checks all 30 required sources and
 their semantic diagnostic families. It inspects deterministic witness MIR,
 class/method and dyn operations, two-pointer generated types, static const
 witness tables, field accessors, and the absence of allocation/RTTI/object

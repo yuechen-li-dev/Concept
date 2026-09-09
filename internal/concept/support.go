@@ -1,6 +1,6 @@
 // Package concept implements the active Concept EVT1 Stage 0 compiler.
 //
-// It was extracted from Oct's Concept/Vulkan compiler at R0. Core syntax,
+// It was extracted from Oct's historical Concept/Vulkan compiler. Core syntax,
 // semantic analysis, MIR, and C11 lowering live here. Vulkan admissions remain
 // explicit through `profile Vulkan;` and the profile-specific validation and
 // lowering seams; Oct is not a build-time dependency.

@@ -12,7 +12,7 @@ cleanup hardening
 5 invalid
 ```
 
-The executable corpus is under `language/evt1-r4a/core`. The Go harness checks
+The executable corpus is under `language/evt1/lifetime/lexical`. The Go harness checks
 the diagnostic family for every negative case, inspects MIR ref-struct and
 semantic-proof facts, verifies generated-C replacement order, and executes
 four strict C11 native cases.

@@ -1,8 +1,8 @@
 # EVT1 R5a automata state conformance
 
 R5a contains 20 required `PASS` cases: 12 accepted programs and 8 statically
-rejected programs. The corpus is `language/evt1-r5a/core`; executable checks
-are in `internal/concept/r5a_conformance_test.go`.
+rejected programs. The corpus is `language/evt1/automata/state`; executable checks
+are in `internal/concept/automata_state_test.go`.
 
 Accepted cases cover the canonical hierarchy, value/const/ref/owned/dyn/Span
 state, two independently stepped machines sharing one environment,

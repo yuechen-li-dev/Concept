@@ -680,7 +680,7 @@ func planTensor(index int, tensor MIRTensorOperation, facts SemanticFactSet) Ten
 	if allContiguous != FactProven || allBounded != FactProven || allFixed != FactProven || allAllocation != FactProven || allCopy != FactProven || allTransfer != FactProven || allAligned != FactProven || disjoint != FactProven {
 		eligibility = DecisionConservativeFallback
 	}
-	tp.Vectorization = OptimizationEligibility{Contiguous: allContiguous, Bounded: allBounded, Alignment: allAligned, DisjointInputs: disjoint, FixedShape: allFixed, NoAllocation: allAllocation, NoCopy: allCopy, NoOwnershipTransfer: allTransfer, Outcome: eligibility, Selected: false, Evidence: PlanningEvidence{FactIDs: uniqueSorted(ids), Claims: []string{"Planner consumes qualified facts; SIMD selection is disabled in R4l"}}}
+	tp.Vectorization = OptimizationEligibility{Contiguous: allContiguous, Bounded: allBounded, Alignment: allAligned, DisjointInputs: disjoint, FixedShape: allFixed, NoAllocation: allAllocation, NoCopy: allCopy, NoOwnershipTransfer: allTransfer, Outcome: eligibility, Selected: false, Evidence: PlanningEvidence{FactIDs: uniqueSorted(ids), Claims: []string{"Planner consumes qualified facts; SIMD selection is disabled in EVT1"}}}
 	return tp
 }
 
@@ -903,7 +903,7 @@ func ValidateLoweringPlan(mir *MIR, facts *SemanticFactSet, plan *LoweringPlan) 
 				return fail("PLAN_RUNTIME_GUARD_MISSING", "bounds plan removed a required runtime guard")
 			}
 			if strings.HasPrefix(d.Strategy, "Vector") {
-				return fail("PLAN_TARGET_UNSUPPORTED", "R4l cannot select vector lowering")
+				return fail("PLAN_TARGET_UNSUPPORTED", "the EVT1 Planner cannot select vector lowering")
 			}
 			for _, id := range d.Evidence.FactIDs {
 				fact, ok := factByID(*facts, id)
@@ -926,7 +926,7 @@ func ValidateLoweringPlan(mir *MIR, facts *SemanticFactSet, plan *LoweringPlan) 
 				return fail("PLAN_TENSOR_INVALID", "tensor plan does not agree with Tensor MIR")
 			}
 			if tp.Vectorization.Selected {
-				return fail("PLAN_INVALID_STRATEGY", "R4l tensor plan selected SIMD")
+				return fail("PLAN_INVALID_STRATEGY", "EVT1 tensor plan selected SIMD")
 			}
 			if tp.AliasPolicy == "ProvenDisjoint" {
 				for _, input := range tp.InputRegions {
