@@ -133,6 +133,12 @@ func TestEVT1CheckedOutputsMatch(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			if os.Getenv("CONCEPT_UPDATE_CHECKED_OUTPUTS") == "1" {
+				if err := Write(filepath.Join("generated"), outputs); err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
 			if err := Check(filepath.Join("generated"), outputs); err != nil {
 				t.Fatal(err)
 			}

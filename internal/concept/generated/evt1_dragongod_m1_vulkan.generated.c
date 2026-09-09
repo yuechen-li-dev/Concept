@@ -9,7 +9,8 @@ static void concept_abort_invalid_tag(const char* enum_name) {
 }
 
 static void concept_abort_invalid_automata_state(const char* automata_name, int machine, int state) {
-  fprintf(stderr, "invalid automata state for %s: machine=%d state=%d\n", automata_name, machine, state);
+  (void)automata_name; (void)machine; (void)state;
+  fprintf(stderr, "invalid machine state reached\n");
   abort();
 }
 
