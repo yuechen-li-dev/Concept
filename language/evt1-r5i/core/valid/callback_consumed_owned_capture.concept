@@ -1,0 +1,22 @@
+profile Core;
+
+struct Ticket
+{
+    int number;
+}
+
+int Redeem(owned Ticket ticket)
+{
+    return ticket.number;
+}
+
+int Main()
+{
+    owned Ticket ticket = Ticket{42};
+    auto redeem = callback()
+    with (move ticket)
+    {
+        return Redeem(move ticket);
+    };
+    return redeem();
+}

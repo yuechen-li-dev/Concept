@@ -992,3 +992,21 @@ constructor, and immediate await adopts the returned concrete frames. The
 persisted `self` reference carries ordinary provenance; the witness is not
 retained for subsequent Steps. No scheduler, virtual operation, allocation,
 or second dispatch path is introduced.
+
+## R5i callable capture pipeline
+
+```text
+callable source
+    -> ordinary binding and explicit-capture validation
+    -> deterministic generated environment type
+    -> Callable/CaptureEnvironment/CaptureBinding MIR and semantic facts
+    -> validated CallablePlan / CallbackDispatchPlan
+    -> direct invoke or static erased-callback adapter
+```
+
+Analysis isolates the body from uncaptured lexical bindings and derives
+copyability, Drop, mutability, consumption, region identity, and provenance
+from existing rules. MIR is the semantic handoff: planning cannot add a
+capture, witness, allocation, or lifetime extension. GenericC11 emits inline
+environment structs and statically named functions. R5i adds no LIR or callable
+runtime.

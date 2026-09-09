@@ -1,0 +1,10 @@
+profile Core;
+
+int Main()
+{
+    const auto increment = callback(int value)
+    {
+        return value + 1;
+    };
+    return increment(4);
+}

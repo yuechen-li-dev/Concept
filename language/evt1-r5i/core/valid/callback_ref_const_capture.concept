@@ -1,0 +1,12 @@
+profile Core;
+
+int Main()
+{
+    int scale = 4;
+    const auto multiply = callback(int value)
+    with (ref const scale)
+    {
+        return value * scale;
+    };
+    return multiply(3);
+}

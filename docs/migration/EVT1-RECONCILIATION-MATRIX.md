@@ -11,7 +11,7 @@ does not authorize that work in this milestone. Status is one of `Keep PoC3`,
 | source unit/module syntax | module-oriented PoC3 surface | mandatory `profile Vulkan;` source unit | require explicit `profile Core;` or `profile Vulkan;` in R0 | Merge | No for R0 | `profile_test.go`; phase1 fixtures | broader module law deferred |
 | imports | implemented multi-module compiler and diagnostics | dotted paths parsed; Vulkan import used as admission marker | preserve syntax; Core import resolution is not active | Keep PoC3 | Yes | phase16 fixtures | no fake resolver in R0 |
 | naming | C++ lineage, but fixtures include older surface conventions | PascalCase types/functions/operations; camelCase locals/parameters | use Go line's explicit naming law | Keep Go | Translation | extracted examples | backend/MIR names may remain snake_case |
-| declaration syntax | includes `fn`, `name: Type`, arrows, `let`/`var` in historical fixtures | return type first; `Type name`; braces | canonical C++-shaped Go syntax; typed `let` is only a const alias | Keep Go | Translation | phase1/2 plus R2 corpus | inference remains absent |
+| declaration syntax | includes `fn`, `name: Type`, arrows, `let`/`var` in historical fixtures | return type first; `Type name`; braces | canonical C++-shaped syntax; R5i uses `auto`/`const auto` for unspellable generated callable types; `var`/inferred `let` are compatibility aliases | Keep Go | Translation | phase1/2, R2, and R5i corpus | general inference remains absent |
 | primitive types | broader general systems-language set | `int`, `bool`, `void`, compile-time `string`, `uint64`, profile handles | canonize minimal core; widths/string runtime remain open | Merge | Yes | phase1; Go type tests | Vulkan handles are not core |
 | structs | runtime structs and places; PoC3 later requires explicit `Copy` conformance | mutable structs, positional construction, field checks, structural copy | ordinary structs are mutable values and copy when all fields are copyable | Merge | No for R2 subset | phase7; R2 corpus | default structural copy is an expected PoC3 divergence; drop remains open |
 | record struct | no corresponding syntax or type-level record immutability | absent before R2 | immutable value aggregate with copy/update construction | Keep Go | No for R2 subset | `language/evt1-r2/core` | EVT1-new evidence, not a PoC3 divergence |
@@ -409,3 +409,22 @@ MIR and Planner expose `StructuredStateGraph`, states, active fields, edges,
 and branch/join/loop counts while retaining `Scheduler: None` and
 `SavedPC: None`. Irreducible or unsupported control expressions reject; no
 saved-PC fallback exists.
+
+## R5i callable reconciliation
+
+| Surface or legacy direction | EVT1 R5i decision |
+|---|---|
+| Callable literal | Canonical `callback(...) [with (...)] { ... }` |
+| Explicit copy/move/ref/ref-const capture | Canonical ordinary binding semantics |
+| Implicit lexical/default capture | Rejected with `CALLABLE_CAPTURE_REQUIRED` |
+| Implicit `self` / field capture | Rejected; capture `self` explicitly |
+| Concrete owning callable | Supported as a generated inline environment |
+| Concrete direct invocation | Supported with a static invoke routine |
+| Non-owning erased callback | Supported as environment ref plus invoke witness |
+| Owning erased callback / closure box | Deferred; no hidden lifetime extension |
+| Fn/FnMut/FnOnce taxonomy | Rejected direction; properties are derived |
+| Heap closure, RTTI, registry | Rejected direction for EVT1 |
+
+The callback witness specializes R4k witness principles. Callable state composes
+with async frame liveness and dyn async dispatch without a scheduler or second
+ownership/lifetime system.

@@ -1,0 +1,13 @@
+profile Core;
+
+int Main()
+{
+    int value = 2;
+    const auto snapshot = callback()
+    with (value)
+    {
+        return value;
+    };
+    value = 9;
+    return value * 10 + snapshot();
+}

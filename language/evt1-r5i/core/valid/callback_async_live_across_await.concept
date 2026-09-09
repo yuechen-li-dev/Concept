@@ -1,0 +1,28 @@
+profile Core;
+
+async int Child(int value)
+{
+    return value;
+}
+
+async int Work()
+{
+    int offset = 5;
+    const auto add = callback(int value)
+    with (offset)
+    {
+        return value + offset;
+    };
+    int value = await Child(7);
+    return add(value);
+}
+
+int Main()
+{
+    Async<int> work = Work();
+    while (not Complete(work)) bounded(8)
+    {
+        Step(work);
+    }
+    return Result(work);
+}

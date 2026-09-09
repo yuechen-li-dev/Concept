@@ -1,0 +1,22 @@
+profile Core;
+
+struct Resource
+{
+    int value;
+}
+
+int Take(owned Resource resource)
+{
+    return resource.value;
+}
+
+int Main()
+{
+    owned Resource resource = Resource{7};
+    auto consume = callback()
+    with (move resource)
+    {
+        return Take(move resource);
+    };
+    return consume();
+}

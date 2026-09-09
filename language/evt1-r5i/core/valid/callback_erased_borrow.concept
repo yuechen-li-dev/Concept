@@ -1,0 +1,13 @@
+profile Core;
+
+int Main()
+{
+    int multiplier = 5;
+    const auto concrete = callback(int value)
+    with (multiplier)
+    {
+        return value * multiplier;
+    };
+    callback<int -> int> erased = ref concrete;
+    return erased(3);
+}

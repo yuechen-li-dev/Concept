@@ -307,6 +307,20 @@ type FunctionPlan struct {
 	ControlFlow []PlanningDecision `json:"control_flow_plans,omitempty"`
 	Foreaches   []ForeachPlan      `json:"foreach_plans,omitempty"`
 	Async       *AsyncPlan         `json:"async_plan,omitempty"`
+	Callables   []CallablePlan     `json:"callable_plans,omitempty"`
+}
+
+type CallablePlan struct {
+	Identity             string              `json:"identity"`
+	EnvironmentIdentity  string              `json:"environment_identity"`
+	EnvironmentSize      int                 `json:"environment_size"`
+	EnvironmentAlignment int                 `json:"environment_alignment"`
+	Captures             []MIRCaptureBinding `json:"captures,omitempty"`
+	Representation       string              `json:"representation"`
+	Dispatch             string              `json:"dispatch"`
+	Allocation           string              `json:"allocation"`
+	RequiresMutable      bool                `json:"requires_mutable"`
+	Consumes             bool                `json:"consumes"`
 }
 
 type AsyncPlan struct {
@@ -423,6 +437,9 @@ func GeneratePlan(module Module, target TargetCapabilities) ([]byte, error) {
 func planFunction(fn MIRFunction, facts SemanticFactSet, target TargetCapabilities) FunctionPlan {
 	encoded, _ := json.Marshal(fn)
 	fp := FunctionPlan{Function: fn.Name, MIRIdentity: digest(encoded), Target: target.Architecture, Cleanup: CleanupPlan{Strategy: "ReverseDeclarationOrder"}}
+	for _, callable := range fn.Callables {
+		fp.Callables = append(fp.Callables, CallablePlan{Identity: callable.Identity, EnvironmentIdentity: callable.Environment.Identity, EnvironmentSize: callable.Environment.Size, EnvironmentAlignment: callable.Environment.Alignment, Captures: append([]MIRCaptureBinding{}, callable.Environment.Fields...), Representation: "InlineEnvironment", Dispatch: "DirectCallable", Allocation: "None", RequiresMutable: callable.RequiresMutable, Consumes: callable.Consumes})
+	}
 	if fn.Async != nil {
 		a := fn.Async
 		ap := &AsyncPlan{Identity: a.Identity, Lowering: "GeneratedMachine", FrameStorage: "Inline", Continuation: "ExplicitGeneratedState", ChildInvocation: "MachinePush", Scheduler: "None", SavedPC: "None", AwaitCount: len(a.AwaitPoints), GeneratedStates: append([]string{}, a.GeneratedStates...), PersistentFields: append([]MIRName{}, a.PersistentFields...), AsyncFrameSize: evt1AsyncFrameBytes, AsyncFrameAlignment: target.PreferredAlignment, MaxChildDepth: evt1MachineStackCapacity, CleanupStrategy: "LexicalDeadBeforePushPersistentAtCompletion", ControlFlowStrategy: a.ControlFlowStrategy, GeneratedStateCount: len(a.States), BranchCount: a.BranchCount, JoinCount: a.JoinCount, LoopCount: a.LoopCount, StateMappings: append([]MIRAsyncState{}, a.States...), Edges: append([]MIRAsyncEdge{}, a.Edges...)}
@@ -455,7 +472,7 @@ func planFunction(fn MIRFunction, facts SemanticFactSet, target TargetCapabiliti
 		switch op.Kind {
 		case "span_index", "array_index", "ndarray_index", "tensor_index", "span_subregion":
 			fp.Bounds = append(fp.Bounds, BoundsPlan{MIRID: op.ID, Operation: op.Kind, Strategy: d.Strategy, Certainty: d.Certainty, Evidence: d.Evidence, Guard: firstGuard(d.RuntimeGuards)})
-		case "dyn_make", "dyn_call", "dyn_field_get", "dyn_field_set", "call", "class_method_call":
+		case "dyn_make", "dyn_call", "dyn_field_get", "dyn_field_set", "call", "class_method_call", "callable_invoke", "callback_invoke":
 			strategy := d.Strategy
 			witness, entry := "", op.Detail
 			if op.Kind == "dyn_make" {
@@ -513,6 +530,15 @@ func planOperation(op MIROperation, facts SemanticFactSet) PlanningDecision {
 	case "dyn_field_get", "dyn_field_set":
 		d.Category, d.Strategy = "DispatchPlan", "WitnessFieldAccessor"
 		d.Evidence = PlanningEvidence{Claims: []string{"NoAllocation", "NoCopy", "NoOwnershipTransfer"}}
+	case "callable_literal", "capture_binding":
+		d.Category, d.Strategy = "CaptureEnvironmentPlan", "InlineEnvironment"
+		d.Evidence = PlanningEvidence{Claims: []string{"ExplicitCapture", "ExactlyOnce", "NoAllocation"}}
+	case "callable_invoke":
+		d.Category, d.Strategy = "CallablePlan", "DirectCallable"
+		d.Evidence = PlanningEvidence{Claims: []string{"StaticCodeIdentity", "InlineEnvironment", "NoAllocation"}}
+	case "callback_invoke":
+		d.Category, d.Strategy = "CallbackDispatchPlan", "StaticWitnessIndirect"
+		d.Evidence = PlanningEvidence{Claims: []string{"BorrowedEnvironmentRef", "StaticWitness", "NoAllocation", "OwningErasureNone"}}
 	case "step_machine":
 		d.Category, d.Strategy = "AutomataPlan", "ExplicitMachineSwitch"
 		d.Evidence = PlanningEvidence{Claims: []string{"NoScheduler", "OneMachineOnly"}, Detail: "machine identity and current-state storage were fixed before planning"}
@@ -725,6 +751,9 @@ func planAggregates(mir *MIR) []AggregatePlan {
 	for _, w := range mir.Witnesses {
 		out = append(out, AggregatePlan{Identity: w.ID, Kind: "dyn witness", Representation: "ObjectWitnessPair", Evidence: PlanningEvidence{Claims: []string{"NoAllocation"}}})
 	}
+	for _, w := range mir.CallbackWitnesses {
+		out = append(out, AggregatePlan{Identity: w.ID, Kind: "callback witness", Representation: "EnvironmentFunctionPair", Evidence: PlanningEvidence{Claims: []string{"StaticAdapter", "NoAllocation", "NonOwning"}}})
+	}
 	for _, storage := range mir.StorageTypes {
 		representation := "InlineAggregate"
 		if storage.Type.isReference() {
@@ -796,6 +825,12 @@ func ValidateLoweringPlan(mir *MIR, facts *SemanticFactSet, plan *LoweringPlan) 
 		encoded, _ := json.Marshal(fn)
 		if fp.Function != fn.Name || fp.MIRIdentity != digest(encoded) {
 			return fail("PLAN_ARTIFACT_INVALID", "function plan references stale or reordered MIR")
+		}
+		expectedCallables := planFunction(fn, *facts, plan.Target).Callables
+		expectedCallableJSON, _ := json.Marshal(expectedCallables)
+		actualCallableJSON, _ := json.Marshal(fp.Callables)
+		if string(expectedCallableJSON) != string(actualCallableJSON) {
+			return fail("PLAN_CALLABLE_INVALID", "callable plan does not preserve MIR environment layout, capture order, dispatch, or allocation evidence")
 		}
 		if fn.Async != nil {
 			if fp.Async == nil || fp.Async.Identity != fn.Async.Identity || fp.Async.Lowering != "GeneratedMachine" || fp.Async.FrameStorage != "Inline" || fp.Async.Continuation != "ExplicitGeneratedState" || fp.Async.ChildInvocation != "MachinePush" || fp.Async.Scheduler != "None" || fp.Async.SavedPC != "None" || fp.Async.ControlFlowStrategy != "StructuredStateGraph" || fp.Async.AwaitCount != len(fn.Async.AwaitPoints) || len(fp.Async.GeneratedStates) != len(fn.Async.GeneratedStates) {

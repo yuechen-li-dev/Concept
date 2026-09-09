@@ -1,0 +1,11 @@
+profile Core;
+
+callback<int -> int> Make()
+{
+    const auto concrete = callback(int value)
+    {
+        return value + 1;
+    };
+    callback<int -> int> erased = ref concrete;
+    return erased;
+}

@@ -1,0 +1,18 @@
+profile Core;
+
+void Add(scoped ref int total)
+{
+    auto add = callback(int value)
+    with (ref total)
+    {
+        total = total + value;
+    };
+    add(5);
+}
+
+int Main()
+{
+    int total = 1;
+    Add(ref total);
+    return total;
+}

@@ -1,0 +1,13 @@
+profile Core;
+
+int Main()
+{
+    int value = 1;
+    auto mutate = callback()
+    with (ref const value)
+    {
+        value = 2;
+    };
+    mutate();
+    return value;
+}

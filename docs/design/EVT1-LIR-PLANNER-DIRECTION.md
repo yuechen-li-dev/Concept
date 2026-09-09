@@ -160,3 +160,16 @@ GenericC11 currently returns the inline operation by value. Direct construction
 into caller-provided storage is a possible later Planner strategy for large
 frames, not an implicit fallback or public ABI commitment. It must not add
 allocation, virtual Step/Complete/Result, or per-await dispatch.
+
+## R5i callable plans
+
+`CallablePlan` records deterministic code/environment identities, exact Generic
+C11 size and alignment, ordered capture fields, provenance, ownership effects,
+receiver mutability, and consumption. Its fixed selections are
+`InlineEnvironment`, `DirectCallable`, and `Allocation: None`.
+
+Erased calls use `CallbackDispatchPlan` with `StaticWitnessIndirect`; the
+aggregate is a non-owning `EnvironmentFunctionPair`. Capture construction uses
+`CaptureEnvironmentPlan` and preserves exactly-once left-to-right evaluation.
+Validation regenerates these records from MIR and rejects changed layout,
+dispatch, witness, or allocation claims. R5i emits no LIR.

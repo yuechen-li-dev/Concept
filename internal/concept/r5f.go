@@ -919,8 +919,19 @@ func evt1ExprNames(expr Expr) []string {
 		case *FailureExpr:
 			visit(e.Value)
 		case *CallExpr:
+			if e.CallableInvoke {
+				seen[e.Callee] = true
+			}
 			for _, x := range e.Args {
 				visit(x)
+			}
+		case *CallableExpr:
+			for _, capture := range e.Captures {
+				if capture.Source != nil {
+					visit(capture.Source)
+				} else {
+					seen[capture.Name] = true
+				}
 			}
 		case *FieldExpr:
 			visit(e.Receiver)

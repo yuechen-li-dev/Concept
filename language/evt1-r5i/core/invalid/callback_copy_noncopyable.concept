@@ -1,0 +1,17 @@
+profile Core;
+
+struct Resource
+{
+    int value;
+}
+
+int Main()
+{
+    owned Resource resource = Resource{1};
+    const auto read = callback()
+    with (resource)
+    {
+        return resource.value;
+    };
+    return read();
+}

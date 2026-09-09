@@ -1,0 +1,17 @@
+profile Core;
+
+int Apply(callback<int -> int> action, int value)
+{
+    return action(value);
+}
+
+int Main()
+{
+    int offset = 3;
+    const auto add = callback(int value)
+    with (offset)
+    {
+        return value + offset;
+    };
+    return Apply(ref add, 4);
+}

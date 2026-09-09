@@ -1,0 +1,15 @@
+profile Core;
+
+int Double(int value)
+{
+    return value * 2;
+}
+
+int Main()
+{
+    const auto useGlobalFunction = callback(int value)
+    {
+        return Double(value);
+    };
+    return useGlobalFunction(6);
+}

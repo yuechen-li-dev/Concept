@@ -1,0 +1,16 @@
+profile Core;
+
+class Device
+{
+public:
+    int value;
+
+    int Read()
+    {
+        const auto read = callback()
+        {
+            return self.value;
+        };
+        return read();
+    }
+}

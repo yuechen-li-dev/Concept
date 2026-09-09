@@ -1,0 +1,13 @@
+profile Core;
+
+int Main()
+{
+    int offset = 2;
+    const auto add = callback(int value)
+    with (offset)
+    {
+        return value + offset;
+    };
+    const callback<int -> int> erased = ref const add;
+    return erased(8);
+}

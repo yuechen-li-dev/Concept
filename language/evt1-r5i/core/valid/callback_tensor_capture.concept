@@ -1,0 +1,14 @@
+profile Core;
+
+int Main()
+{
+    int<array>[4] storage = [3, 5, 7, 9];
+    Span<int> span = Span(storage);
+    tensor<int, 1> values = Tensor(span);
+    const auto read = callback(int index)
+    with (values)
+    {
+        return values[index];
+    };
+    return read(3);
+}

@@ -1,0 +1,13 @@
+profile Core;
+
+int Main()
+{
+    int<array>[4] storage = [2, 4, 6, 8];
+    Span<int> values = Span(storage);
+    const auto read = callback(int index)
+    with (values)
+    {
+        return values[index];
+    };
+    return read(2);
+}

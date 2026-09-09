@@ -26,6 +26,9 @@ const (
 	TypeConceptParam TypeKind = "concept_param"
 	TypeApplied      TypeKind = "applied"
 	TypeAsync        TypeKind = "async"
+	TypeInferred     TypeKind = "inferred"
+	TypeCallable     TypeKind = "callable"
+	TypeCallback     TypeKind = "callback"
 )
 
 type StorageKind string
@@ -43,26 +46,34 @@ type StorageDimension struct {
 }
 
 type Type struct {
-	Name            string             `json:"name"`
-	Kind            TypeKind           `json:"kind"`
-	Ownership       string             `json:"ownership,omitempty"`
-	Const           bool               `json:"const,omitempty"`
-	Scoped          bool               `json:"scoped,omitempty"`
-	Imported        bool               `json:"imported,omitempty"`
-	Unsafe          bool               `json:"unsafe,omitempty"`
-	PointerTo       *Type              `json:"pointer_to,omitempty"`
-	TypeArgs        []Type             `json:"type_args,omitempty"`
-	TensorRank      int                `json:"tensor_rank,omitempty"`
-	TensorSpelling  string             `json:"-"`
-	AsyncOrigin     string             `json:"async_origin,omitempty"`
-	ArrayElem       *Type              `json:"array_elem,omitempty"`
-	ArrayLength     int                `json:"array_length,omitempty"`
-	ArrayLengthExpr Expr               `json:"-"`
-	StorageKind     StorageKind        `json:"storage_kind,omitempty"`
-	Shape           []StorageDimension `json:"shape,omitempty"`
-	Contiguous      bool               `json:"contiguous,omitempty"`
-	Layout          string             `json:"layout,omitempty"`
-	Span            Span               `json:"span"`
+	Name               string             `json:"name"`
+	Kind               TypeKind           `json:"kind"`
+	Ownership          string             `json:"ownership,omitempty"`
+	Const              bool               `json:"const,omitempty"`
+	Scoped             bool               `json:"scoped,omitempty"`
+	Imported           bool               `json:"imported,omitempty"`
+	Unsafe             bool               `json:"unsafe,omitempty"`
+	PointerTo          *Type              `json:"pointer_to,omitempty"`
+	TypeArgs           []Type             `json:"type_args,omitempty"`
+	TensorRank         int                `json:"tensor_rank,omitempty"`
+	TensorSpelling     string             `json:"-"`
+	AsyncOrigin        string             `json:"async_origin,omitempty"`
+	CallableParams     []Type             `json:"callable_params,omitempty"`
+	CallableResult     *Type              `json:"callable_result,omitempty"`
+	CallableID         string             `json:"callable_id,omitempty"`
+	CallableMutable    bool               `json:"callable_mutable,omitempty"`
+	CallableConsumes   bool               `json:"callable_consumes,omitempty"`
+	CallableCopyable   bool               `json:"callable_copyable,omitempty"`
+	CallableHasDrop    bool               `json:"callable_has_drop,omitempty"`
+	CallableProvenance string             `json:"callable_provenance,omitempty"`
+	ArrayElem          *Type              `json:"array_elem,omitempty"`
+	ArrayLength        int                `json:"array_length,omitempty"`
+	ArrayLengthExpr    Expr               `json:"-"`
+	StorageKind        StorageKind        `json:"storage_kind,omitempty"`
+	Shape              []StorageDimension `json:"shape,omitempty"`
+	Contiguous         bool               `json:"contiguous,omitempty"`
+	Layout             string             `json:"layout,omitempty"`
+	Span               Span               `json:"span"`
 }
 
 func (t Type) String() string {
@@ -83,6 +94,21 @@ func (t Type) String() string {
 		parts = append(parts, "const")
 	}
 	base := t.Name
+	if t.Kind == TypeCallable || t.Kind == TypeCallback {
+		var params []string
+		for _, param := range t.CallableParams {
+			params = append(params, param.String())
+		}
+		result := "void"
+		if t.CallableResult != nil {
+			result = t.CallableResult.String()
+		}
+		if t.Kind == TypeCallback {
+			base = "callback<" + strings.Join(params, ", ") + " -> " + result + ">"
+		} else {
+			base = t.CallableID
+		}
+	}
 	if t.Kind == TypeDyn {
 		base = "dyn " + t.Name
 	}
@@ -120,6 +146,13 @@ func (t Type) Equal(other Type) bool {
 		t.Imported != other.Imported ||
 		t.Unsafe != other.Unsafe ||
 		len(t.TypeArgs) != len(other.TypeArgs) ||
+		len(t.CallableParams) != len(other.CallableParams) ||
+		t.CallableID != other.CallableID ||
+		t.CallableMutable != other.CallableMutable ||
+		t.CallableConsumes != other.CallableConsumes ||
+		t.CallableCopyable != other.CallableCopyable ||
+		t.CallableHasDrop != other.CallableHasDrop ||
+		t.CallableProvenance != other.CallableProvenance ||
 		t.TensorRank != other.TensorRank ||
 		t.StorageKind != other.StorageKind ||
 		len(t.Shape) != len(other.Shape) {
@@ -129,6 +162,17 @@ func (t Type) Equal(other Type) bool {
 		if !t.TypeArgs[i].Equal(other.TypeArgs[i]) {
 			return false
 		}
+	}
+	for i := range t.CallableParams {
+		if !t.CallableParams[i].Equal(other.CallableParams[i]) {
+			return false
+		}
+	}
+	if (t.CallableResult == nil) != (other.CallableResult == nil) {
+		return false
+	}
+	if t.CallableResult != nil && !t.CallableResult.Equal(*other.CallableResult) {
+		return false
 	}
 	for i := range t.Shape {
 		if t.Shape[i].String() != other.Shape[i].String() {
@@ -827,6 +871,8 @@ type CallExpr struct {
 	ProvenanceScoped     bool             `json:"provenance_scoped,omitempty"`
 	RuntimeBounds        bool             `json:"runtime_bounds,omitempty"`
 	TensorFacts          *TensorViewFacts `json:"tensor_facts,omitempty"`
+	CallableInvoke       bool             `json:"callable_invoke,omitempty"`
+	CallableType         *Type            `json:"callable_type,omitempty"`
 	Span                 Span             `json:"span"`
 }
 
@@ -889,6 +935,8 @@ type RefExpr struct {
 	DynProvenance string `json:"dyn_provenance,omitempty"`
 	DynScoped     bool   `json:"dyn_scoped,omitempty"`
 	WitnessID     string `json:"witness_id,omitempty"`
+	CallbackErase bool   `json:"callback_erase,omitempty"`
+	CallbackType  *Type  `json:"callback_type,omitempty"`
 	Span          Span   `json:"span"`
 }
 
@@ -941,6 +989,42 @@ type WithExpr struct {
 	Updates []FieldUpdate `json:"updates"`
 	Span    Span          `json:"span"`
 }
+
+type CaptureKind string
+
+const (
+	CaptureCopy     CaptureKind = "Copy"
+	CaptureMove     CaptureKind = "Move"
+	CaptureRef      CaptureKind = "Ref"
+	CaptureRefConst CaptureKind = "RefConst"
+)
+
+type CaptureBinding struct {
+	Name       string      `json:"name"`
+	Kind       CaptureKind `json:"kind"`
+	Source     Expr        `json:"source_expr,omitempty"`
+	Type       Type        `json:"type,omitempty"`
+	Provenance string      `json:"provenance,omitempty"`
+	Mutable    bool        `json:"mutable"`
+	Ordinal    int         `json:"ordinal"`
+	Span       Span        `json:"span"`
+}
+
+type CallableExpr struct {
+	Params          []Param          `json:"params,omitempty"`
+	Captures        []CaptureBinding `json:"captures,omitempty"`
+	Body            Block            `json:"body"`
+	Identity        string           `json:"identity,omitempty"`
+	EnvironmentID   string           `json:"environment_id,omitempty"`
+	ResultType      Type             `json:"result_type,omitempty"`
+	RequiresMutable bool             `json:"requires_mutable,omitempty"`
+	Consumes        bool             `json:"consumes,omitempty"`
+	Ordinal         int              `json:"ordinal"`
+	Span            Span             `json:"span"`
+}
+
+func (*CallableExpr) evt1Expr()        {}
+func (e *CallableExpr) exprSpan() Span { return e.Span }
 
 func (*WithExpr) evt1Expr()        {}
 func (e *WithExpr) exprSpan() Span { return e.Span }
@@ -1045,28 +1129,38 @@ type MIRActuatorMapping struct {
 }
 
 type MIR struct {
-	Schema         string                `json:"schema"`
-	Module         string                `json:"module"`
-	Profile        string                `json:"profile"`
-	Structs        []MIRStruct           `json:"structs,omitempty"`
-	Enums          []MIREnum             `json:"enums,omitempty"`
-	Effects        []MIREffect           `json:"effects,omitempty"`
-	Actuators      []MIRActuator         `json:"actuators,omitempty"`
-	Automata       []MIRAutomata         `json:"automata,omitempty"`
-	Concepts       []MIRConcept          `json:"concepts,omitempty"`
-	Assertions     []MIRAssertion        `json:"assertions,omitempty"`
-	ComptimeDecls  []MIRComptimeDecl     `json:"comptime_decls,omitempty"`
-	StaticAsserts  []MIRStaticAssert     `json:"static_asserts,omitempty"`
-	Templates      []MIRTemplate         `json:"templates,omitempty"`
-	Instances      []MIRInstance         `json:"instances,omitempty"`
-	Functions      []MIRFunction         `json:"functions"`
-	ComptimeFns    []MIRFunction         `json:"comptime_functions,omitempty"`
-	SemanticProofs []MIRSemanticProof    `json:"semantic_proofs,omitempty"`
-	SemanticFacts  []MIRSemanticFact     `json:"semantic_facts,omitempty"`
-	StorageTypes   []MIRStorageType      `json:"storage_types,omitempty"`
-	Layouts        []MIRLayout           `json:"layouts,omitempty"`
-	Streams        []MIRStream           `json:"streams,omitempty"`
-	Witnesses      []MIRInterfaceWitness `json:"interface_witnesses,omitempty"`
+	Schema            string                `json:"schema"`
+	Module            string                `json:"module"`
+	Profile           string                `json:"profile"`
+	Structs           []MIRStruct           `json:"structs,omitempty"`
+	Enums             []MIREnum             `json:"enums,omitempty"`
+	Effects           []MIREffect           `json:"effects,omitempty"`
+	Actuators         []MIRActuator         `json:"actuators,omitempty"`
+	Automata          []MIRAutomata         `json:"automata,omitempty"`
+	Concepts          []MIRConcept          `json:"concepts,omitempty"`
+	Assertions        []MIRAssertion        `json:"assertions,omitempty"`
+	ComptimeDecls     []MIRComptimeDecl     `json:"comptime_decls,omitempty"`
+	StaticAsserts     []MIRStaticAssert     `json:"static_asserts,omitempty"`
+	Templates         []MIRTemplate         `json:"templates,omitempty"`
+	Instances         []MIRInstance         `json:"instances,omitempty"`
+	Functions         []MIRFunction         `json:"functions"`
+	ComptimeFns       []MIRFunction         `json:"comptime_functions,omitempty"`
+	SemanticProofs    []MIRSemanticProof    `json:"semantic_proofs,omitempty"`
+	SemanticFacts     []MIRSemanticFact     `json:"semantic_facts,omitempty"`
+	StorageTypes      []MIRStorageType      `json:"storage_types,omitempty"`
+	Layouts           []MIRLayout           `json:"layouts,omitempty"`
+	Streams           []MIRStream           `json:"streams,omitempty"`
+	Witnesses         []MIRInterfaceWitness `json:"interface_witnesses,omitempty"`
+	CallbackWitnesses []MIRCallbackWitness  `json:"callback_witnesses,omitempty"`
+}
+
+type MIRCallbackWitness struct {
+	ID               string `json:"id"`
+	ConcreteCallable string `json:"concrete_callable"`
+	Signature        Type   `json:"signature"`
+	Adapter          string `json:"adapter"`
+	Environment      string `json:"environment"`
+	NoAllocation     bool   `json:"no_allocation"`
 }
 
 type MIRInterfaceWitness struct {
@@ -1270,7 +1364,42 @@ type MIRFunction struct {
 	Inferences       []MIRInference              `json:"inferences,omitempty"`
 	Foreaches        []MIRForeach                `json:"foreach,omitempty"`
 	Cleanups         []MIRCleanup                `json:"cleanups,omitempty"`
+	Callables        []MIRCallable               `json:"callables,omitempty"`
 	SourceSpan       Span                        `json:"source_span"`
+}
+
+type MIRCallable struct {
+	Identity        string                `json:"identity"`
+	Environment     MIRCaptureEnvironment `json:"environment"`
+	Params          []MIRName             `json:"params,omitempty"`
+	ResultType      Type                  `json:"result_type"`
+	RequiresMutable bool                  `json:"requires_mutable"`
+	Consumes        bool                  `json:"consumes"`
+	Dispatch        string                `json:"dispatch"`
+	NoAllocation    bool                  `json:"no_allocation"`
+	SourceSpan      Span                  `json:"source_span"`
+}
+
+type MIRCaptureEnvironment struct {
+	Identity  string              `json:"identity"`
+	Fields    []MIRCaptureBinding `json:"fields,omitempty"`
+	Size      int                 `json:"size"`
+	Alignment int                 `json:"alignment"`
+	Layout    string              `json:"layout"`
+}
+
+type MIRCaptureBinding struct {
+	Source          string      `json:"source"`
+	Kind            CaptureKind `json:"kind"`
+	Type            Type        `json:"type"`
+	Provenance      string      `json:"provenance"`
+	Mutability      string      `json:"mutability"`
+	OwnershipEffect string      `json:"ownership_effect"`
+	FieldIdentity   string      `json:"field_identity"`
+	RegionIdentity  string      `json:"region_identity"`
+	CleanupTracked  bool        `json:"cleanup_tracked,omitempty"`
+	NoAllocation    bool        `json:"no_allocation"`
+	EvaluationOrder int         `json:"evaluation_order"`
 }
 
 type MIRAsyncFunction struct {
@@ -1445,32 +1574,33 @@ type MIROperation struct {
 }
 
 type semanticEnv struct {
-	profile           *ProfileDefinition
-	enums             map[string]EnumDecl
-	structs           map[string]StructDecl
-	layouts           map[string]LayoutDecl
-	streams           map[string]StreamDecl
-	effects           map[string]EffectDecl
-	effectOrder       []string
-	actuators         map[string]ActuatorDecl
-	actuatorInfo      map[string]*evt1ActuatorInfo
-	automata          map[string]AutomataDecl
-	automataInfo      map[string]*evt1AutomataInfo
-	functions         map[string][]FunctionDecl
-	comptimeFunctions map[string]FunctionDecl
-	templates         map[string]TemplateDecl
-	concepts          map[string]ConceptDecl
-	comptimeDecls     map[string]ComptimeDecl
-	comptimeValues    map[string]Value
-	fieldSets         map[string]map[string]Type
-	escapedArmBinding map[string]Span
-	copyableCache     map[string]bool
-	templateInfos     map[string]*evt1TemplateInfo
-	templateInstances map[string]*evt1TemplateInstance
-	semanticProofs    []MIRSemanticProof
-	resultProvenance  map[string]evt1ResultProvenanceSummary
-	dynWitnesses      map[string]*evt1InterfaceWitness
-	validatingMethod  string
+	profile            *ProfileDefinition
+	enums              map[string]EnumDecl
+	structs            map[string]StructDecl
+	layouts            map[string]LayoutDecl
+	streams            map[string]StreamDecl
+	effects            map[string]EffectDecl
+	effectOrder        []string
+	actuators          map[string]ActuatorDecl
+	actuatorInfo       map[string]*evt1ActuatorInfo
+	automata           map[string]AutomataDecl
+	automataInfo       map[string]*evt1AutomataInfo
+	functions          map[string][]FunctionDecl
+	comptimeFunctions  map[string]FunctionDecl
+	templates          map[string]TemplateDecl
+	concepts           map[string]ConceptDecl
+	comptimeDecls      map[string]ComptimeDecl
+	comptimeValues     map[string]Value
+	fieldSets          map[string]map[string]Type
+	escapedArmBinding  map[string]Span
+	copyableCache      map[string]bool
+	templateInfos      map[string]*evt1TemplateInfo
+	templateInstances  map[string]*evt1TemplateInstance
+	semanticProofs     []MIRSemanticProof
+	resultProvenance   map[string]evt1ResultProvenanceSummary
+	dynWitnesses       map[string]*evt1InterfaceWitness
+	validatingMethod   string
+	validatingFunction string
 }
 
 const evt1AutomataDispatchOutcomeTypeName = "AutomataDispatchOutcome"

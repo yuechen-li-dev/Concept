@@ -53,3 +53,12 @@ method or field access is planned separately from interface satisfaction as
 witness-indirect dispatch or a witness field accessor. The Planner consumes
 the deterministic witness identity already present in MIR and cannot add
 inheritance, RTTI, allocation, or a per-object vtable.
+
+## R5i receiver capture
+
+The normalized method receiver `self` is an ordinary lexical binding for
+capture purposes. It is never implicitly captured. A callable that needs object
+state captures `ref self` or `ref const self` and then uses `self.field` or a
+method call. An unbound `field` capture never expands to `self.field`. Existing
+receiver constness, provenance, and interface dispatch rules remain
+authoritative inside the callable environment.

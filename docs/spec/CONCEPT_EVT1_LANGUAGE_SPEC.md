@@ -69,13 +69,15 @@ Result<ProbeEvidence, PrometheusError> Execute(
 }
 ```
 
-Return type precedes function name. EVT1 does not use `fn`, `name: Type`,
-`-> ReturnType`, inferred `let`, or `var`. R2 accepts `let Type name = value;`
-only as an exact alias of `const Type name = value;`; `const` is canonical and
-documentation should prefer it. Braces and indentation remain human-readable,
-with one statement per line. This resolves a material PoC3 surface conflict in
-favor of the newer Concept/Vulkan direction; PoC3 syntax remains accepted only
-by the retired compiler until translated.
+Return type precedes function name. EVT1 does not use `fn`, `name: Type`, or
+`-> ReturnType`. Ordinary declarations remain `Type name` and
+`const Type name`. R5i admits inferred `auto name = value` and
+`const auto name = value` only for generated concrete callable types that users
+cannot spell. `var` and inferred `let` are compatibility aliases for `auto` and
+`const auto`; canonical documentation must use the C/C++-shaped forms. R2's
+typed `let Type name = value;` remains an exact compatibility alias of
+`const Type name = value;`. Braces and indentation remain human-readable, with
+one statement per line.
 
 ## 5. Declarations
 
@@ -1276,7 +1278,60 @@ this is not a testing framework.
 `comptime Assert.True(condition, reason)`. It uses the existing bounded
 comptime evaluator and emits no runtime code. Runtime values are rejected.
 
-## 26. Backend and runtime boundaries
+## 26. Explicit callable capture environments
+
+A callable literal has one canonical form:
+
+```concept
+callback(int value)
+with (factor, move owner, ref total, ref const config)
+{
+    return value * factor;
+}
+```
+
+The `with` clause is optional only when the environment is empty; `with ()` is
+also an empty environment. Each literal denotes a unique, source-order concrete
+type consisting of a code identity and a generated inline environment. Its
+identity is `<function>#callback<n>` and its environment identity is
+`<function>#callback<n>#environment`.
+
+Capture entries are evaluated exactly once, left-to-right, and become fields in
+that same order. `x` copies `x`; `move x` transfers it; `ref x` stores a mutable
+borrow; and `ref const x` stores a readonly borrow. The bounded named copy form
+`field = expression` proves evaluation order. Move/ref aliases and generalized
+fallible capture construction are deferred; the four canonical forms otherwise
+accept lexical identifier/place sources.
+
+Outer lexical values are not captured implicitly. A local, parameter, or
+normalized `self` used by the body must be listed in `with (...)`; `self` is
+never implicitly captured and an unbound field name never means `self.field`.
+Module functions, types, concepts, and compile-time symbols remain ordinary
+module lookup and need no environment field. Within a body, locals shadow
+parameters, parameters shadow captures, and captures shadow module symbols.
+
+Capture bindings obey ordinary Concept copy, move, lifetime, provenance,
+constness, and Drop rules. Duplicate captures reject. A non-copyable source
+cannot use copy capture. Borrowed environment provenance is bounded by the
+borrowed source, including Span, tensor, and dyn backing. Owned fields drop in
+reverse capture order; borrowed fields never own their referents. Callable
+copyability is structurally derived from its fields. Mutation of copied/moved
+fields requires mutable callable storage; moving a field out makes that field
+moved and suppresses its later environment Drop. These are derived receiver and
+storage facts, not `Fn`, `FnMut`, or `FnOnce` categories.
+
+The erased spelling is `callback<P1, P2 -> R>`. It is a non-owning pair of an
+environment reference and one deterministic static invoke entry for the
+`(signature, concrete callable type)` pair. Construction requires an explicit
+borrow of named concrete storage. Owning temporaries are rejected rather than
+boxed. Erased values retain signature, mutability, and environment provenance;
+they allocate no storage and carry no RTTI or registry.
+
+Record `with`, automata `with state`, and callable `with (...)` are distinct
+grammar productions. They share only the principle that attached state is
+explicit.
+
+## 27. Backend and runtime boundaries
 
 **Canonical EVT1 foundation.** The active bootstrap backend produces strict
 C11 C/H, deterministic MIR JSON, a source map, and a hash manifest. Backend
@@ -1291,7 +1346,7 @@ The C representation is not itself a language specification. Runtime services,
 Oct, and Prometheus are consumers and may not become hidden compiler build
 dependencies.
 
-## 27. Deferred EVT1 items
+## 28. Deferred EVT1 items
 
 The following remain explicit reconciliation or implementation work:
 
@@ -1303,6 +1358,8 @@ The following remain explicit reconciliation or implementation work:
 - explicit external runtime-array/ndarray descriptors, slices, FixedBuffer,
   and bounded dynamic storage construction;
 - owning dyn and explicit erased-storage policies;
+- owning erased callbacks, generalized move/ref capture initializers, and async
+  callback literal syntax;
 - allocation, allocator effects, arenas, and stores;
 - stable C ABI and layout law;
 - plain value-level `decide`, continuation resume, generator yield,

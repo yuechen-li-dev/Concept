@@ -186,3 +186,10 @@ not arbitrary implicit capture. Both forms use typed inline persistent storage,
 ordinary provenance and Drop law, and explicit state identity. Await resumes in
 a generated continuation state; it does not save an instruction pointer or add
 a scheduler.
+
+R5i makes the relationship explicit without merging the constructs. Automata
+`with state` is an authored named persistent execution environment; callable
+`with (...)` is an explicit callable capture environment. Both use ordinary
+typed inline storage, provenance, move, and Drop law. Neither permits ambient
+lexical capture. Spellable concrete callable machine fields remain a later
+type-surface decision; R5i invents no existential storage.

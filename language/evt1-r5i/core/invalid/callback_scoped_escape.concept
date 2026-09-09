@@ -1,0 +1,12 @@
+profile Core;
+
+callback<int -> int> Make(scoped ref int source)
+{
+    const auto concrete = callback(int value)
+    with (ref source)
+    {
+        return source + value;
+    };
+    callback<int -> int> erased = ref concrete;
+    return erased;
+}

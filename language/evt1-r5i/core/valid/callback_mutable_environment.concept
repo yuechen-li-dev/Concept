@@ -1,0 +1,14 @@
+profile Core;
+
+int Main()
+{
+    int count = 0;
+    auto counter = callback()
+    with (count)
+    {
+        count = count + 1;
+        return count;
+    };
+    counter();
+    return counter();
+}

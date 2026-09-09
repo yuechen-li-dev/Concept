@@ -1,0 +1,10 @@
+profile Core;
+
+int Main()
+{
+    callback<int -> int> erased = callback(int value)
+    {
+        return value + 1;
+    };
+    return erased(2);
+}

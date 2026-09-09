@@ -1,0 +1,28 @@
+profile Core;
+
+interface Reader<T>
+{
+    requires int Read(ref T self);
+}
+
+struct Device
+{
+    int value;
+
+    int Read(ref Device self)
+    {
+        return self.value;
+    }
+}
+
+int Main()
+{
+    Device device = Device{11};
+    dyn Reader reader = ref device;
+    const auto read = callback()
+    with (reader)
+    {
+        return reader.Read();
+    };
+    return read();
+}

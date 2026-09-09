@@ -1,0 +1,13 @@
+profile Core;
+
+int Main()
+{
+    int total = 0;
+    auto add = callback(int value)
+    with (ref total)
+    {
+        total = total + value;
+    };
+    add(6);
+    return total;
+}

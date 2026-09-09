@@ -1,0 +1,12 @@
+profile Core;
+
+int Main()
+{
+    int value = 1;
+    const auto read = callback()
+    with (value, ref value)
+    {
+        return value;
+    };
+    return read();
+}

@@ -1,0 +1,25 @@
+profile Core;
+
+int Capture(ref int trace, int marker)
+{
+    trace = trace * 10 + marker;
+    return marker;
+}
+
+int Main()
+{
+    int trace = 0;
+    int invocations = 0;
+    auto combine = callback()
+    with (
+        first = Capture(ref trace, 1),
+        second = Capture(ref trace, 2),
+        ref invocations
+    )
+    {
+        invocations = invocations + 1;
+        return first * 10 + second;
+    };
+    int result = combine();
+    return trace * 1000 + invocations * 100 + result;
+}

@@ -552,6 +552,7 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 			Ownership:   evt1StorageOwnership(storageType),
 		})
 	}
+	mir.CallbackWitnesses = evt1ModuleCallbackWitnesses(module)
 	return mir
 }
 
@@ -573,6 +574,13 @@ func evt1ValidateMIR(mir MIR) error {
 		return err
 	}
 	seenWitnesses := map[string]bool{}
+	seenCallbackWitnesses := map[string]bool{}
+	for _, witness := range mir.CallbackWitnesses {
+		if witness.ID == "" || witness.ConcreteCallable == "" || witness.Signature.Kind != TypeCallback || witness.Adapter == "" || witness.Environment == "" || !witness.NoAllocation || seenCallbackWitnesses[witness.ID] {
+			return evt1Diagnostic("CALLBACK_WITNESS_INVALID", "callback witness MIR omits its unique concrete/signature adapter or no-allocation law", Span{})
+		}
+		seenCallbackWitnesses[witness.ID] = true
+	}
 	for _, witness := range mir.Witnesses {
 		if witness.ID == "" || witness.Interface == "" || witness.ConcreteType == "" || !witness.NoAllocation || seenWitnesses[witness.ID] {
 			return evt1Diagnostic("INTERFACE_WITNESS_INVALID", "interface witness MIR omits its unique identity, type pair, or no-allocation law", Span{})
@@ -726,6 +734,18 @@ func evt1ValidateMIR(mir MIR) error {
 	}
 	allFunctions := append(append([]MIRFunction{}, mir.Functions...), mir.ComptimeFns...)
 	for _, fn := range allFunctions {
+		for _, callable := range fn.Callables {
+			if callable.Identity == "" || callable.Environment.Identity == "" || callable.Dispatch != "DirectCallable" || !callable.NoAllocation || callable.Environment.Alignment < 1 {
+				return evt1Diagnostic("CALLABLE_MIR_INVALID", fmt.Sprintf("callable MIR in %s omits identity, layout, direct dispatch, or no-allocation facts", fn.Name), callable.SourceSpan)
+			}
+			seenCapture := map[string]bool{}
+			for i, capture := range callable.Environment.Fields {
+				if capture.Source == "" || capture.FieldIdentity == "" || capture.RegionIdentity == "" || !capture.NoAllocation || capture.EvaluationOrder != i || capture.Type.Name == "" || capture.Provenance == "" || seenCapture[capture.Source] {
+					return evt1Diagnostic("CALLABLE_MIR_INVALID", "capture binding MIR is incomplete, duplicated, or out of order", callable.SourceSpan)
+				}
+				seenCapture[capture.Source] = true
+			}
+		}
 		if fn.Async != nil {
 			a := fn.Async
 			if a.Identity != fn.Name+"#async" || a.MachineIdentity == "" || a.StateIdentity == "" || a.FrameStorage != "Inline" || a.ContinuationStrategy != "ExplicitGeneratedState" || a.ChildInvocation != "MachinePush" || a.Scheduler != "None" || a.SavedPC != "None" || len(a.GeneratedStates) < len(a.AwaitPoints)+2 {
@@ -771,6 +791,12 @@ func evt1ValidateMIR(mir MIR) error {
 			seen[cleanup.Owner] = true
 		}
 		for _, operation := range fn.Operations {
+			if operation.Kind == "callable_literal" || operation.Kind == "capture_binding" || operation.Kind == "callable_invoke" || operation.Kind == "callback_invoke" {
+				if operation.Type == "" || operation.Detail == "" || !operation.NoAllocation {
+					return evt1Diagnostic("CALLABLE_MIR_INVALID", fmt.Sprintf("MIR %s operation %s omits callable identity or no-allocation evidence", operation.Kind, operation.ID), operation.SourceSpan)
+				}
+				continue
+			}
 			if operation.Kind == "dyn_make" {
 				if operation.Type == "" || operation.Detail == "" || operation.Provenance == "" || !operation.NoCopy || !operation.NoAllocation || !operation.NoOwnershipTransfer {
 					return evt1Diagnostic("DYN_MIR_INVALID", fmt.Sprintf("MIR dyn construction %s omits witness, provenance, or storage-neutrality facts", operation.ID), operation.SourceSpan)
@@ -919,6 +945,8 @@ func evt1MIRCleanups(env *semanticEnv, fn FunctionDecl) []MIRCleanup {
 		dropName := ""
 		if evt1IsFailureType(types[name]) && evt1FailureNeedsDrop(env, types[name]) {
 			dropName = evt1FailureDropName(types[name])
+		} else if types[name].Kind == TypeCallable && types[name].CallableHasDrop {
+			dropName = "DropCallableEnvironment"
 		} else if dropFn := evt1DropFunction(env, types[name]); dropFn != nil {
 			dropName = dropFn.Name
 		} else if types[name].ArrayElem != nil && evt1StorageElementHasDrop(env, *types[name].ArrayElem) {
@@ -1170,6 +1198,19 @@ func collectTransitionMIR(block *Block, state *MIRState) {
 func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInfo *evt1TemplateInfo) {
 	id := fmt.Sprintf("%s.%02d", fn.Name, len(fn.Operations)+1)
 	switch e := expr.(type) {
+	case *CallableExpr:
+		fn.Callables = append(fn.Callables, evt1CallableMIR(env, e))
+		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "callable_literal", Type: e.Identity, Detail: e.EnvironmentID, Evaluation: "CapturesExactlyOnceLeftToRight", NoAllocation: true, SourceSpan: e.Span})
+		for _, capture := range e.Captures {
+			detail := string(capture.Kind) + " " + capture.Name
+			if capture.Source != nil {
+				detail += " = " + evt1ExprIdentity(capture.Source)
+			}
+			fn.Operations = append(fn.Operations, MIROperation{ID: fmt.Sprintf("%s.%02d", fn.Name, len(fn.Operations)+1), Kind: "capture_binding", Type: capture.Type.String(), Detail: detail, Provenance: capture.Provenance, Evaluation: "ExactlyOnce", NoAllocation: true, SourceSpan: capture.Span})
+			if capture.Source != nil {
+				collectExprMIROps(env, capture.Source, fn, templateInfo)
+			}
+		}
 	case *AwaitExpr:
 		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "await_point", Type: e.ResultType.String(), Detail: "explicit_generated_state+machine_push+outcome_consume", NoAllocation: true, SourceSpan: e.Span})
 		collectExprMIROps(env, e.Value, fn, templateInfo)
@@ -1295,6 +1336,17 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 			collectExprMIROps(env, arm.Value, fn, templateInfo)
 		}
 	case *CallExpr:
+		if e.CallableInvoke {
+			kind := "callable_invoke"
+			if e.CallableType != nil && e.CallableType.Kind == TypeCallback {
+				kind = "callback_invoke"
+			}
+			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: kind, Type: e.Callee, Detail: e.CallableType.String(), ReturnType: e.CallableType.CallableResult.String(), NoAllocation: true, SourceSpan: e.Span})
+			for _, arg := range e.Args {
+				collectExprMIROps(env, arg, fn, templateInfo)
+			}
+			return
+		}
 		if strings.HasPrefix(e.Intrinsic, "inference_") {
 			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: e.Intrinsic, Detail: "explicit inference query", NoCopy: true, NoAllocation: true, NoOwnershipTransfer: true, SourceSpan: e.Span})
 			for _, arg := range e.Args {
@@ -1559,6 +1611,7 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 	header.WriteString(evt1TensorDeclarations(tensorTypes))
 	header.WriteString(l.semanticViewDeclarations())
 	header.WriteString(l.interfaceWitnessDeclarations())
+	header.WriteString(l.callableDeclarations())
 	canonicalFailureTypes := evt1CanonicalFailureTypeKeys(l.module)
 	for _, failureType := range evt1CollectFailureTypes(l.module) {
 		if _, legacy := evt1IsResultVoidErrorType(l.env, failureType); legacy && !canonicalFailureTypes[evt1FailureTypeKey(failureType)] {
@@ -1632,6 +1685,7 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 		body.WriteString(l.actuatorRuntimeSupport(actuatorDecl.Name))
 	}
 	body.WriteString(l.interfaceWitnessDefinitions())
+	body.WriteString(l.callableDefinitions())
 	for _, templateDecl := range l.module.Templates {
 		var instances []*evt1TemplateInstance
 		for _, instance := range l.env.templateInstances {
@@ -3049,6 +3103,12 @@ func evt1ConstructorName(enumName, variantName string) string {
 }
 
 func evt1CType(t Type) string {
+	if t.Kind == TypeCallable {
+		return evt1CallableEnvCName(t.CallableID)
+	}
+	if t.Kind == TypeCallback {
+		return evt1CallbackCName(t)
+	}
 	if t.Kind == TypeAsync || t.Name == "Async" {
 		return "concept_async_operation"
 	}
@@ -3881,6 +3941,8 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		return "", evt1RenderCValue(f.l.env, value), value.Type
 	}
 	switch e := expr.(type) {
+	case *CallableExpr:
+		return f.lowerCallableLiteral(e, indent)
 	case *IntLiteral:
 		t, _ := evt1BuiltinType("int", e.Span)
 		return "", fmt.Sprintf("%d", e.Value), t
@@ -4036,6 +4098,10 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 	case *BindExpr:
 		return "", "/* bind_requires_target */", Type{}
 	case *RefExpr:
+		if e.CallbackErase && e.CallbackType != nil {
+			prelude, target, targetType, _ := f.lowerLValue(e.Value, indent)
+			return prelude, fmt.Sprintf("(%s){ .environment = (void*)&(%s), .invoke = &%s }", evt1CallbackCName(*e.CallbackType), target, evt1CallbackAdapterCName(targetType.CallableID, *e.CallbackType)), *e.CallbackType
+		}
 		prelude, target, targetType, _ := f.lowerLValue(e.Value, indent)
 		if e.DynInterface != "" {
 			if f.plannedStrategy("dyn_make", "ObjectWitnessPair") != "ObjectWitnessPair" {
@@ -4107,6 +4173,22 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		}
 		return b.String(), carrierTemp + ".payload." + field, evt1FailureSuccessType(carrierType)
 	case *CallExpr:
+		if e.CallableInvoke && e.CallableType != nil {
+			binding, _ := scopeLookup(e.Callee, f.scope)
+			var prelude strings.Builder
+			var args []string
+			for _, arg := range e.Args {
+				argPrelude, argExpr, argType := f.lowerExpr(arg, indent)
+				prelude.WriteString(argPrelude)
+				temp := f.nextTemp("callback_arg")
+				prelude.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(argType), temp, argExpr))
+				args = append(args, temp)
+			}
+			if e.CallableType.Kind == TypeCallback {
+				return prelude.String(), fmt.Sprintf("%s.invoke(%s.environment%s)", binding.cName, binding.cName, evt1CArgsSuffix(args)), *e.CallableType.CallableResult
+			}
+			return prelude.String(), fmt.Sprintf("%s(&%s%s)", evt1CallableInvokeCName(e.CallableType.CallableID), binding.cName, evt1CArgsSuffix(args)), *e.CallableType.CallableResult
+		}
 		if e.Intrinsic == "async_step" || e.Intrinsic == "async_complete" || e.Intrinsic == "async_result" {
 			prelude, value, valueType := f.lowerExpr(e.Args[0], indent)
 			if e.Intrinsic == "async_step" {
@@ -4644,6 +4726,30 @@ func (f *evt1FunctionLowerer) lowerScopeDrops(scopeIndex, indent int) string {
 }
 
 func (f *evt1FunctionLowerer) lowerDropValue(t Type, value string, indent int) string {
+	if t.Kind == TypeCallable {
+		var b strings.Builder
+		for _, callable := range evt1ModuleCallables(f.l.module) {
+			if callable.Identity != t.CallableID {
+				continue
+			}
+			for i := len(callable.Captures) - 1; i >= 0; i-- {
+				capture := callable.Captures[i]
+				if capture.Kind == CaptureRef || capture.Kind == CaptureRefConst {
+					continue
+				}
+				drop := f.lowerDropValue(capture.Type, "("+value+")."+capture.Name, indent)
+				if drop != "" && capture.Kind == CaptureMove && evt1TypeHasDrop(f.l.env, capture.Type) {
+					b.WriteString(ind(indent) + "if ((" + value + ").__live_" + capture.Name + ") {\n")
+					b.WriteString(f.lowerDropValue(capture.Type, "("+value+")."+capture.Name, indent+1))
+					b.WriteString(ind(indent) + "}\n")
+				} else {
+					b.WriteString(drop)
+				}
+			}
+			break
+		}
+		return b.String()
+	}
 	if evt1IsFailureType(t) && evt1FailureNeedsDrop(f.l.env, t) {
 		return ind(indent) + fmt.Sprintf("%s(%s);\n", evt1FailureDropName(t), value)
 	}

@@ -1,0 +1,11 @@
+profile Core;
+
+int Main()
+{
+    int total = 0;
+    const auto add = callback(int value)
+    {
+        return total + value;
+    };
+    return add(1);
+}

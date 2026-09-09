@@ -8,10 +8,11 @@ import (
 )
 
 type parser struct {
-	path       string
-	tokens     []Token
-	pos        int
-	profileDef *ProfileDefinition
+	path            string
+	tokens          []Token
+	pos             int
+	profileDef      *ProfileDefinition
+	callableOrdinal int
 }
 
 func Parse(path, text string) (Module, error) {
@@ -126,6 +127,10 @@ func lexEVT1(text string) ([]Token, error) {
 			column += 2
 		case i+1 < len(text) && text[i:i+2] == "=>":
 			tokens = append(tokens, Token{Lexeme: "=>", Span: start})
+			i += 2
+			column += 2
+		case i+1 < len(text) && text[i:i+2] == "->":
+			tokens = append(tokens, Token{Lexeme: "->", Span: start})
 			i += 2
 			column += 2
 		case strings.ContainsRune("(){}[];,:.*+-=<>!?@", rune(c)):
@@ -1646,6 +1651,34 @@ done:
 	if err != nil {
 		return Type{}, err
 	}
+	if !dyn && nameTok.Lexeme == "callback" && p.peekLexeme() == "<" {
+		p.next()
+		var params []Type
+		if p.peekLexeme() != "->" {
+			for {
+				param, parseErr := p.parseType(conceptParam)
+				if parseErr != nil {
+					return Type{}, parseErr
+				}
+				params = append(params, param)
+				if p.peekLexeme() != "," {
+					break
+				}
+				p.next()
+			}
+		}
+		if _, err := p.expect("->"); err != nil {
+			return Type{}, evt1Diagnostic("CALLBACK_SIGNATURE_INVALID", "erased callback signature requires `->`", p.currentSpan())
+		}
+		result, parseErr := p.parseType(conceptParam)
+		if parseErr != nil {
+			return Type{}, parseErr
+		}
+		if _, err := p.expect(">"); err != nil {
+			return Type{}, err
+		}
+		return Type{Name: "callback", Kind: TypeCallback, CallableParams: params, CallableResult: &result, Const: t.Const, Scoped: t.Scoped, Span: nameTok.Span}, nil
+	}
 	if dyn {
 		t.Name = nameTok.Lexeme
 		t.Kind = TypeDyn
@@ -1949,7 +1982,7 @@ func (p *parser) parseStatement() (Statement, error) {
 		}
 		return &block, nil
 	default:
-		if p.peekLexeme() == "const" || p.peekLexeme() == "let" || p.looksLikeVarDecl() {
+		if p.peekLexeme() == "const" || p.peekLexeme() == "auto" || p.peekLexeme() == "let" || p.peekLexeme() == "var" || p.looksLikeVarDecl() {
 			return p.parseVarDecl()
 		}
 		value, err := p.parseExpr()
@@ -2343,7 +2376,10 @@ func (p *parser) looksLikeVarDecl() bool {
 	}
 	save := p.pos
 	defer func() { p.pos = save }()
-	if p.peekLexeme() == "const" || p.peekLexeme() == "let" {
+	if p.peekLexeme() == "const" || p.peekLexeme() == "let" || p.peekLexeme() == "var" {
+		p.next()
+	}
+	if p.peekLexeme() == "auto" {
 		p.next()
 	}
 	if _, err := p.parseType(""); err != nil {
@@ -2359,9 +2395,24 @@ func (p *parser) looksLikeVarDecl() bool {
 func (p *parser) parseVarDecl() (Statement, error) {
 	isConst := false
 	constSpan := Span{}
-	if p.peekLexeme() == "const" || p.peekLexeme() == "let" {
-		isConst = true
-		constSpan = p.next().Span
+	if p.peekLexeme() == "auto" {
+		qualifier := p.next()
+		return p.parseInferredVarDecl(false, qualifier.Span)
+	}
+	if p.peekLexeme() == "const" {
+		qualifier := p.next()
+		isConst, constSpan = true, qualifier.Span
+		if p.peekLexeme() == "auto" {
+			p.next()
+			return p.parseInferredVarDecl(true, qualifier.Span)
+		}
+	} else if p.peekLexeme() == "let" || p.peekLexeme() == "var" {
+		qualifier := p.next()
+		isConst = qualifier.Lexeme != "var"
+		constSpan = qualifier.Span
+		if isIdentifier(p.peekLexeme()) && p.pos+1 < len(p.tokens) && p.tokens[p.pos+1].Lexeme == "=" {
+			return p.parseInferredVarDecl(isConst, constSpan)
+		}
 	}
 	t, err := p.parseType("")
 	if err != nil {
@@ -2406,6 +2457,24 @@ func (p *parser) parseVarDecl() (Statement, error) {
 		return nil, err
 	}
 	return &VarDecl{Const: isConst, Type: t, Name: nameTok.Lexeme, Value: value, InlineTensor: inline, Span: nameTok.Span, ConstSpan: constSpan}, nil
+}
+
+func (p *parser) parseInferredVarDecl(isConst bool, qualifierSpan Span) (Statement, error) {
+	nameTok, err := p.expectIdentifier("CV4009", "expected inferred local name")
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.expect("="); err != nil {
+		return nil, err
+	}
+	value, err := p.parseExpr()
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.expect(";"); err != nil {
+		return nil, err
+	}
+	return &VarDecl{Const: isConst, Type: Type{Name: "<inferred>", Kind: TypeInferred, Span: nameTok.Span}, Name: nameTok.Lexeme, Value: value, Span: nameTok.Span, ConstSpan: qualifierSpan}, nil
 }
 
 func (p *parser) parseMatchStmt() (Statement, error) {
@@ -2772,6 +2841,8 @@ func (p *parser) parsePrimary() (Expr, error) {
 		return p.parseMatchExpr()
 	case p.peekLexeme() == "infer":
 		return p.parseInferExpr()
+	case p.peekLexeme() == "callback":
+		return p.parseCallableExpr()
 	case p.peekLexeme() == "true" || p.peekLexeme() == "false":
 		tok := p.next()
 		return p.parsePostfixExpr(&BoolLiteral{Value: tok.Lexeme == "true", Span: tok.Span}, tok.Span)
@@ -2794,6 +2865,85 @@ func (p *parser) parsePrimary() (Expr, error) {
 	default:
 		return p.parseNameLikeExpr()
 	}
+}
+
+func (p *parser) parseCallableExpr() (Expr, error) {
+	start, _ := p.expect("callback")
+	if _, err := p.expect("("); err != nil {
+		return nil, err
+	}
+	expr := &CallableExpr{Ordinal: p.callableOrdinal, Span: start.Span}
+	p.callableOrdinal++
+	if p.peekLexeme() != ")" {
+		for {
+			paramType, err := p.parseType("")
+			if err != nil {
+				return nil, err
+			}
+			name, err := p.expectIdentifier("CALLABLE_PARAMETER_INVALID", "expected callable parameter name")
+			if err != nil {
+				return nil, err
+			}
+			expr.Params = append(expr.Params, Param{Type: paramType, Name: name.Lexeme, Span: name.Span})
+			if p.peekLexeme() != "," {
+				break
+			}
+			p.next()
+		}
+	}
+	if _, err := p.expect(")"); err != nil {
+		return nil, err
+	}
+	if p.peekLexeme() == "with" {
+		p.next()
+		if _, err := p.expect("("); err != nil {
+			return nil, evt1Diagnostic("CALLABLE_CAPTURE_INVALID", "callable `with` requires a parenthesized capture list", p.currentSpan())
+		}
+		for p.peekLexeme() != ")" {
+			capture := CaptureBinding{Kind: CaptureCopy, Ordinal: len(expr.Captures), Span: p.currentSpan()}
+			if p.peekLexeme() == "move" {
+				capture.Kind = CaptureMove
+				p.next()
+			} else if p.peekLexeme() == "ref" {
+				capture.Kind = CaptureRef
+				p.next()
+				if p.peekLexeme() == "const" {
+					capture.Kind = CaptureRefConst
+					p.next()
+				}
+			}
+			name, err := p.expectIdentifier("CALLABLE_CAPTURE_INVALID", "capture source must be an identifier or self")
+			if err != nil {
+				return nil, err
+			}
+			capture.Name, capture.Span = name.Lexeme, name.Span
+			if p.peekLexeme() == "=" {
+				if capture.Kind != CaptureCopy {
+					return nil, evt1Diagnostic("CALLABLE_CAPTURE_INVALID", "capture aliases use copy initialization; move/ref aliases are deferred", capture.Span)
+				}
+				p.next()
+				source, err := p.parseExpr()
+				if err != nil {
+					return nil, err
+				}
+				capture.Source = source
+			}
+			expr.Captures = append(expr.Captures, capture)
+			if p.peekLexeme() != "," {
+				break
+			}
+			p.next()
+		}
+		if _, err := p.expect(")"); err != nil {
+			return nil, err
+		}
+	}
+	body, err := p.parseBlock()
+	if err != nil {
+		return nil, err
+	}
+	expr.Body = body
+	return p.parsePostfixExpr(expr, start.Span)
 }
 
 func (p *parser) parseInferExpr() (Expr, error) {

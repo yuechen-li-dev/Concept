@@ -22,6 +22,8 @@ type evt1Scope struct {
 	machineResultType Type
 	machineErrorType  Type
 	inAsync           bool
+	callableOuter     *evt1Scope
+	functionName      string
 }
 
 type evt1ProvenanceKind string
@@ -119,6 +121,8 @@ func newEVT1Scope(parent *evt1Scope) *evt1Scope {
 		s.machineResultType = parent.machineResultType
 		s.machineErrorType = parent.machineErrorType
 		s.inAsync = parent.inAsync
+		s.callableOuter = parent.callableOuter
+		s.functionName = parent.functionName
 	}
 	return s
 }
@@ -199,6 +203,8 @@ func evt1CloneScope(scope *evt1Scope) *evt1Scope {
 	out.machineResultType = scope.machineResultType
 	out.machineErrorType = scope.machineErrorType
 	out.inAsync = scope.inAsync
+	out.callableOuter = scope.callableOuter
+	out.functionName = scope.functionName
 	for name, binding := range scope.values {
 		out.values[name] = binding
 	}
@@ -703,6 +709,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		}
 		scope.returnType = resolvedReturn
 		scope.inAsync = fn.Async
+		scope.functionName = fn.Name
 		for paramIndex, param := range fn.Params {
 			resolvedParam, err := evt1ResolveType(env, nil, param.Type)
 			if err != nil {
@@ -719,15 +726,19 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		}
 		collectEscapedArmBindings(fn.Body, env)
 		env.validatingMethod = fn.MethodOf
+		env.validatingFunction = fn.Name
 		if err := validateBlock(env, scope, resolvedReturn, *fn.Body, nil, false); err != nil {
 			env.validatingMethod = ""
+			env.validatingFunction = ""
 			return nil, err
 		}
 		if err := evt1ValidateAsyncPersistence(fn); err != nil {
 			env.validatingMethod = ""
+			env.validatingFunction = ""
 			return nil, err
 		}
 		env.validatingMethod = ""
+		env.validatingFunction = ""
 	}
 	for _, fn := range module.ComptimeFns {
 		scope := evt1ModuleScope(env)
@@ -1098,6 +1109,21 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 					t: resolvedType, mutable: !s.Const, state: evt1StorageInitialized, comptime: inComptimeFn,
 					provenance: evt1LifetimeProvenance{Kind: evt1ProvenanceLocal, Depth: local.depth}, tensorFacts: facts,
 				})
+				continue
+			}
+			if s.Type.Kind == TypeInferred {
+				valueType, err := validateExpr(env, local, s.Value, templateInfo, inComptimeFn)
+				if err != nil {
+					return err
+				}
+				if valueType.Kind != TypeCallable {
+					return evt1Diagnostic("CV4009", "inferred locals are bounded to concrete callable initializers in R5i", s.Span)
+				}
+				if _, copiesNamedCallable := s.Value.(*NameExpr); copiesNamedCallable && !evt1TypeCopyable(env, valueType) {
+					return evt1Diagnostic("CV4501", fmt.Sprintf("copy of non-copyable callable %s requires move", valueType.String()), s.Value.exprSpan())
+				}
+				s.Type = valueType
+				local.declare(s.Name, evt1ValueBinding{t: valueType, mutable: !s.Const, state: evt1StorageInitialized, provenance: evt1ExprProvenance(env, local, s.Value)})
 				continue
 			}
 			if err := validateKnownType(env, s.Type, s.Span, typeParam, false); err != nil {
@@ -1497,6 +1523,12 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 					return evt1Diagnostic("DYN_ASYNC_RECEIVER_LIFETIME_INVALID", "Async operation cannot escape the lifetime of its dyn receiver", s.Value.exprSpan())
 				}
 			}
+			if returnType.Kind == TypeCallable || returnType.Kind == TypeCallback {
+				provenance := evt1ExprProvenance(env, local, s.Value)
+				if provenance.Scoped || provenance.Kind == evt1ProvenanceLocal {
+					return evt1Diagnostic("CALLABLE_CAPTURE_LIFETIME_INVALID", "callable cannot escape its captured environment lifetime", s.Value.exprSpan())
+				}
+			}
 			if !evt1TypeCopyable(env, returnType) && !evt1CanTransferInitialize(env, returnType, s.Value) {
 				return evt1Diagnostic("CV4506", fmt.Sprintf("return of non-copyable type %s requires an explicit move", returnType.String()), s.Value.exprSpan())
 			}
@@ -1640,6 +1672,9 @@ func evt1EvalScopeFromValidation(scope *evt1Scope, env *semanticEnv) *evt1EvalSc
 }
 
 func validateExprAgainstExpected(env *semanticEnv, scope *evt1Scope, expr Expr, expected Type, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
+	if expected.Kind == TypeCallback {
+		return evt1ValidateCallbackErasure(env, scope, expr, expected, templateInfo, inComptimeFn)
+	}
 	if inference, ok := expr.(*InferExpr); ok {
 		return validateInferExpr(env, scope, inference, expected, templateInfo, inComptimeFn)
 	}
@@ -2104,6 +2139,20 @@ func evt1NestedLiteralShape(expr Expr) ([]int, []Expr, bool, bool) {
 }
 
 func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string, allowConceptApp bool) error {
+	if t.Kind == TypeCallable {
+		return nil
+	}
+	if t.Kind == TypeCallback {
+		for _, param := range t.CallableParams {
+			if err := validateKnownType(env, param, span, conceptParam, false); err != nil {
+				return err
+			}
+		}
+		if t.CallableResult == nil {
+			return evt1Diagnostic("CALLBACK_SIGNATURE_INVALID", "callback signature requires a result type", span)
+		}
+		return validateKnownType(env, *t.CallableResult, span, conceptParam, false)
+	}
 	if evt1IsTensorType(t) {
 		return evt1ValidateTensorType(env, t, span, conceptParam)
 	}
@@ -2233,6 +2282,8 @@ func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string,
 
 func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
 	switch e := expr.(type) {
+	case *CallableExpr:
+		return evt1ValidateCallableExpr(env, scope, e, templateInfo, inComptimeFn)
 	case *AwaitExpr:
 		if !scope.inAsync || inComptimeFn || scope.inAutomataState {
 			return Type{}, evt1Diagnostic("AWAIT_OUTSIDE_ASYNC", "await is only valid inside an async function", e.Span)
@@ -2299,6 +2350,11 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		if scope.inAutomataState {
 			return Type{}, evt1Diagnostic("AUTOMATA_CAPTURE_IMPLICIT_FORBIDDEN", fmt.Sprintf("name %s is not explicit automata state, machine state, or a transient local", e.Name), e.Span)
+		}
+		if scope.callableOuter != nil {
+			if _, outer := scope.callableOuter.lookup(e.Name); outer {
+				return Type{}, evt1Diagnostic("CALLABLE_CAPTURE_REQUIRED", fmt.Sprintf("outer lexical value %s must be listed in callable `with (...)`", e.Name), e.Span)
+			}
 		}
 		return Type{}, evt1Diagnostic("CV4024", fmt.Sprintf("unknown name %s", e.Name), e.Span)
 	case *FieldExpr:
@@ -2372,6 +2428,11 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		return evt1CanonicalType(env, fieldType), nil
 	case *CallExpr:
+		if !e.Member {
+			if binding, ok := scope.lookup(e.Callee); ok && (binding.t.Kind == TypeCallable || binding.t.Kind == TypeCallback) {
+				return evt1ValidateCallableInvocation(env, scope, e, binding, templateInfo, inComptimeFn)
+			}
+		}
 		if e.Member {
 			return evt1ValidateMemberCall(env, scope, e, templateInfo, inComptimeFn)
 		}
@@ -2836,6 +2897,17 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 	case *BindExpr:
 		return Type{}, evt1Diagnostic("CV4562", "bind requires an explicit contextual ref array/ndarray target type", e.Span)
 	case *RefExpr:
+		if name, ok := e.Value.(*NameExpr); ok {
+			if binding, found := scope.lookup(name.Name); found && binding.t.Kind == TypeCallable {
+				if err := evt1CheckReadableBinding(name.Name, binding, e.Span); err != nil {
+					return Type{}, err
+				}
+				out := binding.t
+				out.Ownership = "ref"
+				out.Const = e.Const || !binding.mutable
+				return out, nil
+			}
+		}
 		lvalue, err := validateAssignable(env, scope, e.Value, templateInfo)
 		if err != nil {
 			return Type{}, evt1Diagnostic("CV4508", "ref requires an existing place; temporaries are not referenceable in R3", e.Value.exprSpan())
@@ -3045,6 +3117,10 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 }
 
 func validateCallArgument(env *semanticEnv, scope *evt1Scope, paramType Type, arg Expr, argType Type, templateInfo *evt1TemplateInfo) error {
+	if paramType.Kind == TypeCallback {
+		_, err := evt1ValidateCallbackErasure(env, scope, arg, paramType, templateInfo, false)
+		return err
+	}
 	typeParam := ""
 	if templateInfo != nil {
 		typeParam = templateInfo.Decl.TypeParam
@@ -3617,6 +3693,17 @@ func evt1DeriveExprResultProvenance(env *semanticEnv, expr Expr, bindings map[st
 
 func evt1ExprProvenance(env *semanticEnv, scope *evt1Scope, expr Expr) evt1LifetimeProvenance {
 	switch e := expr.(type) {
+	case *CallableExpr:
+		result := evt1LifetimeProvenance{Kind: evt1ProvenanceStatic}
+		for _, capture := range e.Captures {
+			if binding, ok := scope.lookup(capture.Name); ok {
+				p := binding.provenance
+				if p.Kind == evt1ProvenanceLocal || (result.Kind != evt1ProvenanceLocal && p.Kind == evt1ProvenanceParameter) {
+					result = p
+				}
+			}
+		}
+		return result
 	case *ParenExpr:
 		return evt1ExprProvenance(env, scope, e.Value)
 	case *MoveExpr:
@@ -4486,6 +4573,12 @@ func evt1ByValueTypeName(t Type) (string, bool) {
 }
 
 func evt1TypeCopyable(env *semanticEnv, t Type) bool {
+	if t.Kind == TypeCallable {
+		return t.CallableCopyable
+	}
+	if t.Kind == TypeCallback {
+		return true
+	}
 	if t.Kind == TypeAsync || t.Name == "Async" {
 		return false
 	}
@@ -4571,6 +4664,9 @@ func evt1DropFunction(env *semanticEnv, t Type) *FunctionDecl {
 }
 
 func evt1TypeHasDrop(env *semanticEnv, t Type) bool {
+	if t.Kind == TypeCallable {
+		return t.CallableHasDrop
+	}
 	if evt1IsFailureType(t) {
 		return evt1FailureNeedsDrop(env, t)
 	}
@@ -4633,7 +4729,7 @@ func evt1CanTransferInitialize(env *semanticEnv, t Type, expr Expr) bool {
 		return true
 	}
 	switch e := expr.(type) {
-	case *MoveExpr, *CallExpr, *TemplateCallExpr, *ConstructExpr, *FailureExpr:
+	case *MoveExpr, *CallExpr, *TemplateCallExpr, *ConstructExpr, *FailureExpr, *CallableExpr:
 		return true
 	case *ParenExpr:
 		return evt1CanTransferInitialize(env, t, e.Value)

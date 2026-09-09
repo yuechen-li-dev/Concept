@@ -120,3 +120,12 @@ cancellation, channel, race/select, generalized closure, or public ABI promise.
 Recommended R5i is a bounded non-owning callable/callback value using explicit
 capture provenance and the same fixed witness shape, without generalized
 closure inference or allocation.
+
+## R5i callable persistence
+
+A concrete callable live across an await is selected by ordinary graph-aware
+liveness and stored as one typed inline frame field. Its environment is neither
+rescanned nor rebuilt: refs retain provenance and owned fields retain move/Drop
+obligations. Invocation after resume uses the ordinary direct or static-witness
+path. R5i adds no async callable literal, scheduler, executor, heap frame, or
+special closure continuation.

@@ -1,0 +1,13 @@
+profile Core;
+
+int Main()
+{
+    int count = 0;
+    const auto counter = callback()
+    with (count)
+    {
+        count = count + 1;
+        return count;
+    };
+    return counter();
+}

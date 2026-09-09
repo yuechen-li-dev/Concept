@@ -1,0 +1,24 @@
+profile Core;
+
+class Counter
+{
+public:
+    int value;
+
+    void Increment()
+    {
+        auto increment = callback()
+        with (ref self)
+        {
+            self.value = self.value + 1;
+        };
+        increment();
+    }
+}
+
+int Main()
+{
+    Counter counter = Counter{3};
+    counter.Increment();
+    return counter.value;
+}

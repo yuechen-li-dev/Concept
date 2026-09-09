@@ -1,0 +1,18 @@
+profile Core;
+
+struct Resource
+{
+    int value;
+}
+
+int Main()
+{
+    owned Resource resource = Resource{1};
+    owned Resource moved = move resource;
+    auto read = callback()
+    with (move resource)
+    {
+        return resource.value;
+    };
+    return read() + moved.value;
+}

@@ -94,3 +94,16 @@ ABI. A future Planner may select caller-provided construction storage only if
 that choice is explicit, allocation-free, and semantically identical. Owning
 dyn, virtual coroutine objects, open generic runtime methods, generalized
 callables, and hidden storage remain outside R5h.
+
+## R5i callback witness specialization
+
+```text
+dyn       = erased object ref      + interface witness
+callback  = erased environment ref + invoke witness
+```
+
+The callback entry is deterministic per exact signature and concrete callable.
+MIR records that identity, adapter, environment, and `NoAllocation`; C stores a
+borrowed environment pointer plus the static function pointer. There is no
+per-instance table, RTTI, registry, owning erasure, or hidden box. Mutability and
+provenance remain properties of the concrete environment.

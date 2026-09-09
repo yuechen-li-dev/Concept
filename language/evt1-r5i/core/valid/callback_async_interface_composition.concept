@@ -1,0 +1,41 @@
+profile Core;
+
+interface Reader<T>
+{
+    requires async int Read(ref T self);
+}
+
+struct Device
+{
+    int value;
+
+    async int Read(ref Device self)
+    {
+        return self.value;
+    }
+}
+
+async int Run(dyn Reader reader, callback<int -> void> onData)
+{
+    int data = await reader.Read();
+    onData(data);
+    return data;
+}
+
+int Main()
+{
+    Device device = Device{17};
+    dyn Reader reader = ref device;
+    int observed = 0;
+    auto record = callback(int value)
+    with (ref observed)
+    {
+        observed = value;
+    };
+    Async<int> work = Run(reader, ref record);
+    while (not Complete(work)) bounded(8)
+    {
+        Step(work);
+    }
+    return Result(work) + observed;
+}
