@@ -1,175 +1,104 @@
 # EVT1 allocator direction
 
-Status: R6e prerequisites structurally resolved; allocator remains unimplemented
+Status: R6f feasibility category C; reference allocator library remains unimplemented
 
-## R6e prerequisite checkpoint
-
-R6d supplied ordinary generic runtime types, `SizeOf<T>` / `AlignOf<T>`,
-structural generic ownership/Drop/provenance, and bounded external C/effect
-declarations. R6e supplies reusable semantic artifacts, exact import
-resolution, cross-module constraints, authoritative effect summaries, and
-interface-operation effect allowances. This is readiness evidence only: it
-adds no allocator framework, heap policy, or allocator-specific compiler law.
-
-## R6d blocker update
-
-R6d has made meaningful local-compilation progress without retrying the
-allocator:
-
-| R6c blocker | R6d status |
-|---|---|
-| User-defined generic runtime types | Resolved locally for structs/classes, nesting, integer non-type parameters, functions, and methods; generic type constraints remain partial |
-| Generic `SizeOf<T>` / `AlignOf<T>` | Resolved through the ordinary fixed-layout geometry authority, including after function-template substitution |
-| Applied ownership/provenance/Drop | Resolved locally through concrete fields, structural reverse Drop, move checking, and explicit generic `ref struct` provenance |
-| Reusable Core multi-module compilation | Unresolved; this is the next isolated blocker |
-| Hosted external-memory / ABI seam | Resolved for bounded scalar/enum/builtin-pointer `extern "C"` declarations and strict-C11 linkage |
-| Authoritative `Allocates` effect | Resolved for local declarations, MIR origin, call propagation, and `NoAllocation` proof projection; module/interface summaries remain unresolved |
-
-The allocator itself is still not implemented. Cross-module generic and effect
-authority must exist before R6e can honestly consume this substrate.
-
-## Decision
-
-The current frozen EVT1 language is insufficient to implement the requested
-reference allocator framework as an ordinary reusable Concept library.
-This is feasibility category C, not A or B.
-
-A fixed-buffer bump-carving experiment could be written with the existing
-`Span<byte>` and `Subspan` operations. That experiment would not establish the
-requested library, because the remaining gaps cannot be closed by one minimal
-library-facing primitive. Implementing through compiler-known allocator types,
-name-based effect inference, or backend-only `malloc` helpers would create the
-fake behavior R6c explicitly rejects.
-
-## Baseline
-
-- Baseline: `79d59cdc38782d4d14a0762f111540347ec23b7d`
-- Compiler: `concept-evt1-stage0-go`
-- R6a: `81b1fc41003130d28b6f2ae4d84e3de71bbdddfa`
-- R6b: `79d59cdc38782d4d14a0762f111540347ec23b7d`
-- The worktree was clean at audit start.
-- `go test ./...`, `go vet ./...`, root `zig build test`, and
-  `legacy/poc3-zig/zig build test` passed.
-
-## Architectural inventory
-
-| Capability | Current authority | Allocator consequence |
-|---|---|---|
-| Raw address / pointer | Unsafe `T*`, address-of, and dereference exist | There is no canonical `RawAddress`, checked pointer arithmetic, or raw-region construction API |
-| Byte and fixed storage | Fixed `byte<array>[N]` storage exists | Caller-owned fixed storage is available |
-| Layout | Named semantic layouts expose `LayoutSize`, `LayoutAlign`, and `LayoutOffset` | There is no generic `SizeOf<T>` or `AlignOf<T>` for typed allocation |
-| Bind | Arrays and ndarrays can share established storage | It cannot bind an allocator-provided raw region to an arbitrary `T` owner |
-| Ownership and Drop | `owned T`, explicit move, and concrete `Drop(owned T)` witnesses exist | Concrete local ownership works, but a reusable applied `Allocation<T>` owner cannot be declared |
-| References and provenance | `ref`, `ref const`, `scoped`, ref structs, and bounded result provenance exist | Views can preserve an existing source lifetime; there is no allocation-lifetime source to bind |
-| Span | `Span<T>`, `ReadOnlySpan<T>`, and `Subspan` are non-owning views | Fixed-buffer carving is possible, but Span supplies no ownership or release authority |
-| Templates | One constrained type parameter on function templates | User-defined generic structs/classes and allocator policy types are not supported; templates cannot invoke templates |
-| Concepts/interfaces | One type parameter with operation and compiler-analysis requirements | Contracts can describe operations, but do not currently attach an allocation effect to the selected operation |
-| Operation summaries | Local call traversal and missing-summary handling exist for `NoAllocation` | There is no explicit authoritative `Allocates` declaration or verified contract summary |
-| Core library composition | Core imports and multi-module compilation remain deferred | Separate `library/memory/*.concept` files cannot form a reusable compiled library |
-| Hosted storage | The strict-C11 generator is bootstrap evidence; stable C ABI/FFI remains deferred | An ordinary Core `HostedMemorySource` cannot call an admitted `malloc/free` adapter |
-
-## Blocking evidence
-
-### Generic policy and owner types
-
-The parser accepts only constrained function templates:
-
-```concept
-template <typename T>
-requires SomeConcept<T>
-T Operation(...)
-{
-    // ...
-}
-```
-
-`parseTemplateDecl` immediately expects `requires` and then parses a function.
-`validateKnownType` accepts applied runtime types only for compiler-owned
-families such as `Result`, `Option`, `Async`, `Inference`, and Span. An ordinary
-`Allocation<Item>` or `PoolAllocator<Item>` is rejected as an unknown type
-application. Adding special cases for allocator names would violate the
-ordinary-template requirement.
-
-This blocks all of the following requested laws together:
-
-- `Allocation<T>` as movable-only release authority;
-- `PoolAllocator<T>` slot geometry and typed reuse;
-- `BumpAllocator<Source>` and `ArenaAllocator<ParentAllocator>` composition;
-- generic Drop ordering of `T` before region release.
-
-### Generic type geometry
-
-EVT1 layout queries currently describe named `layout` declarations. They do
-not provide generic runtime-type `SizeOf<T>` and `AlignOf<T>`. Typed allocation
-therefore cannot mechanically request the correct region geometry, and a pool
-cannot derive slot size/alignment without duplicating compiler layout rules.
-
-### Reusable library boundary
-
-The requested semantic file layout presumes reusable Core library composition.
-General Core imports and multi-module compilation are explicitly deferred.
-Copying definitions into every specimen would test a pasted program, not a
-canonical allocator library.
-
-### Hosted source boundary
-
-The active Core line has no settled external C function/ABI surface. Emitting a
-backend-only `malloc/free` path for a source-named operation would make the
-backend invent allocation behavior absent from typed MIR. That is not an
-ordinary `HostedMemorySource` adapter and would normalize hidden allocation
-into the compiler.
-
-### Allocation effect authority
-
-R6b's `NoAllocation` proof follows uniquely resolved local calls, proves a
-known local leaf because there is no allocation-capable construct, and leaves
-opaque calls unknown. No source or concept contract currently identifies an
-operation as `Allocates`. This gap is independently tractable, but adding an
-unused allocation attribute without an implementable allocator library would
-not complete R6c and would prematurely create a new effect surface.
-
-## Why this is not category B
-
-A category-B correction must be one smallest missing library-facing primitive.
-R6c instead requires coordinated new law in at least these independent areas:
-
-1. user-defined generic runtime types and their instantiation/lowering;
-2. generic type layout queries;
-3. ownership, provenance, and Drop for applied generic owners;
-4. reusable Core module/library composition;
-5. an explicit hosted external-memory adapter boundary; and
-6. semantic operation-effect contracts and propagation.
-
-Those changes span grammar, type identity, validation, MIR, C lowering,
-ownership cleanup, provenance, modules, and ABI policy. Calling that set a
-minimal allocator correction would reopen the R5 freeze under a library label.
-
-## Required prerequisite decision
-
-Before allocator implementation resumes, a post-freeze proposal must choose
-and prove the smallest general, non-allocator-specific foundation for:
-
-- user-defined generic structs/classes with ordinary specialization;
-- generic `SizeOf<T>` and `AlignOf<T>`;
-- applied-type ownership/Drop/provenance;
-- reusable Core library compilation;
-- explicit external operation admission for hosted adapters; and
-- operation semantic summaries, initially `Allocates`.
-
-The proposal must keep allocator names out of these mechanisms. Once those
-general seams exist, R6c can implement `MemoryRegion`, sources, bump/pool/arena
-policies, typed allocation, and proof fixtures as ordinary library code.
-
-## Preserved direction
-
-The eventual allocator law remains:
+## Doctrine
 
 ```text
-Allocation is library policy over an explicit memory source.
-Allocator does not mean heap.
+MemorySource
+    says where raw storage comes from.
+
+Allocator
+    says how storage is carved or reused.
+
+Allocation<T, TAllocator>
+    owns one initialized T placed in allocator-provided storage.
 ```
 
-This audit adds no `new`, `delete`, global allocator, hidden heap, GC, allocator
-grammar, name-based effect inference, or compiler-special allocator type. The
-existing R6b `NoAllocation` Proven/Unknown behavior remains authoritative until
-an explicit allocation operation summary can be attached to real operations.
+These remain intended ordinary imported Concept library abstractions. The
+compiler must not recognize allocator names, invent a hidden heap, add an
+allocator MIR family, or lower allocator calls through a private backend path.
+
+## R6f feasibility result
+
+R6d and R6e resolved the six blockers recorded by R6c: generic runtime types,
+`SizeOf<T>()` / `AlignOf<T>()`, structural generic ownership and provenance,
+reusable semantic modules, the bounded external C ABI, and authoritative
+operation effects. R6f nevertheless exposed a more primitive general gap that
+the R6c inventory had grouped under raw storage rather than its blocker
+checklist:
+
+```text
+ordinary raw storage manipulation
+    raw-address offset and comparison
+    overflow-safe usize arithmetic
+    raw byte region -> typed storage binding
+    initialization through that typed binding
+```
+
+The current `byte*` surface is an external-ABI carrier. Core expressions have
+no pointer arithmetic, address-of, or dereference operation. The existing
+`bind` authority accepts established array/ndarray storage and produces
+non-owning array/ndarray views; it cannot bind `byte*` or a runtime byte
+subregion as arbitrary `T` storage. Even ordinary `usize + usize` is outside
+the current scalar arithmetic set.
+
+That makes all three policies impossible as ordinary library code:
+
+- a bump allocator cannot compute or return an aligned subregion;
+- a pool cannot identify, validate, or reuse raw slots;
+- an arena cannot carve a parent region into child regions.
+
+It also blocks typed `Allocation<T, TAllocator>` from performing the required
+visible sequence `SizeOf<T>()`, `AlignOf<T>()`, allocate, bind, initialize.
+Pretending that a `Span<byte>` is an arbitrary typed object would bypass the
+established element-type and provenance rules rather than use them.
+
+A second, independent ergonomic gap is that function templates still accept
+exactly one type parameter. The requested ordinary
+`Allocate<T, TAllocator>(ref allocator)` helper cannot be declared. This gap
+does not by itself block raw allocators, but it blocks the canonical typed
+helper and must be resolved generally rather than by an allocator-specific
+overload.
+
+## Required next substrate decision
+
+Before the allocator library can resume, a post-freeze proposal must define a
+small, general explicit-storage boundary. At minimum it must prove:
+
+- checked arithmetic for `usize`, including overflow detection;
+- a canonical non-owning raw-region value with byte extent and alignment;
+- bounded raw-region slicing/offset operations with preserved provenance;
+- explicit binding and initialization of suitably sized/aligned raw storage as
+  `T`, without ownership transfer or a hidden copy;
+- enough generic function parameters or inference to express a typed helper.
+
+This proposal is not permission to add allocator types, `new`/`delete`, a
+global heap, reinterpret casts, unchecked pointer arithmetic, variadics, a GC,
+or a runtime registry. The storage operation must be useful independently of
+allocators and carry size, alignment, mutability, and provenance through the
+ordinary semantic fact system.
+
+## Preserved allocation-effect law
+
+`compiler.Allocates` continues to mean an allocation operation boundary, not
+necessarily a heap or syscall. Once an ordinary allocator exists, its
+allocation operation must carry that effect through `concept-module.v1` so
+`NoAllocation` is Disproven for callers. Pure metadata queries remain eligible
+for Proven, while unrelated opaque extern calls remain Unknown.
+
+## Deferred allocator surface
+
+After the explicit-storage substrate exists, R6f may implement, under ordinary
+semantic library roots:
+
+- `MemoryRegion` and `AllocationError`;
+- `MemorySource` and minimal honest capability splits;
+- fixed-buffer and hosted memory sources;
+- bump, pool, and arena allocators;
+- movable-only typed allocation owners with object Drop before storage release;
+- Span/tensor projections backed by explicit allocated storage.
+
+No allocator source or placeholder API is added by this feasibility stop.
+Doing so would publish contracts that have no honest executable
+implementation.

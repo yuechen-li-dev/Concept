@@ -36,15 +36,17 @@ methods, shared-authority size/alignment queries, structural reverse Drop,
 `ref struct` provenance, bounded C ABI validation, and local allocation-effect
 proof propagation.
 
-## Convergence boundary
+## R6f consumer result
 
-The next independent blocker is reusable semantic modules. The compiler has no
-resolver that turns `import Standard.Generic` into a typed dependency, no
-`concept-module.v1` artifact, and therefore no cross-module generic body or
-effect-summary authority. Adding a fixture-copy convention would disguise that
-missing owner and would not converge on R6d success.
+R6e closed the reusable-module boundary. R6f then became the first attempted
+ordinary library consumer to require explicit raw storage. It demonstrated
+that generic/module transport is working but is not sufficient to implement an
+allocator: Core still lacks checked `usize` arithmetic, raw-region slicing,
+and provenance-preserving binding/initialization of a raw byte region as an
+arbitrary `T`. Function templates also remain intentionally limited to one
+type parameter, which prevents the canonical `Allocate<T, TAllocator>` helper.
 
-Until that boundary exists, allocator work remains stopped. No allocator name,
-heap, GC, generic dictionary, reflection registry, package solver, partial
-specialization, variadic template machinery, or generalized effect algebra is
-introduced here.
+Allocator work remains stopped at that general substrate boundary. No
+allocator name, heap, GC, generic dictionary, reflection registry, package
+solver, partial specialization, variadic template machinery, or generalized
+effect algebra is introduced here.

@@ -29,6 +29,7 @@ facts, and C11 output is derived evidence.
 | Operation effects | `concept_assert.go`, `semantic_facts.go` | post-freeze R6d extension | `EVT1-GENERIC-LIBRARY-DIRECTION.md` | R6b proofs plus focused R6d specimens | `operation_effects_test.go`, `proof_graph_test.go` |
 | Reusable semantic modules | `module_artifact.go`, `parse.go` | post-freeze R6e extension | `EVT1-SEMANTIC-MODULE-DIRECTION.md` | `language/evt1/tooling/modules` | `module_artifact_test.go` |
 | Cross-module generics and effects | `generic_types.go`, `concept_assert.go`, `validate.go` | post-freeze R6e extension | `EVT1-SEMANTIC-MODULE-DIRECTION.md` | `language/evt1/tooling/modules` | `module_artifact_test.go` |
+| Explicit raw storage and allocator library | not implemented | deferred after R6f feasibility stop | `EVT1-ALLOCATOR-DIRECTION.md` | none | R6f audit evidence in `EVT1-R6F-CONFORMANCE.md` |
 
 The three explicit state-bearing forms remain distinct: `automata with state`
 is application-authored persistent state, callable `with (...)` is an explicit

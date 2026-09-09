@@ -35,7 +35,7 @@ inline compiler tests.
 | `.concept_test`, test attributes, deterministic test runner, `Assert.*` | R6a tooling/library | Canonical tooling | implemented without changing frozen function/body semantics |
 | `Assert.Concept`, proof diagnostics, `concept explain`, `concept-proof.v1` | R6b tooling | Canonical tooling | compile-time semantic query with no runtime lowering |
 | generic reusable-library substrate | R6d-R6e approved post-freeze extension | Implemented | local generics and layout plus deterministic semantic modules, cross-module instantiation, and effect summaries |
-| reference allocator framework | R6f after substrate completion | Deferred | module/generic/effect prerequisites now exist; allocator policy itself remains unimplemented |
+| reference allocator framework | R6f after explicit raw-storage substrate | Honest feasibility stop | R6d/R6e module, generic, ABI, and effect prerequisites exist; checked `usize` arithmetic, raw-region carving/binding/initialization, and a two-type-parameter helper remain general gaps |
 | richer theory providers, exact prophecy termination matching, parallel tests, lifecycle hooks, statistical benchmark framework | later R6 tooling | Deferred | R6a keeps JSON positional rows, sequential reporting, and lightweight timing |
 | formatter, lint, diagnostics UX, build/package tooling, LSP | R6 tooling | Deferred | consume the frozen semantic model |
 | source auto-fix, IDE proof visualization, arbitrary proof queries, solver edits, LLM-ranked repairs, Planner explanations | post-R6b tooling | Deferred | consume authoritative proof graphs without moving semantic authority |
