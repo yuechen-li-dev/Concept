@@ -447,6 +447,7 @@ type GenericParameter struct {
 type GenericTypeDecl struct {
 	Name       string
 	Parameters []GenericParameter
+	Constraint TemplateConstraint
 	Struct     StructDecl
 	Span       Span
 }
@@ -468,6 +469,8 @@ type FunctionDecl struct {
 type OperationEffectDecl struct {
 	Effect    string `json:"effect"`
 	Operation string `json:"operation"`
+	Origin    string `json:"origin,omitempty"`
+	Module    string `json:"module,omitempty"`
 	Span      Span   `json:"span"`
 }
 
@@ -517,6 +520,7 @@ type TypeAliasDecl struct {
 
 type Module struct {
 	Path             string                `json:"path"`
+	Name             string                `json:"name,omitempty"`
 	Profile          string                `json:"profile"`
 	Imports          []string              `json:"imports,omitempty"`
 	TypeAliases      []TypeAliasDecl       `json:"type_aliases,omitempty"`

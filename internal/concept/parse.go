@@ -17,12 +17,7 @@ type parser struct {
 }
 
 func Parse(path, text string) (Module, error) {
-	tokens, err := lexEVT1(text)
-	if err != nil {
-		return Module{}, err
-	}
-	p := &parser{path: filepath.ToSlash(path), tokens: tokens}
-	module, err := p.parseModule()
+	module, err := parseSyntaxModule(path, text)
 	if err != nil {
 		return Module{}, err
 	}
@@ -32,6 +27,19 @@ func Parse(path, text string) (Module, error) {
 	}
 	evt1MaterializeGenericInstances(&module, env)
 	evt1ApplyExactCallableTypes(&module, env)
+	return module, nil
+}
+
+func parseSyntaxModule(path, text string) (Module, error) {
+	tokens, err := lexEVT1(text)
+	if err != nil {
+		return Module{}, err
+	}
+	p := &parser{path: filepath.ToSlash(path), tokens: tokens}
+	module, err := p.parseModule()
+	if err != nil {
+		return Module{}, err
+	}
 	return module, nil
 }
 
@@ -150,6 +158,13 @@ func lexEVT1(text string) ([]Token, error) {
 
 func (p *parser) parseModule() (Module, error) {
 	module := Module{Path: p.path}
+	if p.peekLexeme() == "module" {
+		name, err := p.parseModuleNameDecl()
+		if err != nil {
+			return module, err
+		}
+		module.Name = name
+	}
 	if err := p.expectKeyword("profile"); err != nil {
 		return module, err
 	}
@@ -165,6 +180,13 @@ func (p *parser) parseModule() (Module, error) {
 	p.profileDef = profileDef
 	if _, err := p.expect(";"); err != nil {
 		return module, err
+	}
+	if module.Name == "" && p.peekLexeme() == "module" {
+		name, err := p.parseModuleNameDecl()
+		if err != nil {
+			return module, err
+		}
+		module.Name = name
 	}
 	for p.peekLexeme() == "import" {
 		p.next()
@@ -394,6 +416,28 @@ func (p *parser) parseModule() (Module, error) {
 	return module, nil
 }
 
+func (p *parser) parseModuleNameDecl() (string, error) {
+	if _, err := p.expect("module"); err != nil {
+		return "", err
+	}
+	var parts []string
+	for {
+		tok, err := p.expectIdentifier("MODULE_NAME_INVALID", "expected module name")
+		if err != nil {
+			return "", err
+		}
+		parts = append(parts, tok.Lexeme)
+		if p.peekLexeme() != "." {
+			break
+		}
+		p.next()
+	}
+	if _, err := p.expect(";"); err != nil {
+		return "", err
+	}
+	return strings.Join(parts, "."), nil
+}
+
 func (p *parser) parseOperationEffectDecl() (OperationEffectDecl, error) {
 	start, err := p.expect("requires")
 	if err != nil {
@@ -478,11 +522,19 @@ func (p *parser) parseTypeAliasDecl(spelling string) (TypeAliasDecl, error) {
 		return TypeAliasDecl{}, err
 	}
 	if _, err := p.expect("="); err != nil {
-		return TypeAliasDecl{}, evt1Diagnostic("CALLABLE_TYPE_QUERY_INVALID", "exact type alias requires `= typeof(expression)`", p.currentSpan())
+		return TypeAliasDecl{}, evt1Diagnostic("TYPE_ALIAS_INVALID", "type alias requires `=`", p.currentSpan())
 	}
-	if _, err := p.expect("typeof"); err != nil {
-		return TypeAliasDecl{}, evt1Diagnostic("CALLABLE_TYPE_QUERY_INVALID", "exact type alias requires `typeof(expression)`", p.currentSpan())
+	if p.peekLexeme() != "typeof" {
+		t, err := p.parseType("")
+		if err != nil {
+			return TypeAliasDecl{}, err
+		}
+		if _, err := p.expect(";"); err != nil {
+			return TypeAliasDecl{}, err
+		}
+		return TypeAliasDecl{Name: name.Lexeme, Spelling: spelling, ResolvedType: t, Span: start.Span}, nil
 	}
+	p.next()
 	if _, err := p.expect("("); err != nil {
 		return TypeAliasDecl{}, err
 	}
@@ -1079,8 +1131,16 @@ func (p *parser) templateDeclIsRuntimeType() bool {
 		case ">":
 			depth--
 			if depth == 0 && i+1 < len(p.tokens) {
-				next := p.tokens[i+1].Lexeme
-				return next == "struct" || next == "class" || (next == "ref" && i+2 < len(p.tokens) && p.tokens[i+2].Lexeme == "struct")
+				for j := i + 1; j < len(p.tokens); j++ {
+					next := p.tokens[j].Lexeme
+					if next == "struct" || next == "class" || (next == "ref" && j+1 < len(p.tokens) && p.tokens[j+1].Lexeme == "struct") {
+						return true
+					}
+					if next == ";" || next == "{" {
+						return false
+					}
+				}
+				return false
 			}
 		}
 	}
@@ -1128,6 +1188,18 @@ func (p *parser) parseGenericTypeDecl() (GenericTypeDecl, error) {
 	old := p.templateTypeParams
 	p.templateTypeParams = typeParams
 	defer func() { p.templateTypeParams = old }()
+	var constraint TemplateConstraint
+	if p.peekLexeme() == "requires" {
+		req := p.next()
+		if len(params) == 0 {
+			return GenericTypeDecl{}, evt1Diagnostic("GENERIC_CONSTRAINT_INVALID", "generic type constraint requires a type parameter", req.Span)
+		}
+		ref, constraintErr := p.parseConceptUse(params[0].Name)
+		if constraintErr != nil {
+			return GenericTypeDecl{}, constraintErr
+		}
+		constraint = TemplateConstraint{ConceptName: ref.Name, TypeArg: ref.TypeArgs[0], Span: req.Span}
+	}
 	var aggregate StructDecl
 	if p.peekLexeme() == "ref" {
 		aggregate, err = p.parseStructDecl(false, false, true)
@@ -1139,7 +1211,7 @@ func (p *parser) parseGenericTypeDecl() (GenericTypeDecl, error) {
 	if err != nil {
 		return GenericTypeDecl{}, err
 	}
-	return GenericTypeDecl{Name: aggregate.Name, Parameters: params, Struct: aggregate, Span: start.Span}, nil
+	return GenericTypeDecl{Name: aggregate.Name, Parameters: params, Constraint: constraint, Struct: aggregate, Span: start.Span}, nil
 }
 
 func (p *parser) parseTemplateDecl() (TemplateDecl, error) {

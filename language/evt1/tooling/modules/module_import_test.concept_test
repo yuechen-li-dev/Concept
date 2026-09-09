@@ -1,0 +1,9 @@
+profile Core;
+import Standard.Generic;
+
+[[fact]]
+void ImportedBoxWorks()
+{
+    Box<int> box = Box<int>{7};
+    Assert.Equals(box.value, 7, "imported generic value should remain exact");
+}

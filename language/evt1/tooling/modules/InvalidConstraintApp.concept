@@ -1,0 +1,6 @@
+module InvalidConstraintApp;
+profile Core;
+import Standard.Constraints;
+
+struct ImmovableThing { int id; }
+usize Main() { return SizeOf<Owner<ImmovableThing>>(); }

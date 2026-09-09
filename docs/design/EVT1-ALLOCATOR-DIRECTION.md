@@ -1,6 +1,15 @@
 # EVT1 allocator direction
 
-Status: R6c feasibility audit; honest stop before implementation
+Status: R6e prerequisites structurally resolved; allocator remains unimplemented
+
+## R6e prerequisite checkpoint
+
+R6d supplied ordinary generic runtime types, `SizeOf<T>` / `AlignOf<T>`,
+structural generic ownership/Drop/provenance, and bounded external C/effect
+declarations. R6e supplies reusable semantic artifacts, exact import
+resolution, cross-module constraints, authoritative effect summaries, and
+interface-operation effect allowances. This is readiness evidence only: it
+adds no allocator framework, heap policy, or allocator-specific compiler law.
 
 ## R6d blocker update
 

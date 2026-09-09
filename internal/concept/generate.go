@@ -143,6 +143,9 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 		mir.Tests = append(mir.Tests, entry)
 	}
 	for _, alias := range module.TypeAliases {
+		if alias.ResolvedType.Kind != TypeCallable {
+			continue
+		}
 		t := evt1MIRType(env, alias.ResolvedType)
 		entry := MIRTypeAlias{Name: alias.Name, ExactType: t, Query: evt1ExprIdentity(alias.Query), Unevaluated: true, CallableIdentity: t.CallableID, EnvironmentIdentity: t.CallableID + "#environment", Storage: "Inline", Dispatch: "DirectCallable", NoAllocation: true, SourceSpan: alias.Span}
 		for _, callable := range evt1ModuleCallables(module) {
@@ -539,10 +542,12 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 	}
 	for _, fn := range module.Functions {
 		mirFn := MIRFunction{Name: fn.Name, ReturnType: evt1MIRType(env, fn.ReturnType), SourceSpan: fn.Span}
-		if _, ok := env.operationEffects[fn.Name]; ok {
+		if effect, ok := env.operationEffects[fn.Name]; ok && effect.Effect == "Allocates" {
 			mirFn.MayAllocate = true
 			mirFn.AllocationEffectOrigin = string(FactOriginDeclaredEffect)
-			if fn.ExternABI != "" {
+			if effect.Origin == string(FactOriginModuleSummaryEffect) {
+				mirFn.AllocationEffectOrigin = string(FactOriginModuleSummaryEffect)
+			} else if fn.ExternABI != "" {
 				mirFn.AllocationEffectOrigin = string(FactOriginExternalContractEffect)
 			}
 		}

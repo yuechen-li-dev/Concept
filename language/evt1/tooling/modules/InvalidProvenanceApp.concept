@@ -1,0 +1,10 @@
+module InvalidProvenanceApp;
+profile Core;
+import Standard.Ownership;
+
+View<int> Bad()
+{
+    int local = 1;
+    View<int> view = View<int>{ref local};
+    return view;
+}

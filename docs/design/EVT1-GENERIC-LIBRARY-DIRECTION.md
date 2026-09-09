@@ -1,6 +1,12 @@
 # EVT1 generic library direction
 
-Status: R6d meaningful progression; reusable modules remain blocking
+Status: R6e reusable semantic module substrate complete
+
+R6e resolves the R6d module blocker with deterministic `concept-module.v1`
+artifacts. Generic types, functions, methods, non-type parameters, declaration
+constraints, ownership/Drop, provenance, and operation summaries now cross an
+acyclic import graph without source inclusion. Concrete instantiation still
+occurs in the consumer and feeds the same layout, MIR, Planner, and C11 owners.
 
 R6d is an approved post-freeze substrate extension required to enable ordinary
 reusable libraries. It is not an opportunistic syntax expansion.

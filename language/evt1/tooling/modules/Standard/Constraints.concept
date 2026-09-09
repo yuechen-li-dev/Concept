@@ -1,0 +1,8 @@
+module Standard.Constraints;
+profile Core;
+
+concept Readable<T> { requires int Read(T value); }
+
+template <typename T>
+requires Readable<T>
+class Owner { public: owned T value; };

@@ -1,0 +1,8 @@
+module Standard.AllocatorContract;
+profile Core;
+
+interface Allocator<T>
+{
+    requires int Allocate(ref T self, usize size);
+    requires compiler.Allocates(Allocate);
+}

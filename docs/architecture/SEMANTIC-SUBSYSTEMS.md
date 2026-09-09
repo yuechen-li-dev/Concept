@@ -27,7 +27,8 @@ facts, and C11 output is derived evidence.
 | Generic runtime types and layout queries | `generic_types.go`, `layout.go` | post-freeze R6d extension | `EVT1-GENERIC-LIBRARY-DIRECTION.md` | focused R6d specimens | `operation_effects_test.go` |
 | External C ABI | `parse.go`, `validate.go`, `generate.go` | post-freeze R6d extension | `EVT1-GENERIC-LIBRARY-DIRECTION.md` | focused R6d hosted specimen | `operation_effects_test.go` |
 | Operation effects | `concept_assert.go`, `semantic_facts.go` | post-freeze R6d extension | `EVT1-GENERIC-LIBRARY-DIRECTION.md` | R6b proofs plus focused R6d specimens | `operation_effects_test.go`, `proof_graph_test.go` |
-| Reusable semantic modules | not implemented | post-freeze R6d blocker | `EVT1-GENERIC-LIBRARY-DIRECTION.md` | none | none |
+| Reusable semantic modules | `module_artifact.go`, `parse.go` | post-freeze R6e extension | `EVT1-SEMANTIC-MODULE-DIRECTION.md` | `language/evt1/tooling/modules` | `module_artifact_test.go` |
+| Cross-module generics and effects | `generic_types.go`, `concept_assert.go`, `validate.go` | post-freeze R6e extension | `EVT1-SEMANTIC-MODULE-DIRECTION.md` | `language/evt1/tooling/modules` | `module_artifact_test.go` |
 
 The three explicit state-bearing forms remain distinct: `automata with state`
 is application-authored persistent state, callable `with (...)` is an explicit

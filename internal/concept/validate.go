@@ -387,6 +387,21 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		}
 		env.concepts[conceptDecl.Name] = conceptDecl
 	}
+	for _, decl := range module.GenericTypes {
+		if decl.Constraint.ConceptName == "" {
+			continue
+		}
+		if _, ok := env.concepts[decl.Constraint.ConceptName]; !ok {
+			return nil, evt1Diagnostic("GENERIC_CONSTRAINT_INVALID", fmt.Sprintf("unknown concept %s in generic type constraint", decl.Constraint.ConceptName), decl.Constraint.Span)
+		}
+		found := false
+		for _, parameter := range decl.Parameters {
+			found = found || parameter.Kind == "type" && parameter.Name == decl.Constraint.TypeArg.Name
+		}
+		if !found {
+			return nil, evt1Diagnostic("GENERIC_CONSTRAINT_INVALID", fmt.Sprintf("constraint %s must target a generic type parameter", decl.Constraint.ConceptName), decl.Constraint.Span)
+		}
+	}
 	for _, templateDecl := range module.Templates {
 		if profile.compilerOwnedType(templateDecl.Name) {
 			return nil, evt1Diagnostic("CV4267", fmt.Sprintf("%s is a compiler-owned runtime type and cannot be redeclared", templateDecl.Name), templateDecl.Span)
@@ -435,14 +450,17 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		env.functions[fn.Name] = append(env.functions[fn.Name], fn)
 	}
 	for _, effect := range module.OperationEffects {
-		if effect.Effect == "NoAllocation" {
+		if effect.Effect == "NoAllocation" && effect.Origin != string(FactOriginModuleSummaryEffect) {
 			return nil, evt1Diagnostic("OPERATION_EFFECT_NEGATIVE_LIE", "NoAllocation cannot be declared; it is derived from the authoritative call graph", effect.Span)
 		}
+		if effect.Effect != "Allocates" && effect.Effect != "NoAllocation" && effect.Effect != "Unknown" {
+			return nil, evt1Diagnostic("OPERATION_EFFECT_INVALID", fmt.Sprintf("unknown operation effect summary %s", effect.Effect), effect.Span)
+		}
 		if _, exists := env.operationEffects[effect.Operation]; exists {
-			return nil, evt1Diagnostic("OPERATION_EFFECT_DUPLICATE", fmt.Sprintf("duplicate allocation effect for %s", effect.Operation), effect.Span)
+			return nil, evt1Diagnostic("OPERATION_EFFECT_DUPLICATE", fmt.Sprintf("duplicate operation effect for %s", effect.Operation), effect.Span)
 		}
 		if len(env.functions[effect.Operation]) != 1 {
-			return nil, evt1Diagnostic("OPERATION_EFFECT_TARGET_INVALID", fmt.Sprintf("Allocates requires one uniquely resolved operation, got %s", effect.Operation), effect.Span)
+			return nil, evt1Diagnostic("OPERATION_EFFECT_TARGET_INVALID", fmt.Sprintf("operation effect requires one uniquely resolved operation, got %s", effect.Operation), effect.Span)
 		}
 		env.operationEffects[effect.Operation] = effect
 	}
@@ -617,6 +635,12 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 					return nil, evt1Diagnostic("CV4152", fmt.Sprintf("prerequisite %s must use the concept parameter %s", r.ConceptName, conceptDecl.TypeParam), r.Span)
 				}
 			case *CompilerAnalysisRequirement:
+				if r.Analysis == "Allocates" {
+					if len(r.TypeArgs) != 0 || len(r.SubjectArgs) != 1 || len(r.Parameters) != 0 || evt1FindEffectRequirementOperation(conceptDecl, r.SubjectArgs[0].Name) == nil {
+						return nil, evt1Diagnostic("INTERFACE_EFFECT_INVALID", "compiler.Allocates requires exactly one declared interface operation name", r.Span)
+					}
+					continue
+				}
 				analysis, ok := evt1SemanticAnalysisRegistry[r.Analysis]
 				if !ok {
 					return nil, evt1Diagnostic("CV4526", fmt.Sprintf("unknown compiler analysis %s", r.Analysis), r.Span)
@@ -4996,8 +5020,12 @@ func checkConceptSatisfaction(env *semanticEnv, conceptName string, concreteType
 			}
 		case *OperationRequirement:
 			required := evt1SubstituteRequirement(*r, conceptDecl.TypeParam, concreteType)
-			if _, err := evt1LookupRequiredOperation(env, required, span, strings.Join(path, " -> ")); err != nil {
+			implementation, err := evt1LookupRequiredOperation(env, required, span, strings.Join(path, " -> "))
+			if err != nil {
 				return err
+			}
+			if effect, ok := env.operationEffects[implementation.Name]; ok && effect.Effect == "Allocates" && !evt1ConceptOperationAllowsAllocation(conceptDecl, r.Name) {
+				return evt1Diagnostic("INTERFACE_EFFECT_MISMATCH", fmt.Sprintf("%s operation %s may allocate but the interface does not allow allocation", strings.Join(path, " -> "), r.Name), span)
 			}
 		case *FieldRequirement:
 			decl, ok := env.structs[concreteType.valueType().Name]
@@ -5019,6 +5047,11 @@ func checkConceptSatisfaction(env *semanticEnv, conceptName string, concreteType
 				return evt1Diagnostic("INTERFACE_REQUIREMENT_UNSATISFIED", fmt.Sprintf("%s requires mutable field %s but %s is readonly", strings.Join(path, " -> "), r.Name, decl.Name), span)
 			}
 		case *CompilerAnalysisRequirement:
+			if r.Analysis == "Allocates" {
+				// This is an allowance on the selected required operation, not a
+				// promise that every implementation allocates.
+				continue
+			}
 			analysis := evt1SemanticAnalysisRegistry[r.Analysis]
 			proof := MIRSemanticProof{Concept: conceptName, Analysis: r.Analysis, FactKind: evt1FactKind(r.Analysis), ConcreteType: concreteType.String(), Parameters: append([]int{}, r.Parameters...), SourceSpan: r.Span}
 			if len(r.SubjectArgs) > 0 {
@@ -5220,6 +5253,25 @@ func evt1FindRelationalRequirementOperation(conceptDecl ConceptDecl, refs []Sema
 		return nil, evt1Diagnostic("CV4532", "relational requirement subjects must identify exactly one required operation", span)
 	}
 	return matches[0], nil
+}
+
+func evt1FindEffectRequirementOperation(conceptDecl ConceptDecl, name string) *OperationRequirement {
+	for _, requirement := range conceptDecl.Requirements {
+		if operation, ok := requirement.(*OperationRequirement); ok && operation.Name == name {
+			return operation
+		}
+	}
+	return nil
+}
+
+func evt1ConceptOperationAllowsAllocation(conceptDecl ConceptDecl, operation string) bool {
+	for _, requirement := range conceptDecl.Requirements {
+		analysis, ok := requirement.(*CompilerAnalysisRequirement)
+		if ok && analysis.Analysis == "Allocates" && len(analysis.SubjectArgs) == 1 && analysis.SubjectArgs[0].Name == operation {
+			return true
+		}
+	}
+	return false
 }
 
 func evt1BindRelationalRequirementSubjects(env *semanticEnv, conceptDecl ConceptDecl, concreteType Type, refs []SemanticSubjectRef, span Span) ([]evt1BoundSemanticSubject, error) {

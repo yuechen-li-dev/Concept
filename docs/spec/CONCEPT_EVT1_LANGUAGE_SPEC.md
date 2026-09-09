@@ -50,10 +50,10 @@ or:
 profile Vulkan;
 ```
 
-**Deferred EVT1.** Dotted imports are represented after the profile line.
-Core multi-module resolution is not implemented, and Core currently rejects
-domain imports. PoC3 module/import fixtures remain the authority pressure for a
-later multi-module decision.
+**Approved R6e extension.** A reusable unit declares `module Dotted.Name;`
+and consumers write `import Dotted.Name;`. The declaration may precede or
+follow `profile`; imports follow them. Core resolves exact local/configured-root
+`concept-module.v1` artifacts. Imports are semantic and never textual.
 
 ## 4. Naming and formatting
 
@@ -1468,6 +1468,26 @@ source declaration. Local call-graph projection maps known allocation to
 Disproven, closed allocation-free bodies to Proven, and opaque calls without a
 summary to Unknown.
 
-Reusable semantic imports and module artifacts remain unresolved. Until that
-R6d blocker is completed, these facilities are local-compilation substrate and
-do not constitute the allocator library or cross-module library success.
+## 32. Approved R6e semantic module substrate
+
+`concept-module.v1` is a deterministic, compiler-versioned, integrity-checked
+semantic artifact. It preserves declarations, generic bodies and constraints,
+source spans, structural ownership/provenance inputs, and bounded operation
+summaries without containing backend code. A consumer loads the artifact and
+then uses ordinary generic instantiation, concept satisfaction, layout,
+ownership, provenance, MIR, and Planner rules. Imported source is not reparsed.
+
+Imports form a checked DAG and resolve only through exact configured roots.
+Missing, duplicate, cyclic, stale, corrupt, schema-incompatible, and
+compiler-incompatible artifacts are diagnostics. All top-level declarations
+are import-visible in R6e; member visibility remains ordinary class law.
+
+Imported effects use `Allocates`, derived `NoAllocation`, and `Unknown`.
+Proofs identify imported authority as `ModuleSummaryEffect`. Within an
+interface, `compiler.Allocates(Operation)` permits allocation and therefore
+accepts allocating or allocation-free implementations; without the allowance,
+an explicitly allocating implementation is incompatible.
+
+No package manager, remote fetch, stable binary module ABI, runtime loader,
+generic dictionary, generalized effect algebra, or header/preprocessor model
+is implied.

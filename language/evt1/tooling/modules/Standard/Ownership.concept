@@ -1,0 +1,8 @@
+module Standard.Ownership;
+profile Core;
+
+template <typename T>
+struct Wrapper { owned T value; };
+
+template <typename T>
+ref struct View { ref T value; };

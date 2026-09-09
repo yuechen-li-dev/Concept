@@ -27,6 +27,19 @@ func evt1PrepareExactCallableTypes(env *semanticEnv, module *Module, typeNames m
 		if _, exists := env.typeAliases[decl.Name]; exists {
 			return evt1Diagnostic("CALLABLE_TYPE_ALIAS_DUPLICATE", fmt.Sprintf("duplicate exact type alias %s", decl.Name), decl.Span)
 		}
+		if decl.Query == nil {
+			if err := validateKnownType(env, decl.ResolvedType, decl.Span, "", false); err != nil {
+				return err
+			}
+			resolved, err := evt1ResolveType(env, nil, decl.ResolvedType)
+			if err != nil {
+				return err
+			}
+			decl.ResolvedType = evt1CanonicalType(env, resolved)
+			env.typeAliases[decl.Name] = decl.ResolvedType
+			typeNames[decl.Name] = decl.Span
+			continue
+		}
 		var queryType Type
 		var err error
 		if name, ok := decl.Query.(*NameExpr); ok && len(env.functions[name.Name]) == 1 && env.functions[name.Name][0].ReturnType.Kind == TypeCallable {

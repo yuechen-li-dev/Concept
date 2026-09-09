@@ -1,0 +1,16 @@
+module Standard.Host;
+profile Core;
+
+extern "C" byte* ConceptHostAllocate(usize size);
+requires compiler.Allocates(ConceptHostAllocate);
+
+extern "C" int ConceptHostOpaque();
+
+int Acquire(usize size)
+{
+    byte* storage = ConceptHostAllocate(size);
+    return 1;
+}
+
+int PureImportedWrapper() { return 1; }
+int OpaqueImportedWrapper() { return ConceptHostOpaque(); }

@@ -346,8 +346,20 @@ func evt1ProjectOutlives(graph *ProofGraph, root string, subjects []conceptAsser
 
 func evt1ProjectNoAllocation(env *semanticEnv, graph *ProofGraph, root string, fn FunctionDecl, visiting map[string]bool) SemanticFactCertainty {
 	if effect, ok := env.operationEffects[fn.Name]; ok {
+		if effect.Effect == "NoAllocation" {
+			id := graph.addNode(ProofKnownFact, fn.Name+" NoAllocation", "authoritative imported operation summary", FactProven, FactOriginModuleSummaryEffect, effect.Span)
+			graph.addEdge(root, id, ProofDerivedFrom)
+			return FactProven
+		}
+		if effect.Effect == "Unknown" {
+			id := graph.addNode(ProofMissingFact, fn.Name, "imported operation summary is unknown", FactUnknown, FactOriginModuleSummaryEffect, effect.Span)
+			graph.addEdge(root, id, ProofBlockedBy)
+			return FactUnknown
+		}
 		origin := FactOriginDeclaredEffect
-		if fn.ExternABI != "" {
+		if effect.Origin == string(FactOriginModuleSummaryEffect) {
+			origin = FactOriginModuleSummaryEffect
+		} else if fn.ExternABI != "" {
 			origin = FactOriginExternalContractEffect
 		}
 		id := graph.addNode(ProofContradiction, fn.Name+" Allocates", "authoritative may-allocate operation contract", FactDisproven, origin, effect.Span)
@@ -511,6 +523,11 @@ func evt1ProjectNamedConcept(env *semanticEnv, graph *ProofGraph, parent, name s
 			}
 		case *CompilerAnalysisRequirement:
 			label = requirement.Analysis
+			if requirement.Analysis == "Allocates" {
+				requirementOutcome = FactProven
+				detail = "interface operation is permitted to allocate"
+				break
+			}
 			analysis := evt1SemanticAnalysisRegistry[requirement.Analysis]
 			if len(requirement.SubjectArgs) > 0 {
 				bound, err := evt1BindRelationalRequirementSubjects(env, decl, concrete, requirement.SubjectArgs, span)

@@ -1,0 +1,14 @@
+module GenericApp;
+profile Core;
+import Standard.Generic;
+
+struct Widget { int id; }
+static_assert(SizeOf<Box<Widget>>() == 4, "imported layout");
+static_assert(AlignOf<FixedStorage<Widget, 4>>() == 4, "imported alignment");
+
+int Main()
+{
+    Widget value = Widget{7};
+    Box<Widget> box = Box<Widget>{Identity<Widget>(value)};
+    return box.value.id;
+}

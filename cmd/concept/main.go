@@ -17,6 +17,7 @@ const usage = `Concept EVT1 Stage 0 / Go
 
 Usage:
   concept check <file>
+  concept build-module <file>
   concept emit-c <file>
   concept mir <file>
   concept plan <file>
@@ -25,6 +26,7 @@ Usage:
 
 Commands:
   check   parse and semantically validate a Concept source file
+  build-module  write a deterministic concept-module.v1 artifact to stdout
   emit-c  write generated strict-C11 implementation to stdout
   mir     write deterministic MIR JSON to stdout
   plan    write deterministic LoweringPlan JSON to stdout
@@ -63,7 +65,16 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
-	module, err := concept.Parse(filepath.ToSlash(sourcePath), string(body))
+	roots := semanticModuleRoots(sourcePath)
+	if command == "build-module" {
+		output, err := concept.CompileSemanticModuleWithRoots(filepath.ToSlash(sourcePath), string(body), roots)
+		if err != nil {
+			fail(err)
+		}
+		_, _ = os.Stdout.Write(output)
+		return
+	}
+	module, err := concept.ParseWithSemanticModuleRoots(filepath.ToSlash(sourcePath), string(body), roots)
 	if err != nil {
 		fail(err)
 	}
@@ -95,6 +106,18 @@ func main() {
 		fmt.Fprintf(os.Stderr, "unknown command %q\n\n%s", command, usage)
 		os.Exit(2)
 	}
+}
+
+func semanticModuleRoots(sourcePath string) []string {
+	roots := []string{filepath.Dir(sourcePath)}
+	if configured := os.Getenv("CONCEPT_MODULE_ROOTS"); configured != "" {
+		for _, root := range filepath.SplitList(configured) {
+			if root != "" {
+				roots = append(roots, root)
+			}
+		}
+	}
+	return roots
 }
 
 func runExplainCommand(args []string) {
@@ -129,7 +152,7 @@ func runExplainCommand(args []string) {
 	if relative, relativeErr := filepath.Rel(".", sourcePath); relativeErr == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 		proofSourcePath = relative
 	}
-	graph, err := concept.ExplainSource(filepath.ToSlash(proofSourcePath), string(body), line)
+	graph, err := concept.ExplainSourceWithSemanticModuleRoots(filepath.ToSlash(proofSourcePath), string(body), line, semanticModuleRoots(sourcePath))
 	if err != nil {
 		fail(err)
 	}

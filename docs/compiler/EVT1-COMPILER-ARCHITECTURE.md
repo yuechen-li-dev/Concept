@@ -1084,6 +1084,21 @@ bounded ABI signature. MIR records a declared allocation summary and its
 origin; the R6b `NoAllocation` projection consumes the same local operation map
 while following ordinary direct-call edges.
 
-This is not yet a module pipeline. Current imports do not load another typed
-Module, and no semantic artifact serializes template bodies or effect
-summaries. That resolver/artifact boundary is the next R6d compiler owner.
+## R6e semantic modules
+
+```text
+Source Module
+    -> Semantic Module Compilation
+    -> concept-module.v1
+
+Consumer
+    -> Import Resolver
+    -> Semantic Artifact Loader
+    -> Generic Instantiation / Concept Proof / Effects
+    -> MIR -> Planner -> backend
+```
+
+The artifact loader reconstructs the ordinary Module declaration model; it
+does not establish a parallel semantic IR. The resolver owns dependency DAG,
+identity, compatibility, integrity, and stale-artifact checks. Downstream
+semantic owners do not read imported source.

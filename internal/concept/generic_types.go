@@ -48,6 +48,21 @@ func evt1InstantiateGenericType(env *semanticEnv, application Type) (Type, error
 	if len(application.TypeArgs) != len(decl.Parameters) {
 		return Type{}, evt1Diagnostic("GENERIC_ARGUMENT_COUNT", fmt.Sprintf("%s requires %d template argument(s), got %d", decl.Name, len(decl.Parameters), len(application.TypeArgs)), application.Span)
 	}
+	if decl.Constraint.ConceptName != "" {
+		parameterIndex := -1
+		for i, parameter := range decl.Parameters {
+			if parameter.Name == decl.Constraint.TypeArg.Name {
+				parameterIndex = i
+				break
+			}
+		}
+		if parameterIndex < 0 || decl.Parameters[parameterIndex].Kind != "type" {
+			return Type{}, evt1Diagnostic("GENERIC_CONSTRAINT_INVALID", "generic type constraint must target a type parameter", decl.Constraint.Span)
+		}
+		if err := checkConceptSatisfaction(env, decl.Constraint.ConceptName, application.TypeArgs[parameterIndex], nil, application.Span); err != nil {
+			return Type{}, err
+		}
+	}
 	parts := make([]string, len(application.TypeArgs))
 	for i, arg := range application.TypeArgs {
 		if decl.Parameters[i].Kind == "type" {

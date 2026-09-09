@@ -218,20 +218,30 @@ func renderProofNode(b *strings.Builder, node ProofNode, nodes map[string]ProofN
 // R6b intentionally accepts source-position queries only; arbitrary query
 // language remains deferred.
 func ExplainSource(path, text string, line int) (ProofGraph, error) {
-	tokens, err := lexEVT1(text)
-	if err != nil {
-		return ProofGraph{}, err
-	}
-	p := &parser{path: path, tokens: tokens}
-	module, err := p.parseModule()
-	if err != nil {
-		return ProofGraph{}, err
-	}
-	env, err := analyzeModule(module)
+	module, err := Parse(path, text)
 	if err != nil {
 		if diagnostic, ok := err.(Diagnostic); ok && diagnostic.Proof != nil && (line == 0 || diagnostic.Proof.SourceSpan.Line == line) {
 			return *diagnostic.Proof, nil
 		}
+		return ProofGraph{}, err
+	}
+	return explainModule(module, line)
+}
+
+func ExplainSourceWithSemanticModuleRoots(path, text string, line int, roots []string) (ProofGraph, error) {
+	module, err := ParseWithSemanticModuleRoots(path, text, roots)
+	if err != nil {
+		if diagnostic, ok := err.(Diagnostic); ok && diagnostic.Proof != nil && (line == 0 || diagnostic.Proof.SourceSpan.Line == line) {
+			return *diagnostic.Proof, nil
+		}
+		return ProofGraph{}, err
+	}
+	return explainModule(module, line)
+}
+
+func explainModule(module Module, line int) (ProofGraph, error) {
+	env, err := analyzeModule(module)
+	if err != nil {
 		return ProofGraph{}, err
 	}
 	for _, graph := range env.proofGraphs {

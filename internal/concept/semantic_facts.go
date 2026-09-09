@@ -47,6 +47,7 @@ const (
 	FactOriginDeclaredEffect         SemanticFactOrigin = "DeclaredEffect"
 	FactOriginDerivedCallEffect      SemanticFactOrigin = "DerivedCallEffect"
 	FactOriginExternalContractEffect SemanticFactOrigin = "ExternalContractEffect"
+	FactOriginModuleSummaryEffect    SemanticFactOrigin = "ModuleSummaryEffect"
 )
 
 type SemanticFactCertainty string
