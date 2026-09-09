@@ -1,0 +1,20 @@
+profile Core;
+
+int Filter(int sample)
+{
+    return sample + 1;
+}
+
+int ProcessAudio(int sample)
+{
+    return Filter(sample);
+}
+
+int VerifyAudio()
+{
+    Assert.Concept<NoAllocation>(
+        ProcessAudio,
+        "audio callback must not allocate"
+    );
+    return ProcessAudio(1);
+}

@@ -1,0 +1,16 @@
+profile Core;
+
+int UnsafeCallable(ref const int config)
+{
+    int scratch = 4;
+    auto callback = callback()
+    with (ref const config, ref scratch)
+    {
+        return config + scratch;
+    };
+    Assert.Concept<LifetimeSafe>(
+        callback,
+        "returned callback must be lifetime safe"
+    );
+    return 0;
+}

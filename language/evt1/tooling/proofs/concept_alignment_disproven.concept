@@ -1,0 +1,13 @@
+profile Core;
+
+int AlignmentConflict()
+{
+    int<array>[8] storage = [0, 1, 2, 3, 4, 5, 6, 7];
+    Span<int> whole = Span(storage);
+    Span<int> weights = Subspan(whole, 1, 4);
+    Assert.Concept<Aligned<16>>(
+        weights,
+        "cooperative matrix path requires 16-byte alignment"
+    );
+    return weights[0];
+}

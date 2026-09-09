@@ -880,6 +880,8 @@ type CallExpr struct {
 	DynInterface         string           `json:"dyn_interface,omitempty"`
 	WitnessID            string           `json:"witness_id,omitempty"`
 	Args                 []Expr           `json:"args,omitempty"`
+	ConceptGoal          string           `json:"concept_goal,omitempty"`
+	ConceptParameters    []int            `json:"concept_parameters,omitempty"`
 	Intrinsic            string           `json:"intrinsic,omitempty"`
 	SpanElementType      *Type            `json:"span_element_type,omitempty"`
 	RegionID             string           `json:"region_id,omitempty"`
@@ -1169,6 +1171,7 @@ type MIR struct {
 	Functions         []MIRFunction         `json:"functions"`
 	ComptimeFns       []MIRFunction         `json:"comptime_functions,omitempty"`
 	SemanticProofs    []MIRSemanticProof    `json:"semantic_proofs,omitempty"`
+	ProofGraphs       []ProofGraph          `json:"proof_graphs,omitempty"`
 	SemanticFacts     []MIRSemanticFact     `json:"semantic_facts,omitempty"`
 	StorageTypes      []MIRStorageType      `json:"storage_types,omitempty"`
 	Layouts           []MIRLayout           `json:"layouts,omitempty"`
@@ -1623,6 +1626,7 @@ type MIROperation struct {
 }
 
 type semanticEnv struct {
+	sourcePath         string
 	profile            *ProfileDefinition
 	enums              map[string]EnumDecl
 	structs            map[string]StructDecl
@@ -1647,6 +1651,7 @@ type semanticEnv struct {
 	templateInfos      map[string]*evt1TemplateInfo
 	templateInstances  map[string]*evt1TemplateInstance
 	semanticProofs     []MIRSemanticProof
+	proofGraphs        []ProofGraph
 	resultProvenance   map[string]evt1ResultProvenanceSummary
 	dynWitnesses       map[string]*evt1InterfaceWitness
 	validatingMethod   string

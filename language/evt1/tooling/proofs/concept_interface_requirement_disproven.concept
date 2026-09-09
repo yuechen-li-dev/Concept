@@ -1,0 +1,21 @@
+profile Core;
+
+interface Resettable<T>
+{
+    requires void Reset(ref T self);
+}
+
+struct Device
+{
+    int state;
+}
+
+int InterfaceProof()
+{
+    Device device = Device{0};
+    Assert.Concept<Resettable>(
+        device,
+        "device must provide reset capability"
+    );
+    return device.state;
+}

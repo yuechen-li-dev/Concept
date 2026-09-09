@@ -1,0 +1,17 @@
+profile Core;
+
+concept MatrixReady<T>
+{
+    requires compiler.Aligned<T>(16);
+    requires compiler.Rank<T>(2);
+}
+
+int UserConceptProof()
+{
+    matrix<int> values[2, 2] = [[1, 2], [3, 4]];
+    Assert.Concept<MatrixReady>(
+        values,
+        "matrix path requires its complete semantic contract"
+    );
+    return values[0, 0];
+}

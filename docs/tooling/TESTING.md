@@ -69,3 +69,10 @@ runner writes `.test-results/manifest.json` using
 `.test-results/prophecy/<test-id>/latest/` as JSON plus exact stdout/stderr.
 Any failed fact/theory, unfulfilled prophecy, timeout, compile error, or
 unexpected abnormal exit makes `concept test` return nonzero.
+
+## Compile-time semantic assertions
+
+`Assert.Concept<Goal>(subjects..., "reason")` is available in `.concept` and
+`.concept_test`. A test executes only after every semantic assertion is proven.
+`DISPROVEN` and `UNKNOWN` fail compilation with distinct proof graphs; they are
+not runtime assertion failures. See `CONCEPT-PROOFS.md`.

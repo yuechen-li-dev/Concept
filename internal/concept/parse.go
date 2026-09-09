@@ -2943,7 +2943,7 @@ func (p *parser) parsePrimary() (Expr, error) {
 		return p.parseMatchExpr()
 	case p.peekLexeme() == "infer":
 		return p.parseInferExpr()
-	case p.peekLexeme() == "callback":
+	case p.peekLexeme() == "callback" && p.looksLikeCallableLiteral():
 		return p.parseCallableExpr()
 	case p.peekLexeme() == "true" || p.peekLexeme() == "false":
 		tok := p.next()
@@ -2967,6 +2967,25 @@ func (p *parser) parsePrimary() (Expr, error) {
 	default:
 		return p.parseNameLikeExpr()
 	}
+}
+
+func (p *parser) looksLikeCallableLiteral() bool {
+	if p.peekLexeme() != "callback" || p.peekLexemeN(1) != "(" {
+		return false
+	}
+	depth := 0
+	for i := p.pos + 1; i < len(p.tokens); i++ {
+		switch p.tokens[i].Lexeme {
+		case "(":
+			depth++
+		case ")":
+			depth--
+			if depth == 0 {
+				return i+1 < len(p.tokens) && (p.tokens[i+1].Lexeme == "with" || p.tokens[i+1].Lexeme == "{")
+			}
+		}
+	}
+	return false
 }
 
 func (p *parser) parseCallableExpr() (Expr, error) {
@@ -3279,6 +3298,12 @@ func (p *parser) parsePostfixExpr(expr Expr, span Span) (Expr, error) {
 			op := p.next()
 			expr = &FailureExpr{Op: op.Lexeme, Value: expr, Span: op.Span}
 		case "<":
+			if fieldExpr, ok := expr.(*FieldExpr); ok {
+				owner, ownerOK := fieldExpr.Receiver.(*NameExpr)
+				if ownerOK && owner.Name == "Assert" && fieldExpr.Field == "Concept" {
+					return p.parseConceptAssertionCall(fieldExpr, span)
+				}
+			}
 			nameExpr, ok := expr.(*NameExpr)
 			if !ok || !p.looksLikeTemplateInvocation() {
 				return expr, nil
@@ -3370,6 +3395,52 @@ func (p *parser) parsePostfixExpr(expr Expr, span Span) (Expr, error) {
 			return expr, nil
 		}
 	}
+}
+
+func (p *parser) parseConceptAssertionCall(field *FieldExpr, span Span) (Expr, error) {
+	p.next() // <
+	goal, err := p.expectIdentifier("CONCEPT_ASSERT_GOAL_INVALID", "Assert.Concept requires a concept or compiler analysis name")
+	if err != nil {
+		return nil, err
+	}
+	parameters := []int{}
+	if p.peekLexeme() == "<" {
+		p.next()
+		parameter := p.current()
+		if !isNumber(parameter.Lexeme) {
+			return nil, evt1Diagnostic("CONCEPT_ASSERT_PARAMETER_INVALID", "analysis parameter must be a positive integer", parameter.Span)
+		}
+		value, _ := strconv.Atoi(parameter.Lexeme)
+		parameters = append(parameters, value)
+		p.next()
+		if _, err := p.expect(">"); err != nil {
+			return nil, err
+		}
+	}
+	if _, err := p.expect(">"); err != nil {
+		return nil, err
+	}
+	if _, err := p.expect("("); err != nil {
+		return nil, err
+	}
+	var args []Expr
+	if p.peekLexeme() != ")" {
+		for {
+			arg, err := p.parseExpr()
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, arg)
+			if p.peekLexeme() != "," {
+				break
+			}
+			p.next()
+		}
+	}
+	if _, err := p.expect(")"); err != nil {
+		return nil, err
+	}
+	return &CallExpr{Callee: "Concept", Receiver: field.Receiver, Member: true, Args: args, ConceptGoal: goal.Lexeme, ConceptParameters: parameters, Span: span}, nil
 }
 
 func (p *parser) looksLikeTemplateInvocation() bool {

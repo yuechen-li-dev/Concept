@@ -1,0 +1,11 @@
+profile Core;
+
+int AlignmentProof()
+{
+    int<array>[4] weights = [1, 2, 3, 4];
+    Assert.Concept<Aligned<16>>(
+        weights,
+        "cooperative matrix path requires 16-byte alignment"
+    );
+    return weights[0];
+}

@@ -566,6 +566,7 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 		mir.ComptimeFns = append(mir.ComptimeFns, mirFn)
 	}
 	mir.SemanticProofs = append(mir.SemanticProofs, env.semanticProofs...)
+	mir.ProofGraphs = append(mir.ProofGraphs, env.proofGraphs...)
 	for _, storageType := range evt1CollectStorageTypes(module, env) {
 		mir.StorageTypes = append(mir.StorageTypes, MIRStorageType{
 			Type:        storageType,
@@ -1093,6 +1094,10 @@ func collectMIROps(env *semanticEnv, block *Block, fn *MIRFunction, templateInfo
 				collectExprMIROps(env, s.Value, fn, templateInfo)
 			}
 		case *ExprStmt:
+			if call, ok := s.Value.(*CallExpr); ok && call.Intrinsic == "concept_assert" {
+				fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "concept_assert", Detail: call.ConceptGoal, NoAllocation: true, NoCopy: true, NoOwnershipTransfer: true, SourceSpan: s.Span})
+				continue
+			}
 			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "expr_stmt", SourceSpan: s.Span})
 			collectExprMIROps(env, s.Value, fn, templateInfo)
 		case *AssertStmt:
@@ -3676,6 +3681,9 @@ func (f *evt1FunctionLowerer) lowerStatement(stmt Statement, indent int) string 
 		returnTemp := f.nextTemp("return")
 		return prelude + ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(valueType), returnTemp, value) + f.lowerAllScopeDrops(indent) + ind(indent) + fmt.Sprintf("return %s;\n", returnTemp)
 	case *ExprStmt:
+		if call, ok := s.Value.(*CallExpr); ok && call.Intrinsic == "concept_assert" {
+			return ""
+		}
 		prelude, value, valueType := f.lowerExpr(s.Value, indent)
 		if valueType.Name == "void" {
 			return prelude + ind(indent) + value + ";\n"

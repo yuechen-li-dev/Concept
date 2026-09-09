@@ -1,0 +1,16 @@
+profile Core;
+
+int PreservationProof()
+{
+    int<array>[4] storage = [1, 2, 3, 4];
+    Span<int> values = Span(storage);
+    Assert.Concept<NoCopy>(
+        values,
+        "span construction must preserve storage without copying"
+    );
+    Assert.Concept<NoOwnershipTransfer>(
+        values,
+        "span construction must not transfer backing ownership"
+    );
+    return values[0];
+}

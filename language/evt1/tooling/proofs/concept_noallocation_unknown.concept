@@ -1,0 +1,17 @@
+profile Core;
+
+int ExternalFilter(int sample);
+
+int ProcessAudio(int sample)
+{
+    return ExternalFilter(sample);
+}
+
+int UnknownAudioProof()
+{
+    Assert.Concept<NoAllocation>(
+        ProcessAudio,
+        "audio callback must not allocate"
+    );
+    return 0;
+}

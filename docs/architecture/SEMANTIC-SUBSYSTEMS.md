@@ -23,6 +23,7 @@ facts, and C11 output is derived evidence.
 | Planner | `planner.go` | section 28 | Planner direction record | `language/evt1/planner` | `planner_test.go` |
 | Composition | all semantic owners above | all relevant sections | R5k freeze report | `language/evt1/composition` | `semantic_corpus_test.go` |
 | Test tooling | `testing_metadata.go`, `testing_assert.go`, `testing_lowering.go`, `testing_runner.go` | section 24 | `EVT1-TEST-PROPHECY-DIRECTION.md` | `language/evt1/tooling/tests`, `internal/concept/testdata/testing` | `testing_runner_test.go` |
+| Concept assertions and proof debugging | `concept_assert.go`, `proof_graph.go` | sections 17 and 24 | `CONCEPT-PROOFS.md` | `language/evt1/tooling/proofs` | `proof_graph_test.go` |
 
 The three explicit state-bearing forms remain distinct: `automata with state`
 is application-authored persistent state, callable `with (...)` is an explicit
@@ -39,3 +40,7 @@ Test attributes are source-ordered Module/MIR metadata. The runner consumes a
 static manifest and generated C11 symbols; it does not add runtime reflection,
 a registry, or a second evaluator. Assertion calls retain ordinary expression
 semantics and evaluate each value argument exactly once.
+
+Proof tooling consumes semantic authority. `Assert.Concept`, human diagnostics,
+the explain CLI, JSON, and repairs project existing facts, requirements, and
+provenance; they do not consult Planner or re-derive legality.

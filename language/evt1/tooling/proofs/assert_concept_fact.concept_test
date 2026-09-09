@@ -1,0 +1,11 @@
+profile Core;
+
+[[fact]]
+void SemanticFactIsAvailable()
+{
+    int<array>[4] values = [1, 2, 3, 4];
+    Assert.Concept<Aligned<16>>(
+        values,
+        "fixed inline storage must retain its alignment proof"
+    );
+}

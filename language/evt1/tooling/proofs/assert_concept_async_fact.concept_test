@@ -1,0 +1,11 @@
+profile Core;
+
+[[fact]]
+async void AsyncSemanticFactIsAvailable()
+{
+    int<array>[4] values = [1, 2, 3, 4];
+    Assert.Concept<Aligned<16>>(
+        values,
+        "async frame storage must retain value alignment"
+    );
+}

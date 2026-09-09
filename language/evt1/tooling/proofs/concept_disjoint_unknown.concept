@@ -1,0 +1,14 @@
+profile Core;
+
+int DisjointIsUnknown()
+{
+    int<array>[8] storage = [0, 1, 2, 3, 4, 5, 6, 7];
+    Span<int> input = Span(storage);
+    Span<int> output = Span(storage);
+    Assert.Concept<Disjoint>(
+        input,
+        output,
+        "kernel requires non-overlapping regions"
+    );
+    return input[0] + output[0];
+}

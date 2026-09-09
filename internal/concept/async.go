@@ -1128,7 +1128,7 @@ func evt1AwaitCountBlock(block Block) int {
 	return count
 }
 
-func evt1ValidateAsyncPersistence(fn FunctionDecl) error {
+func evt1ValidateAsyncPersistence(env *semanticEnv, fn FunctionDecl) error {
 	if !fn.Async {
 		return nil
 	}
@@ -1149,10 +1149,26 @@ func evt1ValidateAsyncPersistence(fn FunctionDecl) error {
 	for name := range persistent {
 		t := a.DeclTypes[name]
 		if t.isReference() && (!params[name] || t.Scoped) {
-			return evt1Diagnostic("ASYNC_PERSISTENT_REF_ESCAPE", fmt.Sprintf("reference %s cannot be proven to outlive async operation %s", name, fn.Name), t.Span)
+			graph := evt1AsyncLifetimeProof(env, fn, name, t)
+			return Diagnostic{Code: "ASYNC_PERSISTENT_REF_ESCAPE", Message: fmt.Sprintf("reference %s cannot be proven to outlive async operation %s", name, fn.Name), Span: t.Span, Proof: &graph}
 		}
 	}
 	return nil
+}
+
+func evt1AsyncLifetimeProof(env *semanticEnv, fn FunctionDecl, name string, t Type) ProofGraph {
+	goal := "LifetimeSafe(" + fn.Name + ".async-frame)"
+	graph := ProofGraph{Schema: ProofSchema, Source: env.sourcePath, Goal: goal, Outcome: FactDisproven, Subjects: []ProofSubjectDescription{{Kind: "value", Name: name, Type: t.String()}}, Reason: "persistent references must outlive their async operation", SourceSpan: t.Span}
+	root := graph.addNode(ProofGoal, goal, "compiler lifetime invariant", FactDisproven, FactOriginCompilerAnalysis, t.Span)
+	source := graph.addNode(ProofKnownFact, "ref source `"+name+"`", "local or scoped provenance", FactProven, FactOriginControlFlow, t.Span)
+	frame := graph.addNode(ProofDependency, "Async persistent field `"+name+"`", "value is live across await", FactProven, FactOriginControlFlow, t.Span)
+	conflict := graph.addNode(ProofContradiction, "operation lifetime", "local reference does not outlive the persistent Async frame", FactDisproven, FactOriginCompilerAnalysis, t.Span)
+	graph.addEdge(root, source, ProofDependsOn)
+	graph.addEdge(source, frame, ProofDerivedFrom)
+	graph.addEdge(frame, conflict, ProofConflictsWith)
+	graph.RepairClasses = []ProofRepair{{Class: "remove the borrowed async-frame dependency", Candidates: []string{"store an owned value in the async frame", "extend the referenced source lifetime", "do not retain the reference across await"}}}
+	graph.normalize()
+	return graph
 }
 
 func evt1BlockContainsAwait(block Block) bool {

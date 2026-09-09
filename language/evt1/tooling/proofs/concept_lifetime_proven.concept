@@ -1,0 +1,16 @@
+profile Core;
+
+int SafeCallable()
+{
+    int state = 4;
+    auto callback = callback()
+    with (state)
+    {
+        return state;
+    };
+    Assert.Concept<LifetimeSafe>(
+        callback,
+        "owned callback environment must be lifetime safe"
+    );
+    return callback();
+}

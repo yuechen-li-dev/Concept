@@ -33,8 +33,10 @@ inline compiler tests.
 | Feature | Owner / phase | Classification | R5 decision |
 |---|---|---|---|
 | `.concept_test`, test attributes, deterministic test runner, `Assert.*` | R6a tooling/library | Canonical tooling | implemented without changing frozen function/body semantics |
+| `Assert.Concept`, proof diagnostics, `concept explain`, `concept-proof.v1` | R6b tooling | Canonical tooling | compile-time semantic query with no runtime lowering |
 | richer theory providers, exact prophecy termination matching, parallel tests, lifecycle hooks, statistical benchmark framework | later R6 tooling | Deferred | R6a keeps JSON positional rows, sequential reporting, and lightweight timing |
 | formatter, lint, diagnostics UX, build/package tooling, LSP | R6 tooling | Deferred | consume the frozen semantic model |
+| source auto-fix, IDE proof visualization, arbitrary proof queries, solver edits, LLM-ranked repairs, Planner explanations | post-R6b tooling | Deferred | consume authoritative proof graphs without moving semantic authority |
 | owning `dyn` | later language/runtime | Deferred | requires explicit erased storage and allocation policy |
 | owning erased callback | later language/runtime | Deferred | no hidden closure box |
 | open generic runtime async methods | later language | Deferred | closed witness construction remains authoritative |

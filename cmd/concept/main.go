@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,6 +20,7 @@ Usage:
   concept emit-c <file>
   concept mir <file>
   concept plan <file>
+  concept explain <file>[:line] [--json] [--verbose]
   concept test [path-or-filter] [--filter text] [--list] [--verbose]
 
 Commands:
@@ -26,6 +28,7 @@ Commands:
   emit-c  write generated strict-C11 implementation to stdout
   mir     write deterministic MIR JSON to stdout
   plan    write deterministic LoweringPlan JSON to stdout
+  explain display the proof graph for an Assert.Concept source contract
   test    discover and execute .concept_test sources through strict C11
 `
 
@@ -44,6 +47,10 @@ func main() {
 	}
 	if len(os.Args) >= 2 && os.Args[1] == "test" {
 		runTestCommand(os.Args[2:])
+		return
+	}
+	if len(os.Args) >= 2 && os.Args[1] == "explain" {
+		runExplainCommand(os.Args[2:])
 		return
 	}
 	if len(os.Args) != 3 {
@@ -88,6 +95,58 @@ func main() {
 		fmt.Fprintf(os.Stderr, "unknown command %q\n\n%s", command, usage)
 		os.Exit(2)
 	}
+}
+
+func runExplainCommand(args []string) {
+	if len(args) < 1 || len(args) > 3 {
+		fmt.Fprint(os.Stderr, usage)
+		os.Exit(2)
+	}
+	sourcePath, line, jsonOutput, verbose := args[0], 0, false, false
+	for _, arg := range args[1:] {
+		switch arg {
+		case "--json":
+			jsonOutput = true
+		case "--verbose":
+			verbose = true
+		default:
+			fmt.Fprint(os.Stderr, usage)
+			os.Exit(2)
+		}
+	}
+	if _, err := os.Stat(sourcePath); err != nil {
+		if split := strings.LastIndex(sourcePath, ":"); split > 1 {
+			if parsed, parseErr := strconv.Atoi(sourcePath[split+1:]); parseErr == nil && parsed > 0 {
+				line, sourcePath = parsed, sourcePath[:split]
+			}
+		}
+	}
+	body, err := os.ReadFile(sourcePath)
+	if err != nil {
+		fail(err)
+	}
+	proofSourcePath := sourcePath
+	if relative, relativeErr := filepath.Rel(".", sourcePath); relativeErr == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		proofSourcePath = relative
+	}
+	graph, err := concept.ExplainSource(filepath.ToSlash(proofSourcePath), string(body), line)
+	if err != nil {
+		fail(err)
+	}
+	if jsonOutput {
+		output, err := concept.SerializeProof(graph)
+		if err != nil {
+			fail(err)
+		}
+		_, _ = os.Stdout.Write(output)
+		return
+	}
+	if verbose {
+		fmt.Print(concept.RenderProofVerbose(graph))
+	} else {
+		fmt.Print(concept.RenderProofSummary(graph))
+	}
+	fmt.Println()
 }
 
 func runTestCommand(args []string) {

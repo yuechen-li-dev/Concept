@@ -1,0 +1,24 @@
+Cannot prove Disjoint(input, output)
+Outcome: UNKNOWN
+Reason:
+  "kernel requires non-overlapping regions"
+
+The compiler does not have enough evidence to prove this constraint.
+
+Goal
+  Disjoint(input, output)  UNKNOWN
+    compile-time semantic assertion
+    input : Span<int>  PROVEN
+      semantic identity resolved without runtime evaluation
+    output : Span<int>  PROVEN
+      semantic identity resolved without runtime evaluation
+    region identities  PROVEN
+      input=storage:storage; output=storage:storage
+    Disjoint relation  UNKNOWN
+      same backing region is known, but no statically non-overlapping intervals are available
+
+Possible ways to satisfy this proof:
+  - provide statically provable non-overlap
+      provide an explicit caller proof
+      use distinct declared regions
+      use fixed non-overlapping intervals

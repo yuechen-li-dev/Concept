@@ -1,0 +1,11 @@
+profile Core;
+
+int RankConflict()
+{
+    matrix<int> values[2, 2] = [[1, 2], [3, 4]];
+    Assert.Concept<Rank<1>>(
+        values,
+        "vector path requires rank 1"
+    );
+    return values[0, 0];
+}

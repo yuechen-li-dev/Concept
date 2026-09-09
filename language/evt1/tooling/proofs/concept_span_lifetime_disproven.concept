@@ -1,0 +1,17 @@
+profile Core;
+
+int UnsafeSpanCallback()
+{
+    int<array>[4] storage = [1, 2, 3, 4];
+    Span<int> values = Span(storage);
+    auto callback = callback()
+    with (values)
+    {
+        return values[0];
+    };
+    Assert.Concept<LifetimeSafe>(
+        callback,
+        "captured view must remain valid"
+    );
+    return 0;
+}

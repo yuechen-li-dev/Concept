@@ -1,0 +1,17 @@
+profile Core;
+
+int LifetimeOrderConflict()
+{
+    int outer = 1;
+    ref int destination = ref outer;
+    {
+        int inner = 2;
+        ref int source = ref inner;
+        Assert.Concept<Outlives>(
+            source,
+            destination,
+            "source must outlive destination"
+        );
+    }
+    return destination;
+}

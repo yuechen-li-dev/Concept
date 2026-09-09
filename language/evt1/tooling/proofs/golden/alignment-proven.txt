@@ -1,0 +1,11 @@
+PROVEN Aligned<16>(weights)
+Reason:
+  "cooperative matrix path requires 16-byte alignment"
+
+Goal
+  Aligned<16>(weights)  PROVEN
+    compile-time semantic assertion
+    weights : int<array>[4]  PROVEN
+      semantic identity resolved without runtime evaluation
+    Aligned semantic fact  PROVEN
+      known effective alignment = 64; required alignment = 16

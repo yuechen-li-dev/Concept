@@ -1302,6 +1302,14 @@ to the same terminal panic primitive and true continues. The future R6
 the existing bounded comptime evaluator and emits no runtime code. Runtime
 values are rejected.
 
+**Canonical R6b tooling.** `Assert.Concept<Goal>(subjects..., reason)` is a
+compile-time semantic assertion with a mandatory nonblank final string literal.
+Named values, types, and operations resolve without runtime evaluation. Proven
+assertions emit no C; disproven and unknown assertions fail with distinct proof
+graphs. Parameterized analyses reuse existing analysis parameters, for example
+`Assert.Concept<Aligned<16>>(buffer, "SIMD alignment")`. `static_assert`
+asserts a boolean; `Assert.Concept` preserves semantic proof structure.
+
 ## 26. Explicit callable capture environments
 
 A callable literal has one canonical form:

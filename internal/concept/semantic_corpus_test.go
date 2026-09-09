@@ -129,6 +129,11 @@ func TestSemanticCorpusManifest(t *testing.T) {
 		if info.IsDir() || filepath.Ext(path) != ".concept" {
 			return nil
 		}
+		// R6 tooling owns source contracts and compile-negative proof fixtures
+		// independently of the frozen R1-R5 semantic corpus manifest.
+		if strings.Contains(filepath.ToSlash(path), "/tooling/") {
+			return nil
+		}
 		if _, ok := seen[filepath.ToSlash(path)]; !ok {
 			return fmt.Errorf("fixture is outside semantic manifest: %s", path)
 		}

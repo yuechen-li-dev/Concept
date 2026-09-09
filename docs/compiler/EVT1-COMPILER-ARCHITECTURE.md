@@ -1052,3 +1052,18 @@ identity, geometry, direct-dispatch, and no-allocation evidence. Header type
 declarations are dependency-ordered across aggregates and callable
 environments. No RTTI, registry, runtime descriptor, reflection object, or
 callable vtable is introduced.
+
+## R6b semantic proof tooling
+
+```text
+SemanticFacts and existing concept/lifetime proofs
+    -> authoritative Proven / Disproven / Unknown
+    -> deterministic ProofGraph projection
+    -> Assert.Concept / concept explain / diagnostics / concept-proof.v1
+```
+
+`concept_assert.go` resolves named subjects without evaluation and expands user
+concepts through ordinary requirements. `proof_graph.go` owns bounded human and
+verbose rendering plus deterministic JSON. Repairs come from failed graph rules
+and filter concrete capture candidates through known copyability/movability.
+Graphs are built on demand; Planner is not involved.

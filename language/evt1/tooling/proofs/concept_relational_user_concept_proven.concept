@@ -1,0 +1,28 @@
+profile Core;
+
+ref struct View
+{
+    ref const int data;
+}
+
+View MakeView(ref const int source)
+{
+    return View{ref const source};
+}
+
+concept ViewOf<T>
+{
+    requires T MakeView(ref const int source);
+    requires compiler.Outlives(source, result);
+}
+
+int RelationalConceptProof()
+{
+    int value = 42;
+    View view = MakeView(ref const value);
+    Assert.Concept<ViewOf>(
+        view,
+        "view construction must preserve source provenance"
+    );
+    return view.data;
+}

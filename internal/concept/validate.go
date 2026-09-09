@@ -70,6 +70,8 @@ type evt1ValueBinding struct {
 	spanFacts        *evt1SpanFacts
 	regionFacts      *evt1SpanFacts
 	tensorFacts      *TensorViewFacts
+	source           Expr
+	declarationSpan  Span
 }
 
 type evt1StorageState string
@@ -284,6 +286,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		return nil, evt1Diagnostic("CV4402", fmt.Sprintf("effect and actuator declarations are not admitted by profile %s", profile.Name), Span{Line: 1, Column: 1})
 	}
 	env := newSemanticEnv(profile)
+	env.sourcePath = module.Path
 	typeNames := map[string]Span{}
 	for _, enumDecl := range module.Enums {
 		if profile.compilerOwnedType(enumDecl.Name) {
@@ -741,7 +744,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 			env.validatingFunction = ""
 			return nil, err
 		}
-		if err := evt1ValidateAsyncPersistence(fn); err != nil {
+		if err := evt1ValidateAsyncPersistence(env, fn); err != nil {
 			env.validatingMethod = ""
 			env.validatingFunction = ""
 			return nil, err
@@ -1117,6 +1120,7 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				local.declare(s.Name, evt1ValueBinding{
 					t: resolvedType, mutable: !s.Const, state: evt1StorageInitialized, comptime: inComptimeFn,
 					provenance: evt1LifetimeProvenance{Kind: evt1ProvenanceLocal, Depth: local.depth}, tensorFacts: facts,
+					source: s.Value, declarationSpan: s.Span,
 				})
 				continue
 			}
@@ -1132,7 +1136,7 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 					return evt1Diagnostic("CV4501", fmt.Sprintf("copy of non-copyable callable %s requires move", valueType.String()), s.Value.exprSpan())
 				}
 				s.Type = valueType
-				local.declare(s.Name, evt1ValueBinding{t: valueType, mutable: !s.Const, state: evt1StorageInitialized, provenance: evt1ExprProvenance(env, local, s.Value)})
+				local.declare(s.Name, evt1ValueBinding{t: valueType, mutable: !s.Const, state: evt1StorageInitialized, provenance: evt1ExprProvenance(env, local, s.Value), source: s.Value, declarationSpan: s.Span})
 				continue
 			}
 			if err := validateKnownType(env, s.Type, s.Span, typeParam, false); err != nil {
@@ -1212,10 +1216,12 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 			}
 			local.declare(s.Name, evt1ValueBinding{
 				t: resolvedType, mutable: !s.Const, state: evt1StorageInitialized, comptime: inComptimeFn,
-				provenance:  provenance,
-				spanFacts:   evt1SpanFactsForValue(env, local, s.Value, resolvedType),
-				regionFacts: evt1RegionFactsForValue(env, local, s.Value, resolvedType),
-				tensorFacts: evt1TensorFactsForValue(local, s.Value, resolvedType),
+				provenance:      provenance,
+				spanFacts:       evt1SpanFactsForValue(env, local, s.Value, resolvedType),
+				regionFacts:     evt1RegionFactsForValue(env, local, s.Value, resolvedType),
+				tensorFacts:     evt1TensorFactsForValue(local, s.Value, resolvedType),
+				source:          s.Value,
+				declarationSpan: s.Span,
 			})
 		case *TransitionStmt:
 			if !local.inAutomataState {
@@ -2454,6 +2460,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		return evt1CanonicalType(env, fieldType), nil
 	case *CallExpr:
+		if e.ConceptGoal != "" {
+			return evt1ValidateConceptAssertion(env, scope, e)
+		}
 		if !e.Member {
 			if binding, ok := scope.lookup(e.Callee); ok && (binding.t.Kind == TypeCallable || binding.t.Kind == TypeCallback) {
 				return evt1ValidateCallableInvocation(env, scope, e, binding, templateInfo, inComptimeFn)
@@ -5615,7 +5624,7 @@ func instantiateTemplate(env *semanticEnv, templateName string, concreteType Typ
 	if err := evt1ValidateAsyncShape(instFn); err != nil {
 		return nil, err
 	}
-	if err := evt1ValidateAsyncPersistence(instFn); err != nil {
+	if err := evt1ValidateAsyncPersistence(env, instFn); err != nil {
 		return nil, err
 	}
 	instance := &evt1TemplateInstance{

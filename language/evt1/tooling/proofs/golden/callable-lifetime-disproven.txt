@@ -1,0 +1,23 @@
+Cannot prove LifetimeSafe(callback)
+Outcome: DISPROVEN
+Reason:
+  "returned callback must be lifetime safe"
+
+Known facts contradict the requested constraint.
+
+Goal
+  LifetimeSafe(callback)  DISPROVEN
+    compile-time semantic assertion
+    callback : UnsafeCallable#callback0  PROVEN
+      semantic identity resolved without runtime evaluation
+    capture `config`  PROVEN
+      capture kind=RefConst, provenance=parameter
+    capture `scratch`  DISPROVEN
+      capture kind=Ref, provenance=local
+
+Possible ways to satisfy this proof:
+  - change the borrowed lifetime dependency
+      capture `scratch` by value
+      extend the source lifetime
+      move ownership of `scratch` into the callable
+      shorten the destination lifetime

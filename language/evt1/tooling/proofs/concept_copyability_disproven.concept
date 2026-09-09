@@ -1,0 +1,21 @@
+profile Core;
+
+concept Copyable<T>
+{
+    requires T Clone(borrow const T value);
+}
+
+immovable struct Socket
+{
+    int handle;
+}
+
+int CopyabilityConflict()
+{
+    Socket resource = Socket{7};
+    Assert.Concept<Copyable>(
+        resource,
+        "resource must support explicit value duplication"
+    );
+    return resource.handle;
+}
