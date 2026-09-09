@@ -601,6 +601,22 @@ func (p *parser) parseMachineDecl(canonical bool) (MachineDecl, error) {
 		return MachineDecl{}, err
 	}
 	machine.Name = nameTok.Lexeme
+	machine.ResultType = Type{Name: "void", Kind: TypeBuiltin, Span: nameTok.Span}
+	machine.ErrorType = Type{Name: "void", Kind: TypeBuiltin, Span: nameTok.Span}
+	if canonical && p.peekLexeme() == "returns" {
+		p.next()
+		machine.ResultType, err = p.parseType("")
+		if err != nil {
+			return MachineDecl{}, err
+		}
+	}
+	if canonical && p.peekLexeme() == "fails" {
+		p.next()
+		machine.ErrorType, err = p.parseType("")
+		if err != nil {
+			return MachineDecl{}, err
+		}
+	}
 	if _, err := p.expect("{"); err != nil {
 		return MachineDecl{}, err
 	}
@@ -1803,6 +1819,43 @@ func (p *parser) parseStatement() (Statement, error) {
 		}
 		p.next()
 		return &YieldStmt{Span: start}, nil
+	case "push":
+		start := p.next().Span
+		machine, err := p.expectIdentifier("MACHINE_PUSH_UNKNOWN", "expected child machine name after push")
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.expect("goto"); err != nil {
+			return nil, evt1Diagnostic("MACHINE_FRAME_INVALID", "push requires an explicit caller resume state: push Child goto Waiting;", p.currentSpan())
+		}
+		resume, err := p.expectIdentifier("MACHINE_UNKNOWN_STATE", "expected caller resume state after goto")
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.expect(";"); err != nil {
+			return nil, err
+		}
+		return &PushMachineStmt{Machine: machine.Lexeme, ResumeState: resume.Lexeme, Span: start}, nil
+	case "pop", "complete", "fail":
+		kindTok := p.next()
+		kind := map[string]string{"pop": "neutral", "complete": "neutral", "fail": "failure"}[kindTok.Lexeme]
+		var value Expr
+		if p.peekLexeme() != ";" {
+			parsed, parseErr := p.parseExpr()
+			if parseErr != nil {
+				return nil, parseErr
+			}
+			value = parsed
+			if kindTok.Lexeme == "complete" {
+				kind = "success"
+			}
+		} else if kindTok.Lexeme == "fail" {
+			return nil, evt1Diagnostic("MACHINE_FAIL_ERROR_TYPE_MISMATCH", "fail requires an error payload", kindTok.Span)
+		}
+		if _, err := p.expect(";"); err != nil {
+			return nil, err
+		}
+		return &MachineCompleteStmt{Kind: kind, Operation: kindTok.Lexeme, Value: value, Span: kindTok.Span}, nil
 	case "foreach":
 		return p.parseForeachStmt()
 	case "return":

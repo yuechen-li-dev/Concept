@@ -1,0 +1,17 @@
+profile Core;
+
+automata Bad
+{
+    machine Run
+    {
+        state Start
+        {
+            push Missing goto Start;
+        }
+    }
+}
+
+int Main()
+{
+    return 0;
+}

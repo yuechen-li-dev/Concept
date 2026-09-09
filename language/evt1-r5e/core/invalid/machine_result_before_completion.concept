@@ -1,0 +1,18 @@
+profile Core;
+
+automata Bad
+{
+    machine Run returns int
+    {
+        state Start
+        {
+            yield;
+        }
+    }
+}
+
+int Main()
+{
+    instance Bad bad();
+    return Result(bad, Run).success;
+}

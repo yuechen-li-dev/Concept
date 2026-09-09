@@ -1,0 +1,22 @@
+profile Core;
+
+enum WorkError
+{
+    Cancelled
+}
+
+automata Bad
+{
+    machine Run fails WorkError
+    {
+        state Start
+        {
+            fail 1;
+        }
+    }
+}
+
+int Main()
+{
+    return 0;
+}

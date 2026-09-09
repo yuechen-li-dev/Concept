@@ -1,0 +1,40 @@
+profile Core;
+
+automata Shared
+with state
+{
+    int value;
+}
+{
+    machine Parent
+    {
+        state Start
+        {
+            state.value = state.value + 2;
+            push Child goto Resumed;
+        }
+
+        state Resumed
+        {
+            state.value = state.value + 8;
+        }
+    }
+
+    machine Child
+    {
+        state Done
+        {
+            state.value = state.value * 3;
+            pop;
+        }
+    }
+}
+
+int Main()
+{
+    instance Shared worker(1);
+    Step(worker, Parent);
+    Step(worker, Parent);
+    Step(worker, Parent);
+    return worker.state.value;
+}

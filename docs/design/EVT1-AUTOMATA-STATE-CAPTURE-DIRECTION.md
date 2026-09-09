@@ -1,6 +1,6 @@
 # EVT1 automata state-capture direction
 
-Status: R5d bounded yield/re-entry implemented; effects deferred
+Status: R5e bounded machine stack and completion implemented; effects deferred
 
 ## Reconciliation
 
@@ -168,5 +168,14 @@ do not. The next Step re-enters the state body from its beginning. A foreach
 inside that body is likewise transient and restarts. Persistent iteration is
 authored explicitly by storing iterator state in `with state` or a machine
 field and calling `MoveNext`/`Current` directly.
-Complete/Result, nested machine values, effects, and actuators remain separate
-later decisions.
+R5e adds one bounded frame stack beneath those storage classes. Push preserves
+the parent and records an explicit parent state; pop destroys only the top
+frame. `complete` and `fail` are semantic pops carrying
+Neutral/Success/Failure, not a second lifecycle. A yielded child remains top
+and the parent remains dormant.
+
+DragonGod's fixed `AutomataStack` supplied bounded-LIFO pressure, but its
+StateId/Reason policy records are not compiler machine storage. Remember/Resume
+remains library vocabulary over parent preservation and explicit resume state;
+there is no second stack or arbitrary saved instruction pointer. Future await
+may generate the state/push/outcome workflow, but R5e adds no async scheduler.

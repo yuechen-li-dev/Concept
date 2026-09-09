@@ -103,8 +103,11 @@ does not authorize that work in this milestone. Status is one of `Keep PoC3`,
 | decision score | scalar int utility | no scored transition primitive | exact per-block `int` or `float` candidate utility | Merge / implemented R5b | Partial | phase5a/18; R5b int/float cases | NaN is terminal invalid score |
 | hardmax and ties | highest int; first source-order tie | ordered guarded selection without scores | first declared enabled candidate with maximum score | Canonical / implemented R5b | Translation | phase18; R5b tie case | strict `>` replacement |
 | no enabled decision | stable runtime panic | dispatch may report unhandled | terminal `machine decision transition has no enabled candidates` | Merge / implemented R5b | Translation | phase18; R5b native panic | no implicit stay |
-| Step | explicit caller-invoked machine step | signal-driven dispatch | `Step(instance, Machine)` executes one selected contained machine | Merge / implemented R5a | Translation only | phase13/18; R5a native corpus | no implicit tick-all order |
-| Complete/Result | explicit completed/result frame operations | dispatch outcomes | keep current bounded internal distinction; reconcile source result surface later | Partial after R5d | Yes | phase13/18 and R5d yield evidence | yield writes neither completion nor result |
+| Step | explicit caller-invoked machine step | signal-driven dispatch | depth-one machine selection; nested Steps drive only the top frame | Merge / implemented R5e | Translation only | phase13/18; R5a/R5e native corpus | no implicit tick-all order |
+| Complete/Result | explicit completed/result frame operations | dispatch outcomes | completion is frame pop carrying Neutral/Success/Failure; Result is completion-gated | Merge / redesigned R5e | Translation | phase13/18; R5e native/runtime-negative corpus | machine outcome is not `Result<T,E>` |
+| push/pop machine frames | hierarchical by-value child pressure | bounded continuation stack | fixed specialized frame stack; `push Child goto Resume`; pop reveals parent | Merge / canonical core R5e | Translation | phase18, DragonGod DG5, R5e nested corpus | no heap or saved PC |
+| Remember/Resume | deferred machine orchestration | DragonGod/Oct policy vocabulary | library workflow over parent preservation and explicit resume state | Library layer over R5e | Yes | DragonGod stack and Oct reference inventory | no second hidden stack |
+| async mapping | deferred | deferred | future compiler-generated state plus R5e push/outcome/pop | Deferred R5f | Yes | R5e design proof | no async syntax or scheduler in R5e |
 | DragonGod Decision | stateful kernel decision policy | application subsystem pressure | library-level hysteresis/commitment/tie-memory policy | Library-level / deferred | Yes | phase20 DragonGod evidence | never implicit in transition decide |
 | infer | absent | absent | normalized float-logit soft belief in `Inference<T>` | EVT1-new / implemented R5c | No | R5c corpus/native evidence | stable softmax; fixed inline storage |
 | transition infer | absent | absent | explicit-policy inference transition | EVT1-new / implemented R5c | No | R5c MIR/Planner/native evidence | HardMax only in R5c |
@@ -344,3 +347,19 @@ softmax, probability queries, declaration-order HardMax, decide equivalence
 including ties, explicit-policy transitions, deterministic exceptional values,
 automata inputs, cleanup, and absence of allocation, RNG, scheduler, SIMD, GPU,
 or model runtime.
+
+## R5d executable evidence
+
+R5d adds 26 required cases: 18 accepted and eight statically rejected. Bare
+yield preserves state and persistent storage while cleaning transients, and
+foreach uses fixed inline or explicit protocol iteration without a coroutine
+frame or scheduler.
+
+## R5e executable evidence
+
+R5e adds 19 canonical sources: twelve accepted, five statically rejected, and
+two runtime-negative. MIR and Planner expose bounded frame storage, push, pop,
+and outcomes. Native C11 covers yield/transition, Neutral/Success/Failure,
+parent restoration, shared/private fields, three-level and same-machine
+nesting, cleanup, overflow, and result gating. Generated code has no heap,
+scheduler, or saved program counter.

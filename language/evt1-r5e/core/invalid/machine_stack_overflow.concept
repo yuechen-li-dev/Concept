@@ -1,0 +1,26 @@
+profile Core;
+
+automata Overflow
+{
+    machine Run
+    {
+        state Recurse
+        {
+            push Run goto Recurse;
+        }
+    }
+}
+
+int Main()
+{
+    instance Overflow value();
+    Step(value, Run);
+    Step(value, Run);
+    Step(value, Run);
+    Step(value, Run);
+    Step(value, Run);
+    Step(value, Run);
+    Step(value, Run);
+    Step(value, Run);
+    return 0;
+}

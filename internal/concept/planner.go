@@ -261,6 +261,33 @@ type AutomataPlan struct {
 	Machines            []MachinePlan         `json:"machines"`
 	Scheduler           string                `json:"scheduler"`
 	YieldStrategy       string                `json:"yield_strategy"`
+	MachineStack        *MachineStackPlan     `json:"machine_stack,omitempty"`
+}
+
+type MachineStackPlan struct {
+	Capacity     int              `json:"capacity"`
+	Storage      string           `json:"storage"`
+	Scheduler    string           `json:"scheduler"`
+	Continuation string           `json:"continuation"`
+	Frames       []FramePlan      `json:"frames"`
+	Pushes       []PushPlan       `json:"pushes,omitempty"`
+	Completions  []CompletionPlan `json:"completions,omitempty"`
+}
+
+type FramePlan struct {
+	Machine string `json:"machine"`
+	State   string `json:"state"`
+	Fields  string `json:"fields"`
+}
+type PushPlan struct {
+	Child       string `json:"child"`
+	ResumeState string `json:"resume_state"`
+	Strategy    string `json:"strategy"`
+}
+type CompletionPlan struct {
+	Machine  string `json:"machine"`
+	Outcome  string `json:"outcome"`
+	Strategy string `json:"strategy"`
 }
 
 type FunctionPlan struct {
@@ -569,11 +596,17 @@ func planAutomata(mir *MIR) []AutomataPlan {
 			continue
 		}
 		plan := AutomataPlan{Identity: automata.Name, StateEnvironment: automata.StateEnvironment.Identity, EnvironmentStrategy: "InlineExplicitStruct", Scheduler: "None", YieldStrategy: "ReenterStateFromStart"}
+		if automata.MachineStack != nil {
+			plan.MachineStack = &MachineStackPlan{Capacity: automata.MachineStack.Capacity, Storage: "InlineBoundedStack", Scheduler: "None", Continuation: "ExplicitState"}
+		}
 		for _, field := range automata.StateEnvironment.Fields {
 			plan.StateFields = append(plan.StateFields, AutomataStoragePlan{Identity: field.Identity, Name: field.Name, Type: field.Type.String(), Classification: field.Classification, Strategy: "InlineField", HasDrop: field.HasDrop})
 		}
 		for _, machine := range automata.Machines {
 			mp := MachinePlan{Identity: automata.Name + "." + machine.Name, CurrentStateSlot: automata.Name + "." + machine.Name + "#current-state", DispatchStrategy: "Switch", InitialState: automata.Name + "." + machine.Name + "." + machine.States[0].Name}
+			if plan.MachineStack != nil {
+				plan.MachineStack.Frames = append(plan.MachineStack.Frames, FramePlan{Machine: machine.Name, State: "PerFrame", Fields: "PerFrame"})
+			}
 			for _, field := range machine.Fields {
 				mp.Fields = append(mp.Fields, AutomataStoragePlan{Identity: field.Identity, Name: field.Name, Type: field.Type.String(), Classification: field.Classification, Strategy: "InlineField", HasDrop: field.HasDrop})
 			}
@@ -588,6 +621,16 @@ func planAutomata(mir *MIR) []AutomataPlan {
 				for _, op := range state.Operations {
 					if op.Kind == "state_transition" {
 						mp.Transitions = append(mp.Transitions, state.Name+"->"+op.Detail)
+					}
+				}
+				if plan.MachineStack != nil {
+					for _, control := range state.MachineControl {
+						if control.Kind == "push_machine" {
+							plan.MachineStack.Pushes = append(plan.MachineStack.Pushes, PushPlan{Child: control.Machine, ResumeState: control.ResumeState, Strategy: "InitializeNextInlineSlot"})
+						}
+						if control.Kind == "pop_machine" {
+							plan.MachineStack.Completions = append(plan.MachineStack.Completions, CompletionPlan{Machine: machine.Name, Outcome: control.Outcome, Strategy: "CleanupStoreOutcomeDecrementDepth"})
+						}
 					}
 				}
 				for _, match := range state.TransitionMatches {
@@ -685,7 +728,7 @@ func ValidateLoweringPlan(mir *MIR, facts *SemanticFactSet, plan *LoweringPlan) 
 		return fail("PLAN_AUTOMATA_INVALID", "lowering plan does not cover every explicit-state automata")
 	}
 	for _, automata := range plan.Automata {
-		if automata.Identity == "" || automata.StateEnvironment == "" || automata.EnvironmentStrategy != "InlineExplicitStruct" || automata.Scheduler != "None" || automata.YieldStrategy != "ReenterStateFromStart" || len(automata.Machines) == 0 {
+		if automata.Identity == "" || automata.StateEnvironment == "" || automata.EnvironmentStrategy != "InlineExplicitStruct" || automata.Scheduler != "None" || automata.YieldStrategy != "ReenterStateFromStart" || len(automata.Machines) == 0 || automata.MachineStack == nil || automata.MachineStack.Storage != "InlineBoundedStack" || automata.MachineStack.Scheduler != "None" || automata.MachineStack.Continuation != "ExplicitState" {
 			return fail("PLAN_AUTOMATA_INVALID", "automata plan invents runtime policy or omits explicit storage")
 		}
 		for _, machine := range automata.Machines {

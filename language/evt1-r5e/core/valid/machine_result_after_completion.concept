@@ -1,0 +1,19 @@
+profile Core;
+
+automata Worker
+{
+    machine Run returns int
+    {
+        state Done
+        {
+            complete 17;
+        }
+    }
+}
+
+int Main()
+{
+    instance Worker worker();
+    Step(worker, Run);
+    return Result(worker, Run).success;
+}

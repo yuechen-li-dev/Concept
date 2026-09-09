@@ -1076,6 +1076,34 @@ beginning. If iteration progress matters across Steps, iterator state must be
 stored explicitly in automata or machine persistent storage and advanced with
 the protocol operations directly.
 
+**Canonical EVT1 R5e machine stack and completion.** Each automata instance has
+an inline bounded stack of at most eight machine frames. A frame contains a
+machine declaration tag, current state, and that frame's machine-persistent
+fields. All frames reference the one outer `with state` environment. The stack
+contains no saved instruction pointer and implies no scheduler or heap.
+
+At depth one, `Step(instance, Machine)` retains R5a's explicit top-level
+machine selection. At greater depth every Step spelling advances the active
+top frame exactly once. `yield;` keeps that frame; `transition Target;` changes
+only its state. The child call is `push Child goto ResumeState;`: initialize a
+new frame, make it topmost, and record an explicit parent state. Overflow
+panics with `automata machine stack capacity exceeded`. Same-machine frames
+are legal and independent.
+
+Machine declarations may spell `machine M returns T fails E`; either clause is
+optional. `pop;` and `complete;` are Neutral semantic pops, `complete value;`
+is Success, and `fail error;` is Failure. Payloads exactly match the declared
+types. Cleanup runs transient-then-frame; explicit `move` into an outcome
+transfers ownership and suppresses the source drop. Root pop empties the stack.
+
+`Result(instance, Machine)` reads the last outcome; `Result(Child)` is its
+parent-state form. Tags are 1 Neutral, 2 Success, and 3 Failure, with typed
+`success`/`failure` fields when declared. A pre-completion read panics with
+`machine result cannot be read before completion`. Machine outcome is not
+`Result<T,E>`, and Neutral fabricates no value. Internal Step status remains
+distinct and non-public. Future async may generate explicit states and use
+this same stack; async syntax is not R5e.
+
 ## 23. Effects, actuators, and profiles
 
 **Profile-specific.** R0 admits `effect`, ordered emitted-effect batches, and

@@ -1,0 +1,18 @@
+profile Core;
+
+automata Bad
+{
+    machine Run
+    {
+        state Start
+        {
+            pop;
+            pop;
+        }
+    }
+}
+
+int Main()
+{
+    return 0;
+}

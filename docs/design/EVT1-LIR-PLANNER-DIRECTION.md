@@ -1,6 +1,6 @@
 # EVT1 LIR Planner direction
 
-Status: R5d yield/foreach planning consumer; LIR is future work
+Status: R5e machine-stack/completion planning consumer; LIR is future work
 
 ## Authority pipeline
 
@@ -108,3 +108,12 @@ fusion, SSA, virtual registers, register allocation, MachineIR, LLVM, MLIR,
 native encoders, generalized alias solving, allocation policy, decompilation,
 continuation/resume frames, scheduler policy, generator yield, branchless hardmax transforms, sampling,
 and inference-model recognition.
+
+## R5e machine-stack plan
+
+Canonical automata carry `MachineStackPlan`, `FramePlan`, `PushPlan`, and
+`CompletionPlan`. GenericC11 selects `InlineBoundedStack`, capacity eight,
+`Scheduler: None`, and `Continuation: ExplicitState`. Push initializes the next
+specialized slot. Completion evaluates/transfers its payload, cleans the frame,
+stores the outcome, and decrements depth. Native target plans retain these
+semantics; R5e emits no LIR.

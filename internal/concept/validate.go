@@ -16,6 +16,11 @@ type evt1Scope struct {
 	tryHandlers       map[string]Type
 	transitionTargets map[string]bool
 	inAutomataState   bool
+	automataName      string
+	machineName       string
+	machineNames      map[string]bool
+	machineResultType Type
+	machineErrorType  Type
 }
 
 type evt1ProvenanceKind string
@@ -107,6 +112,11 @@ func newEVT1Scope(parent *evt1Scope) *evt1Scope {
 		s.tryHandlers = parent.tryHandlers
 		s.transitionTargets = parent.transitionTargets
 		s.inAutomataState = parent.inAutomataState
+		s.automataName = parent.automataName
+		s.machineName = parent.machineName
+		s.machineNames = parent.machineNames
+		s.machineResultType = parent.machineResultType
+		s.machineErrorType = parent.machineErrorType
 	}
 	return s
 }
@@ -181,6 +191,11 @@ func evt1CloneScope(scope *evt1Scope) *evt1Scope {
 	out.tryHandlers = scope.tryHandlers
 	out.transitionTargets = scope.transitionTargets
 	out.inAutomataState = scope.inAutomataState
+	out.automataName = scope.automataName
+	out.machineName = scope.machineName
+	out.machineNames = scope.machineNames
+	out.machineResultType = scope.machineResultType
+	out.machineErrorType = scope.machineErrorType
 	for name, binding := range scope.values {
 		out.values[name] = binding
 	}
@@ -1152,6 +1167,47 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 		case *YieldStmt:
 			if !local.inAutomataState || inComptimeFn {
 				return evt1Diagnostic("YIELD_OUTSIDE_STATE", "yield is only valid inside a runtime machine state body", s.Span)
+			}
+		case *PushMachineStmt:
+			if !local.inAutomataState {
+				return evt1Diagnostic("MACHINE_FRAME_INVALID", "push is only valid inside a runtime machine state body", s.Span)
+			}
+			if !local.machineNames[s.Machine] {
+				return evt1Diagnostic("MACHINE_PUSH_UNKNOWN", fmt.Sprintf("unknown pushed machine %s in automata %s", s.Machine, local.automataName), s.Span)
+			}
+			if !local.transitionTargets[s.ResumeState] {
+				return evt1Diagnostic("MACHINE_UNKNOWN_STATE", fmt.Sprintf("unknown resume state %s in current machine", s.ResumeState), s.Span)
+			}
+		case *MachineCompleteStmt:
+			if !local.inAutomataState {
+				return evt1Diagnostic("MACHINE_FRAME_INVALID", "machine completion is only valid inside a runtime machine state body", s.Span)
+			}
+			expected := Type{Name: "void", Kind: TypeBuiltin}
+			code := "MACHINE_COMPLETE_VALUE_TYPE_MISMATCH"
+			if s.Kind == "success" {
+				expected = local.machineResultType
+			} else if s.Kind == "failure" {
+				expected = local.machineErrorType
+				code = "MACHINE_FAIL_ERROR_TYPE_MISMATCH"
+			}
+			if s.Kind == "neutral" {
+				if s.Value != nil {
+					return evt1Diagnostic(code, "neutral completion cannot carry a payload", s.Span)
+				}
+			} else {
+				if expected.Name == "void" {
+					return evt1Diagnostic(code, fmt.Sprintf("machine %s does not declare a %s payload type", local.machineName, s.Kind), s.Span)
+				}
+				actual, err := validateExprAgainstExpected(env, local, s.Value, expected, templateInfo, inComptimeFn)
+				if err != nil {
+					return evt1Diagnostic(code, err.Error(), s.Span)
+				}
+				if !evt1TypesCompatible(env, expected, actual, "") {
+					return evt1Diagnostic(code, fmt.Sprintf("machine %s %s payload has type %s, expected %s", local.machineName, s.Kind, actual.String(), expected.String()), s.Span)
+				}
+				if expected.isOwned() && !evt1CanTransferInitialize(env, expected, s.Value) {
+					return evt1Diagnostic("CV4506", fmt.Sprintf("machine %s %s payload of owned type %s requires explicit move", local.machineName, s.Kind, expected.String()), s.Span)
+				}
 			}
 		case *ForeachStmt:
 			if err := validateForeachStmt(env, local, s, returnType, templateInfo, inComptimeFn); err != nil {
@@ -2257,6 +2313,45 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 	case *CallExpr:
 		if e.Member {
 			return evt1ValidateMemberCall(env, scope, e, templateInfo, inComptimeFn)
+		}
+		if e.Callee == "Result" {
+			if inComptimeFn {
+				return Type{}, evt1Diagnostic("MACHINE_RESULT_BEFORE_COMPLETION", "machine Result is a runtime completion query", e.Span)
+			}
+			var info *evt1AutomataInfo
+			var automataName string
+			var machineName *NameExpr
+			if len(e.Args) == 1 && scope.inAutomataState {
+				machineName, _ = e.Args[0].(*NameExpr)
+				automataName = scope.automataName
+				e.Intrinsic = "machine_result_inner"
+			} else if len(e.Args) == 2 {
+				instanceName, ok := e.Args[0].(*NameExpr)
+				if !ok {
+					return Type{}, evt1Diagnostic("MACHINE_STATE_ACCESS_INVALID", "Result requires a local automata instance", e.Span)
+				}
+				binding, ok := scope.lookup(instanceName.Name)
+				if !ok || !binding.isInstance() {
+					return Type{}, evt1Diagnostic("MACHINE_STATE_ACCESS_INVALID", "Result requires a local automata instance", instanceName.Span)
+				}
+				info = env.automataInfo[binding.instanceAutomata]
+				automataName = binding.instanceAutomata
+				machineName, _ = e.Args[1].(*NameExpr)
+				e.Intrinsic = "machine_result"
+			} else {
+				return Type{}, evt1Diagnostic("MACHINE_STATE_ACCESS_INVALID", "Result requires Result(Child) in a state or Result(instance, Machine) externally", e.Span)
+			}
+			if machineName == nil || automataName == "" {
+				return Type{}, evt1Diagnostic("MACHINE_STATE_ACCESS_INVALID", "Result requires a declared machine name", e.Span)
+			}
+			known := scope.machineNames[machineName.Name]
+			if info != nil {
+				_, known = info.MachineOrdinal[machineName.Name]
+			}
+			if !known {
+				return Type{}, evt1Diagnostic("MACHINE_PUSH_UNKNOWN", fmt.Sprintf("unknown machine %s in Result", machineName.Name), machineName.Span)
+			}
+			return Type{Name: evt1MachineOutcomeTypeName(automataName, machineName.Name), Kind: TypeStruct, Span: e.Span}, nil
 		}
 		if e.Callee == "Step" || e.Callee == "State" {
 			if inComptimeFn {

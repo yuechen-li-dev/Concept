@@ -1,0 +1,55 @@
+profile Core;
+
+automata Worker
+with state
+{
+    int value;
+}
+{
+    machine Parent
+    {
+        state Start
+        {
+            push Child goto Resumed;
+        }
+
+        state Resumed
+        {
+            state.value = state.value + 100;
+        }
+    }
+
+    machine Child
+    {
+        state Start
+        {
+            push Grandchild goto Resumed;
+        }
+
+        state Resumed
+        {
+            state.value = state.value + 10;
+            pop;
+        }
+    }
+
+    machine Grandchild
+    {
+        state Done
+        {
+            state.value = state.value + 1;
+            complete;
+        }
+    }
+}
+
+int Main()
+{
+    instance Worker worker(0);
+    Step(worker, Parent);
+    Step(worker, Parent);
+    Step(worker, Parent);
+    Step(worker, Parent);
+    Step(worker, Parent);
+    return worker.state.value;
+}

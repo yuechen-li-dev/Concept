@@ -70,11 +70,13 @@ type StateDecl struct {
 }
 
 type MachineDecl struct {
-	Name    string      `json:"name"`
-	Initial bool        `json:"initial,omitempty"`
-	Fields  []Field     `json:"fields,omitempty"`
-	States  []StateDecl `json:"states,omitempty"`
-	Span    Span        `json:"span"`
+	Name       string      `json:"name"`
+	Initial    bool        `json:"initial,omitempty"`
+	ResultType Type        `json:"result_type"`
+	ErrorType  Type        `json:"error_type"`
+	Fields     []Field     `json:"fields,omitempty"`
+	States     []StateDecl `json:"states,omitempty"`
+	Span       Span        `json:"span"`
 }
 
 type AutomataDecl struct {
@@ -129,6 +131,7 @@ type MIRAutomata struct {
 	SourceSpan           Span                         `json:"source_span"`
 	StateEnvironment     *MIRAutomataStateEnvironment `json:"state_environment,omitempty"`
 	Machines             []MIRMachine                 `json:"machines,omitempty"`
+	MachineStack         *MIRMachineStack             `json:"machine_stack,omitempty"`
 }
 
 type MIRMachine struct {
@@ -139,6 +142,26 @@ type MIRMachine struct {
 	SourceSpan     Span                   `json:"source_span"`
 	Fields         []MIRPersistentStorage `json:"fields,omitempty"`
 	States         []MIRState             `json:"states,omitempty"`
+	ResultType     *Type                  `json:"result_type,omitempty"`
+	ErrorType      *Type                  `json:"error_type,omitempty"`
+}
+
+type MIRMachineStack struct {
+	Capacity     int    `json:"capacity"`
+	Storage      string `json:"storage"`
+	Scheduler    string `json:"scheduler"`
+	Continuation string `json:"continuation"`
+	SharedState  string `json:"shared_state"`
+}
+
+type MIRMachineControl struct {
+	Kind        string `json:"kind"`
+	Machine     string `json:"machine,omitempty"`
+	ResumeState string `json:"resume_state,omitempty"`
+	Outcome     string `json:"outcome,omitempty"`
+	PayloadType string `json:"payload_type,omitempty"`
+	CleanupEdge string `json:"cleanup_edge"`
+	SourceSpan  Span   `json:"source_span"`
 }
 
 type MIRState struct {
@@ -157,6 +180,7 @@ type MIRState struct {
 	Foreaches            []MIRForeach           `json:"foreach,omitempty"`
 	Operations           []MIROperation         `json:"operations,omitempty"`
 	Storage              []MIRPersistentStorage `json:"storage,omitempty"`
+	MachineControl       []MIRMachineControl    `json:"machine_control,omitempty"`
 }
 
 type MIRTransitionInfer struct {
@@ -241,6 +265,10 @@ type MIREmit struct {
 	Effect     string   `json:"effect"`
 	Args       []string `json:"args,omitempty"`
 	SourceSpan Span     `json:"source_span"`
+}
+
+func evt1MachineOutcomeTypeName(automataName, machineName string) string {
+	return automataName + machineName + "MachineOutcome"
 }
 
 type evt1AutomataPushEdge struct {
@@ -450,12 +478,40 @@ func evt1ValidateCanonicalAutomata(env *semanticEnv, decl AutomataDecl) (*evt1Au
 	}
 	env.fieldSets[stateEnvName] = stateTypes
 	machineNames := map[string]bool{}
+	allMachineNames := map[string]bool{}
+	for _, declaredMachine := range decl.Machines {
+		allMachineNames[declaredMachine.Name] = true
+		outcomeFields := map[string]Type{"tag": {Name: "int", Kind: TypeBuiltin}}
+		if declaredMachine.ResultType.Name != "void" {
+			outcomeFields["success"] = declaredMachine.ResultType
+		}
+		if declaredMachine.ErrorType.Name != "void" {
+			outcomeFields["failure"] = declaredMachine.ErrorType
+		}
+		env.fieldSets[evt1MachineOutcomeTypeName(decl.Name, declaredMachine.Name)] = outcomeFields
+	}
 	for mi := range decl.Machines {
 		machine := &decl.Machines[mi]
 		if machineNames[machine.Name] {
 			return nil, evt1Diagnostic("AUTOMATA_DUPLICATE_MACHINE", fmt.Sprintf("duplicate machine %s in automata %s", machine.Name, decl.Name), machine.Span)
 		}
 		machineNames[machine.Name] = true
+		if err := validateKnownType(env, machine.ResultType, machine.ResultType.Span, "", false); err != nil {
+			return nil, err
+		}
+		if err := validateKnownType(env, machine.ErrorType, machine.ErrorType.Span, "", false); err != nil {
+			return nil, err
+		}
+		machine.ResultType, _ = evt1ResolveType(env, nil, machine.ResultType)
+		machine.ErrorType, _ = evt1ResolveType(env, nil, machine.ErrorType)
+		outcomeFields := map[string]Type{"tag": {Name: "int", Kind: TypeBuiltin}}
+		if machine.ResultType.Name != "void" {
+			outcomeFields["success"] = machine.ResultType
+		}
+		if machine.ErrorType.Name != "void" {
+			outcomeFields["failure"] = machine.ErrorType
+		}
+		env.fieldSets[evt1MachineOutcomeTypeName(decl.Name, machine.Name)] = outcomeFields
 		info.MachineOrdinal[machine.Name] = mi
 		info.MachineReachable[machine.Name] = true
 		info.StateOrdinal[machine.Name] = map[string]int{}
@@ -511,8 +567,16 @@ func evt1ValidateCanonicalAutomata(env *semanticEnv, decl AutomataDecl) (*evt1Au
 			if state.Body == nil {
 				return nil, evt1Diagnostic("MACHINE_MIR_INVALID", fmt.Sprintf("state %s.%s requires a body", machine.Name, state.Name), state.Span)
 			}
+			if err := evt1ValidateMachineControlFlow(state.Body); err != nil {
+				return nil, err
+			}
 			automataScope := evt1ModuleScope(env)
 			automataScope.inAutomataState = true
+			automataScope.automataName = decl.Name
+			automataScope.machineName = machine.Name
+			automataScope.machineNames = allMachineNames
+			automataScope.machineResultType = machine.ResultType
+			automataScope.machineErrorType = machine.ErrorType
 			automataScope.transitionTargets = stateNames
 			automataScope.declare("state", evt1ValueBinding{t: Type{Name: stateEnvName, Kind: TypeStruct}, mutable: true, state: evt1StorageInitialized})
 			for _, field := range decl.StateFields {

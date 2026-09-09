@@ -522,6 +522,27 @@ type YieldStmt struct {
 func (*YieldStmt) evt1Statement()        {}
 func (s *YieldStmt) statementSpan() Span { return s.Span }
 
+// PushMachineStmt replaces the active Step with an explicit child-frame push.
+// ResumeState is the caller state restored by the eventual semantic pop.
+type PushMachineStmt struct {
+	Machine     string `json:"machine"`
+	ResumeState string `json:"resume_state"`
+	Span        Span   `json:"span"`
+}
+
+func (*PushMachineStmt) evt1Statement()        {}
+func (s *PushMachineStmt) statementSpan() Span { return s.Span }
+
+type MachineCompleteStmt struct {
+	Kind      string `json:"kind"` // neutral, success, or failure
+	Operation string `json:"operation"`
+	Value     Expr   `json:"value,omitempty"`
+	Span      Span   `json:"span"`
+}
+
+func (*MachineCompleteStmt) evt1Statement()        {}
+func (s *MachineCompleteStmt) statementSpan() Span { return s.Span }
+
 func (*TransitionStmt) evt1Statement()        {}
 func (s *TransitionStmt) statementSpan() Span { return s.Span }
 

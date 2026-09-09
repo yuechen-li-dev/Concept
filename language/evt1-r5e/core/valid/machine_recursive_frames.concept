@@ -1,0 +1,41 @@
+profile Core;
+
+automata Recursive
+with state
+{
+    int remaining;
+}
+{
+    machine Run
+    {
+        int identity = 0;
+
+        state Enter
+        {
+            if (state.remaining > 0)
+            {
+                state.remaining = state.remaining - 1;
+                machine.identity = state.remaining;
+                push Run goto Resume;
+            }
+            complete;
+        }
+
+        state Resume
+        {
+            state.remaining = state.remaining + machine.identity + 1;
+            pop;
+        }
+    }
+}
+
+int Main()
+{
+    instance Recursive recursive(2);
+    Step(recursive, Run);
+    Step(recursive, Run);
+    Step(recursive, Run);
+    Step(recursive, Run);
+    Step(recursive, Run);
+    return recursive.state.remaining;
+}

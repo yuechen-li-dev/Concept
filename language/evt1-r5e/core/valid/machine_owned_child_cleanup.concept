@@ -1,0 +1,43 @@
+profile Core;
+
+struct Resource
+{
+    int value;
+}
+
+void Drop(owned Resource resource)
+{
+}
+
+automata Owner
+{
+    machine Parent
+    {
+        state Start
+        {
+            push Child goto Resumed;
+        }
+
+        state Resumed
+        {
+        }
+    }
+
+    machine Child
+    {
+        owned Resource resource = Resource{5};
+
+        state Done
+        {
+            complete;
+        }
+    }
+}
+
+int Main()
+{
+    instance Owner owner();
+    Step(owner, Parent);
+    Step(owner, Parent);
+    return 0;
+}

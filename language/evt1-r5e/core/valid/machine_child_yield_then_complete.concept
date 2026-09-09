@@ -1,0 +1,51 @@
+profile Core;
+
+automata Worker
+with state
+{
+    int entries;
+}
+{
+    machine Parent
+    {
+        state Start
+        {
+            push Child goto Resumed;
+        }
+
+        state Resumed
+        {
+            state.entries = state.entries + 10;
+        }
+    }
+
+    machine Child
+    {
+        state First
+        {
+            state.entries = state.entries + 1;
+            transition Second;
+        }
+
+        state Second
+        {
+            if (state.entries == 1)
+            {
+                state.entries = state.entries + 1;
+                yield;
+            }
+            complete;
+        }
+    }
+}
+
+int Main()
+{
+    instance Worker worker(0);
+    Step(worker, Parent);
+    Step(worker, Parent);
+    Step(worker, Parent);
+    Step(worker, Parent);
+    Step(worker, Parent);
+    return worker.state.entries;
+}

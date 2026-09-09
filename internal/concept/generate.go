@@ -245,6 +245,7 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 				environment.Fields = append(environment.Fields, MIRPersistentStorage{Identity: resolvedDecl.Name + "#state." + field.Name, Name: field.Name, Type: evt1MIRType(env, field.Type), Classification: "AutomataState", Ordinal: i, Mutable: !field.Type.Const, HasDrop: evt1TypeHasDrop(env, field.Type), Provenance: evt1AutomataStorageProvenance(field.Type), SourceSpan: field.Span})
 			}
 			mirAutomata.StateEnvironment = environment
+			mirAutomata.MachineStack = &MIRMachineStack{Capacity: evt1MachineStackCapacity, Storage: "InlineBoundedSpecializedFrames", Scheduler: "None", Continuation: "ExplicitState", SharedState: resolvedDecl.Name + "#state"}
 		}
 		if automataDecl.Context != nil {
 			contextType := evt1MIRType(env, automataDecl.Context.Type)
@@ -258,6 +259,10 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 				RuntimeOrdinal: info.MachineOrdinal[machine.Name],
 				Reachable:      info.MachineReachable[machine.Name],
 				SourceSpan:     machine.Span,
+			}
+			if resolvedDecl.SignalType.Name == "" {
+				resultType, errorType := evt1MIRType(env, machine.ResultType), evt1MIRType(env, machine.ErrorType)
+				mirMachine.ResultType, mirMachine.ErrorType = &resultType, &errorType
 			}
 			for i, field := range machine.Fields {
 				mirMachine.Fields = append(mirMachine.Fields, MIRPersistentStorage{Identity: resolvedDecl.Name + "." + machine.Name + "#field." + field.Name, Name: field.Name, Type: evt1MIRType(env, field.Type), Classification: "MachinePersistent", Ordinal: i, Mutable: !field.Type.Const, HasDrop: evt1TypeHasDrop(env, field.Type), Provenance: evt1AutomataStorageProvenance(field.Type), SourceSpan: field.Span})
@@ -278,6 +283,7 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 					mirState.Foreaches = append(mirState.Foreaches, tmp.Foreaches...)
 					collectTransitionMIR(state.Body, &mirState)
 					collectYieldMIR(state.Body, resolvedDecl.Name, machine.Name, state.Name, &mirState)
+					collectMachineControlMIR(state.Body, machine, &mirState)
 					ordinal := 0
 					for _, stmt := range state.Body.Statements {
 						if local, ok := stmt.(*VarDecl); ok {
@@ -598,6 +604,9 @@ func evt1ValidateMIR(mir MIR) error {
 		}
 		if automata.StateEnvironment.Identity != automata.Name+"#state" || !automata.StateEnvironment.Explicit || !automata.StateEnvironment.Shared {
 			return evt1Diagnostic("AUTOMATA_MIR_INVALID", "automata MIR omits its explicit shared state environment", automata.SourceSpan)
+		}
+		if automata.MachineStack == nil || automata.MachineStack.Capacity != evt1MachineStackCapacity || automata.MachineStack.Storage != "InlineBoundedSpecializedFrames" || automata.MachineStack.Scheduler != "None" || automata.MachineStack.Continuation != "ExplicitState" || automata.MachineStack.SharedState != automata.StateEnvironment.Identity {
+			return evt1Diagnostic("MACHINE_STACK_MIR_INVALID", "canonical automata MIR omits or corrupts its bounded explicit-state machine stack", automata.SourceSpan)
 		}
 		seenMachines := map[string]bool{}
 		seenStorage := map[string]bool{}
@@ -941,6 +950,13 @@ func collectMIROps(env *semanticEnv, block *Block, fn *MIRFunction, templateInfo
 			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "state_transition", Detail: s.Target, SourceSpan: s.Span})
 		case *YieldStmt:
 			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "yield_state", Detail: "preserve-current-state", NoAllocation: true, NoCopy: true, NoOwnershipTransfer: true, SourceSpan: s.Span})
+		case *PushMachineStmt:
+			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "push_machine", Detail: s.Machine + " goto " + s.ResumeState, NoAllocation: true, NoCopy: true, NoOwnershipTransfer: true, SourceSpan: s.Span})
+		case *MachineCompleteStmt:
+			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "complete_" + s.Kind, Detail: "semantic-pop", NoAllocation: true, SourceSpan: s.Span})
+			if s.Value != nil {
+				collectExprMIROps(env, s.Value, fn, templateInfo)
+			}
 		case *ForeachStmt:
 			mode := "Value"
 			if s.ItemType.Ownership == "ref" {
@@ -1531,14 +1547,7 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 		body.WriteString("  fprintf(stderr, \"invalid automata state for %s: machine=%d state=%d\\n\", automata_name, machine, state);\n")
 		body.WriteString("  abort();\n}\n\n")
 	}
-	usesLegacyAutomataRuntime := false
-	for name := range runtimeAutomata {
-		if info := l.env.automataInfo[name]; info != nil && info.Decl.SignalType.Name != "" {
-			usesLegacyAutomataRuntime = true
-			break
-		}
-	}
-	if usesLegacyAutomataRuntime {
+	if len(runtimeAutomata) > 0 {
 		body.WriteString("static void concept_abort_automata_stack(const char* automata_name, const char* reason) {\n")
 		body.WriteString("  fprintf(stderr, \"invalid automata stack for %s: %s\\n\", automata_name, reason);\n")
 		body.WriteString("  abort();\n}\n\n")
@@ -2198,7 +2207,7 @@ func evt1InitialStateName(machine MachineDecl) string {
 
 func (l *lowering) automataRuntimeSupport(info *evt1AutomataInfo) string {
 	if info.Decl.SignalType.Name == "" {
-		return l.canonicalAutomataRuntimeSupport(info)
+		return l.canonicalAutomataStackRuntimeSupport(info)
 	}
 	var b strings.Builder
 	instanceType := evt1AutomataRuntimeInstanceCName(info.Decl.Name)
@@ -3180,6 +3189,9 @@ type evt1FunctionLowerer struct {
 	tryHandlers      []map[string]evt1LoweredTryHandler
 	automataStepName string
 	machineStepName  string
+	automataInfo     *evt1AutomataInfo
+	machineDecl      *MachineDecl
+	frameIndexName   string
 }
 
 type evt1LoweredTryHandler struct {
@@ -3392,12 +3404,20 @@ func (f *evt1FunctionLowerer) lowerStatement(stmt Statement, indent int) string 
 		if f.automataStepName == "" {
 			return ind(indent) + "/* invalid transition */\n"
 		}
-		return f.lowerAllScopeDrops(indent) + ind(indent) + fmt.Sprintf("instance->%s.current_state = %s;\n", evt1PayloadFieldName(f.machineStepName), evt1AutomataStateConstName(f.automataStepName, f.machineStepName, s.Target)) + ind(indent) + "return;\n"
+		statePlace := fmt.Sprintf("instance->%s.current_state", evt1PayloadFieldName(f.machineStepName))
+		if f.frameIndexName != "" {
+			statePlace = fmt.Sprintf("instance->%s[%s].current_state", evt1MachineFramesCName(f.machineStepName), f.frameIndexName)
+		}
+		return f.lowerAllScopeDrops(indent) + ind(indent) + fmt.Sprintf("%s = %s;\n", statePlace, evt1AutomataStateConstName(f.automataStepName, f.machineStepName, s.Target)) + ind(indent) + "return;\n"
 	case *YieldStmt:
 		if f.automataStepName == "" {
 			return ind(indent) + "/* invalid yield */\n"
 		}
 		return f.lowerAllScopeDrops(indent) + ind(indent) + "return; /* CONCEPT_STEP_YIELDED: re-enter current state */\n"
+	case *PushMachineStmt:
+		return f.lowerMachinePush(*s, indent)
+	case *MachineCompleteStmt:
+		return f.lowerMachineCompletion(*s, indent)
 	case *ForeachStmt:
 		return f.lowerForeachStmt(*s, indent)
 	case *TransitionMatchStmt:
@@ -3618,7 +3638,11 @@ func (f *evt1FunctionLowerer) lowerTransitionMatchStmt(stmt TransitionMatchStmt,
 		f.liveOwners = f.cloneOwnerState(before)
 		b.WriteString(ind(indent) + fmt.Sprintf("case %s:\n", tag))
 		b.WriteString(f.lowerAllScopeDrops(indent + 1))
-		b.WriteString(ind(indent+1) + fmt.Sprintf("instance->%s.current_state = %s;\n", evt1PayloadFieldName(f.machineStepName), evt1AutomataStateConstName(f.automataStepName, f.machineStepName, arm.Target)))
+		statePlace := fmt.Sprintf("instance->%s.current_state", evt1PayloadFieldName(f.machineStepName))
+		if f.frameIndexName != "" {
+			statePlace = fmt.Sprintf("instance->%s[%s].current_state", evt1MachineFramesCName(f.machineStepName), f.frameIndexName)
+		}
+		b.WriteString(ind(indent+1) + fmt.Sprintf("%s = %s;\n", statePlace, evt1AutomataStateConstName(f.automataStepName, f.machineStepName, arm.Target)))
 		b.WriteString(ind(indent+1) + "return;\n")
 	}
 	f.liveOwners = before
@@ -3665,7 +3689,11 @@ func (f *evt1FunctionLowerer) lowerTransitionDecideStmt(stmt TransitionDecideStm
 	}
 	b.WriteString(ind(indent+1) + fmt.Sprintf("if (!%s) { concept_panic(%q, %d, %d); }\n", hasBest, "machine decision transition has no enabled candidates", stmt.Span.Line, stmt.Span.Column))
 	b.WriteString(f.lowerAllScopeDrops(indent + 1))
-	b.WriteString(ind(indent+1) + fmt.Sprintf("instance->%s.current_state = %s;\n", evt1PayloadFieldName(f.machineStepName), bestState))
+	statePlace := fmt.Sprintf("instance->%s.current_state", evt1PayloadFieldName(f.machineStepName))
+	if f.frameIndexName != "" {
+		statePlace = fmt.Sprintf("instance->%s[%s].current_state", evt1MachineFramesCName(f.machineStepName), f.frameIndexName)
+	}
+	b.WriteString(ind(indent+1) + fmt.Sprintf("%s = %s;\n", statePlace, bestState))
 	b.WriteString(ind(indent+1) + "return;\n")
 	b.WriteString(ind(indent) + "}\n")
 	return b.String()
@@ -3750,7 +3778,11 @@ func (f *evt1FunctionLowerer) lowerTransitionInferStmt(stmt TransitionInferStmt,
 	b.WriteString(f.lowerAllScopeDrops(indent + 1))
 	b.WriteString(ind(indent+1) + fmt.Sprintf("switch (%s) {\n", best))
 	for i, candidate := range stmt.Candidates {
-		b.WriteString(ind(indent+2) + fmt.Sprintf("case %d: instance->%s.current_state = %s; break;\n", i, evt1PayloadFieldName(f.machineStepName), evt1AutomataStateConstName(f.automataStepName, f.machineStepName, candidate.Identity)))
+		statePlace := fmt.Sprintf("instance->%s.current_state", evt1PayloadFieldName(f.machineStepName))
+		if f.frameIndexName != "" {
+			statePlace = fmt.Sprintf("instance->%s[%s].current_state", evt1MachineFramesCName(f.machineStepName), f.frameIndexName)
+		}
+		b.WriteString(ind(indent+2) + fmt.Sprintf("case %d: %s = %s; break;\n", i, statePlace, evt1AutomataStateConstName(f.automataStepName, f.machineStepName, candidate.Identity)))
 	}
 	b.WriteString(ind(indent+2) + "default: concept_panic(\"inference policy selected invalid candidate\", 0, 0);\n")
 	b.WriteString(ind(indent+1) + "}\n")
@@ -3836,7 +3868,7 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 				if machine.Name == parts[2] {
 					for _, field := range machine.Fields {
 						if field.Name == e.Field {
-							path := binding.cName + "." + evt1PayloadFieldName(parts[2]) + "." + e.Field
+							path := binding.cName + "." + evt1MachineFramesCName(parts[2]) + "[0]." + e.Field
 							if field.Type.isReference() && field.Type.ArrayElem == nil {
 								return "", "(*(" + path + "))", field.Type.borrowBase()
 							}
@@ -4006,6 +4038,20 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		}
 		return b.String(), carrierTemp + ".payload." + field, evt1FailureSuccessType(carrierType)
 	case *CallExpr:
+		if e.Intrinsic == "machine_result" || e.Intrinsic == "machine_result_inner" {
+			var automataName, instanceExpr, machineName string
+			if e.Intrinsic == "machine_result_inner" {
+				automataName, instanceExpr = f.automataStepName, "instance"
+				machineName = e.Args[0].(*NameExpr).Name
+			} else {
+				instanceName := e.Args[0].(*NameExpr).Name
+				binding, _ := scopeLookup(instanceName, f.scope)
+				automataName, instanceExpr = binding.instanceAutomata, "&"+binding.cName
+				machineName = e.Args[1].(*NameExpr).Name
+			}
+			name := evt1CName(automataName) + "_result_" + evt1PayloadFieldName(machineName)
+			return "", name + "(" + instanceExpr + ")", Type{Name: evt1MachineOutcomeTypeName(automataName, machineName), Kind: TypeStruct, Span: e.Span}
+		}
 		if e.Intrinsic == "inference_HardMax" || e.Intrinsic == "inference_Confidence" {
 			prelude, value, inferenceType := f.lowerExpr(e.Args[0], indent)
 			valueTemp := f.nextTemp("inference_query")
@@ -4036,6 +4082,9 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 			binding, _ := scopeLookup(instanceName, f.scope)
 			if e.Intrinsic == "step_machine" {
 				return "", evt1AutomataStepCName(binding.instanceAutomata, machineName) + "(&" + binding.cName + ")", Type{Name: "void", Kind: TypeBuiltin, Span: e.Span}
+			}
+			if f.l.env.automataInfo[binding.instanceAutomata].Decl.SignalType.Name == "" {
+				return "", binding.cName + "." + evt1MachineFramesCName(machineName) + "[0].current_state", Type{Name: "int", Kind: TypeBuiltin, Span: e.Span}
 			}
 			return "", binding.cName + "." + evt1PayloadFieldName(machineName) + ".current_state", Type{Name: "int", Kind: TypeBuiltin, Span: e.Span}
 		}
