@@ -60,6 +60,7 @@ type evt1ValueBinding struct {
 	t                Type
 	mutable          bool
 	state            evt1StorageState
+	objectState      evt1StorageState
 	comptime         bool
 	hasValue         bool
 	value            Value
@@ -150,6 +151,17 @@ func (s *evt1Scope) setState(name string, state evt1StorageState) bool {
 	for scope := s; scope != nil; scope = scope.parent {
 		if binding, ok := scope.values[name]; ok {
 			binding.state = state
+			scope.values[name] = binding
+			return true
+		}
+	}
+	return false
+}
+
+func (s *evt1Scope) setObjectState(name string, state evt1StorageState) bool {
+	for scope := s; scope != nil; scope = scope.parent {
+		if binding, ok := scope.values[name]; ok {
+			binding.objectState = state
 			scope.values[name] = binding
 			return true
 		}
@@ -478,9 +490,6 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 	}
 	for _, structDecl := range module.Structs {
 		fields := map[string]Type{}
-		if len(structDecl.Fields) == 0 {
-			return nil, evt1Diagnostic("CV4123", fmt.Sprintf("empty struct %s is not supported", structDecl.Name), structDecl.Span)
-		}
 		for _, field := range structDecl.Fields {
 			if _, exists := fields[field.Name]; exists {
 				return nil, evt1Diagnostic("CV4124", fmt.Sprintf("duplicate field %s.%s", structDecl.Name, field.Name), field.Span)
@@ -1073,6 +1082,18 @@ func evt1ValidateExternCSignature(env *semanticEnv, fn FunctionDecl) error {
 }
 
 func validateTemplateSignature(env *semanticEnv, templateDecl TemplateDecl) error {
+	parameterSet := templateDecl.TypeParam
+	if len(templateDecl.Parameters) > 0 {
+		var names []string
+		for _, parameter := range templateDecl.Parameters {
+			if parameter.Kind == "type" {
+				names = append(names, parameter.Name)
+			} else if parameter.ValueType.Name != "usize" || parameter.ValueType.Quantity != nil {
+				return evt1Diagnostic("CV4165", fmt.Sprintf("non-type template parameter %s must use dimensionless usize in R6g", parameter.Name), parameter.Span)
+			}
+		}
+		parameterSet = strings.Join(names, "|")
+	}
 	if templateDecl.Constraint.ConceptName != "" {
 		constraintConcept, ok := env.concepts[templateDecl.Constraint.ConceptName]
 		if !ok {
@@ -1085,14 +1106,14 @@ func validateTemplateSignature(env *semanticEnv, templateDecl TemplateDecl) erro
 			return evt1Diagnostic("CV4171", fmt.Sprintf("template constraint %s must be a named one-parameter concept", templateDecl.Constraint.ConceptName), templateDecl.Constraint.Span)
 		}
 	}
-	if err := validateKnownType(env, templateDecl.ReturnType, templateDecl.ReturnType.Span, templateDecl.TypeParam, false); err != nil {
+	if err := validateKnownType(env, templateDecl.ReturnType, templateDecl.ReturnType.Span, parameterSet, false); err != nil {
 		return err
 	}
 	if err := validateTemplateByValueBoundary(env, templateDecl.ReturnType, templateDecl.Span, "return", templateDecl.TypeParam); err != nil {
 		return err
 	}
 	for _, param := range templateDecl.Params {
-		if err := validateKnownType(env, param.Type, param.Span, templateDecl.TypeParam, false); err != nil {
+		if err := validateKnownType(env, param.Type, param.Span, parameterSet, false); err != nil {
 			return err
 		}
 		if err := validateTemplateByValueBoundary(env, param.Type, param.Span, "parameter", templateDecl.TypeParam); err != nil {
@@ -1294,8 +1315,13 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				provenance = evt1ExprProvenance(env, local, s.Value)
 				provenance.Scoped = provenance.Scoped || resolvedType.Scoped
 			}
+			objectState := evt1StorageInitialized
+			if resolvedType.Kind == TypeTypedStorage {
+				objectState = evt1StorageUninitialized
+			}
 			local.declare(s.Name, evt1ValueBinding{
 				t: resolvedType, mutable: !s.Const, state: evt1StorageInitialized, comptime: inComptimeFn,
+				objectState:     objectState,
 				provenance:      provenance,
 				spanFacts:       evt1SpanFactsForValue(env, local, s.Value, resolvedType),
 				regionFacts:     evt1RegionFactsForValue(env, local, s.Value, resolvedType),
@@ -1768,6 +1794,18 @@ func evt1EvalScopeFromValidation(scope *evt1Scope, env *semanticEnv) *evt1EvalSc
 }
 
 func validateExprAgainstExpected(env *semanticEnv, scope *evt1Scope, expr Expr, expected Type, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
+	if evt1NumericRepresentation(expected) {
+		switch expr.(type) {
+		case *IntLiteral:
+			if evt1IntegralRepresentation(expected) {
+				return expected.valueType(), nil
+			}
+		case *FloatLiteral:
+			if expected.Name == "float" {
+				return expected.valueType(), nil
+			}
+		}
+	}
 	if expected.Kind == TypeCallback {
 		return evt1ValidateCallbackErasure(env, scope, expr, expected, templateInfo, inComptimeFn)
 	}
@@ -1806,6 +1844,106 @@ func validateExprAgainstExpected(env *semanticEnv, scope *evt1Scope, expr Expr, 
 		return expected, nil
 	}
 	return validateExpr(env, scope, expr, templateInfo, inComptimeFn)
+}
+
+func evt1ValidateStorageTemplateCall(env *semanticEnv, scope *evt1Scope, e *TemplateCallExpr, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, bool, error) {
+	switch e.Callee {
+	case "AddressFromBits", "AddressOf":
+		if len(e.TypeArgs) > 1 || len(e.Args) != 1 {
+			return Type{}, true, evt1Diagnostic("ADDRESS_OPERATION_ARGUMENTS", e.Callee+" expects one address-space type and one value argument", e.Span)
+		}
+		if err := validateKnownType(env, e.TypeArg, e.TypeArg.Span, "", false); err != nil {
+			return Type{}, true, err
+		}
+		if e.TypeArg.Kind != TypeStruct {
+			return Type{}, true, evt1Diagnostic("ADDRESS_SPACE_TAG_INVALID", "address-space argument must be a nominal struct tag", e.TypeArg.Span)
+		}
+		argType, err := validateExpr(env, scope, e.Args[0], templateInfo, inComptimeFn)
+		if err != nil {
+			return Type{}, true, err
+		}
+		if e.Callee == "AddressFromBits" && !(argType.Name == "usize" && evt1DimensionlessNumeric(argType)) {
+			return Type{}, true, evt1Diagnostic("ADDRESS_FROM_BITS_REQUIRES_USIZE", fmt.Sprintf("AddressFromBits requires dimensionless usize, got %s", argType.String()), e.Args[0].exprSpan())
+		}
+		if e.Callee == "AddressOf" && !argType.isReference() {
+			return Type{}, true, evt1Diagnostic("ADDRESS_OF_REQUIRES_REF", "AddressOf requires an explicit ref to live backing storage", e.Args[0].exprSpan())
+		}
+		return evt1AddressType(e.TypeArg, e.Span), true, nil
+	case "bind":
+		if len(e.TypeArgs) > 1 || len(e.Args) != 2 {
+			return Type{}, true, evt1Diagnostic("RAW_BIND_ARGUMENTS", "bind<T> expects an address and a usize<byte> extent", e.Span)
+		}
+		if err := validateKnownType(env, e.TypeArg, e.TypeArg.Span, "", false); err != nil {
+			return Type{}, true, err
+		}
+		addressType, err := validateExpr(env, scope, e.Args[0], templateInfo, inComptimeFn)
+		if err != nil {
+			return Type{}, true, err
+		}
+		extentType, err := validateExpr(env, scope, e.Args[1], templateInfo, inComptimeFn)
+		if err != nil {
+			return Type{}, true, err
+		}
+		if addressType.Kind != TypeAddress || len(addressType.TypeArgs) != 1 {
+			return Type{}, true, evt1Diagnostic("RAW_BIND_REQUIRES_ADDRESS", fmt.Sprintf("bind<T> requires Address<SystemMemory>, got %s", addressType.String()), e.Args[0].exprSpan())
+		}
+		if addressType.TypeArgs[0].Name != "SystemMemory" {
+			return Type{}, true, evt1Diagnostic("ADDRESS_SPACE_NOT_HOST_ACCESSIBLE", fmt.Sprintf("address space %s is not established as HostAccessible", addressType.TypeArgs[0].String()), e.Args[0].exprSpan())
+		}
+		if !evt1AddressHasStorageOrigin(scope, e.Args[0]) {
+			return Type{}, true, evt1Diagnostic("RAW_BIND_PROVENANCE_UNKNOWN", "bind<T> requires an address derived from live backing storage; an arbitrary or reconstructed address does not establish storage provenance", e.Args[0].exprSpan())
+		}
+		if !evt1ByteDisplacement(extentType) {
+			return Type{}, true, evt1Diagnostic("RAW_BIND_EXTENT_UNIT", fmt.Sprintf("bind<T> extent requires usize<byte>, got %s", extentType.String()), e.Args[1].exprSpan())
+		}
+		if _, _, err := evt1TypeGeometry(env, e.TypeArg); err != nil {
+			return Type{}, true, err
+		}
+		return evt1StorageType(e.TypeArg, e.Span), true, nil
+	case "Convert":
+		targetUnit, ok := quantityFromUnit(e.TypeArg.Name)
+		if !ok || len(e.Args) != 1 {
+			return Type{}, true, evt1Diagnostic("QUANTITY_CONVERSION_INVALID", "Convert<Unit> expects one value and a known unit", e.Span)
+		}
+		source, err := validateExpr(env, scope, e.Args[0], templateInfo, inComptimeFn)
+		if err != nil {
+			return Type{}, true, err
+		}
+		if source.Quantity == nil || !source.Quantity.SameDimension(targetUnit) {
+			return Type{}, true, evt1Diagnostic("QUANTITY_CONVERSION_INVALID", fmt.Sprintf("cannot convert %s to %s", source.String(), e.TypeArg.Name), e.Span)
+		}
+		return evt1QuantityResult(source, targetUnit, e.Span), true, nil
+	default:
+		return Type{}, false, nil
+	}
+}
+
+func evt1StorageBindingForCall(scope *evt1Scope, call *CallExpr) (string, evt1ValueBinding, bool) {
+	if len(call.Args) == 0 {
+		return "", evt1ValueBinding{}, false
+	}
+	name, ok := call.Args[0].(*NameExpr)
+	if !ok {
+		return "", evt1ValueBinding{}, false
+	}
+	binding, ok := scope.lookup(name.Name)
+	return name.Name, binding, ok && binding.t.Kind == TypeTypedStorage && len(binding.t.TypeArgs) == 1
+}
+
+func evt1AddressHasStorageOrigin(scope *evt1Scope, expr Expr) bool {
+	switch e := expr.(type) {
+	case *TemplateCallExpr:
+		return e.Callee == "AddressOf"
+	case *NameExpr:
+		if binding, ok := scope.lookup(e.Name); ok && binding.source != nil {
+			return evt1AddressHasStorageOrigin(scope, binding.source)
+		}
+	case *ParenExpr:
+		return evt1AddressHasStorageOrigin(scope, e.Value)
+	case *BinaryExpr:
+		return evt1AddressHasStorageOrigin(scope, e.Left) || evt1AddressHasStorageOrigin(scope, e.Right)
+	}
+	return false
 }
 
 func validateBindExpr(env *semanticEnv, scope *evt1Scope, bind *BindExpr, expected Type, templateInfo *evt1TemplateInfo) (Type, error) {
@@ -2250,6 +2388,18 @@ func evt1NestedLiteralShape(expr Expr) ([]int, []Expr, bool, bool) {
 }
 
 func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string, allowConceptApp bool) error {
+	if t.Kind == TypeAddress || t.Kind == TypeTypedStorage {
+		if len(t.TypeArgs) != 1 {
+			return evt1Diagnostic("STORAGE_TYPE_ARITY", fmt.Sprintf("%s requires exactly one type argument", t.Name), span)
+		}
+		if err := validateKnownType(env, t.TypeArgs[0], span, conceptParam, false); err != nil {
+			return err
+		}
+		if t.Kind == TypeAddress && t.TypeArgs[0].Kind != TypeStruct && t.TypeArgs[0].Kind != TypeConceptParam {
+			return evt1Diagnostic("ADDRESS_SPACE_TAG_INVALID", fmt.Sprintf("Address space must be a nominal struct tag, got %s", t.TypeArgs[0].String()), span)
+		}
+		return nil
+	}
 	if _, ok := env.structs[t.Name]; ok && len(t.TypeArgs) == 0 {
 		return nil
 	}
@@ -2308,7 +2458,7 @@ func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string,
 		return nil
 	}
 	if t.Kind == TypeConceptParam {
-		if conceptParam != "" && t.Name == conceptParam {
+		if conceptParam != "" && slices.Contains(strings.Split(conceptParam, "|"), t.Name) {
 			return nil
 		}
 		return evt1Diagnostic("CV4148", fmt.Sprintf("unknown concept parameter %s", t.Name), span)
@@ -2557,6 +2707,50 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		return evt1CanonicalType(env, fieldType), nil
 	case *CallExpr:
+		storageName, binding, storageCall := evt1StorageBindingForCall(scope, e)
+		if (e.Callee == "Initialize" || e.Callee == "Destroy") && storageCall {
+			element := binding.t.TypeArgs[0]
+			if e.Callee == "Initialize" {
+				if len(e.Args) != 2 {
+					return Type{}, evt1Diagnostic("STORAGE_LIFETIME_ARGUMENTS", "Initialize requires storage and one initial value", e.Span)
+				}
+				if binding.objectState == evt1StorageInitialized {
+					return Type{}, evt1Diagnostic("STORAGE_DOUBLE_INITIALIZE", fmt.Sprintf("Storage %s already contains a live %s", storageName, element.String()), e.Span)
+				}
+				valueType, err := validateExprAgainstExpected(env, scope, e.Args[1], element, templateInfo, inComptimeFn)
+				if err != nil {
+					return Type{}, err
+				}
+				if !evt1TypesCompatible(env, element, valueType, "") {
+					return Type{}, evt1Diagnostic("STORAGE_INITIALIZER_TYPE", fmt.Sprintf("Initialize expected %s but got %s", element.String(), valueType.String()), e.Args[1].exprSpan())
+				}
+				scope.setObjectState(storageName, evt1StorageInitialized)
+				out := element.valueType()
+				out.Ownership = "ref"
+				out.Span = e.Span
+				return out, nil
+			}
+			if len(e.Args) != 1 {
+				return Type{}, evt1Diagnostic("STORAGE_LIFETIME_ARGUMENTS", "Destroy requires one Storage<T>", e.Span)
+			}
+			if binding.objectState != evt1StorageInitialized {
+				return Type{}, evt1Diagnostic("STORAGE_DESTROY_UNINITIALIZED", fmt.Sprintf("Storage %s does not contain a live %s", storageName, element.String()), e.Span)
+			}
+			scope.setObjectState(storageName, evt1StorageUninitialized)
+			out, _ := evt1BuiltinType("void", e.Span)
+			return out, nil
+		}
+		if e.Callee == "AddressBits" && len(e.Args) == 1 {
+			addressType, err := validateExpr(env, scope, e.Args[0], templateInfo, inComptimeFn)
+			if err != nil {
+				return Type{}, err
+			}
+			if addressType.Kind != TypeAddress {
+				return Type{}, evt1Diagnostic("ADDRESS_BITS_REQUIRES_ADDRESS", fmt.Sprintf("AddressBits requires Address<Space>, got %s", addressType.String()), e.Span)
+			}
+			out, _ := evt1BuiltinType("usize", e.Span)
+			return out, nil
+		}
 		if e.ConceptGoal != "" {
 			return evt1ValidateConceptAssertion(env, scope, e)
 		}
@@ -2854,18 +3048,15 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 	case *TemplateCallExpr:
 		if evt1IsTypeLayoutQuery(e.Callee) {
 			if templateInfo != nil && e.TypeArg.Kind == TypeConceptParam && (e.Callee == "SizeOf" || e.Callee == "AlignOf") {
-				out, _ := evt1BuiltinType("usize", e.Span)
-				return out, nil
+				return evt1ByteQuantityType(e.Span), nil
 			}
 			if _, err := evt1LayoutQuery(env, e.Callee, e.TypeArg, e.Args); err != nil {
 				return Type{}, err
 			}
-			resultName := "int"
-			if e.Callee == "SizeOf" || e.Callee == "AlignOf" {
-				resultName = "usize"
-			}
-			out, _ := evt1BuiltinType(resultName, e.Span)
-			return out, nil
+			return evt1ByteQuantityType(e.Span), nil
+		}
+		if result, handled, storageErr := evt1ValidateStorageTemplateCall(env, scope, e, templateInfo, inComptimeFn); handled {
+			return result, storageErr
 		}
 		if inComptimeFn {
 			return Type{}, evt1Diagnostic("CV4201", "templates are not available during comptime evaluation", e.Span)
@@ -2873,7 +3064,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		if templateInfo != nil {
 			return Type{}, evt1Diagnostic("CV4174", "templates cannot invoke templates in EVT1 M1B-B", e.Span)
 		}
-		instance, err := instantiateTemplate(env, e.Callee, e.TypeArg, e.Span)
+		instance, err := instantiateTemplateArgs(env, e.Callee, evt1TemplateCallArgs(e), e.Span)
 		if err != nil {
 			return Type{}, err
 		}
@@ -3086,6 +3277,22 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		if err != nil {
 			return Type{}, err
 		}
+		// A literal has no unit independently; in a binary expression its
+		// quantity is supplied by the other operand when the representations
+		// agree. This makes `bytes + 1` explicit in representation but safe in
+		// dimension, without inventing runtime unit values.
+		if _, ok := e.Right.(*IntLiteral); ok && evt1IntegralRepresentation(leftType) {
+			rightType = leftType
+		}
+		if _, ok := e.Right.(*FloatLiteral); ok && leftType.Name == "float" {
+			rightType = leftType
+		}
+		if _, ok := e.Left.(*IntLiteral); ok && evt1IntegralRepresentation(rightType) {
+			leftType = rightType
+		}
+		if _, ok := e.Left.(*FloatLiteral); ok && rightType.Name == "float" {
+			leftType = rightType
+		}
 		if templateInfo != nil && (evt1TypeDependsOnParam(leftType, templateInfo.Decl.TypeParam) || evt1TypeDependsOnParam(rightType, templateInfo.Decl.TypeParam)) {
 			return Type{}, evt1Diagnostic("CV4175", "dependent operators are not allowed in EVT1 M1B-B templates", e.Span)
 		}
@@ -3116,9 +3323,46 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			}
 			return evt1CanonicalType(env, leftFacts.ElementType), nil
 		}
+		if leftType.Kind == TypeAddress || rightType.Kind == TypeAddress {
+			if leftType.Kind == TypeAddress && rightType.Kind == TypeAddress {
+				if len(leftType.TypeArgs) != 1 || len(rightType.TypeArgs) != 1 || !leftType.TypeArgs[0].Equal(rightType.TypeArgs[0]) {
+					return Type{}, evt1Diagnostic("ADDRESS_SPACE_MISMATCH", fmt.Sprintf("address operation mixes %s and %s", leftType.String(), rightType.String()), e.Span)
+				}
+				if e.Op == "+" {
+					return Type{}, evt1Diagnostic("ADDRESS_AFFINE_INVALID", "Address + Address is invalid; add a usize<byte> displacement", e.Span)
+				}
+				if e.Op == "-" {
+					out := evt1ByteQuantityType(e.Span)
+					out.Name = "isize"
+					e.ResolvedType = out
+					return out, nil
+				}
+				if e.Op == "==" || e.Op == "!=" || e.Op == "<" || e.Op == ">" || e.Op == "<=" || e.Op == ">=" {
+					out, _ := evt1BuiltinType("bool", e.Span)
+					e.ResolvedType = out
+					return out, nil
+				}
+			}
+			if leftType.Kind == TypeAddress && (e.Op == "+" || e.Op == "-") && evt1ByteDisplacement(rightType) {
+				e.ResolvedType = leftType
+				return leftType, nil
+			}
+			if rightType.Kind == TypeAddress && e.Op == "+" && evt1ByteDisplacement(leftType) {
+				e.ResolvedType = rightType
+				return rightType, nil
+			}
+			return Type{}, evt1Diagnostic("ADDRESS_AFFINE_INVALID", fmt.Sprintf("invalid address operation %s %s %s", leftType.String(), e.Op, rightType.String()), e.Span)
+		}
 		if leftType.Name == "bool" && rightType.Name == "bool" && (e.Op == "and" || e.Op == "or" || e.Op == "==" || e.Op == "!=") {
 			out, _ := evt1BuiltinType("bool", e.Span)
 			return out, nil
+		}
+		if result, handled, numericErr := evt1ValidateNumericBinary(leftType, rightType, e.Op, e.Span); handled {
+			if numericErr != nil {
+				return Type{}, numericErr
+			}
+			e.ResolvedType = result
+			return result, nil
 		}
 		if leftType.Name == "string" && rightType.Name == "string" && (e.Op == "==" || e.Op == "!=") {
 			out, _ := evt1BuiltinType("bool", e.Span)
@@ -3928,6 +4172,9 @@ func evt1ExprProvenance(env *semanticEnv, scope *evt1Scope, expr Expr) evt1Lifet
 			return evt1ExprProvenance(env, scope, e.Args[0])
 		}
 	case *CallExpr:
+		if e.Callee == "Initialize" && len(e.Args) > 0 {
+			return evt1ExprProvenance(env, scope, e.Args[0])
+		}
 		if e.Member && e.Receiver != nil {
 			return evt1ExprProvenance(env, scope, e.Receiver)
 		}
@@ -4786,6 +5033,9 @@ func evt1TypeCopyable(env *semanticEnv, t Type) bool {
 	if evt1IsSpanType(t) {
 		return true
 	}
+	if t.Kind == TypeAddress {
+		return true
+	}
 	if len(t.TypeArgs) > 0 {
 		return false
 	}
@@ -5575,6 +5825,12 @@ func evt1TypesCompatible(env *semanticEnv, expected Type, actual Type, typeParam
 	expected = evt1CanonicalType(env, expected.valueType())
 	actual = evt1CanonicalType(env, actual.valueType())
 	if !evt1TypeDependsOnParam(expected, typeParam) && !evt1TypeDependsOnParam(actual, typeParam) {
+		// Compatibility bridge for pre-R6g APIs whose signature used a naked
+		// numeric representation for a documented byte count. New declarations
+		// retain and check the quantity; lowering remains the same scalar ABI.
+		if expected.Quantity == nil && actual.Quantity != nil && expected.Name == actual.Name && expected.Kind == actual.Kind {
+			actual.Quantity = nil
+		}
 		return expected.Equal(actual)
 	}
 	return evt1SymbolicTypeEqual(expected, actual, typeParam)
@@ -5726,15 +5982,45 @@ func validateTemplateCallExpr(env *semanticEnv, scope *evt1Scope, call CallExpr,
 }
 
 func instantiateTemplate(env *semanticEnv, templateName string, concreteType Type, span Span) (*evt1TemplateInstance, error) {
+	return instantiateTemplateArgs(env, templateName, []Type{concreteType}, span)
+}
+
+func evt1TemplateCallArgs(call *TemplateCallExpr) []Type {
+	if len(call.TypeArgs) > 0 {
+		return call.TypeArgs
+	}
+	return []Type{call.TypeArg}
+}
+
+func instantiateTemplateArgs(env *semanticEnv, templateName string, concreteArgs []Type, span Span) (*evt1TemplateInstance, error) {
 	templateDecl, ok := env.templates[templateName]
 	if !ok {
 		return nil, evt1Diagnostic("CV4178", fmt.Sprintf("unknown template %s", templateName), span)
 	}
-	if err := validateTemplateTypeArgument(env, concreteType, span); err != nil {
-		return nil, err
+	parameters := templateDecl.Parameters
+	if len(parameters) == 0 {
+		parameters = []GenericParameter{{Name: templateDecl.TypeParam, Kind: "type", Span: templateDecl.TypeParamSpan}}
 	}
-	concreteType = evt1CanonicalType(env, concreteType)
-	key := templateName + "|" + evt1TypeIdentity(concreteType)
+	if len(parameters) != len(concreteArgs) {
+		return nil, evt1Diagnostic("CV4179", fmt.Sprintf("template %s expects %d arguments but got %d", templateName, len(parameters), len(concreteArgs)), span)
+	}
+	for i, parameter := range parameters {
+		if parameter.Kind == "type" {
+			if err := validateTemplateTypeArgument(env, concreteArgs[i], span); err != nil {
+				return nil, err
+			}
+		} else if concreteArgs[i].Kind != TypeTemplateValue {
+			return nil, evt1Diagnostic("CV4179", fmt.Sprintf("template argument %d for %s must be a compile-time usize value", i+1, templateName), span)
+		}
+		concreteArgs[i] = evt1CanonicalType(env, concreteArgs[i])
+	}
+	concreteType := concreteArgs[0]
+	var identities []string
+	for _, arg := range concreteArgs {
+		identities = append(identities, evt1TypeIdentity(arg))
+	}
+	typeIdentity := strings.Join(identities, "__")
+	key := templateName + "|" + typeIdentity
 	if instance, ok := env.templateInstances[key]; ok {
 		return instance, nil
 	}
@@ -5756,7 +6042,7 @@ func instantiateTemplate(env *semanticEnv, templateName string, concreteType Typ
 			Function:    fn,
 		})
 	}
-	instFn, err := evt1InstantiateTemplateFunction(templateDecl, concreteType)
+	instFn, err := evt1InstantiateTemplateFunctionArgs(templateDecl, parameters, concreteArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -5787,8 +6073,9 @@ func instantiateTemplate(env *semanticEnv, templateName string, concreteType Typ
 		Key:                 key,
 		TemplateName:        templateName,
 		ConcreteType:        concreteType,
-		TypeIdentity:        evt1TypeIdentity(concreteType),
-		GeneratedSymbol:     evt1TemplateInstanceSymbol(templateName, concreteType),
+		ConcreteArgs:        append([]Type{}, concreteArgs...),
+		TypeIdentity:        typeIdentity,
+		GeneratedSymbol:     "concept_template_" + evt1CName(templateName)[len("concept_"):] + "__" + typeIdentity,
 		ConstraintConcept:   templateDecl.Constraint.ConceptName,
 		Closure:             append([]evt1TemplateClosureEntry{}, info.Closure...),
 		RequirementBindings: bindings,
@@ -5807,6 +6094,14 @@ func validateTemplateTypeArgument(env *semanticEnv, concreteType Type, span Span
 }
 
 func evt1TypeIdentity(t Type) string {
+	if t.Quantity != nil {
+		d := t.Quantity.normalized()
+		parts := make([]string, len(d.Exponents))
+		for i, exponent := range d.Exponents {
+			parts[i] = fmt.Sprintf("%d", exponent)
+		}
+		return evt1CName(t.Name)[len("concept_"):] + "_quantity_" + strings.Join(parts, "_") + fmt.Sprintf("_scale_%d_%d", d.ScaleNumerator, d.ScaleDenominator)
+	}
 	if evt1IsTensorType(t) && len(t.TypeArgs) == 1 {
 		return fmt.Sprintf("tensor_%s_%d", evt1TypeIdentity(t.TypeArgs[0]), t.TensorRank)
 	}
@@ -5843,20 +6138,55 @@ func evt1TemplateInstanceSymbol(templateName string, concreteType Type) string {
 }
 
 func evt1InstantiateTemplateFunction(templateDecl TemplateDecl, concreteType Type) (FunctionDecl, error) {
-	body, err := evt1SubstituteBlock(*templateDecl.Body, templateDecl.TypeParam, concreteType)
-	if err != nil {
-		return FunctionDecl{}, err
+	parameters := templateDecl.Parameters
+	if len(parameters) == 0 {
+		parameters = []GenericParameter{{Name: templateDecl.TypeParam, Kind: "type"}}
 	}
+	return evt1InstantiateTemplateFunctionArgs(templateDecl, parameters, []Type{concreteType})
+}
+
+func evt1InstantiateTemplateFunctionArgs(templateDecl TemplateDecl, parameters []GenericParameter, concreteArgs []Type) (FunctionDecl, error) {
+	body := *templateDecl.Body
+	var err error
+	if parameters[0].Kind == "type" {
+		body, err = evt1SubstituteBlock(body, parameters[0].Name, concreteArgs[0])
+		if err != nil {
+			return FunctionDecl{}, err
+		}
+	}
+	for i := 1; i < len(parameters); i++ {
+		if parameters[i].Kind != "type" {
+			continue
+		}
+		body, err = evt1SubstituteBlock(body, parameters[i].Name, concreteArgs[i])
+		if err != nil {
+			return FunctionDecl{}, err
+		}
+	}
+	returnType := templateDecl.ReturnType
+	for i, parameter := range parameters {
+		if parameter.Kind == "type" {
+			returnType = evt1SubstituteType(returnType, parameter.Name, concreteArgs[i])
+		}
+	}
+	returnType = evt1SubstituteGenericValueExtents(returnType, parameters, concreteArgs)
 	fn := FunctionDecl{
 		Async:      templateDecl.Async,
 		Name:       templateDecl.Name,
-		ReturnType: evt1SubstituteType(templateDecl.ReturnType, templateDecl.TypeParam, concreteType),
+		ReturnType: returnType,
 		Span:       templateDecl.Span,
 		Body:       &body,
 	}
 	for _, param := range templateDecl.Params {
+		paramType := param.Type
+		for i, parameter := range parameters {
+			if parameter.Kind == "type" {
+				paramType = evt1SubstituteType(paramType, parameter.Name, concreteArgs[i])
+			}
+		}
+		paramType = evt1SubstituteGenericValueExtents(paramType, parameters, concreteArgs)
 		fn.Params = append(fn.Params, Param{
-			Type: evt1SubstituteType(param.Type, templateDecl.TypeParam, concreteType),
+			Type: paramType,
 			Name: param.Name,
 			Span: param.Span,
 		})

@@ -392,6 +392,15 @@ func evt1ModuleUsesStorageBounds(module Module) bool {
 					return true
 				}
 			}
+		case *TemplateCallExpr:
+			if e.Callee == "bind" || e.Callee == "Convert" {
+				return true
+			}
+			for _, arg := range e.Args {
+				if usesExpr(arg) {
+					return true
+				}
+			}
 		case *ArrayLiteralExpr:
 			for _, element := range e.Elements {
 				if usesExpr(element) {

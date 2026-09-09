@@ -118,6 +118,32 @@ int Main()
 	}
 }
 
+func TestR6gImportedMultiParameterFunctionTemplateInstantiatesWithoutSourceReparse(t *testing.T) {
+	producer := `module Standard.Geometry;
+profile Core;
+template <typename T, typename U, usize Tag>
+T First(T first, U second) { return first; }
+`
+	artifact := buildSemanticArtifact(t, "Standard/Geometry.concept", producer, nil)
+	consumer := `module App;
+profile Core;
+import Standard.Geometry;
+int Main() { uint other = 2; return First<int, uint, 7>(3, other); }
+`
+	module, err := ParseWithSemanticModules("App.concept", consumer, map[string][]byte{"Standard.Geometry": artifact})
+	if err != nil {
+		t.Fatal(err)
+	}
+	outputs, err := Generate(module, []byte(consumer))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := strings.ToLower(moduleOutput(t, outputs, ".generated.c"))
+	if !strings.Contains(body, "concept_template_first__int__uint__7") {
+		t.Fatalf("imported multi-parameter instance missing:\n%s", body)
+	}
+}
+
 func TestImportedGenericConstraintIsCheckedAgainstConsumerType(t *testing.T) {
 	library := `module Standard.Constrained;
 profile Core;

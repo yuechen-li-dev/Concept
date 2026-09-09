@@ -3106,6 +3106,11 @@ func (l *lowering) structHeader(structDecl StructDecl) string {
 	var b strings.Builder
 	name := evt1CName(structDecl.Name)
 	b.WriteString(fmt.Sprintf("typedef struct %s {\n", name))
+	if len(structDecl.Fields) == 0 {
+		// C11 has no empty structs. The byte is an ABI-only placeholder; Concept
+		// nominal tags used solely in types remain compile-time identities.
+		b.WriteString("  unsigned char _concept_nominal_tag;\n")
+	}
 	for _, field := range structDecl.Fields {
 		b.WriteString(fmt.Sprintf("  %s %s;\n", evt1CType(field.Type), field.Name))
 	}
@@ -3151,6 +3156,9 @@ func (l *lowering) structConstructor(structDecl StructDecl) string {
 	}
 	b.WriteString(") {\n")
 	b.WriteString(fmt.Sprintf("  %s out;\n", typeName))
+	if len(structDecl.Fields) == 0 {
+		b.WriteString("  out._concept_nominal_tag = 0;\n")
+	}
 	for _, field := range structDecl.Fields {
 		b.WriteString(fmt.Sprintf("  out.%s = %s;\n", field.Name, field.Name))
 	}
@@ -3222,6 +3230,12 @@ func evt1ConstructorName(enumName, variantName string) string {
 }
 
 func evt1CType(t Type) string {
+	if t.Kind == TypeAddress {
+		return "uintptr_t"
+	}
+	if t.Kind == TypeTypedStorage && len(t.TypeArgs) == 1 {
+		return evt1CType(t.TypeArgs[0].valueType()) + "*"
+	}
 	if t.Kind == TypeCallable {
 		base := evt1CallableEnvCName(t.CallableID)
 		if t.isReference() || t.isBorrow() {
@@ -4213,10 +4227,11 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 			}
 			return leftPrelude + rightPrelude, fmt.Sprintf("(%s %s %s)", left, op, right), boolType
 		}
-		if e.Op == "*" || e.Op == "-" {
-			return leftPrelude + rightPrelude, fmt.Sprintf("(%s %s %s)", left, e.Op, right), leftType
+		resultType := leftType
+		if e.ResolvedType.Name != "" {
+			resultType = e.ResolvedType
 		}
-		return leftPrelude + rightPrelude, fmt.Sprintf("(%s + %s)", left, right), leftType
+		return leftPrelude + rightPrelude, fmt.Sprintf("(%s %s %s)", left, e.Op, right), resultType
 	case *UnaryExpr:
 		prelude, value, valueType := f.lowerExpr(e.Value, indent)
 		if e.Op == "not" {
@@ -4309,6 +4324,33 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		}
 		return b.String(), carrierTemp + ".payload." + field, evt1FailureSuccessType(carrierType)
 	case *CallExpr:
+		storageBinding := evt1Binding{}
+		storageCall := false
+		if len(e.Args) > 0 {
+			if name, ok := e.Args[0].(*NameExpr); ok {
+				storageBinding, storageCall = scopeLookup(name.Name, f.scope)
+				storageCall = storageCall && storageBinding.t.Kind == TypeTypedStorage
+			}
+		}
+		if e.Callee == "Initialize" && len(e.Args) == 2 && storageCall {
+			storagePrelude, storage, storageType := f.lowerExpr(e.Args[0], indent)
+			element := storageType.TypeArgs[0]
+			valuePrelude, value, _ := f.lowerExprExpected(e.Args[1], element, indent)
+			return storagePrelude + valuePrelude, fmt.Sprintf("((*%s = %s), %s)", storage, value, storage), Type{Name: element.Name, Kind: element.Kind, TypeArgs: element.TypeArgs, Ownership: "ref", Span: e.Span}
+		}
+		if e.Callee == "Destroy" && len(e.Args) == 1 && storageCall {
+			prelude, storage, storageType := f.lowerExpr(e.Args[0], indent)
+			element := storageType.TypeArgs[0]
+			if drop := evt1DropFunction(f.l.env, element); drop != nil {
+				return prelude, fmt.Sprintf("(%s(*%s), (void)0)", evt1FunctionSymbolForDecl(f.l.outputBase, f.l.env, *drop), storage), Type{Name: "void", Kind: TypeBuiltin, Span: e.Span}
+			}
+			return prelude, "((void)0)", Type{Name: "void", Kind: TypeBuiltin, Span: e.Span}
+		}
+		if e.Callee == "AddressBits" && len(e.Args) == 1 {
+			prelude, value, _ := f.lowerExpr(e.Args[0], indent)
+			out, _ := evt1BuiltinType("usize", e.Span)
+			return prelude, "((size_t)(" + value + "))", out
+		}
 		if strings.HasPrefix(e.Intrinsic, "test_assert_") || e.Intrinsic == "test_foretell_checkpoint" {
 			return f.lowerTestToolingCall(e, indent)
 		}
@@ -4530,14 +4572,55 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 	case *TemplateCallExpr:
 		if evt1IsTypeLayoutQuery(e.Callee) {
 			value, _ := evt1LayoutQuery(f.l.env, e.Callee, e.TypeArg, e.Args)
-			resultName := "int"
-			if e.Callee == "SizeOf" || e.Callee == "AlignOf" {
-				resultName = "usize"
-			}
-			t, _ := evt1BuiltinType(resultName, e.Span)
-			return "", fmt.Sprintf("%d", value), t
+			return "", fmt.Sprintf("%d", value), evt1ByteQuantityType(e.Span)
 		}
-		instance, ok := f.l.env.templateInstances[e.Callee+"|"+evt1TypeIdentity(evt1CanonicalType(f.l.env, e.TypeArg))]
+		if e.Callee == "AddressOf" {
+			if reference, ok := e.Args[0].(*RefExpr); ok {
+				prelude, target, _, _ := f.lowerLValue(reference.Value, indent)
+				return prelude, "((uintptr_t)(&(" + target + ")))", evt1AddressType(e.TypeArg, e.Span)
+			}
+			return "", "0", evt1AddressType(e.TypeArg, e.Span)
+		}
+		if e.Callee == "AddressFromBits" {
+			prelude, value, _ := f.lowerExpr(e.Args[0], indent)
+			return prelude, "((uintptr_t)(" + value + "))", evt1AddressType(e.TypeArg, e.Span)
+		}
+		if e.Callee == "bind" {
+			addressPrelude, address, _ := f.lowerExpr(e.Args[0], indent)
+			extentPrelude, extent, _ := f.lowerExpr(e.Args[1], indent)
+			size, alignment, _ := evt1TypeGeometry(f.l.env, e.TypeArg)
+			addressTemp := f.nextTemp("bind_address")
+			extentTemp := f.nextTemp("bind_extent")
+			var prelude strings.Builder
+			prelude.WriteString(addressPrelude)
+			prelude.WriteString(extentPrelude)
+			prelude.WriteString(ind(indent) + fmt.Sprintf("uintptr_t %s = (uintptr_t)(%s);\n", addressTemp, address))
+			prelude.WriteString(ind(indent) + fmt.Sprintf("size_t %s = (size_t)(%s);\n", extentTemp, extent))
+			prelude.WriteString(ind(indent) + fmt.Sprintf("if (%s < %du) { concept_panic(%q, %d, %d); }\n", extentTemp, size, "bind<T> extent is smaller than SizeOf<T>()", e.Span.Line, e.Span.Column))
+			prelude.WriteString(ind(indent) + fmt.Sprintf("if ((%s %% %du) != 0u) { concept_panic(%q, %d, %d); }\n", addressTemp, alignment, "bind<T> address does not satisfy AlignOf<T>()", e.Span.Line, e.Span.Column))
+			storage := evt1StorageType(e.TypeArg, e.Span)
+			return prelude.String(), fmt.Sprintf("((%s)%s)", evt1CType(storage), addressTemp), storage
+		}
+		if e.Callee == "Convert" {
+			prelude, value, source := f.lowerExpr(e.Args[0], indent)
+			target, _ := quantityFromUnit(e.TypeArg.Name)
+			sourceUnit := source.Quantity.normalized()
+			numerator := sourceUnit.ScaleNumerator * target.ScaleDenominator
+			denominator := sourceUnit.ScaleDenominator * target.ScaleNumerator
+			out := evt1QuantityResult(source, target, e.Span)
+			if denominator > 1 && evt1IntegralRepresentation(source) {
+				temp := f.nextTemp("conversion")
+				prelude += ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(source), temp, value)
+				prelude += ind(indent) + fmt.Sprintf("if ((%s %% %d) != 0) { concept_panic(%q, %d, %d); }\n", temp, denominator, "integral unit conversion is not exact", e.Span.Line, e.Span.Column)
+				value = temp
+			}
+			return prelude, fmt.Sprintf("(((%s) * %d) / %d)", value, numerator, denominator), out
+		}
+		var identities []string
+		for _, arg := range evt1TemplateCallArgs(e) {
+			identities = append(identities, evt1TypeIdentity(evt1CanonicalType(f.l.env, arg)))
+		}
+		instance, ok := f.l.env.templateInstances[e.Callee+"|"+strings.Join(identities, "__")]
 		if !ok {
 			return "", "/* missing_template_instance */", Type{Name: "int", Kind: TypeBuiltin}
 		}
@@ -5047,6 +5130,11 @@ func scopeLookup(name string, scopes []map[string]evt1Binding) (evt1Binding, boo
 
 func evt1ResolveGeneratedCall(env *semanticEnv, name string, argTypes []Type) (FunctionDecl, bool) {
 	candidates := env.functions[name]
+	if len(candidates) == 1 && len(candidates[0].Params) == len(argTypes) {
+		// Semantic validation has already selected this sole overload. Lowering
+		// may have erased a contextual literal's quantity qualification.
+		return candidates[0], true
+	}
 	for _, fn := range candidates {
 		if len(fn.Params) != len(argTypes) {
 			continue
@@ -5061,7 +5149,7 @@ func evt1ResolveGeneratedCall(env *semanticEnv, name string, argTypes []Type) (F
 					actual = evt1CanonicalType(env, argTypes[i].borrowBase())
 				}
 			}
-			if !expected.Equal(actual) {
+			if !expected.Equal(actual) && !(expected.Name == actual.Name && ((expected.Quantity == nil) != (actual.Quantity == nil))) {
 				match = false
 				break
 			}

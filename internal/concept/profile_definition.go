@@ -28,6 +28,7 @@ type ProfileDefinition struct {
 func evt1CoreBuiltinDefinitions() map[string]BuiltinTypeDefinition {
 	return map[string]BuiltinTypeDefinition{
 		"byte":   {Name: "byte", CType: "uint8_t"},
+		"uint8":  {Name: "uint8", CType: "uint8_t"},
 		"uint":   {Name: "uint", CType: "uint32_t"},
 		"float":  {Name: "float", CType: "float"},
 		"int":    {Name: "int", CType: "int"},
@@ -36,6 +37,7 @@ func evt1CoreBuiltinDefinitions() map[string]BuiltinTypeDefinition {
 		"string": {Name: "string", CType: "const char*"},
 		"uint64": {Name: "uint64", CType: "uint64_t"},
 		"usize":  {Name: "usize", CType: "size_t"},
+		"isize":  {Name: "isize", CType: "ptrdiff_t"},
 	}
 }
 

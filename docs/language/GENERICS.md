@@ -34,8 +34,9 @@ the inside out; recursive infinite instantiation is rejected with
 
 Integer and `usize` non-type arguments are compile-time values. Generic class
 methods reuse ordinary class/self rules after type substitution. Function
-templates may be unconstrained or use the existing single named Concept
-constraint:
+templates accept ordered type and dimensionless `usize` non-type parameters.
+They may be unconstrained or use the existing single named Concept constraint
+on the first type parameter:
 
 ```concept
 template <typename T>
@@ -48,7 +49,6 @@ provenance authorities. A generic lifetime-carrying aggregate is therefore a
 `ref struct`, just like its non-generic equivalent; no lifetime parameter is
 introduced.
 
-Current bounded edge: reusable cross-module template artifacts and constraints
-on generic type declarations are not implemented yet. Partial specialization,
-variadics, template-template parameters, and template metaprogramming remain
-out of scope.
+R6e artifacts preserve these lists and instantiate them in the consumer without
+source reparse. Partial specialization, variadics, template-template
+parameters, and template metaprogramming remain out of scope.

@@ -47,13 +47,13 @@ func evt1TypeGeometry(env *semanticEnv, t Type) (int, int, error) {
 		return size * evt1StorageElementCount(resolved), alignment, nil
 	}
 	switch resolved.Name {
-	case "byte", "bool":
+	case "byte", "uint8", "bool":
 		return 1, 1, nil
 	case "int", "uint", "float":
 		return 4, 4, nil
 	case "uint64":
 		return 8, 8, nil
-	case "usize":
+	case "usize", "isize":
 		return 8, 8, nil
 	}
 	if decl, ok := env.structs[resolved.Name]; ok {

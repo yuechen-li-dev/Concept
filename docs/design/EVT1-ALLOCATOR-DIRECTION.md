@@ -1,6 +1,6 @@
 # EVT1 allocator direction
 
-Status: R6f feasibility category C; reference allocator library remains unimplemented
+Status: R6g geometry substrate exists; reference allocator library remains deferred
 
 ## Doctrine
 
@@ -60,6 +60,18 @@ exactly one type parameter. The requested ordinary
 does not by itself block raw allocators, but it blocks the canonical typed
 helper and must be resolved generally rather than by an allocator-specific
 overload.
+
+## R6g substrate result
+
+R6g supplies unit-aware byte geometry, affine `Address<Space>`, an ordinary
+`MemoryRegion<SystemMemory>` library with `AlignUp`/`Subregion`, `Storage<T>`
+bind/Initialize/Destroy, and ordered multi-parameter function templates. It
+introduces no allocator.
+
+The remaining prerequisite is narrower: region origin, interval, alignment,
+and lifetime facts must survive ordinary values, slicing, module artifacts, and
+calls. An arbitrary `AddressFromBits` cannot be considered proven merely
+because its tag says `SystemMemory`.
 
 ## Required next substrate decision
 

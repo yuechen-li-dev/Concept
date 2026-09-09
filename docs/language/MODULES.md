@@ -78,6 +78,11 @@ Operation summaries are import authority. A proven pure wrapper supplies
 `Allocates`; an opaque operation without a summary remains `Unknown`. R6b proof
 graphs label the boundary `ModuleSummaryEffect`.
 
+R6g unit-qualified types, `Address<Space>`, `Storage<T>`, and ordered
+multi-parameter function templates use the same typed payload. Consumer
+instantiation includes every argument in deterministic identity; unit metadata
+does not become an ABI object.
+
 Within an interface, `requires compiler.Allocates(Operation);` means the
 operation is permitted to allocate. An allocation-free implementation is also
 compatible. An allocating implementation cannot satisfy an operation lacking

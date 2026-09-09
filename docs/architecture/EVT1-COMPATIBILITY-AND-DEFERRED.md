@@ -15,6 +15,7 @@
 | `type Name = Type;` | Compatibility | `using Name = Type;` | rewrite when alias canonicalization is enabled |
 | `asynchronous` | Compatibility | `async` | rewrite when alias canonicalization is enabled |
 | `awaitchronous` | Joke-but-permanent exact alias | `awaitchronous` | do not rewrite by default |
+| unqualified scalar `byte` | Compatibility | `uint8` for values, `usize<byte>` for extents | retain while legacy fixtures are classified; never infer quantity meaning |
 
 `asynchronous` and `async` share one AST and lowering path;
 `awaitchronous` and `await` do likewise. The joke creates no semantic branch.
@@ -35,7 +36,8 @@ inline compiler tests.
 | `.concept_test`, test attributes, deterministic test runner, `Assert.*` | R6a tooling/library | Canonical tooling | implemented without changing frozen function/body semantics |
 | `Assert.Concept`, proof diagnostics, `concept explain`, `concept-proof.v1` | R6b tooling | Canonical tooling | compile-time semantic query with no runtime lowering |
 | generic reusable-library substrate | R6d-R6e approved post-freeze extension | Implemented | local generics and layout plus deterministic semantic modules, cross-module instantiation, and effect summaries |
-| reference allocator framework | R6f after explicit raw-storage substrate | Honest feasibility stop | R6d/R6e module, generic, ABI, and effect prerequisites exist; checked `usize` arithmetic, raw-region carving/binding/initialization, and a two-type-parameter helper remain general gaps |
+| quantity/address/storage substrate | R6g approved post-freeze extension | Meaningful progression | unit algebra, affine address types, ordinary SystemMemory regions, typed bind/init/destroy, and multi-parameter templates implemented; general region provenance/interval fact transport remains isolated |
+| reference allocator framework | R6h after region-fact transport | Deferred | do not begin until trusted region origin and subregion alignment/disjointness proofs are authoritative |
 | richer theory providers, exact prophecy termination matching, parallel tests, lifecycle hooks, statistical benchmark framework | later R6 tooling | Deferred | R6a keeps JSON positional rows, sequential reporting, and lightweight timing |
 | formatter, lint, diagnostics UX, build/package tooling, LSP | R6 tooling | Deferred | consume the frozen semantic model |
 | source auto-fix, IDE proof visualization, arbitrary proof queries, solver edits, LLM-ranked repairs, Planner explanations | post-R6b tooling | Deferred | consume authoritative proof graphs without moving semantic authority |

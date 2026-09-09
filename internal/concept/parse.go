@@ -145,7 +145,11 @@ func lexEVT1(text string) ([]Token, error) {
 			tokens = append(tokens, Token{Lexeme: "->", Span: start})
 			i += 2
 			column += 2
-		case strings.ContainsRune("(){}[];,:.*+-=<>!?@", rune(c)):
+		case i+1 < len(text) && text[i:i+2] == "<<":
+			tokens = append(tokens, Token{Lexeme: "<<", Span: start})
+			i += 2
+			column += 2
+		case strings.ContainsRune("(){}[];,:.*+-/=<>!?@%^&|", rune(c)):
 			tokens = append(tokens, Token{Lexeme: string(c), Span: start})
 			i++
 			column++
@@ -1222,12 +1226,35 @@ func (p *parser) parseTemplateDecl() (TemplateDecl, error) {
 	if _, err := p.expect("<"); err != nil {
 		return TemplateDecl{}, err
 	}
-	if _, err := p.expect("typename"); err != nil {
-		return TemplateDecl{}, evt1Diagnostic("CV4165", "template declarations require exactly `template <typename T>`", p.currentSpan())
+	var params []GenericParameter
+	typeParams := map[string]bool{}
+	for {
+		if p.peekLexeme() == "typename" || p.peekLexeme() == "class" {
+			p.next()
+			name, parseErr := p.expectIdentifier("CV4165", "expected template type parameter")
+			if parseErr != nil {
+				return TemplateDecl{}, parseErr
+			}
+			params = append(params, GenericParameter{Name: name.Lexeme, Kind: "type", Span: name.Span})
+			typeParams[name.Lexeme] = true
+		} else {
+			valueType, parseErr := p.parseType("")
+			if parseErr != nil {
+				return TemplateDecl{}, parseErr
+			}
+			name, parseErr := p.expectIdentifier("CV4165", "expected non-type template parameter")
+			if parseErr != nil {
+				return TemplateDecl{}, parseErr
+			}
+			params = append(params, GenericParameter{Name: name.Lexeme, Kind: "value", ValueType: valueType, Span: name.Span})
+		}
+		if p.peekLexeme() != "," {
+			break
+		}
+		p.next()
 	}
-	paramTok, err := p.expectIdentifier("CV4165", "expected one template type parameter")
-	if err != nil {
-		return TemplateDecl{}, err
+	if len(params) == 0 {
+		return TemplateDecl{}, evt1Diagnostic("CV4165", "template requires at least one parameter", p.currentSpan())
 	}
 	if _, err := p.expect(">"); err != nil {
 		return TemplateDecl{}, err
@@ -1235,7 +1262,7 @@ func (p *parser) parseTemplateDecl() (TemplateDecl, error) {
 	var constraint TemplateConstraint
 	if p.peekLexeme() == "requires" {
 		reqTok := p.next()
-		ref, parseErr := p.parseConceptUse(paramTok.Lexeme)
+		ref, parseErr := p.parseConceptUse(params[0].Name)
 		if parseErr != nil {
 			return TemplateDecl{}, parseErr
 		}
@@ -1247,8 +1274,8 @@ func (p *parser) parseTemplateDecl() (TemplateDecl, error) {
 		async = true
 	}
 	oldTypeParams := p.templateTypeParams
-	p.templateTypeParams = map[string]bool{paramTok.Lexeme: true}
-	fn, err := p.parseFunctionDecl(paramTok.Lexeme, false)
+	p.templateTypeParams = typeParams
+	fn, err := p.parseFunctionDecl(params[0].Name, false)
 	p.templateTypeParams = oldTypeParams
 	if err != nil {
 		return TemplateDecl{}, err
@@ -1259,8 +1286,9 @@ func (p *parser) parseTemplateDecl() (TemplateDecl, error) {
 	return TemplateDecl{
 		Async:         async,
 		Name:          fn.Name,
-		TypeParam:     paramTok.Lexeme,
-		TypeParamSpan: paramTok.Span,
+		Parameters:    params,
+		TypeParam:     params[0].Name,
+		TypeParamSpan: params[0].Span,
 		Constraint:    constraint,
 		ReturnType:    fn.ReturnType,
 		Params:        fn.Params,
@@ -2014,6 +2042,17 @@ done:
 	if p.peekLexeme() == "<" {
 		storageElement = t
 		p.next()
+		if _, isUnit := quantityFromUnit(p.peekLexeme()); evt1NumericRepresentation(t) && isUnit {
+			dimension, err := p.parseQuantityDimension()
+			if err != nil {
+				return Type{}, err
+			}
+			if _, err := p.expect(">"); err != nil {
+				return Type{}, err
+			}
+			t.Quantity = &dimension
+			return t, nil
+		}
 		if t.Name == "tensor" || t.Name == "vector" || t.Name == "matrix" {
 			spelling := t.Name
 			element, err := p.parseType(conceptParam)
@@ -2068,6 +2107,12 @@ done:
 		t.Kind = TypeApplied
 		if t.Name == "Async" {
 			t.Kind = TypeAsync
+		}
+		if t.Name == "Address" {
+			t.Kind = TypeAddress
+		}
+		if t.Name == "Storage" {
+			t.Kind = TypeTypedStorage
 		}
 		if len(t.TypeArgs) == 1 && (t.TypeArgs[0].Name == string(StorageArray) || t.TypeArgs[0].Name == string(StorageNDArray)) {
 			storageMarker = StorageKind(t.TypeArgs[0].Name)
@@ -2141,6 +2186,55 @@ done:
 		return Type{}, evt1Diagnostic("CV4550", fmt.Sprintf("%s storage requires an extent list", storageMarker), nameTok.Span)
 	}
 	return t, nil
+}
+
+// parseQuantityDimension parses the deliberately bounded unit algebra used in
+// numeric type qualifications: products, quotients, and signed integral
+// powers. The normalized exponent vector, rather than source spelling, is the
+// type identity (so float<Hz> and float<s^-1> are identical).
+func (p *parser) parseQuantityDimension() (QuantityDimension, error) {
+	result := dimensionlessQuantity()
+	divide := false
+	for {
+		unitTok, err := p.expectIdentifier("QUANTITY_UNIT_UNKNOWN", "expected a unit name in quantity type")
+		if err != nil {
+			return QuantityDimension{}, err
+		}
+		unit, ok := quantityFromUnit(unitTok.Lexeme)
+		if !ok {
+			return QuantityDimension{}, evt1Diagnostic("QUANTITY_UNIT_UNKNOWN", fmt.Sprintf("unknown quantity unit %s", unitTok.Lexeme), unitTok.Span)
+		}
+		exponent := 1
+		if p.peekLexeme() == "^" {
+			p.next()
+			sign := 1
+			if p.peekLexeme() == "-" {
+				p.next()
+				sign = -1
+			}
+			exponentTok := p.current()
+			if !isNumber(exponentTok.Lexeme) {
+				return QuantityDimension{}, evt1Diagnostic("QUANTITY_EXPONENT_INVALID", "unit exponent must be a compile-time integer", exponentTok.Span)
+			}
+			p.next()
+			value, _ := strconv.ParseInt(exponentTok.Lexeme, 10, 32)
+			exponent = sign * int(value)
+		}
+		if divide {
+			exponent = -exponent
+		}
+		result = result.Multiply(unit.Pow(exponent))
+		switch p.peekLexeme() {
+		case "*":
+			p.next()
+			divide = false
+		case "/":
+			p.next()
+			divide = true
+		default:
+			return result.normalized(), nil
+		}
+	}
 }
 
 func (p *parser) parseConceptUse(conceptParam string) (Type, error) {
@@ -3029,8 +3123,12 @@ func (p *parser) parseAdditive() (Expr, error) {
 	if err != nil {
 		return nil, err
 	}
-	for p.peekLexeme() == "+" || p.peekLexeme() == "-" {
+	for p.peekLexeme() == "+" || p.peekLexeme() == "-" || p.peekLexeme() == "&" || p.peekLexeme() == "|" || p.peekLexeme() == "^" || p.peekLexeme() == "<<" || (p.peekLexeme() == ">" && p.peekLexemeN(1) == ">") {
 		op := p.next()
+		if op.Lexeme == ">" {
+			p.next()
+			op.Lexeme = ">>"
+		}
 		right, err := p.parseMultiplicative()
 		if err != nil {
 			return nil, err
@@ -3045,7 +3143,7 @@ func (p *parser) parseMultiplicative() (Expr, error) {
 	if err != nil {
 		return nil, err
 	}
-	for p.peekLexeme() == "*" || p.peekLexeme() == "@" {
+	for p.peekLexeme() == "*" || p.peekLexeme() == "/" || p.peekLexeme() == "%" || p.peekLexeme() == "@" {
 		op := p.next()
 		right, err := p.parseUnary()
 		if err != nil {
@@ -3071,7 +3169,7 @@ func (p *parser) parseUnary() (Expr, error) {
 		}
 		return &AwaitExpr{Value: value, Span: op.Span}, nil
 	}
-	if p.peekLexeme() == "bind" {
+	if p.peekLexeme() == "bind" && p.peekLexemeN(1) != "<" {
 		op := p.next()
 		source, err := p.parseUnary()
 		if err != nil {
@@ -3574,9 +3672,24 @@ func (p *parser) parsePostfixExpr(expr Expr, span Span) (Expr, error) {
 				return expr, nil
 			}
 			p.next()
-			typeArg, err := p.parseType("")
-			if err != nil {
-				return nil, err
+			var typeArgs []Type
+			for {
+				var typeArg Type
+				var err error
+				if isNumber(p.peekLexeme()) {
+					tok := p.next()
+					typeArg = Type{Name: tok.Lexeme, Kind: TypeTemplateValue, Span: tok.Span}
+				} else {
+					typeArg, err = p.parseType("")
+					if err != nil {
+						return nil, err
+					}
+				}
+				typeArgs = append(typeArgs, typeArg)
+				if p.peekLexeme() != "," {
+					break
+				}
+				p.next()
 			}
 			if _, err := p.expect(">"); err != nil {
 				return nil, err
@@ -3601,7 +3714,7 @@ func (p *parser) parsePostfixExpr(expr Expr, span Span) (Expr, error) {
 			if _, err := p.expect(")"); err != nil {
 				return nil, err
 			}
-			expr = &TemplateCallExpr{Callee: nameExpr.Name, TypeArg: typeArg, Args: args, Span: span}
+			expr = &TemplateCallExpr{Callee: nameExpr.Name, TypeArg: typeArgs[0], TypeArgs: typeArgs, Args: args, Span: span}
 		case "(":
 			nameExpr, nameCall := expr.(*NameExpr)
 			fieldExpr, memberCall := expr.(*FieldExpr)
@@ -3715,8 +3828,16 @@ func (p *parser) looksLikeTemplateInvocation() bool {
 	save := p.pos
 	defer func() { p.pos = save }()
 	p.next()
-	if _, err := p.parseType(""); err != nil {
-		return false
+	for {
+		if isNumber(p.peekLexeme()) {
+			p.next()
+		} else if _, err := p.parseType(""); err != nil {
+			return false
+		}
+		if p.peekLexeme() != "," {
+			break
+		}
+		p.next()
 	}
 	if p.peekLexeme() != ">" {
 		return false

@@ -1,0 +1,50 @@
+module Standard.MemoryGeometry;
+profile Core;
+
+// Nominal tag for ordinary host-accessible storage.
+struct SystemMemory {}
+
+template <typename TSpace>
+struct MemoryRegion
+{
+    Address<TSpace> start;
+    usize<byte> length;
+    usize<byte> alignment;
+};
+
+enum RegionError
+{
+    OutOfBounds,
+}
+
+usize<byte> CommonAlignment(usize<byte> left, usize<byte> right)
+{
+    while (right != 0) bounded(64)
+    {
+        usize<byte> remainder = left % right;
+        left = right;
+        right = remainder;
+    }
+    return left;
+}
+
+usize<byte> AlignUp(usize<byte> value, usize<byte> alignment)
+{
+    usize<byte> remainder = value % alignment;
+    return if (remainder == 0) value else value + (alignment - remainder);
+}
+
+Result<MemoryRegion<SystemMemory>, RegionError> Subregion(
+    MemoryRegion<SystemMemory> parent,
+    usize<byte> offset,
+    usize<byte> length)
+{
+    return if (offset > parent.length or length > parent.length - offset)
+        Result::Error(RegionError::OutOfBounds)
+    else
+        Result::Ok(MemoryRegion<SystemMemory>{
+            parent.start + offset,
+            length,
+            CommonAlignment(parent.alignment, offset)
+        });
+}

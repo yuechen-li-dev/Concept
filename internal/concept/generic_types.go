@@ -59,8 +59,10 @@ func evt1InstantiateGenericType(env *semanticEnv, application Type) (Type, error
 		if parameterIndex < 0 || decl.Parameters[parameterIndex].Kind != "type" {
 			return Type{}, evt1Diagnostic("GENERIC_CONSTRAINT_INVALID", "generic type constraint must target a type parameter", decl.Constraint.Span)
 		}
-		if err := checkConceptSatisfaction(env, decl.Constraint.ConceptName, application.TypeArgs[parameterIndex], nil, application.Span); err != nil {
-			return Type{}, err
+		if application.TypeArgs[parameterIndex].Kind != TypeConceptParam {
+			if err := checkConceptSatisfaction(env, decl.Constraint.ConceptName, application.TypeArgs[parameterIndex], nil, application.Span); err != nil {
+				return Type{}, err
+			}
 		}
 	}
 	parts := make([]string, len(application.TypeArgs))
@@ -69,8 +71,10 @@ func evt1InstantiateGenericType(env *semanticEnv, application Type) (Type, error
 			if arg.Kind == TypeTemplateValue {
 				return Type{}, evt1Diagnostic("GENERIC_ARGUMENT_KIND", "type template parameter requires a type", arg.Span)
 			}
-			if err := validateKnownType(env, arg, arg.Span, "", false); err != nil {
-				return Type{}, err
+			if arg.Kind != TypeConceptParam {
+				if err := validateKnownType(env, arg, arg.Span, "", false); err != nil {
+					return Type{}, err
+				}
 			}
 		} else {
 			if arg.Kind != TypeTemplateValue {

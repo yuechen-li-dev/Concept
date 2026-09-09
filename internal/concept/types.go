@@ -30,6 +30,8 @@ const (
 	TypeInferred      TypeKind = "inferred"
 	TypeCallable      TypeKind = "callable"
 	TypeCallback      TypeKind = "callback"
+	TypeAddress       TypeKind = "address"
+	TypeTypedStorage  TypeKind = "typed_storage"
 )
 
 type StorageKind string
@@ -74,6 +76,7 @@ type Type struct {
 	Shape              []StorageDimension `json:"shape,omitempty"`
 	Contiguous         bool               `json:"contiguous,omitempty"`
 	Layout             string             `json:"layout,omitempty"`
+	Quantity           *QuantityDimension `json:"quantity,omitempty"`
 	Span               Span               `json:"span"`
 }
 
@@ -127,6 +130,8 @@ func (t Type) String() string {
 		}
 	} else if t.Kind == TypeTensor && len(t.TypeArgs) == 1 {
 		base = fmt.Sprintf("tensor<%s, %d>", t.TypeArgs[0].String(), t.TensorRank)
+	} else if t.Quantity != nil {
+		base = base + "<" + t.Quantity.String() + ">"
 	} else if len(t.TypeArgs) > 0 {
 		var args []string
 		for _, arg := range t.TypeArgs {
@@ -155,8 +160,12 @@ func (t Type) Equal(other Type) bool {
 		t.CallableHasDrop != other.CallableHasDrop ||
 		t.CallableProvenance != other.CallableProvenance ||
 		t.TensorRank != other.TensorRank ||
+		(t.Quantity == nil) != (other.Quantity == nil) ||
 		t.StorageKind != other.StorageKind ||
 		len(t.Shape) != len(other.Shape) {
+		return false
+	}
+	if t.Quantity != nil && !t.Quantity.Equal(*other.Quantity) {
 		return false
 	}
 	for i := range t.TypeArgs {
@@ -428,6 +437,7 @@ type TemplateConstraint struct {
 type TemplateDecl struct {
 	Async         bool               `json:"async,omitempty"`
 	Name          string             `json:"name"`
+	Parameters    []GenericParameter `json:"parameters,omitempty"`
 	TypeParam     string             `json:"type_param"`
 	TypeParamSpan Span               `json:"type_param_span"`
 	Constraint    TemplateConstraint `json:"constraint"`
@@ -438,10 +448,10 @@ type TemplateDecl struct {
 }
 
 type GenericParameter struct {
-	Name      string
-	Kind      string
-	ValueType Type
-	Span      Span
+	Name      string `json:"name"`
+	Kind      string `json:"kind"`
+	ValueType Type   `json:"value_type,omitempty"`
+	Span      Span   `json:"span"`
 }
 
 type GenericTypeDecl struct {
@@ -942,21 +952,23 @@ func (*DispatchExpr) evt1Expr()        {}
 func (e *DispatchExpr) exprSpan() Span { return e.Span }
 
 type TemplateCallExpr struct {
-	Callee  string `json:"callee"`
-	TypeArg Type   `json:"type_arg"`
-	Args    []Expr `json:"args,omitempty"`
-	Span    Span   `json:"span"`
+	Callee   string `json:"callee"`
+	TypeArg  Type   `json:"type_arg"` // first argument, retained for artifact compatibility
+	TypeArgs []Type `json:"type_args,omitempty"`
+	Args     []Expr `json:"args,omitempty"`
+	Span     Span   `json:"span"`
 }
 
 func (*TemplateCallExpr) evt1Expr()        {}
 func (e *TemplateCallExpr) exprSpan() Span { return e.Span }
 
 type BinaryExpr struct {
-	Op     string          `json:"op"`
-	Left   Expr            `json:"left"`
-	Right  Expr            `json:"right"`
-	Tensor *TensorSemantic `json:"tensor,omitempty"`
-	Span   Span            `json:"span"`
+	Op           string          `json:"op"`
+	Left         Expr            `json:"left"`
+	Right        Expr            `json:"right"`
+	Tensor       *TensorSemantic `json:"tensor,omitempty"`
+	ResolvedType Type            `json:"resolved_type,omitempty"`
+	Span         Span            `json:"span"`
 }
 
 func (*BinaryExpr) evt1Expr()        {}
@@ -1786,6 +1798,7 @@ type evt1TemplateInstance struct {
 	Key                 string
 	TemplateName        string
 	ConcreteType        Type
+	ConcreteArgs        []Type
 	TypeIdentity        string
 	GeneratedSymbol     string
 	ConstraintConcept   string
