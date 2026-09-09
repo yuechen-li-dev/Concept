@@ -11,4 +11,12 @@ async Result<int, ReadError> Work(Command command) {
     return Result::Ok(answer);
 }
 int Unwrap(Result<int, ReadError> result) { return match (result) { Result::Ok(value) => value, Result::Error(error) => 0, }; }
-int Main() { Async<Result<int, ReadError>> work = Work(Command::Read); while (not Complete(work)) bounded(8) { Step(work); } return Unwrap(Result(work)); }
+int Main()
+{
+    Async<Result<int, ReadError>> work = Work(Command::Read);
+    while (not Complete(work)) bounded(8)
+    {
+        Step(work);
+    }
+    return Unwrap(Result(work));
+}

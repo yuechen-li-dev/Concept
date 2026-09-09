@@ -2,8 +2,21 @@ profile Core;
 async int Read(ref int value) { return value; }
 async int Work(ref int source, bool first) {
     int value = 0;
-    if (first) { value = await Read(ref source); value = await Read(ref source); }
+    if (first)
+    {
+        value = await Read(ref source);
+        value = await Read(ref source);
+    }
     else { value = await Read(ref source); }
     return value;
 }
-int Main() { int source = 42; Async<int> work = Work(ref source, true); while (not Complete(work)) bounded(8) { Step(work); } return Result(work); }
+int Main()
+{
+    int source = 42;
+    Async<int> work = Work(ref source, true);
+    while (not Complete(work)) bounded(8)
+    {
+        Step(work);
+    }
+    return Result(work);
+}

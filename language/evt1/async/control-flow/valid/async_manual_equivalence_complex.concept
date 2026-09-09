@@ -1,27 +1,78 @@
 profile Core;
-automata Manual with state { int value; int iteration; } {
-    machine Parent {
-        state Start { state.value = 20; push Child goto AfterFirst; }
-        state AfterFirst { push Child goto AfterSecond; }
-        state AfterSecond { state.value = state.value + 22; complete; }
-    }
-    machine Child { state Done { state.iteration = state.iteration + 1; complete; } }
+
+automata Manual with state
+{
+    int value;
+    int iteration;
 }
-async int Child(int value) { return value; }
-async int Generated() {
+{
+    machine Parent
+    {
+        state Start
+        {
+            state.value = 20;
+            push Child goto AfterFirst;
+        }
+
+        state AfterFirst
+        {
+            push Child goto AfterSecond;
+        }
+
+        state AfterSecond
+        {
+            state.value = state.value + 22;
+            complete;
+        }
+    }
+
+    machine Child
+    {
+        state Done
+        {
+            state.iteration = state.iteration + 1;
+            complete;
+        }
+    }
+}
+
+async int Child(int value)
+{
+    return value;
+}
+
+async int Generated()
+{
     int value = 20;
     int iteration = 0;
-    while (iteration < 2) bounded(2) {
+    while (iteration < 2) bounded(2)
+    {
         int observed = await Child(iteration);
-        if (observed == iteration) { value = value + 11; }
+        if (observed == iteration)
+        {
+            value = value + 11;
+        }
         iteration = iteration + 1;
     }
     return value;
 }
-int Main() {
+
+int Main()
+{
     instance Manual manual(0, 0);
-    Step(manual, Parent); Step(manual, Parent); Step(manual, Parent); Step(manual, Parent); Step(manual, Parent);
-    Async<int> generated = Generated(); while (not Complete(generated)) bounded(10) { Step(generated); }
-    if (manual.state.value == Result(generated)) { return manual.state.value; }
+    Step(manual, Parent);
+    Step(manual, Parent);
+    Step(manual, Parent);
+    Step(manual, Parent);
+    Step(manual, Parent);
+    Async<int> generated = Generated();
+    while (not Complete(generated)) bounded(10)
+    {
+        Step(generated);
+    }
+    if (manual.state.value == Result(generated))
+    {
+        return manual.state.value;
+    }
     return 0;
 }

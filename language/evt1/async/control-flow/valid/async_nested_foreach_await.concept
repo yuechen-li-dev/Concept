@@ -12,4 +12,12 @@ async int Work() {
     }
     return total - 40;
 }
-int Main() { Async<int> work = Work(); while (not Complete(work)) bounded(16) { Step(work); } return Result(work); }
+int Main()
+{
+    Async<int> work = Work();
+    while (not Complete(work)) bounded(16)
+    {
+        Step(work);
+    }
+    return Result(work);
+}

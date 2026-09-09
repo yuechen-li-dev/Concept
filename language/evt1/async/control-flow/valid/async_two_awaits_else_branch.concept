@@ -5,7 +5,19 @@ async int C(int value) { return value + 22; }
 async int Work(bool first) {
     int value = 0;
     if (first) { value = await A(); }
-    else { value = await B(); value = await C(value); }
+    else
+    {
+        value = await B();
+        value = await C(value);
+    }
     return value;
 }
-int Main() { Async<int> work = Work(false); while (not Complete(work)) bounded(8) { Step(work); } return Result(work); }
+int Main()
+{
+    Async<int> work = Work(false);
+    while (not Complete(work)) bounded(8)
+    {
+        Step(work);
+    }
+    return Result(work);
+}
