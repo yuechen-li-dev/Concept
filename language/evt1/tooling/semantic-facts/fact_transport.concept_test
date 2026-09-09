@@ -1,0 +1,11 @@
+profile Core;
+
+[[fact]]
+void OrdinaryValueTransportPreservesFacts()
+{
+    int<array>[4] backing = [1, 2, 3, 4];
+    Span<int> first = Span(backing);
+    Span<int> second = first;
+    Assert.Concept<SameRegion>(first, second, "copy retains the backing region");
+    Assert.Equals(second[2], 3, "fact transport does not change runtime values");
+}

@@ -1,0 +1,18 @@
+module R6h.FactOverlap;
+profile Core;
+import Standard.MemoryGeometry;
+Result<int, RegionError> Main()
+{
+    int<array>[4] backing = [0, 0, 0, 0];
+    Address<SystemMemory> start = AddressOf<SystemMemory>(ref backing);
+    usize<byte> extent = 16;
+    usize<byte> alignment = 4;
+    MemoryRegion<SystemMemory> parent = MemoryRegion<SystemMemory>{start, extent, alignment};
+    usize<byte> leftOffset = 0;
+    usize<byte> rightOffset = 4;
+    usize<byte> length = 8;
+    MemoryRegion<SystemMemory> left = Subregion(parent, leftOffset, length)?;
+    MemoryRegion<SystemMemory> right = Subregion(parent, rightOffset, length)?;
+    Assert.Concept<SameRegion>(left, right, "overlapping views retain their common origin");
+    return Result::Ok(0);
+}

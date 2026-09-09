@@ -608,6 +608,23 @@
           }
         }
       ],
+      "result_facts": {
+        "operation": "ZeroBound",
+        "signature": "ZeroBound(int)",
+        "result": {
+          "scalar": {
+            "kind": "Constant",
+            "constant": 99
+          },
+          "transport": [
+            {
+              "transform": "Return",
+              "through": "ZeroBound"
+            }
+          ]
+        },
+        "origin": "CompilerAnalysis"
+      },
       "operations": [
         {
           "id": "ZeroBound.01",
@@ -733,6 +750,22 @@
           "line": 70,
           "column": 1
         }
+      },
+      "result_facts": {
+        "operation": "DefaultBound",
+        "signature": "DefaultBound()",
+        "result": {
+          "scalar": {
+            "kind": "Constant"
+          },
+          "transport": [
+            {
+              "transform": "Return",
+              "through": "DefaultBound"
+            }
+          ]
+        },
+        "origin": "CompilerAnalysis"
       },
       "operations": [
         {

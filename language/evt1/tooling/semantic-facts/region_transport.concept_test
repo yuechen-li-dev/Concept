@@ -1,0 +1,12 @@
+profile Core;
+
+[[fact]]
+void ReturnedIntervalsRemainDisjoint()
+{
+    int<array>[2] leftBacking = [0, 1];
+    int<array>[2] rightBacking = [4, 5];
+    Span<int> left = Span(leftBacking);
+    Span<int> right = Span(rightBacking);
+    Assert.Concept<Disjoint>(left, right, "distinct declared regions are disjoint");
+    Assert.Equals(right[0], 4, "region proofs are compile-time only");
+}

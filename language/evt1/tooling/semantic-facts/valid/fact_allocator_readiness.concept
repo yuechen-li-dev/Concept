@@ -1,0 +1,22 @@
+module R6h.FactAllocatorReadiness;
+profile Core;
+import Standard.MemoryGeometry;
+import Standard.Generic;
+Result<int, RegionError> Main()
+{
+    int<array>[4] backing = [0, 0, 0, 0];
+    Address<SystemMemory> start = AddressOf<SystemMemory>(ref backing);
+    usize<byte> extent = 16;
+    usize<byte> alignment = 4;
+    MemoryRegion<SystemMemory> parent = MemoryRegion<SystemMemory>{start, extent, alignment};
+	usize<byte> requested = 4;
+    usize<byte> offset = AlignUp(requested, alignment);
+    usize<byte> length = 4;
+    MemoryRegion<SystemMemory> child = Subregion(parent, offset, length)?;
+    Box<MemoryRegion<SystemMemory>> box = Box<MemoryRegion<SystemMemory>>{child};
+    Storage<int> cell = bind<int>(box.value.start, box.value.length);
+    ref int value = Initialize(cell, 11);
+    int observed = value;
+    Destroy(cell);
+    return Result::Ok(observed);
+}

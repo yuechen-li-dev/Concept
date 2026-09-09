@@ -1,0 +1,12 @@
+module R6h.UnknownBits;
+profile Core;
+import Standard.Generic;
+struct SystemMemory {}
+int Verify(usize bits)
+{
+    Address<SystemMemory> raw = AddressFromBits<SystemMemory>(bits);
+    Box<Address<SystemMemory>> box = Box<Address<SystemMemory>>{raw};
+    Address<SystemMemory> result = box.value;
+    Assert.Concept<SameRegion>(raw, result, "bits cannot establish an origin");
+    return 0;
+}

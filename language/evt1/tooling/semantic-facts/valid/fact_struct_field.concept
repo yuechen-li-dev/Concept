@@ -1,0 +1,16 @@
+module R6h.FactStructField;
+profile Core;
+import Standard.MemoryGeometry;
+struct Holder { MemoryRegion<SystemMemory> region; }
+int Main()
+{
+    int<array>[4] backing = [0, 0, 0, 0];
+    Address<SystemMemory> start = AddressOf<SystemMemory>(ref backing);
+    usize<byte> extent = 16;
+    usize<byte> alignment = 4;
+    MemoryRegion<SystemMemory> source = MemoryRegion<SystemMemory>{start, extent, alignment};
+    Holder holder = Holder{source};
+    MemoryRegion<SystemMemory> result = holder.region;
+    Assert.Concept<SameRegion>(source, result, "field load retains origin");
+    return 0;
+}

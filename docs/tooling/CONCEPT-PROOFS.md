@@ -67,3 +67,18 @@ LLM dependency in the compiler.
 
 `static_assert` proves a compile-time boolean. `Assert.Concept` queries semantic
 proof authority and preserves its proof structure.
+
+## Transported value facts
+
+R6h proof evidence may include `Transported through` steps such as local copy,
+field store/load, Result or Option extraction, `AddOffset`,
+`CommonAlignment`, imported result return, capture, async persistence, and
+machine persistence. These are compile-time provenance for the proof, not
+runtime metadata.
+
+For region relations, equal origins plus known half-open intervals can prove
+non-overlap or disprove it. A runtime offset remains `UNKNOWN`. When an
+imported or external operation has no semantic result summary, the proof names
+the `Fact lost at` boundary and does not infer facts from ABI or runtime shape.
+The checked R6h goldens cover alignment through multiple transports, returned
+disjoint regions, returned overlap, and an opaque `AddressFromBits` boundary.

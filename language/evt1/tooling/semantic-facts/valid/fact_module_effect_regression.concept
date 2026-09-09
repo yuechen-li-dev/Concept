@@ -1,0 +1,4 @@
+module R6h.FactEffectRegression;
+profile Core;
+import Standard.Host;
+int Main() { return PureImportedWrapper(); }

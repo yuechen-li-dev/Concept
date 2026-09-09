@@ -392,6 +392,45 @@
           }
         }
       ],
+      "result_facts": {
+        "operation": "QueueOpen",
+        "signature": "QueueOpen(borrow const LifecycleContext)",
+        "result": {
+          "source": {
+            "kind": "Field",
+            "field_path": [
+              "queueAvailable"
+            ],
+            "left": {
+              "kind": "Parameter"
+            }
+          },
+          "scalar": {
+            "kind": "Field",
+            "field_path": [
+              "queueAvailable"
+            ],
+            "left": {
+              "kind": "Parameter"
+            }
+          },
+          "transport": [
+            {
+              "transform": "Parameter",
+              "from": "context"
+            },
+            {
+              "transform": "FieldLoad",
+              "through": "queueAvailable"
+            },
+            {
+              "transform": "Return",
+              "through": "QueueOpen"
+            }
+          ]
+        },
+        "origin": "CompilerAnalysis"
+      },
       "operations": [
         {
           "id": "QueueOpen.01",
@@ -451,6 +490,45 @@
           }
         }
       ],
+      "result_facts": {
+        "operation": "ReleaseRequested",
+        "signature": "ReleaseRequested(borrow const LifecycleContext)",
+        "result": {
+          "source": {
+            "kind": "Field",
+            "field_path": [
+              "releaseRequested"
+            ],
+            "left": {
+              "kind": "Parameter"
+            }
+          },
+          "scalar": {
+            "kind": "Field",
+            "field_path": [
+              "releaseRequested"
+            ],
+            "left": {
+              "kind": "Parameter"
+            }
+          },
+          "transport": [
+            {
+              "transform": "Parameter",
+              "from": "context"
+            },
+            {
+              "transform": "FieldLoad",
+              "through": "releaseRequested"
+            },
+            {
+              "transform": "Return",
+              "through": "ReleaseRequested"
+            }
+          ]
+        },
+        "origin": "CompilerAnalysis"
+      },
       "operations": [
         {
           "id": "ReleaseRequested.01",
@@ -510,6 +588,49 @@
           }
         }
       ],
+      "result_facts": {
+        "operation": "CanSubmit",
+        "signature": "CanSubmit(borrow const LifecycleContext)",
+        "result": {
+          "source": {
+            "kind": "Field",
+            "field_path": [
+              "queueAvailable"
+            ],
+            "left": {
+              "kind": "Parameter"
+            }
+          },
+          "scalar": {
+            "kind": "Field",
+            "field_path": [
+              "queueAvailable"
+            ],
+            "left": {
+              "kind": "Parameter"
+            }
+          },
+          "transport": [
+            {
+              "transform": "Parameter",
+              "from": "context"
+            },
+            {
+              "transform": "FieldLoad",
+              "through": "queueAvailable"
+            },
+            {
+              "transform": "Return",
+              "through": "QueueOpen"
+            },
+            {
+              "transform": "Return",
+              "through": "CanSubmit"
+            }
+          ]
+        },
+        "origin": "CompilerAnalysis"
+      },
       "operations": [
         {
           "id": "CanSubmit.01",
@@ -569,6 +690,49 @@
           }
         }
       ],
+      "result_facts": {
+        "operation": "MustRelease",
+        "signature": "MustRelease(borrow const LifecycleContext)",
+        "result": {
+          "source": {
+            "kind": "Field",
+            "field_path": [
+              "releaseRequested"
+            ],
+            "left": {
+              "kind": "Parameter"
+            }
+          },
+          "scalar": {
+            "kind": "Field",
+            "field_path": [
+              "releaseRequested"
+            ],
+            "left": {
+              "kind": "Parameter"
+            }
+          },
+          "transport": [
+            {
+              "transform": "Parameter",
+              "from": "context"
+            },
+            {
+              "transform": "FieldLoad",
+              "through": "releaseRequested"
+            },
+            {
+              "transform": "Return",
+              "through": "ReleaseRequested"
+            },
+            {
+              "transform": "Return",
+              "through": "MustRelease"
+            }
+          ]
+        },
+        "origin": "CompilerAnalysis"
+      },
       "operations": [
         {
           "id": "MustRelease.01",

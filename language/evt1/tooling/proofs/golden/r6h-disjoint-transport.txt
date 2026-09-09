@@ -1,0 +1,2 @@
+PROVEN Disjoint(left, right)
+same origin with non-overlapping half-open intervals [0,8) and [8,16)

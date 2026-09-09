@@ -1,0 +1,17 @@
+module R6h.FactAsyncPersistence;
+profile Core;
+async int Child() { return 2; }
+async int Work()
+{
+    int<ndarray>[2] storage = [40, 1];
+    tensor<int, 1> values = Tensor(storage);
+    int child = await Child();
+    Assert.Concept<Contiguous>(values, "async persistent tensor retains contiguity");
+    return values[0] + child;
+}
+int Main()
+{
+    Async<int> work = Work();
+    while (not Complete(work)) bounded(4) { Step(work); }
+    return Result(work);
+}

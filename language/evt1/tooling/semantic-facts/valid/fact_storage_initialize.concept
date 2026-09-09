@@ -1,0 +1,15 @@
+module R6h.FactStorageInitialize;
+profile Core;
+struct SystemMemory {}
+int Main()
+{
+    int<array>[1] backing = [0];
+    Address<SystemMemory> address = AddressOf<SystemMemory>(ref backing);
+    usize<byte> extent = 4;
+    Storage<int> first = bind<int>(address, extent);
+    Storage<int> second = move first;
+    ref int value = Initialize(second, 9);
+    int observed = value;
+    Destroy(second);
+    return observed;
+}

@@ -1,0 +1,3 @@
+Cannot prove Disjoint(left, right)
+Outcome: DISPROVEN
+same origin with overlapping half-open intervals [0,8) and [4,12)

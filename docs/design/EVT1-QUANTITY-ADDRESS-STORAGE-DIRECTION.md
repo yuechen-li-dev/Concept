@@ -30,6 +30,12 @@ parameters. Identity includes every argument and `concept-module.v1` preserves
 the list for consumer-side instantiation without source reparse. Variadics and
 metaprogramming remain deferred.
 
-Allocator work remains deferred until the semantic-fact owner transports region
-origin, interval, alignment, and lifetime through ordinary values and can
-distinguish a trusted platform region from arbitrary reconstructed bits.
+R6h resolves that transport prerequisite. Address space, origin, relative
+interval, extent, alignment, host accessibility, and lifetime now survive
+ordinary locals, parameters/results, Result/Option payloads, fields, generic
+wrappers, persistent fields, and checked module summaries. Unknown runtime
+offsets degrade interval/alignment; `AddressFromBits` remains unknown.
+
+Allocator work itself remains deferred. The allocator-readiness specimen now
+demonstrates `AlignUp -> Subregion -> imported return -> generic field ->
+bind<T> -> Initialize -> Destroy` without runtime fact metadata.

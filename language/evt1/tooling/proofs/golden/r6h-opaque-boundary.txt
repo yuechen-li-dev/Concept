@@ -1,0 +1,4 @@
+Cannot prove Aligned<4>(value)
+Outcome: UNKNOWN
+Fact lost at AddressFromBits
+region origin and provenance remain Unknown

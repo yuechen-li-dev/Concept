@@ -1,0 +1,15 @@
+module R6h.UnknownMissingSummary;
+profile Core;
+import Standard.MemoryGeometry;
+Result<int, RegionError> Verify()
+{
+    int<array>[4] backing = [0, 0, 0, 0];
+    Address<SystemMemory> start = AddressOf<SystemMemory>(ref backing);
+    usize<byte> extent = 16;
+    usize<byte> alignment = 4;
+    usize<byte> offset = 4;
+    MemoryRegion<SystemMemory> parent = MemoryRegion<SystemMemory>{start, extent, alignment};
+    MemoryRegion<SystemMemory> child = Subregion(parent, offset, alignment)?;
+    Assert.Concept<SameRegion>(parent, child, "missing artifact summary degrades to Unknown");
+    return Result::Ok(0);
+}

@@ -1,0 +1,14 @@
+module R6h.FactMachineField;
+profile Core;
+automata Worker with state { Span<int> values; }
+{
+    machine Main { state Running { Span<int> view = state.values; Assert.Concept<Contiguous>(view, "machine field retains facts"); yield; } }
+}
+int Main()
+{
+    int<array>[2] backing = [7, 9];
+    Span<int> values = Span(backing);
+    instance Worker worker(values);
+    Step(worker, Main);
+    return 0;
+}

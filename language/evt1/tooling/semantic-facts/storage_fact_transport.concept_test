@@ -1,0 +1,16 @@
+profile Core;
+struct SystemMemory {}
+
+[[fact]]
+void StorageInitializationPreservesRuntimeValue()
+{
+    int<array>[1] backing = [0];
+    Address<SystemMemory> address = AddressOf<SystemMemory>(ref backing);
+    usize<byte> extent = 4;
+    Storage<int> cell = bind<int>(address, extent);
+    ref int value = Initialize(cell, 13);
+	Assert.Concept<Initialized>(value, "Initialize marks the object lifetime live");
+	Assert.Concept<SameRegion>(cell, value, "Initialize retains the storage origin");
+    Assert.Equals(value, 13, "Initialize creates the object in the same storage");
+    Destroy(cell);
+}

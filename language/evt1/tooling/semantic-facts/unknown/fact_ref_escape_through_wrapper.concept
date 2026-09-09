@@ -1,0 +1,14 @@
+module R6h.InvalidWrapperEscape;
+profile Core;
+import Standard.MemoryGeometry;
+import Standard.Generic;
+MemoryRegion<SystemMemory> Escape()
+{
+    int<array>[1] backing = [0];
+    Address<SystemMemory> start = AddressOf<SystemMemory>(ref backing);
+    usize<byte> extent = 4;
+    usize<byte> alignment = 4;
+    MemoryRegion<SystemMemory> local = MemoryRegion<SystemMemory>{start, extent, alignment};
+    Box<MemoryRegion<SystemMemory>> box = Box<MemoryRegion<SystemMemory>>{local};
+    return box.value;
+}

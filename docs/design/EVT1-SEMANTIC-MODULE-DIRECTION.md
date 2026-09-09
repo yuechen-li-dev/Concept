@@ -33,6 +33,15 @@ Effect summaries are deliberately closed to `Allocates`, proven
 the consumer trusts the checked artifact summary and the proof graph identifies
 that origin. This avoids both source reanalysis and fake certainty.
 
+R6h adds a separate `value_fact_summaries` section. Each exported operation is
+identified by exact signature and carries a bounded symbolic result relation:
+parameter/field/fact selection, byte-offset addition, extent, common guaranteed
+alignment, provenance relation, field summaries, and explicit transport
+steps. Duplicate, unordered, or over-complex summaries are rejected. The
+artifact is consumer authority; a missing older summary degrades to Unknown
+and is not reconstructed from the semantic payload body. Effect summaries and
+value facts share the artifact envelope but remain different semantics.
+
 Dependency identities and content hashes make a module graph deterministic and
 closed. Cache presence is not semantic. A future build system may cache the
 content-addressed result without changing this contract.

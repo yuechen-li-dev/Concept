@@ -1,0 +1,15 @@
+module R6h.FactDragonGod;
+profile Core;
+struct SystemMemory {}
+struct BootInfo { int code; }
+int Main()
+{
+    BootInfo<array>[1] firmware = [BootInfo{0}];
+    Address<SystemMemory> address = AddressOf<SystemMemory>(ref firmware);
+    usize<byte> extent = SizeOf<BootInfo>();
+    Storage<BootInfo> slot = bind<BootInfo>(address, extent);
+    ref BootInfo info = Initialize(slot, BootInfo{7});
+    int code = info.code;
+    Destroy(slot);
+    return code;
+}

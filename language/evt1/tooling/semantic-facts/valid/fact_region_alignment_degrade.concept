@@ -1,0 +1,16 @@
+module R6h.FactAlignmentDegrade;
+profile Core;
+import Standard.MemoryGeometry;
+Result<int, RegionError> Main()
+{
+    int<array>[4] backing = [0, 0, 0, 0];
+    Address<SystemMemory> start = AddressOf<SystemMemory>(ref backing);
+    usize<byte> extent = 16;
+    usize<byte> alignment = 4;
+    MemoryRegion<SystemMemory> parent = MemoryRegion<SystemMemory>{start, extent, alignment};
+    usize<byte> offset = 12;
+    usize<byte> length = 16;
+    MemoryRegion<SystemMemory> child = Subregion(parent, offset, length)?;
+    Assert.Concept<Aligned<4>>(child, "known alignment degrades conservatively");
+    return Result::Ok(0);
+}

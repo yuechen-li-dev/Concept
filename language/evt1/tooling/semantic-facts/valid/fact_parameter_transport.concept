@@ -1,0 +1,15 @@
+module R6h.FactParameter;
+profile Core;
+import Standard.MemoryGeometry;
+MemoryRegion<SystemMemory> Keep(MemoryRegion<SystemMemory> region) { return region; }
+int Main()
+{
+    int<array>[4] backing = [0, 0, 0, 0];
+    Address<SystemMemory> start = AddressOf<SystemMemory>(ref backing);
+    usize<byte> extent = 16;
+    usize<byte> alignment = 4;
+    MemoryRegion<SystemMemory> source = MemoryRegion<SystemMemory>{start, extent, alignment};
+    MemoryRegion<SystemMemory> result = Keep(source);
+    Assert.Concept<SameRegion>(source, result, "parameter summary retains origin");
+    return 0;
+}

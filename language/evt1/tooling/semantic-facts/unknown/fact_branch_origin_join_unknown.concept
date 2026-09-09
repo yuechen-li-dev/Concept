@@ -1,0 +1,17 @@
+module R6h.UnknownBranchOrigin;
+profile Core;
+import Standard.MemoryGeometry;
+int Verify(bool choose)
+{
+    int<array>[1] leftBacking = [0];
+    int<array>[1] rightBacking = [0];
+    Address<SystemMemory> leftStart = AddressOf<SystemMemory>(ref leftBacking);
+    Address<SystemMemory> rightStart = AddressOf<SystemMemory>(ref rightBacking);
+    usize<byte> extent = 4;
+    usize<byte> alignment = 4;
+    MemoryRegion<SystemMemory> left = MemoryRegion<SystemMemory>{leftStart, extent, alignment};
+    MemoryRegion<SystemMemory> right = MemoryRegion<SystemMemory>{rightStart, extent, alignment};
+    MemoryRegion<SystemMemory> selected = if (choose) left else right;
+    Assert.Concept<SameRegion>(selected, left, "different branch origins join to Unknown");
+    return 0;
+}

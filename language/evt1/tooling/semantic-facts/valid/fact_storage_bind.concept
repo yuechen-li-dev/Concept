@@ -1,0 +1,14 @@
+module R6h.FactStorageBind;
+profile Core;
+struct SystemMemory {}
+int Main()
+{
+    int<array>[1] backing = [0];
+    Address<SystemMemory> address = AddressOf<SystemMemory>(ref backing);
+    usize<byte> extent = 4;
+    Storage<int> cell = bind<int>(address, extent);
+    ref int value = Initialize(cell, 7);
+    int observed = value;
+    Destroy(cell);
+    return observed;
+}

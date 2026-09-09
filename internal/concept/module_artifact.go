@@ -52,16 +52,17 @@ type SemanticModuleExports struct {
 // The surrounding JSON stays inspectable and carries compatibility, integrity,
 // dependency, export, effect, ownership, and diagnostic-origin summaries.
 type SemanticModuleArtifact struct {
-	SchemaVersion    string                        `json:"schema_version"`
-	CompilerIdentity string                        `json:"compiler_identity"`
-	ModuleIdentity   string                        `json:"module_identity"`
-	SourceIdentity   string                        `json:"source_identity"`
-	SourceSHA256     string                        `json:"source_sha256"`
-	ContentSHA256    string                        `json:"content_sha256"`
-	Dependencies     []SemanticModuleDependency    `json:"dependencies,omitempty"`
-	Exports          SemanticModuleExports         `json:"exports"`
-	OperationEffects []SemanticModuleEffectSummary `json:"operation_effect_summaries,omitempty"`
-	SemanticPayload  []byte                        `json:"semantic_payload"`
+	SchemaVersion      string                        `json:"schema_version"`
+	CompilerIdentity   string                        `json:"compiler_identity"`
+	ModuleIdentity     string                        `json:"module_identity"`
+	SourceIdentity     string                        `json:"source_identity"`
+	SourceSHA256       string                        `json:"source_sha256"`
+	ContentSHA256      string                        `json:"content_sha256"`
+	Dependencies       []SemanticModuleDependency    `json:"dependencies,omitempty"`
+	Exports            SemanticModuleExports         `json:"exports"`
+	OperationEffects   []SemanticModuleEffectSummary `json:"operation_effect_summaries,omitempty"`
+	ValueFactSummaries []SemanticFunctionFactSummary `json:"value_fact_summaries,omitempty"`
+	SemanticPayload    []byte                        `json:"semantic_payload"`
 }
 
 var semanticGobOnce sync.Once
@@ -124,6 +125,9 @@ func LoadSemanticModuleArtifact(body []byte) (SemanticModuleArtifact, Module, er
 	if artifact.CompilerIdentity != CompilerID {
 		return artifact, Module{}, fmt.Errorf("MODULE_COMPILER_INCOMPATIBLE: expected %s, got %s", CompilerID, artifact.CompilerIdentity)
 	}
+	if err := validateSemanticFunctionFactSummaries(artifact.ValueFactSummaries); err != nil {
+		return artifact, Module{}, err
+	}
 	hash, err := semanticArtifactHash(artifact)
 	if err != nil {
 		return artifact, Module{}, err
@@ -159,19 +163,25 @@ func CompileSemanticModule(path, source string, artifacts map[string][]byte) ([]
 	}
 	portable := local
 	portable.Path = local.Name
+	// Preserve concrete generic field structure referenced by exported
+	// signatures. Consumers must be able to validate Result/Option payloads and
+	// field fact summaries even when their own source never spells the generic
+	// application independently.
+	evt1MaterializeGenericInstances(&portable, env)
 	payload, err := encodeSemanticModule(portable)
 	if err != nil {
 		return nil, err
 	}
 	artifact := SemanticModuleArtifact{
-		SchemaVersion:    SemanticModuleSchema,
-		CompilerIdentity: CompilerID,
-		ModuleIdentity:   local.Name,
-		SourceIdentity:   local.Name,
-		SourceSHA256:     digest([]byte(source)),
-		Exports:          semanticModuleExports(local, env),
-		OperationEffects: summarizeModuleEffects(local, env),
-		SemanticPayload:  payload,
+		SchemaVersion:      SemanticModuleSchema,
+		CompilerIdentity:   CompilerID,
+		ModuleIdentity:     local.Name,
+		SourceIdentity:     local.Name,
+		SourceSHA256:       digest([]byte(source)),
+		Exports:            semanticModuleExports(local, env),
+		OperationEffects:   summarizeModuleEffects(local, env),
+		ValueFactSummaries: semanticModuleFactSummaries(local, env),
+		SemanticPayload:    payload,
 	}
 	for _, dependency := range loaded {
 		artifact.Dependencies = append(artifact.Dependencies, SemanticModuleDependency{ModuleIdentity: dependency.ModuleIdentity, ContentSHA256: dependency.ContentSHA256})
@@ -446,12 +456,24 @@ func composeSemanticModules(local Module, artifacts map[string][]byte) (Module, 
 	for _, artifact := range order {
 		dependency := modules[artifact.ModuleIdentity]
 		appendSemanticDeclarations(&composed, dependency)
+		for _, fn := range dependency.Functions {
+			composed.ImportedFactAuthority = append(composed.ImportedFactAuthority, evt1FunctionProvenanceKey(fn))
+		}
+		for _, template := range dependency.Templates {
+			composed.ImportedFactAuthority = append(composed.ImportedFactAuthority, "template:"+template.Name)
+		}
 		for _, summary := range artifact.OperationEffects {
 			composed.OperationEffects = append(composed.OperationEffects, OperationEffectDecl{Effect: summary.Effect, Operation: summary.Operation, Origin: string(FactOriginModuleSummaryEffect), Module: artifact.ModuleIdentity})
+		}
+		for _, summary := range artifact.ValueFactSummaries {
+			summary.Origin = FactOriginModuleFactSummary
+			composed.ImportedFactSummaries = append(composed.ImportedFactSummaries, summary)
 		}
 	}
 	appendSemanticDeclarations(&composed, local)
 	composed.OperationEffects = append(composed.OperationEffects, local.OperationEffects...)
+	composed.ImportedFactSummaries = append(composed.ImportedFactSummaries, local.ImportedFactSummaries...)
+	composed.ImportedFactAuthority = append(composed.ImportedFactAuthority, local.ImportedFactAuthority...)
 	// Compile-time obligations belong only to the consuming unit. Imported
 	// assertions are checked when their source module is built and are not
 	// replayed, while local assertions must remain on the ordinary sema path.

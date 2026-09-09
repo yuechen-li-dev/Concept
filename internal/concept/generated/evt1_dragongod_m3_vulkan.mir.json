@@ -515,6 +515,45 @@
           }
         }
       ],
+      "result_facts": {
+        "operation": "QueueOpen",
+        "signature": "QueueOpen(borrow const BufferContext)",
+        "result": {
+          "source": {
+            "kind": "Field",
+            "field_path": [
+              "queueAvailable"
+            ],
+            "left": {
+              "kind": "Parameter"
+            }
+          },
+          "scalar": {
+            "kind": "Field",
+            "field_path": [
+              "queueAvailable"
+            ],
+            "left": {
+              "kind": "Parameter"
+            }
+          },
+          "transport": [
+            {
+              "transform": "Parameter",
+              "from": "context"
+            },
+            {
+              "transform": "FieldLoad",
+              "through": "queueAvailable"
+            },
+            {
+              "transform": "Return",
+              "through": "QueueOpen"
+            }
+          ]
+        },
+        "origin": "CompilerAnalysis"
+      },
       "operations": [
         {
           "id": "QueueOpen.01",
@@ -574,6 +613,45 @@
           }
         }
       ],
+      "result_facts": {
+        "operation": "FailRequested",
+        "signature": "FailRequested(borrow const BufferContext)",
+        "result": {
+          "source": {
+            "kind": "Field",
+            "field_path": [
+              "failRequested"
+            ],
+            "left": {
+              "kind": "Parameter"
+            }
+          },
+          "scalar": {
+            "kind": "Field",
+            "field_path": [
+              "failRequested"
+            ],
+            "left": {
+              "kind": "Parameter"
+            }
+          },
+          "transport": [
+            {
+              "transform": "Parameter",
+              "from": "context"
+            },
+            {
+              "transform": "FieldLoad",
+              "through": "failRequested"
+            },
+            {
+              "transform": "Return",
+              "through": "FailRequested"
+            }
+          ]
+        },
+        "origin": "CompilerAnalysis"
+      },
       "operations": [
         {
           "id": "FailRequested.01",

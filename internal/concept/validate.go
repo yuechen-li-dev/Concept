@@ -71,6 +71,7 @@ type evt1ValueBinding struct {
 	spanFacts        *evt1SpanFacts
 	regionFacts      *evt1SpanFacts
 	tensorFacts      *TensorViewFacts
+	valueFacts       *SemanticValueFacts
 	source           Expr
 	declarationSpan  Span
 }
@@ -202,6 +203,17 @@ func (s *evt1Scope) setTensorFacts(name string, facts *TensorViewFacts) bool {
 	return false
 }
 
+func (s *evt1Scope) setValueFacts(name string, facts *SemanticValueFacts) bool {
+	for scope := s; scope != nil; scope = scope.parent {
+		if binding, ok := scope.values[name]; ok {
+			binding.valueFacts = cloneSemanticValueFacts(facts)
+			scope.values[name] = binding
+			return true
+		}
+	}
+	return false
+}
+
 func evt1CloneScope(scope *evt1Scope) *evt1Scope {
 	if scope == nil {
 		return nil
@@ -299,6 +311,16 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 	}
 	env := newSemanticEnv(profile)
 	env.sourcePath = module.Path
+	for _, key := range module.ImportedFactAuthority {
+		env.importedFactAuthority[key] = true
+	}
+	for _, summary := range module.ImportedFactSummaries {
+		if summary.Signature == "template" {
+			env.templateFactSummaries[summary.Operation] = summary.Result
+			continue
+		}
+		env.importedFactSummaries[summary.Operation+"|"+summary.Signature] = summary
+	}
 	typeNames := map[string]Span{}
 	for _, enumDecl := range module.Enums {
 		if profile.compilerOwnedType(enumDecl.Name) {
@@ -714,6 +736,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		return nil, err
 	}
 	evt1DeriveResultProvenanceSummaries(env, module.Functions)
+	evt1DeriveSemanticFactSummaries(env, module.Functions, module.Templates)
 	for _, fn := range module.ComptimeFns {
 		if err := validateFunctionSignature(env, fn); err != nil {
 			return nil, err
@@ -758,6 +781,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 				state:      evt1StorageInitialized,
 				provenance: parameterProvenance,
 				spanFacts:  evt1ParameterSpanFacts(env, param.Name, resolvedParam, parameterProvenance),
+				valueFacts: evt1ParameterSemanticValueFacts(env, param.Name, resolvedParam, parameterProvenance),
 			})
 		}
 		if err := validateBlock(env, scope, resolvedReturn, *templateDecl.Body, env.templateInfos[templateDecl.Name], false); err != nil {
@@ -792,6 +816,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 				state:      evt1StorageInitialized,
 				provenance: parameterProvenance,
 				spanFacts:  evt1ParameterSpanFacts(env, param.Name, resolvedParam, parameterProvenance),
+				valueFacts: evt1ParameterSemanticValueFacts(env, param.Name, resolvedParam, parameterProvenance),
 			})
 		}
 		collectEscapedArmBindings(fn.Body, env)
@@ -830,6 +855,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 				comptime:   true,
 				provenance: parameterProvenance,
 				spanFacts:  evt1ParameterSpanFacts(env, param.Name, resolvedParam, parameterProvenance),
+				valueFacts: evt1ParameterSemanticValueFacts(env, param.Name, resolvedParam, parameterProvenance),
 			})
 		}
 		collectEscapedArmBindings(fn.Body, env)
@@ -1237,7 +1263,9 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 					return evt1Diagnostic("CV4501", fmt.Sprintf("copy of non-copyable callable %s requires move", valueType.String()), s.Value.exprSpan())
 				}
 				s.Type = valueType
-				local.declare(s.Name, evt1ValueBinding{t: valueType, mutable: !s.Const, state: evt1StorageInitialized, provenance: evt1ExprProvenance(env, local, s.Value), source: s.Value, declarationSpan: s.Span})
+				valueFacts := evt1SemanticFactsForExpr(env, local, s.Value, valueType)
+				local.declare(s.Name, evt1ValueBinding{t: valueType, mutable: !s.Const, state: evt1StorageInitialized, provenance: evt1ExprProvenance(env, local, s.Value), valueFacts: valueFacts, source: s.Value, declarationSpan: s.Span})
+				evt1RecordTransportedFacts(env, local.functionName, s.Name, valueType, valueFacts, s.Span)
 				continue
 			}
 			if err := validateKnownType(env, s.Type, s.Span, typeParam, false); err != nil {
@@ -1319,6 +1347,10 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 			if resolvedType.Kind == TypeTypedStorage {
 				objectState = evt1StorageUninitialized
 			}
+			valueFacts := evt1SemanticFactsForExpr(env, local, s.Value, resolvedType)
+			if valueFacts != nil && valueFacts.Provenance.Kind == "" {
+				valueFacts.Provenance = provenance
+			}
 			local.declare(s.Name, evt1ValueBinding{
 				t: resolvedType, mutable: !s.Const, state: evt1StorageInitialized, comptime: inComptimeFn,
 				objectState:     objectState,
@@ -1326,9 +1358,11 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				spanFacts:       evt1SpanFactsForValue(env, local, s.Value, resolvedType),
 				regionFacts:     evt1RegionFactsForValue(env, local, s.Value, resolvedType),
 				tensorFacts:     evt1TensorFactsForValue(local, s.Value, resolvedType),
+				valueFacts:      valueFacts,
 				source:          s.Value,
 				declarationSpan: s.Span,
 			})
+			evt1RecordTransportedFacts(env, local.functionName, s.Name, resolvedType, valueFacts, s.Span)
 		case *TransitionStmt:
 			if !local.inAutomataState {
 				return evt1Diagnostic("MACHINE_TRANSITION_INVALID", "transition is only valid inside a machine state body", s.Span)
@@ -1575,6 +1609,11 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 					local.setSpanFacts(name.Name, evt1SpanFactsForValue(env, local, s.Value, target.t))
 				}
 			}
+			if name, ok := s.Target.(*NameExpr); ok {
+				valueFacts := evt1SemanticFactsForExpr(env, local, s.Value, target.t)
+				local.setValueFacts(name.Name, valueFacts)
+				evt1RecordTransportedFacts(env, local.functionName, name.Name, target.t, valueFacts, s.Span)
+			}
 			if !evt1TypeCopyable(env, target.t) && !evt1TypeDependsOnParam(target.t, typeParam) {
 				if evt1IsImmovableValueType(env, target.t) && target.wholeValue {
 					return evt1Diagnostic("CV4135", fmt.Sprintf("immovable value %s cannot be assigned as a whole", target.t.String()), s.Span)
@@ -1649,6 +1688,11 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				concreteStatic := valueType.Kind == TypeCallable && valueType.CallableProvenance == string(evt1ProvenanceStatic) && !valueType.Scoped
 				if !concreteStatic && (provenance.Scoped || provenance.Kind == evt1ProvenanceLocal) {
 					return evt1Diagnostic("CALLABLE_CAPTURE_LIFETIME_INVALID", "callable cannot escape its captured environment lifetime", s.Value.exprSpan())
+				}
+			}
+			if valueFacts := evt1SemanticFactsForExpr(env, local, s.Value, returnType); valueFacts != nil && valueFacts.RegionOrigin != "" {
+				if valueFacts.Provenance.Scoped || valueFacts.Provenance.Kind == evt1ProvenanceLocal {
+					return evt1Diagnostic("SEMANTIC_REGION_LIFETIME_ESCAPE", "semantic region value cannot escape the lifetime of its backing storage", s.Value.exprSpan())
 				}
 			}
 			if !evt1TypeCopyable(env, returnType) && !evt1CanTransferInitialize(env, returnType, s.Value) {
@@ -1890,7 +1934,7 @@ func evt1ValidateStorageTemplateCall(env *semanticEnv, scope *evt1Scope, e *Temp
 		if addressType.TypeArgs[0].Name != "SystemMemory" {
 			return Type{}, true, evt1Diagnostic("ADDRESS_SPACE_NOT_HOST_ACCESSIBLE", fmt.Sprintf("address space %s is not established as HostAccessible", addressType.TypeArgs[0].String()), e.Args[0].exprSpan())
 		}
-		if !evt1AddressHasStorageOrigin(scope, e.Args[0]) {
+		if !evt1AddressHasStorageOrigin(env, scope, e.Args[0], addressType) {
 			return Type{}, true, evt1Diagnostic("RAW_BIND_PROVENANCE_UNKNOWN", "bind<T> requires an address derived from live backing storage; an arbitrary or reconstructed address does not establish storage provenance", e.Args[0].exprSpan())
 		}
 		if !evt1ByteDisplacement(extentType) {
@@ -1930,18 +1974,21 @@ func evt1StorageBindingForCall(scope *evt1Scope, call *CallExpr) (string, evt1Va
 	return name.Name, binding, ok && binding.t.Kind == TypeTypedStorage && len(binding.t.TypeArgs) == 1
 }
 
-func evt1AddressHasStorageOrigin(scope *evt1Scope, expr Expr) bool {
+func evt1AddressHasStorageOrigin(env *semanticEnv, scope *evt1Scope, expr Expr, addressType Type) bool {
+	if facts := evt1SemanticFactsForExpr(env, scope, expr, addressType); facts != nil && facts.RegionOrigin != "" && facts.Provenance.Kind != evt1ProvenanceUnknown {
+		return true
+	}
 	switch e := expr.(type) {
 	case *TemplateCallExpr:
 		return e.Callee == "AddressOf"
 	case *NameExpr:
 		if binding, ok := scope.lookup(e.Name); ok && binding.source != nil {
-			return evt1AddressHasStorageOrigin(scope, binding.source)
+			return evt1AddressHasStorageOrigin(env, scope, binding.source, addressType)
 		}
 	case *ParenExpr:
-		return evt1AddressHasStorageOrigin(scope, e.Value)
+		return evt1AddressHasStorageOrigin(env, scope, e.Value, addressType)
 	case *BinaryExpr:
-		return evt1AddressHasStorageOrigin(scope, e.Left) || evt1AddressHasStorageOrigin(scope, e.Right)
+		return evt1AddressHasStorageOrigin(env, scope, e.Left, addressType) || evt1AddressHasStorageOrigin(env, scope, e.Right, addressType)
 	}
 	return false
 }
@@ -5408,7 +5455,7 @@ func init() {
 		}
 		return evt1AnalysisDisproven, []string{fact}
 	}}
-	for _, kind := range []SemanticFactKind{FactContiguous, FactBounded, FactMutable, FactReadonly, FactFixedShape, FactRuntimeShape, FactNoAllocation, FactNoCopy, FactNoOwnershipTransfer} {
+	for _, kind := range []SemanticFactKind{FactContiguous, FactBounded, FactMutable, FactReadonly, FactFixedShape, FactRuntimeShape, FactNoAllocation, FactNoCopy, FactNoOwnershipTransfer, FactAddressSpace, FactRegionOrigin, FactParentRegion, FactByteInterval, FactByteExtent, FactHostAccessible, FactInitialized} {
 		factKind := kind
 		evt1SemanticAnalysisRegistry[string(kind)] = evt1SemanticAnalysis{TypeArity: 1, CheckTypes: func(env *semanticEnv, args []Type, parameters []int) semanticFactResult {
 			return evt1TypeFact(env, factKind, args[0], parameters)

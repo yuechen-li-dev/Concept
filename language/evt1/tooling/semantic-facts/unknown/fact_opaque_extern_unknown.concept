@@ -1,0 +1,11 @@
+module R6h.UnknownExtern;
+profile Core;
+struct SystemMemory {}
+extern "C" usize ExternalBits();
+int Verify()
+{
+    usize bits = ExternalBits();
+    Address<SystemMemory> value = AddressFromBits<SystemMemory>(bits);
+    Assert.Concept<Aligned<4>>(value, "ABI alone cannot establish alignment");
+    return 0;
+}

@@ -56,7 +56,7 @@ func evt1ValidateCallableExpr(env *semanticEnv, outer *evt1Scope, expr *Callable
 			if evt1CaptureCarriesProvenance(*capture) && (provenance.Kind == evt1ProvenanceLocal || (overall.Kind != evt1ProvenanceLocal && provenance.Kind == evt1ProvenanceParameter)) {
 				overall = provenance
 			}
-			captureScope.declare(capture.Name, evt1ValueBinding{t: capture.Type, mutable: true, state: evt1StorageInitialized, provenance: provenance})
+			captureScope.declare(capture.Name, evt1ValueBinding{t: capture.Type, mutable: true, state: evt1StorageInitialized, provenance: provenance, valueFacts: transportSemanticValueFacts(evt1SemanticFactsForExpr(env, outer, capture.Source, t), FactTransformCapture, exprLabel(capture.Source), expr.EnvironmentID+"."+capture.Name, string(capture.Kind))})
 			continue
 		}
 		binding, ok := outer.lookup(capture.Name)
@@ -77,7 +77,7 @@ func evt1ValidateCallableExpr(env *semanticEnv, outer *evt1Scope, expr *Callable
 				return Type{}, evt1Diagnostic("CALLABLE_CAPTURE_COPY_NONCOPYABLE", fmt.Sprintf("capture %s has non-copyable type %s; use `move %s`", capture.Name, binding.t.String(), capture.Name), capture.Span)
 			}
 			capture.Type, capture.Mutable = evt1CanonicalType(env, binding.t), true
-			captureScope.declare(capture.Name, evt1ValueBinding{t: capture.Type, mutable: true, state: evt1StorageInitialized, provenance: provenance, spanFacts: binding.spanFacts, regionFacts: binding.regionFacts, tensorFacts: binding.tensorFacts})
+			captureScope.declare(capture.Name, evt1ValueBinding{t: capture.Type, mutable: true, state: evt1StorageInitialized, provenance: provenance, spanFacts: binding.spanFacts, regionFacts: binding.regionFacts, tensorFacts: binding.tensorFacts, valueFacts: transportSemanticValueFacts(binding.valueFacts, FactTransformCapture, capture.Name, expr.EnvironmentID+"."+capture.Name, string(capture.Kind))})
 		case CaptureMove:
 			move := &MoveExpr{Value: &NameExpr{Name: capture.Name, Span: capture.Span}, Span: capture.Span}
 			t, err := validateExpr(env, outer, move, templateInfo, false)
@@ -87,7 +87,7 @@ func evt1ValidateCallableExpr(env *semanticEnv, outer *evt1Scope, expr *Callable
 			capture.Type, capture.Mutable = t, true
 			copyable = copyable && evt1TypeCopyable(env, t)
 			hasDrop = hasDrop || evt1TypeHasDrop(env, t)
-			captureScope.declare(capture.Name, evt1ValueBinding{t: t, mutable: true, state: evt1StorageInitialized, provenance: provenance, spanFacts: binding.spanFacts, regionFacts: binding.regionFacts, tensorFacts: binding.tensorFacts})
+			captureScope.declare(capture.Name, evt1ValueBinding{t: t, mutable: true, state: evt1StorageInitialized, provenance: provenance, spanFacts: binding.spanFacts, regionFacts: binding.regionFacts, tensorFacts: binding.tensorFacts, valueFacts: transportSemanticValueFacts(binding.valueFacts, FactTransformMove, capture.Name, expr.EnvironmentID+"."+capture.Name, "move capture")})
 		case CaptureRef, CaptureRefConst:
 			isConst := capture.Kind == CaptureRefConst
 			ref := &RefExpr{Value: &NameExpr{Name: capture.Name, Span: capture.Span}, Const: isConst, Span: capture.Span}
@@ -96,7 +96,7 @@ func evt1ValidateCallableExpr(env *semanticEnv, outer *evt1Scope, expr *Callable
 				return Type{}, err
 			}
 			capture.Type, capture.Mutable = t, !isConst
-			captureScope.declare(capture.Name, evt1ValueBinding{t: t, mutable: !isConst, state: evt1StorageInitialized, provenance: provenance, spanFacts: binding.spanFacts, regionFacts: binding.regionFacts, tensorFacts: binding.tensorFacts})
+			captureScope.declare(capture.Name, evt1ValueBinding{t: t, mutable: !isConst, state: evt1StorageInitialized, provenance: provenance, spanFacts: binding.spanFacts, regionFacts: binding.regionFacts, tensorFacts: binding.tensorFacts, valueFacts: transportSemanticValueFacts(binding.valueFacts, FactTransformRefView, capture.Name, expr.EnvironmentID+"."+capture.Name, "borrowed capture")})
 		default:
 			return Type{}, evt1Diagnostic("CALLABLE_CAPTURE_INVALID", "unknown callable capture kind", capture.Span)
 		}

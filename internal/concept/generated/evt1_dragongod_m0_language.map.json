@@ -331,6 +331,23 @@
           "column": 1
         }
       },
+      "result_facts": {
+        "operation": "RootRetryBudget",
+        "signature": "RootRetryBudget()",
+        "result": {
+          "scalar": {
+            "kind": "Constant",
+            "constant": 2
+          },
+          "transport": [
+            {
+              "transform": "Return",
+              "through": "RootRetryBudget"
+            }
+          ]
+        },
+        "origin": "CompilerAnalysis"
+      },
       "operations": [
         {
           "id": "RootRetryBudget.01",
@@ -365,6 +382,23 @@
           "line": 92,
           "column": 1
         }
+      },
+      "result_facts": {
+        "operation": "DerivedStackDepth",
+        "signature": "DerivedStackDepth()",
+        "result": {
+          "scalar": {
+            "kind": "Constant",
+            "constant": 3
+          },
+          "transport": [
+            {
+              "transform": "Return",
+              "through": "DerivedStackDepth"
+            }
+          ]
+        },
+        "origin": "CompilerAnalysis"
       },
       "operations": [
         {

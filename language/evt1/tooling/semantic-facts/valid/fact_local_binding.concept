@@ -1,0 +1,13 @@
+module R6h.FactLocalBinding;
+profile Core;
+import Standard.MemoryGeometry;
+int Main()
+{
+    int<array>[4] backing = [1, 2, 3, 4];
+    Address<SystemMemory> start = AddressOf<SystemMemory>(ref backing);
+    usize<byte> extent = 16;
+    usize<byte> alignment = 4;
+    MemoryRegion<SystemMemory> region = MemoryRegion<SystemMemory>{start, extent, alignment};
+    Assert.Concept<Aligned<4>>(region, "local binding retains alignment");
+    return backing[0];
+}

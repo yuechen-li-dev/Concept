@@ -371,6 +371,23 @@
           }
         }
       ],
+      "result_facts": {
+        "operation": "ClassifyRange",
+        "signature": "ClassifyRange(VkBuffer)",
+        "result": {
+          "scalar": {
+            "kind": "Constant",
+            "constant": 5
+          },
+          "transport": [
+            {
+              "transform": "Return",
+              "through": "ClassifyRange"
+            }
+          ]
+        },
+        "origin": "CompilerAnalysis"
+      },
       "operations": [
         {
           "id": "ClassifyRange.01",
@@ -419,6 +436,23 @@
           }
         }
       ],
+      "result_facts": {
+        "operation": "DerivedMachineDepth",
+        "signature": "DerivedMachineDepth(VkCommandPool)",
+        "result": {
+          "scalar": {
+            "kind": "Constant",
+            "constant": 3
+          },
+          "transport": [
+            {
+              "transform": "Return",
+              "through": "DerivedMachineDepth"
+            }
+          ]
+        },
+        "origin": "CompilerAnalysis"
+      },
       "operations": [
         {
           "id": "DerivedMachineDepth.01",
@@ -478,6 +512,33 @@
           }
         }
       ],
+      "result_facts": {
+        "operation": "PoolReady",
+        "signature": "PoolReady(VkCommandPool, bool)",
+        "result": {
+          "source": {
+            "kind": "Parameter",
+            "parameter_index": 1
+          },
+          "scalar": {
+            "kind": "Parameter",
+            "parameter_index": 1
+          },
+          "provenance_kind": "parameter",
+          "provenance_parameter": 1,
+          "transport": [
+            {
+              "transform": "Parameter",
+              "from": "ready"
+            },
+            {
+              "transform": "Return",
+              "through": "PoolReady"
+            }
+          ]
+        },
+        "origin": "CompilerAnalysis"
+      },
       "operations": [
         {
           "id": "PoolReady.01",

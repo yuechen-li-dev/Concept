@@ -44,6 +44,7 @@ func GenerateForTarget(module Module, source []byte, target TargetCapabilities) 
 		outputBase: evt1OutputBase(module.Path),
 	}
 	l.mir = buildMIR(module, env)
+	evt1ProjectPersistentFactSubjects(&l.mir)
 	evt1QualifyMIRFacts(&l.mir)
 	if err := evt1ValidateMIR(l.mir); err != nil {
 		return nil, err
@@ -127,9 +128,10 @@ func GenerateForTarget(module Module, source []byte, target TargetCapabilities) 
 
 func buildMIR(module Module, env *semanticEnv) MIR {
 	mir := MIR{
-		Schema:  "concept-evt1-mir.v1",
-		Module:  module.Path,
-		Profile: module.Profile,
+		Schema:        "concept-evt1-mir.v1",
+		Module:        module.Path,
+		Profile:       module.Profile,
+		SemanticFacts: append([]MIRSemanticFact{}, env.transportedFacts...),
 	}
 	for _, fn := range module.Functions {
 		kind, foretold, artifacts, annotated := evt1TestMetadata(fn)
@@ -542,6 +544,13 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 	}
 	for _, fn := range module.Functions {
 		mirFn := MIRFunction{Name: fn.Name, ReturnType: evt1MIRType(env, fn.ReturnType), SourceSpan: fn.Span}
+		if summary, ok := env.resultFactSummaries[evt1FunctionProvenanceKey(fn)]; ok && !semanticSummaryUnknown(summary) {
+			entry := SemanticFunctionFactSummary{Operation: fn.Name, Signature: evt1FunctionParamSignature(fn), Result: summary, Origin: FactOriginCompilerAnalysis}
+			if imported, present := env.importedFactSummaries[evt1FunctionProvenanceKey(fn)]; present {
+				entry = imported
+			}
+			mirFn.ResultFacts = &entry
+		}
 		if effect, ok := env.operationEffects[fn.Name]; ok && effect.Effect == "Allocates" {
 			mirFn.MayAllocate = true
 			mirFn.AllocationEffectOrigin = string(FactOriginDeclaredEffect)
@@ -1671,6 +1680,12 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 		header.WriteString(l.interfaceWitnessDeclarations())
 		header.WriteString(l.erasedCallbackDeclarations())
 	}
+	if len(l.module.TypeAliases) == 0 {
+		// Semantic view descriptors must be complete before an ordinary or
+		// instantiated generic aggregate embeds one as a field.
+		header.WriteString(evt1SpanDeclarations(spanTypes))
+		header.WriteString(evt1TensorDeclarations(tensorTypes))
+	}
 	if err := l.writeRuntimeStorageAndTypeDecls(&header, typeDecls, evt1CollectStorageTypes(l.module, l.env), storageViewTypes); err != nil {
 		return nil, nil, err
 	}
@@ -1680,8 +1695,6 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 		}
 	}
 	if len(l.module.TypeAliases) == 0 {
-		header.WriteString(evt1SpanDeclarations(spanTypes))
-		header.WriteString(evt1TensorDeclarations(tensorTypes))
 		header.WriteString(l.semanticViewDeclarations())
 		header.WriteString(l.interfaceWitnessDeclarations())
 		header.WriteString(l.callableDeclarations())

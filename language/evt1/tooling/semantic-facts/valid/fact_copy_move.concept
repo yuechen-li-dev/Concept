@@ -1,0 +1,15 @@
+module R6h.FactCopyMove;
+profile Core;
+import Standard.MemoryGeometry;
+int Main()
+{
+    int<array>[4] backing = [1, 2, 3, 4];
+    Address<SystemMemory> start = AddressOf<SystemMemory>(ref backing);
+    usize<byte> extent = 16;
+    usize<byte> alignment = 4;
+    MemoryRegion<SystemMemory> source = MemoryRegion<SystemMemory>{start, extent, alignment};
+    MemoryRegion<SystemMemory> copied = source;
+    MemoryRegion<SystemMemory> moved = move copied;
+    Assert.Concept<SameRegion>(source, moved, "copy and move retain origin");
+    return 0;
+}

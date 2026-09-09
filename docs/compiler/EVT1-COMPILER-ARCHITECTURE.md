@@ -1102,3 +1102,18 @@ The artifact loader reconstructs the ordinary Module declaration model; it
 does not establish a parallel semantic IR. The resolver owns dependency DAG,
 identity, compatibility, integrity, and stale-artifact checks. Downstream
 semantic owners do not read imported source.
+
+## R6h semantic value fact transport
+
+Semantic validation attaches one field-sensitive `SemanticValueFacts` record
+to ordinary bindings and transports it across copy, move, ref, call, return,
+carrier extraction, aggregate fields, generic fields, callable captures, and
+persistent async/machine fields. Span and Tensor facts bridge from their
+existing validators. Typed subject kinds make value/place and persistent-field
+identities explicit in MIR.
+
+Function bodies produce bounded relational result summaries. Semantic module
+artifacts serialize those summaries separately from operation effects, and
+call sites instantiate them against actual argument facts. The Planner receives
+the resulting MIR facts; it does not rediscover geometry. Proof rendering uses
+the same transport chain. None of this data enters generated C layouts.

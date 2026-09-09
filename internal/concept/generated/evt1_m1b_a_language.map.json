@@ -393,6 +393,93 @@
           }
         }
       ],
+      "result_facts": {
+        "operation": "MakeRange",
+        "signature": "MakeRange(int, int, int)",
+        "result": {
+          "fields": [
+            {
+              "name": "bufferId",
+              "facts": {
+                "source": {
+                  "kind": "Parameter"
+                },
+                "scalar": {
+                  "kind": "Parameter"
+                },
+                "provenance_kind": "parameter",
+                "transport": [
+                  {
+                    "transform": "Parameter",
+                    "from": "bufferId"
+                  },
+                  {
+                    "transform": "FieldStore",
+                    "through": "bufferId"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "offset",
+              "facts": {
+                "source": {
+                  "kind": "Parameter",
+                  "parameter_index": 1
+                },
+                "scalar": {
+                  "kind": "Parameter",
+                  "parameter_index": 1
+                },
+                "provenance_kind": "parameter",
+                "provenance_parameter": 1,
+                "transport": [
+                  {
+                    "transform": "Parameter",
+                    "from": "offset"
+                  },
+                  {
+                    "transform": "FieldStore",
+                    "through": "offset"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "size",
+              "facts": {
+                "source": {
+                  "kind": "Parameter",
+                  "parameter_index": 2
+                },
+                "scalar": {
+                  "kind": "Parameter",
+                  "parameter_index": 2
+                },
+                "provenance_kind": "parameter",
+                "provenance_parameter": 2,
+                "transport": [
+                  {
+                    "transform": "Parameter",
+                    "from": "size"
+                  },
+                  {
+                    "transform": "FieldStore",
+                    "through": "size"
+                  }
+                ]
+              }
+            }
+          ],
+          "transport": [
+            {
+              "transform": "Return",
+              "through": "MakeRange"
+            }
+          ]
+        },
+        "origin": "CompilerAnalysis"
+      },
       "operations": [
         {
           "id": "MakeRange.01",
@@ -498,6 +585,68 @@
           }
         }
       ],
+      "result_facts": {
+        "operation": "MakeAllocation",
+        "signature": "MakeAllocation(BufferRange, int)",
+        "result": {
+          "fields": [
+            {
+              "name": "range",
+              "facts": {
+                "source": {
+                  "kind": "Parameter"
+                },
+                "scalar": {
+                  "kind": "Parameter"
+                },
+                "provenance_kind": "parameter",
+                "transport": [
+                  {
+                    "transform": "Parameter",
+                    "from": "range"
+                  },
+                  {
+                    "transform": "FieldStore",
+                    "through": "range"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "generation",
+              "facts": {
+                "source": {
+                  "kind": "Parameter",
+                  "parameter_index": 1
+                },
+                "scalar": {
+                  "kind": "Parameter",
+                  "parameter_index": 1
+                },
+                "provenance_kind": "parameter",
+                "provenance_parameter": 1,
+                "transport": [
+                  {
+                    "transform": "Parameter",
+                    "from": "generation"
+                  },
+                  {
+                    "transform": "FieldStore",
+                    "through": "generation"
+                  }
+                ]
+              }
+            }
+          ],
+          "transport": [
+            {
+              "transform": "Return",
+              "through": "MakeAllocation"
+            }
+          ]
+        },
+        "origin": "CompilerAnalysis"
+      },
       "operations": [
         {
           "id": "MakeAllocation.01",
@@ -569,6 +718,93 @@
           "line": 77,
           "column": 1
         }
+      },
+      "result_facts": {
+        "operation": "ObserveConstruction",
+        "signature": "ObserveConstruction()",
+        "result": {
+          "fields": [
+            {
+              "name": "first",
+              "facts": {
+                "transport": [
+                  {
+                    "transform": "OpaqueBoundary",
+                    "through": "NextValue",
+                    "detail": "no semantic value result summary"
+                  },
+                  {
+                    "transform": "FieldStore",
+                    "through": "bufferId"
+                  },
+                  {
+                    "transform": "FieldLoad",
+                    "through": "bufferId"
+                  },
+                  {
+                    "transform": "FieldStore",
+                    "through": "first"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "second",
+              "facts": {
+                "transport": [
+                  {
+                    "transform": "OpaqueBoundary",
+                    "through": "NextValue",
+                    "detail": "no semantic value result summary"
+                  },
+                  {
+                    "transform": "FieldStore",
+                    "through": "offset"
+                  },
+                  {
+                    "transform": "FieldLoad",
+                    "through": "offset"
+                  },
+                  {
+                    "transform": "FieldStore",
+                    "through": "second"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "third",
+              "facts": {
+                "transport": [
+                  {
+                    "transform": "OpaqueBoundary",
+                    "through": "NextValue",
+                    "detail": "no semantic value result summary"
+                  },
+                  {
+                    "transform": "FieldStore",
+                    "through": "size"
+                  },
+                  {
+                    "transform": "FieldLoad",
+                    "through": "size"
+                  },
+                  {
+                    "transform": "FieldStore",
+                    "through": "third"
+                  }
+                ]
+              }
+            }
+          ],
+          "transport": [
+            {
+              "transform": "Return",
+              "through": "ObserveConstruction"
+            }
+          ]
+        },
+        "origin": "CompilerAnalysis"
       },
       "operations": [
         {
@@ -723,6 +959,59 @@
           "line": 84,
           "column": 1
         }
+      },
+      "result_facts": {
+        "operation": "CopyAndMutate",
+        "signature": "CopyAndMutate()",
+        "result": {
+          "fields": [
+            {
+              "name": "firstOffset",
+              "facts": {
+                "transport": [
+                  {
+                    "transform": "FieldStore",
+                    "through": "offset"
+                  },
+                  {
+                    "transform": "FieldLoad",
+                    "through": "offset"
+                  },
+                  {
+                    "transform": "FieldStore",
+                    "through": "firstOffset"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "secondOffset",
+              "facts": {
+                "transport": [
+                  {
+                    "transform": "FieldStore",
+                    "through": "offset"
+                  },
+                  {
+                    "transform": "FieldLoad",
+                    "through": "offset"
+                  },
+                  {
+                    "transform": "FieldStore",
+                    "through": "secondOffset"
+                  }
+                ]
+              }
+            }
+          ],
+          "transport": [
+            {
+              "transform": "Return",
+              "through": "CopyAndMutate"
+            }
+          ]
+        },
+        "origin": "CompilerAnalysis"
       },
       "operations": [
         {

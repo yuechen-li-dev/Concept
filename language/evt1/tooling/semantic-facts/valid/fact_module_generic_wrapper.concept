@@ -1,0 +1,16 @@
+module R6h.FactModuleGeneric;
+profile Core;
+import Standard.MemoryGeometry;
+import Standard.Generic;
+int Main()
+{
+    int<array>[2] backing = [0, 0];
+    Address<SystemMemory> start = AddressOf<SystemMemory>(ref backing);
+    usize<byte> extent = 8;
+    usize<byte> alignment = 4;
+    MemoryRegion<SystemMemory> source = MemoryRegion<SystemMemory>{start, extent, alignment};
+    Box<MemoryRegion<SystemMemory>> box = Box<MemoryRegion<SystemMemory>>{source};
+    MemoryRegion<SystemMemory> result = box.value;
+    Assert.Concept<SameRegion>(source, result, "imported generic fields are fact-sensitive");
+    return 0;
+}

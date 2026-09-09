@@ -1,0 +1,24 @@
+module R6h.FactPrometheus;
+profile Core;
+import Standard.MemoryGeometry;
+import Standard.Generic;
+struct RegionHolder { MemoryRegion<SystemMemory> value; }
+int Main()
+{
+    float<ndarray>[2, 2] model = [[1.0, 2.0], [3.0, 4.0]];
+    tensor<float, 2> weights = Tensor(model);
+    Box<tensor<float, 2>> tensorBox = Box<tensor<float, 2>>{weights};
+    tensor<float, 2> transportedWeights = tensorBox.value;
+    Address<SystemMemory> start = AddressOf<SystemMemory>(ref model);
+    usize<byte> extent = 16;
+    usize<byte> alignment = 4;
+    usize<byte> offset = 0;
+    MemoryRegion<SystemMemory> modelRegion = MemoryRegion<SystemMemory>{start, extent, alignment};
+    MemoryRegion<SystemMemory> slicedRegion = Subregion(modelRegion, offset, extent)!;
+    RegionHolder regionBox = RegionHolder{slicedRegion};
+    MemoryRegion<SystemMemory> transportedRegion = regionBox.value;
+    Assert.Concept<Contiguous>(transportedWeights, "generic tensor retains contiguous backing");
+    Assert.Concept<Rank<2>>(transportedWeights, "generic tensor retains rank and shape");
+    Assert.Concept<SameRegion>(modelRegion, transportedRegion, "imported slice and generic region retain backing origin");
+    return 0;
+}

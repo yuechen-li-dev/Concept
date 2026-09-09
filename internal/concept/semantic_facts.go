@@ -30,6 +30,13 @@ const (
 	FactLifetimeSafe        SemanticFactKind = "LifetimeSafe"
 	FactNonEscaping         SemanticFactKind = "NonEscaping"
 	FactOutlives            SemanticFactKind = "Outlives"
+	FactAddressSpace        SemanticFactKind = "AddressSpace"
+	FactRegionOrigin        SemanticFactKind = "RegionOrigin"
+	FactParentRegion        SemanticFactKind = "ParentRegion"
+	FactByteInterval        SemanticFactKind = "ByteInterval"
+	FactByteExtent          SemanticFactKind = "ByteExtent"
+	FactHostAccessible      SemanticFactKind = "HostAccessible"
+	FactInitialized         SemanticFactKind = "Initialized"
 )
 
 type SemanticFactOrigin string
@@ -48,6 +55,9 @@ const (
 	FactOriginDerivedCallEffect      SemanticFactOrigin = "DerivedCallEffect"
 	FactOriginExternalContractEffect SemanticFactOrigin = "ExternalContractEffect"
 	FactOriginModuleSummaryEffect    SemanticFactOrigin = "ModuleSummaryEffect"
+	FactOriginTransportedValue       SemanticFactOrigin = "TransportedValueFact"
+	FactOriginDerivedSummary         SemanticFactOrigin = "DerivedResultSummary"
+	FactOriginModuleFactSummary      SemanticFactOrigin = "ModuleFactSummary"
 )
 
 type SemanticFactCertainty string
@@ -67,13 +77,17 @@ type SemanticFactSubject struct {
 }
 
 type SemanticFactEvidence struct {
-	RegionIDs []string           `json:"region_ids,omitempty"`
-	Offset    int                `json:"offset,omitempty"`
-	Extent    int                `json:"extent,omitempty"`
-	Alignment int                `json:"alignment,omitempty"`
-	Rank      int                `json:"rank,omitempty"`
-	Shape     []StorageDimension `json:"shape,omitempty"`
-	Detail    string             `json:"detail,omitempty"`
+	RegionIDs    []string                    `json:"region_ids,omitempty"`
+	Offset       int                         `json:"offset,omitempty"`
+	Extent       int                         `json:"extent,omitempty"`
+	Alignment    int                         `json:"alignment,omitempty"`
+	Rank         int                         `json:"rank,omitempty"`
+	Shape        []StorageDimension          `json:"shape,omitempty"`
+	Detail       string                      `json:"detail,omitempty"`
+	AddressSpace string                      `json:"address_space,omitempty"`
+	ParentRegion string                      `json:"parent_region,omitempty"`
+	Provenance   string                      `json:"provenance,omitempty"`
+	Transport    []SemanticFactTransportStep `json:"transport,omitempty"`
 }
 
 type MIRSemanticFact struct {
@@ -237,6 +251,19 @@ func evt1TypeFact(env *semanticEnv, kind SemanticFactKind, t Type, parameters []
 			result.Outcome = FactProven
 		} else {
 			result.Outcome = FactDisproven
+		}
+	case FactAddressSpace:
+		if t.Kind == TypeAddress && len(t.TypeArgs) == 1 {
+			result.Outcome = FactProven
+			result.Evidence.AddressSpace = t.TypeArgs[0].Name
+		}
+	case FactHostAccessible:
+		if t.Kind == TypeAddress && len(t.TypeArgs) == 1 {
+			if t.TypeArgs[0].Name == "SystemMemory" {
+				result.Outcome = FactProven
+			} else {
+				result.Outcome = FactUnknown
+			}
 		}
 	}
 	return result
@@ -480,6 +507,56 @@ func evt1QualifyMIRFacts(mir *MIR) {
 		}
 	}
 	sort.SliceStable(mir.SemanticFacts, func(i, j int) bool { return mir.SemanticFacts[i].ID < mir.SemanticFacts[j].ID })
+}
+
+// evt1ProjectPersistentFactSubjects gives generated storage a stable semantic
+// subject without copying facts into runtime frames. The source value remains
+// the authority; capture/async/machine fields are transport projections.
+func evt1ProjectPersistentFactSubjects(mir *MIR) {
+	base := append([]MIRSemanticFact{}, mir.SemanticFacts...)
+	project := func(function, source, target string, kind SemanticSubjectKind, transform SemanticFactTransform, through string) {
+		for _, fact := range base {
+			if len(fact.Subjects) != 1 || fact.Subjects[0].Name != source || (function != "" && fact.Subjects[0].Function != function) {
+				continue
+			}
+			copy := fact
+			copy.Subjects = append([]SemanticFactSubject{}, fact.Subjects...)
+			copy.Subjects[0].Kind, copy.Subjects[0].Name = string(kind), target
+			copy.Evidence.Transport = append(append([]SemanticFactTransportStep{}, fact.Evidence.Transport...), SemanticFactTransportStep{Transform: transform, From: source, Through: through})
+			copy.ID = evt1SemanticFactID(copy.Kind, copy.Subjects, copy.Parameters, copy.SourceSpan)
+			mir.SemanticFacts = append(mir.SemanticFacts, copy)
+		}
+	}
+	for _, fn := range mir.Functions {
+		for _, callable := range fn.Callables {
+			for _, field := range callable.Environment.Fields {
+				project(fn.Name, field.Source, field.FieldIdentity, SubjectCaptureField, FactTransformCapture, callable.Environment.Identity)
+			}
+		}
+		if fn.Async != nil {
+			for _, field := range fn.Async.PersistentFields {
+				target := fn.Async.Identity + ".frame." + field.Name
+				project(fn.Name, field.Name, target, SubjectAsyncPersistentField, FactTransformAsyncPersist, fn.Async.Identity)
+			}
+		}
+	}
+	for _, automata := range mir.Automata {
+		if automata.StateEnvironment != nil {
+			for _, field := range automata.StateEnvironment.Fields {
+				project("", field.Name, field.Identity, SubjectMachineField, FactTransformMachinePersist, automata.StateEnvironment.Identity)
+			}
+		}
+		for _, machine := range automata.Machines {
+			for _, field := range machine.Fields {
+				project("", field.Name, field.Identity, SubjectMachineField, FactTransformMachinePersist, automata.Name+"."+machine.Name)
+			}
+			for _, state := range machine.States {
+				for _, field := range state.Storage {
+					project("", field.Name, field.Identity, SubjectMachineField, FactTransformMachinePersist, automata.Name+"."+machine.Name+"."+state.Name)
+				}
+			}
+		}
+	}
 }
 
 func evt1FactStaticInt(expression string) (int, bool) {

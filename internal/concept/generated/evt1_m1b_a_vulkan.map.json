@@ -305,6 +305,93 @@
           }
         }
       ],
+      "result_facts": {
+        "operation": "MakeRange",
+        "signature": "MakeRange(VkBuffer, int, int)",
+        "result": {
+          "fields": [
+            {
+              "name": "buffer",
+              "facts": {
+                "source": {
+                  "kind": "Parameter"
+                },
+                "scalar": {
+                  "kind": "Parameter"
+                },
+                "provenance_kind": "parameter",
+                "transport": [
+                  {
+                    "transform": "Parameter",
+                    "from": "buffer"
+                  },
+                  {
+                    "transform": "FieldStore",
+                    "through": "buffer"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "offset",
+              "facts": {
+                "source": {
+                  "kind": "Parameter",
+                  "parameter_index": 1
+                },
+                "scalar": {
+                  "kind": "Parameter",
+                  "parameter_index": 1
+                },
+                "provenance_kind": "parameter",
+                "provenance_parameter": 1,
+                "transport": [
+                  {
+                    "transform": "Parameter",
+                    "from": "offset"
+                  },
+                  {
+                    "transform": "FieldStore",
+                    "through": "offset"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "size",
+              "facts": {
+                "source": {
+                  "kind": "Parameter",
+                  "parameter_index": 2
+                },
+                "scalar": {
+                  "kind": "Parameter",
+                  "parameter_index": 2
+                },
+                "provenance_kind": "parameter",
+                "provenance_parameter": 2,
+                "transport": [
+                  {
+                    "transform": "Parameter",
+                    "from": "size"
+                  },
+                  {
+                    "transform": "FieldStore",
+                    "through": "size"
+                  }
+                ]
+              }
+            }
+          ],
+          "transport": [
+            {
+              "transform": "Return",
+              "through": "MakeRange"
+            }
+          ]
+        },
+        "origin": "CompilerAnalysis"
+      },
       "operations": [
         {
           "id": "MakeRange.01",

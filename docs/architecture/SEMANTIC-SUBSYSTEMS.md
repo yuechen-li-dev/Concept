@@ -4,6 +4,13 @@ This is the navigation map for R6 tooling. Semantic legality belongs to the
 typed Module/MIR path; Planner validates and selects strategies from those
 facts, and C11 output is derived evidence.
 
+R6h gives logical value transport to one `SemanticValueFacts` record. Existing
+Span and Tensor validators remain source authorities for their domain facts and
+bridge into that record. Module summaries, persistent-field projections, proof
+graphs, and Planner input consume it; none may reconstruct or strengthen facts.
+Value facts and operation effects remain distinct, and all transport metadata
+is erased before C lowering.
+
 | Subsystem | Implementation | Normative spec | Design record | Corpus | Tests |
 |---|---|---|---|---|---|
 | Values | `types.go`, `parse.go`, `validate.go`, `generate.go` | sections 5-11 | phase 1-10 records | `language/evt1/values` | `values_records_test.go` |
@@ -19,7 +26,7 @@ facts, and C11 output is derived evidence.
 | Machine stack | `machine_stack.go` | section 22 | machine-stack direction record | `language/evt1/machine-stack` | `machine_stack_test.go` |
 | Async | `async.go`, `async_control_flow.go` | section 22 | async direction record | `language/evt1/async` | `async_test.go`, `async_control_flow_test.go`, `async_interface_test.go` |
 | Callables | `callable_capture.go`, `callable_types.go` | sections 26-27 | callable direction record | `language/evt1/callable` | `callable_capture_test.go`, `callable_types_test.go` |
-| Semantic facts | `semantic_facts.go` | section 17 | facts/optimization direction record | `language/evt1/semantic-facts` | `semantic_facts_test.go` |
+| Semantic facts | `semantic_facts.go`, `fact_transport.go` | section 17 | `EVT1-SEMANTIC-FACT-TRANSPORT-DIRECTION.md` | `language/evt1/semantic-facts`, `language/evt1/tooling/semantic-facts` | `semantic_facts_test.go`, `fact_transport_test.go` |
 | Planner | `planner.go` | section 28 | Planner direction record | `language/evt1/planner` | `planner_test.go` |
 | Composition | all semantic owners above | all relevant sections | R5k freeze report | `language/evt1/composition` | `semantic_corpus_test.go` |
 | Test tooling | `testing_metadata.go`, `testing_assert.go`, `testing_lowering.go`, `testing_runner.go` | section 24 | `EVT1-TEST-PROPHECY-DIRECTION.md` | `language/evt1/tooling/tests`, `internal/concept/testdata/testing` | `testing_runner_test.go` |

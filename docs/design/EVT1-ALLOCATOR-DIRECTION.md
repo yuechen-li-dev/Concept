@@ -1,6 +1,6 @@
 # EVT1 allocator direction
 
-Status: R6g geometry substrate exists; reference allocator library remains deferred
+Status: R6h resolves the geometry/fact-transport prerequisites; reference allocator library remains deferred
 
 ## Doctrine
 
@@ -68,10 +68,23 @@ R6g supplies unit-aware byte geometry, affine `Address<Space>`, an ordinary
 bind/Initialize/Destroy, and ordered multi-parameter function templates. It
 introduces no allocator.
 
-The remaining prerequisite is narrower: region origin, interval, alignment,
-and lifetime facts must survive ordinary values, slicing, module artifacts, and
-calls. An arbitrary `AddressFromBits` cannot be considered proven merely
-because its tag says `SystemMemory`.
+R6h resolves the remaining prerequisite: region origin, interval, alignment,
+and lifetime facts survive ordinary values, slicing, generic wrappers, module
+artifacts, and calls. An arbitrary `AddressFromBits` remains Unknown and cannot
+be bound as trusted storage.
+
+| prerequisite | status |
+|---|---|
+| generic runtime types | Resolved |
+| SizeOf/AlignOf | Resolved |
+| generic ownership/provenance | Resolved |
+| semantic modules | Resolved |
+| host ABI seam | Resolved |
+| operation effects | Resolved |
+| quantity/address/storage model | Resolved |
+| semantic fact transport | Resolved |
+
+The allocator framework is still not implemented.
 
 ## Required next substrate decision
 

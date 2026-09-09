@@ -1,0 +1,16 @@
+profile Core;
+
+Span<int> Keep(Span<int> values)
+{
+    return values;
+}
+
+[[fact]]
+void ResultSummaryPreservesFacts()
+{
+    int<array>[2] backing = [7, 9];
+    Span<int> source = Span(backing);
+    Span<int> result = Keep(source);
+    Assert.Concept<SameRegion>(source, result, "result summary retains region identity");
+    Assert.Equals(result[1], 9, "result transport preserves runtime representation");
+}

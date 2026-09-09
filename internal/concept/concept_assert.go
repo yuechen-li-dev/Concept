@@ -160,11 +160,26 @@ func evt1ProjectDirectAnalysis(env *semanticEnv, graph *ProofGraph, root string,
 		result = evt1RefineValueFact(goal, parameters, *subjects[0].binding, result)
 	}
 	detail := result.Evidence.Detail
+	if len(result.Evidence.Transport) != 0 {
+		var steps []string
+		for _, step := range result.Evidence.Transport {
+			label := string(step.Transform)
+			if step.Through != "" {
+				label += " through " + step.Through
+			}
+			steps = append(steps, label)
+		}
+		detail = strings.TrimSpace(detail + "; Transported through: " + strings.Join(steps, " -> "))
+	}
 	if detail == "" && (goal == string(FactNoCopy) || goal == string(FactNoOwnershipTransfer)) && (evt1IsSpanType(subjects[0].typeValue) || evt1IsTensorType(subjects[0].typeValue)) {
 		detail = "view construction preserves backing storage and ownership"
 	}
 	if goal == string(FactAligned) {
-		detail = fmt.Sprintf("known effective alignment = %d; required alignment = %d", result.Evidence.Alignment, parameters[0])
+		prefix := fmt.Sprintf("known effective alignment = %d; required alignment = %d", result.Evidence.Alignment, parameters[0])
+		if detail != "" {
+			prefix += "; " + detail
+		}
+		detail = prefix
 	}
 	if goal == string(FactRank) {
 		detail = fmt.Sprintf("known rank = %d; required rank = %d", result.Evidence.Rank, parameters[0])
@@ -174,6 +189,11 @@ func evt1ProjectDirectAnalysis(env *semanticEnv, graph *ProofGraph, root string,
 	if result.Outcome == FactUnknown {
 		kind, edge = ProofMissingFact, ProofBlockedBy
 		detail = "no compiler-known fact closes this requirement"
+		for _, step := range result.Evidence.Transport {
+			if step.Transform == FactTransformOpaqueBoundary {
+				detail = "Fact lost at " + step.Through + ": " + step.Detail
+			}
+		}
 	} else if result.Outcome == FactDisproven {
 		kind, edge = ProofContradiction, ProofConflictsWith
 	}
@@ -183,6 +203,42 @@ func evt1ProjectDirectAnalysis(env *semanticEnv, graph *ProofGraph, root string,
 }
 
 func evt1RefineValueFact(goal string, parameters []int, binding evt1ValueBinding, fallback semanticFactResult) semanticFactResult {
+	if facts := binding.valueFacts; facts != nil {
+		fallback.Origin = FactOriginTransportedValue
+		fallback.Evidence = SemanticFactEvidence{RegionIDs: []string{facts.RegionOrigin}, Offset: facts.RelativeOffset.Value, Extent: facts.ByteExtent.Value, Alignment: facts.Alignment.Value, Rank: facts.Rank.Value, Shape: append([]StorageDimension{}, facts.Shape...), AddressSpace: facts.AddressSpace, ParentRegion: facts.ParentRegion, Provenance: string(facts.Provenance.Kind), Transport: append([]SemanticFactTransportStep{}, facts.Transport...)}
+		switch SemanticFactKind(goal) {
+		case FactAligned:
+			fallback.Outcome = FactUnknown
+			if len(parameters) == 1 && facts.Alignment.Known {
+				fallback.Outcome = FactDisproven
+				if facts.Alignment.Value%parameters[0] == 0 {
+					fallback.Outcome = FactProven
+				}
+			}
+		case FactRegionOrigin, FactRegionIdentity:
+			fallback.Outcome = map[bool]SemanticFactCertainty{true: FactProven, false: FactUnknown}[facts.RegionOrigin != ""]
+		case FactParentRegion:
+			fallback.Outcome = map[bool]SemanticFactCertainty{true: FactProven, false: FactUnknown}[facts.ParentRegion != ""]
+		case FactByteExtent:
+			fallback.Outcome = map[bool]SemanticFactCertainty{true: FactProven, false: FactUnknown}[facts.ByteExtent.Known]
+		case FactByteInterval:
+			fallback.Outcome = map[bool]SemanticFactCertainty{true: FactProven, false: FactUnknown}[facts.RelativeOffset.Known && facts.ByteExtent.Known]
+		case FactInitialized:
+			fallback.Outcome = facts.Initialized
+		case FactHostAccessible:
+			fallback.Outcome = facts.HostAccessible
+		case FactContiguous:
+			fallback.Outcome = facts.Contiguous
+		case FactBounded:
+			fallback.Outcome = facts.Bounded
+		case FactNoAllocation:
+			fallback.Outcome = facts.NoAllocation
+		case FactNoCopy:
+			fallback.Outcome = facts.NoCopy
+		case FactNoOwnershipTransfer:
+			fallback.Outcome = facts.NoOwnershipTransfer
+		}
+	}
 	if binding.tensorFacts != nil {
 		facts := binding.tensorFacts
 		switch SemanticFactKind(goal) {
@@ -278,6 +334,16 @@ func evt1ProjectRegionRelation(graph *ProofGraph, root, goal string, subjects []
 		if subject.binding == nil {
 			return nil, ""
 		}
+		// The transported value record is authoritative when present. Legacy
+		// subsystem records remain a compatibility bridge for subjects that have
+		// not entered the unified transport path.
+		if subject.binding.valueFacts != nil && !evt1IsSpanType(subject.binding.t) && !evt1IsTensorType(subject.binding.t) {
+			facts := evt1SemanticFactsAsSpan(subject.binding.valueFacts)
+			if facts == nil {
+				return nil, subject.binding.valueFacts.RegionOrigin
+			}
+			return facts, facts.RegionID
+		}
 		if subject.binding.spanFacts != nil {
 			return subject.binding.spanFacts, subject.binding.spanFacts.RegionID
 		}
@@ -288,6 +354,13 @@ func evt1ProjectRegionRelation(graph *ProofGraph, root, goal string, subjects []
 			f := subject.binding.tensorFacts
 			return &evt1SpanFacts{RegionID: f.RegionID, BaseOffsetExpression: f.BaseOffset, Alignment: f.Alignment}, f.RegionID
 		}
+		if subject.binding.valueFacts != nil {
+			facts := evt1SemanticFactsAsSpan(subject.binding.valueFacts)
+			if facts == nil {
+				return nil, subject.binding.valueFacts.RegionOrigin
+			}
+			return facts, facts.RegionID
+		}
 		return nil, ""
 	}
 	aFacts, a := region(subjects[0])
@@ -295,6 +368,16 @@ func evt1ProjectRegionRelation(graph *ProofGraph, root, goal string, subjects []
 	known := graph.addNode(ProofKnownFact, "region identities", fmt.Sprintf("%s=%s; %s=%s", subjects[0].description.Name, emptyAsUnknown(a), subjects[1].description.Name, emptyAsUnknown(b)), FactProven, FactOriginCompilerAnalysis, graph.SourceSpan)
 	graph.addEdge(root, known, ProofDependsOn)
 	outcome, detail := FactUnknown, "no distinct declared region identity or statically known non-overlapping intervals"
+	for _, subject := range subjects {
+		if subject.binding == nil || subject.binding.valueFacts == nil {
+			continue
+		}
+		for _, step := range subject.binding.valueFacts.Transport {
+			if step.Transform == FactTransformOpaqueBoundary {
+				detail = "Fact lost at call to " + step.Through + ": operation has no region-origin/result summary"
+			}
+		}
+	}
 	if goal == string(FactSameRegion) {
 		if a != "" && a == b {
 			outcome, detail = FactProven, "both subjects preserve one stable region identity"
@@ -304,8 +387,20 @@ func evt1ProjectRegionRelation(graph *ProofGraph, root, goal string, subjects []
 	} else if a != "" && b != "" && a != b && (strings.HasPrefix(a, "inline:") || strings.HasPrefix(a, "storage:") || strings.Contains(a, ".")) && (strings.HasPrefix(b, "inline:") || strings.HasPrefix(b, "storage:") || strings.Contains(b, ".")) {
 		outcome, detail = FactProven, "distinct compiler-known storage regions"
 	} else if a == b && a != "" && aFacts != nil && bFacts != nil {
-		// Runtime or missing interval evidence cannot prove overlap or separation.
-		detail = "same backing region is known, but no statically non-overlapping intervals are available"
+		if aFacts.LengthStatic && bFacts.LengthStatic && aFacts.BaseOffsetExpression != "runtime" && bFacts.BaseOffsetExpression != "runtime" {
+			aStart, bStart := aFacts.BackingByteOffset, bFacts.BackingByteOffset
+			aEnd, bEnd := aStart+aFacts.StaticLength, bStart+bFacts.StaticLength
+			if aEnd <= bStart || bEnd <= aStart {
+				outcome, detail = FactProven, fmt.Sprintf("same origin with non-overlapping half-open intervals [%d,%d) and [%d,%d)", aStart, aEnd, bStart, bEnd)
+			} else if !evt1IsSpanType(subjects[0].typeValue) && !evt1IsTensorType(subjects[0].typeValue) && !evt1IsSpanType(subjects[1].typeValue) && !evt1IsTensorType(subjects[1].typeValue) {
+				outcome, detail = FactDisproven, fmt.Sprintf("same origin with overlapping half-open intervals [%d,%d) and [%d,%d)", aStart, aEnd, bStart, bEnd)
+			} else {
+				detail = "same backing region is known, but no statically non-overlapping intervals are available"
+			}
+		} else {
+			// Runtime or missing interval evidence cannot prove overlap or separation.
+			detail = "same backing region is known, but no statically known intervals are available"
+		}
 	}
 	kind, edge := ProofMissingFact, ProofBlockedBy
 	if outcome == FactProven {
