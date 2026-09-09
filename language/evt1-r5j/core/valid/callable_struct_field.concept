@@ -1,0 +1,23 @@
+profile Core;
+
+auto MakeScaler(int multiplier)
+{
+    return callback(int value)
+    with (multiplier)
+    {
+        return value * multiplier;
+    };
+}
+
+using ScaleCallback = typeof(MakeScaler(1));
+
+struct Processor
+{
+    ScaleCallback scale;
+}
+
+int Main()
+{
+    Processor processor = Processor{MakeScaler(4)};
+    return processor.scale(3);
+}

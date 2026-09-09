@@ -1,6 +1,6 @@
 # Concept EVT1 language specification foundation
 
-Status: R5g reducible async control-flow normalization
+Status: R5j exact concrete callable type storage
 
 This document defines the authority categories and the smallest currently
 executable EVT1 language foundation. It is derived from the retired Concept
@@ -1372,3 +1372,30 @@ The following remain explicit reconciliation or implementation work:
 EVT1 intentionally adds none of these merely because they were next on the PoC3
 roadmap. Promotion requires a matrix decision, a specification update, and
 executable EVT1 evidence.
+
+## R5j exact concrete callable types
+
+Concrete callable types have fixed compile-time layout and identity. A callable
+literal's type consists of its exact call signature, deterministic code
+identity, and generated capture-environment type. Different callable literals
+are different concrete types even when their call signatures and environment
+geometry are identical.
+
+The canonical transparent alias is `using ScaleCallback =
+typeof(MakeScaler(1));`. `type ScaleCallback = typeof(MakeScaler(1));` is a
+compatibility spelling. `concept` remains reserved for semantic
+constraints/interfaces and is not a type-declaration catchall. `typeof(expr)`
+is permitted only in a module-scoped exact alias in R5j. It yields the
+expression's value type, is compile-time-only, and does not evaluate the
+expression. A unique function name may query its exact callable return type,
+supporting reference-parameter factories.
+
+An `auto` function return is inferred only when every value return has the same
+exact callable identity. Exact aliases may name function returns, by-value or
+`ref` parameters, struct/class fields, and machine fields. Ordinary copy, move,
+const receiver, provenance, and reverse-drop rules remain authoritative.
+
+`auto` in a stored field or explicit parameter is rejected because its layout
+would be existential. Exact assignment requires the same callable identity; an
+erased callback cannot recover a concrete type. Use an erased callback when
+heterogeneous concrete callable identities must share one runtime type.

@@ -166,12 +166,19 @@ type AggregatePlan struct {
 }
 
 type AutomataStoragePlan struct {
-	Identity       string `json:"identity"`
-	Name           string `json:"name"`
-	Type           string `json:"type"`
-	Classification string `json:"classification"`
-	Strategy       string `json:"strategy"`
-	HasDrop        bool   `json:"has_drop,omitempty"`
+	Identity             string `json:"identity"`
+	Name                 string `json:"name"`
+	Type                 string `json:"type"`
+	Classification       string `json:"classification"`
+	Strategy             string `json:"strategy"`
+	HasDrop              bool   `json:"has_drop,omitempty"`
+	CallableIdentity     string `json:"callable_identity,omitempty"`
+	EnvironmentIdentity  string `json:"environment_identity,omitempty"`
+	EnvironmentSize      int    `json:"environment_size,omitempty"`
+	EnvironmentAlignment int    `json:"environment_alignment,omitempty"`
+	Dispatch             string `json:"dispatch,omitempty"`
+	Allocation           string `json:"allocation,omitempty"`
+	Reconstruction       string `json:"reconstruction,omitempty"`
 }
 
 type MachinePlan struct {
@@ -358,17 +365,30 @@ type AwaitPlan struct {
 }
 
 type LoweringPlan struct {
-	Schema      string             `json:"schema"`
-	Compiler    string             `json:"compiler"`
-	Module      string             `json:"module"`
-	MIRIdentity string             `json:"mir_identity"`
-	PlanID      string             `json:"plan_id"`
-	Target      TargetCapabilities `json:"target"`
-	Profile     string             `json:"profile"`
-	Policy      CompilationPolicy  `json:"compilation_policy"`
-	Functions   []FunctionPlan     `json:"functions"`
-	Aggregates  []AggregatePlan    `json:"aggregate_plans,omitempty"`
-	Automata    []AutomataPlan     `json:"automata_plans,omitempty"`
+	Schema                string                     `json:"schema"`
+	Compiler              string                     `json:"compiler"`
+	Module                string                     `json:"module"`
+	MIRIdentity           string                     `json:"mir_identity"`
+	PlanID                string                     `json:"plan_id"`
+	Target                TargetCapabilities         `json:"target"`
+	Profile               string                     `json:"profile"`
+	Policy                CompilationPolicy          `json:"compilation_policy"`
+	Functions             []FunctionPlan             `json:"functions"`
+	Aggregates            []AggregatePlan            `json:"aggregate_plans,omitempty"`
+	Automata              []AutomataPlan             `json:"automata_plans,omitempty"`
+	ConcreteCallableTypes []ConcreteCallableTypePlan `json:"concrete_callable_types,omitempty"`
+}
+
+type ConcreteCallableTypePlan struct {
+	Name                 string `json:"name"`
+	CallableIdentity     string `json:"callable_identity"`
+	EnvironmentIdentity  string `json:"environment_identity"`
+	EnvironmentSize      int    `json:"environment_size"`
+	EnvironmentAlignment int    `json:"environment_alignment"`
+	Signature            string `json:"signature"`
+	Storage              string `json:"storage"`
+	Dispatch             string `json:"dispatch"`
+	Allocation           string `json:"allocation"`
 }
 
 func PlanModule(module *MIR, facts *SemanticFactSet, target TargetCapabilities, profile ProfileDefinition, policy CompilationPolicy) (*LoweringPlan, error) {
@@ -386,6 +406,9 @@ func PlanModule(module *MIR, facts *SemanticFactSet, target TargetCapabilities, 
 	}
 	plan.Aggregates = planAggregates(module)
 	plan.Automata = planAutomata(module)
+	for _, alias := range module.TypeAliases {
+		plan.ConcreteCallableTypes = append(plan.ConcreteCallableTypes, ConcreteCallableTypePlan{Name: alias.Name, CallableIdentity: alias.CallableIdentity, EnvironmentIdentity: alias.EnvironmentIdentity, EnvironmentSize: alias.EnvironmentSize, EnvironmentAlignment: alias.EnvironmentAlignment, Signature: alias.ExactType.String(), Storage: "Inline", Dispatch: "DirectCallable", Allocation: "None"})
+	}
 	plan.PlanID = loweringPlanIdentity(plan)
 	if err := ValidateLoweringPlan(module, facts, plan); err != nil {
 		return nil, err
@@ -395,14 +418,15 @@ func PlanModule(module *MIR, facts *SemanticFactSet, target TargetCapabilities, 
 
 func loweringPlanIdentity(plan *LoweringPlan) string {
 	identityInput, _ := json.Marshal(struct {
-		MIR        string
-		Target     TargetCapabilities
-		Profile    string
-		Policy     CompilationPolicy
-		Functions  []FunctionPlan
-		Aggregates []AggregatePlan
-		Automata   []AutomataPlan
-	}{plan.MIRIdentity, plan.Target, plan.Profile, plan.Policy, plan.Functions, plan.Aggregates, plan.Automata})
+		MIR                   string
+		Target                TargetCapabilities
+		Profile               string
+		Policy                CompilationPolicy
+		Functions             []FunctionPlan
+		Aggregates            []AggregatePlan
+		Automata              []AutomataPlan
+		ConcreteCallableTypes []ConcreteCallableTypePlan
+	}{plan.MIRIdentity, plan.Target, plan.Profile, plan.Policy, plan.Functions, plan.Aggregates, plan.Automata, plan.ConcreteCallableTypes})
 	return "plan-" + digest(identityInput)[:16]
 }
 
@@ -679,7 +703,19 @@ func planAutomata(mir *MIR) []AutomataPlan {
 				plan.MachineStack.Frames = append(plan.MachineStack.Frames, FramePlan{Machine: machine.Name, State: "PerFrame", Fields: "PerFrame"})
 			}
 			for _, field := range machine.Fields {
-				mp.Fields = append(mp.Fields, AutomataStoragePlan{Identity: field.Identity, Name: field.Name, Type: field.Type.String(), Classification: field.Classification, Strategy: "InlineField", HasDrop: field.HasDrop})
+				storage := AutomataStoragePlan{Identity: field.Identity, Name: field.Name, Type: field.Type.String(), Classification: field.Classification, Strategy: "InlineField", HasDrop: field.HasDrop}
+				if field.Type.Kind == TypeCallable {
+					storage.CallableIdentity = field.Type.CallableID
+					storage.EnvironmentIdentity = field.Type.CallableID + "#environment"
+					storage.Dispatch, storage.Allocation, storage.Reconstruction = "DirectCallable", "None", "ConstructOncePersistAcrossSteps"
+					for _, alias := range mir.TypeAliases {
+						if alias.CallableIdentity == field.Type.CallableID {
+							storage.EnvironmentIdentity, storage.EnvironmentSize, storage.EnvironmentAlignment = alias.EnvironmentIdentity, alias.EnvironmentSize, alias.EnvironmentAlignment
+							break
+						}
+					}
+				}
+				mp.Fields = append(mp.Fields, storage)
 			}
 			for _, state := range machine.States {
 				mp.StateIdentities = append(mp.StateIdentities, automata.Name+"."+machine.Name+"."+state.Name)
@@ -796,6 +832,15 @@ func ValidateLoweringPlan(mir *MIR, facts *SemanticFactSet, plan *LoweringPlan) 
 	}
 	if len(plan.Functions) != len(mir.Functions) {
 		return fail("PLAN_ARTIFACT_INVALID", "lowering plan does not cover every MIR function")
+	}
+	if len(plan.ConcreteCallableTypes) != len(mir.TypeAliases) {
+		return fail("PLAN_CALLABLE_TYPE_INVALID", "lowering plan does not cover every exact callable alias")
+	}
+	for i, alias := range mir.TypeAliases {
+		planned := plan.ConcreteCallableTypes[i]
+		if planned.Name != alias.Name || planned.CallableIdentity != alias.CallableIdentity || planned.EnvironmentIdentity != alias.EnvironmentIdentity || planned.EnvironmentSize != alias.EnvironmentSize || planned.EnvironmentAlignment != alias.EnvironmentAlignment || planned.Storage != "Inline" || planned.Dispatch != "DirectCallable" || planned.Allocation != "None" {
+			return fail("PLAN_CALLABLE_TYPE_INVALID", "exact callable plan changes identity, geometry, dispatch, or allocation")
+		}
 	}
 	expectedAutomataPlans := planAutomata(mir)
 	if len(plan.Automata) != len(expectedAutomataPlans) {

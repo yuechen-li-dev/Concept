@@ -1,0 +1,36 @@
+profile Core;
+
+auto MakeScaler(int factor)
+{
+    return callback(int value)
+    with (factor)
+    {
+        return value * factor;
+    };
+}
+
+using ScaleCallback = typeof(MakeScaler(1));
+
+automata Worker
+with state
+{
+    int result;
+}
+{
+    machine Main
+    {
+        ScaleCallback transform = MakeScaler(3);
+
+        state Running
+        {
+            state.result = transform(4);
+        }
+    }
+}
+
+int Main()
+{
+    instance Worker worker(0);
+    Step(worker, Main);
+    return worker.state.result;
+}

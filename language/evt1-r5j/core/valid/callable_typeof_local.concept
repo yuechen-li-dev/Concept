@@ -1,0 +1,18 @@
+profile Core;
+
+auto MakeOffset(int offset)
+{
+    return callback(int value)
+    with (offset)
+    {
+        return value + offset;
+    };
+}
+
+using OffsetCallback = typeof(MakeOffset(0));
+
+int Main()
+{
+    OffsetCallback add = MakeOffset(5);
+    return add(7);
+}

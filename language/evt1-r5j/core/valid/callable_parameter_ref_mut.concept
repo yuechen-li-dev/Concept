@@ -1,0 +1,24 @@
+profile Core;
+
+auto MakeCounter(int count)
+{
+    return callback()
+    with (count)
+    {
+        count = count + 1;
+        return count;
+    };
+}
+
+using CounterCallback = typeof(MakeCounter(0));
+
+int Next(ref CounterCallback counter)
+{
+    return counter();
+}
+
+int Main()
+{
+    CounterCallback counter = MakeCounter(10);
+    return Next(ref counter) + Next(ref counter);
+}

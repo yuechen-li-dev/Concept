@@ -1,0 +1,19 @@
+profile Core;
+
+auto MakeAdder()
+{
+    return callback(int value)
+    {
+        return value + 1;
+    };
+}
+
+using Adder = typeof(MakeAdder());
+
+int Main()
+{
+    Adder concrete = MakeAdder();
+    callback<int -> int> erased = ref concrete;
+    Adder recovered = erased;
+    return 0;
+}

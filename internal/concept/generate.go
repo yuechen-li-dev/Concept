@@ -127,6 +127,18 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 		Module:  module.Path,
 		Profile: module.Profile,
 	}
+	for _, alias := range module.TypeAliases {
+		t := evt1MIRType(env, alias.ResolvedType)
+		entry := MIRTypeAlias{Name: alias.Name, ExactType: t, Query: evt1ExprIdentity(alias.Query), Unevaluated: true, CallableIdentity: t.CallableID, EnvironmentIdentity: t.CallableID + "#environment", Storage: "Inline", Dispatch: "DirectCallable", NoAllocation: true, SourceSpan: alias.Span}
+		for _, callable := range evt1ModuleCallables(module) {
+			if callable.Identity == t.CallableID {
+				geometry := evt1CallableMIR(env, callable).Environment
+				entry.EnvironmentIdentity, entry.EnvironmentSize, entry.EnvironmentAlignment = geometry.Identity, geometry.Size, geometry.Alignment
+				break
+			}
+		}
+		mir.TypeAliases = append(mir.TypeAliases, entry)
+	}
 	for _, structDecl := range module.Structs {
 		mirStruct := MIRStruct{
 			Name:       structDecl.Name,
@@ -570,6 +582,13 @@ func evt1AutomataStorageProvenance(t Type) string {
 }
 
 func evt1ValidateMIR(mir MIR) error {
+	seenAliases := map[string]bool{}
+	for _, alias := range mir.TypeAliases {
+		if alias.Name == "" || seenAliases[alias.Name] || alias.ExactType.Kind != TypeCallable || alias.CallableIdentity == "" || alias.EnvironmentIdentity == "" || alias.EnvironmentAlignment < 1 || !alias.Unevaluated || alias.Storage != "Inline" || alias.Dispatch != "DirectCallable" || !alias.NoAllocation {
+			return evt1Diagnostic("CALLABLE_TYPE_MIR_INVALID", "exact callable alias MIR omits unique identity, unevaluated query, geometry, or static storage facts", alias.SourceSpan)
+		}
+		seenAliases[alias.Name] = true
+	}
 	if err := evt1ValidateSemanticFacts(mir.SemanticFacts); err != nil {
 		return err
 	}
@@ -1599,6 +1618,19 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 			header.WriteString(builtin.CDeclaration + "\n")
 		}
 	}
+	if len(l.module.TypeAliases) > 0 {
+		for _, decl := range l.module.Structs {
+			header.WriteString(fmt.Sprintf("typedef struct %s %s;\n", evt1CName(decl.Name), evt1CName(decl.Name)))
+		}
+		if len(l.module.Structs) > 0 {
+			header.WriteByte('\n')
+		}
+		header.WriteString(evt1SpanDeclarations(spanTypes))
+		header.WriteString(evt1TensorDeclarations(tensorTypes))
+		header.WriteString(l.semanticViewDeclarations())
+		header.WriteString(l.interfaceWitnessDeclarations())
+		header.WriteString(l.erasedCallbackDeclarations())
+	}
 	if err := l.writeRuntimeStorageAndTypeDecls(&header, typeDecls, evt1CollectStorageTypes(l.module, l.env), storageViewTypes); err != nil {
 		return nil, nil, err
 	}
@@ -1607,11 +1639,21 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 			header.WriteString(fmt.Sprintf("typedef struct { float probabilities[%d]; uint32_t candidate_order[%d]; uint32_t candidate_count; } concept_inference_%s;\n\n", len(enumDecl.Variants), len(enumDecl.Variants), evt1TypeIdentity(Type{Name: enumDecl.Name, Kind: TypeEnum})))
 		}
 	}
-	header.WriteString(evt1SpanDeclarations(spanTypes))
-	header.WriteString(evt1TensorDeclarations(tensorTypes))
-	header.WriteString(l.semanticViewDeclarations())
-	header.WriteString(l.interfaceWitnessDeclarations())
-	header.WriteString(l.callableDeclarations())
+	if len(l.module.TypeAliases) == 0 {
+		header.WriteString(evt1SpanDeclarations(spanTypes))
+		header.WriteString(evt1TensorDeclarations(tensorTypes))
+		header.WriteString(l.semanticViewDeclarations())
+		header.WriteString(l.interfaceWitnessDeclarations())
+		header.WriteString(l.callableDeclarations())
+	}
+	for _, alias := range l.module.TypeAliases {
+		if alias.ResolvedType.Kind == TypeCallable {
+			header.WriteString(fmt.Sprintf("typedef %s %s; /* exact callable alias %s */\n", evt1CType(alias.ResolvedType), evt1CName(alias.Name)+"_exact_callable", alias.Name))
+		}
+	}
+	if len(l.module.TypeAliases) > 0 {
+		header.WriteByte('\n')
+	}
 	canonicalFailureTypes := evt1CanonicalFailureTypeKeys(l.module)
 	for _, failureType := range evt1CollectFailureTypes(l.module) {
 		if _, legacy := evt1IsResultVoidErrorType(l.env, failureType); legacy && !canonicalFailureTypes[evt1FailureTypeKey(failureType)] {
@@ -1726,10 +1768,16 @@ type evt1RuntimeHeaderDecl struct {
 
 func (l *lowering) writeRuntimeStorageAndTypeDecls(out *strings.Builder, typeDecls []evt1RuntimeTypeDecl, storageTypes, viewTypes []Type) error {
 	knownNamed := make(map[string]bool, len(typeDecls))
+	knownCallable := map[string]bool{}
 	knownStorage := make(map[string]bool, len(storageTypes))
 	knownView := make(map[string]bool, len(viewTypes))
 	for _, decl := range typeDecls {
 		knownNamed[decl.Name] = true
+	}
+	if len(l.module.TypeAliases) > 0 {
+		for _, callable := range evt1ModuleCallables(l.module) {
+			knownCallable[callable.Identity] = true
+		}
 	}
 	for _, storageType := range storageTypes {
 		knownStorage[evt1TypeIdentity(storageType)] = true
@@ -1740,6 +1788,9 @@ func (l *lowering) writeRuntimeStorageAndTypeDecls(out *strings.Builder, typeDec
 
 	var typeDeps func(Type) []string
 	typeDeps = func(t Type) []string {
+		if t.Kind == TypeCallable && knownCallable[t.CallableID] {
+			return []string{"callable:" + t.CallableID}
+		}
 		if t.PointerTo != nil {
 			return typeDeps(*t.PointerTo)
 		}
@@ -1793,6 +1844,29 @@ func (l *lowering) writeRuntimeStorageAndTypeDecls(out *strings.Builder, typeDec
 			}
 			return l.enumHeader(*current.Enum)
 		}})
+	}
+	if len(l.module.TypeAliases) > 0 {
+		for _, callable := range evt1ModuleCallables(l.module) {
+			current := callable
+			deps := []string{}
+			seen := map[string]bool{"callable:" + callable.Identity: true}
+			add := func(t Type) {
+				for _, dep := range typeDeps(t) {
+					if !seen[dep] {
+						seen[dep] = true
+						deps = append(deps, dep)
+					}
+				}
+			}
+			for _, capture := range callable.Captures {
+				add(capture.Type)
+			}
+			for _, param := range callable.Params {
+				add(param.Type)
+			}
+			add(callable.ResultType)
+			decls = append(decls, evt1RuntimeHeaderDecl{key: "callable:" + callable.Identity, deps: deps, emit: func() string { return l.callableDeclaration(current) }})
+		}
 	}
 	for i := range storageTypes {
 		storageType := storageTypes[i]
@@ -2602,12 +2676,16 @@ func (l *lowering) canonicalAutomataRuntimeSupport(info *evt1AutomataInfo) strin
 		b.WriteString(fmt.Sprintf("  instance->shared.%s = state_%d;\n", field.Name, i))
 	}
 	initLower := newEVT1FunctionLowerer(l, FunctionDecl{Name: "automata_init", ReturnType: Type{Name: "void", Kind: TypeBuiltin}}, "", true)
+	for _, stateField := range info.Decl.StateFields {
+		initLower.scope[0][stateField.Name] = evt1Binding{cName: "instance->shared." + stateField.Name, t: stateField.Type}
+	}
 	for _, machine := range info.Decl.Machines {
 		b.WriteString(fmt.Sprintf("  instance->%s.current_state = %s;\n", evt1PayloadFieldName(machine.Name), evt1AutomataStateConstName(info.Decl.Name, machine.Name, machine.States[0].Name)))
 		for _, field := range machine.Fields {
 			value := fmt.Sprintf("(%s){0}", evt1CType(field.Type))
 			if field.Initializer != nil {
-				_, lowered, _ := initLower.lowerExpr(field.Initializer, 1)
+				prelude, lowered, _ := initLower.lowerExpr(field.Initializer, 1)
+				b.WriteString(prelude)
 				value = lowered
 			}
 			b.WriteString(fmt.Sprintf("  instance->%s.%s = %s;\n", evt1PayloadFieldName(machine.Name), field.Name, value))
@@ -3104,10 +3182,24 @@ func evt1ConstructorName(enumName, variantName string) string {
 
 func evt1CType(t Type) string {
 	if t.Kind == TypeCallable {
-		return evt1CallableEnvCName(t.CallableID)
+		base := evt1CallableEnvCName(t.CallableID)
+		if t.isReference() || t.isBorrow() {
+			if t.Const {
+				return "const " + base + "*"
+			}
+			return base + "*"
+		}
+		return base
 	}
 	if t.Kind == TypeCallback {
-		return evt1CallbackCName(t)
+		base := evt1CallbackCName(t)
+		if t.isReference() || t.isBorrow() {
+			if t.Const {
+				return "const " + base + "*"
+			}
+			return base + "*"
+		}
+		return base
 	}
 	if t.Kind == TypeAsync || t.Name == "Async" {
 		return "concept_async_operation"
@@ -4174,8 +4266,16 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		return b.String(), carrierTemp + ".payload." + field, evt1FailureSuccessType(carrierType)
 	case *CallExpr:
 		if e.CallableInvoke && e.CallableType != nil {
-			binding, _ := scopeLookup(e.Callee, f.scope)
 			var prelude strings.Builder
+			var binding evt1Binding
+			var memberAccess string
+			if e.Member {
+				memberPrelude, access, _ := f.lowerExpr(&FieldExpr{Receiver: e.Receiver, Field: e.Callee, Span: e.Span}, indent)
+				prelude.WriteString(memberPrelude)
+				memberAccess = access
+			} else {
+				binding, _ = scopeLookup(e.Callee, f.scope)
+			}
 			var args []string
 			for _, arg := range e.Args {
 				argPrelude, argExpr, argType := f.lowerExpr(arg, indent)
@@ -4185,9 +4285,23 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 				args = append(args, temp)
 			}
 			if e.CallableType.Kind == TypeCallback {
-				return prelude.String(), fmt.Sprintf("%s.invoke(%s.environment%s)", binding.cName, binding.cName, evt1CArgsSuffix(args)), *e.CallableType.CallableResult
+				access := memberAccess
+				if !e.Member {
+					access = binding.cName
+				}
+				if binding.t.isReference() || binding.t.isBorrow() {
+					access = "(*" + access + ")"
+				}
+				return prelude.String(), fmt.Sprintf("%s.invoke(%s.environment%s)", access, access, evt1CArgsSuffix(args)), *e.CallableType.CallableResult
 			}
-			return prelude.String(), fmt.Sprintf("%s(&%s%s)", evt1CallableInvokeCName(e.CallableType.CallableID), binding.cName, evt1CArgsSuffix(args)), *e.CallableType.CallableResult
+			environment := "&( " + memberAccess + " )"
+			if !e.Member {
+				environment = "&" + binding.cName
+				if binding.t.isReference() || binding.t.isBorrow() {
+					environment = binding.cName
+				}
+			}
+			return prelude.String(), fmt.Sprintf("%s(%s%s)", evt1CallableInvokeCName(e.CallableType.CallableID), environment, evt1CArgsSuffix(args)), *e.CallableType.CallableResult
 		}
 		if e.Intrinsic == "async_step" || e.Intrinsic == "async_complete" || e.Intrinsic == "async_result" {
 			prelude, value, valueType := f.lowerExpr(e.Args[0], indent)

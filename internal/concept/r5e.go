@@ -138,10 +138,15 @@ func (l *lowering) canonicalAutomataStackRuntimeSupport(info *evt1AutomataInfo) 
 		b.WriteString(fmt.Sprintf("static void %s(%s* instance, uint8_t slot) {\n", evt1MachineInitFrameCName(automata, machine.Name), instanceType))
 		b.WriteString(fmt.Sprintf("  instance->%s[slot].current_state=%s; /* frame initialization */\n", frames, evt1AutomataStateConstName(automata, machine.Name, machine.States[0].Name)))
 		initLower := newEVT1FunctionLowerer(l, FunctionDecl{Name: "machine_frame_init", ReturnType: Type{Name: "void", Kind: TypeBuiltin}}, "", true)
+		for _, stateField := range info.Decl.StateFields {
+			initLower.scope[0][stateField.Name] = evt1Binding{cName: "instance->shared." + stateField.Name, t: stateField.Type}
+		}
 		for _, field := range machine.Fields {
 			value := fmt.Sprintf("(%s){0}", evt1CType(field.Type))
 			if field.Initializer != nil {
-				_, value, _ = initLower.lowerExpr(field.Initializer, 1)
+				prelude, lowered, _ := initLower.lowerExpr(field.Initializer, 1)
+				b.WriteString(prelude)
+				value = lowered
 			}
 			b.WriteString(fmt.Sprintf("  instance->%s[slot].%s = %s;\n", frames, field.Name, value))
 			if evt1TypeHasDrop(l.env, field.Type) {

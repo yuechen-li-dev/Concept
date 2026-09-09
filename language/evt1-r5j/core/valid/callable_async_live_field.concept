@@ -1,0 +1,39 @@
+profile Core;
+
+async int Read(int value)
+{
+    return value;
+}
+
+auto MakeAdder(int amount)
+{
+    return callback(int value)
+    with (amount)
+    {
+        return value + amount;
+    };
+}
+
+using Adder = typeof(MakeAdder(1));
+
+struct Processor
+{
+    Adder add;
+}
+
+async int Run(Processor processor)
+{
+    int value = await Read(8);
+    return processor.add(value);
+}
+
+int Main()
+{
+    Processor processor = Processor{MakeAdder(4)};
+    Async<int> work = Run(processor);
+    while (not Complete(work)) bounded(4)
+    {
+        Step(work);
+    }
+    return Result(work);
+}

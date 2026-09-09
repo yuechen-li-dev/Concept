@@ -1,0 +1,17 @@
+profile Core;
+
+auto MakeIncrementer()
+{
+    return callback(int value)
+    {
+        return value + 1;
+    };
+}
+
+using Incrementer = typeof(MakeIncrementer());
+
+int Main()
+{
+    Incrementer increment = MakeIncrementer();
+    return increment(8);
+}

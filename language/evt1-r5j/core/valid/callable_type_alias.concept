@@ -1,0 +1,23 @@
+profile Core;
+
+auto MakeScaler(int multiplier)
+{
+    return callback(int value)
+    with (multiplier)
+    {
+        return value * multiplier;
+    };
+}
+
+using ScaleCallback = typeof(MakeScaler(1));
+
+int ApplyTwice(ref const ScaleCallback scale, int value)
+{
+    return scale(scale(value));
+}
+
+int Main()
+{
+    ScaleCallback scale = MakeScaler(3);
+    return ApplyTwice(ref const scale, 2);
+}

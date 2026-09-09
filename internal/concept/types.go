@@ -472,10 +472,22 @@ type StaticAssert struct {
 	Span      Span `json:"span"`
 }
 
+// TypeAliasDecl binds a source name to the exact static value type of an
+// unevaluated expression. R5j deliberately keeps this surface module-scoped:
+// it is a compile-time name, not a runtime reflection object.
+type TypeAliasDecl struct {
+	Name         string `json:"name"`
+	Spelling     string `json:"spelling"`
+	Query        Expr   `json:"query"`
+	ResolvedType Type   `json:"resolved_type,omitempty"`
+	Span         Span   `json:"span"`
+}
+
 type Module struct {
 	Path          string             `json:"path"`
 	Profile       string             `json:"profile"`
 	Imports       []string           `json:"imports,omitempty"`
+	TypeAliases   []TypeAliasDecl    `json:"type_aliases,omitempty"`
 	Structs       []StructDecl       `json:"structs,omitempty"`
 	Layouts       []LayoutDecl       `json:"layouts,omitempty"`
 	Streams       []StreamDecl       `json:"streams,omitempty"`
@@ -1132,6 +1144,7 @@ type MIR struct {
 	Schema            string                `json:"schema"`
 	Module            string                `json:"module"`
 	Profile           string                `json:"profile"`
+	TypeAliases       []MIRTypeAlias        `json:"type_aliases,omitempty"`
 	Structs           []MIRStruct           `json:"structs,omitempty"`
 	Enums             []MIREnum             `json:"enums,omitempty"`
 	Effects           []MIREffect           `json:"effects,omitempty"`
@@ -1152,6 +1165,21 @@ type MIR struct {
 	Streams           []MIRStream           `json:"streams,omitempty"`
 	Witnesses         []MIRInterfaceWitness `json:"interface_witnesses,omitempty"`
 	CallbackWitnesses []MIRCallbackWitness  `json:"callback_witnesses,omitempty"`
+}
+
+type MIRTypeAlias struct {
+	Name                 string `json:"name"`
+	ExactType            Type   `json:"exact_type"`
+	Query                string `json:"query"`
+	Unevaluated          bool   `json:"unevaluated"`
+	CallableIdentity     string `json:"callable_identity"`
+	EnvironmentIdentity  string `json:"environment_identity"`
+	EnvironmentSize      int    `json:"environment_size"`
+	EnvironmentAlignment int    `json:"environment_alignment"`
+	Storage              string `json:"storage"`
+	Dispatch             string `json:"dispatch"`
+	NoAllocation         bool   `json:"no_allocation"`
+	SourceSpan           Span   `json:"source_span"`
 }
 
 type MIRCallbackWitness struct {
@@ -1577,6 +1605,7 @@ type semanticEnv struct {
 	profile            *ProfileDefinition
 	enums              map[string]EnumDecl
 	structs            map[string]StructDecl
+	typeAliases        map[string]Type
 	layouts            map[string]LayoutDecl
 	streams            map[string]StreamDecl
 	effects            map[string]EffectDecl
@@ -1634,6 +1663,7 @@ func newSemanticEnv(profile *ProfileDefinition) *semanticEnv {
 		profile:           profile,
 		enums:             enums,
 		structs:           map[string]StructDecl{},
+		typeAliases:       map[string]Type{},
 		layouts:           map[string]LayoutDecl{},
 		streams:           map[string]StreamDecl{},
 		effects:           map[string]EffectDecl{},

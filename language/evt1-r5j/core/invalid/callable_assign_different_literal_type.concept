@@ -1,0 +1,25 @@
+profile Core;
+
+auto MakeLeft()
+{
+    return callback(int value)
+    {
+        return value + 1;
+    };
+}
+
+auto MakeRight()
+{
+    return callback(int value)
+    {
+        return value + 1;
+    };
+}
+
+using Left = typeof(MakeLeft());
+
+int Main()
+{
+    Left value = MakeRight();
+    return 0;
+}

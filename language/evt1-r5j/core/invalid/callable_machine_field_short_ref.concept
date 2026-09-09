@@ -1,0 +1,30 @@
+profile Core;
+
+auto MakeReader(ref int value)
+{
+    return callback()
+    with (ref value)
+    {
+        return value;
+    };
+}
+
+using Reader = typeof(MakeReader);
+
+automata Invalid
+{
+    machine Main
+    {
+        Reader read;
+
+        state Running
+        {
+            int value = read();
+        }
+    }
+}
+
+int Main()
+{
+    return 0;
+}

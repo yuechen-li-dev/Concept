@@ -1,0 +1,8 @@
+profile Core;
+
+using Missing = typeof(NoSuchFactory());
+
+int Main()
+{
+    return 0;
+}

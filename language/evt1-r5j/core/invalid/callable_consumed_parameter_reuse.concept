@@ -1,0 +1,33 @@
+profile Core;
+
+struct Resource
+{
+    int value;
+}
+
+int Take(owned Resource resource)
+{
+    return resource.value;
+}
+
+auto MakeConsumer(owned Resource resource)
+{
+    return callback()
+    with (move resource)
+    {
+        return Take(move resource);
+    };
+}
+
+using Consumer = typeof(MakeConsumer);
+
+int ConsumeTwice(Consumer consume)
+{
+    int first = consume();
+    return first + consume();
+}
+
+int Main()
+{
+    return 0;
+}

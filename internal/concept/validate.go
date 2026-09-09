@@ -430,6 +430,9 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		}
 		env.comptimeFunctions[fn.Name] = fn
 	}
+	if err := evt1PrepareExactCallableTypes(env, &module, typeNames); err != nil {
+		return nil, err
+	}
 	for _, structDecl := range module.Structs {
 		fields := map[string]Type{}
 		if len(structDecl.Fields) == 0 {
@@ -484,6 +487,9 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 	}
 	for _, structDecl := range module.Structs {
 		for _, field := range structDecl.Fields {
+			if field.Type.Kind == TypeCallable && field.Type.CallableProvenance != string(evt1ProvenanceStatic) && !structDecl.Ref {
+				return nil, evt1Diagnostic("CALLABLE_FIELD_REF_ESCAPE", fmt.Sprintf("unrestricted struct %s cannot contain lifetime-bound callable field %s; declare a ref struct", structDecl.Name, field.Name), field.Span)
+			}
 			if field.Type.isReference() && !structDecl.Ref {
 				return nil, evt1Diagnostic("CV4525", fmt.Sprintf("unrestricted struct %s cannot contain reference field %s; declare a ref struct", structDecl.Name, field.Name), field.Span)
 			}
@@ -1525,7 +1531,8 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 			}
 			if returnType.Kind == TypeCallable || returnType.Kind == TypeCallback {
 				provenance := evt1ExprProvenance(env, local, s.Value)
-				if provenance.Scoped || provenance.Kind == evt1ProvenanceLocal {
+				concreteStatic := valueType.Kind == TypeCallable && valueType.CallableProvenance == string(evt1ProvenanceStatic) && !valueType.Scoped
+				if !concreteStatic && (provenance.Scoped || provenance.Kind == evt1ProvenanceLocal) {
 					return evt1Diagnostic("CALLABLE_CAPTURE_LIFETIME_INVALID", "callable cannot escape its captured environment lifetime", s.Value.exprSpan())
 				}
 			}
@@ -1810,6 +1817,16 @@ func validateBindExpr(env *semanticEnv, scope *evt1Scope, bind *BindExpr, expect
 }
 
 func evt1ResolveType(env *semanticEnv, scope *evt1Scope, t Type) (Type, error) {
+	if alias, ok := env.typeAliases[t.Name]; ok && t.PointerTo == nil && t.ArrayElem == nil && len(t.TypeArgs) == 0 {
+		resolved := alias
+		resolved.Ownership = t.Ownership
+		resolved.Const = t.Const
+		resolved.Scoped = t.Scoped
+		resolved.Imported = t.Imported
+		resolved.Unsafe = t.Unsafe
+		resolved.Span = t.Span
+		return resolved, nil
+	}
 	if t.PointerTo != nil {
 		base, err := evt1ResolveType(env, scope, *t.PointerTo)
 		if err != nil {
@@ -2139,6 +2156,12 @@ func evt1NestedLiteralShape(expr Expr) ([]int, []Expr, bool, bool) {
 }
 
 func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string, allowConceptApp bool) error {
+	if t.Kind == TypeInferred {
+		return evt1Diagnostic("CALLABLE_AUTO_FIELD_EXISTENTIAL", "`auto` is only permitted for local bindings and inferred function returns; stored fields and parameters require an exact type", span)
+	}
+	if alias, ok := env.typeAliases[t.Name]; ok {
+		return validateKnownType(env, alias, span, conceptParam, allowConceptApp)
+	}
 	if t.Kind == TypeCallable {
 		return nil
 	}
@@ -3383,6 +3406,15 @@ func evt1FieldSet(env *semanticEnv, t Type) (map[string]Type, string, error) {
 	}
 	fields, ok := env.fieldSets[base.Name]
 	if !ok {
+		if decl, declared := env.structs[base.Name]; declared {
+			fields = map[string]Type{}
+			for _, field := range decl.Fields {
+				fields[field.Name] = evt1CanonicalType(env, field.Type)
+			}
+			ok = true
+		}
+	}
+	if !ok {
 		return nil, base.Name, fmt.Errorf("type %s has no fields", base.Name)
 	}
 	return fields, base.Name, nil
@@ -3628,6 +3660,19 @@ func evt1DeriveBlockResultProvenance(env *semanticEnv, block Block, inherited ma
 
 func evt1DeriveExprResultProvenance(env *semanticEnv, expr Expr, bindings map[string]evt1ResultProvenanceSummary, derive func(FunctionDecl) evt1ResultProvenanceSummary) evt1ResultProvenanceSummary {
 	switch e := expr.(type) {
+	case *CallableExpr:
+		var parts []evt1ResultProvenanceSummary
+		for _, capture := range e.Captures {
+			if evt1CaptureCarriesProvenance(capture) {
+				if summary, ok := bindings[capture.Name]; ok {
+					parts = append(parts, summary)
+				}
+			}
+		}
+		if len(parts) == 0 {
+			return evt1ResultProvenanceSummary{Kind: evt1ResultProvenanceStatic}
+		}
+		return evt1CombineResultProvenance(parts...)
 	case *ParenExpr:
 		return evt1DeriveExprResultProvenance(env, e.Value, bindings, derive)
 	case *MoveExpr:
@@ -3696,6 +3741,12 @@ func evt1ExprProvenance(env *semanticEnv, scope *evt1Scope, expr Expr) evt1Lifet
 	case *CallableExpr:
 		result := evt1LifetimeProvenance{Kind: evt1ProvenanceStatic}
 		for _, capture := range e.Captures {
+			// Copy/move captures of ordinary values are owned by the generated
+			// environment. Only borrow-carrying captures constrain the callable
+			// value's lifetime.
+			if !evt1CaptureCarriesProvenance(capture) {
+				continue
+			}
 			if binding, ok := scope.lookup(capture.Name); ok {
 				p := binding.provenance
 				if p.Kind == evt1ProvenanceLocal || (result.Kind != evt1ProvenanceLocal && p.Kind == evt1ProvenanceParameter) {
@@ -3777,6 +3828,16 @@ func evt1ExprProvenance(env *semanticEnv, scope *evt1Scope, expr Expr) evt1Lifet
 		fn, err := evt1ResolveOrdinaryCall(env, scope, e.Callee, e.Args, argTypes, nil, e.Span)
 		if err != nil {
 			return evt1LifetimeProvenance{Kind: evt1ProvenanceUnknown, Depth: scope.depth, Scoped: true}
+		}
+		if fn.Async {
+			carriesLifetime := false
+			for _, param := range fn.Params {
+				t := param.Type
+				carriesLifetime = carriesLifetime || t.isBorrowLike() || t.Kind == TypeDyn || evt1IsRefStructType(env, t) || evt1IsSpanType(t) || evt1IsTensorType(t)
+			}
+			if !carriesLifetime {
+				return evt1LifetimeProvenance{Kind: evt1ProvenanceStatic}
+			}
 		}
 		summary := env.resultProvenance[evt1FunctionProvenanceKey(fn)]
 		if summary.Kind == evt1ResultProvenanceStatic {

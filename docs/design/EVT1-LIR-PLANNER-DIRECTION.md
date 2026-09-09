@@ -1,6 +1,6 @@
 # EVT1 LIR Planner direction
 
-Status: R5h witness-indirect async constructor planning consumer; LIR is future work
+Status: R5j exact callable storage planning consumer; LIR is future work
 
 ## Authority pipeline
 
@@ -173,3 +173,14 @@ aggregate is a non-owning `EnvironmentFunctionPair`. Capture construction uses
 `CaptureEnvironmentPlan` and preserves exactly-once left-to-right evaluation.
 Validation regenerates these records from MIR and rejects changed layout,
 dispatch, witness, or allocation claims. R5i emits no LIR.
+
+## R5j exact callable type and field plans
+
+`ConcreteCallableTypePlan` records the source alias, exact code/environment
+identities, signature, environment size/alignment, `Storage: Inline`,
+`Dispatch: DirectCallable`, and `Allocation: None`. A callable machine field is
+an ordinary `MachinePersistent` field whose plan additionally records
+`Reconstruction: ConstructOncePersistAcrossSteps`. Planner validation compares
+these records to MIR and cannot substitute erasure, boxing, heap storage, or a
+vtable. Aggregate fields use the same dependency-ordered fixed C layout. LIR
+remains deferred.

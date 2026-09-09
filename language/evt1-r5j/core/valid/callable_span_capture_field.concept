@@ -1,0 +1,25 @@
+profile Core;
+
+auto MakeFirst(Span<int> values)
+{
+    return callback()
+    with (values)
+    {
+        return values[0];
+    };
+}
+
+using FirstCallback = typeof(MakeFirst);
+
+ref struct Holder
+{
+    FirstCallback first;
+}
+
+int Main()
+{
+    int<array>[2] values = [6, 7];
+    Span<int> span = Span(values);
+    Holder holder = Holder{MakeFirst(span)};
+    return holder.first();
+}

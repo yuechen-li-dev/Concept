@@ -130,6 +130,21 @@ func evt1ValidateMemberCall(env *semanticEnv, scope *evt1Scope, call *CallExpr, 
 	if err != nil {
 		return Type{}, err
 	}
+	// An exact callable field is invoked as ordinary aggregate storage, before
+	// method lookup. The receiver's normal place mutability governs whether a
+	// mutating environment may be used.
+	if receiverType.Kind != TypeDyn {
+		if fields, _, fieldErr := evt1FieldSet(env, receiverType); fieldErr == nil {
+			if fieldType, ok := fields[call.Callee]; ok && (fieldType.valueType().Kind == TypeCallable || fieldType.valueType().Kind == TypeCallback) {
+				mutable := false
+				if place, placeErr := validateAssignable(env, scope, call.Receiver, templateInfo); placeErr == nil {
+					mutable = place.mutable && !fieldType.Const
+				}
+				binding := evt1ValueBinding{t: fieldType, mutable: mutable, state: evt1StorageInitialized}
+				return evt1ValidateCallableInvocation(env, scope, call, binding, templateInfo, inComptimeFn)
+			}
+		}
+	}
 	if receiverType.Kind == TypeDyn {
 		decl := env.concepts[receiverType.Name]
 		methods, _, _ := evt1InterfaceRuntimeRequirements(env, receiverType.Name, map[string]bool{})

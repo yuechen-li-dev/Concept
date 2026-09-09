@@ -1,0 +1,40 @@
+profile Core;
+
+interface Reader<T>
+{
+    requires int Read(ref const T self);
+}
+
+struct Device
+{
+    int value;
+
+    int Read(ref const Device self)
+    {
+        return self.value;
+    }
+}
+
+auto MakeReader(dyn const Reader reader)
+{
+    return callback()
+    with (reader)
+    {
+        return reader.Read();
+    };
+}
+
+using ReaderCallback = typeof(MakeReader);
+
+ref struct Holder
+{
+    ReaderCallback read;
+}
+
+int Main()
+{
+    Device device = Device{11};
+    dyn const Reader reader = ref const device;
+    Holder holder = Holder{MakeReader(reader)};
+    return holder.read();
+}

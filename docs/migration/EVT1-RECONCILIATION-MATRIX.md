@@ -1,6 +1,6 @@
 # EVT1 semantic reconciliation matrix
 
-Status: R0 authority ledger with R1-R5c executable evidence
+Status: R0 authority ledger with R1-R5j executable evidence
 
 `Port required?` means implementation or conformance work remains after R0; it
 does not authorize that work in this milestone. Status is one of `Keep PoC3`,
@@ -424,6 +424,14 @@ saved-PC fallback exists.
 | Owning erased callback / closure box | Deferred; no hidden lifetime extension |
 | Fn/FnMut/FnOnce taxonomy | Rejected direction; properties are derived |
 | Heap closure, RTTI, registry | Rejected direction for EVT1 |
+| Exact concrete callable type | Supported through transparent `using Name = typeof(expr)` |
+| Exact type query | Supported module-scoped and unevaluated; `type` is compatibility spelling |
+| Callable struct/class field | Supported when exact identity is known; inline storage |
+| Callable value/ref parameter | Supported with ordinary copy, move, and receiver constness |
+| Machine callable field | Supported as ordinary persistent inline frame storage |
+| `auto` / existential callable field | Rejected; field layout must be exact |
+| Heterogeneous callable storage | Use explicit borrowed erased callback |
+| Owning heterogeneous callable storage | Deferred |
 
 The callback witness specializes R4k witness principles. Callable state composes
 with async frame liveness and dyn async dispatch without a scheduler or second

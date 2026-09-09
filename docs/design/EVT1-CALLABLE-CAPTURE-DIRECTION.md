@@ -1,6 +1,6 @@
 # EVT1 Callable Capture Direction
 
-Status: R5i implemented direction.
+Status: R5j exact type surface implemented.
 
 ## Authority law
 
@@ -116,7 +116,22 @@ would need to preserve left-to-right partial cleanup.
 Owning erased callbacks require an explicit storage and lifetime policy. Heap
 closures, small-buffer optimization, generalized callable reflection, variadic
 callable ABI, async callback literal syntax, move/ref aliases, and generalized
-fallible capture expressions remain outside R5i. A suitable R5j is callable type-surface
-composition: explicitly spellable concrete callable storage for fields and
-parameters, including automata machine fields, without existential or heap
-erasure.
+fallible capture expressions remain outside R5j. Recommended R5k is final R5
+semantic reconciliation and freeze, with no major new feature.
+
+## R5j spellable exact types
+
+`using Name = typeof(expression);` is the canonical C++-recognizable spelling;
+`type` is compatibility-only. The transparent alias binds the existing
+generated callable identity; it does not describe an environment schema and
+does not allocate. `typeof` is module-scoped, unevaluated, and intentionally
+not general reflection. `concept` keeps its constraint/interface meaning.
+
+Exact aliases compose with inferred and explicit function returns, ordinary
+fields, by-value and ref parameters, machine-persistent fields, Option/Result,
+async frames, dyn captures, and Span captures. Same signature is insufficient
+for assignment: code identity remains part of the type. Heterogeneous values
+must explicitly borrow into the existing erased callback signature.
+
+There is no `auto`/existential field, erased-to-concrete recovery, owning erased
+field, heap fallback, SBO, RTTI, registry, or public callable ABI promise.

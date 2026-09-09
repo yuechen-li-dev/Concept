@@ -1,0 +1,39 @@
+profile Core;
+
+auto MakeCounter(int count)
+{
+    return callback()
+    with (count)
+    {
+        count = count + 1;
+        return count;
+    };
+}
+
+using CounterCallback = typeof(MakeCounter(0));
+
+automata Worker
+with state
+{
+    int observed;
+}
+{
+    machine Main
+    {
+        CounterCallback next = MakeCounter(40);
+
+        state Running
+        {
+            state.observed = next();
+            yield;
+        }
+    }
+}
+
+int Main()
+{
+    instance Worker worker(0);
+    Step(worker, Main);
+    Step(worker, Main);
+    return worker.state.observed;
+}

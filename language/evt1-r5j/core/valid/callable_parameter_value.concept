@@ -1,0 +1,22 @@
+profile Core;
+
+auto MakeAdder(int amount)
+{
+    return callback(int value)
+    with (amount)
+    {
+        return value + amount;
+    };
+}
+
+using Adder = typeof(MakeAdder(1));
+
+int Apply(Adder add, int value)
+{
+    return add(value);
+}
+
+int Main()
+{
+    return Apply(MakeAdder(3), 9);
+}

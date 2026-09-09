@@ -1,0 +1,23 @@
+profile Core;
+
+auto InferAdder(int amount)
+{
+    return callback(int value)
+    with (amount)
+    {
+        return value + amount;
+    };
+}
+
+using Adder = typeof(InferAdder(1));
+
+Adder MakeAdder(int amount)
+{
+    return InferAdder(amount);
+}
+
+int Main()
+{
+    Adder add = MakeAdder(4);
+    return add(6);
+}

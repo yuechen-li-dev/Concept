@@ -1,0 +1,23 @@
+profile Core;
+
+auto MakeAdder(int amount)
+{
+    return callback(int value)
+    with (amount)
+    {
+        return value + amount;
+    };
+}
+
+using Adder = typeof(MakeAdder(1));
+
+Option<Adder> Store(Adder add)
+{
+    return Option::Some(add);
+}
+
+int Main()
+{
+    Option<Adder> stored = Store(MakeAdder(2));
+    return 0;
+}

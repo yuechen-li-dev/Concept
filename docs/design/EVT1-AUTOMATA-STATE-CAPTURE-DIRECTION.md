@@ -1,6 +1,6 @@
 # EVT1 automata state-capture direction
 
-Status: R5f async generated-state capture implemented; effects deferred
+Status: R5j concrete callable machine fields implemented; effects deferred
 
 ## Reconciliation
 
@@ -191,5 +191,13 @@ R5i makes the relationship explicit without merging the constructs. Automata
 `with state` is an authored named persistent execution environment; callable
 `with (...)` is an explicit callable capture environment. Both use ordinary
 typed inline storage, provenance, move, and Drop law. Neither permits ambient
-lexical capture. Spellable concrete callable machine fields remain a later
-type-surface decision; R5i invents no existential storage.
+lexical capture.
+
+R5j permits an exact alias-named callable as ordinary machine-persistent
+storage. Its generated environment is initialized once with the frame, remains
+inline across `Step` and `yield`, and is destroyed by the existing reverse
+field/frame cleanup. Initializers may borrow declared persistent `with state`
+fields; the ordinary instance provenance then outlives the machine frame. A
+lifetime-bound callable without such a persistent initializer is rejected.
+There is no automata-specific callback store, per-Step reconstruction, erased
+dispatch, allocation, or lifetime exception.

@@ -1,0 +1,27 @@
+profile Core;
+
+async int Read(int value)
+{
+    return value;
+}
+
+auto MakeReader()
+{
+    return callback(int value)
+    {
+        return Read(value);
+    };
+}
+
+using ReaderCallback = typeof(MakeReader());
+
+int Main()
+{
+    ReaderCallback reader = MakeReader();
+    Async<int> work = reader(9);
+    while (not Complete(work)) bounded(4)
+    {
+        Step(work);
+    }
+    return Result(work);
+}

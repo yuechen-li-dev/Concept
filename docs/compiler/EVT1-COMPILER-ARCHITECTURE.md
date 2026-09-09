@@ -1,6 +1,6 @@
 # Concept EVT1 Stage 0 compiler architecture
 
-Status: R5h async callable/interface composition
+Status: R5j exact callable type aliases and storage
 
 ## Authority
 
@@ -1010,3 +1010,20 @@ from existing rules. MIR is the semantic handoff: planning cannot add a
 capture, witness, allocation, or lifetime extension. GenericC11 emits inline
 environment structs and statically named functions. R5i adds no LIR or callable
 runtime.
+
+R5j adds one compile-time prepass around that established representation:
+
+```text
+callable literal
+    -> generated exact callable type
+    -> optional `using Name = typeof(expression)` alias
+    -> ordinary field / parameter / return / machine-storage type
+```
+
+The prepass infers exact `auto` callable returns, validates each `typeof` query
+without evaluation, and substitutes transparent aliases before ordinary
+ownership, automata, MIR, Planner, and C lowering. MIR retains alias/query,
+identity, geometry, direct-dispatch, and no-allocation evidence. Header type
+declarations are dependency-ordered across aggregates and callable
+environments. No RTTI, registry, runtime descriptor, reflection object, or
+callable vtable is introduced.

@@ -1,0 +1,42 @@
+profile Core;
+
+struct Resource
+{
+    int value;
+}
+
+void Drop(owned Resource resource)
+{
+}
+
+auto MakeOwner(owned Resource resource)
+{
+    return callback()
+    with (move resource)
+    {
+        return resource.value;
+    };
+}
+
+using OwnerCallback = typeof(MakeOwner);
+
+automata Owner
+{
+    machine Main
+    {
+        OwnerCallback read = MakeOwner(Resource{17});
+
+        state Running
+        {
+            int value = read();
+            complete;
+        }
+    }
+}
+
+int Main()
+{
+    instance Owner owner();
+    Step(owner, Main);
+    return 0;
+}

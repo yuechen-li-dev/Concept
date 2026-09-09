@@ -1,0 +1,40 @@
+profile Core;
+
+auto MakeAccumulator(ref int total)
+{
+    return callback(int value)
+    with (ref total)
+    {
+        total = total + value;
+        return total;
+    };
+}
+
+using Accumulator = typeof(MakeAccumulator);
+
+automata Worker
+with state
+{
+    ref int total;
+}
+{
+    machine Main
+    {
+        Accumulator accumulate = MakeAccumulator(ref total);
+
+        state Running
+        {
+            accumulate(1);
+            yield;
+        }
+    }
+}
+
+int Main()
+{
+    int total = 0;
+    instance Worker worker(ref total);
+    Step(worker, Main);
+    Step(worker, Main);
+    return total;
+}

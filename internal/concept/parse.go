@@ -25,9 +25,11 @@ func Parse(path, text string) (Module, error) {
 	if err != nil {
 		return Module{}, err
 	}
-	if err := validateModule(module); err != nil {
+	env, err := analyzeModule(module)
+	if err != nil {
 		return Module{}, err
 	}
+	evt1ApplyExactCallableTypes(&module, env)
 	return module, nil
 }
 
@@ -280,6 +282,12 @@ func (p *parser) parseModule() (Module, error) {
 				return module, err
 			}
 			module.Streams = append(module.Streams, decl)
+		case "using", "type":
+			decl, err := p.parseTypeAliasDecl(p.peekLexeme())
+			if err != nil {
+				return module, err
+			}
+			module.TypeAliases = append(module.TypeAliases, decl)
 		case "enum":
 			enumDecl, err := p.parseEnumDecl()
 			if err != nil {
@@ -331,6 +339,37 @@ func (p *parser) parseModule() (Module, error) {
 		}
 	}
 	return module, nil
+}
+
+func (p *parser) parseTypeAliasDecl(spelling string) (TypeAliasDecl, error) {
+	start, err := p.expect(spelling)
+	if err != nil {
+		return TypeAliasDecl{}, err
+	}
+	name, err := p.expectIdentifier("CALLABLE_TYPE_QUERY_INVALID", "expected exact type alias name")
+	if err != nil {
+		return TypeAliasDecl{}, err
+	}
+	if _, err := p.expect("="); err != nil {
+		return TypeAliasDecl{}, evt1Diagnostic("CALLABLE_TYPE_QUERY_INVALID", "exact type alias requires `= typeof(expression)`", p.currentSpan())
+	}
+	if _, err := p.expect("typeof"); err != nil {
+		return TypeAliasDecl{}, evt1Diagnostic("CALLABLE_TYPE_QUERY_INVALID", "exact type alias requires `typeof(expression)`", p.currentSpan())
+	}
+	if _, err := p.expect("("); err != nil {
+		return TypeAliasDecl{}, err
+	}
+	query, err := p.parseExpr()
+	if err != nil {
+		return TypeAliasDecl{}, err
+	}
+	if _, err := p.expect(")"); err != nil {
+		return TypeAliasDecl{}, err
+	}
+	if _, err := p.expect(";"); err != nil {
+		return TypeAliasDecl{}, err
+	}
+	return TypeAliasDecl{Name: name.Lexeme, Spelling: spelling, Query: query, Span: start.Span}, nil
 }
 
 func (p *parser) parseAutomataDecl() (AutomataDecl, error) {
@@ -1678,6 +1717,10 @@ done:
 			return Type{}, err
 		}
 		return Type{Name: "callback", Kind: TypeCallback, CallableParams: params, CallableResult: &result, Const: t.Const, Scoped: t.Scoped, Span: nameTok.Span}, nil
+	}
+	if !dyn && nameTok.Lexeme == "auto" {
+		t.Name, t.Kind = "auto", TypeInferred
+		return t, nil
 	}
 	if dyn {
 		t.Name = nameTok.Lexeme

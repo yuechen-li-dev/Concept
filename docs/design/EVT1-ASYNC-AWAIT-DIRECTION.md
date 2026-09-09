@@ -1,6 +1,6 @@
 # EVT1 async/await direction
 
-Status: R5h interface/dyn composition implemented over R5g normalization
+Status: R5j exact callable field composition over R5g normalization
 
 ## One execution model
 
@@ -117,9 +117,9 @@ body itself performs another dyn call.
 
 R5h adds no async vtable, task/promise runtime, scheduler, executor, heap,
 cancellation, channel, race/select, generalized closure, or public ABI promise.
-Recommended R5i is a bounded non-owning callable/callback value using explicit
-capture provenance and the same fixed witness shape, without generalized
-closure inference or allocation.
+That R5h recommendation was realized by R5i as a bounded non-owning
+callable/callback value using explicit capture provenance and the same fixed
+witness shape, without generalized closure inference or allocation.
 
 ## R5i callable persistence
 
@@ -129,3 +129,13 @@ rescanned nor rebuilt: refs retain provenance and owned fields retain move/Drop
 obligations. Invocation after resume uses the ordinary direct or static-witness
 path. R5i adds no async callable literal, scheduler, executor, heap frame, or
 special closure continuation.
+
+## R5j exact callable composition
+
+An alias-named concrete callable remains an ordinary fixed-layout value in an
+async parameter, aggregate field, or live-across-await frame slot. Its exact
+environment identity and capture provenance survive lowering; invocation still
+uses the static direct adapter. A callable may also return `Async<T>` and that
+result enters the existing child-machine path. R5j adds no async callable
+runtime, promise/task object, scheduler, heap storage, or reconstructed capture
+environment.

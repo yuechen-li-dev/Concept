@@ -1,0 +1,23 @@
+profile Core;
+
+auto MakeCounter(int count)
+{
+    return callback()
+    with (count)
+    {
+        count = count + 1;
+        return count;
+    };
+}
+
+using Counter = typeof(MakeCounter(0));
+
+int Next(ref const Counter counter)
+{
+    return counter();
+}
+
+int Main()
+{
+    return 0;
+}

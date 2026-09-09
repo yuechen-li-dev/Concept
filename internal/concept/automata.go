@@ -518,6 +518,11 @@ func evt1ValidateCanonicalAutomata(env *semanticEnv, decl AutomataDecl) (*evt1Au
 		info.StateReachable[machine.Name] = map[string]bool{}
 		machineTypeName := decl.Name + "#" + machine.Name + "#machine"
 		machineTypes := map[string]Type{}
+		initializerScope := evt1ModuleScope(env)
+		for stateIndex, stateField := range decl.StateFields {
+			provenance := evt1InitialParameterProvenance(env, stateField.Type, stateIndex, initializerScope.depth)
+			initializerScope.declare(stateField.Name, evt1ValueBinding{t: stateField.Type, mutable: !stateField.Type.Const, state: evt1StorageInitialized, provenance: provenance})
+		}
 		for fi := range machine.Fields {
 			field := &machine.Fields[fi]
 			if _, exists := machineTypes[field.Name]; exists {
@@ -531,11 +536,14 @@ func evt1ValidateCanonicalAutomata(env *semanticEnv, decl AutomataDecl) (*evt1Au
 				return nil, err
 			}
 			field.Type = resolved
+			if resolved.Kind == TypeCallable && resolved.CallableProvenance != string(evt1ProvenanceStatic) && field.Initializer == nil {
+				return nil, evt1Diagnostic("CALLABLE_MACHINE_FIELD_SHORT_REF", fmt.Sprintf("lifetime-bound machine callable field %s.%s requires construction from persistent automata state", machine.Name, field.Name), field.Span)
+			}
 			if field.Initializer == nil && !evt1TypeCopyable(env, resolved) {
 				return nil, evt1Diagnostic("MACHINE_STATE_ACCESS_INVALID", fmt.Sprintf("non-copyable machine field %s.%s requires an explicit initializer", machine.Name, field.Name), field.Span)
 			}
 			if field.Initializer != nil {
-				initType, err := validateExprAgainstExpected(env, evt1ModuleScope(env), field.Initializer, resolved, nil, false)
+				initType, err := validateExprAgainstExpected(env, initializerScope, field.Initializer, resolved, nil, false)
 				if err != nil {
 					return nil, err
 				}

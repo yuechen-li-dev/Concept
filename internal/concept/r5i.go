@@ -583,7 +583,7 @@ func evt1ModuleCallbackWitnesses(module Module) []MIRCallbackWitness {
 	return out
 }
 
-func (l *lowering) callableDeclarations() string {
+func (l *lowering) erasedCallbackDeclarations() string {
 	var b strings.Builder
 	for _, callback := range evt1ModuleCallbackTypes(l.module) {
 		b.WriteString("typedef struct { void *environment; ")
@@ -593,24 +593,36 @@ func (l *lowering) callableDeclarations() string {
 		}
 		b.WriteString("); } " + evt1CallbackCName(callback) + ";\n\n")
 	}
+	return b.String()
+}
+
+func (l *lowering) callableDeclarations() string {
+	var b strings.Builder
+	b.WriteString(l.erasedCallbackDeclarations())
 	for _, callable := range evt1ModuleCallables(l.module) {
-		b.WriteString("typedef struct {\n")
-		if len(callable.Captures) == 0 {
-			b.WriteString("  unsigned char _empty;\n")
-		}
-		for _, capture := range callable.Captures {
-			b.WriteString(fmt.Sprintf("  %s %s;\n", evt1CType(capture.Type), capture.Name))
-			if capture.Kind == CaptureMove && evt1TypeHasDrop(l.env, capture.Type) {
-				b.WriteString(fmt.Sprintf("  bool __live_%s;\n", capture.Name))
-			}
-		}
-		b.WriteString("} " + evt1CallableEnvCName(callable.Identity) + ";\n")
-		b.WriteString(evt1CType(callable.ResultType) + " " + evt1CallableInvokeCName(callable.Identity) + "(" + evt1CallableEnvCName(callable.Identity) + " *environment")
-		for _, param := range callable.Params {
-			b.WriteString(fmt.Sprintf(", %s %s", evt1CType(param.Type), param.Name))
-		}
-		b.WriteString(");\n\n")
+		b.WriteString(l.callableDeclaration(callable))
 	}
+	return b.String()
+}
+
+func (l *lowering) callableDeclaration(callable *CallableExpr) string {
+	var b strings.Builder
+	b.WriteString("typedef struct " + evt1CallableEnvCName(callable.Identity) + " {\n")
+	if len(callable.Captures) == 0 {
+		b.WriteString("  unsigned char _empty;\n")
+	}
+	for _, capture := range callable.Captures {
+		b.WriteString(fmt.Sprintf("  %s %s;\n", evt1CType(capture.Type), capture.Name))
+		if capture.Kind == CaptureMove && evt1TypeHasDrop(l.env, capture.Type) {
+			b.WriteString(fmt.Sprintf("  bool __live_%s;\n", capture.Name))
+		}
+	}
+	b.WriteString("} " + evt1CallableEnvCName(callable.Identity) + ";\n")
+	b.WriteString(evt1CType(callable.ResultType) + " " + evt1CallableInvokeCName(callable.Identity) + "(" + evt1CallableEnvCName(callable.Identity) + " *environment")
+	for _, param := range callable.Params {
+		b.WriteString(fmt.Sprintf(", %s %s", evt1CType(param.Type), param.Name))
+	}
+	b.WriteString(");\n\n")
 	return b.String()
 }
 
