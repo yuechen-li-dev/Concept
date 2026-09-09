@@ -1,0 +1,16 @@
+profile Core;
+
+async bool HasMore()
+{
+    return false;
+}
+
+async int Invalid()
+{
+    int count = 0;
+    while (await HasMore()) bounded(4)
+    {
+        count = count + 1;
+    }
+    return count;
+}

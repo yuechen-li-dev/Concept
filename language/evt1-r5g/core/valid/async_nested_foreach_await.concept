@@ -1,0 +1,15 @@
+profile Core;
+async int Process(int outer, int inner) { return outer + inner; }
+async int Work() {
+    int<array>[2] rows = [10, 10];
+    int<array>[2] items = [10, 11];
+    int total = 0;
+    foreach (int row in rows) {
+        foreach (int item in items) {
+            int value = await Process(row, item);
+            total = total + value;
+        }
+    }
+    return total - 40;
+}
+int Main() { Async<int> work = Work(); while (not Complete(work)) bounded(16) { Step(work); } return Result(work); }

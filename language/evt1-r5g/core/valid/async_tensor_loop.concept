@@ -1,0 +1,32 @@
+profile Core;
+
+async int Child(int value)
+{
+    return value;
+}
+
+async int Sum()
+{
+    int<array>[2] storage = [19, 21];
+    Span<int> values = Span(storage);
+    int total = 0;
+    int index = 0;
+    while (index < 2) bounded(2)
+    {
+        int value = await Child(values[index]);
+        int one = await Child(1);
+        total = total + value + one;
+        index = index + 1;
+    }
+    return total;
+}
+
+int Main()
+{
+    Async<int> work = Sum();
+    while (not Complete(work)) bounded(12)
+    {
+        Step(work);
+    }
+    return Result(work);
+}

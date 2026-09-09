@@ -1,0 +1,16 @@
+profile Core;
+
+async int Child()
+{
+    return 42;
+}
+
+async int Invalid(bool take)
+{
+    int value;
+    if (take)
+    {
+        value = await Child();
+    }
+    return value;
+}

@@ -1,0 +1,14 @@
+profile Core;
+async int First(int value) { return value + 10; }
+async int Second(int value) { return value + 10; }
+async int Work() {
+    int<array>[2] items = [1, 1];
+    int total = 0;
+    foreach (int item in items) {
+        int a = await First(item);
+        int b = await Second(a);
+        total = total + b;
+    }
+    return total;
+}
+int Main() { Async<int> work = Work(); while (not Complete(work)) bounded(12) { Step(work); } return Result(work); }

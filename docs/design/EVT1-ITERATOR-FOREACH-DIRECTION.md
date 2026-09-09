@@ -1,6 +1,6 @@
 # EVT1 iterator and foreach direction
 
-Status: R5d bounded protocol and mechanical consumption implemented
+Status: R5g async iterator persistence over the R5d protocol implemented
 
 An iterator is a small explicit state machine. A source participates through
 `GetIterator`, its iterator advances through `MoveNext`, and the current value
@@ -26,6 +26,23 @@ ends the Step and drops that transient iterator; re-entry starts the state and
 foreach again. To resume iteration across Steps, authors store iterator state
 explicitly in automata or machine persistent storage and call the protocol
 operations directly.
+
+This distinction is deliberate and prominent:
+
+```text
+bare yield in foreach:
+    iterator restarts unless the author stores explicit persistent state
+
+async await in foreach:
+    the compiler persists source and iterator progress because continuation
+    semantics require resuming the same iteration
+```
+
+R5g evaluates the foreach source/GetIterator once, calls MoveNext once per
+attempt and Current once per successful iteration, and retains fixed-index or
+custom-iterator state across any number of awaits in the body. Nested bounded
+foreach is the same transform repeated; it is not a range algebra or generator
+runtime.
 
 ```text
 foreach automates iterator state progression.

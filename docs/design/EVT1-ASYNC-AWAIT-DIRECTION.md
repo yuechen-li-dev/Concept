@@ -1,6 +1,6 @@
 # EVT1 async/await direction
 
-Status: R5f implemented
+Status: R5g structured normalization implemented
 
 ## One execution model
 
@@ -43,13 +43,63 @@ timeout, channel, or allocation policy. A future DragonGod or OS-I/O library
 may hold operations and decide when to call Step, but that policy remains an
 ordinary library above the same protocol.
 
-## Bounded R5f surface and next direction
+## R5g structured normalization
 
-R5f supports sequential awaits plus simple `if`, bounded `while`, and fixed
-contiguous `foreach` lowering. Match-arm awaits, general reducible control-flow
-lowering, async interface methods/dyn, and OS-I/O integration are deferred.
+The compiler now exposes this pipeline:
 
-Recommended R5g scope is a bounded general async control-flow normalizer:
-lower reducible nested branches, match arms, loops, early exits, and cleanup
-edges into the same explicit generated-state graph. It should not add a
-scheduler, cancellation, timeout, select/race, channels, heap futures, or LIR.
+```text
+Async source MIR
+    -> Structured Async CFG
+    -> reducible control-flow normalization
+    -> generated explicit machine states
+    -> ordinary machine-stack MIR
+    -> Planner
+```
+
+The normalized graph uses readable categories including `BasicBlock`,
+`AwaitSuspend`, `AfterAwait`, `Branch`, `BranchJoin`, `MatchDispatch`,
+`MatchJoin`, `LoopInit`, `LoopHeader`, `LoopBackedge`, `ForeachInit`,
+`ForeachHeader`, `ForeachContinue`, `TryJoin`, and `Complete`. Source order,
+not pointer identity, determines stable state names. Correctness and
+inspectability take precedence over state minimization.
+
+Branches and match arms can contain multiple awaits and nest in loops. Match
+payload bindings use the ordinary frame liveness pass. Bounded while loops
+return through explicit headers and backedges, and foreach retains its source
+and iterator progress across child execution. A bounded `try`/`except` region
+routes an awaited `Result` failure to a typed local handler state; `?` remains
+ordinary Result propagation after the child outcome materializes. There is no
+exception stack or coroutine interaction.
+
+## Whiteboard before and after
+
+The hand-authored equivalent needs names such as `Start`, `AfterRead`,
+`LoopHeader`, `AfterProcess`, `LoopBackedge`, and `Complete`, plus explicit
+push/outcome plumbing. The source can state the work directly:
+
+```concept
+async Result<int, Error> ProcessAll(Span<Item> items)
+{
+    int total = 0;
+    foreach (Item item in items)
+    {
+        Data data = await Read(item)?;
+        total = total + await Process(data)?;
+    }
+    return Result::Ok(total);
+}
+```
+
+The emitted MIR and Plan contain those states and edges automatically. The
+long spellings remain an intentionally rather spacious Easter egg; they still
+buy no additional semantics.
+
+## Bounded omissions and R5h
+
+Await in control expressions, arbitrary or irreducible CFGs, recursive-depth
+inference, async interface/dyn methods, OS-I/O integration, schedulers,
+cancellation, timeout, select/race, channels, heap futures, and LIR remain
+deferred. Recommended R5h is a bounded async callable/interface boundary:
+prove statically selected interface methods and fixed witness dispatch over
+the existing inline operation and machine stack, without adding dynamic task
+allocation, scheduler ownership, or an async runtime ecosystem.

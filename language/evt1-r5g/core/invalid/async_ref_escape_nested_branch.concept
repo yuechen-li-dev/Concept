@@ -1,0 +1,22 @@
+profile Core;
+
+async int Child()
+{
+    return 1;
+}
+
+async int Invalid(bool outer, bool inner)
+{
+    int answer = 0;
+    if (outer)
+    {
+        int local = 40;
+        if (inner)
+        {
+            ref int retained = ref local;
+            int value = await Child();
+            answer = retained + value;
+        }
+    }
+    return answer;
+}

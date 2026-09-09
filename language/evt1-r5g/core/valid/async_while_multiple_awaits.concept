@@ -1,0 +1,15 @@
+profile Core;
+async int Next(int index) { return index + 10; }
+async int Process(int value) { return value + 10; }
+async int Work() {
+    int index = 0;
+    int total = 0;
+    while (index < 2) bounded(2) {
+        int item = await Next(index);
+        int result = await Process(item);
+        total = total + result;
+        index = index + 1;
+    }
+    return total + 1;
+}
+int Main() { Async<int> work = Work(); while (not Complete(work)) bounded(12) { Step(work); } return Result(work); }

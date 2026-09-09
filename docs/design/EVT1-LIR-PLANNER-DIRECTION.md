@@ -1,6 +1,6 @@
 # EVT1 LIR Planner direction
 
-Status: R5f async planning consumer; LIR is future work
+Status: R5g structured async graph planning consumer; LIR is future work
 
 ## Authority pipeline
 
@@ -131,3 +131,19 @@ mutation of those authority fields.
 A future target planner may select switch, direct-branch, or jump-table state
 dispatch after proving equivalence. It cannot change persistence, cleanup,
 stack depth, source order, or invent scheduling. R5f still emits no LIR.
+
+## R5g structured async plan
+
+`AsyncPlan.ControlFlowStrategy` is `StructuredStateGraph`. The plan copies the
+validated generated states, typed active-field mappings, and deterministic
+edges from MIR and records generated-state, await, branch, join, and loop
+counts. Await edges identify their source await index; branch, match, loop,
+foreach, handler, and completion edges remain inspectable. Frame size,
+alignment, capacity, persistent fields, `Scheduler: None`, and `SavedPC: None`
+remain mandatory authority fields.
+
+Plan validation regenerates the complete plan from MIR and requires exact
+equality. It therefore cannot repair a malformed join, infer new liveness,
+drop an edge, or choose a saved-PC fallback. Dispatch-shape optimization and
+state merging remain future planning choices only after semantic equivalence
+is proven; R5g emits no LIR.

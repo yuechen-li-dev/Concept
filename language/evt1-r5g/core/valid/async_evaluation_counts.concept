@@ -1,0 +1,89 @@
+profile Core;
+
+enum Choice { Work, Idle }
+
+bool Branch(ref int calls)
+{
+    calls = calls + 1;
+    return true;
+}
+
+Choice Select(ref int calls)
+{
+    calls = calls + 1;
+    return Choice::Work;
+}
+
+bool More(ref int calls, int iteration)
+{
+    calls = calls + 1;
+    return iteration < 2;
+}
+
+int Once(ref int calls, int value)
+{
+    calls = calls + 1;
+    return value;
+}
+
+async int Child(int value)
+{
+    return value;
+}
+
+async int Work(ref int branchCalls, ref int matchCalls, ref int loopCalls,
+               ref int awaitCalls, ref int skippedCalls)
+{
+    int total = 0;
+    if (Branch(ref branchCalls))
+    {
+        total = total + await Child(Once(ref awaitCalls, 10));
+    }
+    else
+    {
+        int observed = await Child(Once(ref skippedCalls, 100));
+        total = total + observed;
+    }
+
+    match (Select(ref matchCalls))
+    {
+        Choice::Work =>
+        {
+            int observed = await Child(Once(ref awaitCalls, 10));
+            total = total + observed;
+        }
+        Choice::Idle =>
+        {
+        }
+    }
+
+    int iteration = 0;
+    while (More(ref loopCalls, iteration)) bounded(2)
+    {
+        int observed = await Child(Once(ref awaitCalls, 11));
+        total = total + observed;
+        iteration = iteration + 1;
+    }
+    return total;
+}
+
+int Main()
+{
+    int branchCalls = 0;
+    int matchCalls = 0;
+    int loopCalls = 0;
+    int awaitCalls = 0;
+    int skippedCalls = 0;
+    Async<int> work = Work(ref branchCalls, ref matchCalls, ref loopCalls,
+                           ref awaitCalls, ref skippedCalls);
+    while (not Complete(work)) bounded(16)
+    {
+        Step(work);
+    }
+    if (branchCalls == 1 and matchCalls == 1 and loopCalls == 2 and
+        awaitCalls == 4 and skippedCalls == 0)
+    {
+        return Result(work);
+    }
+    return 0;
+}

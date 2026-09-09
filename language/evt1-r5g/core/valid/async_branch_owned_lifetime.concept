@@ -1,0 +1,49 @@
+profile Core;
+
+ref struct Resource
+{
+    ref int drops;
+    int value;
+}
+
+void Drop(owned Resource resource)
+{
+    resource.drops = resource.drops + 1;
+}
+
+async int Child(int value)
+{
+    return value;
+}
+
+async int Work(ref int drops, bool first)
+{
+    owned Resource retained = Resource{ref drops, 40};
+    int value = 0;
+    if (first)
+    {
+        owned Resource branchLocal = Resource{ref drops, 2};
+        value = await Child(branchLocal.value);
+    }
+    else
+    {
+        value = await Child(1);
+        value = await Child(value);
+    }
+    return retained.value + value;
+}
+
+int Main()
+{
+    int drops = 0;
+    Async<int> work = Work(ref drops, true);
+    while (not Complete(work)) bounded(8)
+    {
+        Step(work);
+    }
+    if (Result(work) == 42 and drops == 2)
+    {
+        return 42;
+    }
+    return 0;
+}

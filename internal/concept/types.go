@@ -1272,6 +1272,26 @@ type MIRAsyncFunction struct {
 	ChildInvocation      string          `json:"child_invocation"`
 	Scheduler            string          `json:"scheduler"`
 	SavedPC              string          `json:"saved_pc"`
+	ControlFlowStrategy  string          `json:"control_flow_strategy,omitempty"`
+	States               []MIRAsyncState `json:"states,omitempty"`
+	Edges                []MIRAsyncEdge  `json:"edges,omitempty"`
+	BranchCount          int             `json:"branch_count,omitempty"`
+	JoinCount            int             `json:"join_count,omitempty"`
+	LoopCount            int             `json:"loop_count,omitempty"`
+}
+
+type MIRAsyncState struct {
+	Identity     string   `json:"identity"`
+	Kind         string   `json:"kind"`
+	ActiveFields []string `json:"active_fields,omitempty"`
+}
+
+type MIRAsyncEdge struct {
+	From       string `json:"from"`
+	To         string `json:"to"`
+	Kind       string `json:"kind"`
+	AwaitIndex int    `json:"await_index"`
+	Source     string `json:"source,omitempty"`
 }
 
 type MIRAwaitPoint struct {

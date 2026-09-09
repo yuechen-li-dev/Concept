@@ -1,6 +1,6 @@
 # Concept EVT1 language specification foundation
 
-Status: R5f bounded automata-native async/await
+Status: R5g reducible async control-flow normalization
 
 This document defines the authority categories and the smallest currently
 executable EVT1 language foundation. It is derived from the retired Concept
@@ -1103,7 +1103,7 @@ parent-state form. Tags are 1 Neutral, 2 Success, and 3 Failure, with typed
 `Result<T,E>`, and Neutral fabricates no value. Internal Step status remains
 distinct and non-public.
 
-**Canonical EVT1 R5f async/await.** `async` and `asynchronous` are exact
+**Canonical EVT1 R5g async/await.** `async` and `asynchronous` are exact
 lexical aliases on a function declaration. `await` and `awaitchronous` are
 likewise exact aliases. Parsing normalizes each pair to one AST form, so they
 have identical typing, MIR, diagnostics, and lowering.
@@ -1141,10 +1141,30 @@ Value-returning async functions complete with a value, while `async void`
 completes neutrally. Bare return from a value-returning async function is
 invalid.
 
-R5f admits sequential awaits and bounded generated states for simple `if`,
-`while`, and fixed contiguous `foreach`. Foreach iterator index and current
-item persist when live. Await in a match arm and more than one await in a
-single simple branch/loop body are deferred with an explicit diagnostic.
+Async structured control flow is normalized into explicit generated machine
+states. Reducible sequence, `if`/`else`, exhaustive `match`, bounded `while`,
+`foreach`, nested combinations, early returns, and bounded local
+`try`/`except` regions may contain multiple awaits. Await splits the containing
+region into explicit suspend and continuation states. Branch and match arms
+enter deterministic arm states and converge through generated join states;
+loops use explicit header and backedge states. The ordinary definite-
+assignment and moved-value lattices still decide whether a joined value is
+usable.
+
+Match scrutinees, branch and loop conditions, foreach sources, iterator
+operations, and await operands retain ordinary evaluation counts. Async
+foreach persists source, iterator/index, and current-item progress across
+awaits; bare `yield` does not acquire that persistence. Generated-frame
+liveness includes values crossing any generated state boundary and retains
+ordinary ownership, cleanup, and reference provenance laws. Arm-local and
+iteration-local values remain transient when no later state uses them.
+
+If structured control flow cannot be represented by the supported explicit
+state graph, the compiler rejects it rather than introducing a hidden saved-PC
+coroutine model. Await in `if`/`while` conditions, a match scrutinee, or a
+foreach source remains deferred; write an explicit preceding await instead.
+Arbitrary goto, computed jumps, irreducible graphs, exception unwinding, and
+general continuation capture are not part of EVT1.
 
 Async/await is source-level automation of explicit machine-stack state
 progression. Await continues after the suspension point; bare machine yield

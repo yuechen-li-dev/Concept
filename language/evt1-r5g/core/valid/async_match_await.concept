@@ -1,0 +1,14 @@
+profile Core;
+enum Command { Read, Write, Idle }
+async int ReadData() { return 42; }
+async int WriteData() { return 9; }
+async int Work(Command command) {
+    int value = 0;
+    match (command) {
+        Command::Read => { value = await ReadData(); }
+        Command::Write => { value = await WriteData(); }
+        Command::Idle => { value = 1; }
+    }
+    return value;
+}
+int Main() { Async<int> work = Work(Command::Read); while (not Complete(work)) bounded(8) { Step(work); } return Result(work); }

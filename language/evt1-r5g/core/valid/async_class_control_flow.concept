@@ -1,0 +1,47 @@
+profile Core;
+
+enum Mode { Add, Ignore }
+
+async int Child(int value)
+{
+    return value;
+}
+
+class Client
+{
+public:
+    int base;
+
+    async int Load(bool enabled, Mode mode)
+    {
+        int value = base;
+        if (enabled)
+        {
+            int first = await Child(10);
+            value = value + first;
+            match (mode)
+            {
+                Mode::Add =>
+                {
+                    int second = await Child(12);
+                    value = value + second;
+                }
+                Mode::Ignore =>
+                {
+                }
+            }
+        }
+        return value;
+    }
+}
+
+int Main()
+{
+    Client client = Client{20};
+    Async<int> work = client.Load(true, Mode::Add);
+    while (not Complete(work)) bounded(12)
+    {
+        Step(work);
+    }
+    return Result(work);
+}

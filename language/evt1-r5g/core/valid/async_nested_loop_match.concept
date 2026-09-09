@@ -1,0 +1,17 @@
+profile Core;
+enum Command { Add, Stop }
+async int Add(int value) { return value + 10; }
+async int Work() {
+    int iteration = 0;
+    int total = 0;
+    while (iteration < 4) bounded(4) {
+        Command command = if (iteration < 2) Command::Add else Command::Stop;
+        match (command) {
+            Command::Add => { int value = await Add(iteration); total = total + value; }
+            Command::Stop => { total = total + 10; }
+        }
+        iteration = iteration + 1;
+    }
+    return total + 1;
+}
+int Main() { Async<int> work = Work(); while (not Complete(work)) bounded(12) { Step(work); } return Result(work); }

@@ -1,0 +1,13 @@
+profile Core;
+async int Next(int index) { return index + 13; }
+async int Work() {
+    int index = 0;
+    int total = 0;
+    while (index < 3) bounded(3) {
+        int value = await Next(index);
+        total = total + value;
+        index = index + 1;
+    }
+    return total;
+}
+int Main() { Async<int> work = Work(); while (not Complete(work)) bounded(10) { Step(work); } return Result(work); }

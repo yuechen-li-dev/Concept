@@ -115,6 +115,9 @@ does not authorize that work in this milestone. Status is one of `Keep PoC3`,
 | async lifetime | ordinary ownership/ref pressure | ordinary borrowed context pressure | existing provenance and Drop law across generated fields | Merge / implemented R5f | No | R5f ref/owned/move cases | invalid escaping refs reject |
 | scheduler | deferred policy | application/library policy | not a language primitive; explicit Step remains authority | Library layer / deferred | Yes | R5f forbidden-runtime scan | no executor, thread, or event loop |
 | asynchronous/awaitchronous | absent | absent | exact lexical aliases of async/await | EVT1-new / implemented R5f | No | alias MIR and native equivalence | one AST and lowering path |
+| reducible async CFG | manual state pressure | bounded continuation stack | structured CFG normalized to deterministic explicit machine states | Canonical / implemented R5g | Translation | R5g graph/Plan/native corpus | branch, match, loop, foreach, and bounded handler joins |
+| irreducible async CFG | arbitrary manual graph possible | absent | rejected in EVT1 | Deferred by design | Yes | R5g static diagnostics | no saved-PC escape hatch |
+| saved-PC coroutine fallback | absent | absent | explicitly rejected | Rejected | No | R5g MIR/Plan/code scan | semantic continuation is a state tag |
 | DragonGod Decision | stateful kernel decision policy | application subsystem pressure | library-level hysteresis/commitment/tie-memory policy | Library-level / deferred | Yes | phase20 DragonGod evidence | never implicit in transition decide |
 | infer | absent | absent | normalized float-logit soft belief in `Inference<T>` | EVT1-new / implemented R5c | No | R5c corpus/native evidence | stable softmax; fixed inline storage |
 | transition infer | absent | absent | explicit-policy inference transition | EVT1-new / implemented R5c | No | R5c MIR/Planner/native evidence | HardMax only in R5c |
@@ -384,3 +387,20 @@ MIR and Planner mutation tests reject invented runtime policy. Strict-C11
 native evidence and generated-code scans prove fixed inline storage with no
 heap, scheduler, executor, thread pool, event loop, coroutine ABI, setjmp,
 longjmp, or saved PC.
+
+## R5g executable evidence
+
+R5g adds 28 canonical sources: 23 accepted and five statically rejected. The
+native corpus covers multiple awaits in both branch sides, nested if, match
+arms and payloads, bounded while and loop-carried values, nested loop/match,
+fixed and custom foreach including nesting, bounded try/except, `?`, owned and
+borrowed lifetimes, class receiver state, inference-selected work, Span state,
+and complex manual-machine equivalence. Counter cases pin source, condition,
+scrutinee, iterator, and await-operand evaluation; ownership evidence pins
+branch-local and persistent drops. Repeated Plan generation and alias graph
+comparison pin deterministic identities and exact spelling equivalence.
+
+MIR and Planner expose `StructuredStateGraph`, states, active fields, edges,
+and branch/join/loop counts while retaining `Scheduler: None` and
+`SavedPC: None`. Irreducible or unsupported control expressions reject; no
+saved-PC fallback exists.

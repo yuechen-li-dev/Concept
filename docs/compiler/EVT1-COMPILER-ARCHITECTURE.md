@@ -1,6 +1,6 @@
 # Concept EVT1 Stage 0 compiler architecture
 
-Status: R5f bounded automata-native async/await lowering
+Status: R5g reducible async control-flow normalization
 
 ## Authority
 
@@ -930,3 +930,35 @@ switches, top-frame child pushes, pop/outcome transfer, and one-shot completion
 access. Frame and result capacities have C static assertions. This generated
 substrate is scheduler-free and allocation-free and does not introduce a VM or
 C/C++ coroutine ABI.
+
+## R5g structured async CFG boundary
+
+R5g makes the normalization stage explicit:
+
+```text
+Async source MIR
+    -> Structured Async CFG
+    -> reducible CFG normalization
+    -> generated machine state graph
+    -> ordinary machine-stack MIR
+    -> Planner
+```
+
+The CFG builder recursively compiles sequence, if/else, validated match arms,
+bounded while, foreach, and bounded try/except regions. Each await becomes an
+`AwaitSuspend`/`AfterAwait` pair. Branches and matches point to deterministic
+join nodes; loops point through headers and backedges; foreach owns explicit
+source/index or iterator fields. A deterministic DFS assigns source-order
+state identities and materializes MIR edges. Graph validation rejects unknown
+targets, unreachable states, absent await continuations, or inconsistent
+state ordering.
+
+Graph-aware liveness adds only declarations used from another generated state
+to the existing live-across-await set, then closes over backing dependencies.
+Ordinary validation remains authoritative for definite assignment, moved-state
+joins, match exhaustiveness, ownership/drop, Result propagation, and reference
+provenance. GenericC11 consumes the graph; it does not rediscover structured
+control flow or bolt async cases into expression emission. Unsupported control
+expressions reject rather than falling back to a program counter. No LIR,
+scheduler, heap frame, continuation pointer, or exception-unwind runtime is
+introduced.

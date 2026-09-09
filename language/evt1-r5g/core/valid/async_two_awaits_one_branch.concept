@@ -1,0 +1,12 @@
+profile Core;
+async int A() { return 20; }
+async int B(int value) { return value + 22; }
+async int Work(bool run) {
+    if (run) {
+        int a = await A();
+        int b = await B(a);
+        return b;
+    }
+    return 0;
+}
+int Main() { Async<int> work = Work(true); while (not Complete(work)) bounded(8) { Step(work); } return Result(work); }

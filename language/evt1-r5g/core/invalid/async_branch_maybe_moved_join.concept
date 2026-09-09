@@ -1,0 +1,30 @@
+profile Core;
+
+struct Resource
+{
+    int value;
+}
+
+void Drop(owned Resource resource)
+{
+}
+
+void Consume(owned Resource resource)
+{
+}
+
+async int Child()
+{
+    return 1;
+}
+
+async int Invalid(bool take)
+{
+    owned Resource resource = Resource{41};
+    if (take)
+    {
+        Consume(move resource);
+        int ignored = await Child();
+    }
+    return resource.value;
+}

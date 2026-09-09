@@ -715,6 +715,9 @@ func evt1ValidateMIR(mir MIR) error {
 			if a.Identity != fn.Name+"#async" || a.MachineIdentity == "" || a.StateIdentity == "" || a.FrameStorage != "Inline" || a.ContinuationStrategy != "ExplicitGeneratedState" || a.ChildInvocation != "MachinePush" || a.Scheduler != "None" || a.SavedPC != "None" || len(a.GeneratedStates) < len(a.AwaitPoints)+2 {
 				return evt1Diagnostic("AWAIT_MIR_INVALID", fmt.Sprintf("async MIR in %s omits generated-machine invariants", fn.Name), fn.SourceSpan)
 			}
+			if err := evt1ValidateAsyncGraph(a, fn.SourceSpan); err != nil {
+				return err
+			}
 			for i, await := range a.AwaitPoints {
 				if await.Index != i || await.Continuation == "" || await.Evaluation != "ExactlyOnce" || await.ChildPush != "BoundedMachineFramePush" || await.OutcomeConsume != "ExactlyOnce" || await.OperandType.Kind != TypeAsync {
 					return evt1Diagnostic("AWAIT_MIR_INVALID", fmt.Sprintf("await point %d in %s is malformed", i, fn.Name), await.SourceSpan)

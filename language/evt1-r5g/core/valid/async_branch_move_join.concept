@@ -1,0 +1,9 @@
+profile Core;
+async int Child() { return 42; }
+async int Work(bool consume) {
+    int value = 42;
+    if (consume) { Async<int> child = Child(); value = await move child; }
+    else { value = 42; }
+    return value;
+}
+int Main() { Async<int> work = Work(true); while (not Complete(work)) bounded(8) { Step(work); } return Result(work); }

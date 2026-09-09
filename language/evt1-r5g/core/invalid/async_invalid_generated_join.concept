@@ -1,0 +1,29 @@
+profile Core;
+
+enum Choice
+{
+    A,
+    B
+}
+
+async Choice Select()
+{
+    return Choice::A;
+}
+
+async int Invalid()
+{
+    int value = 0;
+    match (await Select())
+    {
+        Choice::A =>
+        {
+            value = 1;
+        }
+        Choice::B =>
+        {
+            value = 2;
+        }
+    }
+    return value;
+}

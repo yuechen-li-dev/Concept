@@ -308,21 +308,28 @@ type FunctionPlan struct {
 }
 
 type AsyncPlan struct {
-	Identity            string      `json:"identity"`
-	Lowering            string      `json:"lowering"`
-	FrameStorage        string      `json:"frame_storage"`
-	Continuation        string      `json:"continuation"`
-	ChildInvocation     string      `json:"child_invocation"`
-	Scheduler           string      `json:"scheduler"`
-	SavedPC             string      `json:"saved_pc"`
-	AwaitCount          int         `json:"await_count"`
-	GeneratedStates     []string    `json:"generated_states"`
-	PersistentFields    []MIRName   `json:"persistent_fields,omitempty"`
-	AsyncFrameSize      int         `json:"async_frame_size"`
-	AsyncFrameAlignment int         `json:"async_frame_alignment"`
-	MaxChildDepth       int         `json:"max_child_depth"`
-	CleanupStrategy     string      `json:"cleanup_strategy"`
-	Awaits              []AwaitPlan `json:"await_plans,omitempty"`
+	Identity            string          `json:"identity"`
+	Lowering            string          `json:"lowering"`
+	FrameStorage        string          `json:"frame_storage"`
+	Continuation        string          `json:"continuation"`
+	ChildInvocation     string          `json:"child_invocation"`
+	Scheduler           string          `json:"scheduler"`
+	SavedPC             string          `json:"saved_pc"`
+	AwaitCount          int             `json:"await_count"`
+	GeneratedStates     []string        `json:"generated_states"`
+	PersistentFields    []MIRName       `json:"persistent_fields,omitempty"`
+	AsyncFrameSize      int             `json:"async_frame_size"`
+	AsyncFrameAlignment int             `json:"async_frame_alignment"`
+	MaxChildDepth       int             `json:"max_child_depth"`
+	CleanupStrategy     string          `json:"cleanup_strategy"`
+	Awaits              []AwaitPlan     `json:"await_plans,omitempty"`
+	ControlFlowStrategy string          `json:"control_flow_strategy"`
+	GeneratedStateCount int             `json:"generated_state_count"`
+	BranchCount         int             `json:"branch_count"`
+	JoinCount           int             `json:"join_count"`
+	LoopCount           int             `json:"loop_count"`
+	StateMappings       []MIRAsyncState `json:"state_mappings,omitempty"`
+	Edges               []MIRAsyncEdge  `json:"edges,omitempty"`
 }
 
 type AwaitPlan struct {
@@ -416,7 +423,7 @@ func planFunction(fn MIRFunction, facts SemanticFactSet, target TargetCapabiliti
 	fp := FunctionPlan{Function: fn.Name, MIRIdentity: digest(encoded), Target: target.Architecture, Cleanup: CleanupPlan{Strategy: "ReverseDeclarationOrder"}}
 	if fn.Async != nil {
 		a := fn.Async
-		ap := &AsyncPlan{Identity: a.Identity, Lowering: "GeneratedMachine", FrameStorage: "Inline", Continuation: "ExplicitGeneratedState", ChildInvocation: "MachinePush", Scheduler: "None", SavedPC: "None", AwaitCount: len(a.AwaitPoints), GeneratedStates: append([]string{}, a.GeneratedStates...), PersistentFields: append([]MIRName{}, a.PersistentFields...), AsyncFrameSize: evt1AsyncFrameBytes, AsyncFrameAlignment: target.PreferredAlignment, MaxChildDepth: evt1MachineStackCapacity, CleanupStrategy: "LexicalDeadBeforePushPersistentAtCompletion"}
+		ap := &AsyncPlan{Identity: a.Identity, Lowering: "GeneratedMachine", FrameStorage: "Inline", Continuation: "ExplicitGeneratedState", ChildInvocation: "MachinePush", Scheduler: "None", SavedPC: "None", AwaitCount: len(a.AwaitPoints), GeneratedStates: append([]string{}, a.GeneratedStates...), PersistentFields: append([]MIRName{}, a.PersistentFields...), AsyncFrameSize: evt1AsyncFrameBytes, AsyncFrameAlignment: target.PreferredAlignment, MaxChildDepth: evt1MachineStackCapacity, CleanupStrategy: "LexicalDeadBeforePushPersistentAtCompletion", ControlFlowStrategy: a.ControlFlowStrategy, GeneratedStateCount: len(a.States), BranchCount: a.BranchCount, JoinCount: a.JoinCount, LoopCount: a.LoopCount, StateMappings: append([]MIRAsyncState{}, a.States...), Edges: append([]MIRAsyncEdge{}, a.Edges...)}
 		for _, await := range a.AwaitPoints {
 			ap.Awaits = append(ap.Awaits, AwaitPlan{Index: await.Index, Continuation: await.Continuation, LiveAcross: append([]string{}, await.LiveAcross...), Evaluation: await.Evaluation, ChildPush: await.ChildPush, OutcomeConsume: await.OutcomeConsume})
 		}
@@ -789,7 +796,7 @@ func ValidateLoweringPlan(mir *MIR, facts *SemanticFactSet, plan *LoweringPlan) 
 			return fail("PLAN_ARTIFACT_INVALID", "function plan references stale or reordered MIR")
 		}
 		if fn.Async != nil {
-			if fp.Async == nil || fp.Async.Identity != fn.Async.Identity || fp.Async.Lowering != "GeneratedMachine" || fp.Async.FrameStorage != "Inline" || fp.Async.Continuation != "ExplicitGeneratedState" || fp.Async.ChildInvocation != "MachinePush" || fp.Async.Scheduler != "None" || fp.Async.SavedPC != "None" || fp.Async.AwaitCount != len(fn.Async.AwaitPoints) || len(fp.Async.GeneratedStates) != len(fn.Async.GeneratedStates) {
+			if fp.Async == nil || fp.Async.Identity != fn.Async.Identity || fp.Async.Lowering != "GeneratedMachine" || fp.Async.FrameStorage != "Inline" || fp.Async.Continuation != "ExplicitGeneratedState" || fp.Async.ChildInvocation != "MachinePush" || fp.Async.Scheduler != "None" || fp.Async.SavedPC != "None" || fp.Async.ControlFlowStrategy != "StructuredStateGraph" || fp.Async.AwaitCount != len(fn.Async.AwaitPoints) || len(fp.Async.GeneratedStates) != len(fn.Async.GeneratedStates) {
 				return fail("PLAN_ASYNC_INVALID", "async plan invents runtime policy or omits generated-state evidence")
 			}
 			expectedAsync := planFunction(fn, *facts, plan.Target).Async

@@ -1,0 +1,17 @@
+profile Core;
+enum LoadError { Missing }
+async Result<int, LoadError> Load(bool available) {
+    return if (available) Result::Ok(42) else Result::Error(LoadError::Missing);
+}
+async int Work() {
+    int answer = 0;
+    try {
+        int value = await Load(false)?;
+        answer = value;
+    }
+    except (LoadError error) {
+        answer = 42;
+    }
+    return answer;
+}
+int Main() { Async<int> work = Work(); while (not Complete(work)) bounded(8) { Step(work); } return Result(work); }

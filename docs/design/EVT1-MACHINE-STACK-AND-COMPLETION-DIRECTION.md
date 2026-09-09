@@ -1,6 +1,6 @@
 # EVT1 machine stack and completion direction
 
-Status: R5f async mapping implemented over the R5e stack law
+Status: R5g structured async mapping implemented over the R5e stack law
 
 R5e finishes the partial substrate already present in Concept. The older
 signal automata compiler had a bounded continuation stack, PoC3 Phase 13/18 had
@@ -51,3 +51,10 @@ operation; it does not run the body. A named operation may be adopted only by
 explicit move. This is the same bounded LIFO and completion law, specialized
 as generated frames; there is still no saved PC, futures framework, task
 runtime, event loop, scheduler, hidden heap, or LIR.
+
+R5g changes only how those parent states are produced. Reducible branches,
+matches, loops, foreach iteration, and bounded local error handlers normalize
+to ordinary named states and edges before lowering. A join is an explicit
+state tag; a loop resumes through an explicit header/backedge; neither is a
+saved instruction pointer. The capacity-eight LIFO stack, top-frame-only Step,
+child completion transfer, and cleanup law are unchanged.

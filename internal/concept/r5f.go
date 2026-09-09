@@ -143,28 +143,10 @@ func (l *lowering) asyncFunctionSymbols(fn FunctionDecl) evt1FunctionSymbols {
 
 func (l *lowering) lowerAsyncFunction(fn FunctionDecl, symbol string) string {
 	a := evt1AnalyzeAsync(fn)
-	persistent := map[string]Type{}
-	for _, p := range fn.Params {
-		persistent[p.Name] = p.Type
-	}
-	for i := range a.Awaits {
-		for _, name := range a.liveAcross(i) {
-			if !strings.HasPrefix(name, "#") {
-				persistent[name] = a.DeclTypes[name]
-			}
-		}
-	}
-	for _, stmt := range fn.Body.Statements {
-		if v, ok := stmt.(*VarDecl); ok && evt1ExprContainsAwait(v.Value) {
-			persistent[v.Name] = v.Type
-		}
-	}
+	cfg := evt1NormalizeAsyncCFG(fn, l.env)
+	persistent := evt1AsyncPersistentMap(fn, a, cfg)
 	frameName, stepName, initName := evt1AsyncFrameName(l.outputBase, fn.Name), evt1AsyncStepName(l.outputBase, fn.Name), evt1AsyncInitName(l.outputBase, fn.Name)
-	var names []string
-	for name := range persistent {
-		names = append(names, name)
-	}
-	sort.Strings(names)
+	names := evt1SortedPersistentNames(persistent)
 	var b strings.Builder
 	b.WriteString("typedef struct " + frameName + " {\n  unsigned int state;\n")
 	for _, name := range names {
@@ -174,7 +156,23 @@ func (l *lowering) lowerAsyncFunction(fn FunctionDecl, symbol string) string {
 		if await.ResultType.Name != "void" {
 			b.WriteString(fmt.Sprintf("  %s await_result_%d;\n", evt1CType(await.ResultType), i))
 		}
-		b.WriteString(fmt.Sprintf("  int foreach_index_%d;\n", i))
+	}
+	for _, node := range cfg.Nodes {
+		if node.Kind == "LoopHeader" && node.HasBound {
+			b.WriteString(fmt.Sprintf("  int loop_iterations_%d;\n", node.Index))
+		}
+	}
+	for _, each := range cfg.Foreaches {
+		sourceType := each.Statement.SourceType
+		if each.SourceByRef && sourceType.ArrayElem != nil {
+			b.WriteString(fmt.Sprintf("  %s* %s;\n", evt1CType(sourceType), each.SourceField))
+		} else {
+			b.WriteString(fmt.Sprintf("  %s %s;\n", evt1CType(sourceType), each.SourceField))
+		}
+		b.WriteString(fmt.Sprintf("  size_t %s;\n", each.IndexField))
+		if each.Statement.SourceKind == "custom" {
+			b.WriteString(fmt.Sprintf("  %s %s;\n", evt1CType(each.Statement.IteratorType), each.Iterator))
+		}
 	}
 	b.WriteString("} " + frameName + ";\n")
 	b.WriteString(fmt.Sprintf("_Static_assert(sizeof(%s) <= CONCEPT_ASYNC_FRAME_BYTES, \"Concept async frame exceeds inline capacity\");\n\n", frameName))
@@ -206,7 +204,7 @@ func (l *lowering) lowerAsyncFunction(fn FunctionDecl, symbol string) string {
 		b.WriteString(", " + p.Name)
 	}
 	b.WriteString(");\n  return operation;\n}\n\n")
-	b.WriteString(l.lowerAsyncStep(fn, a, persistent, frameName, stepName))
+	b.WriteString(l.lowerAsyncCFG(fn, a, cfg, persistent, frameName, stepName))
 	return b.String()
 }
 
@@ -371,6 +369,23 @@ func (l *lowering) lowerAsyncBranchBlock(f *evt1FunctionLowerer, block Block, pe
 
 func (l *lowering) lowerAsyncDirectCallPush(f *evt1FunctionLowerer, await *AwaitExpr, resumeState, indent int) string {
 	call, ok := await.Value.(*CallExpr)
+	if moved, movedOK := await.Value.(*MoveExpr); movedOK {
+		if name, nameOK := moved.Value.(*NameExpr); nameOK {
+			prelude, value, _ := f.lowerExpr(name, indent)
+			var b strings.Builder
+			b.WriteString(prelude)
+			b.WriteString(f.lowerAllScopeDrops(indent))
+			b.WriteString(ind(indent) + fmt.Sprintf("frame->state = %d;\n", resumeState))
+			b.WriteString(ind(indent) + fmt.Sprintf("if (concept_async_complete(&%s)) {\n", value))
+			b.WriteString(ind(indent+1) + fmt.Sprintf("memcpy(async_operation->child_outcome.bytes, %s.result.bytes, %s.result_size);\n", value, value))
+			b.WriteString(ind(indent+1) + fmt.Sprintf("async_operation->child_outcome_size = %s.result_size;\n", value))
+			b.WriteString(ind(indent+1) + "goto async_dispatch;\n")
+			b.WriteString(ind(indent) + "}\n")
+			b.WriteString(ind(indent) + fmt.Sprintf("concept_async_adopt(async_operation, &%s);\n", value))
+			b.WriteString(ind(indent) + "return;\n")
+			return b.String()
+		}
+	}
 	if !ok {
 		return ind(indent) + "concept_async_abort(\"control-flow await requires direct async call\");\n" + ind(indent) + "return;\n"
 	}
@@ -583,6 +598,13 @@ func evt1DirectAwait(stmt Statement) *AwaitExpr {
 			return find(x.Value)
 		case *ParenExpr:
 			return find(x.Value)
+		case *UnaryExpr:
+			return find(x.Value)
+		case *BinaryExpr:
+			if await := find(x.Left); await != nil {
+				return await
+			}
+			return find(x.Right)
 		}
 		return nil
 	}
@@ -600,15 +622,26 @@ func evt1DirectAwait(stmt Statement) *AwaitExpr {
 }
 
 func evt1ReplaceDirectAwait(stmt Statement, index int) Statement {
-	replace := func(e Expr) Expr {
+	var replace func(Expr) Expr
+	replace = func(e Expr) Expr {
 		switch x := e.(type) {
 		case *AwaitExpr:
 			return &NameExpr{Name: fmt.Sprintf("#await%d", index), Span: x.Span}
 		case *FailureExpr:
 			copy := *x
-			if _, ok := x.Value.(*AwaitExpr); ok {
-				copy.Value = &NameExpr{Name: fmt.Sprintf("#await%d", index), Span: x.Span}
-			}
+			copy.Value = replace(x.Value)
+			return &copy
+		case *ParenExpr:
+			copy := *x
+			copy.Value = replace(x.Value)
+			return &copy
+		case *UnaryExpr:
+			copy := *x
+			copy.Value = replace(x.Value)
+			return &copy
+		case *BinaryExpr:
+			copy := *x
+			copy.Left, copy.Right = replace(x.Left), replace(x.Right)
 			return &copy
 		default:
 			return e
@@ -894,12 +927,13 @@ func evt1BuildMIRAsync(fn FunctionDecl, env *semanticEnv) *MIRAsyncFunction {
 		return nil
 	}
 	a := evt1AnalyzeAsync(fn)
+	cfg := evt1NormalizeAsyncCFG(fn, env)
 	identity := fn.Name + "#async"
 	out := &MIRAsyncFunction{
 		Identity: identity, MachineIdentity: identity + "#machine", StateIdentity: identity + "#state",
 		OperationType: evt1AsyncType(evt1MIRType(env, fn.ReturnType), fn.Name, fn.Span), EventualType: evt1MIRType(env, fn.ReturnType),
 		FrameStorage: "Inline", ContinuationStrategy: "ExplicitGeneratedState", ChildInvocation: "MachinePush", Scheduler: "None", SavedPC: "None",
-		GeneratedStates: []string{fn.Name + "#Start"},
+		GeneratedStates: evt1AsyncCFGGeneratedNames(cfg), ControlFlowStrategy: "StructuredStateGraph",
 	}
 	persistent := map[string]bool{}
 	for _, p := range fn.Params {
@@ -917,25 +951,26 @@ func evt1BuildMIRAsync(fn FunctionDecl, env *semanticEnv) *MIRAsyncFunction {
 			operandType.AsyncOrigin = call.Callee
 		}
 		continuation := fmt.Sprintf("%s#AfterAwait%d", fn.Name, i)
-		context := a.AwaitContexts[i]
-		if a.Iterators[i] != "" {
-			out.GeneratedStates = append(out.GeneratedStates, fmt.Sprintf("%s#ForeachLoop%d", fn.Name, i))
-		} else if context == "while" {
-			out.GeneratedStates = append(out.GeneratedStates, fmt.Sprintf("%s#WhileLoop%d", fn.Name, i))
-		} else if context == "if" {
-			out.GeneratedStates = append(out.GeneratedStates, fmt.Sprintf("%s#IfBranch%d", fn.Name, i))
-		}
-		out.GeneratedStates = append(out.GeneratedStates, continuation)
-		if a.Iterators[i] != "" {
-			out.GeneratedStates = append(out.GeneratedStates, fmt.Sprintf("%s#AfterForeach%d", fn.Name, i))
-		} else if context == "while" {
-			out.GeneratedStates = append(out.GeneratedStates, fmt.Sprintf("%s#AfterWhile%d", fn.Name, i))
-		} else if context == "if" {
-			out.GeneratedStates = append(out.GeneratedStates, fmt.Sprintf("%s#AfterIf%d", fn.Name, i))
+		if cfg != nil {
+			for _, state := range cfg.Nodes {
+				if state.Kind == "AfterAwait" && state.AwaitIndex == i {
+					continuation = state.Identity
+					break
+				}
+			}
 		}
 		out.AwaitPoints = append(out.AwaitPoints, MIRAwaitPoint{Index: i, Continuation: continuation, Operand: evt1ExprIdentity(await.Value), OperandType: operandType, ResultType: await.ResultType, LiveAcross: live, Evaluation: "ExactlyOnce", ChildPush: "BoundedMachineFramePush", OutcomeConsume: "ExactlyOnce", SourceSpan: await.Span})
 	}
-	out.GeneratedStates = append(out.GeneratedStates, fn.Name+"#Complete")
+	if cfg != nil {
+		out.States, out.Edges = cfg.mir(evt1AsyncPersistentMap(fn, a, cfg))
+		out.BranchCount, out.JoinCount, out.LoopCount = cfg.BranchCount, cfg.JoinCount, cfg.LoopCount
+	}
+	for name, t := range evt1AsyncPersistentMap(fn, a, cfg) {
+		if _, exists := persistent[name]; !exists {
+			persistent[name] = true
+			a.DeclTypes[name] = t
+		}
+	}
 	for name := range persistent {
 		out.PersistentFields = append(out.PersistentFields, MIRName{Name: name, Type: evt1MIRType(env, a.DeclTypes[name])})
 	}
@@ -947,29 +982,104 @@ func evt1ValidateAsyncShape(fn FunctionDecl) error {
 	if !fn.Async || fn.Body == nil {
 		return nil
 	}
-	var nestedUnsupported func(Block) error
-	nestedUnsupported = func(block Block) error {
+	var validateStructured func(Block) error
+	validateStructured = func(block Block) error {
 		for _, stmt := range block.Statements {
+			if count := evt1SimpleStatementAwaitCount(stmt); count > 0 && (count != 1 || evt1DirectAwait(stmt) == nil) {
+				return evt1Diagnostic("ASYNC_CONTROL_FLOW_NOT_REDUCIBLE", "this await expression shape cannot be split into one explicit continuation state", stmt.statementSpan())
+			}
 			switch s := stmt.(type) {
 			case *IfStmt:
-				if evt1AwaitCountBlock(s.Then) > 1 || (s.Else != nil && evt1AwaitCountBlock(*s.Else) > 1) {
-					return evt1Diagnostic("ASYNC_FRAME_INVALID", "R5f supports at most one await in each if branch", s.Span)
+				if evt1ExprContainsAwait(s.Condition) {
+					return evt1Diagnostic("ASYNC_CONTROL_FLOW_NOT_REDUCIBLE", "await in an if condition is deferred; use an explicit preceding await", s.Span)
+				}
+				if err := validateStructured(s.Then); err != nil {
+					return err
+				}
+				if s.Else != nil {
+					if err := validateStructured(*s.Else); err != nil {
+						return err
+					}
 				}
 			case *WhileStmt:
-				if evt1AwaitCountBlock(s.Body) > 1 {
-					return evt1Diagnostic("ASYNC_FRAME_INVALID", "R5f supports one await in a simple while body", s.Span)
+				if evt1ExprContainsAwait(s.Condition) {
+					return evt1Diagnostic("ASYNC_CONTROL_FLOW_NOT_REDUCIBLE", "await in a while condition is deferred; use an explicit preceding await", s.Span)
+				}
+				if err := validateStructured(s.Body); err != nil {
+					return err
 				}
 			case *MatchStmt:
+				if evt1ExprContainsAwait(s.Subject) {
+					return evt1Diagnostic("ASYNC_MATCH_NORMALIZATION_INVALID", "await in a match subject is deferred; use an explicit preceding await", s.Span)
+				}
 				for _, arm := range s.Arms {
-					if evt1BlockContainsAwait(arm.Block) {
-						return evt1Diagnostic("ASYNC_FRAME_INVALID", "R5f await in match is deferred", s.Span)
+					if err := validateStructured(arm.Block); err != nil {
+						return err
+					}
+				}
+			case *ForeachStmt:
+				if evt1ExprContainsAwait(s.Source) {
+					return evt1Diagnostic("ASYNC_FOREACH_NORMALIZATION_INVALID", "await in a foreach source is deferred; use an explicit preceding await", s.Span)
+				}
+				if err := validateStructured(s.Body); err != nil {
+					return err
+				}
+			case *TryStmt:
+				if err := validateStructured(s.Body); err != nil {
+					return err
+				}
+				for _, arm := range s.Except {
+					if err := validateStructured(arm.Body); err != nil {
+						return err
 					}
 				}
 			}
 		}
 		return nil
 	}
-	return nestedUnsupported(*fn.Body)
+	return validateStructured(*fn.Body)
+}
+
+func evt1SimpleStatementAwaitCount(stmt Statement) int {
+	switch s := stmt.(type) {
+	case *VarDecl:
+		return evt1ExprAwaitCount(s.Value)
+	case *AssignStmt:
+		return evt1ExprAwaitCount(s.Value)
+	case *ExprStmt:
+		return evt1ExprAwaitCount(s.Value)
+	case *ReturnStmt:
+		return evt1ExprAwaitCount(s.Value)
+	}
+	return 0
+}
+
+func evt1ExprAwaitCount(expr Expr) int {
+	switch e := expr.(type) {
+	case nil:
+		return 0
+	case *AwaitExpr:
+		return 1
+	case *ParenExpr:
+		return evt1ExprAwaitCount(e.Value)
+	case *UnaryExpr:
+		return evt1ExprAwaitCount(e.Value)
+	case *MoveExpr:
+		return evt1ExprAwaitCount(e.Value)
+	case *RefExpr:
+		return evt1ExprAwaitCount(e.Value)
+	case *FailureExpr:
+		return evt1ExprAwaitCount(e.Value)
+	case *BinaryExpr:
+		return evt1ExprAwaitCount(e.Left) + evt1ExprAwaitCount(e.Right)
+	case *CallExpr:
+		count := 0
+		for _, arg := range e.Args {
+			count += evt1ExprAwaitCount(arg)
+		}
+		return count
+	}
+	return 0
 }
 
 func evt1AwaitCountBlock(block Block) int {
@@ -1034,6 +1144,24 @@ func evt1StatementContainsAwait(stmt Statement) bool {
 		return evt1ExprContainsAwait(s.Condition) || evt1BlockContainsAwait(s.Body)
 	case *ForeachStmt:
 		return evt1ExprContainsAwait(s.Source) || evt1BlockContainsAwait(s.Body)
+	case *MatchStmt:
+		if evt1ExprContainsAwait(s.Subject) {
+			return true
+		}
+		for _, arm := range s.Arms {
+			if evt1BlockContainsAwait(arm.Block) {
+				return true
+			}
+		}
+	case *TryStmt:
+		if evt1BlockContainsAwait(s.Body) {
+			return true
+		}
+		for _, arm := range s.Except {
+			if evt1BlockContainsAwait(arm.Body) {
+				return true
+			}
+		}
 	case *Block:
 		return evt1BlockContainsAwait(*s)
 	}

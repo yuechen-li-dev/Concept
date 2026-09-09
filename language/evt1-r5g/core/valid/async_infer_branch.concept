@@ -1,0 +1,42 @@
+profile Core;
+
+enum Action { Work, Idle }
+
+async int Child(int value)
+{
+    return value;
+}
+
+async int DecideAndWork()
+{
+    Inference<Action> belief = infer
+    {
+        Work score 2.0;
+        Idle score 0.0;
+    };
+    Action selected = HardMax(belief);
+    int value = 0;
+    match (selected)
+    {
+        Action::Work =>
+        {
+            value = await Child(20);
+            int second = await Child(22);
+            value = value + second;
+        }
+        Action::Idle =>
+        {
+        }
+    }
+    return value;
+}
+
+int Main()
+{
+    Async<int> work = DecideAndWork();
+    while (not Complete(work)) bounded(10)
+    {
+        Step(work);
+    }
+    return Result(work);
+}

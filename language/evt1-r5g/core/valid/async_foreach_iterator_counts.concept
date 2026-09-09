@@ -1,0 +1,73 @@
+profile Core;
+
+ref struct CountingSource
+{
+    ref int gets;
+    ref int moves;
+    ref int currents;
+}
+
+ref struct CountingIterator
+{
+    ref int moves;
+    ref int currents;
+    int current;
+    int end;
+}
+
+CountingIterator GetIterator(ref CountingSource source)
+{
+    source.gets = source.gets + 1;
+    return CountingIterator{ref source.moves, ref source.currents, -1, 3};
+}
+
+bool MoveNext(ref CountingIterator iterator)
+{
+    iterator.moves = iterator.moves + 1;
+    iterator.current = iterator.current + 1;
+    if (iterator.current < iterator.end)
+    {
+        iterator.currents = iterator.currents + 1;
+    }
+    return iterator.current < iterator.end;
+}
+
+int Current(ref const CountingIterator iterator)
+{
+    return iterator.current;
+}
+
+async int Child(int value)
+{
+    return value;
+}
+
+async int Work(ref CountingSource source)
+{
+    int total = 0;
+    foreach (int value in source)
+    {
+        int first = await Child(value);
+        int second = await Child(first);
+        total = total + second;
+    }
+    return total;
+}
+
+int Main()
+{
+    int gets = 0;
+    int moves = 0;
+    int currents = 0;
+    CountingSource source = CountingSource{ref gets, ref moves, ref currents};
+    Async<int> work = Work(ref source);
+    while (not Complete(work)) bounded(16)
+    {
+        Step(work);
+    }
+    if (gets == 1 and moves == 4 and currents == 3 and Result(work) == 3)
+    {
+        return 42;
+    }
+    return 0;
+}
