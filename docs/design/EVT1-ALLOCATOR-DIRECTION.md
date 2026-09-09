@@ -2,6 +2,23 @@
 
 Status: R6c feasibility audit; honest stop before implementation
 
+## R6d blocker update
+
+R6d has made meaningful local-compilation progress without retrying the
+allocator:
+
+| R6c blocker | R6d status |
+|---|---|
+| User-defined generic runtime types | Resolved locally for structs/classes, nesting, integer non-type parameters, functions, and methods; generic type constraints remain partial |
+| Generic `SizeOf<T>` / `AlignOf<T>` | Resolved through the ordinary fixed-layout geometry authority, including after function-template substitution |
+| Applied ownership/provenance/Drop | Resolved locally through concrete fields, structural reverse Drop, move checking, and explicit generic `ref struct` provenance |
+| Reusable Core multi-module compilation | Unresolved; this is the next isolated blocker |
+| Hosted external-memory / ABI seam | Resolved for bounded scalar/enum/builtin-pointer `extern "C"` declarations and strict-C11 linkage |
+| Authoritative `Allocates` effect | Resolved for local declarations, MIR origin, call propagation, and `NoAllocation` proof projection; module/interface summaries remain unresolved |
+
+The allocator itself is still not implemented. Cross-module generic and effect
+authority must exist before R6e can honestly consume this substrate.
+
 ## Decision
 
 The current frozen EVT1 language is insufficient to implement the requested

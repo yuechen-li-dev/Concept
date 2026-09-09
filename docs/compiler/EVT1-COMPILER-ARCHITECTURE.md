@@ -1067,3 +1067,23 @@ concepts through ordinary requirements. `proof_graph.go` owns bounded human and
 verbose rendering plus deterministic JSON. Repairs come from failed graph rules
 and filter concrete capture candidates through known copyability/movability.
 Graphs are built on demand; Planner is not involved.
+
+## R6d local generic and hosted substrate
+
+`generic_types.go` owns deterministic local monomorphization. Applied arguments
+substitute into an ordinary `StructDecl`; the resulting declaration is cached
+by source identity, registered in the normal type/field/method environment, and
+materialized into the typed Module so the independent Parse and Generate
+analyses agree. `layout.go` remains the single geometry authority for
+`SizeOf<T>()` and `AlignOf<T>()`. Ownership and provenance do not gain generic
+side checkers: the concrete declaration flows through the existing structural
+rules.
+
+Bodyless `extern "C"` functions are ordinary function symbols with a validated
+bounded ABI signature. MIR records a declared allocation summary and its
+origin; the R6b `NoAllocation` projection consumes the same local operation map
+while following ordinary direct-call edges.
+
+This is not yet a module pipeline. Current imports do not load another typed
+Module, and no semantic artifact serializes template bodies or effect
+summaries. That resolver/artifact boundary is the next R6d compiler owner.

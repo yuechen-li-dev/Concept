@@ -12,23 +12,24 @@ const CompilerID = "concept-evt1-stage0-go"
 type TypeKind string
 
 const (
-	TypeBuiltin      TypeKind = "builtin"
-	TypeEnum         TypeKind = "enum"
-	TypeStruct       TypeKind = "struct"
-	TypePointer      TypeKind = "pointer"
-	TypeArray        TypeKind = "array"
-	TypeNDArray      TypeKind = "ndarray"
-	TypeLayout       TypeKind = "layout"
-	TypeStream       TypeKind = "stream"
-	TypeSpan         TypeKind = "span"
-	TypeTensor       TypeKind = "tensor"
-	TypeDyn          TypeKind = "dyn"
-	TypeConceptParam TypeKind = "concept_param"
-	TypeApplied      TypeKind = "applied"
-	TypeAsync        TypeKind = "async"
-	TypeInferred     TypeKind = "inferred"
-	TypeCallable     TypeKind = "callable"
-	TypeCallback     TypeKind = "callback"
+	TypeBuiltin       TypeKind = "builtin"
+	TypeEnum          TypeKind = "enum"
+	TypeStruct        TypeKind = "struct"
+	TypePointer       TypeKind = "pointer"
+	TypeArray         TypeKind = "array"
+	TypeNDArray       TypeKind = "ndarray"
+	TypeLayout        TypeKind = "layout"
+	TypeStream        TypeKind = "stream"
+	TypeSpan          TypeKind = "span"
+	TypeTensor        TypeKind = "tensor"
+	TypeDyn           TypeKind = "dyn"
+	TypeConceptParam  TypeKind = "concept_param"
+	TypeApplied       TypeKind = "applied"
+	TypeTemplateValue TypeKind = "template_value"
+	TypeAsync         TypeKind = "async"
+	TypeInferred      TypeKind = "inferred"
+	TypeCallable      TypeKind = "callable"
+	TypeCallback      TypeKind = "callback"
 )
 
 type StorageKind string
@@ -436,6 +437,20 @@ type TemplateDecl struct {
 	Span          Span               `json:"span"`
 }
 
+type GenericParameter struct {
+	Name      string
+	Kind      string
+	ValueType Type
+	Span      Span
+}
+
+type GenericTypeDecl struct {
+	Name       string
+	Parameters []GenericParameter
+	Struct     StructDecl
+	Span       Span
+}
+
 type FunctionDecl struct {
 	Comptime   bool        `json:"comptime,omitempty"`
 	Async      bool        `json:"async,omitempty"`
@@ -446,7 +461,14 @@ type FunctionDecl struct {
 	Body       *Block      `json:"body,omitempty"`
 	MethodOf   string      `json:"method_of,omitempty"`
 	Visibility string      `json:"visibility,omitempty"`
+	ExternABI  string      `json:"extern_abi,omitempty"`
 	Span       Span        `json:"span"`
+}
+
+type OperationEffectDecl struct {
+	Effect    string `json:"effect"`
+	Operation string `json:"operation"`
+	Span      Span   `json:"span"`
 }
 
 // Attribute is bounded tooling metadata attached to an ordinary function.
@@ -494,24 +516,26 @@ type TypeAliasDecl struct {
 }
 
 type Module struct {
-	Path          string             `json:"path"`
-	Profile       string             `json:"profile"`
-	Imports       []string           `json:"imports,omitempty"`
-	TypeAliases   []TypeAliasDecl    `json:"type_aliases,omitempty"`
-	Structs       []StructDecl       `json:"structs,omitempty"`
-	Layouts       []LayoutDecl       `json:"layouts,omitempty"`
-	Streams       []StreamDecl       `json:"streams,omitempty"`
-	Enums         []EnumDecl         `json:"enums,omitempty"`
-	Effects       []EffectDecl       `json:"effects,omitempty"`
-	Actuators     []ActuatorDecl     `json:"actuators,omitempty"`
-	Automata      []AutomataDecl     `json:"automata,omitempty"`
-	Concepts      []ConceptDecl      `json:"concepts,omitempty"`
-	Assertions    []ConceptAssertion `json:"assertions,omitempty"`
-	ComptimeDecls []ComptimeDecl     `json:"comptime_decls,omitempty"`
-	StaticAsserts []StaticAssert     `json:"static_asserts,omitempty"`
-	Templates     []TemplateDecl     `json:"templates,omitempty"`
-	Functions     []FunctionDecl     `json:"functions,omitempty"`
-	ComptimeFns   []FunctionDecl     `json:"comptime_functions,omitempty"`
+	Path             string                `json:"path"`
+	Profile          string                `json:"profile"`
+	Imports          []string              `json:"imports,omitempty"`
+	TypeAliases      []TypeAliasDecl       `json:"type_aliases,omitempty"`
+	Structs          []StructDecl          `json:"structs,omitempty"`
+	Layouts          []LayoutDecl          `json:"layouts,omitempty"`
+	Streams          []StreamDecl          `json:"streams,omitempty"`
+	Enums            []EnumDecl            `json:"enums,omitempty"`
+	Effects          []EffectDecl          `json:"effects,omitempty"`
+	Actuators        []ActuatorDecl        `json:"actuators,omitempty"`
+	Automata         []AutomataDecl        `json:"automata,omitempty"`
+	Concepts         []ConceptDecl         `json:"concepts,omitempty"`
+	Assertions       []ConceptAssertion    `json:"assertions,omitempty"`
+	ComptimeDecls    []ComptimeDecl        `json:"comptime_decls,omitempty"`
+	StaticAsserts    []StaticAssert        `json:"static_asserts,omitempty"`
+	Templates        []TemplateDecl        `json:"templates,omitempty"`
+	GenericTypes     []GenericTypeDecl     `json:"generic_types,omitempty"`
+	Functions        []FunctionDecl        `json:"functions,omitempty"`
+	ComptimeFns      []FunctionDecl        `json:"comptime_functions,omitempty"`
+	OperationEffects []OperationEffectDecl `json:"operation_effects,omitempty"`
 }
 
 type Block struct {
@@ -1404,20 +1428,22 @@ type MIRInstance struct {
 }
 
 type MIRFunction struct {
-	Name             string                      `json:"name"`
-	MethodOf         string                      `json:"method_of,omitempty"`
-	Visibility       string                      `json:"visibility,omitempty"`
-	Async            *MIRAsyncFunction           `json:"async,omitempty"`
-	ReturnType       Type                        `json:"return_type"`
-	Params           []MIRName                   `json:"params,omitempty"`
-	ResultProvenance *MIRResultProvenanceSummary `json:"result_provenance,omitempty"`
-	Operations       []MIROperation              `json:"operations"`
-	TensorOperations []MIRTensorOperation        `json:"tensor_operations,omitempty"`
-	Inferences       []MIRInference              `json:"inferences,omitempty"`
-	Foreaches        []MIRForeach                `json:"foreach,omitempty"`
-	Cleanups         []MIRCleanup                `json:"cleanups,omitempty"`
-	Callables        []MIRCallable               `json:"callables,omitempty"`
-	SourceSpan       Span                        `json:"source_span"`
+	Name                   string                      `json:"name"`
+	MethodOf               string                      `json:"method_of,omitempty"`
+	Visibility             string                      `json:"visibility,omitempty"`
+	Async                  *MIRAsyncFunction           `json:"async,omitempty"`
+	ReturnType             Type                        `json:"return_type"`
+	Params                 []MIRName                   `json:"params,omitempty"`
+	ResultProvenance       *MIRResultProvenanceSummary `json:"result_provenance,omitempty"`
+	Operations             []MIROperation              `json:"operations"`
+	TensorOperations       []MIRTensorOperation        `json:"tensor_operations,omitempty"`
+	Inferences             []MIRInference              `json:"inferences,omitempty"`
+	Foreaches              []MIRForeach                `json:"foreach,omitempty"`
+	Cleanups               []MIRCleanup                `json:"cleanups,omitempty"`
+	Callables              []MIRCallable               `json:"callables,omitempty"`
+	SourceSpan             Span                        `json:"source_span"`
+	MayAllocate            bool                        `json:"may_allocate,omitempty"`
+	AllocationEffectOrigin string                      `json:"allocation_effect_origin,omitempty"`
 }
 
 type MIRCallable struct {
@@ -1626,36 +1652,40 @@ type MIROperation struct {
 }
 
 type semanticEnv struct {
-	sourcePath         string
-	profile            *ProfileDefinition
-	enums              map[string]EnumDecl
-	structs            map[string]StructDecl
-	typeAliases        map[string]Type
-	layouts            map[string]LayoutDecl
-	streams            map[string]StreamDecl
-	effects            map[string]EffectDecl
-	effectOrder        []string
-	actuators          map[string]ActuatorDecl
-	actuatorInfo       map[string]*evt1ActuatorInfo
-	automata           map[string]AutomataDecl
-	automataInfo       map[string]*evt1AutomataInfo
-	functions          map[string][]FunctionDecl
-	comptimeFunctions  map[string]FunctionDecl
-	templates          map[string]TemplateDecl
-	concepts           map[string]ConceptDecl
-	comptimeDecls      map[string]ComptimeDecl
-	comptimeValues     map[string]Value
-	fieldSets          map[string]map[string]Type
-	escapedArmBinding  map[string]Span
-	copyableCache      map[string]bool
-	templateInfos      map[string]*evt1TemplateInfo
-	templateInstances  map[string]*evt1TemplateInstance
-	semanticProofs     []MIRSemanticProof
-	proofGraphs        []ProofGraph
-	resultProvenance   map[string]evt1ResultProvenanceSummary
-	dynWitnesses       map[string]*evt1InterfaceWitness
-	validatingMethod   string
-	validatingFunction string
+	sourcePath           string
+	profile              *ProfileDefinition
+	enums                map[string]EnumDecl
+	structs              map[string]StructDecl
+	typeAliases          map[string]Type
+	layouts              map[string]LayoutDecl
+	streams              map[string]StreamDecl
+	effects              map[string]EffectDecl
+	effectOrder          []string
+	actuators            map[string]ActuatorDecl
+	actuatorInfo         map[string]*evt1ActuatorInfo
+	automata             map[string]AutomataDecl
+	automataInfo         map[string]*evt1AutomataInfo
+	functions            map[string][]FunctionDecl
+	comptimeFunctions    map[string]FunctionDecl
+	templates            map[string]TemplateDecl
+	concepts             map[string]ConceptDecl
+	comptimeDecls        map[string]ComptimeDecl
+	comptimeValues       map[string]Value
+	fieldSets            map[string]map[string]Type
+	escapedArmBinding    map[string]Span
+	copyableCache        map[string]bool
+	templateInfos        map[string]*evt1TemplateInfo
+	templateInstances    map[string]*evt1TemplateInstance
+	semanticProofs       []MIRSemanticProof
+	proofGraphs          []ProofGraph
+	resultProvenance     map[string]evt1ResultProvenanceSummary
+	dynWitnesses         map[string]*evt1InterfaceWitness
+	validatingMethod     string
+	validatingFunction   string
+	operationEffects     map[string]OperationEffectDecl
+	genericTypes         map[string]GenericTypeDecl
+	genericTypeInstances map[string]StructDecl
+	genericInstantiating map[string]bool
 }
 
 const evt1AutomataDispatchOutcomeTypeName = "AutomataDispatchOutcome"
@@ -1686,32 +1716,36 @@ func newSemanticEnv(profile *ProfileDefinition) *semanticEnv {
 		}
 	}
 	return &semanticEnv{
-		profile:           profile,
-		enums:             enums,
-		structs:           map[string]StructDecl{},
-		typeAliases:       map[string]Type{},
-		layouts:           map[string]LayoutDecl{},
-		streams:           map[string]StreamDecl{},
-		effects:           map[string]EffectDecl{},
-		effectOrder:       nil,
-		actuators:         map[string]ActuatorDecl{},
-		actuatorInfo:      map[string]*evt1ActuatorInfo{},
-		automata:          map[string]AutomataDecl{},
-		automataInfo:      map[string]*evt1AutomataInfo{},
-		functions:         map[string][]FunctionDecl{},
-		comptimeFunctions: map[string]FunctionDecl{},
-		templates:         map[string]TemplateDecl{},
-		concepts:          map[string]ConceptDecl{},
-		comptimeDecls:     map[string]ComptimeDecl{},
-		comptimeValues:    map[string]Value{},
-		fieldSets:         fieldSets,
-		escapedArmBinding: map[string]Span{},
-		copyableCache:     map[string]bool{},
-		templateInfos:     map[string]*evt1TemplateInfo{},
-		templateInstances: map[string]*evt1TemplateInstance{},
-		semanticProofs:    nil,
-		resultProvenance:  map[string]evt1ResultProvenanceSummary{},
-		dynWitnesses:      map[string]*evt1InterfaceWitness{},
+		profile:              profile,
+		enums:                enums,
+		structs:              map[string]StructDecl{},
+		typeAliases:          map[string]Type{},
+		layouts:              map[string]LayoutDecl{},
+		streams:              map[string]StreamDecl{},
+		effects:              map[string]EffectDecl{},
+		effectOrder:          nil,
+		actuators:            map[string]ActuatorDecl{},
+		actuatorInfo:         map[string]*evt1ActuatorInfo{},
+		automata:             map[string]AutomataDecl{},
+		automataInfo:         map[string]*evt1AutomataInfo{},
+		functions:            map[string][]FunctionDecl{},
+		comptimeFunctions:    map[string]FunctionDecl{},
+		templates:            map[string]TemplateDecl{},
+		concepts:             map[string]ConceptDecl{},
+		comptimeDecls:        map[string]ComptimeDecl{},
+		comptimeValues:       map[string]Value{},
+		fieldSets:            fieldSets,
+		escapedArmBinding:    map[string]Span{},
+		copyableCache:        map[string]bool{},
+		templateInfos:        map[string]*evt1TemplateInfo{},
+		templateInstances:    map[string]*evt1TemplateInstance{},
+		semanticProofs:       nil,
+		resultProvenance:     map[string]evt1ResultProvenanceSummary{},
+		dynWitnesses:         map[string]*evt1InterfaceWitness{},
+		operationEffects:     map[string]OperationEffectDecl{},
+		genericTypes:         map[string]GenericTypeDecl{},
+		genericTypeInstances: map[string]StructDecl{},
+		genericInstantiating: map[string]bool{},
 	}
 }
 
@@ -1877,7 +1911,9 @@ func evt1CName(name string) string {
 		if i > 0 && isUpper && lastLower {
 			out = append(out, '_')
 		}
-		if isUpper {
+		if !isUpper && !isLower && !(c >= '0' && c <= '9') {
+			out = append(out, '_')
+		} else if isUpper {
 			out = append(out, c+'a'-'A')
 		} else {
 			out = append(out, c)

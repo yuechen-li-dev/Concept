@@ -35,15 +35,18 @@ const (
 type SemanticFactOrigin string
 
 const (
-	FactOriginDeclared         SemanticFactOrigin = "Declared"
-	FactOriginType             SemanticFactOrigin = "DerivedFromType"
-	FactOriginLayout           SemanticFactOrigin = "DerivedFromLayout"
-	FactOriginBind             SemanticFactOrigin = "DerivedFromBind"
-	FactOriginSpan             SemanticFactOrigin = "DerivedFromSpan"
-	FactOriginStream           SemanticFactOrigin = "DerivedFromStream"
-	FactOriginTensorBacking    SemanticFactOrigin = "DerivedFromTensorBacking"
-	FactOriginControlFlow      SemanticFactOrigin = "DerivedFromControlFlow"
-	FactOriginCompilerAnalysis SemanticFactOrigin = "CompilerAnalysis"
+	FactOriginDeclared               SemanticFactOrigin = "Declared"
+	FactOriginType                   SemanticFactOrigin = "DerivedFromType"
+	FactOriginLayout                 SemanticFactOrigin = "DerivedFromLayout"
+	FactOriginBind                   SemanticFactOrigin = "DerivedFromBind"
+	FactOriginSpan                   SemanticFactOrigin = "DerivedFromSpan"
+	FactOriginStream                 SemanticFactOrigin = "DerivedFromStream"
+	FactOriginTensorBacking          SemanticFactOrigin = "DerivedFromTensorBacking"
+	FactOriginControlFlow            SemanticFactOrigin = "DerivedFromControlFlow"
+	FactOriginCompilerAnalysis       SemanticFactOrigin = "CompilerAnalysis"
+	FactOriginDeclaredEffect         SemanticFactOrigin = "DeclaredEffect"
+	FactOriginDerivedCallEffect      SemanticFactOrigin = "DerivedCallEffect"
+	FactOriginExternalContractEffect SemanticFactOrigin = "ExternalContractEffect"
 )
 
 type SemanticFactCertainty string

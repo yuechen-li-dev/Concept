@@ -35,6 +35,7 @@ their fixtures now have exactly one authority under `language/evt1`.
 | R5k | semantic reconciliation and language-core freeze | this report's commit | all paths in `language/evt1/manifest.json` |
 | R6a | first-class test discovery and execution | this report's commit | `language/evt1/tooling/tests` plus `internal/concept/testdata/testing` |
 | R6b | semantic concept assertions and proof diagnostics | this report's commit | `language/evt1/tooling/proofs` |
+| R6d | local generic/library substrate; semantic modules still blocked | `EVT1-R6D-CONFORMANCE.md` | focused compiler and strict-C11 hosted tests |
 
 The manifest records 379 valid, 243 static-invalid, and 13 runtime-negative
 fixtures. Four retained expected-divergence cases compare the frozen EVT1

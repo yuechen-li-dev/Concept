@@ -345,6 +345,15 @@ func evt1ProjectOutlives(graph *ProofGraph, root string, subjects []conceptAsser
 }
 
 func evt1ProjectNoAllocation(env *semanticEnv, graph *ProofGraph, root string, fn FunctionDecl, visiting map[string]bool) SemanticFactCertainty {
+	if effect, ok := env.operationEffects[fn.Name]; ok {
+		origin := FactOriginDeclaredEffect
+		if fn.ExternABI != "" {
+			origin = FactOriginExternalContractEffect
+		}
+		id := graph.addNode(ProofContradiction, fn.Name+" Allocates", "authoritative may-allocate operation contract", FactDisproven, origin, effect.Span)
+		graph.addEdge(root, id, ProofConflictsWith)
+		return FactDisproven
+	}
 	if visiting[fn.Name] {
 		id := graph.addNode(ProofMissingFact, fn.Name, "recursive call summary is not closed", FactUnknown, FactOriginCompilerAnalysis, fn.Span)
 		graph.addEdge(root, id, ProofBlockedBy)

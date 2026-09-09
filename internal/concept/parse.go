@@ -8,11 +8,12 @@ import (
 )
 
 type parser struct {
-	path            string
-	tokens          []Token
-	pos             int
-	profileDef      *ProfileDefinition
-	callableOrdinal int
+	path               string
+	tokens             []Token
+	pos                int
+	profileDef         *ProfileDefinition
+	callableOrdinal    int
+	templateTypeParams map[string]bool
 }
 
 func Parse(path, text string) (Module, error) {
@@ -29,6 +30,7 @@ func Parse(path, text string) (Module, error) {
 	if err != nil {
 		return Module{}, err
 	}
+	evt1MaterializeGenericInstances(&module, env)
 	evt1ApplyExactCallableTypes(&module, env)
 	return module, nil
 }
@@ -241,6 +243,14 @@ func (p *parser) parseModule() (Module, error) {
 			}
 			module.StaticAsserts = append(module.StaticAsserts, assertion)
 		case "template":
+			if p.templateDeclIsRuntimeType() {
+				decl, err := p.parseGenericTypeDecl()
+				if err != nil {
+					return module, err
+				}
+				module.GenericTypes = append(module.GenericTypes, decl)
+				continue
+			}
 			templateDecl, err := p.parseTemplateDecl()
 			if err != nil {
 				return module, err
@@ -344,11 +354,35 @@ func (p *parser) parseModule() (Module, error) {
 			}
 			module.Concepts = append(module.Concepts, interfaceDecl)
 		case "requires":
+			if p.peekLexemeN(1) == "compiler" {
+				effect, err := p.parseOperationEffectDecl()
+				if err != nil {
+					return module, err
+				}
+				module.OperationEffects = append(module.OperationEffects, effect)
+				continue
+			}
 			assertion, err := p.parseConceptAssertion()
 			if err != nil {
 				return module, err
 			}
 			module.Assertions = append(module.Assertions, assertion)
+		case "extern":
+			p.next()
+			abi := p.current()
+			if abi.Lexeme != `"C"` {
+				return module, evt1Diagnostic("EXTERN_ABI_INVALID", "extern requires the supported ABI string \"C\"", abi.Span)
+			}
+			p.next()
+			fn, err := p.parseFunctionDecl("", false)
+			if err != nil {
+				return module, err
+			}
+			if fn.Body != nil {
+				return module, evt1Diagnostic("EXTERN_BODY_INVALID", "extern C declaration cannot have a body", fn.Span)
+			}
+			fn.ExternABI = "C"
+			module.Functions = append(module.Functions, fn)
 		default:
 			fn, err := p.parseFunctionDecl("", false)
 			if err != nil {
@@ -358,6 +392,40 @@ func (p *parser) parseModule() (Module, error) {
 		}
 	}
 	return module, nil
+}
+
+func (p *parser) parseOperationEffectDecl() (OperationEffectDecl, error) {
+	start, err := p.expect("requires")
+	if err != nil {
+		return OperationEffectDecl{}, err
+	}
+	if _, err = p.expect("compiler"); err != nil {
+		return OperationEffectDecl{}, err
+	}
+	if _, err = p.expect("."); err != nil {
+		return OperationEffectDecl{}, err
+	}
+	effect, err := p.expectIdentifier("OPERATION_EFFECT_INVALID", "expected compiler operation effect")
+	if err != nil {
+		return OperationEffectDecl{}, err
+	}
+	if effect.Lexeme != "Allocates" && effect.Lexeme != "NoAllocation" {
+		return OperationEffectDecl{}, evt1Diagnostic("OPERATION_EFFECT_INVALID", "supported operation effect is Allocates", effect.Span)
+	}
+	if _, err = p.expect("("); err != nil {
+		return OperationEffectDecl{}, err
+	}
+	op, err := p.expectIdentifier("OPERATION_EFFECT_INVALID", "expected operation name")
+	if err != nil {
+		return OperationEffectDecl{}, err
+	}
+	if _, err = p.expect(")"); err != nil {
+		return OperationEffectDecl{}, err
+	}
+	if _, err = p.expect(";"); err != nil {
+		return OperationEffectDecl{}, err
+	}
+	return OperationEffectDecl{Effect: effect.Lexeme, Operation: op.Lexeme, Span: start.Span}, nil
 }
 
 func (p *parser) parseAttributes() ([]Attribute, error) {
@@ -1002,6 +1070,78 @@ func (p *parser) parseStateRef() (StateRef, error) {
 	return ref, nil
 }
 
+func (p *parser) templateDeclIsRuntimeType() bool {
+	depth := 0
+	for i := p.pos + 1; i < len(p.tokens); i++ {
+		switch p.tokens[i].Lexeme {
+		case "<":
+			depth++
+		case ">":
+			depth--
+			if depth == 0 && i+1 < len(p.tokens) {
+				next := p.tokens[i+1].Lexeme
+				return next == "struct" || next == "class" || (next == "ref" && i+2 < len(p.tokens) && p.tokens[i+2].Lexeme == "struct")
+			}
+		}
+	}
+	return false
+}
+
+func (p *parser) parseGenericTypeDecl() (GenericTypeDecl, error) {
+	start, err := p.expect("template")
+	if err != nil {
+		return GenericTypeDecl{}, err
+	}
+	if _, err = p.expect("<"); err != nil {
+		return GenericTypeDecl{}, err
+	}
+	var params []GenericParameter
+	typeParams := map[string]bool{}
+	for {
+		if p.peekLexeme() == "typename" || p.peekLexeme() == "class" {
+			p.next()
+			name, e := p.expectIdentifier("GENERIC_PARAMETER_INVALID", "expected generic type parameter")
+			if e != nil {
+				return GenericTypeDecl{}, e
+			}
+			params = append(params, GenericParameter{Name: name.Lexeme, Kind: "type", Span: name.Span})
+			typeParams[name.Lexeme] = true
+		} else {
+			valueType, e := p.parseType("")
+			if e != nil {
+				return GenericTypeDecl{}, e
+			}
+			name, e := p.expectIdentifier("GENERIC_PARAMETER_INVALID", "expected non-type template parameter")
+			if e != nil {
+				return GenericTypeDecl{}, e
+			}
+			params = append(params, GenericParameter{Name: name.Lexeme, Kind: "value", ValueType: valueType, Span: name.Span})
+		}
+		if p.peekLexeme() != "," {
+			break
+		}
+		p.next()
+	}
+	if _, err = p.expect(">"); err != nil {
+		return GenericTypeDecl{}, err
+	}
+	old := p.templateTypeParams
+	p.templateTypeParams = typeParams
+	defer func() { p.templateTypeParams = old }()
+	var aggregate StructDecl
+	if p.peekLexeme() == "ref" {
+		aggregate, err = p.parseStructDecl(false, false, true)
+	} else if p.peekLexeme() == "struct" {
+		aggregate, err = p.parseStructDecl(false, false, false)
+	} else {
+		aggregate, err = p.parseClassDecl()
+	}
+	if err != nil {
+		return GenericTypeDecl{}, err
+	}
+	return GenericTypeDecl{Name: aggregate.Name, Parameters: params, Struct: aggregate, Span: start.Span}, nil
+}
+
 func (p *parser) parseTemplateDecl() (TemplateDecl, error) {
 	start, err := p.expect("template")
 	if err != nil {
@@ -1020,20 +1160,24 @@ func (p *parser) parseTemplateDecl() (TemplateDecl, error) {
 	if _, err := p.expect(">"); err != nil {
 		return TemplateDecl{}, err
 	}
-	reqTok, err := p.expect("requires")
-	if err != nil {
-		return TemplateDecl{}, evt1Diagnostic("CV4166", "template declarations require exactly one named concept constraint", p.currentSpan())
-	}
-	ref, err := p.parseConceptUse(paramTok.Lexeme)
-	if err != nil {
-		return TemplateDecl{}, err
+	var constraint TemplateConstraint
+	if p.peekLexeme() == "requires" {
+		reqTok := p.next()
+		ref, parseErr := p.parseConceptUse(paramTok.Lexeme)
+		if parseErr != nil {
+			return TemplateDecl{}, parseErr
+		}
+		constraint = TemplateConstraint{ConceptName: ref.Name, TypeArg: ref.TypeArgs[0], Span: reqTok.Span}
 	}
 	async := false
 	if p.peekLexeme() == "async" || p.peekLexeme() == "asynchronous" {
 		p.next()
 		async = true
 	}
+	oldTypeParams := p.templateTypeParams
+	p.templateTypeParams = map[string]bool{paramTok.Lexeme: true}
 	fn, err := p.parseFunctionDecl(paramTok.Lexeme, false)
+	p.templateTypeParams = oldTypeParams
 	if err != nil {
 		return TemplateDecl{}, err
 	}
@@ -1045,15 +1189,11 @@ func (p *parser) parseTemplateDecl() (TemplateDecl, error) {
 		Name:          fn.Name,
 		TypeParam:     paramTok.Lexeme,
 		TypeParamSpan: paramTok.Span,
-		Constraint: TemplateConstraint{
-			ConceptName: ref.Name,
-			TypeArg:     ref.TypeArgs[0],
-			Span:        reqTok.Span,
-		},
-		ReturnType: fn.ReturnType,
-		Params:     fn.Params,
-		Body:       fn.Body,
-		Span:       start.Span,
+		Constraint:    constraint,
+		ReturnType:    fn.ReturnType,
+		Params:        fn.Params,
+		Body:          fn.Body,
+		Span:          start.Span,
 	}, nil
 }
 
@@ -1791,6 +1931,8 @@ done:
 	} else if conceptParam != "" && nameTok.Lexeme == conceptParam {
 		t.Name = nameTok.Lexeme
 		t.Kind = TypeConceptParam
+	} else if p.templateTypeParams != nil && p.templateTypeParams[nameTok.Lexeme] {
+		t.Name, t.Kind = nameTok.Lexeme, TypeConceptParam
 	} else {
 		t.Name = nameTok.Lexeme
 		t.Kind = TypeStruct
@@ -1831,9 +1973,16 @@ done:
 			return t, nil
 		}
 		for {
-			arg, err := p.parseType(conceptParam)
-			if err != nil {
-				return Type{}, err
+			var arg Type
+			if isNumber(p.peekLexeme()) {
+				tok := p.next()
+				arg = Type{Name: tok.Lexeme, Kind: TypeTemplateValue, Span: tok.Span}
+			} else {
+				var err error
+				arg, err = p.parseType(conceptParam)
+				if err != nil {
+					return Type{}, err
+				}
 			}
 			t.TypeArgs = append(t.TypeArgs, arg)
 			if p.peekLexeme() != "," {
@@ -3176,7 +3325,32 @@ func (p *parser) parseNameLikeExpr() (Expr, error) {
 	if err != nil {
 		return nil, err
 	}
-	var expr Expr = &NameExpr{Name: nameTok.Lexeme, Span: nameTok.Span}
+	constructName := nameTok.Lexeme
+	if p.genericConstructionAhead() {
+		p.next()
+		var args []Type
+		for {
+			if isNumber(p.peekLexeme()) {
+				tok := p.next()
+				args = append(args, Type{Name: tok.Lexeme, Kind: TypeTemplateValue, Span: tok.Span})
+			} else {
+				arg, parseErr := p.parseType("")
+				if parseErr != nil {
+					return nil, parseErr
+				}
+				args = append(args, arg)
+			}
+			if p.peekLexeme() != "," {
+				break
+			}
+			p.next()
+		}
+		if _, err := p.expect(">"); err != nil {
+			return nil, err
+		}
+		constructName = Type{Name: nameTok.Lexeme, Kind: TypeApplied, TypeArgs: args}.String()
+	}
+	var expr Expr = &NameExpr{Name: constructName, Span: nameTok.Span}
 	if p.peekLexeme() == "::" {
 		p.next()
 		variantTok, err := p.expectIdentifier("CV4016", "expected variant name after ::")
@@ -3224,9 +3398,28 @@ func (p *parser) parseNameLikeExpr() (Expr, error) {
 		if _, err := p.expect("}"); err != nil {
 			return nil, err
 		}
-		expr = &StructConstructExpr{StructName: nameTok.Lexeme, Args: args, Span: nameTok.Span}
+		expr = &StructConstructExpr{StructName: constructName, Args: args, Span: nameTok.Span}
 	}
 	return p.parsePostfixExpr(expr, nameTok.Span)
+}
+
+func (p *parser) genericConstructionAhead() bool {
+	if p.peekLexeme() != "<" {
+		return false
+	}
+	depth := 0
+	for i := p.pos; i < len(p.tokens); i++ {
+		switch p.tokens[i].Lexeme {
+		case "<":
+			depth++
+		case ">":
+			depth--
+			if depth == 0 {
+				return i+1 < len(p.tokens) && p.tokens[i+1].Lexeme == "{"
+			}
+		}
+	}
+	return false
 }
 
 func (p *parser) parseDispatchExpr() (Expr, error) {

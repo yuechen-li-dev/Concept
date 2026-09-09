@@ -24,6 +24,10 @@ facts, and C11 output is derived evidence.
 | Composition | all semantic owners above | all relevant sections | R5k freeze report | `language/evt1/composition` | `semantic_corpus_test.go` |
 | Test tooling | `testing_metadata.go`, `testing_assert.go`, `testing_lowering.go`, `testing_runner.go` | section 24 | `EVT1-TEST-PROPHECY-DIRECTION.md` | `language/evt1/tooling/tests`, `internal/concept/testdata/testing` | `testing_runner_test.go` |
 | Concept assertions and proof debugging | `concept_assert.go`, `proof_graph.go` | sections 17 and 24 | `CONCEPT-PROOFS.md` | `language/evt1/tooling/proofs` | `proof_graph_test.go` |
+| Generic runtime types and layout queries | `generic_types.go`, `layout.go` | post-freeze R6d extension | `EVT1-GENERIC-LIBRARY-DIRECTION.md` | focused R6d specimens | `operation_effects_test.go` |
+| External C ABI | `parse.go`, `validate.go`, `generate.go` | post-freeze R6d extension | `EVT1-GENERIC-LIBRARY-DIRECTION.md` | focused R6d hosted specimen | `operation_effects_test.go` |
+| Operation effects | `concept_assert.go`, `semantic_facts.go` | post-freeze R6d extension | `EVT1-GENERIC-LIBRARY-DIRECTION.md` | R6b proofs plus focused R6d specimens | `operation_effects_test.go`, `proof_graph_test.go` |
+| Reusable semantic modules | not implemented | post-freeze R6d blocker | `EVT1-GENERIC-LIBRARY-DIRECTION.md` | none | none |
 
 The three explicit state-bearing forms remain distinct: `automata with state`
 is application-authored persistent state, callable `with (...)` is an explicit

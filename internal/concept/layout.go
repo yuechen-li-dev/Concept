@@ -53,6 +53,8 @@ func evt1TypeGeometry(env *semanticEnv, t Type) (int, int, error) {
 		return 4, 4, nil
 	case "uint64":
 		return 8, 8, nil
+	case "usize":
+		return 8, 8, nil
 	}
 	if decl, ok := env.structs[resolved.Name]; ok {
 		offset, alignment := 0, 1
@@ -196,6 +198,19 @@ func evt1LayoutRegion(env *semanticEnv, typeName, field string) (LayoutRegion, b
 }
 
 func evt1LayoutQuery(env *semanticEnv, name string, typeArg Type, args []Expr) (int, error) {
+	if name == "SizeOf" || name == "AlignOf" {
+		if len(args) != 0 {
+			return 0, evt1Diagnostic("GENERIC_LAYOUT_QUERY_ARGUMENTS", name+" expects no value arguments", typeArg.Span)
+		}
+		size, alignment, err := evt1TypeGeometry(env, typeArg)
+		if err != nil {
+			return 0, err
+		}
+		if name == "SizeOf" {
+			return size, nil
+		}
+		return alignment, nil
+	}
 	layout, ok := env.layouts[typeArg.Name]
 	if !ok {
 		return 0, evt1Diagnostic("CV4592", fmt.Sprintf("%s requires a declared layout type", name), typeArg.Span)
@@ -227,4 +242,8 @@ func evt1LayoutQuery(env *semanticEnv, name string, typeArg Type, args []Expr) (
 	default:
 		return 0, evt1Diagnostic("CV4592", "unknown layout query "+name, typeArg.Span)
 	}
+}
+
+func evt1IsTypeLayoutQuery(name string) bool {
+	return name == "LayoutSize" || name == "LayoutAlign" || name == "LayoutOffset" || name == "SizeOf" || name == "AlignOf"
 }

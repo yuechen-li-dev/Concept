@@ -1419,7 +1419,7 @@ The following remain explicit reconciliation or implementation work:
 - owning dyn and explicit erased-storage policies;
 - owning erased callbacks, generalized move/ref capture initializers, and async
   callback literal syntax;
-- allocation, allocator effects, arenas, and stores;
+- allocator libraries, arenas, stores, and generalized effects;
 - stable C ABI and layout law;
 - plain value-level `decide` and continuation-resume library policy;
 - general effects versus profile-owned effects/actuators;
@@ -1438,3 +1438,36 @@ EVT1 R5 language-core semantics are frozen for the transition into R6 tooling.
 R6 may fix bugs, diagnostics, contradictions, or specification errors, but
 should not casually expand the language surface. New language features require
 an explicit post-freeze proposal.
+
+## 31. Approved R6d local library substrate
+
+R6d approves a bounded post-freeze extension for ordinary reusable-library
+building blocks. This exception does not reopen unrelated R5 semantics.
+
+User generic runtime declarations use `template <typename T>` on structs,
+`ref struct`s, classes, and functions. Integer/`usize` non-type parameters are
+compile-time only. Each applied type has a deterministic source identity and is
+monomorphized once per semantic compilation unit. Concrete fields are then
+subject to the ordinary layout, structural copy/move/Drop, and provenance
+rules. Infinite recursive instantiation is a diagnostic. There is no SFINAE,
+runtime generic dictionary, reflection registry, partial specialization, or
+variadic/template-metaprogramming sublanguage.
+
+`SizeOf<T>()` and `AlignOf<T>()` are compile-time-only `usize` queries over the
+existing fixed-layout geometry authority. They accept a generic parameter
+inside a function-template definition and fold after concrete substitution.
+
+`extern "C"` declares a bodyless external operation. Its source name is its C
+symbol. The admitted ABI domain is Core scalars, enums, and single pointers to
+builtin storage; other types are rejected until an explicit ABI law exists.
+
+At module scope, `requires compiler.Allocates(Operation);` records the
+authoritative conservative statement that an operation may allocate.
+`NoAllocation` remains compiler-derived and cannot be asserted as a negative
+source declaration. Local call-graph projection maps known allocation to
+Disproven, closed allocation-free bodies to Proven, and opaque calls without a
+summary to Unknown.
+
+Reusable semantic imports and module artifacts remain unresolved. Until that
+R6d blocker is completed, these facilities are local-compilation substrate and
+do not constitute the allocator library or cross-module library success.

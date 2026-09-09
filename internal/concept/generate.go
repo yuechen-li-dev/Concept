@@ -34,6 +34,7 @@ func GenerateForTarget(module Module, source []byte, target TargetCapabilities) 
 	if err != nil {
 		return nil, err
 	}
+	evt1MaterializeGenericInstances(&module, env)
 	if err := evt1NormalizeModuleStorageTypes(&module, env); err != nil {
 		return nil, err
 	}
@@ -538,6 +539,13 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 	}
 	for _, fn := range module.Functions {
 		mirFn := MIRFunction{Name: fn.Name, ReturnType: evt1MIRType(env, fn.ReturnType), SourceSpan: fn.Span}
+		if _, ok := env.operationEffects[fn.Name]; ok {
+			mirFn.MayAllocate = true
+			mirFn.AllocationEffectOrigin = string(FactOriginDeclaredEffect)
+			if fn.ExternABI != "" {
+				mirFn.AllocationEffectOrigin = string(FactOriginExternalContractEffect)
+			}
+		}
 		mirFn.Async = evt1BuildMIRAsync(fn, env)
 		if fn.MethodOf != "" {
 			mirFn.MethodOf, mirFn.Visibility = fn.MethodOf, fn.Visibility
@@ -985,6 +993,8 @@ func evt1MIRCleanups(env *semanticEnv, fn FunctionDecl) []MIRCleanup {
 			dropName = dropFn.Name
 		} else if types[name].ArrayElem != nil && evt1StorageElementHasDrop(env, *types[name].ArrayElem) {
 			dropName = "DropElementsReverse"
+		} else if decl, ok := env.structs[types[name].Name]; ok && evt1StructFieldsNeedDrop(env, decl) {
+			dropName = "DropFieldsReverse"
 		}
 		cleanups = append(cleanups, MIRCleanup{Owner: name, Type: types[name].String(), DropFunction: dropName, State: state[name], Order: len(cleanups) + 1})
 	}
@@ -1585,6 +1595,9 @@ func evt1FunctionSymbol(base, name string) string {
 }
 
 func evt1FunctionSymbolForDecl(base string, env *semanticEnv, fn FunctionDecl) string {
+	if fn.ExternABI == "C" {
+		return fn.Name
+	}
 	if len(env.functions[fn.Name]) <= 1 {
 		return evt1FunctionSymbol(base, fn.Name)
 	}
@@ -4510,9 +4523,13 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 			dispatchCall,
 			Type{Name: evt1AutomataDispatchOutcomeTypeName, Kind: TypeEnum, Span: e.Span}
 	case *TemplateCallExpr:
-		if e.Callee == "LayoutSize" || e.Callee == "LayoutAlign" || e.Callee == "LayoutOffset" {
+		if evt1IsTypeLayoutQuery(e.Callee) {
 			value, _ := evt1LayoutQuery(f.l.env, e.Callee, e.TypeArg, e.Args)
-			t, _ := evt1BuiltinType("int", e.Span)
+			resultName := "int"
+			if e.Callee == "SizeOf" || e.Callee == "AlignOf" {
+				resultName = "usize"
+			}
+			t, _ := evt1BuiltinType(resultName, e.Span)
 			return "", fmt.Sprintf("%d", value), t
 		}
 		instance, ok := f.l.env.templateInstances[e.Callee+"|"+evt1TypeIdentity(evt1CanonicalType(f.l.env, e.TypeArg))]
@@ -4906,7 +4923,26 @@ func (f *evt1FunctionLowerer) lowerDropValue(t Type, value string, indent int) s
 		}
 		return b.String()
 	}
+	if decl, ok := f.l.env.structs[t.Name]; ok {
+		var b strings.Builder
+		for i := len(decl.Fields) - 1; i >= 0; i-- {
+			field := decl.Fields[i]
+			if evt1TypeHasDrop(f.l.env, field.Type) {
+				b.WriteString(f.lowerDropValue(field.Type, "("+value+")."+field.Name, indent))
+			}
+		}
+		return b.String()
+	}
 	return ""
+}
+
+func evt1StructFieldsNeedDrop(env *semanticEnv, decl StructDecl) bool {
+	for _, field := range decl.Fields {
+		if evt1TypeHasDrop(env, field.Type) {
+			return true
+		}
+	}
+	return false
 }
 
 func (f *evt1FunctionLowerer) bindInstanceName(name, automataName string) string {

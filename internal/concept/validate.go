@@ -314,6 +314,16 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		typeNames[structDecl.Name] = structDecl.Span
 		env.structs[structDecl.Name] = structDecl
 	}
+	for _, decl := range module.GenericTypes {
+		if _, exists := env.genericTypes[decl.Name]; exists {
+			return nil, evt1Diagnostic("GENERIC_DUPLICATE", fmt.Sprintf("duplicate generic type declaration %s", decl.Name), decl.Span)
+		}
+		if _, exists := typeNames[decl.Name]; exists {
+			return nil, evt1Diagnostic("GENERIC_DUPLICATE", fmt.Sprintf("generic type %s conflicts with an existing type", decl.Name), decl.Span)
+		}
+		typeNames[decl.Name] = decl.Span
+		env.genericTypes[decl.Name] = decl
+	}
 	for _, layoutDecl := range module.Layouts {
 		if _, exists := typeNames[layoutDecl.Name]; exists {
 			return nil, evt1Diagnostic("CV4570", fmt.Sprintf("duplicate type declaration %s", layoutDecl.Name), layoutDecl.Span)
@@ -423,6 +433,18 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 			}
 		}
 		env.functions[fn.Name] = append(env.functions[fn.Name], fn)
+	}
+	for _, effect := range module.OperationEffects {
+		if effect.Effect == "NoAllocation" {
+			return nil, evt1Diagnostic("OPERATION_EFFECT_NEGATIVE_LIE", "NoAllocation cannot be declared; it is derived from the authoritative call graph", effect.Span)
+		}
+		if _, exists := env.operationEffects[effect.Operation]; exists {
+			return nil, evt1Diagnostic("OPERATION_EFFECT_DUPLICATE", fmt.Sprintf("duplicate allocation effect for %s", effect.Operation), effect.Span)
+		}
+		if len(env.functions[effect.Operation]) != 1 {
+			return nil, evt1Diagnostic("OPERATION_EFFECT_TARGET_INVALID", fmt.Sprintf("Allocates requires one uniquely resolved operation, got %s", effect.Operation), effect.Span)
+		}
+		env.operationEffects[effect.Operation] = effect
 	}
 	for _, fn := range module.ComptimeFns {
 		if fn.Name == "dispatch" || fn.Name == "actuate" || fn.Name == "discard" {
@@ -646,6 +668,9 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 	}
 	for _, fn := range module.Functions {
 		if err := validateFunctionSignature(env, fn); err != nil {
+			return nil, err
+		}
+		if err := evt1ValidateExternCSignature(env, fn); err != nil {
 			return nil, err
 		}
 		if err := evt1ValidateAsyncShape(fn); err != nil {
@@ -994,22 +1019,53 @@ func validateFunctionSignature(env *semanticEnv, fn FunctionDecl) error {
 	return nil
 }
 
-func validateTemplateSignature(env *semanticEnv, templateDecl TemplateDecl) error {
-	if _, ok := env.concepts[templateDecl.Constraint.ConceptName]; !ok {
-		return evt1Diagnostic("CV4169", fmt.Sprintf("unknown concept %s in template constraint", templateDecl.Constraint.ConceptName), templateDecl.Constraint.Span)
+func evt1ValidateExternCSignature(env *semanticEnv, fn FunctionDecl) error {
+	if fn.ExternABI == "" {
+		return nil
 	}
-	constraintConcept := env.concepts[templateDecl.Constraint.ConceptName]
-	if templateDecl.Constraint.TypeArg.Kind != TypeConceptParam || templateDecl.Constraint.TypeArg.Name != templateDecl.TypeParam {
-		return evt1Diagnostic("CV4170", fmt.Sprintf("template constraint %s must apply to template parameter %s", templateDecl.Constraint.ConceptName, templateDecl.TypeParam), templateDecl.Constraint.Span)
+	compatible := func(t Type) bool {
+		if t.PointerTo != nil {
+			base := *t.PointerTo
+			return base.PointerTo == nil && base.ArrayElem == nil && (base.Kind == TypeBuiltin || base.Name == "void")
+		}
+		if t.isBorrowLike() || t.Kind == TypeDyn || t.Kind == TypeAsync || t.Kind == TypeCallable || t.Kind == TypeCallback || t.ArrayElem != nil || len(t.TypeArgs) != 0 {
+			return false
+		}
+		if _, ok := evt1BuiltinDefinition(t.Name); ok {
+			return true
+		}
+		_, ok := env.enums[t.Name]
+		return ok
+	}
+	if !compatible(fn.ReturnType) {
+		return evt1Diagnostic("EXTERN_C_ABI_TYPE_INVALID", fmt.Sprintf("extern C return type %s has no supported C ABI representation", fn.ReturnType.String()), fn.ReturnType.Span)
+	}
+	for _, param := range fn.Params {
+		if !compatible(param.Type) {
+			return evt1Diagnostic("EXTERN_C_ABI_TYPE_INVALID", fmt.Sprintf("extern C parameter %s has unsupported type %s", param.Name, param.Type.String()), param.Span)
+		}
+	}
+	return nil
+}
+
+func validateTemplateSignature(env *semanticEnv, templateDecl TemplateDecl) error {
+	if templateDecl.Constraint.ConceptName != "" {
+		constraintConcept, ok := env.concepts[templateDecl.Constraint.ConceptName]
+		if !ok {
+			return evt1Diagnostic("CV4169", fmt.Sprintf("unknown concept %s in template constraint", templateDecl.Constraint.ConceptName), templateDecl.Constraint.Span)
+		}
+		if templateDecl.Constraint.TypeArg.Kind != TypeConceptParam || templateDecl.Constraint.TypeArg.Name != templateDecl.TypeParam {
+			return evt1Diagnostic("CV4170", fmt.Sprintf("template constraint %s must apply to template parameter %s", templateDecl.Constraint.ConceptName, templateDecl.TypeParam), templateDecl.Constraint.Span)
+		}
+		if constraintConcept.TypeParam == "" {
+			return evt1Diagnostic("CV4171", fmt.Sprintf("template constraint %s must be a named one-parameter concept", templateDecl.Constraint.ConceptName), templateDecl.Constraint.Span)
+		}
 	}
 	if err := validateKnownType(env, templateDecl.ReturnType, templateDecl.ReturnType.Span, templateDecl.TypeParam, false); err != nil {
 		return err
 	}
 	if err := validateTemplateByValueBoundary(env, templateDecl.ReturnType, templateDecl.Span, "return", templateDecl.TypeParam); err != nil {
 		return err
-	}
-	if constraintConcept.TypeParam == "" {
-		return evt1Diagnostic("CV4171", fmt.Sprintf("template constraint %s must be a named one-parameter concept", templateDecl.Constraint.ConceptName), templateDecl.Constraint.Span)
 	}
 	for _, param := range templateDecl.Params {
 		if err := validateKnownType(env, param.Type, param.Span, templateDecl.TypeParam, false); err != nil {
@@ -1851,6 +1907,11 @@ func evt1ResolveType(env *semanticEnv, scope *evt1Scope, t Type) (Type, error) {
 		}
 		t.TypeArgs[i] = resolved
 	}
+	if len(t.TypeArgs) > 0 {
+		if _, ok := env.genericTypes[t.Name]; ok {
+			return evt1InstantiateGenericType(env, t)
+		}
+	}
 	if t.ArrayElem != nil {
 		elem, err := evt1ResolveType(env, scope, *t.ArrayElem)
 		if err != nil {
@@ -2165,6 +2226,18 @@ func evt1NestedLiteralShape(expr Expr) ([]int, []Expr, bool, bool) {
 }
 
 func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string, allowConceptApp bool) error {
+	if _, ok := env.structs[t.Name]; ok && len(t.TypeArgs) == 0 {
+		return nil
+	}
+	if _, ok := env.genericTypeInstances[t.Name]; ok {
+		return nil
+	}
+	if len(t.TypeArgs) > 0 {
+		if _, ok := env.genericTypes[t.Name]; ok {
+			_, err := evt1InstantiateGenericType(env, t)
+			return err
+		}
+	}
 	if t.Kind == TypeInferred {
 		return evt1Diagnostic("CALLABLE_AUTO_FIELD_EXISTENTIAL", "`auto` is only permitted for local bindings and inferred function returns; stored fields and parameters require an exact type", span)
 	}
@@ -2755,11 +2828,19 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		return Type{Name: evt1AutomataDispatchOutcomeTypeName, Kind: TypeEnum, Span: e.Span}, nil
 	case *TemplateCallExpr:
-		if e.Callee == "LayoutSize" || e.Callee == "LayoutAlign" || e.Callee == "LayoutOffset" {
+		if evt1IsTypeLayoutQuery(e.Callee) {
+			if templateInfo != nil && e.TypeArg.Kind == TypeConceptParam && (e.Callee == "SizeOf" || e.Callee == "AlignOf") {
+				out, _ := evt1BuiltinType("usize", e.Span)
+				return out, nil
+			}
 			if _, err := evt1LayoutQuery(env, e.Callee, e.TypeArg, e.Args); err != nil {
 				return Type{}, err
 			}
-			out, _ := evt1BuiltinType("int", e.Span)
+			resultName := "int"
+			if e.Callee == "SizeOf" || e.Callee == "AlignOf" {
+				resultName = "usize"
+			}
+			out, _ := evt1BuiltinType(resultName, e.Span)
 			return out, nil
 		}
 		if inComptimeFn {
@@ -4737,6 +4818,10 @@ func evt1DropFunction(env *semanticEnv, t Type) *FunctionDecl {
 }
 
 func evt1TypeHasDrop(env *semanticEnv, t Type) bool {
+	return evt1TypeHasDropVisiting(env, t, map[string]bool{})
+}
+
+func evt1TypeHasDropVisiting(env *semanticEnv, t Type, visiting map[string]bool) bool {
 	if t.Kind == TypeCallable {
 		return t.CallableHasDrop
 	}
@@ -4746,7 +4831,21 @@ func evt1TypeHasDrop(env *semanticEnv, t Type) bool {
 	if t.isOwned() && evt1DropFunction(env, t) != nil {
 		return true
 	}
-	return t.ArrayElem != nil && evt1StorageElementHasDrop(env, *t.ArrayElem)
+	if t.ArrayElem != nil {
+		return evt1StorageElementHasDrop(env, *t.ArrayElem)
+	}
+	decl, ok := env.structs[t.Name]
+	if !ok || visiting[t.Name] {
+		return false
+	}
+	visiting[t.Name] = true
+	defer delete(visiting, t.Name)
+	for _, field := range decl.Fields {
+		if evt1TypeHasDropVisiting(env, field.Type, visiting) {
+			return true
+		}
+	}
+	return false
 }
 
 func evt1StorageElementHasDrop(env *semanticEnv, t Type) bool {
@@ -4756,7 +4855,7 @@ func evt1StorageElementHasDrop(env *semanticEnv, t Type) bool {
 	if evt1DropFunction(env, t) != nil {
 		return true
 	}
-	return t.ArrayElem != nil && evt1StorageElementHasDrop(env, *t.ArrayElem)
+	return evt1TypeHasDrop(env, t)
 }
 
 func evt1IsImmovableValueType(env *semanticEnv, t Type) bool {
@@ -5279,6 +5378,7 @@ func evt1SubstituteType(t Type, typeParam string, concreteType Type) Type {
 		out := concreteType
 		out.Ownership = t.Ownership
 		out.Const = t.Const
+		out.Scoped = t.Scoped
 		out.Imported = t.Imported
 		out.Unsafe = t.Unsafe
 		return out
@@ -5499,9 +5599,11 @@ func buildTemplateInfo(env *semanticEnv, templateDecl TemplateDecl) (*evt1Templa
 		}
 		return nil
 	}
-	rootPath := []string{templateDecl.Constraint.ConceptName}
-	if err := walk(templateDecl.Constraint.ConceptName, rootPath); err != nil {
-		return nil, err
+	if templateDecl.Constraint.ConceptName != "" {
+		rootPath := []string{templateDecl.Constraint.ConceptName}
+		if err := walk(templateDecl.Constraint.ConceptName, rootPath); err != nil {
+			return nil, err
+		}
 	}
 	return info, nil
 }
@@ -5584,8 +5686,10 @@ func instantiateTemplate(env *semanticEnv, templateName string, concreteType Typ
 	if instance, ok := env.templateInstances[key]; ok {
 		return instance, nil
 	}
-	if err := checkConceptSatisfaction(env, templateDecl.Constraint.ConceptName, concreteType, nil, span); err != nil {
-		return nil, err
+	if templateDecl.Constraint.ConceptName != "" {
+		if err := checkConceptSatisfaction(env, templateDecl.Constraint.ConceptName, concreteType, nil, span); err != nil {
+			return nil, err
+		}
 	}
 	info := env.templateInfos[templateName]
 	var bindings []evt1InstanceRequirementBinding
@@ -5862,6 +5966,17 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 		}
 		return &DispatchExpr{InstanceName: e.InstanceName, Signal: signal, BatchName: e.BatchName, Span: e.Span}, nil
 	case *TemplateCallExpr:
+		if evt1IsTypeLayoutQuery(e.Callee) {
+			out := &TemplateCallExpr{Callee: e.Callee, TypeArg: evt1SubstituteType(e.TypeArg, typeParam, concreteType), Span: e.Span}
+			for _, arg := range e.Args {
+				sub, err := evt1SubstituteExpr(arg, typeParam, concreteType)
+				if err != nil {
+					return nil, err
+				}
+				out.Args = append(out.Args, sub)
+			}
+			return out, nil
+		}
 		return nil, evt1Diagnostic("CV4174", "templates cannot invoke templates in EVT1 M1B-B", e.Span)
 	case *BinaryExpr:
 		left, err := evt1SubstituteExpr(e.Left, typeParam, concreteType)

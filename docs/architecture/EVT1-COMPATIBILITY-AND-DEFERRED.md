@@ -34,7 +34,8 @@ inline compiler tests.
 |---|---|---|---|
 | `.concept_test`, test attributes, deterministic test runner, `Assert.*` | R6a tooling/library | Canonical tooling | implemented without changing frozen function/body semantics |
 | `Assert.Concept`, proof diagnostics, `concept explain`, `concept-proof.v1` | R6b tooling | Canonical tooling | compile-time semantic query with no runtime lowering |
-| reference allocator framework and authoritative allocation summaries | post-freeze language/library prerequisite, then R6c | Blocked after feasibility audit | ordinary allocator implementation requires generic runtime types, generic type geometry, applied-type ownership/Drop, Core library composition, a hosted external-operation seam, and operation summaries; see `docs/design/EVT1-ALLOCATOR-DIRECTION.md` |
+| generic reusable-library substrate | R6d approved post-freeze extension | Partially implemented | local generic runtime types, layout queries, applied structural semantics, bounded `extern "C"`, and local `Allocates` authority exist; reusable semantic modules remain blocking |
+| reference allocator framework | R6e after substrate completion | Deferred | do not retry until deterministic cross-module generic bodies and effect summaries exist; see `docs/design/EVT1-ALLOCATOR-DIRECTION.md` |
 | richer theory providers, exact prophecy termination matching, parallel tests, lifecycle hooks, statistical benchmark framework | later R6 tooling | Deferred | R6a keeps JSON positional rows, sequential reporting, and lightweight timing |
 | formatter, lint, diagnostics UX, build/package tooling, LSP | R6 tooling | Deferred | consume the frozen semantic model |
 | source auto-fix, IDE proof visualization, arbitrary proof queries, solver edits, LLM-ranked repairs, Planner explanations | post-R6b tooling | Deferred | consume authoritative proof graphs without moving semantic authority |
@@ -52,6 +53,8 @@ inline compiler tests.
 | LIR/native backend | native backend | Deferred | MIR plus strict C11 remains the oracle |
 | inheritance, RTTI, per-object vtables | language core | Intentionally rejected | interface composition plus static witnesses |
 | hidden allocation, owning closure boxes, saved-PC coroutine fallback | language core | Intentionally rejected | fixed inline state and explicit ownership |
+| partial specialization, variadic templates, template-template parameters, generic metaprogramming | later language, if ever | Deferred | R6d is ordinary monomorphized library generics only |
+| stable module ABI, package manager, generalized effect algebra, `NoHeapAllocation` | later library/tooling | Deferred | R6d requires only an internal semantic module schema and the `Allocates` fact |
 
 R6 may fix bugs, diagnostics, contradictions, or specification errors. Any new
 language feature requires an explicit post-freeze proposal.

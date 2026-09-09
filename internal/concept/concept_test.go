@@ -336,9 +336,9 @@ func TestEVT1DiagnosticsAreStable(t *testing.T) {
 			code: "CV4164",
 		},
 		{
-			name: "constrained template rejected",
+			name: "bodyless template rejected",
 			src:  "profile Vulkan;\ntemplate <typename T>\nint Identity(T value);\n",
-			code: "CV4166",
+			code: "CV4167",
 		},
 		{
 			name: "m1a non exhaustive regression",
