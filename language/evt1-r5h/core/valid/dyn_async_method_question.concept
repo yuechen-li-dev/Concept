@@ -1,0 +1,39 @@
+profile Core;
+
+enum IoError
+{
+    Missing,
+}
+
+interface Reader<T>
+{
+    requires async Result<int, IoError> Read(ref T self);
+}
+
+struct Device
+{
+    int value;
+
+    async Result<int, IoError> Read(ref Device self)
+    {
+        return Result::Ok(self.value);
+    }
+}
+
+async Result<int, IoError> Load(dyn Reader reader)
+{
+    int value = await reader.Read()?;
+    return Result::Ok(value);
+}
+
+int Main()
+{
+    Device device = Device{42};
+    dyn Reader reader = ref device;
+    Async<Result<int, IoError>> work = Load(reader);
+    while (not Complete(work)) bounded(4)
+    {
+        Step(work);
+    }
+    return Result(work)!;
+}

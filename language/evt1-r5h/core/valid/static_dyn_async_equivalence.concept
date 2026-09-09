@@ -1,0 +1,36 @@
+profile Core;
+
+interface Reader<T>
+{
+    requires async int Read(ref T self);
+}
+
+struct Device
+{
+    int value;
+
+    async int Read(ref Device self)
+    {
+        return self.value;
+    }
+}
+
+int Drive(Async<int> work)
+{
+    while (not Complete(work)) bounded(2)
+    {
+        Step(work);
+    }
+    return Result(work);
+}
+
+int Main()
+{
+    Device device = Device{21};
+    Async<int> concreteWork = device.Read();
+    int concrete = Drive(move concreteWork);
+    dyn Reader reader = ref device;
+    Async<int> dynamicWork = reader.Read();
+    int dynamic = Drive(move dynamicWork);
+    return concrete + dynamic;
+}

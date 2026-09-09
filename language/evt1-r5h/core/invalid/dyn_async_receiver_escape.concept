@@ -1,0 +1,24 @@
+profile Core;
+
+interface Reader<T>
+{
+    requires async int Read(ref T self);
+}
+
+struct Device
+{
+    int value;
+
+    async int Read(ref Device self)
+    {
+        return self.value;
+    }
+}
+
+Async<int> Escape()
+{
+    Device device = Device{42};
+    dyn Reader reader = ref device;
+    Async<int> work = reader.Read();
+    return move work;
+}

@@ -1,0 +1,26 @@
+profile Core;
+
+interface Reader<T>
+{
+    requires compiler.Contiguous<T>();
+    requires async int Read(ref T self);
+}
+
+async int Read(ref int<array>[2] self)
+{
+    return self[0];
+}
+
+requires Reader<int<array>[2]>;
+
+int Main()
+{
+    int<array>[2] values = [42, 0];
+    dyn Reader reader = ref values;
+    Async<int> work = reader.Read();
+    while (not Complete(work)) bounded(2)
+    {
+        Step(work);
+    }
+    return Result(work);
+}

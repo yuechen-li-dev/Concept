@@ -1,0 +1,34 @@
+profile Core;
+
+interface Reader<T>
+{
+    requires asynchronous int Read(ref T self);
+}
+
+struct Device
+{
+    int value;
+
+    asynchronous int Read(ref Device self)
+    {
+        return self.value;
+    }
+}
+
+asynchronous int Load(dyn Reader reader)
+{
+    int value = awaitchronous reader.Read();
+    return value;
+}
+
+int Main()
+{
+    Device device = Device{42};
+    dyn Reader reader = ref device;
+    Async<int> work = Load(reader);
+    while (not Complete(work)) bounded(4)
+    {
+        Step(work);
+    }
+    return Result(work);
+}

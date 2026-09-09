@@ -1,6 +1,6 @@
 # EVT1 diagnostic reconciliation
 
-Status: R4k class, interface, and dyn reconciliation
+Status: R5h async interface/dyn reconciliation
 
 Concept EVT1 compares diagnostics by semantic family. The active Go compiler
 retains `CV` numbers and the retired PoC3 compiler retains `CON` numbers; R2
@@ -106,6 +106,11 @@ the executable mapping used by the R2 conformance harness.
 | dyn const violation | ownership qualifier pressure | `DYN_MUTABLE_FROM_CONST`, `DYN_READONLY_FIELD_MUTATION` | same semantic families | EVT1-new | no mutation capability is recovered through erasure |
 | unknown dyn member | Phase 14 interface-call diagnostics | `DYN_METHOD_NOT_IN_INTERFACE`, `DYN_FIELD_NOT_IN_INTERFACE` | same semantic families | Redesigned | witness surface is closed by the declared interface |
 | dyn lifetime escape | no closed Phase 14 lifetime system | `CV4511` and existing scoped/outlives families | `DYN_ESCAPE_SOURCE_LIFETIME` family | reused provenance diagnostics | dyn has no separate lifetime checker |
+| async/sync interface mismatch | callable signature pressure | `CV4156` | `INTERFACE_REQUIREMENT_UNSATISFIED` family | reused exact matching | normalized result is `Async<T>`; no wrapping or unwrapping |
+| open generic async interface method | open runtime generic pressure | `INTERFACE_ASYNC_METHOD_NOT_DYN_COMPATIBLE` | same semantic family | EVT1-new | fixed witness shape is required |
+| dyn async receiver escape | no direct counterpart | `DYN_ASYNC_RECEIVER_LIFETIME_INVALID` | same semantic family | EVT1-new over R4a/R4k | operation cannot outlive local or scoped receiver |
+| malformed dyn async witness MIR | MIR invariant pressure | `DYN_ASYNC_WITNESS_INVALID` | same semantic family | EVT1-new | normalized return, eventual type, and machine identity required |
+| invalid dyn async result ownership | move-only operation pressure | `DYN_ASYNC_RESULT_OWNERSHIP_INVALID` | same semantic family | EVT1-new over R5f | constructor and transfer are exactly once |
 | invalid inference type/candidate | no counterpart | `INFERENCE_TYPE_INVALID`, `INFER_UNKNOWN_CANDIDATE`, `INFER_DUPLICATE_CANDIDATE` | same semantic families | EVT1-new | closed payload-free enum identity |
 | invalid inference guard/score | R5b decision pressure | `INFER_GUARD_REQUIRES_BOOL`, `INFER_SCORE_REQUIRES_FLOAT` | same semantic families | EVT1-new / reused ordering law | inference logits are exactly float |
 | invalid inference query | no counterpart | `INFERENCE_UNKNOWN_CANDIDATE`, `INFERENCE_QUERY_INVALID` | same semantic families | EVT1-new | no integer indexing or truthiness |

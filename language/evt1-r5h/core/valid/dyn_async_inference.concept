@@ -1,0 +1,39 @@
+profile Core;
+
+enum Choice
+{
+    Read,
+    Idle
+}
+
+interface Reader<T>
+{
+    requires async int Read(ref T self);
+}
+
+struct Device
+{
+    int value;
+
+    async int Read(ref Device self)
+    {
+        Inference<Choice> belief = infer
+        {
+            Read score 1.0;
+            Idle score 0.0;
+        };
+        return if (belief[Choice::Read] > 0.5) self.value else 0;
+    }
+}
+
+int Main()
+{
+    Device device = Device{42};
+    dyn Reader reader = ref device;
+    Async<int> work = reader.Read();
+    while (not Complete(work)) bounded(2)
+    {
+        Step(work);
+    }
+    return Result(work);
+}

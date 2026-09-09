@@ -925,6 +925,11 @@ func (p *parser) parseTemplateDecl() (TemplateDecl, error) {
 	if err != nil {
 		return TemplateDecl{}, err
 	}
+	async := false
+	if p.peekLexeme() == "async" || p.peekLexeme() == "asynchronous" {
+		p.next()
+		async = true
+	}
 	fn, err := p.parseFunctionDecl(paramTok.Lexeme, false)
 	if err != nil {
 		return TemplateDecl{}, err
@@ -933,6 +938,7 @@ func (p *parser) parseTemplateDecl() (TemplateDecl, error) {
 		return TemplateDecl{}, evt1Diagnostic("CV4167", "template declarations require a function body", fn.Span)
 	}
 	return TemplateDecl{
+		Async:         async,
 		Name:          fn.Name,
 		TypeParam:     paramTok.Lexeme,
 		TypeParamSpan: paramTok.Span,
@@ -1051,6 +1057,11 @@ func (p *parser) parseStructDecl(immovable, record, refStruct bool) (StructDecl,
 			p.next()
 			continue
 		}
+		async := false
+		if p.peekLexeme() == "async" || p.peekLexeme() == "asynchronous" {
+			p.next()
+			async = true
+		}
 		fieldType, err := p.parseType("")
 		if err != nil {
 			return StructDecl{}, err
@@ -1064,8 +1075,12 @@ func (p *parser) parseStructDecl(immovable, record, refStruct bool) (StructDecl,
 			if err != nil {
 				return StructDecl{}, err
 			}
+			method.Async = async
 			decl.Methods = append(decl.Methods, method)
 			continue
+		}
+		if async {
+			return StructDecl{}, evt1Diagnostic("ASYNC_RETURN_TYPE_INVALID", "async is valid only on a function or method declaration", fieldName.Span)
 		}
 		if _, err := p.expect(";"); err != nil {
 			return StructDecl{}, err
@@ -1390,6 +1405,11 @@ func (p *parser) parseConceptRequirement(typeParam string) (ConceptRequirement, 
 	if p.peekLexeme() == "" {
 		return nil, evt1Diagnostic("CV4142", "expected concept requirement", start.Span)
 	}
+	async := false
+	if p.peekLexeme() == "async" || p.peekLexeme() == "asynchronous" {
+		p.next()
+		async = true
+	}
 	if p.peekLexeme() == "compiler" && p.peekLexemeN(1) == "." {
 		p.next()
 		p.next()
@@ -1471,8 +1491,18 @@ func (p *parser) parseConceptRequirement(typeParam string) (ConceptRequirement, 
 		return nil, err
 	}
 	if p.peekLexeme() == ";" {
+		if async {
+			return nil, evt1Diagnostic("INTERFACE_ASYNC_METHOD_SIGNATURE_MISMATCH", "async is valid only on an interface method requirement", start.Span)
+		}
 		p.next()
 		return &FieldRequirement{Type: retType, Name: nameTok.Lexeme, Readonly: retType.Const, Span: start.Span}, nil
+	}
+	if p.peekLexeme() == "<" {
+		code := "INTERFACE_NOT_DYN_COMPATIBLE"
+		if async {
+			code = "INTERFACE_ASYNC_METHOD_NOT_DYN_COMPATIBLE"
+		}
+		return nil, evt1Diagnostic(code, "open generic runtime interface methods do not have a fixed witness shape", nameTok.Span)
 	}
 	if _, err := p.expect("("); err != nil {
 		return nil, err
@@ -1500,6 +1530,9 @@ func (p *parser) parseConceptRequirement(typeParam string) (ConceptRequirement, 
 	}
 	if _, err := p.expect(";"); err != nil {
 		return nil, err
+	}
+	if async {
+		req.ReturnType = evt1AsyncType(req.ReturnType, req.Name, start.Span)
 	}
 	return req, nil
 }

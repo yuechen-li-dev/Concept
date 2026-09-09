@@ -147,13 +147,15 @@ type CleanupPlan struct {
 }
 
 type DispatchPlan struct {
-	MIRID     string            `json:"mir_id"`
-	Operation string            `json:"operation"`
-	Strategy  string            `json:"strategy"`
-	Witness   string            `json:"witness,omitempty"`
-	Entry     string            `json:"entry,omitempty"`
-	Certainty DecisionCertainty `json:"certainty"`
-	Evidence  PlanningEvidence  `json:"evidence"`
+	MIRID            string            `json:"mir_id"`
+	Operation        string            `json:"operation"`
+	Strategy         string            `json:"strategy"`
+	Witness          string            `json:"witness,omitempty"`
+	ReturnType       string            `json:"return_type,omitempty"`
+	AsyncConstructor bool              `json:"async_constructor,omitempty"`
+	Entry            string            `json:"entry,omitempty"`
+	Certainty        DecisionCertainty `json:"certainty"`
+	Evidence         PlanningEvidence  `json:"evidence"`
 }
 
 type AggregatePlan struct {
@@ -459,7 +461,7 @@ func planFunction(fn MIRFunction, facts SemanticFactSet, target TargetCapabiliti
 			if op.Kind == "dyn_make" {
 				witness = strings.TrimSpace(strings.Split(op.Detail, "<-")[0])
 			}
-			fp.Dispatch = append(fp.Dispatch, DispatchPlan{MIRID: op.ID, Operation: op.Kind, Strategy: strategy, Witness: witness, Entry: entry, Certainty: d.Certainty, Evidence: d.Evidence})
+			fp.Dispatch = append(fp.Dispatch, DispatchPlan{MIRID: op.ID, Operation: op.Kind, Strategy: strategy, Witness: witness, Entry: entry, ReturnType: op.ReturnType, AsyncConstructor: op.AsyncConstructor, Certainty: d.Certainty, Evidence: d.Evidence})
 		case "result_propagate", "option_propagate", "result_unroll", "option_unroll", "try_handler", "assert":
 			fp.Failure = append(fp.Failure, d)
 		case "while", "bounded_while", "if_stmt", "match_stmt":
@@ -857,6 +859,19 @@ func ValidateLoweringPlan(mir *MIR, facts *SemanticFactSet, plan *LoweringPlan) 
 		for _, dispatch := range fp.Dispatch {
 			if dispatch.Operation == "dyn_make" && !witnesses[dispatch.Witness] {
 				return fail("PLAN_WITNESS_INVALID", "dispatch plan references invalid witness "+dispatch.Witness)
+			}
+			var source *MIROperation
+			for i := range fn.Operations {
+				if fn.Operations[i].ID == dispatch.MIRID {
+					source = &fn.Operations[i]
+					break
+				}
+			}
+			if source == nil || dispatch.ReturnType != source.ReturnType || dispatch.AsyncConstructor != source.AsyncConstructor {
+				return fail("PLAN_ASYNC_INVALID", "dispatch plan does not preserve dyn async constructor result semantics")
+			}
+			if dispatch.AsyncConstructor && (dispatch.Operation != "dyn_call" || dispatch.Strategy != "WitnessIndirect" || !strings.HasPrefix(dispatch.ReturnType, "Async<")) {
+				return fail("PLAN_ASYNC_INVALID", "dyn async constructor must remain ordinary witness-indirect dispatch returning Async<T>")
 			}
 		}
 		live := map[string]bool{}

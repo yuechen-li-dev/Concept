@@ -1,0 +1,46 @@
+profile Core;
+
+interface Reader<T>
+{
+    requires async int Read(ref T self);
+}
+
+interface Resettable<T>
+{
+    requires void Reset(ref T self);
+}
+
+interface DeviceLike<T>
+{
+    requires Reader<T>;
+    requires Resettable<T>;
+}
+
+struct Device
+{
+    int value;
+
+    async int Read(ref Device self)
+    {
+        return self.value;
+    }
+
+    void Reset(ref Device self)
+    {
+        self.value = 0;
+    }
+}
+
+int Main()
+{
+    Device device = Device{42};
+    dyn DeviceLike value = ref device;
+    Async<int> work = value.Read();
+    while (not Complete(work)) bounded(2)
+    {
+        Step(work);
+    }
+    int observed = Result(work);
+    value.Reset();
+    return observed;
+}

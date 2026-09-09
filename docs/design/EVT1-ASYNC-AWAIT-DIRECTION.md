@@ -1,6 +1,6 @@
 # EVT1 async/await direction
 
-Status: R5g structured normalization implemented
+Status: R5h interface/dyn composition implemented over R5g normalization
 
 ## One execution model
 
@@ -94,12 +94,29 @@ The emitted MIR and Plan contain those states and edges automatically. The
 long spellings remain an intentionally rather spacious Easter egg; they still
 buy no additional semantics.
 
-## Bounded omissions and R5h
+## Bounded omissions after R5h
 
 Await in control expressions, arbitrary or irreducible CFGs, recursive-depth
-inference, async interface/dyn methods, OS-I/O integration, schedulers,
+inference, OS-I/O integration, schedulers,
 cancellation, timeout, select/race, channels, heap futures, and LIR remain
-deferred. Recommended R5h is a bounded async callable/interface boundary:
-prove statically selected interface methods and fixed witness dispatch over
-the existing inline operation and machine stack, without adding dynamic task
-allocation, scheduler ownership, or an async runtime ecosystem.
+deferred.
+
+## R5h interface and dyn composition
+
+Async interface methods are ordinary methods returning `Async<T>`. Static
+templates select the concrete constructor directly. Dyn calls select that same
+constructor once through the ordinary witness and return a normal movable-only
+operation. Immediate await adopts the concrete child frames; named operations
+remain manually driveable with `Step`, `Complete`, and `Result`.
+
+The concrete generated frame persists `self` when needed after an await.
+Existing provenance rejects escape from local or scoped dyn backing, and const
+rules reject mutable receivers through `dyn const`. The witness is not a
+virtual coroutine and is not consulted after construction unless the method
+body itself performs another dyn call.
+
+R5h adds no async vtable, task/promise runtime, scheduler, executor, heap,
+cancellation, channel, race/select, generalized closure, or public ABI promise.
+Recommended R5i is a bounded non-owning callable/callback value using explicit
+capture provenance and the same fixed witness shape, without generalized
+closure inference or allocation.

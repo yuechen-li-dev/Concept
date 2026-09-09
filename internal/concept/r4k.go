@@ -330,6 +330,32 @@ func evt1WitnessAdapterCName(id, member string) string {
 	return "concept_witness_" + evt1CName(id) + "_" + evt1CName(member)
 }
 
+func evt1WitnessSelfArgument(witness *evt1InterfaceWitness, fn FunctionDecl, concretePtr string) string {
+	object := "((" + concretePtr + ")object)"
+	if witness.Concrete.ArrayElem == nil || len(fn.Params) == 0 {
+		return object
+	}
+	dimensions := make([]string, 0, evt1StorageRank(witness.Concrete))
+	if len(witness.Concrete.Shape) == 0 {
+		dimensions = append(dimensions, fmt.Sprintf("%d", witness.Concrete.ArrayLength))
+	} else {
+		for _, dimension := range witness.Concrete.Shape {
+			dimensions = append(dimensions, fmt.Sprintf("%d", dimension.Extent))
+		}
+	}
+	return fmt.Sprintf("(%s){ .data = %s->data, .shape = { %s } }", evt1CType(fn.Params[0].Type), object, strings.Join(dimensions, ", "))
+}
+
+func evt1InterfaceMethodRequirement(env *semanticEnv, interfaceName, method string) (OperationRequirement, bool) {
+	methods, _, _ := evt1InterfaceRuntimeRequirements(env, interfaceName, map[string]bool{})
+	for _, req := range methods {
+		if req.Name == method {
+			return req, true
+		}
+	}
+	return OperationRequirement{}, false
+}
+
 func (l *lowering) interfaceWitnessDeclarations() string {
 	var b strings.Builder
 	for _, decl := range l.module.Concepts {
@@ -383,7 +409,7 @@ func (l *lowering) interfaceWitnessDefinitions() string {
 			if req.ReturnType.Name != "void" {
 				b.WriteString("return ")
 			}
-			b.WriteString(evt1FunctionSymbolForDecl(l.outputBase, l.env, fn) + "((" + concretePtr + ")object")
+			b.WriteString(evt1FunctionSymbolForDecl(l.outputBase, l.env, fn) + "(" + evt1WitnessSelfArgument(witness, fn, concretePtr))
 			for _, param := range req.Params[1:] {
 				b.WriteString(", " + param.Name)
 			}

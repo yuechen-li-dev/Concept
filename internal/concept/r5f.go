@@ -17,6 +17,11 @@ func evt1ModuleHasAsync(module Module) bool {
 			return true
 		}
 	}
+	for _, template := range module.Templates {
+		if template.Async {
+			return true
+		}
+	}
 	return false
 }
 
@@ -388,6 +393,26 @@ func (l *lowering) lowerAsyncDirectCallPush(f *evt1FunctionLowerer, await *Await
 	}
 	if !ok {
 		return ind(indent) + "concept_async_abort(\"control-flow await requires direct async call\");\n" + ind(indent) + "return;\n"
+	}
+	if call.Member {
+		prelude, value, operationType := f.lowerExpr(call, indent)
+		if operationType.Kind != TypeAsync {
+			return ind(indent) + "concept_async_abort(\"member await did not construct Async<T>\");\n" + ind(indent) + "return;\n"
+		}
+		child := f.nextTemp("async_child")
+		var b strings.Builder
+		b.WriteString(prelude)
+		b.WriteString(ind(indent) + fmt.Sprintf("concept_async_operation %s = %s;\n", child, value))
+		b.WriteString(f.lowerAllScopeDrops(indent))
+		b.WriteString(ind(indent) + fmt.Sprintf("frame->state = %d;\n", resumeState))
+		b.WriteString(ind(indent) + fmt.Sprintf("if (concept_async_complete(&%s)) {\n", child))
+		b.WriteString(ind(indent+1) + fmt.Sprintf("memcpy(async_operation->child_outcome.bytes, %s.result.bytes, %s.result_size);\n", child, child))
+		b.WriteString(ind(indent+1) + fmt.Sprintf("async_operation->child_outcome_size = %s.result_size;\n", child))
+		b.WriteString(ind(indent+1) + "goto async_dispatch;\n")
+		b.WriteString(ind(indent) + "}\n")
+		b.WriteString(ind(indent) + fmt.Sprintf("concept_async_adopt(async_operation, &%s);\n", child))
+		b.WriteString(ind(indent) + "return;\n")
+		return b.String()
 	}
 	var b strings.Builder
 	var args []string

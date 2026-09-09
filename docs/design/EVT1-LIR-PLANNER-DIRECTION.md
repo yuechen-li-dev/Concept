@@ -1,6 +1,6 @@
 # EVT1 LIR Planner direction
 
-Status: R5g structured async graph planning consumer; LIR is future work
+Status: R5h witness-indirect async constructor planning consumer; LIR is future work
 
 ## Authority pipeline
 
@@ -147,3 +147,16 @@ equality. It therefore cannot repair a malformed join, infer new liveness,
 drop an edge, or choose a saved-PC fallback. Dispatch-shape optimization and
 state merging remain future planning choices only after semantic equivalence
 is proven; R5g emits no LIR.
+
+## R5h dyn async dispatch plan
+
+An interface async call remains `DispatchPlan.Strategy = WitnessIndirect` and
+adds the normalized `Async<T>` return plus an async-constructor marker. The
+concrete method retains its ordinary `AsyncPlan`; the caller's await retains
+`MachinePush`, `Scheduler: None`, and `SavedPC: None`. Plan validation requires
+these MIR facts to survive and rejects a sync return or alternate dispatch.
+
+GenericC11 currently returns the inline operation by value. Direct construction
+into caller-provided storage is a possible later Planner strategy for large
+frames, not an implicit fallback or public ABI commitment. It must not add
+allocation, virtual Step/Complete/Result, or per-await dispatch.

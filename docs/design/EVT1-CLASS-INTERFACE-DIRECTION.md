@@ -1,6 +1,6 @@
 # EVT1 class and interface direction
 
-Status: R4k narrow model implemented
+Status: R5h async member composition implemented over the R4k narrow model
 
 ## Taxonomy
 
@@ -25,6 +25,11 @@ receiver. The default receiver is `ref Class self`; authors may spell
 `ref const Class self` for readonly access. `value.Method(args)` inserts that
 receiver, and an unambiguous bare member in a method body means `self.member`.
 Concrete calls are direct and static.
+
+An async struct or class method uses the same receiver normalization, access
+control, and aggregate storage law. Its callable result is `Async<T>`, so it
+may satisfy an async interface operation without an `implements` declaration
+or class-runtime change. Sync and async callable results must match exactly.
 
 An interface reuses concept requirements and satisfaction. Its public method
 requirements begin with an erased `ref T self` or `ref const T self`; concrete

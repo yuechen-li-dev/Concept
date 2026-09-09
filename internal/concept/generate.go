@@ -371,8 +371,13 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 	}
 	for _, witness := range evt1SortedWitnesses(env) {
 		entry := MIRInterfaceWitness{ID: witness.ID, Interface: witness.Interface.Name, ConcreteType: witness.Concrete.String(), Prerequisites: append([]string{}, witness.Prerequisites...), NoAllocation: true}
-		for _, method := range witness.Methods {
+		methodReqs, _, _ := evt1InterfaceRuntimeRequirements(env, witness.Interface.Name, map[string]bool{})
+		for i, method := range witness.Methods {
 			entry.Methods = append(entry.Methods, method.Name)
+			if i < len(methodReqs) && methodReqs[i].ReturnType.Kind == TypeAsync && len(methodReqs[i].ReturnType.TypeArgs) == 1 {
+				normalized := evt1SubstituteRequirement(methodReqs[i], witness.Interface.TypeParam, witness.Concrete)
+				entry.AsyncMethods = append(entry.AsyncMethods, MIRAsyncWitnessMethod{Name: method.Name, Signature: evt1Signature(normalized.ReturnType, normalized.Name, normalized.Params), ReturnType: normalized.ReturnType, EventualType: normalized.ReturnType.TypeArgs[0], MachineIdentity: method.Name + "#async#machine"})
+			}
 		}
 		for _, field := range witness.Fields {
 			entry.FieldGetters = append(entry.FieldGetters, field.Name)
@@ -415,6 +420,7 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 	for _, templateDecl := range module.Templates {
 		info := env.templateInfos[templateDecl.Name]
 		mirTemplate := MIRTemplate{
+			Async:     templateDecl.Async,
 			Name:      templateDecl.Name,
 			TypeParam: templateDecl.TypeParam,
 			Constraint: MIRTemplateConstraint{
@@ -470,6 +476,11 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 				ReturnType:        instance.Function.ReturnType,
 				InvocationSpans:   append([]Span{}, instance.InvocationSpans...),
 				SourceSpan:        instance.SourceSpan,
+			}
+			if instance.Function.Async {
+				asyncFn := instance.Function
+				asyncFn.Name = instance.GeneratedSymbol
+				mirInstance.Async = evt1BuildMIRAsync(asyncFn, env)
 			}
 			for _, entry := range instance.Closure {
 				mirInstance.Closure = append(mirInstance.Closure, MIRClosureEntry{
@@ -574,6 +585,11 @@ func evt1ValidateMIR(mir MIR) error {
 					return evt1Diagnostic("INTERFACE_WITNESS_INVALID", fmt.Sprintf("interface witness %s contains an empty or duplicate runtime entry", witness.ID), Span{})
 				}
 				seenEntries[entry] = true
+			}
+		}
+		for _, method := range witness.AsyncMethods {
+			if method.Name == "" || method.Signature == "" || method.ReturnType.Kind != TypeAsync || len(method.ReturnType.TypeArgs) != 1 || !method.ReturnType.TypeArgs[0].Equal(method.EventualType) || method.MachineIdentity == "" {
+				return evt1Diagnostic("DYN_ASYNC_WITNESS_INVALID", "async interface witness MIR omits its normalized return or concrete machine identity", Span{})
 			}
 		}
 	}
@@ -764,6 +780,9 @@ func evt1ValidateMIR(mir MIR) error {
 			if operation.Kind == "dyn_call" || operation.Kind == "dyn_field_get" || operation.Kind == "dyn_field_set" {
 				if operation.Type == "" || operation.Detail == "" || !operation.NoCopy || !operation.NoAllocation || !operation.NoOwnershipTransfer {
 					return evt1Diagnostic("DYN_MIR_INVALID", fmt.Sprintf("MIR %s operation %s omits interface or storage-neutrality facts", operation.Kind, operation.ID), operation.SourceSpan)
+				}
+				if operation.AsyncConstructor && (operation.Kind != "dyn_call" || !strings.HasPrefix(operation.ReturnType, "Async<") || operation.Evaluation != "ExactlyOnce" || operation.OutcomeTransfer != "MoveOnce") {
+					return evt1Diagnostic("DYN_ASYNC_RESULT_OWNERSHIP_INVALID", fmt.Sprintf("MIR dyn async constructor %s omits exactly-once move evidence", operation.ID), operation.SourceSpan)
 				}
 				continue
 			}
@@ -1291,6 +1310,9 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 			op := MIROperation{ID: id, Kind: kind, Detail: e.Callee, SourceSpan: e.Span}
 			if e.DynDispatch {
 				op.Type, op.NoCopy, op.NoAllocation, op.NoOwnershipTransfer = e.DynInterface, true, true, true
+				if req, ok := evt1InterfaceMethodRequirement(env, e.DynInterface, e.Callee); ok && req.ReturnType.Kind == TypeAsync {
+					op.ReturnType, op.AsyncConstructor, op.Evaluation, op.OutcomeTransfer = req.ReturnType.String(), true, "ExactlyOnce", "MoveOnce"
+				}
 			}
 			fn.Operations = append(fn.Operations, op)
 			collectExprMIROps(env, e.Receiver, fn, templateInfo)
@@ -3204,6 +3226,21 @@ func (l *lowering) functionSymbols(fn FunctionDecl) evt1FunctionSymbols {
 }
 
 func (l *lowering) templateInstanceBody(instance *evt1TemplateInstance) string {
+	if instance.Function.Async {
+		fn := instance.Function
+		fn.Name = instance.GeneratedSymbol
+		stepName := evt1AsyncStepName(l.outputBase, fn.Name)
+		initName := evt1AsyncInitName(l.outputBase, fn.Name)
+		var b strings.Builder
+		b.WriteString(fmt.Sprintf("static void %s(concept_async_operation*, void*);\n", stepName))
+		b.WriteString(fmt.Sprintf("static void %s(void*", initName))
+		for _, p := range fn.Params {
+			b.WriteString(fmt.Sprintf(", %s %s", evt1CType(p.Type), p.Name))
+		}
+		b.WriteString(");\n")
+		b.WriteString(l.lowerAsyncFunction(fn, instance.GeneratedSymbol))
+		return b.String()
+	}
 	lower := newEVT1FunctionLowerer(l, instance.Function, instance.GeneratedSymbol, true)
 	return lower.lower()
 }
@@ -4274,7 +4311,11 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 			prelude.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(argType), temp, argExpr))
 			args = append(args, temp)
 		}
-		return prelude.String(), instance.GeneratedSymbol + "(" + strings.Join(args, ", ") + ")", instance.Function.ReturnType
+		resultType := instance.Function.ReturnType
+		if instance.Function.Async {
+			resultType = evt1AsyncType(resultType, instance.GeneratedSymbol, e.Span)
+		}
+		return prelude.String(), instance.GeneratedSymbol + "(" + strings.Join(args, ", ") + ")", resultType
 	case *ConstructExpr:
 		enumType := Type{Name: e.EnumName, Kind: TypeEnum, Span: e.Span}
 		if evt1IsFailureType(e.ResolvedType) {
@@ -4833,6 +4874,9 @@ func MIRText(m MIR) string {
 		lines = append(lines, fmt.Sprintf("interface_witness %s interface %s concrete %s no_allocation=%t", witness.ID, witness.Interface, witness.ConcreteType, witness.NoAllocation))
 		for _, method := range witness.Methods {
 			lines = append(lines, fmt.Sprintf("interface_witness %s method %s", witness.ID, method))
+		}
+		for _, method := range witness.AsyncMethods {
+			lines = append(lines, fmt.Sprintf("interface_witness %s async_constructor %s signature %s machine %s", witness.ID, method.Name, method.Signature, method.MachineIdentity))
 		}
 		for _, field := range witness.FieldGetters {
 			lines = append(lines, fmt.Sprintf("interface_witness %s field_get %s", witness.ID, field))

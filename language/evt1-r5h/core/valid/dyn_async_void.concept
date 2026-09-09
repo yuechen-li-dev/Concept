@@ -1,0 +1,35 @@
+profile Core;
+
+interface Flusher<T>
+{
+    requires async void Flush(ref T self);
+}
+
+struct Device
+{
+    int count;
+
+    async void Flush(ref Device self)
+    {
+        self.count = self.count + 1;
+        return;
+    }
+}
+
+async int Run(dyn Flusher flusher)
+{
+    await flusher.Flush();
+    return 42;
+}
+
+int Main()
+{
+    Device device = Device{0};
+    dyn Flusher flusher = ref device;
+    Async<int> work = Run(flusher);
+    while (not Complete(work)) bounded(4)
+    {
+        Step(work);
+    }
+    return Result(work);
+}

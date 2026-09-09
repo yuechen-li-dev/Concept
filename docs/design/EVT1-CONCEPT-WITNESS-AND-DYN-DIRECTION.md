@@ -1,6 +1,6 @@
 # EVT1 concept witness and dyn direction
 
-Status: R4k bounded non-owning runtime reification implemented
+Status: R5h async callable composition implemented over R4k reification
 
 ## One contract system
 
@@ -73,3 +73,24 @@ storage, heap-backed erasure, and allocator integration remain deferred and
 must name an explicit storage policy. Associated types, open generic runtime
 methods, arbitrary compile-time runtime payloads, inheritance, and a generalized
 object model are outside this design.
+
+## Async method entries
+
+R5h treats `requires async T Method(ref U self);` as the ordinary callable
+signature `(ref U) -> Async<T>`. Satisfaction, composition, witness identity,
+const checking, and prerequisite flattening are unchanged. One ordinary witness
+entry returns `concept_async_operation` by value and its adapter invokes the
+concrete generated constructor exactly once.
+
+Dynamic dispatch ends at construction. The returned operation owns concrete
+generated step functions and inline frames; it does not consult an async vtable
+on each Step. Await adopts those frames into the ordinary bounded machine
+stack. The operation's concrete `self` frame field retains receiver provenance,
+so local or scoped backing cannot escape through witness dispatch. Static facts
+still erase, and mixed sync/async entries share one static witness table.
+
+Large by-value returns are an internal strict-C11 choice, not a frozen public
+ABI. A future Planner may select caller-provided construction storage only if
+that choice is explicit, allocation-free, and semantically identical. Owning
+dyn, virtual coroutine objects, open generic runtime methods, generalized
+callables, and hidden storage remain outside R5h.

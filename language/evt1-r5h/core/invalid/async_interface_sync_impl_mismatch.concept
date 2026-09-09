@@ -1,0 +1,18 @@
+profile Core;
+
+interface Reader<T>
+{
+    requires async int Read(ref T self);
+}
+
+struct Device
+{
+    int value;
+
+    int Read(ref Device self)
+    {
+        return 1;
+    }
+}
+
+requires Reader<Device>;

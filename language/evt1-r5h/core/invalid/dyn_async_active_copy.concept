@@ -1,0 +1,25 @@
+profile Core;
+
+interface Reader<T>
+{
+    requires async int Read(ref T self);
+}
+
+struct Device
+{
+    int value;
+
+    async int Read(ref Device self)
+    {
+        return 1;
+    }
+}
+
+int Main()
+{
+    Device device = Device{1};
+    dyn Reader reader = ref device;
+    Async<int> first = reader.Read();
+    Async<int> second = first;
+    return 0;
+}

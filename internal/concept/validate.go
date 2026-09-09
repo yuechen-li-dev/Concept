@@ -669,6 +669,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 			return nil, err
 		}
 		scope.returnType = resolvedReturn
+		scope.inAsync = templateDecl.Async
 		for paramIndex, param := range templateDecl.Params {
 			resolvedParam, err := evt1ResolveType(env, nil, param.Type)
 			if err != nil {
@@ -684,6 +685,10 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 			})
 		}
 		if err := validateBlock(env, scope, resolvedReturn, *templateDecl.Body, env.templateInfos[templateDecl.Name], false); err != nil {
+			return nil, err
+		}
+		templateFn := FunctionDecl{Name: templateDecl.Name, Async: templateDecl.Async, ReturnType: templateDecl.ReturnType, Params: templateDecl.Params, Body: templateDecl.Body, Span: templateDecl.Span}
+		if err := evt1ValidateAsyncShape(templateFn); err != nil {
 			return nil, err
 		}
 	}
@@ -1166,7 +1171,7 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				continue
 			}
 			provenance := evt1LifetimeProvenance{Kind: evt1ProvenanceLocal, Depth: local.depth, Scoped: resolvedType.Scoped}
-			if resolvedType.isReference() || evt1IsRefStructType(env, resolvedType) || resolvedType.Kind == TypeDyn {
+			if resolvedType.isReference() || evt1IsRefStructType(env, resolvedType) || resolvedType.Kind == TypeDyn || resolvedType.Kind == TypeAsync {
 				provenance = evt1ExprProvenance(env, local, s.Value)
 				provenance.Scoped = provenance.Scoped || resolvedType.Scoped
 			}
@@ -1484,6 +1489,12 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				}
 				if provenance.Kind != evt1ProvenanceParameter && provenance.Kind != evt1ProvenanceStatic {
 					return evt1Diagnostic("CV4521", "ref struct return would escape referenced local storage", s.Value.exprSpan())
+				}
+			}
+			if returnType.Kind == TypeAsync {
+				provenance := evt1ExprProvenance(env, local, s.Value)
+				if provenance.Scoped || provenance.Kind == evt1ProvenanceLocal {
+					return evt1Diagnostic("DYN_ASYNC_RECEIVER_LIFETIME_INVALID", "Async operation cannot escape the lifetime of its dyn receiver", s.Value.exprSpan())
 				}
 			}
 			if !evt1TypeCopyable(env, returnType) && !evt1CanTransferInitialize(env, returnType, s.Value) {
@@ -2103,7 +2114,7 @@ func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string,
 		}
 		return nil
 	}
-	if t.Scoped && !t.isReference() && t.Kind != TypeConceptParam && !evt1IsRefStructType(env, t) {
+	if t.Scoped && !t.isReference() && t.Kind != TypeConceptParam && !evt1IsRefStructType(env, t) && t.Kind != TypeDyn {
 		return evt1Diagnostic("CV4525", fmt.Sprintf("scoped requires a reference or ref struct type, got %s", t.String()), span)
 	}
 	if t.PointerTo != nil {
@@ -2678,6 +2689,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			}
 		}
 		instance.InvocationSpans = append(instance.InvocationSpans, e.Span)
+		if instance.Function.Async {
+			return evt1AsyncType(evt1CanonicalType(env, instance.Function.ReturnType), instance.GeneratedSymbol, e.Span), nil
+		}
 		return evt1CanonicalType(env, instance.Function.ReturnType), nil
 	case *IndexExpr:
 		if facts, ok := evt1TensorFactsForExpr(scope, e.Base); ok {
@@ -3382,7 +3396,7 @@ func evt1IsRefStructType(env *semanticEnv, t Type) bool {
 }
 
 func evt1InitialParameterProvenance(env *semanticEnv, t Type, index, depth int) evt1LifetimeProvenance {
-	if t.isReference() || evt1IsRefStructType(env, t) {
+	if t.isReference() || evt1IsRefStructType(env, t) || t.Kind == TypeDyn {
 		return evt1LifetimeProvenance{Kind: evt1ProvenanceParameter, ParameterIndex: index, Scoped: t.Scoped}
 	}
 	return evt1LifetimeProvenance{Kind: evt1ProvenanceLocal, Depth: depth, Scoped: t.Scoped}
@@ -3659,6 +3673,9 @@ func evt1ExprProvenance(env *semanticEnv, scope *evt1Scope, expr Expr) evt1Lifet
 			return evt1ExprProvenance(env, scope, e.Args[0])
 		}
 	case *CallExpr:
+		if e.Member && e.Receiver != nil {
+			return evt1ExprProvenance(env, scope, e.Receiver)
+		}
 		if (e.Callee == evt1SpanMutableName || e.Callee == evt1SpanReadonlyName || e.Callee == "Subspan" || e.Callee == "Tensor") && len(e.Args) > 0 {
 			return evt1ExprProvenance(env, scope, e.Args[0])
 		}
@@ -5016,7 +5033,7 @@ func evt1ResultProvenanceFact(functionName string, summary evt1ResultProvenanceS
 func evt1LookupRequiredOperation(env *semanticEnv, required OperationRequirement, span Span, prefix string) (FunctionDecl, error) {
 	var candidates []FunctionDecl
 	for _, fn := range env.functions[required.Name] {
-		if fn.Visibility == "private" && evt1FunctionParamSignature(fn) == evt1FunctionParamSignature(FunctionDecl{Name: required.Name, Params: required.Params}) && evt1CanonicalType(env, fn.ReturnType).Equal(evt1CanonicalType(env, required.ReturnType)) {
+		if fn.Visibility == "private" && evt1FunctionParamSignature(fn) == evt1FunctionParamSignature(FunctionDecl{Name: required.Name, Params: required.Params}) && evt1CanonicalType(env, evt1CallableReturnType(fn)).Equal(evt1CanonicalType(env, required.ReturnType)) {
 			return FunctionDecl{}, evt1Diagnostic("INTERFACE_PRIVATE_MEMBER_CANNOT_SATISFY", fmt.Sprintf("%s requires public capability %s, but the matching member is private", prefix, required.Name), span)
 		}
 		if fn.Visibility != "private" {
@@ -5048,7 +5065,7 @@ func evt1LookupRequiredOperation(env *semanticEnv, required OperationRequirement
 			}
 			continue
 		}
-		if !evt1CanonicalType(env, fn.ReturnType).Equal(evt1CanonicalType(env, required.ReturnType)) {
+		if !evt1CanonicalType(env, evt1CallableReturnType(fn)).Equal(evt1CanonicalType(env, required.ReturnType)) {
 			return FunctionDecl{}, evt1Diagnostic("CV4156", fmt.Sprintf("%s requires %s but found %s", prefix, evt1Signature(required.ReturnType, required.Name, required.Params), evt1FunctionSignature(fn)), span)
 		}
 		exact = append(exact, fn)
@@ -5121,7 +5138,14 @@ func evt1Signature(retType Type, name string, params []Param) string {
 }
 
 func evt1FunctionSignature(fn FunctionDecl) string {
-	return evt1Signature(fn.ReturnType, fn.Name, fn.Params)
+	return evt1Signature(evt1CallableReturnType(fn), fn.Name, fn.Params)
+}
+
+func evt1CallableReturnType(fn FunctionDecl) Type {
+	if fn.Async {
+		return evt1AsyncType(fn.ReturnType, fn.Name, fn.Span)
+	}
+	return fn.ReturnType
 }
 
 func evt1FunctionParamSignature(fn FunctionDecl) string {
@@ -5416,6 +5440,7 @@ func instantiateTemplate(env *semanticEnv, templateName string, concreteType Typ
 	}
 	scope := newEVT1Scope(nil)
 	scope.returnType = instFn.ReturnType
+	scope.inAsync = instFn.Async
 	for paramIndex, param := range instFn.Params {
 		scope.declare(param.Name, evt1ValueBinding{
 			t:          evt1CanonicalType(env, param.Type),
@@ -5425,6 +5450,12 @@ func instantiateTemplate(env *semanticEnv, templateName string, concreteType Typ
 		})
 	}
 	if err := validateBlock(env, scope, instFn.ReturnType, *instFn.Body, nil, false); err != nil {
+		return nil, err
+	}
+	if err := evt1ValidateAsyncShape(instFn); err != nil {
+		return nil, err
+	}
+	if err := evt1ValidateAsyncPersistence(instFn); err != nil {
 		return nil, err
 	}
 	instance := &evt1TemplateInstance{
@@ -5492,6 +5523,7 @@ func evt1InstantiateTemplateFunction(templateDecl TemplateDecl, concreteType Typ
 		return FunctionDecl{}, err
 	}
 	fn := FunctionDecl{
+		Async:      templateDecl.Async,
 		Name:       templateDecl.Name,
 		ReturnType: evt1SubstituteType(templateDecl.ReturnType, templateDecl.TypeParam, concreteType),
 		Span:       templateDecl.Span,
@@ -5601,6 +5633,30 @@ func evt1SubstituteStatement(stmt Statement, typeParam string, concreteType Type
 
 func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, error) {
 	switch e := expr.(type) {
+	case *AwaitExpr:
+		value, err := evt1SubstituteExpr(e.Value, typeParam, concreteType)
+		if err != nil {
+			return nil, err
+		}
+		return &AwaitExpr{Value: value, ResultType: evt1SubstituteType(e.ResultType, typeParam, concreteType), Span: e.Span}, nil
+	case *FailureExpr:
+		value, err := evt1SubstituteExpr(e.Value, typeParam, concreteType)
+		if err != nil {
+			return nil, err
+		}
+		return &FailureExpr{Value: value, Op: e.Op, ResolvedType: evt1SubstituteType(e.ResolvedType, typeParam, concreteType), Span: e.Span}, nil
+	case *ParenExpr:
+		value, err := evt1SubstituteExpr(e.Value, typeParam, concreteType)
+		if err != nil {
+			return nil, err
+		}
+		return &ParenExpr{Value: value, Span: e.Span}, nil
+	case *UnaryExpr:
+		value, err := evt1SubstituteExpr(e.Value, typeParam, concreteType)
+		if err != nil {
+			return nil, err
+		}
+		return &UnaryExpr{Op: e.Op, Value: value, Span: e.Span}, nil
 	case *NameExpr:
 		return &NameExpr{Name: e.Name, Span: e.Span}, nil
 	case *IntLiteral:

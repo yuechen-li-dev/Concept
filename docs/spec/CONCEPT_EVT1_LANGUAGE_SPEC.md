@@ -1172,6 +1172,38 @@ re-enters the state from its beginning. Async implies no scheduler, executor,
 thread, event loop, VM, coroutine ABI, saved instruction pointer, or hidden
 heap allocation.
 
+**Canonical EVT1 R5h async interface composition.** An async interface method
+is an ordinary interface method whose result is `Async<T>`. The spellings
+`requires async T F(ref U self);` and `requires asynchronous T F(ref U self);`
+normalize to `(ref U) -> Async<T>` before ordinary concept satisfaction and
+witness matching. Receiver type and constness, parameters, `Async<T>`, and its
+eventual `T` must match exactly. Sync and async methods never implicitly wrap
+or unwrap to satisfy one another.
+
+Struct and class methods satisfy that normalized requirement through the same
+resolver as every other operation. A constrained template remains statically
+dispatched, and synchronous code may retain the returned movable-only
+`Async<T>` without becoming async.
+
+Dynamic async dispatch selects the concrete `Async<T>` constructor through the
+ordinary `(interface, concrete type)` witness. Construction evaluates its
+operands once, executes no async body, allocates nothing, and transfers the
+fresh operation once. The returned operation contains concrete generated
+machine behavior; later `Step`, `Complete`, `Result`, or `await` uses ordinary
+R5f/R5g machinery and does not redispatch through the interface.
+
+A dyn receiver remains non-owning. A generated frame that retains `self` must
+not outlive its backing object; local and scoped dyn provenance cannot be
+laundered into an escaping operation. `dyn const I` may invoke only readonly
+receivers. Interface composition and compiler facts remain unchanged: static
+facts erase, while one mixed sync/async witness carries fixed runtime entries.
+
+R5h defines no async vtable, virtual `Step`, task/promise/future runtime,
+scheduler, executor, continuation allocation, hidden heap, RTTI registry, or
+stable public C ABI. Open generic runtime async methods remain rejected. A
+future internal ABI may construct into caller-provided storage only with the
+same explicit allocation-free semantics.
+
 ## 23. Effects, actuators, and profiles
 
 **Profile-specific.** R0 admits `effect`, ordered emitted-effect batches, and

@@ -381,6 +381,7 @@ type TemplateConstraint struct {
 }
 
 type TemplateDecl struct {
+	Async         bool               `json:"async,omitempty"`
 	Name          string             `json:"name"`
 	TypeParam     string             `json:"type_param"`
 	TypeParamSpan Span               `json:"type_param_span"`
@@ -1069,14 +1070,26 @@ type MIR struct {
 }
 
 type MIRInterfaceWitness struct {
-	ID            string   `json:"id"`
-	Interface     string   `json:"interface"`
-	ConcreteType  string   `json:"concrete_type"`
-	Methods       []string `json:"methods,omitempty"`
-	FieldGetters  []string `json:"field_getters,omitempty"`
-	FieldSetters  []string `json:"field_setters,omitempty"`
-	Prerequisites []string `json:"prerequisites,omitempty"`
-	NoAllocation  bool     `json:"no_allocation"`
+	ID            string                  `json:"id"`
+	Interface     string                  `json:"interface"`
+	ConcreteType  string                  `json:"concrete_type"`
+	Methods       []string                `json:"methods,omitempty"`
+	AsyncMethods  []MIRAsyncWitnessMethod `json:"async_methods,omitempty"`
+	FieldGetters  []string                `json:"field_getters,omitempty"`
+	FieldSetters  []string                `json:"field_setters,omitempty"`
+	Prerequisites []string                `json:"prerequisites,omitempty"`
+	NoAllocation  bool                    `json:"no_allocation"`
+}
+
+// MIRAsyncWitnessMethod makes the ordinary callable normalization of an async
+// interface entry inspectable. Runtime dispatch still uses the same witness
+// table and returns the same concrete Async<T> value as a direct call.
+type MIRAsyncWitnessMethod struct {
+	Name            string `json:"name"`
+	Signature       string `json:"signature"`
+	ReturnType      Type   `json:"return_type"`
+	EventualType    Type   `json:"eventual_type"`
+	MachineIdentity string `json:"machine_identity"`
 }
 
 type MIRLayout struct {
@@ -1216,6 +1229,7 @@ type MIRRequirementBinding struct {
 }
 
 type MIRTemplate struct {
+	Async        bool                    `json:"async,omitempty"`
 	Name         string                  `json:"name"`
 	TypeParam    string                  `json:"type_param"`
 	Constraint   MIRTemplateConstraint   `json:"constraint"`
@@ -1236,6 +1250,7 @@ type MIRInstance struct {
 	Closure             []MIRClosureEntry       `json:"closure,omitempty"`
 	RequirementBindings []MIRRequirementBinding `json:"requirement_bindings,omitempty"`
 	ReturnType          Type                    `json:"return_type"`
+	Async               *MIRAsyncFunction       `json:"async,omitempty"`
 	Params              []MIRName               `json:"params,omitempty"`
 	Operations          []MIROperation          `json:"operations,omitempty"`
 	InvocationSpans     []Span                  `json:"invocation_spans,omitempty"`
@@ -1399,6 +1414,10 @@ type MIROperation struct {
 	Kind                 string             `json:"kind"`
 	Type                 string             `json:"type,omitempty"`
 	Detail               string             `json:"detail,omitempty"`
+	ReturnType           string             `json:"return_type,omitempty"`
+	AsyncConstructor     bool               `json:"async_constructor,omitempty"`
+	Evaluation           string             `json:"evaluation,omitempty"`
+	OutcomeTransfer      string             `json:"outcome_transfer,omitempty"`
 	SourceStorageKind    StorageKind        `json:"source_storage_kind,omitempty"`
 	TargetStorageKind    StorageKind        `json:"target_storage_kind,omitempty"`
 	TargetRank           int                `json:"target_rank,omitempty"`

@@ -1,0 +1,43 @@
+profile Core;
+
+interface DeviceControl<T>
+{
+    requires bool Ready(ref const T self);
+    requires async int Read(ref T self);
+    requires void Reset(ref T self);
+}
+
+struct Device
+{
+    int value;
+
+    bool Ready(ref const Device self)
+    {
+        return self.value > 0;
+    }
+
+    async int Read(ref Device self)
+    {
+        return self.value;
+    }
+
+    void Reset(ref Device self)
+    {
+        self.value = 0;
+    }
+}
+
+int Main()
+{
+    Device device = Device{42};
+    dyn DeviceControl control = ref device;
+    bool ready = control.Ready();
+    Async<int> work = control.Read();
+    while (not Complete(work)) bounded(2)
+    {
+        Step(work);
+    }
+    int value = Result(work);
+    control.Reset();
+    return if (ready) value else 0;
+}

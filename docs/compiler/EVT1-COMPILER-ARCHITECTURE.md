@@ -1,6 +1,6 @@
 # Concept EVT1 Stage 0 compiler architecture
 
-Status: R5g reducible async control-flow normalization
+Status: R5h async callable/interface composition
 
 ## Authority
 
@@ -962,3 +962,33 @@ control flow or bolt async cases into expression emission. Unsupported control
 expressions reject rather than falling back to a program counter. No LIR,
 scheduler, heap frame, continuation pointer, or exception-unwind runtime is
 introduced.
+
+## R5h async interface composition boundary
+
+```text
+interface requirement
+    -> ordinary concept satisfaction
+    -> normalize async result to Async<T>
+    -> deterministic static witness
+    -> optional dyn witness reification
+
+dyn async call
+    -> ordinary WitnessIndirect dispatch
+    -> concrete Async<T> constructor once
+    -> concrete generated machine value
+    -> ordinary R5f/R5g push, Step, completion, and result
+```
+
+Required-operation lookup compares an async concrete method through its
+ordinary callable return `Async<T>`; there is no async implementation registry.
+Witness MIR records its normalized signature, eventual type, and concrete
+generated-machine identity. Dyn-call MIR records `ExactlyOnce` construction
+and `MoveOnce` transfer alongside the R4k storage-neutrality facts.
+
+`DispatchPlan` retains `WitnessIndirect` and annotates the `Async<T>` return.
+The callee keeps its concrete `AsyncPlan`; an async caller keeps `MachinePush`,
+`Scheduler: None`, and `SavedPC: None`. Strict-C11 adapters call the concrete
+constructor, and immediate await adopts the returned concrete frames. The
+persisted `self` reference carries ordinary provenance; the witness is not
+retained for subsequent Steps. No scheduler, virtual operation, allocation,
+or second dispatch path is introduced.

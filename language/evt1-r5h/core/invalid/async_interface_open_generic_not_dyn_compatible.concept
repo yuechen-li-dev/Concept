@@ -1,0 +1,6 @@
+profile Core;
+
+interface Transformer<T>
+{
+    requires async U Transform<U>(ref T self, U value);
+}
