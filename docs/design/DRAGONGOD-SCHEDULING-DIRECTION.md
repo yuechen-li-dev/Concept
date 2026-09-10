@@ -40,6 +40,10 @@ policy.
 | actuation | R7b `ActuatorHost` | machine-owned obligations | yes | no scheduler policy |
 | atomics/synchronization | none canonical | shared multi-worker mutation | no | defer host threads |
 
+R7d has since supplied the first canonical strict-C11 integer atomic substrate.
+The row remains insufficient for multi-worker scheduling because shared-access
+authority proofs and worker-safe scheduler notification have not yet landed.
+
 ## Collector interaction
 
 R7d may need per-context root ownership, allocation-state visibility, and

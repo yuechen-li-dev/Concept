@@ -1,0 +1,81 @@
+module Standard.Synchronization.Atomic;
+profile Core;
+
+// AtomicInt is the deliberately small R7d machine-atomic surface. The
+// compiler gives its sole field C11 _Atomic representation; all operations
+// remain ordinary library functions over this explicit authority.
+immovable struct AtomicInt
+{
+    int value;
+}
+
+enum MemoryOrder
+{
+    Relaxed,
+    Acquire,
+    Release,
+    AcquireRelease,
+    Sequential,
+}
+
+int LoadAtomic(ref const AtomicInt atom, MemoryOrder order)
+{
+    return AtomicLoadIntrinsic(ref const atom, order);
+}
+
+int LoadAtomic(ref const AtomicInt atom)
+{
+    return AtomicLoadIntrinsic(ref const atom, MemoryOrder::Sequential);
+}
+
+void StoreAtomic(ref AtomicInt atom, int value, MemoryOrder order)
+{
+    AtomicStoreIntrinsic(ref atom, value, order);
+}
+
+void StoreAtomic(ref AtomicInt atom, int value)
+{
+    AtomicStoreIntrinsic(ref atom, value, MemoryOrder::Sequential);
+}
+
+int ExchangeAtomic(ref AtomicInt atom, int value, MemoryOrder order)
+{
+    return AtomicExchangeIntrinsic(ref atom, value, order);
+}
+
+int ExchangeAtomic(ref AtomicInt atom, int value)
+{
+    return AtomicExchangeIntrinsic(ref atom, value, MemoryOrder::Sequential);
+}
+
+bool CompareExchangeAtomic(
+    ref AtomicInt atom,
+    ref int expected,
+    int desired,
+    MemoryOrder success,
+    MemoryOrder failure
+)
+{
+    return AtomicCompareExchangeIntrinsic(ref atom, ref expected, desired, success, failure);
+}
+
+bool CompareExchangeAtomic(ref AtomicInt atom, ref int expected, int desired)
+{
+    return AtomicCompareExchangeIntrinsic(
+        ref atom,
+        ref expected,
+        desired,
+        MemoryOrder::Sequential,
+        MemoryOrder::Sequential
+    );
+}
+
+int FetchAddAtomic(ref AtomicInt atom, int delta, MemoryOrder order)
+{
+    return AtomicFetchAddIntrinsic(ref atom, delta, order);
+}
+
+int FetchAddAtomic(ref AtomicInt atom, int delta)
+{
+    return AtomicFetchAddIntrinsic(ref atom, delta, MemoryOrder::Sequential);
+}

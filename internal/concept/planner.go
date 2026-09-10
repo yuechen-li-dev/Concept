@@ -519,6 +519,9 @@ func planFunction(fn MIRFunction, facts SemanticFactSet, target TargetCapabiliti
 func planOperation(op MIROperation, facts SemanticFactSet) PlanningDecision {
 	d := PlanningDecision{MIRID: op.ID, Category: "CallPlan", Operation: op.Kind, Strategy: "Direct", Certainty: DecisionSelected, Evidence: PlanningEvidence{Detail: "ordinary MIR operation preserves semantic order"}, SourceSpan: op.SourceSpan}
 	switch op.Kind {
+	case "atomic_load", "atomic_store", "atomic_exchange", "atomic_compare_exchange", "atomic_fetch_add":
+		d.Category, d.Strategy, d.Certainty = "SynchronizationPlan", "RetainC11Atomic", DecisionRequired
+		d.Evidence = PlanningEvidence{Claims: []string{"AtomicAccess", "ExplicitMemoryOrder", "NoAllocation"}, Detail: "no exclusivity proof permits weakening"}
 	case "infer":
 		d.Category, d.Strategy, d.Certainty = "InferencePlan", "ScalarStableSoftMax", DecisionSelected
 		d.Evidence = PlanningEvidence{Claims: []string{"MaxSubtraction", "InlineFixed", "NoSIMD", "NoAllocation"}}

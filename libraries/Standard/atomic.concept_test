@@ -1,0 +1,23 @@
+profile Core;
+
+import Standard.Synchronization.Atomic;
+
+[[fact]]
+void AtomicOperationsPreserveExplicitSemantics()
+{
+    AtomicInt value = AtomicInt{1};
+    Assert.Equals(LoadAtomic(ref value, MemoryOrder::Sequential), 1, "initial value is visible");
+    StoreAtomic(ref value, 4, MemoryOrder::Release);
+    Assert.Equals(LoadAtomic(ref value, MemoryOrder::Acquire), 4, "release store is acquired");
+    Assert.Equals(ExchangeAtomic(ref value, 7, MemoryOrder::AcquireRelease), 4, "exchange returns the prior value");
+
+    int expected = 7;
+    Assert.True(CompareExchangeAtomic(ref value, ref expected, 9, MemoryOrder::Sequential, MemoryOrder::Acquire), "matching compare-exchange claims the value");
+    Assert.Equals(FetchAddAtomic(ref value, 3, MemoryOrder::Sequential), 9, "fetch-add returns the prior value");
+    Assert.Equals(LoadAtomic(ref value, MemoryOrder::Sequential), 12, "fetch-add publishes the new value");
+    Assert.Equals(LoadAtomic(ref value), 12, "omitted order defaults to sequential consistency");
+
+    expected = 7;
+    Assert.True(not CompareExchangeAtomic(ref value, ref expected, 20, MemoryOrder::Sequential, MemoryOrder::Acquire), "mismatched compare-exchange does not write");
+    Assert.Equals(expected, 12, "failed compare-exchange refreshes expected");
+}

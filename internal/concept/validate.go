@@ -3200,6 +3200,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		if e.ConceptGoal != "" {
 			return evt1ValidateConceptAssertion(env, scope, e)
 		}
+		if result, handled, err := evt1ValidateAtomicIntrinsic(env, scope, e, templateInfo, inComptimeFn); handled {
+			return result, err
+		}
 		if !e.Member {
 			if binding, ok := scope.lookup(e.Callee); ok && (binding.t.Kind == TypeCallable || binding.t.Kind == TypeCallback) {
 				return evt1ValidateCallableInvocation(env, scope, e, binding, templateInfo, inComptimeFn)

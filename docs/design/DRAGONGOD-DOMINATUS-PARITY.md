@@ -68,9 +68,9 @@ adds scheduling only as policy over when it receives a bounded step quantum.
 
 R7c also restores multiple logical execution contexts, deterministic FIFO
 fairness, explicit wait/event and sleep/time readiness, and failure isolation.
-It does not restore the C# host parallel runner: Concept/DragonGod does not yet
-have a general synchronization substrate sufficient for safe shared scheduler
-mutation.
+It does not restore the C# host parallel runner. R7d now supplies general C11
+integer atomics, but Concept/DragonGod does not yet have the shared-access proof
+model or guarded authorities required for safe shared scheduler mutation.
 
 ## Authority law
 

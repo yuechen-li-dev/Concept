@@ -1446,6 +1446,13 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 			}
 			return
 		}
+		if strings.HasPrefix(e.Intrinsic, "atomic_") {
+			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: e.Intrinsic, Detail: "explicit C11 atomic operation", NoCopy: true, NoAllocation: true, NoOwnershipTransfer: true, SourceSpan: e.Span})
+			for _, arg := range e.Args {
+				collectExprMIROps(env, arg, fn, templateInfo)
+			}
+			return
+		}
 		if strings.HasPrefix(e.Intrinsic, "inference_") {
 			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: e.Intrinsic, Detail: "explicit inference query", NoCopy: true, NoAllocation: true, NoOwnershipTransfer: true, SourceSpan: e.Span})
 			for _, arg := range e.Args {
@@ -1692,6 +1699,14 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 		header.WriteString("#include " + include + "\n")
 	}
 	header.WriteString("#include <stdbool.h>\n")
+	if evt1ModuleUsesAtomics(l.module) {
+		header.WriteString("#include <stdatomic.h>\n")
+		header.WriteString("static inline memory_order concept_atomic_rmw_order(int tag) {\n")
+		header.WriteString("  switch (tag) { case 0: return memory_order_relaxed; case 1: return memory_order_acquire; case 2: return memory_order_release; case 3: return memory_order_acq_rel; default: return memory_order_seq_cst; }\n}\n")
+		header.WriteString("static inline memory_order concept_atomic_load_order(int tag) { return tag == 0 ? memory_order_relaxed : (tag == 1 ? memory_order_acquire : memory_order_seq_cst); }\n")
+		header.WriteString("static inline memory_order concept_atomic_store_order(int tag) { return tag == 0 ? memory_order_relaxed : (tag == 2 ? memory_order_release : memory_order_seq_cst); }\n")
+		header.WriteString("static inline memory_order concept_atomic_failure_order(int tag) { return tag == 0 ? memory_order_relaxed : (tag == 1 ? memory_order_acquire : memory_order_seq_cst); }\n")
+	}
 	if len(storageViewTypes) > 0 || len(spanTypes) > 0 || len(tensorTypes) > 0 {
 		header.WriteString("#include <stddef.h>\n")
 	}
@@ -3169,7 +3184,11 @@ func (l *lowering) structHeader(structDecl StructDecl) string {
 		b.WriteString("  unsigned char _concept_nominal_tag;\n")
 	}
 	for _, field := range structDecl.Fields {
-		b.WriteString(fmt.Sprintf("  %s %s;\n", evt1CType(field.Type), field.Name))
+		if structDecl.Name == evt1AtomicIntType && field.Name == "value" && field.Type.Name == "int" {
+			b.WriteString("  _Atomic int value;\n")
+		} else {
+			b.WriteString(fmt.Sprintf("  %s %s;\n", evt1CType(field.Type), field.Name))
+		}
 	}
 	b.WriteString(fmt.Sprintf("} %s;\n\n", name))
 	return b.String()
@@ -4391,6 +4410,9 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		}
 		return b.String(), carrierTemp + ".payload." + field, evt1FailureSuccessType(carrierType)
 	case *CallExpr:
+		if strings.HasPrefix(e.Intrinsic, "atomic_") {
+			return f.lowerAtomicIntrinsic(e, indent)
+		}
 		storageCall := false
 		if len(e.Args) > 0 {
 			if place, err := validateAssignable(f.l.env, f.typeScope(), e.Args[0], nil); err == nil {

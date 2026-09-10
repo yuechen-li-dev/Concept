@@ -33,7 +33,8 @@ no Vulkan name appears in canonical kernel APIs.
 | Mind, Actuation, Events, Trace, Replay, checkpoint | Rewrite | canonical configurable R7b mechanisms under `DragonGod.*` |
 | Decision and Graph policy | Replace boundary | Concept semantics and application-owned meaning |
 | scheduler policy and ready queues | Rewrite | R7c `DragonGod.Scheduling` |
-| collector/root graph | Defer | R7d |
+| synchronization | Build incrementally | R7d strict-C11 atomics exist; shared-authority proofs remain |
+| collector/root graph | Defer | after synchronization |
 | Vulkan device/lifecycle policy | Replace boundary | stays in Vulkan consumers/conformance |
 
 Historical tests that prove current language semantics remain in the legacy
@@ -53,8 +54,9 @@ or saved-PC workarounds are archival and are not migrated into the active packag
   records. They do not fake complete ports.
 - `Scheduling` owns explicit context authority, a bounded FIFO of IDs, semantic
   step quanta, wait/sleep readiness, and structured decisions.
-- `Synchronization` remains deferred; the authoritative scheduler is
-  single-worker because shared multi-worker mutation cannot yet be proven safe.
+- `Synchronization` begins with `Standard.Synchronization.Atomic`; the
+  authoritative scheduler remains single-worker because shared multi-worker
+  authority and race freedom cannot yet be proven.
 
 The BootInfo path is firmware backing -> `MemoryRegion<SystemMemory>` ->
 `BumpAllocator` -> `MonotonicAllocation<BootInfo, BumpAllocator>` -> `Value`.
@@ -65,8 +67,9 @@ drops/releases it at scope exit. Both execute through strict C11 tests.
 R7b adds configurable Mind execution, deterministic batches, dirty memory,
 events, actuation obligations, structured trace, replay, checkpoint, explicit
 agent context, and seed state. R7c builds deterministic single-worker scheduling
-over those mechanisms without compiler semantics or a hidden runtime. R7d can
-build collector semantics later; it is not implemented here.
+over those mechanisms without compiler semantics or a hidden runtime. The first
+R7d slice adds general integer atomic machine semantics but not worker-safe
+DragonGod authorities. Collector semantics remain deferred.
 
 The C# Dominatus repository is an application-kernel parity oracle. Its useful
 mechanisms are native DragonGod APIs; its policy remains application-owned. No

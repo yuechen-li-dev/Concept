@@ -68,6 +68,15 @@ LLM dependency in the compiler.
 `static_assert` proves a compile-time boolean. `Assert.Concept` queries semantic
 proof authority and preserves its proof structure.
 
+## Synchronization planning boundary
+
+R7d atomic operations are explicit MIR operations. Planner reports
+`SynchronizationPlan`, `RetainC11Atomic`, `AtomicAccess`,
+`ExplicitMemoryOrder`, and `NoAllocation`. This is conservative planning
+evidence, not yet an `Assert.Concept` ownership proof. Until relational writer,
+consumer, and disjoint-slot facts exist, the compiler retains atomics and makes
+no guard-elision or race-freedom claim.
+
 ## Generic requirement proofs
 
 R6o proof graphs retain every argument of a named concept application and its

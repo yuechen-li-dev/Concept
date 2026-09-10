@@ -23,7 +23,10 @@ Scheduling is ordinary fixed-capacity library policy: the scheduler owns a
 context table, its ready queue stores only stable IDs, and a caller-selected
 semantic step quantum drives deterministic FIFO rotation. Waiting, monotonic
 sleep, failure isolation, and typed trace are explicit. See
-`DRAGONGOD-SCHEDULING.md`. There is no private allocator, hidden runtime
+`DRAGONGOD-SCHEDULING.md`. R7d's initial strict-C11 atomic substrate lives in
+Standard; the current DragonGod EventBus, MemoryState, and ActuatorHost remain
+single-worker until their shared-authority proofs and guarded algorithms exist.
+See `DRAGONGOD-SYNCHRONIZATION.md`. There is no private allocator, hidden runtime
 scheduler, collector, VM/page-table system, runtime registry, Vulkan policy,
 reflection, or serialization layer.
 
