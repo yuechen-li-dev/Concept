@@ -12,7 +12,7 @@ import (
 
 func r6hMemoryArtifact(t *testing.T) []byte {
 	t.Helper()
-	source, err := os.ReadFile("../../language/evt1/tooling/modules/Standard/MemoryGeometry.concept")
+	source, err := os.ReadFile("../../libraries/Standard/MemoryGeometry.concept")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -456,7 +456,7 @@ func TestSemanticFactTransportProofGoldens(t *testing.T) {
 }
 
 func BenchmarkSemanticFactTransportModule(b *testing.B) {
-	library, err := os.ReadFile("../../language/evt1/tooling/modules/Standard/MemoryGeometry.concept")
+	library, err := os.ReadFile("../../libraries/Standard/MemoryGeometry.concept")
 	if err != nil {
 		b.Fatal(err)
 	}

@@ -11,7 +11,7 @@ import (
 
 func foreignMemoryGeometryArtifact(t *testing.T) []byte {
 	t.Helper()
-	source, err := os.ReadFile("../../language/evt1/tooling/modules/Standard/MemoryGeometry.concept")
+	source, err := os.ReadFile("../../libraries/Standard/MemoryGeometry.concept")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestForeignInteropFixtureCorpus(t *testing.T) {
 
 func foreignHostModuleSource(t *testing.T) string {
 	t.Helper()
-	source, err := os.ReadFile("../../language/evt1/tooling/modules/Platform/Host/Memory.concept")
+	source, err := os.ReadFile("../../libraries/Standard/Platform/Host/Memory.concept")
 	if err != nil {
 		t.Fatal(err)
 	}

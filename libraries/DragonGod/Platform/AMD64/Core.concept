@@ -1,0 +1,13 @@
+module DragonGod.Platform.AMD64.Core;
+profile Core;
+
+record struct AMD64Capabilities
+{
+    bool longMode;
+    int addressBits;
+};
+
+AMD64Capabilities BaselineAMD64()
+{
+    return AMD64Capabilities{true, 48};
+}

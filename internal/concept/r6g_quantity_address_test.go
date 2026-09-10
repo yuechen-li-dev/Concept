@@ -41,7 +41,7 @@ int main(void) { return concept_r6g_quantities_main() == 16u ? 0 : 1; }
 }
 
 func TestR6gMemoryRegionAndSubregionAreOrdinaryImportedLibraryCode(t *testing.T) {
-	library, err := os.ReadFile("../../language/evt1/tooling/modules/Standard/MemoryGeometry.concept")
+	library, err := os.ReadFile("../../libraries/Standard/MemoryGeometry.concept")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -9,7 +9,7 @@ import (
 )
 
 func TestR6lOpenGenericBindAcceptsTrustedMemoryRegion(t *testing.T) {
-	library, err := os.ReadFile("../../language/evt1/tooling/modules/Standard/MemoryGeometry.concept")
+	library, err := os.ReadFile("../../libraries/Standard/MemoryGeometry.concept")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +158,7 @@ int Main()
 }
 
 func TestR6mResultExtractionClosesNestedGenericOwner(t *testing.T) {
-	library, err := os.ReadFile("../../language/evt1/tooling/modules/Standard/MemoryGeometry.concept")
+	library, err := os.ReadFile("../../libraries/Standard/MemoryGeometry.concept")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,7 +263,7 @@ int Main()
 }
 
 func TestR6mImportedGenericOwnerInstantiationClosesDeterministically(t *testing.T) {
-	geometrySource, err := os.ReadFile("../../language/evt1/tooling/modules/Standard/MemoryGeometry.concept")
+	geometrySource, err := os.ReadFile("../../libraries/Standard/MemoryGeometry.concept")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -329,7 +329,7 @@ int Read(MemoryRegion<SystemMemory> region)
 }
 
 func TestR6mAllocationOwnerShapeIsStructurallyReady(t *testing.T) {
-	geometrySource, err := os.ReadFile("../../language/evt1/tooling/modules/Standard/MemoryGeometry.concept")
+	geometrySource, err := os.ReadFile("../../libraries/Standard/MemoryGeometry.concept")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,0 +1,13 @@
+module Standard.Manifest;
+profile Core;
+
+import Standard.Build.Metadata;
+
+comptime PackageManifest Manifest = PackageManifest{
+    "Standard",
+    "CODEX",
+    Version{0, 0, 1},
+    PackageKind::Library,
+    [Dependency{""}],
+    0
+};

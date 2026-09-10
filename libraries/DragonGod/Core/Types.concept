@@ -1,0 +1,25 @@
+module DragonGod.Core.Types;
+profile Core;
+
+record struct ProcessorId
+{
+    int value;
+};
+
+enum KernelStatus
+{
+    Ready,
+    HaltRequested,
+    Failed,
+}
+
+record struct KernelContext
+{
+    ProcessorId processor;
+    KernelStatus status;
+};
+
+KernelContext MakeKernelContext(int processor)
+{
+    return KernelContext{ProcessorId{processor}, KernelStatus::Ready};
+}

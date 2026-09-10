@@ -1,0 +1,16 @@
+module DragonGod.Tests.Memory;
+profile Core;
+
+import DragonGod.Memory.Boot;
+import Standard.Memory.Bump;
+import Standard.Memory.MonotonicOwnership;
+
+[[fact]]
+void BootInfoUsesStandardMemory()
+{
+    FirmwareMemorySource firmware = MakeFirmwareMemorySource();
+    MemoryRegion<SystemMemory> region = FirmwareRegion(ref firmware);
+    BumpAllocator bump = MakeBumpAllocator(region);
+    int observed = InspectBootInfo(ref bump, BootInfo{4, 38})!;
+    Assert.Equals(observed, 42, "boot metadata is initialized through Standard.Memory");
+}

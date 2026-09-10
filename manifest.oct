@@ -1,0 +1,26 @@
+package Manifest
+
+record PackageManifest {
+    Name: String
+    Version: String
+    Description: String
+    Authors: String[]
+    Date: String
+    Dependencies: Dependency[]
+}
+
+record Dependency {
+    Name: String
+    VersionRequirement: String
+}
+
+fn Manifest() -> PackageManifest {
+    return PackageManifest {
+        Name: "ConceptBuild"
+        Version: "0.1.0"
+        Description: "Bootstrap orchestration for Concept libraries"
+        Authors: ["CODEX"]
+        Date: "2026-09-10"
+        Dependencies: [Dependency { Name: "Make" VersionRequirement: "0.1.0" }]
+    }
+}

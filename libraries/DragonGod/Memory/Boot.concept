@@ -1,0 +1,39 @@
+module DragonGod.Memory.Boot;
+profile Core;
+
+import Standard.Memory.Bump;
+import Standard.Memory.MonotonicOwnership;
+
+record struct BootInfo
+{
+    int processorCount;
+    int bootStage;
+};
+
+struct FirmwareMemorySource
+{
+    FixedBufferMemorySource backing;
+};
+
+FirmwareMemorySource MakeFirmwareMemorySource()
+{
+    return FirmwareMemorySource{MakeFixedBufferMemorySource()};
+}
+
+MemoryRegion<SystemMemory> FirmwareRegion(ref FirmwareMemorySource source)
+{
+    return RegionOf(ref source.backing);
+}
+
+Result<int, AllocationError> InspectBootInfo(
+    ref BumpAllocator allocator,
+    BootInfo info
+)
+{
+    owned MonotonicAllocation<BootInfo, BumpAllocator> owner =
+        AllocateMonotonic<BootInfo, BumpAllocator>(ref allocator, info)?;
+    ref BootInfo stored = MonotonicAllocationValue<BootInfo, BumpAllocator>(ref owner);
+    return Result::Ok(stored.processorCount + stored.bootStage);
+}
+
+requires compiler.Allocates(InspectBootInfo);

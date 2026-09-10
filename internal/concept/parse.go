@@ -238,6 +238,10 @@ func (p *parser) parseModule() (Module, error) {
 			continue
 		}
 		switch p.peekLexeme() {
+		case "namespace":
+			if err := p.parseNamespaceBlock(&module); err != nil {
+				return module, err
+			}
 		case "await", "awaitchronous":
 			return module, evt1Diagnostic("AWAIT_OUTSIDE_ASYNC", "await is only valid inside an async function", p.currentSpan())
 		case "async", "asynchronous":
@@ -434,7 +438,116 @@ func (p *parser) parseModule() (Module, error) {
 			module.Functions = append(module.Functions, fn)
 		}
 	}
+	addDefaultNamespaceSymbols(&module)
 	return module, nil
+}
+
+func (p *parser) parseNamespaceBlock(module *Module) error {
+	start, err := p.expect("namespace")
+	if err != nil {
+		return err
+	}
+	var parts []string
+	for {
+		part, err := p.expectIdentifier("NAMESPACE_NAME_INVALID", "expected namespace name")
+		if err != nil {
+			return err
+		}
+		parts = append(parts, part.Lexeme)
+		if p.peekLexeme() != "." {
+			break
+		}
+		p.next()
+	}
+	name := strings.Join(parts, ".")
+	if _, err := p.expect("{"); err != nil {
+		return err
+	}
+	for !p.done() && p.peekLexeme() != "}" {
+		switch p.peekLexeme() {
+		case "record":
+			decl, err := p.parseStructDecl(false, true, false)
+			if err != nil {
+				return err
+			}
+			module.Structs = append(module.Structs, decl)
+			module.Functions = append(module.Functions, decl.Methods...)
+			module.NamespaceSymbols = append(module.NamespaceSymbols, NamespaceSymbol{Namespace: name, Module: module.Name, Name: decl.Name, Kind: "type", Span: decl.Span})
+		case "struct":
+			decl, err := p.parseStructDecl(false, false, false)
+			if err != nil {
+				return err
+			}
+			module.Structs = append(module.Structs, decl)
+			module.Functions = append(module.Functions, decl.Methods...)
+			module.NamespaceSymbols = append(module.NamespaceSymbols, NamespaceSymbol{Namespace: name, Module: module.Name, Name: decl.Name, Kind: "type", Span: decl.Span})
+		case "class":
+			decl, err := p.parseClassDecl()
+			if err != nil {
+				return err
+			}
+			module.Structs = append(module.Structs, decl)
+			module.Functions = append(module.Functions, decl.Methods...)
+			module.NamespaceSymbols = append(module.NamespaceSymbols, NamespaceSymbol{Namespace: name, Module: module.Name, Name: decl.Name, Kind: "type", Span: decl.Span})
+		case "enum":
+			decl, err := p.parseEnumDecl()
+			if err != nil {
+				return err
+			}
+			module.Enums = append(module.Enums, decl)
+			module.NamespaceSymbols = append(module.NamespaceSymbols, NamespaceSymbol{Namespace: name, Module: module.Name, Name: decl.Name, Kind: "type", Span: decl.Span})
+		case "namespace":
+			return evt1Diagnostic("NAMESPACE_NESTING_INVALID", "use one dotted namespace name instead of nested namespace blocks", p.currentSpan())
+		default:
+			fn, err := p.parseFunctionDecl("", false)
+			if err != nil {
+				return err
+			}
+			module.Functions = append(module.Functions, fn)
+			module.NamespaceSymbols = append(module.NamespaceSymbols, NamespaceSymbol{Namespace: name, Module: module.Name, Name: fn.Name, Kind: "function", Span: fn.Span})
+		}
+	}
+	if _, err := p.expect("}"); err != nil {
+		return err
+	}
+	if p.peekLexeme() == ";" {
+		p.next()
+	}
+	_ = start
+	return nil
+}
+
+func addDefaultNamespaceSymbols(module *Module) {
+	cut := strings.LastIndex(module.Name, ".")
+	if cut <= 0 {
+		return
+	}
+	namespace := module.Name[:cut]
+	seen := map[string]bool{}
+	for _, symbol := range module.NamespaceSymbols {
+		seen[symbol.Kind+"|"+symbol.Name+"|"+fmt.Sprint(symbol.Span.Line)+"|"+fmt.Sprint(symbol.Span.Column)] = true
+	}
+	add := func(kind, name string, span Span) {
+		key := kind + "|" + name + "|" + fmt.Sprint(span.Line) + "|" + fmt.Sprint(span.Column)
+		if !seen[key] {
+			module.NamespaceSymbols = append(module.NamespaceSymbols, NamespaceSymbol{Namespace: namespace, Module: module.Name, Name: name, Kind: kind, Span: span})
+		}
+	}
+	for _, decl := range module.Structs {
+		add("type", decl.Name, decl.Span)
+	}
+	for _, decl := range module.Enums {
+		add("type", decl.Name, decl.Span)
+	}
+	for _, decl := range module.GenericTypes {
+		add("type", decl.Name, decl.Span)
+	}
+	for _, decl := range module.Functions {
+		add("function", decl.Name, decl.Span)
+	}
+	for _, decl := range module.Templates {
+		add("function", decl.Name, decl.Span)
+	}
 }
 
 func (p *parser) parseForeignContractDecl() (ForeignContractDecl, OperationEffectDecl, error) {
@@ -2159,6 +2272,16 @@ done:
 	if err != nil {
 		return Type{}, err
 	}
+	qualifiedName := nameTok.Lexeme
+	for p.peekLexeme() == "." {
+		p.next()
+		part, partErr := p.expectIdentifier("NAMESPACE_QUALIFIED_NAME_INVALID", "expected qualified type name")
+		if partErr != nil {
+			return Type{}, partErr
+		}
+		qualifiedName += "." + part.Lexeme
+	}
+	nameTok.Lexeme = qualifiedName
 	if !dyn && nameTok.Lexeme == "callback" && p.peekLexeme() == "<" {
 		p.next()
 		var params []Type

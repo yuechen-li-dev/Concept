@@ -1,0 +1,17 @@
+module DragonGod.Time.Core;
+profile Core;
+
+record struct MonotonicTime
+{
+    int<s> value;
+};
+
+record struct Deadline
+{
+    MonotonicTime at;
+};
+
+bool Reached(MonotonicTime now, Deadline deadline)
+{
+    return now.value >= deadline.at.value;
+}

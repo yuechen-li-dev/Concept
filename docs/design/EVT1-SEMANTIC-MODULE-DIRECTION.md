@@ -1,6 +1,6 @@
 # EVT1 semantic module direction
 
-Status: R6e implemented
+Status: R7a implemented
 
 ## Authority pipeline
 
@@ -51,7 +51,15 @@ Dependency identities and content hashes make a module graph deterministic and
 closed. Cache presence is not semantic. A future build system may cache the
 content-addressed result without changing this contract.
 
+R7a's package build is that bounded graph owner. It reads ordinary immutable
+`manifest.concept` values, validates them against `Standard.Build.Metadata`,
+topologically orders packages and modules, and writes deterministic artifacts.
+The manifest author is preserved in package metadata; first-party packages
+credit `CODEX`. Namespaces remain qualified symbol identity in module artifacts
+and are erased before lowering, so neither package layout nor C names become a
+second source-language authority.
+
 This is an internal semantic compatibility boundary for the current compiler,
 not a stable binary-distribution promise. Compiler or schema mismatch rejects.
-Package solving, registries, partitions, and long-term ABI evolution remain
-future build/package work.
+Package solving, registries, remote acquisition, partitions, and long-term ABI
+evolution remain future build/package work.

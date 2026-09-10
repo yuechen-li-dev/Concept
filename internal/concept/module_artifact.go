@@ -47,6 +47,7 @@ type SemanticModuleExports struct {
 	TypeAliases          []string                    `json:"type_aliases,omitempty"`
 	NormalizedSignatures []string                    `json:"normalized_signatures,omitempty"`
 	TypeSummaries        []SemanticModuleTypeSummary `json:"type_summaries,omitempty"`
+	QualifiedSymbols     []string                    `json:"qualified_symbols,omitempty"`
 }
 
 // SemanticModuleArtifact is compiler-semantic data. SemanticPayload is a
@@ -163,6 +164,9 @@ func CompileSemanticModule(path, source string, artifacts map[string][]byte) ([]
 	if err != nil {
 		return nil, err
 	}
+	if err := resolveNamespaceSymbols(&composed); err != nil {
+		return nil, err
+	}
 	env, err := analyzeModule(composed)
 	if err != nil {
 		return nil, err
@@ -210,6 +214,9 @@ func ParseWithSemanticModules(path, source string, artifacts map[string][]byte) 
 	}
 	module, _, err := composeSemanticModules(local, artifacts)
 	if err != nil {
+		return Module{}, err
+	}
+	if err := resolveNamespaceSymbols(&module); err != nil {
 		return Module{}, err
 	}
 	env, err := analyzeModule(module)
@@ -496,6 +503,7 @@ func composeSemanticModules(local Module, artifacts map[string][]byte) (Module, 
 }
 
 func appendSemanticDeclarations(target *Module, source Module) {
+	target.NamespaceSymbols = append(target.NamespaceSymbols, source.NamespaceSymbols...)
 	target.TypeAliases = append(target.TypeAliases, source.TypeAliases...)
 	for _, incoming := range source.Structs {
 		duplicateInstance := false
@@ -528,6 +536,10 @@ func appendSemanticDeclarations(target *Module, source Module) {
 
 func semanticModuleExports(module Module, env *semanticEnv) SemanticModuleExports {
 	var exports SemanticModuleExports
+	for _, symbol := range module.NamespaceSymbols {
+		exports.QualifiedSymbols = append(exports.QualifiedSymbols, symbol.Namespace+"."+symbol.Name)
+	}
+	sort.Strings(exports.QualifiedSymbols)
 	for _, decl := range module.Structs {
 		exports.Types = append(exports.Types, decl.Name)
 		t := Type{Name: decl.Name, Kind: TypeStruct}

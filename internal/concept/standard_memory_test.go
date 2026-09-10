@@ -12,7 +12,7 @@ import (
 
 func standardMemorySource(t *testing.T, relative string) string {
 	t.Helper()
-	path := filepath.Join("..", "..", "language", "evt1", "tooling", "modules", filepath.FromSlash(relative))
+	path := filepath.Join("..", "..", "libraries", filepath.FromSlash(relative))
 	contents, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -29,7 +29,7 @@ func standardMemoryArtifacts(t *testing.T) map[string][]byte {
 	artifacts["Standard.Memory.Pool"] = buildSemanticArtifact(t, "Standard/Memory/Pool.concept", standardMemorySource(t, "Standard/Memory/Pool.concept"), artifacts)
 	artifacts["Standard.Memory.Ownership"] = buildSemanticArtifact(t, "Standard/Memory/Ownership.concept", standardMemorySource(t, "Standard/Memory/Ownership.concept"), artifacts)
 	artifacts["Standard.Memory.MonotonicOwnership"] = buildSemanticArtifact(t, "Standard/Memory/MonotonicOwnership.concept", standardMemorySource(t, "Standard/Memory/MonotonicOwnership.concept"), artifacts)
-	artifacts["Platform.Host.Memory"] = buildSemanticArtifact(t, "Platform/Host/Memory.concept", standardMemorySource(t, "Platform/Host/Memory.concept"), artifacts)
+	artifacts["Platform.Host.Memory"] = buildSemanticArtifact(t, "Standard/Platform/Host/Memory.concept", standardMemorySource(t, "Standard/Platform/Host/Memory.concept"), artifacts)
 	artifacts["Standard.Memory.Host"] = buildSemanticArtifact(t, "Standard/Memory/Host.concept", standardMemorySource(t, "Standard/Memory/Host.concept"), artifacts)
 	return artifacts
 }
@@ -205,7 +205,7 @@ int Main()
 	if err != nil {
 		t.Fatal(err)
 	}
-	moduleRoot := filepath.Join("..", "..", "language", "evt1", "tooling", "modules")
+	moduleRoot := filepath.Join("..", "..", "libraries")
 	freshConsumer, err := ParseWithBuiltSemanticModuleRoots("DeterministicMemory.concept", consumerSource, []string{moduleRoot})
 	if err != nil {
 		t.Fatal(err)

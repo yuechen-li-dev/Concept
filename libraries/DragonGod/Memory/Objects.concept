@@ -1,0 +1,24 @@
+module DragonGod.Memory.Objects;
+profile Core;
+
+import Standard.Memory.Ownership;
+import Standard.Memory.Pool;
+
+record struct KernelObject
+{
+    int value;
+};
+
+Result<int, AllocationError> InspectKernelObject(
+    ref PoolAllocator allocator,
+    KernelObject object
+)
+{
+    owned Allocation<KernelObject, PoolAllocator> first =
+        Allocate<KernelObject, PoolAllocator>(ref allocator, object)?;
+    owned Allocation<KernelObject, PoolAllocator> second = move first;
+    ref KernelObject stored = AllocationValue<KernelObject, PoolAllocator>(ref second);
+    return Result::Ok(stored.value);
+}
+
+requires compiler.Allocates(InspectKernelObject);

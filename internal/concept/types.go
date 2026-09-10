@@ -550,10 +550,14 @@ type TypeAliasDecl struct {
 }
 
 type Module struct {
-	Path             string                `json:"path"`
-	Name             string                `json:"name,omitempty"`
-	Profile          string                `json:"profile"`
-	Imports          []string              `json:"imports,omitempty"`
+	Path    string   `json:"path"`
+	Name    string   `json:"name,omitempty"`
+	Profile string   `json:"profile"`
+	Imports []string `json:"imports,omitempty"`
+	// NamespaceSymbols records source-level symbol organization independently
+	// of module identity. Namespaces erase before lowering and never create
+	// runtime metadata or an import edge.
+	NamespaceSymbols []NamespaceSymbol     `json:"namespace_symbols,omitempty"`
 	TypeAliases      []TypeAliasDecl       `json:"type_aliases,omitempty"`
 	Structs          []StructDecl          `json:"structs,omitempty"`
 	Layouts          []LayoutDecl          `json:"layouts,omitempty"`
@@ -580,6 +584,14 @@ type Module struct {
 	// artifact has no value summary. Consumers must degrade those results to
 	// Unknown instead of re-deriving a stronger contract from the payload body.
 	ImportedFactAuthority []string `json:"-"`
+}
+
+type NamespaceSymbol struct {
+	Namespace string `json:"namespace"`
+	Module    string `json:"module"`
+	Name      string `json:"name"`
+	Kind      string `json:"kind"`
+	Span      Span   `json:"span"`
 }
 
 type Block struct {

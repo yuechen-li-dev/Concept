@@ -2,3 +2,5 @@
 zig-out/
 *.o
 .test-results/
+.octmake/
+artifacts/

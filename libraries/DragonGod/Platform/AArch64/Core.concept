@@ -1,0 +1,13 @@
+module DragonGod.Platform.AArch64.Core;
+profile Core;
+
+record struct AArch64Capabilities
+{
+    int exceptionLevel;
+    int addressBits;
+};
+
+AArch64Capabilities BaselineAArch64()
+{
+    return AArch64Capabilities{1, 48};
+}

@@ -1,0 +1,20 @@
+package ConceptBuild
+
+import Make
+
+[Fact]
+fn PackageBuildOrderIsExplicit() -> Void {
+    let plan = Plan()
+    Assert.Equal("BuildStandard", plan.CommandTargets[0].Name, "Standard build is the first command target")
+    Assert.Equal("BuildStandard", plan.CommandTargets[2].Deps[0], "DragonGod build depends on Standard")
+    Assert.Equal("Standard", plan.CommandTargets[0].Args[4], "Standard package identity is explicit")
+    Assert.Equal("DragonGod", plan.CommandTargets[2].Args[4], "DragonGod package identity is explicit")
+}
+
+[Fact]
+fn BootstrapDriverRemainsOct() -> Void {
+    let plan = Plan()
+    Assert.Equal("go", plan.CommandTargets[0].Program, "Oct invokes the existing Go Stage-0 compiler")
+    Assert.Equal("package", plan.CommandTargets[0].Args[2], "package orchestration stays behind the Concept CLI")
+    Assert.Equal("Test", plan.Default, "the default bootstrap target validates both packages")
+}

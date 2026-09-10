@@ -173,7 +173,11 @@ func DiscoverTests(root string) (TestManifest, error) {
 		if readErr != nil {
 			return TestManifest{}, readErr
 		}
-		module, parseErr := ParseWithBuiltSemanticModuleRoots(filepath.ToSlash(path), string(body), []string{filepath.Dir(path)})
+		moduleRoots := []string{filepath.Dir(path)}
+		if info.IsDir() {
+			moduleRoots = append(moduleRoots, filepath.Dir(projectRoot))
+		}
+		module, parseErr := ParseWithBuiltSemanticModuleRoots(filepath.ToSlash(path), string(body), moduleRoots)
 		if parseErr != nil {
 			return TestManifest{}, fmt.Errorf("%s: %w", filepath.ToSlash(path), parseErr)
 		}

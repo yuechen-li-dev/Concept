@@ -1,0 +1,31 @@
+module Standard.Build.Metadata;
+profile Core;
+
+record struct Version
+{
+    int major;
+    int minor;
+    int patch;
+};
+
+enum PackageKind
+{
+    Library,
+    Executable,
+    Tool,
+}
+
+record struct Dependency
+{
+    string name;
+};
+
+record struct PackageManifest
+{
+    string name;
+    string author;
+    Version version;
+    PackageKind kind;
+    Dependency<array>[1] dependencies;
+    int dependencyCount;
+};

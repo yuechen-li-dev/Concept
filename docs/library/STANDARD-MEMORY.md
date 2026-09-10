@@ -3,6 +3,9 @@
 `Standard.Memory` is ordinary Concept library code. The compiler does not know
 allocator, policy, or owner names. Its modules publish as `concept-module.v1`,
 and consumers instantiate concepts and generic bodies without source reparse.
+Its production source root is `libraries/Standard`; the earlier
+`language/evt1/tooling/modules` location is now only historical conformance
+context. Standard's package manifest credits `CODEX` as author.
 
 ## Ownership layers
 

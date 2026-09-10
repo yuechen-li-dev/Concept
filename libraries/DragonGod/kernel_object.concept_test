@@ -1,0 +1,14 @@
+module DragonGod.Tests.KernelObject;
+profile Core;
+
+import DragonGod.Memory.Objects;
+import Standard.Memory.Pool;
+import Standard.Memory.Ownership;
+
+[[fact]]
+void KernelObjectOwnerMovesWithoutRelocationAndReleases()
+{
+    PoolAllocator pool = MakePoolAllocator(SizeOf<KernelObject>(), AlignOf<KernelObject>());
+    int observed = InspectKernelObject(ref pool, KernelObject{42})!;
+    Assert.Equals(observed, 42, "moving the owner preserves the allocated kernel object");
+}

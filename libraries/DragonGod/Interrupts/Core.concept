@@ -1,0 +1,23 @@
+module DragonGod.Interrupts.Core;
+profile Core;
+
+record struct InterruptId
+{
+    int value;
+};
+
+record struct InterruptWakeup
+{
+    InterruptId interrupt;
+    bool pending;
+};
+
+InterruptWakeup SignalInterrupt(InterruptId interrupt)
+{
+    return InterruptWakeup{interrupt, true};
+}
+
+InterruptWakeup ConsumeInterrupt(InterruptWakeup wakeup)
+{
+    return InterruptWakeup{wakeup.interrupt, false};
+}

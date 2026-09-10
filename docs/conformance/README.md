@@ -42,6 +42,7 @@ their fixtures now have exactly one authority under `language/evt1`.
 | R6n | allocator retry honestly stopped on second-parameter capability constraints | `EVT1-R6N-CONFORMANCE.md` | focused general constraint/dispatch regressions; no allocator fixtures published |
 | R6o | arbitrary-position, relational, and composed generic concept requirements | `0920b96` | 382 valid, 246 static-invalid, and 13 runtime-negative fixtures |
 | R6p | ordinary Standard.Memory fixed, hosted, bump, pool, and typed ownership | this report's commit | semantic-module, `.concept_test`, strict-C11, effect, lifetime, and determinism evidence |
+| R7a | production libraries, ordinary manifests, namespaces, and canonical DragonGod | this report's commit | package DAG/artifacts, namespace collisions, Standard.Memory dogfood, DragonGod strict-C11 evidence |
 
 The manifest records 382 valid, 246 static-invalid, and 13 runtime-negative
 fixtures. Four retained expected-divergence cases compare the frozen EVT1

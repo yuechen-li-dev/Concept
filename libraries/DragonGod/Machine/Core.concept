@@ -1,0 +1,32 @@
+module DragonGod.Machine.Core;
+profile Core;
+
+import DragonGod.Core.Types;
+
+enum ExecutionMode
+{
+    Boot,
+    Kernel,
+    Halted,
+}
+
+record struct MachineState
+{
+    ProcessorId processor;
+    ExecutionMode mode;
+};
+
+MachineState MakeMachineState(ProcessorId processor)
+{
+    return MachineState{processor, ExecutionMode::Boot};
+}
+
+MachineState EnterKernel(MachineState state)
+{
+    return MachineState{state.processor, ExecutionMode::Kernel};
+}
+
+MachineState RequestHalt(MachineState state)
+{
+    return MachineState{state.processor, ExecutionMode::Halted};
+}

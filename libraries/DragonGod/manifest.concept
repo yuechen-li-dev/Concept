@@ -1,0 +1,13 @@
+module DragonGod.Manifest;
+profile Core;
+
+import Standard.Build.Metadata;
+
+comptime PackageManifest Manifest = PackageManifest{
+    "DragonGod",
+    "CODEX",
+    Version{0, 0, 1},
+    PackageKind::Library,
+    [Dependency{"Standard"}],
+    1
+};

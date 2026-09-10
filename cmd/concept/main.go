@@ -23,6 +23,9 @@ Usage:
   concept plan <file>
   concept explain <file>[:line] [--json] [--verbose]
   concept test [path-or-filter] [--filter text] [--list] [--verbose]
+  concept package build <name>
+  concept package test <name>
+  concept package graph <name>
 
 Commands:
   check   parse and semantically validate a Concept source file
@@ -32,6 +35,7 @@ Commands:
   plan    write deterministic LoweringPlan JSON to stdout
   explain display the proof graph for an Assert.Concept source contract
   test    discover and execute .concept_test sources through strict C11
+  package build or test a repository-local manifest.concept package graph
 `
 
 const testUsage = `Usage:
@@ -53,6 +57,10 @@ func main() {
 	}
 	if len(os.Args) >= 2 && os.Args[1] == "explain" {
 		runExplainCommand(os.Args[2:])
+		return
+	}
+	if len(os.Args) >= 2 && os.Args[1] == "package" {
+		runPackageCommand(os.Args[2:])
 		return
 	}
 	if len(os.Args) != 3 {
@@ -104,6 +112,48 @@ func main() {
 		_, _ = os.Stdout.Write(output)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command %q\n\n%s", command, usage)
+		os.Exit(2)
+	}
+}
+
+func runPackageCommand(args []string) {
+	if len(args) != 2 {
+		fmt.Fprint(os.Stderr, usage)
+		os.Exit(2)
+	}
+	action, name := args[0], args[1]
+	switch action {
+	case "build", "graph":
+		graph, err := concept.BuildPackage("libraries", "artifacts", name)
+		if err != nil {
+			fail(err)
+		}
+		body, err := concept.MarshalPackageGraph(graph)
+		if err != nil {
+			fail(err)
+		}
+		fmt.Println(string(body))
+	case "test":
+		if _, err := concept.BuildPackage("libraries", "artifacts", name); err != nil {
+			fail(err)
+		}
+		manifest, err := concept.DiscoverTests(filepath.Join("libraries", name))
+		if err != nil {
+			fail(err)
+		}
+		run, err := concept.RunTests(manifest, concept.TestRunOptions{BenchmarkWarmup: 1, BenchmarkIterations: 5})
+		if err != nil {
+			fail(err)
+		}
+		for _, result := range run.Results {
+			fmt.Printf("%-20s %s\n", result.Status, result.TestID)
+		}
+		fmt.Printf("\n%d passed, %d failed, %d prophecies fulfilled, %d benchmarks\n", run.Passed, run.Failed, run.Fulfilled, run.Benchmarks)
+		if run.Failed != 0 {
+			os.Exit(1)
+		}
+	default:
+		fmt.Fprint(os.Stderr, usage)
 		os.Exit(2)
 	}
 }

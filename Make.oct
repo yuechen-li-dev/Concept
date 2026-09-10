@@ -1,0 +1,91 @@
+package ConceptBuild
+
+import Make
+
+[Pure]
+[NoWhile]
+fn BuildConfig() -> Make.Config {
+    return Make.Config {
+        Profile: "ConceptR7a"
+        StateDir: ".octmake/concept-r7a"
+        Trace: true
+        Staleness: Make.Staleness.Always
+    }
+}
+
+[Pure]
+[NoWhile]
+fn BuildStandardTarget() -> Make.CommandTarget {
+    return Make.CommandTarget {
+        Name: "BuildStandard"
+        Inputs: ["libraries/Standard/manifest.concept"]
+        Outputs: ["artifacts/Standard/package.json"]
+        Deps: []
+        Program: "go"
+        Args: ["run", "./cmd/concept", "package", "build", "Standard"]
+        Cwd: ""
+        Env: []
+    }
+}
+
+[Pure]
+[NoWhile]
+fn TestStandardTarget() -> Make.CommandTarget {
+    return Make.CommandTarget {
+        Name: "TestStandard"
+        Inputs: ["libraries/Standard/manifest.concept"]
+        Outputs: []
+        Deps: ["BuildStandard"]
+        Program: "go"
+        Args: ["run", "./cmd/concept", "package", "test", "Standard"]
+        Cwd: ""
+        Env: []
+    }
+}
+
+[Pure]
+[NoWhile]
+fn BuildDragonGodTarget() -> Make.CommandTarget {
+    return Make.CommandTarget {
+        Name: "BuildDragonGod"
+        Inputs: ["libraries/DragonGod/manifest.concept", "artifacts/Standard/package.json"]
+        Outputs: ["artifacts/DragonGod/package.json"]
+        Deps: ["BuildStandard"]
+        Program: "go"
+        Args: ["run", "./cmd/concept", "package", "build", "DragonGod"]
+        Cwd: ""
+        Env: []
+    }
+}
+
+[Pure]
+[NoWhile]
+fn TestDragonGodTarget() -> Make.CommandTarget {
+    return Make.CommandTarget {
+        Name: "TestDragonGod"
+        Inputs: ["libraries/DragonGod/manifest.concept"]
+        Outputs: []
+        Deps: ["BuildDragonGod"]
+        Program: "go"
+        Args: ["run", "./cmd/concept", "package", "test", "DragonGod"]
+        Cwd: ""
+        Env: []
+    }
+}
+
+[MakePlan]
+[Pure]
+[NoWhile]
+fn Plan() -> Make.Plan {
+    return Make.Plan {
+        Default: "Test"
+        Config: BuildConfig()
+        CommandTargets: [BuildStandardTarget(), TestStandardTarget(), BuildDragonGodTarget(), TestDragonGodTarget()]
+        FunctionTargets: []
+        FlowTargets: []
+        PhonyTargets: [
+            Make.PhonyTarget { Name: "Build" Deps: ["BuildDragonGod"] },
+            Make.PhonyTarget { Name: "Test" Deps: ["TestStandard", "TestDragonGod"] }
+        ]
+    }
+}

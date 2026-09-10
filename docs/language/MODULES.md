@@ -1,6 +1,6 @@
 # Reusable semantic modules
 
-Status: EVT1 R6e implemented compiler substrate
+Status: EVT1 R7a library/package substrate
 
 ## Syntax and authority
 
@@ -29,6 +29,12 @@ a module are import-visible. Class `public`/`private` member rules remain
 unchanged. Imports are not namespace re-exports, although artifact dependency
 closure remains available to resolve semantic references. Alias imports,
 partitions, and C++ header compatibility are not supported.
+
+R7a adds namespaces as semantic symbol qualification, independent of module
+identity. `namespace A.B { ... }` and a dotted module's default namespace both
+publish qualified symbols in the semantic artifact. Qualified lookup is exact;
+an unqualified collision reports every candidate instead of depending on
+source or import order. Namespace spelling is erased before MIR and C lowering.
 
 ## Artifact
 
@@ -100,9 +106,15 @@ compatible. An allocating implementation cannot satisfy an operation lacking
 that allowance. This is a bounded variance rule, not a generalized effect
 algebra or a user-authored negative promise.
 
-R6e deliberately provides no package manager, registry, remote fetch, lockfile,
-stable binary module ABI, import aliases, partial specialization, variadics,
-module partitions, or runtime module system.
+R7a provides a bounded local package builder, not a general package manager.
+It discovers `libraries/<Package>/manifest.concept`, evaluates that manifest
+through the ordinary parser and typed semantic path, orders package and module
+dependencies, and emits deterministic `package.json` plus
+`concept-module.v1` artifacts. The immutable manifest records package name,
+author, version, kind, dependencies, and dependency count; current first-party
+manifests use author `CODEX`. There is no registry, remote fetch, solver,
+lockfile, stable binary module ABI, import alias, partial specialization,
+variadic, partition, or runtime module system.
 
 R6o generalizes serialized generic constraints from one first-parameter target
 to structural concept applications. The typed payload retains concept parameter
@@ -112,7 +124,8 @@ functions and generic types build their operation closure and instantiate from
 that payload without source reparse; closed instance MIR contains concrete
 arguments and concrete witness bindings.
 
-R6p uses this path for `Standard.Memory`. Its artifacts carry allocator concept
+R6p introduced this path for `Standard.Memory`; R7a promotes those sources to
+`libraries/Standard`. Its artifacts carry allocator concept
 composition, required Allocate/Release signatures, effect summaries, generic
 typed-owner bodies, and region/provenance summaries through the ordinary
 schema. An artifact-only consumer instantiates bump, pool, `Allocation<T,A>`,
