@@ -1,6 +1,6 @@
 # EVT1 allocator direction
 
-Status: R6k honest stop; initialized typed-storage ownership is not yet composable
+Status: R6l progression; direct typed-storage ownership works, nested generic carriers remain blocked
 
 ## Doctrine
 
@@ -187,4 +187,7 @@ R6j
     foreign contracts solved external authority
 R6k
     initialized Storage<T> cannot cross the typed-owner boundary
+R6l
+    direct initialized owner fields work; nested generic Result/Option carrier
+    substitution remains the allocator-readiness blocker
 ```

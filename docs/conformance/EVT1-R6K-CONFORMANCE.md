@@ -2,6 +2,11 @@
 
 Status: honest stop
 
+Historical note: R6l subsequently resolved the first three direct boundary
+tests and replaced the fourth self-referential shape with `Value(storage)`.
+This report records the R6k baseline; current status is in
+`EVT1-R6L-CONFORMANCE.md`.
+
 Baseline HEAD: `96249a7254bc22915bbe7be3ba45f675b0713551`
 
 Compiler identity: `concept-evt1-stage0-go`

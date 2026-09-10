@@ -228,6 +228,19 @@ func evt1ValidateMemberCall(env *semanticEnv, scope *evt1Scope, call *CallExpr, 
 	if fn.Visibility == "private" && env.validatingMethod != fn.MethodOf {
 		return Type{}, evt1Diagnostic("CLASS_PRIVATE_MEMBER_ACCESS", fmt.Sprintf("method %s.%s is private", fn.MethodOf, fn.Name), call.Span)
 	}
+	if requiredPath, ok := evt1InitializedStorageRequirement(fn); ok {
+		if receiverPlace, placeErr := validateAssignable(env, scope, call.Receiver, templateInfo); placeErr == nil {
+			path := receiverPlace.path
+			path.Fields = append(append([]string{}, path.Fields...), requiredPath...)
+			state := scope.storageState(path, evt1StorageInitialized)
+			if state == evt1StorageMaybeInitialized {
+				return Type{}, evt1Diagnostic("STORAGE_VALUE_MAYBE_UNINITIALIZED", fmt.Sprintf("method %s requires storage initialized on every control-flow path at %s", fn.Name, evt1StoragePathKey(append([]string{path.Root}, path.Fields...))), call.Span)
+			}
+			if state != evt1StorageInitialized {
+				return Type{}, evt1Diagnostic("STORAGE_VALUE_UNINITIALIZED", fmt.Sprintf("method %s requires initialized storage at %s", fn.Name, evt1StoragePathKey(append([]string{path.Root}, path.Fields...))), call.Span)
+			}
+		}
+	}
 	for i, arg := range args {
 		if err := validateCallArgument(env, scope, fn.Params[i].Type, arg, argTypes[i], templateInfo); err != nil {
 			return Type{}, err
@@ -237,6 +250,49 @@ func evt1ValidateMemberCall(env *semanticEnv, scope *evt1Scope, call *CallExpr, 
 		return evt1AsyncType(evt1CanonicalType(env, fn.ReturnType), fn.Name, call.Span), nil
 	}
 	return evt1CanonicalType(env, fn.ReturnType), nil
+}
+
+// evt1InitializedStorageRequirement derives the small precondition needed by
+// an accessor that borrows a live object through Value(self.<field path>).
+// It is structural and survives generic method materialization and modules;
+// no owner or method name has privileged meaning.
+func evt1InitializedStorageRequirement(fn FunctionDecl) ([]string, bool) {
+	if fn.Body == nil {
+		return nil, false
+	}
+	var inspectExpr func(Expr) ([]string, bool)
+	inspectExpr = func(expr Expr) ([]string, bool) {
+		call, ok := expr.(*CallExpr)
+		if !ok || call.Callee != "Value" || len(call.Args) != 1 {
+			return nil, false
+		}
+		var fields []string
+		current := call.Args[0]
+		for {
+			switch value := current.(type) {
+			case *FieldExpr:
+				fields = append([]string{value.Field}, fields...)
+				current = value.Receiver
+			case *NameExpr:
+				return fields, value.Name == "self" && len(fields) != 0
+			default:
+				return nil, false
+			}
+		}
+	}
+	for _, statement := range fn.Body.Statements {
+		switch value := statement.(type) {
+		case *ReturnStmt:
+			if path, ok := inspectExpr(value.Value); ok {
+				return path, true
+			}
+		case *ExprStmt:
+			if path, ok := inspectExpr(value.Value); ok {
+				return path, true
+			}
+		}
+	}
+	return nil, false
 }
 
 // Aggregate method bodies allow unambiguous bare member names. This syntax

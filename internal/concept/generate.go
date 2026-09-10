@@ -4339,12 +4339,10 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		}
 		return b.String(), carrierTemp + ".payload." + field, evt1FailureSuccessType(carrierType)
 	case *CallExpr:
-		storageBinding := evt1Binding{}
 		storageCall := false
 		if len(e.Args) > 0 {
-			if name, ok := e.Args[0].(*NameExpr); ok {
-				storageBinding, storageCall = scopeLookup(name.Name, f.scope)
-				storageCall = storageCall && storageBinding.t.Kind == TypeTypedStorage
+			if place, err := validateAssignable(f.l.env, f.typeScope(), e.Args[0], nil); err == nil {
+				storageCall = place.t.Kind == TypeTypedStorage && len(place.t.TypeArgs) == 1
 			}
 		}
 		if e.Callee == "Initialize" && len(e.Args) == 2 && storageCall {
@@ -4360,6 +4358,11 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 				return prelude, fmt.Sprintf("(%s(*%s), (void)0)", evt1FunctionSymbolForDecl(f.l.outputBase, f.l.env, *drop), storage), Type{Name: "void", Kind: TypeBuiltin, Span: e.Span}
 			}
 			return prelude, "((void)0)", Type{Name: "void", Kind: TypeBuiltin, Span: e.Span}
+		}
+		if e.Callee == "Value" && len(e.Args) == 1 && storageCall {
+			prelude, storage, storageType := f.lowerExpr(e.Args[0], indent)
+			element := storageType.TypeArgs[0]
+			return prelude, storage, Type{Name: element.Name, Kind: element.Kind, TypeArgs: element.TypeArgs, Ownership: "ref", Const: storageType.Const, Span: e.Span}
 		}
 		if e.Callee == "AddressBits" && len(e.Args) == 1 {
 			prelude, value, _ := f.lowerExpr(e.Args[0], indent)
@@ -4609,8 +4612,15 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 			return prelude, "((uintptr_t)(" + value + "))", evt1AddressType(e.TypeArg, e.Span)
 		}
 		if e.Callee == "bind" {
-			addressPrelude, address, _ := f.lowerExpr(e.Args[0], indent)
-			extentPrelude, extent, _ := f.lowerExpr(e.Args[1], indent)
+			addressPrelude, address, regionType := f.lowerExpr(e.Args[0], indent)
+			extentPrelude, extent := "", ""
+			if len(e.Args) == 1 {
+				startField, lengthField, _ := evt1RegionStorageFields(f.l.env, regionType)
+				extent = "(" + address + ")." + lengthField
+				address = "(" + address + ")." + startField
+			} else {
+				extentPrelude, extent, _ = f.lowerExpr(e.Args[1], indent)
+			}
 			size, alignment, _ := evt1TypeGeometry(f.l.env, e.TypeArg)
 			addressTemp := f.nextTemp("bind_address")
 			extentTemp := f.nextTemp("bind_extent")
@@ -5025,7 +5035,7 @@ func (f *evt1FunctionLowerer) lowerDropValue(t Type, value string, indent int) s
 		return ind(indent) + fmt.Sprintf("%s(%s);\n", evt1FailureDropName(t), value)
 	}
 	if dropFn := evt1DropFunction(f.l.env, t); dropFn != nil {
-		return ind(indent) + fmt.Sprintf("%s(%s);\n", evt1FunctionSymbolForDecl(f.l.outputBase, f.l.env, *dropFn), value)
+		return ind(indent) + fmt.Sprintf("%s(%s);\n", evt1DropSymbol(f.l, *dropFn, t), value)
 	}
 	if t.ArrayElem != nil && evt1StorageElementHasDrop(f.l.env, *t.ArrayElem) {
 		var b strings.Builder
@@ -5045,6 +5055,18 @@ func (f *evt1FunctionLowerer) lowerDropValue(t Type, value string, indent int) s
 		return b.String()
 	}
 	return ""
+}
+
+func evt1DropSymbol(l *lowering, dropFn FunctionDecl, t Type) string {
+	for _, instance := range l.env.templateInstances {
+		if instance.TemplateName != "Drop" || len(instance.Function.Params) != 1 {
+			continue
+		}
+		if evt1CanonicalType(l.env, instance.Function.Params[0].Type.valueType()).Equal(evt1CanonicalType(l.env, t.valueType())) {
+			return instance.GeneratedSymbol
+		}
+	}
+	return evt1FunctionSymbolForDecl(l.outputBase, l.env, dropFn)
 }
 
 func evt1StructFieldsNeedDrop(env *semanticEnv, decl StructDecl) bool {

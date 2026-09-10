@@ -61,6 +61,7 @@ type evt1ValueBinding struct {
 	mutable          bool
 	state            evt1StorageState
 	objectState      evt1StorageState
+	storageStates    map[string]evt1StorageState
 	comptime         bool
 	hasValue         bool
 	value            Value
@@ -74,15 +75,18 @@ type evt1ValueBinding struct {
 	valueFacts       *SemanticValueFacts
 	source           Expr
 	declarationSpan  Span
+	objectBorrow     string
 }
 
 type evt1StorageState string
 
 const (
-	evt1StorageUninitialized evt1StorageState = "uninitialized"
-	evt1StorageInitialized   evt1StorageState = "initialized"
-	evt1StorageMoved         evt1StorageState = "moved"
-	evt1StorageMaybeMoved    evt1StorageState = "maybe_moved"
+	evt1StorageUninitialized    evt1StorageState = "uninitialized"
+	evt1StorageInitialized      evt1StorageState = "initialized"
+	evt1StorageMoved            evt1StorageState = "moved"
+	evt1StorageMaybeMoved       evt1StorageState = "maybe_moved"
+	evt1StorageMaybeInitialized evt1StorageState = "maybe_initialized"
+	evt1StorageObjectEnded      evt1StorageState = "object_ended"
 )
 
 type evt1AccessPath struct {
@@ -170,6 +174,162 @@ func (s *evt1Scope) setObjectState(name string, state evt1StorageState) bool {
 	return false
 }
 
+func evt1StoragePathKey(fields []string) string {
+	return strings.Join(fields, ".")
+}
+
+func (s *evt1Scope) storageState(path evt1AccessPath, fallback evt1StorageState) evt1StorageState {
+	if binding, ok := s.lookup(path.Root); ok {
+		if state, found := binding.storageStates[evt1StoragePathKey(path.Fields)]; found {
+			return state
+		}
+		if len(path.Fields) == 0 && binding.objectState != "" {
+			return binding.objectState
+		}
+	}
+	return fallback
+}
+
+func (s *evt1Scope) setStorageState(path evt1AccessPath, state evt1StorageState) bool {
+	for current := s; current != nil; current = current.parent {
+		if binding, ok := current.values[path.Root]; ok {
+			if binding.storageStates == nil {
+				binding.storageStates = map[string]evt1StorageState{}
+			}
+			binding.storageStates[evt1StoragePathKey(path.Fields)] = state
+			if len(path.Fields) == 0 {
+				binding.objectState = state
+			}
+			current.values[path.Root] = binding
+			return true
+		}
+	}
+	return false
+}
+
+func (s *evt1Scope) setStorageInitializedFact(path evt1AccessPath, certainty SemanticFactCertainty) bool {
+	for current := s; current != nil; current = current.parent {
+		binding, ok := current.values[path.Root]
+		if !ok {
+			continue
+		}
+		if binding.valueFacts == nil {
+			binding.valueFacts = &SemanticValueFacts{Fields: map[string]*SemanticValueFacts{}}
+		}
+		facts := binding.valueFacts
+		for _, field := range path.Fields {
+			if facts.Fields == nil {
+				facts.Fields = map[string]*SemanticValueFacts{}
+			}
+			if facts.Fields[field] == nil {
+				facts.Fields[field] = &SemanticValueFacts{Fields: map[string]*SemanticValueFacts{}}
+			}
+			facts = facts.Fields[field]
+		}
+		facts.Initialized = certainty
+		current.values[path.Root] = binding
+		return true
+	}
+	return false
+}
+
+func (s *evt1Scope) invalidateObjectBorrows(path evt1AccessPath) {
+	key := evt1StoragePathKey(append([]string{path.Root}, path.Fields...))
+	for current := s; current != nil; current = current.parent {
+		for name, binding := range current.values {
+			if binding.objectBorrow == key {
+				binding.state = evt1StorageObjectEnded
+				current.values[name] = binding
+			}
+		}
+	}
+}
+
+func (s *evt1Scope) hasObjectBorrow(path evt1AccessPath) bool {
+	key := evt1StoragePathKey(append([]string{path.Root}, path.Fields...))
+	for current := s; current != nil; current = current.parent {
+		for _, binding := range current.values {
+			if binding.objectBorrow == key && binding.state == evt1StorageInitialized {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func evt1ObjectBorrowForExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *evt1TemplateInfo) string {
+	if paren, ok := expr.(*ParenExpr); ok {
+		return evt1ObjectBorrowForExpr(env, scope, paren.Value, templateInfo)
+	}
+	if name, ok := expr.(*NameExpr); ok {
+		if binding, found := scope.lookup(name.Name); found {
+			return binding.objectBorrow
+		}
+	}
+	call, ok := expr.(*CallExpr)
+	if !ok {
+		return ""
+	}
+	if !call.Member && (call.Callee == "Value" || call.Callee == "Initialize") && len(call.Args) != 0 {
+		if place, err := validateAssignable(env, scope, call.Args[0], templateInfo); err == nil {
+			return evt1StoragePathKey(append([]string{place.path.Root}, place.path.Fields...))
+		}
+	}
+	if call.Member && call.Receiver != nil {
+		if receiver, err := validateAssignable(env, scope, call.Receiver, templateInfo); err == nil {
+			for _, fn := range evt1MethodCandidates(env, receiver.t.valueType().Name, call.Callee) {
+				if fields, required := evt1InitializedStorageRequirement(fn); required {
+					return evt1StoragePathKey(append(append([]string{receiver.path.Root}, receiver.path.Fields...), fields...))
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func evt1StorageStatesFromFacts(t Type, facts *SemanticValueFacts, prefix []string, out map[string]evt1StorageState, env *semanticEnv) {
+	t = evt1CanonicalType(env, t)
+	if t.Kind == TypeTypedStorage {
+		state := evt1StorageUninitialized
+		if facts != nil && facts.Initialized == FactProven {
+			state = evt1StorageInitialized
+		}
+		out[evt1StoragePathKey(prefix)] = state
+		return
+	}
+	fields, _, err := evt1FieldSet(env, t)
+	if err != nil {
+		return
+	}
+	for name, fieldType := range fields {
+		var fieldFacts *SemanticValueFacts
+		if facts != nil {
+			fieldFacts = facts.Fields[name]
+		}
+		evt1StorageStatesFromFacts(fieldType, fieldFacts, append(append([]string{}, prefix...), name), out, env)
+	}
+}
+
+func evt1RegionStorageFields(env *semanticEnv, t Type) (string, string, bool) {
+	t = evt1CanonicalType(env, t.valueType())
+	decl, ok := env.structs[t.Name]
+	if !ok {
+		return "", "", false
+	}
+	start, length := "", ""
+	for _, field := range decl.Fields {
+		fieldType := evt1CanonicalType(env, field.Type)
+		if start == "" && fieldType.Kind == TypeAddress && len(fieldType.TypeArgs) == 1 && fieldType.TypeArgs[0].Name == "SystemMemory" {
+			start = field.Name
+			continue
+		}
+		if start != "" && length == "" && evt1ByteDisplacement(fieldType) {
+			length = field.Name
+		}
+	}
+	return start, length, start != "" && length != ""
+}
+
 func (s *evt1Scope) setProvenance(name string, provenance evt1LifetimeProvenance) bool {
 	for scope := s; scope != nil; scope = scope.parent {
 		if binding, ok := scope.values[name]; ok {
@@ -232,6 +392,14 @@ func evt1CloneScope(scope *evt1Scope) *evt1Scope {
 	out.callableOuter = scope.callableOuter
 	out.functionName = scope.functionName
 	for name, binding := range scope.values {
+		if binding.storageStates != nil {
+			states := make(map[string]evt1StorageState, len(binding.storageStates))
+			for path, state := range binding.storageStates {
+				states[path] = state
+			}
+			binding.storageStates = states
+		}
+		binding.valueFacts = cloneSemanticValueFacts(binding.valueFacts)
 		out.values[name] = binding
 	}
 	out.borrows = append([]evt1RetainedBorrow{}, scope.borrows...)
@@ -241,6 +409,10 @@ func evt1CloneScope(scope *evt1Scope) *evt1Scope {
 func evt1JoinStorageState(a, b evt1StorageState) evt1StorageState {
 	if a == b {
 		return a
+	}
+	if (a == evt1StorageInitialized || a == evt1StorageUninitialized || a == evt1StorageMaybeInitialized) &&
+		(b == evt1StorageInitialized || b == evt1StorageUninitialized || b == evt1StorageMaybeInitialized) {
+		return evt1StorageMaybeInitialized
 	}
 	return evt1StorageMaybeMoved
 }
@@ -255,6 +427,28 @@ func evt1MergeScopeStates(target, left, right *evt1Scope) {
 		rightBinding, rightOK := right.values[name]
 		if leftOK && rightOK {
 			binding.state = evt1JoinStorageState(leftBinding.state, rightBinding.state)
+			binding.objectState = evt1JoinStorageState(leftBinding.objectState, rightBinding.objectState)
+			if len(leftBinding.storageStates) != 0 || len(rightBinding.storageStates) != 0 {
+				binding.storageStates = map[string]evt1StorageState{}
+				paths := map[string]bool{}
+				for path := range leftBinding.storageStates {
+					paths[path] = true
+				}
+				for path := range rightBinding.storageStates {
+					paths[path] = true
+				}
+				for path := range paths {
+					leftState, leftFound := leftBinding.storageStates[path]
+					rightState, rightFound := rightBinding.storageStates[path]
+					if !leftFound {
+						leftState = evt1StorageUninitialized
+					}
+					if !rightFound {
+						rightState = evt1StorageUninitialized
+					}
+					binding.storageStates[path] = evt1JoinStorageState(leftState, rightState)
+				}
+			}
 			target.values[name] = binding
 		}
 	}
@@ -268,6 +462,8 @@ func evt1CheckReadableBinding(name string, binding evt1ValueBinding, span Span) 
 		return evt1Diagnostic("CV4502", fmt.Sprintf("use of %s after ownership was moved", name), span)
 	case evt1StorageMaybeMoved:
 		return evt1Diagnostic("CV4503", fmt.Sprintf("use of %s is invalid because it is moved on some control-flow paths", name), span)
+	case evt1StorageObjectEnded:
+		return evt1Diagnostic("STORAGE_REFERENCE_AFTER_DESTROY", fmt.Sprintf("cannot use %s after the referenced object lifetime ended", name), span)
 	default:
 		return nil
 	}
@@ -888,7 +1084,44 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 	if err := evt1EvaluateModuleComptime(env, module); err != nil {
 		return nil, err
 	}
+	if err := evt1InstantiateGenericDrops(env); err != nil {
+		return nil, err
+	}
 	return env, nil
+}
+
+func evt1InstantiateGenericDrops(env *semanticEnv) error {
+	decl, found := env.templates["Drop"]
+	if !found || len(decl.Params) != 1 || !decl.Params[0].Type.isOwned() || len(decl.Parameters) != 1 {
+		return nil
+	}
+	parameterType := decl.Params[0].Type.valueType()
+	var identities []string
+	for identity := range env.genericTypeApplications {
+		identities = append(identities, identity)
+	}
+	sort.Strings(identities)
+	for _, identity := range identities {
+		application := env.genericTypeApplications[identity]
+		if parameterType.Name != application.Name || len(application.TypeArgs) != 1 || application.TypeArgs[0].Kind == TypeConceptParam {
+			continue
+		}
+		instance, err := instantiateTemplateArgs(env, "Drop", application.TypeArgs, application.Span)
+		if err != nil {
+			return err
+		}
+		duplicate := false
+		for _, existing := range env.functions["Drop"] {
+			if evt1FunctionParamSignature(existing) == evt1FunctionParamSignature(instance.Function) {
+				duplicate = true
+				break
+			}
+		}
+		if !duplicate {
+			env.functions["Drop"] = append(env.functions["Drop"], instance.Function)
+		}
+	}
+	return nil
 }
 
 func evt1ModuleScope(env *semanticEnv) *evt1Scope {
@@ -1359,9 +1592,16 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 			if valueFacts != nil && valueFacts.Provenance.Kind == "" {
 				valueFacts.Provenance = provenance
 			}
+			storageStates := map[string]evt1StorageState{}
+			evt1StorageStatesFromFacts(resolvedType, valueFacts, nil, storageStates, env)
+			objectBorrow := ""
+			if resolvedType.isReference() {
+				objectBorrow = evt1ObjectBorrowForExpr(env, local, s.Value, templateInfo)
+			}
 			local.declare(s.Name, evt1ValueBinding{
 				t: resolvedType, mutable: !s.Const, state: evt1StorageInitialized, comptime: inComptimeFn,
 				objectState:     objectState,
+				storageStates:   storageStates,
 				provenance:      provenance,
 				spanFacts:       evt1SpanFactsForValue(env, local, s.Value, resolvedType),
 				regionFacts:     evt1RegionFactsForValue(env, local, s.Value, resolvedType),
@@ -1369,6 +1609,7 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				valueFacts:      valueFacts,
 				source:          s.Value,
 				declarationSpan: s.Span,
+				objectBorrow:    objectBorrow,
 			})
 			evt1RecordTransportedFacts(env, local.functionName, s.Name, resolvedType, valueFacts, s.Span)
 		case *TransitionStmt:
@@ -1931,15 +2172,39 @@ func evt1ValidateStorageTemplateCall(env *semanticEnv, scope *evt1Scope, e *Temp
 		}
 		return evt1AddressType(e.TypeArg, e.Span), true, nil
 	case "bind":
-		if len(e.TypeArgs) > 1 || len(e.Args) != 2 {
-			return Type{}, true, evt1Diagnostic("RAW_BIND_ARGUMENTS", "bind<T> expects an address and a usize<byte> extent", e.Span)
+		if len(e.TypeArgs) > 1 || (len(e.Args) != 1 && len(e.Args) != 2) {
+			return Type{}, true, evt1Diagnostic("RAW_BIND_ARGUMENTS", "bind<T> expects MemoryRegion<SystemMemory>, or an address and usize<byte> extent", e.Span)
 		}
-		if err := validateKnownType(env, e.TypeArg, e.TypeArg.Span, "", false); err != nil {
+		typeParam := ""
+		if templateInfo != nil {
+			typeParam = templateInfo.Decl.TypeParam
+		}
+		if err := validateKnownType(env, e.TypeArg, e.TypeArg.Span, typeParam, false); err != nil {
 			return Type{}, true, err
 		}
 		addressType, err := validateExpr(env, scope, e.Args[0], templateInfo, inComptimeFn)
 		if err != nil {
 			return Type{}, true, err
+		}
+		if len(e.Args) == 1 {
+			if _, _, regionLike := evt1RegionStorageFields(env, addressType); !regionLike {
+				return Type{}, true, evt1Diagnostic("RAW_BIND_REQUIRES_REGION", fmt.Sprintf("bind<T> requires MemoryRegion<SystemMemory>, got %s", addressType.String()), e.Args[0].exprSpan())
+			}
+			facts := evt1SemanticFactsForExpr(env, scope, e.Args[0], addressType)
+			provenance := evt1ExprProvenance(env, scope, e.Args[0])
+			symbolicParameter := templateInfo != nil
+			if name, ok := e.Args[0].(*NameExpr); ok {
+				if binding, found := scope.lookup(name.Name); found && binding.declarationSpan == (Span{}) {
+					symbolicParameter = true
+				}
+			}
+			if (facts == nil && !symbolicParameter) || (facts != nil && facts.RegionOrigin == "" && provenance.Kind != evt1ProvenanceParameter && provenance.Kind != evt1ProvenanceStatic && !symbolicParameter) {
+				return Type{}, true, evt1Diagnostic("RAW_BIND_PROVENANCE_UNKNOWN", "bind<T> requires a trusted live MemoryRegion<SystemMemory>", e.Args[0].exprSpan())
+			}
+			if facts != nil && facts.HostAccessible != FactProven && facts.AddressSpace != "SystemMemory" {
+				return Type{}, true, evt1Diagnostic("ADDRESS_SPACE_NOT_HOST_ACCESSIBLE", "MemoryRegion<SystemMemory> is not proven HostAccessible", e.Args[0].exprSpan())
+			}
+			return evt1StorageType(e.TypeArg, e.Span), true, nil
 		}
 		extentType, err := validateExpr(env, scope, e.Args[1], templateInfo, inComptimeFn)
 		if err != nil {
@@ -1963,8 +2228,10 @@ func evt1ValidateStorageTemplateCall(env *semanticEnv, scope *evt1Scope, e *Temp
 		if !evt1ByteDisplacement(extentType) {
 			return Type{}, true, evt1Diagnostic("RAW_BIND_EXTENT_UNIT", fmt.Sprintf("bind<T> extent requires usize<byte>, got %s", extentType.String()), e.Args[1].exprSpan())
 		}
-		if _, _, err := evt1TypeGeometry(env, e.TypeArg); err != nil {
-			return Type{}, true, err
+		if !evt1TypeDependsOnParam(e.TypeArg, typeParam) {
+			if _, _, err := evt1TypeGeometry(env, e.TypeArg); err != nil {
+				return Type{}, true, err
+			}
 		}
 		return evt1StorageType(e.TypeArg, e.Span), true, nil
 	case "Convert":
@@ -1985,16 +2252,16 @@ func evt1ValidateStorageTemplateCall(env *semanticEnv, scope *evt1Scope, e *Temp
 	}
 }
 
-func evt1StorageBindingForCall(scope *evt1Scope, call *CallExpr) (string, evt1ValueBinding, bool) {
+func evt1StorageBindingForCall(env *semanticEnv, scope *evt1Scope, call *CallExpr, templateInfo *evt1TemplateInfo) (evt1LValue, evt1ValueBinding, bool) {
 	if len(call.Args) == 0 {
-		return "", evt1ValueBinding{}, false
+		return evt1LValue{}, evt1ValueBinding{}, false
 	}
-	name, ok := call.Args[0].(*NameExpr)
-	if !ok {
-		return "", evt1ValueBinding{}, false
+	place, err := validateAssignable(env, scope, call.Args[0], templateInfo)
+	if err != nil {
+		return evt1LValue{}, evt1ValueBinding{}, false
 	}
-	binding, ok := scope.lookup(name.Name)
-	return name.Name, binding, ok && binding.t.Kind == TypeTypedStorage && len(binding.t.TypeArgs) == 1
+	binding, ok := scope.lookup(place.path.Root)
+	return place, binding, ok && place.t.Kind == TypeTypedStorage && len(place.t.TypeArgs) == 1
 }
 
 func evt1AddressHasStorageOrigin(env *semanticEnv, scope *evt1Scope, expr Expr, addressType Type) bool {
@@ -2777,15 +3044,23 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		return evt1CanonicalType(env, fieldType), nil
 	case *CallExpr:
-		storageName, binding, storageCall := evt1StorageBindingForCall(scope, e)
-		if (e.Callee == "Initialize" || e.Callee == "Destroy") && storageCall {
-			element := binding.t.TypeArgs[0]
+		storagePlace, _, storageCall := evt1StorageBindingForCall(env, scope, e, templateInfo)
+		if (e.Callee == "Initialize" || e.Callee == "Destroy" || e.Callee == "Value") && storageCall {
+			element := storagePlace.t.TypeArgs[0]
+			storageName := storagePlace.path.Root
+			if len(storagePlace.path.Fields) != 0 {
+				storageName += "." + strings.Join(storagePlace.path.Fields, ".")
+			}
+			objectState := scope.storageState(storagePlace.path, evt1StorageInitialized)
 			if e.Callee == "Initialize" {
 				if len(e.Args) != 2 {
 					return Type{}, evt1Diagnostic("STORAGE_LIFETIME_ARGUMENTS", "Initialize requires storage and one initial value", e.Span)
 				}
-				if binding.objectState == evt1StorageInitialized {
+				if objectState == evt1StorageInitialized {
 					return Type{}, evt1Diagnostic("STORAGE_DOUBLE_INITIALIZE", fmt.Sprintf("Storage %s already contains a live %s", storageName, element.String()), e.Span)
+				}
+				if objectState == evt1StorageMaybeInitialized {
+					return Type{}, evt1Diagnostic("STORAGE_MAYBE_INITIALIZED", fmt.Sprintf("Storage %s is initialized on some control-flow paths", storageName), e.Span)
 				}
 				valueType, err := validateExprAgainstExpected(env, scope, e.Args[1], element, templateInfo, inComptimeFn)
 				if err != nil {
@@ -2794,19 +3069,41 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 				if !evt1TypesCompatible(env, element, valueType, "") {
 					return Type{}, evt1Diagnostic("STORAGE_INITIALIZER_TYPE", fmt.Sprintf("Initialize expected %s but got %s", element.String(), valueType.String()), e.Args[1].exprSpan())
 				}
-				scope.setObjectState(storageName, evt1StorageInitialized)
+				scope.setStorageState(storagePlace.path, evt1StorageInitialized)
+				scope.setStorageInitializedFact(storagePlace.path, FactProven)
 				out := element.valueType()
 				out.Ownership = "ref"
+				out.Span = e.Span
+				return out, nil
+			}
+			if e.Callee == "Value" {
+				if len(e.Args) != 1 {
+					return Type{}, evt1Diagnostic("STORAGE_LIFETIME_ARGUMENTS", "Value requires one Storage<T>", e.Span)
+				}
+				if objectState == evt1StorageMaybeInitialized {
+					return Type{}, evt1Diagnostic("STORAGE_VALUE_MAYBE_UNINITIALIZED", fmt.Sprintf("Storage %s is not initialized on every control-flow path", storageName), e.Span)
+				}
+				if objectState != evt1StorageInitialized {
+					return Type{}, evt1Diagnostic("STORAGE_VALUE_UNINITIALIZED", fmt.Sprintf("Storage %s does not contain a live %s", storageName, element.String()), e.Span)
+				}
+				out := element.valueType()
+				out.Ownership = "ref"
+				out.Const = !storagePlace.mutable
 				out.Span = e.Span
 				return out, nil
 			}
 			if len(e.Args) != 1 {
 				return Type{}, evt1Diagnostic("STORAGE_LIFETIME_ARGUMENTS", "Destroy requires one Storage<T>", e.Span)
 			}
-			if binding.objectState != evt1StorageInitialized {
+			if objectState == evt1StorageMaybeInitialized {
+				return Type{}, evt1Diagnostic("STORAGE_DESTROY_MAYBE_UNINITIALIZED", fmt.Sprintf("Storage %s is not initialized on every control-flow path", storageName), e.Span)
+			}
+			if objectState != evt1StorageInitialized {
 				return Type{}, evt1Diagnostic("STORAGE_DESTROY_UNINITIALIZED", fmt.Sprintf("Storage %s does not contain a live %s", storageName, element.String()), e.Span)
 			}
-			scope.setObjectState(storageName, evt1StorageUninitialized)
+			scope.setStorageState(storagePlace.path, evt1StorageUninitialized)
+			scope.setStorageInitializedFact(storagePlace.path, FactDisproven)
+			scope.invalidateObjectBorrows(storagePlace.path)
 			out, _ := evt1BuiltinType("void", e.Span)
 			return out, nil
 		}
@@ -3268,33 +3565,46 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			return Type{}, evt1Diagnostic("CV4028", "unsupported unary operator "+e.Op, e.Span)
 		}
 	case *MoveExpr:
-		name, ok := e.Value.(*NameExpr)
-		if !ok {
-			return Type{}, evt1Diagnostic("CV4507", "move requires a whole local or parameter place", e.Value.exprSpan())
+		place, placeErr := validateAssignable(env, scope, e.Value, templateInfo)
+		if placeErr != nil || (len(place.path.Fields) != 0 && place.t.Kind != TypeTypedStorage) {
+			return Type{}, evt1Diagnostic("CV4507", "move requires a whole local or parameter place, or a typed-storage field", e.Value.exprSpan())
 		}
-		binding, ok := scope.lookup(name.Name)
+		binding, ok := scope.lookup(place.path.Root)
 		if !ok {
-			return Type{}, evt1Diagnostic("CV4024", fmt.Sprintf("unknown name %s", name.Name), name.Span)
+			return Type{}, evt1Diagnostic("CV4024", fmt.Sprintf("unknown name %s", place.path.Root), e.Value.exprSpan())
 		}
 		if binding.state == evt1StorageMoved {
-			return Type{}, evt1Diagnostic("CV4504", fmt.Sprintf("%s was already moved", name.Name), e.Span)
+			return Type{}, evt1Diagnostic("CV4504", fmt.Sprintf("%s was already moved", place.path.Root), e.Span)
 		}
 		if binding.state == evt1StorageMaybeMoved {
-			return Type{}, evt1Diagnostic("CV4503", fmt.Sprintf("%s is moved on some control-flow paths", name.Name), e.Span)
+			return Type{}, evt1Diagnostic("CV4503", fmt.Sprintf("%s is moved on some control-flow paths", place.path.Root), e.Span)
 		}
-		if evt1IsImmovableValueType(env, binding.t) {
-			return Type{}, evt1Diagnostic("CV4505", fmt.Sprintf("immovable type %s cannot be relocated", binding.t.String()), e.Span)
+		if len(place.path.Fields) != 0 {
+			fieldState := scope.storageState(place.path, evt1StorageInitialized)
+			if fieldState == evt1StorageMoved || fieldState == evt1StorageMaybeMoved {
+				return Type{}, evt1Diagnostic("CV4504", fmt.Sprintf("%s was already moved", evt1StoragePathKey(append([]string{place.path.Root}, place.path.Fields...))), e.Span)
+			}
 		}
-		if !evt1TypeMovable(env, binding.t) {
-			return Type{}, evt1Diagnostic("CV4505", fmt.Sprintf("type %s is not movable", binding.t.String()), e.Span)
+		if scope.hasObjectBorrow(place.path) {
+			return Type{}, evt1Diagnostic("STORAGE_MOVE_WITH_LIVE_REFERENCE", fmt.Sprintf("cannot move %s while a reference to its initialized object is live", evt1StoragePathKey(append([]string{place.path.Root}, place.path.Fields...))), e.Span)
 		}
-		if !evt1TypeCopyable(env, binding.t) {
-			if !binding.mutable {
+		if evt1IsImmovableValueType(env, place.t) {
+			return Type{}, evt1Diagnostic("CV4505", fmt.Sprintf("immovable type %s cannot be relocated", place.t.String()), e.Span)
+		}
+		if !evt1TypeMovable(env, place.t) {
+			return Type{}, evt1Diagnostic("CV4505", fmt.Sprintf("type %s is not movable", place.t.String()), e.Span)
+		}
+		if !evt1TypeCopyable(env, place.t) {
+			if !place.mutable {
 				return Type{}, evt1Diagnostic("CV4128", "move requires a mutable owning place", e.Span)
 			}
-			scope.setState(name.Name, evt1StorageMoved)
+			if len(place.path.Fields) == 0 {
+				scope.setState(place.path.Root, evt1StorageMoved)
+			} else {
+				scope.setStorageState(place.path, evt1StorageMoved)
+			}
 		}
-		return evt1CanonicalType(env, binding.t), nil
+		return evt1CanonicalType(env, place.t), nil
 	case *BindExpr:
 		return Type{}, evt1Diagnostic("CV4562", "bind requires an explicit contextual ref array/ndarray target type", e.Span)
 	case *RefExpr:
@@ -3935,7 +4245,8 @@ func evt1IsRefStructType(env *semanticEnv, t Type) bool {
 }
 
 func evt1InitialParameterProvenance(env *semanticEnv, t Type, index, depth int) evt1LifetimeProvenance {
-	if t.isReference() || evt1IsRefStructType(env, t) || t.Kind == TypeDyn {
+	_, _, regionLike := evt1RegionStorageFields(env, t)
+	if t.isReference() || evt1IsRefStructType(env, t) || t.Kind == TypeDyn || t.Kind == TypeAddress || t.Kind == TypeTypedStorage || regionLike {
 		return evt1LifetimeProvenance{Kind: evt1ProvenanceParameter, ParameterIndex: index, Scoped: t.Scoped}
 	}
 	return evt1LifetimeProvenance{Kind: evt1ProvenanceLocal, Depth: depth, Scoped: t.Scoped}
@@ -4138,8 +4449,12 @@ func evt1DeriveExprResultProvenance(env *semanticEnv, expr Expr, bindings map[st
 		if e.EnumName == "Result" && e.VariantName == "Ok" && len(e.Args) > 0 {
 			return evt1DeriveExprResultProvenance(env, e.Args[0], bindings, derive)
 		}
+	case *TemplateCallExpr:
+		if e.Callee == "bind" && len(e.Args) > 0 {
+			return evt1DeriveExprResultProvenance(env, e.Args[0], bindings, derive)
+		}
 	case *CallExpr:
-		if (e.Callee == evt1SpanMutableName || e.Callee == evt1SpanReadonlyName || e.Callee == "Subspan" || e.Callee == "Tensor") && len(e.Args) > 0 {
+		if (e.Callee == evt1SpanMutableName || e.Callee == evt1SpanReadonlyName || e.Callee == "Subspan" || e.Callee == "Tensor" || e.Callee == "Initialize" || e.Callee == "Value") && len(e.Args) > 0 {
 			return evt1DeriveExprResultProvenance(env, e.Args[0], bindings, derive)
 		}
 		var candidates []FunctionDecl
@@ -4241,8 +4556,12 @@ func evt1ExprProvenance(env *semanticEnv, scope *evt1Scope, expr Expr) evt1Lifet
 		if evt1IsFailureType(e.ResolvedType) && len(e.Args) > 0 && evt1IsRefStructType(env, evt1FailureSuccessType(e.ResolvedType)) {
 			return evt1ExprProvenance(env, scope, e.Args[0])
 		}
+	case *TemplateCallExpr:
+		if e.Callee == "bind" && len(e.Args) > 0 {
+			return evt1ExprProvenance(env, scope, e.Args[0])
+		}
 	case *CallExpr:
-		if e.Callee == "Initialize" && len(e.Args) > 0 {
+		if (e.Callee == "Initialize" || e.Callee == "Value") && len(e.Args) > 0 {
 			return evt1ExprProvenance(env, scope, e.Args[0])
 		}
 		if e.Member && e.Receiver != nil {
@@ -5156,6 +5475,17 @@ func evt1DropFunction(env *semanticEnv, t Type) *FunctionDecl {
 		}
 		if evt1CanonicalType(env, fn.Params[0].Type.valueType()).Equal(evt1CanonicalType(env, t.valueType())) {
 			return fn
+		}
+	}
+	if application, ok := env.genericTypeApplications[t.valueType().Name]; ok {
+		if decl, found := env.templates["Drop"]; found && len(decl.Params) == 1 && decl.Params[0].Type.isOwned() {
+			parameterType := decl.Params[0].Type.valueType()
+			if parameterType.Name == application.Name && len(application.TypeArgs) == 1 && len(decl.Parameters) == 1 {
+				if instance, err := instantiateTemplateArgs(env, "Drop", application.TypeArgs, t.Span); err == nil {
+					env.functions["Drop"] = append(env.functions["Drop"], instance.Function)
+					return &env.functions["Drop"][len(env.functions["Drop"])-1]
+				}
+			}
 		}
 	}
 	return nil
@@ -6119,15 +6449,25 @@ func instantiateTemplateArgs(env *semanticEnv, templateName string, concreteArgs
 	if err := validateFunctionSignature(env, instFn); err != nil {
 		return nil, err
 	}
+	resolvedReturn, err := evt1ResolveType(env, nil, instFn.ReturnType)
+	if err != nil {
+		return nil, err
+	}
+	instFn.ReturnType = resolvedReturn
 	scope := newEVT1Scope(nil)
 	scope.returnType = instFn.ReturnType
 	scope.inAsync = instFn.Async
 	for paramIndex, param := range instFn.Params {
+		resolvedParam, err := evt1ResolveType(env, scope, param.Type)
+		if err != nil {
+			return nil, err
+		}
+		instFn.Params[paramIndex].Type = resolvedParam
 		scope.declare(param.Name, evt1ValueBinding{
-			t:          evt1CanonicalType(env, param.Type),
+			t:          evt1CanonicalType(env, resolvedParam),
 			mutable:    !param.Type.Const,
 			state:      evt1StorageInitialized,
-			provenance: evt1InitialParameterProvenance(env, param.Type, paramIndex, scope.depth),
+			provenance: evt1InitialParameterProvenance(env, resolvedParam, paramIndex, scope.depth),
 		})
 	}
 	if err := validateBlock(env, scope, instFn.ReturnType, *instFn.Body, nil, false); err != nil {
@@ -6418,8 +6758,11 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 		}
 		return &DispatchExpr{InstanceName: e.InstanceName, Signal: signal, BatchName: e.BatchName, Span: e.Span}, nil
 	case *TemplateCallExpr:
-		if evt1IsTypeLayoutQuery(e.Callee) {
+		if evt1IsTypeLayoutQuery(e.Callee) || e.Callee == "bind" || e.Callee == "AddressOf" || e.Callee == "AddressFromBits" || e.Callee == "EstablishExternalRegion" || e.Callee == "Convert" {
 			out := &TemplateCallExpr{Callee: e.Callee, TypeArg: evt1SubstituteType(e.TypeArg, typeParam, concreteType), Span: e.Span}
+			for _, typeArg := range e.TypeArgs {
+				out.TypeArgs = append(out.TypeArgs, evt1SubstituteType(typeArg, typeParam, concreteType))
+			}
 			for _, arg := range e.Args {
 				sub, err := evt1SubstituteExpr(arg, typeParam, concreteType)
 				if err != nil {

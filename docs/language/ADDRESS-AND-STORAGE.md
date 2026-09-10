@@ -1,6 +1,6 @@
 # Address and storage
 
-Status: EVT1 R6j includes bounded trusted external storage authority
+Status: EVT1 R6l includes field-sensitive initialized typed-storage ownership
 
 The affine algebra is `Address<Space> + usize<byte> -> Address<Space>` and
 `Address<Space> - Address<Space> -> isize<byte>`. Address plus address is
@@ -26,14 +26,12 @@ Initialized and returns `ref T`; `Destroy(storage)` invokes ordinary `Drop`
 when present and returns to Uninitialized. Double initialization and destroying
 uninitialized storage are errors. `Storage<T>` itself is never readable as T.
 
-R6k established an important current limit: those operational states are
-tracked only for named `Storage<T>` locals. Open-template `bind<T>` does not yet
-validate, initialized state does not travel through aggregate fields, a storage
-field cannot be moved out or passed to `Destroy`, and the reference returned by
-`Initialize` cannot yet be returned as part of a storage owner with the
-backing's provenance. This is a general typed-storage ownership gap, not an
-allocator rule; allocator library work remains blocked on resolving it without
-runtime metadata.
+R6l extends those transitions to aggregate field paths. Open-template
+`bind<T>` validates, initialized state travels through storage and whole-owner
+moves, `Destroy(owner.storage)` is legal, and `Value(owner.storage)` derives an
+owner-bounded mutable or const reference. Moving transfers authority to the
+same backing address; it does not relocate object bytes. Result/Option transport
+of a nested generic owner remains blocked on general carrier substitution.
 
 `Span<T>` remains a view of live contiguous objects; layout remains declared
 storage geometry; tensor shapes remain dimensionless element counts.

@@ -86,6 +86,7 @@ func evt1InstantiateGenericType(env *semanticEnv, application Type) (Type, error
 	identity := decl.Name + "<" + strings.Join(parts, ", ") + ">"
 	if instance, ok := env.genericTypeInstances[identity]; ok {
 		env.structs[identity] = instance
+		env.genericTypeApplications[identity] = application
 		return evt1AppliedConcreteType(application, identity), nil
 	}
 	if env.genericInstantiating[identity] {
@@ -136,6 +137,7 @@ func evt1InstantiateGenericType(env *semanticEnv, application Type) (Type, error
 	}
 	env.structs[identity] = instance
 	env.genericTypeInstances[identity] = instance
+	env.genericTypeApplications[identity] = application
 	for _, method := range instance.Methods {
 		duplicate := false
 		for _, existing := range env.functions[method.Name] {

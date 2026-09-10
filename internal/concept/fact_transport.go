@@ -139,6 +139,9 @@ func evt1ParameterSemanticValueFacts(env *semanticEnv, name string, t Type, prov
 		out.SubjectKind, out.Subject = SubjectParameter, name
 		return out
 	}
+	if _, _, regionLike := evt1RegionStorageFields(env, t); regionLike {
+		return &SemanticValueFacts{SubjectKind: SubjectParameter, Subject: name, Type: t.String(), AddressSpace: "SystemMemory", RegionOrigin: "parameter:" + name, HostAccessible: FactProven, Bounded: FactProven, Provenance: provenance}
+	}
 	return &SemanticValueFacts{SubjectKind: SubjectParameter, Subject: name, Type: t.String(), AddressSpace: evt1AddressSpaceName(t), Provenance: provenance}
 }
 
@@ -203,6 +206,7 @@ type SemanticValueFactSummary struct {
 	NoCopy              SemanticFactCertainty       `json:"no_copy,omitempty"`
 	NoOwnershipTransfer SemanticFactCertainty       `json:"no_ownership_transfer,omitempty"`
 	HostAccessible      SemanticFactCertainty       `json:"host_accessible,omitempty"`
+	Initialized         SemanticFactCertainty       `json:"initialized,omitempty"`
 	Origin              SemanticFactOrigin          `json:"origin,omitempty"`
 	Authority           string                      `json:"authority,omitempty"`
 	ProvenanceKind      string                      `json:"provenance_kind,omitempty"`
@@ -231,7 +235,7 @@ func semanticSummaryField(base *SemanticSummaryExpr, field string) *SemanticSumm
 }
 
 func semanticSummaryUnknown(summary SemanticValueFactSummary) bool {
-	return summary.Source == nil && summary.Scalar == nil && summary.RegionOrigin == nil && len(summary.Fields) == 0 && summary.AddressSpace == ""
+	return summary.Source == nil && summary.Scalar == nil && summary.RegionOrigin == nil && len(summary.Fields) == 0 && summary.AddressSpace == "" && summary.Initialized == ""
 }
 
 func semanticSummaryEqual(a, b SemanticValueFactSummary) bool {
@@ -258,6 +262,7 @@ func joinSemanticSummaries(a, b SemanticValueFactSummary) SemanticValueFactSumma
 		NoCopy:              joinCertainty(a.NoCopy, b.NoCopy),
 		NoOwnershipTransfer: joinCertainty(a.NoOwnershipTransfer, b.NoOwnershipTransfer),
 		HostAccessible:      joinCertainty(a.HostAccessible, b.HostAccessible),
+		Initialized:         joinCertainty(a.Initialized, b.Initialized),
 		Transport:           []SemanticFactTransportStep{{Transform: FactTransformJoin, Detail: "different branch facts conservatively joined"}},
 	}
 }
@@ -330,6 +335,16 @@ func evt1DeriveBlockFactSummary(env *semanticEnv, block Block, params map[string
 			if name, ok := s.Target.(*NameExpr); ok {
 				locals[name.Name] = evt1DeriveExprFactSummary(env, s.Value, params, locals, derive)
 			}
+		case *ExprStmt:
+			call, ok := s.Value.(*CallExpr)
+			if !ok || len(call.Args) == 0 || (call.Callee != "Initialize" && call.Callee != "Destroy") {
+				continue
+			}
+			certainty := FactProven
+			if call.Callee == "Destroy" {
+				certainty = FactDisproven
+			}
+			evt1SetLocalSummaryInitialized(call.Args[0], locals, certainty)
 		case *ReturnStmt:
 			if s.Value == nil {
 				continue
@@ -343,6 +358,27 @@ func evt1DeriveBlockFactSummary(env *semanticEnv, block Block, params map[string
 		}
 	}
 	return result, found
+}
+
+func evt1SetLocalSummaryInitialized(expr Expr, locals map[string]SemanticValueFactSummary, certainty SemanticFactCertainty) {
+	switch value := expr.(type) {
+	case *NameExpr:
+		summary := locals[value.Name]
+		summary.Initialized = certainty
+		locals[value.Name] = summary
+	case *FieldExpr:
+		name, ok := value.Receiver.(*NameExpr)
+		if !ok {
+			return
+		}
+		summary := locals[name.Name]
+		for i := range summary.Fields {
+			if summary.Fields[i].Name == value.Field {
+				summary.Fields[i].Facts.Initialized = certainty
+			}
+		}
+		locals[name.Name] = summary
+	}
 }
 
 func evt1DeriveExprFactSummary(env *semanticEnv, expr Expr, params map[string]int, locals map[string]SemanticValueFactSummary, derive func(FunctionDecl) SemanticValueFactSummary) SemanticValueFactSummary {
@@ -417,8 +453,9 @@ func evt1DeriveExprFactSummary(env *semanticEnv, expr Expr, params map[string]in
 			}
 			return summary
 		}
-		if e.Callee == "Initialize" && len(e.Args) != 0 {
+		if (e.Callee == "Initialize" || e.Callee == "Value") && len(e.Args) != 0 {
 			out := evt1DeriveExprFactSummary(env, e.Args[0], params, locals, derive)
+			out.Initialized = FactProven
 			out.Transport = append(out.Transport, SemanticFactTransportStep{Transform: FactTransformInitialize})
 			return out
 		}
@@ -461,6 +498,13 @@ func evt1DeriveExprFactSummary(env *semanticEnv, expr Expr, params map[string]in
 		}
 		if e.Callee == "AddressFromBits" {
 			return SemanticValueFactSummary{AddressSpace: e.TypeArg.Name, ProvenanceKind: string(evt1ProvenanceUnknown), Transport: []SemanticFactTransportStep{{Transform: FactTransformOpaqueBoundary, Through: "AddressFromBits", Detail: "bits establish no region origin"}}}
+		}
+		if e.Callee == "bind" && len(e.Args) > 0 {
+			out := evt1DeriveExprFactSummary(env, e.Args[0], params, locals, derive)
+			out.Initialized = FactDisproven
+			out.Contiguous, out.Bounded, out.NoAllocation = FactProven, FactProven, FactProven
+			out.Transport = append(out.Transport, SemanticFactTransportStep{Transform: FactTransformPreserve, Through: "bind<T>", Detail: "typed storage preserves backing geometry and begins uninitialized"})
+			return out
 		}
 		if summary, ok := env.templateFactSummaries[e.Callee]; ok {
 			return summary
@@ -704,6 +748,7 @@ func instantiateSemanticFactSummary(summary SemanticValueFactSummary, args []*Se
 	out.NoCopy = preferSummaryCertainty(summary.NoCopy, out.NoCopy)
 	out.NoOwnershipTransfer = preferSummaryCertainty(summary.NoOwnershipTransfer, out.NoOwnershipTransfer)
 	out.HostAccessible = preferSummaryCertainty(summary.HostAccessible, out.HostAccessible)
+	out.Initialized = preferSummaryCertainty(summary.Initialized, out.Initialized)
 	if summary.Origin != "" {
 		out.Origin = summary.Origin
 	}
@@ -863,6 +908,15 @@ func evt1SemanticFactsForExpr(env *semanticEnv, scope *evt1Scope, expr Expr, t T
 			out.Type, out.Contiguous, out.Bounded, out.NoAllocation, out.Initialized = t.String(), FactProven, FactProven, FactProven, FactDisproven
 			return transportSemanticValueFacts(out, FactTransformPreserve, exprLabel(e.Args[0]), "bind<T>", "typed storage preserves raw region geometry")
 		}
+		if e.Callee == "bind" && len(e.Args) == 1 {
+			regionType, _ := validateExpr(env, scope, e.Args[0], nil, false)
+			out := evt1SemanticFactsForExpr(env, scope, e.Args[0], regionType)
+			if out == nil {
+				out = &SemanticValueFacts{}
+			}
+			out.Type, out.Contiguous, out.Bounded, out.NoAllocation, out.Initialized = t.String(), FactProven, FactProven, FactProven, FactDisproven
+			return transportSemanticValueFacts(out, FactTransformPreserve, exprLabel(e.Args[0]), "bind<T>", "typed storage preserves trusted region geometry")
+		}
 		if summary, ok := env.templateFactSummaries[e.Callee]; ok {
 			args := evt1SemanticArgumentFacts(env, scope, e.Args)
 			return instantiateSemanticFactSummary(summary, args, e.Callee)
@@ -883,7 +937,7 @@ func evt1SemanticFactsForExpr(env *semanticEnv, scope *evt1Scope, expr Expr, t T
 			out.Transport = []SemanticFactTransportStep{{Transform: FactTransformPreserve, Through: contract.Name, Detail: "foreign result facts are declared, not compiler-proven"}}
 			return out
 		}
-		if e.Callee == "Initialize" && len(e.Args) != 0 {
+		if (e.Callee == "Initialize" || e.Callee == "Value") && len(e.Args) != 0 {
 			out := evt1SemanticFactsForExpr(env, scope, e.Args[0], t)
 			if out != nil {
 				out.Initialized = FactProven
@@ -895,6 +949,9 @@ func evt1SemanticFactsForExpr(env *semanticEnv, scope *evt1Scope, expr Expr, t T
 						}
 					}
 				}
+			}
+			if e.Callee == "Value" {
+				return transportSemanticValueFacts(out, FactTransformPreserve, exprLabel(e.Args[0]), "Value", "reference borrows the live object in typed storage")
 			}
 			return transportSemanticValueFacts(out, FactTransformInitialize, exprLabel(e.Args[0]), "Initialize", "object lifetime begins inside the same storage region")
 		}

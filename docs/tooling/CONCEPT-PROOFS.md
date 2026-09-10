@@ -82,3 +82,11 @@ imported or external operation has no semantic result summary, the proof names
 the `Fact lost at` boundary and does not infer facts from ABI or runtime shape.
 The checked R6h goldens cover alignment through multiple transports, returned
 disjoint regions, returned overlap, and an opaque `AddressFromBits` boundary.
+
+R6l adds field-sensitive initialized-object state beside transported geometry
+facts. `Value(storage)` requires Initialized, `Destroy(storage)` ends that
+object lifetime, and a later use of a retained reference is rejected. This is
+currently diagnostic authority rather than a new user-selectable proof goal.
+Proof transport through `Result<Owner<T>, E>` and imported generic owner
+instantiation remains Unknown/blocked until the general nested generic
+substitution boundary is repaired; no proof rule fabricates Initialized there.

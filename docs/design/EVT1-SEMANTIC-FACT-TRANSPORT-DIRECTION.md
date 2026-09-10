@@ -65,6 +65,14 @@ Address addition preserves space/origin/provenance, adds a known relative byte o
 
 `bind<T>` accepts only a transported live storage origin in `SystemMemory`; reconstructed bits remain rejected. It preserves address-space, origin, extent, alignment, provenance, contiguity, boundedness, and no-allocation facts. `Initialize` retains that origin, begins the object lifetime, sets object extent/alignment facts, and marks the value initialized. `Destroy` remains the existing semantic state transition: it ends the object and leaves raw storage geometry available to its owner.
 
+R6l keeps object state distinct from those geometry facts. A bounded aggregate
+field path carries Uninitialized, Initialized, Moved, or a conservative joined
+state alongside `SemanticValueFacts`. Initialized certainty is serialized in
+result summaries, while operational transitions remain compiler state and add
+no runtime flag or registry. Nested generic Result/Option owner transport is
+still blocked by the general carrier substitution issue recorded in the R6l
+conformance report.
+
 ## Modules and zero cost
 
 `concept-module.v1` adds `value_fact_summaries`, alongside but semantically separate from `operation_effect_summaries`. The source body is authority when producing the artifact; the validated artifact summary is authority in a consumer. Older artifacts without a needed summary load compatibly but yield Unknown. Consumers do not manufacture a summary from the payload body.

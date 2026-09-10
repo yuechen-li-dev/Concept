@@ -150,6 +150,30 @@
           }
         }
       ],
+      "result_facts": {
+        "operation": "SelectedArm",
+        "signature": "SelectedArm(bool, int, int)",
+        "result": {
+          "contiguous": "unknown",
+          "bounded": "unknown",
+          "no_allocation": "unknown",
+          "no_copy": "unknown",
+          "no_ownership_transfer": "unknown",
+          "host_accessible": "unknown",
+          "initialized": "unknown",
+          "transport": [
+            {
+              "transform": "Join",
+              "detail": "different branch facts conservatively joined"
+            },
+            {
+              "transform": "Return",
+              "through": "SelectedArm"
+            }
+          ]
+        },
+        "origin": "CompilerAnalysis"
+      },
       "operations": [
         {
           "id": "SelectedArm.01",
@@ -224,6 +248,30 @@
           }
         }
       ],
+      "result_facts": {
+        "operation": "CountUp",
+        "signature": "CountUp(int)",
+        "result": {
+          "contiguous": "unknown",
+          "bounded": "unknown",
+          "no_allocation": "unknown",
+          "no_copy": "unknown",
+          "no_ownership_transfer": "unknown",
+          "host_accessible": "unknown",
+          "initialized": "unknown",
+          "transport": [
+            {
+              "transform": "Join",
+              "detail": "different branch facts conservatively joined"
+            },
+            {
+              "transform": "Return",
+              "through": "CountUp"
+            }
+          ]
+        },
+        "origin": "CompilerAnalysis"
+      },
       "operations": [
         {
           "id": "CountUp.01",

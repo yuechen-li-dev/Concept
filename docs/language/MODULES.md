@@ -88,12 +88,13 @@ their `DeclaredForeign` effect/value-summary origins. Consumers use the checked
 artifact without reparsing the companion source; missing authority remains
 Unknown. Exact declaration syntax is provisional.
 
-R6k adds no module schema or summary kind. An imported generic body cannot make
-an otherwise invalid open-template `bind<T>` valid, and value-fact summaries do
-not substitute for the operational Initialized/Uninitialized state needed to
-destroy storage held in an owner field. That boundary must be solved in the
-general typed-storage/ownership semantics before an allocator module artifact
-can honestly export typed owners.
+R6l serializes Initialized certainty in ordinary bounded value-fact summaries
+and permits open-template `bind<T>`. Operational field state remains an analysis
+channel rather than runtime or proof metadata. A nested generic owner inside
+Result/Option does not yet retain its concrete application through extraction,
+and an imported generic owner's `Storage<T>` field is not yet substituted in
+the consumer. Cross-module typed-owner factories remain deferred until those
+general substitution boundaries are resolved.
 
 Within an interface, `requires compiler.Allocates(Operation);` means the
 operation is permitted to allocate. An allocation-free implementation is also

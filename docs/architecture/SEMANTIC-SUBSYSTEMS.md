@@ -38,7 +38,7 @@ is erased before C lowering.
 | Cross-module generics and effects | `generic_types.go`, `concept_assert.go`, `validate.go` | post-freeze R6e extension | `EVT1-SEMANTIC-MODULE-DIRECTION.md` | `language/evt1/tooling/modules` | `module_artifact_test.go` |
 | Quantities and units | `quantity.go`, `parse.go`, `validate.go` | `QUANTITIES-AND-UNITS.md` | `EVT1-QUANTITY-ADDRESS-STORAGE-DIRECTION.md` | focused R6g specimens | `r6g_quantity_address_test.go` |
 | Address and typed storage | `quantity.go`, `validate.go`, `generate.go` | `ADDRESS-AND-STORAGE.md` | `EVT1-QUANTITY-ADDRESS-STORAGE-DIRECTION.md` | `Standard.MemoryGeometry` | `r6g_quantity_address_test.go` |
-| Standard Library: Memory, Memory Sources, Allocators, Typed Allocation Owners | not implemented | blocked on general initialized `Storage<T>` ownership | `EVT1-ALLOCATOR-DIRECTION.md` | none | `r6k_allocator_feasibility_test.go` |
+| Standard Library: Memory, Memory Sources, Allocators, Typed Allocation Owners | not implemented | direct initialized ownership works; blocked on nested generic Result/Option transport | `EVT1-ALLOCATOR-DIRECTION.md`, `EVT1-INITIALIZED-STORAGE-OWNERSHIP-DIRECTION.md` | none | `r6l_initialized_storage_test.go` |
 
 The three explicit state-bearing forms remain distinct: `automata with state`
 is application-authored persistent state, callable `with (...)` is an explicit
