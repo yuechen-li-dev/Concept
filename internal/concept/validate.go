@@ -3014,7 +3014,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			}
 			e.RegionID, e.LayoutName, e.RegionOffset, e.RegionExtent, e.RegionAlignment = region.ID, layoutName, region.Offset, region.ByteExtent, region.Alignment
 		}
-		if templateInfo != nil && evt1TypeDependsOnParam(receiverType, templateInfo.Decl.TypeParam) {
+		if templateInfo != nil && evt1TypeDependsOnParam(receiverType, templateInfo.Decl.TypeParam) && !evt1OpenGenericFieldSetAvailable(env, receiverType) {
 			return Type{}, evt1Diagnostic("CV4172", "dependent field access is not allowed in EVT1 M1B-B templates", e.Span)
 		}
 		if receiverType.Kind == TypeDyn {
@@ -3984,7 +3984,7 @@ func validateAssignable(env *semanticEnv, scope *evt1Scope, expr Expr, templateI
 		if err != nil {
 			return evt1LValue{}, err
 		}
-		if templateInfo != nil && evt1TypeDependsOnParam(receiver.t, templateInfo.Decl.TypeParam) {
+		if templateInfo != nil && evt1TypeDependsOnParam(receiver.t, templateInfo.Decl.TypeParam) && !evt1OpenGenericFieldSetAvailable(env, receiver.t) {
 			return evt1LValue{}, evt1Diagnostic("CV4172", "dependent field access is not allowed in EVT1 M1B-B templates", e.Span)
 		}
 		if receiver.t.Kind == TypeDyn {
@@ -4146,6 +4146,16 @@ func evt1FieldSet(env *semanticEnv, t Type) (map[string]Type, string, error) {
 		base = t.borrowBase()
 	}
 	fields, ok := env.fieldSets[base.Name]
+	baseName := base.Name
+	if !ok && len(base.TypeArgs) > 0 {
+		if decl, found := evt1StructView(env, base); found {
+			fields = map[string]Type{}
+			for _, field := range decl.Fields {
+				fields[field.Name] = evt1CanonicalType(env, field.Type)
+			}
+			baseName, ok = decl.Name, true
+		}
+	}
 	if !ok {
 		if decl, declared := env.structs[base.Name]; declared {
 			fields = map[string]Type{}
@@ -4156,9 +4166,18 @@ func evt1FieldSet(env *semanticEnv, t Type) (map[string]Type, string, error) {
 		}
 	}
 	if !ok {
-		return nil, base.Name, fmt.Errorf("type %s has no fields", base.Name)
+		return nil, baseName, fmt.Errorf("type %s has no fields", baseName)
 	}
-	return fields, base.Name, nil
+	return fields, baseName, nil
+}
+
+func evt1OpenGenericFieldSetAvailable(env *semanticEnv, t Type) bool {
+	base := t
+	if t.isBorrowLike() {
+		base = t.borrowBase()
+	}
+	_, ok := env.genericTypes[base.Name]
+	return ok && len(base.TypeArgs) > 0
 }
 
 func validateConstructExpr(env *semanticEnv, scope *evt1Scope, expr ConstructExpr) (Type, error) {
@@ -4195,7 +4214,19 @@ func validateConstructExpr(env *semanticEnv, scope *evt1Scope, expr ConstructExp
 }
 
 func validateStructConstructExpr(env *semanticEnv, scope *evt1Scope, expr StructConstructExpr) (Type, error) {
+	resolvedType := Type{Name: expr.StructName, Kind: TypeStruct, Span: expr.Span}
+	if expr.StructType.Name != "" {
+		resolved, err := evt1ResolveType(env, scope, expr.StructType)
+		if err != nil {
+			return Type{}, err
+		}
+		resolvedType = resolved
+		expr.StructName = resolved.Name
+	}
 	structDecl, ok := env.structs[expr.StructName]
+	if !ok && resolvedType.Kind == TypeApplied {
+		structDecl, ok = evt1StructView(env, resolvedType)
+	}
 	if !ok {
 		return Type{}, evt1Diagnostic("CV4125", fmt.Sprintf("unknown struct type %s", expr.StructName), expr.Span)
 	}
@@ -4224,6 +4255,9 @@ func validateStructConstructExpr(env *semanticEnv, scope *evt1Scope, expr Struct
 		if !evt1TypeCopyable(env, argType) && !evt1CanTransferInitialize(env, structDecl.Fields[i].Type, arg) {
 			return Type{}, evt1Diagnostic("CV4501", fmt.Sprintf("construction of %s.%s would copy non-copyable type %s", expr.StructName, structDecl.Fields[i].Name, argType.String()), arg.exprSpan())
 		}
+	}
+	if resolvedType.Kind == TypeApplied {
+		return resolvedType, nil
 	}
 	return Type{Name: structDecl.Name, Kind: TypeStruct, Span: expr.Span}, nil
 }
@@ -6075,31 +6109,6 @@ func evt1SubstituteRequirement(req OperationRequirement, typeParam string, concr
 	return out
 }
 
-func evt1SubstituteType(t Type, typeParam string, concreteType Type) Type {
-	if t.Kind == TypeConceptParam && t.Name == typeParam {
-		out := concreteType
-		out.Ownership = t.Ownership
-		out.Const = t.Const
-		out.Scoped = t.Scoped
-		out.Imported = t.Imported
-		out.Unsafe = t.Unsafe
-		return out
-	}
-	if t.PointerTo != nil {
-		base := evt1SubstituteType(*t.PointerTo, typeParam, concreteType)
-		t.PointerTo = &base
-		return t
-	}
-	if t.ArrayElem != nil {
-		elem := evt1SubstituteType(*t.ArrayElem, typeParam, concreteType)
-		t.ArrayElem = &elem
-	}
-	for i := range t.TypeArgs {
-		t.TypeArgs[i] = evt1SubstituteType(t.TypeArgs[i], typeParam, concreteType)
-	}
-	return t
-}
-
 func evt1Signature(retType Type, name string, params []Param) string {
 	var parts []string
 	for _, param := range params {
@@ -6470,6 +6479,14 @@ func instantiateTemplateArgs(env *semanticEnv, templateName string, concreteArgs
 			provenance: evt1InitialParameterProvenance(env, resolvedParam, paramIndex, scope.depth),
 		})
 	}
+	if err := evt1RequireClosedType(instFn.ReturnType, templateName+" result", span); err != nil {
+		return nil, err
+	}
+	for _, parameter := range instFn.Params {
+		if err := evt1RequireClosedType(parameter.Type, templateName+" parameter "+parameter.Name, span); err != nil {
+			return nil, err
+		}
+	}
 	if err := validateBlock(env, scope, instFn.ReturnType, *instFn.Body, nil, false); err != nil {
 		return nil, err
 	}
@@ -6726,6 +6743,10 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 		return &NameExpr{Name: e.Name, Span: e.Span}, nil
 	case *IntLiteral:
 		return &IntLiteral{Value: e.Value, Span: e.Span}, nil
+	case *FloatLiteral:
+		return &FloatLiteral{Value: e.Value, Span: e.Span}, nil
+	case *StringLiteral:
+		return &StringLiteral{Value: e.Value, Span: e.Span}, nil
 	case *BoolLiteral:
 		return &BoolLiteral{Value: e.Value, Span: e.Span}, nil
 	case *FieldExpr:
@@ -6784,7 +6805,7 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 		}
 		return &BinaryExpr{Op: e.Op, Left: left, Right: right, Span: e.Span}, nil
 	case *ConstructExpr:
-		out := &ConstructExpr{EnumName: e.EnumName, VariantName: e.VariantName, Span: e.Span}
+		out := &ConstructExpr{EnumName: e.EnumName, VariantName: e.VariantName, ResolvedType: evt1SubstituteType(e.ResolvedType, typeParam, concreteType), Span: e.Span}
 		for _, arg := range e.Args {
 			sub, err := evt1SubstituteExpr(arg, typeParam, concreteType)
 			if err != nil {
@@ -6794,7 +6815,12 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 		}
 		return out, nil
 	case *StructConstructExpr:
-		out := &StructConstructExpr{StructName: e.StructName, Span: e.Span}
+		structType := evt1SubstituteType(e.StructType, typeParam, concreteType)
+		structName := e.StructName
+		if structType.Name != "" {
+			structName = structType.String()
+		}
+		out := &StructConstructExpr{StructName: structName, StructType: structType, Span: e.Span}
 		for _, arg := range e.Args {
 			sub, err := evt1SubstituteExpr(arg, typeParam, concreteType)
 			if err != nil {
@@ -6835,6 +6861,79 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 			return nil, err
 		}
 		return &RefExpr{Value: value, Const: e.Const, DynInterface: e.DynInterface, DynConcrete: e.DynConcrete, DynProvenance: e.DynProvenance, DynScoped: e.DynScoped, WitnessID: e.WitnessID, Span: e.Span}, nil
+	case *CallableExpr:
+		out := &CallableExpr{Identity: e.Identity, EnvironmentID: e.EnvironmentID, ResultType: evt1SubstituteType(e.ResultType, typeParam, concreteType), RequiresMutable: e.RequiresMutable, Consumes: e.Consumes, Ordinal: e.Ordinal, Span: e.Span}
+		for _, parameter := range e.Params {
+			parameter.Type = evt1SubstituteType(parameter.Type, typeParam, concreteType)
+			out.Params = append(out.Params, parameter)
+		}
+		for _, capture := range e.Captures {
+			capture.Type = evt1SubstituteType(capture.Type, typeParam, concreteType)
+			if capture.Source != nil {
+				source, err := evt1SubstituteExpr(capture.Source, typeParam, concreteType)
+				if err != nil {
+					return nil, err
+				}
+				capture.Source = source
+			}
+			out.Captures = append(out.Captures, capture)
+		}
+		body, err := evt1SubstituteBlock(e.Body, typeParam, concreteType)
+		if err != nil {
+			return nil, err
+		}
+		out.Body = body
+		return out, nil
+	case *ArrayLiteralExpr:
+		out := &ArrayLiteralExpr{Span: e.Span}
+		for _, element := range e.Elements {
+			value, err := evt1SubstituteExpr(element, typeParam, concreteType)
+			if err != nil {
+				return nil, err
+			}
+			out.Elements = append(out.Elements, value)
+		}
+		return out, nil
+	case *IndexExpr:
+		base, err := evt1SubstituteExpr(e.Base, typeParam, concreteType)
+		if err != nil {
+			return nil, err
+		}
+		out := *e
+		out.Base = base
+		out.Indices = nil
+		if e.Index != nil {
+			out.Index, err = evt1SubstituteExpr(e.Index, typeParam, concreteType)
+			if err != nil {
+				return nil, err
+			}
+		}
+		for _, index := range e.Indices {
+			value, err := evt1SubstituteExpr(index, typeParam, concreteType)
+			if err != nil {
+				return nil, err
+			}
+			out.Indices = append(out.Indices, value)
+		}
+		if e.SpanElementType != nil {
+			element := evt1SubstituteType(*e.SpanElementType, typeParam, concreteType)
+			out.SpanElementType = &element
+		}
+		return &out, nil
+	case *IfExpr:
+		condition, err := evt1SubstituteExpr(e.Condition, typeParam, concreteType)
+		if err != nil {
+			return nil, err
+		}
+		thenValue, err := evt1SubstituteExpr(e.Then, typeParam, concreteType)
+		if err != nil {
+			return nil, err
+		}
+		elseValue, err := evt1SubstituteExpr(e.Else, typeParam, concreteType)
+		if err != nil {
+			return nil, err
+		}
+		return &IfExpr{Condition: condition, Then: thenValue, Else: elseValue, Span: e.Span}, nil
 	case *MatchExpr:
 		subject, err := evt1SubstituteExpr(e.Subject, typeParam, concreteType)
 		if err != nil {

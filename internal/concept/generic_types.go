@@ -48,6 +48,14 @@ func evt1InstantiateGenericType(env *semanticEnv, application Type) (Type, error
 	if len(application.TypeArgs) != len(decl.Parameters) {
 		return Type{}, evt1Diagnostic("GENERIC_ARGUMENT_COUNT", fmt.Sprintf("%s requires %d template argument(s), got %d", decl.Name, len(decl.Parameters), len(application.TypeArgs)), application.Span)
 	}
+	// An application inside an open generic declaration is still symbolic.
+	// Materializing it now would collapse its child argument structure into a
+	// nominal string such as Owner<T>, preventing the eventual T -> Concrete
+	// binding from reaching the nested application. Closed applications are
+	// monomorphized below through the ordinary cache.
+	if evt1TypeContainsConceptParameter(application) {
+		return application, nil
+	}
 	if decl.Constraint.ConceptName != "" {
 		parameterIndex := -1
 		for i, parameter := range decl.Parameters {
@@ -95,7 +103,7 @@ func evt1InstantiateGenericType(env *semanticEnv, application Type) (Type, error
 	env.genericInstantiating[identity] = true
 	defer delete(env.genericInstantiating, identity)
 
-	instance := decl.Struct
+	instance := evt1CloneStructDecl(decl.Struct)
 	instance.Name = identity
 	for i := range instance.Fields {
 		fieldType := instance.Fields[i].Type
@@ -134,6 +142,21 @@ func evt1InstantiateGenericType(env *semanticEnv, application Type) (Type, error
 			}
 		}
 		instance.Methods[i] = method
+	}
+	for _, field := range instance.Fields {
+		if err := evt1RequireClosedType(field.Type, identity+"."+field.Name, application.Span); err != nil {
+			return Type{}, err
+		}
+	}
+	for _, method := range instance.Methods {
+		if err := evt1RequireClosedType(method.ReturnType, identity+"."+method.Name+" result", application.Span); err != nil {
+			return Type{}, err
+		}
+		for _, parameter := range method.Params {
+			if err := evt1RequireClosedType(parameter.Type, identity+"."+method.Name+" parameter "+parameter.Name, application.Span); err != nil {
+				return Type{}, err
+			}
+		}
 	}
 	env.structs[identity] = instance
 	env.genericTypeInstances[identity] = instance
@@ -174,9 +197,16 @@ func evt1SubstituteGenericValueExtents(t Type, params []GenericParameter, args [
 		}
 		return expr
 	}
+	if t.Kind == TypeTemplateValue {
+		if value, found := values[t.Name]; found {
+			t.Name = strconv.Itoa(value)
+		}
+		return t
+	}
 	if t.ArrayLengthExpr != nil {
 		t.ArrayLengthExpr = replace(t.ArrayLengthExpr)
 	}
+	t.Shape = append([]StorageDimension(nil), t.Shape...)
 	for i := range t.Shape {
 		if t.Shape[i].Expr != nil {
 			t.Shape[i].Expr = replace(t.Shape[i].Expr)
@@ -186,12 +216,58 @@ func evt1SubstituteGenericValueExtents(t Type, params []GenericParameter, args [
 		elem := evt1SubstituteGenericValueExtents(*t.ArrayElem, params, args)
 		t.ArrayElem = &elem
 	}
+	t.TypeArgs = append([]Type(nil), t.TypeArgs...)
 	for i := range t.TypeArgs {
 		t.TypeArgs[i] = evt1SubstituteGenericValueExtents(t.TypeArgs[i], params, args)
+	}
+	t.CallableParams = append([]Type(nil), t.CallableParams...)
+	for i := range t.CallableParams {
+		t.CallableParams[i] = evt1SubstituteGenericValueExtents(t.CallableParams[i], params, args)
+	}
+	if t.CallableResult != nil {
+		result := evt1SubstituteGenericValueExtents(*t.CallableResult, params, args)
+		t.CallableResult = &result
 	}
 	return t
 }
 
 func evt1AppliedConcreteType(source Type, identity string) Type {
 	return Type{Name: identity, Kind: TypeStruct, Ownership: source.Ownership, Const: source.Const, Scoped: source.Scoped, Imported: source.Imported, Unsafe: source.Unsafe, Span: source.Span}
+}
+
+// evt1StructView returns the field structure of either a concrete nominal
+// struct or an applied generic struct which is still open. It does not cache or
+// materialize the open application.
+func evt1StructView(env *semanticEnv, t Type) (StructDecl, bool) {
+	base := t.valueType()
+	if decl, ok := env.structs[base.Name]; ok {
+		return decl, true
+	}
+	if len(base.TypeArgs) == 0 {
+		return StructDecl{}, false
+	}
+	generic, ok := env.genericTypes[base.Name]
+	if !ok || len(generic.Parameters) != len(base.TypeArgs) {
+		return StructDecl{}, false
+	}
+	decl := evt1CloneStructDecl(generic.Struct)
+	decl.Name = base.String()
+	for i := range decl.Fields {
+		for j, parameter := range generic.Parameters {
+			if parameter.Kind == "type" {
+				decl.Fields[i].Type = evt1SubstituteType(decl.Fields[i].Type, parameter.Name, base.TypeArgs[j])
+			}
+		}
+		decl.Fields[i].Type = evt1SubstituteGenericValueExtents(decl.Fields[i].Type, generic.Parameters, base.TypeArgs)
+	}
+	return decl, true
+}
+
+func evt1CloneStructDecl(decl StructDecl) StructDecl {
+	decl.Fields = append([]Field(nil), decl.Fields...)
+	decl.Methods = append([]FunctionDecl(nil), decl.Methods...)
+	for i := range decl.Methods {
+		decl.Methods[i].Params = append([]Param(nil), decl.Methods[i].Params...)
+	}
+	return decl
 }

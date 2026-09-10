@@ -3650,6 +3650,7 @@ func (p *parser) parseNameLikeExpr() (Expr, error) {
 		return nil, err
 	}
 	constructName := nameTok.Lexeme
+	constructType := Type{Name: nameTok.Lexeme, Kind: TypeStruct, Span: nameTok.Span}
 	if p.genericConstructionAhead() {
 		p.next()
 		var args []Type
@@ -3672,7 +3673,8 @@ func (p *parser) parseNameLikeExpr() (Expr, error) {
 		if _, err := p.expect(">"); err != nil {
 			return nil, err
 		}
-		constructName = Type{Name: nameTok.Lexeme, Kind: TypeApplied, TypeArgs: args}.String()
+		constructType = Type{Name: nameTok.Lexeme, Kind: TypeApplied, TypeArgs: args, Span: nameTok.Span}
+		constructName = constructType.String()
 	}
 	var expr Expr = &NameExpr{Name: constructName, Span: nameTok.Span}
 	if p.peekLexeme() == "::" {
@@ -3722,7 +3724,7 @@ func (p *parser) parseNameLikeExpr() (Expr, error) {
 		if _, err := p.expect("}"); err != nil {
 			return nil, err
 		}
-		expr = &StructConstructExpr{StructName: constructName, Args: args, Span: nameTok.Span}
+		expr = &StructConstructExpr{StructName: constructName, StructType: constructType, Args: args, Span: nameTok.Span}
 	}
 	return p.parsePostfixExpr(expr, nameTok.Span)
 }

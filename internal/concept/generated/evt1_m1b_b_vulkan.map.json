@@ -288,8 +288,8 @@
             "ownership": "borrow",
             "const": true,
             "span": {
-              "line": 58,
-              "column": 26
+              "line": 43,
+              "column": 19
             }
           }
         }
@@ -415,8 +415,8 @@
             "ownership": "borrow",
             "const": true,
             "span": {
-              "line": 73,
-              "column": 26
+              "line": 43,
+              "column": 19
             }
           }
         }
@@ -533,8 +533,8 @@
             "kind": "struct",
             "ownership": "borrow",
             "span": {
-              "line": 72,
-              "column": 21
+              "line": 50,
+              "column": 22
             }
           }
         }

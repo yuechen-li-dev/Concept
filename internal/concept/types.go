@@ -1060,6 +1060,9 @@ func (e *ConstructExpr) exprSpan() Span { return e.Span }
 
 type StructConstructExpr struct {
 	StructName string `json:"struct_name"`
+	// StructType retains the applied type algebra for generic construction.
+	// StructName is the resolved nominal lookup/lowering identity.
+	StructType Type   `json:"struct_type,omitempty"`
 	Args       []Expr `json:"args,omitempty"`
 	Span       Span   `json:"span"`
 }

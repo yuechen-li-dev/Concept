@@ -52,3 +52,18 @@ introduced.
 R6e artifacts preserve these lists and instantiate them in the consumer without
 source reparse. Partial specialization, variadics, template-template
 parameters, and template metaprogramming remain out of scope.
+
+## Structural substitution
+
+R6m makes substitution recursive over the semantic type structure. Nested
+applications, storage types, reference and ownership qualifiers, array and
+ndarray elements/extents, address spaces, and callable signatures are rebuilt
+from substituted children before canonicalization. There is no separate
+`Result`, `Option`, `Storage`, or owner substitution rule.
+
+Open applications remain symbolic in generic declarations and module
+artifacts. Closed applications are cached under their concrete identity and
+must contain no reachable template type parameter in their fields or callable
+signatures. Thus `Result<Owner<T>, E>` closes to its concrete owner/error types,
+and imported `Owner<Widget>` contains `Storage<Widget>` rather than stale
+`Storage<T>`.

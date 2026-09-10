@@ -1,6 +1,6 @@
 # EVT1 allocator direction
 
-Status: R6l progression; direct typed-storage ownership works, nested generic carriers remain blocked
+Status: R6m closes the initialized-owner generic blocker; allocator retry is ready
 
 ## Doctrine
 
@@ -128,27 +128,18 @@ provide `Value`, or implement `Destroy(T) -> Release(region)` exactly once.
 Bump, pool, and arena policy would only create raw regions around that missing
 owner transition, so R6k stops before publishing partial allocator APIs.
 
-## Required next substrate decision
+## R6l/R6m substrate resolution
 
-Before the allocator library can resume, a post-freeze proposal must complete
-the general typed-storage ownership boundary. At minimum it must prove:
+R6l completed open `bind<T>`, aggregate storage state, field `Destroy`, owner
+move, owner-relative `Value`, and generic Drop. R6m then fixed the remaining
+general substitution boundary: open nested applications retain their child
+type algebra until consumer bindings are known. `Result<Owner<T>, E>` and an
+imported `Owner<Widget>` containing `Storage<Widget>` now compile and lower
+without carrier, storage, owner, or allocator name recognition.
 
-- compiler-known storage operations accept an open template type and validate
-  after ordinary concrete substitution;
-- initialized/uninitialized object state transports through aggregate fields
-  and whole-owner moves without runtime proof metadata;
-- `Destroy` can consume an initialized storage place reached through an owned
-  aggregate, or an equally general structural Drop rule can express the same
-  transition;
-- the reference returned by `Initialize` retains the backing region/source
-  provenance when stored in and returned with its owner;
-- moving the owner remains exactly-once while copying it remains structurally
-  rejected.
-
-This proposal is not permission to recognize allocator or owner names, add
-`new`/`delete`, a global heap, reinterpret casts, unchecked pointer arithmetic,
-variadics, a GC, or a runtime registry. The transition must be useful for any
-ordinary initialized typed-storage owner and must remain compile-time-only.
+The allocator library may therefore be retried in a later milestone. This is
+not permission to add `new`/`delete`, a global heap, reinterpret casts,
+unchecked pointer arithmetic, variadics, a GC, or a runtime registry.
 
 ## Preserved allocation-effect law
 
@@ -160,7 +151,7 @@ for Proven, while unrelated opaque extern calls remain Unknown.
 
 ## Deferred allocator surface
 
-After the initialized-storage owner substrate exists, a later milestone may
+With the initialized-storage owner substrate complete, a later milestone may
 implement under ordinary semantic library roots:
 
 - `MemoryRegion` and `AllocationError`;
@@ -190,4 +181,7 @@ R6k
 R6l
     direct initialized owner fields work; nested generic Result/Option carrier
     substitution remains the allocator-readiness blocker
+R6m
+    structural substitution closes nested carriers and imported Storage<T>
+    owner fields without allocator-specific semantics
 ```

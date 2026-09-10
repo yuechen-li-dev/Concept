@@ -32,6 +32,7 @@ is erased before C lowering.
 | Test tooling | `testing_metadata.go`, `testing_assert.go`, `testing_lowering.go`, `testing_runner.go` | section 24 | `EVT1-TEST-PROPHECY-DIRECTION.md` | `language/evt1/tooling/tests`, `internal/concept/testdata/testing` | `testing_runner_test.go` |
 | Concept assertions and proof debugging | `concept_assert.go`, `proof_graph.go` | sections 17 and 24 | `CONCEPT-PROOFS.md` | `language/evt1/tooling/proofs` | `proof_graph_test.go` |
 | Generic runtime types and layout queries | `generic_types.go`, `layout.go` | post-freeze R6d extension | `EVT1-GENERIC-LIBRARY-DIRECTION.md` | focused R6d specimens | `operation_effects_test.go` |
+| Generic structural substitution | `type_substitution.go`, `generic_types.go` | post-freeze R6m extension | `EVT1-GENERIC-SUBSTITUTION-DIRECTION.md` | nested carriers and closed imported owners | `type_substitution_test.go`, `r6l_initialized_storage_test.go` |
 | External C ABI | `parse.go`, `validate.go`, `generate.go` | post-freeze R6d extension | `EVT1-GENERIC-LIBRARY-DIRECTION.md` | focused R6d hosted specimen | `operation_effects_test.go` |
 | Operation effects | `concept_assert.go`, `semantic_facts.go` | post-freeze R6d extension | `EVT1-GENERIC-LIBRARY-DIRECTION.md` | R6b proofs plus focused R6d specimens | `operation_effects_test.go`, `proof_graph_test.go` |
 | Reusable semantic modules | `module_artifact.go`, `parse.go` | post-freeze R6e extension | `EVT1-SEMANTIC-MODULE-DIRECTION.md` | `language/evt1/tooling/modules` | `module_artifact_test.go` |

@@ -539,7 +539,11 @@ func evt1DeriveScalarSummary(expr Expr, params map[string]int, locals map[string
 }
 
 func evt1DeriveStructFactSummary(env *semanticEnv, e *StructConstructExpr, params map[string]int, locals map[string]SemanticValueFactSummary, derive func(FunctionDecl) SemanticValueFactSummary) SemanticValueFactSummary {
-	decl, ok := env.structs[e.StructName]
+	t := e.StructType
+	if t.Name == "" {
+		t = Type{Name: e.StructName, Kind: TypeStruct}
+	}
+	decl, ok := evt1StructView(env, t)
 	if !ok {
 		return SemanticValueFactSummary{}
 	}
@@ -816,7 +820,11 @@ func evt1SemanticFactsForExpr(env *semanticEnv, scope *evt1Scope, expr Expr, t T
 			return transportSemanticValueFacts(base.Fields[e.Field], FactTransformFieldLoad, base.Subject, e.Field, "field-sensitive value facts recovered")
 		}
 	case *StructConstructExpr:
-		decl, ok := env.structs[e.StructName]
+		structType := e.StructType
+		if structType.Name == "" {
+			structType = Type{Name: e.StructName, Kind: TypeStruct}
+		}
+		decl, ok := evt1StructView(env, structType)
 		if !ok {
 			break
 		}

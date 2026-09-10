@@ -320,8 +320,8 @@
             "ownership": "borrow",
             "const": true,
             "span": {
-              "line": 68,
-              "column": 26
+              "line": 52,
+              "column": 19
             }
           }
         }
@@ -447,8 +447,8 @@
             "ownership": "borrow",
             "const": true,
             "span": {
-              "line": 74,
-              "column": 26
+              "line": 52,
+              "column": 19
             }
           }
         }
@@ -565,8 +565,8 @@
             "kind": "struct",
             "ownership": "borrow",
             "span": {
-              "line": 81,
-              "column": 21
+              "line": 59,
+              "column": 22
             }
           }
         }
@@ -683,8 +683,8 @@
             "kind": "struct",
             "ownership": "borrow",
             "span": {
-              "line": 82,
-              "column": 21
+              "line": 59,
+              "column": 22
             }
           }
         }

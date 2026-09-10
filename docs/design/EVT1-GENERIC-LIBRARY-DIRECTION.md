@@ -50,3 +50,12 @@ Allocator work remains stopped at that general substrate boundary. No
 allocator name, heap, GC, generic dictionary, reflection registry, package
 solver, partial specialization, variadic template machinery, or generalized
 effect algebra is introduced here.
+
+## R6m structural closure
+
+Open nested applications now retain their child type algebra in the semantic
+payload. Consumers recursively substitute bound type and non-type parameters
+before concrete canonicalization, and closed fields and callable signatures
+are checked for unresolved parameters before MIR. Imported generic owners and
+factories therefore use the same instantiation path as local declarations; no
+carrier or library type name receives privileged handling.

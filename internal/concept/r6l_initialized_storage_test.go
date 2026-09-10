@@ -157,7 +157,7 @@ int Main()
 	}
 }
 
-func TestR6lResultExtractionNestedGenericOwnerRemainsBlocked(t *testing.T) {
+func TestR6mResultExtractionClosesNestedGenericOwner(t *testing.T) {
 	library, err := os.ReadFile("../../language/evt1/tooling/modules/Standard/MemoryGeometry.concept")
 	if err != nil {
 		t.Fatal(err)
@@ -180,6 +180,14 @@ Result<Owner<T>, MakeError> MakeOwner(MemoryRegion<SystemMemory> region, T value
     Owner<T> owner = Owner<T>{move storage};
     return Result::Ok(move owner);
 }
+template <typename T>
+Option<Owner<T>> MaybeOwner(MemoryRegion<SystemMemory> region, T value)
+{
+    Storage<T> storage = bind<T>(region);
+    Initialize(storage, move value);
+    Owner<T> owner = Owner<T>{move storage};
+    return Option::Some(move owner);
+}
 
 Result<int, MakeError> Read(MemoryRegion<SystemMemory> region)
 {
@@ -189,15 +197,72 @@ Result<int, MakeError> Read(MemoryRegion<SystemMemory> region)
     Destroy(owner.storage);
     return Result::Ok(result);
 }
+Option<int> ReadOptional(MemoryRegion<SystemMemory> region)
+{
+    Owner<int> owner = MaybeOwner<int>(region, 11)?;
+    ref int value = owner.Value();
+    int result = value;
+    Destroy(owner.storage);
+    return Option::Some(result);
+}
+int Main()
+{
+    int<array>[1] backing = [0];
+    Address<SystemMemory> address = AddressOf<SystemMemory>(ref backing);
+    MemoryRegion<SystemMemory> region = MemoryRegion<SystemMemory>{address, SizeOf<int>(), AlignOf<int>()};
+    return Read(region)! + ReadOptional(region)!;
+}
 `
-	_, err = ParseWithSemanticModules("typed_owner_result_return.concept", source, map[string][]byte{"Standard.MemoryGeometry": artifact})
-	var diagnostic Diagnostic
-	if !errors.As(err, &diagnostic) || diagnostic.Code != "CV4106" || !strings.Contains(diagnostic.Message, "expected Owner<int> but got Owner<T>") {
-		t.Fatalf("expected pinned nested generic carrier blocker, got %v", err)
+	module, err := ParseWithSemanticModules("typed_owner_result_return.concept", source, map[string][]byte{"Standard.MemoryGeometry": artifact})
+	if err != nil {
+		t.Fatalf("nested generic carrier did not close: %v", err)
 	}
+	for _, template := range module.Templates {
+		if template.Name != "MakeOwner" {
+			continue
+		}
+		storage := template.Body.Statements[0].(*VarDecl)
+		bind := storage.Value.(*TemplateCallExpr)
+		if storage.Type.String() != "Storage<T>" || bind.TypeArg.String() != "T" {
+			t.Fatalf("open template was mutated by concrete instantiation: storage=%s bind=%s", storage.Type.String(), bind.TypeArg.String())
+		}
+		instance, instantiateErr := evt1InstantiateTemplateFunctionArgs(template, template.Parameters, []Type{{Name: "int", Kind: TypeBuiltin}})
+		if instantiateErr != nil {
+			t.Fatal(instantiateErr)
+		}
+		closedStorage := instance.Body.Statements[0].(*VarDecl)
+		closedBind := closedStorage.Value.(*TemplateCallExpr)
+		if closedStorage.Type.String() != "Storage<int>" || closedBind.TypeArg.String() != "int" {
+			t.Fatalf("function body did not substitute structurally: storage=%s bind=%s", closedStorage.Type.String(), closedBind.TypeArg.String())
+		}
+	}
+	outputs, err := Generate(module, []byte(source))
+	if err != nil {
+		t.Fatalf("nested generic carrier did not lower: %v", err)
+	}
+	for name, body := range outputs {
+		if strings.Contains(string(body), "Owner<T>") || strings.Contains(string(body), "Storage<T>") {
+			t.Fatalf("%s retains an unresolved generic placeholder", name)
+		}
+	}
+	for run := 1; run < 100; run++ {
+		again, generateErr := Generate(module, []byte(source))
+		if generateErr != nil {
+			t.Fatalf("nested generic generation run %d: %v", run, generateErr)
+		}
+		if len(again) != len(outputs) {
+			t.Fatalf("nested generic output count changed on run %d", run)
+		}
+		for name, expected := range outputs {
+			if !bytes.Equal(again[name], expected) {
+				t.Fatalf("nested generic output %s changed on run %d", name, run)
+			}
+		}
+	}
+	runFoundationNativeHarness(t, outputs, "typed_owner_result_return_harness.c", "#include \"typed_owner_result_return.generated.h\"\nint main(void) { return concept_typed_owner_result_return_main() == 20 ? 0 : 1; }\n")
 }
 
-func TestR6lImportedGenericOwnerInstantiationRemainsBlockedDeterministically(t *testing.T) {
+func TestR6mImportedGenericOwnerInstantiationClosesDeterministically(t *testing.T) {
 	geometrySource, err := os.ReadFile("../../language/evt1/tooling/modules/Standard/MemoryGeometry.concept")
 	if err != nil {
 		t.Fatal(err)
@@ -239,10 +304,69 @@ int Read(MemoryRegion<SystemMemory> region)
     return widget.value;
 }
 `
-	_, err = ParseWithSemanticModules("typed_owner_module.concept", consumer, map[string][]byte{"Standard.MemoryGeometry": geometry, "Standard.TypedStorage": artifact})
-	var diagnostic Diagnostic
-	if !errors.As(err, &diagnostic) || diagnostic.Code != "CV4148" {
-		t.Fatalf("expected pinned imported generic storage blocker, got %v", err)
+	module, err := ParseWithSemanticModules("typed_owner_module.concept", consumer, map[string][]byte{"Standard.MemoryGeometry": geometry, "Standard.TypedStorage": artifact})
+	if err != nil {
+		t.Fatalf("imported generic owner did not close: %v", err)
+	}
+	foundClosedField := false
+	for _, decl := range module.Structs {
+		if decl.Name == "Owner<Widget>" && len(decl.Fields) == 1 {
+			foundClosedField = decl.Fields[0].Type.String() == "Storage<Widget>"
+		}
+	}
+	if !foundClosedField {
+		t.Fatal("imported Owner<Widget> did not materialize a Storage<Widget> field")
+	}
+	outputs, err := Generate(module, []byte(consumer))
+	if err != nil {
+		t.Fatalf("imported generic owner did not lower: %v", err)
+	}
+	for name, body := range outputs {
+		if strings.Contains(string(body), "Owner<T>") || strings.Contains(string(body), "Storage<T>") {
+			t.Fatalf("%s retains an unresolved imported generic placeholder", name)
+		}
+	}
+}
+
+func TestR6mAllocationOwnerShapeIsStructurallyReady(t *testing.T) {
+	geometrySource, err := os.ReadFile("../../language/evt1/tooling/modules/Standard/MemoryGeometry.concept")
+	if err != nil {
+		t.Fatal(err)
+	}
+	geometry := buildSemanticArtifact(t, "Standard/MemoryGeometry.concept", string(geometrySource), nil)
+	source := `module App; profile Core; import Standard.MemoryGeometry;
+enum MakeError { Failed }
+struct LocalPolicy { int marker; }
+template <typename T, typename TAllocator>
+ref struct AllocationOwner
+{
+public:
+    ref TAllocator allocator;
+    Storage<T> storage;
+};
+template <typename T, typename TAllocator>
+Result<AllocationOwner<T, TAllocator>, MakeError> MakeAllocationOwner(ref TAllocator allocator, MemoryRegion<SystemMemory> region, T value)
+{
+    Storage<T> storage = bind<T>(region);
+    Initialize(storage, move value);
+    AllocationOwner<T, TAllocator> owner = AllocationOwner<T, TAllocator>{ref allocator, move storage};
+    return Result::Ok(move owner);
+}
+Result<int, MakeError> Use(ref LocalPolicy policy, MemoryRegion<SystemMemory> region)
+{
+    AllocationOwner<int, LocalPolicy> owner = MakeAllocationOwner<int, LocalPolicy>(ref policy, region, 17)?;
+    ref int value = Value(owner.storage);
+    int result = value;
+    Destroy(owner.storage);
+    return Result::Ok(result);
+}
+`
+	module, err := ParseWithSemanticModules("allocation_owner_ready.concept", source, map[string][]byte{"Standard.MemoryGeometry": geometry})
+	if err != nil {
+		t.Fatalf("allocator owner shape retains an open parameter: %v", err)
+	}
+	if _, err := Generate(module, []byte(source)); err != nil {
+		t.Fatalf("allocator owner shape did not lower: %v", err)
 	}
 }
 

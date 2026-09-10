@@ -1,6 +1,6 @@
 # EVT1 initialized typed-storage ownership direction
 
-Status: R6l meaningful progression; one general generic-carrier blocker pinned
+Status: R6l ownership semantics complete; R6m closes nested generic transport
 
 R6k stopped on four allocator-independent boundaries. R6l resolves three
 directly and replaces the unsafe fourth shape with an owner-relative borrow:
@@ -29,18 +29,14 @@ Generated C continues to represent `Storage<T>` as the existing typed address.
 Owner and storage moves copy only that descriptor. There is no `memcpy` of the
 live object, hidden flag, heap, registry, RTTI, or proof payload.
 
-## Remaining blocker
+## R6m closure
 
-The required `Result<Owner<T>, E>` proof currently fails with `CV4106`:
-`expected Owner<int> but got Owner<T>`. The failure is pinned in
-`r6l_initialized_storage_test.go`. Fixing it requires the general generic type
-substitution/canonicalization pipeline to retain nested applications through
-failure carriers and imported generic-owner bodies. The imported case is pinned
-separately as `CV4148: unknown concept parameter T`. Patching Result, module
-payloads, or an owner name would
-violate the milestone doctrine, so allocator work remains deferred.
+R6m preserves open applied-type structure until concrete bindings exist. The
+former `CV4106` `Result<Owner<T>, E>` extraction and imported `CV4148`
+`Storage<T>` field failures now close through the same structural substitution
+path. Structural field views also let initialized storage summaries cross the
+carrier and module boundary. No ownership or storage-lifetime rule changed.
 
-Deferred with it are Option/wrapper carrier parity, cross-module factory state
-summaries, callable/async/machine owner persistence, and the requested product
-specimens. General `T*`, MMIO, shared ownership, variadics, GC, allocators, and
-native LIR remain outside R6l.
+Callable/async/machine product integrations remain separate bounded follow-on
+proofs. General `T*`, MMIO, shared ownership, variadics, GC, allocators, and
+native LIR remain outside R6m.
