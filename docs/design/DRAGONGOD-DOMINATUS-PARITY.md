@@ -34,7 +34,7 @@ or source compatibility.
 | Seeded behavior | Reproduce choices from a known seed | `AgentContext.rngSeed` plus replay input | Mechanism restored | Random policy/algorithm remains application-owned |
 | Decision policies and scoring | Choose application behavior | ordinary Concept `match`, `transition decide`, `infer` | Moved | Language/application semantics, not a kernel subsystem |
 | HFSM graph definitions | Define application states and edges | Concept machines plus Dominatus/application data | Moved | No generic graph framework in DragonGod |
-| Concurrent/parallel runners | Optional host execution policy | none in R7b | Deferred | R7c scheduler boundary |
+| Concurrent/parallel runners | Optional host execution policy | deterministic `DragonGod.Scheduling` single-worker policy | Partial | logical context scheduling restored; host parallelism awaits synchronization |
 | Persistence envelopes | Save external application state | none in R7b | Deferred | Explicit checkpoint exists; serialization does not |
 | Vulkan presentation/device work | Consumer rendering | existing Vulkan consumers/conformance | Unchanged | Never kernel policy |
 
@@ -57,7 +57,20 @@ policy, and Vulkan coupling are deleted rather than preserved.
 | application graph definitions | Dominatus/application code |
 | Vulkan lifecycle and presentation | Vulkan consumer |
 | serialization/persistence format | future application/tooling work |
-| ready queues, fairness, preemption | R7c scheduler |
+| ready queues, fairness, bounded quanta | R7c `DragonGod.Scheduling` |
+
+## R7c scheduler parity
+
+The direct R7b `Mind.ExecuteBatch` path and an R7c `Schedulable` adapter over the
+same `Mind` execute identical signal work and finish with the same authored
+state, terminal status, and step count. This preserves `Mind` as computation and
+adds scheduling only as policy over when it receives a bounded step quantum.
+
+R7c also restores multiple logical execution contexts, deterministic FIFO
+fairness, explicit wait/event and sleep/time readiness, and failure isolation.
+It does not restore the C# host parallel runner: Concept/DragonGod does not yet
+have a general synchronization substrate sufficient for safe shared scheduler
+mutation.
 
 ## Authority law
 

@@ -8,6 +8,38 @@ enum TraceKind
     Step, Enter, Exit, Transition, Yield, Push, Pop,
     EventEnqueue, EventConsume, ActuationDispatch, ActuationComplete,
     Completion, Failure, ReplayInput,
+    ContextReady, ContextSelected, QuantumBegin, QuantumEnd,
+    ContextWait, ContextWake, ContextSleep, ContextComplete, ContextFail,
+}
+
+int TraceKindCode(TraceKind kind)
+{
+    return match (kind)
+    {
+        TraceKind::Step => 1,
+        TraceKind::Enter => 2,
+        TraceKind::Exit => 3,
+        TraceKind::Transition => 4,
+        TraceKind::Yield => 5,
+        TraceKind::Push => 6,
+        TraceKind::Pop => 7,
+        TraceKind::EventEnqueue => 8,
+        TraceKind::EventConsume => 9,
+        TraceKind::ActuationDispatch => 10,
+        TraceKind::ActuationComplete => 11,
+        TraceKind::Completion => 12,
+        TraceKind::Failure => 13,
+        TraceKind::ReplayInput => 14,
+        TraceKind::ContextReady => 15,
+        TraceKind::ContextSelected => 16,
+        TraceKind::QuantumBegin => 17,
+        TraceKind::QuantumEnd => 18,
+        TraceKind::ContextWait => 19,
+        TraceKind::ContextWake => 20,
+        TraceKind::ContextSleep => 21,
+        TraceKind::ContextComplete => 22,
+        TraceKind::ContextFail => 23
+    };
 }
 
 record struct TraceEntry { TraceKind kind; StateId from; StateId to; Reason reason; int tick; };

@@ -6,8 +6,8 @@ import Make
 [NoWhile]
 fn BuildConfig() -> Make.Config {
     return Make.Config {
-        Profile: "ConceptR7b"
-        StateDir: ".octmake/concept-r7b"
+        Profile: "ConceptR7c"
+        StateDir: ".octmake/concept-r7c"
         Trace: true
         Staleness: Make.Staleness.Always
     }

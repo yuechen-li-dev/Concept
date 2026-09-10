@@ -1,0 +1,100 @@
+module DragonGod.Scheduling.Core;
+profile Core;
+
+import DragonGod.Core.Types;
+import DragonGod.Events.Core;
+import DragonGod.Time.Core;
+
+enum ExecutionState
+{
+    Ready,
+    Running,
+    Waiting,
+    Sleeping,
+    Completed,
+    Failed,
+}
+
+int ExecutionStateCode(ExecutionState state)
+{
+    return match (state)
+    {
+        ExecutionState::Ready => 1,
+        ExecutionState::Running => 2,
+        ExecutionState::Waiting => 3,
+        ExecutionState::Sleeping => 4,
+        ExecutionState::Completed => 5,
+        ExecutionState::Failed => 6
+    };
+}
+
+enum ExecutionStep
+{
+    Ready,
+    Waiting(EventKind kind),
+    Sleeping(Deadline deadline),
+    Completed,
+    Failed(Reason reason),
+}
+
+concept Schedulable<TMachine>
+{
+    requires ExecutionStep StepScheduled(ref TMachine self);
+}
+
+enum SchedulerError
+{
+    CapacityExhausted,
+    UnknownContext,
+    InvalidState,
+    AlreadyQueued,
+    NoRunnableContext,
+    InvalidQuantum,
+    DecisionBudgetExhausted,
+    TraceCapacityExhausted,
+}
+
+enum SchedulerRunOutcome
+{
+    Idle,
+    DecisionBudgetExhausted,
+}
+
+record struct SchedulerConfiguration
+{
+    int stepQuantum;
+};
+
+template <typename TMachine>
+struct ExecutionContext
+{
+    ContextId id;
+    TMachine machine;
+    ExecutionState state;
+    EventKind waitKind;
+    Deadline sleepUntil;
+    Reason failure;
+    bool active;
+    bool queued;
+};
+
+template <typename TMachine, usize Capacity>
+class ContextTable
+{
+public:
+    ContextId<array>[Capacity] ids;
+    TMachine<array>[Capacity] machines;
+    ExecutionState<array>[Capacity] states;
+    EventKind<array>[Capacity] waitKinds;
+    Deadline<array>[Capacity] sleepUntil;
+    Reason<array>[Capacity] failures;
+    bool<array>[Capacity] active;
+    bool<array>[Capacity] queued;
+};
+
+record struct Worker
+{
+    WorkerId id;
+    bool running;
+    ContextId current;
+};

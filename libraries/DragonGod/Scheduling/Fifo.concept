@@ -1,0 +1,250 @@
+module DragonGod.Scheduling.Fifo;
+profile Core;
+
+import DragonGod.Scheduling.Core;
+import DragonGod.Scheduling.Queue;
+import DragonGod.Trace.Core;
+
+template <typename Configuration, typename TMachine, usize ContextCapacity, usize ReadyCapacity, usize TraceCapacity>
+requires Schedulable<TMachine>
+class FifoScheduler
+{
+public:
+    SchedulerConfiguration configuration;
+    ContextTable<TMachine, ContextCapacity> contexts;
+    FifoReadyQueue<ReadyCapacity> ready;
+    Clock clock;
+    TraceRecorder<Configuration, TraceCapacity> trace;
+    int nextContextId;
+    int contextCount;
+    int decisions;
+
+    Result<void, SchedulerError> Record(
+        ref FifoScheduler self,
+        TraceKind kind,
+        ContextId id,
+        Reason reason
+    )
+    {
+        match (self.trace.Record(TraceEntry{kind, StateId{id.value}, StateId{id.value}, reason, self.decisions}))
+        {
+            Result::Ok() => { return Result::Ok(); }
+            Result::Error(error) => { return Result::Error(SchedulerError::TraceCapacityExhausted); }
+        }
+    }
+
+    Result<int, SchedulerError> Find(ref const FifoScheduler self, ContextId id)
+    {
+        int index = 0;
+        while (index < Len(self.contexts.ids)) bounded(2147483647)
+        {
+            if (self.contexts.active[index] and self.contexts.ids[index].value == id.value)
+            {
+                return Result::Ok(index);
+            }
+            index = index + 1;
+        }
+        return Result::Error(SchedulerError::UnknownContext);
+    }
+
+    Result<ContextId, SchedulerError> Register(ref FifoScheduler self, TMachine machine)
+    {
+        if (self.configuration.stepQuantum <= 0)
+        {
+            return Result::Error(SchedulerError::InvalidQuantum);
+        }
+        int index = 0;
+        while (index < Len(self.contexts.ids)) bounded(2147483647)
+        {
+            if (not self.contexts.active[index])
+            {
+                if (self.ready.count >= Len(self.ready.entries))
+                {
+                    return Result::Error(SchedulerError::CapacityExhausted);
+                }
+                if (self.trace.count >= Len(self.trace.entries))
+                {
+                    return Result::Error(SchedulerError::TraceCapacityExhausted);
+                }
+                ContextId id = ContextId{self.nextContextId};
+                self.nextContextId = self.nextContextId + 1;
+                self.contexts.ids[index] = id;
+                self.contexts.machines[index] = move machine;
+                self.contexts.states[index] = ExecutionState::Ready;
+                self.contexts.waitKinds[index] = EventKind{0};
+                self.contexts.sleepUntil[index] = Deadline{MonotonicTime{0}};
+                self.contexts.failures[index] = Reason{0};
+                self.contexts.active[index] = true;
+                self.contexts.queued[index] = true;
+                self.ready.Enqueue(id)?;
+                self.contextCount = self.contextCount + 1;
+                self.Record(TraceKind::ContextReady, id, Reason{0})?;
+                return Result::Ok(id);
+            }
+            index = index + 1;
+        }
+        return Result::Error(SchedulerError::CapacityExhausted);
+    }
+
+    Result<void, SchedulerError> MakeReady(ref FifoScheduler self, int index)
+    {
+        if (self.contexts.queued[index])
+        {
+            return Result::Error(SchedulerError::AlreadyQueued);
+        }
+        if (self.ready.count >= Len(self.ready.entries))
+        {
+            return Result::Error(SchedulerError::CapacityExhausted);
+        }
+        if (self.trace.count >= Len(self.trace.entries))
+        {
+            return Result::Error(SchedulerError::TraceCapacityExhausted);
+        }
+        self.contexts.states[index] = ExecutionState::Ready;
+        self.ready.Enqueue(self.contexts.ids[index])?;
+        self.contexts.queued[index] = true;
+        self.Record(TraceKind::ContextWake, self.contexts.ids[index], Reason{0})?;
+        return Result::Ok();
+    }
+
+    Result<void, SchedulerError> Wake(ref FifoScheduler self, ContextId id)
+    {
+        int index = self.Find(id)?;
+        if (ExecutionStateCode(self.contexts.states[index]) != 3 and
+            ExecutionStateCode(self.contexts.states[index]) != 4)
+        {
+            return Result::Error(SchedulerError::InvalidState);
+        }
+        return self.MakeReady(index);
+    }
+
+    Result<int, SchedulerError> NotifyEvent(ref FifoScheduler self, EventKind kind)
+    {
+        int index = 0;
+        int woke = 0;
+        while (index < Len(self.contexts.ids)) bounded(2147483647)
+        {
+            if (self.contexts.active[index] and
+                ExecutionStateCode(self.contexts.states[index]) == 3 and
+                self.contexts.waitKinds[index].value == kind.value)
+            {
+                self.MakeReady(index)?;
+                woke = woke + 1;
+            }
+            index = index + 1;
+        }
+        return Result::Ok(woke);
+    }
+
+    Result<int, SchedulerError> WakeExpired(ref FifoScheduler self)
+    {
+        int index = 0;
+        int woke = 0;
+        while (index < Len(self.contexts.ids)) bounded(2147483647)
+        {
+            if (self.contexts.active[index] and
+                ExecutionStateCode(self.contexts.states[index]) == 4 and
+                Reached(self.clock.now, self.contexts.sleepUntil[index]))
+            {
+                self.MakeReady(index)?;
+                woke = woke + 1;
+            }
+            index = index + 1;
+        }
+        return Result::Ok(woke);
+    }
+
+    Result<ExecutionState, SchedulerError> State(ref const FifoScheduler self, ContextId id)
+    {
+        int index = self.Find(id)?;
+        return Result::Ok(self.contexts.states[index]);
+    }
+
+    Result<void, SchedulerError> ScheduleOne(ref FifoScheduler self)
+    {
+        if (self.configuration.stepQuantum <= 0)
+        {
+            return Result::Error(SchedulerError::InvalidQuantum);
+        }
+        if (self.trace.count + Len(self.contexts.ids) + 4 > Len(self.trace.entries))
+        {
+            return Result::Error(SchedulerError::TraceCapacityExhausted);
+        }
+        int ignoredWakeCount = self.WakeExpired()?;
+        ContextId id = self.ready.Dequeue()?;
+        int index = self.Find(id)?;
+        if (ExecutionStateCode(self.contexts.states[index]) != 1 or not self.contexts.queued[index])
+        {
+            return Result::Error(SchedulerError::InvalidState);
+        }
+
+        self.contexts.queued[index] = false;
+        self.contexts.states[index] = ExecutionState::Running;
+        self.decisions = self.decisions + 1;
+        self.Record(TraceKind::ContextSelected, id, Reason{0})?;
+        self.Record(TraceKind::QuantumBegin, id, Reason{self.configuration.stepQuantum})?;
+
+        int step = 0;
+        bool continueQuantum = true;
+        while (step < self.configuration.stepQuantum and continueQuantum) bounded(2147483647)
+        {
+            ExecutionStep outcome = StepScheduled(ref self.contexts.machines[index]);
+            step = step + 1;
+            match (outcome)
+            {
+                ExecutionStep::Ready => {}
+                ExecutionStep::Waiting(kind) => {
+                    self.contexts.states[index] = ExecutionState::Waiting;
+                    self.contexts.waitKinds[index] = kind;
+                    self.Record(TraceKind::ContextWait, id, Reason{kind.value})?;
+                    continueQuantum = false;
+                }
+                ExecutionStep::Sleeping(deadline) => {
+                    self.contexts.states[index] = ExecutionState::Sleeping;
+                    self.contexts.sleepUntil[index] = deadline;
+                    self.Record(TraceKind::ContextSleep, id, Reason{0})?;
+                    continueQuantum = false;
+                }
+                ExecutionStep::Completed => {
+                    self.contexts.states[index] = ExecutionState::Completed;
+                    self.Record(TraceKind::ContextComplete, id, Reason{0})?;
+                    continueQuantum = false;
+                }
+                ExecutionStep::Failed(reason) => {
+                    self.contexts.states[index] = ExecutionState::Failed;
+                    self.contexts.failures[index] = reason;
+                    self.Record(TraceKind::ContextFail, id, reason)?;
+                    continueQuantum = false;
+                }
+            }
+        }
+
+        if (ExecutionStateCode(self.contexts.states[index]) == 2)
+        {
+            self.contexts.states[index] = ExecutionState::Ready;
+            self.ready.Enqueue(id)?;
+            self.contexts.queued[index] = true;
+        }
+        self.Record(TraceKind::QuantumEnd, id, Reason{step})?;
+        return Result::Ok();
+    }
+
+    Result<SchedulerRunOutcome, SchedulerError> RunUntilIdle(ref FifoScheduler self, int maxDecisions)
+    {
+        if (maxDecisions < 0)
+        {
+            return Result::Error(SchedulerError::DecisionBudgetExhausted);
+        }
+        int ran = 0;
+        while (ran < maxDecisions and not self.ready.IsEmpty()) bounded(2147483647)
+        {
+            self.ScheduleOne()?;
+            ran = ran + 1;
+        }
+        if (not self.ready.IsEmpty())
+        {
+            return Result::Ok(SchedulerRunOutcome::DecisionBudgetExhausted);
+        }
+        return Result::Ok(SchedulerRunOutcome::Idle);
+    }
+};

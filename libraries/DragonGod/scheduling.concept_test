@@ -1,0 +1,332 @@
+module DragonGod.Tests.Scheduling;
+profile Core;
+
+import DragonGod.Scheduling.Core;
+import DragonGod.Scheduling.Queue;
+import DragonGod.Scheduling.Fifo;
+import DragonGod.Trace.Core;
+import DragonGod.Interrupts.Core;
+import DragonGod.Time.Core;
+import Standard.Memory.Bump;
+import Standard.Memory.MonotonicOwnership;
+
+record struct TestConfiguration { int identity; };
+
+struct CounterMachine
+{
+    int label;
+    int remaining;
+    int steps;
+    int waitAt;
+    EventKind waitKind;
+    int sleepAt;
+    Deadline deadline;
+    int failAt;
+};
+
+ExecutionStep StepScheduled(ref CounterMachine self)
+{
+    if (self.waitAt >= 0 and self.steps == self.waitAt)
+    {
+        self.waitAt = -1;
+        return ExecutionStep::Waiting(self.waitKind);
+    }
+    if (self.sleepAt >= 0 and self.steps == self.sleepAt)
+    {
+        self.sleepAt = -1;
+        return ExecutionStep::Sleeping(self.deadline);
+    }
+    if (self.failAt >= 0 and self.steps == self.failAt)
+    {
+        self.failAt = -1;
+        return ExecutionStep::Failed(Reason{self.label});
+    }
+    self.steps = self.steps + 1;
+    self.remaining = self.remaining - 1;
+    if (self.remaining <= 0)
+    {
+        return ExecutionStep::Completed;
+    }
+    return ExecutionStep::Ready;
+}
+
+requires Schedulable<CounterMachine>;
+
+CounterMachine Counter(int label, int steps)
+{
+    return CounterMachine{
+        label,
+        steps,
+        0,
+        -1,
+        EventKind{0},
+        -1,
+        Deadline{MonotonicTime{0}},
+        -1
+    };
+}
+
+TraceEntry<array>[64] EmptyTraceEntries()
+{
+    TraceEntry empty = EmptyTraceEntry();
+    return [
+        empty, empty, empty, empty, empty, empty, empty, empty,
+        empty, empty, empty, empty, empty, empty, empty, empty,
+        empty, empty, empty, empty, empty, empty, empty, empty,
+        empty, empty, empty, empty, empty, empty, empty, empty,
+        empty, empty, empty, empty, empty, empty, empty, empty,
+        empty, empty, empty, empty, empty, empty, empty, empty,
+        empty, empty, empty, empty, empty, empty, empty, empty,
+        empty, empty, empty, empty, empty, empty, empty, empty
+    ];
+}
+
+FifoScheduler<TestConfiguration, CounterMachine, 3, 3, 64> MakeScheduler(int quantum)
+{
+    CounterMachine emptyMachine = Counter(0, 1);
+    ContextId emptyId = EmptyContextId();
+    EventKind emptyKind = EventKind{0};
+    Deadline emptyDeadline = Deadline{MonotonicTime{0}};
+    Reason emptyReason = Reason{0};
+    ContextId<array>[3] contextIds = [emptyId, emptyId, emptyId];
+    CounterMachine<array>[3] machines = [emptyMachine, emptyMachine, emptyMachine];
+    ExecutionState<array>[3] states = [ExecutionState::Ready, ExecutionState::Ready, ExecutionState::Ready];
+    EventKind<array>[3] waitKinds = [emptyKind, emptyKind, emptyKind];
+    Deadline<array>[3] sleepUntil = [emptyDeadline, emptyDeadline, emptyDeadline];
+    Reason<array>[3] failures = [emptyReason, emptyReason, emptyReason];
+    bool<array>[3] active = [false, false, false];
+    bool<array>[3] queued = [false, false, false];
+    ContextTable<CounterMachine, 3> contexts = ContextTable<CounterMachine, 3>{
+        move contextIds,
+        move machines,
+        move states,
+        move waitKinds,
+        move sleepUntil,
+        move failures,
+        move active,
+        move queued
+    };
+    ContextId<array>[3] readyEntries = [emptyId, emptyId, emptyId];
+    FifoReadyQueue<3> ready = FifoReadyQueue<3>{move readyEntries, 0, 0};
+    TraceRecorder<TestConfiguration, 64> trace = TraceRecorder<TestConfiguration, 64>{0, EmptyTraceEntries()};
+    return FifoScheduler<TestConfiguration, CounterMachine, 3, 3, 64>{
+        SchedulerConfiguration{quantum},
+        move contexts,
+        move ready,
+        Clock{MonotonicTime{0}},
+        move trace,
+        1,
+        0,
+        0
+    };
+}
+
+void StepCounterScheduler(ref FifoScheduler<TestConfiguration, CounterMachine, 3, 3, 64> scheduler)
+{
+    scheduler.ScheduleOne()!;
+}
+
+[[fact]]
+void ReadyQueueIsBoundedFifoAndRejectsDuplicates()
+{
+    ContextId empty = EmptyContextId();
+    ContextId<array>[3] entries = [empty, empty, empty];
+    FifoReadyQueue<3> queue = FifoReadyQueue<3>{move entries, 0, 0};
+    queue.Enqueue(ContextId{1})!;
+    queue.Enqueue(ContextId{2})!;
+    Assert.Error(queue.Enqueue(ContextId{1}), "one context cannot occur twice in the ready queue");
+    Assert.Equals(queue.Dequeue()!.value, 1, "FIFO selects the oldest ready context");
+    queue.Enqueue(ContextId{3})!;
+    queue.Enqueue(ContextId{4})!;
+    Assert.Error(queue.Enqueue(ContextId{5}), "configured queue capacity never overwrites live entries");
+    Assert.Equals(queue.Dequeue()!.value, 2, "the ring preserves order across wraparound");
+    Assert.Equals(queue.Dequeue()!.value, 3, "the wrapped tail follows older work");
+    Assert.Equals(queue.Dequeue()!.value, 4, "the newest work runs last");
+    Assert.Error(queue.Dequeue(), "an empty ready queue reports no runnable context");
+}
+
+[[fact]]
+void StandardMemoryCanOwnDynamicallyProvisionedSchedulerState()
+{
+    FixedBufferMemorySource source = MakeFixedBufferMemorySource();
+    BumpAllocator bump = MakeBumpAllocator(RegionOf(ref source));
+    SchedulerConfiguration configuration = SchedulerConfiguration{4};
+    MonotonicAllocation<SchedulerConfiguration, BumpAllocator> owner = AllocateMonotonic<SchedulerConfiguration, BumpAllocator>(ref bump, configuration)!;
+    ref SchedulerConfiguration ownedConfiguration = MonotonicAllocationValue<SchedulerConfiguration, BumpAllocator>(ref owner);
+    Assert.Equals(ownedConfiguration.stepQuantum, 4, "Standard.Memory owns explicitly provisioned scheduler policy state");
+}
+
+[[fact]]
+void SteadyStateSchedulingProvesNoAllocation()
+{
+    Assert.Concept<NoAllocation>(
+        StepCounterScheduler,
+        "a fixed-capacity scheduler decision has no allocating operation"
+    );
+}
+
+[[fact]]
+void ContextCapacityAndQuantumFailuresAreExplicit()
+{
+    FifoScheduler<TestConfiguration, CounterMachine, 3, 3, 64> scheduler = MakeScheduler(1);
+    scheduler.Register(Counter(1, 1))!;
+    scheduler.Register(Counter(2, 1))!;
+    scheduler.Register(Counter(3, 1))!;
+    Assert.Error(scheduler.Register(Counter(4, 1)), "context capacity exhaustion returns an ordinary error");
+
+    FifoScheduler<TestConfiguration, CounterMachine, 3, 3, 64> invalid = MakeScheduler(0);
+    Assert.Error(invalid.Register(Counter(1, 1)), "a non-positive semantic quantum is rejected");
+}
+
+[[fact]]
+void FifoRoundRobinIsFairAndDeterministic()
+{
+    FifoScheduler<TestConfiguration, CounterMachine, 3, 3, 64> scheduler = MakeScheduler(1);
+    ContextId a = scheduler.Register(Counter(1, 5))!;
+    ContextId b = scheduler.Register(Counter(2, 3))!;
+    ContextId c = scheduler.Register(Counter(3, 4))!;
+    SchedulerRunOutcome outcome = scheduler.RunUntilIdle(12)!;
+
+    Assert.Equals(outcome, SchedulerRunOutcome::Idle, "finite work reaches idle at the exact decision budget");
+    Assert.Equals(scheduler.State(a)!, ExecutionState::Completed, "A completes");
+    Assert.Equals(scheduler.State(b)!, ExecutionState::Completed, "B completes");
+    Assert.Equals(scheduler.State(c)!, ExecutionState::Completed, "C completes");
+    Assert.Equals(scheduler.contexts.machines[0].steps, 5, "A receives every required quantum");
+    Assert.Equals(scheduler.contexts.machines[1].steps, 3, "B receives every required quantum");
+    Assert.Equals(scheduler.contexts.machines[2].steps, 4, "C receives every required quantum");
+
+    int<array>[12] expected = [1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 3, 1];
+    int selected = 0;
+    int index = 0;
+    while (index < scheduler.trace.Count()) bounded(64)
+    {
+        TraceEntry entry = scheduler.trace.At(index)!;
+        if (TraceKindCode(entry.kind) == TraceKindCode(TraceKind::ContextSelected))
+        {
+            Assert.Equals(entry.from.value, expected[selected], "continuously ready contexts rotate without starvation");
+            selected = selected + 1;
+        }
+        index = index + 1;
+    }
+    Assert.Equals(selected, 12, "the structured trace exposes every scheduling choice");
+}
+
+[[fact]]
+void QuantumChangesInterleavingNotOutcome()
+{
+    FifoScheduler<TestConfiguration, CounterMachine, 3, 3, 64> q1 = MakeScheduler(1);
+    FifoScheduler<TestConfiguration, CounterMachine, 3, 3, 64> q2 = MakeScheduler(2);
+    FifoScheduler<TestConfiguration, CounterMachine, 3, 3, 64> q4 = MakeScheduler(4);
+    ContextId one = q1.Register(Counter(1, 5))!;
+    ContextId two = q2.Register(Counter(1, 5))!;
+    ContextId four = q4.Register(Counter(1, 5))!;
+    q1.RunUntilIdle(5)!;
+    q2.RunUntilIdle(3)!;
+    q4.RunUntilIdle(2)!;
+    Assert.Equals(q1.State(one)!, ExecutionState::Completed, "quantum one completes the machine");
+    Assert.Equals(q2.State(two)!, ExecutionState::Completed, "quantum two completes the machine");
+    Assert.Equals(q4.State(four)!, ExecutionState::Completed, "quantum four completes the machine");
+    Assert.Equals(q1.contexts.machines[0].steps, q2.contexts.machines[0].steps, "final semantic work is quantum independent");
+    Assert.Equals(q2.contexts.machines[0].steps, q4.contexts.machines[0].steps, "all configured quanta converge");
+}
+
+[[fact]]
+void WaitEventAndInterruptWakeAreExplicit()
+{
+    FifoScheduler<TestConfiguration, CounterMachine, 3, 3, 64> scheduler = MakeScheduler(1);
+    CounterMachine waiting = Counter(1, 2);
+    waiting.waitAt = 0;
+    waiting.waitKind = EventKind{9};
+    ContextId a = scheduler.Register(waiting)!;
+    ContextId b = scheduler.Register(Counter(2, 2))!;
+    scheduler.ScheduleOne()!;
+    Assert.Equals(scheduler.State(a)!, ExecutionState::Waiting, "a wait removes the context from the ready queue");
+    scheduler.RunUntilIdle(2)!;
+    Assert.Equals(scheduler.State(b)!, ExecutionState::Completed, "other ready work continues while A waits");
+    Assert.Equals(scheduler.NotifyEvent(EventKind{8})!, 0, "unrelated events do not wake a context");
+    InterruptWakeup interrupt = SignalInterrupt(InterruptId{9});
+    Assert.True(interrupt.pending, "the platform boundary reports a wake fact without choosing order");
+    Assert.Equals(scheduler.NotifyEvent(EventKind{interrupt.interrupt.value})!, 1, "the scheduler consumes readiness policy explicitly");
+    scheduler.RunUntilIdle(2)!;
+    Assert.Equals(scheduler.State(a)!, ExecutionState::Completed, "the woken context resumes exactly once");
+}
+
+[[fact]]
+void SleepUsesExplicitMonotonicTime()
+{
+    FifoScheduler<TestConfiguration, CounterMachine, 3, 3, 64> scheduler = MakeScheduler(1);
+    CounterMachine sleeper = Counter(1, 1);
+    sleeper.sleepAt = 0;
+    sleeper.deadline = Deadline{MonotonicTime{5}};
+    ContextId id = scheduler.Register(sleeper)!;
+    scheduler.ScheduleOne()!;
+    Assert.Equals(scheduler.State(id)!, ExecutionState::Sleeping, "sleeping work leaves the ready queue");
+    Assert.Error(scheduler.ScheduleOne(), "a sleeper does not execute before its deadline");
+    scheduler.clock = Clock{MonotonicTime{4}};
+    Assert.Error(scheduler.ScheduleOne(), "explicit time short of the deadline does not wake work");
+    scheduler.clock = Clock{MonotonicTime{5}};
+    scheduler.ScheduleOne()!;
+    Assert.Equals(scheduler.State(id)!, ExecutionState::Completed, "the decision boundary wakes an expired sleeper");
+}
+
+[[fact]]
+void FailureIsIsolatedAndBudgetsAreBounded()
+{
+    FifoScheduler<TestConfiguration, CounterMachine, 3, 3, 64> scheduler = MakeScheduler(1);
+    CounterMachine failing = Counter(7, 3);
+    failing.failAt = 0;
+    ContextId failed = scheduler.Register(failing)!;
+    ContextId healthy = scheduler.Register(Counter(2, 2))!;
+    Assert.Equals(scheduler.RunUntilIdle(1)!, SchedulerRunOutcome::DecisionBudgetExhausted, "bounded execution reports remaining runnable work");
+    Assert.Equals(scheduler.State(failed)!, ExecutionState::Failed, "failure is recorded on its context");
+    scheduler.RunUntilIdle(2)!;
+    Assert.Equals(scheduler.State(healthy)!, ExecutionState::Completed, "a failed peer does not crash unrelated work");
+    int failedIndex = scheduler.Find(failed)!;
+    Assert.Equals(scheduler.contexts.failures[failedIndex].code, 7, "the structured failure reason is retained");
+}
+
+[[fact]]
+void OneHundredSingleWorkerRunsHaveIdenticalSemanticTrace()
+{
+    int run = 0;
+    int expectedHash = -1;
+    while (run < 100) bounded(100)
+    {
+        FifoScheduler<TestConfiguration, CounterMachine, 3, 3, 64> scheduler = MakeScheduler(1);
+        scheduler.Register(Counter(1, 5))!;
+        scheduler.Register(Counter(2, 3))!;
+        scheduler.Register(Counter(3, 4))!;
+        scheduler.RunUntilIdle(12)!;
+        int hash = scheduler.trace.Count();
+        int index = 0;
+        while (index < scheduler.trace.Count()) bounded(64)
+        {
+            TraceEntry entry = scheduler.trace.At(index)!;
+            hash = hash * 31 + TraceKindCode(entry.kind);
+            hash = hash * 31 + entry.from.value;
+            hash = hash * 31 + entry.reason.code;
+            index = index + 1;
+        }
+        if (run == 0)
+        {
+            expectedHash = hash;
+        }
+        else
+        {
+            Assert.Equals(hash, expectedHash, "same machines, inputs, clock, and quantum produce the same structured trace");
+        }
+        run = run + 1;
+    }
+    Assert.Equals(run, 100, "the deterministic single-worker scenario ran one hundred times");
+}
+
+[[benchmark]]
+void SchedulerDecisionDispatchBenchmark()
+{
+    FifoScheduler<TestConfiguration, CounterMachine, 3, 3, 64> scheduler = MakeScheduler(1);
+    scheduler.Register(Counter(1, 5))!;
+    scheduler.Register(Counter(2, 3))!;
+    scheduler.Register(Counter(3, 4))!;
+    scheduler.RunUntilIdle(12)!;
+    Assert.Equals(scheduler.decisions, 12, "the informational benchmark executes twelve bounded decisions");
+}

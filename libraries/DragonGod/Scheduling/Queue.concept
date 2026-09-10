@@ -1,0 +1,84 @@
+module DragonGod.Scheduling.Queue;
+profile Core;
+
+import DragonGod.Core.Types;
+import DragonGod.Scheduling.Core;
+
+ContextId EmptyContextId()
+{
+    return ContextId{0};
+}
+
+template <usize Capacity>
+class FifoReadyQueue
+{
+public:
+    ContextId<array>[Capacity] entries;
+    int head;
+    int count;
+
+    int Count(ref const FifoReadyQueue self)
+    {
+        return self.count;
+    }
+
+    bool IsEmpty(ref const FifoReadyQueue self)
+    {
+        return self.count == 0;
+    }
+
+    bool Contains(ref const FifoReadyQueue self, ContextId id)
+    {
+        int offset = 0;
+        while (offset < self.count) bounded(2147483647)
+        {
+            int index = self.head + offset;
+            if (index >= Len(self.entries))
+            {
+                index = index - Len(self.entries);
+            }
+            if (self.entries[index].value == id.value)
+            {
+                return true;
+            }
+            offset = offset + 1;
+        }
+        return false;
+    }
+
+    Result<void, SchedulerError> Enqueue(ref FifoReadyQueue self, ContextId id)
+    {
+        if (self.Contains(id))
+        {
+            return Result::Error(SchedulerError::AlreadyQueued);
+        }
+        if (self.count >= Len(self.entries))
+        {
+            return Result::Error(SchedulerError::CapacityExhausted);
+        }
+        int tail = self.head + self.count;
+        if (tail >= Len(self.entries))
+        {
+            tail = tail - Len(self.entries);
+        }
+        self.entries[tail] = id;
+        self.count = self.count + 1;
+        return Result::Ok();
+    }
+
+    Result<ContextId, SchedulerError> Dequeue(ref FifoReadyQueue self)
+    {
+        if (self.count == 0)
+        {
+            return Result::Error(SchedulerError::NoRunnableContext);
+        }
+        ContextId id = self.entries[self.head];
+        self.head = self.head + 1;
+        if (self.head >= Len(self.entries))
+        {
+            self.head = 0;
+        }
+        self.count = self.count - 1;
+        return Result::Ok(id);
+    }
+};

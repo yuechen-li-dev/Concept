@@ -32,7 +32,7 @@ no Vulkan name appears in canonical kernel APIs.
 | Automata saved-PC/workaround machinery | Delete | canonical R5 machine semantics remain language-owned |
 | Mind, Actuation, Events, Trace, Replay, checkpoint | Rewrite | canonical configurable R7b mechanisms under `DragonGod.*` |
 | Decision and Graph policy | Replace boundary | Concept semantics and application-owned meaning |
-| scheduler policy and ready queues | Defer | R7c |
+| scheduler policy and ready queues | Rewrite | R7c `DragonGod.Scheduling` |
 | collector/root graph | Defer | R7d |
 | Vulkan device/lifecycle policy | Replace boundary | stays in Vulkan consumers/conformance |
 
@@ -51,7 +51,10 @@ or saved-PC workarounds are archival and are not migrated into the active packag
   quantity. Subsecond units await general scale-prefix support.
 - `Platform.AMD64` and `Platform.AArch64` expose only honest current capability
   records. They do not fake complete ports.
-- `Synchronization` is deferred because no canonical R7a operation requires it.
+- `Scheduling` owns explicit context authority, a bounded FIFO of IDs, semantic
+  step quanta, wait/sleep readiness, and structured decisions.
+- `Synchronization` remains deferred; the authoritative scheduler is
+  single-worker because shared multi-worker mutation cannot yet be proven safe.
 
 The BootInfo path is firmware backing -> `MemoryRegion<SystemMemory>` ->
 `BumpAllocator` -> `MonotonicAllocation<BootInfo, BumpAllocator>` -> `Value`.
@@ -61,8 +64,9 @@ drops/releases it at scope exit. Both execute through strict C11 tests.
 
 R7b adds configurable Mind execution, deterministic batches, dirty memory,
 events, actuation obligations, structured trace, replay, checkpoint, explicit
-agent context, and seed state. R7c can build a scheduler over those mechanisms;
-R7d can build collector semantics later. Neither is implemented here.
+agent context, and seed state. R7c builds deterministic single-worker scheduling
+over those mechanisms without compiler semantics or a hidden runtime. R7d can
+build collector semantics later; it is not implemented here.
 
 The C# Dominatus repository is an application-kernel parity oracle. Its useful
 mechanisms are native DragonGod APIs; its policy remains application-owned. No
@@ -70,6 +74,6 @@ separate Dominatus module/namespace or compatibility bridge is part of the
 architecture. See `DRAGONGOD-DOMINATUS-PARITY.md` for the audited mapping.
 
 Intended layering is Concept compiler -> Standard -> DragonGod -> optional
-scheduler/collector/runtime adapters -> Go/.NET/Vulkan consumers. Standard has no
+collector/platform-worker adapters -> Go/.NET/Vulkan consumers. Standard has no
 DragonGod dependency, and ordinary Concept programs need neither DragonGod nor
 runtime namespace/package metadata.

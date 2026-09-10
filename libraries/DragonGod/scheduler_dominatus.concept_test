@@ -1,0 +1,132 @@
+module DragonGod.Tests.SchedulerDominatus;
+profile Core;
+
+import DragonGod.Core.Types;
+import DragonGod.Machine.Execution;
+import DragonGod.Scheduling.Core;
+import DragonGod.Scheduling.Queue;
+import DragonGod.Scheduling.Fifo;
+import DragonGod.Trace.Core;
+
+record struct SchedulerTestConfiguration { int identity; };
+
+struct DominatusMachine
+{
+    Mind<SchedulerTestConfiguration, 4, 16> mind;
+    MindSignal<array>[4] work;
+    int count;
+    int next;
+};
+
+ExecutionStep StepScheduled(ref DominatusMachine self)
+{
+    if (self.next >= self.count)
+    {
+        return ExecutionStep::Failed(Reason{900});
+    }
+    MindSignal signal = self.work[self.next];
+    match (self.mind.Step(signal, self.next))
+    {
+        Result::Error(error) => { return ExecutionStep::Failed(Reason{901}); }
+        Result::Ok() => {}
+    }
+    self.next = self.next + 1;
+    return match (self.mind.status)
+    {
+        MindStatus::Succeeded => ExecutionStep::Completed,
+        MindStatus::Failed => ExecutionStep::Failed(self.mind.lastReason),
+        MindStatus::WaitingActuation => ExecutionStep::Waiting(EventKind{self.mind.lastReason.code}),
+        MindStatus::Idle => ExecutionStep::Ready,
+        MindStatus::Running => ExecutionStep::Ready
+    };
+}
+
+requires Schedulable<DominatusMachine>;
+
+TraceEntry<array>[64] DominatusTraceEntries()
+{
+    TraceEntry empty = EmptyTraceEntry();
+    return [
+        empty, empty, empty, empty, empty, empty, empty, empty,
+        empty, empty, empty, empty, empty, empty, empty, empty,
+        empty, empty, empty, empty, empty, empty, empty, empty,
+        empty, empty, empty, empty, empty, empty, empty, empty,
+        empty, empty, empty, empty, empty, empty, empty, empty,
+        empty, empty, empty, empty, empty, empty, empty, empty,
+        empty, empty, empty, empty, empty, empty, empty, empty,
+        empty, empty, empty, empty, empty, empty, empty, empty
+    ];
+}
+
+Mind<SchedulerTestConfiguration, 4, 16> MakeDominatusMind()
+{
+    MachineFrame emptyFrame = EmptyFrame();
+    MachineFrame<array>[4] frames = [MachineFrame{StateId{10}, Reason{0}}, emptyFrame, emptyFrame, emptyFrame];
+    TraceEntry emptyTrace = EmptyTraceEntry();
+    TraceEntry<array>[16] traceEntries = [
+        emptyTrace, emptyTrace, emptyTrace, emptyTrace,
+        emptyTrace, emptyTrace, emptyTrace, emptyTrace,
+        emptyTrace, emptyTrace, emptyTrace, emptyTrace,
+        emptyTrace, emptyTrace, emptyTrace, emptyTrace
+    ];
+    TraceRecorder<SchedulerTestConfiguration, 16> trace = TraceRecorder<SchedulerTestConfiguration, 16>{0, move traceEntries};
+    return Mind<SchedulerTestConfiguration, 4, 16>{MachineId{1}, 1, MindStatus::Idle, move frames, Reason{0}, 0, move trace};
+}
+
+MindSignal<array>[4] DominatusWork()
+{
+    return [
+        MindSignal::TransitionTo(StateId{20}, Reason{100}),
+        MindSignal::Yield(Reason{101}),
+        MindSignal::TransitionTo(StateId{30}, Reason{102}),
+        MindSignal::Succeed(Reason{103})
+    ];
+}
+
+FifoScheduler<SchedulerTestConfiguration, DominatusMachine, 1, 1, 64> MakeDominatusScheduler()
+{
+    Mind<SchedulerTestConfiguration, 4, 16> emptyMind = MakeDominatusMind();
+    MindSignal<array>[4] emptyWork = DominatusWork();
+    DominatusMachine emptyMachine = DominatusMachine{move emptyMind, move emptyWork, 0, 0};
+    ContextId emptyId = EmptyContextId();
+    ContextId<array>[1] ids = [emptyId];
+    DominatusMachine<array>[1] machines = [emptyMachine];
+    ExecutionState<array>[1] states = [ExecutionState::Ready];
+    EventKind<array>[1] waitKinds = [EventKind{0}];
+    Deadline<array>[1] deadlines = [Deadline{MonotonicTime{0}}];
+    Reason<array>[1] failures = [Reason{0}];
+    bool<array>[1] active = [false];
+    bool<array>[1] queued = [false];
+    ContextTable<DominatusMachine, 1> contexts = ContextTable<DominatusMachine, 1>{
+        move ids, move machines, move states, move waitKinds,
+        move deadlines, move failures, move active, move queued
+    };
+    ContextId<array>[1] readyEntries = [emptyId];
+    FifoReadyQueue<1> ready = FifoReadyQueue<1>{move readyEntries, 0, 0};
+    TraceRecorder<SchedulerTestConfiguration, 64> trace = TraceRecorder<SchedulerTestConfiguration, 64>{0, DominatusTraceEntries()};
+    return FifoScheduler<SchedulerTestConfiguration, DominatusMachine, 1, 1, 64>{
+        SchedulerConfiguration{2}, move contexts, move ready,
+        Clock{MonotonicTime{0}}, move trace, 1, 0, 0
+    };
+}
+
+[[fact]]
+void SchedulerMatchesDirectDominatusBatchOutcome()
+{
+    Mind<SchedulerTestConfiguration, 4, 16> direct = MakeDominatusMind();
+    MindSignal<array>[4] directWork = DominatusWork();
+    BatchResult batch = direct.ExecuteBatch(BatchId{1}, directWork, 4, 4, 0)!;
+
+    Mind<SchedulerTestConfiguration, 4, 16> scheduledMind = MakeDominatusMind();
+    MindSignal<array>[4] scheduledWork = DominatusWork();
+    DominatusMachine machine = DominatusMachine{move scheduledMind, move scheduledWork, 4, 0};
+    FifoScheduler<SchedulerTestConfiguration, DominatusMachine, 1, 1, 64> scheduler = MakeDominatusScheduler();
+    ContextId id = scheduler.Register(move machine)!;
+    scheduler.RunUntilIdle(2)!;
+
+    Assert.True(batch.complete, "the R7b direct batch completes");
+    Assert.Equals(scheduler.State(id)!, ExecutionState::Completed, "the scheduler completes the same bounded work");
+    Assert.Equals(scheduler.contexts.machines[0].mind.CurrentState().value, direct.CurrentState().value, "direct and scheduled execution reach the same authored state");
+    Assert.Equals(scheduler.contexts.machines[0].mind.status, direct.status, "direct and scheduled execution have the same terminal status");
+    Assert.Equals(scheduler.contexts.machines[0].mind.steps, direct.steps, "the scheduler adds no second machine execution model");
+}

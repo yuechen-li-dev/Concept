@@ -11,6 +11,16 @@ record struct MachineId
     int value;
 };
 
+record struct ContextId
+{
+    int value;
+};
+
+record struct WorkerId
+{
+    int value;
+};
+
 record struct BatchId
 {
     int value;
