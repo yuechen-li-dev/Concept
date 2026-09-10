@@ -1,0 +1,7 @@
+module Interop.ModuleImport;
+profile Core;
+import Platform.Host.Memory;
+Result<owned HostAllocation, HostMemoryError> ImportAuthority(usize<byte> size, usize<byte> alignment)
+{
+    return AcquireHost(size, alignment);
+}

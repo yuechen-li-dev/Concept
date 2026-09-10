@@ -473,6 +473,7 @@ type FunctionDecl struct {
 	MethodOf   string      `json:"method_of,omitempty"`
 	Visibility string      `json:"visibility,omitempty"`
 	ExternABI  string      `json:"extern_abi,omitempty"`
+	Module     string      `json:"module,omitempty"`
 	Span       Span        `json:"span"`
 }
 
@@ -482,6 +483,21 @@ type OperationEffectDecl struct {
 	Origin    string `json:"origin,omitempty"`
 	Module    string `json:"module,omitempty"`
 	Span      Span   `json:"span"`
+}
+
+// ForeignContractDecl binds bounded semantic authority to one native ABI
+// declaration. It is compile-time-only: no contract record is emitted into the
+// generated program.
+type ForeignContractDecl struct {
+	Name           string `json:"name"`
+	Module         string `json:"module"`
+	Operation      string `json:"operation"`
+	AddressSpace   Type   `json:"address_space"`
+	ExtentParam    string `json:"extent_parameter"`
+	AlignmentParam string `json:"alignment_parameter"`
+	HostAccessible bool   `json:"host_accessible,omitempty"`
+	Allocates      bool   `json:"allocates,omitempty"`
+	Span           Span   `json:"span"`
 }
 
 // Attribute is bounded tooling metadata attached to an ordinary function.
@@ -550,6 +566,7 @@ type Module struct {
 	Functions        []FunctionDecl        `json:"functions,omitempty"`
 	ComptimeFns      []FunctionDecl        `json:"comptime_functions,omitempty"`
 	OperationEffects []OperationEffectDecl `json:"operation_effects,omitempty"`
+	ForeignContracts []ForeignContractDecl `json:"foreign_contracts,omitempty"`
 	// ImportedFactSummaries are compiler-derived value-result contracts loaded
 	// from concept-module.v1. They are not source syntax and are never lowered
 	// into runtime storage.
@@ -1678,6 +1695,7 @@ type MIROperation struct {
 
 type semanticEnv struct {
 	sourcePath            string
+	moduleName            string
 	profile               *ProfileDefinition
 	enums                 map[string]EnumDecl
 	structs               map[string]StructDecl
@@ -1713,7 +1731,10 @@ type semanticEnv struct {
 	dynWitnesses          map[string]*evt1InterfaceWitness
 	validatingMethod      string
 	validatingFunction    string
+	validatingModule      string
 	operationEffects      map[string]OperationEffectDecl
+	foreignContracts      map[string]ForeignContractDecl
+	foreignByOperation    map[string]ForeignContractDecl
 	genericTypes          map[string]GenericTypeDecl
 	genericTypeInstances  map[string]StructDecl
 	genericInstantiating  map[string]bool
@@ -1779,6 +1800,8 @@ func newSemanticEnv(profile *ProfileDefinition) *semanticEnv {
 		transportedFactIDs:    map[string]bool{},
 		dynWitnesses:          map[string]*evt1InterfaceWitness{},
 		operationEffects:      map[string]OperationEffectDecl{},
+		foreignContracts:      map[string]ForeignContractDecl{},
+		foreignByOperation:    map[string]ForeignContractDecl{},
 		genericTypes:          map[string]GenericTypeDecl{},
 		genericTypeInstances:  map[string]StructDecl{},
 		genericInstantiating:  map[string]bool{},

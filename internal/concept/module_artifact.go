@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -62,6 +63,7 @@ type SemanticModuleArtifact struct {
 	Exports            SemanticModuleExports         `json:"exports"`
 	OperationEffects   []SemanticModuleEffectSummary `json:"operation_effect_summaries,omitempty"`
 	ValueFactSummaries []SemanticFunctionFactSummary `json:"value_fact_summaries,omitempty"`
+	ForeignContracts   []ForeignContractDecl         `json:"foreign_contracts,omitempty"`
 	SemanticPayload    []byte                        `json:"semantic_payload"`
 }
 
@@ -142,6 +144,9 @@ func LoadSemanticModuleArtifact(body []byte) (SemanticModuleArtifact, Module, er
 	if module.Name != artifact.ModuleIdentity {
 		return artifact, Module{}, fmt.Errorf("MODULE_IDENTITY_MISMATCH: payload declares %s, artifact declares %s", module.Name, artifact.ModuleIdentity)
 	}
+	if !reflect.DeepEqual(module.ForeignContracts, artifact.ForeignContracts) {
+		return artifact, Module{}, fmt.Errorf("MODULE_FOREIGN_CONTRACT_MISMATCH: inspectable foreign declarations differ from semantic payload")
+	}
 	return artifact, module, nil
 }
 
@@ -181,6 +186,7 @@ func CompileSemanticModule(path, source string, artifacts map[string][]byte) ([]
 		Exports:            semanticModuleExports(local, env),
 		OperationEffects:   summarizeModuleEffects(local, env),
 		ValueFactSummaries: semanticModuleFactSummaries(local, env),
+		ForeignContracts:   append([]ForeignContractDecl{}, local.ForeignContracts...),
 		SemanticPayload:    payload,
 	}
 	for _, dependency := range loaded {
@@ -463,10 +469,16 @@ func composeSemanticModules(local Module, artifacts map[string][]byte) (Module, 
 			composed.ImportedFactAuthority = append(composed.ImportedFactAuthority, "template:"+template.Name)
 		}
 		for _, summary := range artifact.OperationEffects {
-			composed.OperationEffects = append(composed.OperationEffects, OperationEffectDecl{Effect: summary.Effect, Operation: summary.Operation, Origin: string(FactOriginModuleSummaryEffect), Module: artifact.ModuleIdentity})
+			origin := string(FactOriginModuleSummaryEffect)
+			if summary.Origin == string(FactOriginDeclaredForeign) {
+				origin = summary.Origin
+			}
+			composed.OperationEffects = append(composed.OperationEffects, OperationEffectDecl{Effect: summary.Effect, Operation: summary.Operation, Origin: origin, Module: artifact.ModuleIdentity})
 		}
 		for _, summary := range artifact.ValueFactSummaries {
-			summary.Origin = FactOriginModuleFactSummary
+			if summary.Origin != FactOriginDeclaredForeign {
+				summary.Origin = FactOriginModuleFactSummary
+			}
 			composed.ImportedFactSummaries = append(composed.ImportedFactSummaries, summary)
 		}
 	}
@@ -484,7 +496,20 @@ func composeSemanticModules(local Module, artifacts map[string][]byte) (Module, 
 
 func appendSemanticDeclarations(target *Module, source Module) {
 	target.TypeAliases = append(target.TypeAliases, source.TypeAliases...)
-	target.Structs = append(target.Structs, source.Structs...)
+	for _, incoming := range source.Structs {
+		duplicateInstance := false
+		if strings.Contains(incoming.Name, "<") {
+			for _, existing := range target.Structs {
+				if existing.Name == incoming.Name && reflect.DeepEqual(existing, incoming) {
+					duplicateInstance = true
+					break
+				}
+			}
+		}
+		if !duplicateInstance {
+			target.Structs = append(target.Structs, incoming)
+		}
+	}
 	target.Layouts = append(target.Layouts, source.Layouts...)
 	target.Streams = append(target.Streams, source.Streams...)
 	target.Enums = append(target.Enums, source.Enums...)
@@ -497,6 +522,7 @@ func appendSemanticDeclarations(target *Module, source Module) {
 	target.GenericTypes = append(target.GenericTypes, source.GenericTypes...)
 	target.Functions = append(target.Functions, source.Functions...)
 	target.ComptimeFns = append(target.ComptimeFns, source.ComptimeFns...)
+	target.ForeignContracts = append(target.ForeignContracts, source.ForeignContracts...)
 }
 
 func semanticModuleExports(module Module, env *semanticEnv) SemanticModuleExports {
@@ -558,7 +584,9 @@ func summarizeModuleEffects(module Module, env *semanticEnv) []SemanticModuleEff
 		state[fn.Name] = 1
 		if effect, ok := env.operationEffects[fn.Name]; ok && effect.Effect == "Allocates" {
 			origin := FactOriginDeclaredEffect
-			if fn.ExternABI != "" {
+			if effect.Origin == string(FactOriginDeclaredForeign) {
+				origin = FactOriginDeclaredForeign
+			} else if fn.ExternABI != "" {
 				origin = FactOriginExternalContractEffect
 			}
 			summary := SemanticModuleEffectSummary{Operation: fn.Name, Effect: "Allocates", Origin: string(origin)}

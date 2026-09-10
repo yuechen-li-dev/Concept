@@ -1,0 +1,13 @@
+module Interop.Invalid.UnknownHostAccess;
+profile Core;
+import Standard.MemoryGeometry;
+extern "C" byte* NativeAcquire(usize<byte> size, usize<byte> alignment);
+foreign concept MissingHostAccess on NativeAcquire
+{
+    requires compiler.ExternalStorage<SystemMemory>(result, size, alignment);
+}
+struct Owner { byte* address; usize<byte> length; usize<byte> alignment; }
+MemoryRegion<SystemMemory> InvalidHostRegion(ref const Owner owner)
+{
+    return EstablishExternalRegion<SystemMemory>(owner, owner.address, owner.length, owner.alignment, "MissingHostAccess");
+}

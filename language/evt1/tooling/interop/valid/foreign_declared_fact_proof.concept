@@ -1,0 +1,10 @@
+module Interop.DeclaredFactProof;
+profile Core;
+import Platform.Host.Memory;
+void ProveHostAccess(usize<byte> size)
+{
+    usize<byte> alignment = 4;
+    owned HostAllocation allocation = AcquireHost(size, alignment)!;
+    MemoryRegion<SystemMemory> region = RegionOf(ref const allocation);
+    Assert.Concept<HostAccessible>(region, "host access comes from declared foreign authority");
+}

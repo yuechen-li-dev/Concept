@@ -1,0 +1,19 @@
+module Interop.FirmwareRegion;
+profile Core;
+import Standard.MemoryGeometry;
+struct FirmwareMemory { }
+extern "C" byte* FirmwareRegionAddress(usize<byte> length, usize<byte> alignment);
+foreign concept FirmwareRegionContract on FirmwareRegionAddress
+{
+    requires compiler.ExternalStorage<FirmwareMemory>(result, length, alignment);
+}
+struct FirmwareRegionLease
+{
+    byte* address;
+    usize<byte> length;
+    usize<byte> alignment;
+}
+MemoryRegion<FirmwareMemory> RegionOfFirmware(ref const FirmwareRegionLease lease)
+{
+    return EstablishExternalRegion<FirmwareMemory>(lease, lease.address, lease.length, lease.alignment, "FirmwareRegionContract");
+}

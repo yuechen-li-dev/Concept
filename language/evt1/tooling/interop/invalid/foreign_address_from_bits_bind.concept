@@ -1,0 +1,8 @@
+module Interop.Invalid.AddressBits;
+profile Core;
+import Standard.MemoryGeometry;
+void InvalidBind(usize bits, usize<byte> extent)
+{
+    Address<SystemMemory> address = AddressFromBits<SystemMemory>(bits);
+    Storage<int> storage = bind<int>(address, extent);
+}

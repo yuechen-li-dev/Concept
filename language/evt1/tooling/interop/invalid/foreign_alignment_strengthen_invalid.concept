@@ -1,0 +1,8 @@
+module Interop.Invalid.AlignmentStrengthen;
+profile Core;
+import Platform.Host.Memory;
+MemoryRegion<SystemMemory> InvalidStrengthen(ref const HostAllocation allocation)
+{
+    usize<byte> stronger = 64;
+    return EstablishExternalRegion<SystemMemory>(allocation, allocation.address, allocation.length, stronger, "HostAllocationContract");
+}

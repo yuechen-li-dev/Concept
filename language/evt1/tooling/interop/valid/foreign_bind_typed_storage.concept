@@ -1,0 +1,13 @@
+module Interop.BindTypedStorage;
+profile Core;
+import Platform.Host.Memory;
+int UseForeignStorage(usize<byte> size, usize<byte> alignment)
+{
+    owned HostAllocation allocation = AcquireHost(size, alignment)!;
+    MemoryRegion<SystemMemory> region = RegionOf(ref const allocation);
+    Storage<int> storage = bind<int>(region.start, region.length);
+    ref int value = Initialize(storage, 23);
+    int observed = value;
+    Destroy(storage);
+    return observed;
+}

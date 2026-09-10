@@ -1,0 +1,9 @@
+module Interop.Invalid.ABIMismatch;
+profile Core;
+import Standard.MemoryGeometry;
+extern "C" int NativeAcquire(int size, usize<byte> alignment);
+foreign concept InvalidABI on NativeAcquire
+{
+    requires compiler.ExternalStorage<SystemMemory>(result, size, alignment);
+    requires compiler.HostAccessible(result);
+}

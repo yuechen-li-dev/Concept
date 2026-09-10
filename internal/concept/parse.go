@@ -40,6 +40,12 @@ func parseSyntaxModule(path, text string) (Module, error) {
 	if err != nil {
 		return Module{}, err
 	}
+	for index := range module.Functions {
+		module.Functions[index].Module = module.Name
+	}
+	for index := range module.ComptimeFns {
+		module.ComptimeFns[index].Module = module.Name
+	}
 	return module, nil
 }
 
@@ -409,6 +415,17 @@ func (p *parser) parseModule() (Module, error) {
 			}
 			fn.ExternABI = "C"
 			module.Functions = append(module.Functions, fn)
+		case "foreign":
+			contract, effect, err := p.parseForeignContractDecl()
+			if err != nil {
+				return module, err
+			}
+			contract.Module = module.Name
+			module.ForeignContracts = append(module.ForeignContracts, contract)
+			if effect.Operation != "" {
+				effect.Module = module.Name
+				module.OperationEffects = append(module.OperationEffects, effect)
+			}
 		default:
 			fn, err := p.parseFunctionDecl("", false)
 			if err != nil {
@@ -418,6 +435,143 @@ func (p *parser) parseModule() (Module, error) {
 		}
 	}
 	return module, nil
+}
+
+func (p *parser) parseForeignContractDecl() (ForeignContractDecl, OperationEffectDecl, error) {
+	// This source spelling is intentionally provisional. The semantic model is
+	// kept in ForeignContractDecl so a later syntax decision does not change the
+	// authority, artifact, proof, or lowering contracts.
+	start, err := p.expect("foreign")
+	if err != nil {
+		return ForeignContractDecl{}, OperationEffectDecl{}, err
+	}
+	if _, err = p.expect("concept"); err != nil {
+		return ForeignContractDecl{}, OperationEffectDecl{}, err
+	}
+	name, err := p.expectIdentifier("FOREIGN_CONTRACT_INVALID", "expected foreign contract name")
+	if err != nil {
+		return ForeignContractDecl{}, OperationEffectDecl{}, err
+	}
+	if _, err = p.expect("on"); err != nil {
+		return ForeignContractDecl{}, OperationEffectDecl{}, err
+	}
+	op, err := p.expectIdentifier("FOREIGN_CONTRACT_INVALID", "expected bound foreign operation")
+	if err != nil {
+		return ForeignContractDecl{}, OperationEffectDecl{}, err
+	}
+	if _, err = p.expect("{"); err != nil {
+		return ForeignContractDecl{}, OperationEffectDecl{}, err
+	}
+	decl := ForeignContractDecl{Name: name.Lexeme, Operation: op.Lexeme, Span: start.Span}
+	var effect OperationEffectDecl
+	for !p.done() && p.peekLexeme() != "}" {
+		requirement, err := p.expect("requires")
+		if err != nil {
+			return ForeignContractDecl{}, OperationEffectDecl{}, err
+		}
+		if _, err = p.expect("compiler"); err != nil {
+			return ForeignContractDecl{}, OperationEffectDecl{}, err
+		}
+		if _, err = p.expect("."); err != nil {
+			return ForeignContractDecl{}, OperationEffectDecl{}, err
+		}
+		analysis, err := p.expectIdentifier("FOREIGN_CONTRACT_FACT_INVALID", "expected bounded foreign semantic fact")
+		if err != nil {
+			return ForeignContractDecl{}, OperationEffectDecl{}, err
+		}
+		switch analysis.Lexeme {
+		case "Allocates":
+			if decl.Allocates {
+				return ForeignContractDecl{}, OperationEffectDecl{}, evt1Diagnostic("FOREIGN_CONTRACT_FACT_DUPLICATE", "duplicate Allocates requirement", analysis.Span)
+			}
+			if _, err = p.expect("("); err != nil {
+				return ForeignContractDecl{}, OperationEffectDecl{}, err
+			}
+			target, e := p.expectIdentifier("FOREIGN_CONTRACT_FACT_INVALID", "expected operation name")
+			if e != nil {
+				return ForeignContractDecl{}, OperationEffectDecl{}, e
+			}
+			if _, err = p.expect(")"); err != nil {
+				return ForeignContractDecl{}, OperationEffectDecl{}, err
+			}
+			if target.Lexeme != decl.Operation {
+				return ForeignContractDecl{}, OperationEffectDecl{}, evt1Diagnostic("FOREIGN_CONTRACT_TARGET_MISMATCH", "foreign Allocates fact must name the bound operation", target.Span)
+			}
+			decl.Allocates = true
+			effect = OperationEffectDecl{Effect: "Allocates", Operation: decl.Operation, Origin: string(FactOriginDeclaredForeign), Module: decl.Name, Span: requirement.Span}
+		case "ExternalStorage":
+			if decl.AddressSpace.Name != "" {
+				return ForeignContractDecl{}, OperationEffectDecl{}, evt1Diagnostic("FOREIGN_CONTRACT_FACT_DUPLICATE", "duplicate ExternalStorage requirement", analysis.Span)
+			}
+			if _, err = p.expect("<"); err != nil {
+				return ForeignContractDecl{}, OperationEffectDecl{}, err
+			}
+			space, e := p.parseType("")
+			if e != nil {
+				return ForeignContractDecl{}, OperationEffectDecl{}, e
+			}
+			decl.AddressSpace = space
+			if _, err = p.expect(">"); err != nil {
+				return ForeignContractDecl{}, OperationEffectDecl{}, err
+			}
+			if _, err = p.expect("("); err != nil {
+				return ForeignContractDecl{}, OperationEffectDecl{}, err
+			}
+			result, e := p.expectIdentifier("FOREIGN_CONTRACT_FACT_INVALID", "expected result subject")
+			if e != nil {
+				return ForeignContractDecl{}, OperationEffectDecl{}, e
+			}
+			if result.Lexeme != "result" {
+				return ForeignContractDecl{}, OperationEffectDecl{}, evt1Diagnostic("FOREIGN_CONTRACT_FACT_INVALID", "ExternalStorage first subject must be result", result.Span)
+			}
+			if _, err = p.expect(","); err != nil {
+				return ForeignContractDecl{}, OperationEffectDecl{}, err
+			}
+			extent, e := p.expectIdentifier("FOREIGN_CONTRACT_FACT_INVALID", "expected extent parameter")
+			if e != nil {
+				return ForeignContractDecl{}, OperationEffectDecl{}, e
+			}
+			decl.ExtentParam = extent.Lexeme
+			if _, err = p.expect(","); err != nil {
+				return ForeignContractDecl{}, OperationEffectDecl{}, err
+			}
+			alignment, e := p.expectIdentifier("FOREIGN_CONTRACT_FACT_INVALID", "expected alignment parameter")
+			if e != nil {
+				return ForeignContractDecl{}, OperationEffectDecl{}, e
+			}
+			decl.AlignmentParam = alignment.Lexeme
+			if _, err = p.expect(")"); err != nil {
+				return ForeignContractDecl{}, OperationEffectDecl{}, err
+			}
+		case "HostAccessible":
+			if decl.HostAccessible {
+				return ForeignContractDecl{}, OperationEffectDecl{}, evt1Diagnostic("FOREIGN_CONTRACT_FACT_DUPLICATE", "duplicate HostAccessible requirement", analysis.Span)
+			}
+			if _, err = p.expect("("); err != nil {
+				return ForeignContractDecl{}, OperationEffectDecl{}, err
+			}
+			result, e := p.expectIdentifier("FOREIGN_CONTRACT_FACT_INVALID", "expected result subject")
+			if e != nil {
+				return ForeignContractDecl{}, OperationEffectDecl{}, e
+			}
+			if result.Lexeme != "result" {
+				return ForeignContractDecl{}, OperationEffectDecl{}, evt1Diagnostic("FOREIGN_CONTRACT_FACT_INVALID", "HostAccessible subject must be result", result.Span)
+			}
+			if _, err = p.expect(")"); err != nil {
+				return ForeignContractDecl{}, OperationEffectDecl{}, err
+			}
+			decl.HostAccessible = true
+		default:
+			return ForeignContractDecl{}, OperationEffectDecl{}, evt1Diagnostic("FOREIGN_CONTRACT_FACT_INVALID", "foreign contracts support Allocates, ExternalStorage, and HostAccessible", analysis.Span)
+		}
+		if _, err = p.expect(";"); err != nil {
+			return ForeignContractDecl{}, OperationEffectDecl{}, err
+		}
+	}
+	if _, err = p.expect("}"); err != nil {
+		return ForeignContractDecl{}, OperationEffectDecl{}, err
+	}
+	return decl, effect, nil
 }
 
 func (p *parser) parseModuleNameDecl() (string, error) {

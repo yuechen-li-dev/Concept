@@ -39,3 +39,9 @@ offsets degrade interval/alignment; `AddressFromBits` remains unknown.
 Allocator work itself remains deferred. The allocator-readiness specimen now
 demonstrates `AlignUp -> Subregion -> imported return -> generic field ->
 bind<T> -> Initialize -> Destroy` without runtime fact metadata.
+
+R6j adds the second legitimate storage-origin path: an explicitly declared
+foreign result may establish an ordinary region when extent and alignment keep
+their `usize<byte>` meaning and a live owner/lease supplies provenance.
+Representation-level foreign scalars should stay ABI-honest; semantic units are
+introduced by an ordinary Concept wrapper. `AddressFromBits` remains Unknown.

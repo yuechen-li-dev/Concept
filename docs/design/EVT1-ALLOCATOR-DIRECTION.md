@@ -1,6 +1,6 @@
 # EVT1 allocator direction
 
-Status: R6h resolves the geometry/fact-transport prerequisites; reference allocator library remains deferred
+Status: R6j resolves trusted external-region authority; reference allocator library remains deferred to R6k
 
 ## Doctrine
 
@@ -83,8 +83,11 @@ be bound as trusted storage.
 | operation effects | Resolved |
 | quantity/address/storage model | Resolved |
 | semantic fact transport | Resolved |
+| trusted foreign storage authority | Resolved |
 
-The allocator framework is still not implemented.
+The allocator framework is still not implemented. R6j supplies only the general
+owned/leased foreign storage boundary and a hosted specimen; it adds no retry,
+policy, heap, pool, arena, or allocator-specific compiler rule.
 
 ## Required next substrate decision
 

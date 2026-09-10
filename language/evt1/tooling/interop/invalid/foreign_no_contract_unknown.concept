@@ -1,0 +1,7 @@
+module Interop.Invalid.NoContract;
+profile Core;
+extern "C" byte* OpaqueAcquire(usize<byte> size);
+void InvalidProof()
+{
+    Assert.Concept<NoAllocation>(OpaqueAcquire, "opaque foreign effects remain unknown");
+}

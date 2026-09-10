@@ -83,6 +83,11 @@ multi-parameter function templates use the same typed payload. Consumer
 instantiation includes every argument in deterministic identity; unit metadata
 does not become an ABI object.
 
+R6j artifacts also retain explicitly bound foreign semantic declarations and
+their `DeclaredForeign` effect/value-summary origins. Consumers use the checked
+artifact without reparsing the companion source; missing authority remains
+Unknown. Exact declaration syntax is provisional.
+
 Within an interface, `requires compiler.Allocates(Operation);` means the
 operation is permitted to allocate. An allocation-free implementation is also
 compatible. An allocating implementation cannot satisfy an operation lacking

@@ -1,0 +1,7 @@
+module Interop.StorageOwner;
+profile Core;
+import Platform.Host.Memory;
+Result<owned HostAllocation, HostMemoryError> AcquireOwned(usize<byte> size, usize<byte> alignment)
+{
+    return AcquireHost(size, alignment);
+}

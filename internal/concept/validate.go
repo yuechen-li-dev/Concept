@@ -310,6 +310,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		return nil, evt1Diagnostic("CV4402", fmt.Sprintf("effect and actuator declarations are not admitted by profile %s", profile.Name), Span{Line: 1, Column: 1})
 	}
 	env := newSemanticEnv(profile)
+	env.moduleName = module.Name
 	env.sourcePath = module.Path
 	for _, key := range module.ImportedFactAuthority {
 		env.importedFactAuthority[key] = true
@@ -482,6 +483,9 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 			}
 		}
 		env.functions[fn.Name] = append(env.functions[fn.Name], fn)
+	}
+	if err := evt1ValidateForeignContracts(env, module.ForeignContracts); err != nil {
+		return nil, err
 	}
 	for _, effect := range module.OperationEffects {
 		if effect.Effect == "NoAllocation" && effect.Origin != string(FactOriginModuleSummaryEffect) {
@@ -822,18 +826,22 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		collectEscapedArmBindings(fn.Body, env)
 		env.validatingMethod = fn.MethodOf
 		env.validatingFunction = fn.Name
+		env.validatingModule = fn.Module
 		if err := validateBlock(env, scope, resolvedReturn, *fn.Body, nil, false); err != nil {
 			env.validatingMethod = ""
 			env.validatingFunction = ""
+			env.validatingModule = ""
 			return nil, err
 		}
 		if err := evt1ValidateAsyncPersistence(env, fn); err != nil {
 			env.validatingMethod = ""
 			env.validatingFunction = ""
+			env.validatingModule = ""
 			return nil, err
 		}
 		env.validatingMethod = ""
 		env.validatingFunction = ""
+		env.validatingModule = ""
 	}
 	for _, fn := range module.ComptimeFns {
 		scope := evt1ModuleScope(env)
@@ -1611,6 +1619,12 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 			}
 			if name, ok := s.Target.(*NameExpr); ok {
 				valueFacts := evt1SemanticFactsForExpr(env, local, s.Value, target.t)
+				if valueFacts != nil && valueFacts.RegionOrigin != "" {
+					binding, _ := local.lookup(name.Name)
+					if evt1LifetimeShorterThan(valueFacts.Provenance, binding.provenance) {
+						return evt1Diagnostic("SEMANTIC_REGION_LIFETIME_OUTLIVES", fmt.Sprintf("semantic region assigned to %s would outlive its foreign storage authority", name.Name), s.Value.exprSpan())
+					}
+				}
 				local.setValueFacts(name.Name, valueFacts)
 				evt1RecordTransportedFacts(env, local.functionName, name.Name, target.t, valueFacts, s.Span)
 			}
@@ -1892,6 +1906,9 @@ func validateExprAgainstExpected(env *semanticEnv, scope *evt1Scope, expr Expr, 
 
 func evt1ValidateStorageTemplateCall(env *semanticEnv, scope *evt1Scope, e *TemplateCallExpr, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, bool, error) {
 	switch e.Callee {
+	case "EstablishExternalRegion":
+		t, err := evt1ValidateExternalRegionEstablishment(env, scope, e, templateInfo, inComptimeFn)
+		return t, true, err
 	case "AddressFromBits", "AddressOf":
 		if len(e.TypeArgs) > 1 || len(e.Args) != 1 {
 			return Type{}, true, evt1Diagnostic("ADDRESS_OPERATION_ARGUMENTS", e.Callee+" expects one address-space type and one value argument", e.Span)
@@ -1936,6 +1953,12 @@ func evt1ValidateStorageTemplateCall(env *semanticEnv, scope *evt1Scope, e *Temp
 		}
 		if !evt1AddressHasStorageOrigin(env, scope, e.Args[0], addressType) {
 			return Type{}, true, evt1Diagnostic("RAW_BIND_PROVENANCE_UNKNOWN", "bind<T> requires an address derived from live backing storage; an arbitrary or reconstructed address does not establish storage provenance", e.Args[0].exprSpan())
+		}
+		if facts := evt1SemanticFactsForExpr(env, scope, e.Args[0], addressType); facts != nil && facts.lifetimeAuthority != "" {
+			owner, found := scope.lookup(facts.lifetimeAuthority)
+			if !found || owner.state != evt1StorageInitialized {
+				return Type{}, true, evt1Diagnostic("FOREIGN_STORAGE_AUTHORITY_ENDED", fmt.Sprintf("foreign storage authority %s is no longer live", facts.lifetimeAuthority), e.Args[0].exprSpan())
+			}
 		}
 		if !evt1ByteDisplacement(extentType) {
 			return Type{}, true, evt1Diagnostic("RAW_BIND_EXTENT_UNIT", fmt.Sprintf("bind<T> extent requires usize<byte>, got %s", extentType.String()), e.Args[1].exprSpan())

@@ -71,6 +71,13 @@ Address addition preserves space/origin/provenance, adds a known relative byte o
 
 MIR exposes transported facts and function result summaries to the Planner. The Planner consumes this record and does not reconstruct region geometry. Proof graphs render the transport chain and identify opaque boundaries. Generated C is unchanged except for ordinary program behavior: no provenance field, region ID, proof table, RTTI, registry, allocation, or instrumentation is emitted.
 
+R6j admits one additional source of facts: a bounded, explicitly bound foreign
+semantic declaration. Its facts use origin `DeclaredForeign`, remain tied to a
+live authority wrapper, and otherwise follow this same transport matrix and
+module-summary path. They are never relabeled compiler-proven.
+
 ## Deferred
 
-Source-level `T*`, MMIO/volatile, generalized FFI semantic contracts, symbolic inequality solving, full range analysis, allocator framework work, GC, DMA/IOMMU mapping, and native backend/LIR remain deferred.
+Source-level `T*`, MMIO/volatile, generalized foreign semantics beyond the R6j
+bounded fact set, symbolic inequality solving, full range analysis, allocator
+framework work, GC, DMA/IOMMU mapping, and native backend/LIR remain deferred.

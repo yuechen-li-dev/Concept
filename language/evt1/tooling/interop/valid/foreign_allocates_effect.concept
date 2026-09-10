@@ -1,0 +1,7 @@
+module Interop.ForeignAllocates;
+profile Core;
+extern "C" byte* NativeAllocate(usize<byte> size, usize<byte> alignment);
+foreign concept NativeAllocation on NativeAllocate
+{
+    requires compiler.Allocates(NativeAllocate);
+}

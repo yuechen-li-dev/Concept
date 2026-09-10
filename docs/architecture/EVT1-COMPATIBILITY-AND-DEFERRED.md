@@ -36,8 +36,9 @@ inline compiler tests.
 | `.concept_test`, test attributes, deterministic test runner, `Assert.*` | R6a tooling/library | Canonical tooling | implemented without changing frozen function/body semantics |
 | `Assert.Concept`, proof diagnostics, `concept explain`, `concept-proof.v1` | R6b tooling | Canonical tooling | compile-time semantic query with no runtime lowering |
 | generic reusable-library substrate | R6d-R6e approved post-freeze extension | Implemented | local generics and layout plus deterministic semantic modules, cross-module instantiation, and effect summaries |
-| quantity/address/storage substrate | R6g approved post-freeze extension | Meaningful progression | unit algebra, affine address types, ordinary SystemMemory regions, typed bind/init/destroy, and multi-parameter templates implemented; general region provenance/interval fact transport remains isolated |
-| reference allocator framework | R6h after region-fact transport | Deferred | do not begin until trusted region origin and subregion alignment/disjointness proofs are authoritative |
+| quantity/address/storage substrate | R6g-R6h approved post-freeze extension | Implemented | unit algebra, affine addresses, typed bind/init/destroy, multi-parameter templates, and cross-value/module fact transport implemented |
+| foreign semantic contracts and external storage authority | R6j approved post-freeze extension | Implemented | ABI remains separate; bounded foreign facts use DeclaredForeign and trusted regions are tied to ordinary live owner/lease wrappers; exact source spelling remains provisional |
+| reference allocator framework | R6k | Deferred | trusted external storage blocker is resolved; do not begin allocator policy in R6j |
 | richer theory providers, exact prophecy termination matching, parallel tests, lifecycle hooks, statistical benchmark framework | later R6 tooling | Deferred | R6a keeps JSON positional rows, sequential reporting, and lightweight timing |
 | formatter, lint, diagnostics UX, build/package tooling, LSP | R6 tooling | Deferred | consume the frozen semantic model |
 | source auto-fix, IDE proof visualization, arbitrary proof queries, solver edits, LLM-ranked repairs, Planner explanations | post-R6b tooling | Deferred | consume authoritative proof graphs without moving semantic authority |
@@ -57,6 +58,7 @@ inline compiler tests.
 | hidden allocation, owning closure boxes, saved-PC coroutine fallback | language core | Intentionally rejected | fixed inline state and explicit ownership |
 | partial specialization, variadic templates, template-template parameters, generic metaprogramming | later language, if ever | Deferred | R6d is ordinary monomorphized library generics only |
 | stable module ABI, package manager, generalized effect algebra, `NoHeapAllocation` | later library/tooling | Deferred | R6e provides only internal `concept-module.v1` and the bounded allocation-effect lattice |
+| full C++ ABI, header parser/importer, automatic contract generation, VerifiedForeign analysis, foreign callbacks, shared ownership, fresh-region guarantees | later interop | Deferred | R6j is C exports plus hand-authored bounded semantic companion declarations only |
 
 R6 may fix bugs, diagnostics, contradictions, or specification errors. Any new
 language feature requires an explicit post-freeze proposal.

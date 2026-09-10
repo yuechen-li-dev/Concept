@@ -554,7 +554,9 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 		if effect, ok := env.operationEffects[fn.Name]; ok && effect.Effect == "Allocates" {
 			mirFn.MayAllocate = true
 			mirFn.AllocationEffectOrigin = string(FactOriginDeclaredEffect)
-			if effect.Origin == string(FactOriginModuleSummaryEffect) {
+			if effect.Origin == string(FactOriginDeclaredForeign) {
+				mirFn.AllocationEffectOrigin = string(FactOriginDeclaredForeign)
+			} else if effect.Origin == string(FactOriginModuleSummaryEffect) {
 				mirFn.AllocationEffectOrigin = string(FactOriginModuleSummaryEffect)
 			} else if fn.ExternABI != "" {
 				mirFn.AllocationEffectOrigin = string(FactOriginExternalContractEffect)
@@ -4586,6 +4588,14 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		if evt1IsTypeLayoutQuery(e.Callee) {
 			value, _ := evt1LayoutQuery(f.l.env, e.Callee, e.TypeArg, e.Args)
 			return "", fmt.Sprintf("%d", value), evt1ByteQuantityType(e.Span)
+		}
+		if e.Callee == "EstablishExternalRegion" {
+			addressPrelude, address, _ := f.lowerExpr(e.Args[1], indent)
+			extentPrelude, extent, _ := f.lowerExpr(e.Args[2], indent)
+			alignmentPrelude, alignment, _ := f.lowerExpr(e.Args[3], indent)
+			region, _ := evt1InstantiateGenericType(f.l.env, Type{Name: "MemoryRegion", Kind: TypeApplied, TypeArgs: []Type{e.TypeArg.valueType()}, Span: e.Span})
+			return addressPrelude + extentPrelude + alignmentPrelude,
+				fmt.Sprintf("((%s){((uintptr_t)(%s)), %s, %s})", evt1CType(region), address, extent, alignment), region
 		}
 		if e.Callee == "AddressOf" {
 			if reference, ok := e.Args[0].(*RefExpr); ok {

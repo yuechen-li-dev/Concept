@@ -64,26 +64,29 @@ type SemanticKnownInt struct {
 // Existing Span and Tensor records remain subsystem validators and are bridged
 // into this record instead of being replaced by a parallel proof engine.
 type SemanticValueFacts struct {
-	SubjectKind         SemanticSubjectKind            `json:"subject_kind"`
-	Subject             string                         `json:"subject,omitempty"`
-	Type                string                         `json:"type,omitempty"`
-	AddressSpace        string                         `json:"address_space,omitempty"`
-	RegionOrigin        string                         `json:"region_origin,omitempty"`
-	ParentRegion        string                         `json:"parent_region,omitempty"`
-	RelativeOffset      SemanticKnownInt               `json:"relative_offset"`
-	ByteExtent          SemanticKnownInt               `json:"byte_extent"`
-	Alignment           SemanticKnownInt               `json:"alignment"`
-	Scalar              SemanticKnownInt               `json:"scalar"`
-	Contiguous          SemanticFactCertainty          `json:"contiguous,omitempty"`
-	Bounded             SemanticFactCertainty          `json:"bounded,omitempty"`
-	Mutability          string                         `json:"mutability,omitempty"`
-	Provenance          evt1LifetimeProvenance         `json:"-"`
-	Rank                SemanticKnownInt               `json:"rank"`
-	Shape               []StorageDimension             `json:"shape,omitempty"`
-	NoAllocation        SemanticFactCertainty          `json:"no_allocation,omitempty"`
-	NoCopy              SemanticFactCertainty          `json:"no_copy,omitempty"`
-	NoOwnershipTransfer SemanticFactCertainty          `json:"no_ownership_transfer,omitempty"`
-	HostAccessible      SemanticFactCertainty          `json:"host_accessible,omitempty"`
+	SubjectKind         SemanticSubjectKind    `json:"subject_kind"`
+	Subject             string                 `json:"subject,omitempty"`
+	Type                string                 `json:"type,omitempty"`
+	AddressSpace        string                 `json:"address_space,omitempty"`
+	RegionOrigin        string                 `json:"region_origin,omitempty"`
+	ParentRegion        string                 `json:"parent_region,omitempty"`
+	RelativeOffset      SemanticKnownInt       `json:"relative_offset"`
+	ByteExtent          SemanticKnownInt       `json:"byte_extent"`
+	Alignment           SemanticKnownInt       `json:"alignment"`
+	Scalar              SemanticKnownInt       `json:"scalar"`
+	Contiguous          SemanticFactCertainty  `json:"contiguous,omitempty"`
+	Bounded             SemanticFactCertainty  `json:"bounded,omitempty"`
+	Mutability          string                 `json:"mutability,omitempty"`
+	Provenance          evt1LifetimeProvenance `json:"-"`
+	Rank                SemanticKnownInt       `json:"rank"`
+	Shape               []StorageDimension     `json:"shape,omitempty"`
+	NoAllocation        SemanticFactCertainty  `json:"no_allocation,omitempty"`
+	NoCopy              SemanticFactCertainty  `json:"no_copy,omitempty"`
+	NoOwnershipTransfer SemanticFactCertainty  `json:"no_ownership_transfer,omitempty"`
+	HostAccessible      SemanticFactCertainty  `json:"host_accessible,omitempty"`
+	Origin              SemanticFactOrigin     `json:"origin,omitempty"`
+	Authority           string                 `json:"authority,omitempty"`
+	lifetimeAuthority   string
 	Initialized         SemanticFactCertainty          `json:"initialized,omitempty"`
 	Fields              map[string]*SemanticValueFacts `json:"fields,omitempty"`
 	Transport           []SemanticFactTransportStep    `json:"transport,omitempty"`
@@ -200,6 +203,8 @@ type SemanticValueFactSummary struct {
 	NoCopy              SemanticFactCertainty       `json:"no_copy,omitempty"`
 	NoOwnershipTransfer SemanticFactCertainty       `json:"no_ownership_transfer,omitempty"`
 	HostAccessible      SemanticFactCertainty       `json:"host_accessible,omitempty"`
+	Origin              SemanticFactOrigin          `json:"origin,omitempty"`
+	Authority           string                      `json:"authority,omitempty"`
 	ProvenanceKind      string                      `json:"provenance_kind,omitempty"`
 	ProvenanceParameter int                         `json:"provenance_parameter,omitempty"`
 	Fields              []SemanticFieldFactSummary  `json:"fields,omitempty"`
@@ -402,6 +407,16 @@ func evt1DeriveExprFactSummary(env *semanticEnv, expr Expr, params map[string]in
 	case *StructConstructExpr:
 		return evt1DeriveStructFactSummary(env, e, params, locals, derive)
 	case *CallExpr:
+		if contract, ok := env.foreignByOperation[e.Callee]; ok {
+			summary := SemanticValueFactSummary{AddressSpace: contract.AddressSpace.Name, RegionOrigin: &SemanticSummaryExpr{Kind: "ExternalOrigin", Fact: contract.Name}, RelativeOffset: &SemanticSummaryExpr{Kind: "Constant"}, HostAccessible: map[bool]SemanticFactCertainty{true: FactProven, false: FactUnknown}[contract.HostAccessible], Origin: FactOriginDeclaredForeign, Authority: contract.Name, ProvenanceKind: string(evt1ProvenanceUnknown), Transport: []SemanticFactTransportStep{{Transform: FactTransformPreserve, Through: contract.Name, Detail: "foreign result facts are declared, not compiler-proven"}}}
+			if index := evt1ForeignParameterIndex(env, contract.Operation, contract.ExtentParam); index >= 0 && index < len(e.Args) {
+				summary.ByteExtent = evt1DeriveScalarSummary(e.Args[index], params, locals)
+			}
+			if index := evt1ForeignParameterIndex(env, contract.Operation, contract.AlignmentParam); index >= 0 && index < len(e.Args) {
+				summary.Alignment = evt1DeriveScalarSummary(e.Args[index], params, locals)
+			}
+			return summary
+		}
 		if e.Callee == "Initialize" && len(e.Args) != 0 {
 			out := evt1DeriveExprFactSummary(env, e.Args[0], params, locals, derive)
 			out.Transport = append(out.Transport, SemanticFactTransportStep{Transform: FactTransformInitialize})
@@ -413,6 +428,34 @@ func evt1DeriveExprFactSummary(env *semanticEnv, expr Expr, params map[string]in
 			}
 		}
 	case *TemplateCallExpr:
+		if e.Callee == "EstablishExternalRegion" && len(e.Args) == 5 {
+			owner := evt1DeriveExprFactSummary(env, e.Args[0], params, locals, derive)
+			address := evt1DeriveExprFactSummary(env, e.Args[1], params, locals, derive)
+			authority := evt1ForeignContractLiteral(e.Args[4])
+			hostAccessible := FactUnknown
+			if contract, ok := env.foreignContracts[authority]; ok && contract.HostAccessible {
+				hostAccessible = FactProven
+			}
+			startFacts := SemanticValueFactSummary{AddressSpace: e.TypeArg.Name, RegionOrigin: semanticSummaryFact(address.Source, "RegionOrigin"), RelativeOffset: &SemanticSummaryExpr{Kind: "Constant"}, Alignment: evt1DeriveScalarSummary(e.Args[3], params, locals), HostAccessible: hostAccessible, ProvenanceKind: string(evt1ProvenanceParameter), ProvenanceParameter: owner.ProvenanceParameter, Origin: FactOriginDeclaredForeign, Authority: authority}
+			extentFacts := SemanticValueFactSummary{Source: evt1DeriveScalarSummary(e.Args[2], params, locals), Scalar: evt1DeriveScalarSummary(e.Args[2], params, locals)}
+			alignmentFacts := SemanticValueFactSummary{Source: evt1DeriveScalarSummary(e.Args[3], params, locals), Scalar: evt1DeriveScalarSummary(e.Args[3], params, locals)}
+			return SemanticValueFactSummary{
+				AddressSpace:        e.TypeArg.Name,
+				RegionOrigin:        semanticSummaryFact(address.Source, "RegionOrigin"),
+				RelativeOffset:      &SemanticSummaryExpr{Kind: "Constant"},
+				ByteExtent:          evt1DeriveScalarSummary(e.Args[2], params, locals),
+				Alignment:           evt1DeriveScalarSummary(e.Args[3], params, locals),
+				Contiguous:          FactProven,
+				Bounded:             FactProven,
+				HostAccessible:      hostAccessible,
+				ProvenanceKind:      string(evt1ProvenanceParameter),
+				ProvenanceParameter: owner.ProvenanceParameter,
+				Origin:              FactOriginDeclaredForeign,
+				Authority:           authority,
+				Fields:              []SemanticFieldFactSummary{{Name: "start", Facts: startFacts}, {Name: "length", Facts: extentFacts}, {Name: "alignment", Facts: alignmentFacts}},
+				Transport:           []SemanticFactTransportStep{{Transform: FactTransformPreserve, Through: "EstablishExternalRegion", Detail: "foreign contract establishes bounded external storage"}},
+			}
+		}
 		if e.Callee == "AddressOf" && len(e.Args) == 1 {
 			return SemanticValueFactSummary{AddressSpace: e.TypeArg.Name, RegionOrigin: &SemanticSummaryExpr{Kind: "StorageOrigin", Fact: strings.TrimPrefix(evt1SemanticStorageOrigin(e.Args[0]), "storage:")}, RelativeOffset: &SemanticSummaryExpr{Kind: "Constant"}, HostAccessible: map[bool]SemanticFactCertainty{true: FactProven, false: FactUnknown}[e.TypeArg.Name == "SystemMemory"]}
 		}
@@ -599,6 +642,8 @@ func evalSemanticSummaryExpr(expr *SemanticSummaryExpr, args []*SemanticValueFac
 		return semanticSummaryValue{known: true, integer: expr.Constant}
 	case "StorageOrigin":
 		return semanticSummaryValue{known: true, text: "storage:" + strings.TrimPrefix(expr.Fact, "ref ")}
+	case "ExternalOrigin":
+		return semanticSummaryValue{known: true, text: "foreign:" + expr.Fact}
 	case "Add":
 		left, right := evalSemanticSummaryExpr(expr.Left, args), evalSemanticSummaryExpr(expr.Right, args)
 		if left.known && right.known {
@@ -659,6 +704,12 @@ func instantiateSemanticFactSummary(summary SemanticValueFactSummary, args []*Se
 	out.NoCopy = preferSummaryCertainty(summary.NoCopy, out.NoCopy)
 	out.NoOwnershipTransfer = preferSummaryCertainty(summary.NoOwnershipTransfer, out.NoOwnershipTransfer)
 	out.HostAccessible = preferSummaryCertainty(summary.HostAccessible, out.HostAccessible)
+	if summary.Origin != "" {
+		out.Origin = summary.Origin
+	}
+	if summary.Authority != "" {
+		out.Authority = summary.Authority
+	}
 	if summary.ProvenanceKind == string(evt1ProvenanceParameter) && summary.ProvenanceParameter >= 0 && summary.ProvenanceParameter < len(args) && args[summary.ProvenanceParameter] != nil {
 		out.Provenance = args[summary.ProvenanceParameter].Provenance
 	}
@@ -687,7 +738,7 @@ func evt1SemanticFactsForExpr(env *semanticEnv, scope *evt1Scope, expr Expr, t T
 	switch e := expr.(type) {
 	case *NameExpr:
 		if binding, ok := scope.lookup(e.Name); ok {
-			if !evt1TypeCarriesSemanticValueFacts(env, t, map[string]bool{}) {
+			if !evt1TypeCarriesSemanticValueFacts(env, t, map[string]bool{}) && (binding.valueFacts == nil || (t.PointerTo == nil && len(binding.valueFacts.Fields) == 0)) {
 				if binding.valueFacts != nil && binding.valueFacts.Scalar.Known {
 					return &SemanticValueFacts{SubjectKind: SubjectValue, Type: t.String(), Scalar: binding.valueFacts.Scalar}
 				}
@@ -757,6 +808,36 @@ func evt1SemanticFactsForExpr(env *semanticEnv, scope *evt1Scope, expr Expr, t T
 			return out
 		}
 	case *TemplateCallExpr:
+		if e.Callee == "EstablishExternalRegion" && len(e.Args) == 5 {
+			addressType, _ := validateExpr(env, scope, e.Args[1], nil, false)
+			out := cloneSemanticValueFacts(evt1SemanticFactsForExpr(env, scope, e.Args[1], addressType))
+			if out == nil {
+				out = &SemanticValueFacts{}
+			}
+			out.AddressSpace = e.TypeArg.Name
+			if extent, ok := evt1StaticInt(env, scope, e.Args[2]); ok {
+				out.ByteExtent = SemanticKnownInt{Known: true, Value: extent}
+			}
+			if alignment, ok := evt1StaticInt(env, scope, e.Args[3]); ok {
+				out.Alignment = SemanticKnownInt{Known: true, Value: alignment}
+			}
+			out.RelativeOffset = SemanticKnownInt{Known: true}
+			out.Contiguous, out.Bounded = FactProven, FactProven
+			if contract, ok := env.foreignContracts[evt1ForeignContractLiteral(e.Args[4])]; ok && contract.HostAccessible {
+				out.HostAccessible = FactProven
+			}
+			out.Provenance = evt1ExprProvenance(env, scope, e.Args[0])
+			out.lifetimeAuthority = evt1ForeignAuthorityRoot(e.Args[0])
+			out.Origin, out.Authority = FactOriginDeclaredForeign, evt1ForeignContractLiteral(e.Args[4])
+			start := cloneSemanticValueFacts(out)
+			start.ByteExtent = SemanticKnownInt{}
+			out.Fields = map[string]*SemanticValueFacts{
+				"start":     start,
+				"length":    {Scalar: out.ByteExtent},
+				"alignment": {Scalar: out.Alignment},
+			}
+			return transportSemanticValueFacts(out, FactTransformPreserve, exprLabel(e.Args[0]), "EstablishExternalRegion", "foreign contract establishes storage facts bounded by authority lifetime")
+		}
 		if e.Callee == "AddressOf" && len(e.Args) == 1 {
 			origin := evt1SemanticStorageOrigin(e.Args[0])
 			alignment := 1
@@ -787,6 +868,21 @@ func evt1SemanticFactsForExpr(env *semanticEnv, scope *evt1Scope, expr Expr, t T
 			return instantiateSemanticFactSummary(summary, args, e.Callee)
 		}
 	case *CallExpr:
+		if contract, ok := env.foreignByOperation[e.Callee]; ok {
+			out := &SemanticValueFacts{SubjectKind: SubjectFunctionResult, AddressSpace: contract.AddressSpace.Name, RegionOrigin: fmt.Sprintf("foreign:%s:%d:%d", contract.Name, e.Span.Line, e.Span.Column), RelativeOffset: SemanticKnownInt{Known: true}, HostAccessible: map[bool]SemanticFactCertainty{true: FactProven, false: FactUnknown}[contract.HostAccessible], Origin: FactOriginDeclaredForeign, Authority: contract.Name, Provenance: evt1LifetimeProvenance{Kind: evt1ProvenanceUnknown, Scoped: true}}
+			if index := evt1ForeignParameterIndex(env, contract.Operation, contract.ExtentParam); index >= 0 && index < len(e.Args) {
+				if value, known := evt1StaticInt(env, scope, e.Args[index]); known {
+					out.ByteExtent = SemanticKnownInt{Known: true, Value: value}
+				}
+			}
+			if index := evt1ForeignParameterIndex(env, contract.Operation, contract.AlignmentParam); index >= 0 && index < len(e.Args) {
+				if value, known := evt1StaticInt(env, scope, e.Args[index]); known {
+					out.Alignment = SemanticKnownInt{Known: true, Value: value}
+				}
+			}
+			out.Transport = []SemanticFactTransportStep{{Transform: FactTransformPreserve, Through: contract.Name, Detail: "foreign result facts are declared, not compiler-proven"}}
+			return out
+		}
 		if e.Callee == "Initialize" && len(e.Args) != 0 {
 			out := evt1SemanticFactsForExpr(env, scope, e.Args[0], t)
 			if out != nil {
@@ -811,7 +907,15 @@ func evt1SemanticFactsForExpr(env *semanticEnv, scope *evt1Scope, expr Expr, t T
 			if !ok {
 				break
 			}
-			return instantiateSemanticFactSummary(summary, evt1SemanticArgumentFacts(env, scope, e.Args), e.Callee)
+			args := evt1SemanticArgumentFacts(env, scope, e.Args)
+			if summary.Origin == FactOriginDeclaredForeign && summary.ProvenanceKind == string(evt1ProvenanceParameter) && summary.ProvenanceParameter >= 0 && summary.ProvenanceParameter < len(args) && !evt1FactsContainForeignAuthority(args[summary.ProvenanceParameter], summary.Authority) {
+				return nil
+			}
+			out := instantiateSemanticFactSummary(summary, args, e.Callee)
+			if summary.Origin == FactOriginDeclaredForeign && summary.ProvenanceKind == string(evt1ProvenanceParameter) && summary.ProvenanceParameter >= 0 && summary.ProvenanceParameter < len(e.Args) {
+				evt1SetForeignLifetimeAuthority(out, evt1ForeignAuthorityRoot(e.Args[summary.ProvenanceParameter]))
+			}
+			return out
 		}
 	case *CallableExpr:
 		out := &SemanticValueFacts{SubjectKind: SubjectValue, Type: t.String(), Fields: map[string]*SemanticValueFacts{}, NoAllocation: FactProven}
@@ -829,6 +933,49 @@ func evt1SemanticFactsForExpr(env *semanticEnv, scope *evt1Scope, expr Expr, t T
 		return semanticValueFactsFromTensor(t, tensor)
 	}
 	return nil
+}
+
+func evt1FactsContainForeignAuthority(facts *SemanticValueFacts, authority string) bool {
+	if facts == nil || authority == "" {
+		return false
+	}
+	if facts.Authority == authority && facts.RegionOrigin != "" {
+		return true
+	}
+	for _, field := range facts.Fields {
+		if evt1FactsContainForeignAuthority(field, authority) {
+			return true
+		}
+	}
+	return false
+}
+
+func evt1ForeignAuthorityRoot(expr Expr) string {
+	for {
+		switch value := expr.(type) {
+		case *RefExpr:
+			expr = value.Value
+		case *MoveExpr:
+			expr = value.Value
+		case *ParenExpr:
+			expr = value.Value
+		default:
+			if name, ok := expr.(*NameExpr); ok {
+				return name.Name
+			}
+			return ""
+		}
+	}
+}
+
+func evt1SetForeignLifetimeAuthority(facts *SemanticValueFacts, authority string) {
+	if facts == nil || authority == "" {
+		return
+	}
+	facts.lifetimeAuthority = authority
+	for _, field := range facts.Fields {
+		evt1SetForeignLifetimeAuthority(field, authority)
+	}
 }
 
 func evt1SemanticArgumentFacts(env *semanticEnv, scope *evt1Scope, args []Expr) []*SemanticValueFacts {
@@ -985,27 +1132,27 @@ func evt1RecordTransportedFacts(env *semanticEnv, function, name string, t Type,
 	}
 	facts.Subject, facts.Type = name, t.String()
 	subject := SemanticFactSubject{Kind: string(facts.SubjectKind), Name: name, Function: function, Type: t.String(), RegionID: facts.RegionOrigin}
-	evidence := SemanticFactEvidence{RegionIDs: nil, Offset: facts.RelativeOffset.Value, Extent: facts.ByteExtent.Value, Alignment: facts.Alignment.Value, Rank: facts.Rank.Value, Shape: append([]StorageDimension{}, facts.Shape...), AddressSpace: facts.AddressSpace, ParentRegion: facts.ParentRegion, Provenance: string(facts.Provenance.Kind), Transport: append([]SemanticFactTransportStep{}, facts.Transport...)}
+	evidence := SemanticFactEvidence{RegionIDs: nil, Offset: facts.RelativeOffset.Value, Extent: facts.ByteExtent.Value, Alignment: facts.Alignment.Value, Rank: facts.Rank.Value, Shape: append([]StorageDimension{}, facts.Shape...), AddressSpace: facts.AddressSpace, ParentRegion: facts.ParentRegion, Provenance: string(facts.Provenance.Kind), Transport: append([]SemanticFactTransportStep{}, facts.Transport...), Authority: facts.Authority}
 	if facts.RegionOrigin != "" {
 		evidence.RegionIDs = []string{facts.RegionOrigin}
 		for _, kind := range []SemanticFactKind{FactRegionOrigin, FactRegionIdentity} {
-			evt1AppendTransportFact(env, kind, subject, nil, FactProven, evidence, span)
+			evt1AppendTransportFactWithOrigin(env, kind, subject, nil, FactProven, evidence, facts.Origin, span)
 		}
 	}
 	if facts.AddressSpace != "" {
-		evt1AppendTransportFact(env, FactAddressSpace, subject, nil, FactProven, evidence, span)
+		evt1AppendTransportFactWithOrigin(env, FactAddressSpace, subject, nil, FactProven, evidence, facts.Origin, span)
 	}
 	if facts.ParentRegion != "" {
-		evt1AppendTransportFact(env, FactParentRegion, subject, nil, FactProven, evidence, span)
+		evt1AppendTransportFactWithOrigin(env, FactParentRegion, subject, nil, FactProven, evidence, facts.Origin, span)
 	}
 	if facts.RelativeOffset.Known && facts.ByteExtent.Known {
-		evt1AppendTransportFact(env, FactByteInterval, subject, nil, FactProven, evidence, span)
+		evt1AppendTransportFactWithOrigin(env, FactByteInterval, subject, nil, FactProven, evidence, facts.Origin, span)
 	}
 	if facts.ByteExtent.Known {
-		evt1AppendTransportFact(env, FactByteExtent, subject, nil, FactProven, evidence, span)
+		evt1AppendTransportFactWithOrigin(env, FactByteExtent, subject, nil, FactProven, evidence, facts.Origin, span)
 	}
 	if facts.Alignment.Known && facts.Alignment.Value > 0 {
-		evt1AppendTransportFact(env, FactAligned, subject, []int{facts.Alignment.Value}, FactProven, evidence, span)
+		evt1AppendTransportFactWithOrigin(env, FactAligned, subject, []int{facts.Alignment.Value}, FactProven, evidence, facts.Origin, span)
 	}
 	ordered := []struct {
 		kind    SemanticFactKind
@@ -1021,28 +1168,47 @@ func evt1RecordTransportedFacts(env *semanticEnv, function, name string, t Type,
 	}
 	for _, entry := range ordered {
 		if entry.outcome != "" && entry.outcome != FactUnknown {
-			evt1AppendTransportFact(env, entry.kind, subject, nil, entry.outcome, evidence, span)
+			evt1AppendTransportFactWithOrigin(env, entry.kind, subject, nil, entry.outcome, evidence, facts.Origin, span)
 		}
 	}
 	if facts.Rank.Known {
-		evt1AppendTransportFact(env, FactRank, subject, []int{facts.Rank.Value}, FactProven, evidence, span)
+		evt1AppendTransportFactWithOrigin(env, FactRank, subject, []int{facts.Rank.Value}, FactProven, evidence, facts.Origin, span)
 	}
 }
 
 func evt1AppendTransportFact(env *semanticEnv, kind SemanticFactKind, subject SemanticFactSubject, parameters []int, outcome SemanticFactCertainty, evidence SemanticFactEvidence, span Span) {
+	evt1AppendTransportFactWithOrigin(env, kind, subject, parameters, outcome, evidence, "", span)
+}
+
+func evt1AppendTransportFactWithOrigin(env *semanticEnv, kind SemanticFactKind, subject SemanticFactSubject, parameters []int, outcome SemanticFactCertainty, evidence SemanticFactEvidence, origin SemanticFactOrigin, span Span) {
 	id := evt1SemanticFactID(kind, []SemanticFactSubject{subject}, parameters, span)
 	if env.transportedFactIDs[id] {
 		return
 	}
 	env.transportedFactIDs[id] = true
-	env.transportedFacts = append(env.transportedFacts, MIRSemanticFact{ID: id, Kind: kind, Subjects: []SemanticFactSubject{subject}, Parameters: parameters, Outcome: outcome, Origin: FactOriginTransportedValue, Evidence: evidence, SourceSpan: span})
+	if origin == "" {
+		origin = FactOriginTransportedValue
+	}
+	env.transportedFacts = append(env.transportedFacts, MIRSemanticFact{ID: id, Kind: kind, Subjects: []SemanticFactSubject{subject}, Parameters: parameters, Outcome: outcome, Origin: origin, Evidence: evidence, SourceSpan: span})
+}
+
+func evt1ForeignContractLiteral(expr Expr) string {
+	if value, ok := expr.(*StringLiteral); ok {
+		return value.Value
+	}
+	return ""
 }
 
 func semanticModuleFactSummaries(module Module, env *semanticEnv) []SemanticFunctionFactSummary {
 	var out []SemanticFunctionFactSummary
 	for _, fn := range module.Functions {
 		key := evt1FunctionProvenanceKey(fn)
-		out = append(out, SemanticFunctionFactSummary{Operation: fn.Name, Signature: evt1FunctionParamSignature(fn), Result: env.resultFactSummaries[key], Origin: FactOriginCompilerAnalysis})
+		result := env.resultFactSummaries[key]
+		origin := FactOriginCompilerAnalysis
+		if result.Origin != "" {
+			origin = result.Origin
+		}
+		out = append(out, SemanticFunctionFactSummary{Operation: fn.Name, Signature: evt1FunctionParamSignature(fn), Result: result, Origin: origin})
 	}
 	for _, template := range module.Templates {
 		out = append(out, SemanticFunctionFactSummary{Operation: template.Name, Signature: "template", Result: env.templateFactSummaries[template.Name], Origin: FactOriginCompilerAnalysis})
@@ -1099,7 +1265,7 @@ func validateSemanticValueFactSummary(summary SemanticValueFactSummary) error {
 			if expr.Left == nil || !allowedFacts[expr.Fact] || expr.Right != nil {
 				return fmt.Errorf("invalid Fact expression")
 			}
-		case "Constant", "StorageOrigin":
+		case "Constant", "StorageOrigin", "ExternalOrigin":
 			if expr.Left != nil || expr.Right != nil {
 				return fmt.Errorf("invalid %s expression", expr.Kind)
 			}

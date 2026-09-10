@@ -1,0 +1,7 @@
+module Interop.RegionEstablish;
+profile Core;
+import Platform.Host.Memory;
+MemoryRegion<SystemMemory> BorrowRegion(ref const HostAllocation allocation)
+{
+    return RegionOf(ref const allocation);
+}

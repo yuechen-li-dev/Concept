@@ -1,0 +1,14 @@
+module Interop.Tests.Proofs;
+profile Core;
+import Platform.Host.Memory;
+
+[[fact]]
+void ForeignProofOrigin()
+{
+    usize<byte> size = 4;
+    usize<byte> alignment = 4;
+    owned HostAllocation allocation = AcquireHost(size, alignment)!;
+    MemoryRegion<SystemMemory> region = RegionOf(ref const allocation);
+    Assert.Concept<HostAccessible>(region, "proof origin is DeclaredForeign");
+    Assert.Concept<Aligned<4>>(region, "alignment proof retains foreign authority");
+}

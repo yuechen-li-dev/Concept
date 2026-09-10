@@ -1,0 +1,58 @@
+module Platform.Host.Memory;
+profile Core;
+
+import Standard.MemoryGeometry;
+
+extern "C" byte* ConceptHostAllocate(usize<byte> size, usize<byte> alignment);
+extern "C" void ConceptHostFree(byte* address);
+extern "C" bool ConceptHostAddressIsNull(byte* address);
+
+enum HostMemoryError
+{
+    Unavailable,
+}
+
+foreign concept HostAllocationContract on ConceptHostAllocate
+{
+    requires compiler.Allocates(ConceptHostAllocate);
+    requires compiler.ExternalStorage<SystemMemory>(result, size, alignment);
+    requires compiler.HostAccessible(result);
+}
+
+struct HostAllocation
+{
+    byte* address;
+    usize<byte> length;
+    usize<byte> alignment;
+}
+
+Result<owned HostAllocation, HostMemoryError> AcquireHost(
+    usize<byte> size,
+    usize<byte> alignment
+)
+{
+    byte* address = ConceptHostAllocate(size, alignment);
+    if (ConceptHostAddressIsNull(address))
+    {
+        return Result::Error(HostMemoryError::Unavailable);
+    }
+
+    owned HostAllocation allocation = HostAllocation{address, size, alignment};
+    return Result::Ok(move allocation);
+}
+
+MemoryRegion<SystemMemory> RegionOf(ref const HostAllocation allocation)
+{
+    return EstablishExternalRegion<SystemMemory>(
+        allocation,
+        allocation.address,
+        allocation.length,
+        allocation.alignment,
+        "HostAllocationContract"
+    );
+}
+
+void Drop(owned HostAllocation allocation)
+{
+    ConceptHostFree(allocation.address);
+}

@@ -1117,3 +1117,19 @@ artifacts serialize those summaries separately from operation effects, and
 call sites instantiate them against actual argument facts. The Planner receives
 the resulting MIR facts; it does not rediscover geometry. Proof rendering uses
 the same transport chain. None of this data enters generated C layouts.
+
+## Native interop semantic subsystem
+
+```text
+Interop
+  Native ABI                 extern C declarations and ABI validation
+  Foreign Contracts          explicitly bound bounded semantic declarations
+  External Storage Authority live owner/lease bounded region establishment
+  Foreign Effect Summaries   DeclaredForeign artifact and proof origin
+```
+
+`foreign_contract.go` validates binding and ABI consistency;
+`external_storage.go` guards region establishment. Existing fact transport,
+module artifacts, proofs, MIR, ownership, and Generic C11 lowering remain their
+respective authorities. The current declaration syntax is provisional and is
+not a stabilized language commitment.

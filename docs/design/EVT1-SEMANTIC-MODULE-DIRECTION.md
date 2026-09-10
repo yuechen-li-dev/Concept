@@ -42,6 +42,11 @@ artifact is consumer authority; a missing older summary degrades to Unknown
 and is not reconstructed from the semantic payload body. Effect summaries and
 value facts share the artifact envelope but remain different semantics.
 
+R6j adds inspectable foreign semantic declarations to that same artifact.
+Bound symbol, bounded storage/effect facts, and `DeclaredForeign` origin survive
+consumer imports without reparsing source. The typed Module remains the only
+semantic declaration model and the metadata does not enter runtime layouts.
+
 Dependency identities and content hashes make a module graph deterministic and
 closed. Cache presence is not semantic. A future build system may cache the
 content-addressed result without changing this contract.

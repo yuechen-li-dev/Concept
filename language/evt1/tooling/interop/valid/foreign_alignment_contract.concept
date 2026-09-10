@@ -1,0 +1,10 @@
+module Interop.AlignmentContract;
+profile Core;
+import Platform.Host.Memory;
+void CheckAlignment(usize<byte> size)
+{
+    usize<byte> alignment = 4;
+    owned HostAllocation allocation = AcquireHost(size, alignment)!;
+    MemoryRegion<SystemMemory> region = RegionOf(ref const allocation);
+    Assert.Concept<Aligned<4>>(region, "contract alignment flows through the wrapper");
+}

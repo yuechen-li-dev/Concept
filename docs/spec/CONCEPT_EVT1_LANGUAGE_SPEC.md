@@ -1491,3 +1491,22 @@ an explicitly allocating implementation is incompatible.
 No package manager, remote fetch, stable binary module ABI, runtime loader,
 generic dictionary, generalized effect algebra, or header/preprocessor model
 is implied.
+
+## 33. Approved R6j foreign semantic authority
+
+`extern "C"` remains ABI-only. The provisional R6j source form
+`foreign concept Name on Operation { requires compiler...; }` explicitly binds
+one named extern operation to the bounded facts `Allocates`,
+`ExternalStorage<Space>`, and `HostAccessible`. The spelling is selected for
+R6j but is not yet permanently stabilized.
+
+Foreign facts have origin `DeclaredForeign`, orthogonal to the ordinary
+Proven/Disproven/Unknown result. They survive semantic module summaries and
+proof/MIR projection and erase before runtime. A guarded region-establishment
+operation is usable only from the declaring module, requires extent and
+alignment from a live owner/lease wrapper, and binds the resulting region's
+lifetime to that wrapper. It does not authorize reconstructed addresses,
+freshness, disjointness, or hidden allocation.
+
+Full C++ ABI, header parsing, generated or verified contracts, callbacks,
+shared foreign ownership, MMIO/volatile, and allocator policy remain deferred.

@@ -205,7 +205,10 @@ func evt1ProjectDirectAnalysis(env *semanticEnv, graph *ProofGraph, root string,
 func evt1RefineValueFact(goal string, parameters []int, binding evt1ValueBinding, fallback semanticFactResult) semanticFactResult {
 	if facts := binding.valueFacts; facts != nil {
 		fallback.Origin = FactOriginTransportedValue
-		fallback.Evidence = SemanticFactEvidence{RegionIDs: []string{facts.RegionOrigin}, Offset: facts.RelativeOffset.Value, Extent: facts.ByteExtent.Value, Alignment: facts.Alignment.Value, Rank: facts.Rank.Value, Shape: append([]StorageDimension{}, facts.Shape...), AddressSpace: facts.AddressSpace, ParentRegion: facts.ParentRegion, Provenance: string(facts.Provenance.Kind), Transport: append([]SemanticFactTransportStep{}, facts.Transport...)}
+		if facts.Origin != "" {
+			fallback.Origin = facts.Origin
+		}
+		fallback.Evidence = SemanticFactEvidence{RegionIDs: []string{facts.RegionOrigin}, Offset: facts.RelativeOffset.Value, Extent: facts.ByteExtent.Value, Alignment: facts.Alignment.Value, Rank: facts.Rank.Value, Shape: append([]StorageDimension{}, facts.Shape...), AddressSpace: facts.AddressSpace, ParentRegion: facts.ParentRegion, Provenance: string(facts.Provenance.Kind), Transport: append([]SemanticFactTransportStep{}, facts.Transport...), Authority: facts.Authority}
 		switch SemanticFactKind(goal) {
 		case FactAligned:
 			fallback.Outcome = FactUnknown
@@ -454,6 +457,8 @@ func evt1ProjectNoAllocation(env *semanticEnv, graph *ProofGraph, root string, f
 		origin := FactOriginDeclaredEffect
 		if effect.Origin == string(FactOriginModuleSummaryEffect) {
 			origin = FactOriginModuleSummaryEffect
+		} else if effect.Origin == string(FactOriginDeclaredForeign) {
+			origin = FactOriginDeclaredForeign
 		} else if fn.ExternABI != "" {
 			origin = FactOriginExternalContractEffect
 		}

@@ -1,0 +1,8 @@
+module Interop.Invalid.NullRegion;
+profile Core;
+import Standard.MemoryGeometry;
+struct Owner { byte* address; usize<byte> length; usize<byte> alignment; }
+MemoryRegion<SystemMemory> InvalidNullRegion(ref const Owner owner)
+{
+    return EstablishExternalRegion<SystemMemory>(owner, owner.address, owner.length, owner.alignment, "MissingNullCheckedContract");
+}

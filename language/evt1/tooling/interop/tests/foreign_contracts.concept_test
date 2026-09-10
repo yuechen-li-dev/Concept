@@ -1,0 +1,12 @@
+module Interop.Tests.Contracts;
+profile Core;
+import Platform.Host.Memory;
+
+[[fact]]
+void ForeignFailureChannel()
+{
+    usize<byte> tooLarge = 4096;
+    usize<byte> alignment = 4;
+    Assert.Error(AcquireHost(tooLarge, alignment), "host refusal remains an ordinary Result error");
+    Assert.True(tooLarge > alignment, "fixture exercises a bounded refusal");
+}

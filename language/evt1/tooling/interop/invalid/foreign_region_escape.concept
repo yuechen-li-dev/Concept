@@ -1,0 +1,8 @@
+module Interop.Invalid.RegionEscape;
+profile Core;
+import Platform.Host.Memory;
+MemoryRegion<SystemMemory> InvalidEscape(usize<byte> size, usize<byte> alignment)
+{
+    owned HostAllocation allocation = AcquireHost(size, alignment)!;
+    return RegionOf(ref const allocation);
+}

@@ -1,0 +1,4 @@
+module Interop.ExternBasic;
+profile Core;
+extern "C" int LegacyVersion();
+int ReadVersion() { return LegacyVersion(); }

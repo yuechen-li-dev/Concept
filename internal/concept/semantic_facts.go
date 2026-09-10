@@ -58,6 +58,7 @@ const (
 	FactOriginTransportedValue       SemanticFactOrigin = "TransportedValueFact"
 	FactOriginDerivedSummary         SemanticFactOrigin = "DerivedResultSummary"
 	FactOriginModuleFactSummary      SemanticFactOrigin = "ModuleFactSummary"
+	FactOriginDeclaredForeign        SemanticFactOrigin = "DeclaredForeign"
 )
 
 type SemanticFactCertainty string
@@ -88,6 +89,7 @@ type SemanticFactEvidence struct {
 	ParentRegion string                      `json:"parent_region,omitempty"`
 	Provenance   string                      `json:"provenance,omitempty"`
 	Transport    []SemanticFactTransportStep `json:"transport,omitempty"`
+	Authority    string                      `json:"authority,omitempty"`
 }
 
 type MIRSemanticFact struct {

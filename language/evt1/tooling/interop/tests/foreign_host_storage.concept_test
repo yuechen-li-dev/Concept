@@ -1,0 +1,17 @@
+module Interop.Tests.HostStorage;
+profile Core;
+import Platform.Host.Memory;
+
+[[fact]]
+void ForeignHostStorage()
+{
+    usize<byte> size = 4;
+    usize<byte> alignment = 4;
+    Assert.LGTM(AcquireHost(size, alignment), "bounded host allocation should succeed");
+    owned HostAllocation allocation = AcquireHost(size, alignment)!;
+    MemoryRegion<SystemMemory> region = RegionOf(ref const allocation);
+    Assert.True(region.length == size, "region retains the requested extent");
+    Assert.True(region.alignment == alignment, "region retains the requested alignment");
+    Assert.Equals(4, 4, "the strict host fixture uses four-byte int storage");
+    Assert.Concept<HostAccessible>(region, "host region is contract-accessible");
+}
