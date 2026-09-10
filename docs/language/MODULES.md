@@ -105,3 +105,11 @@ algebra or a user-authored negative promise.
 R6e deliberately provides no package manager, registry, remote fetch, lockfile,
 stable binary module ABI, import aliases, partial specialization, variadics,
 module partitions, or runtime module system.
+
+R6o generalizes serialized generic constraints from one first-parameter target
+to structural concept applications. The typed payload retains concept parameter
+lists, all application arguments, nested prerequisite declarations,
+required-operation signatures, and effect requirements. Imported constrained
+functions and generic types build their operation closure and instantiate from
+that payload without source reparse; closed instance MIR contains concrete
+arguments and concrete witness bindings.

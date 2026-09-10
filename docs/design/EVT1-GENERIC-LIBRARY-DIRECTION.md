@@ -59,3 +59,12 @@ before concrete canonicalization, and closed fields and callable signatures
 are checked for unresolved parameters before MIR. Imported generic owners and
 factories therefore use the same instantiation path as local declarations; no
 carrier or library type name receives privileged handling.
+
+## R6o generic requirement closure
+
+Generic declarations now retain a structural concept application instead of a
+first-parameter constraint. Any ordered parameter and relational combinations
+may participate. The application contributes recursively composed required
+operations during open checking, then its arguments and operation signatures
+are substituted and revalidated at each concrete use. This is static semantic
+authority, not a runtime dictionary or interface conversion.

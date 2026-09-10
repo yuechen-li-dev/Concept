@@ -5,16 +5,28 @@ import (
 	"testing"
 )
 
-func TestR6nSecondTypeParameterConstraintRemainsUnsupported(t *testing.T) {
+func TestR6nSecondTypeParameterConstraintAndRequiredOperationAreSupported(t *testing.T) {
 	_, err := Parse("r6n_second_parameter_constraint.concept", `profile Core;
-concept Provider<T> { requires int Provide(ref T self, usize size); }
+concept Provider<T> { requires int Provide(ref T self, int size); }
+struct Source { int value; }
+struct ConcreteProvider { int value; }
+int Provide(ref ConcreteProvider self, int size) { return self.value; }
+requires Provider<ConcreteProvider>;
 template <typename TValue, typename TProvider>
 requires Provider<TProvider>
-TValue Make(ref TProvider provider, TValue value) { return value; }
+TValue Make(ref TProvider provider, TValue value)
+{
+    int ignored = provider.Provide(1);
+    return value;
+}
+int Use()
+{
+    ConcreteProvider provider = ConcreteProvider{1};
+    return Make<int, ConcreteProvider>(ref provider, 42);
+}
 `)
-	var diagnostic Diagnostic
-	if !errors.As(err, &diagnostic) || diagnostic.Code != "CV4170" {
-		t.Fatalf("expected CV4170 for a constraint on the second type parameter, got %v", err)
+	if err != nil {
+		t.Fatalf("expected second-parameter constraint and required operation closure to compile, got %v", err)
 	}
 }
 
@@ -34,14 +46,14 @@ TValue Make(ref TProvider provider, TValue value)
 	}
 }
 
-func TestR6nTypedOwnerDropCannotConstrainAllocatorParameter(t *testing.T) {
+func TestR6nTypedOwnerDropCanConstrainAllocatorParameter(t *testing.T) {
 	_, err := Parse("r6n_typed_owner_drop.concept", `profile Core;
 struct SystemMemory {}
 struct AllocationError {}
 template <typename TSpace>
 struct MemoryRegion { Address<TSpace> start; usize<byte> length; usize<byte> alignment; };
 concept Releasable<T> {
-    requires Result<void, AllocationError> Release(ref T self, MemoryRegion<SystemMemory> region);
+    requires Result<void, AllocationError> Release(ref T self, borrow const MemoryRegion<SystemMemory> region);
 }
 template <typename TValue, typename TAllocator>
 ref struct AllocationOwner
@@ -52,10 +64,12 @@ ref struct AllocationOwner
 };
 template <typename TValue, typename TAllocator>
 requires Releasable<TAllocator>
-void Drop(owned AllocationOwner<TValue, TAllocator> owner) {}
+void Drop(owned AllocationOwner<TValue, TAllocator> owner)
+{
+    owner.allocator.Release(owner.region);
+}
 `)
-	var diagnostic Diagnostic
-	if !errors.As(err, &diagnostic) || diagnostic.Code != "CV4170" {
-		t.Fatalf("expected CV4170 for typed-owner Drop's allocator constraint, got %v", err)
+	if err != nil {
+		t.Fatalf("expected typed-owner Drop constraint on its second parameter to compile, got %v", err)
 	}
 }

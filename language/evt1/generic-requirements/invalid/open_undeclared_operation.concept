@@ -1,0 +1,13 @@
+profile Core;
+
+concept Readable<T>
+{
+    requires int Read(ref T self);
+}
+
+template <typename T>
+requires Readable<T>
+void Bad(ref T value)
+{
+    Write(ref value, 1);
+}

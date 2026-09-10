@@ -1,0 +1,13 @@
+profile Core;
+
+concept Provider<T>
+{
+    requires int Provide(ref T self);
+}
+
+struct Missing
+{
+    int value;
+}
+
+requires Provider<Missing>;

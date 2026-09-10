@@ -359,7 +359,7 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 		mir.Automata = append(mir.Automata, mirAutomata)
 	}
 	for _, conceptDecl := range module.Concepts {
-		mirConcept := MIRConcept{Name: conceptDecl.Name, TypeParam: conceptDecl.TypeParam, Interface: conceptDecl.Interface, SourceSpan: conceptDecl.Span}
+		mirConcept := MIRConcept{Name: conceptDecl.Name, TypeParam: conceptDecl.TypeParam, Parameters: append([]GenericParameter{}, conceptDecl.Parameters...), Interface: conceptDecl.Interface, SourceSpan: conceptDecl.Span}
 		for _, req := range conceptDecl.Requirements {
 			switch r := req.(type) {
 			case *OperationRequirement:
@@ -374,10 +374,14 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 				}
 				mirConcept.Requirements = append(mirConcept.Requirements, entry)
 			case *PrerequisiteRequirement:
+				detail := r.TypeArg.String()
+				if len(evt1RequirementArguments(r)) > 1 {
+					detail = evt1ConceptApplicationLabel(r.ConceptName, evt1RequirementArguments(r))
+				}
 				mirConcept.Requirements = append(mirConcept.Requirements, MIRConceptRequirement{
 					Kind:       "prerequisite",
 					Name:       r.ConceptName,
-					Detail:     r.TypeArg.String(),
+					Detail:     detail,
 					SourceSpan: r.Span,
 				})
 			case *FieldRequirement:
@@ -420,12 +424,16 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 		mir.Witnesses = append(mir.Witnesses, entry)
 	}
 	for _, assertion := range module.Assertions {
-		mir.Assertions = append(mir.Assertions, MIRAssertion{
+		mirAssertion := MIRAssertion{
 			ConceptName:  assertion.ConceptName,
 			ConcreteType: assertion.ConcreteType,
 			Satisfied:    true,
 			SourceSpan:   assertion.Span,
-		})
+		}
+		if len(assertion.TypeArgs) > 1 {
+			mirAssertion.Arguments = append([]Type{}, assertion.TypeArgs...)
+		}
+		mir.Assertions = append(mir.Assertions, mirAssertion)
 	}
 	for _, decl := range module.ComptimeDecls {
 		mir.ComptimeDecls = append(mir.ComptimeDecls, MIRComptimeDecl{
@@ -463,20 +471,33 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 			ReturnType: templateDecl.ReturnType,
 			SourceSpan: templateDecl.Span,
 		}
+		if len(templateDecl.Parameters) > 1 {
+			mirTemplate.Parameters = append([]GenericParameter{}, templateDecl.Parameters...)
+		}
+		constraintArguments := evt1ConstraintArguments(templateDecl.Constraint)
+		if len(constraintArguments) != 1 || constraintArguments[0].Name != templateDecl.TypeParam || constraintArguments[0].Kind != TypeConceptParam {
+			mirTemplate.Constraint.Arguments = append([]Type{}, constraintArguments...)
+		}
 		for _, entry := range info.Closure {
 			mirTemplate.Closure = append(mirTemplate.Closure, MIRClosureEntry{
 				ConceptName: entry.Concept,
+				Arguments:   append([]Type{}, entry.Arguments...),
 				Path:        append([]string{}, entry.Path...),
 			})
 		}
 		for _, req := range info.Requirements {
-			mirTemplate.Requirements = append(mirTemplate.Requirements, MIRRequirementBinding{
+			binding := MIRRequirementBinding{
 				RequirementID: req.ID,
 				ConceptName:   req.Concept,
 				Name:          req.Operation.Name,
 				Signature:     evt1Signature(req.Operation.ReturnType, req.Operation.Name, req.Operation.Params),
 				Path:          append([]string{}, req.Path...),
-			})
+				Origin:        string(FactOriginGenericRequirement),
+			}
+			if req.MayAllocate {
+				binding.Effect = "Allocates"
+			}
+			mirTemplate.Requirements = append(mirTemplate.Requirements, binding)
 		}
 		for _, param := range templateDecl.Params {
 			mirTemplate.Params = append(mirTemplate.Params, MIRName{Name: param.Name, Type: evt1MIRType(env, param.Type)})
@@ -509,6 +530,9 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 				InvocationSpans:   append([]Span{}, instance.InvocationSpans...),
 				SourceSpan:        instance.SourceSpan,
 			}
+			if len(instance.ConcreteArgs) > 1 {
+				mirInstance.Arguments = append([]Type{}, instance.ConcreteArgs...)
+			}
 			if instance.Function.Async {
 				asyncFn := instance.Function
 				asyncFn.Name = instance.GeneratedSymbol
@@ -517,19 +541,30 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 			for _, entry := range instance.Closure {
 				mirInstance.Closure = append(mirInstance.Closure, MIRClosureEntry{
 					ConceptName: entry.Concept,
+					Arguments:   append([]Type{}, entry.Arguments...),
 					Path:        append([]string{}, entry.Path...),
 				})
 			}
 			for _, binding := range instance.RequirementBindings {
 				req := binding.Requirement
-				concreteReq := evt1SubstituteRequirement(req.Operation, templateDecl.TypeParam, instance.ConcreteType)
-				mirInstance.RequirementBindings = append(mirInstance.RequirementBindings, MIRRequirementBinding{
+				parameters := templateDecl.Parameters
+				if len(parameters) == 0 {
+					parameters = []GenericParameter{{Name: templateDecl.TypeParam, Kind: "type"}}
+				}
+				concreteReq := evt1SubstituteRequirementBindings(req.Operation, evt1TemplateBindings(parameters, instance.ConcreteArgs))
+				instanceBindings := evt1TemplateBindings(parameters, instance.ConcreteArgs)
+				mirBinding := MIRRequirementBinding{
 					RequirementID: req.ID,
 					ConceptName:   req.Concept,
 					Name:          concreteReq.Name,
 					Signature:     evt1Signature(concreteReq.ReturnType, concreteReq.Name, concreteReq.Params),
-					Path:          append([]string{}, req.Path...),
-				})
+					Path:          evt1SubstituteRequirementPath(req.Path, instanceBindings),
+					Origin:        string(FactOriginConcreteWitness),
+				}
+				if effect, ok := env.operationEffects[binding.Function.Name]; ok {
+					mirBinding.Effect = effect.Effect
+				}
+				mirInstance.RequirementBindings = append(mirInstance.RequirementBindings, mirBinding)
 			}
 			for _, param := range instance.Function.Params {
 				mirInstance.Params = append(mirInstance.Params, MIRName{Name: param.Name, Type: evt1MIRType(env, param.Type)})
@@ -1484,6 +1519,13 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 			if binding, ok := templateInfo.CallBindings[evt1SpanKey(e.Span)]; ok {
 				kind = "requirement_call"
 				detail = binding.Requirement.ID + " -> " + binding.Requirement.Operation.Name
+				if binding.Requirement.MayAllocate {
+					fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: kind, Detail: detail, MayAllocate: true, EffectOrigin: string(FactOriginGenericRequirement), SourceSpan: e.Span})
+					for _, arg := range e.Args {
+						collectExprMIROps(env, arg, fn, templateInfo)
+					}
+					return
+				}
 			}
 		}
 		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: kind, Detail: detail, SourceSpan: e.Span})
@@ -3380,23 +3422,33 @@ func evt1TypeUsed(module Module, match func(Type) bool) bool {
 					}
 				}
 			case *PrerequisiteRequirement:
-				if visitType(r.TypeArg) {
-					return true
+				for _, argument := range evt1RequirementArguments(r) {
+					if visitType(argument) {
+						return true
+					}
 				}
 			}
 		}
 	}
 	for _, assertion := range module.Assertions {
-		if visitType(assertion.ConcreteType) {
-			return true
+		arguments := assertion.TypeArgs
+		if len(arguments) == 0 {
+			arguments = []Type{assertion.ConcreteType}
+		}
+		for _, argument := range arguments {
+			if visitType(argument) {
+				return true
+			}
 		}
 	}
 	for _, templateDecl := range module.Templates {
 		if visitType(templateDecl.ReturnType) {
 			return true
 		}
-		if visitType(templateDecl.Constraint.TypeArg) {
-			return true
+		for _, argument := range evt1ConstraintArguments(templateDecl.Constraint) {
+			if visitType(argument) {
+				return true
+			}
 		}
 		for _, param := range templateDecl.Params {
 			if visitType(param.Type) {

@@ -1356,7 +1356,7 @@ func (p *parser) parseGenericTypeDecl() (GenericTypeDecl, error) {
 		if constraintErr != nil {
 			return GenericTypeDecl{}, constraintErr
 		}
-		constraint = TemplateConstraint{ConceptName: ref.Name, TypeArg: ref.TypeArgs[0], Span: req.Span}
+		constraint = TemplateConstraint{ConceptName: ref.Name, TypeArg: ref.TypeArgs[0], TypeArgs: ref.TypeArgs, Span: req.Span}
 	}
 	var aggregate StructDecl
 	if p.peekLexeme() == "ref" {
@@ -1413,6 +1413,9 @@ func (p *parser) parseTemplateDecl() (TemplateDecl, error) {
 	if _, err := p.expect(">"); err != nil {
 		return TemplateDecl{}, err
 	}
+	oldTypeParams := p.templateTypeParams
+	p.templateTypeParams = typeParams
+	defer func() { p.templateTypeParams = oldTypeParams }()
 	var constraint TemplateConstraint
 	if p.peekLexeme() == "requires" {
 		reqTok := p.next()
@@ -1420,17 +1423,14 @@ func (p *parser) parseTemplateDecl() (TemplateDecl, error) {
 		if parseErr != nil {
 			return TemplateDecl{}, parseErr
 		}
-		constraint = TemplateConstraint{ConceptName: ref.Name, TypeArg: ref.TypeArgs[0], Span: reqTok.Span}
+		constraint = TemplateConstraint{ConceptName: ref.Name, TypeArg: ref.TypeArgs[0], TypeArgs: ref.TypeArgs, Span: reqTok.Span}
 	}
 	async := false
 	if p.peekLexeme() == "async" || p.peekLexeme() == "asynchronous" {
 		p.next()
 		async = true
 	}
-	oldTypeParams := p.templateTypeParams
-	p.templateTypeParams = typeParams
 	fn, err := p.parseFunctionDecl(params[0].Name, false)
-	p.templateTypeParams = oldTypeParams
 	if err != nil {
 		return TemplateDecl{}, err
 	}
@@ -1861,9 +1861,19 @@ func (p *parser) parseConceptDecl() (ConceptDecl, error) {
 	if _, err := p.expect("<"); err != nil {
 		return ConceptDecl{}, err
 	}
-	paramTok, err := p.expectIdentifier("CV4141", "expected one concept type parameter")
-	if err != nil {
-		return ConceptDecl{}, err
+	var params []GenericParameter
+	conceptParams := map[string]bool{}
+	for {
+		paramTok, parseErr := p.expectIdentifier("CV4141", "expected concept type parameter")
+		if parseErr != nil {
+			return ConceptDecl{}, parseErr
+		}
+		params = append(params, GenericParameter{Name: paramTok.Lexeme, Kind: "type", Span: paramTok.Span})
+		conceptParams[paramTok.Lexeme] = true
+		if p.peekLexeme() != "," {
+			break
+		}
+		p.next()
 	}
 	if _, err := p.expect(">"); err != nil {
 		return ConceptDecl{}, err
@@ -1871,9 +1881,15 @@ func (p *parser) parseConceptDecl() (ConceptDecl, error) {
 	if _, err := p.expect("{"); err != nil {
 		return ConceptDecl{}, err
 	}
-	decl := ConceptDecl{Name: nameTok.Lexeme, TypeParam: paramTok.Lexeme, Span: start}
+	oldTypeParams := p.templateTypeParams
+	p.templateTypeParams = conceptParams
+	defer func() { p.templateTypeParams = oldTypeParams }()
+	decl := ConceptDecl{Name: nameTok.Lexeme, TypeParam: params[0].Name, Span: start}
+	if len(params) > 1 {
+		decl.Parameters = params
+	}
 	for !p.done() && p.peekLexeme() != "}" {
-		req, err := p.parseConceptRequirement(paramTok.Lexeme)
+		req, err := p.parseConceptRequirement(params[0].Name)
 		if err != nil {
 			return ConceptDecl{}, err
 		}
@@ -1977,7 +1993,7 @@ func (p *parser) parseConceptRequirement(typeParam string) (ConceptRequirement, 
 		if _, err := p.expect(";"); err != nil {
 			return nil, err
 		}
-		return &PrerequisiteRequirement{ConceptName: ref.Name, TypeArg: ref.TypeArgs[0], Span: start.Span}, nil
+		return &PrerequisiteRequirement{ConceptName: ref.Name, TypeArg: ref.TypeArgs[0], TypeArgs: ref.TypeArgs, Span: start.Span}, nil
 	}
 	retType, err := p.parseType(typeParam)
 	if err != nil {
@@ -2046,7 +2062,7 @@ func (p *parser) parseConceptAssertion() (ConceptAssertion, error) {
 	if _, err := p.expect(";"); err != nil {
 		return ConceptAssertion{}, err
 	}
-	return ConceptAssertion{ConceptName: ref.Name, ConcreteType: ref.TypeArgs[0], Span: start.Span}, nil
+	return ConceptAssertion{ConceptName: ref.Name, ConcreteType: ref.TypeArgs[0], TypeArgs: ref.TypeArgs, Span: start.Span}, nil
 }
 
 func (p *parser) parseFunctionDecl(conceptParam string, comptime bool) (FunctionDecl, error) {
@@ -2399,14 +2415,22 @@ func (p *parser) parseConceptUse(conceptParam string) (Type, error) {
 	if _, err := p.expect("<"); err != nil {
 		return Type{}, err
 	}
-	arg, err := p.parseType(conceptParam)
-	if err != nil {
-		return Type{}, err
+	var args []Type
+	for {
+		arg, parseErr := p.parseType(conceptParam)
+		if parseErr != nil {
+			return Type{}, parseErr
+		}
+		args = append(args, arg)
+		if p.peekLexeme() != "," {
+			break
+		}
+		p.next()
 	}
 	if _, err := p.expect(">"); err != nil {
 		return Type{}, err
 	}
-	return Type{Name: nameTok.Lexeme, Kind: TypeApplied, TypeArgs: []Type{arg}, Span: nameTok.Span}, nil
+	return Type{Name: nameTok.Lexeme, Kind: TypeApplied, TypeArgs: args, Span: nameTok.Span}, nil
 }
 
 func (p *parser) parseBlock() (Block, error) {
@@ -4034,8 +4058,9 @@ func (p *parser) isConceptApplicationAhead(conceptParam string) bool {
 	}
 	save := p.pos
 	_, err := p.parseConceptUse(conceptParam)
+	isRequirement := err == nil && p.peekLexeme() == ";"
 	p.pos = save
-	return err == nil
+	return isRequirement
 }
 
 func (p *parser) done() bool {

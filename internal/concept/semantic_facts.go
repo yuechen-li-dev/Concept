@@ -43,6 +43,8 @@ type SemanticFactOrigin string
 
 const (
 	FactOriginDeclared               SemanticFactOrigin = "Declared"
+	FactOriginGenericRequirement     SemanticFactOrigin = "GenericRequirement"
+	FactOriginConcreteWitness        SemanticFactOrigin = "ConcreteWitness"
 	FactOriginType                   SemanticFactOrigin = "DerivedFromType"
 	FactOriginLayout                 SemanticFactOrigin = "DerivedFromLayout"
 	FactOriginBind                   SemanticFactOrigin = "DerivedFromBind"

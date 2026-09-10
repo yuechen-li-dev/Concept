@@ -35,14 +35,27 @@ the inside out; recursive infinite instantiation is rejected with
 Integer and `usize` non-type arguments are compile-time values. Generic class
 methods reuse ordinary class/self rules after type substitution. Function
 templates accept ordered type and dimensionless `usize` non-type parameters.
-They may be unconstrained or use the existing single named Concept constraint
-on the first type parameter:
+They may be unconstrained or use one named Concept application over any of the
+ordered parameters:
 
 ```concept
 template <typename T>
 requires Movable<T>
 T MoveThrough(T value) { return move value; }
 ```
+
+Relational applications retain all arguments:
+
+```concept
+template <typename T, typename U>
+requires Convertible<T, U>
+U ConvertThrough(T value) { return Convert(value); }
+```
+
+During open checking the requirement supplies its recursively composed
+operation closure. Concrete instantiation structurally substitutes every
+application and operation argument and revalidates satisfaction. Group multiple
+requirements in a named concept rather than a boolean expression.
 
 Applied fields feed the existing structural copy, move, reverse Drop, and
 provenance authorities. A generic lifetime-carrying aggregate is therefore a

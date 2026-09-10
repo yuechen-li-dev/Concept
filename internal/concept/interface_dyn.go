@@ -199,9 +199,18 @@ func evt1ValidateMemberCall(env *semanticEnv, scope *evt1Scope, call *CallExpr, 
 	}
 	self := &RefExpr{Value: call.Receiver, Const: selfConst, Span: call.Span}
 	args := append([]Expr{self}, call.Args...)
-	if templateInfo != nil && evt1TypeDependsOnParam(receiverType, templateInfo.Decl.TypeParam) {
+	if templateInfo != nil && evt1TypeDependsOnAnyParameter(receiverType, templateInfo.Decl.Parameters) {
 		synthetic := CallExpr{Callee: call.Callee, Args: args, Span: call.Span}
-		return validateTemplateCallExpr(env, scope, synthetic, templateInfo)
+		result, err := validateTemplateCallExpr(env, scope, synthetic, templateInfo)
+		if err == nil && result.Kind != TypeAsync {
+			// A required operation with an explicit receiver may use ordinary
+			// member spelling in an open generic. Normalize it to the existing
+			// free-operation representation; no nominal method is injected.
+			call.Member = false
+			call.Receiver = nil
+			call.Args = args
+		}
+		return result, err
 	}
 	candidates := evt1MethodCandidates(env, receiverType.valueType().Name, call.Callee)
 	if len(candidates) == 0 {

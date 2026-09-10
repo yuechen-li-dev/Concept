@@ -1,0 +1,24 @@
+profile Core;
+
+concept ReturnsInt<T>
+{
+    requires int Read(ref T self);
+}
+
+concept ReturnsBool<T>
+{
+    requires bool Read(ref T self);
+}
+
+concept Conflict<T>
+{
+    requires ReturnsInt<T>;
+    requires ReturnsBool<T>;
+}
+
+template <typename T>
+requires Conflict<T>
+int Bad(ref T value)
+{
+    return Read(ref value);
+}

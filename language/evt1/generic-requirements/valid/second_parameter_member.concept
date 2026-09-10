@@ -1,0 +1,32 @@
+profile Core;
+
+concept Provider<T>
+{
+    requires int Provide(ref T self);
+}
+
+struct Device
+{
+    int value;
+}
+
+int Provide(ref Device self)
+{
+    return self.value;
+}
+
+requires Provider<Device>;
+
+template <typename TValue, typename TProvider>
+requires Provider<TProvider>
+TValue Get(ref TProvider provider, TValue value)
+{
+    int ignored = provider.Provide();
+    return value;
+}
+
+int Main()
+{
+    Device provider = Device{42};
+    return Get<int, Device>(ref provider, 7);
+}

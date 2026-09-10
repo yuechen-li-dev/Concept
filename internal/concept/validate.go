@@ -622,15 +622,24 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		if decl.Constraint.ConceptName == "" {
 			continue
 		}
-		if _, ok := env.concepts[decl.Constraint.ConceptName]; !ok {
+		constraintConcept, ok := env.concepts[decl.Constraint.ConceptName]
+		if !ok {
 			return nil, evt1Diagnostic("GENERIC_CONSTRAINT_INVALID", fmt.Sprintf("unknown concept %s in generic type constraint", decl.Constraint.ConceptName), decl.Constraint.Span)
 		}
-		found := false
+		var parameterNames []string
 		for _, parameter := range decl.Parameters {
-			found = found || parameter.Kind == "type" && parameter.Name == decl.Constraint.TypeArg.Name
+			if parameter.Kind == "type" {
+				parameterNames = append(parameterNames, parameter.Name)
+			}
 		}
-		if !found {
-			return nil, evt1Diagnostic("GENERIC_CONSTRAINT_INVALID", fmt.Sprintf("constraint %s must target a generic type parameter", decl.Constraint.ConceptName), decl.Constraint.Span)
+		arguments := evt1ConstraintArguments(decl.Constraint)
+		if len(arguments) != len(evt1ConceptParameters(constraintConcept)) {
+			return nil, evt1Diagnostic("GENERIC_CONSTRAINT_INVALID", fmt.Sprintf("constraint %s expects %d argument(s), got %d", decl.Constraint.ConceptName, len(evt1ConceptParameters(constraintConcept)), len(arguments)), decl.Constraint.Span)
+		}
+		for _, argument := range arguments {
+			if err := validateKnownType(env, argument, decl.Constraint.Span, strings.Join(parameterNames, "|"), false); err != nil {
+				return nil, err
+			}
 		}
 	}
 	for _, templateDecl := range module.Templates {
@@ -813,6 +822,11 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		return nil, err
 	}
 	for _, conceptDecl := range module.Concepts {
+		conceptParameterNames := make([]string, 0, len(evt1ConceptParameters(conceptDecl)))
+		for _, parameter := range evt1ConceptParameters(conceptDecl) {
+			conceptParameterNames = append(conceptParameterNames, parameter.Name)
+		}
+		conceptParameterSet := strings.Join(conceptParameterNames, "|")
 		seenMembers := map[string]bool{}
 		for _, req := range conceptDecl.Requirements {
 			switch r := req.(type) {
@@ -822,11 +836,11 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 					return nil, evt1Diagnostic("INTERFACE_DUPLICATE_MEMBER", fmt.Sprintf("duplicate requirement %s.%s", conceptDecl.Name, r.Name), r.Span)
 				}
 				seenMembers[key] = true
-				if err := validateKnownType(env, r.ReturnType, r.Span, conceptDecl.TypeParam, false); err != nil {
+				if err := validateKnownType(env, r.ReturnType, r.Span, conceptParameterSet, false); err != nil {
 					return nil, err
 				}
 				for _, param := range r.Params {
-					if err := validateKnownType(env, param.Type, param.Span, conceptDecl.TypeParam, false); err != nil {
+					if err := validateKnownType(env, param.Type, param.Span, conceptParameterSet, false); err != nil {
 						return nil, err
 					}
 				}
@@ -859,11 +873,18 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 					return nil, evt1Diagnostic("INTERFACE_NOT_DYN_COMPATIBLE", fmt.Sprintf("interface field %s cannot have erased type %s", r.Name, conceptDecl.TypeParam), r.Span)
 				}
 			case *PrerequisiteRequirement:
-				if _, ok := env.concepts[r.ConceptName]; !ok {
+				prerequisite, ok := env.concepts[r.ConceptName]
+				if !ok {
 					return nil, evt1Diagnostic("CV4152", fmt.Sprintf("unknown prerequisite concept %s", r.ConceptName), r.Span)
 				}
-				if r.TypeArg.Kind != TypeConceptParam || r.TypeArg.Name != conceptDecl.TypeParam {
-					return nil, evt1Diagnostic("CV4152", fmt.Sprintf("prerequisite %s must use the concept parameter %s", r.ConceptName, conceptDecl.TypeParam), r.Span)
+				arguments := evt1RequirementArguments(r)
+				if len(arguments) != len(evt1ConceptParameters(prerequisite)) {
+					return nil, evt1Diagnostic("CV4152", fmt.Sprintf("prerequisite %s expects %d argument(s), got %d", r.ConceptName, len(evt1ConceptParameters(prerequisite)), len(arguments)), r.Span)
+				}
+				for _, argument := range arguments {
+					if err := validateKnownType(env, argument, r.Span, conceptParameterSet, false); err != nil {
+						return nil, err
+					}
 				}
 			case *CompilerAnalysisRequirement:
 				if r.Analysis == "Allocates" {
@@ -885,7 +906,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 					}
 				}
 				for _, arg := range r.TypeArgs {
-					if err := validateKnownType(env, arg, r.Span, conceptDecl.TypeParam, false); err != nil {
+					if err := validateKnownType(env, arg, r.Span, conceptParameterSet, false); err != nil {
 						return nil, err
 					}
 				}
@@ -1071,13 +1092,23 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		return nil, err
 	}
 	for _, assertion := range module.Assertions {
-		if _, ok := env.concepts[assertion.ConceptName]; !ok {
+		conceptDecl, ok := env.concepts[assertion.ConceptName]
+		if !ok {
 			return nil, evt1Diagnostic("CV4151", fmt.Sprintf("unknown concept %s", assertion.ConceptName), assertion.Span)
 		}
-		if err := validateKnownType(env, assertion.ConcreteType, assertion.Span, "", false); err != nil {
-			return nil, err
+		arguments := assertion.TypeArgs
+		if len(arguments) == 0 {
+			arguments = []Type{assertion.ConcreteType}
 		}
-		if err := checkConceptSatisfaction(env, assertion.ConceptName, assertion.ConcreteType, nil, assertion.Span); err != nil {
+		if len(arguments) != len(evt1ConceptParameters(conceptDecl)) {
+			return nil, evt1Diagnostic("CV4151", fmt.Sprintf("concept %s expects %d argument(s), got %d", assertion.ConceptName, len(evt1ConceptParameters(conceptDecl)), len(arguments)), assertion.Span)
+		}
+		for _, argument := range arguments {
+			if err := validateKnownType(env, argument, assertion.Span, "", false); err != nil {
+				return nil, err
+			}
+		}
+		if err := checkConceptApplicationSatisfaction(env, assertion.ConceptName, arguments, nil, assertion.Span); err != nil {
 			return nil, err
 		}
 	}
@@ -1366,11 +1397,14 @@ func validateTemplateSignature(env *semanticEnv, templateDecl TemplateDecl) erro
 		if !ok {
 			return evt1Diagnostic("CV4169", fmt.Sprintf("unknown concept %s in template constraint", templateDecl.Constraint.ConceptName), templateDecl.Constraint.Span)
 		}
-		if templateDecl.Constraint.TypeArg.Kind != TypeConceptParam || templateDecl.Constraint.TypeArg.Name != templateDecl.TypeParam {
-			return evt1Diagnostic("CV4170", fmt.Sprintf("template constraint %s must apply to template parameter %s", templateDecl.Constraint.ConceptName, templateDecl.TypeParam), templateDecl.Constraint.Span)
+		arguments := evt1ConstraintArguments(templateDecl.Constraint)
+		if len(arguments) != len(evt1ConceptParameters(constraintConcept)) {
+			return evt1Diagnostic("CV4171", fmt.Sprintf("template constraint %s expects %d argument(s), got %d", templateDecl.Constraint.ConceptName, len(evt1ConceptParameters(constraintConcept)), len(arguments)), templateDecl.Constraint.Span)
 		}
-		if constraintConcept.TypeParam == "" {
-			return evt1Diagnostic("CV4171", fmt.Sprintf("template constraint %s must be a named one-parameter concept", templateDecl.Constraint.ConceptName), templateDecl.Constraint.Span)
+		for _, argument := range arguments {
+			if err := validateKnownType(env, argument, templateDecl.Constraint.Span, parameterSet, false); err != nil {
+				return evt1Diagnostic("CV4170", fmt.Sprintf("template constraint %s has invalid argument %s", templateDecl.Constraint.ConceptName, argument.String()), templateDecl.Constraint.Span)
+			}
 		}
 	}
 	if err := validateKnownType(env, templateDecl.ReturnType, templateDecl.ReturnType.Span, parameterSet, false); err != nil {
@@ -3887,7 +3921,7 @@ func validateCallArgument(env *semanticEnv, scope *evt1Scope, paramType Type, ar
 	}
 	typeParam := ""
 	if templateInfo != nil {
-		typeParam = templateInfo.Decl.TypeParam
+		typeParam = evt1TemplateParameterSet(templateInfo.Decl.Parameters)
 	}
 	if lit, ok := arg.(*ArrayLiteralExpr); ok && paramType.ArrayElem != nil {
 		validatedType, err := validateArrayLiteralExpr(env, scope, *lit, &paramType, templateInfo, false)
@@ -5694,16 +5728,26 @@ func evt1ResolveOrdinaryCall(env *semanticEnv, scope *evt1Scope, name string, ar
 }
 
 func checkConceptSatisfaction(env *semanticEnv, conceptName string, concreteType Type, path []string, span Span) error {
-	path = append(path, fmt.Sprintf("%s<%s>", conceptName, concreteType.String()))
+	return checkConceptApplicationSatisfaction(env, conceptName, []Type{concreteType}, path, span)
+}
+
+func checkConceptApplicationSatisfaction(env *semanticEnv, conceptName string, arguments []Type, path []string, span Span) error {
 	conceptDecl := env.concepts[conceptName]
+	bindings, ok := evt1ConceptBindings(conceptDecl, arguments)
+	if !ok {
+		return evt1Diagnostic("CV4152", fmt.Sprintf("concept %s expects %d argument(s), got %d", conceptName, len(evt1ConceptParameters(conceptDecl)), len(arguments)), span)
+	}
+	path = append(path, evt1ConceptApplicationLabel(conceptName, arguments))
+	concreteType := arguments[0]
 	for _, req := range conceptDecl.Requirements {
 		switch r := req.(type) {
 		case *PrerequisiteRequirement:
-			if err := checkConceptSatisfaction(env, r.ConceptName, concreteType, path, span); err != nil {
+			nestedArguments := evt1SubstituteArguments(evt1RequirementArguments(r), bindings)
+			if err := checkConceptApplicationSatisfaction(env, r.ConceptName, nestedArguments, path, span); err != nil {
 				return err
 			}
 		case *OperationRequirement:
-			required := evt1SubstituteRequirement(*r, conceptDecl.TypeParam, concreteType)
+			required := evt1SubstituteRequirementBindings(*r, bindings)
 			implementation, err := evt1LookupRequiredOperation(env, required, span, strings.Join(path, " -> "))
 			if err != nil {
 				return err
@@ -5723,7 +5767,7 @@ func checkConceptSatisfaction(env *semanticEnv, conceptName string, concreteType
 			if evt1FieldVisibility(decl, r.Name) == "private" {
 				return evt1Diagnostic("INTERFACE_PRIVATE_MEMBER_CANNOT_SATISFY", fmt.Sprintf("%s requires accessible field %s", strings.Join(path, " -> "), r.Name), span)
 			}
-			expected := evt1SubstituteType(r.Type.valueType(), conceptDecl.TypeParam, concreteType.valueType())
+			expected := evt1SubstituteBindings(r.Type.valueType(), bindings)
 			if !evt1CanonicalType(env, actual.valueType()).Equal(evt1CanonicalType(env, expected)) {
 				return evt1Diagnostic("INTERFACE_REQUIREMENT_UNSATISFIED", fmt.Sprintf("%s field %s requires %s but found %s", strings.Join(path, " -> "), r.Name, expected.String(), actual.String()), span)
 			}
@@ -5737,9 +5781,9 @@ func checkConceptSatisfaction(env *semanticEnv, conceptName string, concreteType
 				continue
 			}
 			analysis := evt1SemanticAnalysisRegistry[r.Analysis]
-			proof := MIRSemanticProof{Concept: conceptName, Analysis: r.Analysis, FactKind: evt1FactKind(r.Analysis), ConcreteType: concreteType.String(), Parameters: append([]int{}, r.Parameters...), SourceSpan: r.Span}
+			proof := MIRSemanticProof{Concept: conceptName, Analysis: r.Analysis, FactKind: evt1FactKind(r.Analysis), ConcreteType: evt1ConceptApplicationLabel(conceptName, arguments), Parameters: append([]int{}, r.Parameters...), SourceSpan: r.Span}
 			if len(r.SubjectArgs) > 0 {
-				subjects, err := evt1BindRelationalRequirementSubjects(env, conceptDecl, concreteType, r.SubjectArgs, span)
+				subjects, err := evt1BindRelationalRequirementSubjectsApplication(env, conceptDecl, arguments, r.SubjectArgs, span)
 				if err != nil {
 					return err
 				}
@@ -5749,7 +5793,7 @@ func checkConceptSatisfaction(env *semanticEnv, conceptName string, concreteType
 				proof.Satisfied = outcome == evt1AnalysisProven
 				proof.ProvenanceFacts = facts
 				proof.Origin = FactOriginCompilerAnalysis
-				proof.ID = evt1SemanticProofID(conceptName, concreteType, r.Analysis, proof.Subjects, r.Parameters)
+				proof.ID = evt1SemanticProofID(conceptName, arguments, r.Analysis, proof.Subjects, r.Parameters)
 				env.semanticProofs = append(env.semanticProofs, proof)
 				if outcome == evt1AnalysisUnknown {
 					if r.Analysis != "Outlives" {
@@ -5767,12 +5811,12 @@ func checkConceptSatisfaction(env *semanticEnv, conceptName string, concreteType
 			}
 			args := make([]Type, len(r.TypeArgs))
 			for i, arg := range r.TypeArgs {
-				args[i] = evt1SubstituteType(arg, conceptDecl.TypeParam, concreteType)
+				args[i] = evt1SubstituteBindings(arg, bindings)
 			}
 			for _, arg := range args {
 				proof.Subjects = append(proof.Subjects, MIRSemanticSubject{Kind: "type", Name: arg.String(), Type: arg.String()})
 			}
-			proof.ID = evt1SemanticProofID(conceptName, concreteType, r.Analysis, proof.Subjects, r.Parameters)
+			proof.ID = evt1SemanticProofID(conceptName, arguments, r.Analysis, proof.Subjects, r.Parameters)
 			result := analysis.CheckTypes(env, args, r.Parameters)
 			proof.Satisfied = result.Outcome == FactProven
 			proof.Outcome = string(result.Outcome)
@@ -5959,12 +6003,20 @@ func evt1ConceptOperationAllowsAllocation(conceptDecl ConceptDecl, operation str
 }
 
 func evt1BindRelationalRequirementSubjects(env *semanticEnv, conceptDecl ConceptDecl, concreteType Type, refs []SemanticSubjectRef, span Span) ([]evt1BoundSemanticSubject, error) {
+	return evt1BindRelationalRequirementSubjectsApplication(env, conceptDecl, []Type{concreteType}, refs, span)
+}
+
+func evt1BindRelationalRequirementSubjectsApplication(env *semanticEnv, conceptDecl ConceptDecl, arguments []Type, refs []SemanticSubjectRef, span Span) ([]evt1BoundSemanticSubject, error) {
 	operation, err := evt1FindRelationalRequirementOperation(conceptDecl, refs, span)
 	if err != nil {
 		return nil, err
 	}
-	required := evt1SubstituteRequirement(*operation, conceptDecl.TypeParam, concreteType)
-	fn, err := evt1LookupRequiredOperation(env, required, span, conceptDecl.Name+"<"+concreteType.String()+">")
+	bindings, ok := evt1ConceptBindings(conceptDecl, arguments)
+	if !ok {
+		return nil, evt1Diagnostic("CV4152", fmt.Sprintf("concept %s expects %d argument(s), got %d", conceptDecl.Name, len(evt1ConceptParameters(conceptDecl)), len(arguments)), span)
+	}
+	required := evt1SubstituteRequirementBindings(*operation, bindings)
+	fn, err := evt1LookupRequiredOperation(env, required, span, evt1ConceptApplicationLabel(conceptDecl.Name, arguments))
 	if err != nil {
 		return nil, err
 	}
@@ -6002,8 +6054,8 @@ func evt1MIRSemanticSubjects(subjects []evt1BoundSemanticSubject) []MIRSemanticS
 	return result
 }
 
-func evt1SemanticProofID(conceptName string, concreteType Type, analysis string, subjects []MIRSemanticSubject, parameters []int) string {
-	parts := []string{conceptName + "<" + concreteType.String() + ">", analysis}
+func evt1SemanticProofID(conceptName string, arguments []Type, analysis string, subjects []MIRSemanticSubject, parameters []int) string {
+	parts := []string{evt1ConceptApplicationLabel(conceptName, arguments), analysis}
 	for _, subject := range subjects {
 		label := subject.Function + "." + subject.Kind
 		if subject.Kind == "type" {
@@ -6213,6 +6265,14 @@ func evt1TypeDependsOnParam(t Type, typeParam string) bool {
 	if typeParam == "" {
 		return false
 	}
+	if strings.Contains(typeParam, "|") {
+		for _, parameter := range strings.Split(typeParam, "|") {
+			if evt1TypeDependsOnParam(t, parameter) {
+				return true
+			}
+		}
+		return false
+	}
 	if t.Kind == TypeConceptParam && t.Name == typeParam {
 		return true
 	}
@@ -6281,44 +6341,55 @@ func buildTemplateInfo(env *semanticEnv, templateDecl TemplateDecl) (*evt1Templa
 	}
 	seenConcepts := map[string]bool{}
 	seenRequirements := map[string]bool{}
-	typeParamType := Type{Name: templateDecl.TypeParam, Kind: TypeConceptParam, Span: templateDecl.TypeParamSpan}
-	var walk func(conceptName string, path []string) error
-	walk = func(conceptName string, path []string) error {
-		if !seenConcepts[conceptName] {
+	var walk func(conceptName string, arguments []Type, path []string) error
+	walk = func(conceptName string, arguments []Type, path []string) error {
+		application := evt1ConceptApplicationLabel(conceptName, arguments)
+		if !seenConcepts[application] {
 			info.Closure = append(info.Closure, evt1TemplateClosureEntry{
-				Concept: conceptName,
-				Path:    append([]string{}, path...),
+				Concept:   application,
+				Name:      conceptName,
+				Arguments: append([]Type{}, arguments...),
+				Path:      append([]string{}, path...),
 			})
-			seenConcepts[conceptName] = true
+			seenConcepts[application] = true
 		}
 		conceptDecl := env.concepts[conceptName]
+		bindings, ok := evt1ConceptBindings(conceptDecl, arguments)
+		if !ok {
+			return evt1Diagnostic("CV4171", fmt.Sprintf("concept %s expects %d argument(s), got %d", conceptName, len(evt1ConceptParameters(conceptDecl)), len(arguments)), templateDecl.Constraint.Span)
+		}
 		for _, rawReq := range conceptDecl.Requirements {
 			switch req := rawReq.(type) {
 			case *PrerequisiteRequirement:
-				nextPath := append(append([]string{}, path...), req.ConceptName)
-				if err := walk(req.ConceptName, nextPath); err != nil {
+				nestedArguments := evt1SubstituteArguments(evt1RequirementArguments(req), bindings)
+				nextApplication := evt1ConceptApplicationLabel(req.ConceptName, nestedArguments)
+				nextPath := append(append([]string{}, path...), nextApplication)
+				if err := walk(req.ConceptName, nestedArguments, nextPath); err != nil {
 					return err
 				}
 			case *OperationRequirement:
-				substituted := evt1SubstituteRequirement(*req, conceptDecl.TypeParam, typeParamType)
+				substituted := evt1SubstituteRequirementBindings(*req, bindings)
 				key := evt1RequirementKey(substituted)
 				if seenRequirements[key] {
 					continue
 				}
 				seenRequirements[key] = true
 				info.Requirements = append(info.Requirements, evt1TemplateRequirement{
-					ID:        fmt.Sprintf("%s.req.%02d", templateDecl.Name, len(info.Requirements)+1),
-					Path:      append([]string{}, path...),
-					Concept:   conceptName,
-					Operation: substituted,
+					ID:          fmt.Sprintf("%s.req.%02d", templateDecl.Name, len(info.Requirements)+1),
+					Path:        append([]string{}, path...),
+					Concept:     conceptName,
+					Operation:   substituted,
+					MayAllocate: evt1ConceptOperationAllowsAllocation(conceptDecl, req.Name),
 				})
 			}
 		}
 		return nil
 	}
 	if templateDecl.Constraint.ConceptName != "" {
-		rootPath := []string{templateDecl.Constraint.ConceptName}
-		if err := walk(templateDecl.Constraint.ConceptName, rootPath); err != nil {
+		arguments := evt1ConstraintArguments(templateDecl.Constraint)
+		rootApplication := evt1ConceptApplicationLabel(templateDecl.Constraint.ConceptName, arguments)
+		rootPath := []string{rootApplication}
+		if err := walk(templateDecl.Constraint.ConceptName, arguments, rootPath); err != nil {
 			return nil, err
 		}
 	}
@@ -6341,12 +6412,12 @@ func validateTemplateCallExpr(env *semanticEnv, scope *evt1Scope, call CallExpr,
 		if err != nil {
 			return Type{}, err
 		}
-		if evt1TypeDependsOnParam(argType, templateInfo.Decl.TypeParam) {
+		if evt1TypeDependsOnAnyParameter(argType, templateInfo.Decl.Parameters) {
 			dependent = true
 		}
 		argTypes = append(argTypes, argType)
 	}
-	if !dependent {
+	if !dependent || templateInfo.Decl.Constraint.ConceptName == "" {
 		fn, err := evt1ResolveOrdinaryCall(env, scope, call.Callee, call.Args, argTypes, templateInfo, call.Span)
 		if err != nil {
 			if _, exists := env.templates[call.Callee]; exists {
@@ -6362,6 +6433,7 @@ func validateTemplateCallExpr(env *semanticEnv, scope *evt1Scope, call CallExpr,
 		return evt1CanonicalType(env, fn.ReturnType), nil
 	}
 	var matches []evt1TemplateRequirement
+	var mismatch error
 	for _, req := range templateInfo.Requirements {
 		if req.Operation.Name != call.Callee || len(req.Operation.Params) != len(call.Args) {
 			continue
@@ -6369,6 +6441,7 @@ func validateTemplateCallExpr(env *semanticEnv, scope *evt1Scope, call CallExpr,
 		ok := true
 		for i, arg := range call.Args {
 			if err := validateCallArgument(env, scope, req.Operation.Params[i].Type, arg, argTypes[i], templateInfo); err != nil {
+				mismatch = err
 				ok = false
 				break
 			}
@@ -6378,7 +6451,15 @@ func validateTemplateCallExpr(env *semanticEnv, scope *evt1Scope, call CallExpr,
 		}
 	}
 	if len(matches) == 0 {
-		return Type{}, evt1Diagnostic("CV4176", fmt.Sprintf("template body call %s is not guaranteed by constraint %s", call.Callee, templateInfo.Decl.Constraint.ConceptName), call.Span)
+		var available []string
+		for _, requirement := range templateInfo.Requirements {
+			available = append(available, evt1Signature(requirement.Operation.ReturnType, requirement.Operation.Name, requirement.Operation.Params))
+		}
+		detail := ""
+		if mismatch != nil {
+			detail = "; mismatch: " + mismatch.Error()
+		}
+		return Type{}, evt1Diagnostic("CV4176", fmt.Sprintf("template body call %s is not guaranteed by constraint %s (available: %s; arguments: %v%s)", call.Callee, templateInfo.Decl.Constraint.ConceptName, strings.Join(available, "; "), argTypes, detail), call.Span)
 	}
 	if len(matches) > 1 {
 		return Type{}, evt1Diagnostic("CV4177", fmt.Sprintf("template body call %s is ambiguously guaranteed by constraint %s", call.Callee, templateInfo.Decl.Constraint.ConceptName), call.Span)
@@ -6434,15 +6515,26 @@ func instantiateTemplateArgs(env *semanticEnv, templateName string, concreteArgs
 		return instance, nil
 	}
 	if templateDecl.Constraint.ConceptName != "" {
-		if err := checkConceptSatisfaction(env, templateDecl.Constraint.ConceptName, concreteType, nil, span); err != nil {
+		templateBindings := evt1TemplateBindings(parameters, concreteArgs)
+		constraintArguments := evt1SubstituteArguments(evt1ConstraintArguments(templateDecl.Constraint), templateBindings)
+		if err := checkConceptApplicationSatisfaction(env, templateDecl.Constraint.ConceptName, constraintArguments, nil, span); err != nil {
 			return nil, err
 		}
 	}
 	info := env.templateInfos[templateName]
+	templateBindings := evt1TemplateBindings(parameters, concreteArgs)
 	var bindings []evt1InstanceRequirementBinding
 	for _, req := range info.Requirements {
-		concreteReq := evt1SubstituteRequirement(req.Operation, templateDecl.TypeParam, concreteType)
-		fn, err := evt1LookupRequiredOperation(env, concreteReq, span, templateName+"<"+concreteType.String()+">")
+		concreteReq := evt1SubstituteRequirementBindings(req.Operation, templateBindings)
+		if err := evt1RequireClosedType(concreteReq.ReturnType, templateName+" required operation "+concreteReq.Name+" result", span); err != nil {
+			return nil, err
+		}
+		for _, parameter := range concreteReq.Params {
+			if err := evt1RequireClosedType(parameter.Type, templateName+" required operation "+concreteReq.Name+" parameter "+parameter.Name, span); err != nil {
+				return nil, err
+			}
+		}
+		fn, err := evt1LookupRequiredOperation(env, concreteReq, span, templateName+"<"+strings.Join(identities, ", ")+">")
 		if err != nil {
 			return nil, err
 		}
@@ -6496,6 +6588,16 @@ func instantiateTemplateArgs(env *semanticEnv, templateName string, concreteArgs
 	if err := evt1ValidateAsyncPersistence(env, instFn); err != nil {
 		return nil, err
 	}
+	concreteClosure := make([]evt1TemplateClosureEntry, len(info.Closure))
+	for i, entry := range info.Closure {
+		arguments := evt1SubstituteArguments(entry.Arguments, templateBindings)
+		for _, argument := range arguments {
+			if err := evt1RequireClosedType(argument, templateName+" concept requirement "+entry.Name, span); err != nil {
+				return nil, err
+			}
+		}
+		concreteClosure[i] = evt1TemplateClosureEntry{Concept: evt1ConceptApplicationLabel(entry.Name, arguments), Name: entry.Name, Arguments: arguments, Path: evt1SubstituteRequirementPath(entry.Path, templateBindings)}
+	}
 	instance := &evt1TemplateInstance{
 		Key:                 key,
 		TemplateName:        templateName,
@@ -6504,7 +6606,7 @@ func instantiateTemplateArgs(env *semanticEnv, templateName string, concreteArgs
 		TypeIdentity:        typeIdentity,
 		GeneratedSymbol:     "concept_template_" + evt1CName(templateName)[len("concept_"):] + "__" + typeIdentity,
 		ConstraintConcept:   templateDecl.Constraint.ConceptName,
-		Closure:             append([]evt1TemplateClosureEntry{}, info.Closure...),
+		Closure:             concreteClosure,
 		RequirementBindings: bindings,
 		Function:            instFn,
 		SourceSpan:          templateDecl.Span,

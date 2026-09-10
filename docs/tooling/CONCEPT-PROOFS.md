@@ -68,6 +68,16 @@ LLM dependency in the compiler.
 `static_assert` proves a compile-time boolean. `Assert.Concept` queries semantic
 proof authority and preserves its proof structure.
 
+## Generic requirement proofs
+
+R6o proof graphs retain every argument of a named concept application and its
+nested prerequisite path. Open generic required-operation bindings are marked
+`GenericRequirement`; concrete instances use `ConcreteWitness`. Relational
+`Assert.Concept` queries accept the concept's declared number of semantic
+subjects, so a nested `Convertible<Source, Destination>` path remains visible
+instead of collapsing to the first subject. Unknown evidence remains `UNKNOWN`,
+never false.
+
 ## Transported value facts
 
 R6h proof evidence may include `Transported through` steps such as local copy,

@@ -108,11 +108,15 @@ func evt1BuildConceptAssertionGraph(env *semanticEnv, goal string, parameters []
 			return ProofGraph{}, evt1Diagnostic("CONCEPT_ASSERT_ARITY_MISMATCH", fmt.Sprintf("%s requires %d semantic subject(s), got %d", goal, wantSubjects, len(subjects)), span)
 		}
 		graph.Outcome = evt1ProjectDirectAnalysis(env, &graph, root, goal, parameters, subjects)
-	} else if _, ok := env.concepts[goal]; ok {
-		if len(parameters) != 0 || len(subjects) != 1 {
-			return ProofGraph{}, evt1Diagnostic("CONCEPT_ASSERT_ARITY_MISMATCH", fmt.Sprintf("concept %s requires one semantic subject and no analysis parameters", goal), span)
+	} else if decl, ok := env.concepts[goal]; ok {
+		if len(parameters) != 0 || len(subjects) != len(evt1ConceptParameters(decl)) {
+			return ProofGraph{}, evt1Diagnostic("CONCEPT_ASSERT_ARITY_MISMATCH", fmt.Sprintf("concept %s requires %d semantic subject(s) and no analysis parameters", goal, len(evt1ConceptParameters(decl))), span)
 		}
-		graph.Outcome = evt1ProjectNamedConcept(env, &graph, root, goal, subjects[0].typeValue, subjects[0].binding, nil, span)
+		arguments := make([]Type, len(subjects))
+		for i, subject := range subjects {
+			arguments[i] = subject.typeValue
+		}
+		graph.Outcome = evt1ProjectNamedConceptApplication(env, &graph, root, goal, arguments, subjects[0].binding, nil, span)
 	} else {
 		return ProofGraph{}, evt1Diagnostic("CONCEPT_ASSERT_GOAL_UNKNOWN", fmt.Sprintf("unknown concept or compiler analysis %s", goal), span)
 	}
@@ -495,7 +499,16 @@ func evt1ProjectNoAllocation(env *semanticEnv, graph *ProofGraph, root string, f
 			outcome = child
 		}
 	}
-	if len(calls) == 0 {
+	templateInstances := evt1DirectTemplateInstances(env, *fn.Body)
+	for _, instance := range templateInstances {
+		instantiated := instance.Function
+		instantiated.Name = instance.GeneratedSymbol
+		child := evt1ProjectNoAllocation(env, graph, fnNode, instantiated, visiting)
+		if child != FactProven {
+			outcome = child
+		}
+	}
+	if len(calls) == 0 && len(templateInstances) == 0 {
 		id := graph.addNode(ProofKnownFact, "no allocating operation", "EVT1 body contains no allocation-capable construct", FactProven, FactOriginCompilerAnalysis, fn.Span)
 		graph.addEdge(fnNode, id, ProofDerivedFrom)
 	}
@@ -505,6 +518,74 @@ func evt1ProjectNoAllocation(env *semanticEnv, graph *ProofGraph, root string, f
 		}
 	}
 	return outcome
+}
+
+func evt1DirectTemplateInstances(env *semanticEnv, block Block) []*evt1TemplateInstance {
+	seen := map[string]bool{}
+	var instances []*evt1TemplateInstance
+	var visitExpr func(Expr)
+	visitExpr = func(expr Expr) {
+		switch e := expr.(type) {
+		case *TemplateCallExpr:
+			arguments := evt1TemplateCallArgs(e)
+			var identities []string
+			for _, argument := range arguments {
+				identities = append(identities, evt1TypeIdentity(evt1CanonicalType(env, argument)))
+			}
+			key := e.Callee + "|" + strings.Join(identities, "__")
+			if instance := env.templateInstances[key]; instance != nil && !seen[key] {
+				seen[key] = true
+				instances = append(instances, instance)
+			}
+			for _, argument := range e.Args {
+				visitExpr(argument)
+			}
+		case *CallExpr:
+			for _, argument := range e.Args {
+				visitExpr(argument)
+			}
+		case *BinaryExpr:
+			visitExpr(e.Left)
+			visitExpr(e.Right)
+		case *UnaryExpr:
+			visitExpr(e.Value)
+		case *ParenExpr:
+			visitExpr(e.Value)
+		case *IndexExpr:
+			visitExpr(e.Base)
+			for _, index := range e.Indices {
+				visitExpr(index)
+			}
+		}
+	}
+	var visitBlock func(Block)
+	visitBlock = func(current Block) {
+		for _, statement := range current.Statements {
+			switch s := statement.(type) {
+			case *ExprStmt:
+				visitExpr(s.Value)
+			case *VarDecl:
+				visitExpr(s.Value)
+			case *AssignStmt:
+				visitExpr(s.Value)
+			case *ReturnStmt:
+				visitExpr(s.Value)
+			case *IfStmt:
+				visitExpr(s.Condition)
+				visitBlock(s.Then)
+				if s.Else != nil {
+					visitBlock(*s.Else)
+				}
+			case *WhileStmt:
+				visitExpr(s.Condition)
+				visitBlock(s.Body)
+			case *Block:
+				visitBlock(*s)
+			}
+		}
+	}
+	visitBlock(block)
+	return instances
 }
 
 func evt1DirectCalls(block Block) []string {
@@ -573,11 +654,21 @@ func evt1DirectCalls(block Block) []string {
 }
 
 func evt1ProjectNamedConcept(env *semanticEnv, graph *ProofGraph, parent, name string, concrete Type, binding *evt1ValueBinding, path []string, span Span) SemanticFactCertainty {
-	if containsString(path, name) {
+	return evt1ProjectNamedConceptApplication(env, graph, parent, name, []Type{concrete}, binding, path, span)
+}
+
+func evt1ProjectNamedConceptApplication(env *semanticEnv, graph *ProofGraph, parent, name string, arguments []Type, binding *evt1ValueBinding, path []string, span Span) SemanticFactCertainty {
+	application := evt1ConceptApplicationLabel(name, arguments)
+	if containsString(path, application) {
 		return FactDisproven
 	}
-	path = append(path, name)
+	path = append(path, application)
 	decl := env.concepts[name]
+	bindings, ok := evt1ConceptBindings(decl, arguments)
+	if !ok || len(arguments) == 0 {
+		return FactDisproven
+	}
+	concrete := arguments[0]
 	outcome := FactProven
 	for _, raw := range decl.Requirements {
 		label := "requirement"
@@ -585,10 +676,11 @@ func evt1ProjectNamedConcept(env *semanticEnv, graph *ProofGraph, parent, name s
 		detail := ""
 		switch requirement := raw.(type) {
 		case *PrerequisiteRequirement:
-			label = requirement.ConceptName + "<" + concrete.String() + ">"
+			nestedArguments := evt1SubstituteArguments(evt1RequirementArguments(requirement), bindings)
+			label = evt1ConceptApplicationLabel(requirement.ConceptName, nestedArguments)
 			node := graph.addNode(ProofRequirement, label, "prerequisite concept", "", FactOriginDeclared, requirement.Span)
 			graph.addEdge(parent, node, ProofRequires)
-			requirementOutcome = evt1ProjectNamedConcept(env, graph, node, requirement.ConceptName, concrete, binding, path, span)
+			requirementOutcome = evt1ProjectNamedConceptApplication(env, graph, node, requirement.ConceptName, nestedArguments, binding, path, span)
 			setProofNodeOutcome(graph, node, requirementOutcome)
 			if requirementOutcome == FactDisproven {
 				outcome = FactDisproven
@@ -597,9 +689,9 @@ func evt1ProjectNamedConcept(env *semanticEnv, graph *ProofGraph, parent, name s
 			}
 			continue
 		case *OperationRequirement:
-			required := evt1SubstituteRequirement(*requirement, decl.TypeParam, concrete)
+			required := evt1SubstituteRequirementBindings(*requirement, bindings)
 			label = evt1Signature(required.ReturnType, required.Name, required.Params)
-			if _, err := evt1LookupRequiredOperation(env, required, span, name+"<"+concrete.String()+">"); err != nil {
+			if _, err := evt1LookupRequiredOperation(env, required, span, application); err != nil {
 				requirementOutcome, detail = FactDisproven, err.Error()
 			}
 		case *FieldRequirement:
@@ -613,7 +705,7 @@ func evt1ProjectNamedConcept(env *semanticEnv, graph *ProofGraph, parent, name s
 				if evt1FieldVisibility(structDecl, requirement.Name) == "private" {
 					requirementOutcome, detail = FactDisproven, "required field is private"
 				}
-				expected := evt1SubstituteType(requirement.Type.valueType(), decl.TypeParam, concrete.valueType())
+				expected := evt1SubstituteBindings(requirement.Type.valueType(), bindings)
 				if !evt1CanonicalType(env, actual.valueType()).Equal(evt1CanonicalType(env, expected)) {
 					requirementOutcome, detail = FactDisproven, fmt.Sprintf("required %s; found %s", expected.String(), actual.String())
 				}
@@ -630,7 +722,7 @@ func evt1ProjectNamedConcept(env *semanticEnv, graph *ProofGraph, parent, name s
 			}
 			analysis := evt1SemanticAnalysisRegistry[requirement.Analysis]
 			if len(requirement.SubjectArgs) > 0 {
-				bound, err := evt1BindRelationalRequirementSubjects(env, decl, concrete, requirement.SubjectArgs, span)
+				bound, err := evt1BindRelationalRequirementSubjectsApplication(env, decl, arguments, requirement.SubjectArgs, span)
 				if err != nil {
 					requirementOutcome, detail = FactDisproven, err.Error()
 				} else {
@@ -640,7 +732,7 @@ func evt1ProjectNamedConcept(env *semanticEnv, graph *ProofGraph, parent, name s
 			} else {
 				args := make([]Type, len(requirement.TypeArgs))
 				for i, arg := range requirement.TypeArgs {
-					args[i] = evt1SubstituteType(arg, decl.TypeParam, concrete)
+					args[i] = evt1SubstituteBindings(arg, bindings)
 				}
 				result := analysis.CheckTypes(env, args, requirement.Parameters)
 				if binding != nil {

@@ -1,0 +1,47 @@
+profile Core;
+
+concept Readable<T>
+{
+    requires int Read(ref T self);
+}
+
+concept Left<T>
+{
+    requires Readable<T>;
+}
+
+concept Right<T>
+{
+    requires Readable<T>;
+}
+
+concept Diamond<T>
+{
+    requires Left<T>;
+    requires Right<T>;
+}
+
+struct Device
+{
+    int value;
+}
+
+int Read(ref Device self)
+{
+    return self.value;
+}
+
+requires Diamond<Device>;
+
+template <typename T>
+requires Diamond<T>
+int Inspect(ref T value)
+{
+    return Read(ref value);
+}
+
+int Main()
+{
+    Device value = Device{3};
+    return Inspect<Device>(ref value);
+}

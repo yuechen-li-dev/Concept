@@ -363,9 +363,9 @@ func TestEVT1TemplateDiagnosticsAreStable(t *testing.T) {
 		code string
 	}{
 		{
-			name: "constraint uses concrete type",
+			name: "constraint concrete type does not authorize generic operation",
 			src:  "profile Vulkan;\nstruct BufferRange { int offset; };\nconcept Resource<T> { requires int Measure(borrow const T value); }\ntemplate <typename T>\nrequires Resource<BufferRange>\nint Score(borrow const T value) { return Measure(value); }\n",
-			code: "CV4170",
+			code: "CV4176",
 		},
 		{
 			name: "dependent field access",

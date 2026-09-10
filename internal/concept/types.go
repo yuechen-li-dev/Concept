@@ -382,6 +382,7 @@ func (r *OperationRequirement) requirementSpan() Span { return r.Span }
 type PrerequisiteRequirement struct {
 	ConceptName string `json:"concept_name"`
 	TypeArg     Type   `json:"type_arg"`
+	TypeArgs    []Type `json:"type_args,omitempty"`
 	Span        Span   `json:"span"`
 }
 
@@ -417,6 +418,7 @@ func (r *CompilerAnalysisRequirement) requirementSpan() Span { return r.Span }
 type ConceptDecl struct {
 	Name         string               `json:"name"`
 	TypeParam    string               `json:"type_param"`
+	Parameters   []GenericParameter   `json:"parameters,omitempty"`
 	Requirements []ConceptRequirement `json:"requirements,omitempty"`
 	Interface    bool                 `json:"interface,omitempty"`
 	Span         Span                 `json:"span"`
@@ -425,12 +427,14 @@ type ConceptDecl struct {
 type ConceptAssertion struct {
 	ConceptName  string `json:"concept_name"`
 	ConcreteType Type   `json:"concrete_type"`
+	TypeArgs     []Type `json:"type_args,omitempty"`
 	Span         Span   `json:"span"`
 }
 
 type TemplateConstraint struct {
 	ConceptName string `json:"concept_name"`
 	TypeArg     Type   `json:"type_arg"`
+	TypeArgs    []Type `json:"type_args,omitempty"`
 	Span        Span   `json:"span"`
 }
 
@@ -1388,6 +1392,7 @@ type MIRName struct {
 type MIRConcept struct {
 	Name         string                  `json:"name"`
 	TypeParam    string                  `json:"type_param"`
+	Parameters   []GenericParameter      `json:"parameters,omitempty"`
 	Interface    bool                    `json:"interface,omitempty"`
 	Requirements []MIRConceptRequirement `json:"requirements,omitempty"`
 	SourceSpan   Span                    `json:"source_span"`
@@ -1405,6 +1410,7 @@ type MIRConceptRequirement struct {
 type MIRAssertion struct {
 	ConceptName  string `json:"concept_name"`
 	ConcreteType Type   `json:"concrete_type"`
+	Arguments    []Type `json:"arguments,omitempty"`
 	Satisfied    bool   `json:"satisfied"`
 	SourceSpan   Span   `json:"source_span"`
 }
@@ -1426,11 +1432,13 @@ type MIRStaticAssert struct {
 type MIRTemplateConstraint struct {
 	ConceptName string `json:"concept_name"`
 	TypeParam   string `json:"type_param"`
+	Arguments   []Type `json:"arguments,omitempty"`
 	SourceSpan  Span   `json:"source_span"`
 }
 
 type MIRClosureEntry struct {
 	ConceptName string   `json:"concept_name"`
+	Arguments   []Type   `json:"arguments,omitempty"`
 	Path        []string `json:"path,omitempty"`
 }
 
@@ -1440,12 +1448,15 @@ type MIRRequirementBinding struct {
 	Name          string   `json:"name"`
 	Signature     string   `json:"signature"`
 	Path          []string `json:"path,omitempty"`
+	Origin        string   `json:"origin,omitempty"`
+	Effect        string   `json:"effect,omitempty"`
 }
 
 type MIRTemplate struct {
 	Async        bool                    `json:"async,omitempty"`
 	Name         string                  `json:"name"`
 	TypeParam    string                  `json:"type_param"`
+	Parameters   []GenericParameter      `json:"parameters,omitempty"`
 	Constraint   MIRTemplateConstraint   `json:"constraint"`
 	Closure      []MIRClosureEntry       `json:"closure,omitempty"`
 	Requirements []MIRRequirementBinding `json:"requirements,omitempty"`
@@ -1459,6 +1470,7 @@ type MIRInstance struct {
 	ID                  string                  `json:"id"`
 	TemplateName        string                  `json:"template_name"`
 	ConcreteType        Type                    `json:"concrete_type"`
+	Arguments           []Type                  `json:"arguments,omitempty"`
 	GeneratedSymbol     string                  `json:"generated_symbol"`
 	ConstraintConcept   string                  `json:"constraint_concept"`
 	Closure             []MIRClosureEntry       `json:"closure,omitempty"`
@@ -1679,6 +1691,8 @@ type MIROperation struct {
 	Provenance           string             `json:"provenance,omitempty"`
 	NoCopy               bool               `json:"no_copy,omitempty"`
 	NoAllocation         bool               `json:"no_allocation,omitempty"`
+	MayAllocate          bool               `json:"may_allocate,omitempty"`
+	EffectOrigin         string             `json:"effect_origin,omitempty"`
 	NoOwnershipTransfer  bool               `json:"no_ownership_transfer,omitempty"`
 	LayoutName           string             `json:"layout_name,omitempty"`
 	RegionID             string             `json:"region_id,omitempty"`
@@ -1814,15 +1828,18 @@ func newSemanticEnv(profile *ProfileDefinition) *semanticEnv {
 }
 
 type evt1TemplateRequirement struct {
-	ID        string
-	Path      []string
-	Concept   string
-	Operation OperationRequirement
+	ID          string
+	Path        []string
+	Concept     string
+	Operation   OperationRequirement
+	MayAllocate bool
 }
 
 type evt1TemplateClosureEntry struct {
-	Concept string
-	Path    []string
+	Concept   string
+	Name      string
+	Arguments []Type
+	Path      []string
 }
 
 type evt1TemplateCallBinding struct {

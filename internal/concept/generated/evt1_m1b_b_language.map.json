@@ -261,23 +261,53 @@
       "constraint_concept": "VulkanResource",
       "closure": [
         {
-          "concept_name": "VulkanResource",
+          "concept_name": "VulkanResource\u003cBufferRange\u003e",
+          "arguments": [
+            {
+              "name": "BufferRange",
+              "kind": "struct",
+              "span": {
+                "line": 51,
+                "column": 25
+              }
+            }
+          ],
           "path": [
-            "VulkanResource"
+            "VulkanResource\u003cBufferRange\u003e"
           ]
         },
         {
-          "concept_name": "Measurable",
+          "concept_name": "Measurable\u003cBufferRange\u003e",
+          "arguments": [
+            {
+              "name": "BufferRange",
+              "kind": "struct",
+              "span": {
+                "line": 35,
+                "column": 25
+              }
+            }
+          ],
           "path": [
-            "VulkanResource",
-            "Measurable"
+            "VulkanResource\u003cBufferRange\u003e",
+            "Measurable\u003cBufferRange\u003e"
           ]
         },
         {
-          "concept_name": "Destroyable",
+          "concept_name": "Destroyable\u003cBufferRange\u003e",
+          "arguments": [
+            {
+              "name": "BufferRange",
+              "kind": "struct",
+              "span": {
+                "line": 36,
+                "column": 26
+              }
+            }
+          ],
           "path": [
-            "VulkanResource",
-            "Destroyable"
+            "VulkanResource\u003cBufferRange\u003e",
+            "Destroyable\u003cBufferRange\u003e"
           ]
         }
       ],
@@ -288,9 +318,10 @@
           "name": "Measure",
           "signature": "int Measure(borrow const BufferRange)",
           "path": [
-            "VulkanResource",
-            "Measurable"
-          ]
+            "VulkanResource\u003cBufferRange\u003e",
+            "Measurable\u003cBufferRange\u003e"
+          ],
+          "origin": "ConcreteWitness"
         },
         {
           "requirement_id": "ScoreResource.req.02",
@@ -298,9 +329,10 @@
           "name": "Destroy",
           "signature": "void Destroy(borrow BufferRange)",
           "path": [
-            "VulkanResource",
-            "Destroyable"
-          ]
+            "VulkanResource\u003cBufferRange\u003e",
+            "Destroyable\u003cBufferRange\u003e"
+          ],
+          "origin": "ConcreteWitness"
         }
       ],
       "return_type": {
@@ -388,23 +420,53 @@
       "constraint_concept": "VulkanResource",
       "closure": [
         {
-          "concept_name": "VulkanResource",
+          "concept_name": "VulkanResource\u003cPipelineState\u003e",
+          "arguments": [
+            {
+              "name": "PipelineState",
+              "kind": "struct",
+              "span": {
+                "line": 51,
+                "column": 25
+              }
+            }
+          ],
           "path": [
-            "VulkanResource"
+            "VulkanResource\u003cPipelineState\u003e"
           ]
         },
         {
-          "concept_name": "Measurable",
+          "concept_name": "Measurable\u003cPipelineState\u003e",
+          "arguments": [
+            {
+              "name": "PipelineState",
+              "kind": "struct",
+              "span": {
+                "line": 35,
+                "column": 25
+              }
+            }
+          ],
           "path": [
-            "VulkanResource",
-            "Measurable"
+            "VulkanResource\u003cPipelineState\u003e",
+            "Measurable\u003cPipelineState\u003e"
           ]
         },
         {
-          "concept_name": "Destroyable",
+          "concept_name": "Destroyable\u003cPipelineState\u003e",
+          "arguments": [
+            {
+              "name": "PipelineState",
+              "kind": "struct",
+              "span": {
+                "line": 36,
+                "column": 26
+              }
+            }
+          ],
           "path": [
-            "VulkanResource",
-            "Destroyable"
+            "VulkanResource\u003cPipelineState\u003e",
+            "Destroyable\u003cPipelineState\u003e"
           ]
         }
       ],
@@ -415,9 +477,10 @@
           "name": "Measure",
           "signature": "int Measure(borrow const PipelineState)",
           "path": [
-            "VulkanResource",
-            "Measurable"
-          ]
+            "VulkanResource\u003cPipelineState\u003e",
+            "Measurable\u003cPipelineState\u003e"
+          ],
+          "origin": "ConcreteWitness"
         },
         {
           "requirement_id": "ScoreResource.req.02",
@@ -425,9 +488,10 @@
           "name": "Destroy",
           "signature": "void Destroy(borrow PipelineState)",
           "path": [
-            "VulkanResource",
-            "Destroyable"
-          ]
+            "VulkanResource\u003cPipelineState\u003e",
+            "Destroyable\u003cPipelineState\u003e"
+          ],
+          "origin": "ConcreteWitness"
         }
       ],
       "return_type": {
@@ -507,23 +571,53 @@
       "constraint_concept": "VulkanResource",
       "closure": [
         {
-          "concept_name": "VulkanResource",
+          "concept_name": "VulkanResource\u003cBufferRange\u003e",
+          "arguments": [
+            {
+              "name": "BufferRange",
+              "kind": "struct",
+              "span": {
+                "line": 58,
+                "column": 25
+              }
+            }
+          ],
           "path": [
-            "VulkanResource"
+            "VulkanResource\u003cBufferRange\u003e"
           ]
         },
         {
-          "concept_name": "Measurable",
+          "concept_name": "Measurable\u003cBufferRange\u003e",
+          "arguments": [
+            {
+              "name": "BufferRange",
+              "kind": "struct",
+              "span": {
+                "line": 35,
+                "column": 25
+              }
+            }
+          ],
           "path": [
-            "VulkanResource",
-            "Measurable"
+            "VulkanResource\u003cBufferRange\u003e",
+            "Measurable\u003cBufferRange\u003e"
           ]
         },
         {
-          "concept_name": "Destroyable",
+          "concept_name": "Destroyable\u003cBufferRange\u003e",
+          "arguments": [
+            {
+              "name": "BufferRange",
+              "kind": "struct",
+              "span": {
+                "line": 36,
+                "column": 26
+              }
+            }
+          ],
           "path": [
-            "VulkanResource",
-            "Destroyable"
+            "VulkanResource\u003cBufferRange\u003e",
+            "Destroyable\u003cBufferRange\u003e"
           ]
         }
       ],
@@ -534,9 +628,10 @@
           "name": "Measure",
           "signature": "int Measure(borrow const BufferRange)",
           "path": [
-            "VulkanResource",
-            "Measurable"
-          ]
+            "VulkanResource\u003cBufferRange\u003e",
+            "Measurable\u003cBufferRange\u003e"
+          ],
+          "origin": "ConcreteWitness"
         },
         {
           "requirement_id": "DestroyResource.req.02",
@@ -544,9 +639,10 @@
           "name": "Destroy",
           "signature": "void Destroy(borrow BufferRange)",
           "path": [
-            "VulkanResource",
-            "Destroyable"
-          ]
+            "VulkanResource\u003cBufferRange\u003e",
+            "Destroyable\u003cBufferRange\u003e"
+          ],
+          "origin": "ConcreteWitness"
         }
       ],
       "return_type": {
@@ -625,23 +721,53 @@
       "constraint_concept": "VulkanResource",
       "closure": [
         {
-          "concept_name": "VulkanResource",
+          "concept_name": "VulkanResource\u003cPipelineState\u003e",
+          "arguments": [
+            {
+              "name": "PipelineState",
+              "kind": "struct",
+              "span": {
+                "line": 58,
+                "column": 25
+              }
+            }
+          ],
           "path": [
-            "VulkanResource"
+            "VulkanResource\u003cPipelineState\u003e"
           ]
         },
         {
-          "concept_name": "Measurable",
+          "concept_name": "Measurable\u003cPipelineState\u003e",
+          "arguments": [
+            {
+              "name": "PipelineState",
+              "kind": "struct",
+              "span": {
+                "line": 35,
+                "column": 25
+              }
+            }
+          ],
           "path": [
-            "VulkanResource",
-            "Measurable"
+            "VulkanResource\u003cPipelineState\u003e",
+            "Measurable\u003cPipelineState\u003e"
           ]
         },
         {
-          "concept_name": "Destroyable",
+          "concept_name": "Destroyable\u003cPipelineState\u003e",
+          "arguments": [
+            {
+              "name": "PipelineState",
+              "kind": "struct",
+              "span": {
+                "line": 36,
+                "column": 26
+              }
+            }
+          ],
           "path": [
-            "VulkanResource",
-            "Destroyable"
+            "VulkanResource\u003cPipelineState\u003e",
+            "Destroyable\u003cPipelineState\u003e"
           ]
         }
       ],
@@ -652,9 +778,10 @@
           "name": "Measure",
           "signature": "int Measure(borrow const PipelineState)",
           "path": [
-            "VulkanResource",
-            "Measurable"
-          ]
+            "VulkanResource\u003cPipelineState\u003e",
+            "Measurable\u003cPipelineState\u003e"
+          ],
+          "origin": "ConcreteWitness"
         },
         {
           "requirement_id": "DestroyResource.req.02",
@@ -662,9 +789,10 @@
           "name": "Destroy",
           "signature": "void Destroy(borrow PipelineState)",
           "path": [
-            "VulkanResource",
-            "Destroyable"
-          ]
+            "VulkanResource\u003cPipelineState\u003e",
+            "Destroyable\u003cPipelineState\u003e"
+          ],
+          "origin": "ConcreteWitness"
         }
       ],
       "return_type": {
@@ -1922,23 +2050,53 @@
       },
       "closure": [
         {
-          "concept_name": "VulkanResource",
+          "concept_name": "VulkanResource\u003cT\u003e",
+          "arguments": [
+            {
+              "name": "T",
+              "kind": "concept_param",
+              "span": {
+                "line": 51,
+                "column": 25
+              }
+            }
+          ],
           "path": [
-            "VulkanResource"
+            "VulkanResource\u003cT\u003e"
           ]
         },
         {
-          "concept_name": "Measurable",
+          "concept_name": "Measurable\u003cT\u003e",
+          "arguments": [
+            {
+              "name": "T",
+              "kind": "concept_param",
+              "span": {
+                "line": 35,
+                "column": 25
+              }
+            }
+          ],
           "path": [
-            "VulkanResource",
-            "Measurable"
+            "VulkanResource\u003cT\u003e",
+            "Measurable\u003cT\u003e"
           ]
         },
         {
-          "concept_name": "Destroyable",
+          "concept_name": "Destroyable\u003cT\u003e",
+          "arguments": [
+            {
+              "name": "T",
+              "kind": "concept_param",
+              "span": {
+                "line": 36,
+                "column": 26
+              }
+            }
+          ],
           "path": [
-            "VulkanResource",
-            "Destroyable"
+            "VulkanResource\u003cT\u003e",
+            "Destroyable\u003cT\u003e"
           ]
         }
       ],
@@ -1949,9 +2107,10 @@
           "name": "Measure",
           "signature": "int Measure(borrow const T)",
           "path": [
-            "VulkanResource",
-            "Measurable"
-          ]
+            "VulkanResource\u003cT\u003e",
+            "Measurable\u003cT\u003e"
+          ],
+          "origin": "GenericRequirement"
         },
         {
           "requirement_id": "ScoreResource.req.02",
@@ -1959,9 +2118,10 @@
           "name": "Destroy",
           "signature": "void Destroy(borrow T)",
           "path": [
-            "VulkanResource",
-            "Destroyable"
-          ]
+            "VulkanResource\u003cT\u003e",
+            "Destroyable\u003cT\u003e"
+          ],
+          "origin": "GenericRequirement"
         }
       ],
       "return_type": {
@@ -2033,23 +2193,53 @@
       },
       "closure": [
         {
-          "concept_name": "VulkanResource",
+          "concept_name": "VulkanResource\u003cT\u003e",
+          "arguments": [
+            {
+              "name": "T",
+              "kind": "concept_param",
+              "span": {
+                "line": 58,
+                "column": 25
+              }
+            }
+          ],
           "path": [
-            "VulkanResource"
+            "VulkanResource\u003cT\u003e"
           ]
         },
         {
-          "concept_name": "Measurable",
+          "concept_name": "Measurable\u003cT\u003e",
+          "arguments": [
+            {
+              "name": "T",
+              "kind": "concept_param",
+              "span": {
+                "line": 35,
+                "column": 25
+              }
+            }
+          ],
           "path": [
-            "VulkanResource",
-            "Measurable"
+            "VulkanResource\u003cT\u003e",
+            "Measurable\u003cT\u003e"
           ]
         },
         {
-          "concept_name": "Destroyable",
+          "concept_name": "Destroyable\u003cT\u003e",
+          "arguments": [
+            {
+              "name": "T",
+              "kind": "concept_param",
+              "span": {
+                "line": 36,
+                "column": 26
+              }
+            }
+          ],
           "path": [
-            "VulkanResource",
-            "Destroyable"
+            "VulkanResource\u003cT\u003e",
+            "Destroyable\u003cT\u003e"
           ]
         }
       ],
@@ -2060,9 +2250,10 @@
           "name": "Measure",
           "signature": "int Measure(borrow const T)",
           "path": [
-            "VulkanResource",
-            "Measurable"
-          ]
+            "VulkanResource\u003cT\u003e",
+            "Measurable\u003cT\u003e"
+          ],
+          "origin": "GenericRequirement"
         },
         {
           "requirement_id": "DestroyResource.req.02",
@@ -2070,9 +2261,10 @@
           "name": "Destroy",
           "signature": "void Destroy(borrow T)",
           "path": [
-            "VulkanResource",
-            "Destroyable"
-          ]
+            "VulkanResource\u003cT\u003e",
+            "Destroyable\u003cT\u003e"
+          ],
+          "origin": "GenericRequirement"
         }
       ],
       "return_type": {

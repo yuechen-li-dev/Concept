@@ -220,4 +220,12 @@ R6m
 R6n
     ordinary typed allocation is blocked because a generic capability
     constraint cannot target TAllocator when it is not the first type parameter
+R6o
+    arbitrary-parameter and relational concept applications provide
+    open-generic operation closure and concrete revalidation
 ```
+
+R6o closes the general `CV4170`, `CV4027`, and constrained generic Drop
+blockers without publishing Standard.Memory or adding allocator-specific
+compiler behavior. A later R6p milestone may retry Standard.Memory through the
+ordinary language and module path.

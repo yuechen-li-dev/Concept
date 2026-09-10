@@ -1,0 +1,35 @@
+profile Core;
+
+struct Source
+{
+    int value;
+}
+
+struct Destination
+{
+    int value;
+}
+
+concept Convertible<T, U>
+{
+    requires U Convert(T value);
+}
+
+Destination Convert(Source value)
+{
+    return Destination{value.value};
+}
+
+requires Convertible<Source, Destination>;
+
+template <typename T, typename U>
+requires Convertible<T, U>
+U ConvertThrough(T value)
+{
+    return Convert(value);
+}
+
+Destination Main()
+{
+    return ConvertThrough<Source, Destination>(Source{9});
+}
