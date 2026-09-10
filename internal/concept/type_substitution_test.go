@@ -57,10 +57,40 @@ func TestStructuralTypeSubstitutionHandlesTypeAndValueParameters(t *testing.T) {
 	}
 }
 
+func TestGenericValueSubstitutionClosesNestedApplicationArgument(t *testing.T) {
+	nested := Type{Name: "Inner", Kind: TypeApplied, TypeArgs: []Type{
+		{Name: "T", Kind: TypeBuiltin},
+		{Name: "N", Kind: TypeBuiltin},
+	}}
+	params := []GenericParameter{{Name: "T", Kind: "type"}, {Name: "N", Kind: "value"}}
+	args := []Type{{Name: "Widget", Kind: TypeStruct}, {Name: "32", Kind: TypeTemplateValue}}
+	nested = evt1SubstituteType(nested, "T", args[0])
+	nested = evt1SubstituteGenericValueExtents(nested, params, args)
+	if nested.TypeArgs[0].Name != "Widget" || nested.TypeArgs[1].Name != "32" || nested.TypeArgs[1].Kind != TypeTemplateValue {
+		t.Fatalf("nested generic value argument remained open: %#v", nested)
+	}
+}
+
 func TestClosedInstantiationInvariantRejectsReachableParameter(t *testing.T) {
 	open := Type{Name: "Result", Kind: TypeApplied, TypeArgs: []Type{{Name: "T", Kind: TypeConceptParam}, {Name: "Error", Kind: TypeEnum}}}
 	if err := evt1RequireClosedType(open, "test", Span{}); err == nil {
 		t.Fatal("closed-instantiation invariant accepted a reachable template parameter")
+	}
+}
+
+func TestOpenTypeRecognizesSymbolicNonTypeArguments(t *testing.T) {
+	open := Type{Name: "Buffer", Kind: TypeApplied, TypeArgs: []Type{
+		{Name: "Widget", Kind: TypeStruct},
+		{Name: "Capacity", Kind: TypeTemplateValue},
+	}}
+	if !evt1TypeContainsConceptParameter(open) {
+		t.Fatal("symbolic non-type argument must keep a nested generic application open")
+	}
+	closed := open
+	closed.TypeArgs = append([]Type(nil), open.TypeArgs...)
+	closed.TypeArgs[1].Name = "8"
+	if evt1TypeContainsConceptParameter(closed) {
+		t.Fatal("concrete non-type argument must close a nested generic application")
 	}
 }
 

@@ -31,8 +31,10 @@ against `Standard.Build.Metadata`. No reflection, serialization framework,
 registry, download, solver, or runtime package metadata is involved.
 
 The package DAG comes only from manifest values. Module edges still come only
-from imports. R7a's graph is `Standard -> nothing` and `DragonGod -> Standard`;
-cycles fail as `PACKAGE_DEPENDENCY_CYCLE`.
+from imports. R7b retains `Standard -> nothing` and `DragonGod -> Standard`;
+cycles fail as `PACKAGE_DEPENDENCY_CYCLE`. Dominatus is a parity oracle, not a
+third package: agentic-kernel capabilities live in semantic `DragonGod.*`
+modules without creating a parallel product namespace.
 
 `Make.oct` remains temporary bootstrap orchestration. It is retained because it
 is adequate and avoids shell-script build logic. Its typed plan invokes the

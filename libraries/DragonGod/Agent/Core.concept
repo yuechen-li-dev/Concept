@@ -1,0 +1,21 @@
+module DragonGod.Agent.Core;
+profile Core;
+
+import DragonGod.Core.Types;
+import DragonGod.Memory.State;
+import DragonGod.Events.Core;
+import DragonGod.Actuation.Core;
+import DragonGod.Machine.Execution;
+import DragonGod.Time.Core;
+
+template <typename Configuration, usize Capacity>
+struct AgentContext
+{
+    AgentId id;
+    Mind<Configuration, Capacity, Capacity> mind;
+    MemoryState<Configuration, Capacity> memory;
+    EventBus<Configuration, Capacity> events;
+    ActuatorHost<Configuration, Capacity> actuator;
+    Clock clock;
+    int rngSeed;
+};

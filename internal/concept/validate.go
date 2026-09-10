@@ -5741,12 +5741,14 @@ func evt1ResolveOrdinaryCall(env *semanticEnv, scope *evt1Scope, name string, ar
 		return FunctionDecl{}, evt1Diagnostic("CV4027", fmt.Sprintf("unknown function %s", name), span)
 	}
 	var matches []FunctionDecl
+	var matchScores []int
 	var semanticArgumentError error
 	for _, fn := range candidates {
 		if len(fn.Params) != len(args) {
 			continue
 		}
 		match := true
+		score := 0
 		for i, arg := range args {
 			if err := validateCallArgument(env, scope, fn.Params[i].Type, arg, argTypes[i], templateInfo); err != nil {
 				if diagnostic, ok := err.(Diagnostic); ok && strings.HasPrefix(diagnostic.Code, "CV45") {
@@ -5755,15 +5757,32 @@ func evt1ResolveOrdinaryCall(env *semanticEnv, scope *evt1Scope, name string, ar
 				match = false
 				break
 			}
+			if !evt1CanonicalType(env, fn.Params[i].Type).Equal(evt1CanonicalType(env, argTypes[i])) {
+				score++
+			}
 		}
 		if match {
 			matches = append(matches, fn)
+			matchScores = append(matchScores, score)
 		}
 	}
 	if len(matches) == 1 {
 		return matches[0], nil
 	}
 	if len(matches) > 1 {
+		best := 0
+		unique := true
+		for i := 1; i < len(matches); i++ {
+			if matchScores[i] < matchScores[best] {
+				best = i
+				unique = true
+			} else if matchScores[i] == matchScores[best] {
+				unique = false
+			}
+		}
+		if unique {
+			return matches[best], nil
+		}
 		return FunctionDecl{}, evt1Diagnostic("CV4182", fmt.Sprintf("call %s is ambiguous under exact-signature matching", name), span)
 	}
 	if semanticArgumentError != nil {
@@ -6911,6 +6930,26 @@ func evt1SubstituteStatement(stmt Statement, typeParam string, concreteType Type
 			out.Bound = bound
 		}
 		return out, nil
+	case *ForeachStmt:
+		source, err := evt1SubstituteExpr(s.Source, typeParam, concreteType)
+		if err != nil {
+			return nil, err
+		}
+		body, err := evt1SubstituteBlock(s.Body, typeParam, concreteType)
+		if err != nil {
+			return nil, err
+		}
+		return &ForeachStmt{
+			ItemType:     evt1SubstituteType(s.ItemType, typeParam, concreteType),
+			ItemName:     s.ItemName,
+			Source:       source,
+			Body:         body,
+			SourceType:   evt1SubstituteType(s.SourceType, typeParam, concreteType),
+			IteratorType: evt1SubstituteType(s.IteratorType, typeParam, concreteType),
+			ElementType:  evt1SubstituteType(s.ElementType, typeParam, concreteType),
+			SourceKind:   s.SourceKind,
+			Span:         s.Span,
+		}, nil
 	default:
 		return nil, evt1Diagnostic("CV4180", "unsupported template statement during instantiation", stmt.statementSpan())
 	}

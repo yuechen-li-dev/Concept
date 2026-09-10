@@ -1,0 +1,202 @@
+module DragonGod.Tests.AgenticKernel;
+profile Core;
+
+import DragonGod.Core.Types;
+import DragonGod.Agent.Core;
+import DragonGod.Memory.State;
+import DragonGod.Events.Core;
+import DragonGod.Actuation.Core;
+import DragonGod.Machine.Execution;
+import DragonGod.Trace.Core;
+import DragonGod.Replay.Core;
+import DragonGod.Replay.Checkpoint;
+import DragonGod.Time.Core;
+
+record struct TestConfiguration { int identity; };
+
+enum BehaviorSignal { Evaluate, Finish, }
+record struct BehaviorContext { int eventValue; };
+bool EventAccepted(borrow const BehaviorContext context) { return context.eventValue == 7; }
+bool TransitionOccurred(AutomataDispatchOutcome outcome)
+{
+    return match (outcome)
+    {
+        AutomataDispatchOutcome::Transitioned => true,
+        AutomataDispatchOutcome::Finished => true,
+        AutomataDispatchOutcome::Unhandled => false,
+        AutomataDispatchOutcome::Ambiguous => false,
+        AutomataDispatchOutcome::AlreadyFinished => false,
+        AutomataDispatchOutcome::EffectBatchOccupied => false
+    };
+}
+
+automata HistoricalDominatusBehavior(BehaviorSignal, borrow context: BehaviorContext)
+{
+    initial machine Main
+    {
+        initial state Observe
+        {
+            on BehaviorSignal::Evaluate when EventAccepted(context) => goto Accepted;
+            on BehaviorSignal::Evaluate otherwise => goto Rejected;
+        }
+        state Accepted { on BehaviorSignal::Finish goto Finished; }
+        state Rejected { on BehaviorSignal::Finish goto Finished; }
+        terminal state Finished { finish; }
+    }
+}
+
+AgentContext<TestConfiguration, 16> TestContext(int agentId)
+{
+    MachineFrame frame = EmptyFrame();
+    TraceEntry traceEntry = EmptyTraceEntry();
+    MemorySlot memorySlot = EmptyMemorySlot();
+    Event event = EmptyEvent();
+    ActuationSlot actuation = EmptyActuationSlot();
+    TraceEntry<array>[16] traceEntries = [traceEntry, traceEntry, traceEntry, traceEntry, traceEntry, traceEntry, traceEntry, traceEntry, traceEntry, traceEntry, traceEntry, traceEntry, traceEntry, traceEntry, traceEntry, traceEntry];
+    MachineFrame<array>[16] frames = [MachineFrame{StateId{10}, Reason{0}}, frame, frame, frame, frame, frame, frame, frame, frame, frame, frame, frame, frame, frame, frame, frame];
+    MemorySlot<array>[16] memorySlots = [memorySlot, memorySlot, memorySlot, memorySlot, memorySlot, memorySlot, memorySlot, memorySlot, memorySlot, memorySlot, memorySlot, memorySlot, memorySlot, memorySlot, memorySlot, memorySlot];
+    Event<array>[16] eventSlots = [event, event, event, event, event, event, event, event, event, event, event, event, event, event, event, event];
+    ActuationSlot<array>[16] actuationSlots = [actuation, actuation, actuation, actuation, actuation, actuation, actuation, actuation, actuation, actuation, actuation, actuation, actuation, actuation, actuation, actuation];
+    TraceRecorder<TestConfiguration, 16> trace = TraceRecorder<TestConfiguration, 16>{0, traceEntries};
+    Mind<TestConfiguration, 16, 16> mind = Mind<TestConfiguration, 16, 16>{MachineId{1}, 1, MindStatus::Idle, frames, Reason{0}, 0, trace};
+    MemoryState<TestConfiguration, 16> memory = MemoryState<TestConfiguration, 16>{0, memorySlots};
+    EventBus<TestConfiguration, 16> events = EventBus<TestConfiguration, 16>{1, 0, eventSlots};
+    ActuatorHost<TestConfiguration, 16> actuator = ActuatorHost<TestConfiguration, 16>{1, actuationSlots};
+    return AgentContext<TestConfiguration, 16>{AgentId{agentId}, mind, memory, events, actuator, Clock{MonotonicTime{0}}, 0};
+}
+
+[[fact]]
+void CapacitiesAreConfigurationNotKernelConstants()
+{
+    MemorySlot slot = EmptyMemorySlot();
+    MemorySlot<array>[2] smallSlots = [slot, slot];
+    MemorySlot<array>[6] largerSlots = [slot, slot, slot, slot, slot, slot];
+    MemoryState<TestConfiguration, 2> small = MemoryState<TestConfiguration, 2>{0, smallSlots};
+    MemoryState<TestConfiguration, 6> larger = MemoryState<TestConfiguration, 6>{0, largerSlots};
+    small.Write(MemoryKey{1}, 1)!;
+    small.Write(MemoryKey{2}, 2)!;
+    Assert.Error(small.Write(MemoryKey{3}, 3), "the configured two-key store is bounded");
+    larger.Write(MemoryKey{1}, 1)!;
+    larger.Write(MemoryKey{2}, 2)!;
+    larger.Write(MemoryKey{3}, 3)!;
+    Assert.Equals(larger.Read(MemoryKey{3}, 0), 3, "the same toolkit supports a different capacity");
+}
+
+[[fact]]
+void MemoryTracksChangedKeysAndStableRevisions()
+{
+    MemorySlot slot = EmptyMemorySlot();
+    MemorySlot<array>[3] slots = [slot, slot, slot];
+    MemoryState<TestConfiguration, 3> memory = MemoryState<TestConfiguration, 3>{0, slots};
+    MemoryKey health = MemoryKey{1};
+    memory.Write(health, 7)!;
+    Assert.True(memory.IsDirty(health), "a changed key is dirty");
+    Assert.Equals(memory.revision, 1, "the first write advances the revision");
+    memory.ClearDirty();
+    memory.Write(health, 7)!;
+    Assert.False(memory.IsDirty(health), "an equal write does not dirty the key");
+    Assert.Equals(memory.revision, 1, "an equal write does not advance the revision");
+    memory.Write(health, 8)!;
+    Assert.True(memory.IsDirty(health), "a changed value dirties the key again");
+    Assert.Equals(memory.revision, 2, "a changed value advances the revision once");
+}
+
+[[fact]]
+void AgenticKernelRunsHistoricalDominatusShape()
+{
+    AgentContext<TestConfiguration, 16> context = TestContext(7);
+    EventId eventId = context.events.Dispatch(EventKind{5}, EventPayload{7})!;
+    context.mind.trace.Record(TraceEntry{TraceKind::EventEnqueue, StateId{10}, StateId{10}, Reason{eventId.value}, 0})!;
+    EventCursor cursor = StartCursor();
+    Event input = context.events.ReadNext(ref cursor, EventKind{5})!;
+    context.mind.trace.Record(TraceEntry{TraceKind::EventConsume, StateId{10}, StateId{10}, Reason{input.id.value}, 0})!;
+    context.memory.Write(MemoryKey{1}, input.payload.value)!;
+
+    ActuationReceipt receipt = context.actuator.Dispatch(Allow(Reason{200}))!;
+    context.mind.trace.Record(TraceEntry{TraceKind::ActuationDispatch, StateId{10}, StateId{10}, Reason{receipt.id.value}, 0})!;
+    BehaviorContext behaviorContext = BehaviorContext{input.payload.value};
+    instance HistoricalDominatusBehavior behavior(behaviorContext);
+    Assert.True(TransitionOccurred(dispatch(behavior, BehaviorSignal::Evaluate)), "the application behavior transitions through a native automaton");
+    Assert.True(TransitionOccurred(dispatch(behavior, BehaviorSignal::Finish)), "the application behavior reaches its terminal state");
+    StateId behaviorTarget = StateId{30};
+    MindSignal emptySignal = MindSignal::None;
+    MindSignal<array>[16] work = [MindSignal::TransitionTo(StateId{20}, Reason{100}), MindSignal::AwaitActuation(receipt.id), MindSignal::TransitionTo(behaviorTarget, Reason{101}), MindSignal::Succeed(Reason{102}), emptySignal, emptySignal, emptySignal, emptySignal, emptySignal, emptySignal, emptySignal, emptySignal, emptySignal, emptySignal, emptySignal, emptySignal];
+    BatchResult batch = context.mind.ExecuteBatch(BatchId{3}, work, 4, 4, 0)!;
+
+    Assert.Equals(batch.executed, 4, "the explicit batch runs in source order");
+    Assert.True(batch.complete, "the bounded batch reports completion");
+    Assert.Equals(context.mind.CurrentState().value, 30, "the mind reaches the authored final state");
+    Assert.Equals(context.mind.status, MindStatus::Succeeded, "the mind completes without a scheduler");
+    Assert.Equals(context.memory.Read(MemoryKey{1}, -1), 7, "event data reaches agent memory");
+    Assert.Equals(context.actuator.Status(receipt.id), ActuationStatus::Pending, "the actuation remains an explicit obligation");
+
+    KernelCheckpoint<TestConfiguration, 16> checkpoint = KernelCheckpoint<TestConfiguration, 16>{context, 0};
+    CheckpointSlot<TestConfiguration, 16> checkpointSlot = CheckpointSlot<TestConfiguration, 16>{checkpoint};
+    ReplayInput empty = EmptyReplayInput();
+    ReplayInput<array>[16] inputs = [empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty];
+    ReplayLog<TestConfiguration, 16> log = ReplayLog<TestConfiguration, 16>{0, inputs};
+    log.Append(ReplayInput::Advance(2))!;
+    log.Append(ReplayInput::ActuationComplete(receipt.id, Reason{201}))!;
+    log.Append(ReplayInput::RngSeed(42))!;
+    ReplayDriver<TestConfiguration, 16> driver = ReplayDriver<TestConfiguration, 16>{0};
+    int applied = driver.ApplyAll(log, ref context)!;
+
+    Assert.Equals(applied, 3, "replay applies every structured input exactly once");
+    Assert.Equals(context.rngSeed, 42, "replay restores the explicit random seed");
+    Assert.Equals(context.actuator.Status(receipt.id), ActuationStatus::Completed, "replay completes the pending actuation");
+    Assert.True(Reached(context.clock.now, Deadline{MonotonicTime{2}}), "replay advances monotonic time");
+
+    context.memory.Write(MemoryKey{1}, 99)!;
+    checkpointSlot.Restore(ref context);
+    Assert.Equals(context.memory.Read(MemoryKey{1}, -1), 7, "checkpoint restore recovers semantic memory");
+    Assert.False(context.memory.IsDirty(MemoryKey{1}), "checkpoint restore establishes a clean dirty-key baseline");
+    Assert.Equals(context.actuator.Status(receipt.id), ActuationStatus::Pending, "checkpoint restore recovers pending obligations");
+    Assert.Equals(context.rngSeed, 0, "checkpoint restore recovers the prior random seed");
+}
+
+[[fact]]
+void ReplayIsDeterministicFromTheSameCheckpoint()
+{
+    AgentContext<TestConfiguration, 16> seed = TestContext(1);
+    ActuationReceipt receipt = seed.actuator.Dispatch(Allow(Reason{9}))!;
+    ReplayInput empty = EmptyReplayInput();
+    ReplayInput<array>[16] inputs = [empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty];
+    ReplayLog<TestConfiguration, 16> log = ReplayLog<TestConfiguration, 16>{0, inputs};
+    log.Append(ReplayInput::MemoryWrite(MemoryKey{3}, 55))!;
+    log.Append(ReplayInput::EventDispatch(EventKind{4}, EventPayload{88}))!;
+    log.Append(ReplayInput::ActuationComplete(receipt.id, Reason{10}))!;
+    log.Append(ReplayInput::RngSeed(1234))!;
+
+    AgentContext<TestConfiguration, 16> left = seed;
+    AgentContext<TestConfiguration, 16> right = seed;
+    ReplayDriver<TestConfiguration, 16> leftDriver = ReplayDriver<TestConfiguration, 16>{0};
+    ReplayDriver<TestConfiguration, 16> rightDriver = ReplayDriver<TestConfiguration, 16>{0};
+    leftDriver.ApplyAll(log, ref left)!;
+    rightDriver.ApplyAll(log, ref right)!;
+
+    Assert.Equals(left.memory.Read(MemoryKey{3}, 0), right.memory.Read(MemoryKey{3}, 0), "replay memory outcomes match");
+    Assert.Equals(left.events.Count(), right.events.Count(), "replay event outcomes match");
+    Assert.Equals(left.actuator.Status(receipt.id), right.actuator.Status(receipt.id), "replay actuation outcomes match");
+    Assert.Equals(left.rngSeed, right.rngSeed, "replay random seeds match");
+    Assert.Equals(left.mind.trace.Count(), right.mind.trace.Count(), "replay structured trace lengths match");
+}
+
+[[fact]]
+void BoundedSurfacesReturnOrdinaryErrors()
+{
+    Event event = EmptyEvent();
+    Event<array>[2] eventSlots = [event, event];
+    EventBus<TestConfiguration, 2> events = EventBus<TestConfiguration, 2>{1, 0, eventSlots};
+    EventId e1 = events.Dispatch(EventKind{1}, EventPayload{1})!;
+    EventId e2 = events.Dispatch(EventKind{1}, EventPayload{2})!;
+    Assert.Error(events.Dispatch(EventKind{1}, EventPayload{3}), "a full event bus returns an error");
+    Assert.Equals(e1.value + e2.value, 3, "event identities are stable and monotonic");
+
+    ActuationSlot slot = EmptyActuationSlot();
+    ActuationSlot<array>[2] actuationSlots = [slot, slot];
+    ActuatorHost<TestConfiguration, 2> actuator = ActuatorHost<TestConfiguration, 2>{1, actuationSlots};
+    ActuationReceipt a1 = actuator.Dispatch(Allow(Reason{1}))!;
+    ActuationReceipt a2 = actuator.Dispatch(Allow(Reason{2}))!;
+    Assert.Error(actuator.Dispatch(Allow(Reason{3})), "full actuation storage returns an error");
+    Assert.Equals(a1.id.value + a2.id.value, 3, "actuation identities are stable and monotonic");
+}

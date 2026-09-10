@@ -1,0 +1,84 @@
+module DragonGod.Memory.State;
+profile Core;
+
+record struct MemoryKey { int value; };
+struct MemorySlot { MemoryKey key; int value; bool occupied; bool dirty; };
+enum MemoryError { CapacityExhausted, }
+
+MemorySlot EmptyMemorySlot() { return MemorySlot{MemoryKey{0}, 0, false, false}; }
+bool SlotMatches(MemorySlot slot, MemoryKey key) { return slot.occupied and slot.key.value == key.value; }
+
+template <typename Configuration, usize Capacity>
+class MemoryState
+{
+public:
+    int revision;
+    MemorySlot<array>[Capacity] slots;
+
+    Result<void, MemoryError> Write(ref MemoryState self, MemoryKey key, int value)
+    {
+        int index = 0;
+        foreach (MemorySlot slot in self.slots)
+        {
+            if (SlotMatches(slot, key))
+            {
+                if (slot.value != value)
+                {
+                    self.slots[index] = MemorySlot{key, value, true, true};
+                    self.revision = self.revision + 1;
+                }
+                return Result::Ok();
+            }
+            index = index + 1;
+        }
+        index = 0;
+        foreach (MemorySlot slot in self.slots)
+        {
+            if (not slot.occupied)
+            {
+                self.slots[index] = MemorySlot{key, value, true, true};
+                self.revision = self.revision + 1;
+                return Result::Ok();
+            }
+            index = index + 1;
+        }
+        return Result::Error(MemoryError::CapacityExhausted);
+    }
+
+    int Read(ref const MemoryState self, MemoryKey key, int fallback)
+    {
+        foreach (MemorySlot slot in self.slots)
+        {
+            if (SlotMatches(slot, key)) { return slot.value; }
+        }
+        return fallback;
+    }
+
+    bool Has(ref const MemoryState self, MemoryKey key)
+    {
+        foreach (MemorySlot slot in self.slots)
+        {
+            if (SlotMatches(slot, key)) { return true; }
+        }
+        return false;
+    }
+
+    bool IsDirty(ref const MemoryState self, MemoryKey key)
+    {
+        foreach (MemorySlot slot in self.slots)
+        {
+            if (SlotMatches(slot, key)) { return slot.dirty; }
+        }
+        return false;
+    }
+
+    void ClearDirty(ref MemoryState self)
+    {
+        int index = 0;
+        foreach (MemorySlot slot in self.slots)
+        {
+            self.slots[index] = MemorySlot{slot.key, slot.value, slot.occupied, false};
+            index = index + 1;
+        }
+    }
+};

@@ -17,8 +17,15 @@ func evt1MaterializeGenericInstances(module *Module, env *semanticEnv) {
 		existingStructs[decl.Name] = true
 	}
 	existingFunctions := map[string]bool{}
+	functionKey := func(fn FunctionDecl) string {
+		parts := []string{fn.MethodOf, fn.Name}
+		for _, parameter := range fn.Params {
+			parts = append(parts, parameter.Type.String())
+		}
+		return strings.Join(parts, "\x00")
+	}
 	for _, fn := range module.Functions {
-		existingFunctions[fn.Name] = true
+		existingFunctions[functionKey(fn)] = true
 	}
 	var names []string
 	for name := range env.genericTypeInstances {
@@ -32,9 +39,10 @@ func evt1MaterializeGenericInstances(module *Module, env *semanticEnv) {
 			existingStructs[decl.Name] = true
 		}
 		for _, method := range decl.Methods {
-			if !existingFunctions[method.Name] {
+			key := functionKey(method)
+			if !existingFunctions[key] {
 				module.Functions = append(module.Functions, method)
-				existingFunctions[method.Name] = true
+				existingFunctions[key] = true
 			}
 		}
 	}
@@ -130,6 +138,13 @@ func evt1InstantiateGenericType(env *semanticEnv, application Type) (Type, error
 				method.Body = &body
 			}
 		}
+		// Non-type parameters can occur anywhere a method type can occur, not
+		// only in the aggregate's fields. Close array extents and nested generic
+		// arguments before registering the concrete method overload.
+		method.ReturnType = evt1SubstituteGenericValueExtents(method.ReturnType, decl.Parameters, application.TypeArgs)
+		for k := range method.Params {
+			method.Params[k].Type = evt1SubstituteGenericValueExtents(method.Params[k].Type, decl.Parameters, application.TypeArgs)
+		}
 		method.MethodOf = identity
 		for k := range method.Params {
 			if method.Params[k].Name == "self" {
@@ -184,6 +199,11 @@ func evt1SubstituteGenericValueExtents(t Type, params []GenericParameter, args [
 			value, _ := strconv.Atoi(args[i].Name)
 			values[param.Name] = value
 		}
+	}
+	if value, found := values[t.Name]; found && t.PointerTo == nil && t.ArrayElem == nil && len(t.TypeArgs) == 0 && len(t.CallableParams) == 0 && t.CallableResult == nil {
+		t.Name = strconv.Itoa(value)
+		t.Kind = TypeTemplateValue
+		return t
 	}
 	replace := func(expr Expr) Expr {
 		if name, ok := expr.(*NameExpr); ok {

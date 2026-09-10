@@ -1,0 +1,80 @@
+module DragonGod.Actuation.Core;
+profile Core;
+
+import DragonGod.Core.Types;
+
+enum ActuationStatus { Empty, Pending, Completed, Failed, Denied, }
+enum ActuationError { CapacityExhausted, Missing, }
+record struct ActuationDecision { bool allowed; Reason reason; };
+record struct ActuationReceipt { ActuationId id; bool accepted; bool completed; bool ok; Reason reason; };
+struct ActuationSlot { ActuationId id; ActuationStatus status; Reason reason; bool occupied; };
+
+ActuationSlot EmptyActuationSlot() { return ActuationSlot{ActuationId{0}, ActuationStatus::Empty, Reason{0}, false}; }
+ActuationDecision Allow(Reason reason) { return ActuationDecision{true, reason}; }
+ActuationDecision Deny(Reason reason) { return ActuationDecision{false, reason}; }
+bool SlotIs(ActuationSlot slot, ActuationId id) { return slot.occupied and slot.id.value == id.value; }
+
+template <typename Configuration, usize Capacity>
+class ActuatorHost
+{
+public:
+    int nextId;
+    ActuationSlot<array>[Capacity] slots;
+
+    Result<ActuationReceipt, ActuationError> Dispatch(ref ActuatorHost self, ActuationDecision decision)
+    {
+        ActuationId id = ActuationId{self.nextId};
+        self.nextId = self.nextId + 1;
+        if (not decision.allowed) { return Result::Ok(ActuationReceipt{id, false, true, false, decision.reason}); }
+        int index = 0;
+        foreach (ActuationSlot slot in self.slots)
+        {
+            if (not slot.occupied)
+            {
+                self.slots[index] = ActuationSlot{id, ActuationStatus::Pending, decision.reason, true};
+                return Result::Ok(ActuationReceipt{id, true, false, true, decision.reason});
+            }
+            index = index + 1;
+        }
+        return Result::Error(ActuationError::CapacityExhausted);
+    }
+
+    ActuationStatus Status(ref const ActuatorHost self, ActuationId id)
+    {
+        foreach (ActuationSlot slot in self.slots)
+        {
+            if (SlotIs(slot, id)) { return slot.status; }
+        }
+        return ActuationStatus::Empty;
+    }
+
+    Result<void, ActuationError> Complete(ref ActuatorHost self, ActuationId id, Reason reason)
+    {
+        int index = 0;
+        foreach (ActuationSlot slot in self.slots)
+        {
+            if (SlotIs(slot, id))
+            {
+                self.slots[index] = ActuationSlot{id, ActuationStatus::Completed, reason, true};
+                return Result::Ok();
+            }
+            index = index + 1;
+        }
+        return Result::Error(ActuationError::Missing);
+    }
+
+    Result<void, ActuationError> Fail(ref ActuatorHost self, ActuationId id, Reason reason)
+    {
+        int index = 0;
+        foreach (ActuationSlot slot in self.slots)
+        {
+            if (SlotIs(slot, id))
+            {
+                self.slots[index] = ActuationSlot{id, ActuationStatus::Failed, reason, true};
+                return Result::Ok();
+            }
+            index = index + 1;
+        }
+        return Result::Error(ActuationError::Missing);
+    }
+};

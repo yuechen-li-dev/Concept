@@ -43,6 +43,15 @@ func evt1MethodCandidates(env *semanticEnv, owner, name string) []FunctionDecl {
 			out = append(out, fn)
 		}
 	}
+	if len(out) == 0 {
+		if decl, ok := env.structs[owner]; ok {
+			for _, method := range decl.Methods {
+				if method.Name == name && method.MethodOf == owner {
+					out = append(out, method)
+				}
+			}
+		}
+	}
 	return out
 }
 

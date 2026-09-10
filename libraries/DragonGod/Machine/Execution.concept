@@ -1,0 +1,98 @@
+module DragonGod.Machine.Execution;
+profile Core;
+
+import DragonGod.Core.Types;
+import DragonGod.Trace.Core;
+
+enum MindStatus { Idle, Running, WaitingActuation, Succeeded, Failed, }
+enum MindSignal
+{
+    None,
+    Yield(Reason reason),
+    TransitionTo(StateId target, Reason reason),
+    Push(StateId target, Reason reason),
+    Pop(Reason reason),
+    AwaitActuation(ActuationId id),
+    Succeed(Reason reason),
+    Fail(Reason reason),
+}
+
+record struct MachineFrame { StateId state; Reason reason; };
+record struct BatchResult { BatchId id; int executed; bool complete; };
+enum MachineError { StackOverflow, StackUnderflow, TraceCapacityExhausted, InvalidBudget, }
+MachineFrame EmptyFrame() { return MachineFrame{StateId{0}, Reason{0}}; }
+
+template <typename Configuration, usize FrameCapacity, usize TraceCapacity>
+class Mind
+{
+public:
+    MachineId id;
+    int depth;
+    MindStatus status;
+    MachineFrame<array>[FrameCapacity] frames;
+    Reason lastReason;
+    int steps;
+    TraceRecorder<Configuration, TraceCapacity> trace;
+
+    StateId CurrentState(ref const Mind self) { return self.frames[self.depth - 1].state; }
+
+    Result<void, MachineError> RecordTrace(ref Mind self, TraceKind kind, StateId from, StateId to, Reason reason, int tick)
+    {
+        match (self.trace.Record(TraceEntry{kind, from, to, reason, tick}))
+        {
+            Result::Ok() => { return Result::Ok(); }
+            Result::Error(error) => { return Result::Error(MachineError::TraceCapacityExhausted); }
+        }
+    }
+
+    Result<void, MachineError> PushFrame(ref Mind self, StateId state, Reason reason)
+    {
+        if (self.depth >= Len(self.frames)) { return Result::Error(MachineError::StackOverflow); }
+        self.frames[self.depth] = MachineFrame{state, reason};
+        self.depth = self.depth + 1;
+        return Result::Ok();
+    }
+
+    Result<void, MachineError> Step(ref Mind self, MindSignal signal, int tick)
+    {
+        StateId before = self.CurrentState();
+        self.RecordTrace(TraceKind::Step, before, before, Reason{0}, tick)?;
+        self.steps = self.steps + 1;
+        self.status = MindStatus::Running;
+        match (signal)
+        {
+            MindSignal::None => { return Result::Ok(); }
+            MindSignal::Yield(reason) => { self.lastReason = reason; self.RecordTrace(TraceKind::Yield, before, before, reason, tick)?; return Result::Ok(); }
+            MindSignal::TransitionTo(target, reason) => { self.frames[self.depth - 1] = MachineFrame{target, reason}; self.lastReason = reason; self.RecordTrace(TraceKind::Transition, before, target, reason, tick)?; return Result::Ok(); }
+            MindSignal::Push(target, reason) => { self.PushFrame(target, reason)?; self.lastReason = reason; self.RecordTrace(TraceKind::Push, before, target, reason, tick)?; return Result::Ok(); }
+            MindSignal::Pop(reason) => {
+                if (self.depth <= 1) { return Result::Error(MachineError::StackUnderflow); }
+                self.depth = self.depth - 1;
+                StateId resumed = self.CurrentState();
+                self.lastReason = reason;
+                self.RecordTrace(TraceKind::Pop, before, resumed, reason, tick)?;
+                return Result::Ok();
+            }
+            MindSignal::AwaitActuation(id) => { self.status = MindStatus::WaitingActuation; self.lastReason = Reason{id.value}; return Result::Ok(); }
+            MindSignal::Succeed(reason) => { self.status = MindStatus::Succeeded; self.lastReason = reason; self.RecordTrace(TraceKind::Completion, before, before, reason, tick)?; return Result::Ok(); }
+            MindSignal::Fail(reason) => { self.status = MindStatus::Failed; self.lastReason = reason; self.RecordTrace(TraceKind::Failure, before, before, reason, tick)?; return Result::Ok(); }
+        }
+    }
+
+    Result<BatchResult, MachineError> ExecuteBatch(ref Mind self, BatchId id, MindSignal<array>[FrameCapacity] work, int count, int budget, int tick)
+    {
+        if (budget < 0 or count < 0 or count > Len(work)) { return Result::Error(MachineError::InvalidBudget); }
+        int index = 0;
+        int executed = 0;
+        foreach (MindSignal signal in work)
+        {
+            if (index < count and executed < budget)
+            {
+                self.Step(signal, tick + executed)?;
+                executed = executed + 1;
+            }
+            index = index + 1;
+        }
+        return Result::Ok(BatchResult{id, executed, executed == count});
+    }
+};

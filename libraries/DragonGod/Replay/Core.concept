@@ -1,0 +1,124 @@
+module DragonGod.Replay.Core;
+profile Core;
+
+import DragonGod.Agent.Core;
+import DragonGod.Memory.State;
+import DragonGod.Events.Core;
+import DragonGod.Actuation.Core;
+import DragonGod.Trace.Core;
+import DragonGod.Time.Core;
+
+enum ReplayInput
+{
+    Advance(int<s> elapsed),
+    MemoryWrite(MemoryKey key, int value),
+    EventDispatch(EventKind kind, EventPayload payload),
+    ActuationComplete(ActuationId id, Reason reason),
+    ActuationFail(ActuationId id, Reason reason),
+    RngSeed(int seed),
+}
+
+ReplayInput EmptyReplayInput() { return ReplayInput::RngSeed(0); }
+enum ReplayError { CapacityExhausted, InputRejected, }
+
+template <typename Configuration, usize Capacity>
+class ReplayLog
+{
+public:
+    int count;
+    ReplayInput<array>[Capacity] inputs;
+
+    Result<void, ReplayError> Append(ref ReplayLog self, ReplayInput input)
+    {
+        if (self.count >= Len(self.inputs)) { return Result::Error(ReplayError::CapacityExhausted); }
+        self.inputs[self.count] = input;
+        self.count = self.count + 1;
+        return Result::Ok();
+    }
+};
+
+template <typename Configuration, usize Capacity>
+class ReplayDriver
+{
+public:
+    int cursor;
+
+    Result<void, ReplayError> RecordInput(ref ReplayDriver self, ref AgentContext<Configuration, Capacity> context)
+    {
+        StateId state = context.mind.CurrentState();
+        match (context.mind.trace.Record(TraceEntry{TraceKind::ReplayInput, state, state, Reason{0}, context.mind.steps}))
+        {
+            Result::Ok() => { return Result::Ok(); }
+            Result::Error(error) => { return Result::Error(ReplayError::CapacityExhausted); }
+        }
+    }
+
+    Result<void, ReplayError> ApplyInput(ref ReplayDriver self, ref AgentContext<Configuration, Capacity> context, ReplayInput input)
+    {
+        self.RecordInput(ref context)?;
+        match (input)
+        {
+            ReplayInput::Advance(elapsed) => { Advance(ref context.clock, elapsed); return Result::Ok(); }
+            ReplayInput::MemoryWrite(key, value) => {
+                match (context.memory.Write(key, value))
+                {
+                    Result::Ok() => { return Result::Ok(); }
+                    Result::Error(error) => { return Result::Error(ReplayError::InputRejected); }
+                }
+            }
+            ReplayInput::EventDispatch(kind, payload) => {
+                match (context.events.Dispatch(kind, payload))
+                {
+                    Result::Ok(id) => {
+                        StateId state = context.mind.CurrentState();
+                        match (context.mind.trace.Record(TraceEntry{TraceKind::EventEnqueue, state, state, Reason{id.value}, context.mind.steps}))
+                        {
+                            Result::Ok() => { return Result::Ok(); }
+                            Result::Error(error) => { return Result::Error(ReplayError::CapacityExhausted); }
+                        }
+                    }
+                    Result::Error(error) => { return Result::Error(ReplayError::InputRejected); }
+                }
+            }
+            ReplayInput::ActuationComplete(id, reason) => {
+                match (context.actuator.Complete(id, reason))
+                {
+                    Result::Ok() => {
+                        StateId state = context.mind.CurrentState();
+                        match (context.mind.trace.Record(TraceEntry{TraceKind::ActuationComplete, state, state, reason, context.mind.steps}))
+                        {
+                            Result::Ok() => { return Result::Ok(); }
+                            Result::Error(error) => { return Result::Error(ReplayError::CapacityExhausted); }
+                        }
+                    }
+                    Result::Error(error) => { return Result::Error(ReplayError::InputRejected); }
+                }
+            }
+            ReplayInput::ActuationFail(id, reason) => {
+                match (context.actuator.Fail(id, reason))
+                {
+                    Result::Ok() => { return Result::Ok(); }
+                    Result::Error(error) => { return Result::Error(ReplayError::InputRejected); }
+                }
+            }
+            ReplayInput::RngSeed(seed) => { context.rngSeed = seed; return Result::Ok(); }
+        }
+    }
+
+    Result<int, ReplayError> ApplyAll(ref ReplayDriver self, ReplayLog<Configuration, Capacity> log, ref AgentContext<Configuration, Capacity> context)
+    {
+        int applied = 0;
+        int index = 0;
+        foreach (ReplayInput input in log.inputs)
+        {
+            if (index >= self.cursor and index < log.count)
+            {
+                self.ApplyInput(ref context, input)?;
+                self.cursor = self.cursor + 1;
+                applied = applied + 1;
+            }
+            index = index + 1;
+        }
+        return Result::Ok(applied);
+    }
+};

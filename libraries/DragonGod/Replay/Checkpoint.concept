@@ -1,0 +1,24 @@
+module DragonGod.Replay.Checkpoint;
+profile Core;
+
+import DragonGod.Agent.Core;
+
+template <typename Configuration, usize Capacity>
+struct KernelCheckpoint
+{
+    AgentContext<Configuration, Capacity> context;
+    int replayCursor;
+};
+
+template <typename Configuration, usize Capacity>
+class CheckpointSlot
+{
+public:
+    KernelCheckpoint<Configuration, Capacity> checkpoint;
+
+    void Restore(ref const CheckpointSlot self, ref AgentContext<Configuration, Capacity> context)
+    {
+        context = self.checkpoint.context;
+        context.memory.ClearDirty();
+    }
+};

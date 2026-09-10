@@ -95,6 +95,7 @@ int Main()
     BufferView<int> view = BufferView<int>{span};
     return holder.Get() + Inspect(ref const view);
 }
+
 `
 	module, err := ParseWithSemanticModules("App.concept", source, map[string][]byte{"Standard.Generic": artifact})
 	if err != nil {
@@ -115,6 +116,76 @@ int Main()
 		if !strings.Contains(strings.ToLower(body), want) {
 			t.Fatalf("imported generic implementation omitted %q:\n%s", want, body)
 		}
+	}
+}
+
+func TestImportedGenericMethodSubstitutesForeachStatements(t *testing.T) {
+	producer := `module Standard.Bounded;
+profile Core;
+template <typename Configuration, usize Capacity>
+class Counter
+{
+public:
+    int<array>[Capacity] values;
+    int Sum(ref const Counter self)
+    {
+        int total = 0;
+        foreach (int value in self.values) { total = total + value; }
+        return total;
+    }
+};
+`
+	artifact := buildSemanticArtifact(t, "Standard/Bounded.concept", producer, nil)
+	consumer := `module App;
+profile Core;
+import Standard.Bounded;
+record struct AppConfiguration { int identity; };
+int Main()
+{
+    Counter<AppConfiguration, 3> counter = Counter<AppConfiguration, 3>{[1, 2, 3]};
+    Counter<AppConfiguration, 2> smaller = Counter<AppConfiguration, 2>{[4, 5]};
+    return counter.Sum() + smaller.Sum();
+}
+
+`
+	module, err := ParseWithSemanticModules("App.concept", consumer, map[string][]byte{"Standard.Bounded": artifact})
+	if err != nil {
+		t.Fatal(err)
+	}
+	outputs, err := Generate(module, []byte(consumer))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := moduleOutput(t, outputs, ".generated.c")
+	if !strings.Contains(body, "concept_app_sum") {
+		t.Fatal("imported generic foreach method was not emitted")
+	}
+	if strings.Count(body, "concept_app_sum__") < 4 {
+		t.Fatalf("distinct non-type generic method instances were not retained:\n%s", body)
+	}
+}
+
+func TestImportedGenericNestedSymbolicNonTypeArgumentCloses(t *testing.T) {
+	producer := `module Standard.Nested;
+profile Core;
+template <typename Configuration, usize Capacity>
+struct Inner { int<array>[Capacity] values; };
+template <typename Configuration, usize Capacity>
+struct Outer { Inner<Configuration, Capacity> inner; };
+`
+	artifact := buildSemanticArtifact(t, "Standard/Nested.concept", producer, nil)
+	consumer := `module App;
+profile Core;
+import Standard.Nested;
+record struct AppConfiguration { int identity; };
+usize Main() { return SizeOf<Outer<AppConfiguration, 3>>(); }
+`
+	module, err := ParseWithSemanticModules("App.concept", consumer, map[string][]byte{"Standard.Nested": artifact})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Generate(module, []byte(consumer)); err != nil {
+		t.Fatal(err)
 	}
 }
 

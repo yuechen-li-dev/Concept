@@ -6,6 +6,41 @@ record struct ProcessorId
     int value;
 };
 
+record struct MachineId
+{
+    int value;
+};
+
+record struct BatchId
+{
+    int value;
+};
+
+record struct AgentId
+{
+    int value;
+};
+
+record struct StateId
+{
+    int value;
+};
+
+record struct ActuationId
+{
+    int value;
+};
+
+record struct Reason
+{
+    int code;
+};
+
+record struct StaticKernelConfiguration
+{
+    int identity;
+};
+
 enum KernelStatus
 {
     Ready,

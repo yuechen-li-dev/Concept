@@ -1,0 +1,50 @@
+module DragonGod.Events.Core;
+profile Core;
+
+record struct EventId { int value; };
+record struct EventKind { int value; };
+record struct EventPayload { int value; };
+record struct Event { EventId id; EventKind kind; EventPayload payload; };
+struct EventCursor { int nextIndex; };
+enum EventError { CapacityExhausted, Missing, }
+
+Event EmptyEvent() { return Event{EventId{0}, EventKind{0}, EventPayload{0}}; }
+EventCursor StartCursor() { return EventCursor{0}; }
+
+template <typename Configuration, usize Capacity>
+class EventBus
+{
+public:
+    int nextId;
+    int count;
+    Event<array>[Capacity] events;
+
+    EventCursor TailCursor(ref const EventBus self) { return EventCursor{self.count}; }
+    int Count(ref const EventBus self) { return self.count; }
+
+    Result<EventId, EventError> Dispatch(ref EventBus self, EventKind kind, EventPayload payload)
+    {
+        if (self.count >= Len(self.events)) { return Result::Error(EventError::CapacityExhausted); }
+        EventId id = EventId{self.nextId};
+        self.nextId = self.nextId + 1;
+        self.events[self.count] = Event{id, kind, payload};
+        self.count = self.count + 1;
+        return Result::Ok(id);
+    }
+
+    Result<Event, EventError> ReadNext(ref const EventBus self, ref EventCursor cursor, EventKind kind)
+    {
+        int index = 0;
+        foreach (Event event in self.events)
+        {
+            if (index >= cursor.nextIndex and index < self.count)
+            {
+                cursor.nextIndex = index + 1;
+                if (event.kind.value == kind.value) { return Result::Ok(event); }
+            }
+            index = index + 1;
+        }
+        cursor.nextIndex = self.count;
+        return Result::Error(EventError::Missing);
+    }
+};

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -100,6 +101,7 @@ int Main()
     BumpAllocator bump = MakeBumpAllocator(FirmwareRegion(ref firmware));
     return InspectBootInfo(ref bump, BootInfo{4, 38})!;
 }
+
 `
 	moduleRoots := []string{filepath.Join(output, "Standard", "modules"), filepath.Join(output, "DragonGod", "modules")}
 	module, err := ParseWithSemanticModuleRoots("R7a/ArtifactConsumer.concept", source, moduleRoots)
@@ -111,6 +113,48 @@ int Main()
 		t.Fatal(err)
 	}
 	runFoundationNativeHarness(t, outputs, "r7a_artifact_consumer_harness.c", "#include \"artifactconsumer.generated.h\"\nint main(void) { return concept_artifactconsumer_main() == 42 ? 0 : 1; }\n")
+}
+
+func TestR7bArtifactOnlyAgenticConsumerIsBoundedStrictC11(t *testing.T) {
+	root := filepath.Join("..", "..", "libraries")
+	output := t.TempDir()
+	if _, err := BuildPackage(root, output, "DragonGod"); err != nil {
+		t.Fatal(err)
+	}
+	source := `module R7b.AgenticArtifactConsumer;
+profile Core;
+import DragonGod.Memory.State;
+import DragonGod.Events.Core;
+record struct ConsumerConfiguration { int identity; };
+int Main()
+{
+    MemorySlot emptyMemory = EmptyMemorySlot();
+    MemorySlot<array>[2] memorySlots = [emptyMemory, emptyMemory];
+    MemoryState<ConsumerConfiguration, 2> memory = MemoryState<ConsumerConfiguration, 2>{0, memorySlots};
+    Event emptyEvent = EmptyEvent();
+    Event<array>[2] eventSlots = [emptyEvent, emptyEvent];
+    EventBus<ConsumerConfiguration, 2> events = EventBus<ConsumerConfiguration, 2>{1, 0, eventSlots};
+    EventId id = events.Dispatch(EventKind{4}, EventPayload{7})!;
+    memory.Write(MemoryKey{1}, 7)!;
+    return memory.Read(MemoryKey{1}, 0) + events.Count() + id.value - 1;
+}
+`
+	moduleRoots := []string{filepath.Join(output, "Standard", "modules"), filepath.Join(output, "DragonGod", "modules")}
+	module, err := ParseWithSemanticModuleRoots("R7b/AgenticArtifactConsumer.concept", source, moduleRoots)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outputs, err := Generate(module, []byte(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(moduleOutput(t, outputs, ".generated.c"))
+	for _, forbidden := range []string{"malloc", "legacy/dragon-god-poc", "runtime_reflection", "saved_pc"} {
+		if strings.Contains(strings.ToLower(body), forbidden) {
+			t.Fatalf("agentic artifact consumer emitted forbidden runtime artifact %q", forbidden)
+		}
+	}
+	runFoundationNativeHarness(t, outputs, "r7b_agentic_artifact_consumer_harness.c", "#include \"agenticartifactconsumer.generated.h\"\nint main(void) { return concept_agenticartifactconsumer_main() == 8 ? 0 : 1; }\n")
 }
 
 func TestR7aPackageErrorsRemainTyped(t *testing.T) {

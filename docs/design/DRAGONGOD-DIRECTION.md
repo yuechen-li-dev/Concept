@@ -30,9 +30,10 @@ no Vulkan name appears in canonical kernel APIs.
 | AMD64 capability facts | Keep/rewrite | `DragonGod.Platform.AMD64.Core` |
 | AArch64 capability facts | Keep/rewrite | `DragonGod.Platform.AArch64.Core` |
 | Automata saved-PC/workaround machinery | Delete | canonical R5 machine semantics remain language-owned |
-| Mind, Decision, Actuation, Events, Graph, Trace, Replay, checkpoint | Defer | valid ecosystem consumers, unnecessary for R7a substrate |
-| scheduler policy and ready queues | Defer | R7b |
-| collector/root graph | Defer | R7c |
+| Mind, Actuation, Events, Trace, Replay, checkpoint | Rewrite | canonical configurable R7b mechanisms under `DragonGod.*` |
+| Decision and Graph policy | Replace boundary | Concept semantics and application-owned meaning |
+| scheduler policy and ready queues | Defer | R7c |
+| collector/root graph | Defer | R7d |
 | Vulkan device/lifecycle policy | Replace boundary | stays in Vulkan consumers/conformance |
 
 Historical tests that prove current language semantics remain in the legacy
@@ -58,10 +59,15 @@ The kernel-object path uses `PoolAllocator` -> `Allocation<KernelObject,
 PoolAllocator>`, moves the owner without relocating the object, reads it, and
 drops/releases it at scope exit. Both execute through strict C11 tests.
 
-R7b can build on machine modes, monotonic deadlines, interrupt wakeups, package
-artifacts, and Standard.Memory allocation. R7c can build on typed storage,
-allocation ownership, Drop, releasable regions, and the same explicit authority
-boundaries. Neither scheduler nor collector is implemented here.
+R7b adds configurable Mind execution, deterministic batches, dirty memory,
+events, actuation obligations, structured trace, replay, checkpoint, explicit
+agent context, and seed state. R7c can build a scheduler over those mechanisms;
+R7d can build collector semantics later. Neither is implemented here.
+
+The C# Dominatus repository is an application-kernel parity oracle. Its useful
+mechanisms are native DragonGod APIs; its policy remains application-owned. No
+separate Dominatus module/namespace or compatibility bridge is part of the
+architecture. See `DRAGONGOD-DOMINATUS-PARITY.md` for the audited mapping.
 
 Intended layering is Concept compiler -> Standard -> DragonGod -> optional
 scheduler/collector/runtime adapters -> Go/.NET/Vulkan consumers. Standard has no

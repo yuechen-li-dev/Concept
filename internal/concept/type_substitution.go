@@ -1,6 +1,9 @@
 package concept
 
-import "fmt"
+import (
+	"fmt"
+	"strconv"
+)
 
 // evt1SubstituteType is the canonical structural type substitution operation.
 // Type is a record-shaped algebra: nominal leaves have no children, while the
@@ -48,6 +51,10 @@ func evt1SubstituteType(t Type, typeParam string, concreteType Type) Type {
 func evt1TypeContainsConceptParameter(t Type) bool {
 	if t.Kind == TypeConceptParam {
 		return true
+	}
+	if t.Kind == TypeTemplateValue {
+		_, err := strconv.Atoi(t.Name)
+		return err != nil
 	}
 	if t.PointerTo != nil && evt1TypeContainsConceptParameter(*t.PointerTo) {
 		return true

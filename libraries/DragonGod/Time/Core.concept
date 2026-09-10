@@ -11,6 +11,21 @@ record struct Deadline
     MonotonicTime at;
 };
 
+struct Clock
+{
+    MonotonicTime now;
+};
+
+Clock MakeClock(int<s> initial)
+{
+    return Clock{MonotonicTime{initial}};
+}
+
+void Advance(ref Clock clock, int<s> elapsed)
+{
+    clock.now = MonotonicTime{clock.now.value + elapsed};
+}
+
 bool Reached(MonotonicTime now, Deadline deadline)
 {
     return now.value >= deadline.at.value;

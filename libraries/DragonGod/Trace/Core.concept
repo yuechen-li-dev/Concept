@@ -1,0 +1,39 @@
+module DragonGod.Trace.Core;
+profile Core;
+
+import DragonGod.Core.Types;
+
+enum TraceKind
+{
+    Step, Enter, Exit, Transition, Yield, Push, Pop,
+    EventEnqueue, EventConsume, ActuationDispatch, ActuationComplete,
+    Completion, Failure, ReplayInput,
+}
+
+record struct TraceEntry { TraceKind kind; StateId from; StateId to; Reason reason; int tick; };
+enum TraceError { CapacityExhausted, Missing, }
+TraceEntry EmptyTraceEntry() { return TraceEntry{TraceKind::Step, StateId{0}, StateId{0}, Reason{0}, 0}; }
+
+template <typename Configuration, usize Capacity>
+class TraceRecorder
+{
+public:
+    int count;
+    TraceEntry<array>[Capacity] entries;
+
+    int Count(ref const TraceRecorder self) { return self.count; }
+
+    Result<TraceEntry, TraceError> At(ref const TraceRecorder self, int index)
+    {
+        if (index < 0 or index >= self.count) { return Result::Error(TraceError::Missing); }
+        return Result::Ok(self.entries[index]);
+    }
+
+    Result<void, TraceError> Record(ref TraceRecorder self, TraceEntry entry)
+    {
+        if (self.count >= Len(self.entries)) { return Result::Error(TraceError::CapacityExhausted); }
+        self.entries[self.count] = entry;
+        self.count = self.count + 1;
+        return Result::Ok();
+    }
+};
