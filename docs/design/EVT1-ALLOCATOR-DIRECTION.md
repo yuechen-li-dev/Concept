@@ -1,6 +1,6 @@
 # EVT1 allocator direction
 
-Status: R6j resolves trusted external-region authority; reference allocator library remains deferred to R6k
+Status: R6k honest stop; initialized typed-storage ownership is not yet composable
 
 ## Doctrine
 
@@ -89,23 +89,66 @@ The allocator framework is still not implemented. R6j supplies only the general
 owned/leased foreign storage boundary and a hosted specimen; it adds no retry,
 policy, heap, pool, arena, or allocator-specific compiler rule.
 
+## R6k feasibility result
+
+R6k re-ran the prerequisite gate against the real ordinary-library path. Eight
+historical blockers remain resolved, but the combined
+`generic -> bind<T> -> Initialize -> owner field -> Drop/Destroy` path is not.
+The failure is below allocator policy and is reproducible without declaring an
+allocator:
+
+| prerequisite | R6k result |
+|---|---|
+| generic runtime types | Resolved |
+| `SizeOf<T>` / `AlignOf<T>` | Resolved |
+| generic ownership/provenance/Drop | **Not resolved for initialized `Storage<T>` owners** |
+| semantic modules | Resolved |
+| `extern "C"` | Resolved |
+| `Allocates` | Resolved |
+| quantities/address/storage | **Not resolved for open-template `bind<T>`** |
+| semantic fact transport | Resolved for value facts; operational initialized state does not survive owner fields |
+| trusted external storage authority | Resolved |
+
+Concrete evidence is pinned by `r6k_allocator_feasibility_test.go`:
+
+- an ordinary template body calling `bind<T>` rejects its open type parameter
+  with `CV4148` before consumer instantiation;
+- `Destroy(owner.storage)` is not a storage lifetime operation and rejects as
+  unknown function `CV4027`, because `Initialize`/`Destroy` accept only a named
+  `Storage<T>` local;
+- recovering the field is not an escape hatch: `move owner.storage` rejects
+  with `CV4507`, because move accepts only a whole local or parameter place;
+- retaining the `ref T` returned by `Initialize` in a returned ref owner rejects
+  with `CV4521`; its provenance is not related through the typed-storage binding
+  to the backing parameter.
+
+These are general typed-storage ownership and provenance gaps. An
+`Allocation<T, TAllocator>` cannot truthfully preserve the required sequence,
+provide `Value`, or implement `Destroy(T) -> Release(region)` exactly once.
+Bump, pool, and arena policy would only create raw regions around that missing
+owner transition, so R6k stops before publishing partial allocator APIs.
+
 ## Required next substrate decision
 
-Before the allocator library can resume, a post-freeze proposal must define a
-small, general explicit-storage boundary. At minimum it must prove:
+Before the allocator library can resume, a post-freeze proposal must complete
+the general typed-storage ownership boundary. At minimum it must prove:
 
-- checked arithmetic for `usize`, including overflow detection;
-- a canonical non-owning raw-region value with byte extent and alignment;
-- bounded raw-region slicing/offset operations with preserved provenance;
-- explicit binding and initialization of suitably sized/aligned raw storage as
-  `T`, without ownership transfer or a hidden copy;
-- enough generic function parameters or inference to express a typed helper.
+- compiler-known storage operations accept an open template type and validate
+  after ordinary concrete substitution;
+- initialized/uninitialized object state transports through aggregate fields
+  and whole-owner moves without runtime proof metadata;
+- `Destroy` can consume an initialized storage place reached through an owned
+  aggregate, or an equally general structural Drop rule can express the same
+  transition;
+- the reference returned by `Initialize` retains the backing region/source
+  provenance when stored in and returned with its owner;
+- moving the owner remains exactly-once while copying it remains structurally
+  rejected.
 
-This proposal is not permission to add allocator types, `new`/`delete`, a
-global heap, reinterpret casts, unchecked pointer arithmetic, variadics, a GC,
-or a runtime registry. The storage operation must be useful independently of
-allocators and carry size, alignment, mutability, and provenance through the
-ordinary semantic fact system.
+This proposal is not permission to recognize allocator or owner names, add
+`new`/`delete`, a global heap, reinterpret casts, unchecked pointer arithmetic,
+variadics, a GC, or a runtime registry. The transition must be useful for any
+ordinary initialized typed-storage owner and must remain compile-time-only.
 
 ## Preserved allocation-effect law
 
@@ -117,8 +160,8 @@ for Proven, while unrelated opaque extern calls remain Unknown.
 
 ## Deferred allocator surface
 
-After the explicit-storage substrate exists, R6f may implement, under ordinary
-semantic library roots:
+After the initialized-storage owner substrate exists, a later milestone may
+implement under ordinary semantic library roots:
 
 - `MemoryRegion` and `AllocationError`;
 - `MemorySource` and minimal honest capability splits;
@@ -130,3 +173,18 @@ semantic library roots:
 No allocator source or placeholder API is added by this feasibility stop.
 Doing so would publish contracts that have no honest executable
 implementation.
+
+## Allocator history
+
+```text
+R6c
+    generic/library/effect substrate missing
+R6f
+    quantity/address/storage substrate missing
+R6i
+    trusted external storage authority missing
+R6j
+    foreign contracts solved external authority
+R6k
+    initialized Storage<T> cannot cross the typed-owner boundary
+```

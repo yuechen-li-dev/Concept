@@ -38,7 +38,7 @@ inline compiler tests.
 | generic reusable-library substrate | R6d-R6e approved post-freeze extension | Implemented | local generics and layout plus deterministic semantic modules, cross-module instantiation, and effect summaries |
 | quantity/address/storage substrate | R6g-R6h approved post-freeze extension | Implemented | unit algebra, affine addresses, typed bind/init/destroy, multi-parameter templates, and cross-value/module fact transport implemented |
 | foreign semantic contracts and external storage authority | R6j approved post-freeze extension | Implemented | ABI remains separate; bounded foreign facts use DeclaredForeign and trusted regions are tied to ordinary live owner/lease wrappers; exact source spelling remains provisional |
-| reference allocator framework | R6k | Deferred | trusted external storage blocker is resolved; do not begin allocator policy in R6j |
+| reference allocator framework | post-R6k | Blocked | R6k proved that open-template `bind<T>`, initialized storage state through owner fields, field destruction, and Initialize-result provenance require a general typed-storage ownership milestone |
 | richer theory providers, exact prophecy termination matching, parallel tests, lifecycle hooks, statistical benchmark framework | later R6 tooling | Deferred | R6a keeps JSON positional rows, sequential reporting, and lightweight timing |
 | formatter, lint, diagnostics UX, build/package tooling, LSP | R6 tooling | Deferred | consume the frozen semantic model |
 | source auto-fix, IDE proof visualization, arbitrary proof queries, solver edits, LLM-ranked repairs, Planner explanations | post-R6b tooling | Deferred | consume authoritative proof graphs without moving semantic authority |

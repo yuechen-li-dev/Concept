@@ -88,6 +88,13 @@ their `DeclaredForeign` effect/value-summary origins. Consumers use the checked
 artifact without reparsing the companion source; missing authority remains
 Unknown. Exact declaration syntax is provisional.
 
+R6k adds no module schema or summary kind. An imported generic body cannot make
+an otherwise invalid open-template `bind<T>` valid, and value-fact summaries do
+not substitute for the operational Initialized/Uninitialized state needed to
+destroy storage held in an owner field. That boundary must be solved in the
+general typed-storage/ownership semantics before an allocator module artifact
+can honestly export typed owners.
+
 Within an interface, `requires compiler.Allocates(Operation);` means the
 operation is permitted to allocate. An allocation-free implementation is also
 compatible. An allocating implementation cannot satisfy an operation lacking

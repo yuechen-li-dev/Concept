@@ -36,6 +36,7 @@ their fixtures now have exactly one authority under `language/evt1`.
 | R6a | first-class test discovery and execution | this report's commit | `language/evt1/tooling/tests` plus `internal/concept/testdata/testing` |
 | R6b | semantic concept assertions and proof diagnostics | this report's commit | `language/evt1/tooling/proofs` |
 | R6d | local generic/library substrate; semantic modules still blocked | `EVT1-R6D-CONFORMANCE.md` | focused compiler and strict-C11 hosted tests |
+| R6k | allocator retry honestly stopped on initialized typed-storage ownership | `EVT1-R6K-CONFORMANCE.md` | focused general-gap regression tests; no allocator fixtures published |
 
 The manifest records 379 valid, 243 static-invalid, and 13 runtime-negative
 fixtures. Four retained expected-divergence cases compare the frozen EVT1
