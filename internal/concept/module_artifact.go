@@ -65,6 +65,7 @@ type SemanticModuleArtifact struct {
 	Exports            SemanticModuleExports         `json:"exports"`
 	OperationEffects   []SemanticModuleEffectSummary `json:"operation_effect_summaries,omitempty"`
 	ValueFactSummaries []SemanticFunctionFactSummary `json:"value_fact_summaries,omitempty"`
+	SharedAccessFacts  []MIRSemanticFact             `json:"shared_access_facts,omitempty"`
 	ForeignContracts   []ForeignContractDecl         `json:"foreign_contracts,omitempty"`
 	SemanticPayload    []byte                        `json:"semantic_payload"`
 }
@@ -191,6 +192,7 @@ func CompileSemanticModule(path, source string, artifacts map[string][]byte) ([]
 		Exports:            semanticModuleExports(local, env),
 		OperationEffects:   summarizeModuleEffects(local, env),
 		ValueFactSummaries: semanticModuleFactSummaries(local, env),
+		SharedAccessFacts:  evt1LocalSharedAccessFacts(local, env),
 		ForeignContracts:   append([]ForeignContractDecl{}, local.ForeignContracts...),
 		SemanticPayload:    payload,
 	}
@@ -489,11 +491,17 @@ func composeSemanticModules(local Module, artifacts map[string][]byte) (Module, 
 			}
 			composed.ImportedFactSummaries = append(composed.ImportedFactSummaries, summary)
 		}
+		for _, fact := range artifact.SharedAccessFacts {
+			fact.Origin = FactOriginModuleFactSummary
+			fact.Evidence.Authority = artifact.ModuleIdentity
+			composed.SharedAccessFacts = append(composed.SharedAccessFacts, fact)
+		}
 	}
 	appendSemanticDeclarations(&composed, local)
 	composed.OperationEffects = append(composed.OperationEffects, local.OperationEffects...)
 	composed.ImportedFactSummaries = append(composed.ImportedFactSummaries, local.ImportedFactSummaries...)
 	composed.ImportedFactAuthority = append(composed.ImportedFactAuthority, local.ImportedFactAuthority...)
+	composed.SharedAccessFacts = append(composed.SharedAccessFacts, local.SharedAccessFacts...)
 	// Compile-time obligations belong only to the consuming unit. Imported
 	// assertions are checked when their source module is built and are not
 	// replayed, while local assertions must remain on the ordinary sema path.

@@ -32,3 +32,24 @@ and does not turn ordinary concept constraints into runtime dispatch.
 Drop use required operations for the second template parameter. Imported
 effects remain structural artifact data, with no runtime witness or
 allocator-specific dispatch.
+
+## Compiler-owned concepts
+
+Compiler-owned concepts are namespaced semantic propositions understood by
+the compiler but used through ordinary source machinery. The initial
+synchronization family is directly stateable in concept bodies:
+
+```concept
+concept TemperatureAccess<TAgent, TSlot>
+{
+    requires sync.ExclusiveWriter<TAgent, TSlot>;
+    requires sync.SynchronizedAccess<TSlot>;
+}
+```
+
+Concrete module requirements may declare synchronization authority. Inside a
+generic or named concept, the same spelling is an obligation that must be
+established by the concrete caller or context; it is not an unsafe global
+assumption. Missing evidence is `Unknown`, known conflicting authority is
+`Disproven`, and matching authority is `Proven`. Existing `Disjoint` is reused
+without a second namespaced disjointness system.

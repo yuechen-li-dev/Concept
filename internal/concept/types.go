@@ -580,6 +580,9 @@ type Module struct {
 	// from concept-module.v1. They are not source syntax and are never lowered
 	// into runtime storage.
 	ImportedFactSummaries []SemanticFunctionFactSummary `json:"imported_fact_summaries,omitempty"`
+	// SharedAccessFacts are compiler-owned synchronization contracts transported
+	// from dependency artifacts. Subject order is semantic and must be preserved.
+	SharedAccessFacts []MIRSemanticFact `json:"shared_access_facts,omitempty"`
 	// ImportedFactAuthority records artifact-owned operations even when an older
 	// artifact has no value summary. Consumers must degrade those results to
 	// Unknown instead of re-deriving a stronger contract from the payload body.
@@ -1758,6 +1761,7 @@ type semanticEnv struct {
 	importedFactAuthority   map[string]bool
 	transportedFacts        []MIRSemanticFact
 	transportedFactIDs      map[string]bool
+	sharedAccessFacts       []MIRSemanticFact
 	dynWitnesses            map[string]*evt1InterfaceWitness
 	validatingMethod        string
 	validatingFunction      string

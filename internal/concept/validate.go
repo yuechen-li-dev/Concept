@@ -950,6 +950,9 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 	if err := validateConceptCycles(env); err != nil {
 		return nil, err
 	}
+	if err := evt1RegisterSharedAccessFacts(env, module); err != nil {
+		return nil, err
+	}
 	for _, templateDecl := range module.Templates {
 		if err := validateTemplateSignature(env, templateDecl); err != nil {
 			return nil, err
@@ -1110,6 +1113,9 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		return nil, err
 	}
 	for _, assertion := range module.Assertions {
+		if evt1IsSharedAccessAnalysis(assertion.ConceptName) {
+			continue // top-level synchronization requirements declare authority facts
+		}
 		conceptDecl, ok := env.concepts[assertion.ConceptName]
 		if !ok {
 			return nil, evt1Diagnostic("CV4151", fmt.Sprintf("unknown concept %s", assertion.ConceptName), assertion.Span)
@@ -5931,6 +5937,12 @@ type evt1BoundSemanticSubject struct {
 var evt1SemanticAnalysisRegistry = map[string]evt1SemanticAnalysis{}
 
 func init() {
+	for name, arity := range evt1SharedAccessArities {
+		analysisName, typeArity := name, arity
+		evt1SemanticAnalysisRegistry[analysisName] = evt1SemanticAnalysis{TypeArity: typeArity, CheckTypes: func(env *semanticEnv, args []Type, parameters []int) semanticFactResult {
+			return evt1CheckSharedAccessFact(env, evt1FactKind(analysisName), args)
+		}}
+	}
 	evt1SemanticAnalysisRegistry["LifetimeSafe"] = evt1SemanticAnalysis{TypeArity: 1, CheckTypes: func(env *semanticEnv, args []Type, parameters []int) semanticFactResult {
 		return evt1TypeFact(env, FactLifetimeSafe, args[0], parameters)
 	}}

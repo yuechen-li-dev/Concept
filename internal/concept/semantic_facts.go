@@ -37,6 +37,12 @@ const (
 	FactByteExtent          SemanticFactKind = "ByteExtent"
 	FactHostAccessible      SemanticFactKind = "HostAccessible"
 	FactInitialized         SemanticFactKind = "Initialized"
+	FactExclusiveWriter     SemanticFactKind = "sync.ExclusiveWriter"
+	FactSingleProducer      SemanticFactKind = "sync.SingleProducer"
+	FactSingleConsumer      SemanticFactKind = "sync.SingleConsumer"
+	FactSynchronizedAccess  SemanticFactKind = "sync.SynchronizedAccess"
+	FactPublishedBefore     SemanticFactKind = "sync.PublishedBefore"
+	FactExactlyOnce         SemanticFactKind = "sync.ExactlyOnce"
 )
 
 type SemanticFactOrigin string
@@ -106,9 +112,10 @@ type MIRSemanticFact struct {
 }
 
 type semanticFactResult struct {
-	Outcome  SemanticFactCertainty
-	Origin   SemanticFactOrigin
-	Evidence SemanticFactEvidence
+	Outcome    SemanticFactCertainty
+	Origin     SemanticFactOrigin
+	Evidence   SemanticFactEvidence
+	SourceSpan Span
 }
 
 func evt1FactKind(name string) SemanticFactKind { return SemanticFactKind(name) }

@@ -35,6 +35,12 @@ not yet supply the shared-access proof relations or guarded DragonGod
 algorithms, so no atomic weakening, fence removal, lock elision, or race-freedom
 claim is made yet.
 
+R7d2 Phase 1 supplies the explicit relation vocabulary and artifact transport.
+The relations are real source-level obligations, not analyzer-only facts, but
+the compiler does not yet derive them from DragonGod accesses. The next gate is
+a bounded access summary; only then may guarded Blackboard, EventBus, and
+Actuation paths use proof-derived Planner decisions.
+
 Collector implications remain future work: shared roots require explicit
 ownership, root mutation requires synchronization, and a collector may later
 coordinate at semantic machine-step boundaries. R7d adds no collector.

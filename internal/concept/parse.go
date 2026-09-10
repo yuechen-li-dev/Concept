@@ -2098,6 +2098,34 @@ func (p *parser) parseConceptRequirement(typeParam string) (ConceptRequirement, 
 		}
 		return req, nil
 	}
+	if p.peekLexeme() == "sync" && p.peekLexemeN(1) == "." {
+		analysis, nameSpan, err := p.parseQualifiedConceptName("CV4526", "expected synchronization concept name")
+		if err != nil {
+			return nil, err
+		}
+		req := &CompilerAnalysisRequirement{Analysis: analysis, Span: nameSpan}
+		if _, err := p.expect("<"); err != nil {
+			return nil, err
+		}
+		for {
+			arg, err := p.parseType(typeParam)
+			if err != nil {
+				return nil, err
+			}
+			req.TypeArgs = append(req.TypeArgs, arg)
+			if p.peekLexeme() != "," {
+				break
+			}
+			p.next()
+		}
+		if _, err := p.expect(">"); err != nil {
+			return nil, err
+		}
+		if _, err := p.expect(";"); err != nil {
+			return nil, err
+		}
+		return req, nil
+	}
 	if p.isConceptApplicationAhead(typeParam) {
 		ref, err := p.parseConceptUse(typeParam)
 		if err != nil {
@@ -2531,7 +2559,7 @@ func (p *parser) parseQuantityDimension() (QuantityDimension, error) {
 }
 
 func (p *parser) parseConceptUse(conceptParam string) (Type, error) {
-	nameTok, err := p.expectIdentifier("CV4145", "expected concept name")
+	name, span, err := p.parseQualifiedConceptName("CV4145", "expected concept name")
 	if err != nil {
 		return Type{}, err
 	}
@@ -2553,7 +2581,24 @@ func (p *parser) parseConceptUse(conceptParam string) (Type, error) {
 	if _, err := p.expect(">"); err != nil {
 		return Type{}, err
 	}
-	return Type{Name: nameTok.Lexeme, Kind: TypeApplied, TypeArgs: args, Span: nameTok.Span}, nil
+	return Type{Name: name, Kind: TypeApplied, TypeArgs: args, Span: span}, nil
+}
+
+func (p *parser) parseQualifiedConceptName(code, message string) (string, Span, error) {
+	first, err := p.expectIdentifier(code, message)
+	if err != nil {
+		return "", Span{}, err
+	}
+	name := first.Lexeme
+	for p.peekLexeme() == "." {
+		p.next()
+		part, err := p.expectIdentifier(code, message)
+		if err != nil {
+			return "", Span{}, err
+		}
+		name += "." + part.Lexeme
+	}
+	return name, first.Span, nil
 }
 
 func (p *parser) parseBlock() (Block, error) {
@@ -4080,7 +4125,7 @@ func (p *parser) parsePostfixExpr(expr Expr, span Span) (Expr, error) {
 
 func (p *parser) parseConceptAssertionCall(field *FieldExpr, span Span) (Expr, error) {
 	p.next() // <
-	goal, err := p.expectIdentifier("CONCEPT_ASSERT_GOAL_INVALID", "Assert.Concept requires a concept or compiler analysis name")
+	goal, _, err := p.parseQualifiedConceptName("CONCEPT_ASSERT_GOAL_INVALID", "Assert.Concept requires a concept or compiler analysis name")
 	if err != nil {
 		return nil, err
 	}
@@ -4121,7 +4166,7 @@ func (p *parser) parseConceptAssertionCall(field *FieldExpr, span Span) (Expr, e
 	if _, err := p.expect(")"); err != nil {
 		return nil, err
 	}
-	return &CallExpr{Callee: "Concept", Receiver: field.Receiver, Member: true, Args: args, ConceptGoal: goal.Lexeme, ConceptParameters: parameters, Span: span}, nil
+	return &CallExpr{Callee: "Concept", Receiver: field.Receiver, Member: true, Args: args, ConceptGoal: goal, ConceptParameters: parameters, Span: span}, nil
 }
 
 func (p *parser) looksLikeTemplateInvocation() bool {
@@ -4176,7 +4221,7 @@ func (p *parser) expect(lexeme string) (Token, error) {
 }
 
 func (p *parser) isConceptApplicationAhead(conceptParam string) bool {
-	if !isIdentifier(p.peekLexeme()) || p.peekLexemeN(1) != "<" {
+	if !isIdentifier(p.peekLexeme()) {
 		return false
 	}
 	save := p.pos

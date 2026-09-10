@@ -102,6 +102,20 @@ the `Fact lost at` boundary and does not infer facts from ABI or runtime shape.
 The checked R6h goldens cover alignment through multiple transports, returned
 disjoint regions, returned overlap, and an opaque `AddressFromBits` boundary.
 
+## Compiler-owned synchronization propositions
+
+R7d2 synchronization propositions use this same proof path. For example,
+`Assert.Concept<sync.ExclusiveWriter>(AgentA, SlotX, "one writer")` queries an
+ordered two-subject fact. `sync.SynchronizedAccess` and `sync.ExactlyOnce`
+take one subject; producer, consumer, writer, and publication propositions
+take two. They may also be independent requirements in an ordinary named
+concept.
+
+Local concrete authority is shown as `Declared`, dependency authority as
+`ModuleFactSummary`, and missing authority as `Unknown`. Phase 1 does not yet
+derive access sets, so Planner remains conservative and these facts do not
+authorize guard or atomic elision.
+
 R6l adds field-sensitive initialized-object state beside transported geometry
 facts. `Value(storage)` requires Initialized, `Destroy(storage)` ends that
 object lifetime, and a later use of a retained reference is rejected. This is

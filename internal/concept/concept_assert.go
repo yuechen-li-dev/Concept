@@ -47,6 +47,15 @@ func evt1ValidateConceptAssertion(env *semanticEnv, scope *evt1Scope, call *Call
 	for _, subject := range subjects {
 		proof.Subjects = append(proof.Subjects, MIRSemanticSubject{Kind: subject.description.Kind, Name: subject.description.Name, Type: subject.description.Type})
 	}
+	if evt1IsSharedAccessAnalysis(call.ConceptGoal) {
+		args := make([]Type, len(subjects))
+		for i, subject := range subjects {
+			args[i] = subject.typeValue
+		}
+		result := evt1CheckSharedAccessFact(env, evt1FactKind(call.ConceptGoal), args)
+		proof.Origin = result.Origin
+		proof.Evidence = &result.Evidence
+	}
 	env.semanticProofs = append(env.semanticProofs, proof)
 	env.proofGraphs = append(env.proofGraphs, graph)
 	if graph.Outcome != FactProven {
@@ -159,8 +168,17 @@ func evt1ProjectDirectAnalysis(env *semanticEnv, graph *ProofGraph, root string,
 	if (goal == string(FactLifetimeSafe) || goal == string(FactNonEscaping)) && subjects[0].binding != nil && subjects[0].typeValue.Kind == TypeCallable {
 		return evt1ProjectCallableLifetime(env, graph, root, goal, subjects[0])
 	}
-	result := evt1TypeFact(env, evt1FactKind(goal), subjects[0].typeValue, parameters)
-	if subjects[0].binding != nil {
+	result := semanticFactResult{}
+	if evt1IsSharedAccessAnalysis(goal) {
+		args := make([]Type, len(subjects))
+		for i, subject := range subjects {
+			args[i] = subject.typeValue
+		}
+		result = evt1SemanticAnalysisRegistry[goal].CheckTypes(env, args, parameters)
+	} else {
+		result = evt1TypeFact(env, evt1FactKind(goal), subjects[0].typeValue, parameters)
+	}
+	if subjects[0].binding != nil && !evt1IsSharedAccessAnalysis(goal) {
 		result = evt1RefineValueFact(goal, parameters, *subjects[0].binding, result)
 	}
 	detail := result.Evidence.Detail
@@ -201,7 +219,11 @@ func evt1ProjectDirectAnalysis(env *semanticEnv, graph *ProofGraph, root string,
 	} else if result.Outcome == FactDisproven {
 		kind, edge = ProofContradiction, ProofConflictsWith
 	}
-	id := graph.addNode(kind, goal+" semantic fact", detail, result.Outcome, result.Origin, subjects[0].span)
+	factSpan := result.SourceSpan
+	if factSpan.Line == 0 {
+		factSpan = subjects[0].span
+	}
+	id := graph.addNode(kind, goal+" semantic fact", detail, result.Outcome, result.Origin, factSpan)
 	graph.addEdge(root, id, edge)
 	return result.Outcome
 }
@@ -696,6 +718,7 @@ func evt1ProjectNamedConceptApplication(env *semanticEnv, graph *ProofGraph, par
 		label := "requirement"
 		requirementOutcome := FactProven
 		detail := ""
+		requirementOrigin := FactOriginDeclared
 		switch requirement := raw.(type) {
 		case *PrerequisiteRequirement:
 			nestedArguments := evt1SubstituteArguments(evt1RequirementArguments(requirement), bindings)
@@ -757,10 +780,10 @@ func evt1ProjectNamedConceptApplication(env *semanticEnv, graph *ProofGraph, par
 					args[i] = evt1SubstituteBindings(arg, bindings)
 				}
 				result := analysis.CheckTypes(env, args, requirement.Parameters)
-				if binding != nil {
+				if binding != nil && !evt1IsSharedAccessAnalysis(requirement.Analysis) {
 					result = evt1RefineValueFact(requirement.Analysis, requirement.Parameters, *binding, result)
 				}
-				requirementOutcome, detail = result.Outcome, result.Evidence.Detail
+				requirementOutcome, detail, requirementOrigin = result.Outcome, result.Evidence.Detail, result.Origin
 			}
 		}
 		kind, edge := ProofRequirement, ProofRequires
@@ -770,7 +793,7 @@ func evt1ProjectNamedConceptApplication(env *semanticEnv, graph *ProofGraph, par
 		if requirementOutcome == FactUnknown {
 			kind, edge = ProofMissingFact, ProofBlockedBy
 		}
-		node := graph.addNode(kind, label, detail, requirementOutcome, FactOriginDeclared, raw.requirementSpan())
+		node := graph.addNode(kind, label, detail, requirementOutcome, requirementOrigin, raw.requirementSpan())
 		graph.addEdge(parent, node, edge)
 		if requirementOutcome == FactDisproven {
 			outcome = FactDisproven

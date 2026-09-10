@@ -21,3 +21,10 @@ ordering. There is no `volatile` fallback.
 The existing R7b `MemoryState`, `EventBus`, and `ActuatorHost` remain
 single-worker components. They must not be shared between host workers until
 the remaining R7d authority proofs and guarded algorithms are completed.
+
+R7d2 Phase 1 supplies explicit source propositions for exclusive writer,
+single producer/consumer, synchronized access, publication visibility, and
+internal exactly-once authority. They compose and cross semantic module
+artifacts, but DragonGod does not yet emit derived access summaries for its
+real operations. These components therefore remain single-worker; a source
+declaration is not being substituted for proof of their algorithms.
