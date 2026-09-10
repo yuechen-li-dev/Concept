@@ -26,3 +26,9 @@ broader semantic role above; R6o completes the recognizable generic-template
 use case within that existing model. Satisfaction remains compile-time static
 proof. An `interface` is the deliberately narrower dyn-compatible concept form
 and does not turn ordinary concept constraints into runtime dispatch.
+
+`Standard.Memory` is R6p's concrete proof of this model.
+`ReleasableAllocator<A>` composes `Allocator<A>`; typed allocation and generic
+Drop use required operations for the second template parameter. Imported
+effects remain structural artifact data, with no runtime witness or
+allocator-specific dispatch.

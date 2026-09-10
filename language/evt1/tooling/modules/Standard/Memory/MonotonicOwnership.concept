@@ -1,0 +1,45 @@
+module Standard.Memory.MonotonicOwnership;
+profile Core;
+
+import Standard.Memory.Core;
+
+template <typename T, typename TAllocator>
+requires Allocator<TAllocator>
+ref struct MonotonicAllocation
+{
+    ref TAllocator allocator;
+    Storage<T> storage;
+};
+
+template <typename T, typename TAllocator>
+requires Allocator<TAllocator>
+ref T MonotonicAllocationValue(ref MonotonicAllocation<T, TAllocator> self)
+{
+    return Value(self.storage);
+}
+
+template <typename T, typename TAllocator>
+requires Allocator<TAllocator>
+Result<MonotonicAllocation<T, TAllocator>, AllocationError> AllocateMonotonic(
+    ref TAllocator allocator,
+    T value
+)
+{
+    MemoryRegion<SystemMemory> region = allocator.Allocate(SizeOf<T>(), AlignOf<T>())?;
+    Storage<T> storage = bind<T>(region);
+    Initialize(storage, move value);
+    MonotonicAllocation<T, TAllocator> allocation = MonotonicAllocation<T, TAllocator>{
+        ref allocator,
+        move storage
+    };
+    return Result::Ok(move allocation);
+}
+
+requires compiler.Allocates(AllocateMonotonic);
+
+template <typename T, typename TAllocator>
+requires Allocator<TAllocator>
+void Drop(owned MonotonicAllocation<T, TAllocator> allocation)
+{
+    Destroy(allocation.storage);
+}

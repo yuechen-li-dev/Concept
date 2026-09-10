@@ -1,0 +1,80 @@
+module Standard.Memory.Bump;
+profile Core;
+
+import Standard.Memory.Core;
+
+struct FixedBufferMemorySource
+{
+    int<array>[64] backing;
+};
+
+FixedBufferMemorySource MakeFixedBufferMemorySource()
+{
+    int<array>[64] backing =
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    return FixedBufferMemorySource{move backing};
+}
+
+MemoryRegion<SystemMemory> RegionOf(ref FixedBufferMemorySource source)
+{
+    return MemoryRegion<SystemMemory>{
+        AddressOf<SystemMemory>(ref source.backing),
+        256,
+        4
+    };
+}
+
+class BumpAllocator
+{
+public:
+    MemoryRegion<SystemMemory> region;
+    usize<byte> offset;
+
+    usize<byte> Capacity(ref const BumpAllocator self)
+    {
+        return self.region.length;
+    }
+
+    usize<byte> Remaining(ref const BumpAllocator self)
+    {
+        return self.region.length - self.offset;
+    }
+};
+
+BumpAllocator MakeBumpAllocator(MemoryRegion<SystemMemory> region)
+{
+    return BumpAllocator{region, 0};
+}
+
+Result<MemoryRegion<SystemMemory>, AllocationError> Allocate(
+    ref BumpAllocator self,
+    usize<byte> size,
+    usize<byte> alignment
+)
+{
+    if (not IsValidAlignment(alignment) or self.region.alignment % alignment != 0)
+    {
+        return Result::Error(AllocationError::InvalidAlignment);
+    }
+    usize<byte> alignedOffset = CheckedAlignUp(self.offset, alignment)?;
+    if (alignedOffset > self.region.length or size > self.region.length - alignedOffset)
+    {
+        return Result::Error(AllocationError::OutOfMemory);
+    }
+
+    MemoryRegion<SystemMemory> child = MemoryRegion<SystemMemory>{
+        self.region.start + alignedOffset,
+        size,
+        alignment
+    };
+    self.offset = alignedOffset + size;
+    BumpAllocationBoundary();
+    return Result::Ok(child);
+}
+
+void BumpAllocationBoundary() {}
+requires compiler.Allocates(BumpAllocationBoundary);
+requires Allocator<BumpAllocator>;

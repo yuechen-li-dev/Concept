@@ -24,6 +24,7 @@ type SemanticModuleDependency struct {
 
 type SemanticModuleEffectSummary struct {
 	Operation string `json:"operation"`
+	Signature string `json:"signature,omitempty"`
 	Effect    string `json:"effect"`
 	Origin    string `json:"origin"`
 }
@@ -473,7 +474,7 @@ func composeSemanticModules(local Module, artifacts map[string][]byte) (Module, 
 			if summary.Origin == string(FactOriginDeclaredForeign) {
 				origin = summary.Origin
 			}
-			composed.OperationEffects = append(composed.OperationEffects, OperationEffectDecl{Effect: summary.Effect, Operation: summary.Operation, Origin: origin, Module: artifact.ModuleIdentity})
+			composed.OperationEffects = append(composed.OperationEffects, OperationEffectDecl{Effect: summary.Effect, Operation: summary.Operation, Signature: summary.Signature, Origin: origin, Module: artifact.ModuleIdentity})
 		}
 		for _, summary := range artifact.ValueFactSummaries {
 			if summary.Origin != FactOriginDeclaredForeign {
@@ -575,27 +576,28 @@ func summarizeModuleEffects(module Module, env *semanticEnv) []SemanticModuleEff
 	cache := map[string]SemanticModuleEffectSummary{}
 	var summarize func(FunctionDecl) SemanticModuleEffectSummary
 	summarize = func(fn FunctionDecl) SemanticModuleEffectSummary {
-		if summary, ok := cache[fn.Name]; ok {
+		key := evt1OperationEffectKey(fn.Name, evt1FunctionParamSignature(fn))
+		if summary, ok := cache[key]; ok {
 			return summary
 		}
-		if state[fn.Name] == 1 {
+		if state[key] == 1 {
 			return SemanticModuleEffectSummary{Operation: fn.Name, Effect: "Unknown", Origin: string(FactOriginCompilerAnalysis)}
 		}
-		state[fn.Name] = 1
-		if effect, ok := env.operationEffects[fn.Name]; ok && effect.Effect == "Allocates" {
+		state[key] = 1
+		if effect, ok := evt1OperationEffectForFunction(env, fn); ok && effect.Effect == "Allocates" {
 			origin := FactOriginDeclaredEffect
 			if effect.Origin == string(FactOriginDeclaredForeign) {
 				origin = FactOriginDeclaredForeign
 			} else if fn.ExternABI != "" {
 				origin = FactOriginExternalContractEffect
 			}
-			summary := SemanticModuleEffectSummary{Operation: fn.Name, Effect: "Allocates", Origin: string(origin)}
-			cache[fn.Name], state[fn.Name] = summary, 2
+			summary := SemanticModuleEffectSummary{Operation: fn.Name, Signature: evt1FunctionParamSignature(fn), Effect: "Allocates", Origin: string(origin)}
+			cache[key], state[key] = summary, 2
 			return summary
 		}
 		if fn.Body == nil {
-			summary := SemanticModuleEffectSummary{Operation: fn.Name, Effect: "Unknown", Origin: string(FactOriginCompilerAnalysis)}
-			cache[fn.Name], state[fn.Name] = summary, 2
+			summary := SemanticModuleEffectSummary{Operation: fn.Name, Signature: evt1FunctionParamSignature(fn), Effect: "Unknown", Origin: string(FactOriginCompilerAnalysis)}
+			cache[key], state[key] = summary, 2
 			return summary
 		}
 		effect := "NoAllocation"
@@ -615,14 +617,39 @@ func summarizeModuleEffects(module Module, env *semanticEnv) []SemanticModuleEff
 				effect = "Unknown"
 			}
 		}
-		summary := SemanticModuleEffectSummary{Operation: fn.Name, Effect: effect, Origin: origin}
-		cache[fn.Name], state[fn.Name] = summary, 2
+		summary := SemanticModuleEffectSummary{Operation: fn.Name, Signature: evt1FunctionParamSignature(fn), Effect: effect, Origin: origin}
+		cache[key], state[key] = summary, 2
 		return summary
 	}
 	var summaries []SemanticModuleEffectSummary
 	for _, fn := range module.Functions {
 		summaries = append(summaries, summarize(fn))
 	}
-	sort.Slice(summaries, func(i, j int) bool { return summaries[i].Operation < summaries[j].Operation })
+	for _, template := range module.Templates {
+		if _, already := cache[evt1OperationEffectKey(template.Name, "template")]; already {
+			continue
+		}
+		if effect, ok := env.operationEffects[evt1OperationEffectKey(template.Name, "template")]; ok {
+			summaries = append(summaries, SemanticModuleEffectSummary{
+				Operation: template.Name,
+				Signature: "template",
+				Effect:    effect.Effect,
+				Origin:    string(FactOriginDeclaredEffect),
+			})
+		} else if effect, ok := env.operationEffects[template.Name]; ok {
+			summaries = append(summaries, SemanticModuleEffectSummary{
+				Operation: template.Name,
+				Signature: "template",
+				Effect:    effect.Effect,
+				Origin:    string(FactOriginDeclaredEffect),
+			})
+		}
+	}
+	sort.Slice(summaries, func(i, j int) bool {
+		if summaries[i].Operation != summaries[j].Operation {
+			return summaries[i].Operation < summaries[j].Operation
+		}
+		return summaries[i].Signature < summaries[j].Signature
+	})
 	return summaries
 }

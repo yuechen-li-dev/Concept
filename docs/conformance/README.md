@@ -40,8 +40,10 @@ their fixtures now have exactly one authority under `language/evt1`.
 | R6l | initialized typed-storage field ownership progressed; nested generic carriers remain blocked | `EVT1-R6L-CONFORMANCE.md` | focused generic bind, owner state, Value, move, Drop, and blocker tests |
 | R6m | structural generic substitution closes nested carriers and imported owner types | `EVT1-R6M-CONFORMANCE.md` | structural substitution, module, owner, and strict-C11 regression tests |
 | R6n | allocator retry honestly stopped on second-parameter capability constraints | `EVT1-R6N-CONFORMANCE.md` | focused general constraint/dispatch regressions; no allocator fixtures published |
+| R6o | arbitrary-position, relational, and composed generic concept requirements | `0920b96` | 382 valid, 246 static-invalid, and 13 runtime-negative fixtures |
+| R6p | ordinary Standard.Memory fixed, hosted, bump, pool, and typed ownership | this report's commit | semantic-module, `.concept_test`, strict-C11, effect, lifetime, and determinism evidence |
 
-The manifest records 379 valid, 243 static-invalid, and 13 runtime-negative
+The manifest records 382 valid, 246 static-invalid, and 13 runtime-negative
 fixtures. Four retained expected-divergence cases compare the frozen EVT1
 structural-copy and bounded-comptime decisions against PoC3. No EVT1 gap or
 unresolved specification ambiguity remains in the R5 core.

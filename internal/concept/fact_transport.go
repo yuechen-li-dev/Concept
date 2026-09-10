@@ -324,9 +324,22 @@ func evt1DeriveSemanticFactSummaries(env *semanticEnv, functions []FunctionDecl,
 }
 
 func evt1DeriveBlockFactSummary(env *semanticEnv, block Block, params map[string]int, derive func(FunctionDecl) SemanticValueFactSummary) (SemanticValueFactSummary, bool) {
-	locals := map[string]SemanticValueFactSummary{}
+	return evt1DeriveBlockFactSummaryWithLocals(env, block, params, map[string]SemanticValueFactSummary{}, derive)
+}
+
+func evt1DeriveBlockFactSummaryWithLocals(env *semanticEnv, block Block, params map[string]int, locals map[string]SemanticValueFactSummary, derive func(FunctionDecl) SemanticValueFactSummary) (SemanticValueFactSummary, bool) {
 	var result SemanticValueFactSummary
 	found := false
+	appendResult := func(candidate SemanticValueFactSummary, candidateFound bool) {
+		if !candidateFound {
+			return
+		}
+		if found {
+			result = joinSemanticSummaries(result, candidate)
+		} else {
+			result, found = candidate, true
+		}
+	}
 	for _, stmt := range block.Statements {
 		switch s := stmt.(type) {
 		case *VarDecl:
@@ -350,14 +363,53 @@ func evt1DeriveBlockFactSummary(env *semanticEnv, block Block, params map[string
 				continue
 			}
 			candidate := evt1DeriveExprFactSummary(env, s.Value, params, locals, derive)
-			if found {
-				result = joinSemanticSummaries(result, candidate)
-			} else {
-				result, found = candidate, true
+			appendResult(candidate, true)
+		case *WhileStmt:
+			bodyLocals := cloneSemanticSummaryLocals(locals)
+			invalidateSemanticSummaryAssignments(s.Body, bodyLocals)
+			candidate, candidateFound := evt1DeriveBlockFactSummaryWithLocals(env, s.Body, params, bodyLocals, derive)
+			appendResult(candidate, candidateFound)
+		case *IfStmt:
+			thenResult, thenFound := evt1DeriveBlockFactSummaryWithLocals(env, s.Then, params, cloneSemanticSummaryLocals(locals), derive)
+			appendResult(thenResult, thenFound)
+			if s.Else != nil {
+				elseResult, elseFound := evt1DeriveBlockFactSummaryWithLocals(env, *s.Else, params, cloneSemanticSummaryLocals(locals), derive)
+				appendResult(elseResult, elseFound)
 			}
+		case *Block:
+			candidate, candidateFound := evt1DeriveBlockFactSummaryWithLocals(env, *s, params, cloneSemanticSummaryLocals(locals), derive)
+			appendResult(candidate, candidateFound)
 		}
 	}
 	return result, found
+}
+
+func cloneSemanticSummaryLocals(locals map[string]SemanticValueFactSummary) map[string]SemanticValueFactSummary {
+	out := make(map[string]SemanticValueFactSummary, len(locals))
+	for name, summary := range locals {
+		out[name] = summary
+	}
+	return out
+}
+
+func invalidateSemanticSummaryAssignments(block Block, locals map[string]SemanticValueFactSummary) {
+	for _, stmt := range block.Statements {
+		switch s := stmt.(type) {
+		case *AssignStmt:
+			if name, ok := s.Target.(*NameExpr); ok {
+				locals[name.Name] = SemanticValueFactSummary{}
+			}
+		case *IfStmt:
+			invalidateSemanticSummaryAssignments(s.Then, locals)
+			if s.Else != nil {
+				invalidateSemanticSummaryAssignments(*s.Else, locals)
+			}
+		case *WhileStmt:
+			invalidateSemanticSummaryAssignments(s.Body, locals)
+		case *Block:
+			invalidateSemanticSummaryAssignments(*s, locals)
+		}
+	}
 }
 
 func evt1SetLocalSummaryInitialized(expr Expr, locals map[string]SemanticValueFactSummary, certainty SemanticFactCertainty) {
@@ -418,7 +470,7 @@ func evt1DeriveExprFactSummary(env *semanticEnv, expr Expr, params map[string]in
 	case *FieldExpr:
 		base := evt1DeriveExprFactSummary(env, e.Receiver, params, locals, derive)
 		if base.Source != nil {
-			return SemanticValueFactSummary{Source: semanticSummaryField(base.Source, e.Field), Scalar: semanticSummaryField(base.Source, e.Field), Transport: append(base.Transport, SemanticFactTransportStep{Transform: FactTransformFieldLoad, Through: e.Field})}
+			return SemanticValueFactSummary{Source: semanticSummaryField(base.Source, e.Field), Scalar: semanticSummaryField(base.Source, e.Field), ProvenanceKind: base.ProvenanceKind, ProvenanceParameter: base.ProvenanceParameter, Transport: append(base.Transport, SemanticFactTransportStep{Transform: FactTransformFieldLoad, Through: e.Field})}
 		}
 		for _, field := range base.Fields {
 			if field.Name == e.Field {
@@ -430,13 +482,18 @@ func evt1DeriveExprFactSummary(env *semanticEnv, expr Expr, params map[string]in
 	case *BinaryExpr:
 		left := evt1DeriveExprFactSummary(env, e.Left, params, locals, derive)
 		rightScalar := evt1DeriveScalarSummary(e.Right, params, locals)
-		if e.Op == "+" && left.Source != nil {
+		if e.Op == "+" && (left.Source != nil || left.RegionOrigin != nil) {
 			out := left
 			if out.RegionOrigin == nil {
 				out.RegionOrigin = semanticSummaryFact(left.Source, "RegionOrigin")
 			}
-			out.RelativeOffset = &SemanticSummaryExpr{Kind: "Add", Left: semanticSummaryFact(left.Source, "RelativeOffset"), Right: rightScalar}
-			out.Alignment = &SemanticSummaryExpr{Kind: "CommonAlignment", Left: semanticSummaryFact(left.Source, "Alignment"), Right: rightScalar}
+			if rightScalar != nil {
+				out.RelativeOffset = &SemanticSummaryExpr{Kind: "Add", Left: semanticSummaryFact(left.Source, "RelativeOffset"), Right: rightScalar}
+				out.Alignment = &SemanticSummaryExpr{Kind: "CommonAlignment", Left: semanticSummaryFact(left.Source, "Alignment"), Right: rightScalar}
+			} else {
+				out.RelativeOffset = nil
+				out.Alignment = nil
+			}
 			out.Transport = append(out.Transport, SemanticFactTransportStep{Transform: FactTransformAddOffset})
 			return out
 		}
@@ -494,7 +551,12 @@ func evt1DeriveExprFactSummary(env *semanticEnv, expr Expr, params map[string]in
 			}
 		}
 		if e.Callee == "AddressOf" && len(e.Args) == 1 {
-			return SemanticValueFactSummary{AddressSpace: e.TypeArg.Name, RegionOrigin: &SemanticSummaryExpr{Kind: "StorageOrigin", Fact: strings.TrimPrefix(evt1SemanticStorageOrigin(e.Args[0]), "storage:")}, RelativeOffset: &SemanticSummaryExpr{Kind: "Constant"}, HostAccessible: map[bool]SemanticFactCertainty{true: FactProven, false: FactUnknown}[e.TypeArg.Name == "SystemMemory"]}
+			source := evt1DeriveExprFactSummary(env, e.Args[0], params, locals, derive)
+			origin := &SemanticSummaryExpr{Kind: "StorageOrigin", Fact: strings.TrimPrefix(evt1SemanticStorageOrigin(e.Args[0]), "storage:")}
+			if source.Source != nil {
+				origin = semanticSummaryFact(source.Source, "RegionOrigin")
+			}
+			return SemanticValueFactSummary{Source: source.Source, AddressSpace: e.TypeArg.Name, RegionOrigin: origin, RelativeOffset: &SemanticSummaryExpr{Kind: "Constant"}, HostAccessible: map[bool]SemanticFactCertainty{true: FactProven, false: FactUnknown}[e.TypeArg.Name == "SystemMemory"], ProvenanceKind: source.ProvenanceKind, ProvenanceParameter: source.ProvenanceParameter}
 		}
 		if e.Callee == "AddressFromBits" {
 			return SemanticValueFactSummary{AddressSpace: e.TypeArg.Name, ProvenanceKind: string(evt1ProvenanceUnknown), Transport: []SemanticFactTransportStep{{Transform: FactTransformOpaqueBoundary, Through: "AddressFromBits", Detail: "bits establish no region origin"}}}
@@ -532,7 +594,11 @@ func evt1DeriveScalarSummary(expr Expr, params map[string]int, locals map[string
 		}
 	case *BinaryExpr:
 		if e.Op == "+" {
-			return &SemanticSummaryExpr{Kind: "Add", Left: evt1DeriveScalarSummary(e.Left, params, locals), Right: evt1DeriveScalarSummary(e.Right, params, locals)}
+			left := evt1DeriveScalarSummary(e.Left, params, locals)
+			right := evt1DeriveScalarSummary(e.Right, params, locals)
+			if left != nil && right != nil {
+				return &SemanticSummaryExpr{Kind: "Add", Left: left, Right: right}
+			}
 		}
 	}
 	return nil
@@ -580,6 +646,9 @@ func evt1DeriveStructFactSummary(env *semanticEnv, e *StructConstructExpr, param
 		address := addressField.Facts
 		out.Source = address.Source
 		out.AddressSpace = address.AddressSpace
+		out.HostAccessible = address.HostAccessible
+		out.ProvenanceKind = address.ProvenanceKind
+		out.ProvenanceParameter = address.ProvenanceParameter
 		out.RegionOrigin = address.RegionOrigin
 		if out.RegionOrigin == nil && address.Source != nil {
 			out.RegionOrigin = semanticSummaryFact(address.Source, "RegionOrigin")
@@ -1048,6 +1117,12 @@ func evt1SemanticArgumentFacts(env *semanticEnv, scope *evt1Scope, args []Expr) 
 	for i, arg := range args {
 		t, _ := validateExpr(env, scope, arg, nil, false)
 		out[i] = evt1SemanticFactsForExpr(env, scope, arg, t)
+		if out[i] == nil {
+			provenance := evt1ExprProvenance(env, scope, arg)
+			if provenance.Kind != evt1ProvenanceUnknown {
+				out[i] = &SemanticValueFacts{Provenance: provenance}
+			}
+		}
 		if out[i] == nil {
 			if value, ok := evt1KnownTransportInt(scope, arg); ok {
 				out[i] = &SemanticValueFacts{Scalar: SemanticKnownInt{Known: true, Value: value}}

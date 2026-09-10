@@ -1,0 +1,59 @@
+module Standard.Memory.Core;
+profile Core;
+
+import Standard.MemoryGeometry;
+
+enum AllocationError
+{
+    OutOfMemory,
+    InvalidAlignment,
+    InvalidRegion,
+    DoubleRelease,
+}
+
+concept Allocator<TAllocator>
+{
+    requires Result<MemoryRegion<SystemMemory>, AllocationError> Allocate(
+        ref TAllocator self,
+        usize<byte> size,
+        usize<byte> alignment
+    );
+    requires compiler.Allocates(Allocate);
+}
+
+concept ReleasableAllocator<TAllocator>
+{
+    requires Allocator<TAllocator>;
+    requires Result<void, AllocationError> Release(
+        ref TAllocator self,
+        borrow const MemoryRegion<SystemMemory> region
+    );
+}
+
+bool IsValidAlignment(usize<byte> alignment)
+{
+    return alignment > 0;
+}
+
+Result<usize<byte>, AllocationError> CheckedAlignUp(
+    usize<byte> value,
+    usize<byte> alignment
+)
+{
+    if (not IsValidAlignment(alignment))
+    {
+        return Result::Error(AllocationError::InvalidAlignment);
+    }
+    usize<byte> remainder = value % alignment;
+    if (remainder == 0)
+    {
+        return Result::Ok(value);
+    }
+    usize<byte> padding = alignment - remainder;
+    usize<byte> aligned = value + padding;
+    if (aligned < value)
+    {
+        return Result::Error(AllocationError::InvalidRegion);
+    }
+    return Result::Ok(aligned);
+}

@@ -96,7 +96,9 @@ disjoint regions, returned overlap, and an opaque `AddressFromBits` boundary.
 R6l adds field-sensitive initialized-object state beside transported geometry
 facts. `Value(storage)` requires Initialized, `Destroy(storage)` ends that
 object lifetime, and a later use of a retained reference is rejected. This is
-currently diagnostic authority rather than a new user-selectable proof goal.
-Proof transport through `Result<Owner<T>, E>` and imported generic owner
-instantiation remains Unknown/blocked until the general nested generic
-substitution boundary is repaired; no proof rule fabricates Initialized there.
+diagnostic authority rather than a new user-selectable proof goal. R6m repaired
+the nested generic substitution boundary without fabricating Initialized
+evidence. R6p demonstrates all three imported
+allocator-effect outcomes: typed allocation is `NoAllocation` Disproven, pure
+remaining-capacity inspection is Proven, and an opaque foreign operation
+without declared effect authority remains Unknown.

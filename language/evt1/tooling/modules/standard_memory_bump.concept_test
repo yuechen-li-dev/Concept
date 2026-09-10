@@ -1,0 +1,24 @@
+profile Core;
+import Standard.Memory.Bump;
+
+[[fact]]
+void BumpAllocatesAlignedRegionsAndAccountsExactly()
+{
+    FixedBufferMemorySource source = MakeFixedBufferMemorySource();
+    BumpAllocator bump = MakeBumpAllocator(RegionOf(ref source));
+    usize<byte> one = 1;
+    usize<byte> four = 4;
+    usize<byte> restSize = 248;
+
+    Assert.True(Capacity(ref const bump) == 256, "fixed source exposes its exact byte capacity");
+    MemoryRegion<SystemMemory> first = Allocate(ref bump, one, one)!;
+    MemoryRegion<SystemMemory> second = Allocate(ref bump, four, four)!;
+    Assert.True(first.start != second.start, "sequential bump allocations use distinct intervals");
+    Assert.True(Remaining(ref const bump) == 248, "alignment padding and payload bytes are both charged");
+    MemoryRegion<SystemMemory> rest = Allocate(ref bump, restSize, one)!;
+    Assert.True(rest.length == 248, "the exact remaining extent can be allocated");
+    Assert.True(Remaining(ref const bump) == 0, "exhaustion leaves zero remaining bytes");
+    Assert.Error(Allocate(ref bump, one, one), "allocation beyond the fixed region returns OutOfMemory");
+    usize<byte> zero = 0;
+    Assert.Error(Allocate(ref bump, one, zero), "zero alignment is rejected explicitly");
+}

@@ -80,3 +80,8 @@ must contain no reachable template type parameter in their fields or callable
 signatures. Thus `Result<Owner<T>, E>` closes to its concrete owner/error types,
 and imported `Owner<Widget>` contains `Storage<Widget>` rather than stale
 `Storage<T>`.
+
+R6p exercises multi-parameter generic Drop and typed allocation where the
+capability constrains the second parameter. Closed instantiation resolves
+`Allocation<T,A>`, `Storage<T>`, Result payloads, required operations, and
+effects through the same structural substitution machinery.

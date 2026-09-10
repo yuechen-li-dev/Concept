@@ -447,7 +447,7 @@ func evt1ProjectOutlives(graph *ProofGraph, root string, subjects []conceptAsser
 }
 
 func evt1ProjectNoAllocation(env *semanticEnv, graph *ProofGraph, root string, fn FunctionDecl, visiting map[string]bool) SemanticFactCertainty {
-	if effect, ok := env.operationEffects[fn.Name]; ok {
+	if effect, ok := evt1OperationEffectForFunction(env, fn); ok {
 		if effect.Effect == "NoAllocation" {
 			id := graph.addNode(ProofKnownFact, fn.Name+" NoAllocation", "authoritative imported operation summary", FactProven, FactOriginModuleSummaryEffect, effect.Span)
 			graph.addEdge(root, id, ProofDerivedFrom)
@@ -501,6 +501,16 @@ func evt1ProjectNoAllocation(env *semanticEnv, graph *ProofGraph, root string, f
 	}
 	templateInstances := evt1DirectTemplateInstances(env, *fn.Body)
 	for _, instance := range templateInstances {
+		if effect, ok := env.operationEffects[evt1OperationEffectKey(instance.TemplateName, "template")]; ok && effect.Effect == "Allocates" {
+			origin := FactOriginDeclaredEffect
+			if effect.Origin == string(FactOriginModuleSummaryEffect) {
+				origin = FactOriginModuleSummaryEffect
+			}
+			id := graph.addNode(ProofContradiction, instance.TemplateName+" Allocates", "authoritative generic operation contract", FactDisproven, origin, effect.Span)
+			graph.addEdge(fnNode, id, ProofConflictsWith)
+			outcome = FactDisproven
+			continue
+		}
 		instantiated := instance.Function
 		instantiated.Name = instance.GeneratedSymbol
 		child := evt1ProjectNoAllocation(env, graph, fnNode, instantiated, visiting)
@@ -548,6 +558,12 @@ func evt1DirectTemplateInstances(env *semanticEnv, block Block) []*evt1TemplateI
 			visitExpr(e.Left)
 			visitExpr(e.Right)
 		case *UnaryExpr:
+			visitExpr(e.Value)
+		case *FailureExpr:
+			visitExpr(e.Value)
+		case *MoveExpr:
+			visitExpr(e.Value)
+		case *RefExpr:
 			visitExpr(e.Value)
 		case *ParenExpr:
 			visitExpr(e.Value)
@@ -608,6 +624,12 @@ func evt1DirectCalls(block Block) []string {
 			visitExpr(e.Left)
 			visitExpr(e.Right)
 		case *UnaryExpr:
+			visitExpr(e.Value)
+		case *FailureExpr:
+			visitExpr(e.Value)
+		case *MoveExpr:
+			visitExpr(e.Value)
+		case *RefExpr:
 			visitExpr(e.Value)
 		case *ParenExpr:
 			visitExpr(e.Value)

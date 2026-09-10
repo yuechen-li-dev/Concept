@@ -90,11 +90,9 @@ Unknown. Exact declaration syntax is provisional.
 
 R6l serializes Initialized certainty in ordinary bounded value-fact summaries
 and permits open-template `bind<T>`. Operational field state remains an analysis
-channel rather than runtime or proof metadata. A nested generic owner inside
-Result/Option does not yet retain its concrete application through extraction,
-and an imported generic owner's `Storage<T>` field is not yet substituted in
-the consumer. Cross-module typed-owner factories remain deferred until those
-general substitution boundaries are resolved.
+channel rather than runtime or proof metadata. R6m subsequently resolved nested
+generic owner extraction and imported `Storage<T>` substitution, enabling
+cross-module typed-owner factories.
 
 Within an interface, `requires compiler.Allocates(Operation);` means the
 operation is permitted to allocate. An allocation-free implementation is also
@@ -113,3 +111,9 @@ required-operation signatures, and effect requirements. Imported constrained
 functions and generic types build their operation closure and instantiate from
 that payload without source reparse; closed instance MIR contains concrete
 arguments and concrete witness bindings.
+
+R6p uses this path for `Standard.Memory`. Its artifacts carry allocator concept
+composition, required Allocate/Release signatures, effect summaries, generic
+typed-owner bodies, and region/provenance summaries through the ordinary
+schema. An artifact-only consumer instantiates bump, pool, `Allocation<T,A>`,
+typed Allocate, and constrained Drop without opening module source.

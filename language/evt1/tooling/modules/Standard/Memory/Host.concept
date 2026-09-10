@@ -1,0 +1,25 @@
+module Standard.Memory.Host;
+profile Core;
+
+import Standard.Memory.Core;
+import Platform.Host.Memory;
+
+struct HostedMemorySource
+{
+    owned HostAllocation allocation;
+};
+
+Result<HostedMemorySource, HostMemoryError> AcquireHostedMemorySource(
+    usize<byte> size,
+    usize<byte> alignment
+)
+{
+    owned HostAllocation allocation = AcquireHost(size, alignment)?;
+    HostedMemorySource source = HostedMemorySource{move allocation};
+    return Result::Ok(move source);
+}
+
+MemoryRegion<SystemMemory> RegionOf(ref const HostedMemorySource source)
+{
+    return RegionOf(ref const source.allocation);
+}

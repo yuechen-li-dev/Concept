@@ -429,6 +429,7 @@
               "kind": "Parameter"
             }
           },
+          "provenance_kind": "parameter",
           "transport": [
             {
               "transform": "Parameter",
@@ -527,6 +528,7 @@
               "kind": "Parameter"
             }
           },
+          "provenance_kind": "parameter",
           "transport": [
             {
               "transform": "Parameter",
@@ -625,6 +627,7 @@
               "kind": "Parameter"
             }
           },
+          "provenance_kind": "parameter",
           "transport": [
             {
               "transform": "Parameter",
@@ -727,6 +730,7 @@
               "kind": "Parameter"
             }
           },
+          "provenance_kind": "parameter",
           "transport": [
             {
               "transform": "Parameter",

@@ -1,7 +1,6 @@
 # Typed storage lifetime
 
-Status: EVT1 R6l general field-state substrate implemented; nested generic
-failure-carrier transport remains blocked
+Status: EVT1 R6p complete through nested generic allocation owners
 
 `Storage<T>` denotes suitably aligned and sized storage. It does not denote a
 live `T`. `Initialize(storage, value)` begins one object lifetime in that
@@ -30,11 +29,9 @@ Open `bind<T>` is legal. The one-argument form accepts a trusted
 `MemoryRegion<SystemMemory>` and defers concrete size/alignment checks until
 instantiation/lowering. The existing address-plus-extent form remains valid.
 
-R6l does not add an allocator, heap, pointer syntax, shared ownership, or hidden
-object-state runtime. The current blocker is `Result<Owner<T>, E>`: nested open
-generic applications are canonicalized before failure-carrier extraction and
-the caller observes `Owner<T>` rather than `Owner<Concrete>`. Extending that
-general carrier substitution path is required before R6l can be complete.
-Imported generic owners also still expose their open `Storage<T>` field to the
-consumer as unresolved `T` (`CV4148`); the deterministic artifact is preserved,
-but consumer instantiation is not yet valid.
+R6l did not add an allocator, heap, pointer syntax, shared ownership, or hidden
+object-state runtime. R6m subsequently closed its nested carrier substitution
+boundary. R6p exercises the completed rule in
+`Result<Allocation<T,A>, AllocationError>` across imported artifacts. The
+ordinary owner adds no runtime state flag; compile-time state still governs
+`Value` and `Destroy`, and Drop orders object destruction before raw release.

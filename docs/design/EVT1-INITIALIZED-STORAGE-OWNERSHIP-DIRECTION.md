@@ -1,6 +1,6 @@
 # EVT1 initialized typed-storage ownership direction
 
-Status: R6l ownership semantics complete; R6m closes nested generic transport
+Status: R6p applies the completed R6l/R6m substrate to ordinary allocation
 
 R6k stopped on four allocator-independent boundaries. R6l resolves three
 directly and replaces the unsafe fourth shape with an owner-relative borrow:
@@ -40,3 +40,8 @@ carrier and module boundary. No ownership or storage-lifetime rule changed.
 Callable/async/machine product integrations remain separate bounded follow-on
 proofs. General `T*`, MMIO, shared ownership, variadics, GC, allocators, and
 native LIR remain outside R6m.
+
+R6p's ordinary `Allocation<T,A>` carries allocator and region authority beside
+`Storage<T>`. Its generic Drop calls `Destroy` and then `Release`; the
+monotonic sibling destroys without reclaiming the region. Moving either owner
+transfers its descriptor rather than live object bytes, including immovable T.

@@ -699,13 +699,31 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		if effect.Effect != "Allocates" && effect.Effect != "NoAllocation" && effect.Effect != "Unknown" {
 			return nil, evt1Diagnostic("OPERATION_EFFECT_INVALID", fmt.Sprintf("unknown operation effect summary %s", effect.Effect), effect.Span)
 		}
-		if _, exists := env.operationEffects[effect.Operation]; exists {
+		key := evt1OperationEffectKey(effect.Operation, effect.Signature)
+		if _, exists := env.operationEffects[key]; exists {
 			return nil, evt1Diagnostic("OPERATION_EFFECT_DUPLICATE", fmt.Sprintf("duplicate operation effect for %s", effect.Operation), effect.Span)
 		}
-		if len(env.functions[effect.Operation]) != 1 {
+		targets := 0
+		if effect.Signature == "template" {
+			if env.templates[effect.Operation].Name != "" {
+				targets = 1
+			}
+		} else if effect.Signature != "" {
+			for _, fn := range env.functions[effect.Operation] {
+				if evt1FunctionParamSignature(fn) == effect.Signature {
+					targets++
+				}
+			}
+		} else {
+			targets = len(env.functions[effect.Operation])
+			if env.templates[effect.Operation].Name != "" {
+				targets++
+			}
+		}
+		if targets != 1 {
 			return nil, evt1Diagnostic("OPERATION_EFFECT_TARGET_INVALID", fmt.Sprintf("operation effect requires one uniquely resolved operation, got %s", effect.Operation), effect.Span)
 		}
-		env.operationEffects[effect.Operation] = effect
+		env.operationEffects[key] = effect
 	}
 	for _, fn := range module.ComptimeFns {
 		if fn.Name == "dispatch" || fn.Name == "actuate" || fn.Name == "discard" {
@@ -1121,9 +1139,24 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 	return env, nil
 }
 
+func evt1OperationEffectKey(operation string, signature string) string {
+	if signature == "" {
+		return operation
+	}
+	return operation + "|" + signature
+}
+
+func evt1OperationEffectForFunction(env *semanticEnv, fn FunctionDecl) (OperationEffectDecl, bool) {
+	if effect, ok := env.operationEffects[evt1OperationEffectKey(fn.Name, evt1FunctionParamSignature(fn))]; ok {
+		return effect, true
+	}
+	effect, ok := env.operationEffects[fn.Name]
+	return effect, ok
+}
+
 func evt1InstantiateGenericDrops(env *semanticEnv) error {
 	decl, found := env.templates["Drop"]
-	if !found || len(decl.Params) != 1 || !decl.Params[0].Type.isOwned() || len(decl.Parameters) != 1 {
+	if !found || len(decl.Params) != 1 || !decl.Params[0].Type.isOwned() || len(decl.Parameters) == 0 {
 		return nil
 	}
 	parameterType := decl.Params[0].Type.valueType()
@@ -1134,7 +1167,16 @@ func evt1InstantiateGenericDrops(env *semanticEnv) error {
 	sort.Strings(identities)
 	for _, identity := range identities {
 		application := env.genericTypeApplications[identity]
-		if parameterType.Name != application.Name || len(application.TypeArgs) != 1 || application.TypeArgs[0].Kind == TypeConceptParam {
+		if parameterType.Name != application.Name || len(application.TypeArgs) != len(decl.Parameters) {
+			continue
+		}
+		open := false
+		for _, argument := range application.TypeArgs {
+			if argument.Kind == TypeConceptParam || evt1TypeDependsOnAnyParameter(argument, decl.Parameters) {
+				open = true
+			}
+		}
+		if open {
 			continue
 		}
 		instance, err := instantiateTemplateArgs(env, "Drop", application.TypeArgs, application.Span)
@@ -2055,7 +2097,7 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				return err
 			}
 		case *WhileStmt:
-			if err := validateWhileStmt(env, local, *s, templateInfo, inComptimeFn); err != nil {
+			if err := validateWhileStmt(env, local, *s, returnType, templateInfo, inComptimeFn); err != nil {
 				return err
 			}
 		case *IfStmt:
@@ -2226,13 +2268,16 @@ func evt1ValidateStorageTemplateCall(env *semanticEnv, scope *evt1Scope, e *Temp
 			}
 			facts := evt1SemanticFactsForExpr(env, scope, e.Args[0], addressType)
 			provenance := evt1ExprProvenance(env, scope, e.Args[0])
+			if facts != nil && facts.Provenance.Kind != "" {
+				provenance = facts.Provenance
+			}
 			symbolicParameter := templateInfo != nil
 			if name, ok := e.Args[0].(*NameExpr); ok {
 				if binding, found := scope.lookup(name.Name); found && binding.declarationSpan == (Span{}) {
 					symbolicParameter = true
 				}
 			}
-			if (facts == nil && !symbolicParameter) || (facts != nil && facts.RegionOrigin == "" && provenance.Kind != evt1ProvenanceParameter && provenance.Kind != evt1ProvenanceStatic && !symbolicParameter) {
+			if (facts == nil && !symbolicParameter) || (facts != nil && facts.RegionOrigin == "" && facts.HostAccessible != FactProven && provenance.Kind != evt1ProvenanceParameter && provenance.Kind != evt1ProvenanceStatic && !symbolicParameter) {
 				return Type{}, true, evt1Diagnostic("RAW_BIND_PROVENANCE_UNKNOWN", "bind<T> requires a trusted live MemoryRegion<SystemMemory>", e.Args[0].exprSpan())
 			}
 			if facts != nil && facts.HostAccessible != FactProven && facts.AddressSpace != "SystemMemory" {
@@ -4938,7 +4983,7 @@ func validatePattern(env *semanticEnv, scope *evt1Scope, subjectType Type, enumD
 	return armScope, variant, nil
 }
 
-func validateWhileStmt(env *semanticEnv, scope *evt1Scope, stmt WhileStmt, templateInfo *evt1TemplateInfo, inComptimeFn bool) error {
+func validateWhileStmt(env *semanticEnv, scope *evt1Scope, stmt WhileStmt, returnType Type, templateInfo *evt1TemplateInfo, inComptimeFn bool) error {
 	conditionType, err := validateExpr(env, scope, stmt.Condition, templateInfo, inComptimeFn)
 	if err != nil {
 		return err
@@ -4969,7 +5014,7 @@ func validateWhileStmt(env *semanticEnv, scope *evt1Scope, stmt WhileStmt, templ
 		}
 	}
 	bodyScope := evt1CloneScope(scope)
-	if err := validateBlock(env, bodyScope, Type{Name: "void", Kind: TypeBuiltin}, stmt.Body, templateInfo, inComptimeFn); err != nil {
+	if err := validateBlock(env, bodyScope, returnType, stmt.Body, templateInfo, inComptimeFn); err != nil {
 		return err
 	}
 	beforeScope := evt1CloneScope(scope)
@@ -5541,14 +5586,14 @@ func evt1DropFunction(env *semanticEnv, t Type) *FunctionDecl {
 		if fn.ReturnType.Name != "void" || len(fn.Params) != 1 || !fn.Params[0].Type.isOwned() {
 			continue
 		}
-		if evt1CanonicalType(env, fn.Params[0].Type.valueType()).Equal(evt1CanonicalType(env, t.valueType())) {
+		if evt1SemanticTypeEqual(env, fn.Params[0].Type.valueType(), t.valueType()) {
 			return fn
 		}
 	}
 	if application, ok := env.genericTypeApplications[t.valueType().Name]; ok {
 		if decl, found := env.templates["Drop"]; found && len(decl.Params) == 1 && decl.Params[0].Type.isOwned() {
 			parameterType := decl.Params[0].Type.valueType()
-			if parameterType.Name == application.Name && len(application.TypeArgs) == 1 && len(decl.Parameters) == 1 {
+			if parameterType.Name == application.Name && len(application.TypeArgs) == len(decl.Parameters) {
 				if instance, err := instantiateTemplateArgs(env, "Drop", application.TypeArgs, t.Span); err == nil {
 					env.functions["Drop"] = append(env.functions["Drop"], instance.Function)
 					return &env.functions["Drop"][len(env.functions["Drop"])-1]
@@ -5752,7 +5797,7 @@ func checkConceptApplicationSatisfaction(env *semanticEnv, conceptName string, a
 			if err != nil {
 				return err
 			}
-			if effect, ok := env.operationEffects[implementation.Name]; ok && effect.Effect == "Allocates" && !evt1ConceptOperationAllowsAllocation(conceptDecl, r.Name) {
+			if effect, ok := evt1OperationEffectForFunction(env, implementation); ok && effect.Effect == "Allocates" && !evt1ConceptOperationAllowsAllocation(conceptDecl, r.Name) {
 				return evt1Diagnostic("INTERFACE_EFFECT_MISMATCH", fmt.Sprintf("%s operation %s may allocate but the interface does not allow allocation", strings.Join(path, " -> "), r.Name), span)
 			}
 		case *FieldRequirement:
@@ -6089,7 +6134,7 @@ func evt1ResultProvenanceFact(functionName string, summary evt1ResultProvenanceS
 func evt1LookupRequiredOperation(env *semanticEnv, required OperationRequirement, span Span, prefix string) (FunctionDecl, error) {
 	var candidates []FunctionDecl
 	for _, fn := range env.functions[required.Name] {
-		if fn.Visibility == "private" && evt1FunctionParamSignature(fn) == evt1FunctionParamSignature(FunctionDecl{Name: required.Name, Params: required.Params}) && evt1CanonicalType(env, evt1CallableReturnType(fn)).Equal(evt1CanonicalType(env, required.ReturnType)) {
+		if fn.Visibility == "private" && evt1FunctionParamSignature(fn) == evt1FunctionParamSignature(FunctionDecl{Name: required.Name, Params: required.Params}) && evt1RequiredOperationTypeEqual(env, evt1CallableReturnType(fn), required.ReturnType) {
 			return FunctionDecl{}, evt1Diagnostic("INTERFACE_PRIVATE_MEMBER_CANNOT_SATISFY", fmt.Sprintf("%s requires public capability %s, but the matching member is private", prefix, required.Name), span)
 		}
 		if fn.Visibility != "private" {
@@ -6107,8 +6152,8 @@ func evt1LookupRequiredOperation(env *semanticEnv, required OperationRequirement
 		paramsMatch := true
 		qualifierMismatch := false
 		for i := range fn.Params {
-			if !evt1CanonicalType(env, fn.Params[i].Type).Equal(evt1CanonicalType(env, required.Params[i].Type)) {
-				if evt1CanonicalType(env, fn.Params[i].Type.valueType()).Equal(evt1CanonicalType(env, required.Params[i].Type.valueType())) {
+			if !evt1RequiredOperationTypeEqual(env, fn.Params[i].Type, required.Params[i].Type) {
+				if evt1RequiredOperationTypeEqual(env, fn.Params[i].Type.valueType(), required.Params[i].Type.valueType()) {
 					qualifierMismatch = true
 				}
 				paramsMatch = false
@@ -6121,7 +6166,7 @@ func evt1LookupRequiredOperation(env *semanticEnv, required OperationRequirement
 			}
 			continue
 		}
-		if !evt1CanonicalType(env, evt1CallableReturnType(fn)).Equal(evt1CanonicalType(env, required.ReturnType)) {
+		if !evt1RequiredOperationTypeEqual(env, evt1CallableReturnType(fn), required.ReturnType) {
 			return FunctionDecl{}, evt1Diagnostic("CV4156", fmt.Sprintf("%s requires %s but found %s", prefix, evt1Signature(required.ReturnType, required.Name, required.Params), evt1FunctionSignature(fn)), span)
 		}
 		exact = append(exact, fn)
@@ -6136,7 +6181,7 @@ func evt1LookupRequiredOperation(env *semanticEnv, required OperationRequirement
 		if len(fn.Params) == len(required.Params) {
 			code := "CV4154"
 			for i := range fn.Params {
-				if i < len(required.Params) && evt1CanonicalType(env, fn.Params[i].Type.valueType()).Equal(evt1CanonicalType(env, required.Params[i].Type.valueType())) && !evt1CanonicalType(env, fn.Params[i].Type).Equal(evt1CanonicalType(env, required.Params[i].Type)) {
+				if i < len(required.Params) && evt1RequiredOperationTypeEqual(env, fn.Params[i].Type.valueType(), required.Params[i].Type.valueType()) && !evt1RequiredOperationTypeEqual(env, fn.Params[i].Type, required.Params[i].Type) {
 					code = "CV4155"
 					break
 				}
@@ -6145,6 +6190,33 @@ func evt1LookupRequiredOperation(env *semanticEnv, required OperationRequirement
 		}
 	}
 	return FunctionDecl{}, evt1Diagnostic("CV4153", fmt.Sprintf("%s is missing required operation %s", prefix, evt1Signature(required.ReturnType, required.Name, required.Params)), span)
+}
+
+func evt1RequiredOperationTypeEqual(env *semanticEnv, left Type, right Type) bool {
+	return evt1SemanticTypeEqual(env, left, right)
+}
+
+func evt1TypeWithoutImportMarkers(t Type) Type {
+	t.Imported = false
+	if t.PointerTo != nil {
+		base := evt1TypeWithoutImportMarkers(*t.PointerTo)
+		t.PointerTo = &base
+	}
+	if t.ArrayElem != nil {
+		element := evt1TypeWithoutImportMarkers(*t.ArrayElem)
+		t.ArrayElem = &element
+	}
+	for i := range t.TypeArgs {
+		t.TypeArgs[i] = evt1TypeWithoutImportMarkers(t.TypeArgs[i])
+	}
+	for i := range t.CallableParams {
+		t.CallableParams[i] = evt1TypeWithoutImportMarkers(t.CallableParams[i])
+	}
+	if t.CallableResult != nil {
+		result := evt1TypeWithoutImportMarkers(*t.CallableResult)
+		t.CallableResult = &result
+	}
+	return t
 }
 
 func evt1SubstituteRequirement(req OperationRequirement, typeParam string, concreteType Type) OperationRequirement {
@@ -6258,7 +6330,13 @@ func evt1CanonicalType(env *semanticEnv, t Type) Type {
 }
 
 func evt1CanInitializeStoredType(env *semanticEnv, expected Type, actual Type) bool {
-	return evt1CanonicalType(env, expected.valueType()).Equal(evt1CanonicalType(env, actual.valueType()))
+	return evt1SemanticTypeEqual(env, expected.valueType(), actual.valueType())
+}
+
+func evt1SemanticTypeEqual(env *semanticEnv, left Type, right Type) bool {
+	left = evt1TypeWithoutImportMarkers(evt1CanonicalType(env, left))
+	right = evt1TypeWithoutImportMarkers(evt1CanonicalType(env, right))
+	return left.Equal(right) || left.String() == right.String()
 }
 
 func evt1TypeDependsOnParam(t Type, typeParam string) bool {
@@ -6300,7 +6378,7 @@ func evt1TypesCompatible(env *semanticEnv, expected Type, actual Type, typeParam
 		if expected.Quantity == nil && actual.Quantity != nil && expected.Name == actual.Name && expected.Kind == actual.Kind {
 			actual.Quantity = nil
 		}
-		return expected.Equal(actual)
+		return expected.Equal(actual) || expected.String() == actual.String()
 	}
 	return evt1SymbolicTypeEqual(expected, actual, typeParam)
 }
@@ -6496,6 +6574,11 @@ func instantiateTemplateArgs(env *semanticEnv, templateName string, concreteArgs
 	}
 	for i, parameter := range parameters {
 		if parameter.Kind == "type" {
+			resolved, err := evt1ResolveType(env, nil, concreteArgs[i])
+			if err != nil {
+				return nil, err
+			}
+			concreteArgs[i] = resolved
 			if err := validateTemplateTypeArgument(env, concreteArgs[i], span); err != nil {
 				return nil, err
 			}
@@ -6808,6 +6891,24 @@ func evt1SubstituteStatement(stmt Statement, typeParam string, concreteType Type
 				return nil, err
 			}
 			out.Else = &elseBlock
+		}
+		return out, nil
+	case *WhileStmt:
+		condition, err := evt1SubstituteExpr(s.Condition, typeParam, concreteType)
+		if err != nil {
+			return nil, err
+		}
+		body, err := evt1SubstituteBlock(s.Body, typeParam, concreteType)
+		if err != nil {
+			return nil, err
+		}
+		out := &WhileStmt{Condition: condition, Body: body, Span: s.Span}
+		if s.Bound != nil {
+			bound, err := evt1SubstituteExpr(s.Bound, typeParam, concreteType)
+			if err != nil {
+				return nil, err
+			}
+			out.Bound = bound
 		}
 		return out, nil
 	default:

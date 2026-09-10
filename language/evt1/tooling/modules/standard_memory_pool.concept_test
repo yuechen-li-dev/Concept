@@ -1,0 +1,42 @@
+profile Core;
+import Standard.Memory.Pool;
+
+[[fact]]
+void PoolAllocatesReleasesAndReusesExactSlots()
+{
+    usize<byte> slotSize = 4;
+    usize<byte> slotAlignment = 4;
+    usize<byte> oneByte = 1;
+    PoolAllocator pool = MakePoolAllocator(slotSize, slotAlignment);
+    Assert.True(CapacityBytes(ref const pool) == 64, "sixteen four-byte slots expose sixty-four bytes");
+
+    MemoryRegion<SystemMemory> first = Allocate(ref pool, slotSize, slotAlignment)!;
+    MemoryRegion<SystemMemory> second = Allocate(ref pool, slotSize, slotAlignment)!;
+    Assert.True(first.start != second.start, "simultaneously live pool slots are distinct");
+    MemoryRegion<SystemMemory> third = Allocate(ref pool, slotSize, slotAlignment)!;
+    MemoryRegion<SystemMemory> fourth = Allocate(ref pool, slotSize, slotAlignment)!;
+    MemoryRegion<SystemMemory> fifth = Allocate(ref pool, slotSize, slotAlignment)!;
+    MemoryRegion<SystemMemory> sixth = Allocate(ref pool, slotSize, slotAlignment)!;
+    MemoryRegion<SystemMemory> seventh = Allocate(ref pool, slotSize, slotAlignment)!;
+    MemoryRegion<SystemMemory> eighth = Allocate(ref pool, slotSize, slotAlignment)!;
+    MemoryRegion<SystemMemory> ninth = Allocate(ref pool, slotSize, slotAlignment)!;
+    MemoryRegion<SystemMemory> tenth = Allocate(ref pool, slotSize, slotAlignment)!;
+    MemoryRegion<SystemMemory> eleventh = Allocate(ref pool, slotSize, slotAlignment)!;
+    MemoryRegion<SystemMemory> twelfth = Allocate(ref pool, slotSize, slotAlignment)!;
+    MemoryRegion<SystemMemory> thirteenth = Allocate(ref pool, slotSize, slotAlignment)!;
+    MemoryRegion<SystemMemory> fourteenth = Allocate(ref pool, slotSize, slotAlignment)!;
+    MemoryRegion<SystemMemory> fifteenth = Allocate(ref pool, slotSize, slotAlignment)!;
+    MemoryRegion<SystemMemory> sixteenth = Allocate(ref pool, slotSize, slotAlignment)!;
+    Assert.Error(Allocate(ref pool, slotSize, slotAlignment), "the seventeenth allocation reports bounded exhaustion");
+
+    Release(ref pool, first)!;
+    Assert.Error(Release(ref pool, first), "releasing an already free slot reports DoubleRelease");
+    MemoryRegion<SystemMemory> reused = Allocate(ref pool, slotSize, slotAlignment)!;
+    Assert.True(reused.start == first.start, "the first released slot is deterministically reused");
+
+    int<array>[1] foreignBacking = [0];
+    MemoryRegion<SystemMemory> foreign = MemoryRegion<SystemMemory>{AddressOf<SystemMemory>(ref foreignBacking), slotSize, slotAlignment};
+    Assert.Error(Release(ref pool, foreign), "a region from another origin is rejected");
+    MemoryRegion<SystemMemory> interior = MemoryRegion<SystemMemory>{second.start + oneByte, slotSize, slotAlignment};
+    Assert.Error(Release(ref pool, interior), "an interior malformed region is rejected");
+}

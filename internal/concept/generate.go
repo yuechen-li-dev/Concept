@@ -561,7 +561,7 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 					Path:          evt1SubstituteRequirementPath(req.Path, instanceBindings),
 					Origin:        string(FactOriginConcreteWitness),
 				}
-				if effect, ok := env.operationEffects[binding.Function.Name]; ok {
+				if effect, ok := evt1OperationEffectForFunction(env, binding.Function); ok {
 					mirBinding.Effect = effect.Effect
 				}
 				mirInstance.RequirementBindings = append(mirInstance.RequirementBindings, mirBinding)
@@ -586,7 +586,7 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 			}
 			mirFn.ResultFacts = &entry
 		}
-		if effect, ok := env.operationEffects[fn.Name]; ok && effect.Effect == "Allocates" {
+		if effect, ok := evt1OperationEffectForFunction(env, fn); ok && effect.Effect == "Allocates" {
 			mirFn.MayAllocate = true
 			mirFn.AllocationEffectOrigin = string(FactOriginDeclaredEffect)
 			if effect.Origin == string(FactOriginDeclaredForeign) {
@@ -3561,7 +3561,7 @@ func newEVT1FunctionLowerer(l *lowering, fn FunctionDecl, symbol string, private
 	liveOwners := map[string]bool{}
 	for _, param := range fn.Params {
 		scope[0][param.Name] = evt1Binding{cName: param.Name, t: param.Type}
-		if evt1TypeHasDrop(l.env, param.Type) && fn.Name != "Drop" {
+		if param.Type.isOwned() && evt1TypeHasDrop(l.env, param.Type) && fn.Name != "Drop" {
 			ownedOrder[0] = append(ownedOrder[0], param.Name)
 			liveOwners[param.Name] = true
 		}
@@ -5114,7 +5114,7 @@ func evt1DropSymbol(l *lowering, dropFn FunctionDecl, t Type) string {
 		if instance.TemplateName != "Drop" || len(instance.Function.Params) != 1 {
 			continue
 		}
-		if evt1CanonicalType(l.env, instance.Function.Params[0].Type.valueType()).Equal(evt1CanonicalType(l.env, t.valueType())) {
+		if evt1SemanticTypeEqual(l.env, instance.Function.Params[0].Type.valueType(), t.valueType()) {
 			return instance.GeneratedSymbol
 		}
 	}

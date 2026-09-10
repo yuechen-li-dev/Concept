@@ -1,0 +1,109 @@
+module Standard.Memory.Pool;
+profile Core;
+
+import Standard.Memory.Core;
+
+class PoolAllocator
+{
+public:
+    int<array>[16] backing;
+    bool<array>[16] allocated;
+    usize<byte> slotSize;
+    usize<byte> slotAlignment;
+
+    usize<byte> CapacityBytes(ref const PoolAllocator self)
+    {
+        usize count = 16;
+        return self.slotSize * count;
+    }
+
+    Result<MemoryRegion<SystemMemory>, AllocationError> Allocate(
+        ref PoolAllocator self,
+        usize<byte> size,
+        usize<byte> alignment
+    )
+    {
+        usize<byte> backingAlignment = 4;
+        if (not IsValidAlignment(alignment) or
+            alignment != self.slotAlignment or
+            backingAlignment % alignment != 0)
+        {
+            return Result::Error(AllocationError::InvalidAlignment);
+        }
+        if (size != self.slotSize or size == 0 or size > 4 or size % alignment != 0)
+        {
+            return Result::Error(AllocationError::InvalidRegion);
+        }
+
+        int index = 0;
+        usize<byte> offset = 0;
+        while (index < 16) bounded(16)
+        {
+            if (not self.allocated[index])
+            {
+                self.allocated[index] = true;
+                MemoryRegion<SystemMemory> slot = MemoryRegion<SystemMemory>{
+                    AddressOf<SystemMemory>(ref self.backing) + offset,
+                    size,
+                    alignment
+                };
+                PoolAllocationBoundary();
+                return Result::Ok(slot);
+            }
+            index = index + 1;
+            offset = offset + size;
+        }
+        return Result::Error(AllocationError::OutOfMemory);
+    }
+
+    Result<void, AllocationError> Release(
+        ref PoolAllocator self,
+        borrow const MemoryRegion<SystemMemory> region
+    )
+    {
+        Address<SystemMemory> start = AddressOf<SystemMemory>(ref self.backing);
+        if (region.length != self.slotSize or region.alignment != self.slotAlignment)
+        {
+            return Result::Error(AllocationError::InvalidRegion);
+        }
+
+        int index = 0;
+        usize<byte> offset = 0;
+        while (index < 16) bounded(16)
+        {
+            if (region.start == start + offset)
+            {
+                if (not self.allocated[index])
+                {
+                    return Result::Error(AllocationError::DoubleRelease);
+                }
+                self.allocated[index] = false;
+                return Result::Ok();
+            }
+            index = index + 1;
+            offset = offset + self.slotSize;
+        }
+        return Result::Error(AllocationError::InvalidRegion);
+    }
+};
+
+void PoolAllocationBoundary() {}
+requires compiler.Allocates(PoolAllocationBoundary);
+
+PoolAllocator MakePoolAllocator(
+    usize<byte> slotSize,
+    usize<byte> slotAlignment
+)
+{
+    int<array>[16] backing = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    bool<array>[16] allocated = [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false];
+    PoolAllocator pool = PoolAllocator{
+        move backing,
+        move allocated,
+        slotSize,
+        slotAlignment
+    };
+    return pool;
+}
+
+requires ReleasableAllocator<PoolAllocator>;

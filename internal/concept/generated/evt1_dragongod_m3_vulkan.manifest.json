@@ -11,11 +11,11 @@
     },
     {
       "path": "evt1_dragongod_m3_vulkan.mir.json",
-      "sha256": "a1b6abce21b53aaf1faa6452e489d24b199f20fe5678411b3214b6c967c0a0b7"
+      "sha256": "5aa5111c673260a2ff7871baf66d5e6b28be322c6fa0d61067bdd49bf5b1ae05"
     },
     {
       "path": "evt1_dragongod_m3_vulkan.map.json",
-      "sha256": "bf4a75562342816cd344a5673f96ca68c8a057d59c7e4a67351993952b6a8acb"
+      "sha256": "4387f134e6b5af4e9d8244c20547ca640d0fa7995f44efb9afbed9dfcc05dd2e"
     }
   ],
   "options": {

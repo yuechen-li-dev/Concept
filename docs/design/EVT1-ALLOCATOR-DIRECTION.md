@@ -1,6 +1,6 @@
 # EVT1 allocator direction
 
-Status: R6n honest stop on general multi-parameter capability constraints
+Status: R6p ordinary Standard.Memory implementation complete
 
 ## Doctrine
 
@@ -223,9 +223,13 @@ R6n
 R6o
     arbitrary-parameter and relational concept applications provide
     open-generic operation closure and concrete revalidation
+R6p
+    ordinary fixed, hosted, bump, pool, releasable, and monotonic typed
+    allocation is implemented in Standard.Memory
 ```
 
 R6o closes the general `CV4170`, `CV4027`, and constrained generic Drop
 blockers without publishing Standard.Memory or adding allocator-specific
-compiler behavior. A later R6p milestone may retry Standard.Memory through the
-ordinary language and module path.
+compiler behavior. R6p performs that retry successfully through the ordinary
+language and module path. Arena remains orthogonal bounded policy work rather
+than a missing compiler substrate.

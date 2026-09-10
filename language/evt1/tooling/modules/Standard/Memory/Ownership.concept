@@ -1,0 +1,57 @@
+module Standard.Memory.Ownership;
+profile Core;
+
+import Standard.Memory.Core;
+
+template <typename T, typename TAllocator>
+requires ReleasableAllocator<TAllocator>
+ref struct Allocation
+{
+    ref TAllocator allocator;
+    MemoryRegion<SystemMemory> region;
+    Storage<T> storage;
+};
+
+template <typename T, typename TAllocator>
+requires ReleasableAllocator<TAllocator>
+ref T AllocationValue(ref Allocation<T, TAllocator> self)
+{
+    return Value(self.storage);
+}
+
+template <typename T, typename TAllocator>
+requires ReleasableAllocator<TAllocator>
+ref const T ConstAllocationValue(ref const Allocation<T, TAllocator> self)
+{
+    return Value(self.storage);
+}
+
+template <typename T, typename TAllocator>
+requires ReleasableAllocator<TAllocator>
+Result<Allocation<T, TAllocator>, AllocationError> Allocate(
+    ref TAllocator allocator,
+    T value
+)
+{
+    usize<byte> size = SizeOf<T>();
+    usize<byte> alignment = AlignOf<T>();
+    MemoryRegion<SystemMemory> region = allocator.Allocate(size, alignment)?;
+    Storage<T> storage = bind<T>(region);
+    Initialize(storage, move value);
+    Allocation<T, TAllocator> allocation = Allocation<T, TAllocator>{
+        ref allocator,
+        region,
+        move storage
+    };
+    return Result::Ok(move allocation);
+}
+
+requires compiler.Allocates(Allocate);
+
+template <typename T, typename TAllocator>
+requires ReleasableAllocator<TAllocator>
+void Drop(owned Allocation<T, TAllocator> allocation)
+{
+    Destroy(allocation.storage);
+    allocation.allocator.Release(allocation.region)!;
+}
