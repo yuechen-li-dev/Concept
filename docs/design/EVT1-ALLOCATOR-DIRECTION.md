@@ -1,6 +1,6 @@
 # EVT1 allocator direction
 
-Status: R6m closes the initialized-owner generic blocker; allocator retry is ready
+Status: R6n honest stop on general multi-parameter capability constraints
 
 ## Doctrine
 
@@ -149,6 +149,39 @@ allocation operation must carry that effect through `concept-module.v1` so
 `NoAllocation` is Disproven for callers. Pure metadata queries remain eligible
 for Proven, while unrelated opaque extern calls remain Unknown.
 
+## R6n feasibility result
+
+R6n confirmed every prerequisite named by the retry gate on the real compiler
+path. The first ordinary typed-allocation declaration then exposed a distinct
+general generic-contract gap: a template constraint may currently target only
+the template's first type parameter.
+
+The required public shape is ordered by the allocated value type:
+
+```text
+template <typename T, typename TAllocator>
+requires Allocator<TAllocator>
+Result<Allocation<T, TAllocator>, AllocationError> Allocate(...)
+```
+
+This is rejected with `CV4170`. Removing the constraint is not an ordinary
+dynamic-dispatch fallback: the open call to the concept-required operation is
+rejected with `CV4027`. The same restriction prevents generic
+`Drop(Allocation<T, TAllocator>)` from constraining `TAllocator` with
+`ReleasableAllocator` before calling `Release`.
+
+Putting `TAllocator` first would evade the diagnostic but would not implement
+the required `Allocation<T, A>` / `Allocate<T>` API. Concrete overloads for
+each allocator policy would encode the exact specialization and capability lie
+the milestone forbids. Compiler recognition of allocator or owner names would
+also violate the architectural rule.
+
+`r6n_allocator_feasibility_test.go` pins all three general cases without
+changing compiler semantics. R6n therefore publishes no partial
+`Standard.Memory` API. The next prerequisite is general constraints on any
+type parameter, with required-operation closure using that binding through
+generic bodies and semantic artifacts.
+
 ## Deferred allocator surface
 
 With the initialized-storage owner substrate complete, a later milestone may
@@ -184,4 +217,7 @@ R6l
 R6m
     structural substitution closes nested carriers and imported Storage<T>
     owner fields without allocator-specific semantics
+R6n
+    ordinary typed allocation is blocked because a generic capability
+    constraint cannot target TAllocator when it is not the first type parameter
 ```
