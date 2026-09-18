@@ -227,6 +227,24 @@ func (p *parser) parseModule() (Module, error) {
 			if err != nil {
 				return module, err
 			}
+			if p.peekLexeme() == "extern" {
+				p.next()
+				abi := p.current()
+				if abi.Lexeme != `"C"` {
+					return module, evt1Diagnostic("EXTERN_ABI_INVALID", "extern requires the supported ABI string \"C\"", abi.Span)
+				}
+				p.next()
+				fn, err := p.parseFunctionDecl("", false)
+				if err != nil {
+					return module, err
+				}
+				if fn.Body != nil {
+					return module, evt1Diagnostic("EXTERN_BODY_INVALID", "extern C declaration cannot have a body", fn.Span)
+				}
+				fn.ExternABI, fn.Attributes = "C", attributes
+				module.Functions = append(module.Functions, fn)
+				continue
+			}
 			async := false
 			if p.peekLexeme() == "async" || p.peekLexeme() == "asynchronous" {
 				async = true

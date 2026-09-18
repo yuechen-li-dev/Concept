@@ -583,6 +583,10 @@ type Module struct {
 	// SharedAccessFacts are compiler-owned synchronization contracts transported
 	// from dependency artifacts. Subject order is semantic and must be preserved.
 	SharedAccessFacts []MIRSemanticFact `json:"shared_access_facts,omitempty"`
+	// AccessSummaries are compiler-derived descriptions of storage and channel
+	// accesses. They are semantic artifact data only and never become runtime
+	// registries or backend state.
+	AccessSummaries []MIRAccessEntry `json:"access_summaries,omitempty"`
 	// ImportedFactAuthority records artifact-owned operations even when an older
 	// artifact has no value summary. Consumers must degrade those results to
 	// Unknown instead of re-deriving a stronger contract from the payload body.
@@ -1267,6 +1271,7 @@ type MIR struct {
 	SemanticProofs    []MIRSemanticProof    `json:"semantic_proofs,omitempty"`
 	ProofGraphs       []ProofGraph          `json:"proof_graphs,omitempty"`
 	SemanticFacts     []MIRSemanticFact     `json:"semantic_facts,omitempty"`
+	AccessSummaries   []MIRAccessEntry      `json:"access_summaries,omitempty"`
 	StorageTypes      []MIRStorageType      `json:"storage_types,omitempty"`
 	Layouts           []MIRLayout           `json:"layouts,omitempty"`
 	Streams           []MIRStream           `json:"streams,omitempty"`
@@ -1768,6 +1773,7 @@ type semanticEnv struct {
 	transportedFacts        []MIRSemanticFact
 	transportedFactIDs      map[string]bool
 	sharedAccessFacts       []MIRSemanticFact
+	accessSummaries         []MIRAccessEntry
 	dynWitnesses            map[string]*evt1InterfaceWitness
 	validatingMethod        string
 	validatingFunction      string

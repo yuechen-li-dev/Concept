@@ -37,9 +37,9 @@ must eventually use the existing explicit foreign boundary and retain
 
 ## Derivation boundary
 
-Phase 2 should add a bounded, demand-driven access summary with general access
-kinds such as `Read`, `Write`, `AtomicRead`, `AtomicWrite`, `Publish`,
-`Consume`, `Claim`, and `Commit`. Each entry must carry structural subject,
+R7d4 adds a bounded access summary with the closed access kinds `Read`,
+`Write`, `AtomicRead`, `AtomicWrite`, `Publish`, `Consume`, `Claim`, and
+`Commit`. Each entry carries structural subject,
 operation, context when statically known, module origin, and imported-summary
 provenance.
 
@@ -49,9 +49,13 @@ Producer and consumer derivation follows the same cardinality rule. Known
 fixed slot non-overlap reuses existing `Disjoint` interval authority. Dynamic
 keys remain `Unknown`. This does not require arbitrary pointer alias analysis.
 
-Artifacts should transport bounded access summaries and substitute generic
+Artifacts transport bounded access summaries and substitute parameter
 subjects through the existing generic closure path. A closed artifact must
 contain no unresolved template parameters. Imported source is never reopened.
+
+Declarations remain independent of derivation. Opaque subjects or shared/open
+context reachability block positive proof rather than being fitted to an
+explicit contract.
 
 ## Optimization authority
 

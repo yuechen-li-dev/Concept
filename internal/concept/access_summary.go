@@ -1,0 +1,733 @@
+package concept
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"sort"
+	"strings"
+)
+
+// AccessKind is deliberately closed. New spellings require a concrete
+// synchronization proposition, not a library or method-name convention.
+type AccessKind string
+
+const (
+	AccessRead        AccessKind = "Read"
+	AccessWrite       AccessKind = "Write"
+	AccessAtomicRead  AccessKind = "AtomicRead"
+	AccessAtomicWrite AccessKind = "AtomicWrite"
+	AccessPublish     AccessKind = "Publish"
+	AccessConsume     AccessKind = "Consume"
+	AccessClaim       AccessKind = "Claim"
+	AccessCommit      AccessKind = "Commit"
+)
+
+type AccessResolution string
+
+const (
+	AccessExact    AccessResolution = "Exact"
+	AccessInterval AccessResolution = "Interval"
+	AccessOpaque   AccessResolution = "Opaque"
+)
+
+type AccessIdentity struct {
+	Kind     string `json:"kind"`
+	Module   string `json:"module,omitempty"`
+	Function string `json:"function,omitempty"`
+	Ordinal  int    `json:"ordinal,omitempty"`
+	Name     string `json:"name,omitempty"` // display spelling, not sole identity
+	Type     Type   `json:"type,omitempty"`
+}
+
+type AccessPathElement struct {
+	Kind    string `json:"kind"`
+	Field   string `json:"field,omitempty"`
+	Ordinal int    `json:"ordinal,omitempty"`
+	Index   int64  `json:"index,omitempty"`
+}
+
+type AccessSubject struct {
+	Root       AccessIdentity      `json:"root"`
+	Path       []AccessPathElement `json:"path,omitempty"`
+	Type       Type                `json:"type,omitempty"`
+	RegionID   string              `json:"region_id,omitempty"`
+	Offset     int                 `json:"offset,omitempty"`
+	Extent     int                 `json:"extent,omitempty"`
+	Resolution AccessResolution    `json:"resolution"`
+}
+
+type MIRAccessEntry struct {
+	ID         string             `json:"id"`
+	Subject    AccessSubject      `json:"subject"`
+	Operation  AccessKind         `json:"operation"`
+	Context    AccessIdentity     `json:"context"`
+	Function   AccessIdentity     `json:"function"`
+	Module     AccessIdentity     `json:"module"`
+	Origin     SemanticFactOrigin `json:"origin"`
+	Resolution AccessResolution   `json:"resolution"`
+	SourceSpan Span               `json:"source_span"`
+}
+
+type evt1AccessCall struct {
+	callee string
+	args   []Expr
+	span   Span
+}
+
+type evt1AccessFunction struct {
+	decl    FunctionDecl
+	key     string
+	locals  map[string]AccessSubject
+	entries []MIRAccessEntry
+	calls   []evt1AccessCall
+}
+
+func evt1SemanticAccessAttribute(name string) bool {
+	return name == "semantic_access" || name == "execution_context"
+}
+
+func evt1AccessSummaryDemanded(module Module) bool {
+	for _, assertion := range module.Assertions {
+		if evt1IsSharedAccessAnalysis(assertion.ConceptName) {
+			return true
+		}
+	}
+	for _, fn := range module.Functions {
+		for _, attribute := range fn.Attributes {
+			if evt1SemanticAccessAttribute(attribute.Name) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func evt1AccessFunctionKey(fn FunctionDecl) string {
+	return fn.Module + "::" + fn.Name + "(" + evt1FunctionParamSignature(fn) + ")"
+}
+
+func evt1AccessIdentityKey(id AccessIdentity) string {
+	return fmt.Sprintf("%s|%s|%s|%d|%s", id.Kind, id.Module, id.Function, id.Ordinal, id.Type.String())
+}
+
+func evt1AccessSubjectKey(subject AccessSubject) string {
+	var path strings.Builder
+	for _, part := range subject.Path {
+		fmt.Fprintf(&path, "/%s:%s:%d:%d", part.Kind, part.Field, part.Ordinal, part.Index)
+	}
+	return evt1AccessIdentityKey(subject.Root) + path.String() + "|" + subject.Type.String() + "|" + subject.RegionID + fmt.Sprintf("|%d|%d|%s", subject.Offset, subject.Extent, subject.Resolution)
+}
+
+func evt1AccessEntryKey(entry MIRAccessEntry) string {
+	return fmt.Sprintf("%s|%s|%s|%s|%s|%d:%d", entry.Operation, evt1AccessSubjectKey(entry.Subject), evt1AccessIdentityKey(entry.Context), evt1AccessIdentityKey(entry.Function), entry.Origin, entry.SourceSpan.Line, entry.SourceSpan.Column)
+}
+
+func evt1FinalizeAccessEntry(entry MIRAccessEntry) MIRAccessEntry {
+	entry.Resolution = entry.Subject.Resolution
+	if entry.Origin == "" {
+		entry.Origin = FactOriginDerivedAccessSummary
+	}
+	sum := sha256.Sum256([]byte(evt1AccessEntryKey(entry)))
+	entry.ID = "access:" + hex.EncodeToString(sum[:12])
+	return entry
+}
+
+func evt1DeriveAccessSummaries(env *semanticEnv, module Module) error {
+	// Imported summaries are authoritative artifact data. Their payload bodies
+	// are intentionally not re-analysed.
+	for _, imported := range module.AccessSummaries {
+		entry := imported
+		entry.Origin = FactOriginModuleAccessSummary
+		entry = evt1FinalizeAccessEntry(entry)
+		env.accessSummaries = append(env.accessSummaries, entry)
+	}
+
+	functions := map[string]*evt1AccessFunction{}
+	byName := map[string][]*evt1AccessFunction{}
+	for _, fn := range module.Functions {
+		if fn.Module != module.Name {
+			continue
+		}
+		state := &evt1AccessFunction{decl: fn, key: evt1AccessFunctionKey(fn), locals: map[string]AccessSubject{}}
+		for i, param := range fn.Params {
+			state.locals[param.Name] = AccessSubject{
+				Root: AccessIdentity{Kind: "Parameter", Module: fn.Module, Function: state.key, Ordinal: i, Name: param.Name, Type: param.Type},
+				Type: param.Type, Resolution: AccessExact,
+			}
+		}
+		if err := evt1AccessApplyAttributes(env, state); err != nil {
+			return err
+		}
+		if fn.Body != nil {
+			evt1AccessBlock(env, state, *fn.Body)
+		} else if fn.ExternABI != "" && len(state.entries) == 0 {
+			for i, param := range fn.Params {
+				if !param.Type.isBorrowLike() || param.Type.Const {
+					continue
+				}
+				subject := state.locals[param.Name]
+				subject.Resolution = AccessOpaque
+				entry := evt1AccessEntry(state, AccessWrite, subject, fn.Span)
+				entry.Origin = FactOriginDeclaredForeign
+				entry.Subject.Root.Ordinal = i
+				state.entries = append(state.entries, evt1FinalizeAccessEntry(entry))
+			}
+		}
+		functions[state.key] = state
+		byName[fn.Name] = append(byName[fn.Name], state)
+	}
+	for _, template := range module.Templates {
+		if template.Body == nil {
+			continue
+		}
+		fn := FunctionDecl{Name: template.Name, Module: module.Name, ReturnType: template.ReturnType, Params: template.Params, Body: template.Body, Span: template.Span}
+		state := &evt1AccessFunction{decl: fn, key: module.Name + "::template:" + template.Name, locals: map[string]AccessSubject{}}
+		for i, param := range fn.Params {
+			state.locals[param.Name] = AccessSubject{Root: AccessIdentity{Kind: "Parameter", Module: module.Name, Function: state.key, Ordinal: i, Name: param.Name, Type: param.Type}, Type: param.Type, Resolution: AccessExact}
+		}
+		evt1AccessBlock(env, state, *template.Body)
+		functions[state.key] = state
+		byName[template.Name] = append(byName[template.Name], state)
+	}
+
+	// Monotone finite fixpoint. Subject paths are capped by resolver semantics,
+	// so recursive substitution cannot construct an unbounded term.
+	for changed := true; changed; {
+		changed = false
+		keys := make([]string, 0, len(functions))
+		for key := range functions {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			caller := functions[key]
+			seen := map[string]bool{}
+			for _, entry := range caller.entries {
+				seen[evt1AccessEntryKey(entry)] = true
+			}
+			for _, call := range caller.calls {
+				candidates := byName[call.callee]
+				var callee *evt1AccessFunction
+				for _, candidate := range candidates {
+					if len(candidate.decl.Params) == len(call.args) {
+						if callee != nil {
+							callee = nil
+							break
+						}
+						callee = candidate
+					}
+				}
+				if callee == nil {
+					continue
+				}
+				for _, incoming := range callee.entries {
+					entry := incoming
+					entry.Function = AccessIdentity{Kind: "Function", Module: caller.decl.Module, Function: caller.key, Name: caller.decl.Name}
+					if entry.Subject.Root.Kind == "Parameter" && entry.Subject.Root.Ordinal < len(call.args) {
+						base := evt1AccessResolveSubject(env, caller, call.args[entry.Subject.Root.Ordinal])
+						if len(base.Path)+len(entry.Subject.Path) > 16 {
+							base.Resolution = AccessOpaque
+							base.Path = nil
+						} else {
+							base.Path = append(base.Path, entry.Subject.Path...)
+							if entry.Subject.Type.Kind != TypeConceptParam && entry.Subject.Type.Name != "T" {
+								base.Type = entry.Subject.Type
+							}
+							if entry.Subject.Resolution == AccessOpaque {
+								base.Resolution = AccessOpaque
+							}
+						}
+						entry.Subject = base
+					}
+					entry = evt1FinalizeAccessEntry(entry)
+					entryKey := evt1AccessEntryKey(entry)
+					if !seen[entryKey] {
+						seen[entryKey] = true
+						caller.entries = append(caller.entries, entry)
+						changed = true
+					}
+				}
+			}
+		}
+	}
+
+	contexts := evt1AccessContexts(functions, byName)
+	for key, state := range functions {
+		contextSet := contexts[key]
+		for _, entry := range state.entries {
+			if len(contextSet) == 1 {
+				for _, context := range contextSet {
+					entry.Context = context
+				}
+			} else if len(contextSet) > 1 {
+				entry.Context = AccessIdentity{Kind: "SharedContext", Module: state.decl.Module, Function: state.key}
+			} else {
+				entry.Context = AccessIdentity{Kind: "OrdinaryContext", Module: state.decl.Module, Function: state.key}
+			}
+			entry = evt1FinalizeAccessEntry(entry)
+			env.accessSummaries = append(env.accessSummaries, entry)
+		}
+	}
+	evt1SortAccessEntries(env.accessSummaries)
+	return evt1ValidateDerivedAccessContracts(env)
+}
+
+func evt1AccessApplyAttributes(env *semanticEnv, state *evt1AccessFunction) error {
+	for _, attribute := range state.decl.Attributes {
+		switch attribute.Name {
+		case "semantic_access":
+			if len(attribute.Args) != 2 {
+				return evt1Diagnostic("ACCESS_CONTRACT_INVALID", "[[semantic_access]] requires an access-kind string and a parameter", attribute.Span)
+			}
+			kindLiteral, ok := attribute.Args[0].(*StringLiteral)
+			parameter, parameterOK := attribute.Args[1].(*NameExpr)
+			kind := AccessKind("")
+			if ok {
+				kind = AccessKind(kindLiteral.Value)
+			}
+			if !parameterOK || !evt1AccessKindValid(kind) {
+				return evt1Diagnostic("ACCESS_CONTRACT_INVALID", "semantic access must use Read, Write, AtomicRead, AtomicWrite, Publish, Consume, Claim, or Commit and name a parameter", attribute.Span)
+			}
+			subject, found := state.locals[parameter.Name]
+			if !found || subject.Root.Kind != "Parameter" {
+				return evt1Diagnostic("ACCESS_CONTRACT_INVALID", "semantic access subject must be a function parameter", parameter.Span)
+			}
+			entry := evt1AccessEntry(state, kind, subject, attribute.Span)
+			if state.decl.ExternABI != "" {
+				entry.Origin = FactOriginDeclaredForeign
+			}
+			state.entries = append(state.entries, evt1FinalizeAccessEntry(entry))
+		case "execution_context":
+			if len(attribute.Args) != 1 {
+				return evt1Diagnostic("EXECUTION_CONTEXT_INVALID", "[[execution_context]] requires one context type", attribute.Span)
+			}
+			name, ok := attribute.Args[0].(*NameExpr)
+			if !ok {
+				return evt1Diagnostic("EXECUTION_CONTEXT_INVALID", "execution context must be a semantic type name", attribute.Span)
+			}
+			t := Type{Name: name.Name, Kind: TypeStruct, Span: name.Span}
+			if err := validateKnownType(env, t, name.Span, "", false); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func evt1AccessKindValid(kind AccessKind) bool {
+	switch kind {
+	case AccessRead, AccessWrite, AccessAtomicRead, AccessAtomicWrite, AccessPublish, AccessConsume, AccessClaim, AccessCommit:
+		return true
+	}
+	return false
+}
+
+func evt1AccessEntry(state *evt1AccessFunction, kind AccessKind, subject AccessSubject, span Span) MIRAccessEntry {
+	return MIRAccessEntry{
+		Subject: subject, Operation: kind,
+		Function: AccessIdentity{Kind: "Function", Module: state.decl.Module, Function: state.key, Name: state.decl.Name},
+		Module:   AccessIdentity{Kind: "Module", Module: state.decl.Module, Name: state.decl.Module},
+		Origin:   FactOriginDerivedAccessSummary, SourceSpan: span,
+	}
+}
+
+func evt1AccessContexts(functions map[string]*evt1AccessFunction, byName map[string][]*evt1AccessFunction) map[string]map[string]AccessIdentity {
+	contexts := map[string]map[string]AccessIdentity{}
+	for key, state := range functions {
+		for _, attribute := range state.decl.Attributes {
+			if attribute.Name != "execution_context" || len(attribute.Args) != 1 {
+				continue
+			}
+			name, ok := attribute.Args[0].(*NameExpr)
+			if !ok {
+				continue
+			}
+			id := AccessIdentity{Kind: "ExecutionContext", Module: state.decl.Module, Name: name.Name, Type: Type{Name: name.Name, Kind: TypeStruct}}
+			contexts[key] = map[string]AccessIdentity{evt1AccessIdentityKey(id): id}
+		}
+	}
+	for changed := true; changed; {
+		changed = false
+		for key, state := range functions {
+			for _, call := range state.calls {
+				for _, callee := range byName[call.callee] {
+					if len(callee.decl.Params) != len(call.args) {
+						continue
+					}
+					if contexts[callee.key] == nil {
+						contexts[callee.key] = map[string]AccessIdentity{}
+					}
+					for contextKey, context := range contexts[key] {
+						if _, exists := contexts[callee.key][contextKey]; !exists {
+							contexts[callee.key][contextKey] = context
+							changed = true
+						}
+					}
+				}
+			}
+		}
+	}
+	return contexts
+}
+
+func evt1AccessBlock(env *semanticEnv, state *evt1AccessFunction, block Block) {
+	for _, statement := range block.Statements {
+		switch s := statement.(type) {
+		case *VarDecl:
+			evt1AccessExpr(env, state, s.Value)
+			state.locals[s.Name] = AccessSubject{Root: AccessIdentity{Kind: "Value", Module: state.decl.Module, Function: state.key, Name: s.Name, Type: s.Type}, Type: s.Type, Resolution: AccessExact}
+		case *AssignStmt:
+			evt1AccessExpr(env, state, s.Value)
+			subject := evt1AccessResolveSubject(env, state, s.Target)
+			if evt1AccessRelevant(subject) || subject.Root.Kind == "Opaque" {
+				state.entries = append(state.entries, evt1FinalizeAccessEntry(evt1AccessEntry(state, AccessWrite, subject, s.Span)))
+			}
+			evt1AccessTargetOperands(env, state, s.Target)
+		case *ExprStmt:
+			evt1AccessExpr(env, state, s.Value)
+		case *ReturnStmt:
+			evt1AccessExpr(env, state, s.Value)
+		case *AssertStmt:
+			evt1AccessExpr(env, state, s.Condition)
+			evt1AccessExpr(env, state, s.Reason)
+		case *StaticAssertStmt:
+			evt1AccessExpr(env, state, s.Condition)
+			evt1AccessExpr(env, state, s.Message)
+		case *IfStmt:
+			evt1AccessExpr(env, state, s.Condition)
+			evt1AccessBlock(env, state, s.Then)
+			if s.Else != nil {
+				evt1AccessBlock(env, state, *s.Else)
+			}
+		case *Block:
+			evt1AccessBlock(env, state, *s)
+		case *WhileStmt:
+			evt1AccessExpr(env, state, s.Condition)
+			evt1AccessExpr(env, state, s.Bound)
+			evt1AccessBlock(env, state, s.Body)
+		case *ForeachStmt:
+			evt1AccessExpr(env, state, s.Source)
+			evt1AccessBlock(env, state, s.Body)
+		case *TryStmt:
+			evt1AccessBlock(env, state, s.Body)
+			for _, arm := range s.Except {
+				evt1AccessBlock(env, state, arm.Body)
+			}
+		case *MatchStmt:
+			evt1AccessExpr(env, state, s.Subject)
+			for _, arm := range s.Arms {
+				evt1AccessBlock(env, state, arm.Block)
+			}
+		case *ActuatorLocalDecl:
+			evt1AccessExpr(env, state, s.Mechanism)
+		case *InstanceDecl:
+			evt1AccessExpr(env, state, s.Context)
+			for _, arg := range s.StateArgs {
+				evt1AccessExpr(env, state, arg)
+			}
+		case *MachineCompleteStmt:
+			evt1AccessExpr(env, state, s.Value)
+		case *TransitionMatchStmt:
+			evt1AccessExpr(env, state, s.Subject)
+		case *TransitionDecideStmt:
+			for _, c := range s.Candidates {
+				evt1AccessExpr(env, state, c.Guard)
+				evt1AccessExpr(env, state, c.Score)
+			}
+		case *TransitionInferStmt:
+			for _, c := range s.Candidates {
+				evt1AccessExpr(env, state, c.Guard)
+				evt1AccessExpr(env, state, c.Score)
+			}
+		}
+	}
+}
+
+func evt1AccessTargetOperands(env *semanticEnv, state *evt1AccessFunction, expr Expr) {
+	switch e := expr.(type) {
+	case *IndexExpr:
+		evt1AccessExpr(env, state, e.Index)
+		for _, index := range e.Indices {
+			evt1AccessExpr(env, state, index)
+		}
+	}
+}
+
+func evt1AccessExpr(env *semanticEnv, state *evt1AccessFunction, expr Expr) {
+	if expr == nil {
+		return
+	}
+	switch e := expr.(type) {
+	case *NameExpr, *FieldExpr, *IndexExpr:
+		subject := evt1AccessResolveSubject(env, state, expr)
+		if evt1AccessRelevant(subject) {
+			state.entries = append(state.entries, evt1FinalizeAccessEntry(evt1AccessEntry(state, AccessRead, subject, expr.exprSpan())))
+		}
+		if index, ok := e.(*IndexExpr); ok {
+			evt1AccessExpr(env, state, index.Index)
+			for _, part := range index.Indices {
+				evt1AccessExpr(env, state, part)
+			}
+		}
+	case *CallExpr:
+		for _, arg := range e.Args {
+			evt1AccessExpr(env, state, arg)
+		}
+		if e.Receiver != nil {
+			evt1AccessExpr(env, state, e.Receiver)
+		}
+		atomicKind := map[string][]AccessKind{
+			evt1AtomicLoad: {AccessAtomicRead}, evt1AtomicStore: {AccessAtomicWrite},
+			evt1AtomicExchange: {AccessAtomicRead, AccessAtomicWrite}, evt1AtomicCompareSwap: {AccessAtomicRead, AccessAtomicWrite}, evt1AtomicFetchAdd: {AccessAtomicRead, AccessAtomicWrite},
+		}[e.Callee]
+		if len(atomicKind) != 0 && len(e.Args) != 0 {
+			subject := evt1AccessResolveSubject(env, state, e.Args[0])
+			for _, kind := range atomicKind {
+				state.entries = append(state.entries, evt1FinalizeAccessEntry(evt1AccessEntry(state, kind, subject, e.Span)))
+			}
+		}
+		state.calls = append(state.calls, evt1AccessCall{callee: e.Callee, args: e.Args, span: e.Span})
+	case *TemplateCallExpr:
+		for _, arg := range e.Args {
+			evt1AccessExpr(env, state, arg)
+		}
+		state.calls = append(state.calls, evt1AccessCall{callee: e.Callee, args: e.Args, span: e.Span})
+	case *BinaryExpr:
+		evt1AccessExpr(env, state, e.Left)
+		evt1AccessExpr(env, state, e.Right)
+	case *UnaryExpr:
+		evt1AccessExpr(env, state, e.Value)
+	case *MoveExpr:
+		evt1AccessExpr(env, state, e.Value)
+	case *RefExpr:
+		evt1AccessExpr(env, state, e.Value)
+	case *ParenExpr:
+		evt1AccessExpr(env, state, e.Value)
+	case *AwaitExpr:
+		evt1AccessExpr(env, state, e.Value)
+	case *BindExpr:
+		evt1AccessExpr(env, state, e.Source)
+	case *WithExpr:
+		evt1AccessExpr(env, state, e.Base)
+		for _, update := range e.Updates {
+			evt1AccessExpr(env, state, update.Value)
+		}
+	case *ArrayLiteralExpr:
+		for _, item := range e.Elements {
+			evt1AccessExpr(env, state, item)
+		}
+	case *StructConstructExpr:
+		for _, arg := range e.Args {
+			evt1AccessExpr(env, state, arg)
+		}
+	case *ConstructExpr:
+		for _, arg := range e.Args {
+			evt1AccessExpr(env, state, arg)
+		}
+	case *IfExpr:
+		evt1AccessExpr(env, state, e.Condition)
+		evt1AccessExpr(env, state, e.Then)
+		evt1AccessExpr(env, state, e.Else)
+	case *MatchExpr:
+		evt1AccessExpr(env, state, e.Subject)
+		for _, arm := range e.Arms {
+			evt1AccessExpr(env, state, arm.Value)
+		}
+	case *DispatchExpr:
+		evt1AccessExpr(env, state, e.Signal)
+	}
+}
+
+func evt1AccessRelevant(subject AccessSubject) bool {
+	// Local scalar/value temporaries cannot be observed by another execution
+	// context. Parameter-rooted storage is the bounded shared-state surface in
+	// R7d4; persistent machine/capture roots can be added structurally later.
+	return subject.Root.Kind == "Parameter"
+}
+
+func evt1AccessResolveSubject(env *semanticEnv, state *evt1AccessFunction, expr Expr) AccessSubject {
+	switch e := expr.(type) {
+	case *RefExpr:
+		return evt1AccessResolveSubject(env, state, e.Value)
+	case *ParenExpr:
+		return evt1AccessResolveSubject(env, state, e.Value)
+	case *NameExpr:
+		if subject, ok := state.locals[e.Name]; ok {
+			return subject
+		}
+		return AccessSubject{Root: AccessIdentity{Kind: "Value", Module: state.decl.Module, Function: state.key, Name: e.Name}, Resolution: AccessOpaque}
+	case *FieldExpr:
+		base := evt1AccessResolveSubject(env, state, e.Receiver)
+		ordinal, fieldType := evt1AccessField(env, base.Type, e.Field)
+		base.Path = append(base.Path, AccessPathElement{Kind: "Field", Field: e.Field, Ordinal: ordinal})
+		if fieldType.Name != "" {
+			base.Type = fieldType
+		}
+		if e.RegionID != "" {
+			base.RegionID, base.Offset, base.Extent, base.Resolution = e.RegionID, e.RegionOffset, e.RegionExtent, AccessInterval
+		}
+		return base
+	case *IndexExpr:
+		base := evt1AccessResolveSubject(env, state, e.Base)
+		indices := e.Indices
+		if len(indices) == 0 && e.Index != nil {
+			indices = []Expr{e.Index}
+		}
+		for _, index := range indices {
+			literal, ok := index.(*IntLiteral)
+			if !ok || literal.Negative || literal.Magnitude > uint64(^uint(0)>>1) {
+				base.Resolution = AccessOpaque
+				base.Path = append(base.Path, AccessPathElement{Kind: "DynamicIndex"})
+				return base
+			}
+			base.Path = append(base.Path, AccessPathElement{Kind: "Index", Index: int64(literal.Magnitude)})
+			base.Offset += int(literal.Magnitude)
+			base.Extent = 1
+			base.Resolution = AccessInterval
+		}
+		if base.Type.ArrayElem != nil {
+			base.Type = *base.Type.ArrayElem
+		}
+		return base
+	default:
+		return AccessSubject{Root: AccessIdentity{Kind: "Opaque", Module: state.decl.Module, Function: state.key}, Resolution: AccessOpaque}
+	}
+}
+
+func evt1AccessField(env *semanticEnv, owner Type, name string) (int, Type) {
+	decl, ok := env.structs[owner.Name]
+	if !ok {
+		return -1, Type{}
+	}
+	for i, field := range decl.Fields {
+		if field.Name == name {
+			return i, field.Type
+		}
+	}
+	return -1, Type{}
+}
+
+func evt1SortAccessEntries(entries []MIRAccessEntry) {
+	sort.Slice(entries, func(i, j int) bool { return evt1AccessEntryKey(entries[i]) < evt1AccessEntryKey(entries[j]) })
+}
+
+func evt1AccessSubjectMatches(subject AccessSubject, requested Type) bool {
+	wanted := requested.valueType().String()
+	return subject.Type.valueType().String() == wanted || subject.Root.Type.valueType().String() == wanted
+}
+
+func evt1DerivedSharedAccess(env *semanticEnv, kind SemanticFactKind, args []Type) semanticFactResult {
+	if len(args) != 2 {
+		return semanticFactResult{Outcome: FactUnknown, Origin: FactOriginCompilerAnalysis, Evidence: SemanticFactEvidence{Detail: "R7d4 derives only writer, producer, and consumer cardinality"}}
+	}
+	operation := AccessWrite
+	switch kind {
+	case FactExclusiveWriter:
+		operation = AccessWrite
+	case FactSingleProducer:
+		operation = AccessPublish
+	case FactSingleConsumer:
+		operation = AccessConsume
+	default:
+		return semanticFactResult{Outcome: FactUnknown, Origin: FactOriginCompilerAnalysis, Evidence: SemanticFactEvidence{Detail: "this synchronization relation remains explicit in R7d4"}}
+	}
+	wantedContext, wantedSubject := args[0], args[1]
+	contexts := map[string]string{}
+	var resolved []MIRAccessEntry
+	opaque := false
+	var evidence []string
+	for _, entry := range env.accessSummaries {
+		matchesOperation := entry.Operation == operation
+		if kind == FactExclusiveWriter {
+			matchesOperation = entry.Operation == AccessWrite || entry.Operation == AccessAtomicWrite
+		}
+		if !matchesOperation || !evt1AccessSubjectMatches(entry.Subject, wantedSubject) {
+			continue
+		}
+		if entry.Resolution == AccessOpaque || entry.Context.Kind == "SharedContext" || entry.Context.Kind == "OrdinaryContext" || entry.Context.Type.Name == "" {
+			opaque = true
+			evidence = append(evidence, fmt.Sprintf("%s %s in %s is unresolved", entry.Operation, wantedSubject.String(), entry.Function.Name))
+			continue
+		}
+		key := entry.Context.Type.String()
+		contexts[key] = entry.Context.Name
+		resolved = append(resolved, entry)
+		evidence = append(evidence, fmt.Sprintf("%s %s by %s in %s", entry.Operation, wantedSubject.String(), key, entry.Function.Name))
+	}
+	sort.Strings(evidence)
+	detail := strings.Join(evidence, "; ")
+	if len(contexts) > 1 {
+		for i := range resolved {
+			for j := i + 1; j < len(resolved); j++ {
+				if resolved[i].Context.Type.String() != resolved[j].Context.Type.String() && evt1AccessSubjectsOverlap(resolved[i].Subject, resolved[j].Subject) {
+					return semanticFactResult{Outcome: FactDisproven, Origin: FactOriginDerivedAccessSummary, Evidence: SemanticFactEvidence{Detail: detail, Authority: "derived access set"}}
+				}
+			}
+		}
+		return semanticFactResult{Outcome: FactUnknown, Origin: FactOriginDerivedAccessSummary, Evidence: SemanticFactEvidence{Detail: detail + "; known fixed paths are disjoint", Authority: "derived access set"}}
+	}
+	if opaque || len(contexts) == 0 {
+		if detail == "" {
+			detail = "no closed access set for " + wantedSubject.String()
+		}
+		return semanticFactResult{Outcome: FactUnknown, Origin: FactOriginDerivedAccessSummary, Evidence: SemanticFactEvidence{Detail: detail, Authority: "derived access set"}}
+	}
+	for context := range contexts {
+		if context == wantedContext.String() {
+			return semanticFactResult{Outcome: FactProven, Origin: FactOriginDerivedAccessSummary, Evidence: SemanticFactEvidence{Detail: detail, Authority: "derived access set"}}
+		}
+	}
+	return semanticFactResult{Outcome: FactDisproven, Origin: FactOriginDerivedAccessSummary, Evidence: SemanticFactEvidence{Detail: detail, Authority: "derived access set"}}
+}
+
+func evt1AccessSubjectsOverlap(a, b AccessSubject) bool {
+	if a.Resolution == AccessOpaque || b.Resolution == AccessOpaque {
+		return true
+	}
+	limit := len(a.Path)
+	if len(b.Path) < limit {
+		limit = len(b.Path)
+	}
+	for i := 0; i < limit; i++ {
+		left, right := a.Path[i], b.Path[i]
+		if left.Kind == "Field" && right.Kind == "Field" && left.Ordinal >= 0 && right.Ordinal >= 0 && left.Ordinal != right.Ordinal {
+			return false
+		}
+		if left.Kind == "Index" && right.Kind == "Index" && left.Index != right.Index {
+			return false
+		}
+	}
+	if a.Resolution == AccessInterval && b.Resolution == AccessInterval && a.RegionID != "" && a.RegionID == b.RegionID && a.Extent > 0 && b.Extent > 0 {
+		return a.Offset < b.Offset+b.Extent && b.Offset < a.Offset+a.Extent
+	}
+	return true
+}
+
+func evt1ValidateDerivedAccessContracts(env *semanticEnv) error {
+	for _, fact := range env.sharedAccessFacts {
+		if fact.Origin != FactOriginDeclared || len(fact.Subjects) != 2 {
+			continue
+		}
+		if fact.Kind != FactExclusiveWriter && fact.Kind != FactSingleProducer && fact.Kind != FactSingleConsumer {
+			continue
+		}
+		args := []Type{{Name: fact.Subjects[0].Type}, {Name: fact.Subjects[1].Type}}
+		result := evt1DerivedSharedAccess(env, fact.Kind, args)
+		if result.Outcome == FactDisproven {
+			return evt1Diagnostic("SYNC_AUTHORITY_CONTRADICTION", result.Evidence.Detail, fact.SourceSpan)
+		}
+	}
+	return nil
+}
+
+func evt1LocalAccessSummaries(module Module, env *semanticEnv) []MIRAccessEntry {
+	var entries []MIRAccessEntry
+	for _, entry := range env.accessSummaries {
+		if entry.Module.Module == module.Name && entry.Origin == FactOriginDerivedAccessSummary {
+			entries = append(entries, entry)
+		}
+	}
+	evt1SortAccessEntries(entries)
+	return entries
+}

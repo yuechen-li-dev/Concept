@@ -1,0 +1,34 @@
+module AccessSummary.DerivedWriterAndProducer;
+profile Core;
+
+record struct Agent {}
+
+struct Slot
+{
+    int Value;
+}
+
+record struct Queue {}
+
+void Store(ref Slot slot, int value)
+{
+    slot.Value = value;
+}
+
+[[execution_context(Agent)]]
+void AgentEntry(ref Slot slot)
+{
+    Store(ref slot, 1);
+}
+
+[[execution_context(Agent)]]
+[[semantic_access("Publish", queue)]]
+void PublishEvent(ref Queue queue)
+{
+}
+
+void CheckDerivedAccess()
+{
+    Assert.Concept<sync.ExclusiveWriter>(Agent, Slot, "one derived writer context");
+    Assert.Concept<sync.SingleProducer>(Agent, Queue, "one derived producer context");
+}

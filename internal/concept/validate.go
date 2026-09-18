@@ -977,6 +977,11 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 	if err := evt1ValidateTestMetadata(module); err != nil {
 		return nil, err
 	}
+	if evt1AccessSummaryDemanded(module) {
+		if err := evt1DeriveAccessSummaries(env, module); err != nil {
+			return nil, err
+		}
+	}
 	evt1DeriveResultProvenanceSummaries(env, module.Functions)
 	evt1DeriveSemanticFactSummaries(env, module.Functions, module.Templates)
 	for _, fn := range module.ComptimeFns {

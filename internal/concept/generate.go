@@ -135,6 +135,9 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 		Profile:       module.Profile,
 		SemanticFacts: append([]MIRSemanticFact{}, env.transportedFacts...),
 	}
+	if evt1AccessSummaryDemanded(module) {
+		mir.AccessSummaries = append([]MIRAccessEntry{}, env.accessSummaries...)
+	}
 	for _, fn := range module.Functions {
 		kind, foretold, artifacts, annotated := evt1TestMetadata(fn)
 		if !annotated {

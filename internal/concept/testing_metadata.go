@@ -18,6 +18,10 @@ func evt1ValidateTestMetadata(module Module) error {
 		artifacts := 0
 		for _, attribute := range fn.Attributes {
 			switch {
+			case evt1SemanticAccessAttribute(attribute.Name):
+				// Compiler-owned access metadata is validated by the access-summary
+				// pass and is independent of test metadata.
+				continue
 			case evt1TestKinds[attribute.Name]:
 				if len(attribute.Args) != 0 {
 					return evt1Diagnostic("TEST_ATTRIBUTE_ARGUMENT_INVALID", fmt.Sprintf("[[%s]] does not accept arguments in R6a", attribute.Name), attribute.Span)
@@ -45,6 +49,13 @@ func evt1ValidateTestMetadata(module Module) error {
 			}
 		}
 		if primary == "" {
+			semanticOnly := true
+			for _, attribute := range fn.Attributes {
+				semanticOnly = semanticOnly && evt1SemanticAccessAttribute(attribute.Name)
+			}
+			if semanticOnly {
+				continue
+			}
 			return evt1Diagnostic("TEST_KIND_REQUIRED", fmt.Sprintf("function %s has test metadata but no test kind", fn.Name), fn.Span)
 		}
 		if foretold && primary != "prophecy" {

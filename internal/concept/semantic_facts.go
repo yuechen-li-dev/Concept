@@ -67,6 +67,8 @@ const (
 	FactOriginDerivedSummary         SemanticFactOrigin = "DerivedResultSummary"
 	FactOriginModuleFactSummary      SemanticFactOrigin = "ModuleFactSummary"
 	FactOriginDeclaredForeign        SemanticFactOrigin = "DeclaredForeign"
+	FactOriginDerivedAccessSummary   SemanticFactOrigin = "DerivedAccessSummary"
+	FactOriginModuleAccessSummary    SemanticFactOrigin = "ModuleAccessSummary"
 )
 
 type SemanticFactCertainty string

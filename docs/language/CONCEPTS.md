@@ -53,3 +53,10 @@ established by the concrete caller or context; it is not an unsafe global
 assumption. Missing evidence is `Unknown`, known conflicting authority is
 `Disproven`, and matching authority is `Proven`. Existing `Disjoint` is reused
 without a second namespaced disjointness system.
+
+R7d4 can independently derive writer, producer, and consumer cardinality.
+Execution entries use `[[execution_context(ContextType)]]`; operations whose
+channel meaning is not intrinsic use
+`[[semantic_access("Publish", parameter)]]` and the other closed access-kind
+spellings. These annotations state semantics explicitly. A function named
+`Publish`, `Read`, or `Commit` has no special meaning by spelling alone.

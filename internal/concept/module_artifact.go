@@ -66,6 +66,7 @@ type SemanticModuleArtifact struct {
 	OperationEffects   []SemanticModuleEffectSummary `json:"operation_effect_summaries,omitempty"`
 	ValueFactSummaries []SemanticFunctionFactSummary `json:"value_fact_summaries,omitempty"`
 	SharedAccessFacts  []MIRSemanticFact             `json:"shared_access_facts,omitempty"`
+	AccessSummaries    []MIRAccessEntry              `json:"access_summaries,omitempty"`
 	ForeignContracts   []ForeignContractDecl         `json:"foreign_contracts,omitempty"`
 	SemanticPayload    []byte                        `json:"semantic_payload"`
 }
@@ -172,6 +173,11 @@ func CompileSemanticModule(path, source string, artifacts map[string][]byte) ([]
 	if err != nil {
 		return nil, err
 	}
+	if !evt1AccessSummaryDemanded(composed) {
+		if err := evt1DeriveAccessSummaries(env, composed); err != nil {
+			return nil, err
+		}
+	}
 	portable := local
 	portable.Path = local.Name
 	// Preserve concrete generic field structure referenced by exported
@@ -193,6 +199,7 @@ func CompileSemanticModule(path, source string, artifacts map[string][]byte) ([]
 		OperationEffects:   summarizeModuleEffects(local, env),
 		ValueFactSummaries: semanticModuleFactSummaries(local, env),
 		SharedAccessFacts:  evt1LocalSharedAccessFacts(local, env),
+		AccessSummaries:    evt1LocalAccessSummaries(local, env),
 		ForeignContracts:   append([]ForeignContractDecl{}, local.ForeignContracts...),
 		SemanticPayload:    payload,
 	}
@@ -496,12 +503,17 @@ func composeSemanticModules(local Module, artifacts map[string][]byte) (Module, 
 			fact.Evidence.Authority = artifact.ModuleIdentity
 			composed.SharedAccessFacts = append(composed.SharedAccessFacts, fact)
 		}
+		for _, access := range artifact.AccessSummaries {
+			access.Origin = FactOriginModuleAccessSummary
+			composed.AccessSummaries = append(composed.AccessSummaries, access)
+		}
 	}
 	appendSemanticDeclarations(&composed, local)
 	composed.OperationEffects = append(composed.OperationEffects, local.OperationEffects...)
 	composed.ImportedFactSummaries = append(composed.ImportedFactSummaries, local.ImportedFactSummaries...)
 	composed.ImportedFactAuthority = append(composed.ImportedFactAuthority, local.ImportedFactAuthority...)
 	composed.SharedAccessFacts = append(composed.SharedAccessFacts, local.SharedAccessFacts...)
+	composed.AccessSummaries = append(composed.AccessSummaries, local.AccessSummaries...)
 	// Compile-time obligations belong only to the consuming unit. Imported
 	// assertions are checked when their source module is built and are not
 	// replayed, while local assertions must remain on the ordinary sema path.

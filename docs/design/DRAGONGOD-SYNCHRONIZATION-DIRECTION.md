@@ -30,16 +30,16 @@ may later remove a mechanical guard. Publication ordering still remains when
 readers can run concurrently. Unknown proof state retains the safe mechanism;
 Disproven unsynchronized mutation is rejected.
 
-R7d currently supplies the initial strict-C11 integer atomic substrate. It does
-not yet supply the shared-access proof relations or guarded DragonGod
-algorithms, so no atomic weakening, fence removal, lock elision, or race-freedom
-claim is made yet.
+R7d1 supplies the strict-C11 atomic substrate. R7d2 supplies explicit
+shared-access propositions. R7d4 supplies structural access evidence and
+tri-state writer/producer/consumer derivation. No atomic weakening, fence
+removal, lock elision, or race-freedom claim is made.
 
 R7d2 Phase 1 supplies the explicit relation vocabulary and artifact transport.
 The relations are real source-level obligations, not analyzer-only facts, but
-the compiler does not yet derive them from DragonGod accesses. The next gate is
-a bounded access summary; only then may guarded Blackboard, EventBus, and
-Actuation paths use proof-derived Planner decisions.
+current DragonGod sources deliberately remain unannotated and single-worker;
+their first R7d4 pass is mostly Unknown. Worker-safe Blackboard, EventBus, and
+Actuation algorithms plus proof-consuming Planner decisions are later work.
 
 Collector implications remain future work: shared roots require explicit
 ownership, root mutation requires synchronization, and a collector may later

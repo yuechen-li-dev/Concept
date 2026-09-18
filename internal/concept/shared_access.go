@@ -116,6 +116,10 @@ func evt1SameOrderedFact(fact MIRSemanticFact, kind SemanticFactKind, subjects [
 }
 
 func evt1CheckSharedAccessFact(env *semanticEnv, kind SemanticFactKind, args []Type) semanticFactResult {
+	derived := evt1DerivedSharedAccess(env, kind, args)
+	if derived.Outcome == FactProven || derived.Outcome == FactDisproven {
+		return derived
+	}
 	subjects := make([]SemanticFactSubject, len(args))
 	for i, arg := range args {
 		resolved, err := evt1ResolveType(env, nil, arg)

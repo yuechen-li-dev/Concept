@@ -112,9 +112,11 @@ take two. They may also be independent requirements in an ordinary named
 concept.
 
 Local concrete authority is shown as `Declared`, dependency authority as
-`ModuleFactSummary`, and missing authority as `Unknown`. Phase 1 does not yet
-derive access sets, so Planner remains conservative and these facts do not
-authorize guard or atomic elision.
+`ModuleFactSummary`, derived access evidence as `DerivedAccessSummary`, and
+imported access evidence as `ModuleAccessSummary`. Writer, producer, and
+consumer proofs list the bounded access-set evidence. Opaque identity remains
+`Unknown`; two closed conflicting contexts are `Disproven`. Planner remains
+conservative and R7d4 facts do not authorize guard or atomic elision.
 
 R6l adds field-sensitive initialized-object state beside transported geometry
 facts. `Value(storage)` requires Initialized, `Destroy(storage)` ends that
