@@ -3,20 +3,25 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static void concept_abort_invalid_tag(const char* enum_name) {
-  fprintf(stderr, "invalid enum tag for %s\n", enum_name);
+static void concept_panic(const char* reason, int line, int column) {
+  fprintf(stderr, "Concept panic at %d:%d: %s\n", line, column, reason);
   abort();
 }
 
-static concept_limits concept_limits_make(int bound, bool fast) {
+int32_t concept_rt_evt1_m1b_c_language_i32_add(int32_t left, int32_t right, int line, int column) {
+  int64_t result = (int64_t)left + (int64_t)right;
+  if (result < INT32_MIN || result > INT32_MAX) { concept_panic("int32 addition overflow", line, column); }
+  return (int32_t)result;
+}
+static concept_limits concept_limits_make(int32_t bound, bool fast) {
   concept_limits out;
   out.bound = bound;
   out.fast = fast;
   return out;
 }
 
-int concept_evt1_m1b_c_language_selected_arm(bool chooseThen, int thenValue, int elseValue) {
-  int cv_if_result_01;
+int32_t concept_evt1_m1b_c_language_selected_arm(bool chooseThen, int32_t thenValue, int32_t elseValue) {
+  int32_t cv_if_result_01;
   if (chooseThen) {
     cv_if_result_01 = thenValue;
   } else {
@@ -25,22 +30,22 @@ int concept_evt1_m1b_c_language_selected_arm(bool chooseThen, int thenValue, int
   return cv_if_result_01;
 }
 
-int concept_evt1_m1b_c_language_count_up(int input) {
-  int value = 0;
-  int cursor = 0;
+int32_t concept_evt1_m1b_c_language_count_up(int32_t input) {
+  int32_t value = INT32_C(0);
+  int32_t cursor = INT32_C(0);
   int cv_limit_01 = 6;
   int cv_iter_02 = 0;
   while (cv_iter_02 < cv_limit_01) {
     if (!((cursor < input))) { break; }
     cv_iter_02 = cv_iter_02 + 1;
-    value = (value + 1);
-    cursor = (cursor + 1);
+    value = concept_rt_evt1_m1b_c_language_i32_add(value, INT32_C(1), 50, 23);
+    cursor = concept_rt_evt1_m1b_c_language_i32_add(cursor, INT32_C(1), 51, 25);
   }
   while (1) {
     if (!((value < 4))) { break; }
-    value = (value + 1);
+    value = concept_rt_evt1_m1b_c_language_i32_add(value, INT32_C(1), 55, 23);
   }
-  int cv_if_result_03;
+  int32_t cv_if_result_03;
   if (true) {
     cv_if_result_03 = value;
   } else {
@@ -49,18 +54,18 @@ int concept_evt1_m1b_c_language_count_up(int input) {
   return cv_if_result_03;
 }
 
-int concept_evt1_m1b_c_language_zero_bound(int input) {
-  int value = 99;
+int32_t concept_evt1_m1b_c_language_zero_bound(int32_t input) {
+  int32_t value = INT32_C(99);
   int cv_limit_01 = 0;
   int cv_iter_02 = 0;
   while (cv_iter_02 < cv_limit_01) {
-    if (!((input > 0))) { break; }
+    if (!((input > INT32_C(0)))) { break; }
     cv_iter_02 = cv_iter_02 + 1;
-    value = 0;
+    value = INT32_C(0);
   }
   return value;
 }
 
-int concept_evt1_m1b_c_language_default_bound() {
+int32_t concept_evt1_m1b_c_language_default_bound() {
   return 3;
 }

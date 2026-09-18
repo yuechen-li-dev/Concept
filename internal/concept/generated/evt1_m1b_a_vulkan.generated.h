@@ -7,8 +7,8 @@
 
 typedef struct concept_buffer_range {
   VkBuffer buffer;
-  int offset;
-  int size;
+  int32_t offset;
+  int32_t size;
 } concept_buffer_range;
 
 typedef struct concept_command_pool_state {
@@ -30,7 +30,7 @@ typedef struct concept_resource_event {
       concept_buffer_range range;
     } range;
     struct {
-      int code;
+      int32_t code;
     } failed;
   } payload;
 } concept_resource_event;
@@ -39,15 +39,15 @@ bool concept_evt1_m1b_a_vulkan_is_valid(const concept_command_pool_state* value)
 
 void concept_evt1_m1b_a_vulkan_destroy(concept_command_pool_state* value);
 
-concept_buffer_range concept_evt1_m1b_a_vulkan_make_range(VkBuffer buffer, int offset, int size);
+concept_buffer_range concept_evt1_m1b_a_vulkan_make_range(VkBuffer buffer, int32_t offset, int32_t size);
 
 void concept_evt1_m1b_a_vulkan_mark_initialized(concept_command_pool_state* state);
 
 bool concept_evt1_m1b_a_vulkan_build_and_validate(VkCommandPool pool);
 
-int concept_evt1_m1b_a_vulkan_describe_event(concept_resource_event event);
+int32_t concept_evt1_m1b_a_vulkan_describe_event(concept_resource_event event);
 
-int concept_evt1_m1b_a_vulkan_classify_range(VkBuffer buffer);
+int32_t concept_evt1_m1b_a_vulkan_classify_range(VkBuffer buffer);
 
 void concept_evt1_m1b_a_vulkan_cleanup_state(VkCommandPool pool);
 

@@ -2176,9 +2176,12 @@ func evt1EvalScopeFromValidation(scope *evt1Scope, env *semanticEnv) *evt1EvalSc
 
 func validateExprAgainstExpected(env *semanticEnv, scope *evt1Scope, expr Expr, expected Type, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
 	if evt1NumericRepresentation(expected) {
-		switch expr.(type) {
+		switch literal := expr.(type) {
 		case *IntLiteral:
 			if evt1IntegralRepresentation(expected) {
+				if err := evt1ResolveIntegerLiteral(literal, expected); err != nil {
+					return Type{}, err
+				}
 				return expected.valueType(), nil
 			}
 		case *FloatLiteral:
@@ -3005,6 +3008,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		return e.ResultType, nil
 	case *IntLiteral:
 		t, _ := evt1BuiltinType("int", e.Span)
+		if err := evt1ResolveIntegerLiteral(e, t); err != nil {
+			return Type{}, err
+		}
 		return t, nil
 	case *FloatLiteral:
 		t, _ := evt1BuiltinType("float", e.Span)
@@ -3430,6 +3436,12 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		argTypes := make([]Type, 0, len(e.Args))
 		for _, arg := range e.Args {
+			if literal, ok := arg.(*IntLiteral); ok {
+				// Integer literals remain target-neutral until overload candidates
+				// provide an expected parameter type.
+				argTypes = append(argTypes, Type{Name: "int", Kind: TypeBuiltin, Span: literal.Span})
+				continue
+			}
 			argType, err := validateExpr(env, scope, arg, templateInfo, inComptimeFn)
 			if err != nil {
 				return Type{}, err
@@ -3737,11 +3749,27 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		out.Span = e.Span
 		return out, nil
 	case *BinaryExpr:
-		leftType, err := validateExpr(env, scope, e.Left, templateInfo, inComptimeFn)
-		if err != nil {
-			return Type{}, err
+		var leftType, rightType Type
+		var err error
+		leftLiteral, leftIsLiteral := e.Left.(*IntLiteral)
+		rightLiteral, rightIsLiteral := e.Right.(*IntLiteral)
+		if leftIsLiteral && !rightIsLiteral {
+			rightType, err = validateExpr(env, scope, e.Right, templateInfo, inComptimeFn)
+			if err == nil && evt1IntegralRepresentation(rightType) {
+				err = evt1ResolveIntegerLiteral(leftLiteral, rightType)
+				leftType = rightType
+			} else if err == nil {
+				leftType, err = validateExpr(env, scope, e.Left, templateInfo, inComptimeFn)
+			}
+		} else {
+			leftType, err = validateExpr(env, scope, e.Left, templateInfo, inComptimeFn)
+			if err == nil && rightIsLiteral && evt1IntegralRepresentation(leftType) {
+				err = evt1ResolveIntegerLiteral(rightLiteral, leftType)
+				rightType = leftType
+			} else if err == nil {
+				rightType, err = validateExpr(env, scope, e.Right, templateInfo, inComptimeFn)
+			}
 		}
-		rightType, err := validateExpr(env, scope, e.Right, templateInfo, inComptimeFn)
 		if err != nil {
 			return Type{}, err
 		}
@@ -3749,13 +3777,13 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		// quantity is supplied by the other operand when the representations
 		// agree. This makes `bytes + 1` explicit in representation but safe in
 		// dimension, without inventing runtime unit values.
-		if _, ok := e.Right.(*IntLiteral); ok && evt1IntegralRepresentation(leftType) {
+		if rightIsLiteral && evt1IntegralRepresentation(leftType) {
 			rightType = leftType
 		}
 		if _, ok := e.Right.(*FloatLiteral); ok && leftType.Name == "float" {
 			rightType = leftType
 		}
-		if _, ok := e.Left.(*IntLiteral); ok && evt1IntegralRepresentation(rightType) {
+		if leftIsLiteral && evt1IntegralRepresentation(rightType) {
 			leftType = rightType
 		}
 		if _, ok := e.Left.(*FloatLiteral); ok && rightType.Name == "float" {
@@ -3763,6 +3791,19 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		if templateInfo != nil && (evt1TypeDependsOnParam(leftType, templateInfo.Decl.TypeParam) || evt1TypeDependsOnParam(rightType, templateInfo.Decl.TypeParam)) {
 			return Type{}, evt1Diagnostic("CV4175", "dependent operators are not allowed in EVT1 M1B-B templates", e.Span)
+		}
+		if e.Op == "/" {
+			if literal, ok := e.Right.(*IntLiteral); ok && literal.Magnitude == 0 {
+				return Type{}, evt1Diagnostic("CV4645", "constant division by zero is not allowed; provide a nonzero divisor", literal.Span)
+			}
+		}
+		if e.Op == "<<" || e.Op == ">>" {
+			if literal, ok := e.Right.(*IntLiteral); ok {
+				_, _, _, width, known := evt1IntegerTypeRange(leftType)
+				if literal.Negative || (known && literal.Magnitude >= uint64(width)) {
+					return Type{}, evt1Diagnostic("CV4646", fmt.Sprintf("shift count %s is invalid for %s; expected 0 <= count < %d", literal.Source(), leftType.String(), width), literal.Span)
+				}
+			}
 		}
 		if e.Op == "@" {
 			leftName, leftFacts, leftTensor := tensorNameFacts(scope, e.Left)
@@ -3828,6 +3869,36 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		if result, handled, numericErr := evt1ValidateNumericBinary(leftType, rightType, e.Op, e.Span); handled {
 			if numericErr != nil {
 				return Type{}, numericErr
+			}
+			if result.Name == "int" {
+				if left, leftOK := e.Left.(*IntLiteral); leftOK {
+					if right, rightOK := e.Right.(*IntLiteral); rightOK {
+						leftValue, lok := left.signed64()
+						rightValue, rok := right.signed64()
+						if lok && rok {
+							var value int64
+							check := true
+							switch e.Op {
+							case "+":
+								value = leftValue + rightValue
+							case "-":
+								value = leftValue - rightValue
+							case "*":
+								value = leftValue * rightValue
+							case "/":
+								if leftValue == evt1IntMin && rightValue == -1 {
+									return Type{}, evt1Diagnostic("CV4649", "constant int division overflows the defined 32-bit range", e.Span)
+								}
+								check = false
+							default:
+								check = false
+							}
+							if check && (value < evt1IntMin || value > evt1IntMax) {
+								return Type{}, evt1Diagnostic("CV4649", fmt.Sprintf("constant int arithmetic result %d is outside the defined 32-bit range", value), e.Span)
+							}
+						}
+					}
+				}
 			}
 			e.ResolvedType = result
 			return result, nil
@@ -3969,6 +4040,12 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 }
 
 func validateCallArgument(env *semanticEnv, scope *evt1Scope, paramType Type, arg Expr, argType Type, templateInfo *evt1TemplateInfo) error {
+	if literal, ok := arg.(*IntLiteral); ok && evt1IntegralRepresentation(paramType) {
+		if err := evt1ResolveIntegerLiteral(literal, evt1CanonicalType(env, paramType)); err != nil {
+			return evt1Diagnostic("CV4644", fmt.Sprintf("call argument literal %s is out of range for expected %s", literal.Source(), paramType.String()), literal.Span)
+		}
+		return nil
+	}
 	if paramType.Kind == TypeCallback {
 		_, err := evt1ValidateCallbackErasure(env, scope, arg, paramType, templateInfo, false)
 		return err
@@ -5366,7 +5443,7 @@ func evt1ExprIdentity(expr Expr) string {
 	case *NameExpr:
 		return e.Name
 	case *IntLiteral:
-		return fmt.Sprintf("%d", e.Value)
+		return e.Source()
 	case *FloatLiteral:
 		return fmt.Sprintf("%g", e.Value)
 	case *StringLiteral:
@@ -5766,7 +5843,7 @@ func evt1ResolveOrdinaryCall(env *semanticEnv, scope *evt1Scope, name string, ar
 				match = false
 				break
 			}
-			if !evt1CanonicalType(env, fn.Params[i].Type).Equal(evt1CanonicalType(env, argTypes[i])) {
+			if _, literal := arg.(*IntLiteral); !literal && !evt1CanonicalType(env, fn.Params[i].Type).Equal(evt1CanonicalType(env, argTypes[i])) {
 				score++
 			}
 		}
@@ -6999,7 +7076,7 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 	case *NameExpr:
 		return &NameExpr{Name: e.Name, Span: e.Span}, nil
 	case *IntLiteral:
-		return &IntLiteral{Value: e.Value, Span: e.Span}, nil
+		return &IntLiteral{Magnitude: e.Magnitude, Negative: e.Negative, Lexeme: e.Lexeme, ResolvedType: e.ResolvedType, Span: e.Span}, nil
 	case *FloatLiteral:
 		return &FloatLiteral{Value: e.Value, Span: e.Span}, nil
 	case *StringLiteral:

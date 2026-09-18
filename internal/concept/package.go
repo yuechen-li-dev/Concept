@@ -97,7 +97,13 @@ func extractPackageManifest(path string, body []byte) (PackageManifestValue, err
 	major, ok1 := versionValue.Args[0].(*IntLiteral)
 	minor, ok2 := versionValue.Args[1].(*IntLiteral)
 	patch, ok3 := versionValue.Args[2].(*IntLiteral)
-	if !ok1 || !ok2 || !ok3 || major.Value < 0 || minor.Value < 0 || patch.Value < 0 {
+	if !ok1 || !ok2 || !ok3 {
+		return PackageManifestValue{}, fmt.Errorf("PACKAGE_MANIFEST_INVALID: version components must be nonnegative integers")
+	}
+	majorValue, majorOK := major.boundedInt()
+	minorValue, minorOK := minor.boundedInt()
+	patchValue, patchOK := patch.boundedInt()
+	if !majorOK || !minorOK || !patchOK || majorValue < 0 || minorValue < 0 || patchValue < 0 {
 		return PackageManifestValue{}, fmt.Errorf("PACKAGE_MANIFEST_INVALID: version components must be nonnegative integers")
 	}
 	kindValue, ok := construct.Args[3].(*ConstructExpr)
@@ -112,11 +118,15 @@ func extractPackageManifest(path string, body []byte) (PackageManifestValue, err
 		return PackageManifestValue{}, fmt.Errorf("PACKAGE_MANIFEST_INVALID: dependencies must be an ordinary array")
 	}
 	count, ok := construct.Args[5].(*IntLiteral)
-	if !ok || count.Value < 0 || count.Value > len(dependenciesValue.Elements) {
+	if !ok {
 		return PackageManifestValue{}, fmt.Errorf("PACKAGE_MANIFEST_INVALID: dependency count is out of bounds")
 	}
-	manifest := PackageManifestValue{Name: name.Value, Author: author.Value, Version: PackageVersion{major.Value, minor.Value, patch.Value}, Kind: kindValue.VariantName, ManifestPath: filepath.ToSlash(path), ManifestSHA256: digest(body)}
-	for i := 0; i < count.Value; i++ {
+	countValue, countOK := count.boundedInt()
+	if !countOK || countValue < 0 || countValue > len(dependenciesValue.Elements) {
+		return PackageManifestValue{}, fmt.Errorf("PACKAGE_MANIFEST_INVALID: dependency count is out of bounds")
+	}
+	manifest := PackageManifestValue{Name: name.Value, Author: author.Value, Version: PackageVersion{majorValue, minorValue, patchValue}, Kind: kindValue.VariantName, ManifestPath: filepath.ToSlash(path), ManifestSHA256: digest(body)}
+	for i := 0; i < countValue; i++ {
 		dependency, ok := dependenciesValue.Elements[i].(*StructConstructExpr)
 		if !ok || len(dependency.Args) != 1 {
 			return PackageManifestValue{}, fmt.Errorf("PACKAGE_MANIFEST_INVALID: dependency %d must be Dependency{name}", i)

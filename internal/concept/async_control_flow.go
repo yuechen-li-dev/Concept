@@ -433,6 +433,60 @@ func evt1AsyncPersistentMap(fn FunctionDecl, analysis evt1AsyncAnalysis, cfg *ev
 			}
 		}
 	}
+	// Persistence is transitive through initializer provenance. A persistent
+	// Span (or another view) cannot retain a pointer to a block-local backing
+	// value that disappears at the first suspension.
+	initializers := map[string]Expr{}
+	var collectInitializers func(Block)
+	collectInitializers = func(block Block) {
+		for _, statement := range block.Statements {
+			switch s := statement.(type) {
+			case *VarDecl:
+				initializers[s.Name] = s.Value
+			case *IfStmt:
+				collectInitializers(s.Then)
+				if s.Else != nil {
+					collectInitializers(*s.Else)
+				}
+			case *WhileStmt:
+				collectInitializers(s.Body)
+			case *ForeachStmt:
+				collectInitializers(s.Body)
+			case *MatchStmt:
+				for _, arm := range s.Arms {
+					collectInitializers(arm.Block)
+				}
+			case *TryStmt:
+				collectInitializers(s.Body)
+				for _, arm := range s.Except {
+					collectInitializers(arm.Body)
+				}
+			}
+		}
+	}
+	collectInitializers(*fn.Body)
+	changed := true
+	for changed {
+		changed = false
+		for name := range persistent {
+			// Copy values do not retain their initializer's storage. Only a
+			// persisted view needs its backing provenance promoted into the
+			// coroutine frame. Keeping this narrow also prevents unrelated
+			// initializer trees from inflating bounded async frames.
+			if !evt1IsSpanType(persistent[name]) {
+				continue
+			}
+			for _, dependency := range evt1ExprNames(initializers[name]) {
+				if _, exists := persistent[dependency]; exists {
+					continue
+				}
+				if t, declared := analysis.DeclTypes[dependency]; declared {
+					persistent[dependency] = t
+					changed = true
+				}
+			}
+		}
+	}
 	return persistent
 }
 
@@ -815,7 +869,7 @@ func (l *lowering) lowerAsyncCFGForeachInit(f *evt1FunctionLowerer, info evt1Asy
 		if get.Params[0].Type.isBorrowLike() {
 			arg = "&(" + arg + ")"
 		}
-		b.WriteString(ind(indent) + fmt.Sprintf("frame->%s = %s(%s);\n", info.Iterator, evt1FunctionSymbolForDecl(l.outputBase, l.env, get), arg))
+		b.WriteString(ind(indent) + fmt.Sprintf("frame->%s = %s(%s);\n", info.Iterator, evt1FunctionSymbolForDecl(l.symbolBase, l.env, get), arg))
 	}
 	return b.String()
 }
@@ -834,8 +888,8 @@ func (l *lowering) lowerAsyncCFGForeachHeader(f *evt1FunctionLowerer, info evt1A
 		if current.Params[0].Type.isBorrowLike() {
 			currentArg = "&(" + iterator + ")"
 		}
-		b.WriteString(ind(indent) + fmt.Sprintf("if (!(%s(%s))) { frame->state = %d; goto async_dispatch; }\n", evt1FunctionSymbolForDecl(l.outputBase, l.env, move), moveArg, exit.Index))
-		b.WriteString(ind(indent) + fmt.Sprintf("frame->%s = %s(%s); /* Current once per successful iteration */\n", stmt.ItemName, evt1FunctionSymbolForDecl(l.outputBase, l.env, current), currentArg))
+		b.WriteString(ind(indent) + fmt.Sprintf("if (!(%s(%s))) { frame->state = %d; goto async_dispatch; }\n", evt1FunctionSymbolForDecl(l.symbolBase, l.env, move), moveArg, exit.Index))
+		b.WriteString(ind(indent) + fmt.Sprintf("frame->%s = %s(%s); /* Current once per successful iteration */\n", stmt.ItemName, evt1FunctionSymbolForDecl(l.symbolBase, l.env, current), currentArg))
 	} else {
 		source := "frame->" + info.SourceField
 		if info.SourceByRef && stmt.SourceType.ArrayElem != nil {

@@ -3,12 +3,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static void concept_abort_invalid_tag(const char* enum_name) {
-  fprintf(stderr, "invalid enum tag for %s\n", enum_name);
+static void concept_panic(const char* reason, int line, int column) {
+  fprintf(stderr, "Concept panic at %d:%d: %s\n", line, column, reason);
   abort();
 }
 
-static concept_buffer_range concept_buffer_range_make(VkBuffer buffer, int offset, int size) {
+int32_t concept_rt_evt1_m1b_b_vulkan_i32_add(int32_t left, int32_t right, int line, int column) {
+  int64_t result = (int64_t)left + (int64_t)right;
+  if (result < INT32_MIN || result > INT32_MAX) { concept_panic("int32 addition overflow", line, column); }
+  return (int32_t)result;
+}
+static concept_buffer_range concept_buffer_range_make(VkBuffer buffer, int32_t offset, int32_t size) {
   concept_buffer_range out;
   out.buffer = buffer;
   out.offset = offset;
@@ -16,22 +21,22 @@ static concept_buffer_range concept_buffer_range_make(VkBuffer buffer, int offse
   return out;
 }
 
-static int concept_template_score_resource__buffer_range(const concept_buffer_range* value) {
-  return concept_evt1_m1b_b_vulkan_measure__buffer_range(value);
+static int32_t concept_template_score_resource__buffer_range(const concept_buffer_range* value) {
+  return concept_evt1_m1b_b_vulkan_measure__borrow_const_buffer_range(value);
 }
 
-static int concept_template_score_resource__pipeline_state(const concept_pipeline_state* value) {
-  return concept_evt1_m1b_b_vulkan_measure__pipeline_state(value);
+static int32_t concept_template_score_resource__pipeline_state(const concept_pipeline_state* value) {
+  return concept_evt1_m1b_b_vulkan_measure__borrow_const_pipeline_state(value);
 }
 
 static void concept_template_destroy_resource__pipeline_state(concept_pipeline_state* value) {
-  concept_evt1_m1b_b_vulkan_destroy__pipeline_state(value);
+  concept_evt1_m1b_b_vulkan_destroy__borrow_pipeline_state(value);
 }
 
-int concept_evt1_m1b_b_vulkan_classify_range(VkBuffer buffer) {
+int32_t concept_evt1_m1b_b_vulkan_classify_range(VkBuffer buffer) {
   VkBuffer cv_init_1_01 = buffer;
-  int cv_init_2_02 = 2;
-  int cv_init_3_03 = 3;
+  int32_t cv_init_2_02 = INT32_C(2);
+  int32_t cv_init_3_03 = INT32_C(3);
   concept_buffer_range range;
   range.buffer = cv_init_1_01;
   range.offset = cv_init_2_02;
@@ -39,22 +44,22 @@ int concept_evt1_m1b_b_vulkan_classify_range(VkBuffer buffer) {
   return concept_template_score_resource__buffer_range(&range);
 }
 
-int concept_evt1_m1b_b_vulkan_double_range_score(VkBuffer first, VkBuffer second) {
+int32_t concept_evt1_m1b_b_vulkan_double_range_score(VkBuffer first, VkBuffer second) {
   VkBuffer cv_init_1_01 = first;
-  int cv_init_2_02 = 4;
-  int cv_init_3_03 = 5;
+  int32_t cv_init_2_02 = INT32_C(4);
+  int32_t cv_init_3_03 = INT32_C(5);
   concept_buffer_range left;
   left.buffer = cv_init_1_01;
   left.offset = cv_init_2_02;
   left.size = cv_init_3_03;
   VkBuffer cv_init_1_04 = second;
-  int cv_init_2_05 = 6;
-  int cv_init_3_06 = 7;
+  int32_t cv_init_2_05 = INT32_C(6);
+  int32_t cv_init_3_06 = INT32_C(7);
   concept_buffer_range right;
   right.buffer = cv_init_1_04;
   right.offset = cv_init_2_05;
   right.size = cv_init_3_06;
-  return (concept_template_score_resource__buffer_range(&left) + concept_template_score_resource__buffer_range(&right));
+  return concept_rt_evt1_m1b_b_vulkan_i32_add(concept_template_score_resource__buffer_range(&left), concept_template_score_resource__buffer_range(&right), 65, 45);
 }
 
 bool concept_evt1_m1b_b_vulkan_build_and_destroy(VkCommandPool pool) {
@@ -65,5 +70,5 @@ bool concept_evt1_m1b_b_vulkan_build_and_destroy(VkCommandPool pool) {
   state.alive = cv_init_2_02;
   concept_evt1_m1b_b_vulkan_set_alive(&state);
   concept_template_destroy_resource__pipeline_state(&state);
-  return (concept_template_score_resource__pipeline_state(&state) > 0);
+  return (concept_template_score_resource__pipeline_state(&state) > INT32_C(0));
 }

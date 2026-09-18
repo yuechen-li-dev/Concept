@@ -95,7 +95,7 @@ func TestLexicalLifetimeMIRLifetimeAndProofFacts(t *testing.T) {
 
 func TestLexicalLifetimeOwnedReplacementDropsOldFirst(t *testing.T) {
 	body := string(generateLexicalLifetimeFixture(t, "owned_replacement_drop.concept")["owned_replacement_drop.generated.c"])
-	mainAt := strings.Index(body, "int concept_owned_replacement_drop_main")
+	mainAt := strings.Index(body, "int32_t concept_owned_replacement_drop_main")
 	if mainAt < 0 {
 		t.Fatal("generated Main missing")
 	}

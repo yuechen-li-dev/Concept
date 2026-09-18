@@ -5,29 +5,29 @@
 #include <stdint.h>
 
 typedef struct concept_buffer_range {
-  int bufferId;
-  int offset;
-  int size;
+  int32_t bufferId;
+  int32_t offset;
+  int32_t size;
 } concept_buffer_range;
 
 typedef struct concept_allocation {
   concept_buffer_range range;
-  int generation;
+  int32_t generation;
 } concept_allocation;
 
 typedef struct concept_observed_values {
-  int first;
-  int second;
-  int third;
+  int32_t first;
+  int32_t second;
+  int32_t third;
 } concept_observed_values;
 
 typedef struct concept_copy_result {
-  int firstOffset;
-  int secondOffset;
+  int32_t firstOffset;
+  int32_t secondOffset;
 } concept_copy_result;
 
 typedef struct concept_command_pool_state {
-  int poolId;
+  int32_t poolId;
   bool initialized;
 } concept_command_pool_state;
 
@@ -45,7 +45,7 @@ typedef struct concept_outcome {
       concept_allocation allocation;
     } ready;
     struct {
-      int code;
+      int32_t code;
     } failed;
   } payload;
 } concept_outcome;
@@ -54,21 +54,21 @@ bool concept_evt1_m1b_a_language_is_valid(const concept_command_pool_state* valu
 
 void concept_evt1_m1b_a_language_destroy(concept_command_pool_state* value);
 
-int concept_evt1_m1b_a_language_next_value();
+int32_t concept_evt1_m1b_a_language_next_value();
 
-int concept_evt1_m1b_a_language_add(int left, int right);
+int32_t concept_evt1_m1b_a_language_add(int32_t left, int32_t right);
 
-concept_buffer_range concept_evt1_m1b_a_language_make_range(int bufferId, int offset, int size);
+concept_buffer_range concept_evt1_m1b_a_language_make_range(int32_t bufferId, int32_t offset, int32_t size);
 
-concept_allocation concept_evt1_m1b_a_language_make_allocation(concept_buffer_range range, int generation);
+concept_allocation concept_evt1_m1b_a_language_make_allocation(concept_buffer_range range, int32_t generation);
 
 concept_observed_values concept_evt1_m1b_a_language_observe_construction();
 
 concept_copy_result concept_evt1_m1b_a_language_copy_and_mutate();
 
-int concept_evt1_m1b_a_language_classify_outcome(concept_outcome outcome);
+int32_t concept_evt1_m1b_a_language_classify_outcome(concept_outcome outcome);
 
-int concept_evt1_m1b_a_language_match_allocation();
+int32_t concept_evt1_m1b_a_language_match_allocation();
 
 void concept_evt1_m1b_a_language_initialize_pool(concept_command_pool_state* state);
 

@@ -199,7 +199,7 @@ usize Main() { return SizeOf<Pair<int>>(); }
 		t.Fatal(err)
 	}
 	header := string(outputs["generic_struct_basic.generated.h"])
-	if !strings.Contains(header, "concept_pair_int_") || !strings.Contains(header, "int first;") {
+	if !strings.Contains(header, "concept_pair_int_") || !strings.Contains(header, "int32_t first;") {
 		t.Fatalf("generic instance did not become a concrete C type:\n%s", header)
 	}
 }

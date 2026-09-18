@@ -24,7 +24,7 @@ static void concept_abort_automata_completion(const char* automata_name, int ste
   abort();
 }
 
-static concept_lifecycle_context concept_lifecycle_context_make(bool queueAvailable, bool failRequested, int submission, concept_queue_class queue, int ticket) {
+static concept_lifecycle_context concept_lifecycle_context_make(bool queueAvailable, bool failRequested, int32_t submission, concept_queue_class queue, int32_t ticket) {
   concept_lifecycle_context out;
   out.queueAvailable = queueAvailable;
   out.failRequested = failRequested;
@@ -208,14 +208,14 @@ typedef struct concept_resource_lifecycle_effect_entry {
   concept_resource_lifecycle_effect_tag tag;
   union {
     struct {
-      int submission;
+      int32_t submission;
     } record_submission;
     struct {
-      int submission;
+      int32_t submission;
       concept_queue_class queue;
     } begin_submission;
     struct {
-      int ticket;
+      int32_t ticket;
     } finalize_ticket;
   } payload;
 } concept_resource_lifecycle_effect_entry;
@@ -274,11 +274,11 @@ static concept_automata_dispatch_outcome concept_resource_lifecycle_dispatch(con
               switch (selected_candidate) {
                 case 1:
                   {
-                  int record_submission_01_01 = staged->context->submission;
+                  int32_t record_submission_01_01 = staged->context->submission;
                   staged_batch.entries[staged_count].payload.record_submission.submission = record_submission_01_01;
                   staged_batch.entries[staged_count].tag = CONCEPT_RESOURCE_LIFECYCLE_EFFECT_RECORD_SUBMISSION;
                   staged_count = (uint8_t)(staged_count + 1);
-                  int begin_submission_02_01 = staged->context->submission;
+                  int32_t begin_submission_02_01 = staged->context->submission;
                   staged_batch.entries[staged_count].payload.begin_submission.submission = begin_submission_02_01;
                   concept_queue_class begin_submission_02_02 = staged->context->queue;
                   staged_batch.entries[staged_count].payload.begin_submission.queue = begin_submission_02_02;
@@ -289,7 +289,7 @@ static concept_automata_dispatch_outcome concept_resource_lifecycle_dispatch(con
                   }
                 case 2:
                   {
-                  int finalize_ticket_01_01 = staged->context->ticket;
+                  int32_t finalize_ticket_01_01 = staged->context->ticket;
                   staged_batch.entries[staged_count].payload.finalize_ticket.ticket = finalize_ticket_01_01;
                   staged_batch.entries[staged_count].tag = CONCEPT_RESOURCE_LIFECYCLE_EFFECT_FINALIZE_TICKET;
                   staged_count = (uint8_t)(staged_count + 1);
@@ -298,7 +298,7 @@ static concept_automata_dispatch_outcome concept_resource_lifecycle_dispatch(con
                   }
                 case 3:
                   {
-                  int finalize_ticket_01_01 = staged->context->ticket;
+                  int32_t finalize_ticket_01_01 = staged->context->ticket;
                   staged_batch.entries[staged_count].payload.finalize_ticket.ticket = finalize_ticket_01_01;
                   staged_batch.entries[staged_count].tag = CONCEPT_RESOURCE_LIFECYCLE_EFFECT_FINALIZE_TICKET;
                   staged_count = (uint8_t)(staged_count + 1);
@@ -320,7 +320,7 @@ static concept_automata_dispatch_outcome concept_resource_lifecycle_dispatch(con
               }
               return concept_automata_dispatch_outcome_make_transitioned();
             case CONCEPT_LIFECYCLE_SIGNAL_FINISH_NOW:
-              int finalize_ticket_01_01 = staged->context->ticket;
+              int32_t finalize_ticket_01_01 = staged->context->ticket;
               staged_batch.entries[staged_count].payload.finalize_ticket.ticket = finalize_ticket_01_01;
               staged_batch.entries[staged_count].tag = CONCEPT_RESOURCE_LIFECYCLE_EFFECT_FINALIZE_TICKET;
               staged_count = (uint8_t)(staged_count + 1);
@@ -531,38 +531,38 @@ bool concept_evt1_dragongod_m3_language_fail_requested(const concept_lifecycle_c
   return context->failRequested;
 }
 
-int concept_evt1_dragongod_m3_language_outcome_code(concept_automata_dispatch_outcome outcome) {
+int32_t concept_evt1_dragongod_m3_language_outcome_code(concept_automata_dispatch_outcome outcome) {
   concept_automata_dispatch_outcome cv_match_subject_01 = outcome;
-  int cv_match_result_02;
+  int32_t cv_match_result_02;
   switch (cv_match_subject_01.tag) {
   case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_TRANSITIONED:
     {
-      cv_match_result_02 = 1;
+      cv_match_result_02 = INT32_C(1);
       break;
     }
   case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_UNHANDLED:
     {
-      cv_match_result_02 = 2;
+      cv_match_result_02 = INT32_C(2);
       break;
     }
   case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_AMBIGUOUS:
     {
-      cv_match_result_02 = 5;
+      cv_match_result_02 = INT32_C(5);
       break;
     }
   case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_FINISHED:
     {
-      cv_match_result_02 = 3;
+      cv_match_result_02 = INT32_C(3);
       break;
     }
   case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_ALREADY_FINISHED:
     {
-      cv_match_result_02 = 4;
+      cv_match_result_02 = INT32_C(4);
       break;
     }
   case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_EFFECT_BATCH_OCCUPIED:
     {
-      cv_match_result_02 = 6;
+      cv_match_result_02 = INT32_C(6);
       break;
     }
   default:
@@ -571,7 +571,7 @@ int concept_evt1_dragongod_m3_language_outcome_code(concept_automata_dispatch_ou
   return cv_match_result_02;
 }
 
-int concept_evt1_dragongod_m3_language_effectful_submit_code(concept_lifecycle_context context) {
+int32_t concept_evt1_dragongod_m3_language_effectful_submit_code(concept_lifecycle_context context) {
   concept_resource_lifecycle_instance lifecycle;
   concept_resource_lifecycle_init(&lifecycle, &context);
   concept_resource_lifecycle_effects emitted = {0};
@@ -580,7 +580,7 @@ int concept_evt1_dragongod_m3_language_effectful_submit_code(concept_lifecycle_c
   return concept_evt1_dragongod_m3_language_outcome_code(cv_arg_02);
 }
 
-int concept_evt1_dragongod_m3_language_zero_emit_transition_code(concept_lifecycle_context context) {
+int32_t concept_evt1_dragongod_m3_language_zero_emit_transition_code(concept_lifecycle_context context) {
   concept_resource_lifecycle_instance lifecycle;
   concept_resource_lifecycle_init(&lifecycle, &context);
   concept_resource_lifecycle_effects emitted = {0};
@@ -591,7 +591,7 @@ int concept_evt1_dragongod_m3_language_zero_emit_transition_code(concept_lifecyc
   return concept_evt1_dragongod_m3_language_outcome_code(cv_arg_03);
 }
 
-int concept_evt1_dragongod_m3_language_contextless_compatibility_code() {
+int32_t concept_evt1_dragongod_m3_language_contextless_compatibility_code() {
   concept_immediate_lifecycle_instance lifecycle;
   concept_immediate_lifecycle_init(&lifecycle);
   concept_lifecycle_signal cv_signal_01 = concept_lifecycle_signal_make_stop();

@@ -15,7 +15,7 @@ static concept_inner_status concept_inner_status_make_idle() {
   return out;
 }
 
-static concept_inner_status concept_inner_status_make_counted(int value) {
+static concept_inner_status concept_inner_status_make_counted(int32_t value) {
   concept_inner_status out;
   out.tag = CONCEPT_INNER_STATUS_COUNTED;
   out.payload.counted.value = value;
@@ -29,14 +29,14 @@ static concept_demo_state concept_demo_state_make_empty() {
   return out;
 }
 
-static concept_demo_state concept_demo_state_make_counted(int value) {
+static concept_demo_state concept_demo_state_make_counted(int32_t value) {
   concept_demo_state out;
   out.tag = CONCEPT_DEMO_STATE_COUNTED;
   out.payload.counted.value = value;
   return out;
 }
 
-static concept_demo_state concept_demo_state_make_pair(int first, int second) {
+static concept_demo_state concept_demo_state_make_pair(int32_t first, int32_t second) {
   concept_demo_state out;
   out.tag = CONCEPT_DEMO_STATE_PAIR;
   out.payload.pair.first = first;
@@ -59,19 +59,19 @@ concept_inner_status concept_evt1_m1a_language_make_inner_idle() {
   return concept_inner_status_make_idle();
 }
 
-concept_inner_status concept_evt1_m1a_language_make_inner_counted(int value) {
-  int cv_payload_01 = value;
+concept_inner_status concept_evt1_m1a_language_make_inner_counted(int32_t value) {
+  int32_t cv_payload_01 = value;
   return concept_inner_status_make_counted(cv_payload_01);
 }
 
-concept_demo_state concept_evt1_m1a_language_make_counted(int value) {
-  int cv_payload_01 = value;
+concept_demo_state concept_evt1_m1a_language_make_counted(int32_t value) {
+  int32_t cv_payload_01 = value;
   return concept_demo_state_make_counted(cv_payload_01);
 }
 
-concept_demo_state concept_evt1_m1a_language_make_pair(int first, int second) {
-  int cv_payload_01 = first;
-  int cv_payload_02 = second;
+concept_demo_state concept_evt1_m1a_language_make_pair(int32_t first, int32_t second) {
+  int32_t cv_payload_01 = first;
+  int32_t cv_payload_02 = second;
   return concept_demo_state_make_pair(cv_payload_01, cv_payload_02);
 }
 
@@ -80,27 +80,27 @@ concept_demo_state concept_evt1_m1a_language_make_wrapped(concept_inner_status i
   return concept_demo_state_make_wrapped(cv_payload_01);
 }
 
-int concept_evt1_m1a_language_classify(concept_demo_state state) {
+int32_t concept_evt1_m1a_language_classify(concept_demo_state state) {
   concept_demo_state cv_match_subject_01 = state;
-  int cv_match_result_02;
+  int32_t cv_match_result_02;
   switch (cv_match_subject_01.tag) {
   case CONCEPT_DEMO_STATE_EMPTY:
     {
-      cv_match_result_02 = 0;
+      cv_match_result_02 = INT32_C(0);
       break;
     }
   case CONCEPT_DEMO_STATE_COUNTED:
     {
-      int value = cv_match_subject_01.payload.counted.value;
+      int32_t value = cv_match_subject_01.payload.counted.value;
       cv_match_result_02 = value;
       break;
     }
   case CONCEPT_DEMO_STATE_PAIR:
     {
-      int first = cv_match_subject_01.payload.pair.first;
-      int second = cv_match_subject_01.payload.pair.second;
-      int cv_arg_03 = first;
-      int cv_arg_04 = second;
+      int32_t first = cv_match_subject_01.payload.pair.first;
+      int32_t second = cv_match_subject_01.payload.pair.second;
+      int32_t cv_arg_03 = first;
+      int32_t cv_arg_04 = second;
       cv_match_result_02 = concept_evt1_m1a_language_add(cv_arg_03, cv_arg_04);
       break;
     }
@@ -108,18 +108,18 @@ int concept_evt1_m1a_language_classify(concept_demo_state state) {
     {
       concept_inner_status inner = cv_match_subject_01.payload.wrapped.inner;
       concept_inner_status cv_match_subject_05 = inner;
-      int cv_match_result_06;
+      int32_t cv_match_result_06;
       switch (cv_match_subject_05.tag) {
       case CONCEPT_INNER_STATUS_IDLE:
         {
-          cv_match_result_06 = 100;
+          cv_match_result_06 = INT32_C(100);
           break;
         }
       case CONCEPT_INNER_STATUS_COUNTED:
         {
-          int value = cv_match_subject_05.payload.counted.value;
-          int cv_arg_07 = value;
-          int cv_arg_08 = 100;
+          int32_t value = cv_match_subject_05.payload.counted.value;
+          int32_t cv_arg_07 = value;
+          int32_t cv_arg_08 = INT32_C(100);
           cv_match_result_06 = concept_evt1_m1a_language_add(cv_arg_07, cv_arg_08);
           break;
         }
@@ -135,7 +135,7 @@ int concept_evt1_m1a_language_classify(concept_demo_state state) {
   return cv_match_result_02;
 }
 
-int concept_evt1_m1a_language_observe_and_classify() {
+int32_t concept_evt1_m1a_language_observe_and_classify() {
   concept_demo_state cv_arg_01 = concept_evt1_m1a_language_observe_state();
   return concept_evt1_m1a_language_classify(cv_arg_01);
 }
@@ -145,23 +145,23 @@ void concept_evt1_m1a_language_visit(concept_demo_state state) {
   switch (cv_subject_01.tag) {
   case CONCEPT_DEMO_STATE_EMPTY:
     {
-      int cv_arg_02 = 0;
+      int32_t cv_arg_02 = INT32_C(0);
       concept_evt1_m1a_language_record_int(cv_arg_02);
       break;
     }
   case CONCEPT_DEMO_STATE_COUNTED:
     {
-      int value = cv_subject_01.payload.counted.value;
-      int cv_arg_03 = value;
+      int32_t value = cv_subject_01.payload.counted.value;
+      int32_t cv_arg_03 = value;
       concept_evt1_m1a_language_record_int(cv_arg_03);
       break;
     }
   case CONCEPT_DEMO_STATE_PAIR:
     {
-      int first = cv_subject_01.payload.pair.first;
-      int second = cv_subject_01.payload.pair.second;
-      int cv_arg_04 = first;
-      int cv_arg_05 = second;
+      int32_t first = cv_subject_01.payload.pair.first;
+      int32_t second = cv_subject_01.payload.pair.second;
+      int32_t cv_arg_04 = first;
+      int32_t cv_arg_05 = second;
       concept_evt1_m1a_language_record_pair(cv_arg_04, cv_arg_05);
       break;
     }
@@ -172,16 +172,16 @@ void concept_evt1_m1a_language_visit(concept_demo_state state) {
       switch (cv_subject_06.tag) {
       case CONCEPT_INNER_STATUS_IDLE:
         {
-          int cv_arg_07 = 1000;
+          int32_t cv_arg_07 = INT32_C(1000);
           concept_evt1_m1a_language_record_int(cv_arg_07);
           break;
         }
       case CONCEPT_INNER_STATUS_COUNTED:
         {
-          int value = cv_subject_06.payload.counted.value;
-          int cv_arg_08 = value;
-          int cv_arg_09 = 1000;
-          int cv_arg_10 = concept_evt1_m1a_language_add(cv_arg_08, cv_arg_09);
+          int32_t value = cv_subject_06.payload.counted.value;
+          int32_t cv_arg_08 = value;
+          int32_t cv_arg_09 = INT32_C(1000);
+          int32_t cv_arg_10 = concept_evt1_m1a_language_add(cv_arg_08, cv_arg_09);
           concept_evt1_m1a_language_record_int(cv_arg_10);
           break;
         }

@@ -3,17 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static void concept_abort_invalid_tag(const char* enum_name) {
-  fprintf(stderr, "invalid enum tag for %s\n", enum_name);
-  abort();
-}
-
-static void concept_panic(const char* reason, int line, int column) {
-  fprintf(stderr, "Concept panic at %d:%d: %s\n", line, column, reason);
-  abort();
-}
-
-static concept_descriptor_binding concept_descriptor_binding_make(int set, int binding, bool write) {
+static concept_descriptor_binding concept_descriptor_binding_make(int32_t set, int32_t binding, bool write) {
   concept_descriptor_binding out;
   out.set = set;
   out.binding = binding;
@@ -27,11 +17,11 @@ static concept_binding_summary concept_binding_summary_make(concept_array_2_int 
   return out;
 }
 
-int concept_evt1_m1b_d_vulkan_classify_range(VkBuffer buffer) {
+int32_t concept_evt1_m1b_d_vulkan_classify_range(VkBuffer buffer) {
   return 5;
 }
 
-int concept_evt1_m1b_d_vulkan_pipeline_stride(VkBuffer buffer) {
+int32_t concept_evt1_m1b_d_vulkan_pipeline_stride(VkBuffer buffer) {
   return 4;
 }
 

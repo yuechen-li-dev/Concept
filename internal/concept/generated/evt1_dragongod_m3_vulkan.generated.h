@@ -20,9 +20,9 @@ typedef struct concept_queue_class {
 typedef struct concept_buffer_context {
   bool queueAvailable;
   bool failRequested;
-  int bufferId;
+  int32_t bufferId;
   concept_queue_class queue;
-  int failureCode;
+  int32_t failureCode;
 } concept_buffer_context;
 
 typedef enum concept_resource_signal_tag {
@@ -60,11 +60,11 @@ bool concept_evt1_dragongod_m3_vulkan_queue_open(const concept_buffer_context* c
 
 bool concept_evt1_dragongod_m3_vulkan_fail_requested(const concept_buffer_context* context);
 
-int concept_evt1_dragongod_m3_vulkan_outcome_code(concept_automata_dispatch_outcome outcome);
+int32_t concept_evt1_dragongod_m3_vulkan_outcome_code(concept_automata_dispatch_outcome outcome);
 
-int concept_evt1_dragongod_m3_vulkan_vulkan_effectful_submit_code(concept_buffer_context context, VkBuffer buffer);
+int32_t concept_evt1_dragongod_m3_vulkan_vulkan_effectful_submit_code(concept_buffer_context context, VkBuffer buffer);
 
-int concept_evt1_dragongod_m3_vulkan_vulkan_zero_emit_transition_code(concept_buffer_context context, VkCommandPool pool);
+int32_t concept_evt1_dragongod_m3_vulkan_vulkan_zero_emit_transition_code(concept_buffer_context context, VkCommandPool pool);
 
 
 #endif

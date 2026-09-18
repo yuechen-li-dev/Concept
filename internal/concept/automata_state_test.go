@@ -202,7 +202,7 @@ func TestAutomataStateCleanupShape(t *testing.T) {
 	if structStart < 0 || stepStart < 0 {
 		t.Fatal("automata storage or step function missing")
 	}
-	if strings.Contains(shape[structStart:stepStart], "transient") || !strings.Contains(shape[stepStart:], "int transient") {
+	if strings.Contains(shape[structStart:stepStart], "transient") || !strings.Contains(shape[stepStart:], "int32_t transient") {
 		t.Fatalf("transient local was lifted into persistent storage:\n%s", shape)
 	}
 	transientOwned := string(automataStateFixture(t, "valid", "machine_transient_local.concept")["machine_transient_local.generated.c"])

@@ -6,20 +6,20 @@
 #include <stdint.h>
 
 typedef struct concept_descriptor_binding {
-  int set;
-  int binding;
+  int32_t set;
+  int32_t binding;
   bool write;
 } concept_descriptor_binding;
 
-typedef struct { int data[2]; } concept_array_2_int;
+typedef struct { int32_t data[2]; } concept_array_2_int;
 
 typedef struct concept_binding_summary {
   concept_array_2_int slots;
 } concept_binding_summary;
 
-int concept_evt1_m1b_d_vulkan_classify_range(VkBuffer buffer);
+int32_t concept_evt1_m1b_d_vulkan_classify_range(VkBuffer buffer);
 
-int concept_evt1_m1b_d_vulkan_pipeline_stride(VkBuffer buffer);
+int32_t concept_evt1_m1b_d_vulkan_pipeline_stride(VkBuffer buffer);
 
 bool concept_evt1_m1b_d_vulkan_pool_ready(VkCommandPool pool, bool ready);
 

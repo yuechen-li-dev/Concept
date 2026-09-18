@@ -8,7 +8,17 @@ static void concept_abort_invalid_tag(const char* enum_name) {
   abort();
 }
 
-static concept_buffer_range concept_buffer_range_make(VkBuffer buffer, int offset, int size) {
+static void concept_panic(const char* reason, int line, int column) {
+  fprintf(stderr, "Concept panic at %d:%d: %s\n", line, column, reason);
+  abort();
+}
+
+int32_t concept_rt_evt1_m1b_a_vulkan_i32_add(int32_t left, int32_t right, int line, int column) {
+  int64_t result = (int64_t)left + (int64_t)right;
+  if (result < INT32_MIN || result > INT32_MAX) { concept_panic("int32 addition overflow", line, column); }
+  return (int32_t)result;
+}
+static concept_buffer_range concept_buffer_range_make(VkBuffer buffer, int32_t offset, int32_t size) {
   concept_buffer_range out;
   out.buffer = buffer;
   out.offset = offset;
@@ -30,17 +40,17 @@ static concept_resource_event concept_resource_event_make_range(concept_buffer_r
   return out;
 }
 
-static concept_resource_event concept_resource_event_make_failed(int code) {
+static concept_resource_event concept_resource_event_make_failed(int32_t code) {
   concept_resource_event out;
   out.tag = CONCEPT_RESOURCE_EVENT_FAILED;
   out.payload.failed.code = code;
   return out;
 }
 
-concept_buffer_range concept_evt1_m1b_a_vulkan_make_range(VkBuffer buffer, int offset, int size) {
+concept_buffer_range concept_evt1_m1b_a_vulkan_make_range(VkBuffer buffer, int32_t offset, int32_t size) {
   VkBuffer cv_init_1_01 = buffer;
-  int cv_init_2_02 = offset;
-  int cv_init_3_03 = size;
+  int32_t cv_init_2_02 = offset;
+  int32_t cv_init_3_03 = size;
   concept_buffer_range range;
   range.buffer = cv_init_1_01;
   range.offset = cv_init_2_02;
@@ -62,24 +72,24 @@ bool concept_evt1_m1b_a_vulkan_build_and_validate(VkCommandPool pool) {
   return concept_evt1_m1b_a_vulkan_is_valid(&state);
 }
 
-int concept_evt1_m1b_a_vulkan_describe_event(concept_resource_event event) {
+int32_t concept_evt1_m1b_a_vulkan_describe_event(concept_resource_event event) {
   concept_resource_event cv_match_subject_01 = event;
-  int cv_match_result_02;
+  int32_t cv_match_result_02;
   switch (cv_match_subject_01.tag) {
   case CONCEPT_RESOURCE_EVENT_IDLE:
     {
-      cv_match_result_02 = 0;
+      cv_match_result_02 = INT32_C(0);
       break;
     }
   case CONCEPT_RESOURCE_EVENT_RANGE:
     {
       concept_buffer_range range = cv_match_subject_01.payload.range.range;
-      cv_match_result_02 = (range.offset + range.size);
+      cv_match_result_02 = concept_rt_evt1_m1b_a_vulkan_i32_add(range.offset, range.size, 67, 53);
       break;
     }
   case CONCEPT_RESOURCE_EVENT_FAILED:
     {
-      int code = cv_match_subject_01.payload.failed.code;
+      int32_t code = cv_match_subject_01.payload.failed.code;
       cv_match_result_02 = code;
       break;
     }
@@ -89,10 +99,10 @@ int concept_evt1_m1b_a_vulkan_describe_event(concept_resource_event event) {
   return cv_match_result_02;
 }
 
-int concept_evt1_m1b_a_vulkan_classify_range(VkBuffer buffer) {
+int32_t concept_evt1_m1b_a_vulkan_classify_range(VkBuffer buffer) {
   VkBuffer cv_init_1_01 = buffer;
-  int cv_init_2_02 = 2;
-  int cv_init_3_03 = 3;
+  int32_t cv_init_2_02 = INT32_C(2);
+  int32_t cv_init_3_03 = INT32_C(3);
   concept_buffer_range range;
   range.buffer = cv_init_1_01;
   range.offset = cv_init_2_02;

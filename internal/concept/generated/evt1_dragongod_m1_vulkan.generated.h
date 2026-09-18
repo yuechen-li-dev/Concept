@@ -38,15 +38,15 @@ typedef struct concept_automata_dispatch_outcome {
   } payload;
 } concept_automata_dispatch_outcome;
 
-int concept_evt1_dragongod_m1_vulkan_outcome_code(concept_automata_dispatch_outcome outcome);
+int32_t concept_evt1_dragongod_m1_vulkan_outcome_code(concept_automata_dispatch_outcome outcome);
 
 concept_automata_dispatch_outcome concept_evt1_dragongod_m1_vulkan_buffer_cleanup_finishes(VkBuffer buffer);
 
-int concept_evt1_dragongod_m1_vulkan_buffer_cleanup_trace(VkBuffer buffer);
+int32_t concept_evt1_dragongod_m1_vulkan_buffer_cleanup_trace(VkBuffer buffer);
 
 concept_automata_dispatch_outcome concept_evt1_dragongod_m1_vulkan_buffer_lifecycle_already_finished_outcome(VkCommandPool pool);
 
-int concept_evt1_dragongod_m1_vulkan_vulkan_dispatch_audit(VkBuffer buffer, VkCommandPool pool);
+int32_t concept_evt1_dragongod_m1_vulkan_vulkan_dispatch_audit(VkBuffer buffer, VkCommandPool pool);
 
 
 #endif

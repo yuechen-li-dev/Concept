@@ -2,6 +2,12 @@
 
 Status: EVT1 R7a library/package substrate
 
+## C symbol identity
+
+Generated C function symbols derive from the complete declared module path and declaration identity, including overload signature identity where required. A filesystem path locates source but does not define program identity. Case-distinct declaration identifiers receive deterministic disambiguation and cannot silently collapse to one C symbol.
+
+Generation reports `CV4647` before invoking a C compiler if two declarations would emit the same symbol.
+
 ## Syntax and authority
 
 ```concept

@@ -1082,7 +1082,7 @@ func (f *evt1FunctionLowerer) renderTensorScalar(expr Expr, loops map[string]str
 		}
 		return e.Name
 	case *IntLiteral:
-		return fmt.Sprint(e.Value)
+		return e.Source()
 	case *FloatLiteral:
 		literal := fmt.Sprintf("%g", e.Value)
 		if !strings.ContainsAny(literal, ".eE") {

@@ -8,7 +8,7 @@ static void concept_abort_invalid_tag(const char* enum_name) {
   abort();
 }
 
-static concept_buffer_range concept_buffer_range_make(int bufferId, int offset, int size) {
+static concept_buffer_range concept_buffer_range_make(int32_t bufferId, int32_t offset, int32_t size) {
   concept_buffer_range out;
   out.bufferId = bufferId;
   out.offset = offset;
@@ -16,14 +16,14 @@ static concept_buffer_range concept_buffer_range_make(int bufferId, int offset, 
   return out;
 }
 
-static concept_allocation concept_allocation_make(concept_buffer_range range, int generation) {
+static concept_allocation concept_allocation_make(concept_buffer_range range, int32_t generation) {
   concept_allocation out;
   out.range = range;
   out.generation = generation;
   return out;
 }
 
-static concept_observed_values concept_observed_values_make(int first, int second, int third) {
+static concept_observed_values concept_observed_values_make(int32_t first, int32_t second, int32_t third) {
   concept_observed_values out;
   out.first = first;
   out.second = second;
@@ -31,7 +31,7 @@ static concept_observed_values concept_observed_values_make(int first, int secon
   return out;
 }
 
-static concept_copy_result concept_copy_result_make(int firstOffset, int secondOffset) {
+static concept_copy_result concept_copy_result_make(int32_t firstOffset, int32_t secondOffset) {
   concept_copy_result out;
   out.firstOffset = firstOffset;
   out.secondOffset = secondOffset;
@@ -52,17 +52,17 @@ static concept_outcome concept_outcome_make_ready(concept_allocation allocation)
   return out;
 }
 
-static concept_outcome concept_outcome_make_failed(int code) {
+static concept_outcome concept_outcome_make_failed(int32_t code) {
   concept_outcome out;
   out.tag = CONCEPT_OUTCOME_FAILED;
   out.payload.failed.code = code;
   return out;
 }
 
-concept_buffer_range concept_evt1_m1b_a_language_make_range(int bufferId, int offset, int size) {
-  int cv_init_1_01 = bufferId;
-  int cv_init_2_02 = offset;
-  int cv_init_3_03 = size;
+concept_buffer_range concept_evt1_m1b_a_language_make_range(int32_t bufferId, int32_t offset, int32_t size) {
+  int32_t cv_init_1_01 = bufferId;
+  int32_t cv_init_2_02 = offset;
+  int32_t cv_init_3_03 = size;
   concept_buffer_range range;
   range.bufferId = cv_init_1_01;
   range.offset = cv_init_2_02;
@@ -70,9 +70,9 @@ concept_buffer_range concept_evt1_m1b_a_language_make_range(int bufferId, int of
   return range;
 }
 
-concept_allocation concept_evt1_m1b_a_language_make_allocation(concept_buffer_range range, int generation) {
+concept_allocation concept_evt1_m1b_a_language_make_allocation(concept_buffer_range range, int32_t generation) {
   concept_buffer_range cv_init_1_01 = range;
-  int cv_init_2_02 = generation;
+  int32_t cv_init_2_02 = generation;
   concept_allocation allocation;
   allocation.range = cv_init_1_01;
   allocation.generation = cv_init_2_02;
@@ -80,16 +80,16 @@ concept_allocation concept_evt1_m1b_a_language_make_allocation(concept_buffer_ra
 }
 
 concept_observed_values concept_evt1_m1b_a_language_observe_construction() {
-  int cv_init_1_01 = concept_evt1_m1b_a_language_next_value();
-  int cv_init_2_02 = concept_evt1_m1b_a_language_next_value();
-  int cv_init_3_03 = concept_evt1_m1b_a_language_next_value();
+  int32_t cv_init_1_01 = concept_evt1_m1b_a_language_next_value();
+  int32_t cv_init_2_02 = concept_evt1_m1b_a_language_next_value();
+  int32_t cv_init_3_03 = concept_evt1_m1b_a_language_next_value();
   concept_buffer_range range;
   range.bufferId = cv_init_1_01;
   range.offset = cv_init_2_02;
   range.size = cv_init_3_03;
-  int cv_init_1_04 = range.bufferId;
-  int cv_init_2_05 = range.offset;
-  int cv_init_3_06 = range.size;
+  int32_t cv_init_1_04 = range.bufferId;
+  int32_t cv_init_2_05 = range.offset;
+  int32_t cv_init_3_06 = range.size;
   concept_observed_values observed;
   observed.first = cv_init_1_04;
   observed.second = cv_init_2_05;
@@ -98,45 +98,45 @@ concept_observed_values concept_evt1_m1b_a_language_observe_construction() {
 }
 
 concept_copy_result concept_evt1_m1b_a_language_copy_and_mutate() {
-  int cv_init_1_01 = 7;
-  int cv_init_2_02 = 1;
-  int cv_init_3_03 = 3;
+  int32_t cv_init_1_01 = INT32_C(7);
+  int32_t cv_init_2_02 = INT32_C(1);
+  int32_t cv_init_3_03 = INT32_C(3);
   concept_buffer_range first;
   first.bufferId = cv_init_1_01;
   first.offset = cv_init_2_02;
   first.size = cv_init_3_03;
   concept_buffer_range second = first;
-  second.offset = 9;
-  int cv_init_1_04 = first.offset;
-  int cv_init_2_05 = second.offset;
+  second.offset = INT32_C(9);
+  int32_t cv_init_1_04 = first.offset;
+  int32_t cv_init_2_05 = second.offset;
   concept_copy_result result;
   result.firstOffset = cv_init_1_04;
   result.secondOffset = cv_init_2_05;
   return result;
 }
 
-int concept_evt1_m1b_a_language_classify_outcome(concept_outcome outcome) {
+int32_t concept_evt1_m1b_a_language_classify_outcome(concept_outcome outcome) {
   concept_outcome cv_match_subject_01 = outcome;
-  int cv_match_result_02;
+  int32_t cv_match_result_02;
   switch (cv_match_subject_01.tag) {
   case CONCEPT_OUTCOME_EMPTY:
     {
-      cv_match_result_02 = 0;
+      cv_match_result_02 = INT32_C(0);
       break;
     }
   case CONCEPT_OUTCOME_READY:
     {
       concept_allocation allocation = cv_match_subject_01.payload.ready.allocation;
-      int cv_arg_03 = allocation.range.offset;
-      int cv_arg_04 = allocation.range.size;
-      int cv_arg_05 = concept_evt1_m1b_a_language_add(cv_arg_03, cv_arg_04);
-      int cv_arg_06 = allocation.generation;
+      int32_t cv_arg_03 = allocation.range.offset;
+      int32_t cv_arg_04 = allocation.range.size;
+      int32_t cv_arg_05 = concept_evt1_m1b_a_language_add(cv_arg_03, cv_arg_04);
+      int32_t cv_arg_06 = allocation.generation;
       cv_match_result_02 = concept_evt1_m1b_a_language_add(cv_arg_05, cv_arg_06);
       break;
     }
   case CONCEPT_OUTCOME_FAILED:
     {
-      int code = cv_match_subject_01.payload.failed.code;
+      int32_t code = cv_match_subject_01.payload.failed.code;
       cv_match_result_02 = code;
       break;
     }
@@ -146,16 +146,16 @@ int concept_evt1_m1b_a_language_classify_outcome(concept_outcome outcome) {
   return cv_match_result_02;
 }
 
-int concept_evt1_m1b_a_language_match_allocation() {
-  int cv_init_1_01 = 4;
-  int cv_init_2_02 = 5;
-  int cv_init_3_03 = 6;
+int32_t concept_evt1_m1b_a_language_match_allocation() {
+  int32_t cv_init_1_01 = INT32_C(4);
+  int32_t cv_init_2_02 = INT32_C(5);
+  int32_t cv_init_3_03 = INT32_C(6);
   concept_buffer_range range;
   range.bufferId = cv_init_1_01;
   range.offset = cv_init_2_02;
   range.size = cv_init_3_03;
   concept_buffer_range cv_init_1_04 = range;
-  int cv_init_2_05 = 7;
+  int32_t cv_init_2_05 = INT32_C(7);
   concept_allocation allocation;
   allocation.range = cv_init_1_04;
   allocation.generation = cv_init_2_05;
@@ -170,7 +170,7 @@ void concept_evt1_m1b_a_language_initialize_pool(concept_command_pool_state* sta
 }
 
 bool concept_evt1_m1b_a_language_use_immovable() {
-  int cv_init_1_01 = 11;
+  int32_t cv_init_1_01 = INT32_C(11);
   bool cv_init_2_02 = false;
   concept_command_pool_state state;
   state.poolId = cv_init_1_01;

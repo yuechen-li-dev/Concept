@@ -506,7 +506,7 @@ func (l *lowering) interfaceWitnessDefinitions() string {
 			if req.ReturnType.Name != "void" {
 				b.WriteString("return ")
 			}
-			b.WriteString(evt1FunctionSymbolForDecl(l.outputBase, l.env, fn) + "(" + evt1WitnessSelfArgument(witness, fn, concretePtr))
+			b.WriteString(evt1FunctionSymbolForDecl(l.symbolBase, l.env, fn) + "(" + evt1WitnessSelfArgument(witness, fn, concretePtr))
 			for _, param := range req.Params[1:] {
 				b.WriteString(", " + param.Name)
 			}

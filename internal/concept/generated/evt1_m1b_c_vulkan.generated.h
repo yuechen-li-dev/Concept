@@ -6,11 +6,11 @@
 #include <stdint.h>
 
 typedef struct concept_range_config {
-  int step;
+  int32_t step;
   bool active;
 } concept_range_config;
 
-int concept_evt1_m1b_c_vulkan_classify_range(VkBuffer buffer);
+int32_t concept_evt1_m1b_c_vulkan_classify_range(VkBuffer buffer);
 
 bool concept_evt1_m1b_c_vulkan_pool_ready(VkCommandPool pool, bool ready);
 

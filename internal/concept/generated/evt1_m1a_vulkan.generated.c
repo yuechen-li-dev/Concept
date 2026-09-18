@@ -57,26 +57,26 @@ concept_pipeline_state concept_evt1_m1a_vulkan_make_failed_state(concept_vulkan_
   return concept_pipeline_state_make_failed(cv_payload_01);
 }
 
-int concept_evt1_m1a_vulkan_get_status_code(concept_pipeline_state state) {
+int32_t concept_evt1_m1a_vulkan_get_status_code(concept_pipeline_state state) {
   concept_pipeline_state cv_match_subject_01 = state;
-  int cv_match_result_02;
+  int32_t cv_match_result_02;
   switch (cv_match_subject_01.tag) {
   case CONCEPT_PIPELINE_STATE_EMPTY:
     {
-      cv_match_result_02 = 0;
+      cv_match_result_02 = INT32_C(0);
       break;
     }
   case CONCEPT_PIPELINE_STATE_LAYOUT_CREATED:
     {
       VkPipelineLayout layout = cv_match_subject_01.payload.layout_created.layout;
-      cv_match_result_02 = 1;
+      cv_match_result_02 = INT32_C(1);
       break;
     }
   case CONCEPT_PIPELINE_STATE_READY:
     {
       VkPipelineLayout layout = cv_match_subject_01.payload.ready.layout;
       VkPipeline pipeline = cv_match_subject_01.payload.ready.pipeline;
-      cv_match_result_02 = 2;
+      cv_match_result_02 = INT32_C(2);
       break;
     }
   case CONCEPT_PIPELINE_STATE_FAILED:

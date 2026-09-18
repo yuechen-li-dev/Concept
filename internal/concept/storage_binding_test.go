@@ -93,7 +93,7 @@ func TestStorageBindingMIRAndDescriptorFacts(t *testing.T) {
 	if bind == nil || bind.SourceStorageKind != StorageArray || bind.TargetStorageKind != StorageNDArray || bind.TargetRank != 2 || bind.CountCheck != "runtime_overflow_safe_equal" || bind.Provenance != "local" || !bind.NoCopy || !bind.NoAllocation || !bind.NoOwnershipTransfer {
 		t.Fatalf("missing bind MIR facts: %+v", bind)
 	}
-	if !strings.Contains(header, "int* data; size_t shape[2]") || !strings.Contains(body, ".data = (storage).data") || !strings.Contains(body, "SIZE_MAX") {
+	if !strings.Contains(header, "int32_t* data; size_t shape[2]") || !strings.Contains(body, ".data = (storage).data") || !strings.Contains(body, "SIZE_MAX") {
 		t.Fatalf("missing non-owning descriptor or checked product\nHEADER:\n%s\nBODY:\n%s", header, body)
 	}
 	for _, forbidden := range []string{"malloc", "calloc", "realloc", "free(", "stackalloc", "memcpy", "Slice", "Span", "tensor"} {

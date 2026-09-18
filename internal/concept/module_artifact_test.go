@@ -261,7 +261,7 @@ int Main() { owned Owner<Resource> owner = Owner<Resource>{Resource{7}}; return 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if count := strings.Count(moduleOutput(t, outputs, ".generated.c"), "concept_drop_drop((owner).value);"); count != 1 {
+	if count := strings.Count(moduleOutput(t, outputs, ".generated.c"), "concept_app_drop((owner).value);"); count != 1 {
 		t.Fatalf("imported generic emitted %d resource drops", count)
 	}
 	escapeSource := `module App; profile Core; import Standard.Ownership;

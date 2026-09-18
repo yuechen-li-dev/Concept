@@ -3,12 +3,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static void concept_abort_invalid_tag(const char* enum_name) {
-  fprintf(stderr, "invalid enum tag for %s\n", enum_name);
+static void concept_panic(const char* reason, int line, int column) {
+  fprintf(stderr, "Concept panic at %d:%d: %s\n", line, column, reason);
   abort();
 }
 
-static concept_buffer_range concept_buffer_range_make(int bufferId, int offset, int size) {
+int32_t concept_rt_evt1_m1b_b_language_i32_add(int32_t left, int32_t right, int line, int column) {
+  int64_t result = (int64_t)left + (int64_t)right;
+  if (result < INT32_MIN || result > INT32_MAX) { concept_panic("int32 addition overflow", line, column); }
+  return (int32_t)result;
+}
+static concept_buffer_range concept_buffer_range_make(int32_t bufferId, int32_t offset, int32_t size) {
   concept_buffer_range out;
   out.bufferId = bufferId;
   out.offset = offset;
@@ -16,7 +21,7 @@ static concept_buffer_range concept_buffer_range_make(int bufferId, int offset, 
   return out;
 }
 
-static concept_destroy_audit concept_destroy_audit_make(int first, int second, bool third) {
+static concept_destroy_audit concept_destroy_audit_make(int32_t first, int32_t second, bool third) {
   concept_destroy_audit out;
   out.first = first;
   out.second = second;
@@ -24,42 +29,42 @@ static concept_destroy_audit concept_destroy_audit_make(int first, int second, b
   return out;
 }
 
-static int concept_template_score_resource__buffer_range(const concept_buffer_range* value) {
-  return concept_evt1_m1b_b_language_measure__buffer_range(value);
+static int32_t concept_template_score_resource__buffer_range(const concept_buffer_range* value) {
+  return concept_evt1_m1b_b_language_measure__borrow_const_buffer_range(value);
 }
 
-static int concept_template_score_resource__pipeline_state(const concept_pipeline_state* value) {
-  return concept_evt1_m1b_b_language_measure__pipeline_state(value);
+static int32_t concept_template_score_resource__pipeline_state(const concept_pipeline_state* value) {
+  return concept_evt1_m1b_b_language_measure__borrow_const_pipeline_state(value);
 }
 
 static void concept_template_destroy_resource__buffer_range(concept_buffer_range* value) {
-  concept_evt1_m1b_b_language_destroy__buffer_range(value);
+  concept_evt1_m1b_b_language_destroy__borrow_buffer_range(value);
 }
 
 static void concept_template_destroy_resource__pipeline_state(concept_pipeline_state* value) {
-  concept_evt1_m1b_b_language_destroy__pipeline_state(value);
+  concept_evt1_m1b_b_language_destroy__borrow_pipeline_state(value);
 }
 
-int concept_evt1_m1b_b_language_repeated_score() {
-  int cv_init_1_01 = 7;
-  int cv_init_2_02 = 2;
-  int cv_init_3_03 = 3;
+int32_t concept_evt1_m1b_b_language_repeated_score() {
+  int32_t cv_init_1_01 = INT32_C(7);
+  int32_t cv_init_2_02 = INT32_C(2);
+  int32_t cv_init_3_03 = INT32_C(3);
   concept_buffer_range first;
   first.bufferId = cv_init_1_01;
   first.offset = cv_init_2_02;
   first.size = cv_init_3_03;
-  int cv_init_1_04 = 8;
-  int cv_init_2_05 = 4;
-  int cv_init_3_06 = 5;
+  int32_t cv_init_1_04 = INT32_C(8);
+  int32_t cv_init_2_05 = INT32_C(4);
+  int32_t cv_init_3_06 = INT32_C(5);
   concept_buffer_range second;
   second.bufferId = cv_init_1_04;
   second.offset = cv_init_2_05;
   second.size = cv_init_3_06;
-  return (concept_template_score_resource__buffer_range(&first) + concept_template_score_resource__buffer_range(&second));
+  return concept_rt_evt1_m1b_b_language_i32_add(concept_template_score_resource__buffer_range(&first), concept_template_score_resource__buffer_range(&second), 68, 46);
 }
 
-int concept_evt1_m1b_b_language_score_pipeline() {
-  int cv_init_1_01 = 11;
+int32_t concept_evt1_m1b_b_language_score_pipeline() {
+  int32_t cv_init_1_01 = INT32_C(11);
   bool cv_init_2_02 = true;
   concept_pipeline_state state;
   state.handle = cv_init_1_01;
@@ -68,14 +73,14 @@ int concept_evt1_m1b_b_language_score_pipeline() {
 }
 
 concept_destroy_audit concept_evt1_m1b_b_language_use_destroyers() {
-  int cv_init_1_01 = 9;
-  int cv_init_2_02 = 1;
-  int cv_init_3_03 = 2;
+  int32_t cv_init_1_01 = INT32_C(9);
+  int32_t cv_init_2_02 = INT32_C(1);
+  int32_t cv_init_3_03 = INT32_C(2);
   concept_buffer_range range;
   range.bufferId = cv_init_1_01;
   range.offset = cv_init_2_02;
   range.size = cv_init_3_03;
-  int cv_init_1_04 = 13;
+  int32_t cv_init_1_04 = INT32_C(13);
   bool cv_init_2_05 = true;
   concept_pipeline_state state;
   state.handle = cv_init_1_04;
@@ -83,8 +88,8 @@ concept_destroy_audit concept_evt1_m1b_b_language_use_destroyers() {
   concept_template_destroy_resource__buffer_range(&range);
   concept_template_destroy_resource__pipeline_state(&state);
   concept_template_destroy_resource__pipeline_state(&state);
-  int cv_init_1_06 = range.offset;
-  int cv_init_2_07 = state.handle;
+  int32_t cv_init_1_06 = range.offset;
+  int32_t cv_init_2_07 = state.handle;
   bool cv_init_3_08 = state.alive;
   concept_destroy_audit audit;
   audit.first = cv_init_1_06;
@@ -94,7 +99,7 @@ concept_destroy_audit concept_evt1_m1b_b_language_use_destroyers() {
 }
 
 bool concept_evt1_m1b_b_language_use_immovable() {
-  int cv_init_1_01 = 5;
+  int32_t cv_init_1_01 = INT32_C(5);
   bool cv_init_2_02 = false;
   concept_pipeline_state state;
   state.handle = cv_init_1_01;
@@ -105,12 +110,12 @@ bool concept_evt1_m1b_b_language_use_immovable() {
 }
 
 bool concept_evt1_m1b_b_language_compare_template_score() {
-  int cv_init_1_01 = 3;
-  int cv_init_2_02 = 6;
-  int cv_init_3_03 = 1;
+  int32_t cv_init_1_01 = INT32_C(3);
+  int32_t cv_init_2_02 = INT32_C(6);
+  int32_t cv_init_3_03 = INT32_C(1);
   concept_buffer_range range;
   range.bufferId = cv_init_1_01;
   range.offset = cv_init_2_02;
   range.size = cv_init_3_03;
-  return (concept_template_score_resource__buffer_range(&range) > 0);
+  return (concept_template_score_resource__buffer_range(&range) > INT32_C(0));
 }

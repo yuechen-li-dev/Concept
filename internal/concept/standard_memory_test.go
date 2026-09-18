@@ -94,7 +94,7 @@ int Main()
 	if strings.Contains(implementation, "malloc") || strings.Contains(implementation, "free(") || strings.Contains(implementation, "memcpy") {
 		t.Fatalf("fixed-buffer allocator path contains forbidden runtime machinery:\n%s", implementation)
 	}
-	runFoundationNativeHarness(t, outputs, "fixedspecimen_harness.c", "#include \"fixedspecimen.generated.h\"\nint main(void) { return concept_fixedspecimen_main() == 42 ? 0 : 1; }\n")
+	runFoundationNativeHarness(t, outputs, "fixedspecimen_harness.c", "#include \"fixedspecimen.generated.h\"\nint main(void) { return concept_fixed_specimen_main() == 42 ? 0 : 1; }\n")
 }
 
 func TestStandardMemoryPoolTypedOwnerReleasesAndReuses(t *testing.T) {
@@ -125,7 +125,7 @@ int Main()
 	if err != nil {
 		t.Fatal(err)
 	}
-	runFoundationNativeHarness(t, outputs, "poolspecimen_harness.c", "#include \"poolspecimen.generated.h\"\nint main(void) { return concept_poolspecimen_main() == 42 ? 0 : 1; }\n")
+	runFoundationNativeHarness(t, outputs, "poolspecimen_harness.c", "#include \"poolspecimen.generated.h\"\nint main(void) { return concept_pool_specimen_main() == 42 ? 0 : 1; }\n")
 }
 
 func TestStandardMemoryEffectsAndBumpCapabilitySplit(t *testing.T) {
@@ -328,7 +328,7 @@ static int releases = 0;
 void ObserveDestroy(int value) { if (value == 7 && state == 0) state = 1; destroys += 1; }
 void ObserveRelease(void) { if (state == 1) state = 2; releases += 1; }
 int main(void) {
-  int value = concept_ownershipspecimen_main();
+  int value = concept_ownership_specimen_main();
   if (!(value == 7 && state == 2 && destroys == 1 && releases == 1)) printf("value=%d state=%d destroys=%d releases=%d\n", value, state, destroys, releases);
   return value == 7 && state == 2 && destroys == 1 && releases == 1 ? 0 : 1;
 }
@@ -368,7 +368,7 @@ int Main()
 	if strings.Contains(moduleOutput(t, outputs, ".generated.c"), "memcpy") {
 		t.Fatal("moving the allocation owner relocated the immovable object")
 	}
-	runFoundationNativeHarness(t, outputs, "immovablespecimen_harness.c", "#include \"immovablespecimen.generated.h\"\nint main(void) { return concept_immovablespecimen_main() == 42 ? 0 : 1; }\n")
+	runFoundationNativeHarness(t, outputs, "immovablespecimen_harness.c", "#include \"immovablespecimen.generated.h\"\nint main(void) { return concept_immovable_specimen_main() == 42 ? 0 : 1; }\n")
 }
 
 func TestStandardMemoryHostedSourceFreesExactlyOnce(t *testing.T) {
@@ -408,7 +408,7 @@ static int frees = 0;
 uint8_t* ConceptHostAllocate(size_t size, size_t alignment) { return size <= 64 && alignment <= 16 ? bytes : 0; }
 void ConceptHostFree(uint8_t* address) { if (address == bytes) frees += 1; }
 bool ConceptHostAddressIsNull(uint8_t* address) { return address == 0; }
-int main(void) { int value = concept_hostspecimen_main(); return value == 42 && frees == 1 ? 0 : 1; }
+int main(void) { int value = concept_host_specimen_main(); return value == 42 && frees == 1 ? 0 : 1; }
 `
 	runFoundationNativeHarness(t, outputs, "hostspecimen_harness.c", harness)
 }
@@ -477,7 +477,8 @@ int Main()
 					t.Fatalf("generated firmware/tensor path contains forbidden %q", forbidden)
 				}
 			}
-			harness := "#include \"" + specimen.header + "\"\nint main(void) { return concept_" + strings.TrimSuffix(strings.ToLower(specimen.header), ".generated.h") + "_main() == " + fmt.Sprint(specimen.expected) + " ? 0 : 1; }\n"
+			symbolBase := evt1SemanticSymbolBase(module)
+			harness := "#include \"" + specimen.header + "\"\nint main(void) { return concept_" + symbolBase + "_main() == " + fmt.Sprint(specimen.expected) + " ? 0 : 1; }\n"
 			runFoundationNativeHarness(t, outputs, strings.TrimSuffix(specimen.header, ".generated.h")+"_harness.c", harness)
 		})
 	}

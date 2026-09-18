@@ -152,7 +152,7 @@ int Main()
 		t.Fatal(err)
 	}
 	generated := string(outputs["r6g_address.generated.c"])
-	for _, want := range []string{"uintptr_t start", "bind<T> extent is smaller", "bind<T> address does not satisfy", "(*cell = 7)"} {
+	for _, want := range []string{"uintptr_t start", "bind<T> extent is smaller", "bind<T> address does not satisfy", "(*cell = INT32_C(7))"} {
 		if !strings.Contains(generated, want) {
 			t.Fatalf("generated C is missing %q:\n%s", want, generated)
 		}

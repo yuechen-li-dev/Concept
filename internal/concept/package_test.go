@@ -112,7 +112,7 @@ int Main()
 	if err != nil {
 		t.Fatal(err)
 	}
-	runFoundationNativeHarness(t, outputs, "r7a_artifact_consumer_harness.c", "#include \"artifactconsumer.generated.h\"\nint main(void) { return concept_artifactconsumer_main() == 42 ? 0 : 1; }\n")
+	runFoundationNativeHarness(t, outputs, "r7a_artifact_consumer_harness.c", "#include \"artifactconsumer.generated.h\"\nint main(void) { return concept_r7a__artifact_consumer_main() == 42 ? 0 : 1; }\n")
 }
 
 func TestR7bArtifactOnlyAgenticConsumerIsBoundedStrictC11(t *testing.T) {
@@ -154,7 +154,7 @@ int Main()
 			t.Fatalf("agentic artifact consumer emitted forbidden runtime artifact %q", forbidden)
 		}
 	}
-	runFoundationNativeHarness(t, outputs, "r7b_agentic_artifact_consumer_harness.c", "#include \"agenticartifactconsumer.generated.h\"\nint main(void) { return concept_agenticartifactconsumer_main() == 8 ? 0 : 1; }\n")
+	runFoundationNativeHarness(t, outputs, "r7b_agentic_artifact_consumer_harness.c", "#include \"agenticartifactconsumer.generated.h\"\nint main(void) { return concept_r7b__agentic_artifact_consumer_main() == 8 ? 0 : 1; }\n")
 }
 
 func TestR7cArtifactOnlySchedulerConsumerIsBoundedStrictC11(t *testing.T) {
@@ -219,7 +219,7 @@ int Main()
 			t.Fatalf("scheduler artifact consumer emitted forbidden runtime artifact %q", forbidden)
 		}
 	}
-	runFoundationNativeHarness(t, outputs, "r7c_scheduler_artifact_consumer_harness.c", "#include \"schedulerartifactconsumer.generated.h\"\nint main(void) { return concept_schedulerartifactconsumer_main() == 8 ? 0 : 1; }\n")
+	runFoundationNativeHarness(t, outputs, "r7c_scheduler_artifact_consumer_harness.c", "#include \"schedulerartifactconsumer.generated.h\"\nint main(void) { return concept_r7c__scheduler_artifact_consumer_main() == 8 ? 0 : 1; }\n")
 }
 
 func TestR7aPackageErrorsRemainTyped(t *testing.T) {

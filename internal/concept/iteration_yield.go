@@ -136,7 +136,7 @@ func (f *evt1FunctionLowerer) lowerForeachStmt(stmt ForeachStmt, indent int) str
 		getArg = "&" + sourceName
 	}
 	iteratorName := f.nextTemp("foreach_iterator")
-	b += ind(indent+1) + fmt.Sprintf("%s %s = %s(%s);\n", evt1CType(stmt.IteratorType), iteratorName, evt1FunctionSymbolForDecl(f.l.outputBase, f.l.env, get), getArg)
+	b += ind(indent+1) + fmt.Sprintf("%s %s = %s(%s);\n", evt1CType(stmt.IteratorType), iteratorName, evt1FunctionSymbolForDecl(f.l.symbolBase, f.l.env, get), getArg)
 	f.registerOwner(iteratorName, stmt.IteratorType)
 	moveArg := iteratorName
 	if move.Params[0].Type.isBorrowLike() {
@@ -146,10 +146,10 @@ func (f *evt1FunctionLowerer) lowerForeachStmt(stmt ForeachStmt, indent int) str
 	if current.Params[0].Type.isBorrowLike() {
 		currentArg = "&" + iteratorName
 	}
-	b += ind(indent+1) + fmt.Sprintf("while (%s(%s)) {\n", evt1FunctionSymbolForDecl(f.l.outputBase, f.l.env, move), moveArg)
+	b += ind(indent+1) + fmt.Sprintf("while (%s(%s)) {\n", evt1FunctionSymbolForDecl(f.l.symbolBase, f.l.env, move), moveArg)
 	f.pushScope()
 	itemName := f.bindName(stmt.ItemName, stmt.ItemType)
-	b += ind(indent+2) + fmt.Sprintf("%s %s = %s(%s);\n", evt1CType(stmt.ItemType), itemName, evt1FunctionSymbolForDecl(f.l.outputBase, f.l.env, current), currentArg)
+	b += ind(indent+2) + fmt.Sprintf("%s %s = %s(%s);\n", evt1CType(stmt.ItemType), itemName, evt1FunctionSymbolForDecl(f.l.symbolBase, f.l.env, current), currentArg)
 	b += f.lowerBlock(stmt.Body, indent+2)
 	b += f.lowerCurrentScopeDrops(indent + 2)
 	f.popScope()

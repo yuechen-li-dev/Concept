@@ -56,7 +56,7 @@ func TestAtomicOperationsReachMIRPlannerAndStrictC11(t *testing.T) {
 	if !strings.Contains(string(planBytes), `"category": "SynchronizationPlan"`) || !strings.Contains(string(planBytes), `"strategy": "RetainC11Atomic"`) {
 		t.Fatalf("Planner omitted conservative atomic decision:\n%s", planBytes)
 	}
-	runFoundationNativeHarness(t, outputs, "atomic_harness.c", "#include \"atomic.generated.h\"\nint main(void) { concept_atomic_int value = {.value=1}; concept_atomic_store_atomic__atomic_int_int_memory_order(&value, 4, (concept_memory_order){.tag=2}); return concept_atomic_load_atomic__atomic_int_memory_order(&value, (concept_memory_order){.tag=1}) == 4 ? 0 : 1; }\n")
+	runFoundationNativeHarness(t, outputs, "atomic_harness.c", "#include \"atomic.generated.h\"\nint main(void) { concept_atomic_int value = {.value=1}; concept_standard__synchronization__atomic_store_atomic__ref_atomic_int_int_memory_order(&value, 4, (concept_memory_order){.tag=2}); return concept_standard__synchronization__atomic_load_atomic__ref_const_atomic_int_memory_order(&value, (concept_memory_order){.tag=1}) == 4 ? 0 : 1; }\n")
 }
 
 func TestAtomicSemanticArtifactIsConsumableWithoutSource(t *testing.T) {

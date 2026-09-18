@@ -5,17 +5,17 @@
 #include <stdint.h>
 
 typedef struct concept_limits {
-  int bound;
+  int32_t bound;
   bool fast;
 } concept_limits;
 
-int concept_evt1_m1b_c_language_selected_arm(bool chooseThen, int thenValue, int elseValue);
+int32_t concept_evt1_m1b_c_language_selected_arm(bool chooseThen, int32_t thenValue, int32_t elseValue);
 
-int concept_evt1_m1b_c_language_count_up(int input);
+int32_t concept_evt1_m1b_c_language_count_up(int32_t input);
 
-int concept_evt1_m1b_c_language_zero_bound(int input);
+int32_t concept_evt1_m1b_c_language_zero_bound(int32_t input);
 
-int concept_evt1_m1b_c_language_default_bound();
+int32_t concept_evt1_m1b_c_language_default_bound();
 
 
 #endif

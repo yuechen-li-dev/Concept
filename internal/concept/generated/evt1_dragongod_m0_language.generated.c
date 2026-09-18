@@ -3,11 +3,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static void concept_abort_invalid_tag(const char* enum_name) {
-  fprintf(stderr, "invalid enum tag for %s\n", enum_name);
-  abort();
-}
-
 static concept_lifecycle_signal concept_lifecycle_signal_make_create() {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_CREATE;
@@ -64,12 +59,12 @@ static concept_lifecycle_signal concept_lifecycle_signal_make_tick() {
   return out;
 }
 
-int concept_evt1_dragongod_m0_language_root_retry_budget() {
-  return 2;
+int32_t concept_evt1_dragongod_m0_language_root_retry_budget() {
+  return INT32_C(2);
 }
 
-int concept_evt1_dragongod_m0_language_derived_stack_depth() {
-  return 3;
+int32_t concept_evt1_dragongod_m0_language_derived_stack_depth() {
+  return INT32_C(3);
 }
 
 bool concept_evt1_dragongod_m0_language_finish_is_explicit() {

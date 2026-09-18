@@ -907,8 +907,14 @@ func (*NameExpr) evt1Expr()        {}
 func (e *NameExpr) exprSpan() Span { return e.Span }
 
 type IntLiteral struct {
-	Value int  `json:"value"`
-	Span  Span `json:"span"`
+	// Magnitude is the exact non-negative source magnitude. Negative is kept
+	// separately so target typing can admit INT32_MIN without first overflowing
+	// a signed parser representation.
+	Magnitude    uint64 `json:"magnitude"`
+	Negative     bool   `json:"negative,omitempty"`
+	Lexeme       string `json:"lexeme,omitempty"`
+	ResolvedType Type   `json:"resolved_type,omitempty"`
+	Span         Span   `json:"span"`
 }
 
 func (*IntLiteral) evt1Expr()        {}

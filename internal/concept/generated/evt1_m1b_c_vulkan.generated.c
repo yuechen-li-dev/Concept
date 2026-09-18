@@ -3,47 +3,52 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static void concept_abort_invalid_tag(const char* enum_name) {
-  fprintf(stderr, "invalid enum tag for %s\n", enum_name);
+static void concept_panic(const char* reason, int line, int column) {
+  fprintf(stderr, "Concept panic at %d:%d: %s\n", line, column, reason);
   abort();
 }
 
-static concept_range_config concept_range_config_make(int step, bool active) {
+int32_t concept_rt_evt1_m1b_c_vulkan_i32_add(int32_t left, int32_t right, int line, int column) {
+  int64_t result = (int64_t)left + (int64_t)right;
+  if (result < INT32_MIN || result > INT32_MAX) { concept_panic("int32 addition overflow", line, column); }
+  return (int32_t)result;
+}
+static concept_range_config concept_range_config_make(int32_t step, bool active) {
   concept_range_config out;
   out.step = step;
   out.active = active;
   return out;
 }
 
-int concept_evt1_m1b_c_vulkan_classify_range(VkBuffer buffer) {
-  int total = 0;
-  int cursor = 0;
+int32_t concept_evt1_m1b_c_vulkan_classify_range(VkBuffer buffer) {
+  int32_t total = INT32_C(0);
+  int32_t cursor = INT32_C(0);
   int cv_limit_01 = 3;
   int cv_iter_02 = 0;
   while (cv_iter_02 < cv_limit_01) {
     if (!((cursor < 3))) { break; }
     cv_iter_02 = cv_iter_02 + 1;
-    total = (total + 1);
-    cursor = (cursor + 1);
+    total = concept_rt_evt1_m1b_c_vulkan_i32_add(total, INT32_C(1), 31, 23);
+    cursor = concept_rt_evt1_m1b_c_vulkan_i32_add(cursor, INT32_C(1), 32, 25);
   }
-  int cv_if_result_03;
+  int32_t cv_if_result_03;
   if (true) {
     cv_if_result_03 = total;
   } else {
-    cv_if_result_03 = 0;
+    cv_if_result_03 = INT32_C(0);
   }
   return cv_if_result_03;
 }
 
 bool concept_evt1_m1b_c_vulkan_pool_ready(VkCommandPool pool, bool ready) {
-  int count = 0;
+  int32_t count = INT32_C(0);
   while (1) {
-    if (!((count < 2))) { break; }
-    count = (count + 1);
+    if (!((count < INT32_C(2)))) { break; }
+    count = concept_rt_evt1_m1b_c_vulkan_i32_add(count, INT32_C(1), 42, 23);
   }
   bool cv_if_result_01;
   if (ready) {
-    cv_if_result_01 = (count > 0);
+    cv_if_result_01 = (count > INT32_C(0));
   } else {
     cv_if_result_01 = false;
   }

@@ -73,6 +73,21 @@ fn TestDragonGodTarget() -> Make.CommandTarget {
     }
 }
 
+[Pure]
+[NoWhile]
+fn BurnInTarget() -> Make.CommandTarget {
+    return Make.CommandTarget {
+        Name: "BurnIn"
+        Inputs: ["internal/concept/burn_in_test.go"]
+        Outputs: []
+        Deps: []
+        Program: "go"
+        Args: ["test", "./internal/concept", "-run", "R7d3", "-count=1"]
+        Cwd: ""
+        Env: []
+    }
+}
+
 [MakePlan]
 [Pure]
 [NoWhile]
@@ -80,7 +95,7 @@ fn Plan() -> Make.Plan {
     return Make.Plan {
         Default: "Test"
         Config: BuildConfig()
-        CommandTargets: [BuildStandardTarget(), TestStandardTarget(), BuildDragonGodTarget(), TestDragonGodTarget()]
+        CommandTargets: [BuildStandardTarget(), TestStandardTarget(), BuildDragonGodTarget(), TestDragonGodTarget(), BurnInTarget()]
         FunctionTargets: []
         FlowTargets: []
         PhonyTargets: [

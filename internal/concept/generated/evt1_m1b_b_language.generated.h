@@ -5,39 +5,39 @@
 #include <stdint.h>
 
 typedef struct concept_buffer_range {
-  int bufferId;
-  int offset;
-  int size;
+  int32_t bufferId;
+  int32_t offset;
+  int32_t size;
 } concept_buffer_range;
 
 typedef struct concept_pipeline_state {
-  int handle;
+  int32_t handle;
   bool alive;
 } concept_pipeline_state;
 
 typedef struct concept_destroy_audit {
-  int first;
-  int second;
+  int32_t first;
+  int32_t second;
   bool third;
 } concept_destroy_audit;
 
-int concept_evt1_m1b_b_language_measure__buffer_range(const concept_buffer_range* value);
+int32_t concept_evt1_m1b_b_language_measure__borrow_const_buffer_range(const concept_buffer_range* value);
 
-int concept_evt1_m1b_b_language_measure__pipeline_state(const concept_pipeline_state* value);
+int32_t concept_evt1_m1b_b_language_measure__borrow_const_pipeline_state(const concept_pipeline_state* value);
 
-void concept_evt1_m1b_b_language_destroy__buffer_range(concept_buffer_range* value);
+void concept_evt1_m1b_b_language_destroy__borrow_buffer_range(concept_buffer_range* value);
 
-void concept_evt1_m1b_b_language_destroy__pipeline_state(concept_pipeline_state* value);
+void concept_evt1_m1b_b_language_destroy__borrow_pipeline_state(concept_pipeline_state* value);
 
-int concept_evt1_m1b_b_language_next_destroy_slot();
+int32_t concept_evt1_m1b_b_language_next_destroy_slot();
 
-void concept_evt1_m1b_b_language_record_destroy(int slot, int code);
+void concept_evt1_m1b_b_language_record_destroy(int32_t slot, int32_t code);
 
 void concept_evt1_m1b_b_language_set_alive(concept_pipeline_state* value);
 
-int concept_evt1_m1b_b_language_repeated_score();
+int32_t concept_evt1_m1b_b_language_repeated_score();
 
-int concept_evt1_m1b_b_language_score_pipeline();
+int32_t concept_evt1_m1b_b_language_score_pipeline();
 
 concept_destroy_audit concept_evt1_m1b_b_language_use_destroyers();
 

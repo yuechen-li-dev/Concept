@@ -22,9 +22,9 @@ typedef struct concept_resource_signal {
   } payload;
 } concept_resource_signal;
 
-int concept_evt1_dragongod_m0_vulkan_classify_range(VkBuffer buffer);
+int32_t concept_evt1_dragongod_m0_vulkan_classify_range(VkBuffer buffer);
 
-int concept_evt1_dragongod_m0_vulkan_derived_machine_depth(VkCommandPool pool);
+int32_t concept_evt1_dragongod_m0_vulkan_derived_machine_depth(VkCommandPool pool);
 
 bool concept_evt1_dragongod_m0_vulkan_pool_ready(VkCommandPool pool, bool ready);
 

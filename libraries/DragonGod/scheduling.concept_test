@@ -302,9 +302,11 @@ void OneHundredSingleWorkerRunsHaveIdenticalSemanticTrace()
         while (index < scheduler.trace.Count()) bounded(64)
         {
             TraceEntry entry = scheduler.trace.At(index)!;
-            hash = hash * 31 + TraceKindCode(entry.kind);
-            hash = hash * 31 + entry.from.value;
-            hash = hash * 31 + entry.reason.code;
+            // Concept int arithmetic is checked. Bound each mixing step so
+            // this determinism checksum cannot depend on C signed overflow.
+            hash = (hash & 65535) * 31 + TraceKindCode(entry.kind);
+            hash = (hash & 65535) * 31 + entry.from.value;
+            hash = (hash & 65535) * 31 + entry.reason.code;
             index = index + 1;
         }
         if (run == 0)

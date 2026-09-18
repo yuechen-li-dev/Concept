@@ -444,7 +444,10 @@ func evt1DeriveExprFactSummary(env *semanticEnv, expr Expr, params map[string]in
 		}
 		return locals[e.Name]
 	case *IntLiteral:
-		return SemanticValueFactSummary{Scalar: &SemanticSummaryExpr{Kind: "Constant", Constant: e.Value}}
+		if value, ok := e.boundedInt(); ok {
+			return SemanticValueFactSummary{Scalar: &SemanticSummaryExpr{Kind: "Constant", Constant: value}}
+		}
+		return SemanticValueFactSummary{}
 	case *ParenExpr:
 		return evt1DeriveExprFactSummary(env, e.Value, params, locals, derive)
 	case *MoveExpr:
@@ -578,7 +581,10 @@ func evt1DeriveExprFactSummary(env *semanticEnv, expr Expr, params map[string]in
 func evt1DeriveScalarSummary(expr Expr, params map[string]int, locals map[string]SemanticValueFactSummary) *SemanticSummaryExpr {
 	switch e := expr.(type) {
 	case *IntLiteral:
-		return &SemanticSummaryExpr{Kind: "Constant", Constant: e.Value}
+		if value, ok := e.boundedInt(); ok {
+			return &SemanticSummaryExpr{Kind: "Constant", Constant: value}
+		}
+		return nil
 	case *NameExpr:
 		if index, ok := params[e.Name]; ok {
 			return semanticSummaryParameter(index)
@@ -706,7 +712,11 @@ func evt1NameIs(expr Expr, name string) bool {
 
 func evt1IntegerIs(expr Expr, value int) bool {
 	literal, ok := expr.(*IntLiteral)
-	return ok && literal.Value == value
+	if !ok {
+		return false
+	}
+	actual, exact := literal.boundedInt()
+	return exact && actual == value
 }
 
 type semanticSummaryValue struct {
@@ -865,7 +875,10 @@ func evt1SemanticFactsForExpr(env *semanticEnv, scope *evt1Scope, expr Expr, t T
 			return transportSemanticValueFacts(binding.valueFacts, FactTransformCopy, e.Name, "local binding", "ordinary value copy preserves applicable facts")
 		}
 	case *IntLiteral:
-		return &SemanticValueFacts{SubjectKind: SubjectValue, Type: t.String(), Scalar: SemanticKnownInt{Known: true, Value: e.Value}}
+		if value, ok := e.boundedInt(); ok {
+			return &SemanticValueFacts{SubjectKind: SubjectValue, Type: t.String(), Scalar: SemanticKnownInt{Known: true, Value: value}}
+		}
+		return nil
 	case *ParenExpr:
 		return evt1SemanticFactsForExpr(env, scope, e.Value, t)
 	case *MoveExpr:
@@ -1135,7 +1148,7 @@ func evt1SemanticArgumentFacts(env *semanticEnv, scope *evt1Scope, args []Expr) 
 func evt1KnownTransportInt(scope *evt1Scope, expr Expr) (int, bool) {
 	switch e := expr.(type) {
 	case *IntLiteral:
-		return e.Value, true
+		return e.boundedInt()
 	case *NameExpr:
 		if binding, ok := scope.lookup(e.Name); ok && binding.valueFacts != nil && binding.valueFacts.Scalar.Known {
 			return binding.valueFacts.Scalar.Value, true

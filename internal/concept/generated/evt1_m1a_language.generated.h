@@ -14,7 +14,7 @@ typedef struct concept_inner_status {
   union {
     struct { unsigned char unused; } none;
     struct {
-      int value;
+      int32_t value;
     } counted;
   } payload;
 } concept_inner_status;
@@ -31,11 +31,11 @@ typedef struct concept_demo_state {
   union {
     struct { unsigned char unused; } none;
     struct {
-      int value;
+      int32_t value;
     } counted;
     struct {
-      int first;
-      int second;
+      int32_t first;
+      int32_t second;
     } pair;
     struct {
       concept_inner_status inner;
@@ -43,31 +43,31 @@ typedef struct concept_demo_state {
   } payload;
 } concept_demo_state;
 
-int concept_evt1_m1a_language_add(int left, int right);
+int32_t concept_evt1_m1a_language_add(int32_t left, int32_t right);
 
 concept_demo_state concept_evt1_m1a_language_observe_state();
 
-int concept_evt1_m1a_language_observe_calls();
+int32_t concept_evt1_m1a_language_observe_calls();
 
-void concept_evt1_m1a_language_record_int(int value);
+void concept_evt1_m1a_language_record_int(int32_t value);
 
-void concept_evt1_m1a_language_record_pair(int first, int second);
+void concept_evt1_m1a_language_record_pair(int32_t first, int32_t second);
 
 concept_demo_state concept_evt1_m1a_language_make_empty();
 
 concept_inner_status concept_evt1_m1a_language_make_inner_idle();
 
-concept_inner_status concept_evt1_m1a_language_make_inner_counted(int value);
+concept_inner_status concept_evt1_m1a_language_make_inner_counted(int32_t value);
 
-concept_demo_state concept_evt1_m1a_language_make_counted(int value);
+concept_demo_state concept_evt1_m1a_language_make_counted(int32_t value);
 
-concept_demo_state concept_evt1_m1a_language_make_pair(int first, int second);
+concept_demo_state concept_evt1_m1a_language_make_pair(int32_t first, int32_t second);
 
 concept_demo_state concept_evt1_m1a_language_make_wrapped(concept_inner_status inner);
 
-int concept_evt1_m1a_language_classify(concept_demo_state state);
+int32_t concept_evt1_m1a_language_classify(concept_demo_state state);
 
-int concept_evt1_m1a_language_observe_and_classify();
+int32_t concept_evt1_m1a_language_observe_and_classify();
 
 void concept_evt1_m1a_language_visit(concept_demo_state state);
 

@@ -47,7 +47,7 @@ concept_pipeline_state concept_evt1_m1a_vulkan_make_ready_state(VkPipelineLayout
 
 concept_pipeline_state concept_evt1_m1a_vulkan_make_failed_state(concept_vulkan_error error);
 
-int concept_evt1_m1a_vulkan_get_status_code(concept_pipeline_state state);
+int32_t concept_evt1_m1a_vulkan_get_status_code(concept_pipeline_state state);
 
 void concept_evt1_m1a_vulkan_destroy_pipeline_state(concept_pipeline_state state);
 

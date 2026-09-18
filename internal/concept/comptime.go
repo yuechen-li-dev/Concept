@@ -234,7 +234,17 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 		return evt1EvalExprTyped(state, scope, e.Value, expected)
 	case *IntLiteral:
 		t, _ := evt1BuiltinType("int", e.Span)
-		return Value{Kind: ValueInt, Type: t, IntValue: e.Value}, nil
+		if expected != nil && evt1IntegralRepresentation(*expected) {
+			t = expected.valueType()
+		}
+		if err := evt1ResolveIntegerLiteral(e, t); err != nil {
+			return Value{}, err
+		}
+		value, ok := e.signed64()
+		if !ok || int64(int(value)) != value {
+			return Value{}, evt1Diagnostic("CV4644", fmt.Sprintf("integer literal %s is not representable in bounded compile-time evaluation", e.Source()), e.Span)
+		}
+		return Value{Kind: ValueInt, Type: t, IntValue: int(value)}, nil
 	case *BoolLiteral:
 		t, _ := evt1BuiltinType("bool", e.Span)
 		return Value{Kind: ValueBool, Type: t, BoolValue: e.Value}, nil

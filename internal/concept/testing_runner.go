@@ -424,7 +424,7 @@ func runOneTest(test TestDeclaration, values []any, caseIndex int, options TestR
 		return failedTestResult(result, start, "runner", err.Error(), test)
 	}
 	base := evt1OutputBase(test.sourcePath)
-	harness := evt1TestHarness(test, values, base)
+	harness := evt1TestHarness(test, values, base, evt1SemanticSymbolBase(test.module))
 	harnessPath := filepath.Join(temp, "test_harness.c")
 	if err := os.WriteFile(harnessPath, []byte(harness), 0o644); err != nil {
 		return failedTestResult(result, start, "runner", err.Error(), test)
@@ -506,16 +506,16 @@ func evt1TestCompiler(includeDir, generated, harness, executable string) (string
 	return compiler, []string{"-std=c11", "-Wall", "-Wextra", "-I", includeDir, generated, harness, "-lm", "-o", executable}, nil
 }
 
-func evt1TestHarness(test TestDeclaration, values []any, base string) string {
+func evt1TestHarness(test TestDeclaration, values []any, outputBase, symbolBase string) string {
 	args := make([]string, len(values))
 	for i, value := range values {
 		args[i], _ = evt1TestCLiteral(test.function.Params[i].Type, value)
 	}
-	call := evt1FunctionSymbol(base, test.function.Name) + "(" + strings.Join(args, ", ") + ")"
+	call := evt1FunctionSymbol(symbolBase, test.function.Name) + "(" + strings.Join(args, ", ") + ")"
 	if test.Async {
 		call = "concept_async_operation operation = " + call + ";\n  int steps = 0;\n  while (!concept_async_complete(&operation) && steps < 100000) { concept_async_step(&operation); ++steps; }\n  if (!concept_async_complete(&operation)) return 124"
 	}
-	return fmt.Sprintf("#include \"%s.generated.h\"\n\nint main(void) {\n  %s;\n  return 0;\n}\n", base, call)
+	return fmt.Sprintf("#include \"%s.generated.h\"\n\nint main(void) {\n  %s;\n  return 0;\n}\n", outputBase, call)
 }
 
 func evt1TestCLiteral(t Type, value any) (string, error) {

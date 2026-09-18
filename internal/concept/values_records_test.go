@@ -137,7 +137,7 @@ func TestValuesRecordsRecordMIRAndLowering(t *testing.T) {
 		t.Fatal("record_with operation missing from MIR")
 	}
 	cBody := string(outputs["record_with_update.generated.c"])
-	if !strings.Contains(cBody, "record_with") || !strings.Contains(cBody, ".x = 10;") {
+	if !strings.Contains(cBody, "record_with") || !strings.Contains(cBody, ".x = INT32_C(10);") {
 		t.Fatalf("fresh record update lowering missing:\n%s", cBody)
 	}
 }

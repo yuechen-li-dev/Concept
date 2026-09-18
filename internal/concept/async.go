@@ -116,8 +116,8 @@ func (l *lowering) asyncForwardDeclarations() string {
 		if !fn.Async {
 			continue
 		}
-		b.WriteString(fmt.Sprintf("static void %s(concept_async_operation*, void*);\n", evt1AsyncStepName(l.outputBase, fn.Name)))
-		b.WriteString(fmt.Sprintf("static void %s(void*", evt1AsyncInitName(l.outputBase, fn.Name)))
+		b.WriteString(fmt.Sprintf("static void %s(concept_async_operation*, void*);\n", evt1AsyncStepName(l.symbolBase, fn.Name)))
+		b.WriteString(fmt.Sprintf("static void %s(void*", evt1AsyncInitName(l.symbolBase, fn.Name)))
 		for _, p := range fn.Params {
 			b.WriteString(fmt.Sprintf(", %s %s", evt1CType(p.Type), p.Name))
 		}
@@ -130,7 +130,7 @@ func (l *lowering) asyncForwardDeclarations() string {
 }
 
 func (l *lowering) asyncFunctionSymbols(fn FunctionDecl) evt1FunctionSymbols {
-	name := evt1FunctionSymbolForDecl(l.outputBase, l.env, fn)
+	name := evt1FunctionSymbolForDecl(l.symbolBase, l.env, fn)
 	var proto strings.Builder
 	proto.WriteString("concept_async_operation " + name + "(")
 	for i, p := range fn.Params {
@@ -150,7 +150,7 @@ func (l *lowering) lowerAsyncFunction(fn FunctionDecl, symbol string) string {
 	a := evt1AnalyzeAsync(fn)
 	cfg := evt1NormalizeAsyncCFG(fn, l.env)
 	persistent := evt1AsyncPersistentMap(fn, a, cfg)
-	frameName, stepName, initName := evt1AsyncFrameName(l.outputBase, fn.Name), evt1AsyncStepName(l.outputBase, fn.Name), evt1AsyncInitName(l.outputBase, fn.Name)
+	frameName, stepName, initName := evt1AsyncFrameName(l.symbolBase, fn.Name), evt1AsyncStepName(l.symbolBase, fn.Name), evt1AsyncInitName(l.symbolBase, fn.Name)
 	names := evt1SortedPersistentNames(persistent)
 	var b strings.Builder
 	b.WriteString("typedef struct " + frameName + " {\n  unsigned int state;\n")
@@ -270,7 +270,7 @@ func (l *lowering) lowerAsyncStep(fn FunctionDecl, a evt1AsyncAnalysis, persiste
 				}
 				b.WriteString(prelude.String())
 				b.WriteString(f.lowerAllScopeDrops(2))
-				b.WriteString(fmt.Sprintf("    frame->state = %d;\n    concept_async_push(async_operation, %s);\n    %s(async_operation->frames[async_operation->depth - 1u].storage.bytes", state+1, evt1AsyncStepName(l.outputBase, child.Name), evt1AsyncInitName(l.outputBase, child.Name)))
+				b.WriteString(fmt.Sprintf("    frame->state = %d;\n    concept_async_push(async_operation, %s);\n    %s(async_operation->frames[async_operation->depth - 1u].storage.bytes", state+1, evt1AsyncStepName(l.symbolBase, child.Name), evt1AsyncInitName(l.symbolBase, child.Name)))
 				for _, arg := range args {
 					b.WriteString(", " + arg)
 				}
@@ -430,8 +430,8 @@ func (l *lowering) lowerAsyncDirectCallPush(f *evt1FunctionLowerer, await *Await
 	}
 	b.WriteString(f.lowerAllScopeDrops(indent))
 	b.WriteString(ind(indent) + fmt.Sprintf("frame->state = %d;\n", resumeState))
-	b.WriteString(ind(indent) + fmt.Sprintf("concept_async_push(async_operation, %s);\n", evt1AsyncStepName(l.outputBase, child.Name)))
-	b.WriteString(ind(indent) + fmt.Sprintf("%s(async_operation->frames[async_operation->depth - 1u].storage.bytes", evt1AsyncInitName(l.outputBase, child.Name)))
+	b.WriteString(ind(indent) + fmt.Sprintf("concept_async_push(async_operation, %s);\n", evt1AsyncStepName(l.symbolBase, child.Name)))
+	b.WriteString(ind(indent) + fmt.Sprintf("%s(async_operation->frames[async_operation->depth - 1u].storage.bytes", evt1AsyncInitName(l.symbolBase, child.Name)))
 	for _, arg := range args {
 		b.WriteString(", " + arg)
 	}
@@ -525,7 +525,7 @@ func (l *lowering) lowerAsyncForeach(f *evt1FunctionLowerer, each *ForeachStmt, 
 		}
 	}
 	b.WriteString(f.lowerAllScopeDrops(2))
-	b.WriteString(fmt.Sprintf("    frame->state = %d;\n    concept_async_push(async_operation, %s);\n    %s(async_operation->frames[async_operation->depth - 1u].storage.bytes", resumeState, evt1AsyncStepName(l.outputBase, child.Name), evt1AsyncInitName(l.outputBase, child.Name)))
+	b.WriteString(fmt.Sprintf("    frame->state = %d;\n    concept_async_push(async_operation, %s);\n    %s(async_operation->frames[async_operation->depth - 1u].storage.bytes", resumeState, evt1AsyncStepName(l.symbolBase, child.Name), evt1AsyncInitName(l.symbolBase, child.Name)))
 	for _, arg := range args {
 		b.WriteString(", " + arg)
 	}

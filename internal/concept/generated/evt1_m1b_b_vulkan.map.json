@@ -154,7 +154,7 @@
         "line": 32,
         "column": 5
       },
-      "symbol": "concept_evt1_m1b_b_vulkan_measure__buffer_range"
+      "symbol": "concept_evt1_m1b_b_vulkan_measure__borrow_const_buffer_range"
     },
     {
       "name": "Measure",
@@ -162,7 +162,7 @@
         "line": 33,
         "column": 5
       },
-      "symbol": "concept_evt1_m1b_b_vulkan_measure__pipeline_state"
+      "symbol": "concept_evt1_m1b_b_vulkan_measure__borrow_const_pipeline_state"
     },
     {
       "name": "Destroy",
@@ -170,7 +170,7 @@
         "line": 34,
         "column": 6
       },
-      "symbol": "concept_evt1_m1b_b_vulkan_destroy__buffer_range"
+      "symbol": "concept_evt1_m1b_b_vulkan_destroy__borrow_buffer_range"
     },
     {
       "name": "Destroy",
@@ -178,7 +178,7 @@
         "line": 35,
         "column": 6
       },
-      "symbol": "concept_evt1_m1b_b_vulkan_destroy__pipeline_state"
+      "symbol": "concept_evt1_m1b_b_vulkan_destroy__borrow_pipeline_state"
     },
     {
       "name": "SetAlive",

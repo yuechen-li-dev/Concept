@@ -45,7 +45,7 @@ func evt1ValidateTestAssertion(env *semanticEnv, scope *evt1Scope, call *CallExp
 		if !valueTypes[0].SameValueType(valueTypes[1]) || !valueTypes[0].SameValueType(valueTypes[2]) || !evt1TestNumericType(valueTypes[0]) {
 			return Type{}, evt1Diagnostic("TEST_ASSERT_NEAR_NUMERIC_REQUIRED", "Assert.Near requires three values of one numeric type", call.Span)
 		}
-		if literal, ok := call.Args[2].(*IntLiteral); ok && literal.Value < 0 {
+		if literal, ok := call.Args[2].(*IntLiteral); ok && literal.Negative {
 			return Type{}, evt1Diagnostic("TEST_ASSERT_NEAR_NEGATIVE_TOLERANCE", "Assert.Near tolerance must not be negative", literal.Span)
 		}
 		if literal, ok := call.Args[2].(*FloatLiteral); ok && literal.Value < 0 {

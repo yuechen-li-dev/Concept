@@ -19,9 +19,9 @@ typedef struct concept_queue_class {
 typedef struct concept_lifecycle_context {
   bool queueAvailable;
   bool failRequested;
-  int submission;
+  int32_t submission;
   concept_queue_class queue;
-  int ticket;
+  int32_t ticket;
 } concept_lifecycle_context;
 
 typedef enum concept_lifecycle_signal_tag {
@@ -59,13 +59,13 @@ bool concept_evt1_dragongod_m3_language_queue_open(const concept_lifecycle_conte
 
 bool concept_evt1_dragongod_m3_language_fail_requested(const concept_lifecycle_context* context);
 
-int concept_evt1_dragongod_m3_language_outcome_code(concept_automata_dispatch_outcome outcome);
+int32_t concept_evt1_dragongod_m3_language_outcome_code(concept_automata_dispatch_outcome outcome);
 
-int concept_evt1_dragongod_m3_language_effectful_submit_code(concept_lifecycle_context context);
+int32_t concept_evt1_dragongod_m3_language_effectful_submit_code(concept_lifecycle_context context);
 
-int concept_evt1_dragongod_m3_language_zero_emit_transition_code(concept_lifecycle_context context);
+int32_t concept_evt1_dragongod_m3_language_zero_emit_transition_code(concept_lifecycle_context context);
 
-int concept_evt1_dragongod_m3_language_contextless_compatibility_code();
+int32_t concept_evt1_dragongod_m3_language_contextless_compatibility_code();
 
 
 #endif

@@ -259,7 +259,7 @@ int Main()
 			}
 		}
 	}
-	runFoundationNativeHarness(t, outputs, "typed_owner_result_return_harness.c", "#include \"typed_owner_result_return.generated.h\"\nint main(void) { return concept_typed_owner_result_return_main() == 20 ? 0 : 1; }\n")
+	runFoundationNativeHarness(t, outputs, "typed_owner_result_return_harness.c", "#include \"typed_owner_result_return.generated.h\"\nint main(void) { return concept_app_main() == 20 ? 0 : 1; }\n")
 }
 
 func TestR6mImportedGenericOwnerInstantiationClosesDeterministically(t *testing.T) {

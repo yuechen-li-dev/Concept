@@ -7,8 +7,8 @@
 
 typedef struct concept_buffer_range {
   VkBuffer buffer;
-  int offset;
-  int size;
+  int32_t offset;
+  int32_t size;
 } concept_buffer_range;
 
 typedef struct concept_pipeline_state {
@@ -16,19 +16,19 @@ typedef struct concept_pipeline_state {
   bool alive;
 } concept_pipeline_state;
 
-int concept_evt1_m1b_b_vulkan_measure__buffer_range(const concept_buffer_range* value);
+int32_t concept_evt1_m1b_b_vulkan_measure__borrow_const_buffer_range(const concept_buffer_range* value);
 
-int concept_evt1_m1b_b_vulkan_measure__pipeline_state(const concept_pipeline_state* value);
+int32_t concept_evt1_m1b_b_vulkan_measure__borrow_const_pipeline_state(const concept_pipeline_state* value);
 
-void concept_evt1_m1b_b_vulkan_destroy__buffer_range(concept_buffer_range* value);
+void concept_evt1_m1b_b_vulkan_destroy__borrow_buffer_range(concept_buffer_range* value);
 
-void concept_evt1_m1b_b_vulkan_destroy__pipeline_state(concept_pipeline_state* value);
+void concept_evt1_m1b_b_vulkan_destroy__borrow_pipeline_state(concept_pipeline_state* value);
 
 void concept_evt1_m1b_b_vulkan_set_alive(concept_pipeline_state* value);
 
-int concept_evt1_m1b_b_vulkan_classify_range(VkBuffer buffer);
+int32_t concept_evt1_m1b_b_vulkan_classify_range(VkBuffer buffer);
 
-int concept_evt1_m1b_b_vulkan_double_range_score(VkBuffer first, VkBuffer second);
+int32_t concept_evt1_m1b_b_vulkan_double_range_score(VkBuffer first, VkBuffer second);
 
 bool concept_evt1_m1b_b_vulkan_build_and_destroy(VkCommandPool pool);
 

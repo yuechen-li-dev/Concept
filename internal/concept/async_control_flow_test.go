@@ -117,7 +117,7 @@ func TestAsyncControlFlowStructuredNativeC11(t *testing.T) {
 			if err != nil {
 				t.Fatalf("generation: %v", err)
 			}
-			harness := fmt.Sprintf("#include \"%s.generated.h\"\nint main(void) { return concept_%s_main() == 42 ? 0 : 1; }\n", name, name)
+			harness := fmt.Sprintf("#include <stdio.h>\n#include \"%s.generated.h\"\nint main(void) { int value = concept_%s_main(); if (value != 42) fprintf(stderr, \"got %%d, want 42\\n\", value); return value == 42 ? 0 : 1; }\n", name, name)
 			runFoundationNativeHarness(t, outputs, name+"_harness.c", harness)
 			if name == "async_foreach_iterator_counts" {
 				generated := string(outputs[name+".generated.c"])

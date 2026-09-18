@@ -52,7 +52,7 @@ func TestStructuralTypeSubstitutionHandlesTypeAndValueParameters(t *testing.T) {
 	if array.ArrayElem.Name != "Widget" || array.TypeArgs[0].Name != "128" {
 		t.Fatalf("mixed substitution did not close array: %#v", array)
 	}
-	if extent, ok := array.Shape[0].Expr.(*IntLiteral); !ok || extent.Value != 128 {
+	if extent, ok := array.Shape[0].Expr.(*IntLiteral); !ok || extent.Magnitude != 128 || extent.Negative {
 		t.Fatalf("array extent was not structurally substituted: %#v", array.Shape[0])
 	}
 }

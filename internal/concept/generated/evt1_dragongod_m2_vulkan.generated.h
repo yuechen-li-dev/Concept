@@ -43,11 +43,11 @@ bool concept_evt1_dragongod_m2_vulkan_queue_open(const concept_buffer_context* c
 
 bool concept_evt1_dragongod_m2_vulkan_release_requested(const concept_buffer_context* context);
 
-int concept_evt1_dragongod_m2_vulkan_outcome_code(concept_automata_dispatch_outcome outcome);
+int32_t concept_evt1_dragongod_m2_vulkan_outcome_code(concept_automata_dispatch_outcome outcome);
 
-int concept_evt1_dragongod_m2_vulkan_vulkan_fallback_trace(concept_buffer_context context, VkBuffer buffer);
+int32_t concept_evt1_dragongod_m2_vulkan_vulkan_fallback_trace(concept_buffer_context context, VkBuffer buffer);
 
-int concept_evt1_dragongod_m2_vulkan_vulkan_ambiguous_trace(concept_buffer_context context, VkCommandPool pool);
+int32_t concept_evt1_dragongod_m2_vulkan_vulkan_ambiguous_trace(concept_buffer_context context, VkCommandPool pool);
 
 concept_automata_dispatch_outcome concept_evt1_dragongod_m2_vulkan_buffer_already_finished_outcome(concept_buffer_context context, VkBuffer buffer);
 

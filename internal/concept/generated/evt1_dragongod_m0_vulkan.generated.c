@@ -3,11 +3,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static void concept_abort_invalid_tag(const char* enum_name) {
-  fprintf(stderr, "invalid enum tag for %s\n", enum_name);
-  abort();
-}
-
 static concept_resource_signal concept_resource_signal_make_create() {
   concept_resource_signal out;
   out.tag = CONCEPT_RESOURCE_SIGNAL_CREATE;
@@ -57,12 +52,12 @@ static concept_resource_signal concept_resource_signal_make_tick() {
   return out;
 }
 
-int concept_evt1_dragongod_m0_vulkan_classify_range(VkBuffer buffer) {
-  return 5;
+int32_t concept_evt1_dragongod_m0_vulkan_classify_range(VkBuffer buffer) {
+  return INT32_C(5);
 }
 
-int concept_evt1_dragongod_m0_vulkan_derived_machine_depth(VkCommandPool pool) {
-  return 3;
+int32_t concept_evt1_dragongod_m0_vulkan_derived_machine_depth(VkCommandPool pool) {
+  return INT32_C(3);
 }
 
 bool concept_evt1_dragongod_m0_vulkan_pool_ready(VkCommandPool pool, bool ready) {

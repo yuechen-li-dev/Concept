@@ -196,17 +196,17 @@ func TestEVT1CGenerationUsesTransparentStructsAndNoConceptRuntime(t *testing.T) 
 	header := string(outputs["evt1_m1b_b_language.generated.h"])
 	body := string(outputs["evt1_m1b_b_language.generated.c"])
 	for _, needle := range []string{
-		"typedef struct concept_buffer_range {\n  int bufferId;\n  int offset;\n  int size;\n}",
-		"typedef struct concept_pipeline_state {\n  int handle;\n  bool alive;\n}",
+		"typedef struct concept_buffer_range {\n  int32_t bufferId;\n  int32_t offset;\n  int32_t size;\n}",
+		"typedef struct concept_pipeline_state {\n  int32_t handle;\n  bool alive;\n}",
 	} {
 		if !strings.Contains(header, needle) {
 			t.Fatalf("header missing %q\n%s", needle, header)
 		}
 	}
 	for _, needle := range []string{
-		"static int concept_template_score_resource__buffer_range(",
+		"static int32_t concept_template_score_resource__buffer_range(",
 		"static void concept_template_destroy_resource__pipeline_state(",
-		"concept_evt1_m1b_b_language_measure__buffer_range",
+		"concept_evt1_m1b_b_language_measure__borrow_const_buffer_range",
 	} {
 		if !strings.Contains(body, needle) {
 			t.Fatalf("body missing %q\n%s", needle, body)
@@ -1122,8 +1122,8 @@ func TestEVT1TemplateInstancesAreDeterministicAndDeduplicated(t *testing.T) {
 	}
 	body := string(outputs["evt1_m1b_b_language.generated.c"])
 	for _, needle := range []string{
-		"static int concept_template_score_resource__buffer_range(",
-		"static int concept_template_score_resource__pipeline_state(",
+		"static int32_t concept_template_score_resource__buffer_range(",
+		"static int32_t concept_template_score_resource__pipeline_state(",
 		"static void concept_template_destroy_resource__buffer_range(",
 		"static void concept_template_destroy_resource__pipeline_state(",
 	} {

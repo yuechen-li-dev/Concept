@@ -24,7 +24,7 @@ static void concept_abort_automata_completion(const char* automata_name, int ste
   abort();
 }
 
-static concept_buffer_context concept_buffer_context_make(bool queueAvailable, bool failRequested, int bufferId, concept_queue_class queue, int failureCode) {
+static concept_buffer_context concept_buffer_context_make(bool queueAvailable, bool failRequested, int32_t bufferId, concept_queue_class queue, int32_t failureCode) {
   concept_buffer_context out;
   out.queueAvailable = queueAvailable;
   out.failRequested = failRequested;
@@ -208,14 +208,14 @@ typedef struct concept_buffer_lifecycle_effect_entry {
   concept_buffer_lifecycle_effect_tag tag;
   union {
     struct {
-      int bufferId;
+      int32_t bufferId;
     } record_buffer_submission;
     struct {
-      int bufferId;
+      int32_t bufferId;
       concept_queue_class queue;
     } begin_buffer_submission;
     struct {
-      int failureCode;
+      int32_t failureCode;
     } mark_buffer_failure;
   } payload;
 } concept_buffer_lifecycle_effect_entry;
@@ -274,11 +274,11 @@ static concept_automata_dispatch_outcome concept_buffer_lifecycle_dispatch(conce
               switch (selected_candidate) {
                 case 1:
                   {
-                  int record_buffer_submission_01_01 = staged->context->bufferId;
+                  int32_t record_buffer_submission_01_01 = staged->context->bufferId;
                   staged_batch.entries[staged_count].payload.record_buffer_submission.bufferId = record_buffer_submission_01_01;
                   staged_batch.entries[staged_count].tag = CONCEPT_BUFFER_LIFECYCLE_EFFECT_RECORD_BUFFER_SUBMISSION;
                   staged_count = (uint8_t)(staged_count + 1);
-                  int begin_buffer_submission_02_01 = staged->context->bufferId;
+                  int32_t begin_buffer_submission_02_01 = staged->context->bufferId;
                   staged_batch.entries[staged_count].payload.begin_buffer_submission.bufferId = begin_buffer_submission_02_01;
                   concept_queue_class begin_buffer_submission_02_02 = staged->context->queue;
                   staged_batch.entries[staged_count].payload.begin_buffer_submission.queue = begin_buffer_submission_02_02;
@@ -289,7 +289,7 @@ static concept_automata_dispatch_outcome concept_buffer_lifecycle_dispatch(conce
                   }
                 case 2:
                   {
-                  int mark_buffer_failure_01_01 = staged->context->failureCode;
+                  int32_t mark_buffer_failure_01_01 = staged->context->failureCode;
                   staged_batch.entries[staged_count].payload.mark_buffer_failure.failureCode = mark_buffer_failure_01_01;
                   staged_batch.entries[staged_count].tag = CONCEPT_BUFFER_LIFECYCLE_EFFECT_MARK_BUFFER_FAILURE;
                   staged_count = (uint8_t)(staged_count + 1);
@@ -298,7 +298,7 @@ static concept_automata_dispatch_outcome concept_buffer_lifecycle_dispatch(conce
                   }
                 case 3:
                   {
-                  int mark_buffer_failure_01_01 = staged->context->failureCode;
+                  int32_t mark_buffer_failure_01_01 = staged->context->failureCode;
                   staged_batch.entries[staged_count].payload.mark_buffer_failure.failureCode = mark_buffer_failure_01_01;
                   staged_batch.entries[staged_count].tag = CONCEPT_BUFFER_LIFECYCLE_EFFECT_MARK_BUFFER_FAILURE;
                   staged_count = (uint8_t)(staged_count + 1);
@@ -320,7 +320,7 @@ static concept_automata_dispatch_outcome concept_buffer_lifecycle_dispatch(conce
               }
               return concept_automata_dispatch_outcome_make_transitioned();
             case CONCEPT_RESOURCE_SIGNAL_FINISH_NOW:
-              int mark_buffer_failure_01_01 = staged->context->failureCode;
+              int32_t mark_buffer_failure_01_01 = staged->context->failureCode;
               staged_batch.entries[staged_count].payload.mark_buffer_failure.failureCode = mark_buffer_failure_01_01;
               staged_batch.entries[staged_count].tag = CONCEPT_BUFFER_LIFECYCLE_EFFECT_MARK_BUFFER_FAILURE;
               staged_count = (uint8_t)(staged_count + 1);
@@ -447,38 +447,38 @@ bool concept_evt1_dragongod_m3_vulkan_fail_requested(const concept_buffer_contex
   return context->failRequested;
 }
 
-int concept_evt1_dragongod_m3_vulkan_outcome_code(concept_automata_dispatch_outcome outcome) {
+int32_t concept_evt1_dragongod_m3_vulkan_outcome_code(concept_automata_dispatch_outcome outcome) {
   concept_automata_dispatch_outcome cv_match_subject_01 = outcome;
-  int cv_match_result_02;
+  int32_t cv_match_result_02;
   switch (cv_match_subject_01.tag) {
   case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_TRANSITIONED:
     {
-      cv_match_result_02 = 1;
+      cv_match_result_02 = INT32_C(1);
       break;
     }
   case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_UNHANDLED:
     {
-      cv_match_result_02 = 2;
+      cv_match_result_02 = INT32_C(2);
       break;
     }
   case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_AMBIGUOUS:
     {
-      cv_match_result_02 = 5;
+      cv_match_result_02 = INT32_C(5);
       break;
     }
   case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_FINISHED:
     {
-      cv_match_result_02 = 3;
+      cv_match_result_02 = INT32_C(3);
       break;
     }
   case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_ALREADY_FINISHED:
     {
-      cv_match_result_02 = 4;
+      cv_match_result_02 = INT32_C(4);
       break;
     }
   case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_EFFECT_BATCH_OCCUPIED:
     {
-      cv_match_result_02 = 6;
+      cv_match_result_02 = INT32_C(6);
       break;
     }
   default:
@@ -487,7 +487,7 @@ int concept_evt1_dragongod_m3_vulkan_outcome_code(concept_automata_dispatch_outc
   return cv_match_result_02;
 }
 
-int concept_evt1_dragongod_m3_vulkan_vulkan_effectful_submit_code(concept_buffer_context context, VkBuffer buffer) {
+int32_t concept_evt1_dragongod_m3_vulkan_vulkan_effectful_submit_code(concept_buffer_context context, VkBuffer buffer) {
   concept_buffer_lifecycle_instance lifecycle;
   concept_buffer_lifecycle_init(&lifecycle, &context);
   concept_buffer_lifecycle_effects emitted = {0};
@@ -496,7 +496,7 @@ int concept_evt1_dragongod_m3_vulkan_vulkan_effectful_submit_code(concept_buffer
   return concept_evt1_dragongod_m3_vulkan_outcome_code(cv_arg_02);
 }
 
-int concept_evt1_dragongod_m3_vulkan_vulkan_zero_emit_transition_code(concept_buffer_context context, VkCommandPool pool) {
+int32_t concept_evt1_dragongod_m3_vulkan_vulkan_zero_emit_transition_code(concept_buffer_context context, VkCommandPool pool) {
   concept_buffer_lifecycle_instance lifecycle;
   concept_buffer_lifecycle_init(&lifecycle, &context);
   concept_buffer_lifecycle_effects emitted = {0};

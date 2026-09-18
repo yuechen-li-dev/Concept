@@ -155,6 +155,10 @@ func lexEVT1(text string) ([]Token, error) {
 			tokens = append(tokens, Token{Lexeme: "<<", Span: start})
 			i += 2
 			column += 2
+		case i+1 < len(text) && text[i:i+2] == "&&":
+			return nil, evt1Diagnostic("CV4648", "use 'and' instead of '&&'", start)
+		case i+1 < len(text) && text[i:i+2] == "||":
+			return nil, evt1Diagnostic("CV4648", "use 'or' instead of '||'", start)
 		case strings.ContainsRune("(){}[];,:.*+-/=<>!?@%^&|", rune(c)):
 			tokens = append(tokens, Token{Lexeme: string(c), Span: start})
 			i++
@@ -2392,7 +2396,10 @@ done:
 					return Type{}, evt1Diagnostic("CV4610", "tensor rank must be a positive compile-time integer", rankTok.Span)
 				}
 				p.next()
-				rank64, _ := strconv.ParseInt(rankTok.Lexeme, 10, 32)
+				rank64, parseErr := strconv.ParseInt(rankTok.Lexeme, 10, 32)
+				if parseErr != nil {
+					return Type{}, evt1Diagnostic("CV4610", "tensor rank is outside the supported integer range", rankTok.Span)
+				}
 				if rank64 <= 0 {
 					return Type{}, evt1Diagnostic("CV4610", "tensor rank must be positive", rankTok.Span)
 				}
@@ -2538,7 +2545,10 @@ func (p *parser) parseQuantityDimension() (QuantityDimension, error) {
 				return QuantityDimension{}, evt1Diagnostic("QUANTITY_EXPONENT_INVALID", "unit exponent must be a compile-time integer", exponentTok.Span)
 			}
 			p.next()
-			value, _ := strconv.ParseInt(exponentTok.Lexeme, 10, 32)
+			value, parseErr := strconv.ParseInt(exponentTok.Lexeme, 10, 32)
+			if parseErr != nil {
+				return QuantityDimension{}, evt1Diagnostic("QUANTITY_EXPONENT_INVALID", "unit exponent is outside the supported integer range", exponentTok.Span)
+			}
 			exponent = sign * int(value)
 		}
 		if divide {
@@ -3417,13 +3427,13 @@ func (p *parser) parseLogicalOr() (Expr, error) {
 }
 
 func (p *parser) parseLogicalAnd() (Expr, error) {
-	left, err := p.parseEquality()
+	left, err := p.parseBitwiseOr()
 	if err != nil {
 		return nil, err
 	}
 	for p.peekLexeme() == "and" {
 		op := p.next()
-		right, err := p.parseEquality()
+		right, err := p.parseBitwiseOr()
 		if err != nil {
 			return nil, err
 		}
@@ -3449,12 +3459,80 @@ func (p *parser) parseEquality() (Expr, error) {
 }
 
 func (p *parser) parseComparison() (Expr, error) {
-	left, err := p.parseAdditive()
+	left, err := p.parseShift()
 	if err != nil {
 		return nil, err
 	}
 	for p.peekLexeme() == "<" || p.peekLexeme() == ">" || p.peekLexeme() == "<=" || p.peekLexeme() == ">=" {
 		op := p.next()
+		right, err := p.parseShift()
+		if err != nil {
+			return nil, err
+		}
+		left = &BinaryExpr{Op: op.Lexeme, Left: left, Right: right, Span: op.Span}
+	}
+	return left, nil
+}
+
+func (p *parser) parseBitwiseOr() (Expr, error) {
+	left, err := p.parseBitwiseXor()
+	if err != nil {
+		return nil, err
+	}
+	for p.peekLexeme() == "|" {
+		op := p.next()
+		right, err := p.parseBitwiseXor()
+		if err != nil {
+			return nil, err
+		}
+		left = &BinaryExpr{Op: op.Lexeme, Left: left, Right: right, Span: op.Span}
+	}
+	return left, nil
+}
+
+func (p *parser) parseBitwiseXor() (Expr, error) {
+	left, err := p.parseBitwiseAnd()
+	if err != nil {
+		return nil, err
+	}
+	for p.peekLexeme() == "^" {
+		op := p.next()
+		right, err := p.parseBitwiseAnd()
+		if err != nil {
+			return nil, err
+		}
+		left = &BinaryExpr{Op: op.Lexeme, Left: left, Right: right, Span: op.Span}
+	}
+	return left, nil
+}
+
+func (p *parser) parseBitwiseAnd() (Expr, error) {
+	left, err := p.parseEquality()
+	if err != nil {
+		return nil, err
+	}
+	for p.peekLexeme() == "&" {
+		op := p.next()
+		right, err := p.parseEquality()
+		if err != nil {
+			return nil, err
+		}
+		left = &BinaryExpr{Op: op.Lexeme, Left: left, Right: right, Span: op.Span}
+	}
+	return left, nil
+}
+
+func (p *parser) parseShift() (Expr, error) {
+	left, err := p.parseAdditive()
+	if err != nil {
+		return nil, err
+	}
+	for p.peekLexeme() == "<<" || (p.peekLexeme() == ">" && p.peekLexemeN(1) == ">") {
+		op := p.next()
+		if op.Lexeme == ">" {
+			p.next()
+			op.Lexeme = ">>"
+		}
 		right, err := p.parseAdditive()
 		if err != nil {
 			return nil, err
@@ -3469,12 +3547,8 @@ func (p *parser) parseAdditive() (Expr, error) {
 	if err != nil {
 		return nil, err
 	}
-	for p.peekLexeme() == "+" || p.peekLexeme() == "-" || p.peekLexeme() == "&" || p.peekLexeme() == "|" || p.peekLexeme() == "^" || p.peekLexeme() == "<<" || (p.peekLexeme() == ">" && p.peekLexemeN(1) == ">") {
+	for p.peekLexeme() == "+" || p.peekLexeme() == "-" {
 		op := p.next()
-		if op.Lexeme == ">" {
-			p.next()
-			op.Lexeme = ">>"
-		}
 		right, err := p.parseMultiplicative()
 		if err != nil {
 			return nil, err
@@ -3543,6 +3617,15 @@ func (p *parser) parseUnary() (Expr, error) {
 			return nil, err
 		}
 		return &RefExpr{Value: value, Const: isConst, Span: op.Span}, nil
+	}
+	if p.peekLexeme() == "-" && isNumber(p.peekLexemeN(1)) {
+		op := p.next()
+		tok := p.next()
+		literal, err := evt1ParseIntegerLiteral(tok.Lexeme, true, op.Span)
+		if err != nil {
+			return nil, err
+		}
+		return p.parsePostfixExpr(literal, op.Span)
 	}
 	if p.peekLexeme() == "-" || p.peekLexeme() == "not" {
 		op := p.next()
@@ -3626,9 +3709,11 @@ func (p *parser) parsePrimary() (Expr, error) {
 		return p.parsePostfixExpr(&FloatLiteral{Value: value, Span: tok.Span}, tok.Span)
 	case isNumber(p.peekLexeme()):
 		tok := p.next()
-		parsed, _ := strconv.ParseInt(tok.Lexeme, 0, 32)
-		value := int(parsed)
-		return p.parsePostfixExpr(&IntLiteral{Value: value, Span: tok.Span}, tok.Span)
+		literal, err := evt1ParseIntegerLiteral(tok.Lexeme, false, tok.Span)
+		if err != nil {
+			return nil, err
+		}
+		return p.parsePostfixExpr(literal, tok.Span)
 	default:
 		return p.parseNameLikeExpr()
 	}
@@ -4136,7 +4221,11 @@ func (p *parser) parseConceptAssertionCall(field *FieldExpr, span Span) (Expr, e
 		if !isNumber(parameter.Lexeme) {
 			return nil, evt1Diagnostic("CONCEPT_ASSERT_PARAMETER_INVALID", "analysis parameter must be a positive integer", parameter.Span)
 		}
-		value, _ := strconv.Atoi(parameter.Lexeme)
+		value64, parseErr := strconv.ParseInt(parameter.Lexeme, 0, 32)
+		if parseErr != nil || value64 <= 0 {
+			return nil, evt1Diagnostic("CONCEPT_ASSERT_PARAMETER_INVALID", "analysis parameter must be a positive 32-bit integer", parameter.Span)
+		}
+		value := int(value64)
 		parameters = append(parameters, value)
 		p.next()
 		if _, err := p.expect(">"); err != nil {
@@ -4289,8 +4378,16 @@ func isNumber(s string) bool {
 		return false
 	}
 	if len(s) > 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X') {
-		_, err := strconv.ParseInt(s, 0, 32)
-		return err == nil
+		if len(s) == 2 {
+			return false
+		}
+		for i := 2; i < len(s); i++ {
+			c := s[i]
+			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+				return false
+			}
+		}
+		return true
 	}
 	for i := 0; i < len(s); i++ {
 		if s[i] < '0' || s[i] > '9' {

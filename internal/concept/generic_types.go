@@ -196,7 +196,12 @@ func evt1SubstituteGenericValueExtents(t Type, params []GenericParameter, args [
 	values := map[string]int{}
 	for i, param := range params {
 		if param.Kind == "value" {
-			value, _ := strconv.Atoi(args[i].Name)
+			value, err := strconv.Atoi(args[i].Name)
+			if err != nil {
+				// Invalid value arguments are diagnosed before substitution; do
+				// not turn an unexpected parse failure into a semantic zero.
+				continue
+			}
 			values[param.Name] = value
 		}
 	}
@@ -208,7 +213,10 @@ func evt1SubstituteGenericValueExtents(t Type, params []GenericParameter, args [
 	replace := func(expr Expr) Expr {
 		if name, ok := expr.(*NameExpr); ok {
 			if value, found := values[name.Name]; found {
-				return &IntLiteral{Value: value, Span: name.Span}
+				if value < 0 {
+					return &IntLiteral{Magnitude: uint64(-int64(value)), Negative: true, Lexeme: fmt.Sprint(-int64(value)), Span: name.Span}
+				}
+				return &IntLiteral{Magnitude: uint64(value), Lexeme: fmt.Sprint(value), Span: name.Span}
 			}
 		}
 		return expr

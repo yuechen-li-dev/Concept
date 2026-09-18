@@ -3,17 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static void concept_abort_invalid_tag(const char* enum_name) {
-  fprintf(stderr, "invalid enum tag for %s\n", enum_name);
-  abort();
-}
-
-static void concept_panic(const char* reason, int line, int column) {
-  fprintf(stderr, "Concept panic at %d:%d: %s\n", line, column, reason);
-  abort();
-}
-
-static concept_transition concept_transition_make(concept_lifecycle_state from, int signal, concept_lifecycle_state to) {
+static concept_transition concept_transition_make(concept_lifecycle_state from, int32_t signal, concept_lifecycle_state to) {
   concept_transition out;
   out.from = from;
   out.signal = signal;
@@ -48,15 +38,15 @@ static concept_lifecycle_state concept_lifecycle_state_make_submitted() {
   return out;
 }
 
-int concept_evt1_m1b_d_language_default_retry_budget() {
+int32_t concept_evt1_m1b_d_language_default_retry_budget() {
   return 2;
 }
 
-int concept_evt1_m1b_d_language_matrix_corner() {
+int32_t concept_evt1_m1b_d_language_matrix_corner() {
   return 6;
 }
 
-int concept_evt1_m1b_d_language_summary_value() {
+int32_t concept_evt1_m1b_d_language_summary_value() {
   return 7;
 }
 
@@ -64,6 +54,6 @@ bool concept_evt1_m1b_d_language_transition_table_stable() {
   return true;
 }
 
-int concept_evt1_m1b_d_language_total_retry_budget() {
+int32_t concept_evt1_m1b_d_language_total_retry_budget() {
   return 7;
 }

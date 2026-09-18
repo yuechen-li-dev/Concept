@@ -8,6 +8,21 @@ static void concept_abort_invalid_tag(const char* enum_name) {
   abort();
 }
 
+static void concept_panic(const char* reason, int line, int column) {
+  fprintf(stderr, "Concept panic at %d:%d: %s\n", line, column, reason);
+  abort();
+}
+
+int32_t concept_rt_evt1_dragongod_m1_vulkan_i32_add(int32_t left, int32_t right, int line, int column) {
+  int64_t result = (int64_t)left + (int64_t)right;
+  if (result < INT32_MIN || result > INT32_MAX) { concept_panic("int32 addition overflow", line, column); }
+  return (int32_t)result;
+}
+int32_t concept_rt_evt1_dragongod_m1_vulkan_i32_mul(int32_t left, int32_t right, int line, int column) {
+  int64_t result = (int64_t)left * (int64_t)right;
+  if (result < INT32_MIN || result > INT32_MAX) { concept_panic("int32 multiplication overflow", line, column); }
+  return (int32_t)result;
+}
 static void concept_abort_invalid_automata_state(const char* automata_name, int machine, int state) {
   (void)automata_name; (void)machine; (void)state;
   fprintf(stderr, "invalid machine state reached\n");
@@ -402,38 +417,38 @@ static concept_automata_dispatch_outcome concept_buffer_lifecycle_dispatch(conce
   }
 }
 
-int concept_evt1_dragongod_m1_vulkan_outcome_code(concept_automata_dispatch_outcome outcome) {
+int32_t concept_evt1_dragongod_m1_vulkan_outcome_code(concept_automata_dispatch_outcome outcome) {
   concept_automata_dispatch_outcome cv_match_subject_01 = outcome;
-  int cv_match_result_02;
+  int32_t cv_match_result_02;
   switch (cv_match_subject_01.tag) {
   case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_TRANSITIONED:
     {
-      cv_match_result_02 = 1;
+      cv_match_result_02 = INT32_C(1);
       break;
     }
   case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_UNHANDLED:
     {
-      cv_match_result_02 = 2;
+      cv_match_result_02 = INT32_C(2);
       break;
     }
   case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_AMBIGUOUS:
     {
-      cv_match_result_02 = 5;
+      cv_match_result_02 = INT32_C(5);
       break;
     }
   case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_FINISHED:
     {
-      cv_match_result_02 = 3;
+      cv_match_result_02 = INT32_C(3);
       break;
     }
   case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_ALREADY_FINISHED:
     {
-      cv_match_result_02 = 4;
+      cv_match_result_02 = INT32_C(4);
       break;
     }
   case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_EFFECT_BATCH_OCCUPIED:
     {
-      cv_match_result_02 = 6;
+      cv_match_result_02 = INT32_C(6);
       break;
     }
   default:
@@ -459,7 +474,7 @@ concept_automata_dispatch_outcome concept_evt1_dragongod_m1_vulkan_buffer_cleanu
   return concept_buffer_lifecycle_dispatch(&lifecycle, cv_signal_06);
 }
 
-int concept_evt1_dragongod_m1_vulkan_buffer_cleanup_trace(VkBuffer buffer) {
+int32_t concept_evt1_dragongod_m1_vulkan_buffer_cleanup_trace(VkBuffer buffer) {
   concept_buffer_lifecycle_instance lifecycle;
   concept_buffer_lifecycle_init(&lifecycle);
   concept_resource_signal cv_signal_01 = concept_resource_signal_make_create();
@@ -480,7 +495,7 @@ int concept_evt1_dragongod_m1_vulkan_buffer_cleanup_trace(VkBuffer buffer) {
   concept_automata_dispatch_outcome cv_arg_10 = d;
   concept_automata_dispatch_outcome cv_arg_11 = e;
   concept_automata_dispatch_outcome cv_arg_12 = f;
-  return ((((((concept_evt1_dragongod_m1_vulkan_outcome_code(cv_arg_07) * 100000) + (concept_evt1_dragongod_m1_vulkan_outcome_code(cv_arg_08) * 10000)) + (concept_evt1_dragongod_m1_vulkan_outcome_code(cv_arg_09) * 1000)) + (concept_evt1_dragongod_m1_vulkan_outcome_code(cv_arg_10) * 100)) + (concept_evt1_dragongod_m1_vulkan_outcome_code(cv_arg_11) * 10)) + concept_evt1_dragongod_m1_vulkan_outcome_code(cv_arg_12));
+  return concept_rt_evt1_dragongod_m1_vulkan_i32_add(concept_rt_evt1_dragongod_m1_vulkan_i32_add(concept_rt_evt1_dragongod_m1_vulkan_i32_add(concept_rt_evt1_dragongod_m1_vulkan_i32_add(concept_rt_evt1_dragongod_m1_vulkan_i32_add(concept_rt_evt1_dragongod_m1_vulkan_i32_mul(concept_evt1_dragongod_m1_vulkan_outcome_code(cv_arg_07), INT32_C(100000), 112, 27), concept_rt_evt1_dragongod_m1_vulkan_i32_mul(concept_evt1_dragongod_m1_vulkan_outcome_code(cv_arg_08), INT32_C(10000), 113, 24), 112, 36), concept_rt_evt1_dragongod_m1_vulkan_i32_mul(concept_evt1_dragongod_m1_vulkan_outcome_code(cv_arg_09), INT32_C(1000), 114, 24), 113, 32), concept_rt_evt1_dragongod_m1_vulkan_i32_mul(concept_evt1_dragongod_m1_vulkan_outcome_code(cv_arg_10), INT32_C(100), 115, 24), 114, 31), concept_rt_evt1_dragongod_m1_vulkan_i32_mul(concept_evt1_dragongod_m1_vulkan_outcome_code(cv_arg_11), INT32_C(10), 116, 24), 115, 30), concept_evt1_dragongod_m1_vulkan_outcome_code(cv_arg_12), 116, 29);
 }
 
 concept_automata_dispatch_outcome concept_evt1_dragongod_m1_vulkan_buffer_lifecycle_already_finished_outcome(VkCommandPool pool) {
@@ -502,9 +517,9 @@ concept_automata_dispatch_outcome concept_evt1_dragongod_m1_vulkan_buffer_lifecy
   return concept_buffer_lifecycle_dispatch(&lifecycle, cv_signal_07);
 }
 
-int concept_evt1_dragongod_m1_vulkan_vulkan_dispatch_audit(VkBuffer buffer, VkCommandPool pool) {
+int32_t concept_evt1_dragongod_m1_vulkan_vulkan_dispatch_audit(VkBuffer buffer, VkCommandPool pool) {
   VkBuffer cv_arg_01 = buffer;
   VkCommandPool cv_arg_02 = pool;
   concept_automata_dispatch_outcome cv_arg_03 = concept_evt1_dragongod_m1_vulkan_buffer_lifecycle_already_finished_outcome(cv_arg_02);
-  return ((concept_evt1_dragongod_m1_vulkan_buffer_cleanup_trace(cv_arg_01) * 10) + concept_evt1_dragongod_m1_vulkan_outcome_code(cv_arg_03));
+  return concept_rt_evt1_dragongod_m1_vulkan_i32_add(concept_rt_evt1_dragongod_m1_vulkan_i32_mul(concept_evt1_dragongod_m1_vulkan_buffer_cleanup_trace(cv_arg_01), INT32_C(10), 134, 39), concept_evt1_dragongod_m1_vulkan_outcome_code(cv_arg_03), 134, 44);
 }

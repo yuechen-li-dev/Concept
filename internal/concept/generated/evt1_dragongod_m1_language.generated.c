@@ -8,6 +8,21 @@ static void concept_abort_invalid_tag(const char* enum_name) {
   abort();
 }
 
+static void concept_panic(const char* reason, int line, int column) {
+  fprintf(stderr, "Concept panic at %d:%d: %s\n", line, column, reason);
+  abort();
+}
+
+int32_t concept_rt_evt1_dragongod_m1_language_i32_add(int32_t left, int32_t right, int line, int column) {
+  int64_t result = (int64_t)left + (int64_t)right;
+  if (result < INT32_MIN || result > INT32_MAX) { concept_panic("int32 addition overflow", line, column); }
+  return (int32_t)result;
+}
+int32_t concept_rt_evt1_dragongod_m1_language_i32_mul(int32_t left, int32_t right, int line, int column) {
+  int64_t result = (int64_t)left * (int64_t)right;
+  if (result < INT32_MIN || result > INT32_MAX) { concept_panic("int32 multiplication overflow", line, column); }
+  return (int32_t)result;
+}
 static void concept_abort_invalid_automata_state(const char* automata_name, int machine, int state) {
   (void)automata_name; (void)machine; (void)state;
   fprintf(stderr, "invalid machine state reached\n");
@@ -577,38 +592,38 @@ static concept_automata_dispatch_outcome concept_single_step_lifecycle_dispatch(
   }
 }
 
-int concept_evt1_dragongod_m1_language_outcome_code(concept_automata_dispatch_outcome outcome) {
+int32_t concept_evt1_dragongod_m1_language_outcome_code(concept_automata_dispatch_outcome outcome) {
   concept_automata_dispatch_outcome cv_match_subject_01 = outcome;
-  int cv_match_result_02;
+  int32_t cv_match_result_02;
   switch (cv_match_subject_01.tag) {
   case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_TRANSITIONED:
     {
-      cv_match_result_02 = 1;
+      cv_match_result_02 = INT32_C(1);
       break;
     }
   case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_UNHANDLED:
     {
-      cv_match_result_02 = 2;
+      cv_match_result_02 = INT32_C(2);
       break;
     }
   case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_AMBIGUOUS:
     {
-      cv_match_result_02 = 5;
+      cv_match_result_02 = INT32_C(5);
       break;
     }
   case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_FINISHED:
     {
-      cv_match_result_02 = 3;
+      cv_match_result_02 = INT32_C(3);
       break;
     }
   case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_ALREADY_FINISHED:
     {
-      cv_match_result_02 = 4;
+      cv_match_result_02 = INT32_C(4);
       break;
     }
   case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_EFFECT_BATCH_OCCUPIED:
     {
-      cv_match_result_02 = 6;
+      cv_match_result_02 = INT32_C(6);
       break;
     }
   default:
@@ -617,7 +632,7 @@ int concept_evt1_dragongod_m1_language_outcome_code(concept_automata_dispatch_ou
   return cv_match_result_02;
 }
 
-int concept_evt1_dragongod_m1_language_initial_terminal_outcome_code() {
+int32_t concept_evt1_dragongod_m1_language_initial_terminal_outcome_code() {
   concept_immediate_lifecycle_instance lifecycle;
   concept_immediate_lifecycle_init(&lifecycle);
   concept_lifecycle_signal cv_signal_01 = concept_lifecycle_signal_make_create();
@@ -625,7 +640,7 @@ int concept_evt1_dragongod_m1_language_initial_terminal_outcome_code() {
   return concept_evt1_dragongod_m1_language_outcome_code(cv_arg_02);
 }
 
-int concept_evt1_dragongod_m1_language_zero_capacity_outcome_code() {
+int32_t concept_evt1_dragongod_m1_language_zero_capacity_outcome_code() {
   concept_single_step_lifecycle_instance lifecycle;
   concept_single_step_lifecycle_init(&lifecycle);
   concept_lifecycle_signal cv_signal_01 = concept_lifecycle_signal_make_create();
@@ -633,7 +648,7 @@ int concept_evt1_dragongod_m1_language_zero_capacity_outcome_code() {
   return concept_evt1_dragongod_m1_language_outcome_code(cv_arg_02);
 }
 
-int concept_evt1_dragongod_m1_language_unhandled_preserves_state_code() {
+int32_t concept_evt1_dragongod_m1_language_unhandled_preserves_state_code() {
   concept_resource_lifecycle_instance lifecycle;
   concept_resource_lifecycle_init(&lifecycle);
   concept_lifecycle_signal cv_signal_01 = concept_lifecycle_signal_make_stop();
@@ -642,10 +657,10 @@ int concept_evt1_dragongod_m1_language_unhandled_preserves_state_code() {
   concept_automata_dispatch_outcome second = concept_resource_lifecycle_dispatch(&lifecycle, cv_signal_02);
   concept_automata_dispatch_outcome cv_arg_03 = first;
   concept_automata_dispatch_outcome cv_arg_04 = second;
-  return ((concept_evt1_dragongod_m1_language_outcome_code(cv_arg_03) * 10) + concept_evt1_dragongod_m1_language_outcome_code(cv_arg_04));
+  return concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_03), INT32_C(10), 143, 31), concept_evt1_dragongod_m1_language_outcome_code(cv_arg_04), 143, 36);
 }
 
-int concept_evt1_dragongod_m1_language_nested_push_resumes_caller_code() {
+int32_t concept_evt1_dragongod_m1_language_nested_push_resumes_caller_code() {
   concept_resource_lifecycle_instance lifecycle;
   concept_resource_lifecycle_init(&lifecycle);
   concept_lifecycle_signal cv_signal_01 = concept_lifecycle_signal_make_create();
@@ -666,10 +681,10 @@ int concept_evt1_dragongod_m1_language_nested_push_resumes_caller_code() {
   concept_automata_dispatch_outcome cv_arg_10 = d;
   concept_automata_dispatch_outcome cv_arg_11 = e;
   concept_automata_dispatch_outcome cv_arg_12 = f;
-  return ((((((concept_evt1_dragongod_m1_language_outcome_code(cv_arg_07) * 100000) + (concept_evt1_dragongod_m1_language_outcome_code(cv_arg_08) * 10000)) + (concept_evt1_dragongod_m1_language_outcome_code(cv_arg_09) * 1000)) + (concept_evt1_dragongod_m1_language_outcome_code(cv_arg_10) * 100)) + (concept_evt1_dragongod_m1_language_outcome_code(cv_arg_11) * 10)) + concept_evt1_dragongod_m1_language_outcome_code(cv_arg_12));
+  return concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_07), INT32_C(100000), 155, 27), concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_08), INT32_C(10000), 156, 24), 155, 36), concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_09), INT32_C(1000), 157, 24), 156, 32), concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_10), INT32_C(100), 158, 24), 157, 31), concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_11), INT32_C(10), 159, 24), 158, 30), concept_evt1_dragongod_m1_language_outcome_code(cv_arg_12), 159, 29);
 }
 
-int concept_evt1_dragongod_m1_language_root_terminal_continuation_finishes_immediately_code() {
+int32_t concept_evt1_dragongod_m1_language_root_terminal_continuation_finishes_immediately_code() {
   concept_resource_lifecycle_instance lifecycle;
   concept_resource_lifecycle_init(&lifecycle);
   concept_lifecycle_signal cv_signal_01 = concept_lifecycle_signal_make_create();
@@ -693,10 +708,10 @@ int concept_evt1_dragongod_m1_language_root_terminal_continuation_finishes_immed
   concept_automata_dispatch_outcome cv_arg_12 = e;
   concept_automata_dispatch_outcome cv_arg_13 = f;
   concept_automata_dispatch_outcome cv_arg_14 = g;
-  return (((((((concept_evt1_dragongod_m1_language_outcome_code(cv_arg_08) * 1000000) + (concept_evt1_dragongod_m1_language_outcome_code(cv_arg_09) * 100000)) + (concept_evt1_dragongod_m1_language_outcome_code(cv_arg_10) * 10000)) + (concept_evt1_dragongod_m1_language_outcome_code(cv_arg_11) * 1000)) + (concept_evt1_dragongod_m1_language_outcome_code(cv_arg_12) * 100)) + (concept_evt1_dragongod_m1_language_outcome_code(cv_arg_13) * 10)) + concept_evt1_dragongod_m1_language_outcome_code(cv_arg_14));
+  return concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_08), INT32_C(1000000), 173, 27), concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_09), INT32_C(100000), 174, 24), 173, 37), concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_10), INT32_C(10000), 175, 24), 174, 33), concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_11), INT32_C(1000), 176, 24), 175, 32), concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_12), INT32_C(100), 177, 24), 176, 31), concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_13), INT32_C(10), 178, 24), 177, 30), concept_evt1_dragongod_m1_language_outcome_code(cv_arg_14), 178, 29);
 }
 
-int concept_evt1_dragongod_m1_language_non_root_finish_terminates_whole_instance_code() {
+int32_t concept_evt1_dragongod_m1_language_non_root_finish_terminates_whole_instance_code() {
   concept_resource_lifecycle_instance lifecycle;
   concept_resource_lifecycle_init(&lifecycle);
   concept_lifecycle_signal cv_signal_01 = concept_lifecycle_signal_make_create();
@@ -717,10 +732,10 @@ int concept_evt1_dragongod_m1_language_non_root_finish_terminates_whole_instance
   concept_automata_dispatch_outcome cv_arg_10 = d;
   concept_automata_dispatch_outcome cv_arg_11 = e;
   concept_automata_dispatch_outcome cv_arg_12 = f;
-  return ((((((concept_evt1_dragongod_m1_language_outcome_code(cv_arg_07) * 100000) + (concept_evt1_dragongod_m1_language_outcome_code(cv_arg_08) * 10000)) + (concept_evt1_dragongod_m1_language_outcome_code(cv_arg_09) * 1000)) + (concept_evt1_dragongod_m1_language_outcome_code(cv_arg_10) * 100)) + (concept_evt1_dragongod_m1_language_outcome_code(cv_arg_11) * 10)) + concept_evt1_dragongod_m1_language_outcome_code(cv_arg_12));
+  return concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_07), INT32_C(100000), 191, 27), concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_08), INT32_C(10000), 192, 24), 191, 36), concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_09), INT32_C(1000), 193, 24), 192, 32), concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_10), INT32_C(100), 194, 24), 193, 31), concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_11), INT32_C(10), 195, 24), 194, 30), concept_evt1_dragongod_m1_language_outcome_code(cv_arg_12), 195, 29);
 }
 
-int concept_evt1_dragongod_m1_language_independent_instances_stay_independent_code() {
+int32_t concept_evt1_dragongod_m1_language_independent_instances_stay_independent_code() {
   concept_resource_lifecycle_instance left;
   concept_resource_lifecycle_init(&left);
   concept_resource_lifecycle_instance right;
@@ -737,5 +752,5 @@ int concept_evt1_dragongod_m1_language_independent_instances_stay_independent_co
   concept_automata_dispatch_outcome cv_arg_06 = b;
   concept_automata_dispatch_outcome cv_arg_07 = c;
   concept_automata_dispatch_outcome cv_arg_08 = d;
-  return ((((concept_evt1_dragongod_m1_language_outcome_code(cv_arg_05) * 1000) + (concept_evt1_dragongod_m1_language_outcome_code(cv_arg_06) * 100)) + (concept_evt1_dragongod_m1_language_outcome_code(cv_arg_07) * 10)) + concept_evt1_dragongod_m1_language_outcome_code(cv_arg_08));
+  return concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_05), INT32_C(1000), 207, 27), concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_06), INT32_C(100), 208, 24), 207, 34), concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_07), INT32_C(10), 209, 24), 208, 30), concept_evt1_dragongod_m1_language_outcome_code(cv_arg_08), 209, 29);
 }
