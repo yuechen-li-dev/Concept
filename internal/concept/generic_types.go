@@ -123,6 +123,10 @@ func evt1InstantiateGenericType(env *semanticEnv, application Type) (Type, error
 		}
 		instance.Fields[i].Type = resolved
 	}
+	if instance.Table && instance.TableSized && len(instance.Fields) != 0 {
+		instance.TableCardinality = instance.Fields[0].Type.ArrayLength
+		instance.TableCardinalityExpression = fmt.Sprintf("%d", instance.TableCardinality)
+	}
 	for i := range instance.Methods {
 		method := instance.Methods[i]
 		for j, param := range decl.Parameters {

@@ -52,11 +52,11 @@ AgentContext<TestConfiguration, 16> TestContext(int agentId)
     MemorySlot memorySlot = EmptyMemorySlot();
     Event event = EmptyEvent();
     ActuationSlot actuation = EmptyActuationSlot();
-    TraceEntry<array>[16] traceEntries = [traceEntry, traceEntry, traceEntry, traceEntry, traceEntry, traceEntry, traceEntry, traceEntry, traceEntry, traceEntry, traceEntry, traceEntry, traceEntry, traceEntry, traceEntry, traceEntry];
-    MachineFrame<array>[16] frames = [MachineFrame{StateId{10}, Reason{0}}, frame, frame, frame, frame, frame, frame, frame, frame, frame, frame, frame, frame, frame, frame, frame];
-    MemorySlot<array>[16] memorySlots = [memorySlot, memorySlot, memorySlot, memorySlot, memorySlot, memorySlot, memorySlot, memorySlot, memorySlot, memorySlot, memorySlot, memorySlot, memorySlot, memorySlot, memorySlot, memorySlot];
-    Event<array>[16] eventSlots = [event, event, event, event, event, event, event, event, event, event, event, event, event, event, event, event];
-    ActuationSlot<array>[16] actuationSlots = [actuation, actuation, actuation, actuation, actuation, actuation, actuation, actuation, actuation, actuation, actuation, actuation, actuation, actuation, actuation, actuation];
+    TraceEntry<array>[16] traceEntries = [traceEntry ...];
+    MachineFrame<array>[16] frames = [MachineFrame{StateId{10}, Reason{0}}, frame ...];
+    MemorySlot<array>[16] memorySlots = [memorySlot ...];
+    Event<array>[16] eventSlots = [event ...];
+    ActuationSlot<array>[16] actuationSlots = [actuation ...];
     TraceRecorder<TestConfiguration, 16> trace = TraceRecorder<TestConfiguration, 16>{0, traceEntries};
     Mind<TestConfiguration, 16, 16> mind = Mind<TestConfiguration, 16, 16>{MachineId{1}, 1, MindStatus::Idle, frames, Reason{0}, 0, trace};
     MemoryState<TestConfiguration, 16> memory = MemoryState<TestConfiguration, 16>{AtomicInt{0}, MakeSpinLock(), move memorySlots};
@@ -120,7 +120,7 @@ void AgenticKernelRunsHistoricalDominatusShape()
     Assert.True(TransitionOccurred(dispatch(behavior, BehaviorSignal::Finish)), "the application behavior reaches its terminal state");
     StateId behaviorTarget = StateId{30};
     MindSignal emptySignal = MindSignal::None;
-    MindSignal<array>[16] work = [MindSignal::TransitionTo(StateId{20}, Reason{100}), MindSignal::AwaitActuation(receipt.id), MindSignal::TransitionTo(behaviorTarget, Reason{101}), MindSignal::Succeed(Reason{102}), emptySignal, emptySignal, emptySignal, emptySignal, emptySignal, emptySignal, emptySignal, emptySignal, emptySignal, emptySignal, emptySignal, emptySignal];
+    MindSignal<array>[16] work = [MindSignal::TransitionTo(StateId{20}, Reason{100}), MindSignal::AwaitActuation(receipt.id), MindSignal::TransitionTo(behaviorTarget, Reason{101}), MindSignal::Succeed(Reason{102}), emptySignal ...];
     BatchResult batch = context.mind.ExecuteBatch(BatchId{3}, work, 4, 4, 0)!;
 
     Assert.Equals(batch.executed, 4, "the explicit batch runs in source order");
@@ -133,7 +133,7 @@ void AgenticKernelRunsHistoricalDominatusShape()
     KernelCheckpoint<TestConfiguration, 16> checkpoint = KernelCheckpoint<TestConfiguration, 16>{context, 0};
     CheckpointSlot<TestConfiguration, 16> checkpointSlot = CheckpointSlot<TestConfiguration, 16>{checkpoint};
     ReplayInput empty = EmptyReplayInput();
-    ReplayInput<array>[16] inputs = [empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty];
+    ReplayInput<array>[16] inputs = [empty ...];
     ReplayLog<TestConfiguration, 16> log = ReplayLog<TestConfiguration, 16>{0, inputs};
     log.Append(ReplayInput::Advance(2))!;
     log.Append(ReplayInput::ActuationComplete(receipt.id, Reason{201}))!;
@@ -160,7 +160,7 @@ void ReplayIsDeterministicFromTheSameCheckpoint()
     AgentContext<TestConfiguration, 16> seed = TestContext(1);
     ActuationReceipt receipt = seed.actuator.Dispatch(Allow(Reason{9}))!;
     ReplayInput empty = EmptyReplayInput();
-    ReplayInput<array>[16] inputs = [empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty];
+    ReplayInput<array>[16] inputs = [empty ...];
     ReplayLog<TestConfiguration, 16> log = ReplayLog<TestConfiguration, 16>{0, inputs};
     log.Append(ReplayInput::MemoryWrite(MemoryKey{3}, 55))!;
     log.Append(ReplayInput::EventDispatch(EventKind{4}, EventPayload{88}))!;

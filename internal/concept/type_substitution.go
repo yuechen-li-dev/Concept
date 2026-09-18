@@ -33,6 +33,27 @@ func evt1SubstituteType(t Type, typeParam string, concreteType Type) Type {
 		elem := evt1SubstituteType(*t.ArrayElem, typeParam, concreteType)
 		t.ArrayElem = &elem
 	}
+	if concreteType.Kind == TypeTemplateValue {
+		replaceExtent := func(expr Expr) Expr {
+			if name, ok := expr.(*NameExpr); ok && name.Name == typeParam {
+				value, err := strconv.Atoi(concreteType.Name)
+				if err == nil {
+					if value < 0 {
+						return &IntLiteral{Magnitude: uint64(-int64(value)), Negative: true, Lexeme: concreteType.Name, Span: name.Span}
+					}
+					return &IntLiteral{Magnitude: uint64(value), Lexeme: concreteType.Name, Span: name.Span}
+				}
+			}
+			return expr
+		}
+		if t.ArrayLengthExpr != nil {
+			t.ArrayLengthExpr = replaceExtent(t.ArrayLengthExpr)
+		}
+		t.Shape = append([]StorageDimension(nil), t.Shape...)
+		for i := range t.Shape {
+			t.Shape[i].Expr = replaceExtent(t.Shape[i].Expr)
+		}
+	}
 	t.TypeArgs = append([]Type(nil), t.TypeArgs...)
 	for i := range t.TypeArgs {
 		t.TypeArgs[i] = evt1SubstituteType(t.TypeArgs[i], typeParam, concreteType)

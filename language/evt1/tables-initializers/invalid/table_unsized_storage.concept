@@ -1,0 +1,12 @@
+profile Core;
+
+table Samples
+{
+    int value;
+}
+
+int Main()
+{
+    Samples samples = Samples{1};
+    return 0;
+}

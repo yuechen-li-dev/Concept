@@ -492,6 +492,40 @@ func evt1ModuleUsesStorageBounds(module Module) bool {
 }
 
 func (f *evt1FunctionLowerer) lowerStorageLiteral(literal ArrayLiteralExpr, expected Type, indent int) (string, string, Type) {
+	hasRepeat := false
+	for _, element := range literal.Elements {
+		_, hasRepeat = element.(*RepeatInitializer)
+		if hasRepeat {
+			break
+		}
+	}
+	if hasRepeat {
+		var prelude strings.Builder
+		storage := f.nextTemp("repeated_initializer")
+		prelude.WriteString(ind(indent) + fmt.Sprintf("%s %s;\n", evt1CType(expected), storage))
+		cursor := 0
+		for elementIndex, element := range literal.Elements {
+			repeat, repeated := element.(*RepeatInitializer)
+			if !repeated {
+				elementPrelude, value, _ := f.lowerExprExpected(element, *expected.ArrayElem, indent)
+				prelude.WriteString(elementPrelude)
+				prelude.WriteString(ind(indent) + fmt.Sprintf("%s.data[%d] = %s;\n", storage, cursor, value))
+				cursor++
+				continue
+			}
+			if repeat.ResolvedCount == 0 {
+				continue
+			}
+			index := f.nextTemp(fmt.Sprintf("repeat_%d", elementIndex+1))
+			prelude.WriteString(ind(indent) + fmt.Sprintf("for (size_t %s = 0; %s < %d; ++%s) {\n", index, index, repeat.ResolvedCount, index))
+			elementPrelude, value, _ := f.lowerExprExpected(repeat.Value, *expected.ArrayElem, indent+1)
+			prelude.WriteString(elementPrelude)
+			prelude.WriteString(ind(indent+1) + fmt.Sprintf("%s.data[%d + %s] = %s;\n", storage, cursor, index, value))
+			prelude.WriteString(ind(indent) + "}\n")
+			cursor += repeat.ResolvedCount
+		}
+		return prelude.String(), storage, expected
+	}
 	var prelude strings.Builder
 	values := make([]string, 0, evt1StorageElementCount(expected))
 	for i, element := range evt1FlattenArrayLiteral(&literal) {

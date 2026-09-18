@@ -1,5 +1,13 @@
 # EVT1 array, ndarray, and tensor direction
 
+## Fixed table columns
+
+`table<N>` reuses fixed-array storage as its semantic column representation.
+Each top-level field becomes one contiguous fixed array of extent `N`; the
+enclosing aggregate applies ordinary field alignment and padding. This is
+structure-of-arrays layout, not an array of row structs, and no recursive
+field-splitting or table-specific runtime descriptor is introduced.
+
 Status: R4j semantic facts canonical; optimization deferred
 
 ## Layering

@@ -773,50 +773,67 @@ func evt1ExecComptimeBlock(state *evt1ComptimeState, scope *evt1EvalScope, block
 }
 
 func evt1EvalArrayLiteral(state *evt1ComptimeState, scope *evt1EvalScope, expr ArrayLiteralExpr, expected *Type) (Value, error) {
+	expandedCount := 0
+	for _, element := range expr.Elements {
+		if repeat, ok := element.(*RepeatInitializer); ok {
+			expandedCount += repeat.ResolvedCount
+		} else {
+			expandedCount++
+		}
+	}
 	var arrayType Type
 	if expected != nil && expected.ArrayElem != nil {
 		arrayType = expected.valueType()
-		if arrayType.StorageKind != StorageNDArray && len(expr.Elements) != arrayType.ArrayLength {
-			return Value{}, evt1Diagnostic("CV4226", fmt.Sprintf("array literal expected %d elements but got %d", arrayType.ArrayLength, len(expr.Elements)), expr.Span)
+		if arrayType.StorageKind != StorageNDArray && expandedCount != arrayType.ArrayLength {
+			return Value{}, evt1Diagnostic("CV4226", fmt.Sprintf("array literal expected %d elements but got %d", arrayType.ArrayLength, expandedCount), expr.Span)
 		}
-	} else if len(expr.Elements) == 0 {
+	} else if expandedCount == 0 {
 		return Value{}, evt1Diagnostic("CV4225", "empty array literal requires an explicit fixed-array type", expr.Span)
 	}
-	if len(expr.Elements) > evt1ComptimeMaxLiteralElements {
-		return Value{}, evt1Diagnostic("CV4224", fmt.Sprintf("array literal element count %d exceeds limit %d", len(expr.Elements), evt1ComptimeMaxLiteralElements), expr.Span)
+	if expandedCount > evt1ComptimeMaxLiteralElements {
+		return Value{}, evt1Diagnostic("CV4224", fmt.Sprintf("array literal element count %d exceeds compile-time evaluation limit %d", expandedCount, evt1ComptimeMaxLiteralElements), expr.Span)
 	}
 	literalElements := expr.Elements
 	if arrayType.StorageKind == StorageNDArray {
 		literalElements = evt1FlattenArrayLiteral(&expr)
 	}
 	elements := make([]Value, 0, len(literalElements))
-	for i, element := range literalElements {
-		var elemExpected *Type
-		if arrayType.ArrayElem != nil {
-			elemExpected = arrayType.ArrayElem
+	ordinal := 0
+	for _, element := range literalElements {
+		repeatCount := 1
+		if repeat, ok := element.(*RepeatInitializer); ok {
+			element = repeat.Value
+			repeatCount = repeat.ResolvedCount
 		}
-		value, err := evt1EvalExprTyped(state, scope, element, elemExpected)
-		if err != nil {
-			return Value{}, err
-		}
-		if i == 0 && arrayType.ArrayElem == nil {
-			elemType := value.Type.valueType()
-			arrayType = Type{
-				Name:        elemType.String() + "[]",
-				Kind:        TypeArray,
-				ArrayElem:   &elemType,
-				ArrayLength: len(expr.Elements),
-				StorageKind: StorageArray,
-				Shape:       []StorageDimension{{Extent: len(expr.Elements), Expression: fmt.Sprintf("%d", len(expr.Elements))}},
-				Contiguous:  true,
-				Layout:      "row-major",
-				Span:        expr.Span,
+		for repetition := 0; repetition < repeatCount; repetition++ {
+			var elemExpected *Type
+			if arrayType.ArrayElem != nil {
+				elemExpected = arrayType.ArrayElem
 			}
+			value, err := evt1EvalExprTyped(state, scope, element, elemExpected)
+			if err != nil {
+				return Value{}, err
+			}
+			if ordinal == 0 && arrayType.ArrayElem == nil {
+				elemType := value.Type.valueType()
+				arrayType = Type{
+					Name:        elemType.String() + "[]",
+					Kind:        TypeArray,
+					ArrayElem:   &elemType,
+					ArrayLength: expandedCount,
+					StorageKind: StorageArray,
+					Shape:       []StorageDimension{{Extent: expandedCount, Expression: fmt.Sprintf("%d", expandedCount)}},
+					Contiguous:  true,
+					Layout:      "row-major",
+					Span:        expr.Span,
+				}
+			}
+			if arrayType.ArrayElem != nil && !arrayType.ArrayElem.valueType().Equal(value.Type.valueType()) {
+				return Value{}, evt1Diagnostic("CV4227", fmt.Sprintf("array literal element %d expected %s but got %s", ordinal+1, arrayType.ArrayElem.String(), value.Type.String()), element.exprSpan())
+			}
+			elements = append(elements, value)
+			ordinal++
 		}
-		if arrayType.ArrayElem != nil && !arrayType.ArrayElem.valueType().Equal(value.Type.valueType()) {
-			return Value{}, evt1Diagnostic("CV4227", fmt.Sprintf("array literal element %d expected %s but got %s", i+1, arrayType.ArrayElem.String(), value.Type.String()), element.exprSpan())
-		}
-		elements = append(elements, value)
 	}
 	return Value{Kind: ValueArray, Type: arrayType, Elements: elements}, nil
 }

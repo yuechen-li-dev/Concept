@@ -34,6 +34,13 @@ inspectable; profiles may admit domain semantics but may not silently change
 core meaning. No hidden heap, scheduler, lifetime calculus, or ambient effect
 system is implied by syntax.
 
+**Approved tables/initializers extension.** `table<N>` is a struct-shaped
+structure of fixed contiguous columns with one shared compile-time row count.
+Plain `table` is currently schema-only and does not imply dynamic ownership.
+Inside array initializers, `value ... N` means `N` independent semantic
+initializations and `value ...` fills a statically known remainder. Ellipsis is
+not spread and does not unpack a container.
+
 ## 3. Source files and modules
 
 **Canonical EVT1 foundation.** Ordinary source uses `.concept`; R6a test tooling

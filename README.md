@@ -10,7 +10,7 @@ Active compiler:             EVT1 Stage 0 / Go
 Compiler ID:                 concept-evt1-stage0-go
 Retired reference compiler:  PoC3 / Zig
 Current backend:             deterministic MIR and strict C11 C/H
-Current language status:     EVT1 R7c DragonGod scheduling
+Current language status:     EVT1 tables and ellipsis repetition
 ```
 
 R0 starts a new canonical compiler line. The Go compiler architecture extracted

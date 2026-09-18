@@ -182,16 +182,20 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 	}
 	for _, structDecl := range module.Structs {
 		mirStruct := MIRStruct{
-			Name:       structDecl.Name,
-			CName:      evt1CName(structDecl.Name),
-			Immovable:  structDecl.Immovable,
-			Record:     structDecl.Record,
-			Ref:        structDecl.Ref,
-			Class:      structDecl.Class,
-			Copyable:   evt1TypeCopyable(env, Type{Name: structDecl.Name, Kind: TypeStruct}),
-			Movable:    !structDecl.Immovable,
-			HasDrop:    evt1DropFunction(env, Type{Name: structDecl.Name, Kind: TypeStruct}) != nil,
-			SourceSpan: structDecl.Span,
+			Name:        structDecl.Name,
+			CName:       evt1CName(structDecl.Name),
+			Immovable:   structDecl.Immovable,
+			Record:      structDecl.Record,
+			Ref:         structDecl.Ref,
+			Class:       structDecl.Class,
+			Table:       structDecl.Table,
+			TableSized:  structDecl.TableSized,
+			Cardinality: structDecl.TableCardinality,
+			Columnar:    structDecl.Table,
+			Copyable:    evt1TypeCopyable(env, Type{Name: structDecl.Name, Kind: TypeStruct}),
+			Movable:     !structDecl.Immovable,
+			HasDrop:     evt1DropFunction(env, Type{Name: structDecl.Name, Kind: TypeStruct}) != nil,
+			SourceSpan:  structDecl.Span,
 		}
 		for _, field := range structDecl.Fields {
 			visibility := ""
@@ -1587,10 +1591,21 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 		fn.Operations = append(fn.Operations, op)
 		collectExprMIROps(env, e.Receiver, fn, templateInfo)
 	case *ArrayLiteralExpr:
-		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "array_literal", Detail: fmt.Sprintf("%d elements", len(e.Elements)), SourceSpan: e.Span})
+		expanded := 0
+		for _, element := range e.Elements {
+			if repeat, ok := element.(*RepeatInitializer); ok {
+				expanded += repeat.ResolvedCount
+			} else {
+				expanded++
+			}
+		}
+		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "array_literal", Detail: fmt.Sprintf("%d elements", expanded), SourceSpan: e.Span})
 		for _, element := range e.Elements {
 			collectExprMIROps(env, element, fn, templateInfo)
 		}
+	case *RepeatInitializer:
+		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "repeat_initializer", Detail: fmt.Sprintf("count=%d evaluation=Independent", e.ResolvedCount), SourceSpan: e.Span})
+		collectExprMIROps(env, e.Value, fn, templateInfo)
 	case *IndexExpr:
 		if e.InferenceIndex {
 			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "inference_probability", Detail: fmt.Sprintf("candidate_tag=%d", e.CandidateTag), NoCopy: true, NoAllocation: true, NoOwnershipTransfer: true, SourceSpan: e.Span})
@@ -2348,6 +2363,10 @@ func evt1ModuleUsesAutomataDispatchOutcome(module Module) bool {
 				if usesExpr(arg) {
 					return true
 				}
+			}
+		case *RepeatInitializer:
+			if usesExpr(e.Value) || (e.Count != nil && usesExpr(e.Count)) {
+				return true
 			}
 		case *MatchExpr:
 			if usesExpr(e.Subject) {
@@ -4014,7 +4033,11 @@ func (f *evt1FunctionLowerer) lowerLocalStructConstruct(targetType Type, name st
 	var b strings.Builder
 	var temps []string
 	for i, arg := range construct.Args {
-		prelude, expr, argType := f.lowerExpr(arg, indent)
+		fieldType := structDecl.Fields[i].Type
+		if resolved, ok := f.l.env.fieldSets[targetType.Name][structDecl.Fields[i].Name]; ok {
+			fieldType = resolved
+		}
+		prelude, expr, argType := f.lowerExprExpected(arg, fieldType, indent)
 		b.WriteString(prelude)
 		temp := f.nextTemp(fmt.Sprintf("init_%d", i+1))
 		b.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(argType), temp, expr))

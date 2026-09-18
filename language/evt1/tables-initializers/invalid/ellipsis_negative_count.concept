@@ -1,0 +1,7 @@
+profile Core;
+
+int Main()
+{
+    int<array>[2] values = [1 ... -1];
+    return values[0];
+}

@@ -1,0 +1,28 @@
+profile Core;
+
+record table<2> Samples
+{
+    int value;
+}
+
+ref table<2> SampleView
+{
+    int value;
+}
+
+template <typename T, usize N>
+table<N> GenericSamples
+{
+    T value;
+}
+
+comptime Samples Left = Samples{[1, 2]};
+comptime Samples Right = Samples{[1, 2]};
+static_assert(Left == Right, "record table uses structural record equality");
+static_assert(SizeOf<GenericSamples<int, 3>>() == 12, "generic table closes cardinality");
+
+int Main()
+{
+    SampleView view = SampleView{[7 ...]};
+    return view.value[1];
+}

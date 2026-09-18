@@ -1,0 +1,15 @@
+profile Core;
+
+table<4> Point
+{
+    float x;
+    float y;
+}
+
+int Main()
+{
+    Point points = Point{[0.0 ...], [1.0 ...]};
+    points.x[2] = 4.0;
+    Span<float> xs = Span(points.x);
+    return if (xs[2] == 4.0) 0 else 1;
+}

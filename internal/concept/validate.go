@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -748,6 +749,11 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 			}
 			resolved, err := evt1ResolveType(env, nil, field.Type)
 			if err != nil {
+				if structDecl.Table && field.Type.Column {
+					if diagnostic, ok := err.(Diagnostic); ok && (diagnostic.Code == "CV4221" || diagnostic.Code == "CV4222" || diagnostic.Code == "CV4223") {
+						return nil, evt1Diagnostic("TABLE_CARDINALITY_INVALID", diagnostic.Message, diagnostic.Span)
+					}
+				}
 				return nil, err
 			}
 			fields[field.Name] = resolved
@@ -1010,14 +1016,19 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 	}
 	for _, templateDecl := range module.Templates {
 		scope := evt1ModuleScope(env)
-		resolvedReturn, err := evt1ResolveType(env, nil, templateDecl.ReturnType)
+		for _, parameter := range templateDecl.Parameters {
+			if parameter.Kind == "value" {
+				scope.declare(parameter.Name, evt1ValueBinding{t: parameter.ValueType, mutable: false, state: evt1StorageInitialized})
+			}
+		}
+		resolvedReturn, err := evt1ResolveType(env, scope, templateDecl.ReturnType)
 		if err != nil {
 			return nil, err
 		}
 		scope.returnType = resolvedReturn
 		scope.inAsync = templateDecl.Async
 		for paramIndex, param := range templateDecl.Params {
-			resolvedParam, err := evt1ResolveType(env, nil, param.Type)
+			resolvedParam, err := evt1ResolveType(env, scope, param.Type)
 			if err != nil {
 				return nil, err
 			}
@@ -1367,6 +1378,12 @@ func evt1CollectComptimeCallsFromExpr(expr Expr, env *semanticEnv) []string {
 		var out []string
 		for _, arg := range e.Elements {
 			out = append(out, evt1CollectComptimeCallsFromExpr(arg, env)...)
+		}
+		return out
+	case *RepeatInitializer:
+		out := evt1CollectComptimeCallsFromExpr(e.Value, env)
+		if e.Count != nil {
+			out = append(out, evt1CollectComptimeCallsFromExpr(e.Count, env)...)
 		}
 		return out
 	case *MatchExpr:
@@ -2548,8 +2565,8 @@ func evt1ResolveType(env *semanticEnv, scope *evt1Scope, t Type) (Type, error) {
 			if typeErr != nil {
 				return Type{}, typeErr
 			}
-			if extentType.Name != "int" {
-				return Type{}, evt1Diagnostic("CV4221", "runtime storage extent must be int", expr.exprSpan())
+			if extentType.Name != "int" && extentType.Name != "usize" {
+				return Type{}, evt1Diagnostic("CV4221", "runtime storage extent must be int or usize", expr.exprSpan())
 			}
 			resolvedShape = append(resolvedShape, StorageDimension{Runtime: true, Expression: evt1ExprIdentity(expr), Expr: expr})
 		}
@@ -2568,6 +2585,7 @@ func evt1ResolveType(env *semanticEnv, scope *evt1Scope, t Type) (Type, error) {
 			Shape:       resolvedShape,
 			Contiguous:  true,
 			Layout:      "row-major",
+			Column:      t.Column,
 			Span:        t.Span,
 		}
 		if kind == StorageNDArray {
@@ -2579,7 +2597,7 @@ func evt1ResolveType(env *semanticEnv, scope *evt1Scope, t Type) (Type, error) {
 		if len(resolvedShape) > evt1ComptimeMaxArrayNesting {
 			return Type{}, evt1Diagnostic("CV4223", fmt.Sprintf("storage rank %d exceeds limit %d", len(resolvedShape), evt1ComptimeMaxArrayNesting), t.Span)
 		}
-		if !evt1StorageHasRuntimeShape(resolved) {
+		if !evt1StorageHasRuntimeShape(resolved) && !resolved.Column {
 			cells := evt1StorageElementCount(resolved)
 			if cells > evt1ComptimeMaxArrayCells {
 				return Type{}, evt1Diagnostic("CV4224", fmt.Sprintf("storage cell count %d exceeds limit %d", cells, evt1ComptimeMaxArrayCells), t.Span)
@@ -2716,23 +2734,47 @@ func validateArrayLiteralExpr(env *semanticEnv, scope *evt1Scope, expr ArrayLite
 	if len(expr.Elements) > evt1ComptimeMaxLiteralElements {
 		return Type{}, evt1Diagnostic("CV4224", fmt.Sprintf("array literal element count %d exceeds limit %d", len(expr.Elements), evt1ComptimeMaxLiteralElements), expr.Span)
 	}
+	openRepetition := evt1HasOpenInitializerRepetition(expr, templateInfo)
+	expandedCount := len(expr.Elements)
+	if !openRepetition {
+		var err error
+		expandedCount, err = evt1ResolveInitializerRepetitions(env, scope, &expr, expected)
+		if err != nil {
+			return Type{}, err
+		}
+	} else if expected == nil || expected.ArrayElem == nil {
+		return Type{}, evt1Diagnostic("REPETITION_COUNT_NOT_INFERABLE", "generic ellipsis repetition requires an explicitly sized destination type", expr.Span)
+	}
 	var arrayType Type
 	if expected != nil && expected.ArrayElem != nil {
 		arrayType = evt1CanonicalType(env, *expected)
-		if len(expr.Elements) != arrayType.ArrayLength {
-			return Type{}, evt1Diagnostic("CV4226", fmt.Sprintf("array literal expected %d elements but got %d", arrayType.ArrayLength, len(expr.Elements)), expr.Span)
+		if !openRepetition && expandedCount != arrayType.ArrayLength {
+			return Type{}, evt1Diagnostic("CV4226", fmt.Sprintf("array literal expected %d elements but got %d", arrayType.ArrayLength, expandedCount), expr.Span)
 		}
-	} else if len(expr.Elements) == 0 {
+	} else if expandedCount == 0 && len(expr.Elements) == 0 {
 		return Type{}, evt1Diagnostic("CV4225", "empty array literal requires an explicit fixed-array type", expr.Span)
 	}
+	var err error
 	for i, element := range expr.Elements {
+		repeat, repeated := element.(*RepeatInitializer)
+		if repeated {
+			element = repeat.Value
+		}
 		var elemExpected *Type
 		if arrayType.ArrayElem != nil {
 			elemExpected = arrayType.ArrayElem
 		}
-		elementType, err := validateExpr(env, scope, element, templateInfo, inComptimeFn)
+		var elementType Type
+		if elemExpected != nil {
+			elementType, err = validateExprAgainstExpected(env, scope, element, *elemExpected, templateInfo, inComptimeFn)
+		} else {
+			elementType, err = validateExpr(env, scope, element, templateInfo, inComptimeFn)
+		}
 		if err != nil {
 			return Type{}, err
+		}
+		if repeated && (repeat.ResolvedCount > 1 || openRepetition) && !evt1InitializerMayRepeatIndependently(env, element, elementType) {
+			return Type{}, evt1Diagnostic("REPETITION_OWNERSHIP_INVALID", "initializer repetition requires every conceptual initialization to be independently legal", repeat.Span)
 		}
 		if i == 0 && arrayType.ArrayElem == nil {
 			elem := evt1CanonicalType(env, elementType.valueType())
@@ -2740,9 +2782,9 @@ func validateArrayLiteralExpr(env *semanticEnv, scope *evt1Scope, expr ArrayLite
 				Name:        elem.String() + "[]",
 				Kind:        TypeArray,
 				ArrayElem:   &elem,
-				ArrayLength: len(expr.Elements),
+				ArrayLength: expandedCount,
 				StorageKind: StorageArray,
-				Shape:       []StorageDimension{{Extent: len(expr.Elements), Expression: fmt.Sprintf("%d", len(expr.Elements))}},
+				Shape:       []StorageDimension{{Extent: expandedCount, Expression: fmt.Sprintf("%d", expandedCount)}},
 				Contiguous:  true,
 				Layout:      "row-major",
 				Span:        expr.Span,
@@ -2759,6 +2801,99 @@ func validateArrayLiteralExpr(env *semanticEnv, scope *evt1Scope, expr ArrayLite
 		return Type{}, evt1Diagnostic("CV4225", "empty array literal requires an explicit fixed-array type", expr.Span)
 	}
 	return arrayType, nil
+}
+
+func evt1HasOpenInitializerRepetition(expr ArrayLiteralExpr, templateInfo *evt1TemplateInfo) bool {
+	if templateInfo == nil {
+		return false
+	}
+	valueParams := map[string]bool{}
+	for _, parameter := range templateInfo.Decl.Parameters {
+		if parameter.Kind == "value" {
+			valueParams[parameter.Name] = true
+		}
+	}
+	for _, element := range expr.Elements {
+		repeat, ok := element.(*RepeatInitializer)
+		if !ok {
+			continue
+		}
+		if repeat.Count == nil {
+			return true
+		}
+		if name, ok := repeat.Count.(*NameExpr); ok && valueParams[name.Name] {
+			return true
+		}
+	}
+	return false
+}
+
+func evt1ResolveInitializerRepetitions(env *semanticEnv, scope *evt1Scope, expr *ArrayLiteralExpr, expected *Type) (int, error) {
+	total, bareIndex := 0, -1
+	for i, element := range expr.Elements {
+		repeat, ok := element.(*RepeatInitializer)
+		if !ok {
+			total++
+			continue
+		}
+		if repeat.Count == nil {
+			if bareIndex >= 0 {
+				return 0, evt1Diagnostic("REPETITION_COUNT_NOT_INFERABLE", "an initializer may contain only one fill-remainder ellipsis", repeat.Span)
+			}
+			bareIndex = i
+			continue
+		}
+		evalScope := evt1SeedComptimeScope(env)
+		if scope != nil {
+			evalScope = evt1EvalScopeFromValidation(scope, env)
+		}
+		value, err := evt1EvalExpr(newEVT1ComptimeState(env), evalScope, repeat.Count)
+		if err != nil || value.Kind != ValueInt {
+			return 0, evt1Diagnostic("REPETITION_COUNT_NOT_COMPTIME", "ellipsis repetition count must be a compile-time integer", repeat.Count.exprSpan())
+		}
+		if value.IntValue < 0 {
+			return 0, evt1Diagnostic("REPETITION_COUNT_NEGATIVE", "ellipsis repetition count must be nonnegative", repeat.Count.exprSpan())
+		}
+		if value.IntValue > evt1StorageMaxFixedExtent {
+			return 0, evt1Diagnostic("REPETITION_COUNT_TOO_LARGE", fmt.Sprintf("ellipsis repetition count %d exceeds limit %d", value.IntValue, evt1StorageMaxFixedExtent), repeat.Count.exprSpan())
+		}
+		repeat.ResolvedCount = value.IntValue
+		total += value.IntValue
+	}
+	if bareIndex >= 0 {
+		if expected == nil || expected.ArrayElem == nil || evt1StorageHasRuntimeShape(*expected) {
+			return 0, evt1Diagnostic("REPETITION_COUNT_NOT_INFERABLE", "bare ellipsis requires a statically known destination extent", expr.Elements[bareIndex].exprSpan())
+		}
+		if bareIndex != len(expr.Elements)-1 {
+			return 0, evt1Diagnostic("REPETITION_COUNT_NOT_INFERABLE", "fill-remainder ellipsis must be the final initializer element", expr.Elements[bareIndex].exprSpan())
+		}
+		remaining := expected.ArrayLength - total
+		if remaining < 0 {
+			return 0, evt1Diagnostic("INITIALIZER_TOO_LARGE", fmt.Sprintf("initializer expands to at least %d elements for extent %d", total, expected.ArrayLength), expr.Elements[bareIndex].exprSpan())
+		}
+		repeat := expr.Elements[bareIndex].(*RepeatInitializer)
+		repeat.ResolvedCount = remaining
+		total += remaining
+	}
+	if expected != nil && expected.ArrayElem != nil && total > expected.ArrayLength {
+		return 0, evt1Diagnostic("INITIALIZER_TOO_LARGE", fmt.Sprintf("initializer expands to %d elements for extent %d", total, expected.ArrayLength), expr.Span)
+	}
+	return total, nil
+}
+
+func evt1InitializerMayRepeatIndependently(env *semanticEnv, expr Expr, t Type) bool {
+	if _, moved := expr.(*MoveExpr); moved {
+		return false
+	}
+	if evt1TypeCopyable(env, t) {
+		return true
+	}
+	switch expr.(type) {
+	case *CallExpr, *TemplateCallExpr, *ConstructExpr, *StructConstructExpr:
+		return true
+	default:
+		return false
+	}
 }
 
 func validateNDArrayLiteralExpr(env *semanticEnv, scope *evt1Scope, expr ArrayLiteralExpr, expected Type, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
@@ -2830,7 +2965,10 @@ func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string,
 		}
 		return nil
 	}
-	if _, ok := env.structs[t.Name]; ok && len(t.TypeArgs) == 0 {
+	if decl, ok := env.structs[t.Name]; ok && len(t.TypeArgs) == 0 {
+		if decl.Table && !decl.TableSized {
+			return evt1Diagnostic("TABLE_CARDINALITY_REQUIRED", "unsized table is a schema only; owning storage requires table<N>", span)
+		}
 		return nil
 	}
 	if _, ok := env.genericTypeInstances[t.Name]; ok {
@@ -5220,6 +5358,14 @@ func evt1ValidateGuardExpr(env *semanticEnv, scope *evt1Scope, expr Expr, state 
 			}
 		}
 		return nil
+	case *RepeatInitializer:
+		if err := evt1ValidateGuardExpr(env, scope, e.Value, state, depth); err != nil {
+			return err
+		}
+		if e.Count != nil {
+			return evt1ValidateGuardExpr(env, scope, e.Count, state, depth)
+		}
+		return nil
 	case *IndexExpr:
 		if err := evt1ValidateGuardExpr(env, scope, e.Base, state, depth); err != nil {
 			return err
@@ -5423,6 +5569,11 @@ func evt1GuardExprNodeCount(expr Expr) int {
 		for _, element := range e.Elements {
 			count += evt1GuardExprNodeCount(element)
 		}
+	case *RepeatInitializer:
+		count += evt1GuardExprNodeCount(e.Value)
+		if e.Count != nil {
+			count += evt1GuardExprNodeCount(e.Count)
+		}
 	case *IndexExpr:
 		count += evt1GuardExprNodeCount(e.Base)
 		for _, index := range evt1StorageIndices(e) {
@@ -5509,6 +5660,11 @@ func evt1ExprIdentity(expr Expr) string {
 			parts = append(parts, evt1ExprIdentity(element))
 		}
 		return "[" + strings.Join(parts, ",") + "]"
+	case *RepeatInitializer:
+		if e.Count != nil {
+			return evt1ExprIdentity(e.Value) + "..." + evt1ExprIdentity(e.Count)
+		}
+		return evt1ExprIdentity(e.Value) + "..."
 	case *IndexExpr:
 		indices := make([]string, 0, len(evt1StorageIndices(e)))
 		for _, index := range evt1StorageIndices(e) {
@@ -6876,16 +7032,7 @@ func evt1InstantiateTemplateFunction(templateDecl TemplateDecl, concreteType Typ
 func evt1InstantiateTemplateFunctionArgs(templateDecl TemplateDecl, parameters []GenericParameter, concreteArgs []Type) (FunctionDecl, error) {
 	body := *templateDecl.Body
 	var err error
-	if parameters[0].Kind == "type" {
-		body, err = evt1SubstituteBlock(body, parameters[0].Name, concreteArgs[0])
-		if err != nil {
-			return FunctionDecl{}, err
-		}
-	}
-	for i := 1; i < len(parameters); i++ {
-		if parameters[i].Kind != "type" {
-			continue
-		}
+	for i := range parameters {
 		body, err = evt1SubstituteBlock(body, parameters[i].Name, concreteArgs[i])
 		if err != nil {
 			return FunctionDecl{}, err
@@ -7079,6 +7226,15 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 		}
 		return &UnaryExpr{Op: e.Op, Value: value, Span: e.Span}, nil
 	case *NameExpr:
+		if e.Name == typeParam && concreteType.Kind == TypeTemplateValue {
+			value, err := strconv.Atoi(concreteType.Name)
+			if err == nil {
+				if value < 0 {
+					return &IntLiteral{Magnitude: uint64(-int64(value)), Negative: true, Lexeme: concreteType.Name, Span: e.Span}, nil
+				}
+				return &IntLiteral{Magnitude: uint64(value), Lexeme: concreteType.Name, Span: e.Span}, nil
+			}
+		}
 		return &NameExpr{Name: e.Name, Span: e.Span}, nil
 	case *IntLiteral:
 		return &IntLiteral{Magnitude: e.Magnitude, Negative: e.Negative, Lexeme: e.Lexeme, ResolvedType: e.ResolvedType, Span: e.Span}, nil
@@ -7231,6 +7387,19 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 				return nil, err
 			}
 			out.Elements = append(out.Elements, value)
+		}
+		return out, nil
+	case *RepeatInitializer:
+		value, err := evt1SubstituteExpr(e.Value, typeParam, concreteType)
+		if err != nil {
+			return nil, err
+		}
+		out := &RepeatInitializer{Value: value, ResolvedCount: e.ResolvedCount, FillRemainder: e.FillRemainder, Span: e.Span}
+		if e.Count != nil {
+			out.Count, err = evt1SubstituteExpr(e.Count, typeParam, concreteType)
+			if err != nil {
+				return nil, err
+			}
 		}
 		return out, nil
 	case *IndexExpr:

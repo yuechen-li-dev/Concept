@@ -18,6 +18,7 @@ is erased before C lowering.
 | Lifetimes | `validate.go`, `types.go` | section 8.5 | `EVT1-REFERENCE-AND-SPAN-DIRECTION.md` | `language/evt1/lifetime` | `lifetime_lexical_test.go`, `lifetime_relational_test.go` |
 | Failure | `failure.go` | section 12 | `EVT1-FAILURE-MODEL.md` | `language/evt1/failure` | `failure_test.go` |
 | Storage | `storage.go`, `layout.go`, `span.go` | section 16 | layout/storage/span direction records | `language/evt1/storage` | `storage_arrays_test.go`, `storage_binding_test.go`, `layout_stream_test.go`, `span_test.go` |
+| Tables and initializer repetition | `types.go`, `parse.go`, `validate.go`, `storage.go`, `generate.go` | `TABLES.md`, `INITIALIZERS.md` | fixed columnar aggregate and compact initializer repetition | `language/evt1/tables-initializers` | `table_repetition_test.go` |
 | Tensor | `tensor.go` | section 16.4 | tensor direction record | `language/evt1/tensor` | `tensor_semantics_test.go`, `tensor_backing_test.go` |
 | Interfaces | `interface_dyn.go` | sections 13 and 19 | interface/dyn direction records | `language/evt1/interface` | `interface_dyn_test.go` |
 | Automata | `automata.go` | section 22 | automata and decide direction records | `language/evt1/automata` | `automata_state_test.go`, `automata_transitions_test.go` |

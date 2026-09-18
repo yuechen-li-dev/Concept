@@ -607,6 +607,11 @@ func evt1AccessExpr(env *semanticEnv, state *evt1AccessFunction, expr Expr) {
 		for _, item := range e.Elements {
 			evt1AccessExpr(env, state, item)
 		}
+	case *RepeatInitializer:
+		evt1AccessExpr(env, state, e.Value)
+		if e.Count != nil {
+			evt1AccessExpr(env, state, e.Count)
+		}
 	case *StructConstructExpr:
 		for _, arg := range e.Args {
 			evt1AccessExpr(env, state, arg)

@@ -30,11 +30,14 @@ type SemanticModuleEffectSummary struct {
 }
 
 type SemanticModuleTypeSummary struct {
-	Name     string `json:"name"`
-	Copyable bool   `json:"copyable"`
-	Movable  bool   `json:"movable"`
-	HasDrop  bool   `json:"has_drop"`
-	Ref      bool   `json:"ref,omitempty"`
+	Name        string `json:"name"`
+	Copyable    bool   `json:"copyable"`
+	Movable     bool   `json:"movable"`
+	HasDrop     bool   `json:"has_drop"`
+	Ref         bool   `json:"ref,omitempty"`
+	Table       bool   `json:"table,omitempty"`
+	Cardinality int    `json:"cardinality,omitempty"`
+	Columnar    bool   `json:"columnar,omitempty"`
 }
 
 type SemanticModuleExports struct {
@@ -84,7 +87,7 @@ func registerSemanticGobTypes() {
 			&AwaitExpr{}, &InferExpr{}, &NameExpr{}, &IntLiteral{}, &FloatLiteral{}, &StringLiteral{}, &BoolLiteral{},
 			&FieldExpr{}, &CallExpr{}, &DispatchExpr{}, &TemplateCallExpr{}, &BinaryExpr{}, &UnaryExpr{}, &MoveExpr{},
 			&RefExpr{}, &BindExpr{}, &ConstructExpr{}, &StructConstructExpr{}, &CallableExpr{}, &WithExpr{},
-			&ArrayLiteralExpr{}, &IndexExpr{}, &MatchExpr{}, &IfExpr{}, &FailureExpr{}, &ParenExpr{},
+			&ArrayLiteralExpr{}, &RepeatInitializer{}, &IndexExpr{}, &MatchExpr{}, &IfExpr{}, &FailureExpr{}, &ParenExpr{},
 		}
 		for _, value := range values {
 			gob.Register(value)
@@ -563,7 +566,7 @@ func semanticModuleExports(module Module, env *semanticEnv) SemanticModuleExport
 	for _, decl := range module.Structs {
 		exports.Types = append(exports.Types, decl.Name)
 		t := Type{Name: decl.Name, Kind: TypeStruct}
-		exports.TypeSummaries = append(exports.TypeSummaries, SemanticModuleTypeSummary{Name: decl.Name, Copyable: evt1TypeCopyable(env, t), Movable: evt1TypeMovable(env, t), HasDrop: evt1TypeHasDrop(env, t), Ref: decl.Ref})
+		exports.TypeSummaries = append(exports.TypeSummaries, SemanticModuleTypeSummary{Name: decl.Name, Copyable: evt1TypeCopyable(env, t), Movable: evt1TypeMovable(env, t), HasDrop: evt1TypeHasDrop(env, t), Ref: decl.Ref, Table: decl.Table, Cardinality: decl.TableCardinality, Columnar: decl.Table})
 	}
 	for _, decl := range module.Enums {
 		exports.Types = append(exports.Types, decl.Name)

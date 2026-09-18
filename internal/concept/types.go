@@ -76,6 +76,7 @@ type Type struct {
 	Shape              []StorageDimension `json:"shape,omitempty"`
 	Contiguous         bool               `json:"contiguous,omitempty"`
 	Layout             string             `json:"layout,omitempty"`
+	Column             bool               `json:"column,omitempty"`
 	Quantity           *QuantityDimension `json:"quantity,omitempty"`
 	Span               Span               `json:"span"`
 }
@@ -162,6 +163,7 @@ func (t Type) Equal(other Type) bool {
 		t.TensorRank != other.TensorRank ||
 		(t.Quantity == nil) != (other.Quantity == nil) ||
 		t.StorageKind != other.StorageKind ||
+		t.Column != other.Column ||
 		len(t.Shape) != len(other.Shape) {
 		return false
 	}
@@ -310,15 +312,19 @@ type StreamChannel struct {
 }
 
 type StructDecl struct {
-	Name       string         `json:"name"`
-	Immovable  bool           `json:"immovable"`
-	Record     bool           `json:"record"`
-	Ref        bool           `json:"ref,omitempty"`
-	Class      bool           `json:"class,omitempty"`
-	Fields     []Field        `json:"fields"`
-	Methods    []FunctionDecl `json:"methods,omitempty"`
-	Span       Span           `json:"span"`
-	RecordSpan Span           `json:"record_span,omitempty"`
+	Name                       string         `json:"name"`
+	Immovable                  bool           `json:"immovable"`
+	Record                     bool           `json:"record"`
+	Ref                        bool           `json:"ref,omitempty"`
+	Class                      bool           `json:"class,omitempty"`
+	Table                      bool           `json:"table,omitempty"`
+	TableSized                 bool           `json:"table_sized,omitempty"`
+	TableCardinalityExpression string         `json:"table_cardinality_expression,omitempty"`
+	TableCardinality           int            `json:"table_cardinality,omitempty"`
+	Fields                     []Field        `json:"fields"`
+	Methods                    []FunctionDecl `json:"methods,omitempty"`
+	Span                       Span           `json:"span"`
+	RecordSpan                 Span           `json:"record_span,omitempty"`
 }
 
 type VariantDecl struct {
@@ -1159,6 +1165,20 @@ type ArrayLiteralExpr struct {
 func (*ArrayLiteralExpr) evt1Expr()        {}
 func (e *ArrayLiteralExpr) exprSpan() Span { return e.Span }
 
+// RepeatInitializer is initializer grammar, not an expression operator.
+// ResolvedCount is filled by semantic validation while Value and Count retain
+// compact source semantics for MIR, artifacts, and loop-based C11 lowering.
+type RepeatInitializer struct {
+	Value         Expr `json:"value"`
+	Count         Expr `json:"count,omitempty"`
+	ResolvedCount int  `json:"resolved_count,omitempty"`
+	FillRemainder bool `json:"fill_remainder,omitempty"`
+	Span          Span `json:"span"`
+}
+
+func (*RepeatInitializer) evt1Expr()        {}
+func (e *RepeatInitializer) exprSpan() Span { return e.Span }
+
 type IndexExpr struct {
 	Base             Expr     `json:"base"`
 	Index            Expr     `json:"index"` // first index retained for the legacy rank-1 evaluator
@@ -1382,17 +1402,21 @@ type MIRStorageType struct {
 }
 
 type MIRStruct struct {
-	Name       string    `json:"name"`
-	CName      string    `json:"c_name"`
-	Immovable  bool      `json:"immovable"`
-	Record     bool      `json:"record,omitempty"`
-	Ref        bool      `json:"ref,omitempty"`
-	Class      bool      `json:"class,omitempty"`
-	Copyable   bool      `json:"copyable"`
-	Movable    bool      `json:"movable"`
-	HasDrop    bool      `json:"has_drop"`
-	Fields     []MIRName `json:"fields,omitempty"`
-	SourceSpan Span      `json:"source_span"`
+	Name        string    `json:"name"`
+	CName       string    `json:"c_name"`
+	Immovable   bool      `json:"immovable"`
+	Record      bool      `json:"record,omitempty"`
+	Ref         bool      `json:"ref,omitempty"`
+	Class       bool      `json:"class,omitempty"`
+	Table       bool      `json:"table,omitempty"`
+	TableSized  bool      `json:"table_sized,omitempty"`
+	Cardinality int       `json:"cardinality,omitempty"`
+	Columnar    bool      `json:"columnar,omitempty"`
+	Copyable    bool      `json:"copyable"`
+	Movable     bool      `json:"movable"`
+	HasDrop     bool      `json:"has_drop"`
+	Fields      []MIRName `json:"fields,omitempty"`
+	SourceSpan  Span      `json:"source_span"`
 }
 
 type MIREnum struct {

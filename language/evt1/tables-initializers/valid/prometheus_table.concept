@@ -1,0 +1,14 @@
+profile Core;
+
+table<1024> Coordinates
+{
+    float x;
+    float y;
+    float weight;
+}
+
+float WeightedCoordinate()
+{
+    Coordinates coordinates = Coordinates{[1.0 ...], [2.0 ...], [0.5 ... 1024]};
+    return coordinates.x[17] * coordinates.weight[17] + coordinates.y[17];
+}

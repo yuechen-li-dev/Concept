@@ -1,0 +1,14 @@
+profile Core;
+
+template <usize N>
+int<array>[N] Zeroes()
+{
+    return [0 ... N];
+}
+
+int Main()
+{
+    int<array>[8] values = [1 ... 2, 2 ... 3, 3 ...];
+    int<array>[4] zeroes = Zeroes<4>();
+    return values[7] + zeroes[3];
+}

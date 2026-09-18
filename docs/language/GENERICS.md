@@ -2,6 +2,12 @@
 
 Status: EVT1 R6d implemented local-compilation substrate
 
+Fixed tables use the existing non-type parameter system; there is no separate
+table-generic mechanism. `template <typename T, usize N> table<N> Samples`
+substitutes both the element type and shared column cardinality. Initializer
+repetition counts may use the same `usize` parameter and close at ordinary
+template instantiation.
+
 Concept uses modern-C++-recognizable spelling for ordinary monomorphized
 runtime types and functions:
 

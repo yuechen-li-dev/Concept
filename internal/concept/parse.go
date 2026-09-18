@@ -74,6 +74,10 @@ func lexEVT1(text string) ([]Token, error) {
 		}
 		start := Span{Line: line, Column: column}
 		switch {
+		case i+2 < len(text) && text[i:i+3] == "...":
+			tokens = append(tokens, Token{Lexeme: "...", Span: start})
+			i += 3
+			column += 3
 		case (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_':
 			j := i + 1
 			for j < len(text) {
@@ -322,13 +326,28 @@ func (p *parser) parseModule() (Module, error) {
 			module.Structs = append(module.Structs, structDecl)
 			module.Functions = append(module.Functions, structDecl.Methods...)
 		case "record":
-			structDecl, err := p.parseStructDecl(false, true, false)
+			var structDecl StructDecl
+			var err error
+			if p.peekLexemeN(1) == "table" {
+				structDecl, err = p.parseTableDecl(true, false)
+			} else {
+				structDecl, err = p.parseStructDecl(false, true, false)
+			}
 			if err != nil {
 				return module, err
 			}
 			module.Structs = append(module.Structs, structDecl)
 			module.Functions = append(module.Functions, structDecl.Methods...)
 		case "ref":
+			if p.peekLexemeN(1) == "table" {
+				decl, err := p.parseTableDecl(false, true)
+				if err != nil {
+					return module, err
+				}
+				module.Structs = append(module.Structs, decl)
+				module.Functions = append(module.Functions, decl.Methods...)
+				continue
+			}
 			if p.peekLexemeN(1) != "struct" {
 				fn, err := p.parseFunctionDecl("", false)
 				if err != nil {
@@ -350,6 +369,13 @@ func (p *parser) parseModule() (Module, error) {
 			}
 			module.Structs = append(module.Structs, structDecl)
 			module.Functions = append(module.Functions, structDecl.Methods...)
+		case "table":
+			decl, err := p.parseTableDecl(false, false)
+			if err != nil {
+				return module, err
+			}
+			module.Structs = append(module.Structs, decl)
+			module.Functions = append(module.Functions, decl.Methods...)
 		case "class":
 			decl, err := p.parseClassDecl()
 			if err != nil {
@@ -1426,7 +1452,7 @@ func (p *parser) templateDeclIsRuntimeType() bool {
 			if depth == 0 && i+1 < len(p.tokens) {
 				for j := i + 1; j < len(p.tokens); j++ {
 					next := p.tokens[j].Lexeme
-					if next == "struct" || next == "class" || (next == "ref" && j+1 < len(p.tokens) && p.tokens[j+1].Lexeme == "struct") {
+					if next == "struct" || next == "table" || next == "class" || ((next == "ref" || next == "record") && j+1 < len(p.tokens) && (p.tokens[j+1].Lexeme == "struct" || p.tokens[j+1].Lexeme == "table")) {
 						return true
 					}
 					if next == ";" || next == "{" {
@@ -1494,7 +1520,13 @@ func (p *parser) parseGenericTypeDecl() (GenericTypeDecl, error) {
 		constraint = TemplateConstraint{ConceptName: ref.Name, TypeArg: ref.TypeArgs[0], TypeArgs: ref.TypeArgs, Span: req.Span}
 	}
 	var aggregate StructDecl
-	if p.peekLexeme() == "ref" {
+	if p.peekLexeme() == "ref" && p.peekLexemeN(1) == "table" {
+		aggregate, err = p.parseTableDecl(false, true)
+	} else if p.peekLexeme() == "record" && p.peekLexemeN(1) == "table" {
+		aggregate, err = p.parseTableDecl(true, false)
+	} else if p.peekLexeme() == "table" {
+		aggregate, err = p.parseTableDecl(false, false)
+	} else if p.peekLexeme() == "ref" {
 		aggregate, err = p.parseStructDecl(false, false, true)
 	} else if p.peekLexeme() == "struct" {
 		aggregate, err = p.parseStructDecl(false, false, false)
@@ -1716,6 +1748,105 @@ func (p *parser) parseStructDecl(immovable, record, refStruct bool) (StructDecl,
 		}
 		if _, err := p.expect(";"); err != nil {
 			return StructDecl{}, err
+		}
+		decl.Fields = append(decl.Fields, Field{Type: fieldType, Name: fieldName.Lexeme, Visibility: visibility, Span: fieldName.Span})
+	}
+	if _, err := p.expect("}"); err != nil {
+		return StructDecl{}, err
+	}
+	if p.peekLexeme() == ";" {
+		p.next()
+	}
+	evt1RewriteAggregateMethods(&decl)
+	return decl, nil
+}
+
+func (p *parser) parseTableDecl(record, refTable bool) (StructDecl, error) {
+	start := p.currentSpan()
+	if refTable {
+		p.next()
+	}
+	recordSpan := Span{}
+	if record {
+		recordSpan = p.next().Span
+	}
+	if _, err := p.expect("table"); err != nil {
+		return StructDecl{}, err
+	}
+	var cardinality Expr
+	if p.peekLexeme() == "<" {
+		p.next()
+		var err error
+		// `>` closes table cardinality syntax; parse arithmetic without treating
+		// the delimiter as a comparison operator.
+		cardinality, err = p.parseAdditive()
+		if err != nil {
+			return StructDecl{}, err
+		}
+		if _, err := p.expect(">"); err != nil {
+			return StructDecl{}, err
+		}
+	}
+	nameTok, err := p.expectIdentifier("TABLE_NAME_REQUIRED", "expected table name")
+	if err != nil {
+		return StructDecl{}, err
+	}
+	if _, err := p.expect("{"); err != nil {
+		return StructDecl{}, err
+	}
+	decl := StructDecl{
+		Name: nameTok.Lexeme, Record: record, Ref: refTable, Table: true,
+		TableSized: cardinality != nil, Span: start, RecordSpan: recordSpan,
+	}
+	if cardinality != nil {
+		decl.TableCardinalityExpression = evt1ExprIdentity(cardinality)
+		if literal, ok := cardinality.(*IntLiteral); ok && !literal.Negative && literal.Magnitude <= uint64(^uint(0)>>1) {
+			decl.TableCardinality = int(literal.Magnitude)
+		}
+	}
+	visibility := "public"
+	for !p.done() && p.peekLexeme() != "}" {
+		if (p.peekLexeme() == "public" || p.peekLexeme() == "private") && p.peekLexemeN(1) == ":" {
+			visibility = p.next().Lexeme
+			p.next()
+			continue
+		}
+		async := false
+		if p.peekLexeme() == "async" || p.peekLexeme() == "asynchronous" {
+			p.next()
+			async = true
+		}
+		fieldType, err := p.parseType("")
+		if err != nil {
+			return StructDecl{}, err
+		}
+		fieldName, err := p.expectIdentifier("TABLE_COLUMN_NAME_REQUIRED", "expected table column name")
+		if err != nil {
+			return StructDecl{}, err
+		}
+		if p.peekLexeme() == "(" {
+			method, err := p.parseAggregateMethodTail(decl.Name, visibility, fieldType, fieldName)
+			if err != nil {
+				return StructDecl{}, err
+			}
+			method.Async = async
+			decl.Methods = append(decl.Methods, method)
+			continue
+		}
+		if async {
+			return StructDecl{}, evt1Diagnostic("ASYNC_RETURN_TYPE_INVALID", "async is valid only on a function or method declaration", fieldName.Span)
+		}
+		if _, err := p.expect(";"); err != nil {
+			return StructDecl{}, err
+		}
+		if cardinality != nil {
+			element := fieldType
+			fieldType = Type{
+				Name: element.String() + "[]", Kind: TypeArray, ArrayElem: &element,
+				ArrayLengthExpr: cardinality, StorageKind: StorageArray,
+				Shape: []StorageDimension{{Expr: cardinality}}, Contiguous: true,
+				Layout: "row-major", Column: true, Span: element.Span,
+			}
 		}
 		decl.Fields = append(decl.Fields, Field{Type: fieldType, Name: fieldName.Lexeme, Visibility: visibility, Span: fieldName.Span})
 	}
@@ -4099,6 +4230,19 @@ func (p *parser) parseArrayLiteralExpr() (Expr, error) {
 			element, err := p.parseExpr()
 			if err != nil {
 				return nil, err
+			}
+			if p.peekLexeme() == "..." {
+				ellipsis := p.next()
+				repeat := &RepeatInitializer{Value: element, FillRemainder: true, Span: ellipsis.Span}
+				if p.peekLexeme() != "," && p.peekLexeme() != "]" {
+					count, err := p.parseExpr()
+					if err != nil {
+						return nil, err
+					}
+					repeat.Count = count
+					repeat.FillRemainder = false
+				}
+				element = repeat
 			}
 			lit.Elements = append(lit.Elements, element)
 			if p.peekLexeme() != "," {

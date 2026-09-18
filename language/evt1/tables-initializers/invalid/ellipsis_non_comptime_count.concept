@@ -1,0 +1,8 @@
+profile Core;
+
+int Main()
+{
+    int count = 2;
+    int<array>[2] values = [1 ... count];
+    return values[0];
+}
