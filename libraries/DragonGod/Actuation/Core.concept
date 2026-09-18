@@ -2,61 +2,173 @@ module DragonGod.Actuation.Core;
 profile Core;
 
 import DragonGod.Core.Types;
+import Standard.Synchronization.Atomic;
+import Standard.Synchronization.Guard;
 
-enum ActuationStatus { Empty, Pending, Completed, Failed, Denied, }
-enum ActuationError { CapacityExhausted, Missing, }
+enum ActuationStatus { Empty, Allocating, Pending, Claimed, Completed, Failed, Denied, }
+enum ActuationError { CapacityExhausted, Missing, AlreadyClaimed, AlreadyCommitted, InvalidClaim, }
 record struct ActuationDecision { bool allowed; Reason reason; };
 record struct ActuationReceipt { ActuationId id; bool accepted; bool completed; bool ok; Reason reason; };
-struct ActuationSlot { ActuationId id; ActuationStatus status; Reason reason; bool occupied; };
+struct ActuationSlot { ActuationId id; AtomicInt status; Reason reason; };
 
-ActuationSlot EmptyActuationSlot() { return ActuationSlot{ActuationId{0}, ActuationStatus::Empty, Reason{0}, false}; }
+class ActuationClaim
+{
+public:
+    // Construction is library-policy authority in R7d5. The atomic slot
+    // transition remains the runtime arbiter even if a value is forged.
+    ActuationId id;
+    owned int authority;
+};
+
+ActuationSlot EmptyActuationSlot() { return ActuationSlot{ActuationId{0}, AtomicInt{0}, Reason{0}}; }
 ActuationDecision Allow(Reason reason) { return ActuationDecision{true, reason}; }
 ActuationDecision Deny(Reason reason) { return ActuationDecision{false, reason}; }
-bool SlotIs(ActuationSlot slot, ActuationId id) { return slot.occupied and slot.id.value == id.value; }
+bool SlotIs(ref const ActuationSlot slot, ActuationId id)
+{
+    return LoadAtomic(ref const slot.status, MemoryOrder::Acquire) >= 2 and slot.id.value == id.value;
+}
+
+ActuationStatus StatusFromCode(int code)
+{
+    if (code == 1) { return ActuationStatus::Allocating; }
+    if (code == 2) { return ActuationStatus::Pending; }
+    if (code == 3) { return ActuationStatus::Claimed; }
+    if (code == 4) { return ActuationStatus::Completed; }
+    if (code == 5) { return ActuationStatus::Failed; }
+    if (code == 6) { return ActuationStatus::Denied; }
+    return ActuationStatus::Empty;
+}
+
+int ActuationStatusCode(ActuationStatus status)
+{
+    return match (status)
+    {
+        ActuationStatus::Empty => 0,
+        ActuationStatus::Allocating => 1,
+        ActuationStatus::Pending => 2,
+        ActuationStatus::Claimed => 3,
+        ActuationStatus::Completed => 4,
+        ActuationStatus::Failed => 5,
+        ActuationStatus::Denied => 6
+    };
+}
 
 template <typename Configuration, usize Capacity>
 class ActuatorHost
 {
 public:
     int nextId;
+    SpinLock allocationGate;
     ActuationSlot<array>[Capacity] slots;
 
+    [[semantic_access("Write", self)]]
     Result<ActuationReceipt, ActuationError> Dispatch(ref ActuatorHost self, ActuationDecision decision)
     {
+        owned Guard allocation = Lock(ref self.allocationGate);
         ActuationId id = ActuationId{self.nextId};
         self.nextId = self.nextId + 1;
-        if (not decision.allowed) { return Result::Ok(ActuationReceipt{id, false, true, false, decision.reason}); }
-        int index = 0;
-        foreach (ActuationSlot slot in self.slots)
+        if (not decision.allowed)
         {
-            if (not slot.occupied)
+            Release(ref allocation.lock);
+            allocation.armed = false;
+            return Result::Ok(ActuationReceipt{id, false, true, false, decision.reason});
+        }
+        int index = 0;
+        while (index < Len(self.slots)) bounded(2147483647)
+        {
+            int expected = 0;
+            if (CompareExchangeAtomic(ref self.slots[index].status, ref expected, 1, MemoryOrder::AcquireRelease, MemoryOrder::Relaxed))
             {
-                self.slots[index] = ActuationSlot{id, ActuationStatus::Pending, decision.reason, true};
+                self.slots[index].id = id;
+                self.slots[index].reason = decision.reason;
+                StoreAtomic(ref self.slots[index].status, 2, MemoryOrder::Release);
+                Release(ref allocation.lock);
+                allocation.armed = false;
                 return Result::Ok(ActuationReceipt{id, true, false, true, decision.reason});
             }
             index = index + 1;
         }
+        Release(ref allocation.lock);
+        allocation.armed = false;
         return Result::Error(ActuationError::CapacityExhausted);
     }
 
+    [[semantic_access("Read", self)]]
     ActuationStatus Status(ref const ActuatorHost self, ActuationId id)
     {
-        foreach (ActuationSlot slot in self.slots)
+        int index = 0;
+        while (index < Len(self.slots)) bounded(2147483647)
         {
-            if (SlotIs(slot, id)) { return slot.status; }
+            if (SlotIs(ref const self.slots[index], id))
+            {
+                return StatusFromCode(LoadAtomic(ref const self.slots[index].status, MemoryOrder::Acquire));
+            }
+            index = index + 1;
         }
         return ActuationStatus::Empty;
+    }
+
+    [[semantic_access("Claim", self)]]
+    Result<owned ActuationClaim, ActuationError> Claim(ref ActuatorHost self, ActuationId id)
+    {
+        int index = 0;
+        while (index < Len(self.slots)) bounded(2147483647)
+        {
+            int status = LoadAtomic(ref const self.slots[index].status, MemoryOrder::Acquire);
+            if (status >= 2 and self.slots[index].id.value == id.value)
+            {
+                int expected = 2;
+                if (CompareExchangeAtomic(ref self.slots[index].status, ref expected, 3, MemoryOrder::AcquireRelease, MemoryOrder::Acquire))
+                {
+                    owned ActuationClaim claim = ActuationClaim{id, 1};
+                    return Result::Ok(move claim);
+                }
+                if (expected >= 4) { return Result::Error(ActuationError::AlreadyCommitted); }
+                return Result::Error(ActuationError::AlreadyClaimed);
+            }
+            index = index + 1;
+        }
+        return Result::Error(ActuationError::Missing);
+    }
+
+    [[semantic_access("Commit", self)]]
+    Result<void, ActuationError> Commit(ref ActuatorHost self, owned ActuationClaim claim, Reason reason)
+    {
+        int index = 0;
+        while (index < Len(self.slots)) bounded(2147483647)
+        {
+            int status = LoadAtomic(ref const self.slots[index].status, MemoryOrder::Acquire);
+            if (status >= 2 and self.slots[index].id.value == claim.id.value)
+            {
+                if (claim.authority != 1) { return Result::Error(ActuationError::InvalidClaim); }
+                int expected = 3;
+                if (CompareExchangeAtomic(ref self.slots[index].status, ref expected, 4, MemoryOrder::AcquireRelease, MemoryOrder::Acquire))
+                {
+                    self.slots[index].reason = reason;
+                    return Result::Ok();
+                }
+                return Result::Error(ActuationError::AlreadyCommitted);
+            }
+            index = index + 1;
+        }
+        return Result::Error(ActuationError::Missing);
     }
 
     Result<void, ActuationError> Complete(ref ActuatorHost self, ActuationId id, Reason reason)
     {
         int index = 0;
-        foreach (ActuationSlot slot in self.slots)
+        while (index < Len(self.slots)) bounded(2147483647)
         {
-            if (SlotIs(slot, id))
+            int status = LoadAtomic(ref const self.slots[index].status, MemoryOrder::Acquire);
+            if (status >= 2 and self.slots[index].id.value == id.value)
             {
-                self.slots[index] = ActuationSlot{id, ActuationStatus::Completed, reason, true};
-                return Result::Ok();
+                int expected = 2;
+                if (CompareExchangeAtomic(ref self.slots[index].status, ref expected, 4, MemoryOrder::AcquireRelease, MemoryOrder::Acquire))
+                {
+                    self.slots[index].reason = reason;
+                    return Result::Ok();
+                }
+                return Result::Error(ActuationError::AlreadyCommitted);
             }
             index = index + 1;
         }
@@ -66,12 +178,18 @@ public:
     Result<void, ActuationError> Fail(ref ActuatorHost self, ActuationId id, Reason reason)
     {
         int index = 0;
-        foreach (ActuationSlot slot in self.slots)
+        while (index < Len(self.slots)) bounded(2147483647)
         {
-            if (SlotIs(slot, id))
+            int status = LoadAtomic(ref const self.slots[index].status, MemoryOrder::Acquire);
+            if (status >= 2 and self.slots[index].id.value == id.value)
             {
-                self.slots[index] = ActuationSlot{id, ActuationStatus::Failed, reason, true};
-                return Result::Ok();
+                int expected = 2;
+                if (CompareExchangeAtomic(ref self.slots[index].status, ref expected, 5, MemoryOrder::AcquireRelease, MemoryOrder::Acquire))
+                {
+                    self.slots[index].reason = reason;
+                    return Result::Ok();
+                }
+                return Result::Error(ActuationError::AlreadyClaimed);
             }
             index = index + 1;
         }

@@ -32,14 +32,14 @@ Disproven unsynchronized mutation is rejected.
 
 R7d1 supplies the strict-C11 atomic substrate. R7d2 supplies explicit
 shared-access propositions. R7d4 supplies structural access evidence and
-tri-state writer/producer/consumer derivation. No atomic weakening, fence
-removal, lock elision, or race-freedom claim is made.
+tri-state writer/producer/consumer derivation. R7d5 adds the general guard,
+publication and exactly-once derivation, conservative proof-consuming Planner,
+and worker-safe bounded Blackboard, EventBus, and Actuation paths.
 
-R7d2 Phase 1 supplies the explicit relation vocabulary and artifact transport.
-The relations are real source-level obligations, not analyzer-only facts, but
-current DragonGod sources deliberately remain unannotated and single-worker;
-their first R7d4 pass is mostly Unknown. Worker-safe Blackboard, EventBus, and
-Actuation algorithms plus proof-consuming Planner decisions are later work.
+The source relations are real contracts, not analyzer-only facts. A declared
+fact alone cannot remove synchronization. Derived Proven evidence may enable a
+general transformation; Unknown retains the safe mechanism and Disproven
+rejects an incompatible declaration.
 
 Collector implications remain future work: shared roots require explicit
 ownership, root mutation requires synchronization, and a collector may later

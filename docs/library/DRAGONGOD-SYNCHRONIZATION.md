@@ -4,7 +4,9 @@ DragonGod's intended coordination surface is EventBus, GlobalBlackboard, and
 Actuation. These are explicit caller-owned authorities, not ambient globals.
 
 The first R7d substrate is `Standard.Synchronization.Atomic`. `AtomicInt` is an
-immovable value whose storage lowers to C11 `_Atomic int`. Its ordinary library
+value whose verification storage lowers to C11 `_Atomic int`. Quiescent
+bounded checkpoints retain value-copy behavior; concurrent access remains
+restricted to the atomic API. Its ordinary library
 API is `LoadAtomic`, `StoreAtomic`, `ExchangeAtomic`,
 `CompareExchangeAtomic`, and `FetchAddAtomic`.
 
@@ -14,17 +16,16 @@ AcquireRelease, and Sequential. Load, store, read-modify-write, and CAS-failure
 orders use operation-specific C11 mappings; an invalid combination is
 strengthened to sequential consistency.
 
-The current Planner conservatively retains every atomic. Future weakening
-requires a proven ownership or exclusivity fact and must preserve publication
-ordering. There is no `volatile` fallback.
+The default verification Planner conservatively retains every atomic. R7d5's
+optimized policy may simplify a whole private exact single-context atomic set
+when no publication or ordering edge depends on it. Cross-context readers keep
+release/acquire operations. There is no `volatile` fallback and no R7d5 memory
+order weakening.
 
-The existing R7b `MemoryState`, `EventBus`, and `ActuatorHost` remain
-single-worker components. They must not be shared between host workers until
-the remaining R7d authority proofs and guarded algorithms are completed.
-
-R7d2 Phase 1 supplies explicit source propositions for exclusive writer,
-single producer/consumer, synchronized access, publication visibility, and
-internal exactly-once authority. They compose and cross semantic module
-artifacts, but DragonGod does not yet emit derived access summaries for its
-real operations. These components therefore remain single-worker; a source
-declaration is not being substituted for proof of their algorithms.
+R7d5 makes the existing components worker-safe without introducing competing
+APIs. `MemoryState` uses per-slot writer guards plus atomic publication and a
+separate insertion guard, so disjoint occupied slots do not serialize on a
+global lock. `EventBus` writes bounded payload under a producer guard before a
+Release count publication; readers use Acquire count observation. `ActuatorHost`
+uses atomic Pending -> Claimed -> Committed transitions and an owned claim
+authority. The scheduler itself remains single-worker until R7e.

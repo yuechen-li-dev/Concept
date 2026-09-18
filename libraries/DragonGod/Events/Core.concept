@@ -1,6 +1,9 @@
 module DragonGod.Events.Core;
 profile Core;
 
+import Standard.Synchronization.Atomic;
+import Standard.Synchronization.Guard;
+
 record struct EventId { int value; };
 record struct EventKind { int value; };
 record struct EventPayload { int value; };
@@ -16,35 +19,57 @@ class EventBus
 {
 public:
     int nextId;
-    int count;
+    AtomicInt count;
+    SpinLock producerGate;
     Event<array>[Capacity] events;
 
-    EventCursor TailCursor(ref const EventBus self) { return EventCursor{self.count}; }
-    int Count(ref const EventBus self) { return self.count; }
+    [[semantic_access("Read", self)]]
+    EventCursor TailCursor(ref const EventBus self)
+    {
+        return EventCursor{LoadAtomic(ref const self.count, MemoryOrder::Acquire)};
+    }
 
+    [[semantic_access("Read", self)]]
+    int Count(ref const EventBus self)
+    {
+        return LoadAtomic(ref const self.count, MemoryOrder::Acquire);
+    }
+
+    [[semantic_access("Publish", self)]]
     Result<EventId, EventError> Dispatch(ref EventBus self, EventKind kind, EventPayload payload)
     {
-        if (self.count >= Len(self.events)) { return Result::Error(EventError::CapacityExhausted); }
+        owned Guard producer = Lock(ref self.producerGate);
+        int count = LoadAtomic(ref const self.count, MemoryOrder::Relaxed);
+        if (count >= Len(self.events))
+        {
+            Release(ref producer.lock);
+            producer.armed = false;
+            return Result::Error(EventError::CapacityExhausted);
+        }
         EventId id = EventId{self.nextId};
         self.nextId = self.nextId + 1;
-        self.events[self.count] = Event{id, kind, payload};
-        self.count = self.count + 1;
+        self.events[count] = Event{id, kind, payload};
+        StoreAtomic(ref self.count, count + 1, MemoryOrder::Release);
+        Release(ref producer.lock);
+        producer.armed = false;
         return Result::Ok(id);
     }
 
+    [[semantic_access("Consume", self)]]
     Result<Event, EventError> ReadNext(ref const EventBus self, ref EventCursor cursor, EventKind kind)
     {
+        int count = LoadAtomic(ref const self.count, MemoryOrder::Acquire);
         int index = 0;
         foreach (Event event in self.events)
         {
-            if (index >= cursor.nextIndex and index < self.count)
+            if (index >= cursor.nextIndex and index < count)
             {
                 cursor.nextIndex = index + 1;
                 if (event.kind.value == kind.value) { return Result::Ok(event); }
             }
             index = index + 1;
         }
-        cursor.nextIndex = self.count;
+        cursor.nextIndex = count;
         return Result::Error(EventError::Missing);
     }
 };

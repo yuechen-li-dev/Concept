@@ -58,33 +58,38 @@ type AccessSubject struct {
 }
 
 type MIRAccessEntry struct {
-	ID         string             `json:"id"`
-	Subject    AccessSubject      `json:"subject"`
-	Operation  AccessKind         `json:"operation"`
-	Context    AccessIdentity     `json:"context"`
-	Function   AccessIdentity     `json:"function"`
-	Module     AccessIdentity     `json:"module"`
-	Origin     SemanticFactOrigin `json:"origin"`
-	Resolution AccessResolution   `json:"resolution"`
-	SourceSpan Span               `json:"source_span"`
+	ID          string             `json:"id"`
+	Subject     AccessSubject      `json:"subject"`
+	Operation   AccessKind         `json:"operation"`
+	Context     AccessIdentity     `json:"context"`
+	Function    AccessIdentity     `json:"function"`
+	Module      AccessIdentity     `json:"module"`
+	Origin      SemanticFactOrigin `json:"origin"`
+	Resolution  AccessResolution   `json:"resolution"`
+	MemoryOrder string             `json:"memory_order,omitempty"`
+	Mechanism   string             `json:"mechanism,omitempty"`
+	Sequence    int                `json:"sequence,omitempty"`
+	SourceSpan  Span               `json:"source_span"`
 }
 
 type evt1AccessCall struct {
-	callee string
-	args   []Expr
-	span   Span
+	callee   string
+	args     []Expr
+	span     Span
+	sequence int
 }
 
 type evt1AccessFunction struct {
-	decl    FunctionDecl
-	key     string
-	locals  map[string]AccessSubject
-	entries []MIRAccessEntry
-	calls   []evt1AccessCall
+	decl     FunctionDecl
+	key      string
+	locals   map[string]AccessSubject
+	entries  []MIRAccessEntry
+	calls    []evt1AccessCall
+	sequence int
 }
 
 func evt1SemanticAccessAttribute(name string) bool {
-	return name == "semantic_access" || name == "execution_context"
+	return name == "semantic_access" || name == "execution_context" || name == "synchronization"
 }
 
 func evt1AccessSummaryDemanded(module Module) bool {
@@ -120,7 +125,7 @@ func evt1AccessSubjectKey(subject AccessSubject) string {
 }
 
 func evt1AccessEntryKey(entry MIRAccessEntry) string {
-	return fmt.Sprintf("%s|%s|%s|%s|%s|%d:%d", entry.Operation, evt1AccessSubjectKey(entry.Subject), evt1AccessIdentityKey(entry.Context), evt1AccessIdentityKey(entry.Function), entry.Origin, entry.SourceSpan.Line, entry.SourceSpan.Column)
+	return fmt.Sprintf("%s|%s|%s|%s|%s|%s|%s|%d:%d", entry.Operation, evt1AccessSubjectKey(entry.Subject), evt1AccessIdentityKey(entry.Context), evt1AccessIdentityKey(entry.Function), entry.Origin, entry.MemoryOrder, entry.Mechanism, entry.SourceSpan.Line, entry.SourceSpan.Column)
 }
 
 func evt1FinalizeAccessEntry(entry MIRAccessEntry) MIRAccessEntry {
@@ -161,6 +166,7 @@ func evt1DeriveAccessSummaries(env *semanticEnv, module Module) error {
 		}
 		if fn.Body != nil {
 			evt1AccessBlock(env, state, *fn.Body)
+			evt1AccessAttachSynchronizationOrders(state)
 		} else if fn.ExternABI != "" && len(state.entries) == 0 {
 			for i, param := range fn.Params {
 				if !param.Type.isBorrowLike() || param.Type.Const {
@@ -187,6 +193,7 @@ func evt1DeriveAccessSummaries(env *semanticEnv, module Module) error {
 			state.locals[param.Name] = AccessSubject{Root: AccessIdentity{Kind: "Parameter", Module: module.Name, Function: state.key, Ordinal: i, Name: param.Name, Type: param.Type}, Type: param.Type, Resolution: AccessExact}
 		}
 		evt1AccessBlock(env, state, *template.Body)
+		evt1AccessAttachSynchronizationOrders(state)
 		functions[state.key] = state
 		byName[template.Name] = append(byName[template.Name], state)
 	}
@@ -224,6 +231,7 @@ func evt1DeriveAccessSummaries(env *semanticEnv, module Module) error {
 				for _, incoming := range callee.entries {
 					entry := incoming
 					entry.Function = AccessIdentity{Kind: "Function", Module: caller.decl.Module, Function: caller.key, Name: caller.decl.Name}
+					entry.Sequence = call.sequence
 					if entry.Subject.Root.Kind == "Parameter" && entry.Subject.Root.Ordinal < len(call.args) {
 						base := evt1AccessResolveSubject(env, caller, call.args[entry.Subject.Root.Ordinal])
 						if len(base.Path)+len(entry.Subject.Path) > 16 {
@@ -310,6 +318,21 @@ func evt1AccessApplyAttributes(env *semanticEnv, state *evt1AccessFunction) erro
 			if err := validateKnownType(env, t, name.Span, "", false); err != nil {
 				return err
 			}
+		case "synchronization":
+			if len(attribute.Args) != 2 {
+				return evt1Diagnostic("SYNCHRONIZATION_CONTRACT_INVALID", "[[synchronization]] requires a mechanism string and a parameter", attribute.Span)
+			}
+			mechanism, mechanismOK := attribute.Args[0].(*StringLiteral)
+			parameter, parameterOK := attribute.Args[1].(*NameExpr)
+			if !mechanismOK || !parameterOK || (mechanism.Value != "Acquire" && mechanism.Value != "Release") {
+				return evt1Diagnostic("SYNCHRONIZATION_CONTRACT_INVALID", "synchronization mechanism must be Acquire or Release and name a parameter", attribute.Span)
+			}
+			if state.decl.ReturnType.Name != "void" {
+				return evt1Diagnostic("SYNCHRONIZATION_CONTRACT_INVALID", "synchronization acquire/release functions must return void", attribute.Span)
+			}
+			if subject, found := state.locals[parameter.Name]; !found || subject.Root.Kind != "Parameter" {
+				return evt1Diagnostic("SYNCHRONIZATION_CONTRACT_INVALID", "synchronization authority must be a function parameter", parameter.Span)
+			}
 		}
 	}
 	return nil
@@ -323,12 +346,61 @@ func evt1AccessKindValid(kind AccessKind) bool {
 	return false
 }
 
+func evt1SynchronizationEffect(fn FunctionDecl) string {
+	for _, attribute := range fn.Attributes {
+		if attribute.Name != "synchronization" || len(attribute.Args) != 2 {
+			continue
+		}
+		if mechanism, ok := attribute.Args[0].(*StringLiteral); ok {
+			return mechanism.Value
+		}
+	}
+	return ""
+}
+
+func evt1NamedSynchronizationEffect(env *semanticEnv, name string) string {
+	effect := ""
+	for _, fn := range env.functions[name] {
+		candidate := evt1SynchronizationEffect(fn)
+		if candidate == "" {
+			continue
+		}
+		if effect != "" && effect != candidate {
+			return ""
+		}
+		effect = candidate
+	}
+	return effect
+}
+
+func evt1AccessAttachSynchronizationOrders(state *evt1AccessFunction) {
+	for i := range state.entries {
+		entry := &state.entries[i]
+		want := AccessAtomicWrite
+		if entry.Operation == AccessConsume {
+			want = AccessAtomicRead
+		} else if entry.Operation != AccessPublish {
+			continue
+		}
+		for _, atomic := range state.entries {
+			if atomic.Operation == want && evt1AccessSubjectsOverlap(entry.Subject, atomic.Subject) && atomic.MemoryOrder != "" {
+				entry.MemoryOrder = atomic.MemoryOrder
+				entry.Mechanism = atomic.Mechanism
+				entry.Sequence = atomic.Sequence
+				break
+			}
+		}
+		*entry = evt1FinalizeAccessEntry(*entry)
+	}
+}
+
 func evt1AccessEntry(state *evt1AccessFunction, kind AccessKind, subject AccessSubject, span Span) MIRAccessEntry {
+	state.sequence++
 	return MIRAccessEntry{
 		Subject: subject, Operation: kind,
 		Function: AccessIdentity{Kind: "Function", Module: state.decl.Module, Function: state.key, Name: state.decl.Name},
 		Module:   AccessIdentity{Kind: "Module", Module: state.decl.Module, Name: state.decl.Module},
-		Origin:   FactOriginDerivedAccessSummary, SourceSpan: span,
+		Origin:   FactOriginDerivedAccessSummary, Sequence: state.sequence, SourceSpan: span,
 	}
 }
 
@@ -471,28 +543,44 @@ func evt1AccessExpr(env *semanticEnv, state *evt1AccessFunction, expr Expr) {
 			}
 		}
 	case *CallExpr:
+		atomicKind := map[string][]AccessKind{
+			evt1AtomicLoad: {AccessAtomicRead}, evt1AtomicStore: {AccessAtomicWrite},
+			evt1AtomicExchange: {AccessAtomicRead, AccessAtomicWrite}, evt1AtomicCompareSwap: {AccessAtomicRead, AccessAtomicWrite}, evt1AtomicFetchAdd: {AccessAtomicRead, AccessAtomicWrite},
+		}[e.Callee]
 		for _, arg := range e.Args {
 			evt1AccessExpr(env, state, arg)
 		}
 		if e.Receiver != nil {
 			evt1AccessExpr(env, state, e.Receiver)
 		}
-		atomicKind := map[string][]AccessKind{
-			evt1AtomicLoad: {AccessAtomicRead}, evt1AtomicStore: {AccessAtomicWrite},
-			evt1AtomicExchange: {AccessAtomicRead, AccessAtomicWrite}, evt1AtomicCompareSwap: {AccessAtomicRead, AccessAtomicWrite}, evt1AtomicFetchAdd: {AccessAtomicRead, AccessAtomicWrite},
-		}[e.Callee]
 		if len(atomicKind) != 0 && len(e.Args) != 0 {
 			subject := evt1AccessResolveSubject(env, state, e.Args[0])
+			orderAt := len(e.Args) - 1
+			if e.Callee == evt1AtomicCompareSwap {
+				orderAt = 3
+			}
+			order := ""
+			if orderAt >= 0 && orderAt < len(e.Args) {
+				order = evt1ExprIdentity(e.Args[orderAt])
+			}
 			for _, kind := range atomicKind {
-				state.entries = append(state.entries, evt1FinalizeAccessEntry(evt1AccessEntry(state, kind, subject, e.Span)))
+				entry := evt1AccessEntry(state, kind, subject, e.Span)
+				entry.MemoryOrder = order
+				entry.Mechanism = e.Intrinsic
+				if entry.Mechanism == "" {
+					entry.Mechanism = e.Callee
+				}
+				state.entries = append(state.entries, evt1FinalizeAccessEntry(entry))
 			}
 		}
-		state.calls = append(state.calls, evt1AccessCall{callee: e.Callee, args: e.Args, span: e.Span})
+		state.sequence++
+		state.calls = append(state.calls, evt1AccessCall{callee: e.Callee, args: e.Args, span: e.Span, sequence: state.sequence})
 	case *TemplateCallExpr:
 		for _, arg := range e.Args {
 			evt1AccessExpr(env, state, arg)
 		}
-		state.calls = append(state.calls, evt1AccessCall{callee: e.Callee, args: e.Args, span: e.Span})
+		state.sequence++
+		state.calls = append(state.calls, evt1AccessCall{callee: e.Callee, args: e.Args, span: e.Span, sequence: state.sequence})
 	case *BinaryExpr:
 		evt1AccessExpr(env, state, e.Left)
 		evt1AccessExpr(env, state, e.Right)
@@ -501,7 +589,9 @@ func evt1AccessExpr(env *semanticEnv, state *evt1AccessFunction, expr Expr) {
 	case *MoveExpr:
 		evt1AccessExpr(env, state, e.Value)
 	case *RefExpr:
-		evt1AccessExpr(env, state, e.Value)
+		// Forming a reference evaluates its address but does not read the
+		// referenced storage. Index operands are still ordinary reads.
+		evt1AccessTargetOperands(env, state, e.Value)
 	case *ParenExpr:
 		evt1AccessExpr(env, state, e.Value)
 	case *AwaitExpr:
@@ -618,8 +708,17 @@ func evt1AccessSubjectMatches(subject AccessSubject, requested Type) bool {
 }
 
 func evt1DerivedSharedAccess(env *semanticEnv, kind SemanticFactKind, args []Type) semanticFactResult {
+	if kind == FactSynchronizedAccess && len(args) == 1 {
+		return evt1DerivedSynchronizedAccess(env, args[0])
+	}
+	if kind == FactPublishedBefore && len(args) == 2 {
+		return evt1DerivedPublishedBefore(env, args[0], args[1])
+	}
+	if kind == FactExactlyOnce && len(args) == 1 {
+		return evt1DerivedExactlyOnce(env, args[0])
+	}
 	if len(args) != 2 {
-		return semanticFactResult{Outcome: FactUnknown, Origin: FactOriginCompilerAnalysis, Evidence: SemanticFactEvidence{Detail: "R7d4 derives only writer, producer, and consumer cardinality"}}
+		return semanticFactResult{Outcome: FactUnknown, Origin: FactOriginCompilerAnalysis, Evidence: SemanticFactEvidence{Detail: "synchronization relation has unsupported subject arity"}}
 	}
 	operation := AccessWrite
 	switch kind {
@@ -630,7 +729,7 @@ func evt1DerivedSharedAccess(env *semanticEnv, kind SemanticFactKind, args []Typ
 	case FactSingleConsumer:
 		operation = AccessConsume
 	default:
-		return semanticFactResult{Outcome: FactUnknown, Origin: FactOriginCompilerAnalysis, Evidence: SemanticFactEvidence{Detail: "this synchronization relation remains explicit in R7d4"}}
+		return semanticFactResult{Outcome: FactUnknown, Origin: FactOriginCompilerAnalysis, Evidence: SemanticFactEvidence{Detail: "no bounded derived rule matches this synchronization relation"}}
 	}
 	wantedContext, wantedSubject := args[0], args[1]
 	contexts := map[string]string{}
@@ -679,6 +778,127 @@ func evt1DerivedSharedAccess(env *semanticEnv, kind SemanticFactKind, args []Typ
 		}
 	}
 	return semanticFactResult{Outcome: FactDisproven, Origin: FactOriginDerivedAccessSummary, Evidence: SemanticFactEvidence{Detail: detail, Authority: "derived access set"}}
+}
+
+func evt1MemoryOrderAcquire(order string) bool {
+	return strings.Contains(order, "Acquire") || strings.Contains(order, "Sequential")
+}
+
+func evt1MemoryOrderRelease(order string) bool {
+	return strings.Contains(order, "Release") || strings.Contains(order, "Sequential")
+}
+
+func evt1DerivedSynchronizedAccess(env *semanticEnv, subject Type) semanticFactResult {
+	var accesses []MIRAccessEntry
+	contexts := map[string]bool{}
+	allAtomic := true
+	for _, entry := range env.accessSummaries {
+		if !evt1AccessSubjectMatches(entry.Subject, subject) {
+			continue
+		}
+		switch entry.Operation {
+		case AccessRead, AccessWrite, AccessAtomicRead, AccessAtomicWrite:
+			accesses = append(accesses, entry)
+			if entry.Context.Type.Name == "" || entry.Context.Kind == "SharedContext" || entry.Context.Kind == "OrdinaryContext" || entry.Resolution == AccessOpaque {
+				return semanticFactResult{Outcome: FactUnknown, Origin: FactOriginDerivedAccessSummary, Evidence: SemanticFactEvidence{Detail: "shared access set contains unresolved context or subject", Authority: "derived synchronization mechanisms"}}
+			}
+			contexts[entry.Context.Type.String()] = true
+			allAtomic = allAtomic && (entry.Operation == AccessAtomicRead || entry.Operation == AccessAtomicWrite)
+		}
+	}
+	if len(accesses) == 0 {
+		return semanticFactResult{Outcome: FactUnknown, Origin: FactOriginDerivedAccessSummary, Evidence: SemanticFactEvidence{Detail: "no closed access set for " + subject.String(), Authority: "derived synchronization mechanisms"}}
+	}
+	if len(contexts) == 1 {
+		return semanticFactResult{Outcome: FactProven, Origin: FactOriginDerivedAccessSummary, Evidence: SemanticFactEvidence{Detail: "all accesses are confined to one explicit execution context", Authority: "exclusive context ownership"}}
+	}
+	if allAtomic {
+		return semanticFactResult{Outcome: FactProven, Origin: FactOriginDerivedAccessSummary, Evidence: SemanticFactEvidence{Detail: "all cross-context accesses use C11 atomic operations", Authority: "derived synchronization mechanisms"}}
+	}
+	for i := range accesses {
+		for j := i + 1; j < len(accesses); j++ {
+			left, right := accesses[i], accesses[j]
+			if left.Context.Type.String() == right.Context.Type.String() || !evt1AccessSubjectsOverlap(left.Subject, right.Subject) {
+				continue
+			}
+			leftWrite := left.Operation == AccessWrite || left.Operation == AccessAtomicWrite
+			rightWrite := right.Operation == AccessWrite || right.Operation == AccessAtomicWrite
+			if (leftWrite || rightWrite) && (left.Operation == AccessRead || left.Operation == AccessWrite || right.Operation == AccessRead || right.Operation == AccessWrite) {
+				return semanticFactResult{Outcome: FactDisproven, Origin: FactOriginDerivedAccessSummary, Evidence: SemanticFactEvidence{Detail: "overlapping cross-context access is not mediated by one of the observed synchronization mechanisms", Authority: "derived synchronization mechanisms"}}
+			}
+		}
+	}
+	return semanticFactResult{Outcome: FactProven, Origin: FactOriginDerivedAccessSummary, Evidence: SemanticFactEvidence{Detail: "all cross-context conflicts are atomic or structurally disjoint", Authority: "derived synchronization mechanisms"}}
+}
+
+func evt1DerivedPublishedBefore(env *semanticEnv, written, observed Type) semanticFactResult {
+	var writes, reads, publishes, consumes []MIRAccessEntry
+	for _, entry := range env.accessSummaries {
+		switch entry.Operation {
+		case AccessWrite, AccessAtomicWrite:
+			if evt1AccessSubjectMatches(entry.Subject, written) {
+				writes = append(writes, entry)
+			}
+		case AccessRead, AccessAtomicRead:
+			if evt1AccessSubjectMatches(entry.Subject, observed) {
+				reads = append(reads, entry)
+			}
+		case AccessPublish:
+			if evt1MemoryOrderRelease(entry.MemoryOrder) {
+				publishes = append(publishes, entry)
+			}
+		case AccessConsume:
+			if evt1MemoryOrderAcquire(entry.MemoryOrder) {
+				consumes = append(consumes, entry)
+			}
+		}
+	}
+	for _, write := range writes {
+		for _, publish := range publishes {
+			if write.Context.Type.String() == "" || write.Context.Type.String() != publish.Context.Type.String() || write.Sequence >= publish.Sequence {
+				continue
+			}
+			for _, consume := range consumes {
+				if !evt1AccessSubjectsOverlap(publish.Subject, consume.Subject) || consume.Context.Type.String() == "" || consume.Context.Type.String() == write.Context.Type.String() {
+					continue
+				}
+				for _, read := range reads {
+					if read.Context.Type.String() == consume.Context.Type.String() && consume.Sequence < read.Sequence {
+						detail := fmt.Sprintf("%s writes %s before release publication; %s acquires the same publication before reading %s", write.Context.Type.String(), written.String(), read.Context.Type.String(), observed.String())
+						return semanticFactResult{Outcome: FactProven, Origin: FactOriginDerivedAccessSummary, Evidence: SemanticFactEvidence{Detail: detail, Authority: "release/acquire publication graph"}}
+					}
+				}
+			}
+		}
+	}
+	return semanticFactResult{Outcome: FactUnknown, Origin: FactOriginDerivedAccessSummary, Evidence: SemanticFactEvidence{Detail: "no release/acquire Write-Publish-Consume-Read path connects the ordered subjects", Authority: "release/acquire publication graph"}}
+}
+
+func evt1DerivedExactlyOnce(env *semanticEnv, obligation Type) semanticFactResult {
+	var claims, commits []MIRAccessEntry
+	casByFunction := map[string]bool{}
+	resetWrite := false
+	for _, entry := range env.accessSummaries {
+		if !evt1AccessSubjectMatches(entry.Subject, obligation) || entry.Resolution == AccessOpaque {
+			continue
+		}
+		switch entry.Operation {
+		case AccessClaim:
+			claims = append(claims, entry)
+		case AccessCommit:
+			commits = append(commits, entry)
+		case AccessAtomicWrite:
+			if entry.Mechanism == "atomic_compare_exchange" || entry.Mechanism == evt1AtomicCompareSwap {
+				casByFunction[entry.Function.Function] = true
+			} else {
+				resetWrite = true
+			}
+		}
+	}
+	if len(claims) == 1 && len(commits) == 1 && casByFunction[claims[0].Function.Function] && casByFunction[commits[0].Function.Function] && !resetWrite {
+		return semanticFactResult{Outcome: FactProven, Origin: FactOriginDerivedAccessSummary, Evidence: SemanticFactEvidence{Detail: "exact obligation identity uses one CAS claim transition and one CAS commit transition with no reset", Authority: "derived claim/commit state machine"}}
+	}
+	return semanticFactResult{Outcome: FactUnknown, Origin: FactOriginDerivedAccessSummary, Evidence: SemanticFactEvidence{Detail: "claim/commit CAS authority or no-reset evidence is incomplete", Authority: "derived claim/commit state machine"}}
 }
 
 func evt1AccessSubjectsOverlap(a, b AccessSubject) bool {

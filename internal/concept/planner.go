@@ -55,13 +55,18 @@ func TargetByName(name string) (TargetCapabilities, error) {
 }
 
 type CompilationPolicy struct {
-	PreserveRuntimeGuards bool `json:"preserve_runtime_guards"`
-	ForbidAllocation      bool `json:"forbid_allocation"`
-	ForbidImplicitCopy    bool `json:"forbid_implicit_copy"`
+	PreserveRuntimeGuards   bool `json:"preserve_runtime_guards"`
+	OptimizeSynchronization bool `json:"optimize_synchronization"`
+	ForbidAllocation        bool `json:"forbid_allocation"`
+	ForbidImplicitCopy      bool `json:"forbid_implicit_copy"`
 }
 
 func ConservativeCompilationPolicy() CompilationPolicy {
 	return CompilationPolicy{PreserveRuntimeGuards: true, ForbidAllocation: true, ForbidImplicitCopy: true}
+}
+
+func OptimizedCompilationPolicy() CompilationPolicy {
+	return CompilationPolicy{PreserveRuntimeGuards: false, OptimizeSynchronization: true, ForbidAllocation: true, ForbidImplicitCopy: true}
 }
 
 type DecisionCertainty string
@@ -402,6 +407,28 @@ func PlanModule(module *MIR, facts *SemanticFactSet, target TargetCapabilities, 
 	plan := &LoweringPlan{Schema: PlanSchema, Compiler: CompilerID, Module: module.Module, MIRIdentity: digest(mirBytes), Target: target, Profile: profile.Name, Policy: policy}
 	for _, fn := range module.Functions {
 		fp := planFunction(fn, *facts, target)
+		if policy.OptimizeSynchronization && evt1AllAtomicsSimplifiable(module.AccessSummaries) {
+			for i := range fp.Decisions {
+				decision := &fp.Decisions[i]
+				if decision.Category == "SynchronizationPlan" && decision.Strategy == "RetainC11Atomic" {
+					decision.Strategy = "SimplifyAtomic"
+					decision.Certainty = DecisionSelected
+					decision.Evidence = PlanningEvidence{Claims: []string{"SynchronizedAccess", "SingleExecutionContext", "NoPublicationOrdering"}, Detail: "all accesses are exact, confined to one explicit context, and carry no publication edge"}
+					decision.ID = "decision-" + digest([]byte(decision.MIRID + "|" + decision.Category + "|" + decision.Strategy))[:16]
+				}
+			}
+		}
+		if policy.OptimizeSynchronization && evt1AllGuardsSimplifiable(module.AccessSummaries) {
+			for i := range fp.Decisions {
+				decision := &fp.Decisions[i]
+				if decision.Category == "SynchronizationPlan" && decision.Strategy == "RetainSynchronization" {
+					decision.Strategy = "ElideSynchronization"
+					decision.Certainty = DecisionSelected
+					decision.Evidence = PlanningEvidence{Claims: []string{"SynchronizedAccess", "SingleExecutionContext", "NoConflictingCrossContextAccess", "NoPublicationOrdering"}, Detail: "guard operation is redundant for the exact single-context access set"}
+					decision.ID = "decision-" + digest([]byte(decision.MIRID + "|" + decision.Category + "|" + decision.Strategy))[:16]
+				}
+			}
+		}
 		plan.Functions = append(plan.Functions, fp)
 	}
 	plan.Aggregates = planAggregates(module)
@@ -414,6 +441,48 @@ func PlanModule(module *MIR, facts *SemanticFactSet, target TargetCapabilities, 
 		return nil, err
 	}
 	return plan, nil
+}
+
+func evt1AllAtomicsSimplifiable(accesses []MIRAccessEntry) bool {
+	contexts := map[string]bool{}
+	atomicCount := 0
+	for _, entry := range accesses {
+		switch entry.Operation {
+		case AccessPublish, AccessConsume:
+			return false
+		case AccessAtomicRead, AccessAtomicWrite:
+			if entry.Context.Type.Name == "" && entry.Origin == FactOriginModuleAccessSummary {
+				continue
+			}
+			atomicCount++
+			if entry.Resolution == AccessOpaque || entry.Context.Type.Name == "" || entry.Context.Kind != "ExecutionContext" {
+				return false
+			}
+			contexts[entry.Context.Type.String()] = true
+		}
+	}
+	return atomicCount > 0 && len(contexts) == 1
+}
+
+func evt1AllGuardsSimplifiable(accesses []MIRAccessEntry) bool {
+	contexts := map[string]bool{}
+	count := 0
+	for _, entry := range accesses {
+		if entry.Origin == FactOriginModuleAccessSummary {
+			continue
+		}
+		switch entry.Operation {
+		case AccessPublish, AccessConsume:
+			return false
+		case AccessRead, AccessWrite, AccessAtomicRead, AccessAtomicWrite:
+			count++
+			if entry.Resolution == AccessOpaque || entry.Context.Type.Name == "" || entry.Context.Kind != "ExecutionContext" {
+				return false
+			}
+			contexts[entry.Context.Type.String()] = true
+		}
+	}
+	return count > 0 && len(contexts) == 1
 }
 
 func loweringPlanIdentity(plan *LoweringPlan) string {
@@ -434,6 +503,10 @@ func loweringPlanIdentity(plan *LoweringPlan) string {
 // backend. It shares the same validated MIR and semantic-fact construction as
 // normal generation.
 func GeneratePlan(module Module, target TargetCapabilities) ([]byte, error) {
+	return GeneratePlanWithPolicy(module, target, ConservativeCompilationPolicy())
+}
+
+func GeneratePlanWithPolicy(module Module, target TargetCapabilities, policy CompilationPolicy) ([]byte, error) {
 	env, err := analyzeModule(module)
 	if err != nil {
 		return nil, err
@@ -442,12 +515,20 @@ func GeneratePlan(module Module, target TargetCapabilities) ([]byte, error) {
 		return nil, err
 	}
 	mir := buildMIR(module, env)
+	if policy.OptimizeSynchronization {
+		if len(env.accessSummaries) == 0 {
+			if err := evt1DeriveAccessSummaries(env, module); err != nil {
+				return nil, err
+			}
+		}
+		mir.AccessSummaries = append([]MIRAccessEntry{}, env.accessSummaries...)
+	}
 	evt1QualifyMIRFacts(&mir)
 	if err := evt1ValidateMIR(mir); err != nil {
 		return nil, err
 	}
 	facts := NewSemanticFactSet(mir.SemanticFacts)
-	plan, err := PlanModule(&mir, &facts, target, *env.profile, ConservativeCompilationPolicy())
+	plan, err := PlanModule(&mir, &facts, target, *env.profile, policy)
 	if err != nil {
 		return nil, err
 	}
@@ -522,6 +603,11 @@ func planOperation(op MIROperation, facts SemanticFactSet) PlanningDecision {
 	case "atomic_load", "atomic_store", "atomic_exchange", "atomic_compare_exchange", "atomic_fetch_add":
 		d.Category, d.Strategy, d.Certainty = "SynchronizationPlan", "RetainC11Atomic", DecisionRequired
 		d.Evidence = PlanningEvidence{Claims: []string{"AtomicAccess", "ExplicitMemoryOrder", "NoAllocation"}, Detail: "no exclusivity proof permits weakening"}
+	case "call", "class_method_call":
+		if op.Synchronization != "" {
+			d.Category, d.Strategy, d.Certainty = "SynchronizationPlan", "RetainSynchronization", DecisionRequired
+			d.Evidence = PlanningEvidence{Claims: []string{op.Synchronization, "UnknownConflictingAccess"}, Detail: "safe guard operation is retained until the full proof conjunction is proven"}
+		}
 	case "infer":
 		d.Category, d.Strategy, d.Certainty = "InferencePlan", "ScalarStableSoftMax", DecisionSelected
 		d.Evidence = PlanningEvidence{Claims: []string{"MaxSubtraction", "InlineFixed", "NoSIMD", "NoAllocation"}}

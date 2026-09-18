@@ -1749,6 +1749,13 @@ func (p *parser) parseClassDecl() (StructDecl, error) {
 			p.next()
 			continue
 		}
+		var attributes []Attribute
+		if p.peekLexeme() == "[" && p.peekLexemeN(1) == "[" {
+			attributes, err = p.parseAttributes()
+			if err != nil {
+				return StructDecl{}, err
+			}
+		}
 		async := false
 		if p.peekLexeme() == "async" || p.peekLexeme() == "asynchronous" {
 			p.next()
@@ -1768,8 +1775,12 @@ func (p *parser) parseClassDecl() (StructDecl, error) {
 				return StructDecl{}, err
 			}
 			method.Async = async
+			method.Attributes = attributes
 			decl.Methods = append(decl.Methods, method)
 			continue
+		}
+		if len(attributes) != 0 {
+			return StructDecl{}, evt1Diagnostic("TEST_ATTRIBUTE_REQUIRES_FUNCTION", "attributes inside a class require a method declaration", member.Span)
 		}
 		if async {
 			return StructDecl{}, evt1Diagnostic("ASYNC_RETURN_TYPE_INVALID", "async is valid only on a function or method declaration", member.Span)

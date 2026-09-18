@@ -1,84 +1,151 @@
 module DragonGod.Memory.State;
 profile Core;
 
+import Standard.Synchronization.Atomic;
+import Standard.Synchronization.Guard;
+
 record struct MemoryKey { int value; };
-struct MemorySlot { MemoryKey key; int value; bool occupied; bool dirty; };
+struct MemorySlot
+{
+    MemoryKey key;
+    AtomicInt value;
+    AtomicInt occupied;
+    AtomicInt dirty;
+    SpinLock writer;
+};
 enum MemoryError { CapacityExhausted, }
 
-MemorySlot EmptyMemorySlot() { return MemorySlot{MemoryKey{0}, 0, false, false}; }
-bool SlotMatches(MemorySlot slot, MemoryKey key) { return slot.occupied and slot.key.value == key.value; }
+MemorySlot EmptyMemorySlot()
+{
+    return MemorySlot{MemoryKey{0}, AtomicInt{0}, AtomicInt{0}, AtomicInt{0}, MakeSpinLock()};
+}
+
+bool SlotMatches(ref const MemorySlot slot, MemoryKey key)
+{
+    return LoadAtomic(ref const slot.occupied, MemoryOrder::Acquire) == 1 and slot.key.value == key.value;
+}
 
 template <typename Configuration, usize Capacity>
 class MemoryState
 {
 public:
-    int revision;
+    AtomicInt revision;
+    SpinLock insertion;
     MemorySlot<array>[Capacity] slots;
 
+    [[semantic_access("Write", self)]]
     Result<void, MemoryError> Write(ref MemoryState self, MemoryKey key, int value)
     {
         int index = 0;
-        foreach (MemorySlot slot in self.slots)
+        while (index < Len(self.slots)) bounded(2147483647)
         {
-            if (SlotMatches(slot, key))
+            if (SlotMatches(ref const self.slots[index], key))
             {
-                if (slot.value != value)
+                owned Guard existingWriter = Lock(ref self.slots[index].writer);
+                int prior = LoadAtomic(ref const self.slots[index].value, MemoryOrder::Relaxed);
+                if (prior != value)
                 {
-                    self.slots[index] = MemorySlot{key, value, true, true};
-                    self.revision = self.revision + 1;
+                    StoreAtomic(ref self.slots[index].value, value, MemoryOrder::Release);
+                    StoreAtomic(ref self.slots[index].dirty, 1, MemoryOrder::Release);
+                    FetchAddAtomic(ref self.revision, 1, MemoryOrder::Release);
                 }
                 return Result::Ok();
             }
             index = index + 1;
         }
+
+        owned Guard insertion = Lock(ref self.insertion);
         index = 0;
-        foreach (MemorySlot slot in self.slots)
+        while (index < Len(self.slots)) bounded(2147483647)
         {
-            if (not slot.occupied)
+            if (SlotMatches(ref const self.slots[index], key))
             {
-                self.slots[index] = MemorySlot{key, value, true, true};
-                self.revision = self.revision + 1;
+                owned Guard insertedWriter = Lock(ref self.slots[index].writer);
+                int prior = LoadAtomic(ref const self.slots[index].value, MemoryOrder::Relaxed);
+                if (prior != value)
+                {
+                    StoreAtomic(ref self.slots[index].value, value, MemoryOrder::Release);
+                    StoreAtomic(ref self.slots[index].dirty, 1, MemoryOrder::Release);
+                    FetchAddAtomic(ref self.revision, 1, MemoryOrder::Release);
+                }
+                Release(ref insertion.lock);
+                insertion.armed = false;
+                return Result::Ok();
+            }
+            if (LoadAtomic(ref const self.slots[index].occupied, MemoryOrder::Relaxed) == 0)
+            {
+                self.slots[index].key = key;
+                StoreAtomic(ref self.slots[index].value, value, MemoryOrder::Relaxed);
+                StoreAtomic(ref self.slots[index].dirty, 1, MemoryOrder::Relaxed);
+                StoreAtomic(ref self.slots[index].occupied, 1, MemoryOrder::Release);
+                FetchAddAtomic(ref self.revision, 1, MemoryOrder::Release);
+                Release(ref insertion.lock);
+                insertion.armed = false;
                 return Result::Ok();
             }
             index = index + 1;
         }
+        Release(ref insertion.lock);
+        insertion.armed = false;
         return Result::Error(MemoryError::CapacityExhausted);
     }
 
+    [[semantic_access("Read", self)]]
     int Read(ref const MemoryState self, MemoryKey key, int fallback)
     {
-        foreach (MemorySlot slot in self.slots)
+        int index = 0;
+        while (index < Len(self.slots)) bounded(2147483647)
         {
-            if (SlotMatches(slot, key)) { return slot.value; }
+            if (SlotMatches(ref const self.slots[index], key))
+            {
+                return LoadAtomic(ref const self.slots[index].value, MemoryOrder::Acquire);
+            }
+            index = index + 1;
         }
         return fallback;
     }
 
+    [[semantic_access("Read", self)]]
     bool Has(ref const MemoryState self, MemoryKey key)
     {
-        foreach (MemorySlot slot in self.slots)
+        int index = 0;
+        while (index < Len(self.slots)) bounded(2147483647)
         {
-            if (SlotMatches(slot, key)) { return true; }
+            if (SlotMatches(ref const self.slots[index], key)) { return true; }
+            index = index + 1;
         }
         return false;
     }
 
+    [[semantic_access("Read", self)]]
     bool IsDirty(ref const MemoryState self, MemoryKey key)
     {
-        foreach (MemorySlot slot in self.slots)
+        int index = 0;
+        while (index < Len(self.slots)) bounded(2147483647)
         {
-            if (SlotMatches(slot, key)) { return slot.dirty; }
+            if (SlotMatches(ref const self.slots[index], key))
+            {
+                return LoadAtomic(ref const self.slots[index].dirty, MemoryOrder::Acquire) == 1;
+            }
+            index = index + 1;
         }
         return false;
     }
 
+    [[semantic_access("Write", self)]]
     void ClearDirty(ref MemoryState self)
     {
         int index = 0;
-        foreach (MemorySlot slot in self.slots)
+        while (index < Len(self.slots)) bounded(2147483647)
         {
-            self.slots[index] = MemorySlot{slot.key, slot.value, slot.occupied, false};
+            StoreAtomic(ref self.slots[index].dirty, 0, MemoryOrder::Release);
             index = index + 1;
         }
+    }
+
+    [[semantic_access("Read", self)]]
+    int Revision(ref const MemoryState self)
+    {
+        return LoadAtomic(ref const self.revision, MemoryOrder::Acquire);
     }
 };

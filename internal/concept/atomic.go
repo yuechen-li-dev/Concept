@@ -110,6 +110,30 @@ func (f *evt1FunctionLowerer) lowerAtomicIntrinsic(call *CallExpr, indent int) (
 	intType, _ := evt1BuiltinType("int", call.Span)
 	boolType, _ := evt1BuiltinType("bool", call.Span)
 	voidType, _ := evt1BuiltinType("void", call.Span)
+	if f.l.simplifyAtomics {
+		place := "((" + args[0] + ")->value)"
+		switch call.Intrinsic {
+		case "atomic_load":
+			return prelude, place, intType
+		case "atomic_store":
+			return prelude, "((" + place + " = " + args[1] + "), (void)0)", voidType
+		case "atomic_exchange":
+			old := f.nextTemp("atomic_old")
+			prelude += ind(indent) + "int " + old + " = " + place + ";\n"
+			prelude += ind(indent) + place + " = " + args[1] + ";\n"
+			return prelude, old, intType
+		case "atomic_compare_exchange":
+			ok := f.nextTemp("atomic_ok")
+			prelude += ind(indent) + "bool " + ok + " = (" + place + " == *(" + args[1] + "));\n"
+			prelude += ind(indent) + "if (" + ok + ") { " + place + " = " + args[2] + "; } else { *(" + args[1] + ") = " + place + "; }\n"
+			return prelude, ok, boolType
+		default:
+			old := f.nextTemp("atomic_old")
+			prelude += ind(indent) + "int " + old + " = " + place + ";\n"
+			prelude += ind(indent) + place + " = " + place + " + " + args[1] + ";\n"
+			return prelude, old, intType
+		}
+	}
 	switch call.Intrinsic {
 	case "atomic_load":
 		return prelude, "atomic_load_explicit(&((" + args[0] + ")->value), " + order("load", args[1]) + ")", intType

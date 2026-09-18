@@ -1,0 +1,63 @@
+module Standard.Synchronization.Guard;
+profile Core;
+
+import Standard.Synchronization.Atomic;
+
+// SpinLock is the smallest platform-neutral guard authority. Contention is
+// deliberately bounded at the call site; DragonGod does not hide a scheduler
+// or blocking runtime behind this type.
+struct SpinLock
+{
+    AtomicInt state;
+}
+
+SpinLock MakeSpinLock()
+{
+    return SpinLock{AtomicInt{0}};
+}
+
+[[synchronization("Acquire", lock)]]
+void Acquire(ref SpinLock lock)
+{
+    bool acquired = false;
+    while (not acquired) bounded(2147483647)
+    {
+        int expected = 0;
+        acquired = CompareExchangeAtomic(
+            ref lock.state,
+            ref expected,
+            1,
+            MemoryOrder::Acquire,
+            MemoryOrder::Relaxed
+        );
+    }
+}
+
+[[synchronization("Release", lock)]]
+void Release(ref SpinLock lock)
+{
+    StoreAtomic(ref lock.state, 0, MemoryOrder::Release);
+}
+
+// Guard is lifetime-bound and non-copyable. Moving transfers the sole release
+// obligation; Drop performs that release exactly once.
+ref struct Guard
+{
+    ref SpinLock lock;
+    owned int authority;
+    bool armed;
+}
+
+Guard Lock(ref SpinLock lock)
+{
+    Acquire(ref lock);
+    return Guard{ref lock, 1, true};
+}
+
+void Drop(owned Guard guard)
+{
+    if (guard.armed)
+    {
+        Release(ref guard.lock);
+    }
+}

@@ -229,6 +229,9 @@ func evt1TestMetadata(fn FunctionDecl) (TestKind, bool, []string, bool) {
 	foretold, annotated := false, false
 	var artifacts []string
 	for _, attribute := range fn.Attributes {
+		if evt1SemanticAccessAttribute(attribute.Name) {
+			continue
+		}
 		annotated = true
 		switch attribute.Name {
 		case "fact", "theory", "benchmark", "prophecy":

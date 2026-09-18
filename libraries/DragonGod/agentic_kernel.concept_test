@@ -59,9 +59,9 @@ AgentContext<TestConfiguration, 16> TestContext(int agentId)
     ActuationSlot<array>[16] actuationSlots = [actuation, actuation, actuation, actuation, actuation, actuation, actuation, actuation, actuation, actuation, actuation, actuation, actuation, actuation, actuation, actuation];
     TraceRecorder<TestConfiguration, 16> trace = TraceRecorder<TestConfiguration, 16>{0, traceEntries};
     Mind<TestConfiguration, 16, 16> mind = Mind<TestConfiguration, 16, 16>{MachineId{1}, 1, MindStatus::Idle, frames, Reason{0}, 0, trace};
-    MemoryState<TestConfiguration, 16> memory = MemoryState<TestConfiguration, 16>{0, memorySlots};
-    EventBus<TestConfiguration, 16> events = EventBus<TestConfiguration, 16>{1, 0, eventSlots};
-    ActuatorHost<TestConfiguration, 16> actuator = ActuatorHost<TestConfiguration, 16>{1, actuationSlots};
+    MemoryState<TestConfiguration, 16> memory = MemoryState<TestConfiguration, 16>{AtomicInt{0}, MakeSpinLock(), move memorySlots};
+    EventBus<TestConfiguration, 16> events = EventBus<TestConfiguration, 16>{1, AtomicInt{0}, MakeSpinLock(), move eventSlots};
+    ActuatorHost<TestConfiguration, 16> actuator = ActuatorHost<TestConfiguration, 16>{1, MakeSpinLock(), move actuationSlots};
     return AgentContext<TestConfiguration, 16>{AgentId{agentId}, mind, memory, events, actuator, Clock{MonotonicTime{0}}, 0};
 }
 
@@ -71,8 +71,8 @@ void CapacitiesAreConfigurationNotKernelConstants()
     MemorySlot slot = EmptyMemorySlot();
     MemorySlot<array>[2] smallSlots = [slot, slot];
     MemorySlot<array>[6] largerSlots = [slot, slot, slot, slot, slot, slot];
-    MemoryState<TestConfiguration, 2> small = MemoryState<TestConfiguration, 2>{0, smallSlots};
-    MemoryState<TestConfiguration, 6> larger = MemoryState<TestConfiguration, 6>{0, largerSlots};
+    MemoryState<TestConfiguration, 2> small = MemoryState<TestConfiguration, 2>{AtomicInt{0}, MakeSpinLock(), move smallSlots};
+    MemoryState<TestConfiguration, 6> larger = MemoryState<TestConfiguration, 6>{AtomicInt{0}, MakeSpinLock(), move largerSlots};
     small.Write(MemoryKey{1}, 1)!;
     small.Write(MemoryKey{2}, 2)!;
     Assert.Error(small.Write(MemoryKey{3}, 3), "the configured two-key store is bounded");
@@ -87,18 +87,18 @@ void MemoryTracksChangedKeysAndStableRevisions()
 {
     MemorySlot slot = EmptyMemorySlot();
     MemorySlot<array>[3] slots = [slot, slot, slot];
-    MemoryState<TestConfiguration, 3> memory = MemoryState<TestConfiguration, 3>{0, slots};
+    MemoryState<TestConfiguration, 3> memory = MemoryState<TestConfiguration, 3>{AtomicInt{0}, MakeSpinLock(), move slots};
     MemoryKey health = MemoryKey{1};
     memory.Write(health, 7)!;
     Assert.True(memory.IsDirty(health), "a changed key is dirty");
-    Assert.Equals(memory.revision, 1, "the first write advances the revision");
+    Assert.Equals(memory.Revision(), 1, "the first write advances the revision");
     memory.ClearDirty();
     memory.Write(health, 7)!;
     Assert.False(memory.IsDirty(health), "an equal write does not dirty the key");
-    Assert.Equals(memory.revision, 1, "an equal write does not advance the revision");
+    Assert.Equals(memory.Revision(), 1, "an equal write does not advance the revision");
     memory.Write(health, 8)!;
     Assert.True(memory.IsDirty(health), "a changed value dirties the key again");
-    Assert.Equals(memory.revision, 2, "a changed value advances the revision once");
+    Assert.Equals(memory.Revision(), 2, "a changed value advances the revision once");
 }
 
 [[fact]]
@@ -186,7 +186,7 @@ void BoundedSurfacesReturnOrdinaryErrors()
 {
     Event event = EmptyEvent();
     Event<array>[2] eventSlots = [event, event];
-    EventBus<TestConfiguration, 2> events = EventBus<TestConfiguration, 2>{1, 0, eventSlots};
+    EventBus<TestConfiguration, 2> events = EventBus<TestConfiguration, 2>{1, AtomicInt{0}, MakeSpinLock(), move eventSlots};
     EventId e1 = events.Dispatch(EventKind{1}, EventPayload{1})!;
     EventId e2 = events.Dispatch(EventKind{1}, EventPayload{2})!;
     Assert.Error(events.Dispatch(EventKind{1}, EventPayload{3}), "a full event bus returns an error");
@@ -194,7 +194,7 @@ void BoundedSurfacesReturnOrdinaryErrors()
 
     ActuationSlot slot = EmptyActuationSlot();
     ActuationSlot<array>[2] actuationSlots = [slot, slot];
-    ActuatorHost<TestConfiguration, 2> actuator = ActuatorHost<TestConfiguration, 2>{1, actuationSlots};
+    ActuatorHost<TestConfiguration, 2> actuator = ActuatorHost<TestConfiguration, 2>{1, MakeSpinLock(), move actuationSlots};
     ActuationReceipt a1 = actuator.Dispatch(Allow(Reason{1}))!;
     ActuationReceipt a2 = actuator.Dispatch(Allow(Reason{2}))!;
     Assert.Error(actuator.Dispatch(Allow(Reason{3})), "full actuation storage returns an error");

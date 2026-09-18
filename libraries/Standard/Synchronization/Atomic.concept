@@ -4,7 +4,10 @@ profile Core;
 // AtomicInt is the deliberately small R7d machine-atomic surface. The
 // compiler gives its sole field C11 _Atomic representation; all operations
 // remain ordinary library functions over this explicit authority.
-immovable struct AtomicInt
+// AtomicInt remains a value so bounded, quiescent checkpoint values keep their
+// established copy semantics. Concurrent access must still go through the
+// atomic API; the C representation is one C11 _Atomic int and does not allocate.
+struct AtomicInt
 {
     int value;
 }

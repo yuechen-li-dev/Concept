@@ -115,8 +115,20 @@ Local concrete authority is shown as `Declared`, dependency authority as
 `ModuleFactSummary`, derived access evidence as `DerivedAccessSummary`, and
 imported access evidence as `ModuleAccessSummary`. Writer, producer, and
 consumer proofs list the bounded access-set evidence. Opaque identity remains
-`Unknown`; two closed conflicting contexts are `Disproven`. Planner remains
-conservative and R7d4 facts do not authorize guard or atomic elision.
+`Unknown`; two closed conflicting contexts are `Disproven`.
+
+R7d5 derives `SynchronizedAccess` from atomic mediation, exact single-context
+access, or structural disjointness. It derives `PublishedBefore` only from a
+structural Write -> Release Publish -> Acquire Consume -> Read chain, and
+`ExactlyOnce` from exact Claim/Commit CAS transitions without reset. Access
+summary entries preserve memory order, mechanism, and sequence through module
+artifacts.
+
+The default verification plan retains guards and C11 atomics. The optimized
+plan may emit `ElideSynchronization` or `SimplifyAtomic` only when its explicit
+proof conjunction is Proven. Unknown retains the safe mechanism; Disproven
+rejects an incompatible declaration. Planner explanations are composed from
+those graph-derived claims, not speculative prose.
 
 R6l adds field-sensitive initialized-object state beside transported geometry
 facts. `Value(storage)` requires Initialized, `Destroy(storage)` ends that

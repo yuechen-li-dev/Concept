@@ -14,13 +14,15 @@ type evt1FunctionSymbols struct {
 }
 
 type lowering struct {
-	module     Module
-	env        *semanticEnv
-	outputBase string
-	symbolBase string
-	mir        MIR
-	plan       *LoweringPlan
-	mapDoc     map[string]any
+	module          Module
+	env             *semanticEnv
+	outputBase      string
+	symbolBase      string
+	mir             MIR
+	plan            *LoweringPlan
+	simplifyAtomics bool
+	simplifyGuards  bool
+	mapDoc          map[string]any
 }
 
 func Generate(module Module, source []byte) (Outputs, error) {
@@ -31,6 +33,10 @@ func Generate(module Module, source []byte) (Outputs, error) {
 // target descriptions are planning evidence only; strict-C11 remains the
 // sole emitting backend.
 func GenerateForTarget(module Module, source []byte, target TargetCapabilities) (Outputs, error) {
+	return GenerateForTargetWithPolicy(module, source, target, ConservativeCompilationPolicy())
+}
+
+func GenerateForTargetWithPolicy(module Module, source []byte, target TargetCapabilities, policy CompilationPolicy) (Outputs, error) {
 	env, err := analyzeModule(module)
 	if err != nil {
 		return nil, err
@@ -46,13 +52,23 @@ func GenerateForTarget(module Module, source []byte, target TargetCapabilities) 
 		symbolBase: evt1SemanticSymbolBase(module),
 	}
 	l.mir = buildMIR(module, env)
+	if policy.OptimizeSynchronization {
+		if len(env.accessSummaries) == 0 {
+			if err := evt1DeriveAccessSummaries(env, module); err != nil {
+				return nil, err
+			}
+		}
+		l.mir.AccessSummaries = append([]MIRAccessEntry{}, env.accessSummaries...)
+		l.simplifyAtomics = evt1AllAtomicsSimplifiable(l.mir.AccessSummaries)
+		l.simplifyGuards = evt1AllGuardsSimplifiable(l.mir.AccessSummaries)
+	}
 	evt1ProjectPersistentFactSubjects(&l.mir)
 	evt1QualifyMIRFacts(&l.mir)
 	if err := evt1ValidateMIR(l.mir); err != nil {
 		return nil, err
 	}
 	facts := NewSemanticFactSet(l.mir.SemanticFacts)
-	l.plan, err = PlanModule(&l.mir, &facts, target, *env.profile, ConservativeCompilationPolicy())
+	l.plan, err = PlanModule(&l.mir, &facts, target, *env.profile, policy)
 	if err != nil {
 		return nil, err
 	}
@@ -1540,7 +1556,7 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 				}
 			}
 		}
-		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: kind, Detail: detail, SourceSpan: e.Span})
+		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: kind, Detail: detail, Synchronization: evt1NamedSynchronizationEffect(env, e.Callee), SourceSpan: e.Span})
 		for _, arg := range e.Args {
 			collectExprMIROps(env, arg, fn, templateInfo)
 		}
@@ -3248,7 +3264,11 @@ func (l *lowering) structHeader(structDecl StructDecl) string {
 	}
 	for _, field := range structDecl.Fields {
 		if structDecl.Name == evt1AtomicIntType && field.Name == "value" && field.Type.Name == "int" {
-			b.WriteString("  _Atomic int value;\n")
+			if l.simplifyAtomics {
+				b.WriteString("  int value;\n")
+			} else {
+				b.WriteString("  _Atomic int value;\n")
+			}
 		} else {
 			b.WriteString(fmt.Sprintf("  %s %s;\n", evt1CType(field.Type), field.Name))
 		}
@@ -4714,6 +4734,9 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		fn, ok := evt1ResolveGeneratedCall(f.l.env, e.Callee, argTypes)
 		if !ok {
 			return prelude.String(), "/* unresolved_call */", Type{Name: "int", Kind: TypeBuiltin}
+		}
+		if f.l.simplifyGuards && evt1SynchronizationEffect(fn) != "" {
+			return prelude.String(), "((void)0)", Type{Name: "void", Kind: TypeBuiltin, Span: e.Span}
 		}
 		var args []string
 		for i, argType := range argTypes {

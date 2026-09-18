@@ -1,0 +1,32 @@
+module EVT1.SyncConsumption.ReleaseAcquirePublication;
+profile Core;
+
+record struct WriterContext {}
+record struct ReaderContext {}
+struct AtomicInt { int value; }
+enum MemoryOrder { Relaxed, Acquire, Release, AcquireRelease, Sequential, }
+struct Payload { int value; }
+struct Publication { AtomicInt ready; }
+
+[[execution_context(WriterContext)]]
+[[semantic_access("Publish", publication)]]
+void Publish(ref Payload payload, ref Publication publication)
+{
+    payload.value = 42;
+    AtomicStoreIntrinsic(ref publication.ready, 1, MemoryOrder::Release);
+}
+
+[[execution_context(ReaderContext)]]
+[[semantic_access("Consume", publication)]]
+int Consume(ref const Payload payload, ref const Publication publication)
+{
+    int ready = AtomicLoadIntrinsic(ref const publication.ready, MemoryOrder::Acquire);
+    if (ready == 1) { return payload.value; }
+    return 0;
+}
+
+void CheckPublicationProof()
+{
+    Assert.Concept<sync.SynchronizedAccess>(Publication, "publication state uses atomic mediation");
+    Assert.Concept<sync.PublishedBefore>(Payload, Payload, "release/acquire publishes the payload");
+}

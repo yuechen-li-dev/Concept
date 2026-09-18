@@ -1734,6 +1734,7 @@ type MIROperation struct {
 	TensorBackingKind    TensorBackingKind  `json:"tensor_backing_kind,omitempty"`
 	Contiguous           bool               `json:"contiguous,omitempty"`
 	BoundsCheck          string             `json:"bounds_check,omitempty"`
+	Synchronization      string             `json:"synchronization,omitempty"`
 	SourceSpan           Span               `json:"source_span"`
 }
 

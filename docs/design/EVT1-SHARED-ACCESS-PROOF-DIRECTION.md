@@ -65,9 +65,11 @@ Disproven rejects an incompatible contract.
 
 Exclusive writer authority alone never proves that a plain store is safe:
 publication to concurrent readers may still require release/acquire ordering.
-A future general Planner decision may retain or elide synchronization only
-from proof evidence, never from `GlobalBlackboard`, `EventBus`, `Actuation`, or
-other library type names.
+R7d5 implements general Planner decisions that retain or elide synchronization
+only from structural proof evidence, never from `GlobalBlackboard`, `EventBus`,
+`Actuation`, or other library type names. Verification mode retains the safe
+mechanism. Optimized mode simplifies only exact single-context accesses with no
+cross-context publication dependency; R7d5 does not weaken memory order.
 
 No runtime proof/race registry, volatile synchronization, whole-world scan, or
 second shared-storage system belongs in this design.
