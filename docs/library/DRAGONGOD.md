@@ -4,7 +4,7 @@
 immutable manifest credits `CODEX` and declares the sole package dependency
 `Standard`.
 
-The R7c surface is Core, Agent, Memory, Machine, Events, Actuation, Trace,
+The DragonGod surface is Core, Agent, Memory, Machine, Events, Actuation, Trace,
 Replay, Scheduling, Interrupts, Time, AMD64, and AArch64. It is the native agentic compute
 substrate corresponding to the useful architecture of the C# Dominatus
 application kernel. There is deliberately no separate Dominatus package or
@@ -21,12 +21,13 @@ Memory continues to dogfood Standard.Memory for owned allocation paths. The
 agentic components use inline arrays when no dynamic allocation is required.
 Scheduling is ordinary fixed-capacity library policy: the scheduler owns a
 context table, its ready queue stores only stable IDs, and a caller-selected
-semantic step quantum drives deterministic FIFO rotation. Waiting, monotonic
-sleep, failure isolation, and typed trace are explicit. See
-`DRAGONGOD-SCHEDULING.md`. R7d's initial strict-C11 atomic substrate lives in
-Standard; the current DragonGod EventBus, MemoryState, and ActuatorHost remain
-single-worker until their shared-authority proofs and guarded algorithms exist.
-See `DRAGONGOD-SYNCHRONIZATION.md`. There is no private allocator, hidden runtime
+semantic step quantum drives deterministic FIFO rotation. `ParallelScheduler`
+maps this context authority to real native workers with guarded queue, claim,
+wake, and release. Waiting, monotonic sleep, failure isolation, and typed trace
+are explicit. See `DRAGONGOD-SCHEDULING.md` and `DRAGONGOD-WORKERS.md`.
+Standard supplies strict-C11 atomics; DragonGod EventBus, MemoryState, and
+ActuatorHost have worker-safe guarded algorithms. See
+`DRAGONGOD-SYNCHRONIZATION.md`. There is no private allocator, hidden runtime
 scheduler, collector, VM/page-table system, runtime registry, Vulkan policy,
 reflection, or serialization layer.
 

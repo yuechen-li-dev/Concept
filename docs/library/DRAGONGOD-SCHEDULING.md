@@ -59,9 +59,8 @@ single-worker FIFO trace and final state are deterministic and replayable. The
 trace records ready, selected, quantum begin/end, wait, wake, sleep, completion,
 and failure facts through the existing bounded `TraceRecorder`.
 
-DragonGod currently has no general atomic or synchronization substrate adequate
-for shared scheduler mutation. R7c therefore does not add a host-thread backend
-or claim multi-worker determinism. A future worker backend must isolate platform
-threads behind DragonGod platform capabilities and preserve this scheduler as
-the single-worker semantic authority. R7c does not target POSIX scheduling
-compatibility.
+R7e adds `ParallelScheduler` as a guarded multi-worker wrapper around this
+authority. Its Win32 native validation adapter creates and joins actual host
+threads; the Concept scheduler remains platform neutral. Multi-worker traces
+may differ by interleaving, while final state and no-double-execution
+invariants are tested. See `DRAGONGOD-WORKERS.md`.

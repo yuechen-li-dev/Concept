@@ -42,6 +42,11 @@ and missing evidence cannot authorize one instance's guard removal. The
 existing R7d5 no-Publish/Consume policy still retains the real EventBus guard
 in both SPSC and MPSC uses.
 
+R7e native workers exercise EventBus publication and consumption through
+compiled Concept call paths. A consumer observes the preceding Blackboard
+write. This establishes correctness with the retained producer guard; it does
+not add generic call-site context attribution or claim SPSC guard elision.
+
 The next bounded step is a general call-site-to-imported-method access mapping
 with concrete receiver and caller execution context, followed by a separately
 justified publication-aware guard rule. It must preserve the verification

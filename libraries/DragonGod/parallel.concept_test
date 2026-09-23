@@ -1,0 +1,434 @@
+module DragonGod.Tests.Parallel;
+profile Core;
+
+import DragonGod.Scheduling.Parallel;
+import DragonGod.Trace.Core;
+import DragonGod.Memory.State;
+import DragonGod.Events.Core;
+import DragonGod.Actuation.Core;
+import DragonGod.Machine.Execution;
+
+record struct ParallelConfiguration { int identity; };
+struct ParallelMachine
+{
+    int remaining;
+    int steps;
+    int failAt;
+    AtomicInt executing;
+    AtomicInt overlap;
+    int waitAt;
+    int sleepAt;
+    Deadline deadline;
+    AtomicInt entered;
+    AtomicInt proceed;
+};
+
+ParallelMachine ParallelWork(int remaining, int failAt)
+{
+    return ParallelMachine{
+        remaining, 0, failAt, AtomicInt{0}, AtomicInt{0},
+        -1, -1, Deadline{MonotonicTime{0}}, AtomicInt{0}, AtomicInt{1}
+    };
+}
+
+ExecutionStep StepScheduled(ref ParallelMachine self)
+{
+    int expected = 0;
+    if (not CompareExchangeAtomic(ref self.executing, ref expected, 1))
+    {
+        StoreAtomic(ref self.overlap, 1);
+    }
+    ExecutionStep outcome = ExecutionStep::Ready;
+    if (self.failAt == self.steps)
+    {
+        StoreAtomic(ref self.executing, 0);
+        return ExecutionStep::Failed(Reason{7});
+    }
+    if (self.waitAt == self.steps)
+    {
+        self.waitAt = -1;
+        StoreAtomic(ref self.entered, 1, MemoryOrder::Release);
+        while (LoadAtomic(ref const self.proceed, MemoryOrder::Acquire) == 0) bounded(2147483647) {}
+        StoreAtomic(ref self.executing, 0);
+        return ExecutionStep::Waiting(EventKind{9});
+    }
+    if (self.sleepAt == self.steps)
+    {
+        self.sleepAt = -1;
+        StoreAtomic(ref self.entered, 1, MemoryOrder::Release);
+        while (LoadAtomic(ref const self.proceed, MemoryOrder::Acquire) == 0) bounded(2147483647) {}
+        StoreAtomic(ref self.executing, 0);
+        return ExecutionStep::Sleeping(self.deadline);
+    }
+    self.remaining = self.remaining - 1;
+    self.steps = self.steps + 1;
+    if (self.remaining == 0) { outcome = ExecutionStep::Completed; }
+    StoreAtomic(ref self.executing, 0);
+    return outcome;
+}
+
+requires Schedulable<ParallelMachine>;
+
+ParallelScheduler<ParallelConfiguration, ParallelMachine, 4, 4, 64> MakeParallelScheduler(int quantum)
+{
+    ContextId emptyId = ContextId{0};
+    ParallelMachine emptyMachine = ParallelWork(0, -1);
+    ContextId<array>[4] ids = [emptyId ...];
+    ParallelMachine<array>[4] machines = [emptyMachine ...];
+    ExecutionState<array>[4] states = [ExecutionState::Ready ...];
+    EventKind<array>[4] kinds = [EventKind{0} ...];
+    Deadline<array>[4] deadlines = [Deadline{MonotonicTime{0}} ...];
+    Reason<array>[4] failures = [Reason{0} ...];
+    bool<array>[4] active = [false ...];
+    bool<array>[4] queued = [false ...];
+    ContextTable<ParallelMachine, 4> contexts = ContextTable<ParallelMachine, 4>{
+        move ids, move machines, move states, move kinds, move deadlines, move failures, move active, move queued
+    };
+    ContextId<array>[4] entries = [emptyId ...];
+    FifoReadyQueue<4> ready = FifoReadyQueue<4>{move entries, 0, 0};
+    TraceEntry emptyTrace = EmptyTraceEntry();
+    TraceEntry<array>[64] traces = [emptyTrace ...];
+    TraceRecorder<ParallelConfiguration, 64> trace = TraceRecorder<ParallelConfiguration, 64>{0, move traces};
+    FifoScheduler<ParallelConfiguration, ParallelMachine, 4, 4, 64> core = FifoScheduler<ParallelConfiguration, ParallelMachine, 4, 4, 64>{
+        SchedulerConfiguration{quantum}, move contexts, move ready, Clock{MonotonicTime{0}}, move trace, 1, 0, 0
+    };
+    bool<array>[4] pending = [false ...];
+    bool<array>[4] pendingEvent = [false ...];
+    EventKind<array>[4] pendingKind = [EventKind{0} ...];
+    WorkerTraceEntry emptyWorkerTrace = WorkerTraceEntry{WorkerTraceKind::QuantumEnd, WorkerId{0}, emptyId, 0};
+    WorkerTraceEntry<array>[64] workerTrace = [emptyWorkerTrace ...];
+    return ParallelScheduler<ParallelConfiguration, ParallelMachine, 4, 4, 64>{
+        move core, MakeSpinLock(), move pending, move pendingEvent, move pendingKind, 0,
+        move workerTrace, 0, 0, 0
+    };
+}
+
+[[fact]]
+void ParallelWorkerRunsMultipleContextsAndIsolatesFailure()
+{
+    ParallelScheduler<ParallelConfiguration, ParallelMachine, 4, 4, 64> scheduler = MakeParallelScheduler(1);
+    ContextId first = scheduler.Register(ParallelWork(3, -1))!;
+    ContextId second = scheduler.Register(ParallelWork(2, -1))!;
+    ContextId failed = scheduler.Register(ParallelWork(2, 0))!;
+    scheduler.Register(ParallelWork(1, -1))!;
+    Worker worker = Worker{WorkerId{1}, false, ContextId{0}, 0};
+    scheduler.RunWorker(ref worker)!;
+    Assert.Equals(scheduler.core.State(first)!, ExecutionState::Completed, "first context completes");
+    Assert.Equals(scheduler.core.State(second)!, ExecutionState::Completed, "second context completes");
+    Assert.Equals(scheduler.core.State(failed)!, ExecutionState::Failed, "failure remains isolated");
+    Assert.Equals(scheduler.core.contexts.machines[0].steps, 3, "one worker can execute a context repeatedly");
+    Assert.Equals(scheduler.core.contexts.machines[1].steps, 2, "one worker runs several contexts");
+    Assert.Equals(scheduler.core.ready.Count(), 0, "ready queue drains");
+    Assert.True(scheduler.traceCount > 0, "worker decisions have structured trace entries");
+    Assert.Error(scheduler.Register(ParallelWork(1, -1)), "registered contexts reserve bounded ready capacity");
+}
+
+ParallelScheduler<ParallelConfiguration, ParallelMachine, 4, 4, 64> MakeNativeWorkload(int quantum)
+{
+    ParallelScheduler<ParallelConfiguration, ParallelMachine, 4, 4, 64> scheduler = MakeParallelScheduler(quantum);
+    scheduler.Register(ParallelWork(1000, -1))!;
+    scheduler.Register(ParallelWork(1000, -1))!;
+    scheduler.Register(ParallelWork(1000, -1))!;
+    scheduler.Register(ParallelWork(1000, -1))!;
+    return move scheduler;
+}
+
+ParallelScheduler<ParallelConfiguration, ParallelMachine, 4, 4, 64> MakeNativeFailureWorkload()
+{
+    ParallelScheduler<ParallelConfiguration, ParallelMachine, 4, 4, 64> scheduler = MakeParallelScheduler(1);
+    scheduler.Register(ParallelWork(1000, -1))!;
+    scheduler.Register(ParallelWork(1000, 0))!;
+    scheduler.Register(ParallelWork(1000, -1))!;
+    scheduler.Register(ParallelWork(1000, -1))!;
+    return move scheduler;
+}
+
+int NativeFailureFinalState(ref const ParallelScheduler<ParallelConfiguration, ParallelMachine, 4, 4, 64> scheduler)
+{
+    if (ExecutionStateCode(scheduler.core.contexts.states[1]) != 6) { return -1; }
+    if (scheduler.core.contexts.failures[1].code != 7) { return -2; }
+    int index = 0;
+    int total = 0;
+    while (index < 4) bounded(4)
+    {
+        if (index != 1)
+        {
+            if (ExecutionStateCode(scheduler.core.contexts.states[index]) != 5) { return -3; }
+            total = total + scheduler.core.contexts.machines[index].steps;
+        }
+        index = index + 1;
+    }
+    if (scheduler.core.ready.count != 0 or scheduler.runningCount != 0) { return -4; }
+    return total;
+}
+
+int RunNativeWorker(ref ParallelScheduler<ParallelConfiguration, ParallelMachine, 4, 4, 64> scheduler, int id)
+{
+    Worker worker = Worker{WorkerId{id}, false, ContextId{0}, 0};
+    scheduler.RunWorker(ref worker)!;
+    return worker.decisions;
+}
+
+int NativeFinalSteps(ref const ParallelScheduler<ParallelConfiguration, ParallelMachine, 4, 4, 64> scheduler)
+{
+    int total = 0;
+    int index = 0;
+    while (index < 4) bounded(4)
+    {
+        if (ExecutionStateCode(scheduler.core.contexts.states[index]) != 5) { return -1; }
+        if (LoadAtomic(ref const scheduler.core.contexts.machines[index].overlap) != 0) { return -3; }
+        total = total + scheduler.core.contexts.machines[index].steps;
+        index = index + 1;
+    }
+    if (scheduler.core.ready.count != 0 or scheduler.runningCount != 0) { return -2; }
+    return total;
+}
+
+ParallelScheduler<ParallelConfiguration, ParallelMachine, 4, 4, 64> MakeNativeWakeWorkload(bool sleeping)
+{
+    ParallelScheduler<ParallelConfiguration, ParallelMachine, 4, 4, 64> scheduler = MakeParallelScheduler(1);
+    ParallelMachine machine = ParallelWork(1, -1);
+    if (sleeping)
+    {
+        machine.sleepAt = 0;
+        machine.deadline = Deadline{MonotonicTime{5}};
+    }
+    else { machine.waitAt = 0; }
+    StoreAtomic(ref machine.proceed, 0);
+    scheduler.Register(move machine)!;
+    return move scheduler;
+}
+
+int NativeWakeEntered(ref const ParallelScheduler<ParallelConfiguration, ParallelMachine, 4, 4, 64> scheduler)
+{
+    return LoadAtomic(ref const scheduler.core.contexts.machines[0].entered, MemoryOrder::Acquire);
+}
+
+void NativeWakeProceed(ref ParallelScheduler<ParallelConfiguration, ParallelMachine, 4, 4, 64> scheduler)
+{
+    StoreAtomic(ref scheduler.core.contexts.machines[0].proceed, 1, MemoryOrder::Release);
+}
+
+void NativeWakeNow(ref ParallelScheduler<ParallelConfiguration, ParallelMachine, 4, 4, 64> scheduler)
+{
+    scheduler.Wake(ContextId{1})!;
+}
+
+void NativeNotifyEvent(ref ParallelScheduler<ParallelConfiguration, ParallelMachine, 4, 4, 64> scheduler)
+{
+    scheduler.NotifyEvent(EventKind{9})!;
+}
+
+void NativeAdvanceTime(ref ParallelScheduler<ParallelConfiguration, ParallelMachine, 4, 4, 64> scheduler)
+{
+    scheduler.AdvanceTime(MonotonicTime{5})!;
+}
+
+int NativeWakeFinalState(ref const ParallelScheduler<ParallelConfiguration, ParallelMachine, 4, 4, 64> scheduler)
+{
+    if (ExecutionStateCode(scheduler.core.contexts.states[0]) != 5) { return -1; }
+    if (scheduler.core.contexts.machines[0].steps != 1) { return -2; }
+    if (scheduler.core.ready.count != 0 or scheduler.runningCount != 0) { return -3; }
+    return 0;
+}
+
+[[fact]]
+void ParallelSchedulingSteadyStateDoesNotAllocate()
+{
+    Assert.Concept<NoAllocation>(RunNativeWorker, "worker loop uses fixed scheduler storage and explicit atomic guards");
+    Assert.Concept<NoAllocation>(NativeWakeNow, "an explicit wake uses fixed scheduler storage");
+    Assert.Concept<NoAllocation>(NativeNotifyEvent, "event wake bookkeeping uses fixed arrays");
+    Assert.Concept<NoAllocation>(NativeAdvanceTime, "deadline wake uses fixed scheduler storage");
+}
+
+struct SharedAgentFixture
+{
+    MemoryState<ParallelConfiguration, 8> memory;
+    EventBus<ParallelConfiguration, 8> events;
+    ActuatorHost<ParallelConfiguration, 1> actuator;
+    ActuationId actuation;
+    AtomicInt observed;
+    AtomicInt claims;
+};
+
+SharedAgentFixture MakeSharedAgentFixture()
+{
+    MemorySlot emptyMemory = EmptyMemorySlot();
+    MemorySlot<array>[8] slots = [emptyMemory ...];
+    MemoryState<ParallelConfiguration, 8> memory = MemoryState<ParallelConfiguration, 8>{AtomicInt{0}, MakeSpinLock(), move slots};
+    memory.Write(MemoryKey{1}, 0)!;
+    memory.Write(MemoryKey{2}, 0)!;
+    memory.Write(MemoryKey{4}, 0)!;
+    memory.Write(MemoryKey{5}, 0)!;
+    Event emptyEvent = EmptyEvent();
+    Event<array>[8] events = [emptyEvent ...];
+    EventBus<ParallelConfiguration, 8> bus = EventBus<ParallelConfiguration, 8>{1, AtomicInt{0}, MakeSpinLock(), move events};
+    ActuationSlot emptyActuation = EmptyActuationSlot();
+    ActuationSlot<array>[1] obligations = [emptyActuation];
+    ActuatorHost<ParallelConfiguration, 1> actuator = ActuatorHost<ParallelConfiguration, 1>{1, MakeSpinLock(), move obligations};
+    ActuationReceipt receipt = actuator.Dispatch(Allow(Reason{1}))!;
+    return SharedAgentFixture{move memory, move bus, move actuator, receipt.id, AtomicInt{0}, AtomicInt{0}};
+}
+
+int ClaimSharedActuation(ref SharedAgentFixture fixture)
+{
+    try
+    {
+        owned ActuationClaim claim = fixture.actuator.Claim(fixture.actuation)?;
+        fixture.actuator.Commit(move claim, Reason{9})?;
+        FetchAddAtomic(ref fixture.claims, 1);
+        return 1;
+    }
+    except (ActuationError error) { return 0; }
+}
+
+ref struct SharedAgentMachine
+{
+    ref SharedAgentFixture shared;
+    int role;
+    int steps;
+    EventCursor cursor;
+    Mind<ParallelConfiguration, 2, 8> mind;
+};
+
+Mind<ParallelConfiguration, 2, 8> MakeSharedAgentMind(int id)
+{
+    MachineFrame emptyFrame = EmptyFrame();
+    MachineFrame<array>[2] frames = [MachineFrame{StateId{id}, Reason{0}}, emptyFrame];
+    TraceEntry emptyTrace = EmptyTraceEntry();
+    TraceEntry<array>[8] entries = [emptyTrace ...];
+    TraceRecorder<ParallelConfiguration, 8> trace = TraceRecorder<ParallelConfiguration, 8>{0, move entries};
+    return Mind<ParallelConfiguration, 2, 8>{MachineId{id}, 1, MindStatus::Idle, move frames, Reason{0}, 0, move trace};
+}
+
+ExecutionStep FinishSharedAgent(ref SharedAgentMachine self)
+{
+    self.mind.Step(MindSignal::Succeed(Reason{self.role}), self.steps)!;
+    return ExecutionStep::Completed;
+}
+
+ExecutionStep StepScheduled(ref SharedAgentMachine self)
+{
+    self.steps = self.steps + 1;
+    if (self.role == 0)
+    {
+        self.shared.memory.Write(MemoryKey{1}, 42)!;
+        self.shared.events.Dispatch(EventKind{1}, EventPayload{42})!;
+        return FinishSharedAgent(ref self);
+    }
+    if (self.role == 1)
+    {
+        match (self.shared.events.ReadNext(ref self.cursor, EventKind{1}))
+        {
+            Result::Error(error) => { return ExecutionStep::Ready; }
+            Result::Ok(event) => {
+                int value = self.shared.memory.Read(MemoryKey{1}, -1);
+                StoreAtomic(ref self.shared.observed, value);
+                if (value != event.payload.value)
+                {
+                    self.mind.Step(MindSignal::Fail(Reason{10}), self.steps)!;
+                    return ExecutionStep::Failed(Reason{10});
+                }
+                return FinishSharedAgent(ref self);
+            }
+        }
+    }
+    if (self.role == 2 or self.role == 3)
+    {
+        int claimed = ClaimSharedActuation(ref self.shared);
+        return FinishSharedAgent(ref self);
+    }
+    if (self.role >= 6) { self.shared.memory.Write(MemoryKey{2}, self.role * 10)!; }
+    else { self.shared.memory.Write(MemoryKey{self.role}, self.role * 10)!; }
+    return FinishSharedAgent(ref self);
+}
+
+requires Schedulable<SharedAgentMachine>;
+
+ParallelScheduler<ParallelConfiguration, SharedAgentMachine, 8, 8, 64> MakeSharedAgentWorkload(ref SharedAgentFixture fixture)
+{
+    ContextId emptyId = ContextId{0};
+    SharedAgentMachine emptyMachine = SharedAgentMachine{ref fixture, -1, 0, StartCursor(), MakeSharedAgentMind(0)};
+    ContextId<array>[8] ids = [emptyId ...];
+    SharedAgentMachine<array>[8] machines = [emptyMachine ...];
+    ExecutionState<array>[8] states = [ExecutionState::Ready ...];
+    EventKind<array>[8] kinds = [EventKind{0} ...];
+    Deadline<array>[8] deadlines = [Deadline{MonotonicTime{0}} ...];
+    Reason<array>[8] failures = [Reason{0} ...];
+    bool<array>[8] active = [false ...];
+    bool<array>[8] queued = [false ...];
+    ContextTable<SharedAgentMachine, 8> contexts = ContextTable<SharedAgentMachine, 8>{
+        move ids, move machines, move states, move kinds, move deadlines, move failures, move active, move queued
+    };
+    ContextId<array>[8] entries = [emptyId ...];
+    FifoReadyQueue<8> ready = FifoReadyQueue<8>{move entries, 0, 0};
+    TraceEntry emptyTrace = EmptyTraceEntry();
+    TraceEntry<array>[64] traces = [emptyTrace ...];
+    TraceRecorder<ParallelConfiguration, 64> trace = TraceRecorder<ParallelConfiguration, 64>{0, move traces};
+    FifoScheduler<ParallelConfiguration, SharedAgentMachine, 8, 8, 64> core = FifoScheduler<ParallelConfiguration, SharedAgentMachine, 8, 8, 64>{
+        SchedulerConfiguration{1}, move contexts, move ready, Clock{MonotonicTime{0}}, move trace, 1, 0, 0
+    };
+    bool<array>[8] pending = [false ...];
+    bool<array>[8] pendingEvent = [false ...];
+    EventKind<array>[8] pendingKind = [EventKind{0} ...];
+    WorkerTraceEntry emptyWorkerTrace = WorkerTraceEntry{WorkerTraceKind::QuantumEnd, WorkerId{0}, emptyId, 0};
+    WorkerTraceEntry<array>[64] workerTrace = [emptyWorkerTrace ...];
+    ParallelScheduler<ParallelConfiguration, SharedAgentMachine, 8, 8, 64> scheduler = ParallelScheduler<ParallelConfiguration, SharedAgentMachine, 8, 8, 64>{
+        move core, MakeSpinLock(), move pending, move pendingEvent, move pendingKind, 0,
+        move workerTrace, 0, 0, 0
+    };
+    int index = 0;
+    while (index < 8) bounded(8)
+    {
+        scheduler.Register(SharedAgentMachine{ref fixture, index, 0, StartCursor(), MakeSharedAgentMind(index + 1)})!;
+        index = index + 1;
+    }
+    return move scheduler;
+}
+
+int RunSharedAgentWorker(ref ParallelScheduler<ParallelConfiguration, SharedAgentMachine, 8, 8, 64> scheduler, int id)
+{
+    Worker worker = Worker{WorkerId{id}, false, ContextId{0}, 0};
+    scheduler.RunWorker(ref worker)!;
+    return worker.decisions;
+}
+
+int SharedAgentFinalState(
+    ref const ParallelScheduler<ParallelConfiguration, SharedAgentMachine, 8, 8, 64> scheduler,
+    ref const SharedAgentFixture fixture)
+{
+    int index = 0;
+    while (index < 8) bounded(8)
+    {
+        if (ExecutionStateCode(scheduler.core.contexts.states[index]) != 5) { return -1; }
+        match (scheduler.core.contexts.machines[index].mind.status)
+        {
+            MindStatus::Succeeded => {}
+            MindStatus::Idle => { return -7; }
+            MindStatus::Running => { return -7; }
+            MindStatus::WaitingActuation => { return -7; }
+            MindStatus::Failed => { return -7; }
+        }
+        index = index + 1;
+    }
+    if (LoadAtomic(ref const fixture.observed) != 42) { return -2; }
+    if (fixture.events.Count() != 1) { return -3; }
+    if (LoadAtomic(ref const fixture.claims) != 1) { return -4; }
+    if (ActuationStatusCode(fixture.actuator.Status(fixture.actuation)) != 4) { return -5; }
+    index = 4;
+    while (index < 6) bounded(2)
+    {
+        if (fixture.memory.Read(MemoryKey{index}, -1) != index * 10) { return -6; }
+        index = index + 1;
+    }
+    int sharedValue = fixture.memory.Read(MemoryKey{2}, -1);
+    if (sharedValue != 60 and sharedValue != 70) { return -8; }
+    if (not fixture.memory.IsDirty(MemoryKey{2}) or fixture.memory.Revision() < 4) { return -9; }
+    return 0;
+}
+
+[[fact]]
+void SharedAgentWorkerSteadyStateDoesNotAllocate()
+{
+    Assert.Concept<NoAllocation>(RunSharedAgentWorker, "shared components and worker scheduling use fixed bounded storage");
+}

@@ -41,13 +41,15 @@ policy.
 | atomics/synchronization | none canonical | shared multi-worker mutation | no | defer host threads |
 
 R7d has since supplied the first canonical strict-C11 integer atomic substrate.
-The row remains insufficient for multi-worker scheduling because shared-access
-authority proofs and worker-safe scheduler notification have not yet landed.
+R7e now uses the R7d substrate in `ParallelScheduler`: a short scheduler gate
+protects selection, claim, wake, release, and trace while machine Steps run
+outside that gate. The R7c `FifoScheduler` remains the deterministic one-worker
+authority. See `DRAGONGOD-MULTI-WORKER-DIRECTION.md`.
 
 ## Collector interaction
 
-R7d may need per-context root ownership, allocation-state visibility, and
-pause/coordination at explicit machine step boundaries. R7c adds no GC roots,
+R7f may need per-context root ownership, allocation-state visibility, and
+pause/coordination at explicit machine step boundaries. R7e adds no GC roots,
 barriers, heap scanning, conventional safepoints, or collector hooks. Step
 boundaries are only an observation for the next milestone.
 

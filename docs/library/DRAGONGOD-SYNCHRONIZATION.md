@@ -28,4 +28,6 @@ separate insertion guard, so disjoint occupied slots do not serialize on a
 global lock. `EventBus` writes bounded payload under a producer guard before a
 Release count publication; readers use Acquire count observation. `ActuatorHost`
 uses atomic Pending -> Claimed -> Committed transitions and an owned claim
-authority. The scheduler itself remains single-worker until R7e.
+authority. R7e exercises these components under native multi-worker scheduling;
+the EventBus producer guard remains because SPSC caller-context evidence is
+still Unknown.

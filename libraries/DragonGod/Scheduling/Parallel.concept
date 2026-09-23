@@ -1,0 +1,296 @@
+module DragonGod.Scheduling.Parallel;
+profile Core;
+
+import DragonGod.Scheduling.Fifo;
+import Standard.Synchronization.Guard;
+
+// A worker is a reusable execution resource. The table remains the sole owner
+// of each machine; only its ContextId crosses the shared ready queue.
+enum WorkerDecision { Ran, Busy, Idle, }
+enum WorkerTraceKind
+{
+    WorkerSelectedContext, ContextClaimed, QuantumBegin, QuantumEnd,
+    Wake, Requeue, Complete, Fail,
+}
+record struct WorkerTraceEntry
+{
+    WorkerTraceKind kind;
+    WorkerId worker;
+    ContextId context;
+    int decision;
+};
+
+template <typename Configuration, typename TMachine, usize ContextCapacity, usize ReadyCapacity, usize TraceCapacity>
+requires Schedulable<TMachine>
+class ParallelScheduler
+{
+public:
+    FifoScheduler<Configuration, TMachine, ContextCapacity, ReadyCapacity, TraceCapacity> core;
+    SpinLock gate;
+    bool<array>[ContextCapacity] pendingWake;
+    bool<array>[ContextCapacity] pendingEvent;
+    EventKind<array>[ContextCapacity] pendingEventKind;
+    int runningCount;
+    WorkerTraceEntry<array>[TraceCapacity] workerTrace;
+    int traceNext;
+    int traceCount;
+    int traceOverwrites;
+
+    // A bounded ring retains recent diagnostic decisions. Trace recording is
+    // always under gate and never participates in scheduling authority.
+    void RecordWorker(ref ParallelScheduler self, WorkerTraceKind kind, WorkerId worker, ContextId id)
+    {
+        if (Len(self.workerTrace) == 0) { return; }
+        self.workerTrace[self.traceNext] = WorkerTraceEntry{kind, worker, id, self.core.decisions};
+        self.traceNext = self.traceNext + 1;
+        if (self.traceNext >= Len(self.workerTrace)) { self.traceNext = 0; }
+        if (self.traceCount < Len(self.workerTrace)) { self.traceCount = self.traceCount + 1; }
+        else { self.traceOverwrites = self.traceOverwrites + 1; }
+    }
+
+    // Registration and clock changes are startup/quiescent operations. All
+    // mutations after workers start go through this guarded surface.
+    Result<ContextId, SchedulerError> Register(ref ParallelScheduler self, TMachine machine)
+    {
+        Acquire(ref self.gate);
+        // Reserve a queue slot for every registered context, including those
+        // currently running, so release can always requeue without trapping.
+        if (self.core.contextCount >= Len(self.core.ready.entries))
+        {
+            Release(ref self.gate);
+            return Result::Error(SchedulerError::CapacityExhausted);
+        }
+        Result<ContextId, SchedulerError> result = self.core.Register(move machine);
+        Release(ref self.gate);
+        return result;
+    }
+
+    Result<void, SchedulerError> Wake(ref ParallelScheduler self, ContextId id)
+    {
+        Acquire(ref self.gate);
+        Result<int, SchedulerError> found = self.core.Find(id);
+        match (found)
+        {
+            Result::Error(error) => { Release(ref self.gate); return Result::Error(error); }
+            Result::Ok(index) => {
+                if (ExecutionStateCode(self.core.contexts.states[index]) == 2)
+                {
+                    self.pendingWake[index] = true;
+                    self.RecordWorker(WorkerTraceKind::Wake, WorkerId{0}, id);
+                    Release(ref self.gate);
+                    return Result::Ok();
+                }
+                Result<void, SchedulerError> result = self.core.Wake(id);
+                self.RecordWorker(WorkerTraceKind::Wake, WorkerId{0}, id);
+                Release(ref self.gate);
+                return result;
+            }
+        }
+    }
+
+    Result<int, SchedulerError> NotifyEvent(ref ParallelScheduler self, EventKind kind)
+    {
+        Acquire(ref self.gate);
+        bool<array>[ContextCapacity] waiting = [false ...];
+        int index = 0;
+        while (index < Len(self.core.contexts.ids)) bounded(2147483647)
+        {
+            waiting[index] = self.core.contexts.active[index] and
+                ExecutionStateCode(self.core.contexts.states[index]) == 3 and
+                self.core.contexts.waitKinds[index].value == kind.value;
+            if (self.core.contexts.active[index] and
+                ExecutionStateCode(self.core.contexts.states[index]) == 2 and
+                self.pendingEvent[index] and self.pendingEventKind[index].value != kind.value)
+            {
+                Release(ref self.gate);
+                return Result::Error(SchedulerError::CapacityExhausted);
+            }
+            index = index + 1;
+        }
+        Result<int, SchedulerError> result = self.core.NotifyEvent(kind);
+        match (result)
+        {
+            Result::Error(error) => { Release(ref self.gate); return Result::Error(error); }
+            Result::Ok(woke) => {}
+        }
+        index = 0;
+        while (index < Len(self.core.contexts.ids)) bounded(2147483647)
+        {
+            if (self.core.contexts.active[index] and ExecutionStateCode(self.core.contexts.states[index]) == 2)
+            {
+                self.pendingEvent[index] = true;
+                self.pendingEventKind[index] = kind;
+            }
+            if (waiting[index])
+            {
+                self.RecordWorker(WorkerTraceKind::Wake, WorkerId{0}, self.core.contexts.ids[index]);
+            }
+            index = index + 1;
+        }
+        Release(ref self.gate);
+        return result;
+    }
+
+    Result<int, SchedulerError> WakeExpiredLocked(ref ParallelScheduler self)
+    {
+        bool<array>[ContextCapacity] sleeping = [false ...];
+        int index = 0;
+        while (index < Len(self.core.contexts.ids)) bounded(2147483647)
+        {
+            sleeping[index] = self.core.contexts.active[index] and
+                ExecutionStateCode(self.core.contexts.states[index]) == 4 and
+                Reached(self.core.clock.now, self.core.contexts.sleepUntil[index]);
+            index = index + 1;
+        }
+        Result<int, SchedulerError> result = self.core.WakeExpired();
+        match (result)
+        {
+            Result::Error(error) => { return Result::Error(error); }
+            Result::Ok(woke) => {}
+        }
+        index = 0;
+        while (index < Len(self.core.contexts.ids)) bounded(2147483647)
+        {
+            if (sleeping[index]) { self.RecordWorker(WorkerTraceKind::Wake, WorkerId{0}, self.core.contexts.ids[index]); }
+            index = index + 1;
+        }
+        return result;
+    }
+
+    Result<int, SchedulerError> WakeExpired(ref ParallelScheduler self)
+    {
+        Acquire(ref self.gate);
+        Result<int, SchedulerError> result = self.WakeExpiredLocked();
+        Release(ref self.gate);
+        return result;
+    }
+
+    Result<int, SchedulerError> AdvanceTime(ref ParallelScheduler self, MonotonicTime now)
+    {
+        Acquire(ref self.gate);
+        self.core.clock = Clock{now};
+        Result<int, SchedulerError> result = self.WakeExpiredLocked();
+        Release(ref self.gate);
+        return result;
+    }
+
+    Result<WorkerDecision, SchedulerError> RunOne(ref ParallelScheduler self, ref Worker worker)
+    {
+        Acquire(ref self.gate);
+        if (self.core.configuration.stepQuantum <= 0)
+        {
+            Release(ref self.gate);
+            return Result::Error(SchedulerError::InvalidQuantum);
+        }
+        if (self.core.ready.IsEmpty())
+        {
+            bool busy = self.runningCount > 0;
+            Release(ref self.gate);
+            if (busy) { return Result::Ok(WorkerDecision::Busy); }
+            return Result::Ok(WorkerDecision::Idle);
+        }
+        ContextId id = self.core.ready.Dequeue()!;
+        self.RecordWorker(WorkerTraceKind::WorkerSelectedContext, worker.id, id);
+        int index = self.core.Find(id)!;
+        if (ExecutionStateCode(self.core.contexts.states[index]) != 1 or not self.core.contexts.queued[index])
+        {
+            Release(ref self.gate);
+            return Result::Error(SchedulerError::InvalidState);
+        }
+        self.core.contexts.queued[index] = false;
+        self.core.contexts.states[index] = ExecutionState::Running;
+        self.RecordWorker(WorkerTraceKind::ContextClaimed, worker.id, id);
+        self.runningCount = self.runningCount + 1;
+        self.core.decisions = self.core.decisions + 1;
+        worker.running = true;
+        worker.current = id;
+        worker.decisions = worker.decisions + 1;
+        self.RecordWorker(WorkerTraceKind::QuantumBegin, worker.id, id);
+        Release(ref self.gate);
+
+        int step = 0;
+        ExecutionStep outcome = ExecutionStep::Ready;
+        bool keepRunning = true;
+        while (step < self.core.configuration.stepQuantum and keepRunning) bounded(2147483647)
+        {
+            outcome = StepScheduled(ref self.core.contexts.machines[index]);
+            step = step + 1;
+            match (outcome)
+            {
+                ExecutionStep::Ready => {}
+                ExecutionStep::Waiting(kind) => { keepRunning = false; }
+                ExecutionStep::Sleeping(deadline) => { keepRunning = false; }
+                ExecutionStep::Completed => { keepRunning = false; }
+                ExecutionStep::Failed(reason) => { keepRunning = false; }
+            }
+        }
+
+        Acquire(ref self.gate);
+        match (outcome)
+        {
+            ExecutionStep::Ready => { self.core.contexts.states[index] = ExecutionState::Ready; }
+            ExecutionStep::Waiting(kind) => {
+                self.core.contexts.states[index] = ExecutionState::Waiting;
+                self.core.contexts.waitKinds[index] = kind;
+            }
+            ExecutionStep::Sleeping(deadline) => {
+                self.core.contexts.states[index] = ExecutionState::Sleeping;
+                self.core.contexts.sleepUntil[index] = deadline;
+            }
+            ExecutionStep::Completed => { self.core.contexts.states[index] = ExecutionState::Completed; }
+            ExecutionStep::Failed(reason) => {
+                self.core.contexts.states[index] = ExecutionState::Failed;
+                self.core.contexts.failures[index] = reason;
+            }
+        }
+        int state = ExecutionStateCode(self.core.contexts.states[index]);
+        if (state == 3 and self.pendingEvent[index] and
+            self.pendingEventKind[index].value == self.core.contexts.waitKinds[index].value)
+        {
+            self.core.contexts.states[index] = ExecutionState::Ready;
+            state = 1;
+        }
+        if (state == 4 and Reached(self.core.clock.now, self.core.contexts.sleepUntil[index]))
+        {
+            self.core.contexts.states[index] = ExecutionState::Ready;
+            state = 1;
+        }
+        if (self.pendingWake[index] and (state == 3 or state == 4))
+        {
+            self.core.contexts.states[index] = ExecutionState::Ready;
+            state = 1;
+        }
+        self.pendingWake[index] = false;
+        self.pendingEvent[index] = false;
+        if (state == 1)
+        {
+            self.core.ready.Enqueue(id)!;
+            self.core.contexts.queued[index] = true;
+            self.RecordWorker(WorkerTraceKind::Requeue, worker.id, id);
+        }
+        if (state == 5) { self.RecordWorker(WorkerTraceKind::Complete, worker.id, id); }
+        if (state == 6) { self.RecordWorker(WorkerTraceKind::Fail, worker.id, id); }
+        self.RecordWorker(WorkerTraceKind::QuantumEnd, worker.id, id);
+        self.runningCount = self.runningCount - 1;
+        worker.running = false;
+        worker.current = ContextId{0};
+        Release(ref self.gate);
+        return Result::Ok(WorkerDecision::Ran);
+    }
+
+    Result<void, SchedulerError> RunWorker(ref ParallelScheduler self, ref Worker worker)
+    {
+        bool done = false;
+        while (not done) bounded(2147483647)
+        {
+            WorkerDecision decision = self.RunOne(ref worker)?;
+            match (decision)
+            {
+                WorkerDecision::Ran => {}
+                WorkerDecision::Busy => {}
+                WorkerDecision::Idle => { done = true; }
+            }
+        }
+        return Result::Ok();
+    }
+};

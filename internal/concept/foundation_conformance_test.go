@@ -210,5 +210,7 @@ func runFoundationNativeHarness(t *testing.T, outputs Outputs, harnessName, harn
 	}
 	if out, err := exec.Command(executable).CombinedOutput(); err != nil {
 		t.Fatalf("native C11 specimen failed: %v\n%s", err, out)
+	} else if len(out) != 0 {
+		t.Logf("native C11 specimen output:\n%s", out)
 	}
 }

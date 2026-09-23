@@ -92,9 +92,10 @@ public:
     bool<array>[Capacity] queued;
 };
 
-record struct Worker
+struct Worker
 {
     WorkerId id;
     bool running;
     ContextId current;
+    int decisions;
 };

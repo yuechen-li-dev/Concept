@@ -35,6 +35,10 @@ shared-access propositions. R7d4 supplies structural access evidence and
 tri-state writer/producer/consumer derivation. R7d5 adds the general guard,
 publication and exactly-once derivation, conservative proof-consuming Planner,
 and worker-safe bounded Blackboard, EventBus, and Actuation paths.
+R7e exercises those authorities under real native-worker concurrency. Its
+scheduler gate orders queue and lifecycle mutation while per-context machine
+Steps run concurrently. The safe EventBus producer guard remains when generic
+caller execution context is unresolved.
 
 The source relations are real contracts, not analyzer-only facts. A declared
 fact alone cannot remove synchronization. Derived Proven evidence may enable a
