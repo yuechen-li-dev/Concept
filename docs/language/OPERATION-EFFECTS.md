@@ -1,5 +1,7 @@
 # Operation allocation effects
 
+R7f2 adds `compiler.InvalidatesBorrows(Operation, resourceParameter)` to the existing operation-effect declarations. The parameter must be a reference; the fact travels in module artifacts and excludes conflicting lexical borrows at call sites. See [destructive resource effects](../design/EVT1-DESTRUCTIVE-RESOURCE-EFFECTS.md).
+
 Status: EVT1 R6d local authority implemented
 
 The initial effect vocabulary contains one conservative semantic fact:

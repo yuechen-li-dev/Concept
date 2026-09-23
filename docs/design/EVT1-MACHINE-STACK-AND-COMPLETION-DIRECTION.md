@@ -1,5 +1,7 @@
 # EVT1 machine stack and completion direction
 
+R7f2 suspension rule: a lexical lease tied to an explicitly invalidatable resource cannot cross `yield`, and such a reference carrier cannot become a persistent machine field. See [suspension scoped authority](EVT1-SUSPENSION-SCOPED-AUTHORITY.md).
+
 Status: R5h dyn-selected async construction implemented over the R5e stack law
 
 R5e finishes the partial substrate already present in Concept. The older

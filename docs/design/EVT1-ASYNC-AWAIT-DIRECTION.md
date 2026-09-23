@@ -1,5 +1,7 @@
 # EVT1 async/await direction
 
+R7f2 suspension rule: a local reference carrier for an explicitly invalidatable resource is rejected when live across `await`; awaited destructive calls are checked against live borrows at invocation. See [suspension scoped authority](EVT1-SUSPENSION-SCOPED-AUTHORITY.md).
+
 Status: R5j exact callable field composition over R5g normalization
 
 ## One execution model

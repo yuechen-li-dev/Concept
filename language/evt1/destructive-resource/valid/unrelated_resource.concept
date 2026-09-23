@@ -1,0 +1,15 @@
+profile Core;
+
+struct Store { int value; };
+ref const int Borrow(ref const Store store) { return ref const store.value; }
+void Reset(ref Store store) { store.value = 0; }
+requires compiler.InvalidatesBorrows(Reset, store);
+
+int Main()
+{
+    Store first = Store{7};
+    Store second = Store{9};
+    ref const int held = Borrow(ref const first);
+    Reset(ref second);
+    return held;
+}

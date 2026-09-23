@@ -1,5 +1,7 @@
 # EVT1 R7f1 generic library closure
 
+R7f2 follow-up: [EVT1-R7F2-CONFORMANCE.md](EVT1-R7F2-CONFORMANCE.md) adds an explicit destructive reference effect and conservative suspension rejection for resource-sensitive leases. The wider machine/foreign boundary remains open.
+
 Status: **Meaningful progression**. Baseline and R7e: `b1747d7d3ffba7510aff6484c6863f70c214cf6e`; compiler ID: `concept-evt1-stage0-go`. R7f stopped without a collector. R7f1 adds no collector or scheduler integration.
 
 ## Evidence

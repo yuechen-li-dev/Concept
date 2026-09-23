@@ -1,0 +1,16 @@
+profile Core;
+
+struct Store { int value; };
+ref struct Lease { ref const Store owner; };
+Lease Borrow(ref const Store store) { return Lease{ref const store}; }
+void Reset(ref Store store) { store.value = 0; }
+requires compiler.InvalidatesBorrows(Reset, store);
+async int Child() { return 1; }
+
+async int Work()
+{
+    Store store = Store{7};
+    Lease lease = Borrow(ref const store);
+    int value = await Child();
+    return lease.owner.value + value;
+}

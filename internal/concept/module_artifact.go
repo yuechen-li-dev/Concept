@@ -26,6 +26,7 @@ type SemanticModuleEffectSummary struct {
 	Operation string `json:"operation"`
 	Signature string `json:"signature,omitempty"`
 	Effect    string `json:"effect"`
+	Resource  string `json:"resource,omitempty"`
 	Origin    string `json:"origin"`
 }
 
@@ -494,7 +495,7 @@ func composeSemanticModules(local Module, artifacts map[string][]byte) (Module, 
 			if summary.Origin == string(FactOriginDeclaredForeign) {
 				origin = summary.Origin
 			}
-			composed.OperationEffects = append(composed.OperationEffects, OperationEffectDecl{Effect: summary.Effect, Operation: summary.Operation, Signature: summary.Signature, Origin: origin, Module: artifact.ModuleIdentity})
+			composed.OperationEffects = append(composed.OperationEffects, OperationEffectDecl{Effect: summary.Effect, Operation: summary.Operation, Resource: summary.Resource, Signature: summary.Signature, Origin: origin, Module: artifact.ModuleIdentity})
 		}
 		for _, summary := range artifact.ValueFactSummaries {
 			if summary.Origin != FactOriginDeclaredForeign {
@@ -681,11 +682,28 @@ func summarizeModuleEffects(module Module, env *semanticEnv) []SemanticModuleEff
 			})
 		}
 	}
+	for _, declared := range module.OperationEffects {
+		if declared.Effect != "InvalidatesBorrows" {
+			continue
+		}
+		signature := declared.Signature
+		if signature == "" {
+			if env.templates[declared.Operation].Name != "" {
+				signature = "template"
+			} else if candidates := env.functions[declared.Operation]; len(candidates) == 1 {
+				signature = evt1FunctionParamSignature(candidates[0])
+			}
+		}
+		summaries = append(summaries, SemanticModuleEffectSummary{Operation: declared.Operation, Signature: signature, Effect: declared.Effect, Resource: declared.Resource, Origin: string(FactOriginDeclaredEffect)})
+	}
 	sort.Slice(summaries, func(i, j int) bool {
 		if summaries[i].Operation != summaries[j].Operation {
 			return summaries[i].Operation < summaries[j].Operation
 		}
-		return summaries[i].Signature < summaries[j].Signature
+		if summaries[i].Signature != summaries[j].Signature {
+			return summaries[i].Signature < summaries[j].Signature
+		}
+		return summaries[i].Effect < summaries[j].Effect
 	})
 	return summaries
 }

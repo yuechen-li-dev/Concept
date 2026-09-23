@@ -776,8 +776,8 @@ func (p *parser) parseOperationEffectDecl() (OperationEffectDecl, error) {
 	if err != nil {
 		return OperationEffectDecl{}, err
 	}
-	if effect.Lexeme != "Allocates" && effect.Lexeme != "NoAllocation" {
-		return OperationEffectDecl{}, evt1Diagnostic("OPERATION_EFFECT_INVALID", "supported operation effect is Allocates", effect.Span)
+	if effect.Lexeme != "Allocates" && effect.Lexeme != "NoAllocation" && effect.Lexeme != "InvalidatesBorrows" {
+		return OperationEffectDecl{}, evt1Diagnostic("OPERATION_EFFECT_INVALID", "supported operation effects are Allocates and InvalidatesBorrows", effect.Span)
 	}
 	if _, err = p.expect("("); err != nil {
 		return OperationEffectDecl{}, err
@@ -786,13 +786,24 @@ func (p *parser) parseOperationEffectDecl() (OperationEffectDecl, error) {
 	if err != nil {
 		return OperationEffectDecl{}, err
 	}
+	resource := ""
+	if effect.Lexeme == "InvalidatesBorrows" {
+		if _, err = p.expect(","); err != nil {
+			return OperationEffectDecl{}, err
+		}
+		parameter, parameterErr := p.expectIdentifier("OPERATION_EFFECT_INVALID", "expected resource parameter name")
+		if parameterErr != nil {
+			return OperationEffectDecl{}, parameterErr
+		}
+		resource = parameter.Lexeme
+	}
 	if _, err = p.expect(")"); err != nil {
 		return OperationEffectDecl{}, err
 	}
 	if _, err = p.expect(";"); err != nil {
 		return OperationEffectDecl{}, err
 	}
-	return OperationEffectDecl{Effect: effect.Lexeme, Operation: op.Lexeme, Span: start.Span}, nil
+	return OperationEffectDecl{Effect: effect.Lexeme, Operation: op.Lexeme, Resource: resource, Span: start.Span}, nil
 }
 
 func (p *parser) parseAttributes() ([]Attribute, error) {

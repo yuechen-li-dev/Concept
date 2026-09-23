@@ -1,0 +1,20 @@
+profile Core;
+
+struct Store { int value; };
+ref struct Lease { ref const Store owner; };
+Lease Borrow(ref const Store store) { return Lease{ref const store}; }
+void Reset(ref Store store) { store.value = 0; }
+requires compiler.InvalidatesBorrows(Reset, store);
+
+automata Worker
+{
+    machine Run
+    {
+        state Waiting
+        {
+            Store store = Store{7};
+            Lease lease = Borrow(ref const store);
+            yield;
+        }
+    }
+}

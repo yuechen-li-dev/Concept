@@ -474,6 +474,9 @@ func evt1ValidateCanonicalAutomata(env *semanticEnv, decl AutomataDecl) (*evt1Au
 			return nil, err
 		}
 		field.Type = resolved
+		if evt1CarriesInvalidatableReference(env, resolved) {
+			return nil, evt1Diagnostic("SCOPED_AUTHORITY_PERSISTENT_FIELD", fmt.Sprintf("reference-struct field %s.%s cannot persist across machine suspension", decl.Name, field.Name), field.Span)
+		}
 		stateTypes[field.Name] = resolved
 	}
 	env.fieldSets[stateEnvName] = stateTypes
@@ -536,6 +539,9 @@ func evt1ValidateCanonicalAutomata(env *semanticEnv, decl AutomataDecl) (*evt1Au
 				return nil, err
 			}
 			field.Type = resolved
+			if evt1CarriesInvalidatableReference(env, resolved) {
+				return nil, evt1Diagnostic("SCOPED_AUTHORITY_PERSISTENT_FIELD", fmt.Sprintf("reference-struct field %s.%s cannot persist across machine suspension", machine.Name, field.Name), field.Span)
+			}
 			if resolved.Kind == TypeCallable && resolved.CallableProvenance != string(evt1ProvenanceStatic) && field.Initializer == nil {
 				return nil, evt1Diagnostic("CALLABLE_MACHINE_FIELD_SHORT_REF", fmt.Sprintf("lifetime-bound machine callable field %s.%s requires construction from persistent automata state", machine.Name, field.Name), field.Span)
 			}

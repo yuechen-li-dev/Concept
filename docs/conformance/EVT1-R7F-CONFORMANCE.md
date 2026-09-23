@@ -1,5 +1,7 @@
 # EVT1 R7f collector collections: honest stop
 
+R7f2 follow-up: [EVT1-R7F2-CONFORMANCE.md](EVT1-R7F2-CONFORMANCE.md) establishes a bounded destructive-reference contract and suspension rejection. The collector implementation remains deferred until the machine and foreign boundaries are proved.
+
 R7f1 follow-up: [EVT1-R7F1-CONFORMANCE.md](EVT1-R7F1-CONFORMANCE.md) closes the generic-call and local-array compiler blockers and proves the value-shaped two-type-parameter concept case already worked. It adds a lexical `owned`-move borrow exclusion, but destructive operations through `ref` and suspension are not fully proved. R7f remains an honest stop; a collector remains deferred.
 
 Baseline: `b1747d7d3ffba7510aff6484c6863f70c214cf6e` (R7e).

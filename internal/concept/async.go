@@ -1134,12 +1134,14 @@ func evt1ValidateAsyncPersistence(env *semanticEnv, fn FunctionDecl) error {
 	}
 	a := evt1AnalyzeAsync(fn)
 	persistent := map[string]bool{}
+	crossesAwait := map[string]bool{}
 	for _, p := range fn.Params {
 		persistent[p.Name] = true
 	}
 	for i := range a.Awaits {
 		for _, name := range a.liveAcross(i) {
 			persistent[name] = true
+			crossesAwait[name] = true
 		}
 	}
 	params := map[string]bool{}
@@ -1148,6 +1150,10 @@ func evt1ValidateAsyncPersistence(env *semanticEnv, fn FunctionDecl) error {
 	}
 	for name := range persistent {
 		t := a.DeclTypes[name]
+		if crossesAwait[name] && evt1IsRefStructType(env, t) && evt1CarriesInvalidatableReference(env, t) {
+			graph := evt1AsyncLifetimeProof(env, fn, name, t)
+			return Diagnostic{Code: "SCOPED_AUTHORITY_CROSSES_AWAIT", Message: fmt.Sprintf("scoped authority %s cannot cross await because it may exclude destructive resource access", name), Span: t.Span, Proof: &graph}
+		}
 		if t.isReference() && (!params[name] || t.Scoped) {
 			graph := evt1AsyncLifetimeProof(env, fn, name, t)
 			return Diagnostic{Code: "ASYNC_PERSISTENT_REF_ESCAPE", Message: fmt.Sprintf("reference %s cannot be proven to outlive async operation %s", name, fn.Name), Span: t.Span, Proof: &graph}

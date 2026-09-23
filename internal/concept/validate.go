@@ -776,10 +776,13 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		if effect.Effect == "NoAllocation" && effect.Origin != string(FactOriginModuleSummaryEffect) {
 			return nil, evt1Diagnostic("OPERATION_EFFECT_NEGATIVE_LIE", "NoAllocation cannot be declared; it is derived from the authoritative call graph", effect.Span)
 		}
-		if effect.Effect != "Allocates" && effect.Effect != "NoAllocation" && effect.Effect != "Unknown" {
+		if effect.Effect != "Allocates" && effect.Effect != "NoAllocation" && effect.Effect != "Unknown" && effect.Effect != "InvalidatesBorrows" {
 			return nil, evt1Diagnostic("OPERATION_EFFECT_INVALID", fmt.Sprintf("unknown operation effect summary %s", effect.Effect), effect.Span)
 		}
 		key := evt1OperationEffectKey(effect.Operation, effect.Signature)
+		if effect.Effect == "InvalidatesBorrows" {
+			key += "|InvalidatesBorrows"
+		}
 		if _, exists := env.operationEffects[key]; exists {
 			return nil, evt1Diagnostic("OPERATION_EFFECT_DUPLICATE", fmt.Sprintf("duplicate operation effect for %s", effect.Operation), effect.Span)
 		}
@@ -802,6 +805,27 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		}
 		if targets != 1 {
 			return nil, evt1Diagnostic("OPERATION_EFFECT_TARGET_INVALID", fmt.Sprintf("operation effect requires one uniquely resolved operation, got %s", effect.Operation), effect.Span)
+		}
+		if effect.Effect == "InvalidatesBorrows" {
+			var params []Param
+			if effect.Signature == "template" || (effect.Signature == "" && env.templates[effect.Operation].Name != "") {
+				params = env.templates[effect.Operation].Params
+			} else {
+				for _, fn := range env.functions[effect.Operation] {
+					if effect.Signature == "" || evt1FunctionParamSignature(fn) == effect.Signature {
+						params = fn.Params
+					}
+				}
+			}
+			found := false
+			for _, param := range params {
+				if param.Name == effect.Resource && param.Type.isReference() {
+					found = true
+				}
+			}
+			if !found {
+				return nil, evt1Diagnostic("OPERATION_EFFECT_RESOURCE_INVALID", fmt.Sprintf("%s must name a reference parameter of %s", effect.Resource, effect.Operation), effect.Span)
+			}
 		}
 		env.operationEffects[key] = effect
 	}
@@ -1113,6 +1137,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		}
 		scope.returnType = resolvedReturn
 		scope.inAsync = templateDecl.Async
+		scope.functionName = templateDecl.Name
 		for paramIndex, param := range templateDecl.Params {
 			resolvedParam, err := evt1ResolveType(env, scope, param.Type)
 			if err != nil {
@@ -1260,6 +1285,164 @@ func evt1OperationEffectForFunction(env *semanticEnv, fn FunctionDecl) (Operatio
 	}
 	effect, ok := env.operationEffects[fn.Name]
 	return effect, ok
+}
+
+func evt1InvalidatingEffect(env *semanticEnv, operation, signature string) (OperationEffectDecl, bool) {
+	if effect, ok := env.operationEffects[evt1OperationEffectKey(operation, signature)+"|InvalidatesBorrows"]; ok {
+		return effect, true
+	}
+	effect, ok := env.operationEffects[operation+"|InvalidatesBorrows"]
+	return effect, ok
+}
+
+func evt1DestructiveConflictDiagnostic(env *semanticEnv, effect OperationEffectDecl, borrowedName string, binding evt1ValueBinding, resource string, span Span) error {
+	goal := "SafeInvalidation(" + effect.Operation + "," + resource + ")"
+	graph := ProofGraph{Schema: ProofSchema, Source: env.sourcePath, Goal: goal, Outcome: FactDisproven, Subjects: []ProofSubjectDescription{{Kind: "resource", Name: resource}, {Kind: "value", Name: borrowedName, Type: binding.t.String()}}, Reason: "destructive operation conflicts with live resource borrow", SourceSpan: span}
+	root := graph.addNode(ProofGoal, goal, "call-site safety", FactDisproven, FactOriginCompilerAnalysis, span)
+	origin := FactOriginDeclaredEffect
+	if effect.Origin == string(FactOriginModuleSummaryEffect) {
+		origin = FactOriginModuleSummaryEffect
+	} else if effect.Origin == string(FactOriginDeclaredForeign) {
+		origin = FactOriginDeclaredForeign
+	}
+	declared := graph.addNode(ProofKnownFact, effect.Operation+" InvalidatesBorrows("+effect.Resource+")", "operation contract", FactProven, origin, effect.Span)
+	borrow := graph.addNode(ProofKnownFact, borrowedName+" borrows "+resource, "live scoped authority", FactProven, FactOriginControlFlow, binding.declarationSpan)
+	graph.addEdge(root, declared, ProofDependsOn)
+	graph.addEdge(root, borrow, ProofDependsOn)
+	graph.addEdge(declared, borrow, ProofConflictsWith)
+	graph.normalize()
+	return Diagnostic{Code: "DESTRUCTIVE_ACCESS_WITH_LIVE_BORROW", Message: fmt.Sprintf("cannot call %s while %s borrows storage from %s; the operation may invalidate that borrow", effect.Operation, borrowedName, resource), Span: span, Proof: &graph}
+}
+
+func evt1CarriesInvalidatableReference(env *semanticEnv, t Type) bool {
+	resourceTypes := map[string]bool{}
+	for _, effect := range env.operationEffects {
+		if effect.Effect != "InvalidatesBorrows" {
+			continue
+		}
+		for _, fn := range env.functions[effect.Operation] {
+			if effect.Signature != "" && effect.Signature != evt1FunctionParamSignature(fn) {
+				continue
+			}
+			for _, param := range fn.Params {
+				if param.Name == effect.Resource {
+					resourceTypes[param.Type.valueType().Name] = true
+				}
+			}
+		}
+		if template := env.templates[effect.Operation]; template.Name != "" {
+			for _, param := range template.Params {
+				if param.Name == effect.Resource {
+					resourceTypes[param.Type.valueType().Name] = true
+				}
+			}
+		}
+	}
+	seen := map[string]bool{}
+	var visit func(Type) bool
+	visit = func(current Type) bool {
+		current = evt1CanonicalType(env, current)
+		if current.isReference() && resourceTypes[current.valueType().Name] {
+			return true
+		}
+		name := current.valueType().String()
+		if seen[name] {
+			return false
+		}
+		seen[name] = true
+		if !evt1IsRefStructType(env, current) {
+			return false
+		}
+		fields, _, err := evt1FieldSet(env, current)
+		if err != nil {
+			return false
+		}
+		for _, field := range fields {
+			if visit(field) {
+				return true
+			}
+		}
+		return false
+	}
+	return visit(t)
+}
+
+func evt1CheckInvalidatingCall(env *semanticEnv, scope *evt1Scope, operation, signature string, params []Param, args []Expr, span Span, templateInfo *evt1TemplateInfo) error {
+	effect, declared := evt1InvalidatingEffect(env, operation, signature)
+	if !declared {
+		return nil
+	}
+	index := -1
+	for i, param := range params {
+		if param.Name == effect.Resource {
+			index = i
+			break
+		}
+	}
+	if index < 0 || index >= len(args) {
+		return evt1Diagnostic("OPERATION_EFFECT_RESOURCE_INVALID", "destructive operation resource parameter is unavailable at this call", span)
+	}
+	resource := args[index]
+	if ref, ok := resource.(*RefExpr); ok {
+		resource = ref.Value
+	}
+	var paths []string
+	if name, ok := resource.(*NameExpr); ok {
+		if binding, found := scope.lookup(name.Name); found && len(binding.objectBorrows) != 0 {
+			paths = append(paths, binding.objectBorrows...)
+		}
+	}
+	if len(paths) == 0 {
+		if place, err := validateAssignable(env, scope, resource, templateInfo); err == nil {
+			paths = append(paths, evt1StoragePathKey(append([]string{place.path.Root}, place.path.Fields...)))
+		}
+	}
+	for current := scope; current != nil; current = current.parent {
+		names := make([]string, 0, len(current.values))
+		for name := range current.values {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			binding := current.values[name]
+			if binding.state != evt1StorageInitialized {
+				continue
+			}
+			for _, borrowed := range binding.objectBorrows {
+				for _, path := range paths {
+					if evt1BorrowPathsOverlap(path, borrowed) {
+						return evt1DestructiveConflictDiagnostic(env, effect, name, binding, path, span)
+					}
+				}
+				if len(paths) == 0 {
+					return evt1Diagnostic("DESTRUCTIVE_ACCESS_UNKNOWN_RESOURCE", fmt.Sprintf("cannot prove %s targets storage separate from live borrow %s", operation, name), span)
+				}
+			}
+		}
+	}
+	currentOperation := scope.functionName
+	currentSignature := ""
+	if templateInfo != nil {
+		currentOperation, currentSignature = templateInfo.Decl.Name, "template"
+	} else if currentOperation != "" && env.templates[currentOperation].Name != "" {
+		currentSignature = "template"
+	} else if currentOperation != "" && len(env.functions[currentOperation]) == 1 {
+		currentSignature = evt1FunctionParamSignature(env.functions[currentOperation][0])
+	}
+	if currentOperation != "" && currentOperation != operation {
+		for _, path := range paths {
+			root := strings.Split(path, ".")[0]
+			binding, found := scope.lookup(root)
+			if !found || binding.provenance.Kind != evt1ProvenanceParameter {
+				continue
+			}
+			propagated, ok := evt1InvalidatingEffect(env, currentOperation, currentSignature)
+			if !ok || propagated.Resource != root {
+				return evt1Diagnostic("DESTRUCTIVE_EFFECT_NOT_PROPAGATED", fmt.Sprintf("%s may invalidate borrows from parameter %s; declare compiler.InvalidatesBorrows(%s, %s)", currentOperation, root, currentOperation, root), span)
+			}
+		}
+	}
+	return nil
 }
 
 func evt1InstantiateGenericDrops(env *semanticEnv) error {
@@ -1813,6 +1996,19 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 		case *YieldStmt:
 			if !local.inAutomataState || inComptimeFn {
 				return evt1Diagnostic("YIELD_OUTSIDE_STATE", "yield is only valid inside a runtime machine state body", s.Span)
+			}
+			for current := local; current != nil; current = current.parent {
+				names := make([]string, 0, len(current.values))
+				for name := range current.values {
+					names = append(names, name)
+				}
+				sort.Strings(names)
+				for _, name := range names {
+					binding := current.values[name]
+					if binding.state == evt1StorageInitialized && len(binding.objectBorrows) != 0 {
+						return evt1Diagnostic("SCOPED_AUTHORITY_CROSSES_YIELD", fmt.Sprintf("scoped authority %s cannot cross yield", name), s.Span)
+					}
+				}
 			}
 		case *PushMachineStmt:
 			if !local.inAutomataState {
@@ -3704,6 +3900,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 				return Type{}, err
 			}
 		}
+		if err := evt1CheckInvalidatingCall(env, scope, fn.Name, evt1FunctionParamSignature(fn), fn.Params, e.Args, e.Span, templateInfo); err != nil {
+			return Type{}, err
+		}
 		if fn.Async {
 			return Type{Name: "Async", Kind: TypeAsync, TypeArgs: []Type{evt1CanonicalType(env, fn.ReturnType)}, AsyncOrigin: fn.Name, Span: e.Span}, nil
 		}
@@ -3777,6 +3976,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			if err := validateCallArgument(env, scope, instance.Function.Params[i].Type, arg, argType, nil); err != nil {
 				return Type{}, err
 			}
+		}
+		if err := evt1CheckInvalidatingCall(env, scope, e.Callee, "template", instance.Function.Params, e.Args, e.Span, nil); err != nil {
+			return Type{}, err
 		}
 		instance.InvocationSpans = append(instance.InvocationSpans, e.Span)
 		if instance.Function.Async {
@@ -7121,6 +7323,7 @@ func instantiateTemplateArgs(env *semanticEnv, templateName string, concreteArgs
 	scope := newEVT1Scope(nil)
 	scope.returnType = instFn.ReturnType
 	scope.inAsync = instFn.Async
+	scope.functionName = templateName
 	for paramIndex, param := range instFn.Params {
 		resolvedParam, err := evt1ResolveType(env, scope, param.Type)
 		if err != nil {

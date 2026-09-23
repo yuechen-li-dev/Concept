@@ -492,6 +492,7 @@ type FunctionDecl struct {
 type OperationEffectDecl struct {
 	Effect    string `json:"effect"`
 	Operation string `json:"operation"`
+	Resource  string `json:"resource,omitempty"`
 	Signature string `json:"signature,omitempty"`
 	Origin    string `json:"origin,omitempty"`
 	Module    string `json:"module,omitempty"`
