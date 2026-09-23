@@ -1,5 +1,11 @@
 # Generic runtime types
 
+A closed generic application must close semantic access subjects as well as
+types. Imported open method access summaries preserve structural type and
+value arguments; concrete applications receive independent entries. Bound
+parameters left in a concrete access subject or context are diagnosed before
+derived shared-access proof consumption.
+
 Status: EVT1 R6d implemented local-compilation substrate
 
 Fixed tables use the existing non-type parameter system; there is no separate

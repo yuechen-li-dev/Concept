@@ -1,5 +1,11 @@
 # EVT1 synchronization proof consumption
 
+R7d6 can now close imported generic access summaries per concrete instance.
+Generic guard decisions in Planner and C lowering use the same concrete-owner
+access set. Ordinary decisions retain the R7d5 compiled-unit policy. The
+publication-aware EventBus producer guard remains because its method contexts
+are unresolved and the existing no-Publish/Consume gate rejects elision.
+
 R7d5 consumes bounded shared-access evidence without changing the source
 program or recognizing library type names. The governing rule is:
 

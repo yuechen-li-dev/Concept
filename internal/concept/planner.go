@@ -418,7 +418,7 @@ func PlanModule(module *MIR, facts *SemanticFactSet, target TargetCapabilities, 
 				}
 			}
 		}
-		if policy.OptimizeSynchronization && evt1AllGuardsSimplifiable(module.AccessSummaries) {
+		if policy.OptimizeSynchronization && evt1GuardsSimplifiableForOwner(fn.MethodOf, module.AccessSummaries) {
 			for i := range fp.Decisions {
 				decision := &fp.Decisions[i]
 				if decision.Category == "SynchronizationPlan" && decision.Strategy == "RetainSynchronization" {
@@ -465,10 +465,14 @@ func evt1AllAtomicsSimplifiable(accesses []MIRAccessEntry) bool {
 }
 
 func evt1AllGuardsSimplifiable(accesses []MIRAccessEntry) bool {
+	return evt1GuardsSimplifiableAccessSet(accesses, false)
+}
+
+func evt1GuardsSimplifiableAccessSet(accesses []MIRAccessEntry, includeImported bool) bool {
 	contexts := map[string]bool{}
 	count := 0
 	for _, entry := range accesses {
-		if entry.Origin == FactOriginModuleAccessSummary {
+		if !includeImported && entry.Origin == FactOriginModuleAccessSummary {
 			continue
 		}
 		switch entry.Operation {
@@ -483,6 +487,22 @@ func evt1AllGuardsSimplifiable(accesses []MIRAccessEntry) bool {
 		}
 	}
 	return count > 0 && len(contexts) == 1
+}
+
+// Generic methods consume only evidence for their exact concrete owner. An
+// open declaration or a different instantiation cannot authorize guard
+// removal. Ordinary R7d5 planning keeps its existing compiled-unit policy.
+func evt1GuardsSimplifiableForOwner(owner string, accesses []MIRAccessEntry) bool {
+	if !strings.Contains(owner, "<") {
+		return evt1AllGuardsSimplifiable(accesses)
+	}
+	var scoped []MIRAccessEntry
+	for _, entry := range accesses {
+		if entry.Instance == owner || entry.Subject.Root.Type.valueType().Name == owner || entry.Subject.Type.valueType().Name == owner {
+			scoped = append(scoped, entry)
+		}
+	}
+	return len(scoped) != 0 && evt1GuardsSimplifiableAccessSet(scoped, true)
 }
 
 func loweringPlanIdentity(plan *LoweringPlan) string {

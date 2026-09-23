@@ -26,6 +26,7 @@ func Parse(path, text string) (Module, error) {
 		return Module{}, err
 	}
 	evt1MaterializeGenericInstances(&module, env)
+	evt1MaterializeGenericProofSummaries(&module, env)
 	evt1ApplyExactCallableTypes(&module, env)
 	return module, nil
 }
@@ -45,6 +46,9 @@ func parseSyntaxModule(path, text string) (Module, error) {
 	}
 	for index := range module.ComptimeFns {
 		module.ComptimeFns[index].Module = module.Name
+	}
+	for index := range module.GenericTypes {
+		module.GenericTypes[index].Module = module.Name
 	}
 	return module, nil
 }

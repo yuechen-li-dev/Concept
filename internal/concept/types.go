@@ -466,6 +466,7 @@ type GenericParameter struct {
 
 type GenericTypeDecl struct {
 	Name       string
+	Module     string
 	Parameters []GenericParameter
 	Constraint TemplateConstraint
 	Struct     StructDecl

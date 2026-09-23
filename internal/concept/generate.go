@@ -14,15 +14,15 @@ type evt1FunctionSymbols struct {
 }
 
 type lowering struct {
-	module          Module
-	env             *semanticEnv
-	outputBase      string
-	symbolBase      string
-	mir             MIR
-	plan            *LoweringPlan
-	simplifyAtomics bool
-	simplifyGuards  bool
-	mapDoc          map[string]any
+	module                  Module
+	env                     *semanticEnv
+	outputBase              string
+	symbolBase              string
+	mir                     MIR
+	plan                    *LoweringPlan
+	simplifyAtomics         bool
+	optimizeSynchronization bool
+	mapDoc                  map[string]any
 }
 
 func Generate(module Module, source []byte) (Outputs, error) {
@@ -42,14 +42,16 @@ func GenerateForTargetWithPolicy(module Module, source []byte, target TargetCapa
 		return nil, err
 	}
 	evt1MaterializeGenericInstances(&module, env)
+	evt1MaterializeGenericProofSummaries(&module, env)
 	if err := evt1NormalizeModuleStorageTypes(&module, env); err != nil {
 		return nil, err
 	}
 	l := &lowering{
-		module:     module,
-		env:        env,
-		outputBase: evt1OutputBase(module.Path),
-		symbolBase: evt1SemanticSymbolBase(module),
+		module:                  module,
+		env:                     env,
+		outputBase:              evt1OutputBase(module.Path),
+		symbolBase:              evt1SemanticSymbolBase(module),
+		optimizeSynchronization: policy.OptimizeSynchronization,
 	}
 	l.mir = buildMIR(module, env)
 	if policy.OptimizeSynchronization {
@@ -60,7 +62,6 @@ func GenerateForTargetWithPolicy(module Module, source []byte, target TargetCapa
 		}
 		l.mir.AccessSummaries = append([]MIRAccessEntry{}, env.accessSummaries...)
 		l.simplifyAtomics = evt1AllAtomicsSimplifiable(l.mir.AccessSummaries)
-		l.simplifyGuards = evt1AllGuardsSimplifiable(l.mir.AccessSummaries)
 	}
 	evt1ProjectPersistentFactSubjects(&l.mir)
 	evt1QualifyMIRFacts(&l.mir)
@@ -4758,7 +4759,7 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		if !ok {
 			return prelude.String(), "/* unresolved_call */", Type{Name: "int", Kind: TypeBuiltin}
 		}
-		if f.l.simplifyGuards && evt1SynchronizationEffect(fn) != "" {
+		if f.l.optimizeSynchronization && evt1GuardsSimplifiableForOwner(f.fn.MethodOf, f.l.mir.AccessSummaries) && evt1SynchronizationEffect(fn) != "" {
 			return prelude.String(), "((void)0)", Type{Name: "void", Kind: TypeBuiltin, Span: e.Span}
 		}
 		var args []string

@@ -1,5 +1,10 @@
 # EVT1 access-summary direction
 
+R7d6 transports open generic method summaries in `concept-module.v1` with a
+structural owner and subject. Each demanded concrete application gets an
+independent closed summary keyed by its full instance identity. Open summaries
+are not themselves concrete access evidence. Imported origin remains visible.
+
 Explicit sync propositions describe what must be true. Access summaries
 describe what code actually does. Derived proofs compare the two. Planner
 optimization is a later consumer of those proofs.

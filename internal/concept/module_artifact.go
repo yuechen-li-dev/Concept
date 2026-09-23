@@ -236,6 +236,7 @@ func ParseWithSemanticModules(path, source string, artifacts map[string][]byte) 
 		return Module{}, err
 	}
 	evt1MaterializeGenericInstances(&module, env)
+	evt1MaterializeGenericProofSummaries(&module, env)
 	evt1ApplyExactCallableTypes(&module, env)
 	return module, nil
 }

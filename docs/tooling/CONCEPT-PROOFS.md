@@ -1,5 +1,11 @@
 # Concept semantic proofs
 
+Imported generic method access summaries can now close for a concrete type
+application. Proof status is derived from the closed entries. An open generic
+access entry is symbolic; an unknown concrete context remains Unknown. The
+current `concept explain` presentation does not yet render a full
+instance-sensitive proof environment or instantiation binding table.
+
 `Assert.Concept` is a permanent compile-time source contract over facts the
 compiler already knows. It does not evaluate its subject, emit a runtime check,
 allocate, or lower to C.

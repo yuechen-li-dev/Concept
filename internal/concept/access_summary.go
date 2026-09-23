@@ -58,18 +58,20 @@ type AccessSubject struct {
 }
 
 type MIRAccessEntry struct {
-	ID          string             `json:"id"`
-	Subject     AccessSubject      `json:"subject"`
-	Operation   AccessKind         `json:"operation"`
-	Context     AccessIdentity     `json:"context"`
-	Function    AccessIdentity     `json:"function"`
-	Module      AccessIdentity     `json:"module"`
-	Origin      SemanticFactOrigin `json:"origin"`
-	Resolution  AccessResolution   `json:"resolution"`
-	MemoryOrder string             `json:"memory_order,omitempty"`
-	Mechanism   string             `json:"mechanism,omitempty"`
-	Sequence    int                `json:"sequence,omitempty"`
-	SourceSpan  Span               `json:"source_span"`
+	ID               string             `json:"id"`
+	OpenGenericOwner string             `json:"open_generic_owner,omitempty"`
+	Instance         string             `json:"instance,omitempty"`
+	Subject          AccessSubject      `json:"subject"`
+	Operation        AccessKind         `json:"operation"`
+	Context          AccessIdentity     `json:"context"`
+	Function         AccessIdentity     `json:"function"`
+	Module           AccessIdentity     `json:"module"`
+	Origin           SemanticFactOrigin `json:"origin"`
+	Resolution       AccessResolution   `json:"resolution"`
+	MemoryOrder      string             `json:"memory_order,omitempty"`
+	Mechanism        string             `json:"mechanism,omitempty"`
+	Sequence         int                `json:"sequence,omitempty"`
+	SourceSpan       Span               `json:"source_span"`
 }
 
 type evt1AccessCall struct {
@@ -80,12 +82,13 @@ type evt1AccessCall struct {
 }
 
 type evt1AccessFunction struct {
-	decl     FunctionDecl
-	key      string
-	locals   map[string]AccessSubject
-	entries  []MIRAccessEntry
-	calls    []evt1AccessCall
-	sequence int
+	decl              FunctionDecl
+	key               string
+	openGenericParams map[string]bool
+	locals            map[string]AccessSubject
+	entries           []MIRAccessEntry
+	calls             []evt1AccessCall
+	sequence          int
 }
 
 func evt1SemanticAccessAttribute(name string) bool {
@@ -93,6 +96,9 @@ func evt1SemanticAccessAttribute(name string) bool {
 }
 
 func evt1AccessSummaryDemanded(module Module) bool {
+	if len(module.AccessSummaries) != 0 {
+		return true
+	}
 	for _, assertion := range module.Assertions {
 		if evt1IsSharedAccessAnalysis(assertion.ConceptName) {
 			return true
@@ -102,6 +108,15 @@ func evt1AccessSummaryDemanded(module Module) bool {
 		for _, attribute := range fn.Attributes {
 			if evt1SemanticAccessAttribute(attribute.Name) {
 				return true
+			}
+		}
+	}
+	for _, generic := range module.GenericTypes {
+		for _, method := range generic.Struct.Methods {
+			for _, attribute := range method.Attributes {
+				if evt1SemanticAccessAttribute(attribute.Name) {
+					return true
+				}
 			}
 		}
 	}
@@ -125,7 +140,7 @@ func evt1AccessSubjectKey(subject AccessSubject) string {
 }
 
 func evt1AccessEntryKey(entry MIRAccessEntry) string {
-	return fmt.Sprintf("%s|%s|%s|%s|%s|%s|%s|%d:%d", entry.Operation, evt1AccessSubjectKey(entry.Subject), evt1AccessIdentityKey(entry.Context), evt1AccessIdentityKey(entry.Function), entry.Origin, entry.MemoryOrder, entry.Mechanism, entry.SourceSpan.Line, entry.SourceSpan.Column)
+	return fmt.Sprintf("%s|%s|%s|%s|%s|%s|%s|%s|%s|%d:%d", entry.OpenGenericOwner, entry.Instance, entry.Operation, evt1AccessSubjectKey(entry.Subject), evt1AccessIdentityKey(entry.Context), evt1AccessIdentityKey(entry.Function), entry.Origin, entry.MemoryOrder, entry.Mechanism, entry.SourceSpan.Line, entry.SourceSpan.Column)
 }
 
 func evt1FinalizeAccessEntry(entry MIRAccessEntry) MIRAccessEntry {
@@ -197,6 +212,59 @@ func evt1DeriveAccessSummaries(env *semanticEnv, module Module) error {
 		functions[state.key] = state
 		byName[template.Name] = append(byName[template.Name], state)
 	}
+	// Open generic methods are semantic declarations, not module.Functions.
+	// Retain their symbolic access contracts in the exporting artifact. The
+	// consumer closes these entries against its own concrete instantiations.
+	var genericNames []string
+	for name := range env.genericTypes {
+		genericNames = append(genericNames, name)
+	}
+	sort.Strings(genericNames)
+	for _, name := range genericNames {
+		generic := env.genericTypes[name]
+		if generic.Module != module.Name {
+			continue
+		}
+		owner := Type{Name: name, Kind: TypeStruct}
+		for _, parameter := range generic.Parameters {
+			kind := TypeConceptParam
+			if parameter.Kind == "value" {
+				kind = TypeTemplateValue
+			}
+			owner.TypeArgs = append(owner.TypeArgs, Type{Name: parameter.Name, Kind: kind})
+		}
+		for _, method := range generic.Struct.Methods {
+			fn := method
+			fn.Params = append([]Param(nil), method.Params...)
+			fn.Module = module.Name
+			fn.MethodOf = owner.String()
+			for i := range fn.Params {
+				if fn.Params[i].Name == "self" {
+					fn.Params[i].Type = owner
+				}
+			}
+			state := &evt1AccessFunction{decl: fn, key: evt1AccessFunctionKey(fn), locals: map[string]AccessSubject{}, openGenericParams: map[string]bool{}}
+			for _, parameter := range generic.Parameters {
+				state.openGenericParams[parameter.Name] = true
+			}
+			for i, param := range fn.Params {
+				state.locals[param.Name] = AccessSubject{Root: AccessIdentity{Kind: "Parameter", Module: fn.Module, Function: state.key, Ordinal: i, Name: param.Name, Type: param.Type}, Type: param.Type, Resolution: AccessExact}
+			}
+			if err := evt1AccessApplyAttributes(env, state); err != nil {
+				return err
+			}
+			if fn.Body != nil {
+				evt1AccessBlock(env, state, *fn.Body)
+				evt1AccessAttachSynchronizationOrders(state)
+			}
+			for i := range state.entries {
+				state.entries[i].OpenGenericOwner = name
+				state.entries[i] = evt1FinalizeAccessEntry(state.entries[i])
+			}
+			functions[state.key] = state
+			byName[fn.Name] = append(byName[fn.Name], state)
+		}
+	}
 
 	// Monotone finite fixpoint. Subject paths are capped by resolver semantics,
 	// so recursive substitution cannot construct an unbounded term.
@@ -209,9 +277,9 @@ func evt1DeriveAccessSummaries(env *semanticEnv, module Module) error {
 		sort.Strings(keys)
 		for _, key := range keys {
 			caller := functions[key]
-			seen := map[string]bool{}
-			for _, entry := range caller.entries {
-				seen[evt1AccessEntryKey(entry)] = true
+			seen := map[string]int{}
+			for index, entry := range caller.entries {
+				seen[evt1AccessEntryKey(entry)] = index
 			}
 			for _, call := range caller.calls {
 				candidates := byName[call.callee]
@@ -250,8 +318,17 @@ func evt1DeriveAccessSummaries(env *semanticEnv, module Module) error {
 					}
 					entry = evt1FinalizeAccessEntry(entry)
 					entryKey := evt1AccessEntryKey(entry)
-					if !seen[entryKey] {
-						seen[entryKey] = true
+					if prior, found := seen[entryKey]; found {
+						// Recursive and converging call paths can describe the
+						// same structural access at different sequence positions.
+						// Keep one bounded entry and choose its earliest position
+						// deterministically, independent of fixpoint visitation.
+						if entry.Sequence < caller.entries[prior].Sequence {
+							caller.entries[prior] = entry
+							changed = true
+						}
+					} else {
+						seen[entryKey] = len(caller.entries)
 						caller.entries = append(caller.entries, entry)
 						changed = true
 					}
@@ -277,6 +354,10 @@ func evt1DeriveAccessSummaries(env *semanticEnv, module Module) error {
 			env.accessSummaries = append(env.accessSummaries, entry)
 		}
 	}
+	if err := evt1CloseGenericAccessSummaries(env); err != nil {
+		return err
+	}
+	env.accessSummaries = evt1CanonicalizeAccessEntries(env.accessSummaries)
 	evt1SortAccessEntries(env.accessSummaries)
 	return evt1ValidateDerivedAccessContracts(env)
 }
@@ -315,8 +396,10 @@ func evt1AccessApplyAttributes(env *semanticEnv, state *evt1AccessFunction) erro
 				return evt1Diagnostic("EXECUTION_CONTEXT_INVALID", "execution context must be a semantic type name", attribute.Span)
 			}
 			t := Type{Name: name.Name, Kind: TypeStruct, Span: name.Span}
-			if err := validateKnownType(env, t, name.Span, "", false); err != nil {
-				return err
+			if !state.openGenericParams[name.Name] {
+				if err := validateKnownType(env, t, name.Span, "", false); err != nil {
+					return err
+				}
 			}
 		case "synchronization":
 			if len(attribute.Args) != 2 {
@@ -415,7 +498,11 @@ func evt1AccessContexts(functions map[string]*evt1AccessFunction, byName map[str
 			if !ok {
 				continue
 			}
-			id := AccessIdentity{Kind: "ExecutionContext", Module: state.decl.Module, Name: name.Name, Type: Type{Name: name.Name, Kind: TypeStruct}}
+			kind := TypeStruct
+			if state.openGenericParams[name.Name] {
+				kind = TypeConceptParam
+			}
+			id := AccessIdentity{Kind: "ExecutionContext", Module: state.decl.Module, Name: name.Name, Type: Type{Name: name.Name, Kind: kind}}
 			contexts[key] = map[string]AccessIdentity{evt1AccessIdentityKey(id): id}
 		}
 	}
@@ -693,7 +780,10 @@ func evt1AccessResolveSubject(env *semanticEnv, state *evt1AccessFunction, expr 
 func evt1AccessField(env *semanticEnv, owner Type, name string) (int, Type) {
 	decl, ok := env.structs[owner.Name]
 	if !ok {
-		return -1, Type{}
+		decl, ok = evt1StructView(env, owner)
+		if !ok {
+			return -1, Type{}
+		}
 	}
 	for i, field := range decl.Fields {
 		if field.Name == name {
@@ -705,6 +795,27 @@ func evt1AccessField(env *semanticEnv, owner Type, name string) (int, Type) {
 
 func evt1SortAccessEntries(entries []MIRAccessEntry) {
 	sort.Slice(entries, func(i, j int) bool { return evt1AccessEntryKey(entries[i]) < evt1AccessEntryKey(entries[j]) })
+}
+
+func evt1CanonicalizeAccessEntries(entries []MIRAccessEntry) []MIRAccessEntry {
+	byKey := map[string]MIRAccessEntry{}
+	for _, entry := range entries {
+		key := evt1AccessEntryKey(entry)
+		prior, found := byKey[key]
+		if !found || entry.Sequence < prior.Sequence {
+			byKey[key] = entry
+		}
+	}
+	keys := make([]string, 0, len(byKey))
+	for key := range byKey {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	result := make([]MIRAccessEntry, 0, len(keys))
+	for _, key := range keys {
+		result = append(result, byKey[key])
+	}
+	return result
 }
 
 func evt1AccessSubjectMatches(subject AccessSubject, requested Type) bool {

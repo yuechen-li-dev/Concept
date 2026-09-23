@@ -2,6 +2,12 @@
 
 Status: R6m implemented
 
+R7d6 extends the same structural closure to imported generic access subjects
+and execution-context types. Open method summaries remain symbolic in the
+artifact; concrete applications receive independent closed entries before
+shared-access status is derived. See
+`EVT1-INSTANCE-SENSITIVE-PROOF-TRANSPORT.md` for the current Planner boundary.
+
 Generic substitution is one structural operation over the complete `Type`
 record. A bound template leaf is replaced while ownership, const, scoped,
 imported, and unsafe qualifiers are preserved. The traversal then visits

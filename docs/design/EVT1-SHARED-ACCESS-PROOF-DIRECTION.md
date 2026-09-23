@@ -1,5 +1,10 @@
 # EVT1 shared-access proof direction
 
+R7d6 closes imported generic access subjects before bounded producer, consumer,
+and writer derivation. Substitution does not promote an open requirement to
+Proven. A conflicting concrete access can disprove a declared contract;
+missing or opaque concrete access remains Unknown and retains synchronization.
+
 ## Doctrine
 
 Explicit first. Derived second. Optimized last.

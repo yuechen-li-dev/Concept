@@ -1,5 +1,10 @@
 # Reusable semantic modules
 
+`concept-module.v1` can carry symbolic generic method access summaries.
+Artifact-only consumers instantiate those summaries with their own concrete
+type and value bindings. Older artifacts without the summary supply no
+optimistic shared-access evidence.
+
 Status: EVT1 R7a library/package substrate
 
 ## C symbol identity
