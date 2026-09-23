@@ -1,0 +1,9 @@
+profile Core;
+
+struct Payload { int<array>[3] values; }
+
+int Main()
+{
+    Payload payload = Payload{[4 ...]};
+    return payload.values[2];
+}

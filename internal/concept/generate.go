@@ -1834,7 +1834,9 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 		header.WriteString(evt1SpanDeclarations(spanTypes))
 		header.WriteString(evt1TensorDeclarations(tensorTypes))
 	}
-	if err := l.writeRuntimeStorageAndTypeDecls(&header, typeDecls, evt1CollectStorageTypes(l.module, l.env), storageViewTypes); err != nil {
+	failureTypes := evt1CollectFailureTypes(l.module, l.env)
+	canonicalFailureTypes := evt1CanonicalFailureTypeKeys(l.module)
+	if err := l.writeRuntimeStorageAndTypeDecls(&header, typeDecls, evt1CollectStorageTypes(l.module, l.env), storageViewTypes, failureTypes, canonicalFailureTypes); err != nil {
 		return nil, nil, err
 	}
 	for _, enumDecl := range l.module.Enums {
@@ -1854,14 +1856,6 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 	}
 	if len(l.module.TypeAliases) > 0 {
 		header.WriteByte('\n')
-	}
-	canonicalFailureTypes := evt1CanonicalFailureTypeKeys(l.module)
-	for _, failureType := range evt1CollectFailureTypes(l.module) {
-		if _, legacy := evt1IsResultVoidErrorType(l.env, failureType); legacy && !canonicalFailureTypes[evt1FailureTypeKey(failureType)] {
-			header.WriteString(l.resultTypeDecl(failureType))
-		} else {
-			header.WriteString(evt1FailureTypeDecl(failureType))
-		}
 	}
 	header.WriteString(l.actuatorSupportDecls())
 	var symbols []evt1FunctionSymbols
@@ -1902,29 +1896,8 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 			body.WriteString(l.enumConstructors(enumDecl))
 		}
 	}
-	for _, failureType := range evt1CollectFailureTypes(l.module) {
-		if canonicalFailureTypes[evt1FailureTypeKey(failureType)] {
-			body.WriteString(evt1FailureConstructors(failureType))
-			body.WriteString(evt1FailureDropFunction(l.env, failureType, l.symbolBase))
-		}
-	}
-	if evt1ModuleUsesAutomataDispatchOutcome(l.module) {
-		body.WriteString(l.enumConstructors(evt1BuiltinAutomataDispatchOutcomeEnum()))
-	}
-	if len(l.module.Actuators) > 0 {
-		body.WriteString(l.enumConstructors(evt1BuiltinActuationOutcomeEnum()))
-	}
-	for _, automataName := range evt1RuntimeAutomataUsageOrder(l.module) {
-		body.WriteString(l.automataRuntimeSupport(l.env.automataInfo[automataName]))
-	}
-	for _, actuatorDecl := range l.module.Actuators {
-		body.WriteString(l.actuatorRuntimeSupport(actuatorDecl.Name))
-	}
-	body.WriteString(l.interfaceWitnessDefinitions())
-	body.WriteString(l.callableDefinitions())
-	// Instantiated generic bodies may call implementations declared later in
-	// another imported or local module. Declare every closed non-async instance
-	// before emitting any body; ordering remains stable by instance key.
+	// Failure-value Drop helpers can call closed generic Drop implementations.
+	// Give them the same forward declarations as ordinary generic bodies.
 	var forwardInstances []*evt1TemplateInstance
 	for _, instance := range l.env.templateInstances {
 		if !instance.Function.Async {
@@ -1948,6 +1921,27 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 	if len(forwardInstances) > 0 {
 		body.WriteByte('\n')
 	}
+	for _, failureType := range failureTypes {
+		_, legacy := evt1IsResultVoidErrorType(l.env, failureType)
+		if !legacy || canonicalFailureTypes[evt1FailureTypeKey(failureType)] {
+			body.WriteString(evt1FailureConstructors(failureType))
+			body.WriteString(evt1FailureDropFunction(l, failureType))
+		}
+	}
+	if evt1ModuleUsesAutomataDispatchOutcome(l.module) {
+		body.WriteString(l.enumConstructors(evt1BuiltinAutomataDispatchOutcomeEnum()))
+	}
+	if len(l.module.Actuators) > 0 {
+		body.WriteString(l.enumConstructors(evt1BuiltinActuationOutcomeEnum()))
+	}
+	for _, automataName := range evt1RuntimeAutomataUsageOrder(l.module) {
+		body.WriteString(l.automataRuntimeSupport(l.env.automataInfo[automataName]))
+	}
+	for _, actuatorDecl := range l.module.Actuators {
+		body.WriteString(l.actuatorRuntimeSupport(actuatorDecl.Name))
+	}
+	body.WriteString(l.interfaceWitnessDefinitions())
+	body.WriteString(l.callableDefinitions())
 	for _, templateDecl := range l.module.Templates {
 		var instances []*evt1TemplateInstance
 		for _, instance := range l.env.templateInstances {
@@ -2000,11 +1994,12 @@ type evt1RuntimeHeaderDecl struct {
 	emit func() string
 }
 
-func (l *lowering) writeRuntimeStorageAndTypeDecls(out *strings.Builder, typeDecls []evt1RuntimeTypeDecl, storageTypes, viewTypes []Type) error {
+func (l *lowering) writeRuntimeStorageAndTypeDecls(out *strings.Builder, typeDecls []evt1RuntimeTypeDecl, storageTypes, viewTypes, failureTypes []Type, canonicalFailureTypes map[string]bool) error {
 	knownNamed := make(map[string]bool, len(typeDecls))
 	knownCallable := map[string]bool{}
 	knownStorage := make(map[string]bool, len(storageTypes))
 	knownView := make(map[string]bool, len(viewTypes))
+	knownFailure := make(map[string]bool, len(failureTypes))
 	for _, decl := range typeDecls {
 		knownNamed[decl.Name] = true
 	}
@@ -2019,6 +2014,9 @@ func (l *lowering) writeRuntimeStorageAndTypeDecls(out *strings.Builder, typeDec
 	for _, viewType := range viewTypes {
 		knownView[evt1StorageViewCName(viewType)] = true
 	}
+	for _, failureType := range failureTypes {
+		knownFailure[evt1FailureTypeKey(failureType)] = true
+	}
 
 	var typeDeps func(Type) []string
 	typeDeps = func(t Type) []string {
@@ -2027,6 +2025,9 @@ func (l *lowering) writeRuntimeStorageAndTypeDecls(out *strings.Builder, typeDec
 		}
 		if t.PointerTo != nil {
 			return typeDeps(*t.PointerTo)
+		}
+		if evt1IsFailureType(t) && knownFailure[evt1FailureTypeKey(t)] {
+			return []string{"failure:" + evt1FailureTypeKey(t)}
 		}
 		if t.ArrayElem != nil {
 			if t.isReference() {
@@ -2047,7 +2048,7 @@ func (l *lowering) writeRuntimeStorageAndTypeDecls(out *strings.Builder, typeDec
 		return nil
 	}
 
-	decls := make([]evt1RuntimeHeaderDecl, 0, len(typeDecls)+len(storageTypes)+len(viewTypes))
+	decls := make([]evt1RuntimeHeaderDecl, 0, len(typeDecls)+len(storageTypes)+len(viewTypes)+len(failureTypes))
 	for i := range typeDecls {
 		decl := typeDecls[i]
 		deps := make([]string, 0)
@@ -2077,6 +2078,28 @@ func (l *lowering) writeRuntimeStorageAndTypeDecls(out *strings.Builder, typeDec
 				return l.structHeader(*current.Struct)
 			}
 			return l.enumHeader(*current.Enum)
+		}})
+	}
+	for _, failureType := range failureTypes {
+		current := failureType
+		decl, _ := evt1FailureEnumDecl(current)
+		deps := []string{}
+		seen := map[string]bool{"failure:" + evt1FailureTypeKey(current): true}
+		for _, variant := range decl.Variants {
+			for _, field := range variant.Payload {
+				for _, dep := range typeDeps(field.Type) {
+					if !seen[dep] {
+						seen[dep] = true
+						deps = append(deps, dep)
+					}
+				}
+			}
+		}
+		decls = append(decls, evt1RuntimeHeaderDecl{key: "failure:" + evt1FailureTypeKey(current), deps: deps, emit: func() string {
+			if _, legacy := evt1IsResultVoidErrorType(l.env, current); legacy && !canonicalFailureTypes[evt1FailureTypeKey(current)] {
+				return l.resultTypeDecl(current)
+			}
+			return evt1FailureTypeDecl(current)
 		}})
 	}
 	if len(l.module.TypeAliases) > 0 {
@@ -3879,8 +3902,8 @@ func (f *evt1FunctionLowerer) lowerStatement(stmt Statement, indent int) string 
 			}
 			return recvPrelude + valuePrelude + ind(indent) + fmt.Sprintf("(%s).witness->set_%s((%s).object, %s);\n", recv, field.Field, recv, value)
 		}
-		prelude, target, _, _ := f.lowerLValue(s.Target, indent)
-		rhsPrelude, value, _ := f.lowerExpr(s.Value, indent)
+		prelude, target, targetType, _ := f.lowerLValue(s.Target, indent)
+		rhsPrelude, value, valueType := f.lowerExpr(s.Value, indent)
 		replacementDrop := ""
 		if name, ok := s.Target.(*NameExpr); ok {
 			if binding, found := scopeLookup(name.Name, f.scope); found && evt1TypeHasDrop(f.l.env, binding.t) {
@@ -3889,6 +3912,12 @@ func (f *evt1FunctionLowerer) lowerStatement(stmt Statement, indent int) string 
 				}
 				f.liveOwners[binding.cName] = true
 			}
+		}
+		if _, local := s.Target.(*NameExpr); !local && !evt1TypeCopyable(f.l.env, targetType) && evt1TypeHasDrop(f.l.env, targetType) {
+			// Evaluate the incoming authority before dropping the old place. The
+			// indexed lvalue prelude fixes the index once, including bounds checks.
+			temp := f.nextTemp("replacement")
+			return prelude + rhsPrelude + ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(valueType), temp, value) + f.lowerDropValue(targetType, target, indent) + ind(indent) + fmt.Sprintf("%s = %s;\n", target, temp)
 		}
 		return prelude + replacementDrop + rhsPrelude + ind(indent) + fmt.Sprintf("%s = %s;\n", target, value)
 	case *TransitionStmt:
@@ -4572,6 +4601,14 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		}
 		return b.String(), carrierTemp + ".payload." + field, evt1FailureSuccessType(carrierType)
 	case *CallExpr:
+		if e.Intrinsic == "option_value" {
+			prelude, value, optionType := f.lowerExpr(e.Args[0], indent)
+			pointer := f.nextTemp("option")
+			result := optionType.TypeArgs[0].valueType()
+			result.Ownership = "ref"
+			result.Const = optionType.Const
+			return prelude + ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(optionType), pointer, value) + ind(indent) + fmt.Sprintf("if (%s->tag != 0) { concept_panic(%q, %d, %d); }\n", pointer, "OptionValue requires Some", e.Span.Line, e.Span.Column), "&" + pointer + "->payload.some.value", result
+		}
 		if strings.HasPrefix(e.Intrinsic, "atomic_") {
 			return f.lowerAtomicIntrinsic(e, indent)
 		}
@@ -5301,7 +5338,13 @@ func (f *evt1FunctionLowerer) lowerDropValue(t Type, value string, indent int) s
 }
 
 func evt1DropSymbol(l *lowering, dropFn FunctionDecl, t Type) string {
-	for _, instance := range l.env.templateInstances {
+	keys := make([]string, 0, len(l.env.templateInstances))
+	for key := range l.env.templateInstances {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		instance := l.env.templateInstances[key]
 		if instance.TemplateName != "Drop" || len(instance.Function.Params) != 1 {
 			continue
 		}
@@ -5474,7 +5517,11 @@ func evt1RenderCValue(env *semanticEnv, value Value) string {
 		}
 		return evt1ConstructorName(value.EnumName, value.Variant) + "(" + strings.Join(parts, ", ") + ")"
 	case ValueArray:
-		return "/* comptime_array */"
+		parts := make([]string, len(value.Elements))
+		for i, element := range value.Elements {
+			parts[i] = evt1RenderCValue(env, element)
+		}
+		return "(" + evt1CType(value.Type) + "){ .data = {" + strings.Join(parts, ", ") + "} }"
 	default:
 		return "0"
 	}

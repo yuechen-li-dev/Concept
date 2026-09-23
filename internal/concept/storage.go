@@ -256,7 +256,13 @@ func evt1CollectStorageTypes(module Module, env *semanticEnv) []Type {
 			visitBlock(*fn.Body)
 		}
 	}
-	for _, instance := range env.templateInstances {
+	instanceKeys := make([]string, 0, len(env.templateInstances))
+	for key := range env.templateInstances {
+		instanceKeys = append(instanceKeys, key)
+	}
+	sort.Strings(instanceKeys)
+	for _, key := range instanceKeys {
+		instance := env.templateInstances[key]
 		fn := instance.Function
 		add(fn.ReturnType)
 		for _, param := range fn.Params {

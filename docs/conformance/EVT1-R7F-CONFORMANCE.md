@@ -1,5 +1,8 @@
 # EVT1 R7f collector collections: honest stop
 
+R7fR follow-up: [EVT1-R7FR-CONVERGENCE.md](EVT1-R7FR-CONVERGENCE.md)
+ships the bounded ordinary-library collector after general substrate repairs.
+
 R7f3 follow-up: [EVT1-R7F3-CONFORMANCE.md](EVT1-R7F3-CONFORMANCE.md)
 closes applied-type fixed-array syntax but stops on non-copyable indexed
 storage-authority replacement. No collector is shipped.

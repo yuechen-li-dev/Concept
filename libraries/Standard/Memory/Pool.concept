@@ -6,7 +6,7 @@ import Standard.Memory.Core;
 class PoolAllocator
 {
 public:
-    int<array>[16] backing;
+    int<array>[256] backing;
     bool<array>[16] allocated;
     usize<byte> slotSize;
     usize<byte> slotAlignment;
@@ -30,7 +30,7 @@ public:
         {
             return Result::Error(AllocationError::InvalidAlignment);
         }
-        if (size != self.slotSize or size == 0 or size > 4 or size % alignment != 0)
+        if (size != self.slotSize or size == 0 or size > 64 or size % alignment != 0)
         {
             return Result::Error(AllocationError::InvalidRegion);
         }
@@ -95,7 +95,7 @@ PoolAllocator MakePoolAllocator(
     usize<byte> slotAlignment
 )
 {
-    int<array>[16] backing = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    int<array>[256] backing = [0 ...];
     bool<array>[16] allocated = [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false];
     PoolAllocator pool = PoolAllocator{
         move backing,

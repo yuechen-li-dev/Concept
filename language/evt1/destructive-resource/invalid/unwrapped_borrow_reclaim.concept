@@ -1,0 +1,20 @@
+profile Core;
+
+enum Error { Missing, }
+struct Store { int value; }
+
+Result<ref const int, Error> Borrow(ref const Store store)
+{
+    return Result::Ok(ref const store.value);
+}
+
+void Reset(ref Store store) { store.value = 0; }
+requires compiler.InvalidatesBorrows(Reset, store);
+
+int Main()
+{
+    Store store = Store{7};
+    ref const int held = Borrow(ref const store)!;
+    Reset(ref store);
+    return held;
+}

@@ -1,32 +1,35 @@
-# Collector Collections design boundary
+# Collector Collections design
 
-Concept does not have a mandatory garbage collector. The intended
-`Standard.Collection` library would combine explicit allocation, explicit
-roots, synchronous explicit `Trace<T>`, and explicit reclamation. It would be
-bounded, homogeneous, non-moving, and manually triggered. No runtime
-reflection, conservative stack scan, hidden GC runtime, or async borrow is
-part of this design.
+Concept does not have a mandatory garbage collector. Collector Collections
+are ordinary libraries over explicit allocation, roots, tracing, and
+reclamation. The R7fR implementation is `Standard.Collection.Core`: bounded,
+homogeneous, non-moving, manually triggered mark/sweep. It uses no runtime
+reflection, conservative scan, global root registry, hidden GC runtime, or
+collector-specific compiler, MIR, or Planner branch.
 
-The first storage model should use `ReleasableAllocator<A>` to obtain each
-object region, `Storage<T>` to own the initialized object authority, and a
-fixed slot table to hold generation, mark, region, and storage state. A fixed
-local worklist would carry slot indices. Each outgoing handle would be
-enumerated by the user's synchronous `Trace<T>` operation. Sweep would call
-`Destroy` exactly once before `Release`, in slot order.
+Each metadata slot owns an optional Standard.Memory `Allocation<T,A>` plus
+occupancy, mark, and generation fields. The allocator provides storage;
+`Trace<T>` enumerates outgoing collector handles; roots determine initial
+reachability. A fixed local array supplies the mark worklist, and mark on
+enqueue prevents duplicate queue entries. Sweep in slot order drops each
+unreachable allocation, whose Drop destroys the object before releasing its
+region. Object addresses never move.
 
-The table cannot yet hold an allocated storage authority after construction:
-`Option<Storage<T>><array>[Capacity]` starts empty, but indexed assignment of
-`move Option::Some(storage)` is rejected as a copy of a non-copyable type.
-That diagnostic is the current design gate. Any language repair must apply to
-ordinary non-copyable arrays and preserve their lifetime and Drop behavior.
+Borrowed references derive from the collector's storage. `Collect` invalidates
+collector-derived borrows, and a borrow must end before collection. The
+R7f2 conservative suspension rule still bars resource-sensitive leases
+across await/yield. Internal tracing runs under the exclusive collection call
+using ordinary readonly allocation views and a bounded visitor.
 
-Collector borrows must be scoped. A future `Collect` must declare
-`compiler.InvalidatesBorrows(Collect, collector)`, so a collector-derived
-borrow ends before Collect. R7f2 already rejects resource-sensitive leases
-across await and yield; no suspension exception is proposed. Multiple
-collectors must have distinct handle domains without a global registry.
+`Trace<T>` is manual and synchronous. A future R7g reflection feature may
+derive it, while hand-written implementations remain valid. Heterogeneous
+collections would need explicit static Trace/Destroy witnesses, rather than
+ambient RTTI. Moving, generational, concurrent, and weak-reference policies
+remain deferred. DragonGod can later place `Collect` at a scheduler quantum
+boundary and coordinate workers using its existing rendezvous mechanisms;
+R7fR introduces no scheduler integration or collector thread.
 
-Heterogeneous type witnesses, derived Trace through future reflection,
-reference counting, weak references, generational or moving collection,
-concurrent collection, and DragonGod rendezvous are deferred. Manual
-`Trace<T>` would remain valid if a future reflection facility derives it.
+The current domain ID is chosen by the caller and must differ between
+independent collectors. The current root API uses manual integer tokens.
+These explicit contracts are recorded in the library documentation rather
+than hidden in runtime state.

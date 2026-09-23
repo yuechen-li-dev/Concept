@@ -510,6 +510,13 @@ func evt1ProjectNoAllocation(env *semanticEnv, graph *ProofGraph, root string, f
 	graph.addEdge(root, fnNode, ProofRequires)
 	for _, name := range calls {
 		candidates := env.functions[name]
+		// These compiler-defined operations only inspect inline metadata or
+		// return an existing storage view; none obtains storage.
+		if len(candidates) == 0 && env.templates[name].Name == "" && (name == "Len" || name == "Value" || name == "OptionValue") {
+			id := graph.addNode(ProofKnownFact, name+" NoAllocation", "compiler-defined storage inspection", FactProven, FactOriginCompilerAnalysis, fn.Span)
+			graph.addEdge(fnNode, id, ProofDerivedFrom)
+			continue
+		}
 		if len(candidates) != 1 {
 			id := graph.addNode(ProofMissingFact, name, "call target or allocation summary is not uniquely available", FactUnknown, FactOriginCompilerAnalysis, fn.Span)
 			graph.addEdge(fnNode, id, ProofBlockedBy)

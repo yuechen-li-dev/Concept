@@ -276,6 +276,12 @@ func evt1ObjectBorrowForExpr(env *semanticEnv, scope *evt1Scope, expr Expr, temp
 	if moved, ok := expr.(*MoveExpr); ok {
 		return evt1ObjectBorrowForExpr(env, scope, moved.Value, templateInfo)
 	}
+	if unwrapped, ok := expr.(*FailureExpr); ok {
+		return evt1ObjectBorrowForExpr(env, scope, unwrapped.Value, templateInfo)
+	}
+	if bound, ok := expr.(*BindExpr); ok {
+		return evt1ObjectBorrowForExpr(env, scope, bound.Source, templateInfo)
+	}
 	if name, ok := expr.(*NameExpr); ok {
 		if binding, found := scope.lookup(name.Name); found {
 			return binding.objectBorrows
@@ -1388,7 +1394,10 @@ func evt1CheckInvalidatingCall(env *semanticEnv, scope *evt1Scope, operation, si
 	}
 	var paths []string
 	if name, ok := resource.(*NameExpr); ok {
-		if binding, found := scope.lookup(name.Name); found && len(binding.objectBorrows) != 0 {
+		// A reference alias names its referent. A value that merely contains
+		// references is still a distinct resource: invalidating that value's
+		// derived borrows does not invalidate its referenced allocator.
+		if binding, found := scope.lookup(name.Name); found && binding.t.isReference() && len(binding.objectBorrows) != 0 {
 			paths = append(paths, binding.objectBorrows...)
 		}
 	}
@@ -2267,13 +2276,16 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 					binding, _ = local.lookup(name.Name)
 				}
 				canReplaceOwned := isName && binding.state == evt1StorageInitialized && target.t.isOwned() && evt1CanTransferInitialize(env, target.t, s.Value)
-				if !isName || (binding.state != evt1StorageMoved && !canReplaceOwned) || !evt1CanTransferInitialize(env, target.t, s.Value) {
+				canReplaceProjected := !isName && evt1TypeHasDrop(env, target.t) && evt1CanTransferInitialize(env, target.t, s.Value)
+				if !canReplaceProjected && (!isName || (binding.state != evt1StorageMoved && !canReplaceOwned) || !evt1CanTransferInitialize(env, target.t, s.Value)) {
 					if target.t.isOwned() {
 						return evt1Diagnostic("CV4501", fmt.Sprintf("assignment copies non-copyable type %s; use move from an initialized owner", target.t.String()), s.Span)
 					}
 					return evt1Diagnostic("CV4133", fmt.Sprintf("assignment copies non-copyable type %s", target.t.String()), s.Span)
 				}
-				local.setState(name.Name, evt1StorageInitialized)
+				if isName {
+					local.setState(name.Name, evt1StorageInitialized)
+				}
 			}
 		case *ReturnStmt:
 			if s.Value == nil {
@@ -3562,6 +3574,21 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		return evt1CanonicalType(env, fieldType), nil
 	case *CallExpr:
+		if e.Callee == "OptionValue" && len(e.Args) == 1 {
+			optionType, err := validateExpr(env, scope, e.Args[0], templateInfo, inComptimeFn)
+			if err != nil {
+				return Type{}, err
+			}
+			if !optionType.isReference() || !evt1IsOptionType(optionType) || len(optionType.TypeArgs) != 1 {
+				return Type{}, evt1Diagnostic("OPTION_VALUE_ARGUMENT", "OptionValue requires ref Option<T> or ref const Option<T>", e.Span)
+			}
+			e.Intrinsic = "option_value"
+			result := optionType.TypeArgs[0].valueType()
+			result.Ownership = "ref"
+			result.Const = optionType.Const
+			result.Span = e.Span
+			return result, nil
+		}
 		storagePlace, _, storageCall := evt1StorageBindingForCall(env, scope, e, templateInfo)
 		if (e.Callee == "Initialize" || e.Callee == "Destroy" || e.Callee == "Value") && storageCall {
 			element := storagePlace.t.TypeArgs[0]
@@ -5185,15 +5212,26 @@ func evt1ExprProvenance(env *semanticEnv, scope *evt1Scope, expr Expr) evt1Lifet
 			}
 		}
 	case *ConstructExpr:
-		if evt1IsFailureType(e.ResolvedType) && len(e.Args) > 0 && evt1IsRefStructType(env, evt1FailureSuccessType(e.ResolvedType)) {
+		if evt1IsFailureType(e.ResolvedType) && (e.VariantName == "Some" || e.VariantName == "Ok") && len(e.Args) > 0 && (evt1FailureSuccessType(e.ResolvedType).isBorrowLike() || evt1IsRefStructType(env, evt1FailureSuccessType(e.ResolvedType))) {
 			return evt1ExprProvenance(env, scope, e.Args[0])
+		}
+		if evt1IsFailureType(e.ResolvedType) && (e.VariantName == "None" || e.VariantName == "Error") {
+			return evt1LifetimeProvenance{Kind: evt1ProvenanceStatic}
 		}
 	case *TemplateCallExpr:
 		if e.Callee == "bind" && len(e.Args) > 0 {
 			return evt1ExprProvenance(env, scope, e.Args[0])
 		}
+		// An open generic call cannot be instantiated here: its type arguments
+		// may still be type parameters. Derive the lifetime relation from the
+		// template body, whose parameter positions are stable under closing.
+		if decl, ok := env.templates[e.Callee]; ok {
+			fn := FunctionDecl{Name: decl.Name, ReturnType: decl.ReturnType, Params: decl.Params, Body: decl.Body}
+			evt1DeriveResultProvenanceSummaries(env, []FunctionDecl{fn})
+			return evt1CallResultLifetimeProvenance(env, scope, e.Args, fn.Params, env.resultProvenance[evt1FunctionProvenanceKey(fn)])
+		}
 	case *CallExpr:
-		if (e.Callee == "Initialize" || e.Callee == "Value") && len(e.Args) > 0 {
+		if (e.Callee == "Initialize" || e.Callee == "Value" || e.Callee == "OptionValue") && len(e.Args) > 0 {
 			return evt1ExprProvenance(env, scope, e.Args[0])
 		}
 		if e.Member && e.Receiver != nil {
@@ -5224,29 +5262,34 @@ func evt1ExprProvenance(env *semanticEnv, scope *evt1Scope, expr Expr) evt1Lifet
 				return evt1LifetimeProvenance{Kind: evt1ProvenanceStatic}
 			}
 		}
-		summary := env.resultProvenance[evt1FunctionProvenanceKey(fn)]
-		if summary.Kind == evt1ResultProvenanceStatic {
-			return evt1LifetimeProvenance{Kind: evt1ProvenanceStatic}
+		return evt1CallResultLifetimeProvenance(env, scope, e.Args, fn.Params, env.resultProvenance[evt1FunctionProvenanceKey(fn)])
+	}
+	return evt1LifetimeProvenance{Kind: evt1ProvenanceUnknown, Depth: scope.depth, Scoped: true}
+}
+
+func evt1CallResultLifetimeProvenance(env *semanticEnv, scope *evt1Scope, args []Expr, params []Param, summary evt1ResultProvenanceSummary) evt1LifetimeProvenance {
+	if summary.Kind == evt1ResultProvenanceStatic {
+		return evt1LifetimeProvenance{Kind: evt1ProvenanceStatic}
+	}
+	if summary.Kind != evt1ResultProvenanceParameter && summary.Kind != evt1ResultProvenanceShortestOf {
+		return evt1LifetimeProvenance{Kind: evt1ProvenanceUnknown, Depth: scope.depth, Scoped: true}
+	}
+	result := evt1LifetimeProvenance{Kind: evt1ProvenanceStatic}
+	found := false
+	for _, index := range summary.ParameterIndices {
+		if index < 0 || index >= len(args) || index >= len(params) {
+			return evt1LifetimeProvenance{Kind: evt1ProvenanceUnknown, Depth: scope.depth, Scoped: true}
 		}
-		if summary.Kind == evt1ResultProvenanceParameter || summary.Kind == evt1ResultProvenanceShortestOf {
-			result := evt1LifetimeProvenance{Kind: evt1ProvenanceStatic}
-			found := false
-			for _, index := range summary.ParameterIndices {
-				if index < 0 || index >= len(e.Args) {
-					return evt1LifetimeProvenance{Kind: evt1ProvenanceUnknown, Depth: scope.depth, Scoped: true}
-				}
-				p := evt1ExprProvenance(env, scope, e.Args[index])
-				p.Scoped = p.Scoped || fn.Params[index].Type.Scoped
-				if !found || evt1ProvenanceIsShorter(p, result) {
-					result = p
-				}
-				result.Scoped = result.Scoped || p.Scoped
-				found = true
-			}
-			if found {
-				return result
-			}
+		p := evt1ExprProvenance(env, scope, args[index])
+		p.Scoped = p.Scoped || params[index].Type.Scoped
+		if !found || evt1ProvenanceIsShorter(p, result) {
+			result = p
 		}
+		result.Scoped = result.Scoped || p.Scoped
+		found = true
+	}
+	if found {
+		return result
 	}
 	return evt1LifetimeProvenance{Kind: evt1ProvenanceUnknown, Depth: scope.depth, Scoped: true}
 }
@@ -6208,7 +6251,20 @@ func evt1IsImmovableValueType(env *semanticEnv, t Type) bool {
 
 func evt1CanDirectInitialize(env *semanticEnv, t Type, expr Expr) bool {
 	if lit, ok := expr.(*ArrayLiteralExpr); ok {
-		return t.ArrayElem != nil && len(lit.Elements) == t.ArrayLength
+		if t.ArrayElem == nil {
+			return false
+		}
+		if len(lit.Elements) == t.ArrayLength {
+			return true
+		}
+		// Repetition initializes each destination element independently. The
+		// array-literal validator checks its exact extent and element moves.
+		for _, element := range lit.Elements {
+			if _, repeated := element.(*RepeatInitializer); repeated {
+				return true
+			}
+		}
+		return false
 	}
 	construct, ok := expr.(*StructConstructExpr)
 	if !ok {
@@ -7114,18 +7170,26 @@ func evt1ValidateOpenNestedTemplateCall(env *semanticEnv, scope *evt1Scope, call
 		return Type{}, evt1Diagnostic("CV4179", fmt.Sprintf("template %s expects %d arguments but got %d", call.Callee, len(params), len(args)), call.Span)
 	}
 	if callee.Constraint.ConceptName != "" {
-		if caller.Decl.Constraint.ConceptName != callee.Constraint.ConceptName {
-			return Type{}, evt1Diagnostic("CV4176", fmt.Sprintf("nested template %s requires %s, which is not guaranteed by the caller", call.Callee, callee.Constraint.ConceptName), call.Span)
-		}
 		inner := evt1SubstituteArguments(evt1ConstraintArguments(callee.Constraint), evt1TemplateBindings(params, args))
-		outer := evt1ConstraintArguments(caller.Decl.Constraint)
-		if len(inner) != len(outer) {
-			return Type{}, evt1Diagnostic("CV4176", "nested template constraint arguments are not guaranteed by the caller", call.Span)
-		}
-		for i := range inner {
-			if inner[i].String() != outer[i].String() {
-				return Type{}, evt1Diagnostic("CV4176", "nested template constraint arguments are not guaranteed by the caller", call.Span)
+		guaranteed := false
+		for _, entry := range caller.Closure {
+			if entry.Name != callee.Constraint.ConceptName || len(entry.Arguments) != len(inner) {
+				continue
 			}
+			match := true
+			for i := range inner {
+				if !evt1SymbolicTypeEqual(inner[i], entry.Arguments[i], caller.Decl.TypeParam) {
+					match = false
+					break
+				}
+			}
+			if match {
+				guaranteed = true
+				break
+			}
+		}
+		if !guaranteed {
+			return Type{}, evt1Diagnostic("CV4176", fmt.Sprintf("nested template %s requires %s, which is not guaranteed by the caller", call.Callee, callee.Constraint.ConceptName), call.Span)
 		}
 	}
 	closeType := func(t Type) Type {

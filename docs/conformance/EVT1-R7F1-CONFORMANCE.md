@@ -1,5 +1,8 @@
 # EVT1 R7f1 generic library closure
 
+R7fR follow-up: [EVT1-R7FR-CONVERGENCE.md](EVT1-R7FR-CONVERGENCE.md)
+exercises generic required operations and fixed local worklists in the collector.
+
 R7f3 follow-up: [EVT1-R7F3-CONFORMANCE.md](EVT1-R7F3-CONFORMANCE.md)
 records the remaining indexed storage-authority blocker.
 

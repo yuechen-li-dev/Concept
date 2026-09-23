@@ -1,0 +1,16 @@
+profile Core;
+
+struct Resource { int id; }
+void Drop(owned Resource resource) { }
+
+int Main()
+{
+    Option<owned Resource><array>[2] slots = [Option::None ...];
+    int index = 1;
+    Resource first = Resource{1};
+    slots[index] = Option::Some(move first);
+    Resource second = Resource{2};
+    slots[index] = Option::Some(move second);
+    slots[index] = Option::None;
+    return 0;
+}

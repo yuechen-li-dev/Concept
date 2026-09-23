@@ -1,5 +1,8 @@
 # EVT1 R7f2 destructive resource effects: meaningful progression
 
+R7fR follow-up: [EVT1-R7FR-CONVERGENCE.md](EVT1-R7FR-CONVERGENCE.md)
+uses this borrow invalidation effect in an ordinary collector library.
+
 R7f3 follow-up: [EVT1-R7F3-CONFORMANCE.md](EVT1-R7F3-CONFORMANCE.md)
 records an honest stop at indexed storage-authority replacement.
 

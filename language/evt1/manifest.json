@@ -2,8 +2,8 @@
   "schema": "concept-evt1-semantic-corpus-v1",
   "compiler_id": "concept-evt1-stage0-go",
   "totals": {
-    "valid": 393,
-    "static_invalid": 255,
+    "valid": 395,
+    "static_invalid": 256,
     "runtime_negative": 13,
     "compatibility": 5,
     "expected_divergence": 4
@@ -11,11 +11,11 @@
   "subsystems": [
     { "subsystem": "Foundation", "path": "foundation", "valid": 5, "static_invalid": 16, "runtime_negative": [], "historical_milestones": ["R1"] },
     { "subsystem": "Values", "path": "values", "valid": 13, "static_invalid": 19, "runtime_negative": [], "historical_milestones": ["R2"] },
-    { "subsystem": "Ownership", "path": "ownership", "valid": 16, "static_invalid": 15, "runtime_negative": [], "historical_milestones": ["R3"] },
+    { "subsystem": "Ownership", "path": "ownership", "valid": 17, "static_invalid": 15, "runtime_negative": [], "historical_milestones": ["R3", "R7fR"] },
     { "subsystem": "Lexical lifetime", "path": "lifetime/lexical", "valid": 6, "static_invalid": 5, "runtime_negative": [], "historical_milestones": ["R4a"] },
     { "subsystem": "Relational lifetime", "path": "lifetime/relational", "valid": 6, "static_invalid": 5, "runtime_negative": [], "historical_milestones": ["R4b"] },
     { "subsystem": "Failure", "path": "failure", "valid": 14, "static_invalid": 10, "runtime_negative": [], "historical_milestones": ["R4c"] },
-    { "subsystem": "Array storage", "path": "storage/arrays", "valid": 17, "static_invalid": 13, "runtime_negative": [], "historical_milestones": ["R4d"] },
+    { "subsystem": "Array storage", "path": "storage/arrays", "valid": 18, "static_invalid": 13, "runtime_negative": [], "historical_milestones": ["R4d", "R7fR"] },
     { "subsystem": "Storage binding", "path": "storage/binding", "valid": 12, "static_invalid": 9, "runtime_negative": ["bind_runtime_size_mismatch.concept", "bind_shape_product_overflow.concept"], "historical_milestones": ["R4e"] },
     { "subsystem": "Layouts and streams", "path": "storage/layout-stream", "valid": 16, "static_invalid": 13, "runtime_negative": [], "historical_milestones": ["R4f"] },
     { "subsystem": "Span", "path": "storage/span", "valid": 15, "static_invalid": 12, "runtime_negative": ["span_subspan_runtime_oob.concept", "span_index_runtime_oob.concept"], "historical_milestones": ["R4g"] },
@@ -38,7 +38,7 @@
     { "subsystem": "Generic concept requirements", "path": "generic-requirements", "valid": 3, "static_invalid": 3, "runtime_negative": [], "historical_milestones": ["R6o"] },
     { "subsystem": "Tables and initializer repetition", "path": "tables-initializers", "valid": 4, "static_invalid": 5, "runtime_negative": [], "historical_milestones": ["EVT1 tables and ellipsis"] },
     { "subsystem": "Generic library closure", "path": "generic-library-closure", "valid": 5, "static_invalid": 1, "runtime_negative": [], "historical_milestones": ["R7f1"] },
-    { "subsystem": "Destructive resource", "path": "destructive-resource", "valid": 2, "static_invalid": 3, "runtime_negative": [], "historical_milestones": ["R7f2"] }
+    { "subsystem": "Destructive resource", "path": "destructive-resource", "valid": 2, "static_invalid": 4, "runtime_negative": [], "historical_milestones": ["R7f2", "R7fR"] }
   ],
   "compatibility_fixtures": [
     "values/valid/let_const_alias.concept",

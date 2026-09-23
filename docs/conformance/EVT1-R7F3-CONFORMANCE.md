@@ -1,5 +1,9 @@
 # EVT1 R7f3 collector collections: honest stop
 
+R7fR follow-up: [EVT1-R7FR-CONVERGENCE.md](EVT1-R7FR-CONVERGENCE.md)
+preserves the collector and closes the general compiler gaps recorded below.
+The R7f3 outcome here remains historical.
+
 Baseline `3e830976f5d0d43a9e63bb332c1a19d2860a9b60` is R7f2. R7f1 is
 `58dae662d4559b2c0ea6843767e36a54dfbd706d`; R7e is
 `b1747d7d3ffba7510aff6484c6863f70c214cf6e`. Compiler ID:

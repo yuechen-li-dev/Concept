@@ -1,0 +1,285 @@
+module Standard.Collection.Core;
+profile Core;
+
+import Standard.Memory.Ownership;
+
+enum CollectionError
+{
+    CapacityExceeded,
+    RootCapacityExceeded,
+    InvalidHandle,
+    OutOfMemory,
+}
+
+template <typename T>
+struct CollectorHandle
+{
+    int index;
+    int generation;
+    int domain;
+};
+
+template <typename T>
+ref struct TraceVisitor
+{
+    Span<int> worklist;
+    Span<bool> occupied;
+    Span<bool> marked;
+    Span<int> generation;
+    int count;
+    int domain;
+    bool valid;
+};
+
+template <typename T>
+void Visit(ref TraceVisitor<T> visitor, CollectorHandle<T> handle)
+{
+    if (handle.index < 0 or handle.index >= Len(visitor.occupied) or
+        handle.domain != visitor.domain)
+    {
+        visitor.valid = false;
+        return;
+    }
+    if (not visitor.occupied[handle.index] or
+        visitor.generation[handle.index] != handle.generation)
+    {
+        visitor.valid = false;
+        return;
+    }
+    if (not visitor.marked[handle.index])
+    {
+        visitor.marked[handle.index] = true;
+        visitor.worklist[visitor.count] = handle.index;
+        visitor.count = visitor.count + 1;
+    }
+}
+
+concept Trace<T>
+{
+    requires void TraceReferences(ref const T value, ref TraceVisitor<T> visitor);
+}
+
+concept Collectible<T, TAllocator>
+{
+    requires Trace<T>;
+    requires ReleasableAllocator<TAllocator>;
+}
+
+// Each live entry owns the ordinary Standard.Memory allocation authority.
+// Replacing an entry must run its Drop before the new value is installed.
+template <typename T, usize Capacity, typename TAllocator>
+requires ReleasableAllocator<TAllocator>
+ref struct MarkSweepCollector
+{
+    ref TAllocator allocator;
+    Option<owned Allocation<T, TAllocator>><array>[Capacity] slots;
+    bool<array>[Capacity] occupied;
+    bool<array>[Capacity] marked;
+    int<array>[Capacity] generation;
+    int<array>[Capacity] rootIndex;
+    int<array>[Capacity] rootGeneration;
+    bool<array>[Capacity] rootOccupied;
+    int domain;
+};
+
+template <typename T, usize Capacity, typename TAllocator>
+requires ReleasableAllocator<TAllocator>
+MarkSweepCollector<T, Capacity, TAllocator> MakeCollector(ref TAllocator allocator, int domain)
+{
+    Option<owned Allocation<T, TAllocator>><array>[Capacity] slots = [Option::None ...];
+    bool<array>[Capacity] occupied = [false ...];
+    bool<array>[Capacity] marked = [false ...];
+    int<array>[Capacity] generation = [1 ...];
+    int<array>[Capacity] rootIndex = [0 ...];
+    int<array>[Capacity] rootGeneration = [0 ...];
+    bool<array>[Capacity] rootOccupied = [false ...];
+    MarkSweepCollector<T, Capacity, TAllocator> collector = MarkSweepCollector<T, Capacity, TAllocator>{
+        ref allocator, move slots, move occupied, move marked, move generation,
+        move rootIndex, move rootGeneration, move rootOccupied, domain
+    };
+    return move collector;
+}
+
+template <typename T, usize Capacity, typename TAllocator>
+requires ReleasableAllocator<TAllocator>
+Result<CollectorHandle<T>, CollectionError> AllocateObject(
+    ref MarkSweepCollector<T, Capacity, TAllocator> collector,
+    T value
+)
+{
+    int index = 0;
+    while (index < Len(collector.occupied)) bounded(2147483647)
+    {
+        if (not collector.occupied[index] and collector.generation[index] > 0)
+        {
+            Result<Allocation<T, TAllocator>, AllocationError> attempt =
+                Allocate<T, TAllocator>(ref collector.allocator, move value);
+            match (move attempt)
+            {
+                Result::Ok(allocation) => {
+                    Option<owned Allocation<T, TAllocator>> candidate = Option::Some(move allocation);
+                    collector.slots[index] = move candidate;
+                    collector.occupied[index] = true;
+                    CollectorHandle<T> handle = CollectorHandle<T>{index, collector.generation[index], collector.domain};
+                    return Result::Ok(move handle);
+                }
+                Result::Error(error) => { return Result::Error(CollectionError::OutOfMemory); }
+            }
+        }
+        index = index + 1;
+    }
+    return Result::Error(CollectionError::CapacityExceeded);
+}
+requires compiler.Allocates(AllocateObject);
+
+template <typename T, usize Capacity, typename TAllocator>
+requires ReleasableAllocator<TAllocator>
+bool ValidHandle(
+    ref const MarkSweepCollector<T, Capacity, TAllocator> collector,
+    CollectorHandle<T> handle
+)
+{
+    return handle.index >= 0 and handle.index < Len(collector.occupied) and
+        handle.domain == collector.domain and collector.occupied[handle.index] and
+        collector.generation[handle.index] == handle.generation;
+}
+
+template <typename T, usize Capacity, typename TAllocator>
+requires ReleasableAllocator<TAllocator>
+Result<ref const T, CollectionError> Borrow(
+    ref const MarkSweepCollector<T, Capacity, TAllocator> collector,
+    CollectorHandle<T> handle
+)
+{
+    if (not ValidHandle<T, Capacity, TAllocator>(ref const collector, handle))
+    {
+        return Result::Error(CollectionError::InvalidHandle);
+    }
+    ref const Allocation<T, TAllocator> allocation = OptionValue(ref const collector.slots[handle.index]);
+    return Result::Ok(ConstAllocationValue<T, TAllocator>(ref const allocation));
+}
+
+template <typename T, usize Capacity, typename TAllocator>
+requires ReleasableAllocator<TAllocator>
+Result<ref T, CollectionError> BorrowMutable(
+    ref MarkSweepCollector<T, Capacity, TAllocator> collector,
+    CollectorHandle<T> handle
+)
+{
+    if (not ValidHandle<T, Capacity, TAllocator>(ref const collector, handle))
+    {
+        return Result::Error(CollectionError::InvalidHandle);
+    }
+    ref Allocation<T, TAllocator> allocation = OptionValue(ref collector.slots[handle.index]);
+    return Result::Ok(AllocationValue<T, TAllocator>(ref allocation));
+}
+
+// Root tokens identify an entry in this collector's bounded root table.
+// Duplicate roots are allowed; each registration has its own token.
+template <typename T, usize Capacity, typename TAllocator>
+requires ReleasableAllocator<TAllocator>
+Result<int, CollectionError> RegisterRoot(
+    ref MarkSweepCollector<T, Capacity, TAllocator> collector,
+    CollectorHandle<T> handle
+)
+{
+    if (not ValidHandle<T, Capacity, TAllocator>(ref const collector, handle))
+    {
+        return Result::Error(CollectionError::InvalidHandle);
+    }
+    int index = 0;
+    while (index < Len(collector.rootOccupied)) bounded(2147483647)
+    {
+        if (not collector.rootOccupied[index])
+        {
+            collector.rootIndex[index] = handle.index;
+            collector.rootGeneration[index] = handle.generation;
+            collector.rootOccupied[index] = true;
+            return Result::Ok(index);
+        }
+        index = index + 1;
+    }
+    return Result::Error(CollectionError::RootCapacityExceeded);
+}
+
+template <typename T, usize Capacity, typename TAllocator>
+requires ReleasableAllocator<TAllocator>
+void UnregisterRoot(ref MarkSweepCollector<T, Capacity, TAllocator> collector, int root)
+{
+    if (root >= 0 and root < Len(collector.rootOccupied))
+    {
+        collector.rootOccupied[root] = false;
+    }
+}
+
+// Mark on enqueue: each live slot enters the bounded worklist at most once.
+// A malformed edge aborts before sweep, preserving every allocated object.
+template <typename T, usize Capacity, typename TAllocator>
+requires Collectible<T, TAllocator>
+Result<int, CollectionError> Collect(ref MarkSweepCollector<T, Capacity, TAllocator> collector)
+{
+    int<array>[Capacity] worklist = [0 ...];
+    TraceVisitor<T> visitor = TraceVisitor<T>{
+        Span(worklist), Span(collector.occupied), Span(collector.marked),
+        Span(collector.generation), 0, collector.domain, true
+    };
+    int index = 0;
+    while (index < Len(collector.marked)) bounded(2147483647)
+    {
+        visitor.marked[index] = false;
+        index = index + 1;
+    }
+    index = 0;
+    while (index < Len(collector.rootOccupied)) bounded(2147483647)
+    {
+        if (collector.rootOccupied[index])
+        {
+            CollectorHandle<T> root = CollectorHandle<T>{
+                collector.rootIndex[index], collector.rootGeneration[index], collector.domain
+            };
+            Visit<T>(ref visitor, root);
+        }
+        index = index + 1;
+    }
+    if (not visitor.valid)
+    {
+        return Result::Error(CollectionError::InvalidHandle);
+    }
+    int cursor = 0;
+    while (cursor < visitor.count) bounded(2147483647)
+    {
+        int liveIndex = visitor.worklist[cursor];
+        ref const Allocation<T, TAllocator> allocation = OptionValue(ref const collector.slots[liveIndex]);
+        ref const T value = ConstAllocationValue<T, TAllocator>(ref const allocation);
+        TraceReferences(ref const value, ref visitor);
+        if (not visitor.valid)
+        {
+            return Result::Error(CollectionError::InvalidHandle);
+        }
+        cursor = cursor + 1;
+    }
+    int reclaimed = 0;
+    index = 0;
+    while (index < Len(collector.occupied)) bounded(2147483647)
+    {
+        if (collector.occupied[index] and not visitor.marked[index])
+        {
+            collector.slots[index] = Option::None;
+            collector.occupied[index] = false;
+            // A wrapped generation could make an ancient handle valid again.
+            // Retire the slot instead of reusing a generation value.
+            if (collector.generation[index] == 2147483647)
+            {
+                collector.generation[index] = 0;
+            }
+            else
+            {
+                collector.generation[index] = collector.generation[index] + 1;
+            }
+            reclaimed = reclaimed + 1;
+        }
+        index = index + 1;
+    }
+    return Result::Ok(reclaimed);
+}
+requires compiler.InvalidatesBorrows(Collect, collector);

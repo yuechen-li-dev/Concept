@@ -31,7 +31,8 @@ There is no global/default allocator or hidden heap.
 - `Standard.Memory.Bump` owns a fixed 256-byte, four-byte-aligned inline source
   and a monotonic bump policy. Padding is charged exactly. It has no individual
   `Release` and therefore does not satisfy `ReleasableAllocator`.
-- `Standard.Memory.Pool` is a bounded 16-slot policy over 64 inline bytes. Its
+- `Standard.Memory.Pool` is a bounded 16-slot policy over 1024 inline bytes,
+  allowing exact slots up to 64 bytes each. Its
   inline bitmap tracks exact origin, slot start, length, alignment, live state,
   exhaustion, double release, and deterministic reuse.
 - `Standard.Memory.Ownership` defines releasable `Allocation<T,A>`, typed

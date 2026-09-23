@@ -49,7 +49,10 @@ func evt1FailureEnumDecl(t Type) (EnumDecl, bool) {
 	return EnumDecl{}, false
 }
 
-func evt1FailureTypeKey(t Type) string { return evt1TypeIdentity(t.valueType()) }
+// Failure instantiations with ref and ref const payloads have distinct C
+// layouts. The ordinary generic identity intentionally erases qualifiers, so
+// use the emitted failure identity when deduplicating declarations.
+func evt1FailureTypeKey(t Type) string { return evt1FailureCName(t) }
 
 func evt1FailureCName(t Type) string {
 	parts := []string{t.Name}
@@ -93,8 +96,8 @@ func evt1FailureNeedsDrop(env *semanticEnv, t Type) bool {
 	return false
 }
 
-func evt1FailureDropFunction(env *semanticEnv, t Type, outputBase string) string {
-	if !evt1FailureNeedsDrop(env, t) {
+func evt1FailureDropFunction(l *lowering, t Type) string {
+	if !evt1FailureNeedsDrop(l.env, t) {
 		return ""
 	}
 	decl, _ := evt1FailureEnumDecl(t)
@@ -103,14 +106,14 @@ func evt1FailureDropFunction(env *semanticEnv, t Type, outputBase string) string
 	for _, variant := range decl.Variants {
 		var drops []string
 		for _, field := range variant.Payload {
-			if !evt1TypeHasDrop(env, field.Type) {
+			if !evt1TypeHasDrop(l.env, field.Type) {
 				continue
 			}
 			value := fmt.Sprintf("value.payload.%s.%s", evt1PayloadFieldName(variant.Name), field.Name)
 			if evt1IsFailureType(field.Type) {
 				drops = append(drops, fmt.Sprintf("%s(%s);", evt1FailureDropName(field.Type), value))
-			} else if dropFn := evt1DropFunction(env, field.Type); dropFn != nil {
-				drops = append(drops, fmt.Sprintf("%s(%s);", evt1FunctionSymbolForDecl(outputBase, env, *dropFn), value))
+			} else if dropFn := evt1DropFunction(l.env, field.Type); dropFn != nil {
+				drops = append(drops, fmt.Sprintf("%s(%s);", evt1DropSymbol(l, *dropFn, field.Type), value))
 			}
 		}
 		b.WriteString(fmt.Sprintf("  case %d:\n", variant.Tag))
@@ -179,10 +182,13 @@ func evt1FailureConstructors(t Type) string {
 	return b.String()
 }
 
-func evt1CollectFailureTypes(module Module) []Type {
+func evt1CollectFailureTypes(module Module, env *semanticEnv) []Type {
 	seen := map[string]Type{}
 	var add func(Type)
 	add = func(t Type) {
+		if t.ArrayElem != nil {
+			add(*t.ArrayElem)
+		}
 		for _, a := range t.TypeArgs {
 			add(a)
 		}
@@ -202,6 +208,23 @@ func evt1CollectFailureTypes(module Module) []Type {
 	for _, s := range module.Structs {
 		for _, f := range s.Fields {
 			add(f.Type)
+		}
+	}
+	if env != nil {
+		keys := make([]string, 0, len(env.templateInstances))
+		for key := range env.templateInstances {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			fn := env.templateInstances[key].Function
+			add(fn.ReturnType)
+			for _, param := range fn.Params {
+				add(param.Type)
+			}
+			if fn.Body != nil {
+				evt1VisitFailureTypesBlock(*fn.Body, add)
+			}
 		}
 	}
 	keys := make([]string, 0, len(seen))

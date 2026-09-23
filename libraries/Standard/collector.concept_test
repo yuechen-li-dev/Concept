@@ -1,0 +1,159 @@
+profile Core;
+import Standard.Collection.Core;
+import Standard.Memory.Pool;
+
+struct Node
+{
+    int value;
+    CollectorHandle<Node> left;
+    CollectorHandle<Node> right;
+};
+
+void TraceReferences(ref const Node value, ref TraceVisitor<Node> visitor)
+{
+    if (value.left.index >= 0) { Visit<Node>(ref visitor, value.left); }
+    if (value.right.index >= 0) { Visit<Node>(ref visitor, value.right); }
+}
+
+[[fact]]
+void CollectorAllocatesIntoIndexedSlot()
+{
+    PoolAllocator pool = MakePoolAllocator(SizeOf<Node>(), AlignOf<Node>());
+    MarkSweepCollector<Node, 8, PoolAllocator> collector =
+        MakeCollector<Node, 8, PoolAllocator>(ref pool, 17);
+    CollectorHandle<Node> none = CollectorHandle<Node>{-1, 0, 17};
+    CollectorHandle<Node> handle = AllocateObject<Node, 8, PoolAllocator>(ref collector, Node{7, none, none})!;
+    Assert.True(handle.index == 0, "first object uses first slot");
+    {
+        ref const Node value = Borrow<Node, 8, PoolAllocator>(ref const collector, handle)!;
+        Assert.True(value.value == 7, "borrow observes stable allocated object");
+    }
+    int root = RegisterRoot<Node, 8, PoolAllocator>(ref collector, handle)!;
+    Assert.True(root == 0, "first root uses first entry");
+    UnregisterRoot<Node, 8, PoolAllocator>(ref collector, root);
+    int reclaimed = Collect<Node, 8, PoolAllocator>(ref collector)!;
+    Assert.True(reclaimed == 1, "unrooted object is swept");
+    Assert.Error(Borrow<Node, 8, PoolAllocator>(ref const collector, handle), "swept handle is stale");
+}
+
+[[fact]]
+void CollectorTracesCyclesAndDiamonds()
+{
+    PoolAllocator pool = MakePoolAllocator(SizeOf<Node>(), AlignOf<Node>());
+    MarkSweepCollector<Node, 8, PoolAllocator> collector =
+        MakeCollector<Node, 8, PoolAllocator>(ref pool, 29);
+    CollectorHandle<Node> none = CollectorHandle<Node>{-1, 0, 29};
+    CollectorHandle<Node> a = AllocateObject<Node, 8, PoolAllocator>(ref collector, Node{1, none, none})!;
+    CollectorHandle<Node> b = AllocateObject<Node, 8, PoolAllocator>(ref collector, Node{2, none, none})!;
+    CollectorHandle<Node> c = AllocateObject<Node, 8, PoolAllocator>(ref collector, Node{3, none, none})!;
+    CollectorHandle<Node> d = AllocateObject<Node, 8, PoolAllocator>(ref collector, Node{4, none, none})!;
+    CollectorHandle<Node> islandA = AllocateObject<Node, 8, PoolAllocator>(ref collector, Node{5, none, none})!;
+    CollectorHandle<Node> islandB = AllocateObject<Node, 8, PoolAllocator>(ref collector, Node{6, none, none})!;
+    CollectorHandle<Node> self = AllocateObject<Node, 8, PoolAllocator>(ref collector, Node{7, none, none})!;
+    {
+        ref Node node = BorrowMutable<Node, 8, PoolAllocator>(ref collector, a)!;
+        node.left = b;
+        node.right = c;
+    }
+    {
+        ref Node node = BorrowMutable<Node, 8, PoolAllocator>(ref collector, b)!;
+        node.left = d;
+    }
+    {
+        ref Node node = BorrowMutable<Node, 8, PoolAllocator>(ref collector, c)!;
+        node.left = d;
+    }
+    {
+        ref Node node = BorrowMutable<Node, 8, PoolAllocator>(ref collector, d)!;
+        node.left = a;
+    }
+    {
+        ref Node node = BorrowMutable<Node, 8, PoolAllocator>(ref collector, islandA)!;
+        node.left = islandB;
+    }
+    {
+        ref Node node = BorrowMutable<Node, 8, PoolAllocator>(ref collector, islandB)!;
+        node.left = islandA;
+    }
+    {
+        ref Node node = BorrowMutable<Node, 8, PoolAllocator>(ref collector, self)!;
+        node.left = self;
+    }
+    int rootA = RegisterRoot<Node, 8, PoolAllocator>(ref collector, a)!;
+    int duplicateRootA = RegisterRoot<Node, 8, PoolAllocator>(ref collector, a)!;
+    int rootSelf = RegisterRoot<Node, 8, PoolAllocator>(ref collector, self)!;
+    Assert.True(Collect<Node, 8, PoolAllocator>(ref collector)! == 2, "unrooted cycle is reclaimed");
+    Assert.Error(Borrow<Node, 8, PoolAllocator>(ref const collector, islandA), "first island handle is stale");
+    Assert.Error(Borrow<Node, 8, PoolAllocator>(ref const collector, islandB), "second island handle is stale");
+    {
+        ref const Node survivor = Borrow<Node, 8, PoolAllocator>(ref const collector, d)!;
+        Assert.True(survivor.value == 4, "diamond tail survives exactly once");
+    }
+    UnregisterRoot<Node, 8, PoolAllocator>(ref collector, rootSelf);
+    Assert.True(Collect<Node, 8, PoolAllocator>(ref collector)! == 1, "unrooted self-cycle is reclaimed");
+    UnregisterRoot<Node, 8, PoolAllocator>(ref collector, rootA);
+    Assert.True(Collect<Node, 8, PoolAllocator>(ref collector)! == 0, "duplicate root independently retains graph");
+    UnregisterRoot<Node, 8, PoolAllocator>(ref collector, duplicateRootA);
+    Assert.True(Collect<Node, 8, PoolAllocator>(ref collector)! == 4, "unrooted diamond cycle is reclaimed");
+    CollectorHandle<Node> reused = AllocateObject<Node, 8, PoolAllocator>(ref collector, Node{8, none, none})!;
+    Assert.True(reused.index == a.index and reused.generation != a.generation, "reused slot advances generation");
+    Assert.Error(Borrow<Node, 8, PoolAllocator>(ref const collector, a), "old handle cannot alias reused slot");
+    Assert.Error(RegisterRoot<Node, 8, PoolAllocator>(ref collector, a), "stale handle cannot become root");
+}
+
+[[fact]]
+void CollectorsKeepIndependentDomains()
+{
+    PoolAllocator leftPool = MakePoolAllocator(SizeOf<Node>(), AlignOf<Node>());
+    PoolAllocator rightPool = MakePoolAllocator(SizeOf<Node>(), AlignOf<Node>());
+    MarkSweepCollector<Node, 2, PoolAllocator> left = MakeCollector<Node, 2, PoolAllocator>(ref leftPool, 41);
+    MarkSweepCollector<Node, 2, PoolAllocator> right = MakeCollector<Node, 2, PoolAllocator>(ref rightPool, 42);
+    CollectorHandle<Node> none = CollectorHandle<Node>{-1, 0, 41};
+    CollectorHandle<Node> leftHandle = AllocateObject<Node, 2, PoolAllocator>(ref left, Node{11, none, none})!;
+    CollectorHandle<Node> rightHandle = AllocateObject<Node, 2, PoolAllocator>(ref right, Node{12, none, none})!;
+    Assert.Error(RegisterRoot<Node, 2, PoolAllocator>(ref right, leftHandle), "foreign root is rejected");
+    int rightRoot = RegisterRoot<Node, 2, PoolAllocator>(ref right, rightHandle)!;
+    {
+        ref const Node heldLeft = Borrow<Node, 2, PoolAllocator>(ref const left, leftHandle)!;
+        Assert.True(Collect<Node, 2, PoolAllocator>(ref right)! == 0, "other collector may collect during a left borrow");
+        Assert.True(heldLeft.value == 11, "unrelated collection preserves live borrow");
+    }
+    Assert.True(Collect<Node, 2, PoolAllocator>(ref left)! == 1, "left collector sweeps only left allocation");
+    Assert.True(Collect<Node, 2, PoolAllocator>(ref right)! == 0, "right rooted allocation survives");
+    {
+        ref const Node value = Borrow<Node, 2, PoolAllocator>(ref const right, rightHandle)!;
+        Assert.True(value.value == 12, "right object remains stable");
+    }
+    UnregisterRoot<Node, 2, PoolAllocator>(ref right, rightRoot);
+    Assert.True(Collect<Node, 2, PoolAllocator>(ref right)! == 1, "right collector later reclaims independently");
+}
+
+struct OversizedNode { int<array>[17] words; };
+void TraceReferences(ref const OversizedNode value, ref TraceVisitor<OversizedNode> visitor) { }
+void TraceReferences(ref const int value, ref TraceVisitor<int> visitor) { }
+
+[[fact]]
+void CollectorAllocationFailureLeavesSlotFree()
+{
+    PoolAllocator pool = MakePoolAllocator(SizeOf<OversizedNode>(), AlignOf<OversizedNode>());
+    MarkSweepCollector<OversizedNode, 1, PoolAllocator> collector =
+        MakeCollector<OversizedNode, 1, PoolAllocator>(ref pool, 62);
+    Assert.Error(AllocateObject<OversizedNode, 1, PoolAllocator>(ref collector, OversizedNode{[0 ...]}), "oversized allocator request reports error");
+    Assert.True(not collector.occupied[0] and collector.generation[0] == 1, "failed allocation does not consume slot");
+}
+
+[[fact]]
+void CollectorRetiresExhaustedGeneration()
+{
+    PoolAllocator pool = MakePoolAllocator(SizeOf<int>(), AlignOf<int>());
+    MarkSweepCollector<int, 1, PoolAllocator> collector = MakeCollector<int, 1, PoolAllocator>(ref pool, 63);
+    CollectorHandle<int> first = AllocateObject<int, 1, PoolAllocator>(ref collector, 7)!;
+    int root = RegisterRoot<int, 1, PoolAllocator>(ref collector, first)!;
+    Assert.Error(RegisterRoot<int, 1, PoolAllocator>(ref collector, first), "bounded root table reports exhaustion");
+    UnregisterRoot<int, 1, PoolAllocator>(ref collector, root);
+    collector.generation[0] = 2147483647;
+    Assert.True(Collect<int, 1, PoolAllocator>(ref collector)! == 1, "unrooted object is reclaimed");
+    Assert.True(collector.generation[0] == 0, "exhausted generation retires slot");
+    Assert.Error(AllocateObject<int, 1, PoolAllocator>(ref collector, 8), "retired slot is never reused");
+    Assert.Error(Borrow<int, 1, PoolAllocator>(ref const collector, first), "old handle remains invalid");
+}
