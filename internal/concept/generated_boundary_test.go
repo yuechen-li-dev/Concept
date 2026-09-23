@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestGeneratedPayloadEnumCaseExpansionBoundary(t *testing.T) {
+func TestGeneratedPayloadEnumCaseBuilderRejectsMalformedBody(t *testing.T) {
 	source := `module GeneratedEnum; profile Core;
 enum Choice { None, Some(int value), }
 generator <typename T> DeriveTag
@@ -16,7 +16,7 @@ int Tag(ref const T item) {
 derive DeriveTag reflect<Choice>;
 `
 	_, err := Parse("generated_enum.concept", source)
-	if err == nil || !strings.Contains(err.Error(), "GENERATOR_FIELD_QUERY_INVALID") {
+	if err == nil || !strings.Contains(err.Error(), "GENERATOR_CASE_BODY_INVALID") {
 		t.Fatalf("expected bounded case-generation diagnostic, got %v", err)
 	}
 }

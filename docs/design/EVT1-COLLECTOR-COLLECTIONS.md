@@ -22,10 +22,11 @@ across await/yield. Internal tracing runs under the exclusive collection call
 using ordinary readonly allocation views and a bounded visitor.
 
 `Trace<T>` is synchronous. `Standard.Collection.DeriveTrace` now derives an
-ordinary `TraceReferences` witness for explicitly `[[trace]]` annotated
-`CollectorHandle<T>` fields; the handwritten witness remains valid and the
-collector has no dependency on reflection. General nested composite and
-payload-enum derivation remains open. Heterogeneous
+ordinary `TraceReferences` witness for fields satisfying the library's
+`TraceEdge<E,T>` concept, annotated handle arrays and table columns, and
+nested fields with an ordinary `TraceNested<F,T>` witness. A companion
+generator derives exhaustive payload-enum tracing. The handwritten witness
+remains valid and the collector has no dependency on reflection. Heterogeneous
 collections would need explicit static Trace/Destroy witnesses, rather than
 ambient RTTI. Moving, generational, concurrent, and weak-reference policies
 remain deferred. DragonGod can later place `Collect` at a scheduler quantum

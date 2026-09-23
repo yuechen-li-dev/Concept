@@ -177,7 +177,11 @@ func evt1MaterializeGeneratedDeclarations(module *Module) error {
 		if err != nil {
 			return evt1Diagnostic("GENERATOR_DECLARATION_INVALID", fmt.Sprintf("generator %s: %v", generator.Name, err), request.Span)
 		}
-		body, inputs, err := evt1ExpandGeneratedFields(*function.Body, info)
+		owner := ""
+		if len(function.Params) != 0 {
+			owner = function.Params[0].Name
+		}
+		body, inputs, err := evt1ExpandGeneratedFields(*function.Body, info, owner, env)
 		if err != nil {
 			return err
 		}
@@ -203,7 +207,7 @@ func evt1MaterializeGeneratedDeclarations(module *Module) error {
 	return nil
 }
 
-func evt1ExpandGeneratedFields(block Block, info TypeInfo) (Block, []GeneratedInput, error) {
+func evt1ExpandGeneratedFields(block Block, info TypeInfo, owner string, env *semanticEnv) (Block, []GeneratedInput, error) {
 	var out Block
 	out.Span = block.Span
 	var inputs []GeneratedInput
@@ -217,6 +221,15 @@ func evt1ExpandGeneratedFields(block Block, info TypeInfo) (Block, []GeneratedIn
 			continue
 		}
 		query, ok := loop.Source.(*TemplateCallExpr)
+		if ok && query.Callee == "Cases" {
+			match, caseInputs, err := evt1ExpandGeneratedCases(loop, query, info, owner, env)
+			if err != nil {
+				return Block{}, nil, err
+			}
+			out.Statements = append(out.Statements, match)
+			inputs = append(inputs, caseInputs...)
+			continue
+		}
 		if !ok || query.Callee != "Fields" || loop.ItemType.Name != "FieldInfo" || !query.TypeArg.SameValueType(info.Type) || len(query.Args) > 1 {
 			return Block{}, nil, evt1Diagnostic("GENERATOR_FIELD_QUERY_INVALID", "generator foreach requires FieldInfo item in Fields<T>(attribute)", loop.Span)
 		}
@@ -229,7 +242,7 @@ func evt1ExpandGeneratedFields(block Block, info TypeInfo) (Block, []GeneratedIn
 			selector = name.Name
 		}
 		for _, field := range info.Fields {
-			if selector != "" && !evt1HasNamedAttribute(field.Attributes, selector) {
+			if selector != "" && !evt1GeneratedFieldMatches(env, selector, info.Type, field) {
 				continue
 			}
 			inputs = append(inputs, GeneratedInput{Name: field.Name, Type: field.Type, Span: field.Span})
@@ -249,6 +262,76 @@ func evt1ExpandGeneratedFields(block Block, info TypeInfo) (Block, []GeneratedIn
 		}
 	}
 	return out, inputs, nil
+}
+
+func evt1GeneratedFieldMatches(env *semanticEnv, selector string, owner Type, field FieldInfo) bool {
+	if concept, exists := env.concepts[selector]; exists {
+		arguments := []Type{field.Type}
+		if len(evt1ConceptParameters(concept)) == 2 {
+			arguments = append(arguments, owner)
+		}
+		if len(evt1ConceptParameters(concept)) < 1 || len(evt1ConceptParameters(concept)) > 2 {
+			return false
+		}
+		return checkConceptApplicationSatisfaction(env, selector, arguments, nil, field.Span) == nil
+	}
+	return evt1HasNamedAttribute(field.Attributes, selector)
+}
+
+func evt1ExpandGeneratedCases(loop *ForeachStmt, query *TemplateCallExpr, info TypeInfo, owner string, env *semanticEnv) (*MatchStmt, []GeneratedInput, error) {
+	if info.Kind != "enum" || owner == "" || loop.ItemType.Name != "EnumCaseInfo" || !query.TypeArg.SameValueType(info.Type) || len(query.Args) != 0 {
+		return nil, nil, evt1Diagnostic("GENERATOR_CASE_QUERY_INVALID", "generator foreach requires EnumCaseInfo item in Cases<T>() over an enum", loop.Span)
+	}
+	match := &MatchStmt{Subject: &NameExpr{Name: owner, Span: loop.Span}, Span: loop.Span}
+	var inputs []GeneratedInput
+	statementCount := 0
+	for caseIndex, enumCase := range info.EnumCases {
+		pattern := Pattern{EnumName: info.Type.Name, VariantName: enumCase.Name, Span: enumCase.Span}
+		for fieldIndex := range enumCase.Payload {
+			pattern.Bindings = append(pattern.Bindings, fmt.Sprintf("__generated_payload_%d_%d", caseIndex, fieldIndex))
+		}
+		arm := StatementArm{Pattern: pattern, Block: Block{Span: loop.Body.Span}, Span: enumCase.Span}
+		for _, statement := range loop.Body.Statements {
+			payloadLoop, ok := statement.(*ForeachStmt)
+			if !ok {
+				return nil, nil, evt1Diagnostic("GENERATOR_CASE_BODY_INVALID", "case generation requires a Payload<case>(attribute) field loop", statement.statementSpan())
+			}
+			payloadQuery, ok := payloadLoop.Source.(*TemplateCallExpr)
+			if !ok || payloadQuery.Callee != "Payload" || payloadLoop.ItemType.Name != "FieldInfo" || payloadQuery.TypeArg.Name != loop.ItemName || len(payloadQuery.Args) > 1 {
+				return nil, nil, evt1Diagnostic("GENERATOR_CASE_BODY_INVALID", "case body requires FieldInfo item in Payload<case>(attribute)", payloadLoop.Span)
+			}
+			selector := ""
+			if len(payloadQuery.Args) == 1 {
+				name, ok := payloadQuery.Args[0].(*NameExpr)
+				if !ok {
+					return nil, nil, evt1Diagnostic("GENERATOR_CASE_BODY_INVALID", "payload selector must name an attribute", payloadLoop.Span)
+				}
+				selector = name.Name
+			}
+			for fieldIndex, field := range enumCase.Payload {
+				if selector != "" && !evt1GeneratedFieldMatches(env, selector, info.Type, field) {
+					continue
+				}
+				inputs = append(inputs, GeneratedInput{Name: enumCase.Name + "." + field.Name, Type: field.Type, Span: field.Span})
+				for _, bodyStatement := range payloadLoop.Body.Statements {
+					if statementCount >= evt1GeneratedStatementLimit {
+						return nil, nil, evt1Diagnostic("GENERATOR_OUTPUT_LIMIT", "generated function exceeds statement limit", payloadLoop.Span)
+					}
+					cloned, err := evt1SubstituteStatement(bodyStatement, "__generated_payload_clone__", Type{})
+					if err != nil {
+						return nil, nil, evt1Diagnostic("GENERATOR_BODY_UNSUPPORTED", err.Error(), bodyStatement.statementSpan())
+					}
+					if err := evt1ReplaceGeneratedFieldStatement(cloned, payloadLoop.ItemName, pattern.Bindings[fieldIndex]); err != nil {
+						return nil, nil, err
+					}
+					arm.Block.Statements = append(arm.Block.Statements, cloned)
+					statementCount++
+				}
+			}
+		}
+		match.Arms = append(match.Arms, arm)
+	}
+	return match, inputs, nil
 }
 
 func evt1HasNamedAttribute(attributes []Attribute, name string) bool {
@@ -284,6 +367,15 @@ func evt1ReplaceGeneratedFieldStatement(statement Statement, placeholder, field 
 				}
 			}
 		}
+	case *ForeachStmt:
+		if err := evt1ReplaceGeneratedFieldExpr(s.Source, placeholder, field); err != nil {
+			return err
+		}
+		for _, item := range s.Body.Statements {
+			if err := evt1ReplaceGeneratedFieldStatement(item, placeholder, field); err != nil {
+				return err
+			}
+		}
 	case *ExprStmt:
 		return evt1ReplaceGeneratedFieldExpr(s.Value, placeholder, field)
 	case *AssignStmt:
@@ -307,7 +399,12 @@ func evt1ReplaceGeneratedFieldStatement(statement Statement, placeholder, field 
 
 func evt1ReplaceGeneratedFieldExpr(expression Expr, placeholder, field string) error {
 	switch e := expression.(type) {
-	case *NameExpr, *IntLiteral, *FloatLiteral, *StringLiteral, *BoolLiteral:
+	case *NameExpr:
+		if e.Name == placeholder {
+			e.Name = field
+		}
+		return nil
+	case *IntLiteral, *FloatLiteral, *StringLiteral, *BoolLiteral:
 		return nil
 	case *FieldExpr:
 		if err := evt1ReplaceGeneratedFieldExpr(e.Receiver, placeholder, field); err != nil {

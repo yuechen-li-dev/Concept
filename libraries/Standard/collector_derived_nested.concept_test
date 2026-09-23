@@ -1,0 +1,37 @@
+profile Core;
+import Standard.Collection.Core;
+import Standard.Collection.DeriveTrace;
+
+struct NestedLinks
+{
+    CollectorHandle<DerivedCompositeNode> edge;
+};
+
+struct DerivedCompositeNode
+{
+    NestedLinks links;
+    int value;
+};
+
+void TraceReferences(ref const NestedLinks links, ref TraceVisitor<DerivedCompositeNode> visitor)
+{
+    if (links.edge.index >= 0) { Visit<DerivedCompositeNode>(ref visitor, links.edge); }
+}
+
+derive DeriveTrace reflect<DerivedCompositeNode>;
+
+[[fact]]
+void DerivedCompositeDelegatesToOrdinaryNestedWitness()
+{
+    int<array>[2] worklist = [0, 0];
+    bool<array>[2] occupied = [true, true];
+    bool<array>[2] marked = [false, false];
+    int<array>[2] generation = [0, 0];
+    TraceVisitor<DerivedCompositeNode> visitor = TraceVisitor<DerivedCompositeNode>{
+        Span(worklist), Span(occupied), Span(marked), Span(generation), 0, 89, true
+    };
+    CollectorHandle<DerivedCompositeNode> child = CollectorHandle<DerivedCompositeNode>{1, 0, 89};
+    DerivedCompositeNode node = DerivedCompositeNode{NestedLinks{child}, 7};
+    TraceReferences(ref const node, ref visitor);
+    Assert.True(visitor.count == 1 and visitor.worklist[0] == 1, "generated composite delegates through nested witness");
+}

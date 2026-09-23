@@ -1,0 +1,27 @@
+profile Core;
+import Standard.Collection.Core;
+import Standard.Collection.DeriveTrace;
+
+table<2> DerivedTableNode
+{
+    [[trace_array]] CollectorHandle<DerivedTableNode> edges;
+};
+
+derive DeriveTrace reflect<DerivedTableNode>;
+
+[[fact]]
+void DerivedTableTracesColumnEdges()
+{
+    int<array>[2] worklist = [0, 0];
+    bool<array>[2] occupied = [true, true];
+    bool<array>[2] marked = [false, false];
+    int<array>[2] generation = [0, 0];
+    TraceVisitor<DerivedTableNode> visitor = TraceVisitor<DerivedTableNode>{
+        Span(worklist), Span(occupied), Span(marked), Span(generation), 0, 83, true
+    };
+    CollectorHandle<DerivedTableNode> none = CollectorHandle<DerivedTableNode>{-1, 0, 83};
+    CollectorHandle<DerivedTableNode> child = CollectorHandle<DerivedTableNode>{1, 0, 83};
+    DerivedTableNode node = DerivedTableNode{[none, child]};
+    TraceReferences(ref const node, ref visitor);
+    Assert.True(visitor.count == 1 and visitor.worklist[0] == 1, "table column edge is visited");
+}

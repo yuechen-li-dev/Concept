@@ -1,6 +1,6 @@
 # Standard.Collection
 
-R7g1 adds `Standard.Collection.DeriveTrace` for fields explicitly marked `[[trace]]` in a concrete struct. `derive DeriveTrace reflect<Node>;` emits an ordinary checked `TraceReferences` witness. The collector continues to accept handwritten witnesses; nested composite, array/table, and payload-enum derivation remain open.
+R7g1 adds `Standard.Collection.DeriveTrace`. `derive DeriveTrace reflect<Node>;` emits an ordinary checked `TraceReferences` witness. Direct handle fields are selected through the library's `TraceEdge<E,T>` concept; `[[trace_array]]` marks fixed handle arrays and table columns for ordinary iteration. A `TraceNested<F,T>` witness delegates from a nested composite field. `derive DeriveEnumTrace reflect<Choice>;` creates an exhaustive payload-enum match using the same edge concept. The collector continues to accept handwritten witnesses.
 
 `Standard.Collection.Core` ships a bounded homogeneous, non-moving mark/sweep
 collector as ordinary Concept library code. Concept has no mandatory garbage

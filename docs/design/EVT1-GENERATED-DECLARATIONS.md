@@ -13,7 +13,11 @@ derive DeriveValue reflect<Item>;
 
 The generator body is a normal function syntax tree retained as a template, not a runtime function. `derive` closes its type parameter with the reflected type and inserts a `FunctionDecl` into the current module before final name binding, type checking, effect and ownership analysis, MIR, and C lowering. The reflected target must be closed. Imported targets obey the existing type-level `[[reflect]]` permission. There is one generation pass; generated declarations cannot trigger another generation wave.
 
-The bounded field query `foreach (FieldInfo field in Fields<T>(attribute))` expands the loop body once per source-ordered field carrying that attribute. `item.field` inside that body becomes the field selector in the ordinary expression AST. Fields without the annotation are skipped. The generated body is then checked as ordinary Concept; the generator has no direct symbol-table or backend access. Invalid field queries and unsupported structural operations are diagnosed.
+The bounded field query `foreach (FieldInfo field in Fields<T>(selector))` expands its body in source field order. The selector may name an attribute or a one- or two-parameter concept. A concept selector tests the field type (and, for two parameters, the reflected owner type) through ordinary concept satisfaction; fields without a witness are skipped. `item.field` becomes an ordinary field expression. The body can contain ordinary nested iteration for fixed arrays and table columns.
+
+For payload enums, `foreach (EnumCaseInfo variant in Cases<T>())` with an inner `Payload<variant>(selector)` field loop constructs one exhaustive ordinary `MatchStmt`. Pattern bindings are created for every payload position, while the selected fields contribute ordinary statements to each arm. The normal match checker validates exhaustiveness and payload types. Malformed queries and unsupported structural operations are diagnosed.
+
+The generated body is checked as ordinary Concept; the generator has no direct symbol-table or backend access. One function is limited to 4,096 generated statements.
 
 Concept reflection generation is structural. It does not generate source text and reparse it. The existing structural type substitution and statement cloning code constructs the final declaration. Neither the generator nor `[[reflect]]` adds runtime reflection metadata.
 
@@ -23,4 +27,4 @@ Generated declarations are materialized during module compilation and transporte
 
 `concept generated <file> [symbol]` returns a structured view of the ordinary declaration AST and its origin. `concept explain <file> --generated <symbol>` emits a `concept-proof.v1` graph with generator, derivation site, reflected type, and selected field inputs. `concept explain <file> --concept 'Trace<Node>'` first checks the concept through ordinary required-operation lookup, then attributes its generated witness. Existing source-position `concept explain` behavior is unchanged.
 
-This is a bounded function and required-operation-witness path. It does not yet synthesize structs, enum declarations, arbitrary control flow from enum cases, or open generic declarations. Runtime reflection remains deferred.
+This is a bounded function and required-operation-witness path. It does not synthesize new structs, enum declarations, open generic declarations, or arbitrary multi-wave generation. Runtime reflection remains deferred.

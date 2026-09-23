@@ -1,0 +1,28 @@
+profile Core;
+import Standard.Collection.Core;
+import Standard.Collection.DeriveTrace;
+
+struct DerivedArrayNode
+{
+    [[trace_array]] CollectorHandle<DerivedArrayNode><array>[2] edges;
+};
+
+derive DeriveTrace reflect<DerivedArrayNode>;
+
+[[fact]]
+void DerivedArrayTracesSelectedEdges()
+{
+    Assert.Concept<NoAllocation>(TraceReferences, "generated array trace uses bounded iteration");
+    int<array>[3] worklist = [0, 0, 0];
+    bool<array>[3] occupied = [true, true, true];
+    bool<array>[3] marked = [false, false, false];
+    int<array>[3] generation = [0, 0, 0];
+    TraceVisitor<DerivedArrayNode> visitor = TraceVisitor<DerivedArrayNode>{
+        Span(worklist), Span(occupied), Span(marked), Span(generation), 0, 79, true
+    };
+    CollectorHandle<DerivedArrayNode> none = CollectorHandle<DerivedArrayNode>{-1, 0, 79};
+    CollectorHandle<DerivedArrayNode> child = CollectorHandle<DerivedArrayNode>{2, 0, 79};
+    DerivedArrayNode node = DerivedArrayNode{[none, child]};
+    TraceReferences(ref const node, ref visitor);
+    Assert.True(visitor.count == 1 and visitor.worklist[0] == 2, "array edge is visited");
+}

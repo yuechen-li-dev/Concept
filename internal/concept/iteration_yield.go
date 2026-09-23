@@ -35,7 +35,12 @@ func validateForeachStmt(env *semanticEnv, scope *evt1Scope, stmt *ForeachStmt, 
 		stmt.SourceKind, stmt.IteratorType, element = "custom", iterator, customElement
 	}
 	stmt.ElementType = element
-	itemValue := evt1CanonicalType(env, stmt.ItemType.valueType())
+	resolvedItem, err := evt1ResolveType(env, scope, stmt.ItemType)
+	if err != nil {
+		return err
+	}
+	stmt.ItemType = evt1CanonicalType(env, resolvedItem)
+	itemValue := stmt.ItemType.valueType()
 	if !itemValue.Equal(element.valueType()) {
 		return evt1Diagnostic("FOREACH_ITEM_TYPE_MISMATCH", fmt.Sprintf("foreach item type %s does not match iterator element %s", stmt.ItemType.String(), element.String()), stmt.Span)
 	}

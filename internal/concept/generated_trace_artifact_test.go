@@ -12,8 +12,8 @@ func TestGeneratedTraceAcrossArtifactOnlyModules(t *testing.T) {
 		"Standard/Collection/DeriveTrace.concept", standardMemorySource(t, "Standard/Collection/DeriveTrace.concept"), artifacts)
 	sourceA := `module TraceInput; profile Core; import Standard.Collection.Core;
 [[reflect]] struct Node {
-    [[trace]] CollectorHandle<Node> left;
-    [[trace]] CollectorHandle<Node> right;
+    CollectorHandle<Node> left;
+    CollectorHandle<Node> right;
 };
 `
 	a, err := CompileSemanticModule("TraceInput.concept", sourceA, artifacts)

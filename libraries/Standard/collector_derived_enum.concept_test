@@ -1,0 +1,36 @@
+profile Core;
+import Standard.Collection.Core;
+import Standard.Collection.DeriveTrace;
+
+enum DerivedChoice
+{
+    Empty,
+    Link(CollectorHandle<DerivedChoice> next),
+    Pair(CollectorHandle<DerivedChoice> left, int ignored, CollectorHandle<DerivedChoice> right),
+}
+
+derive DeriveEnumTrace reflect<DerivedChoice>;
+
+[[fact]]
+void DerivedPayloadEnumTracesActiveEdge()
+{
+    Assert.Concept<NoAllocation>(TraceReferences, "generated enum trace uses bounded visitor operations");
+    int<array>[3] worklist = [0, 0, 0];
+    bool<array>[3] occupied = [true, true, true];
+    bool<array>[3] marked = [false, false, false];
+    int<array>[3] generation = [0, 0, 0];
+    TraceVisitor<DerivedChoice> visitor = TraceVisitor<DerivedChoice>{
+        Span(worklist), Span(occupied), Span(marked), Span(generation), 0, 73, true
+    };
+    DerivedChoice empty = DerivedChoice::Empty;
+    TraceReferences(ref const empty, ref visitor);
+    Assert.True(visitor.count == 0, "empty case has no edge");
+    CollectorHandle<DerivedChoice> first = CollectorHandle<DerivedChoice>{1, 0, 73};
+    DerivedChoice link = DerivedChoice::Link(first);
+    TraceReferences(ref const link, ref visitor);
+    Assert.True(visitor.count == 1 and visitor.worklist[0] == 1, "active payload edge is visited");
+    CollectorHandle<DerivedChoice> second = CollectorHandle<DerivedChoice>{2, 0, 73};
+    DerivedChoice pair = DerivedChoice::Pair(first, 99, second);
+    TraceReferences(ref const pair, ref visitor);
+    Assert.True(visitor.count == 2 and visitor.worklist[1] == 2, "selected payload fields are visited in order");
+}

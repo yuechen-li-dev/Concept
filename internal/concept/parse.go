@@ -2242,6 +2242,13 @@ func (p *parser) parseEnumDecl() (EnumDecl, error) {
 			p.next()
 			if p.peekLexeme() != ")" {
 				for {
+					var payloadAttributes []Attribute
+					if p.peekLexeme() == "[" && p.peekLexemeN(1) == "[" {
+						payloadAttributes, err = p.parseAttributes()
+						if err != nil {
+							return EnumDecl{}, err
+						}
+					}
 					fieldType, err := p.parseType("")
 					if err != nil {
 						return EnumDecl{}, err
@@ -2250,7 +2257,7 @@ func (p *parser) parseEnumDecl() (EnumDecl, error) {
 					if err != nil {
 						return EnumDecl{}, err
 					}
-					payload = append(payload, Field{Type: fieldType, Name: fieldName.Lexeme, Span: fieldName.Span})
+					payload = append(payload, Field{Type: fieldType, Name: fieldName.Lexeme, Attributes: payloadAttributes, Span: fieldName.Span})
 					if p.peekLexeme() != "," {
 						break
 					}

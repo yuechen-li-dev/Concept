@@ -6,8 +6,8 @@ import Standard.Memory.Pool;
 struct DerivedNode
 {
     int value;
-    [[trace]] CollectorHandle<DerivedNode> left;
-    [[trace]] CollectorHandle<DerivedNode> right;
+    CollectorHandle<DerivedNode> left;
+    CollectorHandle<DerivedNode> right;
 };
 
 derive DeriveTrace reflect<DerivedNode>;

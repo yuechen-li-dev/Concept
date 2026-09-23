@@ -6787,9 +6787,6 @@ func evt1LookupRequiredOperation(env *semanticEnv, required OperationRequirement
 			candidates = append(candidates, fn)
 		}
 	}
-	if len(candidates) == 0 {
-		return FunctionDecl{}, evt1Diagnostic("CV4153", fmt.Sprintf("%s is missing required operation %s", prefix, evt1Signature(required.ReturnType, required.Name, required.Params)), span)
-	}
 	var exact []FunctionDecl
 	for _, fn := range candidates {
 		if len(fn.Params) != len(required.Params) {
@@ -6823,6 +6820,12 @@ func evt1LookupRequiredOperation(env *semanticEnv, required OperationRequirement
 	if len(exact) > 1 {
 		return FunctionDecl{}, evt1Diagnostic("CV4182", fmt.Sprintf("%s has ambiguous required operation %s", prefix, evt1Signature(required.ReturnType, required.Name, required.Params)), span)
 	}
+	if witness, ok := evt1ClosedTemplateRequiredWitness(env, required); ok {
+		return witness, nil
+	}
+	if len(candidates) == 0 {
+		return FunctionDecl{}, evt1Diagnostic("CV4153", fmt.Sprintf("%s is missing required operation %s", prefix, evt1Signature(required.ReturnType, required.Name, required.Params)), span)
+	}
 	for _, fn := range candidates {
 		if len(fn.Params) == len(required.Params) {
 			code := "CV4154"
@@ -6836,6 +6839,74 @@ func evt1LookupRequiredOperation(env *semanticEnv, required OperationRequirement
 		}
 	}
 	return FunctionDecl{}, evt1Diagnostic("CV4153", fmt.Sprintf("%s is missing required operation %s", prefix, evt1Signature(required.ReturnType, required.Name, required.Params)), span)
+}
+
+// A closed requirement may be witnessed by an ordinary unconstrained generic
+// operation when its type argument is uniquely determined by the signature.
+func evt1ClosedTemplateRequiredWitness(env *semanticEnv, required OperationRequirement) (FunctionDecl, bool) {
+	template, ok := env.templates[required.Name]
+	if !ok || template.Constraint.ConceptName != "" || len(template.Params) != len(required.Params) {
+		return FunctionDecl{}, false
+	}
+	parameters := template.Parameters
+	if len(parameters) == 0 {
+		parameters = []GenericParameter{{Name: template.TypeParam, Kind: "type"}}
+	}
+	if len(parameters) != 1 || parameters[0].Kind != "type" {
+		return FunctionDecl{}, false
+	}
+	var inferred Type
+	for i, param := range template.Params {
+		if !evt1InferRequiredTemplateType(param.Type, required.Params[i].Type, parameters[0].Name, &inferred) {
+			return FunctionDecl{}, false
+		}
+	}
+	if inferred.Name == "" {
+		return FunctionDecl{}, false
+	}
+	instance, err := evt1InstantiateTemplateFunction(template, inferred)
+	if err != nil {
+		return FunctionDecl{}, false
+	}
+	actualReturn, err := evt1ResolveType(env, nil, instance.ReturnType)
+	if err != nil {
+		return FunctionDecl{}, false
+	}
+	expectedReturn, err := evt1ResolveType(env, nil, required.ReturnType)
+	if err != nil || !evt1RequiredOperationTypeEqual(env, actualReturn, expectedReturn) {
+		return FunctionDecl{}, false
+	}
+	for i := range instance.Params {
+		actual, actualErr := evt1ResolveType(env, nil, instance.Params[i].Type)
+		expected, expectedErr := evt1ResolveType(env, nil, required.Params[i].Type)
+		if actualErr != nil || expectedErr != nil || !evt1RequiredOperationTypeEqual(env, actual, expected) {
+			return FunctionDecl{}, false
+		}
+	}
+	return instance, true
+}
+
+func evt1InferRequiredTemplateType(pattern, target Type, parameter string, inferred *Type) bool {
+	if pattern.Name == parameter && len(pattern.TypeArgs) == 0 && pattern.PointerTo == nil && pattern.ArrayElem == nil {
+		candidate := target.valueType()
+		if inferred.Name == "" {
+			*inferred = candidate
+			return true
+		}
+		return inferred.SameValueType(candidate)
+	}
+	if pattern.Name != target.Name || len(pattern.TypeArgs) != len(target.TypeArgs) {
+		return true
+	}
+	for i := range pattern.TypeArgs {
+		if !evt1InferRequiredTemplateType(pattern.TypeArgs[i], target.TypeArgs[i], parameter, inferred) {
+			return false
+		}
+	}
+	if pattern.ArrayElem != nil && target.ArrayElem != nil {
+		return evt1InferRequiredTemplateType(*pattern.ArrayElem, *target.ArrayElem, parameter, inferred)
+	}
+	return true
 }
 
 func evt1RequiredOperationTypeEqual(env *semanticEnv, left Type, right Type) bool {

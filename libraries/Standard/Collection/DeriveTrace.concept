@@ -2,16 +2,47 @@ module Standard.Collection.DeriveTrace;
 profile Core;
 import Standard.Collection.Core;
 
+concept TraceEdge<E, T>
+{
+    requires void Visit(ref TraceVisitor<T> visitor, E edge);
+}
+
+concept TraceNested<F, T>
+{
+    requires void TraceReferences(ref const F value, ref TraceVisitor<T> visitor);
+}
+
 // A field opts into tracing with [[trace]]. The generated operation remains
 // ordinary Concept and is checked after structural field expansion.
 generator <typename T> DeriveTrace
 void TraceReferences(ref const T value, ref TraceVisitor<T> visitor)
 {
-    foreach (FieldInfo field in Fields<T>(trace))
+    foreach (FieldInfo field in Fields<T>(TraceEdge))
     {
         if (value.field.index >= 0)
         {
             Visit<T>(ref visitor, value.field);
+        }
+    }
+    foreach (FieldInfo field in Fields<T>(trace_array))
+    {
+        foreach (CollectorHandle<T> edge in value.field)
+        {
+            if (edge.index >= 0) { Visit<T>(ref visitor, edge); }
+        }
+    }
+    foreach (FieldInfo field in Fields<T>(TraceNested))
+    {
+        TraceReferences(ref const value.field, ref visitor);
+    }
+}
+
+generator <typename T> DeriveEnumTrace
+void TraceReferences(ref const T value, ref TraceVisitor<T> visitor)
+{
+    foreach (EnumCaseInfo variant in Cases<T>()) {
+        foreach (FieldInfo field in Payload<variant>(TraceEdge)) {
+            if (field.index >= 0) { Visit<T>(ref visitor, field); }
         }
     }
 }
