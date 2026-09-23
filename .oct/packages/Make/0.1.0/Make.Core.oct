@@ -1,0 +1,206 @@
+package Make
+
+record ProcessResult {
+    ExitCode: Int
+    Stdout: String
+    Stderr: String
+}
+
+record EnvValue {
+    Name: String
+    Present: Bool
+    Value: String
+}
+
+enum Staleness {
+    Timestamp
+    Always
+}
+
+enum CAbiLibraryKind {
+    Static
+    Shared
+}
+
+enum CAbiCallingConvention {
+    C
+    Stdcall
+}
+
+record Config {
+    Profile: String
+    StateDir: String
+    Trace: Bool
+    Staleness: Staleness
+}
+
+record CAbiHeader {
+    Path: String
+    IncludeDir: String
+}
+
+record CAbiLibrary {
+    Name: String
+    Kind: CAbiLibraryKind
+    Headers: CAbiHeader[]
+    IncludeDirs: String[]
+    LibraryPath: String
+    LinkName: String
+    LinkDirs: String[]
+    RuntimeFiles: String[]
+    ImportLibraryPath: String
+    CallingConvention: CAbiCallingConvention
+    Defines: String[]
+}
+
+record CAbiConsumer {
+    IncludeDirs: String[]
+    Defines: String[]
+    LinkDirs: String[]
+    LinkNames: String[]
+    LibraryPaths: String[]
+    LinkArgs: String[]
+    RuntimeFiles: String[]
+}
+
+fn DefaultConfig() -> Config {
+    return Config {
+        Profile: "Default"
+        StateDir: ".octmake"
+        Trace: false
+        Staleness: Staleness.Timestamp
+    }
+}
+
+record Plan {
+    Default: String
+    Config: Config
+    CommandTargets: CommandTarget[]
+    FunctionTargets: FunctionTarget[]
+    FlowTargets: FlowTarget[]
+    PhonyTargets: PhonyTarget[]
+}
+
+// NativePlan is intentionally separate from Plan so adding the production
+// native surface does not make older Make.Plan literals source-incompatible.
+// The direct backend discovers an optional NativePlan() function beside Plan().
+enum NativeLanguage { C Cpp }
+enum NativeKind { ObjectSet SharedLibrary Executable }
+enum NativeProfile { Debug Release }
+
+record NativeTarget {
+    Name: String
+    Variant: String
+    Kind: NativeKind
+    Language: NativeLanguage
+    Sources: String[]
+    Manifest: String
+    ManifestSection: String
+    Inputs: String[]
+    Deps: String[]
+    IncludeDirs: String[]
+    Defines: String[]
+    ProjectRootStringDefines: String[]
+    Standard: String
+    Profile: NativeProfile
+    LinkLibraries: String[]
+    Output: String
+    InstallCopies: String[]
+}
+
+record NativePlan {
+    Targets: NativeTarget[]
+}
+
+record CommandTarget {
+    Name: String
+    Inputs: String[]
+    Outputs: String[]
+    Deps: String[]
+    Program: String
+    Args: String[]
+    Cwd: String
+    Env: String[]
+}
+
+record FunctionTarget {
+    Name: String
+    Inputs: String[]
+    Outputs: String[]
+    Deps: String[]
+    Function: String
+}
+
+record FlowTarget {
+    Name: String
+    Inputs: String[]
+    Outputs: String[]
+    Deps: String[]
+    Flow: String
+    MaxSteps: Int
+}
+
+record PhonyTarget {
+    Name: String
+    Deps: String[]
+}
+
+fn Exec(program: String, args: String[]) -> ProcessResult ! Error {
+    return MakeExecRaw(program, args)?
+}
+
+fn ExecIn(cwd: String, program: String, args: String[]) -> ProcessResult ! Error {
+    return MakeExecInRaw(cwd, program, args)?
+}
+
+fn Tool(name: String) -> String ! Error {
+    return MakeToolRaw(name)?
+}
+
+fn Env(name: String) -> EnvValue ! Error {
+    return MakeEnvRaw(name)?
+}
+
+fn Exists(path: String) -> Bool {
+    return MakeExistsRaw(path)
+}
+
+fn IsFile(path: String) -> Bool {
+    return MakeIsFileRaw(path)
+}
+
+fn IsDir(path: String) -> Bool {
+    return MakeIsDirRaw(path)
+}
+
+fn MkdirAll(path: String) -> Int ! Error {
+    return MakeMkdirAllRaw(path)?
+}
+
+fn Remove(path: String) -> Int ! Error {
+    return MakeRemoveRaw(path)?
+}
+
+fn Copy(src: String, dst: String) -> Int ! Error {
+    return MakeCopyRaw(src, dst)?
+}
+
+fn ReadText(path: String) -> String ! Error {
+    return MakeReadTextRaw(path)?
+}
+
+fn WriteText(path: String, text: String) -> Int ! Error {
+    return MakeWriteTextRaw(path, text)?
+}
+
+fn Glob(pattern: String) -> String[] ! Error {
+    return MakeGlobRaw(pattern)?
+}
+
+fn ModifiedTime(path: String) -> Int ! Error {
+    return MakeModifiedTimeRaw(path)?
+}
+
+fn HashFile(path: String) -> String ! Error {
+    return MakeHashFileRaw(path)?
+}

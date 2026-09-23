@@ -1,0 +1,18 @@
+package Registries
+
+record RegistryConfig {
+    Registries: RegistrySource[]
+}
+
+record RegistrySource {
+    Name: String
+    Path: String
+}
+
+fn Registries() -> RegistryConfig {
+    return RegistryConfig {
+        Registries: [
+            RegistrySource { Name: "local" Path: "C:\\Users\\yuech\\source\\repos\\oct\\Registry" }
+        ]
+    }
+}

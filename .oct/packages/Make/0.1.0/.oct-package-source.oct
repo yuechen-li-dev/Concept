@@ -1,0 +1,27 @@
+package PackageSource
+
+record PackageSource {
+    Name: String
+    Version: String
+    Registry: String
+    RegistryPath: String
+    SourceKind: String
+    Source: String
+    Ref: String
+    ResolvedCommit: String
+    Path: String
+}
+
+fn PackageSource() -> PackageSource {
+    return PackageSource {
+        Name: "Make"
+        Version: "0.1.0"
+        Registry: "local"
+        RegistryPath: "C:\\Users\\yuech\\source\\repos\\oct\\Registry"
+        SourceKind: "local"
+        Source: ".."
+        Ref: ""
+        ResolvedCommit: ""
+        Path: "Libraries/Make"
+    }
+}
