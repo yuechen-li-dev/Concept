@@ -1,5 +1,7 @@
 # Generic runtime types
 
+R7f1: An open generic body can invoke a generic function or a generic operation required by its concept. Requirement-local type parameters close separately from the caller's parameters. A local fixed array may use a direct non-type generic value as its extent; each closed instance emits a fixed C11 array. See [generic library closure](../design/EVT1-GENERIC-LIBRARY-CLOSURE.md).
+
 A closed generic application must close semantic access subjects as well as
 types. Imported open method access summaries preserve structural type and
 value arguments; concrete applications receive independent entries. Bound

@@ -25,6 +25,34 @@ func evt1StorageHasRuntimeShape(t Type) bool {
 	return false
 }
 
+// A symbolic extent in an open template denotes fixed storage after value
+// substitution. Ordinary runtime extents still require explicit storage.
+func evt1StorageShapeDependsOnlyOnGenericValues(t Type, params []GenericParameter) bool {
+	if !evt1StorageHasRuntimeShape(t) {
+		return false
+	}
+	for _, dimension := range t.Shape {
+		if !dimension.Runtime {
+			continue
+		}
+		name, ok := dimension.Expr.(*NameExpr)
+		if !ok {
+			return false
+		}
+		found := false
+		for _, param := range params {
+			if param.Kind == "value" && param.Name == name.Name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
 func evt1StorageElementCount(t Type) int {
 	if t.ArrayElem == nil || evt1StorageHasRuntimeShape(t) {
 		return 0
@@ -220,6 +248,16 @@ func evt1CollectStorageTypes(module Module, env *semanticEnv) []Type {
 		}
 	}
 	for _, fn := range module.Functions {
+		add(fn.ReturnType)
+		for _, param := range fn.Params {
+			add(param.Type)
+		}
+		if fn.Body != nil {
+			visitBlock(*fn.Body)
+		}
+	}
+	for _, instance := range env.templateInstances {
+		fn := instance.Function
 		add(fn.ReturnType)
 		for _, param := range fn.Params {
 			add(param.Type)

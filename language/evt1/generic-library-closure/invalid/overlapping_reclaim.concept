@@ -1,0 +1,14 @@
+profile Core;
+
+struct Store { int value; };
+ref struct Lease { ref const Store owner; };
+Lease Borrow(ref const Store store) { return Lease{ref const store}; }
+void Reclaim(owned Store store) { }
+
+int Main()
+{
+    owned Store store = Store{7};
+    Lease lease = Borrow(ref const store);
+    Reclaim(move store);
+    return lease.owner.value;
+}

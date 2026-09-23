@@ -376,10 +376,11 @@ type ConceptRequirement interface {
 }
 
 type OperationRequirement struct {
-	ReturnType Type    `json:"return_type"`
-	Name       string  `json:"name"`
-	Params     []Param `json:"params,omitempty"`
-	Span       Span    `json:"span"`
+	ReturnType    Type               `json:"return_type"`
+	Name          string             `json:"name"`
+	Params        []Param            `json:"params,omitempty"`
+	GenericParams []GenericParameter `json:"generic_params,omitempty"`
+	Span          Span               `json:"span"`
 }
 
 func (*OperationRequirement) evt1ConceptRequirement() {}
@@ -1789,6 +1790,8 @@ type semanticEnv struct {
 	copyableCache           map[string]bool
 	templateInfos           map[string]*evt1TemplateInfo
 	templateInstances       map[string]*evt1TemplateInstance
+	templateInstantiating   map[string]bool
+	templateDepth           int
 	semanticProofs          []MIRSemanticProof
 	proofGraphs             []ProofGraph
 	resultProvenance        map[string]evt1ResultProvenanceSummary
@@ -1864,6 +1867,7 @@ func newSemanticEnv(profile *ProfileDefinition) *semanticEnv {
 		copyableCache:           map[string]bool{},
 		templateInfos:           map[string]*evt1TemplateInfo{},
 		templateInstances:       map[string]*evt1TemplateInstance{},
+		templateInstantiating:   map[string]bool{},
 		semanticProofs:          nil,
 		resultProvenance:        map[string]evt1ResultProvenanceSummary{},
 		resultFactSummaries:     map[string]SemanticValueFactSummary{},

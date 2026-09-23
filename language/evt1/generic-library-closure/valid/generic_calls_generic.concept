@@ -1,0 +1,18 @@
+profile Core;
+
+template <typename U>
+U Identity(U value)
+{
+    return value;
+}
+
+template <typename T>
+T Forward(T value)
+{
+    return Identity<T>(value);
+}
+
+int Main()
+{
+    return Forward<int>(42);
+}

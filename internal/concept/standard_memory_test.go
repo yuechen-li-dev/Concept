@@ -108,8 +108,11 @@ int Main()
 {
     PoolAllocator pool = MakePoolAllocator(SizeOf<int>(), AlignOf<int>());
     owned Allocation<int, PoolAllocator> first = Allocate<int, PoolAllocator>(ref pool, 17)!;
-    ref int firstValue = AllocationValue<int, PoolAllocator>(ref first);
-    int observed = firstValue;
+    int observed = 0;
+    {
+        ref int firstValue = AllocationValue<int, PoolAllocator>(ref first);
+        observed = firstValue;
+    }
     Drop<int, PoolAllocator>(move first);
     owned Allocation<int, PoolAllocator> second = Allocate<int, PoolAllocator>(ref pool, 25)!;
     ref int secondValue = AllocationValue<int, PoolAllocator>(ref second);

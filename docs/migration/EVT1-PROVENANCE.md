@@ -1,5 +1,7 @@
 # Concept EVT1 provenance
 
+R7f1 tracks lexical borrow sources through local reference and reference-struct values to reject moving an `owned` resource into reclaim while borrowed. This covers direct and imported APIs; destructive `ref` effects and suspension remain outside the proved boundary. See [scoped reclamation authority](../design/EVT1-SCOPED-RECLAMATION-AUTHORITY.md).
+
 Cutover date: 2026-09-07
 
 ## Source records

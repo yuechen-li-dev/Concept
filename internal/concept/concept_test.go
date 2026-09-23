@@ -378,11 +378,6 @@ func TestEVT1TemplateDiagnosticsAreStable(t *testing.T) {
 			code: "CV4173",
 		},
 		{
-			name: "nested template call rejected",
-			src:  "profile Vulkan;\nstruct BufferRange { int offset; };\nconcept Resource<T> { requires int Measure(borrow const T value); }\nint Measure(borrow const BufferRange value);\nrequires Resource<BufferRange>;\ntemplate <typename T>\nrequires Resource<T>\nint Score(borrow const T value) { return Measure(value); }\ntemplate <typename T>\nrequires Resource<T>\nint Forward(borrow const T value) { return Score<T>(value); }\n",
-			code: "CV4174",
-		},
-		{
 			name: "dependent operator rejected",
 			src:  "profile Vulkan;\nstruct BufferRange { int offset; };\nconcept Resource<T> { requires int Measure(borrow const T value); }\nint Measure(borrow const BufferRange value);\ntemplate <typename T>\nrequires Resource<T>\nbool Larger(borrow const T left, borrow const T right) { return left > right; }\n",
 			code: "CV4175",
@@ -1127,7 +1122,7 @@ func TestEVT1TemplateInstancesAreDeterministicAndDeduplicated(t *testing.T) {
 		"static void concept_template_destroy_resource__buffer_range(",
 		"static void concept_template_destroy_resource__pipeline_state(",
 	} {
-		if strings.Count(body, needle) != 1 {
+		if strings.Count(body, needle) != 2 { // one forward declaration and one definition
 			t.Fatalf("expected one instance for %q\n%s", needle, body)
 		}
 	}

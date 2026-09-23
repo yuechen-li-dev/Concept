@@ -2199,6 +2199,42 @@ func (p *parser) parseConceptRequirement(typeParam string) (ConceptRequirement, 
 	if p.peekLexeme() == "" {
 		return nil, evt1Diagnostic("CV4142", "expected concept requirement", start.Span)
 	}
+	var operationParams []GenericParameter
+	if p.peekLexeme() == "template" {
+		p.next()
+		if _, err := p.expect("<"); err != nil {
+			return nil, err
+		}
+		old := p.templateTypeParams
+		local := make(map[string]bool, len(old))
+		for name, known := range old {
+			local[name] = known
+		}
+		for {
+			if p.peekLexeme() != "typename" && p.peekLexeme() != "class" {
+				return nil, evt1Diagnostic("GENERIC_PARAMETER_INVALID", "required operation parameter must be a type", start.Span)
+			}
+			p.next()
+			name, parseErr := p.expectIdentifier("GENERIC_PARAMETER_INVALID", "expected required operation type parameter")
+			if parseErr != nil {
+				return nil, parseErr
+			}
+			if local[name.Lexeme] {
+				return nil, evt1Diagnostic("GENERIC_PARAMETER_INVALID", "required operation type parameter shadows another parameter", name.Span)
+			}
+			local[name.Lexeme] = true
+			operationParams = append(operationParams, GenericParameter{Name: name.Lexeme, Kind: "type", Span: name.Span})
+			if p.peekLexeme() != "," {
+				break
+			}
+			p.next()
+		}
+		if _, err := p.expect(">"); err != nil {
+			return nil, err
+		}
+		p.templateTypeParams = local
+		defer func() { p.templateTypeParams = old }()
+	}
 	async := false
 	if p.peekLexeme() == "async" || p.peekLexeme() == "asynchronous" {
 		p.next()
@@ -2329,7 +2365,7 @@ func (p *parser) parseConceptRequirement(typeParam string) (ConceptRequirement, 
 	if _, err := p.expect("("); err != nil {
 		return nil, err
 	}
-	req := &OperationRequirement{ReturnType: retType, Name: nameTok.Lexeme, Span: start.Span}
+	req := &OperationRequirement{ReturnType: retType, Name: nameTok.Lexeme, GenericParams: operationParams, Span: start.Span}
 	if p.peekLexeme() != ")" {
 		for {
 			paramType, err := p.parseType(typeParam)

@@ -1,0 +1,30 @@
+profile Core;
+
+struct Pair { int left; int right; };
+struct Visitor { int total; };
+
+concept Visit<T, V>
+{
+    requires void VisitEdges(ref const T value, ref V visitor);
+}
+
+void VisitEdges(ref const Pair value, ref Visitor visitor)
+{
+    visitor.total = visitor.total + value.left + value.right;
+}
+requires Visit<Pair, Visitor>;
+
+template <typename T, typename V>
+requires Visit<T, V>
+void Apply(ref const T value, ref V visitor)
+{
+    VisitEdges(ref const value, ref visitor);
+}
+
+int Main()
+{
+    Pair pair = Pair{2, 3};
+    Visitor visitor = Visitor{0};
+    Apply<Pair, Visitor>(ref const pair, ref visitor);
+    return visitor.total;
+}

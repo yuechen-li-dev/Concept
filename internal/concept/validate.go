@@ -76,7 +76,7 @@ type evt1ValueBinding struct {
 	valueFacts       *SemanticValueFacts
 	source           Expr
 	declarationSpan  Span
-	objectBorrow     string
+	objectBorrows    []string
 }
 
 type evt1StorageState string
@@ -234,13 +234,20 @@ func (s *evt1Scope) setStorageInitializedFact(path evt1AccessPath, certainty Sem
 	return false
 }
 
+func evt1BorrowPathsOverlap(left, right string) bool {
+	return left == right || strings.HasPrefix(left, right+".") || strings.HasPrefix(right, left+".")
+}
+
 func (s *evt1Scope) invalidateObjectBorrows(path evt1AccessPath) {
 	key := evt1StoragePathKey(append([]string{path.Root}, path.Fields...))
 	for current := s; current != nil; current = current.parent {
 		for name, binding := range current.values {
-			if binding.objectBorrow == key {
-				binding.state = evt1StorageObjectEnded
-				current.values[name] = binding
+			for _, borrowed := range binding.objectBorrows {
+				if evt1BorrowPathsOverlap(borrowed, key) {
+					binding.state = evt1StorageObjectEnded
+					current.values[name] = binding
+					break
+				}
 			}
 		}
 	}
@@ -250,42 +257,94 @@ func (s *evt1Scope) hasObjectBorrow(path evt1AccessPath) bool {
 	key := evt1StoragePathKey(append([]string{path.Root}, path.Fields...))
 	for current := s; current != nil; current = current.parent {
 		for _, binding := range current.values {
-			if binding.objectBorrow == key && binding.state == evt1StorageInitialized {
-				return true
+			if binding.state == evt1StorageInitialized {
+				for _, borrowed := range binding.objectBorrows {
+					if evt1BorrowPathsOverlap(borrowed, key) {
+						return true
+					}
+				}
 			}
 		}
 	}
 	return false
 }
 
-func evt1ObjectBorrowForExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *evt1TemplateInfo) string {
+func evt1ObjectBorrowForExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *evt1TemplateInfo) []string {
 	if paren, ok := expr.(*ParenExpr); ok {
 		return evt1ObjectBorrowForExpr(env, scope, paren.Value, templateInfo)
 	}
+	if moved, ok := expr.(*MoveExpr); ok {
+		return evt1ObjectBorrowForExpr(env, scope, moved.Value, templateInfo)
+	}
 	if name, ok := expr.(*NameExpr); ok {
 		if binding, found := scope.lookup(name.Name); found {
-			return binding.objectBorrow
+			return binding.objectBorrows
 		}
+	}
+	if referenced, ok := expr.(*RefExpr); ok {
+		if place, err := validateAssignable(env, scope, referenced.Value, templateInfo); err == nil {
+			return []string{evt1StoragePathKey(append([]string{place.path.Root}, place.path.Fields...))}
+		}
+	}
+	if constructed, ok := expr.(*StructConstructExpr); ok {
+		var sources []string
+		for _, argument := range constructed.Args {
+			sources = append(sources, evt1ObjectBorrowForExpr(env, scope, argument, templateInfo)...)
+		}
+		return sources
+	}
+	if templated, ok := expr.(*TemplateCallExpr); ok {
+		var sources []string
+		for _, argument := range templated.Args {
+			sources = append(sources, evt1ObjectBorrowForExpr(env, scope, argument, templateInfo)...)
+		}
+		return sources
 	}
 	call, ok := expr.(*CallExpr)
 	if !ok {
-		return ""
+		return nil
 	}
 	if !call.Member && (call.Callee == "Value" || call.Callee == "Initialize") && len(call.Args) != 0 {
 		if place, err := validateAssignable(env, scope, call.Args[0], templateInfo); err == nil {
-			return evt1StoragePathKey(append([]string{place.path.Root}, place.path.Fields...))
+			return []string{evt1StoragePathKey(append([]string{place.path.Root}, place.path.Fields...))}
 		}
 	}
 	if call.Member && call.Receiver != nil {
 		if receiver, err := validateAssignable(env, scope, call.Receiver, templateInfo); err == nil {
 			for _, fn := range evt1MethodCandidates(env, receiver.t.valueType().Name, call.Callee) {
 				if fields, required := evt1InitializedStorageRequirement(fn); required {
-					return evt1StoragePathKey(append(append([]string{receiver.path.Root}, receiver.path.Fields...), fields...))
+					return []string{evt1StoragePathKey(append(append([]string{receiver.path.Root}, receiver.path.Fields...), fields...))}
 				}
 			}
 		}
 	}
-	return ""
+	// An ordinary reference-returning call may derive its result from any
+	// explicit reference operand. Retain every source, including an implicit
+	// method receiver, so imported calls cannot launder borrow authority.
+	var sources []string
+	seen := map[string]bool{}
+	add := func(argument Expr) {
+		for _, source := range evt1ObjectBorrowForExpr(env, scope, argument, templateInfo) {
+			if !seen[source] {
+				seen[source] = true
+				sources = append(sources, source)
+			}
+		}
+	}
+	if call.Member && call.Receiver != nil {
+		add(call.Receiver)
+		if place, err := validateAssignable(env, scope, call.Receiver, templateInfo); err == nil {
+			path := evt1StoragePathKey(append([]string{place.path.Root}, place.path.Fields...))
+			if !seen[path] {
+				seen[path] = true
+				sources = append(sources, path)
+			}
+		}
+	}
+	for _, argument := range call.Args {
+		add(argument)
+	}
+	return sources
 }
 
 func evt1StorageStatesFromFacts(t Type, facts *SemanticValueFacts, prefix []string, out map[string]evt1StorageState, env *semanticEnv) {
@@ -336,6 +395,17 @@ func (s *evt1Scope) setProvenance(name string, provenance evt1LifetimeProvenance
 		if binding, ok := scope.values[name]; ok {
 			binding.provenance = provenance
 			scope.values[name] = binding
+			return true
+		}
+	}
+	return false
+}
+
+func (s *evt1Scope) setObjectBorrows(name string, sources []string) bool {
+	for current := s; current != nil; current = current.parent {
+		if binding, ok := current.values[name]; ok {
+			binding.objectBorrows = append([]string(nil), sources...)
+			current.values[name] = binding
 			return true
 		}
 	}
@@ -401,6 +471,7 @@ func evt1CloneScope(scope *evt1Scope) *evt1Scope {
 			binding.storageStates = states
 		}
 		binding.valueFacts = cloneSemanticValueFacts(binding.valueFacts)
+		binding.objectBorrows = append([]string(nil), binding.objectBorrows...)
 		out.values[name] = binding
 	}
 	out.borrows = append([]evt1RetainedBorrow{}, scope.borrows...)
@@ -429,6 +500,14 @@ func evt1MergeScopeStates(target, left, right *evt1Scope) {
 		if leftOK && rightOK {
 			binding.state = evt1JoinStorageState(leftBinding.state, rightBinding.state)
 			binding.objectState = evt1JoinStorageState(leftBinding.objectState, rightBinding.objectState)
+			seenBorrow := map[string]bool{}
+			binding.objectBorrows = nil
+			for _, borrowed := range append(append([]string{}, leftBinding.objectBorrows...), rightBinding.objectBorrows...) {
+				if !seenBorrow[borrowed] {
+					seenBorrow[borrowed] = true
+					binding.objectBorrows = append(binding.objectBorrows, borrowed)
+				}
+			}
 			if len(leftBinding.storageStates) != 0 || len(rightBinding.storageStates) != 0 {
 				binding.storageStates = map[string]evt1StorageState{}
 				paths := map[string]bool{}
@@ -860,15 +939,22 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 					return nil, evt1Diagnostic("INTERFACE_DUPLICATE_MEMBER", fmt.Sprintf("duplicate requirement %s.%s", conceptDecl.Name, r.Name), r.Span)
 				}
 				seenMembers[key] = true
-				if err := validateKnownType(env, r.ReturnType, r.Span, conceptParameterSet, false); err != nil {
+				operationParameterSet := conceptParameterSet
+				for _, parameter := range r.GenericParams {
+					operationParameterSet += "|" + parameter.Name
+				}
+				if err := validateKnownType(env, r.ReturnType, r.Span, operationParameterSet, false); err != nil {
 					return nil, err
 				}
 				for _, param := range r.Params {
-					if err := validateKnownType(env, param.Type, param.Span, conceptParameterSet, false); err != nil {
+					if err := validateKnownType(env, param.Type, param.Span, operationParameterSet, false); err != nil {
 						return nil, err
 					}
 				}
 				if conceptDecl.Interface {
+					if len(r.GenericParams) > 0 {
+						return nil, evt1Diagnostic("INTERFACE_NOT_DYN_COMPATIBLE", "open generic runtime interface methods do not have a fixed witness shape", r.Span)
+					}
 					if len(r.Params) == 0 || !r.Params[0].Type.isReference() || r.Params[0].Type.Kind != TypeConceptParam || r.Params[0].Type.Name != conceptDecl.TypeParam {
 						return nil, evt1Diagnostic("INTERFACE_NOT_DYN_COMPATIBLE", fmt.Sprintf("interface method %s must begin with ref %s self", r.Name, conceptDecl.TypeParam), r.Span)
 					}
@@ -1627,7 +1713,8 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				}
 			}
 			_, bindingRuntimeStorage := s.Value.(*BindExpr)
-			if evt1StorageHasRuntimeShape(resolvedType) && !inComptimeFn && !s.Comptime && !(resolvedType.isReference() && bindingRuntimeStorage) {
+			if evt1StorageHasRuntimeShape(resolvedType) && !inComptimeFn && !s.Comptime && !(resolvedType.isReference() && bindingRuntimeStorage) &&
+				!(templateInfo != nil && evt1StorageShapeDependsOnlyOnGenericValues(resolvedType, templateInfo.Decl.Parameters)) {
 				code := "CV4558"
 				family := "array"
 				if resolvedType.StorageKind == StorageNDArray {
@@ -1698,9 +1785,9 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 			}
 			storageStates := map[string]evt1StorageState{}
 			evt1StorageStatesFromFacts(resolvedType, valueFacts, nil, storageStates, env)
-			objectBorrow := ""
-			if resolvedType.isReference() {
-				objectBorrow = evt1ObjectBorrowForExpr(env, local, s.Value, templateInfo)
+			var objectBorrows []string
+			if resolvedType.isReference() || evt1IsRefStructType(env, resolvedType) {
+				objectBorrows = evt1ObjectBorrowForExpr(env, local, s.Value, templateInfo)
 			}
 			local.declare(s.Name, evt1ValueBinding{
 				t: resolvedType, mutable: !s.Const, state: evt1StorageInitialized, comptime: inComptimeFn,
@@ -1713,7 +1800,7 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				valueFacts:      valueFacts,
 				source:          s.Value,
 				declarationSpan: s.Span,
-				objectBorrow:    objectBorrow,
+				objectBorrows:   objectBorrows,
 			})
 			evt1RecordTransportedFacts(env, local.functionName, s.Name, resolvedType, valueFacts, s.Span)
 		case *TransitionStmt:
@@ -1958,6 +2045,7 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 					sourceProvenance.Scoped = true
 				}
 				local.setProvenance(name.Name, sourceProvenance)
+				local.setObjectBorrows(name.Name, evt1ObjectBorrowForExpr(env, local, s.Value, templateInfo))
 				if evt1IsSpanType(target.t) {
 					local.setSpanFacts(name.Name, evt1SpanFactsForValue(env, local, s.Value, target.t))
 				}
@@ -3672,7 +3760,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			return Type{}, evt1Diagnostic("CV4201", "templates are not available during comptime evaluation", e.Span)
 		}
 		if templateInfo != nil {
-			return Type{}, evt1Diagnostic("CV4174", "templates cannot invoke templates in EVT1 M1B-B", e.Span)
+			return evt1ValidateOpenNestedTemplateCall(env, scope, e, templateInfo)
 		}
 		instance, err := instantiateTemplateArgs(env, e.Callee, evt1TemplateCallArgs(e), e.Span)
 		if err != nil {
@@ -6404,6 +6492,34 @@ func evt1ResultProvenanceFact(functionName string, summary evt1ResultProvenanceS
 }
 
 func evt1LookupRequiredOperation(env *semanticEnv, required OperationRequirement, span Span, prefix string) (FunctionDecl, error) {
+	if len(required.GenericParams) > 0 {
+		implementation, ok := env.templates[required.Name]
+		if !ok {
+			return FunctionDecl{}, evt1Diagnostic("CV4153", fmt.Sprintf("%s is missing required generic operation %s", prefix, required.Name), span)
+		}
+		if len(implementation.Parameters) != len(required.GenericParams) || implementation.Constraint.ConceptName != "" || len(implementation.Params) != len(required.Params) {
+			return FunctionDecl{}, evt1Diagnostic("CV4154", fmt.Sprintf("%s has incompatible generic operation %s", prefix, required.Name), span)
+		}
+		closeType := func(t Type) Type {
+			for i, parameter := range implementation.Parameters {
+				if parameter.Kind != "type" || required.GenericParams[i].Kind != "type" {
+					return Type{}
+				}
+				t = evt1SubstituteType(t, parameter.Name, Type{Name: required.GenericParams[i].Name, Kind: TypeConceptParam})
+			}
+			return t
+		}
+		result := closeType(implementation.ReturnType)
+		if result.Name == "" || !evt1SymbolicTypeEqual(result, required.ReturnType, "") {
+			return FunctionDecl{}, evt1Diagnostic("CV4156", fmt.Sprintf("%s generic operation %s has wrong result type", prefix, required.Name), span)
+		}
+		for i, parameter := range implementation.Params {
+			if !evt1SymbolicTypeEqual(closeType(parameter.Type), required.Params[i].Type, "") {
+				return FunctionDecl{}, evt1Diagnostic("CV4155", fmt.Sprintf("%s generic operation %s has wrong parameter type", prefix, required.Name), span)
+			}
+		}
+		return FunctionDecl{Name: required.Name, ReturnType: result, Params: required.Params}, nil
+	}
 	var candidates []FunctionDecl
 	for _, fn := range env.functions[required.Name] {
 		if fn.Visibility == "private" && evt1FunctionParamSignature(fn) == evt1FunctionParamSignature(FunctionDecl{Name: required.Name, Params: required.Params}) && evt1RequiredOperationTypeEqual(env, evt1CallableReturnType(fn), required.ReturnType) {
@@ -6754,6 +6870,83 @@ func evt1SpanKey(span Span) string {
 	return fmt.Sprintf("%d:%d", span.Line, span.Column)
 }
 
+// An open template can call another template when its explicit arguments close
+// from the caller's parameters. The ordinary instantiator checks the complete
+// concrete body after outer substitution; this pass checks the open signature.
+func evt1ValidateOpenNestedTemplateCall(env *semanticEnv, scope *evt1Scope, call *TemplateCallExpr, caller *evt1TemplateInfo) (Type, error) {
+	for _, requirement := range caller.Requirements {
+		req := requirement.Operation
+		if req.Name != call.Callee || len(req.GenericParams) == 0 {
+			continue
+		}
+		args := evt1TemplateCallArgs(call)
+		if len(args) != len(req.GenericParams) {
+			return Type{}, evt1Diagnostic("CV4179", fmt.Sprintf("required generic operation %s expects %d arguments but got %d", call.Callee, len(req.GenericParams), len(args)), call.Span)
+		}
+		if len(call.Args) != len(req.Params) {
+			return Type{}, evt1Diagnostic("CV4106", fmt.Sprintf("required generic operation %s expects %d operands but got %d", call.Callee, len(req.Params), len(call.Args)), call.Span)
+		}
+		bindings := evt1TemplateBindings(req.GenericParams, args)
+		for i, arg := range call.Args {
+			actual, err := validateExpr(env, scope, arg, caller, false)
+			if err != nil {
+				return Type{}, err
+			}
+			expected := evt1SubstituteBindings(req.Params[i].Type, bindings)
+			if err := validateCallArgument(env, scope, expected, arg, actual, caller); err != nil {
+				return Type{}, err
+			}
+		}
+		return evt1SubstituteBindings(req.ReturnType, bindings), nil
+	}
+	callee, ok := env.templates[call.Callee]
+	if !ok {
+		return Type{}, evt1Diagnostic("CV4178", fmt.Sprintf("unknown template %s", call.Callee), call.Span)
+	}
+	params := callee.Parameters
+	if len(params) == 0 {
+		params = []GenericParameter{{Name: callee.TypeParam, Kind: "type"}}
+	}
+	args := evt1TemplateCallArgs(call)
+	if len(args) != len(params) {
+		return Type{}, evt1Diagnostic("CV4179", fmt.Sprintf("template %s expects %d arguments but got %d", call.Callee, len(params), len(args)), call.Span)
+	}
+	if callee.Constraint.ConceptName != "" {
+		if caller.Decl.Constraint.ConceptName != callee.Constraint.ConceptName {
+			return Type{}, evt1Diagnostic("CV4176", fmt.Sprintf("nested template %s requires %s, which is not guaranteed by the caller", call.Callee, callee.Constraint.ConceptName), call.Span)
+		}
+		inner := evt1SubstituteArguments(evt1ConstraintArguments(callee.Constraint), evt1TemplateBindings(params, args))
+		outer := evt1ConstraintArguments(caller.Decl.Constraint)
+		if len(inner) != len(outer) {
+			return Type{}, evt1Diagnostic("CV4176", "nested template constraint arguments are not guaranteed by the caller", call.Span)
+		}
+		for i := range inner {
+			if inner[i].String() != outer[i].String() {
+				return Type{}, evt1Diagnostic("CV4176", "nested template constraint arguments are not guaranteed by the caller", call.Span)
+			}
+		}
+	}
+	closeType := func(t Type) Type {
+		for i, param := range params {
+			t = evt1SubstituteType(t, param.Name, args[i])
+		}
+		return evt1SubstituteGenericValueExtents(t, params, args)
+	}
+	if len(call.Args) != len(callee.Params) {
+		return Type{}, evt1Diagnostic("CV4106", fmt.Sprintf("wrong call payload count for %s: expected %d but got %d", call.Callee, len(callee.Params), len(call.Args)), call.Span)
+	}
+	for i, arg := range call.Args {
+		actual, err := validateExpr(env, scope, arg, caller, false)
+		if err != nil {
+			return Type{}, err
+		}
+		if err := validateCallArgument(env, scope, closeType(callee.Params[i].Type), arg, actual, caller); err != nil {
+			return Type{}, err
+		}
+	}
+	return closeType(callee.ReturnType), nil
+}
+
 func validateTemplateCallExpr(env *semanticEnv, scope *evt1Scope, call CallExpr, templateInfo *evt1TemplateInfo) (Type, error) {
 	argTypes := make([]Type, 0, len(call.Args))
 	dependent := false
@@ -6869,6 +7062,15 @@ func instantiateTemplateArgs(env *semanticEnv, templateName string, concreteArgs
 	if instance, ok := env.templateInstances[key]; ok {
 		return instance, nil
 	}
+	if env.templateInstantiating[key] || env.templateDepth >= 128 {
+		return nil, evt1Diagnostic("GENERIC_INSTANTIATION_RECURSIVE", fmt.Sprintf("recursive or excessive generic instantiation of %s", templateName), span)
+	}
+	env.templateInstantiating[key] = true
+	env.templateDepth++
+	defer func() {
+		delete(env.templateInstantiating, key)
+		env.templateDepth--
+	}()
 	if templateDecl.Constraint.ConceptName != "" {
 		templateBindings := evt1TemplateBindings(parameters, concreteArgs)
 		constraintArguments := evt1SubstituteArguments(evt1ConstraintArguments(templateDecl.Constraint), templateBindings)
@@ -6881,6 +7083,12 @@ func instantiateTemplateArgs(env *semanticEnv, templateName string, concreteArgs
 	var bindings []evt1InstanceRequirementBinding
 	for _, req := range info.Requirements {
 		concreteReq := evt1SubstituteRequirementBindings(req.Operation, templateBindings)
+		if len(concreteReq.GenericParams) > 0 {
+			// A generic required operation is checked structurally against its
+			// template witness by concept satisfaction. Its concrete callable is
+			// selected when an operation-local invocation closes.
+			continue
+		}
 		if err := evt1RequireClosedType(concreteReq.ReturnType, templateName+" required operation "+concreteReq.Name+" result", span); err != nil {
 			return nil, err
 		}
@@ -7274,7 +7482,7 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 		}
 		return &DispatchExpr{InstanceName: e.InstanceName, Signal: signal, BatchName: e.BatchName, Span: e.Span}, nil
 	case *TemplateCallExpr:
-		if evt1IsTypeLayoutQuery(e.Callee) || e.Callee == "bind" || e.Callee == "AddressOf" || e.Callee == "AddressFromBits" || e.Callee == "EstablishExternalRegion" || e.Callee == "Convert" {
+		{
 			out := &TemplateCallExpr{Callee: e.Callee, TypeArg: evt1SubstituteType(e.TypeArg, typeParam, concreteType), Span: e.Span}
 			for _, typeArg := range e.TypeArgs {
 				out.TypeArgs = append(out.TypeArgs, evt1SubstituteType(typeArg, typeParam, concreteType))
@@ -7288,7 +7496,6 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 			}
 			return out, nil
 		}
-		return nil, evt1Diagnostic("CV4174", "templates cannot invoke templates in EVT1 M1B-B", e.Span)
 	case *BinaryExpr:
 		left, err := evt1SubstituteExpr(e.Left, typeParam, concreteType)
 		if err != nil {

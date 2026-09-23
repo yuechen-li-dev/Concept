@@ -1,5 +1,7 @@
 # Concepts
 
+R7f1: An operation requirement may itself have `template <typename U>` parameters. These are scoped within that requirement and structurally matched to a concrete generic function. Multi-type-parameter concepts already support value and reference parameters; non-type concept parameters remain unsupported. See [generic library closure](../design/EVT1-GENERIC-LIBRARY-CLOSURE.md).
+
 Concept concepts are named semantic requirement structures. They can describe
 types, operations, fields, lifetimes, regions, effects, foreign boundaries, and
 relationships among generic arguments.

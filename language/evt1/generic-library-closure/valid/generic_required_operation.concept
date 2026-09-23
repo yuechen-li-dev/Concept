@@ -1,0 +1,28 @@
+profile Core;
+
+struct Item { int value; };
+
+concept Transformable<T>
+{
+    requires template <typename U> U Transform(ref const T value, U seed);
+}
+
+template <typename V>
+V Transform(ref const Item value, V seed)
+{
+    return seed;
+}
+requires Transformable<Item>;
+
+template <typename T>
+requires Transformable<T>
+int Apply(ref const T value)
+{
+    return Transform<int>(ref const value, 7);
+}
+
+int Main()
+{
+    Item item = Item{3};
+    return Apply<Item>(ref const item);
+}

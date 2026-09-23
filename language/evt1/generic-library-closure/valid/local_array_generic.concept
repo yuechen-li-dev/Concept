@@ -1,0 +1,13 @@
+profile Core;
+
+template <usize N>
+int Work()
+{
+    int<array>[N] values = [7 ...];
+    return values[0] + Len(values);
+}
+
+int Main()
+{
+    return Work<4>() + Work<32>();
+}

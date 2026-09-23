@@ -1,5 +1,7 @@
 # EVT1 structural generic substitution direction
 
+R7f1 follow-up: [generic library closure](EVT1-GENERIC-LIBRARY-CLOSURE.md) extends open-body substitution to nested template calls and delays direct generic-value local array extents until closed instantiation.
+
 Status: R6m implemented
 
 R7d6 extends the same structural closure to imported generic access subjects

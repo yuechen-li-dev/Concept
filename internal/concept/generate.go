@@ -1922,6 +1922,32 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 	}
 	body.WriteString(l.interfaceWitnessDefinitions())
 	body.WriteString(l.callableDefinitions())
+	// Instantiated generic bodies may call implementations declared later in
+	// another imported or local module. Declare every closed non-async instance
+	// before emitting any body; ordering remains stable by instance key.
+	var forwardInstances []*evt1TemplateInstance
+	for _, instance := range l.env.templateInstances {
+		if !instance.Function.Async {
+			forwardInstances = append(forwardInstances, instance)
+		}
+	}
+	sort.Slice(forwardInstances, func(i, j int) bool { return forwardInstances[i].Key < forwardInstances[j].Key })
+	for _, instance := range forwardInstances {
+		body.WriteString("static " + evt1CType(instance.Function.ReturnType) + " " + instance.GeneratedSymbol + "(")
+		for i, param := range instance.Function.Params {
+			if i != 0 {
+				body.WriteString(", ")
+			}
+			body.WriteString(evt1CType(param.Type) + " " + param.Name)
+		}
+		if len(instance.Function.Params) == 0 {
+			body.WriteString("void")
+		}
+		body.WriteString(");\n")
+	}
+	if len(forwardInstances) > 0 {
+		body.WriteByte('\n')
+	}
 	for _, templateDecl := range l.module.Templates {
 		var instances []*evt1TemplateInstance
 		for _, instance := range l.env.templateInstances {

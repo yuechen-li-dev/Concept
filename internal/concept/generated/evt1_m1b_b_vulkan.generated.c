@@ -21,6 +21,10 @@ static concept_buffer_range concept_buffer_range_make(VkBuffer buffer, int32_t o
   return out;
 }
 
+static void concept_template_destroy_resource__pipeline_state(concept_pipeline_state* value);
+static int32_t concept_template_score_resource__buffer_range(const concept_buffer_range* value);
+static int32_t concept_template_score_resource__pipeline_state(const concept_pipeline_state* value);
+
 static int32_t concept_template_score_resource__buffer_range(const concept_buffer_range* value) {
   return concept_evt1_m1b_b_vulkan_measure__borrow_const_buffer_range(value);
 }

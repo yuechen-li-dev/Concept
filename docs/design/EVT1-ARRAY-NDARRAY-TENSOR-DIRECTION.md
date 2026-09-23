@@ -1,5 +1,7 @@
 # EVT1 array, ndarray, and tensor direction
 
+R7f1 permits fixed local arrays whose open extent directly names a non-type generic value. Instantiation closes that extent before C11 lowering; runtime-valued local extents remain invalid. See [generic library closure](EVT1-GENERIC-LIBRARY-CLOSURE.md).
+
 ## Fixed table columns
 
 `table<N>` reuses fixed-array storage as its semantic column representation.
