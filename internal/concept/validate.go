@@ -7630,9 +7630,13 @@ func evt1SubstituteBlock(block Block, typeParam string, concreteType Type) (Bloc
 func evt1SubstituteStatement(stmt Statement, typeParam string, concreteType Type) (Statement, error) {
 	switch s := stmt.(type) {
 	case *VarDecl:
-		value, err := evt1SubstituteExpr(s.Value, typeParam, concreteType)
-		if err != nil {
-			return nil, err
+		var value Expr
+		if s.Value != nil {
+			var err error
+			value, err = evt1SubstituteExpr(s.Value, typeParam, concreteType)
+			if err != nil {
+				return nil, err
+			}
 		}
 		return &VarDecl{Type: evt1SubstituteType(s.Type, typeParam, concreteType), Name: s.Name, Value: value, Span: s.Span}, nil
 	case *EffectsDecl:

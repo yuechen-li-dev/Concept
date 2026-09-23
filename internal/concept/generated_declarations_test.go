@@ -192,6 +192,19 @@ derive DeriveInvalid reflect<Item>;
 	}
 }
 
+func TestGeneratedUninitializedLocalUsesOrdinaryChecker(t *testing.T) {
+	source := `module GeneratedUninitialized; profile Core;
+record struct Person { int id; bool active; }
+generator <typename T> DeriveRead
+T ReadOctagon() { T result; result.id = 1; result.active = true; return result; }
+derive DeriveRead reflect<Person>;
+`
+	_, err := Parse("uninitialized_generated.concept", source)
+	if err == nil || !strings.Contains(err.Error(), "CV4560") || !strings.Contains(err.Error(), "generated ReadOctagon by DeriveRead") {
+		t.Fatalf("expected ordinary initializer diagnostic for generated local, got %v", err)
+	}
+}
+
 func TestGeneratedStructuralInvalidInputs(t *testing.T) {
 	cases := []struct{ source, code string }{
 		{`module InvalidQuery; profile Core;
