@@ -147,3 +147,6 @@ composition, required Allocate/Release signatures, effect summaries, generic
 typed-owner bodies, and region/provenance summaries through the ordinary
 schema. An artifact-only consumer instantiates bump, pool, `Allocation<T,A>`,
 typed Allocate, and constrained Drop without opening module source.
+# Reflection boundary
+
+An imported type can be structurally inspected by `reflect<T>;` only when its defining declaration carries `[[reflect]]`. The compiler resolves the query from the verified `concept-module.v1` artifact identity and semantic payload, without reparsing source. Type-level permission is compile-time-only; see [Reflection](REFLECTION.md).

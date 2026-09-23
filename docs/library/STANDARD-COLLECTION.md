@@ -1,5 +1,7 @@
 # Standard.Collection
 
+R7g adds a structural reflection query, but automatic `Trace<T>` derivation is not yet implemented. Collector tracing remains authored as ordinary `TraceReferences` functions.
+
 `Standard.Collection.Core` ships a bounded homogeneous, non-moving mark/sweep
 collector as ordinary Concept library code. Concept has no mandatory garbage
 collector. The caller selects a `ReleasableAllocator<A>`, creates

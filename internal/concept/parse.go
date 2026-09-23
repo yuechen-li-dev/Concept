@@ -25,6 +25,9 @@ func Parse(path, text string) (Module, error) {
 	if err != nil {
 		return Module{}, err
 	}
+	if err := evt1BuildReflectionResults(&module, env); err != nil {
+		return Module{}, err
+	}
 	evt1MaterializeGenericInstances(&module, env)
 	evt1MaterializeGenericProofSummaries(&module, env)
 	evt1ApplyExactCallableTypes(&module, env)
@@ -49,6 +52,13 @@ func parseSyntaxModule(path, text string) (Module, error) {
 	}
 	for index := range module.GenericTypes {
 		module.GenericTypes[index].Module = module.Name
+		module.GenericTypes[index].Struct.Module = module.Name
+	}
+	for index := range module.Structs {
+		module.Structs[index].Module = module.Name
+	}
+	for index := range module.Enums {
+		module.Enums[index].Module = module.Name
 	}
 	return module, nil
 }
@@ -235,6 +245,57 @@ func (p *parser) parseModule() (Module, error) {
 			if err != nil {
 				return module, err
 			}
+			if p.peekLexeme() == "struct" || p.peekLexeme() == "record" || p.peekLexeme() == "table" || p.peekLexeme() == "class" || p.peekLexeme() == "immovable" || p.peekLexeme() == "ref" && (p.peekLexemeN(1) == "struct" || p.peekLexemeN(1) == "table") {
+				var decl StructDecl
+				var err error
+				switch p.peekLexeme() {
+				case "record":
+					if p.peekLexemeN(1) == "table" {
+						decl, err = p.parseTableDecl(true, false)
+					} else {
+						decl, err = p.parseStructDecl(false, true, false)
+					}
+				case "table":
+					decl, err = p.parseTableDecl(false, false)
+				case "class":
+					decl, err = p.parseClassDecl()
+				case "immovable":
+					decl, err = p.parseStructDecl(true, false, false)
+				case "ref":
+					if p.peekLexemeN(1) == "table" {
+						decl, err = p.parseTableDecl(false, true)
+					} else {
+						decl, err = p.parseStructDecl(false, false, true)
+					}
+				default:
+					decl, err = p.parseStructDecl(false, false, false)
+				}
+				if err != nil {
+					return module, err
+				}
+				decl.Attributes = attributes
+				module.Structs = append(module.Structs, decl)
+				module.Functions = append(module.Functions, decl.Methods...)
+				continue
+			}
+			if p.peekLexeme() == "enum" {
+				decl, err := p.parseEnumDecl()
+				if err != nil {
+					return module, err
+				}
+				decl.Attributes = attributes
+				module.Enums = append(module.Enums, decl)
+				continue
+			}
+			if p.peekLexeme() == "template" && p.templateDeclIsRuntimeType() {
+				decl, err := p.parseGenericTypeDecl()
+				if err != nil {
+					return module, err
+				}
+				decl.Struct.Attributes = attributes
+				module.GenericTypes = append(module.GenericTypes, decl)
+				continue
+			}
 			if p.peekLexeme() == "extern" {
 				p.next()
 				abi := p.current()
@@ -268,6 +329,12 @@ func (p *parser) parseModule() (Module, error) {
 			continue
 		}
 		switch p.peekLexeme() {
+		case "reflect":
+			request, err := p.parseReflectionRequest()
+			if err != nil {
+				return module, err
+			}
+			module.ReflectionRequests = append(module.ReflectionRequests, request)
 		case "namespace":
 			if err := p.parseNamespaceBlock(&module); err != nil {
 				return module, err
@@ -844,6 +911,27 @@ func (p *parser) parseAttributes() ([]Attribute, error) {
 		attributes = append(attributes, attribute)
 	}
 	return attributes, nil
+}
+
+func (p *parser) parseReflectionRequest() (ReflectionRequest, error) {
+	start, err := p.expect("reflect")
+	if err != nil {
+		return ReflectionRequest{}, err
+	}
+	if _, err := p.expect("<"); err != nil {
+		return ReflectionRequest{}, err
+	}
+	typeArg, err := p.parseType("")
+	if err != nil {
+		return ReflectionRequest{}, err
+	}
+	if _, err := p.expect(">"); err != nil {
+		return ReflectionRequest{}, err
+	}
+	if _, err := p.expect(";"); err != nil {
+		return ReflectionRequest{}, err
+	}
+	return ReflectionRequest{Type: typeArg, Span: start.Span}, nil
 }
 
 func (p *parser) parseTypeAliasDecl(spelling string) (TypeAliasDecl, error) {
@@ -1736,6 +1824,13 @@ func (p *parser) parseStructDecl(immovable, record, refStruct bool) (StructDecl,
 			p.next()
 			continue
 		}
+		var attributes []Attribute
+		if p.peekLexeme() == "[" && p.peekLexemeN(1) == "[" {
+			attributes, err = p.parseAttributes()
+			if err != nil {
+				return StructDecl{}, err
+			}
+		}
 		async := false
 		if p.peekLexeme() == "async" || p.peekLexeme() == "asynchronous" {
 			p.next()
@@ -1764,7 +1859,7 @@ func (p *parser) parseStructDecl(immovable, record, refStruct bool) (StructDecl,
 		if _, err := p.expect(";"); err != nil {
 			return StructDecl{}, err
 		}
-		decl.Fields = append(decl.Fields, Field{Type: fieldType, Name: fieldName.Lexeme, Visibility: visibility, Span: fieldName.Span})
+		decl.Fields = append(decl.Fields, Field{Type: fieldType, Name: fieldName.Lexeme, Attributes: attributes, Visibility: visibility, Span: fieldName.Span})
 	}
 	if _, err := p.expect("}"); err != nil {
 		return StructDecl{}, err
@@ -1826,6 +1921,13 @@ func (p *parser) parseTableDecl(record, refTable bool) (StructDecl, error) {
 			p.next()
 			continue
 		}
+		var attributes []Attribute
+		if p.peekLexeme() == "[" && p.peekLexemeN(1) == "[" {
+			attributes, err = p.parseAttributes()
+			if err != nil {
+				return StructDecl{}, err
+			}
+		}
 		async := false
 		if p.peekLexeme() == "async" || p.peekLexeme() == "asynchronous" {
 			p.next()
@@ -1863,7 +1965,7 @@ func (p *parser) parseTableDecl(record, refTable bool) (StructDecl, error) {
 				Layout: "row-major", Column: true, Span: element.Span,
 			}
 		}
-		decl.Fields = append(decl.Fields, Field{Type: fieldType, Name: fieldName.Lexeme, Visibility: visibility, Span: fieldName.Span})
+		decl.Fields = append(decl.Fields, Field{Type: fieldType, Name: fieldName.Lexeme, Attributes: attributes, Visibility: visibility, Span: fieldName.Span})
 	}
 	if _, err := p.expect("}"); err != nil {
 		return StructDecl{}, err
@@ -2105,6 +2207,13 @@ func (p *parser) parseEnumDecl() (EnumDecl, error) {
 	}
 	enumDecl := EnumDecl{Name: nameTok.Lexeme, Span: start}
 	for !p.done() && p.peekLexeme() != "}" {
+		var attributes []Attribute
+		if p.peekLexeme() == "[" && p.peekLexemeN(1) == "[" {
+			attributes, err = p.parseAttributes()
+			if err != nil {
+				return EnumDecl{}, err
+			}
+		}
 		variantTok, err := p.expectIdentifier("CV4004", "expected enum variant name")
 		if err != nil {
 			return EnumDecl{}, err
@@ -2133,7 +2242,7 @@ func (p *parser) parseEnumDecl() (EnumDecl, error) {
 				return EnumDecl{}, err
 			}
 		}
-		enumDecl.Variants = append(enumDecl.Variants, VariantDecl{Name: variantTok.Lexeme, Payload: payload, Tag: len(enumDecl.Variants), Span: variantTok.Span})
+		enumDecl.Variants = append(enumDecl.Variants, VariantDecl{Name: variantTok.Lexeme, Payload: payload, Attributes: attributes, Tag: len(enumDecl.Variants), Span: variantTok.Span})
 		if p.peekLexeme() == "," {
 			p.next()
 		}

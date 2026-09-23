@@ -1,0 +1,9 @@
+# EVT1 reflection direction
+
+R7g uses the ordinary type AST and semantic module artifact as its structural authority. `reflect<T>;` is a compile-time request; the compiler resolves `T`, creates a one-level typed snapshot, and erases the request before MIR. Field and case order follows declaration order. Generic applications use the existing monomorphization/substitution path. The dependency artifact supplies imported structure, and type-level `[[reflect]]` supplies explicit cross-module permission.
+
+The next architectural step is a checked declaration-generation operation. A generator should consume typed reflection results, construct ordinary AST declarations with stable identities and source provenance, append them before ordinary semantic analysis, then use the existing MIR/backend path. The compiler needs a way to retain the generator site and reflected source in diagnostics, module artifacts, `concept explain`, and a readable generated declaration view. The current bounded `comptime` evaluator returns values and has no declaration result or insertion phase. Token substitution would obscure typing and provenance, so it is not used as a shortcut.
+
+`Trace<T>` derivation should live in Concept library code and select collector-managed fields by an explicit semantic rule. The compiler must have no `CollectorHandle`, `Trace`, or serializer-specific generation branch. Handwritten `TraceReferences` remains valid, and ordinary coherence must reject duplicate handwritten/generated declarations.
+
+Test-only runtime structural metadata is a separate later slice. It must be requested by a `.concept_test` function marked `[[reflect]]`, materialized only for the reflected types, and excluded from production artifacts. No general runtime invocation or mutation surface is planned for EVT1.

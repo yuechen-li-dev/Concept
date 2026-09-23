@@ -267,11 +267,12 @@ func (t Type) borrowBase() Type {
 }
 
 type Field struct {
-	Type        Type   `json:"type"`
-	Name        string `json:"name"`
-	Visibility  string `json:"visibility,omitempty"`
-	Span        Span   `json:"span"`
-	Initializer Expr   `json:"initializer,omitempty"`
+	Type        Type        `json:"type"`
+	Name        string      `json:"name"`
+	Attributes  []Attribute `json:"attributes,omitempty"`
+	Visibility  string      `json:"visibility,omitempty"`
+	Span        Span        `json:"span"`
+	Initializer Expr        `json:"initializer,omitempty"`
 }
 
 // LayoutDecl is a zero-allocation semantic description of fixed memory
@@ -313,6 +314,8 @@ type StreamChannel struct {
 
 type StructDecl struct {
 	Name                       string         `json:"name"`
+	Module                     string         `json:"module,omitempty"`
+	Attributes                 []Attribute    `json:"attributes,omitempty"`
 	Immovable                  bool           `json:"immovable"`
 	Record                     bool           `json:"record"`
 	Ref                        bool           `json:"ref,omitempty"`
@@ -328,16 +331,19 @@ type StructDecl struct {
 }
 
 type VariantDecl struct {
-	Name    string  `json:"name"`
-	Payload []Field `json:"payload,omitempty"`
-	Tag     int     `json:"tag"`
-	Span    Span    `json:"span"`
+	Name       string      `json:"name"`
+	Attributes []Attribute `json:"attributes,omitempty"`
+	Payload    []Field     `json:"payload,omitempty"`
+	Tag        int         `json:"tag"`
+	Span       Span        `json:"span"`
 }
 
 type EnumDecl struct {
-	Name     string        `json:"name"`
-	Variants []VariantDecl `json:"variants"`
-	Span     Span          `json:"span"`
+	Name       string        `json:"name"`
+	Module     string        `json:"module,omitempty"`
+	Attributes []Attribute   `json:"attributes,omitempty"`
+	Variants   []VariantDecl `json:"variants"`
+	Span       Span          `json:"span"`
 }
 
 type Param struct {
@@ -559,10 +565,12 @@ type TypeAliasDecl struct {
 }
 
 type Module struct {
-	Path    string   `json:"path"`
-	Name    string   `json:"name,omitempty"`
-	Profile string   `json:"profile"`
-	Imports []string `json:"imports,omitempty"`
+	Path               string              `json:"path"`
+	Name               string              `json:"name,omitempty"`
+	Profile            string              `json:"profile"`
+	Imports            []string            `json:"imports,omitempty"`
+	ReflectionRequests []ReflectionRequest `json:"reflection_requests,omitempty"`
+	ReflectionResults  []TypeInfo          `json:"reflection_results,omitempty"`
 	// NamespaceSymbols records source-level symbol organization independently
 	// of module identity. Namespaces erase before lowering and never create
 	// runtime metadata or an import edge.

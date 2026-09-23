@@ -1,5 +1,7 @@
 # Concept semantic proofs
 
+Reflection queries can currently be inspected with `concept reflect file.concept`. `concept explain` still explains source `Assert.Concept` assertions; generated-declaration provenance is not yet available.
+
 Imported generic method access summaries can now close for a concrete type
 application. Proof status is derived from the closed entries. An open generic
 access entry is symbolic; an unknown concrete context remains Unknown. The

@@ -1,5 +1,7 @@
 # Concept testing
 
+Test-only runtime reflection with `[[reflect]]` is not yet implemented. Type-level `[[reflect]]` is a compile-time cross-module structural permission and does not enable test runtime metadata.
+
 Concept tests are ordinary Concept functions in `.concept_test` files. Test
 attributes are tooling metadata; there is no test DSL, test class, macro
 framework, or runtime reflection registry.

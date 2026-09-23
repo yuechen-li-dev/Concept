@@ -43,6 +43,7 @@ type SemanticModuleTypeSummary struct {
 
 type SemanticModuleExports struct {
 	Types                []string                    `json:"types,omitempty"`
+	ReflectableTypes     []string                    `json:"reflectable_types,omitempty"`
 	Functions            []string                    `json:"functions,omitempty"`
 	Concepts             []string                    `json:"concepts,omitempty"`
 	Interfaces           []string                    `json:"interfaces,omitempty"`
@@ -177,6 +178,9 @@ func CompileSemanticModule(path, source string, artifacts map[string][]byte) ([]
 	if err != nil {
 		return nil, err
 	}
+	if err := evt1BuildReflectionResults(&composed, env); err != nil {
+		return nil, err
+	}
 	if !evt1AccessSummaryDemanded(composed) {
 		if err := evt1DeriveAccessSummaries(env, composed); err != nil {
 			return nil, err
@@ -234,6 +238,9 @@ func ParseWithSemanticModules(path, source string, artifacts map[string][]byte) 
 	}
 	env, err := analyzeModule(module)
 	if err != nil {
+		return Module{}, err
+	}
+	if err := evt1BuildReflectionResults(&module, env); err != nil {
 		return Module{}, err
 	}
 	evt1MaterializeGenericInstances(&module, env)
@@ -451,6 +458,22 @@ func composeSemanticModules(local Module, artifacts map[string][]byte) (Module, 
 		if artifact.ModuleIdentity != name {
 			return fmt.Errorf("MODULE_IDENTITY_MISMATCH: import %s resolved artifact %s", name, artifact.ModuleIdentity)
 		}
+		// The verified artifact identity, not an optional payload field, owns
+		// the defining-module boundary. Older v1 payloads lack this field.
+		for i := range module.Structs {
+			// Materialized generic instances may originate in a dependency
+			// of this artifact. Preserve that owner for ordinary deduplication.
+			if !strings.Contains(module.Structs[i].Name, "<") {
+				module.Structs[i].Module = artifact.ModuleIdentity
+			}
+		}
+		for i := range module.Enums {
+			module.Enums[i].Module = artifact.ModuleIdentity
+		}
+		for i := range module.GenericTypes {
+			module.GenericTypes[i].Module = artifact.ModuleIdentity
+			module.GenericTypes[i].Struct.Module = artifact.ModuleIdentity
+		}
 		for _, dependency := range artifact.Dependencies {
 			if err := load(dependency.ModuleIdentity); err != nil {
 				return err
@@ -524,6 +547,7 @@ func composeSemanticModules(local Module, artifacts map[string][]byte) (Module, 
 	// replayed, while local assertions must remain on the ordinary sema path.
 	composed.Assertions = append(composed.Assertions, local.Assertions...)
 	composed.StaticAsserts = append(composed.StaticAsserts, local.StaticAsserts...)
+	composed.ReflectionRequests = append(composed.ReflectionRequests, local.ReflectionRequests...)
 	return composed, order, nil
 }
 
@@ -534,7 +558,11 @@ func appendSemanticDeclarations(target *Module, source Module) {
 		duplicateInstance := false
 		if strings.Contains(incoming.Name, "<") {
 			for _, existing := range target.Structs {
-				if existing.Name == incoming.Name && reflect.DeepEqual(existing, incoming) {
+				left, right := existing, incoming
+				// Materialized instances are transported by each consumer artifact;
+				// provenance of the transport does not change their semantic shape.
+				left.Module, right.Module = "", ""
+				if existing.Name == incoming.Name && reflect.DeepEqual(left, right) {
 					duplicateInstance = true
 					break
 				}
@@ -567,11 +595,17 @@ func semanticModuleExports(module Module, env *semanticEnv) SemanticModuleExport
 	sort.Strings(exports.QualifiedSymbols)
 	for _, decl := range module.Structs {
 		exports.Types = append(exports.Types, decl.Name)
+		if evt1HasReflectPermission(decl.Attributes) {
+			exports.ReflectableTypes = append(exports.ReflectableTypes, decl.Name)
+		}
 		t := Type{Name: decl.Name, Kind: TypeStruct}
 		exports.TypeSummaries = append(exports.TypeSummaries, SemanticModuleTypeSummary{Name: decl.Name, Copyable: evt1TypeCopyable(env, t), Movable: evt1TypeMovable(env, t), HasDrop: evt1TypeHasDrop(env, t), Ref: decl.Ref, Table: decl.Table, Cardinality: decl.TableCardinality, Columnar: decl.Table})
 	}
 	for _, decl := range module.Enums {
 		exports.Types = append(exports.Types, decl.Name)
+		if evt1HasReflectPermission(decl.Attributes) {
+			exports.ReflectableTypes = append(exports.ReflectableTypes, decl.Name)
+		}
 	}
 	for _, decl := range module.Layouts {
 		exports.Types = append(exports.Types, decl.Name)
@@ -581,6 +615,9 @@ func semanticModuleExports(module Module, env *semanticEnv) SemanticModuleExport
 	}
 	for _, decl := range module.GenericTypes {
 		exports.GenericTypes = append(exports.GenericTypes, decl.Name)
+		if evt1HasReflectPermission(decl.Struct.Attributes) {
+			exports.ReflectableTypes = append(exports.ReflectableTypes, decl.Name)
+		}
 	}
 	for _, decl := range module.Templates {
 		exports.GenericFunctions = append(exports.GenericFunctions, decl.Name)
@@ -597,6 +634,7 @@ func semanticModuleExports(module Module, env *semanticEnv) SemanticModuleExport
 		}
 	}
 	sort.Strings(exports.Types)
+	sort.Strings(exports.ReflectableTypes)
 	sort.Strings(exports.Functions)
 	sort.Strings(exports.Concepts)
 	sort.Strings(exports.Interfaces)

@@ -2,6 +2,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -22,6 +23,7 @@ Usage:
   concept mir <file>
   concept plan <file>
   concept explain <file>[:line] [--json] [--verbose]
+  concept reflect <file>
   concept test [path-or-filter] [--filter text] [--list] [--verbose]
   concept package build <name>
   concept package test <name>
@@ -34,6 +36,7 @@ Commands:
   mir     write deterministic MIR JSON to stdout
   plan    write deterministic LoweringPlan JSON to stdout
   explain display the proof graph for an Assert.Concept source contract
+  reflect display compile-time structural results from explicit reflect<T>; sites
   test    discover and execute .concept_test sources through strict C11
   package build or test a repository-local manifest.concept package graph
 `
@@ -90,6 +93,12 @@ func main() {
 	switch command {
 	case "check":
 		fmt.Printf("%s: ok (%s, %s)\n", filepath.ToSlash(sourcePath), module.Profile, concept.CompilerID)
+	case "reflect":
+		output, err := json.MarshalIndent(module.ReflectionResults, "", "  ")
+		if err != nil {
+			fail(err)
+		}
+		fmt.Println(string(output))
 	case "plan":
 		output, err := concept.GeneratePlan(module, concept.GenericC11Target())
 		if err != nil {

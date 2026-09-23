@@ -1,0 +1,14 @@
+# R7g convergence log
+
+Baseline: `b516f40017d8b8b814b7c2b141f2ac3872aa07f4` (also R7fR). Compiler ID: `concept-evt1-stage0-go`. Artifact schema: `concept-module.v1`. Worktree was clean before changes. The initial 478 available `git log --oneline -1450` entries were inspected by count and recent history.
+
+| Blocker | Evidence | Resolution/status |
+| --- | --- | --- |
+| No explicit reflection query | Parser had `comptime` expressions but no `reflect` declaration. | Added typed `reflect<T>;` requests and compiler-only `TypeInfo` results. |
+| Imported structure could be queried without a reflection boundary | Module composition carries typed dependency ASTs, including private fields. | Reflection query now requires type-level `[[reflect]]` across modules; artifact-only allowed/denied tests pass. The artifact's existing compiler-private payload still contains private AST and is not a public redacted metadata format. |
+| Closed generics initially lost argument listing after type resolution | The resolved nominal type is named `Box<int>` with empty `TypeArgs`. | Preserve parsed type arguments in `TypeInfo`; substituted field types come from ordinary generic instantiation. |
+| Imported generic instances duplicated after provenance was added | Full Go suite reported `CV4122 duplicate struct declaration MemoryRegion<SystemMemory>` across collector and memory tests. | Preserve generic defining ownership, compare transported instance shape without transport provenance, and derive generic reflection permission from its defining generic declaration. Directed collector and memory regressions pass. |
+| No ordinary generated declaration path | `evt1EvaluateModuleComptime` stores `Value` results; `Module` has no generated-declaration provenance and `concept explain` only targets source proof assertions. | Open architectural blocker. No `Trace<T>` generator or source substitution workaround was added. |
+| Test runtime reflection is absent | Test attributes accept fact/theory/prophecy/benchmark metadata but no reflection capability or scoped metadata lowering. | Deferred; no production runtime metadata introduced. |
+
+Baseline gates: `go test ./...`, `go vet ./...`, root and `legacy/poc3-zig` `zig build test` passed. Final full `go test ./...` passed after repairing the generic-instance regression; `go vet ./...` and both Zig gates passed. `oct make BurnIn --file Make.oct`, Standard build/test (8 passed), and DragonGod build/test (21 passed, 1 benchmark) passed after the structural change. Directed reflection tests cover record fields, attributes, private visibility, payload enums, sized tables, closed generics, arrays, spans, storage/address type distinctions, artifact-only permission, runtime erasure, and 100-run artifact/metadata determinism. The existing EVT1 manifest remains 395 valid, 256 static-invalid, 13 runtime-negative, 5 compatibility, and 4 expected-divergence fixtures; no corpus counts were changed in this slice.

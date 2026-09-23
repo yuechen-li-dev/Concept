@@ -1,0 +1,18 @@
+module Examples.Reflection;
+profile Core;
+
+[[reflect]]
+record struct Person
+{
+    string name;
+    int age;
+};
+
+enum Event
+{
+    Arrived(int year),
+    Departed,
+}
+
+reflect<Person>;
+reflect<Event>;

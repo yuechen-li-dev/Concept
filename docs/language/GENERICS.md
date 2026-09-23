@@ -99,3 +99,6 @@ R6p exercises multi-parameter generic Drop and typed allocation where the
 capability constrains the second parameter. Closed instantiation resolves
 `Allocation<T,A>`, `Storage<T>`, Result payloads, required operations, and
 effects through the same structural substitution machinery.
+# Reflection status
+
+Closed generic applications can be inspected with `reflect<Box<int>>;` after ordinary instantiation. The reflected fields use substituted types. Open generic reflection and generator-driven derivation are not implemented; see [Reflection](REFLECTION.md).
