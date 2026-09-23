@@ -481,18 +481,19 @@ type GenericTypeDecl struct {
 }
 
 type FunctionDecl struct {
-	Comptime   bool        `json:"comptime,omitempty"`
-	Async      bool        `json:"async,omitempty"`
-	Attributes []Attribute `json:"attributes,omitempty"`
-	Name       string      `json:"name"`
-	ReturnType Type        `json:"return_type"`
-	Params     []Param     `json:"params,omitempty"`
-	Body       *Block      `json:"body,omitempty"`
-	MethodOf   string      `json:"method_of,omitempty"`
-	Visibility string      `json:"visibility,omitempty"`
-	ExternABI  string      `json:"extern_abi,omitempty"`
-	Module     string      `json:"module,omitempty"`
-	Span       Span        `json:"span"`
+	Comptime   bool             `json:"comptime,omitempty"`
+	Async      bool             `json:"async,omitempty"`
+	Attributes []Attribute      `json:"attributes,omitempty"`
+	Name       string           `json:"name"`
+	ReturnType Type             `json:"return_type"`
+	Params     []Param          `json:"params,omitempty"`
+	Body       *Block           `json:"body,omitempty"`
+	MethodOf   string           `json:"method_of,omitempty"`
+	Visibility string           `json:"visibility,omitempty"`
+	ExternABI  string           `json:"extern_abi,omitempty"`
+	Module     string           `json:"module,omitempty"`
+	Span       Span             `json:"span"`
+	Generated  *GeneratedOrigin `json:"generated,omitempty"`
 }
 
 type OperationEffectDecl struct {
@@ -571,6 +572,8 @@ type Module struct {
 	Imports            []string            `json:"imports,omitempty"`
 	ReflectionRequests []ReflectionRequest `json:"reflection_requests,omitempty"`
 	ReflectionResults  []TypeInfo          `json:"reflection_results,omitempty"`
+	Generators         []GeneratorDecl     `json:"generators,omitempty"`
+	GenerationRequests []GenerationRequest `json:"generation_requests,omitempty"`
 	// NamespaceSymbols records source-level symbol organization independently
 	// of module identity. Namespaces erase before lowering and never create
 	// runtime metadata or an import edge.

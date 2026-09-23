@@ -14,11 +14,15 @@ type parser struct {
 	profileDef         *ProfileDefinition
 	callableOrdinal    int
 	templateTypeParams map[string]bool
+	inGeneratorBody    bool
 }
 
 func Parse(path, text string) (Module, error) {
 	module, err := parseSyntaxModule(path, text)
 	if err != nil {
+		return Module{}, err
+	}
+	if err := evt1MaterializeGeneratedDeclarations(&module); err != nil {
 		return Module{}, err
 	}
 	env, err := analyzeModule(module)
@@ -59,6 +63,9 @@ func parseSyntaxModule(path, text string) (Module, error) {
 	}
 	for index := range module.Enums {
 		module.Enums[index].Module = module.Name
+	}
+	for index := range module.Generators {
+		module.Generators[index].Module = module.Name
 	}
 	return module, nil
 }
@@ -329,6 +336,18 @@ func (p *parser) parseModule() (Module, error) {
 			continue
 		}
 		switch p.peekLexeme() {
+		case "generator":
+			decl, err := p.parseGeneratorDecl()
+			if err != nil {
+				return module, err
+			}
+			module.Generators = append(module.Generators, decl)
+		case "derive":
+			request, err := p.parseGenerationRequest()
+			if err != nil {
+				return module, err
+			}
+			module.GenerationRequests = append(module.GenerationRequests, request)
 		case "reflect":
 			request, err := p.parseReflectionRequest()
 			if err != nil {
@@ -2959,6 +2978,11 @@ func (p *parser) parseBlock() (Block, error) {
 
 func (p *parser) parseStatement() (Statement, error) {
 	switch p.peekLexeme() {
+	case "derive":
+		if p.inGeneratorBody {
+			return nil, evt1Diagnostic("GENERATOR_RECURSION_UNSUPPORTED", "a generator cannot request another generation wave", p.currentSpan())
+		}
+		return nil, evt1Diagnostic("GENERATOR_REQUEST_SCOPE", "derive is only allowed at module scope", p.currentSpan())
 	case "for":
 		return nil, evt1Diagnostic("CV4237", "for loops are not supported in EVT1 M1B-D; use while (...) bounded(N)", p.currentSpan())
 	case "comptime":

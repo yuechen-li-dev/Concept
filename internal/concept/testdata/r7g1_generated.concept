@@ -1,0 +1,17 @@
+module R7g1.Generated;
+profile Core;
+
+struct Item { [[selected]] int value; int ignored; }
+concept Readable<T> { requires int ReadValue(ref const T item); }
+
+generator <typename T> DeriveValue
+int ReadValue(ref const T item)
+{
+    int result = 0;
+    foreach (FieldInfo field in Fields<T>(selected)) {
+        result = result + item.field;
+    }
+    return result;
+}
+
+derive DeriveValue reflect<Item>;

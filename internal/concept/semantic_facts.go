@@ -59,6 +59,7 @@ const (
 	FactOriginTensorBacking          SemanticFactOrigin = "DerivedFromTensorBacking"
 	FactOriginControlFlow            SemanticFactOrigin = "DerivedFromControlFlow"
 	FactOriginCompilerAnalysis       SemanticFactOrigin = "CompilerAnalysis"
+	FactOriginGeneratedByReflection  SemanticFactOrigin = "GeneratedByReflection"
 	FactOriginDeclaredEffect         SemanticFactOrigin = "DeclaredEffect"
 	FactOriginDerivedCallEffect      SemanticFactOrigin = "DerivedCallEffect"
 	FactOriginExternalContractEffect SemanticFactOrigin = "ExternalContractEffect"

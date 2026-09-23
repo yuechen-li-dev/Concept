@@ -76,6 +76,7 @@ type ProofGraph struct {
 	FactOrigins   []SemanticFactOrigin      `json:"fact_origins,omitempty"`
 	Reason        string                    `json:"reason"`
 	SourceSpan    Span                      `json:"source_span"`
+	Generated     *GeneratedOrigin          `json:"generated,omitempty"`
 }
 
 func proofNodeID(goal string, kind ProofNodeKind, order int, label string, span Span) string {

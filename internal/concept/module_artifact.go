@@ -171,6 +171,9 @@ func CompileSemanticModule(path, source string, artifacts map[string][]byte) ([]
 	if err != nil {
 		return nil, err
 	}
+	if err := evt1MaterializeGeneratedDeclarations(&composed); err != nil {
+		return nil, err
+	}
 	if err := resolveNamespaceSymbols(&composed); err != nil {
 		return nil, err
 	}
@@ -187,6 +190,12 @@ func CompileSemanticModule(path, source string, artifacts map[string][]byte) ([]
 		}
 	}
 	portable := local
+	for _, function := range composed.Functions {
+		if function.Generated != nil && function.Generated.GenerationModule == local.Name {
+			portable.Functions = append(portable.Functions, function)
+		}
+	}
+	localWithGenerated := portable
 	portable.Path = local.Name
 	// Preserve concrete generic field structure referenced by exported
 	// signatures. Consumers must be able to validate Result/Option payloads and
@@ -203,11 +212,11 @@ func CompileSemanticModule(path, source string, artifacts map[string][]byte) ([]
 		ModuleIdentity:     local.Name,
 		SourceIdentity:     local.Name,
 		SourceSHA256:       digest([]byte(source)),
-		Exports:            semanticModuleExports(local, env),
-		OperationEffects:   summarizeModuleEffects(local, env),
-		ValueFactSummaries: semanticModuleFactSummaries(local, env),
-		SharedAccessFacts:  evt1LocalSharedAccessFacts(local, env),
-		AccessSummaries:    evt1LocalAccessSummaries(local, env),
+		Exports:            semanticModuleExports(localWithGenerated, env),
+		OperationEffects:   summarizeModuleEffects(localWithGenerated, env),
+		ValueFactSummaries: semanticModuleFactSummaries(localWithGenerated, env),
+		SharedAccessFacts:  evt1LocalSharedAccessFacts(localWithGenerated, env),
+		AccessSummaries:    evt1LocalAccessSummaries(localWithGenerated, env),
 		ForeignContracts:   append([]ForeignContractDecl{}, local.ForeignContracts...),
 		SemanticPayload:    payload,
 	}
@@ -231,6 +240,9 @@ func ParseWithSemanticModules(path, source string, artifacts map[string][]byte) 
 	}
 	module, _, err := composeSemanticModules(local, artifacts)
 	if err != nil {
+		return Module{}, err
+	}
+	if err := evt1MaterializeGeneratedDeclarations(&module); err != nil {
 		return Module{}, err
 	}
 	if err := resolveNamespaceSymbols(&module); err != nil {
@@ -548,6 +560,7 @@ func composeSemanticModules(local Module, artifacts map[string][]byte) (Module, 
 	composed.Assertions = append(composed.Assertions, local.Assertions...)
 	composed.StaticAsserts = append(composed.StaticAsserts, local.StaticAsserts...)
 	composed.ReflectionRequests = append(composed.ReflectionRequests, local.ReflectionRequests...)
+	composed.GenerationRequests = append(composed.GenerationRequests, local.GenerationRequests...)
 	return composed, order, nil
 }
 
@@ -582,6 +595,7 @@ func appendSemanticDeclarations(target *Module, source Module) {
 	target.ComptimeDecls = append(target.ComptimeDecls, source.ComptimeDecls...)
 	target.Templates = append(target.Templates, source.Templates...)
 	target.GenericTypes = append(target.GenericTypes, source.GenericTypes...)
+	target.Generators = append(target.Generators, source.Generators...)
 	target.Functions = append(target.Functions, source.Functions...)
 	target.ComptimeFns = append(target.ComptimeFns, source.ComptimeFns...)
 	target.ForeignContracts = append(target.ForeignContracts, source.ForeignContracts...)

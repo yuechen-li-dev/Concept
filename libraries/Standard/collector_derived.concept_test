@@ -1,0 +1,106 @@
+profile Core;
+import Standard.Collection.Core;
+import Standard.Collection.DeriveTrace;
+import Standard.Memory.Pool;
+
+struct DerivedNode
+{
+    int value;
+    [[trace]] CollectorHandle<DerivedNode> left;
+    [[trace]] CollectorHandle<DerivedNode> right;
+};
+
+derive DeriveTrace reflect<DerivedNode>;
+
+[[fact]]
+void DerivedCollectorTracesCycle()
+{
+    Assert.Concept<NoAllocation>(TraceReferences, "generated trace uses bounded visitor operations");
+    PoolAllocator pool = MakePoolAllocator(SizeOf<DerivedNode>(), AlignOf<DerivedNode>());
+    MarkSweepCollector<DerivedNode, 3, PoolAllocator> collector =
+        MakeCollector<DerivedNode, 3, PoolAllocator>(ref pool, 71);
+    CollectorHandle<DerivedNode> none = CollectorHandle<DerivedNode>{-1, 0, 71};
+    CollectorHandle<DerivedNode> a = AllocateObject<DerivedNode, 3, PoolAllocator>(ref collector, DerivedNode{1, none, none})!;
+    CollectorHandle<DerivedNode> b = AllocateObject<DerivedNode, 3, PoolAllocator>(ref collector, DerivedNode{2, none, none})!;
+    CollectorHandle<DerivedNode> island = AllocateObject<DerivedNode, 3, PoolAllocator>(ref collector, DerivedNode{3, none, none})!;
+    {
+        ref DerivedNode first = BorrowMutable<DerivedNode, 3, PoolAllocator>(ref collector, a)!;
+        first.left = b;
+    }
+    {
+        ref DerivedNode second = BorrowMutable<DerivedNode, 3, PoolAllocator>(ref collector, b)!;
+        second.right = a;
+    }
+    int root = RegisterRoot<DerivedNode, 3, PoolAllocator>(ref collector, a)!;
+    int reclaimed = Collect<DerivedNode, 3, PoolAllocator>(ref collector)!;
+    Assert.True(reclaimed == 1, "generated trace retains the rooted cycle and sweeps the island");
+    Assert.Error(Borrow<DerivedNode, 3, PoolAllocator>(ref const collector, island), "island is stale");
+    UnregisterRoot<DerivedNode, 3, PoolAllocator>(ref collector, root);
+    reclaimed = Collect<DerivedNode, 3, PoolAllocator>(ref collector)!;
+    Assert.True(reclaimed == 2, "generated trace permits cycle reclamation after root removal");
+}
+
+[[fact]]
+void DerivedCollectorMatchesManualGraph()
+{
+    PoolAllocator pool = MakePoolAllocator(SizeOf<DerivedNode>(), AlignOf<DerivedNode>());
+    MarkSweepCollector<DerivedNode, 8, PoolAllocator> collector =
+        MakeCollector<DerivedNode, 8, PoolAllocator>(ref pool, 29);
+    CollectorHandle<DerivedNode> none = CollectorHandle<DerivedNode>{-1, 0, 29};
+    CollectorHandle<DerivedNode> a = AllocateObject<DerivedNode, 8, PoolAllocator>(ref collector, DerivedNode{1, none, none})!;
+    CollectorHandle<DerivedNode> b = AllocateObject<DerivedNode, 8, PoolAllocator>(ref collector, DerivedNode{2, none, none})!;
+    CollectorHandle<DerivedNode> c = AllocateObject<DerivedNode, 8, PoolAllocator>(ref collector, DerivedNode{3, none, none})!;
+    CollectorHandle<DerivedNode> d = AllocateObject<DerivedNode, 8, PoolAllocator>(ref collector, DerivedNode{4, none, none})!;
+    CollectorHandle<DerivedNode> islandA = AllocateObject<DerivedNode, 8, PoolAllocator>(ref collector, DerivedNode{5, none, none})!;
+    CollectorHandle<DerivedNode> islandB = AllocateObject<DerivedNode, 8, PoolAllocator>(ref collector, DerivedNode{6, none, none})!;
+    CollectorHandle<DerivedNode> self = AllocateObject<DerivedNode, 8, PoolAllocator>(ref collector, DerivedNode{7, none, none})!;
+    {
+        ref DerivedNode node = BorrowMutable<DerivedNode, 8, PoolAllocator>(ref collector, a)!;
+        node.left = b;
+        node.right = c;
+    }
+    {
+        ref DerivedNode node = BorrowMutable<DerivedNode, 8, PoolAllocator>(ref collector, b)!;
+        node.left = d;
+    }
+    {
+        ref DerivedNode node = BorrowMutable<DerivedNode, 8, PoolAllocator>(ref collector, c)!;
+        node.left = d;
+    }
+    {
+        ref DerivedNode node = BorrowMutable<DerivedNode, 8, PoolAllocator>(ref collector, d)!;
+        node.left = a;
+    }
+    {
+        ref DerivedNode node = BorrowMutable<DerivedNode, 8, PoolAllocator>(ref collector, islandA)!;
+        node.left = islandB;
+    }
+    {
+        ref DerivedNode node = BorrowMutable<DerivedNode, 8, PoolAllocator>(ref collector, islandB)!;
+        node.left = islandA;
+    }
+    {
+        ref DerivedNode node = BorrowMutable<DerivedNode, 8, PoolAllocator>(ref collector, self)!;
+        node.left = self;
+    }
+    int rootA = RegisterRoot<DerivedNode, 8, PoolAllocator>(ref collector, a)!;
+    int duplicateRootA = RegisterRoot<DerivedNode, 8, PoolAllocator>(ref collector, a)!;
+    int rootSelf = RegisterRoot<DerivedNode, 8, PoolAllocator>(ref collector, self)!;
+    Assert.True(Collect<DerivedNode, 8, PoolAllocator>(ref collector)! == 2, "unrooted cycle is reclaimed");
+    Assert.Error(Borrow<DerivedNode, 8, PoolAllocator>(ref const collector, islandA), "first island handle is stale");
+    Assert.Error(Borrow<DerivedNode, 8, PoolAllocator>(ref const collector, islandB), "second island handle is stale");
+    {
+        ref const DerivedNode survivor = Borrow<DerivedNode, 8, PoolAllocator>(ref const collector, d)!;
+        Assert.True(survivor.value == 4, "diamond tail survives exactly once");
+    }
+    UnregisterRoot<DerivedNode, 8, PoolAllocator>(ref collector, rootSelf);
+    Assert.True(Collect<DerivedNode, 8, PoolAllocator>(ref collector)! == 1, "unrooted self-cycle is reclaimed");
+    UnregisterRoot<DerivedNode, 8, PoolAllocator>(ref collector, rootA);
+    Assert.True(Collect<DerivedNode, 8, PoolAllocator>(ref collector)! == 0, "duplicate root independently retains graph");
+    UnregisterRoot<DerivedNode, 8, PoolAllocator>(ref collector, duplicateRootA);
+    Assert.True(Collect<DerivedNode, 8, PoolAllocator>(ref collector)! == 4, "unrooted diamond cycle is reclaimed");
+    CollectorHandle<DerivedNode> reused = AllocateObject<DerivedNode, 8, PoolAllocator>(ref collector, DerivedNode{8, none, none})!;
+    Assert.True(reused.index == a.index and reused.generation != a.generation, "reused slot advances generation");
+    Assert.Error(Borrow<DerivedNode, 8, PoolAllocator>(ref const collector, a), "old handle cannot alias reused slot");
+    Assert.Error(RegisterRoot<DerivedNode, 8, PoolAllocator>(ref collector, a), "stale handle cannot become root");
+}

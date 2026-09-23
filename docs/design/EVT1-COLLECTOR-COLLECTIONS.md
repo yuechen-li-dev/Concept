@@ -21,8 +21,11 @@ R7f2 conservative suspension rule still bars resource-sensitive leases
 across await/yield. Internal tracing runs under the exclusive collection call
 using ordinary readonly allocation views and a bounded visitor.
 
-`Trace<T>` is manual and synchronous. A future R7g reflection feature may
-derive it, while hand-written implementations remain valid. Heterogeneous
+`Trace<T>` is synchronous. `Standard.Collection.DeriveTrace` now derives an
+ordinary `TraceReferences` witness for explicitly `[[trace]]` annotated
+`CollectorHandle<T>` fields; the handwritten witness remains valid and the
+collector has no dependency on reflection. General nested composite and
+payload-enum derivation remains open. Heterogeneous
 collections would need explicit static Trace/Destroy witnesses, rather than
 ambient RTTI. Moving, generational, concurrent, and weak-reference policies
 remain deferred. DragonGod can later place `Collect` at a scheduler quantum

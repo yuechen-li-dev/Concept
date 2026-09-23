@@ -1,6 +1,6 @@
 # Standard.Collection
 
-R7g adds a structural reflection query, but automatic `Trace<T>` derivation is not yet implemented. Collector tracing remains authored as ordinary `TraceReferences` functions.
+R7g1 adds `Standard.Collection.DeriveTrace` for fields explicitly marked `[[trace]]` in a concrete struct. `derive DeriveTrace reflect<Node>;` emits an ordinary checked `TraceReferences` witness. The collector continues to accept handwritten witnesses; nested composite, array/table, and payload-enum derivation remain open.
 
 `Standard.Collection.Core` ships a bounded homogeneous, non-moving mark/sweep
 collector as ordinary Concept library code. Concept has no mandatory garbage
@@ -48,5 +48,4 @@ collector exposes no async borrow exception.
 See [EVT1-R7FR-CONVERGENCE.md](../conformance/EVT1-R7FR-CONVERGENCE.md) for
 native, artifact-only, graph, ownership, and determinism evidence. DragonGod
 rendezvous, heterogeneous objects, moving or concurrent collection, weak
-references, finalizers, and reflection-derived tracing remain outside this
-first library.
+references, and finalizers remain outside this first library.

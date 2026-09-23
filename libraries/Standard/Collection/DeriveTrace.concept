@@ -1,0 +1,17 @@
+module Standard.Collection.DeriveTrace;
+profile Core;
+import Standard.Collection.Core;
+
+// A field opts into tracing with [[trace]]. The generated operation remains
+// ordinary Concept and is checked after structural field expansion.
+generator <typename T> DeriveTrace
+void TraceReferences(ref const T value, ref TraceVisitor<T> visitor)
+{
+    foreach (FieldInfo field in Fields<T>(trace))
+    {
+        if (value.field.index >= 0)
+        {
+            Visit<T>(ref visitor, value.field);
+        }
+    }
+}

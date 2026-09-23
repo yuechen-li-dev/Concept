@@ -62,6 +62,12 @@ are instantiated in the consumer compilation and then follow the ordinary
 layout, ownership, provenance, MIR, Planner, and backend pipeline. There are no
 runtime dictionaries, reflection tables, or module loader.
 
+R7g1 transports generated function declarations and their origin in the same
+`concept-module.v1` semantic payload. The producing module runs its generator
+once during compilation; a consumer imports the checked declaration without
+rerunning that generator. The deterministic envelope hash covers generated
+declaration syntax and provenance.
+
 R7d4 adds deterministic, hash-covered `access_summaries` beside
 `shared_access_facts`. Subjects remain structural and imported evidence is
 relabeled `ModuleAccessSummary`. Consumers never reopen dependency source;

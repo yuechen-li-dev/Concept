@@ -64,3 +64,6 @@ channel meaning is not intrinsic use
 `[[semantic_access("Publish", parameter)]]` and the other closed access-kind
 spellings. These annotations state semantics explicitly. A function named
 `Publish`, `Read`, or `Commit` has no special meaning by spelling alone.
+## Generated witnesses
+
+A generated function can satisfy a concept's required operation through the same lookup and signature rules as a handwritten function. `concept explain <file> --generated <operation>` displays the generated origin and reflected inputs for that checked operation. `concept explain <file> --concept 'Trace<Node>'` checks a single-argument concept goal and attributes its generated required operation.

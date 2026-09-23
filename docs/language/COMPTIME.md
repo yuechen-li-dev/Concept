@@ -1,0 +1,3 @@
+# Compile-time evaluation and declaration generation
+
+Ordinary bounded `comptime` evaluates values during compilation. R7g1 adds a separate explicit declaration-generation path: `generator <typename T> Name` retains an ordinary function syntax tree, and `derive Name reflect<ClosedType>;` constructs a closed function declaration before final semantic analysis. Generators cannot mutate the compiler's symbol table directly. The one-pass phase accepts only supported structural field queries and checks each resulting declaration with the ordinary language rules. See [checked generated declarations](../design/EVT1-GENERATED-DECLARATIONS.md).

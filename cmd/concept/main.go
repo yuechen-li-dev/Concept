@@ -23,7 +23,10 @@ Usage:
   concept mir <file>
   concept plan <file>
   concept explain <file>[:line] [--json] [--verbose]
+  concept explain <file> --generated <symbol> [--json] [--verbose]
+  concept explain <file> --concept 'Trace<Node>' [--json] [--verbose]
   concept reflect <file>
+  concept generated <file> [symbol]
   concept test [path-or-filter] [--filter text] [--list] [--verbose]
   concept package build <name>
   concept package test <name>
@@ -37,6 +40,7 @@ Commands:
   plan    write deterministic LoweringPlan JSON to stdout
   explain display the proof graph for an Assert.Concept source contract
   reflect display compile-time structural results from explicit reflect<T>; sites
+  generated display checked generated declarations and provenance
   test    discover and execute .concept_test sources through strict C11
   package build or test a repository-local manifest.concept package graph
 `
@@ -60,6 +64,10 @@ func main() {
 	}
 	if len(os.Args) >= 2 && os.Args[1] == "explain" {
 		runExplainCommand(os.Args[2:])
+		return
+	}
+	if len(os.Args) >= 2 && os.Args[1] == "generated" {
+		runGeneratedCommand(os.Args[2:])
 		return
 	}
 	if len(os.Args) >= 2 && os.Args[1] == "package" {
@@ -180,17 +188,32 @@ func semanticModuleRoots(sourcePath string) []string {
 }
 
 func runExplainCommand(args []string) {
-	if len(args) < 1 || len(args) > 3 {
+	if len(args) < 1 || len(args) > 5 {
 		fmt.Fprint(os.Stderr, usage)
 		os.Exit(2)
 	}
-	sourcePath, line, jsonOutput, verbose := args[0], 0, false, false
-	for _, arg := range args[1:] {
+	sourcePath, line, jsonOutput, verbose, generatedSymbol, conceptGoal := args[0], 0, false, false, "", ""
+	for i := 1; i < len(args); i++ {
+		arg := args[i]
 		switch arg {
 		case "--json":
 			jsonOutput = true
 		case "--verbose":
 			verbose = true
+		case "--generated":
+			i++
+			if i >= len(args) {
+				fmt.Fprint(os.Stderr, usage)
+				os.Exit(2)
+			}
+			generatedSymbol = args[i]
+		case "--concept":
+			i++
+			if i >= len(args) {
+				fmt.Fprint(os.Stderr, usage)
+				os.Exit(2)
+			}
+			conceptGoal = args[i]
 		default:
 			fmt.Fprint(os.Stderr, usage)
 			os.Exit(2)
@@ -211,7 +234,20 @@ func runExplainCommand(args []string) {
 	if relative, relativeErr := filepath.Rel(".", sourcePath); relativeErr == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 		proofSourcePath = relative
 	}
-	graph, err := concept.ExplainSourceWithSemanticModuleRoots(filepath.ToSlash(proofSourcePath), string(body), line, semanticModuleRoots(sourcePath))
+	var graph concept.ProofGraph
+	if generatedSymbol != "" || conceptGoal != "" {
+		module, parseErr := concept.ParseWithSemanticModuleRoots(filepath.ToSlash(proofSourcePath), string(body), semanticModuleRoots(sourcePath))
+		if parseErr != nil {
+			fail(parseErr)
+		}
+		if conceptGoal != "" {
+			graph, err = concept.ExplainGeneratedConcept(module, conceptGoal)
+		} else {
+			graph, err = concept.ExplainGeneratedDeclaration(module, generatedSymbol)
+		}
+	} else {
+		graph, err = concept.ExplainSourceWithSemanticModuleRoots(filepath.ToSlash(proofSourcePath), string(body), line, semanticModuleRoots(sourcePath))
+	}
 	if err != nil {
 		fail(err)
 	}
@@ -229,6 +265,30 @@ func runExplainCommand(args []string) {
 		fmt.Print(concept.RenderProofSummary(graph))
 	}
 	fmt.Println()
+}
+
+func runGeneratedCommand(args []string) {
+	if len(args) < 1 || len(args) > 2 {
+		fmt.Fprint(os.Stderr, usage)
+		os.Exit(2)
+	}
+	sourcePath, symbol := args[0], ""
+	if len(args) == 2 {
+		symbol = args[1]
+	}
+	body, err := os.ReadFile(sourcePath)
+	if err != nil {
+		fail(err)
+	}
+	module, err := concept.ParseWithSemanticModuleRoots(filepath.ToSlash(sourcePath), string(body), semanticModuleRoots(sourcePath))
+	if err != nil {
+		fail(err)
+	}
+	output, err := concept.InspectGeneratedDeclarations(module, symbol)
+	if err != nil {
+		fail(err)
+	}
+	fmt.Println(string(output))
 }
 
 func runTestCommand(args []string) {

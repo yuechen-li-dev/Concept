@@ -1087,13 +1087,13 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 	}
 	for _, fn := range module.Functions {
 		if err := validateFunctionSignature(env, fn); err != nil {
-			return nil, err
+			return nil, evt1WithGeneratedContext(err, fn)
 		}
 		if err := evt1ValidateExternCSignature(env, fn); err != nil {
-			return nil, err
+			return nil, evt1WithGeneratedContext(err, fn)
 		}
 		if err := evt1ValidateAsyncShape(fn); err != nil {
-			return nil, err
+			return nil, evt1WithGeneratedContext(err, fn)
 		}
 	}
 	if err := evt1ValidateTestMetadata(module); err != nil {
@@ -1202,13 +1202,13 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 			env.validatingMethod = ""
 			env.validatingFunction = ""
 			env.validatingModule = ""
-			return nil, err
+			return nil, evt1WithGeneratedContext(err, fn)
 		}
 		if err := evt1ValidateAsyncPersistence(env, fn); err != nil {
 			env.validatingMethod = ""
 			env.validatingFunction = ""
 			env.validatingModule = ""
-			return nil, err
+			return nil, evt1WithGeneratedContext(err, fn)
 		}
 		env.validatingMethod = ""
 		env.validatingFunction = ""
