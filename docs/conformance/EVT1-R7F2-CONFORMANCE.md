@@ -1,5 +1,8 @@
 # EVT1 R7f2 destructive resource effects: meaningful progression
 
+R7f3 follow-up: [EVT1-R7F3-CONFORMANCE.md](EVT1-R7F3-CONFORMANCE.md)
+records an honest stop at indexed storage-authority replacement.
+
 Baseline: `58dae662d4559b2c0ea6843767e36a54dfbd706d` (`concept-evt1-stage0-go`). R7e: `b1747d7d3ffba7510aff6484c6863f70c214cf6e`. R7f1 is the baseline commit. The work began with a clean tree.
 
 The independent destructive-ref reproducer accepted `Borrow(ref const store); Reset(ref store); Use(held)` before R7f2. A local reference-struct lease across `await` was also accepted. The new contract `requires compiler.InvalidatesBorrows(Reset, store);` declares that the named reference parameter may invalidate borrows from its resource. The ordinary operation-effect representation and `concept-module.v1` effect summary carry the parameter name. The checker compares the call's structural resource path with live reference/lease source paths. A different resource and reclaim after scope exit remain legal. Ordinary mutation without the contract remains legal.

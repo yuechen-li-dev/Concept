@@ -62,6 +62,11 @@ concepts, generic calls, and imported artifacts. Inspection helpers remain
 `NoAllocation`; opaque foreign operations without an effect contract remain
 Unknown.
 
+R7f3 tested an allocator-backed collector design using `Storage<T>` authorities.
+Indexed replacement of non-copyable optional storage remains unsupported, so
+no collector is currently built on this API. See
+[STANDARD-COLLECTION.md](STANDARD-COLLECTION.md).
+
 Arena policy, callable move capture, async persistence, and machine-field
 integration are bounded follow-ons. They are not prerequisites for the fixed,
 pool, hosted, typed-owner, module, or strict-C11 paths delivered here.

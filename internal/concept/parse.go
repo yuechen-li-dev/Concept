@@ -2658,6 +2658,13 @@ done:
 			t = storageElement
 		}
 	}
+	// An applied type may itself be the element of fixed storage, e.g.
+	// Storage<T><array>[N]. Keep the storage suffix distinct from its type args.
+	if p.peekLexeme() == "<" && (p.peekLexemeN(1) == string(StorageArray) || p.peekLexemeN(1) == string(StorageNDArray)) && p.peekLexemeN(2) == ">" {
+		p.next()
+		storageMarker = StorageKind(p.next().Lexeme)
+		p.next()
+	}
 	if p.peekLexeme() == "*" {
 		p.next()
 		pointee := t

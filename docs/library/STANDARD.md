@@ -9,3 +9,6 @@ identities, allocator concepts, typed allocation owners, region geometry,
 effects, strict-C11 behavior, and deterministic module artifacts are preserved.
 The package builds independently with `go run ./cmd/concept package build
 Standard` and tests with the corresponding `package test Standard` command.
+
+`Standard.Collection` is not shipped. The R7f3 status and ordinary-library
+design boundary are recorded in [STANDARD-COLLECTION.md](STANDARD-COLLECTION.md).
