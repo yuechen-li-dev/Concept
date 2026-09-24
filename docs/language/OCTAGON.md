@@ -45,7 +45,10 @@ No runtime codec registry is involved.
 
 The generated family reads and writes the canonical array, nested-array,
 payload, table, and refined-value fixtures. Handwritten array, payload, and
-table codecs reproduce the same bytes. The result
-error currently identifies the error kind; it does not carry a nested field
-path. `NoAllocation` is conditional on the selected underlying operations and
-is not a blanket codec promise.
+table codecs reproduce the same bytes. `OctagonError::At` carries an error kind
+and up to 16 typed path parts (`Name` or `Index`). Ordinary `AtName`/`AtIndex`
+helpers add context as recursive codecs delegate. Reader and writer failures
+propagate with `?`, preserving paths such as
+`Envelope.Items[1].Mode.Enabled.level`. Paths beyond 16 parts retain the outer
+prefix. `NoAllocation` is conditional on the selected underlying operations
+and is not a blanket codec promise.

@@ -40,3 +40,8 @@ semantic artifacts and executes them from C without rerunning B's generator.
 The shared fixtures are
 loaded by Oct's interpreted and compiled paths, while Concept's generated
 readers and writers execute through strict C11.
+
+`OctagonError` carries a bounded typed path. Record fields, fixed-array indices,
+payload cases and members, and nominal refinements add context through ordinary
+Result wrappers; `?` propagates the decorated error. No runtime reflection or
+dynamic path allocation is involved.

@@ -4424,6 +4424,18 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			}
 		}
 		if leftType.Name == rightType.Name && leftType.Kind == TypeEnum && (e.Op == "==" || e.Op == "!=") {
+			enumDecl, ok := env.enums[leftType.Name]
+			if !ok {
+				enumDecl, ok = evt1FailureEnumDecl(leftType)
+			}
+			if !ok {
+				return Type{}, evt1Diagnostic("CV4830", "enum equality requires a known tag-only enum or an explicit comparison operation", e.Span)
+			}
+			for _, variant := range enumDecl.Variants {
+				if len(variant.Payload) != 0 {
+					return Type{}, evt1Diagnostic("CV4830", "payload enum equality requires an explicit comparison operation", e.Span)
+				}
+			}
 			out, _ := evt1BuiltinType("bool", e.Span)
 			return out, nil
 		}

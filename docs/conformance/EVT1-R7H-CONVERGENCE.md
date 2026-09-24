@@ -2,6 +2,22 @@
 
 ## R7h2 derived codec continuation (2026-09-24)
 
+The error-path continuation adds a bounded `OctagonError::At` payload with a
+preserved error kind and up to 16 typed name/index parts. Ordinary Result
+wrappers add record, field, array-index, case, and payload context at delegation
+points. A strict-C11 regression verifies malformed nested input and a capacity
+failure in a nested generated writer, each retaining
+`Envelope.Items[index].Mode.Enabled.level`. A case-label capacity failure
+retains `Mode.Enabled`. The first native run exposed that
+the Standard codec helpers used `!`, which escalated errors before they could
+be decorated. The library now uses ordinary `?` propagation, including inside
+fixed-array construction. Paths beyond 16 parts retain the outer prefix.
+The kind assertion in that regression exposed a general strict-C11 enum
+equality bug: semantic checking accepted `==` on enums while lowering emitted
+an invalid C struct comparison. Tag-only equality now compares variant tags;
+payload enum equality requires an explicit comparison operation and reports
+`CV4830`. Focused native and rejection regressions cover both cases.
+
 The retained R7h2 array and table implementation was extended with generated
 payload enum readers and writers. The earlier generator admitted only an
 exhaustive match driven by an enum-valued parameter, so a reader could not
@@ -37,12 +53,10 @@ Concept refined fixture is LF-canonical: Oct's existing scalar fixture was
 checked out as CRLF in this worktree, which did not match Concept's canonical
 writer. No Oct source or fixture was changed.
 
-The generated codec family still reports an `OctagonError` kind without the
-requested nested field path. A local `NoAllocation` proof succeeds for the
+The generated codec family now retains nested field/index paths. A local `NoAllocation` proof succeeds for the
 fixed-storage scalar `ReadInt` and `WriteInt` operations. An imported operation
 without a transported effect summary is `UNKNOWN`, so a blanket generated-codec
-proof remains unqualified. Those are the remaining R7h2 conformance gaps; the
-rest of the family is persistent
+proof remains unqualified. The codec family is persistent
 in-tree and exercised through real C11 and Oct paths.
 
 ## R7h2 continuation: closed generic witness calls (2026-09-24)

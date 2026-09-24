@@ -553,6 +553,9 @@ func evt1ExpandGeneratedCases(loop *ForeachStmt, query *TemplateCallExpr, info T
 					if err := evt1ReplaceGeneratedFieldStatement(cloned, payloadLoop.ItemName, pattern.Bindings[fieldIndex]); err != nil {
 						return nil, nil, err
 					}
+					payloadInfo := info
+					payloadInfo.Fields = enumCase.Payload
+					evt1ReplaceGeneratedMetadataStatement(cloned, payloadInfo, field.Name, payloadLoop.ItemName)
 					evt1ReplaceGeneratedMetadataStatement(cloned, info, enumCase.Name, loop.ItemName)
 					arm.Block.Statements = append(arm.Block.Statements, cloned)
 					statementCount++

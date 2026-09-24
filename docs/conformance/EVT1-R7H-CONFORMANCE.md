@@ -10,8 +10,9 @@ Oct loads the same array, nested-array, payload, table, and refined fixtures in
 interpreted and compiled modes with zero fallback. The family artifact, MIR, C,
 and header outputs, plus an array codec concept-explain graph, are byte-identical
 over 100 runs.
-Nested runtime error paths and a conditional `NoAllocation` proof remain
-unqualified; see `EVT1-R7H-CONVERGENCE.md`.
+Nested generated reader and writer failures retain typed field/index paths in
+strict C11. A blanket generated-codec `NoAllocation` proof remains unknown for
+opaque imported operations; see `EVT1-R7H-CONVERGENCE.md`.
 
 R7h1 is partially conformant. Named complete aggregate construction,
 generated aggregate construction through artifacts, failure cleanup, Oct

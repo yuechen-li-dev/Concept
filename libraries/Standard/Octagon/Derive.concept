@@ -7,22 +7,22 @@ import Standard.Octagon.Core;
 generator <typename T> DeriveOctagonRead
 Result<T, OctagonError> ReadOctagon(ref OctagonReader reader, OctagonType<T> type)
 {
-    BeginRecord(ref reader, TypeName<T>())!;
+    AtNameVoid(BeginRecord(ref reader, TypeName<T>()), TypeName<T>())?;
     T value = T{foreach (FieldInfo field in Fields<T>()) {
-        field = ReadNamed(ref reader, NameOf<field>(), OctagonType<FieldType<field>>{0})!;
+        field = AtName(AtName(ReadNamed(ref reader, NameOf<field>(), OctagonType<FieldType<field>>{0}), NameOf<field>()), TypeName<T>())?;
     }};
-    EndRecord(ref reader)!;
+    AtNameVoid(EndRecord(ref reader), TypeName<T>())?;
     return Result::Ok(move value);
 }
 
 generator <typename T> DeriveOctagonWrite
 Result<void, OctagonError> WriteOctagon(ref const T value, ref OctagonWriter writer)
 {
-    BeginRecord(ref writer, TypeName<T>())!;
+    AtNameVoid(BeginRecord(ref writer, TypeName<T>()), TypeName<T>())?;
     foreach (FieldInfo field in Fields<T>()) {
-        WriteNamed(ref writer, NameOf<field>(), value.field)!;
+        AtNameVoid(AtNameVoid(WriteNamed(ref writer, NameOf<field>(), value.field), NameOf<field>()), TypeName<T>())?;
     }
-    EndRecord(ref writer)!;
+    AtNameVoid(EndRecord(ref writer), TypeName<T>())?;
     return Result::Ok();
 }
 
@@ -32,17 +32,17 @@ generator <typename T> DeriveOctagonEnumWrite
 Result<void, OctagonError> WriteOctagon(ref const T value, ref OctagonWriter writer)
 {
     foreach (EnumCaseInfo variant in Cases<T>()) {
-        WriteLiteral(ref writer, TypeName<T>())!;
-        WriteLiteral(ref writer, ".")!;
-        WriteLiteral(ref writer, NameOf<variant>())!;
+        AtNameVoid(AtNameVoid(WriteLiteral(ref writer, TypeName<T>()), NameOf<variant>()), TypeName<T>())?;
+        AtNameVoid(AtNameVoid(WriteLiteral(ref writer, "."), NameOf<variant>()), TypeName<T>())?;
+        AtNameVoid(AtNameVoid(WriteLiteral(ref writer, NameOf<variant>()), NameOf<variant>()), TypeName<T>())?;
         int payloadIndex = 0;
         foreach (FieldInfo field in Payload<variant>()) {
-            if (payloadIndex == 0) { WriteLiteral(ref writer, "(")!; }
-            else { WriteLiteral(ref writer, ", ")!; }
-            WriteOctagon(ref const field, ref writer)!;
+            if (payloadIndex == 0) { AtNameVoid(AtNameVoid(AtNameVoid(WriteLiteral(ref writer, "("), NameOf<field>()), NameOf<variant>()), TypeName<T>())?; }
+            else { AtNameVoid(AtNameVoid(AtNameVoid(WriteLiteral(ref writer, ", "), NameOf<field>()), NameOf<variant>()), TypeName<T>())?; }
+            AtNameVoid(AtNameVoid(AtNameVoid(WriteOctagon(ref const field, ref writer), NameOf<field>()), NameOf<variant>()), TypeName<T>())?;
             payloadIndex = payloadIndex + 1;
         }
-        if (payloadIndex > 0) { WriteLiteral(ref writer, ")")!; }
+        if (payloadIndex > 0) { AtNameVoid(AtNameVoid(WriteLiteral(ref writer, ")"), NameOf<variant>()), TypeName<T>())?; }
     }
     return Result::Ok();
 }
@@ -54,15 +54,15 @@ Result<T, OctagonError> ReadOctagon(ref OctagonReader reader, OctagonType<T> typ
         if (TryCase(ref reader, TypeName<T>(), NameOf<variant>(), HasPayload<variant>())) {
             int payloadIndex = 0;
             foreach (FieldInfo field in Payload<variant>()) {
-                if (payloadIndex > 0) { ExpectLiteral(ref reader, ",")!; }
-                FieldType<field> field = ReadOctagon(ref reader, OctagonType<FieldType<field>>{0})!;
+                if (payloadIndex > 0) { AtNameVoid(AtNameVoid(AtNameVoid(ExpectLiteral(ref reader, ","), NameOf<field>()), NameOf<variant>()), TypeName<T>())?; }
+                FieldType<field> field = AtName(AtName(AtName(ReadOctagon(ref reader, OctagonType<FieldType<field>>{0}), NameOf<field>()), NameOf<variant>()), TypeName<T>())?;
                 payloadIndex = payloadIndex + 1;
             }
-            if (payloadIndex > 0) { ExpectLiteral(ref reader, ")")!; }
+            if (payloadIndex > 0) { AtNameVoid(AtNameVoid(ExpectLiteral(ref reader, ")"), NameOf<variant>()), TypeName<T>())?; }
             return Result::Ok(ConstructCase<variant>());
         }
     }
-    return Result::Error(OctagonError::UnexpectedData);
+    return Result::Error(PrefixOctagonError(OctagonError::UnexpectedData, OctagonPathPart::Name(TypeName<T>())));
 }
 
 // A single-field nominal refinement reads its representation through the
@@ -71,7 +71,8 @@ generator <typename T> DeriveOctagonRefinedRead
 Result<T, OctagonError> ReadOctagon(ref OctagonReader reader, OctagonType<T> type)
 {
     foreach (FieldInfo field in OnlyField<T>()) {
-        return AdmitOctagon(ReadOctagon(ref reader, OctagonType<FieldType<field>>{0})!, type);
+        FieldType<field> raw = AtName(AtName(ReadOctagon(ref reader, OctagonType<FieldType<field>>{0}), NameOf<field>()), TypeName<T>())?;
+        return AtName(AdmitOctagon(raw, type), TypeName<T>());
     }
     return Result::Error(OctagonError::UnexpectedData);
 }
@@ -80,7 +81,7 @@ generator <typename T> DeriveOctagonRefinedWrite
 Result<void, OctagonError> WriteOctagon(ref const T value, ref OctagonWriter writer)
 {
     foreach (FieldInfo field in OnlyField<T>()) {
-        WriteOctagon(ref const value.field, ref writer)!;
+        AtNameVoid(AtNameVoid(WriteOctagon(ref const value.field, ref writer), NameOf<field>()), TypeName<T>())?;
     }
     return Result::Ok();
 }

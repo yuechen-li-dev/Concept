@@ -4480,6 +4480,10 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		}
 		leftPrelude, left, leftType := f.lowerExpr(e.Left, indent)
 		rightPrelude, right, rightType := f.lowerExpr(e.Right, indent)
+		if (e.Op == "==" || e.Op == "!=") && leftType.Kind == TypeEnum && leftType.SameValueType(rightType) {
+			boolType, _ := evt1BuiltinType("bool", e.Span)
+			return leftPrelude + rightPrelude, fmt.Sprintf("((%s).tag %s (%s).tag)", left, e.Op, right), boolType
+		}
 		if e.Op == "<" || e.Op == ">" || e.Op == "<=" || e.Op == ">=" || e.Op == "==" || e.Op == "!=" || e.Op == "and" || e.Op == "or" {
 			boolType, _ := evt1BuiltinType("bool", e.Span)
 			op := e.Op

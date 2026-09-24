@@ -3,11 +3,70 @@ profile Core;
 
 extern "C" usize strlen(string text);
 
+enum OctagonErrorKind { EndOfInput, UnexpectedData, CapacityExceeded, }
+enum OctagonPathPart { Name(string text), Index(int value), }
+
 enum OctagonError
 {
     EndOfInput,
     UnexpectedData,
     CapacityExceeded,
+    At(OctagonErrorKind kind, OctagonPathPart<array>[16] parts, int depth),
+}
+
+// Error paths are a bounded value carried through ordinary Result propagation.
+// The outermost context is first; paths deeper than 16 parts keep the prefix.
+OctagonError PrefixOctagonError(OctagonError error, OctagonPathPart part)
+{
+    OctagonPathPart<array>[16] parts = [OctagonPathPart::Index(0) ...];
+    parts[0] = part;
+    match (error)
+    {
+        OctagonError::EndOfInput => {
+            return OctagonError::At(OctagonErrorKind::EndOfInput, move parts, 1);
+        }
+        OctagonError::UnexpectedData => {
+            return OctagonError::At(OctagonErrorKind::UnexpectedData, move parts, 1);
+        }
+        OctagonError::CapacityExceeded => {
+            return OctagonError::At(OctagonErrorKind::CapacityExceeded, move parts, 1);
+        }
+        OctagonError::At(kind, previous, depth) => {
+            int count = depth;
+            if (count > 15) { count = 15; }
+            int index = 0;
+            while (index < count) bounded(15) {
+                parts[index + 1] = previous[index];
+                index = index + 1;
+            }
+            return OctagonError::At(kind, move parts, count + 1);
+        }
+    }
+}
+
+bool OctagonPathNameIs(OctagonPathPart part, string expected)
+{
+    match (part)
+    {
+        OctagonPathPart::Index(value) => { return false; }
+        OctagonPathPart::Name(actual) => {
+            if (strlen(actual) != strlen(expected)) { return false; }
+            usize index = 0;
+            while (index < strlen(expected)) bounded(2147483647) {
+                if (actual[index] != expected[index]) { return false; }
+                index = index + 1;
+            }
+            return true;
+        }
+    }
+}
+
+bool OctagonPathIndexIs(OctagonPathPart part, int expected)
+{
+    return match (part) {
+        OctagonPathPart::Index(value) => value == expected,
+        OctagonPathPart::Name(text) => false,
+    };
 }
 
 ref struct OctagonReader
@@ -29,6 +88,44 @@ struct OctagonType
 {
     int marker;
 };
+
+template <typename T>
+Result<T, OctagonError> AtName(Result<T, OctagonError> result, string name)
+{
+    match (move result)
+    {
+        Result::Ok(value) => { return Result::Ok(move value); }
+        Result::Error(error) => { return Result::Error(PrefixOctagonError(error, OctagonPathPart::Name(name))); }
+    }
+}
+
+template <typename T>
+Result<T, OctagonError> AtIndex(Result<T, OctagonError> result, int index)
+{
+    match (move result)
+    {
+        Result::Ok(value) => { return Result::Ok(move value); }
+        Result::Error(error) => { return Result::Error(PrefixOctagonError(error, OctagonPathPart::Index(index))); }
+    }
+}
+
+Result<void, OctagonError> AtNameVoid(Result<void, OctagonError> result, string name)
+{
+    match (move result)
+    {
+        Result::Ok() => { return Result::Ok(); }
+        Result::Error(error) => { return Result::Error(PrefixOctagonError(error, OctagonPathPart::Name(name))); }
+    }
+}
+
+Result<void, OctagonError> AtIndexVoid(Result<void, OctagonError> result, int index)
+{
+    match (move result)
+    {
+        Result::Ok() => { return Result::Ok(); }
+        Result::Error(error) => { return Result::Error(PrefixOctagonError(error, OctagonPathPart::Index(index))); }
+    }
+}
 
 concept OctagonCodec<T>
 {
@@ -54,7 +151,7 @@ Result<void, OctagonError> WriteLiteral(ref OctagonWriter writer, string text)
     usize index = 0;
     while (index < strlen(text)) bounded(2147483647)
     {
-        WriteByte(ref writer, text[index])!;
+        WriteByte(ref writer, text[index])?;
         index = index + 1;
     }
     return Result::Ok();
@@ -124,27 +221,27 @@ bool TryCase(ref OctagonReader reader, string typeName, string caseName, bool pa
 
 Result<void, OctagonError> BeginRecord(ref OctagonReader reader, string name)
 {
-    ExpectLiteral(ref reader, name)!;
-    ExpectLiteral(ref reader, "{")!;
+    ExpectLiteral(ref reader, name)?;
+    ExpectLiteral(ref reader, "{")?;
     return Result::Ok();
 }
 
 Result<void, OctagonError> EndRecord(ref OctagonReader reader)
 {
-    ExpectLiteral(ref reader, "}")!;
+    ExpectLiteral(ref reader, "}")?;
     return Result::Ok();
 }
 
 Result<void, OctagonError> BeginRecord(ref OctagonWriter writer, string name)
 {
-    WriteLiteral(ref writer, name)!;
-    WriteLiteral(ref writer, " {\n")!;
+    WriteLiteral(ref writer, name)?;
+    WriteLiteral(ref writer, " {\n")?;
     return Result::Ok();
 }
 
 Result<void, OctagonError> EndRecord(ref OctagonWriter writer)
 {
-    WriteLiteral(ref writer, "}")!;
+    WriteLiteral(ref writer, "}")?;
     return Result::Ok();
 }
 
@@ -152,7 +249,7 @@ Result<void, OctagonError> EndRecord(ref OctagonWriter writer)
 // Oct's single canonical trailing newline.
 Result<void, OctagonError> FinishOctagon(ref OctagonWriter writer)
 {
-    WriteLiteral(ref writer, "\n")!;
+    WriteLiteral(ref writer, "\n")?;
     return Result::Ok();
 }
 
@@ -206,7 +303,7 @@ Result<void, OctagonError> WriteInt(ref OctagonWriter writer, int value)
     int<array>[10] reversed = [0 ...];
     int count = 0;
     int remaining = value;
-    if (remaining < 0) { WriteByte(ref writer, 45)!; }
+    if (remaining < 0) { WriteByte(ref writer, 45)?; }
     while (remaining != 0) bounded(10)
     {
         int quotient = remaining / 10;
@@ -220,25 +317,25 @@ Result<void, OctagonError> WriteInt(ref OctagonWriter writer, int value)
     while (count > 0) bounded(10)
     {
         count = count - 1;
-        WriteByte(ref writer, digits[reversed[count]])!;
+        WriteByte(ref writer, digits[reversed[count]])?;
     }
     return Result::Ok();
 }
 
 Result<int, OctagonError> ReadNamedInt(ref OctagonReader reader, string name)
 {
-    ExpectLiteral(ref reader, name)!;
-    ExpectLiteral(ref reader, ":")!;
+    ExpectLiteral(ref reader, name)?;
+    ExpectLiteral(ref reader, ":")?;
     return Result::Ok(ReadInt(ref reader)!);
 }
 
 Result<void, OctagonError> WriteNamedInt(ref OctagonWriter writer, string name, int value)
 {
-    WriteLiteral(ref writer, "    ")!;
-    WriteLiteral(ref writer, name)!;
-    WriteLiteral(ref writer, ": ")!;
-    WriteInt(ref writer, value)!;
-    WriteLiteral(ref writer, "\n")!;
+    WriteLiteral(ref writer, "    ")?;
+    WriteLiteral(ref writer, name)?;
+    WriteLiteral(ref writer, ": ")?;
+    WriteInt(ref writer, value)?;
+    WriteLiteral(ref writer, "\n")?;
     return Result::Ok();
 }
 
@@ -246,15 +343,15 @@ Result<bool, OctagonError> ReadBool(ref OctagonReader reader)
 {
     SkipWhitespace(ref reader);
     if (reader.offset >= Len(reader.input)) { return Result::Error(OctagonError::EndOfInput); }
-    if (reader.input[reader.offset] == 116) { ExpectLiteral(ref reader, "true")!; return Result::Ok(true); }
-    if (reader.input[reader.offset] == 102) { ExpectLiteral(ref reader, "false")!; return Result::Ok(false); }
+    if (reader.input[reader.offset] == 116) { ExpectLiteral(ref reader, "true")?; return Result::Ok(true); }
+    if (reader.input[reader.offset] == 102) { ExpectLiteral(ref reader, "false")?; return Result::Ok(false); }
     return Result::Error(OctagonError::UnexpectedData);
 }
 
 Result<void, OctagonError> WriteBool(ref OctagonWriter writer, bool value)
 {
-    if (value) { WriteLiteral(ref writer, "true")!; }
-    else { WriteLiteral(ref writer, "false")!; }
+    if (value) { WriteLiteral(ref writer, "true")?; }
+    else { WriteLiteral(ref writer, "false")?; }
     return Result::Ok();
 }
 
@@ -280,49 +377,52 @@ Result<void, OctagonError> WriteOctagon(ref const bool value, ref OctagonWriter 
 
 Result<int, OctagonError> ReadArrayElement(ref OctagonReader reader, ref int index, OctagonType<int> type)
 {
-    if (index > 0) { ExpectLiteral(ref reader, ",")!; }
+    if (index > 0) { AtIndexVoid(ExpectLiteral(ref reader, ","), index)?; }
+    int current = index;
     index = index + 1;
-    return ReadInt(ref reader);
+    return AtIndex(ReadInt(ref reader), current);
 }
 
 Result<bool, OctagonError> ReadArrayElement(ref OctagonReader reader, ref int index, OctagonType<bool> type)
 {
-    if (index > 0) { ExpectLiteral(ref reader, ",")!; }
+    if (index > 0) { AtIndexVoid(ExpectLiteral(ref reader, ","), index)?; }
+    int current = index;
     index = index + 1;
-    return ReadBool(ref reader);
+    return AtIndex(ReadBool(ref reader), current);
 }
 
 template <typename T> requires OctagonCodec<T>
 Result<T, OctagonError> ReadArrayElement(ref OctagonReader reader, ref int index, OctagonType<T> type)
 {
-    if (index > 0) { ExpectLiteral(ref reader, ",")!; }
+    if (index > 0) { AtIndexVoid(ExpectLiteral(ref reader, ","), index)?; }
+    int current = index;
     index = index + 1;
-    return ReadOctagon(ref reader, type);
+    return AtIndex<T>(ReadOctagon(ref reader, type), current);
 }
 
 template <typename T, usize N> requires OctagonArrayElement<T>
 Result<T<array>[N], OctagonError> ReadOctagon(ref OctagonReader reader, OctagonType<T<array>[N]> type)
 {
-    ExpectLiteral(ref reader, "[")!;
+    ExpectLiteral(ref reader, "[")?;
     int index = 0;
-    T<array>[N] values = [ReadArrayElement(ref reader, ref index, OctagonType<T>{0})! ... N];
-    ExpectLiteral(ref reader, "]")!;
+    T<array>[N] values = [ReadArrayElement(ref reader, ref index, OctagonType<T>{0})? ... N];
+    ExpectLiteral(ref reader, "]")?;
     return Result::Ok(move values);
 }
 
 template <typename T, usize N> requires OctagonCodec<T>
 Result<void, OctagonError> WriteOctagon(ref const T<array>[N] values, ref OctagonWriter writer)
 {
-    WriteLiteral(ref writer, "[")!;
+    WriteLiteral(ref writer, "[")?;
     int index = 0;
     while (index < Len(values)) bounded(2147483647)
     {
-        if (index > 0) { WriteLiteral(ref writer, ", ")!; }
+        if (index > 0) { AtIndexVoid(WriteLiteral(ref writer, ", "), index)?; }
         T item = values[index];
-        WriteOctagon(ref const item, ref writer)!;
+        AtIndexVoid(WriteOctagon(ref const item, ref writer), index)?;
         index = index + 1;
     }
-    WriteLiteral(ref writer, "]")!;
+    WriteLiteral(ref writer, "]")?;
     return Result::Ok();
 }
 
@@ -333,8 +433,8 @@ Result<int, OctagonError> ReadNamed(ref OctagonReader reader, string name, Octag
 
 Result<bool, OctagonError> ReadNamed(ref OctagonReader reader, string name, OctagonType<bool> type)
 {
-    ExpectLiteral(ref reader, name)!;
-    ExpectLiteral(ref reader, ":")!;
+    ExpectLiteral(ref reader, name)?;
+    ExpectLiteral(ref reader, ":")?;
     return Result::Ok(ReadBool(ref reader)!);
 }
 
@@ -345,29 +445,29 @@ Result<void, OctagonError> WriteNamed(ref OctagonWriter writer, string name, int
 
 Result<void, OctagonError> WriteNamed(ref OctagonWriter writer, string name, bool value)
 {
-    WriteLiteral(ref writer, "    ")!;
-    WriteLiteral(ref writer, name)!;
-    WriteLiteral(ref writer, ": ")!;
-    WriteBool(ref writer, value)!;
-    WriteLiteral(ref writer, "\n")!;
+    WriteLiteral(ref writer, "    ")?;
+    WriteLiteral(ref writer, name)?;
+    WriteLiteral(ref writer, ": ")?;
+    WriteBool(ref writer, value)?;
+    WriteLiteral(ref writer, "\n")?;
     return Result::Ok();
 }
 
 template <typename T> requires OctagonCodec<T>
 Result<T, OctagonError> ReadNamed(ref OctagonReader reader, string name, OctagonType<T> type)
 {
-    ExpectLiteral(ref reader, name)!;
-    ExpectLiteral(ref reader, ":")!;
+    ExpectLiteral(ref reader, name)?;
+    ExpectLiteral(ref reader, ":")?;
     return ReadOctagon(ref reader, type);
 }
 
 template <typename T> requires OctagonCodec<T>
 Result<void, OctagonError> WriteNamed(ref OctagonWriter writer, string name, T value)
 {
-    WriteLiteral(ref writer, "    ")!;
-    WriteLiteral(ref writer, name)!;
-    WriteLiteral(ref writer, ": ")!;
-    WriteOctagon(ref const value, ref writer)!;
-    WriteLiteral(ref writer, "\n")!;
+    WriteLiteral(ref writer, "    ")?;
+    WriteLiteral(ref writer, name)?;
+    WriteLiteral(ref writer, ": ")?;
+    WriteOctagon(ref const value, ref writer)?;
+    WriteLiteral(ref writer, "\n")?;
     return Result::Ok();
 }

@@ -325,6 +325,10 @@ enum Status
 Status status = Status::Ready(7);
 ```
 
+Tag-only enums support `==` and `!=` by variant identity. Payload enums require
+an explicit comparison operation so payload semantics are author-defined;
+applying the built-in equality operators to one reports `CV4830`.
+
 failure semantics specializes this same facility for the canonical compiler-known
 `Option<T>` and `Result<T,E>` forms described in Section 24; it does not add a
 second enum or match system.
