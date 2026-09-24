@@ -1,11 +1,17 @@
-# R7h1 conformance status
+# R7h conformance status
 
-R7h2 continuation: closed generic witness proof and ordinary calls now infer
-the same type and value arguments. Generated record codecs cover scalar,
-fixed-array, nested-array, and columnar-table fields through ordinary
-`OctagonCodec<T>` delegation. Standard runs these codecs through strict C11.
-Payload-enum and refinement derivation and the full bidirectional interop and
-determinism gates remain unqualified; see `EVT1-R7H-CONVERGENCE.md`.
+R7h2: closed generic witness proof and ordinary calls infer the same type and
+value arguments. Generated codecs cover scalar record fields, fixed arrays,
+nested arrays, payload enums, nested payloads, columnar tables, and a nominal
+single-field refinement through ordinary `OctagonCodec<T>` delegation.
+Standard and the A-to-B-to-C artifact regression execute through strict C11.
+Concept generated codecs consume and reproduce shared canonical Octagon bytes;
+Oct loads the same array, nested-array, payload, table, and refined fixtures in
+interpreted and compiled modes with zero fallback. The family artifact, MIR, C,
+and header outputs, plus an array codec concept-explain graph, are byte-identical
+over 100 runs.
+Nested runtime error paths and a conditional `NoAllocation` proof remain
+unqualified; see `EVT1-R7H-CONVERGENCE.md`.
 
 R7h1 is partially conformant. Named complete aggregate construction,
 generated aggregate construction through artifacts, failure cleanup, Oct
@@ -15,11 +21,7 @@ tests. Type-directed field selection uses the general `FieldType<field>`
 reflection substitution and ordinary overloads. Oct's relevant compiled
 Octagon load corpus now passes without fallback.
 
-The continuation additionally proves a fixed integer-array round trip and
-handwritten typed nested-payload-enum and columnar-table round trips in strict
-C11. Their bytes match Oct's canonical fixtures. Oct loads the catalog fixture
-in interpreted and compiled modes, and its writer reproduces the payload and
-catalog fixtures over 100 runs. A general enum/table derived codec, nested
-array family, refined values, generated array fields, and complete
-cross-language families remain open. See
-`EVT1-R7H-CONVERGENCE.md` for evidence and exact baselines.
+The R7h1 historical checkpoint included handwritten typed nested-payload-enum
+and columnar-table codecs. R7h2 now derives those shapes and retains manual
+codecs as valid ordinary alternatives. See `EVT1-R7H-CONVERGENCE.md` for the
+earlier blocker history and current qualification evidence.

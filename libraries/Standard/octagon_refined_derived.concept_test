@@ -1,0 +1,44 @@
+profile Core;
+import Standard.Octagon.Core;
+import Standard.Octagon.Derive;
+
+record struct Positive { int Value; }
+
+concept PositiveSchema<T>
+{
+    requires bool IsAdmitted(ref const T value);
+}
+
+bool IsAdmitted(ref const Positive value) { return value.Value > 0; }
+
+Result<Positive, OctagonError> AdmitOctagon(int raw, OctagonType<Positive> type)
+{
+    if (raw <= 0) { return Result::Error(OctagonError::UnexpectedData); }
+    return Result::Ok(Positive{Value = raw});
+}
+
+derive DeriveOctagonRefinedRead reflect<Positive>;
+derive DeriveOctagonRefinedWrite reflect<Positive>;
+requires OctagonCodec<Positive>;
+requires PositiveSchema<Positive>;
+
+[[fact]]
+void DerivedRefinedAdmission()
+{
+    Positive positive = AdmitOctagon(42, OctagonType<Positive>{0})!;
+    byte<array>[16] bytes = [0 ...];
+    OctagonWriter writer = OctagonWriter{Span(bytes), 0};
+    WriteOctagon(ref const positive, ref writer)!;
+    FinishOctagon(ref writer)!;
+    OctagonReader golden = OctagonReader{Span(bytes), 0};
+    ExpectLiteral(ref golden, "42\n")!;
+    Assert.True(golden.offset == writer.offset, "refined representation bytes");
+    OctagonReader reader = OctagonReader{Span(bytes), 0};
+    Positive loaded = ReadOctagon(ref reader, OctagonType<Positive>{0})!;
+    Assert.True(IsAdmitted(ref const loaded), "refined admission accepted positive data");
+    byte<array>[4] rejected = [48, 10, 0, 0];
+    OctagonReader invalid = OctagonReader{Span(rejected), 0};
+    Result<Positive, OctagonError> failure = ReadOctagon(ref invalid, OctagonType<Positive>{0});
+    bool rejectedAdmission = match (failure) { Result::Ok(value) => false, Result::Error(error) => true, };
+    Assert.True(rejectedAdmission, "refined admission rejected zero");
+}

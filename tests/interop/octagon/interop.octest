@@ -1,0 +1,37 @@
+package R7h2Refined
+
+enum Inner { Value(Int) }
+enum Outer { Wrapped(Inner) }
+
+record table Catalog { ID: Int Active: Bool }
+record ArrayHolder { Values: Int[] }
+record NestedArrayHolder { Values: Int[][] }
+
+[Fact]
+fn LoadsGeneratedArrayShape() -> Void ! Error {
+    let holder = LoadOctagon<ArrayHolder>("tests/fixtures/octagon/array_holder.octagon")?
+    Assert.Equal(3, Len(holder.Values), "generated array field extent")
+    Assert.Equal(2, holder.Values[1], "generated array field value")
+}
+
+[Fact]
+fn LoadsGeneratedNestedArrayShape() -> Void ! Error {
+    let holder = LoadOctagon<NestedArrayHolder>("tests/fixtures/octagon/nested_array_holder.octagon")?
+    Assert.Equal(3, Len(holder.Values), "generated outer array extent")
+    Assert.Equal(6, holder.Values[2][1], "generated nested element")
+}
+
+[Fact]
+fn LoadsGeneratedNestedPayload() -> Void ! Error {
+    let outer = LoadOctagon<Outer>("../oct/Language/Data/Octagon/valid/payload_enum_nested.octagon")?
+    let inner = match outer { case Outer.Wrapped(v) -> v }
+    let number = match inner { case Inner.Value(v) -> v }
+    Assert.Equal(42, number, "generated nested payload")
+}
+
+[Fact]
+fn LoadsGeneratedTable() -> Void ! Error {
+    let catalog = LoadOctagon<Catalog>("../oct/Language/Data/Octagon/Load/valid/concept_catalog.octagon")?
+    Assert.Equal(3, Len(catalog), "derived columnar table cardinality")
+    Assert.Equal(false, catalog[1].Active, "derived column value")
+}

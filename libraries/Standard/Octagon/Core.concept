@@ -84,6 +84,44 @@ Result<void, OctagonError> ExpectLiteral(ref OctagonReader reader, string text)
     return Result::Ok();
 }
 
+bool TryCase(ref OctagonReader reader, string typeName, string caseName, bool payload)
+{
+    SkipWhitespace(ref reader);
+    int start = reader.offset;
+    usize index = 0;
+    while (index < strlen(typeName)) bounded(2147483647)
+    {
+        if (reader.offset >= Len(reader.input) or reader.input[reader.offset] != typeName[index]) { reader.offset = start; return false; }
+        reader.offset = reader.offset + 1;
+        index = index + 1;
+    }
+    if (reader.offset >= Len(reader.input) or reader.input[reader.offset] != 46) { reader.offset = start; return false; }
+    reader.offset = reader.offset + 1;
+    index = 0;
+    while (index < strlen(caseName)) bounded(2147483647)
+    {
+        if (reader.offset >= Len(reader.input) or reader.input[reader.offset] != caseName[index]) { reader.offset = start; return false; }
+        reader.offset = reader.offset + 1;
+        index = index + 1;
+    }
+    if (payload)
+    {
+        if (reader.offset >= Len(reader.input) or reader.input[reader.offset] != 40) { reader.offset = start; return false; }
+        reader.offset = reader.offset + 1;
+        return true;
+    }
+    if (reader.offset < Len(reader.input))
+    {
+        byte next = reader.input[reader.offset];
+        if (next != 32 and next != 9 and next != 10 and next != 13 and next != 44 and next != 93 and next != 125 and next != 41)
+        {
+            reader.offset = start;
+            return false;
+        }
+    }
+    return true;
+}
+
 Result<void, OctagonError> BeginRecord(ref OctagonReader reader, string name)
 {
     ExpectLiteral(ref reader, name)!;

@@ -183,7 +183,7 @@ func evt1MaterializeGeneratedDeclarations(module *Module) error {
 			return evt1Diagnostic("GENERATOR_DECLARATION_INVALID", fmt.Sprintf("generator %s: %v", generator.Name, err), request.Span)
 		}
 		owner := ""
-		if len(function.Params) != 0 {
+		if len(function.Params) != 0 && function.Params[0].Type.valueType().SameValueType(info.Type) {
 			owner = function.Params[0].Name
 		}
 		body, inputs, err := evt1ExpandGeneratedFields(*function.Body, info, owner, env)
@@ -233,16 +233,19 @@ func evt1ExpandGeneratedFields(block Block, info TypeInfo, owner string, env *se
 		}
 		query, ok := loop.Source.(*TemplateCallExpr)
 		if ok && query.Callee == "Cases" {
-			match, caseInputs, err := evt1ExpandGeneratedCases(loop, query, info, owner, env)
+			caseStatement, caseInputs, err := evt1ExpandGeneratedCases(loop, query, info, owner, env)
 			if err != nil {
 				return Block{}, nil, err
 			}
-			out.Statements = append(out.Statements, match)
+			out.Statements = append(out.Statements, caseStatement)
 			inputs = append(inputs, caseInputs...)
 			continue
 		}
-		if !ok || query.Callee != "Fields" || loop.ItemType.Name != "FieldInfo" || !query.TypeArg.SameValueType(info.Type) || len(query.Args) > 1 {
-			return Block{}, nil, evt1Diagnostic("GENERATOR_FIELD_QUERY_INVALID", "generator foreach requires FieldInfo item in Fields<T>(attribute)", loop.Span)
+		if !ok || (query.Callee != "Fields" && query.Callee != "OnlyField") || loop.ItemType.Name != "FieldInfo" || !query.TypeArg.SameValueType(info.Type) || len(query.Args) > 1 {
+			return Block{}, nil, evt1Diagnostic("GENERATOR_FIELD_QUERY_INVALID", "generator foreach requires FieldInfo item in Fields<T>(attribute) or OnlyField<T>()", loop.Span)
+		}
+		if query.Callee == "OnlyField" && (len(query.Args) != 0 || len(info.Fields) != 1) {
+			return Block{}, nil, evt1Diagnostic("GENERATOR_SINGLE_FIELD_REQUIRED", "OnlyField<T>() requires exactly one reflected field and no selector", loop.Span)
 		}
 		selector := ""
 		if len(query.Args) == 1 {
@@ -368,6 +371,7 @@ func evt1ReplaceGeneratedMetadataStatement(statement Statement, info TypeInfo, f
 	case *ReturnStmt:
 		evt1ReplaceGeneratedMetadataExpr(&s.Value, info, field, placeholder)
 	case *VarDecl:
+		s.Type = evt1GeneratedFieldType(s.Type, info, field, placeholder)
 		evt1ReplaceGeneratedMetadataExpr(&s.Value, info, field, placeholder)
 	case *ExprStmt:
 		evt1ReplaceGeneratedMetadataExpr(&s.Value, info, field, placeholder)
@@ -407,6 +411,25 @@ func evt1ReplaceGeneratedMetadataExpr(expression *Expr, info TypeInfo, field, pl
 		if e.Callee == "NameOf" && field != "" && e.TypeArg.Name == placeholder && len(e.Args) == 0 {
 			*expression = &StringLiteral{Value: field, Span: e.Span}
 			return
+		}
+		if field != "" && e.TypeArg.Name == placeholder && len(e.Args) == 0 {
+			for caseIndex, enumCase := range info.EnumCases {
+				if enumCase.Name != field {
+					continue
+				}
+				if e.Callee == "HasPayload" {
+					*expression = &BoolLiteral{Value: len(enumCase.Payload) > 0, Span: e.Span}
+					return
+				}
+				if e.Callee == "ConstructCase" {
+					constructed := &ConstructExpr{EnumName: info.Type.Name, VariantName: enumCase.Name, Span: e.Span}
+					for fieldIndex := range enumCase.Payload {
+						constructed.Args = append(constructed.Args, &NameExpr{Name: fmt.Sprintf("__generated_payload_%d_%d", caseIndex, fieldIndex), Span: e.Span})
+					}
+					*expression = constructed
+					return
+				}
+			}
 		}
 		for i := range e.Args {
 			evt1ReplaceGeneratedMetadataExpr(&e.Args[i], info, field, placeholder)
@@ -471,9 +494,12 @@ func evt1GeneratedFieldMatches(env *semanticEnv, selector string, owner Type, fi
 	return evt1HasNamedAttribute(field.Attributes, selector)
 }
 
-func evt1ExpandGeneratedCases(loop *ForeachStmt, query *TemplateCallExpr, info TypeInfo, owner string, env *semanticEnv) (*MatchStmt, []GeneratedInput, error) {
-	if info.Kind != "enum" || owner == "" || loop.ItemType.Name != "EnumCaseInfo" || !query.TypeArg.SameValueType(info.Type) || len(query.Args) != 0 {
+func evt1ExpandGeneratedCases(loop *ForeachStmt, query *TemplateCallExpr, info TypeInfo, owner string, env *semanticEnv) (Statement, []GeneratedInput, error) {
+	if info.Kind != "enum" || loop.ItemType.Name != "EnumCaseInfo" || !query.TypeArg.SameValueType(info.Type) || len(query.Args) != 0 {
 		return nil, nil, evt1Diagnostic("GENERATOR_CASE_QUERY_INVALID", "generator foreach requires EnumCaseInfo item in Cases<T>() over an enum", loop.Span)
+	}
+	if owner == "" {
+		return evt1ExpandGeneratedCaseConditions(loop, info, env)
 	}
 	match := &MatchStmt{Subject: &NameExpr{Name: owner, Span: loop.Span}, Span: loop.Span}
 	var inputs []GeneratedInput
@@ -487,7 +513,17 @@ func evt1ExpandGeneratedCases(loop *ForeachStmt, query *TemplateCallExpr, info T
 		for _, statement := range loop.Body.Statements {
 			payloadLoop, ok := statement.(*ForeachStmt)
 			if !ok {
-				return nil, nil, evt1Diagnostic("GENERATOR_CASE_BODY_INVALID", "case generation requires a Payload<case>(attribute) field loop", statement.statementSpan())
+				if statementCount >= evt1GeneratedStatementLimit {
+					return nil, nil, evt1Diagnostic("GENERATOR_OUTPUT_LIMIT", "generated function exceeds statement limit", statement.statementSpan())
+				}
+				cloned, err := evt1SubstituteStatement(statement, "__generated_case_clone__", Type{})
+				if err != nil {
+					return nil, nil, evt1Diagnostic("GENERATOR_BODY_UNSUPPORTED", err.Error(), statement.statementSpan())
+				}
+				evt1ReplaceGeneratedMetadataStatement(cloned, info, enumCase.Name, loop.ItemName)
+				arm.Block.Statements = append(arm.Block.Statements, cloned)
+				statementCount++
+				continue
 			}
 			payloadQuery, ok := payloadLoop.Source.(*TemplateCallExpr)
 			if !ok || payloadQuery.Callee != "Payload" || payloadLoop.ItemType.Name != "FieldInfo" || payloadQuery.TypeArg.Name != loop.ItemName || len(payloadQuery.Args) > 1 {
@@ -517,6 +553,7 @@ func evt1ExpandGeneratedCases(loop *ForeachStmt, query *TemplateCallExpr, info T
 					if err := evt1ReplaceGeneratedFieldStatement(cloned, payloadLoop.ItemName, pattern.Bindings[fieldIndex]); err != nil {
 						return nil, nil, err
 					}
+					evt1ReplaceGeneratedMetadataStatement(cloned, info, enumCase.Name, loop.ItemName)
 					arm.Block.Statements = append(arm.Block.Statements, cloned)
 					statementCount++
 				}
@@ -525,6 +562,78 @@ func evt1ExpandGeneratedCases(loop *ForeachStmt, query *TemplateCallExpr, info T
 		match.Arms = append(match.Arms, arm)
 	}
 	return match, inputs, nil
+}
+
+// Without an enum-valued subject, Cases<T>() expands into ordinary checked
+// statements for each case. This is used by readers: the generator decides
+// how to recognize a case, and ConstructCase<case>() closes its typed payload
+// locals into an ordinary enum constructor.
+func evt1ExpandGeneratedCaseConditions(loop *ForeachStmt, info TypeInfo, env *semanticEnv) (Statement, []GeneratedInput, error) {
+	if len(loop.Body.Statements) != 1 {
+		return nil, nil, evt1Diagnostic("GENERATOR_CASE_BODY_INVALID", "case condition generation requires one if statement", loop.Span)
+	}
+	condition, ok := loop.Body.Statements[0].(*IfStmt)
+	if !ok {
+		return nil, nil, evt1Diagnostic("GENERATOR_CASE_BODY_INVALID", "case condition generation requires one if statement", loop.Span)
+	}
+	result := &Block{Span: loop.Span}
+	var inputs []GeneratedInput
+	count := 0
+	for caseIndex, enumCase := range info.EnumCases {
+		cloned, err := evt1SubstituteStatement(condition, "__generated_case_clone__", Type{})
+		if err != nil {
+			return nil, nil, evt1Diagnostic("GENERATOR_BODY_UNSUPPORTED", err.Error(), condition.Span)
+		}
+		branch := cloned.(*IfStmt)
+		branch.Then, err = evt1ExpandGeneratedPayloadStatements(branch.Then, info, caseIndex, enumCase, loop.ItemName, env, &inputs, &count)
+		if err != nil {
+			return nil, nil, err
+		}
+		evt1ReplaceGeneratedMetadataStatement(branch, info, enumCase.Name, loop.ItemName)
+		result.Statements = append(result.Statements, branch)
+	}
+	return result, inputs, nil
+}
+
+func evt1ExpandGeneratedPayloadStatements(block Block, info TypeInfo, caseIndex int, enumCase EnumCaseInfo, casePlaceholder string, env *semanticEnv, inputs *[]GeneratedInput, count *int) (Block, error) {
+	out := Block{Span: block.Span}
+	for _, statement := range block.Statements {
+		if *count >= evt1GeneratedStatementLimit {
+			return Block{}, evt1Diagnostic("GENERATOR_OUTPUT_LIMIT", "generated function exceeds statement limit", statement.statementSpan())
+		}
+		loop, ok := statement.(*ForeachStmt)
+		if !ok {
+			out.Statements = append(out.Statements, statement)
+			*count++
+			continue
+		}
+		query, ok := loop.Source.(*TemplateCallExpr)
+		if !ok || query.Callee != "Payload" || loop.ItemType.Name != "FieldInfo" || query.TypeArg.Name != casePlaceholder || len(query.Args) != 0 {
+			return Block{}, evt1Diagnostic("GENERATOR_CASE_BODY_INVALID", "case body requires FieldInfo item in Payload<case>()", loop.Span)
+		}
+		payloadInfo := info
+		payloadInfo.Fields = enumCase.Payload
+		for fieldIndex, field := range enumCase.Payload {
+			*inputs = append(*inputs, GeneratedInput{Name: enumCase.Name + "." + field.Name, Type: field.Type, Span: field.Span})
+			binding := fmt.Sprintf("__generated_payload_%d_%d", caseIndex, fieldIndex)
+			for _, source := range loop.Body.Statements {
+				if *count >= evt1GeneratedStatementLimit {
+					return Block{}, evt1Diagnostic("GENERATOR_OUTPUT_LIMIT", "generated function exceeds statement limit", source.statementSpan())
+				}
+				cloned, err := evt1SubstituteStatement(source, "__generated_payload_clone__", Type{})
+				if err != nil {
+					return Block{}, evt1Diagnostic("GENERATOR_BODY_UNSUPPORTED", err.Error(), source.statementSpan())
+				}
+				if err := evt1ReplaceGeneratedFieldStatement(cloned, loop.ItemName, binding); err != nil {
+					return Block{}, err
+				}
+				evt1ReplaceGeneratedMetadataStatement(cloned, payloadInfo, field.Name, loop.ItemName)
+				out.Statements = append(out.Statements, cloned)
+				*count++
+			}
+		}
+	}
+	return out, nil
 }
 
 func evt1HasNamedAttribute(attributes []Attribute, name string) bool {
@@ -581,6 +690,9 @@ func evt1ReplaceGeneratedFieldStatement(statement Statement, placeholder, field 
 			return evt1ReplaceGeneratedFieldExpr(s.Value, placeholder, field)
 		}
 	case *VarDecl:
+		if s.Name == placeholder {
+			s.Name = field
+		}
 		if s.Value != nil {
 			return evt1ReplaceGeneratedFieldExpr(s.Value, placeholder, field)
 		}

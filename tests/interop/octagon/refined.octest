@@ -1,0 +1,11 @@
+package R7h2Refined
+
+concept Positive = Int {
+    Require(Self > 0, "positive value required")
+}
+
+[Fact]
+fn LoadsConceptScalar() -> Void ! Error {
+    let value = LoadOctagon<Positive>("tests/fixtures/octagon/positive.octagon")?
+    Assert.True(value == 42, "Oct authoritative admission accepted Concept-compatible bytes")
+}

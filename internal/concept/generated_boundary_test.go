@@ -10,7 +10,9 @@ func TestGeneratedPayloadEnumCaseBuilderRejectsMalformedBody(t *testing.T) {
 enum Choice { None, Some(int value), }
 generator <typename T> DeriveTag
 int Tag(ref const T item) {
-    foreach (EnumCaseInfo option in Cases<T>()) { return 1; }
+    foreach (EnumCaseInfo option in Cases<T>()) {
+        foreach (FieldInfo field in Fields<T>()) { return 1; }
+    }
     return 0;
 }
 derive DeriveTag reflect<Choice>;

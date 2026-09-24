@@ -1,4 +1,49 @@
-# R7h Octagon and Concept schemas: architectural stop
+# R7h Octagon and Concept schemas: convergence log
+
+## R7h2 derived codec continuation (2026-09-24)
+
+The retained R7h2 array and table implementation was extended with generated
+payload enum readers and writers. The earlier generator admitted only an
+exhaustive match driven by an enum-valued parameter, so a reader could not
+expand `Cases<T>()` into case tests and construct its result. The general
+generator fix expands a reader's one-if case body into ordinary checked
+branches, substitutes concrete `FieldType<field>` payload locals, and lowers
+`ConstructCase<variant>()` to ordinary enum construction. Writer arms can now
+contain ordinary statements around the payload loop. A regression retains a
+malformed payload-query diagnostic. Standard's derived tag-only, multi-payload,
+and nested-payload facts execute in strict C11.
+
+A nominal single-field refined codec now reads its representation through its
+ordinary witness and calls the author's `AdmitOctagon` operation. The missing
+admission regression fails with generated provenance, while `Positive` accepts
+42 and rejects zero. A separate ordinary schema concept proves `IsAdmitted`;
+`concept explain` reports a missing operation as `CV4153`. This is a bounded
+single-field wrapper derivation, not a general refinement declaration model.
+The first field-loop implementation would have silently consumed one field of a
+multi-field wrapper. The general `OnlyField<T>()` reflection query now rejects
+zero or multiple fields during derivation; a regression pins the diagnostic.
+
+An A-to-B-to-C artifact regression now executes its generated array, payload
+enum, columnar table, and refined codecs in strict C11 without B source reparse
+or generator replay. Its B semantic artifact, C MIR/C/header outputs, and
+serialized concept-explain graph remain byte-identical over 100 runs. A
+strict-C11 interop test runs generated readers
+and writers for arrays, nested arrays, nested payload enums, columnar tables,
+and refined values against exact shared fixture bytes. The native harness
+repeats these byte comparisons 100 times, and the generated interop MIR/C/header
+outputs are byte-identical across 100 compilations. Oct's compiled interop lane
+loads the same shapes with five compiled cases and zero fallback. The
+Concept refined fixture is LF-canonical: Oct's existing scalar fixture was
+checked out as CRLF in this worktree, which did not match Concept's canonical
+writer. No Oct source or fixture was changed.
+
+The generated codec family still reports an `OctagonError` kind without the
+requested nested field path. A local `NoAllocation` proof succeeds for the
+fixed-storage scalar `ReadInt` and `WriteInt` operations. An imported operation
+without a transported effect summary is `UNKNOWN`, so a blanket generated-codec
+proof remains unqualified. Those are the remaining R7h2 conformance gaps; the
+rest of the family is persistent
+in-tree and exercised through real C11 and Oct paths.
 
 ## R7h2 continuation: closed generic witness calls (2026-09-24)
 

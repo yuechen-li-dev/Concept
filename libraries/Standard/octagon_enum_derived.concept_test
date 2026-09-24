@@ -1,0 +1,80 @@
+profile Core;
+import Standard.Octagon.Core;
+import Standard.Octagon.Derive;
+
+enum Inner { Value(int number), }
+enum Outer { Wrapped(Inner inner), }
+enum Choice { None, Both(int count, bool enabled), }
+enum Prefix { A, AB, }
+
+derive DeriveOctagonEnumRead reflect<Inner>;
+derive DeriveOctagonEnumRead reflect<Outer>;
+derive DeriveOctagonEnumRead reflect<Choice>;
+derive DeriveOctagonEnumWrite reflect<Inner>;
+derive DeriveOctagonEnumWrite reflect<Outer>;
+derive DeriveOctagonEnumWrite reflect<Choice>;
+derive DeriveOctagonEnumRead reflect<Prefix>;
+derive DeriveOctagonEnumWrite reflect<Prefix>;
+requires OctagonCodec<Inner>;
+requires OctagonCodec<Outer>;
+requires OctagonCodec<Choice>;
+requires OctagonCodec<Prefix>;
+
+[[fact]]
+void DerivedNestedPayloadWriter()
+{
+    Outer value = Outer::Wrapped(Inner::Value(42));
+    byte<array>[64] bytes = [0 ...];
+    OctagonWriter writer = OctagonWriter{Span(bytes), 0};
+    WriteOctagon(ref const value, ref writer)!;
+    FinishOctagon(ref writer)!;
+    OctagonReader golden = OctagonReader{Span(bytes), 0};
+    ExpectLiteral(ref golden, "Outer.Wrapped(Inner.Value(42))\n")!;
+    Assert.True(golden.offset == writer.offset, "derived nested payload canonical bytes");
+    OctagonReader reader = OctagonReader{Span(bytes), 0};
+    Outer loaded = ReadOctagon(ref reader, OctagonType<Outer>{0})!;
+    int number = match (loaded) { Outer::Wrapped(inner) => match (inner) { Inner::Value(n) => n, }, };
+    Assert.True(number == 42, "derived nested payload reader");
+}
+
+[[fact]]
+void DerivedTagAndMultiPayloadWriter()
+{
+    byte<array>[64] bytes = [0 ...];
+    OctagonWriter writer = OctagonWriter{Span(bytes), 0};
+    Choice value = Choice::Both(7, true);
+    WriteOctagon(ref const value, ref writer)!;
+    FinishOctagon(ref writer)!;
+    OctagonReader golden = OctagonReader{Span(bytes), 0};
+    ExpectLiteral(ref golden, "Choice.Both(7, true)\n")!;
+    Assert.True(golden.offset == writer.offset, "derived multiple payload fields");
+    OctagonReader reader = OctagonReader{Span(bytes), 0};
+    Choice loaded = ReadOctagon(ref reader, OctagonType<Choice>{0})!;
+    int count = match (loaded) { Choice::Both(n, enabled) => n, Choice::None => 0, };
+    Assert.True(count == 7, "derived multiple payload reader");
+    writer.offset = 0;
+    value = Choice::None;
+    WriteOctagon(ref const value, ref writer)!;
+    FinishOctagon(ref writer)!;
+    OctagonReader tag = OctagonReader{Span(bytes), 0};
+    ExpectLiteral(ref tag, "Choice.None\n")!;
+    Assert.True(tag.offset == writer.offset, "derived tag-only case");
+    OctagonReader tagReader = OctagonReader{Span(bytes), 0};
+    Choice tagLoaded = ReadOctagon(ref tagReader, OctagonType<Choice>{0})!;
+    int tagValue = match (tagLoaded) { Choice::None => 1, Choice::Both(n, enabled) => 0, };
+    Assert.True(tagValue == 1, "derived tag-only reader");
+}
+
+[[fact]]
+void DerivedCaseNamesAreExact()
+{
+    byte<array>[32] bytes = [0 ...];
+    OctagonWriter writer = OctagonWriter{Span(bytes), 0};
+    Prefix value = Prefix::AB;
+    WriteOctagon(ref const value, ref writer)!;
+    FinishOctagon(ref writer)!;
+    OctagonReader reader = OctagonReader{Span(bytes), 0};
+    Prefix loaded = ReadOctagon(ref reader, OctagonType<Prefix>{0})!;
+    int selected = match (loaded) { Prefix::A => 0, Prefix::AB => 1, };
+    Assert.True(selected == 1, "generated reader selects the complete case name");
+}

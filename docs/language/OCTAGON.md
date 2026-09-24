@@ -1,4 +1,4 @@
-# Octagon data interop (R7h2 progression)
+# Octagon data interop (R7h2)
 
 Octagon is the shared data language. Concept concepts are the shared schema
 language. Reflection generates ordinary typed conversion code.
@@ -18,8 +18,11 @@ The `int` and `bool` codecs and generated mixed-record round trip are implemente
 element operations satisfy their ordinary concepts. Tests execute generated
 integer, boolean, record, and nested array fields, plus a derived
 `record table<3>` with complete integer and boolean columns through strict C11.
-The nested payload enum codec remains handwritten. General enum derivation,
-other scalar types, and refinement admission are not implemented.
+`DeriveOctagonEnumRead` and `DeriveOctagonEnumWrite` generate ordinary checked
+case construction and exhaustive matches, including nested payloads. A nominal
+single-field refinement can derive a codec: its reader delegates to the
+representation codec and must call the author's `AdmitOctagon` operation.
+Other scalar types require their own ordinary codecs.
 
 `WriteOctagon` writes one composable Octagon data expression. Call
 `FinishOctagon(ref writer)` once at the document boundary to emit Oct's
@@ -39,3 +42,10 @@ The compiler checks complete coverage and unique names, evaluates expressions
 in source order, and drops completed owning fields if a later expression
 propagates failure.
 No runtime codec registry is involved.
+
+The generated family reads and writes the canonical array, nested-array,
+payload, table, and refined-value fixtures. Handwritten array, payload, and
+table codecs reproduce the same bytes. The result
+error currently identifies the error kind; it does not carry a nested field
+path. `NoAllocation` is conditional on the selected underlying operations and
+is not a blanket codec promise.

@@ -25,3 +25,62 @@ Result<void, OctagonError> WriteOctagon(ref const T value, ref OctagonWriter wri
     EndRecord(ref writer)!;
     return Result::Ok();
 }
+
+// Payload enum writer arms are ordinary exhaustive matches. Each payload
+// delegates to the same typed codec operation as a record field.
+generator <typename T> DeriveOctagonEnumWrite
+Result<void, OctagonError> WriteOctagon(ref const T value, ref OctagonWriter writer)
+{
+    foreach (EnumCaseInfo variant in Cases<T>()) {
+        WriteLiteral(ref writer, TypeName<T>())!;
+        WriteLiteral(ref writer, ".")!;
+        WriteLiteral(ref writer, NameOf<variant>())!;
+        int payloadIndex = 0;
+        foreach (FieldInfo field in Payload<variant>()) {
+            if (payloadIndex == 0) { WriteLiteral(ref writer, "(")!; }
+            else { WriteLiteral(ref writer, ", ")!; }
+            WriteOctagon(ref const field, ref writer)!;
+            payloadIndex = payloadIndex + 1;
+        }
+        if (payloadIndex > 0) { WriteLiteral(ref writer, ")")!; }
+    }
+    return Result::Ok();
+}
+
+generator <typename T> DeriveOctagonEnumRead
+Result<T, OctagonError> ReadOctagon(ref OctagonReader reader, OctagonType<T> type)
+{
+    foreach (EnumCaseInfo variant in Cases<T>()) {
+        if (TryCase(ref reader, TypeName<T>(), NameOf<variant>(), HasPayload<variant>())) {
+            int payloadIndex = 0;
+            foreach (FieldInfo field in Payload<variant>()) {
+                if (payloadIndex > 0) { ExpectLiteral(ref reader, ",")!; }
+                FieldType<field> field = ReadOctagon(ref reader, OctagonType<FieldType<field>>{0})!;
+                payloadIndex = payloadIndex + 1;
+            }
+            if (payloadIndex > 0) { ExpectLiteral(ref reader, ")")!; }
+            return Result::Ok(ConstructCase<variant>());
+        }
+    }
+    return Result::Error(OctagonError::UnexpectedData);
+}
+
+// A single-field nominal refinement reads its representation through the
+// ordinary codec and must pass the author's AdmitOctagon operation.
+generator <typename T> DeriveOctagonRefinedRead
+Result<T, OctagonError> ReadOctagon(ref OctagonReader reader, OctagonType<T> type)
+{
+    foreach (FieldInfo field in OnlyField<T>()) {
+        return AdmitOctagon(ReadOctagon(ref reader, OctagonType<FieldType<field>>{0})!, type);
+    }
+    return Result::Error(OctagonError::UnexpectedData);
+}
+
+generator <typename T> DeriveOctagonRefinedWrite
+Result<void, OctagonError> WriteOctagon(ref const T value, ref OctagonWriter writer)
+{
+    foreach (FieldInfo field in OnlyField<T>()) {
+        WriteOctagon(ref const value.field, ref writer)!;
+    }
+    return Result::Ok();
+}

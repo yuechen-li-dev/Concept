@@ -81,7 +81,9 @@ int Main() { Packet packet = Packet{Values = [1, 2, 3, 4]}; return Count(ref con
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Generate(module, []byte(sourceC)); err != nil {
+	outputs, err := Generate(module, []byte(sourceC))
+	if err != nil {
 		t.Fatal(err)
 	}
+	runFoundationNativeHarness(t, outputs, "r7h2_artifact_harness.c", "#include \"witnessc.generated.h\"\nint main(void) { return concept_witness_c_main() == 4 ? 0 : 1; }\n")
 }
