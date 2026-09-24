@@ -6,11 +6,13 @@ language. Reflection generates ordinary typed conversion code.
 `Standard.Octagon.Core` currently exposes byte-span readers and writers and an
 ordinary `OctagonCodec<T>` requirement. `Standard.Octagon.Derive` expands
 reflected fields into checked reader/writer functions for records whose fields
-are `int`. It performs direct typed parsing; it has no dynamic object graph.
+are `int` or `bool`. `FieldType<field>` and `OctagonType<T>` select the typed
+reader through ordinary overload resolution. It performs direct typed parsing;
+it has no dynamic object graph.
 The writer emits the Oct record form `Type { field: value }` in declaration
 order. The reader returns `Result<T, OctagonError>`.
 
-The `int` codec and generated integer-record round trip are implemented.
+The `int` and `bool` codecs and generated mixed-record round trip are implemented.
 Other scalar types, payload enums, arrays, tables, and refinements remain
 outside this implementation; they must not be inferred from the concept name.
 

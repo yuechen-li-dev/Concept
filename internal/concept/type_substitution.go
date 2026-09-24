@@ -5,6 +5,33 @@ import (
 	"strconv"
 )
 
+// evt1CloneType detaches a type tree before a speculative analysis rewrites
+// closed generic applications in place.
+func evt1CloneType(t Type) Type {
+	if t.PointerTo != nil {
+		base := evt1CloneType(*t.PointerTo)
+		t.PointerTo = &base
+	}
+	if t.ArrayElem != nil {
+		element := evt1CloneType(*t.ArrayElem)
+		t.ArrayElem = &element
+	}
+	t.TypeArgs = append([]Type(nil), t.TypeArgs...)
+	for i := range t.TypeArgs {
+		t.TypeArgs[i] = evt1CloneType(t.TypeArgs[i])
+	}
+	t.CallableParams = append([]Type(nil), t.CallableParams...)
+	for i := range t.CallableParams {
+		t.CallableParams[i] = evt1CloneType(t.CallableParams[i])
+	}
+	if t.CallableResult != nil {
+		result := evt1CloneType(*t.CallableResult)
+		t.CallableResult = &result
+	}
+	t.Shape = append([]StorageDimension(nil), t.Shape...)
+	return t
+}
+
 // evt1SubstituteType is the canonical structural type substitution operation.
 // Type is a record-shaped algebra: nominal leaves have no children, while the
 // fields below represent every current composite constructor. Keeping this

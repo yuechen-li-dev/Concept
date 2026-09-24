@@ -22,9 +22,17 @@ ref struct OctagonWriter
     int offset;
 };
 
+// A value-level type witness lets ordinary overload resolution select a
+// reader without relying on return-type inference or runtime type names.
+template <typename T>
+struct OctagonType
+{
+    int marker;
+};
+
 concept OctagonCodec<T>
 {
-    requires Result<T, OctagonError> ReadOctagon(ref OctagonReader reader);
+    requires Result<T, OctagonError> ReadOctagon(ref OctagonReader reader, OctagonType<T> type);
     requires Result<void, OctagonError> WriteOctagon(ref const T value, ref OctagonWriter writer);
 }
 
@@ -179,6 +187,49 @@ Result<void, OctagonError> WriteNamedInt(ref OctagonWriter writer, string name, 
     WriteLiteral(ref writer, name)!;
     WriteLiteral(ref writer, ": ")!;
     WriteInt(ref writer, value)!;
+    WriteLiteral(ref writer, "\n")!;
+    return Result::Ok();
+}
+
+Result<bool, OctagonError> ReadBool(ref OctagonReader reader)
+{
+    SkipWhitespace(ref reader);
+    if (reader.offset >= Len(reader.input)) { return Result::Error(OctagonError::EndOfInput); }
+    if (reader.input[reader.offset] == 116) { ExpectLiteral(ref reader, "true")!; return Result::Ok(true); }
+    if (reader.input[reader.offset] == 102) { ExpectLiteral(ref reader, "false")!; return Result::Ok(false); }
+    return Result::Error(OctagonError::UnexpectedData);
+}
+
+Result<void, OctagonError> WriteBool(ref OctagonWriter writer, bool value)
+{
+    if (value) { WriteLiteral(ref writer, "true")!; }
+    else { WriteLiteral(ref writer, "false")!; }
+    return Result::Ok();
+}
+
+Result<int, OctagonError> ReadNamed(ref OctagonReader reader, string name, OctagonType<int> type)
+{
+    return ReadNamedInt(ref reader, name);
+}
+
+Result<bool, OctagonError> ReadNamed(ref OctagonReader reader, string name, OctagonType<bool> type)
+{
+    ExpectLiteral(ref reader, name)!;
+    ExpectLiteral(ref reader, ":")!;
+    return Result::Ok(ReadBool(ref reader)!);
+}
+
+Result<void, OctagonError> WriteNamed(ref OctagonWriter writer, string name, int value)
+{
+    return WriteNamedInt(ref writer, name, value);
+}
+
+Result<void, OctagonError> WriteNamed(ref OctagonWriter writer, string name, bool value)
+{
+    WriteLiteral(ref writer, "    ")!;
+    WriteLiteral(ref writer, name)!;
+    WriteLiteral(ref writer, ": ")!;
+    WriteBool(ref writer, value)!;
     WriteLiteral(ref writer, "\n")!;
     return Result::Ok();
 }

@@ -155,6 +155,11 @@ func evt1MaterializeGeneratedDeclarations(module *Module) error {
 	probe.Automata = append([]AutomataDecl(nil), module.Automata...)
 	probe.Functions = append([]FunctionDecl(nil), module.Functions...)
 	for i := range probe.Functions {
+		probe.Functions[i].ReturnType = evt1CloneType(probe.Functions[i].ReturnType)
+		probe.Functions[i].Params = append([]Param(nil), probe.Functions[i].Params...)
+		for j := range probe.Functions[i].Params {
+			probe.Functions[i].Params[j].Type = evt1CloneType(probe.Functions[i].Params[j].Type)
+		}
 		if probe.Functions[i].ReturnType.Kind != TypeInferred {
 			probe.Functions[i].Body = nil
 		}
@@ -391,6 +396,10 @@ func evt1ReplaceGeneratedMetadataExpr(expression *Expr, info TypeInfo, field, pl
 	}
 	switch e := (*expression).(type) {
 	case *TemplateCallExpr:
+		e.TypeArg = evt1GeneratedFieldType(e.TypeArg, info, field, placeholder)
+		for i := range e.TypeArgs {
+			e.TypeArgs[i] = evt1GeneratedFieldType(e.TypeArgs[i], info, field, placeholder)
+		}
 		if e.Callee == "TypeName" && e.TypeArg.SameValueType(info.Type) && len(e.Args) == 0 {
 			*expression = &StringLiteral{Value: info.Type.Name, Span: e.Span}
 			return
@@ -411,6 +420,8 @@ func evt1ReplaceGeneratedMetadataExpr(expression *Expr, info TypeInfo, field, pl
 			evt1ReplaceGeneratedMetadataExpr(&e.Args[i], info, field, placeholder)
 		}
 	case *StructConstructExpr:
+		e.StructType = evt1GeneratedFieldType(e.StructType, info, field, placeholder)
+		e.StructName = e.StructType.String()
 		for i := range e.Args {
 			evt1ReplaceGeneratedMetadataExpr(&e.Args[i], info, field, placeholder)
 		}
@@ -423,6 +434,27 @@ func evt1ReplaceGeneratedMetadataExpr(expression *Expr, info TypeInfo, field, pl
 	case *RefExpr:
 		evt1ReplaceGeneratedMetadataExpr(&e.Value, info, field, placeholder)
 	}
+}
+
+// FieldType<item> is a compile-time type query scoped to a reflected-field
+// expansion. Replacing the type node preserves ordinary overload resolution
+// and type checking for whatever operation the generator chooses to call.
+func evt1GeneratedFieldType(t Type, info TypeInfo, field, placeholder string) Type {
+	if field != "" && t.Name == "FieldType" && len(t.TypeArgs) == 1 && t.TypeArgs[0].Name == placeholder {
+		for _, candidate := range info.Fields {
+			if candidate.Name == field {
+				return candidate.Type
+			}
+		}
+	}
+	for i := range t.TypeArgs {
+		t.TypeArgs[i] = evt1GeneratedFieldType(t.TypeArgs[i], info, field, placeholder)
+	}
+	if t.ArrayElem != nil {
+		element := evt1GeneratedFieldType(*t.ArrayElem, info, field, placeholder)
+		t.ArrayElem = &element
+	}
+	return t
 }
 
 func evt1GeneratedFieldMatches(env *semanticEnv, selector string, owner Type, field FieldInfo) bool {
@@ -588,6 +620,20 @@ func evt1ReplaceGeneratedFieldExpr(expression Expr, placeholder, field string) e
 		}
 		return nil
 	case *TemplateCallExpr:
+		for _, arg := range e.Args {
+			if err := evt1ReplaceGeneratedFieldExpr(arg, placeholder, field); err != nil {
+				return err
+			}
+		}
+		return nil
+	case *StructConstructExpr:
+		for _, arg := range e.Args {
+			if err := evt1ReplaceGeneratedFieldExpr(arg, placeholder, field); err != nil {
+				return err
+			}
+		}
+		return nil
+	case *ConstructExpr:
 		for _, arg := range e.Args {
 			if err := evt1ReplaceGeneratedFieldExpr(arg, placeholder, field); err != nil {
 				return err

@@ -8,8 +8,19 @@ record struct Pair
     int Y;
 };
 
+record struct Config
+{
+    int Count;
+    bool Enabled;
+};
+
 derive DeriveOctagonRead reflect<Pair>;
 derive DeriveOctagonWrite reflect<Pair>;
+derive DeriveOctagonRead reflect<Config>;
+derive DeriveOctagonWrite reflect<Config>;
+
+requires OctagonCodec<Pair>;
+requires OctagonCodec<Config>;
 
 [[fact]]
 void GeneratedIntegerRecordRoundTrip()
@@ -24,6 +35,23 @@ void GeneratedIntegerRecordRoundTrip()
         Assert.True(golden.offset == writer.offset, "Concept bytes match Oct record golden");
     }
     OctagonReader reader = OctagonReader{Span(bytes), 0};
-    Pair loaded = ReadOctagon(ref reader)!;
+    Pair loaded = ReadOctagon(ref reader, OctagonType<Pair>{0})!;
     Assert.True(loaded.X == 12 and loaded.Y == -3, "generated integer record round trip");
+}
+
+[[fact]]
+void GeneratedMixedRecordRoundTrip()
+{
+    Config input = Config{Count = 7, Enabled = true};
+    byte<array>[80] bytes = [0 ...];
+    {
+        OctagonWriter writer = OctagonWriter{Span(bytes), 0};
+        WriteOctagon(ref const input, ref writer)!;
+        OctagonReader golden = OctagonReader{Span(bytes), 0};
+        ExpectLiteral(ref golden, "Config {\n    Count: 7\n    Enabled: true\n}\n")!;
+        Assert.True(golden.offset == writer.offset, "mixed record canonical bytes");
+    }
+    OctagonReader reader = OctagonReader{Span(bytes), 0};
+    Config loaded = ReadOctagon(ref reader, OctagonType<Config>{0})!;
+    Assert.True(loaded.Count == 7 and loaded.Enabled, "generated mixed record round trip");
 }

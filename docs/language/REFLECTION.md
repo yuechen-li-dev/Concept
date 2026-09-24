@@ -19,4 +19,10 @@ The reflection result is compiler data and is not exported as a result in `conce
 
 Generated functions are inspectable with `concept generated <file> [symbol]` and attributable with `concept explain <file> --generated <symbol>`. The generator can expand source-ordered fields through `Fields<T>(attribute-or-concept)`, and enum payloads through `Cases<T>()` and `Payload<case>(selector)`. Nested ordinary loops traverse fixed arrays and table columns. This bounded API does not expose `TypeInfo` as an arbitrary runtime or comptime value. See [checked generated declarations](../design/EVT1-GENERATED-DECLARATIONS.md).
 
+Inside a reflected field expansion, `FieldType<field>` substitutes the
+field's semantic type into an ordinary type position. It can be nested in a
+closed generic type, such as `OctagonType<FieldType<field>>`. The resulting
+call is resolved and checked by normal overload rules; no field operation is
+selected by a runtime type name.
+
 EVT1 production code has no general runtime reflection. Runtime reflection restricted to `.concept_test` with explicit `[[reflect]]` is not implemented yet. Production runtime reflection remains uncommitted. If ever introduced, it must be explicit, bounded, measurable, and must not create an ambient reflection universe.

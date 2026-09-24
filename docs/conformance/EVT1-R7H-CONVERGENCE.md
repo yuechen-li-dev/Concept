@@ -56,6 +56,31 @@ types is needed before generated payload, array, table, and refined fields
 can be implemented without serializer-specific compiler branches. Keeping
 integer-only generation explicit preserves a coherent checked library.
 
+### R7h1 continuation: typed field dispatch and compiled Oct corpus
+
+`FieldType<field>` now substitutes a reflected semantic field type into an
+ordinary type position. `OctagonType<T>` disambiguates reader overloads;
+normal type checking selects the `int` or `bool` implementation. A mixed
+record with two generated readers in one module passes the strict C11
+Standard test lane. A separate native regression proves `FieldType` selects
+ordinary overloads and uncovered a reflection-probe aliasing bug: the probe
+had rewritten the real function signature's shared generic type nodes. The
+probe now deep-clones signature types before analysis. A second regression
+derives the mixed-field function from an imported `[[reflect]]` artifact and
+consumes the generated function from a downstream artifact without source
+reparsing. Generated mixed-field C output is byte-identical over 100 runs.
+
+Oct's compiled data parser now accepts parenthesized data and dimensioned
+numeric literals and checks their declared numeric dimensions. It also
+rejects duplicate record fields. The full Octagon Load valid corpus now
+passes compiled (10 facts, zero fallback), as does the invalid corpus (8
+facts, zero fallback). The formerly failing dimensioned scalar, nested
+record/array, and record fixtures are covered by these lanes and a dedicated
+compiled dimensioned-record integration regression. This fixes the compiled
+corpus failures recorded above; the earlier failure record is retained as
+history. The Oct fix is commit
+`8a4fee3bb3fc503c5fc392b9a5bc9e467add4b2c`.
+
 ## Baseline and authorities
 
 - Concept HEAD at the start: `1e96be2e1be9897207ab2d1ce0a9d6ad6ad98c80`; clean worktree.

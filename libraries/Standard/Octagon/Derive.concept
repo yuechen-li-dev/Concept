@@ -5,11 +5,11 @@ import Standard.Octagon.Core;
 // R7h1's bounded integer-record derivation uses the ordinary typed byte reader
 // and writer. Other field types require their own ordinary codec operations.
 generator <typename T> DeriveOctagonRead
-Result<T, OctagonError> ReadOctagon(ref OctagonReader reader)
+Result<T, OctagonError> ReadOctagon(ref OctagonReader reader, OctagonType<T> type)
 {
     BeginRecord(ref reader, TypeName<T>())!;
     T value = T{foreach (FieldInfo field in Fields<T>()) {
-        field = ReadNamedInt(ref reader, NameOf<field>())!;
+        field = ReadNamed(ref reader, NameOf<field>(), OctagonType<FieldType<field>>{0})!;
     }};
     EndRecord(ref reader)!;
     return Result::Ok(move value);
@@ -20,7 +20,7 @@ Result<void, OctagonError> WriteOctagon(ref const T value, ref OctagonWriter wri
 {
     BeginRecord(ref writer, TypeName<T>())!;
     foreach (FieldInfo field in Fields<T>()) {
-        WriteNamedInt(ref writer, NameOf<field>(), value.field)!;
+        WriteNamed(ref writer, NameOf<field>(), value.field)!;
     }
     EndRecord(ref writer)!;
     return Result::Ok();
