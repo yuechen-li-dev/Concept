@@ -1,0 +1,184 @@
+module Standard.Octagon.Core;
+profile Core;
+
+extern "C" usize strlen(string text);
+
+enum OctagonError
+{
+    EndOfInput,
+    UnexpectedData,
+    CapacityExceeded,
+}
+
+ref struct OctagonReader
+{
+    Span<byte> input;
+    int offset;
+};
+
+ref struct OctagonWriter
+{
+    Span<byte> output;
+    int offset;
+};
+
+concept OctagonCodec<T>
+{
+    requires Result<T, OctagonError> ReadOctagon(ref OctagonReader reader);
+    requires Result<void, OctagonError> WriteOctagon(ref const T value, ref OctagonWriter writer);
+}
+
+Result<void, OctagonError> WriteByte(ref OctagonWriter writer, byte value)
+{
+    if (writer.offset >= Len(writer.output)) { return Result::Error(OctagonError::CapacityExceeded); }
+    writer.output[writer.offset] = value;
+    writer.offset = writer.offset + 1;
+    return Result::Ok();
+}
+
+Result<void, OctagonError> WriteLiteral(ref OctagonWriter writer, string text)
+{
+    usize index = 0;
+    while (index < strlen(text)) bounded(2147483647)
+    {
+        WriteByte(ref writer, text[index])!;
+        index = index + 1;
+    }
+    return Result::Ok();
+}
+
+void SkipWhitespace(ref OctagonReader reader)
+{
+    while (reader.offset < Len(reader.input)) bounded(2147483647)
+    {
+        byte current = reader.input[reader.offset];
+        if (current != 32 and current != 9 and current != 10 and current != 13) { return; }
+        reader.offset = reader.offset + 1;
+    }
+}
+
+Result<void, OctagonError> ExpectLiteral(ref OctagonReader reader, string text)
+{
+    SkipWhitespace(ref reader);
+    usize index = 0;
+    while (index < strlen(text)) bounded(2147483647)
+    {
+        if (reader.offset >= Len(reader.input)) { return Result::Error(OctagonError::EndOfInput); }
+        if (reader.input[reader.offset] != text[index]) { return Result::Error(OctagonError::UnexpectedData); }
+        reader.offset = reader.offset + 1;
+        index = index + 1;
+    }
+    return Result::Ok();
+}
+
+Result<void, OctagonError> BeginRecord(ref OctagonReader reader, string name)
+{
+    ExpectLiteral(ref reader, name)!;
+    ExpectLiteral(ref reader, "{")!;
+    return Result::Ok();
+}
+
+Result<void, OctagonError> EndRecord(ref OctagonReader reader)
+{
+    ExpectLiteral(ref reader, "}")!;
+    return Result::Ok();
+}
+
+Result<void, OctagonError> BeginRecord(ref OctagonWriter writer, string name)
+{
+    WriteLiteral(ref writer, name)!;
+    WriteLiteral(ref writer, " {\n")!;
+    return Result::Ok();
+}
+
+Result<void, OctagonError> EndRecord(ref OctagonWriter writer)
+{
+    WriteLiteral(ref writer, "}\n")!;
+    return Result::Ok();
+}
+
+Result<int, OctagonError> ReadInt(ref OctagonReader reader)
+{
+    SkipWhitespace(ref reader);
+    if (reader.offset >= Len(reader.input)) { return Result::Error(OctagonError::EndOfInput); }
+    bool negative = false;
+    if (reader.input[reader.offset] == 45)
+    {
+        negative = true;
+        reader.offset = reader.offset + 1;
+    }
+    int value = 0;
+    int count = 0;
+    byte<array>[10] digits = [48, 49, 50, 51, 52, 53, 54, 55, 56, 57];
+    bool reading = true;
+    while (reader.offset < Len(reader.input) and reading) bounded(2147483647)
+    {
+        byte current = reader.input[reader.offset];
+        int digit = 0;
+        bool found = false;
+        while (digit < 10 and not found) bounded(10)
+        {
+            if (current == digits[digit]) { found = true; }
+            digit = digit + 1;
+        }
+        if (not found) { reading = false; }
+        else
+        {
+            int nextDigit = digit - 1;
+            if (value < -214748364) { return Result::Error(OctagonError::UnexpectedData); }
+            if (value == -214748364)
+            {
+                if (negative and nextDigit > 8) { return Result::Error(OctagonError::UnexpectedData); }
+                if (not negative and nextDigit > 7) { return Result::Error(OctagonError::UnexpectedData); }
+            }
+            value = value * 10 - nextDigit;
+            reader.offset = reader.offset + 1;
+            count = count + 1;
+        }
+    }
+    if (count == 0) { return Result::Error(OctagonError::UnexpectedData); }
+    if (negative) { return Result::Ok(value); }
+    return Result::Ok(-value);
+}
+
+Result<void, OctagonError> WriteInt(ref OctagonWriter writer, int value)
+{
+    byte<array>[10] digits = [48, 49, 50, 51, 52, 53, 54, 55, 56, 57];
+    int<array>[10] reversed = [0 ...];
+    int count = 0;
+    int remaining = value;
+    if (remaining < 0) { WriteByte(ref writer, 45)!; }
+    while (remaining != 0) bounded(10)
+    {
+        int quotient = remaining / 10;
+        int digit = remaining - quotient * 10;
+        if (digit < 0) { digit = -digit; }
+        reversed[count] = digit;
+        count = count + 1;
+        remaining = quotient;
+    }
+    if (count == 0) { reversed[0] = 0; count = 1; }
+    while (count > 0) bounded(10)
+    {
+        count = count - 1;
+        WriteByte(ref writer, digits[reversed[count]])!;
+    }
+    return Result::Ok();
+}
+
+Result<int, OctagonError> ReadNamedInt(ref OctagonReader reader, string name)
+{
+    ExpectLiteral(ref reader, name)!;
+    ExpectLiteral(ref reader, ":")!;
+    return Result::Ok(ReadInt(ref reader)!);
+}
+
+Result<void, OctagonError> WriteNamedInt(ref OctagonWriter writer, string name, int value)
+{
+    WriteLiteral(ref writer, "    ")!;
+    WriteLiteral(ref writer, name)!;
+    WriteLiteral(ref writer, ": ")!;
+    WriteInt(ref writer, value)!;
+    WriteLiteral(ref writer, "\n")!;
+    return Result::Ok();
+}

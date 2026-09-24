@@ -1,0 +1,29 @@
+profile Core;
+import Standard.Octagon.Core;
+import Standard.Octagon.Derive;
+
+record struct Pair
+{
+    int X;
+    int Y;
+};
+
+derive DeriveOctagonRead reflect<Pair>;
+derive DeriveOctagonWrite reflect<Pair>;
+
+[[fact]]
+void GeneratedIntegerRecordRoundTrip()
+{
+    Pair input = Pair{X = 12, Y = -3};
+    byte<array>[64] bytes = [0 ...];
+    {
+        OctagonWriter writer = OctagonWriter{Span(bytes), 0};
+        WriteOctagon(ref const input, ref writer)!;
+        OctagonReader golden = OctagonReader{Span(bytes), 0};
+        ExpectLiteral(ref golden, "Pair {\n    X: 12\n    Y: -3\n}\n")!;
+        Assert.True(golden.offset == writer.offset, "Concept bytes match Oct record golden");
+    }
+    OctagonReader reader = OctagonReader{Span(bytes), 0};
+    Pair loaded = ReadOctagon(ref reader)!;
+    Assert.True(loaded.X == 12 and loaded.Y == -3, "generated integer record round trip");
+}
