@@ -21,6 +21,8 @@ For payload enums, `foreach (EnumCaseInfo variant in Cases<T>())` in a writer wi
 
 The generated body is checked as ordinary Concept; the generator has no direct symbol-table or backend access. One function is limited to 4,096 generated statements.
 
+Structural queries also expand inside ordinary `try` bodies and `except` arms. The generator clones the complete lexical scope, substitutes reflected names and types in both body and handler, and then lets normal Result propagation and call checking apply. This permits one handler to add context for several generated calls without nesting a wrapper around each call. A handler that needs an enclosing `try` to add another segment must propagate its mapped error with `?`; a direct `return Result::Error(...)` returns from the function.
+
 Concept reflection generation is structural. It does not generate source text and reparse it. The existing structural type substitution and statement cloning code constructs the final declaration. Neither the generator nor `[[reflect]]` adds runtime reflection metadata.
 
 Identity is a digest over module, generator identity, derivation site, reflected type, selected field names and types, local ordinal, and operation signature. Each generated function stores generator module and source span, derivation module and site, reflected module and type, and selected field names, types, and spans. Duplicate generated functions and collisions with handwritten functions report the generation site and the competing origin. The normal analyzer remains the authority for other semantic conflicts.

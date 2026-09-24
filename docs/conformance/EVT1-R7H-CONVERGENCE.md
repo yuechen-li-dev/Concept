@@ -1,5 +1,29 @@
 # R7h Octagon and Concept schemas: convergence log
 
+## R7h2 error-scope syntax follow-up (2026-09-24)
+
+Baseline Concept was clean `421b93eabe9cfbba89bd339bd4225d44ee086a67`;
+Oct stayed at `81ba6eb87e5d2777df27991265b93f228f7edf89`.
+The repeated `AtNameVoid(AtNameVoid(...))` in the derived enum writer added
+typed error-path segments at each delegation. The general language already had
+lexical `try`/`except` Result propagation, but structural generator queries
+could not expand within those scopes: template statement cloning, reflected
+metadata replacement, and `Cases`/`Payload` expansion did not traverse
+`TryStmt`. Those compiler paths now recurse through ordinary try bodies and
+handlers. The Standard derivation uses type, enum-case, and payload scopes,
+with plain `?` calls. Single `AtName` calls remain where a generated typed
+initializer requires an expression.
+
+The first native error-path run exposed a scope rule: direct
+`return Result::Error(...)` in an inner handler bypasses enclosing handlers.
+Inner handlers now propagate their mapped `Result` with `?`, so enclosing
+scopes add their segments. The existing strict-C11 regression again asserts
+the complete six-part nested reader and writer paths and the enum-label path.
+The artifact-only generated codec family also passes.
+Full `go test ./...`, `go vet ./...`, both Zig roots, Standard's 29 compiled
+facts, DragonGod's 21 facts and benchmark, and BurnIn pass. Oct source was
+unchanged.
+
 ## R7h2 derived codec continuation (2026-09-24)
 
 The error-path continuation adds a bounded `OctagonError::At` payload with a

@@ -7721,6 +7721,20 @@ func evt1SubstituteStatement(stmt Statement, typeParam string, concreteType Type
 			return nil, err
 		}
 		return &ExprStmt{Value: value, Span: s.Span}, nil
+	case *TryStmt:
+		body, err := evt1SubstituteBlock(s.Body, typeParam, concreteType)
+		if err != nil {
+			return nil, err
+		}
+		out := &TryStmt{Body: body, Span: s.Span}
+		for _, arm := range s.Except {
+			armBody, err := evt1SubstituteBlock(arm.Body, typeParam, concreteType)
+			if err != nil {
+				return nil, err
+			}
+			out.Except = append(out.Except, ExceptArm{ErrorType: evt1SubstituteType(arm.ErrorType, typeParam, concreteType), Binding: arm.Binding, Body: armBody, Span: arm.Span})
+		}
+		return out, nil
 	case *MatchStmt:
 		subject, err := evt1SubstituteExpr(s.Subject, typeParam, concreteType)
 		if err != nil {

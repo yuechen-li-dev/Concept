@@ -52,3 +52,10 @@ propagate with `?`, preserving paths such as
 `Envelope.Items[1].Mode.Enabled.level`. Paths beyond 16 parts retain the outer
 prefix. `NoAllocation` is conditional on the selected underlying operations
 and is not a blanket codec promise.
+
+Derived codecs use ordinary lexical `try`/`except` scopes to add the record
+type, enum case, or payload field to an error path. Calls inside a scope use
+plain `?`; an inner handler re-propagates its mapped error with `?` so an outer
+scope can add its segment. Expression-level `AtName` remains useful inside a
+generated aggregate initializer, where the field read must itself be an
+expression. The path is serialized error data, not codec dispatch metadata.

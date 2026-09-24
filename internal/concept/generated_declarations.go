@@ -220,6 +220,24 @@ func evt1ExpandGeneratedFields(block Block, info TypeInfo, owner string, env *se
 		if len(out.Statements) >= evt1GeneratedStatementLimit {
 			return Block{}, nil, evt1Diagnostic("GENERATOR_OUTPUT_LIMIT", "generated function exceeds statement limit", block.Span)
 		}
+		if scoped, ok := statement.(*TryStmt); ok {
+			body, bodyInputs, err := evt1ExpandGeneratedFields(scoped.Body, info, owner, env)
+			if err != nil {
+				return Block{}, nil, err
+			}
+			scoped.Body = body
+			inputs = append(inputs, bodyInputs...)
+			for index := range scoped.Except {
+				armBody, armInputs, err := evt1ExpandGeneratedFields(scoped.Except[index].Body, info, owner, env)
+				if err != nil {
+					return Block{}, nil, err
+				}
+				scoped.Except[index].Body = armBody
+				inputs = append(inputs, armInputs...)
+			}
+			out.Statements = append(out.Statements, scoped)
+			continue
+		}
 		loop, ok := statement.(*ForeachStmt)
 		if !ok {
 			aggregateInputs, err := evt1ExpandGeneratedAggregateStatement(statement, info)
@@ -391,6 +409,15 @@ func evt1ReplaceGeneratedMetadataStatement(statement Statement, info TypeInfo, f
 				evt1ReplaceGeneratedMetadataStatement(item, info, field, placeholder)
 			}
 		}
+	case *TryStmt:
+		for _, item := range s.Body.Statements {
+			evt1ReplaceGeneratedMetadataStatement(item, info, field, placeholder)
+		}
+		for _, arm := range s.Except {
+			for _, item := range arm.Body.Statements {
+				evt1ReplaceGeneratedMetadataStatement(item, info, field, placeholder)
+			}
+		}
 	}
 }
 
@@ -510,61 +537,95 @@ func evt1ExpandGeneratedCases(loop *ForeachStmt, query *TemplateCallExpr, info T
 			pattern.Bindings = append(pattern.Bindings, fmt.Sprintf("__generated_payload_%d_%d", caseIndex, fieldIndex))
 		}
 		arm := StatementArm{Pattern: pattern, Block: Block{Span: loop.Body.Span}, Span: enumCase.Span}
-		for _, statement := range loop.Body.Statements {
-			payloadLoop, ok := statement.(*ForeachStmt)
-			if !ok {
-				if statementCount >= evt1GeneratedStatementLimit {
-					return nil, nil, evt1Diagnostic("GENERATOR_OUTPUT_LIMIT", "generated function exceeds statement limit", statement.statementSpan())
-				}
-				cloned, err := evt1SubstituteStatement(statement, "__generated_case_clone__", Type{})
-				if err != nil {
-					return nil, nil, evt1Diagnostic("GENERATOR_BODY_UNSUPPORTED", err.Error(), statement.statementSpan())
-				}
-				evt1ReplaceGeneratedMetadataStatement(cloned, info, enumCase.Name, loop.ItemName)
-				arm.Block.Statements = append(arm.Block.Statements, cloned)
-				statementCount++
-				continue
-			}
-			payloadQuery, ok := payloadLoop.Source.(*TemplateCallExpr)
-			if !ok || payloadQuery.Callee != "Payload" || payloadLoop.ItemType.Name != "FieldInfo" || payloadQuery.TypeArg.Name != loop.ItemName || len(payloadQuery.Args) > 1 {
-				return nil, nil, evt1Diagnostic("GENERATOR_CASE_BODY_INVALID", "case body requires FieldInfo item in Payload<case>(attribute)", payloadLoop.Span)
-			}
-			selector := ""
-			if len(payloadQuery.Args) == 1 {
-				name, ok := payloadQuery.Args[0].(*NameExpr)
-				if !ok {
-					return nil, nil, evt1Diagnostic("GENERATOR_CASE_BODY_INVALID", "payload selector must name an attribute", payloadLoop.Span)
-				}
-				selector = name.Name
-			}
-			for fieldIndex, field := range enumCase.Payload {
-				if selector != "" && !evt1GeneratedFieldMatches(env, selector, info.Type, field) {
-					continue
-				}
-				inputs = append(inputs, GeneratedInput{Name: enumCase.Name + "." + field.Name, Type: field.Type, Span: field.Span})
-				for _, bodyStatement := range payloadLoop.Body.Statements {
-					if statementCount >= evt1GeneratedStatementLimit {
-						return nil, nil, evt1Diagnostic("GENERATOR_OUTPUT_LIMIT", "generated function exceeds statement limit", payloadLoop.Span)
-					}
-					cloned, err := evt1SubstituteStatement(bodyStatement, "__generated_payload_clone__", Type{})
-					if err != nil {
-						return nil, nil, evt1Diagnostic("GENERATOR_BODY_UNSUPPORTED", err.Error(), bodyStatement.statementSpan())
-					}
-					if err := evt1ReplaceGeneratedFieldStatement(cloned, payloadLoop.ItemName, pattern.Bindings[fieldIndex]); err != nil {
-						return nil, nil, err
-					}
-					payloadInfo := info
-					payloadInfo.Fields = enumCase.Payload
-					evt1ReplaceGeneratedMetadataStatement(cloned, payloadInfo, field.Name, payloadLoop.ItemName)
-					evt1ReplaceGeneratedMetadataStatement(cloned, info, enumCase.Name, loop.ItemName)
-					arm.Block.Statements = append(arm.Block.Statements, cloned)
-					statementCount++
-				}
-			}
+		body, err := evt1ExpandGeneratedCasePayloads(loop.Body, info, enumCase, pattern, loop.ItemName, env, &inputs, &statementCount)
+		if err != nil {
+			return nil, nil, err
 		}
+		arm.Block = body
 		match.Arms = append(match.Arms, arm)
 	}
 	return match, inputs, nil
+}
+
+func evt1ExpandGeneratedCasePayloads(block Block, info TypeInfo, enumCase EnumCaseInfo, pattern Pattern, casePlaceholder string, env *semanticEnv, inputs *[]GeneratedInput, statementCount *int) (Block, error) {
+	out := Block{Span: block.Span}
+	for _, statement := range block.Statements {
+		if *statementCount >= evt1GeneratedStatementLimit {
+			return Block{}, evt1Diagnostic("GENERATOR_OUTPUT_LIMIT", "generated function exceeds statement limit", statement.statementSpan())
+		}
+		if scoped, ok := statement.(*TryStmt); ok {
+			cloned, err := evt1SubstituteStatement(scoped, "__generated_case_clone__", Type{})
+			if err != nil {
+				return Block{}, evt1Diagnostic("GENERATOR_BODY_UNSUPPORTED", err.Error(), statement.statementSpan())
+			}
+			try := cloned.(*TryStmt)
+			try.Body, err = evt1ExpandGeneratedCasePayloads(try.Body, info, enumCase, pattern, casePlaceholder, env, inputs, statementCount)
+			if err != nil {
+				return Block{}, err
+			}
+			for index := range try.Except {
+				try.Except[index].Body, err = evt1ExpandGeneratedCasePayloads(try.Except[index].Body, info, enumCase, pattern, casePlaceholder, env, inputs, statementCount)
+				if err != nil {
+					return Block{}, err
+				}
+			}
+			evt1ReplaceGeneratedMetadataStatement(try, info, enumCase.Name, casePlaceholder)
+			out.Statements = append(out.Statements, try)
+			*statementCount++
+			continue
+		}
+		payloadLoop, ok := statement.(*ForeachStmt)
+		if !ok {
+			if *statementCount >= evt1GeneratedStatementLimit {
+				return Block{}, evt1Diagnostic("GENERATOR_OUTPUT_LIMIT", "generated function exceeds statement limit", statement.statementSpan())
+			}
+			cloned, err := evt1SubstituteStatement(statement, "__generated_case_clone__", Type{})
+			if err != nil {
+				return Block{}, evt1Diagnostic("GENERATOR_BODY_UNSUPPORTED", err.Error(), statement.statementSpan())
+			}
+			evt1ReplaceGeneratedMetadataStatement(cloned, info, enumCase.Name, casePlaceholder)
+			out.Statements = append(out.Statements, cloned)
+			*statementCount++
+			continue
+		}
+		payloadQuery, ok := payloadLoop.Source.(*TemplateCallExpr)
+		if !ok || payloadQuery.Callee != "Payload" || payloadLoop.ItemType.Name != "FieldInfo" || payloadQuery.TypeArg.Name != casePlaceholder || len(payloadQuery.Args) > 1 {
+			return Block{}, evt1Diagnostic("GENERATOR_CASE_BODY_INVALID", "case body requires FieldInfo item in Payload<case>(attribute)", payloadLoop.Span)
+		}
+		selector := ""
+		if len(payloadQuery.Args) == 1 {
+			name, ok := payloadQuery.Args[0].(*NameExpr)
+			if !ok {
+				return Block{}, evt1Diagnostic("GENERATOR_CASE_BODY_INVALID", "payload selector must name an attribute", payloadLoop.Span)
+			}
+			selector = name.Name
+		}
+		for fieldIndex, field := range enumCase.Payload {
+			if selector != "" && !evt1GeneratedFieldMatches(env, selector, info.Type, field) {
+				continue
+			}
+			*inputs = append(*inputs, GeneratedInput{Name: enumCase.Name + "." + field.Name, Type: field.Type, Span: field.Span})
+			for _, bodyStatement := range payloadLoop.Body.Statements {
+				if *statementCount >= evt1GeneratedStatementLimit {
+					return Block{}, evt1Diagnostic("GENERATOR_OUTPUT_LIMIT", "generated function exceeds statement limit", payloadLoop.Span)
+				}
+				cloned, err := evt1SubstituteStatement(bodyStatement, "__generated_payload_clone__", Type{})
+				if err != nil {
+					return Block{}, evt1Diagnostic("GENERATOR_BODY_UNSUPPORTED", err.Error(), bodyStatement.statementSpan())
+				}
+				if err := evt1ReplaceGeneratedFieldStatement(cloned, payloadLoop.ItemName, pattern.Bindings[fieldIndex]); err != nil {
+					return Block{}, err
+				}
+				payloadInfo := info
+				payloadInfo.Fields = enumCase.Payload
+				evt1ReplaceGeneratedMetadataStatement(cloned, payloadInfo, field.Name, payloadLoop.ItemName)
+				evt1ReplaceGeneratedMetadataStatement(cloned, info, enumCase.Name, casePlaceholder)
+				out.Statements = append(out.Statements, cloned)
+				*statementCount++
+			}
+		}
+	}
+	return out, nil
 }
 
 // Without an enum-valued subject, Cases<T>() expands into ordinary checked
@@ -603,6 +664,26 @@ func evt1ExpandGeneratedPayloadStatements(block Block, info TypeInfo, caseIndex 
 	for _, statement := range block.Statements {
 		if *count >= evt1GeneratedStatementLimit {
 			return Block{}, evt1Diagnostic("GENERATOR_OUTPUT_LIMIT", "generated function exceeds statement limit", statement.statementSpan())
+		}
+		if scoped, ok := statement.(*TryStmt); ok {
+			cloned, err := evt1SubstituteStatement(scoped, "__generated_case_clone__", Type{})
+			if err != nil {
+				return Block{}, evt1Diagnostic("GENERATOR_BODY_UNSUPPORTED", err.Error(), statement.statementSpan())
+			}
+			try := cloned.(*TryStmt)
+			try.Body, err = evt1ExpandGeneratedPayloadStatements(try.Body, info, caseIndex, enumCase, casePlaceholder, env, inputs, count)
+			if err != nil {
+				return Block{}, err
+			}
+			for index := range try.Except {
+				try.Except[index].Body, err = evt1ExpandGeneratedPayloadStatements(try.Except[index].Body, info, caseIndex, enumCase, casePlaceholder, env, inputs, count)
+				if err != nil {
+					return Block{}, err
+				}
+			}
+			out.Statements = append(out.Statements, try)
+			*count++
+			continue
 		}
 		loop, ok := statement.(*ForeachStmt)
 		if !ok {
@@ -667,6 +748,19 @@ func evt1ReplaceGeneratedFieldStatement(statement Statement, placeholder, field 
 		}
 		if s.Else != nil {
 			for _, item := range s.Else.Statements {
+				if err := evt1ReplaceGeneratedFieldStatement(item, placeholder, field); err != nil {
+					return err
+				}
+			}
+		}
+	case *TryStmt:
+		for _, item := range s.Body.Statements {
+			if err := evt1ReplaceGeneratedFieldStatement(item, placeholder, field); err != nil {
+				return err
+			}
+		}
+		for _, arm := range s.Except {
+			for _, item := range arm.Body.Statements {
 				if err := evt1ReplaceGeneratedFieldStatement(item, placeholder, field); err != nil {
 					return err
 				}
