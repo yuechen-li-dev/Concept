@@ -987,6 +987,7 @@ func (e *FieldExpr) exprSpan() Span { return e.Span }
 
 type CallExpr struct {
 	Callee               string           `json:"callee"`
+	InferredTemplateArgs []Type           `json:"inferred_template_args,omitempty"`
 	Receiver             Expr             `json:"receiver,omitempty"`
 	Member               bool             `json:"member,omitempty"`
 	DynDispatch          bool             `json:"dyn_dispatch,omitempty"`

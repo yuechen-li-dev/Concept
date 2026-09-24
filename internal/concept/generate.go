@@ -4613,6 +4613,9 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		}
 		return b.String(), carrierTemp + ".payload." + field, evt1FailureSuccessType(carrierType)
 	case *CallExpr:
+		if len(e.InferredTemplateArgs) > 0 {
+			return f.lowerExpr(&TemplateCallExpr{Callee: e.Callee, TypeArg: e.InferredTemplateArgs[0], TypeArgs: e.InferredTemplateArgs, Args: e.Args, Span: e.Span}, indent)
+		}
 		if e.Intrinsic == "option_value" {
 			prelude, value, optionType := f.lowerExpr(e.Args[0], indent)
 			pointer := f.nextTemp("option")

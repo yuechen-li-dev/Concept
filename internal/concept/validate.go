@@ -3917,8 +3917,22 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		fn, err := evt1ResolveOrdinaryCall(env, scope, e.Callee, e.Args, argTypes, templateInfo, e.Span)
 		if err != nil {
-			if _, exists := env.templates[e.Callee]; exists {
-				return Type{}, evt1Diagnostic("CV4173", fmt.Sprintf("template call %s requires an explicit concrete type argument", e.Callee), e.Span)
+			if decl, exists := env.templates[e.Callee]; exists {
+				if inferred, ok := evt1InferClosedTemplateArguments(env, decl, argTypes); ok {
+					instance, instanceErr := instantiateTemplateArgs(env, e.Callee, inferred, e.Span)
+					if instanceErr != nil {
+						return Type{}, instanceErr
+					}
+					for i, arg := range e.Args {
+						if argErr := validateCallArgument(env, scope, instance.Function.Params[i].Type, arg, argTypes[i], templateInfo); argErr != nil {
+							return Type{}, argErr
+						}
+					}
+					e.InferredTemplateArgs = inferred
+					instance.InvocationSpans = append(instance.InvocationSpans, e.Span)
+					return evt1CanonicalType(env, instance.Function.ReturnType), nil
+				}
+				return Type{}, evt1Diagnostic("CV4173", fmt.Sprintf("template call %s cannot infer all concrete arguments", e.Callee), e.Span)
 			}
 			return Type{}, err
 		}
@@ -6889,30 +6903,32 @@ func evt1LookupRequiredOperation(env *semanticEnv, required OperationRequirement
 	return FunctionDecl{}, evt1Diagnostic("CV4153", fmt.Sprintf("%s is missing required operation %s", prefix, evt1Signature(required.ReturnType, required.Name, required.Params)), span)
 }
 
-// A closed requirement may be witnessed by an ordinary unconstrained generic
-// operation when its type argument is uniquely determined by the signature.
+// A closed requirement and an ordinary call infer the same template arguments.
 func evt1ClosedTemplateRequiredWitness(env *semanticEnv, required OperationRequirement) (FunctionDecl, bool) {
 	template, ok := env.templates[required.Name]
-	if !ok || template.Constraint.ConceptName != "" || len(template.Params) != len(required.Params) {
+	if !ok || len(template.Params) != len(required.Params) {
 		return FunctionDecl{}, false
 	}
 	parameters := template.Parameters
 	if len(parameters) == 0 {
 		parameters = []GenericParameter{{Name: template.TypeParam, Kind: "type"}}
 	}
-	if len(parameters) != 1 || parameters[0].Kind != "type" {
+	actual := make([]Type, len(required.Params))
+	for i, param := range required.Params {
+		actual[i] = param.Type
+	}
+	args, ok := evt1InferClosedTemplateArguments(env, template, actual)
+	if !ok {
 		return FunctionDecl{}, false
 	}
-	var inferred Type
-	for i, param := range template.Params {
-		if !evt1InferRequiredTemplateType(param.Type, required.Params[i].Type, parameters[0].Name, &inferred) {
+	if template.Constraint.ConceptName != "" {
+		bindings := evt1TemplateBindings(parameters, args)
+		constraintArgs := evt1SubstituteArguments(evt1ConstraintArguments(template.Constraint), bindings)
+		if err := checkConceptApplicationSatisfaction(env, template.Constraint.ConceptName, constraintArgs, nil, required.Span); err != nil {
 			return FunctionDecl{}, false
 		}
 	}
-	if inferred.Name == "" {
-		return FunctionDecl{}, false
-	}
-	instance, err := evt1InstantiateTemplateFunction(template, inferred)
+	instance, err := evt1InstantiateTemplateFunctionArgs(template, parameters, args)
 	if err != nil {
 		return FunctionDecl{}, false
 	}
@@ -6932,29 +6948,6 @@ func evt1ClosedTemplateRequiredWitness(env *semanticEnv, required OperationRequi
 		}
 	}
 	return instance, true
-}
-
-func evt1InferRequiredTemplateType(pattern, target Type, parameter string, inferred *Type) bool {
-	if pattern.Name == parameter && len(pattern.TypeArgs) == 0 && pattern.PointerTo == nil && pattern.ArrayElem == nil {
-		candidate := target.valueType()
-		if inferred.Name == "" {
-			*inferred = candidate
-			return true
-		}
-		return inferred.SameValueType(candidate)
-	}
-	if pattern.Name != target.Name || len(pattern.TypeArgs) != len(target.TypeArgs) {
-		return true
-	}
-	for i := range pattern.TypeArgs {
-		if !evt1InferRequiredTemplateType(pattern.TypeArgs[i], target.TypeArgs[i], parameter, inferred) {
-			return false
-		}
-	}
-	if pattern.ArrayElem != nil && target.ArrayElem != nil {
-		return evt1InferRequiredTemplateType(*pattern.ArrayElem, *target.ArrayElem, parameter, inferred)
-	}
-	return true
 }
 
 func evt1RequiredOperationTypeEqual(env *semanticEnv, left Type, right Type) bool {
@@ -7565,8 +7558,8 @@ func instantiateTemplateArgs(env *semanticEnv, templateName string, concreteArgs
 }
 
 func validateTemplateTypeArgument(env *semanticEnv, concreteType Type, span Span) error {
-	if concreteType.PointerTo != nil || concreteType.ArrayElem != nil || concreteType.Ownership != "" || concreteType.Const || concreteType.Imported || concreteType.Unsafe || len(concreteType.TypeArgs) > 0 || concreteType.Kind == TypeConceptParam {
-		return evt1Diagnostic("CV4179", "template calls require one concrete non-template type argument", span)
+	if concreteType.Kind == TypeConceptParam || evt1TypeContainsConceptParameter(concreteType) {
+		return evt1Diagnostic("CV4179", "template calls require closed concrete type arguments", span)
 	}
 	return validateKnownType(env, concreteType, span, "", false)
 }
