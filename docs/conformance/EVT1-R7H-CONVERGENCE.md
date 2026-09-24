@@ -1,5 +1,48 @@
 # R7h Octagon and Concept schemas: architectural stop
 
+## R7h1 continuation: fixed arrays and shared payload/table goldens
+
+This continuation started from clean Concept `60ded73389687888a873ec369cd25ebf9f74c9b1`
+and clean Oct `8a4fee3bb3fc503c5fc392b9a5bc9e467add4b2c`.
+The Oct fixture, compiled table round trip, writer checks, and LF pinning are
+commit `81ba6eb87e5d2777df27991265b93f228f7edf89`.
+`Standard.Octagon.Core` now has scalar `OctagonType<T>` operations and a
+fixed-array value reader/writer using complete array construction. An element
+failure propagates before a completed array becomes live. The writer emits a
+composable value, and `FinishOctagon` supplies Oct's one canonical document
+newline. The strict C11 Standard test lane covers `[1, 2, 3]`.
+
+Two representative ordinary typed codecs now exercise nested payload enums
+and `record table<3>` with full `ID` and `Active` columns. Concept's output
+matches Oct's payload and table fixtures byte for byte. Oct loads both in its
+interpreted and compiled paths; the compiled valid load corpus has 11 facts
+and zero fallback. Oct's writer reproduces the same payload/table fixture bytes
+in 100 consecutive runs. These codecs are handwritten `OctagonType<T>`
+overloads, so they do not establish general reflection-derived enum/table
+families.
+Oct's compiled `LoadOctagon<Catalog>` → `WriteOctagon` integration test also
+reproduces the Concept table fixture byte for byte. The existing scalar-array
+fixture was pinned to LF in Oct so its checked-out bytes match the canonical
+writer on Windows; its writer has its own 100-run byte comparison.
+
+The array work exposed and fixed a general strict-C11 lowering bug: closed
+generic `ref const T<array>[N]` parameters were omitted from storage-view
+typedef collection. A native harness now asserts their declaration and
+execution. The next blocker is precise: `requires OctagonCodec<int<array>[3]>`
+reports CV4154 because closed concept witness lookup recognizes only a single
+unconstrained type-parameter template, while the array codec is constrained on
+its element and has an extent parameter. Generated `ReadNamed` cannot select
+the array family until closed template witnessing and generated typed dispatch
+can carry this proof. General payload enum reader derivation also needs
+compile-time case selection and typed payload construction; the current
+`Cases<T>()` generator expansion produces a writer-style match only.
+
+A bounded attempt to recognize constrained two-parameter array templates as
+closed concept witnesses made the proof pass, but an actual generated helper
+still failed at the required operation call: it could not select the array
+template without explicit element and extent arguments. That partial proof
+change was removed rather than leaving a concept witness that cannot execute.
+
 ## R7h1 continuation (2026-09-24)
 
 The R7h stop above is historical. R7h1 began from clean Concept

@@ -36,6 +36,11 @@ concept OctagonCodec<T>
     requires Result<void, OctagonError> WriteOctagon(ref const T value, ref OctagonWriter writer);
 }
 
+concept OctagonArrayElement<T>
+{
+    requires Result<T, OctagonError> ReadArrayElement(ref OctagonReader reader, ref int index, OctagonType<T> type);
+}
+
 Result<void, OctagonError> WriteByte(ref OctagonWriter writer, byte value)
 {
     if (writer.offset >= Len(writer.output)) { return Result::Error(OctagonError::CapacityExceeded); }
@@ -101,7 +106,15 @@ Result<void, OctagonError> BeginRecord(ref OctagonWriter writer, string name)
 
 Result<void, OctagonError> EndRecord(ref OctagonWriter writer)
 {
-    WriteLiteral(ref writer, "}\n")!;
+    WriteLiteral(ref writer, "}")!;
+    return Result::Ok();
+}
+
+// A codec writes one composable data expression. The document boundary owns
+// Oct's single canonical trailing newline.
+Result<void, OctagonError> FinishOctagon(ref OctagonWriter writer)
+{
+    WriteLiteral(ref writer, "\n")!;
     return Result::Ok();
 }
 
@@ -204,6 +217,66 @@ Result<void, OctagonError> WriteBool(ref OctagonWriter writer, bool value)
 {
     if (value) { WriteLiteral(ref writer, "true")!; }
     else { WriteLiteral(ref writer, "false")!; }
+    return Result::Ok();
+}
+
+Result<int, OctagonError> ReadOctagon(ref OctagonReader reader, OctagonType<int> type)
+{
+    return ReadInt(ref reader);
+}
+
+Result<bool, OctagonError> ReadOctagon(ref OctagonReader reader, OctagonType<bool> type)
+{
+    return ReadBool(ref reader);
+}
+
+Result<void, OctagonError> WriteOctagon(ref const int value, ref OctagonWriter writer)
+{
+    return WriteInt(ref writer, value);
+}
+
+Result<void, OctagonError> WriteOctagon(ref const bool value, ref OctagonWriter writer)
+{
+    return WriteBool(ref writer, value);
+}
+
+Result<int, OctagonError> ReadArrayElement(ref OctagonReader reader, ref int index, OctagonType<int> type)
+{
+    if (index > 0) { ExpectLiteral(ref reader, ",")!; }
+    index = index + 1;
+    return ReadInt(ref reader);
+}
+
+Result<bool, OctagonError> ReadArrayElement(ref OctagonReader reader, ref int index, OctagonType<bool> type)
+{
+    if (index > 0) { ExpectLiteral(ref reader, ",")!; }
+    index = index + 1;
+    return ReadBool(ref reader);
+}
+
+template <typename T, usize N> requires OctagonArrayElement<T>
+Result<T<array>[N], OctagonError> ReadOctagon(ref OctagonReader reader, OctagonType<T<array>[N]> type)
+{
+    ExpectLiteral(ref reader, "[")!;
+    int index = 0;
+    T<array>[N] values = [ReadArrayElement(ref reader, ref index, OctagonType<T>{0})! ... N];
+    ExpectLiteral(ref reader, "]")!;
+    return Result::Ok(move values);
+}
+
+template <typename T, usize N> requires OctagonCodec<T>
+Result<void, OctagonError> WriteOctagon(ref const T<array>[N] values, ref OctagonWriter writer)
+{
+    WriteLiteral(ref writer, "[")!;
+    int index = 0;
+    while (index < Len(values)) bounded(2147483647)
+    {
+        if (index > 0) { WriteLiteral(ref writer, ", ")!; }
+        T item = values[index];
+        WriteOctagon(ref const item, ref writer)!;
+        index = index + 1;
+    }
+    WriteLiteral(ref writer, "]")!;
     return Result::Ok();
 }
 

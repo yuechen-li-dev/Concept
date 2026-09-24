@@ -15,6 +15,11 @@ reflected field expansion, `FieldType<field>` closes that witness to the field
 type, so normal overload resolution chooses `ReadNamed`. This also permits
 multiple generated record readers in one module.
 
-This implementation is bounded to `int`/`bool` records. The Oct repository owns
-payload enum data syntax and nominal validation. Its canonical payload form
-is `Enum.Case(data)`; recursively nested arguments must be Octagon data.
+Generated derivation is bounded to `int`/`bool` records. The typed library also
+has a fixed-array codec, and tests exercise ordinary handwritten nested
+payload-enum and columnar-table codecs through `OctagonType<T>`. This is a
+working value path, not yet a reflected enum/table derivation family. The Oct
+repository owns payload enum data syntax and nominal validation. Its canonical
+payload form is `Enum.Case(data)`; recursively nested arguments must be
+Octagon data. An Octagon document has one final newline, emitted by
+`FinishOctagon` after the composable value writer returns.

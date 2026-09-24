@@ -13,8 +13,22 @@ The writer emits the Oct record form `Type { field: value }` in declaration
 order. The reader returns `Result<T, OctagonError>`.
 
 The `int` and `bool` codecs and generated mixed-record round trip are implemented.
-Other scalar types, payload enums, arrays, tables, and refinements remain
-outside this implementation; they must not be inferred from the concept name.
+`ReadOctagon<T, N>` and `WriteOctagon<T, N>` handle fixed arrays when the
+element operations satisfy their ordinary concepts. The tests execute an
+integer array, a nested payload enum, and a `record table<3>` with complete
+integer and boolean columns through strict C11. The latter two use ordinary
+handwritten `OctagonType<T>` overloads; general enum/table derivation is still
+pending. Other scalar types and refinement admission are not implemented.
+
+`WriteOctagon` writes one composable Octagon data expression. Call
+`FinishOctagon(ref writer)` once at the document boundary to emit Oct's
+canonical trailing newline. Nested values do not finish a document.
+
+The current fixed-array template must be called with explicit element type and
+extent. Concept's closed concept witness lookup does not yet recognize this
+constrained two-parameter template as `OctagonCodec<T<array>[N]>`, so a
+generated record cannot yet dispatch an arbitrary array field through
+`ReadNamed`/`WriteNamed`.
 
 Aggregate construction initializes fields directly into a not-yet-live
 aggregate. The aggregate becomes live only after all required fields are

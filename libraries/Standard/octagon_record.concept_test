@@ -14,6 +14,68 @@ record struct Config
     bool Enabled;
 };
 
+
+enum Inner { Value(int number), }
+enum Outer { Wrapped(Inner inner), }
+record table<3> Catalog { int ID; bool Active; }
+
+Result<Catalog, OctagonError> ReadOctagon(ref OctagonReader reader, OctagonType<Catalog> type)
+{
+    BeginRecord(ref reader, "Catalog")!;
+    ExpectLiteral(ref reader, "ID:")!;
+    int<array>[3] ids = ReadOctagon<int, 3>(ref reader, OctagonType<int<array>[3]>{0})!;
+    ExpectLiteral(ref reader, "Active:")!;
+    bool<array>[3] active = ReadOctagon<bool, 3>(ref reader, OctagonType<bool<array>[3]>{0})!;
+    EndRecord(ref reader)!;
+    return Result::Ok(Catalog{ID = move ids, Active = move active});
+}
+
+Result<void, OctagonError> WriteOctagon(ref const Catalog value, ref OctagonWriter writer)
+{
+    BeginRecord(ref writer, "Catalog")!;
+    WriteLiteral(ref writer, "    ID: ")!;
+    int<array>[3] ids = value.ID;
+    WriteOctagon<int, 3>(ref const ids, ref writer)!;
+    WriteLiteral(ref writer, "\n    Active: ")!;
+    bool<array>[3] active = value.Active;
+    WriteOctagon<bool, 3>(ref const active, ref writer)!;
+    WriteLiteral(ref writer, "\n")!;
+    EndRecord(ref writer)!;
+    return Result::Ok();
+}
+
+Result<Inner, OctagonError> ReadOctagon(ref OctagonReader reader, OctagonType<Inner> type)
+{
+    ExpectLiteral(ref reader, "Inner.Value(")!;
+    int number = ReadInt(ref reader)!;
+    ExpectLiteral(ref reader, ")")!;
+    return Result::Ok(Inner::Value(number));
+}
+
+Result<Outer, OctagonError> ReadOctagon(ref OctagonReader reader, OctagonType<Outer> type)
+{
+    ExpectLiteral(ref reader, "Outer.Wrapped(")!;
+    Inner inner = ReadOctagon(ref reader, OctagonType<Inner>{0})!;
+    ExpectLiteral(ref reader, ")")!;
+    return Result::Ok(Outer::Wrapped(move inner));
+}
+
+Result<void, OctagonError> WriteOctagon(ref const Inner value, ref OctagonWriter writer)
+{
+    match (value) {
+        Inner::Value(number) => { WriteLiteral(ref writer, "Inner.Value(")!; WriteInt(ref writer, number)!; WriteLiteral(ref writer, ")")!; }
+    }
+    return Result::Ok();
+}
+
+Result<void, OctagonError> WriteOctagon(ref const Outer value, ref OctagonWriter writer)
+{
+    match (value) {
+        Outer::Wrapped(inner) => { WriteLiteral(ref writer, "Outer.Wrapped(")!; WriteOctagon(ref const inner, ref writer)!; WriteLiteral(ref writer, ")")!; }
+    }
+    return Result::Ok();
+}
+
 derive DeriveOctagonRead reflect<Pair>;
 derive DeriveOctagonWrite reflect<Pair>;
 derive DeriveOctagonRead reflect<Config>;
@@ -21,6 +83,9 @@ derive DeriveOctagonWrite reflect<Config>;
 
 requires OctagonCodec<Pair>;
 requires OctagonCodec<Config>;
+requires OctagonCodec<Inner>;
+requires OctagonCodec<Outer>;
+requires OctagonCodec<Catalog>;
 
 [[fact]]
 void GeneratedIntegerRecordRoundTrip()
@@ -30,6 +95,7 @@ void GeneratedIntegerRecordRoundTrip()
     {
         OctagonWriter writer = OctagonWriter{Span(bytes), 0};
         WriteOctagon(ref const input, ref writer)!;
+        FinishOctagon(ref writer)!;
         OctagonReader golden = OctagonReader{Span(bytes), 0};
         ExpectLiteral(ref golden, "Pair {\n    X: 12\n    Y: -3\n}\n")!;
         Assert.True(golden.offset == writer.offset, "Concept bytes match Oct record golden");
@@ -47,6 +113,7 @@ void GeneratedMixedRecordRoundTrip()
     {
         OctagonWriter writer = OctagonWriter{Span(bytes), 0};
         WriteOctagon(ref const input, ref writer)!;
+        FinishOctagon(ref writer)!;
         OctagonReader golden = OctagonReader{Span(bytes), 0};
         ExpectLiteral(ref golden, "Config {\n    Count: 7\n    Enabled: true\n}\n")!;
         Assert.True(golden.offset == writer.offset, "mixed record canonical bytes");
@@ -54,4 +121,54 @@ void GeneratedMixedRecordRoundTrip()
     OctagonReader reader = OctagonReader{Span(bytes), 0};
     Config loaded = ReadOctagon(ref reader, OctagonType<Config>{0})!;
     Assert.True(loaded.Count == 7 and loaded.Enabled, "generated mixed record round trip");
+}
+
+[[fact]]
+void FixedArrayRoundTrip()
+{
+    int<array>[3] input = [1, 2, 3];
+    byte<array>[64] bytes = [0 ...];
+    OctagonWriter writer = OctagonWriter{Span(bytes), 0};
+    WriteOctagon<int, 3>(ref const input, ref writer)!;
+    FinishOctagon(ref writer)!;
+    OctagonReader golden = OctagonReader{Span(bytes), 0};
+    ExpectLiteral(ref golden, "[1, 2, 3]\n")!;
+    Assert.True(golden.offset == writer.offset, "array canonical bytes");
+    OctagonReader reader = OctagonReader{Span(bytes), 0};
+    int<array>[3] loaded = ReadOctagon<int, 3>(ref reader, OctagonType<int<array>[3]>{0})!;
+    Assert.True(loaded[0] == 1 and loaded[1] == 2 and loaded[2] == 3, "fixed array round trip");
+}
+
+
+[[fact]]
+void NestedPayloadEnumRoundTrip()
+{
+    Outer input = Outer::Wrapped(Inner::Value(42));
+    byte<array>[64] bytes = [0 ...];
+    OctagonWriter writer = OctagonWriter{Span(bytes), 0};
+    WriteOctagon(ref const input, ref writer)!;
+    FinishOctagon(ref writer)!;
+    OctagonReader golden = OctagonReader{Span(bytes), 0};
+    ExpectLiteral(ref golden, "Outer.Wrapped(Inner.Value(42))\n")!;
+    Assert.True(golden.offset == writer.offset, "Oct nested payload golden bytes");
+    OctagonReader reader = OctagonReader{Span(bytes), 0};
+    Outer loaded = ReadOctagon(ref reader, OctagonType<Outer>{0})!;
+    int number = match (loaded) { Outer::Wrapped(inner) => match (inner) { Inner::Value(n) => n, }, };
+    Assert.True(number == 42, "nested payload enum round trip");
+}
+
+[[fact]]
+void ColumnarTableRoundTrip()
+{
+    Catalog input = Catalog{ID = [1, 2, 3], Active = [true, false, true]};
+    byte<array>[128] bytes = [0 ...];
+    OctagonWriter writer = OctagonWriter{Span(bytes), 0};
+    WriteOctagon(ref const input, ref writer)!;
+    FinishOctagon(ref writer)!;
+    OctagonReader golden = OctagonReader{Span(bytes), 0};
+    ExpectLiteral(ref golden, "Catalog {\n    ID: [1, 2, 3]\n    Active: [true, false, true]\n}\n")!;
+    Assert.True(golden.offset == writer.offset, "columnar table golden bytes");
+    OctagonReader reader = OctagonReader{Span(bytes), 0};
+    Catalog loaded = ReadOctagon(ref reader, OctagonType<Catalog>{0})!;
+    Assert.True(loaded.ID[0] == 1 and loaded.ID[2] == 3 and loaded.Active[0] and not loaded.Active[1], "columnar table round trip");
 }

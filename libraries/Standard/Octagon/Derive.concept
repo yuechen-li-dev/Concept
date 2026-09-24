@@ -2,8 +2,8 @@ module Standard.Octagon.Derive;
 profile Core;
 import Standard.Octagon.Core;
 
-// R7h1's bounded integer-record derivation uses the ordinary typed byte reader
-// and writer. Other field types require their own ordinary codec operations.
+// Reflected record derivation uses the ordinary typed byte reader and writer.
+// Each additional field type needs a matching checked ReadNamed/WriteNamed pair.
 generator <typename T> DeriveOctagonRead
 Result<T, OctagonError> ReadOctagon(ref OctagonReader reader, OctagonType<T> type)
 {

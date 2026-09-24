@@ -379,6 +379,21 @@ func evt1CollectStorageViewTypes(module Module, env *semanticEnv) []Type {
 			visitBlock(*fn.Body)
 		}
 	}
+	instanceKeys := make([]string, 0, len(env.templateInstances))
+	for key := range env.templateInstances {
+		instanceKeys = append(instanceKeys, key)
+	}
+	sort.Strings(instanceKeys)
+	for _, key := range instanceKeys {
+		fn := env.templateInstances[key].Function
+		add(fn.ReturnType)
+		for _, param := range fn.Params {
+			add(param.Type)
+		}
+		if fn.Body != nil {
+			visitBlock(*fn.Body)
+		}
+	}
 	for _, automata := range module.Automata {
 		for _, field := range automata.StateFields {
 			add(field.Type)
