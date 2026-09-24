@@ -14,6 +14,19 @@ record struct Config
     bool Enabled;
 };
 
+record struct ArrayHolder
+{
+    int<array>[3] Values;
+};
+record struct BoolArrayHolder { bool<array>[8] Flags; };
+record struct PairArrayHolder { Pair<array>[2] Items; };
+
+type Row = int<array>[2];
+record struct NestedArrayHolder
+{
+    Row<array>[3] Values;
+};
+
 
 enum Inner { Value(int number), }
 enum Outer { Wrapped(Inner inner), }
@@ -80,9 +93,21 @@ derive DeriveOctagonRead reflect<Pair>;
 derive DeriveOctagonWrite reflect<Pair>;
 derive DeriveOctagonRead reflect<Config>;
 derive DeriveOctagonWrite reflect<Config>;
+derive DeriveOctagonRead reflect<ArrayHolder>;
+derive DeriveOctagonWrite reflect<ArrayHolder>;
+derive DeriveOctagonRead reflect<BoolArrayHolder>;
+derive DeriveOctagonWrite reflect<BoolArrayHolder>;
+derive DeriveOctagonRead reflect<PairArrayHolder>;
+derive DeriveOctagonWrite reflect<PairArrayHolder>;
+derive DeriveOctagonRead reflect<NestedArrayHolder>;
+derive DeriveOctagonWrite reflect<NestedArrayHolder>;
 
 requires OctagonCodec<Pair>;
 requires OctagonCodec<Config>;
+requires OctagonCodec<ArrayHolder>;
+requires OctagonCodec<BoolArrayHolder>;
+requires OctagonCodec<PairArrayHolder>;
+requires OctagonCodec<NestedArrayHolder>;
 requires OctagonCodec<Inner>;
 requires OctagonCodec<Outer>;
 requires OctagonCodec<Catalog>;
@@ -137,6 +162,64 @@ void FixedArrayRoundTrip()
     OctagonReader reader = OctagonReader{Span(bytes), 0};
     int<array>[3] loaded = ReadOctagon<int, 3>(ref reader, OctagonType<int<array>[3]>{0})!;
     Assert.True(loaded[0] == 1 and loaded[1] == 2 and loaded[2] == 3, "fixed array round trip");
+}
+
+[[fact]]
+void GeneratedArrayFieldRoundTrip()
+{
+    ArrayHolder input = ArrayHolder{Values = [1, 2, 3]};
+    byte<array>[80] bytes = [0 ...];
+    OctagonWriter writer = OctagonWriter{Span(bytes), 0};
+    WriteOctagon(ref const input, ref writer)!;
+    FinishOctagon(ref writer)!;
+    OctagonReader golden = OctagonReader{Span(bytes), 0};
+    ExpectLiteral(ref golden, "ArrayHolder {\n    Values: [1, 2, 3]\n}\n")!;
+    Assert.True(golden.offset == writer.offset, "generated array field canonical bytes");
+    OctagonReader reader = OctagonReader{Span(bytes), 0};
+    ArrayHolder loaded = ReadOctagon(ref reader, OctagonType<ArrayHolder>{0})!;
+    Assert.True(loaded.Values[0] == 1 and loaded.Values[2] == 3, "generated array field round trip");
+}
+
+[[fact]]
+void GeneratedBoolArrayFieldRoundTrip()
+{
+    BoolArrayHolder input = BoolArrayHolder{Flags = [true, false, true, false, true, false, true, false]};
+    byte<array>[128] bytes = [0 ...];
+    OctagonWriter writer = OctagonWriter{Span(bytes), 0};
+    WriteOctagon(ref const input, ref writer)!;
+    FinishOctagon(ref writer)!;
+    OctagonReader reader = OctagonReader{Span(bytes), 0};
+    BoolArrayHolder loaded = ReadOctagon(ref reader, OctagonType<BoolArrayHolder>{0})!;
+    Assert.True(loaded.Flags[0] and not loaded.Flags[7], "generated bool array field round trip");
+}
+
+[[fact]]
+void GeneratedRecordArrayFieldRoundTrip()
+{
+    PairArrayHolder input = PairArrayHolder{Items = [Pair{X = 1, Y = 2}, Pair{X = 3, Y = 4}]};
+    byte<array>[160] bytes = [0 ...];
+    OctagonWriter writer = OctagonWriter{Span(bytes), 0};
+    WriteOctagon(ref const input, ref writer)!;
+    FinishOctagon(ref writer)!;
+    OctagonReader reader = OctagonReader{Span(bytes), 0};
+    PairArrayHolder loaded = ReadOctagon(ref reader, OctagonType<PairArrayHolder>{0})!;
+    Assert.True(loaded.Items[0].X == 1 and loaded.Items[1].Y == 4, "generated record array field round trip");
+}
+
+[[fact]]
+void GeneratedNestedArrayFieldRoundTrip()
+{
+    NestedArrayHolder input = NestedArrayHolder{Values = [[1, 2], [3, 4], [5, 6]]};
+    byte<array>[128] bytes = [0 ...];
+    OctagonWriter writer = OctagonWriter{Span(bytes), 0};
+    WriteOctagon(ref const input, ref writer)!;
+    FinishOctagon(ref writer)!;
+    OctagonReader golden = OctagonReader{Span(bytes), 0};
+    ExpectLiteral(ref golden, "NestedArrayHolder {\n    Values: [[1, 2], [3, 4], [5, 6]]\n}\n")!;
+    Assert.True(golden.offset == writer.offset, "generated nested array canonical bytes");
+    OctagonReader reader = OctagonReader{Span(bytes), 0};
+    NestedArrayHolder loaded = ReadOctagon(ref reader, OctagonType<NestedArrayHolder>{0})!;
+    Assert.True(loaded.Values[0][0] == 1 and loaded.Values[2][1] == 6, "generated nested array round trip");
 }
 
 

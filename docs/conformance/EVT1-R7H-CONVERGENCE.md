@@ -1,5 +1,65 @@
 # R7h Octagon and Concept schemas: architectural stop
 
+## R7h2 continuation: closed generic witness calls (2026-09-24)
+
+Baseline was clean Concept `4024e5fbf2491a9fa2344df7839e023d06b3f52e` and
+clean Oct `81ba6eb87e5d2777df27991265b93f228f7edf89`. Oct source was not
+changed. The independent reproducer is in `r7h2_witness_test.go`: a
+`Codec<int<array>[4]>` requirement was accepted while the ordinary
+`Encode(ref const values)` call failed with `CV4173`, demanding explicit
+template arguments. This was a proof/call split, not an Octagon format issue.
+
+Closed template argument inference now serves both required-operation proof
+and ordinary call resolution. It binds type parameters and fixed extents from
+the same parameter pattern, reopens nominal generic applications for
+inference, checks the resulting closed signature, and then uses the ordinary
+template instantiator. The instantiator still checks constraints and uses its
+existing recursion guard and deterministic identity (`template name`, type
+arguments, value arguments). The obsolete single-type-parameter proof helper
+was removed. A handwritten strict-C11 call executes the inferred `int, 4`
+instance, and its generated outputs are byte-identical over 100 runs.
+
+The full Go gate exposed an artifact transport regression: the existing
+generated Trace fixture carries `CollectorHandle<Node>` as a closed imported
+nominal instance, without its open generic application in the consumer's
+local map. Pattern inference initially rejected this required operation and
+selected no reflected fields. The general fix compares the nominal instance
+against the same pattern after earlier parameter positions have closed all
+its arguments. The artifact-only Trace regression and R7h2 artifact chain
+pass together. This does not parse a nominal name string.
+
+The first derived codec blocker was that `ReadNamed`/`WriteNamed` had only
+scalar overloads. Ordinary constrained generic overloads now delegate through
+`OctagonCodec<T>`; the compiler has no Octagon-specific path. Generated
+record fields round trip for `int<array>[3]`, `bool<array>[8]`, arrays of
+generated `Pair` records, and nested arrays via a `Row` alias. A generic
+array-element reader delegates to the ordinary codec witness. The existing
+record generator also derives `record table<3> Catalog` column-wise, with
+canonical bytes equal to the handwritten table fixture. All these run in the
+Standard strict-C11 fact lane.
+
+An A->B->C semantic-artifact regression exports the generic witness from A,
+derives a field call in B, and consumes B's generated function from C without
+source reparse or rerunning B's generator. The independent native fixture
+qualifies execution; the artifact regression currently qualifies semantic
+transport and output generation. Generic operation witnesses from R7f1 remain
+in the full Go regression lane.
+
+Remaining R7h2 work is explicit: general payload-enum reader/writer
+derivation, refinement admission, full Concept/Oct bidirectional fixtures,
+an executable artifact-only linked program, and the full 100-run multi-module
+artifact/MIR/C/header/explain/fixture gate. Generated nested error paths and
+NoAllocation proof are also not yet qualified. Current work meets the milestone's
+meaningful-progression threshold through closed witness invocation, generated
+array fields, and nested arrays; it is not full R7h2 conformance.
+
+Final qualification for this progression: `go test ./...`, `go vet ./...`,
+both Zig test roots, `oct make BurnIn`, and the Concept Make Standard and
+DragonGod build/test graph passed. Standard ran 25 facts, DragonGod 21 facts
+and one benchmark. Adjacent Oct parser/interpreter/build/CLI Go tests passed
+at the unchanged baseline SHA. `git diff --check` passed; no compiler
+Octagon-name branch was added.
+
 ## R7h1 continuation: fixed arrays and shared payload/table goldens
 
 This continuation started from clean Concept `60ded73389687888a873ec369cd25ebf9f74c9b1`

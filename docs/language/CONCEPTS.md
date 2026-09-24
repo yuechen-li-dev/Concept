@@ -67,3 +67,10 @@ spellings. These annotations state semantics explicitly. A function named
 ## Generated witnesses
 
 A generated function can satisfy a concept's required operation through the same lookup and signature rules as a handwritten function. `concept explain <file> --generated <operation>` displays the generated origin and reflected inputs for that checked operation. `concept explain <file> --concept 'Trace<Node>'` checks a single-argument concept goal and attributes its generated required operation.
+
+For a closed required operation, generic template arguments may be inferred
+from parameter types, including fixed array extents. The same inference is
+used by an ordinary call when no nongeneric overload matches. Constraint
+closure and ordinary overload checking still apply. A proven closed witness
+must be callable through its required operation from ordinary generated or
+handwritten code; this is the compiler invariant.

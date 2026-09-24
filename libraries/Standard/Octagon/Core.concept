@@ -254,6 +254,14 @@ Result<bool, OctagonError> ReadArrayElement(ref OctagonReader reader, ref int in
     return ReadBool(ref reader);
 }
 
+template <typename T> requires OctagonCodec<T>
+Result<T, OctagonError> ReadArrayElement(ref OctagonReader reader, ref int index, OctagonType<T> type)
+{
+    if (index > 0) { ExpectLiteral(ref reader, ",")!; }
+    index = index + 1;
+    return ReadOctagon(ref reader, type);
+}
+
 template <typename T, usize N> requires OctagonArrayElement<T>
 Result<T<array>[N], OctagonError> ReadOctagon(ref OctagonReader reader, OctagonType<T<array>[N]> type)
 {
@@ -303,6 +311,25 @@ Result<void, OctagonError> WriteNamed(ref OctagonWriter writer, string name, boo
     WriteLiteral(ref writer, name)!;
     WriteLiteral(ref writer, ": ")!;
     WriteBool(ref writer, value)!;
+    WriteLiteral(ref writer, "\n")!;
+    return Result::Ok();
+}
+
+template <typename T> requires OctagonCodec<T>
+Result<T, OctagonError> ReadNamed(ref OctagonReader reader, string name, OctagonType<T> type)
+{
+    ExpectLiteral(ref reader, name)!;
+    ExpectLiteral(ref reader, ":")!;
+    return ReadOctagon(ref reader, type);
+}
+
+template <typename T> requires OctagonCodec<T>
+Result<void, OctagonError> WriteNamed(ref OctagonWriter writer, string name, T value)
+{
+    WriteLiteral(ref writer, "    ")!;
+    WriteLiteral(ref writer, name)!;
+    WriteLiteral(ref writer, ": ")!;
+    WriteOctagon(ref const value, ref writer)!;
     WriteLiteral(ref writer, "\n")!;
     return Result::Ok();
 }

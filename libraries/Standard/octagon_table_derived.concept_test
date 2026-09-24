@@ -1,0 +1,25 @@
+profile Core;
+import Standard.Octagon.Core;
+import Standard.Octagon.Derive;
+
+record table<3> Catalog { int ID; bool Active; }
+
+derive DeriveOctagonRead reflect<Catalog>;
+derive DeriveOctagonWrite reflect<Catalog>;
+requires OctagonCodec<Catalog>;
+
+[[fact]]
+void DerivedColumnarTableRoundTrip()
+{
+    Catalog input = Catalog{ID = [1, 2, 3], Active = [true, false, true]};
+    byte<array>[128] bytes = [0 ...];
+    OctagonWriter writer = OctagonWriter{Span(bytes), 0};
+    WriteOctagon(ref const input, ref writer)!;
+    FinishOctagon(ref writer)!;
+    OctagonReader golden = OctagonReader{Span(bytes), 0};
+    ExpectLiteral(ref golden, "Catalog {\n    ID: [1, 2, 3]\n    Active: [true, false, true]\n}\n")!;
+    Assert.True(golden.offset == writer.offset, "derived table canonical columns");
+    OctagonReader reader = OctagonReader{Span(bytes), 0};
+    Catalog loaded = ReadOctagon(ref reader, OctagonType<Catalog>{0})!;
+    Assert.True(loaded.ID[0] == 1 and loaded.ID[2] == 3 and loaded.Active[0] and not loaded.Active[1], "derived table round trip");
+}
