@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"sort"
 	"strings"
@@ -39,6 +40,25 @@ type NativeABIClaim struct {
 	Offsets   []int    `json:"offsets"`
 }
 
+type NativeABIEvidence struct {
+	TypeName  string   `json:"type_name"`
+	Origin    string   `json:"origin"`
+	Size      int      `json:"size"`
+	Alignment int      `json:"alignment"`
+	Fields    []string `json:"fields"`
+	Offsets   []int    `json:"offsets"`
+}
+
+type NativeABIReport struct {
+	Schema                string              `json:"schema"`
+	Compiler              string              `json:"compiler"`
+	CompilerVersion       string              `json:"compiler_version"`
+	Target                string              `json:"target"`
+	BuildInputHash        string              `json:"build_input_hash"`
+	SemanticCompanionHash string              `json:"semantic_companion_hash"`
+	Evidence              []NativeABIEvidence `json:"evidence"`
+}
+
 type NativeTarget struct {
 	Name       string         `json:"name"`
 	Language   string         `json:"language"`
@@ -64,13 +84,22 @@ type NativeCommand struct {
 }
 
 type NativePlan struct {
-	Schema                string          `json:"schema"`
-	Project               string          `json:"project"`
-	Toolchain             string          `json:"toolchain"`
-	ToolchainVersion      string          `json:"toolchain_version"`
-	BuildInputHash        string          `json:"build_input_hash"`
-	SemanticCompanionHash string          `json:"semantic_companion_hash"`
-	Commands              []NativeCommand `json:"commands"`
+	Schema                string               `json:"schema"`
+	Project               string               `json:"project"`
+	Toolchain             string               `json:"toolchain"`
+	ToolchainVersion      string               `json:"toolchain_version"`
+	BuildInputHash        string               `json:"build_input_hash"`
+	SemanticCompanionHash string               `json:"semantic_companion_hash"`
+	Commands              []NativeCommand      `json:"commands"`
+	ABIProbes             []NativeABIProbePlan `json:"abi_probes,omitempty"`
+}
+
+type NativeABIProbePlan struct {
+	Compiler string   `json:"compiler"`
+	Header   string   `json:"header"`
+	TypeName string   `json:"type_name"`
+	Fields   []string `json:"fields"`
+	Mode     string   `json:"mode"`
 }
 
 type NativeBuildResult struct {
@@ -432,6 +461,9 @@ func NativeBuildPlan(project NativeProject) (NativePlan, error) {
 		nativeHashPart(semantic, p, body)
 	}
 	plan.SemanticCompanionHash = hex.EncodeToString(semantic.Sum(nil))
+	for _, claim := range project.ABI {
+		plan.ABIProbes = append(plan.ABIProbes, NativeABIProbePlan{Compiler: compiler, Header: claim.Header, TypeName: claim.TypeName, Fields: append([]string{}, claim.Fields...), Mode: "compile-and-run"})
+	}
 	for _, target := range project.Targets {
 		targetCompiler := compiler
 		if target.Language == "C" {
@@ -525,6 +557,11 @@ func NativeBuildPlan(project NativeProject) (NativePlan, error) {
 		return NativePlan{}, err
 	}
 	nativeHashPart(input, "command-plan", commandBody)
+	claimBody, err := json.Marshal(project.ABI)
+	if err != nil {
+		return NativePlan{}, err
+	}
+	nativeHashPart(input, "abi-claims", claimBody)
 	plan.BuildInputHash = hex.EncodeToString(input.Sum(nil))
 	return plan, nil
 }
@@ -582,9 +619,38 @@ func MarshalNativePlan(plan NativePlan) ([]byte, error) { return json.MarshalInd
 // CheckNativeABI checks exact declared repr(C) fields against a probe compiled
 // and executed by the selected native compiler. No C++ source is parsed here.
 func CheckNativeABI(project NativeProject) error {
+	plan, err := NativeBuildPlan(project)
+	if err != nil {
+		return err
+	}
 	compiler := "clang++"
 	if project.Toolchain == "GCC" {
 		compiler = "g++"
+	}
+	target, err := exec.Command(compiler, "-dumpmachine").Output()
+	if err != nil {
+		return fmt.Errorf("NATIVE_ABI_TARGET_UNKNOWN: %w", err)
+	}
+	report := NativeABIReport{Schema: "concept-native-abi.v1", Compiler: compiler, CompilerVersion: plan.ToolchainVersion, Target: strings.TrimSpace(string(target)) + "/" + runtime.GOOS + "/" + runtime.GOARCH, BuildInputHash: plan.BuildInputHash, SemanticCompanionHash: plan.SemanticCompanionHash, Evidence: []NativeABIEvidence{}}
+	claimed := map[string]bool{}
+	for _, claim := range project.ABI {
+		claimed[claim.Companion+"|"+claim.TypeName] = true
+	}
+	for _, companion := range project.Companions {
+		path := filepath.Join(project.Root, filepath.FromSlash(companion))
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		module, err := Parse(filepath.ToSlash(path), string(body))
+		if err != nil {
+			return err
+		}
+		for _, decl := range module.Structs {
+			if evt1HasCRepr(decl.Attributes) && !claimed[companion+"|"+decl.Name] {
+				return fmt.Errorf("NATIVE_ABI_CLAIM_MISSING: %s in %s requires a native layout claim", decl.Name, companion)
+			}
+		}
 	}
 	for _, claim := range project.ABI {
 		path := filepath.Join(project.Root, filepath.FromSlash(claim.Companion))
@@ -597,22 +663,40 @@ func CheckNativeABI(project NativeProject) error {
 			return err
 		}
 		found := false
+		geometryEnv := newSemanticEnv(&coreProfileDefinition)
+		for _, decl := range module.Structs {
+			geometryEnv.structs[decl.Name] = decl
+		}
+		var conceptOffsets []int
+		var conceptSize, conceptAlign int
 		for _, decl := range module.Structs {
 			if decl.Name != claim.TypeName {
 				continue
 			}
 			found = true
-			if !decl.Record || len(decl.Fields) != len(claim.Fields) {
-				return fmt.Errorf("NATIVE_ABI_COMPANION_MISMATCH: %s must be a record struct with %d fields", claim.TypeName, len(claim.Fields))
+			if !decl.Record || !evt1HasCRepr(decl.Attributes) || len(decl.Fields) != len(claim.Fields) {
+				return fmt.Errorf("NATIVE_ABI_COMPANION_MISMATCH: %s must be a repr(C) record struct with %d fields", claim.TypeName, len(claim.Fields))
 			}
 			for i, field := range decl.Fields {
-				if field.Name != claim.Fields[i] || field.Type.Name != "int" {
-					return fmt.Errorf("NATIVE_ABI_COMPANION_MISMATCH: %s field %d must be int %s", claim.TypeName, i, claim.Fields[i])
+				if field.Name != claim.Fields[i] {
+					return fmt.Errorf("NATIVE_ABI_COMPANION_MISMATCH: %s field %d must be %s", claim.TypeName, i, claim.Fields[i])
 				}
+			}
+			conceptOffsets, conceptSize, conceptAlign, err = evt1StructFieldOffsets(geometryEnv, decl)
+			if err != nil {
+				return err
 			}
 		}
 		if !found {
 			return fmt.Errorf("NATIVE_ABI_COMPANION_MISMATCH: %s is absent from %s", claim.TypeName, claim.Companion)
+		}
+		if conceptSize != claim.Size || conceptAlign != claim.Alignment {
+			return fmt.Errorf("NATIVE_ABI_MISMATCH: %s Concept size %d align %d; companion claims size %d align %d", claim.TypeName, conceptSize, conceptAlign, claim.Size, claim.Alignment)
+		}
+		for i, field := range claim.Fields {
+			if conceptOffsets[i] != claim.Offsets[i] {
+				return fmt.Errorf("NATIVE_ABI_MISMATCH: %s.%s Concept offset %d; companion claims offset %d", claim.TypeName, field, conceptOffsets[i], claim.Offsets[i])
+			}
 		}
 		// The include and identifiers come from validated project data. Keep probe
 		// input narrow: C identifiers and project-relative header paths only.
@@ -643,7 +727,12 @@ func CheckNativeABI(project NativeProject) error {
 			os.RemoveAll(temp)
 			return err
 		}
-		build := exec.Command(compiler, "-std=c++17", "-I", project.Root, probe, "-o", executable)
+		probeArgs, err := nativeABIProbeArgs(project, claim, probe, executable)
+		if err != nil {
+			os.RemoveAll(temp)
+			return err
+		}
+		build := exec.Command(compiler, probeArgs...)
 		output, err := build.CombinedOutput()
 		if err != nil {
 			os.RemoveAll(temp)
@@ -660,19 +749,65 @@ func CheckNativeABI(project NativeProject) error {
 			return fmt.Errorf("NATIVE_ABI_PROBE_OUTPUT: %s: %w", claim.TypeName, err)
 		}
 		if size != claim.Size || alignment != claim.Alignment {
-			return fmt.Errorf("NATIVE_ABI_MISMATCH: %s companion size %d align %d; %s reports size %d align %d", claim.TypeName, claim.Size, claim.Alignment, compiler, size, alignment)
+			return fmt.Errorf("NATIVE_ABI_MISMATCH: %s Concept size %d align %d; companion claim size %d align %d; %s reports size %d align %d", claim.TypeName, conceptSize, conceptAlign, claim.Size, claim.Alignment, compiler, size, alignment)
 		}
+		measuredOffsets := make([]int, len(claim.Fields))
 		for i, field := range claim.Fields {
 			var offset int
 			if _, err := fmt.Fscan(read, &offset); err != nil {
 				return fmt.Errorf("NATIVE_ABI_PROBE_OUTPUT: %s.%s: %w", claim.TypeName, field, err)
 			}
 			if offset != claim.Offsets[i] {
-				return fmt.Errorf("NATIVE_ABI_MISMATCH: %s.%s companion offset %d; %s reports offset %d", claim.TypeName, field, claim.Offsets[i], compiler, offset)
+				return fmt.Errorf("NATIVE_ABI_MISMATCH: %s.%s Concept offset %d; companion claim offset %d; %s reports offset %d", claim.TypeName, field, conceptOffsets[i], claim.Offsets[i], compiler, offset)
+			}
+			measuredOffsets[i] = offset
+		}
+		report.Evidence = append(report.Evidence, NativeABIEvidence{TypeName: claim.TypeName, Origin: "NativeToolchainProbe", Size: size, Alignment: alignment, Fields: append([]string{}, claim.Fields...), Offsets: measuredOffsets})
+	}
+	body, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Join(project.Root, ".native-build"), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(project.Root, ".native-build", "abi.json"), append(body, '\n'), 0o644)
+}
+
+func nativeABIProbeArgs(project NativeProject, claim NativeABIClaim, probe, executable string) ([]string, error) {
+	headerDir := filepath.ToSlash(filepath.Dir(filepath.FromSlash(claim.Header)))
+	for _, target := range project.Targets {
+		if target.Language != "Cpp" {
+			continue
+		}
+		matches := false
+		for _, source := range target.Sources {
+			if filepath.ToSlash(filepath.Dir(filepath.FromSlash(source))) == headerDir {
+				matches = true
+				break
 			}
 		}
+		if !matches {
+			continue
+		}
+		standard := map[string]string{"Cpp17": "c++17", "Cpp20": "c++20", "Cpp23": "c++23"}[target.Standard]
+		if standard == "" {
+			return nil, fmt.Errorf("NATIVE_ABI_PROBE_FLAGS_UNKNOWN: %s target %s has unsupported C++ standard %s", claim.TypeName, target.Name, target.Standard)
+		}
+		args := []string{"-std=" + standard, "-I", project.Root}
+		for _, include := range target.Includes {
+			args = append(args, "-I", filepath.Join(project.Root, filepath.FromSlash(include)))
+		}
+		for _, define := range target.Defines {
+			value := "-D" + define.Name
+			if define.HasValue {
+				value += "=" + define.Value
+			}
+			args = append(args, value)
+		}
+		return append(args, probe, "-o", executable), nil
 	}
-	return nil
+	return nil, fmt.Errorf("NATIVE_ABI_PROBE_TARGET_UNKNOWN: no C++ target owns header %s", claim.Header)
 }
 
 func nativeIdentifier(s string) bool {

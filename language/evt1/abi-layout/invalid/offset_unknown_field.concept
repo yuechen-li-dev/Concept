@@ -1,0 +1,3 @@
+profile Core;
+[[repr(C)]] record struct Pair { int x; int y; }
+static_assert(OffsetOf<Pair>(Pair.z) == 0, "missing field");

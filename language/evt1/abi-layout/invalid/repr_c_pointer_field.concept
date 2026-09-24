@@ -1,0 +1,2 @@
+profile Core;
+[[repr(C)]] record struct HandleBox { byte* handle; int count; }

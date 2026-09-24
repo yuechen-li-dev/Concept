@@ -9,6 +9,12 @@ void ParseTwoChildren()
     Assert.Equals(0, ConceptXmlIsNull(document), "native XMLDocument was allocated");
     Assert.Equals(0, ConceptXmlParse(document), "parse succeeds");
     Assert.Equals(2, ConceptXmlChildCount(document), "two children are visible");
+    ConceptXmlStats stats = ConceptXmlGetStats(document);
+    Assert.Equals(2, stats.children, "native aggregate return carries child count");
+    Assert.Equals(0, stats.status, "native aggregate return carries status");
+    ConceptXmlStats roundTrip = ConceptXmlRoundTripStats(ConceptXmlStats{3, 4});
+    Assert.Equals(4, roundTrip.children, "Concept aggregate parameter crosses native boundary");
+    Assert.Equals(6, roundTrip.status, "native aggregate return crosses back");
     ConceptXmlDestroy(document);
 }
 

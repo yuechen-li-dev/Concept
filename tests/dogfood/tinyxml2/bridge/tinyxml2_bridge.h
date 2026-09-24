@@ -16,6 +16,8 @@ unsigned char* ConceptXmlCreate(void) CONCEPT_XML_NOEXCEPT;
 int ConceptXmlIsNull(unsigned char* document) CONCEPT_XML_NOEXCEPT;
 int ConceptXmlParse(unsigned char* document) CONCEPT_XML_NOEXCEPT;
 int ConceptXmlChildCount(unsigned char* document) CONCEPT_XML_NOEXCEPT;
+ConceptXmlStats ConceptXmlGetStats(unsigned char* document) CONCEPT_XML_NOEXCEPT;
+ConceptXmlStats ConceptXmlRoundTripStats(ConceptXmlStats stats) CONCEPT_XML_NOEXCEPT;
 void ConceptXmlDestroy(unsigned char* document) CONCEPT_XML_NOEXCEPT;
 #ifdef __cplusplus
 }

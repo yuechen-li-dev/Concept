@@ -28,6 +28,29 @@ func evt1AlignUp(value, alignment int) int {
 	return (value + alignment - 1) / alignment * alignment
 }
 
+// evt1StructFieldOffsets uses the same geometry as SizeOf/AlignOf. Native ABI
+// claims compare these offsets with the selected compiler's offsetof results.
+func evt1StructFieldOffsets(env *semanticEnv, decl StructDecl) ([]int, int, int, error) {
+	if len(decl.Fields) == 0 {
+		return nil, 0, 0, evt1Diagnostic("C_ABI_LAYOUT_INVALID", "C ABI struct must have fields", decl.Span)
+	}
+	offsets := make([]int, len(decl.Fields))
+	end, alignment := 0, 1
+	for i, field := range decl.Fields {
+		size, fieldAlign, err := evt1TypeGeometry(env, field.Type)
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		end = evt1AlignUp(end, fieldAlign)
+		offsets[i] = end
+		end += size
+		if fieldAlign > alignment {
+			alignment = fieldAlign
+		}
+	}
+	return offsets, evt1AlignUp(end, alignment), alignment, nil
+}
+
 func evt1TypeGeometry(env *semanticEnv, t Type) (int, int, error) {
 	resolved, err := evt1ResolveType(env, nil, t)
 	if err != nil {
@@ -57,18 +80,11 @@ func evt1TypeGeometry(env *semanticEnv, t Type) (int, int, error) {
 		return 8, 8, nil
 	}
 	if decl, ok := env.structs[resolved.Name]; ok {
-		offset, alignment := 0, 1
-		for _, field := range decl.Fields {
-			size, align, err := evt1TypeGeometry(env, field.Type)
-			if err != nil {
-				return 0, 0, err
-			}
-			offset = evt1AlignUp(offset, align) + size
-			if align > alignment {
-				alignment = align
-			}
+		if len(decl.Fields) == 0 {
+			return 0, 1, nil // preserve ordinary nominal tag geometry; repr(C) rejects empty
 		}
-		return evt1AlignUp(offset, alignment), alignment, nil
+		_, size, alignment, err := evt1StructFieldOffsets(env, decl)
+		return size, alignment, err
 	}
 	return 0, 0, evt1Diagnostic("CV4573", "type "+resolved.String()+" has no fixed layout geometry", t.Span)
 }
@@ -211,6 +227,31 @@ func evt1LayoutQuery(env *semanticEnv, name string, typeArg Type, args []Expr) (
 		}
 		return alignment, nil
 	}
+	if name == "OffsetOf" {
+		decl, ok := env.structs[typeArg.Name]
+		if !ok || len(args) != 1 {
+			return 0, evt1Diagnostic("C_ABI_OFFSET_INVALID", "OffsetOf<T> expects a struct and one field name", typeArg.Span)
+		}
+		fieldName := ""
+		if field, ok := args[0].(*FieldExpr); ok {
+			if owner, valid := field.Receiver.(*NameExpr); valid && owner.Name == typeArg.Name {
+				fieldName = field.Field
+			}
+		}
+		if fieldName == "" {
+			return 0, evt1Diagnostic("C_ABI_OFFSET_INVALID", "OffsetOf field must use T.field identity", args[0].exprSpan())
+		}
+		offsets, _, _, err := evt1StructFieldOffsets(env, decl)
+		if err != nil {
+			return 0, err
+		}
+		for i, field := range decl.Fields {
+			if field.Name == fieldName {
+				return offsets[i], nil
+			}
+		}
+		return 0, evt1Diagnostic("C_ABI_OFFSET_INVALID", "unknown field "+typeArg.Name+"."+fieldName, args[0].exprSpan())
+	}
 	layout, ok := env.layouts[typeArg.Name]
 	if !ok {
 		return 0, evt1Diagnostic("CV4592", fmt.Sprintf("%s requires a declared layout type", name), typeArg.Span)
@@ -245,5 +286,5 @@ func evt1LayoutQuery(env *semanticEnv, name string, typeArg Type, args []Expr) (
 }
 
 func evt1IsTypeLayoutQuery(name string) bool {
-	return name == "LayoutSize" || name == "LayoutAlign" || name == "LayoutOffset" || name == "SizeOf" || name == "AlignOf"
+	return name == "LayoutSize" || name == "LayoutAlign" || name == "LayoutOffset" || name == "SizeOf" || name == "AlignOf" || name == "OffsetOf"
 }

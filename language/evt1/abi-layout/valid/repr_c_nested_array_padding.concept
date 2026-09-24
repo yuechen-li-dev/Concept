@@ -1,0 +1,18 @@
+profile Core;
+
+[[repr(C)]] record struct Pair { int x; int y; }
+[[repr(C)]] record struct Outer { Pair pair; int flags; }
+[[repr(C)]] record struct Packet { byte<array>[16] bytes; int status; }
+[[repr(C)]] record struct Padded { byte tag; uint64 value; }
+
+static_assert(SizeOf<Outer>() == 12, "nested size");
+static_assert(OffsetOf<Outer>(Outer.flags) == 8, "nested offset");
+static_assert(SizeOf<Packet>() == 20, "array extent");
+static_assert(OffsetOf<Packet>(Packet.status) == 16, "array offset");
+static_assert(SizeOf<Padded>() == 16, "padding");
+static_assert(AlignOf<Padded>() == 8, "alignment");
+static_assert(OffsetOf<Padded>(Padded.value) == 8, "padded offset");
+
+extern "C" Outer RoundTripOuter(Outer value);
+extern "C" Packet RoundTripPacket(Packet value);
+extern "C" Padded RoundTripPadded(Padded value);

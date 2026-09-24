@@ -1,0 +1,2 @@
+profile Core;
+[[repr(packed)]] record struct Packet { byte tag; int value; }

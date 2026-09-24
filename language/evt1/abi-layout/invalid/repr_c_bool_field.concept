@@ -1,0 +1,2 @@
+profile Core;
+[[repr(C)]] record struct Flags { bool enabled; int count; }

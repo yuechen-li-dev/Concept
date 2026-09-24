@@ -1,0 +1,3 @@
+profile Core;
+enum Kind { One, Two, }
+extern "C" Kind GetKind();

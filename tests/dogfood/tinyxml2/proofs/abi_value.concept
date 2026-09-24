@@ -1,0 +1,9 @@
+module Native.Proofs.Abi;
+profile Core;
+import Native;
+
+int ExplainCAbiValue()
+{
+    Assert.Concept<CAbiValue>(ConceptXmlStats, "native stats has an explicit C value representation");
+    return 0;
+}

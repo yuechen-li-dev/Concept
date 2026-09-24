@@ -1,0 +1,18 @@
+profile Core;
+
+[[repr(C)]] record struct Pair { int x; int y; }
+static_assert(SizeOf<Pair>() == 8, "pair size");
+static_assert(AlignOf<Pair>() == 4, "pair alignment");
+static_assert(OffsetOf<Pair>(Pair.y) == 4, "pair offset");
+
+concept CAbiValue<T> { requires compiler.CAbiLayout<T>(); }
+requires CAbiValue<Pair>;
+
+extern "C" Pair MakePair(int x, int y);
+extern "C" Pair RoundTripPair(Pair pair);
+
+int UsePair()
+{
+    Pair result = RoundTripPair(MakePair(1, 2));
+    return result.y;
+}

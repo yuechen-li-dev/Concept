@@ -2,8 +2,8 @@
   "schema": "concept-evt1-semantic-corpus-v1",
   "compiler_id": "concept-evt1-stage0-go",
   "totals": {
-    "valid": 395,
-    "static_invalid": 256,
+    "valid": 397,
+    "static_invalid": 262,
     "runtime_negative": 13,
     "compatibility": 5,
     "expected_divergence": 4
@@ -38,7 +38,8 @@
     { "subsystem": "Generic concept requirements", "path": "generic-requirements", "valid": 3, "static_invalid": 3, "runtime_negative": [], "historical_milestones": ["R6o"] },
     { "subsystem": "Tables and initializer repetition", "path": "tables-initializers", "valid": 4, "static_invalid": 5, "runtime_negative": [], "historical_milestones": ["EVT1 tables and ellipsis"] },
     { "subsystem": "Generic library closure", "path": "generic-library-closure", "valid": 5, "static_invalid": 1, "runtime_negative": [], "historical_milestones": ["R7f1"] },
-    { "subsystem": "Destructive resource", "path": "destructive-resource", "valid": 2, "static_invalid": 4, "runtime_negative": [], "historical_milestones": ["R7f2", "R7fR"] }
+    { "subsystem": "Destructive resource", "path": "destructive-resource", "valid": 2, "static_invalid": 4, "runtime_negative": [], "historical_milestones": ["R7f2", "R7fR"] },
+    { "subsystem": "C ABI layout", "path": "abi-layout", "valid": 2, "static_invalid": 6, "runtime_negative": [], "historical_milestones": ["R7j"] }
   ],
   "compatibility_fixtures": [
     "values/valid/let_const_alias.concept",

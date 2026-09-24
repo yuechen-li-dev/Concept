@@ -4,10 +4,18 @@ profile Core;
 // These symbols are implemented by the small C bridge over untouched TinyXML2.
 // byte* is an opaque handle; its pointee layout is deliberately unknown.
 // This exact layout is checked against bridge/tinyxml2_bridge.h by concept check.
+[[repr(C)]]
 record struct ConceptXmlStats { int children; int status; }
+
+concept CAbiValue<T>
+{
+    requires compiler.CAbiLayout<T>();
+}
+requires CAbiValue<ConceptXmlStats>;
 
 concept NativeStatsSchema<T>
 {
+    requires CAbiValue<T>;
     requires int NativeChildren(ref const T stats);
 }
 
@@ -18,6 +26,8 @@ extern "C" byte* ConceptXmlCreate();
 extern "C" int ConceptXmlIsNull(byte* document);
 extern "C" int ConceptXmlParse(byte* document);
 extern "C" int ConceptXmlChildCount(byte* document);
+extern "C" ConceptXmlStats ConceptXmlGetStats(byte* document);
+extern "C" ConceptXmlStats ConceptXmlRoundTripStats(ConceptXmlStats stats);
 extern "C" void ConceptXmlDestroy(byte* document);
 
 foreign concept CreateDocumentContract on ConceptXmlCreate

@@ -45,8 +45,21 @@ type TypeInfo struct {
 	ReflectionSite   Span           `json:"reflection_site"`
 }
 
-func evt1ReflectableAttributes(attributes []Attribute, span Span) error {
+func evt1ReflectableAttributes(attributes []Attribute, span Span, allowCRepr bool) error {
 	for _, attribute := range attributes {
+		if attribute.Name == "repr" {
+			if !allowCRepr {
+				return evt1Diagnostic("C_ABI_REPR_INVALID", "[[repr(C)]] requires a non-generic record struct", attribute.Span)
+			}
+			if len(attribute.Args) != 1 {
+				return evt1Diagnostic("C_ABI_REPR_INVALID", "repr requires exactly one C argument", attribute.Span)
+			}
+			name, ok := attribute.Args[0].(*NameExpr)
+			if !ok || name.Name != "C" {
+				return evt1Diagnostic("C_ABI_REPR_INVALID", "only [[repr(C)]] is supported", attribute.Span)
+			}
+			continue
+		}
 		if attribute.Name != "reflect" || len(attribute.Args) != 0 {
 			return evt1Diagnostic("REFLECT_ATTRIBUTE_INVALID", "type reflection permission requires [[reflect]] without arguments", attribute.Span)
 		}
@@ -66,17 +79,17 @@ func evt1HasReflectPermission(attributes []Attribute) bool {
 func evt1BuildReflectionResults(module *Module, env *semanticEnv) error {
 	module.ReflectionResults = nil
 	for _, decl := range module.Structs {
-		if err := evt1ReflectableAttributes(decl.Attributes, decl.Span); err != nil {
+		if err := evt1ReflectableAttributes(decl.Attributes, decl.Span, true); err != nil {
 			return err
 		}
 	}
 	for _, decl := range module.Enums {
-		if err := evt1ReflectableAttributes(decl.Attributes, decl.Span); err != nil {
+		if err := evt1ReflectableAttributes(decl.Attributes, decl.Span, false); err != nil {
 			return err
 		}
 	}
 	for _, decl := range module.GenericTypes {
-		if err := evt1ReflectableAttributes(decl.Struct.Attributes, decl.Span); err != nil {
+		if err := evt1ReflectableAttributes(decl.Struct.Attributes, decl.Span, false); err != nil {
 			return err
 		}
 	}

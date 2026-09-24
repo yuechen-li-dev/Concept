@@ -1,0 +1,11 @@
+module Native.Proofs.AbiInvalid;
+profile Core;
+import Native;
+
+record struct UnrepresentedStats { int children; int status; }
+
+int ExplainUnsafeCAbiValue()
+{
+    Assert.Concept<CAbiValue>(UnrepresentedStats, "aggregate has no C representation claim");
+    return 0;
+}

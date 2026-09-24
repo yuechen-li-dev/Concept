@@ -848,6 +848,11 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		return nil, err
 	}
 	for _, structDecl := range module.Structs {
+		if evt1HasCRepr(structDecl.Attributes) {
+			if ok, reason := evt1CABIValue(env, Type{Name: structDecl.Name, Kind: TypeStruct}, map[string]bool{}); !ok {
+				return nil, evt1Diagnostic("C_ABI_REPR_INVALID", structDecl.Name+": "+reason, structDecl.Span)
+			}
+		}
 		fields := map[string]Type{}
 		for _, field := range structDecl.Fields {
 			if _, exists := fields[field.Name]; exists {
@@ -1702,29 +1707,90 @@ func evt1ValidateExternCSignature(env *semanticEnv, fn FunctionDecl) error {
 	if fn.ExternABI == "" {
 		return nil
 	}
-	compatible := func(t Type) bool {
+	compatible := func(t Type) (bool, string) {
 		if t.PointerTo != nil {
 			base := *t.PointerTo
-			return base.PointerTo == nil && base.ArrayElem == nil && (base.Kind == TypeBuiltin || base.Name == "void")
+			if base.PointerTo == nil && base.ArrayElem == nil && (base.Kind == TypeBuiltin || base.Name == "void") {
+				return true, ""
+			}
+			return false, "pointer pointee has no supported foreign representation"
 		}
 		if t.isBorrowLike() || t.Kind == TypeDyn || t.Kind == TypeAsync || t.Kind == TypeCallable || t.Kind == TypeCallback || t.ArrayElem != nil || len(t.TypeArgs) != 0 {
-			return false
+			return false, "type has runtime, borrowed, or array representation"
 		}
 		if _, ok := evt1BuiltinDefinition(t.Name); ok {
-			return true
+			return true, ""
 		}
-		_, ok := env.enums[t.Name]
-		return ok
+		if _, ok := env.enums[t.Name]; ok {
+			return false, "enum lacks an explicit fixed underlying C representation"
+		}
+		return evt1CABIValue(env, t, map[string]bool{})
 	}
-	if !compatible(fn.ReturnType) {
-		return evt1Diagnostic("EXTERN_C_ABI_TYPE_INVALID", fmt.Sprintf("extern C return type %s has no supported C ABI representation", fn.ReturnType.String()), fn.ReturnType.Span)
+	if ok, reason := compatible(fn.ReturnType); !ok {
+		return evt1Diagnostic("EXTERN_C_ABI_TYPE_INVALID", fmt.Sprintf("cannot return %s by value across extern C: %s", fn.ReturnType.String(), reason), fn.ReturnType.Span)
 	}
 	for _, param := range fn.Params {
-		if !compatible(param.Type) {
-			return evt1Diagnostic("EXTERN_C_ABI_TYPE_INVALID", fmt.Sprintf("extern C parameter %s has unsupported type %s", param.Name, param.Type.String()), param.Span)
+		if ok, reason := compatible(param.Type); !ok {
+			return evt1Diagnostic("EXTERN_C_ABI_TYPE_INVALID", fmt.Sprintf("cannot pass %s by value across extern C: %s", param.Type.String(), reason), param.Span)
 		}
 	}
 	return nil
+}
+
+// A C ABI value has no hidden ownership or runtime representation. The C11
+// backend emits the same field order and native compiler handles call lowering.
+func evt1CABIValue(env *semanticEnv, t Type, visiting map[string]bool) (bool, string) {
+	if t.isBorrowLike() || t.isOwned() || t.PointerTo != nil {
+		return false, "borrowed, owned, or pointer fields need a separate explicit foreign contract"
+	}
+	if t.ArrayElem != nil {
+		if evt1StorageHasRuntimeShape(t) {
+			return false, "array extent is not fixed"
+		}
+		return evt1CABIValue(env, *t.ArrayElem, visiting)
+	}
+	if len(t.TypeArgs) != 0 || t.Kind == TypeDyn || t.Kind == TypeCallable || t.Kind == TypeCallback || t.Kind == TypeAsync {
+		return false, "field has no fixed C value representation"
+	}
+	switch t.Name {
+	case "int", "uint", "uint8", "byte", "uint64", "usize", "isize", "float":
+		return true, ""
+	}
+	decl, ok := env.structs[t.Name]
+	if !ok {
+		return false, "type is not a supported C scalar or aggregate"
+	}
+	if !evt1HasCRepr(decl.Attributes) {
+		return false, "aggregate lacks [[repr(C)]]"
+	}
+	if !decl.Record || decl.Ref || decl.Immovable || decl.Class || decl.Table || len(decl.Fields) == 0 {
+		return false, "repr(C) requires a nonempty record struct"
+	}
+	if visiting[t.Name] {
+		return false, "recursive value layout"
+	}
+	visiting[t.Name] = true
+	defer delete(visiting, t.Name)
+	for _, field := range decl.Fields {
+		if ok, reason := evt1CABIValue(env, field.Type, visiting); !ok {
+			return false, "field " + field.Name + ": " + reason
+		}
+	}
+	if evt1TypeHasDrop(env, t) {
+		return false, "aggregate carries destruction authority"
+	}
+	return true, ""
+}
+
+func evt1HasCRepr(attributes []Attribute) bool {
+	for _, attribute := range attributes {
+		if attribute.Name == "repr" && len(attribute.Args) == 1 {
+			if name, ok := attribute.Args[0].(*NameExpr); ok && name.Name == "C" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func validateTemplateSignature(env *semanticEnv, templateDecl TemplateDecl) error {
@@ -6595,6 +6661,17 @@ type evt1BoundSemanticSubject struct {
 var evt1SemanticAnalysisRegistry = map[string]evt1SemanticAnalysis{}
 
 func init() {
+	evt1SemanticAnalysisRegistry["CAbiLayout"] = evt1SemanticAnalysis{TypeArity: 1, CheckTypes: func(env *semanticEnv, args []Type, parameters []int) semanticFactResult {
+		ok, reason := evt1CABIValue(env, args[0], map[string]bool{})
+		if !ok {
+			return semanticFactResult{Outcome: FactDisproven, Origin: FactOriginCompilerAnalysis, Evidence: SemanticFactEvidence{Detail: reason}}
+		}
+		size, alignment, err := evt1TypeGeometry(env, args[0])
+		if err != nil {
+			return semanticFactResult{Outcome: FactDisproven, Origin: FactOriginCompilerAnalysis, Evidence: SemanticFactEvidence{Detail: err.Error()}}
+		}
+		return semanticFactResult{Outcome: FactProven, Origin: FactOriginCompilerAnalysis, Evidence: SemanticFactEvidence{Detail: fmt.Sprintf("repr(C) C ABI value; compiler layout size %d align %d; native measurements require project ABI probe", size, alignment), Alignment: alignment}}
+	}}
 	for name, arity := range evt1SharedAccessArities {
 		analysisName, typeArity := name, arity
 		evt1SemanticAnalysisRegistry[analysisName] = evt1SemanticAnalysis{TypeArity: typeArity, CheckTypes: func(env *semanticEnv, args []Type, parameters []int) semanticFactResult {
