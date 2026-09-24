@@ -1,5 +1,9 @@
 # Reflection and bounded generation
 
+`[[repr(C)]]` may accompany `[[reflect]]` on a record struct. Reflection is
+compile-time semantic data; native layout measurement is performed separately
+by the external compiler. See [ABI-LAYOUT.md](ABI-LAYOUT.md).
+
 Compile-time reflection is code generation with provenance. It is not a runtime object model.
 
 The currently implemented structural query is an explicit module-scope declaration:

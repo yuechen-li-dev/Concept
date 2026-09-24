@@ -24,6 +24,10 @@ Concept does not claim reproducible native output universally.
 
 `concept plan <project>` is the inspection surface. `concept check <project>`
 validates the manifest, companion modules, tests, and compiler-run ABI probes.
+R7j plans list those probes explicitly, and successful checks write measured
+`NativeToolchainProbe` facts to `.native-build/abi.json` with compiler, target,
+and native-input identity. See
+[EVT1-NATIVE-LAYOUT-EVIDENCE.md](EVT1-NATIVE-LAYOUT-EVIDENCE.md).
 `concept build <project>` executes the plan and writes `.native-build/build.json`.
 `concept test <project>` builds the targets, links `.concept_test` harnesses to
 the selected static library with the C++ driver, and runs them. Native compiler

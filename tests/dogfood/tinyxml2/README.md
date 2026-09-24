@@ -39,18 +39,22 @@ test executable and a static library containing TinyXML2 and a small C bridge.
 The generated metadata is `.native-build/build.json`.
 
 `concept/Native.concept` is the super-header: it declares the C ABI, a trusted
-allocation claim, and a schema over the selected C struct. The bridge only
-exposes an opaque XMLDocument handle and scalar operations. `concept check`
+allocation claim, and a schema over the selected C struct. The bridge exposes
+an opaque XMLDocument handle, scalar operations, and a `[[repr(C)]]` stats value
+returned and round-tripped by value. `concept check`
 compiles and runs a Clang ABI probe for the struct's size, alignment, and field
 offsets. `tests/native.concept_test` calls the native implementation through
 the linked archive and checks the create, parse, read, destroy path. It also
-checks the `NativeStatsSchema` proposition at compile time. The overlapping
+checks the `NativeStatsSchema` proposition, which requires `CAbiValue` and a
+typed field accessor, at compile time. The overlapping
 native and Concept tests pass on the same host.
 
 The native source can remain C++ indefinitely. New Concept implementation
 modules are optional. Exceptions, STL types, templates, inheritance, member
 functions, and overloaded C++ symbols do not cross this R7i boundary.
 
-Current limitation: EVT1 rejects an aggregate return from `extern "C"` with
-`EXTERN_C_ABI_TYPE_INVALID`. The schema and ABI probe validate the selected
-struct declaration, but the `.concept_test` calls scalar bridge functions.
+`concept explain tests/dogfood/tinyxml2/proofs/abi_value.concept --verbose`
+shows the `CAbiValue` representation proof. Measured native facts are in
+`.native-build/abi.json` after `concept check`; the file records the selected
+compiler and target separately from the declared foreign operation contract.
+`proofs/abi_value_disproven.concept` shows the missing-`repr(C)` blocker.

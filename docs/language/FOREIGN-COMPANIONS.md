@@ -22,6 +22,8 @@ macro framework: it combines runtime calls with compile-time concept proofs.
 Use an `extern "C"` bridge for C++ APIs that otherwise expose classes or STL
 types. Keep exceptions inside the bridge. For layout claims, declare the
 selected Concept record and run a probe compiled by the native toolchain.
-The initial boundary permits opaque handles and scalar calls. Direct aggregate
-returns currently report `EXTERN_C_ABI_TYPE_INVALID` and require a future
-general ABI extension before they can be called.
+The R7j boundary admits nonempty `[[repr(C)]] record struct` values with
+recursively supported fields as direct parameters and returns. See
+[ABI-LAYOUT.md](ABI-LAYOUT.md) for eligibility, layout queries, and deferred
+forms. Measured `NativeToolchainProbe` layout and trusted `DeclaredForeign`
+semantic contracts remain distinct evidence.
