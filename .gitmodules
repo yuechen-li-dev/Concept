@@ -1,0 +1,4 @@
+[submodule "tests/dogfood/tinyxml2/upstream"]
+	path = tests/dogfood/tinyxml2/upstream
+	url = https://github.com/leethomason/tinyxml2.git
+	ignore = untracked

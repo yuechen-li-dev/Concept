@@ -1,0 +1,9 @@
+module Native.Proofs.Unknown;
+profile Core;
+import Native;
+
+int ExplainUnknownEffect()
+{
+    Assert.Concept<NoAllocation>(ConceptXmlChildCount, "opaque native getter has no allocation claim");
+    return 0;
+}

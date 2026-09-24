@@ -1,0 +1,11 @@
+module Native.Proofs.Schema;
+profile Core;
+import Native;
+
+record struct MissingStats { int value; }
+
+int ExplainMissingSchema()
+{
+    Assert.Concept<NativeStatsSchema>(MissingStats, "missing native stats accessor must be rejected");
+    return 0;
+}

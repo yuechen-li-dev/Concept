@@ -1,0 +1,9 @@
+module Native.Proofs.Allocation;
+profile Core;
+import Native;
+
+int ExplainForeignAllocation()
+{
+    Assert.Concept<NoAllocation>(ConceptXmlCreate, "creation has a trusted foreign allocation declaration");
+    return 0;
+}

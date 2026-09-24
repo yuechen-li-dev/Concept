@@ -31,6 +31,10 @@ Usage:
   concept package build <name>
   concept package test <name>
   concept package graph <name>
+  concept build <native-project-dir>
+  concept check <native-project-dir>
+  concept test <native-project-dir>
+  concept plan <native-project-dir>
 
 Commands:
   check   parse and semantically validate a Concept source file
@@ -59,7 +63,15 @@ func main() {
 		return
 	}
 	if len(os.Args) >= 2 && os.Args[1] == "test" {
+		if len(os.Args) == 3 && nativeProjectDir(os.Args[2]) {
+			runNativeCommand("test", os.Args[2])
+			return
+		}
 		runTestCommand(os.Args[2:])
+		return
+	}
+	if len(os.Args) == 3 && (os.Args[1] == "build" || os.Args[1] == "check" || os.Args[1] == "plan") && nativeProjectDir(os.Args[2]) {
+		runNativeCommand(os.Args[1], os.Args[2])
 		return
 	}
 	if len(os.Args) >= 2 && os.Args[1] == "explain" {
@@ -133,6 +145,120 @@ func main() {
 	}
 }
 
+func nativeProjectDir(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil || !info.IsDir() {
+		return false
+	}
+	body, err := os.ReadFile(filepath.Join(path, "manifest.concept"))
+	return err == nil && strings.Contains(string(body), "NativeProjectManifest Native")
+}
+
+func runNativeCommand(action, root string) {
+	project, err := concept.LoadNativeProject(root)
+	if err != nil {
+		fail(err)
+	}
+	plan, err := concept.NativeBuildPlan(project)
+	if err != nil {
+		fail(err)
+	}
+	if action == "plan" {
+		body, err := concept.MarshalNativePlan(plan)
+		if err != nil {
+			fail(err)
+		}
+		fmt.Println(string(body))
+		return
+	}
+	for _, companion := range project.Companions {
+		path := filepath.Join(project.Root, filepath.FromSlash(companion))
+		body, err := os.ReadFile(path)
+		if err != nil {
+			fail(err)
+		}
+		if _, err := concept.ParseWithBuiltSemanticModuleRoots(filepath.ToSlash(path), string(body), []string{filepath.Join(project.Root, "concept")}); err != nil {
+			fail(fmt.Errorf("NATIVE_COMPANION_INVALID: %s: %w", companion, err))
+		}
+	}
+	for _, test := range project.Tests {
+		if _, err := os.Stat(filepath.Join(project.Root, filepath.FromSlash(test))); err != nil {
+			fail(fmt.Errorf("NATIVE_TEST_MISSING: %s: %w", test, err))
+		}
+	}
+	testManifest, err := concept.DiscoverTests(filepath.Join(project.Root, "tests"))
+	if err != nil {
+		fail(fmt.Errorf("NATIVE_TEST_INVALID: %w", err))
+	}
+	allowed := map[string]bool{}
+	for _, path := range project.Tests {
+		rel, err := filepath.Rel(filepath.Join(project.Root, "tests"), filepath.Join(project.Root, filepath.FromSlash(path)))
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			fail(fmt.Errorf("NATIVE_TEST_OUTSIDE_ROOT: %s", path))
+		}
+		allowed[filepath.ToSlash(rel)] = true
+	}
+	selected := testManifest.Tests[:0]
+	for _, item := range testManifest.Tests {
+		if allowed[item.Source] {
+			selected = append(selected, item)
+		}
+	}
+	testManifest.Tests = selected
+	if len(testManifest.Tests) == 0 {
+		fail(fmt.Errorf("NATIVE_TEST_EMPTY: manifest lists no discovered test functions"))
+	}
+	if err := concept.CheckNativeABI(project); err != nil {
+		fail(err)
+	}
+	if action == "check" {
+		fmt.Printf("%s: native project, companions, and tests ok\n", project.Name)
+		return
+	}
+	result, err := concept.RunNativeBuild(project, plan)
+	if err != nil {
+		fail(err)
+	}
+	if action == "build" {
+		body, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			fail(err)
+		}
+		fmt.Println(string(body))
+		return
+	}
+	if action != "test" {
+		fail(fmt.Errorf("unsupported native action %s", action))
+	}
+	var inputs []string
+	for _, target := range project.Targets {
+		if target.Kind == "StaticLibrary" {
+			inputs = append(inputs, filepath.Join(project.Root, filepath.FromSlash(target.Output)))
+		}
+	}
+	if len(inputs) == 0 {
+		fail(fmt.Errorf("NATIVE_TEST_LINK_INPUT_MISSING: project has no static library target"))
+	}
+	linker := "clang++"
+	if project.Toolchain == "GCC" {
+		linker = "g++"
+	}
+	run, err := concept.RunTests(testManifest, concept.TestRunOptions{NativeLinker: linker, NativeLinkInputs: inputs})
+	if err != nil {
+		fail(err)
+	}
+	for _, item := range run.Results {
+		fmt.Printf("%-20s %s\n", item.Status, item.TestID)
+		if item.Failure != nil {
+			fmt.Printf("  %s: %s\n", item.Failure.Kind, item.Failure.Message)
+		}
+	}
+	fmt.Printf("\n%d passed, %d failed\n", run.Passed, run.Failed)
+	if run.Failed != 0 {
+		os.Exit(1)
+	}
+}
+
 func runPackageCommand(args []string) {
 	if len(args) != 2 {
 		fmt.Fprint(os.Stderr, usage)
@@ -177,6 +303,9 @@ func runPackageCommand(args []string) {
 
 func semanticModuleRoots(sourcePath string) []string {
 	roots := []string{filepath.Dir(sourcePath)}
+	if root := nativeCompanionRoot(sourcePath); root != "" {
+		roots = append(roots, root)
+	}
 	if configured := os.Getenv("CONCEPT_MODULE_ROOTS"); configured != "" {
 		for _, root := range filepath.SplitList(configured) {
 			if root != "" {
@@ -185,6 +314,21 @@ func semanticModuleRoots(sourcePath string) []string {
 		}
 	}
 	return roots
+}
+
+func nativeCompanionRoot(sourcePath string) string {
+	for dir := filepath.Dir(sourcePath); ; dir = filepath.Dir(dir) {
+		if nativeProjectDir(dir) {
+			root := filepath.Join(dir, "concept")
+			if info, err := os.Stat(root); err == nil && info.IsDir() {
+				return root
+			}
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+	}
 }
 
 func runExplainCommand(args []string) {
@@ -246,7 +390,11 @@ func runExplainCommand(args []string) {
 			graph, err = concept.ExplainGeneratedDeclaration(module, generatedSymbol)
 		}
 	} else {
-		graph, err = concept.ExplainSourceWithSemanticModuleRoots(filepath.ToSlash(proofSourcePath), string(body), line, semanticModuleRoots(sourcePath))
+		if nativeCompanionRoot(sourcePath) != "" {
+			graph, err = concept.ExplainSourceWithBuiltSemanticModuleRoots(filepath.ToSlash(proofSourcePath), string(body), line, semanticModuleRoots(sourcePath))
+		} else {
+			graph, err = concept.ExplainSourceWithSemanticModuleRoots(filepath.ToSlash(proofSourcePath), string(body), line, semanticModuleRoots(sourcePath))
+		}
 	}
 	if err != nil {
 		fail(err)

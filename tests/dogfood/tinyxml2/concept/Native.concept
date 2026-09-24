@@ -1,0 +1,26 @@
+module Native;
+profile Core;
+
+// These symbols are implemented by the small C bridge over untouched TinyXML2.
+// byte* is an opaque handle; its pointee layout is deliberately unknown.
+// This exact layout is checked against bridge/tinyxml2_bridge.h by concept check.
+record struct ConceptXmlStats { int children; int status; }
+
+concept NativeStatsSchema<T>
+{
+    requires int NativeChildren(ref const T stats);
+}
+
+int NativeChildren(ref const ConceptXmlStats stats) { return stats.children; }
+requires NativeStatsSchema<ConceptXmlStats>;
+
+extern "C" byte* ConceptXmlCreate();
+extern "C" int ConceptXmlIsNull(byte* document);
+extern "C" int ConceptXmlParse(byte* document);
+extern "C" int ConceptXmlChildCount(byte* document);
+extern "C" void ConceptXmlDestroy(byte* document);
+
+foreign concept CreateDocumentContract on ConceptXmlCreate
+{
+    requires compiler.Allocates(ConceptXmlCreate);
+}

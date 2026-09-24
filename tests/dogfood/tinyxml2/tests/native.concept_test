@@ -1,0 +1,19 @@
+module Native.Tests;
+profile Core;
+import Native;
+
+[[fact]]
+void ParseTwoChildren()
+{
+    byte* document = ConceptXmlCreate();
+    Assert.Equals(0, ConceptXmlIsNull(document), "native XMLDocument was allocated");
+    Assert.Equals(0, ConceptXmlParse(document), "parse succeeds");
+    Assert.Equals(2, ConceptXmlChildCount(document), "two children are visible");
+    ConceptXmlDestroy(document);
+}
+
+[[fact]]
+void NativeStructSchema()
+{
+    Assert.Concept<NativeStatsSchema>(ConceptXmlStats, "native struct companion has the checked semantic accessor");
+}

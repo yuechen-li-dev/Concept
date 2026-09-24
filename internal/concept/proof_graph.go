@@ -240,6 +240,19 @@ func ExplainSourceWithSemanticModuleRoots(path, text string, line int, roots []s
 	return explainModule(module, line)
 }
 
+// Native project proofs resolve explicit companion source modules through the
+// same in-memory artifact build used by .concept_test discovery.
+func ExplainSourceWithBuiltSemanticModuleRoots(path, source string, line int, roots []string) (ProofGraph, error) {
+	module, err := ParseWithBuiltSemanticModuleRoots(path, source, roots)
+	if err != nil {
+		if diagnostic, ok := err.(Diagnostic); ok && diagnostic.Proof != nil && (line == 0 || diagnostic.Proof.SourceSpan.Line == line) {
+			return *diagnostic.Proof, nil
+		}
+		return ProofGraph{}, err
+	}
+	return explainModule(module, line)
+}
+
 func explainModule(module Module, line int) (ProofGraph, error) {
 	env, err := analyzeModule(module)
 	if err != nil {

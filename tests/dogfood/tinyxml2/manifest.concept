@@ -1,0 +1,81 @@
+module TinyXML2.Manifest;
+profile Core;
+
+record struct NativeTarget
+{
+    string name;
+    NativeLanguage language;
+    NativeStandard standard;
+    NativeOutputKind kind;
+    string output;
+    string<array>[2] sources;
+    string<array>[1] includes;
+    NativeDefine<array>[1] defines;
+    string<array>[1] linkInputs;
+};
+
+enum NativeLanguage { C, Cpp, }
+enum NativeStandard { C11, C17, Cpp17, Cpp20, Cpp23, }
+enum NativeOutputKind { Executable, StaticLibrary, }
+enum NativeToolchain { Clang, ClangCL, MSVC, GCC, }
+
+record struct NativeDefine
+{
+    string name;
+    string value;
+    bool hasValue;
+};
+
+record struct NativeAbiClaim
+{
+    string header;
+    string typeName;
+    string companion;
+    int size;
+    int alignment;
+    string<array>[2] fields;
+    int<array>[2] offsets;
+};
+
+record struct NativeVersion { int major; int minor; int patch; }
+
+record struct NativeProjectManifest
+{
+    string name;
+    string author;
+    NativeVersion version;
+    NativeToolchain toolchain;
+    string<array>[2] sourceRoots;
+    NativeTarget<array>[2] targets;
+    string<array>[1] companions;
+    string<array>[1] tests;
+    NativeAbiClaim<array>[1] abi;
+};
+
+comptime NativeProjectManifest Native = NativeProjectManifest{
+    "TinyXML2",
+    "Lee Thomason / Concept fixture",
+    NativeVersion{11, 0, 0},
+    NativeToolchain::Clang,
+    ["upstream", "bridge"],
+    [
+        NativeTarget{
+            "xmltest", NativeLanguage::Cpp, NativeStandard::Cpp17,
+            NativeOutputKind::Executable, ".native-build/xmltest.exe",
+            ["upstream/tinyxml2.cpp", "upstream/xmltest.cpp"],
+            ["upstream"], [NativeDefine{"_FILE_OFFSET_BITS", "64", true}], [""]
+        },
+        NativeTarget{
+            "bridge", NativeLanguage::Cpp, NativeStandard::Cpp17,
+            NativeOutputKind::StaticLibrary, ".native-build/libtinyxml2_bridge.a",
+            ["upstream/tinyxml2.cpp", "bridge/tinyxml2_bridge.cpp"],
+            ["upstream"], [NativeDefine{"_FILE_OFFSET_BITS", "64", true}], [""]
+        }
+    ],
+    ["concept/Native.concept"],
+    ["tests/native.concept_test"],
+    [NativeAbiClaim{
+        "bridge/tinyxml2_bridge.h", "ConceptXmlStats", "concept/Native.concept",
+        8, 4, ["children", "status"], [0, 4]
+    }]
+};

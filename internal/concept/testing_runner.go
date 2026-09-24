@@ -126,6 +126,8 @@ type TestRunOptions struct {
 	Timeout             time.Duration
 	BenchmarkWarmup     int
 	BenchmarkIterations int
+	NativeLinker        string
+	NativeLinkInputs    []string
 }
 
 func DiscoverTests(root string) (TestManifest, error) {
@@ -176,6 +178,9 @@ func DiscoverTests(root string) (TestManifest, error) {
 		moduleRoots := []string{filepath.Dir(path)}
 		if info.IsDir() {
 			moduleRoots = append(moduleRoots, filepath.Dir(projectRoot))
+			if _, err := os.Stat(filepath.Join(filepath.Dir(projectRoot), "concept")); err == nil {
+				moduleRoots = append(moduleRoots, filepath.Join(filepath.Dir(projectRoot), "concept"))
+			}
 		}
 		module, parseErr := ParseWithBuiltSemanticModuleRoots(filepath.ToSlash(path), string(body), moduleRoots)
 		if parseErr != nil {
@@ -417,6 +422,14 @@ func runOneTest(test TestDeclaration, values []any, caseIndex int, options TestR
 	for _, key := range keys {
 		buildHash.Write(outputs[key])
 	}
+	for _, input := range options.NativeLinkInputs {
+		body, readErr := os.ReadFile(input)
+		if readErr != nil {
+			return failedTestResult(result, start, "native-link-input", readErr.Error(), test)
+		}
+		buildHash.Write([]byte(filepath.Base(input)))
+		buildHash.Write(body)
+	}
 	result.BuildIdentity = hex.EncodeToString(buildHash.Sum(nil))
 	temp, err := os.MkdirTemp("", "concept-test-")
 	if err != nil {
@@ -436,15 +449,23 @@ func runOneTest(test TestDeclaration, values []any, caseIndex int, options TestR
 	if runtime.GOOS == "windows" {
 		executable += ".exe"
 	}
-	compiler, args, err := evt1TestCompiler(temp, filepath.Join(temp, base+".generated.c"), harnessPath, executable)
-	if err != nil {
-		return failedTestResult(result, start, "compiler-unavailable", err.Error(), test)
+	if len(options.NativeLinkInputs) != 0 {
+		phase, message := evt1BuildNativeLinkedTest(temp, filepath.Join(temp, base+".generated.c"), harnessPath, executable, options)
+		if phase != "" {
+			return failedTestResult(result, start, phase, message, test)
+		}
+		result.TargetIdentity += "/" + filepath.Base(options.NativeLinker)
+	} else {
+		compiler, args, err := evt1TestCompiler(temp, filepath.Join(temp, base+".generated.c"), harnessPath, executable)
+		if err != nil {
+			return failedTestResult(result, start, "compiler-unavailable", err.Error(), test)
+		}
+		build := exec.Command(compiler, args...)
+		if output, err := build.CombinedOutput(); err != nil {
+			return failedTestResult(result, start, "native-compile", string(output), test)
+		}
+		result.TargetIdentity += "/" + filepath.Base(compiler)
 	}
-	build := exec.Command(compiler, args...)
-	if output, err := build.CombinedOutput(); err != nil {
-		return failedTestResult(result, start, "native-compile", string(output), test)
-	}
-	result.TargetIdentity += "/" + filepath.Base(compiler)
 	if test.Kind == TestBenchmark {
 		for i := 0; i < options.BenchmarkWarmup; i++ {
 			stdout, stderr, code, _ := runTestProcess(executable, options.Timeout)
@@ -507,6 +528,36 @@ func evt1TestCompiler(includeDir, generated, harness, executable string) (string
 		return "", nil, errors.New("gcc or clang is required for concept test")
 	}
 	return compiler, []string{"-std=c11", "-Wall", "-Wextra", "-I", includeDir, generated, harness, "-lm", "-o", executable}, nil
+}
+
+func evt1BuildNativeLinkedTest(includeDir, generated, harness, executable string, options TestRunOptions) (string, string) {
+	if options.NativeLinker != "clang++" && options.NativeLinker != "g++" {
+		return "compiler-unavailable", "native linker must be clang++ or g++"
+	}
+	compiler := "clang"
+	if options.NativeLinker == "g++" {
+		compiler = "gcc"
+	}
+	for _, program := range []string{compiler, options.NativeLinker} {
+		if _, err := exec.LookPath(program); err != nil {
+			return "compiler-unavailable", err.Error()
+		}
+	}
+	objects := []string{}
+	for i, source := range []string{generated, harness} {
+		object := filepath.Join(includeDir, fmt.Sprintf("concept_%d.o", i))
+		args := []string{"-std=c11", "-Wall", "-Wextra", "-I", includeDir, "-c", source, "-o", object}
+		if output, err := exec.Command(compiler, args...).CombinedOutput(); err != nil {
+			return "concept-c-compile", fmt.Sprintf("%s %s: %v\n%s", compiler, strings.Join(args, " "), err, output)
+		}
+		objects = append(objects, object)
+	}
+	args := append(append([]string{}, objects...), options.NativeLinkInputs...)
+	args = append(args, "-o", executable)
+	if output, err := exec.Command(options.NativeLinker, args...).CombinedOutput(); err != nil {
+		return "link", fmt.Sprintf("%s %s: %v\n%s", options.NativeLinker, strings.Join(args, " "), err, output)
+	}
+	return "", ""
 }
 
 func evt1TestHarness(test TestDeclaration, values []any, outputBase, symbolBase string) string {
