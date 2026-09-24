@@ -4343,8 +4343,33 @@ func (p *parser) parseNameLikeExpr() (Expr, error) {
 	if p.peekLexeme() == "{" {
 		p.next()
 		args := []Expr{}
+		argNames := []string{}
+		var generatedFields *ForeachStmt
+		if p.peekLexeme() == "foreach" {
+			if !p.inGeneratorBody {
+				return nil, evt1Diagnostic("GENERATOR_AGGREGATE_REQUIRED", "reflected aggregate fields are only valid in a generator", p.currentSpan())
+			}
+			statement, err := p.parseForeachStmt()
+			if err != nil {
+				return nil, err
+			}
+			generatedFields = statement.(*ForeachStmt)
+		}
+		named := p.peekLexemeN(1) == "="
 		if p.peekLexeme() != "}" {
 			for {
+				if named {
+					name, err := p.expectIdentifier("AGGREGATE_FIELD_NAME_REQUIRED", "expected aggregate field name")
+					if err != nil {
+						return nil, err
+					}
+					if _, err := p.expect("="); err != nil {
+						return nil, err
+					}
+					argNames = append(argNames, name.Lexeme)
+				} else if p.peekLexemeN(1) == "=" {
+					return nil, evt1Diagnostic("AGGREGATE_INITIALIZER_MIXED", "cannot mix positional and named aggregate fields", p.currentSpan())
+				}
 				arg, err := p.parseExpr()
 				if err != nil {
 					return nil, err
@@ -4359,7 +4384,7 @@ func (p *parser) parseNameLikeExpr() (Expr, error) {
 		if _, err := p.expect("}"); err != nil {
 			return nil, err
 		}
-		expr = &StructConstructExpr{StructName: constructName, StructType: constructType, Args: args, Span: nameTok.Span}
+		expr = &StructConstructExpr{StructName: constructName, StructType: constructType, Args: args, ArgNames: argNames, GeneratedFields: generatedFields, Span: nameTok.Span}
 	}
 	return p.parsePostfixExpr(expr, nameTok.Span)
 }

@@ -1112,9 +1112,11 @@ type StructConstructExpr struct {
 	StructName string `json:"struct_name"`
 	// StructType retains the applied type algebra for generic construction.
 	// StructName is the resolved nominal lookup/lowering identity.
-	StructType Type   `json:"struct_type,omitempty"`
-	Args       []Expr `json:"args,omitempty"`
-	Span       Span   `json:"span"`
+	StructType      Type         `json:"struct_type,omitempty"`
+	Args            []Expr       `json:"args,omitempty"`
+	ArgNames        []string     `json:"arg_names,omitempty"`
+	GeneratedFields *ForeachStmt `json:"generated_fields,omitempty"`
+	Span            Span         `json:"span"`
 }
 
 func (*StructConstructExpr) evt1Expr()        {}

@@ -217,6 +217,12 @@ func evt1ExpandGeneratedFields(block Block, info TypeInfo, owner string, env *se
 		}
 		loop, ok := statement.(*ForeachStmt)
 		if !ok {
+			aggregateInputs, err := evt1ExpandGeneratedAggregateStatement(statement, info)
+			if err != nil {
+				return Block{}, nil, err
+			}
+			evt1ReplaceGeneratedMetadataStatement(statement, info, "", "")
+			inputs = append(inputs, aggregateInputs...)
 			out.Statements = append(out.Statements, statement)
 			continue
 		}
@@ -257,11 +263,166 @@ func evt1ExpandGeneratedFields(block Block, info TypeInfo, owner string, env *se
 				if err := evt1ReplaceGeneratedFieldStatement(cloned, loop.ItemName, field.Name); err != nil {
 					return Block{}, nil, err
 				}
+				evt1ReplaceGeneratedMetadataStatement(cloned, info, field.Name, loop.ItemName)
 				out.Statements = append(out.Statements, cloned)
 			}
 		}
 	}
 	return out, inputs, nil
+}
+
+func evt1ExpandGeneratedAggregateStatement(statement Statement, info TypeInfo) ([]GeneratedInput, error) {
+	switch s := statement.(type) {
+	case *ReturnStmt:
+		return evt1ExpandGeneratedAggregateExpr(s.Value, info)
+	case *VarDecl:
+		return evt1ExpandGeneratedAggregateExpr(s.Value, info)
+	case *AssignStmt:
+		return evt1ExpandGeneratedAggregateExpr(s.Value, info)
+	case *ExprStmt:
+		return evt1ExpandGeneratedAggregateExpr(s.Value, info)
+	default:
+		return nil, nil
+	}
+}
+
+func evt1ExpandGeneratedAggregateExpr(expression Expr, info TypeInfo) ([]GeneratedInput, error) {
+	if expression == nil {
+		return nil, nil
+	}
+	switch e := expression.(type) {
+	case *StructConstructExpr:
+		var inputs []GeneratedInput
+		if loop := e.GeneratedFields; loop != nil {
+			query, ok := loop.Source.(*TemplateCallExpr)
+			if !ok || query.Callee != "Fields" || loop.ItemType.Name != "FieldInfo" || !query.TypeArg.SameValueType(info.Type) || len(query.Args) != 0 || len(loop.Body.Statements) != 1 {
+				return nil, evt1Diagnostic("GENERATOR_AGGREGATE_FIELDS_INVALID", "aggregate field generation requires foreach (FieldInfo field in Fields<T>()) with one field assignment", loop.Span)
+			}
+			assignment, ok := loop.Body.Statements[0].(*AssignStmt)
+			if !ok {
+				return nil, evt1Diagnostic("GENERATOR_AGGREGATE_FIELDS_INVALID", "aggregate field generation requires assignment to the reflected field", loop.Span)
+			}
+			target, targetOK := assignment.Target.(*NameExpr)
+			if !targetOK || target.Name != loop.ItemName {
+				return nil, evt1Diagnostic("GENERATOR_AGGREGATE_FIELDS_INVALID", "aggregate field generation requires assignment to the reflected field", loop.Span)
+			}
+			for _, field := range info.Fields {
+				value, err := evt1SubstituteExpr(assignment.Value, "__generated_field_clone__", Type{})
+				if err != nil {
+					return nil, err
+				}
+				if err := evt1ReplaceGeneratedFieldExpr(value, loop.ItemName, field.Name); err != nil {
+					return nil, err
+				}
+				evt1ReplaceGeneratedMetadataExpr(&value, info, field.Name, loop.ItemName)
+				e.Args = append(e.Args, value)
+				e.ArgNames = append(e.ArgNames, field.Name)
+				inputs = append(inputs, GeneratedInput{Name: field.Name, Type: field.Type, Span: field.Span})
+			}
+			e.GeneratedFields = nil
+		}
+		for _, arg := range e.Args {
+			nested, err := evt1ExpandGeneratedAggregateExpr(arg, info)
+			if err != nil {
+				return nil, err
+			}
+			inputs = append(inputs, nested...)
+		}
+		return inputs, nil
+	case *ConstructExpr:
+		var inputs []GeneratedInput
+		for _, arg := range e.Args {
+			nested, err := evt1ExpandGeneratedAggregateExpr(arg, info)
+			if err != nil {
+				return nil, err
+			}
+			inputs = append(inputs, nested...)
+		}
+		return inputs, nil
+	case *CallExpr:
+		var inputs []GeneratedInput
+		for _, arg := range e.Args {
+			nested, err := evt1ExpandGeneratedAggregateExpr(arg, info)
+			if err != nil {
+				return nil, err
+			}
+			inputs = append(inputs, nested...)
+		}
+		return inputs, nil
+	case *ParenExpr:
+		return evt1ExpandGeneratedAggregateExpr(e.Value, info)
+	case *MoveExpr:
+		return evt1ExpandGeneratedAggregateExpr(e.Value, info)
+	default:
+		return nil, nil
+	}
+}
+
+func evt1ReplaceGeneratedMetadataStatement(statement Statement, info TypeInfo, field, placeholder string) {
+	switch s := statement.(type) {
+	case *ReturnStmt:
+		evt1ReplaceGeneratedMetadataExpr(&s.Value, info, field, placeholder)
+	case *VarDecl:
+		evt1ReplaceGeneratedMetadataExpr(&s.Value, info, field, placeholder)
+	case *ExprStmt:
+		evt1ReplaceGeneratedMetadataExpr(&s.Value, info, field, placeholder)
+	case *AssignStmt:
+		evt1ReplaceGeneratedMetadataExpr(&s.Value, info, field, placeholder)
+	case *Block:
+		for _, item := range s.Statements {
+			evt1ReplaceGeneratedMetadataStatement(item, info, field, placeholder)
+		}
+	case *IfStmt:
+		evt1ReplaceGeneratedMetadataExpr(&s.Condition, info, field, placeholder)
+		for _, item := range s.Then.Statements {
+			evt1ReplaceGeneratedMetadataStatement(item, info, field, placeholder)
+		}
+		if s.Else != nil {
+			for _, item := range s.Else.Statements {
+				evt1ReplaceGeneratedMetadataStatement(item, info, field, placeholder)
+			}
+		}
+	}
+}
+
+func evt1ReplaceGeneratedMetadataExpr(expression *Expr, info TypeInfo, field, placeholder string) {
+	if expression == nil || *expression == nil {
+		return
+	}
+	switch e := (*expression).(type) {
+	case *TemplateCallExpr:
+		if e.Callee == "TypeName" && e.TypeArg.SameValueType(info.Type) && len(e.Args) == 0 {
+			*expression = &StringLiteral{Value: info.Type.Name, Span: e.Span}
+			return
+		}
+		if e.Callee == "NameOf" && field != "" && e.TypeArg.Name == placeholder && len(e.Args) == 0 {
+			*expression = &StringLiteral{Value: field, Span: e.Span}
+			return
+		}
+		for i := range e.Args {
+			evt1ReplaceGeneratedMetadataExpr(&e.Args[i], info, field, placeholder)
+		}
+	case *CallExpr:
+		for i := range e.Args {
+			evt1ReplaceGeneratedMetadataExpr(&e.Args[i], info, field, placeholder)
+		}
+	case *ConstructExpr:
+		for i := range e.Args {
+			evt1ReplaceGeneratedMetadataExpr(&e.Args[i], info, field, placeholder)
+		}
+	case *StructConstructExpr:
+		for i := range e.Args {
+			evt1ReplaceGeneratedMetadataExpr(&e.Args[i], info, field, placeholder)
+		}
+	case *FailureExpr:
+		evt1ReplaceGeneratedMetadataExpr(&e.Value, info, field, placeholder)
+	case *ParenExpr:
+		evt1ReplaceGeneratedMetadataExpr(&e.Value, info, field, placeholder)
+	case *MoveExpr:
+		evt1ReplaceGeneratedMetadataExpr(&e.Value, info, field, placeholder)
+	case *RefExpr:
+		evt1ReplaceGeneratedMetadataExpr(&e.Value, info, field, placeholder)
+	}
 }
 
 func evt1GeneratedFieldMatches(env *semanticEnv, selector string, owner Type, field FieldInfo) bool {

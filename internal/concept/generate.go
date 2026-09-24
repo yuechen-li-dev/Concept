@@ -4450,6 +4450,18 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		if e.SpanIndex {
 			return f.lowerSpanIndex(e, indent)
 		}
+		if baseType, _ := validateExpr(f.l.env, f.typeScope(), e.Base, nil, false); baseType.Name == "string" && baseType.Kind == TypeBuiltin {
+			basePrelude, base, _ := f.lowerExpr(e.Base, indent)
+			indexPrelude, index, indexType := f.lowerExpr(e.Index, indent)
+			baseTemp := f.nextTemp("string")
+			indexTemp := f.nextTemp("index")
+			var prelude strings.Builder
+			prelude.WriteString(basePrelude + indexPrelude)
+			prelude.WriteString(ind(indent) + fmt.Sprintf("const char *%s = %s;\n", baseTemp, base))
+			prelude.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(indexType), indexTemp, index))
+			prelude.WriteString(ind(indent) + fmt.Sprintf("if ((int64_t)%s < 0 || (uint64_t)%s >= strlen(%s)) { concept_panic(\"string index out of bounds\", %d, %d); }\n", indexTemp, indexTemp, baseTemp, e.Span.Line, e.Span.Column))
+			return prelude.String(), fmt.Sprintf("((uint8_t)%s[%s])", baseTemp, indexTemp), Type{Name: "byte", Kind: TypeBuiltin, Span: e.Span}
+		}
 		return f.lowerStorageIndex(e, indent, false)
 	case *ArrayLiteralExpr:
 		return "", "/* array_literal_requires_target */", Type{}
@@ -4992,15 +5004,35 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		var args []string
 		var initializers []string
 		structDecl := f.l.env.structs[e.StructName]
+		args = make([]string, len(structDecl.Fields))
+		initializers = make([]string, len(structDecl.Fields))
+		fieldIndex := make(map[string]int, len(structDecl.Fields))
+		for i, field := range structDecl.Fields {
+			fieldIndex[field.Name] = i
+		}
 		for i, arg := range e.Args {
 			argPrelude, argExpr, argType := f.lowerExpr(arg, indent)
 			prelude.WriteString(argPrelude)
 			temp := f.nextTemp("field")
 			prelude.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(argType), temp, argExpr))
-			if i < len(structDecl.Fields) {
-				args = append(args, temp)
-				initializers = append(initializers, "."+structDecl.Fields[i].Name+" = "+temp)
+			// Each completed field owns its value until the complete aggregate
+			// expression takes it. A later field can propagate failure, so these
+			// temporaries must participate in ordinary scope cleanup meanwhile.
+			if evt1TypeHasDrop(f.l.env, argType) {
+				f.currentScope()[temp] = evt1Binding{cName: temp, t: argType}
+				f.registerOwner(temp, argType)
 			}
+			index := i
+			if len(e.ArgNames) != 0 {
+				index = fieldIndex[e.ArgNames[i]]
+			}
+			if index < len(structDecl.Fields) {
+				args[index] = temp
+				initializers[index] = "." + structDecl.Fields[index].Name + " = " + temp
+			}
+		}
+		for _, arg := range args {
+			f.liveOwners[arg] = false // ownership transfers into the complete value
 		}
 		if !evt1TypeCopyable(f.l.env, structType) {
 			return prelude.String(), "(" + evt1CType(structType) + "){ " + strings.Join(initializers, ", ") + " }", structType

@@ -327,7 +327,11 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 			if err != nil {
 				return Value{}, err
 			}
-			fields[structDecl.Fields[i].Name] = value
+			name := structDecl.Fields[i].Name
+			if len(e.ArgNames) != 0 {
+				name = e.ArgNames[i]
+			}
+			fields[name] = value
 		}
 		return Value{
 			Kind:       ValueStruct,

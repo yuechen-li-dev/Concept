@@ -1,0 +1,29 @@
+profile Core;
+
+record struct Pair
+{
+    int x;
+    int y;
+};
+
+Pair MakePair()
+{
+    return Pair{y = 2, x = 1};
+}
+
+generator <typename T> DeriveCopy
+T Copy(ref const T value)
+{
+    return T{foreach (FieldInfo field in Fields<T>()) { field = value.field; }};
+}
+
+derive DeriveCopy reflect<Pair>;
+
+[[fact]]
+void NamedAggregateConstructionIsComplete()
+{
+    Pair pair = MakePair();
+    Assert.True(pair.x == 1 and pair.y == 2, "named construction retains field identity");
+    Pair copy = Copy(ref const pair);
+    Assert.True(copy.x == 1 and copy.y == 2, "generated aggregate construction is complete");
+}

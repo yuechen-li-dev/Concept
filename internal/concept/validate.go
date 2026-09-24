@@ -4069,6 +4069,21 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			}
 			return evt1CanonicalType(env, element), nil
 		}
+		if baseType.Name == "string" && baseType.Kind == TypeBuiltin {
+			indices := evt1StorageIndices(e)
+			if len(indices) != 1 {
+				return Type{}, evt1Diagnostic("STRING_INDEX_INVALID", "string byte access requires exactly one index", e.Span)
+			}
+			indexType, err := validateExpr(env, scope, indices[0], templateInfo, inComptimeFn)
+			if err != nil {
+				return Type{}, err
+			}
+			if indexType.Name != "int" && indexType.Name != "usize" {
+				return Type{}, evt1Diagnostic("STRING_INDEX_INVALID", "string byte index must be int or usize", indices[0].exprSpan())
+			}
+			out, _ := evt1BuiltinType("byte", e.Span)
+			return out, nil
+		}
 		if baseType.ArrayElem == nil {
 			return Type{}, evt1Diagnostic("CV4231", fmt.Sprintf("index target %s is not array or ndarray storage", baseType.String()), e.Base.exprSpan())
 		}
@@ -4863,22 +4878,51 @@ func validateStructConstructExpr(env *semanticEnv, scope *evt1Scope, expr Struct
 		}
 	}
 	if len(structDecl.Fields) != len(expr.Args) {
-		return Type{}, evt1Diagnostic("CV4126", fmt.Sprintf("wrong initializer count for %s: expected %d but got %d", expr.StructName, len(structDecl.Fields), len(expr.Args)), expr.Span)
+		if len(expr.ArgNames) == 0 {
+			return Type{}, evt1Diagnostic("CV4126", fmt.Sprintf("wrong initializer count for %s: expected %d but got %d", expr.StructName, len(structDecl.Fields), len(expr.Args)), expr.Span)
+		}
 	}
+	fieldIndex := make(map[string]int, len(structDecl.Fields))
+	for i, field := range structDecl.Fields {
+		fieldIndex[field.Name] = i
+	}
+	seen := make(map[string]bool, len(expr.ArgNames))
 	for i, arg := range expr.Args {
-		argType, err := validateExprAgainstExpected(env, scope, arg, structDecl.Fields[i].Type, nil, false)
+		var field Field
+		if len(expr.ArgNames) != 0 {
+			name := expr.ArgNames[i]
+			index, ok := fieldIndex[name]
+			if !ok {
+				return Type{}, evt1Diagnostic("AGGREGATE_FIELD_UNKNOWN", fmt.Sprintf("unknown field %s.%s", expr.StructName, name), arg.exprSpan())
+			}
+			if seen[name] {
+				return Type{}, evt1Diagnostic("AGGREGATE_FIELD_DUPLICATE", fmt.Sprintf("duplicate field %s.%s", expr.StructName, name), arg.exprSpan())
+			}
+			seen[name] = true
+			field = structDecl.Fields[index]
+		} else {
+			field = structDecl.Fields[i]
+		}
+		argType, err := validateExprAgainstExpected(env, scope, arg, field.Type, nil, false)
 		if err != nil {
 			return Type{}, err
 		}
-		if structDecl.Fields[i].Type.isReference() {
-			if err := validateCallArgument(env, scope, structDecl.Fields[i].Type, arg, argType, nil); err != nil {
+		if field.Type.isReference() {
+			if err := validateCallArgument(env, scope, field.Type, arg, argType, nil); err != nil {
 				return Type{}, err
 			}
-		} else if !evt1CanInitializeStoredType(env, structDecl.Fields[i].Type, argType) {
-			return Type{}, evt1Diagnostic("CV4107", fmt.Sprintf("wrong initializer type for %s field %s: expected %s but got %s", expr.StructName, structDecl.Fields[i].Name, structDecl.Fields[i].Type.String(), argType.String()), arg.exprSpan())
+		} else if !evt1CanInitializeStoredType(env, field.Type, argType) {
+			return Type{}, evt1Diagnostic("CV4107", fmt.Sprintf("wrong initializer type for %s field %s: expected %s but got %s", expr.StructName, field.Name, field.Type.String(), argType.String()), arg.exprSpan())
 		}
-		if !evt1TypeCopyable(env, argType) && !evt1CanTransferInitialize(env, structDecl.Fields[i].Type, arg) {
-			return Type{}, evt1Diagnostic("CV4501", fmt.Sprintf("construction of %s.%s would copy non-copyable type %s", expr.StructName, structDecl.Fields[i].Name, argType.String()), arg.exprSpan())
+		if !evt1TypeCopyable(env, argType) && !evt1CanTransferInitialize(env, field.Type, arg) {
+			return Type{}, evt1Diagnostic("CV4501", fmt.Sprintf("construction of %s.%s would copy non-copyable type %s", expr.StructName, field.Name, argType.String()), arg.exprSpan())
+		}
+	}
+	if len(expr.ArgNames) != 0 {
+		for _, field := range structDecl.Fields {
+			if !seen[field.Name] {
+				return Type{}, evt1Diagnostic("AGGREGATE_FIELD_MISSING", fmt.Sprintf("missing field %s.%s", expr.StructName, field.Name), expr.Span)
+			}
 		}
 	}
 	if resolvedType.Kind == TypeApplied {
@@ -5975,8 +6019,12 @@ func evt1ExprIdentity(expr Expr) string {
 		return e.EnumName + "::" + e.VariantName + "(" + strings.Join(args, ",") + ")"
 	case *StructConstructExpr:
 		var args []string
-		for _, arg := range e.Args {
-			args = append(args, evt1ExprIdentity(arg))
+		for i, arg := range e.Args {
+			part := evt1ExprIdentity(arg)
+			if len(e.ArgNames) != 0 {
+				part = e.ArgNames[i] + "=" + part
+			}
+			args = append(args, part)
 		}
 		return e.StructName + "{" + strings.Join(args, ",") + "}"
 	case *WithExpr:
@@ -7864,7 +7912,14 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 		if structType.Name != "" {
 			structName = structType.String()
 		}
-		out := &StructConstructExpr{StructName: structName, StructType: structType, Span: e.Span}
+		out := &StructConstructExpr{StructName: structName, StructType: structType, ArgNames: append([]string(nil), e.ArgNames...), Span: e.Span}
+		if e.GeneratedFields != nil {
+			statement, err := evt1SubstituteStatement(e.GeneratedFields, typeParam, concreteType)
+			if err != nil {
+				return nil, err
+			}
+			out.GeneratedFields = statement.(*ForeachStmt)
+		}
 		for _, arg := range e.Args {
 			sub, err := evt1SubstituteExpr(arg, typeParam, concreteType)
 			if err != nil {
