@@ -61,11 +61,7 @@ func TestR7jAggregateDeclarationSurvivesArtifactOnlyImport(t *testing.T) {
 		t.Fatal(err)
 	}
 	const consumer = `module Consumer; profile Core; import Native;
-requires CAbiValue<ConceptXmlStats>;
-int UseStats() {
-    ConceptXmlStats value = ConceptXmlRoundTripStats(ConceptXmlStats{1, 2});
-    return value.children;
-}`
+int Unrelated() { return 1; }`
 	module, err := ParseWithSemanticModules("Consumer.concept", consumer, map[string][]byte{"Native": artifact})
 	if err != nil {
 		t.Fatal(err)
@@ -76,6 +72,11 @@ int UseStats() {
 	}
 	if !strings.Contains(string(outputs["consumer.generated.h"]), "concept_concept_xml_stats ConceptXmlRoundTripStats(concept_concept_xml_stats stats)") {
 		t.Fatalf("artifact-only import lost aggregate C ABI declaration:\n%s", outputs["consumer.generated.h"])
+	}
+	const boundary = `module Consumer; profile Core; import Native;
+int UseStats() { ConceptXmlStats value = ConceptXmlRoundTripStats(ConceptXmlStats{1, 2}); return value.children; }`
+	if _, err := ParseWithSemanticModules("Consumer.concept", boundary, map[string][]byte{"Native": artifact}); err == nil || !strings.Contains(err.Error(), "NATIVE_ABI_EVIDENCE_MISSING") {
+		t.Fatalf("old artifact must retain declarations but cannot authorize aggregate call: %v", err)
 	}
 }
 

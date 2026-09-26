@@ -610,7 +610,9 @@ type Module struct {
 	// ImportedFactAuthority records artifact-owned operations even when an older
 	// artifact has no value summary. Consumers must degrade those results to
 	// Unknown instead of re-deriving a stronger contract from the payload body.
-	ImportedFactAuthority []string `json:"-"`
+	ImportedFactAuthority []string            `json:"-"`
+	ImportedABIRequired   []string            `json:"-"`
+	ImportedABIEvidence   []NativeABIEvidence `json:"-"`
 }
 
 type NamespaceSymbol struct {
@@ -1818,6 +1820,8 @@ type semanticEnv struct {
 	transportedFactIDs      map[string]bool
 	sharedAccessFacts       []MIRSemanticFact
 	accessSummaries         []MIRAccessEntry
+	importedABIRequired     map[string]bool
+	importedABIEvidence     map[string]NativeABIEvidence
 	dynWitnesses            map[string]*evt1InterfaceWitness
 	validatingMethod        string
 	validatingFunction      string

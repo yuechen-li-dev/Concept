@@ -253,6 +253,17 @@ func ExplainSourceWithBuiltSemanticModuleRoots(path, source string, line int, ro
 	return explainModule(module, line)
 }
 
+func ExplainSourceWithNativeSemanticModules(path, source string, line int, artifacts map[string][]byte, identity NativeABIIdentity) (ProofGraph, error) {
+	module, err := ParseWithSemanticModulesForNative(path, source, artifacts, identity)
+	if err != nil {
+		if diagnostic, ok := err.(Diagnostic); ok && diagnostic.Proof != nil && (line == 0 || diagnostic.Proof.SourceSpan.Line == line) {
+			return *diagnostic.Proof, nil
+		}
+		return ProofGraph{}, err
+	}
+	return explainModule(module, line)
+}
+
 func explainModule(module Module, line int) (ProofGraph, error) {
 	env, err := analyzeModule(module)
 	if err != nil {

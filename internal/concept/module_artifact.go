@@ -73,6 +73,7 @@ type SemanticModuleArtifact struct {
 	SharedAccessFacts  []MIRSemanticFact             `json:"shared_access_facts,omitempty"`
 	AccessSummaries    []MIRAccessEntry              `json:"access_summaries,omitempty"`
 	ForeignContracts   []ForeignContractDecl         `json:"foreign_contracts,omitempty"`
+	NativeABI          *NativeABIReport              `json:"native_abi,omitempty"`
 	SemanticPayload    []byte                        `json:"semantic_payload"`
 }
 
@@ -156,10 +157,26 @@ func LoadSemanticModuleArtifact(body []byte) (SemanticModuleArtifact, Module, er
 	if !reflect.DeepEqual(module.ForeignContracts, artifact.ForeignContracts) {
 		return artifact, Module{}, fmt.Errorf("MODULE_FOREIGN_CONTRACT_MISMATCH: inspectable foreign declarations differ from semantic payload")
 	}
+	if artifact.NativeABI != nil {
+		if err := validateNativeABIEvidenceForModule(*artifact.NativeABI, module, artifact.SourceSHA256); err != nil {
+			return artifact, Module{}, err
+		}
+	}
 	return artifact, module, nil
 }
 
 func CompileSemanticModule(path, source string, artifacts map[string][]byte) ([]byte, error) {
+	return compileSemanticModule(path, source, artifacts, nil, nil)
+}
+
+// CompileSemanticModuleWithNativeABI validates every imported measurement
+// against the current native boundary and carries a freshly measured local
+// report when supplied. The report is the same object projected as abi.json.
+func CompileSemanticModuleWithNativeABI(path, source string, artifacts map[string][]byte, identity NativeABIIdentity, report *NativeABIReport) ([]byte, error) {
+	return compileSemanticModule(path, source, artifacts, &identity, report)
+}
+
+func compileSemanticModule(path, source string, artifacts map[string][]byte, identity *NativeABIIdentity, report *NativeABIReport) ([]byte, error) {
 	local, err := parseSyntaxModule(path, source)
 	if err != nil {
 		return nil, err
@@ -167,7 +184,7 @@ func CompileSemanticModule(path, source string, artifacts map[string][]byte) ([]
 	if local.Name == "" {
 		return nil, evt1Diagnostic("MODULE_DECLARATION_REQUIRED", "semantic module compilation requires `module Name;`", Span{Line: 1, Column: 1})
 	}
-	composed, loaded, err := composeSemanticModules(local, artifacts)
+	composed, loaded, err := composeSemanticModulesForNative(local, artifacts, identity)
 	if err != nil {
 		return nil, err
 	}
@@ -220,6 +237,15 @@ func CompileSemanticModule(path, source string, artifacts map[string][]byte) ([]
 		ForeignContracts:   append([]ForeignContractDecl{}, local.ForeignContracts...),
 		SemanticPayload:    payload,
 	}
+	if report != nil {
+		if identity == nil || report.Identity != *identity {
+			return nil, fmt.Errorf("NATIVE_ABI_EVIDENCE_STALE: local measurement identity differs from current native boundary")
+		}
+		if err := validateNativeABIEvidenceForModule(*report, local, digest([]byte(source))); err != nil {
+			return nil, err
+		}
+		artifact.NativeABI = report
+	}
 	for _, dependency := range loaded {
 		artifact.Dependencies = append(artifact.Dependencies, SemanticModuleDependency{ModuleIdentity: dependency.ModuleIdentity, ContentSHA256: dependency.ContentSHA256})
 	}
@@ -234,11 +260,19 @@ func CompileSemanticModule(path, source string, artifacts map[string][]byte) ([]
 }
 
 func ParseWithSemanticModules(path, source string, artifacts map[string][]byte) (Module, error) {
+	return parseWithSemanticModules(path, source, artifacts, nil)
+}
+
+func ParseWithSemanticModulesForNative(path, source string, artifacts map[string][]byte, identity NativeABIIdentity) (Module, error) {
+	return parseWithSemanticModules(path, source, artifacts, &identity)
+}
+
+func parseWithSemanticModules(path, source string, artifacts map[string][]byte, identity *NativeABIIdentity) (Module, error) {
 	local, err := parseSyntaxModule(path, source)
 	if err != nil {
 		return Module{}, err
 	}
-	module, _, err := composeSemanticModules(local, artifacts)
+	module, _, err := composeSemanticModulesForNative(local, artifacts, identity)
 	if err != nil {
 		return Module{}, err
 	}
@@ -444,6 +478,10 @@ func ParseWithBuiltSemanticModuleRoots(path, source string, roots []string) (Mod
 }
 
 func composeSemanticModules(local Module, artifacts map[string][]byte) (Module, []SemanticModuleArtifact, error) {
+	return composeSemanticModulesForNative(local, artifacts, nil)
+}
+
+func composeSemanticModulesForNative(local Module, artifacts map[string][]byte, identity *NativeABIIdentity) (Module, []SemanticModuleArtifact, error) {
 	var order []SemanticModuleArtifact
 	modules := map[string]Module{}
 	states := map[string]int{}
@@ -469,6 +507,18 @@ func composeSemanticModules(local Module, artifacts map[string][]byte) (Module, 
 		}
 		if artifact.ModuleIdentity != name {
 			return fmt.Errorf("MODULE_IDENTITY_MISMATCH: import %s resolved artifact %s", name, artifact.ModuleIdentity)
+		}
+		if artifact.NativeABI != nil {
+			if identity == nil || artifact.NativeABI.Identity != *identity {
+				current := "unavailable"
+				if identity != nil {
+					current = describeNativeABIIdentity(*identity)
+				}
+				return fmt.Errorf("NATIVE_ABI_EVIDENCE_STALE: %s measured with %s; current boundary %s; reprobe required", name, describeNativeABIIdentity(artifact.NativeABI.Identity), current)
+			}
+			if err := validateNativeABIEvidenceForModule(*artifact.NativeABI, module, artifact.SourceSHA256); err != nil {
+				return err
+			}
 		}
 		// The verified artifact identity, not an optional payload field, owns
 		// the defining-module boundary. Older v1 payloads lack this field.
@@ -519,6 +569,18 @@ func composeSemanticModules(local Module, artifacts map[string][]byte) (Module, 
 	for _, artifact := range order {
 		dependency := modules[artifact.ModuleIdentity]
 		appendSemanticDeclarations(&composed, dependency)
+		for _, decl := range dependency.Structs {
+			if evt1HasCRepr(decl.Attributes) {
+				composed.ImportedABIRequired = append(composed.ImportedABIRequired, decl.Name)
+			}
+		}
+		if artifact.NativeABI != nil {
+			for _, evidence := range artifact.NativeABI.Evidence {
+				if evidence.SourceSHA256 == artifact.SourceSHA256 {
+					composed.ImportedABIEvidence = append(composed.ImportedABIEvidence, evidence)
+				}
+			}
+		}
 		for _, fn := range dependency.Functions {
 			composed.ImportedFactAuthority = append(composed.ImportedFactAuthority, evt1FunctionProvenanceKey(fn))
 		}
@@ -552,6 +614,8 @@ func composeSemanticModules(local Module, artifacts map[string][]byte) (Module, 
 	composed.OperationEffects = append(composed.OperationEffects, local.OperationEffects...)
 	composed.ImportedFactSummaries = append(composed.ImportedFactSummaries, local.ImportedFactSummaries...)
 	composed.ImportedFactAuthority = append(composed.ImportedFactAuthority, local.ImportedFactAuthority...)
+	composed.ImportedABIRequired = append(composed.ImportedABIRequired, local.ImportedABIRequired...)
+	composed.ImportedABIEvidence = append(composed.ImportedABIEvidence, local.ImportedABIEvidence...)
 	composed.SharedAccessFacts = append(composed.SharedAccessFacts, local.SharedAccessFacts...)
 	composed.AccessSummaries = append(composed.AccessSummaries, local.AccessSummaries...)
 	// Compile-time obligations belong only to the consuming unit. Imported

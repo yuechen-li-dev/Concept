@@ -18,17 +18,16 @@ func TestNativeConceptArtifactsRepeatByteIdentically(t *testing.T) {
 		t.Fatal(err)
 	}
 	requireTinyXML2Submodule(t, project.Root)
-	companionPath := filepath.Join(project.Root, "concept", "Native.concept")
-	companion, err := os.ReadFile(companionPath)
-	if err != nil {
-		t.Fatal(err)
-	}
 	testPath := filepath.Join(project.Root, "tests", "native.concept_test")
 	testSource, err := os.ReadFile(testPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	module, err := ParseWithBuiltSemanticModuleRoots(filepath.ToSlash(testPath), string(testSource), []string{filepath.Join(project.Root, "concept")})
+	artifacts, identity, err := BuildNativeCompanionArtifacts(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	module, err := ParseWithSemanticModulesForNative(filepath.ToSlash(testPath), string(testSource), artifacts, identity)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +41,7 @@ func TestNativeConceptArtifactsRepeatByteIdentically(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	unknown, err := ExplainSourceWithBuiltSemanticModuleRoots(filepath.ToSlash(unknownPath), string(unknownSource), 0, []string{filepath.Join(project.Root, "concept")})
+	unknown, err := ExplainSourceWithNativeSemanticModules(filepath.ToSlash(unknownPath), string(unknownSource), 0, artifacts, identity)
 	if err != nil || unknown.Outcome != FactUnknown {
 		t.Fatalf("unclaimed native effect was not Unknown: %v %+v", err, unknown)
 	}
@@ -51,18 +50,23 @@ func TestNativeConceptArtifactsRepeatByteIdentically(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	schema, err := ExplainSourceWithBuiltSemanticModuleRoots(filepath.ToSlash(schemaPath), string(schemaSource), 0, []string{filepath.Join(project.Root, "concept")})
+	schema, err := ExplainSourceWithNativeSemanticModules(filepath.ToSlash(schemaPath), string(schemaSource), 0, artifacts, identity)
 	if err != nil || schema.Outcome != FactDisproven {
 		t.Fatalf("missing native schema was not Disproven: %v %+v", err, schema)
 	}
-	var planBaseline, companionBaseline, generatedBaseline, proofBaseline []byte
+	abiProofPath := filepath.Join(project.Root, "proofs", "abi_value.concept")
+	abiProofSource, err := os.ReadFile(abiProofPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var planBaseline, companionBaseline, generatedBaseline, proofBaseline, abiBaseline, abiProofBaseline, probeBaseline []byte
 	for run := 0; run < 100; run++ {
 		plan, err := NativeBuildPlan(project)
 		if err != nil {
 			t.Fatal(err)
 		}
 		planBody, _ := MarshalNativePlan(plan)
-		artifact, err := CompileSemanticModule(filepath.ToSlash(companionPath), string(companion), nil)
+		artifact, err := CompileNativeSemanticModule(project, "concept/Native.concept", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -70,7 +74,7 @@ func TestNativeConceptArtifactsRepeatByteIdentically(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		graph, err := ExplainSourceWithBuiltSemanticModuleRoots(filepath.ToSlash(proofPath), string(proofSource), 0, []string{filepath.Join(project.Root, "concept")})
+		graph, err := ExplainSourceWithNativeSemanticModules(filepath.ToSlash(proofPath), string(proofSource), 0, artifacts, identity)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -81,6 +85,19 @@ func TestNativeConceptArtifactsRepeatByteIdentically(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		abiBody, err := os.ReadFile(filepath.Join(project.Root, ".native-build", "abi.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		abiGraph, err := ExplainSourceWithNativeSemanticModules(filepath.ToSlash(abiProofPath), string(abiProofSource), 0, artifacts, identity)
+		if err != nil || abiGraph.Outcome != FactProven {
+			t.Fatalf("ABI proof changed: %v %+v", err, abiGraph)
+		}
+		abiProof, err := SerializeProof(abiGraph)
+		if err != nil {
+			t.Fatal(err)
+		}
+		probe := []byte(nativeABIProbeSource(project.ABI[0]))
 		var c []byte
 		for name, body := range generated {
 			if strings.HasSuffix(name, ".generated.c") {
@@ -88,10 +105,10 @@ func TestNativeConceptArtifactsRepeatByteIdentically(t *testing.T) {
 			}
 		}
 		if run == 0 {
-			planBaseline, companionBaseline, generatedBaseline, proofBaseline = planBody, artifact, c, proof
+			planBaseline, companionBaseline, generatedBaseline, proofBaseline, abiBaseline, abiProofBaseline, probeBaseline = planBody, artifact, c, proof, abiBody, abiProof, probe
 			continue
 		}
-		if !bytes.Equal(planBody, planBaseline) || !bytes.Equal(artifact, companionBaseline) || !bytes.Equal(c, generatedBaseline) || !bytes.Equal(proof, proofBaseline) {
+		if !bytes.Equal(planBody, planBaseline) || !bytes.Equal(artifact, companionBaseline) || !bytes.Equal(c, generatedBaseline) || !bytes.Equal(proof, proofBaseline) || !bytes.Equal(abiBody, abiBaseline) || !bytes.Equal(abiProof, abiProofBaseline) || !bytes.Equal(probe, probeBaseline) {
 			t.Fatalf("Concept-side artifact changed on run %d", run+1)
 		}
 	}

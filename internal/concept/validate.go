@@ -594,6 +594,14 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 	env := newSemanticEnv(profile)
 	env.moduleName = module.Name
 	env.sourcePath = module.Path
+	env.importedABIRequired = map[string]bool{}
+	env.importedABIEvidence = map[string]NativeABIEvidence{}
+	for _, name := range module.ImportedABIRequired {
+		env.importedABIRequired[name] = true
+	}
+	for _, evidence := range module.ImportedABIEvidence {
+		env.importedABIEvidence[evidence.TypeName] = evidence
+	}
 	for _, key := range module.ImportedFactAuthority {
 		env.importedFactAuthority[key] = true
 	}
@@ -4002,6 +4010,19 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			}
 			return Type{}, err
 		}
+		if fn.ExternABI != "" {
+			boundaryTypes := []Type{fn.ReturnType}
+			for _, param := range fn.Params {
+				boundaryTypes = append(boundaryTypes, param.Type)
+			}
+			for _, boundaryType := range boundaryTypes {
+				if env.importedABIRequired[boundaryType.Name] {
+					if _, ok := env.importedABIEvidence[boundaryType.Name]; !ok {
+						return Type{}, evt1Diagnostic("NATIVE_ABI_EVIDENCE_MISSING", fmt.Sprintf("%s requires validated native ABI evidence for %s", fn.Name, boundaryType.Name), e.Span)
+					}
+				}
+			}
+		}
 		for i, arg := range e.Args {
 			if err := validateCallArgument(env, scope, fn.Params[i].Type, arg, argTypes[i], templateInfo); err != nil {
 				return Type{}, err
@@ -6662,6 +6683,16 @@ var evt1SemanticAnalysisRegistry = map[string]evt1SemanticAnalysis{}
 
 func init() {
 	evt1SemanticAnalysisRegistry["CAbiLayout"] = evt1SemanticAnalysis{TypeArity: 1, CheckTypes: func(env *semanticEnv, args []Type, parameters []int) semanticFactResult {
+		if env.importedABIRequired[args[0].Name] {
+			evidence, ok := env.importedABIEvidence[args[0].Name]
+			if !ok {
+				return semanticFactResult{Outcome: FactUnknown, Origin: FactOriginCompilerAnalysis, Evidence: SemanticFactEvidence{Detail: "imported repr(C) declaration has no validated native ABI evidence"}}
+			}
+			if ok, reason := evt1CABIValue(env, args[0], map[string]bool{}); !ok {
+				return semanticFactResult{Outcome: FactDisproven, Origin: FactOriginCompilerAnalysis, Evidence: SemanticFactEvidence{Detail: reason}}
+			}
+			return semanticFactResult{Outcome: FactProven, Origin: FactOriginNativeToolchainProbe, Evidence: SemanticFactEvidence{Detail: fmt.Sprintf("repr(C); NativeToolchainProbe size %d align %d offsets %v; %s %s; target %s/%s/%s; input %s; source %s", evidence.Size, evidence.Alignment, evidence.Offsets, evidence.Identity.CompilerFamily, evidence.Identity.CompilerVersion, evidence.Identity.TargetTriple, evidence.Identity.OperatingSystem, evidence.Identity.Architecture, evidence.Identity.BuildInputHash, evidence.SourceSHA256), Alignment: evidence.Alignment}}
+		}
 		ok, reason := evt1CABIValue(env, args[0], map[string]bool{})
 		if !ok {
 			return semanticFactResult{Outcome: FactDisproven, Origin: FactOriginCompilerAnalysis, Evidence: SemanticFactEvidence{Detail: reason}}

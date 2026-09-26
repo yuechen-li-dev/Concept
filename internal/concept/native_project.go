@@ -41,12 +41,28 @@ type NativeABIClaim struct {
 }
 
 type NativeABIEvidence struct {
-	TypeName  string   `json:"type_name"`
-	Origin    string   `json:"origin"`
-	Size      int      `json:"size"`
-	Alignment int      `json:"alignment"`
-	Fields    []string `json:"fields"`
-	Offsets   []int    `json:"offsets"`
+	Companion    string            `json:"companion"`
+	SourceSHA256 string            `json:"source_sha256"`
+	Identity     NativeABIIdentity `json:"identity"`
+	TypeName     string            `json:"type_name"`
+	Origin       string            `json:"origin"`
+	Size         int               `json:"size"`
+	Alignment    int               `json:"alignment"`
+	Fields       []string          `json:"fields"`
+	Offsets      []int             `json:"offsets"`
+}
+
+// NativeABIIdentity names the exact native build boundary for a measurement.
+// BuildInputHash is conservative: it includes native sources, headers, claims,
+// defines, include paths, language modes, and compiler commands.
+type NativeABIIdentity struct {
+	CompilerFamily        string `json:"compiler_family"`
+	CompilerVersion       string `json:"compiler_version"`
+	TargetTriple          string `json:"target_triple"`
+	OperatingSystem       string `json:"operating_system"`
+	Architecture          string `json:"architecture"`
+	BuildInputHash        string `json:"build_input_hash"`
+	SemanticCompanionHash string `json:"semantic_companion_hash"`
 }
 
 type NativeABIReport struct {
@@ -57,6 +73,25 @@ type NativeABIReport struct {
 	BuildInputHash        string              `json:"build_input_hash"`
 	SemanticCompanionHash string              `json:"semantic_companion_hash"`
 	Evidence              []NativeABIEvidence `json:"evidence"`
+	Identity              NativeABIIdentity   `json:"identity"`
+}
+
+func CurrentNativeABIIdentity(project NativeProject) (NativeABIIdentity, error) {
+	plan, err := NativeBuildPlan(project)
+	if err != nil {
+		return NativeABIIdentity{}, err
+	}
+	compiler := "clang++"
+	if project.Toolchain == "GCC" {
+		compiler = "g++"
+	}
+	target, err := exec.Command(compiler, "-dumpmachine").Output()
+	if err != nil {
+		return NativeABIIdentity{}, fmt.Errorf("NATIVE_ABI_TARGET_UNKNOWN: %w", err)
+	}
+	return NativeABIIdentity{CompilerFamily: project.Toolchain, CompilerVersion: plan.ToolchainVersion,
+		TargetTriple: strings.TrimSpace(string(target)), OperatingSystem: runtime.GOOS, Architecture: runtime.GOARCH,
+		BuildInputHash: plan.BuildInputHash, SemanticCompanionHash: plan.SemanticCompanionHash}, nil
 }
 
 type NativeTarget struct {
@@ -105,6 +140,32 @@ type NativeABIProbePlan struct {
 type NativeBuildResult struct {
 	Plan               NativePlan        `json:"plan"`
 	NativeOutputHashes map[string]string `json:"native_output_hashes"`
+}
+
+// ValidateNativeBuildOutputs checks the exact outputs about to be linked or
+// executed against the build result produced under the measured input plan.
+func ValidateNativeBuildOutputs(project NativeProject, result NativeBuildResult) error {
+	current, err := NativeBuildPlan(project)
+	if err != nil {
+		return err
+	}
+	if current.BuildInputHash != result.Plan.BuildInputHash || current.SemanticCompanionHash != result.Plan.SemanticCompanionHash || current.ToolchainVersion != result.Plan.ToolchainVersion {
+		return fmt.Errorf("NATIVE_BUILD_INPUT_STALE: native inputs changed after ABI validation")
+	}
+	for _, target := range project.Targets {
+		want, ok := result.NativeOutputHashes[target.Name]
+		if !ok || want == "" {
+			return fmt.Errorf("NATIVE_BUILD_OUTPUT_MISSING: %s has no output hash", target.Name)
+		}
+		body, err := os.ReadFile(filepath.Join(project.Root, filepath.FromSlash(target.Output)))
+		if err != nil {
+			return fmt.Errorf("NATIVE_BUILD_OUTPUT_MISSING: %s: %w", target.Name, err)
+		}
+		if got := nativeDigest(body); got != want {
+			return fmt.Errorf("NATIVE_BUILD_OUTPUT_MISMATCH: %s expected %s, got %s", target.Name, want, got)
+		}
+	}
+	return nil
 }
 
 func LoadNativeProject(root string) (NativeProject, error) {
@@ -632,6 +693,9 @@ func CheckNativeABI(project NativeProject) error {
 		return fmt.Errorf("NATIVE_ABI_TARGET_UNKNOWN: %w", err)
 	}
 	report := NativeABIReport{Schema: "concept-native-abi.v1", Compiler: compiler, CompilerVersion: plan.ToolchainVersion, Target: strings.TrimSpace(string(target)) + "/" + runtime.GOOS + "/" + runtime.GOARCH, BuildInputHash: plan.BuildInputHash, SemanticCompanionHash: plan.SemanticCompanionHash, Evidence: []NativeABIEvidence{}}
+	report.Identity = NativeABIIdentity{CompilerFamily: project.Toolchain, CompilerVersion: plan.ToolchainVersion,
+		TargetTriple: strings.TrimSpace(string(target)), OperatingSystem: runtime.GOOS, Architecture: runtime.GOARCH,
+		BuildInputHash: plan.BuildInputHash, SemanticCompanionHash: plan.SemanticCompanionHash}
 	claimed := map[string]bool{}
 	for _, claim := range project.ABI {
 		claimed[claim.Companion+"|"+claim.TypeName] = true
@@ -711,19 +775,14 @@ func CheckNativeABI(project NativeProject) error {
 		if strings.ContainsAny(claim.Header, "\"\r\n") {
 			return fmt.Errorf("NATIVE_ABI_CLAIM_INVALID: header %q", claim.Header)
 		}
-		var source strings.Builder
-		fmt.Fprintf(&source, "#include \"%s\"\n#include <cstddef>\n#include <cstdio>\nint main() { std::printf(\"%%zu %%zu\", sizeof(%s), alignof(%s));\n", filepath.ToSlash(claim.Header), claim.TypeName, claim.TypeName)
-		for _, field := range claim.Fields {
-			fmt.Fprintf(&source, "std::printf(\" %%zu\", offsetof(%s, %s));\n", claim.TypeName, field)
-		}
-		source.WriteString("return 0; }\n")
+		source := nativeABIProbeSource(claim)
 		temp, err := os.MkdirTemp("", "concept-native-abi-")
 		if err != nil {
 			return err
 		}
 		probe := filepath.Join(temp, "probe.cpp")
 		executable := filepath.Join(temp, "probe.exe")
-		if err := os.WriteFile(probe, []byte(source.String()), 0o644); err != nil {
+		if err := os.WriteFile(probe, []byte(source), 0o644); err != nil {
 			os.RemoveAll(temp)
 			return err
 		}
@@ -762,8 +821,14 @@ func CheckNativeABI(project NativeProject) error {
 			}
 			measuredOffsets[i] = offset
 		}
-		report.Evidence = append(report.Evidence, NativeABIEvidence{TypeName: claim.TypeName, Origin: "NativeToolchainProbe", Size: size, Alignment: alignment, Fields: append([]string{}, claim.Fields...), Offsets: measuredOffsets})
+		report.Evidence = append(report.Evidence, NativeABIEvidence{Companion: claim.Companion, SourceSHA256: digest(body), Identity: report.Identity, TypeName: claim.TypeName, Origin: "NativeToolchainProbe", Size: size, Alignment: alignment, Fields: append([]string{}, claim.Fields...), Offsets: measuredOffsets})
 	}
+	sort.Slice(report.Evidence, func(i, j int) bool {
+		if report.Evidence[i].Companion != report.Evidence[j].Companion {
+			return report.Evidence[i].Companion < report.Evidence[j].Companion
+		}
+		return report.Evidence[i].TypeName < report.Evidence[j].TypeName
+	})
 	body, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
 		return err
@@ -772,6 +837,16 @@ func CheckNativeABI(project NativeProject) error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(project.Root, ".native-build", "abi.json"), append(body, '\n'), 0o644)
+}
+
+func nativeABIProbeSource(claim NativeABIClaim) string {
+	var source strings.Builder
+	fmt.Fprintf(&source, "#include \"%s\"\n#include <cstddef>\n#include <cstdio>\nint main() { std::printf(\"%%zu %%zu\", sizeof(%s), alignof(%s));\n", filepath.ToSlash(claim.Header), claim.TypeName, claim.TypeName)
+	for _, field := range claim.Fields {
+		fmt.Fprintf(&source, "std::printf(\" %%zu\", offsetof(%s, %s));\n", claim.TypeName, field)
+	}
+	source.WriteString("return 0; }\n")
+	return source.String()
 }
 
 func nativeABIProbeArgs(project NativeProject, claim NativeABIClaim, probe, executable string) ([]string, error) {

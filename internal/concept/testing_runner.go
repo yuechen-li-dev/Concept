@@ -131,6 +131,14 @@ type TestRunOptions struct {
 }
 
 func DiscoverTests(root string) (TestManifest, error) {
+	return discoverTests(root, nil, nil)
+}
+
+func DiscoverTestsWithNativeABI(root string, artifacts map[string][]byte, identity NativeABIIdentity) (TestManifest, error) {
+	return discoverTests(root, artifacts, &identity)
+}
+
+func discoverTests(root string, nativeArtifacts map[string][]byte, nativeIdentity *NativeABIIdentity) (TestManifest, error) {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
 		return TestManifest{}, err
@@ -182,7 +190,13 @@ func DiscoverTests(root string) (TestManifest, error) {
 				moduleRoots = append(moduleRoots, filepath.Join(filepath.Dir(projectRoot), "concept"))
 			}
 		}
-		module, parseErr := ParseWithBuiltSemanticModuleRoots(filepath.ToSlash(path), string(body), moduleRoots)
+		var module Module
+		var parseErr error
+		if nativeIdentity != nil {
+			module, parseErr = ParseWithSemanticModulesForNative(filepath.ToSlash(path), string(body), nativeArtifacts, *nativeIdentity)
+		} else {
+			module, parseErr = ParseWithBuiltSemanticModuleRoots(filepath.ToSlash(path), string(body), moduleRoots)
+		}
 		if parseErr != nil {
 			return TestManifest{}, fmt.Errorf("%s: %w", filepath.ToSlash(path), parseErr)
 		}

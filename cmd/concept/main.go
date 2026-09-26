@@ -171,22 +171,22 @@ func runNativeCommand(action, root string) {
 		fmt.Println(string(body))
 		return
 	}
-	for _, companion := range project.Companions {
-		path := filepath.Join(project.Root, filepath.FromSlash(companion))
-		body, err := os.ReadFile(path)
-		if err != nil {
-			fail(err)
-		}
-		if _, err := concept.ParseWithBuiltSemanticModuleRoots(filepath.ToSlash(path), string(body), []string{filepath.Join(project.Root, "concept")}); err != nil {
-			fail(fmt.Errorf("NATIVE_COMPANION_INVALID: %s: %w", companion, err))
-		}
+	if err := concept.CheckNativeABI(project); err != nil {
+		fail(err)
+	}
+	artifacts, identity, err := concept.BuildNativeCompanionArtifacts(project)
+	if err != nil {
+		fail(fmt.Errorf("NATIVE_COMPANION_INVALID: %w", err))
+	}
+	if identity.BuildInputHash != plan.BuildInputHash || identity.SemanticCompanionHash != plan.SemanticCompanionHash || identity.CompilerVersion != plan.ToolchainVersion {
+		fail(fmt.Errorf("NATIVE_ABI_EVIDENCE_STALE: native inputs changed after planning"))
 	}
 	for _, test := range project.Tests {
 		if _, err := os.Stat(filepath.Join(project.Root, filepath.FromSlash(test))); err != nil {
 			fail(fmt.Errorf("NATIVE_TEST_MISSING: %s: %w", test, err))
 		}
 	}
-	testManifest, err := concept.DiscoverTests(filepath.Join(project.Root, "tests"))
+	testManifest, err := concept.DiscoverTestsWithNativeABI(filepath.Join(project.Root, "tests"), artifacts, identity)
 	if err != nil {
 		fail(fmt.Errorf("NATIVE_TEST_INVALID: %w", err))
 	}
@@ -208,15 +208,15 @@ func runNativeCommand(action, root string) {
 	if len(testManifest.Tests) == 0 {
 		fail(fmt.Errorf("NATIVE_TEST_EMPTY: manifest lists no discovered test functions"))
 	}
-	if err := concept.CheckNativeABI(project); err != nil {
-		fail(err)
-	}
 	if action == "check" {
 		fmt.Printf("%s: native project, companions, and tests ok\n", project.Name)
 		return
 	}
 	result, err := concept.RunNativeBuild(project, plan)
 	if err != nil {
+		fail(err)
+	}
+	if err := concept.ValidateNativeBuildOutputs(project, result); err != nil {
 		fail(err)
 	}
 	if action == "build" {
@@ -390,8 +390,16 @@ func runExplainCommand(args []string) {
 			graph, err = concept.ExplainGeneratedDeclaration(module, generatedSymbol)
 		}
 	} else {
-		if nativeCompanionRoot(sourcePath) != "" {
-			graph, err = concept.ExplainSourceWithBuiltSemanticModuleRoots(filepath.ToSlash(proofSourcePath), string(body), line, semanticModuleRoots(sourcePath))
+		if companionRoot := nativeCompanionRoot(sourcePath); companionRoot != "" {
+			project, loadErr := concept.LoadNativeProject(filepath.Dir(companionRoot))
+			if loadErr != nil {
+				fail(loadErr)
+			}
+			artifacts, identity, buildErr := concept.BuildNativeCompanionArtifacts(project)
+			if buildErr != nil {
+				fail(buildErr)
+			}
+			graph, err = concept.ExplainSourceWithNativeSemanticModules(filepath.ToSlash(proofSourcePath), string(body), line, artifacts, identity)
 		} else {
 			graph, err = concept.ExplainSourceWithSemanticModuleRoots(filepath.ToSlash(proofSourcePath), string(body), line, semanticModuleRoots(sourcePath))
 		}
