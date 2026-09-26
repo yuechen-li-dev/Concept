@@ -3,49 +3,49 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static concept_resource_signal concept_resource_signal_make_create() {
+static concept_resource_signal concept_resource_signal_make_create(void) {
   concept_resource_signal out;
   out.tag = CONCEPT_RESOURCE_SIGNAL_CREATE;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_resource_signal concept_resource_signal_make_record() {
+static concept_resource_signal concept_resource_signal_make_record(void) {
   concept_resource_signal out;
   out.tag = CONCEPT_RESOURCE_SIGNAL_RECORD;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_resource_signal concept_resource_signal_make_cleanup() {
+static concept_resource_signal concept_resource_signal_make_cleanup(void) {
   concept_resource_signal out;
   out.tag = CONCEPT_RESOURCE_SIGNAL_CLEANUP;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_resource_signal concept_resource_signal_make_release() {
+static concept_resource_signal concept_resource_signal_make_release(void) {
   concept_resource_signal out;
   out.tag = CONCEPT_RESOURCE_SIGNAL_RELEASE;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_resource_signal concept_resource_signal_make_submit() {
+static concept_resource_signal concept_resource_signal_make_submit(void) {
   concept_resource_signal out;
   out.tag = CONCEPT_RESOURCE_SIGNAL_SUBMIT;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_resource_signal concept_resource_signal_make_stop() {
+static concept_resource_signal concept_resource_signal_make_stop(void) {
   concept_resource_signal out;
   out.tag = CONCEPT_RESOURCE_SIGNAL_STOP;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_resource_signal concept_resource_signal_make_tick() {
+static concept_resource_signal concept_resource_signal_make_tick(void) {
   concept_resource_signal out;
   out.tag = CONCEPT_RESOURCE_SIGNAL_TICK;
   out.payload.none.unused = 0u;

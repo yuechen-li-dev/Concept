@@ -8,7 +8,7 @@ static void concept_abort_invalid_tag(const char* enum_name) {
   abort();
 }
 
-static concept_pipeline_state concept_pipeline_state_make_empty() {
+static concept_pipeline_state concept_pipeline_state_make_empty(void) {
   concept_pipeline_state out;
   out.tag = CONCEPT_PIPELINE_STATE_EMPTY;
   out.payload.none.unused = 0u;
@@ -37,7 +37,7 @@ static concept_pipeline_state concept_pipeline_state_make_failed(concept_vulkan_
   return out;
 }
 
-concept_pipeline_state concept_evt1_m1a_vulkan_make_empty_state() {
+concept_pipeline_state concept_evt1_m1a_vulkan_make_empty_state(void) {
   return concept_pipeline_state_make_empty();
 }
 

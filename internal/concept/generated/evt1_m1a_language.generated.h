@@ -45,17 +45,17 @@ typedef struct concept_demo_state {
 
 int32_t concept_evt1_m1a_language_add(int32_t left, int32_t right);
 
-concept_demo_state concept_evt1_m1a_language_observe_state();
+concept_demo_state concept_evt1_m1a_language_observe_state(void);
 
-int32_t concept_evt1_m1a_language_observe_calls();
+int32_t concept_evt1_m1a_language_observe_calls(void);
 
 void concept_evt1_m1a_language_record_int(int32_t value);
 
 void concept_evt1_m1a_language_record_pair(int32_t first, int32_t second);
 
-concept_demo_state concept_evt1_m1a_language_make_empty();
+concept_demo_state concept_evt1_m1a_language_make_empty(void);
 
-concept_inner_status concept_evt1_m1a_language_make_inner_idle();
+concept_inner_status concept_evt1_m1a_language_make_inner_idle(void);
 
 concept_inner_status concept_evt1_m1a_language_make_inner_counted(int32_t value);
 
@@ -67,7 +67,7 @@ concept_demo_state concept_evt1_m1a_language_make_wrapped(concept_inner_status i
 
 int32_t concept_evt1_m1a_language_classify(concept_demo_state state);
 
-int32_t concept_evt1_m1a_language_observe_and_classify();
+int32_t concept_evt1_m1a_language_observe_and_classify(void);
 
 void concept_evt1_m1a_language_visit(concept_demo_state state);
 

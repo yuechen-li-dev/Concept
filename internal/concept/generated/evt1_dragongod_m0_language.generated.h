@@ -22,11 +22,11 @@ typedef struct concept_lifecycle_signal {
   } payload;
 } concept_lifecycle_signal;
 
-int32_t concept_evt1_dragongod_m0_language_root_retry_budget();
+int32_t concept_evt1_dragongod_m0_language_root_retry_budget(void);
 
-int32_t concept_evt1_dragongod_m0_language_derived_stack_depth();
+int32_t concept_evt1_dragongod_m0_language_derived_stack_depth(void);
 
-bool concept_evt1_dragongod_m0_language_finish_is_explicit();
+bool concept_evt1_dragongod_m0_language_finish_is_explicit(void);
 
 
 #endif

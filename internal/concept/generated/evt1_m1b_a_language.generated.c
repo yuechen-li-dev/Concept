@@ -38,7 +38,7 @@ static concept_copy_result concept_copy_result_make(int32_t firstOffset, int32_t
   return out;
 }
 
-static concept_outcome concept_outcome_make_empty() {
+static concept_outcome concept_outcome_make_empty(void) {
   concept_outcome out;
   out.tag = CONCEPT_OUTCOME_EMPTY;
   out.payload.none.unused = 0u;
@@ -79,7 +79,7 @@ concept_allocation concept_evt1_m1b_a_language_make_allocation(concept_buffer_ra
   return allocation;
 }
 
-concept_observed_values concept_evt1_m1b_a_language_observe_construction() {
+concept_observed_values concept_evt1_m1b_a_language_observe_construction(void) {
   int32_t cv_init_1_01 = concept_evt1_m1b_a_language_next_value();
   int32_t cv_init_2_02 = concept_evt1_m1b_a_language_next_value();
   int32_t cv_init_3_03 = concept_evt1_m1b_a_language_next_value();
@@ -97,7 +97,7 @@ concept_observed_values concept_evt1_m1b_a_language_observe_construction() {
   return observed;
 }
 
-concept_copy_result concept_evt1_m1b_a_language_copy_and_mutate() {
+concept_copy_result concept_evt1_m1b_a_language_copy_and_mutate(void) {
   int32_t cv_init_1_01 = INT32_C(7);
   int32_t cv_init_2_02 = INT32_C(1);
   int32_t cv_init_3_03 = INT32_C(3);
@@ -146,7 +146,7 @@ int32_t concept_evt1_m1b_a_language_classify_outcome(concept_outcome outcome) {
   return cv_match_result_02;
 }
 
-int32_t concept_evt1_m1b_a_language_match_allocation() {
+int32_t concept_evt1_m1b_a_language_match_allocation(void) {
   int32_t cv_init_1_01 = INT32_C(4);
   int32_t cv_init_2_02 = INT32_C(5);
   int32_t cv_init_3_03 = INT32_C(6);
@@ -169,7 +169,7 @@ void concept_evt1_m1b_a_language_initialize_pool(concept_command_pool_state* sta
   state->initialized = true;
 }
 
-bool concept_evt1_m1b_a_language_use_immovable() {
+bool concept_evt1_m1b_a_language_use_immovable(void) {
   int32_t cv_init_1_01 = INT32_C(11);
   bool cv_init_2_02 = false;
   concept_command_pool_state state;

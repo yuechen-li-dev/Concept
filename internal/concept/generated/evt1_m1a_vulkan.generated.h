@@ -39,7 +39,7 @@ void concept_evt1_m1a_vulkan_destroy_pipeline_layout(VkPipelineLayout layout);
 
 void concept_evt1_m1a_vulkan_record_failure(concept_vulkan_error error);
 
-concept_pipeline_state concept_evt1_m1a_vulkan_make_empty_state();
+concept_pipeline_state concept_evt1_m1a_vulkan_make_empty_state(void);
 
 concept_pipeline_state concept_evt1_m1a_vulkan_make_layout_created_state(VkPipelineLayout layout);
 

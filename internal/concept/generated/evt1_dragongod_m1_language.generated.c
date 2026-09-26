@@ -39,98 +39,98 @@ static void concept_abort_automata_completion(const char* automata_name, int ste
   abort();
 }
 
-static concept_lifecycle_signal concept_lifecycle_signal_make_create() {
+static concept_lifecycle_signal concept_lifecycle_signal_make_create(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_CREATE;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_lifecycle_signal concept_lifecycle_signal_make_begin() {
+static concept_lifecycle_signal concept_lifecycle_signal_make_begin(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_BEGIN;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_lifecycle_signal concept_lifecycle_signal_make_clean() {
+static concept_lifecycle_signal concept_lifecycle_signal_make_clean(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_CLEAN;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_lifecycle_signal concept_lifecycle_signal_make_release() {
+static concept_lifecycle_signal concept_lifecycle_signal_make_release(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_RELEASE;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_lifecycle_signal concept_lifecycle_signal_make_sweep() {
+static concept_lifecycle_signal concept_lifecycle_signal_make_sweep(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_SWEEP;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_lifecycle_signal concept_lifecycle_signal_make_confirm() {
+static concept_lifecycle_signal concept_lifecycle_signal_make_confirm(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_CONFIRM;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_lifecycle_signal concept_lifecycle_signal_make_stop() {
+static concept_lifecycle_signal concept_lifecycle_signal_make_stop(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_STOP;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_lifecycle_signal concept_lifecycle_signal_make_tick() {
+static concept_lifecycle_signal concept_lifecycle_signal_make_tick(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_TICK;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_transitioned() {
+static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_transitioned(void) {
   concept_automata_dispatch_outcome out;
   out.tag = CONCEPT_AUTOMATA_DISPATCH_OUTCOME_TRANSITIONED;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_unhandled() {
+static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_unhandled(void) {
   concept_automata_dispatch_outcome out;
   out.tag = CONCEPT_AUTOMATA_DISPATCH_OUTCOME_UNHANDLED;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_ambiguous() {
+static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_ambiguous(void) {
   concept_automata_dispatch_outcome out;
   out.tag = CONCEPT_AUTOMATA_DISPATCH_OUTCOME_AMBIGUOUS;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_finished() {
+static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_finished(void) {
   concept_automata_dispatch_outcome out;
   out.tag = CONCEPT_AUTOMATA_DISPATCH_OUTCOME_FINISHED;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_already_finished() {
+static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_already_finished(void) {
   concept_automata_dispatch_outcome out;
   out.tag = CONCEPT_AUTOMATA_DISPATCH_OUTCOME_ALREADY_FINISHED;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_effect_batch_occupied() {
+static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_effect_batch_occupied(void) {
   concept_automata_dispatch_outcome out;
   out.tag = CONCEPT_AUTOMATA_DISPATCH_OUTCOME_EFFECT_BATCH_OCCUPIED;
   out.payload.none.unused = 0u;
@@ -267,7 +267,7 @@ static concept_automata_dispatch_outcome concept_resource_lifecycle_dispatch(con
       switch (instance->current_state) {
         case concept_resource_lifecycle_state_main_empty:
           switch (signal.tag) {
-            case CONCEPT_LIFECYCLE_SIGNAL_CREATE:
+            case CONCEPT_LIFECYCLE_SIGNAL_CREATE: ;
               instance->current_state = concept_resource_lifecycle_state_main_ready;
               concept_resource_lifecycle_normalize(instance);
               if (instance->finished) {
@@ -279,21 +279,21 @@ static concept_automata_dispatch_outcome concept_resource_lifecycle_dispatch(con
           }
         case concept_resource_lifecycle_state_main_ready:
           switch (signal.tag) {
-            case CONCEPT_LIFECYCLE_SIGNAL_TICK:
+            case CONCEPT_LIFECYCLE_SIGNAL_TICK: ;
               instance->current_state = concept_resource_lifecycle_state_main_ready;
               concept_resource_lifecycle_normalize(instance);
               if (instance->finished) {
                 return concept_automata_dispatch_outcome_make_finished();
               }
               return concept_automata_dispatch_outcome_make_transitioned();
-            case CONCEPT_LIFECYCLE_SIGNAL_BEGIN:
+            case CONCEPT_LIFECYCLE_SIGNAL_BEGIN: ;
               instance->current_state = concept_resource_lifecycle_state_main_running;
               concept_resource_lifecycle_normalize(instance);
               if (instance->finished) {
                 return concept_automata_dispatch_outcome_make_finished();
               }
               return concept_automata_dispatch_outcome_make_transitioned();
-            case CONCEPT_LIFECYCLE_SIGNAL_CLEAN:
+            case CONCEPT_LIFECYCLE_SIGNAL_CLEAN: ;
               if (instance->continuation_count >= 2) {
                 concept_abort_automata_stack("ResourceLifecycle", "push overflow");
               }
@@ -307,7 +307,7 @@ static concept_automata_dispatch_outcome concept_resource_lifecycle_dispatch(con
                 return concept_automata_dispatch_outcome_make_finished();
               }
               return concept_automata_dispatch_outcome_make_transitioned();
-            case CONCEPT_LIFECYCLE_SIGNAL_STOP:
+            case CONCEPT_LIFECYCLE_SIGNAL_STOP: ;
               instance->current_state = concept_resource_lifecycle_state_main_finished;
               concept_resource_lifecycle_normalize(instance);
               if (instance->finished) {
@@ -319,7 +319,7 @@ static concept_automata_dispatch_outcome concept_resource_lifecycle_dispatch(con
           }
         case concept_resource_lifecycle_state_main_running:
           switch (signal.tag) {
-            case CONCEPT_LIFECYCLE_SIGNAL_CLEAN:
+            case CONCEPT_LIFECYCLE_SIGNAL_CLEAN: ;
               if (instance->continuation_count >= 2) {
                 concept_abort_automata_stack("ResourceLifecycle", "push overflow");
               }
@@ -338,7 +338,7 @@ static concept_automata_dispatch_outcome concept_resource_lifecycle_dispatch(con
           }
         case concept_resource_lifecycle_state_main_awaiting_resume:
           switch (signal.tag) {
-            case CONCEPT_LIFECYCLE_SIGNAL_STOP:
+            case CONCEPT_LIFECYCLE_SIGNAL_STOP: ;
               instance->current_state = concept_resource_lifecycle_state_main_finished;
               concept_resource_lifecycle_normalize(instance);
               if (instance->finished) {
@@ -359,7 +359,7 @@ static concept_automata_dispatch_outcome concept_resource_lifecycle_dispatch(con
       switch (instance->current_state) {
         case concept_resource_lifecycle_state_cleanup_begin:
           switch (signal.tag) {
-            case CONCEPT_LIFECYCLE_SIGNAL_RELEASE:
+            case CONCEPT_LIFECYCLE_SIGNAL_RELEASE: ;
               if (instance->continuation_count >= 2) {
                 concept_abort_automata_stack("ResourceLifecycle", "push overflow");
               }
@@ -378,21 +378,21 @@ static concept_automata_dispatch_outcome concept_resource_lifecycle_dispatch(con
           }
         case concept_resource_lifecycle_state_cleanup_resume:
           switch (signal.tag) {
-            case CONCEPT_LIFECYCLE_SIGNAL_TICK:
+            case CONCEPT_LIFECYCLE_SIGNAL_TICK: ;
               instance->current_state = concept_resource_lifecycle_state_cleanup_resume;
               concept_resource_lifecycle_normalize(instance);
               if (instance->finished) {
                 return concept_automata_dispatch_outcome_make_finished();
               }
               return concept_automata_dispatch_outcome_make_transitioned();
-            case CONCEPT_LIFECYCLE_SIGNAL_CONFIRM:
+            case CONCEPT_LIFECYCLE_SIGNAL_CONFIRM: ;
               instance->current_state = concept_resource_lifecycle_state_cleanup_complete;
               concept_resource_lifecycle_normalize(instance);
               if (instance->finished) {
                 return concept_automata_dispatch_outcome_make_finished();
               }
               return concept_automata_dispatch_outcome_make_transitioned();
-            case CONCEPT_LIFECYCLE_SIGNAL_STOP:
+            case CONCEPT_LIFECYCLE_SIGNAL_STOP: ;
               instance->current_state = concept_resource_lifecycle_state_cleanup_abort_all;
               concept_resource_lifecycle_normalize(instance);
               if (instance->finished) {
@@ -416,7 +416,7 @@ static concept_automata_dispatch_outcome concept_resource_lifecycle_dispatch(con
       switch (instance->current_state) {
         case concept_resource_lifecycle_state_sweep_machine_begin:
           switch (signal.tag) {
-            case CONCEPT_LIFECYCLE_SIGNAL_SWEEP:
+            case CONCEPT_LIFECYCLE_SIGNAL_SWEEP: ;
               instance->current_state = concept_resource_lifecycle_state_sweep_machine_complete;
               concept_resource_lifecycle_normalize(instance);
               if (instance->finished) {
@@ -569,7 +569,7 @@ static concept_automata_dispatch_outcome concept_single_step_lifecycle_dispatch(
       switch (instance->current_state) {
         case concept_single_step_lifecycle_state_main_idle:
           switch (signal.tag) {
-            case CONCEPT_LIFECYCLE_SIGNAL_CREATE:
+            case CONCEPT_LIFECYCLE_SIGNAL_CREATE: ;
               instance->current_state = concept_single_step_lifecycle_state_main_finished;
               concept_single_step_lifecycle_normalize(instance);
               if (instance->finished) {
@@ -632,7 +632,7 @@ int32_t concept_evt1_dragongod_m1_language_outcome_code(concept_automata_dispatc
   return cv_match_result_02;
 }
 
-int32_t concept_evt1_dragongod_m1_language_initial_terminal_outcome_code() {
+int32_t concept_evt1_dragongod_m1_language_initial_terminal_outcome_code(void) {
   concept_immediate_lifecycle_instance lifecycle;
   concept_immediate_lifecycle_init(&lifecycle);
   concept_lifecycle_signal cv_signal_01 = concept_lifecycle_signal_make_create();
@@ -640,7 +640,7 @@ int32_t concept_evt1_dragongod_m1_language_initial_terminal_outcome_code() {
   return concept_evt1_dragongod_m1_language_outcome_code(cv_arg_02);
 }
 
-int32_t concept_evt1_dragongod_m1_language_zero_capacity_outcome_code() {
+int32_t concept_evt1_dragongod_m1_language_zero_capacity_outcome_code(void) {
   concept_single_step_lifecycle_instance lifecycle;
   concept_single_step_lifecycle_init(&lifecycle);
   concept_lifecycle_signal cv_signal_01 = concept_lifecycle_signal_make_create();
@@ -648,7 +648,7 @@ int32_t concept_evt1_dragongod_m1_language_zero_capacity_outcome_code() {
   return concept_evt1_dragongod_m1_language_outcome_code(cv_arg_02);
 }
 
-int32_t concept_evt1_dragongod_m1_language_unhandled_preserves_state_code() {
+int32_t concept_evt1_dragongod_m1_language_unhandled_preserves_state_code(void) {
   concept_resource_lifecycle_instance lifecycle;
   concept_resource_lifecycle_init(&lifecycle);
   concept_lifecycle_signal cv_signal_01 = concept_lifecycle_signal_make_stop();
@@ -660,7 +660,7 @@ int32_t concept_evt1_dragongod_m1_language_unhandled_preserves_state_code() {
   return concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_03), INT32_C(10), 143, 31), concept_evt1_dragongod_m1_language_outcome_code(cv_arg_04), 143, 36);
 }
 
-int32_t concept_evt1_dragongod_m1_language_nested_push_resumes_caller_code() {
+int32_t concept_evt1_dragongod_m1_language_nested_push_resumes_caller_code(void) {
   concept_resource_lifecycle_instance lifecycle;
   concept_resource_lifecycle_init(&lifecycle);
   concept_lifecycle_signal cv_signal_01 = concept_lifecycle_signal_make_create();
@@ -684,7 +684,7 @@ int32_t concept_evt1_dragongod_m1_language_nested_push_resumes_caller_code() {
   return concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_07), INT32_C(100000), 155, 27), concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_08), INT32_C(10000), 156, 24), 155, 36), concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_09), INT32_C(1000), 157, 24), 156, 32), concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_10), INT32_C(100), 158, 24), 157, 31), concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_11), INT32_C(10), 159, 24), 158, 30), concept_evt1_dragongod_m1_language_outcome_code(cv_arg_12), 159, 29);
 }
 
-int32_t concept_evt1_dragongod_m1_language_root_terminal_continuation_finishes_immediately_code() {
+int32_t concept_evt1_dragongod_m1_language_root_terminal_continuation_finishes_immediately_code(void) {
   concept_resource_lifecycle_instance lifecycle;
   concept_resource_lifecycle_init(&lifecycle);
   concept_lifecycle_signal cv_signal_01 = concept_lifecycle_signal_make_create();
@@ -711,7 +711,7 @@ int32_t concept_evt1_dragongod_m1_language_root_terminal_continuation_finishes_i
   return concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_08), INT32_C(1000000), 173, 27), concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_09), INT32_C(100000), 174, 24), 173, 37), concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_10), INT32_C(10000), 175, 24), 174, 33), concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_11), INT32_C(1000), 176, 24), 175, 32), concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_12), INT32_C(100), 177, 24), 176, 31), concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_13), INT32_C(10), 178, 24), 177, 30), concept_evt1_dragongod_m1_language_outcome_code(cv_arg_14), 178, 29);
 }
 
-int32_t concept_evt1_dragongod_m1_language_non_root_finish_terminates_whole_instance_code() {
+int32_t concept_evt1_dragongod_m1_language_non_root_finish_terminates_whole_instance_code(void) {
   concept_resource_lifecycle_instance lifecycle;
   concept_resource_lifecycle_init(&lifecycle);
   concept_lifecycle_signal cv_signal_01 = concept_lifecycle_signal_make_create();
@@ -735,7 +735,7 @@ int32_t concept_evt1_dragongod_m1_language_non_root_finish_terminates_whole_inst
   return concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_add(concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_07), INT32_C(100000), 191, 27), concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_08), INT32_C(10000), 192, 24), 191, 36), concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_09), INT32_C(1000), 193, 24), 192, 32), concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_10), INT32_C(100), 194, 24), 193, 31), concept_rt_evt1_dragongod_m1_language_i32_mul(concept_evt1_dragongod_m1_language_outcome_code(cv_arg_11), INT32_C(10), 195, 24), 194, 30), concept_evt1_dragongod_m1_language_outcome_code(cv_arg_12), 195, 29);
 }
 
-int32_t concept_evt1_dragongod_m1_language_independent_instances_stay_independent_code() {
+int32_t concept_evt1_dragongod_m1_language_independent_instances_stay_independent_code(void) {
   concept_resource_lifecycle_instance left;
   concept_resource_lifecycle_init(&left);
   concept_resource_lifecycle_instance right;

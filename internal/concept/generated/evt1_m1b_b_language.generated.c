@@ -50,7 +50,7 @@ static void concept_template_destroy_resource__pipeline_state(concept_pipeline_s
   concept_evt1_m1b_b_language_destroy__borrow_pipeline_state(value);
 }
 
-int32_t concept_evt1_m1b_b_language_repeated_score() {
+int32_t concept_evt1_m1b_b_language_repeated_score(void) {
   int32_t cv_init_1_01 = INT32_C(7);
   int32_t cv_init_2_02 = INT32_C(2);
   int32_t cv_init_3_03 = INT32_C(3);
@@ -68,7 +68,7 @@ int32_t concept_evt1_m1b_b_language_repeated_score() {
   return concept_rt_evt1_m1b_b_language_i32_add(concept_template_score_resource__buffer_range(&first), concept_template_score_resource__buffer_range(&second), 68, 46);
 }
 
-int32_t concept_evt1_m1b_b_language_score_pipeline() {
+int32_t concept_evt1_m1b_b_language_score_pipeline(void) {
   int32_t cv_init_1_01 = INT32_C(11);
   bool cv_init_2_02 = true;
   concept_pipeline_state state;
@@ -77,7 +77,7 @@ int32_t concept_evt1_m1b_b_language_score_pipeline() {
   return concept_template_score_resource__pipeline_state(&state);
 }
 
-concept_destroy_audit concept_evt1_m1b_b_language_use_destroyers() {
+concept_destroy_audit concept_evt1_m1b_b_language_use_destroyers(void) {
   int32_t cv_init_1_01 = INT32_C(9);
   int32_t cv_init_2_02 = INT32_C(1);
   int32_t cv_init_3_03 = INT32_C(2);
@@ -103,7 +103,7 @@ concept_destroy_audit concept_evt1_m1b_b_language_use_destroyers() {
   return audit;
 }
 
-bool concept_evt1_m1b_b_language_use_immovable() {
+bool concept_evt1_m1b_b_language_use_immovable(void) {
   int32_t cv_init_1_01 = INT32_C(5);
   bool cv_init_2_02 = false;
   concept_pipeline_state state;
@@ -114,7 +114,7 @@ bool concept_evt1_m1b_b_language_use_immovable() {
   return state.alive;
 }
 
-bool concept_evt1_m1b_b_language_compare_template_score() {
+bool concept_evt1_m1b_b_language_compare_template_score(void) {
   int32_t cv_init_1_01 = INT32_C(3);
   int32_t cv_init_2_02 = INT32_C(6);
   int32_t cv_init_3_03 = INT32_C(1);

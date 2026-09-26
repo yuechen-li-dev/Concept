@@ -54,7 +54,7 @@ bool concept_evt1_m1b_a_language_is_valid(const concept_command_pool_state* valu
 
 void concept_evt1_m1b_a_language_destroy(concept_command_pool_state* value);
 
-int32_t concept_evt1_m1b_a_language_next_value();
+int32_t concept_evt1_m1b_a_language_next_value(void);
 
 int32_t concept_evt1_m1b_a_language_add(int32_t left, int32_t right);
 
@@ -62,17 +62,17 @@ concept_buffer_range concept_evt1_m1b_a_language_make_range(int32_t bufferId, in
 
 concept_allocation concept_evt1_m1b_a_language_make_allocation(concept_buffer_range range, int32_t generation);
 
-concept_observed_values concept_evt1_m1b_a_language_observe_construction();
+concept_observed_values concept_evt1_m1b_a_language_observe_construction(void);
 
-concept_copy_result concept_evt1_m1b_a_language_copy_and_mutate();
+concept_copy_result concept_evt1_m1b_a_language_copy_and_mutate(void);
 
 int32_t concept_evt1_m1b_a_language_classify_outcome(concept_outcome outcome);
 
-int32_t concept_evt1_m1b_a_language_match_allocation();
+int32_t concept_evt1_m1b_a_language_match_allocation(void);
 
 void concept_evt1_m1b_a_language_initialize_pool(concept_command_pool_state* state);
 
-bool concept_evt1_m1b_a_language_use_immovable();
+bool concept_evt1_m1b_a_language_use_immovable(void);
 
 
 #endif

@@ -2793,7 +2793,7 @@ func (l *lowering) automataRuntimeSupport(info *evt1AutomataInfo) string {
 			}
 			b.WriteString("          switch (signal.tag) {\n")
 			for _, group := range evt1AutomataHandlerGroups(state) {
-				b.WriteString(fmt.Sprintf("            case %s:\n", evt1TagName(info.SignalEnum.Name, group[0].Signal.MemberName)))
+				b.WriteString(fmt.Sprintf("            case %s: ;\n", evt1TagName(info.SignalEnum.Name, group[0].Signal.MemberName)))
 				if len(group) == 1 && group[0].Guard == nil && !group[0].Otherwise {
 					b.WriteString(l.automataDispatchAction(info, machine, machineIndex, group[0], 7, "instance", "", ""))
 					b.WriteString(fmt.Sprintf("              %s(instance);\n", normalizeName))
@@ -3088,7 +3088,7 @@ func (l *lowering) automataEffectfulDispatch(info *evt1AutomataInfo, machineInde
 			}
 			b.WriteString(ind(5) + "switch (signal.tag) {\n")
 			for _, group := range evt1AutomataHandlerGroups(state) {
-				b.WriteString(ind(6) + fmt.Sprintf("case %s:\n", evt1TagName(info.SignalEnum.Name, group[0].Signal.MemberName)))
+				b.WriteString(ind(6) + fmt.Sprintf("case %s: ;\n", evt1TagName(info.SignalEnum.Name, group[0].Signal.MemberName)))
 				if len(group) == 1 && group[0].Guard == nil && !group[0].Otherwise {
 					b.WriteString(l.automataDispatchAction(info, machine, machineIndex, group[0], 7, "staged", "staged_batch", "staged_count"))
 					b.WriteString(ind(7) + fmt.Sprintf("%s(&staged_instance);\n", normalizeName))
@@ -3376,6 +3376,9 @@ func (l *lowering) structConstructor(structDecl StructDecl) string {
 	typeName := evt1CName(structDecl.Name)
 	ctor := evt1StructConstructorName(structDecl.Name)
 	b.WriteString(fmt.Sprintf("static %s %s(", typeName, ctor))
+	if len(structDecl.Fields) == 0 {
+		b.WriteString("void")
+	}
 	for i, field := range structDecl.Fields {
 		if i > 0 {
 			b.WriteString(", ")
@@ -3428,6 +3431,9 @@ func (l *lowering) enumConstructors(enumDecl EnumDecl) string {
 	for _, variant := range enumDecl.Variants {
 		name := evt1ConstructorName(enumDecl.Name, variant.Name)
 		b.WriteString(fmt.Sprintf("static %s %s(", enumType, name))
+		if len(variant.Payload) == 0 {
+			b.WriteString("void")
+		}
 		for i, field := range variant.Payload {
 			if i > 0 {
 				b.WriteString(", ")
@@ -3653,6 +3659,9 @@ func (l *lowering) functionSymbols(fn FunctionDecl) evt1FunctionSymbols {
 	cReturn := evt1CType(fn.ReturnType)
 	name := evt1FunctionSymbolForDecl(l.symbolBase, l.env, fn)
 	prototype.WriteString(fmt.Sprintf("%s %s(", cReturn, name))
+	if len(fn.Params) == 0 {
+		prototype.WriteString("void")
+	}
 	for i, param := range fn.Params {
 		if i > 0 {
 			prototype.WriteString(", ")
@@ -3782,6 +3791,9 @@ func (f *evt1FunctionLowerer) lower() string {
 		prefix = "static "
 	}
 	b.WriteString(fmt.Sprintf("%s%s %s(", prefix, evt1CType(f.fn.ReturnType), f.symbol))
+	if len(f.fn.Params) == 0 {
+		b.WriteString("void")
+	}
 	for i, param := range f.fn.Params {
 		if i > 0 {
 			b.WriteString(", ")

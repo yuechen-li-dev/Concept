@@ -3,70 +3,70 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static concept_lifecycle_signal concept_lifecycle_signal_make_create() {
+static concept_lifecycle_signal concept_lifecycle_signal_make_create(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_CREATE;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_lifecycle_signal concept_lifecycle_signal_make_begin() {
+static concept_lifecycle_signal concept_lifecycle_signal_make_begin(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_BEGIN;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_lifecycle_signal concept_lifecycle_signal_make_clean() {
+static concept_lifecycle_signal concept_lifecycle_signal_make_clean(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_CLEAN;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_lifecycle_signal concept_lifecycle_signal_make_release() {
+static concept_lifecycle_signal concept_lifecycle_signal_make_release(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_RELEASE;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_lifecycle_signal concept_lifecycle_signal_make_sweep() {
+static concept_lifecycle_signal concept_lifecycle_signal_make_sweep(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_SWEEP;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_lifecycle_signal concept_lifecycle_signal_make_confirm() {
+static concept_lifecycle_signal concept_lifecycle_signal_make_confirm(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_CONFIRM;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_lifecycle_signal concept_lifecycle_signal_make_stop() {
+static concept_lifecycle_signal concept_lifecycle_signal_make_stop(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_STOP;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_lifecycle_signal concept_lifecycle_signal_make_tick() {
+static concept_lifecycle_signal concept_lifecycle_signal_make_tick(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_TICK;
   out.payload.none.unused = 0u;
   return out;
 }
 
-int32_t concept_evt1_dragongod_m0_language_root_retry_budget() {
+int32_t concept_evt1_dragongod_m0_language_root_retry_budget(void) {
   return INT32_C(2);
 }
 
-int32_t concept_evt1_dragongod_m0_language_derived_stack_depth() {
+int32_t concept_evt1_dragongod_m0_language_derived_stack_depth(void) {
   return INT32_C(3);
 }
 
-bool concept_evt1_dragongod_m0_language_finish_is_explicit() {
+bool concept_evt1_dragongod_m0_language_finish_is_explicit(void) {
   return true;
 }

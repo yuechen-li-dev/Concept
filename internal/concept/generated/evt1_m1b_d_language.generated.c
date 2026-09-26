@@ -17,43 +17,43 @@ static concept_retry_summary concept_retry_summary_make(concept_array_2_int valu
   return out;
 }
 
-static concept_lifecycle_state concept_lifecycle_state_make_empty() {
+static concept_lifecycle_state concept_lifecycle_state_make_empty(void) {
   concept_lifecycle_state out;
   out.tag = CONCEPT_LIFECYCLE_STATE_EMPTY;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_lifecycle_state concept_lifecycle_state_make_ready() {
+static concept_lifecycle_state concept_lifecycle_state_make_ready(void) {
   concept_lifecycle_state out;
   out.tag = CONCEPT_LIFECYCLE_STATE_READY;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_lifecycle_state concept_lifecycle_state_make_submitted() {
+static concept_lifecycle_state concept_lifecycle_state_make_submitted(void) {
   concept_lifecycle_state out;
   out.tag = CONCEPT_LIFECYCLE_STATE_SUBMITTED;
   out.payload.none.unused = 0u;
   return out;
 }
 
-int32_t concept_evt1_m1b_d_language_default_retry_budget() {
+int32_t concept_evt1_m1b_d_language_default_retry_budget(void) {
   return 2;
 }
 
-int32_t concept_evt1_m1b_d_language_matrix_corner() {
+int32_t concept_evt1_m1b_d_language_matrix_corner(void) {
   return 6;
 }
 
-int32_t concept_evt1_m1b_d_language_summary_value() {
+int32_t concept_evt1_m1b_d_language_summary_value(void) {
   return 7;
 }
 
-bool concept_evt1_m1b_d_language_transition_table_stable() {
+bool concept_evt1_m1b_d_language_transition_table_stable(void) {
   return true;
 }
 
-int32_t concept_evt1_m1b_d_language_total_retry_budget() {
+int32_t concept_evt1_m1b_d_language_total_retry_budget(void) {
   return 7;
 }

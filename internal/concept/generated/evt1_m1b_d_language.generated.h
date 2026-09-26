@@ -29,15 +29,15 @@ typedef struct concept_retry_summary {
   concept_array_2_int values;
 } concept_retry_summary;
 
-int32_t concept_evt1_m1b_d_language_default_retry_budget();
+int32_t concept_evt1_m1b_d_language_default_retry_budget(void);
 
-int32_t concept_evt1_m1b_d_language_matrix_corner();
+int32_t concept_evt1_m1b_d_language_matrix_corner(void);
 
-int32_t concept_evt1_m1b_d_language_summary_value();
+int32_t concept_evt1_m1b_d_language_summary_value(void);
 
-bool concept_evt1_m1b_d_language_transition_table_stable();
+bool concept_evt1_m1b_d_language_transition_table_stable(void);
 
-int32_t concept_evt1_m1b_d_language_total_retry_budget();
+int32_t concept_evt1_m1b_d_language_total_retry_budget(void);
 
 
 #endif

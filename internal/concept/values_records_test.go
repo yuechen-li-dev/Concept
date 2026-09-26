@@ -199,7 +199,7 @@ int Main()
 		t.Fatal(err)
 	}
 	cBody := string(outputs["with_base_once.generated.c"])
-	if strings.Count(cBody, "concept_with_base_once_make()") != 2 {
+	if strings.Count(cBody, "concept_with_base_once_make(void)") != 1 || strings.Count(cBody, "concept_with_base_once_make()") != 1 {
 		t.Fatalf("Make definition plus exactly one evaluation expected:\n%s", cBody)
 	}
 }

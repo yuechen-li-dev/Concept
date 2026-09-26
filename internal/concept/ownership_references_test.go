@@ -185,7 +185,7 @@ func TestOwnershipReferencesMoveAndReferenceSpans(t *testing.T) {
 func TestOwnershipReferencesDropLoweringOrderAndTransfer(t *testing.T) {
 	outputs := generateOwnershipFixture(t, "drop_scope_order.concept")
 	body := string(outputs["drop_scope_order.generated.c"])
-	mainAt := strings.Index(body, "int32_t concept_drop_scope_order_main()")
+	mainAt := strings.Index(body, "int32_t concept_drop_scope_order_main(void)")
 	mainBody := body[mainAt:]
 	secondDrop := strings.Index(mainBody, "concept_drop_scope_order_drop(second);")
 	firstDrop := strings.Index(mainBody, "concept_drop_scope_order_drop(first);")
@@ -196,7 +196,7 @@ func TestOwnershipReferencesDropLoweringOrderAndTransfer(t *testing.T) {
 
 	movedOutputs := generateOwnershipFixture(t, "drop_moved_source.concept")
 	movedBody := string(movedOutputs["drop_moved_source.generated.c"])
-	movedMain := movedBody[strings.Index(movedBody, "int32_t concept_drop_moved_source_main()"):]
+	movedMain := movedBody[strings.Index(movedBody, "int32_t concept_drop_moved_source_main(void)"):]
 	if strings.Contains(movedMain, "concept_drop_moved_source_drop(first);") || strings.Count(movedMain, "concept_drop_moved_source_drop(second);") != 1 {
 		t.Fatalf("moved source cleanup was not suppressed:\n%s", movedMain)
 	}

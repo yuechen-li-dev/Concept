@@ -15,7 +15,7 @@ int32_t concept_evt1_m1b_c_language_count_up(int32_t input);
 
 int32_t concept_evt1_m1b_c_language_zero_bound(int32_t input);
 
-int32_t concept_evt1_m1b_c_language_default_bound();
+int32_t concept_evt1_m1b_c_language_default_bound(void);
 
 
 #endif

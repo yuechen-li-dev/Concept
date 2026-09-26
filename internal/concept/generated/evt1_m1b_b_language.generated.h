@@ -29,21 +29,21 @@ void concept_evt1_m1b_b_language_destroy__borrow_buffer_range(concept_buffer_ran
 
 void concept_evt1_m1b_b_language_destroy__borrow_pipeline_state(concept_pipeline_state* value);
 
-int32_t concept_evt1_m1b_b_language_next_destroy_slot();
+int32_t concept_evt1_m1b_b_language_next_destroy_slot(void);
 
 void concept_evt1_m1b_b_language_record_destroy(int32_t slot, int32_t code);
 
 void concept_evt1_m1b_b_language_set_alive(concept_pipeline_state* value);
 
-int32_t concept_evt1_m1b_b_language_repeated_score();
+int32_t concept_evt1_m1b_b_language_repeated_score(void);
 
-int32_t concept_evt1_m1b_b_language_score_pipeline();
+int32_t concept_evt1_m1b_b_language_score_pipeline(void);
 
-concept_destroy_audit concept_evt1_m1b_b_language_use_destroyers();
+concept_destroy_audit concept_evt1_m1b_b_language_use_destroyers(void);
 
-bool concept_evt1_m1b_b_language_use_immovable();
+bool concept_evt1_m1b_b_language_use_immovable(void);
 
-bool concept_evt1_m1b_b_language_compare_template_score();
+bool concept_evt1_m1b_b_language_compare_template_score(void);
 
 
 #endif

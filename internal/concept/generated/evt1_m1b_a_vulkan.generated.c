@@ -26,7 +26,7 @@ static concept_buffer_range concept_buffer_range_make(VkBuffer buffer, int32_t o
   return out;
 }
 
-static concept_resource_event concept_resource_event_make_idle() {
+static concept_resource_event concept_resource_event_make_idle(void) {
   concept_resource_event out;
   out.tag = CONCEPT_RESOURCE_EVENT_IDLE;
   out.payload.none.unused = 0u;

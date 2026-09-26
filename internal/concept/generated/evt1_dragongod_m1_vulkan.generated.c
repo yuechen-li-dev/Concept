@@ -39,91 +39,91 @@ static void concept_abort_automata_completion(const char* automata_name, int ste
   abort();
 }
 
-static concept_resource_signal concept_resource_signal_make_create() {
+static concept_resource_signal concept_resource_signal_make_create(void) {
   concept_resource_signal out;
   out.tag = CONCEPT_RESOURCE_SIGNAL_CREATE;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_resource_signal concept_resource_signal_make_record() {
+static concept_resource_signal concept_resource_signal_make_record(void) {
   concept_resource_signal out;
   out.tag = CONCEPT_RESOURCE_SIGNAL_RECORD;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_resource_signal concept_resource_signal_make_cleanup() {
+static concept_resource_signal concept_resource_signal_make_cleanup(void) {
   concept_resource_signal out;
   out.tag = CONCEPT_RESOURCE_SIGNAL_CLEANUP;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_resource_signal concept_resource_signal_make_release() {
+static concept_resource_signal concept_resource_signal_make_release(void) {
   concept_resource_signal out;
   out.tag = CONCEPT_RESOURCE_SIGNAL_RELEASE;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_resource_signal concept_resource_signal_make_submit() {
+static concept_resource_signal concept_resource_signal_make_submit(void) {
   concept_resource_signal out;
   out.tag = CONCEPT_RESOURCE_SIGNAL_SUBMIT;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_resource_signal concept_resource_signal_make_stop() {
+static concept_resource_signal concept_resource_signal_make_stop(void) {
   concept_resource_signal out;
   out.tag = CONCEPT_RESOURCE_SIGNAL_STOP;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_resource_signal concept_resource_signal_make_tick() {
+static concept_resource_signal concept_resource_signal_make_tick(void) {
   concept_resource_signal out;
   out.tag = CONCEPT_RESOURCE_SIGNAL_TICK;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_transitioned() {
+static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_transitioned(void) {
   concept_automata_dispatch_outcome out;
   out.tag = CONCEPT_AUTOMATA_DISPATCH_OUTCOME_TRANSITIONED;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_unhandled() {
+static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_unhandled(void) {
   concept_automata_dispatch_outcome out;
   out.tag = CONCEPT_AUTOMATA_DISPATCH_OUTCOME_UNHANDLED;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_ambiguous() {
+static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_ambiguous(void) {
   concept_automata_dispatch_outcome out;
   out.tag = CONCEPT_AUTOMATA_DISPATCH_OUTCOME_AMBIGUOUS;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_finished() {
+static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_finished(void) {
   concept_automata_dispatch_outcome out;
   out.tag = CONCEPT_AUTOMATA_DISPATCH_OUTCOME_FINISHED;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_already_finished() {
+static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_already_finished(void) {
   concept_automata_dispatch_outcome out;
   out.tag = CONCEPT_AUTOMATA_DISPATCH_OUTCOME_ALREADY_FINISHED;
   out.payload.none.unused = 0u;
   return out;
 }
 
-static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_effect_batch_occupied() {
+static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_effect_batch_occupied(void) {
   concept_automata_dispatch_outcome out;
   out.tag = CONCEPT_AUTOMATA_DISPATCH_OUTCOME_EFFECT_BATCH_OCCUPIED;
   out.payload.none.unused = 0u;
@@ -255,7 +255,7 @@ static concept_automata_dispatch_outcome concept_buffer_lifecycle_dispatch(conce
       switch (instance->current_state) {
         case concept_buffer_lifecycle_state_main_empty:
           switch (signal.tag) {
-            case CONCEPT_RESOURCE_SIGNAL_CREATE:
+            case CONCEPT_RESOURCE_SIGNAL_CREATE: ;
               instance->current_state = concept_buffer_lifecycle_state_main_ready;
               concept_buffer_lifecycle_normalize(instance);
               if (instance->finished) {
@@ -267,21 +267,21 @@ static concept_automata_dispatch_outcome concept_buffer_lifecycle_dispatch(conce
           }
         case concept_buffer_lifecycle_state_main_ready:
           switch (signal.tag) {
-            case CONCEPT_RESOURCE_SIGNAL_TICK:
+            case CONCEPT_RESOURCE_SIGNAL_TICK: ;
               instance->current_state = concept_buffer_lifecycle_state_main_ready;
               concept_buffer_lifecycle_normalize(instance);
               if (instance->finished) {
                 return concept_automata_dispatch_outcome_make_finished();
               }
               return concept_automata_dispatch_outcome_make_transitioned();
-            case CONCEPT_RESOURCE_SIGNAL_RECORD:
+            case CONCEPT_RESOURCE_SIGNAL_RECORD: ;
               instance->current_state = concept_buffer_lifecycle_state_main_recording;
               concept_buffer_lifecycle_normalize(instance);
               if (instance->finished) {
                 return concept_automata_dispatch_outcome_make_finished();
               }
               return concept_automata_dispatch_outcome_make_transitioned();
-            case CONCEPT_RESOURCE_SIGNAL_CLEANUP:
+            case CONCEPT_RESOURCE_SIGNAL_CLEANUP: ;
               if (instance->continuation_count >= 2) {
                 concept_abort_automata_stack("BufferLifecycle", "push overflow");
               }
@@ -295,7 +295,7 @@ static concept_automata_dispatch_outcome concept_buffer_lifecycle_dispatch(conce
                 return concept_automata_dispatch_outcome_make_finished();
               }
               return concept_automata_dispatch_outcome_make_transitioned();
-            case CONCEPT_RESOURCE_SIGNAL_STOP:
+            case CONCEPT_RESOURCE_SIGNAL_STOP: ;
               instance->current_state = concept_buffer_lifecycle_state_main_finished;
               concept_buffer_lifecycle_normalize(instance);
               if (instance->finished) {
@@ -307,7 +307,7 @@ static concept_automata_dispatch_outcome concept_buffer_lifecycle_dispatch(conce
           }
         case concept_buffer_lifecycle_state_main_recording:
           switch (signal.tag) {
-            case CONCEPT_RESOURCE_SIGNAL_CLEANUP:
+            case CONCEPT_RESOURCE_SIGNAL_CLEANUP: ;
               if (instance->continuation_count >= 2) {
                 concept_abort_automata_stack("BufferLifecycle", "push overflow");
               }
@@ -326,7 +326,7 @@ static concept_automata_dispatch_outcome concept_buffer_lifecycle_dispatch(conce
           }
         case concept_buffer_lifecycle_state_main_ready_after_cleanup:
           switch (signal.tag) {
-            case CONCEPT_RESOURCE_SIGNAL_STOP:
+            case CONCEPT_RESOURCE_SIGNAL_STOP: ;
               instance->current_state = concept_buffer_lifecycle_state_main_finished;
               concept_buffer_lifecycle_normalize(instance);
               if (instance->finished) {
@@ -347,7 +347,7 @@ static concept_automata_dispatch_outcome concept_buffer_lifecycle_dispatch(conce
       switch (instance->current_state) {
         case concept_buffer_lifecycle_state_cleanup_machine_begin:
           switch (signal.tag) {
-            case CONCEPT_RESOURCE_SIGNAL_RELEASE:
+            case CONCEPT_RESOURCE_SIGNAL_RELEASE: ;
               if (instance->continuation_count >= 2) {
                 concept_abort_automata_stack("BufferLifecycle", "push overflow");
               }
@@ -366,14 +366,14 @@ static concept_automata_dispatch_outcome concept_buffer_lifecycle_dispatch(conce
           }
         case concept_buffer_lifecycle_state_cleanup_machine_resume:
           switch (signal.tag) {
-            case CONCEPT_RESOURCE_SIGNAL_TICK:
+            case CONCEPT_RESOURCE_SIGNAL_TICK: ;
               instance->current_state = concept_buffer_lifecycle_state_cleanup_machine_resume;
               concept_buffer_lifecycle_normalize(instance);
               if (instance->finished) {
                 return concept_automata_dispatch_outcome_make_finished();
               }
               return concept_automata_dispatch_outcome_make_transitioned();
-            case CONCEPT_RESOURCE_SIGNAL_SUBMIT:
+            case CONCEPT_RESOURCE_SIGNAL_SUBMIT: ;
               instance->current_state = concept_buffer_lifecycle_state_cleanup_machine_complete;
               concept_buffer_lifecycle_normalize(instance);
               if (instance->finished) {
@@ -394,7 +394,7 @@ static concept_automata_dispatch_outcome concept_buffer_lifecycle_dispatch(conce
       switch (instance->current_state) {
         case concept_buffer_lifecycle_state_submit_machine_begin:
           switch (signal.tag) {
-            case CONCEPT_RESOURCE_SIGNAL_SUBMIT:
+            case CONCEPT_RESOURCE_SIGNAL_SUBMIT: ;
               instance->current_state = concept_buffer_lifecycle_state_submit_machine_complete;
               concept_buffer_lifecycle_normalize(instance);
               if (instance->finished) {

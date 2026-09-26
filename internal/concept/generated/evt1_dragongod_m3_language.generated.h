@@ -65,7 +65,7 @@ int32_t concept_evt1_dragongod_m3_language_effectful_submit_code(concept_lifecyc
 
 int32_t concept_evt1_dragongod_m3_language_zero_emit_transition_code(concept_lifecycle_context context);
 
-int32_t concept_evt1_dragongod_m3_language_contextless_compatibility_code();
+int32_t concept_evt1_dragongod_m3_language_contextless_compatibility_code(void);
 
 
 #endif

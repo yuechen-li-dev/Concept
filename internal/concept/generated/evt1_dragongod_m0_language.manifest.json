@@ -3,11 +3,11 @@
   "files": [
     {
       "path": "evt1_dragongod_m0_language.generated.h",
-      "sha256": "cb240724b1fffd7bfe54cf2b20bf9a3a34822535e578e5914c49184a6e005c3f"
+      "sha256": "4cfbcb73e311723bc45cbbd6769049c45b71e29f1fe1cc211ec1a6f2d904f2f0"
     },
     {
       "path": "evt1_dragongod_m0_language.generated.c",
-      "sha256": "78e62cfffc2a65b923a27ea38482f9db40627f323a5c30d580159871a5fefbba"
+      "sha256": "3a8b80044f5369a159103855637f386b859be9b8866f0a78e3f03def046cd617"
     },
     {
       "path": "evt1_dragongod_m0_language.mir.json",

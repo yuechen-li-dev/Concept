@@ -8,7 +8,7 @@ static void concept_abort_invalid_tag(const char* enum_name) {
   abort();
 }
 
-static concept_inner_status concept_inner_status_make_idle() {
+static concept_inner_status concept_inner_status_make_idle(void) {
   concept_inner_status out;
   out.tag = CONCEPT_INNER_STATUS_IDLE;
   out.payload.none.unused = 0u;
@@ -22,7 +22,7 @@ static concept_inner_status concept_inner_status_make_counted(int32_t value) {
   return out;
 }
 
-static concept_demo_state concept_demo_state_make_empty() {
+static concept_demo_state concept_demo_state_make_empty(void) {
   concept_demo_state out;
   out.tag = CONCEPT_DEMO_STATE_EMPTY;
   out.payload.none.unused = 0u;
@@ -51,11 +51,11 @@ static concept_demo_state concept_demo_state_make_wrapped(concept_inner_status i
   return out;
 }
 
-concept_demo_state concept_evt1_m1a_language_make_empty() {
+concept_demo_state concept_evt1_m1a_language_make_empty(void) {
   return concept_demo_state_make_empty();
 }
 
-concept_inner_status concept_evt1_m1a_language_make_inner_idle() {
+concept_inner_status concept_evt1_m1a_language_make_inner_idle(void) {
   return concept_inner_status_make_idle();
 }
 
@@ -135,7 +135,7 @@ int32_t concept_evt1_m1a_language_classify(concept_demo_state state) {
   return cv_match_result_02;
 }
 
-int32_t concept_evt1_m1a_language_observe_and_classify() {
+int32_t concept_evt1_m1a_language_observe_and_classify(void) {
   concept_demo_state cv_arg_01 = concept_evt1_m1a_language_observe_state();
   return concept_evt1_m1a_language_classify(cv_arg_01);
 }

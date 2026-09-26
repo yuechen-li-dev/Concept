@@ -58,7 +58,7 @@ int32_t concept_evt1_dragongod_m2_language_ambiguous_preserves_state_code(concep
 
 int32_t concept_evt1_dragongod_m2_language_already_finished_skips_guard_selection_code(concept_lifecycle_context context);
 
-int32_t concept_evt1_dragongod_m2_language_contextless_compatibility_code();
+int32_t concept_evt1_dragongod_m2_language_contextless_compatibility_code(void);
 
 
 #endif
