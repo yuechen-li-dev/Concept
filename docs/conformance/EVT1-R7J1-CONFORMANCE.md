@@ -1,0 +1,7 @@
+# R7j1 conformance
+
+The native artifact path embeds hash covered, structured `NativeToolchainProbe` measurements in optional `concept-module.v1` data. `abi.json` is the inspectable projection of the same report. Matching imports rederive `CAbiValue`; changed toolchain, target, native input, or companion identity rejects reuse. Missing old artifact evidence leaves the proposition Unknown and blocks imported by value foreign calls. TinyXML2 A→B→C and a real header mutation exercise those paths. `concept explain` exposes the measured origin and identity.
+
+Generated ordinary functions, foreign prototypes, and zero payload constructors use `(void)` for zero arguments in C11. Focused generated C is checked by Clang and GCC with `-std=c11 -pedantic -pedantic-errors -Wstrict-prototypes -Werror`. All nine checked language generated C files pass both compilers with `-std=c11 -pedantic -pedantic-errors -Wstrict-prototypes -fsyntax-only`. The Vulkan checked corpus needs `vulkan/vulkan.h`, which is unavailable in this gate.
+
+The build plan conservatively hashes the whole native input set and always lists ABI probes. `concept build/test` checks the current input hash and exact output hashes before using native outputs. `concept plan` does not yet distinguish a cache hit from a required reprobe, and a separately supplied archive in an artifact only consumer has no binding to the semantic evidence. These are the remaining R7j1 gaps; see the convergence log.

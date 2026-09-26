@@ -54,7 +54,10 @@ modules are optional. Exceptions, STL types, templates, inheritance, member
 functions, and overloaded C++ symbols do not cross this R7i boundary.
 
 `concept explain tests/dogfood/tinyxml2/proofs/abi_value.concept --verbose`
-shows the `CAbiValue` representation proof. Measured native facts are in
-`.native-build/abi.json` after `concept check`; the file records the selected
-compiler and target separately from the declared foreign operation contract.
+builds a measured semantic companion artifact and shows `NativeToolchainProbe`
+in the `CAbiValue` proof, including layout, target, toolchain, and input hash.
+The same report is inspectable in `.native-build/abi.json`; the declared
+foreign operation contract remains separate. R7j1 tests also import that
+artifact through an A→B→C chain, reject a changed header or toolchain identity,
+and recover the proof after restoring the native input.
 `proofs/abi_value_disproven.concept` shows the missing-`repr(C)` blocker.

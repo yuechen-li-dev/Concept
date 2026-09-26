@@ -15,6 +15,10 @@ static_assert(OffsetOf<Pair>(Pair.y) == 4, "typed field identity");
 
 The ordinary proposition `concept CAbiValue<T> { requires compiler.CAbiLayout<T>(); }` explains representation eligibility. It checks `repr(C)`, each field, fixed extent, and absence of destruction authority. It does not claim native measurement by itself. The native project ABI probe supplies that separate evidence. `concept explain` reports the compiler analysis and its blockers.
 
+Measured ABI facts are not timeless truths. They are evidence produced for a specific native boundary, target, toolchain, and ABI relevant input identity. Semantic artifacts may transport native ABI evidence, but consumers must validate its identity before using it. An imported `repr(C)` declaration without validated measured evidence has Unknown `CAbiValue` and cannot authorize a by value foreign call. A matching measurement adds `NativeToolchainProbe` provenance to the proof.
+
+Concept source uses ordinary zero argument function syntax. Strict C11 lowering emits `(void)` for zero argument C prototypes and definitions.
+
 Nested `repr(C)` records and fixed arrays are admitted. The C11 backend emits ordinary C structs and passes aggregates by value in prototypes and calls; the external C compiler selects register or hidden return conventions. A C pointer field is currently rejected from `repr(C)` value structs because its foreign handle and nullability contract have not been represented. Opaque pointer parameters already supported by the scalar FFI remain separate. C enum representation, packed structs, explicit alignment overrides, unions, bitfields, flexible arrays, function pointers, and long double are deferred. Bool fields are rejected until representation is verified.
 
 `repr(C)` answers how a value is represented. Foreign concepts answer what the operation or value means. The two contracts are separate. In particular, memory layout does not infer ownership, nullability, or lifetime semantics.
