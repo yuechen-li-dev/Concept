@@ -10,6 +10,7 @@ Baseline: `37babd3afd8eda6fedb49a7ea379af69cc45496c`, compiler
 | C11 cannot encode port instructions | Strict C11 generated wrapper compilation | Port I/O is a CPU instruction, not C memory access | Emit deterministic AMD64 `.machine.S` alongside strict C11 wrappers and link it in Concept tests | GCC AMD64 native Pause/timestamp test; port codegen only |
 | Imported NoAllocation proof became Unknown | `TestAMD64MachineIntrinsicArtifactOnlyConsumer` after making local proof traverse machine calls | Artifact effect summarizer still treated the typed extern as opaque | Classify validated machine declarations as compiler-known nonallocating before the opaque-extern rule | Artifact-only Standard consumer and DragonGod package |
 | Structured asm had no semantic statement | `TestStructuredAMD64AsmOperandsMIRAndExecution` | Source could express only opaque extern calls or typed known intrinsics | Add bounded `unsafe asm AMD64` with one typed register operand, clobbers, memory effect, MIR transport, and generated helper | Native AMD64 in/out/inout execution and artifact-only import |
+| Const asm output was accepted | `TestStructuredAsmInvalidForms` first accepted `out register` on a const local | `validateAssignable` returns a place even when its `mutable` flag is false | Require a mutable place for `out` and `inout` | AMD64 asm frontend and output initialization |
 
 The remaining asm blocker is multiple operands with a general explicit
 register allocation and clobber contract. CPUID, privileged operations, and

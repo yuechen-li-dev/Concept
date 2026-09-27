@@ -26,3 +26,20 @@ instruction classification, AArch64 operations, CPU barriers, async/machine
 interaction, MMIO barrier ordering, and 100-run proof/explain evidence are
 outstanding. The bounded asm form and its deliberate limits are described in
 `docs/language/INLINE-ASSEMBLY.md`.
+
+## Final gates
+
+| Gate | Result |
+| --- | --- |
+| `go test ./...` | Passed; `internal/concept` 237.809 s |
+| `go vet ./...` | Passed |
+| Root and legacy `zig build test` | Both passed |
+| `go test ./internal/concept -run R7d3 -count=1` (BurnIn command from `Make.oct`) | Passed; `oct` executable unavailable on this host |
+| Standard package test | 29 passed, 0 failed |
+| DragonGod package test | 23 passed, 0 failed, 1 benchmark |
+| Full EVT1 semantic corpus in `TestSemanticCorpusManifest` | 398 valid, 262 static-invalid, 13 runtime-negative fixtures accepted at compile time |
+| R7k/R7x and focused R7l tests | Passed |
+
+Compiler source audit found no UART or DragonGod-specific branches outside
+tests. MIR contains general `machine_intrinsic` and `machine_asm` operations;
+there is no runtime intrinsic registry or helper allocator.
