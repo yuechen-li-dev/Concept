@@ -37,6 +37,72 @@ uint32 ConstInput() {
 }
 void Prove() { Assert.Concept<NoAllocation>(Reverse, "inline instruction does not allocate"); }`
 
+const multiAsmSource = `module MultiAsm; profile Core;
+uint32 Add(uint32 a, uint32 b) {
+    unsafe asm AMD64 { "add {a}, {b}"; in register a; inout register b; clobber flags; memory none; }
+    return b;
+}
+uint32 SwapFirst(uint32 a, uint32 b) {
+    unsafe asm AMD64 { "xchg {a}, {b}"; inout register a; inout register b; memory none; }
+    return a;
+}
+uint32 Fixed(uint32 value) {
+    unsafe asm AMD64 { "bswap {value}"; inout eax value; memory none; }
+    return value;
+}`
+
+func TestMultiOperandAsmNativeAndConflicts(t *testing.T) {
+	module, err := Parse("multi_asm.concept", multiAsmSource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outputs, err := GenerateForTarget(module, []byte(multiAsmSource), X86_64GenericTarget())
+	if err != nil {
+		t.Fatal(err)
+	}
+	assembly := string(outputs["multi_asm.machine.S"])
+	if !strings.Contains(assembly, "add %r8d, %r9d") || !strings.Contains(assembly, "bswap %eax") {
+		t.Fatal(assembly)
+	}
+	for _, tc := range []struct{ body, code string }{
+		{`"add {a}, {b}"; in eax a; in eax b; memory none;`, "ASM_REGISTER_CONFLICT"},
+		{`"add {a}, {b} # {c}"; inout register a; inout register b; in register c; clobber r10; clobber r11; memory none;`, "ASM_OPERAND_LIMIT"},
+		{`"bswap {a}"; inout register a; in register a; memory none;`, "ASM_OPERAND_DUPLICATE"},
+		{`"bswap {a}"; inout eax a; clobber eax; memory none;`, "ASM_REGISTER_CONFLICT"},
+	} {
+		_, err := Parse("bad_multi.concept", "profile Core; void Bad(uint32 a, uint32 b, uint32 c) { unsafe asm AMD64 { "+tc.body+" } }")
+		if err == nil || !strings.Contains(err.Error(), tc.code) {
+			t.Fatalf("expected %s, got %v", tc.code, err)
+		}
+	}
+	if runtime.GOARCH != "amd64" {
+		t.Skip("AMD64 execution requires AMD64 host")
+	}
+	compiler, err := exec.LookPath("gcc")
+	if err != nil {
+		t.Skip("GCC unavailable")
+	}
+	dir := t.TempDir()
+	for name, body := range outputs {
+		if err := os.WriteFile(filepath.Join(dir, name), body, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	base := evt1SemanticSymbolBase(module)
+	harness := fmt.Sprintf("#include \"multi_asm.generated.h\"\nint main(void) { return %s(7,9)!=16 || %s(7,9)!=9 || %s(0x11223344u)!=0x44332211u; }\n", evt1FunctionSymbol(base, "Add"), evt1FunctionSymbol(base, "SwapFirst"), evt1FunctionSymbol(base, "Fixed"))
+	if err := os.WriteFile(filepath.Join(dir, "harness.c"), []byte(harness), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	build := exec.Command(compiler, "-std=c11", "-pedantic-errors", "-O2", "multi_asm.generated.c", "multi_asm.machine.S", "harness.c", "-o", "multi-test")
+	build.Dir = dir
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build: %v\n%s", err, out)
+	}
+	if out, err := exec.Command(filepath.Join(dir, "multi-test")).CombinedOutput(); err != nil {
+		t.Fatalf("run: %v\n%s", err, out)
+	}
+}
+
 func TestStructuredAMD64AsmOperandsMIRAndExecution(t *testing.T) {
 	module, err := Parse("asm_probe.concept", asmSource)
 	if err != nil {
@@ -57,11 +123,13 @@ func TestStructuredAMD64AsmOperandsMIRAndExecution(t *testing.T) {
 				if op.MachineAssembly == nil || !op.NoAllocation || op.MachineAssembly.Architecture != "AMD64" || op.MachineAssembly.ControlFlow != "local" {
 					t.Fatalf("asm MIR lost typed effects: %+v", op)
 				}
-				roles[op.MachineAssembly.OperandMode] = true
+				for _, operand := range op.MachineAssembly.Operands {
+					roles[operand.Mode] = true
+				}
 			}
 		}
 	}
-	if !roles["in"] || !roles["out"] || !roles["inout"] || !strings.Contains(string(outputs["asm_probe.machine.S"]), "bswap %eax") {
+	if !roles["in"] || !roles["out"] || !roles["inout"] || !strings.Contains(string(outputs["asm_probe.machine.S"]), "bswap %r8d") {
 		t.Fatalf("assembly operand roles or helper missing: %+v", roles)
 	}
 	if _, err := GenerateForTarget(module, []byte(asmSource), AArch64GenericTarget()); err == nil || !strings.Contains(err.Error(), "MACHINE_ARCHITECTURE_MISMATCH") {
@@ -104,7 +172,7 @@ func TestStructuredAsmInvalidForms(t *testing.T) {
 		{`unsafe asm AMD64 { "mov {value}, %r10d"; in register value; memory none; }`, "ASM_REGISTER_UNDECLARED"},
 		{`unsafe asm AMD64 { "jmp {value}"; in register value; memory none; }`, "ASM_CONTROL_FLOW_UNSUPPORTED"},
 		{`unsafe asm AMD64 { "not {value}"; inout register value; clobber unknown; memory none; }`, "ASM_CLOBBER_INVALID"},
-		{`unsafe asm AMD64 { "not {value}"; inout register value; in register value; memory none; }`, "ASM_OPERAND_LIMIT"},
+		{`unsafe asm AMD64 { "not {value}"; inout register value; in register value; memory none; }`, "ASM_OPERAND_DUPLICATE"},
 	} {
 		source := "profile Core; void Bad(uint32 value) { " + tc.body + " }"
 		_, err := Parse("bad_asm.concept", source)
@@ -144,7 +212,7 @@ void ConsumerProof() { Assert.Concept<NoAllocation>(Imported, "imported asm body
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(outputs["asm_consumer.machine.S"]), "bswap %eax") {
+	if !strings.Contains(string(outputs["asm_consumer.machine.S"]), "bswap %r8d") {
 		t.Fatal("artifact-only consumer lost imported asm helper")
 	}
 	plan, err := GeneratePlan(module, X86_64GenericTarget())

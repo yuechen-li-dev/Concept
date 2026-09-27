@@ -27,6 +27,7 @@ const (
 	FactNoAllocation        SemanticFactKind = "NoAllocation"
 	FactHardwareRead        SemanticFactKind = "HardwareRead"
 	FactHardwareWrite       SemanticFactKind = "HardwareWrite"
+	FactPrivileged          SemanticFactKind = "Privileged"
 	FactNoCopy              SemanticFactKind = "NoCopy"
 	FactNoOwnershipTransfer SemanticFactKind = "NoOwnershipTransfer"
 	FactLifetimeSafe        SemanticFactKind = "LifetimeSafe"

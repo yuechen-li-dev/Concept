@@ -1,0 +1,14 @@
+module Standard.Machine.AArch64;
+profile Core;
+
+[[machine("AArch64.Yield")]] extern "C" void ConceptAArch64Yield();
+[[machine("AArch64.Wfi")]] extern "C" void ConceptAArch64Wfi();
+[[machine("AArch64.Dmb")]] extern "C" void ConceptAArch64Dmb();
+[[machine("AArch64.Dsb")]] extern "C" void ConceptAArch64Dsb();
+[[machine("AArch64.Isb")]] extern "C" void ConceptAArch64Isb();
+
+void Yield() { ConceptAArch64Yield(); }
+void Wfi() { ConceptAArch64Wfi(); }
+void Dmb() { ConceptAArch64Dmb(); }
+void Dsb() { ConceptAArch64Dsb(); }
+void Isb() { ConceptAArch64Isb(); }

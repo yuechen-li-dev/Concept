@@ -29,6 +29,7 @@ bool PollPortTransmitter(ref const PortUart uart)
         {
             return true;
         }
+        Pause();
         attempts = attempts + 1;
     }
     return false;

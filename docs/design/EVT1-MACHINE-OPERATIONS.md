@@ -1,23 +1,32 @@
 # EVT1 machine operations
 
-An architecture-qualified machine intrinsic has a typed declaration in an
-ordinary library, a Concept operation identity, and a nonallocating MIR
-operation. The planner retains the operation and orders it in the source
-operation stream. The current backend emits a C ABI call and an inspectable
-architecture helper. The helper is an implementation of the operation, not
-its definition. Semantic module artifacts carry the typed declaration and
-machine annotation for source-independent consumers.
+An architecture-qualified intrinsic has a typed Standard declaration, stable
+Concept identity, and a `machine_intrinsic` MIR operation. Its privilege and
+ordering classification are explicit MIR fields. The planner retains each
+operation as an ordered target helper call. The current backend emits a C ABI
+call and deterministic target-specific assembly; helper text is implementation,
+not semantics. `concept-module.v1` carries the declaration and annotation to
+artifact-only consumers.
 
-`HardwareRead` is derived for timestamp and port input, and `HardwareWrite`
-for port output, through ordinary transitive call analysis. The `NoAllocation`
-proof accepts compiler-known machine declarations and their wrappers. No
-ordinary-memory fence or CPU barrier is claimed by these operations.
+AMD64 `Cpuid` is an ordinary typed library wrapper returning `CpuidResult`.
+Its implementation exercises the multi-operand structured asm model with
+fixed EAX/EBX/ECX/EDX registers. The generated helper passes a single frame
+pointer across the C ABI. Each operand has an ordered eight-byte slot, a
+Concept scalar type, direction, and optional fixed register. The helper
+preserves RBX and its frame register, loads `in`/`inout` slots, executes one
+instruction, and stores `out`/`inout` slots. The C wrapper initializes output
+storage and performs typed copies. No runtime allocation or register allocator
+is involved.
 
-The first structured `unsafe asm AMD64` statement carries one typed register
-operand, explicit clobbers, and an explicit memory effect through parsing,
-semantic validation, MIR, artifacts, planning, and helper generation. The
-backend conservatively uses a separate call boundary to retain ordering;
-there is no runtime dispatcher or GCC constraint syntax in Concept source.
-Multiple operands and deeper register-clobber validation remain separate
-work. Privileged operations also require an explicit privilege fact or
-authority rule before they can be classified honestly.
+`NoAllocation` is derived from the compiler-known intrinsic and inline helper
+paths. `HardwareRead`/`HardwareWrite` remain distinct MMIO and port access
+facts. `Privileged` is derived from operations such as `Cli` and propagates
+through ordinary wrappers. `MachineOrdering` specifies the exact barrier
+category rather than treating all operations as a generic memory clobber.
+Explicit inline-asm memory effects survive MIR and planning. A call boundary
+prevents C compiler movement across target helpers; no claim is made that
+`memory readwrite` by itself creates a CPU fence.
+
+The model has no runtime intrinsic registry, target dispatcher, broad ISA
+database, naked function, or GCC constraint language. EVT2 can lower these
+same semantic operation IDs through LIR and MachineIR to native instructions.

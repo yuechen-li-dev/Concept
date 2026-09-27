@@ -1,39 +1,42 @@
-# Machine intrinsics (R7l progression)
+# Machine intrinsics
 
-Use typed machine intrinsics when an operation has known semantics.
+If Concept knows what the machine operation means, use a typed intrinsic.
+Inline assembly exists only for operations or sequences the language does not
+otherwise model.
 
-Use inline assembly only when the instruction sequence itself is the point.
+`Standard.Machine.AMD64` exports `Pause`, `ReadTimestamp`, 8/16/32-bit
+`In`/`Out`, `Cpuid`, `Cli`, `Sti`, `Hlt`, `Lfence`, `Sfence`, and `Mfence`.
+`Cpuid(uint32 leaf, uint32 subleaf)` returns a complete `CpuidResult` record
+with `eax`, `ebx`, `ecx`, and `edx` fields. Its ordinary typed wrapper uses
+fixed-register structured asm internally. `ReadTimestamp` observes a CPU
+counter and has no wall-clock promise. `Pause` is a processor hint.
 
-The current architecture namespace is the ordinary module
-`Standard.Machine.AMD64`. Import it and call `Pause()`, `ReadTimestamp()`,
-`In8/16/32(port)`, or `Out8/16/32(port, value)`. Concept's present package
-syntax imports a module and then uses its exported names without a dotted call
-qualifier. `uint16` is the port number. `ReadTimestamp` reads a processor
-counter; it is not a wall clock. `Pause` is a processor hint. Port I/O is
-privileged on ordinary hosted operating systems and must not be executed by
-an ordinary user-mode test.
+`Standard.Machine.AArch64` exports `Yield`, `Wfi`, `Dmb`, `Dsb`, and `Isb`.
+The barrier identities retain distinct ordering properties in MIR:
+AMD64 load, store, and full fences; AArch64 inner-shareable memory order,
+completion, and instruction-stream synchronization. These operations are
+preserved by the planner. They are not aliases for a compiler-only fence.
+The current backend emits deterministic target assembly helpers, and Clang
+cross-assembles the AArch64 helper on the AMD64 development host. This is a
+code-generation check, not native AArch64 execution.
+
+`Cli`, `Sti`, and `Hlt` carry `Privileged` as a semantic fact; AArch64 `Wfi`
+is conservatively classified the same way for the current target profile.
+Privilege is distinct from memory unsafety. Hosted tests inspect MIR, proofs,
+and object generation without executing privileged instructions. The current
+profile has no privilege authority gate.
 
 MMIO and port I/O are different machine mechanisms. Concept represents them
-differently. MMIO uses `Address<DeviceMemory>` and `MmioLoad/Store`; port I/O
-uses a `uint16` port and typed `In/Out` operations. The DragonGod MMIO UART
-and AMD64 port UART retain that difference in ordinary library code.
+differently. MMIO uses `Address<DeviceMemory>` with `MmioLoad/Store`; AMD64
+port I/O uses a `uint16` port number with typed `In/Out`. DragonGod retains
+separate MMIO and port UART libraries and uses `Pause` in the port poll loop.
 
-The compiler-owned `[[machine("AMD64.*")]]` annotation is restricted to
-exact signatures in `Standard.Machine.AMD64`. It records a stable operation
-identity in MIR and the semantic module artifact. It is not a user-facing
-assembly constraint language. Each operation has a deterministic generated
-`.machine.S` implementation; ordinary generated C remains strict C11 and
-calls a typed C ABI symbol. The helper is emitted only for modules containing
-machine operations. No runtime registry or dispatcher is involved.
+Compiler-owned `[[machine("Architecture.Operation")]]` annotations are
+restricted to exact signatures in the matching Standard module. MIR and
+`concept-module.v1` retain their typed identity; the C11 backend emits only
+used, inspectable `.machine.S` helpers. Generated C remains strict C11. There
+is no runtime operation registry or dispatcher.
 
 R7l machine operations are Concept semantics. Current C/compiler-helper
 lowering is an implementation strategy, not the semantic definition. EVT2
-native backends will lower the same operations directly.
-
-This implementation is a bounded progression: CPUID, privileged machine-state
-instructions, and AArch64 operations are not yet available. A one-operand
-structured AMD64 asm escape hatch is documented in `INLINE-ASSEMBLY.md`.
-The generic C11 planning target uses the current host architecture
-for machine-helper eligibility; an explicit AArch64 target rejects AMD64
-operations. A future target contract should encode operating-system ABI and
-object format before broader cross-compilation is claimed.
+native backends will lower the same operations directly through MachineIR.

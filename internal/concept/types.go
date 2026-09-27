@@ -844,16 +844,21 @@ type ExprStmt struct {
 }
 
 // AsmStmt is an explicitly unsafe, architecture-bound machine escape hatch.
-// The bounded EVT1 form has one typed register operand and no control exit.
+// Operands are ordered, typed register values; control remains local.
 type AsmStmt struct {
-	Architecture string   `json:"architecture"`
-	Template     string   `json:"template"`
-	OperandMode  string   `json:"operand_mode"`
-	OperandName  string   `json:"operand_name"`
-	OperandType  Type     `json:"operand_type"`
-	Clobbers     []string `json:"clobbers,omitempty"`
-	MemoryEffect string   `json:"memory_effect"`
-	Span         Span     `json:"span"`
+	Architecture string       `json:"architecture"`
+	Template     string       `json:"template"`
+	Operands     []AsmOperand `json:"operands"`
+	Clobbers     []string     `json:"clobbers,omitempty"`
+	MemoryEffect string       `json:"memory_effect"`
+	Span         Span         `json:"span"`
+}
+
+type AsmOperand struct {
+	Mode     string `json:"mode"`
+	Name     string `json:"name"`
+	Type     Type   `json:"type"`
+	Register string `json:"register"` // empty means backend-selected
 }
 
 func (*AsmStmt) evt1Statement()        {}
@@ -1810,19 +1815,26 @@ type MIROperation struct {
 	Contiguous           bool                `json:"contiguous,omitempty"`
 	BoundsCheck          string              `json:"bounds_check,omitempty"`
 	Synchronization      string              `json:"synchronization,omitempty"`
+	MachineOrdering      string              `json:"machine_ordering,omitempty"`
+	Privileged           bool                `json:"privileged,omitempty"`
 	MachineAssembly      *MIRMachineAssembly `json:"machine_assembly,omitempty"`
 	SourceSpan           Span                `json:"source_span"`
 }
 
 type MIRMachineAssembly struct {
-	Architecture string   `json:"architecture"`
-	Template     string   `json:"template"`
-	OperandMode  string   `json:"operand_mode"`
-	OperandName  string   `json:"operand_name"`
-	OperandType  string   `json:"operand_type"`
-	Clobbers     []string `json:"clobbers,omitempty"`
-	MemoryEffect string   `json:"memory_effect"`
-	ControlFlow  string   `json:"control_flow"`
+	Architecture string          `json:"architecture"`
+	Template     string          `json:"template"`
+	Operands     []MIRAsmOperand `json:"operands"`
+	Clobbers     []string        `json:"clobbers,omitempty"`
+	MemoryEffect string          `json:"memory_effect"`
+	ControlFlow  string          `json:"control_flow"`
+}
+
+type MIRAsmOperand struct {
+	Mode     string `json:"mode"`
+	Name     string `json:"name"`
+	Type     string `json:"type"`
+	Register string `json:"register,omitempty"`
 }
 
 type semanticEnv struct {
