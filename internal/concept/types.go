@@ -52,36 +52,37 @@ type StorageDimension struct {
 }
 
 type Type struct {
-	Name               string             `json:"name"`
-	Kind               TypeKind           `json:"kind"`
-	Ownership          string             `json:"ownership,omitempty"`
-	Const              bool               `json:"const,omitempty"`
-	Scoped             bool               `json:"scoped,omitempty"`
-	Imported           bool               `json:"imported,omitempty"`
-	Unsafe             bool               `json:"unsafe,omitempty"`
-	PointerTo          *Type              `json:"pointer_to,omitempty"`
-	TypeArgs           []Type             `json:"type_args,omitempty"`
-	TensorRank         int                `json:"tensor_rank,omitempty"`
-	TensorSpelling     string             `json:"-"`
-	AsyncOrigin        string             `json:"async_origin,omitempty"`
-	CallableParams     []Type             `json:"callable_params,omitempty"`
-	CallableResult     *Type              `json:"callable_result,omitempty"`
-	CallableID         string             `json:"callable_id,omitempty"`
-	CallableMutable    bool               `json:"callable_mutable,omitempty"`
-	CallableConsumes   bool               `json:"callable_consumes,omitempty"`
-	CallableCopyable   bool               `json:"callable_copyable,omitempty"`
-	CallableHasDrop    bool               `json:"callable_has_drop,omitempty"`
-	CallableProvenance string             `json:"callable_provenance,omitempty"`
-	ArrayElem          *Type              `json:"array_elem,omitempty"`
-	ArrayLength        int                `json:"array_length,omitempty"`
-	ArrayLengthExpr    Expr               `json:"-"`
-	StorageKind        StorageKind        `json:"storage_kind,omitempty"`
-	Shape              []StorageDimension `json:"shape,omitempty"`
-	Contiguous         bool               `json:"contiguous,omitempty"`
-	Layout             string             `json:"layout,omitempty"`
-	Column             bool               `json:"column,omitempty"`
-	Quantity           *QuantityDimension `json:"quantity,omitempty"`
-	Span               Span               `json:"span"`
+	Name                string              `json:"name"`
+	Kind                TypeKind            `json:"kind"`
+	FloatRepresentation FloatRepresentation `json:"float_representation,omitempty"`
+	Ownership           string              `json:"ownership,omitempty"`
+	Const               bool                `json:"const,omitempty"`
+	Scoped              bool                `json:"scoped,omitempty"`
+	Imported            bool                `json:"imported,omitempty"`
+	Unsafe              bool                `json:"unsafe,omitempty"`
+	PointerTo           *Type               `json:"pointer_to,omitempty"`
+	TypeArgs            []Type              `json:"type_args,omitempty"`
+	TensorRank          int                 `json:"tensor_rank,omitempty"`
+	TensorSpelling      string              `json:"-"`
+	AsyncOrigin         string              `json:"async_origin,omitempty"`
+	CallableParams      []Type              `json:"callable_params,omitempty"`
+	CallableResult      *Type               `json:"callable_result,omitempty"`
+	CallableID          string              `json:"callable_id,omitempty"`
+	CallableMutable     bool                `json:"callable_mutable,omitempty"`
+	CallableConsumes    bool                `json:"callable_consumes,omitempty"`
+	CallableCopyable    bool                `json:"callable_copyable,omitempty"`
+	CallableHasDrop     bool                `json:"callable_has_drop,omitempty"`
+	CallableProvenance  string              `json:"callable_provenance,omitempty"`
+	ArrayElem           *Type               `json:"array_elem,omitempty"`
+	ArrayLength         int                 `json:"array_length,omitempty"`
+	ArrayLengthExpr     Expr                `json:"-"`
+	StorageKind         StorageKind         `json:"storage_kind,omitempty"`
+	Shape               []StorageDimension  `json:"shape,omitempty"`
+	Contiguous          bool                `json:"contiguous,omitempty"`
+	Layout              string              `json:"layout,omitempty"`
+	Column              bool                `json:"column,omitempty"`
+	Quantity            *QuantityDimension  `json:"quantity,omitempty"`
+	Span                Span                `json:"span"`
 }
 
 func (t Type) String() string {
@@ -148,6 +149,11 @@ func (t Type) String() string {
 }
 
 func (t Type) Equal(other Type) bool {
+	leftFloat, leftIsFloat := evt1FloatRepresentationInfo(t)
+	rightFloat, rightIsFloat := evt1FloatRepresentationInfo(other)
+	if leftIsFloat != rightIsFloat || (leftIsFloat && leftFloat.Representation != rightFloat.Representation) {
+		return false
+	}
 	if t.Name != other.Name ||
 		t.Kind != other.Kind ||
 		t.Ownership != other.Ownership ||

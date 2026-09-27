@@ -1770,7 +1770,7 @@ func evt1CABIValue(env *semanticEnv, t Type, visiting map[string]bool) (bool, st
 		return false, "field has no fixed C value representation"
 	}
 	switch t.Name {
-	case "int", "uint", "uint8", "uint16", "uint32", "byte", "uint64", "usize", "isize", "float":
+	case "int", "uint", "uint8", "uint16", "uint32", "byte", "uint64", "usize", "isize", "float", "double":
 		return true, ""
 	}
 	decl, ok := env.structs[t.Name]
@@ -2599,7 +2599,7 @@ func validateExprAgainstExpected(env *semanticEnv, scope *evt1Scope, expr Expr, 
 				return expected.valueType(), nil
 			}
 		case *FloatLiteral:
-			if expected.Name == "float" {
+			if _, floating := evt1FloatRepresentationInfo(expected); floating {
 				return expected.valueType(), nil
 			}
 		}
@@ -3522,6 +3522,9 @@ func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string,
 			}
 			return validateKnownType(env, t.TypeArgs[0], span, conceptParam, false)
 		}
+		if evt1IsFloating(Type{Name: t.Name, Kind: TypeBuiltin}) {
+			return evt1Diagnostic("CV4102", fmt.Sprintf("%s: <...> here is a unit/dimension expression, not a precision parameter; use half / float16, float / float32, or double / float64 for representation", t.String()), span)
+		}
 		return evt1Diagnostic("CV4102", fmt.Sprintf("unknown type application %s", t.String()), span)
 	}
 	if _, ok := env.profile.builtinType(t.Name, span); ok {
@@ -3547,6 +3550,10 @@ func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string,
 	}
 	if _, ok := env.automata[t.Name]; ok {
 		return evt1Diagnostic("CV4263", fmt.Sprintf("automata %s cannot be used as a runtime type", t.Name), span)
+	}
+	switch t.Name {
+	case "bfloat16", "float8e4m3", "float8e5m2", "float8", "float4":
+		return evt1Diagnostic("FLOAT_REPRESENTATION_UNSUPPORTED", fmt.Sprintf("%s has no qualified EVT1 C11 representation and arithmetic lowering; float8/float4 also require an explicit encoding", t.Name), span)
 	}
 	return evt1Diagnostic("CV4102", fmt.Sprintf("unknown enum or type %s", t.Name), span)
 }
@@ -4318,8 +4325,8 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		switch e.Op {
 		case "-":
-			if valueType.Name != "int" && valueType.Name != "float" {
-				return Type{}, evt1Diagnostic("CV4028", "unary - requires int or float", e.Span)
+			if _, floating := evt1FloatRepresentationInfo(valueType); valueType.Name != "int" && !floating {
+				return Type{}, evt1Diagnostic("CV4028", "unary - requires int or a floating scalar", e.Span)
 			}
 			return valueType, nil
 		case "not":
@@ -4453,7 +4460,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 				rightType.Quantity = nil
 			}
 		}
-		if _, ok := e.Right.(*FloatLiteral); ok && leftType.Name == "float" {
+		if _, ok := e.Right.(*FloatLiteral); ok && evt1IsFloating(leftType) {
 			rightType = leftType
 			if e.Op == "*" || e.Op == "/" {
 				rightType.Quantity = nil
@@ -4465,7 +4472,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 				leftType.Quantity = nil
 			}
 		}
-		if _, ok := e.Left.(*FloatLiteral); ok && rightType.Name == "float" {
+		if _, ok := e.Left.(*FloatLiteral); ok && evt1IsFloating(rightType) {
 			leftType = rightType
 			if e.Op == "*" || e.Op == "/" {
 				leftType.Quantity = nil
@@ -4601,7 +4608,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 				return leftType, nil
 			}
 		}
-		if leftType.Name == rightType.Name && (leftType.Name == "float" || leftType.Name == "uint" || leftType.Name == "uint8" || leftType.Name == "uint16" || leftType.Name == "uint32" || leftType.Name == "byte") {
+		if leftType.Name == rightType.Name && (evt1IsFloating(leftType) || leftType.Name == "uint" || leftType.Name == "uint8" || leftType.Name == "uint16" || leftType.Name == "uint32" || leftType.Name == "byte") {
 			if e.Op == "<" || e.Op == ">" || e.Op == "<=" || e.Op == ">=" || e.Op == "==" || e.Op == "!=" {
 				out, _ := evt1BuiltinType("bool", e.Span)
 				return out, nil
@@ -6827,6 +6834,32 @@ type evt1BoundSemanticSubject struct {
 var evt1SemanticAnalysisRegistry = map[string]evt1SemanticAnalysis{}
 
 func init() {
+	floatFact := func(args []Type, check func(FloatRepresentationInfo) bool) semanticFactResult {
+		info, ok := evt1FloatRepresentationInfo(args[0])
+		outcome := FactDisproven
+		if ok && check(info) {
+			outcome = FactProven
+		}
+		return semanticFactResult{Outcome: outcome, Origin: FactOriginCompilerAnalysis, Evidence: SemanticFactEvidence{Detail: fmt.Sprintf("floating representation %s", info.Representation)}}
+	}
+	evt1SemanticAnalysisRegistry["Floating"] = evt1SemanticAnalysis{TypeArity: 1, CheckTypes: func(_ *semanticEnv, args []Type, _ []int) semanticFactResult {
+		return floatFact(args, func(FloatRepresentationInfo) bool { return true })
+	}}
+	evt1SemanticAnalysisRegistry["BinaryFloat"] = evt1SemanticAnalysis{TypeArity: 1, CheckTypes: func(_ *semanticEnv, args []Type, _ []int) semanticFactResult {
+		return floatFact(args, func(info FloatRepresentationInfo) bool {
+			return info.Representation == FloatBinary16 || info.Representation == FloatBinary32 || info.Representation == FloatBinary64
+		})
+	}}
+	for name, selectBits := range map[string]func(FloatRepresentationInfo) int{
+		"ScalarBits":        func(info FloatRepresentationInfo) int { return info.Bits },
+		"FloatExponentBits": func(info FloatRepresentationInfo) int { return info.ExponentBits },
+		"FloatMantissaBits": func(info FloatRepresentationInfo) int { return info.MantissaBits },
+	} {
+		selector := selectBits
+		evt1SemanticAnalysisRegistry[name] = evt1SemanticAnalysis{TypeArity: 1, ParameterArity: 1, CheckTypes: func(_ *semanticEnv, args []Type, parameters []int) semanticFactResult {
+			return floatFact(args, func(info FloatRepresentationInfo) bool { return selector(info) == parameters[0] })
+		}}
+	}
 	evt1SemanticAnalysisRegistry["CAbiLayout"] = evt1SemanticAnalysis{TypeArity: 1, CheckTypes: func(env *semanticEnv, args []Type, parameters []int) semanticFactResult {
 		if env.importedABIRequired[args[0].Name] {
 			evidence, ok := env.importedABIEvidence[args[0].Name]

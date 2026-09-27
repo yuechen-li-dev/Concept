@@ -90,6 +90,9 @@ func evt1ResolveConceptAssertionSubject(env *semanticEnv, scope *evt1Scope, name
 	if alias, ok := env.typeAliases[name.Name]; ok {
 		return conceptAssertionSubject{description: ProofSubjectDescription{Kind: "type", Name: name.Name, Type: alias.String()}, typeValue: alias, span: name.Span}, nil
 	}
+	if builtin, ok := env.profile.builtinType(name.Name, name.Span); ok {
+		return conceptAssertionSubject{description: ProofSubjectDescription{Kind: "type", Name: name.Name, Type: builtin.String()}, typeValue: builtin, span: name.Span}, nil
+	}
 	return conceptAssertionSubject{}, evt1Diagnostic("CONCEPT_ASSERT_SUBJECT_UNKNOWN", fmt.Sprintf("unknown semantic subject %s", name.Name), name.Span)
 }
 
@@ -199,7 +202,7 @@ func evt1ProjectDirectAnalysis(env *semanticEnv, graph *ProofGraph, root string,
 		return evt1ProjectCallableLifetime(env, graph, root, goal, subjects[0])
 	}
 	result := semanticFactResult{}
-	if evt1IsSharedAccessAnalysis(goal) {
+	if evt1IsSharedAccessAnalysis(goal) || evt1IsFloatRepresentationAnalysis(goal) {
 		args := make([]Type, len(subjects))
 		for i, subject := range subjects {
 			args[i] = subject.typeValue
@@ -256,6 +259,14 @@ func evt1ProjectDirectAnalysis(env *semanticEnv, graph *ProofGraph, root string,
 	id := graph.addNode(kind, goal+" semantic fact", detail, result.Outcome, result.Origin, factSpan)
 	graph.addEdge(root, id, edge)
 	return result.Outcome
+}
+
+func evt1IsFloatRepresentationAnalysis(name string) bool {
+	switch name {
+	case "Floating", "BinaryFloat", "ScalarBits", "FloatExponentBits", "FloatMantissaBits":
+		return true
+	}
+	return false
 }
 
 func evt1RefineValueFact(goal string, parameters []int, binding evt1ValueBinding, fallback semanticFactResult) semanticFactResult {

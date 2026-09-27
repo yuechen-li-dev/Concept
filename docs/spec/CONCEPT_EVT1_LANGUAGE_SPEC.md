@@ -106,6 +106,25 @@ geometry for semantic layouts as `byte` as 8-bit/alignment 1, `int`, `uint`, and
 `float` as 32-bit/alignment 4, and `uint64` as 64-bit/alignment 8. These are
 Concept layout facts; they do not claim a general foreign ABI mapping.
 
+**R8a floating amendment.** The scalar representation is separate from a
+quantity unit:
+
+| Canonical spelling | Compatibility spelling | Representation | C lowering |
+| --- | --- | --- | --- |
+| `half` | `float16` | IEEE binary16 | `_Float16` compiler extension |
+| `float` | `float32` | IEEE binary32 | strict-C11 `float` |
+| `double` | `float64` | IEEE binary64 | strict-C11 `double` |
+
+half is the canonical binary16 spelling. float is the canonical binary32
+spelling. double is the canonical binary64 spelling. float16, float32, and
+float64 are explicit compatibility spellings. Unit arguments and scalar
+representation are orthogonal. `float<K>` means a binary32 quantity measured
+in kelvin. It does not mean a 32-bit floating type parameterized by K.
+`float<32>` is invalid because brackets here require a unit expression.
+Binary16 currently uses an extension and has no strict-C11 or C ABI claim;
+the qualified backend boundary is in
+[R8 floating representations](../design/R8-FLOATING-REPRESENTATIONS.md).
+
 **Deferred EVT1.** `string` is available to bounded compile-time evaluation
 and diagnostics but does not establish a general runtime string model.
 `uint64` exists in the seed implementation but awaits cross-line primitive and

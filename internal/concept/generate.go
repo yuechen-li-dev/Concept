@@ -4708,12 +4708,8 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 	case *ArrayLiteralExpr:
 		return "", "/* array_literal_requires_target */", Type{}
 	case *FloatLiteral:
-		literal := fmt.Sprintf("%g", e.Value)
-		if !strings.ContainsAny(literal, ".eE") {
-			literal += ".0"
-		}
 		floatType, _ := evt1BuiltinType("float", e.Span)
-		return "", literal + "f", floatType
+		return "", evt1RenderFloatLiteral(e, floatType), floatType
 	case *InferExpr:
 		return f.lowerInferenceExpr(e, indent)
 	case *BinaryExpr:
@@ -4725,6 +4721,12 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		}
 		leftPrelude, left, leftType := f.lowerExpr(e.Left, indent)
 		rightPrelude, right, rightType := f.lowerExpr(e.Right, indent)
+		if literal, ok := e.Left.(*FloatLiteral); ok && evt1IsFloating(rightType) {
+			left, leftType = evt1RenderFloatLiteral(literal, rightType), rightType
+		}
+		if literal, ok := e.Right.(*FloatLiteral); ok && evt1IsFloating(leftType) {
+			right, rightType = evt1RenderFloatLiteral(literal, leftType), leftType
+		}
 		if (e.Op == "==" || e.Op == "!=") && leftType.Kind == TypeEnum && leftType.SameValueType(rightType) {
 			boolType, _ := evt1BuiltinType("bool", e.Span)
 			return leftPrelude + rightPrelude, fmt.Sprintf("((%s).tag %s (%s).tag)", left, e.Op, right), boolType
@@ -5435,6 +5437,9 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 }
 
 func (f *evt1FunctionLowerer) lowerExprExpected(expr Expr, expected Type, indent int) (string, string, Type) {
+	if literal, ok := expr.(*FloatLiteral); ok && evt1IsFloating(expected) {
+		return "", evt1RenderFloatLiteral(literal, expected), expected.valueType()
+	}
 	if call, ok := expr.(*CallExpr); ok && call.Intrinsic == "raw_empty" && (expected.StorageKind == StorageRaw || expected.StorageKind == StorageSparse) {
 		return "", "(" + evt1CType(expected) + "){0}", expected
 	}

@@ -6,11 +6,12 @@ import "sort"
 // semantic environment, and C lowerer. Core code does not special-case domain
 // type names.
 type BuiltinTypeDefinition struct {
-	Name         string
-	CType        string
-	CDeclaration string
-	Fields       map[string]Type
-	NeedsHeaders []string
+	Name                string
+	CType               string
+	FloatRepresentation FloatRepresentation
+	CDeclaration        string
+	Fields              map[string]Type
+	NeedsHeaders        []string
 }
 
 // ProfileDefinition is the deliberately small EVT1 profile registry contract.
@@ -27,19 +28,24 @@ type ProfileDefinition struct {
 
 func evt1CoreBuiltinDefinitions() map[string]BuiltinTypeDefinition {
 	return map[string]BuiltinTypeDefinition{
-		"byte":   {Name: "byte", CType: "uint8_t"},
-		"uint8":  {Name: "uint8", CType: "uint8_t"},
-		"uint16": {Name: "uint16", CType: "uint16_t"},
-		"uint32": {Name: "uint32", CType: "uint32_t"},
-		"uint":   {Name: "uint", CType: "uint32_t"},
-		"float":  {Name: "float", CType: "float"},
-		"int":    {Name: "int", CType: "int32_t"},
-		"void":   {Name: "void", CType: "void"},
-		"bool":   {Name: "bool", CType: "bool"},
-		"string": {Name: "string", CType: "const char*"},
-		"uint64": {Name: "uint64", CType: "uint64_t"},
-		"usize":  {Name: "usize", CType: "size_t"},
-		"isize":  {Name: "isize", CType: "ptrdiff_t"},
+		"byte":    {Name: "byte", CType: "uint8_t"},
+		"uint8":   {Name: "uint8", CType: "uint8_t"},
+		"uint16":  {Name: "uint16", CType: "uint16_t"},
+		"uint32":  {Name: "uint32", CType: "uint32_t"},
+		"uint":    {Name: "uint", CType: "uint32_t"},
+		"half":    {Name: "half", CType: "_Float16", FloatRepresentation: FloatBinary16},
+		"float16": {Name: "half", CType: "_Float16", FloatRepresentation: FloatBinary16},
+		"float":   {Name: "float", CType: "float", FloatRepresentation: FloatBinary32},
+		"float32": {Name: "float", CType: "float", FloatRepresentation: FloatBinary32},
+		"double":  {Name: "double", CType: "double", FloatRepresentation: FloatBinary64},
+		"float64": {Name: "double", CType: "double", FloatRepresentation: FloatBinary64},
+		"int":     {Name: "int", CType: "int32_t"},
+		"void":    {Name: "void", CType: "void"},
+		"bool":    {Name: "bool", CType: "bool"},
+		"string":  {Name: "string", CType: "const char*"},
+		"uint64":  {Name: "uint64", CType: "uint64_t"},
+		"usize":   {Name: "usize", CType: "size_t"},
+		"isize":   {Name: "isize", CType: "ptrdiff_t"},
 	}
 }
 
@@ -63,11 +69,11 @@ func (p *ProfileDefinition) builtinType(name string, span Span) (Type, bool) {
 	if p == nil {
 		return Type{}, false
 	}
-	_, ok := p.BuiltinTypes[name]
+	definition, ok := p.BuiltinTypes[name]
 	if !ok {
 		return Type{}, false
 	}
-	return Type{Name: name, Kind: TypeBuiltin, Span: span}, true
+	return Type{Name: definition.Name, Kind: TypeBuiltin, FloatRepresentation: definition.FloatRepresentation, Span: span}, true
 }
 
 func (p *ProfileDefinition) compilerOwnedType(name string) bool {

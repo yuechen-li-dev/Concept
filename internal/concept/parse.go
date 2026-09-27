@@ -2739,6 +2739,7 @@ done:
 	} else if builtin, ok := p.profileDef.builtinType(nameTok.Lexeme, nameTok.Span); ok {
 		t.Name = builtin.Name
 		t.Kind = builtin.Kind
+		t.FloatRepresentation = builtin.FloatRepresentation
 	} else if conceptParam != "" && nameTok.Lexeme == conceptParam {
 		t.Name = nameTok.Lexeme
 		t.Kind = TypeConceptParam

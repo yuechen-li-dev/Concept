@@ -86,8 +86,12 @@ func evt1TypeGeometry(env *semanticEnv, t Type) (int, int, error) {
 		return 1, 1, nil
 	case "uint16":
 		return 2, 2, nil
+	case "half":
+		return 2, 2, nil
 	case "int", "uint", "uint32", "float":
 		return 4, 4, nil
+	case "double":
+		return 8, 8, nil
 	case "uint64":
 		return 8, 8, nil
 	case "usize", "isize":

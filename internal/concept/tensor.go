@@ -82,7 +82,7 @@ func evt1ValidateTensorType(env *semanticEnv, t Type, span Span, conceptParam st
 		return err
 	}
 	e := evt1CanonicalType(env, t.TypeArgs[0].valueType())
-	if e.Name != "int" && e.Name != "uint" && e.Name != "uint64" && e.Name != "byte" && e.Name != "float" {
+	if e.Name != "int" && e.Name != "uint" && e.Name != "uint64" && e.Name != "byte" && !evt1IsFloating(e) {
 		return evt1Diagnostic("CV4612", fmt.Sprintf("tensor element type %s is not a supported scalar arithmetic type", e.String()), span)
 	}
 	return nil
