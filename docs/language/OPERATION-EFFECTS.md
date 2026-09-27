@@ -29,5 +29,12 @@ opaque operation without a summary -> Unknown
 ```
 
 Proof nodes identify `DeclaredEffect` and `ExternalContractEffect`; call nodes
-preserve the operation chain. Cross-module summaries and interface-operation
-effect compatibility remain part of the reusable-module blocker.
+preserve the operation chain. Module artifacts carry operation summaries for
+imported calls. Interface-operation effect compatibility remains a separate
+reusable-module boundary.
+
+R7k separately derives `HardwareRead` and `HardwareWrite` from explicit MMIO
+operations and transitive calls. Their closed summaries travel in module
+artifacts; an opaque call leaves the absence of hardware access Unknown.
+Neither fact implies atomic synchronization or a CPU memory fence. See
+[Hardware memory](HARDWARE-MEMORY.md).
