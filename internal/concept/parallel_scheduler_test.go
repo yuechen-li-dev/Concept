@@ -8,7 +8,6 @@ import (
 )
 
 func TestR7eNativeWorkers(t *testing.T) {
-	t.Parallel()
 	root := filepath.Join("..", "..", "libraries")
 	output := t.TempDir()
 	if _, err := BuildPackage(root, output, "DragonGod"); err != nil {

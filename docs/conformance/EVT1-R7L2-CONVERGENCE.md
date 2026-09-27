@@ -11,6 +11,7 @@ Baseline: `58c180966e0680968d8acb5b643cbb7ce4658308`, compiler
 | Artifact helper identity drift | Symbol hash included resolved `Type`, which changes between local and imported views | Hash source-stable operand mode, name, fixed register, instruction and span; artifact-only asm consumer passes |
 | Worktree baseline checkout bytes | Managed worktree checkout converted fixture bytes to CRLF and omitted ignored tinyxml2 upstream files; checked-output and ABI tests failed | Copied fixture bytes and ignored upstream fixture from the original repository checkout into the isolated worktree; no compiler workaround |
 | Parallel Zig cache collision | Concurrent root/legacy Zig run reported an unexpected standard-library load error | Serial root rerun passed; legacy run passed |
+| Combined full Go run failed worker fairness assertion | Claude's `fd3bd85` made `TestR7eNativeWorkers` parallel with the full suite; its native harness asserts that at least two OS threads receive decisions in a short run and returned exit code 6 under competing suite load | Keep this native concurrency test serial at the Go test level; its own harness still launches up to four workers. Focused native rerun passes. |
 
 The original checkout contained unrelated uncommitted compiler/test edits.
 R7l2 was built in a managed isolated worktree at the baseline commit. The

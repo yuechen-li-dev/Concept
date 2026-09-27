@@ -42,7 +42,14 @@ against that commit.
 | Standard | 29 passed, 0 failed |
 | DragonGod | 23 passed, 0 failed, 1 benchmark |
 | EVT1 corpus | 398 valid, 262 static-invalid, 13 runtime-negative fixtures |
-| Full `go test ./...` | Pending final reconciled run |
+| Full `go test ./...` on reconciled checkout | Passed; `internal/concept` 111.198 s |
+
+The first combined full Go run exposed `TestR7eNativeWorkers`'s short-run
+thread participation assertion under concurrent suite load. Claude's test
+optimization had marked that native concurrency test `t.Parallel()`.
+Removing only the outer Go test parallelism made the focused test and the
+subsequent full run pass; the native harness still starts 1, 2, and 4 workers.
+See `EVT1-R7L2-CONVERGENCE.md`.
 
 The bounded scope still excludes an AArch64 inline asm syntax, general
 memory operands, a full assembler, SIMD, naked functions, custom calling

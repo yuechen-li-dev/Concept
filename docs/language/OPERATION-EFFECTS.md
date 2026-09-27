@@ -44,3 +44,9 @@ port I/O operations. `Pause` is a retained machine hint and does not assert
 memory-barrier or hardware-read semantics. Typed machine declarations and
 their wrappers derive `NoAllocation`; no source-negative effect declaration is
 introduced.
+
+R7l2 classifies `Cli`, `Sti`, and `Hlt` as `Privileged` machine operations.
+This is a separate semantic fact from memory unsafety and from
+`HardwareRead`/`HardwareWrite`. Architecture-specific fences carry a precise
+`MachineOrdering` MIR property; the compiler retains them as ordered helper
+calls. `Cpuid` and structured asm helpers remain `NoAllocation`.

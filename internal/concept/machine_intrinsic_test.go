@@ -313,6 +313,28 @@ uint8 Ordered(Address<DeviceMemory> first, Address<DeviceMemory> second) {
 	}
 }
 
+func TestMachinePrivilegeExplainByteIdenticalAcross100Runs(t *testing.T) {
+	source := `module Standard.Machine.AMD64; profile Core;
+[[machine("AMD64.Cli")]] extern "C" void ConceptAMD64Cli();
+void Cli() { ConceptAMD64Cli(); }
+void Prove() { Assert.Concept<Privileged>(Cli, "interrupt masking requires privilege"); }`
+	var expected string
+	for i := 0; i < 100; i++ {
+		graph, err := ExplainSource("privileged.concept", source, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := RenderProofSummary(graph)
+		if !strings.Contains(got, "PROVEN Privileged") {
+			t.Fatalf("privilege proof missing: %s", got)
+		}
+		if i > 0 && got != expected {
+			t.Fatalf("privilege explain drift at run %d", i+1)
+		}
+		expected = got
+	}
+}
+
 func TestAMD64MachineIntrinsicSignatureRejectsForgery(t *testing.T) {
 	source := `module Standard.Machine.AMD64; profile Core;
 [[machine("AMD64.In8")]] extern "C" uint8 ConceptAMD64In8(uint32 port);`

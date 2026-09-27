@@ -44,3 +44,9 @@ are not part of R7k. The later R7l progression adds typed AMD64 port I/O in
 `Standard.Machine.AMD64`; it is distinct from `Address<DeviceMemory>` MMIO.
 Architecture-specific barriers and native backends must preserve the same
 observable MMIO operations when those capabilities arrive.
+
+R7l2 adds distinct AMD64 `Lfence`, `Sfence`, and `Mfence` and AArch64
+`Dmb`, `Dsb`, and `Isb` machine operations. Their exact ordering categories
+are carried in MIR. A source sequence of `MmioStore`, `Mfence`, and
+`MmioLoad` remains ordered as three operations; this does not change the
+representation of port I/O or make every asm memory declaration a CPU fence.

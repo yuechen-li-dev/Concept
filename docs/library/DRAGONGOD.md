@@ -40,6 +40,8 @@ bytes. Interrupt-driven UART and bare-metal mapping remain future work.
 `Standard.Machine.AMD64`. Its `uint16` base is a port number, not an MMIO
 address. Hosted tests compile and link the port path and prove its hardware
 facts; they do not execute privileged port instructions in user mode.
+The bounded poll now calls typed AMD64 `Pause` between unsuccessful reads.
+The MMIO UART still uses `Address<DeviceMemory>` and `MmioLoad/Store`.
 
 Build with `go run ./cmd/concept package build DragonGod`; test with `go run
 ./cmd/concept package test DragonGod`. The repository bootstrap equivalent is
