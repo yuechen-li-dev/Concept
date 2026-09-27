@@ -13,3 +13,7 @@ Standard` and tests with the corresponding `package test Standard` command.
 R7fR adds the ordinary `Standard.Collection.Core` homogeneous mark/sweep
 collector. Its handles, roots, Trace contract, and borrow rules are described
 in [STANDARD-COLLECTION.md](STANDARD-COLLECTION.md).
+
+R7k adds `Standard.Hardware.Mmio`, the `DeviceMemory` nominal space tag, and
+compiler-known `MmioLoad<T>`/`MmioStore<T>` operations. See
+[Hardware memory](../language/HARDWARE-MEMORY.md).

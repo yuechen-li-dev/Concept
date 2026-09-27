@@ -160,6 +160,10 @@ func lexEVT1(text string) ([]Token, error) {
 			tokens = append(tokens, Token{Lexeme: "::", Span: start})
 			i += 2
 			column += 2
+		case i+1 < len(text) && text[i:i+2] == "..":
+			tokens = append(tokens, Token{Lexeme: "..", Span: start})
+			i += 2
+			column += 2
 		case i+1 < len(text) && text[i:i+2] == "!=":
 			tokens = append(tokens, Token{Lexeme: "!=", Span: start})
 			i += 2
@@ -471,6 +475,12 @@ func (p *parser) parseModule() (Module, error) {
 			}
 			module.Structs = append(module.Structs, structDecl)
 			module.Functions = append(module.Functions, structDecl.Methods...)
+		case "bits":
+			decl, err := p.parseBitsDecl()
+			if err != nil {
+				return module, err
+			}
+			module.Structs = append(module.Structs, decl)
 		case "table":
 			decl, err := p.parseTableDecl(false, false)
 			if err != nil {

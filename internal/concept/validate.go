@@ -594,6 +594,9 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 	env := newSemanticEnv(profile)
 	env.moduleName = module.Name
 	env.sourcePath = module.Path
+	for _, summary := range module.ImportedHardwareEffects {
+		env.importedHardwareEffects[evt1OperationEffectKey(summary.Operation, summary.Signature)] = summary
+	}
 	env.importedABIRequired = map[string]bool{}
 	env.importedABIEvidence = map[string]NativeABIEvidence{}
 	for _, name := range module.ImportedABIRequired {
@@ -879,6 +882,9 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 				return nil, err
 			}
 			fields[field.Name] = resolved
+		}
+		for _, bit := range structDecl.BitFields {
+			fields[bit.Name] = evt1BitFieldType(structDecl, bit)
 		}
 		env.fieldSets[structDecl.Name] = fields
 		methodNames := map[string]bool{}
@@ -1761,7 +1767,7 @@ func evt1CABIValue(env *semanticEnv, t Type, visiting map[string]bool) (bool, st
 		return false, "field has no fixed C value representation"
 	}
 	switch t.Name {
-	case "int", "uint", "uint8", "byte", "uint64", "usize", "isize", "float":
+	case "int", "uint", "uint8", "uint16", "uint32", "byte", "uint64", "usize", "isize", "float":
 		return true, ""
 	}
 	decl, ok := env.structs[t.Name]
@@ -4090,6 +4096,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		return Type{Name: evt1AutomataDispatchOutcomeTypeName, Kind: TypeEnum, Span: e.Span}, nil
 	case *TemplateCallExpr:
+		if result, handled, err := evt1ValidateMmioCall(env, scope, e, templateInfo, inComptimeFn); handled {
+			return result, err
+		}
 		if evt1IsTypeLayoutQuery(e.Callee) {
 			if templateInfo != nil && e.TypeArg.Kind == TypeConceptParam && (e.Callee == "SizeOf" || e.Callee == "AlignOf") {
 				return evt1ByteQuantityType(e.Span), nil
@@ -4517,12 +4526,12 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 				return leftType, nil
 			}
 		}
-		if leftType.Name == rightType.Name && (leftType.Name == "float" || leftType.Name == "uint" || leftType.Name == "byte") {
+		if leftType.Name == rightType.Name && (leftType.Name == "float" || leftType.Name == "uint" || leftType.Name == "uint8" || leftType.Name == "uint16" || leftType.Name == "uint32" || leftType.Name == "byte") {
 			if e.Op == "<" || e.Op == ">" || e.Op == "<=" || e.Op == ">=" || e.Op == "==" || e.Op == "!=" {
 				out, _ := evt1BuiltinType("bool", e.Span)
 				return out, nil
 			}
-			if e.Op == "+" || e.Op == "-" || e.Op == "*" {
+			if (e.Op == "+" || e.Op == "-" || e.Op == "*") && leftType.Name != "uint16" {
 				return leftType, nil
 			}
 		}
@@ -4549,6 +4558,10 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			return out, nil
 		}
 		if leftType.Name == rightType.Name && leftType.Kind == TypeStruct && (e.Op == "==" || e.Op == "!=") && evt1IsComptimeType(env, leftType) {
+			out, _ := evt1BuiltinType("bool", e.Span)
+			return out, nil
+		}
+		if leftType.Name == rightType.Name && leftType.Kind == TypeStruct && (e.Op == "==" || e.Op == "!=") && env.structs[leftType.Name].BitsRepresentation != "" {
 			out, _ := evt1BuiltinType("bool", e.Span)
 			return out, nil
 		}
@@ -4885,6 +4898,11 @@ func validateWithExpr(env *semanticEnv, scope *evt1Scope, expr WithExpr, templat
 		}
 		if !evt1TypesCompatible(env, fieldType, valueType, "") {
 			return Type{}, evt1Diagnostic("CV4147", fmt.Sprintf("with update for %s.%s expected %s but got %s", decl.Name, update.Name, fieldType.String(), valueType.String()), update.Value.exprSpan())
+		}
+		if bit, isBit := evt1BitField(decl, update.Name); isBit && bit.Start != bit.End {
+			if value, known := evt1StaticInt(env, scope, update.Value); known && (value < 0 || (bit.End-bit.Start+1 < 64 && uint64(value) > bitRangeMask(0, bit.End-bit.Start))) {
+				return Type{}, evt1Diagnostic("BITS_FIELD_VALUE_OUT_OF_RANGE", fmt.Sprintf("value does not fit %d-bit field %s", bit.End-bit.Start+1, update.Name), update.Value.exprSpan())
+			}
 		}
 	}
 	return baseType, nil
@@ -6760,6 +6778,12 @@ func init() {
 		factKind := kind
 		evt1SemanticAnalysisRegistry[string(kind)] = evt1SemanticAnalysis{TypeArity: 1, CheckTypes: func(env *semanticEnv, args []Type, parameters []int) semanticFactResult {
 			return evt1TypeFact(env, factKind, args[0], parameters)
+		}}
+	}
+	for _, kind := range []SemanticFactKind{FactHardwareRead, FactHardwareWrite} {
+		factKind := kind
+		evt1SemanticAnalysisRegistry[string(kind)] = evt1SemanticAnalysis{SubjectArity: 1, CheckTypes: func(env *semanticEnv, args []Type, parameters []int) semanticFactResult {
+			return semanticFactResult{Outcome: FactUnknown, Origin: FactOriginCompilerAnalysis, Evidence: SemanticFactEvidence{Detail: string(factKind) + " requires an operation subject"}}
 		}}
 	}
 	for _, kind := range []SemanticFactKind{FactAligned, FactRank} {

@@ -29,6 +29,8 @@ func evt1CoreBuiltinDefinitions() map[string]BuiltinTypeDefinition {
 	return map[string]BuiltinTypeDefinition{
 		"byte":   {Name: "byte", CType: "uint8_t"},
 		"uint8":  {Name: "uint8", CType: "uint8_t"},
+		"uint16": {Name: "uint16", CType: "uint16_t"},
+		"uint32": {Name: "uint32", CType: "uint32_t"},
 		"uint":   {Name: "uint", CType: "uint32_t"},
 		"float":  {Name: "float", CType: "float"},
 		"int":    {Name: "int", CType: "int32_t"},

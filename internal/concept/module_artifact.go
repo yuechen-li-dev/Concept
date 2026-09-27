@@ -30,6 +30,14 @@ type SemanticModuleEffectSummary struct {
 	Origin    string `json:"origin"`
 }
 
+type SemanticModuleHardwareEffectSummary struct {
+	Operation string `json:"operation"`
+	Signature string `json:"signature"`
+	Read      bool   `json:"read"`
+	Write     bool   `json:"write"`
+	Known     bool   `json:"known"`
+}
+
 type SemanticModuleTypeSummary struct {
 	Name        string `json:"name"`
 	Copyable    bool   `json:"copyable"`
@@ -60,21 +68,22 @@ type SemanticModuleExports struct {
 // The surrounding JSON stays inspectable and carries compatibility, integrity,
 // dependency, export, effect, ownership, and diagnostic-origin summaries.
 type SemanticModuleArtifact struct {
-	SchemaVersion      string                        `json:"schema_version"`
-	CompilerIdentity   string                        `json:"compiler_identity"`
-	ModuleIdentity     string                        `json:"module_identity"`
-	SourceIdentity     string                        `json:"source_identity"`
-	SourceSHA256       string                        `json:"source_sha256"`
-	ContentSHA256      string                        `json:"content_sha256"`
-	Dependencies       []SemanticModuleDependency    `json:"dependencies,omitempty"`
-	Exports            SemanticModuleExports         `json:"exports"`
-	OperationEffects   []SemanticModuleEffectSummary `json:"operation_effect_summaries,omitempty"`
-	ValueFactSummaries []SemanticFunctionFactSummary `json:"value_fact_summaries,omitempty"`
-	SharedAccessFacts  []MIRSemanticFact             `json:"shared_access_facts,omitempty"`
-	AccessSummaries    []MIRAccessEntry              `json:"access_summaries,omitempty"`
-	ForeignContracts   []ForeignContractDecl         `json:"foreign_contracts,omitempty"`
-	NativeABI          *NativeABIReport              `json:"native_abi,omitempty"`
-	SemanticPayload    []byte                        `json:"semantic_payload"`
+	SchemaVersion      string                                `json:"schema_version"`
+	CompilerIdentity   string                                `json:"compiler_identity"`
+	ModuleIdentity     string                                `json:"module_identity"`
+	SourceIdentity     string                                `json:"source_identity"`
+	SourceSHA256       string                                `json:"source_sha256"`
+	ContentSHA256      string                                `json:"content_sha256"`
+	Dependencies       []SemanticModuleDependency            `json:"dependencies,omitempty"`
+	Exports            SemanticModuleExports                 `json:"exports"`
+	OperationEffects   []SemanticModuleEffectSummary         `json:"operation_effect_summaries,omitempty"`
+	HardwareEffects    []SemanticModuleHardwareEffectSummary `json:"hardware_effect_summaries,omitempty"`
+	ValueFactSummaries []SemanticFunctionFactSummary         `json:"value_fact_summaries,omitempty"`
+	SharedAccessFacts  []MIRSemanticFact                     `json:"shared_access_facts,omitempty"`
+	AccessSummaries    []MIRAccessEntry                      `json:"access_summaries,omitempty"`
+	ForeignContracts   []ForeignContractDecl                 `json:"foreign_contracts,omitempty"`
+	NativeABI          *NativeABIReport                      `json:"native_abi,omitempty"`
+	SemanticPayload    []byte                                `json:"semantic_payload"`
 }
 
 var semanticGobOnce sync.Once
@@ -231,6 +240,7 @@ func compileSemanticModule(path, source string, artifacts map[string][]byte, ide
 		SourceSHA256:       digest([]byte(source)),
 		Exports:            semanticModuleExports(localWithGenerated, env),
 		OperationEffects:   summarizeModuleEffects(localWithGenerated, env),
+		HardwareEffects:    summarizeModuleHardwareEffects(localWithGenerated, env),
 		ValueFactSummaries: semanticModuleFactSummaries(localWithGenerated, env),
 		SharedAccessFacts:  evt1LocalSharedAccessFacts(localWithGenerated, env),
 		AccessSummaries:    evt1LocalAccessSummaries(localWithGenerated, env),
@@ -594,6 +604,7 @@ func composeSemanticModulesForNative(local Module, artifacts map[string][]byte, 
 			}
 			composed.OperationEffects = append(composed.OperationEffects, OperationEffectDecl{Effect: summary.Effect, Operation: summary.Operation, Resource: summary.Resource, Signature: summary.Signature, Origin: origin, Module: artifact.ModuleIdentity})
 		}
+		composed.ImportedHardwareEffects = append(composed.ImportedHardwareEffects, artifact.HardwareEffects...)
 		for _, summary := range artifact.ValueFactSummaries {
 			if summary.Origin != FactOriginDeclaredForeign {
 				summary.Origin = FactOriginModuleFactSummary
@@ -616,6 +627,7 @@ func composeSemanticModulesForNative(local Module, artifacts map[string][]byte, 
 	composed.ImportedFactAuthority = append(composed.ImportedFactAuthority, local.ImportedFactAuthority...)
 	composed.ImportedABIRequired = append(composed.ImportedABIRequired, local.ImportedABIRequired...)
 	composed.ImportedABIEvidence = append(composed.ImportedABIEvidence, local.ImportedABIEvidence...)
+	composed.ImportedHardwareEffects = append(composed.ImportedHardwareEffects, local.ImportedHardwareEffects...)
 	composed.SharedAccessFacts = append(composed.SharedAccessFacts, local.SharedAccessFacts...)
 	composed.AccessSummaries = append(composed.AccessSummaries, local.AccessSummaries...)
 	// Compile-time obligations belong only to the consuming unit. Imported
