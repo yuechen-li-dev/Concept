@@ -134,6 +134,9 @@ func evt1SemanticStorageOrigin(expr Expr) string {
 }
 
 func evt1ParameterSemanticValueFacts(env *semanticEnv, name string, t Type, provenance evt1LifetimeProvenance) *SemanticValueFacts {
+	if t.Kind == TypeRange {
+		return &SemanticValueFacts{SubjectKind: SubjectParameter, Subject: name, Type: t.String(), Bounded: FactProven, Provenance: provenance}
+	}
 	if span := evt1ParameterSpanFacts(env, name, t, provenance); span != nil {
 		out := semanticValueFactsFromSpan(t, span)
 		out.SubjectKind, out.Subject = SubjectParameter, name
@@ -146,7 +149,7 @@ func evt1ParameterSemanticValueFacts(env *semanticEnv, name string, t Type, prov
 }
 
 func evt1TypeCarriesSemanticValueFacts(env *semanticEnv, t Type, visiting map[string]bool) bool {
-	if t.Kind == TypeAddress || t.Kind == TypeTypedStorage || t.Kind == TypeSpan || t.Kind == TypeTensor || t.Kind == TypeCallable || t.Kind == TypeCallback || t.Kind == TypeAsync || t.isReference() {
+	if t.Kind == TypeAddress || t.Kind == TypeTypedStorage || t.Kind == TypeSpan || t.Kind == TypeTensor || t.Kind == TypeRange || t.Kind == TypeCallable || t.Kind == TypeCallback || t.Kind == TypeAsync || t.isReference() {
 		return true
 	}
 	if t.Kind != TypeStruct || visiting[t.Name] {

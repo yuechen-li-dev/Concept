@@ -711,7 +711,7 @@ func planOperation(op MIROperation, facts SemanticFactSet) PlanningDecision {
 }
 
 func planForeach(each MIRForeach) ForeachPlan {
-	eligible := each.SourceKind == "array" || each.SourceKind == "ndarray" || each.SourceKind == "span" || each.SourceKind == "readonly_span"
+	eligible := each.SourceKind == "array" || each.SourceKind == "ndarray" || each.SourceKind == "span" || each.SourceKind == "readonly_span" || each.SourceKind == "range"
 	return ForeachPlan{SourceKind: each.SourceKind, IteratorStrategy: each.IteratorStrategy, IterationMode: each.IterationMode, BoundsStrategy: "MoveNextGuard", CleanupStrategy: "ReverseLexical", DirectIndexEligible: eligible, SelectedDirectIndex: false, NoAllocation: each.NoAllocation}
 }
 

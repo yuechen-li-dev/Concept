@@ -1,0 +1,54 @@
+module Standard.Math;
+profile Core;
+
+// C11 single-precision primitives. Concept's Core numeric profile exposes float.
+extern "C" float fabsf(float value);
+extern "C" float sqrtf(float value);
+extern "C" float powf(float base, float exponent);
+extern "C" float expf(float value);
+extern "C" float logf(float value);
+extern "C" float log2f(float value);
+extern "C" float log10f(float value);
+extern "C" float floorf(float value);
+extern "C" float ceilf(float value);
+extern "C" float roundf(float value);
+extern "C" float truncf(float value);
+extern "C" float sinf(float value);
+extern "C" float cosf(float value);
+extern "C" float tanf(float value);
+extern "C" float asinf(float value);
+extern "C" float acosf(float value);
+extern "C" float atanf(float value);
+extern "C" float atan2f(float y, float x);
+
+float Abs(float value) { return fabsf(value); }
+float Min(float left, float right) { return if (left < right) left else right; }
+float Max(float left, float right) { return if (left > right) left else right; }
+float Clamp(float value, float lower, float upper) { return Min(Max(value, lower), upper); }
+
+int Abs(int value) { return if (value < 0) 0 - value else value; }
+int Min(int left, int right) { return if (left < right) left else right; }
+int Max(int left, int right) { return if (left > right) left else right; }
+int Clamp(int value, int lower, int upper) { return Min(Max(value, lower), upper); }
+
+float Sqrt(float value) { return sqrtf(value); }
+float Pow(float base, float exponent) { return powf(base, exponent); }
+float Exp(float value) { return expf(value); }
+float Log(float value) { return logf(value); }
+float Log2(float value) { return log2f(value); }
+float Log10(float value) { return log10f(value); }
+float Floor(float value) { return floorf(value); }
+float Ceil(float value) { return ceilf(value); }
+float Round(float value) { return roundf(value); }
+float Trunc(float value) { return truncf(value); }
+float Sin(float value) { return sinf(value); }
+float Cos(float value) { return cosf(value); }
+float Tan(float value) { return tanf(value); }
+float Asin(float value) { return asinf(value); }
+float Acos(float value) { return acosf(value); }
+float Atan(float value) { return atanf(value); }
+float Atan2(float y, float x) { return atan2f(y, x); }
+
+bool IsNaN(float value) { return value != value; }
+bool IsInf(float value) { return value != 0.0 and value + value == value; }
+bool IsFinite(float value) { return not IsNaN(value) and not IsInf(value); }

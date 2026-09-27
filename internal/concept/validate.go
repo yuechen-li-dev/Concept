@@ -2269,6 +2269,15 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				mutable: false,
 			})
 		case *AssignStmt:
+			if s.CompoundOp != "" {
+				// Compound mutation must use the ordinary place and arithmetic checks.
+				// Tensor assignment has a separate backing/alias contract.
+				if target, err := validateAssignable(env, local, s.Target, templateInfo); err != nil {
+					return err
+				} else if !evt1NumericRepresentation(evt1CanonicalType(env, target.t)) {
+					return evt1Diagnostic("COMPOUND_TARGET_INVALID", "compound mutation requires a built-in numeric place", s.Span)
+				}
+			}
 			if handled, err := validateTensorAssignment(env, local, s, templateInfo, inComptimeFn); handled {
 				if err != nil {
 					return err
@@ -2886,6 +2895,10 @@ func evt1ResolveType(env *semanticEnv, scope *evt1Scope, t Type) (Type, error) {
 		}
 		t.TypeArgs[i] = resolved
 	}
+	if t.Name == "Range" && len(t.TypeArgs) > 0 {
+		t.Kind = TypeRange
+		return t, nil
+	}
 	if len(t.TypeArgs) > 0 {
 		if _, ok := env.genericTypes[t.Name]; ok {
 			return evt1InstantiateGenericType(env, t)
@@ -3323,6 +3336,12 @@ func evt1NestedLiteralShape(expr Expr) ([]int, []Expr, bool, bool) {
 }
 
 func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string, allowConceptApp bool) error {
+	if t.Kind == TypeRange || (t.Name == "Range" && len(t.TypeArgs) > 0) {
+		if len(t.TypeArgs) != 1 || !evt1IntegralRepresentation(t.TypeArgs[0]) || t.TypeArgs[0].Quantity != nil {
+			return evt1Diagnostic("RANGE_TYPE_INVALID", "Range requires one dimensionless integer element type", span)
+		}
+		return nil
+	}
 	if t.Kind == TypeAddress || t.Kind == TypeTypedStorage {
 		if len(t.TypeArgs) != 1 {
 			return evt1Diagnostic("STORAGE_TYPE_ARITY", fmt.Sprintf("%s requires exactly one type argument", t.Name), span)
@@ -4325,6 +4344,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		out.Span = e.Span
 		return out, nil
 	case *BinaryExpr:
+		if e.Op == ".." || e.Op == "step" || e.Op == "descend" {
+			return evt1ValidateRangeExpr(env, scope, e, templateInfo, inComptimeFn)
+		}
 		var leftType, rightType Type
 		var err error
 		leftLiteral, leftIsLiteral := e.Left.(*IntLiteral)
@@ -6276,6 +6298,9 @@ func evt1TypeCopyable(env *semanticEnv, t Type) bool {
 	if evt1IsSpanType(t) {
 		return true
 	}
+	if t.Kind == TypeRange {
+		return true
+	}
 	if t.Kind == TypeAddress {
 		return true
 	}
@@ -7813,7 +7838,7 @@ func evt1SubstituteStatement(stmt Statement, typeParam string, concreteType Type
 		if err != nil {
 			return nil, err
 		}
-		return &AssignStmt{Target: target, Value: value, Span: s.Span}, nil
+		return &AssignStmt{Target: target, Value: value, CompoundOp: s.CompoundOp, Span: s.Span}, nil
 	case *ReturnStmt:
 		if s.Value == nil {
 			return &ReturnStmt{Span: s.Span}, nil

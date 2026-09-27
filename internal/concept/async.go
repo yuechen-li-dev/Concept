@@ -174,7 +174,11 @@ func (l *lowering) lowerAsyncFunction(fn FunctionDecl, symbol string) string {
 		} else {
 			b.WriteString(fmt.Sprintf("  %s %s;\n", evt1CType(sourceType), each.SourceField))
 		}
-		b.WriteString(fmt.Sprintf("  size_t %s;\n", each.IndexField))
+		if each.Statement.SourceKind == "range" {
+			b.WriteString(fmt.Sprintf("  %s %s;\n", evt1CType(each.Statement.ElementType), each.IndexField))
+		} else {
+			b.WriteString(fmt.Sprintf("  size_t %s;\n", each.IndexField))
+		}
 		if each.Statement.SourceKind == "custom" {
 			b.WriteString(fmt.Sprintf("  %s %s;\n", evt1CType(each.Statement.IteratorType), each.Iterator))
 		}

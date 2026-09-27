@@ -29,8 +29,7 @@ public:
 
     bool Contains(ref const FifoReadyQueue self, ContextId id)
     {
-        int offset = 0;
-        while (offset < self.count) bounded(2147483647)
+        for (offset in 0..self.count)
         {
             int index = self.head + offset;
             if (index >= Len(self.entries))
@@ -41,7 +40,6 @@ public:
             {
                 return true;
             }
-            offset = offset + 1;
         }
         return false;
     }

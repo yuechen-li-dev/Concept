@@ -99,6 +99,14 @@ func lexEVT1(text string) ([]Token, error) {
 			tokens = append(tokens, Token{Lexeme: "...", Span: start})
 			i += 3
 			column += 3
+		case i+1 < len(text) && text[i:i+2] == "..":
+			tokens = append(tokens, Token{Lexeme: "..", Span: start})
+			i += 2
+			column += 2
+		case i+2 < len(text) && (text[i:i+3] == "<<=" || text[i:i+3] == ">>="):
+			tokens = append(tokens, Token{Lexeme: text[i : i+3], Span: start})
+			i += 3
+			column += 3
 		case (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_':
 			j := i + 1
 			for j < len(text) {
@@ -178,6 +186,10 @@ func lexEVT1(text string) ([]Token, error) {
 			column += 2
 		case i+1 < len(text) && text[i:i+2] == "<<":
 			tokens = append(tokens, Token{Lexeme: "<<", Span: start})
+			i += 2
+			column += 2
+		case i+1 < len(text) && strings.Contains(" += -= *= /= %= &= |= ^= ++ -- ", " "+text[i:i+2]+" "):
+			tokens = append(tokens, Token{Lexeme: text[i : i+2], Span: start})
 			i += 2
 			column += 2
 		case i+1 < len(text) && text[i:i+2] == "&&":
@@ -3097,6 +3109,16 @@ func (p *parser) parseStatement() (Statement, error) {
 		return p.parseMatchStmt()
 	case "while":
 		return p.parseWhileStmt()
+	case "++", "--":
+		operator := p.next()
+		target, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.expect(";"); err != nil {
+			return nil, err
+		}
+		return evt1MutationAssignment(target, operator.Lexeme, nil, operator.Span), nil
 	case "bind":
 		value, err := p.parseExpr()
 		if err != nil {
@@ -3120,14 +3142,24 @@ func (p *parser) parseStatement() (Statement, error) {
 		if err != nil {
 			return nil, err
 		}
-		if p.peekLexeme() == "=" {
-			p.next()
+		if p.peekLexeme() == "++" || p.peekLexeme() == "--" {
+			operator := p.next()
+			if _, err := p.expect(";"); err != nil {
+				return nil, err
+			}
+			return evt1MutationAssignment(value, operator.Lexeme, nil, operator.Span), nil
+		}
+		if p.peekLexeme() == "=" || evt1CompoundOperator(p.peekLexeme()) != "" {
+			operator := p.next()
 			rhs, err := p.parseExpr()
 			if err != nil {
 				return nil, err
 			}
 			if _, err := p.expect(";"); err != nil {
 				return nil, err
+			}
+			if operator.Lexeme != "=" {
+				return evt1MutationAssignment(value, operator.Lexeme, rhs, operator.Span), nil
 			}
 			return &AssignStmt{Target: value, Value: rhs, Span: value.exprSpan()}, nil
 		}
@@ -3136,6 +3168,24 @@ func (p *parser) parseStatement() (Statement, error) {
 		}
 		return &ExprStmt{Value: value, Span: value.exprSpan()}, nil
 	}
+}
+
+func evt1CompoundOperator(spelling string) string {
+	switch spelling {
+	case "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<=", ">>=":
+		return strings.TrimSuffix(spelling, "=")
+	default:
+		return ""
+	}
+}
+
+func evt1MutationAssignment(target Expr, spelling string, rhs Expr, span Span) *AssignStmt {
+	op := evt1CompoundOperator(spelling)
+	if spelling == "++" || spelling == "--" {
+		op = string(spelling[0])
+		rhs = &IntLiteral{Magnitude: 1, Lexeme: "1", Span: span}
+	}
+	return &AssignStmt{Target: target, Value: &BinaryExpr{Op: op, Left: target, Right: rhs, Span: span}, CompoundOp: op, Span: target.exprSpan()}
 }
 
 func (p *parser) parseForeachStmt() (Statement, error) {
@@ -3821,19 +3871,44 @@ func (p *parser) parseEquality() (Expr, error) {
 }
 
 func (p *parser) parseComparison() (Expr, error) {
-	left, err := p.parseShift()
+	left, err := p.parseRange()
 	if err != nil {
 		return nil, err
 	}
 	for p.peekLexeme() == "<" || p.peekLexeme() == ">" || p.peekLexeme() == "<=" || p.peekLexeme() == ">=" {
 		op := p.next()
-		right, err := p.parseShift()
+		right, err := p.parseRange()
 		if err != nil {
 			return nil, err
 		}
 		left = &BinaryExpr{Op: op.Lexeme, Left: left, Right: right, Span: op.Span}
 	}
 	return left, nil
+}
+
+func (p *parser) parseRange() (Expr, error) {
+	start, err := p.parseShift()
+	if err != nil || p.peekLexeme() != ".." {
+		return start, err
+	}
+	operator := p.next()
+	end, err := p.parseShift()
+	if err != nil {
+		return nil, err
+	}
+	rangeValue := Expr(&BinaryExpr{Op: "..", Left: start, Right: end, Span: operator.Span})
+	if p.peekLexeme() == "step" || p.peekLexeme() == "descend" {
+		modifier := p.next()
+		magnitude, err := p.parseShift()
+		if err != nil {
+			return nil, err
+		}
+		rangeValue = &BinaryExpr{Op: modifier.Lexeme, Left: rangeValue, Right: magnitude, Span: modifier.Span}
+	}
+	if p.peekLexeme() == "step" || p.peekLexeme() == "descend" {
+		return nil, evt1Diagnostic("RANGE_DIRECTION_INVALID", "a range uses either step or descend, not both", p.currentSpan())
+	}
+	return rangeValue, nil
 }
 
 func (p *parser) parseBitwiseOr() (Expr, error) {

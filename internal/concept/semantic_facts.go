@@ -164,6 +164,9 @@ func evt1TypeFact(env *semanticEnv, kind SemanticFactKind, t Type, parameters []
 		if isStorage || isSpan || isTensor {
 			result.Outcome = FactProven
 		}
+		if kind == FactBounded && t.Kind == TypeRange {
+			result.Outcome = FactProven
+		}
 	case FactFixedShape:
 		if isStorage {
 			if evt1StorageHasRuntimeShape(t) {

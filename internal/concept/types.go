@@ -21,6 +21,7 @@ const (
 	TypeLayout        TypeKind = "layout"
 	TypeStream        TypeKind = "stream"
 	TypeSpan          TypeKind = "span"
+	TypeRange         TypeKind = "range"
 	TypeTensor        TypeKind = "tensor"
 	TypeDyn           TypeKind = "dyn"
 	TypeConceptParam  TypeKind = "concept_param"
@@ -807,10 +808,11 @@ func (*ActuationDecl) evt1Statement()        {}
 func (s *ActuationDecl) statementSpan() Span { return s.Span }
 
 type AssignStmt struct {
-	Target Expr            `json:"target"`
-	Value  Expr            `json:"value"`
-	Tensor *TensorSemantic `json:"tensor,omitempty"`
-	Span   Span            `json:"span"`
+	Target     Expr            `json:"target"`
+	Value      Expr            `json:"value"`
+	CompoundOp string          `json:"compound_op,omitempty"`
+	Tensor     *TensorSemantic `json:"tensor,omitempty"`
+	Span       Span            `json:"span"`
 }
 
 func (*AssignStmt) evt1Statement()        {}

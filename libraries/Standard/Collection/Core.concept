@@ -107,8 +107,7 @@ Result<CollectorHandle<T>, CollectionError> AllocateObject(
     T value
 )
 {
-    int index = 0;
-    while (index < Len(collector.occupied)) bounded(2147483647)
+    for (index in 0..Len(collector.occupied))
     {
         if (not collector.occupied[index] and collector.generation[index] > 0)
         {
@@ -126,7 +125,6 @@ Result<CollectorHandle<T>, CollectionError> AllocateObject(
                 Result::Error(error) => { return Result::Error(CollectionError::OutOfMemory); }
             }
         }
-        index = index + 1;
     }
     return Result::Error(CollectionError::CapacityExceeded);
 }

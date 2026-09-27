@@ -51,10 +51,8 @@ bool OctagonPathNameIs(OctagonPathPart part, string expected)
         OctagonPathPart::Index(value) => { return false; }
         OctagonPathPart::Name(actual) => {
             if (strlen(actual) != strlen(expected)) { return false; }
-            usize index = 0;
-            while (index < strlen(expected)) bounded(2147483647) {
+            for (index in 0..strlen(expected)) {
                 if (actual[index] != expected[index]) { return false; }
-                index = index + 1;
             }
             return true;
         }

@@ -674,7 +674,11 @@ func (l *lowering) lowerAsyncCFG(fn FunctionDecl, analysis evt1AsyncAnalysis, cf
 			b.WriteString(l.lowerAsyncCFGForeachHeader(f, cfg.Foreaches[node.ForeachID], node.Body, node.Exit, 2))
 		case "ForeachContinue":
 			info := cfg.Foreaches[node.ForeachID]
-			if info.Statement.SourceKind != "custom" {
+			if info.Statement.SourceKind == "range" {
+				cursor, source := "frame->"+info.IndexField, "frame->"+info.SourceField
+				b.WriteString(fmt.Sprintf("    uint64_t remaining = %s.descending ? (uint64_t)%s - (uint64_t)%s.end : (uint64_t)%s.end - (uint64_t)%s;\n", source, cursor, source, source, cursor))
+				b.WriteString(fmt.Sprintf("    %s = (uint64_t)%s.step >= remaining ? %s.end : (%s.descending ? %s - %s.step : %s + %s.step);\n", cursor, source, source, source, cursor, source, cursor, source))
+			} else if info.Statement.SourceKind != "custom" {
 				b.WriteString(fmt.Sprintf("    frame->%s = frame->%s + 1u;\n", info.IndexField, info.IndexField))
 			}
 			b.WriteString(l.asyncGotoNode(f, node.Next, 2))
@@ -862,7 +866,11 @@ func (l *lowering) lowerAsyncCFGForeachInit(f *evt1FunctionLowerer, info evt1Asy
 	} else {
 		b.WriteString(ind(indent) + fmt.Sprintf("frame->%s = %s; /* source evaluated once */\n", info.SourceField, source))
 	}
-	b.WriteString(ind(indent) + fmt.Sprintf("frame->%s = 0u;\n", info.IndexField))
+	if stmt.SourceKind == "range" {
+		b.WriteString(ind(indent) + fmt.Sprintf("frame->%s = frame->%s.start;\n", info.IndexField, info.SourceField))
+	} else {
+		b.WriteString(ind(indent) + fmt.Sprintf("frame->%s = 0u;\n", info.IndexField))
+	}
 	if stmt.SourceKind == "custom" {
 		get := evt1ForeachProtocolFunction(l.env, "GetIterator", sourceType)
 		arg := "frame->" + info.SourceField
@@ -892,6 +900,13 @@ func (l *lowering) lowerAsyncCFGForeachHeader(f *evt1FunctionLowerer, info evt1A
 		b.WriteString(ind(indent) + fmt.Sprintf("frame->%s = %s(%s); /* Current once per successful iteration */\n", stmt.ItemName, evt1FunctionSymbolForDecl(l.symbolBase, l.env, current), currentArg))
 	} else {
 		source := "frame->" + info.SourceField
+		if stmt.SourceKind == "range" {
+			cursor := "frame->" + info.IndexField
+			b.WriteString(ind(indent) + fmt.Sprintf("if (!(%s.descending ? %s > %s.end : %s < %s.end)) { frame->state = %d; goto async_dispatch; }\n", source, cursor, source, cursor, source, exit.Index))
+			b.WriteString(ind(indent) + fmt.Sprintf("frame->%s = %s;\n", stmt.ItemName, cursor))
+			b.WriteString(ind(indent) + fmt.Sprintf("frame->state = %d; goto async_dispatch;\n", body.Index))
+			return b.String()
+		}
 		if info.SourceByRef && stmt.SourceType.ArrayElem != nil {
 			source = "(*" + source + ")"
 		}

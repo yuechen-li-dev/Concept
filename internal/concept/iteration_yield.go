@@ -27,6 +27,10 @@ func validateForeachStmt(env *semanticEnv, scope *evt1Scope, stmt *ForeachStmt, 
 			stmt.SourceKind = "readonly_span"
 		}
 		stmt.IteratorType = Type{Name: "builtin_span_iterator", Kind: TypeStruct, Span: stmt.Span}
+	} else if rangeElement, ok := evt1RangeElement(sourceType); ok {
+		element = rangeElement
+		stmt.SourceKind = "range"
+		stmt.IteratorType = Type{Name: "builtin_range_iterator", Kind: TypeStruct, Span: stmt.Span}
 	} else {
 		iterator, customElement, findErr := evt1ResolveForeachProtocol(env, sourceType, stmt.Span)
 		if findErr != nil {
@@ -49,6 +53,9 @@ func validateForeachStmt(env *semanticEnv, scope *evt1Scope, stmt *ForeachStmt, 
 		return evt1Diagnostic("FOREACH_ITEM_TYPE_MISMATCH", fmt.Sprintf("foreach item type %s does not match iterator element %s", stmt.ItemType.String(), element.String()), stmt.Span)
 	}
 	if stmt.ItemType.Ownership == "ref" {
+		if stmt.SourceKind == "range" {
+			return evt1Diagnostic("RANGE_REF_ITEM_INVALID", "range iteration produces values, not referenceable elements", stmt.Span)
+		}
 		if (stmt.SourceKind == "readonly_span" || sourceType.Const) && !stmt.ItemType.Const {
 			return evt1Diagnostic("FOREACH_MUTABLE_REF_FROM_READONLY", "mutable foreach reference cannot be produced from ReadOnlySpan", stmt.Span)
 		}
@@ -111,6 +118,25 @@ func (f *evt1FunctionLowerer) lowerForeachStmt(stmt ForeachStmt, indent int) str
 	} else {
 		b += ind(indent+1) + fmt.Sprintf("%s %s = %s; /* source evaluated once */\n", evt1CType(sourceType), sourceName, sourceExpr)
 		f.registerOwner(sourceName, sourceType)
+	}
+	if stmt.SourceKind == "range" {
+		cursor := f.nextTemp("range_cursor")
+		distance := f.nextTemp("range_remaining")
+		condition := fmt.Sprintf("(%s.descending ? %s > %s.end : %s < %s.end)", sourceName, cursor, sourceName, cursor, sourceName)
+		b += ind(indent+1) + fmt.Sprintf("%s %s = %s.start; /* inline counted iterator */\n", evt1CType(stmt.ElementType), cursor, sourceName)
+		b += ind(indent+1) + fmt.Sprintf("while (%s) {\n", condition)
+		f.pushScope()
+		itemName := f.bindName(stmt.ItemName, stmt.ItemType)
+		b += ind(indent+2) + fmt.Sprintf("%s %s = %s;\n", evt1CType(stmt.ItemType), itemName, cursor)
+		b += ind(indent+2) + fmt.Sprintf("uint64_t %s = %s.descending ? (uint64_t)%s - (uint64_t)%s.end : (uint64_t)%s.end - (uint64_t)%s;\n", distance, sourceName, cursor, sourceName, sourceName, cursor)
+		b += ind(indent+2) + fmt.Sprintf("%s = (uint64_t)%s.step >= %s ? %s.end : (%s.descending ? %s - %s.step : %s + %s.step);\n", cursor, sourceName, distance, sourceName, sourceName, cursor, sourceName, cursor, sourceName)
+		b += f.lowerBlock(stmt.Body, indent+2)
+		b += f.lowerCurrentScopeDrops(indent + 2)
+		f.popScope()
+		b += ind(indent+1) + "}\n"
+		b += f.lowerCurrentScopeDrops(indent + 1)
+		f.popScope()
+		return b + ind(indent) + "}\n"
 	}
 	if stmt.SourceKind != "custom" {
 		length := fmt.Sprintf("%d", evt1StorageElementCount(sourceType))

@@ -469,6 +469,11 @@ func evt1ProjectOutlives(graph *ProofGraph, root string, subjects []conceptAsser
 }
 
 func evt1ProjectNoAllocation(env *semanticEnv, graph *ProofGraph, root string, fn FunctionDecl, visiting map[string]bool) SemanticFactCertainty {
+	if evt1KnownC11MathPrimitive(fn) {
+		id := graph.addNode(ProofKnownFact, fn.Name+" NoAllocation", "compiler-known C11 math primitive", FactProven, FactOriginCompilerAnalysis, fn.Span)
+		graph.addEdge(root, id, ProofDerivedFrom)
+		return FactProven
+	}
 	if effect, ok := evt1OperationEffectForFunction(env, fn); ok {
 		if effect.Effect == "NoAllocation" {
 			id := graph.addNode(ProofKnownFact, fn.Name+" NoAllocation", "authoritative imported operation summary", FactProven, FactOriginModuleSummaryEffect, effect.Span)
