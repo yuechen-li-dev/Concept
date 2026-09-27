@@ -3563,6 +3563,41 @@ func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string,
 
 func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
 	switch e := expr.(type) {
+	case *InterpretExpr:
+		if err := validateKnownType(env, e.Target, e.Span, "", false); err != nil {
+			return Type{}, err
+		}
+		e.Target = evt1CanonicalType(env, e.Target)
+		source, err := validateExpr(env, scope, e.Value, templateInfo, inComptimeFn)
+		if err != nil {
+			return Type{}, err
+		}
+		source = evt1CanonicalType(env, source)
+		e.SourceType = source
+		if templateInfo != nil && evt1TypeDependsOnParam(source, templateInfo.Decl.TypeParam) {
+			// An open generic has no concrete representation yet. Every
+			// instantiation rechecks this node after substitution.
+			return e.Target, nil
+		}
+		if source.Quantity != nil {
+			if e.Target.Quantity == nil && evt1NumericRepresentation(source) && evt1NumericRepresentation(e.Target) {
+				return Type{}, evt1Diagnostic("INTERPRET_USE_MAGNITUDE", "quantity stripping uses Magnitude(value)", e.Span)
+			}
+			if e.Target.Quantity != nil && source.Quantity.SameDimension(*e.Target.Quantity) {
+				if source.Quantity.Equal(*e.Target.Quantity) {
+					return Type{}, evt1Diagnostic("INTERPRET_INVALID", "source already has the target quantity meaning; use the value directly", e.Span)
+				}
+				return Type{}, evt1Diagnostic("INTERPRET_USE_AS", "this is a unit conversion; use value as T", e.Span)
+			}
+			return Type{}, evt1Diagnostic("INTERPRET_INVALID", "interpret cannot change an existing quantity's semantic dimension", e.Span)
+		}
+		if e.Target.Quantity == nil || !evt1NumericRepresentation(source) || !evt1NumericRepresentation(e.Target) {
+			return Type{}, evt1Diagnostic("INTERPRET_INVALID", "interpret only attaches a quantity to a matching numeric scalar; it cannot reinterpret bits, authority, storage, or address spaces", e.Span)
+		}
+		if source.Name != e.Target.Name || source.Kind != e.Target.Kind || source.Const != e.Target.Const {
+			return Type{}, evt1Diagnostic("INTERPRET_REPRESENTATION", "source and target scalar representations must match; convert first with `as` (for example, interpret (raw as double) as double<m>)", e.Span)
+		}
+		return e.Target, nil
 	case *CastExpr:
 		if err := validateKnownType(env, e.Target, e.Span, "", false); err != nil {
 			return Type{}, err
@@ -3586,7 +3621,10 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			return Type{}, evt1Diagnostic("NUMERIC_CAST_REQUIRED", "as requires numeric source and target representations", e.Span)
 		}
 		if (source.Quantity == nil) != (e.Target.Quantity == nil) {
-			return Type{}, evt1Diagnostic("CAST_QUANTITY_SEMANTICS", "as cannot attach or erase a quantity; semantic interpretation is separate", e.Span)
+			if source.Quantity == nil {
+				return Type{}, evt1Diagnostic("CAST_QUANTITY_SEMANTICS", "scalar-to-quantity conversion does not derive a unit; use an explicit semantic boundary: interpret value as T", e.Span)
+			}
+			return Type{}, evt1Diagnostic("CAST_QUANTITY_SEMANTICS", "as cannot erase a quantity; use Magnitude(value) to extract its current-unit scalar", e.Span)
 		}
 		if source.Quantity != nil && !source.Quantity.SameDimension(*e.Target.Quantity) {
 			return Type{}, evt1Diagnostic("CAST_QUANTITY_SEMANTICS", "as cannot change a quantity dimension; source and target dimensions differ", e.Span)
@@ -6307,6 +6345,8 @@ func evt1GuardExprNodeCount(expr Expr) int {
 
 func evt1ExprIdentity(expr Expr) string {
 	switch e := expr.(type) {
+	case *InterpretExpr:
+		return "(interpret " + evt1ExprIdentity(e.Value) + " as " + e.Target.String() + ")"
 	case *CastExpr:
 		return "(" + evt1ExprIdentity(e.Value) + " as " + e.Target.String() + ")"
 	case *NameExpr:
@@ -8251,6 +8291,12 @@ func evt1SubstituteStatement(stmt Statement, typeParam string, concreteType Type
 
 func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, error) {
 	switch e := expr.(type) {
+	case *InterpretExpr:
+		value, err := evt1SubstituteExpr(e.Value, typeParam, concreteType)
+		if err != nil {
+			return nil, err
+		}
+		return &InterpretExpr{Value: value, Target: evt1SubstituteType(e.Target, typeParam, concreteType), Span: e.Span}, nil
 	case *CastExpr:
 		value, err := evt1SubstituteExpr(e.Value, typeParam, concreteType)
 		if err != nil {

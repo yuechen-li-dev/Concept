@@ -341,6 +341,8 @@ func evt1VisitFailureTypesExpr(expr Expr, add func(Type)) {
 		}
 	case *CastExpr:
 		evt1VisitFailureTypesExpr(e.Value, add)
+	case *InterpretExpr:
+		evt1VisitFailureTypesExpr(e.Value, add)
 	case *ConstructExpr:
 		add(e.ResolvedType)
 		for _, a := range e.Args {

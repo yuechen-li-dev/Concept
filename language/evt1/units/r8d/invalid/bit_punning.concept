@@ -1,0 +1,4 @@
+module UnitCorpus.InvalidInterpretBits;
+profile Core;
+
+float Bad(int bits) { return interpret bits as float; }

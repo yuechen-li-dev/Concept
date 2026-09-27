@@ -1,0 +1,4 @@
+module UnitCorpus.InvalidInterpretStripping;
+profile Core;
+
+float Bad(float<m> value) { return interpret value as float; }

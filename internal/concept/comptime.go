@@ -230,6 +230,13 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 		return Value{}, err
 	}
 	switch e := expr.(type) {
+	case *InterpretExpr:
+		value, err := evt1EvalExprTyped(state, scope, e.Value, nil)
+		if err != nil {
+			return Value{}, err
+		}
+		value.Type = e.Target
+		return value, nil
 	case *CastExpr:
 		var expectedCastSource *Type
 		if _, literal := e.Value.(*FloatLiteral); literal && e.Target.Name == "double" && e.Target.Quantity == nil {

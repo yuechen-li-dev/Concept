@@ -3,5 +3,5 @@ profile Core;
 
 float<m> Invalid(int nativeMeters)
 {
-    return AssumeQuantity<float<m>>(nativeMeters);
+    return interpret nativeMeters as float<m>;
 }

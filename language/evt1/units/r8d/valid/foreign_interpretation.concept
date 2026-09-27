@@ -1,0 +1,17 @@
+module UnitCorpus.ForeignInterpretation;
+profile Core;
+
+extern "C" float ReadDistanceMeters();
+
+float<m> Distance()
+{
+    float raw = ReadDistanceMeters();
+    return interpret raw as float<m>;
+}
+
+float<m> Attach(float raw) { return interpret raw as float<m>; }
+
+void Facts()
+{
+    Assert.Concept<NoAllocation>(Attach, "interpret adds no allocation");
+}

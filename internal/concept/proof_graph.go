@@ -274,5 +274,41 @@ func explainModule(module Module, line int) (ProofGraph, error) {
 			return graph, nil
 		}
 	}
+	// An interpretation is a declared semantic boundary, not a proposition
+	// proven from execution. Expose the checked MIR site through the existing
+	// explanation schema so callers can audit its source, type, and unit scale.
+	if line > 0 {
+		mir := buildMIR(module, env)
+		for _, fn := range mir.Functions {
+			for _, op := range fn.Operations {
+				if op.SourceSpan.Line != line || (op.Kind != "interpret_scalar_semantics" && op.Kind != "unit_scaled_float") {
+					continue
+				}
+				interpretation := op.Kind == "interpret_scalar_semantics"
+				goal := op.Type + " as " + op.ReturnType
+				origin := FactOriginCompilerAnalysis
+				reason := "language-defined exact same-dimension unit-scale conversion"
+				label := "checked unit-scale conversion"
+				if interpretation {
+					goal = "interpret " + goal
+					origin = FactOriginExplicitInterpretation
+					reason = "programmer declared external semantic meaning at this site; the external convention is not independently proved"
+					label = "checked semantic interpretation"
+				}
+				graph := ProofGraph{Schema: ProofSchema, Source: module.Path, Goal: goal, Outcome: FactProven, Reason: reason, SourceSpan: op.SourceSpan}
+				root := graph.addNode(ProofGoal, goal, label, FactProven, origin, op.SourceSpan)
+				sourceLabel := "source quantity and unit"
+				if interpretation {
+					sourceLabel = "source scalar representation"
+				}
+				source := graph.addNode(ProofSubject, op.Type, sourceLabel, FactProven, FactOriginCompilerAnalysis, op.SourceSpan)
+				target := graph.addNode(ProofKnownFact, op.ReturnType, op.Detail, FactProven, origin, op.SourceSpan)
+				graph.addEdge(root, source, ProofDependsOn)
+				graph.addEdge(root, target, ProofDependsOn)
+				graph.normalize()
+				return graph, nil
+			}
+		}
+	}
 	return ProofGraph{}, fmt.Errorf("no Assert.Concept assertion found at requested source position")
 }

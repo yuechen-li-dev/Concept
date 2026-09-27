@@ -3,10 +3,10 @@ profile Core;
 
 float<m> MeasuredAltitude(float nativeMeters)
 {
-    return AssumeQuantity<float<m>>(nativeMeters);
+    return interpret nativeMeters as float<m>;
 }
 
 float<m/s> MeasuredClimbRate(float nativeMetersPerSecond)
 {
-    return AssumeQuantity<float<m/s>>(nativeMetersPerSecond);
+    return interpret nativeMetersPerSecond as float<m/s>;
 }

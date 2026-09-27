@@ -8,8 +8,8 @@ float<m> ProjectDisplacement()
     tensor<float> basis[3, 3] = [[0.0, -1.0, 0.0],
                                  [1.0,  0.0, 0.0],
                                  [0.0, 0.0, 1.0]];
-    tensor<float<m>> local[3] = [AssumeQuantity<float<m>>(1.0), AssumeQuantity<float<m>>(2.0), AssumeQuantity<float<m>>(3.0)];
-    tensor<float<m>> world[3] = AssumeQuantity<float<m>>(0.0);
+    tensor<float<m>> local[3] = [interpret 1.0 as float<m>, interpret 2.0 as float<m>, interpret 3.0 as float<m>];
+    tensor<float<m>> world[3] = interpret 0.0 as float<m>;
     world[i] = basis[i, j] * local[j];
     return world[0];
 }

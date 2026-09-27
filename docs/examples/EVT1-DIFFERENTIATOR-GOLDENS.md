@@ -14,7 +14,7 @@ change the program's structure.
 
 | Feature attempted | Problem and first attempt | Documentation and result | Classification |
 | --- | --- | --- | --- |
-| Unit-typed tensor literal | Measured displacement from raw `1.0`, `2.0`, `3.0` | `CV4227`; the quantity guide led to explicit `AssumeQuantity<float<m>>` at the measurement boundary | Documented intentional boundary |
+| Unit-typed tensor literal | Measured displacement from raw `1.0`, `2.0`, `3.0` | `CV4227`; the quantity guide led to an explicit semantic interpretation at the measurement boundary, now spelled `interpret value as float<m>` | Documented intentional boundary |
 | Einstein contraction with units | `world[i] = basis[i, j] * local[j]` | Checks and runs; a wrong unit result receives `CV4615` | Working composition |
 | Precision width | `float<32>` and `float<64>` for one HPC algorithm | Quantity guide defines `K` as Kelvin; compiler rejects `float<32>` with `CV4102` | Post-EVT1 feature proposal |
 

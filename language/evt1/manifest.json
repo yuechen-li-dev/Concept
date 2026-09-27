@@ -2,8 +2,8 @@
   "schema": "concept-evt1-semantic-corpus-v1",
   "compiler_id": "concept-evt1-stage0-go",
   "totals": {
-    "valid": 404,
-    "static_invalid": 275,
+    "valid": 406,
+    "static_invalid": 279,
     "runtime_negative": 13,
     "compatibility": 5,
     "expected_divergence": 4
@@ -42,7 +42,8 @@
     { "subsystem": "C ABI layout", "path": "abi-layout", "valid": 2, "static_invalid": 6, "runtime_negative": [], "historical_milestones": ["R7j"] },
     { "subsystem": "SFIAEAIMTOPII", "path": "tooling/sfiaea", "valid": 0, "static_invalid": 6, "runtime_negative": [], "historical_milestones": ["R7p"] },
     { "subsystem": "Quantity boundary", "path": "tooling/quantity-boundary", "valid": 2, "static_invalid": 1, "runtime_negative": [], "historical_milestones": ["R7p"] },
-    { "subsystem": "Multiplicative unit algebra", "path": "units/r8c", "valid": 4, "static_invalid": 6, "runtime_negative": [], "historical_milestones": ["R8c"] }
+    { "subsystem": "Multiplicative unit algebra", "path": "units/r8c", "valid": 4, "static_invalid": 6, "runtime_negative": [], "historical_milestones": ["R8c"] },
+    { "subsystem": "Explicit semantic interpretation", "path": "units/r8d", "valid": 2, "static_invalid": 4, "runtime_negative": [], "historical_milestones": ["R8d"] }
   ],
   "domain_goldens": [
     "libraries/Golden/Aerospace",

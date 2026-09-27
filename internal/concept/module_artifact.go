@@ -49,6 +49,17 @@ type SemanticModuleTypeSummary struct {
 	Columnar    bool   `json:"columnar,omitempty"`
 }
 
+// SemanticInterpretationSite keeps an auditable declaration of externally
+// supplied quantity meaning in the artifact's inspectable envelope.
+type SemanticInterpretationSite struct {
+	Function string             `json:"function"`
+	Source   string             `json:"source"`
+	Target   string             `json:"target"`
+	Detail   string             `json:"detail"`
+	Origin   SemanticFactOrigin `json:"origin"`
+	Span     Span               `json:"span"`
+}
+
 type SemanticModuleExports struct {
 	Types                []string                    `json:"types,omitempty"`
 	ReflectableTypes     []string                    `json:"reflectable_types,omitempty"`
@@ -79,6 +90,7 @@ type SemanticModuleArtifact struct {
 	OperationEffects   []SemanticModuleEffectSummary         `json:"operation_effect_summaries,omitempty"`
 	HardwareEffects    []SemanticModuleHardwareEffectSummary `json:"hardware_effect_summaries,omitempty"`
 	ValueFactSummaries []SemanticFunctionFactSummary         `json:"value_fact_summaries,omitempty"`
+	Interpretations    []SemanticInterpretationSite          `json:"interpretations,omitempty"`
 	SharedAccessFacts  []MIRSemanticFact                     `json:"shared_access_facts,omitempty"`
 	AccessSummaries    []MIRAccessEntry                      `json:"access_summaries,omitempty"`
 	ForeignContracts   []ForeignContractDecl                 `json:"foreign_contracts,omitempty"`
@@ -96,7 +108,7 @@ func registerSemanticGobTypes() {
 			&MachineCompleteStmt{}, &TransitionStmt{}, &TransitionMatchStmt{}, &TransitionInferStmt{}, &TransitionDecideStmt{},
 			&InstanceDecl{}, &ActuationDecl{}, &AssignStmt{}, &ReturnStmt{}, &AssertStmt{}, &TryStmt{}, &ExprStmt{}, &AsmStmt{},
 			&StaticAssertStmt{}, &MatchStmt{}, &WhileStmt{}, &ForeachStmt{},
-			&AwaitExpr{}, &InferExpr{}, &CastExpr{}, &NameExpr{}, &IntLiteral{}, &FloatLiteral{}, &StringLiteral{}, &BoolLiteral{},
+			&AwaitExpr{}, &InferExpr{}, &CastExpr{}, &InterpretExpr{}, &NameExpr{}, &IntLiteral{}, &FloatLiteral{}, &StringLiteral{}, &BoolLiteral{},
 			&FieldExpr{}, &CallExpr{}, &DispatchExpr{}, &TemplateCallExpr{}, &BinaryExpr{}, &UnaryExpr{}, &MoveExpr{},
 			&RefExpr{}, &BindExpr{}, &ConstructExpr{}, &StructConstructExpr{}, &CallableExpr{}, &WithExpr{},
 			&ArrayLiteralExpr{}, &RepeatInitializer{}, &IndexExpr{}, &MatchExpr{}, &IfExpr{}, &FailureExpr{}, &ParenExpr{},
@@ -242,6 +254,7 @@ func compileSemanticModule(path, source string, artifacts map[string][]byte, ide
 		OperationEffects:   summarizeModuleEffects(localWithGenerated, env),
 		HardwareEffects:    summarizeModuleHardwareEffects(localWithGenerated, env),
 		ValueFactSummaries: semanticModuleFactSummaries(localWithGenerated, env),
+		Interpretations:    semanticModuleInterpretations(localWithGenerated, env),
 		SharedAccessFacts:  evt1LocalSharedAccessFacts(localWithGenerated, env),
 		AccessSummaries:    evt1LocalAccessSummaries(localWithGenerated, env),
 		ForeignContracts:   append([]ForeignContractDecl{}, local.ForeignContracts...),
@@ -267,6 +280,18 @@ func compileSemanticModule(path, source string, artifacts map[string][]byte, ide
 		return nil, err
 	}
 	return json.MarshalIndent(artifact, "", "  ")
+}
+
+func semanticModuleInterpretations(module Module, env *semanticEnv) []SemanticInterpretationSite {
+	var sites []SemanticInterpretationSite
+	for _, fn := range buildMIR(module, env).Functions {
+		for _, op := range fn.Operations {
+			if op.Kind == "interpret_scalar_semantics" {
+				sites = append(sites, SemanticInterpretationSite{Function: fn.Name, Source: op.Type, Target: op.ReturnType, Detail: op.Detail, Origin: FactOriginExplicitInterpretation, Span: op.SourceSpan})
+			}
+		}
+	}
+	return sites
 }
 
 func ParseWithSemanticModules(path, source string, artifacts map[string][]byte) (Module, error) {

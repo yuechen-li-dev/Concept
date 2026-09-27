@@ -5,6 +5,6 @@ import Golden.Differentiators.Geometry.Frame;
 [[fact]]
 void DimensionedDisplacementContractsThroughBasis()
 {
-    Assert.True(ProjectDisplacement() == AssumeQuantity<float<m>>(-2.0),
+    Assert.True(ProjectDisplacement() == (interpret -2.0 as float<m>),
                 "the quarter-turn basis rotates a measured displacement");
 }

@@ -37,10 +37,11 @@ ties to even. Exclusive powers-of-two upper bounds avoid double rounding of
 `INT64_MAX` and `UINT64_MAX` into an unsafe C cast. Only a proven in-range
 rounded value reaches the C integer conversion.
 
-Quantity casts may change numeric representation only when the normalized unit
-identity, including scale, is identical. Casts cannot attach, remove, rescale,
-or change a dimension. `interpret`, scaled unit conversion, and semantic
-attachment remain outside R8b. `reinterpret_cast`, `const_cast`, and
+R8c extends quantity casts to exact same-dimension unit-scale conversion;
+they may also change numeric representation. Casts cannot attach or remove a
+quantity, or change a dimension. R8d uses `interpret value as T` to attach
+externally supplied meaning to a same-representation scalar. `Magnitude`
+extracts the current-unit scalar. `reinterpret_cast`, `const_cast`, and
 `dynamic_cast` have no semantics in Concept.
 
 ## Facts and implementation boundary
@@ -64,7 +65,7 @@ with `float` and `double` targets; its preexisting value model does not admit
 
 ## Subsequent ledger
 
-- R8c: multiplicative unit algebra and scaled unit conversion.
-- R8d: `interpret value as T` semantic attachment at external boundaries.
+- R8c: multiplicative unit algebra and scaled unit conversion (established).
+- R8d: `interpret value as T` semantic attachment at external boundaries (established).
 - R8e: project policy concepts, `must_use`/discard, lint/fmt, broader first-contact diagnostics.
 - R8f: resume differentiator goldens.

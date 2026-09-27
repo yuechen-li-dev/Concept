@@ -1,0 +1,4 @@
+module UnitCorpus.InvalidInterpretConversion;
+profile Core;
+
+float<m> Bad(float<mm> value) { return interpret value as float<m>; }

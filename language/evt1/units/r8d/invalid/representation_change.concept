@@ -1,0 +1,4 @@
+module UnitCorpus.InvalidInterpretRepresentation;
+profile Core;
+
+double<m> Bad(float raw) { return interpret raw as double<m>; }

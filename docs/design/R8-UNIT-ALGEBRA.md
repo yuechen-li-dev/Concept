@@ -64,8 +64,9 @@ may not be integral. Existing same-unit integer casts retain R8b range checks.
 `Magnitude(value)` returns the stored numeric scalar in its current unit with
 the unit removed. It is an explicit builtin, so `Magnitude(5mm)` is `5` and
 does not silently convert to meters. Normal `as` still cannot attach or strip
-units. `AssumeQuantity<T>` remains available for the existing explicit native
-boundary and is not replaced in R8c.
+units. R8d makes `interpret value as T` canonical for explicit semantic
+attachment at native and decoded-data boundaries. The earlier
+`AssumeQuantity<T>` spelling remains a compatibility primitive.
 
 Named derived units are ordinary dimension-and-scale aliases: `Hz = s^-1`,
 `N = kg*m/s^2`, `Pa = N/m^2`, `W = kg*m^2/s^3`, and

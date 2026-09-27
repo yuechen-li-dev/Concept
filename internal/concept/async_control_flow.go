@@ -741,6 +741,8 @@ func evt1AwaitFailureInStatement(stmt Statement) *FailureExpr {
 			return find(e.Value)
 		case *CastExpr:
 			return find(e.Value)
+		case *InterpretExpr:
+			return find(e.Value)
 		case *ParenExpr:
 			return find(e.Value)
 		case *UnaryExpr:
@@ -774,6 +776,10 @@ func evt1ReplaceAwaitFailure(stmt Statement, target *FailureExpr, name string) S
 		}
 		switch e := expr.(type) {
 		case *CastExpr:
+			copy := *e
+			copy.Value = replace(e.Value)
+			return &copy
+		case *InterpretExpr:
 			copy := *e
 			copy.Value = replace(e.Value)
 			return &copy

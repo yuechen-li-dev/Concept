@@ -1345,6 +1345,11 @@ func collectTransitionMIR(block *Block, state *MIRState) {
 func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInfo *evt1TemplateInfo) {
 	id := fmt.Sprintf("%s.%02d", fn.Name, len(fn.Operations)+1)
 	switch e := expr.(type) {
+	case *InterpretExpr:
+		unit := e.Target.Quantity.normalized()
+		detail := fmt.Sprintf("explicit semantic interpretation from %s; stored scalar unchanged; dimension %s; scale %d/%d", evt1ExprIdentity(e.Value), unit.String(), unit.ScaleNumerator, unit.ScaleDenominator)
+		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "interpret_scalar_semantics", Type: e.SourceType.String(), ReturnType: e.Target.String(), Detail: detail, Provenance: string(FactOriginExplicitInterpretation), Evaluation: "ExactlyOnce", NoAllocation: true, SourceSpan: e.Span})
+		collectExprMIROps(env, e.Value, fn, templateInfo)
 	case *CastExpr:
 		detail := "explicit numeric conversion"
 		if e.Kind == "unit_scaled_float" {
@@ -4593,6 +4598,9 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		return "", evt1RenderCValue(f.l.env, value), value.Type
 	}
 	switch e := expr.(type) {
+	case *InterpretExpr:
+		prelude, value, _ := f.lowerExpr(e.Value, indent)
+		return prelude, value, e.Target
 	case *CastExpr:
 		return f.lowerNumericCast(e, indent)
 	case *CallableExpr:

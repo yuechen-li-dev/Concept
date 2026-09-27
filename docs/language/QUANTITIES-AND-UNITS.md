@@ -1,6 +1,6 @@
 # Quantities and units
 
-Status: EVT1 R6g compiler substrate
+Status: EVT1 R8d semantic interpretation
 
 Concept separates numeric representation from measurement. `int`, `uint`,
 `uint8`, `usize`, `isize`, and `float` select representation; `byte`, `bit`,
@@ -27,12 +27,21 @@ An unqualified numeric literal is dimensionless for multiplication and
 division (`length / 2.0` remains a length). In addition, subtraction,
 comparison, and remainder, a literal uses the other operand's unit.
 
-At an external measurement boundary, `AssumeQuantity<float<m>>(rawMeters)`
+At an external measurement boundary, `interpret rawMeters as float<m>`
 attaches the named unit to an unqualified scalar of the same numeric
 representation. It does not convert, scale, validate, or prove that the native
 producer used that unit. The source call is the reviewable trust decision;
 lowering keeps the original scalar. A qualified source, a different numeric
 representation, or an unqualified target is rejected.
+
+`as` converts numeric representation and performs exact same-dimension unit
+scale conversion. `interpret` supplies semantic meaning that cannot be
+derived from the scalar value; it performs no scale conversion. `Magnitude`
+extracts the scalar stored in a quantity's current unit. For example,
+`interpret rawMillimeters as float<mm>` retains 1200 as 1200 mm, and a later
+`as float<m>` produces 1.2 m. `AssumeQuantity<T>` is retained as a legacy
+compiler primitive for existing source compatibility; new authored code uses
+`interpret`.
 
 `SizeOf<T>()`, `AlignOf<T>()`, `LayoutSize<T>()`, `LayoutAlign<T>()`, and
 `LayoutOffset<T>()` use `usize<byte>` and the existing layout authority. A

@@ -47,8 +47,8 @@ FlightSample Interpret(NativeSample native)
 {
     bool valid = (native.validityFlags & 1) != 0;
     return FlightSample{
-        AssumeQuantity<float<m>>(native.altitudeMeters),
-        AssumeQuantity<float<m/s>>(native.verticalMetersPerSecond),
+        interpret native.altitudeMeters as float<m>,
+        interpret native.verticalMetersPerSecond as float<m/s>,
         valid
     };
 }

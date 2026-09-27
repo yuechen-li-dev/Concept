@@ -8,7 +8,7 @@ preserved in `first-draft.concept.txt`. Normal and Verify use
 
 Friction: C-style loop and nominal `unit` declaration were natural instincts.
 The actual spelling is a range loop and numeric representation with unit, such
-as `float<m>`. The native ABI uses raw floats, so `AssumeQuantity<T>` is the
+as `float<m>`. The native ABI uses raw floats, so `interpret raw as T` is the
 explicit trusted interpretation point. Familiar: records, enums, bounded
 buffers. New: quantity types and `Result`. Advanced: `NoAllocation` proof.
 `NativeSample` has local `repr(C)` eligibility. An artifact-only

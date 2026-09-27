@@ -1,0 +1,19 @@
+module UnitCorpus.ProtocolInterpretation;
+profile Core;
+
+record struct Packet
+{
+    float altitudeMeters;
+    float pressureMegapascals;
+}
+
+float<m> Altitude(Packet packet)
+{
+    return interpret packet.altitudeMeters as float<m>;
+}
+
+float<Pa> Pressure(Packet packet)
+{
+    float<MPa> pressure = interpret packet.pressureMegapascals as float<MPa>;
+    return pressure as float<Pa>;
+}

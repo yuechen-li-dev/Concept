@@ -15,6 +15,7 @@ type parser struct {
 	callableOrdinal    int
 	templateTypeParams map[string]bool
 	inGeneratorBody    bool
+	suppressAs         bool
 }
 
 func Parse(path, text string) (Module, error) {
@@ -4078,6 +4079,24 @@ func (p *parser) parseMultiplicative() (Expr, error) {
 }
 
 func (p *parser) parseUnary() (Expr, error) {
+	if p.peekLexeme() == "interpret" {
+		start := p.next().Span
+		previous := p.suppressAs
+		p.suppressAs = true
+		value, err := p.parseUnary()
+		p.suppressAs = previous
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.expect("as"); err != nil {
+			return nil, evt1Diagnostic("INTERPRET_SYNTAX", "interpret requires `interpret expression as T`; parenthesize compound source expressions", start)
+		}
+		target, err := p.parseType("")
+		if err != nil {
+			return nil, err
+		}
+		return p.parsePostfixExpr(&InterpretExpr{Value: value, Target: target, Span: start}, start)
+	}
 	if p.peekLexeme() == "await" || p.peekLexeme() == "awaitchronous" {
 		op := p.next()
 		value, err := p.parseUnary()
@@ -4181,7 +4200,10 @@ func (p *parser) parsePrimary() (Expr, error) {
 		if _, numeric := evt1BuiltinType(p.peekLexeme(), p.currentSpan()); numeric && p.peekLexemeN(1) == ")" {
 			return nil, evt1Diagnostic("C_STYLE_CAST_UNSUPPORTED", "C-style casts are unsupported; use value as T, or TruncTo<T>/FloorTo<T>/CeilTo<T>/RoundTo<T> for floating-to-integer conversion", start)
 		}
+		previous := p.suppressAs
+		p.suppressAs = false
 		expr, err := p.parseExpr()
+		p.suppressAs = previous
 		if err != nil {
 			return nil, err
 		}
@@ -4674,6 +4696,9 @@ func (p *parser) parsePostfixExpr(expr Expr, span Span) (Expr, error) {
 	for {
 		switch p.peekLexeme() {
 		case "as":
+			if p.suppressAs {
+				return expr, nil
+			}
 			operator := p.next()
 			target, err := p.parseType("")
 			if err != nil {

@@ -982,6 +982,18 @@ type CastExpr struct {
 func (*CastExpr) evt1Expr()        {}
 func (e *CastExpr) exprSpan() Span { return e.Span }
 
+// InterpretExpr attaches an externally supplied quantity meaning to an
+// identical scalar representation. It is separate from numeric CastExpr.
+type InterpretExpr struct {
+	Value      Expr `json:"value"`
+	Target     Type `json:"target"`
+	SourceType Type `json:"source_type,omitempty"`
+	Span       Span `json:"span"`
+}
+
+func (*InterpretExpr) evt1Expr()        {}
+func (e *InterpretExpr) exprSpan() Span { return e.Span }
+
 type NameExpr struct {
 	Name string `json:"name"`
 	Span Span   `json:"span"`

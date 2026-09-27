@@ -51,8 +51,9 @@ Those formats and all float4 encodings remain declared/deferred. Ambiguous
 
 - R8b: explicit casts and representation conversion.
 - R8c: multiplicative unit algebra and scaled unit conversion.
-- R8d: semantic unit attachment replacing user-facing `AssumeQuantity`.
-- R8e: resume differentiator goldens.
+- R8d: semantic unit attachment via `interpret`, retaining `AssumeQuantity` for compatibility (established).
+- R8e: project policy and first-contact tooling.
+- R8f: resume differentiator goldens.
 - Affine temperature units and exact mixed-precision policy are deferred.
 - Portable binary16 and unsupported bfloat16/float8/float4 lowering need
   separate backend evidence before a strict-C11 claim.

@@ -670,6 +670,8 @@ func evt1DirectTemplateInstances(env *semanticEnv, block Block) []*evt1TemplateI
 		switch e := expr.(type) {
 		case *CastExpr:
 			visitExpr(e.Value)
+		case *InterpretExpr:
+			visitExpr(e.Value)
 		case *TemplateCallExpr:
 			arguments := evt1TemplateCallArgs(e)
 			var identities []string
@@ -760,6 +762,8 @@ func evt1DirectCalls(block Block) []string {
 	visitExpr = func(expr Expr) {
 		switch e := expr.(type) {
 		case *CastExpr:
+			visitExpr(e.Value)
+		case *InterpretExpr:
 			visitExpr(e.Value)
 		case *CallExpr:
 			_, machine := machineIntrinsics[e.Intrinsic]
