@@ -34,6 +34,7 @@ func TestR7jNativeABIEvidenceDeterministic100(t *testing.T) {
 		ABI:        []NativeABIClaim{{Header: "bridge.h", TypeName: "Pair", Companion: "Native.concept", Size: 8, Alignment: 4, Fields: []string{"x", "y"}, Offsets: []int{0, 4}}},
 	}
 	var first []byte
+	narrowNativeDeterminismPath(t)
 	for run := 0; run < determinismRuns(); run++ {
 		if err := CheckNativeABI(project); err != nil {
 			t.Fatal(err)

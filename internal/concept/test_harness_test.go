@@ -4,6 +4,8 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -66,4 +68,36 @@ func determinismRuns() int {
 		return 10
 	}
 	return 100
+}
+
+// A native determinism loop reprobes the same installed toolchain 100 times.
+// On Windows, LookPath otherwise scans every PATHEXT spelling in every PATH
+// directory for each probe. Resolve the actual tools once and keep those same
+// installations visible throughout the loop; probe execution is unchanged.
+func narrowNativeDeterminismPath(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS != "windows" {
+		return
+	}
+	seen := map[string]bool{}
+	var dirs []string
+	for _, tool := range []string{"clang++", "clang", "llvm-ar", "gcc", "g++", "ar"} {
+		path, err := exec.LookPath(tool)
+		if err != nil {
+			continue
+		}
+		dir := filepath.Dir(path)
+		if !seen[dir] {
+			seen[dir] = true
+			dirs = append(dirs, dir)
+		}
+	}
+	if systemRoot := os.Getenv("SystemRoot"); systemRoot != "" {
+		dirs = append(dirs, filepath.Join(systemRoot, "System32"), systemRoot)
+	}
+	if len(dirs) == 0 {
+		t.Fatal("native determinism fixture has no resolved toolchain")
+	}
+	t.Setenv("PATH", strings.Join(dirs, string(os.PathListSeparator)))
+	t.Setenv("PATHEXT", ".COM;.EXE")
 }

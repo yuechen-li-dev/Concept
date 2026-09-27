@@ -60,6 +60,7 @@ func TestNativeConceptArtifactsRepeatByteIdentically(t *testing.T) {
 		t.Fatal(err)
 	}
 	var planBaseline, companionBaseline, generatedBaseline, proofBaseline, abiBaseline, abiProofBaseline, probeBaseline []byte
+	narrowNativeDeterminismPath(t)
 	for run := 0; run < determinismRuns(); run++ {
 		plan, err := NativeBuildPlan(project)
 		if err != nil {
