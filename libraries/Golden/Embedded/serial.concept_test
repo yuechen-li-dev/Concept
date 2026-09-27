@@ -1,0 +1,62 @@
+module Golden.Embedded.Tests;
+profile Core;
+
+import Golden.Embedded.Serial;
+
+[[fact]]
+void SerialOperationsAreBoundedEffects()
+{
+    Assert.Concept<NoAllocation>(ReadByte, "one explicit read uses fixed storage");
+    Assert.Concept<NoAllocation>(Enqueue, "queue mutation stays inline");
+    Assert.Concept<NoAllocation>(Apply, "command dispatch stays inline");
+    Assert.Concept<NoAllocation>(Flush, "bounded transmit loop stays inline");
+    Assert.Concept<HardwareRead>(ReadByte, "read sees the device register");
+    Assert.Concept<HardwareRead>(Flush, "drain observes transmit status");
+    Assert.Concept<HardwareWrite>(Flush, "drain writes explicit device bytes");
+    Assert.Concept<NoAllocation>(DecodeByte, "protocol decoder uses fixed state");
+    Assert.Concept<NoAllocation>(PollAndDispatch, "receive and dispatch use no heap");
+}
+
+[[fact]]
+void DecoderTransitionsAreExplicit()
+{
+    Decoder decoder = Decoder{ParseState::Waiting, 0, 0};
+    uint8 setRate = 0x02;
+    uint8 divisor = 7;
+    uint8 ping = 0x01;
+    uint8 invalid = 0xFF;
+
+    Result<Option<Command>, SerialError> pending = DecodeByte(ref decoder, setRate);
+    Assert.LGTM(pending, "opcode is accepted without a complete command");
+    Assert.True(decoder.state == ParseState::AwaitRate, "decoder waits for divisor");
+
+    Result<Option<Command>, SerialError> completed = DecodeByte(ref decoder, divisor);
+    Assert.LGTM(completed, "divisor completes rate command");
+    Assert.True(decoder.state == ParseState::Waiting, "decoder returns to opcode state");
+    Assert.Equals(decoder.commandsSeen, 1, "one complete command");
+
+    Assert.LGTM(DecodeByte(ref decoder, ping), "ping is one byte");
+    Assert.Equals(decoder.commandsSeen, 2, "ping counts once");
+    Assert.Error(DecodeByte(ref decoder, invalid), "unknown opcode is recoverable");
+    Assert.Equals(decoder.bytesSeen, 4, "every consumed byte is counted");
+}
+
+[[fact]]
+void QueueAndCommandStateAreDeterministic()
+{
+    usize dataAddress = 4096;
+    usize statusAddress = 4101;
+    SerialPort port = SerialPort{
+        AddressFromBits<DeviceMemory>(dataAddress),
+        AddressFromBits<DeviceMemory>(statusAddress),
+        [0 ... 32],
+        0, 0, 0
+    };
+    Assert.LGTM(Enqueue(ref port, 0x41), "first byte is queued");
+    Assert.LGTM(Apply(ref port, Command::SetRate(7)), "rate command is queued");
+    Assert.Equals(port.count, 2, "two bytes are pending");
+    uint8 expectedFirst = 0x41;
+    uint8 expectedSecond = 7;
+    Assert.Equals(port.queue[0], expectedFirst, "first byte is kept");
+    Assert.Equals(port.queue[1], expectedSecond, "payload is kept");
+}

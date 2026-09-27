@@ -1,0 +1,45 @@
+module Golden.Cad.Tests;
+profile Core;
+import Golden.Cad.Mesh;
+
+[[fact]]
+void TriangleOrientationUsesStableVertexIds()
+{
+    Mesh mesh = NewMesh();
+    float<m> zero = 0.0;
+    float<m> four = 4.0;
+    float<m> three = 3.0;
+    Id<Vertex> a = AddVertex(ref mesh, zero, zero)!;
+    Id<Vertex> b = AddVertex(ref mesh, four, zero)!;
+    Id<Vertex> c = AddVertex(ref mesh, zero, three)!;
+    Id<Face> positive = AddFace(ref mesh, a, b, c)!;
+    Id<Face> negative = AddFace(ref mesh, a, c, b)!;
+    Id<Face> degenerate = AddFace(ref mesh, a, b, b)!;
+    Assert.LGTM(SignedDoubleArea(ref const mesh, positive), "counterclockwise face has area");
+    Assert.LGTM(SignedDoubleArea(ref const mesh, negative), "clockwise face has signed area");
+    Assert.Error(SignedDoubleArea(ref const mesh, degenerate), "repeated vertex is degenerate");
+    Assert.Equals(CountPositiveFaces(ref const mesh), 1, "only one face has positive orientation");
+    Assert.Equals(CountDegenerateFaces(ref const mesh), 1, "degeneracy census is stable");
+    Vertex center = FaceCentroid(ref const mesh, positive)!;
+    Assert.True(center.x > 1.0 and center.x < 2.0, "centroid lies within x extent");
+    Assert.True(center.y > 0.0 and center.y < 2.0, "centroid lies within y extent");
+    Bounds bounds = VertexBounds(ref const mesh)!;
+    Assert.True(bounds.minX == 0.0 and bounds.maxX == 4.0, "x bounds cover vertices");
+    Assert.True(bounds.minY == 0.0 and bounds.maxY == 3.0, "y bounds cover vertices");
+}
+
+[[fact]]
+void GeometryTraversalIsInline()
+{
+    Assert.Concept<NoAllocation>(SignedDoubleArea, "vertex lookup and cross product are inline");
+    Assert.Concept<NoAllocation>(CountPositiveFaces, "dense face traversal is bounded");
+    Assert.Concept<NoAllocation>(FaceCentroid, "centroid uses value geometry");
+    Assert.Concept<NoAllocation>(VertexBounds, "bounds traversal uses inline vertices");
+}
+
+[[fact]]
+void EmptyMeshHasNoBounds()
+{
+    Mesh mesh = NewMesh();
+    Assert.Error(VertexBounds(ref const mesh), "empty mesh has no spatial extent");
+}

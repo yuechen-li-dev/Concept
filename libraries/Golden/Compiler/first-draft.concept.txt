@@ -1,0 +1,50 @@
+module Golden.Compiler.Postfix;
+profile Core;
+import Standard.Collection.Stores;
+
+enum Token
+{
+    Number(int value),
+    Plus,
+    Multiply
+}
+
+enum Expr
+{
+    Literal(int value),
+    Add(Id<Expr> left, Id<Expr> right),
+    Mul(Id<Expr> left, Id<Expr> right)
+}
+
+enum ParseError
+{
+    StackUnderflow,
+    StackOverflow,
+    StoreFull,
+    TrailingOperands
+}
+
+struct Parser
+{
+    DenseStore<Expr, 64> nodes;
+    Id<Expr>[64] stack;
+    int depth;
+}
+
+Result<Id<Expr>, ParseError> Parse(ref Parser parser, Span<Token> tokens)
+{
+    for (int i = 0; i < Len(tokens); i++)
+    {
+        match (tokens[i])
+        {
+            Token::Number(value) => { PushLiteral(ref parser, value)!; }
+            Token::Plus => { ReduceAdd(ref parser)!; }
+            Token::Multiply => { ReduceMul(ref parser)!; }
+        }
+    }
+    if (parser.depth != 1)
+    {
+        return Result::Error(ParseError::TrailingOperands);
+    }
+    return Result::Ok(parser.stack[0]);
+}

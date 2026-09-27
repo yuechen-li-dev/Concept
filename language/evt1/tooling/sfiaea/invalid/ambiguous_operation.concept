@@ -1,0 +1,16 @@
+profile Core;
+
+int Select(int value)
+{
+    return value;
+}
+
+uint Select(uint value)
+{
+    return value;
+}
+
+int Main()
+{
+    return Select(7);
+}

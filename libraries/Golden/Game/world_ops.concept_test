@@ -1,0 +1,42 @@
+module Golden.Game.WorldOpsTests;
+profile Core;
+import Golden.Game.WorldOps;
+
+[[fact]]
+void TransientTrailsRejectStaleGenerationalHandles()
+{
+    TrailPool pool = NewTrailPool();
+    GenerationalId<Trail> first = RecordTrail(ref pool, 3, 4, 1)!;
+    Assert.True(Contains<Trail, 32>(ref const pool.trails, first), "new trail is live");
+    Assert.LGTM(RetireTrail(ref pool, first), "trail is retired");
+    Assert.False(Contains<Trail, 32>(ref const pool.trails, first), "old handle is stale");
+    GenerationalId<Trail> second = RecordTrail(ref pool, 7, 8, 2)!;
+    Assert.True(second.generation != first.generation, "slot reuse changes generation");
+}
+
+[[fact]]
+void FixedScheduleProjectsDensePositionsIntoSoA()
+{
+    World world = World{DenseStore<Agent, 64>{Uninitialized()}, 0};
+    Id<Agent> first = Spawn(ref world, 1, 2)!;
+    Id<Agent> second = Spawn(ref world, 4, 5)!;
+    {
+        ref Agent a = DenseGetMutable<Agent, 64>(ref world.agents, first)!;
+        a.intent = Intent::Seek(3, 2);
+    }
+    RunTickBudget(ref world, 2);
+    PositionFrame frame = PositionFrame{[0 ...], [0 ...]};
+    int count = ProjectPositions(ref const world, ref frame);
+    Assert.Equals(count, 2, "two agents project into the fixed frame");
+    Assert.Equals(SumActiveCoordinates(ReadOnlySpan(frame.x), count), 7, "SoA x column holds updated positions");
+    Assert.Equals(SumActiveCoordinates(ReadOnlySpan(frame.y), count), 7, "SoA y column holds positions");
+    Assert.Equals(world.tick, 2, "budget performs exactly two ticks");
+}
+
+[[fact]]
+void SchedulerAndProjectionHaveNoAllocation()
+{
+    Assert.Concept<NoAllocation>(RunTickBudget, "caller-owned tick budget has no task heap");
+    Assert.Concept<NoAllocation>(ProjectPositions, "dense traversal fills an existing table");
+    Assert.Concept<NoAllocation>(SumActiveCoordinates, "Span reduction stays inline");
+}

@@ -44,8 +44,9 @@ their fixtures now have exactly one authority under `language/evt1`.
 | R6p | ordinary Standard.Memory fixed, hosted, bump, pool, and typed ownership | this report's commit | semantic-module, `.concept_test`, strict-C11, effect, lifetime, and determinism evidence |
 | R7a | production libraries, ordinary manifests, namespaces, and canonical DragonGod | this report's commit | package DAG/artifacts, namespace collisions, Standard.Memory dogfood, DragonGod strict-C11 evidence |
 | R7fR | bounded ordinary-library Standard.Collection mark/sweep | `EVT1-R7FR-CONVERGENCE.md` | graph cycles, stale handles, borrow exclusion, artifact-only strict C11, 100-run determinism |
+| R7p | EVT1 semantic freeze after domain burn-in | `EVT1-R7P-FREEZE-REPORT.md` | nine domain fixtures, first-draft friction, full Normal/Verify qualification |
 
-The manifest records 382 valid, 246 static-invalid, and 13 runtime-negative
+The manifest records 400 valid, 269 static-invalid, and 13 runtime-negative
 fixtures. Four retained expected-divergence cases compare the frozen EVT1
 structural-copy and bounded-comptime decisions against PoC3. No EVT1 gap or
 unresolved specification ambiguity remains in the R5 core.

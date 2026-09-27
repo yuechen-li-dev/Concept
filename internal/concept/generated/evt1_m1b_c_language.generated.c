@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static void concept_panic(const char* reason, int line, int column) {
+_Noreturn static void concept_panic(const char* reason, int line, int column) {
   fprintf(stderr, "Concept panic at %d:%d: %s\n", line, column, reason);
   abort();
 }

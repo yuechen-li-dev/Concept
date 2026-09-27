@@ -1,0 +1,7 @@
+module QuantityBoundaryInvalid;
+profile Core;
+
+float<m> Invalid(int nativeMeters)
+{
+    return AssumeQuantity<float<m>>(nativeMeters);
+}

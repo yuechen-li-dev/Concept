@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static void concept_abort_invalid_tag(const char* enum_name) {
+_Noreturn static void concept_abort_invalid_tag(const char* enum_name) {
   fprintf(stderr, "invalid enum tag for %s\n", enum_name);
   abort();
 }
@@ -127,6 +127,7 @@ int32_t concept_evt1_m1b_a_language_classify_outcome(concept_outcome outcome) {
   case CONCEPT_OUTCOME_READY:
     {
       concept_allocation allocation = cv_match_subject_01.payload.ready.allocation;
+      (void)allocation;
       int32_t cv_arg_03 = allocation.range.offset;
       int32_t cv_arg_04 = allocation.range.size;
       int32_t cv_arg_05 = concept_evt1_m1b_a_language_add(cv_arg_03, cv_arg_04);
@@ -137,6 +138,7 @@ int32_t concept_evt1_m1b_a_language_classify_outcome(concept_outcome outcome) {
   case CONCEPT_OUTCOME_FAILED:
     {
       int32_t code = cv_match_subject_01.payload.failed.code;
+      (void)code;
       cv_match_result_02 = code;
       break;
     }

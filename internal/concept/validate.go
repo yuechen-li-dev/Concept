@@ -2756,6 +2756,18 @@ func evt1ValidateStorageTemplateCall(env *semanticEnv, scope *evt1Scope, e *Temp
 			return Type{}, true, evt1Diagnostic("QUANTITY_CONVERSION_INVALID", fmt.Sprintf("cannot convert %s to %s", source.String(), e.TypeArg.Name), e.Span)
 		}
 		return evt1QuantityResult(source, targetUnit, e.Span), true, nil
+	case "AssumeQuantity":
+		if len(e.Args) != 1 || e.TypeArg.Quantity == nil || !evt1NumericRepresentation(e.TypeArg) {
+			return Type{}, true, evt1Diagnostic("QUANTITY_ATTACHMENT_INVALID", "AssumeQuantity<T> expects one scalar and a numeric quantity type T", e.Span)
+		}
+		source, err := validateExpr(env, scope, e.Args[0], templateInfo, inComptimeFn)
+		if err != nil {
+			return Type{}, true, err
+		}
+		if source.Quantity != nil || source.Name != e.TypeArg.Name || source.Kind != e.TypeArg.Kind {
+			return Type{}, true, evt1Diagnostic("QUANTITY_ATTACHMENT_INVALID", fmt.Sprintf("AssumeQuantity<%s> requires an unqualified %s scalar", e.TypeArg.String(), e.TypeArg.Name), e.Span)
+		}
+		return e.TypeArg, true, nil
 	default:
 		return Type{}, false, nil
 	}
@@ -4437,15 +4449,27 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		// dimension, without inventing runtime unit values.
 		if rightIsLiteral && evt1IntegralRepresentation(leftType) {
 			rightType = leftType
+			if e.Op == "*" || e.Op == "/" {
+				rightType.Quantity = nil
+			}
 		}
 		if _, ok := e.Right.(*FloatLiteral); ok && leftType.Name == "float" {
 			rightType = leftType
+			if e.Op == "*" || e.Op == "/" {
+				rightType.Quantity = nil
+			}
 		}
 		if leftIsLiteral && evt1IntegralRepresentation(rightType) {
 			leftType = rightType
+			if e.Op == "*" || e.Op == "/" {
+				leftType.Quantity = nil
+			}
 		}
 		if _, ok := e.Left.(*FloatLiteral); ok && rightType.Name == "float" {
 			leftType = rightType
+			if e.Op == "*" || e.Op == "/" {
+				leftType.Quantity = nil
+			}
 		}
 		if templateInfo != nil && (evt1TypeDependsOnParam(leftType, templateInfo.Decl.TypeParam) || evt1TypeDependsOnParam(rightType, templateInfo.Decl.TypeParam)) {
 			return Type{}, evt1Diagnostic("CV4175", "dependent operators are not allowed in EVT1 M1B-B templates", e.Span)

@@ -1,0 +1,59 @@
+module Golden.Hft.Market;
+profile Core;
+import Standard.Synchronization.Atomic;
+import Standard.Machine.AMD64;
+
+record struct MarketEvent
+{
+    int symbol;
+    int priceTicks;
+    uint64 timestamp;
+}
+
+struct MarketQueue
+{
+    MarketEvent[64] slots;
+    AtomicInt head;
+    AtomicInt tail;
+}
+
+bool Publish(ref MarketQueue queue, MarketEvent event)
+{
+    int tail = AtomicLoad(ref queue.tail, MemoryOrder::Relaxed);
+    int head = AtomicLoad(ref queue.head, MemoryOrder::Acquire);
+    if (tail - head == 64)
+    {
+        return false;
+    }
+    queue.slots[tail % 64] = event;
+    AtomicStore(ref queue.tail, tail + 1, MemoryOrder::Release);
+    return true;
+}
+
+Option<MarketEvent> Consume(ref MarketQueue queue)
+{
+    int head = AtomicLoad(ref queue.head, MemoryOrder::Relaxed);
+    int tail = AtomicLoad(ref queue.tail, MemoryOrder::Acquire);
+    if (head == tail)
+    {
+        return Option::None;
+    }
+    MarketEvent event = queue.slots[head % 64];
+    AtomicStore(ref queue.head, head + 1, MemoryOrder::Release);
+    return Option::Some(event);
+}
+
+int Drain(ref MarketQueue queue, int budget)
+{
+    int count = 0;
+    for (int i = 0; i < budget; ++i)
+    {
+        Option<MarketEvent> event = Consume(ref queue);
+        if (event == Option::None)
+        {
+            break;
+        }
+        count++;
+    }
+    return count;
+}

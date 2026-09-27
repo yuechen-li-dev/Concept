@@ -1,0 +1,18 @@
+profile Core;
+
+struct Packet
+{
+    int code;
+}
+
+template <typename T>
+int ReadPriority(T packet)
+{
+    return packet.priority;
+}
+
+int Main()
+{
+    Packet packet = Packet{7};
+    return ReadPriority<Packet>(packet);
+}

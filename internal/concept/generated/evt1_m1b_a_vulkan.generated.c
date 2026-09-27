@@ -3,12 +3,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static void concept_abort_invalid_tag(const char* enum_name) {
+_Noreturn static void concept_abort_invalid_tag(const char* enum_name) {
   fprintf(stderr, "invalid enum tag for %s\n", enum_name);
   abort();
 }
 
-static void concept_panic(const char* reason, int line, int column) {
+_Noreturn static void concept_panic(const char* reason, int line, int column) {
   fprintf(stderr, "Concept panic at %d:%d: %s\n", line, column, reason);
   abort();
 }
@@ -84,12 +84,14 @@ int32_t concept_evt1_m1b_a_vulkan_describe_event(concept_resource_event event) {
   case CONCEPT_RESOURCE_EVENT_RANGE:
     {
       concept_buffer_range range = cv_match_subject_01.payload.range.range;
+      (void)range;
       cv_match_result_02 = concept_rt_evt1_m1b_a_vulkan_i32_add(range.offset, range.size, 67, 53);
       break;
     }
   case CONCEPT_RESOURCE_EVENT_FAILED:
     {
       int32_t code = cv_match_subject_01.payload.failed.code;
+      (void)code;
       cv_match_result_02 = code;
       break;
     }

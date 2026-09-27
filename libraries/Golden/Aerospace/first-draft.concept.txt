@@ -1,0 +1,38 @@
+module Golden.Aerospace.FlightTelemetry;
+profile Core;
+
+unit Meter;
+unit Second;
+
+enum FlightMode
+{
+    Preflight,
+    Climb,
+    Cruise,
+    Descent,
+    Fault
+}
+
+struct Sample
+{
+    Meter altitude;
+    Meter<per Second> verticalSpeed;
+    bool valid;
+}
+
+struct Controller
+{
+    FlightMode mode;
+    Sample[8] recent;
+    int count;
+}
+
+void Accept(ref Controller controller, Sample sample)
+{
+    if (!sample.valid) { controller.mode = FlightMode::Fault; return; }
+    for (int i = 0; i < 8; i++)
+    {
+        controller.recent[i] = sample;
+    }
+    if (sample.altitude > 10000) { controller.mode = FlightMode::Cruise; }
+}

@@ -3223,6 +3223,13 @@ func (p *parser) parseForeachStmt() (Statement, error) {
 	if _, err := p.expect("("); err != nil {
 		return nil, err
 	}
+	if start.Lexeme == "for" {
+		for i := p.pos; i < len(p.tokens) && p.tokens[i].Lexeme != ")"; i++ {
+			if p.tokens[i].Lexeme == ";" {
+				return nil, evt1Diagnostic("FOREACH_ITERATOR_INVALID", "C-style for loops are unsupported; use `for (i in start..end step n)` or `while (condition) bounded(limit)`", start.Span)
+			}
+		}
+	}
 	var itemType Type
 	if p.pos+1 >= len(p.tokens) || p.tokens[p.pos+1].Lexeme != "in" {
 		var err error

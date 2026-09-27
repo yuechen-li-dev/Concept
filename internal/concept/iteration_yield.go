@@ -128,6 +128,7 @@ func (f *evt1FunctionLowerer) lowerForeachStmt(stmt ForeachStmt, indent int) str
 		f.pushScope()
 		itemName := f.bindName(stmt.ItemName, stmt.ItemType)
 		b += ind(indent+2) + fmt.Sprintf("%s %s = %s;\n", evt1CType(stmt.ItemType), itemName, cursor)
+		b += ind(indent+2) + fmt.Sprintf("(void)%s;\n", itemName)
 		b += ind(indent+2) + fmt.Sprintf("uint64_t %s = %s.descending ? (uint64_t)%s - (uint64_t)%s.end : (uint64_t)%s.end - (uint64_t)%s;\n", distance, sourceName, cursor, sourceName, sourceName, cursor)
 		b += ind(indent+2) + fmt.Sprintf("%s = (uint64_t)%s.step >= %s ? %s.end : (%s.descending ? %s - %s.step : %s + %s.step);\n", cursor, sourceName, distance, sourceName, sourceName, cursor, sourceName, cursor, sourceName)
 		b += f.lowerBlock(stmt.Body, indent+2)
@@ -153,6 +154,7 @@ func (f *evt1FunctionLowerer) lowerForeachStmt(stmt ForeachStmt, indent int) str
 			itemExpr = "&(" + access + ")"
 		}
 		b += ind(indent+2) + fmt.Sprintf("%s %s = %s;\n", evt1CType(stmt.ItemType), itemName, itemExpr)
+		b += ind(indent+2) + fmt.Sprintf("(void)%s;\n", itemName)
 		b += ind(indent+2) + fmt.Sprintf("%s = %s + 1u;\n", indexName, indexName)
 		b += f.lowerBlock(stmt.Body, indent+2)
 		b += f.lowerCurrentScopeDrops(indent + 2)
@@ -185,6 +187,7 @@ func (f *evt1FunctionLowerer) lowerForeachStmt(stmt ForeachStmt, indent int) str
 	f.pushScope()
 	itemName := f.bindName(stmt.ItemName, stmt.ItemType)
 	b += ind(indent+2) + fmt.Sprintf("%s %s = %s(%s);\n", evt1CType(stmt.ItemType), itemName, evt1FunctionSymbolForDecl(f.l.symbolBase, f.l.env, current), currentArg)
+	b += ind(indent+2) + fmt.Sprintf("(void)%s;\n", itemName)
 	b += f.lowerBlock(stmt.Body, indent+2)
 	b += f.lowerCurrentScopeDrops(indent + 2)
 	f.popScope()

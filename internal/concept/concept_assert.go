@@ -532,7 +532,8 @@ func evt1ProjectNoAllocation(env *semanticEnv, graph *ProofGraph, root string, f
 		graph.addEdge(root, id, ProofConflictsWith)
 		return FactDisproven
 	}
-	if visiting[fn.Name] {
+	visitKey := evt1OperationEffectKey(fn.Name, evt1FunctionParamSignature(fn))
+	if visiting[visitKey] {
 		id := graph.addNode(ProofMissingFact, fn.Name, "recursive call summary is not closed", FactUnknown, FactOriginCompilerAnalysis, fn.Span)
 		graph.addEdge(root, id, ProofBlockedBy)
 		return FactUnknown
@@ -542,30 +543,39 @@ func evt1ProjectNoAllocation(env *semanticEnv, graph *ProofGraph, root string, f
 		graph.addEdge(root, id, ProofBlockedBy)
 		return FactUnknown
 	}
-	visiting[fn.Name] = true
-	defer delete(visiting, fn.Name)
+	visiting[visitKey] = true
+	defer delete(visiting, visitKey)
 	calls := evt1DirectCalls(*fn.Body)
 	outcome := FactProven
 	fnNode := graph.addNode(ProofSubgoal, fn.Name, "local operation body", "", FactOriginCompilerAnalysis, fn.Span)
 	graph.addEdge(root, fnNode, ProofRequires)
 	for _, name := range calls {
+		if evt1AtomicIntrinsicName(name) {
+			id := graph.addNode(ProofKnownFact, name+" NoAllocation", "compiler-known C11 atomic intrinsic", FactProven, FactOriginCompilerAnalysis, fn.Span)
+			graph.addEdge(fnNode, id, ProofDerivedFrom)
+			continue
+		}
 		candidates := env.functions[name]
 		// These compiler-defined operations only inspect inline metadata or
 		// return an existing storage view; none obtains storage.
-		if len(candidates) == 0 && env.templates[name].Name == "" && (name == "Len" || name == "Value" || name == "OptionValue") {
+		if len(candidates) == 0 && env.templates[name].Name == "" && evt1InlineStorageInspectionName(name) {
 			id := graph.addNode(ProofKnownFact, name+" NoAllocation", "compiler-defined storage inspection", FactProven, FactOriginCompilerAnalysis, fn.Span)
 			graph.addEdge(fnNode, id, ProofDerivedFrom)
 			continue
 		}
-		if len(candidates) != 1 {
+		if len(candidates) == 0 {
 			id := graph.addNode(ProofMissingFact, name, "call target or allocation summary is not uniquely available", FactUnknown, FactOriginCompilerAnalysis, fn.Span)
 			graph.addEdge(fnNode, id, ProofBlockedBy)
 			outcome = FactUnknown
 			continue
 		}
-		child := evt1ProjectNoAllocation(env, graph, fnNode, candidates[0], visiting)
-		if child != FactProven {
-			outcome = child
+		for _, candidate := range candidates {
+			child := evt1ProjectNoAllocation(env, graph, fnNode, candidate, visiting)
+			if child == FactDisproven {
+				outcome = FactDisproven
+			} else if child == FactUnknown && outcome == FactProven {
+				outcome = FactUnknown
+			}
 		}
 	}
 	templateInstances := evt1DirectTemplateInstances(env, *fn.Body)
@@ -602,6 +612,10 @@ func evt1ProjectNoAllocation(env *semanticEnv, graph *ProofGraph, root string, f
 		}
 	}
 	return outcome
+}
+
+func evt1InlineStorageInspectionName(name string) bool {
+	return name == "Len" || name == "Value" || name == "OptionValue"
 }
 
 func evt1DirectAsmStatements(block Block) []*AsmStmt {

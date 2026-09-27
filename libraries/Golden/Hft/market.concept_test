@@ -1,0 +1,53 @@
+module Golden.Hft.Tests;
+profile Core;
+import Golden.Hft.Market;
+
+[[fact]]
+void MarketQueuePreservesPublicationOrder()
+{
+    MarketQueue queue = MarketQueue{
+        [MarketEvent{0, 0, 0} ...],
+        AtomicInt{0},
+        AtomicInt{0}
+    };
+    Assert.True(Publish(ref queue, MarketEvent{11, 101, 7}), "first event fits");
+    Assert.True(Publish(ref queue, MarketEvent{11, 102, 8}), "second event fits");
+    Option<MarketEvent> first = Consume(ref queue);
+    uint64 expectedTimestamp = 7;
+    match (first)
+    {
+        Option::None => { Assert.True(false, "a published event must be visible"); }
+        Option::Some(event) => {
+            Assert.Equals(event.priceTicks, 101, "FIFO retains the first price");
+            Assert.Equals(event.timestamp, expectedTimestamp, "timestamp stays with the event");
+        }
+    }
+    Assert.Equals(Drain(ref queue, 16), 1, "drain consumes one remaining event");
+}
+
+[[fact]]
+void MarketHotPathUsesOnlyBoundedStorage()
+{
+    Assert.Concept<sync.SingleProducer>(FeedContext, MarketQueue, "one feed publishes to this queue");
+    Assert.Concept<sync.SingleConsumer>(SignalContext, MarketQueue, "one signal context consumes this queue");
+    Assert.Concept<NoAllocation>(Publish, "publication stores into fixed slots");
+    Assert.Concept<NoAllocation>(Consume, "consumption reads one fixed slot");
+    Assert.Concept<NoAllocation>(Drain, "bounded draining allocates nothing");
+    Assert.Concept<NoAllocation>(NextValid, "validated dequeue stays inline");
+    Assert.Concept<NoAllocation>(DrainSignal, "signal calculation uses scalar state");
+}
+
+[[fact]]
+void SignalPathRejectsBadPricesAndRetainsOrder()
+{
+    MarketQueue queue = MarketQueue{[MarketEvent{0, 0, 0} ...], AtomicInt{0}, AtomicInt{0}};
+    SignalState signal = SignalState{0, 0, 0, 0};
+    Assert.True(Publish(ref queue, MarketEvent{3, 100, 1}), "first quote fits");
+    Assert.True(Publish(ref queue, MarketEvent{3, 0, 2}), "invalid quote is still transportable");
+    Assert.True(Publish(ref queue, MarketEvent{3, 103, 3}), "third quote fits");
+    Assert.Equals(DrainSignal(ref queue, ref signal, 8), 2, "two valid quotes update signal");
+    Assert.Equals(signal.accepted, 2, "only positive prices count");
+    Assert.Equals(signal.rejected, 1, "zero price is rejected once");
+    Assert.Equals(signal.lastDelta, 3, "signal uses last accepted price");
+    Assert.Error(NextValid(ref queue), "empty queue has an explicit result error");
+}

@@ -1,6 +1,11 @@
 # Concept semantic proofs
 
-Reflection queries can currently be inspected with `concept reflect file.concept`. `concept explain` still explains source `Assert.Concept` assertions; generated-declaration provenance is not yet available.
+Reflection queries can be inspected with `concept reflect file.concept`.
+`concept explain file.concept --generated Operation` attributes a checked
+generated declaration to its generator, derivation site, reflected type, and
+selected fields. `concept explain file.concept --concept 'Trace<Node>'` checks
+a required-operation witness and attributes a generated witness when present.
+Source-position `Assert.Concept` explanations remain available.
 
 Imported generic method access summaries can now close for a concrete type
 application. Proof status is derived from the closed entries. An open generic

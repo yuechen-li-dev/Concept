@@ -1,0 +1,24 @@
+profile Core;
+
+concept Readable<T>
+{
+    requires int Read(ref const T item);
+}
+
+struct Packet
+{
+    int code;
+}
+
+template <typename T>
+requires Readable<T>
+int Decode(ref const T item)
+{
+    return Read(ref const item);
+}
+
+int Main()
+{
+    Packet packet = Packet{7};
+    return Decode<Packet>(ref const packet);
+}

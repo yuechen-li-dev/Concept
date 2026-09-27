@@ -101,4 +101,4 @@ capability constrains the second parameter. Closed instantiation resolves
 effects through the same structural substitution machinery.
 # Reflection status
 
-Closed generic applications can be inspected with `reflect<Box<int>>;` after ordinary instantiation. The reflected fields use substituted types. Open generic reflection and generator-driven derivation are not implemented; see [Reflection](REFLECTION.md).
+Closed generic applications can be inspected with `reflect<Box<int>>;` after ordinary instantiation. The reflected fields use substituted types. Bounded generator-driven derivation is implemented for closed reflected types; see [Reflection](REFLECTION.md). Open generic reflection remains unavailable.

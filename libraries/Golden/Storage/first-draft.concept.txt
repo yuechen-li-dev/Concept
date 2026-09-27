@@ -1,0 +1,14 @@
+module Golden.Storage.PageCache;
+profile Core;
+
+struct Page { byte data[4096]; bool dirty; };
+struct Cache { Page pages[8]; int count; };
+
+Page* Find(Cache* cache, int pageId)
+{
+    for (int i = 0; i < cache->count; ++i)
+    {
+        if (cache->pages[i].id == pageId) return &cache->pages[i];
+    }
+    return nullptr;
+}

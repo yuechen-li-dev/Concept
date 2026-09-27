@@ -269,7 +269,7 @@ func evt1FailureNestingDepth(t Type) int {
 	return depth
 }
 
-func evt1CanonicalFailureTypeKeys(module Module) map[string]bool {
+func evt1CanonicalFailureTypeKeys(module Module, env *semanticEnv) map[string]bool {
 	out := map[string]bool{}
 	add := func(t Type) {
 		if evt1IsFailureType(t) {
@@ -279,6 +279,13 @@ func evt1CanonicalFailureTypeKeys(module Module) map[string]bool {
 	for _, fn := range module.Functions {
 		if fn.Body != nil {
 			evt1VisitFailureTypesBlock(*fn.Body, add)
+		}
+	}
+	if env != nil {
+		for _, instance := range env.templateInstances {
+			if instance.Function.Body != nil {
+				evt1VisitFailureTypesBlock(*instance.Function.Body, add)
+			}
 		}
 	}
 	return out

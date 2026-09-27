@@ -5,6 +5,13 @@ substrate: `AtomicInt`, explicit `MemoryOrder`, and load, store, exchange,
 compare-exchange, and fetch-add operations. The ordinary library owns the API;
 MIR and Planner retain general atomic semantics.
 
+The callable spellings are `LoadAtomic(ref atomic, order)`,
+`StoreAtomic(ref atomic, value, order)`, `ExchangeAtomic`,
+`CompareExchangeAtomic`, and `FetchAddAtomic`. For a bounded queue, the
+publisher stores the payload before a Release store of the tail; the consumer
+uses an Acquire load of the tail before reading that payload. A missing proof
+does not erase these operations in Verify or the default plan.
+
 R7d2 adds compiler-owned source propositions rather than new runtime objects:
 
 ```concept

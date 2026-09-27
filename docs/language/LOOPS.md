@@ -17,8 +17,11 @@ Value iteration copies only copyable elements. Arrays and spans use inline
 counted iteration without a runtime iterator allocation. Other iterable
 sources use the existing `GetIterator`/`MoveNext`/`Current` protocol.
 
-There is no C-style `for` loop. Finite `start..end` ranges, `step`, `descend`,
-`break`, and `continue` are not yet accepted by this checkout. They require a
-range/control-flow representation that can be validated and lowered across
-ordinary functions, machines, and async code. Until then, counted iteration
-uses `while (...) bounded(limit)` where boundedness is required.
+There is no C-style `for` loop or `break`/`continue`. Finite `start..end`
+ranges are values: the start is included and the end excluded. For example,
+`for (index in 0..32)` performs at most 32 iterations. `start..end step n`
+and `start..end descend n` use a positive step, with runtime guards when an
+endpoint or step is not known at compile time. Range loops use the same
+inline, allocation-free iteration path as arrays and spans, including in
+machines and async code. A loop that must stop on a runtime condition can use
+`while (condition) bounded(limit)`.

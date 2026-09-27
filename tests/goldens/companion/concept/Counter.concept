@@ -1,0 +1,27 @@
+module Counter;
+profile Core;
+
+[[repr(C)]] record struct CounterStats { int value; int resets; }
+
+concept CAbiValue<T> { requires compiler.CAbiLayout<T>(); }
+requires CAbiValue<CounterStats>;
+
+concept CounterSnapshotSchema<T>
+{
+    requires CAbiValue<T>;
+    requires int SnapshotValue(ref const T snapshot);
+}
+int SnapshotValue(ref const CounterStats snapshot) { return snapshot.value; }
+requires CounterSnapshotSchema<CounterStats>;
+
+extern "C" byte* ConceptCounterCreate();
+extern "C" void ConceptCounterDestroy(byte* counter);
+extern "C" void ConceptCounterAdd(byte* counter, int delta);
+extern "C" void ConceptCounterReset(byte* counter);
+extern "C" CounterStats ConceptCounterSnapshot(byte* counter);
+
+foreign concept CounterCreationContract on ConceptCounterCreate
+{
+    requires compiler.Allocates(ConceptCounterCreate);
+    requires compiler.NonNull(result);
+}

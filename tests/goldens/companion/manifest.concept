@@ -1,0 +1,61 @@
+module Counter.Manifest;
+profile Core;
+
+record struct NativeTarget
+{
+    string name;
+    NativeLanguage language;
+    NativeStandard standard;
+    NativeOutputKind kind;
+    string output;
+    string<array>[1] sources;
+    string<array>[1] includes;
+    NativeDefine<array>[1] defines;
+    string<array>[1] linkInputs;
+};
+
+enum NativeLanguage { C, Cpp, }
+enum NativeStandard { C11, C17, Cpp17, Cpp20, Cpp23, }
+enum NativeOutputKind { Executable, StaticLibrary, }
+enum NativeToolchain { Clang, ClangCL, MSVC, GCC, }
+
+record struct NativeDefine { string name; string value; bool hasValue; };
+record struct NativeAbiClaim
+{
+    string header;
+    string typeName;
+    string companion;
+    int size;
+    int alignment;
+    string<array>[2] fields;
+    int<array>[2] offsets;
+};
+record struct NativeVersion { int major; int minor; int patch; }
+record struct NativeProjectManifest
+{
+    string name;
+    string author;
+    NativeVersion version;
+    NativeToolchain toolchain;
+    string<array>[2] sourceRoots;
+    NativeTarget<array>[1] targets;
+    string<array>[1] companions;
+    string<array>[1] tests;
+    NativeAbiClaim<array>[1] abi;
+};
+
+comptime NativeProjectManifest Native = NativeProjectManifest{
+    "GoldenCounter", "Concept fixture", NativeVersion{1, 0, 0}, NativeToolchain::Clang,
+    ["native", "concept"],
+    [NativeTarget{
+        "counter", NativeLanguage::Cpp, NativeStandard::Cpp17,
+        NativeOutputKind::StaticLibrary, ".native-build/libgolden_counter.a",
+        ["native/counter_bridge.cpp"], ["native"],
+        [NativeDefine{"GOLDEN_COUNTER", "1", true}], [""]
+    }],
+    ["concept/Counter.concept"], ["tests/counter.concept_test"],
+    [NativeAbiClaim{
+        "native/counter_bridge.h", "CounterStats", "concept/Counter.concept",
+        8, 4, ["value", "resets"], [0, 4]
+    }]
+};

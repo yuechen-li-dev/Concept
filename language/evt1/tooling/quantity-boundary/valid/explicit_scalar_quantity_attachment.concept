@@ -1,0 +1,12 @@
+module QuantityBoundary;
+profile Core;
+
+float<m> MeasuredAltitude(float nativeMeters)
+{
+    return AssumeQuantity<float<m>>(nativeMeters);
+}
+
+float<m/s> MeasuredClimbRate(float nativeMetersPerSecond)
+{
+    return AssumeQuantity<float<m/s>>(nativeMetersPerSecond);
+}

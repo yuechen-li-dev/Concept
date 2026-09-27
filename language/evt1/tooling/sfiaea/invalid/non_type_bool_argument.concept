@@ -1,0 +1,12 @@
+profile Core;
+
+template <typename T, usize N>
+struct Slots
+{
+    T<array>[N] values;
+};
+
+usize<byte> Main()
+{
+    return SizeOf<Slots<int, true>>();
+}

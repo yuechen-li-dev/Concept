@@ -1,0 +1,105 @@
+module Golden.Game.Agents;
+profile Core;
+import Standard.Collection.Stores;
+
+enum Intent
+{
+    Idle,
+    Seek(int x, int y),
+    Strike(int target)
+}
+
+struct Agent
+{
+    int x;
+    int y;
+    int health;
+    Intent intent;
+}
+
+struct World
+{
+    DenseStore<Agent, 64> agents;
+    int tick;
+}
+
+Result<Id<Agent>, StoreError> Spawn(ref World world, int x, int y)
+{
+    Agent agent = Agent{x, y, 100, Intent::Idle};
+    return Append<Agent, 64>(ref world.agents, agent);
+}
+requires compiler.InvalidatesBorrows(Spawn, world);
+
+void Tick(ref World world)
+{
+    for (i in 0..Count<Agent, 64>(ref const world.agents))
+    {
+        Id<Agent> id = IdAt<Agent, 64>(ref const world.agents, i)!;
+        ref Agent agent = DenseGetMutable<Agent, 64>(ref world.agents, id)!;
+        match (agent.intent)
+        {
+            Intent::Idle => { }
+            Intent::Seek(x, y) => {
+                if (agent.x < x) { agent.x++; }
+                if (agent.y < y) { agent.y++; }
+            }
+            Intent::Strike(target) => {
+                if (target == i) { agent.health -= 1; }
+            }
+        }
+    }
+    world.tick++;
+}
+
+Result<int, StoreError> ApplyDamage(ref World world, Id<Agent> target, int amount)
+{
+    ref Agent agent = DenseGetMutable<Agent, 64>(ref world.agents, target)?;
+    if (amount > 0)
+    {
+        agent.health -= amount;
+        if (agent.health < 0) { agent.health = 0; }
+    }
+    return Result::Ok(agent.health);
+}
+
+int CountSeeking(ref const World world)
+{
+    int count = 0;
+    for (i in 0..Count<Agent, 64>(ref const world.agents))
+    {
+        Id<Agent> id = IdAt<Agent, 64>(ref const world.agents, i)!;
+        ref const Agent agent = DenseGet<Agent, 64>(ref const world.agents, id)!;
+        match (agent.intent)
+        {
+            Intent::Idle => { }
+            Intent::Seek(x, y) => { count++; }
+            Intent::Strike(target) => { }
+        }
+    }
+    return count;
+}
+
+automata Patrol
+with state
+{
+    int steps;
+    int limit;
+}
+{
+    machine Walk
+    {
+        state Moving
+        {
+            if (steps >= limit)
+            {
+                transition Finished;
+            }
+            steps++;
+            yield;
+        }
+
+        state Finished
+        {
+        }
+    }
+}

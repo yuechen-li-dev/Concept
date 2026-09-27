@@ -1,0 +1,164 @@
+module Golden.Embedded.Serial;
+profile Core;
+import Standard.Hardware.Mmio;
+
+bits LineStatus : uint8
+{
+    dataReady: 0;
+    transmitEmpty: 5;
+}
+
+enum Command
+{
+    Ping,
+    SetRate(uint8 divisor),
+    Send(uint8 payload)
+}
+
+enum SerialError
+{
+    QueueFull,
+    NotReady,
+    BadCommand
+}
+
+enum ParseState
+{
+    Waiting,
+    AwaitRate,
+    AwaitPayload
+}
+
+struct Decoder
+{
+    ParseState state;
+    int bytesSeen;
+    int commandsSeen;
+}
+
+struct SerialPort
+{
+    Address<DeviceMemory> data;
+    Address<DeviceMemory> status;
+    uint8[32] queue;
+    int head;
+    int tail;
+    int count;
+}
+
+Result<uint8, SerialError> ReadByte(ref SerialPort port)
+{
+    LineStatus status = LineStatus{MmioLoad<uint8>(port.status)};
+    if (not status.dataReady)
+    {
+        return Result::Error(SerialError::NotReady);
+    }
+    return Result::Ok(MmioLoad<uint8>(port.data));
+}
+
+Result<int, SerialError> Enqueue(ref SerialPort port, uint8 value)
+{
+    if (port.count == 32)
+    {
+        return Result::Error(SerialError::QueueFull);
+    }
+    port.queue[port.tail] = value;
+    port.tail = (port.tail + 1) % 32;
+    port.count++;
+    return Result::Ok(port.count);
+}
+
+Result<int, SerialError> Apply(ref SerialPort port, Command command)
+{
+    return match (command)
+    {
+        Command::Ping => Enqueue(ref port, 0x50),
+        Command::SetRate(divisor) => Enqueue(ref port, divisor),
+        Command::Send(payload) => Enqueue(ref port, payload),
+    };
+}
+
+int Flush(ref SerialPort port)
+{
+    int sent = 0;
+    bool ready = true;
+    for (i in 0..32)
+    {
+        if (port.count > 0 and ready)
+        {
+            LineStatus status = LineStatus{MmioLoad<uint8>(port.status)};
+            if (status.transmitEmpty)
+            {
+                MmioStore<uint8>(port.data, port.queue[port.head]);
+                port.head = (port.head + 1) % 32;
+                port.count--;
+                sent++;
+            }
+            else
+            {
+                ready = false;
+            }
+        }
+    }
+    return sent;
+}
+
+Result<Option<Command>, SerialError> DecodeByte(ref Decoder decoder, uint8 value)
+{
+    decoder.bytesSeen++;
+    return match (decoder.state)
+    {
+        ParseState::Waiting => DecodeOpcode(ref decoder, value),
+        ParseState::AwaitRate => CompleteRate(ref decoder, value),
+        ParseState::AwaitPayload => CompletePayload(ref decoder, value),
+    };
+}
+
+Result<Option<Command>, SerialError> DecodeOpcode(ref Decoder decoder, uint8 value)
+{
+    if (value == 0x01)
+    {
+        decoder.commandsSeen++;
+        return Result::Ok(Option::Some(Command::Ping));
+    }
+    if (value == 0x02)
+    {
+        decoder.state = ParseState::AwaitRate;
+        return Result::Ok(Option::None);
+    }
+    if (value == 0x03)
+    {
+        decoder.state = ParseState::AwaitPayload;
+        return Result::Ok(Option::None);
+    }
+    return Result::Error(SerialError::BadCommand);
+}
+
+Result<Option<Command>, SerialError> CompleteRate(ref Decoder decoder, uint8 value)
+{
+    decoder.state = ParseState::Waiting;
+    if (value == 0)
+    {
+        return Result::Error(SerialError::BadCommand);
+    }
+    decoder.commandsSeen++;
+    return Result::Ok(Option::Some(Command::SetRate(value)));
+}
+
+Result<Option<Command>, SerialError> CompletePayload(ref Decoder decoder, uint8 value)
+{
+    decoder.state = ParseState::Waiting;
+    decoder.commandsSeen++;
+    return Result::Ok(Option::Some(Command::Send(value)));
+}
+
+Result<int, SerialError> PollAndDispatch(ref SerialPort port, ref Decoder decoder)
+{
+    uint8 received = ReadByte(ref port)?;
+    Option<Command> ready = DecodeByte(ref decoder, received)?;
+    match (ready)
+    {
+        Option::None => { return Result::Ok(0); }
+        Option::Some(command) => { return Apply(ref port, command); }
+    }
+}

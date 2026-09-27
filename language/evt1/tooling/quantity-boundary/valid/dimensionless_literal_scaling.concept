@@ -1,0 +1,17 @@
+module QuantityLiteralScaling;
+profile Core;
+
+float<m> Half(float<m> distance)
+{
+    return distance / 2.0;
+}
+
+float<m> Double(float<m> distance)
+{
+    return 2.0 * distance;
+}
+
+float<m> Offset(float<m> distance)
+{
+    return distance + 2.0;
+}

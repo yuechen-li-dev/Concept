@@ -81,6 +81,10 @@ semantic/reference corpus shared with migration work.
 
 ## Libraries
 
+The [EVT1 domain goldens](docs/examples/EVT1-GOLDENS.md) exercise embedded,
+civilian aerospace, game, HPC, HFT, compiler, native companion, storage, and
+CAD workloads during the R7p semantic burn-in.
+
 - `libraries/Standard` is the production home of reusable Standard modules,
   beginning with `Standard.Memory` and package metadata definitions.
 - `libraries/DragonGod` is the canonical bare-metal kernel seed. It consumes

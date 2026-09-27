@@ -1,0 +1,14 @@
+module Golden.Companion.Native;
+profile Core;
+
+extern "C" int native_checksum(const char* bytes, size_t count);
+
+foreign concept ChecksumNeverAllocates on native_checksum
+{
+    requires NoAllocation;
+}
+
+int VerifyPacket(Span<byte> packet)
+{
+    return native_checksum(packet.data(), packet.len());
+}

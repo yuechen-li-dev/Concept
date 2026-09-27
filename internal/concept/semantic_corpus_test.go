@@ -30,6 +30,7 @@ type semanticCorpusManifest struct {
 		HistoricalMilestone []string `json:"historical_milestones"`
 	} `json:"subsystems"`
 	CompatibilityFixtures []string `json:"compatibility_fixtures"`
+	DomainGoldens         []string `json:"domain_goldens"`
 }
 
 func loadSemanticCorpusManifest(t *testing.T) ([]byte, semanticCorpusManifest) {
@@ -117,6 +118,34 @@ func TestSemanticCorpusManifest(t *testing.T) {
 
 	if totals.valid != manifest.Totals.Valid || totals.staticInvalid != manifest.Totals.StaticInvalid || totals.runtimeNegative != manifest.Totals.RuntimeNegative {
 		t.Fatalf("manifest totals drift: got %+v want valid=%d static-invalid=%d runtime-negative=%d", totals, manifest.Totals.Valid, manifest.Totals.StaticInvalid, manifest.Totals.RuntimeNegative)
+	}
+	if len(manifest.DomainGoldens) != 9 {
+		t.Fatalf("expected nine permanent domain goldens, got %d", len(manifest.DomainGoldens))
+	}
+	for _, relative := range manifest.DomainGoldens {
+		golden := filepath.Join("..", "..", filepath.FromSlash(relative))
+		for _, required := range []string{"README.md", "first-draft.concept.txt"} {
+			if _, err := os.Stat(filepath.Join(golden, required)); err != nil {
+				t.Fatalf("domain golden %s lacks %s: %v", relative, required, err)
+			}
+		}
+		for suffix, minimum := range map[string]int{".concept": 1, ".concept_test": 1} {
+			count := 0
+			if err := filepath.Walk(golden, func(path string, info os.FileInfo, err error) error {
+				if err != nil {
+					return err
+				}
+				if !info.IsDir() && strings.HasSuffix(info.Name(), suffix) {
+					count++
+				}
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if count < minimum {
+				t.Fatalf("domain golden %s has no %s fixture", relative, suffix)
+			}
+		}
 	}
 	all, err := filepath.Glob(filepath.Join(root, "**", "*.concept"))
 	if err != nil {

@@ -1,0 +1,83 @@
+module Golden.Embedded.Serial;
+profile Core;
+import Standard.Hardware.Mmio;
+
+bits LineStatus : uint8
+{
+    dataReady: 0;
+    transmitEmpty: 5;
+}
+
+enum Command
+{
+    Ping,
+    SetRate(uint8 divisor),
+    Send(uint8 payload)
+}
+
+enum SerialError
+{
+    QueueFull,
+    NotReady,
+    BadCommand
+}
+
+struct SerialPort
+{
+    Address<DeviceMemory> data;
+    Address<DeviceMemory> status;
+    uint8[32] queue;
+    int head;
+    int tail;
+    int count;
+}
+
+Result<uint8, SerialError> ReadByte(ref SerialPort port)
+{
+    LineStatus status = LineStatus{MmioLoad<uint8>(port.status)};
+    if (!status.dataReady)
+    {
+        return Result::Error(SerialError::NotReady);
+    }
+    return Result::Ok(MmioLoad<uint8>(port.data));
+}
+
+Result<int, SerialError> Enqueue(ref SerialPort port, uint8 value)
+{
+    if (port.count == 32)
+    {
+        return Result::Error(SerialError::QueueFull);
+    }
+    port.queue[port.tail] = value;
+    port.tail = (port.tail + 1) % 32;
+    port.count++;
+    return Result::Ok(port.count);
+}
+
+Result<int, SerialError> Apply(ref SerialPort port, Command command)
+{
+    return match (command)
+    {
+        Command::Ping => Enqueue(port, 0x50),
+        Command::SetRate(divisor) => Enqueue(port, divisor),
+        Command::Send(payload) => Enqueue(port, payload),
+    };
+}
+
+int Flush(ref SerialPort port)
+{
+    int sent = 0;
+    for (int i = 0; i < 32 && port.count > 0; i++)
+    {
+        LineStatus status = LineStatus{MmioLoad<uint8>(port.status)};
+        if (!status.transmitEmpty)
+        {
+            break;
+        }
+        MmioStore<uint8>(port.data, port.queue[port.head]);
+        port.head = (port.head + 1) % 32;
+        port.count--;
+        sent++;
+    }
+    return sent;
+}

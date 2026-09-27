@@ -1,0 +1,71 @@
+module Golden.Game.WorldOps;
+profile Core;
+import Golden.Game.Agents;
+import Standard.Collection.Stores;
+
+record struct Trail
+{
+    int x;
+    int y;
+    int bornTick;
+}
+
+struct TrailPool
+{
+    GenerationalStore<Trail, 32> trails;
+}
+
+TrailPool NewTrailPool()
+{
+    return TrailPool{MakeGenerationalStore<Trail, 32>()};
+}
+
+Result<GenerationalId<Trail>, StoreError> RecordTrail(ref TrailPool pool, int x, int y, int tick)
+{
+    return Insert<Trail, 32>(ref pool.trails, Trail{x, y, tick});
+}
+requires compiler.InvalidatesBorrows(RecordTrail, pool);
+
+Result<void, StoreError> RetireTrail(ref TrailPool pool, GenerationalId<Trail> id)
+{
+    return Remove<Trail, 32>(ref pool.trails, id);
+}
+requires compiler.InvalidatesBorrows(RetireTrail, pool);
+
+table<64> PositionFrame
+{
+    int x;
+    int y;
+}
+
+int ProjectPositions(ref const World world, ref PositionFrame frame)
+{
+    int count = Count<Agent, 64>(ref const world.agents);
+    for (i in 0..count)
+    {
+        Id<Agent> id = IdAt<Agent, 64>(ref const world.agents, i)!;
+        ref const Agent agent = DenseGet<Agent, 64>(ref const world.agents, id)!;
+        frame.x[i] = agent.x;
+        frame.y[i] = agent.y;
+    }
+    return count;
+}
+
+int SumActiveCoordinates(ReadOnlySpan<int> column, int count)
+{
+    int sum = 0;
+    for (i in 0..count)
+    {
+        sum += column[i];
+    }
+    return sum;
+}
+
+void RunTickBudget(ref World world, int ticks)
+{
+    // The caller selects a fixed budget. There is no implicit task runtime.
+    for (tick in 0..ticks)
+    {
+        Tick(ref world);
+    }
+}

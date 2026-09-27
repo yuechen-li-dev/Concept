@@ -1889,7 +1889,7 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 		header.WriteString(evt1TensorDeclarations(tensorTypes))
 	}
 	failureTypes := evt1CollectFailureTypes(l.module, l.env)
-	canonicalFailureTypes := evt1CanonicalFailureTypeKeys(l.module)
+	canonicalFailureTypes := evt1CanonicalFailureTypeKeys(l.module, l.env)
 	if err := l.writeRuntimeStorageAndTypeDecls(&header, typeDecls, evt1CollectStorageTypes(l.module, l.env), storageViewTypes, failureTypes, canonicalFailureTypes); err != nil {
 		return nil, nil, err
 	}
@@ -1965,7 +1965,7 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 			if i != 0 {
 				body.WriteString(", ")
 			}
-			body.WriteString(evt1CType(param.Type) + " " + param.Name)
+			body.WriteString(evt1CType(param.Type) + " " + evt1CParamName(param.Name))
 		}
 		if len(instance.Function.Params) == 0 {
 			body.WriteString("void")
@@ -2022,12 +2022,12 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 	integerSupport := evt1DefinedIntegerArithmeticHelpers(l.symbolBase, rawBody)
 	var support strings.Builder
 	if strings.Contains(rawBody, "concept_abort_invalid_tag(") {
-		support.WriteString("static void concept_abort_invalid_tag(const char* enum_name) {\n")
+		support.WriteString("_Noreturn static void concept_abort_invalid_tag(const char* enum_name) {\n")
 		support.WriteString("  fprintf(stderr, \"invalid enum tag for %s\\n\", enum_name);\n")
 		support.WriteString("  abort();\n}\n\n")
 	}
 	if strings.Contains(rawBody, "concept_panic(") || integerSupport != "" {
-		support.WriteString("static void concept_panic(const char* reason, int line, int column) {\n")
+		support.WriteString("_Noreturn static void concept_panic(const char* reason, int line, int column) {\n")
 		support.WriteString("  fprintf(stderr, \"Concept panic at %d:%d: %s\\n\", line, column, reason);\n")
 		support.WriteString("  abort();\n}\n\n")
 	}
@@ -3746,7 +3746,7 @@ func (l *lowering) functionSymbols(fn FunctionDecl) evt1FunctionSymbols {
 		if i > 0 {
 			prototype.WriteString(", ")
 		}
-		prototype.WriteString(fmt.Sprintf("%s %s", evt1CType(param.Type), param.Name))
+		prototype.WriteString(fmt.Sprintf("%s %s", evt1CType(param.Type), evt1CParamName(param.Name)))
 	}
 	prototype.WriteString(");\n")
 	if fn.Body == nil {
@@ -3820,10 +3820,11 @@ func newEVT1FunctionLowerer(l *lowering, fn FunctionDecl, symbol string, private
 	ownedOrder := [][]string{{}}
 	liveOwners := map[string]bool{}
 	for _, param := range fn.Params {
-		scope[0][param.Name] = evt1Binding{cName: param.Name, t: param.Type}
+		cName := evt1CParamName(param.Name)
+		scope[0][param.Name] = evt1Binding{cName: cName, t: param.Type}
 		if param.Type.isOwned() && evt1TypeHasDrop(l.env, param.Type) && fn.Name != "Drop" {
-			ownedOrder[0] = append(ownedOrder[0], param.Name)
-			liveOwners[param.Name] = true
+			ownedOrder[0] = append(ownedOrder[0], cName)
+			liveOwners[cName] = true
 		}
 	}
 	var plan *FunctionPlan
@@ -3878,7 +3879,7 @@ func (f *evt1FunctionLowerer) lower() string {
 		if i > 0 {
 			b.WriteString(", ")
 		}
-		b.WriteString(fmt.Sprintf("%s %s", evt1CType(param.Type), param.Name))
+		b.WriteString(fmt.Sprintf("%s %s", evt1CType(param.Type), evt1CParamName(param.Name)))
 	}
 	b.WriteString(") {\n")
 	b.WriteString(f.lowerBlock(*f.fn.Body, 1))
@@ -4174,12 +4175,52 @@ func (f *evt1FunctionLowerer) lowerWhileStmt(stmt WhileStmt, indent int) string 
 	return b.String()
 }
 
+func evt1CCondition(expression string) string {
+	// Most lowered comparisons already have one outer pair. Adding another
+	// makes Clang warn about a suspicious equality test under -Werror.
+	if len(expression) < 2 || expression[0] != '(' || expression[len(expression)-1] != ')' {
+		return "(" + expression + ")"
+	}
+	depth := 0
+	quote := byte(0)
+	escaped := false
+	for i := 0; i < len(expression); i++ {
+		ch := expression[i]
+		if quote != 0 {
+			if escaped {
+				escaped = false
+			} else if ch == '\\' {
+				escaped = true
+			} else if ch == quote {
+				quote = 0
+			}
+			continue
+		}
+		if ch == '\'' || ch == '"' {
+			quote = ch
+			continue
+		}
+		if ch == '(' {
+			depth++
+		} else if ch == ')' {
+			depth--
+			if depth == 0 && i != len(expression)-1 {
+				return "(" + expression + ")"
+			}
+		}
+	}
+	if depth == 0 {
+		return expression
+	}
+	return "(" + expression + ")"
+}
+
 func (f *evt1FunctionLowerer) lowerIfStmt(stmt IfStmt, indent int) string {
 	conditionPrelude, conditionExpr, _ := f.lowerExpr(stmt.Condition, indent)
 	before := f.cloneLiveOwners()
 	var b strings.Builder
 	b.WriteString(conditionPrelude)
-	b.WriteString(ind(indent) + fmt.Sprintf("if (%s) {\n", conditionExpr))
+	b.WriteString(ind(indent) + "if " + evt1CCondition(conditionExpr) + " {\n")
 	b.WriteString(f.lowerBlock(stmt.Then, indent+1))
 	thenLive := f.cloneLiveOwners()
 	f.liveOwners = before
@@ -4317,6 +4358,7 @@ func (f *evt1FunctionLowerer) lowerMatchStmt(stmt MatchStmt, indent int) string 
 			field := variant.Payload[i]
 			cName := f.bindName(binding, field.Type)
 			b.WriteString(ind(indent+2) + fmt.Sprintf("%s %s = %s%spayload.%s.%s;\n", evt1CType(field.Type), cName, subjectTemp, member, evt1PayloadFieldName(variant.Name), field.Name))
+			b.WriteString(ind(indent+2) + fmt.Sprintf("(void)%s;\n", cName))
 		}
 		b.WriteString(f.lowerBlock(arm.Block, indent+2))
 		b.WriteString(f.lowerCurrentScopeDrops(indent + 2))
@@ -5190,6 +5232,10 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 			}
 			return prelude, fmt.Sprintf("(((%s) * %d) / %d)", value, numerator, denominator), out
 		}
+		if e.Callee == "AssumeQuantity" {
+			prelude, value, _ := f.lowerExpr(e.Args[0], indent)
+			return prelude, value, e.TypeArg
+		}
 		var identities []string
 		for _, arg := range evt1TemplateCallArgs(e) {
 			identities = append(identities, evt1TypeIdentity(evt1CanonicalType(f.l.env, arg)))
@@ -5264,7 +5310,15 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 			fieldIndex[field.Name] = i
 		}
 		for i, arg := range e.Args {
-			argPrelude, argExpr, argType := f.lowerExpr(arg, indent)
+			index := i
+			if len(e.ArgNames) != 0 {
+				index = fieldIndex[e.ArgNames[i]]
+			}
+			fieldType := structDecl.Fields[index].Type
+			if resolved, ok := f.l.env.fieldSets[e.StructName][structDecl.Fields[index].Name]; ok {
+				fieldType = resolved
+			}
+			argPrelude, argExpr, argType := f.lowerExprExpected(arg, fieldType, indent)
 			prelude.WriteString(argPrelude)
 			temp := f.nextTemp("field")
 			prelude.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(argType), temp, argExpr))
@@ -5274,10 +5328,6 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 			if evt1TypeHasDrop(f.l.env, argType) {
 				f.currentScope()[temp] = evt1Binding{cName: temp, t: argType}
 				f.registerOwner(temp, argType)
-			}
-			index := i
-			if len(e.ArgNames) != 0 {
-				index = fieldIndex[e.ArgNames[i]]
 			}
 			if index < len(structDecl.Fields) {
 				args[index] = temp
@@ -5347,6 +5397,7 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 				field := variant.Payload[i]
 				cName := f.bindName(binding, field.Type)
 				b.WriteString(ind(indent+2) + fmt.Sprintf("%s %s = %s%spayload.%s.%s;\n", evt1CType(field.Type), cName, subjectTemp, member, evt1PayloadFieldName(variant.Name), field.Name))
+				b.WriteString(ind(indent+2) + fmt.Sprintf("(void)%s;\n", cName))
 			}
 			armPrelude, armExpr, _ := f.lowerExpr(arm.Value, indent+2)
 			b.WriteString(armPrelude)
@@ -5368,7 +5419,7 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		var b strings.Builder
 		b.WriteString(conditionPrelude)
 		b.WriteString(ind(indent) + fmt.Sprintf("%s %s;\n", evt1CType(resultType), resultTemp))
-		b.WriteString(ind(indent) + fmt.Sprintf("if (%s) {\n", conditionExpr))
+		b.WriteString(ind(indent) + "if " + evt1CCondition(conditionExpr) + " {\n")
 		thenPrelude, thenExpr, _ := f.lowerExprExpected(e.Then, resultType, indent+1)
 		b.WriteString(thenPrelude)
 		b.WriteString(ind(indent+1) + fmt.Sprintf("%s = %s;\n", resultTemp, thenExpr))
@@ -5514,14 +5565,34 @@ func (f *evt1FunctionLowerer) currentScope() map[string]evt1Binding {
 func (f *evt1FunctionLowerer) bindName(name string, t Type) string {
 	scope := f.currentScope()
 	if _, exists := scope[name]; !exists {
-		scope[name] = evt1Binding{cName: name, t: t}
-		f.registerOwner(name, t)
-		return name
+		cName := name
+		if evt1CKeyword(name) {
+			cName = f.nextTemp("user_" + name)
+		}
+		scope[name] = evt1Binding{cName: cName, t: t}
+		f.registerOwner(cName, t)
+		return cName
 	}
 	unique := f.nextTemp(name)
 	scope[name] = evt1Binding{cName: unique, t: t}
 	f.registerOwner(unique, t)
 	return unique
+}
+
+func evt1CKeyword(name string) bool {
+	switch name {
+	case "auto", "break", "case", "char", "const", "continue", "default", "do", "double", "else", "enum", "extern", "float", "for", "goto", "if", "inline", "int", "long", "register", "restrict", "return", "short", "signed", "sizeof", "static", "struct", "switch", "typedef", "union", "unsigned", "void", "volatile", "while", "_Alignas", "_Alignof", "_Atomic", "_Bool", "_Complex", "_Generic", "_Imaginary", "_Noreturn", "_Static_assert", "_Thread_local":
+		return true
+	default:
+		return false
+	}
+}
+
+func evt1CParamName(name string) string {
+	if evt1CKeyword(name) {
+		return "cv_param_" + name
+	}
+	return name
 }
 
 func (f *evt1FunctionLowerer) registerOwner(cName string, t Type) {

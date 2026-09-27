@@ -1,0 +1,8 @@
+module Counter.Proofs.Allocation;
+profile Core;
+import Counter;
+
+void ExplainForeignAllocation()
+{
+    Assert.Concept<NoAllocation>(ConceptCounterCreate, "native creation declares allocation");
+}

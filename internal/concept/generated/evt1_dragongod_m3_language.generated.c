@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static void concept_abort_invalid_tag(const char* enum_name) {
+_Noreturn static void concept_abort_invalid_tag(const char* enum_name) {
   fprintf(stderr, "invalid enum tag for %s\n", enum_name);
   abort();
 }

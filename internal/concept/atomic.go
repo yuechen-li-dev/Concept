@@ -12,6 +12,14 @@ const (
 	evt1AtomicFetchAdd    = "AtomicFetchAddIntrinsic"
 )
 
+func evt1AtomicIntrinsicName(name string) bool {
+	switch name {
+	case evt1AtomicLoad, evt1AtomicStore, evt1AtomicExchange, evt1AtomicCompareSwap, evt1AtomicFetchAdd:
+		return true
+	}
+	return false
+}
+
 func evt1ValidateAtomicIntrinsic(env *semanticEnv, scope *evt1Scope, call *CallExpr, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, bool, error) {
 	kind := map[string]string{
 		evt1AtomicLoad:        "atomic_load",

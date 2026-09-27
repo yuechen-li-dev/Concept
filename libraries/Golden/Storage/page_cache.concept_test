@@ -1,0 +1,45 @@
+module Golden.Storage.Tests;
+profile Core;
+import Golden.Storage.PageCache;
+
+[[fact]]
+void CacheHandlesRejectStalePages()
+{
+    PageCache cache = NewCache();
+    GenerationalId<Page> first = Install(ref cache, 42)!;
+    Assert.LGTM(WriteByte(ref cache, first, 5, 0x7F), "page byte is stored");
+    uint8 expected = 0x7F;
+    Assert.Equals(ReadByte(ref cache, first, 5)!, expected, "read returns written byte");
+    Assert.Error(EvictClean(ref cache, first), "dirty page cannot be evicted");
+    {
+        ref Page page = GenerationalGetMutable<Page, 8>(ref cache.pages, first)!;
+        page.dirty = false;
+    }
+    Assert.LGTM(EvictClean(ref cache, first), "clean page can be evicted");
+    Assert.Error(ReadByte(ref cache, first, 5), "old handle cannot read reused slot");
+    GenerationalId<Page> second = Install(ref cache, 43)!;
+    Assert.Equals(ActiveSlots(ref const cache), 1, "one page remains active");
+    Assert.True(second.generation != first.generation, "reused slot has a new generation");
+}
+
+[[fact]]
+void CacheDoesNotAllocateOnAccess()
+{
+    Assert.Concept<NoAllocation>(WriteByte, "fixed page mutation is inline");
+    Assert.Concept<NoAllocation>(ReadByte, "fixed page reads are inline");
+    Assert.Concept<NoAllocation>(ActiveSlots, "slot census is bounded");
+    Assert.Concept<NoAllocation>(Pin, "pin count is inline metadata");
+    Assert.Concept<NoAllocation>(Unpin, "unpin count is inline metadata");
+}
+
+[[fact]]
+void PinnedPageCannotBeEvicted()
+{
+    PageCache cache = NewCache();
+    GenerationalId<Page> id = Install(ref cache, 9)!;
+    Assert.LGTM(Pin(ref cache, id), "page acquires one pin");
+    Assert.Error(EvictClean(ref cache, id), "pinned page cannot be evicted");
+    Assert.LGTM(Unpin(ref cache, id), "pin is released");
+    Assert.Error(Unpin(ref cache, id), "double unpin is an error");
+    Assert.LGTM(EvictClean(ref cache, id), "unpinned clean page can leave cache");
+}

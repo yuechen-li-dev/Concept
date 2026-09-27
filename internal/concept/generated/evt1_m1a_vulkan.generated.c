@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static void concept_abort_invalid_tag(const char* enum_name) {
+_Noreturn static void concept_abort_invalid_tag(const char* enum_name) {
   fprintf(stderr, "invalid enum tag for %s\n", enum_name);
   abort();
 }
@@ -69,19 +69,23 @@ int32_t concept_evt1_m1a_vulkan_get_status_code(concept_pipeline_state state) {
   case CONCEPT_PIPELINE_STATE_LAYOUT_CREATED:
     {
       VkPipelineLayout layout = cv_match_subject_01.payload.layout_created.layout;
+      (void)layout;
       cv_match_result_02 = INT32_C(1);
       break;
     }
   case CONCEPT_PIPELINE_STATE_READY:
     {
       VkPipelineLayout layout = cv_match_subject_01.payload.ready.layout;
+      (void)layout;
       VkPipeline pipeline = cv_match_subject_01.payload.ready.pipeline;
+      (void)pipeline;
       cv_match_result_02 = INT32_C(2);
       break;
     }
   case CONCEPT_PIPELINE_STATE_FAILED:
     {
       concept_vulkan_error error = cv_match_subject_01.payload.failed.error;
+      (void)error;
       cv_match_result_02 = error.Code;
       break;
     }
@@ -101,6 +105,7 @@ void concept_evt1_m1a_vulkan_destroy_pipeline_state(concept_pipeline_state state
   case CONCEPT_PIPELINE_STATE_LAYOUT_CREATED:
     {
       VkPipelineLayout layout = cv_subject_01.payload.layout_created.layout;
+      (void)layout;
       VkPipelineLayout cv_arg_02 = layout;
       concept_evt1_m1a_vulkan_destroy_pipeline_layout(cv_arg_02);
       break;
@@ -108,7 +113,9 @@ void concept_evt1_m1a_vulkan_destroy_pipeline_state(concept_pipeline_state state
   case CONCEPT_PIPELINE_STATE_READY:
     {
       VkPipelineLayout layout = cv_subject_01.payload.ready.layout;
+      (void)layout;
       VkPipeline pipeline = cv_subject_01.payload.ready.pipeline;
+      (void)pipeline;
       VkPipeline cv_arg_03 = pipeline;
       concept_evt1_m1a_vulkan_destroy_pipeline(cv_arg_03);
       VkPipelineLayout cv_arg_04 = layout;
@@ -118,6 +125,7 @@ void concept_evt1_m1a_vulkan_destroy_pipeline_state(concept_pipeline_state state
   case CONCEPT_PIPELINE_STATE_FAILED:
     {
       concept_vulkan_error error = cv_subject_01.payload.failed.error;
+      (void)error;
       concept_vulkan_error cv_arg_05 = error;
       concept_evt1_m1a_vulkan_record_failure(cv_arg_05);
       break;

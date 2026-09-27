@@ -1,0 +1,12 @@
+module Golden.Cad.Mesh;
+profile Core;
+
+struct Vertex { double x, y, z; };
+struct Triangle { int a, b, c; };
+
+double Area(Vertex* vertices, Triangle face)
+{
+    auto ab = vertices[face.b] - vertices[face.a];
+    auto ac = vertices[face.c] - vertices[face.a];
+    return 0.5 * length(cross(ab, ac));
+}

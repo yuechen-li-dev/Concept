@@ -1,0 +1,28 @@
+module Golden.Compiler.Tests;
+profile Core;
+import Golden.Compiler.Postfix;
+
+[[fact]]
+void PostfixBuildsDenseAstAndEvaluates()
+{
+    Parser parser = Parser{DenseStore<Expr, 64>{Uninitialized()}, [Id<Expr>{0} ... 64], 0};
+    TokenWord[5] tokens = [TokenWord{0, 2}, TokenWord{0, 3}, TokenWord{0, 4}, TokenWord{2, 0}, TokenWord{1, 0}];
+    Id<Expr> root = Parse(ref parser, ReadOnlySpan(tokens))!;
+    Assert.Equals(Evaluate(ref const parser, root), 14, "2 + 3 * 4 evaluates through stable IDs");
+    Assert.Equals(Count<Expr, 64>(ref const parser.nodes), 5, "every token creates at most one node");
+}
+
+[[fact]]
+void PostfixReportsMalformedInput()
+{
+    Parser parser = Parser{DenseStore<Expr, 64>{Uninitialized()}, [Id<Expr>{0} ... 64], 0};
+    TokenWord[1] tokens = [TokenWord{1, 0}];
+    Assert.Error(Parse(ref parser, ReadOnlySpan(tokens)), "operator without operands is explicit");
+}
+
+[[fact]]
+void PostfixParsingUsesInlineStorage()
+{
+    Assert.Concept<NoAllocation>(Parse, "parser uses bounded node and operand stores");
+    Assert.Concept<NoAllocation>(Evaluate, "dense ID traversal uses a fixed scratch array");
+}

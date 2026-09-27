@@ -1,0 +1,13 @@
+profile Core;
+
+concept Readable<T>
+{
+    requires int Read(ref const T item);
+}
+
+struct Packet
+{
+    int code;
+}
+
+requires Readable<Packet>;

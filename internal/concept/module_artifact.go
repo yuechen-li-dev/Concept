@@ -780,18 +780,29 @@ func summarizeModuleEffects(module Module, env *semanticEnv) []SemanticModuleEff
 		effect := "NoAllocation"
 		origin := string(FactOriginCompilerAnalysis)
 		for _, call := range evt1DirectCalls(*fn.Body) {
+			if evt1AtomicIntrinsicName(call) {
+				continue // validated C11 atomics use no allocation
+			}
+			if evt1InlineStorageInspectionName(call) && len(env.functions[call]) == 0 && env.templates[call].Name == "" {
+				continue // metadata inspection or an existing storage view
+			}
 			candidates := env.functions[call]
-			if len(candidates) != 1 {
+			if len(candidates) == 0 {
 				effect = "Unknown"
 				continue
 			}
-			child := summarize(candidates[0])
-			if child.Effect == "Allocates" {
-				effect, origin = "Allocates", string(FactOriginDerivedCallEffect)
-				break
+			for _, candidate := range candidates {
+				child := summarize(candidate)
+				if child.Effect == "Allocates" {
+					effect, origin = "Allocates", string(FactOriginDerivedCallEffect)
+					break
+				}
+				if child.Effect == "Unknown" {
+					effect = "Unknown"
+				}
 			}
-			if child.Effect == "Unknown" {
-				effect = "Unknown"
+			if effect == "Allocates" {
+				break
 			}
 		}
 		summary := SemanticModuleEffectSummary{Operation: fn.Name, Signature: evt1FunctionParamSignature(fn), Effect: effect, Origin: origin}

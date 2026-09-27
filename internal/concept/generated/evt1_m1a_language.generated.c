@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static void concept_abort_invalid_tag(const char* enum_name) {
+_Noreturn static void concept_abort_invalid_tag(const char* enum_name) {
   fprintf(stderr, "invalid enum tag for %s\n", enum_name);
   abort();
 }
@@ -92,13 +92,16 @@ int32_t concept_evt1_m1a_language_classify(concept_demo_state state) {
   case CONCEPT_DEMO_STATE_COUNTED:
     {
       int32_t value = cv_match_subject_01.payload.counted.value;
+      (void)value;
       cv_match_result_02 = value;
       break;
     }
   case CONCEPT_DEMO_STATE_PAIR:
     {
       int32_t first = cv_match_subject_01.payload.pair.first;
+      (void)first;
       int32_t second = cv_match_subject_01.payload.pair.second;
+      (void)second;
       int32_t cv_arg_03 = first;
       int32_t cv_arg_04 = second;
       cv_match_result_02 = concept_evt1_m1a_language_add(cv_arg_03, cv_arg_04);
@@ -107,6 +110,7 @@ int32_t concept_evt1_m1a_language_classify(concept_demo_state state) {
   case CONCEPT_DEMO_STATE_WRAPPED:
     {
       concept_inner_status inner = cv_match_subject_01.payload.wrapped.inner;
+      (void)inner;
       concept_inner_status cv_match_subject_05 = inner;
       int32_t cv_match_result_06;
       switch (cv_match_subject_05.tag) {
@@ -118,6 +122,7 @@ int32_t concept_evt1_m1a_language_classify(concept_demo_state state) {
       case CONCEPT_INNER_STATUS_COUNTED:
         {
           int32_t value = cv_match_subject_05.payload.counted.value;
+          (void)value;
           int32_t cv_arg_07 = value;
           int32_t cv_arg_08 = INT32_C(100);
           cv_match_result_06 = concept_evt1_m1a_language_add(cv_arg_07, cv_arg_08);
@@ -152,6 +157,7 @@ void concept_evt1_m1a_language_visit(concept_demo_state state) {
   case CONCEPT_DEMO_STATE_COUNTED:
     {
       int32_t value = cv_subject_01.payload.counted.value;
+      (void)value;
       int32_t cv_arg_03 = value;
       concept_evt1_m1a_language_record_int(cv_arg_03);
       break;
@@ -159,7 +165,9 @@ void concept_evt1_m1a_language_visit(concept_demo_state state) {
   case CONCEPT_DEMO_STATE_PAIR:
     {
       int32_t first = cv_subject_01.payload.pair.first;
+      (void)first;
       int32_t second = cv_subject_01.payload.pair.second;
+      (void)second;
       int32_t cv_arg_04 = first;
       int32_t cv_arg_05 = second;
       concept_evt1_m1a_language_record_pair(cv_arg_04, cv_arg_05);
@@ -168,6 +176,7 @@ void concept_evt1_m1a_language_visit(concept_demo_state state) {
   case CONCEPT_DEMO_STATE_WRAPPED:
     {
       concept_inner_status inner = cv_subject_01.payload.wrapped.inner;
+      (void)inner;
       concept_inner_status cv_subject_06 = inner;
       switch (cv_subject_06.tag) {
       case CONCEPT_INNER_STATUS_IDLE:
@@ -179,6 +188,7 @@ void concept_evt1_m1a_language_visit(concept_demo_state state) {
       case CONCEPT_INNER_STATUS_COUNTED:
         {
           int32_t value = cv_subject_06.payload.counted.value;
+          (void)value;
           int32_t cv_arg_08 = value;
           int32_t cv_arg_09 = INT32_C(1000);
           int32_t cv_arg_10 = concept_evt1_m1a_language_add(cv_arg_08, cv_arg_09);

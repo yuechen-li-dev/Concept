@@ -1,0 +1,8 @@
+module Counter.Proofs.Abi;
+profile Core;
+import Counter;
+
+void ExplainCAbiValue()
+{
+    Assert.Concept<CAbiValue>(CounterStats, "native snapshot has a measured C value representation");
+}

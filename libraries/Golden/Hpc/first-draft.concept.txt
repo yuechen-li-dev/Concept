@@ -1,0 +1,39 @@
+module Golden.Hpc.Stencil;
+profile Core;
+import Standard.Math;
+
+table<16> Field
+{
+    float temperature;
+    float source;
+}
+
+float Lerp(float a, float b, float t)
+{
+    return a + t * (b - a);
+}
+
+void Step(ref Field next, ref const Field current, float diffusion)
+{
+    next.temperature[0] = current.temperature[0];
+    for (int i = 1; i < 15; ++i)
+    {
+        float laplace = current.temperature[i - 1]
+            - 2.0 * current.temperature[i]
+            + current.temperature[i + 1];
+        next.temperature[i] = current.temperature[i]
+            + diffusion * laplace
+            + current.source[i];
+    }
+    next.temperature[15] = current.temperature[15];
+}
+
+float TotalEnergy(ref const Field field)
+{
+    float sum = 0.0;
+    for (int i = 0; i < 16; ++i)
+    {
+        sum += field.temperature[i];
+    }
+    return sum;
+}

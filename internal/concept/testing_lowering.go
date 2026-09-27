@@ -63,7 +63,7 @@ func (f *evt1FunctionLowerer) lowerTestToolingCall(call *CallExpr, indent int) (
 			} else if payload.Kind == TypeEnum {
 				value += ".tag"
 			}
-			args = append(args, value)
+			args = append(args, evt1TestPrintArg(payload, value))
 		}
 		return failure(exprs[0]+".tag == 1", detail, args...)
 	case "test_assert_lgtm":
@@ -78,7 +78,7 @@ func (f *evt1FunctionLowerer) lowerTestToolingCall(call *CallExpr, indent int) (
 			} else if payload.Kind == TypeEnum {
 				value += ".tag"
 			}
-			args = append(args, value)
+			args = append(args, evt1TestPrintArg(payload, value))
 		}
 		return failure(exprs[0]+".tag == 0", detail, args...)
 	default:
@@ -90,8 +90,12 @@ func evt1TestFormat(t Type) string {
 	switch t.Name {
 	case "float":
 		return "%g"
-	case "uint", "byte":
+	case "uint", "uint32":
 		return "%u"
+	case "uint64", "usize":
+		return "%llu"
+	case "isize":
+		return "%lld"
 	case "string":
 		return "%s"
 	default:
@@ -106,10 +110,8 @@ func evt1TestPrintArgs(types []Type, exprs []string) string {
 			args = append(args, expression+".tag")
 		} else if types[i].Kind == TypeEnum {
 			args = append(args, expression+".tag")
-		} else if types[i].Name == "float" {
-			args = append(args, "(double)"+expression)
 		} else {
-			args = append(args, expression)
+			args = append(args, evt1TestPrintArg(types[i], expression))
 		}
 	}
 	if len(args) == 0 {
@@ -118,8 +120,30 @@ func evt1TestPrintArgs(types []Type, exprs []string) string {
 	return ", " + strings.Join(args, ", ")
 }
 
+func evt1TestPrintArg(t Type, expression string) string {
+	switch t.Name {
+	case "float":
+		return "(double)" + expression
+	case "uint64", "usize":
+		return "(unsigned long long)" + expression
+	case "isize":
+		return "(long long)" + expression
+	case "uint", "uint32":
+		return "(unsigned int)" + expression
+	default:
+		return expression
+	}
+}
+
 func evt1TestPrintableType(t Type) bool {
-	return evt1TestNumericType(t) || t.Name == "bool" || t.Name == "string" || t.Kind == TypeEnum
+	if evt1TestNumericType(t) || t.Name == "bool" || t.Name == "string" || t.Kind == TypeEnum {
+		return true
+	}
+	switch t.Name {
+	case "uint8", "uint16", "uint32", "uint64", "usize", "isize":
+		return true
+	}
+	return false
 }
 
 func evt1ModuleUsesTestNear(module Module) bool {

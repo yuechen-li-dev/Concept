@@ -1,0 +1,116 @@
+module Golden.Hpc.Stencil;
+profile Core;
+import Standard.Math;
+
+table<16> Field
+{
+    float temperature;
+    float source;
+}
+
+enum KernelError
+{
+    UnstableDiffusion,
+    ShapeMismatch
+}
+
+float Lerp(float a, float b, float t)
+{
+    return a + t * (b - a);
+}
+
+void AdvanceHeat(ref Field next, ref const Field current, float diffusion)
+{
+    next.temperature[0] = current.temperature[0];
+    for (i in 1..15)
+    {
+        float laplace = current.temperature[i - 1]
+            - 2.0 * current.temperature[i]
+            + current.temperature[i + 1];
+        next.temperature[i] = current.temperature[i]
+            + diffusion * laplace
+            + current.source[i];
+    }
+    next.temperature[15] = current.temperature[15];
+}
+
+Result<void, KernelError> AdvanceChecked(ref Field next, ref const Field current, float diffusion)
+{
+    // The explicit Euler step is stable for this one-dimensional unit grid
+    // only within this range.
+    if (diffusion < 0.0 or diffusion > 0.5)
+    {
+        return Result::Error(KernelError::UnstableDiffusion);
+    }
+    AdvanceHeat(ref next, ref const current, diffusion);
+    return Result::Ok();
+}
+
+Result<float, KernelError> MaximumResidual(ReadOnlySpan<float> current, ReadOnlySpan<float> next)
+{
+    if (Len(current) != Len(next))
+    {
+        return Result::Error(KernelError::ShapeMismatch);
+    }
+    float maximum = 0.0;
+    for (i in 0..Len(current))
+    {
+        float difference = next[i] - current[i];
+        if (difference < 0.0) { difference = 0.0 - difference; }
+        if (difference > maximum)
+        {
+            maximum = difference;
+        }
+    }
+    return Result::Ok(maximum);
+}
+
+void ClearSources(ref Field field)
+{
+    for (i in 0..16)
+    {
+        field.source[i] = 0.0;
+    }
+}
+
+float TotalEnergy(ref const Field field)
+{
+    float sum = 0.0;
+    for (i in 0..16)
+    {
+        sum += field.temperature[i];
+    }
+    return sum;
+}
+
+float SumSamples(ReadOnlySpan<float> samples)
+{
+    float total = 0.0;
+    for (sample in samples)
+    {
+        total += sample;
+    }
+    return total;
+}
+
+float MaximumMagnitude(ReadOnlySpan<float> samples)
+{
+    float maximum = 0.0;
+    for (sample in samples)
+    {
+        float magnitude = Abs(sample);
+        if (magnitude > maximum)
+        {
+            maximum = magnitude;
+        }
+    }
+    return maximum;
+}
+
+void ScaleSamples(Span<float> samples, float scale)
+{
+    for (ref float sample in samples)
+    {
+        sample *= scale;
+    }
+}

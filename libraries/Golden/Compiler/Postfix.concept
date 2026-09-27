@@ -1,0 +1,133 @@
+module Golden.Compiler.Postfix;
+profile Core;
+import Standard.Collection.Stores;
+
+struct TokenWord
+{
+    int kind;
+    int value;
+}
+
+enum Expr
+{
+    Literal(int value),
+    Add(Id<Expr> left, Id<Expr> right),
+    Mul(Id<Expr> left, Id<Expr> right)
+}
+
+enum ParseError
+{
+    StackUnderflow,
+    StackOverflow,
+    StoreFull,
+    TrailingOperands
+}
+
+struct Parser
+{
+    DenseStore<Expr, 64> nodes;
+    Id<Expr>[64] stack;
+    int depth;
+}
+
+Result<Id<Expr>, ParseError> NewNode(ref Parser parser, Expr node)
+{
+    Result<Id<Expr>, StoreError> inserted = Append<Expr, 64>(ref parser.nodes, node);
+    match (inserted)
+    {
+        Result::Ok(id) => { return Result::Ok(id); }
+        Result::Error(error) => { return Result::Error(ParseError::StoreFull); }
+    }
+}
+requires compiler.InvalidatesBorrows(NewNode, parser);
+
+Result<void, ParseError> Push(ref Parser parser, Id<Expr> id)
+{
+    if (parser.depth == 64)
+    {
+        return Result::Error(ParseError::StackOverflow);
+    }
+    parser.stack[parser.depth] = id;
+    parser.depth++;
+    return Result::Ok();
+}
+
+Result<Id<Expr>, ParseError> Pop(ref Parser parser)
+{
+    if (parser.depth == 0)
+    {
+        return Result::Error(ParseError::StackUnderflow);
+    }
+    parser.depth--;
+    return Result::Ok(parser.stack[parser.depth]);
+}
+
+Result<void, ParseError> PushLiteral(ref Parser parser, int value)
+{
+    Id<Expr> id = NewNode(ref parser, Expr::Literal(value))?;
+    return Push(ref parser, id);
+}
+requires compiler.InvalidatesBorrows(PushLiteral, parser);
+
+Result<void, ParseError> ReduceAdd(ref Parser parser)
+{
+    Id<Expr> right = Pop(ref parser)?;
+    Id<Expr> left = Pop(ref parser)?;
+    Id<Expr> id = NewNode(ref parser, Expr::Add(left, right))?;
+    return Push(ref parser, id);
+}
+requires compiler.InvalidatesBorrows(ReduceAdd, parser);
+
+Result<void, ParseError> ReduceMul(ref Parser parser)
+{
+    Id<Expr> right = Pop(ref parser)?;
+    Id<Expr> left = Pop(ref parser)?;
+    Id<Expr> id = NewNode(ref parser, Expr::Mul(left, right))?;
+    return Push(ref parser, id);
+}
+requires compiler.InvalidatesBorrows(ReduceMul, parser);
+
+Result<Id<Expr>, ParseError> Parse(ref Parser parser, ReadOnlySpan<TokenWord> tokens)
+{
+    for (i in 0..Len(tokens))
+    {
+        if (tokens[i].kind == 0)
+        {
+            PushLiteral(ref parser, tokens[i].value)?;
+        }
+        else
+        {
+            if (tokens[i].kind == 1)
+            {
+                ReduceAdd(ref parser)?;
+            }
+            else
+            {
+                ReduceMul(ref parser)?;
+            }
+        }
+    }
+    if (parser.depth != 1)
+    {
+        return Result::Error(ParseError::TrailingOperands);
+    }
+    return Result::Ok(parser.stack[0]);
+}
+requires compiler.InvalidatesBorrows(Parse, parser);
+
+int Evaluate(ref const Parser parser, Id<Expr> root)
+{
+    int<array>[64] computed = [0 ...];
+    for (ordinal in 0..Count<Expr, 64>(ref const parser.nodes))
+    {
+        Id<Expr> id = IdAt<Expr, 64>(ref const parser.nodes, ordinal)!;
+        ref const Expr node = DenseGet<Expr, 64>(ref const parser.nodes, id)!;
+        computed[ordinal] = match (node)
+        {
+            Expr::Literal(value) => value,
+            Expr::Add(left, right) => computed[left.index] + computed[right.index],
+            Expr::Mul(left, right) => computed[left.index] * computed[right.index],
+        };
+    }
+    return computed[root.index];
+}

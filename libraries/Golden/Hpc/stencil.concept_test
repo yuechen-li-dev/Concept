@@ -1,0 +1,47 @@
+module Golden.Hpc.Tests;
+profile Core;
+import Golden.Hpc.Stencil;
+
+[[fact]]
+void OneDimensionalHeatStepConservesInteriorSpike()
+{
+    Field current = Field{
+        [0.0 ... 7, 10.0, 0.0 ... 8],
+        [0.0 ...]
+    };
+    Field next = Field{[0.0 ...], [0.0 ...]};
+    AdvanceHeat(ref next, ref const current, 0.1);
+    Assert.Near(next.temperature[6], 1.0, 0.001, "left neighbor receives heat");
+    Assert.Near(next.temperature[7], 8.0, 0.001, "center diffuses heat");
+    Assert.Near(next.temperature[8], 1.0, 0.001, "right neighbor receives heat");
+    Assert.Near(TotalEnergy(ref const next), 10.0, 0.001, "interior energy is conserved");
+    Assert.Near(SumSamples(ReadOnlySpan(next.temperature)), 10.0, 0.001, "Span traverses the SoA column");
+    Assert.Near(MaximumMagnitude(ReadOnlySpan(next.temperature)), 8.0, 0.001, "math intrinsic sees the peak");
+    ScaleSamples(Span(next.temperature), 0.5);
+    Assert.Near(SumSamples(ReadOnlySpan(next.temperature)), 5.0, 0.001, "mutable Span scales in place");
+}
+
+[[fact]]
+void NumericalLoopHasNoAllocation()
+{
+    Assert.Concept<NoAllocation>(AdvanceHeat, "fixed SoA columns and a finite range allocate nothing");
+    Assert.Concept<NoAllocation>(TotalEnergy, "reduction stays in scalar registers");
+    Assert.Concept<NoAllocation>(SumSamples, "Span reduction stays inline");
+    Assert.Concept<NoAllocation>(ScaleSamples, "mutable Span changes existing storage");
+    Assert.Concept<NoAllocation>(MaximumResidual, "residual reduction uses existing views");
+    Assert.Concept<NoAllocation>(AdvanceChecked, "stability check adds no heap");
+}
+
+[[fact]]
+void StabilityAndShapeFailuresAreExplicit()
+{
+    Field current = Field{[0.0 ...], [0.0 ...]};
+    Field next = Field{[0.0 ...], [0.0 ...]};
+    Assert.Error(AdvanceChecked(ref next, ref const current, 0.6), "unstable coefficient is rejected");
+    Assert.LGTM(AdvanceChecked(ref next, ref const current, 0.2), "stable coefficient advances");
+    float[2] short = [0.0, 1.0];
+    float[3] long = [0.0, 1.0, 2.0];
+    Assert.Error(MaximumResidual(ReadOnlySpan(short), ReadOnlySpan(long)), "mismatched extents are rejected");
+    Assert.Near(MaximumResidual(ReadOnlySpan(next.temperature), ReadOnlySpan(current.temperature))!, 0.0, 0.001, "identical fields have no residual");
+    ClearSources(ref next);
+}

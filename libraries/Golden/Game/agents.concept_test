@@ -1,0 +1,54 @@
+module Golden.Game.Tests;
+profile Core;
+import Golden.Game.Agents;
+
+[[fact]]
+void AgentsAdvanceThroughStableDenseIds()
+{
+    World world = World{DenseStore<Agent, 64>{Uninitialized()}, 0};
+    Id<Agent> first = Spawn(ref world, 0, 0)!;
+    Id<Agent> second = Spawn(ref world, 5, 0)!;
+    {
+        ref Agent seeker = DenseGetMutable<Agent, 64>(ref world.agents, first)!;
+        seeker.intent = Intent::Seek(3, 2);
+    }
+    {
+        ref Agent striker = DenseGetMutable<Agent, 64>(ref world.agents, second)!;
+        striker.intent = Intent::Strike(1);
+    }
+    Tick(ref world);
+    Tick(ref world);
+    {
+        ref const Agent seeker = DenseGet<Agent, 64>(ref const world.agents, first)!;
+        Assert.Equals(seeker.x, 2, "seeker advances one cell per tick");
+        Assert.Equals(seeker.y, 2, "seeker reaches the target row");
+    }
+    {
+        ref const Agent striker = DenseGet<Agent, 64>(ref const world.agents, second)!;
+        Assert.Equals(striker.health, 98, "explicit strike self-target resolves twice");
+    }
+    Assert.Equals(world.tick, 2, "world clock advances deterministically");
+    Assert.Equals(CountSeeking(ref const world), 1, "one agent retains a seek intent");
+    Assert.Equals(ApplyDamage(ref world, first, 200)!, 0, "damage clamps health to zero");
+}
+
+[[fact]]
+void HotAgentTraversalHasNoAllocation()
+{
+    Assert.Concept<NoAllocation>(Tick, "stable-ID traversal uses inline storage");
+    Assert.Concept<NoAllocation>(Spawn, "bounded append uses inline storage");
+    Assert.Concept<NoAllocation>(CountSeeking, "intent census is a dense traversal");
+}
+
+[[fact]]
+void PatrolYieldRequiresExplicitSteps()
+{
+    instance Patrol patrol(0, 3);
+    Step(patrol, Walk);
+    Assert.Equals(patrol.state.steps, 1, "first step advances once");
+    Step(patrol, Walk);
+    Step(patrol, Walk);
+    Assert.Equals(patrol.state.steps, 3, "yield preserves explicit state");
+    Step(patrol, Walk);
+    Assert.Equals(patrol.state.steps, 3, "transition ends the walk");
+}

@@ -1,0 +1,129 @@
+module Golden.Aerospace.FlightTelemetry;
+profile Core;
+
+enum FlightMode
+{
+    Preflight,
+    Climb,
+    Cruise,
+    Descent,
+    Fault
+}
+
+enum TelemetryError
+{
+    SensorInvalid,
+    CapacityExceeded,
+    OutOfEnvelope
+}
+
+[[repr(C)]] record struct NativeSample
+{
+    float altitudeMeters;
+    float verticalMetersPerSecond;
+    uint32 validityFlags;
+}
+
+concept CAbiValue<T> { requires compiler.CAbiLayout<T>(); }
+requires CAbiValue<NativeSample>;
+
+record struct FlightSample
+{
+    float<m> altitude;
+    float<m/s> verticalSpeed;
+    bool valid;
+}
+
+struct FlightController
+{
+    FlightMode mode;
+    FlightSample[16] history;
+    int historyCount;
+    int accepted;
+    int rejected;
+}
+
+FlightSample Interpret(NativeSample native)
+{
+    bool valid = (native.validityFlags & 1) != 0;
+    return FlightSample{
+        AssumeQuantity<float<m>>(native.altitudeMeters),
+        AssumeQuantity<float<m/s>>(native.verticalMetersPerSecond),
+        valid
+    };
+}
+
+Result<void, TelemetryError> Accept(ref FlightController controller, FlightSample sample)
+{
+    if (not sample.valid)
+    {
+        controller.rejected++;
+        controller.mode = FlightMode::Fault;
+        return Result::Error(TelemetryError::SensorInvalid);
+    }
+    if (sample.altitude < 0.0 or sample.altitude > 200000.0)
+    {
+        controller.rejected++;
+        controller.mode = FlightMode::Fault;
+        return Result::Error(TelemetryError::OutOfEnvelope);
+    }
+    if (controller.historyCount == 16)
+    {
+        return Result::Error(TelemetryError::CapacityExceeded);
+    }
+    controller.history[controller.historyCount] = sample;
+    controller.historyCount++;
+    controller.accepted++;
+
+    if (controller.mode == FlightMode::Preflight and sample.verticalSpeed > 0.0)
+    {
+        controller.mode = FlightMode::Climb;
+    }
+    if (controller.mode == FlightMode::Climb and sample.altitude >= 10000.0)
+    {
+        controller.mode = FlightMode::Cruise;
+    }
+    if (controller.mode == FlightMode::Cruise and sample.verticalSpeed < 0.0)
+    {
+        controller.mode = FlightMode::Descent;
+    }
+    return Result::Ok();
+}
+
+Result<void, TelemetryError> AcceptNative(ref FlightController controller, NativeSample native)
+{
+    return Accept(ref controller, Interpret(native));
+}
+
+int CountValid(ref const FlightController controller)
+{
+    int count = 0;
+    for (i in 0..controller.historyCount)
+    {
+        if (controller.history[i].valid) { count++; }
+    }
+    return count;
+}
+
+Result<FlightSample, TelemetryError> Latest(ref const FlightController controller)
+{
+    if (controller.historyCount == 0)
+    {
+        return Result::Error(TelemetryError::SensorInvalid);
+    }
+    return Result::Ok(controller.history[controller.historyCount - 1]);
+}
+
+bool MayUseTelemetryForGuidance(ref const FlightController controller)
+{
+    if (controller.mode == FlightMode::Fault or controller.historyCount == 0)
+    {
+        return false;
+    }
+    Result<FlightSample, TelemetryError> sample = Latest(ref const controller);
+    return match (sample)
+    {
+        Result::Ok(value) => value.valid,
+        Result::Error(error) => false,
+    };
+}

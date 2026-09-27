@@ -1,0 +1,26 @@
+module Counter.Tests;
+profile Core;
+import Counter;
+
+[[fact]]
+[[verify_foreign("CounterCreationContract")]]
+void NativeCounterBehaviorIsObserved()
+{
+    byte* counter = ConceptCounterCreate();
+    ConceptCounterAdd(counter, 7);
+    ConceptCounterAdd(counter, 5);
+    CounterStats first = ConceptCounterSnapshot(counter);
+    Assert.Equals(first.value, 12, "native C++ behavior is visible through the ABI");
+    Assert.Equals(first.resets, 0, "new counter has no resets");
+    ConceptCounterReset(counter);
+    CounterStats second = ConceptCounterSnapshot(counter);
+    Assert.Equals(second.value, 0, "reset is native behavior");
+    Assert.Equals(second.resets, 1, "reset count crosses the ABI");
+    ConceptCounterDestroy(counter);
+}
+
+[[fact]]
+void NativeCounterSchemaHasMeasuredRepresentation()
+{
+    Assert.Concept<CounterSnapshotSchema>(CounterStats, "snapshot has measured ABI layout and a typed accessor");
+}

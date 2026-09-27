@@ -85,6 +85,10 @@ func evt1TestEqualityType(env *semanticEnv, t Type) bool {
 	if evt1TestNumericType(t) || t.Name == "bool" || t.Name == "string" {
 		return true
 	}
+	switch t.Name {
+	case "uint8", "uint16", "uint32", "uint64", "usize", "isize":
+		return true
+	}
 	if t.Kind != TypeEnum {
 		return false
 	}
