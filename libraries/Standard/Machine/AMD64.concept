@@ -1,6 +1,25 @@
 module Standard.Machine.AMD64;
 profile Core;
 
+record struct CpuidResult { uint32 eax; uint32 ebx; uint32 ecx; uint32 edx; }
+
+CpuidResult Cpuid(uint32 leaf, uint32 subleaf)
+{
+    uint32 eax = leaf;
+    uint32 ebx = 0;
+    uint32 ecx = subleaf;
+    uint32 edx = 0;
+    unsafe asm AMD64 {
+        "cpuid";
+        inout eax eax;
+        out ebx ebx;
+        inout ecx ecx;
+        out edx edx;
+        memory none;
+    }
+    return CpuidResult{eax, ebx, ecx, edx};
+}
+
 // The module is the architecture namespace. These declarations have typed
 // Concept signatures; their machine identities survive semantic artifacts.
 [[machine("AMD64.Pause")]]
@@ -67,6 +86,20 @@ void Out32(uint16 port, uint32 value)
     ConceptAMD64Out32(port, value);
 }
 
+[[machine("AMD64.Cli")]] extern "C" void ConceptAMD64Cli();
+[[machine("AMD64.Sti")]] extern "C" void ConceptAMD64Sti();
+[[machine("AMD64.Hlt")]] extern "C" void ConceptAMD64Hlt();
+[[machine("AMD64.Lfence")]] extern "C" void ConceptAMD64Lfence();
+[[machine("AMD64.Sfence")]] extern "C" void ConceptAMD64Sfence();
+[[machine("AMD64.Mfence")]] extern "C" void ConceptAMD64Mfence();
+
+void Cli() { ConceptAMD64Cli(); }
+void Sti() { ConceptAMD64Sti(); }
+void Hlt() { ConceptAMD64Hlt(); }
+void Lfence() { ConceptAMD64Lfence(); }
+void Sfence() { ConceptAMD64Sfence(); }
+void Mfence() { ConceptAMD64Mfence(); }
+
 void MachineFacts()
 {
     Assert.Concept<NoAllocation>(Pause, "pause needs no storage");
@@ -74,4 +107,8 @@ void MachineFacts()
     Assert.Concept<HardwareRead>(ReadTimestamp, "timestamp reads machine state");
     Assert.Concept<HardwareRead>(In8, "port input reads hardware");
     Assert.Concept<HardwareWrite>(Out8, "port output writes hardware");
+    Assert.Concept<NoAllocation>(Cpuid, "cpuid uses fixed local storage");
+    Assert.Concept<Privileged>(Cli, "interrupt masking is privileged");
+    Assert.Concept<Privileged>(Sti, "interrupt unmasking is privileged");
+    Assert.Concept<Privileged>(Hlt, "halt is privileged");
 }

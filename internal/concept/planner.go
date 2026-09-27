@@ -627,6 +627,12 @@ func planOperation(op MIROperation, facts SemanticFactSet) PlanningDecision {
 			d.Evidence.Claims = append(d.Evidence.Claims, "MemoryEffect:"+op.MachineAssembly.MemoryEffect)
 			d.Evidence.Detail = "typed assembly remains a local target helper call with explicit operand, clobber, and memory declarations"
 		}
+		if op.MachineOrdering != "" {
+			d.Evidence.Claims = append(d.Evidence.Claims, "MachineOrdering:"+op.MachineOrdering)
+		}
+		if op.Privileged {
+			d.Evidence.Claims = append(d.Evidence.Claims, "Privileged")
+		}
 	case "mmio_read", "mmio_write":
 		d.Category, d.Strategy, d.Certainty = "HardwareAccessPlan", "RetainOrderedVolatileAccess", DecisionRequired
 		d.Evidence = PlanningEvidence{Claims: []string{"ExternallyObservable", "SourceOrderedMMIO", "NoAllocation"}, Detail: "each MMIO operation remains one width-specific C11 volatile access"}

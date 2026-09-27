@@ -165,6 +165,19 @@ func evt1ProjectDirectAnalysis(env *semanticEnv, graph *ProofGraph, root string,
 	if goal == string(FactNoAllocation) && subjects[0].function != nil {
 		return evt1ProjectNoAllocation(env, graph, root, *subjects[0].function, map[string]bool{})
 	}
+	if goal == string(FactPrivileged) && subjects[0].function != nil {
+		privileged, known := evt1FunctionPrivileged(env, *subjects[0].function, map[string]bool{})
+		outcome := FactUnknown
+		if known {
+			outcome = FactDisproven
+		}
+		if privileged {
+			outcome = FactProven
+		}
+		id := graph.addNode(ProofKnownFact, subjects[0].function.Name+" Privileged", "compiler-known machine operation classification", outcome, FactOriginCompilerAnalysis, subjects[0].span)
+		graph.addEdge(root, id, ProofDerivedFrom)
+		return outcome
+	}
 	if (goal == string(FactHardwareRead) || goal == string(FactHardwareWrite)) && subjects[0].function != nil {
 		read, write, known := evt1FunctionHardwareEffects(env, *subjects[0].function, map[string]bool{})
 		outcome := FactUnknown

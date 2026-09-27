@@ -1097,7 +1097,11 @@ func collectMIROps(env *semanticEnv, block *Block, fn *MIRFunction, templateInfo
 		id := fmt.Sprintf("%s.%02d", fn.Name, len(fn.Operations)+1)
 		switch s := stmt.(type) {
 		case *AsmStmt:
-			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "machine_asm", Detail: evt1AsmSymbol(fn.Name, s), NoCopy: true, NoAllocation: true, NoOwnershipTransfer: true, MachineAssembly: &MIRMachineAssembly{Architecture: s.Architecture, Template: s.Template, OperandMode: s.OperandMode, OperandName: s.OperandName, OperandType: s.OperandType.Name, Clobbers: append([]string{}, s.Clobbers...), MemoryEffect: s.MemoryEffect, ControlFlow: "local"}, SourceSpan: s.Span})
+			operands := make([]MIRAsmOperand, len(s.Operands))
+			for i, operand := range s.Operands {
+				operands[i] = MIRAsmOperand{Mode: operand.Mode, Name: operand.Name, Type: operand.Type.Name, Register: operand.Register}
+			}
+			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "machine_asm", Detail: evt1AsmSymbol(fn.Name, s), NoCopy: true, NoAllocation: true, NoOwnershipTransfer: true, MachineAssembly: &MIRMachineAssembly{Architecture: s.Architecture, Template: s.Template, Operands: operands, Clobbers: append([]string{}, s.Clobbers...), MemoryEffect: s.MemoryEffect, ControlFlow: "local"}, SourceSpan: s.Span})
 		case *VarDecl:
 			if s.InlineTensor != nil {
 				facts := s.InlineTensor.Facts
@@ -1481,7 +1485,7 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 			for _, arg := range e.Args {
 				collectExprMIROps(env, arg, fn, templateInfo)
 			}
-			fn.Operations = append(fn.Operations, MIROperation{ID: fmt.Sprintf("%s.%02d", fn.Name, len(fn.Operations)+1), Kind: "machine_intrinsic", Detail: e.Intrinsic, Type: "(" + strings.Join(spec.params, ",") + ")", ReturnType: spec.result, NoCopy: true, NoAllocation: true, NoOwnershipTransfer: true, SourceSpan: e.Span})
+			fn.Operations = append(fn.Operations, MIROperation{ID: fmt.Sprintf("%s.%02d", fn.Name, len(fn.Operations)+1), Kind: "machine_intrinsic", Detail: e.Intrinsic, Type: "(" + strings.Join(spec.params, ",") + ")", ReturnType: spec.result, NoCopy: true, NoAllocation: true, NoOwnershipTransfer: true, MachineOrdering: spec.ordering, Privileged: spec.privileged, SourceSpan: e.Span})
 			return
 		}
 		if e.CallableInvoke {
@@ -3863,8 +3867,7 @@ func (f *evt1FunctionLowerer) lowerBlock(block Block, indent int) string {
 func (f *evt1FunctionLowerer) lowerStatement(stmt Statement, indent int) string {
 	switch s := stmt.(type) {
 	case *AsmStmt:
-		prelude, place, _, _ := f.lowerLValue(&NameExpr{Name: s.OperandName, Span: s.Span}, indent)
-		return prelude + ind(indent) + fmt.Sprintf("%s(&%s);\n", evt1AsmSymbol(f.fn.Name, s), place)
+		return f.lowerAsmStatement(s, indent)
 	case *VarDecl:
 		if s.Comptime {
 			value, err := evt1EvalExpr(newEVT1ComptimeState(f.l.env), f.evalScope(), s.Value)

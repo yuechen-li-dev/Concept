@@ -6796,7 +6796,7 @@ func init() {
 			return evt1TypeFact(env, factKind, args[0], parameters)
 		}}
 	}
-	for _, kind := range []SemanticFactKind{FactHardwareRead, FactHardwareWrite} {
+	for _, kind := range []SemanticFactKind{FactHardwareRead, FactHardwareWrite, FactPrivileged} {
 		factKind := kind
 		evt1SemanticAnalysisRegistry[string(kind)] = evt1SemanticAnalysis{SubjectArity: 1, CheckTypes: func(env *semanticEnv, args []Type, parameters []int) semanticFactResult {
 			return semanticFactResult{Outcome: FactUnknown, Origin: FactOriginCompilerAnalysis, Evidence: SemanticFactEvidence{Detail: string(factKind) + " requires an operation subject"}}

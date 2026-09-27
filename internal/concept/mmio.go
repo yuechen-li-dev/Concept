@@ -169,5 +169,8 @@ func evt1QualifyHardwareFacts(mir *MIR, env *semanticEnv) {
 		if write {
 			evt1AppendFact(&mir.SemanticFacts, FactHardwareWrite, []SemanticFactSubject{subject}, nil, FactOriginCompilerAnalysis, SemanticFactEvidence{Detail: "hardware write in transitive call graph"}, fn.SourceSpan)
 		}
+		if privileged, known := evt1FunctionPrivileged(env, *declaration, map[string]bool{}); known && privileged {
+			evt1AppendFact(&mir.SemanticFacts, FactPrivileged, []SemanticFactSubject{subject}, nil, FactOriginCompilerAnalysis, SemanticFactEvidence{Detail: "privileged machine operation in transitive call graph"}, fn.SourceSpan)
+		}
 	}
 }
