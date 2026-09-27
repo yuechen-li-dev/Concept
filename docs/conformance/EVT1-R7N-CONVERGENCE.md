@@ -21,3 +21,22 @@ generic ID constructors; `-pedantic-errors` and other warnings stay active.
 The next blocker is a sound stationary initialization representation that can
 own immovable values while exposing a contiguous payload span. A separate
 arena or graph framework would not resolve that representation problem.
+
+## R7n2 follow-up
+
+| Awkward pattern | Substrate fix | Evidence |
+| --- | --- | --- |
+| `Initialize(Storage<Immovable>, T{...})` lowered through a complete aggregate assignment | Evaluate all fields, then write directly to the final storage address | Strict C11 immovable fixture; generated C checked for whole-object assignment |
+| A later fallible field could abandon an earlier owned field | Register field temporaries for normal cleanup until commitment | Failing and succeeding constructor paths observe exactly two Drops |
+| `Destroy` of an immovable aggregate with an owned field skipped structural cleanup | Reuse structural `lowerDropValue` for typed storage destruction | Successful path destroys its owned field once |
+| A borrowed record reference was considered an owner for recursive cleanup | Exclude `ref T` from generated Drop traversal | Native strict C11 fixture with a borrowed immovable value |
+| Fixed layout rejected an owned field despite unchanged physical representation | Resolve the value type for field geometry | `SizeOf<Pinned>` accepted for bound storage |
+
+The next blocker is store-owned, partially initialized contiguous storage.
+`Option<owned T>[Capacity]` cannot form `Span<T>` because its payloads have a
+tagged stride. A generic raw byte array sized by `Capacity * SizeOf<T>()`
+currently rejects with `CV4200` because the capacity name is unavailable in
+that compile-time extent; `SizeOf<T>()` alone rejects with `CV4573` because
+open `T` has no fixed layout geometry. A sound solution must also constrain
+moving a store after an immovable entry becomes live. The current patch does
+not claim store Emplace, payload Span, or R7n closeout.

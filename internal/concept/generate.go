@@ -4209,6 +4209,43 @@ func (f *evt1FunctionLowerer) lowerLocalStructConstruct(targetType Type, name st
 	return b.String()
 }
 
+// Initialize a bound Storage<T> without ever producing a complete temporary T.
+// Evaluate every field before writing to the destination so an early failure
+// leaves the storage uninitialized; field temporaries retain ordinary cleanup.
+func (f *evt1FunctionLowerer) lowerInPlaceStructConstruct(storage string, targetType Type, construct StructConstructExpr, indent int) string {
+	structDecl := f.l.env.structs[targetType.Name]
+	fieldIndex := make(map[string]int, len(structDecl.Fields))
+	for i, field := range structDecl.Fields {
+		fieldIndex[field.Name] = i
+	}
+	var b strings.Builder
+	temps := make([]string, len(structDecl.Fields))
+	for i, arg := range construct.Args {
+		index := i
+		if len(construct.ArgNames) != 0 {
+			index = fieldIndex[construct.ArgNames[i]]
+		}
+		fieldType := structDecl.Fields[index].Type
+		if resolved, ok := f.l.env.fieldSets[targetType.Name][structDecl.Fields[index].Name]; ok {
+			fieldType = resolved
+		}
+		prelude, expr, argType := f.lowerExprExpected(arg, fieldType, indent)
+		b.WriteString(prelude)
+		temp := f.nextTemp(fmt.Sprintf("init_%d", index+1))
+		b.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(argType), temp, expr))
+		if evt1TypeHasDrop(f.l.env, fieldType) {
+			f.currentScope()[temp] = evt1Binding{cName: temp, t: fieldType}
+			f.registerOwner(temp, fieldType)
+		}
+		temps[index] = temp
+	}
+	for i, field := range structDecl.Fields {
+		b.WriteString(ind(indent) + fmt.Sprintf("(*%s).%s = %s;\n", storage, field.Name, temps[i]))
+		f.liveOwners[temps[i]] = false
+	}
+	return b.String()
+}
+
 func (f *evt1FunctionLowerer) lowerMatchStmt(stmt MatchStmt, indent int) string {
 	subPrelude, subjectExpr, subjectType := f.lowerExpr(stmt.Subject, indent)
 	member := "."
@@ -4781,15 +4818,18 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		if e.Callee == "Initialize" && len(e.Args) == 2 && storageCall {
 			storagePrelude, storage, storageType := f.lowerExpr(e.Args[0], indent)
 			element := storageType.TypeArgs[0]
+			if construct, ok := e.Args[1].(*StructConstructExpr); ok && construct.StructName == element.Name {
+				storageTemp := f.nextTemp("storage")
+				storagePrelude += ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(storageType), storageTemp, storage)
+				return storagePrelude + f.lowerInPlaceStructConstruct(storageTemp, element, *construct, indent), storageTemp, Type{Name: element.Name, Kind: element.Kind, TypeArgs: element.TypeArgs, Ownership: "ref", Span: e.Span}
+			}
 			valuePrelude, value, _ := f.lowerExprExpected(e.Args[1], element, indent)
 			return storagePrelude + valuePrelude, fmt.Sprintf("((*%s = %s), %s)", storage, value, storage), Type{Name: element.Name, Kind: element.Kind, TypeArgs: element.TypeArgs, Ownership: "ref", Span: e.Span}
 		}
 		if e.Callee == "Destroy" && len(e.Args) == 1 && storageCall {
 			prelude, storage, storageType := f.lowerExpr(e.Args[0], indent)
 			element := storageType.TypeArgs[0]
-			if drop := evt1DropFunction(f.l.env, element); drop != nil {
-				return prelude, fmt.Sprintf("(%s(*%s), (void)0)", evt1FunctionSymbolForDecl(f.l.symbolBase, f.l.env, *drop), storage), Type{Name: "void", Kind: TypeBuiltin, Span: e.Span}
-			}
+			prelude += f.lowerDropValue(element, "*"+storage, indent)
 			return prelude, "((void)0)", Type{Name: "void", Kind: TypeBuiltin, Span: e.Span}
 		}
 		if e.Callee == "Value" && len(e.Args) == 1 && storageCall {
@@ -5493,6 +5533,9 @@ func (f *evt1FunctionLowerer) lowerScopeDrops(scopeIndex, indent int) string {
 }
 
 func (f *evt1FunctionLowerer) lowerDropValue(t Type, value string, indent int) string {
+	if t.isReference() {
+		return ""
+	}
 	if t.Kind == TypeCallable {
 		var b strings.Builder
 		for _, callable := range evt1ModuleCallables(f.l.module) {

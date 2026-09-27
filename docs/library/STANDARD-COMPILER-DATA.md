@@ -48,8 +48,18 @@ Drop semantics. Generic custom `foreach` iteration over an imported typed ID
 range is not yet available; `Count` and `IdAt` keep the loop explicit.
 
 Immovable values cannot pass through the current by-value `Append`/`Insert`
-boundary. A future stationary initialization API must construct them in place;
-the library does not fake a move. Arena reset, a graph wrapper, hashing,
+boundary. `Storage<T>` now constructs an aggregate initializer field by field
+at its final address, including an immovable `T`. It evaluates all field
+expressions before beginning that object's lifetime, so an early failure
+cleans up completed field temporaries without leaving a live half-object.
+The stores still need a contiguous, partially initialized backing type before
+they can offer stationary insertion; the library does not fake a move.
+Arena reset, a graph wrapper, hashing,
 serialization, and cross-store domains are deferred. Graphs can already store
 typed target IDs in node records and walk a dense edge store. No ABI layout is
 promised without an explicit valid `repr(C)` declaration.
+
+`GenerationalStore` is sparse after removal and deliberately offers no
+contiguous payload Span. Its checked ID walk stays allocation-free. The
+current `DenseStore` also offers no payload Span: its `Option<T>` payloads are
+strided by tags rather than a contiguous `T[Count]` prefix.

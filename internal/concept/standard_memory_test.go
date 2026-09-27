@@ -372,6 +372,9 @@ int Main()
 	if strings.Contains(moduleOutput(t, outputs, ".generated.c"), "memcpy") {
 		t.Fatal("moving the allocation owner relocated the immovable object")
 	}
+	if strings.Contains(moduleOutput(t, outputs, ".generated.c"), "*storage =") {
+		t.Fatal("Initialize constructed a temporary immovable object before final storage")
+	}
 	runFoundationNativeHarness(t, outputs, "immovablespecimen_harness.c", "#include \"immovablespecimen.generated.h\"\nint main(void) { return concept_immovable_specimen_main() == 42 ? 0 : 1; }\n")
 }
 

@@ -37,7 +37,9 @@ func evt1StructFieldOffsets(env *semanticEnv, decl StructDecl) ([]int, int, int,
 	offsets := make([]int, len(decl.Fields))
 	end, alignment := 0, 1
 	for i, field := range decl.Fields {
-		size, fieldAlign, err := evt1TypeGeometry(env, field.Type)
+		// Ownership changes lifetime responsibility, not a field's physical
+		// representation inside an otherwise fixed-layout record.
+		size, fieldAlign, err := evt1TypeGeometry(env, field.Type.valueType())
 		if err != nil {
 			return nil, 0, 0, err
 		}

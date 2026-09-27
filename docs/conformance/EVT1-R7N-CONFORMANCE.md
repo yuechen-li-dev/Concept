@@ -47,3 +47,31 @@ the exact Go commands named by the BurnIn, Standard, and DragonGod Make targets
 were run directly.
 The library currently lacks contiguous payload `Span<T>` and in-place
 immovable insertion, so those success criteria remain open.
+
+## R7n2 follow-up
+
+Baseline: clean `414bb636fafde148dc7e89b758844f1f43652581`;
+compiler ID `concept-evt1-stage0-go`. The single-object `Storage<T>`
+initialization path now constructs aggregate fields into the final address.
+The strict C11 immovable specimen exercises a failed later field expression,
+cleanup of the completed owned field, successful `Destroy`, and no complete
+temporary `T` or hidden heap call in generated C. Owned fields now participate
+in fixed layout geometry, and `Destroy` recursively drops owned fields when
+there is no custom Drop for the containing record.
+
+R7n2 remains **meaningful progression**, not R7n closeout: neither store
+exposes stationary insertion, and `DenseStore` still has strided `Option<T>`
+payloads rather than a contiguous `T[Count]` prefix. `GenerationalStore`
+remains sparse by design and should keep checked ID traversal without a fake
+payload Span. These criteria require a general, partially initialized inline
+storage representation with explicit lifetime and relocation rules.
+
+Validation of the R7n2 progression: `go test ./...` (including the existing
+100-run R7n store artifact/MIR/C/proof comparison), `go vet ./...`, both Zig
+test suites, R7d3 BurnIn, and the full EVT1 corpus manifest passed. Standard
+passed 34 facts and two benchmarks in both Normal and Verify; DragonGod passed
+23 facts and one benchmark in both modes. The new stationary `Storage<T>`
+fixture ran natively and passed `-std=c11 -pedantic-errors -Wall -Wextra
+-Werror -Wno-unused-function`. It is single-object substrate evidence, not
+evidence for the still absent store Emplace or payload Span APIs. No R7n2
+Emplace/Span performance comparison or NoAllocation proof can be claimed.
