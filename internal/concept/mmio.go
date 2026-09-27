@@ -115,6 +115,13 @@ func evt1FunctionHardwareEffects(env *semanticEnv, fn FunctionDecl, visiting map
 	known = true
 	for _, op := range operations.Operations {
 		switch op.Kind {
+		case "machine_intrinsic":
+			switch op.Detail {
+			case "AMD64.ReadTimestamp", "AMD64.In8", "AMD64.In16", "AMD64.In32":
+				read = true
+			case "AMD64.Out8", "AMD64.Out16", "AMD64.Out32":
+				write = true
+			}
 		case "mmio_read":
 			read = true
 		case "mmio_write":
@@ -157,10 +164,10 @@ func evt1QualifyHardwareFacts(mir *MIR, env *semanticEnv) {
 		read, write, _ := evt1FunctionHardwareEffects(env, *declaration, map[string]bool{})
 		subject := SemanticFactSubject{Kind: "operation", Name: fn.Name, Function: fn.Name, Type: fn.ReturnType.String()}
 		if read {
-			evt1AppendFact(&mir.SemanticFacts, FactHardwareRead, []SemanticFactSubject{subject}, nil, FactOriginCompilerAnalysis, SemanticFactEvidence{Detail: "MMIO read in transitive call graph"}, fn.SourceSpan)
+			evt1AppendFact(&mir.SemanticFacts, FactHardwareRead, []SemanticFactSubject{subject}, nil, FactOriginCompilerAnalysis, SemanticFactEvidence{Detail: "hardware read in transitive call graph"}, fn.SourceSpan)
 		}
 		if write {
-			evt1AppendFact(&mir.SemanticFacts, FactHardwareWrite, []SemanticFactSubject{subject}, nil, FactOriginCompilerAnalysis, SemanticFactEvidence{Detail: "MMIO write in transitive call graph"}, fn.SourceSpan)
+			evt1AppendFact(&mir.SemanticFacts, FactHardwareWrite, []SemanticFactSubject{subject}, nil, FactOriginCompilerAnalysis, SemanticFactEvidence{Detail: "hardware write in transitive call graph"}, fn.SourceSpan)
 		}
 	}
 }

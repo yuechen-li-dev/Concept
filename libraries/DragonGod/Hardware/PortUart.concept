@@ -1,0 +1,35 @@
+module DragonGod.Hardware.PortUart;
+profile Core;
+
+import Standard.Machine.AMD64;
+
+// A legacy x86 I/O port is a uint16 port number, never Address<DeviceMemory>.
+record struct PortUart
+{
+    uint16 base;
+}
+
+uint8 ReadPortStatus(ref const PortUart uart)
+{
+    return In8(uart.base + 5);
+}
+
+void WritePortByte(ref const PortUart uart, uint8 value)
+{
+    Out8(uart.base, value);
+}
+
+bool PollPortTransmitter(ref const PortUart uart)
+{
+    int attempts = 0;
+    while (attempts < 4) bounded(4)
+    {
+        uint8 status = ReadPortStatus(ref const uart);
+        if ((status & 32) != 0)
+        {
+            return true;
+        }
+        attempts = attempts + 1;
+    }
+    return false;
+}

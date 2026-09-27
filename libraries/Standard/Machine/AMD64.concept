@@ -1,0 +1,77 @@
+module Standard.Machine.AMD64;
+profile Core;
+
+// The module is the architecture namespace. These declarations have typed
+// Concept signatures; their machine identities survive semantic artifacts.
+[[machine("AMD64.Pause")]]
+extern "C" void ConceptAMD64Pause();
+
+[[machine("AMD64.ReadTimestamp")]]
+extern "C" uint64 ConceptAMD64ReadTimestamp();
+
+[[machine("AMD64.In8")]]
+extern "C" uint8 ConceptAMD64In8(uint16 port);
+
+[[machine("AMD64.In16")]]
+extern "C" uint16 ConceptAMD64In16(uint16 port);
+
+[[machine("AMD64.In32")]]
+extern "C" uint32 ConceptAMD64In32(uint16 port);
+
+[[machine("AMD64.Out8")]]
+extern "C" void ConceptAMD64Out8(uint16 port, uint8 value);
+
+[[machine("AMD64.Out16")]]
+extern "C" void ConceptAMD64Out16(uint16 port, uint16 value);
+
+[[machine("AMD64.Out32")]]
+extern "C" void ConceptAMD64Out32(uint16 port, uint32 value);
+
+void Pause()
+{
+    ConceptAMD64Pause();
+}
+
+uint64 ReadTimestamp()
+{
+    return ConceptAMD64ReadTimestamp();
+}
+
+uint8 In8(uint16 port)
+{
+    return ConceptAMD64In8(port);
+}
+
+uint16 In16(uint16 port)
+{
+    return ConceptAMD64In16(port);
+}
+
+uint32 In32(uint16 port)
+{
+    return ConceptAMD64In32(port);
+}
+
+void Out8(uint16 port, uint8 value)
+{
+    ConceptAMD64Out8(port, value);
+}
+
+void Out16(uint16 port, uint16 value)
+{
+    ConceptAMD64Out16(port, value);
+}
+
+void Out32(uint16 port, uint32 value)
+{
+    ConceptAMD64Out32(port, value);
+}
+
+void MachineFacts()
+{
+    Assert.Concept<NoAllocation>(Pause, "pause needs no storage");
+    Assert.Concept<NoAllocation>(ReadTimestamp, "timestamp needs no storage");
+    Assert.Concept<HardwareRead>(ReadTimestamp, "timestamp reads machine state");
+    Assert.Concept<HardwareRead>(In8, "port input reads hardware");
+    Assert.Concept<HardwareWrite>(Out8, "port output writes hardware");
+}

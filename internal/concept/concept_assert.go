@@ -178,7 +178,7 @@ func evt1ProjectDirectAnalysis(env *semanticEnv, graph *ProofGraph, root string,
 		if _, imported := env.importedHardwareEffects[evt1OperationEffectKey(subjects[0].function.Name, evt1FunctionParamSignature(*subjects[0].function))]; imported {
 			origin = FactOriginModuleSummaryEffect
 		}
-		id := graph.addNode(ProofKnownFact, subjects[0].function.Name+" "+goal, "observable device transaction summary", outcome, origin, subjects[0].span)
+		id := graph.addNode(ProofKnownFact, subjects[0].function.Name+" "+goal, "observable hardware operation summary", outcome, origin, subjects[0].span)
 		graph.addEdge(root, id, ProofDerivedFrom)
 		return outcome
 	}
@@ -486,6 +486,11 @@ func evt1ProjectOutlives(graph *ProofGraph, root string, subjects []conceptAsser
 }
 
 func evt1ProjectNoAllocation(env *semanticEnv, graph *ProofGraph, root string, fn FunctionDecl, visiting map[string]bool) SemanticFactCertainty {
+	if spec, machine, err := evt1MachineIntrinsic(fn); machine && err == nil {
+		id := graph.addNode(ProofKnownFact, spec.id+" NoAllocation", "compiler-known machine intrinsic", FactProven, FactOriginCompilerAnalysis, fn.Span)
+		graph.addEdge(root, id, ProofDerivedFrom)
+		return FactProven
+	}
 	if evt1KnownC11MathPrimitive(fn) {
 		id := graph.addNode(ProofKnownFact, fn.Name+" NoAllocation", "compiler-known C11 math primitive", FactProven, FactOriginCompilerAnalysis, fn.Span)
 		graph.addEdge(root, id, ProofDerivedFrom)
@@ -661,7 +666,8 @@ func evt1DirectCalls(block Block) []string {
 	visitExpr = func(expr Expr) {
 		switch e := expr.(type) {
 		case *CallExpr:
-			if !e.Member && e.Intrinsic == "" {
+			_, machine := machineIntrinsics[e.Intrinsic]
+			if !e.Member && (e.Intrinsic == "" || machine) {
 				seen[e.Callee] = true
 			}
 			for _, arg := range e.Args {

@@ -1700,6 +1700,9 @@ func evt1CollectComptimeCallsFromExpr(expr Expr, env *semanticEnv) []string {
 }
 
 func validateFunctionSignature(env *semanticEnv, fn FunctionDecl) error {
+	if _, _, err := evt1MachineIntrinsic(fn); err != nil {
+		return err
+	}
 	if err := validateKnownType(env, fn.ReturnType, fn.Span, "", false); err != nil {
 		return err
 	}
@@ -4034,6 +4037,15 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 				return Type{}, evt1Diagnostic("CV4173", fmt.Sprintf("template call %s cannot infer all concrete arguments", e.Callee), e.Span)
 			}
 			return Type{}, err
+		}
+		if spec, machine, machineErr := evt1MachineIntrinsic(fn); machine {
+			if machineErr != nil {
+				return Type{}, machineErr
+			}
+			if inComptimeFn {
+				return Type{}, evt1Diagnostic("MACHINE_COMPTIME_INVALID", "machine intrinsic requires runtime execution", e.Span)
+			}
+			e.Intrinsic = spec.id
 		}
 		if fn.ExternABI != "" {
 			boundaryTypes := []Type{fn.ReturnType}

@@ -54,6 +54,10 @@ func GenerateForTargetWithPolicy(module Module, source []byte, target TargetCapa
 		optimizeSynchronization: policy.OptimizeSynchronization,
 	}
 	l.mir = buildMIR(module, env)
+	machineHelper, err := evt1MachineHelperSource(l.mir, target)
+	if err != nil {
+		return nil, err
+	}
 	if policy.OptimizeSynchronization {
 		if len(env.accessSummaries) == 0 {
 			if err := evt1DeriveAccessSummaries(env, module); err != nil {
@@ -132,18 +136,25 @@ func GenerateForTargetWithPolicy(module Module, source []byte, target TargetCapa
 			{"path": l.outputBase + ".map.json", "sha256": digest(mapJSON)},
 		},
 	}
+	if len(machineHelper) != 0 {
+		manifest["files"] = append(manifest["files"].([]map[string]string), map[string]string{"path": l.outputBase + ".machine.S", "sha256": digest(machineHelper)})
+	}
 	manifestJSON, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
 		return nil, err
 	}
 	manifestJSON = append(manifestJSON, '\n')
-	return Outputs{
+	outputs := Outputs{
 		l.outputBase + ".generated.h":   header,
 		l.outputBase + ".generated.c":   body,
 		l.outputBase + ".mir.json":      mirJSON,
 		l.outputBase + ".map.json":      mapJSON,
 		l.outputBase + ".manifest.json": manifestJSON,
-	}, nil
+	}
+	if len(machineHelper) != 0 {
+		outputs[l.outputBase+".machine.S"] = machineHelper
+	}
+	return outputs, nil
 }
 
 func buildMIR(module Module, env *semanticEnv) MIR {
@@ -1464,6 +1475,13 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 			collectExprMIROps(env, arm.Value, fn, templateInfo)
 		}
 	case *CallExpr:
+		if spec, machine := machineIntrinsics[e.Intrinsic]; machine {
+			for _, arg := range e.Args {
+				collectExprMIROps(env, arg, fn, templateInfo)
+			}
+			fn.Operations = append(fn.Operations, MIROperation{ID: fmt.Sprintf("%s.%02d", fn.Name, len(fn.Operations)+1), Kind: "machine_intrinsic", Detail: e.Intrinsic, Type: "(" + strings.Join(spec.params, ",") + ")", ReturnType: spec.result, NoCopy: true, NoAllocation: true, NoOwnershipTransfer: true, SourceSpan: e.Span})
+			return
+		}
 		if e.CallableInvoke {
 			kind := "callable_invoke"
 			if e.CallableType != nil && e.CallableType.Kind == TypeCallback {

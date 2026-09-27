@@ -754,6 +754,11 @@ func summarizeModuleEffects(module Module, env *semanticEnv) []SemanticModuleEff
 			cache[key], state[key] = summary, 2
 			return summary
 		}
+		if _, machine, err := evt1MachineIntrinsic(fn); machine && err == nil {
+			summary := SemanticModuleEffectSummary{Operation: fn.Name, Signature: evt1FunctionParamSignature(fn), Effect: "NoAllocation", Origin: string(FactOriginCompilerAnalysis)}
+			cache[key], state[key] = summary, 2
+			return summary
+		}
 		if effect, ok := evt1OperationEffectForFunction(env, fn); ok && effect.Effect == "Allocates" {
 			origin := FactOriginDeclaredEffect
 			if effect.Origin == string(FactOriginDeclaredForeign) {

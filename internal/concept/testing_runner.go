@@ -248,7 +248,7 @@ func evt1TestMetadata(fn FunctionDecl) (TestKind, bool, []string, bool) {
 	foretold, annotated := false, false
 	var artifacts []string
 	for _, attribute := range fn.Attributes {
-		if evt1SemanticAccessAttribute(attribute.Name) {
+		if evt1SemanticAccessAttribute(attribute.Name) || attribute.Name == "machine" {
 			continue
 		}
 		annotated = true
@@ -454,6 +454,10 @@ func runOneTest(test TestDeclaration, values []any, caseIndex int, options TestR
 		return failedTestResult(result, start, "runner", err.Error(), test)
 	}
 	base := evt1OutputBase(test.sourcePath)
+	machineHelper := ""
+	if _, present := outputs[base+".machine.S"]; present {
+		machineHelper = filepath.Join(temp, base+".machine.S")
+	}
 	harness := evt1TestHarness(test, values, base, evt1SemanticSymbolBase(test.module))
 	harnessPath := filepath.Join(temp, "test_harness.c")
 	if err := os.WriteFile(harnessPath, []byte(harness), 0o644); err != nil {
@@ -464,7 +468,7 @@ func runOneTest(test TestDeclaration, values []any, caseIndex int, options TestR
 		executable += ".exe"
 	}
 	if len(options.NativeLinkInputs) != 0 {
-		phase, message := evt1BuildNativeLinkedTest(temp, filepath.Join(temp, base+".generated.c"), harnessPath, executable, options)
+		phase, message := evt1BuildNativeLinkedTest(temp, filepath.Join(temp, base+".generated.c"), harnessPath, executable, options, machineHelper)
 		if phase != "" {
 			return failedTestResult(result, start, phase, message, test)
 		}
@@ -473,6 +477,9 @@ func runOneTest(test TestDeclaration, values []any, caseIndex int, options TestR
 		compiler, args, err := evt1TestCompiler(temp, filepath.Join(temp, base+".generated.c"), harnessPath, executable)
 		if err != nil {
 			return failedTestResult(result, start, "compiler-unavailable", err.Error(), test)
+		}
+		if machineHelper != "" {
+			args = append(args[:len(args)-2], append([]string{machineHelper}, args[len(args)-2:]...)...)
 		}
 		build := exec.Command(compiler, args...)
 		if output, err := build.CombinedOutput(); err != nil {
@@ -544,7 +551,7 @@ func evt1TestCompiler(includeDir, generated, harness, executable string) (string
 	return compiler, []string{"-std=c11", "-Wall", "-Wextra", "-I", includeDir, generated, harness, "-lm", "-o", executable}, nil
 }
 
-func evt1BuildNativeLinkedTest(includeDir, generated, harness, executable string, options TestRunOptions) (string, string) {
+func evt1BuildNativeLinkedTest(includeDir, generated, harness, executable string, options TestRunOptions, machineHelper string) (string, string) {
 	if options.NativeLinker != "clang++" && options.NativeLinker != "g++" {
 		return "compiler-unavailable", "native linker must be clang++ or g++"
 	}
@@ -558,7 +565,11 @@ func evt1BuildNativeLinkedTest(includeDir, generated, harness, executable string
 		}
 	}
 	objects := []string{}
-	for i, source := range []string{generated, harness} {
+	sources := []string{generated, harness}
+	if machineHelper != "" {
+		sources = append(sources, machineHelper)
+	}
+	for i, source := range sources {
 		object := filepath.Join(includeDir, fmt.Sprintf("concept_%d.o", i))
 		args := []string{"-std=c11", "-Wall", "-Wextra", "-I", includeDir, "-c", source, "-o", object}
 		if output, err := exec.Command(compiler, args...).CombinedOutput(); err != nil {

@@ -1,0 +1,12 @@
+module DragonGod.PortUartTest;
+profile Core;
+
+import DragonGod.Hardware.PortUart;
+
+[[fact]]
+void PortUartUsesHardwareTransactions()
+{
+    Assert.Concept<HardwareRead>(ReadPortStatus, "port read is observable hardware access");
+    Assert.Concept<HardwareWrite>(WritePortByte, "port write is observable hardware access");
+    Assert.Concept<NoAllocation>(PollPortTransmitter, "bounded poll allocates no storage");
+}

@@ -18,7 +18,7 @@ func evt1ValidateTestMetadata(module Module) error {
 		artifacts := 0
 		for _, attribute := range fn.Attributes {
 			switch {
-			case evt1SemanticAccessAttribute(attribute.Name):
+			case evt1SemanticAccessAttribute(attribute.Name) || attribute.Name == "machine":
 				// Compiler-owned access metadata is validated by the access-summary
 				// pass and is independent of test metadata.
 				continue
@@ -51,7 +51,7 @@ func evt1ValidateTestMetadata(module Module) error {
 		if primary == "" {
 			semanticOnly := true
 			for _, attribute := range fn.Attributes {
-				semanticOnly = semanticOnly && evt1SemanticAccessAttribute(attribute.Name)
+				semanticOnly = semanticOnly && (evt1SemanticAccessAttribute(attribute.Name) || attribute.Name == "machine")
 			}
 			if semanticOnly {
 				continue

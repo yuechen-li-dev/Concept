@@ -620,6 +620,9 @@ func planFunction(fn MIRFunction, facts SemanticFactSet, target TargetCapabiliti
 func planOperation(op MIROperation, facts SemanticFactSet) PlanningDecision {
 	d := PlanningDecision{MIRID: op.ID, Category: "CallPlan", Operation: op.Kind, Strategy: "Direct", Certainty: DecisionSelected, Evidence: PlanningEvidence{Detail: "ordinary MIR operation preserves semantic order"}, SourceSpan: op.SourceSpan}
 	switch op.Kind {
+	case "machine_intrinsic":
+		d.Category, d.Strategy, d.Certainty = "MachineOperationPlan", "RetainOrderedTargetHelper", DecisionRequired
+		d.Evidence = PlanningEvidence{Claims: []string{"ArchitectureQualified", "NoAllocation"}, Detail: "machine operation remains an explicit architecture-specific helper call"}
 	case "mmio_read", "mmio_write":
 		d.Category, d.Strategy, d.Certainty = "HardwareAccessPlan", "RetainOrderedVolatileAccess", DecisionRequired
 		d.Evidence = PlanningEvidence{Claims: []string{"ExternallyObservable", "SourceOrderedMMIO", "NoAllocation"}, Detail: "each MMIO operation remains one width-specific C11 volatile access"}
