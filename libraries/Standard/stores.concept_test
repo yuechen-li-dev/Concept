@@ -1,0 +1,199 @@
+profile Core;
+import Standard.Collection.Stores;
+
+enum Expr
+{
+    Integer(int value),
+    Add(Id<Expr> left, Id<Expr> right),
+}
+
+struct Statement { int value; }
+
+ref struct Tracked
+{
+    ref int drops;
+    int value;
+}
+
+void Drop(owned Tracked item)
+{
+    item.drops = item.drops + 1;
+}
+
+Result<Id<Statement>, StoreError> AppendStatement(ref DenseStore<Statement, 2> store, Statement value)
+{
+    return Append<Statement, 2>(ref store, move value);
+}
+
+Result<GenerationalId<Statement>, StoreError> InsertStatement(
+    ref GenerationalStore<Statement, 2> store, Statement value)
+{
+    return Insert<Statement, 2>(ref store, move value);
+}
+
+Result<void, StoreError> RemoveStatement(
+    ref GenerationalStore<Statement, 2> store, GenerationalId<Statement> id)
+{
+    return Remove<Statement, 2>(ref store, id);
+}
+requires compiler.InvalidatesBorrows(RemoveStatement, store);
+
+[[fact]]
+void BoundedStoreOperationsDoNotAllocate()
+{
+    Assert.Concept<NoAllocation>(AppendStatement, "dense append uses only inline slots");
+    Assert.Concept<NoAllocation>(InsertStatement, "generational insert uses only inline slots");
+    Assert.Concept<NoAllocation>(RemoveStatement, "generational removal uses only inline slots");
+}
+
+[[fact]]
+void DenseAstUsesTypedStableIds()
+{
+    DenseStore<Expr, 4> exprs = MakeDenseStore<Expr, 4>();
+    Id<Expr> left = Append<Expr, 4>(ref exprs, Expr::Integer(3))!;
+    Id<Expr> right = Append<Expr, 4>(ref exprs, Expr::Integer(5))!;
+    Id<Expr> root = Append<Expr, 4>(ref exprs, Expr::Add(left, right))!;
+    Assert.True(left.index == 0 and right.index == 1 and root.index == 2,
+        "append returns stable typed positions");
+    int seen = 0;
+    for (ordinal in 0..Count<Expr, 4>(ref const exprs))
+    {
+        Id<Expr> id = IdAt<Expr, 4>(ref const exprs, ordinal)!;
+        ref const Expr value = DenseGet<Expr, 4>(ref const exprs, id)!;
+        seen = seen + 1;
+    }
+    Assert.True(seen == 3, "ID view walks dense append order");
+    ref const Expr tree = DenseGet<Expr, 4>(ref const exprs, root)!;
+    int evaluated = 0;
+    match (tree)
+    {
+        Expr::Integer(value) => { evaluated = value; }
+        Expr::Add(lhs, rhs) => {
+            ref const Expr lhsNode = DenseGet<Expr, 4>(ref const exprs, lhs)!;
+            ref const Expr rhsNode = DenseGet<Expr, 4>(ref const exprs, rhs)!;
+            int lhsValue = match (lhsNode)
+            {
+                Expr::Integer(value) => value,
+                Expr::Add(a, b) => 0,
+            };
+            int rhsValue = match (rhsNode)
+            {
+                Expr::Integer(value) => value,
+                Expr::Add(a, b) => 0,
+            };
+            evaluated = lhsValue + rhsValue;
+        }
+    }
+    Assert.True(evaluated == 8, "AST edges resolve through typed stable IDs");
+    match (DenseGet<Expr, 4>(ref const exprs, Id<Expr>{-1}))
+    {
+        Result::Ok(value) => { Assert.True(false, "negative ID must reject"); }
+        Result::Error(error) => { Assert.True(error == StoreError::InvalidId, "negative ID is rejected"); }
+    }
+    match (DenseGet<Expr, 4>(ref const exprs, Id<Expr>{3}))
+    {
+        Result::Ok(value) => { Assert.True(false, "past-end ID must reject"); }
+        Result::Error(error) => { Assert.True(error == StoreError::InvalidId, "past-end ID is rejected"); }
+    }
+    Id<Expr> fourth = Append<Expr, 4>(ref exprs, Expr::Integer(7))!;
+    Assert.True(fourth.index == 3, "last bounded slot is usable");
+    Assert.Error(Append<Expr, 4>(ref exprs, Expr::Integer(9)), "bounded store rejects overflow");
+}
+
+[[fact]]
+void GenerationalReuseRejectsStaleIds()
+{
+    GenerationalStore<Statement, 2> store = MakeGenerationalStore<Statement, 2>();
+    GenerationalId<Statement> first = Insert<Statement, 2>(ref store, Statement{10})!;
+    GenerationalId<Statement> second = Insert<Statement, 2>(ref store, Statement{20})!;
+    Remove<Statement, 2>(ref store, first)!;
+    Assert.True(not Contains<Statement, 2>(ref const store, first), "removed handle is stale");
+    Assert.Error(GenerationalGet<Statement, 2>(ref const store, first), "stale access rejects");
+    Assert.Error(Remove<Statement, 2>(ref store, first), "double remove rejects");
+    GenerationalId<Statement> reused = Insert<Statement, 2>(ref store, Statement{30})!;
+    Assert.True(reused.index == first.index and reused.generation == first.generation + 1,
+        "LIFO free slot reuse increments generation");
+    Assert.True(GenerationalGet<Statement, 2>(ref const store, reused)!.value == 30,
+        "new value is available");
+    Assert.True(GenerationalGet<Statement, 2>(ref const store, second)!.value == 20,
+        "other slot remains live");
+}
+
+[[fact]]
+void ExhaustedGenerationRetiresSlot()
+{
+    GenerationalStore<Statement, 1> store = MakeGenerationalStore<Statement, 1>();
+    GenerationalId<Statement> first = Insert<Statement, 1>(ref store, Statement{4})!;
+    store.generation[first.index] = 2147483647;
+    GenerationalId<Statement> exhausted = GenerationalId<Statement>{first.index, 2147483647};
+    Remove<Statement, 1>(ref store, exhausted)!;
+    Assert.True(store.generation[0] == 0, "generation exhaustion retires slot");
+    Assert.Error(Insert<Statement, 1>(ref store, Statement{5}), "retired slot is never reused");
+    Assert.True(not Contains<Statement, 1>(ref const store, first), "old handle cannot revive");
+}
+
+[[fact]]
+void StoredNoncopyableValuesDropExactlyOnce()
+{
+    int drops = 0;
+    {
+        GenerationalStore<Tracked, 2> store = MakeGenerationalStore<Tracked, 2>();
+        GenerationalId<Tracked> first = Insert<Tracked, 2>(ref store, Tracked{ref drops, 1})!;
+        GenerationalId<Tracked> second = Insert<Tracked, 2>(ref store, Tracked{ref drops, 2})!;
+        Assert.True(drops == 0, "live entries remain owned by store");
+        Remove<Tracked, 2>(ref store, first)!;
+        Assert.True(drops == 1, "removal destroys the first entry once");
+        Assert.Error(Remove<Tracked, 2>(ref store, first), "double remove cannot drop twice");
+        Assert.True(drops == 1, "failed remove leaves drop count unchanged");
+        Assert.True(GenerationalGet<Tracked, 2>(ref const store, second)!.value == 2,
+            "unrelated noncopyable value stays live");
+    }
+    Assert.True(drops == 2, "store scope drops only the remaining entry");
+    {
+        DenseStore<Tracked, 2> dense = MakeDenseStore<Tracked, 2>();
+        Id<Tracked> first = Append<Tracked, 2>(ref dense, Tracked{ref drops, 3})!;
+        Id<Tracked> second = Append<Tracked, 2>(ref dense, Tracked{ref drops, 4})!;
+        Assert.True(first.index == 0 and second.index == 1 and drops == 2,
+            "dense store owns both noncopyable values");
+    }
+    Assert.True(drops == 4, "dense store scope drops both values once");
+}
+
+[[benchmark]]
+void TypedStoreDenseAndReuseBenchmark()
+{
+    DenseStore<Statement, 64> dense = MakeDenseStore<Statement, 64>();
+    for (index in 0..64)
+    {
+        Id<Statement> id = Append<Statement, 64>(ref dense, Statement{index})!;
+        Assert.True(id.index == index, "append position");
+    }
+    int sum = 0;
+    for (index in 0..Count<Statement, 64>(ref const dense))
+    {
+        Id<Statement> id = IdAt<Statement, 64>(ref const dense, index)!;
+        sum = sum + DenseGet<Statement, 64>(ref const dense, id)!.value;
+    }
+    GenerationalStore<Statement, 2> reusable = MakeGenerationalStore<Statement, 2>();
+    GenerationalId<Statement> first = Insert<Statement, 2>(ref reusable, Statement{sum})!;
+    Remove<Statement, 2>(ref reusable, first)!;
+    GenerationalId<Statement> second = Insert<Statement, 2>(ref reusable, Statement{1})!;
+    Assert.True(second.generation == first.generation + 1 and sum == 2016,
+        "bounded benchmark completes the same work");
+}
+
+[[benchmark]]
+void PlainArrayDenseBenchmark()
+{
+    int<array>[64] values = [0 ...];
+    for (index in 0..64)
+    {
+        values[index] = index;
+    }
+    int sum = 0;
+    for (index in 0..64)
+    {
+        sum = sum + values[index];
+    }
+    Assert.True(sum == 2016, "plain array benchmark completes dense work");
+}

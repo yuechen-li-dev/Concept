@@ -4211,6 +4211,10 @@ func (f *evt1FunctionLowerer) lowerLocalStructConstruct(targetType Type, name st
 
 func (f *evt1FunctionLowerer) lowerMatchStmt(stmt MatchStmt, indent int) string {
 	subPrelude, subjectExpr, subjectType := f.lowerExpr(stmt.Subject, indent)
+	member := "."
+	if subjectType.isReference() {
+		member = "->"
+	}
 	enumDecl := f.l.env.enums[subjectType.Name]
 	if decl, ok := evt1FailureEnumDecl(subjectType); ok {
 		enumDecl = decl
@@ -4219,7 +4223,7 @@ func (f *evt1FunctionLowerer) lowerMatchStmt(stmt MatchStmt, indent int) string 
 	var b strings.Builder
 	b.WriteString(subPrelude)
 	b.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(subjectType), subjectTemp, subjectExpr))
-	b.WriteString(ind(indent) + fmt.Sprintf("switch (%s.tag) {\n", subjectTemp))
+	b.WriteString(ind(indent) + fmt.Sprintf("switch (%s%stag) {\n", subjectTemp, member))
 	for _, arm := range stmt.Arms {
 		variant, _ := evt1LookupVariant(enumDecl, arm.Pattern.VariantName)
 		tag := evt1TagName(enumDecl.Name, variant.Name)
@@ -4232,7 +4236,7 @@ func (f *evt1FunctionLowerer) lowerMatchStmt(stmt MatchStmt, indent int) string 
 		for i, binding := range arm.Pattern.Bindings {
 			field := variant.Payload[i]
 			cName := f.bindName(binding, field.Type)
-			b.WriteString(ind(indent+2) + fmt.Sprintf("%s %s = %s.payload.%s.%s;\n", evt1CType(field.Type), cName, subjectTemp, evt1PayloadFieldName(variant.Name), field.Name))
+			b.WriteString(ind(indent+2) + fmt.Sprintf("%s %s = %s%spayload.%s.%s;\n", evt1CType(field.Type), cName, subjectTemp, member, evt1PayloadFieldName(variant.Name), field.Name))
 		}
 		b.WriteString(f.lowerBlock(arm.Block, indent+2))
 		b.WriteString(f.lowerCurrentScopeDrops(indent + 2))
@@ -5218,6 +5222,10 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		return b.String(), resultTemp, baseType
 	case *MatchExpr:
 		subPrelude, subjectExpr, subjectType := f.lowerExpr(e.Subject, indent)
+		member := "."
+		if subjectType.isReference() {
+			member = "->"
+		}
 		enumDecl := f.l.env.enums[subjectType.Name]
 		if decl, ok := evt1FailureEnumDecl(subjectType); ok {
 			enumDecl = decl
@@ -5230,7 +5238,7 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		b.WriteString(subPrelude)
 		b.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(subjectType), subjectTemp, subjectExpr))
 		b.WriteString(ind(indent) + fmt.Sprintf("%s %s;\n", evt1CType(resultType), resultTemp))
-		b.WriteString(ind(indent) + fmt.Sprintf("switch (%s.tag) {\n", subjectTemp))
+		b.WriteString(ind(indent) + fmt.Sprintf("switch (%s%stag) {\n", subjectTemp, member))
 		for _, arm := range e.Arms {
 			variant, _ := evt1LookupVariant(enumDecl, arm.Pattern.VariantName)
 			tag := evt1TagName(enumDecl.Name, variant.Name)
@@ -5243,7 +5251,7 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 			for i, binding := range arm.Pattern.Bindings {
 				field := variant.Payload[i]
 				cName := f.bindName(binding, field.Type)
-				b.WriteString(ind(indent+2) + fmt.Sprintf("%s %s = %s.payload.%s.%s;\n", evt1CType(field.Type), cName, subjectTemp, evt1PayloadFieldName(variant.Name), field.Name))
+				b.WriteString(ind(indent+2) + fmt.Sprintf("%s %s = %s%spayload.%s.%s;\n", evt1CType(field.Type), cName, subjectTemp, member, evt1PayloadFieldName(variant.Name), field.Name))
 			}
 			armPrelude, armExpr, _ := f.lowerExpr(arm.Value, indent+2)
 			b.WriteString(armPrelude)

@@ -88,6 +88,14 @@ func evt1FailureNeedsDrop(env *semanticEnv, t Type) bool {
 	decl, _ := evt1FailureEnumDecl(t)
 	for _, variant := range decl.Variants {
 		for _, field := range variant.Payload {
+			// An owned payload is a replaceable place even when its value has no
+			// custom destructor. The generated drop is then a no-op, but still
+			// preserves the move/replace authority of the enclosing Option.
+			// Storage<T> is a separate initialization authority whose live
+			// object must be destroyed explicitly before replacement.
+			if field.Type.isOwned() && field.Type.Name != "Storage" {
+				return true
+			}
 			if evt1TypeHasDrop(env, field.Type) {
 				return true
 			}
@@ -160,6 +168,9 @@ func evt1FailureConstructors(t Type) string {
 	var b strings.Builder
 	for _, variant := range decl.Variants {
 		b.WriteString(fmt.Sprintf("static %s %s(", name, evt1FailureConstructorName(t, variant.Name)))
+		if len(variant.Payload) == 0 {
+			b.WriteString("void")
+		}
 		for i, field := range variant.Payload {
 			if i > 0 {
 				b.WriteString(", ")

@@ -44,3 +44,20 @@ void Probe()
 		t.Fatalf("indexed storage authority replacement = %v, want CV4133", err)
 	}
 }
+
+func TestR7nOwnedOptionCannotDiscardStorageAuthority(t *testing.T) {
+	source := `profile Core;
+struct SystemMemory {}
+void Probe()
+{
+    int<array>[1] backing = [0];
+    Storage<int> storage = bind<int>(AddressOf<SystemMemory>(ref backing), SizeOf<int>());
+    Option<owned Storage<int>><array>[1] slots = [Option::None ...];
+    Option<owned Storage<int>> candidate = Option::Some(move storage);
+    slots[0] = move candidate;
+}`
+	_, err := Parse("owned_storage_slot.concept", source)
+	if err == nil || !strings.Contains(err.Error(), "CV4133") {
+		t.Fatalf("owned Storage authority replacement = %v, want CV4133", err)
+	}
+}
