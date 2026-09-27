@@ -2033,6 +2033,12 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 		support.WriteString("  if (value == NULL) { fprintf(stderr, \"Concept verify: foreign contract violated in this execution: %s\\n\", contract); abort(); }\n")
 		support.WriteString("}\n\n")
 	}
+	if strings.Contains(rawBody, "concept_verify_poison_released_region(") {
+		support.WriteString("static void concept_verify_poison_released_region(uintptr_t address, size_t length) {\n")
+		support.WriteString("  unsigned char* bytes = (unsigned char*)address;\n")
+		support.WriteString("  for (size_t offset = 0; offset < length; ++offset) bytes[offset] = 0xDDu;\n")
+		support.WriteString("}\n\n")
+	}
 	support.WriteString(integerSupport)
 	bodyText := strings.TrimRight(rawBody[:bodyPrefixLen]+support.String()+rawBody[bodyPrefixLen:], "\n") + "\n"
 	return []byte(headerText), []byte(bodyText), nil
@@ -4739,6 +4745,15 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		}
 		return b.String(), carrierTemp + ".payload." + field, evt1FailureSuccessType(carrierType)
 	case *CallExpr:
+		if e.Intrinsic == "verify_poison_released_region" {
+			addressPrelude, address, _ := f.lowerExpr(e.Args[0], indent)
+			extentPrelude, extent, _ := f.lowerExpr(e.Args[1], indent)
+			out, _ := evt1BuiltinType("void", e.Span)
+			if !f.l.verify {
+				return addressPrelude + extentPrelude, "((void)0)", out
+			}
+			return addressPrelude + extentPrelude, fmt.Sprintf("(concept_verify_poison_released_region((uintptr_t)(%s), (size_t)(%s)), (void)0)", address, extent), out
+		}
 		if len(e.InferredTemplateArgs) > 0 {
 			return f.lowerExpr(&TemplateCallExpr{Callee: e.Callee, TypeArg: e.InferredTemplateArgs[0], TypeArgs: e.InferredTemplateArgs, Args: e.Args, Span: e.Span}, indent)
 		}

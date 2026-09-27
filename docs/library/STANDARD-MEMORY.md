@@ -36,11 +36,14 @@ There is no global/default allocator or hidden heap.
   inline bitmap tracks exact origin, slot start, length, alignment, live state,
   exhaustion, double release, and deterministic reuse.
 
-The pool's current backing is `int<array>[256]` (1,024 bytes), and sixteen
-64-byte slots can use every backing byte. Verify currently preserves ordinary
-occupancy and release semantics but has no red zones or release poison. Those
-features need a coherent raw-byte envelope and a matching semantic layout;
-appending only generated C fields would invalidate `SizeOf<PoolAllocator>()`.
+The pool's backing is `int<array>[256]` (1,024 bytes), and sixteen 64-byte
+slots can use every backing byte. Verify preserves ordinary occupancy and
+release semantics and poisons the released raw payload with `0xDD` byte writes.
+The typed owner destroys `T` before calling Release; direct low-level callers
+must do likewise. Reallocation initializes a new object over the raw slot.
+Normal has no poison write, and both modes retain the 1,056-byte pool layout.
+Physical red zones are unavailable in this exact pool. They would require a
+separate explicit allocator representation, so no guarded variant was added.
 - `Standard.Memory.Ownership` defines releasable `Allocation<T,A>`, typed
   `Allocate<T,A>`, mutable/const value borrows, and constrained generic Drop.
 - `Standard.Memory.MonotonicOwnership` provides the owner for allocators without

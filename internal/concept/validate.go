@@ -3680,6 +3680,25 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		return evt1CanonicalType(env, fieldType), nil
 	case *CallExpr:
+		if e.Callee == "VerifyPoisonReleasedRegion" {
+			if len(e.Args) != 2 {
+				return Type{}, evt1Diagnostic("VERIFY_POISON_ARGUMENTS", "VerifyPoisonReleasedRegion requires a SystemMemory address and byte extent", e.Span)
+			}
+			address, err := validateExpr(env, scope, e.Args[0], templateInfo, inComptimeFn)
+			if err != nil {
+				return Type{}, err
+			}
+			extent, err := validateExpr(env, scope, e.Args[1], templateInfo, inComptimeFn)
+			if err != nil {
+				return Type{}, err
+			}
+			if address.Kind != TypeAddress || len(address.TypeArgs) != 1 || address.TypeArgs[0].Name != "SystemMemory" || !evt1ByteDisplacement(extent) {
+				return Type{}, evt1Diagnostic("VERIFY_POISON_ARGUMENTS", "VerifyPoisonReleasedRegion requires Address<SystemMemory> and usize<byte>", e.Span)
+			}
+			e.Intrinsic = "verify_poison_released_region"
+			out, _ := evt1BuiltinType("void", e.Span)
+			return out, nil
+		}
 		if e.Callee == "OptionValue" && len(e.Args) == 1 {
 			optionType, err := validateExpr(env, scope, e.Args[0], templateInfo, inComptimeFn)
 			if err != nil {

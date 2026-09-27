@@ -1,4 +1,4 @@
-# Verify mode (R7m in progress)
+# Verify mode
 
 `concept emit-c <file> --verify`, `concept mir <file> --verify`,
 `concept plan <file> --verify`, and `concept test <directory> --verify`
@@ -34,8 +34,8 @@ status. Native companion tests still perform the existing ABI/artifact identity
 check before test execution.
 
 Verification instrumentation must not add, remove, duplicate, or reorder MMIO
-or machine operations. The present Verify lowering adds no instrumentation to
-those paths; their equivalence still needs a dedicated regression gate.
+or machine operations. The MMIO and AMD64 machine fixtures compare Normal and
+Verify C and helper output directly; Verify adds no instrumentation there.
 
 ## Current verifiability map
 
@@ -45,12 +45,23 @@ those paths; their equivalence still needs a dedicated regression gate.
 | Statically invalid index | Compile-time only | Existing compiler diagnostic |
 | C ABI layout, generic satisfaction | Compile-time/build-time only | Existing semantic or ABI probe |
 | Pointer result of a declared foreign contract | Runtime verifiable for an observed call | Typed `NonNull(result)` observer |
+| Released `PoolAllocator` slot | Verify poisons raw payload bytes after a valid release | `0xDD` byte writes through `unsigned char*`; existing occupancy rejects double release |
+| Released owner or collector handle | Mediated by existing ownership/handle state | Static owner-lifetime rejection and collector stale-handle checks |
 | Universal `NoAllocation`, `ExactlyOnce`, single writer | Partially verifiable in selected executions | No R7m observer yet |
 | Opaque foreign memory and arbitrary dangling pointers | Not runtime verifiable by this mode | None |
 
-The mode does not yet poison storage or add allocator red zones. The current
-`PoolAllocator` has 1,024 backing bytes, all of which are usable as sixteen
-64-byte slots. Its semantic `SizeOf` and generated C representation agree on
-that layout. An envelope therefore needs an explicit representation and layout
-change in Verify; reusing a payload byte as a guard or silently enlarging the C
-struct would be unsound.
+`PoolAllocator.Release` calls `VerifyPoisonReleasedRegion` only after validating
+the exact slot and live occupancy. The ordinary typed owner calls
+`Destroy(storage)` before `Release(region)`, so the object's lifetime has ended
+when Verify writes the deterministic `0xDD` pattern through raw byte access.
+Normal lowers the intrinsic to a no-op. The pattern is an implementation detail;
+it does not change program results or provide arbitrary dangling-pointer
+detection. Direct low-level `Release` callers remain responsible for ending any
+object lifetime first.
+
+Verify mode cannot invent storage that the semantic type does not own. Physical
+red zones require an allocator representation that explicitly reserves them.
+The exact inline pool has 1,024 usable backing bytes for sixteen 64-byte slots,
+so no front/back guards exist in it. A separate guarded allocator policy is
+deferred; Verify never changes `SizeOf<PoolAllocator>()` or its generated C
+representation.

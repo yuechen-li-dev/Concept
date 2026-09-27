@@ -24,3 +24,26 @@ difference is the bounds helper and call sites, with no storage envelope.
 implementation in 242.010 seconds and on the committed implementation in
 244.412 seconds. The final `go vet ./...` and artifact-only TinyXML2 Verify
 run also passed.
+
+## R7m3 closeout
+
+| Boundary | Evidence | Decision |
+| --- | --- | --- |
+| Exact pool storage | Sixteen 64-byte payloads consume all 1,024 backing bytes; `SizeOf<PoolAllocator>() == 1056` and `AlignOf == 8` in both semantic and strict-C11 native checks. Normal and Verify generated headers match. | No hidden red-zone field or capacity reduction. Defer a separate, explicit guarded allocator policy. |
+| Release poison | The typed owner destroys `Tracked{17}` before `Release`; C11 witness observes the destructor's value and then four `0xDD` raw bytes. Normal has no poison call. | `VerifyPoisonReleasedRegion(Address<SystemMemory>, usize<byte>)` lowers to a bounded `unsigned char*` loop only in Verify. Successful occupancy check precedes poisoning, then the slot becomes free. Reuse initializes 42 successfully. Direct raw-region callers must end object lifetime first. |
+| Stale state | Existing pool fact detects double release, rejects foreign/interior regions, and reuses the first free slot. Owner lifetime checks reject value access after destruction; collector stale-handle facts pass under Verify. | No arbitrary dangling native-pointer claim. |
+| Hardware isolation | Poison intrinsic rejects DeviceMemory; Normal/Verify MMIO C and AMD64 `.machine.S` comparison remains byte-identical. | No DeviceMemory or machine helper writes added. |
+| Determinism | Existing 100-run proof JSON and semantic artifact/C/MIR gates, Verify bounds MIR/C gate, 100-run foreign violation report, and new 100-run Verify pool output gate all passed. | No profile-specific semantic artifact facts. |
+| Informational overhead | Bounds mean 8.258ms Normal / 6.689ms Verify; pool fact process 33.829ms / 33.741ms; collector fact process 35.310ms / 35.159ms; scheduler mean 6.456ms / 8.551ms. | Single host measurements include launch noise; no performance target. |
+
+Standard and DragonGod package builds passed. Standard Verify passed 29 facts,
+DragonGod Verify 23 facts and one benchmark, and artifact-only TinyXML2 Verify
+two facts. The strict-C11 pool poison/reuse witness and foreign/bounds negative
+regressions passed. Owner access after Drop is rejected as `CV4502`; the pool
+fact reports double release as an ordinary error. Pool generated C was 14,337
+bytes Normal and 15,529 bytes Verify; only Verify contains the raw-byte poison
+helper. The first full `go test ./...` passed in 262.509 seconds and
+`go vet ./...` passed. BurnIn and the semantic corpus passed with unchanged
+manifest counts (398 valid, 262 static-invalid, 13 runtime-negative,
+5 compatibility, 4 expected-divergence). The final clean-HEAD full gate
+follows the documentation commit.
