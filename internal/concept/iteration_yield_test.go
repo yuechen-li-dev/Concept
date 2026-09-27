@@ -13,7 +13,7 @@ import (
 var iterationValidFixtures = []string{
 	"yield_basic.concept", "yield_transient_local_recreated.concept", "yield_transient_owned_cleanup.concept", "yield_persistent_owned_survives.concept",
 	"yield_same_state_reentry.concept", "yield_shared_state_persists.concept", "yield_machine_field_persists.concept",
-	"foreach_array.concept", "foreach_ndarray_linear.concept", "foreach_span.concept", "foreach_readonly_span.concept", "foreach_ref_mutation.concept", "foreach_custom_iterator.concept", "foreach_source_evaluated_once.concept", "foreach_cleanup.concept", "foreach_inside_automata_state.concept", "persistent_iterator_manual_step.concept",
+	"for_array.concept", "foreach_array.concept", "foreach_ndarray_linear.concept", "foreach_span.concept", "foreach_readonly_span.concept", "foreach_ref_mutation.concept", "foreach_custom_iterator.concept", "foreach_source_evaluated_once.concept", "foreach_cleanup.concept", "foreach_inside_automata_state.concept", "persistent_iterator_manual_step.concept",
 	"foreach_iterator_evaluation_counts.concept",
 }
 
@@ -81,6 +81,7 @@ func TestIterationYieldNativeC11(t *testing.T) {
 		{"yield_same_state_reentry.concept", "concept_yield_same_state_reentry_main", 20},
 		{"yield_shared_state_persists.concept", "concept_yield_shared_state_persists_main", 11},
 		{"yield_machine_field_persists.concept", "concept_yield_machine_field_persists_main", 3},
+		{"for_array.concept", "concept_for_array_main", 10},
 		{"foreach_array.concept", "concept_foreach_array_main", 10},
 		{"foreach_ndarray_linear.concept", "concept_foreach_ndarray_linear_main", 123456},
 		{"foreach_span.concept", "concept_foreach_span_main", 10},
@@ -172,5 +173,28 @@ func TestIterationYieldMIRAndPlanner(t *testing.T) {
 	arrayBody := string(foreachOutputs["foreach_array.generated.c"])
 	if !strings.Contains(arrayBody, "backing storage is not copied") || strings.Contains(arrayBody, "malloc") {
 		t.Fatalf("array foreach allocation/copy law drift")
+	}
+}
+
+func TestForArraySharesInlineIterationAndIsDeterministic(t *testing.T) {
+	baseline := iterationFixture(t, "valid", "for_array.concept")
+	var mir MIR
+	if err := json.Unmarshal(baseline["for_array.mir.json"], &mir); err != nil {
+		t.Fatal(err)
+	}
+	if len(mir.Functions) != 1 || len(mir.Functions[0].Foreaches) != 1 {
+		t.Fatalf("for did not use the ordinary iteration MIR: %+v", mir.Functions)
+	}
+	each := mir.Functions[0].Foreaches[0]
+	if each.IteratorStrategy != "BuiltinInlineIterator" || !each.NoAllocation || each.SourceEvaluation != "ExactlyOnce" {
+		t.Fatalf("for array iteration drift: %+v", each)
+	}
+	for run := 0; run < 100; run++ {
+		next := iterationFixture(t, "valid", "for_array.concept")
+		for _, name := range []string{"for_array.mir.json", "for_array.generated.c", "for_array.generated.h"} {
+			if string(next[name]) != string(baseline[name]) {
+				t.Fatalf("%s changed on run %d", name, run+1)
+			}
+		}
 	}
 }

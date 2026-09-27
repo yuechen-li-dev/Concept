@@ -2,7 +2,7 @@
   "schema": "concept-evt1-semantic-corpus-v1",
   "compiler_id": "concept-evt1-stage0-go",
   "totals": {
-    "valid": 397,
+    "valid": 398,
     "static_invalid": 262,
     "runtime_negative": 13,
     "compatibility": 5,
@@ -27,7 +27,7 @@
     { "subsystem": "Automata state", "path": "automata/state", "valid": 12, "static_invalid": 8, "runtime_negative": [], "historical_milestones": ["R5a"] },
     { "subsystem": "Automata transitions", "path": "automata/transitions", "valid": 14, "static_invalid": 10, "runtime_negative": ["transition_decide_nan_runtime.concept", "transition_decide_no_enabled_runtime.concept"], "historical_milestones": ["R5b"] },
     { "subsystem": "Inference", "path": "inference", "valid": 17, "static_invalid": 10, "runtime_negative": ["infer_no_enabled_runtime.concept", "infer_nan_runtime.concept", "infer_all_negative_infinity_runtime.concept"], "historical_milestones": ["R5c"] },
-    { "subsystem": "Iteration and yield", "path": "iteration", "valid": 18, "static_invalid": 8, "runtime_negative": [], "historical_milestones": ["R5d"] },
+    { "subsystem": "Iteration and yield", "path": "iteration", "valid": 19, "static_invalid": 8, "runtime_negative": [], "historical_milestones": ["R5d", "R7x"] },
     { "subsystem": "Machine stack", "path": "machine-stack", "valid": 12, "static_invalid": 5, "runtime_negative": ["machine_stack_overflow.concept", "machine_result_before_completion.concept"], "historical_milestones": ["R5e"] },
     { "subsystem": "Async", "path": "async/basic", "valid": 23, "static_invalid": 6, "runtime_negative": ["async_stack_overflow.concept", "async_result_before_completion.concept"], "historical_milestones": ["R5f"] },
     { "subsystem": "Async control flow", "path": "async/control-flow", "valid": 23, "static_invalid": 5, "runtime_negative": [], "historical_milestones": ["R5g"] },

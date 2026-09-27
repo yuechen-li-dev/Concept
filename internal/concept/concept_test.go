@@ -526,9 +526,9 @@ func TestEVT1M1BDDiagnosticsAreStable(t *testing.T) {
 			code: "CV4236",
 		},
 		{
-			name: "for loop rejected",
-			src:  "profile Vulkan;\nint Use() { for (1) { } return 0; }\n",
-			code: "CV4237",
+			name: "C-style for loop rejected",
+			src:  "profile Vulkan;\nint Use() { for (int i = 0; i < 1; i = i + 1) { } return 0; }\n",
+			code: "FOREACH_ITERATOR_INVALID",
 		},
 	}
 	for _, tc := range cases {

@@ -2991,7 +2991,7 @@ func (p *parser) parseStatement() (Statement, error) {
 		}
 		return nil, evt1Diagnostic("GENERATOR_REQUEST_SCOPE", "derive is only allowed at module scope", p.currentSpan())
 	case "for":
-		return nil, evt1Diagnostic("CV4237", "for loops are not supported in EVT1 M1B-D; use while (...) bounded(N)", p.currentSpan())
+		return p.parseForeachStmt()
 	case "comptime":
 		return p.parseLocalComptimeDecl()
 	case "static_assert":
@@ -3139,13 +3139,17 @@ func (p *parser) parseStatement() (Statement, error) {
 }
 
 func (p *parser) parseForeachStmt() (Statement, error) {
-	start, _ := p.expect("foreach")
+	start := p.next() // for and foreach share one iteration construct.
 	if _, err := p.expect("("); err != nil {
 		return nil, err
 	}
-	itemType, err := p.parseType("")
-	if err != nil {
-		return nil, err
+	var itemType Type
+	if p.pos+1 >= len(p.tokens) || p.tokens[p.pos+1].Lexeme != "in" {
+		var err error
+		itemType, err = p.parseType("")
+		if err != nil {
+			return nil, err
+		}
 	}
 	item, err := p.expectIdentifier("FOREACH_ITERATOR_INVALID", "expected foreach item name")
 	if err != nil {

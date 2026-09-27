@@ -60,7 +60,7 @@ public:
     {
         int count = LoadAtomic(ref const self.count, MemoryOrder::Acquire);
         int index = 0;
-        foreach (Event event in self.events)
+        for (Event event in self.events)
         {
             if (index >= cursor.nextIndex and index < count)
             {
