@@ -21,4 +21,6 @@ comparison, Normal output was 14,648 bytes and Verify was 15,541 bytes; the
 difference is the bounds helper and call sites, with no storage envelope.
 `go vet ./...` passed. Standard Verify passed 29 tests. DragonGod Verify passed
 23 tests and one benchmark. The full Go suite passed after the foreign
-implementation in 242.010 seconds; a final-HEAD recheck follows.
+implementation in 242.010 seconds and on the committed implementation in
+244.412 seconds. The final `go vet ./...` and artifact-only TinyXML2 Verify
+run also passed.

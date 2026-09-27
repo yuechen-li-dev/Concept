@@ -25,7 +25,7 @@ all tests had passed. A preserved 58,063,203-byte test log contained 822,263
 100-run determinism tests. The test-local PATH narrowing in `7563d89` retains
 their probes and 100 iterations. The exact full command then passed in
 170.221 seconds. After the foreign implementation it passed again in 242.010
-seconds; a final-HEAD recheck follows.
+seconds and on the committed implementation in 244.412 seconds.
 
 The outstanding architectural boundary is PoolAllocator's storage geometry:
 1,024 backing bytes are fully usable at maximum capacity, while semantic
