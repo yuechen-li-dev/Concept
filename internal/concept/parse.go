@@ -735,7 +735,7 @@ func (p *parser) parseForeignContractDecl() (ForeignContractDecl, OperationEffec
 	if _, err = p.expect("{"); err != nil {
 		return ForeignContractDecl{}, OperationEffectDecl{}, err
 	}
-	decl := ForeignContractDecl{Name: name.Lexeme, Operation: op.Lexeme, Span: start.Span}
+	decl := ForeignContractDecl{Name: name.Lexeme, Operation: op.Lexeme, SourcePath: p.path, Span: start.Span}
 	var effect OperationEffectDecl
 	for !p.done() && p.peekLexeme() != "}" {
 		requirement, err := p.expect("requires")
@@ -753,6 +753,24 @@ func (p *parser) parseForeignContractDecl() (ForeignContractDecl, OperationEffec
 			return ForeignContractDecl{}, OperationEffectDecl{}, err
 		}
 		switch analysis.Lexeme {
+		case "NonNull":
+			if decl.NonNullResult {
+				return ForeignContractDecl{}, OperationEffectDecl{}, evt1Diagnostic("FOREIGN_CONTRACT_FACT_DUPLICATE", "duplicate NonNull requirement", analysis.Span)
+			}
+			if _, err = p.expect("("); err != nil {
+				return ForeignContractDecl{}, OperationEffectDecl{}, err
+			}
+			result, e := p.expectIdentifier("FOREIGN_CONTRACT_FACT_INVALID", "expected result subject")
+			if e != nil {
+				return ForeignContractDecl{}, OperationEffectDecl{}, e
+			}
+			if result.Lexeme != "result" {
+				return ForeignContractDecl{}, OperationEffectDecl{}, evt1Diagnostic("FOREIGN_CONTRACT_FACT_INVALID", "NonNull subject must be result", result.Span)
+			}
+			if _, err = p.expect(")"); err != nil {
+				return ForeignContractDecl{}, OperationEffectDecl{}, err
+			}
+			decl.NonNullResult = true
 		case "Allocates":
 			if decl.Allocates {
 				return ForeignContractDecl{}, OperationEffectDecl{}, evt1Diagnostic("FOREIGN_CONTRACT_FACT_DUPLICATE", "duplicate Allocates requirement", analysis.Span)
@@ -835,7 +853,7 @@ func (p *parser) parseForeignContractDecl() (ForeignContractDecl, OperationEffec
 			}
 			decl.HostAccessible = true
 		default:
-			return ForeignContractDecl{}, OperationEffectDecl{}, evt1Diagnostic("FOREIGN_CONTRACT_FACT_INVALID", "foreign contracts support Allocates, ExternalStorage, and HostAccessible", analysis.Span)
+			return ForeignContractDecl{}, OperationEffectDecl{}, evt1Diagnostic("FOREIGN_CONTRACT_FACT_INVALID", "foreign contracts support Allocates, ExternalStorage, HostAccessible, and NonNull", analysis.Span)
 		}
 		if _, err = p.expect(";"); err != nil {
 			return ForeignContractDecl{}, OperationEffectDecl{}, err

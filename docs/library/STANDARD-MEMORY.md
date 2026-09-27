@@ -35,6 +35,12 @@ There is no global/default allocator or hidden heap.
   allowing exact slots up to 64 bytes each. Its
   inline bitmap tracks exact origin, slot start, length, alignment, live state,
   exhaustion, double release, and deterministic reuse.
+
+The pool's current backing is `int<array>[256]` (1,024 bytes), and sixteen
+64-byte slots can use every backing byte. Verify currently preserves ordinary
+occupancy and release semantics but has no red zones or release poison. Those
+features need a coherent raw-byte envelope and a matching semantic layout;
+appending only generated C fields would invalidate `SizeOf<PoolAllocator>()`.
 - `Standard.Memory.Ownership` defines releasable `Allocation<T,A>`, typed
   `Allocate<T,A>`, mutable/const value borrows, and constrained generic Drop.
 - `Standard.Memory.MonotonicOwnership` provides the owner for allocators without

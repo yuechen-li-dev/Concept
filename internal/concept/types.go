@@ -530,6 +530,8 @@ type ForeignContractDecl struct {
 	AlignmentParam string `json:"alignment_parameter"`
 	HostAccessible bool   `json:"host_accessible,omitempty"`
 	Allocates      bool   `json:"allocates,omitempty"`
+	NonNullResult  bool   `json:"non_null_result,omitempty"`
+	SourcePath     string `json:"source_path,omitempty"`
 	Span           Span   `json:"span"`
 }
 

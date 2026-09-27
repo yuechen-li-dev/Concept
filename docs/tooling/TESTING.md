@@ -36,6 +36,11 @@ not unwrap it.
   the last 16 non-empty literal checkpoints.
 - `[[artifact("path")]]`: repeatable source-relative metadata. Paths must stay
   under the selected test root and are recorded with SHA-256 identity.
+- `[[verify_foreign("ContractName")]]`: on a fact, requests a Verify-mode
+  runtime observation for a typed `compiler.NonNull(result)` foreign contract.
+  Unsupported contracts and unobserved call paths fail explicitly. The result
+  retains `DeclaredForeign`, declaration and call sources, strategy, and
+  pass/fail without changing the static proof status.
 
 Theory JSON is deliberately bounded:
 
@@ -58,6 +63,7 @@ concept test Addition
 concept test --filter Addition
 concept test --list
 concept test --verbose
+concept test path/to/native-project --verify
 ```
 
 Discovery is normalized path order followed by source declaration order.

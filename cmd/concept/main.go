@@ -34,6 +34,7 @@ Usage:
   concept build <native-project-dir>
   concept check <native-project-dir>
   concept test <native-project-dir>
+  concept test <native-project-dir> --verify
   concept plan <native-project-dir>
 
 Commands:
@@ -64,15 +65,15 @@ func main() {
 		return
 	}
 	if len(os.Args) >= 2 && os.Args[1] == "test" {
-		if len(os.Args) == 3 && nativeProjectDir(os.Args[2]) {
-			runNativeCommand("test", os.Args[2])
+		if (len(os.Args) == 3 || len(os.Args) == 4 && os.Args[3] == "--verify") && nativeProjectDir(os.Args[2]) {
+			runNativeCommand("test", os.Args[2], len(os.Args) == 4)
 			return
 		}
 		runTestCommand(os.Args[2:])
 		return
 	}
 	if len(os.Args) == 3 && (os.Args[1] == "build" || os.Args[1] == "check" || os.Args[1] == "plan") && nativeProjectDir(os.Args[2]) {
-		runNativeCommand(os.Args[1], os.Args[2])
+		runNativeCommand(os.Args[1], os.Args[2], false)
 		return
 	}
 	if len(os.Args) >= 2 && os.Args[1] == "explain" {
@@ -168,7 +169,7 @@ func nativeProjectDir(path string) bool {
 	return err == nil && strings.Contains(string(body), "NativeProjectManifest Native")
 }
 
-func runNativeCommand(action, root string) {
+func runNativeCommand(action, root string, verify bool) {
 	project, err := concept.LoadNativeProject(root)
 	if err != nil {
 		fail(err)
@@ -257,7 +258,7 @@ func runNativeCommand(action, root string) {
 	if project.Toolchain == "GCC" {
 		linker = "g++"
 	}
-	run, err := concept.RunTests(testManifest, concept.TestRunOptions{NativeLinker: linker, NativeLinkInputs: inputs})
+	run, err := concept.RunTests(testManifest, concept.TestRunOptions{NativeLinker: linker, NativeLinkInputs: inputs, Verify: verify})
 	if err != nil {
 		fail(err)
 	}

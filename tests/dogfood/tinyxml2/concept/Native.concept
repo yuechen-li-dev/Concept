@@ -33,4 +33,5 @@ extern "C" void ConceptXmlDestroy(byte* document);
 foreign concept CreateDocumentContract on ConceptXmlCreate
 {
     requires compiler.Allocates(ConceptXmlCreate);
+    requires compiler.NonNull(result);
 }

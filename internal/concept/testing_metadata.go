@@ -44,6 +44,14 @@ func evt1ValidateTestMetadata(module Module) error {
 					return evt1Diagnostic("TEST_ATTRIBUTE_ARGUMENT_INVALID", "[[foretold]] does not accept arguments", attribute.Span)
 				}
 				foretold = true
+			case attribute.Name == "verify_foreign":
+				if len(attribute.Args) != 1 {
+					return evt1Diagnostic("VERIFY_FOREIGN_ATTRIBUTE_INVALID", "[[verify_foreign]] requires one contract name", attribute.Span)
+				}
+				contract, ok := attribute.Args[0].(*StringLiteral)
+				if !ok || strings.TrimSpace(contract.Value) == "" {
+					return evt1Diagnostic("VERIFY_FOREIGN_ATTRIBUTE_INVALID", "[[verify_foreign]] requires a non-empty string contract name", attribute.Span)
+				}
 			default:
 				return evt1Diagnostic("TEST_ATTRIBUTE_UNKNOWN", fmt.Sprintf("unknown attribute [[%s]]", attribute.Name), attribute.Span)
 			}

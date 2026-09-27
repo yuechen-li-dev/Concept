@@ -35,6 +35,12 @@ func TestVerifyBoundsUsesSameSourceAndReportsObservation(t *testing.T) {
 	if err != nil || !equalOutputs(verified, verifiedAgain) {
 		t.Fatalf("verify output is not deterministic: %v", err)
 	}
+	for run := 2; run <= 100; run++ {
+		candidate, err := GenerateForTargetWithPolicy(module, source, GenericC11Target(), VerifyCompilationPolicy())
+		if err != nil || !equalOutputs(verified, candidate) {
+			t.Fatalf("verify output changed on run %d: %v", run, err)
+		}
+	}
 	name := "array_runtime_bounds.generated.c"
 	if strings.Contains(string(normal[name]), "concept_verify_bounds(") || !strings.Contains(string(verified[name]), "concept_verify_bounds(") {
 		t.Fatal("verify bounds instrumentation must be present only in Verify C")

@@ -3,6 +3,7 @@ profile Core;
 import Native;
 
 [[fact]]
+[[verify_foreign("CreateDocumentContract")]]
 void ParseTwoChildren()
 {
     byte* document = ConceptXmlCreate();

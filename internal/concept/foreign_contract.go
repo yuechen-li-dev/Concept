@@ -17,6 +17,9 @@ func evt1ValidateForeignContracts(env *semanticEnv, contracts []ForeignContractD
 		if _, exists := env.foreignByOperation[contract.Operation]; exists {
 			return evt1Diagnostic("FOREIGN_CONTRACT_TARGET_DUPLICATE", fmt.Sprintf("foreign operation %s already has a semantic contract", contract.Operation), contract.Span)
 		}
+		if contract.NonNullResult && functions[0].ReturnType.PointerTo == nil {
+			return evt1Diagnostic("FOREIGN_CONTRACT_ABI_MISMATCH", fmt.Sprintf("foreign NonNull operation %s must return a pointer", contract.Operation), contract.Span)
+		}
 		if contract.ExtentParam != "" || contract.AlignmentParam != "" {
 			if contract.ExtentParam == "" || contract.AlignmentParam == "" || contract.AddressSpace.Name == "" {
 				return evt1Diagnostic("FOREIGN_STORAGE_CONTRACT_INCOMPLETE", "ExternalStorage requires address space, extent, and alignment authority", contract.Span)

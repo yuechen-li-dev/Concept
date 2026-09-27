@@ -27,6 +27,7 @@ go run ./cmd/concept plan tests/dogfood/tinyxml2
 go run ./cmd/concept check tests/dogfood/tinyxml2
 go run ./cmd/concept build tests/dogfood/tinyxml2
 go run ./cmd/concept test tests/dogfood/tinyxml2
+go run ./cmd/concept test tests/dogfood/tinyxml2 --verify
 go run ./cmd/concept explain tests/dogfood/tinyxml2/proofs/declared_allocation.concept --verbose
 go run ./cmd/concept explain tests/dogfood/tinyxml2/proofs/unknown_effect.concept --verbose
 ```
@@ -48,6 +49,15 @@ the linked archive and checks the create, parse, read, destroy path. It also
 checks the `NativeStatsSchema` proposition, which requires `CAbiValue` and a
 typed field accessor, at compile time. The overlapping
 native and Concept tests pass on the same host.
+
+In Verify mode, `CreateDocumentContract` declares
+`requires compiler.NonNull(result);`, and the selected test carries
+`[[verify_foreign("CreateDocumentContract")]]`. The generated typed observer
+records the declared foreign origin, companion source, observed call site,
+strategy, and pass/fail in `results.json`. A passing call is execution evidence,
+not a static proof. The native artifact identity and ABI checks still precede
+the run; the companion declaration is consumed through its artifact without
+dependency source reparse.
 
 The native source can remain C++ indefinitely. New Concept implementation
 modules are optional. Exceptions, STL types, templates, inheritance, member

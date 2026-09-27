@@ -41,19 +41,20 @@ type TestParameter struct {
 }
 
 type TestDeclaration struct {
-	TestID      string          `json:"test_id"`
-	Kind        TestKind        `json:"kind"`
-	Function    string          `json:"function"`
-	Source      string          `json:"source"`
-	SourceLine  int             `json:"source_line"`
-	Artifacts   []TestArtifact  `json:"artifacts,omitempty"`
-	Async       bool            `json:"async"`
-	Foretold    bool            `json:"foretold"`
-	Parameters  []TestParameter `json:"theory_parameters,omitempty"`
-	module      Module
-	function    FunctionDecl
-	sourceBytes []byte
-	sourcePath  string
+	TestID                string          `json:"test_id"`
+	Kind                  TestKind        `json:"kind"`
+	Function              string          `json:"function"`
+	Source                string          `json:"source"`
+	SourceLine            int             `json:"source_line"`
+	Artifacts             []TestArtifact  `json:"artifacts,omitempty"`
+	Async                 bool            `json:"async"`
+	Foretold              bool            `json:"foretold"`
+	VerifyForeignContract string          `json:"verify_foreign_contract,omitempty"`
+	Parameters            []TestParameter `json:"theory_parameters,omitempty"`
+	module                Module
+	function              FunctionDecl
+	sourceBytes           []byte
+	sourcePath            string
 }
 
 type TestManifest struct {
@@ -85,28 +86,40 @@ type BenchmarkEvidence struct {
 }
 
 type TestResult struct {
-	TestID           string             `json:"test_id"`
-	Kind             TestKind           `json:"kind"`
-	SourceFile       string             `json:"source_file"`
-	SourceLine       int                `json:"source_line"`
-	Status           string             `json:"status"`
-	CaseIndex        *int               `json:"case_index,omitempty"`
-	BoundValues      map[string]any     `json:"bound_values,omitempty"`
-	StartTime        string             `json:"start_time"`
-	DurationNanos    int64              `json:"duration_nanos"`
-	ProcessExitCode  *int               `json:"process_exit_code,omitempty"`
-	TerminationKind  string             `json:"termination_kind,omitempty"`
-	TerminationCode  string             `json:"termination_code,omitempty"`
-	PanicReason      string             `json:"panic_reason,omitempty"`
-	Stdout           string             `json:"stdout,omitempty"`
-	Stderr           string             `json:"stderr,omitempty"`
-	Artifacts        []TestArtifact     `json:"artifacts,omitempty"`
-	LastCheckpoints  []string           `json:"last_checkpoints,omitempty"`
-	BuildIdentity    string             `json:"build_identity"`
-	CompilerIdentity string             `json:"compiler_identity"`
-	TargetIdentity   string             `json:"target_identity"`
-	Failure          *TestFailure       `json:"failure,omitempty"`
-	Benchmark        *BenchmarkEvidence `json:"benchmark,omitempty"`
+	TestID           string                           `json:"test_id"`
+	Kind             TestKind                         `json:"kind"`
+	SourceFile       string                           `json:"source_file"`
+	SourceLine       int                              `json:"source_line"`
+	Status           string                           `json:"status"`
+	CaseIndex        *int                             `json:"case_index,omitempty"`
+	BoundValues      map[string]any                   `json:"bound_values,omitempty"`
+	StartTime        string                           `json:"start_time"`
+	DurationNanos    int64                            `json:"duration_nanos"`
+	ProcessExitCode  *int                             `json:"process_exit_code,omitempty"`
+	TerminationKind  string                           `json:"termination_kind,omitempty"`
+	TerminationCode  string                           `json:"termination_code,omitempty"`
+	PanicReason      string                           `json:"panic_reason,omitempty"`
+	Verifications    []ForeignVerificationObservation `json:"verifications,omitempty"`
+	Stdout           string                           `json:"stdout,omitempty"`
+	Stderr           string                           `json:"stderr,omitempty"`
+	Artifacts        []TestArtifact                   `json:"artifacts,omitempty"`
+	LastCheckpoints  []string                         `json:"last_checkpoints,omitempty"`
+	BuildIdentity    string                           `json:"build_identity"`
+	CompilerIdentity string                           `json:"compiler_identity"`
+	TargetIdentity   string                           `json:"target_identity"`
+	Failure          *TestFailure                     `json:"failure,omitempty"`
+	Benchmark        *BenchmarkEvidence               `json:"benchmark,omitempty"`
+}
+
+type ForeignVerificationObservation struct {
+	Contract          string `json:"contract"`
+	Origin            string `json:"origin"`
+	DeclarationSource string `json:"declaration_source"`
+	DeclarationLine   int    `json:"declaration_line"`
+	CallSource        string `json:"call_source"`
+	CallLine          int    `json:"call_line"`
+	Strategy          string `json:"strategy"`
+	Passed            bool   `json:"passed"`
 }
 
 type TestRun struct {
@@ -218,6 +231,31 @@ func discoverTests(root string, nativeArtifacts map[string][]byte, nativeIdentit
 			}
 			seen[id] = true
 			decl := TestDeclaration{TestID: id, Kind: kind, Function: fn.Name, Source: rel, SourceLine: fn.Span.Line, Async: fn.Async, Foretold: foretold, module: module, function: fn, sourceBytes: body, sourcePath: path}
+			for _, attribute := range fn.Attributes {
+				if attribute.Name != "verify_foreign" {
+					continue
+				}
+				if kind == "" || len(attribute.Args) != 1 {
+					return TestManifest{}, evt1Diagnostic("VERIFY_FOREIGN_ATTRIBUTE_INVALID", "verify_foreign requires one contract name on a test", attribute.Span)
+				}
+				literal, ok := attribute.Args[0].(*StringLiteral)
+				if !ok || literal.Value == "" || decl.VerifyForeignContract != "" {
+					return TestManifest{}, evt1Diagnostic("VERIFY_FOREIGN_ATTRIBUTE_INVALID", "verify_foreign requires one distinct string contract name", attribute.Span)
+				}
+				decl.VerifyForeignContract = literal.Value
+				found := false
+				for _, contract := range module.ForeignContracts {
+					if contract.Name == literal.Value {
+						found = true
+						if !contract.NonNullResult {
+							return TestManifest{}, evt1Diagnostic("VERIFY_RUNTIME_UNSUPPORTED", "no runtime verifier exists for foreign contract "+literal.Value, attribute.Span)
+						}
+					}
+				}
+				if !found {
+					return TestManifest{}, evt1Diagnostic("VERIFY_CONTRACT_UNKNOWN", "foreign contract "+literal.Value+" is unavailable", attribute.Span)
+				}
+			}
 			for _, p := range fn.Params {
 				decl.Parameters = append(decl.Parameters, TestParameter{Name: p.Name, Type: p.Type.String()})
 			}
@@ -518,11 +556,21 @@ func runOneTest(test TestDeclaration, values []any, caseIndex int, options TestR
 	}
 	stdout, stderr, exitCode, duration := runTestProcess(executable, options.Timeout)
 	result.Stdout, result.Stderr, result.DurationNanos = stdout, stderr, duration.Nanoseconds()
+	result.Verifications = parseForeignVerificationObservations(stderr)
 	result.ProcessExitCode = &exitCode
 	result.LastCheckpoints = parseCheckpoints(stderr)
 	for _, line := range strings.Split(stderr, "\n") {
 		if strings.Contains(line, "Concept panic") || strings.Contains(line, "Concept verify:") {
 			result.PanicReason = strings.TrimSpace(line)
+		}
+	}
+	if options.Verify && test.VerifyForeignContract != "" {
+		observed := false
+		for _, observation := range result.Verifications {
+			observed = observed || observation.Contract == test.VerifyForeignContract
+		}
+		if !observed {
+			return failedTestResult(result, start, "verification-not-executed", "no runtime observation for foreign contract "+test.VerifyForeignContract, test)
 		}
 	}
 	if exitCode != 0 {
@@ -732,6 +780,26 @@ func classifyTestFailure(stderr string) string {
 		return "timeout"
 	}
 	return "abnormal-exit"
+}
+
+func parseForeignVerificationObservations(stderr string) []ForeignVerificationObservation {
+	var observations []ForeignVerificationObservation
+	for _, line := range strings.Split(stderr, "\n") {
+		if !strings.HasPrefix(line, "CONCEPT_VERIFY_FOREIGN|") {
+			continue
+		}
+		parts := strings.Split(line, "|")
+		if len(parts) != 9 || parts[2] != string(FactOriginDeclaredForeign) || parts[7] != "NonNull" {
+			continue
+		}
+		declarationLine, declarationErr := strconv.Atoi(parts[4])
+		callLine, callErr := strconv.Atoi(parts[6])
+		if declarationErr != nil || callErr != nil {
+			continue
+		}
+		observations = append(observations, ForeignVerificationObservation{Contract: parts[1], Origin: parts[2], DeclarationSource: parts[3], DeclarationLine: declarationLine, CallSource: parts[5], CallLine: callLine, Strategy: parts[7], Passed: strings.TrimSpace(parts[8]) == "PASS"})
+	}
+	return observations
 }
 
 func parseCheckpoints(stderr string) []string {

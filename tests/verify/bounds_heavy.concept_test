@@ -1,0 +1,20 @@
+profile Core;
+
+int ReadChecked(int index)
+{
+    int<array>[4] values = [1, 2, 3, 4];
+    return values[index];
+}
+
+[[benchmark]]
+void BoundsHeavy()
+{
+    int sum = 0;
+    int index = 0;
+    while (index < 10000) bounded(10000)
+    {
+        sum = sum + ReadChecked(index % 4);
+        index = index + 1;
+    }
+    Assert.Equals(25000, sum, "bounded indexing preserves result");
+}

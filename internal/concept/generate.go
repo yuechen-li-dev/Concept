@@ -2027,6 +2027,12 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 		support.WriteString("  fprintf(stderr, \"Concept verify: compiler-derived bounds violated: %s at %s:%d:%d: index=%lld extent=%zu\\n\", reason, source, line, column, (long long)index, extent);\n")
 		support.WriteString("  abort();\n}\n\n")
 	}
+	if strings.Contains(rawBody, "concept_verify_foreign_nonnull(") {
+		support.WriteString("static void concept_verify_foreign_nonnull(const void* value, const char* contract, const char* declared_at, int declaration_line, const char* called_at, int call_line) {\n")
+		support.WriteString("  fprintf(stderr, \"CONCEPT_VERIFY_FOREIGN|%s|DeclaredForeign|%s|%d|%s|%d|NonNull|%s\\n\", contract, declared_at, declaration_line, called_at, call_line, value != NULL ? \"PASS\" : \"FAIL\");\n")
+		support.WriteString("  if (value == NULL) { fprintf(stderr, \"Concept verify: foreign contract violated in this execution: %s\\n\", contract); abort(); }\n")
+		support.WriteString("}\n\n")
+	}
 	support.WriteString(integerSupport)
 	bodyText := strings.TrimRight(rawBody[:bodyPrefixLen]+support.String()+rawBody[bodyPrefixLen:], "\n") + "\n"
 	return []byte(headerText), []byte(bodyText), nil
@@ -4979,7 +4985,14 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		if fn.Async {
 			resultType = evt1AsyncType(fn.ReturnType, fn.Name, e.Span)
 		}
-		return prelude.String(), evt1FunctionSymbolForDecl(f.l.symbolBase, f.l.env, fn) + "(" + strings.Join(args, ", ") + ")", resultType
+		call := evt1FunctionSymbolForDecl(f.l.symbolBase, f.l.env, fn) + "(" + strings.Join(args, ", ") + ")"
+		if contract, found := f.l.env.foreignByOperation[fn.Name]; f.l.verify && found && contract.NonNullResult && fn.ExternABI != "" {
+			value := f.nextTemp("foreign_result")
+			prelude.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(resultType), value, call))
+			prelude.WriteString(ind(indent) + fmt.Sprintf("concept_verify_foreign_nonnull(%s, %q, %q, %d, %q, %d);\n", value, contract.Name, contract.SourcePath, contract.Span.Line, f.l.module.Path, e.Span.Line))
+			return prelude.String(), value, resultType
+		}
+		return prelude.String(), call, resultType
 	case *DispatchExpr:
 		binding, _ := scopeLookup(e.InstanceName, f.scope)
 		info := f.l.env.automataInfo[binding.instanceAutomata]
