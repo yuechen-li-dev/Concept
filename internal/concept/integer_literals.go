@@ -164,6 +164,15 @@ func evt1DefinedIntegerArithmeticHelpers(base, generatedBody string) string {
 		b.WriteString("  if (left == INT32_MIN && right == -1) { concept_panic(\"int32 division overflow\", line, column); }\n")
 		b.WriteString("  return left / right;\n}\n")
 	}
+	if strings.Contains(generatedBody, evt1IntegerHelperName(base, "i64_mod")+"(") {
+		b.WriteString("int64_t " + evt1IntegerHelperName(base, "i64_mod") + "(int64_t left, int64_t right, int line, int column) {\n")
+		b.WriteString("  if (right == 0) { concept_panic(\"integer modulo by zero\", line, column); }\n")
+		b.WriteString("  if (left == INT64_MIN && right == -1) { return 0; }\n")
+		b.WriteString("  int64_t remainder = left % right;\n")
+		b.WriteString("  if (remainder >= 0) { return remainder; }\n")
+		b.WriteString("  uint64_t magnitude = right < 0 ? (uint64_t)(-(right + 1)) + 1u : (uint64_t)right;\n")
+		b.WriteString("  return (int64_t)(magnitude - (uint64_t)(-(remainder + 1)) - 1u);\n}\n")
+	}
 	if strings.Contains(generatedBody, evt1IntegerHelperName(base, "i32_shl")+"(") {
 		b.WriteString("int32_t " + evt1IntegerHelperName(base, "i32_shl") + "(int32_t value, int32_t count, int line, int column) {\n")
 		b.WriteString("  if (count < 0 || count >= 32) { concept_panic(\"invalid int32 shift count\", line, column); }\n")
@@ -183,6 +192,12 @@ func evt1DefinedIntegerArithmeticHelpers(base, generatedBody string) string {
 		b.WriteString("  (void)bits;\n")
 		b.WriteString("  if (right == 0) { concept_panic(\"integer division by zero\", line, column); }\n")
 		b.WriteString("  return left / right;\n}\n")
+	}
+	if strings.Contains(generatedBody, evt1IntegerHelperName(base, "u64_mod")+"(") {
+		b.WriteString("uint64_t " + evt1IntegerHelperName(base, "u64_mod") + "(uint64_t left, uint64_t right, int bits, int line, int column) {\n")
+		b.WriteString("  (void)bits;\n")
+		b.WriteString("  if (right == 0) { concept_panic(\"integer modulo by zero\", line, column); }\n")
+		b.WriteString("  return left % right;\n}\n")
 	}
 	if strings.Contains(generatedBody, evt1IntegerHelperName(base, "u64_shl")+"(") {
 		b.WriteString("uint64_t " + evt1IntegerHelperName(base, "u64_shl") + "(uint64_t value, uint64_t count, int bits, int line, int column) {\n")

@@ -4521,18 +4521,23 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 				return leftPrelude + rightPrelude, fmt.Sprintf("%s(%s, %s, %d, %d)", evt1IntegerHelperName(f.l.symbolBase, "i32_mul"), left, right, e.Span.Line, e.Span.Column), resultType
 			case "/":
 				return leftPrelude + rightPrelude, fmt.Sprintf("%s(%s, %s, %d, %d)", evt1IntegerHelperName(f.l.symbolBase, "i32_div"), left, right, e.Span.Line, e.Span.Column), resultType
+			case "%":
+				return leftPrelude + rightPrelude, fmt.Sprintf("%s(%s, %s, %d, %d)", evt1IntegerHelperName(f.l.symbolBase, "i64_mod"), left, right, e.Span.Line, e.Span.Column), resultType
 			case "<<":
 				return leftPrelude + rightPrelude, fmt.Sprintf("%s(%s, %s, %d, %d)", evt1IntegerHelperName(f.l.symbolBase, "i32_shl"), left, right, e.Span.Line, e.Span.Column), resultType
 			case ">>":
 				return leftPrelude + rightPrelude, fmt.Sprintf("%s(%s, %s, %d, %d)", evt1IntegerHelperName(f.l.symbolBase, "i32_shr"), left, right, e.Span.Line, e.Span.Column), resultType
 			}
 		}
-		if evt1IntegralRepresentation(resultType) && (e.Op == "/" || e.Op == "<<" || e.Op == ">>") {
+		if resultType.Name == "isize" && e.Op == "%" {
+			return leftPrelude + rightPrelude, fmt.Sprintf("((%s)%s((int64_t)(%s), (int64_t)(%s), %d, %d))", evt1CType(resultType), evt1IntegerHelperName(f.l.symbolBase, "i64_mod"), left, right, e.Span.Line, e.Span.Column), resultType
+		}
+		if evt1IntegralRepresentation(resultType) && (e.Op == "/" || e.Op == "%" || e.Op == "<<" || e.Op == ">>") {
 			bits := 64
 			if _, _, _, width, ok := evt1IntegerTypeRange(resultType); ok {
 				bits = width
 			}
-			operation := map[string]string{"/": "div", "<<": "shl", ">>": "shr"}[e.Op]
+			operation := map[string]string{"/": "div", "%": "mod", "<<": "shl", ">>": "shr"}[e.Op]
 			return leftPrelude + rightPrelude, fmt.Sprintf("((%s)%s((uint64_t)(%s), (uint64_t)(%s), %d, %d, %d))", evt1CType(resultType), evt1IntegerHelperName(f.l.symbolBase, "u64_"+operation), left, right, bits, e.Span.Line, e.Span.Column), resultType
 		}
 		_ = rightType

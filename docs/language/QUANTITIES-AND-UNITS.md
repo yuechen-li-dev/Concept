@@ -33,11 +33,12 @@ The `usize` operator surface includes `+`, `-`, `*`, `/`, `%`, comparisons,
 `&`, `|`, `^`, `<<`, and `>>`. It follows existing native integer overflow
 semantics; R6g adds no allocator-only arithmetic policy.
 
-Signed modulo is normatively Euclidean: the remainder is nonnegative and
-smaller than the divisor magnitude. R6g exposes `%` for unsigned
-representations (where C and Euclidean results coincide) and reserves signed
-`%` until its lowering has explicit zero and minimum-value handling. C's
-signed remainder is not language semantics.
+Signed modulo is Euclidean: the remainder is nonnegative and smaller than the
+divisor magnitude, including for a negative divisor. Both signed and unsigned
+`%` trap on a zero divisor; a literal zero divisor is rejected during checking.
+The minimum signed value modulo `-1` is zero. Generated C uses checked helpers,
+so C's signed remainder and undefined minimum-value division do not define
+Concept's `%`. Signed `/` retains its separate checked, truncating semantics.
 
 ## Oct reconciliation
 

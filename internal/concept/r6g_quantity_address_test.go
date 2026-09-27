@@ -115,11 +115,53 @@ usize Arithmetic(usize left, usize right)
 
 func TestR6gSignedModuloDoesNotLeakCRemainderSemantics(t *testing.T) {
 	source := `profile Core;
-int Modulo(int left, int right) { return left % right; }`
-	_, err := Parse("r6g_signed_modulo.concept", source)
-	var diagnostic Diagnostic
-	if !errors.As(err, &diagnostic) || diagnostic.Code != "SIGNED_EUCLIDEAN_MODULO_DEFERRED" {
-		t.Fatalf("expected SIGNED_EUCLIDEAN_MODULO_DEFERRED, got %v", err)
+int Modulo(int left, int right) { return left % right; }
+isize WideModulo(isize left, isize right) { return left % right; }
+uint UnsignedModulo(uint left, uint right) { return left % right; }
+uint8 SmallModulo(uint8 left, uint8 right) { return left % right; }
+uint64 LargeModulo(uint64 left, uint64 right) { return left % right; }`
+	module, err := Parse("r6g_signed_modulo.concept", source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outputs, err := Generate(module, []byte(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	harness := `#include "r6g_signed_modulo.generated.h"
+#include <stdint.h>
+int main(void) {
+  if (concept_r6g_signed_modulo_modulo(-5, 3) != 1) return 1;
+  if (concept_r6g_signed_modulo_modulo(-5, -3) != 1) return 2;
+  if (concept_r6g_signed_modulo_modulo(INT32_MIN, -1) != 0) return 3;
+  if (concept_r6g_signed_modulo_modulo(INT32_MIN, 3) != 1) return 4;
+  if (concept_r6g_signed_modulo_wide_modulo((ptrdiff_t)INTPTR_MIN, -1) != 0) return 5;
+  if (concept_r6g_signed_modulo_unsigned_modulo(4294967295u, 10u) != 5u) return 6;
+  if (concept_r6g_signed_modulo_small_modulo(255u, 11u) != 2u) return 7;
+  if (concept_r6g_signed_modulo_large_modulo(UINT64_MAX, 10u) != 5u) return 8;
+  if (concept_r6g_signed_modulo_wide_modulo(-5, (ptrdiff_t)INTPTR_MIN) != INTPTR_MAX - 4) return 9;
+  return 0;
+}`
+	runFoundationNativeHarness(t, outputs, "r6g_signed_modulo_harness.c", harness)
+	for run := 0; run < 100; run++ {
+		next, err := Generate(module, []byte(source))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range []string{"r6g_signed_modulo.mir.json", "r6g_signed_modulo.generated.c"} {
+			if string(next[name]) != string(outputs[name]) {
+				t.Fatalf("%s changed on run %d", name, run+1)
+			}
+		}
+	}
+	for _, source := range []string{
+		"profile Core; int Main() { return 7 % 0; }",
+		"profile Core; uint Main() { uint value = 7; return value % 0; }",
+	} {
+		_, err := Parse("modulo_zero.concept", source)
+		if diagnosticCode(err) != "CV4645" {
+			t.Fatalf("zero divisor diagnostic = %v", err)
+		}
 	}
 }
 

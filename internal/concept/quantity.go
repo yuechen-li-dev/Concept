@@ -230,9 +230,6 @@ func evt1ValidateNumericBinary(left, right Type, op string, span Span) (Type, bo
 			if !evt1IntegralRepresentation(left) {
 				return Type{}, true, evt1Diagnostic("MODULO_REQUIRES_INTEGRAL", "% requires integral operands", span)
 			}
-			if left.Name == "int" || left.Name == "isize" {
-				return Type{}, true, evt1Diagnostic("SIGNED_EUCLIDEAN_MODULO_DEFERRED", "signed % is reserved for Euclidean modulo lowering with explicit zero and minimum-value handling; C remainder semantics are not exposed", span)
-			}
 		}
 		if !leftDimension.Equal(rightDimension) {
 			return Type{}, true, evt1Diagnostic("QUANTITY_DIMENSION_MISMATCH", fmt.Sprintf("cannot apply %s to %s and %s; operands require identical units", op, left.String(), right.String()), span)

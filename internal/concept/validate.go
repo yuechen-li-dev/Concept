@@ -4368,9 +4368,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		if templateInfo != nil && (evt1TypeDependsOnParam(leftType, templateInfo.Decl.TypeParam) || evt1TypeDependsOnParam(rightType, templateInfo.Decl.TypeParam)) {
 			return Type{}, evt1Diagnostic("CV4175", "dependent operators are not allowed in EVT1 M1B-B templates", e.Span)
 		}
-		if e.Op == "/" {
+		if e.Op == "/" || e.Op == "%" {
 			if literal, ok := e.Right.(*IntLiteral); ok && literal.Magnitude == 0 {
-				return Type{}, evt1Diagnostic("CV4645", "constant division by zero is not allowed; provide a nonzero divisor", literal.Span)
+				return Type{}, evt1Diagnostic("CV4645", "constant division or modulo by zero is not allowed; provide a nonzero divisor", literal.Span)
 			}
 		}
 		if e.Op == "<<" || e.Op == ">>" {
