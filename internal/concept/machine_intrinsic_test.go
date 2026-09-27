@@ -370,6 +370,7 @@ uint32 Vendor() { CpuidResult result = Cpuid(0, 0); return result.ebx; }
 void Prove() {
     Assert.Concept<NoAllocation>(Probe, "machine call has no allocation");
     Assert.Concept<HardwareRead>(Probe, "timestamp read survives import");
+    Assert.Concept<Privileged>(Cli, "privilege classification survives import");
 }`
 	module, err := ParseWithSemanticModules("machine_consumer.concept", consumer, map[string][]byte{"Standard.Machine.AMD64": artifact})
 	if err != nil {
