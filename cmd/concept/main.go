@@ -19,15 +19,15 @@ const usage = `Concept EVT1 Stage 0 / Go
 Usage:
   concept check <file>
   concept build-module <file>
-  concept emit-c <file>
-  concept mir <file>
-  concept plan <file>
+  concept emit-c <file> [--verify]
+  concept mir <file> [--verify]
+  concept plan <file> [--verify]
   concept explain <file>[:line] [--json] [--verbose]
   concept explain <file> --generated <symbol> [--json] [--verbose]
   concept explain <file> --concept 'Trace<Node>' [--json] [--verbose]
   concept reflect <file>
   concept generated <file> [symbol]
-  concept test [path-or-filter] [--filter text] [--list] [--verbose]
+  concept test [path-or-filter] [--filter text] [--list] [--verbose] [--verify]
   concept package build <name>
   concept package test <name>
   concept package graph <name>
@@ -55,6 +55,7 @@ const testUsage = `Usage:
   concept test --filter <text>
   concept test --list
   concept test --verbose
+  concept test --verify
 `
 
 func main() {
@@ -86,12 +87,17 @@ func main() {
 		runPackageCommand(os.Args[2:])
 		return
 	}
-	if len(os.Args) != 3 {
+	verify := len(os.Args) == 4 && os.Args[3] == "--verify"
+	if len(os.Args) != 3 && !verify {
 		fmt.Fprint(os.Stderr, usage)
 		os.Exit(2)
 	}
 
 	command, sourcePath := os.Args[1], os.Args[2]
+	if verify && command != "plan" && command != "emit-c" && command != "mir" {
+		fmt.Fprint(os.Stderr, usage)
+		os.Exit(2)
+	}
 	body, err := os.ReadFile(sourcePath)
 	if err != nil {
 		fail(err)
@@ -120,13 +126,21 @@ func main() {
 		}
 		fmt.Println(string(output))
 	case "plan":
-		output, err := concept.GeneratePlan(module, concept.GenericC11Target())
+		policy := concept.ConservativeCompilationPolicy()
+		if verify {
+			policy = concept.VerifyCompilationPolicy()
+		}
+		output, err := concept.GeneratePlanWithPolicy(module, concept.GenericC11Target(), policy)
 		if err != nil {
 			fail(err)
 		}
 		_, _ = os.Stdout.Write(output)
 	case "emit-c", "mir":
-		outputs, err := concept.Generate(module, body)
+		policy := concept.ConservativeCompilationPolicy()
+		if verify {
+			policy = concept.VerifyCompilationPolicy()
+		}
+		outputs, err := concept.GenerateForTargetWithPolicy(module, body, concept.GenericC11Target(), policy)
 		if err != nil {
 			fail(err)
 		}
@@ -448,7 +462,7 @@ func runGeneratedCommand(args []string) {
 }
 
 func runTestCommand(args []string) {
-	root, filter, list, verbose := ".", "", false, false
+	root, filter, list, verbose, verify := ".", "", false, false, false
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--help", "-h":
@@ -458,6 +472,8 @@ func runTestCommand(args []string) {
 			list = true
 		case "--verbose":
 			verbose = true
+		case "--verify":
+			verify = true
 		case "--filter":
 			if i+1 >= len(args) {
 				fmt.Fprint(os.Stderr, testUsage)
@@ -488,7 +504,7 @@ func runTestCommand(args []string) {
 		}
 		return
 	}
-	run, err := concept.RunTests(manifest, concept.TestRunOptions{Filter: filter, BenchmarkWarmup: 1, BenchmarkIterations: 5})
+	run, err := concept.RunTests(manifest, concept.TestRunOptions{Filter: filter, BenchmarkWarmup: 1, BenchmarkIterations: 5, Verify: verify})
 	if err != nil {
 		fail(err)
 	}

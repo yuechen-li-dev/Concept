@@ -618,7 +618,11 @@ func (f *evt1FunctionLowerer) lowerSpanIndex(index *IndexExpr, indent int) (stri
 	out.WriteString(indexPrelude)
 	out.WriteString(ind(indent) + fmt.Sprintf("int %s = %s;\n", indexName, indexValue))
 	if f.plannedStrategy("span_index", "PerAccessRuntime") == "PerAccessRuntime" {
-		out.WriteString(ind(indent) + fmt.Sprintf("if (%s < 0 || (size_t)%s >= %s.length) { concept_panic(%q, %d, %d); }\n", indexName, indexName, baseName, "Concept span index out of bounds", index.Span.Line, index.Span.Column))
+		if f.l.verify {
+			out.WriteString(ind(indent) + fmt.Sprintf("if (%s < 0 || (size_t)%s >= %s.length) { concept_verify_bounds(%q, %q, %d, %d, (int64_t)%s, %s.length); }\n", indexName, indexName, baseName, "Concept span index out of bounds", f.l.module.Path, index.Span.Line, index.Span.Column, indexName, baseName))
+		} else {
+			out.WriteString(ind(indent) + fmt.Sprintf("if (%s < 0 || (size_t)%s >= %s.length) { concept_panic(%q, %d, %d); }\n", indexName, indexName, baseName, "Concept span index out of bounds", index.Span.Line, index.Span.Column))
+		}
 	}
 	return out.String(), fmt.Sprintf("%s.data[(size_t)%s]", baseName, indexName), evt1SpanElement(baseType)
 }

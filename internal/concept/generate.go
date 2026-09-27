@@ -22,6 +22,7 @@ type lowering struct {
 	plan                    *LoweringPlan
 	simplifyAtomics         bool
 	optimizeSynchronization bool
+	verify                  bool
 	mapDoc                  map[string]any
 }
 
@@ -52,6 +53,7 @@ func GenerateForTargetWithPolicy(module Module, source []byte, target TargetCapa
 		outputBase:              evt1OutputBase(module.Path),
 		symbolBase:              evt1SemanticSymbolBase(module),
 		optimizeSynchronization: policy.OptimizeSynchronization,
+		verify:                  policy.Verify,
 	}
 	l.mir = buildMIR(module, env)
 	machineHelper, err := evt1MachineHelperSource(l.mir, target)
@@ -2018,6 +2020,11 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 	if strings.Contains(rawBody, "concept_panic(") || integerSupport != "" {
 		support.WriteString("static void concept_panic(const char* reason, int line, int column) {\n")
 		support.WriteString("  fprintf(stderr, \"Concept panic at %d:%d: %s\\n\", line, column, reason);\n")
+		support.WriteString("  abort();\n}\n\n")
+	}
+	if strings.Contains(rawBody, "concept_verify_bounds(") {
+		support.WriteString("static void concept_verify_bounds(const char* reason, const char* source, int line, int column, int64_t index, size_t extent) {\n")
+		support.WriteString("  fprintf(stderr, \"Concept verify: compiler-derived bounds violated: %s at %s:%d:%d: index=%lld extent=%zu\\n\", reason, source, line, column, (long long)index, extent);\n")
 		support.WriteString("  abort();\n}\n\n")
 	}
 	support.WriteString(integerSupport)

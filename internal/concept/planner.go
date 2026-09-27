@@ -55,10 +55,17 @@ func TargetByName(name string) (TargetCapabilities, error) {
 }
 
 type CompilationPolicy struct {
+	Verify                  bool `json:"verify,omitempty"`
 	PreserveRuntimeGuards   bool `json:"preserve_runtime_guards"`
 	OptimizeSynchronization bool `json:"optimize_synchronization"`
 	ForbidAllocation        bool `json:"forbid_allocation"`
 	ForbidImplicitCopy      bool `json:"forbid_implicit_copy"`
+}
+
+func VerifyCompilationPolicy() CompilationPolicy {
+	policy := ConservativeCompilationPolicy()
+	policy.Verify = true
+	return policy
 }
 
 func ConservativeCompilationPolicy() CompilationPolicy {
@@ -400,13 +407,16 @@ func PlanModule(module *MIR, facts *SemanticFactSet, target TargetCapabilities, 
 	if module == nil || facts == nil {
 		return nil, evt1Diagnostic("PLAN_ARTIFACT_INVALID", "planner requires explicit MIR and semantic facts", Span{})
 	}
+	if policy.Verify && (!policy.PreserveRuntimeGuards || policy.OptimizeSynchronization) {
+		return nil, evt1Diagnostic("PLAN_VERIFY_POLICY_INVALID", "Verify must retain runtime guards and synchronization", Span{})
+	}
 	if err := validateTarget(target); err != nil {
 		return nil, err
 	}
 	mirBytes, _ := json.Marshal(module)
 	plan := &LoweringPlan{Schema: PlanSchema, Compiler: CompilerID, Module: module.Module, MIRIdentity: digest(mirBytes), Target: target, Profile: profile.Name, Policy: policy}
 	for _, fn := range module.Functions {
-		fp := planFunction(fn, *facts, target)
+		fp := planFunction(fn, *facts, target, policy)
 		if policy.OptimizeSynchronization && evt1AllAtomicsSimplifiable(module.AccessSummaries) {
 			for i := range fp.Decisions {
 				decision := &fp.Decisions[i]
@@ -559,7 +569,7 @@ func GeneratePlanWithPolicy(module Module, target TargetCapabilities, policy Com
 	return append(body, '\n'), nil
 }
 
-func planFunction(fn MIRFunction, facts SemanticFactSet, target TargetCapabilities) FunctionPlan {
+func planFunction(fn MIRFunction, facts SemanticFactSet, target TargetCapabilities, policy CompilationPolicy) FunctionPlan {
 	encoded, _ := json.Marshal(fn)
 	fp := FunctionPlan{Function: fn.Name, MIRIdentity: digest(encoded), Target: target.Architecture, Cleanup: CleanupPlan{Strategy: "ReverseDeclarationOrder"}}
 	for _, callable := range fn.Callables {
@@ -587,7 +597,7 @@ func planFunction(fn MIRFunction, facts SemanticFactSet, target TargetCapabiliti
 		fp.Cleanup.Drops = append(fp.Cleanup.Drops, CleanupAction{Owner: cleanup.Owner, Type: cleanup.Type, DropFunction: cleanup.DropFunction, Order: cleanup.Order, Action: "DropAtScopeExit"})
 	}
 	for _, op := range fn.Operations {
-		d := planOperation(op, facts)
+		d := planOperation(op, facts, policy)
 		if op.Kind == "assign" && cleanupOwner(fn.Cleanups, op.Detail) {
 			d.Category, d.Strategy, d.Certainty = "CleanupPlan", "DropOldBeforeReplaceThenInitializeNew", DecisionRequired
 			d.Evidence = PlanningEvidence{Claims: []string{"MIR cleanup obligation remains live after replacement"}}
@@ -617,7 +627,7 @@ func planFunction(fn MIRFunction, facts SemanticFactSet, target TargetCapabiliti
 	return fp
 }
 
-func planOperation(op MIROperation, facts SemanticFactSet) PlanningDecision {
+func planOperation(op MIROperation, facts SemanticFactSet, policy CompilationPolicy) PlanningDecision {
 	d := PlanningDecision{MIRID: op.ID, Category: "CallPlan", Operation: op.Kind, Strategy: "Direct", Certainty: DecisionSelected, Evidence: PlanningEvidence{Detail: "ordinary MIR operation preserves semantic order"}, SourceSpan: op.SourceSpan}
 	switch op.Kind {
 	case "machine_intrinsic", "machine_asm":
@@ -662,7 +672,7 @@ func planOperation(op MIROperation, facts SemanticFactSet) PlanningDecision {
 		if op.Kind == "array_index" || op.Kind == "ndarray_index" || op.Kind == "tensor_index" {
 			d.RuntimeGuards = []string{"zero_le_index_lt_extent"}
 		}
-		if op.BoundsCheck == "statically_valid" {
+		if op.BoundsCheck == "statically_valid" && !policy.Verify {
 			d.Strategy, d.Certainty, d.RuntimeGuards = "StaticEliminated", DecisionSelected, nil
 		}
 		d.Evidence = evidenceForSubject(facts, op.RegionID, FactBounded)
@@ -996,7 +1006,7 @@ func ValidateLoweringPlan(mir *MIR, facts *SemanticFactSet, plan *LoweringPlan) 
 		if fp.Function != fn.Name || fp.MIRIdentity != digest(encoded) {
 			return fail("PLAN_ARTIFACT_INVALID", "function plan references stale or reordered MIR")
 		}
-		expectedCallables := planFunction(fn, *facts, plan.Target).Callables
+		expectedCallables := planFunction(fn, *facts, plan.Target, plan.Policy).Callables
 		expectedCallableJSON, _ := json.Marshal(expectedCallables)
 		actualCallableJSON, _ := json.Marshal(fp.Callables)
 		if string(expectedCallableJSON) != string(actualCallableJSON) {
@@ -1006,7 +1016,7 @@ func ValidateLoweringPlan(mir *MIR, facts *SemanticFactSet, plan *LoweringPlan) 
 			if fp.Async == nil || fp.Async.Identity != fn.Async.Identity || fp.Async.Lowering != "GeneratedMachine" || fp.Async.FrameStorage != "Inline" || fp.Async.Continuation != "ExplicitGeneratedState" || fp.Async.ChildInvocation != "MachinePush" || fp.Async.Scheduler != "None" || fp.Async.SavedPC != "None" || fp.Async.ControlFlowStrategy != "StructuredStateGraph" || fp.Async.AwaitCount != len(fn.Async.AwaitPoints) || len(fp.Async.GeneratedStates) != len(fn.Async.GeneratedStates) {
 				return fail("PLAN_ASYNC_INVALID", "async plan invents runtime policy or omits generated-state evidence")
 			}
-			expectedAsync := planFunction(fn, *facts, plan.Target).Async
+			expectedAsync := planFunction(fn, *facts, plan.Target, plan.Policy).Async
 			expectedJSON, _ := json.Marshal(expectedAsync)
 			actualJSON, _ := json.Marshal(fp.Async)
 			if string(actualJSON) != string(expectedJSON) {

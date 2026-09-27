@@ -625,7 +625,11 @@ func (f *evt1FunctionLowerer) lowerStorageIndex(index *IndexExpr, indent int, pl
 		prelude.WriteString(ind(indent) + fmt.Sprintf("int %s = %s;\n", name, indexValue))
 		extent := f.lowerStorageExtent(base, baseType, i)
 		if boundsStrategy == "PerAccessRuntime" {
-			prelude.WriteString(ind(indent) + fmt.Sprintf("if (%s < 0 || (size_t)%s >= %s) { concept_panic(%q, %d, %d); }\n", name, name, extent, evt1StoragePanicReason(baseType), index.Span.Line, index.Span.Column))
+			if f.l.verify {
+				prelude.WriteString(ind(indent) + fmt.Sprintf("if (%s < 0 || (size_t)%s >= %s) { concept_verify_bounds(%q, %q, %d, %d, (int64_t)%s, (size_t)%s); }\n", name, name, extent, evt1StoragePanicReason(baseType), f.l.module.Path, index.Span.Line, index.Span.Column, name, extent))
+			} else {
+				prelude.WriteString(ind(indent) + fmt.Sprintf("if (%s < 0 || (size_t)%s >= %s) { concept_panic(%q, %d, %d); }\n", name, name, extent, evt1StoragePanicReason(baseType), index.Span.Line, index.Span.Column))
+			}
 		}
 		indexNames = append(indexNames, name)
 	}

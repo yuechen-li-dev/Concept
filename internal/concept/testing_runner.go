@@ -112,6 +112,7 @@ type TestResult struct {
 type TestRun struct {
 	Schema     string       `json:"schema"`
 	Compiler   string       `json:"compiler"`
+	Verify     bool         `json:"verify,omitempty"`
 	Results    []TestResult `json:"results"`
 	Passed     int          `json:"passed"`
 	Failed     int          `json:"failed"`
@@ -120,6 +121,7 @@ type TestRun struct {
 }
 
 type TestRunOptions struct {
+	Verify              bool
 	Root                string
 	Filter              string
 	ResultsDir          string
@@ -314,7 +316,7 @@ func RunTests(manifest TestManifest, options TestRunOptions) (TestRun, error) {
 	if options.ResultsDir == "" {
 		options.ResultsDir = filepath.Join(filepath.FromSlash(manifest.Root), ".test-results")
 	}
-	run := TestRun{Schema: TestResultsSchema, Compiler: CompilerID}
+	run := TestRun{Schema: TestResultsSchema, Compiler: CompilerID, Verify: options.Verify}
 	for _, test := range manifest.Tests {
 		if options.Filter != "" && !strings.Contains(strings.ToLower(test.TestID), strings.ToLower(options.Filter)) {
 			continue
@@ -423,7 +425,11 @@ func runOneTest(test TestDeclaration, values []any, caseIndex int, options TestR
 			result.BoundValues[p.Name] = values[i]
 		}
 	}
-	outputs, err := Generate(test.module, test.sourceBytes)
+	policy := ConservativeCompilationPolicy()
+	if options.Verify {
+		policy = VerifyCompilationPolicy()
+	}
+	outputs, err := GenerateForTargetWithPolicy(test.module, test.sourceBytes, GenericC11Target(), policy)
 	if err != nil {
 		return failedTestResult(result, start, "compile", err.Error(), test)
 	}
@@ -515,7 +521,7 @@ func runOneTest(test TestDeclaration, values []any, caseIndex int, options TestR
 	result.ProcessExitCode = &exitCode
 	result.LastCheckpoints = parseCheckpoints(stderr)
 	for _, line := range strings.Split(stderr, "\n") {
-		if strings.Contains(line, "Concept panic") {
+		if strings.Contains(line, "Concept panic") || strings.Contains(line, "Concept verify:") {
 			result.PanicReason = strings.TrimSpace(line)
 		}
 	}
@@ -715,6 +721,9 @@ func parseAssertionFailure(stderr, source string) *TestFailure {
 func classifyTestFailure(stderr string) string {
 	if strings.Contains(stderr, "CONCEPT_TEST_ASSERT|") {
 		return "assertion"
+	}
+	if strings.Contains(stderr, "Concept verify:") {
+		return "verification"
 	}
 	if strings.Contains(stderr, "panic") {
 		return "unexpected-panic"
