@@ -42,7 +42,8 @@ establishment operation is restricted to the declaring module and erases to an
 ordinary region value in C. Owner escape, longer-lived assignment, and use after
 move/drop reject. `AddressFromBits` remains untrusted.
 
-R6g/R6j add no source `T*`, implicit cast, object-scaled pointer arithmetic,
-reinterpret cast, MMIO/volatile rule, allocator, heap, or runtime metadata
-registry. Freshness/disjointness and MMIO/volatile remain deferred; the compiler
-rejects rather than inventing provenance for reconstructed addresses.
+R7k adds `Address<DeviceMemory>` and explicit MMIO operations using the same
+affine address algebra. See [Hardware memory](HARDWARE-MEMORY.md). Device
+access does not turn reconstructed addresses into trusted `SystemMemory`
+storage or introduce a volatile-qualified source type. Freshness/disjointness
+remain separate from this low-level hardware-access primitive.

@@ -31,6 +31,11 @@ ActuatorHost have worker-safe guarded algorithms. See
 scheduler, collector, VM/page-table system, runtime registry, Vulkan policy,
 reflection, or serialization layer.
 
+`DragonGod.Hardware.Uart` dogfoods explicit MMIO with scalar-backed
+`UartLineStatus` bits. Its read, write, and bounded poll operations are ordinary
+NoAllocation library functions; hosted tests exercise them with register
+bytes. Interrupt-driven UART and bare-metal mapping remain future work.
+
 Build with `go run ./cmd/concept package build DragonGod`; test with `go run
 ./cmd/concept package test DragonGod`. The repository bootstrap equivalent is
 the `BuildDragonGod` or `TestDragonGod` target in `Make.oct`.

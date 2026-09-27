@@ -1,0 +1,15 @@
+module DragonGod.Tests.Uart;
+profile Core;
+
+import DragonGod.Hardware.Uart;
+
+[[fact]]
+void UartAccessHasExplicitHardwareEffects()
+{
+    Assert.Concept<NoAllocation>(ReadStatus, "one scalar MMIO read allocates no storage");
+    Assert.Concept<NoAllocation>(WriteByte, "one scalar MMIO write allocates no storage");
+    Assert.Concept<NoAllocation>(PollTransmitter, "bounded polling and scalar MMIO allocate no storage");
+    Assert.Concept<HardwareRead>(ReadStatus, "status reads are observable hardware transactions");
+    Assert.Concept<HardwareWrite>(WriteByte, "byte writes are observable hardware transactions");
+    Assert.Concept<HardwareRead>(PollTransmitter, "polling retains hardware reads");
+}

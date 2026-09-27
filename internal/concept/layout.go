@@ -72,7 +72,9 @@ func evt1TypeGeometry(env *semanticEnv, t Type) (int, int, error) {
 	switch resolved.Name {
 	case "byte", "uint8", "bool":
 		return 1, 1, nil
-	case "int", "uint", "float":
+	case "uint16":
+		return 2, 2, nil
+	case "int", "uint", "uint32", "float":
 		return 4, 4, nil
 	case "uint64":
 		return 8, 8, nil

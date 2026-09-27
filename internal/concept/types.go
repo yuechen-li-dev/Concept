@@ -314,6 +314,8 @@ type StreamChannel struct {
 
 type StructDecl struct {
 	Name                       string         `json:"name"`
+	BitsRepresentation         string         `json:"bits_representation,omitempty"`
+	BitFields                  []BitFieldDecl `json:"bit_fields,omitempty"`
 	Module                     string         `json:"module,omitempty"`
 	Attributes                 []Attribute    `json:"attributes,omitempty"`
 	Immovable                  bool           `json:"immovable"`
@@ -328,6 +330,15 @@ type StructDecl struct {
 	Methods                    []FunctionDecl `json:"methods,omitempty"`
 	Span                       Span           `json:"span"`
 	RecordSpan                 Span           `json:"record_span,omitempty"`
+}
+
+// BitFieldDecl describes a value projection. End is inclusive; no C bitfield
+// layout or implicit device access is involved.
+type BitFieldDecl struct {
+	Name  string `json:"name"`
+	Start int    `json:"start"`
+	End   int    `json:"end"`
+	Span  Span   `json:"span"`
 }
 
 type VariantDecl struct {
@@ -610,9 +621,10 @@ type Module struct {
 	// ImportedFactAuthority records artifact-owned operations even when an older
 	// artifact has no value summary. Consumers must degrade those results to
 	// Unknown instead of re-deriving a stronger contract from the payload body.
-	ImportedFactAuthority []string            `json:"-"`
-	ImportedABIRequired   []string            `json:"-"`
-	ImportedABIEvidence   []NativeABIEvidence `json:"-"`
+	ImportedFactAuthority   []string                              `json:"-"`
+	ImportedABIRequired     []string                              `json:"-"`
+	ImportedABIEvidence     []NativeABIEvidence                   `json:"-"`
+	ImportedHardwareEffects []SemanticModuleHardwareEffectSummary `json:"-"`
 }
 
 type NamespaceSymbol struct {
@@ -1421,21 +1433,23 @@ type MIRStorageType struct {
 }
 
 type MIRStruct struct {
-	Name        string    `json:"name"`
-	CName       string    `json:"c_name"`
-	Immovable   bool      `json:"immovable"`
-	Record      bool      `json:"record,omitempty"`
-	Ref         bool      `json:"ref,omitempty"`
-	Class       bool      `json:"class,omitempty"`
-	Table       bool      `json:"table,omitempty"`
-	TableSized  bool      `json:"table_sized,omitempty"`
-	Cardinality int       `json:"cardinality,omitempty"`
-	Columnar    bool      `json:"columnar,omitempty"`
-	Copyable    bool      `json:"copyable"`
-	Movable     bool      `json:"movable"`
-	HasDrop     bool      `json:"has_drop"`
-	Fields      []MIRName `json:"fields,omitempty"`
-	SourceSpan  Span      `json:"source_span"`
+	Name               string         `json:"name"`
+	BitsRepresentation string         `json:"bits_representation,omitempty"`
+	BitFields          []BitFieldDecl `json:"bit_fields,omitempty"`
+	CName              string         `json:"c_name"`
+	Immovable          bool           `json:"immovable"`
+	Record             bool           `json:"record,omitempty"`
+	Ref                bool           `json:"ref,omitempty"`
+	Class              bool           `json:"class,omitempty"`
+	Table              bool           `json:"table,omitempty"`
+	TableSized         bool           `json:"table_sized,omitempty"`
+	Cardinality        int            `json:"cardinality,omitempty"`
+	Columnar           bool           `json:"columnar,omitempty"`
+	Copyable           bool           `json:"copyable"`
+	Movable            bool           `json:"movable"`
+	HasDrop            bool           `json:"has_drop"`
+	Fields             []MIRName      `json:"fields,omitempty"`
+	SourceSpan         Span           `json:"source_span"`
 }
 
 type MIREnum struct {
@@ -1827,6 +1841,7 @@ type semanticEnv struct {
 	validatingFunction      string
 	validatingModule        string
 	operationEffects        map[string]OperationEffectDecl
+	importedHardwareEffects map[string]SemanticModuleHardwareEffectSummary
 	foreignContracts        map[string]ForeignContractDecl
 	foreignByOperation      map[string]ForeignContractDecl
 	genericTypes            map[string]GenericTypeDecl
@@ -1896,6 +1911,7 @@ func newSemanticEnv(profile *ProfileDefinition) *semanticEnv {
 		transportedFactIDs:      map[string]bool{},
 		dynWitnesses:            map[string]*evt1InterfaceWitness{},
 		operationEffects:        map[string]OperationEffectDecl{},
+		importedHardwareEffects: map[string]SemanticModuleHardwareEffectSummary{},
 		foreignContracts:        map[string]ForeignContractDecl{},
 		foreignByOperation:      map[string]ForeignContractDecl{},
 		genericTypes:            map[string]GenericTypeDecl{},

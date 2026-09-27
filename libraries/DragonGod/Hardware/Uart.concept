@@ -1,0 +1,42 @@
+module DragonGod.Hardware.Uart;
+profile Core;
+
+import Standard.Hardware.Mmio;
+
+bits UartLineStatus : uint8
+{
+    dataReady: 0;
+    transmitterEmpty: 5;
+}
+
+record struct Uart
+{
+    Address<DeviceMemory> base;
+}
+
+UartLineStatus ReadStatus(ref const Uart uart)
+{
+    usize<byte> lineStatusOffset = 5;
+    return UartLineStatus{MmioLoad<uint8>(uart.base + lineStatusOffset)};
+}
+
+void WriteByte(ref const Uart uart, uint8 value)
+{
+    usize<byte> dataOffset = 0;
+    MmioStore<uint8>(uart.base + dataOffset, value);
+}
+
+bool PollTransmitter(ref const Uart uart)
+{
+    int attempts = 0;
+    while (attempts < 4) bounded(4)
+    {
+        UartLineStatus status = ReadStatus(ref const uart);
+        if (status.transmitterEmpty)
+        {
+            return true;
+        }
+        attempts = attempts + 1;
+    }
+    return false;
+}
