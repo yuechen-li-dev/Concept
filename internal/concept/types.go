@@ -969,6 +969,19 @@ type Expr interface {
 	exprSpan() Span
 }
 
+// CastExpr is the sole semantic node for both `value as T` and
+// `static_cast<T>(value)`; the surface spelling is intentionally discarded.
+type CastExpr struct {
+	Value      Expr   `json:"value"`
+	Target     Type   `json:"target"`
+	SourceType Type   `json:"source_type,omitempty"`
+	Kind       string `json:"kind,omitempty"`
+	Span       Span   `json:"span"`
+}
+
+func (*CastExpr) evt1Expr()        {}
+func (e *CastExpr) exprSpan() Span { return e.Span }
+
 type NameExpr struct {
 	Name string `json:"name"`
 	Span Span   `json:"span"`
@@ -1075,11 +1088,12 @@ func (*DispatchExpr) evt1Expr()        {}
 func (e *DispatchExpr) exprSpan() Span { return e.Span }
 
 type TemplateCallExpr struct {
-	Callee   string `json:"callee"`
-	TypeArg  Type   `json:"type_arg"` // first argument, retained for artifact compatibility
-	TypeArgs []Type `json:"type_args,omitempty"`
-	Args     []Expr `json:"args,omitempty"`
-	Span     Span   `json:"span"`
+	Callee       string `json:"callee"`
+	TypeArg      Type   `json:"type_arg"` // first argument, retained for artifact compatibility
+	TypeArgs     []Type `json:"type_args,omitempty"`
+	Args         []Expr `json:"args,omitempty"`
+	ResolvedType Type   `json:"resolved_type,omitempty"`
+	Span         Span   `json:"span"`
 }
 
 func (*TemplateCallExpr) evt1Expr()        {}
@@ -2024,6 +2038,7 @@ type ValueKind string
 
 const (
 	ValueInt    ValueKind = "int"
+	ValueFloat  ValueKind = "float"
 	ValueBool   ValueKind = "bool"
 	ValueString ValueKind = "string"
 	ValueStruct ValueKind = "struct"
@@ -2035,6 +2050,7 @@ type Value struct {
 	Kind        ValueKind
 	Type        Type
 	IntValue    int
+	FloatValue  float64
 	BoolValue   bool
 	StringValue string
 	StructName  string
@@ -2049,6 +2065,8 @@ func (v Value) Render() string {
 	switch v.Kind {
 	case ValueInt:
 		return fmt.Sprintf("%d", v.IntValue)
+	case ValueFloat:
+		return evt1RenderFloatLiteral(&FloatLiteral{Value: v.FloatValue}, v.Type)
 	case ValueBool:
 		if v.BoolValue {
 			return "true"

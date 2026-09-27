@@ -625,6 +625,8 @@ func evt1DirectAwait(stmt Statement) *AwaitExpr {
 			return x
 		case *FailureExpr:
 			return find(x.Value)
+		case *CastExpr:
+			return find(x.Value)
 		case *ParenExpr:
 			return find(x.Value)
 		case *UnaryExpr:
@@ -657,6 +659,10 @@ func evt1ReplaceDirectAwait(stmt Statement, index int) Statement {
 		case *AwaitExpr:
 			return &NameExpr{Name: fmt.Sprintf("#await%d", index), Span: x.Span}
 		case *FailureExpr:
+			copy := *x
+			copy.Value = replace(x.Value)
+			return &copy
+		case *CastExpr:
 			copy := *x
 			copy.Value = replace(x.Value)
 			return &copy
@@ -728,6 +734,8 @@ func evt1AnalyzeAsync(fn FunctionDecl) evt1AsyncAnalysis {
 			expr(e.Value)
 		case *NameExpr:
 			a.Uses[e.Name] = append(a.Uses[e.Name], order)
+		case *CastExpr:
+			expr(e.Value)
 		case *ParenExpr:
 			expr(e.Value)
 		case *UnaryExpr:
@@ -911,6 +919,8 @@ func evt1ExprNames(expr Expr) []string {
 		case *NameExpr:
 			seen[e.Name] = true
 		case *AwaitExpr:
+			visit(e.Value)
+		case *CastExpr:
 			visit(e.Value)
 		case *ParenExpr:
 			visit(e.Value)
@@ -1100,6 +1110,8 @@ func evt1ExprAwaitCount(expr Expr) int {
 		return 0
 	case *AwaitExpr:
 		return 1
+	case *CastExpr:
+		return evt1ExprAwaitCount(e.Value)
 	case *ParenExpr:
 		return evt1ExprAwaitCount(e.Value)
 	case *UnaryExpr:
@@ -1238,6 +1250,8 @@ func evt1ExprContainsAwait(expr Expr) bool {
 		return true
 	}
 	switch e := expr.(type) {
+	case *CastExpr:
+		return evt1ExprContainsAwait(e.Value)
 	case *ParenExpr:
 		return evt1ExprContainsAwait(e.Value)
 	case *UnaryExpr:

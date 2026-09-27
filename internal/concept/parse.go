@@ -4150,6 +4150,9 @@ func (p *parser) parsePrimary() (Expr, error) {
 		return nil, evt1Diagnostic("CV4013", "unexpected end of expression", p.currentSpan())
 	case p.peekLexeme() == "(":
 		start := p.next().Span
+		if _, numeric := evt1BuiltinType(p.peekLexeme(), p.currentSpan()); numeric && p.peekLexemeN(1) == ")" {
+			return nil, evt1Diagnostic("C_STYLE_CAST_UNSUPPORTED", "C-style casts are unsupported; use value as T, or TruncTo<T>/FloorTo<T>/CeilTo<T>/RoundTo<T> for floating-to-integer conversion", start)
+		}
 		expr, err := p.parseExpr()
 		if err != nil {
 			return nil, err
@@ -4401,6 +4404,37 @@ func (p *parser) parseNameLikeExpr() (Expr, error) {
 	if err != nil {
 		return nil, err
 	}
+	switch nameTok.Lexeme {
+	case "reinterpret_cast":
+		return nil, evt1Diagnostic("REINTERPRET_CAST_UNSUPPORTED", "Concept has no general reinterpret_cast; use storage/address binding or a representation-specific operation", nameTok.Span)
+	case "const_cast":
+		return nil, evt1Diagnostic("CONST_CAST_UNSUPPORTED", "Concept does not permit authority to be cast into existence", nameTok.Span)
+	case "dynamic_cast":
+		return nil, evt1Diagnostic("DYNAMIC_CAST_UNSUPPORTED", "Concept has no dynamic_cast runtime type conversion", nameTok.Span)
+	}
+	if nameTok.Lexeme == "static_cast" {
+		if _, err := p.expect("<"); err != nil {
+			return nil, err
+		}
+		target, err := p.parseType("")
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.expect(">"); err != nil {
+			return nil, err
+		}
+		if _, err := p.expect("("); err != nil {
+			return nil, err
+		}
+		value, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.expect(")"); err != nil {
+			return nil, err
+		}
+		return p.parsePostfixExpr(&CastExpr{Value: value, Target: target, Span: nameTok.Span}, nameTok.Span)
+	}
 	constructName := nameTok.Lexeme
 	constructType := Type{Name: nameTok.Lexeme, Kind: TypeStruct, Span: nameTok.Span}
 	if p.genericConstructionAhead() {
@@ -4603,6 +4637,13 @@ func (p *parser) parseArrayLiteralExpr() (Expr, error) {
 func (p *parser) parsePostfixExpr(expr Expr, span Span) (Expr, error) {
 	for {
 		switch p.peekLexeme() {
+		case "as":
+			operator := p.next()
+			target, err := p.parseType("")
+			if err != nil {
+				return nil, err
+			}
+			expr = &CastExpr{Value: expr, Target: target, Span: operator.Span}
 		case "?", "!":
 			op := p.next()
 			expr = &FailureExpr{Op: op.Lexeme, Value: expr, Span: op.Span}

@@ -334,6 +334,13 @@ func evt1VisitFailureTypesExpr(expr Expr, add func(Type)) {
 		return
 	}
 	switch e := expr.(type) {
+	case *TemplateCallExpr:
+		add(e.ResolvedType)
+		for _, a := range e.Args {
+			evt1VisitFailureTypesExpr(a, add)
+		}
+	case *CastExpr:
+		evt1VisitFailureTypesExpr(e.Value, add)
 	case *ConstructExpr:
 		add(e.ResolvedType)
 		for _, a := range e.Args {

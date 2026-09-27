@@ -50,6 +50,7 @@ func evt1NewVulkanProfileDefinition() ProfileDefinition {
 		BuiltinEnums: []EnumDecl{
 			evt1BuiltinAutomataDispatchOutcomeEnum(),
 			evt1BuiltinActuationOutcomeEnum(),
+			evt1BuiltinNumericCastErrorEnum(),
 		},
 		AdmittedImports: map[string]struct{}{
 			"Prometheus.Vulkan": {},

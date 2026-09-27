@@ -743,7 +743,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		if profile.compilerOwnedType(templateDecl.Name) {
 			return nil, evt1Diagnostic("CV4267", fmt.Sprintf("%s is a compiler-owned runtime type and cannot be redeclared", templateDecl.Name), templateDecl.Span)
 		}
-		if templateDecl.Name == "dispatch" || templateDecl.Name == "actuate" || templateDecl.Name == "discard" {
+		if templateDecl.Name == "dispatch" || templateDecl.Name == "actuate" || templateDecl.Name == "discard" || evt1IsNumericRoundOperation(templateDecl.Name) {
 			return nil, evt1Diagnostic("CV4268", fmt.Sprintf("%s is a compiler-owned operation name and cannot be redeclared", templateDecl.Name), templateDecl.Span)
 		}
 		if env.effects[templateDecl.Name].Name != "" {
@@ -767,7 +767,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		env.comptimeDecls[decl.Name] = decl
 	}
 	for _, fn := range module.Functions {
-		if fn.Name == "dispatch" || fn.Name == "actuate" || fn.Name == "discard" {
+		if fn.Name == "dispatch" || fn.Name == "actuate" || fn.Name == "discard" || evt1IsNumericRoundOperation(fn.Name) {
 			return nil, evt1Diagnostic("CV4268", fmt.Sprintf("%s is a compiler-owned operation name and cannot be redeclared", fn.Name), fn.Span)
 		}
 		if env.effects[fn.Name].Name != "" {
@@ -847,7 +847,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		env.operationEffects[key] = effect
 	}
 	for _, fn := range module.ComptimeFns {
-		if fn.Name == "dispatch" || fn.Name == "actuate" || fn.Name == "discard" {
+		if fn.Name == "dispatch" || fn.Name == "actuate" || fn.Name == "discard" || evt1IsNumericRoundOperation(fn.Name) {
 			return nil, evt1Diagnostic("CV4268", fmt.Sprintf("%s is a compiler-owned operation name and cannot be redeclared", fn.Name), fn.Span)
 		}
 		if len(env.functions[fn.Name]) > 0 || env.templates[fn.Name].Name != "" || env.comptimeDecls[fn.Name].Name != "" || env.comptimeFunctions[fn.Name].Name != "" || env.automata[fn.Name].Name != "" || env.effects[fn.Name].Name != "" || env.actuators[fn.Name].Name != "" {
@@ -3560,6 +3560,45 @@ func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string,
 
 func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
 	switch e := expr.(type) {
+	case *CastExpr:
+		if err := validateKnownType(env, e.Target, e.Span, "", false); err != nil {
+			return Type{}, err
+		}
+		e.Target = evt1CanonicalType(env, e.Target)
+		var source Type
+		if _, literal := e.Value.(*FloatLiteral); literal && e.Target.Quantity == nil && e.Target.Name == "double" {
+			// A floating literal is context-typed by binary64 when the cast
+			// directly names that representation; do not round it through float.
+			source = e.Target
+		} else {
+			var err error
+			source, err = validateExpr(env, scope, e.Value, templateInfo, inComptimeFn)
+			if err != nil {
+				return Type{}, err
+			}
+		}
+		source = evt1CanonicalType(env, source)
+		e.SourceType = source
+		if !evt1NumericRepresentation(source) || !evt1NumericRepresentation(e.Target) {
+			return Type{}, evt1Diagnostic("NUMERIC_CAST_REQUIRED", "as requires numeric source and target representations", e.Span)
+		}
+		if (source.Quantity == nil) != (e.Target.Quantity == nil) {
+			return Type{}, evt1Diagnostic("CAST_QUANTITY_SEMANTICS", "as cannot attach or erase a quantity; semantic interpretation is separate", e.Span)
+		}
+		if source.Quantity != nil && !source.Quantity.Equal(*e.Target.Quantity) {
+			return Type{}, evt1Diagnostic("CAST_QUANTITY_SEMANTICS", "as cannot change a quantity dimension or scale", e.Span)
+		}
+		if evt1IsFloating(source) && evt1IntegralRepresentation(e.Target) {
+			return Type{}, evt1Diagnostic("FLOAT_TO_INT_ROUNDING_REQUIRED", "floating-point to integer conversion requires TruncTo<T>, FloorTo<T>, CeilTo<T>, or RoundTo<T>", e.Span)
+		}
+		if evt1IntegralRepresentation(source) && evt1IntegralRepresentation(e.Target) {
+			e.Kind = "integer_checked_range"
+		} else if evt1IntegralRepresentation(source) {
+			e.Kind = "integer_to_float"
+		} else {
+			e.Kind = "float_representation"
+		}
+		return e.Target, nil
 	case *CallableExpr:
 		return evt1ValidateCallableExpr(env, scope, e, templateInfo, inComptimeFn)
 	case *AwaitExpr:
@@ -4163,6 +4202,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		return Type{Name: evt1AutomataDispatchOutcomeTypeName, Kind: TypeEnum, Span: e.Span}, nil
 	case *TemplateCallExpr:
+		if evt1IsNumericRoundOperation(e.Callee) {
+			return evt1ValidateNumericRoundCall(env, scope, e, templateInfo, inComptimeFn)
+		}
 		if result, handled, err := evt1ValidateMmioCall(env, scope, e, templateInfo, inComptimeFn); handled {
 			return result, err
 		}
@@ -6225,6 +6267,8 @@ func evt1GuardExprNodeCount(expr Expr) int {
 
 func evt1ExprIdentity(expr Expr) string {
 	switch e := expr.(type) {
+	case *CastExpr:
+		return "(" + evt1ExprIdentity(e.Value) + " as " + e.Target.String() + ")"
 	case *NameExpr:
 		return e.Name
 	case *IntLiteral:
@@ -6834,6 +6878,9 @@ type evt1BoundSemanticSubject struct {
 var evt1SemanticAnalysisRegistry = map[string]evt1SemanticAnalysis{}
 
 func init() {
+	evt1SemanticAnalysisRegistry["ExactConversion"] = evt1SemanticAnalysis{TypeArity: 2, CheckTypes: func(_ *semanticEnv, args []Type, _ []int) semanticFactResult {
+		return evt1ExactConversionFact(args[0], args[1])
+	}}
 	floatFact := func(args []Type, check func(FloatRepresentationInfo) bool) semanticFactResult {
 		info, ok := evt1FloatRepresentationInfo(args[0])
 		outcome := FactDisproven
@@ -8110,6 +8157,12 @@ func evt1SubstituteStatement(stmt Statement, typeParam string, concreteType Type
 
 func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, error) {
 	switch e := expr.(type) {
+	case *CastExpr:
+		value, err := evt1SubstituteExpr(e.Value, typeParam, concreteType)
+		if err != nil {
+			return nil, err
+		}
+		return &CastExpr{Value: value, Target: evt1SubstituteType(e.Target, typeParam, concreteType), Span: e.Span}, nil
 	case *AwaitExpr:
 		value, err := evt1SubstituteExpr(e.Value, typeParam, concreteType)
 		if err != nil {

@@ -107,7 +107,7 @@ func evt1IsComptimeType(env *semanticEnv, t Type) bool {
 		return evt1IsComptimeType(env, *t.ArrayElem)
 	}
 	if _, ok := evt1BuiltinType(t.Name, t.Span); ok {
-		return t.Name == "int" || t.Name == "bool" || t.Name == "string"
+		return t.Name == "int" || t.Name == "bool" || t.Name == "string" || t.Name == "float" || t.Name == "double"
 	}
 	if structDecl, ok := env.structs[t.Name]; ok {
 		for _, field := range structDecl.Fields {
@@ -230,6 +230,16 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 		return Value{}, err
 	}
 	switch e := expr.(type) {
+	case *CastExpr:
+		var expectedCastSource *Type
+		if _, literal := e.Value.(*FloatLiteral); literal && e.Target.Name == "double" && e.Target.Quantity == nil {
+			expectedCastSource = &e.Target
+		}
+		value, err := evt1EvalExprTyped(state, scope, e.Value, expectedCastSource)
+		if err != nil {
+			return Value{}, err
+		}
+		return evt1EvalNumericCast(value, e.Target, e.Span)
 	case *ParenExpr:
 		return evt1EvalExprTyped(state, scope, e.Value, expected)
 	case *IntLiteral:
@@ -245,6 +255,16 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 			return Value{}, evt1Diagnostic("CV4644", fmt.Sprintf("integer literal %s is not representable in bounded compile-time evaluation", e.Source()), e.Span)
 		}
 		return Value{Kind: ValueInt, Type: t, IntValue: int(value)}, nil
+	case *FloatLiteral:
+		t, _ := evt1BuiltinType("float", e.Span)
+		if expected != nil && evt1IsFloating(*expected) {
+			t = expected.valueType()
+		}
+		value := e.Value
+		if t.Name == "float" {
+			value = float64(float32(value))
+		}
+		return Value{Kind: ValueFloat, Type: t, FloatValue: value}, nil
 	case *BoolLiteral:
 		t, _ := evt1BuiltinType("bool", e.Span)
 		return Value{Kind: ValueBool, Type: t, BoolValue: e.Value}, nil

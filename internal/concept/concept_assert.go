@@ -263,7 +263,7 @@ func evt1ProjectDirectAnalysis(env *semanticEnv, graph *ProofGraph, root string,
 
 func evt1IsFloatRepresentationAnalysis(name string) bool {
 	switch name {
-	case "Floating", "BinaryFloat", "ScalarBits", "FloatExponentBits", "FloatMantissaBits":
+	case "Floating", "BinaryFloat", "ScalarBits", "FloatExponentBits", "FloatMantissaBits", "ExactConversion":
 		return true
 	}
 	return false
@@ -668,6 +668,8 @@ func evt1DirectTemplateInstances(env *semanticEnv, block Block) []*evt1TemplateI
 	var visitExpr func(Expr)
 	visitExpr = func(expr Expr) {
 		switch e := expr.(type) {
+		case *CastExpr:
+			visitExpr(e.Value)
 		case *TemplateCallExpr:
 			arguments := evt1TemplateCallArgs(e)
 			var identities []string
@@ -757,6 +759,8 @@ func evt1DirectCalls(block Block) []string {
 	var visitExpr func(Expr)
 	visitExpr = func(expr Expr) {
 		switch e := expr.(type) {
+		case *CastExpr:
+			visitExpr(e.Value)
 		case *CallExpr:
 			_, machine := machineIntrinsics[e.Intrinsic]
 			if !e.Member && (e.Intrinsic == "" || machine) {
