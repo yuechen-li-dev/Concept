@@ -38,3 +38,9 @@ operations and transitive calls. Their closed summaries travel in module
 artifacts; an opaque call leaves the absence of hardware access Unknown.
 Neither fact implies atomic synchronization or a CPU memory fence. See
 [Hardware memory](HARDWARE-MEMORY.md).
+
+The R7l progression derives the same hardware facts for AMD64 timestamp and
+port I/O operations. `Pause` is a retained machine hint and does not assert
+memory-barrier or hardware-read semantics. Typed machine declarations and
+their wrappers derive `NoAllocation`; no source-negative effect declaration is
+introduced.

@@ -36,6 +36,11 @@ reflection, or serialization layer.
 NoAllocation library functions; hosted tests exercise them with register
 bytes. Interrupt-driven UART and bare-metal mapping remain future work.
 
+`DragonGod.Hardware.PortUart` separately dogfoods AMD64 `In8`/`Out8` from
+`Standard.Machine.AMD64`. Its `uint16` base is a port number, not an MMIO
+address. Hosted tests compile and link the port path and prove its hardware
+facts; they do not execute privileged port instructions in user mode.
+
 Build with `go run ./cmd/concept package build DragonGod`; test with `go run
 ./cmd/concept package test DragonGod`. The repository bootstrap equivalent is
 the `BuildDragonGod` or `TestDragonGod` target in `Make.oct`.

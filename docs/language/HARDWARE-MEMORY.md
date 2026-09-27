@@ -40,5 +40,7 @@ facts over operations and transitive call graphs. They travel in semantic
 module artifacts. `NoAllocation` continues to derive independently.
 
 DMA, cacheability, page mapping, port I/O, interrupts, and inline assembly
-are not part of R7k. Architecture-specific barriers and native backends must
-preserve the same observable MMIO operations when those capabilities arrive.
+are not part of R7k. The later R7l progression adds typed AMD64 port I/O in
+`Standard.Machine.AMD64`; it is distinct from `Address<DeviceMemory>` MMIO.
+Architecture-specific barriers and native backends must preserve the same
+observable MMIO operations when those capabilities arrive.

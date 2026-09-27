@@ -80,6 +80,12 @@ bounds-guard strategy, reverse-declaration cleanup strategy, and witness
 dispatch strategy. X86_64_Generic and AArch64_Generic are planning-only target
 descriptions; they do not enable native code generation.
 
+The later R7l progression retains C11 as the generated source backend but
+also emits an inspectable `.machine.S` helper for architecture-qualified
+machine operations used by a module. An explicit AArch64 planning target
+rejects AMD64 operations. GenericC11 still denotes the C backend; machine
+helper eligibility additionally checks the current host CPU architecture.
+
 Fixed inline storage's 64-byte alignment is an existing EVT1 semantic
 guarantee, not a target preference: semantic bind validation and qualified MIR
 facts already depend on it. Planner semantics therefore preserves it as Proven evidence.
