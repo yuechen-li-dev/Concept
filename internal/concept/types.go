@@ -843,6 +843,22 @@ type ExprStmt struct {
 	Span  Span `json:"span"`
 }
 
+// AsmStmt is an explicitly unsafe, architecture-bound machine escape hatch.
+// The bounded EVT1 form has one typed register operand and no control exit.
+type AsmStmt struct {
+	Architecture string   `json:"architecture"`
+	Template     string   `json:"template"`
+	OperandMode  string   `json:"operand_mode"`
+	OperandName  string   `json:"operand_name"`
+	OperandType  Type     `json:"operand_type"`
+	Clobbers     []string `json:"clobbers,omitempty"`
+	MemoryEffect string   `json:"memory_effect"`
+	Span         Span     `json:"span"`
+}
+
+func (*AsmStmt) evt1Statement()        {}
+func (s *AsmStmt) statementSpan() Span { return s.Span }
+
 // AssertStmt is runtime assertion sugar. It lowers to the same terminal panic
 // primitive used by explicit failure escalation; it is not a testing API.
 type AssertStmt struct {
@@ -1760,41 +1776,53 @@ type MIRCleanup struct {
 }
 
 type MIROperation struct {
-	ID                   string             `json:"id"`
-	Kind                 string             `json:"kind"`
-	Type                 string             `json:"type,omitempty"`
-	Detail               string             `json:"detail,omitempty"`
-	ReturnType           string             `json:"return_type,omitempty"`
-	AsyncConstructor     bool               `json:"async_constructor,omitempty"`
-	Evaluation           string             `json:"evaluation,omitempty"`
-	OutcomeTransfer      string             `json:"outcome_transfer,omitempty"`
-	SourceStorageKind    StorageKind        `json:"source_storage_kind,omitempty"`
-	TargetStorageKind    StorageKind        `json:"target_storage_kind,omitempty"`
-	TargetRank           int                `json:"target_rank,omitempty"`
-	TargetShape          []StorageDimension `json:"target_shape,omitempty"`
-	CountCheck           string             `json:"count_check,omitempty"`
-	Mutability           string             `json:"mutability,omitempty"`
-	Provenance           string             `json:"provenance,omitempty"`
-	NoCopy               bool               `json:"no_copy,omitempty"`
-	NoAllocation         bool               `json:"no_allocation,omitempty"`
-	MayAllocate          bool               `json:"may_allocate,omitempty"`
-	EffectOrigin         string             `json:"effect_origin,omitempty"`
-	NoOwnershipTransfer  bool               `json:"no_ownership_transfer,omitempty"`
-	LayoutName           string             `json:"layout_name,omitempty"`
-	RegionID             string             `json:"region_id,omitempty"`
-	Offset               int                `json:"offset,omitempty"`
-	ByteExtent           int                `json:"byte_extent,omitempty"`
-	Alignment            int                `json:"alignment,omitempty"`
-	SameBackingRegion    bool               `json:"same_backing_region,omitempty"`
-	ElementType          *Type              `json:"element_type,omitempty"`
-	BaseOffset           string             `json:"base_offset,omitempty"`
-	Length               string             `json:"length,omitempty"`
-	ByteExtentExpression string             `json:"byte_extent_expression,omitempty"`
-	TensorBackingKind    TensorBackingKind  `json:"tensor_backing_kind,omitempty"`
-	Contiguous           bool               `json:"contiguous,omitempty"`
-	BoundsCheck          string             `json:"bounds_check,omitempty"`
-	Synchronization      string             `json:"synchronization,omitempty"`
-	SourceSpan           Span               `json:"source_span"`
+	ID                   string              `json:"id"`
+	Kind                 string              `json:"kind"`
+	Type                 string              `json:"type,omitempty"`
+	Detail               string              `json:"detail,omitempty"`
+	ReturnType           string              `json:"return_type,omitempty"`
+	AsyncConstructor     bool                `json:"async_constructor,omitempty"`
+	Evaluation           string              `json:"evaluation,omitempty"`
+	OutcomeTransfer      string              `json:"outcome_transfer,omitempty"`
+	SourceStorageKind    StorageKind         `json:"source_storage_kind,omitempty"`
+	TargetStorageKind    StorageKind         `json:"target_storage_kind,omitempty"`
+	TargetRank           int                 `json:"target_rank,omitempty"`
+	TargetShape          []StorageDimension  `json:"target_shape,omitempty"`
+	CountCheck           string              `json:"count_check,omitempty"`
+	Mutability           string              `json:"mutability,omitempty"`
+	Provenance           string              `json:"provenance,omitempty"`
+	NoCopy               bool                `json:"no_copy,omitempty"`
+	NoAllocation         bool                `json:"no_allocation,omitempty"`
+	MayAllocate          bool                `json:"may_allocate,omitempty"`
+	EffectOrigin         string              `json:"effect_origin,omitempty"`
+	NoOwnershipTransfer  bool                `json:"no_ownership_transfer,omitempty"`
+	LayoutName           string              `json:"layout_name,omitempty"`
+	RegionID             string              `json:"region_id,omitempty"`
+	Offset               int                 `json:"offset,omitempty"`
+	ByteExtent           int                 `json:"byte_extent,omitempty"`
+	Alignment            int                 `json:"alignment,omitempty"`
+	SameBackingRegion    bool                `json:"same_backing_region,omitempty"`
+	ElementType          *Type               `json:"element_type,omitempty"`
+	BaseOffset           string              `json:"base_offset,omitempty"`
+	Length               string              `json:"length,omitempty"`
+	ByteExtentExpression string              `json:"byte_extent_expression,omitempty"`
+	TensorBackingKind    TensorBackingKind   `json:"tensor_backing_kind,omitempty"`
+	Contiguous           bool                `json:"contiguous,omitempty"`
+	BoundsCheck          string              `json:"bounds_check,omitempty"`
+	Synchronization      string              `json:"synchronization,omitempty"`
+	MachineAssembly      *MIRMachineAssembly `json:"machine_assembly,omitempty"`
+	SourceSpan           Span                `json:"source_span"`
+}
+
+type MIRMachineAssembly struct {
+	Architecture string   `json:"architecture"`
+	Template     string   `json:"template"`
+	OperandMode  string   `json:"operand_mode"`
+	OperandName  string   `json:"operand_name"`
+	OperandType  string   `json:"operand_type"`
+	Clobbers     []string `json:"clobbers,omitempty"`
+	MemoryEffect string   `json:"memory_effect"`
+	ControlFlow  string   `json:"control_flow"`
 }
 
 type semanticEnv struct {

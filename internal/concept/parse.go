@@ -3007,6 +3007,8 @@ func (p *parser) parseBlock() (Block, error) {
 
 func (p *parser) parseStatement() (Statement, error) {
 	switch p.peekLexeme() {
+	case "unsafe":
+		return p.parseAsmStatement()
 	case "derive":
 		if p.inGeneratorBody {
 			return nil, evt1Diagnostic("GENERATOR_RECURSION_UNSUPPORTED", "a generator cannot request another generation wave", p.currentSpan())

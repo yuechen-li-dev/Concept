@@ -1939,6 +1939,10 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 	local := newEVT1Scope(scope)
 	for _, stmt := range block.Statements {
 		switch s := stmt.(type) {
+		case *AsmStmt:
+			if err := evt1ValidateAsmStmt(env, local, s, inComptimeFn); err != nil {
+				return err
+			}
 		case *VarDecl:
 			typeParam := ""
 			if templateInfo != nil {

@@ -56,18 +56,27 @@ func evt1MachineIntrinsic(fn FunctionDecl) (machineIntrinsicSpec, bool, error) {
 
 func evt1MachineHelperSource(mir MIR, target TargetCapabilities) ([]byte, error) {
 	used := map[string]bool{}
+	var assembly []MIROperation
 	for _, fn := range mir.Functions {
 		for _, op := range fn.Operations {
-			if op.Kind != "machine_intrinsic" {
+			if op.Kind != "machine_intrinsic" && op.Kind != "machine_asm" {
 				continue
 			}
 			if target.Architecture == ArchitectureAArch64 || (target.Architecture == ArchitectureGenericC11 && runtime.GOARCH != "amd64") {
-				return nil, evt1Diagnostic("MACHINE_ARCHITECTURE_MISMATCH", op.Detail+" requires AMD64, but target/host architecture is incompatible", op.SourceSpan)
+				operation := op.Detail
+				if op.Kind == "machine_asm" {
+					operation = "asm AMD64"
+				}
+				return nil, evt1Diagnostic("MACHINE_ARCHITECTURE_MISMATCH", operation+" requires AMD64, but target/host architecture is incompatible", op.SourceSpan)
 			}
-			used[op.Detail] = true
+			if op.Kind == "machine_asm" {
+				assembly = append(assembly, op)
+			} else {
+				used[op.Detail] = true
+			}
 		}
 	}
-	if len(used) == 0 {
+	if len(used) == 0 && len(assembly) == 0 {
 		return nil, nil
 	}
 	var b strings.Builder
@@ -78,6 +87,9 @@ func evt1MachineHelperSource(mir MIR, target TargetCapabilities) ([]byte, error)
 		}
 		spec := machineIntrinsics[id]
 		fmt.Fprintf(&b, ".globl %s\n%s:\n%s\n", spec.symbol, spec.symbol, spec.assembly)
+	}
+	for _, op := range assembly {
+		b.WriteString(evt1AsmInstructionSource(op))
 	}
 	return []byte(b.String()), nil
 }

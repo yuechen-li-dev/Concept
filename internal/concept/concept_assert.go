@@ -574,7 +574,12 @@ func evt1ProjectNoAllocation(env *semanticEnv, graph *ProofGraph, root string, f
 			outcome = child
 		}
 	}
-	if len(calls) == 0 && len(templateInstances) == 0 {
+	asmStatements := evt1DirectAsmStatements(*fn.Body)
+	for _, asm := range asmStatements {
+		id := graph.addNode(ProofKnownFact, "asm "+asm.Architecture+" NoAllocation", "compiler-generated local instruction helper has no allocation path", FactProven, FactOriginCompilerAnalysis, asm.Span)
+		graph.addEdge(fnNode, id, ProofDerivedFrom)
+	}
+	if len(calls) == 0 && len(templateInstances) == 0 && len(asmStatements) == 0 {
 		id := graph.addNode(ProofKnownFact, "no allocating operation", "EVT1 body contains no allocation-capable construct", FactProven, FactOriginCompilerAnalysis, fn.Span)
 		graph.addEdge(fnNode, id, ProofDerivedFrom)
 	}
@@ -584,6 +589,39 @@ func evt1ProjectNoAllocation(env *semanticEnv, graph *ProofGraph, root string, f
 		}
 	}
 	return outcome
+}
+
+func evt1DirectAsmStatements(block Block) []*AsmStmt {
+	var result []*AsmStmt
+	var visit func(Block)
+	visit = func(current Block) {
+		for _, statement := range current.Statements {
+			switch s := statement.(type) {
+			case *AsmStmt:
+				result = append(result, s)
+			case *IfStmt:
+				visit(s.Then)
+				if s.Else != nil {
+					visit(*s.Else)
+				}
+			case *WhileStmt:
+				visit(s.Body)
+			case *Block:
+				visit(*s)
+			case *TryStmt:
+				visit(s.Body)
+				for _, arm := range s.Except {
+					visit(arm.Body)
+				}
+			case *MatchStmt:
+				for _, arm := range s.Arms {
+					visit(arm.Block)
+				}
+			}
+		}
+	}
+	visit(block)
+	return result
 }
 
 func evt1DirectTemplateInstances(env *semanticEnv, block Block) []*evt1TemplateInstance {
