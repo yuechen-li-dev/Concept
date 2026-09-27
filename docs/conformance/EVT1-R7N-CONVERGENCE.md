@@ -32,11 +32,30 @@ arena or graph framework would not resolve that representation problem.
 | A borrowed record reference was considered an owner for recursive cleanup | Exclude `ref T` from generated Drop traversal | Native strict C11 fixture with a borrowed immovable value |
 | Fixed layout rejected an owned field despite unchanged physical representation | Resolve the value type for field geometry | `SizeOf<Pinned>` accepted for bound storage |
 
-The next blocker is store-owned, partially initialized contiguous storage.
+The R7n2 blocker was store-owned, partially initialized contiguous storage.
 `Option<owned T>[Capacity]` cannot form `Span<T>` because its payloads have a
 tagged stride. A generic raw byte array sized by `Capacity * SizeOf<T>()`
 currently rejects with `CV4200` because the capacity name is unavailable in
 that compile-time extent; `SizeOf<T>()` alone rejects with `CV4573` because
 open `T` has no fixed layout geometry. A sound solution must also constrain
-moving a store after an immovable entry becomes live. The current patch does
-not claim store Emplace, payload Span, or R7n closeout.
+moving a store after an immovable entry becomes live. R7n3 implements the raw
+and sparse backing described below.
+
+## R7n3 closeout
+
+| Awkward pattern | Local substrate or library fix | Evidence |
+| --- | --- | --- |
+| `Option<owned T>[N]` makes dense payloads strided by tags | General `T<raw>[N]` with typed contiguous data and one live-prefix count | Native raw prefix and Standard Span facts; generated C has `T data[N]; int count` |
+| Final-slot construction of an immovable value could not cross a by-value store API | Stationary `Emplace(ref store, T{...})` and raw append commit after completed field initialization | Artifact-only immovable dense fixture in Normal and Verify |
+| Failed later field left a prior owned temporary live after an always-returning `if` | Correct live-owner merge in `lowerIfStmt` | Failed initializer observes exactly one Drop and no live store element |
+| Generic fixed array extent failed to substitute `Capacity * SizeOf<T>()` | Recursive value and type substitution in fixed extents | Generic layout regression in Go suite |
+| A wrapper around generic `ReadOnlyValues` lost the returned Span's parameter provenance | Derive return provenance through template calls and raw views | Standard `StatementValues` wrapper and `NoAllocation` fact |
+| An allocation inside a stationary aggregate field was omitted from a `NoAllocation` proof | Traverse aggregate, array, and conditional initializers for direct calls and template instances | Allocating `Emplace` field disproves a false `NoAllocation` assertion |
+| `Option<owned Immovable>` rejects the payload before a generational store can construct it | General `T<sparse>[N]` with checked live bits; preserve generation and free-stack policy | Artifact-only fresh/reused sparse Emplace, failure cleanup, stale handle, and Drop evidence |
+
+DenseStore owns contiguous raw storage for Capacity values and maintains a
+live initialized prefix `[0, Count)`. Only that prefix may be viewed as
+`Span<T>`. GenerationalStore intentionally trades contiguity for stable
+reusable identities and therefore does not expose a contiguous payload span.
+Stationary insertion constructs the object directly in its final storage and
+therefore supports immovable values without relocation.

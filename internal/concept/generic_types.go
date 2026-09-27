@@ -214,14 +214,24 @@ func evt1SubstituteGenericValueExtents(t Type, params []GenericParameter, args [
 		t.Kind = TypeTemplateValue
 		return t
 	}
-	replace := func(expr Expr) Expr {
-		if name, ok := expr.(*NameExpr); ok {
-			if value, found := values[name.Name]; found {
+	var replace func(Expr) Expr
+	replace = func(expr Expr) Expr {
+		switch e := expr.(type) {
+		case *NameExpr:
+			if value, found := values[e.Name]; found {
 				if value < 0 {
-					return &IntLiteral{Magnitude: uint64(-int64(value)), Negative: true, Lexeme: fmt.Sprint(-int64(value)), Span: name.Span}
+					return &IntLiteral{Magnitude: uint64(-int64(value)), Negative: true, Lexeme: fmt.Sprint(-int64(value)), Span: e.Span}
 				}
-				return &IntLiteral{Magnitude: uint64(value), Lexeme: fmt.Sprint(value), Span: name.Span}
+				return &IntLiteral{Magnitude: uint64(value), Lexeme: fmt.Sprint(value), Span: e.Span}
 			}
+		case *BinaryExpr:
+			copy := *e
+			copy.Left, copy.Right = replace(e.Left), replace(e.Right)
+			return &copy
+		case *ParenExpr:
+			copy := *e
+			copy.Value = replace(e.Value)
+			return &copy
 		}
 		return expr
 	}

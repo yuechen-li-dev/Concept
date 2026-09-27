@@ -69,6 +69,16 @@ func evt1TypeGeometry(env *semanticEnv, t Type) (int, int, error) {
 		if err != nil {
 			return 0, 0, err
 		}
+		if resolved.StorageKind == StorageRaw {
+			if alignment < 4 {
+				alignment = 4
+			}
+			end := evt1AlignUp(size*evt1StorageElementCount(resolved), 4) + 4
+			return evt1AlignUp(end, alignment), alignment, nil
+		}
+		if resolved.StorageKind == StorageSparse {
+			return evt1AlignUp(size*evt1StorageElementCount(resolved)+evt1StorageElementCount(resolved), alignment), alignment, nil
+		}
 		return size * evt1StorageElementCount(resolved), alignment, nil
 	}
 	switch resolved.Name {

@@ -2828,14 +2828,14 @@ done:
 		if t.Name == "Storage" {
 			t.Kind = TypeTypedStorage
 		}
-		if len(t.TypeArgs) == 1 && (t.TypeArgs[0].Name == string(StorageArray) || t.TypeArgs[0].Name == string(StorageNDArray)) {
+		if len(t.TypeArgs) == 1 && (t.TypeArgs[0].Name == string(StorageArray) || t.TypeArgs[0].Name == string(StorageNDArray) || t.TypeArgs[0].Name == string(StorageRaw) || t.TypeArgs[0].Name == string(StorageSparse)) {
 			storageMarker = StorageKind(t.TypeArgs[0].Name)
 			t = storageElement
 		}
 	}
 	// An applied type may itself be the element of fixed storage, e.g.
 	// Storage<T><array>[N]. Keep the storage suffix distinct from its type args.
-	if p.peekLexeme() == "<" && (p.peekLexemeN(1) == string(StorageArray) || p.peekLexemeN(1) == string(StorageNDArray)) && p.peekLexemeN(2) == ">" {
+	if p.peekLexeme() == "<" && (p.peekLexemeN(1) == string(StorageArray) || p.peekLexemeN(1) == string(StorageNDArray) || p.peekLexemeN(1) == string(StorageRaw) || p.peekLexemeN(1) == string(StorageSparse)) && p.peekLexemeN(2) == ">" {
 		p.next()
 		storageMarker = StorageKind(p.next().Lexeme)
 		p.next()
@@ -2871,7 +2871,7 @@ done:
 		if _, err := p.expect("]"); err != nil {
 			return Type{}, err
 		}
-		if (storageMarker == StorageArray || storageMarker == "") && len(dimensions) != 1 {
+		if (storageMarker == StorageArray || storageMarker == StorageRaw || storageMarker == StorageSparse || storageMarker == "") && len(dimensions) != 1 {
 			return Type{}, evt1Diagnostic("CV4550", fmt.Sprintf("array storage requires exactly one extent, got %d", len(dimensions)), nameTok.Span)
 		}
 		elem := t
@@ -2894,7 +2894,7 @@ done:
 			ArrayElem:   &elem,
 			StorageKind: kind,
 			Shape:       shape,
-			Contiguous:  true,
+			Contiguous:  kind != StorageRaw && kind != StorageSparse,
 			Layout:      "row-major",
 			Span:        nameTok.Span,
 		}

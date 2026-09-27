@@ -661,6 +661,22 @@ func evt1DirectTemplateInstances(env *semanticEnv, block Block) []*evt1TemplateI
 			for _, argument := range e.Args {
 				visitExpr(argument)
 			}
+		case *StructConstructExpr:
+			for _, argument := range e.Args {
+				visitExpr(argument)
+			}
+		case *ConstructExpr:
+			for _, argument := range e.Args {
+				visitExpr(argument)
+			}
+		case *ArrayLiteralExpr:
+			for _, element := range e.Elements {
+				visitExpr(element)
+			}
+		case *IfExpr:
+			visitExpr(e.Condition)
+			visitExpr(e.Then)
+			visitExpr(e.Else)
 		case *BinaryExpr:
 			visitExpr(e.Left)
 			visitExpr(e.Right)
@@ -724,6 +740,22 @@ func evt1DirectCalls(block Block) []string {
 			for _, arg := range e.Args {
 				visitExpr(arg)
 			}
+		case *StructConstructExpr:
+			for _, arg := range e.Args {
+				visitExpr(arg)
+			}
+		case *ConstructExpr:
+			for _, arg := range e.Args {
+				visitExpr(arg)
+			}
+		case *ArrayLiteralExpr:
+			for _, element := range e.Elements {
+				visitExpr(element)
+			}
+		case *IfExpr:
+			visitExpr(e.Condition)
+			visitExpr(e.Then)
+			visitExpr(e.Else)
 		case *TemplateCallExpr:
 			for _, arg := range e.Args {
 				visitExpr(arg)

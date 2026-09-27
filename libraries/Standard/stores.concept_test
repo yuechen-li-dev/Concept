@@ -24,12 +24,30 @@ Result<Id<Statement>, StoreError> AppendStatement(ref DenseStore<Statement, 2> s
 {
     return Append<Statement, 2>(ref store, move value);
 }
+requires compiler.InvalidatesBorrows(AppendStatement, store);
+
+Id<Statement> EmplaceStatement(ref DenseStore<Statement, 2> store, int value)
+{
+    return Emplace(ref store, Statement{value});
+}
+requires compiler.InvalidatesBorrows(EmplaceStatement, store);
+
+ReadOnlySpan<Statement> StatementValues(ref const DenseStore<Statement, 2> store)
+{
+    return ReadOnlyValues<Statement, 2>(ref const store);
+}
 
 Result<GenerationalId<Statement>, StoreError> InsertStatement(
     ref GenerationalStore<Statement, 2> store, Statement value)
 {
     return Insert<Statement, 2>(ref store, move value);
 }
+
+GenerationalId<Statement> EmplaceGenerationalStatement(ref GenerationalStore<Statement, 2> store, int value)
+{
+    return Emplace(ref store, Statement{value});
+}
+requires compiler.InvalidatesBorrows(EmplaceGenerationalStatement, store);
 
 Result<void, StoreError> RemoveStatement(
     ref GenerationalStore<Statement, 2> store, GenerationalId<Statement> id)
@@ -42,7 +60,10 @@ requires compiler.InvalidatesBorrows(RemoveStatement, store);
 void BoundedStoreOperationsDoNotAllocate()
 {
     Assert.Concept<NoAllocation>(AppendStatement, "dense append uses only inline slots");
+    Assert.Concept<NoAllocation>(EmplaceStatement, "stationary dense insertion uses only inline slots");
+    Assert.Concept<NoAllocation>(StatementValues, "dense Span view borrows inline slots");
     Assert.Concept<NoAllocation>(InsertStatement, "generational insert uses only inline slots");
+    Assert.Concept<NoAllocation>(EmplaceGenerationalStatement, "generational stationary insert uses inline slots");
     Assert.Concept<NoAllocation>(RemoveStatement, "generational removal uses only inline slots");
 }
 
@@ -63,28 +84,30 @@ void DenseAstUsesTypedStableIds()
         seen = seen + 1;
     }
     Assert.True(seen == 3, "ID view walks dense append order");
-    ref const Expr tree = DenseGet<Expr, 4>(ref const exprs, root)!;
-    int evaluated = 0;
-    match (tree)
     {
-        Expr::Integer(value) => { evaluated = value; }
-        Expr::Add(lhs, rhs) => {
-            ref const Expr lhsNode = DenseGet<Expr, 4>(ref const exprs, lhs)!;
-            ref const Expr rhsNode = DenseGet<Expr, 4>(ref const exprs, rhs)!;
-            int lhsValue = match (lhsNode)
-            {
-                Expr::Integer(value) => value,
-                Expr::Add(a, b) => 0,
-            };
-            int rhsValue = match (rhsNode)
-            {
-                Expr::Integer(value) => value,
-                Expr::Add(a, b) => 0,
-            };
-            evaluated = lhsValue + rhsValue;
+        ref const Expr tree = DenseGet<Expr, 4>(ref const exprs, root)!;
+        int evaluated = 0;
+        match (tree)
+        {
+            Expr::Integer(value) => { evaluated = value; }
+            Expr::Add(lhs, rhs) => {
+                ref const Expr lhsNode = DenseGet<Expr, 4>(ref const exprs, lhs)!;
+                ref const Expr rhsNode = DenseGet<Expr, 4>(ref const exprs, rhs)!;
+                int lhsValue = match (lhsNode)
+                {
+                    Expr::Integer(value) => value,
+                    Expr::Add(a, b) => 0,
+                };
+                int rhsValue = match (rhsNode)
+                {
+                    Expr::Integer(value) => value,
+                    Expr::Add(a, b) => 0,
+                };
+                evaluated = lhsValue + rhsValue;
+            }
         }
+        Assert.True(evaluated == 8, "AST edges resolve through typed stable IDs");
     }
-    Assert.True(evaluated == 8, "AST edges resolve through typed stable IDs");
     match (DenseGet<Expr, 4>(ref const exprs, Id<Expr>{-1}))
     {
         Result::Ok(value) => { Assert.True(false, "negative ID must reject"); }
@@ -98,6 +121,29 @@ void DenseAstUsesTypedStableIds()
     Id<Expr> fourth = Append<Expr, 4>(ref exprs, Expr::Integer(7))!;
     Assert.True(fourth.index == 3, "last bounded slot is usable");
     Assert.Error(Append<Expr, 4>(ref exprs, Expr::Integer(9)), "bounded store rejects overflow");
+}
+
+[[fact]]
+void DenseSpanViewsOnlyLivePrefix()
+{
+    DenseStore<Statement, 16> store = MakeDenseStore<Statement, 16>();
+    Id<Statement> first = Emplace(ref store, Statement{2});
+    Assert.True(first.index == 0, "stationary Emplace returns the physical prefix index");
+    Append<Statement, 16>(ref store, Statement{3})!;
+    Append<Statement, 16>(ref store, Statement{5})!;
+    {
+        Span<Statement> mutableValues = Values<Statement, 16>(ref store);
+        Assert.True(Len(mutableValues) == 3, "mutable view has the live prefix length");
+        mutableValues[0].value = 2;
+    }
+    ReadOnlySpan<Statement> values = ReadOnlyValues<Statement, 16>(ref const store);
+    Assert.True(Len(values) == 3, "Span does not expose raw capacity tail");
+    int sum = 0;
+    foreach (ref const Statement item in values)
+    {
+        sum = sum + item.value;
+    }
+    Assert.True(sum == 10, "Span traverses contiguous live statements");
 }
 
 [[fact]]
@@ -196,4 +242,21 @@ void PlainArrayDenseBenchmark()
         sum = sum + values[index];
     }
     Assert.True(sum == 2016, "plain array benchmark completes dense work");
+}
+
+[[benchmark]]
+void StationaryDenseSpanBenchmark()
+{
+    DenseStore<Statement, 64> dense = MakeDenseStore<Statement, 64>();
+    for (index in 0..64)
+    {
+        Emplace(ref dense, Statement{index});
+    }
+    ReadOnlySpan<Statement> values = ReadOnlyValues<Statement, 64>(ref const dense);
+    int sum = 0;
+    foreach (ref const Statement item in values)
+    {
+        sum = sum + item.value;
+    }
+    Assert.True(sum == 2016, "stationary and plain paths complete the same work");
 }

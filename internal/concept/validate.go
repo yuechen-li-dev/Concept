@@ -931,7 +931,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 			if embedded, ok := env.structs[field.Type.valueType().Name]; ok && embedded.Ref && !structDecl.Ref {
 				return nil, evt1Diagnostic("CV4525", fmt.Sprintf("unrestricted struct %s cannot contain lifetime-bound ref struct field %s", structDecl.Name, field.Name), field.Span)
 			}
-			if !field.Type.isBorrowLike() && evt1IsImmovableValueType(env, field.Type) {
+			if !structDecl.Immovable && field.Type.StorageKind != StorageRaw && field.Type.StorageKind != StorageSparse && !field.Type.isBorrowLike() && evt1IsImmovableValueType(env, field.Type) {
 				return nil, evt1Diagnostic("CV4138", fmt.Sprintf("struct %s cannot embed immovable field %s", structDecl.Name, field.Type.String()), field.Span)
 			}
 		}
@@ -2065,7 +2065,7 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 			storageStates := map[string]evt1StorageState{}
 			evt1StorageStatesFromFacts(resolvedType, valueFacts, nil, storageStates, env)
 			var objectBorrows []string
-			if resolvedType.isReference() || evt1IsRefStructType(env, resolvedType) {
+			if resolvedType.isReference() || evt1IsRefStructType(env, resolvedType) || evt1IsSpanType(resolvedType) {
 				objectBorrows = evt1ObjectBorrowForExpr(env, local, s.Value, templateInfo)
 			}
 			local.declare(s.Name, evt1ValueBinding{
@@ -2616,6 +2616,13 @@ func validateExprAgainstExpected(env *semanticEnv, scope *evt1Scope, expr Expr, 
 	if call, ok := expr.(*CallExpr); ok && (call.Callee == evt1SpanMutableName || call.Callee == evt1SpanReadonlyName || call.Callee == "Subspan") {
 		return validateSpanCall(env, scope, call, &expected, templateInfo, inComptimeFn)
 	}
+	if call, ok := expr.(*CallExpr); ok && call.Callee == "Uninitialized" && (expected.StorageKind == StorageRaw || expected.StorageKind == StorageSparse) {
+		if len(call.Args) != 0 || (evt1StorageHasRuntimeShape(expected) && (templateInfo == nil || !evt1StorageShapeDependsOnlyOnGenericValues(expected, templateInfo.Decl.Parameters))) {
+			return Type{}, evt1Diagnostic("RAW_STORAGE_INITIALIZER", "Uninitialized requires a fixed raw storage target and no arguments", call.Span)
+		}
+		call.Intrinsic = "raw_empty"
+		return expected, nil
+	}
 	if bind, ok := expr.(*BindExpr); ok {
 		return validateBindExpr(env, scope, bind, expected, templateInfo)
 	}
@@ -2979,7 +2986,7 @@ func evt1ResolveType(env *semanticEnv, scope *evt1Scope, t Type) (Type, error) {
 			ArrayElem:   &elem,
 			StorageKind: kind,
 			Shape:       resolvedShape,
-			Contiguous:  true,
+			Contiguous:  kind != StorageRaw && kind != StorageSparse,
 			Layout:      "row-major",
 			Column:      t.Column,
 			Span:        t.Span,
@@ -2989,6 +2996,9 @@ func evt1ResolveType(env *semanticEnv, scope *evt1Scope, t Type) (Type, error) {
 		}
 		if len(resolvedShape) == 1 && !resolvedShape[0].Runtime {
 			resolved.ArrayLength = resolvedShape[0].Extent
+		}
+		if (kind == StorageRaw || kind == StorageSparse) && len(resolvedShape) == 1 && !resolvedShape[0].Runtime && resolved.ArrayLength == 0 && !evt1TypeContainsConceptParameter(t) {
+			return Type{}, evt1Diagnostic("RAW_STORAGE_SHAPE", "partially initialized inline storage requires positive capacity", t.Span)
 		}
 		if len(resolvedShape) > evt1ComptimeMaxArrayNesting {
 			return Type{}, evt1Diagnostic("CV4223", fmt.Sprintf("storage rank %d exceeds limit %d", len(resolvedShape), evt1ComptimeMaxArrayNesting), t.Span)
@@ -3680,6 +3690,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		return evt1CanonicalType(env, fieldType), nil
 	case *CallExpr:
+		if result, handled, err := evt1ValidateRawStorageCall(env, scope, e, templateInfo, inComptimeFn); handled {
+			return result, err
+		}
 		if e.Callee == "VerifyPoisonReleasedRegion" {
 			if len(e.Args) != 2 {
 				return Type{}, evt1Diagnostic("VERIFY_POISON_ARGUMENTS", "VerifyPoisonReleasedRegion requires a SystemMemory address and byte extent", e.Span)
@@ -4250,6 +4263,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		if baseType.ArrayElem == nil {
 			return Type{}, evt1Diagnostic("CV4231", fmt.Sprintf("index target %s is not array or ndarray storage", baseType.String()), e.Base.exprSpan())
+		}
+		if baseType.StorageKind == StorageRaw || baseType.StorageKind == StorageSparse {
+			return Type{}, evt1Diagnostic("RAW_STORAGE_ACCESS", "raw storage has no live element access; use a checked initialized view", e.Span)
 		}
 		indices := evt1StorageIndices(e)
 		rank := evt1StorageRank(baseType)
@@ -4892,6 +4908,9 @@ func validateAssignable(env *semanticEnv, scope *evt1Scope, expr Expr, templateI
 		if receiver.t.ArrayElem == nil {
 			return evt1LValue{}, evt1Diagnostic("CV4231", "array index assignment requires array or ndarray storage", expr.exprSpan())
 		}
+		if receiver.t.StorageKind == StorageRaw || receiver.t.StorageKind == StorageSparse {
+			return evt1LValue{}, evt1Diagnostic("RAW_STORAGE_ACCESS", "raw storage elements cannot be accessed as live values", e.Span)
+		}
 		if _, err := validateExpr(env, scope, e, templateInfo, false); err != nil {
 			return evt1LValue{}, err
 		}
@@ -5344,8 +5363,22 @@ func evt1DeriveExprResultProvenance(env *semanticEnv, expr Expr, bindings map[st
 		if e.Callee == "bind" && len(e.Args) > 0 {
 			return evt1DeriveExprResultProvenance(env, e.Args[0], bindings, derive)
 		}
+		if decl, ok := env.templates[e.Callee]; ok {
+			fn := FunctionDecl{Name: decl.Name, ReturnType: decl.ReturnType, Params: decl.Params, Body: decl.Body}
+			calleeSummary := derive(fn)
+			parts := make([]evt1ResultProvenanceSummary, 0, len(calleeSummary.ParameterIndices))
+			for _, index := range calleeSummary.ParameterIndices {
+				if index < 0 || index >= len(e.Args) {
+					return evt1UnknownResultProvenance()
+				}
+				parts = append(parts, evt1DeriveExprResultProvenance(env, e.Args[index], bindings, derive))
+			}
+			if calleeSummary.Kind != evt1ResultProvenanceUnknown {
+				return evt1CombineResultProvenance(parts...)
+			}
+		}
 	case *CallExpr:
-		if (e.Callee == evt1SpanMutableName || e.Callee == evt1SpanReadonlyName || e.Callee == "Subspan" || e.Callee == "Tensor" || e.Callee == "Initialize" || e.Callee == "Value") && len(e.Args) > 0 {
+		if (e.Callee == evt1SpanMutableName || e.Callee == evt1SpanReadonlyName || e.Callee == "Subspan" || e.Callee == "Tensor" || e.Callee == "Initialize" || e.Callee == "Value" || e.Callee == "RawGet" || e.Callee == "RawValues" || e.Callee == "SparseGet") && len(e.Args) > 0 {
 			return evt1DeriveExprResultProvenance(env, e.Args[0], bindings, derive)
 		}
 		var candidates []FunctionDecl
@@ -5463,7 +5496,7 @@ func evt1ExprProvenance(env *semanticEnv, scope *evt1Scope, expr Expr) evt1Lifet
 			return evt1CallResultLifetimeProvenance(env, scope, e.Args, fn.Params, env.resultProvenance[evt1FunctionProvenanceKey(fn)])
 		}
 	case *CallExpr:
-		if (e.Callee == "Initialize" || e.Callee == "Value" || e.Callee == "OptionValue") && len(e.Args) > 0 {
+		if (e.Callee == "Initialize" || e.Callee == "Value" || e.Callee == "OptionValue" || e.Callee == "RawGet" || e.Callee == "RawValues" || e.Callee == "SparseGet") && len(e.Args) > 0 {
 			return evt1ExprProvenance(env, scope, e.Args[0])
 		}
 		if e.Member && e.Receiver != nil {
@@ -6338,6 +6371,9 @@ func evt1TypeCopyable(env *semanticEnv, t Type) bool {
 		return false
 	}
 	if t.ArrayElem != nil {
+		if t.StorageKind == StorageRaw || t.StorageKind == StorageSparse {
+			return false
+		}
 		return evt1TypeCopyable(env, *t.ArrayElem)
 	}
 	if evt1IsFailureType(t) {
@@ -6483,7 +6519,14 @@ func evt1IsImmovableValueType(env *semanticEnv, t Type) bool {
 		return false
 	}
 	if structDecl, ok := env.structs[t.Name]; ok {
-		return structDecl.Immovable
+		if structDecl.Immovable {
+			return true
+		}
+		for _, field := range structDecl.Fields {
+			if (field.Type.StorageKind == StorageRaw || field.Type.StorageKind == StorageSparse) && field.Type.ArrayElem != nil && evt1IsImmovableValueType(env, *field.Type.ArrayElem) {
+				return true
+			}
+		}
 	}
 	return false
 }

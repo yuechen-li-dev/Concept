@@ -38,29 +38,25 @@ template <typename T, usize Capacity>
 class DenseStore
 {
 public:
-    Option<owned T><array>[Capacity] slots;
-    int count;
+    T<raw>[Capacity] backing;
 };
 
 template <typename T, usize Capacity>
 DenseStore<T, Capacity> MakeDenseStore()
 {
-    Option<owned T><array>[Capacity] slots = [Option::None ...];
-    DenseStore<T, Capacity> store = DenseStore<T, Capacity>{move slots, 0};
+    T<raw>[Capacity] backing = Uninitialized();
+    DenseStore<T, Capacity> store = DenseStore<T, Capacity>{move backing};
     return move store;
 }
 
 template <typename T, usize Capacity>
 Result<Id<T>, StoreError> Append(ref DenseStore<T, Capacity> store, T value)
 {
-    if (store.count >= Len(store.slots))
+    if (RawCount(ref const store.backing) >= Len(store.backing))
     {
         return Result::Error(StoreError::CapacityExceeded);
     }
-    int index = store.count;
-    Option<owned T> candidate = Option::Some(move value);
-    store.slots[index] = move candidate;
-    store.count = index + 1;
+    int index = RawAppend(ref store.backing, move value);
     Id<T> id = Id<T>{index};
     return Result::Ok(move id);
 }
@@ -68,47 +64,59 @@ Result<Id<T>, StoreError> Append(ref DenseStore<T, Capacity> store, T value)
 template <typename T, usize Capacity>
 Result<ref const T, StoreError> DenseGet(ref const DenseStore<T, Capacity> store, Id<T> id)
 {
-    if (id.index < 0 or id.index >= store.count)
+    if (id.index < 0 or id.index >= RawCount(ref const store.backing))
     {
         return Result::Error(StoreError::InvalidId);
     }
-    return Result::Ok(OptionValue(ref const store.slots[id.index]));
+    return Result::Ok(RawGet(ref const store.backing, id.index));
 }
 
 template <typename T, usize Capacity>
 Result<ref T, StoreError> DenseGetMutable(ref DenseStore<T, Capacity> store, Id<T> id)
 {
-    if (id.index < 0 or id.index >= store.count)
+    if (id.index < 0 or id.index >= RawCount(ref const store.backing))
     {
         return Result::Error(StoreError::InvalidId);
     }
-    return Result::Ok(OptionValue(ref store.slots[id.index]));
+    return Result::Ok(RawGet(ref store.backing, id.index));
 }
 
 template <typename T, usize Capacity>
 int Count(ref const DenseStore<T, Capacity> store)
 {
-    return store.count;
+    return RawCount(ref const store.backing);
 }
 
 // The caller can walk 0..Count without constructing an iterator object.
 template <typename T, usize Capacity>
 Result<Id<T>, StoreError> IdAt(ref const DenseStore<T, Capacity> store, int ordinal)
 {
-    if (ordinal < 0 or ordinal >= store.count)
+    if (ordinal < 0 or ordinal >= RawCount(ref const store.backing))
     {
         return Result::Error(StoreError::InvalidId);
     }
     Id<T> id = Id<T>{ordinal};
     return Result::Ok(move id);
 }
+requires compiler.InvalidatesBorrows(Append, store);
+
+template <typename T, usize Capacity>
+Span<T> Values(ref DenseStore<T, Capacity> store)
+{
+    return RawValues(ref store.backing);
+}
+
+template <typename T, usize Capacity>
+ReadOnlySpan<T> ReadOnlyValues(ref const DenseStore<T, Capacity> store)
+{
+    return RawValues(ref const store.backing);
+}
 
 template <typename T, usize Capacity>
 class GenerationalStore
 {
 public:
-    Option<owned T><array>[Capacity] slots;
-    bool<array>[Capacity] occupied;
+    T<sparse>[Capacity] slots;
     int<array>[Capacity] generation;
     int<array>[Capacity] free;
     int next;
@@ -118,11 +126,10 @@ public:
 template <typename T, usize Capacity>
 GenerationalStore<T, Capacity> MakeGenerationalStore()
 {
-    Option<owned T><array>[Capacity] slots = [Option::None ...];
-    bool<array>[Capacity] occupied = [false ...];
+    T<sparse>[Capacity] slots = Uninitialized();
     int<array>[Capacity] generation = [1 ...];
     int<array>[Capacity] free = [0 ...];
-    GenerationalStore<T, Capacity> store = GenerationalStore<T, Capacity>{move slots, move occupied, move generation, move free, 0, 0};
+    GenerationalStore<T, Capacity> store = GenerationalStore<T, Capacity>{move slots, move generation, move free, 0, 0};
     return move store;
 }
 
@@ -144,9 +151,7 @@ Result<GenerationalId<T>, StoreError> Insert(ref GenerationalStore<T, Capacity> 
         index = store.next;
         store.next = index + 1;
     }
-    Option<owned T> candidate = Option::Some(move value);
-    store.slots[index] = move candidate;
-    store.occupied[index] = true;
+    SparseInitialize(ref store.slots, index, move value);
     GenerationalId<T> id = GenerationalId<T>{index, store.generation[index]};
     return Result::Ok(move id);
 }
@@ -156,7 +161,7 @@ bool Contains(ref const GenerationalStore<T, Capacity> store, GenerationalId<T> 
 {
     return id.index >= 0 and id.index < store.next and
         id.generation > 0 and store.generation[id.index] == id.generation and
-        store.occupied[id.index];
+        SparseOccupied(ref const store.slots, id.index);
 }
 
 template <typename T, usize Capacity>
@@ -166,7 +171,7 @@ Result<ref const T, StoreError> GenerationalGet(ref const GenerationalStore<T, C
     {
         return Result::Error(StoreError::StaleId);
     }
-    return Result::Ok(OptionValue(ref const store.slots[id.index]));
+    return Result::Ok(SparseGet(ref const store.slots, id.index));
 }
 
 template <typename T, usize Capacity>
@@ -176,7 +181,7 @@ Result<ref T, StoreError> GenerationalGetMutable(ref GenerationalStore<T, Capaci
     {
         return Result::Error(StoreError::StaleId);
     }
-    return Result::Ok(OptionValue(ref store.slots[id.index]));
+    return Result::Ok(SparseGet(ref store.slots, id.index));
 }
 
 template <typename T, usize Capacity>
@@ -186,8 +191,7 @@ Result<void, StoreError> Remove(ref GenerationalStore<T, Capacity> store, Genera
     {
         return Result::Error(StoreError::StaleId);
     }
-    store.slots[id.index] = Option::None;
-    store.occupied[id.index] = false;
+    SparseRemove(ref store.slots, id.index);
     int generation = store.generation[id.index];
     bool exhausted = generation == 2147483647;
     if (exhausted)

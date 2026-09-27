@@ -7,9 +7,11 @@ index and generation. The free stack gives deterministic LIFO reuse, while a
 retired exhausted generation can never alias an earlier handle.
 
 The implementation composes ordinary generic structs, non-type capacity
-parameters, fixed arrays, `Option<owned T>`, `Result`, `ref` returns, and
-`InvalidatesBorrows`. It adds no runtime type registry, allocator, or compiler
-recognition of store names. Generated C has inline arrays and direct indexing.
+parameters, partially initialized fixed storage, `Result`, `ref` returns, and
+`InvalidatesBorrows`. It adds no runtime type registry or allocator. Generated
+C has inline typed arrays and direct indexing. The general storage primitives
+`T<raw>[N]` and `T<sparse>[N]` are compiler-recognized; the Standard store
+names remain ordinary generic library types.
 
 Three general substrate repairs came from the dogfood. An owned `Option` with a
 payload lacking a custom destructor still needs move/replace authority; its
@@ -18,11 +20,30 @@ cannot use that rule to discard storage. Matching a borrowed enum now emits poin
 for the tag and payload. Zero-argument failure constructors emit `(void)` in
 C11. These changes serve ordinary programs independently of stores.
 
-The current representation trades an option tag per slot for sound partial
-initialization and automatic Drop. This keeps insertion local and permits
-noncopyable values, but it cannot promise a `Span<T>` over payloads. An
-immovable `T` needs in-place construction in a store-owned slot before this
-store can own it. These are the next concrete blockers for full R7n success.
+DenseStore now owns `T<raw>[Capacity]`: physically adjacent `T` slots and one
+initialized-prefix count. Slots below count are live; the tail is uninitialized
+at the Concept level. `RawAppend` or `Emplace` writes directly to slot `Count`
+and increments count after success. `RawValues` borrows `data[0..count)` as an
+ordinary `Span<T>` or `ReadOnlySpan<T>`. It never exposes the tail. Drop visits
+the prefix in reverse order. A failing later field expression drops completed
+field temporaries; count remains unchanged. The C representation uses a typed
+`T data[N]` and `int count`, with C's natural element stride and alignment.
+
+GenerationalStore now owns `T<sparse>[Capacity]`. Its typed payload array is
+paired with live bits, while the library still owns generations, `next`, and
+its deterministic LIFO free stack. Direct `Emplace` commits liveness and
+free-list state only after construction succeeds. `SparseRemove` destroys the
+selected live value once and clears its bit. Store Drop visits only live bits
+in reverse slot order. The sparse store does not offer a contiguous live
+payload Span. A single-store ID remains stable until removal, and a reused
+slot must receive a new generation. An exhausted generation retires the slot.
+
+The bounded storage types do not allocate. Normal borrow/provenance rules
+apply to returned views. Fixed backing never reallocates. A store with an
+immovable payload derives immovability from that backing; stationary insertion
+does not relocate its live elements. `Append` and `Insert` remain the movable
+by-value paths. An immovable store is constructed directly with
+`{Uninitialized(), ...}` because a moving factory return is not valid.
 
 ## R7n2 stationary storage progression
 
@@ -35,10 +56,7 @@ destructor target. A strict C11 specimen constructs an immovable record,
 returns early from a failed later field expression, and observes one Drop for
 the abandoned field and one for the successfully destroyed object.
 
-This solves final-address construction for a single `Storage<T>` but does not
-change either store's slots. `DenseStore` still contains `Option<owned T>[N]`,
-whose payload stride includes the option tag. It cannot yield `Span<T>` over
-the live prefix. `GenerationalStore` has intentional holes after removal and
-must not yield a live payload Span. A general partially initialized inline
-array with safe per-slot lifetime and store relocation rules is the remaining
-substrate for DenseStore stationary insertion and contiguous views.
+R7n3 extends that same final-address construction to bounded store slots.
+The R7n2 single-object proof remains the regression for field cleanup; the
+R7n3 artifact-only store proof covers a fresh dense slot, a fresh sparse slot,
+and sparse reuse under Normal and Verify.

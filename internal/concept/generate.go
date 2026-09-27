@@ -1860,13 +1860,22 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 			header.WriteString(builtin.CDeclaration + "\n")
 		}
 	}
+	spanStructs := map[string]bool{}
+	for _, spanType := range spanTypes {
+		spanStructs[evt1SpanElement(spanType).Name] = true
+	}
+	forwardCount := 0
+	for _, decl := range l.module.Structs {
+		if len(l.module.TypeAliases) == 0 && !spanStructs[decl.Name] {
+			continue
+		}
+		header.WriteString(fmt.Sprintf("typedef struct %s %s;\n", evt1CName(decl.Name), evt1CName(decl.Name)))
+		forwardCount++
+	}
+	if forwardCount > 0 {
+		header.WriteByte('\n')
+	}
 	if len(l.module.TypeAliases) > 0 {
-		for _, decl := range l.module.Structs {
-			header.WriteString(fmt.Sprintf("typedef struct %s %s;\n", evt1CName(decl.Name), evt1CName(decl.Name)))
-		}
-		if len(l.module.Structs) > 0 {
-			header.WriteByte('\n')
-		}
 		header.WriteString(evt1SpanDeclarations(spanTypes))
 		header.WriteString(evt1TensorDeclarations(tensorTypes))
 		header.WriteString(l.semanticViewDeclarations())
@@ -2195,6 +2204,12 @@ func (l *lowering) writeRuntimeStorageAndTypeDecls(out *strings.Builder, typeDec
 			key:  "storage:" + evt1TypeIdentity(storageType),
 			deps: deps,
 			emit: func() string {
+				if current.StorageKind == StorageRaw {
+					return fmt.Sprintf("typedef struct { %s data[%d]; int count; } %s;\n\n", evt1CType(*current.ArrayElem), evt1StorageElementCount(current), evt1StorageCName(current))
+				}
+				if current.StorageKind == StorageSparse {
+					return fmt.Sprintf("typedef struct { %s data[%d]; bool live[%d]; } %s;\n\n", evt1CType(*current.ArrayElem), evt1StorageElementCount(current), evt1StorageElementCount(current), evt1StorageCName(current))
+				}
 				if len(l.module.Layouts) > 0 {
 					return fmt.Sprintf("typedef struct { _Alignas(%d) %s data[%d]; } %s;\n\n", evt1InlineStorageAlignment, evt1CType(*current.ArrayElem), evt1StorageElementCount(current), evt1StorageCName(current))
 				}
@@ -3580,7 +3595,7 @@ func evt1CType(t Type) string {
 		}
 		return base + "*"
 	}
-	if t.isReference() && t.ArrayElem != nil {
+	if t.isReference() && t.ArrayElem != nil && t.StorageKind != StorageRaw && t.StorageKind != StorageSparse {
 		return evt1StorageViewCName(t)
 	}
 	if t.isBorrow() || t.isReference() {
@@ -4173,17 +4188,45 @@ func (f *evt1FunctionLowerer) lowerIfStmt(stmt IfStmt, indent int) string {
 		b.WriteString(" else {\n")
 		b.WriteString(f.lowerBlock(*stmt.Else, indent+1))
 		elseLive := f.cloneLiveOwners()
-		for name, live := range thenLive {
-			f.liveOwners[name] = live && elseLive[name]
+		thenReturns := evt1BlockEndsInReturn(stmt.Then)
+		elseReturns := evt1BlockEndsInReturn(*stmt.Else)
+		for name := range before {
+			switch {
+			case thenReturns && !elseReturns:
+				f.liveOwners[name] = elseLive[name]
+			case elseReturns && !thenReturns:
+				f.liveOwners[name] = thenLive[name]
+			case !thenReturns && !elseReturns:
+				f.liveOwners[name] = thenLive[name] && elseLive[name]
+			default:
+				f.liveOwners[name] = before[name]
+			}
 		}
 		b.WriteString(ind(indent) + "}\n")
 		return b.String()
 	}
-	for name, live := range thenLive {
-		f.liveOwners[name] = live && before[name]
+	if !evt1BlockEndsInReturn(stmt.Then) {
+		for name, live := range thenLive {
+			f.liveOwners[name] = live && before[name]
+		}
 	}
 	b.WriteString("\n")
 	return b.String()
+}
+
+func evt1BlockEndsInReturn(block Block) bool {
+	if len(block.Statements) == 0 {
+		return false
+	}
+	switch last := block.Statements[len(block.Statements)-1].(type) {
+	case *ReturnStmt:
+		return true
+	case *Block:
+		return evt1BlockEndsInReturn(*last)
+	case *IfStmt:
+		return last.Else != nil && evt1BlockEndsInReturn(last.Then) && evt1BlockEndsInReturn(*last.Else)
+	}
+	return false
 }
 
 func (f *evt1FunctionLowerer) lowerLocalStructConstruct(targetType Type, name string, construct StructConstructExpr, indent int) string {
@@ -4733,7 +4776,7 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		if evt1IsSemanticViewType(f.l.env, out) {
 			return prelude, target, out
 		}
-		if out.ArrayElem != nil {
+		if out.ArrayElem != nil && out.StorageKind != StorageRaw && out.StorageKind != StorageSparse {
 			return f.lowerStorageView(e.Value, out, false, e.Span, indent)
 		}
 		return prelude, "&(" + target + ")", out
@@ -4786,6 +4829,18 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		}
 		return b.String(), carrierTemp + ".payload." + field, evt1FailureSuccessType(carrierType)
 	case *CallExpr:
+		if e.Intrinsic == "dense_emplace" {
+			return f.lowerDenseEmplace(e, indent)
+		}
+		if e.Intrinsic == "generational_emplace" {
+			return f.lowerGenerationalEmplace(e, indent)
+		}
+		if strings.HasPrefix(e.Intrinsic, "raw_") && e.Intrinsic != "raw_empty" {
+			return f.lowerRawStorageCall(e, indent)
+		}
+		if strings.HasPrefix(e.Intrinsic, "sparse_") {
+			return f.lowerSparseStorageCall(e, indent)
+		}
 		if e.Intrinsic == "verify_poison_released_region" {
 			addressPrelude, address, _ := f.lowerExpr(e.Args[0], indent)
 			extentPrelude, extent, _ := f.lowerExpr(e.Args[1], indent)
@@ -5329,6 +5384,9 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 }
 
 func (f *evt1FunctionLowerer) lowerExprExpected(expr Expr, expected Type, indent int) (string, string, Type) {
+	if call, ok := expr.(*CallExpr); ok && call.Intrinsic == "raw_empty" && (expected.StorageKind == StorageRaw || expected.StorageKind == StorageSparse) {
+		return "", "(" + evt1CType(expected) + "){0}", expected
+	}
 	if literal, ok := expr.(*IntLiteral); ok && evt1IntegralRepresentation(expected) {
 		_ = evt1ResolveIntegerLiteral(literal, expected)
 		return "", evt1RenderIntegerLiteral(literal), expected.valueType()
@@ -5565,6 +5623,30 @@ func (f *evt1FunctionLowerer) lowerDropValue(t Type, value string, indent int) s
 	}
 	if dropFn := evt1DropFunction(f.l.env, t); dropFn != nil {
 		return ind(indent) + fmt.Sprintf("%s(%s);\n", evt1DropSymbol(f.l, *dropFn, t), value)
+	}
+	if t.ArrayElem != nil && t.StorageKind == StorageRaw {
+		if !evt1StorageElementHasDrop(f.l.env, *t.ArrayElem) {
+			return ""
+		}
+		index := f.nextTemp("raw_drop")
+		var b strings.Builder
+		b.WriteString(ind(indent) + fmt.Sprintf("for (int %s = (%s).count; %s > 0; --%s) {\n", index, value, index, index))
+		b.WriteString(f.lowerDropValue(*t.ArrayElem, fmt.Sprintf("(%s).data[%s - 1]", value, index), indent+1))
+		b.WriteString(ind(indent) + "}\n")
+		return b.String()
+	}
+	if t.ArrayElem != nil && t.StorageKind == StorageSparse {
+		if !evt1StorageElementHasDrop(f.l.env, *t.ArrayElem) {
+			return ""
+		}
+		index := f.nextTemp("sparse_drop")
+		var b strings.Builder
+		b.WriteString(ind(indent) + fmt.Sprintf("for (int %s = %d; %s > 0; --%s) {\n", index, evt1StorageElementCount(t), index, index))
+		b.WriteString(ind(indent+1) + fmt.Sprintf("if ((%s).live[%s - 1]) {\n", value, index))
+		b.WriteString(f.lowerDropValue(*t.ArrayElem, fmt.Sprintf("(%s).data[%s - 1]", value, index), indent+2))
+		b.WriteString(ind(indent+1) + "}\n")
+		b.WriteString(ind(indent) + "}\n")
+		return b.String()
 	}
 	if t.ArrayElem != nil && evt1StorageElementHasDrop(f.l.env, *t.ArrayElem) {
 		var b strings.Builder

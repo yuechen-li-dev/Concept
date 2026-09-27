@@ -71,6 +71,51 @@ func TestGenericValueSubstitutionClosesNestedApplicationArgument(t *testing.T) {
 	}
 }
 
+func TestGenericFixedExtentClosesValueAndTypeLayoutOperands(t *testing.T) {
+	source := `profile Core;
+struct Pair { int left; int right; }
+template <typename T, usize Capacity>
+struct Backing { byte<array>[Capacity * SizeOf<T>()] bytes; }
+int Main()
+{
+    Backing<Pair, 3> backing = Backing<Pair, 3>{[0 ...]};
+    return Len(backing.bytes);
+}`
+	module, err := Parse("generic_layout_extent.concept", source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Generate(module, []byte(source)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRawInlineBackingHasTypedContiguousLayout(t *testing.T) {
+	source := `profile Core;
+struct Pair { uint64 wide; int tail; }
+template <typename T, usize Capacity>
+struct Backing { T<raw>[Capacity] cells; }
+template <typename T, usize Capacity>
+struct SparseBacking { T<sparse>[Capacity] cells; }
+static_assert(SizeOf<Backing<Pair, 3>>() == 56, "raw count layout follows typed stride");
+static_assert(AlignOf<Backing<Pair, 3>>() == 8, "raw backing preserves payload alignment");
+static_assert(SizeOf<SparseBacking<Pair, 3>>() == 56, "sparse live flags follow typed payloads");
+usize<byte> Main()
+{
+    Backing<Pair, 3> backing = Backing<Pair, 3>{Uninitialized()};
+    return SizeOf<Backing<Pair, 3>>();
+}`
+	module, err := Parse("raw_inline_backing.concept", source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outputs, err := Generate(module, []byte(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runFoundationNativeHarness(t, outputs, "raw_layout_harness.c", "#include \"raw_inline_backing.generated.h\"\nint main(void) { return concept_raw_inline_backing_main() == 56 ? 0 : 1; }\n")
+}
+
 func TestClosedInstantiationInvariantRejectsReachableParameter(t *testing.T) {
 	open := Type{Name: "Result", Kind: TypeApplied, TypeArgs: []Type{{Name: "T", Kind: TypeConceptParam}, {Name: "Error", Kind: TypeEnum}}}
 	if err := evt1RequireClosedType(open, "test", Span{}); err == nil {

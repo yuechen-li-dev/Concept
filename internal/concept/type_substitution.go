@@ -81,6 +81,21 @@ func evt1SubstituteType(t Type, typeParam string, concreteType Type) Type {
 			t.Shape[i].Expr = replaceExtent(t.Shape[i].Expr)
 		}
 	}
+	// Shape expressions may contain type layout queries such as SizeOf<T>().
+	// Close their type operands before evaluating the fixed extent.
+	if t.ArrayLengthExpr != nil {
+		if expr, err := evt1SubstituteExpr(t.ArrayLengthExpr, typeParam, concreteType); err == nil {
+			t.ArrayLengthExpr = expr
+		}
+	}
+	t.Shape = append([]StorageDimension(nil), t.Shape...)
+	for i := range t.Shape {
+		if t.Shape[i].Expr != nil {
+			if expr, err := evt1SubstituteExpr(t.Shape[i].Expr, typeParam, concreteType); err == nil {
+				t.Shape[i].Expr = expr
+			}
+		}
+	}
 	t.TypeArgs = append([]Type(nil), t.TypeArgs...)
 	for i := range t.TypeArgs {
 		t.TypeArgs[i] = evt1SubstituteType(t.TypeArgs[i], typeParam, concreteType)

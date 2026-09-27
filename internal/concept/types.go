@@ -40,6 +40,8 @@ type StorageKind string
 const (
 	StorageArray   StorageKind = "array"
 	StorageNDArray StorageKind = "ndarray"
+	StorageRaw     StorageKind = "raw"
+	StorageSparse  StorageKind = "sparse"
 )
 
 type StorageDimension struct {
