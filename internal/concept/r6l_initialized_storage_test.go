@@ -158,6 +158,7 @@ int Main()
 }
 
 func TestR6mResultExtractionClosesNestedGenericOwner(t *testing.T) {
+	t.Parallel()
 	library, err := os.ReadFile("../../libraries/Standard/MemoryGeometry.concept")
 	if err != nil {
 		t.Fatal(err)
@@ -245,7 +246,7 @@ int Main()
 			t.Fatalf("%s retains an unresolved generic placeholder", name)
 		}
 	}
-	for run := 1; run < 100; run++ {
+	for run := 1; run < determinismRuns(); run++ {
 		again, generateErr := Generate(module, []byte(source))
 		if generateErr != nil {
 			t.Fatalf("nested generic generation run %d: %v", run, generateErr)
@@ -263,6 +264,7 @@ int Main()
 }
 
 func TestR6mImportedGenericOwnerInstantiationClosesDeterministically(t *testing.T) {
+	t.Parallel()
 	geometrySource, err := os.ReadFile("../../libraries/Standard/MemoryGeometry.concept")
 	if err != nil {
 		t.Fatal(err)
@@ -290,7 +292,7 @@ void Drop(owned Owner<T> owner) { Destroy(owner.storage); }
 `
 	deps := map[string][]byte{"Standard.MemoryGeometry": geometry}
 	artifact := buildSemanticArtifact(t, "Standard/TypedStorage.concept", library, deps)
-	for run := 1; run < 100; run++ {
+	for run := 1; run < determinismRuns(); run++ {
 		if got := buildSemanticArtifact(t, "Standard/TypedStorage.concept", library, deps); !bytes.Equal(got, artifact) {
 			t.Fatalf("typed owner artifact changed on run %d", run)
 		}

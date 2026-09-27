@@ -246,7 +246,7 @@ reflect<Item>;
 `
 	var wantArtifact, wantView, wantProof, wantReflection []byte
 	var wantOutputs Outputs
-	for run := 0; run < 100; run++ {
+	for run := 0; run < determinismRuns(); run++ {
 		artifact, err := CompileSemanticModule("determinism.concept", source, nil)
 		if err != nil {
 			t.Fatal(err)

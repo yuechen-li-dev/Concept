@@ -52,11 +52,11 @@ func TestR7x2StandardMathGeneration(t *testing.T) {
 			t.Fatal(err)
 		}
 		executable := filepath.Join(dir, "math_harness.exe")
-		cmd := exec.Command(compiler, "-std=c11", "-Wall", "-Wextra", "-Werror", "-I", dir, filepath.Join(dir, "math.generated.c"), harnessPath, "-lm", "-o", executable)
+		cmd := nativeCommand(t, compiler, "-std=c11", "-Wall", "-Wextra", "-Werror", "-I", dir, filepath.Join(dir, "math.generated.c"), harnessPath, "-lm", "-o", executable)
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("strict C11 math compile: %v\n%s", err, output)
 		}
-		if output, err := exec.Command(executable).CombinedOutput(); err != nil {
+		if output, err := nativeCommand(t, executable).CombinedOutput(); err != nil {
 			t.Fatalf("math execution: %v\n%s", err, output)
 		}
 	}

@@ -154,7 +154,7 @@ int Main()
 		t.Fatal("range and bounded while did not lower to inline C loops")
 	}
 	runFoundationNativeHarness(t, first, "range_compare_harness.c", "#include \"range_compare.generated.h\"\nint main(void) { return concept_range_compare_main() == 90 ? 0 : 1; }\n")
-	for i := 0; i < 100; i++ {
+	for i := 0; i < determinismRuns(); i++ {
 		again, err := Generate(module, []byte(source))
 		if err != nil || !reflect.DeepEqual(first, again) {
 			t.Fatalf("range generation drift at run %d: %v", i+1, err)

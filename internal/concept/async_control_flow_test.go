@@ -101,6 +101,7 @@ async int Work(Command command) {
 }
 
 func TestAsyncControlFlowStructuredNativeC11(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{
 		"async_two_awaits_one_branch", "async_two_awaits_else_branch", "async_nested_if_await",
 		"async_match_await", "async_match_multiple_awaits", "async_match_payload_binding_await",
@@ -168,7 +169,7 @@ func TestAsyncControlFlowGraphPlanAndDeterminism(t *testing.T) {
 	if asyncPlan == nil || asyncPlan.ControlFlowStrategy != "StructuredStateGraph" || asyncPlan.GeneratedStateCount != len(async.States) || asyncPlan.Scheduler != "None" || asyncPlan.SavedPC != "None" {
 		t.Fatalf("structured async plan missing: %+v", asyncPlan)
 	}
-	for i := 0; i < 100; i++ {
+	for i := 0; i < determinismRuns(); i++ {
 		again, err := GeneratePlan(module, GenericC11Target())
 		if err != nil || !bytes.Equal(planBytes, again) {
 			t.Fatalf("plan drift at iteration %d: %v", i, err)

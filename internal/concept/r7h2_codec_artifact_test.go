@@ -6,6 +6,7 @@ import (
 )
 
 func TestR7h2GeneratedCodecFamilyAcrossArtifacts(t *testing.T) {
+	t.Parallel()
 	artifacts := map[string][]byte{}
 	artifacts["Standard.Octagon.Core"] = buildSemanticArtifact(t,
 		"Standard/Octagon/Core.concept", standardMemorySource(t, "Standard/Octagon/Core.concept"), artifacts)
@@ -88,7 +89,7 @@ int Main() {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for run := 1; run < 100; run++ {
+	for run := 1; run < determinismRuns(); run++ {
 		currentB, err := CompileSemanticModule("CodecB.concept", sourceB, artifacts)
 		if err != nil {
 			t.Fatal(err)

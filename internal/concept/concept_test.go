@@ -103,6 +103,7 @@ func TestParseSpecimensAndGenerateDeterministically(t *testing.T) {
 }
 
 func TestEVT1CheckedOutputsMatch(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{
 		"evt1_m1a_language.concept",
 		"evt1_m1a_vulkan.concept",
@@ -1872,7 +1873,7 @@ func runNativeHarness(t *testing.T, outputs Outputs, harnessName, harnessSource 
 	}
 	args = append(args, generatedC, harnessPath, "/Fe:"+filepath.Join(dir, "specimen.exe"))
 	args = append(args, extraArgs...)
-	build := exec.Command("cl", args...)
+	build := nativeCommand(t, "cl", args...)
 	build.Dir = dir
 	out, err := build.CombinedOutput()
 	if err != nil {
@@ -1887,7 +1888,7 @@ func runNativeHarness(t *testing.T, outputs Outputs, harnessName, harnessSource 
 		}
 		t.Fatalf("cl failed:\n%s", out)
 	}
-	run := exec.Command(filepath.Join(dir, "specimen.exe"))
+	run := nativeCommand(t, filepath.Join(dir, "specimen.exe"))
 	run.Dir = dir
 	runOut, err := run.CombinedOutput()
 	if err != nil {
@@ -1914,7 +1915,7 @@ func runNativeHarnessIncludingGeneratedC(t *testing.T, outputs Outputs, harnessN
 	}
 	args = append(args, harnessPath, "/Fe:"+filepath.Join(dir, "specimen.exe"))
 	args = append(args, extraArgs...)
-	build := exec.Command("cl", args...)
+	build := nativeCommand(t, "cl", args...)
 	build.Dir = dir
 	out, err := build.CombinedOutput()
 	if err != nil {
@@ -1929,7 +1930,7 @@ func runNativeHarnessIncludingGeneratedC(t *testing.T, outputs Outputs, harnessN
 		}
 		t.Fatalf("cl failed:\n%s", out)
 	}
-	run := exec.Command(filepath.Join(dir, "specimen.exe"))
+	run := nativeCommand(t, filepath.Join(dir, "specimen.exe"))
 	run.Dir = dir
 	runOut, err := run.CombinedOutput()
 	if err != nil {

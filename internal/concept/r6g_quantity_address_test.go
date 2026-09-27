@@ -143,7 +143,7 @@ int main(void) {
   return 0;
 }`
 	runFoundationNativeHarness(t, outputs, "r6g_signed_modulo_harness.c", harness)
-	for run := 0; run < 100; run++ {
+	for run := 0; run < determinismRuns(); run++ {
 		next, err := Generate(module, []byte(source))
 		if err != nil {
 			t.Fatal(err)
@@ -275,7 +275,7 @@ int Main()
 		}
 	}
 	first := outputs["r6g_multi_template.generated.c"]
-	for run := 1; run < 100; run++ {
+	for run := 1; run < determinismRuns(); run++ {
 		reparsed, parseErr := Parse("r6g_multi_template.concept", source)
 		if parseErr != nil {
 			t.Fatal(parseErr)

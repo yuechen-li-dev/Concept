@@ -74,7 +74,7 @@ func TestSharedAccessContractsAreExplicitComposableAndProven(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for run := 1; run < 100; run++ {
+	for run := 1; run < determinismRuns(); run++ {
 		got, err := SerializeProof(graph)
 		if err != nil || !bytes.Equal(got, want) {
 			t.Fatalf("synchronization proof changed on run %d: %v", run, err)
@@ -135,7 +135,7 @@ struct Queue { int size; }
 requires sync.SingleProducer<Producer, Queue>;
 requires sync.ExactlyOnce<Queue>;`
 	body := buildSemanticArtifact(t, "Standard/Access.concept", library, nil)
-	for run := 1; run < 100; run++ {
+	for run := 1; run < determinismRuns(); run++ {
 		if got := buildSemanticArtifact(t, "Standard/Access.concept", library, nil); !bytes.Equal(got, body) {
 			t.Fatalf("synchronization artifact changed on run %d", run)
 		}

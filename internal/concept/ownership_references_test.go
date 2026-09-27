@@ -210,6 +210,7 @@ func TestOwnershipReferencesDropLoweringOrderAndTransfer(t *testing.T) {
 }
 
 func TestOwnershipReferencesNativeC11(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		fixture string
 		call    string

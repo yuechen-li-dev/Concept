@@ -77,6 +77,7 @@ func TestInferenceConformance(t *testing.T) {
 }
 
 func TestInferenceNativeC11(t *testing.T) {
+	t.Parallel()
 	cases := []struct{ file, call, condition, include string }{
 		{"infer_basic.concept", "concept_infer_basic_main()", "fabsf(value - 0.5f) < 0.0001f", "#include <math.h>\n"},
 		{"infer_disabled_candidate_zero.concept", "concept_infer_disabled_candidate_zero_main()", "value == 0.0f", ""},
@@ -219,10 +220,10 @@ func TestInferenceTerminalPanicPaths(t *testing.T) {
 			}
 			exe := filepath.Join(dir, "panic.exe")
 			generated := filepath.Join(dir, base+".generated.c")
-			if out, err := exec.Command(compiler, "-std=c11", "-Wall", "-Wextra", "-I", dir, generated, harnessPath, "-o", exe).CombinedOutput(); err != nil {
+			if out, err := nativeCommand(t, compiler, "-std=c11", "-Wall", "-Wextra", "-I", dir, generated, harnessPath, "-o", exe).CombinedOutput(); err != nil {
 				t.Fatalf("compile: %v\n%s", err, out)
 			}
-			out, err := exec.Command(exe).CombinedOutput()
+			out, err := nativeCommand(t, exe).CombinedOutput()
 			if err == nil || !strings.Contains(string(out), tc.reason) {
 				t.Fatalf("panic evidence missing: err=%v output=%s", err, out)
 			}

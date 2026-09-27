@@ -121,7 +121,7 @@ derive DeriveMake reflect<Pair>;
 `
 	var firstArtifact []byte
 	var firstOutputs map[string][]byte
-	for run := 0; run < 100; run++ {
+	for run := 0; run < determinismRuns(); run++ {
 		artifact, err := CompileSemanticModule("AggregateDeterminism.concept", source, nil)
 		if err != nil {
 			t.Fatal(err)

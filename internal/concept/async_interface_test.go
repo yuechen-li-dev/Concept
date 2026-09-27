@@ -173,7 +173,7 @@ func TestAsyncInterfaceAliasesNormalizeIdentically(t *testing.T) {
 func TestAsyncInterfaceDeterministicWitnessAndPlan(t *testing.T) {
 	module, source := asyncInterfaceFixture(t, "valid", "mixed_sync_async_interface.concept")
 	var wantMIR, wantPlan []byte
-	for i := 0; i < 100; i++ {
+	for i := 0; i < determinismRuns(); i++ {
 		outputs, err := Generate(module, source)
 		if err != nil {
 			t.Fatal(err)
@@ -223,6 +223,7 @@ func TestAsyncInterfaceRejectsMalformedAsyncWitnessAndPlan(t *testing.T) {
 }
 
 func TestAsyncInterfaceNativeC11(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{
 		"async_interface_struct_satisfies",
 		"async_interface_class_satisfies",

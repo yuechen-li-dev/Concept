@@ -206,7 +206,7 @@ requires Convertible<T, U>
 U ConvertThrough(T value) { return Convert(value); }
 `
 	first := buildSemanticArtifact(t, "Library.concept", source, nil)
-	for run := 1; run < 100; run++ {
+	for run := 1; run < determinismRuns(); run++ {
 		if got := buildSemanticArtifact(t, "Library.concept", source, nil); !bytes.Equal(got, first) {
 			t.Fatalf("artifact changed on run %d", run)
 		}
@@ -226,7 +226,7 @@ U ConvertThrough(T value) { return Convert(value); }
 Destination Use() { return ConvertThrough<Source, Destination>(Source{4}); }
 `
 	var first Outputs
-	for run := 0; run < 100; run++ {
+	for run := 0; run < determinismRuns(); run++ {
 		module, err := Parse("relational_determinism.concept", source)
 		if err != nil {
 			t.Fatal(err)
@@ -278,7 +278,7 @@ void Check()
 	if err != nil {
 		t.Fatal(err)
 	}
-	for run := 1; run < 100; run++ {
+	for run := 1; run < determinismRuns(); run++ {
 		got, err := SerializeProof(mir.ProofGraphs[0])
 		if err != nil {
 			t.Fatal(err)

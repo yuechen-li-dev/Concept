@@ -176,7 +176,7 @@ func TestR7d4AccessSummaryArtifactTransportAndDeterminism(t *testing.T) {
 			mirName = name
 		}
 	}
-	for i := 0; i < 100; i++ {
+	for i := 0; i < determinismRuns(); i++ {
 		again, compileErr := CompileSemanticModule("access.concept", r7d4AccessSource, nil)
 		if compileErr != nil || string(again) != string(first) {
 			t.Fatalf("artifact changed on run %d: %v", i+1, compileErr)

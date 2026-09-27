@@ -241,16 +241,16 @@ int main(int argc, char **argv) {
 	}
 	for _, compiler := range compilers {
 		exe := filepath.Join(dir, filepath.Base(compiler)+"-mmio.exe")
-		command := exec.Command(compiler, "-std=c11", "-pedantic", "-pedantic-errors", "-O2", "-Wall", "-Wextra", "-include", filepath.Join(dir, "adapter.h"), filepath.Join(dir, "hardware_probe.generated.c"), filepath.Join(dir, "simulator.c"), filepath.Join(dir, "harness.c"), "-o", exe)
+		command := nativeCommand(t, compiler, "-std=c11", "-pedantic", "-pedantic-errors", "-O2", "-Wall", "-Wextra", "-include", filepath.Join(dir, "adapter.h"), filepath.Join(dir, "hardware_probe.generated.c"), filepath.Join(dir, "simulator.c"), filepath.Join(dir, "harness.c"), "-o", exe)
 		if output, err := command.CombinedOutput(); err != nil {
 			t.Fatalf("%s strict C11 MMIO build: %v\n%s", compiler, err, output)
 		}
-		for i := 0; i < 100; i++ {
-			if output, err := exec.Command(exe).CombinedOutput(); err != nil {
+		for i := 0; i < determinismRuns(); i++ {
+			if output, err := nativeCommand(t, exe).CombinedOutput(); err != nil {
 				t.Fatalf("%s hosted device trace run %d: %v\n%s", compiler, i, err, output)
 			}
 		}
-		if output, err := exec.Command(exe, "bad").CombinedOutput(); err == nil || !strings.Contains(string(output), "bits field value out of range") {
+		if output, err := nativeCommand(t, exe, "bad").CombinedOutput(); err == nil || !strings.Contains(string(output), "bits field value out of range") {
 			t.Fatalf("%s dynamic bits range check: err=%v\n%s", compiler, err, output)
 		}
 	}
@@ -267,9 +267,10 @@ func r7kCCompilers() []string {
 }
 
 func TestMmioArtifactsAndPlanAreByteIdenticalAcross100Runs(t *testing.T) {
+	t.Parallel()
 	var reference Outputs
 	var referencePlan, referenceArtifact []byte
-	for i := 0; i < 100; i++ {
+	for i := 0; i < determinismRuns(); i++ {
 		module, err := Parse("hardware_probe.concept", mmioSource)
 		if err != nil {
 			t.Fatal(err)
@@ -500,11 +501,11 @@ int main(void) {
 	}
 	for _, compiler := range compilers {
 		exe := filepath.Join(dir, filepath.Base(compiler)+"-uart.exe")
-		command := exec.Command(compiler, "-std=c11", "-pedantic", "-pedantic-errors", "-O2", "-I", dir, filepath.Join(dir, "uartconsumer.generated.c"), harnessPath, "-o", exe)
+		command := nativeCommand(t, compiler, "-std=c11", "-pedantic", "-pedantic-errors", "-O2", "-I", dir, filepath.Join(dir, "uartconsumer.generated.c"), harnessPath, "-o", exe)
 		if output, err := command.CombinedOutput(); err != nil {
 			t.Fatalf("%s strict C11 UART build: %v\n%s", compiler, err, output)
 		}
-		if output, err := exec.Command(exe).CombinedOutput(); err != nil {
+		if output, err := nativeCommand(t, exe).CombinedOutput(); err != nil {
 			t.Fatalf("%s hosted UART specimen: %v\n%s", compiler, err, output)
 		}
 	}

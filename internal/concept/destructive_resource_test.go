@@ -48,7 +48,7 @@ int Main() { Store first = Store{7}; Store second = Store{9}; int result = 0; { 
 	}
 	firstMIR := moduleOutput(t, outputs, ".mir.json")
 	firstC := moduleOutput(t, outputs, ".generated.c")
-	for i := 0; i < 100; i++ {
+	for i := 0; i < determinismRuns(); i++ {
 		again := buildSemanticArtifact(t, "Library/Resource.concept", provider, nil)
 		if !bytes.Equal(artifact, again) {
 			t.Fatalf("artifact changed on run %d", i)

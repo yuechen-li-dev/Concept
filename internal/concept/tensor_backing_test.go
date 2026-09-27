@@ -150,6 +150,7 @@ func TestTensorBackingMIRValidationRejectsIncompleteInlineBacking(t *testing.T) 
 }
 
 func TestTensorBackingNativeC11(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		file string
 		call string

@@ -54,7 +54,7 @@ struct Use { Channel<QueueX> channel; }
 	if err != nil {
 		t.Fatal(err)
 	}
-	for run := 1; run < 100; run++ {
+	for run := 1; run < determinismRuns(); run++ {
 		again, parseErr := ParseWithSemanticModules("Proof/Consumer.concept", consumer, map[string][]byte{"Proof.Channel": body})
 		if parseErr != nil {
 			t.Fatal(parseErr)

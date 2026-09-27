@@ -108,8 +108,9 @@ int Verify(usize bits)
 }
 
 func TestSemanticModuleValueSummariesAreDeterministicAndChecked(t *testing.T) {
+	t.Parallel()
 	first := r6hMemoryArtifact(t)
-	for run := 1; run < 100; run++ {
+	for run := 1; run < determinismRuns(); run++ {
 		if next := r6hMemoryArtifact(t); !bytes.Equal(first, next) {
 			t.Fatalf("semantic value summaries changed on build %d", run)
 		}
@@ -259,6 +260,7 @@ int Main()
 }
 
 func TestSemanticFactTransportCorpusCompilesAndHasNoRuntimeProofBaggage(t *testing.T) {
+	t.Parallel()
 	root := "../../language/evt1/tooling/semantic-facts/valid"
 	paths, err := filepath.Glob(filepath.Join(root, "*.concept"))
 	if err != nil {

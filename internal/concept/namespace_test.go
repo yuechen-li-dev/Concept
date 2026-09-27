@@ -46,7 +46,7 @@ int Main()
 	if !strings.Contains(implementation, "platform_alpha_timer") || !strings.Contains(implementation, "platform_beta_timer") {
 		t.Fatalf("qualified namespace identities did not survive lowering:\n%s", implementation)
 	}
-	for run := 0; run < 100; run++ {
+	for run := 0; run < determinismRuns(); run++ {
 		again := buildSemanticArtifact(t, "Alpha/Timer.concept", alpha, nil)
 		if !bytes.Equal(again, artifacts["Alpha.Timer"]) {
 			t.Fatalf("namespace artifact changed on run %d", run)

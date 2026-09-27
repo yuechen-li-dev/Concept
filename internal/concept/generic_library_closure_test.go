@@ -42,7 +42,7 @@ requires Transformable<Item>;
 int Main() { Item item = Item{3}; return Apply<Item>(ref const item); }
 `
 	var firstArtifact, firstMIR, firstC []byte
-	for run := 0; run < 100; run++ {
+	for run := 0; run < determinismRuns(); run++ {
 		artifact, err := CompileSemanticModule("Library/Closure.concept", provider, nil)
 		if err != nil {
 			t.Fatal(err)

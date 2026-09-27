@@ -794,7 +794,22 @@ func evt1AccessField(env *semanticEnv, owner Type, name string) (int, Type) {
 }
 
 func evt1SortAccessEntries(entries []MIRAccessEntry) {
-	sort.Slice(entries, func(i, j int) bool { return evt1AccessEntryKey(entries[i]) < evt1AccessEntryKey(entries[j]) })
+	// Keys are formatted once up front rather than twice per comparison.
+	// Sorting keyed pairs with the same comparator outcomes yields the same
+	// permutation sort.Slice produced before, so output order is unchanged.
+	keyed := make([]evt1KeyedAccessEntry, len(entries))
+	for i := range entries {
+		keyed[i] = evt1KeyedAccessEntry{key: evt1AccessEntryKey(entries[i]), entry: entries[i]}
+	}
+	sort.Slice(keyed, func(i, j int) bool { return keyed[i].key < keyed[j].key })
+	for i := range keyed {
+		entries[i] = keyed[i].entry
+	}
+}
+
+type evt1KeyedAccessEntry struct {
+	key   string
+	entry MIRAccessEntry
 }
 
 func evt1CanonicalizeAccessEntries(entries []MIRAccessEntry) []MIRAccessEntry {

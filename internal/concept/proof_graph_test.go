@@ -112,7 +112,7 @@ func TestProofJSONIsByteDeterministicAcrossOneHundredRuns(t *testing.T) {
 	for _, name := range []string{"concept_alignment_proven.concept", "concept_callable_capture_disproven.concept", "concept_disjoint_unknown.concept", "concept_noallocation_proven.concept"} {
 		path, source := proofFixture(t, name)
 		var want []byte
-		for i := 0; i < 100; i++ {
+		for i := 0; i < determinismRuns(); i++ {
 			graph, err := ExplainSource(path, string(source), 0)
 			if err != nil {
 				t.Fatalf("%s run %d: %v", name, i, err)

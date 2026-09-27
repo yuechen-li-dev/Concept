@@ -170,7 +170,7 @@ profile Core;
 reflect<Node>;
 `
 	var firstArtifact, firstMetadata []byte
-	for run := 0; run < 100; run++ {
+	for run := 0; run < determinismRuns(); run++ {
 		artifact, err := CompileSemanticModule("Sample.concept", source, nil)
 		if err != nil {
 			t.Fatal(err)

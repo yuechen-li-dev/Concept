@@ -47,10 +47,10 @@ func TestAsyncRuntimeStackOverflow(t *testing.T) {
 		t.Fatal(err)
 	}
 	exe := filepath.Join(dir, "overflow.exe")
-	if out, err := exec.Command(compiler, "-std=c11", "-Wall", "-Wextra", "-I", dir, filepath.Join(dir, "async_stack_overflow.generated.c"), harness, "-o", exe).CombinedOutput(); err != nil {
+	if out, err := nativeCommand(t, compiler, "-std=c11", "-Wall", "-Wextra", "-I", dir, filepath.Join(dir, "async_stack_overflow.generated.c"), harness, "-o", exe).CombinedOutput(); err != nil {
 		t.Fatalf("compile: %v\n%s", err, out)
 	}
-	out, err := exec.Command(exe).CombinedOutput()
+	out, err := nativeCommand(t, exe).CombinedOutput()
 	if err == nil || !strings.Contains(string(out), "machine stack capacity exceeded") {
 		t.Fatalf("overflow behavior drift: err=%v out=%s", err, out)
 	}
@@ -78,10 +78,10 @@ func TestAsyncRuntimeResultBeforeCompletion(t *testing.T) {
 		t.Fatal(err)
 	}
 	exe := filepath.Join(dir, "premature_result.exe")
-	if out, err := exec.Command(compiler, "-std=c11", "-Wall", "-Wextra", "-I", dir, filepath.Join(dir, "async_result_before_completion.generated.c"), harness, "-o", exe).CombinedOutput(); err != nil {
+	if out, err := nativeCommand(t, compiler, "-std=c11", "-Wall", "-Wextra", "-I", dir, filepath.Join(dir, "async_result_before_completion.generated.c"), harness, "-o", exe).CombinedOutput(); err != nil {
 		t.Fatalf("compile: %v\n%s", err, out)
 	}
-	out, err := exec.Command(exe).CombinedOutput()
+	out, err := nativeCommand(t, exe).CombinedOutput()
 	if err == nil || !strings.Contains(string(out), "result requested before completion") {
 		t.Fatalf("premature result behavior drift: err=%v out=%s", err, out)
 	}
@@ -148,6 +148,7 @@ func TestAsyncBasicMIRPlanAndC(t *testing.T) {
 }
 
 func TestAsyncAliasesAndNestedNativeC11(t *testing.T) {
+	t.Parallel()
 	shortModule, shortSource := asyncFixture(t, "valid", "async_basic.concept")
 	longModule, longSource := asyncFixture(t, "valid", "asynchronous_alias.concept")
 	shortOutputs, err := Generate(shortModule, shortSource)

@@ -6,6 +6,7 @@ import (
 )
 
 func TestGeneratedTraceHundredRunArtifactAndBackendDeterminism(t *testing.T) {
+	t.Parallel()
 	artifacts := r7fRCollectionArtifacts(t)
 	artifacts["Standard.Collection.DeriveTrace"] = buildSemanticArtifact(t,
 		"Standard/Collection/DeriveTrace.concept", standardMemorySource(t, "Standard/Collection/DeriveTrace.concept"), artifacts)
@@ -23,7 +24,7 @@ derive DeriveTrace reflect<Node>;
 `
 	var expectedArtifact, expectedView, expectedProof []byte
 	var expectedOutputs Outputs
-	for run := 0; run < 100; run++ {
+	for run := 0; run < determinismRuns(); run++ {
 		artifact, err := CompileSemanticModule("TraceDeterminismOutput.concept", sourceB, artifacts)
 		if err != nil {
 			t.Fatal(err)

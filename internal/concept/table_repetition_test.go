@@ -169,7 +169,7 @@ table<N> Samples { T value; }
 table<4> Point { float x; float y; }
 `
 	first := buildSemanticArtifact(t, "Geometry/Columns.concept", producer, nil)
-	for run := 1; run < 100; run++ {
+	for run := 1; run < determinismRuns(); run++ {
 		if next := buildSemanticArtifact(t, "Geometry/Columns.concept", producer, nil); !bytes.Equal(first, next) {
 			t.Fatalf("table artifact changed on run %d", run)
 		}
@@ -205,7 +205,7 @@ int Main()
 
 func TestTableRepetitionOutputsAreByteIdenticalAcross100Runs(t *testing.T) {
 	want := make(map[string][]byte)
-	for run := 0; run < 100; run++ {
+	for run := 0; run < determinismRuns(); run++ {
 		module, err := Parse("table_repetition.concept", tableRepetitionSpecimen)
 		if err != nil {
 			t.Fatal(err)

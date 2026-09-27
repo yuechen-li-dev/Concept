@@ -198,6 +198,7 @@ int Run(bool ready) {
 }
 
 func TestFailureNativeC11(t *testing.T) {
+	t.Parallel()
 	cases := []struct{ fixture, harness string }{
 		{"option_some_none.concept", `int main(void) { concept_option_option_int value = concept_option_some_none_nested_value(); return value.tag == 0 && value.payload.some.value.tag == 0 && value.payload.some.value.payload.some.value == 8 ? 0 : 1; }`},
 		{"option_question_propagate.concept", `int main(void) { concept_option_bool yes = concept_option_question_propagate_has_value(true); concept_option_bool no = concept_option_question_propagate_has_value(false); return yes.tag == 0 && yes.payload.some.value && no.tag == 1 ? 0 : 1; }`},
@@ -242,10 +243,10 @@ func TestFailureTerminalPanicPaths(t *testing.T) {
 			}
 			exe := filepath.Join(dir, "panic.exe")
 			generated := filepath.Join(dir, base+".generated.c")
-			if out, err := exec.Command(compiler, "-std=c11", "-I", dir, generated, harness, "-o", exe).CombinedOutput(); err != nil {
+			if out, err := nativeCommand(t, compiler, "-std=c11", "-I", dir, generated, harness, "-o", exe).CombinedOutput(); err != nil {
 				t.Fatalf("compile: %v\n%s", err, out)
 			}
-			out, err := exec.Command(exe).CombinedOutput()
+			out, err := nativeCommand(t, exe).CombinedOutput()
 			if err == nil {
 				t.Fatal("terminal path returned normally")
 			}

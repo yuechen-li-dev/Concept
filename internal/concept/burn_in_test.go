@@ -236,7 +236,7 @@ int Boundary() { return -2147483648; }
 	if err != nil {
 		t.Fatal(err)
 	}
-	for run := 1; run < 100; run++ {
+	for run := 1; run < determinismRuns(); run++ {
 		got, err := Generate(module, source)
 		if err != nil {
 			t.Fatalf("generation run %d: %v", run, err)
@@ -278,7 +278,7 @@ int Checked(int X, int Y) { return (X * 3) / Y; }
 		}
 	}
 	object := filepath.Join(dir, "burn_in.o")
-	command := exec.Command(compiler, "-std=c11", "-Wall", "-Wextra", "-Werror", "-c", filepath.Join(dir, "burn_in.generated.c"), "-o", object)
+	command := nativeCommand(t, compiler, "-std=c11", "-Wall", "-Wextra", "-Werror", "-c", filepath.Join(dir, "burn_in.generated.c"), "-o", object)
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("strict C11 compile failed: %v\n%s", err, output)
 	}
@@ -331,11 +331,11 @@ int main(void) {
 		t.Fatal(err)
 	}
 	executable := filepath.Join(dir, "oracle.exe")
-	command := exec.Command(compiler, "-std=c11", "-O3", "-Wall", "-Wextra", "-Werror", filepath.Join(dir, "oracle_runtime.generated.c"), harnessPath, "-o", executable)
+	command := nativeCommand(t, compiler, "-std=c11", "-O3", "-Wall", "-Wextra", "-Werror", filepath.Join(dir, "oracle_runtime.generated.c"), harnessPath, "-o", executable)
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("oracle compile failed: %v\n%s", err, output)
 	}
-	if output, err := exec.Command(executable).CombinedOutput(); err != nil {
+	if output, err := nativeCommand(t, executable).CombinedOutput(); err != nil {
 		t.Fatalf("oracle execution failed: %v\n%s", err, output)
 	}
 }
@@ -386,11 +386,11 @@ func TestR7d3DeterministicLiteralExecutionOracle(t *testing.T) {
 		t.Fatal(err)
 	}
 	executable := filepath.Join(dir, "literal_fuzz.exe")
-	command := exec.Command(compiler, "-std=c11", "-O3", "-Wall", "-Wextra", "-Werror", filepath.Join(dir, "literal_fuzz.generated.c"), harnessPath, "-o", executable)
+	command := nativeCommand(t, compiler, "-std=c11", "-O3", "-Wall", "-Wextra", "-Werror", filepath.Join(dir, "literal_fuzz.generated.c"), harnessPath, "-o", executable)
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("literal oracle compile failed: %v\n%s", err, output)
 	}
-	if output, err := exec.Command(executable).CombinedOutput(); err != nil {
+	if output, err := nativeCommand(t, executable).CombinedOutput(); err != nil {
 		t.Fatalf("literal oracle execution failed: %v\n%s", err, output)
 	}
 }
@@ -424,7 +424,7 @@ func TestR7d3CrossModuleSameStemLinks(t *testing.T) {
 			}
 		}
 		object := filepath.Join(moduleDir, "shared.o")
-		command := exec.Command(compiler, "-std=c11", "-Wall", "-Wextra", "-Werror", "-c", filepath.Join(moduleDir, "shared.generated.c"), "-o", object)
+		command := nativeCommand(t, compiler, "-std=c11", "-Wall", "-Wextra", "-Werror", "-c", filepath.Join(moduleDir, "shared.generated.c"), "-o", object)
 		if output, err := command.CombinedOutput(); err != nil {
 			t.Fatalf("module %s compile failed: %v\n%s", moduleName, err, output)
 		}
@@ -442,10 +442,10 @@ int main(void) { return concept_a_value() == 1 && concept_b_value() == 2 ? 0 : 1
 	executable := filepath.Join(dir, "linked.exe")
 	args := append([]string{"-std=c11", "-Wall", "-Wextra", "-Werror", harnessPath}, objects...)
 	args = append(args, "-o", executable)
-	if output, err := exec.Command(compiler, args...).CombinedOutput(); err != nil {
+	if output, err := nativeCommand(t, compiler, args...).CombinedOutput(); err != nil {
 		t.Fatalf("link failed: %v\n%s", err, output)
 	}
-	if output, err := exec.Command(executable).CombinedOutput(); err != nil {
+	if output, err := nativeCommand(t, executable).CombinedOutput(); err != nil {
 		t.Fatalf("linked execution failed: %v\n%s", err, output)
 	}
 }

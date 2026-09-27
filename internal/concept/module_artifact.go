@@ -495,6 +495,10 @@ func composeSemanticModulesForNative(local Module, artifacts map[string][]byte, 
 	var order []SemanticModuleArtifact
 	modules := map[string]Module{}
 	states := map[string]int{}
+	// verifiedHashes records the content hash LoadSemanticModuleArtifact has
+	// already verified for each fully loaded module, so dependency staleness
+	// checks do not re-decode and re-hash the same artifact per import edge.
+	verifiedHashes := map[string]string{}
 	var load func(string) error
 	load = func(name string) error {
 		if name == local.Name && local.Name != "" {
@@ -550,15 +554,13 @@ func composeSemanticModulesForNative(local Module, artifacts map[string][]byte, 
 			if err := load(dependency.ModuleIdentity); err != nil {
 				return err
 			}
-			loadedDependency, _, err := LoadSemanticModuleArtifact(artifacts[dependency.ModuleIdentity])
-			if err != nil {
-				return err
-			}
-			if loadedDependency.ContentSHA256 != dependency.ContentSHA256 {
-				return fmt.Errorf("MODULE_DEPENDENCY_STALE: %s expects %s at %s, got %s", artifact.ModuleIdentity, dependency.ModuleIdentity, dependency.ContentSHA256, loadedDependency.ContentSHA256)
+			loadedHash := verifiedHashes[dependency.ModuleIdentity]
+			if loadedHash != dependency.ContentSHA256 {
+				return fmt.Errorf("MODULE_DEPENDENCY_STALE: %s expects %s at %s, got %s", artifact.ModuleIdentity, dependency.ModuleIdentity, dependency.ContentSHA256, loadedHash)
 			}
 		}
 		states[name] = 2
+		verifiedHashes[name] = artifact.ContentSHA256
 		modules[name] = module
 		order = append(order, artifact)
 		return nil

@@ -188,6 +188,7 @@ void Verify()
 }
 
 func TestStandardMemoryArtifactsAreDeterministicAcross100Runs(t *testing.T) {
+	t.Parallel()
 	first := standardMemoryArtifacts(t)
 	consumerSource := `module DeterministicMemory;
 profile Core;
@@ -222,7 +223,7 @@ int Main()
 			t.Fatalf("fresh and artifact-only consumer output differ for %s", name)
 		}
 	}
-	for run := 1; run < 100; run++ {
+	for run := 1; run < determinismRuns(); run++ {
 		again := standardMemoryArtifacts(t)
 		for name, expected := range first {
 			if !bytes.Equal(again[name], expected) {

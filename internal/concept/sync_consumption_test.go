@@ -180,6 +180,7 @@ void CheckImportedOrdering()
 }
 
 func TestR7d5SameSourceVerificationRetainsAndOptimizedSimplifiesPrivateAtomic(t *testing.T) {
+	t.Parallel()
 	atomic := buildSemanticArtifact(t, "Standard/Synchronization/Atomic.concept", standardMemorySource(t, "Standard/Synchronization/Atomic.concept"), nil)
 	source := `module Sync.PrivateAtomic;
 profile Core;
@@ -221,7 +222,7 @@ int Increment(ref AtomicInt value)
 	if !bytes.Contains(plan, []byte(`"strategy": "SimplifyAtomic"`)) || !bytes.Contains(plan, []byte(`"NoPublicationOrdering"`)) {
 		t.Fatalf("optimized plan omitted its proof conjunction:\n%s", plan)
 	}
-	for run := 0; run < 100; run++ {
+	for run := 0; run < determinismRuns(); run++ {
 		again, generateErr := GenerateForTargetWithPolicy(module, []byte(source), GenericC11Target(), OptimizedCompilationPolicy())
 		if generateErr != nil || !equalOutputs(optimized, again) {
 			t.Fatalf("optimized MIR/artifact/C output changed on run %d: %v", run+1, generateErr)
@@ -314,6 +315,7 @@ int Observe(ref const Shared shared) { return shared.value; }
 }
 
 func TestR7d5ActuationClaimRaceIsExactlyOnceInNativeThreads(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join("..", "..", "libraries")
 	output := t.TempDir()
 	if _, err := BuildPackage(root, output, "DragonGod"); err != nil {
@@ -401,6 +403,7 @@ int main(void) {
 }
 
 func TestR7d5BlackboardPublicationDisjointWritersAndMPSCNativeThreads(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join("..", "..", "libraries")
 	output := t.TempDir()
 	if _, err := BuildPackage(root, output, "DragonGod"); err != nil {

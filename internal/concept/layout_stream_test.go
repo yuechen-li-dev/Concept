@@ -163,6 +163,7 @@ func generateLayoutStreamFixture(t *testing.T, class, file string) Outputs {
 }
 
 func TestLayoutStreamNativeC11(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		file string
 		call string

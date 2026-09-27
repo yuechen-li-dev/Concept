@@ -73,6 +73,7 @@ func TestMachineStackConformance(t *testing.T) {
 }
 
 func TestMachineStackNativeC11(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		file, call string
 		want       int
@@ -127,10 +128,10 @@ func TestMachineStackRuntimeNegative(t *testing.T) {
 				t.Fatal(err)
 			}
 			exe := filepath.Join(dir, "negative.exe")
-			if out, err := exec.Command(compiler, "-std=c11", "-Wall", "-Wextra", "-I", dir, filepath.Join(dir, base+".generated.c"), harness, "-o", exe).CombinedOutput(); err != nil {
+			if out, err := nativeCommand(t, compiler, "-std=c11", "-Wall", "-Wextra", "-I", dir, filepath.Join(dir, base+".generated.c"), harness, "-o", exe).CombinedOutput(); err != nil {
 				t.Fatalf("compile: %v\n%s", err, out)
 			}
-			out, err := exec.Command(exe).CombinedOutput()
+			out, err := nativeCommand(t, exe).CombinedOutput()
 			if err == nil {
 				t.Fatal("runtime-negative specimen unexpectedly succeeded")
 			}

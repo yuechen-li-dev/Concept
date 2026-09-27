@@ -305,13 +305,14 @@ int RejectFalseClaim()
 }
 
 func TestForeignInteropArtifactsAndOutputsAreDeterministic(t *testing.T) {
+	t.Parallel()
 	geometry := foreignMemoryGeometryArtifact(t)
 	source := foreignHostModuleSource(t)
 	baseline, err := CompileSemanticModule("Platform/Host/Memory.concept", source, map[string][]byte{"Standard.MemoryGeometry": geometry})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for run := 1; run < 100; run++ {
+	for run := 1; run < determinismRuns(); run++ {
 		actual, compileErr := CompileSemanticModule("Platform/Host/Memory.concept", source, map[string][]byte{"Standard.MemoryGeometry": geometry})
 		if compileErr != nil {
 			t.Fatal(compileErr)
@@ -336,7 +337,7 @@ void Check(usize<byte> size)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for run := 1; run < 100; run++ {
+	for run := 1; run < determinismRuns(); run++ {
 		actual, generateErr := Generate(module, []byte(consumer))
 		if generateErr != nil {
 			t.Fatal(generateErr)

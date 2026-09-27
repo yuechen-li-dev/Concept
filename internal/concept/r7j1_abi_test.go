@@ -157,7 +157,7 @@ int Main() { Pair pair = GetPair(); Signal signal = Signal::Start; return pair.x
 		if _, err := exec.LookPath(compiler); err != nil {
 			continue
 		}
-		command := exec.Command(compiler, "-std=c11", "-pedantic", "-pedantic-errors", "-Wstrict-prototypes", "-Werror", "-fsyntax-only", filepath.Join(dir, "prototype.generated.c"))
+		command := nativeCommand(t, compiler, "-std=c11", "-pedantic", "-pedantic-errors", "-Wstrict-prototypes", "-Werror", "-fsyntax-only", filepath.Join(dir, "prototype.generated.c"))
 		if output, err := command.CombinedOutput(); err != nil {
 			t.Fatalf("%s: %v\n%s", compiler, err, output)
 		}

@@ -83,6 +83,7 @@ func TestAutomataTransitionsConformance(t *testing.T) {
 }
 
 func TestAutomataTransitionsNativeC11(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		file string
 		want int
@@ -247,10 +248,10 @@ func TestAutomataTransitionsTerminalPanicPaths(t *testing.T) {
 			}
 			exe := filepath.Join(dir, "panic.exe")
 			generated := filepath.Join(dir, base+".generated.c")
-			if out, err := exec.Command(compiler, "-std=c11", "-Wall", "-Wextra", "-I", dir, generated, harnessPath, "-o", exe).CombinedOutput(); err != nil {
+			if out, err := nativeCommand(t, compiler, "-std=c11", "-Wall", "-Wextra", "-I", dir, generated, harnessPath, "-o", exe).CombinedOutput(); err != nil {
 				t.Fatalf("compile: %v\n%s", err, out)
 			}
-			out, err := exec.Command(exe).CombinedOutput()
+			out, err := nativeCommand(t, exe).CombinedOutput()
 			if err == nil || !strings.Contains(string(out), tc.reason) || !strings.Contains(string(out), "Concept panic at") {
 				t.Fatalf("deterministic panic evidence missing: err=%v output=%s", err, out)
 			}

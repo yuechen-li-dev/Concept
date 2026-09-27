@@ -34,7 +34,7 @@ func TestR7jNativeABIEvidenceDeterministic100(t *testing.T) {
 		ABI:        []NativeABIClaim{{Header: "bridge.h", TypeName: "Pair", Companion: "Native.concept", Size: 8, Alignment: 4, Fields: []string{"x", "y"}, Offsets: []int{0, 4}}},
 	}
 	var first []byte
-	for run := 0; run < 100; run++ {
+	for run := 0; run < determinismRuns(); run++ {
 		if err := CheckNativeABI(project); err != nil {
 			t.Fatal(err)
 		}
@@ -180,11 +180,11 @@ int main(void) { return concept_abi_round_trip_main(0) == 42 ? 0 : 1; }
 	}
 	for i, cc := range compilers {
 		exe := filepath.Join(dir, "abi"+string(rune('0'+i))+".exe")
-		cmd := exec.Command(cc, "-std=c11", "-pedantic-errors", "-Wall", "-Wextra", filepath.Join(dir, "abi_roundtrip.generated.c"), filepath.Join(dir, "native.c"), filepath.Join(dir, "host.c"), "-o", exe)
+		cmd := nativeCommand(t, cc, "-std=c11", "-pedantic-errors", "-Wall", "-Wextra", filepath.Join(dir, "abi_roundtrip.generated.c"), filepath.Join(dir, "native.c"), filepath.Join(dir, "host.c"), "-o", exe)
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("%s strict C11 aggregate link failed: %v\n%s", cc, err, output)
 		}
-		if output, err := exec.Command(exe).CombinedOutput(); err != nil {
+		if output, err := nativeCommand(t, exe).CombinedOutput(); err != nil {
 			t.Fatalf("%s native aggregate round trip failed: %v\n%s", cc, err, output)
 		}
 	}

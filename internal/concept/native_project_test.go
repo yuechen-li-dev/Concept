@@ -60,7 +60,7 @@ func TestNativeConceptArtifactsRepeatByteIdentically(t *testing.T) {
 		t.Fatal(err)
 	}
 	var planBaseline, companionBaseline, generatedBaseline, proofBaseline, abiBaseline, abiProofBaseline, probeBaseline []byte
-	for run := 0; run < 100; run++ {
+	for run := 0; run < determinismRuns(); run++ {
 		plan, err := NativeBuildPlan(project)
 		if err != nil {
 			t.Fatal(err)
@@ -156,7 +156,7 @@ func TestNativePlanExecutesStructuredCArgumentsWithSpaces(t *testing.T) {
 	if _, err := RunNativeBuild(project, first); err != nil {
 		t.Fatal(err)
 	}
-	if output, err := exec.Command(filepath.Join(root, ".native-build", "app.exe")).CombinedOutput(); err != nil {
+	if output, err := nativeCommand(t, filepath.Join(root, ".native-build", "app.exe")).CombinedOutput(); err != nil {
 		t.Fatalf("C executable failed: %v\n%s", err, output)
 	}
 	if err := os.WriteFile(filepath.Join(root, "include paths", "answer.h"), []byte("#define ANSWER 43\n"), 0o644); err != nil {

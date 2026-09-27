@@ -26,7 +26,7 @@ int Main() { Pair pair = Make(); if (pair.Y) { return pair.X; } return 0; }
 	if err != nil {
 		t.Fatal(err)
 	}
-	for run := 1; run < 100; run++ {
+	for run := 1; run < determinismRuns(); run++ {
 		again, err := Parse("R7hFieldType.concept", source)
 		if err != nil {
 			t.Fatal(err)

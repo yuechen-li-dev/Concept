@@ -149,6 +149,7 @@ func TestTensorSemanticsMIRValidationRejectsIncompleteTensor(t *testing.T) {
 }
 
 func TestTensorSemanticsNativeC11(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		file, call string
 		want       int
@@ -199,10 +200,10 @@ func TestTensorSemanticsRuntimeGuards(t *testing.T) {
 			}
 			exe := filepath.Join(dir, "guard.exe")
 			generated := filepath.Join(dir, base+".generated.c")
-			if out, err := exec.Command(compiler, "-std=c11", "-Wall", "-Wextra", "-I", dir, generated, harness, "-o", exe).CombinedOutput(); err != nil {
+			if out, err := nativeCommand(t, compiler, "-std=c11", "-Wall", "-Wextra", "-I", dir, generated, harness, "-o", exe).CombinedOutput(); err != nil {
 				t.Fatalf("native compile failed: %v\n%s", err, out)
 			}
-			out, err := exec.Command(exe).CombinedOutput()
+			out, err := nativeCommand(t, exe).CombinedOutput()
 			if err == nil || !strings.Contains(string(out), tc.reason) {
 				t.Fatalf("runtime guard evidence missing: err=%v output=%s", err, out)
 			}

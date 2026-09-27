@@ -43,6 +43,7 @@ func TestTestMetadataDiagnostics(t *testing.T) {
 }
 
 func TestDiscoveryManifestIsDeterministicAndCarriesMIRMetadata(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join("..", "..", "language", "evt1", "tooling", "tests")
 	manifest, err := DiscoverTests(root)
 	if err != nil {
@@ -55,7 +56,7 @@ func TestDiscoveryManifestIsDeterministicAndCarriesMIRMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 100; i++ {
+	for i := 0; i < determinismRuns(); i++ {
 		again, err := DiscoverTests(root)
 		if err != nil {
 			t.Fatal(err)
@@ -170,6 +171,7 @@ func TestTestToolingGeneratedCHasNoHiddenRuntime(t *testing.T) {
 }
 
 func TestRunnerExecutesFactsTheoryBenchmarkAsyncAndProphecy(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join("..", "..", "language", "evt1", "tooling", "tests")
 	manifest, err := DiscoverTests(root)
 	if err != nil {

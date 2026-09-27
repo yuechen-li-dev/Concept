@@ -86,12 +86,12 @@ func TestStructuredAMD64AsmOperandsMIRAndExecution(t *testing.T) {
 		t.Fatal(err)
 	}
 	binary := filepath.Join(dir, "asm-test")
-	build := exec.Command(compiler, "-std=c11", "-pedantic-errors", "-O2", "asm_probe.generated.c", "asm_probe.machine.S", "harness.c", "-o", binary)
+	build := nativeCommand(t, compiler, "-std=c11", "-pedantic-errors", "-O2", "asm_probe.generated.c", "asm_probe.machine.S", "harness.c", "-o", binary)
 	build.Dir = dir
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("strict C11/asm build: %v\n%s", err, output)
 	}
-	if output, err := exec.Command(binary).CombinedOutput(); err != nil {
+	if output, err := nativeCommand(t, binary).CombinedOutput(); err != nil {
 		t.Fatalf("asm operand execution: %v\n%s", err, output)
 	}
 }
@@ -179,7 +179,7 @@ void ConsumerProof() { Assert.Concept<NoAllocation>(Imported, "imported asm body
 func TestStructuredAsmArtifactsAreByteIdenticalAcross100Runs(t *testing.T) {
 	var expected Outputs
 	var expectedArtifact []byte
-	for i := 0; i < 100; i++ {
+	for i := 0; i < determinismRuns(); i++ {
 		module, err := Parse("asm_probe.concept", asmSource)
 		if err != nil {
 			t.Fatal(err)

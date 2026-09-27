@@ -29,7 +29,7 @@ void TraceReferences(ref const int value, ref TraceVisitor<int> visitor) { }
 int Main() { PoolAllocator pool = MakePoolAllocator(SizeOf<int>(), AlignOf<int>()); MarkSweepCollector<int, 2, PoolAllocator> collector = MakeCollector<int, 2, PoolAllocator>(ref pool, 7); CollectorHandle<int> handle = AllocateObject<int, 2, PoolAllocator>(ref collector, 5)!; return Collect<int, 2, PoolAllocator>(ref collector)!; }`
 	var firstGraph, firstArtifact []byte
 	var firstMIR, firstC string
-	for i := 0; i < 100; i++ {
+	for i := 0; i < determinismRuns(); i++ {
 		graph, err := BuildPackage(root, out, "Standard")
 		if err != nil {
 			t.Fatal(err)
@@ -63,6 +63,7 @@ int Main() { PoolAllocator pool = MakePoolAllocator(SizeOf<int>(), AlignOf<int>(
 }
 
 func TestR7fRCollectorPackageFactRunsNative(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join("..", "..", "libraries")
 	if _, err := BuildPackage(root, t.TempDir(), "Standard"); err != nil {
 		t.Fatal(err)

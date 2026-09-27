@@ -120,11 +120,11 @@ int main(void) { return concept_extern_c_host_acquire(8) == 1 ? 0 : 1; }
 		t.Fatal(err)
 	}
 	exe := filepath.Join(dir, "extern_c_host.exe")
-	command := exec.Command(compiler, "cc", "-std=c11", "-Wall", "-Wextra", "-I", dir, filepath.Join(dir, "extern_c_host.generated.c"), hostPath, "-o", exe)
+	command := nativeCommand(t, compiler, "cc", "-std=c11", "-Wall", "-Wextra", "-I", dir, filepath.Join(dir, "extern_c_host.generated.c"), hostPath, "-o", exe)
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("strict C11 host compile failed: %v\n%s", err, output)
 	}
-	if output, err := exec.Command(exe).CombinedOutput(); err != nil {
+	if output, err := nativeCommand(t, exe).CombinedOutput(); err != nil {
 		t.Fatalf("strict C11 host execution failed: %v\n%s", err, output)
 	}
 }
@@ -421,7 +421,7 @@ usize Main() { return SizeOf<Storage<int, 4>>(); }
 	if err != nil {
 		t.Fatal(err)
 	}
-	for run := 1; run < 100; run++ {
+	for run := 1; run < determinismRuns(); run++ {
 		outputs, err := Generate(module, []byte(source))
 		if err != nil {
 			t.Fatal(err)

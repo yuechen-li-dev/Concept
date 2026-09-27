@@ -41,6 +41,7 @@ func TestR7aPackageCycleDiagnosticIsBounded(t *testing.T) {
 }
 
 func TestR7aStandardAndDragonGodPackagesBuildDeterministically(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join("..", "..", "libraries")
 	output := t.TempDir()
 	first, err := BuildPackage(root, output, "DragonGod")
@@ -48,7 +49,7 @@ func TestR7aStandardAndDragonGodPackagesBuildDeterministically(t *testing.T) {
 		t.Fatal(err)
 	}
 	expected, _ := MarshalPackageGraph(first)
-	for run := 1; run < 100; run++ {
+	for run := 1; run < determinismRuns(); run++ {
 		again, err := BuildPackage(root, output, "DragonGod")
 		if err != nil {
 			t.Fatalf("run %d: %v", run, err)
@@ -85,6 +86,7 @@ func TestR7aPromotedStandardMemoryArtifactIsEquivalent(t *testing.T) {
 }
 
 func TestR7aArtifactOnlyDragonGodConsumerRunsStrictC11(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join("..", "..", "libraries")
 	output := t.TempDir()
 	if _, err := BuildPackage(root, output, "DragonGod"); err != nil {
@@ -116,6 +118,7 @@ int Main()
 }
 
 func TestR7bArtifactOnlyAgenticConsumerIsBoundedStrictC11(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join("..", "..", "libraries")
 	output := t.TempDir()
 	if _, err := BuildPackage(root, output, "DragonGod"); err != nil {
@@ -157,6 +160,7 @@ int Main()
 }
 
 func TestR7cArtifactOnlySchedulerConsumerIsBoundedStrictC11(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join("..", "..", "libraries")
 	output := t.TempDir()
 	if _, err := BuildPackage(root, output, "DragonGod"); err != nil {

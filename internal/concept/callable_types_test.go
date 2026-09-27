@@ -149,7 +149,7 @@ func TestCallableTypesOwnedMachineCallableHasOneGuardedCleanupPath(t *testing.T)
 func TestCallableTypesDeterminismAndForbiddenRuntime(t *testing.T) {
 	module, source := callableTypesFixture(t, "valid", "callable_machine_field_ref_capture.concept")
 	var firstMIR, firstPlan, firstC []byte
-	for i := 0; i < 100; i++ {
+	for i := 0; i < determinismRuns(); i++ {
 		outputs, err := Generate(module, source)
 		if err != nil {
 			t.Fatal(err)
@@ -184,6 +184,7 @@ func TestCallableTypesDeterminismAndForbiddenRuntime(t *testing.T) {
 }
 
 func TestCallableTypesNativeC11(t *testing.T) {
+	t.Parallel()
 	cases := map[string]int{
 		"callable_typeof_local": 12, "callable_type_alias": 18, "callable_function_return": 9, "callable_explicit_return_alias": 10,
 		"callable_struct_field": 12, "callable_class_field": 10, "callable_parameter_value": 12, "callable_parameter_ref_const": 10, "callable_parameter_ref_mut": 23,

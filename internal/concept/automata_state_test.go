@@ -155,6 +155,7 @@ func diagnosticCode(err error) string {
 }
 
 func TestAutomataStateNativeC11(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		file, call string
 		want       int

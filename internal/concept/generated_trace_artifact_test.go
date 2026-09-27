@@ -7,6 +7,7 @@ import (
 )
 
 func TestGeneratedTraceAcrossArtifactOnlyModules(t *testing.T) {
+	t.Parallel()
 	artifacts := r7fRCollectionArtifacts(t)
 	artifacts["Standard.Collection.DeriveTrace"] = buildSemanticArtifact(t,
 		"Standard/Collection/DeriveTrace.concept", standardMemorySource(t, "Standard/Collection/DeriveTrace.concept"), artifacts)

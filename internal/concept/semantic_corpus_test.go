@@ -67,6 +67,7 @@ func generateSemanticCorpusFile(path string) (Outputs, error) {
 }
 
 func TestSemanticCorpusManifest(t *testing.T) {
+	t.Parallel()
 	_, manifest := loadSemanticCorpusManifest(t)
 	root := filepath.Join("..", "..", "language", "evt1")
 	totals := struct{ valid, staticInvalid, runtimeNegative int }{}
@@ -150,7 +151,7 @@ func TestSemanticCorpusManifestDeterminism(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for iteration := 0; iteration < 100; iteration++ {
+	for iteration := 0; iteration < determinismRuns(); iteration++ {
 		var next semanticCorpusManifest
 		if err := json.Unmarshal(data, &next); err != nil {
 			t.Fatal(err)
@@ -166,6 +167,7 @@ func TestSemanticCorpusManifestDeterminism(t *testing.T) {
 }
 
 func TestSemanticCorpusForbiddenRuntime(t *testing.T) {
+	t.Parallel()
 	_, manifest := loadSemanticCorpusManifest(t)
 	root := filepath.Join("..", "..", "language", "evt1")
 	forbidden := []string{"malloc(", "calloc(", "realloc(", "setjmp", "longjmp", "garbage collector", "rtti", "per-object vtable", "promise runtime", "future runtime", "executor", "scheduler", "event loop", "coroutine abi", "closure box"}
@@ -237,7 +239,7 @@ func TestFreezeArtifactsDeterministicAndRuntimeBounded(t *testing.T) {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
-	for iteration := 0; iteration < 100; iteration++ {
+	for iteration := 0; iteration < determinismRuns(); iteration++ {
 		outputs, err := Generate(module, source)
 		if err != nil {
 			t.Fatal(err)

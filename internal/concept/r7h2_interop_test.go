@@ -10,6 +10,7 @@ import (
 )
 
 func TestR7h2GeneratedCodecsReadAndWriteSharedOctBytes(t *testing.T) {
+	t.Parallel()
 	octRoot := filepath.Join("..", "..", "..", "oct")
 	files := map[string]string{
 		"array":   filepath.Join("..", "..", "tests", "fixtures", "octagon", "array_holder.octagon"),
@@ -102,7 +103,7 @@ int Main() {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for run := 1; run < 100; run++ {
+	for run := 1; run < determinismRuns(); run++ {
 		again, err := ParseWithSemanticModules("R7h2Interop.concept", program, artifacts)
 		if err != nil {
 			t.Fatal(err)

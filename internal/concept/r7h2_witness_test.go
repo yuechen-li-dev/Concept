@@ -26,7 +26,7 @@ func TestR7h2ClosedArrayWitnessCall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for run := 1; run < 100; run++ {
+	for run := 1; run < determinismRuns(); run++ {
 		again, err := Parse("r7h2_closed_array_witness.concept", r7h2WitnessSource)
 		if err != nil {
 			t.Fatal(err)

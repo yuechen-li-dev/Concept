@@ -257,7 +257,7 @@ int Main() {
 func TestCallableCaptureDeterminismAndForbiddenRuntime(t *testing.T) {
 	module, source := callableCaptureFixture(t, "valid", "callback_async_interface_composition.concept")
 	var firstMIR, firstPlan []byte
-	for i := 0; i < 100; i++ {
+	for i := 0; i < determinismRuns(); i++ {
 		outputs, err := Generate(module, source)
 		if err != nil {
 			t.Fatal(err)
@@ -291,6 +291,7 @@ func TestCallableCaptureDeterminismAndForbiddenRuntime(t *testing.T) {
 }
 
 func TestCallableCaptureNativeC11(t *testing.T) {
+	t.Parallel()
 	cases := map[string]int{
 		"callback_empty_capture": 5, "callback_copy_capture": 12, "callback_move_capture": 7,
 		"callback_ref_capture": 6, "callback_ref_const_capture": 12, "callback_copy_independent_value": 92,

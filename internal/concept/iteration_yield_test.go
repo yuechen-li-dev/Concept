@@ -70,6 +70,7 @@ func TestIterationYieldConformance(t *testing.T) {
 }
 
 func TestIterationYieldNativeC11(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		file, call string
 		want       int
@@ -189,7 +190,7 @@ func TestForArraySharesInlineIterationAndIsDeterministic(t *testing.T) {
 	if each.IteratorStrategy != "BuiltinInlineIterator" || !each.NoAllocation || each.SourceEvaluation != "ExactlyOnce" {
 		t.Fatalf("for array iteration drift: %+v", each)
 	}
-	for run := 0; run < 100; run++ {
+	for run := 0; run < determinismRuns(); run++ {
 		next := iterationFixture(t, "valid", "for_array.concept")
 		for _, name := range []string{"for_array.mir.json", "for_array.generated.c", "for_array.generated.h"} {
 			if string(next[name]) != string(baseline[name]) {

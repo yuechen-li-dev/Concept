@@ -120,6 +120,7 @@ func TestStorageArraysMIRPreservesStorageFacts(t *testing.T) {
 }
 
 func TestStorageArraysNativeC11(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		file, symbol string
 		want         int
@@ -166,10 +167,10 @@ func TestStorageArraysRuntimeBoundsPanic(t *testing.T) {
 	}
 	executable := filepath.Join(dir, "bounds.exe")
 	generated := filepath.Join(dir, "array_runtime_bounds.generated.c")
-	if out, err := exec.Command(compiler, "-std=c11", "-Wall", "-Wextra", "-I", dir, generated, harness, "-o", executable).CombinedOutput(); err != nil {
+	if out, err := nativeCommand(t, compiler, "-std=c11", "-Wall", "-Wextra", "-I", dir, generated, harness, "-o", executable).CombinedOutput(); err != nil {
 		t.Fatalf("native C11 compile failed: %v\n%s", err, out)
 	}
-	out, err := exec.Command(executable).CombinedOutput()
+	out, err := nativeCommand(t, executable).CombinedOutput()
 	if err == nil || !strings.Contains(string(out), "Concept array index out of bounds") || !strings.Contains(string(out), "Concept panic at") {
 		t.Fatalf("bounds panic evidence missing: err=%v output=%s", err, out)
 	}

@@ -64,7 +64,7 @@ func TestSemanticModuleArtifactIsInspectableAndByteIdenticalAcross100Runs(t *tes
 	if artifact.SchemaVersion != SemanticModuleSchema || artifact.ModuleIdentity != "Standard.Generic" || module.Name != "Standard.Generic" {
 		t.Fatalf("wrong artifact identity: %#v", artifact)
 	}
-	for run := 1; run < 100; run++ {
+	for run := 1; run < determinismRuns(); run++ {
 		if got := buildSemanticArtifact(t, "Standard/Generic.concept", genericSemanticModule, nil); !bytes.Equal(got, first) {
 			t.Fatalf("module artifact changed on run %d", run)
 		}
@@ -460,11 +460,11 @@ int main(void) { return concept_app_main() == 8 ? 0 : 1; }
 		t.Fatal(err)
 	}
 	exe := filepath.Join(dir, "module.exe")
-	command := exec.Command(compiler, "cc", "-std=c11", "-Wall", "-Wextra", "-I", dir, generatedC, hostPath, "-o", exe)
+	command := nativeCommand(t, compiler, "cc", "-std=c11", "-Wall", "-Wextra", "-I", dir, generatedC, hostPath, "-o", exe)
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("strict C11 module compile failed: %v\n%s", err, output)
 	}
-	if output, err := exec.Command(exe).CombinedOutput(); err != nil {
+	if output, err := nativeCommand(t, exe).CombinedOutput(); err != nil {
 		t.Fatalf("strict C11 module execution failed: %v\n%s", err, output)
 	}
 }
