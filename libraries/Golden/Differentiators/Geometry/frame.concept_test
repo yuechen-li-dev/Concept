@@ -1,0 +1,10 @@
+module Golden.Differentiators.Geometry.FrameTests;
+profile Core;
+import Golden.Differentiators.Geometry.Frame;
+
+[[fact]]
+void DimensionedDisplacementContractsThroughBasis()
+{
+    Assert.True(ProjectDisplacement() == AssumeQuantity<float<m>>(-2.0),
+                "the quarter-turn basis rotates a measured displacement");
+}

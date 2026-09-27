@@ -1,4 +1,9 @@
-# EVT1 domain goldens
+# EVT1 migration goldens
+
+R7p covers ordinary industry migration workloads. The separate
+[R7q differentiator index](EVT1-DIFFERENTIATOR-GOLDENS.md) records its working
+tensor/unit example and the frozen precision-width blocker; R7q did not
+complete a second golden layer.
 
 These are permanent burn-in fixtures. The first natural draft is retained next
 to each implementation. Run `go test ./internal/concept -run

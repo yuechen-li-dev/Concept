@@ -1,0 +1,13 @@
+module Golden.Differentiators.Geometry.DimensionalMismatch;
+profile Core;
+
+// Must reject: length-valued matrix times length-valued vector produces m^2,
+// not the declared m-valued destination.
+float<m> BadContraction()
+{
+    tensor<float<m>> matrix[1, 1] = [[AssumeQuantity<float<m>>(2.0)]];
+    tensor<float<m>> vector[1] = [AssumeQuantity<float<m>>(3.0)];
+    tensor<float<m>> output[1] = AssumeQuantity<float<m>>(0.0);
+    output[i] = matrix[i, j] * vector[j];
+    return output[0];
+}

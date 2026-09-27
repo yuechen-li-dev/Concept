@@ -1,0 +1,15 @@
+module Golden.Differentiators.Geometry.Frame;
+profile Core;
+
+// Transform a measured displacement by a dimensionless 3D basis.
+// The intended relation is world_i = basis_ij * local_j.
+float<m> ProjectDisplacement()
+{
+    tensor<float> basis[3, 3] = [[0.0, -1.0, 0.0],
+                                 [1.0,  0.0, 0.0],
+                                 [0.0, 0.0, 1.0]];
+    tensor<float<m>> local[3] = [AssumeQuantity<float<m>>(1.0), AssumeQuantity<float<m>>(2.0), AssumeQuantity<float<m>>(3.0)];
+    tensor<float<m>> world[3] = AssumeQuantity<float<m>>(0.0);
+    world[i] = basis[i, j] * local[j];
+    return world[0];
+}

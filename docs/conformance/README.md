@@ -45,6 +45,7 @@ their fixtures now have exactly one authority under `language/evt1`.
 | R7a | production libraries, ordinary manifests, namespaces, and canonical DragonGod | this report's commit | package DAG/artifacts, namespace collisions, Standard.Memory dogfood, DragonGod strict-C11 evidence |
 | R7fR | bounded ordinary-library Standard.Collection mark/sweep | `EVT1-R7FR-CONVERGENCE.md` | graph cycles, stale handles, borrow exclusion, artifact-only strict C11, 100-run determinism |
 | R7p | EVT1 semantic freeze after domain burn-in | `EVT1-R7P-FREEZE-REPORT.md` | nine domain fixtures, first-draft friction, full Normal/Verify qualification |
+| R7q | Differentiator qualification stopped at missing precision-width semantics | `EVT1-R7Q-CONFORMANCE.md` | tensor/unit contraction works; `float<32>` rejects under frozen EVT1 |
 
 The manifest records 400 valid, 269 static-invalid, and 13 runtime-negative
 fixtures. Four retained expected-divergence cases compare the frozen EVT1
