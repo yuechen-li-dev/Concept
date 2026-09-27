@@ -1,0 +1,26 @@
+profile Core;
+
+struct DeviceMemory {}
+
+bits Status : uint8
+{
+    ready: 0;
+    mode: 1..3;
+}
+
+uint8 ReadStatus(Address<DeviceMemory> address)
+{
+    return MmioLoad<uint8>(address);
+}
+
+void WriteStatus(Address<DeviceMemory> address, uint8 value)
+{
+    MmioStore<uint8>(address, value);
+}
+
+void Prove()
+{
+    Assert.Concept<NoAllocation>(ReadStatus, "MMIO read allocates no storage");
+    Assert.Concept<HardwareRead>(ReadStatus, "device read is observable");
+    Assert.Concept<HardwareWrite>(WriteStatus, "device write is observable");
+}

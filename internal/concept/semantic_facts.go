@@ -25,6 +25,8 @@ const (
 	FactRank                SemanticFactKind = "Rank"
 	FactShape               SemanticFactKind = "Shape"
 	FactNoAllocation        SemanticFactKind = "NoAllocation"
+	FactHardwareRead        SemanticFactKind = "HardwareRead"
+	FactHardwareWrite       SemanticFactKind = "HardwareWrite"
 	FactNoCopy              SemanticFactKind = "NoCopy"
 	FactNoOwnershipTransfer SemanticFactKind = "NoOwnershipTransfer"
 	FactLifetimeSafe        SemanticFactKind = "LifetimeSafe"

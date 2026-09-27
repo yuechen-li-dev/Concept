@@ -29,6 +29,10 @@ func evt1IntegerTypeRange(t Type) (negativeAllowed bool, maxMagnitude uint64, mi
 		return false, uint64(math.MaxUint32), 0, 32, true
 	case "uint8", "byte":
 		return false, uint64(math.MaxUint8), 0, 8, true
+	case "uint16":
+		return false, uint64(math.MaxUint16), 0, 16, true
+	case "uint32":
+		return false, uint64(math.MaxUint32), 0, 32, true
 	case "uint64", "usize":
 		return false, math.MaxUint64, 0, 64, true
 	case "isize":
@@ -108,7 +112,7 @@ func evt1RenderIntegerLiteral(literal *IntLiteral) string {
 		return "(-" + source + ")"
 	}
 	switch t.Name {
-	case "uint", "uint8", "byte":
+	case "uint", "uint8", "uint16", "uint32", "byte":
 		return "UINT32_C(" + source + ")"
 	case "uint64", "usize":
 		return "UINT64_C(" + source + ")"

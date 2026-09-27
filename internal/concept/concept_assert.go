@@ -165,6 +165,23 @@ func evt1ProjectDirectAnalysis(env *semanticEnv, graph *ProofGraph, root string,
 	if goal == string(FactNoAllocation) && subjects[0].function != nil {
 		return evt1ProjectNoAllocation(env, graph, root, *subjects[0].function, map[string]bool{})
 	}
+	if (goal == string(FactHardwareRead) || goal == string(FactHardwareWrite)) && subjects[0].function != nil {
+		read, write, known := evt1FunctionHardwareEffects(env, *subjects[0].function, map[string]bool{})
+		outcome := FactUnknown
+		if known {
+			outcome = FactDisproven
+		}
+		if (goal == string(FactHardwareRead) && read) || (goal == string(FactHardwareWrite) && write) {
+			outcome = FactProven
+		}
+		origin := FactOriginCompilerAnalysis
+		if _, imported := env.importedHardwareEffects[evt1OperationEffectKey(subjects[0].function.Name, evt1FunctionParamSignature(*subjects[0].function))]; imported {
+			origin = FactOriginModuleSummaryEffect
+		}
+		id := graph.addNode(ProofKnownFact, subjects[0].function.Name+" "+goal, "observable device transaction summary", outcome, origin, subjects[0].span)
+		graph.addEdge(root, id, ProofDerivedFrom)
+		return outcome
+	}
 	if (goal == string(FactLifetimeSafe) || goal == string(FactNonEscaping)) && subjects[0].binding != nil && subjects[0].typeValue.Kind == TypeCallable {
 		return evt1ProjectCallableLifetime(env, graph, root, goal, subjects[0])
 	}

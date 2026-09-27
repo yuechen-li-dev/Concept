@@ -1,0 +1,6 @@
+module Standard.Hardware.Mmio;
+profile Core;
+
+// Nominal address-space tag. MmioLoad<T> and MmioStore<T> are compiler-known
+// operations over Address<DeviceMemory>; T is uint8/16/32/64.
+struct DeviceMemory {}

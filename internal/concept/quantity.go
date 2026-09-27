@@ -186,7 +186,7 @@ func evt1ByteQuantityType(span Span) Type {
 
 func evt1NumericRepresentation(t Type) bool {
 	switch t.Name {
-	case "int", "uint", "uint8", "byte", "uint64", "usize", "isize", "float":
+	case "int", "uint", "uint8", "uint16", "uint32", "byte", "uint64", "usize", "isize", "float":
 		return t.Kind == TypeBuiltin
 	default:
 		return false
