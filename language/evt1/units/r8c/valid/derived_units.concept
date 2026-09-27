@@ -1,0 +1,12 @@
+module UnitCorpus.Derived;
+profile Core;
+
+float<N> Force(float<kg> mass, float<m/s^2> acceleration) { return mass * acceleration; }
+float<Pa> Pressure(float<N> force, float<m^2> area) { return force / area; }
+float<Hz> Frequency(float<s> period) { return 1.0 / period; }
+float Ratio(float<mm> small, float<m> large) { return small / large; }
+
+void Facts(float<Pa> pascal, float<N/m^2> derived, float<Hz> hertz, float<s^-1> inverseSecond) {
+    Assert.Concept<SameDimension>(pascal, derived, "pascal equals newtons per square meter");
+    Assert.Concept<SameDimension>(hertz, inverseSecond, "hertz equals inverse seconds");
+}

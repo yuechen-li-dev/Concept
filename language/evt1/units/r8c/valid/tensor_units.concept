@@ -1,0 +1,10 @@
+module UnitCorpus.TensorUnits;
+profile Core;
+
+float<Pa> TransformPressure() {
+    tensor<float> basis[1, 1] = [[2.0]];
+    tensor<float<Pa>> pressure[1] = [1.0Pa];
+    tensor<float<Pa>> output[1] = 0.0Pa;
+    output[i] = basis[i, j] * pressure[j];
+    return output[0];
+}

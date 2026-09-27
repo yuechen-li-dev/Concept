@@ -137,6 +137,18 @@ func lexEVT1(text string) ([]Token, error) {
 						j++
 					}
 				}
+				if j < len(text) && (text[j] == 'e' || text[j] == 'E') {
+					k := j + 1
+					if k < len(text) && (text[k] == '+' || text[k] == '-') {
+						k++
+					}
+					if k < len(text) && text[k] >= '0' && text[k] <= '9' {
+						for k < len(text) && text[k] >= '0' && text[k] <= '9' {
+							k++
+						}
+						j = k
+					}
+				}
 			}
 			tokens = append(tokens, Token{Lexeme: text[i:j], Span: start})
 			column += j - i
@@ -2754,7 +2766,8 @@ done:
 	if p.peekLexeme() == "<" {
 		storageElement = t
 		p.next()
-		if _, isUnit := quantityFromUnit(p.peekLexeme()); evt1NumericRepresentation(t) && isUnit {
+		_, knownUnit := quantityFromUnit(p.peekLexeme())
+		if evt1NumericRepresentation(t) && (knownUnit || isUnsupportedStandardUnit(p.peekLexeme())) {
 			dimension, err := p.parseQuantityDimension()
 			if err != nil {
 				return Type{}, err
@@ -2762,8 +2775,15 @@ done:
 			if _, err := p.expect(">"); err != nil {
 				return Type{}, err
 			}
-			t.Quantity = &dimension
-			return t, nil
+			if dimension.IsDimensionless() {
+				if !dimension.Equal(dimensionlessQuantity()) {
+					return Type{}, evt1Diagnostic("QUANTITY_DIMENSIONLESS_SCALE", "a scaled dimensionless type requires an explicit numeric scale conversion", nameTok.Span)
+				}
+			} else {
+				t.Quantity = &dimension
+			}
+			// A quantity may still be a fixed-array element type.
+			goto typeSuffix
 		}
 		if t.Name == "tensor" || t.Name == "vector" || t.Name == "matrix" {
 			spelling := t.Name
@@ -2834,6 +2854,7 @@ done:
 			t = storageElement
 		}
 	}
+typeSuffix:
 	// An applied type may itself be the element of fixed storage, e.g.
 	// Storage<T><array>[N]. Keep the storage suffix distinct from its type args.
 	if p.peekLexeme() == "<" && (p.peekLexemeN(1) == string(StorageArray) || p.peekLexemeN(1) == string(StorageNDArray) || p.peekLexemeN(1) == string(StorageRaw) || p.peekLexemeN(1) == string(StorageSparse)) && p.peekLexemeN(2) == ">" {
@@ -2924,7 +2945,7 @@ func (p *parser) parseQuantityDimension() (QuantityDimension, error) {
 		}
 		unit, ok := quantityFromUnit(unitTok.Lexeme)
 		if !ok {
-			return QuantityDimension{}, evt1Diagnostic("QUANTITY_UNIT_UNKNOWN", fmt.Sprintf("unknown quantity unit %s", unitTok.Lexeme), unitTok.Span)
+			return QuantityDimension{}, quantityUnknownDiagnostic(unitTok)
 		}
 		exponent := 1
 		if p.peekLexeme() == "^" {
@@ -2948,7 +2969,14 @@ func (p *parser) parseQuantityDimension() (QuantityDimension, error) {
 		if divide {
 			exponent = -exponent
 		}
-		result = result.Multiply(unit.Pow(exponent))
+		powered, ok := unit.PowChecked(exponent)
+		if !ok {
+			return QuantityDimension{}, evt1Diagnostic("QUANTITY_SCALE_OVERFLOW", "exact unit scale exceeds the bounded compile-time rational range", unitTok.Span)
+		}
+		result, ok = result.MultiplyChecked(powered)
+		if !ok {
+			return QuantityDimension{}, evt1Diagnostic("QUANTITY_SCALE_OVERFLOW", "exact unit scale exceeds the bounded compile-time rational range", unitTok.Span)
+		}
 		switch p.peekLexeme() {
 		case "*":
 			p.next()
@@ -4184,14 +4212,22 @@ func (p *parser) parsePrimary() (Expr, error) {
 	case isFloatNumber(p.peekLexeme()):
 		tok := p.next()
 		value, _ := strconv.ParseFloat(tok.Lexeme, 64)
-		return p.parsePostfixExpr(&FloatLiteral{Value: value, Span: tok.Span}, tok.Span)
+		expr, err := p.quantityLiteral(&FloatLiteral{Value: value, Span: tok.Span}, tok, "float")
+		if err != nil {
+			return nil, err
+		}
+		return p.parsePostfixExpr(expr, tok.Span)
 	case isNumber(p.peekLexeme()):
 		tok := p.next()
 		literal, err := evt1ParseIntegerLiteral(tok.Lexeme, false, tok.Span)
 		if err != nil {
 			return nil, err
 		}
-		return p.parsePostfixExpr(literal, tok.Span)
+		expr, err := p.quantityLiteral(literal, tok, "int")
+		if err != nil {
+			return nil, err
+		}
+		return p.parsePostfixExpr(expr, tok.Span)
 	default:
 		return p.parseNameLikeExpr()
 	}
@@ -4771,17 +4807,22 @@ func (p *parser) parseConceptAssertionCall(field *FieldExpr, span Span) (Expr, e
 	parameters := []int{}
 	if p.peekLexeme() == "<" {
 		p.next()
-		parameter := p.current()
-		if !isNumber(parameter.Lexeme) {
-			return nil, evt1Diagnostic("CONCEPT_ASSERT_PARAMETER_INVALID", "analysis parameter must be a positive integer", parameter.Span)
+		for {
+			parameter := p.current()
+			if !isNumber(parameter.Lexeme) {
+				return nil, evt1Diagnostic("CONCEPT_ASSERT_PARAMETER_INVALID", "analysis parameter must be a positive integer", parameter.Span)
+			}
+			value64, parseErr := strconv.ParseInt(parameter.Lexeme, 0, 32)
+			if parseErr != nil || value64 <= 0 {
+				return nil, evt1Diagnostic("CONCEPT_ASSERT_PARAMETER_INVALID", "analysis parameter must be a positive 32-bit integer", parameter.Span)
+			}
+			parameters = append(parameters, int(value64))
+			p.next()
+			if p.peekLexeme() != "," {
+				break
+			}
+			p.next()
 		}
-		value64, parseErr := strconv.ParseInt(parameter.Lexeme, 0, 32)
-		if parseErr != nil || value64 <= 0 {
-			return nil, evt1Diagnostic("CONCEPT_ASSERT_PARAMETER_INVALID", "analysis parameter must be a positive 32-bit integer", parameter.Span)
-		}
-		value := int(value64)
-		parameters = append(parameters, value)
-		p.next()
 		if _, err := p.expect(">"); err != nil {
 			return nil, err
 		}
@@ -4952,8 +4993,40 @@ func isNumber(s string) bool {
 }
 
 func isFloatNumber(s string) bool {
-	return strings.Contains(s, ".") && func() bool {
+	return strings.ContainsAny(s, ".eE") && func() bool {
 		_, err := strconv.ParseFloat(s, 64)
 		return err == nil
 	}()
+}
+
+// Adjacency is intentional: 1m is a quantity literal; 1 m remains two
+// independent tokens and is rejected by the ordinary expression grammar.
+func (p *parser) quantityLiteral(value Expr, number Token, representation string) (Expr, error) {
+	unitToken := p.current()
+	if unitToken.Span.Line != number.Span.Line || unitToken.Span.Column != number.Span.Column+len(number.Lexeme) || !isIdentifier(unitToken.Lexeme) {
+		return value, nil
+	}
+	unit, ok := quantityFromUnit(unitToken.Lexeme)
+	if !ok {
+		return nil, quantityUnknownDiagnostic(unitToken)
+	}
+	p.next()
+	target := evt1QuantityType(representation, unit, number.Span)
+	return &TemplateCallExpr{Callee: "AssumeQuantity", TypeArg: target, TypeArgs: []Type{target}, Args: []Expr{value}, Span: number.Span}, nil
+}
+
+func quantityUnknownDiagnostic(token Token) error {
+	message := fmt.Sprintf("unit '%s' is not in the standard unit catalog; declare/import a domain-specific unit or use a catalogued unit with scientific scaling", token.Lexeme)
+	if token.Lexeme == "dm" {
+		message = "unit 'dm' is not in the standard unit catalog; use scientific scaling such as 1e-1m or declare/import a domain-specific unit"
+	}
+	return evt1Diagnostic("QUANTITY_UNIT_UNKNOWN", message, token.Span)
+}
+
+func isUnsupportedStandardUnit(name string) bool {
+	switch name {
+	case "dm", "dam", "hm", "daN":
+		return true
+	}
+	return false
 }

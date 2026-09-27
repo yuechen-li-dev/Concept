@@ -408,6 +408,17 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 	case *MatchExpr:
 		return evt1EvalMatchExpr(state, scope, *e)
 	case *CallExpr:
+		if e.Callee == "Magnitude" && len(e.Args) == 1 {
+			value, err := evt1EvalExpr(state, scope, e.Args[0])
+			if err != nil {
+				return Value{}, err
+			}
+			if value.Type.Quantity == nil {
+				return Value{}, evt1Diagnostic("QUANTITY_MAGNITUDE_INVALID", "Magnitude expects a unit-bearing numeric value", e.Span)
+			}
+			value.Type.Quantity = nil
+			return value, nil
+		}
 		if e.Callee == "Tensor" && len(e.Args) == 1 {
 			return evt1EvalExpr(state, scope, e.Args[0])
 		}
@@ -445,6 +456,17 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 		}
 		return evt1EvalComptimeCall(state, scope, e.Callee, e.Args, e.Span)
 	case *TemplateCallExpr:
+		if e.Callee == "AssumeQuantity" && len(e.Args) == 1 && e.TypeArg.Quantity != nil {
+			value, err := evt1EvalExpr(state, scope, e.Args[0])
+			if err != nil {
+				return Value{}, err
+			}
+			if value.Type.Quantity != nil || value.Type.Name != e.TypeArg.Name {
+				return Value{}, evt1Diagnostic("QUANTITY_ATTACHMENT_INVALID", "quantity literal requires a matching dimensionless scalar", e.Span)
+			}
+			value.Type = e.TypeArg
+			return value, nil
+		}
 		if evt1IsTypeLayoutQuery(e.Callee) {
 			value, err := evt1LayoutQuery(state.env, e.Callee, e.TypeArg, e.Args)
 			if err != nil {
@@ -500,6 +522,65 @@ func evt1EvalBinaryExpr(state *evt1ComptimeState, scope *evt1EvalScope, expr Bin
 	if (left.Kind == ValueArray || right.Kind == ValueArray) && (expr.Op == "<" || expr.Op == ">" || expr.Op == "<=" || expr.Op == ">=") {
 		return Value{}, evt1Diagnostic("CV4236", "array ordering comparisons are not supported", expr.Span)
 	}
+	if left.Type.Quantity != nil || right.Type.Quantity != nil {
+		result, handled, err := evt1ValidateNumericBinary(left.Type, right.Type, expr.Op, expr.Span)
+		if err != nil {
+			return Value{}, err
+		}
+		if !handled {
+			return Value{}, evt1Diagnostic("CV4201", "unsupported comptime quantity operands", expr.Span)
+		}
+		if left.Kind == ValueFloat && right.Kind == ValueFloat {
+			a, b := left.FloatValue, right.FloatValue
+			if expr.Op == "+" || expr.Op == "-" || expr.Op == "*" || expr.Op == "/" {
+				var v float64
+				switch expr.Op {
+				case "+":
+					v = a + b
+				case "-":
+					v = a - b
+				case "*":
+					v = a * b
+				case "/":
+					v = a / b
+				}
+				if (expr.Op == "*" || expr.Op == "/") && result.Quantity == nil && left.Type.Quantity != nil && right.Type.Quantity != nil {
+					var composed QuantityDimension
+					if expr.Op == "*" {
+						composed, _ = left.Type.Quantity.MultiplyChecked(*right.Type.Quantity)
+					} else {
+						composed, _ = left.Type.Quantity.DivideChecked(*right.Type.Quantity)
+					}
+					if composed.IsDimensionless() {
+						v = v * float64(composed.ScaleNumerator) / float64(composed.ScaleDenominator)
+					}
+				}
+				if result.Name == "float" {
+					v = float64(float32(v))
+				}
+				return Value{Kind: ValueFloat, Type: result, FloatValue: v}, nil
+			}
+			return Value{Kind: ValueBool, Type: result, BoolValue: evt1CompareFloats(a, b, expr.Op)}, nil
+		}
+		if left.Kind == ValueInt && right.Kind == ValueInt {
+			a, b := left.IntValue, right.IntValue
+			switch expr.Op {
+			case "+":
+				return Value{Kind: ValueInt, Type: result, IntValue: a + b}, nil
+			case "-":
+				return Value{Kind: ValueInt, Type: result, IntValue: a - b}, nil
+			case "*":
+				return Value{Kind: ValueInt, Type: result, IntValue: a * b}, nil
+			case "/":
+				if b == 0 {
+					return Value{}, evt1Diagnostic("CV4645", "constant division by zero", expr.Span)
+				}
+				return Value{Kind: ValueInt, Type: result, IntValue: a / b}, nil
+			}
+			return Value{Kind: ValueBool, Type: result, BoolValue: evt1CompareInts(a, b, expr.Op)}, nil
+		}
+		return Value{}, evt1Diagnostic("CV4201", "comptime quantity operands have different scalar representations", expr.Span)
+	}
 	switch expr.Op {
 	case "+", "-", "*", "<", ">", "<=", ">=":
 		if left.Kind != ValueInt || right.Kind != ValueInt {
@@ -534,6 +615,24 @@ func evt1EvalBinaryExpr(state *evt1ComptimeState, scope *evt1EvalScope, expr Bin
 	}
 }
 
+func evt1CompareFloats(a, b float64, op string) bool {
+	switch op {
+	case "==":
+		return a == b
+	case "!=":
+		return a != b
+	case "<":
+		return a < b
+	case ">":
+		return a > b
+	case "<=":
+		return a <= b
+	case ">=":
+		return a >= b
+	}
+	return false
+}
+
 func evt1CompareInts(left, right int, op string) bool {
 	switch op {
 	case "<":
@@ -556,6 +655,8 @@ func evt1ValueEqual(left, right Value) bool {
 	switch left.Kind {
 	case ValueInt:
 		return right.Kind == ValueInt && left.IntValue == right.IntValue
+	case ValueFloat:
+		return right.Kind == ValueFloat && left.FloatValue == right.FloatValue
 	case ValueBool:
 		return right.Kind == ValueBool && left.BoolValue == right.BoolValue
 	case ValueString:

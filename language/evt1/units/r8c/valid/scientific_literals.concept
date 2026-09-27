@@ -1,0 +1,11 @@
+module UnitCorpus.ScientificLiterals;
+profile Core;
+
+static_assert(Magnitude(1m) == 1, "integer unit literal");
+static_assert(Magnitude(1e-1m) == 0.1, "scientific unit literal");
+
+float<m> TenthMeter() { return 1e-1m; }
+float<m> MillimeterAsLiteral() { return 1e-3m; }
+float<m> KilometerAsLiteral() { return 1e3m; }
+float<Pa> Megapascal() { return 1MPa as float<Pa>; }
+float<Hz> Gigahertz() { return 1GHz as float<Hz>; }

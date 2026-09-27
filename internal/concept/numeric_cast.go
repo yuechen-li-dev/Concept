@@ -129,7 +129,37 @@ func evt1ExactConversionFact(source, target Type) semanticFactResult {
 
 func evt1EvalNumericCast(value Value, target Type, span Span) (Value, error) {
 	if value.Type.Quantity != nil || target.Quantity != nil {
-		return Value{}, evt1Diagnostic("CAST_COMPTIME_UNSUPPORTED", "quantity casts are not available in bounded comptime evaluation", span)
+		if value.Type.Quantity == nil || target.Quantity == nil || !value.Type.Quantity.SameDimension(*target.Quantity) {
+			return Value{}, evt1Diagnostic("CAST_QUANTITY_SEMANTICS", "as cannot attach, erase, or change a quantity dimension", span)
+		}
+		if !value.Type.Quantity.Equal(*target.Quantity) {
+			if !evt1IsFloating(target) {
+				return Value{}, evt1Diagnostic("CAST_QUANTITY_SEMANTICS", "scaled integer quantity cast requires an explicit exactness policy", span)
+			}
+			n, d, ok := value.Type.Quantity.ScaleRatioToChecked(*target.Quantity)
+			if !ok {
+				return Value{}, evt1Diagnostic("QUANTITY_SCALE_OVERFLOW", "exact unit scale ratio exceeds the bounded compile-time rational range", span)
+			}
+			var numeric float64
+			if value.Kind == ValueInt {
+				numeric = float64(value.IntValue)
+			} else if value.Kind == ValueFloat {
+				numeric = value.FloatValue
+			} else {
+				return Value{}, evt1Diagnostic("CAST_COMPTIME_UNSUPPORTED", "quantity cast requires a numeric value", span)
+			}
+			numeric = numeric * float64(n) / float64(d)
+			if target.Name == "float" {
+				numeric = float64(float32(numeric))
+			}
+			return Value{Kind: ValueFloat, Type: target, FloatValue: numeric}, nil
+		}
+		unqualifiedSource, unqualifiedTarget := value.Type, target
+		unqualifiedSource.Quantity, unqualifiedTarget.Quantity = nil, nil
+		value.Type = unqualifiedSource
+		converted, err := evt1EvalNumericCast(value, unqualifiedTarget, span)
+		converted.Type = target
+		return converted, err
 	}
 	if value.Kind == ValueFloat && evt1IntegralRepresentation(target) {
 		return Value{}, evt1Diagnostic("FLOAT_TO_INT_ROUNDING_REQUIRED", "floating-point to integer conversion requires a named rounding operation", span)
@@ -221,6 +251,10 @@ func (f *evt1FunctionLowerer) lowerNumericCast(cast *CastExpr, indent int) (stri
 	var out strings.Builder
 	out.WriteString(prelude)
 	out.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(source), temp, value))
+	if cast.Kind == "unit_scaled_float" {
+		numerator, denominator := source.Quantity.ScaleRatioTo(*target.Quantity)
+		return out.String(), fmt.Sprintf("((%s)(((double)%s * %d.0) / %d.0))", evt1CType(target), temp, numerator, denominator), target
+	}
 	if cast.Kind == "integer_checked_range" {
 		sourceSigned, _, _, _, _ := evt1IntegerTypeRange(source)
 		targetSigned, targetMax, targetMin, _, _ := evt1IntegerTypeRange(target)

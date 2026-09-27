@@ -1,0 +1,13 @@
+module UnitCorpus.ScaledCasts;
+profile Core;
+
+float<m> MillimetersToMeters(float<mm> value) { return value as float<m>; }
+double<m> MillimetersToDoubleMeters(float<mm> value) { return value as double<m>; }
+float<Pa> MegapascalsToPascals(float<MPa> value) { return value as float<Pa>; }
+float StripCurrentUnit(float<mm> value) { return Magnitude(value); }
+
+void Facts(float<mm> millimeters, float<m> meters, float<MPa> mega, float<Pa> pascals) {
+    Assert.Concept<UnitScale<1, 1000>>(millimeters, meters, "exact millimeter scale");
+    Assert.Concept<UnitScale<1000000, 1>>(mega, pascals, "exact megapascal scale");
+    Assert.Concept<NoAllocation>(MillimetersToMeters, "unit cast needs no allocation");
+}

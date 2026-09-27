@@ -202,7 +202,7 @@ func evt1ProjectDirectAnalysis(env *semanticEnv, graph *ProofGraph, root string,
 		return evt1ProjectCallableLifetime(env, graph, root, goal, subjects[0])
 	}
 	result := semanticFactResult{}
-	if evt1IsSharedAccessAnalysis(goal) || evt1IsFloatRepresentationAnalysis(goal) {
+	if evt1IsSharedAccessAnalysis(goal) || evt1IsDirectTypeAnalysis(goal) {
 		args := make([]Type, len(subjects))
 		for i, subject := range subjects {
 			args[i] = subject.typeValue
@@ -211,7 +211,7 @@ func evt1ProjectDirectAnalysis(env *semanticEnv, graph *ProofGraph, root string,
 	} else {
 		result = evt1TypeFact(env, evt1FactKind(goal), subjects[0].typeValue, parameters)
 	}
-	if subjects[0].binding != nil && !evt1IsSharedAccessAnalysis(goal) {
+	if subjects[0].binding != nil && !evt1IsSharedAccessAnalysis(goal) && !evt1IsDirectTypeAnalysis(goal) {
 		result = evt1RefineValueFact(goal, parameters, *subjects[0].binding, result)
 	}
 	detail := result.Evidence.Detail
@@ -261,9 +261,9 @@ func evt1ProjectDirectAnalysis(env *semanticEnv, graph *ProofGraph, root string,
 	return result.Outcome
 }
 
-func evt1IsFloatRepresentationAnalysis(name string) bool {
+func evt1IsDirectTypeAnalysis(name string) bool {
 	switch name {
-	case "Floating", "BinaryFloat", "ScalarBits", "FloatExponentBits", "FloatMantissaBits", "ExactConversion":
+	case "Floating", "BinaryFloat", "ScalarBits", "FloatExponentBits", "FloatMantissaBits", "ExactConversion", "SameDimension", "Dimensionless", "UnitScale":
 		return true
 	}
 	return false

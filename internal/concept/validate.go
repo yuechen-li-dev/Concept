@@ -2755,6 +2755,9 @@ func evt1ValidateStorageTemplateCall(env *semanticEnv, scope *evt1Scope, e *Temp
 		if source.Quantity == nil || !source.Quantity.SameDimension(targetUnit) {
 			return Type{}, true, evt1Diagnostic("QUANTITY_CONVERSION_INVALID", fmt.Sprintf("cannot convert %s to %s", source.String(), e.TypeArg.Name), e.Span)
 		}
+		if _, _, ok := source.Quantity.ScaleRatioToChecked(targetUnit); !ok {
+			return Type{}, true, evt1Diagnostic("QUANTITY_SCALE_OVERFLOW", "exact unit scale ratio exceeds the bounded compile-time rational range", e.Span)
+		}
 		return evt1QuantityResult(source, targetUnit, e.Span), true, nil
 	case "AssumeQuantity":
 		if len(e.Args) != 1 || e.TypeArg.Quantity == nil || !evt1NumericRepresentation(e.TypeArg) {
@@ -3585,8 +3588,18 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		if (source.Quantity == nil) != (e.Target.Quantity == nil) {
 			return Type{}, evt1Diagnostic("CAST_QUANTITY_SEMANTICS", "as cannot attach or erase a quantity; semantic interpretation is separate", e.Span)
 		}
+		if source.Quantity != nil && !source.Quantity.SameDimension(*e.Target.Quantity) {
+			return Type{}, evt1Diagnostic("CAST_QUANTITY_SEMANTICS", "as cannot change a quantity dimension; source and target dimensions differ", e.Span)
+		}
 		if source.Quantity != nil && !source.Quantity.Equal(*e.Target.Quantity) {
-			return Type{}, evt1Diagnostic("CAST_QUANTITY_SEMANTICS", "as cannot change a quantity dimension or scale", e.Span)
+			if !evt1IsFloating(e.Target) {
+				return Type{}, evt1Diagnostic("CAST_QUANTITY_SEMANTICS", "scaled integer quantity casts require an explicit exactness policy; use a floating representation", e.Span)
+			}
+			if _, _, ok := source.Quantity.ScaleRatioToChecked(*e.Target.Quantity); !ok {
+				return Type{}, evt1Diagnostic("QUANTITY_SCALE_OVERFLOW", "exact unit scale ratio exceeds the bounded compile-time rational range", e.Span)
+			}
+			e.Kind = "unit_scaled_float"
+			return e.Target, nil
 		}
 		if evt1IsFloating(source) && evt1IntegralRepresentation(e.Target) {
 			return Type{}, evt1Diagnostic("FLOAT_TO_INT_ROUNDING_REQUIRED", "floating-point to integer conversion requires TruncTo<T>, FloorTo<T>, CeilTo<T>, or RoundTo<T>", e.Span)
@@ -3748,6 +3761,21 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		return evt1CanonicalType(env, fieldType), nil
 	case *CallExpr:
+		if e.Callee == "Magnitude" {
+			if len(e.Args) != 1 {
+				return Type{}, evt1Diagnostic("QUANTITY_MAGNITUDE_INVALID", "Magnitude expects one unit-bearing numeric value", e.Span)
+			}
+			source, err := validateExpr(env, scope, e.Args[0], templateInfo, inComptimeFn)
+			if err != nil {
+				return Type{}, err
+			}
+			if !evt1NumericRepresentation(source) || source.Quantity == nil {
+				return Type{}, evt1Diagnostic("QUANTITY_MAGNITUDE_INVALID", "Magnitude expects a unit-bearing numeric value", e.Span)
+			}
+			e.Intrinsic = "quantity_magnitude"
+			source.Quantity = nil
+			return source, nil
+		}
 		if result, handled, err := evt1ValidateRawStorageCall(env, scope, e, templateInfo, inComptimeFn); handled {
 			return result, err
 		}
@@ -4629,6 +4657,18 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 							}
 						}
 					}
+				}
+			}
+			if (e.Op == "*" || e.Op == "/") && result.Quantity == nil && leftType.Quantity != nil && rightType.Quantity != nil {
+				var composed QuantityDimension
+				var ok bool
+				if e.Op == "*" {
+					composed, ok = leftType.Quantity.MultiplyChecked(*rightType.Quantity)
+				} else {
+					composed, ok = leftType.Quantity.DivideChecked(*rightType.Quantity)
+				}
+				if ok && composed.IsDimensionless() && !composed.Equal(dimensionlessQuantity()) {
+					e.UnitScaleNumerator, e.UnitScaleDenominator = composed.ScaleNumerator, composed.ScaleDenominator
 				}
 			}
 			e.ResolvedType = result
@@ -6878,6 +6918,56 @@ type evt1BoundSemanticSubject struct {
 var evt1SemanticAnalysisRegistry = map[string]evt1SemanticAnalysis{}
 
 func init() {
+	unitFact := func(outcome SemanticFactCertainty, detail string) semanticFactResult {
+		return semanticFactResult{Outcome: outcome, Origin: FactOriginCompilerAnalysis, Evidence: SemanticFactEvidence{Detail: detail}}
+	}
+	unitOf := func(t Type) QuantityDimension {
+		if t.Quantity != nil {
+			return t.Quantity.normalized()
+		}
+		return dimensionlessQuantity()
+	}
+	evt1SemanticAnalysisRegistry["SameDimension"] = evt1SemanticAnalysis{TypeArity: 2, CheckTypes: func(_ *semanticEnv, args []Type, _ []int) semanticFactResult {
+		if !evt1NumericRepresentation(args[0]) || !evt1NumericRepresentation(args[1]) {
+			return unitFact(FactDisproven, "subjects must be numeric")
+		}
+		a, b := unitOf(args[0]), unitOf(args[1])
+		outcome := FactDisproven
+		if a.SameDimension(b) {
+			outcome = FactProven
+		}
+		return unitFact(outcome, fmt.Sprintf("normalized dimensions %v and %v", a.Exponents, b.Exponents))
+	}}
+	evt1SemanticAnalysisRegistry["Dimensionless"] = evt1SemanticAnalysis{TypeArity: 1, CheckTypes: func(_ *semanticEnv, args []Type, _ []int) semanticFactResult {
+		outcome := FactDisproven
+		if evt1NumericRepresentation(args[0]) && unitOf(args[0]).IsDimensionless() {
+			outcome = FactProven
+		}
+		return unitFact(outcome, fmt.Sprintf("normalized dimension %v", unitOf(args[0]).Exponents))
+	}}
+	evt1SemanticAnalysisRegistry["UnitScale"] = evt1SemanticAnalysis{TypeArity: 2, ParameterArity: 2, ValidateParameters: func(parameters []int, span Span) error {
+		if parameters[0] <= 0 || parameters[1] <= 0 {
+			return evt1Diagnostic("UNIT_SCALE_RATIO_INVALID", "UnitScale ratio requires positive numerator and denominator", span)
+		}
+		return nil
+	}, CheckTypes: func(_ *semanticEnv, args []Type, parameters []int) semanticFactResult {
+		if !evt1NumericRepresentation(args[0]) || !evt1NumericRepresentation(args[1]) {
+			return unitFact(FactDisproven, "subjects must be numeric")
+		}
+		a, b := unitOf(args[0]), unitOf(args[1])
+		if !a.SameDimension(b) {
+			return unitFact(FactDisproven, "normalized dimensions differ")
+		}
+		n, d, ok := a.ScaleRatioToChecked(b)
+		if !ok {
+			return unitFact(FactUnknown, "exact unit scale ratio exceeds the bounded compile-time rational range")
+		}
+		outcome := FactDisproven
+		if n == parameters[0] && d == parameters[1] {
+			outcome = FactProven
+		}
+		return unitFact(outcome, fmt.Sprintf("same normalized dimension %v; exact scale ratio %d/%d", a.Exponents, n, d))
+	}}
 	evt1SemanticAnalysisRegistry["ExactConversion"] = evt1SemanticAnalysis{TypeArity: 2, CheckTypes: func(_ *semanticEnv, args []Type, _ []int) semanticFactResult {
 		return evt1ExactConversionFact(args[0], args[1])
 	}}
@@ -7920,7 +8010,11 @@ func evt1TypeIdentity(t Type) string {
 		d := t.Quantity.normalized()
 		parts := make([]string, len(d.Exponents))
 		for i, exponent := range d.Exponents {
-			parts[i] = fmt.Sprintf("%d", exponent)
+			if exponent < 0 {
+				parts[i] = fmt.Sprintf("neg%d", -exponent)
+			} else {
+				parts[i] = fmt.Sprintf("%d", exponent)
+			}
 		}
 		return evt1CName(t.Name)[len("concept_"):] + "_quantity_" + strings.Join(parts, "_") + fmt.Sprintf("_scale_%d_%d", d.ScaleNumerator, d.ScaleDenominator)
 	}

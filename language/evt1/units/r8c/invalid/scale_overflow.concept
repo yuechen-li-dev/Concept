@@ -1,0 +1,3 @@
+module UnitCorpus.ScaleOverflow;
+profile Core;
+float<nm^3> Invalid(float value) { return AssumeQuantity<float<nm^3>>(value); }

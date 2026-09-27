@@ -1346,7 +1346,12 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 	id := fmt.Sprintf("%s.%02d", fn.Name, len(fn.Operations)+1)
 	switch e := expr.(type) {
 	case *CastExpr:
-		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: e.Kind, Type: e.SourceType.String(), ReturnType: e.Target.String(), Detail: "explicit numeric conversion", Evaluation: "ExactlyOnce", NoAllocation: true, SourceSpan: e.Span})
+		detail := "explicit numeric conversion"
+		if e.Kind == "unit_scaled_float" {
+			n, d := e.SourceType.Quantity.ScaleRatioTo(*e.Target.Quantity)
+			detail = fmt.Sprintf("same normalized dimension; exact unit scale ratio %d/%d; binary64 scale arithmetic then target representation conversion", n, d)
+		}
+		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: e.Kind, Type: e.SourceType.String(), ReturnType: e.Target.String(), Detail: detail, Evaluation: "ExactlyOnce", NoAllocation: true, SourceSpan: e.Span})
 		collectExprMIROps(env, e.Value, fn, templateInfo)
 	case *CallableExpr:
 		fn.Callables = append(fn.Callables, evt1CallableMIR(env, e))
@@ -1696,7 +1701,11 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 		if e.Tensor != nil {
 			fn.TensorOperations = append(fn.TensorOperations, *e.Tensor)
 		}
-		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "binary", Detail: e.Op, SourceSpan: e.Span})
+		detail := e.Op
+		if e.UnitScaleDenominator != 0 {
+			detail = fmt.Sprintf("%s; exact dimensionless scale %d/%d", e.Op, e.UnitScaleNumerator, e.UnitScaleDenominator)
+		}
+		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "binary", Detail: detail, SourceSpan: e.Span})
 		collectExprMIROps(env, e.Left, fn, templateInfo)
 		collectExprMIROps(env, e.Right, fn, templateInfo)
 	case *UnaryExpr:
@@ -4768,6 +4777,9 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		if e.ResolvedType.Name != "" {
 			resultType = e.ResolvedType
 		}
+		if e.UnitScaleDenominator != 0 {
+			return leftPrelude + rightPrelude, fmt.Sprintf("((%s)((((double)(%s) %s (double)(%s)) * %d.0) / %d.0))", evt1CType(resultType), left, e.Op, right, e.UnitScaleNumerator, e.UnitScaleDenominator), resultType
+		}
 		if resultType.Name == "int" {
 			switch e.Op {
 			case "+":
@@ -4891,6 +4903,11 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		}
 		return b.String(), carrierTemp + ".payload." + field, evt1FailureSuccessType(carrierType)
 	case *CallExpr:
+		if e.Intrinsic == "quantity_magnitude" {
+			prelude, value, source := f.lowerExpr(e.Args[0], indent)
+			source.Quantity = nil
+			return prelude, value, source
+		}
 		if e.Intrinsic == "dense_emplace" {
 			return f.lowerDenseEmplace(e, indent)
 		}
@@ -5244,8 +5261,7 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 			prelude, value, source := f.lowerExpr(e.Args[0], indent)
 			target, _ := quantityFromUnit(e.TypeArg.Name)
 			sourceUnit := source.Quantity.normalized()
-			numerator := sourceUnit.ScaleNumerator * target.ScaleDenominator
-			denominator := sourceUnit.ScaleDenominator * target.ScaleNumerator
+			numerator, denominator := sourceUnit.ScaleRatioTo(target)
 			out := evt1QuantityResult(source, target, e.Span)
 			if denominator > 1 && evt1IntegralRepresentation(source) {
 				temp := f.nextTemp("conversion")

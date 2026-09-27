@@ -1,0 +1,3 @@
+module UnitCorpus.IntegralScaledCast;
+profile Core;
+int<m> Invalid(int<mm> value) { return value as int<m>; }

@@ -1100,12 +1100,14 @@ func (*TemplateCallExpr) evt1Expr()        {}
 func (e *TemplateCallExpr) exprSpan() Span { return e.Span }
 
 type BinaryExpr struct {
-	Op           string          `json:"op"`
-	Left         Expr            `json:"left"`
-	Right        Expr            `json:"right"`
-	Tensor       *TensorSemantic `json:"tensor,omitempty"`
-	ResolvedType Type            `json:"resolved_type,omitempty"`
-	Span         Span            `json:"span"`
+	Op                   string          `json:"op"`
+	Left                 Expr            `json:"left"`
+	Right                Expr            `json:"right"`
+	UnitScaleNumerator   int             `json:"unit_scale_numerator,omitempty"`
+	UnitScaleDenominator int             `json:"unit_scale_denominator,omitempty"`
+	Tensor               *TensorSemantic `json:"tensor,omitempty"`
+	ResolvedType         Type            `json:"resolved_type,omitempty"`
+	Span                 Span            `json:"span"`
 }
 
 func (*BinaryExpr) evt1Expr()        {}

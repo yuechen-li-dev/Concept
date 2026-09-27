@@ -1,0 +1,3 @@
+module UnitCorpus.DimensionChangingCast;
+profile Core;
+float<s> Invalid(float<m> value) { return value as float<s>; }

@@ -1,0 +1,3 @@
+module UnitCorpus.ScalarAttachmentCast;
+profile Core;
+float<m> Invalid(float value) { return value as float<m>; }
