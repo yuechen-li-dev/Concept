@@ -18,6 +18,12 @@ The Standard Verify run passed 29 tests. The DragonGod Verify run passed 23
 tests and one benchmark. These runs exercise the explicit mode, but their
 existing fixtures do not yet contain new allocator, collector, or scheduler
 audit checks.
+TinyXML2's ordinary native companion run passed 2 tests; no foreign Verify
+checker was added. `go vet ./...`, `zig build test`, focused Verify and corpus
+Go tests passed. Two full `go test ./...` attempts did not complete: the first
+was interrupted after more than ten minutes without a package result beyond
+`cmd/concept`; the second was interrupted after more than four minutes with
+the same symptom. Neither is recorded as a passing full gate.
 
 This is not R7m success. Poison on Drop, allocator red zones, ownership-state
 instrumentation, declared/foreign contract observers, collector and DragonGod
