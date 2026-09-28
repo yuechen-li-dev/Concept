@@ -1,0 +1,35 @@
+module Golden.Differentiators.Hpc.Dot;
+profile Core;
+
+concept Floating<T>
+{
+    requires compiler.Floating<T>();
+}
+
+// A four-lane dot product is small enough that the intended accumulation order
+// is visible, and large enough to test a fixed hot-path reduction.
+template <typename T>
+requires Floating<T>
+T Dot4(ReadOnlySpan<T> left, ReadOnlySpan<T> right)
+{
+    T total = left[0] * right[0];
+    for (i in 1..4)
+    {
+        total += left[i] * right[i];
+    }
+    return total;
+}
+
+float DotFloat()
+{
+    float[4] left = [1.0, 2.0, 3.0, 4.0];
+    float[4] right = [4.0, 3.0, 2.0, 1.0];
+    return Dot4<float>(ReadOnlySpan(left), ReadOnlySpan(right));
+}
+
+double DotDouble()
+{
+    double[4] left = [1.0 as double, 2.0 as double, 3.0 as double, 4.0 as double];
+    double[4] right = [4.0 as double, 3.0 as double, 2.0 as double, 1.0 as double];
+    return Dot4<double>(ReadOnlySpan(left), ReadOnlySpan(right));
+}

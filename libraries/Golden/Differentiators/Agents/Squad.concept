@@ -1,0 +1,140 @@
+module Golden.Differentiators.Agents.Squad;
+profile Core;
+
+enum Policy
+{
+    Patrol,
+    Engage,
+    Retreat
+}
+
+struct Observation
+{
+    float threat;
+    float health;
+    float cover;
+    int rounds;
+}
+
+struct Features
+{
+    float threat;
+    float vulnerability;
+    float cover;
+    float armed;
+}
+
+float Bound(float value)
+{
+    if (value < 0.0) {
+        return 0.0;
+    }
+    if (value > 1.0) {
+        return 1.0;
+    }
+    return value;
+}
+
+Features Observe(Observation observation)
+{
+    float armed = 0.0;
+    if (observation.rounds > 0) {
+        armed = 1.0;
+    }
+    return Features {
+        Bound(observation.threat),
+        1.0 - Bound(observation.health),
+        Bound(observation.cover),
+        armed
+    };
+}
+
+float Commitment(Policy current, Policy candidate, int ticks)
+{
+    if (ticks > 0 and current == candidate) {
+        return 0.4;
+    }
+    return 0.0;
+}
+
+automata SquadAgent
+with state
+{
+    Observation observation;
+    Policy current;
+    int commitTicks;
+    int shots;
+    int patrolSteps;
+}
+{
+    machine Act
+    {
+        state Decide
+        {
+            Features features = Observe(observation);
+            Inference<Policy> utilities = infer
+            {
+                Patrol score 0.2 + Commitment(current, Policy::Patrol, commitTicks);
+                Engage when features.armed > 0.0 score
+                features.threat * 1.4 + features.cover * 0.2
+                + Commitment(current, Policy::Engage, commitTicks);
+                Retreat score features.vulnerability * 1.6 + features.threat * 0.3
+                + Commitment(current, Policy::Retreat, commitTicks);
+            };
+            Policy selected = HardMax(utilities);
+            transition match (selected)
+            {
+                Policy::Patrol => Patrol;
+                Policy::Engage => AcquireTarget;
+                Policy::Retreat => Withdraw;
+            }
+        }
+
+        state Patrol
+        {
+            if (current != Policy::Patrol) {
+                commitTicks = 2;
+            }
+            current = Policy::Patrol;
+            if (commitTicks <= 0) {
+                transition Decide;
+            }
+            commitTicks --;
+            patrolSteps ++;
+            yield;
+        }
+
+        state AcquireTarget
+        {
+            current = Policy::Engage;
+            commitTicks = 2;
+            transition Fire;
+        }
+
+        state Fire
+        {
+            shots ++;
+            observation.rounds --;
+            transition Cooldown;
+        }
+
+        state Cooldown
+        {
+            commitTicks --;
+            transition Decide;
+        }
+
+        state Withdraw
+        {
+            if (current != Policy::Retreat) {
+                commitTicks = 2;
+            }
+            current = Policy::Retreat;
+            if (commitTicks <= 0) {
+                transition Decide;
+            }
+            commitTicks --;
+            yield;
+        }
+    }
+}

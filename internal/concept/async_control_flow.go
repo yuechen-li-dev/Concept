@@ -94,6 +94,40 @@ func (b *evt1AsyncCFGBuilder) node(kind string, span Span) *evt1AsyncCFGNode {
 	return n
 }
 
+// Returns inside an ordinary branch still need the async completion lowering.
+// Keeping such a branch in one BasicBlock would emit a C value-return from the
+// void step function instead of finishing its operation.
+func evt1AsyncBlockContainsReturn(block Block) bool {
+	for _, statement := range block.Statements {
+		switch s := statement.(type) {
+		case *ReturnStmt:
+			return true
+		case *Block:
+			if evt1AsyncBlockContainsReturn(*s) {
+				return true
+			}
+		case *IfStmt:
+			if evt1AsyncBlockContainsReturn(s.Then) || (s.Else != nil && evt1AsyncBlockContainsReturn(*s.Else)) {
+				return true
+			}
+		case *MatchStmt:
+			if evt1AsyncMatchContainsReturn(s) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func evt1AsyncMatchContainsReturn(match *MatchStmt) bool {
+	for _, arm := range match.Arms {
+		if evt1AsyncBlockContainsReturn(arm.Block) {
+			return true
+		}
+	}
+	return false
+}
+
 func (b *evt1AsyncCFGBuilder) compile(statements []Statement, next *evt1AsyncCFGNode, env *semanticEnv) *evt1AsyncCFGNode {
 	if len(statements) == 0 {
 		return next
@@ -111,7 +145,7 @@ func (b *evt1AsyncCFGBuilder) compile(statements []Statement, next *evt1AsyncCFG
 		}
 		switch s := stmt.(type) {
 		case *IfStmt:
-			if evt1StatementContainsAwait(s) {
+			if evt1StatementContainsAwait(s) || evt1AsyncBlockContainsReturn(s.Then) || (s.Else != nil && evt1AsyncBlockContainsReturn(*s.Else)) {
 				after := b.compile(statements[i+1:], next, env)
 				join := b.node("BranchJoin", s.Span)
 				join.Next = after
@@ -127,7 +161,7 @@ func (b *evt1AsyncCFGBuilder) compile(statements []Statement, next *evt1AsyncCFG
 				return branch
 			}
 		case *MatchStmt:
-			if evt1StatementContainsAwait(s) {
+			if evt1StatementContainsAwait(s) || evt1AsyncMatchContainsReturn(s) {
 				after := b.compile(statements[i+1:], next, env)
 				join := b.node("MatchJoin", s.Span)
 				join.Next = after

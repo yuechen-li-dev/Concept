@@ -288,7 +288,7 @@ func evt1TestMetadata(fn FunctionDecl) (TestKind, bool, []string, bool) {
 	foretold, annotated := false, false
 	var artifacts []string
 	for _, attribute := range fn.Attributes {
-		if evt1SemanticAccessAttribute(attribute.Name) || attribute.Name == "machine" {
+		if evt1SemanticAccessAttribute(attribute.Name) || attribute.Name == "machine" || attribute.Name == "must_use" {
 			continue
 		}
 		annotated = true

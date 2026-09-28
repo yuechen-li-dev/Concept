@@ -1,0 +1,4 @@
+module Golden.Differentiators.Hpc.InvalidScalar;
+profile Core;
+concept Floating<T> { requires compiler.Floating<T>(); }
+requires Floating<int>;

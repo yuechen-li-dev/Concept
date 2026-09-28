@@ -1,0 +1,33 @@
+module Golden.Differentiators.Hpc.DotTests;
+profile Core;
+import Golden.Differentiators.Hpc.Dot;
+
+[[fact]]
+void ClosedRepresentationsAgreeOnThisExactDot()
+{
+    Assert.True(DotFloat() == 20.0, "binary32 uses paired accumulation");
+    Assert.True(DotDouble() ==(20.0 as double), "binary64 uses sequential accumulation");
+    float[4] left =[1.0, 2.0, 3.0, 4.0];
+    float[4] right =[4.0, 3.0, 2.0, 1.0];
+    Assert.True(ReferenceDotFloat(ReadOnlySpan(left), ReadOnlySpan(right)) == DotFloat(),
+    "specialized binary32 agrees with the direct baseline shape");
+}
+
+[[fact]]
+void ClosedKernelUsesInlineStorage()
+{
+    Assert.Concept<Floating>(float, "binary32 is a supported scalar");
+    Assert.Concept<Floating>(double, "binary64 is a supported scalar");
+    Assert.Concept<NoAllocation>(DotFloat, "fixed arrays and spans stay inline");
+    Assert.Concept<NoAllocation>(DotDouble, "fixed arrays and spans stay inline");
+}
+
+[[benchmark]]
+void ClosedDotBenchmark()
+{
+    float total = 0.0;
+    for (i in 0 .. 1000) {
+        total += DotFloat();
+    }
+    Assert.True(total == 20000.0, "benchmark retains observable work");
+}

@@ -1,0 +1,34 @@
+module Golden.Differentiators.Compiler.IRTests;
+profile Core;
+import Golden.Differentiators.Compiler.IR;
+import Golden.Differentiators.Compiler.IRTools;
+
+[[fact]]
+void GeneratedOperandSchemaChecksArity()
+{
+    Instruction literal = Instruction {
+        Opcode::Literal, NodeId {
+            - 1
+        }, NodeId {
+            - 1
+        }, 7
+    };
+    Instruction add = Instruction {
+        Opcode::Add, NodeId {
+            0
+        }, NodeId {
+            1
+        }, 0
+    };
+    Instruction malformed = Instruction {
+        Opcode::Add, NodeId {
+            0
+        }, NodeId {
+            - 1
+        }, 0
+    };
+    Assert.True(ValidArity(ref const literal), "literal has no references");
+    Assert.True(ValidArity(ref const add), "add has two typed references");
+    Assert.True(not ValidArity(ref const malformed), "missing right operand is rejected");
+    Assert.Concept<NoAllocation>(OperandCount, "generated operand census is inline");
+}

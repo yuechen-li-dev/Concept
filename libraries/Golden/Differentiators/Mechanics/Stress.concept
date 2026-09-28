@@ -1,0 +1,22 @@
+module Golden.Differentiators.Mechanics.Stress;
+profile Core;
+
+// A native sensor reports pascals as unadorned double values. Rotate its
+// symmetric plane-stress tensor into a frame whose first axis is turned 90°.
+double<Pa> RotatedShear(double nativeNormalX, double nativeNormalY, double nativeShear)
+{
+    tensor<double> frame[2, 2] =[[0.0 as double, - 1.0 as double],
+    [1.0 as double, 0.0 as double]];
+    tensor<double<Pa>> stress[2, 2] =[
+    [interpret nativeNormalX as double<Pa>, interpret nativeShear as double<Pa>],
+    [interpret nativeShear as double<Pa>, interpret nativeNormalY as double<Pa>]
+    ];
+    tensor<double<Pa>> rotated[2, 2] = interpret(0.0 as double) as double<Pa>;
+    rotated[i, j] = frame[i, k] * stress[k, l] * frame[j, l];
+    return rotated[0, 1];
+}
+
+float<Pa> DisplayShear(double nativeNormalX, double nativeNormalY, double nativeShear)
+{
+    return RotatedShear(nativeNormalX, nativeNormalY, nativeShear) as float<Pa>;
+}

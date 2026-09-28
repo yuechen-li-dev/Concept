@@ -1,0 +1,4 @@
+module Golden.Differentiators.Async.InvalidMustUse;
+profile Core;
+[[must_use]] int Commit() { return 1; }
+void Invalid() { Commit(); }

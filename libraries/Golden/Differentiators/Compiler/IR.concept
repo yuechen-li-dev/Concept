@@ -1,0 +1,23 @@
+module Golden.Differentiators.Compiler.IR;
+profile Core;
+
+record struct NodeId
+{
+    int value;
+}
+
+enum Opcode
+{
+    Literal,
+    Add,
+    Return
+}
+
+[[reflect]]
+record struct Instruction
+{
+    Opcode opcode;
+    [[operand]] NodeId left;
+    [[operand]] NodeId right;
+    int immediate;
+}

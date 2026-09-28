@@ -1,0 +1,9 @@
+module Golden.Differentiators.Agents.InvalidPolicy;
+profile Core;
+automata Agent
+{
+    machine Act
+    {
+        state Decide { transition MissingPolicy; }
+    }
+}

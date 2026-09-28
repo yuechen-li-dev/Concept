@@ -1,0 +1,33 @@
+module Golden.Differentiators.Manifest;
+profile Core;
+
+record struct LintPolicy
+{
+    string concept;
+    string severity;
+    string kind;
+    string subject;
+}
+
+concept ProjectNaming<declaration D>
+{
+    requires compiler.CanonicalName(D);
+}
+
+concept HotPathPolicy<declaration F>
+{
+    requires compiler.NoAllocation(F);
+}
+
+comptime LintPolicy Naming = LintPolicy {
+    "ProjectNaming", "error", "", ""
+};
+comptime LintPolicy DotKernel = LintPolicy {
+    "HotPathPolicy", "error", "FunctionDeclaration", "DotFloat"
+};
+comptime LintPolicy StressKernel = LintPolicy {
+    "HotPathPolicy", "error", "FunctionDeclaration", "RotatedShear"
+};
+comptime LintPolicy AgentFeatures = LintPolicy {
+    "HotPathPolicy", "error", "FunctionDeclaration", "Observe"
+};

@@ -1,0 +1,23 @@
+module Golden.Differentiators.Mechanics.StressTests;
+profile Core;
+import Golden.Differentiators.Mechanics.Stress;
+
+[[fact]]
+void QuarterTurnReversesShear()
+{
+    double<Pa> shear = RotatedShear(10.0 as double, 20.0 as double, 2.0 as double);
+    double<Pa> expected = interpret(- 2.0 as double) as double<Pa>;
+    Assert.True(shear == expected, "a quarter turn reverses the off-diagonal stress");
+    Assert.True(DisplayShear(10.0 as double, 20.0 as double, 2.0 as double)
+    ==(expected as float<Pa>), "display precision is an explicit boundary");
+}
+
+[[fact]]
+void StressUnitsAndStorageAreStatic()
+{
+    double<Pa> pressure = interpret(1.0 as double) as double<Pa>;
+    double<N / m ^ 2> derived = pressure as double<N / m ^ 2>;
+    Assert.Concept<SameDimension>(pressure, derived,
+    "stress and force per area have the same dimensions");
+    Assert.Concept<NoAllocation>(RotatedShear, "fixed stress contraction needs no heap");
+}

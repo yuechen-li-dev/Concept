@@ -1,0 +1,49 @@
+module Golden.Differentiators.Async.Journal;
+profile Core;
+
+enum JournalError
+{
+    Missing,
+    Full
+}
+
+struct Request
+{
+    int sequence;
+    int value;
+}
+
+void Drop(owned Request request) { }
+
+async Result<int, JournalError> Fetch(int sequence)
+{
+    if (sequence < 0) { return Result::Error(JournalError::Missing); }
+    return Result::Ok(sequence * 2);
+}
+
+async Result<int, JournalError> Commit(int value)
+{
+    if (value > 100) { return Result::Error(JournalError::Full); }
+    return Result::Ok(value + 1);
+}
+
+[[must_use]]
+async Result<int, JournalError> Transfer(int sequence)
+{
+    owned Request pending = Request{sequence, 0};
+    {
+        ref int value = ref pending.value;
+        value = 1;
+    }
+    int fetched = await Fetch(pending.sequence)?;
+    pending.value += fetched;
+    int committed = await Commit(pending.value)?;
+    return Result::Ok(committed);
+}
+
+Result<int, JournalError> Drive(int sequence)
+{
+    Async<Result<int, JournalError>> operation = Transfer(sequence);
+    while (not Complete(operation)) bounded(8) { Step(operation); }
+    return Result(operation);
+}

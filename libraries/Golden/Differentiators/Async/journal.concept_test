@@ -1,0 +1,18 @@
+module Golden.Differentiators.Async.JournalTests;
+profile Core;
+import Golden.Differentiators.Async.Journal;
+
+[[fact]]
+void TransferSuspendsAndPropagatesErrors()
+{
+    Assert.Equals(Drive(4)!, 10, "fetch and commit complete in order");
+    Assert.Error(Drive(- 1), "a missing request fails before commit");
+    Assert.Error(Drive(50), "capacity failure propagates after fetch");
+}
+
+[[fact]]
+void PipelineStateIsInline()
+{
+    Assert.Concept<NoAllocation>(Transfer, "bounded suspended request owns inline state");
+    SendBestEffort(- 1);
+}

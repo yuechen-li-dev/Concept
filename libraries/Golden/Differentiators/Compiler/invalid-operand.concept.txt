@@ -1,0 +1,13 @@
+module Golden.Differentiators.Compiler.InvalidOperand;
+profile Core;
+[[reflect]] record struct Instruction { [[operand]] int left; }
+generator <typename T> DeriveOperandCount
+int OperandCount(ref const T instruction)
+{
+    int count = 0;
+    foreach (FieldInfo field in Fields<T>(operand)) {
+        if (instruction.field.value >= 0) { count++; }
+    }
+    return count;
+}
+derive DeriveOperandCount reflect<Instruction>;

@@ -1,0 +1,10 @@
+module Golden.Differentiators.Mechanics.InvalidDimension;
+profile Core;
+double<Pa> Invalid()
+{
+    tensor<double> frame[1, 1] = [[1.0 as double]];
+    tensor<double<m>> displacement[1] = [interpret (1.0 as double) as double<m>];
+    tensor<double<Pa>> stress[1] = interpret (0.0 as double) as double<Pa>;
+    stress[i] = frame[i, j] * displacement[j];
+    return stress[0];
+}

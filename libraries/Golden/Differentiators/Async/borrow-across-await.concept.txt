@@ -1,0 +1,10 @@
+module Golden.Differentiators.Async.InvalidBorrow;
+profile Core;
+async int Read() { return 1; }
+async int Invalid()
+{
+    int local = 4;
+    ref int retained = ref local;
+    int received = await Read();
+    return retained + received;
+}

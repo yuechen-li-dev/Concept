@@ -1,0 +1,31 @@
+module Golden.Differentiators.Compiler.IRTools;
+profile Core;
+import Golden.Differentiators.Compiler.IR;
+
+// Operand annotations are semantic IR schema. One checked function is derived
+// from that schema, so new operand fields join validation automatically.
+generator <typename T> DeriveOperandCount
+int OperandCount(ref const T instruction)
+{
+    int count = 0;
+    foreach(FieldInfo field in Fields<T>(operand))
+    {
+        if (instruction.field.value >= 0) {
+            count ++;
+        }
+    }
+    return count;
+}
+
+derive DeriveOperandCount reflect<Instruction>;
+
+bool ValidArity(ref const Instruction instruction)
+{
+    int count = OperandCount(ref const instruction);
+    return match (instruction.opcode)
+    {
+        Opcode::Literal => count == 0,
+        Opcode::Add => count == 2,
+        Opcode::Return => count == 1,
+    };
+}

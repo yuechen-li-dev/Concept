@@ -1,0 +1,56 @@
+module Golden.Differentiators.Agents.SquadTests;
+profile Core;
+import Golden.Differentiators.Agents.Squad;
+
+[[fact]]
+void ThreeAgentsChooseDifferentPolicies()
+{
+    instance SquadAgent fighter(Observation {
+        0.9, 0.9, 0.2, 3
+    }, Policy::Patrol, 0, 0, 0);
+    instance SquadAgent scout(Observation {
+        0.0, 1.0, 0.2, 0
+    }, Policy::Engage, 0, 0, 0);
+    instance SquadAgent wounded(Observation {
+        0.8, 0.1, 0.1, 0
+    }, Policy::Patrol, 0, 0, 0);
+    Step(fighter, Act);
+    Step(scout, Act);
+    Step(wounded, Act);
+    Step(fighter, Act);
+    Step(scout, Act);
+    Step(wounded, Act);
+    Assert.True(fighter.state.current == Policy::Engage, "armed agent acquires a threat");
+    Assert.True(scout.state.current == Policy::Patrol, "unthreatened scout patrols");
+    Assert.True(wounded.state.current == Policy::Retreat, "wounded unarmed agent withdraws");
+    Step(fighter, Act);
+    Step(scout, Act);
+    Step(wounded, Act);
+    Assert.Equals(fighter.state.shots, 1, "engage policy reaches the fire state");
+    Assert.Equals(scout.state.patrolSteps, 2, "patrol persists across ticks");
+    Assert.Equals(wounded.state.commitTicks, 0, "retreat commitment expires before reconsideration");
+}
+
+[[fact]]
+void UtilityFeaturesAreBoundedAndInline()
+{
+    Features features = Observe(Observation {
+        1.4, - 0.2, 1.2, 1
+    });
+    Assert.True(features.threat == 1.0 and features.vulnerability == 1.0
+    and features.cover == 1.0, "sensor values are bounded before scoring");
+    Assert.Concept<NoAllocation>(Observe, "feature extraction uses fixed scalar state");
+    Assert.Concept<NoAllocation>(Commitment, "policy inertia is a scalar score term");
+}
+
+[[benchmark]]
+void PatrolProgressBenchmark()
+{
+    instance SquadAgent scout(Observation {
+        0.0, 1.0, 0.2, 0
+    }, Policy::Engage, 0, 0, 0);
+    for (i in 0 .. 1000) {
+        Step(scout, Act);
+    }
+    Assert.True(scout.state.patrolSteps > 0, "benchmark retains observable patrol progress");
+}
