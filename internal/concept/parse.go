@@ -103,6 +103,31 @@ func lexEVT1(text string) ([]Token, error) {
 			}
 			continue
 		}
+		if c == '/' && i+1 < len(text) && text[i+1] == '*' {
+			start := Span{Line: line, Column: column}
+			i += 2
+			column += 2
+			closed := false
+			for i < len(text) {
+				if i+1 < len(text) && text[i] == '*' && text[i+1] == '/' {
+					i += 2
+					column += 2
+					closed = true
+					break
+				}
+				if text[i] == '\n' {
+					line++
+					column = 1
+				} else {
+					column++
+				}
+				i++
+			}
+			if !closed {
+				return nil, evt1Diagnostic("CV4000", "unterminated block comment", start)
+			}
+			continue
+		}
 		start := Span{Line: line, Column: column}
 		switch {
 		case i+2 < len(text) && text[i:i+3] == "...":

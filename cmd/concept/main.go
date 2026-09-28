@@ -19,6 +19,7 @@ const usage = `Concept EVT1 Stage 0 / Go
 Usage:
   concept check <file>
   concept lint <file-or-project> [--verify]
+  concept format <file-or-project> [--check]
   concept build-module <file>
   concept emit-c <file> [--verify]
   concept mir <file> [--verify]
@@ -43,6 +44,7 @@ Usage:
 Commands:
   check   parse and semantically validate a Concept source file
   lint    evaluate manifest.concept policies over bound declarations
+  format  apply presentation-only canonical whitespace and comment-preserving layout
   build-module  write a deterministic concept-module.v1 artifact to stdout
   emit-c  write generated strict-C11 implementation to stdout
   mir     write deterministic MIR JSON to stdout
@@ -98,6 +100,37 @@ func main() {
 		}
 		if concept.HasLintErrors(findings) {
 			os.Exit(1)
+		}
+		return
+	}
+	if (len(os.Args) == 3 || len(os.Args) == 4 && os.Args[3] == "--check") && os.Args[1] == "format" {
+		edits, err := concept.FormatPath(os.Args[2])
+		if err != nil {
+			fail(err)
+		}
+		paths := make([]string, 0, len(edits))
+		for path := range edits {
+			paths = append(paths, path)
+		}
+		sort.Strings(paths)
+		if len(os.Args) == 4 {
+			for _, path := range paths {
+				fmt.Println(filepath.ToSlash(path))
+			}
+			if len(paths) > 0 {
+				os.Exit(1)
+			}
+			return
+		}
+		for _, path := range paths {
+			info, err := os.Stat(path)
+			if err != nil {
+				fail(err)
+			}
+			if err := os.WriteFile(path, []byte(edits[path]), info.Mode().Perm()); err != nil {
+				fail(err)
+			}
+			fmt.Println(filepath.ToSlash(path))
 		}
 		return
 	}

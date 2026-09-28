@@ -53,6 +53,10 @@ concept explain path/to/file.concept --policy ProjectNaming --subject SomeFuncti
 concept explain path/to/file.concept --must-use SomeFunction --verbose
 concept lint path/to/file.concept
 concept lint path/to/project/
+
+# Presentation only; leaves names and semantic policy unchanged.
+concept format path/to/file.concept
+concept format path/to/project/ --check
 ```
 
 Explain inspects an existing assertion and does not mutate source semantics.
