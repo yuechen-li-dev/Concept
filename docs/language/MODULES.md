@@ -156,3 +156,14 @@ typed Allocate, and constrained Drop without opening module source.
 # Reflection boundary
 
 An imported type can be structurally inspected by `reflect<T>;` only when its defining declaration carries `[[reflect]]`. The compiler resolves the query from the verified `concept-module.v1` artifact identity and semantic payload, without reparsing source. Type-level permission is compile-time-only; see [Reflection](REFLECTION.md).
+
+## Project lint policy
+
+`manifest.concept` may also declare immutable `LintPolicy` values. Each names
+an ordinary declaration-parameter concept, a `warning` or `error` severity,
+and optional exact declaration-kind and subject selectors. The first-party
+package metadata shape remains separate. Local lint severity is not exported
+semantic contract and does not change module artifact or generated C identity.
+`concept lint` applies root policy to root declarations, while imported
+dependency contracts remain available to proofs. See
+[R8 project policy](../design/R8-PROJECT-POLICY.md).

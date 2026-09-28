@@ -49,9 +49,19 @@ concept explain path/to/file.concept
 concept explain path/to/file.concept:42
 concept explain path/to/file.concept --verbose
 concept explain path/to/file.concept --json
+concept explain path/to/file.concept --policy ProjectNaming --subject SomeFunction --verbose
+concept explain path/to/file.concept --must-use SomeFunction --verbose
+concept lint path/to/file.concept
+concept lint path/to/project/
 ```
 
 Explain inspects an existing assertion and does not mutate source semantics.
+Policy explanation runs the same concept proof graph on a manifest-selected
+bound declaration. It includes policy source, severity, declaration provenance,
+and the underlying requirement's truth and origin. MustUse explanation projects
+the existing core obligation, including foreign and imported artifact origin.
+`concept lint` reports non-Proven policy results; `--verify` has identical
+compile-time findings. Policy warnings return zero, errors nonzero.
 `--json` emits deterministic `concept-proof.v1`: goal, outcome, subjects,
 ordered nodes and edges, failed/unknown node IDs, repair classes, reason, and
 source location. IDs derive from semantic identity, relation, order, and source

@@ -594,6 +594,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 	env := newSemanticEnv(profile)
 	env.moduleName = module.Name
 	env.sourcePath = module.Path
+	env.declarationSubjects = DeclarationSubjects(module)
 	for _, summary := range module.ImportedHardwareEffects {
 		env.importedHardwareEffects[evt1OperationEffectKey(summary.Operation, summary.Signature)] = summary
 	}
@@ -974,6 +975,15 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		return nil, err
 	}
 	for _, conceptDecl := range module.Concepts {
+		hasDeclarationParameter := false
+		for _, parameter := range evt1ConceptParameters(conceptDecl) {
+			if parameter.Kind == "declaration" {
+				hasDeclarationParameter = true
+			}
+		}
+		if conceptDecl.Interface && hasDeclarationParameter {
+			return nil, evt1Diagnostic("CONCEPT_PARAMETER_CATEGORY_INVALID", "runtime interfaces require type parameters", conceptDecl.Span)
+		}
 		conceptParameterNames := make([]string, 0, len(evt1ConceptParameters(conceptDecl)))
 		for _, parameter := range evt1ConceptParameters(conceptDecl) {
 			conceptParameterNames = append(conceptParameterNames, parameter.Name)
@@ -983,6 +993,9 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		for _, req := range conceptDecl.Requirements {
 			switch r := req.(type) {
 			case *OperationRequirement:
+				if hasDeclarationParameter {
+					return nil, evt1Diagnostic("CONCEPT_REQUIREMENT_CATEGORY_INVALID", "declaration-subject concepts cannot require a runtime operation", r.Span)
+				}
 				key := "method:" + r.Name
 				if seenMembers[key] {
 					return nil, evt1Diagnostic("INTERFACE_DUPLICATE_MEMBER", fmt.Sprintf("duplicate requirement %s.%s", conceptDecl.Name, r.Name), r.Span)
@@ -1017,6 +1030,9 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 					}
 				}
 			case *FieldRequirement:
+				if hasDeclarationParameter {
+					return nil, evt1Diagnostic("CONCEPT_REQUIREMENT_CATEGORY_INVALID", "declaration-subject concepts cannot require a runtime field", r.Span)
+				}
 				key := "field:" + r.Name
 				if seenMembers[key] {
 					return nil, evt1Diagnostic("INTERFACE_DUPLICATE_MEMBER", fmt.Sprintf("duplicate field requirement %s.%s", conceptDecl.Name, r.Name), r.Span)
@@ -1036,6 +1052,30 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 				if !ok {
 					return nil, evt1Diagnostic("CV4152", fmt.Sprintf("unknown prerequisite concept %s", r.ConceptName), r.Span)
 				}
+				if hasDeclarationParameter {
+					if len(r.Arguments) != len(evt1ConceptParameters(prerequisite)) {
+						return nil, evt1Diagnostic("CV4152", fmt.Sprintf("prerequisite %s expects %d argument(s), got %d", r.ConceptName, len(evt1ConceptParameters(prerequisite)), len(r.Arguments)), r.Span)
+					}
+					for i, argument := range r.Arguments {
+						if argument.Kind != evt1ConceptParameters(prerequisite)[i].Kind {
+							return nil, evt1Diagnostic("CONCEPT_ARGUMENT_CATEGORY_MISMATCH", fmt.Sprintf("prerequisite %s expects %s argument", r.ConceptName, evt1ConceptParameters(prerequisite)[i].Kind), argument.Span)
+						}
+						if argument.Kind == "declaration" {
+							matched := false
+							for _, parameter := range evt1ConceptParameters(conceptDecl) {
+								if parameter.Kind == "declaration" && parameter.Name == argument.Declaration {
+									matched = true
+								}
+							}
+							if !matched {
+								return nil, evt1Diagnostic("CONCEPT_DECLARATION_ARGUMENT_INVALID", fmt.Sprintf("%s is not a declaration parameter of %s", argument.Declaration, conceptDecl.Name), argument.Span)
+							}
+						} else if err := validateKnownType(env, argument.Type, argument.Span, conceptParameterSet, false); err != nil {
+							return nil, err
+						}
+					}
+					continue
+				}
 				arguments := evt1RequirementArguments(r)
 				if len(arguments) != len(evt1ConceptParameters(prerequisite)) {
 					return nil, evt1Diagnostic("CV4152", fmt.Sprintf("prerequisite %s expects %d argument(s), got %d", r.ConceptName, len(evt1ConceptParameters(prerequisite)), len(arguments)), r.Span)
@@ -1046,6 +1086,12 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 					}
 				}
 			case *CompilerAnalysisRequirement:
+				if evt1DeclarationRequirementParameter(conceptDecl, r) {
+					if !evt1IsDeclarationAnalysis(r.Analysis) {
+						return nil, evt1Diagnostic("CONCEPT_DECLARATION_ANALYSIS_INVALID", fmt.Sprintf("%s is not a declaration-subject analysis", r.Analysis), r.Span)
+					}
+					continue
+				}
 				if r.Analysis == "Allocates" {
 					if len(r.TypeArgs) != 0 || len(r.SubjectArgs) != 1 || len(r.Parameters) != 0 || evt1FindEffectRequirementOperation(conceptDecl, r.SubjectArgs[0].Name) == nil {
 						return nil, evt1Diagnostic("INTERFACE_EFFECT_INVALID", "compiler.Allocates requires exactly one declared interface operation name", r.Span)
@@ -1271,6 +1317,46 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		conceptDecl, ok := env.concepts[assertion.ConceptName]
 		if !ok {
 			return nil, evt1Diagnostic("CV4151", fmt.Sprintf("unknown concept %s", assertion.ConceptName), assertion.Span)
+		}
+		declarationApplication := false
+		for _, parameter := range evt1ConceptParameters(conceptDecl) {
+			if parameter.Kind == "declaration" {
+				declarationApplication = true
+			}
+		}
+		for _, argument := range assertion.Arguments {
+			if argument.Kind == "declaration" {
+				declarationApplication = true
+			}
+		}
+		if declarationApplication {
+			if len(assertion.Arguments) != len(evt1ConceptParameters(conceptDecl)) {
+				return nil, evt1Diagnostic("CV4151", fmt.Sprintf("concept %s expects %d argument(s), got %d", assertion.ConceptName, len(evt1ConceptParameters(conceptDecl)), len(assertion.Arguments)), assertion.Span)
+			}
+			subjects := make([]conceptAssertionSubject, 0, len(assertion.Arguments))
+			for _, argument := range assertion.Arguments {
+				if argument.Kind == "declaration" {
+					subject, err := evt1ResolveConceptAssertionSubject(env, newEVT1Scope(nil), &NameExpr{Name: argument.Declaration, Span: argument.Span})
+					if err != nil {
+						return nil, err
+					}
+					subjects = append(subjects, subject)
+				} else {
+					if err := validateKnownType(env, argument.Type, argument.Span, "", false); err != nil {
+						return nil, err
+					}
+					subjects = append(subjects, conceptAssertionSubject{description: ProofSubjectDescription{Kind: "type", Name: argument.Type.String(), Type: argument.Type.String()}, typeValue: argument.Type, span: argument.Span})
+				}
+			}
+			graph, err := evt1BuildConceptAssertionGraph(env, assertion.ConceptName, nil, subjects, "top-level required concept", assertion.Span)
+			if err != nil {
+				return nil, err
+			}
+			env.proofGraphs = append(env.proofGraphs, graph)
+			if graph.Outcome != FactProven {
+				return nil, Diagnostic{Code: "CONCEPT_ASSERT_" + strings.ToUpper(string(graph.Outcome)), Message: fmt.Sprintf("%s %s", strings.ToUpper(string(graph.Outcome)), graph.Goal), Span: assertion.Span, Proof: &graph}
+			}
+			continue
 		}
 		arguments := assertion.TypeArgs
 		if len(arguments) == 0 {

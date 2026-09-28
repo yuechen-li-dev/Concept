@@ -1,0 +1,5 @@
+module R8e2b.WarningsManifest;
+profile Core;
+record struct LintPolicy { string concept; string severity; string kind; string subject; }
+concept ProjectNaming<declaration D> { requires compiler.CanonicalName(D); }
+comptime LintPolicy Naming = LintPolicy{"ProjectNaming", "warning", "", ""};

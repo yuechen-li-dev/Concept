@@ -1,4 +1,4 @@
-# R8 project policy design seam
+# R8 semantic project policy
 
 > Project policy may require semantic facts, but it cannot create them.
 
@@ -13,25 +13,51 @@ loaded from semantic artifacts. Generated functions use `GeneratedOrigin`;
 foreign functions use the existing `ExternABI` declaration. These categories
 are never inferred from spelling or path.
 
-The current compiler's `ConceptDecl` parameters denote types. Its proof engine
-also accepts operation and value subjects for `Assert.Concept`, but a concept
-parameter cannot yet bind a declaration as a first-class semantic subject.
-The next R8e2 step is to make declaration parameters bind through that existing
-concept/proof machinery, then evaluate naming and proposition requirements
-without modifying semantic truth. Manifest policy references and severities must
-bind against those concepts before adding `concept lint`; a hardcoded naming
-visitor would misrepresent the policy system.
+> Project policy is ordinary Concept over semantic program subjects, not a
+> separate lint language. Policy may require truth. Policy cannot create truth.
+
+Concepts may bind `declaration D` and use normal `requires` entries:
+
+```concept
+concept ProjectNaming<declaration D> { requires compiler.CanonicalName(D); }
+concept HotPathPolicy<declaration F> { requires compiler.NoAllocation(F); }
+```
+
+`NoAllocation` uses the same proof projector as `Assert.Concept`; Proven,
+Disproven, and Unknown remain distinct. The manifest selects severity and
+subjects, never a different truth. No policy enters MIR or runtime C.
 
 Naming is project policy, not grammar. The intended canonical style is
 PascalCase for types, functions, methods, concepts, interfaces, and machines;
 camelCase for fields, locals, and parameters. Generated and foreign declarations
-are exempt from the default authored policy by semantic provenance. The current
-progression does not enforce naming or expose a lint command.
+are exempt from the default authored policy by semantic provenance; an
+explanation shows the exemption. Explicit `PascalCase`, `CamelCase`, and
+`SnakeCase` requirements may apply to other provenance categories.
+
+`manifest.concept` holds ordinary immutable `LintPolicy` values with four
+strings: concept identity, `warning` or `error`, optional declaration kind, and
+optional exact subject name. Empty selectors mean all project declarations.
+Concept identities bind against the semantic concept environment. Contradictory
+active naming requirements produce `LINT_POLICY_CONFLICT`. Only `LintPolicy`
+values authored in the current manifest activate policy; imported compile-time
+values do not activate root lint.
+
+```concept
+record struct LintPolicy {
+    string concept; string severity; string kind; string subject;
+}
+comptime LintPolicy Naming = LintPolicy{"ProjectNaming", "warning", "", ""};
+```
+
+`concept lint file.concept` and `concept lint project/` use the ordinary
+compiler module resolver. Warnings return zero; error findings return nonzero.
+`--verify` runs the same compile-time policy evaluation.
 
 Language errors such as ownership violations, invalid types, and ignored
 MustUse results remain core compiler obligations. Naming and requirements such
 as NoAllocation are project policy findings. Policy cannot change codegen or
 upgrade Unknown or Disproven facts to Proven.
 
-R8e3 remains a separate milestone for source trivia, formatter configuration,
-and `concept fmt`. R8f differentiator goldens follow R8e3; R7q remains paused.
+Interface/override naming constraints and preferred immutability remain
+deferred. R8e3 owns trivia preservation and `concept fmt`. R8f follows R8e3;
+R7q remains paused.

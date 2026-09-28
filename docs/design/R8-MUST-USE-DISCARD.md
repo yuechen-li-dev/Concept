@@ -20,6 +20,7 @@ consumers enforce MustUse without reading provider source. This is verified
 for an authored type, a value-returning function, and a foreign `extern "C"`
 declaration. Generic returns are checked after closing the result type.
 
-Current boundary: this implements the correctness-significant MustUse seam.
-Project policy concepts, manifest severity binding, `concept lint`,
-`concept fmt`, and policy explanations are not implemented by this change.
+`concept explain file.concept --must-use Symbol` now shows the declaration or
+return-type attribute responsible for the core obligation. Artifact-only and
+foreign declarations retain their origin. Project policy remains a separate
+source of findings and cannot weaken MustUse. `concept fmt` belongs to R8e3.

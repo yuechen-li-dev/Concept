@@ -2353,12 +2353,19 @@ func (p *parser) parseConceptDecl() (ConceptDecl, error) {
 	var params []GenericParameter
 	conceptParams := map[string]bool{}
 	for {
-		paramTok, parseErr := p.expectIdentifier("CV4141", "expected concept type parameter")
+		kind := "type"
+		if p.peekLexeme() == "declaration" {
+			p.next()
+			kind = "declaration"
+		}
+		paramTok, parseErr := p.expectIdentifier("CV4141", "expected concept parameter")
 		if parseErr != nil {
 			return ConceptDecl{}, parseErr
 		}
-		params = append(params, GenericParameter{Name: paramTok.Lexeme, Kind: "type", Span: paramTok.Span})
-		conceptParams[paramTok.Lexeme] = true
+		params = append(params, GenericParameter{Name: paramTok.Lexeme, Kind: kind, Span: paramTok.Span})
+		if kind == "type" {
+			conceptParams[paramTok.Lexeme] = true
+		}
 		if p.peekLexeme() != "," {
 			break
 		}
@@ -2374,7 +2381,7 @@ func (p *parser) parseConceptDecl() (ConceptDecl, error) {
 	p.templateTypeParams = conceptParams
 	defer func() { p.templateTypeParams = oldTypeParams }()
 	decl := ConceptDecl{Name: nameTok.Lexeme, TypeParam: params[0].Name, Span: start}
-	if len(params) > 1 {
+	if len(params) > 1 || params[0].Kind != "type" {
 		decl.Parameters = params
 	}
 	for !p.done() && p.peekLexeme() != "}" {
@@ -2539,14 +2546,30 @@ func (p *parser) parseConceptRequirement(typeParam string) (ConceptRequirement, 
 		return req, nil
 	}
 	if p.isConceptApplicationAhead(typeParam) {
-		ref, err := p.parseConceptUse(typeParam)
+		name, _, arguments, err := p.parseConceptApplication(typeParam)
 		if err != nil {
 			return nil, err
 		}
 		if _, err := p.expect(";"); err != nil {
 			return nil, err
 		}
-		return &PrerequisiteRequirement{ConceptName: ref.Name, TypeArg: ref.TypeArgs[0], TypeArgs: ref.TypeArgs, Span: start.Span}, nil
+		var types []Type
+		for _, argument := range arguments {
+			if argument.Kind == "type" {
+				types = append(types, argument.Type)
+			}
+		}
+		requirement := &PrerequisiteRequirement{ConceptName: name, TypeArgs: types, Span: start.Span}
+		for _, argument := range arguments {
+			if argument.Kind == "declaration" {
+				requirement.Arguments = arguments
+				break
+			}
+		}
+		if len(types) > 0 {
+			requirement.TypeArg = types[0]
+		}
+		return requirement, nil
 	}
 	retType, err := p.parseType(typeParam)
 	if err != nil {
@@ -2608,14 +2631,23 @@ func (p *parser) parseConceptAssertion() (ConceptAssertion, error) {
 	if err != nil {
 		return ConceptAssertion{}, err
 	}
-	ref, err := p.parseConceptUse("")
+	name, _, arguments, err := p.parseConceptApplication("")
 	if err != nil {
 		return ConceptAssertion{}, err
 	}
 	if _, err := p.expect(";"); err != nil {
 		return ConceptAssertion{}, err
 	}
-	return ConceptAssertion{ConceptName: ref.Name, ConcreteType: ref.TypeArgs[0], TypeArgs: ref.TypeArgs, Span: start.Span}, nil
+	assertion := ConceptAssertion{ConceptName: name, Arguments: arguments, Span: start.Span}
+	for _, argument := range arguments {
+		if argument.Kind == "type" {
+			assertion.TypeArgs = append(assertion.TypeArgs, argument.Type)
+		}
+	}
+	if len(assertion.TypeArgs) > 0 {
+		assertion.ConcreteType = assertion.TypeArgs[0]
+	}
+	return assertion, nil
 }
 
 func (p *parser) parseFunctionDecl(conceptParam string, comptime bool) (FunctionDecl, error) {
@@ -3001,29 +3033,53 @@ func (p *parser) parseQuantityDimension() (QuantityDimension, error) {
 }
 
 func (p *parser) parseConceptUse(conceptParam string) (Type, error) {
-	name, span, err := p.parseQualifiedConceptName("CV4145", "expected concept name")
+	name, span, arguments, err := p.parseConceptApplication(conceptParam)
 	if err != nil {
 		return Type{}, err
 	}
-	if _, err := p.expect("<"); err != nil {
-		return Type{}, err
-	}
-	var args []Type
-	for {
-		arg, parseErr := p.parseType(conceptParam)
-		if parseErr != nil {
-			return Type{}, parseErr
+	var types []Type
+	for _, argument := range arguments {
+		if argument.Kind != "type" {
+			return Type{}, evt1Diagnostic("CONCEPT_ARGUMENT_CATEGORY_MISMATCH", "this concept application requires type arguments", argument.Span)
 		}
-		args = append(args, arg)
+		types = append(types, argument.Type)
+	}
+	return Type{Name: name, Kind: TypeApplied, TypeArgs: types, Span: span}, nil
+}
+
+func (p *parser) parseConceptApplication(conceptParam string) (string, Span, []ConceptArgumentRef, error) {
+	name, span, err := p.parseQualifiedConceptName("CV4145", "expected concept name")
+	if err != nil {
+		return "", Span{}, nil, err
+	}
+	if _, err := p.expect("<"); err != nil {
+		return "", Span{}, nil, err
+	}
+	var args []ConceptArgumentRef
+	for {
+		if p.peekLexeme() == "declaration" {
+			p.next()
+			identifier, parseErr := p.expectIdentifier("CONCEPT_DECLARATION_ARGUMENT_INVALID", "expected declaration subject name")
+			if parseErr != nil {
+				return "", Span{}, nil, parseErr
+			}
+			args = append(args, ConceptArgumentRef{Kind: "declaration", Declaration: identifier.Lexeme, Span: identifier.Span})
+		} else {
+			arg, parseErr := p.parseType(conceptParam)
+			if parseErr != nil {
+				return "", Span{}, nil, parseErr
+			}
+			args = append(args, ConceptArgumentRef{Kind: "type", Type: arg, Span: arg.Span})
+		}
 		if p.peekLexeme() != "," {
 			break
 		}
 		p.next()
 	}
 	if _, err := p.expect(">"); err != nil {
-		return Type{}, err
+		return "", Span{}, nil, err
 	}
-	return Type{Name: name, Kind: TypeApplied, TypeArgs: args, Span: span}, nil
+	return name, span, args, nil
 }
 
 func (p *parser) parseQualifiedConceptName(code, message string) (string, Span, error) {
@@ -4967,7 +5023,7 @@ func (p *parser) isConceptApplicationAhead(conceptParam string) bool {
 		return false
 	}
 	save := p.pos
-	_, err := p.parseConceptUse(conceptParam)
+	_, _, _, err := p.parseConceptApplication(conceptParam)
 	isRequirement := err == nil && p.peekLexeme() == ";"
 	p.pos = save
 	return isRequirement

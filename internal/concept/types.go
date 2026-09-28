@@ -413,10 +413,11 @@ func (*OperationRequirement) evt1ConceptRequirement() {}
 func (r *OperationRequirement) requirementSpan() Span { return r.Span }
 
 type PrerequisiteRequirement struct {
-	ConceptName string `json:"concept_name"`
-	TypeArg     Type   `json:"type_arg"`
-	TypeArgs    []Type `json:"type_args,omitempty"`
-	Span        Span   `json:"span"`
+	ConceptName string               `json:"concept_name"`
+	TypeArg     Type                 `json:"type_arg"`
+	TypeArgs    []Type               `json:"type_args,omitempty"`
+	Arguments   []ConceptArgumentRef `json:"arguments,omitempty"`
+	Span        Span                 `json:"span"`
 }
 
 func (*PrerequisiteRequirement) evt1ConceptRequirement() {}
@@ -459,10 +460,20 @@ type ConceptDecl struct {
 }
 
 type ConceptAssertion struct {
-	ConceptName  string `json:"concept_name"`
-	ConcreteType Type   `json:"concrete_type"`
-	TypeArgs     []Type `json:"type_args,omitempty"`
-	Span         Span   `json:"span"`
+	ConceptName  string               `json:"concept_name"`
+	ConcreteType Type                 `json:"concrete_type"`
+	TypeArgs     []Type               `json:"type_args,omitempty"`
+	Arguments    []ConceptArgumentRef `json:"-"`
+	Span         Span                 `json:"span"`
+}
+
+// ConceptArgumentRef retains the syntactic category until semantic binding.
+// Declaration names resolve to bound DeclarationSubject identities, never Type.
+type ConceptArgumentRef struct {
+	Kind        string `json:"kind"`
+	Type        Type   `json:"type,omitempty"`
+	Declaration string `json:"declaration,omitempty"`
+	Span        Span   `json:"span"`
 }
 
 type TemplateConstraint struct {
@@ -1899,6 +1910,7 @@ type semanticEnv struct {
 	comptimeFunctions       map[string]FunctionDecl
 	templates               map[string]TemplateDecl
 	concepts                map[string]ConceptDecl
+	declarationSubjects     []DeclarationSubject
 	comptimeDecls           map[string]ComptimeDecl
 	comptimeValues          map[string]Value
 	fieldSets               map[string]map[string]Type

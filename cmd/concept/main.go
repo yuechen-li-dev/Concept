@@ -18,6 +18,7 @@ const usage = `Concept EVT1 Stage 0 / Go
 
 Usage:
   concept check <file>
+  concept lint <file-or-project> [--verify]
   concept build-module <file>
   concept emit-c <file> [--verify]
   concept mir <file> [--verify]
@@ -25,6 +26,8 @@ Usage:
   concept explain <file>[:line] [--json] [--verbose]
   concept explain <file> --generated <symbol> [--json] [--verbose]
   concept explain <file> --concept 'Trace<Node>' [--json] [--verbose]
+  concept explain <file> --policy <concept> --subject <declaration> [--json] [--verbose]
+  concept explain <file> --must-use <symbol> [--json] [--verbose]
   concept reflect <file>
   concept generated <file> [symbol]
   concept test [path-or-filter] [--filter text] [--list] [--verbose] [--verify]
@@ -39,6 +42,7 @@ Usage:
 
 Commands:
   check   parse and semantically validate a Concept source file
+  lint    evaluate manifest.concept policies over bound declarations
   build-module  write a deterministic concept-module.v1 artifact to stdout
   emit-c  write generated strict-C11 implementation to stdout
   mir     write deterministic MIR JSON to stdout
@@ -82,6 +86,19 @@ func main() {
 	}
 	if len(os.Args) >= 2 && os.Args[1] == "generated" {
 		runGeneratedCommand(os.Args[2:])
+		return
+	}
+	if (len(os.Args) == 3 || len(os.Args) == 4 && os.Args[3] == "--verify") && os.Args[1] == "lint" {
+		findings, err := concept.LintPath(os.Args[2], semanticModuleRoots(os.Args[2]))
+		if err != nil {
+			fail(err)
+		}
+		for _, finding := range findings {
+			fmt.Println(concept.FormatLintFinding(finding))
+		}
+		if concept.HasLintErrors(findings) {
+			os.Exit(1)
+		}
 		return
 	}
 	if len(os.Args) >= 2 && os.Args[1] == "package" {
@@ -347,11 +364,11 @@ func nativeCompanionRoot(sourcePath string) string {
 }
 
 func runExplainCommand(args []string) {
-	if len(args) < 1 || len(args) > 5 {
+	if len(args) < 1 || len(args) > 7 {
 		fmt.Fprint(os.Stderr, usage)
 		os.Exit(2)
 	}
-	sourcePath, line, jsonOutput, verbose, generatedSymbol, conceptGoal := args[0], 0, false, false, "", ""
+	sourcePath, line, jsonOutput, verbose, generatedSymbol, conceptGoal, policyName, subjectName, mustUseName := args[0], 0, false, false, "", "", "", "", ""
 	for i := 1; i < len(args); i++ {
 		arg := args[i]
 		switch arg {
@@ -373,6 +390,27 @@ func runExplainCommand(args []string) {
 				os.Exit(2)
 			}
 			conceptGoal = args[i]
+		case "--policy":
+			i++
+			if i >= len(args) {
+				fmt.Fprint(os.Stderr, usage)
+				os.Exit(2)
+			}
+			policyName = args[i]
+		case "--subject":
+			i++
+			if i >= len(args) {
+				fmt.Fprint(os.Stderr, usage)
+				os.Exit(2)
+			}
+			subjectName = args[i]
+		case "--must-use":
+			i++
+			if i >= len(args) {
+				fmt.Fprint(os.Stderr, usage)
+				os.Exit(2)
+			}
+			mustUseName = args[i]
 		default:
 			fmt.Fprint(os.Stderr, usage)
 			os.Exit(2)
@@ -394,7 +432,15 @@ func runExplainCommand(args []string) {
 		proofSourcePath = relative
 	}
 	var graph concept.ProofGraph
-	if generatedSymbol != "" || conceptGoal != "" {
+	if mustUseName != "" {
+		graph, err = concept.ExplainMustUse(sourcePath, mustUseName, semanticModuleRoots(sourcePath))
+	} else if policyName != "" {
+		if subjectName == "" {
+			fmt.Fprint(os.Stderr, usage)
+			os.Exit(2)
+		}
+		graph, err = concept.ExplainPolicy(sourcePath, policyName, subjectName, semanticModuleRoots(sourcePath))
+	} else if generatedSymbol != "" || conceptGoal != "" {
 		module, parseErr := concept.ParseWithSemanticModuleRoots(filepath.ToSlash(proofSourcePath), string(body), semanticModuleRoots(sourcePath))
 		if parseErr != nil {
 			fail(parseErr)

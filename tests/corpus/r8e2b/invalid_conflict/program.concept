@@ -1,0 +1,3 @@
+module R8e2b.Conflict;
+profile Core;
+void FastFunction() {}

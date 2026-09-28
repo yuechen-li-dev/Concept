@@ -1,0 +1,2 @@
+profile Core;
+void terrible_name() {}

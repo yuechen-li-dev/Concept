@@ -11,7 +11,60 @@ type conceptAssertionSubject struct {
 	typeValue   Type
 	binding     *evt1ValueBinding
 	function    *FunctionDecl
+	declaration *DeclarationSubject
 	span        Span
+}
+
+// A named concept receives one of the semantic categories declared by its
+// parameter. A declaration is never encoded as a synthetic Type.
+type conceptSemanticArgument struct {
+	typeValue   *Type
+	declaration *DeclarationSubject
+}
+
+func conceptTypeArgument(t Type) conceptSemanticArgument {
+	return conceptSemanticArgument{typeValue: &t}
+}
+func conceptDeclarationArgument(d DeclarationSubject) conceptSemanticArgument {
+	return conceptSemanticArgument{declaration: &d}
+}
+
+func bindConceptSemanticArguments(decl ConceptDecl, arguments []conceptSemanticArgument) (map[string]Type, map[string]DeclarationSubject, bool) {
+	parameters := evt1ConceptParameters(decl)
+	if len(parameters) != len(arguments) {
+		return nil, nil, false
+	}
+	types := map[string]Type{}
+	declarations := map[string]DeclarationSubject{}
+	for i, parameter := range parameters {
+		switch parameter.Kind {
+		case "type":
+			if arguments[i].typeValue == nil {
+				return nil, nil, false
+			}
+			types[parameter.Name] = *arguments[i].typeValue
+		case "declaration":
+			if arguments[i].declaration == nil {
+				return nil, nil, false
+			}
+			declarations[parameter.Name] = *arguments[i].declaration
+		default:
+			return nil, nil, false
+		}
+	}
+	return types, declarations, true
+}
+
+func conceptSemanticApplicationLabel(name string, arguments []conceptSemanticArgument) string {
+	parts := make([]string, len(arguments))
+	for i, argument := range arguments {
+		if argument.declaration != nil {
+			parts[i] = argument.declaration.Owner + "::" + argument.declaration.Name + "#" + argument.declaration.ID
+		} else {
+			parts[i] = argument.typeValue.String()
+		}
+	}
+	return name + "<" + strings.Join(parts, ", ") + ">"
 }
 
 func evt1ValidateConceptAssertion(env *semanticEnv, scope *evt1Scope, call *CallExpr) (Type, error) {
@@ -75,17 +128,21 @@ func evt1ResolveConceptAssertionSubject(env *semanticEnv, scope *evt1Scope, name
 		if span.Line == 0 {
 			span = name.Span
 		}
-		return conceptAssertionSubject{description: ProofSubjectDescription{Kind: "value", Name: name.Name, Type: binding.t.String()}, typeValue: binding.t, binding: &copy, span: span}, nil
+		return conceptAssertionSubject{description: ProofSubjectDescription{Kind: "value", Name: name.Name, Type: binding.t.String()}, typeValue: binding.t, binding: &copy, declaration: evt1FindDeclarationSubject(env, name.Name, LocalDeclaration, span), span: span}, nil
 	}
 	if candidates := env.functions[name.Name]; len(candidates) == 1 {
 		fn := candidates[0]
-		return conceptAssertionSubject{description: ProofSubjectDescription{Kind: "operation", Name: name.Name, Type: evt1FunctionSignature(fn)}, function: &fn, span: name.Span}, nil
+		kind := FunctionDeclaration
+		if fn.MethodOf != "" {
+			kind = MethodDeclaration
+		}
+		return conceptAssertionSubject{description: ProofSubjectDescription{Kind: "operation", Name: name.Name, Type: evt1FunctionSignature(fn)}, function: &fn, declaration: evt1FindDeclarationSubject(env, name.Name, kind, fn.Span), span: name.Span}, nil
 	} else if len(candidates) > 1 {
 		return conceptAssertionSubject{}, evt1Diagnostic("CONCEPT_ASSERT_SUBJECT_AMBIGUOUS", fmt.Sprintf("semantic operation subject %s is overloaded", name.Name), name.Span)
 	}
 	if decl, ok := env.structs[name.Name]; ok {
 		t := Type{Name: decl.Name, Kind: TypeStruct, Span: name.Span}
-		return conceptAssertionSubject{description: ProofSubjectDescription{Kind: "type", Name: name.Name, Type: name.Name}, typeValue: t, span: name.Span}, nil
+		return conceptAssertionSubject{description: ProofSubjectDescription{Kind: "type", Name: name.Name, Type: name.Name}, typeValue: t, declaration: evt1FindDeclarationSubject(env, name.Name, TypeDeclaration, decl.Span), span: name.Span}, nil
 	}
 	if alias, ok := env.typeAliases[name.Name]; ok {
 		return conceptAssertionSubject{description: ProofSubjectDescription{Kind: "type", Name: name.Name, Type: alias.String()}, typeValue: alias, span: name.Span}, nil
@@ -93,7 +150,31 @@ func evt1ResolveConceptAssertionSubject(env *semanticEnv, scope *evt1Scope, name
 	if builtin, ok := env.profile.builtinType(name.Name, name.Span); ok {
 		return conceptAssertionSubject{description: ProofSubjectDescription{Kind: "type", Name: name.Name, Type: builtin.String()}, typeValue: builtin, span: name.Span}, nil
 	}
+	var found *DeclarationSubject
+	for i := range env.declarationSubjects {
+		candidate := &env.declarationSubjects[i]
+		if candidate.Name != name.Name {
+			continue
+		}
+		if found != nil {
+			return conceptAssertionSubject{}, evt1Diagnostic("CONCEPT_ASSERT_SUBJECT_AMBIGUOUS", fmt.Sprintf("semantic declaration subject %s is ambiguous", name.Name), name.Span)
+		}
+		found = candidate
+	}
+	if found != nil {
+		return conceptAssertionSubject{description: ProofSubjectDescription{Kind: string(found.Kind), Name: found.Name}, declaration: found, span: found.Site}, nil
+	}
 	return conceptAssertionSubject{}, evt1Diagnostic("CONCEPT_ASSERT_SUBJECT_UNKNOWN", fmt.Sprintf("unknown semantic subject %s", name.Name), name.Span)
+}
+
+func evt1FindDeclarationSubject(env *semanticEnv, name string, kind DeclarationKind, site Span) *DeclarationSubject {
+	for i := range env.declarationSubjects {
+		subject := &env.declarationSubjects[i]
+		if subject.Name == name && subject.Kind == kind && subject.Site == site {
+			return subject
+		}
+	}
+	return nil
 }
 
 func evt1BuildConceptAssertionGraph(env *semanticEnv, goal string, parameters []int, subjects []conceptAssertionSubject, reason string, span Span) (ProofGraph, error) {
@@ -124,9 +205,20 @@ func evt1BuildConceptAssertionGraph(env *semanticEnv, goal string, parameters []
 		if len(parameters) != 0 || len(subjects) != len(evt1ConceptParameters(decl)) {
 			return ProofGraph{}, evt1Diagnostic("CONCEPT_ASSERT_ARITY_MISMATCH", fmt.Sprintf("concept %s requires %d semantic subject(s) and no analysis parameters", goal, len(evt1ConceptParameters(decl))), span)
 		}
-		arguments := make([]Type, len(subjects))
+		arguments := make([]conceptSemanticArgument, len(subjects))
 		for i, subject := range subjects {
-			arguments[i] = subject.typeValue
+			parameter := evt1ConceptParameters(decl)[i]
+			if parameter.Kind == "declaration" {
+				if subject.declaration == nil {
+					return ProofGraph{}, evt1Diagnostic("CONCEPT_ARGUMENT_CATEGORY_MISMATCH", fmt.Sprintf("%s expects a declaration subject for %s, got %s", goal, parameter.Name, subject.description.Kind), span)
+				}
+				arguments[i] = conceptDeclarationArgument(*subject.declaration)
+			} else {
+				if subject.description.Kind == "operation" || subject.typeValue.Name == "" {
+					return ProofGraph{}, evt1Diagnostic("CONCEPT_ARGUMENT_CATEGORY_MISMATCH", fmt.Sprintf("%s expects a type for %s, got declaration", goal, parameter.Name), span)
+				}
+				arguments[i] = conceptTypeArgument(subject.typeValue)
+			}
 		}
 		graph.Outcome = evt1ProjectNamedConceptApplication(env, &graph, root, goal, arguments, subjects[0].binding, nil, span)
 	} else {
@@ -849,21 +941,24 @@ func evt1DirectCalls(block Block) []string {
 }
 
 func evt1ProjectNamedConcept(env *semanticEnv, graph *ProofGraph, parent, name string, concrete Type, binding *evt1ValueBinding, path []string, span Span) SemanticFactCertainty {
-	return evt1ProjectNamedConceptApplication(env, graph, parent, name, []Type{concrete}, binding, path, span)
+	return evt1ProjectNamedConceptApplication(env, graph, parent, name, []conceptSemanticArgument{conceptTypeArgument(concrete)}, binding, path, span)
 }
 
-func evt1ProjectNamedConceptApplication(env *semanticEnv, graph *ProofGraph, parent, name string, arguments []Type, binding *evt1ValueBinding, path []string, span Span) SemanticFactCertainty {
-	application := evt1ConceptApplicationLabel(name, arguments)
+func evt1ProjectNamedConceptApplication(env *semanticEnv, graph *ProofGraph, parent, name string, arguments []conceptSemanticArgument, binding *evt1ValueBinding, path []string, span Span) SemanticFactCertainty {
+	application := conceptSemanticApplicationLabel(name, arguments)
 	if containsString(path, application) {
 		return FactDisproven
 	}
 	path = append(path, application)
 	decl := env.concepts[name]
-	bindings, ok := evt1ConceptBindings(decl, arguments)
+	bindings, declarationBindings, ok := bindConceptSemanticArguments(decl, arguments)
 	if !ok || len(arguments) == 0 {
 		return FactDisproven
 	}
-	concrete := arguments[0]
+	concrete := Type{}
+	if arguments[0].typeValue != nil {
+		concrete = *arguments[0].typeValue
+	}
 	outcome := FactProven
 	for _, raw := range decl.Requirements {
 		label := "requirement"
@@ -872,11 +967,29 @@ func evt1ProjectNamedConceptApplication(env *semanticEnv, graph *ProofGraph, par
 		requirementOrigin := FactOriginDeclared
 		switch requirement := raw.(type) {
 		case *PrerequisiteRequirement:
-			nestedArguments := evt1SubstituteArguments(evt1RequirementArguments(requirement), bindings)
-			label = evt1ConceptApplicationLabel(requirement.ConceptName, nestedArguments)
+			var nested []conceptSemanticArgument
+			if len(declarationBindings) != 0 {
+				for _, argument := range requirement.Arguments {
+					if argument.Kind == "declaration" {
+						declaration, exists := declarationBindings[argument.Declaration]
+						if !exists {
+							return FactDisproven
+						}
+						nested = append(nested, conceptDeclarationArgument(declaration))
+					} else {
+						nested = append(nested, conceptTypeArgument(evt1SubstituteBindings(argument.Type, bindings)))
+					}
+				}
+			} else {
+				nestedArguments := evt1SubstituteArguments(evt1RequirementArguments(requirement), bindings)
+				for _, argument := range nestedArguments {
+					nested = append(nested, conceptTypeArgument(argument))
+				}
+			}
+			label = conceptSemanticApplicationLabel(requirement.ConceptName, nested)
 			node := graph.addNode(ProofRequirement, label, "prerequisite concept", "", FactOriginDeclared, requirement.Span)
 			graph.addEdge(parent, node, ProofRequires)
-			requirementOutcome = evt1ProjectNamedConceptApplication(env, graph, node, requirement.ConceptName, nestedArguments, binding, path, span)
+			requirementOutcome = evt1ProjectNamedConceptApplication(env, graph, node, requirement.ConceptName, nested, binding, path, span)
 			setProofNodeOutcome(graph, node, requirementOutcome)
 			if requirementOutcome == FactDisproven {
 				outcome = FactDisproven
@@ -911,6 +1024,13 @@ func evt1ProjectNamedConceptApplication(env *semanticEnv, graph *ProofGraph, par
 			}
 		case *CompilerAnalysisRequirement:
 			label = requirement.Analysis
+			if len(requirement.SubjectArgs) == 1 {
+				if declaration, exists := declarationBindings[requirement.SubjectArgs[0].Name]; exists {
+					requirementOutcome, detail = evt1ProjectDeclarationAnalysis(env, graph, parent, requirement.Analysis, declaration)
+					requirementOrigin = FactOriginCompilerAnalysis
+					break
+				}
+			}
 			if requirement.Analysis == "Allocates" {
 				requirementOutcome = FactProven
 				detail = "interface operation is permitted to allocate"
@@ -918,7 +1038,13 @@ func evt1ProjectNamedConceptApplication(env *semanticEnv, graph *ProofGraph, par
 			}
 			analysis := evt1SemanticAnalysisRegistry[requirement.Analysis]
 			if len(requirement.SubjectArgs) > 0 {
-				bound, err := evt1BindRelationalRequirementSubjectsApplication(env, decl, arguments, requirement.SubjectArgs, span)
+				typeArguments := make([]Type, len(arguments))
+				for i, argument := range arguments {
+					if argument.typeValue != nil {
+						typeArguments[i] = *argument.typeValue
+					}
+				}
+				bound, err := evt1BindRelationalRequirementSubjectsApplication(env, decl, typeArguments, requirement.SubjectArgs, span)
 				if err != nil {
 					requirementOutcome, detail = FactDisproven, err.Error()
 				} else {
@@ -953,6 +1079,78 @@ func evt1ProjectNamedConceptApplication(env *semanticEnv, graph *ProofGraph, par
 		}
 	}
 	return outcome
+}
+
+func evt1ProjectDeclarationAnalysis(env *semanticEnv, graph *ProofGraph, parent, analysis string, declaration DeclarationSubject) (SemanticFactCertainty, string) {
+	var matches bool
+	switch analysis {
+	case "Name":
+		return FactProven, "identifier spelling: " + declaration.Name
+	case "DeclarationKind":
+		return FactProven, "bound declaration kind: " + string(declaration.Kind)
+	case "Authored":
+		matches = declaration.Provenance == DeclarationAuthored
+	case "Generated":
+		matches = declaration.Provenance == DeclarationGenerated
+	case "Foreign":
+		matches = declaration.Provenance == DeclarationForeign
+	case string(TypeDeclaration), string(FunctionDeclaration), string(MethodDeclaration), string(FieldDeclaration), string(LocalDeclaration), string(ParameterDeclaration), string(ConceptDeclaration), string(InterfaceDeclaration), string(MachineDeclaration):
+		matches = string(declaration.Kind) == analysis
+	case "NoAllocation":
+		if declaration.Kind != FunctionDeclaration && declaration.Kind != MethodDeclaration {
+			return FactDisproven, "NoAllocation requires a function or method declaration"
+		}
+		for _, fn := range env.functions[declaration.Name] {
+			if fn.Module == declaration.Owner && fn.Span == declaration.Site {
+				return evt1ProjectNoAllocation(env, graph, parent, fn, map[string]bool{}), "existing NoAllocation proof for bound declaration"
+			}
+		}
+		return FactUnknown, "bound operation has no available effect summary"
+	case "CanonicalName", "PascalCase", "CamelCase", "SnakeCase":
+		style := analysis
+		if style == "CanonicalName" {
+			if declaration.Provenance != DeclarationAuthored {
+				return FactProven, fmt.Sprintf("%s provenance is exempt from authored naming policy", declaration.Provenance)
+			}
+			style = canonicalDeclarationStyle(declaration.Kind)
+		}
+		if style == "SnakeCase" {
+			style = "snake_case"
+		}
+		if declarationNameHasStyle(declaration.Name, style) {
+			return FactProven, fmt.Sprintf("name %s satisfies %s", declaration.Name, style)
+		}
+		return FactDisproven, fmt.Sprintf("name %s requires %s", declaration.Name, style)
+	default:
+		return FactUnknown, "unsupported declaration analysis"
+	}
+	if matches {
+		return FactProven, fmt.Sprintf("%s is %s with %s provenance", declaration.Name, declaration.Kind, declaration.Provenance)
+	}
+	return FactDisproven, fmt.Sprintf("%s is %s with %s provenance", declaration.Name, declaration.Kind, declaration.Provenance)
+}
+
+func evt1IsDeclarationAnalysis(analysis string) bool {
+	switch analysis {
+	case "Name", "DeclarationKind", "Authored", "Generated", "Foreign", "NoAllocation", "CanonicalName", "PascalCase", "CamelCase", "SnakeCase",
+		string(TypeDeclaration), string(FunctionDeclaration), string(MethodDeclaration),
+		string(FieldDeclaration), string(LocalDeclaration), string(ParameterDeclaration),
+		string(ConceptDeclaration), string(InterfaceDeclaration), string(MachineDeclaration):
+		return true
+	}
+	return false
+}
+
+func evt1DeclarationRequirementParameter(decl ConceptDecl, requirement *CompilerAnalysisRequirement) bool {
+	if len(requirement.SubjectArgs) != 1 || len(requirement.TypeArgs) != 0 || len(requirement.Parameters) != 0 {
+		return false
+	}
+	for _, parameter := range evt1ConceptParameters(decl) {
+		if parameter.Kind == "declaration" && parameter.Name == requirement.SubjectArgs[0].Name {
+			return true
+		}
+	}
+	return false
 }
 
 func evt1DeriveProofRepairs(env *semanticEnv, graph *ProofGraph, goal string, subjects []conceptAssertionSubject) {

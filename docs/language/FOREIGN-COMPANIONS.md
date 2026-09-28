@@ -31,3 +31,10 @@ recursively supported fields as direct parameters and returns. See
 [ABI-LAYOUT.md](ABI-LAYOUT.md) for eligibility, layout queries, and deferred
 forms. Measured `NativeToolchainProbe` layout and trusted `DeclaredForeign`
 semantic contracts remain distinct evidence.
+
+An `extern "C"` function is a Foreign declaration subject. The default
+authored naming concept preserves its native spelling. A foreign status return
+marked `[[must_use]]` remains a core obligation through a semantic artifact;
+`concept explain file.concept --must-use NativeStatus` shows the foreign and
+artifact provenance. A declaration-parameter policy may require an existing
+foreign fact, but cannot promote missing ABI probe or allocation evidence.
