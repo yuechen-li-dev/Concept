@@ -68,6 +68,15 @@ func parseSyntaxModule(path, text string) (Module, error) {
 	for index := range module.Generators {
 		module.Generators[index].Module = module.Name
 	}
+	for index := range module.Concepts {
+		module.Concepts[index].Module = module.Name
+	}
+	for index := range module.Templates {
+		module.Templates[index].Module = module.Name
+	}
+	for index := range module.Automata {
+		module.Automata[index].Module = module.Name
+	}
 	return module, nil
 }
 

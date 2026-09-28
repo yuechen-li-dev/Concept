@@ -450,6 +450,7 @@ func (r *CompilerAnalysisRequirement) requirementSpan() Span { return r.Span }
 
 type ConceptDecl struct {
 	Name         string               `json:"name"`
+	Module       string               `json:"-"`
 	TypeParam    string               `json:"type_param"`
 	Parameters   []GenericParameter   `json:"parameters,omitempty"`
 	Requirements []ConceptRequirement `json:"requirements,omitempty"`
@@ -473,6 +474,7 @@ type TemplateConstraint struct {
 
 type TemplateDecl struct {
 	Async         bool               `json:"async,omitempty"`
+	Module        string             `json:"-"`
 	Name          string             `json:"name"`
 	Parameters    []GenericParameter `json:"parameters,omitempty"`
 	TypeParam     string             `json:"type_param"`

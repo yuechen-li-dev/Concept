@@ -575,6 +575,21 @@ func composeSemanticModulesForNative(local Module, artifacts map[string][]byte, 
 			module.GenericTypes[i].Module = artifact.ModuleIdentity
 			module.GenericTypes[i].Struct.Module = artifact.ModuleIdentity
 		}
+		for i := range module.Concepts {
+			module.Concepts[i].Module = artifact.ModuleIdentity
+		}
+		for i := range module.Templates {
+			module.Templates[i].Module = artifact.ModuleIdentity
+		}
+		for i := range module.Automata {
+			module.Automata[i].Module = artifact.ModuleIdentity
+		}
+		for i := range module.Functions {
+			module.Functions[i].Module = artifact.ModuleIdentity
+		}
+		for i := range module.ComptimeFns {
+			module.ComptimeFns[i].Module = artifact.ModuleIdentity
+		}
 		for _, dependency := range artifact.Dependencies {
 			if err := load(dependency.ModuleIdentity); err != nil {
 				return err

@@ -81,6 +81,7 @@ type MachineDecl struct {
 
 type AutomataDecl struct {
 	Name        string        `json:"name"`
+	Module      string        `json:"-"`
 	SignalType  Type          `json:"signal_type"`
 	Context     *Field        `json:"context,omitempty"`
 	StateFields []Field       `json:"state_fields,omitempty"`
