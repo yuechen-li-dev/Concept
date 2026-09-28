@@ -104,12 +104,12 @@ func narrowNativeDeterminismPath(t *testing.T) {
 
 // nativeHostLinkArgs are the host libraries a linked native harness may need.
 // Generated C can call <math.h> functions (inference lowers softmax to expf),
-// which glibc keeps in libm; MinGW and the MSVC-target clang driver accept -lm
-// as well, matching the existing concept test runner and math_r7x2 harness.
+// which glibc keeps in libm. The Windows CRT supplies these functions; the
+// MSVC-target clang driver interprets -lm as m.lib, which is unavailable.
 // Threaded harnesses use POSIX threads off Windows.
 func nativeHostLinkArgs() []string {
 	if runtime.GOOS == "windows" {
-		return []string{"-lm"}
+		return nil
 	}
 	return []string{"-lm", "-pthread"}
 }
