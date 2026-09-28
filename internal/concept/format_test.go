@@ -422,3 +422,31 @@ func TestR8e3ProofTruth(t *testing.T) {
 		prior = graph.Outcome
 	}
 }
+
+func TestR8gFormatterKeepsCompactNaturalForms(t *testing.T) {
+	const source = `profile Core;
+struct Point { int x; int y; }
+int Check(int used, int count) {
+    Point p = Point{0, 0};
+    used++;
+    count--;
+    if (used > count) { return p.x; }
+    return count;
+}`
+	formatted, err := FormatSource("compact.concept", source, DefaultFormatOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, needle := range []string{"Point{0, 0}", "used++;", "count--;", "if (used > count) { return p.x; }"} {
+		if !strings.Contains(formatted, needle) {
+			t.Fatalf("formatter lost %q:\n%s", needle, formatted)
+		}
+	}
+	if strings.Contains(formatted, "struct Point { int x;") {
+		t.Fatalf("declaration was incorrectly compacted:\n%s", formatted)
+	}
+	again, err := FormatSource("compact.concept", formatted, DefaultFormatOptions())
+	if err != nil || again != formatted {
+		t.Fatalf("formatter is not stable: %v\n%s", err, again)
+	}
+}

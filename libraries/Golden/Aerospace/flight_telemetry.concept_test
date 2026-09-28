@@ -6,12 +6,14 @@ import Golden.Aerospace.FlightTelemetry;
 void CommercialFlightTelemetryTransitionsAreDeterministic()
 {
     FlightSample empty = FlightSample{0.0, 0.0, false};
-    FlightController controller = FlightController{FlightMode::Preflight, [empty ... 16], 0, 0, 0};
+    FlightController controller = FlightController {
+        FlightMode::Preflight,[empty ... 16], 0, 0, 0
+    };
     Assert.LGTM(AcceptNative(ref controller, NativeSample{120.0, 20.0, 1}), "valid climb sample");
     Assert.True(controller.mode == FlightMode::Climb, "positive vertical speed starts climb");
     Assert.LGTM(AcceptNative(ref controller, NativeSample{11000.0, 10.0, 1}), "cruise altitude sample");
     Assert.True(controller.mode == FlightMode::Cruise, "climb enters cruise envelope");
-    Assert.LGTM(AcceptNative(ref controller, NativeSample{10500.0, -5.0, 1}), "descent sample");
+    Assert.LGTM(AcceptNative(ref controller, NativeSample{10500.0, - 5.0, 1}), "descent sample");
     Assert.True(controller.mode == FlightMode::Descent, "negative vertical speed starts descent");
     Assert.Equals(CountValid(ref const controller), 3, "three stored samples remain valid");
     Assert.LGTM(Latest(ref const controller), "latest accepted sample is available");
@@ -35,7 +37,9 @@ void TelemetryControlPathUsesFixedStorage()
 void EmptyControllerHasNoGuidanceSample()
 {
     FlightSample empty = FlightSample{0.0, 0.0, false};
-    FlightController controller = FlightController{FlightMode::Preflight, [empty ... 16], 0, 0, 0};
+    FlightController controller = FlightController {
+        FlightMode::Preflight,[empty ... 16], 0, 0, 0
+    };
     Assert.Error(Latest(ref const controller), "history has no sample");
     Assert.False(MayUseTelemetryForGuidance(ref const controller), "empty history cannot guide");
 }

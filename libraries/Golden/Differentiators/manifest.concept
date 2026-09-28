@@ -19,9 +19,7 @@ concept HotPathPolicy<declaration F>
     requires compiler.NoAllocation(F);
 }
 
-comptime LintPolicy Naming = LintPolicy {
-    "ProjectNaming", "error", "", ""
-};
+comptime LintPolicy Naming = LintPolicy{"ProjectNaming", "error", "", ""};
 comptime LintPolicy DotKernel = LintPolicy {
     "HotPathPolicy", "error", "FunctionDeclaration", "DotFloat"
 };

@@ -15,7 +15,7 @@ void ANormalFlightVisitsEachPhaseInOrder()
     Assert.True(fc.phase == Phase::Climb, "climbing");
     Assert.LGTM(Accept(ref fc, Good(11000.0, 5.0)), "through cruise altitude");
     Assert.True(fc.phase == Phase::Cruise, "cruising");
-    Assert.LGTM(Accept(ref fc, Good(10800.0, -8.0)), "top of descent");
+    Assert.LGTM(Accept(ref fc, Good(10800.0, - 8.0)), "top of descent");
     Assert.True(fc.phase == Phase::Descent, "descending");
 }
 
@@ -44,7 +44,7 @@ void AnInvalidSampleLatchesTheFault()
 void AltitudeOutsideTheEnvelopeIsRejected()
 {
     FlightController fc = NewController();
-    Assert.FailsWith(Accept(ref fc, Good(-1.0, 0.0)), TelemetryError::OutsideEnvelope, "below ground");
+    Assert.FailsWith(Accept(ref fc, Good(- 1.0, 0.0)), TelemetryError::OutsideEnvelope, "below ground");
     Assert.Equals(fc.rejected, 1, "counted once");
     Assert.FailsWith(Latest(ref const fc), TelemetryError::NoSamples, "rejected samples are not recorded");
 }
@@ -53,7 +53,7 @@ void AltitudeOutsideTheEnvelopeIsRejected()
 void HistoryKeepsTheLatestSamplesForever()
 {
     FlightController fc = NewController();
-    for (i in 0..3 * HistoryLength)
+    for (i in 0 .. 3 * HistoryLength)
     {
         Assert.LGTM(Accept(ref fc, Good(100.0, 1.0)), "a long flight keeps accepting data");
     }

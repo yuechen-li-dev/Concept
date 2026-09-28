@@ -25,18 +25,14 @@ void Drop(owned Request request) { }
 async Result<int, JournalError> Fetch(int sequence)
 {
     if (sequence < 0)
-    {
-        return Result::Error(JournalError::Missing);
-    }
+    { return Result::Error(JournalError::Missing); }
     return Result::Ok(sequence * 2);
 }
 
 async Result<int, JournalError> Commit(int value)
 {
     if (value > 100)
-    {
-        return Result::Error(JournalError::Full);
-    }
+    { return Result::Error(JournalError::Full); }
     return Result::Ok(value + 1);
 }
 
@@ -44,9 +40,9 @@ async Result<int, JournalError> Commit(int value)
 async Result<int, JournalError> Transfer(int sequence)
 {
     owned Request request = Request{sequence, 0};
-    request.value = await Fetch(request.sequence)?;
+    request.value = await Fetch(request.sequence) ?;
     request.value += 1;
-    int receipt = await Commit(request.value)?;
+    int receipt = await Commit(request.value) ?;
     return Result::Ok(receipt);
 }
 
@@ -59,16 +55,12 @@ Result<int, JournalError> RunWithin(int sequence, int budget)
     while (not Complete(task)) bounded(StepBudget)
     {
         if (steps >= budget)
-        {
-            return Result::Error(JournalError::Stalled);
-        }
+        { return Result::Error(JournalError::Stalled); }
         Step(task);
         steps += 1;
     }
     else
-    {
-        return Result::Error(JournalError::Stalled);
-    }
+    { return Result::Error(JournalError::Stalled); }
     return Result(task);
 }
 

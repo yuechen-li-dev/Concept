@@ -41,7 +41,7 @@ table<64> PositionFrame
 int ProjectPositions(ref const World world, ref PositionFrame frame)
 {
     int count = Count<Agent, 64>(ref const world.agents);
-    for (i in 0..count)
+    for (i in 0 .. count)
     {
         Id<Agent> id = IdAt<Agent, 64>(ref const world.agents, i)!;
         ref const Agent agent = DenseGet<Agent, 64>(ref const world.agents, id)!;
@@ -54,7 +54,7 @@ int ProjectPositions(ref const World world, ref PositionFrame frame)
 int SumActiveCoordinates(ReadOnlySpan<int> column, int count)
 {
     int sum = 0;
-    for (i in 0..count)
+    for (i in 0 .. count)
     {
         sum += column[i];
     }
@@ -64,7 +64,7 @@ int SumActiveCoordinates(ReadOnlySpan<int> column, int count)
 void RunTickBudget(ref World world, int ticks)
 {
     // The caller selects a fixed budget. There is no implicit task runtime.
-    for (tick in 0..ticks)
+    for (tick in 0 .. ticks)
     {
         Tick(ref world);
     }

@@ -17,7 +17,9 @@ void TransientTrailsRejectStaleGenerationalHandles()
 [[fact]]
 void FixedScheduleProjectsDensePositionsIntoSoA()
 {
-    World world = World{DenseStore<Agent, 64>{Uninitialized()}, 0};
+    World world = World {
+        DenseStore<Agent, 64>{Uninitialized()}, 0
+    };
     Id<Agent> first = Spawn(ref world, 1, 2)!;
     Id<Agent> second = Spawn(ref world, 4, 5)!;
     {
@@ -25,7 +27,7 @@ void FixedScheduleProjectsDensePositionsIntoSoA()
         a.intent = Intent::Seek(3, 2);
     }
     RunTickBudget(ref world, 2);
-    PositionFrame frame = PositionFrame{[0 ...], [0 ...]};
+    PositionFrame frame = PositionFrame{[0 ...],[0 ...]};
     int count = ProjectPositions(ref const world, ref frame);
     Assert.Equals(count, 2, "two agents project into the fixed frame");
     Assert.Equals(SumActiveCoordinates(ReadOnlySpan(frame.x), count), 7, "SoA x column holds updated positions");

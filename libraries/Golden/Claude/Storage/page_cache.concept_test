@@ -17,7 +17,7 @@ void OffsetsOutsideThePageAreRejected()
 {
     PageCache cache = NewCache();
     GenerationalId<Page> page = Load(ref cache, 1)!;
-    Assert.FailsWith(Write(ref cache, page, -1, 1), CacheError::OffsetOutOfRange, "below the page");
+    Assert.FailsWith(Write(ref cache, page, - 1, 1), CacheError::OffsetOutOfRange, "below the page");
     Assert.FailsWith(Write(ref cache, page, PageBytes, 1), CacheError::OffsetOutOfRange, "one past the end");
     Assert.LGTM(Write(ref cache, page, PageBytes - 1, 1), "the last byte is in range");
 }
@@ -64,7 +64,7 @@ void HandlesToEvictedPagesGoStale()
 void TheNinthPageDoesNotFit()
 {
     PageCache cache = NewCache();
-    for (i in 0..Frames)
+    for (i in 0 .. Frames)
     {
         Assert.LGTM(Load(ref cache, i), "fill every frame");
     }

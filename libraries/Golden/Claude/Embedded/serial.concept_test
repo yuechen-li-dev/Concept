@@ -72,7 +72,7 @@ void QueueWrapsAroundItsEnd()
 void FullQueueRejectsWithoutLosingData()
 {
     SerialPort port = TestPort();
-    for (i in 0..QueueCapacity)
+    for (i in 0 .. QueueCapacity)
     {
         Assert.LGTM(Enqueue(ref port.queue, 0x20), "fills to capacity");
     }

@@ -25,7 +25,7 @@ void SnapshotColumnsSumOnlyTheLiveRows()
     Id<Agent> b = Spawn(ref world, 4, 5)!;
     Assert.LGTM(Command(ref world, a, Intent::Seek(3, 2)), "a walks east");
     RunTicks(ref world, 2);
-    Positions frame = Positions{[99 ...], [99 ...]};
+    Positions frame = Positions{[99 ...],[99 ...]};
     int rows = Snapshot(ref const world, ref frame);
     Assert.Equals(rows, 2, "two agents");
     ReadOnlySpan<int> xs = ReadOnlySpan(frame.x);

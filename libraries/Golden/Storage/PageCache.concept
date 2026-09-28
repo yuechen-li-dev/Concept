@@ -38,7 +38,9 @@ PageCache NewCache()
 
 Result<GenerationalId<Page>, StoreError> Install(ref PageCache cache, int filePage)
 {
-    Page page = Page{PageHeader{filePage, 1}, [0 ... 256], false, 0};
+    Page page = Page {
+        PageHeader{filePage, 1},[0 ... 256], false, 0
+    };
     return Insert<Page, 8>(ref cache.pages, move page);
 }
 requires compiler.InvalidatesBorrows(Install, cache);
@@ -46,9 +48,7 @@ requires compiler.InvalidatesBorrows(Install, cache);
 Result<void, CacheError> WriteByte(ref PageCache cache, GenerationalId<Page> id, int offset, uint8 value)
 {
     if (offset < 0 or offset >= 256)
-    {
-        return Result::Error(CacheError::Missing);
-    }
+    { return Result::Error(CacheError::Missing); }
     Result<ref Page, StoreError> found = GenerationalGetMutable<Page, 8>(ref cache.pages, id);
     match (found)
     {
@@ -65,9 +65,7 @@ Result<void, CacheError> WriteByte(ref PageCache cache, GenerationalId<Page> id,
 Result<uint8, CacheError> ReadByte(ref PageCache cache, GenerationalId<Page> id, int offset)
 {
     if (offset < 0 or offset >= 256)
-    {
-        return Result::Error(CacheError::Missing);
-    }
+    { return Result::Error(CacheError::Missing); }
     Result<ref const Page, StoreError> found = GenerationalGet<Page, 8>(ref const cache.pages, id);
     match (found)
     {
@@ -87,9 +85,7 @@ Result<void, CacheError> EvictClean(ref PageCache cache, GenerationalId<Page> id
         {
             Result::Ok(page) => {
                 if (page.dirty or page.pinCount > 0)
-                {
-                    return Result::Error(CacheError::DirtyPage);
-                }
+                { return Result::Error(CacheError::DirtyPage); }
             }
             Result::Error(error) => { return Result::Error(CacheError::Missing); }
         }
@@ -129,10 +125,12 @@ Result<void, CacheError> Unpin(ref PageCache cache, GenerationalId<Page> id)
 int ActiveSlots(ref const PageCache cache)
 {
     int count = 0;
-    for (i in 0..cache.pages.next)
+    for (i in 0 .. cache.pages.next)
     {
         GenerationalId<Page> id = GenerationalId<Page>{i, cache.pages.generation[i]};
-        if (Contains<Page, 8>(ref const cache.pages, id)) { count++; }
+        if (Contains<Page, 8>(ref const cache.pages, id)) {
+            count++;
+        }
     }
     return count;
 }

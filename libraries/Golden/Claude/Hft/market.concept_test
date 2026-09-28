@@ -6,7 +6,7 @@ int PriceOf(Option<Quote> quote)
 {
     return match (quote)
     {
-        Option::None => -1,
+        Option::None => - 1,
         Option::Some(value) => value.priceTicks,
     };
 }
@@ -19,14 +19,14 @@ void QuotesLeaveInPublicationOrder()
     Assert.LGTM(Publish(ref ring, Quote{7, 102, 2}), "second quote");
     Assert.Equals(PriceOf(Consume(ref ring)), 101, "first in, first out");
     Assert.Equals(PriceOf(Consume(ref ring)), 102, "then the second");
-    Assert.Equals(PriceOf(Consume(ref ring)), -1, "then empty");
+    Assert.Equals(PriceOf(Consume(ref ring)), - 1, "then empty");
 }
 
 [[fact]]
 void FullRingRejectsUntilAQuoteIsConsumed()
 {
     QuoteRing ring = NewRing();
-    for (i in 0..Capacity)
+    for (i in 0 .. Capacity)
     {
         Assert.LGTM(Publish(ref ring, Quote{1, i + 1, 0}), "fills to capacity");
     }
@@ -41,7 +41,7 @@ void FullRingRejectsUntilAQuoteIsConsumed()
 void SequenceNumbersWrapWithoutLosingOrder()
 {
     QuoteRing ring = NewRing();
-    for (round in 0..5 * SequenceSpan)
+    for (round in 0 .. 5 * SequenceSpan)
     {
         Assert.LGTM(Publish(ref ring, Quote{2, round + 1, 0}), "publish");
         Assert.Equals(PriceOf(Consume(ref ring)), round + 1, "consume returns the same quote");
@@ -68,7 +68,7 @@ void DrainStopsAtItsBudget()
 {
     QuoteRing ring = NewRing();
     Signal signal = NewSignal();
-    for (i in 0..10)
+    for (i in 0 .. 10)
     {
         Assert.LGTM(Publish(ref ring, Quote{4, 50 + i, 0}), "publish");
     }

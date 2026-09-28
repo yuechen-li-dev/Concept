@@ -53,7 +53,7 @@ Result<Id<Face>, StoreError> AddFace(ref Mesh mesh, Id<Vertex> a, Id<Vertex> b, 
 }
 requires compiler.InvalidatesBorrows(AddFace, mesh);
 
-Result<float<m^2>, MeshError> SignedDoubleArea(ref const Mesh mesh, Id<Face> faceId)
+Result<float<m ^ 2>, MeshError> SignedDoubleArea(ref const Mesh mesh, Id<Face> faceId)
 {
     ref const Face face = DenseGet<Face, 96>(ref const mesh.faces, faceId)!;
     ref const Vertex a = DenseGet<Vertex, 64>(ref const mesh.vertices, face.a)!;
@@ -63,11 +63,9 @@ Result<float<m^2>, MeshError> SignedDoubleArea(ref const Mesh mesh, Id<Face> fac
     float<m> aby = b.y - a.y;
     float<m> acx = c.x - a.x;
     float<m> acy = c.y - a.y;
-    float<m^2> area = abx * acy - aby * acx;
+    float<m ^ 2> area = abx * acy - aby * acx;
     if (area == 0.0)
-    {
-        return Result::Error(MeshError::Degenerate);
-    }
+    { return Result::Error(MeshError::Degenerate); }
     return Result::Ok(area);
 }
 
@@ -77,8 +75,8 @@ Result<Vertex, MeshError> FaceCentroid(ref const Mesh mesh, Id<Face> faceId)
     ref const Vertex a = DenseGet<Vertex, 64>(ref const mesh.vertices, face.a)!;
     ref const Vertex b = DenseGet<Vertex, 64>(ref const mesh.vertices, face.b)!;
     ref const Vertex c = DenseGet<Vertex, 64>(ref const mesh.vertices, face.c)!;
-    float<m> x = (a.x + b.x + c.x) / 3.0;
-    float<m> y = (a.y + b.y + c.y) / 3.0;
+    float<m> x =(a.x + b.x + c.x) / 3.0;
+    float<m> y =(a.y + b.y + c.y) / 3.0;
     return Result::Ok(Vertex{x, y});
 }
 
@@ -86,23 +84,29 @@ Result<Bounds, MeshError> VertexBounds(ref const Mesh mesh)
 {
     int length = Count<Vertex, 64>(ref const mesh.vertices);
     if (length == 0)
-    {
-        return Result::Error(MeshError::VertexMissing);
-    }
+    { return Result::Error(MeshError::VertexMissing); }
     Id<Vertex> first = IdAt<Vertex, 64>(ref const mesh.vertices, 0)!;
     ref const Vertex initial = DenseGet<Vertex, 64>(ref const mesh.vertices, first)!;
     float<m> minX = initial.x;
     float<m> minY = initial.y;
     float<m> maxX = initial.x;
     float<m> maxY = initial.y;
-    for (i in 1..length)
+    for (i in 1 .. length)
     {
         Id<Vertex> id = IdAt<Vertex, 64>(ref const mesh.vertices, i)!;
         ref const Vertex vertex = DenseGet<Vertex, 64>(ref const mesh.vertices, id)!;
-        if (vertex.x < minX) { minX = vertex.x; }
-        if (vertex.x > maxX) { maxX = vertex.x; }
-        if (vertex.y < minY) { minY = vertex.y; }
-        if (vertex.y > maxY) { maxY = vertex.y; }
+        if (vertex.x < minX) {
+            minX = vertex.x;
+        }
+        if (vertex.x > maxX) {
+            maxX = vertex.x;
+        }
+        if (vertex.y < minY) {
+            minY = vertex.y;
+        }
+        if (vertex.y > maxY) {
+            maxY = vertex.y;
+        }
     }
     return Result::Ok(Bounds{minX, minY, maxX, maxY});
 }
@@ -110,14 +114,16 @@ Result<Bounds, MeshError> VertexBounds(ref const Mesh mesh)
 int CountDegenerateFaces(ref const Mesh mesh)
 {
     int count = 0;
-    for (i in 0..Count<Face, 96>(ref const mesh.faces))
+    for (i in 0 .. Count<Face, 96>(ref const mesh.faces))
     {
         Id<Face> face = IdAt<Face, 96>(ref const mesh.faces, i)!;
-        Result<float<m^2>, MeshError> area = SignedDoubleArea(ref const mesh, face);
+        Result<float<m ^ 2>, MeshError> area = SignedDoubleArea(ref const mesh, face);
         match (area)
         {
             Result::Ok(value) => { }
-            Result::Error(error) => { count++; }
+            Result::Error(error) => {
+                count++;
+            }
         }
     }
     return count;
@@ -126,13 +132,17 @@ int CountDegenerateFaces(ref const Mesh mesh)
 int CountPositiveFaces(ref const Mesh mesh)
 {
     int count = 0;
-    for (i in 0..Count<Face, 96>(ref const mesh.faces))
+    for (i in 0 .. Count<Face, 96>(ref const mesh.faces))
     {
         Id<Face> face = IdAt<Face, 96>(ref const mesh.faces, i)!;
-        Result<float<m^2>, MeshError> area = SignedDoubleArea(ref const mesh, face);
+        Result<float<m ^ 2>, MeshError> area = SignedDoubleArea(ref const mesh, face);
         match (area)
         {
-            Result::Ok(value) => { if (value > 0.0) { count++; } }
+            Result::Ok(value) => {
+                if (value > 0.0) {
+                    count++;
+                }
+            }
             Result::Error(error) => { }
         }
     }

@@ -72,6 +72,7 @@ func FormatSource(path, source string, options FormatOptions) (string, error) {
 		return "", err
 	}
 	printer := sourcePrinter{options: options}
+	compactEnd, compactKind := -1, ""
 	for i, token := range doc.Tokens {
 		prev := ""
 		if i > 0 {
@@ -81,28 +82,38 @@ func FormatSource(path, source string, options FormatOptions) (string, error) {
 		if i+1 < len(doc.Tokens) {
 			next = doc.Tokens[i+1].Lexeme
 		}
-		printer.trivia(token.Leading)
+		if i > compactEnd {
+			printer.trivia(token.Leading)
+		}
+		if token.Lexeme == "{" && options.BraceStyle == "same-line" {
+			compactKind, compactEnd = evt1CompactBrace(doc.Tokens, i, options.MaxLineLength-printer.lineWidth())
+		}
+		compact := compactEnd >= i
 		if printer.pendingBreak {
-			printer.newline()
+			if !compact || i != compactEnd {
+				printer.newline()
+			}
 			printer.pendingBreak = false
 		}
 		if token.Lexeme == "}" {
 			if printer.depth > 0 {
 				printer.depth--
 			}
-			if prev != "{" {
+			if prev != "{" && !compact {
 				printer.newline()
 			}
 		}
 		if token.Lexeme == "{" && options.BraceStyle == "allman" && prev != "" && prev != "{" {
 			printer.newline()
 		}
-		printer.spaceBefore(token.Lexeme, prev, token.Leading)
+		if !(compact && compactKind == "aggregate" && (token.Lexeme == "{" || prev == "{" || token.Lexeme == "}")) {
+			printer.spaceBefore(token.Lexeme, prev, token.Leading)
+		}
 		printer.write(token.Lexeme)
 		switch token.Lexeme {
 		case "{":
 			printer.depth++
-			if next != "}" {
+			if next != "}" && !compact {
 				printer.newline()
 			}
 		case ";":
@@ -112,6 +123,9 @@ func FormatSource(path, source string, options FormatOptions) (string, error) {
 				printer.newline()
 			}
 		case "}":
+			if compact && i == compactEnd {
+				compactEnd, compactKind = -1, ""
+			}
 			if next != ";" && next != "," && next != ")" && next != "]" && next != "else" && next != "except" && next != "{" {
 				printer.pendingBreak = true
 			}
@@ -135,6 +149,87 @@ func FormatSource(path, source string, options FormatOptions) (string, error) {
 		return "", fmt.Errorf("FORMAT_OUTPUT_INVALID: %w", err)
 	}
 	return result, nil
+}
+
+// Compact only comment-free, flat forms whose full spelling fits the line.
+// The token boundary is deliberately narrow: declarations and nested control
+// flow keep the ordinary multiline layout.
+func evt1CompactBrace(tokens []SourceToken, open, available int) (string, int) {
+	if open == 0 || available < 8 {
+		return "", -1
+	}
+	close := -1
+	for i := open + 1; i < len(tokens); i++ {
+		if tokens[i].Lexeme == "{" {
+			return "", -1
+		}
+		if tokens[i].Lexeme == "}" {
+			close = i
+			break
+		}
+		if strings.Contains(tokens[i].Leading, "//") || strings.Contains(tokens[i].Leading, "/*") {
+			return "", -1
+		}
+	}
+	if close <= open+1 {
+		return "", -1
+	}
+	prev := tokens[open-1].Lexeme
+	kind := ""
+	if prev == "else" || prev == "=>" || prev == ")" && evt1BraceFollowsIf(tokens, open) {
+		kind = "simple"
+	} else if isIdentifier(prev) || prev == ">" {
+		declaration := false
+		if open >= 2 {
+			switch tokens[open-2].Lexeme {
+			case "struct", "class", "enum", "concept", "interface", "automata", "layout", "machine", "table", "namespace", "module":
+				declaration = true
+			}
+		}
+		if !declaration {
+			kind = "aggregate"
+		}
+	}
+	if kind == "" {
+		return "", -1
+	}
+	semicolons, width := 0, 2
+	for i := open + 1; i < close; i++ {
+		lexeme := tokens[i].Lexeme
+		if lexeme == ";" {
+			semicolons++
+		}
+		if lexeme == "=>" {
+			return "", -1
+		}
+		width += len(lexeme) + 1
+	}
+	if kind == "aggregate" && semicolons != 0 {
+		return "", -1
+	}
+	if kind == "simple" && (semicolons != 1 || tokens[close-1].Lexeme != ";" || tokens[open+1].Lexeme != "return") {
+		return "", -1
+	}
+	if width > available {
+		return "", -1
+	}
+	return kind, close
+}
+
+func evt1BraceFollowsIf(tokens []SourceToken, open int) bool {
+	depth := 0
+	for i := open - 1; i >= 0; i-- {
+		switch tokens[i].Lexeme {
+		case ")":
+			depth++
+		case "(":
+			depth--
+			if depth == 0 {
+				return i > 0 && tokens[i-1].Lexeme == "if"
+			}
+		}
+	}
+	return false
 }
 
 type sourcePrinter struct {
@@ -172,6 +267,9 @@ func (p *sourcePrinter) spaceBefore(current, previous, original string) {
 	}
 	last := p.buf.Bytes()[p.buf.Len()-1]
 	if last == ' ' || last == '\n' {
+		return
+	}
+	if (current == "++" || current == "--") && (isIdentifier(previous) || previous == "]" || previous == ")") {
 		return
 	}
 	if current == ";" || current == "," || current == ":" || current == ")" || current == "]" || current == "." || current == "::" || current == "(" && previous != "if" && previous != "while" && previous != "for" && previous != "match" || current == "[" || previous == "(" || previous == "[" || previous == "." || previous == "::" || previous == "@" {

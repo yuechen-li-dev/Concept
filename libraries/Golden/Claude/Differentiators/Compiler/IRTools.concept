@@ -10,7 +10,9 @@ int OperandCount(ref const T instruction)
     int used = 0;
     for (FieldInfo field in Fields<T>(operand))
     {
-        if (instruction.field.value >= 0) { used++; }
+        if (instruction.field.value >= 0) {
+            used++;
+        }
     }
     return used;
 }
@@ -21,7 +23,9 @@ int SuccessorCount(ref const T instruction)
     int used = 0;
     for (FieldInfo field in Fields<T>(successor))
     {
-        if (instruction.field.value >= 0) { used++; }
+        if (instruction.field.value >= 0) {
+            used++;
+        }
     }
     return used;
 }
@@ -62,5 +66,5 @@ bool WellFormed(ref const Instruction instruction)
 {
     Shape expected = ShapeOf(instruction.opcode);
     return OperandCount(ref const instruction) == expected.operands
-        and SuccessorCount(ref const instruction) == expected.successors;
+    and SuccessorCount(ref const instruction) == expected.successors;
 }

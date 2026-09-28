@@ -11,7 +11,7 @@ import Standard.Hardware.Mmio;
 comptime int QueueCapacity = 32;
 comptime uint8 PingReply = 0x50;
 
-bits LineStatus : uint8
+bits LineStatus: uint8
 {
     dataReady: 0;
     transmitEmpty: 5;
@@ -70,7 +70,7 @@ Decoder NewDecoder()
 SerialPort OpenPort(Address<DeviceMemory> data, Address<DeviceMemory> status)
 {
     // Bound to a local first: see docs/examples/CLAUDE-GOLDENS.md, bug B1.
-    uint8[QueueCapacity] empty = [0 ... QueueCapacity];
+    uint8[QueueCapacity] empty =[0 ... QueueCapacity];
     TransmitQueue queue = TransmitQueue{empty, 0, 0};
     return SerialPort{data, status, queue};
 }
@@ -83,18 +83,14 @@ LineStatus ReadStatus(ref const SerialPort port)
 Result<uint8, SerialError> ReadByte(ref const SerialPort port)
 {
     if (not ReadStatus(ref const port).dataReady)
-    {
-        return Result::Error(SerialError::NoData);
-    }
+    { return Result::Error(SerialError::NoData); }
     return Result::Ok(MmioLoad<uint8>(port.data));
 }
 
 Result<void, SerialError> Enqueue(ref TransmitQueue queue, uint8 value)
 {
     if (queue.count == QueueCapacity)
-    {
-        return Result::Error(SerialError::QueueFull);
-    }
+    { return Result::Error(SerialError::QueueFull); }
     queue.bytes[(queue.head + queue.count) % QueueCapacity] = value;
     queue.count += 1;
     return Result::Ok();
@@ -103,7 +99,7 @@ Result<void, SerialError> Enqueue(ref TransmitQueue queue, uint8 value)
 uint8 Dequeue(ref TransmitQueue queue)
 {
     uint8 value = queue.bytes[queue.head];
-    queue.head = (queue.head + 1) % QueueCapacity;
+    queue.head =(queue.head + 1) % QueueCapacity;
     queue.count -= 1;
     return value;
 }
@@ -159,11 +155,9 @@ Result<Option<Command>, SerialError> Decode(ref Decoder decoder, uint8 value)
 
 Result<Option<Command>, SerialError> BeginCommand(ref Decoder decoder, uint8 opcode)
 {
-    Expecting operand = ClassifyOpcode(opcode)?;
+    Expecting operand = ClassifyOpcode(opcode) ?;
     if (operand == Expecting::Opcode)
-    {
-        return Finish(ref decoder, Command::Ping);
-    }
+    { return Finish(ref decoder, Command::Ping); }
     decoder.next = operand;
     return Result::Ok(Option::None);
 }
@@ -171,9 +165,7 @@ Result<Option<Command>, SerialError> BeginCommand(ref Decoder decoder, uint8 opc
 Result<Option<Command>, SerialError> FinishRate(ref Decoder decoder, uint8 divisor)
 {
     if (divisor == 0)
-    {
-        return Result::Error(SerialError::ZeroDivisor);
-    }
+    { return Result::Error(SerialError::ZeroDivisor); }
     return Finish(ref decoder, Command::SetRate(divisor));
 }
 
@@ -187,13 +179,13 @@ Result<Option<Command>, SerialError> Finish(ref Decoder decoder, Command command
 // completed command. Returns whether a command ran.
 Result<bool, SerialError> Poll(ref SerialPort port, ref Decoder decoder)
 {
-    uint8 received = ReadByte(ref const port)?;
-    Option<Command> decoded = Decode(ref decoder, received)?;
+    uint8 received = ReadByte(ref const port) ?;
+    Option<Command> decoded = Decode(ref decoder, received) ?;
     match (decoded)
     {
         Option::None => { return Result::Ok(false); }
         Option::Some(command) => {
-            Execute(ref port, command)?;
+            Execute(ref port, command) ?;
             return Result::Ok(true);
         }
     }

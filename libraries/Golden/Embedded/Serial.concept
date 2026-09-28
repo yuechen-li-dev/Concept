@@ -2,7 +2,7 @@ module Golden.Embedded.Serial;
 profile Core;
 import Standard.Hardware.Mmio;
 
-bits LineStatus : uint8
+bits LineStatus: uint8
 {
     dataReady: 0;
     transmitEmpty: 5;
@@ -50,20 +50,16 @@ Result<uint8, SerialError> ReadByte(ref SerialPort port)
 {
     LineStatus status = LineStatus{MmioLoad<uint8>(port.status)};
     if (not status.dataReady)
-    {
-        return Result::Error(SerialError::NotReady);
-    }
+    { return Result::Error(SerialError::NotReady); }
     return Result::Ok(MmioLoad<uint8>(port.data));
 }
 
 Result<int, SerialError> Enqueue(ref SerialPort port, uint8 value)
 {
     if (port.count == 32)
-    {
-        return Result::Error(SerialError::QueueFull);
-    }
+    { return Result::Error(SerialError::QueueFull); }
     port.queue[port.tail] = value;
-    port.tail = (port.tail + 1) % 32;
+    port.tail =(port.tail + 1) % 32;
     port.count++;
     return Result::Ok(port.count);
 }
@@ -82,7 +78,7 @@ int Flush(ref SerialPort port)
 {
     int sent = 0;
     bool ready = true;
-    for (i in 0..32)
+    for (i in 0 .. 32)
     {
         if (port.count > 0 and ready)
         {
@@ -90,7 +86,7 @@ int Flush(ref SerialPort port)
             if (status.transmitEmpty)
             {
                 MmioStore<uint8>(port.data, port.queue[port.head]);
-                port.head = (port.head + 1) % 32;
+                port.head =(port.head + 1) % 32;
                 port.count--;
                 sent++;
             }
@@ -138,9 +134,7 @@ Result<Option<Command>, SerialError> CompleteRate(ref Decoder decoder, uint8 val
 {
     decoder.state = ParseState::Waiting;
     if (value == 0)
-    {
-        return Result::Error(SerialError::BadCommand);
-    }
+    { return Result::Error(SerialError::BadCommand); }
     decoder.commandsSeen++;
     return Result::Ok(Option::Some(Command::SetRate(value)));
 }
@@ -154,8 +148,8 @@ Result<Option<Command>, SerialError> CompletePayload(ref Decoder decoder, uint8 
 
 Result<int, SerialError> PollAndDispatch(ref SerialPort port, ref Decoder decoder)
 {
-    uint8 received = ReadByte(ref port)?;
-    Option<Command> ready = DecodeByte(ref decoder, received)?;
+    uint8 received = ReadByte(ref port) ?;
+    Option<Command> ready = DecodeByte(ref decoder, received) ?;
     match (ready)
     {
         Option::None => { return Result::Ok(0); }

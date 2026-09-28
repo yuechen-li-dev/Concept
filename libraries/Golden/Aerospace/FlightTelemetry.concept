@@ -24,13 +24,15 @@ enum TelemetryError
     uint32 validityFlags;
 }
 
-concept CAbiValue<T> { requires compiler.CAbiLayout<T>(); }
+concept CAbiValue<T> {
+    requires compiler.CAbiLayout<T>();
+}
 requires CAbiValue<NativeSample>;
 
 record struct FlightSample
 {
     float<m> altitude;
-    float<m/s> verticalSpeed;
+    float<m / s> verticalSpeed;
     bool valid;
 }
 
@@ -45,10 +47,10 @@ struct FlightController
 
 FlightSample Interpret(NativeSample native)
 {
-    bool valid = (native.validityFlags & 1) != 0;
-    return FlightSample{
+    bool valid =(native.validityFlags & 1) != 0;
+    return FlightSample {
         interpret native.altitudeMeters as float<m>,
-        interpret native.verticalMetersPerSecond as float<m/s>,
+        interpret native.verticalMetersPerSecond as float<m / s>,
         valid
     };
 }
@@ -68,9 +70,7 @@ Result<void, TelemetryError> Accept(ref FlightController controller, FlightSampl
         return Result::Error(TelemetryError::OutOfEnvelope);
     }
     if (controller.historyCount == 16)
-    {
-        return Result::Error(TelemetryError::CapacityExceeded);
-    }
+    { return Result::Error(TelemetryError::CapacityExceeded); }
     controller.history[controller.historyCount] = sample;
     controller.historyCount++;
     controller.accepted++;
@@ -98,9 +98,11 @@ Result<void, TelemetryError> AcceptNative(ref FlightController controller, Nativ
 int CountValid(ref const FlightController controller)
 {
     int count = 0;
-    for (i in 0..controller.historyCount)
+    for (i in 0 .. controller.historyCount)
     {
-        if (controller.history[i].valid) { count++; }
+        if (controller.history[i].valid) {
+            count++;
+        }
     }
     return count;
 }
@@ -108,18 +110,14 @@ int CountValid(ref const FlightController controller)
 Result<FlightSample, TelemetryError> Latest(ref const FlightController controller)
 {
     if (controller.historyCount == 0)
-    {
-        return Result::Error(TelemetryError::SensorInvalid);
-    }
+    { return Result::Error(TelemetryError::SensorInvalid); }
     return Result::Ok(controller.history[controller.historyCount - 1]);
 }
 
 bool MayUseTelemetryForGuidance(ref const FlightController controller)
 {
     if (controller.mode == FlightMode::Fault or controller.historyCount == 0)
-    {
-        return false;
-    }
+    { return false; }
     Result<FlightSample, TelemetryError> sample = Latest(ref const controller);
     return match (sample)
     {

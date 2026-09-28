@@ -31,16 +31,14 @@ record struct Diffusion
 Result<Diffusion, StencilError> StableDiffusion(float value)
 {
     if (value < 0.0 or value > 0.5)
-    {
-        return Result::Error(StencilError::UnstableDiffusion);
-    }
+    { return Result::Error(StencilError::UnstableDiffusion); }
     return Result::Ok(Diffusion{value});
 }
 
 void Advance(ref Rod next, ref const Rod current, Diffusion r)
 {
     next.temperature[0] = current.temperature[0];
-    for (i in 1..Cells - 1)
+    for (i in 1 .. Cells - 1)
     {
         float<K> laplacian = current.temperature[i - 1] - 2.0 * current.temperature[i] + current.temperature[i + 1];
         next.temperature[i] = current.temperature[i] + r.value * laplacian + current.source[i];
@@ -51,7 +49,7 @@ void Advance(ref Rod next, ref const Rod current, Diffusion r)
 float<K> TotalHeat(ref const Rod rod)
 {
     float<K> total = 0.0;
-    for (i in 0..Cells)
+    for (i in 0 .. Cells)
     {
         total += rod.temperature[i];
     }
@@ -62,11 +60,9 @@ float<K> TotalHeat(ref const Rod rod)
 Result<float, StencilError> MaxChange(ReadOnlySpan<float> before, ReadOnlySpan<float> after)
 {
     if (Len(before) != Len(after))
-    {
-        return Result::Error(StencilError::ExtentMismatch);
-    }
+    { return Result::Error(StencilError::ExtentMismatch); }
     float largest = 0.0;
-    for (i in 0..Len(before))
+    for (i in 0 .. Len(before))
     {
         largest = Max(largest, Abs(after[i] - before[i]));
     }

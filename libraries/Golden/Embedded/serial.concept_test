@@ -46,7 +46,7 @@ void QueueAndCommandStateAreDeterministic()
 {
     usize dataAddress = 4096;
     usize statusAddress = 4101;
-    SerialPort port = SerialPort{
+    SerialPort port = SerialPort {
         AddressFromBits<DeviceMemory>(dataAddress),
         AddressFromBits<DeviceMemory>(statusAddress),
         [0 ... 32],

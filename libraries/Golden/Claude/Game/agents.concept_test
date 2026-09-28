@@ -16,7 +16,9 @@ void SeekersStepTowardTheirTargetFromEitherSide()
     Id<Agent> west = Spawn(ref world, 5, 5)!;
     Assert.LGTM(Command(ref world, east, Intent::Seek(2, 0)), "go east");
     Assert.LGTM(Command(ref world, west, Intent::Seek(3, 4)), "go south-west");
-    for (t in 0..4) { Tick(ref world); }
+    for (t in 0 .. 4) {
+        Tick(ref world);
+    }
     ref const Agent a = DenseGet<Agent, 64>(ref const world.agents, east)!;
     Assert.Equals(a.x, 2, "stops on the target column");
     ref const Agent b = DenseGet<Agent, 64>(ref const world.agents, west)!;
@@ -45,7 +47,9 @@ void TheFallenStopActingAndHealthNeverGoesNegative()
     Id<Agent> attacker = Spawn(ref world, 1, 0)!;
     Assert.LGTM(Command(ref world, attacker, Intent::Strike(victim)), "attack");
     Assert.LGTM(Command(ref world, victim, Intent::Strike(attacker)), "retaliate");
-    for (t in 0..12) { Tick(ref world); }
+    for (t in 0 .. 12) {
+        Tick(ref world);
+    }
     Assert.Equals(HealthOf(ref const world, victim), 0, "clamped at zero");
     Assert.Equals(HealthOf(ref const world, attacker), 0, "they traded blows evenly");
     Assert.Equals(CountAlive(ref const world), 0, "nobody left standing");
@@ -56,7 +60,9 @@ void TheFallenStopActingAndHealthNeverGoesNegative()
 void SentryWalksItsLegsThenStands()
 {
     instance Sentry sentry(0, 3);
-    for (s in 0..10) { Step(sentry, Watch); }
+    for (s in 0 .. 10) {
+        Step(sentry, Watch);
+    }
     Assert.Equals(sentry.state.legsWalked, 3, "exactly three legs, however long it is stepped");
 }
 

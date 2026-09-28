@@ -53,9 +53,10 @@ table<64> Positions
 int Snapshot(ref const World world, ref Positions frame)
 {
     int population = Count<Agent, 64>(ref const world.agents);
-    for (i in 0..population)
+    for (i in 0 .. population)
     {
-        ref const Agent agent = DenseGet<Agent, 64>(ref const world.agents, IdAt<Agent, 64>(ref const world.agents, i)!)!;
+        ref const Agent agent = DenseGet<Agent, 64>(ref const world.agents, IdAt<Agent, 64>(ref const world.agents,
+        i)!)!;
         frame.x[i] = agent.x;
         frame.y[i] = agent.y;
     }
@@ -75,7 +76,7 @@ int Sum(ReadOnlySpan<int> column)
 void RunTicks(ref World world, int ticks)
 {
     // The caller chooses the budget; there is no background scheduler.
-    for (t in 0..ticks)
+    for (t in 0 .. ticks)
     {
         Tick(ref world);
     }

@@ -32,10 +32,8 @@ Result<Rotation, StressError> RotationFrom(double c, double s)
     double one = 1.0;
     double tolerance = 0.000000001;
     double drift = c * c + s * s - one;
-    if (drift > tolerance or drift < -tolerance)
-    {
-        return Result::Error(StressError::NotARotation);
-    }
+    if (drift > tolerance or drift < - tolerance)
+    { return Result::Error(StressError::NotARotation); }
     return Result::Ok(Rotation{c, s});
 }
 
@@ -43,13 +41,15 @@ Result<Rotation, StressError> RotationFrom(double c, double s)
 // place that contract is stated.
 PlaneStress FromSensor(double normalX, double normalY, double shear)
 {
-    return PlaneStress{interpret normalX as double<Pa>, interpret normalY as double<Pa>, interpret shear as double<Pa>};
+    return PlaneStress {
+        interpret normalX as double<Pa>, interpret normalY as double<Pa>, interpret shear as double<Pa>
+    };
 }
 
 PlaneStress Rotate(PlaneStress s, Rotation r)
 {
-    tensor<double> frame[2, 2] = [[r.c, r.s], [-r.s, r.c]];
-    tensor<double<Pa>> stress[2, 2] = [[s.xx, s.xy], [s.xy, s.yy]];
+    tensor<double> frame[2, 2] =[[r.c, r.s],[- r.s, r.c]];
+    tensor<double<Pa>> stress[2, 2] =[[s.xx, s.xy],[s.xy, s.yy]];
     double<Pa> zero = 0.0;
     tensor<double<Pa>> rotated[2, 2] = zero;
     rotated[i, j] = frame[i, k] * stress[k, l] * frame[j, l];
@@ -61,7 +61,7 @@ double<Pa> Trace(PlaneStress s)
     return s.xx + s.yy;
 }
 
-double<Pa^2> Determinant(PlaneStress s)
+double<Pa ^ 2> Determinant(PlaneStress s)
 {
     return s.xx * s.yy - s.xy * s.xy;
 }

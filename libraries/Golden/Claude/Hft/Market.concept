@@ -43,14 +43,16 @@ struct Signal
     int rejected;
 }
 
-record struct FeedContext {}
-record struct SignalContext {}
+record struct FeedContext { }
+record struct SignalContext { }
 
 QuoteRing NewRing()
 {
     Quote blank = Quote{0, 0, 0};
-    Quote[Capacity] slots = [blank ... Capacity];
-    return QuoteRing{slots, AtomicInt{0}, AtomicInt{0}};
+    Quote[Capacity] slots =[blank ... Capacity];
+    return QuoteRing {
+        slots, AtomicInt{0}, AtomicInt{0}
+    };
 }
 
 Signal NewSignal()
@@ -60,12 +62,12 @@ Signal NewSignal()
 
 int NextSequence(int sequence)
 {
-    return (sequence + 1) % SequenceSpan;
+    return(sequence + 1) % SequenceSpan;
 }
 
 int Distance(int head, int tail)
 {
-    return (tail - head + SequenceSpan) % SequenceSpan;
+    return(tail - head + SequenceSpan) % SequenceSpan;
 }
 
 Quote Stamp(int symbol, int priceTicks)
@@ -82,9 +84,7 @@ Result<void, MarketError> Publish(ref QuoteRing ring, Quote quote)
     int tail = LoadAtomic(ref ring.tail, MemoryOrder::Relaxed);
     int head = LoadAtomic(ref ring.head, MemoryOrder::Acquire);
     if (Distance(head, tail) == Capacity)
-    {
-        return Result::Error(MarketError::QueueFull);
-    }
+    { return Result::Error(MarketError::QueueFull); }
     ring.slots[tail % Capacity] = quote;
     StoreAtomic(ref ring.tail, NextSequence(tail), MemoryOrder::Release);
     return Result::Ok();
@@ -98,9 +98,7 @@ Option<Quote> Consume(ref QuoteRing ring)
     int head = LoadAtomic(ref ring.head, MemoryOrder::Relaxed);
     int tail = LoadAtomic(ref ring.tail, MemoryOrder::Acquire);
     if (head == tail)
-    {
-        return Option::None;
-    }
+    { return Option::None; }
     Quote quote = ring.slots[head % Capacity];
     StoreAtomic(ref ring.head, NextSequence(head), MemoryOrder::Release);
     return Option::Some(quote);
@@ -109,15 +107,14 @@ Option<Quote> Consume(ref QuoteRing ring)
 [[execution_context(SignalContext)]]
 int Pending(ref const QuoteRing ring)
 {
-    return Distance(LoadAtomic(ref const ring.head, MemoryOrder::Relaxed), LoadAtomic(ref const ring.tail, MemoryOrder::Acquire));
+    return Distance(LoadAtomic(ref const ring.head, MemoryOrder::Relaxed), LoadAtomic(ref const ring.tail,
+    MemoryOrder::Acquire));
 }
 
 Result<Quote, MarketError> Validate(Quote quote)
 {
     if (quote.priceTicks <= 0)
-    {
-        return Result::Error(MarketError::NonPositivePrice);
-    }
+    { return Result::Error(MarketError::NonPositivePrice); }
     return Result::Ok(quote);
 }
 
@@ -133,7 +130,9 @@ void Observe(ref Signal signal, Quote quote)
             signal.lastPrice = valid.priceTicks;
             signal.accepted += 1;
         }
-        Result::Error(error) => { signal.rejected += 1; }
+        Result::Error(error) => {
+            signal.rejected += 1;
+        }
     }
 }
 

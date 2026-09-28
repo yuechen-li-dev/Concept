@@ -31,8 +31,8 @@ struct MarketQueue
     AtomicInt tail;
 }
 
-record struct FeedContext {}
-record struct SignalContext {}
+record struct FeedContext { }
+record struct SignalContext { }
 
 MarketEvent StampEvent(int symbol, int priceTicks)
 {
@@ -46,9 +46,7 @@ bool Publish(ref MarketQueue queue, MarketEvent event)
     int tail = LoadAtomic(ref queue.tail, MemoryOrder::Relaxed);
     int head = LoadAtomic(ref queue.head, MemoryOrder::Acquire);
     if (tail - head == 64)
-    {
-        return false;
-    }
+    { return false; }
     queue.slots[tail % 64] = event;
     StoreAtomic(ref queue.tail, tail + 1, MemoryOrder::Release);
     return true;
@@ -61,9 +59,7 @@ Option<MarketEvent> Consume(ref MarketQueue queue)
     int head = LoadAtomic(ref queue.head, MemoryOrder::Relaxed);
     int tail = LoadAtomic(ref queue.tail, MemoryOrder::Acquire);
     if (head == tail)
-    {
-        return Option::None;
-    }
+    { return Option::None; }
     MarketEvent event = queue.slots[head % 64];
     StoreAtomic(ref queue.head, head + 1, MemoryOrder::Release);
     return Option::Some(event);
@@ -78,9 +74,7 @@ Result<MarketEvent, MarketError> NextValid(ref MarketQueue queue)
         Option::None => { return Result::Error(MarketError::Empty); }
         Option::Some(event) => {
             if (event.priceTicks <= 0)
-            {
-                return Result::Error(MarketError::InvalidPrice);
-            }
+            { return Result::Error(MarketError::InvalidPrice); }
             return Result::Ok(event);
         }
     }
@@ -101,17 +95,24 @@ int DrainSignal(ref MarketQueue queue, ref SignalState state, int budget)
 {
     int seen = 0;
     bool active = true;
-    for (i in 0..budget)
+    for (i in 0 .. budget)
     {
         if (active)
         {
             Result<MarketEvent, MarketError> next = NextValid(ref queue);
             match (next)
             {
-                Result::Ok(event) => { UpdateSignal(ref state, event); seen++; }
+                Result::Ok(event) => {
+                    UpdateSignal(ref state, event);
+                    seen++;
+                }
                 Result::Error(error) => {
-                    if (error == MarketError::Empty) { active = false; }
-                    else { state.rejected++; }
+                    if (error == MarketError::Empty) {
+                        active = false;
+                    }
+                    else {
+                        state.rejected++;
+                    }
                 }
             }
         }
@@ -124,15 +125,19 @@ int Drain(ref MarketQueue queue, int budget)
 {
     int count = 0;
     bool found = true;
-    for (i in 0..budget)
+    for (i in 0 .. budget)
     {
         if (found)
         {
             Option<MarketEvent> event = Consume(ref queue);
             match (event)
             {
-                Option::None => { found = false; }
-                Option::Some(value) => { count++; }
+                Option::None => {
+                    found = false;
+                }
+                Option::Some(value) => {
+                    count++;
+                }
             }
         }
     }

@@ -26,12 +26,8 @@ struct Features
 
 float Bound(float value)
 {
-    if (value < 0.0) {
-        return 0.0;
-    }
-    if (value > 1.0) {
-        return 1.0;
-    }
+    if (value < 0.0) { return 0.0; }
+    if (value > 1.0) { return 1.0; }
     return value;
 }
 
@@ -51,9 +47,7 @@ Features Observe(Observation observation)
 
 float Commitment(Policy current, Policy candidate, int ticks)
 {
-    if (ticks > 0 and current == candidate) {
-        return 0.4;
-    }
+    if (ticks > 0 and current == candidate) { return 0.4; }
     return 0.0;
 }
 
@@ -99,8 +93,8 @@ with state
             if (commitTicks <= 0) {
                 transition Decide;
             }
-            commitTicks --;
-            patrolSteps ++;
+            commitTicks--;
+            patrolSteps++;
             yield;
         }
 
@@ -113,14 +107,14 @@ with state
 
         state Fire
         {
-            shots ++;
-            observation.rounds --;
+            shots++;
+            observation.rounds--;
             transition Cooldown;
         }
 
         state Cooldown
         {
-            commitTicks --;
+            commitTicks--;
             transition Decide;
         }
 
@@ -133,7 +127,7 @@ with state
             if (commitTicks <= 0) {
                 transition Decide;
             }
-            commitTicks --;
+            commitTicks--;
             yield;
         }
     }

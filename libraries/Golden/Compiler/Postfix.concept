@@ -44,9 +44,7 @@ requires compiler.InvalidatesBorrows(NewNode, parser);
 Result<void, ParseError> Push(ref Parser parser, Id<Expr> id)
 {
     if (parser.depth == 64)
-    {
-        return Result::Error(ParseError::StackOverflow);
-    }
+    { return Result::Error(ParseError::StackOverflow); }
     parser.stack[parser.depth] = id;
     parser.depth++;
     return Result::Ok();
@@ -55,70 +53,66 @@ Result<void, ParseError> Push(ref Parser parser, Id<Expr> id)
 Result<Id<Expr>, ParseError> Pop(ref Parser parser)
 {
     if (parser.depth == 0)
-    {
-        return Result::Error(ParseError::StackUnderflow);
-    }
+    { return Result::Error(ParseError::StackUnderflow); }
     parser.depth--;
     return Result::Ok(parser.stack[parser.depth]);
 }
 
 Result<void, ParseError> PushLiteral(ref Parser parser, int value)
 {
-    Id<Expr> id = NewNode(ref parser, Expr::Literal(value))?;
+    Id<Expr> id = NewNode(ref parser, Expr::Literal(value)) ?;
     return Push(ref parser, id);
 }
 requires compiler.InvalidatesBorrows(PushLiteral, parser);
 
 Result<void, ParseError> ReduceAdd(ref Parser parser)
 {
-    Id<Expr> right = Pop(ref parser)?;
-    Id<Expr> left = Pop(ref parser)?;
-    Id<Expr> id = NewNode(ref parser, Expr::Add(left, right))?;
+    Id<Expr> right = Pop(ref parser) ?;
+    Id<Expr> left = Pop(ref parser) ?;
+    Id<Expr> id = NewNode(ref parser, Expr::Add(left, right)) ?;
     return Push(ref parser, id);
 }
 requires compiler.InvalidatesBorrows(ReduceAdd, parser);
 
 Result<void, ParseError> ReduceMul(ref Parser parser)
 {
-    Id<Expr> right = Pop(ref parser)?;
-    Id<Expr> left = Pop(ref parser)?;
-    Id<Expr> id = NewNode(ref parser, Expr::Mul(left, right))?;
+    Id<Expr> right = Pop(ref parser) ?;
+    Id<Expr> left = Pop(ref parser) ?;
+    Id<Expr> id = NewNode(ref parser, Expr::Mul(left, right)) ?;
     return Push(ref parser, id);
 }
 requires compiler.InvalidatesBorrows(ReduceMul, parser);
 
 Result<Id<Expr>, ParseError> Parse(ref Parser parser, ReadOnlySpan<TokenWord> tokens)
 {
-    for (i in 0..Len(tokens))
+    for (i in 0 .. Len(tokens))
     {
         if (tokens[i].kind == 0)
         {
-            PushLiteral(ref parser, tokens[i].value)?;
+            PushLiteral(ref parser, tokens[i].value) ?;
         }
         else
         {
             if (tokens[i].kind == 1)
             {
-                ReduceAdd(ref parser)?;
+                ReduceAdd(ref parser) ?;
             }
             else
             {
-                ReduceMul(ref parser)?;
+                ReduceMul(ref parser) ?;
             }
         }
     }
     if (parser.depth != 1)
-    {
-        return Result::Error(ParseError::TrailingOperands);
-    }
+    { return Result::Error(ParseError::TrailingOperands); }
     return Result::Ok(parser.stack[0]);
 }
 requires compiler.InvalidatesBorrows(Parse, parser);
 
 int Evaluate(ref const Parser parser, Id<Expr> root)
 {
-    int<array>[64] computed = [0 ...];
-    for (ordinal in 0..Count<Expr, 64>(ref const parser.nodes))
+    int<array>[64] computed =[0 ...];
+    for (ordinal in 0 .. Count<Expr, 64>(ref const parser.nodes))
     {
         Id<Expr> id = IdAt<Expr, 64>(ref const parser.nodes, ordinal)!;
         ref const Expr node = DenseGet<Expr, 64>(ref const parser.nodes, id)!;

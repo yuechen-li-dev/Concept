@@ -11,7 +11,7 @@ int OperandCount(ref const T instruction)
     foreach(FieldInfo field in Fields<T>(operand))
     {
         if (instruction.field.value >= 0) {
-            count ++;
+            count++;
         }
     }
     return count;

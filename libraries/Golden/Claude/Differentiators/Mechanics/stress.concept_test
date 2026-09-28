@@ -31,7 +31,7 @@ bool Close(double actual, double expected)
 {
     double tolerance = 0.0001;
     double difference = actual - expected;
-    return difference < tolerance and difference > -tolerance;
+    return difference < tolerance and difference > - tolerance;
 }
 
 [[fact]]
@@ -40,7 +40,7 @@ void AQuarterTurnSwapsTheNormalsAndFlipsTheShear()
     PlaneStress turned = Rotate(Sample(), QuarterTurn());
     Assert.True(Close(Magnitude(turned.xx), 20.0 as double), "old y-normal is the new x-normal");
     Assert.True(Close(Magnitude(turned.yy), 10.0 as double), "and vice versa");
-    Assert.True(Close(Magnitude(turned.xy), -2.0 as double), "shear changes sign");
+    Assert.True(Close(Magnitude(turned.xy), - 2.0 as double), "shear changes sign");
 }
 
 // cos = 4/5, sin = 3/5 is an exact rotation, so the expected components are

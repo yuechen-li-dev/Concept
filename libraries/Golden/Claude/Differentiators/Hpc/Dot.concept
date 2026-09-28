@@ -18,32 +18,38 @@ concept Floating<T>
     requires T Reduce4(T a, T b, T c, T d);
 }
 
-float Multiply(float left, float right) { return left * right; }
-double Multiply(double left, double right) { return left * right; }
+float Multiply(float left, float right) {
+    return left * right;
+}
+double Multiply(double left, double right) {
+    return left * right;
+}
 
 // binary32: pairwise, (a + b) + (c + d) - two independent adds, then one.
-float Reduce4(float a, float b, float c, float d) { return (a + b) + (c + d); }
+float Reduce4(float a, float b, float c, float d) {
+    return(a + b) +(c + d);
+}
 
 // binary64: left to right, ((a + b) + c) + d - the order a scalar loop uses.
-double Reduce4(double a, double b, double c, double d) { return ((a + b) + c) + d; }
+double Reduce4(double a, double b, double c, double d) {
+    return((a + b) + c) + d;
+}
 
 template <typename T>
 requires Floating<T>
 Result<T, DotError> Dot4(ReadOnlySpan<T> left, ReadOnlySpan<T> right)
 {
     if (Len(left) != 4 or Len(right) != 4)
-    {
-        return Result::Error(DotError::NotFourLanes);
-    }
+    { return Result::Error(DotError::NotFourLanes); }
     return Result::Ok(Reduce4(
-        Multiply(left[0], right[0]),
-        Multiply(left[1], right[1]),
-        Multiply(left[2], right[2]),
-        Multiply(left[3], right[3])));
+    Multiply(left[0], right[0]),
+    Multiply(left[1], right[1]),
+    Multiply(left[2], right[2]),
+    Multiply(left[3], right[3])));
 }
 
 // The same kernel written directly for binary32, for comparing generated C.
 float Dot4Float(ReadOnlySpan<float> left, ReadOnlySpan<float> right)
 {
-    return (left[0] * right[0] + left[1] * right[1]) + (left[2] * right[2] + left[3] * right[3]);
+    return(left[0] * right[0] + left[1] * right[1]) +(left[2] * right[2] + left[3] * right[3]);
 }

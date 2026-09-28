@@ -11,7 +11,7 @@ void ATransferFetchesTransformsAndCommits()
 [[fact]]
 void AMissingRecordFailsAtFetch()
 {
-    Assert.FailsWith(Run(-1), JournalError::Missing, "nothing to fetch");
+    Assert.FailsWith(Run(- 1), JournalError::Missing, "nothing to fetch");
 }
 
 [[fact]]
@@ -30,7 +30,7 @@ void TooSmallABudgetStallsInsteadOfPanicking()
 [[fact]]
 void TelemetryIgnoresFailureOnPurpose()
 {
-    RecordTelemetry(-1);
+    RecordTelemetry(- 1);
     Assert.True(true, "a failed best-effort send does not propagate");
 }
 

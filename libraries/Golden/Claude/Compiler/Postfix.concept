@@ -71,7 +71,8 @@ Option<Operator> OperatorIn(Token token)
 
 Parser NewParser()
 {
-    Id<Expr>[64] stack = [Id<Expr>{0} ... 64];
+    Id<Expr>[64] stack =[Id<Expr>{0}
+    ... 64];
     return Parser{MakeDenseStore<Expr, 64>(), stack, 0};
 }
 
@@ -88,9 +89,7 @@ requires compiler.InvalidatesBorrows(AddNode, parser);
 Result<void, ParseError> Push(ref Parser parser, Id<Expr> id)
 {
     if (parser.depth == 64)
-    {
-        return Result::Error(ParseError::TooDeep);
-    }
+    { return Result::Error(ParseError::TooDeep); }
     parser.stack[parser.depth] = id;
     parser.depth += 1;
     return Result::Ok();
@@ -99,9 +98,7 @@ Result<void, ParseError> Push(ref Parser parser, Id<Expr> id)
 Result<Id<Expr>, ParseError> Pop(ref Parser parser)
 {
     if (parser.depth == 0)
-    {
-        return Result::Error(ParseError::MissingOperand);
-    }
+    { return Result::Error(ParseError::MissingOperand); }
     parser.depth -= 1;
     return Result::Ok(parser.stack[parser.depth]);
 }
@@ -111,13 +108,13 @@ Result<void, ParseError> Shift(ref Parser parser, Token token)
     match (OperatorIn(token))
     {
         Option::None => {
-            Id<Expr> leaf = AddNode(ref parser, Expr::Literal(token.number))?;
+            Id<Expr> leaf = AddNode(ref parser, Expr::Literal(token.number)) ?;
             return Push(ref parser, leaf);
         }
         Option::Some(op) => {
-            Id<Expr> right = Pop(ref parser)?;
-            Id<Expr> left = Pop(ref parser)?;
-            Id<Expr> node = AddNode(ref parser, Expr::Binary(op, left, right))?;
+            Id<Expr> right = Pop(ref parser) ?;
+            Id<Expr> left = Pop(ref parser) ?;
+            Id<Expr> node = AddNode(ref parser, Expr::Binary(op, left, right)) ?;
             return Push(ref parser, node);
         }
     }
@@ -128,16 +125,12 @@ Result<Id<Expr>, ParseError> Parse(ref Parser parser, ReadOnlySpan<Token> tokens
 {
     for (token in tokens)
     {
-        Shift(ref parser, token)?;
+        Shift(ref parser, token) ?;
     }
     if (parser.depth == 0)
-    {
-        return Result::Error(ParseError::EmptyInput);
-    }
+    { return Result::Error(ParseError::EmptyInput); }
     if (parser.depth > 1)
-    {
-        return Result::Error(ParseError::LeftoverOperands);
-    }
+    { return Result::Error(ParseError::LeftoverOperands); }
     return Result::Ok(parser.stack[0]);
 }
 requires compiler.InvalidatesBorrows(Parse, parser);
@@ -153,8 +146,8 @@ int Apply(Operator op, int left, int right)
 
 int Evaluate(ref const Parser parser, Id<Expr> root)
 {
-    int[64] value = [0 ... 64];
-    for (i in 0..Count<Expr, 64>(ref const parser.nodes))
+    int[64] value =[0 ... 64];
+    for (i in 0 .. Count<Expr, 64>(ref const parser.nodes))
     {
         Id<Expr> id = IdAt<Expr, 64>(ref const parser.nodes, i)!;
         value[i] = match (DenseGet<Expr, 64>(ref const parser.nodes, id)!)

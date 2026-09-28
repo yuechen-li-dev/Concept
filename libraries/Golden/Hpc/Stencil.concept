@@ -16,20 +16,20 @@ enum KernelError
 
 float Lerp(float a, float b, float t)
 {
-    return a + t * (b - a);
+    return a + t *(b - a);
 }
 
 void AdvanceHeat(ref Field next, ref const Field current, float diffusion)
 {
     next.temperature[0] = current.temperature[0];
-    for (i in 1..15)
+    for (i in 1 .. 15)
     {
         float laplace = current.temperature[i - 1]
-            - 2.0 * current.temperature[i]
-            + current.temperature[i + 1];
+        - 2.0 * current.temperature[i]
+        + current.temperature[i + 1];
         next.temperature[i] = current.temperature[i]
-            + diffusion * laplace
-            + current.source[i];
+        + diffusion * laplace
+        + current.source[i];
     }
     next.temperature[15] = current.temperature[15];
 }
@@ -39,9 +39,7 @@ Result<void, KernelError> AdvanceChecked(ref Field next, ref const Field current
     // The explicit Euler step is stable for this one-dimensional unit grid
     // only within this range.
     if (diffusion < 0.0 or diffusion > 0.5)
-    {
-        return Result::Error(KernelError::UnstableDiffusion);
-    }
+    { return Result::Error(KernelError::UnstableDiffusion); }
     AdvanceHeat(ref next, ref const current, diffusion);
     return Result::Ok();
 }
@@ -49,14 +47,14 @@ Result<void, KernelError> AdvanceChecked(ref Field next, ref const Field current
 Result<float, KernelError> MaximumResidual(ReadOnlySpan<float> current, ReadOnlySpan<float> next)
 {
     if (Len(current) != Len(next))
-    {
-        return Result::Error(KernelError::ShapeMismatch);
-    }
+    { return Result::Error(KernelError::ShapeMismatch); }
     float maximum = 0.0;
-    for (i in 0..Len(current))
+    for (i in 0 .. Len(current))
     {
         float difference = next[i] - current[i];
-        if (difference < 0.0) { difference = 0.0 - difference; }
+        if (difference < 0.0) {
+            difference = 0.0 - difference;
+        }
         if (difference > maximum)
         {
             maximum = difference;
@@ -67,7 +65,7 @@ Result<float, KernelError> MaximumResidual(ReadOnlySpan<float> current, ReadOnly
 
 void ClearSources(ref Field field)
 {
-    for (i in 0..16)
+    for (i in 0 .. 16)
     {
         field.source[i] = 0.0;
     }
@@ -76,7 +74,7 @@ void ClearSources(ref Field field)
 float TotalEnergy(ref const Field field)
 {
     float sum = 0.0;
-    for (i in 0..16)
+    for (i in 0 .. 16)
     {
         sum += field.temperature[i];
     }

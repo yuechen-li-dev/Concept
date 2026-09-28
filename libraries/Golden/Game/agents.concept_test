@@ -5,7 +5,9 @@ import Golden.Game.Agents;
 [[fact]]
 void AgentsAdvanceThroughStableDenseIds()
 {
-    World world = World{DenseStore<Agent, 64>{Uninitialized()}, 0};
+    World world = World {
+        DenseStore<Agent, 64>{Uninitialized()}, 0
+    };
     Id<Agent> first = Spawn(ref world, 0, 0)!;
     Id<Agent> second = Spawn(ref world, 5, 0)!;
     {

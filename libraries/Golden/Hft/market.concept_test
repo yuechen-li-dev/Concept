@@ -5,8 +5,9 @@ import Golden.Hft.Market;
 [[fact]]
 void MarketQueuePreservesPublicationOrder()
 {
-    MarketQueue queue = MarketQueue{
-        [MarketEvent{0, 0, 0} ...],
+    MarketQueue queue = MarketQueue {
+        [MarketEvent{0, 0, 0}
+        ...],
         AtomicInt{0},
         AtomicInt{0}
     };
@@ -16,7 +17,9 @@ void MarketQueuePreservesPublicationOrder()
     uint64 expectedTimestamp = 7;
     match (first)
     {
-        Option::None => { Assert.True(false, "a published event must be visible"); }
+        Option::None => {
+            Assert.True(false, "a published event must be visible");
+        }
         Option::Some(event) => {
             Assert.Equals(event.priceTicks, 101, "FIFO retains the first price");
             Assert.Equals(event.timestamp, expectedTimestamp, "timestamp stays with the event");
@@ -40,7 +43,10 @@ void MarketHotPathUsesOnlyBoundedStorage()
 [[fact]]
 void SignalPathRejectsBadPricesAndRetainsOrder()
 {
-    MarketQueue queue = MarketQueue{[MarketEvent{0, 0, 0} ...], AtomicInt{0}, AtomicInt{0}};
+    MarketQueue queue = MarketQueue {
+        [MarketEvent{0, 0, 0}
+        ...], AtomicInt{0}, AtomicInt{0}
+    };
     SignalState signal = SignalState{0, 0, 0, 0};
     Assert.True(Publish(ref queue, MarketEvent{3, 100, 1}), "first quote fits");
     Assert.True(Publish(ref queue, MarketEvent{3, 0, 2}), "invalid quote is still transportable");

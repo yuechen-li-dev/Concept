@@ -5,11 +5,8 @@ import Golden.Hpc.Stencil;
 [[fact]]
 void OneDimensionalHeatStepConservesInteriorSpike()
 {
-    Field current = Field{
-        [0.0 ... 7, 10.0, 0.0 ... 8],
-        [0.0 ...]
-    };
-    Field next = Field{[0.0 ...], [0.0 ...]};
+    Field current = Field{[0.0 ... 7, 10.0, 0.0 ... 8],[0.0 ...]};
+    Field next = Field{[0.0 ...],[0.0 ...]};
     AdvanceHeat(ref next, ref const current, 0.1);
     Assert.Near(next.temperature[6], 1.0, 0.001, "left neighbor receives heat");
     Assert.Near(next.temperature[7], 8.0, 0.001, "center diffuses heat");
@@ -35,13 +32,14 @@ void NumericalLoopHasNoAllocation()
 [[fact]]
 void StabilityAndShapeFailuresAreExplicit()
 {
-    Field current = Field{[0.0 ...], [0.0 ...]};
-    Field next = Field{[0.0 ...], [0.0 ...]};
+    Field current = Field{[0.0 ...],[0.0 ...]};
+    Field next = Field{[0.0 ...],[0.0 ...]};
     Assert.Error(AdvanceChecked(ref next, ref const current, 0.6), "unstable coefficient is rejected");
     Assert.LGTM(AdvanceChecked(ref next, ref const current, 0.2), "stable coefficient advances");
-    float[2] short = [0.0, 1.0];
-    float[3] long = [0.0, 1.0, 2.0];
+    float[2] short =[0.0, 1.0];
+    float[3] long =[0.0, 1.0, 2.0];
     Assert.Error(MaximumResidual(ReadOnlySpan(short), ReadOnlySpan(long)), "mismatched extents are rejected");
-    Assert.Near(MaximumResidual(ReadOnlySpan(next.temperature), ReadOnlySpan(current.temperature))!, 0.0, 0.001, "identical fields have no residual");
+    Assert.Near(MaximumResidual(ReadOnlySpan(next.temperature), ReadOnlySpan(current.temperature))!,
+    0.0, 0.001, "identical fields have no residual");
     ClearSources(ref next);
 }

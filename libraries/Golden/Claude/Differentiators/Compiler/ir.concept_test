@@ -5,17 +5,19 @@ import Golden.Claude.Differentiators.Compiler.IRTools;
 
 Instruction Make(Opcode opcode, int left, int right, int taken, int fallthrough)
 {
-    return Instruction{opcode, NodeId{left}, NodeId{right}, BlockId{taken}, BlockId{fallthrough}, 0};
+    return Instruction {
+        opcode, NodeId{left}, NodeId{right}, BlockId{taken}, BlockId{fallthrough}, 0
+    };
 }
 
 [[fact]]
 void EachOpcodeAcceptsItsShape()
 {
-    Instruction constant = Make(Opcode::Constant, -1, -1, -1, -1);
-    Instruction add = Make(Opcode::Add, 0, 1, -1, -1);
-    Instruction jump = Make(Opcode::Jump, -1, -1, 3, -1);
-    Instruction branch = Make(Opcode::Branch, 2, -1, 4, 5);
-    Instruction ret = Make(Opcode::Return, 2, -1, -1, -1);
+    Instruction constant = Make(Opcode::Constant, - 1, - 1, - 1, - 1);
+    Instruction add = Make(Opcode::Add, 0, 1, - 1, - 1);
+    Instruction jump = Make(Opcode::Jump, - 1, - 1, 3, - 1);
+    Instruction branch = Make(Opcode::Branch, 2, - 1, 4, 5);
+    Instruction ret = Make(Opcode::Return, 2, - 1, - 1, - 1);
     Assert.True(WellFormed(ref const constant), "no operands, no successors");
     Assert.True(WellFormed(ref const add), "two operands");
     Assert.True(WellFormed(ref const jump), "one successor");
@@ -26,9 +28,9 @@ void EachOpcodeAcceptsItsShape()
 [[fact]]
 void MissingAndExtraSlotsAreBothCaught()
 {
-    Instruction halfAdd = Make(Opcode::Add, 0, -1, -1, -1);
-    Instruction branchOneWay = Make(Opcode::Branch, 2, -1, 4, -1);
-    Instruction jumpWithOperand = Make(Opcode::Jump, 7, -1, 3, -1);
+    Instruction halfAdd = Make(Opcode::Add, 0, - 1, - 1, - 1);
+    Instruction branchOneWay = Make(Opcode::Branch, 2, - 1, 4, - 1);
+    Instruction jumpWithOperand = Make(Opcode::Jump, 7, - 1, 3, - 1);
     Assert.False(WellFormed(ref const halfAdd), "add is missing its right operand");
     Assert.False(WellFormed(ref const branchOneWay), "branch is missing its fallthrough");
     Assert.False(WellFormed(ref const jumpWithOperand), "jump carries a stray operand");
@@ -37,7 +39,7 @@ void MissingAndExtraSlotsAreBothCaught()
 [[fact]]
 void CensusesCountOnlyTheirOwnKindOfSlot()
 {
-    Instruction branch = Make(Opcode::Branch, 2, -1, 4, 5);
+    Instruction branch = Make(Opcode::Branch, 2, - 1, 4, 5);
     Assert.Equals(OperandCount(ref const branch), 1, "successor slots are not operands");
     Assert.Equals(SuccessorCount(ref const branch), 2, "operand slots are not successors");
 }

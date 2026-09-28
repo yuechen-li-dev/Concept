@@ -17,26 +17,20 @@ void Drop(owned Request request) { }
 
 async Result<int, JournalError> Fetch(int sequence)
 {
-    if (sequence < 0) {
-        return Result::Error(JournalError::Missing);
-    }
+    if (sequence < 0) { return Result::Error(JournalError::Missing); }
     return Result::Ok(sequence * 2);
 }
 
 async Result<int, JournalError> Commit(int value)
 {
-    if (value > 100) {
-        return Result::Error(JournalError::Full);
-    }
+    if (value > 100) { return Result::Error(JournalError::Full); }
     return Result::Ok(value + 1);
 }
 
 [[must_use]]
 async Result<int, JournalError> Transfer(int sequence)
 {
-    owned Request pending = Request {
-        sequence, 0
-    };
+    owned Request pending = Request{sequence, 0};
     {
         ref int value = ref pending.value;
         value = 1;
