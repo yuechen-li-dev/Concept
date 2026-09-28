@@ -204,7 +204,7 @@ func runFoundationNativeHarness(t *testing.T, outputs Outputs, harnessName, harn
 		t.Fatal("generated C output missing")
 	}
 	executable := filepath.Join(dir, "evt1-r1-native.exe")
-	build := nativeCommand(t, compiler, "-std=c11", "-Wall", "-Wextra", "-I", dir, generatedC, harnessPath, "-o", executable)
+	build := nativeCommand(t, compiler, withHostLinkArgs("-std=c11", "-Wall", "-Wextra", "-I", dir, generatedC, harnessPath, "-o", executable)...)
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("native C11 compile failed: %v\n%s", err, out)
 	}

@@ -1874,9 +1874,12 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 		header.WriteString("static inline memory_order concept_atomic_store_order(int tag) { return tag == 0 ? memory_order_relaxed : (tag == 2 ? memory_order_release : memory_order_seq_cst); }\n")
 		header.WriteString("static inline memory_order concept_atomic_failure_order(int tag) { return tag == 0 ? memory_order_relaxed : (tag == 1 ? memory_order_acquire : memory_order_seq_cst); }\n")
 	}
-	if len(storageViewTypes) > 0 || len(spanTypes) > 0 || len(tensorTypes) > 0 || evt1ModuleUsesRange(l) {
-		header.WriteString("#include <stddef.h>\n")
-	}
+	// size_t and ptrdiff_t reach headers through usize/isize and many storage
+	// paths, not only views/spans/tensors/ranges. Both <stddef.h> and
+	// <stdint.h> are C11 freestanding headers, so including them
+	// unconditionally is valid for hosted and bare-metal targets alike and does
+	// not rely on a toolchain's transitive includes.
+	header.WriteString("#include <stddef.h>\n")
 	header.WriteString("#include <stdint.h>\n\n")
 	if evt1ModuleUsesRange(l) {
 		header.WriteString(evt1RangeCDeclarations())

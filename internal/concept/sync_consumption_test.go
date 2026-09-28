@@ -370,15 +370,14 @@ int IsCommitted(ref const RaceFixture fixture)
 	if err != nil {
 		t.Fatal(err)
 	}
-	harness := `#include "workersafe.generated.h"
-#include <windows.h>
+	harness := nativeThreadShim + `#include "workersafe.generated.h"
 
 typedef struct {
   concept_race_fixture* fixture;
   int result;
 } claim_args;
 
-static DWORD WINAPI claim_thread(LPVOID raw) {
+CPT_THREAD_FN(claim_thread, raw) {
   claim_args* args = (claim_args*)raw;
   args->result = concept_sync__worker_safe_claim_and_commit(args->fixture);
   return 0;
@@ -388,13 +387,10 @@ int main(void) {
   concept_race_fixture fixture = concept_sync__worker_safe_make_race_fixture();
   claim_args left = {&fixture, 0};
   claim_args right = {&fixture, 0};
-  HANDLE threads[2];
-  threads[0] = CreateThread(NULL, 0, claim_thread, &left, 0, NULL);
-  threads[1] = CreateThread(NULL, 0, claim_thread, &right, 0, NULL);
-  if (threads[0] == NULL || threads[1] == NULL) return 2;
-  WaitForMultipleObjects(2, threads, TRUE, INFINITE);
-  CloseHandle(threads[0]);
-  CloseHandle(threads[1]);
+  cpt_thread threads[2];
+  if (cpt_thread_start(&threads[0], claim_thread, &left) != 0) return 2;
+  if (cpt_thread_start(&threads[1], claim_thread, &right) != 0) return 2;
+  for (int i = 0; i < 2; ++i) if (cpt_thread_join(threads[i], 0) != 0) return 6;
   if (left.result + right.result != 1) return 3;
   return concept_sync__worker_safe_is_committed(&fixture) == 1 ? 0 : 4;
 }
@@ -486,30 +482,29 @@ int EventCount(ref const SharedFixture fixture)
 	if writeAt < 0 || writeEnd < 0 || !strings.Contains(generatedBody[writeAt:writeAt+writeEnd], "_drop(") {
 		t.Fatalf("shared-state Write lowering omitted guard cleanup:\n%s", generatedBody)
 	}
-	harness := `#include "sharedstate.generated.h"
-#include <windows.h>
+	harness := nativeThreadShim + `#include "sharedstate.generated.h"
 
 typedef struct { concept_shared_fixture* fixture; int observed; } shared_args;
 
-static DWORD WINAPI writer(LPVOID raw) {
+CPT_THREAD_FN(writer, raw) {
   shared_args* args = (shared_args*)raw;
   concept_sync__shared_state_write_and_publish(args->fixture);
   return 0;
 }
 
-static DWORD WINAPI second_producer(LPVOID raw) {
+CPT_THREAD_FN(second_producer, raw) {
   shared_args* args = (shared_args*)raw;
   concept_sync__shared_state_publish_second(args->fixture);
   return 0;
 }
 
-static DWORD WINAPI disjoint_writer(LPVOID raw) {
+CPT_THREAD_FN(disjoint_writer, raw) {
   shared_args* args = (shared_args*)raw;
   concept_sync__shared_state_write_disjoint(args->fixture);
   return 0;
 }
 
-static DWORD WINAPI reader(LPVOID raw) {
+CPT_THREAD_FN(reader, raw) {
   shared_args* args = (shared_args*)raw;
   for (int i = 0; i < 1000000; ++i) {
     int value = concept_sync__shared_state_observe_published(args->fixture);
@@ -522,14 +517,12 @@ static DWORD WINAPI reader(LPVOID raw) {
 int main(void) {
   concept_shared_fixture fixture = concept_sync__shared_state_make_shared_fixture();
   shared_args args = {&fixture, -1};
-  HANDLE threads[4];
-  threads[0] = CreateThread(NULL, 0, writer, &args, 0, NULL);
-  threads[1] = CreateThread(NULL, 0, second_producer, &args, 0, NULL);
-  threads[2] = CreateThread(NULL, 0, disjoint_writer, &args, 0, NULL);
-  threads[3] = CreateThread(NULL, 0, reader, &args, 0, NULL);
-  for (int i = 0; i < 4; ++i) if (threads[i] == NULL) return 2;
-  WaitForMultipleObjects(4, threads, TRUE, INFINITE);
-  for (int i = 0; i < 4; ++i) CloseHandle(threads[i]);
+  cpt_thread threads[4];
+  if (cpt_thread_start(&threads[0], writer, &args) != 0) return 2;
+  if (cpt_thread_start(&threads[1], second_producer, &args) != 0) return 2;
+  if (cpt_thread_start(&threads[2], disjoint_writer, &args) != 0) return 2;
+  if (cpt_thread_start(&threads[3], reader, &args) != 0) return 2;
+  for (int i = 0; i < 4; ++i) if (cpt_thread_join(threads[i], 0) != 0) return 6;
   if (args.observed != 42) return 3;
   if (concept_sync__shared_state_read_disjoint(&fixture) != 100) return 4;
   return concept_sync__shared_state_event_count(&fixture) == 2 ? 0 : 5;

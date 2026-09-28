@@ -3,6 +3,7 @@
 #define PROM_EVT1_DRAGONGOD_M3_VULKAN_GENERATED_H
 #include <vulkan/vulkan.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 typedef enum concept_queue_class_tag {

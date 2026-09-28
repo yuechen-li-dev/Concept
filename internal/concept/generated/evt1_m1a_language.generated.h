@@ -2,6 +2,7 @@
 #ifndef PROM_EVT1_M1A_LANGUAGE_GENERATED_H
 #define PROM_EVT1_M1A_LANGUAGE_GENERATED_H
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 typedef enum concept_inner_status_tag {

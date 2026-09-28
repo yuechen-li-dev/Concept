@@ -181,7 +181,7 @@ int main(void) { return concept_abi_round_trip_main(0) == 42 ? 0 : 1; }
 	}
 	for i, cc := range compilers {
 		exe := filepath.Join(dir, "abi"+string(rune('0'+i))+".exe")
-		cmd := nativeCommand(t, cc, "-std=c11", "-pedantic-errors", "-Wall", "-Wextra", filepath.Join(dir, "abi_roundtrip.generated.c"), filepath.Join(dir, "native.c"), filepath.Join(dir, "host.c"), "-o", exe)
+		cmd := nativeCommand(t, cc, withHostLinkArgs("-std=c11", "-pedantic-errors", "-Wall", "-Wextra", filepath.Join(dir, "abi_roundtrip.generated.c"), filepath.Join(dir, "native.c"), filepath.Join(dir, "host.c"), "-o", exe)...)
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("%s strict C11 aggregate link failed: %v\n%s", cc, err, output)
 		}

@@ -115,11 +115,11 @@ int main(void) { return concept_r8b__async_cast_main() == 42.0 ? 0 : 1; }
 	if err := os.WriteFile(filepath.Join(dir, "harness.c"), []byte(harness), 0600); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command("gcc", "-std=c11", "-pedantic-errors", filepath.Join(dir, "async_cast.generated.c"), filepath.Join(dir, "harness.c"), "-o", filepath.Join(dir, "async-cast.exe"))
+	cmd := nativeCommand(t, "gcc", "-std=c11", "-pedantic-errors", filepath.Join(dir, "async_cast.generated.c"), filepath.Join(dir, "harness.c"), "-o", filepath.Join(dir, "async-cast.exe"))
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("async cast C11: %v\n%s", err, output)
 	}
-	cmd = exec.Command(filepath.Join(dir, "async-cast.exe"))
+	cmd = nativeCommand(t, filepath.Join(dir, "async-cast.exe"))
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("async cast runtime: %v\n%s", err, output)
 	}
@@ -249,11 +249,11 @@ int main(void) {
 	if err := os.WriteFile(filepath.Join(dir, "harness.c"), []byte(harness), 0600); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command("gcc", "-std=c11", "-pedantic-errors", filepath.Join(dir, "casts.generated.c"), filepath.Join(dir, "round.generated.c"), filepath.Join(dir, "consumer.generated.c"), filepath.Join(dir, "harness.c"), "-o", filepath.Join(dir, "artifact-test.exe"), "-lm")
+	cmd := nativeCommand(t, "gcc", "-std=c11", "-pedantic-errors", filepath.Join(dir, "casts.generated.c"), filepath.Join(dir, "round.generated.c"), filepath.Join(dir, "consumer.generated.c"), filepath.Join(dir, "harness.c"), "-o", filepath.Join(dir, "artifact-test.exe"), "-lm")
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("artifact-only C link: %v\n%s", err, output)
 	}
-	cmd = exec.Command(filepath.Join(dir, "artifact-test.exe"))
+	cmd = nativeCommand(t, filepath.Join(dir, "artifact-test.exe"))
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("artifact-only runtime: %v\n%s", err, output)
 	}
@@ -343,9 +343,7 @@ half Narrow(float x) { return static_cast<half>(x); }
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := exec.LookPath("gcc"); err != nil {
-		t.Skip("GCC extension lane unavailable")
-	}
+	requireCFloat16(t, "gcc")
 	dir := t.TempDir()
 	for name, body := range outputs {
 		if err := os.WriteFile(filepath.Join(dir, name), body, 0600); err != nil {
@@ -362,11 +360,11 @@ int main(void) {
 	if err := os.WriteFile(filepath.Join(dir, "harness.c"), []byte(harness), 0600); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command("gcc", "-std=c11", filepath.Join(dir, "half.generated.c"), filepath.Join(dir, "harness.c"), "-o", filepath.Join(dir, "half-test.exe"))
+	cmd := nativeCommand(t, "gcc", "-std=c11", filepath.Join(dir, "half.generated.c"), filepath.Join(dir, "harness.c"), "-o", filepath.Join(dir, "half-test.exe"))
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("GCC half extension: %v\n%s", err, output)
 	}
-	cmd = exec.Command(filepath.Join(dir, "half-test.exe"))
+	cmd = nativeCommand(t, filepath.Join(dir, "half-test.exe"))
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("GCC half extension runtime: %v\n%s", err, output)
 	}
@@ -405,11 +403,11 @@ int main(void) {
 	if err := os.WriteFile(filepath.Join(dir, "verify.c"), []byte(harness), 0600); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command("gcc", "-std=c11", "-pedantic-errors", filepath.Join(dir, "round.generated.c"), filepath.Join(dir, "verify.c"), "-o", filepath.Join(dir, "verify.exe"), "-lm")
+	cmd := nativeCommand(t, "gcc", "-std=c11", "-pedantic-errors", filepath.Join(dir, "round.generated.c"), filepath.Join(dir, "verify.c"), "-o", filepath.Join(dir, "verify.exe"), "-lm")
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Verify strict C11: %v\n%s", err, output)
 	}
-	cmd = exec.Command(filepath.Join(dir, "verify.exe"))
+	cmd = nativeCommand(t, filepath.Join(dir, "verify.exe"))
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Verify runtime: %v\n%s", err, output)
 	}
@@ -467,11 +465,11 @@ int main(void) {
 		if err := os.WriteFile(filepath.Join(dir, "harness.c"), []byte(harness), 0600); err != nil {
 			t.Fatal(err)
 		}
-		cmd := exec.Command(compiler, "-std=c11", "-pedantic-errors", filepath.Join(dir, "casts.generated.c"), filepath.Join(dir, "harness.c"), "-o", filepath.Join(dir, "casts-test.exe"))
+		cmd := nativeCommand(t, compiler, "-std=c11", "-pedantic-errors", filepath.Join(dir, "casts.generated.c"), filepath.Join(dir, "harness.c"), "-o", filepath.Join(dir, "casts-test.exe"))
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("%s strict C11: %v\n%s", compiler, err, output)
 		}
-		cmd = exec.Command(filepath.Join(dir, "casts-test.exe"))
+		cmd = nativeCommand(t, filepath.Join(dir, "casts-test.exe"))
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("%s runtime: %v\n%s", compiler, err, output)
 		}
@@ -480,11 +478,11 @@ int main(void) {
 			if err := os.WriteFile(filepath.Join(dir, "trap.c"), []byte(trap), 0600); err != nil {
 				t.Fatal(err)
 			}
-			cmd = exec.Command(compiler, "-std=c11", "-pedantic-errors", filepath.Join(dir, "casts.generated.c"), filepath.Join(dir, "trap.c"), "-o", filepath.Join(dir, "trap.exe"))
+			cmd = nativeCommand(t, compiler, "-std=c11", "-pedantic-errors", filepath.Join(dir, "casts.generated.c"), filepath.Join(dir, "trap.c"), "-o", filepath.Join(dir, "trap.exe"))
 			if output, err := cmd.CombinedOutput(); err != nil {
 				t.Fatalf("%s trap %d link: %v\n%s", compiler, i, err, output)
 			}
-			cmd = exec.Command(filepath.Join(dir, "trap.exe"))
+			cmd = nativeCommand(t, filepath.Join(dir, "trap.exe"))
 			if output, err := cmd.CombinedOutput(); err == nil || !bytes.Contains(output, []byte("integer cast out of range")) {
 				t.Fatalf("%s trap %d did not reject: %v\n%s", compiler, i, err, output)
 			}
@@ -553,7 +551,7 @@ func TestR8bNamedRoundingBuilds(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		cmd := exec.Command(compiler, "-std=c11", "-pedantic-errors", "-fsyntax-only", filepath.Join(dir, "round.generated.c"))
+		cmd := nativeCommand(t, compiler, "-std=c11", "-pedantic-errors", "-fsyntax-only", filepath.Join(dir, "round.generated.c"))
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("%s strict C11: %v\n%s", compiler, err, output)
 		}
@@ -596,11 +594,11 @@ int main(void) {
 		if compiler == "gcc" {
 			args = append(args, "-lm")
 		}
-		cmd = exec.Command(compiler, args...)
+		cmd = nativeCommand(t, compiler, args...)
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("%s link: %v\n%s", compiler, err, output)
 		}
-		cmd = exec.Command(filepath.Join(dir, "round-test.exe"))
+		cmd = nativeCommand(t, filepath.Join(dir, "round-test.exe"))
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("%s runtime: %v\n%s", compiler, err, output)
 		}

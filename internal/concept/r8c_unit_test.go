@@ -163,7 +163,7 @@ func assertR8cStrictC11(t *testing.T, outputs Outputs, source string) {
 		if _, err := exec.LookPath(compiler); err != nil {
 			continue
 		}
-		cmd := exec.Command(compiler, "-std=c11", "-pedantic-errors", "-fsyntax-only", filepath.Join(dir, source))
+		cmd := nativeCommand(t, compiler, "-std=c11", "-pedantic-errors", "-fsyntax-only", filepath.Join(dir, source))
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("%s strict C11: %v\n%s", compiler, err, output)
 		}
@@ -337,9 +337,7 @@ int main(void) {
 }
 
 func TestR8cHalfUnitExtension(t *testing.T) {
-	if _, err := exec.LookPath("gcc"); err != nil {
-		t.Skip("GCC half extension unavailable")
-	}
+	requireCFloat16(t, "")
 	const source = `module R8c.Half; profile Core;
 float<m> Widen(half<mm> x) { return x as float<m>; }`
 	module, err := Parse("half.concept", source)

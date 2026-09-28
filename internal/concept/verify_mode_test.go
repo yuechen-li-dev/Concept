@@ -65,7 +65,7 @@ func TestVerifyBoundsUsesSameSourceAndReportsObservation(t *testing.T) {
 				t.Fatal(err)
 			}
 			exe := filepath.Join(dir, "verify.exe")
-			if out, err := nativeCommand(t, compiler, "-std=c11", "-Wall", "-Wextra", "-Werror", "-I", dir, filepath.Join(dir, name), harness, "-o", exe).CombinedOutput(); err != nil {
+			if out, err := nativeCommand(t, compiler, withHostLinkArgs("-std=c11", "-Wall", "-Wextra", "-Werror", "-I", dir, filepath.Join(dir, name), harness, "-o", exe)...).CombinedOutput(); err != nil {
 				t.Fatalf("C11 compile: %v\n%s", err, out)
 			}
 			out, err := nativeCommand(t, exe).CombinedOutput()

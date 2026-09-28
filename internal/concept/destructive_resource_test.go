@@ -27,7 +27,7 @@ int Main() { Store first = Store{7}; Store second = Store{9}; int result = 0; { 
 	if err != nil {
 		t.Fatal(err)
 	}
-	runFoundationNativeHarness(t, outputs, "r7f2_resource_harness.c", "#include \"App.generated.h\"\nint main(void) { return concept_app_main() == 7 ? 0 : 1; }\n")
+	runFoundationNativeHarness(t, outputs, "r7f2_resource_harness.c", "#include \"app.generated.h\"\nint main(void) { return concept_app_main() == 7 ? 0 : 1; }\n")
 	invalid := strings.Replace(valid, "Reset(ref second);", "Reset(ref first);", 1)
 	_, err = ParseWithSemanticModules("Invalid.concept", invalid, deps)
 	if err == nil || !strings.Contains(err.Error(), "DESTRUCTIVE_ACCESS_WITH_LIVE_BORROW") {

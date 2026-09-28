@@ -86,7 +86,7 @@ func TestAMD64PauseAndTimestampExecuteNatively(t *testing.T) {
 		t.Fatal(err)
 	}
 	binary := filepath.Join(dir, "machine-test")
-	build := nativeCommand(t, compiler, "-std=c11", "-pedantic-errors", "-O2", "amd64.generated.c", "amd64.machine.S", "harness.c", "-o", binary)
+	build := nativeCommand(t, compiler, withHostLinkArgs("-std=c11", "-pedantic-errors", "-O2", "amd64.generated.c", "amd64.machine.S", "harness.c", "-o", binary)...)
 	build.Dir = dir
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("strict C11 wrapper/helper build failed: %v\n%s", err, output)
@@ -130,12 +130,12 @@ func TestAMD64CpuidTypedWrapperExecutesNatively(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "harness.c"), []byte(harness), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	build := exec.Command(compiler, "-std=c11", "-pedantic-errors", "-O2", "amd64.generated.c", "amd64.machine.S", "harness.c", "-o", "cpuid-test")
+	build := nativeCommand(t, compiler, "-std=c11", "-pedantic-errors", "-O2", "amd64.generated.c", "amd64.machine.S", "harness.c", "-o", "cpuid-test")
 	build.Dir = dir
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("strict C11 CPUID build: %v\n%s", err, out)
 	}
-	if out, err := exec.Command(filepath.Join(dir, "cpuid-test")).CombinedOutput(); err != nil {
+	if out, err := nativeCommand(t, filepath.Join(dir, "cpuid-test")).CombinedOutput(); err != nil {
 		t.Fatalf("native CPUID: %v\n%s", err, out)
 	}
 }
@@ -179,7 +179,7 @@ func TestAArch64MachineBarrierCrossTarget(t *testing.T) {
 	}
 	if compiler, err := exec.LookPath("clang"); err == nil {
 		object := filepath.Join(t.TempDir(), "aarch64.o")
-		build := exec.Command(compiler, "-target", "aarch64-none-elf", "-c", "-x", "assembler", "-", "-o", object)
+		build := nativeCommand(t, compiler, "-target", "aarch64-none-elf", "-c", "-x", "assembler", "-", "-o", object)
 		build.Stdin = strings.NewReader(assembly)
 		if out, err := build.CombinedOutput(); err != nil {
 			t.Fatalf("AArch64 helper cross-build: %v\n%s", err, out)

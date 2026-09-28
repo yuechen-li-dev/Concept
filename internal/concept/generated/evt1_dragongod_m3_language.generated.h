@@ -2,6 +2,7 @@
 #ifndef PROM_EVT1_DRAGONGOD_M3_LANGUAGE_GENERATED_H
 #define PROM_EVT1_DRAGONGOD_M3_LANGUAGE_GENERATED_H
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 typedef enum concept_queue_class_tag {

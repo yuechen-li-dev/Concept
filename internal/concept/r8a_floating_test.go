@@ -186,7 +186,7 @@ func TestR8aHalfCompilerExtension(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		cmd := exec.Command(compiler, "-std=c11", "-fsyntax-only", filepath.Join(dir, "half.generated.c"))
+		cmd := nativeCommand(t, compiler, "-std=c11", "-fsyntax-only", filepath.Join(dir, "half.generated.c"))
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("%s binary16 extension: %v\n%s", compiler, err, output)
 		}
@@ -206,11 +206,11 @@ int main(void) {
 			t.Fatal(err)
 		}
 		executable := filepath.Join(dir, "half-test.exe")
-		cmd = exec.Command(compiler, "-std=c11", filepath.Join(dir, "half.generated.c"), filepath.Join(dir, "harness.c"), "-o", executable)
+		cmd = nativeCommand(t, compiler, "-std=c11", filepath.Join(dir, "half.generated.c"), filepath.Join(dir, "harness.c"), "-o", executable)
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("%s binary16 executable: %v\n%s", compiler, err, output)
 		}
-		cmd = exec.Command(executable)
+		cmd = nativeCommand(t, executable)
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("%s binary16 arithmetic: %v\n%s", compiler, err, output)
 		}
@@ -319,7 +319,7 @@ double Main() { double a = 1.0000000000000002; double b = 2.0; return Add(a, b);
 				t.Fatal(err)
 			}
 		}
-		cmd := exec.Command(compiler, "-std=c11", "-pedantic-errors", "-fsyntax-only", filepath.Join(dir, "strict.generated.c"))
+		cmd := nativeCommand(t, compiler, "-std=c11", "-pedantic-errors", "-fsyntax-only", filepath.Join(dir, "strict.generated.c"))
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("%s strict C11: %v\n%s", compiler, err, output)
 		}
@@ -330,11 +330,11 @@ int main(void) { return concept_r8a__strict_scale(1.0) > 1.0 ? 0 : 1; }
 			t.Fatal(err)
 		}
 		executable := filepath.Join(dir, "strict-test.exe")
-		cmd = exec.Command(compiler, "-std=c11", "-pedantic-errors", filepath.Join(dir, "strict.generated.c"), filepath.Join(dir, "harness.c"), "-o", executable)
+		cmd = nativeCommand(t, compiler, "-std=c11", "-pedantic-errors", filepath.Join(dir, "strict.generated.c"), filepath.Join(dir, "harness.c"), "-o", executable)
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("%s strict C11 executable: %v\n%s", compiler, err, output)
 		}
-		cmd = exec.Command(executable)
+		cmd = nativeCommand(t, executable)
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("%s binary64 arithmetic: %v\n%s", compiler, err, output)
 		}

@@ -47,7 +47,7 @@ func TestAsyncRuntimeStackOverflow(t *testing.T) {
 		t.Fatal(err)
 	}
 	exe := filepath.Join(dir, "overflow.exe")
-	if out, err := nativeCommand(t, compiler, "-std=c11", "-Wall", "-Wextra", "-I", dir, filepath.Join(dir, "async_stack_overflow.generated.c"), harness, "-o", exe).CombinedOutput(); err != nil {
+	if out, err := nativeCommand(t, compiler, withHostLinkArgs("-std=c11", "-Wall", "-Wextra", "-I", dir, filepath.Join(dir, "async_stack_overflow.generated.c"), harness, "-o", exe)...).CombinedOutput(); err != nil {
 		t.Fatalf("compile: %v\n%s", err, out)
 	}
 	out, err := nativeCommand(t, exe).CombinedOutput()
@@ -78,7 +78,7 @@ func TestAsyncRuntimeResultBeforeCompletion(t *testing.T) {
 		t.Fatal(err)
 	}
 	exe := filepath.Join(dir, "premature_result.exe")
-	if out, err := nativeCommand(t, compiler, "-std=c11", "-Wall", "-Wextra", "-I", dir, filepath.Join(dir, "async_result_before_completion.generated.c"), harness, "-o", exe).CombinedOutput(); err != nil {
+	if out, err := nativeCommand(t, compiler, withHostLinkArgs("-std=c11", "-Wall", "-Wextra", "-I", dir, filepath.Join(dir, "async_result_before_completion.generated.c"), harness, "-o", exe)...).CombinedOutput(); err != nil {
 		t.Fatalf("compile: %v\n%s", err, out)
 	}
 	out, err := nativeCommand(t, exe).CombinedOutput()

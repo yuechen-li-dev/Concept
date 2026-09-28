@@ -25,5 +25,5 @@ int Main() { int<array>[3] values = [1, 2, 3]; return Count<int, 3>(ref const va
 			t.Fatalf("closed generic array view missing from C header: %s", name)
 		}
 	}
-	runFoundationNativeHarness(t, outputs, "generic_array_view_harness.c", "#include \"GenericArrayView.generated.h\"\nint main(void) { return concept_generic_array_view_main() == 3 ? 0 : 1; }\n")
+	runFoundationNativeHarness(t, outputs, "generic_array_view_harness.c", "#include \"genericarrayview.generated.h\"\nint main(void) { return concept_generic_array_view_main() == 3 ? 0 : 1; }\n")
 }

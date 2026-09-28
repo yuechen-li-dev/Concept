@@ -93,12 +93,12 @@ func TestMultiOperandAsmNativeAndConflicts(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "harness.c"), []byte(harness), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	build := exec.Command(compiler, "-std=c11", "-pedantic-errors", "-O2", "multi_asm.generated.c", "multi_asm.machine.S", "harness.c", "-o", "multi-test")
+	build := nativeCommand(t, compiler, "-std=c11", "-pedantic-errors", "-O2", "multi_asm.generated.c", "multi_asm.machine.S", "harness.c", "-o", "multi-test")
 	build.Dir = dir
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build: %v\n%s", err, out)
 	}
-	if out, err := exec.Command(filepath.Join(dir, "multi-test")).CombinedOutput(); err != nil {
+	if out, err := nativeCommand(t, filepath.Join(dir, "multi-test")).CombinedOutput(); err != nil {
 		t.Fatalf("run: %v\n%s", err, out)
 	}
 }
@@ -154,7 +154,7 @@ func TestStructuredAMD64AsmOperandsMIRAndExecution(t *testing.T) {
 		t.Fatal(err)
 	}
 	binary := filepath.Join(dir, "asm-test")
-	build := nativeCommand(t, compiler, "-std=c11", "-pedantic-errors", "-O2", "asm_probe.generated.c", "asm_probe.machine.S", "harness.c", "-o", binary)
+	build := nativeCommand(t, compiler, withHostLinkArgs("-std=c11", "-pedantic-errors", "-O2", "asm_probe.generated.c", "asm_probe.machine.S", "harness.c", "-o", binary)...)
 	build.Dir = dir
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("strict C11/asm build: %v\n%s", err, output)

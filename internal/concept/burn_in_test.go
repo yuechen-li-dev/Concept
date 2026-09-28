@@ -331,7 +331,7 @@ int main(void) {
 		t.Fatal(err)
 	}
 	executable := filepath.Join(dir, "oracle.exe")
-	command := nativeCommand(t, compiler, "-std=c11", "-O3", "-Wall", "-Wextra", "-Werror", filepath.Join(dir, "oracle_runtime.generated.c"), harnessPath, "-o", executable)
+	command := nativeCommand(t, compiler, withHostLinkArgs("-std=c11", "-O3", "-Wall", "-Wextra", "-Werror", filepath.Join(dir, "oracle_runtime.generated.c"), harnessPath, "-o", executable)...)
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("oracle compile failed: %v\n%s", err, output)
 	}
@@ -386,7 +386,7 @@ func TestR7d3DeterministicLiteralExecutionOracle(t *testing.T) {
 		t.Fatal(err)
 	}
 	executable := filepath.Join(dir, "literal_fuzz.exe")
-	command := nativeCommand(t, compiler, "-std=c11", "-O3", "-Wall", "-Wextra", "-Werror", filepath.Join(dir, "literal_fuzz.generated.c"), harnessPath, "-o", executable)
+	command := nativeCommand(t, compiler, withHostLinkArgs("-std=c11", "-O3", "-Wall", "-Wextra", "-Werror", filepath.Join(dir, "literal_fuzz.generated.c"), harnessPath, "-o", executable)...)
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("literal oracle compile failed: %v\n%s", err, output)
 	}

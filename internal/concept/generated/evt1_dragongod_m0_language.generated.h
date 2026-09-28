@@ -2,6 +2,7 @@
 #ifndef PROM_EVT1_DRAGONGOD_M0_LANGUAGE_GENERATED_H
 #define PROM_EVT1_DRAGONGOD_M0_LANGUAGE_GENERATED_H
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 typedef enum concept_lifecycle_signal_tag {

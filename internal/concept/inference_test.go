@@ -220,7 +220,7 @@ func TestInferenceTerminalPanicPaths(t *testing.T) {
 			}
 			exe := filepath.Join(dir, "panic.exe")
 			generated := filepath.Join(dir, base+".generated.c")
-			if out, err := nativeCommand(t, compiler, "-std=c11", "-Wall", "-Wextra", "-I", dir, generated, harnessPath, "-o", exe).CombinedOutput(); err != nil {
+			if out, err := nativeCommand(t, compiler, withHostLinkArgs("-std=c11", "-Wall", "-Wextra", "-I", dir, generated, harnessPath, "-o", exe)...).CombinedOutput(); err != nil {
 				t.Fatalf("compile: %v\n%s", err, out)
 			}
 			out, err := nativeCommand(t, exe).CombinedOutput()

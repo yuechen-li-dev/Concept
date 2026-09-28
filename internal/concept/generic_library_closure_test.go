@@ -165,7 +165,7 @@ int Main() { return Forward<int>(42); }
 	if err != nil {
 		t.Fatal(err)
 	}
-	runFoundationNativeHarness(t, outputs, "nested_artifact_harness.c", "#include \"App.generated.h\"\nint main(void) { return concept_app_main() == 42 ? 0 : 1; }\n")
+	runFoundationNativeHarness(t, outputs, "nested_artifact_harness.c", "#include \"app.generated.h\"\nint main(void) { return concept_app_main() == 42 ? 0 : 1; }\n")
 }
 
 func TestR7f1GenericLocalArrayFromArtifact(t *testing.T) {
@@ -187,7 +187,7 @@ int Main() { return Work<4>() + Work<32>(); }
 	if err != nil {
 		t.Fatal(err)
 	}
-	runFoundationNativeHarness(t, outputs, "storage_artifact_harness.c", "#include \"App.generated.h\"\nint main(void) { return concept_app_main() == 50 ? 0 : 1; }\n")
+	runFoundationNativeHarness(t, outputs, "storage_artifact_harness.c", "#include \"app.generated.h\"\nint main(void) { return concept_app_main() == 50 ? 0 : 1; }\n")
 }
 
 func TestR7f1GenericRequiredOperationFromArtifact(t *testing.T) {
@@ -214,7 +214,7 @@ int Main() { Item item = Item{3}; return Apply<Item>(ref const item); }
 	if err != nil {
 		t.Fatal(err)
 	}
-	runFoundationNativeHarness(t, outputs, "required_artifact_harness.c", "#include \"App.generated.h\"\nint main(void) { return concept_app_main() == 7 ? 0 : 1; }\n")
+	runFoundationNativeHarness(t, outputs, "required_artifact_harness.c", "#include \"app.generated.h\"\nint main(void) { return concept_app_main() == 7 ? 0 : 1; }\n")
 }
 
 func TestR7f1CombinedLibraryProbeFromArtifact(t *testing.T) {
@@ -242,7 +242,7 @@ int Main() { owned Store store = Store{5}; Item item = Item{3}; int result = 0; 
 	if err != nil {
 		t.Fatal(err)
 	}
-	runFoundationNativeHarness(t, outputs, "combined_probe_harness.c", "#include \"App.generated.h\"\nint main(void) { return concept_app_main() == 21 ? 0 : 1; }\n")
+	runFoundationNativeHarness(t, outputs, "combined_probe_harness.c", "#include \"app.generated.h\"\nint main(void) { return concept_app_main() == 21 ? 0 : 1; }\n")
 	invalid := strings.Replace(consumer, "result = Apply<Item, 4>(ref const item) + lease.owner.value;", "result = Apply<Item, 4>(ref const item) + lease.owner.value + Reclaim(move store);", 1)
 	_, err = ParseWithSemanticModules("Invalid.concept", invalid, map[string][]byte{"Library.Probe": artifact})
 	if err == nil || !strings.Contains(err.Error(), "STORAGE_MOVE_WITH_LIVE_REFERENCE") {
@@ -297,7 +297,7 @@ int Main() { owned Store store = Store{7}; { Lease lease = Borrow(ref const stor
 	if err != nil {
 		t.Fatal(err)
 	}
-	runFoundationNativeHarness(t, outputs, "imported_reclaim_harness.c", "#include \"App.generated.h\"\nint main(void) { return concept_app_main() == 7 ? 0 : 1; }\n")
+	runFoundationNativeHarness(t, outputs, "imported_reclaim_harness.c", "#include \"app.generated.h\"\nint main(void) { return concept_app_main() == 7 ? 0 : 1; }\n")
 	invalid := `module App; profile Core; import Library.Access;
 int Main() { owned Store store = Store{7}; Lease lease = Borrow(ref const store); Reclaim(move store); return lease.owner.value; }
 `

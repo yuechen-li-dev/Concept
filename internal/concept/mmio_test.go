@@ -241,7 +241,7 @@ int main(int argc, char **argv) {
 	}
 	for _, compiler := range compilers {
 		exe := filepath.Join(dir, filepath.Base(compiler)+"-mmio.exe")
-		command := nativeCommand(t, compiler, "-std=c11", "-pedantic", "-pedantic-errors", "-O2", "-Wall", "-Wextra", "-include", filepath.Join(dir, "adapter.h"), filepath.Join(dir, "hardware_probe.generated.c"), filepath.Join(dir, "simulator.c"), filepath.Join(dir, "harness.c"), "-o", exe)
+		command := nativeCommand(t, compiler, withHostLinkArgs("-std=c11", "-pedantic", "-pedantic-errors", "-O2", "-Wall", "-Wextra", "-include", filepath.Join(dir, "adapter.h"), filepath.Join(dir, "hardware_probe.generated.c"), filepath.Join(dir, "simulator.c"), filepath.Join(dir, "harness.c"), "-o", exe)...)
 		if output, err := command.CombinedOutput(); err != nil {
 			t.Fatalf("%s strict C11 MMIO build: %v\n%s", compiler, err, output)
 		}
@@ -501,7 +501,7 @@ int main(void) {
 	}
 	for _, compiler := range compilers {
 		exe := filepath.Join(dir, filepath.Base(compiler)+"-uart.exe")
-		command := nativeCommand(t, compiler, "-std=c11", "-pedantic", "-pedantic-errors", "-O2", "-I", dir, filepath.Join(dir, "uartconsumer.generated.c"), harnessPath, "-o", exe)
+		command := nativeCommand(t, compiler, withHostLinkArgs("-std=c11", "-pedantic", "-pedantic-errors", "-O2", "-I", dir, filepath.Join(dir, "uartconsumer.generated.c"), harnessPath, "-o", exe)...)
 		if output, err := command.CombinedOutput(); err != nil {
 			t.Fatalf("%s strict C11 UART build: %v\n%s", compiler, err, output)
 		}

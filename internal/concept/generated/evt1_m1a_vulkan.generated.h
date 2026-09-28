@@ -3,6 +3,7 @@
 #define PROM_EVT1_M1A_VULKAN_GENERATED_H
 #include <vulkan/vulkan.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 typedef struct concept_vulkan_error {

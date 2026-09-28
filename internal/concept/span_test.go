@@ -261,7 +261,7 @@ func TestSpanRuntimeBoundsPanics(t *testing.T) {
 			}
 			executable := filepath.Join(dir, "bounds.exe")
 			generated := filepath.Join(dir, base+".generated.c")
-			if out, err := nativeCommand(t, compiler, "-std=c11", "-Wall", "-Wextra", "-I", dir, generated, harness, "-o", executable).CombinedOutput(); err != nil {
+			if out, err := nativeCommand(t, compiler, withHostLinkArgs("-std=c11", "-Wall", "-Wextra", "-I", dir, generated, harness, "-o", executable)...).CombinedOutput(); err != nil {
 				t.Fatalf("native C11 compile failed: %v\n%s", err, out)
 			}
 			out, err := nativeCommand(t, executable).CombinedOutput()

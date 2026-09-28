@@ -101,3 +101,105 @@ func narrowNativeDeterminismPath(t *testing.T) {
 	t.Setenv("PATH", strings.Join(dirs, string(os.PathListSeparator)))
 	t.Setenv("PATHEXT", ".COM;.EXE")
 }
+
+// nativeHostLinkArgs are the host libraries a linked native harness may need.
+// Generated C can call <math.h> functions (inference lowers softmax to expf),
+// which glibc keeps in libm; MinGW and the MSVC-target clang driver accept -lm
+// as well, matching the existing concept test runner and math_r7x2 harness.
+// Threaded harnesses use POSIX threads off Windows.
+func nativeHostLinkArgs() []string {
+	if runtime.GOOS == "windows" {
+		return []string{"-lm"}
+	}
+	return []string{"-lm", "-pthread"}
+}
+
+// withHostLinkArgs inserts nativeHostLinkArgs after the inputs of a gcc/clang
+// link command (before a trailing "-o <output>" when present), since libraries
+// must follow the objects that reference them.
+func withHostLinkArgs(args ...string) []string {
+	out := make([]string, 0, len(args)+3)
+	for i := 0; i < len(args); i++ {
+		if args[i] == "-o" && i+2 == len(args) {
+			out = append(out, nativeHostLinkArgs()...)
+			return append(out, args[i:]...)
+		}
+		out = append(out, args[i])
+	}
+	return append(out, nativeHostLinkArgs()...)
+}
+
+// nativeThreadShim is prepended to threaded native harnesses so the same
+// specimen runs on Win32 threads and POSIX threads. It must precede every
+// other include so the POSIX feature macro applies. POSIX has no timed join;
+// hung joins are bounded by nativeCommand's deadline instead.
+const nativeThreadShim = `#if !defined(_WIN32) && !defined(_POSIX_C_SOURCE)
+#define _POSIX_C_SOURCE 200809L
+#endif
+#if defined(_WIN32)
+#include <windows.h>
+typedef HANDLE cpt_thread;
+#define CPT_THREAD_FN(name, arg) static DWORD WINAPI name(LPVOID arg)
+static int cpt_thread_start(cpt_thread* thread, LPTHREAD_START_ROUTINE fn, void* arg) {
+  *thread = CreateThread(NULL, 0, fn, arg, 0, NULL);
+  return *thread == NULL ? -1 : 0;
+}
+static int cpt_thread_join(cpt_thread thread, unsigned timeout_ms) {
+  DWORD waited = WaitForSingleObject(thread, timeout_ms == 0 ? INFINITE : (DWORD)timeout_ms);
+  CloseHandle(thread);
+  return waited == WAIT_OBJECT_0 ? 0 : -1;
+}
+static void cpt_thread_yield(void) { Sleep(0); }
+static double cpt_seconds_now(void) {
+  LARGE_INTEGER frequency, now;
+  QueryPerformanceFrequency(&frequency);
+  QueryPerformanceCounter(&now);
+  return (double)now.QuadPart / (double)frequency.QuadPart;
+}
+#else
+#include <pthread.h>
+#include <sched.h>
+#include <time.h>
+typedef pthread_t cpt_thread;
+#define CPT_THREAD_FN(name, arg) static void* name(void* arg)
+static int cpt_thread_start(cpt_thread* thread, void* (*fn)(void*), void* arg) {
+  return pthread_create(thread, NULL, fn, arg) == 0 ? 0 : -1;
+}
+static int cpt_thread_join(cpt_thread thread, unsigned timeout_ms) {
+  (void)timeout_ms;
+  return pthread_join(thread, NULL) == 0 ? 0 : -1;
+}
+static void cpt_thread_yield(void) { sched_yield(); }
+static double cpt_seconds_now(void) {
+  struct timespec now;
+  clock_gettime(CLOCK_MONOTONIC, &now);
+  return (double)now.tv_sec + (double)now.tv_nsec / 1e9;
+}
+#endif
+`
+
+// requireCFloat16 skips tests for the _Float16 extension lane when the host
+// C compiler lacks it (for example GCC < 12 on x86-64), which is a toolchain
+// capability limit rather than a Concept defect.
+// An empty compiler name selects gcc, then clang, like runFoundationNativeHarness.
+func requireCFloat16(t *testing.T, compilerName string) {
+	t.Helper()
+	var compiler string
+	var err error
+	if compilerName != "" {
+		compiler, err = exec.LookPath(compilerName)
+	} else if compiler, err = exec.LookPath("gcc"); err != nil {
+		compiler, err = exec.LookPath("clang")
+	}
+	if err != nil {
+		t.Skipf("C compiler unavailable for the _Float16 lane: %v", err)
+	}
+	dir := t.TempDir()
+	probe := filepath.Join(dir, "float16_probe.c")
+	if err := os.WriteFile(probe, []byte("_Float16 cpt_probe(_Float16 value) { return value; }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := nativeCommand(t, compiler, "-std=c11", "-fsyntax-only", probe).CombinedOutput(); err != nil {
+		t.Skipf("%s does not support _Float16 on this target: %s", filepath.Base(compiler), strings.TrimSpace(string(out)))
+	}
+}

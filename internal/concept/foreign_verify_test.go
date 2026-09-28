@@ -52,7 +52,7 @@ void Check() {
 		t.Fatal(err)
 	}
 	object := filepath.Join(dir, "fake.o")
-	if output, err := exec.Command(clang, "-std=c11", "-c", fake, "-o", object).CombinedOutput(); err != nil {
+	if output, err := nativeCommand(t, clang, "-std=c11", "-c", fake, "-o", object).CombinedOutput(); err != nil {
 		t.Fatalf("fake native fixture: %v\n%s", err, output)
 	}
 	manifest, err := DiscoverTests(dir)

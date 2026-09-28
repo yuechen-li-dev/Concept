@@ -200,7 +200,7 @@ func TestTensorSemanticsRuntimeGuards(t *testing.T) {
 			}
 			exe := filepath.Join(dir, "guard.exe")
 			generated := filepath.Join(dir, base+".generated.c")
-			if out, err := nativeCommand(t, compiler, "-std=c11", "-Wall", "-Wextra", "-I", dir, generated, harness, "-o", exe).CombinedOutput(); err != nil {
+			if out, err := nativeCommand(t, compiler, withHostLinkArgs("-std=c11", "-Wall", "-Wextra", "-I", dir, generated, harness, "-o", exe)...).CombinedOutput(); err != nil {
 				t.Fatalf("native compile failed: %v\n%s", err, out)
 			}
 			out, err := nativeCommand(t, exe).CombinedOutput()
