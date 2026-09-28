@@ -12,13 +12,14 @@ profile Core;
 [[fact]]
 void AdditionWorks()
 {
-    Assert.Equals(Add(2, 3), 5, "two plus three should equal five");
+    Assert.Equal(Add(2, 3), 5, "two plus three should equal five");
 }
 ```
 
 Every assertion requires a non-empty string-literal reason. This applies to
-`Assert.True(condition, reason)`, `False`, `Equals(actual, expected, reason)`,
-`Near(actual, expected, tolerance, reason)`, `Error(result, reason)`, and
+`Assert.True(condition, reason)`, `False`, `Equal(actual, expected, reason)`
+(also `Equals`), `Near(actual, expected, tolerance, reason)`,
+`Error(result, reason)`, `FailsWith(result, expectedError, reason)`, and
 `LGTM(result, reason)`. Values evaluate once, left to right. `Error` expects the
 ordinary `Result<T,E>::Error` channel; `LGTM` expects `Result<T,E>::Ok` and does
 not unwrap it.

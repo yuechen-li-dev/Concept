@@ -16,6 +16,10 @@ Result<int, Problem> Fail() { return Result::Error(Problem::Missing); }
     uint32 value = 0;
     Assert.Equals(value, 0, "right literal takes uint32 context");
     Assert.Equals(0, value, "left literal takes uint32 context");
+    Assert.Equal(value, 0, "singular spelling shares right literal context");
+    Assert.Equal(0, value, "singular spelling shares left literal context");
+    Assert.Equal("Concept", "Concept", "singular spelling compares strings");
+    Assert.Equal(Problem::Missing, Problem::Missing, "singular spelling compares enum tags");
 }
 [[fact]] void TypedNear() {
     double actual = 1.000000000001;
@@ -49,6 +53,7 @@ Result<int, Problem> Fail() { return Result::Error(Problem::Missing); }
 
 func TestR8gAssertionRejectsWrongErrorAndDimension(t *testing.T) {
 	for _, tc := range []struct{ source, code string }{
+		{`profile Core; [[fact]] void Test() { uint32 value = 1; Assert.Equal(value, "1", "wrong type"); }`, "TEST_ASSERT_EQUALS_TYPE_MISMATCH"},
 		{`profile Core; enum A { X } enum B { X } Result<int,A> F() { return Result::Error(A::X); } [[fact]] void Test() { Assert.FailsWith(F(), B::X, "wrong error type"); }`, "TEST_ASSERT_EQUALS_TYPE_MISMATCH"},
 		{`profile Core; [[fact]] void Test() { double<m> x = interpret (1.0 as double) as double<m>; double<s> tolerance = interpret (1.0 as double) as double<s>; Assert.Near(x, x, tolerance, "wrong dimension"); }`, "TEST_ASSERT_NEAR_NUMERIC_REQUIRED"},
 	} {

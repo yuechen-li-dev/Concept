@@ -6,7 +6,7 @@ import (
 )
 
 func evt1ValidateTestAssertion(env *semanticEnv, scope *evt1Scope, call *CallExpr, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
-	want := map[string]int{"True": 2, "False": 2, "Equals": 3, "Near": 4, "Error": 2, "FailsWith": 3, "LGTM": 2}
+	want := map[string]int{"True": 2, "False": 2, "Equal": 3, "Equals": 3, "Near": 4, "Error": 2, "FailsWith": 3, "LGTM": 2}
 	argc, ok := want[call.Callee]
 	if !ok {
 		return Type{}, evt1Diagnostic("TEST_ASSERT_UNKNOWN", fmt.Sprintf("unknown test assertion Assert.%s", call.Callee), call.Span)
@@ -22,18 +22,19 @@ func evt1ValidateTestAssertion(env *semanticEnv, scope *evt1Scope, call *CallExp
 		return Type{}, evt1Diagnostic("TEST_ASSERT_REASON_NONEMPTY", fmt.Sprintf("Assert.%s reason must not be empty or whitespace", call.Callee), reason.Span)
 	}
 	valueTypes := make([]Type, len(call.Args)-1)
+	equalityAssertion := call.Callee == "Equal" || call.Callee == "Equals"
 	for i := range valueTypes {
 		var t Type
 		var err error
-		if call.Callee == "Equals" && i == 0 && evt1ContextualIntegerOrFloatLiteral(call.Args[0]) && !evt1ContextualIntegerOrFloatLiteral(call.Args[1]) {
+		if equalityAssertion && i == 0 && evt1ContextualIntegerOrFloatLiteral(call.Args[0]) && !evt1ContextualIntegerOrFloatLiteral(call.Args[1]) {
 			valueTypes[1], err = validateExpr(env, scope, call.Args[1], templateInfo, inComptimeFn)
 			if err != nil {
 				return Type{}, err
 			}
 			t, err = validateExprAgainstExpected(env, scope, call.Args[0], valueTypes[1], templateInfo, inComptimeFn)
-		} else if call.Callee == "Equals" && i == 1 && valueTypes[1].Name != "" {
+		} else if equalityAssertion && i == 1 && valueTypes[1].Name != "" {
 			continue
-		} else if (call.Callee == "Equals" || call.Callee == "Near") && i > 0 && evt1ContextualIntegerOrFloatLiteral(call.Args[i]) && valueTypes[0].Name != "" {
+		} else if (equalityAssertion || call.Callee == "Near") && i > 0 && evt1ContextualIntegerOrFloatLiteral(call.Args[i]) && valueTypes[0].Name != "" {
 			t, err = validateExprAgainstExpected(env, scope, call.Args[i], valueTypes[0], templateInfo, inComptimeFn)
 		} else {
 			t, err = validateExpr(env, scope, call.Args[i], templateInfo, inComptimeFn)
@@ -48,12 +49,12 @@ func evt1ValidateTestAssertion(env *semanticEnv, scope *evt1Scope, call *CallExp
 		if valueTypes[0].Name != "bool" {
 			return Type{}, evt1Diagnostic("TEST_ASSERT_BOOL_REQUIRED", fmt.Sprintf("Assert.%s requires bool, got %s", call.Callee, valueTypes[0].String()), call.Args[0].exprSpan())
 		}
-	case "Equals":
+	case "Equal", "Equals":
 		if !valueTypes[0].SameValueType(valueTypes[1]) {
-			return Type{}, evt1Diagnostic("TEST_ASSERT_EQUALS_TYPE_MISMATCH", fmt.Sprintf("Assert.Equals requires identical value types, got %s and %s", valueTypes[0].String(), valueTypes[1].String()), call.Span)
+			return Type{}, evt1Diagnostic("TEST_ASSERT_EQUALS_TYPE_MISMATCH", fmt.Sprintf("Assert.%s requires identical value types, got %s and %s", call.Callee, valueTypes[0].String(), valueTypes[1].String()), call.Span)
 		}
 		if !evt1TestEqualityType(env, valueTypes[0]) {
-			return Type{}, evt1Diagnostic("TEST_ASSERT_EQUALS_UNSUPPORTED", fmt.Sprintf("Assert.Equals does not support %s", valueTypes[0].String()), call.Span)
+			return Type{}, evt1Diagnostic("TEST_ASSERT_EQUALS_UNSUPPORTED", fmt.Sprintf("Assert.%s does not support %s", call.Callee, valueTypes[0].String()), call.Span)
 		}
 	case "Near":
 		if !valueTypes[0].SameValueType(valueTypes[1]) || !evt1TestNumericType(valueTypes[0]) || !evt1TestNearToleranceCompatible(valueTypes[0], valueTypes[2]) {
@@ -84,6 +85,9 @@ func evt1ValidateTestAssertion(env *semanticEnv, scope *evt1Scope, call *CallExp
 		}
 	}
 	call.Intrinsic = "test_assert_" + strings.ToLower(call.Callee)
+	if equalityAssertion {
+		call.Intrinsic = "test_assert_equals"
+	}
 	result, _ := evt1BuiltinType("void", call.Span)
 	return result, nil
 }

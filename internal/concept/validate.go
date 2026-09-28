@@ -4192,7 +4192,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		if e.Callee == "Tensor" {
 			return Type{}, evt1Diagnostic("CV4611", "Tensor(source) requires an explicit tensor<T, Rank> destination type", e.Span)
 		}
-		if e.Callee == "HardMax" || e.Callee == "Confidence" {
+		if e.Callee == "HardMax" || e.Callee == "ArgMax" || e.Callee == "Confidence" {
 			if len(e.Args) != 1 {
 				return Type{}, evt1Diagnostic("INFERENCE_QUERY_INVALID", fmt.Sprintf("%s requires exactly one Inference argument", e.Callee), e.Span)
 			}
@@ -4204,6 +4204,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 				return Type{}, evt1Diagnostic("INFERENCE_QUERY_INVALID", fmt.Sprintf("%s requires Inference<T>, got %s", e.Callee, argType.String()), e.Args[0].exprSpan())
 			}
 			e.Intrinsic = "inference_" + e.Callee
+			if e.Callee == "ArgMax" {
+				e.Intrinsic = "inference_HardMax"
+			}
 			if e.Callee == "Confidence" {
 				out, _ := evt1BuiltinType("float", e.Span)
 				return out, nil
@@ -6096,9 +6099,11 @@ func validateTransitionInferStmt(env *semanticEnv, scope *evt1Scope, stmt *Trans
 	if !scope.inAutomataState {
 		return evt1Diagnostic("MACHINE_TRANSITION_INVALID", "transition infer is only valid inside a machine state body", stmt.Span)
 	}
-	if stmt.Policy != "HardMax" {
+	if stmt.Policy != "HardMax" && stmt.Policy != "ArgMax" {
 		return evt1Diagnostic("TRANSITION_INFER_UNKNOWN_POLICY", fmt.Sprintf("unknown transition inference policy %s", stmt.Policy), stmt.Span)
 	}
+	// Both spellings select the same deterministic policy and artifact identity.
+	stmt.Policy = "HardMax"
 	if len(stmt.Candidates) == 0 {
 		return evt1Diagnostic("INFER_EMPTY", "transition infer requires at least one candidate", stmt.Span)
 	}

@@ -76,6 +76,36 @@ func TestInferenceConformance(t *testing.T) {
 	}
 }
 
+func TestArgMaxAliasUsesHardMaxSemantics(t *testing.T) {
+	path := filepath.Join("..", "..", "language", "evt1", "inference", "valid", "infer_decide_hardmax_equivalence.concept")
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := strings.ReplaceAll(string(body), "HardMax", "ArgMax")
+	module, err := Parse("argmax_equivalence.concept", source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outputs, err := Generate(module, []byte(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertR8cStrictC11(t, outputs, "argmax_equivalence.generated.c")
+	runFoundationNativeHarness(t, outputs, "argmax_harness.c", "#include \"argmax_equivalence.generated.h\"\nint main(void) { return concept_argmax_equivalence_main() == 111 ? 0 : 1; }\n")
+	var mir MIR
+	if err := json.Unmarshal(outputs["argmax_equivalence.mir.json"], &mir); err != nil {
+		t.Fatal(err)
+	}
+	if policy := mir.Automata[0].Machines[1].States[0].TransitionInferences[0].Policy; policy != "HardMax" {
+		t.Fatalf("ArgMax must retain the proven HardMax policy, got %q", policy)
+	}
+	invalid := `profile Core; enum Action { Go } Action Bad() { return ArgMax(1); }`
+	if _, err := Parse("argmax_invalid.concept", invalid); err == nil || !strings.Contains(err.Error(), "INFERENCE_QUERY_INVALID") {
+		t.Fatalf("ArgMax must require Inference<T>, got %v", err)
+	}
+}
+
 func TestInferenceNativeC11(t *testing.T) {
 	t.Parallel()
 	cases := []struct{ file, call, condition, include string }{

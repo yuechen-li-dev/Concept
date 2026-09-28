@@ -1045,7 +1045,7 @@ Inference<Action> belief = infer
 };
 
 float attackProbability = belief[Action::Attack];
-Action selected = HardMax(belief);
+Action selected = ArgMax(belief);
 float confidence = Confidence(belief);
 ```
 
@@ -1059,14 +1059,15 @@ Disabled and `-Inf` candidates have zero probability. One `+Inf` receives
 all mass; multiple `+Inf` candidates split mass equally. All enabled
 `-Inf` terminates with `inference normalization has no finite support`.
 
-Indexed access requires a qualified candidate of `T`. `HardMax` selects the
-first source-declared maximum; `Confidence` returns that probability.
+Indexed access requires a qualified candidate of `T`. `ArgMax` and `HardMax`
+are equivalent spellings: both select the first source-declared maximum;
+`Confidence` returns that probability.
 Inference has no truthiness. For identical finite candidates, guards, float
 scores, and order, `HardMax(infer(scores))` agrees with direct `decide`, but
 `decide` remains raw-score argmax and need not normalize.
 
-`transition infer with HardMax { ... }` is the only inference semantics transition-inference
-policy. It infers, selects, cleans transients, updates the tag, and returns from
+`transition infer with ArgMax { ... }` and `transition infer with HardMax { ... }`
+name the same transition-inference policy. It infers, selects, cleans transients, updates the tag, and returns from
 `Step`. Missing or unknown policy is invalid. Randomness is never implicit;
 sampling and explicit RNG are deferred. The older typed-signal automata form
 remains compatibility surface. Plain value-level decide,
@@ -1275,7 +1276,8 @@ executables run as bounded child processes, so an abort cannot terminate the
 host runner.
 
 The compiler-known testing surface is `Assert.True`, `Assert.False`,
-`Assert.Equals`, `Assert.Near`, `Assert.Error`, and `Assert.LGTM`. Every call
+`Assert.Equal` (also `Assert.Equals`), `Assert.Near`, `Assert.Error`,
+`Assert.FailsWith`, and `Assert.LGTM`. Every call
 requires a non-empty string-literal reason as its final argument. All value
 arguments evaluate exactly once, left to right. `Near` is absolute numeric
 tolerance. `Error` and `LGTM` accept only `Result<T,E>` and respectively require
