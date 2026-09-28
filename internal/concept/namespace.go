@@ -239,6 +239,9 @@ func resolveNamespaceExpr(expr Expr, resolution namespaceResolution) (Expr, erro
 	case *FailureExpr:
 		resolved, err := resolveNamespaceExpr(value.Value, resolution)
 		value.Value = resolved
+		if err == nil && value.Else != nil {
+			value.Else, err = resolveNamespaceExpr(value.Else, resolution)
+		}
 		return value, err
 	case *StructConstructExpr:
 		if resolved, ok := resolution.qualified[value.StructName]; ok {

@@ -112,6 +112,9 @@ func evt1InferenceCandidateTypes(module Module) map[string]bool {
 			visitExpr(e.Value)
 		case *FailureExpr:
 			visitExpr(e.Value)
+			if e.Else != nil {
+				visitExpr(e.Else)
+			}
 		case *MoveExpr:
 			visitExpr(e.Value)
 		case *RefExpr:

@@ -477,6 +477,9 @@ func evt1ReplaceGeneratedMetadataExpr(expression *Expr, info TypeInfo, field, pl
 		}
 	case *FailureExpr:
 		evt1ReplaceGeneratedMetadataExpr(&e.Value, info, field, placeholder)
+		if e.Else != nil {
+			evt1ReplaceGeneratedMetadataExpr(&e.Else, info, field, placeholder)
+		}
 	case *ParenExpr:
 		evt1ReplaceGeneratedMetadataExpr(&e.Value, info, field, placeholder)
 	case *MoveExpr:

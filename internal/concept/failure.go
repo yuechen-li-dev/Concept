@@ -351,6 +351,9 @@ func evt1VisitFailureTypesExpr(expr Expr, add func(Type)) {
 	case *FailureExpr:
 		add(e.ResolvedType)
 		evt1VisitFailureTypesExpr(e.Value, add)
+		if e.Else != nil {
+			evt1VisitFailureTypesExpr(e.Else, add)
+		}
 	case *CallExpr:
 		for _, a := range e.Args {
 			evt1VisitFailureTypesExpr(a, add)
@@ -377,7 +380,7 @@ func evt1ModuleUsesFailurePanic(module Module) bool {
 	exprUses = func(expr Expr) bool {
 		switch e := expr.(type) {
 		case *FailureExpr:
-			return e.Op == "!" || exprUses(e.Value)
+			return e.Op == "!" || exprUses(e.Value) || (e.Else != nil && exprUses(e.Else))
 		case *CallExpr:
 			for _, a := range e.Args {
 				if exprUses(a) {

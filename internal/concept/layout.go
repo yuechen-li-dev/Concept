@@ -97,6 +97,14 @@ func evt1TypeGeometry(env *semanticEnv, t Type) (int, int, error) {
 	case "usize", "isize":
 		return 8, 8, nil
 	}
+	if decl, ok := env.enums[resolved.Name]; ok {
+		for _, variant := range decl.Variants {
+			if len(variant.Payload) != 0 {
+				return 0, 0, evt1Diagnostic("CV4573", "payload enum "+resolved.String()+" has no fixed scalar geometry", t.Span)
+			}
+		}
+		return 4, 4, nil // stable uint32 tag, independent of case count
+	}
 	if decl, ok := env.structs[resolved.Name]; ok {
 		if len(decl.Fields) == 0 {
 			return 0, 1, nil // preserve ordinary nominal tag geometry; repr(C) rejects empty

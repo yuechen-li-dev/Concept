@@ -772,7 +772,13 @@ func evt1AwaitFailureInStatement(stmt Statement) *FailureExpr {
 			if name, ok := e.Value.(*NameExpr); ok && strings.HasPrefix(name.Name, "#await") {
 				return e
 			}
-			return find(e.Value)
+			if found := find(e.Value); found != nil {
+				return found
+			}
+			if e.Else != nil {
+				return find(e.Else)
+			}
+			return nil
 		case *CastExpr:
 			return find(e.Value)
 		case *InterpretExpr:

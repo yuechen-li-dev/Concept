@@ -624,7 +624,13 @@ func evt1DirectAwait(stmt Statement) *AwaitExpr {
 		case *AwaitExpr:
 			return x
 		case *FailureExpr:
-			return find(x.Value)
+			if await := find(x.Value); await != nil {
+				return await
+			}
+			if x.Else != nil {
+				return find(x.Else)
+			}
+			return nil
 		case *CastExpr:
 			return find(x.Value)
 		case *InterpretExpr:
@@ -663,6 +669,9 @@ func evt1ReplaceDirectAwait(stmt Statement, index int) Statement {
 		case *FailureExpr:
 			copy := *x
 			copy.Value = replace(x.Value)
+			if x.Else != nil {
+				copy.Else = replace(x.Else)
+			}
 			return &copy
 		case *CastExpr:
 			copy := *x
@@ -754,6 +763,9 @@ func evt1AnalyzeAsync(fn FunctionDecl) evt1AsyncAnalysis {
 			expr(e.Value)
 		case *FailureExpr:
 			expr(e.Value)
+			if e.Else != nil {
+				expr(e.Else)
+			}
 		case *BindExpr:
 			expr(e.Source)
 		case *FieldExpr:
@@ -942,6 +954,9 @@ func evt1ExprNames(expr Expr) []string {
 			visit(e.Value)
 		case *FailureExpr:
 			visit(e.Value)
+			if e.Else != nil {
+				visit(e.Else)
+			}
 		case *CallExpr:
 			if e.CallableInvoke {
 				seen[e.Callee] = true
@@ -1133,7 +1148,11 @@ func evt1ExprAwaitCount(expr Expr) int {
 	case *RefExpr:
 		return evt1ExprAwaitCount(e.Value)
 	case *FailureExpr:
-		return evt1ExprAwaitCount(e.Value)
+		count := evt1ExprAwaitCount(e.Value)
+		if e.Else != nil {
+			count += evt1ExprAwaitCount(e.Else)
+		}
+		return count
 	case *BinaryExpr:
 		return evt1ExprAwaitCount(e.Left) + evt1ExprAwaitCount(e.Right)
 	case *CallExpr:
@@ -1275,7 +1294,7 @@ func evt1ExprContainsAwait(expr Expr) bool {
 	case *RefExpr:
 		return evt1ExprContainsAwait(e.Value)
 	case *FailureExpr:
-		return evt1ExprContainsAwait(e.Value)
+		return evt1ExprContainsAwait(e.Value) || (e.Else != nil && evt1ExprContainsAwait(e.Else))
 	case *BinaryExpr:
 		return evt1ExprContainsAwait(e.Left) || evt1ExprContainsAwait(e.Right)
 	case *CallExpr:

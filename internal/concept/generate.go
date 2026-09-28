@@ -1397,6 +1397,9 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 		}
 	case *FailureExpr:
 		kind := "result_propagate"
+		if e.Else != nil {
+			kind = "result_error_remap"
+		}
 		if evt1IsOptionType(e.ResolvedType) {
 			kind = "option_propagate"
 		}
@@ -1409,6 +1412,9 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 		}
 		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: kind, Type: e.ResolvedType.String(), SourceSpan: e.Span})
 		collectExprMIROps(env, e.Value, fn, templateInfo)
+		if e.Else != nil {
+			collectExprMIROps(env, e.Else, fn, templateInfo)
+		}
 	case *MoveExpr:
 		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "move", Detail: exprLabel(e.Value), SourceSpan: e.Span})
 		collectExprMIROps(env, e.Value, fn, templateInfo)
@@ -3525,12 +3531,24 @@ func (l *lowering) enumHeader(enumDecl EnumDecl) string {
 	var b strings.Builder
 	tagType := evt1CName(enumDecl.Name) + "_tag"
 	enumType := evt1CName(enumDecl.Name)
+	payloadFree := true
+	for _, variant := range enumDecl.Variants {
+		if len(variant.Payload) != 0 {
+			payloadFree = false
+			break
+		}
+	}
 	b.WriteString(fmt.Sprintf("typedef enum %s {\n", tagType))
 	for _, variant := range enumDecl.Variants {
 		b.WriteString(fmt.Sprintf("  %s = %d,\n", evt1TagName(enumDecl.Name, variant.Name), variant.Tag))
 	}
 	b.WriteString(fmt.Sprintf("} %s;\n\n", tagType))
 	b.WriteString(fmt.Sprintf("typedef struct %s {\n", enumType))
+	if payloadFree {
+		b.WriteString("  uint32_t tag;\n")
+		b.WriteString(fmt.Sprintf("} %s;\n\n", enumType))
+		return b.String()
+	}
 	b.WriteString(fmt.Sprintf("  %s tag;\n", tagType))
 	b.WriteString("  union {\n")
 	b.WriteString("    struct { unsigned char unused; } none;\n")
@@ -3552,6 +3570,13 @@ func (l *lowering) enumHeader(enumDecl EnumDecl) string {
 func (l *lowering) enumConstructors(enumDecl EnumDecl) string {
 	var b strings.Builder
 	enumType := evt1CName(enumDecl.Name)
+	payloadFree := true
+	for _, variant := range enumDecl.Variants {
+		if len(variant.Payload) != 0 {
+			payloadFree = false
+			break
+		}
+	}
 	for _, variant := range enumDecl.Variants {
 		name := evt1ConstructorName(enumDecl.Name, variant.Name)
 		b.WriteString(fmt.Sprintf("static %s %s(", enumType, name))
@@ -3571,7 +3596,7 @@ func (l *lowering) enumConstructors(enumDecl EnumDecl) string {
 			for _, field := range variant.Payload {
 				b.WriteString(fmt.Sprintf("  out.payload.%s.%s = %s;\n", evt1PayloadFieldName(variant.Name), field.Name, field.Name))
 			}
-		} else {
+		} else if !payloadFree {
 			b.WriteString("  out.payload.none.unused = 0u;\n")
 		}
 		b.WriteString("  return out;\n}\n\n")
@@ -4630,7 +4655,8 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		freshNoncopyableConstruct = !evt1TypeCopyable(f.l.env, Type{Name: construct.StructName, Kind: TypeStruct})
 	}
 	_, integerLiteral := expr.(*IntLiteral)
-	if value, ok := evt1TryEvalRuntimeExpr(f.l.env, f.evalScope(), expr); !integerLiteral && !failureConstruct && !freshNoncopyableConstruct && ok && evt1RuntimeTypeSafe(f.l.env, value.Type) {
+	_, floatLiteral := expr.(*FloatLiteral)
+	if value, ok := evt1TryEvalRuntimeExpr(f.l.env, f.evalScope(), expr); !integerLiteral && !floatLiteral && !failureConstruct && !freshNoncopyableConstruct && !evt1NeedsContextualArrayLowering(expr) && ok && evt1RuntimeTypeSafe(f.l.env, value.Type) {
 		return "", evt1RenderCValue(f.l.env, value), value.Type
 	}
 	switch e := expr.(type) {
@@ -4779,7 +4805,10 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 	case *ArrayLiteralExpr:
 		return "", "/* array_literal_requires_target */", Type{}
 	case *FloatLiteral:
-		floatType, _ := evt1BuiltinType("float", e.Span)
+		floatType := e.ResolvedType
+		if floatType.Name == "" {
+			floatType, _ = evt1BuiltinType("float", e.Span)
+		}
 		return "", evt1RenderFloatLiteral(e, floatType), floatType
 	case *InferExpr:
 		return f.lowerInferenceExpr(e, indent)
@@ -4915,7 +4944,17 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 			b.WriteString(ind(indent+1) + fmt.Sprintf("concept_panic(%q, %d, %d);\n", reason, e.Span.Line, e.Span.Column))
 		} else if evt1IsResultType(carrierType) {
 			errType := evt1FailureErrorType(carrierType)
-			if handler, ok := f.lookupTryHandler(errType); ok {
+			if e.Else != nil {
+				remapType := evt1FailureErrorType(f.fn.ReturnType)
+				remapPrelude, remapValue, _ := f.lowerExprExpected(e.Else, remapType, indent+1)
+				b.WriteString(remapPrelude)
+				remapTemp := f.nextTemp("remapped_error")
+				b.WriteString(ind(indent+1) + fmt.Sprintf("%s %s = %s;\n", evt1CType(remapType), remapTemp, remapValue))
+				before := f.cloneLiveOwners()
+				b.WriteString(f.lowerAllScopeDrops(indent + 1))
+				f.liveOwners = before
+				b.WriteString(ind(indent+1) + fmt.Sprintf("return %s(%s);\n", evt1FailureConstructorName(f.fn.ReturnType, "Error"), remapTemp))
+			} else if handler, ok := f.lookupTryHandler(errType); ok {
 				b.WriteString(ind(indent+1) + fmt.Sprintf("%s = %s.payload.error.error;\n", handler.errorName, carrierTemp))
 				before := f.cloneLiveOwners()
 				for scopeIndex := len(f.ownedOrder) - 1; scopeIndex >= handler.cleanupFrom; scopeIndex-- {
@@ -5190,13 +5229,37 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		var prelude strings.Builder
 		var rawArgs []string
 		var argTypes []Type
+		var contextualFn *FunctionDecl
 		for _, arg := range e.Args {
-			argPrelude, argExpr, argType := f.lowerExpr(arg, indent)
+			if _, ok := arg.(*ArrayLiteralExpr); ok {
+				roughTypes := make([]Type, len(e.Args))
+				for i, candidate := range e.Args {
+					if _, isArray := candidate.(*ArrayLiteralExpr); !isArray {
+						roughTypes[i], _ = validateExpr(f.l.env, f.typeScope(), candidate, nil, false)
+					}
+				}
+				if selected, err := evt1ResolveOrdinaryCall(f.l.env, f.typeScope(), e.Callee, e.Args, roughTypes, nil, e.Span); err == nil {
+					contextualFn = &selected
+				}
+				break
+			}
+		}
+		for i, arg := range e.Args {
+			var argPrelude, argExpr string
+			var argType Type
+			if contextualFn != nil {
+				argPrelude, argExpr, argType = f.lowerExprExpected(arg, contextualFn.Params[i].Type, indent)
+			} else {
+				argPrelude, argExpr, argType = f.lowerExpr(arg, indent)
+			}
 			prelude.WriteString(argPrelude)
 			argTypes = append(argTypes, argType)
 			rawArgs = append(rawArgs, argExpr)
 		}
 		fn, ok := evt1ResolveGeneratedCall(f.l.env, e.Callee, argTypes)
+		if contextualFn != nil {
+			fn, ok = *contextualFn, true
+		}
 		if !ok {
 			return prelude.String(), "/* unresolved_call */", Type{Name: "int", Kind: TypeBuiltin}
 		}
@@ -5361,6 +5424,10 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 			if variant, found := evt1LookupVariant(decl, e.VariantName); found {
 				payload = variant.Payload
 			}
+		} else if decl, ok := f.l.env.enums[e.EnumName]; ok {
+			if variant, found := evt1LookupVariant(decl, e.VariantName); found {
+				payload = variant.Payload
+			}
 		}
 		for i, arg := range e.Args {
 			var argPrelude, argExpr string
@@ -5482,7 +5549,7 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 				b.WriteString(ind(indent+2) + fmt.Sprintf("%s %s = %s%spayload.%s.%s;\n", evt1CType(field.Type), cName, subjectTemp, member, evt1PayloadFieldName(variant.Name), field.Name))
 				b.WriteString(ind(indent+2) + fmt.Sprintf("(void)%s;\n", cName))
 			}
-			armPrelude, armExpr, _ := f.lowerExpr(arm.Value, indent+2)
+			armPrelude, armExpr, _ := f.lowerExprExpected(arm.Value, resultType, indent+2)
 			b.WriteString(armPrelude)
 			b.WriteString(ind(indent+2) + fmt.Sprintf("%s = %s;\n", resultTemp, armExpr))
 			b.WriteString(f.lowerCurrentScopeDrops(indent + 2))
@@ -5515,6 +5582,28 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 	default:
 		return "", "0", Type{Name: "int", Kind: TypeBuiltin}
 	}
+}
+
+// A folded aggregate loses the field type that gives nested array literals
+// their element representation. Lower these through the typed field path.
+func evt1NeedsContextualArrayLowering(expr Expr) bool {
+	switch e := expr.(type) {
+	case *ArrayLiteralExpr:
+		return true
+	case *ConstructExpr:
+		for _, arg := range e.Args {
+			if evt1NeedsContextualArrayLowering(arg) {
+				return true
+			}
+		}
+	case *StructConstructExpr:
+		for _, arg := range e.Args {
+			if evt1NeedsContextualArrayLowering(arg) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (f *evt1FunctionLowerer) lowerExprExpected(expr Expr, expected Type, indent int) (string, string, Type) {

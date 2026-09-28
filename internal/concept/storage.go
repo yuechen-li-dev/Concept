@@ -498,7 +498,7 @@ func evt1ModuleUsesStorageBounds(module Module) bool {
 				}
 			}
 		case *FailureExpr:
-			return usesExpr(e.Value)
+			return usesExpr(e.Value) || (e.Else != nil && usesExpr(e.Else))
 		}
 		return false
 	}
@@ -588,7 +588,7 @@ func (f *evt1FunctionLowerer) lowerStorageLiteral(literal ArrayLiteralExpr, expe
 	var prelude strings.Builder
 	values := make([]string, 0, evt1StorageElementCount(expected))
 	for i, element := range evt1FlattenArrayLiteral(&literal) {
-		elementPrelude, value, elementType := f.lowerExpr(element, indent)
+		elementPrelude, value, elementType := f.lowerExprExpected(element, *expected.ArrayElem, indent)
 		prelude.WriteString(elementPrelude)
 		name := f.nextTemp(fmt.Sprintf("element_%d", i+1))
 		prelude.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(elementType), name, value))

@@ -12,18 +12,18 @@ enum Operator
     Times
 }
 
-// Enums have no fixed element geometry yet, so a Span cannot carry a struct
-// that contains one (CV4601). Tokens therefore hold a compact code; Number, Op
-// and OperatorIn are the only places that know the encoding.
-struct Token
+enum TokenKind
 {
-    int code;
-    int number;
+    Number,
+    Plus,
+    Times
 }
 
-comptime int NumberCode = 0;
-comptime int PlusCode = 1;
-comptime int TimesCode = 2;
+struct Token
+{
+    TokenKind kind;
+    int number;
+}
 
 enum Expr
 {
@@ -49,23 +49,23 @@ struct Parser
 
 Token Number(int value)
 {
-    return Token{NumberCode, value};
+    return Token{TokenKind::Number, value};
 }
 
 Token Op(Operator op)
 {
-    int code = match (op)
+    TokenKind kind = match (op)
     {
-        Operator::Plus => PlusCode,
-        Operator::Times => TimesCode,
+        Operator::Plus => TokenKind::Plus,
+        Operator::Times => TokenKind::Times,
     };
-    return Token{code, 0};
+    return Token{kind, 0};
 }
 
 Option<Operator> OperatorIn(Token token)
 {
-    if (token.code == PlusCode) { return Option::Some(Operator::Plus); }
-    if (token.code == TimesCode) { return Option::Some(Operator::Times); }
+    if (token.kind == TokenKind::Plus) { return Option::Some(Operator::Plus); }
+    if (token.kind == TokenKind::Times) { return Option::Some(Operator::Times); }
     return Option::None;
 }
 

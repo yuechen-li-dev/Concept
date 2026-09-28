@@ -1031,8 +1031,9 @@ func (*IntLiteral) evt1Expr()        {}
 func (e *IntLiteral) exprSpan() Span { return e.Span }
 
 type FloatLiteral struct {
-	Value float64 `json:"value"`
-	Span  Span    `json:"span"`
+	Value        float64 `json:"value"`
+	ResolvedType Type    `json:"resolved_type,omitempty"`
+	Span         Span    `json:"span"`
 }
 
 func (*FloatLiteral) evt1Expr()        {}
@@ -1310,9 +1311,10 @@ func (*IndexExpr) evt1Expr()        {}
 func (e *IndexExpr) exprSpan() Span { return e.Span }
 
 type MatchExpr struct {
-	Subject Expr      `json:"subject"`
-	Arms    []ExprArm `json:"arms"`
-	Span    Span      `json:"span"`
+	Subject      Expr      `json:"subject"`
+	Arms         []ExprArm `json:"arms"`
+	ExpectedType Type      `json:"expected_type,omitempty"`
+	Span         Span      `json:"span"`
 }
 
 func (*MatchExpr) evt1Expr()        {}
@@ -1342,6 +1344,7 @@ type ParenExpr struct {
 type FailureExpr struct {
 	Op           string `json:"op"` // ? propagates; ! escalates.
 	Value        Expr   `json:"value"`
+	Else         Expr   `json:"else,omitempty"`
 	ResolvedType Type   `json:"resolved_type,omitempty"`
 	Span         Span   `json:"span"`
 }

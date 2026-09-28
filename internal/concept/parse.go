@@ -4217,7 +4217,7 @@ func (p *parser) parseUnary() (Expr, error) {
 		// Async<T> operand: `await Child()?` == `(await Child())?`.
 		if failure, ok := value.(*FailureExpr); ok {
 			awaited := &AwaitExpr{Value: failure.Value, Span: op.Span}
-			return &FailureExpr{Op: failure.Op, Value: awaited, Span: failure.Span}, nil
+			return &FailureExpr{Op: failure.Op, Value: awaited, Else: failure.Else, Span: failure.Span}, nil
 		}
 		return &AwaitExpr{Value: value, Span: op.Span}, nil
 	}
@@ -4821,7 +4821,16 @@ func (p *parser) parsePostfixExpr(expr Expr, span Span) (Expr, error) {
 			expr = &CastExpr{Value: expr, Target: target, Span: operator.Span}
 		case "?", "!":
 			op := p.next()
-			expr = &FailureExpr{Op: op.Lexeme, Value: expr, Span: op.Span}
+			failure := &FailureExpr{Op: op.Lexeme, Value: expr, Span: op.Span}
+			if op.Lexeme == "?" && p.peekLexeme() == "else" {
+				p.next()
+				remap, err := p.parseExpr()
+				if err != nil {
+					return nil, err
+				}
+				failure.Else = remap
+			}
+			expr = failure
 		case "<":
 			if fieldExpr, ok := expr.(*FieldExpr); ok {
 				owner, ownerOK := fieldExpr.Receiver.(*NameExpr)

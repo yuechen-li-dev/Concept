@@ -2690,9 +2690,18 @@ func validateExprAgainstExpected(env *semanticEnv, scope *evt1Scope, expr Expr, 
 			}
 		case *FloatLiteral:
 			if _, floating := evt1FloatRepresentationInfo(expected); floating {
+				if err := evt1ResolveFloatLiteral(literal, expected); err != nil {
+					return Type{}, err
+				}
 				return expected.valueType(), nil
 			}
 		}
+	}
+	if unary, ok := expr.(*UnaryExpr); ok && unary.Op == "-" && evt1IsFloating(expected) {
+		if _, err := validateExprAgainstExpected(env, scope, unary.Value, expected, templateInfo, inComptimeFn); err != nil {
+			return Type{}, err
+		}
+		return expected.valueType(), nil
 	}
 	if expected.Kind == TypeCallback {
 		return evt1ValidateCallbackErasure(env, scope, expr, expected, templateInfo, inComptimeFn)
@@ -2718,6 +2727,10 @@ func validateExprAgainstExpected(env *semanticEnv, scope *evt1Scope, expr Expr, 
 	}
 	if lit, ok := expr.(*ArrayLiteralExpr); ok && expected.ArrayElem != nil {
 		return validateArrayLiteralExpr(env, scope, *lit, &expected, templateInfo, inComptimeFn)
+	}
+	if match, ok := expr.(*MatchExpr); ok {
+		match.ExpectedType = expected
+		return validateMatchExpr(env, scope, *match, templateInfo, inComptimeFn)
 	}
 	if construct, ok := expr.(*ConstructExpr); ok && evt1IsFailureType(expected) {
 		return validateFailureConstructExpr(env, scope, construct, expected, templateInfo, inComptimeFn)
@@ -3421,7 +3434,7 @@ func validateNDArrayLiteralExpr(env *semanticEnv, scope *evt1Scope, expr ArrayLi
 		}
 	}
 	for i, leaf := range leaves {
-		leafType, err := validateExpr(env, scope, leaf, templateInfo, inComptimeFn)
+		leafType, err := validateExprAgainstExpected(env, scope, leaf, *expected.ArrayElem, templateInfo, inComptimeFn)
 		if err != nil {
 			return Type{}, err
 		}
@@ -3767,6 +3780,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		return t, nil
 	case *FloatLiteral:
+		if e.ResolvedType.Name != "" {
+			return e.ResolvedType, nil
+		}
 		t, _ := evt1BuiltinType("float", e.Span)
 		return t, nil
 	case *StringLiteral:
@@ -4661,7 +4677,10 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 				rightType.Quantity = nil
 			}
 		}
-		if _, ok := e.Right.(*FloatLiteral); ok && evt1IsFloating(leftType) {
+		if literal := evt1ContextualFloatLiteral(e.Right); literal != nil && evt1IsFloating(leftType) {
+			if err := evt1ResolveFloatLiteral(literal, leftType); err != nil {
+				return Type{}, err
+			}
 			rightType = leftType
 			if e.Op == "*" || e.Op == "/" {
 				rightType.Quantity = nil
@@ -4673,7 +4692,10 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 				leftType.Quantity = nil
 			}
 		}
-		if _, ok := e.Left.(*FloatLiteral); ok && evt1IsFloating(rightType) {
+		if literal := evt1ContextualFloatLiteral(e.Left); literal != nil && evt1IsFloating(rightType) {
+			if err := evt1ResolveFloatLiteral(literal, rightType); err != nil {
+				return Type{}, err
+			}
 			leftType = rightType
 			if e.Op == "*" || e.Op == "/" {
 				leftType.Quantity = nil
@@ -4906,6 +4928,20 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			return Type{}, evt1Diagnostic("CV4548", fmt.Sprintf("%s consumes non-copyable %s; use move for an existing owner", e.Op, operand.String()), e.Value.exprSpan())
 		}
 		if e.Op == "?" {
+			if e.Else != nil {
+				if !evt1IsResultType(operand) || !evt1IsResultType(scope.returnType) {
+					return Type{}, evt1Diagnostic("CV4543", "? else requires a Result operand and a Result-returning function", e.Span)
+				}
+				expectedError := evt1CanonicalType(env, evt1FailureErrorType(scope.returnType))
+				actualError, err := validateExprAgainstExpected(env, scope, e.Else, expectedError, templateInfo, inComptimeFn)
+				if err != nil {
+					return Type{}, err
+				}
+				if !evt1TypesCompatible(env, expectedError, actualError, "") {
+					return Type{}, evt1Diagnostic("CV4543", fmt.Sprintf("? else remap expected %s but got %s", expectedError.String(), actualError.String()), e.Else.exprSpan())
+				}
+				return evt1CanonicalType(env, evt1FailureSuccessType(operand)), nil
+			}
 			if evt1IsOptionType(operand) {
 				if !evt1IsOptionType(scope.returnType) {
 					return Type{}, evt1Diagnostic("CV4542", "Option propagation requires an Option-returning function", e.Span)
@@ -4958,6 +4994,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 }
 
 func validateCallArgument(env *semanticEnv, scope *evt1Scope, paramType Type, arg Expr, argType Type, templateInfo *evt1TemplateInfo) error {
+	if literal := evt1ContextualFloatLiteral(arg); literal != nil && evt1IsFloating(paramType) {
+		return evt1ResolveFloatLiteral(literal, paramType)
+	}
 	if literal, ok := arg.(*IntLiteral); ok && evt1IntegralRepresentation(paramType) {
 		if err := evt1ResolveIntegerLiteral(literal, evt1CanonicalType(env, paramType)); err != nil {
 			return evt1Diagnostic("CV4644", fmt.Sprintf("call argument literal %s is out of range for expected %s", literal.Source(), paramType.String()), literal.Span)
@@ -5543,11 +5582,34 @@ func evt1DeriveBlockResultProvenance(env *semanticEnv, block Block, inherited ma
 				continue
 			}
 			candidate := evt1DeriveExprResultProvenance(env, s.Value, bindings, derive)
-			if found && !evt1SameResultProvenance(result, candidate) {
-				return evt1UnknownResultProvenance(), true
+			if found {
+				result = evt1CombineResultProvenance(result, candidate)
+			} else {
+				result = candidate
 			}
-			result, found = candidate, true
-		case *IfStmt, *MatchStmt, *WhileStmt:
+			found = true
+		case *IfStmt:
+			thenResult, thenFound := evt1DeriveBlockResultProvenance(env, s.Then, bindings, derive)
+			if thenFound {
+				if found {
+					result = evt1CombineResultProvenance(result, thenResult)
+				} else {
+					result = thenResult
+				}
+				found = true
+			}
+			if s.Else != nil {
+				elseResult, elseFound := evt1DeriveBlockResultProvenance(env, *s.Else, bindings, derive)
+				if elseFound {
+					if found {
+						result = evt1CombineResultProvenance(result, elseResult)
+					} else {
+						result = elseResult
+					}
+					found = true
+				}
+			}
+		case *MatchStmt, *WhileStmt:
 			return evt1UnknownResultProvenance(), true
 		}
 	}
@@ -5602,6 +5664,9 @@ func evt1DeriveExprResultProvenance(env *semanticEnv, expr Expr, bindings map[st
 	case *ConstructExpr:
 		if e.EnumName == "Result" && e.VariantName == "Ok" && len(e.Args) > 0 {
 			return evt1DeriveExprResultProvenance(env, e.Args[0], bindings, derive)
+		}
+		if (e.EnumName == "Result" && e.VariantName == "Error") || (e.EnumName == "Option" && e.VariantName == "None") {
+			return evt1ResultProvenanceSummary{Kind: evt1ResultProvenanceStatic}
 		}
 	case *TemplateCallExpr:
 		if e.Callee == "bind" && len(e.Args) > 0 {
@@ -5850,9 +5915,17 @@ func validateMatchExpr(env *semanticEnv, scope *evt1Scope, expr MatchExpr, templ
 		for _, binding := range arm.Pattern.Bindings {
 			armScope.setProvenance(binding, evt1ExprProvenance(env, scope, expr.Subject))
 		}
-		valueType, err := validateExpr(env, armScope, arm.Value, templateInfo, inComptimeFn)
+		var valueType Type
+		if expr.ExpectedType.Name != "" {
+			valueType, err = validateExprAgainstExpected(env, armScope, arm.Value, expr.ExpectedType, templateInfo, inComptimeFn)
+		} else {
+			valueType, err = validateExpr(env, armScope, arm.Value, templateInfo, inComptimeFn)
+		}
 		if err != nil {
 			return Type{}, err
+		}
+		if expr.ExpectedType.Name != "" && !evt1TypesCompatible(env, expr.ExpectedType, valueType, "") {
+			return Type{}, evt1Diagnostic("CV4116", fmt.Sprintf("match expression arm expected %s but got %s", expr.ExpectedType.String(), valueType.String()), arm.Value.exprSpan())
 		}
 		if index == 0 {
 			resultType = evt1CanonicalType(env, valueType)
@@ -7704,12 +7777,6 @@ func evt1TypesCompatible(env *semanticEnv, expected Type, actual Type, typeParam
 	expected = evt1CanonicalType(env, expected.valueType())
 	actual = evt1CanonicalType(env, actual.valueType())
 	if !evt1TypeDependsOnParam(expected, typeParam) && !evt1TypeDependsOnParam(actual, typeParam) {
-		// Compatibility bridge for pre-R6g APIs whose signature used a naked
-		// numeric representation for a documented byte count. New declarations
-		// retain and check the quantity; lowering remains the same scalar ABI.
-		if expected.Quantity == nil && actual.Quantity != nil && expected.Name == actual.Name && expected.Kind == actual.Kind {
-			actual.Quantity = nil
-		}
 		return expected.Equal(actual) || expected.String() == actual.String()
 	}
 	return evt1SymbolicTypeEqual(expected, actual, typeParam)
@@ -7733,7 +7800,10 @@ func evt1SymbolicTypeEqual(a Type, b Type, typeParam string) bool {
 			return left.Extent == right.Extent && left.Runtime == right.Runtime && left.Expression == right.Expression
 		}) && evt1SymbolicTypeEqual(*a.ArrayElem, *b.ArrayElem, typeParam)
 	}
-	if a.Name != b.Name || a.Kind != b.Kind || a.Ownership != b.Ownership || a.Const != b.Const || a.Imported != b.Imported || a.Unsafe != b.Unsafe || len(a.TypeArgs) != len(b.TypeArgs) {
+	if a.Name != b.Name || a.Kind != b.Kind || a.Ownership != b.Ownership || a.Const != b.Const || a.Imported != b.Imported || a.Unsafe != b.Unsafe || len(a.TypeArgs) != len(b.TypeArgs) || (a.Quantity == nil) != (b.Quantity == nil) {
+		return false
+	}
+	if a.Quantity != nil && !a.Quantity.Equal(*b.Quantity) {
 		return false
 	}
 	for i := range a.TypeArgs {
@@ -8407,7 +8477,14 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 		if err != nil {
 			return nil, err
 		}
-		return &FailureExpr{Value: value, Op: e.Op, ResolvedType: evt1SubstituteType(e.ResolvedType, typeParam, concreteType), Span: e.Span}, nil
+		var remap Expr
+		if e.Else != nil {
+			remap, err = evt1SubstituteExpr(e.Else, typeParam, concreteType)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return &FailureExpr{Value: value, Else: remap, Op: e.Op, ResolvedType: evt1SubstituteType(e.ResolvedType, typeParam, concreteType), Span: e.Span}, nil
 	case *ParenExpr:
 		value, err := evt1SubstituteExpr(e.Value, typeParam, concreteType)
 		if err != nil {
@@ -8434,7 +8511,7 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 	case *IntLiteral:
 		return &IntLiteral{Magnitude: e.Magnitude, Negative: e.Negative, Lexeme: e.Lexeme, ResolvedType: e.ResolvedType, Span: e.Span}, nil
 	case *FloatLiteral:
-		return &FloatLiteral{Value: e.Value, Span: e.Span}, nil
+		return &FloatLiteral{Value: e.Value, ResolvedType: e.ResolvedType, Span: e.Span}, nil
 	case *StringLiteral:
 		return &StringLiteral{Value: e.Value, Span: e.Span}, nil
 	case *BoolLiteral:
@@ -8648,7 +8725,7 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 		if err != nil {
 			return nil, err
 		}
-		out := &MatchExpr{Subject: subject, Span: e.Span}
+		out := &MatchExpr{Subject: subject, ExpectedType: evt1SubstituteType(e.ExpectedType, typeParam, concreteType), Span: e.Span}
 		for _, arm := range e.Arms {
 			value, err := evt1SubstituteExpr(arm.Value, typeParam, concreteType)
 			if err != nil {

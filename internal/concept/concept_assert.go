@@ -805,6 +805,9 @@ func evt1DirectTemplateInstances(env *semanticEnv, block Block) []*evt1TemplateI
 			visitExpr(e.Value)
 		case *FailureExpr:
 			visitExpr(e.Value)
+			if e.Else != nil {
+				visitExpr(e.Else)
+			}
 		case *MoveExpr:
 			visitExpr(e.Value)
 		case *RefExpr:
@@ -892,6 +895,9 @@ func evt1DirectCalls(block Block) []string {
 			visitExpr(e.Value)
 		case *FailureExpr:
 			visitExpr(e.Value)
+			if e.Else != nil {
+				visitExpr(e.Else)
+			}
 		case *MoveExpr:
 			visitExpr(e.Value)
 		case *RefExpr:

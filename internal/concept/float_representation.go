@@ -2,6 +2,7 @@ package concept
 
 import (
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -62,6 +63,40 @@ func evt1FloatRepresentationInfo(t Type) (FloatRepresentationInfo, bool) {
 func evt1IsFloating(t Type) bool {
 	_, ok := evt1FloatRepresentationInfo(t)
 	return ok
+}
+
+func evt1ContextualFloatLiteral(expr Expr) *FloatLiteral {
+	switch e := expr.(type) {
+	case *FloatLiteral:
+		return e
+	case *ParenExpr:
+		return evt1ContextualFloatLiteral(e.Value)
+	case *UnaryExpr:
+		if e.Op == "-" {
+			return evt1ContextualFloatLiteral(e.Value)
+		}
+	}
+	return nil
+}
+
+func evt1ResolveFloatLiteral(literal *FloatLiteral, target Type) error {
+	info, ok := evt1FloatRepresentationInfo(target)
+	if !ok {
+		return evt1Diagnostic("FLOAT_LITERAL_TARGET_INVALID", "float literal requires a floating scalar target", literal.Span)
+	}
+	max, minSubnormal := math.MaxFloat64, math.SmallestNonzeroFloat64
+	switch info.Representation {
+	case FloatBinary16:
+		max, minSubnormal = 65504, math.Ldexp(1, -24)
+	case FloatBinary32:
+		max, minSubnormal = math.MaxFloat32, math.SmallestNonzeroFloat32
+	}
+	magnitude := math.Abs(literal.Value)
+	if math.IsInf(magnitude, 0) || math.IsNaN(magnitude) || magnitude > max || (magnitude != 0 && magnitude < minSubnormal/2) {
+		return evt1Diagnostic("FLOAT_LITERAL_OUT_OF_RANGE", fmt.Sprintf("float literal is outside the representable range of %s", target.String()), literal.Span)
+	}
+	literal.ResolvedType = target.valueType()
+	return nil
 }
 
 func evt1RenderFloatLiteral(literal *FloatLiteral, target Type) string {

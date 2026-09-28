@@ -142,7 +142,7 @@ func validateInlineTensorDeclaration(env *semanticEnv, scope *evt1Scope, decl *V
 			return Type{}, nil, err
 		}
 	} else {
-		valueType, err := validateExpr(env, scope, decl.Value, templateInfo, inComptimeFn || decl.Comptime)
+		valueType, err := validateExprAgainstExpected(env, scope, decl.Value, element, templateInfo, inComptimeFn || decl.Comptime)
 		if err != nil {
 			return Type{}, nil, err
 		}
@@ -827,7 +827,7 @@ func (f *evt1FunctionLowerer) lowerInlineTensorDeclaration(decl *VarDecl, indent
 		b.WriteString(prelude)
 		initializer = value
 	} else {
-		prelude, value, _ := f.lowerExpr(decl.Value, indent)
+		prelude, value, _ := f.lowerExprExpected(decl.Value, *inline.BackingType.ArrayElem, indent)
 		b.WriteString(prelude)
 		fillName := f.nextTemp("tensor_fill")
 		b.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(*inline.BackingType.ArrayElem), fillName, value))

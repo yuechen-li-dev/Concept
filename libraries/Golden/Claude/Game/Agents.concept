@@ -104,7 +104,7 @@ void Tick(ref World world)
 int CountAlive(ref const World world)
 {
     int alive = 0;
-    // Index loop: a Span<Agent> is unavailable while Agent holds an enum (CV4601).
+    // Index loop: a Span<Agent> is unavailable while Agent holds a payload enum.
     for (i in 0..Count<Agent, 64>(ref const world.agents))
     {
         ref const Agent agent = DenseGet<Agent, 64>(ref const world.agents, IdAt<Agent, 64>(ref const world.agents, i)!)!;
