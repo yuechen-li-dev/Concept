@@ -6093,6 +6093,9 @@ func evt1ResolveGeneratedCall(env *semanticEnv, name string, argTypes []Type) (F
 func evt1RenderCValue(env *semanticEnv, value Value) string {
 	switch value.Kind {
 	case ValueInt:
+		if value.WideUint {
+			return evt1RenderIntegerLiteral(&IntLiteral{Magnitude: value.UintValue, ResolvedType: value.Type})
+		}
 		return fmt.Sprintf("%d", value.IntValue)
 	case ValueFloat:
 		return evt1RenderFloatLiteral(&FloatLiteral{Value: value.FloatValue}, value.Type)

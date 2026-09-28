@@ -10,8 +10,6 @@ import Standard.Collection.Stores;
 // neither may leave. WriteBack is the only way a page becomes clean.
 
 comptime int Frames = 8;
-// Template arguments cannot name a comptime constant yet, so the store type
-// spells the literal. Keep it equal to Frames. (docs/examples/CLAUDE-GOLDENS.md, F6)
 comptime int PageBytes = 256;
 
 enum CacheError
@@ -34,14 +32,14 @@ struct Page
 
 struct PageCache
 {
-    GenerationalStore<Page, 8> frames;
+    GenerationalStore<Page, Frames> frames;
     int resident;
     int writeBacks;
 }
 
 PageCache NewCache()
 {
-    return PageCache{MakeGenerationalStore<Page, 8>(), 0, 0};
+    return PageCache{MakeGenerationalStore<Page, Frames>(), 0, 0};
 }
 
 // The single place a handle is judged. Borrowing through a remapped Result
@@ -49,7 +47,7 @@ PageCache NewCache()
 // then borrow directly; the `!` after a successful check cannot fire.
 Result<void, CacheError> Resident(ref const PageCache cache, GenerationalId<Page> id)
 {
-    if (not Contains<Page, 8>(ref const cache.frames, id))
+    if (not Contains<Page, Frames>(ref const cache.frames, id))
     {
         return Result::Error(CacheError::StaleHandle);
     }
@@ -68,7 +66,7 @@ Result<void, CacheError> CheckOffset(int offset)
 Result<GenerationalId<Page>, CacheError> Load(ref PageCache cache, int filePage)
 {
     Page page = Page{filePage, [0 ... PageBytes], false, 0};
-    match (Insert<Page, 8>(ref cache.frames, move page))
+    match (Insert<Page, Frames>(ref cache.frames, move page))
     {
         Result::Ok(id) => {
             cache.resident += 1;
@@ -83,7 +81,7 @@ Result<uint8, CacheError> Read(ref const PageCache cache, GenerationalId<Page> i
 {
     CheckOffset(offset)?;
     Resident(ref const cache, id)?;
-    ref const Page page = GenerationalGet<Page, 8>(ref const cache.frames, id)!;
+    ref const Page page = GenerationalGet<Page, Frames>(ref const cache.frames, id)!;
     return Result::Ok(page.bytes[offset]);
 }
 
@@ -91,7 +89,7 @@ Result<void, CacheError> Write(ref PageCache cache, GenerationalId<Page> id, int
 {
     CheckOffset(offset)?;
     Resident(ref const cache, id)?;
-    ref Page page = GenerationalGetMutable<Page, 8>(ref cache.frames, id)!;
+    ref Page page = GenerationalGetMutable<Page, Frames>(ref cache.frames, id)!;
     page.bytes[offset] = value;
     page.dirty = true;
     return Result::Ok();
@@ -101,7 +99,7 @@ Result<void, CacheError> Write(ref PageCache cache, GenerationalId<Page> id, int
 Result<void, CacheError> WriteBack(ref PageCache cache, GenerationalId<Page> id)
 {
     Resident(ref const cache, id)?;
-    ref Page page = GenerationalGetMutable<Page, 8>(ref cache.frames, id)!;
+    ref Page page = GenerationalGetMutable<Page, Frames>(ref cache.frames, id)!;
     if (page.dirty)
     {
         page.dirty = false;
@@ -113,7 +111,7 @@ Result<void, CacheError> WriteBack(ref PageCache cache, GenerationalId<Page> id)
 Result<void, CacheError> Pin(ref PageCache cache, GenerationalId<Page> id)
 {
     Resident(ref const cache, id)?;
-    ref Page page = GenerationalGetMutable<Page, 8>(ref cache.frames, id)!;
+    ref Page page = GenerationalGetMutable<Page, Frames>(ref cache.frames, id)!;
     page.pins += 1;
     return Result::Ok();
 }
@@ -121,7 +119,7 @@ Result<void, CacheError> Pin(ref PageCache cache, GenerationalId<Page> id)
 Result<void, CacheError> Unpin(ref PageCache cache, GenerationalId<Page> id)
 {
     Resident(ref const cache, id)?;
-    ref Page page = GenerationalGetMutable<Page, 8>(ref cache.frames, id)!;
+    ref Page page = GenerationalGetMutable<Page, Frames>(ref cache.frames, id)!;
     if (page.pins == 0)
     {
         return Result::Error(CacheError::NotPinned);
@@ -134,7 +132,7 @@ Result<void, CacheError> Evict(ref PageCache cache, GenerationalId<Page> id)
 {
     {
         Resident(ref const cache, id)?;
-    ref Page page = GenerationalGetMutable<Page, 8>(ref cache.frames, id)!;
+    ref Page page = GenerationalGetMutable<Page, Frames>(ref cache.frames, id)!;
         if (page.pins > 0)
         {
             return Result::Error(CacheError::Pinned);
@@ -144,7 +142,7 @@ Result<void, CacheError> Evict(ref PageCache cache, GenerationalId<Page> id)
             return Result::Error(CacheError::Dirty);
         }
     }
-    Remove<Page, 8>(ref cache.frames, id)!;
+    Remove<Page, Frames>(ref cache.frames, id)!;
     cache.resident -= 1;
     return Result::Ok();
 }

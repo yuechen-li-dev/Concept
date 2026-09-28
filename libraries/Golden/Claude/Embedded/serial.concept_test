@@ -103,7 +103,7 @@ void PingQueuesTheReplyByte()
 {
     SerialPort port = TestPort();
     Assert.LGTM(Execute(ref port, Command::Ping), "ping is executed");
-    uint8 reply = PingReply as uint8;
+    uint8 reply = PingReply;
     Assert.Equals(Dequeue(ref port.queue), reply, "reply byte is queued");
 }
 

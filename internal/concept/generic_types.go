@@ -79,6 +79,14 @@ func evt1InstantiateGenericType(env *semanticEnv, application Type) (Type, error
 	}
 	parts := make([]string, len(application.TypeArgs))
 	for i, arg := range application.TypeArgs {
+		if decl.Parameters[i].Kind == "value" {
+			resolved, err := evt1ResolveGenericValueArgument(env, arg, decl.Parameters[i].ValueType)
+			if err != nil {
+				return Type{}, err
+			}
+			arg = resolved
+			application.TypeArgs[i] = resolved
+		}
 		if decl.Parameters[i].Kind == "type" {
 			if arg.Kind == TypeTemplateValue {
 				return Type{}, evt1Diagnostic("GENERIC_ARGUMENT_KIND", "type template parameter requires a type", arg.Span)

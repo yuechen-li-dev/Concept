@@ -2086,6 +2086,8 @@ type Value struct {
 	Kind        ValueKind
 	Type        Type
 	IntValue    int
+	UintValue   uint64
+	WideUint    bool
 	FloatValue  float64
 	BoolValue   bool
 	StringValue string
@@ -2100,6 +2102,9 @@ type Value struct {
 func (v Value) Render() string {
 	switch v.Kind {
 	case ValueInt:
+		if v.WideUint {
+			return fmt.Sprintf("%d", v.UintValue)
+		}
 		return fmt.Sprintf("%d", v.IntValue)
 	case ValueFloat:
 		return evt1RenderFloatLiteral(&FloatLiteral{Value: v.FloatValue}, v.Type)

@@ -2679,6 +2679,11 @@ func evt1EvalScopeFromValidation(scope *evt1Scope, env *semanticEnv) *evt1EvalSc
 }
 
 func validateExprAgainstExpected(env *semanticEnv, scope *evt1Scope, expr Expr, expected Type, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
+	if contextual, err := evt1ContextualComptimeInteger(env, expr, expected); err != nil {
+		return Type{}, err
+	} else if contextual {
+		return expected.valueType(), nil
+	}
 	if templateInfo != nil && expected.Kind == TypeConceptParam {
 		if literal, ok := expr.(*FloatLiteral); ok {
 			// The requirement establishes the open type; every closed instance
@@ -3035,6 +3040,19 @@ func evt1ResolveType(env *semanticEnv, scope *evt1Scope, t Type) (Type, error) {
 		return evt1CanonicalType(env, t), nil
 	}
 	for i := range t.TypeArgs {
+		if decl, ok := env.genericTypes[t.Name]; ok && i < len(decl.Parameters) && decl.Parameters[i].Kind == "value" {
+			if scope != nil {
+				if binding, found := scope.lookup(t.TypeArgs[i].Name); found && binding.t.Name == decl.Parameters[i].ValueType.Name {
+					continue
+				}
+			}
+			resolved, err := evt1ResolveGenericValueArgument(env, t.TypeArgs[i], decl.Parameters[i].ValueType)
+			if err != nil {
+				return Type{}, err
+			}
+			t.TypeArgs[i] = resolved
+			continue
+		}
 		resolved, err := evt1ResolveType(env, scope, t.TypeArgs[i])
 		if err != nil {
 			return Type{}, err
@@ -4678,6 +4696,16 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		if err != nil {
 			return Type{}, err
 		}
+		if contextual, contextErr := evt1ContextualComptimeInteger(env, e.Right, leftType); contextErr != nil {
+			return Type{}, contextErr
+		} else if contextual {
+			rightType = leftType.valueType()
+		}
+		if contextual, contextErr := evt1ContextualComptimeInteger(env, e.Left, rightType); contextErr != nil {
+			return Type{}, contextErr
+		} else if contextual {
+			leftType = rightType.valueType()
+		}
 		// A literal has no unit independently; in a binary expression its
 		// quantity is supplied by the other operand when the representations
 		// agree. This makes `bytes + 1` explicit in representation but safe in
@@ -5010,6 +5038,11 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 }
 
 func validateCallArgument(env *semanticEnv, scope *evt1Scope, paramType Type, arg Expr, argType Type, templateInfo *evt1TemplateInfo) error {
+	if contextual, err := evt1ContextualComptimeInteger(env, arg, paramType); err != nil {
+		return err
+	} else if contextual {
+		return nil
+	}
 	if literal := evt1ContextualFloatLiteral(arg); literal != nil && evt1IsFloating(paramType) {
 		return evt1ResolveFloatLiteral(literal, paramType)
 	}
@@ -8124,8 +8157,12 @@ func instantiateTemplateArgs(env *semanticEnv, templateName string, concreteArgs
 			if err := validateTemplateTypeArgument(env, concreteArgs[i], span); err != nil {
 				return nil, err
 			}
-		} else if concreteArgs[i].Kind != TypeTemplateValue {
-			return nil, evt1Diagnostic("CV4179", fmt.Sprintf("template argument %d for %s must be a compile-time usize value", i+1, templateName), span)
+		} else {
+			resolved, err := evt1ResolveGenericValueArgument(env, concreteArgs[i], parameter.ValueType)
+			if err != nil {
+				return nil, err
+			}
+			concreteArgs[i] = resolved
 		}
 		concreteArgs[i] = evt1CanonicalType(env, concreteArgs[i])
 	}

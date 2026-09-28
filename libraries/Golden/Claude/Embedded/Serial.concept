@@ -9,7 +9,7 @@ import Standard.Hardware.Mmio;
 //   0x03 <payload>  Send
 
 comptime int QueueCapacity = 32;
-comptime int PingReply = 0x50;
+comptime uint8 PingReply = 0x50;
 
 bits LineStatus : uint8
 {
@@ -125,7 +125,7 @@ Result<void, SerialError> Execute(ref SerialPort port, Command command)
 {
     return match (command)
     {
-        Command::Ping => Enqueue(ref port.queue, PingReply as uint8),
+        Command::Ping => Enqueue(ref port.queue, PingReply),
         Command::SetRate(divisor) => Enqueue(ref port.queue, divisor),
         Command::Send(payload) => Enqueue(ref port.queue, payload),
     };

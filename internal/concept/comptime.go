@@ -107,7 +107,7 @@ func evt1IsComptimeType(env *semanticEnv, t Type) bool {
 		return evt1IsComptimeType(env, *t.ArrayElem)
 	}
 	if _, ok := evt1BuiltinType(t.Name, t.Span); ok {
-		return t.Name == "int" || t.Name == "bool" || t.Name == "string" || t.Name == "float" || t.Name == "double"
+		return evt1IntegralRepresentation(t) || t.Name == "bool" || t.Name == "string" || t.Name == "float" || t.Name == "double"
 	}
 	if structDecl, ok := env.structs[t.Name]; ok {
 		for _, field := range structDecl.Fields {
@@ -257,6 +257,9 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 		if err := evt1ResolveIntegerLiteral(e, t); err != nil {
 			return Value{}, err
 		}
+		if !e.Negative && e.Magnitude > uint64(^uint(0)>>1) {
+			return Value{Kind: ValueInt, Type: t, UintValue: e.Magnitude, WideUint: true}, nil
+		}
 		value, ok := e.signed64()
 		if !ok || int64(int(value)) != value {
 			return Value{}, evt1Diagnostic("CV4644", fmt.Sprintf("integer literal %s is not representable in bounded compile-time evaluation", e.Source()), e.Span)
@@ -308,7 +311,7 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 			return Value{}, evt1Diagnostic("CV4201", "unsupported comptime unary operator "+e.Op, e.Span)
 		}
 	case *BinaryExpr:
-		return evt1EvalBinaryExpr(state, scope, *e)
+		return evt1EvalBinaryExpr(state, scope, *e, expected)
 	case *FieldExpr:
 		receiver, err := evt1EvalExpr(state, scope, e.Receiver)
 		if err != nil {
@@ -488,7 +491,7 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 	}
 }
 
-func evt1EvalBinaryExpr(state *evt1ComptimeState, scope *evt1EvalScope, expr BinaryExpr) (Value, error) {
+func evt1EvalBinaryExpr(state *evt1ComptimeState, scope *evt1EvalScope, expr BinaryExpr, expected *Type) (Value, error) {
 	if expr.Op == "and" || expr.Op == "or" {
 		left, err := evt1EvalExpr(state, scope, expr.Left)
 		if err != nil {
@@ -518,11 +521,11 @@ func evt1EvalBinaryExpr(state *evt1ComptimeState, scope *evt1EvalScope, expr Bin
 		}
 		return Value{Kind: ValueBool, Type: t, BoolValue: left.BoolValue || right.BoolValue}, nil
 	}
-	left, err := evt1EvalExpr(state, scope, expr.Left)
+	left, err := evt1EvalExprTyped(state, scope, expr.Left, expected)
 	if err != nil {
 		return Value{}, err
 	}
-	right, err := evt1EvalExpr(state, scope, expr.Right)
+	right, err := evt1EvalExprTyped(state, scope, expr.Right, expected)
 	if err != nil {
 		return Value{}, err
 	}
@@ -588,8 +591,11 @@ func evt1EvalBinaryExpr(state *evt1ComptimeState, scope *evt1EvalScope, expr Bin
 		}
 		return Value{}, evt1Diagnostic("CV4201", "comptime quantity operands have different scalar representations", expr.Span)
 	}
+	if left.WideUint || right.WideUint {
+		return evt1EvalWideUintBinary(left, right, expr.Op, expr.Span)
+	}
 	switch expr.Op {
-	case "+", "-", "*", "<", ">", "<=", ">=":
+	case "+", "-", "*", "/", "%", "&", "|", "^", "<<", ">>", "<", ">", "<=", ">=":
 		if left.Kind != ValueInt || right.Kind != ValueInt {
 			return Value{}, evt1Diagnostic("CV4201", "integer operator requires int operands", expr.Span)
 		}
@@ -600,6 +606,32 @@ func evt1EvalBinaryExpr(state *evt1ComptimeState, scope *evt1EvalScope, expr Bin
 			return Value{Kind: ValueInt, Type: left.Type, IntValue: left.IntValue - right.IntValue}, nil
 		case "*":
 			return Value{Kind: ValueInt, Type: left.Type, IntValue: left.IntValue * right.IntValue}, nil
+		case "/", "%":
+			if right.IntValue == 0 {
+				return Value{}, evt1Diagnostic("CV4645", "constant division by zero", expr.Span)
+			}
+			if expr.Op == "/" {
+				return Value{Kind: ValueInt, Type: left.Type, IntValue: left.IntValue / right.IntValue}, nil
+			}
+			return Value{Kind: ValueInt, Type: left.Type, IntValue: left.IntValue % right.IntValue}, nil
+		case "&", "|", "^":
+			value := left.IntValue & right.IntValue
+			if expr.Op == "|" {
+				value = left.IntValue | right.IntValue
+			}
+			if expr.Op == "^" {
+				value = left.IntValue ^ right.IntValue
+			}
+			return Value{Kind: ValueInt, Type: left.Type, IntValue: value}, nil
+		case "<<", ">>":
+			if right.IntValue < 0 || right.IntValue >= 64 {
+				return Value{}, evt1Diagnostic("CV4646", "invalid compile-time shift count", expr.Span)
+			}
+			value := left.IntValue << uint(right.IntValue)
+			if expr.Op == ">>" {
+				value = left.IntValue >> uint(right.IntValue)
+			}
+			return Value{Kind: ValueInt, Type: left.Type, IntValue: value}, nil
 		default:
 			t, _ := evt1BuiltinType("bool", expr.Span)
 			return Value{Kind: ValueBool, Type: t, BoolValue: evt1CompareInts(left.IntValue, right.IntValue, expr.Op)}, nil
@@ -620,6 +652,84 @@ func evt1EvalBinaryExpr(state *evt1ComptimeState, scope *evt1EvalScope, expr Bin
 	default:
 		return Value{}, evt1Diagnostic("CV4201", "unsupported comptime operator "+expr.Op, expr.Span)
 	}
+}
+
+func evt1EvalWideUintBinary(left, right Value, op string, span Span) (Value, error) {
+	if left.Kind != ValueInt || right.Kind != ValueInt || (!left.WideUint && left.IntValue < 0) || (!right.WideUint && right.IntValue < 0) {
+		return Value{}, evt1Diagnostic("CV4201", "wide unsigned comptime operation requires non-negative integers", span)
+	}
+	a, b := uint64(left.IntValue), uint64(right.IntValue)
+	if left.WideUint {
+		a = left.UintValue
+	}
+	if right.WideUint {
+		b = right.UintValue
+	}
+	boolType, _ := evt1BuiltinType("bool", span)
+	switch op {
+	case "==", "!=", "<", ">", "<=", ">=":
+		value := false
+		switch op {
+		case "==":
+			value = a == b
+		case "!=":
+			value = a != b
+		case "<":
+			value = a < b
+		case ">":
+			value = a > b
+		case "<=":
+			value = a <= b
+		case ">=":
+			value = a >= b
+		}
+		return Value{Kind: ValueBool, Type: boolType, BoolValue: value}, nil
+	}
+	result := Value{Kind: ValueInt, Type: left.Type}
+	if right.WideUint {
+		result.Type = right.Type
+	}
+	var value uint64
+	switch op {
+	case "+":
+		value = a + b
+	case "-":
+		value = a - b
+	case "*":
+		value = a * b
+	case "/", "%":
+		if b == 0 {
+			return Value{}, evt1Diagnostic("CV4645", "constant division by zero", span)
+		}
+		if op == "/" {
+			value = a / b
+		} else {
+			value = a % b
+		}
+	case "&":
+		value = a & b
+	case "|":
+		value = a | b
+	case "^":
+		value = a ^ b
+	case "<<", ">>":
+		if b >= 64 {
+			return Value{}, evt1Diagnostic("CV4646", "invalid compile-time shift count", span)
+		}
+		if op == "<<" {
+			value = a << b
+		} else {
+			value = a >> b
+		}
+	default:
+		return Value{}, evt1Diagnostic("CV4201", "unsupported wide unsigned comptime operator "+op, span)
+	}
+	if value > uint64(^uint(0)>>1) {
+		result.UintValue, result.WideUint = value, true
+	} else {
+		result.IntValue = int(value)
+	}
+	return result, nil
 }
 
 func evt1CompareFloats(a, b float64, op string) bool {
@@ -661,7 +771,13 @@ func evt1ValueEqual(left, right Value) bool {
 	}
 	switch left.Kind {
 	case ValueInt:
-		return right.Kind == ValueInt && left.IntValue == right.IntValue
+		if right.Kind != ValueInt {
+			return false
+		}
+		if left.WideUint || right.WideUint {
+			return left.WideUint && right.WideUint && left.UintValue == right.UintValue
+		}
+		return left.IntValue == right.IntValue
 	case ValueFloat:
 		return right.Kind == ValueFloat && left.FloatValue == right.FloatValue
 	case ValueBool:
