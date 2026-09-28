@@ -849,8 +849,9 @@ func (*ReturnStmt) evt1Statement()        {}
 func (s *ReturnStmt) statementSpan() Span { return s.Span }
 
 type ExprStmt struct {
-	Value Expr `json:"value"`
-	Span  Span `json:"span"`
+	Value   Expr `json:"value"`
+	Discard bool `json:"discard,omitempty"`
+	Span    Span `json:"span"`
 }
 
 // AsmStmt is an explicitly unsafe, architecture-bound machine escape hatch.
@@ -1059,6 +1060,7 @@ func (e *FieldExpr) exprSpan() Span { return e.Span }
 
 type CallExpr struct {
 	Callee               string           `json:"callee"`
+	MustUseResult        bool             `json:"must_use_result,omitempty"`
 	InferredTemplateArgs []Type           `json:"inferred_template_args,omitempty"`
 	Receiver             Expr             `json:"receiver,omitempty"`
 	Member               bool             `json:"member,omitempty"`
@@ -1100,12 +1102,13 @@ func (*DispatchExpr) evt1Expr()        {}
 func (e *DispatchExpr) exprSpan() Span { return e.Span }
 
 type TemplateCallExpr struct {
-	Callee       string `json:"callee"`
-	TypeArg      Type   `json:"type_arg"` // first argument, retained for artifact compatibility
-	TypeArgs     []Type `json:"type_args,omitempty"`
-	Args         []Expr `json:"args,omitempty"`
-	ResolvedType Type   `json:"resolved_type,omitempty"`
-	Span         Span   `json:"span"`
+	Callee        string `json:"callee"`
+	MustUseResult bool   `json:"must_use_result,omitempty"`
+	TypeArg       Type   `json:"type_arg"` // first argument, retained for artifact compatibility
+	TypeArgs      []Type `json:"type_args,omitempty"`
+	Args          []Expr `json:"args,omitempty"`
+	ResolvedType  Type   `json:"resolved_type,omitempty"`
+	Span          Span   `json:"span"`
 }
 
 func (*TemplateCallExpr) evt1Expr()        {}

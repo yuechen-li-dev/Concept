@@ -66,7 +66,7 @@ template <typename TValue, typename TAllocator>
 requires Releasable<TAllocator>
 void Drop(owned AllocationOwner<TValue, TAllocator> owner)
 {
-    owner.allocator.Release(owner.region);
+    discard owner.allocator.Release(owner.region);
 }
 `)
 	if err != nil {

@@ -18,6 +18,11 @@ func evt1ValidateTestMetadata(module Module) error {
 		artifacts := 0
 		for _, attribute := range fn.Attributes {
 			switch {
+			case attribute.Name == "must_use":
+				if len(attribute.Args) != 0 || fn.ReturnType.Name == "void" {
+					return evt1Diagnostic("MUST_USE_ATTRIBUTE_INVALID", "[[must_use]] requires a value-returning function and no arguments", attribute.Span)
+				}
+				continue
 			case evt1SemanticAccessAttribute(attribute.Name) || attribute.Name == "machine":
 				// Compiler-owned access metadata is validated by the access-summary
 				// pass and is independent of test metadata.
@@ -59,7 +64,7 @@ func evt1ValidateTestMetadata(module Module) error {
 		if primary == "" {
 			semanticOnly := true
 			for _, attribute := range fn.Attributes {
-				semanticOnly = semanticOnly && (evt1SemanticAccessAttribute(attribute.Name) || attribute.Name == "machine")
+				semanticOnly = semanticOnly && (evt1SemanticAccessAttribute(attribute.Name) || attribute.Name == "machine" || attribute.Name == "must_use")
 			}
 			if semanticOnly {
 				continue

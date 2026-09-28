@@ -1207,7 +1207,11 @@ func collectMIROps(env *semanticEnv, block *Block, fn *MIRFunction, templateInfo
 				fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "concept_assert", Detail: call.ConceptGoal, NoAllocation: true, NoCopy: true, NoOwnershipTransfer: true, SourceSpan: s.Span})
 				continue
 			}
-			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "expr_stmt", SourceSpan: s.Span})
+			kind := "expr_stmt"
+			if s.Discard {
+				kind = "discard_value"
+			}
+			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: kind, SourceSpan: s.Span})
 			collectExprMIROps(env, s.Value, fn, templateInfo)
 		case *AssertStmt:
 			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "assert", Detail: "Assert.True", SourceSpan: s.Span})
@@ -4091,6 +4095,10 @@ func (f *evt1FunctionLowerer) lowerStatement(stmt Statement, indent int) string 
 		prelude, value, valueType := f.lowerExpr(s.Value, indent)
 		if valueType.Name == "void" {
 			return prelude + ind(indent) + value + ";\n"
+		}
+		if !valueType.isBorrowLike() && evt1TypeHasDrop(f.l.env, valueType) {
+			temp := f.nextTemp("discard")
+			return prelude + ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(valueType), temp, value) + f.lowerDropValue(valueType, temp, indent)
 		}
 		return prelude + ind(indent) + "(void)" + value + ";\n"
 	case *AssertStmt:

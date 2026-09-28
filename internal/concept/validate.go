@@ -2450,8 +2450,12 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				return evt1Diagnostic("CV4506", fmt.Sprintf("return of non-copyable type %s requires an explicit move", returnType.String()), s.Value.exprSpan())
 			}
 		case *ExprStmt:
-			if _, err := validateExpr(env, local, s.Value, templateInfo, inComptimeFn); err != nil {
+			valueType, err := validateExpr(env, local, s.Value, templateInfo, inComptimeFn)
+			if err != nil {
 				return err
+			}
+			if !s.Discard && (evt1MustUseType(env, valueType) || evt1MustUseFunctionResult(s.Value)) {
+				return evt1Diagnostic("MUST_USE_RESULT_IGNORED", fmt.Sprintf("value of %s must be used; handle or propagate it, or write `discard <expression>;` to discard it explicitly", valueType.String()), s.Span)
 			}
 		case *AssertStmt:
 			conditionType, err := validateExpr(env, local, s.Condition, templateInfo, inComptimeFn)
@@ -2526,7 +2530,7 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				return err
 			}
 			if conditionType.Name != "bool" {
-				return evt1Diagnostic("CV4186", "if statement condition must be bool", s.Condition.exprSpan())
+				return evt1Diagnostic("CV4186", "Concept conditions require bool; compare a pointer or number explicitly instead of relying on truthiness", s.Condition.exprSpan())
 			}
 			thenScope := evt1CloneScope(local)
 			elseScope := evt1CloneScope(local)
@@ -4191,6 +4195,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 						}
 					}
 					e.InferredTemplateArgs = inferred
+					e.MustUseResult = evt1HasNamedAttribute(instance.Function.Attributes, "must_use")
 					instance.InvocationSpans = append(instance.InvocationSpans, e.Span)
 					return evt1CanonicalType(env, instance.Function.ReturnType), nil
 				}
@@ -4198,6 +4203,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			}
 			return Type{}, err
 		}
+		e.MustUseResult = evt1HasNamedAttribute(fn.Attributes, "must_use")
 		if spec, machine, machineErr := evt1MachineIntrinsic(fn); machine {
 			if machineErr != nil {
 				return Type{}, machineErr
@@ -4312,6 +4318,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			return Type{}, err
 		}
 		instance.InvocationSpans = append(instance.InvocationSpans, e.Span)
+		e.MustUseResult = evt1HasNamedAttribute(instance.Function.Attributes, "must_use")
 		if instance.Function.Async {
 			return evt1AsyncType(evt1CanonicalType(env, instance.Function.ReturnType), instance.GeneratedSymbol, e.Span), nil
 		}
@@ -8193,7 +8200,7 @@ func evt1SubstituteStatement(stmt Statement, typeParam string, concreteType Type
 		if err != nil {
 			return nil, err
 		}
-		return &ExprStmt{Value: value, Span: s.Span}, nil
+		return &ExprStmt{Value: value, Discard: s.Discard, Span: s.Span}, nil
 	case *TryStmt:
 		body, err := evt1SubstituteBlock(s.Body, typeParam, concreteType)
 		if err != nil {

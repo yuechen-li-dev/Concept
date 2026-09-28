@@ -174,17 +174,17 @@ Result<int, BuildError> BuildReusedSlot(bool fail)
 int Main()
 {
     Assert.Concept<NoAllocation>(EmplacePinned, "stationary bounded insertion allocates nothing");
-    Build(true);
+    discard Build(true);
     Checkpoint(1);
-    Build(false);
+    discard Build(false);
     Checkpoint(2);
-    BuildGenerational(true);
+    discard BuildGenerational(true);
     Checkpoint(3);
-    BuildGenerational(false);
+    discard BuildGenerational(false);
     Checkpoint(4);
-    BuildReusedSlot(true);
+    discard BuildReusedSlot(true);
     Checkpoint(7);
-    BuildReusedSlot(false);
+    discard BuildReusedSlot(false);
     Checkpoint(9);
     return 0;
 }`

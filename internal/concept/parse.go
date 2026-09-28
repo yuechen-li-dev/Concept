@@ -3055,6 +3055,26 @@ func (p *parser) parseBlock() (Block, error) {
 
 func (p *parser) parseStatement() (Statement, error) {
 	switch p.peekLexeme() {
+	case "discard":
+		if p.peekLexemeN(1) == "(" {
+			value, err := p.parseExpr()
+			if err != nil {
+				return nil, err
+			}
+			if _, err := p.expect(";"); err != nil {
+				return nil, err
+			}
+			return &ExprStmt{Value: value, Span: value.exprSpan()}, nil
+		}
+		start := p.next().Span
+		value, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.expect(";"); err != nil {
+			return nil, err
+		}
+		return &ExprStmt{Value: value, Discard: true, Span: start}, nil
 	case "unsafe":
 		return p.parseAsmStatement()
 	case "derive":
@@ -3256,7 +3276,7 @@ func (p *parser) parseForeachStmt() (Statement, error) {
 	if start.Lexeme == "for" {
 		for i := p.pos; i < len(p.tokens) && p.tokens[i].Lexeme != ")"; i++ {
 			if p.tokens[i].Lexeme == ";" {
-				return nil, evt1Diagnostic("FOREACH_ITERATOR_INVALID", "C-style for loops are unsupported; use `for (i in start..end step n)` or `while (condition) bounded(limit)`", start.Span)
+				return nil, evt1Diagnostic("FOREACH_ITERATOR_INVALID", "C-style for loops are unsupported; use `for (i in start..end step n)` or `descend` for reverse traversal; use bounded while for condition-driven loops", start.Span)
 			}
 		}
 	}
@@ -4198,7 +4218,7 @@ func (p *parser) parsePrimary() (Expr, error) {
 	case p.peekLexeme() == "(":
 		start := p.next().Span
 		if _, numeric := evt1BuiltinType(p.peekLexeme(), p.currentSpan()); numeric && p.peekLexemeN(1) == ")" {
-			return nil, evt1Diagnostic("C_STYLE_CAST_UNSUPPORTED", "C-style casts are unsupported; use value as T, or TruncTo<T>/FloorTo<T>/CeilTo<T>/RoundTo<T> for floating-to-integer conversion", start)
+			return nil, evt1Diagnostic("C_STYLE_CAST_UNSUPPORTED", "C-style casts are unsupported; use `value as T` or `static_cast<T>(value)`; floating-to-integer conversion requires TruncTo<T>, FloorTo<T>, CeilTo<T>, or RoundTo<T>", start)
 		}
 		previous := p.suppressAs
 		p.suppressAs = false
@@ -4463,10 +4483,14 @@ func (p *parser) parseNameLikeExpr() (Expr, error) {
 		return nil, err
 	}
 	switch nameTok.Lexeme {
+	case "std":
+		if p.peekLexeme() == "::" && p.peekLexemeN(1) == "move" {
+			return nil, evt1Diagnostic("STD_MOVE_UNSUPPORTED", "Concept uses `move value` for explicit ownership transfer", nameTok.Span)
+		}
 	case "reinterpret_cast":
-		return nil, evt1Diagnostic("REINTERPRET_CAST_UNSUPPORTED", "Concept has no general reinterpret_cast; use storage/address binding or a representation-specific operation", nameTok.Span)
+		return nil, evt1Diagnostic("REINTERPRET_CAST_UNSUPPORTED", "Concept has no general reinterpret_cast; use Storage/bind, Address operations, or an explicit bits/representation API as appropriate", nameTok.Span)
 	case "const_cast":
-		return nil, evt1Diagnostic("CONST_CAST_UNSUPPORTED", "Concept does not permit authority to be cast into existence", nameTok.Span)
+		return nil, evt1Diagnostic("CONST_CAST_UNSUPPORTED", "Concept does not permit mutable authority to be cast into existence; acquire a mutable reference from its owner", nameTok.Span)
 	case "dynamic_cast":
 		return nil, evt1Diagnostic("DYNAMIC_CAST_UNSUPPORTED", "Concept has no dynamic_cast runtime type conversion", nameTok.Span)
 	}

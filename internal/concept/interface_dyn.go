@@ -243,6 +243,7 @@ func evt1ValidateMemberCall(env *semanticEnv, scope *evt1Scope, call *CallExpr, 
 	if fn.MethodOf == "" || fn.MethodOf != receiverType.valueType().Name {
 		return Type{}, evt1Diagnostic("CLASS_METHOD_RECEIVER_INVALID", fmt.Sprintf("%s is not a method of %s", call.Callee, receiverType.String()), call.Span)
 	}
+	call.MustUseResult = evt1HasNamedAttribute(fn.Attributes, "must_use")
 	if fn.Visibility == "private" && env.validatingMethod != fn.MethodOf {
 		return Type{}, evt1Diagnostic("CLASS_PRIVATE_MEMBER_ACCESS", fmt.Sprintf("method %s.%s is private", fn.MethodOf, fn.Name), call.Span)
 	}

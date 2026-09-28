@@ -47,6 +47,9 @@ type TypeInfo struct {
 
 func evt1ReflectableAttributes(attributes []Attribute, span Span, allowCRepr bool) error {
 	for _, attribute := range attributes {
+		if attribute.Name == "must_use" && len(attribute.Args) == 0 {
+			continue
+		}
 		if attribute.Name == "repr" {
 			if !allowCRepr {
 				return evt1Diagnostic("C_ABI_REPR_INVALID", "[[repr(C)]] requires a non-generic record struct", attribute.Span)

@@ -41,7 +41,7 @@ func evt1FailureEnumDecl(t Type) (EnumDecl, bool) {
 		if t.TypeArgs[0].Name != "void" {
 			ok.Payload = []Field{{Name: "value", Type: t.TypeArgs[0], Span: t.Span}}
 		}
-		return EnumDecl{Name: evt1ResultName, Variants: []VariantDecl{
+		return EnumDecl{Name: evt1ResultName, Attributes: []Attribute{{Name: "must_use"}}, Variants: []VariantDecl{
 			ok,
 			{Name: "Error", Tag: 1, Payload: []Field{{Name: "error", Type: t.TypeArgs[1], Span: t.Span}}},
 		}}, true

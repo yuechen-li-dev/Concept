@@ -2,6 +2,10 @@
 
 An `extern "C"` declaration names an external ABI symbol. It does not prove
 allocation, ownership, lifetime, purity, or native implementation behavior.
+`[[must_use]] extern "C" T Operation(...);` can require Concept callers to
+handle that declared return value, including when the declaration arrives
+through a semantic module artifact. This obligation does not prove anything
+about the native implementation.
 An adjacent `foreign concept` can state a precise trusted semantic contract:
 
 ```concept

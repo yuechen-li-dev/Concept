@@ -65,9 +65,9 @@ Result<int, BuildError> Build(bool fail)
 }
 int Main()
 {
-    Build(true);
+    discard Build(true);
     Checkpoint(1);
-    Build(false);
+    discard Build(false);
     Checkpoint(2);
     return 0;
 }`
