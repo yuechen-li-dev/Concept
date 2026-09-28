@@ -2,15 +2,6 @@ module Golden.Claude.Hft.MarketTests;
 profile Core;
 import Golden.Claude.Hft.Market;
 
-bool FailsWith(Result<void, MarketError> result, MarketError expected)
-{
-    return match (result)
-    {
-        Result::Ok() => false,
-        Result::Error(error) => error == expected,
-    };
-}
-
 int PriceOf(Option<Quote> quote)
 {
     return match (quote)
@@ -39,7 +30,7 @@ void FullRingRejectsUntilAQuoteIsConsumed()
     {
         Assert.LGTM(Publish(ref ring, Quote{1, i + 1, 0}), "fills to capacity");
     }
-    Assert.True(FailsWith(Publish(ref ring, Quote{1, 999, 0}), MarketError::QueueFull), "the next publish is refused");
+    Assert.FailsWith(Publish(ref ring, Quote{1, 999, 0}), MarketError::QueueFull, "the next publish is refused");
     Assert.Equals(PriceOf(Consume(ref ring)), 1, "the oldest quote is intact");
     Assert.LGTM(Publish(ref ring, Quote{1, 999, 0}), "one freed slot admits one quote");
 }

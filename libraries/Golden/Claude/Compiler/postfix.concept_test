@@ -3,15 +3,6 @@ profile Core;
 import Golden.Claude.Compiler.Postfix;
 import Standard.Collection.Stores;
 
-bool FailsWith(Result<Id<Expr>, ParseError> result, ParseError expected)
-{
-    return match (result)
-    {
-        Result::Ok(id) => false,
-        Result::Error(error) => error == expected,
-    };
-}
-
 [[fact]]
 void OperatorOrderComesFromTheStream()
 {
@@ -38,7 +29,7 @@ void AnOperatorNeedsTwoOperands()
 {
     Parser parser = NewParser();
     Token[2] tokens = [Number(1), Op(Operator::Plus)];
-    Assert.True(FailsWith(Parse(ref parser, ReadOnlySpan(tokens)), ParseError::MissingOperand), "only one operand available");
+    Assert.FailsWith(Parse(ref parser, ReadOnlySpan(tokens)), ParseError::MissingOperand, "only one operand available");
 }
 
 [[fact]]
@@ -46,7 +37,7 @@ void UnconsumedOperandsAreAnError()
 {
     Parser parser = NewParser();
     Token[2] tokens = [Number(1), Number(2)];
-    Assert.True(FailsWith(Parse(ref parser, ReadOnlySpan(tokens)), ParseError::LeftoverOperands), "two values, no operator");
+    Assert.FailsWith(Parse(ref parser, ReadOnlySpan(tokens)), ParseError::LeftoverOperands, "two values, no operator");
 }
 
 [[fact]]
@@ -54,7 +45,7 @@ void EmptyInputHasNoValue()
 {
     Parser parser = NewParser();
     Token[0] tokens = [];
-    Assert.True(FailsWith(Parse(ref parser, ReadOnlySpan(tokens)), ParseError::EmptyInput), "nothing to evaluate");
+    Assert.FailsWith(Parse(ref parser, ReadOnlySpan(tokens)), ParseError::EmptyInput, "nothing to evaluate");
 }
 
 [[fact]]

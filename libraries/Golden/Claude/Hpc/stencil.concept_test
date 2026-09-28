@@ -25,9 +25,9 @@ void InteriorSpikeSpreadsToItsNeighbours()
     Rod current = RodWithSpike(7, spike);
     Rod next = Rod{[0.0 ...], [0.0 ...]};
     Advance(ref next, ref const current, StableDiffusion(0.1)!);
-    Assert.Near(Magnitude(next.temperature[6]), 1.0, 0.001, "left neighbour gains r * spike");
-    Assert.Near(Magnitude(next.temperature[7]), 8.0, 0.001, "centre loses 2r * spike");
-    Assert.Near(Magnitude(next.temperature[8]), 1.0, 0.001, "right neighbour gains r * spike");
+    Assert.Near(next.temperature[6], 1.0, 0.001, "left neighbour gains r * spike");
+    Assert.Near(next.temperature[7], 8.0, 0.001, "centre loses 2r * spike");
+    Assert.Near(next.temperature[8], 1.0, 0.001, "right neighbour gains r * spike");
 }
 
 [[fact]]
@@ -42,7 +42,7 @@ void HeatIsConservedAwayFromTheBoundaries()
         Advance(ref b, ref const a, r);
         Advance(ref a, ref const b, r);
     }
-    Assert.Near(Magnitude(TotalHeat(ref const a)), 10.0, 0.001, "six steps cannot reach the ends, so no heat leaves");
+    Assert.Near(TotalHeat(ref const a), 10.0, 0.001, "six steps cannot reach the ends, so no heat leaves");
 }
 
 [[theory]]

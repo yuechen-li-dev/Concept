@@ -2,15 +2,6 @@ module Golden.Claude.Differentiators.Async.JournalTests;
 profile Core;
 import Golden.Claude.Differentiators.Async.Journal;
 
-bool FailsWith(Result<int, JournalError> result, JournalError expected)
-{
-    return match (result)
-    {
-        Result::Ok(value) => false,
-        Result::Error(error) => error == expected,
-    };
-}
-
 [[fact]]
 void ATransferFetchesTransformsAndCommits()
 {
@@ -20,19 +11,19 @@ void ATransferFetchesTransformsAndCommits()
 [[fact]]
 void AMissingRecordFailsAtFetch()
 {
-    Assert.True(FailsWith(Run(-1), JournalError::Missing), "nothing to fetch");
+    Assert.FailsWith(Run(-1), JournalError::Missing, "nothing to fetch");
 }
 
 [[fact]]
 void AFullJournalFailsAtCommit()
 {
-    Assert.True(FailsWith(Run(50), JournalError::Full), "fetch succeeds, commit refuses 101");
+    Assert.FailsWith(Run(50), JournalError::Full, "fetch succeeds, commit refuses 101");
 }
 
 [[fact]]
 void TooSmallABudgetStallsInsteadOfPanicking()
 {
-    Assert.True(FailsWith(RunWithin(4, 1), JournalError::Stalled), "one step cannot finish two awaits");
+    Assert.FailsWith(RunWithin(4, 1), JournalError::Stalled, "one step cannot finish two awaits");
     Assert.Equals(RunWithin(4, StepBudget)!, 10, "the full budget can");
 }
 

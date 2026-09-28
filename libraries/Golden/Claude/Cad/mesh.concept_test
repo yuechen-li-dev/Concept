@@ -33,8 +33,8 @@ void WindingDecidesTheSignOfTheArea()
     Fixture f = RightTriangles();
     Triangle ccw = TriangleOf(ref const f.mesh, f.ccw)!;
     Triangle cw = TriangleOf(ref const f.mesh, f.cw)!;
-    Assert.Near(Magnitude(SignedDoubleArea(ccw)), 12.0, 0.0001, "twice 6 m^2");
-    Assert.Near(Magnitude(SignedDoubleArea(cw)), -12.0, 0.0001, "same triangle, reversed winding");
+    Assert.Near(SignedDoubleArea(ccw), 12.0, 0.0001, "twice 6 m^2");
+    Assert.Near(SignedDoubleArea(cw), -12.0, 0.0001, "same triangle, reversed winding");
     Assert.True(OrientationOf(ccw) == Orientation::CounterClockwise, "ccw");
     Assert.True(OrientationOf(cw) == Orientation::Clockwise, "cw");
 }
@@ -55,8 +55,8 @@ void CentroidIsTheVertexMean()
 {
     Fixture f = RightTriangles();
     Point c = Centroid(TriangleOf(ref const f.mesh, f.ccw)!);
-    Assert.Near(Magnitude(c.x), 4.0 / 3.0, 0.0001, "x");
-    Assert.Near(Magnitude(c.y), 1.0, 0.0001, "y");
+    Assert.Near(c.x, interpret (4.0 / 3.0) as float<m>, 0.0001, "x");
+    Assert.Near(c.y, 1.0, 0.0001, "y");
 }
 
 [[fact]]
@@ -64,9 +64,9 @@ void BoundsCoverEveryPoint()
 {
     Fixture f = RightTriangles();
     Bounds box = BoundsOf(ref const f.mesh)!;
-    Assert.Near(Magnitude(box.low.x), 0.0, 0.0001, "min x");
-    Assert.Near(Magnitude(box.high.x), 4.0, 0.0001, "max x");
-    Assert.Near(Magnitude(box.high.y), 3.0, 0.0001, "max y");
+    Assert.Near(box.low.x, 0.0, 0.0001, "min x");
+    Assert.Near(box.high.x, 4.0, 0.0001, "max x");
+    Assert.Near(box.high.y, 3.0, 0.0001, "max y");
 }
 
 [[fact]]

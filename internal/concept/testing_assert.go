@@ -6,7 +6,7 @@ import (
 )
 
 func evt1ValidateTestAssertion(env *semanticEnv, scope *evt1Scope, call *CallExpr, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
-	want := map[string]int{"True": 2, "False": 2, "Equals": 3, "Near": 4, "Error": 2, "LGTM": 2}
+	want := map[string]int{"True": 2, "False": 2, "Equals": 3, "Near": 4, "Error": 2, "FailsWith": 3, "LGTM": 2}
 	argc, ok := want[call.Callee]
 	if !ok {
 		return Type{}, evt1Diagnostic("TEST_ASSERT_UNKNOWN", fmt.Sprintf("unknown test assertion Assert.%s", call.Callee), call.Span)
@@ -23,7 +23,21 @@ func evt1ValidateTestAssertion(env *semanticEnv, scope *evt1Scope, call *CallExp
 	}
 	valueTypes := make([]Type, len(call.Args)-1)
 	for i := range valueTypes {
-		t, err := validateExpr(env, scope, call.Args[i], templateInfo, inComptimeFn)
+		var t Type
+		var err error
+		if call.Callee == "Equals" && i == 0 && evt1ContextualIntegerOrFloatLiteral(call.Args[0]) && !evt1ContextualIntegerOrFloatLiteral(call.Args[1]) {
+			valueTypes[1], err = validateExpr(env, scope, call.Args[1], templateInfo, inComptimeFn)
+			if err != nil {
+				return Type{}, err
+			}
+			t, err = validateExprAgainstExpected(env, scope, call.Args[0], valueTypes[1], templateInfo, inComptimeFn)
+		} else if call.Callee == "Equals" && i == 1 && valueTypes[1].Name != "" {
+			continue
+		} else if (call.Callee == "Equals" || call.Callee == "Near") && i > 0 && evt1ContextualIntegerOrFloatLiteral(call.Args[i]) && valueTypes[0].Name != "" {
+			t, err = validateExprAgainstExpected(env, scope, call.Args[i], valueTypes[0], templateInfo, inComptimeFn)
+		} else {
+			t, err = validateExpr(env, scope, call.Args[i], templateInfo, inComptimeFn)
+		}
 		if err != nil {
 			return Type{}, err
 		}
@@ -42,8 +56,8 @@ func evt1ValidateTestAssertion(env *semanticEnv, scope *evt1Scope, call *CallExp
 			return Type{}, evt1Diagnostic("TEST_ASSERT_EQUALS_UNSUPPORTED", fmt.Sprintf("Assert.Equals does not support %s", valueTypes[0].String()), call.Span)
 		}
 	case "Near":
-		if !valueTypes[0].SameValueType(valueTypes[1]) || !valueTypes[0].SameValueType(valueTypes[2]) || !evt1TestNumericType(valueTypes[0]) {
-			return Type{}, evt1Diagnostic("TEST_ASSERT_NEAR_NUMERIC_REQUIRED", "Assert.Near requires three values of one numeric type", call.Span)
+		if !valueTypes[0].SameValueType(valueTypes[1]) || !evt1TestNumericType(valueTypes[0]) || !evt1TestNearToleranceCompatible(valueTypes[0], valueTypes[2]) {
+			return Type{}, evt1Diagnostic("TEST_ASSERT_NEAR_NUMERIC_REQUIRED", "Assert.Near requires matching numeric values and a same-dimension tolerance", call.Span)
 		}
 		if literal, ok := call.Args[2].(*IntLiteral); ok && literal.Negative {
 			return Type{}, evt1Diagnostic("TEST_ASSERT_NEAR_NEGATIVE_TOLERANCE", "Assert.Near tolerance must not be negative", literal.Span)
@@ -54,6 +68,19 @@ func evt1ValidateTestAssertion(env *semanticEnv, scope *evt1Scope, call *CallExp
 	case "Error", "LGTM":
 		if !evt1IsResultType(valueTypes[0]) {
 			return Type{}, evt1Diagnostic("TEST_ASSERT_RESULT_REQUIRED", fmt.Sprintf("Assert.%s requires Result<T,E>, got %s", call.Callee, valueTypes[0].String()), call.Args[0].exprSpan())
+		}
+	case "FailsWith":
+		if !evt1IsResultType(valueTypes[0]) {
+			return Type{}, evt1Diagnostic("TEST_ASSERT_RESULT_REQUIRED", "Assert.FailsWith requires Result<T,E>", call.Args[0].exprSpan())
+		}
+		errorType := evt1FailureErrorType(valueTypes[0])
+		if !errorType.SameValueType(valueTypes[1]) {
+			return Type{}, evt1Diagnostic("TEST_ASSERT_EQUALS_TYPE_MISMATCH", fmt.Sprintf("Assert.FailsWith expected %s but got %s", errorType.String(), valueTypes[1].String()), call.Args[1].exprSpan())
+		}
+		boolType, _ := evt1BuiltinType("bool", call.Span)
+		_, err := evt1LookupRequiredOperation(env, OperationRequirement{Name: "operator==", ReturnType: boolType, Params: []Param{{Type: errorType}, {Type: errorType}}}, call.Span, "Assert.FailsWith")
+		if err != nil {
+			return Type{}, err
 		}
 	}
 	call.Intrinsic = "test_assert_" + strings.ToLower(call.Callee)
@@ -78,7 +105,26 @@ func evt1ValidateForetellCall(env *semanticEnv, scope *evt1Scope, call *CallExpr
 }
 
 func evt1TestNumericType(t Type) bool {
-	return t.Name == "int" || t.Name == "uint" || t.Name == "byte" || t.Name == "float"
+	return evt1IntegralRepresentation(t) || evt1IsFloating(t)
+}
+
+func evt1ContextualIntegerOrFloatLiteral(expr Expr) bool {
+	switch expr.(type) {
+	case *IntLiteral, *FloatLiteral:
+		return true
+	}
+	return evt1ContextualFloatLiteral(expr) != nil
+}
+
+func evt1TestNearToleranceCompatible(actual, tolerance Type) bool {
+	if actual.SameValueType(tolerance) {
+		return true
+	}
+	if actual.Name != tolerance.Name || actual.Quantity == nil || tolerance.Quantity == nil || !actual.Quantity.SameDimension(*tolerance.Quantity) {
+		return false
+	}
+	_, _, ok := tolerance.Quantity.ScaleRatioToChecked(*actual.Quantity)
+	return ok
 }
 
 func evt1TestEqualityType(env *semanticEnv, t Type) bool {

@@ -3,24 +3,6 @@ profile Core;
 import Golden.Claude.Embedded.Serial;
 
 // Result helpers: Assert.Error only says "some error"; these say which one.
-bool FailsWith(Result<void, SerialError> result, SerialError expected)
-{
-    return match (result)
-    {
-        Result::Ok() => false,
-        Result::Error(error) => error == expected,
-    };
-}
-
-bool FailsWith(Result<Option<Command>, SerialError> result, SerialError expected)
-{
-    return match (result)
-    {
-        Result::Ok(value) => false,
-        Result::Error(error) => error == expected,
-    };
-}
-
 bool IsPending(Result<Option<Command>, SerialError> result)
 {
     return match (result)
@@ -57,7 +39,7 @@ void ZeroDivisorIsRejectedAndDecoderResyncs()
 {
     Decoder decoder = NewDecoder();
     discard Decode(ref decoder, 0x02);
-    Assert.True(FailsWith(Decode(ref decoder, 0), SerialError::ZeroDivisor), "a zero divisor is invalid");
+    Assert.FailsWith(Decode(ref decoder, 0), SerialError::ZeroDivisor, "a zero divisor is invalid");
     Assert.True(decoder.next == Expecting::Opcode, "the next byte is treated as an opcode");
     Assert.LGTM(Decode(ref decoder, 0x01), "a following ping still decodes");
 }
@@ -66,7 +48,7 @@ void ZeroDivisorIsRejectedAndDecoderResyncs()
 void UnknownOpcodeIsRecoverable()
 {
     Decoder decoder = NewDecoder();
-    Assert.True(FailsWith(Decode(ref decoder, 0xFF), SerialError::UnknownOpcode), "0xFF is not an opcode");
+    Assert.FailsWith(Decode(ref decoder, 0xFF), SerialError::UnknownOpcode, "0xFF is not an opcode");
     Assert.LGTM(Decode(ref decoder, 0x01), "the stream continues");
     Assert.Equals(decoder.bytesSeen, 2, "every byte is counted, including the bad one");
 }
@@ -94,7 +76,7 @@ void FullQueueRejectsWithoutLosingData()
     {
         Assert.LGTM(Enqueue(ref port.queue, 0x20), "fills to capacity");
     }
-    Assert.True(FailsWith(Enqueue(ref port.queue, 0x21), SerialError::QueueFull), "one past capacity fails");
+    Assert.FailsWith(Enqueue(ref port.queue, 0x21), SerialError::QueueFull, "one past capacity fails");
     Assert.Equals(port.queue.count, QueueCapacity, "the failed enqueue changed nothing");
 }
 

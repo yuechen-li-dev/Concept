@@ -7,24 +7,6 @@ NativeSample Good(float altitude, float climbRate)
     return NativeSample{altitude, climbRate, 1};
 }
 
-bool FailsWith(Result<void, TelemetryError> result, TelemetryError expected)
-{
-    return match (result)
-    {
-        Result::Ok() => false,
-        Result::Error(error) => error == expected,
-    };
-}
-
-bool FailsWith(Result<Sample, TelemetryError> result, TelemetryError expected)
-{
-    return match (result)
-    {
-        Result::Ok(sample) => false,
-        Result::Error(error) => error == expected,
-    };
-}
-
 [[fact]]
 void ANormalFlightVisitsEachPhaseInOrder()
 {
@@ -50,7 +32,7 @@ void AnInvalidSampleLatchesTheFault()
 {
     FlightController fc = NewController();
     Assert.LGTM(Accept(ref fc, Good(500.0, 10.0)), "climbing");
-    Assert.True(FailsWith(Accept(ref fc, NativeSample{500.0, 10.0, 0}), TelemetryError::SensorInvalid), "validity bit clear");
+    Assert.FailsWith(Accept(ref fc, NativeSample{500.0, 10.0, 0}), TelemetryError::SensorInvalid, "validity bit clear");
     Assert.False(GuidanceAvailable(ref const fc), "no guidance while faulted");
     Assert.LGTM(Accept(ref fc, Good(600.0, 10.0)), "later good data is still recorded");
     Assert.True(fc.phase == Phase::Fault, "but the fault stays latched");
@@ -62,9 +44,9 @@ void AnInvalidSampleLatchesTheFault()
 void AltitudeOutsideTheEnvelopeIsRejected()
 {
     FlightController fc = NewController();
-    Assert.True(FailsWith(Accept(ref fc, Good(-1.0, 0.0)), TelemetryError::OutsideEnvelope), "below ground");
+    Assert.FailsWith(Accept(ref fc, Good(-1.0, 0.0)), TelemetryError::OutsideEnvelope, "below ground");
     Assert.Equals(fc.rejected, 1, "counted once");
-    Assert.True(FailsWith(Latest(ref const fc), TelemetryError::NoSamples), "rejected samples are not recorded");
+    Assert.FailsWith(Latest(ref const fc), TelemetryError::NoSamples, "rejected samples are not recorded");
 }
 
 [[fact]]
@@ -77,7 +59,7 @@ void HistoryKeepsTheLatestSamplesForever()
     }
     Assert.LGTM(Accept(ref fc, Good(4321.0, 1.0)), "one more");
     Assert.Equals(fc.stored, HistoryLength, "history is full, not overflowing");
-    Assert.Near(Magnitude(Latest(ref const fc)!.altitude), 4321.0, 0.01, "latest is the newest sample");
+    Assert.Near(Latest(ref const fc)!.altitude, 4321.0, 0.01, "latest is the newest sample");
 }
 
 [[fact]]

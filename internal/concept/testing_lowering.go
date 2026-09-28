@@ -49,7 +49,14 @@ func (f *evt1FunctionLowerer) lowerTestToolingCall(call *CallExpr, indent int) (
 		}
 		return failure(condition, "|actual="+evt1TestFormat(types[0])+"|expected="+evt1TestFormat(types[1]))
 	case "test_assert_near":
-		condition := fmt.Sprintf("(%s == %s) || ((%s >= 0) && isfinite((double)%s) && isfinite((double)%s) && isfinite((double)%s) && fabs((double)%s - (double)%s) <= (double)%s)", exprs[0], exprs[1], exprs[2], exprs[0], exprs[1], exprs[2], exprs[0], exprs[1], exprs[2])
+		tolerance := "(double)" + exprs[2]
+		if types[0].Quantity != nil && types[2].Quantity != nil {
+			n, d, _ := types[2].Quantity.ScaleRatioToChecked(*types[0].Quantity)
+			if n != 1 || d != 1 {
+				tolerance = fmt.Sprintf("(((double)%s * %d.0) / %d.0)", exprs[2], n, d)
+			}
+		}
+		condition := fmt.Sprintf("(%s == %s) || ((%s >= 0) && isfinite((double)%s) && isfinite((double)%s) && isfinite((double)%s) && fabs((double)%s - (double)%s) <= %s)", exprs[0], exprs[1], exprs[2], exprs[0], exprs[1], exprs[2], exprs[0], exprs[1], tolerance)
 		return failure(condition, "|actual="+evt1TestFormat(types[0])+"|expected="+evt1TestFormat(types[1])+"|tolerance="+evt1TestFormat(types[2]))
 	case "test_assert_error":
 		detail := "|result_tag=%d"
@@ -81,6 +88,16 @@ func (f *evt1FunctionLowerer) lowerTestToolingCall(call *CallExpr, indent int) (
 			args = append(args, evt1TestPrintArg(payload, value))
 		}
 		return failure(exprs[0]+".tag == 0", detail, args...)
+	case "test_assert_failswith":
+		actual := exprs[0] + ".payload.error.error"
+		expected := exprs[1]
+		if types[1].Kind == TypeEnum {
+			actual += ".tag"
+			expected += ".tag"
+		}
+		return failure(exprs[0]+".tag == 1 && "+actual+" == "+expected,
+			"|result_tag=%d|actual_error="+evt1TestFormat(types[1])+"|expected_error="+evt1TestFormat(types[1]),
+			exprs[0]+".tag", evt1TestPrintArg(types[1], "("+exprs[0]+".tag == 1 ? "+actual+" : 0)"), evt1TestPrintArg(types[1], expected))
 	default:
 		return "", "(void)0", voidType
 	}
@@ -88,7 +105,7 @@ func (f *evt1FunctionLowerer) lowerTestToolingCall(call *CallExpr, indent int) (
 
 func evt1TestFormat(t Type) string {
 	switch t.Name {
-	case "float":
+	case "float", "double", "half":
 		return "%g"
 	case "uint", "uint32":
 		return "%u"
@@ -122,7 +139,7 @@ func evt1TestPrintArgs(types []Type, exprs []string) string {
 
 func evt1TestPrintArg(t Type, expression string) string {
 	switch t.Name {
-	case "float":
+	case "float", "double", "half":
 		return "(double)" + expression
 	case "uint64", "usize":
 		return "(unsigned long long)" + expression
