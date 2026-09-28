@@ -304,6 +304,7 @@ func TestR8fStaticRejections(t *testing.T) {
 		{"Async", "borrow-across-await.concept.txt", "ASYNC_PERSISTENT_REF_ESCAPE"},
 		{"Async", "ignored-must-use.concept.txt", "MUST_USE_RESULT_IGNORED"},
 		{"Compiler", "invalid-operand.concept.txt", "CV4025"},
+		{"Compiler", "invalid-authored-pass.concept.txt", "CONCEPT_ASSERT_DISPROVEN"},
 		{"Agents", "invalid-policy-target.concept.txt", "MACHINE_UNKNOWN_STATE"},
 		{"Hpc", "unsupported-scalar.concept.txt", "CV4640"},
 	} {

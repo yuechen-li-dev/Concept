@@ -1,0 +1,9 @@
+module Golden.Differentiators.Compiler.InvalidAuthoredPass;
+profile Core;
+concept CheckedOperandPass<declaration F>
+{
+    requires compiler.Generated(F);
+    requires compiler.NoAllocation(F);
+}
+int ManualPass() { return 0; }
+requires CheckedOperandPass<declaration ManualPass>;

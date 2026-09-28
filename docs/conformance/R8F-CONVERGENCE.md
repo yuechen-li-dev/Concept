@@ -23,8 +23,10 @@ the manifest includes benchmarks, while `Passed` counts only facts. The
 assertion now checks `Passed + Benchmarks` against the manifest. The focused
 R7p domain test passes in Normal and Verify with 37 facts and two benchmarks.
 
-The final `go test ./... -count=1` passed on the exact final sources (204.225 s
-for `internal/concept`). `go vet ./...`, both Zig suites, BurnIn, the complete
+The full `go test ./... -count=1` passed after the five domains and compiler
+fixes were introduced (204.225 s for `internal/concept`). A final rerun also
+passed after adding the compiler golden's generated-pass semantic concept and
+its authored-pass rejection. `go vet ./...`, both Zig suites, BurnIn, the complete
 Golden tree (37 facts and two benchmarks), Standard Normal/Verify (35 each),
 and DragonGod Normal/Verify (23 each) passed. The new native facts agree in
 Normal and Verify. The representative 100-run artifact/C identity test,
@@ -33,6 +35,13 @@ generated` and `concept explain` were run against built semantic artifacts.
 Project lint passes with `CONCEPT_MODULE_ROOTS` set to the absolute
 `libraries` directory; individual format checks pass for all 12 new
 sources/manifest files.
+
+The final compiler example requires `CheckedOperandPass<declaration
+OperandCount>`, which proves generated provenance and `NoAllocation`. An
+authored replacement fails with `CONCEPT_ASSERT_DISPROVEN`. With a fixed
+artifact root, `concept generated` and `concept explain` each produced
+identical output across 100 invocations; project lint and the compiler source
+format check did the same.
 
 The new R8f tree leaves every R7p golden and the R7q Frame unchanged. The
 remaining language-design opportunity is open-type arithmetic bounds; the

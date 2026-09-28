@@ -9,8 +9,8 @@ each new program as `first-draft.concept.txt`.
 | --- | ---: | --- | --- | --- |
 | Agents/Squad | 140 | Three tactical agents turn bounded observations into features, `Inference<Policy>` scores, and a policy-specific temporal machine. A score bonus plus state duration gives commitment. | Inference, hard maximum, automata, `transition match`, `yield`, `NoAllocation` | A utility scorer, state-machine code, and an explicit commitment convention |
 | Mechanics/Stress | 22 | Rotate a 2D plane-stress tensor from raw native pascals and report shear at explicit display precision. | Einstein contraction, fixed tensor extents, `double<Pa>`, `interpret`, `as float<Pa>`, `SameDimension`, `NoAllocation` | Unit and tensor libraries with compatible expression templates and separate raw-data conventions |
-| Hpc/Dot | 66 | One four-lane dot algorithm closes for `float` and `double`; binary32 uses paired accumulation, binary64 uses sequential accumulation. A direct binary32 baseline shows the expected code shape. | `Floating<T>` and required operations, fixed arrays and spans, `SizeOf<T>()` specialization, `NoAllocation` | Traits/operator bounds, templates, and specialization/codegen review |
-| Compiler/IR + IRTools | 54 | A typed instruction schema marks operand IDs. A second module reflects that schema and generates a checked operand census used by an arity verifier. | `[[reflect]]`, `Fields<T>(operand)`, `derive`, generated provenance, artifact-only import, `NoAllocation` | Visitor or code generator plus schema synchronization |
+| Hpc/Dot | 69 | One four-lane dot algorithm closes for `float` and `double`; binary32 uses paired accumulation, binary64 uses sequential accumulation. A direct binary32 baseline shows the expected code shape. | `Floating<T>` and required operations, fixed arrays and spans, `SizeOf<T>()` specialization, `NoAllocation` | Traits/operator bounds, templates, and specialization/codegen review |
+| Compiler/IR + IRTools | 62 | A typed instruction schema marks operand IDs. A second module reflects that schema and generates a checked operand census used by an arity verifier. | `[[reflect]]`, `Fields<T>(operand)`, `derive`, `CheckedOperandPass<declaration F>`, artifact-only import | Visitor or code generator plus schema synchronization |
 | Async/Journal | 64 | A bounded journal transaction fetches, transforms, and commits; errors propagate through two suspensions while owned request state persists. | `async`/`await`, owned state, scoped ref, `Result`, `[[must_use]]`, `discard`, `NoAllocation` | Coroutine/task storage and explicit ownership/lifetime discipline |
 
 ## First-draft friction
@@ -20,7 +20,7 @@ each new program as `first-draft.concept.txt`.
 | Agents | Expected inference to drive a temporal machine. The draft used a ternary expression for `armed` (`CV4020`) and put a transition after `yield` (`MACHINE_FRAME_INVALID`). | Partial: terminal-step rule needed clearer examples. | Bound the feature with a short `if`; kept each machine step terminal and represented minimum commitment in state. Existing semantic feature and documentation gap. |
 | Mechanics | Expected tensor contraction over pressures. Native float literals would not initialize `tensor<double>` (`CV4227`). | Partial: representation rules exist, but no double-tensor example. | Cast representation explicitly before constructing the tensor or interpreting pressure. Units and Einstein contraction compose. Documentation gap. |
 | HPC | Expected `Floating<T>` to allow arithmetic. Open `T` received `CV4175`; native C then lacked closed `ReadOnlySpan<float/double>` typedefs. | Partial: generic operation closure is documented, but not this numeric composition. | Used required operations with scalar witnesses; fixed the header collector and erased the closed size choice. Existing generic boundary and compiler correctness fixes. |
-| Compiler | Expected reflection to generate a checked IR verifier. The first derivation worked, but IR and generator initially shared a file, so artifact transport was unproven. | Yes for reflection and derive; artifact-only example design needed work. | Split schema A and generator B; consumer C uses semantic artifacts alone. Example design correction. |
+| Compiler | Expected reflection to generate a checked IR verifier. The first derivation worked, but IR and generator initially shared a file, so artifact transport was unproven. | Yes for reflection and derive; artifact-only example design needed work. | Split schema A and generator B; consumer C uses semantic artifacts alone. `CheckedOperandPass` requires generation provenance and NoAllocation; an authored impostor is statically rejected. Example design correction. |
 | Async | Expected await and Result to preserve owned request state and errors. Early error returns emitted value returns from a `void` C step; `[[must_use]]` was mistaken for a test annotation. | Partial: examples did not expose these implementation defects. | Split return-bearing branches in async CFG lowering and excluded `must_use` from test discovery. Ownership and error propagation now compose. Compiler and tooling correctness fixes. |
 
 The first drafts reflect the domain structure before compiler feedback. The
@@ -49,7 +49,9 @@ calls. This is a code-shape observation, not a throughput claim.
 
 `concept generated` reports the checked `OperandCount` declaration, its
 `GeneratedByReflection` identity, and the two `NodeId` operands that supplied
-it. `concept explain` proves its `NoAllocation` summary through an imported
+it. `CheckedOperandPass` requires both generated provenance and allocation
+freedom, rejecting an authored impostor with `CONCEPT_ASSERT_DISPROVEN`.
+`concept explain` proves its `NoAllocation` summary through an imported
 semantic artifact. The artifact-only consumer imports A and B and calls both
 `OperandCount` and `ValidArity` without source reparse.
 
