@@ -736,6 +736,9 @@ func evt1DirectAsmStatements(block Block) []*AsmStmt {
 				}
 			case *WhileStmt:
 				visit(s.Body)
+				if s.Else != nil {
+					visit(*s.Else)
+				}
 			case *Block:
 				visit(*s)
 			case *TryStmt:
@@ -842,6 +845,9 @@ func evt1DirectTemplateInstances(env *semanticEnv, block Block) []*evt1TemplateI
 			case *WhileStmt:
 				visitExpr(s.Condition)
 				visitBlock(s.Body)
+				if s.Else != nil {
+					visitBlock(*s.Else)
+				}
 			case *Block:
 				visitBlock(*s)
 			}
@@ -932,6 +938,9 @@ func evt1DirectCalls(block Block) []string {
 			case *WhileStmt:
 				visitExpr(s.Condition)
 				visitBlock(s.Body)
+				if s.Else != nil {
+					visitBlock(*s.Else)
+				}
 			case *Block:
 				visitBlock(*s)
 			}

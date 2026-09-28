@@ -185,6 +185,9 @@ func collectDeclarationLocals(block Block, owner string, provenance DeclarationP
 			}
 		case *WhileStmt:
 			collectDeclarationLocals(s.Body, owner, provenance, add)
+			if s.Else != nil {
+				collectDeclarationLocals(*s.Else, owner, provenance, add)
+			}
 		case *ForeachStmt:
 			add(LocalDeclaration, s.ItemName, owner, provenance, s.Span)
 			collectDeclarationLocals(s.Body, owner, provenance, add)

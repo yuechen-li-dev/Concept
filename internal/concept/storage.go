@@ -231,6 +231,9 @@ func evt1CollectStorageTypes(module Module, env *semanticEnv) []Type {
 				}
 			case *WhileStmt:
 				visitBlock(s.Body)
+				if s.Else != nil {
+					visitBlock(*s.Else)
+				}
 			case *ForeachStmt:
 				add(s.SourceType)
 				add(s.ItemType)
@@ -342,6 +345,9 @@ func evt1CollectStorageViewTypes(module Module, env *semanticEnv) []Type {
 				}
 			case *WhileStmt:
 				visitBlock(s.Body)
+				if s.Else != nil {
+					visitBlock(*s.Else)
+				}
 			case *ForeachStmt:
 				add(s.SourceType)
 				add(s.ItemType)
@@ -527,7 +533,7 @@ func evt1ModuleUsesStorageBounds(module Module) bool {
 					return true
 				}
 			case *WhileStmt:
-				if usesExpr(s.Condition) || visitBlock(s.Body) {
+				if usesExpr(s.Condition) || visitBlock(s.Body) || (s.Else != nil && visitBlock(*s.Else)) {
 					return true
 				}
 			case *ForeachStmt:

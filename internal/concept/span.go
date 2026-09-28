@@ -449,6 +449,9 @@ func evt1CollectSpanTypes(module Module) []Type {
 				}
 			case *WhileStmt:
 				visitBlock(s.Body)
+				if s.Else != nil {
+					visitBlock(*s.Else)
+				}
 			case *ForeachStmt:
 				add(s.SourceType)
 				add(s.ItemType)

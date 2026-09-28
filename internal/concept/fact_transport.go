@@ -372,6 +372,12 @@ func evt1DeriveBlockFactSummaryWithLocals(env *semanticEnv, block Block, params 
 			invalidateSemanticSummaryAssignments(s.Body, bodyLocals)
 			candidate, candidateFound := evt1DeriveBlockFactSummaryWithLocals(env, s.Body, params, bodyLocals, derive)
 			appendResult(candidate, candidateFound)
+			if s.Else != nil {
+				elseLocals := cloneSemanticSummaryLocals(locals)
+				invalidateSemanticSummaryAssignments(*s.Else, elseLocals)
+				candidate, candidateFound := evt1DeriveBlockFactSummaryWithLocals(env, *s.Else, params, elseLocals, derive)
+				appendResult(candidate, candidateFound)
+			}
 		case *IfStmt:
 			thenResult, thenFound := evt1DeriveBlockFactSummaryWithLocals(env, s.Then, params, cloneSemanticSummaryLocals(locals), derive)
 			appendResult(thenResult, thenFound)
@@ -409,6 +415,9 @@ func invalidateSemanticSummaryAssignments(block Block, locals map[string]Semanti
 			}
 		case *WhileStmt:
 			invalidateSemanticSummaryAssignments(s.Body, locals)
+			if s.Else != nil {
+				invalidateSemanticSummaryAssignments(*s.Else, locals)
+			}
 		case *Block:
 			invalidateSemanticSummaryAssignments(*s, locals)
 		}

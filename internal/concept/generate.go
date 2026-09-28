@@ -1058,6 +1058,9 @@ func evt1MIRCleanups(env *semanticEnv, fn FunctionDecl) []MIRCleanup {
 				}
 			case *WhileStmt:
 				visitBlock(s.Body)
+				if s.Else != nil {
+					visitBlock(*s.Else)
+				}
 			case *ForeachStmt:
 				visitExpr(s.Source)
 				visitBlock(s.Body)
@@ -1253,6 +1256,10 @@ func collectMIROps(env *semanticEnv, block *Block, fn *MIRFunction, templateInfo
 				collectExprMIROps(env, s.Bound, fn, templateInfo)
 			}
 			collectMIROps(env, &s.Body, fn, templateInfo)
+			if s.Else != nil {
+				fn.Operations = append(fn.Operations, MIROperation{ID: fmt.Sprintf("%s.%02d", fn.Name, len(fn.Operations)+1), Kind: "bounded_exhaustion", SourceSpan: s.Span})
+				collectMIROps(env, s.Else, fn, templateInfo)
+			}
 		case *IfStmt:
 			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "if_stmt", SourceSpan: s.Span})
 			collectExprMIROps(env, s.Condition, fn, templateInfo)
@@ -1285,6 +1292,9 @@ func collectYieldMIR(block *Block, automata, machine, state string, out *MIRStat
 			}
 		case *WhileStmt:
 			collectYieldMIR(&s.Body, automata, machine, state, out)
+			if s.Else != nil {
+				collectYieldMIR(s.Else, automata, machine, state, out)
+			}
 		case *ForeachStmt:
 			collectYieldMIR(&s.Body, automata, machine, state, out)
 		case *Block:
@@ -1338,6 +1348,9 @@ func collectTransitionMIR(block *Block, state *MIRState) {
 			}
 		case *WhileStmt:
 			collectTransitionMIR(&s.Body, state)
+			if s.Else != nil {
+				collectTransitionMIR(s.Else, state)
+			}
 		case *ForeachStmt:
 			collectTransitionMIR(&s.Body, state)
 		case *Block:
@@ -2463,6 +2476,9 @@ func evt1RuntimeAutomataUsage(module Module) map[string]bool {
 				}
 			case *WhileStmt:
 				visitBlock(s.Body)
+				if s.Else != nil {
+					visitBlock(*s.Else)
+				}
 			case *ForeachStmt:
 				visitBlock(s.Body)
 			case *Block:
@@ -2611,7 +2627,7 @@ func evt1ModuleUsesAutomataDispatchOutcome(module Module) bool {
 					}
 				}
 			case *WhileStmt:
-				if usesExpr(s.Condition) || (s.Bound != nil && usesExpr(s.Bound)) || visitBlock(s.Body) {
+				if usesExpr(s.Condition) || (s.Bound != nil && usesExpr(s.Bound)) || visitBlock(s.Body) || (s.Else != nil && visitBlock(*s.Else)) {
 					return true
 				}
 			case *ForeachStmt:
@@ -4245,14 +4261,20 @@ func (f *evt1FunctionLowerer) lowerWhileStmt(stmt WhileStmt, indent int) string 
 	if stmt.Bound != nil {
 		boundValue, err := evt1EvalExpr(newEVT1ComptimeState(f.l.env), f.evalScope(), stmt.Bound)
 		if err == nil {
-			limitName := f.nextTemp("limit")
 			iterName := f.nextTemp("iter")
-			b.WriteString(ind(indent) + fmt.Sprintf("int %s = %d;\n", limitName, boundValue.IntValue))
 			b.WriteString(ind(indent) + fmt.Sprintf("int %s = 0;\n", iterName))
-			b.WriteString(ind(indent) + fmt.Sprintf("while (%s < %s) {\n", iterName, limitName))
+			b.WriteString(ind(indent) + "while (1) {\n")
 			condPrelude, condExpr, _ := f.lowerExpr(stmt.Condition, indent+1)
 			b.WriteString(condPrelude)
 			b.WriteString(ind(indent+1) + fmt.Sprintf("if (!(%s)) { break; }\n", condExpr))
+			b.WriteString(ind(indent+1) + fmt.Sprintf("if (%s >= %d) {\n", iterName, boundValue.IntValue))
+			if stmt.Else != nil {
+				b.WriteString(f.lowerBlock(*stmt.Else, indent+2))
+			} else if f.l.verify {
+				b.WriteString(ind(indent+2) + fmt.Sprintf("concept_panic(%q, %d, %d);\n", "bounded while exhausted", stmt.Span.Line, stmt.Span.Column))
+			}
+			b.WriteString(ind(indent+2) + "break;\n")
+			b.WriteString(ind(indent+1) + "}\n")
 			b.WriteString(ind(indent+1) + fmt.Sprintf("%s = %s + 1;\n", iterName, iterName))
 			b.WriteString(f.lowerBlock(stmt.Body, indent+1))
 			b.WriteString(ind(indent) + "}\n")

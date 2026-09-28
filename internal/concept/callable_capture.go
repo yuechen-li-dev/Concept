@@ -486,6 +486,9 @@ func evt1ModuleCallables(module Module) []*CallableExpr {
 			case *WhileStmt:
 				visitExpr(s.Condition)
 				visitBlock(s.Body)
+				if s.Else != nil {
+					visitBlock(*s.Else)
+				}
 			case *Block:
 				visitBlock(*s)
 			}
@@ -520,6 +523,9 @@ func evt1ModuleCallbackTypes(module Module) []Type {
 				}
 			case *WhileStmt:
 				visitBlock(s.Body)
+				if s.Else != nil {
+					visitBlock(*s.Else)
+				}
 			case *Block:
 				visitBlock(*s)
 			}

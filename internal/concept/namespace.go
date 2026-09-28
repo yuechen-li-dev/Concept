@@ -182,6 +182,9 @@ func resolveNamespaceBlock(block *Block, resolution namespaceResolution) error {
 			if err == nil {
 				err = resolveNamespaceBlock(&stmt.Body, resolution)
 			}
+			if err == nil && stmt.Else != nil {
+				err = resolveNamespaceBlock(stmt.Else, resolution)
+			}
 		case *Block:
 			err = resolveNamespaceBlock(stmt, resolution)
 		}

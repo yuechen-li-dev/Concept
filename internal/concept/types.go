@@ -945,10 +945,11 @@ type StatementArm struct {
 }
 
 type WhileStmt struct {
-	Condition Expr  `json:"condition"`
-	Bound     Expr  `json:"bound,omitempty"`
-	Body      Block `json:"body"`
-	Span      Span  `json:"span"`
+	Condition Expr   `json:"condition"`
+	Bound     Expr   `json:"bound,omitempty"`
+	Body      Block  `json:"body"`
+	Else      *Block `json:"else,omitempty"`
+	Span      Span   `json:"span"`
 }
 
 func (*WhileStmt) evt1Statement()        {}

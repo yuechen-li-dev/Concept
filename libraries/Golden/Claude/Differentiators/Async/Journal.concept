@@ -50,19 +50,22 @@ async Result<int, JournalError> Transfer(int sequence)
     return Result::Ok(receipt);
 }
 
-// Steps the transfer at most `budget` times. A bounded loop simply stops at
-// its bound, so completion is checked explicitly rather than assumed:
-// reading the result of an unfinished task would panic.
+// A result is read only after the task reaches its completed state. Both the
+// caller's budget and the fixed safety bound have explicit stalled paths.
 Result<int, JournalError> RunWithin(int sequence, int budget)
 {
     Async<Result<int, JournalError>> task = Transfer(sequence);
     int steps = 0;
-    while (not Complete(task) and steps < budget) bounded(StepBudget)
+    while (not Complete(task)) bounded(StepBudget)
     {
+        if (steps >= budget)
+        {
+            return Result::Error(JournalError::Stalled);
+        }
         Step(task);
         steps += 1;
     }
-    if (not Complete(task))
+    else
     {
         return Result::Error(JournalError::Stalled);
     }

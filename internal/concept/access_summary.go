@@ -565,6 +565,9 @@ func evt1AccessBlock(env *semanticEnv, state *evt1AccessFunction, block Block) {
 			evt1AccessExpr(env, state, s.Condition)
 			evt1AccessExpr(env, state, s.Bound)
 			evt1AccessBlock(env, state, s.Body)
+			if s.Else != nil {
+				evt1AccessBlock(env, state, *s.Else)
+			}
 		case *ForeachStmt:
 			evt1AccessExpr(env, state, s.Source)
 			evt1AccessBlock(env, state, s.Body)

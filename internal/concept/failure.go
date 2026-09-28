@@ -466,7 +466,7 @@ func evt1ModuleUsesTransitionPanic(module Module) bool {
 					}
 				}
 			case *WhileStmt:
-				if blockUses(s.Body) {
+				if blockUses(s.Body) || (s.Else != nil && blockUses(*s.Else)) {
 					return true
 				}
 			case *ForeachStmt:

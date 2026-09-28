@@ -197,6 +197,9 @@ func evt1InferenceCandidateTypes(module Module) map[string]bool {
 			case *WhileStmt:
 				visitExpr(s.Condition)
 				visitBlock(s.Body)
+				if s.Else != nil {
+					visitBlock(*s.Else)
+				}
 			case *ForeachStmt:
 				visitExpr(s.Source)
 				visitBlock(s.Body)

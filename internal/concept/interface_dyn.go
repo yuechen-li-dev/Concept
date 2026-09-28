@@ -364,6 +364,9 @@ func evt1RewriteMemberBlock(block *Block, fields, methods, inherited map[string]
 		case *WhileStmt:
 			s.Condition = evt1RewriteMemberExpr(s.Condition, fields, methods, shadow)
 			evt1RewriteMemberBlock(&s.Body, fields, methods, shadow)
+			if s.Else != nil {
+				evt1RewriteMemberBlock(s.Else, fields, methods, shadow)
+			}
 		case *ForeachStmt:
 			s.Source = evt1RewriteMemberExpr(s.Source, fields, methods, shadow)
 			evt1RewriteMemberBlock(&s.Body, fields, methods, shadow)

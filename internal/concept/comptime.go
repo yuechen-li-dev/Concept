@@ -945,13 +945,10 @@ func evt1ExecComptimeBlock(state *evt1ComptimeState, scope *evt1EvalScope, block
 			if bound.IntValue > evt1ComptimeMaxLoopBound {
 				return nil, evt1Diagnostic("CV4206", fmt.Sprintf("comptime loop bound %d exceeds limit %d", bound.IntValue, evt1ComptimeMaxLoopBound), s.Bound.exprSpan())
 			}
-			if bound.IntValue == 0 {
-				continue
-			}
 			if err := state.push(fmt.Sprintf("while[%d]", bound.IntValue)); err != nil {
 				return nil, err
 			}
-			for i := 0; i < bound.IntValue; i++ {
+			for i := 0; ; i++ {
 				condition, err := evt1EvalExpr(state, local, s.Condition)
 				if err != nil {
 					state.pop()
@@ -962,6 +959,20 @@ func evt1ExecComptimeBlock(state *evt1ComptimeState, scope *evt1EvalScope, block
 					return nil, evt1Diagnostic("CV4201", "while condition must evaluate to bool", s.Condition.exprSpan())
 				}
 				if !condition.BoolValue {
+					break
+				}
+				if i >= bound.IntValue {
+					if s.Else != nil {
+						result, err := evt1ExecComptimeBlock(state, local, *s.Else, returnType)
+						if err != nil {
+							state.pop()
+							return nil, err
+						}
+						if result != nil {
+							state.pop()
+							return result, nil
+						}
+					}
 					break
 				}
 				result, err := evt1ExecComptimeBlock(state, local, s.Body, returnType)

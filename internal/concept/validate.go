@@ -1694,6 +1694,9 @@ func evt1CollectComptimeCallsFromBlock(block Block, env *semanticEnv) []string {
 				out = append(out, evt1CollectComptimeCallsFromExpr(s.Bound, env)...)
 			}
 			out = append(out, evt1CollectComptimeCallsFromBlock(s.Body, env)...)
+			if s.Else != nil {
+				out = append(out, evt1CollectComptimeCallsFromBlock(*s.Else, env)...)
+			}
 		case *ForeachStmt:
 			out = append(out, evt1CollectComptimeCallsFromExpr(s.Source, env)...)
 			out = append(out, evt1CollectComptimeCallsFromBlock(s.Body, env)...)
@@ -6246,6 +6249,16 @@ func validateWhileStmt(env *semanticEnv, scope *evt1Scope, stmt WhileStmt, retur
 	if err := validateBlock(env, bodyScope, returnType, stmt.Body, templateInfo, inComptimeFn); err != nil {
 		return err
 	}
+	if stmt.Else != nil {
+		if stmt.Bound == nil {
+			return evt1Diagnostic("CV4205", "while else requires bounded(limit)", stmt.Span)
+		}
+		elseScope := evt1CloneScope(scope)
+		if err := validateBlock(env, elseScope, returnType, *stmt.Else, templateInfo, inComptimeFn); err != nil {
+			return err
+		}
+		evt1MergeScopeStates(scope, evt1CloneScope(scope), elseScope)
+	}
 	beforeScope := evt1CloneScope(scope)
 	evt1MergeScopeStates(scope, beforeScope, bodyScope)
 	return nil
@@ -8517,6 +8530,13 @@ func evt1SubstituteStatement(stmt Statement, typeParam string, concreteType Type
 				return nil, err
 			}
 			out.Bound = bound
+		}
+		if s.Else != nil {
+			exhausted, err := evt1SubstituteBlock(*s.Else, typeParam, concreteType)
+			if err != nil {
+				return nil, err
+			}
+			out.Else = &exhausted
 		}
 		return out, nil
 	case *ForeachStmt:

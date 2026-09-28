@@ -4542,6 +4542,17 @@ func (p *parser) parseWhileStmt() (Statement, error) {
 		return nil, err
 	}
 	stmt.Body = body
+	if p.peekLexeme() == "else" {
+		p.next()
+		if stmt.Bound == nil {
+			return nil, evt1Diagnostic("CV4205", "while else requires bounded(limit)", p.currentSpan())
+		}
+		exhausted, err := p.parseBlock()
+		if err != nil {
+			return nil, err
+		}
+		stmt.Else = &exhausted
+	}
 	return stmt, nil
 }
 

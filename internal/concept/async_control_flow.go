@@ -34,6 +34,7 @@ type evt1AsyncCFGNode struct {
 	Condition  Expr
 	True       *evt1AsyncCFGNode
 	False      *evt1AsyncCFGNode
+	Exhausted  *evt1AsyncCFGNode
 	Match      *MatchStmt
 	MatchArms  []evt1AsyncCFGMatchArm
 	Foreach    *ForeachStmt
@@ -184,7 +185,7 @@ func (b *evt1AsyncCFGBuilder) compile(statements []Statement, next *evt1AsyncCFG
 				return dispatch
 			}
 		case *WhileStmt:
-			if evt1BlockContainsAwait(s.Body) {
+			if evt1BlockContainsAwait(s.Body) || (s.Else != nil && evt1BlockContainsAwait(*s.Else)) {
 				after := b.compile(statements[i+1:], next, env)
 				init := b.node("LoopInit", s.Span)
 				header := b.node("LoopHeader", s.Span)
@@ -192,6 +193,9 @@ func (b *evt1AsyncCFGBuilder) compile(statements []Statement, next *evt1AsyncCFG
 				init.Statements, init.Next = ordinary, header
 				back.Next = header
 				header.Condition, header.False = s.Condition, after
+				if s.Else != nil {
+					header.Exhausted = b.compile(s.Else.Statements, after, env)
+				}
 				if s.Bound != nil {
 					if value, err := evt1EvalExpr(newEVT1ComptimeState(env), nil, s.Bound); err == nil {
 						header.HasBound, header.LoopBound = true, value.IntValue
@@ -287,7 +291,7 @@ func evt1BlockUsesName(block Block, sought string) bool {
 					return true
 				}
 			case *WhileStmt:
-				if usesExpr(s.Condition) || usesBlock(s.Body) {
+				if usesExpr(s.Condition) || usesBlock(s.Body) || (s.Else != nil && usesBlock(*s.Else)) {
 					return true
 				}
 			case *ForeachStmt:
@@ -347,6 +351,7 @@ func (b *evt1AsyncCFGBuilder) finalize() {
 		visit(n.Next)
 		visit(n.True)
 		visit(n.False)
+		visit(n.Exhausted)
 		for _, arm := range n.MatchArms {
 			visit(arm.Target)
 		}
@@ -395,6 +400,9 @@ func (cfg *evt1AsyncCFG) mir(persistent map[string]Type) ([]MIRAsyncState, []MIR
 		case "Branch", "LoopHeader":
 			add(n, n.True, "true", -1, evt1ExprIdentity(n.Condition))
 			add(n, n.False, "false", -1, evt1ExprIdentity(n.Condition))
+			if n.Kind == "LoopHeader" {
+				add(n, n.Exhausted, "bounded_exhaustion", -1, evt1ExprIdentity(n.Condition))
+			}
 		case "MatchDispatch":
 			for _, arm := range n.MatchArms {
 				add(n, arm.Target, "match", -1, arm.Pattern.EnumName+"::"+arm.Pattern.VariantName)
@@ -484,6 +492,9 @@ func evt1AsyncPersistentMap(fn FunctionDecl, analysis evt1AsyncAnalysis, cfg *ev
 				}
 			case *WhileStmt:
 				collectInitializers(s.Body)
+				if s.Else != nil {
+					collectInitializers(*s.Else)
+				}
 			case *ForeachStmt:
 				collectInitializers(s.Body)
 			case *MatchStmt:
@@ -565,6 +576,11 @@ func evt1AsyncGraphNameSites(cfg *evt1AsyncCFG) (map[string]*evt1AsyncCFGNode, m
 			addExpr(node, s.Condition)
 			for _, child := range s.Body.Statements {
 				addStatement(node, child)
+			}
+			if s.Else != nil {
+				for _, child := range s.Else.Statements {
+					addStatement(node, child)
+				}
 			}
 		case *ForeachStmt:
 			addExpr(node, s.Source)
@@ -689,12 +705,22 @@ func (l *lowering) lowerAsyncCFG(fn FunctionDecl, analysis evt1AsyncAnalysis, cf
 			}
 			b.WriteString(l.asyncGotoNode(f, node.Next, 2))
 		case "LoopHeader":
-			if node.HasBound {
-				b.WriteString(fmt.Sprintf("    if (frame->loop_iterations_%d >= %d) { frame->state = %d; goto async_dispatch; }\n", node.Index, node.LoopBound, node.False.Index))
-			}
 			prelude, condition, _ := f.lowerExpr(node.Condition, 2)
 			b.WriteString(prelude)
-			b.WriteString(fmt.Sprintf("    frame->state = (%s) ? %d : %d;\n    goto async_dispatch;\n", condition, node.True.Index, node.False.Index))
+			b.WriteString(fmt.Sprintf("    if (!(%s)) { frame->state = %d; goto async_dispatch; }\n", condition, node.False.Index))
+			if node.HasBound {
+				b.WriteString(fmt.Sprintf("    if (frame->loop_iterations_%d >= %d) {\n", node.Index, node.LoopBound))
+				if node.Exhausted != nil {
+					b.WriteString(fmt.Sprintf("      frame->state = %d; goto async_dispatch;\n", node.Exhausted.Index))
+				} else {
+					if l.verify {
+						b.WriteString(fmt.Sprintf("      concept_panic(%q, %d, %d);\n", "bounded while exhausted", node.Span.Line, node.Span.Column))
+					}
+					b.WriteString(fmt.Sprintf("      frame->state = %d; goto async_dispatch;\n", node.False.Index))
+				}
+				b.WriteString("    }\n")
+			}
+			b.WriteString(fmt.Sprintf("    frame->state = %d; goto async_dispatch;\n", node.True.Index))
 		case "LoopBackedge":
 			if node.Next != nil && node.Next.HasBound {
 				b.WriteString(fmt.Sprintf("    frame->loop_iterations_%d = frame->loop_iterations_%d + 1;\n", node.Next.Index, node.Next.Index))
@@ -1029,6 +1055,12 @@ func evt1ValidateAsyncGraph(async *MIRAsyncFunction, span Span) error {
 				return evt1Diagnostic("ASYNC_GRAPH_INVALID", "async completion state must be terminal", span)
 			}
 		case "Branch", "LoopHeader", "ForeachHeader":
+			if state.Kind == "LoopHeader" {
+				if count != 2 && count != 3 {
+					return evt1Diagnostic("ASYNC_JOIN_INVALID", "async loop header has invalid target count", span)
+				}
+				break
+			}
 			if count != 2 {
 				return evt1Diagnostic("ASYNC_JOIN_INVALID", "async branch or loop header must have two explicit targets", span)
 			}

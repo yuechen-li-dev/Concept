@@ -850,6 +850,9 @@ func evt1AnalyzeAsync(fn FunctionDecl) evt1AsyncAnalysis {
 				for i := before; i < len(a.Awaits); i++ {
 					a.AwaitContexts[i] = "while"
 				}
+				if s.Else != nil {
+					block(*s.Else)
+				}
 			case *ForeachStmt:
 				expr(s.Source)
 				a.DeclOrder[s.ItemName], a.DeclTypes[s.ItemName] = order, s.ItemType
@@ -1083,6 +1086,11 @@ func evt1ValidateAsyncShape(fn FunctionDecl) error {
 				if err := validateStructured(s.Body); err != nil {
 					return err
 				}
+				if s.Else != nil {
+					if err := validateStructured(*s.Else); err != nil {
+						return err
+					}
+				}
 			case *MatchStmt:
 				if evt1ExprContainsAwait(s.Subject) {
 					return evt1Diagnostic("ASYNC_MATCH_NORMALIZATION_INVALID", "await in a match subject is deferred; use an explicit preceding await", s.Span)
@@ -1246,7 +1254,7 @@ func evt1StatementContainsAwait(stmt Statement) bool {
 	case *IfStmt:
 		return evt1ExprContainsAwait(s.Condition) || evt1BlockContainsAwait(s.Then) || (s.Else != nil && evt1BlockContainsAwait(*s.Else))
 	case *WhileStmt:
-		return evt1ExprContainsAwait(s.Condition) || evt1BlockContainsAwait(s.Body)
+		return evt1ExprContainsAwait(s.Condition) || evt1BlockContainsAwait(s.Body) || (s.Else != nil && evt1BlockContainsAwait(*s.Else))
 	case *ForeachStmt:
 		return evt1ExprContainsAwait(s.Source) || evt1BlockContainsAwait(s.Body)
 	case *MatchStmt:
