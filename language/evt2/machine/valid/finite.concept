@@ -1,0 +1,30 @@
+profile Core;
+
+automata Counter
+with state
+{
+    int count;
+}
+{
+    machine Run
+    {
+        int increment = 2;
+
+        state Start
+        {
+            state.count = state.count + machine.increment;
+            transition Middle;
+        }
+
+        state Middle
+        {
+            state.count = state.count + machine.increment;
+            transition Done;
+        }
+
+        state Done
+        {
+            complete;
+        }
+    }
+}

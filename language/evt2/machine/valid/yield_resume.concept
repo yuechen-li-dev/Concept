@@ -1,0 +1,22 @@
+profile Core;
+
+automata Counter
+with state
+{
+    int count;
+}
+{
+    machine Run
+    {
+        state Work
+        {
+            if (state.count == 0)
+            {
+                state.count = 1;
+                yield;
+            }
+            state.count = state.count + 1;
+            complete;
+        }
+    }
+}

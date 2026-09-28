@@ -10,6 +10,9 @@ func LowerLirToAmd64Machine(lir LIRModule) (MachineModule, error) {
 	}
 	out := MachineModule{}
 	for _, lf := range lir.Functions {
+		if lf.Machine != nil {
+			return MachineModule{}, fmt.Errorf("EVT2_MACHINEIR_MACHINE_STEP_DEFERRED %s", lf.Name)
+		}
 		b := machineBuilder{lir: lf, values: map[int]MachineOperand{}, types: map[int]LIRType{}, regions: map[int]string{}, flags: map[int]machineCondition{}}
 		b.fn = MachineFunction{Identity: lf.Identity, Name: lf.Name, Target: "amd64-windows", ABI: "win64", Result: lf.Result, Source: lf.Source, Facts: append([]string(nil), lf.Facts...), Decisions: append([]string(nil), lf.Decisions...), Frame: MachineFrame{Alignment: 16}}
 		for _, lb := range lf.Blocks {

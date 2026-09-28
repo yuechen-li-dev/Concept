@@ -9,9 +9,9 @@ not claim that native machine execution is implemented.
 > state-stack storage, persistent state, transitions, yield/resume, and terminal
 > status. It does not require a hidden coroutine runtime.
 
-The quotation is the required target design. At this point only the validated
-MIR input to such lowering exists. `concept lir`, `concept machineir`, and
-`concept amd64` must reject automata until the executable state path exists.
+The quotation is the overall EVT2x target. EVT2x2 establishes a finite-state
+MachineFrame and verified Step LIR for one canonical machine. Pushdown storage
+and AMD64 machine execution remain outside this stage.
 
 ## Existing semantics to preserve
 
@@ -45,15 +45,16 @@ memory, using the same `json:"-"` pattern as ordinary function bodies.
 Serialized checked MIR remains a summary. Native lowering can consume typed
 MIR without parsing either debug text or generated C.
 
-## Lowering boundary
+## EVT2x2 lowering boundary
 
-The next implementation step is to turn those state bodies into verified LIR
-with explicit caller-owned frame accesses, checked depth updates, state
-dispatch, and a compact step result. LIR should contain ordinary CFG and
-storage operations, with stable state annotations for inspection. The existing
-MachineIR, `CMIRAMD1` bridge, Concept allocator, frame finalizer, and AMD64
-encoder can then be extended for the required pointer ABI and memory forms.
-No machine-specific encoder or permanent extra compiler IR is warranted.
+`concept lir` now lowers supported single-machine state bodies into generated
+Init and Step functions with a caller-owned frame address parameter, typed
+field addresses, loads/stores, compare/branch dispatch, explicit returns, and
+an invalid-state trap. The generated function and state blocks carry stable
+closed-machine provenance. See `EVT2-MACHINE-FRAME.md` for exact geometry and
+Step results. Push/pop and multiple-machine execution diagnose explicitly.
+`concept machineir` stops at `EVT2_MACHINEIR_MACHINE_STEP_DEFERRED`; no bridge,
+allocator, or encoder change is claimed. No permanent extra IR was added.
 
 The existing fixed capacity is a storage bound, not a per-step execution
 bound. A proven static push depth may permit a Planner-authorized omitted

@@ -30,12 +30,12 @@ func GenerateLIR(module Module) (LIRModule, error) {
 	if err != nil {
 		return LIRModule{}, err
 	}
-	return LowerMirToLir(&mir, plan)
+	return LowerMirToLir(&mir, plan, env)
 }
 
 // LowerMirToLir consumes validated MIR and the exact planner output. The
 // semantic body is retained in-memory because the legacy MIR JSON is a summary.
-func LowerMirToLir(mir *MIR, plan *LoweringPlan) (LIRModule, error) {
+func LowerMirToLir(mir *MIR, plan *LoweringPlan, env *semanticEnv) (LIRModule, error) {
 	if mir == nil || plan == nil || len(plan.Functions) != len(mir.Functions) {
 		return LIRModule{}, fmt.Errorf("EVT2_PLAN_MISMATCH")
 	}
@@ -43,14 +43,15 @@ func LowerMirToLir(mir *MIR, plan *LoweringPlan) (LIRModule, error) {
 	if err := ValidateLoweringPlan(mir, &facts, plan); err != nil {
 		return LIRModule{}, err
 	}
-	// Machine states are executable declarations, not ordinary function bodies.
-	// Until frame/dispatch lowering consumes MIRState.SemanticBody, omitting them
-	// would let an automata-only module appear to have valid native LIR.
-	if len(mir.Automata) != 0 {
-		return LIRModule{}, fmt.Errorf("EVT2_UNSUPPORTED_AUTOMATA_LOWERING %s", mir.Automata[0].Name)
-	}
 	out := LIRModule{PlanID: plan.PlanID, SemanticFacts: append([]MIRSemanticFact(nil), mir.SemanticFacts...)}
 	sort.Slice(out.SemanticFacts, func(i, j int) bool { return out.SemanticFacts[i].ID < out.SemanticFacts[j].ID })
+	for _, automata := range mir.Automata {
+		generated, err := lowerAutomataToLIR(automata, env)
+		if err != nil {
+			return LIRModule{}, err
+		}
+		out.Functions = append(out.Functions, generated...)
+	}
 	var err error
 	for i, fn := range mir.Functions {
 		if fn.SemanticBody == nil {
@@ -156,12 +157,17 @@ type lirBinding struct {
 	local bool
 }
 type lirBuilder struct {
-	mir       MIRFunction
-	plan      FunctionPlan
-	fn        LIRFunction
-	current   int
-	nextValue int
-	names     map[string]lirBinding
+	mir           MIRFunction
+	plan          FunctionPlan
+	fn            LIRFunction
+	current       int
+	nextValue     int
+	names         map[string]lirBinding
+	machine       *LIRMachineFunction
+	frameParam    int
+	machineFields map[string]int
+	machineStates map[string]int
+	activeState   int
 }
 
 func (b *lirBuilder) value() int { n := b.nextValue; b.nextValue++; return n }
@@ -232,6 +238,25 @@ func (b *lirBuilder) statement(stmt Statement) error {
 			b.emit(LIRInstruction{Op: "store_slot", Result: -1, Type: lt, Args: []int{v}, Slot: slot, Source: s.Span})
 		}
 	case *AssignStmt:
+		if field, ok := s.Target.(*FieldExpr); ok && b.machine != nil {
+			if s.CompoundOp != "" {
+				return fmt.Errorf("EVT2_UNSUPPORTED_MACHINE_COMPOUND_ASSIGN at %d:%d", s.Span.Line, s.Span.Column)
+			}
+			id, err := b.machineFieldID(field)
+			if err != nil {
+				return err
+			}
+			v, typ, err := b.expr(s.Value)
+			if err != nil {
+				return err
+			}
+			if typ != b.machine.Fields[id].Type {
+				return fmt.Errorf("EVT2_TYPE_MISMATCH machine field %s", field.Field)
+			}
+			addr := b.frameFieldAddress(id, field.Span)
+			b.emit(LIRInstruction{Op: "store", Result: -1, Type: typ, Args: []int{addr, v}, Slot: -1, Source: s.Span})
+			return nil
+		}
 		if s.CompoundOp != "" {
 			if _, ok := s.Target.(*NameExpr); !ok {
 				return fmt.Errorf("EVT2_UNSUPPORTED_COMPOUND_TARGET %T", s.Target)
@@ -321,9 +346,43 @@ func (b *lirBuilder) statement(stmt Statement) error {
 			b.current = elseEnd
 		}
 	case *ForeachStmt:
+		if b.machine != nil {
+			return fmt.Errorf("EVT2_UNSUPPORTED_MACHINE_FOREACH at %d:%d", s.Span.Line, s.Span.Column)
+		}
 		return b.foreach(s)
 	case *Block:
 		return b.block(*s)
+	case *TransitionStmt:
+		if b.machine == nil {
+			return fmt.Errorf("EVT2_UNSUPPORTED_STATEMENT %T", stmt)
+		}
+		id, ok := b.machineStates[s.Target]
+		if !ok {
+			return fmt.Errorf("EVT2_MACHINE_UNKNOWN_STATE %s", s.Target)
+		}
+		b.storeMachineState(id, s.Span)
+		b.returnMachineResult("Active", s.Span)
+	case *YieldStmt:
+		if b.machine == nil {
+			return fmt.Errorf("EVT2_UNSUPPORTED_STATEMENT %T", stmt)
+		}
+		// EVT1 yield re-enters the same source state on the next Step.
+		b.storeMachineState(b.activeState, s.Span)
+		b.returnMachineResult("Yielded", s.Span)
+	case *MachineCompleteStmt:
+		if b.machine == nil {
+			return fmt.Errorf("EVT2_UNSUPPORTED_STATEMENT %T", stmt)
+		}
+		if s.Operation == "pop" {
+			return fmt.Errorf("EVT2_UNSUPPORTED_AUTOMATA_PUSH_POP")
+		}
+		if s.Kind != "neutral" || s.Value != nil {
+			return fmt.Errorf("EVT2_UNSUPPORTED_MACHINE_OUTCOME %s", s.Kind)
+		}
+		b.storeMachineCompleted(true, s.Span)
+		b.returnMachineResult("Completed", s.Span)
+	case *PushMachineStmt:
+		return fmt.Errorf("EVT2_UNSUPPORTED_AUTOMATA_PUSH_POP")
 	default:
 		return fmt.Errorf("EVT2_UNSUPPORTED_STATEMENT %T at %d:%d", stmt, stmt.statementSpan().Line, stmt.statementSpan().Column)
 	}
@@ -391,6 +450,12 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 	case *NameExpr:
 		v, ok := b.names[e.Name]
 		if !ok {
+			if b.machine != nil {
+				if id, found := b.machineFields[e.Name]; found {
+					v, typ := b.loadMachineField(id, e.Span)
+					return v, typ, nil
+				}
+			}
 			return 0, "", fmt.Errorf("EVT2_UNKNOWN_NAME %s", e.Name)
 		}
 		if v.array {
@@ -444,6 +509,16 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 			return 0, "", err
 		}
 		return b.emit(LIRInstruction{Op: "load", Result: 0, Type: t, Args: []int{addr}, Slot: -1, Source: e.Span}), t, nil
+	case *FieldExpr:
+		if b.machine == nil {
+			return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_EXPR %T", expr)
+		}
+		id, err := b.machineFieldID(e)
+		if err != nil {
+			return 0, "", err
+		}
+		v, typ := b.loadMachineField(id, e.Span)
+		return v, typ, nil
 	default:
 		return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_EXPR %T at %d:%d", expr, expr.exprSpan().Line, expr.exprSpan().Column)
 	}
