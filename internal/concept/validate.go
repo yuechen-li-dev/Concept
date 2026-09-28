@@ -2679,6 +2679,14 @@ func evt1EvalScopeFromValidation(scope *evt1Scope, env *semanticEnv) *evt1EvalSc
 }
 
 func validateExprAgainstExpected(env *semanticEnv, scope *evt1Scope, expr Expr, expected Type, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
+	if templateInfo != nil && expected.Kind == TypeConceptParam {
+		if literal, ok := expr.(*FloatLiteral); ok {
+			// The requirement establishes the open type; every closed instance
+			// rechecks the literal against its actual floating representation.
+			literal.ResolvedType = expected.valueType()
+			return expected.valueType(), nil
+		}
+	}
 	if evt1NumericRepresentation(expected) {
 		switch literal := expr.(type) {
 		case *IntLiteral:
@@ -4542,6 +4550,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		switch e.Op {
 		case "-":
+			if templateInfo != nil && evt1TypeDependsOnAnyParameter(valueType, templateInfo.Decl.Parameters) {
+				return evt1ValidateOpenRequiredOperator(env, templateInfo, "operator-", []Type{valueType}, e.Span)
+			}
 			if _, floating := evt1FloatRepresentationInfo(valueType); valueType.Name != "int" && !floating {
 				return Type{}, evt1Diagnostic("CV4028", "unary - requires int or a floating scalar", e.Span)
 			}
@@ -4701,8 +4712,13 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 				leftType.Quantity = nil
 			}
 		}
-		if templateInfo != nil && (evt1TypeDependsOnParam(leftType, templateInfo.Decl.TypeParam) || evt1TypeDependsOnParam(rightType, templateInfo.Decl.TypeParam)) {
-			return Type{}, evt1Diagnostic("CV4175", "dependent operators are not allowed in EVT1 M1B-B templates", e.Span)
+		if templateInfo != nil && (evt1TypeDependsOnAnyParameter(leftType, templateInfo.Decl.Parameters) || evt1TypeDependsOnAnyParameter(rightType, templateInfo.Decl.Parameters)) {
+			result, err := evt1ValidateOpenRequiredOperator(env, templateInfo, "operator"+e.Op, []Type{leftType, rightType}, e.Span)
+			if err != nil {
+				return Type{}, err
+			}
+			e.ResolvedType = result
+			return result, nil
 		}
 		if e.Op == "/" || e.Op == "%" {
 			if literal, ok := e.Right.(*IntLiteral); ok && literal.Magnitude == 0 {
@@ -7459,6 +7475,9 @@ func evt1ResultProvenanceFact(functionName string, summary evt1ResultProvenanceS
 }
 
 func evt1LookupRequiredOperation(env *semanticEnv, required OperationRequirement, span Span, prefix string) (FunctionDecl, error) {
+	if _, ok := evt1RequiredOperatorToken(required.Name); ok {
+		return evt1LookupBuiltinOperatorWitness(env, required, span, prefix)
+	}
 	if len(required.GenericParams) > 0 {
 		implementation, ok := env.templates[required.Name]
 		if !ok {
@@ -8511,7 +8530,7 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 	case *IntLiteral:
 		return &IntLiteral{Magnitude: e.Magnitude, Negative: e.Negative, Lexeme: e.Lexeme, ResolvedType: e.ResolvedType, Span: e.Span}, nil
 	case *FloatLiteral:
-		return &FloatLiteral{Value: e.Value, ResolvedType: e.ResolvedType, Span: e.Span}, nil
+		return &FloatLiteral{Value: e.Value, ResolvedType: evt1SubstituteType(e.ResolvedType, typeParam, concreteType), Span: e.Span}, nil
 	case *StringLiteral:
 		return &StringLiteral{Value: e.Value, Span: e.Span}, nil
 	case *BoolLiteral:

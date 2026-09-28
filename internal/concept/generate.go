@@ -1716,6 +1716,14 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 		if e.Tensor != nil {
 			fn.TensorOperations = append(fn.TensorOperations, *e.Tensor)
 		}
+		if templateInfo != nil {
+			if binding, ok := templateInfo.CallBindings[evt1SpanKey(e.Span)]; ok {
+				fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "requirement_operator", Detail: binding.Requirement.ID + " -> " + binding.Requirement.Operation.Name, SourceSpan: e.Span})
+				collectExprMIROps(env, e.Left, fn, templateInfo)
+				collectExprMIROps(env, e.Right, fn, templateInfo)
+				return
+			}
+		}
 		detail := e.Op
 		if e.UnitScaleDenominator != 0 {
 			detail = fmt.Sprintf("%s; exact dimensionless scale %d/%d", e.Op, e.UnitScaleNumerator, e.UnitScaleDenominator)
@@ -1724,6 +1732,13 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 		collectExprMIROps(env, e.Left, fn, templateInfo)
 		collectExprMIROps(env, e.Right, fn, templateInfo)
 	case *UnaryExpr:
+		if templateInfo != nil {
+			if binding, ok := templateInfo.CallBindings[evt1SpanKey(e.Span)]; ok {
+				fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "requirement_operator", Detail: binding.Requirement.ID + " -> " + binding.Requirement.Operation.Name, SourceSpan: e.Span})
+				collectExprMIROps(env, e.Value, fn, templateInfo)
+				return
+			}
+		}
 		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "unary", Detail: e.Op, SourceSpan: e.Span})
 		collectExprMIROps(env, e.Value, fn, templateInfo)
 	case *NameExpr:

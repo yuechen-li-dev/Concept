@@ -46,7 +46,7 @@ float<mm> Convert(float<m> distance) { return distance as float<mm>; }
 	for _, call := range []string{"Abs(distance)", "Min(distance, distance)", "Max(distance, distance)"} {
 		consumer := "module R8g.MathSafety; profile Core; import Standard.Math; float F(float<m> distance) { return " + call + "; }"
 		_, err := ParseWithSemanticModules("r8g_math_safety.concept", consumer, map[string][]byte{"Standard.Math": mathArtifact})
-		if err == nil || !strings.Contains(err.Error(), "CV4107") {
+		if err == nil || !strings.Contains(err.Error(), "CV4116") {
 			t.Fatalf("%s silently erased quantity through Standard.Math: %v", call, err)
 		}
 	}

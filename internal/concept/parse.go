@@ -2604,6 +2604,14 @@ func (p *parser) parseConceptRequirement(typeParam string) (ConceptRequirement, 
 	if err != nil {
 		return nil, err
 	}
+	if nameTok.Lexeme == "operator" {
+		switch p.peekLexeme() {
+		case "+", "-", "*", "/", "==", "!=", "<", ">", "<=", ">=":
+			nameTok.Lexeme += p.next().Lexeme
+		default:
+			return nil, evt1Diagnostic("CV4143", "expected supported required operator", p.currentSpan())
+		}
+	}
 	if p.peekLexeme() == ";" {
 		if async {
 			return nil, evt1Diagnostic("INTERFACE_ASYNC_METHOD_SIGNATURE_MISMATCH", "async is valid only on an interface method requirement", start.Span)

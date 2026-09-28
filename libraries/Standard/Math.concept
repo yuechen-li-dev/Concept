@@ -26,6 +26,28 @@ float Min(float left, float right) { return if (left < right) left else right; }
 float Max(float left, float right) { return if (left > right) left else right; }
 float Clamp(float value, float lower, float upper) { return Min(Max(value, lower), upper); }
 
+concept LessComparable<T> { requires bool operator<(T left, T right); }
+concept GreaterComparable<T> { requires bool operator>(T left, T right); }
+concept MagnitudeOrder<T>
+{
+    requires LessComparable<T>;
+    requires bool operator==(T left, T right);
+    requires T operator-(T value);
+}
+
+template <typename T> requires LessComparable<T>
+T Min(T left, T right) { return if (left < right) left else right; }
+template <typename T> requires GreaterComparable<T>
+T Max(T left, T right) { return if (left > right) left else right; }
+template <typename T> requires MagnitudeOrder<T>
+T Abs(T value)
+{
+    T zero = 0.0;
+    if (value == zero) { return zero; }
+    if (value < zero) { return -value; }
+    return value;
+}
+
 int Abs(int value) { return if (value < 0) 0 - value else value; }
 int Min(int left, int right) { return if (left < right) left else right; }
 int Max(int left, int right) { return if (left > right) left else right; }
