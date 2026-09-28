@@ -8,7 +8,7 @@ LLM readability is not the only readability target.
 
 Human reviewers should not have to read compressed TypeScript-like one-liners.
 
-This inventory is human process guidance. P21-M9 does not implement a formatter, does not add `concept fmt`, and does not mass-reformat the repository. A real formatting tool and formatter/linter policy are deferred.
+This inventory records the historical P21-M9 readability review for `.conception` fixtures. The active EVT1 compiler now provides `concept format` for `.concept` and `.concept_test`; see [R8 source trivia and formatting](design/R8-SOURCE-TRIVIA-AND-FORMAT.md). The older `.conception` inventory has not been mass-reformatted.
 
 ## Desired style
 
@@ -58,4 +58,4 @@ The table is intentionally representative rather than exhaustive. A full repo-wi
 
 ## Future formatter direction
 
-A future `concept fmt` should be designed explicitly rather than inferred from compressed historical fixtures. It should preserve semantic fixture expectations, avoid rewriting expected diagnostics accidentally, and probably start as an opt-in check over new/changed `.concept` and `.conception` files before becoming a whole-repository tool.
+The historical proposal used the spelling `concept fmt`. The EVT1 command is `concept format`, with `--check` for nonwriting verification. The active formatter does not select legacy `.conception` files.

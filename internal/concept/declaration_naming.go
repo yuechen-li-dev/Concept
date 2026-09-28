@@ -76,6 +76,13 @@ func declarationNameSuggestion(name, style string) string {
 		if len(runes) == 0 {
 			continue
 		}
+		// Segment acronyms as ordinary words, while retaining the interior
+		// capitals of an existing mixed-case identifier such as SomeLocal.
+		if len(parts) > 1 || strings.ToUpper(part) == part {
+			for index := range runes {
+				runes[index] = unicode.ToLower(runes[index])
+			}
+		}
 		if style == "PascalCase" || i > 0 {
 			runes[0] = unicode.ToUpper(runes[0])
 		} else {
