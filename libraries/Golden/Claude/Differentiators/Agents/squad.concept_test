@@ -1,0 +1,72 @@
+module Golden.Claude.Differentiators.Agents.SquadTests;
+profile Core;
+import Golden.Claude.Differentiators.Agents.Squad;
+
+Observation Scene(float threat, float health, float cover, int rounds)
+{
+    return Observation{threat, health, cover, rounds};
+}
+
+[[fact]]
+void AnArmedAgentUnderThreatEngages()
+{
+    Assert.True(Choose(Scene(0.9, 0.9, 0.2, 3), Policy::Patrol, 0) == Policy::Engage, "threat and ammunition");
+}
+
+[[fact]]
+void WithoutAmmunitionEngageIsNotAnOption()
+{
+    Assert.True(Choose(Scene(0.9, 0.9, 0.9, 0), Policy::Patrol, 0) != Policy::Engage, "the when-clause removes it");
+}
+
+[[fact]]
+void AWoundedAgentRetreats()
+{
+    Assert.True(Choose(Scene(0.8, 0.1, 0.1, 0), Policy::Patrol, 0) == Policy::Retreat, "low health");
+}
+
+[[fact]]
+void ACalmSceneMeansPatrol()
+{
+    Assert.True(Choose(Scene(0.0, 1.0, 0.2, 0), Policy::Engage, 0) == Policy::Patrol, "nothing to react to");
+}
+
+[[fact]]
+void HoldingAPolicyResistsAMarginalChange()
+{
+    // Retreat scores 1.6 * 0.15 + 0.3 * 0.1 = 0.27 against Patrol's 0.2: a
+    // fresh agent retreats, but one holding Patrol keeps patrolling.
+    Observation marginal = Scene(0.1, 0.85, 0.0, 0);
+    Assert.True(Choose(marginal, Policy::Patrol, 0) == Policy::Retreat, "no hold: the higher score wins");
+    Assert.True(Choose(marginal, Policy::Patrol, 1) == Policy::Patrol, "holding: the bonus keeps patrol");
+}
+
+[[fact]]
+void OutOfRangeSensorValuesAreClamped()
+{
+    Assert.True(Choose(Scene(7.0, -3.0, 0.0, 0), Policy::Patrol, 0) == Policy::Retreat, "same answer as threat 1, health 0");
+}
+
+[[fact]]
+void AnEngagementFiresOnceThenDecidesAgain()
+{
+    instance Soldier fighter(Scene(0.9, 0.9, 0.2, 3), Policy::Patrol, 0, 0, 0);
+    for (s in 0..4) { Step(fighter, Act); }
+    Assert.Equals(fighter.state.shots, 1, "decide, aim, fire, recover: one shot");
+    Assert.Equals(fighter.state.seen.rounds, 2, "one round spent");
+}
+
+[[fact]]
+void PatrolPersistsForItsHoldThenReconsiders()
+{
+    instance Soldier scout(Scene(0.0, 1.0, 0.2, 0), Policy::Engage, 0, 0, 0);
+    for (s in 0..4) { Step(scout, Act); }
+    Assert.True(scout.state.policy == Policy::Patrol, "switched to patrol");
+    Assert.Equals(scout.state.patrolLegs, CommitTicks, "walked exactly the committed legs");
+}
+
+[[fact]]
+void ScoringIsAllocationFree()
+{
+    Assert.Concept<NoAllocation>(Choose, "fixed scalar inference");
+}

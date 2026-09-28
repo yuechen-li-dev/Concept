@@ -1,0 +1,66 @@
+module Golden.Claude.Differentiators.Compiler.IRTools;
+profile Core;
+import Golden.Claude.Differentiators.Compiler.IR;
+
+// Slot censuses generated from the IR schema, and a verifier built on them.
+
+generator <typename T> DeriveOperandCount
+int OperandCount(ref const T instruction)
+{
+    int used = 0;
+    for (FieldInfo field in Fields<T>(operand))
+    {
+        if (instruction.field.value >= 0) { used++; }
+    }
+    return used;
+}
+
+generator <typename T> DeriveSuccessorCount
+int SuccessorCount(ref const T instruction)
+{
+    int used = 0;
+    for (FieldInfo field in Fields<T>(successor))
+    {
+        if (instruction.field.value >= 0) { used++; }
+    }
+    return used;
+}
+
+derive DeriveOperandCount reflect<Instruction>;
+derive DeriveSuccessorCount reflect<Instruction>;
+
+// A pass the verifier relies on must come from the schema, not be written by
+// hand, and must not allocate.
+concept SchemaDerivedPass<declaration F>
+{
+    requires compiler.Generated(F);
+    requires compiler.NoAllocation(F);
+}
+
+requires SchemaDerivedPass<declaration OperandCount>;
+requires SchemaDerivedPass<declaration SuccessorCount>;
+
+record struct Shape
+{
+    int operands;
+    int successors;
+}
+
+Shape ShapeOf(Opcode opcode)
+{
+    return match (opcode)
+    {
+        Opcode::Constant => Shape{0, 0},
+        Opcode::Add => Shape{2, 0},
+        Opcode::Jump => Shape{0, 1},
+        Opcode::Branch => Shape{1, 2},
+        Opcode::Return => Shape{1, 0},
+    };
+}
+
+bool WellFormed(ref const Instruction instruction)
+{
+    Shape expected = ShapeOf(instruction.opcode);
+    return OperandCount(ref const instruction) == expected.operands
+        and SuccessorCount(ref const instruction) == expected.successors;
+}

@@ -1,0 +1,151 @@
+module Golden.Claude.Storage.PageCache;
+profile Core;
+import Standard.Collection.Stores;
+
+// An eight-frame buffer pool of 256-byte pages. Callers hold generational
+// handles, so a handle to an evicted page fails cleanly instead of reading
+// whatever page later reused the frame.
+//
+// Eviction rules: a pinned page is in use and a dirty page has unsaved bytes;
+// neither may leave. WriteBack is the only way a page becomes clean.
+
+comptime int Frames = 8;
+// Template arguments cannot name a comptime constant yet, so the store type
+// spells the literal. Keep it equal to Frames. (docs/examples/CLAUDE-GOLDENS.md, F6)
+comptime int PageBytes = 256;
+
+enum CacheError
+{
+    Full,
+    StaleHandle,
+    OffsetOutOfRange,
+    Pinned,
+    Dirty,
+    NotPinned
+}
+
+struct Page
+{
+    int filePage;
+    uint8[PageBytes] bytes;
+    bool dirty;
+    int pins;
+}
+
+struct PageCache
+{
+    GenerationalStore<Page, 8> frames;
+    int resident;
+    int writeBacks;
+}
+
+PageCache NewCache()
+{
+    return PageCache{MakeGenerationalStore<Page, 8>(), 0, 0};
+}
+
+// The single place a handle is judged. Borrowing through a remapped Result
+// loses the borrow's provenance (CV4522), so callers check residency here and
+// then borrow directly; the `!` after a successful check cannot fire.
+Result<void, CacheError> Resident(ref const PageCache cache, GenerationalId<Page> id)
+{
+    if (not Contains<Page, 8>(ref const cache.frames, id))
+    {
+        return Result::Error(CacheError::StaleHandle);
+    }
+    return Result::Ok();
+}
+
+Result<void, CacheError> CheckOffset(int offset)
+{
+    if (offset < 0 or offset >= PageBytes)
+    {
+        return Result::Error(CacheError::OffsetOutOfRange);
+    }
+    return Result::Ok();
+}
+
+Result<GenerationalId<Page>, CacheError> Load(ref PageCache cache, int filePage)
+{
+    Page page = Page{filePage, [0 ... PageBytes], false, 0};
+    match (Insert<Page, 8>(ref cache.frames, move page))
+    {
+        Result::Ok(id) => {
+            cache.resident += 1;
+            return Result::Ok(id);
+        }
+        Result::Error(error) => { return Result::Error(CacheError::Full); }
+    }
+}
+requires compiler.InvalidatesBorrows(Load, cache);
+
+Result<uint8, CacheError> Read(ref const PageCache cache, GenerationalId<Page> id, int offset)
+{
+    CheckOffset(offset)?;
+    Resident(ref const cache, id)?;
+    ref const Page page = GenerationalGet<Page, 8>(ref const cache.frames, id)!;
+    return Result::Ok(page.bytes[offset]);
+}
+
+Result<void, CacheError> Write(ref PageCache cache, GenerationalId<Page> id, int offset, uint8 value)
+{
+    CheckOffset(offset)?;
+    Resident(ref const cache, id)?;
+    ref Page page = GenerationalGetMutable<Page, 8>(ref cache.frames, id)!;
+    page.bytes[offset] = value;
+    page.dirty = true;
+    return Result::Ok();
+}
+
+// Stands in for flushing the page to its file; afterwards it is clean.
+Result<void, CacheError> WriteBack(ref PageCache cache, GenerationalId<Page> id)
+{
+    Resident(ref const cache, id)?;
+    ref Page page = GenerationalGetMutable<Page, 8>(ref cache.frames, id)!;
+    if (page.dirty)
+    {
+        page.dirty = false;
+        cache.writeBacks += 1;
+    }
+    return Result::Ok();
+}
+
+Result<void, CacheError> Pin(ref PageCache cache, GenerationalId<Page> id)
+{
+    Resident(ref const cache, id)?;
+    ref Page page = GenerationalGetMutable<Page, 8>(ref cache.frames, id)!;
+    page.pins += 1;
+    return Result::Ok();
+}
+
+Result<void, CacheError> Unpin(ref PageCache cache, GenerationalId<Page> id)
+{
+    Resident(ref const cache, id)?;
+    ref Page page = GenerationalGetMutable<Page, 8>(ref cache.frames, id)!;
+    if (page.pins == 0)
+    {
+        return Result::Error(CacheError::NotPinned);
+    }
+    page.pins -= 1;
+    return Result::Ok();
+}
+
+Result<void, CacheError> Evict(ref PageCache cache, GenerationalId<Page> id)
+{
+    {
+        Resident(ref const cache, id)?;
+    ref Page page = GenerationalGetMutable<Page, 8>(ref cache.frames, id)!;
+        if (page.pins > 0)
+        {
+            return Result::Error(CacheError::Pinned);
+        }
+        if (page.dirty)
+        {
+            return Result::Error(CacheError::Dirty);
+        }
+    }
+    Remove<Page, 8>(ref cache.frames, id)!;
+    cache.resident -= 1;
+    return Result::Ok();
+}
+requires compiler.InvalidatesBorrows(Evict, cache);

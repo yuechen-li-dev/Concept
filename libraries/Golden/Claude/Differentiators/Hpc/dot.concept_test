@@ -1,0 +1,56 @@
+module Golden.Claude.Differentiators.Hpc.DotTests;
+profile Core;
+import Golden.Claude.Differentiators.Hpc.Dot;
+
+[[fact]]
+void BothWidthsAgreeWhenNothingRounds()
+{
+    float[4] a = [1.0, 2.0, 3.0, 4.0];
+    float[4] b = [4.0, 3.0, 2.0, 1.0];
+    double[4] c = [1.0, 2.0, 3.0, 4.0];
+    double[4] d = [4.0, 3.0, 2.0, 1.0];
+    Assert.True(Dot4<float>(ReadOnlySpan(a), ReadOnlySpan(b))! == 20.0, "binary32");
+    double twenty = 20.0;
+    Assert.True(Dot4<double>(ReadOnlySpan(c), ReadOnlySpan(d))! == twenty, "binary64");
+}
+
+// Products 1e8, 1, -1e8, 1. Near 1e8, binary32 values are 8 apart, so
+// pairwise binary32 absorbs each 1 into its big neighbour and returns 0;
+// binary64 represents 1e8 + 1 exactly and returns 2. The order is observable,
+// which is why it is a stated policy.
+[[fact]]
+void AdditionOrderIsVisibleInBinary32()
+{
+    float[4] big = [100000000.0, 1.0, -100000000.0, 1.0];
+    float[4] ones = [1.0, 1.0, 1.0, 1.0];
+    Assert.True(Dot4<float>(ReadOnlySpan(big), ReadOnlySpan(ones))! == 0.0, "pairwise binary32 loses both ones");
+    // Unary minus loses the literal's context type, hence the one cast.
+    double[4] wide = [100000000.0, 1.0, -100000000.0 as double, 1.0];
+    double[4] unit = [1.0, 1.0, 1.0, 1.0];
+    double two = 2.0;
+    Assert.True(Dot4<double>(ReadOnlySpan(wide), ReadOnlySpan(unit))! == two, "binary64 keeps them");
+}
+
+[[fact]]
+void TheGenericKernelMatchesTheHandWrittenOne()
+{
+    float[4] a = [0.5, -1.25, 3.0, 8.0];
+    float[4] b = [2.0, 4.0, -0.5, 0.125];
+    Assert.True(Dot4<float>(ReadOnlySpan(a), ReadOnlySpan(b))! == Dot4Float(ReadOnlySpan(a), ReadOnlySpan(b)), "same order, same bits");
+}
+
+[[fact]]
+void OnlyFourLaneInputsAreAccepted()
+{
+    float[3] short = [1.0, 2.0, 3.0];
+    float[4] full = [1.0, 2.0, 3.0, 4.0];
+    Assert.Error(Dot4<float>(ReadOnlySpan(short), ReadOnlySpan(full)), "three lanes");
+}
+
+[[fact]]
+void BothWidthsAreFloatingAndHeapFree()
+{
+    Assert.Concept<Floating>(float, "binary32 satisfies the contract");
+    Assert.Concept<Floating>(double, "binary64 satisfies the contract");
+    Assert.Concept<NoAllocation>(Dot4Float, "spans over caller storage");
+}

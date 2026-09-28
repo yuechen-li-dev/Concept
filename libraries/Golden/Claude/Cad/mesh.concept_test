@@ -1,0 +1,93 @@
+module Golden.Claude.Cad.MeshTests;
+profile Core;
+import Golden.Claude.Cad.Mesh;
+import Standard.Collection.Stores;
+
+// A 3-4-5 right triangle and its mirror image, plus a sliver.
+struct Fixture
+{
+    Mesh mesh;
+    Id<Face> ccw;
+    Id<Face> cw;
+    Id<Face> sliver;
+}
+
+Fixture RightTriangles()
+{
+    Mesh mesh = NewMesh();
+    float<m> zero = 0.0;
+    float<m> three = 3.0;
+    float<m> four = 4.0;
+    Id<Point> origin = AddPoint(ref mesh, zero, zero)!;
+    Id<Point> east = AddPoint(ref mesh, four, zero)!;
+    Id<Point> north = AddPoint(ref mesh, zero, three)!;
+    Id<Face> ccw = AddFace(ref mesh, origin, east, north)!;
+    Id<Face> cw = AddFace(ref mesh, origin, north, east)!;
+    Id<Face> sliver = AddFace(ref mesh, origin, east, east)!;
+    return Fixture{move mesh, ccw, cw, sliver};
+}
+
+[[fact]]
+void WindingDecidesTheSignOfTheArea()
+{
+    Fixture f = RightTriangles();
+    Triangle ccw = TriangleOf(ref const f.mesh, f.ccw)!;
+    Triangle cw = TriangleOf(ref const f.mesh, f.cw)!;
+    Assert.Near(Magnitude(SignedDoubleArea(ccw)), 12.0, 0.0001, "twice 6 m^2");
+    Assert.Near(Magnitude(SignedDoubleArea(cw)), -12.0, 0.0001, "same triangle, reversed winding");
+    Assert.True(OrientationOf(ccw) == Orientation::CounterClockwise, "ccw");
+    Assert.True(OrientationOf(cw) == Orientation::Clockwise, "cw");
+}
+
+[[fact]]
+void ARepeatedVertexIsDegenerateNotAnError()
+{
+    Fixture f = RightTriangles();
+    Assert.True(OrientationOf(TriangleOf(ref const f.mesh, f.sliver)!) == Orientation::Degenerate, "zero area");
+    Census census = TakeCensus(ref const f.mesh)!;
+    Assert.Equals(census.counterClockwise, 1, "one ccw face");
+    Assert.Equals(census.clockwise, 1, "one cw face");
+    Assert.Equals(census.degenerate, 1, "one sliver");
+}
+
+[[fact]]
+void CentroidIsTheVertexMean()
+{
+    Fixture f = RightTriangles();
+    Point c = Centroid(TriangleOf(ref const f.mesh, f.ccw)!);
+    Assert.Near(Magnitude(c.x), 4.0 / 3.0, 0.0001, "x");
+    Assert.Near(Magnitude(c.y), 1.0, 0.0001, "y");
+}
+
+[[fact]]
+void BoundsCoverEveryPoint()
+{
+    Fixture f = RightTriangles();
+    Bounds box = BoundsOf(ref const f.mesh)!;
+    Assert.Near(Magnitude(box.low.x), 0.0, 0.0001, "min x");
+    Assert.Near(Magnitude(box.high.x), 4.0, 0.0001, "max x");
+    Assert.Near(Magnitude(box.high.y), 3.0, 0.0001, "max y");
+}
+
+[[fact]]
+void AnEmptyMeshHasNoBounds()
+{
+    Mesh mesh = NewMesh();
+    Assert.Error(BoundsOf(ref const mesh), "nothing to bound");
+}
+
+[[fact]]
+void AFaceIdFromNowhereIsReportedNotTrusted()
+{
+    Fixture f = RightTriangles();
+    Id<Face> bogus = Id<Face>{50};
+    Assert.Error(TriangleOf(ref const f.mesh, bogus), "no such face");
+}
+
+[[fact]]
+void GeometryQueriesAllocateNothing()
+{
+    Assert.Concept<NoAllocation>(TriangleOf, "value copies from dense stores");
+    Assert.Concept<NoAllocation>(TakeCensus, "bounded traversal");
+    Assert.Concept<NoAllocation>(BoundsOf, "bounded traversal");
+}

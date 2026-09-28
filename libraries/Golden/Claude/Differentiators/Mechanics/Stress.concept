@@ -1,0 +1,73 @@
+module Golden.Claude.Differentiators.Mechanics.Stress;
+profile Core;
+
+// Plane stress at a point, and its components in a rotated frame:
+//     rotated[i, j] = R[i, k] * stress[k, l] * R[j, l]
+// A rotation changes the components but not the physics, so the trace and
+// determinant (the two invariants of a 2x2 symmetric tensor) must survive it.
+
+enum StressError
+{
+    NotARotation
+}
+
+record struct PlaneStress
+{
+    double<Pa> xx;
+    double<Pa> yy;
+    double<Pa> xy;
+}
+
+// Direction cosines of the new axes; checked to be a proper rotation.
+record struct Rotation
+{
+    double c;
+    double s;
+}
+
+Result<Rotation, StressError> RotationFrom(double c, double s)
+{
+    // Float literals only take their type from a direct initializer, so the
+    // constants are named locals rather than inline (see docs/examples/CLAUDE-GOLDENS.md, F1).
+    double one = 1.0;
+    double tolerance = 0.000000001;
+    double drift = c * c + s * s - one;
+    if (drift > tolerance or drift < -tolerance)
+    {
+        return Result::Error(StressError::NotARotation);
+    }
+    return Result::Ok(Rotation{c, s});
+}
+
+// A sensor reports raw doubles that are pascals by contract; this is the one
+// place that contract is stated.
+PlaneStress FromSensor(double normalX, double normalY, double shear)
+{
+    return PlaneStress{interpret normalX as double<Pa>, interpret normalY as double<Pa>, interpret shear as double<Pa>};
+}
+
+PlaneStress Rotate(PlaneStress s, Rotation r)
+{
+    tensor<double> frame[2, 2] = [[r.c, r.s], [-r.s, r.c]];
+    tensor<double<Pa>> stress[2, 2] = [[s.xx, s.xy], [s.xy, s.yy]];
+    double<Pa> zero = 0.0;
+    tensor<double<Pa>> rotated[2, 2] = zero;
+    rotated[i, j] = frame[i, k] * stress[k, l] * frame[j, l];
+    return PlaneStress{rotated[0, 0], rotated[1, 1], rotated[0, 1]};
+}
+
+double<Pa> Trace(PlaneStress s)
+{
+    return s.xx + s.yy;
+}
+
+double<Pa^2> Determinant(PlaneStress s)
+{
+    return s.xx * s.yy - s.xy * s.xy;
+}
+
+// Display precision is a deliberate, visible narrowing.
+float<Pa> ForDisplay(double<Pa> value)
+{
+    return value as float<Pa>;
+}

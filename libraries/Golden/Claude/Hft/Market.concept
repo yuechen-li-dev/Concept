@@ -1,0 +1,153 @@
+module Golden.Claude.Hft.Market;
+profile Core;
+import Standard.Synchronization.Atomic;
+import Standard.Machine.AMD64;
+
+// Single-producer/single-consumer quote ring between a feed handler and a
+// signal calculator.
+//
+// Sequence numbers run over [0, 2 * Capacity) rather than growing forever:
+// AtomicInt is a signed 32-bit value and Concept traps on signed overflow, so
+// an ever-increasing counter would panic after 2^31 events. Using twice the
+// capacity keeps "empty" (head == tail) and "full" (distance == Capacity)
+// distinguishable without a spare slot.
+
+comptime int Capacity = 64;
+comptime int SequenceSpan = 128;
+
+record struct Quote
+{
+    int symbol;
+    int priceTicks;
+    uint64 timestamp;
+}
+
+enum MarketError
+{
+    QueueFull,
+    NonPositivePrice
+}
+
+struct QuoteRing
+{
+    Quote[Capacity] slots;
+    AtomicInt head;
+    AtomicInt tail;
+}
+
+struct Signal
+{
+    int lastPrice;
+    int lastDelta;
+    int accepted;
+    int rejected;
+}
+
+record struct FeedContext {}
+record struct SignalContext {}
+
+QuoteRing NewRing()
+{
+    Quote blank = Quote{0, 0, 0};
+    Quote[Capacity] slots = [blank ... Capacity];
+    return QuoteRing{slots, AtomicInt{0}, AtomicInt{0}};
+}
+
+Signal NewSignal()
+{
+    return Signal{0, 0, 0, 0};
+}
+
+int NextSequence(int sequence)
+{
+    return (sequence + 1) % SequenceSpan;
+}
+
+int Distance(int head, int tail)
+{
+    return (tail - head + SequenceSpan) % SequenceSpan;
+}
+
+Quote Stamp(int symbol, int priceTicks)
+{
+    return Quote{symbol, priceTicks, ReadTimestamp()};
+}
+
+// The producer owns tail; it reads head with Acquire to see freed slots and
+// publishes the written slot with a Release store of tail.
+[[execution_context(FeedContext)]]
+[[semantic_access("Publish", ring)]]
+Result<void, MarketError> Publish(ref QuoteRing ring, Quote quote)
+{
+    int tail = LoadAtomic(ref ring.tail, MemoryOrder::Relaxed);
+    int head = LoadAtomic(ref ring.head, MemoryOrder::Acquire);
+    if (Distance(head, tail) == Capacity)
+    {
+        return Result::Error(MarketError::QueueFull);
+    }
+    ring.slots[tail % Capacity] = quote;
+    StoreAtomic(ref ring.tail, NextSequence(tail), MemoryOrder::Release);
+    return Result::Ok();
+}
+
+// The consumer owns head; the mirror image of Publish.
+[[execution_context(SignalContext)]]
+[[semantic_access("Consume", ring)]]
+Option<Quote> Consume(ref QuoteRing ring)
+{
+    int head = LoadAtomic(ref ring.head, MemoryOrder::Relaxed);
+    int tail = LoadAtomic(ref ring.tail, MemoryOrder::Acquire);
+    if (head == tail)
+    {
+        return Option::None;
+    }
+    Quote quote = ring.slots[head % Capacity];
+    StoreAtomic(ref ring.head, NextSequence(head), MemoryOrder::Release);
+    return Option::Some(quote);
+}
+
+[[execution_context(SignalContext)]]
+int Pending(ref const QuoteRing ring)
+{
+    return Distance(LoadAtomic(ref const ring.head, MemoryOrder::Relaxed), LoadAtomic(ref const ring.tail, MemoryOrder::Acquire));
+}
+
+Result<Quote, MarketError> Validate(Quote quote)
+{
+    if (quote.priceTicks <= 0)
+    {
+        return Result::Error(MarketError::NonPositivePrice);
+    }
+    return Result::Ok(quote);
+}
+
+void Observe(ref Signal signal, Quote quote)
+{
+    match (Validate(quote))
+    {
+        Result::Ok(valid) => {
+            if (signal.accepted > 0)
+            {
+                signal.lastDelta = valid.priceTicks - signal.lastPrice;
+            }
+            signal.lastPrice = valid.priceTicks;
+            signal.accepted += 1;
+        }
+        Result::Error(error) => { signal.rejected += 1; }
+    }
+}
+
+// Processes at most `budget` quotes, and never more than one ring's worth per
+// call, so a fast feed cannot starve the caller. Only this context consumes,
+// so a non-zero Pending() cannot become empty before Consume runs.
+[[execution_context(SignalContext)]]
+int DrainInto(ref QuoteRing ring, ref Signal signal, int budget)
+{
+    int processed = 0;
+    while (processed < budget and Pending(ref const ring) > 0) bounded(Capacity)
+    {
+        Observe(ref signal, Consume(ref ring)!);
+        processed += 1;
+    }
+    return processed;
+}

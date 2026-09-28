@@ -1,0 +1,82 @@
+module Golden.Claude.Differentiators.Async.Journal;
+profile Core;
+
+// A journal transfer: fetch a record, transform it, commit it. The request
+// is owned by the task and lives in its inline frame across both awaits; an
+// error at either stage ends the task without running the rest.
+
+comptime int StepBudget = 8;
+
+enum JournalError
+{
+    Missing,
+    Full,
+    Stalled
+}
+
+struct Request
+{
+    int sequence;
+    int value;
+}
+
+void Drop(owned Request request) { }
+
+async Result<int, JournalError> Fetch(int sequence)
+{
+    if (sequence < 0)
+    {
+        return Result::Error(JournalError::Missing);
+    }
+    return Result::Ok(sequence * 2);
+}
+
+async Result<int, JournalError> Commit(int value)
+{
+    if (value > 100)
+    {
+        return Result::Error(JournalError::Full);
+    }
+    return Result::Ok(value + 1);
+}
+
+[[must_use]]
+async Result<int, JournalError> Transfer(int sequence)
+{
+    owned Request request = Request{sequence, 0};
+    request.value = await Fetch(request.sequence)?;
+    request.value += 1;
+    int receipt = await Commit(request.value)?;
+    return Result::Ok(receipt);
+}
+
+// Steps the transfer at most `budget` times. A bounded loop simply stops at
+// its bound, so completion is checked explicitly rather than assumed:
+// reading the result of an unfinished task would panic.
+Result<int, JournalError> RunWithin(int sequence, int budget)
+{
+    Async<Result<int, JournalError>> task = Transfer(sequence);
+    int steps = 0;
+    while (not Complete(task) and steps < budget) bounded(StepBudget)
+    {
+        Step(task);
+        steps += 1;
+    }
+    if (not Complete(task))
+    {
+        return Result::Error(JournalError::Stalled);
+    }
+    return Result(task);
+}
+
+Result<int, JournalError> Run(int sequence)
+{
+    return RunWithin(sequence, StepBudget);
+}
+
+// Telemetry is best effort: its outcome must not affect the caller, and the
+// code says so.
+void RecordTelemetry(int sequence)
+{
+    discard Run(sequence);
+}

@@ -1,0 +1,167 @@
+module Golden.Claude.Compiler.Postfix;
+profile Core;
+import Standard.Collection.Stores;
+
+// Parses a postfix token stream into an expression tree stored in a dense
+// arena, then evaluates it. Nodes are appended only after their operands, so
+// arena order is already a valid bottom-up evaluation order.
+
+enum Operator
+{
+    Plus,
+    Times
+}
+
+// Enums have no fixed element geometry yet, so a Span cannot carry a struct
+// that contains one (CV4601). Tokens therefore hold a compact code; Number, Op
+// and OperatorIn are the only places that know the encoding.
+struct Token
+{
+    int code;
+    int number;
+}
+
+comptime int NumberCode = 0;
+comptime int PlusCode = 1;
+comptime int TimesCode = 2;
+
+enum Expr
+{
+    Literal(int value),
+    Binary(Operator op, Id<Expr> left, Id<Expr> right)
+}
+
+enum ParseError
+{
+    EmptyInput,
+    MissingOperand,
+    LeftoverOperands,
+    TooDeep,
+    OutOfNodes
+}
+
+struct Parser
+{
+    DenseStore<Expr, 64> nodes;
+    Id<Expr>[64] stack;
+    int depth;
+}
+
+Token Number(int value)
+{
+    return Token{NumberCode, value};
+}
+
+Token Op(Operator op)
+{
+    int code = match (op)
+    {
+        Operator::Plus => PlusCode,
+        Operator::Times => TimesCode,
+    };
+    return Token{code, 0};
+}
+
+Option<Operator> OperatorIn(Token token)
+{
+    if (token.code == PlusCode) { return Option::Some(Operator::Plus); }
+    if (token.code == TimesCode) { return Option::Some(Operator::Times); }
+    return Option::None;
+}
+
+Parser NewParser()
+{
+    Id<Expr>[64] stack = [Id<Expr>{0} ... 64];
+    return Parser{MakeDenseStore<Expr, 64>(), stack, 0};
+}
+
+Result<Id<Expr>, ParseError> AddNode(ref Parser parser, Expr node)
+{
+    match (Append<Expr, 64>(ref parser.nodes, node))
+    {
+        Result::Ok(id) => { return Result::Ok(id); }
+        Result::Error(error) => { return Result::Error(ParseError::OutOfNodes); }
+    }
+}
+requires compiler.InvalidatesBorrows(AddNode, parser);
+
+Result<void, ParseError> Push(ref Parser parser, Id<Expr> id)
+{
+    if (parser.depth == 64)
+    {
+        return Result::Error(ParseError::TooDeep);
+    }
+    parser.stack[parser.depth] = id;
+    parser.depth += 1;
+    return Result::Ok();
+}
+
+Result<Id<Expr>, ParseError> Pop(ref Parser parser)
+{
+    if (parser.depth == 0)
+    {
+        return Result::Error(ParseError::MissingOperand);
+    }
+    parser.depth -= 1;
+    return Result::Ok(parser.stack[parser.depth]);
+}
+
+Result<void, ParseError> Shift(ref Parser parser, Token token)
+{
+    match (OperatorIn(token))
+    {
+        Option::None => {
+            Id<Expr> leaf = AddNode(ref parser, Expr::Literal(token.number))?;
+            return Push(ref parser, leaf);
+        }
+        Option::Some(op) => {
+            Id<Expr> right = Pop(ref parser)?;
+            Id<Expr> left = Pop(ref parser)?;
+            Id<Expr> node = AddNode(ref parser, Expr::Binary(op, left, right))?;
+            return Push(ref parser, node);
+        }
+    }
+}
+requires compiler.InvalidatesBorrows(Shift, parser);
+
+Result<Id<Expr>, ParseError> Parse(ref Parser parser, ReadOnlySpan<Token> tokens)
+{
+    for (token in tokens)
+    {
+        Shift(ref parser, token)?;
+    }
+    if (parser.depth == 0)
+    {
+        return Result::Error(ParseError::EmptyInput);
+    }
+    if (parser.depth > 1)
+    {
+        return Result::Error(ParseError::LeftoverOperands);
+    }
+    return Result::Ok(parser.stack[0]);
+}
+requires compiler.InvalidatesBorrows(Parse, parser);
+
+int Apply(Operator op, int left, int right)
+{
+    return match (op)
+    {
+        Operator::Plus => left + right,
+        Operator::Times => left * right,
+    };
+}
+
+int Evaluate(ref const Parser parser, Id<Expr> root)
+{
+    int[64] value = [0 ... 64];
+    for (i in 0..Count<Expr, 64>(ref const parser.nodes))
+    {
+        Id<Expr> id = IdAt<Expr, 64>(ref const parser.nodes, i)!;
+        value[i] = match (DenseGet<Expr, 64>(ref const parser.nodes, id)!)
+        {
+            Expr::Literal(number) => number,
+            Expr::Binary(op, left, right) => Apply(op, value[left.index], value[right.index]),
+        };
+    }
+    return value[root.index];
+}

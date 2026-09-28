@@ -1,0 +1,85 @@
+module Golden.Claude.Differentiators.Mechanics.StressTests;
+profile Core;
+import Golden.Claude.Differentiators.Mechanics.Stress;
+
+PlaneStress Sample()
+{
+    // Float literals are not typed from a double parameter, so name them.
+    double normalX = 10.0;
+    double normalY = 20.0;
+    double shear = 2.0;
+    return FromSensor(normalX, normalY, shear);
+}
+
+Rotation QuarterTurn()
+{
+    double c = 0.0;
+    double s = 1.0;
+    return RotationFrom(c, s)!;
+}
+
+Rotation ThreeFourFive()
+{
+    double c = 0.8;
+    double s = 0.6;
+    return RotationFrom(c, s)!;
+}
+
+// Assert.Near does not accept double, and float literals do not adapt to a
+// double operand, hence the helper and the `as double` at each call.
+bool Close(double actual, double expected)
+{
+    double tolerance = 0.0001;
+    double difference = actual - expected;
+    return difference < tolerance and difference > -tolerance;
+}
+
+[[fact]]
+void AQuarterTurnSwapsTheNormalsAndFlipsTheShear()
+{
+    PlaneStress turned = Rotate(Sample(), QuarterTurn());
+    Assert.True(Close(Magnitude(turned.xx), 20.0 as double), "old y-normal is the new x-normal");
+    Assert.True(Close(Magnitude(turned.yy), 10.0 as double), "and vice versa");
+    Assert.True(Close(Magnitude(turned.xy), -2.0 as double), "shear changes sign");
+}
+
+// cos = 4/5, sin = 3/5 is an exact rotation, so the expected components are
+// exact decimals.
+[[fact]]
+void AThreeFourFiveRotationMatchesTheClosedForm()
+{
+    PlaneStress r = Rotate(Sample(), ThreeFourFive());
+    Assert.True(Close(Magnitude(r.xx), 15.52 as double), "c^2 xx + 2cs xy + s^2 yy");
+    Assert.True(Close(Magnitude(r.yy), 14.48 as double), "s^2 xx - 2cs xy + c^2 yy");
+    Assert.True(Close(Magnitude(r.xy), 5.36 as double), "cs (yy - xx) + (c^2 - s^2) xy");
+}
+
+[[fact]]
+void RotationPreservesBothInvariants()
+{
+    PlaneStress before = Sample();
+    PlaneStress after = Rotate(before, ThreeFourFive());
+    Assert.True(Close(Magnitude(Trace(after)), Magnitude(Trace(before))), "trace: 30 Pa either way");
+    Assert.True(Close(Magnitude(Determinant(after)), Magnitude(Determinant(before))), "determinant: 196 Pa^2 either way");
+}
+
+[[fact]]
+void AScaledFrameIsNotARotation()
+{
+    double one = 1.0;
+    Assert.Error(RotationFrom(one, one), "stretches as well as turns");
+}
+
+[[fact]]
+void PascalsAndNewtonsPerSquareMetreAreTheSameDimension()
+{
+    double<Pa> pressure = Sample().xx;
+    double<N / m ^ 2> same = pressure as double<N / m ^ 2>;
+    Assert.Concept<SameDimension>(pressure, same, "a unit change, not a dimension change");
+}
+
+[[fact]]
+void RotationNeedsNoHeap()
+{
+    Assert.Concept<NoAllocation>(Rotate, "fixed 2x2 tensors");
+}

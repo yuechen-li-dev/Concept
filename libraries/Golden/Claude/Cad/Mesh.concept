@@ -1,0 +1,177 @@
+module Golden.Claude.Cad.Mesh;
+profile Core;
+import Standard.Collection.Stores;
+
+// A 2D triangle mesh in metres. Faces refer to vertices by typed ID, so a
+// face can never point at another face or at a raw array slot.
+//
+// Degenerate (zero-area) triangles are a geometric fact about the input, not
+// a failure, so they are reported as an Orientation rather than an error.
+
+comptime float<m^2> AreaTolerance = 0.000001;
+
+enum MeshError
+{
+    MissingVertex,
+    MissingFace,
+    Empty,
+    Full
+}
+
+enum Orientation
+{
+    CounterClockwise,
+    Clockwise,
+    Degenerate
+}
+
+record struct Point
+{
+    float<m> x;
+    float<m> y;
+}
+
+record struct Face
+{
+    Id<Point> a;
+    Id<Point> b;
+    Id<Point> c;
+}
+
+record struct Triangle
+{
+    Point a;
+    Point b;
+    Point c;
+}
+
+record struct Bounds
+{
+    Point low;
+    Point high;
+}
+
+struct Census
+{
+    int counterClockwise;
+    int clockwise;
+    int degenerate;
+}
+
+struct Mesh
+{
+    DenseStore<Point, 64> points;
+    DenseStore<Face, 96> faces;
+}
+
+Mesh NewMesh()
+{
+    return Mesh{MakeDenseStore<Point, 64>(), MakeDenseStore<Face, 96>()};
+}
+
+// Standard.Math's Min/Max/Abs take plain float, so these keep the unit.
+float<m> Lesser(float<m> a, float<m> b) { return if (a < b) a else b; }
+float<m> Greater(float<m> a, float<m> b) { return if (a > b) a else b; }
+float<m^2> Magnitude2(float<m^2> area) { return if (area < 0.0) -area else area; }
+
+Result<Id<Point>, MeshError> AddPoint(ref Mesh mesh, float<m> x, float<m> y)
+{
+    match (Append<Point, 64>(ref mesh.points, Point{x, y}))
+    {
+        Result::Ok(id) => { return Result::Ok(id); }
+        Result::Error(error) => { return Result::Error(MeshError::Full); }
+    }
+}
+requires compiler.InvalidatesBorrows(AddPoint, mesh);
+
+Result<Id<Face>, MeshError> AddFace(ref Mesh mesh, Id<Point> a, Id<Point> b, Id<Point> c)
+{
+    match (Append<Face, 96>(ref mesh.faces, Face{a, b, c}))
+    {
+        Result::Ok(id) => { return Result::Ok(id); }
+        Result::Error(error) => { return Result::Error(MeshError::Full); }
+    }
+}
+requires compiler.InvalidatesBorrows(AddFace, mesh);
+
+Result<Point, MeshError> PointAt(ref const Mesh mesh, Id<Point> id)
+{
+    match (DenseGet<Point, 64>(ref const mesh.points, id))
+    {
+        Result::Ok(point) => { return Result::Ok(point); }
+        Result::Error(error) => { return Result::Error(MeshError::MissingVertex); }
+    }
+}
+
+// `?` cannot convert StoreError into MeshError, so each store gets one small
+// adapter; everything above them just uses `?`.
+Result<Face, MeshError> FaceAt(ref const Mesh mesh, Id<Face> id)
+{
+    match (DenseGet<Face, 96>(ref const mesh.faces, id))
+    {
+        Result::Ok(face) => { return Result::Ok(face); }
+        Result::Error(error) => { return Result::Error(MeshError::MissingFace); }
+    }
+}
+
+Result<Triangle, MeshError> TriangleOf(ref const Mesh mesh, Id<Face> id)
+{
+    Face face = FaceAt(ref const mesh, id)?;
+    return Result::Ok(Triangle{PointAt(ref const mesh, face.a)?, PointAt(ref const mesh, face.b)?, PointAt(ref const mesh, face.c)?});
+}
+
+// Twice the signed area: positive when a, b, c turn counter-clockwise.
+float<m^2> SignedDoubleArea(Triangle t)
+{
+    return (t.b.x - t.a.x) * (t.c.y - t.a.y) - (t.b.y - t.a.y) * (t.c.x - t.a.x);
+}
+
+Orientation OrientationOf(Triangle t)
+{
+    float<m^2> area = SignedDoubleArea(t);
+    if (Magnitude2(area) <= AreaTolerance)
+    {
+        return Orientation::Degenerate;
+    }
+    return if (area > 0.0) Orientation::CounterClockwise else Orientation::Clockwise;
+}
+
+Point Centroid(Triangle t)
+{
+    return Point{(t.a.x + t.b.x + t.c.x) / 3.0, (t.a.y + t.b.y + t.c.y) / 3.0};
+}
+
+Result<Bounds, MeshError> BoundsOf(ref const Mesh mesh)
+{
+    int count = Count<Point, 64>(ref const mesh.points);
+    if (count == 0)
+    {
+        return Result::Error(MeshError::Empty);
+    }
+    Point first = PointAt(ref const mesh, IdAt<Point, 64>(ref const mesh.points, 0)!)?;
+    Point low = first;
+    Point high = first;
+    for (i in 1..count)
+    {
+        Point p = PointAt(ref const mesh, IdAt<Point, 64>(ref const mesh.points, i)!)?;
+        low = Point{Lesser(low.x, p.x), Lesser(low.y, p.y)};
+        high = Point{Greater(high.x, p.x), Greater(high.y, p.y)};
+    }
+    return Result::Ok(Bounds{low, high});
+}
+
+Result<Census, MeshError> TakeCensus(ref const Mesh mesh)
+{
+    Census census = Census{0, 0, 0};
+    for (i in 0..Count<Face, 96>(ref const mesh.faces))
+    {
+        Triangle t = TriangleOf(ref const mesh, IdAt<Face, 96>(ref const mesh.faces, i)!)?;
+        match (OrientationOf(t))
+        {
+            Orientation::CounterClockwise => { census.counterClockwise += 1; }
+            Orientation::Clockwise => { census.clockwise += 1; }
+            Orientation::Degenerate => { census.degenerate += 1; }
+        }
+    }
+    return Result::Ok(census);
+}

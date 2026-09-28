@@ -1,0 +1,197 @@
+module Golden.Claude.Embedded.Serial;
+profile Core;
+import Standard.Hardware.Mmio;
+
+// A UART with a 32-byte software transmit queue and a three-command
+// receive protocol:
+//   0x01            Ping
+//   0x02 <divisor>  SetRate (divisor must be non-zero)
+//   0x03 <payload>  Send
+
+comptime int QueueCapacity = 32;
+comptime int PingReply = 0x50;
+
+bits LineStatus : uint8
+{
+    dataReady: 0;
+    transmitEmpty: 5;
+}
+
+enum Command
+{
+    Ping,
+    SetRate(uint8 divisor),
+    Send(uint8 payload)
+}
+
+enum SerialError
+{
+    NoData,
+    QueueFull,
+    UnknownOpcode,
+    ZeroDivisor
+}
+
+// What the decoder is waiting for. Operand-bearing opcodes need one more byte.
+enum Expecting
+{
+    Opcode,
+    RateDivisor,
+    SendPayload
+}
+
+struct Decoder
+{
+    Expecting next;
+    int bytesSeen;
+    int commandsDecoded;
+}
+
+// The ring is (head, count); the tail is derived so the two can never disagree.
+struct TransmitQueue
+{
+    uint8[QueueCapacity] bytes;
+    int head;
+    int count;
+}
+
+struct SerialPort
+{
+    Address<DeviceMemory> data;
+    Address<DeviceMemory> status;
+    TransmitQueue queue;
+}
+
+Decoder NewDecoder()
+{
+    return Decoder{Expecting::Opcode, 0, 0};
+}
+
+SerialPort OpenPort(Address<DeviceMemory> data, Address<DeviceMemory> status)
+{
+    // Bound to a local first: see docs/examples/CLAUDE-GOLDENS.md, bug B1.
+    uint8[QueueCapacity] empty = [0 ... QueueCapacity];
+    TransmitQueue queue = TransmitQueue{empty, 0, 0};
+    return SerialPort{data, status, queue};
+}
+
+LineStatus ReadStatus(ref const SerialPort port)
+{
+    return LineStatus{MmioLoad<uint8>(port.status)};
+}
+
+Result<uint8, SerialError> ReadByte(ref const SerialPort port)
+{
+    if (not ReadStatus(ref const port).dataReady)
+    {
+        return Result::Error(SerialError::NoData);
+    }
+    return Result::Ok(MmioLoad<uint8>(port.data));
+}
+
+Result<void, SerialError> Enqueue(ref TransmitQueue queue, uint8 value)
+{
+    if (queue.count == QueueCapacity)
+    {
+        return Result::Error(SerialError::QueueFull);
+    }
+    queue.bytes[(queue.head + queue.count) % QueueCapacity] = value;
+    queue.count += 1;
+    return Result::Ok();
+}
+
+uint8 Dequeue(ref TransmitQueue queue)
+{
+    uint8 value = queue.bytes[queue.head];
+    queue.head = (queue.head + 1) % QueueCapacity;
+    queue.count -= 1;
+    return value;
+}
+
+// Moves queued bytes to the device while it can accept them. Returns the
+// number sent; anything left stays queued for the next call.
+int Flush(ref SerialPort port)
+{
+    int sent = 0;
+    while (port.queue.count > 0 and ReadStatus(ref const port).transmitEmpty) bounded(QueueCapacity)
+    {
+        MmioStore<uint8>(port.data, Dequeue(ref port.queue));
+        sent += 1;
+    }
+    return sent;
+}
+
+Result<void, SerialError> Execute(ref SerialPort port, Command command)
+{
+    return match (command)
+    {
+        Command::Ping => Enqueue(ref port.queue, PingReply as uint8),
+        Command::SetRate(divisor) => Enqueue(ref port.queue, divisor),
+        Command::Send(payload) => Enqueue(ref port.queue, payload),
+    };
+}
+
+Result<Expecting, SerialError> ClassifyOpcode(uint8 opcode)
+{
+    if (opcode == 0x01) { return Result::Ok(Expecting::Opcode); }
+    if (opcode == 0x02) { return Result::Ok(Expecting::RateDivisor); }
+    if (opcode == 0x03) { return Result::Ok(Expecting::SendPayload); }
+    return Result::Error(SerialError::UnknownOpcode);
+}
+
+// Feeds one byte to the decoder. Yields a command when one is complete. On
+// error the decoder is back at an opcode boundary, so the stream can resync.
+Result<Option<Command>, SerialError> Decode(ref Decoder decoder, uint8 value)
+{
+    decoder.bytesSeen += 1;
+    Expecting waiting = decoder.next;
+    decoder.next = Expecting::Opcode;
+    return match (waiting)
+    {
+        Expecting::Opcode => BeginCommand(ref decoder, value),
+        Expecting::RateDivisor => FinishRate(ref decoder, value),
+        Expecting::SendPayload => Finish(ref decoder, Command::Send(value)),
+    };
+}
+
+Result<Option<Command>, SerialError> BeginCommand(ref Decoder decoder, uint8 opcode)
+{
+    Expecting operand = ClassifyOpcode(opcode)?;
+    if (operand == Expecting::Opcode)
+    {
+        return Finish(ref decoder, Command::Ping);
+    }
+    decoder.next = operand;
+    return Result::Ok(Option::None);
+}
+
+Result<Option<Command>, SerialError> FinishRate(ref Decoder decoder, uint8 divisor)
+{
+    if (divisor == 0)
+    {
+        return Result::Error(SerialError::ZeroDivisor);
+    }
+    return Finish(ref decoder, Command::SetRate(divisor));
+}
+
+Result<Option<Command>, SerialError> Finish(ref Decoder decoder, Command command)
+{
+    decoder.commandsDecoded += 1;
+    return Result::Ok(Option::Some(command));
+}
+
+// One receive step: read a byte if one is waiting, decode it, and execute a
+// completed command. Returns whether a command ran.
+Result<bool, SerialError> Poll(ref SerialPort port, ref Decoder decoder)
+{
+    uint8 received = ReadByte(ref const port)?;
+    Option<Command> decoded = Decode(ref decoder, received)?;
+    match (decoded)
+    {
+        Option::None => { return Result::Ok(false); }
+        Option::Some(command) => {
+            Execute(ref port, command)?;
+            return Result::Ok(true);
+        }
+    }
+}

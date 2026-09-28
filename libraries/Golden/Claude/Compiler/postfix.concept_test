@@ -1,0 +1,65 @@
+module Golden.Claude.Compiler.PostfixTests;
+profile Core;
+import Golden.Claude.Compiler.Postfix;
+import Standard.Collection.Stores;
+
+bool FailsWith(Result<Id<Expr>, ParseError> result, ParseError expected)
+{
+    return match (result)
+    {
+        Result::Ok(id) => false,
+        Result::Error(error) => error == expected,
+    };
+}
+
+[[fact]]
+void OperatorOrderComesFromTheStream()
+{
+    // 2 3 4 * +   is   2 + (3 * 4)
+    Parser parser = NewParser();
+    Token[5] tokens = [Number(2), Number(3), Number(4), Op(Operator::Times), Op(Operator::Plus)];
+    Id<Expr> root = Parse(ref parser, ReadOnlySpan(tokens))!;
+    Assert.Equals(Evaluate(ref const parser, root), 14, "multiplication binds first here");
+    Assert.Equals(Count<Expr, 64>(ref const parser.nodes), 5, "one node per token");
+}
+
+[[fact]]
+void SameNumbersDifferentStreamDifferentTree()
+{
+    // 2 3 + 4 *   is   (2 + 3) * 4
+    Parser parser = NewParser();
+    Token[5] tokens = [Number(2), Number(3), Op(Operator::Plus), Number(4), Op(Operator::Times)];
+    Id<Expr> root = Parse(ref parser, ReadOnlySpan(tokens))!;
+    Assert.Equals(Evaluate(ref const parser, root), 20, "addition happens first here");
+}
+
+[[fact]]
+void AnOperatorNeedsTwoOperands()
+{
+    Parser parser = NewParser();
+    Token[2] tokens = [Number(1), Op(Operator::Plus)];
+    Assert.True(FailsWith(Parse(ref parser, ReadOnlySpan(tokens)), ParseError::MissingOperand), "only one operand available");
+}
+
+[[fact]]
+void UnconsumedOperandsAreAnError()
+{
+    Parser parser = NewParser();
+    Token[2] tokens = [Number(1), Number(2)];
+    Assert.True(FailsWith(Parse(ref parser, ReadOnlySpan(tokens)), ParseError::LeftoverOperands), "two values, no operator");
+}
+
+[[fact]]
+void EmptyInputHasNoValue()
+{
+    Parser parser = NewParser();
+    Token[0] tokens = [];
+    Assert.True(FailsWith(Parse(ref parser, ReadOnlySpan(tokens)), ParseError::EmptyInput), "nothing to evaluate");
+}
+
+[[fact]]
+void ParsingAndEvaluationUseOnlyTheArena()
+{
+    Assert.Concept<NoAllocation>(Parse, "bounded arena and operand stack");
+    Assert.Concept<NoAllocation>(Evaluate, "fixed scratch array");
+}

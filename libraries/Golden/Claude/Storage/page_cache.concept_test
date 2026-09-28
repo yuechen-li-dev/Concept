@@ -1,0 +1,109 @@
+module Golden.Claude.Storage.PageCacheTests;
+profile Core;
+import Golden.Claude.Storage.PageCache;
+import Standard.Collection.Stores;
+
+bool FailsWith(Result<void, CacheError> result, CacheError expected)
+{
+    return match (result)
+    {
+        Result::Ok() => false,
+        Result::Error(error) => error == expected,
+    };
+}
+
+bool FailsWith(Result<uint8, CacheError> result, CacheError expected)
+{
+    return match (result)
+    {
+        Result::Ok(value) => false,
+        Result::Error(error) => error == expected,
+    };
+}
+
+bool FailsWith(Result<GenerationalId<Page>, CacheError> result, CacheError expected)
+{
+    return match (result)
+    {
+        Result::Ok(id) => false,
+        Result::Error(error) => error == expected,
+    };
+}
+
+[[fact]]
+void WrittenBytesReadBack()
+{
+    PageCache cache = NewCache();
+    GenerationalId<Page> page = Load(ref cache, 42)!;
+    Assert.LGTM(Write(ref cache, page, 5, 0x7F), "write one byte");
+    uint8 expected = 0x7F;
+    Assert.Equals(Read(ref const cache, page, 5)!, expected, "the same byte comes back");
+}
+
+[[fact]]
+void OffsetsOutsideThePageAreRejected()
+{
+    PageCache cache = NewCache();
+    GenerationalId<Page> page = Load(ref cache, 1)!;
+    Assert.True(FailsWith(Write(ref cache, page, -1, 1), CacheError::OffsetOutOfRange), "below the page");
+    Assert.True(FailsWith(Write(ref cache, page, PageBytes, 1), CacheError::OffsetOutOfRange), "one past the end");
+    Assert.LGTM(Write(ref cache, page, PageBytes - 1, 1), "the last byte is in range");
+}
+
+[[fact]]
+void DirtyPagesStayUntilWrittenBack()
+{
+    PageCache cache = NewCache();
+    GenerationalId<Page> page = Load(ref cache, 7)!;
+    Assert.LGTM(Write(ref cache, page, 0, 9), "dirty the page");
+    Assert.True(FailsWith(Evict(ref cache, page), CacheError::Dirty), "unsaved bytes block eviction");
+    Assert.LGTM(WriteBack(ref cache, page), "save it");
+    Assert.LGTM(Evict(ref cache, page), "now it may leave");
+    Assert.Equals(cache.writeBacks, 1, "one write-back happened");
+}
+
+[[fact]]
+void PinnedPagesStayUntilEveryPinIsReleased()
+{
+    PageCache cache = NewCache();
+    GenerationalId<Page> page = Load(ref cache, 9)!;
+    Assert.LGTM(Pin(ref cache, page), "first pin");
+    Assert.LGTM(Pin(ref cache, page), "second pin");
+    Assert.LGTM(Unpin(ref cache, page), "release one");
+    Assert.True(FailsWith(Evict(ref cache, page), CacheError::Pinned), "one pin still holds it");
+    Assert.LGTM(Unpin(ref cache, page), "release the other");
+    Assert.True(FailsWith(Unpin(ref cache, page), CacheError::NotPinned), "there is nothing left to release");
+    Assert.LGTM(Evict(ref cache, page), "now it may leave");
+}
+
+[[fact]]
+void HandlesToEvictedPagesGoStale()
+{
+    PageCache cache = NewCache();
+    GenerationalId<Page> old = Load(ref cache, 1)!;
+    Assert.LGTM(Evict(ref cache, old), "evict the clean page");
+    GenerationalId<Page> reused = Load(ref cache, 2)!;
+    Assert.Equals(reused.index, old.index, "the frame is reused");
+    Assert.True(FailsWith(Read(ref const cache, old, 0), CacheError::StaleHandle), "the old handle cannot see the new page");
+    Assert.Equals(cache.resident, 1, "one page is resident");
+}
+
+[[fact]]
+void TheNinthPageDoesNotFit()
+{
+    PageCache cache = NewCache();
+    for (i in 0..Frames)
+    {
+        Assert.LGTM(Load(ref cache, i), "fill every frame");
+    }
+    Assert.True(FailsWith(Load(ref cache, 99), CacheError::Full), "no frame is free");
+    Assert.Equals(cache.resident, Frames, "the failed load changed nothing");
+}
+
+[[fact]]
+void PageAccessAllocatesNothing()
+{
+    Assert.Concept<NoAllocation>(Read, "fixed frames");
+    Assert.Concept<NoAllocation>(Write, "fixed frames");
+    Assert.Concept<NoAllocation>(Evict, "fixed frames");
+}

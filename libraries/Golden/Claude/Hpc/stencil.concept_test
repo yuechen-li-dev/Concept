@@ -1,0 +1,79 @@
+module Golden.Claude.Hpc.StencilTests;
+profile Core;
+import Golden.Claude.Hpc.Stencil;
+
+Rod RodWithSpike(int cell, float<K> height)
+{
+    Rod rod = Rod{[0.0 ...], [0.0 ...]};
+    rod.temperature[cell] = height;
+    return rod;
+}
+
+bool IsStable(float value)
+{
+    return match (StableDiffusion(value))
+    {
+        Result::Ok(r) => true,
+        Result::Error(error) => false,
+    };
+}
+
+[[fact]]
+void InteriorSpikeSpreadsToItsNeighbours()
+{
+    float<K> spike = 10.0;
+    Rod current = RodWithSpike(7, spike);
+    Rod next = Rod{[0.0 ...], [0.0 ...]};
+    Advance(ref next, ref const current, StableDiffusion(0.1)!);
+    Assert.Near(Magnitude(next.temperature[6]), 1.0, 0.001, "left neighbour gains r * spike");
+    Assert.Near(Magnitude(next.temperature[7]), 8.0, 0.001, "centre loses 2r * spike");
+    Assert.Near(Magnitude(next.temperature[8]), 1.0, 0.001, "right neighbour gains r * spike");
+}
+
+[[fact]]
+void HeatIsConservedAwayFromTheBoundaries()
+{
+    float<K> spike = 10.0;
+    Rod a = RodWithSpike(7, spike);
+    Rod b = Rod{[0.0 ...], [0.0 ...]};
+    Diffusion r = StableDiffusion(0.25)!;
+    for (step in 0..3)
+    {
+        Advance(ref b, ref const a, r);
+        Advance(ref a, ref const b, r);
+    }
+    Assert.Near(Magnitude(TotalHeat(ref const a)), 10.0, 0.001, "six steps cannot reach the ends, so no heat leaves");
+}
+
+[[theory]]
+[[artifact("stability.json")]]
+void StabilityLimitIsInclusive(float value, bool stable)
+{
+    Assert.True(IsStable(value) == stable, "diffusion number classified at the stability limit");
+}
+
+[[fact]]
+void MaxChangeRejectsMismatchedExtents()
+{
+    float[2] short = [0.0, 1.0];
+    float[3] long = [0.0, 1.0, 2.0];
+    Assert.Error(MaxChange(ReadOnlySpan(short), ReadOnlySpan(long)), "extents differ");
+    float[3] moved = [0.0, -1.5, 2.0];
+    Assert.Near(MaxChange(ReadOnlySpan(long), ReadOnlySpan(moved))!, 2.5, 0.001, "signed changes compare by magnitude");
+}
+
+[[fact]]
+void ScaleEditsTheBorrowedStorage()
+{
+    float[3] samples = [2.0, 4.0, 6.0];
+    Scale(Span(samples), 0.5);
+    Assert.Near(samples[2], 3.0, 0.001, "the caller's array changed");
+}
+
+[[fact]]
+void KernelsAllocateNothing()
+{
+    Assert.Concept<NoAllocation>(Advance, "fixed columns, finite range");
+    Assert.Concept<NoAllocation>(MaxChange, "reduction over existing views");
+    Assert.Concept<NoAllocation>(Scale, "in-place update");
+}

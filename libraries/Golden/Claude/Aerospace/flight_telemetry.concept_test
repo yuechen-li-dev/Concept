@@ -1,0 +1,88 @@
+module Golden.Claude.Aerospace.FlightTelemetryTests;
+profile Core;
+import Golden.Claude.Aerospace.FlightTelemetry;
+
+NativeSample Good(float altitude, float climbRate)
+{
+    return NativeSample{altitude, climbRate, 1};
+}
+
+bool FailsWith(Result<void, TelemetryError> result, TelemetryError expected)
+{
+    return match (result)
+    {
+        Result::Ok() => false,
+        Result::Error(error) => error == expected,
+    };
+}
+
+bool FailsWith(Result<Sample, TelemetryError> result, TelemetryError expected)
+{
+    return match (result)
+    {
+        Result::Ok(sample) => false,
+        Result::Error(error) => error == expected,
+    };
+}
+
+[[fact]]
+void ANormalFlightVisitsEachPhaseInOrder()
+{
+    FlightController fc = NewController();
+    Assert.LGTM(Accept(ref fc, Good(120.0, 20.0)), "wheels up");
+    Assert.True(fc.phase == Phase::Climb, "climbing");
+    Assert.LGTM(Accept(ref fc, Good(11000.0, 5.0)), "through cruise altitude");
+    Assert.True(fc.phase == Phase::Cruise, "cruising");
+    Assert.LGTM(Accept(ref fc, Good(10800.0, -8.0)), "top of descent");
+    Assert.True(fc.phase == Phase::Descent, "descending");
+}
+
+[[fact]]
+void OneSampleNeverSkipsAPhase()
+{
+    FlightController fc = NewController();
+    Assert.LGTM(Accept(ref fc, Good(12000.0, 30.0)), "first sample is already high and climbing");
+    Assert.True(fc.phase == Phase::Climb, "preflight goes to climb, not straight to cruise");
+}
+
+[[fact]]
+void AnInvalidSampleLatchesTheFault()
+{
+    FlightController fc = NewController();
+    Assert.LGTM(Accept(ref fc, Good(500.0, 10.0)), "climbing");
+    Assert.True(FailsWith(Accept(ref fc, NativeSample{500.0, 10.0, 0}), TelemetryError::SensorInvalid), "validity bit clear");
+    Assert.False(GuidanceAvailable(ref const fc), "no guidance while faulted");
+    Assert.LGTM(Accept(ref fc, Good(600.0, 10.0)), "later good data is still recorded");
+    Assert.True(fc.phase == Phase::Fault, "but the fault stays latched");
+    ResetOnGround(ref fc);
+    Assert.True(fc.phase == Phase::Preflight, "reset clears the latch");
+}
+
+[[fact]]
+void AltitudeOutsideTheEnvelopeIsRejected()
+{
+    FlightController fc = NewController();
+    Assert.True(FailsWith(Accept(ref fc, Good(-1.0, 0.0)), TelemetryError::OutsideEnvelope), "below ground");
+    Assert.Equals(fc.rejected, 1, "counted once");
+    Assert.True(FailsWith(Latest(ref const fc), TelemetryError::NoSamples), "rejected samples are not recorded");
+}
+
+[[fact]]
+void HistoryKeepsTheLatestSamplesForever()
+{
+    FlightController fc = NewController();
+    for (i in 0..3 * HistoryLength)
+    {
+        Assert.LGTM(Accept(ref fc, Good(100.0, 1.0)), "a long flight keeps accepting data");
+    }
+    Assert.LGTM(Accept(ref fc, Good(4321.0, 1.0)), "one more");
+    Assert.Equals(fc.stored, HistoryLength, "history is full, not overflowing");
+    Assert.Near(Magnitude(Latest(ref const fc)!.altitude), 4321.0, 0.01, "latest is the newest sample");
+}
+
+[[fact]]
+void ControlPathAllocatesNothing()
+{
+    Assert.Concept<NoAllocation>(Accept, "fixed ring and scalar phase");
+    Assert.Concept<NoAllocation>(Latest, "value read from the ring");
+}

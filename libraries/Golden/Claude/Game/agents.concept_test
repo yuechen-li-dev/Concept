@@ -1,0 +1,68 @@
+module Golden.Claude.Game.AgentsTests;
+profile Core;
+import Golden.Claude.Game.Agents;
+import Standard.Collection.Stores;
+
+int HealthOf(ref const World world, Id<Agent> id)
+{
+    return DenseGet<Agent, 64>(ref const world.agents, id)!.health;
+}
+
+[[fact]]
+void SeekersStepTowardTheirTargetFromEitherSide()
+{
+    World world = NewWorld();
+    Id<Agent> east = Spawn(ref world, 0, 0)!;
+    Id<Agent> west = Spawn(ref world, 5, 5)!;
+    Assert.LGTM(Command(ref world, east, Intent::Seek(2, 0)), "go east");
+    Assert.LGTM(Command(ref world, west, Intent::Seek(3, 4)), "go south-west");
+    for (t in 0..4) { Tick(ref world); }
+    ref const Agent a = DenseGet<Agent, 64>(ref const world.agents, east)!;
+    Assert.Equals(a.x, 2, "stops on the target column");
+    ref const Agent b = DenseGet<Agent, 64>(ref const world.agents, west)!;
+    Assert.Equals(b.x, 3, "moves left, not only right");
+    Assert.Equals(b.y, 4, "moves down, not only up");
+}
+
+[[fact]]
+void MutualStrikesBothLand()
+{
+    World world = NewWorld();
+    Id<Agent> red = Spawn(ref world, 0, 0)!;
+    Id<Agent> blue = Spawn(ref world, 1, 0)!;
+    Assert.LGTM(Command(ref world, red, Intent::Strike(blue)), "red attacks");
+    Assert.LGTM(Command(ref world, blue, Intent::Strike(red)), "blue attacks");
+    Tick(ref world);
+    Assert.Equals(HealthOf(ref const world, red), FullHealth - StrikeDamage, "red is hit");
+    Assert.Equals(HealthOf(ref const world, blue), FullHealth - StrikeDamage, "blue is hit, regardless of who comes first in the store");
+}
+
+[[fact]]
+void TheFallenStopActingAndHealthNeverGoesNegative()
+{
+    World world = NewWorld();
+    Id<Agent> victim = Spawn(ref world, 0, 0)!;
+    Id<Agent> attacker = Spawn(ref world, 1, 0)!;
+    Assert.LGTM(Command(ref world, attacker, Intent::Strike(victim)), "attack");
+    Assert.LGTM(Command(ref world, victim, Intent::Strike(attacker)), "retaliate");
+    for (t in 0..12) { Tick(ref world); }
+    Assert.Equals(HealthOf(ref const world, victim), 0, "clamped at zero");
+    Assert.Equals(HealthOf(ref const world, attacker), 0, "they traded blows evenly");
+    Assert.Equals(CountAlive(ref const world), 0, "nobody left standing");
+    Assert.Equals(world.tick, 12, "one tick per call");
+}
+
+[[fact]]
+void SentryWalksItsLegsThenStands()
+{
+    instance Sentry sentry(0, 3);
+    for (s in 0..10) { Step(sentry, Watch); }
+    Assert.Equals(sentry.state.legsWalked, 3, "exactly three legs, however long it is stepped");
+}
+
+[[fact]]
+void TheTickAllocatesNothing()
+{
+    Assert.Concept<NoAllocation>(Tick, "fixed damage buffer and dense store");
+    Assert.Concept<NoAllocation>(CountAlive, "bounded index traversal");
+}

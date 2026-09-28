@@ -1,0 +1,125 @@
+module Golden.Claude.Differentiators.Agents.Squad;
+profile Core;
+
+// Tactical agents. Deciding and doing are kept apart:
+//   Choose  - a pure utility function: observation in, policy out;
+//   Soldier - a machine that turns the chosen policy into timed behaviour.
+// Hysteresis: after switching policy an agent holds it for CommitTicks
+// decisions, and while holding, its current policy gets a score bonus, so a
+// marginal change in the scene does not make it flip back and forth.
+
+comptime int CommitTicks = 2;
+comptime float HoldBonus = 0.4;
+
+enum Policy
+{
+    Patrol,
+    Engage,
+    Retreat
+}
+
+struct Observation
+{
+    float threat;
+    float health;
+    float cover;
+    int rounds;
+}
+
+float Unit(float value)
+{
+    if (value < 0.0) { return 0.0; }
+    if (value > 1.0) { return 1.0; }
+    return value;
+}
+
+float Bonus(Policy current, Policy candidate, int hold)
+{
+    return if (hold > 0 and current == candidate) HoldBonus else 0.0;
+}
+
+Policy Choose(Observation seen, Policy current, int hold)
+{
+    float threat = Unit(seen.threat);
+    float exposure = 1.0 - Unit(seen.health);
+    float cover = Unit(seen.cover);
+    bool armed = seen.rounds > 0;
+    Inference<Policy> utility = infer
+    {
+        Patrol score 0.2 + Bonus(current, Policy::Patrol, hold);
+        Engage when armed score 1.4 * threat + 0.2 * cover + Bonus(current, Policy::Engage, hold);
+        Retreat score 1.6 * exposure + 0.3 * threat + Bonus(current, Policy::Retreat, hold);
+    };
+    return HardMax(utility);
+}
+
+automata Soldier
+with state
+{
+    Observation seen;
+    Policy policy;
+    int hold;
+    int shots;
+    int patrolLegs;
+}
+{
+    machine Act
+    {
+        state Decide
+        {
+            Policy chosen = Choose(seen, policy, hold);
+            if (chosen != policy)
+            {
+                policy = chosen;
+                hold = CommitTicks;
+            }
+            transition match (policy)
+            {
+                Policy::Patrol => Patrolling;
+                Policy::Engage => Aiming;
+                Policy::Retreat => Withdrawing;
+            }
+        }
+
+        // Patrol and retreat persist, one step at a time, until the hold ends.
+        state Patrolling
+        {
+            if (hold == 0)
+            {
+                transition Decide;
+            }
+            hold -= 1;
+            patrolLegs += 1;
+            yield;
+        }
+
+        state Withdrawing
+        {
+            if (hold == 0)
+            {
+                transition Decide;
+            }
+            hold -= 1;
+            yield;
+        }
+
+        // Engaging is a fixed three-step sequence, then a fresh decision.
+        state Aiming
+        {
+            transition Firing;
+        }
+
+        state Firing
+        {
+            shots += 1;
+            seen.rounds -= 1;
+            transition Recovering;
+        }
+
+        state Recovering
+        {
+            hold = 0;
+            transition Decide;
+        }
+    }
+}

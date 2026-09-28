@@ -1,0 +1,144 @@
+module Golden.Claude.Aerospace.FlightTelemetry;
+profile Core;
+import Standard.Math;
+
+// Flight-phase tracking from a native air-data sensor.
+//
+// Each accepted sample advances the phase at most one step, so a single
+// sample can never skip a phase. A fault latches: guidance stays unavailable
+// until the controller is explicitly reset on the ground.
+
+comptime int HistoryLength = 16;
+comptime float<m> EnvelopeFloor = 0.0;
+comptime float<m> EnvelopeCeiling = 20000.0;
+comptime float<m> CruiseAltitude = 10000.0;
+
+enum Phase
+{
+    Preflight,
+    Climb,
+    Cruise,
+    Descent,
+    Fault
+}
+
+enum TelemetryError
+{
+    SensorInvalid,
+    OutsideEnvelope,
+    NoSamples
+}
+
+[[repr(C)]] record struct NativeSample
+{
+    float altitudeMeters;
+    float verticalMetersPerSecond;
+    uint32 flags;
+}
+
+concept CAbiValue<T> { requires compiler.CAbiLayout<T>(); }
+requires CAbiValue<NativeSample>;
+
+record struct Sample
+{
+    float<m> altitude;
+    float<m/s> climbRate;
+}
+
+// The latest HistoryLength samples, oldest overwritten first.
+struct FlightController
+{
+    Phase phase;
+    Sample[HistoryLength] history;
+    int newest;
+    int stored;
+    int rejected;
+}
+
+FlightController NewController()
+{
+    Sample blank = Sample{0.0, 0.0};
+    Sample[HistoryLength] history = [blank ... HistoryLength];
+    return FlightController{Phase::Preflight, history, 0, 0, 0};
+}
+
+// Bit 0 of the sensor flags means "measurement valid". (comptime cannot hold
+// a uint32 mask yet, so the bit lives here rather than as a named constant.)
+bool MeasurementValid(NativeSample native)
+{
+    return (native.flags & 1) != 0;
+}
+
+// The only place raw sensor numbers become typed quantities.
+Result<Sample, TelemetryError> Interpret(NativeSample native)
+{
+    if (not MeasurementValid(native))
+    {
+        return Result::Error(TelemetryError::SensorInvalid);
+    }
+    Sample sample = Sample{
+        interpret native.altitudeMeters as float<m>,
+        interpret native.verticalMetersPerSecond as float<m/s>
+    };
+    if (sample.altitude < EnvelopeFloor or sample.altitude > EnvelopeCeiling)
+    {
+        return Result::Error(TelemetryError::OutsideEnvelope);
+    }
+    return Result::Ok(sample);
+}
+
+Phase NextPhase(Phase phase, Sample sample)
+{
+    return match (phase)
+    {
+        Phase::Preflight => if (sample.climbRate > 0.0) Phase::Climb else Phase::Preflight,
+        Phase::Climb => if (sample.altitude >= CruiseAltitude) Phase::Cruise else Phase::Climb,
+        Phase::Cruise => if (sample.climbRate < 0.0) Phase::Descent else Phase::Cruise,
+        Phase::Descent => Phase::Descent,
+        Phase::Fault => Phase::Fault,
+    };
+}
+
+void Record(ref FlightController controller, Sample sample)
+{
+    controller.newest = (controller.newest + 1) % HistoryLength;
+    controller.history[controller.newest] = sample;
+    controller.stored = Min(controller.stored + 1, HistoryLength);
+}
+
+Result<void, TelemetryError> Accept(ref FlightController controller, NativeSample native)
+{
+    match (Interpret(native))
+    {
+        Result::Ok(sample) => {
+            Record(ref controller, sample);
+            controller.phase = NextPhase(controller.phase, sample);
+            return Result::Ok();
+        }
+        Result::Error(error) => {
+            controller.rejected += 1;
+            controller.phase = Phase::Fault;
+            return Result::Error(error);
+        }
+    }
+}
+
+Result<Sample, TelemetryError> Latest(ref const FlightController controller)
+{
+    if (controller.stored == 0)
+    {
+        return Result::Error(TelemetryError::NoSamples);
+    }
+    return Result::Ok(controller.history[controller.newest]);
+}
+
+bool GuidanceAvailable(ref const FlightController controller)
+{
+    return controller.phase != Phase::Fault and controller.stored > 0;
+}
+
+// Ground-only recovery: clears the latch and the history.
+void ResetOnGround(ref FlightController controller)
+{
+    controller = NewController();
+}

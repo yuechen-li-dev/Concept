@@ -1,0 +1,82 @@
+module Golden.Claude.Game.WorldOps;
+profile Core;
+import Golden.Claude.Game.Agents;
+import Standard.Collection.Stores;
+
+// Footprints fade: a trail handle stays valid only until its trail is
+// retired, after which the slot may hold someone else's footprint.
+
+record struct Footprint
+{
+    int x;
+    int y;
+    int tick;
+}
+
+struct Trails
+{
+    GenerationalStore<Footprint, 32> prints;
+}
+
+Trails NewTrails()
+{
+    return Trails{MakeGenerationalStore<Footprint, 32>()};
+}
+
+Result<GenerationalId<Footprint>, StoreError> Leave(ref Trails trails, int x, int y, int tick)
+{
+    return Insert<Footprint, 32>(ref trails.prints, Footprint{x, y, tick});
+}
+requires compiler.InvalidatesBorrows(Leave, trails);
+
+Result<void, StoreError> Fade(ref Trails trails, GenerationalId<Footprint> id)
+{
+    return Remove<Footprint, 32>(ref trails.prints, id);
+}
+requires compiler.InvalidatesBorrows(Fade, trails);
+
+bool StillVisible(ref const Trails trails, GenerationalId<Footprint> id)
+{
+    return Contains<Footprint, 32>(ref const trails.prints, id);
+}
+
+// Structure-of-arrays snapshot of agent positions for a renderer or a
+// spatial query that wants contiguous columns.
+table<64> Positions
+{
+    int x;
+    int y;
+}
+
+// Copies every agent's position into the table and returns how many rows are
+// meaningful.
+int Snapshot(ref const World world, ref Positions frame)
+{
+    int population = Count<Agent, 64>(ref const world.agents);
+    for (i in 0..population)
+    {
+        ref const Agent agent = DenseGet<Agent, 64>(ref const world.agents, IdAt<Agent, 64>(ref const world.agents, i)!)!;
+        frame.x[i] = agent.x;
+        frame.y[i] = agent.y;
+    }
+    return population;
+}
+
+int Sum(ReadOnlySpan<int> column)
+{
+    int total = 0;
+    for (value in column)
+    {
+        total += value;
+    }
+    return total;
+}
+
+void RunTicks(ref World world, int ticks)
+{
+    // The caller chooses the budget; there is no background scheduler.
+    for (t in 0..ticks)
+    {
+        Tick(ref world);
+    }
+}

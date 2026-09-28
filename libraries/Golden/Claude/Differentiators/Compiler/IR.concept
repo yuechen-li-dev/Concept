@@ -1,0 +1,37 @@
+module Golden.Claude.Differentiators.Compiler.IR;
+profile Core;
+
+// The instruction schema. Field annotations say what each slot means to a
+// verifier: [[operand]] slots name values, [[successor]] slots name blocks.
+// A negative id means "slot unused". Tools derive their checks from these
+// annotations, so adding a slot here updates every derived check.
+
+record struct NodeId
+{
+    int value;
+}
+
+record struct BlockId
+{
+    int value;
+}
+
+enum Opcode
+{
+    Constant,
+    Add,
+    Jump,
+    Branch,
+    Return
+}
+
+[[reflect]]
+record struct Instruction
+{
+    Opcode opcode;
+    [[operand]] NodeId left;
+    [[operand]] NodeId right;
+    [[successor]] BlockId taken;
+    [[successor]] BlockId fallthrough;
+    int immediate;
+}

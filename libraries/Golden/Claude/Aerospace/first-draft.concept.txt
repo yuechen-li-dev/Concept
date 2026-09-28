@@ -1,0 +1,138 @@
+module Golden.Claude.Aerospace.FlightTelemetry;
+profile Core;
+
+// Flight-phase tracking from a native air-data sensor.
+//
+// Each accepted sample advances the phase at most one step, so a single
+// sample can never skip a phase. A fault latches: guidance stays unavailable
+// until the controller is explicitly reset on the ground.
+
+comptime int HistoryLength = 16;
+comptime int ValidBit = 1;
+
+enum Phase
+{
+    Preflight,
+    Climb,
+    Cruise,
+    Descent,
+    Fault
+}
+
+enum TelemetryError
+{
+    SensorInvalid,
+    OutsideEnvelope,
+    NoSamples
+}
+
+[[repr(C)]] record struct NativeSample
+{
+    float altitudeMeters;
+    float verticalMetersPerSecond;
+    uint32 flags;
+}
+
+concept CAbiValue<T> { requires compiler.CAbiLayout<T>(); }
+requires CAbiValue<NativeSample>;
+
+record struct Sample
+{
+    float<m> altitude;
+    float<m/s> climbRate;
+}
+
+// The latest HistoryLength samples, oldest overwritten first.
+struct FlightController
+{
+    Phase phase;
+    Sample[HistoryLength] history;
+    int newest;
+    int stored;
+    int rejected;
+}
+
+FlightController NewController()
+{
+    Sample blank = Sample{0.0, 0.0};
+    Sample[HistoryLength] history = [blank ... HistoryLength];
+    return FlightController{Phase::Preflight, history, 0, 0, 0};
+}
+
+// The only place raw sensor numbers become typed quantities.
+Result<Sample, TelemetryError> Interpret(NativeSample native)
+{
+    if ((native.flags & ValidBit) == 0)
+    {
+        return Result::Error(TelemetryError::SensorInvalid);
+    }
+    Sample sample = Sample{
+        interpret native.altitudeMeters as float<m>,
+        interpret native.verticalMetersPerSecond as float<m/s>
+    };
+    float<m> floor = 0.0;
+    float<m> ceiling = 20000.0;
+    if (sample.altitude < floor or sample.altitude > ceiling)
+    {
+        return Result::Error(TelemetryError::OutsideEnvelope);
+    }
+    return Result::Ok(sample);
+}
+
+Phase NextPhase(Phase phase, Sample sample)
+{
+    float<m> cruiseAltitude = 10000.0;
+    float<m/s> level = 0.0;
+    return match (phase)
+    {
+        Phase::Preflight => if (sample.climbRate > level) Phase::Climb else Phase::Preflight,
+        Phase::Climb => if (sample.altitude >= cruiseAltitude) Phase::Cruise else Phase::Climb,
+        Phase::Cruise => if (sample.climbRate < level) Phase::Descent else Phase::Cruise,
+        Phase::Descent => Phase::Descent,
+        Phase::Fault => Phase::Fault,
+    };
+}
+
+void Record(ref FlightController controller, Sample sample)
+{
+    controller.newest = (controller.newest + 1) % HistoryLength;
+    controller.history[controller.newest] = sample;
+    controller.stored = Min(controller.stored + 1, HistoryLength);
+}
+
+Result<void, TelemetryError> Accept(ref FlightController controller, NativeSample native)
+{
+    match (Interpret(native))
+    {
+        Result::Ok(sample) => {
+            Record(ref controller, sample);
+            controller.phase = NextPhase(controller.phase, sample);
+            return Result::Ok();
+        }
+        Result::Error(error) => {
+            controller.rejected += 1;
+            controller.phase = Phase::Fault;
+            return Result::Error(error);
+        }
+    }
+}
+
+Result<Sample, TelemetryError> Latest(ref const FlightController controller)
+{
+    if (controller.stored == 0)
+    {
+        return Result::Error(TelemetryError::NoSamples);
+    }
+    return Result::Ok(controller.history[controller.newest]);
+}
+
+bool GuidanceAvailable(ref const FlightController controller)
+{
+    return controller.phase != Phase::Fault and controller.stored > 0;
+}
+
+// Ground-only recovery: clears the latch and the history.
+void ResetOnGround(ref FlightController controller)
+{
+    controller = NewController();
+}

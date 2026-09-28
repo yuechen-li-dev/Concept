@@ -1,0 +1,118 @@
+module Golden.Claude.Embedded.SerialTests;
+profile Core;
+import Golden.Claude.Embedded.Serial;
+
+// Result helpers: Assert.Error only says "some error"; these say which one.
+bool FailsWith(Result<void, SerialError> result, SerialError expected)
+{
+    return match (result)
+    {
+        Result::Ok() => false,
+        Result::Error(error) => error == expected,
+    };
+}
+
+bool FailsWith(Result<Option<Command>, SerialError> result, SerialError expected)
+{
+    return match (result)
+    {
+        Result::Ok(value) => false,
+        Result::Error(error) => error == expected,
+    };
+}
+
+bool IsPending(Result<Option<Command>, SerialError> result)
+{
+    return match (result)
+    {
+        Result::Ok(decoded) => match (decoded)
+        {
+            Option::None => true,
+            Option::Some(command) => false,
+        },
+        Result::Error(error) => false,
+    };
+}
+
+SerialPort TestPort()
+{
+    usize dataAddress = 4096;
+    usize statusAddress = 4101;
+    return OpenPort(AddressFromBits<DeviceMemory>(dataAddress), AddressFromBits<DeviceMemory>(statusAddress));
+}
+
+[[fact]]
+void RateCommandNeedsItsOperandByte()
+{
+    Decoder decoder = NewDecoder();
+    Assert.True(IsPending(Decode(ref decoder, 0x02)), "opcode alone is not a command");
+    Assert.True(decoder.next == Expecting::RateDivisor, "decoder now wants the divisor");
+    Assert.LGTM(Decode(ref decoder, 7), "divisor completes the command");
+    Assert.True(decoder.next == Expecting::Opcode, "back at an opcode boundary");
+    Assert.Equals(decoder.commandsDecoded, 1, "exactly one command decoded");
+}
+
+[[fact]]
+void ZeroDivisorIsRejectedAndDecoderResyncs()
+{
+    Decoder decoder = NewDecoder();
+    discard Decode(ref decoder, 0x02);
+    Assert.True(FailsWith(Decode(ref decoder, 0), SerialError::ZeroDivisor), "a zero divisor is invalid");
+    Assert.True(decoder.next == Expecting::Opcode, "the next byte is treated as an opcode");
+    Assert.LGTM(Decode(ref decoder, 0x01), "a following ping still decodes");
+}
+
+[[fact]]
+void UnknownOpcodeIsRecoverable()
+{
+    Decoder decoder = NewDecoder();
+    Assert.True(FailsWith(Decode(ref decoder, 0xFF), SerialError::UnknownOpcode), "0xFF is not an opcode");
+    Assert.LGTM(Decode(ref decoder, 0x01), "the stream continues");
+    Assert.Equals(decoder.bytesSeen, 2, "every byte is counted, including the bad one");
+}
+
+[[fact]]
+void QueueWrapsAroundItsEnd()
+{
+    SerialPort port = TestPort();
+    port.queue.head = QueueCapacity - 1;
+    Assert.LGTM(Enqueue(ref port.queue, 0x41), "slot at the end of storage");
+    Assert.LGTM(Enqueue(ref port.queue, 0x42), "wraps to slot zero");
+    uint8 first = 0x41;
+    uint8 second = 0x42;
+    Assert.Equals(port.queue.bytes[QueueCapacity - 1], first, "first byte at the end");
+    Assert.Equals(port.queue.bytes[0], second, "second byte wrapped");
+    Assert.Equals(Dequeue(ref port.queue), first, "FIFO order survives the wrap");
+    Assert.Equals(Dequeue(ref port.queue), second, "FIFO order survives the wrap");
+}
+
+[[fact]]
+void FullQueueRejectsWithoutLosingData()
+{
+    SerialPort port = TestPort();
+    for (i in 0..QueueCapacity)
+    {
+        Assert.LGTM(Enqueue(ref port.queue, 0x20), "fills to capacity");
+    }
+    Assert.True(FailsWith(Enqueue(ref port.queue, 0x21), SerialError::QueueFull), "one past capacity fails");
+    Assert.Equals(port.queue.count, QueueCapacity, "the failed enqueue changed nothing");
+}
+
+[[fact]]
+void PingQueuesTheReplyByte()
+{
+    SerialPort port = TestPort();
+    Assert.LGTM(Execute(ref port, Command::Ping), "ping is executed");
+    uint8 reply = PingReply as uint8;
+    Assert.Equals(Dequeue(ref port.queue), reply, "reply byte is queued");
+}
+
+[[fact]]
+void SerialPathsTouchOnlyTheDeviceAndFixedStorage()
+{
+    Assert.Concept<NoAllocation>(Poll, "receive, decode, and execute use fixed storage");
+    Assert.Concept<NoAllocation>(Flush, "the transmit drain uses fixed storage");
+    Assert.Concept<HardwareRead>(ReadByte, "receiving reads the device");
+    Assert.Concept<HardwareRead>(Flush, "draining polls transmit status");
+    Assert.Concept<HardwareWrite>(Flush, "draining writes the data register");
+}

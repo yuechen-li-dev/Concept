@@ -1,0 +1,96 @@
+module Golden.Claude.Hft.MarketTests;
+profile Core;
+import Golden.Claude.Hft.Market;
+
+bool FailsWith(Result<void, MarketError> result, MarketError expected)
+{
+    return match (result)
+    {
+        Result::Ok() => false,
+        Result::Error(error) => error == expected,
+    };
+}
+
+int PriceOf(Option<Quote> quote)
+{
+    return match (quote)
+    {
+        Option::None => -1,
+        Option::Some(value) => value.priceTicks,
+    };
+}
+
+[[fact]]
+void QuotesLeaveInPublicationOrder()
+{
+    QuoteRing ring = NewRing();
+    Assert.LGTM(Publish(ref ring, Quote{7, 101, 1}), "first quote");
+    Assert.LGTM(Publish(ref ring, Quote{7, 102, 2}), "second quote");
+    Assert.Equals(PriceOf(Consume(ref ring)), 101, "first in, first out");
+    Assert.Equals(PriceOf(Consume(ref ring)), 102, "then the second");
+    Assert.Equals(PriceOf(Consume(ref ring)), -1, "then empty");
+}
+
+[[fact]]
+void FullRingRejectsUntilAQuoteIsConsumed()
+{
+    QuoteRing ring = NewRing();
+    for (i in 0..Capacity)
+    {
+        Assert.LGTM(Publish(ref ring, Quote{1, i + 1, 0}), "fills to capacity");
+    }
+    Assert.True(FailsWith(Publish(ref ring, Quote{1, 999, 0}), MarketError::QueueFull), "the next publish is refused");
+    Assert.Equals(PriceOf(Consume(ref ring)), 1, "the oldest quote is intact");
+    Assert.LGTM(Publish(ref ring, Quote{1, 999, 0}), "one freed slot admits one quote");
+}
+
+// Runs the sequence numbers around their span several times; order and
+// content must survive every wrap.
+[[fact]]
+void SequenceNumbersWrapWithoutLosingOrder()
+{
+    QuoteRing ring = NewRing();
+    for (round in 0..5 * SequenceSpan)
+    {
+        Assert.LGTM(Publish(ref ring, Quote{2, round + 1, 0}), "publish");
+        Assert.Equals(PriceOf(Consume(ref ring)), round + 1, "consume returns the same quote");
+    }
+    Assert.Equals(Pending(ref const ring), 0, "nothing left behind");
+}
+
+[[fact]]
+void NonPositivePricesAreCountedButNeverMoveTheSignal()
+{
+    QuoteRing ring = NewRing();
+    Signal signal = NewSignal();
+    Assert.LGTM(Publish(ref ring, Quote{3, 100, 1}), "valid");
+    Assert.LGTM(Publish(ref ring, Quote{3, 0, 2}), "invalid but transportable");
+    Assert.LGTM(Publish(ref ring, Quote{3, 103, 3}), "valid");
+    Assert.Equals(DrainInto(ref ring, ref signal, 8), 3, "all three quotes are processed");
+    Assert.Equals(signal.accepted, 2, "two accepted");
+    Assert.Equals(signal.rejected, 1, "one rejected");
+    Assert.Equals(signal.lastDelta, 3, "delta skips the rejected quote");
+}
+
+[[fact]]
+void DrainStopsAtItsBudget()
+{
+    QuoteRing ring = NewRing();
+    Signal signal = NewSignal();
+    for (i in 0..10)
+    {
+        Assert.LGTM(Publish(ref ring, Quote{4, 50 + i, 0}), "publish");
+    }
+    Assert.Equals(DrainInto(ref ring, ref signal, 4), 4, "budget limits the batch");
+    Assert.Equals(Pending(ref const ring), 6, "the rest waits for the next call");
+}
+
+[[fact]]
+void EachSideOfTheRingHasOneOwnerAndNoHeap()
+{
+    Assert.Concept<sync.SingleProducer>(FeedContext, QuoteRing, "only the feed publishes");
+    Assert.Concept<sync.SingleConsumer>(SignalContext, QuoteRing, "only the signal context consumes");
+    Assert.Concept<NoAllocation>(Publish, "fixed slots");
+    Assert.Concept<NoAllocation>(Consume, "fixed slots");
+    Assert.Concept<NoAllocation>(DrainInto, "scalar signal state");
+}

@@ -29,8 +29,22 @@ func TestR7pDomainGoldensNormalAndVerify(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if run.Failed != 0 || run.Passed+run.Benchmarks != len(manifest.Tests) {
-			t.Fatalf("verify=%v: %d facts passed, %d benchmarks, %d failed: %+v", verify, run.Passed, run.Benchmarks, run.Failed, run.Results)
+		// A theory contributes one result per data row, so compare test
+		// identities rather than raw counts: every discovered test must have
+		// produced results, and none may have failed.
+		reported := map[string]bool{}
+		for _, result := range run.Results {
+			id, _, _ := strings.Cut(result.TestID, "[") // theory rows report as ID[row]
+			reported[id] = true
+		}
+		missing := []string{}
+		for _, test := range manifest.Tests {
+			if !reported[test.TestID] {
+				missing = append(missing, test.TestID)
+			}
+		}
+		if run.Failed != 0 || len(missing) != 0 {
+			t.Fatalf("verify=%v: %d passed, %d benchmarks, %d failed, missing %v: %+v", verify, run.Passed, run.Benchmarks, run.Failed, missing, run.Results)
 		}
 	}
 }

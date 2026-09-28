@@ -1,0 +1,82 @@
+module Golden.Claude.Hpc.Stencil;
+profile Core;
+import Standard.Math;
+
+// Explicit-Euler heat diffusion on a 16-cell rod with fixed-temperature
+// (Dirichlet) ends. Temperatures carry kelvin; the diffusion number is
+// dimensionless.
+
+comptime int Cells = 16;
+
+table<16> Rod
+{
+    float<K> temperature;
+    float<K> source;
+}
+
+enum StencilError
+{
+    UnstableDiffusion,
+    ExtentMismatch
+}
+
+// A diffusion number that has already been checked against the explicit
+// scheme's stability limit (0 <= r <= 1/2 on a unit grid). Holding one is the
+// proof; Advance cannot be handed an unstable coefficient.
+record struct Diffusion
+{
+    float value;
+}
+
+Result<Diffusion, StencilError> StableDiffusion(float value)
+{
+    if (value < 0.0 or value > 0.5)
+    {
+        return Result::Error(StencilError::UnstableDiffusion);
+    }
+    return Result::Ok(Diffusion{value});
+}
+
+void Advance(ref Rod next, ref const Rod current, Diffusion r)
+{
+    next.temperature[0] = current.temperature[0];
+    for (i in 1..Cells - 1)
+    {
+        float<K> laplacian = current.temperature[i - 1] - 2.0 * current.temperature[i] + current.temperature[i + 1];
+        next.temperature[i] = current.temperature[i] + r.value * laplacian + current.source[i];
+    }
+    next.temperature[Cells - 1] = current.temperature[Cells - 1];
+}
+
+float<K> TotalHeat(ref const Rod rod)
+{
+    float<K> total = 0.0;
+    for (i in 0..Cells)
+    {
+        total += rod.temperature[i];
+    }
+    return total;
+}
+
+// Largest pointwise change between two samplings of the same field.
+Result<float, StencilError> MaxChange(ReadOnlySpan<float> before, ReadOnlySpan<float> after)
+{
+    if (Len(before) != Len(after))
+    {
+        return Result::Error(StencilError::ExtentMismatch);
+    }
+    float largest = 0.0;
+    for (i in 0..Len(before))
+    {
+        largest = Max(largest, Abs(after[i] - before[i]));
+    }
+    return Result::Ok(largest);
+}
+
+void Scale(Span<float> samples, float factor)
+{
+    for (ref float sample in samples)
+    {
+        sample *= factor;
+    }
+}
