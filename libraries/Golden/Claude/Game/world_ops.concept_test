@@ -28,10 +28,8 @@ void SnapshotColumnsSumOnlyTheLiveRows()
     Positions frame = Positions{[99 ...],[99 ...]};
     int rows = Snapshot(ref const world, ref frame);
     Assert.Equals(rows, 2, "two agents");
-    ReadOnlySpan<int> xs = ReadOnlySpan(frame.x);
-    ReadOnlySpan<int> ys = ReadOnlySpan(frame.y);
-    Assert.Equals(Sum(Subspan(xs, 0, rows)), 7, "3 + 4; the 99 filler is outside the sub-span");
-    Assert.Equals(Sum(Subspan(ys, 0, rows)), 7, "2 + 5");
+    Assert.Equals(Sum(Subspan(ReadOnlySpan(frame.x), 0, rows)), 7, "3 + 4; the 99 filler is outside the sub-span");
+    Assert.Equals(Sum(Subspan(ReadOnlySpan(frame.y), 0, rows)), 7, "2 + 5");
 }
 
 [[fact]]

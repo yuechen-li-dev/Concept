@@ -102,6 +102,24 @@ func TestDiscoveryIgnoresHistoricalConTestAndRejectsMissingArtifact(t *testing.T
 	}
 }
 
+func TestR8gNestedTestSelectionRetainsSiblingModuleRoots(t *testing.T) {
+	root := filepath.Join("..", "..", "libraries", "Golden", "Claude", "Storage")
+	manifest, err := DiscoverTests(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(manifest.Tests) != 7 {
+		t.Fatalf("nested selection found %d tests", len(manifest.Tests))
+	}
+	run, err := RunTests(manifest, TestRunOptions{ResultsDir: filepath.Join(t.TempDir(), "results")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.Passed != 7 || run.Failed != 0 {
+		t.Fatalf("nested selection: %+v", run)
+	}
+}
+
 func TestAttributesRejectTyposAndArtifactsCannotEscapeRoot(t *testing.T) {
 	_, err := Parse("typo.concept_test", "profile Core; [[faact]] void Typo() { }")
 	if err == nil || !strings.Contains(err.Error(), "TEST_ATTRIBUTE_UNKNOWN") {

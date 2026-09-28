@@ -236,6 +236,33 @@ func TestSpanNativeC11(t *testing.T) {
 	}
 }
 
+func TestR8gSubspanTemporaryPreservesBackingLifetime(t *testing.T) {
+	const valid = `module R8g.SubspanTemporary; profile Core;
+int Read() {
+    int<array>[4] values = [1, 2, 3, 4];
+    return Subspan(ReadOnlySpan(values), 1, 2)[1];
+}`
+	module, err := Parse("subspan_temporary.concept", valid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outputs, err := Generate(module, []byte(valid))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertR8cStrictC11(t, outputs, "subspan_temporary.generated.c")
+	runFoundationNativeHarness(t, outputs, "subspan_temporary_harness.c", `#include "subspan_temporary.generated.h"
+int main(void) { return concept_r8g__subspan_temporary_read() == 3 ? 0 : 1; }`)
+	const invalid = `module R8g.SubspanEscape; profile Core;
+ReadOnlySpan<int> Escape() {
+    int<array>[4] values = [1, 2, 3, 4];
+    return Subspan(ReadOnlySpan(values), 1, 2);
+}`
+	if _, err := Parse("subspan_escape.concept", invalid); err == nil || !strings.Contains(err.Error(), "CV4521") {
+		t.Fatalf("temporary subspan escaped local backing: %v", err)
+	}
+}
+
 func TestSpanRuntimeBoundsPanics(t *testing.T) {
 	compiler, err := exec.LookPath("gcc")
 	if err != nil {

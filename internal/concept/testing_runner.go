@@ -198,13 +198,7 @@ func discoverTests(root string, nativeArtifacts map[string][]byte, nativeIdentit
 		if readErr != nil {
 			return TestManifest{}, readErr
 		}
-		moduleRoots := []string{filepath.Dir(path)}
-		if info.IsDir() {
-			moduleRoots = append(moduleRoots, filepath.Dir(projectRoot))
-			if _, err := os.Stat(filepath.Join(filepath.Dir(projectRoot), "concept")); err == nil {
-				moduleRoots = append(moduleRoots, filepath.Join(filepath.Dir(projectRoot), "concept"))
-			}
-		}
+		moduleRoots := evt1TestModuleRoots(projectRoot, filepath.Dir(path))
 		var module Module
 		var parseErr error
 		if nativeIdentity != nil {
@@ -281,6 +275,35 @@ func discoverTests(root string, nativeArtifacts map[string][]byte, nativeIdentit
 		}
 	}
 	return manifest, nil
+}
+
+// A selected test directory is a selection boundary, not an import root.
+// Search exact module paths through ancestors inside the same checkout so a
+// nested package can import its siblings under the original module identity.
+func evt1TestModuleRoots(selectionRoot, sourceDir string) []string {
+	roots := []string{sourceDir, filepath.Dir(selectionRoot)}
+	repoRoot := ""
+	for dir := selectionRoot; ; dir = filepath.Dir(dir) {
+		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+			repoRoot = dir
+			break
+		}
+		if parent := filepath.Dir(dir); parent == dir {
+			break
+		}
+	}
+	if repoRoot != "" {
+		for dir := selectionRoot; ; dir = filepath.Dir(dir) {
+			roots = append(roots, dir)
+			if dir == repoRoot {
+				break
+			}
+		}
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(selectionRoot), "concept")); err == nil {
+		roots = append(roots, filepath.Join(filepath.Dir(selectionRoot), "concept"))
+	}
+	return roots
 }
 
 func evt1TestMetadata(fn FunctionDecl) (TestKind, bool, []string, bool) {

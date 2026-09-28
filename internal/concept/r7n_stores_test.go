@@ -31,9 +31,13 @@ int Main()
     Id<Expr> first = AppendExpr(ref exprs, Expr{7})!;
     Id<Expr> second = Append<Expr, 3>(ref exprs, Expr{9})!;
     GenerationalStore<Stmt, 2> stmts = MakeGenerationalStore<Stmt, 2>();
+    if (GenerationalCount<Stmt, 2>(ref const stmts) != 0) { return 2; }
     GenerationalId<Stmt> old = Insert<Stmt, 2>(ref stmts, Stmt{11})!;
+    if (GenerationalCount<Stmt, 2>(ref const stmts) != 1) { return 3; }
     Remove<Stmt, 2>(ref stmts, old)!;
+    if (GenerationalCount<Stmt, 2>(ref const stmts) != 0) { return 4; }
     GenerationalId<Stmt> reused = Insert<Stmt, 2>(ref stmts, Stmt{13})!;
+    if (GenerationalCount<Stmt, 2>(ref const stmts) != 1) { return 5; }
     if (Contains<Stmt, 2>(ref const stmts, old) or
         reused.index != old.index or reused.generation != old.generation + 1)
     {
@@ -140,7 +144,7 @@ Result<int, BuildError> Build(bool fail)
 }
 Result<int, BuildError> BuildGenerational(bool fail)
 {
-    GenerationalStore<Pinned, 2> store = GenerationalStore<Pinned, 2>{Uninitialized(), [1 ...], [0 ...], 0, 0};
+    GenerationalStore<Pinned, 2> store = GenerationalStore<Pinned, 2>{Uninitialized(), [1 ...], [0 ...], 0, 0, 0};
     GenerationalId<Pinned> id = Emplace(ref store, Pinned{Part{7}, Key(fail)?});
     ref const Pinned value = GenerationalGet<Pinned, 2>(ref const store, id)!;
     return Result::Ok(value.key);
@@ -153,7 +157,7 @@ Result<GenerationalId<Pinned>, BuildError> TryPinned(
 }
 Result<int, BuildError> BuildReusedSlot(bool fail)
 {
-    GenerationalStore<Pinned, 2> store = GenerationalStore<Pinned, 2>{Uninitialized(), [1 ...], [0 ...], 0, 0};
+    GenerationalStore<Pinned, 2> store = GenerationalStore<Pinned, 2>{Uninitialized(), [1 ...], [0 ...], 0, 0, 0};
     GenerationalId<Pinned> first = Emplace(ref store, Pinned{Part{7}, 1});
     Remove<Pinned, 2>(ref store, first)!;
     match (TryPinned(ref store, fail))
@@ -254,7 +258,7 @@ void Probe()
 immovable struct Pinned { int value; }
 void Probe()
 {
-    GenerationalStore<Pinned, 2> store = GenerationalStore<Pinned, 2>{Uninitialized(), [1 ...], [0 ...], 0, 0};
+    GenerationalStore<Pinned, 2> store = GenerationalStore<Pinned, 2>{Uninitialized(), [1 ...], [0 ...], 0, 0, 0};
     Emplace(ref store, Pinned{7});
     GenerationalStore<Pinned, 2> moved = move store;
 }`
@@ -265,7 +269,7 @@ void Probe()
 immovable struct Pinned { int value; }
 void Probe()
 {
-    GenerationalStore<Pinned, 2> store = GenerationalStore<Pinned, 2>{Uninitialized(), [1 ...], [0 ...], 0, 0};
+    GenerationalStore<Pinned, 2> store = GenerationalStore<Pinned, 2>{Uninitialized(), [1 ...], [0 ...], 0, 0, 0};
     Pinned value = Pinned{7};
     Insert<Pinned, 2>(ref store, move value)!;
 }`

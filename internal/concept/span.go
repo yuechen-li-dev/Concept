@@ -227,13 +227,28 @@ func validateSpanCall(env *semanticEnv, scope *evt1Scope, call *CallExpr, expect
 				return Type{}, evt1Diagnostic("CV4603", "Subspan offset and length must be int", arg.exprSpan())
 			}
 		}
-		place, err := validateAssignable(env, scope, call.Args[0], templateInfo)
-		if err != nil {
-			return Type{}, evt1Diagnostic("CV4600", "Subspan requires an existing Span value", call.Args[0].exprSpan())
-		}
-		parent, err := evt1SpanSourceFacts(env, scope, call.Args[0], parentType, place)
-		if err != nil {
-			return Type{}, err
+		var parent evt1SpanFacts
+		if source, ok := call.Args[0].(*CallExpr); ok {
+			// A Span constructor or prior Subspan is a value, not a place. Its
+			// checked region and lifetime still belong to the original backing.
+			var known bool
+			parent, known = evt1KnownSpanFacts(scope, source)
+			if !known || source.Intrinsic == "" || parent.RegionID == "" {
+				return Type{}, evt1Diagnostic("CV4600", "Subspan requires a Span with known backing storage", source.Span)
+			}
+			parent.Provenance = evt1ExprProvenance(env, scope, source)
+			if parent.Provenance.Kind == evt1ProvenanceUnknown {
+				return Type{}, evt1Diagnostic("CV4600", "Subspan requires a Span with known backing lifetime", source.Span)
+			}
+		} else {
+			place, err := validateAssignable(env, scope, call.Args[0], templateInfo)
+			if err != nil {
+				return Type{}, evt1Diagnostic("CV4600", "Subspan requires an existing Span value", call.Args[0].exprSpan())
+			}
+			parent, err = evt1SpanSourceFacts(env, scope, call.Args[0], parentType, place)
+			if err != nil {
+				return Type{}, err
+			}
 		}
 		offset, offsetStatic := evt1StaticInt(env, scope, call.Args[1])
 		length, lengthStatic := evt1StaticInt(env, scope, call.Args[2])
@@ -434,20 +449,65 @@ func evt1CollectSpanTypes(module Module) []Type {
 			add(*t.ArrayElem)
 		}
 	}
+	var visitExpr func(Expr)
+	visitExpr = func(expr Expr) {
+		switch e := expr.(type) {
+		case *CallExpr:
+			if e.SpanElementType != nil {
+				add(evt1SpanType(e.MutabilityToTypeName(), *e.SpanElementType, e.Span))
+			}
+			visitExpr(e.Receiver)
+			for _, arg := range e.Args {
+				visitExpr(arg)
+			}
+		case *IndexExpr:
+			visitExpr(e.Base)
+			visitExpr(e.Index)
+		case *FieldExpr:
+			visitExpr(e.Receiver)
+		case *BinaryExpr:
+			visitExpr(e.Left)
+			visitExpr(e.Right)
+		case *ParenExpr:
+			visitExpr(e.Value)
+		case *RefExpr:
+			visitExpr(e.Value)
+		case *MoveExpr:
+			visitExpr(e.Value)
+		case *FailureExpr:
+			visitExpr(e.Value)
+			visitExpr(e.Else)
+		case *TemplateCallExpr:
+			for _, arg := range e.Args {
+				visitExpr(arg)
+			}
+		}
+	}
 	var visitBlock func(Block)
 	visitBlock = func(block Block) {
 		for _, statement := range block.Statements {
 			switch s := statement.(type) {
 			case *VarDecl:
 				add(s.Type)
+				visitExpr(s.Value)
+			case *ReturnStmt:
+				visitExpr(s.Value)
+			case *ExprStmt:
+				visitExpr(s.Value)
+			case *AssignStmt:
+				visitExpr(s.Value)
+			case *AssertStmt:
+				visitExpr(s.Condition)
 			case *Block:
 				visitBlock(*s)
 			case *IfStmt:
+				visitExpr(s.Condition)
 				visitBlock(s.Then)
 				if s.Else != nil {
 					visitBlock(*s.Else)
 				}
 			case *WhileStmt:
+				visitExpr(s.Condition)
 				visitBlock(s.Body)
 				if s.Else != nil {
 					visitBlock(*s.Else)
