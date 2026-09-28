@@ -972,10 +972,12 @@ func (*ForeachStmt) evt1Statement()        {}
 func (s *ForeachStmt) statementSpan() Span { return s.Span }
 
 type Pattern struct {
-	EnumName    string   `json:"enum_name"`
-	VariantName string   `json:"variant_name"`
-	Bindings    []string `json:"bindings,omitempty"`
-	Span        Span     `json:"span"`
+	EnumName    string      `json:"enum_name"`
+	VariantName string      `json:"variant_name"`
+	Bindings    []string    `json:"bindings,omitempty"`
+	Literal     *IntLiteral `json:"literal,omitempty"`
+	Wildcard    bool        `json:"wildcard,omitempty"`
+	Span        Span        `json:"span"`
 }
 
 type Expr interface {

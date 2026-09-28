@@ -116,22 +116,22 @@ Result<Option<Command>, SerialError> DecodeByte(ref Decoder decoder, uint8 value
 
 Result<Option<Command>, SerialError> DecodeOpcode(ref Decoder decoder, uint8 value)
 {
-    if (value == 0x01)
+    match (value)
     {
-        decoder.commandsSeen++;
-        return Result::Ok(Option::Some(Command::Ping));
+        0x01 => {
+            decoder.commandsSeen++;
+            return Result::Ok(Option::Some(Command::Ping));
+        }
+        0x02 => {
+            decoder.state = ParseState::AwaitRate;
+            return Result::Ok(Option::None);
+        }
+        0x03 => {
+            decoder.state = ParseState::AwaitPayload;
+            return Result::Ok(Option::None);
+        }
+        _ => { return Result::Error(SerialError::BadCommand); }
     }
-    if (value == 0x02)
-    {
-        decoder.state = ParseState::AwaitRate;
-        return Result::Ok(Option::None);
-    }
-    if (value == 0x03)
-    {
-        decoder.state = ParseState::AwaitPayload;
-        return Result::Ok(Option::None);
-    }
-    return Result::Error(SerialError::BadCommand);
 }
 
 Result<Option<Command>, SerialError> CompleteRate(ref Decoder decoder, uint8 value)

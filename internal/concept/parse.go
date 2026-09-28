@@ -3890,6 +3890,23 @@ func (p *parser) parseMatchStmt() (Statement, error) {
 }
 
 func (p *parser) parsePattern() (Pattern, error) {
+	if p.peekLexeme() == "_" {
+		tok := p.next()
+		return Pattern{Wildcard: true, Span: tok.Span}, nil
+	}
+	negative := p.peekLexeme() == "-" && isNumber(p.peekLexemeN(1))
+	if isNumber(p.peekLexeme()) || negative {
+		span := p.currentSpan()
+		if negative {
+			p.next()
+		}
+		tok := p.next()
+		literal, err := evt1ParseIntegerLiteral(tok.Lexeme, negative, span)
+		if err != nil {
+			return Pattern{}, err
+		}
+		return Pattern{Literal: literal, Span: span}, nil
+	}
 	enumTok, err := p.expectIdentifier("CV4010", "expected enum name in match arm")
 	if err != nil {
 		return Pattern{}, err

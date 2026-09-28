@@ -133,10 +133,13 @@ Result<void, SerialError> Execute(ref SerialPort port, Command command)
 
 Result<Expecting, SerialError> ClassifyOpcode(uint8 opcode)
 {
-    if (opcode == 0x01) { return Result::Ok(Expecting::Opcode); }
-    if (opcode == 0x02) { return Result::Ok(Expecting::RateDivisor); }
-    if (opcode == 0x03) { return Result::Ok(Expecting::SendPayload); }
-    return Result::Error(SerialError::UnknownOpcode);
+    return match (opcode)
+    {
+        0x01 => Result::Ok(Expecting::Opcode),
+        0x02 => Result::Ok(Expecting::RateDivisor),
+        0x03 => Result::Ok(Expecting::SendPayload),
+        _ => Result::Error(SerialError::UnknownOpcode),
+    };
 }
 
 // Feeds one byte to the decoder. Yields a command when one is complete. On

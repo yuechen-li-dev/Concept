@@ -5949,6 +5949,9 @@ func validateMatchExpr(env *semanticEnv, scope *evt1Scope, expr MatchExpr, templ
 			return Type{}, evt1Diagnostic("CV4116", fmt.Sprintf("incompatible expression-arm result types: expected %s but got %s", resultType.String(), valueType.String()), arm.Value.exprSpan())
 		}
 	}
+	if evt1IntegralRepresentation(subjectType) && !seen["*"] {
+		return Type{}, evt1Diagnostic("CV4115", "integer match requires a wildcard arm", expr.Span)
+	}
 	if missing := evt1MissingVariants(enumDecl, seen); len(missing) > 0 {
 		return Type{}, evt1Diagnostic("CV4115", "non-exhaustive match, missing variants: "+strings.Join(missing, ", "), expr.Span)
 	}
@@ -5973,6 +5976,9 @@ func validateMatchStmt(env *semanticEnv, scope *evt1Scope, stmt MatchStmt, retur
 			return err
 		}
 	}
+	if evt1IntegralRepresentation(subjectType) && !seen["*"] {
+		return evt1Diagnostic("CV4115", "integer match requires a wildcard arm", stmt.Span)
+	}
 	if missing := evt1MissingVariants(enumDecl, seen); len(missing) > 0 {
 		return evt1Diagnostic("CV4115", "non-exhaustive match, missing variants: "+strings.Join(missing, ", "), stmt.Span)
 	}
@@ -5986,6 +5992,9 @@ func validateTransitionMatchStmt(env *semanticEnv, scope *evt1Scope, stmt *Trans
 	subjectType, enumDecl, err := validateMatchSubject(env, scope, stmt.Subject, templateInfo, inComptimeFn)
 	if err != nil {
 		return evt1Diagnostic("TRANSITION_MATCH_REQUIRES_MATCHABLE", err.Error(), stmt.Subject.exprSpan())
+	}
+	if evt1IntegralRepresentation(subjectType) && subjectType.Quantity == nil {
+		return evt1Diagnostic("TRANSITION_MATCH_REQUIRES_MATCHABLE", "machine transition match requires an enum signal", stmt.Subject.exprSpan())
 	}
 	seen := map[string]bool{}
 	for _, arm := range stmt.Arms {
@@ -6097,6 +6106,9 @@ func validateMatchSubject(env *semanticEnv, scope *evt1Scope, subject Expr, temp
 	if decl, ok := evt1FailureEnumDecl(subjectType); ok {
 		return subjectType, decl, nil
 	}
+	if evt1IntegralRepresentation(subjectType) && subjectType.Quantity == nil {
+		return subjectType, EnumDecl{}, nil
+	}
 	if subjectType.Kind != TypeEnum {
 		enumDecl, ok := env.enums[subjectType.Name]
 		if !ok {
@@ -6108,6 +6120,30 @@ func validateMatchSubject(env *semanticEnv, scope *evt1Scope, subject Expr, temp
 }
 
 func validatePattern(env *semanticEnv, scope *evt1Scope, subjectType Type, enumDecl EnumDecl, pattern Pattern, seen map[string]bool) (*evt1Scope, VariantDecl, error) {
+	if evt1IntegralRepresentation(subjectType) && subjectType.Quantity == nil {
+		if seen["*"] {
+			return nil, VariantDecl{}, evt1Diagnostic("CV4113", "integer match arm after wildcard is unreachable", pattern.Span)
+		}
+		if pattern.Wildcard {
+			seen["*"] = true
+			return newEVT1Scope(scope), VariantDecl{}, nil
+		}
+		if pattern.Literal == nil {
+			return nil, VariantDecl{}, evt1Diagnostic("CV4109", "integer match requires a literal or wildcard pattern", pattern.Span)
+		}
+		if err := evt1ResolveIntegerLiteral(pattern.Literal, subjectType); err != nil {
+			return nil, VariantDecl{}, err
+		}
+		key := fmt.Sprintf("integer:%t:%d", pattern.Literal.Negative && pattern.Literal.Magnitude != 0, pattern.Literal.Magnitude)
+		if seen[key] {
+			return nil, VariantDecl{}, evt1Diagnostic("CV4113", "duplicate integer match arm "+pattern.Literal.Source(), pattern.Span)
+		}
+		seen[key] = true
+		return newEVT1Scope(scope), VariantDecl{}, nil
+	}
+	if pattern.Wildcard || pattern.Literal != nil {
+		return nil, VariantDecl{}, evt1Diagnostic("CV4109", "enum match requires an enum variant pattern", pattern.Span)
+	}
 	if pattern.EnumName != enumDecl.Name {
 		if _, ok := env.enums[pattern.EnumName]; ok {
 			return nil, VariantDecl{}, evt1Diagnostic("CV4109", fmt.Sprintf("match arm pattern uses %s on subject of type %s", pattern.EnumName, subjectType.Name), pattern.Span)

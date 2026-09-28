@@ -1235,7 +1235,7 @@ func collectMIROps(env *semanticEnv, block *Block, fn *MIRFunction, templateInfo
 				fn.Operations = append(fn.Operations, MIROperation{
 					ID:         fmt.Sprintf("%s.%02d", fn.Name, len(fn.Operations)+1),
 					Kind:       "pattern",
-					Detail:     arm.Pattern.EnumName + "::" + arm.Pattern.VariantName,
+					Detail:     evt1PatternLabel(arm.Pattern),
 					SourceSpan: arm.Pattern.Span,
 				})
 				collectMIROps(env, &arm.Block, fn, templateInfo)
@@ -1500,7 +1500,7 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 			fn.Operations = append(fn.Operations, MIROperation{
 				ID:         fmt.Sprintf("%s.%02d", fn.Name, len(fn.Operations)+1),
 				Kind:       "pattern",
-				Detail:     arm.Pattern.EnumName + "::" + arm.Pattern.VariantName,
+				Detail:     evt1PatternLabel(arm.Pattern),
 				SourceSpan: arm.Pattern.Span,
 			})
 			collectExprMIROps(env, arm.Value, fn, templateInfo)
@@ -4438,6 +4438,9 @@ func (f *evt1FunctionLowerer) lowerInPlaceStructConstruct(storage string, target
 
 func (f *evt1FunctionLowerer) lowerMatchStmt(stmt MatchStmt, indent int) string {
 	subPrelude, subjectExpr, subjectType := f.lowerExpr(stmt.Subject, indent)
+	if evt1IntegralRepresentation(subjectType) && subjectType.Quantity == nil {
+		return f.lowerIntegerMatchStmt(stmt, subPrelude, subjectExpr, subjectType, indent)
+	}
 	member := "."
 	if subjectType.isReference() {
 		member = "->"
@@ -5532,6 +5535,9 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		return b.String(), resultTemp, baseType
 	case *MatchExpr:
 		subPrelude, subjectExpr, subjectType := f.lowerExpr(e.Subject, indent)
+		if evt1IntegralRepresentation(subjectType) && subjectType.Quantity == nil {
+			return f.lowerIntegerMatchExpr(e, subPrelude, subjectExpr, subjectType, indent)
+		}
 		member := "."
 		if subjectType.isReference() {
 			member = "->"
