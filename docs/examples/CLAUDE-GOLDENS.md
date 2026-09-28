@@ -205,3 +205,23 @@ originals was forced by the language. That includes repeated literal
 template arguments, `int` token codes, and remap-`match` at every call site.
 Fixing F3, F4 and F6 would change how any model writes Concept, not just
 Claude.
+
+## R8g follow-up status (2026-09-27)
+
+Implementation commit `cb82976c9547c883aaf4cac6f192a7d2f1bcbda8` fixed
+B1, contextual float literals (F1), borrowed Result `? else` remapping (F3),
+and fixed geometry for payload-free enums (F4). It closed the implicit
+quantity-erasure paths in B2. `Standard.Math` now rejects quantity arguments
+to plain scalar signatures; dimension-preserving generic Abs/Min/Max remain
+open with F2 operator requirements. Match-expression arms now inherit a Result
+expected type, resolving that part of F8.
+
+The final Claude Postfix source now uses `TokenKind` instead of the three
+integer token codes. Its first draft remains unchanged. Payload-bearing Game
+`Intent` still has no scalar geometry; that Golden retains its indexed loop.
+All 88 Claude runtime results and the combined Golden Normal/Verify tree pass.
+The stricter quantity rule also required old layout-test callers of scalar
+`usize` APIs to write `Magnitude(SizeOf<T>())`; F4 required regeneration of
+the checked EVT1 C outputs and manifests.
+The remaining R8g queue and gate evidence are recorded in
+`docs/conformance/R8G-CONVERGENCE.md` and `R8G-CONFORMANCE.md`.
