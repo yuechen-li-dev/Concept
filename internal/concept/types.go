@@ -813,6 +813,18 @@ type InferExpr struct {
 	Span          Span              `json:"span"`
 }
 
+// DecideExpr selects one payload-free enum candidate by the greatest enabled
+// score. Equal scores retain the first candidate in source order.
+type DecideExpr struct {
+	Candidates    []ScoredCandidate `json:"candidates"`
+	CandidateType Type              `json:"candidate_type,omitempty"`
+	ScoreType     Type              `json:"score_type,omitempty"`
+	Span          Span              `json:"span"`
+}
+
+func (*DecideExpr) evt1Expr()        {}
+func (e *DecideExpr) exprSpan() Span { return e.Span }
+
 func (*InferExpr) evt1Expr()        {}
 func (e *InferExpr) exprSpan() Span { return e.Span }
 

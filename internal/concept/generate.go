@@ -1408,6 +1408,14 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 			}
 			collectExprMIROps(env, candidate.Score, fn, templateInfo)
 		}
+	case *DecideExpr:
+		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "decide", Type: e.CandidateType.String(), Detail: fmt.Sprintf("%d declaration-order candidate(s); first maximum wins", len(e.Candidates)), NoAllocation: true, SourceSpan: e.Span})
+		for _, candidate := range e.Candidates {
+			if candidate.Guard != nil {
+				collectExprMIROps(env, candidate.Guard, fn, templateInfo)
+			}
+			collectExprMIROps(env, candidate.Score, fn, templateInfo)
+		}
 	case *FailureExpr:
 		kind := "result_propagate"
 		if e.Else != nil {
@@ -4653,6 +4661,44 @@ func (f *evt1FunctionLowerer) lowerInferenceExpr(expr *InferExpr, indent int) (s
 	return b.String(), result, t
 }
 
+func (f *evt1FunctionLowerer) lowerDecisionExpr(expr *DecideExpr, indent int) (string, string, Type) {
+	hasBest := f.nextTemp("decision_has_best")
+	bestScore := f.nextTemp("decision_best_score")
+	bestValue := f.nextTemp("decision_best_value")
+	var b strings.Builder
+	b.WriteString(ind(indent) + fmt.Sprintf("bool %s = false;\n", hasBest))
+	b.WriteString(ind(indent) + fmt.Sprintf("%s %s = (%s)0;\n", evt1CType(expr.ScoreType), bestScore, evt1CType(expr.ScoreType)))
+	b.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s();\n", evt1CType(expr.CandidateType), bestValue, evt1ConstructorName(expr.CandidateType.Name, expr.Candidates[0].Identity)))
+	for _, candidate := range expr.Candidates {
+		candidateIndent := indent
+		if candidate.Guard != nil {
+			guardPrelude, guardValue, _ := f.lowerExpr(candidate.Guard, candidateIndent)
+			guardTemp := f.nextTemp("decision_guard")
+			b.WriteString(guardPrelude)
+			b.WriteString(ind(candidateIndent) + fmt.Sprintf("bool %s = %s;\n", guardTemp, guardValue))
+			b.WriteString(ind(candidateIndent) + fmt.Sprintf("if (%s) {\n", guardTemp))
+			candidateIndent++
+		}
+		scorePrelude, scoreValue, _ := f.lowerExpr(candidate.Score, candidateIndent)
+		scoreTemp := f.nextTemp("decision_score")
+		b.WriteString(scorePrelude)
+		b.WriteString(ind(candidateIndent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(expr.ScoreType), scoreTemp, scoreValue))
+		if expr.ScoreType.Name == "float" {
+			b.WriteString(ind(candidateIndent) + fmt.Sprintf("if (%s != %s) { concept_panic(%q, %d, %d); }\n", scoreTemp, scoreTemp, "decision score is NaN", candidate.Span.Line, candidate.Span.Column))
+		}
+		b.WriteString(ind(candidateIndent) + fmt.Sprintf("if (!%s || %s > %s) {\n", hasBest, scoreTemp, bestScore))
+		b.WriteString(ind(candidateIndent+1) + fmt.Sprintf("%s = true;\n", hasBest))
+		b.WriteString(ind(candidateIndent+1) + fmt.Sprintf("%s = %s;\n", bestScore, scoreTemp))
+		b.WriteString(ind(candidateIndent+1) + fmt.Sprintf("%s = %s();\n", bestValue, evt1ConstructorName(expr.CandidateType.Name, candidate.Identity)))
+		b.WriteString(ind(candidateIndent) + "}\n")
+		if candidate.Guard != nil {
+			b.WriteString(ind(indent) + "}\n")
+		}
+	}
+	b.WriteString(ind(indent) + fmt.Sprintf("if (!%s) { concept_panic(%q, %d, %d); }\n", hasBest, "decision has no enabled candidates", expr.Span.Line, expr.Span.Column))
+	return b.String(), bestValue, expr.CandidateType
+}
+
 func (f *evt1FunctionLowerer) lowerTransitionInferStmt(stmt TransitionInferStmt, indent int) string {
 	core, probabilities := f.lowerInferenceCore(stmt.Candidates, indent+1)
 	best := f.nextTemp("inference_best")
@@ -4852,6 +4898,8 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		return "", evt1RenderFloatLiteral(e, floatType), floatType
 	case *InferExpr:
 		return f.lowerInferenceExpr(e, indent)
+	case *DecideExpr:
+		return f.lowerDecisionExpr(e, indent)
 	case *BinaryExpr:
 		if e.Op == ".." || e.Op == "step" || e.Op == "descend" {
 			return f.lowerRangeExpr(e, indent)

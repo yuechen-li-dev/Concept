@@ -1,0 +1,3 @@
+profile Core;
+enum Choice { Left, Right }
+Choice Bad() { return decide { Left when 1 score 2; Right score 1; }; }
