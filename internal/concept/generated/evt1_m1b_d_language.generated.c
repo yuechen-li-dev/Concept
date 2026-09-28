@@ -20,21 +20,18 @@ static concept_retry_summary concept_retry_summary_make(concept_array_2_int valu
 static concept_lifecycle_state concept_lifecycle_state_make_empty(void) {
   concept_lifecycle_state out;
   out.tag = CONCEPT_LIFECYCLE_STATE_EMPTY;
-  out.payload.none.unused = 0u;
   return out;
 }
 
 static concept_lifecycle_state concept_lifecycle_state_make_ready(void) {
   concept_lifecycle_state out;
   out.tag = CONCEPT_LIFECYCLE_STATE_READY;
-  out.payload.none.unused = 0u;
   return out;
 }
 
 static concept_lifecycle_state concept_lifecycle_state_make_submitted(void) {
   concept_lifecycle_state out;
   out.tag = CONCEPT_LIFECYCLE_STATE_SUBMITTED;
-  out.payload.none.unused = 0u;
   return out;
 }
 

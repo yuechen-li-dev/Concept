@@ -163,7 +163,7 @@ struct Header
 }
 static_assert(SizeOf<Header>() == 8, "header size");
 static_assert(AlignOf<Header>() == 4, "header alignment");
-usize Main() { return SizeOf<Header>(); }
+usize Main() { return Magnitude(SizeOf<Header>()); }
 `
 	module, err := Parse("generic_sizeof.concept", source)
 	if err != nil {
@@ -188,7 +188,7 @@ struct Pair
 };
 static_assert(SizeOf<Pair<int>>() == 8, "pair size");
 static_assert(AlignOf<Pair<int>>() == 4, "pair alignment");
-usize Main() { return SizeOf<Pair<int>>(); }
+usize Main() { return Magnitude(SizeOf<Pair<int>>()); }
 `
 	module, err := Parse("generic_struct_basic.concept", source)
 	if err != nil {
@@ -212,7 +212,7 @@ struct FixedBuffer
     T<array>[Capacity] values;
 };
 static_assert(SizeOf<FixedBuffer<int, 4>>() == 16, "fixed buffer size");
-usize Main() { return SizeOf<FixedBuffer<int, 4>>(); }
+usize Main() { return Magnitude(SizeOf<FixedBuffer<int, 4>>()); }
 `
 	module, err := Parse("generic_non_type_parameter.concept", source)
 	if err != nil {
@@ -279,7 +279,7 @@ func TestGenericFunctionCanQueryConcreteTypeLayout(t *testing.T) {
 template <typename T>
 usize RequiredBytes()
 {
-    return SizeOf<T>();
+    return Magnitude(SizeOf<T>());
 }
 usize Main() { return RequiredBytes<int>(); }
 `
@@ -302,7 +302,7 @@ func TestNestedGenericApplicationsShareConcreteIdentity(t *testing.T) {
 template <typename T>
 struct Box { T value; };
 static_assert(SizeOf<Box<Box<int>>>() == 4, "nested box size");
-usize Main() { return SizeOf<Box<Box<int>>>(); }
+usize Main() { return Magnitude(SizeOf<Box<Box<int>>>()); }
 `
 	module, err := Parse("generic_nested_application.concept", source)
 	if err != nil {
@@ -411,7 +411,7 @@ struct Storage { T<array>[N] data; };
 extern "C"
 byte* HostAcquire(usize size);
 requires compiler.Allocates(HostAcquire);
-usize Main() { return SizeOf<Storage<int, 4>>(); }
+usize Main() { return Magnitude(SizeOf<Storage<int, 4>>()); }
 `
 	module, err := Parse("generic_effect_determinism.concept", source)
 	if err != nil {

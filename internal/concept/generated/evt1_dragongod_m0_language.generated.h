@@ -17,10 +17,7 @@ typedef enum concept_lifecycle_signal_tag {
 } concept_lifecycle_signal_tag;
 
 typedef struct concept_lifecycle_signal {
-  concept_lifecycle_signal_tag tag;
-  union {
-    struct { unsigned char unused; } none;
-  } payload;
+  uint32_t tag;
 } concept_lifecycle_signal;
 
 int32_t concept_evt1_dragongod_m0_language_root_retry_budget(void);

@@ -42,98 +42,84 @@ static void concept_abort_automata_completion(const char* automata_name, int ste
 static concept_lifecycle_signal concept_lifecycle_signal_make_create(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_CREATE;
-  out.payload.none.unused = 0u;
   return out;
 }
 
 static concept_lifecycle_signal concept_lifecycle_signal_make_begin(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_BEGIN;
-  out.payload.none.unused = 0u;
   return out;
 }
 
 static concept_lifecycle_signal concept_lifecycle_signal_make_clean(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_CLEAN;
-  out.payload.none.unused = 0u;
   return out;
 }
 
 static concept_lifecycle_signal concept_lifecycle_signal_make_release(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_RELEASE;
-  out.payload.none.unused = 0u;
   return out;
 }
 
 static concept_lifecycle_signal concept_lifecycle_signal_make_sweep(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_SWEEP;
-  out.payload.none.unused = 0u;
   return out;
 }
 
 static concept_lifecycle_signal concept_lifecycle_signal_make_confirm(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_CONFIRM;
-  out.payload.none.unused = 0u;
   return out;
 }
 
 static concept_lifecycle_signal concept_lifecycle_signal_make_stop(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_STOP;
-  out.payload.none.unused = 0u;
   return out;
 }
 
 static concept_lifecycle_signal concept_lifecycle_signal_make_tick(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_TICK;
-  out.payload.none.unused = 0u;
   return out;
 }
 
 static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_transitioned(void) {
   concept_automata_dispatch_outcome out;
   out.tag = CONCEPT_AUTOMATA_DISPATCH_OUTCOME_TRANSITIONED;
-  out.payload.none.unused = 0u;
   return out;
 }
 
 static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_unhandled(void) {
   concept_automata_dispatch_outcome out;
   out.tag = CONCEPT_AUTOMATA_DISPATCH_OUTCOME_UNHANDLED;
-  out.payload.none.unused = 0u;
   return out;
 }
 
 static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_ambiguous(void) {
   concept_automata_dispatch_outcome out;
   out.tag = CONCEPT_AUTOMATA_DISPATCH_OUTCOME_AMBIGUOUS;
-  out.payload.none.unused = 0u;
   return out;
 }
 
 static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_finished(void) {
   concept_automata_dispatch_outcome out;
   out.tag = CONCEPT_AUTOMATA_DISPATCH_OUTCOME_FINISHED;
-  out.payload.none.unused = 0u;
   return out;
 }
 
 static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_already_finished(void) {
   concept_automata_dispatch_outcome out;
   out.tag = CONCEPT_AUTOMATA_DISPATCH_OUTCOME_ALREADY_FINISHED;
-  out.payload.none.unused = 0u;
   return out;
 }
 
 static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_effect_batch_occupied(void) {
   concept_automata_dispatch_outcome out;
   out.tag = CONCEPT_AUTOMATA_DISPATCH_OUTCOME_EFFECT_BATCH_OCCUPIED;
-  out.payload.none.unused = 0u;
   return out;
 }
 

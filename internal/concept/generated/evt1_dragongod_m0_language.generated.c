@@ -6,56 +6,48 @@
 static concept_lifecycle_signal concept_lifecycle_signal_make_create(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_CREATE;
-  out.payload.none.unused = 0u;
   return out;
 }
 
 static concept_lifecycle_signal concept_lifecycle_signal_make_begin(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_BEGIN;
-  out.payload.none.unused = 0u;
   return out;
 }
 
 static concept_lifecycle_signal concept_lifecycle_signal_make_clean(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_CLEAN;
-  out.payload.none.unused = 0u;
   return out;
 }
 
 static concept_lifecycle_signal concept_lifecycle_signal_make_release(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_RELEASE;
-  out.payload.none.unused = 0u;
   return out;
 }
 
 static concept_lifecycle_signal concept_lifecycle_signal_make_sweep(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_SWEEP;
-  out.payload.none.unused = 0u;
   return out;
 }
 
 static concept_lifecycle_signal concept_lifecycle_signal_make_confirm(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_CONFIRM;
-  out.payload.none.unused = 0u;
   return out;
 }
 
 static concept_lifecycle_signal concept_lifecycle_signal_make_stop(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_STOP;
-  out.payload.none.unused = 0u;
   return out;
 }
 
 static concept_lifecycle_signal concept_lifecycle_signal_make_tick(void) {
   concept_lifecycle_signal out;
   out.tag = CONCEPT_LIFECYCLE_SIGNAL_TICK;
-  out.payload.none.unused = 0u;
   return out;
 }
 

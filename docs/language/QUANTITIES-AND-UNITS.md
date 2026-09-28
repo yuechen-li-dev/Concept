@@ -44,9 +44,9 @@ compiler primitive for existing source compatibility; new authored code uses
 `interpret`.
 
 `SizeOf<T>()`, `AlignOf<T>()`, `LayoutSize<T>()`, `LayoutAlign<T>()`, and
-`LayoutOffset<T>()` use `usize<byte>` and the existing layout authority. A
-compatibility bridge permits an R6g byte quantity through an old naked-`usize`
-result signature, but it does not permit unrelated quantity arithmetic.
+`LayoutOffset<T>()` use `usize<byte>` and the existing layout authority. Use
+`Magnitude` when an API explicitly needs the current-unit scalar, such as a
+legacy `usize` result signature.
 
 The `usize` operator surface includes `+`, `-`, `*`, `/`, `%`, comparisons,
 `&`, `|`, `^`, `<<`, and `>>`. It follows existing native integer overflow

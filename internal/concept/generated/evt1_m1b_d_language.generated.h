@@ -12,10 +12,7 @@ typedef enum concept_lifecycle_state_tag {
 } concept_lifecycle_state_tag;
 
 typedef struct concept_lifecycle_state {
-  concept_lifecycle_state_tag tag;
-  union {
-    struct { unsigned char unused; } none;
-  } payload;
+  uint32_t tag;
 } concept_lifecycle_state;
 
 typedef struct concept_transition {

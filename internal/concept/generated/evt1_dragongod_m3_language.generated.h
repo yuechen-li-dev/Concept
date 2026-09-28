@@ -11,10 +11,7 @@ typedef enum concept_queue_class_tag {
 } concept_queue_class_tag;
 
 typedef struct concept_queue_class {
-  concept_queue_class_tag tag;
-  union {
-    struct { unsigned char unused; } none;
-  } payload;
+  uint32_t tag;
 } concept_queue_class;
 
 typedef struct concept_lifecycle_context {
@@ -34,10 +31,7 @@ typedef enum concept_lifecycle_signal_tag {
 } concept_lifecycle_signal_tag;
 
 typedef struct concept_lifecycle_signal {
-  concept_lifecycle_signal_tag tag;
-  union {
-    struct { unsigned char unused; } none;
-  } payload;
+  uint32_t tag;
 } concept_lifecycle_signal;
 
 typedef enum concept_automata_dispatch_outcome_tag {
@@ -50,10 +44,7 @@ typedef enum concept_automata_dispatch_outcome_tag {
 } concept_automata_dispatch_outcome_tag;
 
 typedef struct concept_automata_dispatch_outcome {
-  concept_automata_dispatch_outcome_tag tag;
-  union {
-    struct { unsigned char unused; } none;
-  } payload;
+  uint32_t tag;
 } concept_automata_dispatch_outcome;
 
 bool concept_evt1_dragongod_m3_language_queue_open(const concept_lifecycle_context* context);

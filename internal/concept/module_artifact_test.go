@@ -178,7 +178,7 @@ struct Outer { Inner<Configuration, Capacity> inner; };
 profile Core;
 import Standard.Nested;
 record struct AppConfiguration { int identity; };
-usize Main() { return SizeOf<Outer<AppConfiguration, 3>>(); }
+usize Main() { return Magnitude(SizeOf<Outer<AppConfiguration, 3>>()); }
 `
 	module, err := ParseWithSemanticModules("App.concept", consumer, map[string][]byte{"Standard.Nested": artifact})
 	if err != nil {
@@ -227,14 +227,14 @@ class Owner { public: T value; };
 	valid := `module App; profile Core; import Standard.Constrained;
 struct Resource { int id; }
 int Read(Resource value) { return value.id; }
-usize Main() { return SizeOf<Owner<Resource>>(); }
+usize Main() { return Magnitude(SizeOf<Owner<Resource>>()); }
 `
 	if _, err := ParseWithSemanticModules("valid.concept", valid, map[string][]byte{"Standard.Constrained": artifact}); err != nil {
 		t.Fatal(err)
 	}
 	invalid := `module App; profile Core; import Standard.Constrained;
 struct ImmovableThing { int id; }
-usize Main() { return SizeOf<Owner<ImmovableThing>>(); }
+usize Main() { return Magnitude(SizeOf<Owner<ImmovableThing>>()); }
 `
 	_, err := ParseWithSemanticModules("invalid.concept", invalid, map[string][]byte{"Standard.Constrained": artifact})
 	if err == nil || !strings.Contains(err.Error(), "Readable") || !strings.Contains(err.Error(), "ImmovableThing") {
@@ -299,7 +299,7 @@ int OpaqueWrapper() { return HostOpaque(); }
 		name, call, code string
 	}{
 		{"proven", "Pure()", ""},
-		{"disproven", "Acquire(SizeOf<int>())", "CONCEPT_ASSERT_DISPROVEN"},
+		{"disproven", "Acquire(Magnitude(SizeOf<int>()))", "CONCEPT_ASSERT_DISPROVEN"},
 		{"unknown", "OpaqueWrapper()", "CONCEPT_ASSERT_UNKNOWN"},
 	}
 	for _, tc := range cases {
@@ -337,7 +337,7 @@ struct Arena { int used; }
 int Allocate(ref Arena self, usize size) { self.used = self.used + 1; return self.used; }
 requires compiler.Allocates(Allocate);
 requires Allocator<Arena>;
-int Main() { Arena arena = Arena{0}; return Allocate(ref arena, SizeOf<int>()); }
+int Main() { Arena arena = Arena{0}; return Allocate(ref arena, Magnitude(SizeOf<int>())); }
 `
 	module, err := ParseWithSemanticModules("interface_effect.concept", consumer, map[string][]byte{"Standard.AllocatorContract": artifact})
 	if err != nil {
@@ -424,7 +424,7 @@ int Acquire(usize size) { byte* storage = ConceptHostAllocate(size); return 1; }
 int Main()
 {
     Box<int> box = Box<int>{Identity<int>(7)};
-    usize bytes = SizeOf<int>();
+    usize bytes = Magnitude(SizeOf<int>());
     int acquired = Acquire(bytes);
     return box.value + acquired;
 }
@@ -486,7 +486,7 @@ func TestFilesystemResolverUsesExactRootsAndRejectsStaleOrDuplicateIdentity(t *t
 	}
 	root := t.TempDir()
 	writeRoot(root)
-	consumer := `module App; profile Core; import Standard.Generic; usize Main() { return SizeOf<Box<int>>(); }`
+	consumer := `module App; profile Core; import Standard.Generic; usize Main() { return Magnitude(SizeOf<Box<int>>()); }`
 	if _, err := ParseWithSemanticModuleRoots("app.concept", consumer, []string{root}); err != nil {
 		t.Fatal(err)
 	}

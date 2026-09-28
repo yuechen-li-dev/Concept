@@ -17,10 +17,7 @@ typedef enum concept_resource_signal_tag {
 } concept_resource_signal_tag;
 
 typedef struct concept_resource_signal {
-  concept_resource_signal_tag tag;
-  union {
-    struct { unsigned char unused; } none;
-  } payload;
+  uint32_t tag;
 } concept_resource_signal;
 
 typedef enum concept_automata_dispatch_outcome_tag {
@@ -33,10 +30,7 @@ typedef enum concept_automata_dispatch_outcome_tag {
 } concept_automata_dispatch_outcome_tag;
 
 typedef struct concept_automata_dispatch_outcome {
-  concept_automata_dispatch_outcome_tag tag;
-  union {
-    struct { unsigned char unused; } none;
-  } payload;
+  uint32_t tag;
 } concept_automata_dispatch_outcome;
 
 int32_t concept_evt1_dragongod_m1_vulkan_outcome_code(concept_automata_dispatch_outcome outcome);

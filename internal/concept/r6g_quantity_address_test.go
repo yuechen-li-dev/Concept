@@ -19,7 +19,7 @@ float HertzSeconds(float<Hz> frequency, float<s> period) { return frequency * pe
 float<K> Warm(float<K> temperature, float<K> delta) { return temperature + delta; }
 float<m/s> Speed(float<m> distance, float<s> elapsed) { return distance / elapsed; }
 usize<byte> BitsToBytes(usize<bit> bits) { return Convert<byte>(bits); }
-usize Main() { usize count = 4; return RequiredBytes(count, SizeOf<int>()); }
+usize Main() { usize count = 4; return Magnitude(RequiredBytes(count, SizeOf<int>())); }
 `
 	module, err := Parse("r6g_quantities.concept", source)
 	if err != nil {

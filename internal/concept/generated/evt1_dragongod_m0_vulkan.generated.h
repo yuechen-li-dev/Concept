@@ -17,10 +17,7 @@ typedef enum concept_resource_signal_tag {
 } concept_resource_signal_tag;
 
 typedef struct concept_resource_signal {
-  concept_resource_signal_tag tag;
-  union {
-    struct { unsigned char unused; } none;
-  } payload;
+  uint32_t tag;
 } concept_resource_signal;
 
 int32_t concept_evt1_dragongod_m0_vulkan_classify_range(VkBuffer buffer);
