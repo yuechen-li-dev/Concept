@@ -8,6 +8,7 @@ generator <typename T> DeriveOperandCount
 int OperandCount(ref const T instruction)
 {
     int used = 0;
+    // `field` is the FieldInfo loop binding and projects the selected member.
     for (FieldInfo field in Fields<T>(operand))
     {
         if (instruction.field.value >= 0) {

@@ -1,5 +1,7 @@
 # Claude reinterpretations of the Golden programs
 
+**R8g follow-up (2026-09-28):** The final original and Claude sources now run together: 130 passed, 0 failed, 2 benchmarks in both Normal and Verify. All 61 final `.concept` and `.concept_test` files pass per-file `concept format --check`; first drafts remain historical evidence. The original behavior bugs described below have been fixed and pinned in original runtime tests. The resolved/deferred issue ledger is [R8G-CONVERGENCE.md](../conformance/R8G-CONVERGENCE.md). The comparison below records what the Claude pass found at first contact; superseded limitations remain as historical evidence.
+
 All thirteen Golden domains, the eight R7p migration goldens and the five R8f
 differentiators, rewritten the way Claude would write them. They live in
 `libraries/Golden/Claude/`, mirroring the original layout. Each domain keeps
@@ -9,8 +11,8 @@ feedback, next to the final source.
 | | Originals | Claude versions |
 | --- | ---: | ---: |
 | Test functions | 38 | 83 (88 results; one theory has 6 rows) |
-| Normal / Verify | pass | pass / pass |
-| Whole Golden tree | 37 facts + 2 benchmarks | 125 facts + 2 benchmarks |
+| Normal / Verify | pass / pass | pass / pass |
+| Final runtime results | 42 facts + 2 benchmarks | 88 facts; combined tree: 130 facts + 2 benchmarks |
 
 `TestR7pDomainGoldensNormalAndVerify` passes over the combined tree. Its
 accounting compared raw result counts with discovered tests, which a
@@ -18,7 +20,7 @@ accounting compared raw result counts with discovered tests, which a
 discovered test ID to report and none to fail, the same class of fix R8f
 made for benchmarks.
 
-The new files are deliberately **not** run through `concept format`. See F9.
+The final sources now pass `concept format --check`; only first-draft `.txt` files retain their original layout.
 
 ## How to run
 
@@ -39,7 +41,7 @@ The rewrites apply a different set of habits.
 | --- | --- | --- |
 | Name invariants, not numbers | `32`, `64`, `0x50`, `0/1/2` token kinds inline | `QueueCapacity`, `PingReply`, `Operator` enum, `CommitTicks` |
 | One error per failure | `CacheError::Missing` for a bad offset; `DirtyPage` for a pinned page; `SensorInvalid` for an empty history | `OffsetOutOfRange`, `Pinned`, `NoSamples`, and so on |
-| Tests check *which* error | `Assert.Error(...)` everywhere | `FailsWith(result, Error::X)` helpers per domain |
+| Tests check *which* error | `Assert.Error(...)` everywhere | Direct built-in `Assert.FailsWith(result, Error::X)` after F8 |
 | Make bad states hard to build | Unchecked `AdvanceHeat(diffusion)` beside a checked wrapper | `Diffusion` can only come from `StableDiffusion()`; the kernel takes a `Diffusion` |
 | Separate deciding from doing | Utility scoring inside a machine state | Pure `Choose()` tested on its own; the machine only sequences |
 | Derive state, don't duplicate it | Ring with `head`, `tail` *and* `count` | `(head, count)`; tail is computed |
@@ -50,7 +52,7 @@ The rewrites apply a different set of habits.
 
 ## Behaviour bugs in the original goldens
 
-These go beyond style. Each is fixed in the Claude version and pinned by a test.
+These go beyond style. Each was first fixed in the Claude version and is now also fixed and pinned in the original Golden.
 
 | Domain | Defect | Pinning test |
 | --- | --- | --- |
@@ -206,7 +208,7 @@ template arguments, `int` token codes, and remap-`match` at every call site.
 Fixing F3, F4 and F6 would change how any model writes Concept, not just
 Claude.
 
-## R8g follow-up status (2026-09-27)
+## First R8g batch status (2026-09-27; superseded by follow-up above)
 
 Implementation commit `cb82976c9547c883aaf4cac6f192a7d2f1bcbda8` fixed
 B1, contextual float literals (F1), borrowed Result `? else` remapping (F3),

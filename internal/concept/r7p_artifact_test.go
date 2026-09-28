@@ -61,7 +61,7 @@ func TestR7pGoldenArtifactsWithoutDependencySource(t *testing.T) {
 		}
 		artifacts[golden.module] = artifact
 	}
-	const aerospaceConsumer = `module Consumer; profile Core; import Golden.Aerospace.FlightTelemetry; int Main() { FlightController controller = FlightController{FlightMode::Preflight, [FlightSample{0.0, 0.0, false} ... 16], 0, 0, 0}; AcceptNative(ref controller, NativeSample{100.0, 2.0, 1})!; return controller.accepted; }`
+ const aerospaceConsumer = `module Consumer; profile Core; import Golden.Aerospace.FlightTelemetry; int Main() { FlightController controller = FlightController{FlightMode::Preflight, [FlightSample{0.0, 0.0, false} ... 16], 0, 0, 0, 0}; AcceptNative(ref controller, NativeSample{100.0, 2.0, 1})!; return controller.accepted; }`
 	if _, err := ParseWithSemanticModules("Consumer.concept", aerospaceConsumer, artifacts); err != nil {
 		t.Fatalf("aerospace artifact consumer: %v", err)
 	}

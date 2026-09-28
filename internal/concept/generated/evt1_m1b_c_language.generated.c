@@ -33,11 +33,13 @@ int32_t concept_evt1_m1b_c_language_selected_arm(bool chooseThen, int32_t thenVa
 int32_t concept_evt1_m1b_c_language_count_up(int32_t input) {
   int32_t value = INT32_C(0);
   int32_t cursor = INT32_C(0);
-  int cv_limit_01 = 6;
-  int cv_iter_02 = 0;
-  while (cv_iter_02 < cv_limit_01) {
+  int cv_iter_01 = 0;
+  while (1) {
     if (!((cursor < input))) { break; }
-    cv_iter_02 = cv_iter_02 + 1;
+    if (cv_iter_01 >= 6) {
+      break;
+    }
+    cv_iter_01 = cv_iter_01 + 1;
     value = concept_rt_evt1_m1b_c_language_i32_add(value, INT32_C(1), 50, 23);
     cursor = concept_rt_evt1_m1b_c_language_i32_add(cursor, INT32_C(1), 51, 25);
   }
@@ -45,22 +47,24 @@ int32_t concept_evt1_m1b_c_language_count_up(int32_t input) {
     if (!((value < 4))) { break; }
     value = concept_rt_evt1_m1b_c_language_i32_add(value, INT32_C(1), 55, 23);
   }
-  int32_t cv_if_result_03;
+  int32_t cv_if_result_02;
   if (true) {
-    cv_if_result_03 = value;
+    cv_if_result_02 = value;
   } else {
-    cv_if_result_03 = input;
+    cv_if_result_02 = input;
   }
-  return cv_if_result_03;
+  return cv_if_result_02;
 }
 
 int32_t concept_evt1_m1b_c_language_zero_bound(int32_t input) {
   int32_t value = INT32_C(99);
-  int cv_limit_01 = 0;
-  int cv_iter_02 = 0;
-  while (cv_iter_02 < cv_limit_01) {
+  int cv_iter_01 = 0;
+  while (1) {
     if (!((input > INT32_C(0)))) { break; }
-    cv_iter_02 = cv_iter_02 + 1;
+    if (cv_iter_01 >= 0) {
+      break;
+    }
+    cv_iter_01 = cv_iter_01 + 1;
     value = INT32_C(0);
   }
   return value;

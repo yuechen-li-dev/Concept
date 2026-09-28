@@ -80,7 +80,8 @@ int Main()
     {
         Step(work);
     }
-    if (branchCalls == 1 and matchCalls == 1 and loopCalls == 2 and
+    // The final condition check distinguishes exact completion from exhaustion.
+    if (branchCalls == 1 and matchCalls == 1 and loopCalls == 3 and
         awaitCalls == 4 and skippedCalls == 0)
     {
         return Result(work);

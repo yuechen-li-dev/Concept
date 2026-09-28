@@ -23,21 +23,23 @@ static concept_range_config concept_range_config_make(int32_t step, bool active)
 int32_t concept_evt1_m1b_c_vulkan_classify_range(VkBuffer buffer) {
   int32_t total = INT32_C(0);
   int32_t cursor = INT32_C(0);
-  int cv_limit_01 = 3;
-  int cv_iter_02 = 0;
-  while (cv_iter_02 < cv_limit_01) {
+  int cv_iter_01 = 0;
+  while (1) {
     if (!((cursor < 3))) { break; }
-    cv_iter_02 = cv_iter_02 + 1;
+    if (cv_iter_01 >= 3) {
+      break;
+    }
+    cv_iter_01 = cv_iter_01 + 1;
     total = concept_rt_evt1_m1b_c_vulkan_i32_add(total, INT32_C(1), 31, 23);
     cursor = concept_rt_evt1_m1b_c_vulkan_i32_add(cursor, INT32_C(1), 32, 25);
   }
-  int32_t cv_if_result_03;
+  int32_t cv_if_result_02;
   if (true) {
-    cv_if_result_03 = total;
+    cv_if_result_02 = total;
   } else {
-    cv_if_result_03 = INT32_C(0);
+    cv_if_result_02 = INT32_C(0);
   }
-  return cv_if_result_03;
+  return cv_if_result_02;
 }
 
 bool concept_evt1_m1b_c_vulkan_pool_ready(VkCommandPool pool, bool ready) {
