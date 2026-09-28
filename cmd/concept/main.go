@@ -24,6 +24,7 @@ Usage:
   concept emit-c <file> [--verify]
   concept mir <file> [--verify]
   concept lir <file>
+  concept machineir <file>
   concept plan <file> [--verify]
   concept explain <file>[:line] [--json] [--verbose]
   concept explain <file> --generated <symbol> [--json] [--verbose]
@@ -50,6 +51,7 @@ Commands:
   emit-c  write generated strict-C11 implementation to stdout
   mir     write deterministic MIR JSON to stdout
   lir     verify and write target-independent EVT2 LIR to stdout
+  machineir  verify and write AMD64 Windows MachineIR to stdout
   plan    write deterministic LoweringPlan JSON to stdout
   explain display the proof graph for an Assert.Concept source contract
   reflect display compile-time structural results from explicit reflect<T>; sites
@@ -178,6 +180,12 @@ func main() {
 			fail(err)
 		}
 		fmt.Print(lir.String())
+	case "machineir":
+		machine, err := concept.GenerateMachineIR(module)
+		if err != nil {
+			fail(err)
+		}
+		fmt.Print(machine.String())
 	case "reflect":
 		output, err := json.MarshalIndent(module.ReflectionResults, "", "  ")
 		if err != nil {
