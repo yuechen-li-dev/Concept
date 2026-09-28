@@ -43,6 +43,12 @@ func LowerMirToLir(mir *MIR, plan *LoweringPlan) (LIRModule, error) {
 	if err := ValidateLoweringPlan(mir, &facts, plan); err != nil {
 		return LIRModule{}, err
 	}
+	// Machine states are executable declarations, not ordinary function bodies.
+	// Until frame/dispatch lowering consumes MIRState.SemanticBody, omitting them
+	// would let an automata-only module appear to have valid native LIR.
+	if len(mir.Automata) != 0 {
+		return LIRModule{}, fmt.Errorf("EVT2_UNSUPPORTED_AUTOMATA_LOWERING %s", mir.Automata[0].Name)
+	}
 	out := LIRModule{PlanID: plan.PlanID, SemanticFacts: append([]MIRSemanticFact(nil), mir.SemanticFacts...)}
 	sort.Slice(out.SemanticFacts, func(i, j int) bool { return out.SemanticFacts[i].ID < out.SemanticFacts[j].ID })
 	var err error

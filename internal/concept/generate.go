@@ -316,7 +316,7 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 		if resolvedDecl.SignalType.Name == "" {
 			environment := &MIRAutomataStateEnvironment{Identity: resolvedDecl.Name + "#state", Shared: true, Explicit: true, SourceSpan: resolvedDecl.Span}
 			for i, field := range resolvedDecl.StateFields {
-				environment.Fields = append(environment.Fields, MIRPersistentStorage{Identity: resolvedDecl.Name + "#state." + field.Name, Name: field.Name, Type: evt1MIRType(env, field.Type), Classification: "AutomataState", Ordinal: i, Mutable: !field.Type.Const, HasDrop: evt1TypeHasDrop(env, field.Type), Provenance: evt1AutomataStorageProvenance(field.Type), SourceSpan: field.Span})
+				environment.Fields = append(environment.Fields, MIRPersistentStorage{Identity: resolvedDecl.Name + "#state." + field.Name, Name: field.Name, Type: evt1MIRType(env, field.Type), Classification: "AutomataState", Ordinal: i, Mutable: !field.Type.Const, HasDrop: evt1TypeHasDrop(env, field.Type), Provenance: evt1AutomataStorageProvenance(field.Type), Initializer: field.Initializer, SourceSpan: field.Span})
 			}
 			mirAutomata.StateEnvironment = environment
 			mirAutomata.MachineStack = &MIRMachineStack{Capacity: evt1MachineStackCapacity, Storage: "InlineBoundedSpecializedFrames", Scheduler: "None", Continuation: "ExplicitState", SharedState: resolvedDecl.Name + "#state"}
@@ -339,11 +339,12 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 				mirMachine.ResultType, mirMachine.ErrorType = &resultType, &errorType
 			}
 			for i, field := range machine.Fields {
-				mirMachine.Fields = append(mirMachine.Fields, MIRPersistentStorage{Identity: resolvedDecl.Name + "." + machine.Name + "#field." + field.Name, Name: field.Name, Type: evt1MIRType(env, field.Type), Classification: "MachinePersistent", Ordinal: i, Mutable: !field.Type.Const, HasDrop: evt1TypeHasDrop(env, field.Type), Provenance: evt1AutomataStorageProvenance(field.Type), SourceSpan: field.Span})
+				mirMachine.Fields = append(mirMachine.Fields, MIRPersistentStorage{Identity: resolvedDecl.Name + "." + machine.Name + "#field." + field.Name, Name: field.Name, Type: evt1MIRType(env, field.Type), Classification: "MachinePersistent", Ordinal: i, Mutable: !field.Type.Const, HasDrop: evt1TypeHasDrop(env, field.Type), Provenance: evt1AutomataStorageProvenance(field.Type), Initializer: field.Initializer, SourceSpan: field.Span})
 			}
 			for _, state := range machine.States {
 				mirState := MIRState{
 					Name:           state.Name,
+					SemanticBody:   state.Body,
 					Initial:        state.Initial,
 					Terminal:       state.Terminal,
 					RuntimeOrdinal: info.StateOrdinal[machine.Name][state.Name],

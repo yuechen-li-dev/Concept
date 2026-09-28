@@ -1,5 +1,10 @@
 # EVT2 target-independent LIR
 
+EVT2x is a sequence break after EVT2d. Machine-state semantic bodies and
+persistent initializers now survive in-memory MIR construction, but executable
+automata LIR is pending; the LIR entry point rejects automata explicitly. See
+`EVT2-NATIVE-AUTOMATA.md` and `EVT2X-CONVERGENCE.md`.
+
 MIR preserves Concept language semantics. SemanticFacts record what the compiler knows. Planner decides which mechanisms remain necessary. LIR makes low-level control/dataflow explicit without becoming target-specific. MachineIR will later perform target/ABI/instruction lowering.
 
 Lowering may erase syntax but not semantic authority required by later stages. A retained bounds guard is explicit; an exact conversion, atomic order, MMIO distinction, or proof-backed removal must likewise have an explicit representation before that feature is supported by LIR.
