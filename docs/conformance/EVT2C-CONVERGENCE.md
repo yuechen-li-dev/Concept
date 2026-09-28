@@ -17,8 +17,14 @@ Qualification:
 | Standard Normal / Verify | 35 / 35 pass, 3 benchmarks each |
 | DragonGod Normal / Verify | 23 / 23 pass, 1 benchmark each |
 | Golden Normal / Verify | 130 / 130 pass, 2 benchmarks each |
-| Full `go test ./... -count=1` | Baseline failures above remained. The post-change run also saw one native thread specimen exit 3; its isolated rerun passed. |
+| Full `go test ./... -count=1` | Pass after the qualification follow-up: `internal/concept` 262.767 s; Vulkan profile package pass. |
 
 The current MachineIR has no encoder, executable memory, native execution, object files, full register allocator, calls, SysV ABI, or float/SIMD. `UMUL` remains a target legalization pseudo-op. EVT2d was not started.
 
-The post-change full suite also failed `TestR7d5BlackboardPublicationDisjointWritersAndMPSCNativeThreads`: its native harness returned 3 because its reader did not observe the expected value 42 within a bounded polling loop. The identical test passed when run in isolation immediately afterward. EVT2c does not route this C11 harness through MachineIR. The cause of the full-run-only failure remains unqualified. No EVT2c test failed in the full run.
+## Qualification follow-up
+
+The first post-change full run also failed `TestR7d5BlackboardPublicationDisjointWritersAndMPSCNativeThreads` with native exit 3. Its reader used a million tight polling iterations, which could finish before the writer was scheduled. The test now yields after an unsuccessful poll and uses the existing monotonic clock to bound the wait to five seconds. The semantic assertion remains `observed == 42`; the focused test passed ten consecutive runs and the final full run passed.
+
+Three baseline failures were checkout or host setup: `.gitattributes` now pins LF for the EVT1 source fixtures, byte-exact checked outputs, and proof text (the local worktree was normalized to match); Windows native harnesses no longer pass POSIX `-lm` to the MSVC-target Clang driver; and the declared TinyXML2 submodule was initialized at its pinned `8224e427b655b83dae5e2298f1e6919523a78737` commit. The proof and checked-output tests, the five formerly `m.lib`-blocked tests, and the TinyXML2 ABI test passed individually before the full run. No checked output was regenerated or changed, and the compiler, C emitter, LIR, and MachineIR semantics were unchanged by this follow-up.
+
+After the full Go pass, `go vet ./...`, both Zig suites, Standard Normal/Verify (35 each), DragonGod Normal/Verify (23 each), and Golden Normal/Verify (130 each) passed again. The worktree has only the follow-up source, attribute, and ledger changes; the initialized upstream submodule remains at its declared commit.
