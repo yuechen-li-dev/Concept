@@ -1651,7 +1651,11 @@ type MIRInstance struct {
 }
 
 type MIRFunction struct {
-	Name                   string                       `json:"name"`
+	Name string `json:"name"`
+	// SemanticBody is the validated, typed control/dataflow input to EVT2.
+	// The legacy MIR JSON is an inspectable summary, not a round-trippable IR.
+	SemanticBody           *Block                       `json:"-"`
+	DeclarationIdentity    string                       `json:"-"`
 	MethodOf               string                       `json:"method_of,omitempty"`
 	Visibility             string                       `json:"visibility,omitempty"`
 	Async                  *MIRAsyncFunction            `json:"async,omitempty"`

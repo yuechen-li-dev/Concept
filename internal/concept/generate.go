@@ -620,7 +620,7 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 		}
 	}
 	for _, fn := range module.Functions {
-		mirFn := MIRFunction{Name: fn.Name, ReturnType: evt1MIRType(env, fn.ReturnType), SourceSpan: fn.Span}
+		mirFn := MIRFunction{Name: fn.Name, ReturnType: evt1MIRType(env, fn.ReturnType), SourceSpan: fn.Span, SemanticBody: fn.Body, DeclarationIdentity: evt1FunctionProvenanceKey(fn)}
 		if summary, ok := env.resultFactSummaries[evt1FunctionProvenanceKey(fn)]; ok && !semanticSummaryUnknown(summary) {
 			entry := SemanticFunctionFactSummary{Operation: fn.Name, Signature: evt1FunctionParamSignature(fn), Result: summary, Origin: FactOriginCompilerAnalysis}
 			if imported, present := env.importedFactSummaries[evt1FunctionProvenanceKey(fn)]; present {
