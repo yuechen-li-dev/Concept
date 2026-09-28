@@ -3,6 +3,9 @@ profile Core;
 import Standard.Synchronization.Atomic;
 import Standard.Machine.AMD64;
 
+comptime int QueueCapacity = 64;
+comptime int SequenceSpan = 128;
+
 record struct MarketEvent
 {
     int symbol;
@@ -26,7 +29,7 @@ struct SignalState
 
 struct MarketQueue
 {
-    MarketEvent[64] slots;
+    MarketEvent[QueueCapacity] slots;
     AtomicInt head;
     AtomicInt tail;
 }
@@ -39,16 +42,26 @@ MarketEvent StampEvent(int symbol, int priceTicks)
     return MarketEvent{symbol, priceTicks, ReadTimestamp()};
 }
 
+int NextSequence(int sequence)
+{
+    return(sequence + 1) % SequenceSpan;
+}
+
+int QueueDistance(int head, int tail)
+{
+    return(tail - head + SequenceSpan) % SequenceSpan;
+}
+
 [[execution_context(FeedContext)]]
 [[semantic_access("Publish", queue)]]
 bool Publish(ref MarketQueue queue, MarketEvent event)
 {
     int tail = LoadAtomic(ref queue.tail, MemoryOrder::Relaxed);
     int head = LoadAtomic(ref queue.head, MemoryOrder::Acquire);
-    if (tail - head == 64)
+    if (QueueDistance(head, tail) == QueueCapacity)
     { return false; }
-    queue.slots[tail % 64] = event;
-    StoreAtomic(ref queue.tail, tail + 1, MemoryOrder::Release);
+    queue.slots[tail % QueueCapacity] = event;
+    StoreAtomic(ref queue.tail, NextSequence(tail), MemoryOrder::Release);
     return true;
 }
 
@@ -60,8 +73,8 @@ Option<MarketEvent> Consume(ref MarketQueue queue)
     int tail = LoadAtomic(ref queue.tail, MemoryOrder::Acquire);
     if (head == tail)
     { return Option::None; }
-    MarketEvent event = queue.slots[head % 64];
-    StoreAtomic(ref queue.head, head + 1, MemoryOrder::Release);
+    MarketEvent event = queue.slots[head % QueueCapacity];
+    StoreAtomic(ref queue.head, NextSequence(head), MemoryOrder::Release);
     return Option::Some(event);
 }
 

@@ -77,6 +77,20 @@ Result<uint8, CacheError> ReadByte(ref PageCache cache, GenerationalId<Page> id,
     }
 }
 
+// The caller has persisted the page bytes; clearing dirty makes eviction safe.
+Result<void, CacheError> WriteBack(ref PageCache cache, GenerationalId<Page> id)
+{
+    Result<ref Page, StoreError> found = GenerationalGetMutable<Page, 8>(ref cache.pages, id);
+    match (found)
+    {
+        Result::Ok(page) => {
+            page.dirty = false;
+            return Result::Ok();
+        }
+        Result::Error(error) => { return Result::Error(CacheError::Missing); }
+    }
+}
+
 Result<void, CacheError> EvictClean(ref PageCache cache, GenerationalId<Page> id)
 {
     {
@@ -124,13 +138,5 @@ Result<void, CacheError> Unpin(ref PageCache cache, GenerationalId<Page> id)
 
 int ActiveSlots(ref const PageCache cache)
 {
-    int count = 0;
-    for (i in 0 .. cache.pages.next)
-    {
-        GenerationalId<Page> id = GenerationalId<Page>{i, cache.pages.generation[i]};
-        if (Contains<Page, 8>(ref const cache.pages, id)) {
-            count++;
-        }
-    }
-    return count;
+    return GenerationalCount<Page, 8>(ref const cache.pages);
 }

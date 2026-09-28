@@ -41,6 +41,23 @@ void MarketHotPathUsesOnlyBoundedStorage()
 }
 
 [[fact]]
+void MarketSequenceWrapRetainsOrder()
+{
+    MarketQueue queue = MarketQueue {
+        [MarketEvent{0, 0, 0}
+        ...], AtomicInt{0}, AtomicInt{0}
+    };
+    StoreAtomic(ref queue.head, 127, MemoryOrder::Relaxed);
+    StoreAtomic(ref queue.tail, 127, MemoryOrder::Relaxed);
+    Assert.True(Publish(ref queue, MarketEvent{1, 11, 0}), "last sequence publishes");
+    Assert.True(Publish(ref queue, MarketEvent{1, 12, 0}), "wrapped sequence publishes");
+    Assert.Equals(Consume(ref queue)!.priceTicks, 11, "before wrap");
+    Assert.Equals(Consume(ref queue)!.priceTicks, 12, "after wrap");
+    Assert.True(QueueDistance(LoadAtomic(ref queue.head, MemoryOrder::Relaxed),
+    LoadAtomic(ref queue.tail, MemoryOrder::Relaxed)) == 0, "queue is empty again");
+}
+
+[[fact]]
 void SignalPathRejectsBadPricesAndRetainsOrder()
 {
     MarketQueue queue = MarketQueue {

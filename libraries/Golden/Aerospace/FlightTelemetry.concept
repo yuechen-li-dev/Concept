@@ -1,6 +1,8 @@
 module Golden.Aerospace.FlightTelemetry;
 profile Core;
 
+comptime int HistoryCapacity = 16;
+
 enum FlightMode
 {
     Preflight,
@@ -39,8 +41,9 @@ record struct FlightSample
 struct FlightController
 {
     FlightMode mode;
-    FlightSample[16] history;
+    FlightSample[HistoryCapacity] history;
     int historyCount;
+    int historyNext;
     int accepted;
     int rejected;
 }
@@ -69,23 +72,32 @@ Result<void, TelemetryError> Accept(ref FlightController controller, FlightSampl
         controller.mode = FlightMode::Fault;
         return Result::Error(TelemetryError::OutOfEnvelope);
     }
-    if (controller.historyCount == 16)
-    { return Result::Error(TelemetryError::CapacityExceeded); }
-    controller.history[controller.historyCount] = sample;
-    controller.historyCount++;
+    controller.history[controller.historyNext] = sample;
+    controller.historyNext =(controller.historyNext + 1) % HistoryCapacity;
+    if (controller.historyCount < HistoryCapacity) {
+        controller.historyCount++;
+    }
     controller.accepted++;
 
-    if (controller.mode == FlightMode::Preflight and sample.verticalSpeed > 0.0)
+    match (controller.mode)
     {
-        controller.mode = FlightMode::Climb;
-    }
-    if (controller.mode == FlightMode::Climb and sample.altitude >= 10000.0)
-    {
-        controller.mode = FlightMode::Cruise;
-    }
-    if (controller.mode == FlightMode::Cruise and sample.verticalSpeed < 0.0)
-    {
-        controller.mode = FlightMode::Descent;
+        FlightMode::Preflight => {
+            if (sample.verticalSpeed > 0.0) {
+                controller.mode = FlightMode::Climb;
+            }
+        }
+        FlightMode::Climb => {
+            if (sample.altitude >= 10000.0) {
+                controller.mode = FlightMode::Cruise;
+            }
+        }
+        FlightMode::Cruise => {
+            if (sample.verticalSpeed < 0.0) {
+                controller.mode = FlightMode::Descent;
+            }
+        }
+        FlightMode::Descent => { }
+        FlightMode::Fault => { }
     }
     return Result::Ok();
 }
@@ -111,7 +123,7 @@ Result<FlightSample, TelemetryError> Latest(ref const FlightController controlle
 {
     if (controller.historyCount == 0)
     { return Result::Error(TelemetryError::SensorInvalid); }
-    return Result::Ok(controller.history[controller.historyCount - 1]);
+    return Result::Ok(controller.history[(controller.historyNext + HistoryCapacity - 1) % HistoryCapacity]);
 }
 
 bool MayUseTelemetryForGuidance(ref const FlightController controller)

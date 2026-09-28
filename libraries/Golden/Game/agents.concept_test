@@ -16,7 +16,7 @@ void AgentsAdvanceThroughStableDenseIds()
     }
     {
         ref Agent striker = DenseGetMutable<Agent, 64>(ref world.agents, second)!;
-        striker.intent = Intent::Strike(1);
+        striker.intent = Intent::Strike(second);
     }
     Tick(ref world);
     Tick(ref world);
@@ -27,11 +27,51 @@ void AgentsAdvanceThroughStableDenseIds()
     }
     {
         ref const Agent striker = DenseGet<Agent, 64>(ref const world.agents, second)!;
-        Assert.Equals(striker.health, 98, "explicit strike self-target resolves twice");
+        Assert.Equals(striker.health, 80, "typed self-target resolves twice");
     }
     Assert.Equals(world.tick, 2, "world clock advances deterministically");
     Assert.Equals(CountSeeking(ref const world), 1, "one agent retains a seek intent");
     Assert.Equals(ApplyDamage(ref world, first, 200)!, 0, "damage clamps health to zero");
+}
+
+[[fact]]
+void SeekMovesBothWaysAndMutualStrikesLand()
+{
+    World world = World{MakeDenseStore<Agent, 64>(), 0};
+    Id<Agent> left = Spawn(ref world, 0, 0)!;
+    Id<Agent> right = Spawn(ref world, 5, 5)!;
+    {
+        ref Agent a = DenseGetMutable<Agent, 64>(ref world.agents, left)!;
+        a.intent = Intent::Seek(2, 1);
+    }
+    {
+        ref Agent b = DenseGetMutable<Agent, 64>(ref world.agents, right)!;
+        b.intent = Intent::Seek(3, 4);
+    }
+    for (i in 0 .. 4) {
+        Tick(ref world);
+    }
+    {
+        ref const Agent a = DenseGet<Agent, 64>(ref const world.agents, left)!;
+        Assert.Equals(a.x, 2, "right then stop");
+        Assert.Equals(a.y, 1, "up then stop");
+    }
+    {
+        ref const Agent b = DenseGet<Agent, 64>(ref const world.agents, right)!;
+        Assert.Equals(b.x, 3, "left then stop");
+        Assert.Equals(b.y, 4, "down then stop");
+    }
+    {
+        ref Agent a = DenseGetMutable<Agent, 64>(ref world.agents, left)!;
+        a.intent = Intent::Strike(right);
+    }
+    {
+        ref Agent b = DenseGetMutable<Agent, 64>(ref world.agents, right)!;
+        b.intent = Intent::Strike(left);
+    }
+    Tick(ref world);
+    Assert.Equals(DenseGet<Agent, 64>(ref const world.agents, left)!.health, 90, "first attacker hit");
+    Assert.Equals(DenseGet<Agent, 64>(ref const world.agents, right)!.health, 90, "second attacker hit");
 }
 
 [[fact]]

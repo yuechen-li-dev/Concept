@@ -43,3 +43,13 @@ void EmptyMeshHasNoBounds()
     Mesh mesh = NewMesh();
     Assert.Error(VertexBounds(ref const mesh), "empty mesh has no spatial extent");
 }
+
+[[fact]]
+void MissingFaceReturnsDeclaredError()
+{
+    Mesh mesh = NewMesh();
+    Assert.FailsWith(SignedDoubleArea(ref const mesh, Id<Face>{17}), MeshError::FaceMissing,
+    "bad face ID returns an error");
+    Assert.FailsWith(FaceCentroid(ref const mesh, Id<Face>{17}), MeshError::FaceMissing,
+    "centroid checks its face ID");
+}

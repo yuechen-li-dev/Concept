@@ -4,7 +4,8 @@ profile Core;
 enum JournalError
 {
     Missing,
-    Full
+    Full,
+    Stalled
 }
 
 struct Request
@@ -41,13 +42,22 @@ async Result<int, JournalError> Transfer(int sequence)
     return Result::Ok(committed);
 }
 
-Result<int, JournalError> Drive(int sequence)
+Result<int, JournalError> DriveWithin(int sequence, int budget)
 {
     Async<Result<int, JournalError>> operation = Transfer(sequence);
+    int steps = 0;
     while (not Complete(operation)) bounded(8) {
+        if (steps >= budget) { return Result::Error(JournalError::Stalled); }
         Step(operation);
+        steps++;
     }
+    else { return Result::Error(JournalError::Stalled); }
     return Result(operation);
+}
+
+Result<int, JournalError> Drive(int sequence)
+{
+    return DriveWithin(sequence, 8);
 }
 
 void SendBestEffort(int sequence)

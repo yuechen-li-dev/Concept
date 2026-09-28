@@ -2,11 +2,14 @@ module Golden.Game.Agents;
 profile Core;
 import Standard.Collection.Stores;
 
+comptime int MaxAgents = 64;
+comptime int StrikeDamage = 10;
+
 enum Intent
 {
     Idle,
     Seek(int x, int y),
-    Strike(int target)
+    Strike(Id<Agent> target)
 }
 
 struct Agent
@@ -30,28 +33,45 @@ Result<Id<Agent>, StoreError> Spawn(ref World world, int x, int y)
 }
 requires compiler.InvalidatesBorrows(Spawn, world);
 
+int StepToward(int from, int to)
+{
+    if (from < to) { return 1; }
+    if (from > to) { return - 1; }
+    return 0;
+}
+
 void Tick(ref World world)
 {
-    for (i in 0 .. Count<Agent, 64>(ref const world.agents))
+    int population = Count<Agent, 64>(ref const world.agents);
+    int[MaxAgents] incoming =[0 ... MaxAgents];
+    for (i in 0 .. population)
     {
         Id<Agent> id = IdAt<Agent, 64>(ref const world.agents, i)!;
         ref Agent agent = DenseGetMutable<Agent, 64>(ref world.agents, id)!;
-        match (agent.intent)
-        {
-            Intent::Idle => { }
-            Intent::Seek(x, y) => {
-                if (agent.x < x) {
-                    agent.x++;
+        if (agent.health > 0) {
+            match (agent.intent)
+            {
+                Intent::Idle => { }
+                Intent::Seek(x, y) => {
+                    agent.x += StepToward(agent.x, x);
+                    agent.y += StepToward(agent.y, y);
                 }
-                if (agent.y < y) {
-                    agent.y++;
-                }
-            }
-            Intent::Strike(target) => {
-                if (target == i) {
-                    agent.health -= 1;
+                Intent::Strike(target) => {
+                    if (target.index >= 0 and target.index < population) {
+                        incoming[target.index] += StrikeDamage;
+                    }
                 }
             }
+        }
+    }
+    for (i in 0 .. population)
+    {
+        Id<Agent> id = IdAt<Agent, 64>(ref const world.agents, i)!;
+        ref Agent agent = DenseGetMutable<Agent, 64>(ref world.agents, id)!;
+        if (incoming[i] >= agent.health) {
+            agent.health = 0;
+        } else {
+            agent.health -= incoming[i];
         }
     }
     world.tick++;

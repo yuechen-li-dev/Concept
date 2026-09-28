@@ -16,3 +16,11 @@ void PipelineStateIsInline()
     Assert.Concept<NoAllocation>(Transfer, "bounded suspended request owns inline state");
     SendBestEffort(- 1);
 }
+
+[[fact]]
+void InsufficientBudgetStallsWithoutReadingUnfinishedResult()
+{
+    Assert.FailsWith(DriveWithin(4, 0), JournalError::Stalled, "no step budget");
+    Assert.FailsWith(DriveWithin(4, 1), JournalError::Stalled, "one step is insufficient");
+    Assert.Equals(DriveWithin(4, 8)!, 10, "sufficient budget finishes");
+}

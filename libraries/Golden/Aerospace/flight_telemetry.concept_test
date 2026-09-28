@@ -7,7 +7,7 @@ void CommercialFlightTelemetryTransitionsAreDeterministic()
 {
     FlightSample empty = FlightSample{0.0, 0.0, false};
     FlightController controller = FlightController {
-        FlightMode::Preflight,[empty ... 16], 0, 0, 0
+        FlightMode::Preflight,[empty ... 16], 0, 0, 0, 0
     };
     Assert.LGTM(AcceptNative(ref controller, NativeSample{120.0, 20.0, 1}), "valid climb sample");
     Assert.True(controller.mode == FlightMode::Climb, "positive vertical speed starts climb");
@@ -38,8 +38,28 @@ void EmptyControllerHasNoGuidanceSample()
 {
     FlightSample empty = FlightSample{0.0, 0.0, false};
     FlightController controller = FlightController {
-        FlightMode::Preflight,[empty ... 16], 0, 0, 0
+        FlightMode::Preflight,[empty ... 16], 0, 0, 0, 0
     };
     Assert.Error(Latest(ref const controller), "history has no sample");
     Assert.False(MayUseTelemetryForGuidance(ref const controller), "empty history cannot guide");
+}
+
+[[fact]]
+void OneSampleCannotSkipAndHistoryOverwritesOldest()
+{
+    FlightSample empty = FlightSample{0.0, 0.0, false};
+    FlightController controller = FlightController {
+        FlightMode::Preflight,[empty ... 16], 0, 0, 0, 0
+    };
+    Assert.LGTM(AcceptNative(ref controller, NativeSample{11000.0, 1.0, 1}), "high climb sample");
+    Assert.True(controller.mode == FlightMode::Climb, "one sample advances one phase");
+    for (i in 0 .. 16)
+    {
+        Assert.LGTM(AcceptNative(ref controller, NativeSample{100.0 +(i as float), 0.0, 1}), "continued telemetry");
+    }
+    Assert.Equals(controller.historyCount, 16, "ring retains fixed capacity");
+    Assert.Equals(controller.accepted, 17, "telemetry continues after wrap");
+    Assert.True(Latest(ref const controller)!.altitude == 115.0, "latest sample survives wrap");
+    Assert.True(controller.history[controller.historyNext].altitude == 100.0,
+    "oldest retained sample follows the overwritten slot");
 }

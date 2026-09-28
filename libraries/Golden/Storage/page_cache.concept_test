@@ -11,10 +11,7 @@ void CacheHandlesRejectStalePages()
     uint8 expected = 0x7F;
     Assert.Equals(ReadByte(ref cache, first, 5)!, expected, "read returns written byte");
     Assert.Error(EvictClean(ref cache, first), "dirty page cannot be evicted");
-    {
-        ref Page page = GenerationalGetMutable<Page, 8>(ref cache.pages, first)!;
-        page.dirty = false;
-    }
+    Assert.LGTM(WriteBack(ref cache, first), "persisted page becomes clean");
     Assert.LGTM(EvictClean(ref cache, first), "clean page can be evicted");
     Assert.Error(ReadByte(ref cache, first, 5), "old handle cannot read reused slot");
     GenerationalId<Page> second = Install(ref cache, 43)!;
@@ -30,6 +27,7 @@ void CacheDoesNotAllocateOnAccess()
     Assert.Concept<NoAllocation>(ActiveSlots, "slot census is bounded");
     Assert.Concept<NoAllocation>(Pin, "pin count is inline metadata");
     Assert.Concept<NoAllocation>(Unpin, "unpin count is inline metadata");
+    Assert.Concept<NoAllocation>(WriteBack, "writeback updates page metadata");
 }
 
 [[fact]]

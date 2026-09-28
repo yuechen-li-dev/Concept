@@ -55,10 +55,10 @@ requires compiler.InvalidatesBorrows(AddFace, mesh);
 
 Result<float<m ^ 2>, MeshError> SignedDoubleArea(ref const Mesh mesh, Id<Face> faceId)
 {
-    ref const Face face = DenseGet<Face, 96>(ref const mesh.faces, faceId)!;
-    ref const Vertex a = DenseGet<Vertex, 64>(ref const mesh.vertices, face.a)!;
-    ref const Vertex b = DenseGet<Vertex, 64>(ref const mesh.vertices, face.b)!;
-    ref const Vertex c = DenseGet<Vertex, 64>(ref const mesh.vertices, face.c)!;
+    ref const Face face = DenseGet<Face, 96>(ref const mesh.faces, faceId) ? else MeshError::FaceMissing;
+    ref const Vertex a = DenseGet<Vertex, 64>(ref const mesh.vertices, face.a) ? else MeshError::VertexMissing;
+    ref const Vertex b = DenseGet<Vertex, 64>(ref const mesh.vertices, face.b) ? else MeshError::VertexMissing;
+    ref const Vertex c = DenseGet<Vertex, 64>(ref const mesh.vertices, face.c) ? else MeshError::VertexMissing;
     float<m> abx = b.x - a.x;
     float<m> aby = b.y - a.y;
     float<m> acx = c.x - a.x;
@@ -71,10 +71,10 @@ Result<float<m ^ 2>, MeshError> SignedDoubleArea(ref const Mesh mesh, Id<Face> f
 
 Result<Vertex, MeshError> FaceCentroid(ref const Mesh mesh, Id<Face> faceId)
 {
-    ref const Face face = DenseGet<Face, 96>(ref const mesh.faces, faceId)!;
-    ref const Vertex a = DenseGet<Vertex, 64>(ref const mesh.vertices, face.a)!;
-    ref const Vertex b = DenseGet<Vertex, 64>(ref const mesh.vertices, face.b)!;
-    ref const Vertex c = DenseGet<Vertex, 64>(ref const mesh.vertices, face.c)!;
+    ref const Face face = DenseGet<Face, 96>(ref const mesh.faces, faceId) ? else MeshError::FaceMissing;
+    ref const Vertex a = DenseGet<Vertex, 64>(ref const mesh.vertices, face.a) ? else MeshError::VertexMissing;
+    ref const Vertex b = DenseGet<Vertex, 64>(ref const mesh.vertices, face.b) ? else MeshError::VertexMissing;
+    ref const Vertex c = DenseGet<Vertex, 64>(ref const mesh.vertices, face.c) ? else MeshError::VertexMissing;
     float<m> x =(a.x + b.x + c.x) / 3.0;
     float<m> y =(a.y + b.y + c.y) / 3.0;
     return Result::Ok(Vertex{x, y});
