@@ -23,6 +23,7 @@ Usage:
   concept build-module <file>
   concept emit-c <file> [--verify]
   concept mir <file> [--verify]
+  concept lir <file>
   concept plan <file> [--verify]
   concept explain <file>[:line] [--json] [--verbose]
   concept explain <file> --generated <symbol> [--json] [--verbose]
@@ -48,6 +49,7 @@ Commands:
   build-module  write a deterministic concept-module.v1 artifact to stdout
   emit-c  write generated strict-C11 implementation to stdout
   mir     write deterministic MIR JSON to stdout
+  lir     verify and write target-independent EVT2 LIR to stdout
   plan    write deterministic LoweringPlan JSON to stdout
   explain display the proof graph for an Assert.Concept source contract
   reflect display compile-time structural results from explicit reflect<T>; sites
@@ -170,6 +172,12 @@ func main() {
 	switch command {
 	case "check":
 		fmt.Printf("%s: ok (%s, %s)\n", filepath.ToSlash(sourcePath), module.Profile, concept.CompilerID)
+	case "lir":
+		lir, err := concept.GenerateLIR(module)
+		if err != nil {
+			fail(err)
+		}
+		fmt.Print(lir.String())
 	case "reflect":
 		output, err := json.MarshalIndent(module.ReflectionResults, "", "  ")
 		if err != nil {
