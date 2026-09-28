@@ -1,0 +1,19 @@
+profile Core;
+
+enum Choice {
+    Left, Right
+}
+
+int Main()
+{
+    Choice chosen = decide
+    {
+        Left score 1.5;
+        Right score 1.5;
+    };
+    return match (chosen)
+    {
+        Choice::Left => 1,
+        Choice::Right => 2,
+    };
+}

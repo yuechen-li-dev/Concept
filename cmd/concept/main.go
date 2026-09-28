@@ -25,6 +25,8 @@ Usage:
   concept mir <file> [--verify]
   concept lir <file>
   concept machineir <file>
+  concept machineir-bin <file> > out.cmir
+  concept amd64 <file>
   concept plan <file> [--verify]
   concept explain <file>[:line] [--json] [--verbose]
   concept explain <file> --generated <symbol> [--json] [--verbose]
@@ -52,6 +54,8 @@ Commands:
   mir     write deterministic MIR JSON to stdout
   lir     verify and write target-independent EVT2 LIR to stdout
   machineir  verify and write AMD64 Windows MachineIR to stdout
+  machineir-bin  write versioned typed AMD64 MachineIR bytes to stdout
+  amd64  compile the Concept backend through C11 and print native bytes
   plan    write deterministic LoweringPlan JSON to stdout
   explain display the proof graph for an Assert.Concept source contract
   reflect display compile-time structural results from explicit reflect<T>; sites
@@ -186,6 +190,30 @@ func main() {
 			fail(err)
 		}
 		fmt.Print(machine.String())
+	case "machineir-bin":
+		machine, err := concept.GenerateMachineIR(module)
+		if err != nil {
+			fail(err)
+		}
+		artifact, err := concept.EncodeMachineBridge(machine)
+		if err != nil {
+			fail(err)
+		}
+		if _, err := os.Stdout.Write(artifact); err != nil {
+			fail(err)
+		}
+	case "amd64":
+		machine, err := concept.GenerateMachineIR(module)
+		if err != nil {
+			fail(err)
+		}
+		artifact, err := concept.EncodeMachineBridge(machine)
+		if err != nil {
+			fail(err)
+		}
+		if err := printConceptAMD64(machine, artifact); err != nil {
+			fail(err)
+		}
 	case "reflect":
 		output, err := json.MarshalIndent(module.ReflectionResults, "", "  ")
 		if err != nil {

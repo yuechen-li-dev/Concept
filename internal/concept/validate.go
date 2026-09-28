@@ -2725,6 +2725,9 @@ func validateExprAgainstExpected(env *semanticEnv, scope *evt1Scope, expr Expr, 
 	if inference, ok := expr.(*InferExpr); ok {
 		return validateInferExpr(env, scope, inference, expected, templateInfo, inComptimeFn)
 	}
+	if decision, ok := expr.(*DecideExpr); ok {
+		return validateDecideExpr(env, scope, decision, expected, templateInfo, inComptimeFn)
+	}
 	if call, ok := expr.(*CallExpr); ok && call.Callee == "Tensor" {
 		return validateTensorConstruction(env, scope, call, expected, templateInfo, inComptimeFn)
 	}
@@ -3824,6 +3827,8 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		return validateArrayLiteralExpr(env, scope, *e, nil, templateInfo, inComptimeFn)
 	case *InferExpr:
 		return Type{}, evt1Diagnostic("INFER_REQUIRES_INFERENCE_CONTEXT", "infer requires an expected Inference<T> type", e.Span)
+	case *DecideExpr:
+		return Type{}, evt1Diagnostic("DECIDE_REQUIRES_ENUM_CONTEXT", "decide requires an expected enum type", e.Span)
 	case *ParenExpr:
 		return validateExpr(env, scope, e.Value, templateInfo, inComptimeFn)
 	case *NameExpr:
@@ -6680,6 +6685,8 @@ func evt1ExprIdentity(expr Expr) string {
 		return "with(" + strings.Join(parts, ",") + ")"
 	case *InferExpr:
 		return fmt.Sprintf("infer<%s:%d>", e.CandidateType.Name, len(e.Candidates))
+	case *DecideExpr:
+		return fmt.Sprintf("decide<%s:%d>", e.CandidateType.Name, len(e.Candidates))
 	case *ArrayLiteralExpr:
 		var parts []string
 		for _, element := range e.Elements {

@@ -3519,6 +3519,9 @@ func (p *parser) parseScoredCandidate(code, message string, order int) (ScoredCa
 		if strings.HasPrefix(code, "TRANSITION_DECIDE") {
 			scoreCode = "TRANSITION_DECIDE_SCORE_TYPE_INVALID"
 		}
+		if strings.HasPrefix(code, "DECIDE") {
+			scoreCode = "DECIDE_SCORE_TYPE_INVALID"
+		}
 		return ScoredCandidate{}, evt1Diagnostic(scoreCode, "expected `score` in scored candidate", p.currentSpan())
 	}
 	p.next()
@@ -4354,6 +4357,8 @@ func (p *parser) parsePrimary() (Expr, error) {
 		return p.parseMatchExpr()
 	case p.peekLexeme() == "infer":
 		return p.parseInferExpr()
+	case p.peekLexeme() == "decide":
+		return p.parseDecideExpr()
 	case p.peekLexeme() == "callback" && p.looksLikeCallableLiteral():
 		return p.parseCallableExpr()
 	case p.peekLexeme() == "true" || p.peekLexeme() == "false":
@@ -4496,6 +4501,25 @@ func (p *parser) parseInferExpr() (Expr, error) {
 	expr := &InferExpr{Span: start}
 	for !p.done() && p.peekLexeme() != "}" {
 		candidate, err := p.parseScoredCandidate("INFER_UNKNOWN_CANDIDATE", "expected inference candidate", len(expr.Candidates))
+		if err != nil {
+			return nil, err
+		}
+		expr.Candidates = append(expr.Candidates, candidate)
+	}
+	if _, err := p.expect("}"); err != nil {
+		return nil, err
+	}
+	return p.parsePostfixExpr(expr, start)
+}
+
+func (p *parser) parseDecideExpr() (Expr, error) {
+	start := p.next().Span
+	if _, err := p.expect("{"); err != nil {
+		return nil, err
+	}
+	expr := &DecideExpr{Span: start}
+	for !p.done() && p.peekLexeme() != "}" {
+		candidate, err := p.parseScoredCandidate("DECIDE_UNKNOWN_CANDIDATE", "expected decision candidate", len(expr.Candidates))
 		if err != nil {
 			return nil, err
 		}

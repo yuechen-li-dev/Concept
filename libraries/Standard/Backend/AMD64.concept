@@ -1,0 +1,1409 @@
+module Standard.Backend.AMD64;
+profile Core;
+
+extern "C" usize strlen(string text);
+
+// The wire format is produced by EncodeMachineBridge in Stage-0. All byte
+// access is bounded; no source text or MachineIR printer output is accepted.
+enum BackendError
+{
+    BridgeInvalid,
+    BridgeVersion,
+    CapacityExceeded,
+    UnsupportedInstruction,
+    RegisterExhausted,
+    BufferFull,
+    InvalidEncoding,
+}
+
+enum Register
+{
+    RAX, RBX, RCX, RDX, RSI, RDI, RBP, RSP,
+    R8, R9, R10, R11, R12, R13, R14, R15,
+}
+
+enum OperandKind {
+    None, Virtual, Physical, Immediate, Slot, Memory, Block,
+}
+enum Opcode
+{
+    None, Mov, Load, Store, Lea, Add, Sub, Imul, Umul, Cmp, Test,
+    Setcc, Trap, Jmp, Jcc, Ret,
+}
+enum Condition {
+    None, Equal, NotEqual, Less, LessEqual, Greater, GreaterEqual,
+    Below, BelowEqual, Above, AboveEqual, Overflow, Carry,
+}
+
+record struct BridgeText {
+    int offset;
+    int length;
+}
+ref struct BridgeReader {
+    ReadOnlySpan<byte> data;
+    int offset;
+}
+
+Result<int, BackendError> ReadI32(ref BridgeReader reader)
+{
+    if (reader.offset < 0 or Len(reader.data) - reader.offset < 4)
+    { return Result::Error(BackendError::BridgeInvalid); }
+    int high = reader.data[reader.offset + 3] as int;
+    if (high >= 128) {
+        high = high - 256;
+    }
+    int value =(reader.data[reader.offset] as int) +
+    (reader.data[reader.offset + 1] as int) * 256 +
+    (reader.data[reader.offset + 2] as int) * 65536 +
+    high * 16777216;
+    reader.offset = reader.offset + 4;
+    return Result::Ok(value);
+}
+
+Result<int, BackendError> ReadCount(ref BridgeReader reader)
+{
+    int count = ReadI32(ref reader) ?;
+    if (count < 0 or count > 1048576)
+    { return Result::Error(BackendError::BridgeInvalid); }
+    return Result::Ok(count);
+}
+
+Result<BridgeText, BackendError> ReadText(ref BridgeReader reader)
+{
+    int length = ReadCount(ref reader) ?;
+    if (length > Len(reader.data) - reader.offset)
+    { return Result::Error(BackendError::BridgeInvalid); }
+    BridgeText text = BridgeText{reader.offset, length};
+    reader.offset = reader.offset + length;
+    return Result::Ok(text);
+}
+
+bool TextEquals(ref const BridgeReader reader, BridgeText text, string expected)
+{
+    if (text.length !=(strlen(expected) as int)) { return false; }
+    for (i in 0 .. text.length)
+    {
+        if (reader.data[text.offset + i] != expected[i]) { return false; }
+    }
+    return true;
+}
+
+Result<void, BackendError> SkipStrings(ref BridgeReader reader)
+{
+    int count = ReadCount(ref reader) ?;
+    for (i in 0 .. count) {
+        ReadText(ref reader) ?;
+    }
+    return Result::Ok();
+}
+
+Result<void, BackendError> SkipSpan(ref BridgeReader reader)
+{
+    ReadI32(ref reader) ?;
+    ReadI32(ref reader) ?;
+    return Result::Ok();
+}
+
+Result<int, BackendError> ReadBridgeHeader(ref BridgeReader reader)
+{
+    if (Len(reader.data) < 8)
+    { return Result::Error(BackendError::BridgeInvalid); }
+    if (reader.data[0] != 67 or reader.data[1] != 77 or
+    reader.data[2] != 73 or reader.data[3] != 82 or
+    reader.data[4] != 65 or reader.data[5] != 77 or
+    reader.data[6] != 68 or reader.data[7] != 49)
+    { return Result::Error(BackendError::BridgeVersion); }
+    reader.offset = 8;
+    return ReadCount(ref reader);
+}
+
+record struct MachineOperand
+{
+    OperandKind kind;
+    int id;
+    int width;
+    int base;
+    int baseSlot;
+    int index;
+    int scale;
+    int displacement;
+    BridgeText literal;
+    BridgeText region;
+    bool signedValue;
+}
+
+record struct MachineInstruction
+{
+    Opcode op;
+    MachineOperand destination;
+    MachineOperand source0;
+    MachineOperand source1;
+    int sourceCount;
+    int width;
+    int flagsDef;
+    int flagsUse;
+    Condition condition;
+    int lirBlock;
+    int lirInstruction;
+    int sourceLine;
+    int sourceColumn;
+}
+
+record struct MachineBlock
+{
+    int id;
+    int lirBlock;
+    int firstInstruction;
+    int instructionCount;
+    Opcode terminator;
+    int trueBlock;
+    int falseBlock;
+    Condition condition;
+    int flagsUse;
+    int sourceLine;
+    int sourceColumn;
+}
+
+record struct MachineVReg {
+    int id;
+    int width;
+    bool address;
+}
+record struct MachineSlot
+{
+    int id;
+    int size;
+    int alignment;
+    bool incomingIndirect;
+    int baseVReg;
+    BridgeText source;
+}
+record struct MachineArg
+{
+    BridgeText typeName;
+    int index;
+    int width;
+    bool indirect;
+    Register physical;
+    int stackOffset;
+    bool onStack;
+    int virtualReg;
+}
+
+struct BackendFunction
+{
+    BridgeText identity;
+    BridgeText name;
+    BridgeText result;
+    int frameLocalSize;
+    int frameAlignment;
+    int frameShadowSpace;
+    bool hasCalls;
+    MachineArg[8] args;
+    int argCount;
+    MachineVReg[128] virtualRegs;
+    int virtualRegCount;
+    MachineSlot[64] slots;
+    int slotCount;
+    MachineBlock[128] blocks;
+    int blockCount;
+    MachineInstruction[512] instructions;
+    int instructionCount;
+}
+
+MachineOperand EmptyOperand()
+{
+    return MachineOperand {
+        OperandKind::None, 0, 0, - 1, - 1, - 1, 1, 0,
+        BridgeText{0, 0}, BridgeText{0, 0}, false
+    };
+}
+
+MachineInstruction EmptyInstruction()
+{
+    return MachineInstruction {
+        Opcode::None, EmptyOperand(), EmptyOperand(),
+        EmptyOperand(), 0, 0, - 1, - 1, Condition::None, 0, 0, 0, 0
+    };
+}
+
+BackendFunction EmptyFunction()
+{
+    return BackendFunction {
+        BridgeText{0, 0}, BridgeText{0, 0}, BridgeText{0, 0},
+        0, 16, 0, false,
+        [MachineArg {
+            BridgeText{0, 0}, 0, 0, false, Register::RAX, 0, false, 0
+        }
+        ...], 0,
+        [MachineVReg{0, 0, false}
+        ...], 0,
+        [MachineSlot {
+            0, 0, 0, false, - 1, BridgeText{0, 0}
+        }
+        ...], 0,
+        [MachineBlock{0, 0, 0, 0, Opcode::None, 0, 0, Condition::None, - 1, 0, 0}
+        ...], 0,
+        [EmptyInstruction() ...], 0
+    };
+}
+
+Result<Register, BackendError> ReadRegister(ref BridgeReader reader)
+{
+    return RegisterFromID(ReadI32(ref reader) ?);
+}
+
+Result<OperandKind, BackendError> ReadOperandKind(ref BridgeReader reader)
+{
+    int value = ReadI32(ref reader) ?;
+    return match (value)
+    {
+        0 => Result::Ok(OperandKind::None),
+        1 => Result::Ok(OperandKind::Virtual),
+        2 => Result::Ok(OperandKind::Physical),
+        3 => Result::Ok(OperandKind::Immediate),
+        4 => Result::Ok(OperandKind::Slot),
+        5 => Result::Ok(OperandKind::Memory),
+        6 => Result::Ok(OperandKind::Block),
+        _ => Result::Error(BackendError::BridgeInvalid),
+    };
+}
+
+Result<Opcode, BackendError> ReadOpcode(ref BridgeReader reader)
+{
+    int value = ReadI32(ref reader) ?;
+    return match (value)
+    {
+        0 => Result::Ok(Opcode::None),
+        1 => Result::Ok(Opcode::Mov),
+        2 => Result::Ok(Opcode::Load),
+        3 => Result::Ok(Opcode::Store),
+        4 => Result::Ok(Opcode::Lea),
+        5 => Result::Ok(Opcode::Add),
+        6 => Result::Ok(Opcode::Sub),
+        7 => Result::Ok(Opcode::Imul),
+        8 => Result::Ok(Opcode::Umul),
+        9 => Result::Ok(Opcode::Cmp),
+        10 => Result::Ok(Opcode::Test),
+        11 => Result::Ok(Opcode::Setcc),
+        12 => Result::Ok(Opcode::Trap),
+        13 => Result::Ok(Opcode::Jmp),
+        14 => Result::Ok(Opcode::Jcc),
+        15 => Result::Ok(Opcode::Ret),
+        _ => Result::Error(BackendError::BridgeInvalid),
+    };
+}
+
+Result<Condition, BackendError> ReadCondition(ref BridgeReader reader)
+{
+    int value = ReadI32(ref reader) ?;
+    return match (value)
+    {
+        0 => Result::Ok(Condition::None),
+        1 => Result::Ok(Condition::Equal),
+        2 => Result::Ok(Condition::NotEqual),
+        3 => Result::Ok(Condition::Less),
+        4 => Result::Ok(Condition::LessEqual),
+        5 => Result::Ok(Condition::Greater),
+        6 => Result::Ok(Condition::GreaterEqual),
+        7 => Result::Ok(Condition::Below),
+        8 => Result::Ok(Condition::BelowEqual),
+        9 => Result::Ok(Condition::Above),
+        10 => Result::Ok(Condition::AboveEqual),
+        11 => Result::Ok(Condition::Overflow),
+        12 => Result::Ok(Condition::Carry),
+        _ => Result::Error(BackendError::BridgeInvalid),
+    };
+}
+
+Result<bool, BackendError> ReadBool(ref BridgeReader reader)
+{
+    int value = ReadI32(ref reader) ?;
+    if (value == 0) { return Result::Ok(false); }
+    if (value == 1) { return Result::Ok(true); }
+    return Result::Error(BackendError::BridgeInvalid);
+}
+
+Result<MachineOperand, BackendError> ReadOperand(ref BridgeReader reader)
+{
+    int id = ReadI32(ref reader) ?;
+    int width = ReadI32(ref reader) ?;
+    int base = ReadI32(ref reader) ?;
+    int baseSlot = ReadI32(ref reader) ?;
+    int index = ReadI32(ref reader) ?;
+    int scale = ReadI32(ref reader) ?;
+    int displacement = ReadI32(ref reader) ?;
+    OperandKind kind = ReadOperandKind(ref reader) ?;
+    BridgeText literal = ReadText(ref reader) ?;
+    BridgeText region = ReadText(ref reader) ?;
+    bool signedValue = ReadBool(ref reader) ?;
+    return Result::Ok(MachineOperand {
+        kind, id, width, base, baseSlot,
+        index, scale, displacement, literal, region, signedValue
+    });
+}
+
+bool ValidWidth(int width)
+{
+    return width == 1 or width == 2 or width == 4 or width == 8;
+}
+
+Result<void, BackendError> ValidateOperand(
+ref const BackendFunction function, MachineOperand operand)
+{
+    bool valid = match (operand.kind)
+    {
+        OperandKind::None => true,
+        OperandKind::Block => operand.id >= 0 and operand.id < function.blockCount,
+        OperandKind::Virtual => ValidWidth(operand.width) and
+        operand.id >= 0 and operand.id < function.virtualRegCount and
+        operand.width == function.virtualRegs[operand.id].width,
+        OperandKind::Physical => ValidWidth(operand.width) and
+        operand.id >= 0 and operand.id < 16,
+        OperandKind::Slot => ValidWidth(operand.width) and
+        operand.id >= 0 and operand.id < function.slotCount,
+        OperandKind::Immediate => ValidWidth(operand.width) and
+        operand.literal.length > 0,
+        OperandKind::Memory => ValidWidth(operand.width) and
+        operand.baseSlot < function.slotCount and
+        operand.base < function.virtualRegCount and
+        operand.index < function.virtualRegCount and
+        (operand.base >= 0 or operand.baseSlot >= 0 or operand.index < 0) and
+        (operand.scale == 1 or operand.scale == 2 or
+        operand.scale == 4 or operand.scale == 8),
+    };
+    if (not valid) { return Result::Error(BackendError::BridgeInvalid); }
+    return Result::Ok();
+}
+
+Result<void, BackendError> ReadFunction(ref BridgeReader reader, ref BackendFunction function)
+{
+    function.identity = ReadText(ref reader) ?;
+    function.name = ReadText(ref reader) ?;
+    BridgeText target = ReadText(ref reader) ?;
+    BridgeText abi = ReadText(ref reader) ?;
+    if (not TextEquals(ref const reader, target, "amd64-windows") or
+    not TextEquals(ref const reader, abi, "win64"))
+    { return Result::Error(BackendError::BridgeInvalid); }
+    function.result = ReadText(ref reader) ?;
+    SkipSpan(ref reader) ?;
+    SkipStrings(ref reader) ?;
+    SkipStrings(ref reader) ?;
+    function.frameLocalSize = ReadI32(ref reader) ?;
+    function.frameAlignment = ReadI32(ref reader) ?;
+    function.frameShadowSpace = ReadI32(ref reader) ?;
+    function.hasCalls = ReadBool(ref reader) ?;
+    function.argCount = ReadCount(ref reader) ?;
+    if (function.argCount > 8) { return Result::Error(BackendError::CapacityExceeded); }
+    for (i in 0 .. function.argCount)
+    {
+        BridgeText typeName = ReadText(ref reader) ?;
+        int index = ReadI32(ref reader) ?;
+        int width = ReadI32(ref reader) ?;
+        bool indirect = ReadBool(ref reader) ?;
+        Register physical = ReadRegister(ref reader) ?;
+        int stackOffset = ReadI32(ref reader) ?;
+        bool onStack = ReadBool(ref reader) ?;
+        int virtualReg = ReadI32(ref reader) ?;
+        function.args[i] = MachineArg {
+            typeName, index, width, indirect,
+            physical, stackOffset, onStack, virtualReg
+        };
+    }
+    function.virtualRegCount = ReadCount(ref reader) ?;
+    if (function.virtualRegCount > 128) {
+        return Result::Error(BackendError::CapacityExceeded);
+    }
+    for (i in 0 .. function.virtualRegCount)
+    {
+        int id = ReadI32(ref reader) ?;
+        int width = ReadI32(ref reader) ?;
+        bool address = ReadBool(ref reader) ?;
+        function.virtualRegs[i] = MachineVReg{id, width, address};
+    }
+    function.slotCount = ReadCount(ref reader) ?;
+    if (function.slotCount > 64) { return Result::Error(BackendError::CapacityExceeded); }
+    for (i in 0 .. function.slotCount)
+    {
+        int id = ReadI32(ref reader) ?;
+        int size = ReadI32(ref reader) ?;
+        int alignment = ReadI32(ref reader) ?;
+        bool indirect = ReadBool(ref reader) ?;
+        int baseVReg = ReadI32(ref reader) ?;
+        BridgeText source = ReadText(ref reader) ?;
+        function.slots[i] = MachineSlot{id, size, alignment, indirect, baseVReg, source};
+    }
+    function.blockCount = ReadCount(ref reader) ?;
+    if (function.blockCount > 128) { return Result::Error(BackendError::CapacityExceeded); }
+    for (bi in 0 .. function.blockCount)
+    {
+        int id = ReadI32(ref reader) ?;
+        int lirBlock = ReadI32(ref reader) ?;
+        int count = ReadCount(ref reader) ?;
+        if (count > 512 - function.instructionCount)
+        { return Result::Error(BackendError::CapacityExceeded); }
+        int first = function.instructionCount;
+        for (ii in 0 .. count)
+        {
+            Opcode op = ReadOpcode(ref reader) ?;
+            MachineOperand destination = ReadOperand(ref reader) ?;
+            int sourceCount = ReadCount(ref reader) ?;
+            if (sourceCount > 2) { return Result::Error(BackendError::BridgeInvalid); }
+            MachineOperand source0 = EmptyOperand();
+            MachineOperand source1 = EmptyOperand();
+            if (sourceCount > 0) {
+                source0 = ReadOperand(ref reader) ?;
+            }
+            if (sourceCount > 1) {
+                source1 = ReadOperand(ref reader) ?;
+            }
+            ValidateOperand(ref const function, destination) ?;
+            if (sourceCount > 0)
+            {
+                ValidateOperand(ref const function, source0) ?;
+            }
+            if (sourceCount > 1)
+            {
+                ValidateOperand(ref const function, source1) ?;
+            }
+            int width = ReadI32(ref reader) ?;
+            int flagsDef = ReadI32(ref reader) ?;
+            int flagsUse = ReadI32(ref reader) ?;
+            int sourceBlock = ReadI32(ref reader) ?;
+            int sourceInstruction = ReadI32(ref reader) ?;
+            Condition condition = ReadCondition(ref reader) ?;
+            int sourceLine = ReadI32(ref reader) ?;
+            int sourceColumn = ReadI32(ref reader) ?;
+            ReadText(ref reader) ?; // Planner decision reference
+            SkipStrings(ref reader) ?; // fact references
+            function.instructions[function.instructionCount] = MachineInstruction {
+                op, destination, source0, source1, sourceCount, width, flagsDef,
+                flagsUse, condition, sourceBlock, sourceInstruction,
+                sourceLine, sourceColumn
+            };
+            function.instructionCount = function.instructionCount + 1;
+        }
+        Opcode terminator = ReadOpcode(ref reader) ?;
+        int trueBlock = ReadI32(ref reader) ?;
+        int falseBlock = ReadI32(ref reader) ?;
+        int flagsUse = ReadI32(ref reader) ?;
+        Condition condition = ReadCondition(ref reader) ?;
+        int sourceLine = ReadI32(ref reader) ?;
+        int sourceColumn = ReadI32(ref reader) ?;
+        function.blocks[bi] = MachineBlock {
+            id, lirBlock, first, count,
+            terminator, trueBlock, falseBlock, condition, flagsUse,
+            sourceLine, sourceColumn
+        };
+    }
+    return Result::Ok();
+}
+
+Result<void, BackendError> DecodeFunction(
+ReadOnlySpan<byte> artifact, int ordinal, ref BackendFunction function)
+{
+    BridgeReader reader = BridgeReader{artifact, 0};
+    int count = ReadBridgeHeader(ref reader) ?;
+    if (ordinal < 0 or ordinal >= count)
+    { return Result::Error(BackendError::BridgeInvalid); }
+    BackendFunction selected = EmptyFunction();
+    for (index in 0 .. count)
+    {
+        function = EmptyFunction();
+        ReadFunction(ref reader, ref function) ?;
+        if (index == ordinal) {
+            selected = function;
+        }
+    }
+    if (reader.offset != Len(artifact))
+    { return Result::Error(BackendError::BridgeInvalid); }
+    function = selected;
+    return Result::Ok();
+}
+
+struct Allocation
+{
+    int[128] start;
+    int[128] end;
+    Register[128] physical;
+    bool[128] assigned;
+}
+
+Allocation EmptyAllocation()
+{
+    return Allocation{[2147483647 ...],[- 1 ...],[Register::RAX ...],[false ...]};
+}
+
+void TouchInterval(ref Allocation allocation, int id, int position)
+{
+    if (position < allocation.start[id]) {
+        allocation.start[id] = position;
+    }
+    if (position > allocation.end[id]) {
+        allocation.end[id] = position;
+    }
+}
+
+void TouchOperand(ref Allocation allocation, MachineOperand operand, int position)
+{
+    if (operand.kind == OperandKind::Virtual)
+    {
+        TouchInterval(ref allocation, operand.id, position);
+    }
+    if (operand.kind == OperandKind::Memory)
+    {
+        if (operand.base >= 0) {
+            TouchInterval(ref allocation, operand.base, position);
+        }
+        if (operand.index >= 0) {
+            TouchInterval(ref allocation, operand.index, position);
+        }
+    }
+}
+
+struct Liveness
+{
+    bool[512] use;
+    bool[512] def;
+    bool[512] liveIn;
+    bool[512] liveOut;
+}
+
+Liveness EmptyLiveness()
+{
+    return Liveness{[false ...],[false ...],[false ...],[false ...]};
+}
+
+void MarkUse(ref Liveness liveness, int block, int id)
+{
+    int index = block * 32 + id;
+    if (not liveness.def[index]) {
+        liveness.use[index] = true;
+    }
+}
+
+void MarkOperandUse(ref Liveness liveness, int block, MachineOperand operand)
+{
+    if (operand.kind == OperandKind::Virtual)
+    {
+        MarkUse(ref liveness, block, operand.id);
+    }
+    if (operand.kind == OperandKind::Memory)
+    {
+        if (operand.base >= 0) {
+            MarkUse(ref liveness, block, operand.base);
+        }
+        if (operand.index >= 0) {
+            MarkUse(ref liveness, block, operand.index);
+        }
+    }
+}
+
+Result<void, BackendError> ComputeLiveness(
+ref const BackendFunction function, ref Liveness liveness)
+{
+    if (function.blockCount > 16 or function.virtualRegCount > 32)
+    { return Result::Error(BackendError::CapacityExceeded); }
+    for (bi in 0 .. function.blockCount)
+    {
+        MachineBlock block = function.blocks[bi];
+        if (block.id != bi) { return Result::Error(BackendError::BridgeInvalid); }
+        for (ii in 0 .. block.instructionCount)
+        {
+            MachineInstruction instruction = function.instructions[block.firstInstruction + ii];
+            if (instruction.sourceCount > 0)
+            {
+                MarkOperandUse(ref liveness, bi, instruction.source0);
+            }
+            if (instruction.sourceCount > 1)
+            {
+                MarkOperandUse(ref liveness, bi, instruction.source1);
+            }
+            if (instruction.op == Opcode::Add or instruction.op == Opcode::Sub or
+            instruction.op == Opcode::Imul or instruction.op == Opcode::Umul or
+            instruction.op == Opcode::Store)
+            {
+                MarkOperandUse(ref liveness, bi, instruction.destination);
+            }
+            if (instruction.destination.kind == OperandKind::Virtual)
+            {
+                liveness.def[bi * 32 + instruction.destination.id] = true;
+            }
+        }
+    }
+    bool changed = true;
+    for (pass in 0 .. function.blockCount + 1)
+    {
+        changed = false;
+        for (bi in 0 .. function.blockCount)
+        {
+            MachineBlock block = function.blocks[bi];
+            if (block.terminator == Opcode::Jmp or block.terminator == Opcode::Jcc)
+            {
+                if (block.trueBlock < 0 or block.trueBlock >= function.blockCount)
+                { return Result::Error(BackendError::BridgeInvalid); }
+            }
+            if (block.terminator == Opcode::Jcc and
+            (block.falseBlock < 0 or block.falseBlock >= function.blockCount))
+            { return Result::Error(BackendError::BridgeInvalid); }
+            for (id in 0 .. function.virtualRegCount)
+            {
+                int index = bi * 32 + id;
+                bool outgoing = false;
+                if (block.terminator == Opcode::Jmp or block.terminator == Opcode::Jcc)
+                {
+                    outgoing = liveness.liveIn[block.trueBlock * 32 + id];
+                }
+                if (block.terminator == Opcode::Jcc)
+                {
+                    outgoing = outgoing or liveness.liveIn[block.falseBlock * 32 + id];
+                }
+                bool incoming = liveness.use[index] or
+                (outgoing and not liveness.def[index]);
+                if (outgoing != liveness.liveOut[index] or
+                incoming != liveness.liveIn[index])
+                {
+                    changed = true;
+                }
+                liveness.liveOut[index] = outgoing;
+                liveness.liveIn[index] = incoming;
+            }
+        }
+        if (not changed) { return Result::Ok(); }
+    }
+    return Result::Error(BackendError::BridgeInvalid);
+}
+
+// Live-in/out edges extend intervals across branches and loop backedges.
+// The layout order stays deterministic even when the CFG is cyclic.
+Result<void, BackendError> ComputeIntervals(
+ref const BackendFunction function, ref Allocation allocation)
+{
+    Liveness liveness = EmptyLiveness();
+    ComputeLiveness(ref const function, ref liveness) ?;
+    for (bi in 0 .. function.blockCount)
+    {
+        MachineBlock block = function.blocks[bi];
+        for (id in 0 .. function.virtualRegCount)
+        {
+            int index = bi * 32 + id;
+            if (liveness.liveIn[index])
+            {
+                TouchInterval(ref allocation, id, block.firstInstruction);
+            }
+            if (liveness.liveOut[index])
+            {
+                TouchInterval(ref allocation, id,
+                block.firstInstruction + block.instructionCount);
+            }
+        }
+        for (ii in 0 .. block.instructionCount)
+        {
+            int position = block.firstInstruction + ii;
+            MachineInstruction instruction = function.instructions[position];
+            TouchOperand(ref allocation, instruction.destination, position);
+            if (instruction.sourceCount > 0)
+            {
+                TouchOperand(ref allocation, instruction.source0, position);
+            }
+            if (instruction.sourceCount > 1)
+            {
+                TouchOperand(ref allocation, instruction.source1, position);
+            }
+        }
+    }
+    return Result::Ok();
+}
+
+Register PoolRegister(int ordinal)
+{
+    if (ordinal == 0) { return Register::R10; }
+    if (ordinal == 1) { return Register::R11; }
+    if (ordinal == 2) { return Register::RAX; }
+    if (ordinal == 3) { return Register::R8; }
+    return Register::R9;
+}
+
+// R10/R11/RAX handle the initial ABI copies. R8/R9 become available only
+// after their incoming arguments have been copied, which happens before any
+// later value can require a fourth register. Spills remain explicit failure.
+Result<void, BackendError> AllocateRegisters(
+ref const BackendFunction function, ref Allocation allocation)
+{
+    ComputeIntervals(ref const function, ref allocation) ?;
+    for (position in 0 .. function.instructionCount)
+    {
+        for (id in 0 .. function.virtualRegCount)
+        {
+            if (allocation.start[id] == position)
+            {
+                bool found = false;
+                Register choice = Register::R10;
+                for (candidate in 0 .. 5)
+                {
+                    Register physical = PoolRegister(candidate);
+                    bool busy = false;
+                    for (other in 0 .. function.virtualRegCount)
+                    {
+                        if (allocation.assigned[other] and
+                        allocation.physical[other] == physical and
+                        allocation.end[other] > position)
+                        {
+                            busy = true;
+                        }
+                    }
+                    if (not busy and not found)
+                    {
+                        choice = physical;
+                        found = true;
+                    }
+                }
+                if (not found) { return Result::Error(BackendError::RegisterExhausted); }
+                allocation.physical[id] = choice;
+                allocation.assigned[id] = true;
+            }
+        }
+    }
+    return Result::Ok();
+}
+
+struct ByteWriter {
+    Span<byte> bytes;
+    int offset;
+}
+record struct BranchFixup {
+    int patchOffset;
+    int targetBlock;
+}
+struct EncodingPlan
+{
+    int[128] blockOffsets;
+    BranchFixup[256] fixups;
+    int fixupCount;
+}
+
+struct FinalizedFrame
+{
+    int byteCount;
+    int[64] slotOffsets;
+}
+
+Result<FinalizedFrame, BackendError> FinalizeFrame(ref const BackendFunction function)
+{
+    if (function.hasCalls or function.frameShadowSpace != 0 or
+    function.frameAlignment != 16)
+    { return Result::Error(BackendError::UnsupportedInstruction); }
+    FinalizedFrame frame = FinalizedFrame{0,[- 1 ...]};
+    int used = 0;
+    for (i in 0 .. function.slotCount)
+    {
+        MachineSlot slot = function.slots[i];
+        if (slot.incomingIndirect) {
+            frame.slotOffsets[i] = - 1;
+        }
+        else
+        {
+            if (slot.size <= 0 or slot.alignment <= 0 or slot.alignment > 16)
+            { return Result::Error(BackendError::BridgeInvalid); }
+            int padding =(slot.alignment - used % slot.alignment) % slot.alignment;
+            used = used + padding;
+            frame.slotOffsets[i] = used;
+            used = used + slot.size;
+        }
+    }
+    if (used != function.frameLocalSize)
+    { return Result::Error(BackendError::BridgeInvalid); }
+    if (used > 0)
+    {
+        int aligned =((used + 7) / 16) * 16 + 8;
+        frame.byteCount = aligned;
+    }
+    return Result::Ok(move frame);
+}
+
+EncodingPlan EmptyEncodingPlan()
+{
+    return EncodingPlan {
+        [- 1 ...],[BranchFixup{0, 0}
+        ...], 0
+    };
+}
+
+Result<void, BackendError> WriteByte(ref ByteWriter writer, int value)
+{
+    if (value < 0 or value > 255 or writer.offset >= Len(writer.bytes))
+    { return Result::Error(BackendError::BufferFull); }
+    writer.bytes[writer.offset] = value as byte;
+    writer.offset = writer.offset + 1;
+    return Result::Ok();
+}
+
+Result<void, BackendError> WriteI32LE(ref ByteWriter writer, int value)
+{
+    int remaining = value;
+    for (i in 0 .. 4)
+    {
+        int digit = remaining % 256;
+        if (digit < 0) {
+            digit = digit + 256;
+        }
+        WriteByte(ref writer, digit) ?;
+        remaining =(remaining - digit) / 256;
+    }
+    return Result::Ok();
+}
+
+Result<void, BackendError> PatchI32LE(ref ByteWriter writer, int offset, int value)
+{
+    if (offset < 0 or offset > writer.offset - 4)
+    { return Result::Error(BackendError::InvalidEncoding); }
+    int saved = writer.offset;
+    writer.offset = offset;
+    WriteI32LE(ref writer, value) ?;
+    writer.offset = saved;
+    return Result::Ok();
+}
+
+Result<Register, BackendError> RegisterFromID(int id)
+{
+    return match (id)
+    {
+        0 => Result::Ok(Register::RAX),
+        1 => Result::Ok(Register::RBX),
+        2 => Result::Ok(Register::RCX),
+        3 => Result::Ok(Register::RDX),
+        4 => Result::Ok(Register::RSI),
+        5 => Result::Ok(Register::RDI),
+        6 => Result::Ok(Register::RBP),
+        7 => Result::Ok(Register::RSP),
+        8 => Result::Ok(Register::R8),
+        9 => Result::Ok(Register::R9),
+        10 => Result::Ok(Register::R10),
+        11 => Result::Ok(Register::R11),
+        12 => Result::Ok(Register::R12),
+        13 => Result::Ok(Register::R13),
+        14 => Result::Ok(Register::R14),
+        15 => Result::Ok(Register::R15),
+        _ => Result::Error(BackendError::BridgeInvalid),
+    };
+}
+
+int RegisterEncoding(Register reg)
+{
+    return match (reg)
+    {
+        Register::RAX => 0,
+        Register::RCX => 1,
+        Register::RDX => 2,
+        Register::RBX => 3,
+        Register::RSP => 4,
+        Register::RBP => 5,
+        Register::RSI => 6,
+        Register::RDI => 7,
+        Register::R8 => 8,
+        Register::R9 => 9,
+        Register::R10 => 10,
+        Register::R11 => 11,
+        Register::R12 => 12,
+        Register::R13 => 13,
+        Register::R14 => 14,
+        Register::R15 => 15,
+    };
+}
+
+Result<Register, BackendError> ResolveRegister(
+ref const Allocation allocation, MachineOperand operand)
+{
+    if (operand.kind == OperandKind::Virtual)
+    {
+        if (operand.id < 0 or operand.id >= 128 or not allocation.assigned[operand.id])
+        { return Result::Error(BackendError::BridgeInvalid); }
+        return Result::Ok(allocation.physical[operand.id]);
+    }
+    if (operand.kind == OperandKind::Physical)
+    { return RegisterFromID(operand.id); }
+    return Result::Error(BackendError::UnsupportedInstruction);
+}
+
+Result<void, BackendError> WriteRex(
+ref ByteWriter writer, bool wide, int regCode, int rmCode)
+{
+    int rex = 64;
+    if (wide) {
+        rex = rex + 8;
+    }
+    if (regCode >= 8) {
+        rex = rex + 4;
+    }
+    if (rmCode >= 8) {
+        rex = rex + 1;
+    }
+    if (rex != 64) {
+        WriteByte(ref writer, rex) ?;
+    }
+    return Result::Ok();
+}
+
+Result<void, BackendError> WriteRegReg(
+ref ByteWriter writer, int opcode, Register rm, Register reg, int width)
+{
+    if (width != 1 and width != 4 and width != 8)
+    { return Result::Error(BackendError::UnsupportedInstruction); }
+    int rmCode = RegisterEncoding(rm);
+    int regCode = RegisterEncoding(reg);
+    WriteRex(ref writer, width == 8, regCode, rmCode) ?;
+    WriteByte(ref writer, opcode) ?;
+    WriteByte(ref writer, 192 +(regCode % 8) * 8 + rmCode % 8) ?;
+    return Result::Ok();
+}
+
+int ScaleBits(int scale)
+{
+    if (scale == 1) { return 0; }
+    if (scale == 2) { return 1; }
+    if (scale == 4) { return 2; }
+    if (scale == 8) { return 3; }
+    return - 1;
+}
+
+Result<void, BackendError> WriteMemoryReg(
+ref ByteWriter writer, ref const Allocation allocation,
+int opcode, Register reg, MachineOperand memory, int width)
+{
+    if (memory.kind != OperandKind::Memory or memory.base < 0 or
+    memory.baseSlot >= 0 or(width != 4 and width != 8))
+    { return Result::Error(BackendError::UnsupportedInstruction); }
+    if (memory.base >= 128 or not allocation.assigned[memory.base])
+    { return Result::Error(BackendError::BridgeInvalid); }
+    int base = RegisterEncoding(allocation.physical[memory.base]);
+    int index = - 1;
+    if (memory.index >= 0)
+    {
+        if (memory.index >= 128 or not allocation.assigned[memory.index])
+        { return Result::Error(BackendError::BridgeInvalid); }
+        index = RegisterEncoding(allocation.physical[memory.index]);
+        if (index == 4) { return Result::Error(BackendError::InvalidEncoding); }
+    }
+    int scale = ScaleBits(memory.scale);
+    if (scale < 0) { return Result::Error(BackendError::InvalidEncoding); }
+    int regCode = RegisterEncoding(reg);
+    int rex = 64;
+    if (width == 8) {
+        rex = rex + 8;
+    }
+    if (regCode >= 8) {
+        rex = rex + 4;
+    }
+    if (index >= 8) {
+        rex = rex + 2;
+    }
+    if (base >= 8) {
+        rex = rex + 1;
+    }
+    if (rex != 64) {
+        WriteByte(ref writer, rex) ?;
+    }
+    WriteByte(ref writer, opcode) ?;
+    int mode = 0;
+    if (memory.displacement != 0 or base % 8 == 5)
+    {
+        if (memory.displacement >= - 128 and memory.displacement <= 127)
+        {
+            mode = 1;
+        }
+        else {
+            mode = 2;
+        }
+    }
+    bool sib = index >= 0 or base % 8 == 4;
+    int rm = base % 8;
+    if (sib) {
+        rm = 4;
+    }
+    WriteByte(ref writer, mode * 64 +(regCode % 8) * 8 + rm) ?;
+    if (sib)
+    {
+        int indexField = 4;
+        if (index >= 0) {
+            indexField = index % 8;
+        }
+        WriteByte(ref writer, scale * 64 + indexField * 8 + base % 8) ?;
+    }
+    if (mode == 1)
+    {
+        int displacement = memory.displacement % 256;
+        if (displacement < 0) {
+            displacement = displacement + 256;
+        }
+        WriteByte(ref writer, displacement) ?;
+    }
+    if (mode == 2) {
+        WriteI32LE(ref writer, memory.displacement) ?;
+    }
+    return Result::Ok();
+}
+
+Result<void, BackendError> WriteStackReg(
+ref ByteWriter writer, ref const FinalizedFrame frame,
+int opcode, Register reg, MachineOperand slot, int width)
+{
+    if (slot.kind != OperandKind::Slot or slot.id < 0 or slot.id >= 64 or
+    frame.slotOffsets[slot.id] < 0 or(width != 4 and width != 8))
+    { return Result::Error(BackendError::UnsupportedInstruction); }
+    int displacement = frame.slotOffsets[slot.id];
+    int regCode = RegisterEncoding(reg);
+    int rex = 64;
+    if (width == 8) {
+        rex = rex + 8;
+    }
+    if (regCode >= 8) {
+        rex = rex + 4;
+    }
+    if (rex != 64) {
+        WriteByte(ref writer, rex) ?;
+    }
+    WriteByte(ref writer, opcode) ?;
+    if (displacement <= 127)
+    {
+        WriteByte(ref writer, 64 +(regCode % 8) * 8 + 4) ?;
+        WriteByte(ref writer, 36) ?;
+        WriteByte(ref writer, displacement) ?;
+    }
+    else
+    {
+        WriteByte(ref writer, 128 +(regCode % 8) * 8 + 4) ?;
+        WriteByte(ref writer, 36) ?;
+        WriteI32LE(ref writer, displacement) ?;
+    }
+    return Result::Ok();
+}
+
+Result<void, BackendError> WriteStackAdjustment(ref ByteWriter writer, bool subtract, int bytes)
+{
+    if (bytes == 0) { return Result::Ok(); }
+    if (bytes < 0) { return Result::Error(BackendError::InvalidEncoding); }
+    WriteByte(ref writer, 72) ?;
+    if (bytes <= 127)
+    {
+        WriteByte(ref writer, 131) ?;
+        if (subtract) {
+            WriteByte(ref writer, 236) ?;
+        }
+        else {
+            WriteByte(ref writer, 196) ?;
+        }
+        WriteByte(ref writer, bytes) ?;
+    }
+    else
+    {
+        WriteByte(ref writer, 129) ?;
+        if (subtract) {
+            WriteByte(ref writer, 236) ?;
+        }
+        else {
+            WriteByte(ref writer, 196) ?;
+        }
+        WriteI32LE(ref writer, bytes) ?;
+    }
+    return Result::Ok();
+}
+
+Result<int, BackendError> ParseI32Literal(
+ref const BridgeReader reader, BridgeText text)
+{
+    if (text.length == 0 or text.length > 11)
+    { return Result::Error(BackendError::InvalidEncoding); }
+    int index = text.offset;
+    int end = text.offset + text.length;
+    bool negative = reader.data[index] == 45;
+    if (negative) {
+        index = index + 1;
+    }
+    if (index == end) { return Result::Error(BackendError::InvalidEncoding); }
+    int value = 0;
+    while (index < end) bounded(11)
+    {
+        int digit = reader.data[index] as int;
+        if (digit < 48 or digit > 57)
+        { return Result::Error(BackendError::InvalidEncoding); }
+        digit = digit - 48;
+        if (negative)
+        {
+            if (value < - 214748364 or
+            (value == - 214748364 and digit > 8))
+            { return Result::Error(BackendError::InvalidEncoding); }
+            value = value * 10 - digit;
+        }
+        else
+        {
+            if (value >(2147483647 - digit) / 10)
+            { return Result::Error(BackendError::InvalidEncoding); }
+            value = value * 10 + digit;
+        }
+        index = index + 1;
+    }
+    return Result::Ok(value);
+}
+
+Result<void, BackendError> WriteMovImmediate(
+ref ByteWriter writer, Register destination, int value, int width)
+{
+    if (width != 1 and width != 4)
+    { return Result::Error(BackendError::UnsupportedInstruction); }
+    int code = RegisterEncoding(destination);
+    WriteRex(ref writer, false, 0, code) ?;
+    if (width == 1)
+    {
+        if (value < - 128 or value > 255)
+        { return Result::Error(BackendError::InvalidEncoding); }
+        WriteByte(ref writer, 176 + code % 8) ?;
+        if (value < 0) {
+            value = value + 256;
+        }
+        WriteByte(ref writer, value) ?;
+    }
+    else
+    {
+        WriteByte(ref writer, 184 + code % 8) ?;
+        WriteI32LE(ref writer, value) ?;
+    }
+    return Result::Ok();
+}
+
+Result<void, BackendError> WriteCompareImmediate(
+ref ByteWriter writer, Register left, int value, int width)
+{
+    if (width != 4) { return Result::Error(BackendError::UnsupportedInstruction); }
+    int code = RegisterEncoding(left);
+    WriteRex(ref writer, false, 7, code) ?;
+    WriteByte(ref writer, 129) ?;
+    WriteByte(ref writer, 192 + 7 * 8 + code % 8) ?;
+    WriteI32LE(ref writer, value) ?;
+    return Result::Ok();
+}
+
+int ConditionEncoding(Condition condition)
+{
+    return match (condition)
+    {
+        Condition::None => - 1,
+        Condition::Equal => 4,
+        Condition::NotEqual => 5,
+        Condition::Less => 12,
+        Condition::LessEqual => 14,
+        Condition::Greater => 15,
+        Condition::GreaterEqual => 13,
+        Condition::Below => 2,
+        Condition::BelowEqual => 6,
+        Condition::Above => 7,
+        Condition::AboveEqual => 3,
+        Condition::Overflow => 0,
+        Condition::Carry => 2,
+    };
+}
+
+Result<void, BackendError> AddFixup(
+ref ByteWriter writer, ref EncodingPlan plan, int target)
+{
+    if (target < 0 or target >= 128 or plan.fixupCount >= 256)
+    { return Result::Error(BackendError::InvalidEncoding); }
+    plan.fixups[plan.fixupCount] = BranchFixup{writer.offset, target};
+    plan.fixupCount = plan.fixupCount + 1;
+    WriteI32LE(ref writer, 0) ?;
+    return Result::Ok();
+}
+
+Result<void, BackendError> EmitInstruction(
+ref ByteWriter writer, ref const BridgeReader reader,
+ref const Allocation allocation, ref const FinalizedFrame frame,
+MachineInstruction instruction)
+{
+    if (instruction.op == Opcode::Trap)
+    {
+        WriteByte(ref writer, 15) ?;
+        WriteByte(ref writer, 11) ?;
+        return Result::Ok();
+    }
+    if (instruction.op == Opcode::Lea or instruction.op == Opcode::Load)
+    {
+        Register destination = ResolveRegister(ref const allocation, instruction.destination) ?;
+        int opcode = 141;
+        if (instruction.op == Opcode::Load) {
+            opcode = 139;
+        }
+        if (instruction.source0.kind == OperandKind::Slot)
+        {
+            return WriteStackReg(ref writer, ref const frame, opcode,
+            destination, instruction.source0, instruction.width);
+        }
+        return WriteMemoryReg(ref writer, ref const allocation, opcode,
+        destination, instruction.source0, instruction.width);
+    }
+    if (instruction.op == Opcode::Store)
+    {
+        Register source = ResolveRegister(ref const allocation, instruction.source0) ?;
+        if (instruction.destination.kind == OperandKind::Slot)
+        {
+            return WriteStackReg(ref writer, ref const frame, 137,
+            source, instruction.destination, instruction.width);
+        }
+        return WriteMemoryReg(ref writer, ref const allocation, 137,
+        source, instruction.destination, instruction.width);
+    }
+    if (instruction.op == Opcode::Mov)
+    {
+        Register destination = ResolveRegister(ref const allocation, instruction.destination) ?;
+        if (instruction.source0.kind == OperandKind::Immediate)
+        {
+            int value = ParseI32Literal(ref const reader, instruction.source0.literal) ?;
+            return WriteMovImmediate(ref writer, destination, value, instruction.width);
+        }
+        Register source = ResolveRegister(ref const allocation, instruction.source0) ?;
+        int opcode = 137;
+        if (instruction.width == 1) {
+            opcode = 136;
+        }
+        return WriteRegReg(ref writer, opcode, destination, source, instruction.width);
+    }
+    if (instruction.op == Opcode::Add or instruction.op == Opcode::Sub or
+    instruction.op == Opcode::Imul)
+    {
+        Register destination = ResolveRegister(ref const allocation, instruction.destination) ?;
+        Register source = ResolveRegister(ref const allocation, instruction.source0) ?;
+        if (instruction.op == Opcode::Imul)
+        {
+            WriteRex(ref writer, instruction.width == 8,
+            RegisterEncoding(destination), RegisterEncoding(source)) ?;
+            WriteByte(ref writer, 15) ?;
+            WriteByte(ref writer, 175) ?;
+            WriteByte(ref writer, 192 +
+            (RegisterEncoding(destination) % 8) * 8 + RegisterEncoding(source) % 8) ?;
+            return Result::Ok();
+        }
+        int opcode = 1;
+        if (instruction.op == Opcode::Sub) {
+            opcode = 41;
+        }
+        return WriteRegReg(ref writer, opcode, destination, source, instruction.width);
+    }
+    if (instruction.op == Opcode::Cmp or instruction.op == Opcode::Test)
+    {
+        Register left = ResolveRegister(ref const allocation, instruction.source0) ?;
+        if (instruction.source1.kind == OperandKind::Immediate)
+        {
+            if (instruction.op != Opcode::Cmp)
+            { return Result::Error(BackendError::UnsupportedInstruction); }
+            int value = ParseI32Literal(ref const reader, instruction.source1.literal) ?;
+            return WriteCompareImmediate(ref writer, left, value, instruction.width);
+        }
+        Register right = ResolveRegister(ref const allocation, instruction.source1) ?;
+        int opcode = 57;
+        if (instruction.op == Opcode::Test) {
+            opcode = 133;
+            if (instruction.width == 1) {
+                opcode = 132;
+            }
+        }
+        if (instruction.op == Opcode::Cmp and instruction.width == 1)
+        {
+            opcode = 56;
+        }
+        return WriteRegReg(ref writer, opcode, left, right, instruction.width);
+    }
+    if (instruction.op == Opcode::Setcc)
+    {
+        Register destination = ResolveRegister(ref const allocation, instruction.destination) ?;
+        int condition = ConditionEncoding(instruction.condition);
+        if (condition < 0) { return Result::Error(BackendError::InvalidEncoding); }
+        int code = RegisterEncoding(destination);
+        WriteRex(ref writer, false, 0, code) ?;
+        WriteByte(ref writer, 15) ?;
+        WriteByte(ref writer, 144 + condition) ?;
+        WriteByte(ref writer, 192 + code % 8) ?;
+        return Result::Ok();
+    }
+    return Result::Error(BackendError::UnsupportedInstruction);
+}
+
+// Callers must discard output on Error; the published count is transactional.
+Result<int, BackendError> EncodeFunction(
+ref const BridgeReader reader, ref const BackendFunction function,
+ref const Allocation allocation, ref const FinalizedFrame frame, Span<byte> output)
+{
+    ByteWriter writer = ByteWriter{output, 0};
+    EncodingPlan plan = EmptyEncodingPlan();
+    WriteStackAdjustment(ref writer, true, frame.byteCount) ?;
+    for (bi in 0 .. function.blockCount)
+    {
+        MachineBlock block = function.blocks[bi];
+        plan.blockOffsets[bi] = writer.offset;
+        for (ii in 0 .. block.instructionCount)
+        {
+            EmitInstruction(ref writer, ref const reader, ref const allocation,
+            ref const frame, function.instructions[block.firstInstruction + ii]) ?;
+        }
+        match (block.terminator)
+        {
+            Opcode::Jmp => {
+                WriteByte(ref writer, 233) ?;
+                AddFixup(ref writer, ref plan, block.trueBlock) ?;
+            }
+            Opcode::Jcc => {
+                int condition = ConditionEncoding(block.condition);
+                if (condition < 0) { return Result::Error(BackendError::InvalidEncoding); }
+                WriteByte(ref writer, 15) ?;
+                WriteByte(ref writer, 128 + condition) ?;
+                AddFixup(ref writer, ref plan, block.trueBlock) ?;
+                WriteByte(ref writer, 233) ?;
+                AddFixup(ref writer, ref plan, block.falseBlock) ?;
+            }
+            Opcode::Ret => {
+                WriteStackAdjustment(ref writer, false, frame.byteCount) ?;
+                WriteByte(ref writer, 195) ?;
+            }
+            Opcode::Trap => { }
+            Opcode::None => { return Result::Error(BackendError::UnsupportedInstruction); }
+            Opcode::Mov => { return Result::Error(BackendError::UnsupportedInstruction); }
+            Opcode::Load => { return Result::Error(BackendError::UnsupportedInstruction); }
+            Opcode::Store => { return Result::Error(BackendError::UnsupportedInstruction); }
+            Opcode::Lea => { return Result::Error(BackendError::UnsupportedInstruction); }
+            Opcode::Add => { return Result::Error(BackendError::UnsupportedInstruction); }
+            Opcode::Sub => { return Result::Error(BackendError::UnsupportedInstruction); }
+            Opcode::Imul => { return Result::Error(BackendError::UnsupportedInstruction); }
+            Opcode::Umul => { return Result::Error(BackendError::UnsupportedInstruction); }
+            Opcode::Cmp => { return Result::Error(BackendError::UnsupportedInstruction); }
+            Opcode::Test => { return Result::Error(BackendError::UnsupportedInstruction); }
+            Opcode::Setcc => { return Result::Error(BackendError::UnsupportedInstruction); }
+        }
+    }
+    for (i in 0 .. plan.fixupCount)
+    {
+        BranchFixup fixup = plan.fixups[i];
+        if (fixup.targetBlock >= function.blockCount)
+        { return Result::Error(BackendError::InvalidEncoding); }
+        int displacement = plan.blockOffsets[fixup.targetBlock] -(fixup.patchOffset + 4);
+        PatchI32LE(ref writer, fixup.patchOffset, displacement) ?;
+    }
+    return Result::Ok(writer.offset);
+}
+
+Result<int, BackendError> EmitFunction(
+ReadOnlySpan<byte> artifact, int ordinal, Span<byte> output)
+{
+    BackendFunction function = EmptyFunction();
+    DecodeFunction(artifact, ordinal, ref function) ?;
+    Allocation allocation = EmptyAllocation();
+    AllocateRegisters(ref const function, ref allocation) ?;
+    FinalizedFrame frame = FinalizeFrame(ref const function) ?;
+    BridgeReader reader = BridgeReader{artifact, 0};
+    return EncodeFunction(ref const reader, ref const function, ref const allocation,
+    ref const frame, output);
+}
+
+void BackendFacts()
+{
+    Assert.Concept<NoAllocation>(WriteByte, "bounded caller-supplied output");
+    Assert.Concept<NoAllocation>(AllocateRegisters, "fixed interval and liveness storage");
+    Assert.Concept<NoAllocation>(EncodeFunction, "bounded direct AMD64 encoding");
+    Assert.Concept<NoAllocation>(EmitFunction, "artifact to bytes uses fixed storage");
+}
