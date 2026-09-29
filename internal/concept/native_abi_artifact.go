@@ -79,6 +79,9 @@ func validateNativeABIEvidenceForModule(report NativeABIReport, module Module, s
 	for _, decl := range module.Structs {
 		env.structs[decl.Name] = decl
 	}
+	for _, decl := range module.Handles {
+		env.handles[decl.Name] = decl
+	}
 	matched := 0
 	for _, decl := range module.Structs {
 		if !evt1HasCRepr(decl.Attributes) {

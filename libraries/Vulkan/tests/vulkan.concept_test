@@ -1,0 +1,109 @@
+module Vulkan.Tests;
+profile Core;
+import Vulkan;
+
+// Observers exported by native/test_device.c.
+extern "C" int ConceptVkTestLiveBuffers();
+extern "C" int ConceptVkTestDoubleDestroys();
+extern "C" VkDevice ConceptVkTestDevice();
+
+// Keeps only the status of a creation, dropping a created buffer.
+Result<void, VulkanError> Discarded(Result<Buffer, VulkanError> created)
+{
+    return match (move created)
+    {
+        Result::Ok(buffer) => Result::Ok(),
+        Result::Error(error) => Result::Error(error),
+    };
+}
+
+int ErrorCode(VulkanError error)
+{
+    return match (error)
+    {
+        VulkanError::OutOfHostMemory => -1,
+        VulkanError::OutOfDeviceMemory => -2,
+        VulkanError::InitializationFailed => -3,
+        VulkanError::DeviceLost => -4,
+        VulkanError::MemoryMapFailed => -5,
+        VulkanError::LayerNotPresent => -6,
+        VulkanError::ExtensionNotPresent => -7,
+        VulkanError::FeatureNotPresent => -8,
+        VulkanError::IncompatibleDriver => -9,
+        VulkanError::TooManyObjects => -10,
+        VulkanError::FormatNotSupported => -11,
+        VulkanError::FragmentedPool => -12,
+        VulkanError::Unknown(code) => code,
+    };
+}
+
+BufferUsage StorageTransfer()
+{
+    BufferUsage none = BufferUsage{0};
+    return none with { storage = true; transferDestination = true; };
+}
+
+MemoryProperty HostVisible()
+{
+    MemoryProperty none = MemoryProperty{0};
+    return none with { hostVisible = true; hostCoherent = true; };
+}
+
+int FailureCode(Result<void, VulkanError> result)
+{
+    return match (result)
+    {
+        Result::Ok => 0,
+        Result::Error(error) => ErrorCode(error),
+    };
+}
+
+[[fact]]
+void EveryFailingCodeRoundTrips()
+{
+    for (code in 1..14)
+    {
+        Assert.Equal(FailureCode(Check(0 - code)), 0 - code, "a negative code is an error that keeps its value");
+    }
+    Assert.Equal(FailureCode(Check(-1000)), -1000, "an unlisted code is Unknown(code)");
+    Assert.LGTM(Check(0), "VK_SUCCESS");
+    Assert.LGTM(Check(2), "VK_TIMEOUT is a status, not a failure");
+}
+
+[[fact]]
+void FlagWordsMatchTheVulkanBits()
+{
+    Assert.True(StorageTransfer().raw == 34, "STORAGE (0x20) | TRANSFER_DST (0x2)");
+    Assert.True(HostVisible().raw == 6, "HOST_VISIBLE (0x2) | HOST_COHERENT (0x4)");
+}
+
+int LiveWhileHeld(VkDevice device)
+{
+    owned Buffer buffer = CreateBuffer(device, 256, StorageTransfer(), HostVisible())!;
+    return ConceptVkTestLiveBuffers();
+}
+
+void Consume(owned Buffer buffer)
+{
+}
+
+[[fact]]
+void DroppingABufferDestroysItOnce()
+{
+    VkDevice device = ConceptVkTestDevice();
+    Assert.Equal(LiveWhileHeld(device), 1, "the buffer is live while owned");
+    Assert.Equal(ConceptVkTestLiveBuffers(), 0, "leaving scope destroyed it");
+    owned Buffer moved = CreateBuffer(device, 64, StorageTransfer(), HostVisible())!;
+    Consume(move moved);
+    Assert.Equal(ConceptVkTestLiveBuffers(), 0, "moving hands destruction to the new owner");
+    Assert.Equal(ConceptVkTestDoubleDestroys(), 0, "nothing was destroyed twice");
+}
+
+[[fact]]
+void FailedCreationOwnsNothing()
+{
+    VkDevice device = ConceptVkTestDevice();
+    BufferUsage none = BufferUsage{0};
+    Assert.Equal(FailureCode(Discarded(CreateBuffer(device, 64, none, HostVisible()))), -3, "no usage is VK_ERROR_INITIALIZATION_FAILED");
+    Assert.Equal(ConceptVkTestLiveBuffers(), 0, "a failed creation leaves nothing live");
+}

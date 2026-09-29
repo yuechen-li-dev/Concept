@@ -731,6 +731,9 @@ func CheckNativeABI(project NativeProject) error {
 		for _, decl := range module.Structs {
 			geometryEnv.structs[decl.Name] = decl
 		}
+		for _, decl := range module.Handles {
+			geometryEnv.handles[decl.Name] = decl
+		}
 		var conceptOffsets []int
 		var conceptSize, conceptAlign int
 		for _, decl := range module.Structs {
@@ -852,7 +855,7 @@ func nativeABIProbeSource(claim NativeABIClaim) string {
 func nativeABIProbeArgs(project NativeProject, claim NativeABIClaim, probe, executable string) ([]string, error) {
 	headerDir := filepath.ToSlash(filepath.Dir(filepath.FromSlash(claim.Header)))
 	for _, target := range project.Targets {
-		if target.Language != "Cpp" {
+		if target.Language != "Cpp" && target.Language != "C" {
 			continue
 		}
 		matches := false
@@ -865,7 +868,9 @@ func nativeABIProbeArgs(project NativeProject, claim NativeABIClaim, probe, exec
 		if !matches {
 			continue
 		}
-		standard := map[string]string{"Cpp17": "c++17", "Cpp20": "c++20", "Cpp23": "c++23"}[target.Standard]
+		// A C target's header is measured by the C++ probe: a C struct has the
+		// same layout when compiled as C++.
+		standard := map[string]string{"Cpp17": "c++17", "Cpp20": "c++20", "Cpp23": "c++23", "C11": "c++17", "C17": "c++17"}[target.Standard]
 		if standard == "" {
 			return nil, fmt.Errorf("NATIVE_ABI_PROBE_FLAGS_UNKNOWN: %s target %s has unsupported C++ standard %s", claim.TypeName, target.Name, target.Standard)
 		}
@@ -882,7 +887,7 @@ func nativeABIProbeArgs(project NativeProject, claim NativeABIClaim, probe, exec
 		}
 		return append(args, probe, "-o", executable), nil
 	}
-	return nil, fmt.Errorf("NATIVE_ABI_PROBE_TARGET_UNKNOWN: no C++ target owns header %s", claim.Header)
+	return nil, fmt.Errorf("NATIVE_ABI_PROBE_TARGET_UNKNOWN: no C or C++ target owns header %s", claim.Header)
 }
 
 func nativeIdentifier(s string) bool {

@@ -1,0 +1,116 @@
+module Vulkan;
+profile Core;
+
+// Vulkan in ordinary Concept. Object handles are foreign handles, VkResult
+// codes become Result<T, VulkanError>, flag words are `bits`, and a created
+// object is an owned value whose Drop releases it. The C boundary is
+// native/concept_vulkan.h.
+
+extern "C" handle VkDevice;
+extern "C" handle VkBuffer;
+extern "C" handle VkDeviceMemory;
+
+// The failing VkResult codes (negative in C).
+enum VulkanError
+{
+    OutOfHostMemory,
+    OutOfDeviceMemory,
+    InitializationFailed,
+    DeviceLost,
+    MemoryMapFailed,
+    LayerNotPresent,
+    ExtensionNotPresent,
+    FeatureNotPresent,
+    IncompatibleDriver,
+    TooManyObjects,
+    FormatNotSupported,
+    FragmentedPool,
+    Unknown(int code),
+}
+
+// Non-negative codes are success or status (VK_TIMEOUT and friends); only
+// the operations that can return a status look at it.
+Result<void, VulkanError> Check(int code)
+{
+    if (code >= 0) { return Result::Ok(); }
+    return Result::Error(ErrorFromCode(code));
+}
+
+VulkanError ErrorFromCode(int code)
+{
+    return match (code)
+    {
+        -1 => VulkanError::OutOfHostMemory,
+        -2 => VulkanError::OutOfDeviceMemory,
+        -3 => VulkanError::InitializationFailed,
+        -4 => VulkanError::DeviceLost,
+        -5 => VulkanError::MemoryMapFailed,
+        -6 => VulkanError::LayerNotPresent,
+        -7 => VulkanError::ExtensionNotPresent,
+        -8 => VulkanError::FeatureNotPresent,
+        -9 => VulkanError::IncompatibleDriver,
+        -10 => VulkanError::TooManyObjects,
+        -11 => VulkanError::FormatNotSupported,
+        -12 => VulkanError::FragmentedPool,
+        _ => VulkanError::Unknown(code),
+    };
+}
+
+// VkBufferUsageFlagBits
+bits BufferUsage : uint32
+{
+    transferSource: 0;
+    transferDestination: 1;
+    uniformTexel: 2;
+    storageTexel: 3;
+    uniform: 4;
+    storage: 5;
+    index: 6;
+    vertex: 7;
+    indirect: 8;
+}
+
+// VkMemoryPropertyFlagBits
+bits MemoryProperty : uint32
+{
+    deviceLocal: 0;
+    hostVisible: 1;
+    hostCoherent: 2;
+    hostCached: 3;
+    lazilyAllocated: 4;
+}
+
+[[repr(C)]]
+record struct BufferCreation
+{
+    int code;
+    VkBuffer buffer;
+    VkDeviceMemory memory;
+};
+
+extern "C" BufferCreation ConceptVkCreateBuffer(VkDevice device, usize size, uint32 usage, uint32 properties);
+extern "C" void ConceptVkDestroyBuffer(VkDevice device, VkBuffer buffer, VkDeviceMemory memory);
+
+// A buffer and the memory bound to it. Dropping it destroys both, exactly
+// once; moving it transfers that duty.
+class Buffer
+{
+public:
+    VkDevice device;
+    VkBuffer buffer;
+    VkDeviceMemory memory;
+    usize<byte> size;
+};
+
+void Drop(owned Buffer buffer)
+{
+    ConceptVkDestroyBuffer(buffer.device, buffer.buffer, buffer.memory);
+}
+
+Result<Buffer, VulkanError> CreateBuffer(VkDevice device, usize<byte> size, BufferUsage usage, MemoryProperty properties)
+{
+    BufferCreation created = ConceptVkCreateBuffer(device, Magnitude(size), usage.raw, properties.raw);
+    Check(created.code)?;
+    owned Buffer buffer = Buffer{device, created.buffer, created.memory, size};
+    return Result::Ok(move buffer);
+}
