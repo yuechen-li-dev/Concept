@@ -13,7 +13,7 @@ int32_t concept_rt_concept_templates_vulkan_i32_add(int32_t left, int32_t right,
   if (result < INT32_MIN || result > INT32_MAX) { concept_panic("int32 addition overflow", line, column); }
   return (int32_t)result;
 }
-static concept_buffer_range concept_buffer_range_make(VkBuffer buffer, int32_t offset, int32_t size) {
+static concept_buffer_range concept_buffer_range_make(concept_vk_buffer buffer, int32_t offset, int32_t size) {
   concept_buffer_range out;
   out.buffer = buffer;
   out.offset = offset;
@@ -37,8 +37,8 @@ static void concept_template_destroy_resource__pipeline_state(concept_pipeline_s
   concept_concept_templates_vulkan_destroy__borrow_pipeline_state(value);
 }
 
-int32_t concept_concept_templates_vulkan_classify_range(VkBuffer buffer) {
-  VkBuffer cv_init_1_01 = buffer;
+int32_t concept_concept_templates_vulkan_classify_range(concept_vk_buffer buffer) {
+  concept_vk_buffer cv_init_1_01 = buffer;
   int32_t cv_init_2_02 = INT32_C(2);
   int32_t cv_init_3_03 = INT32_C(3);
   concept_buffer_range range;
@@ -48,26 +48,26 @@ int32_t concept_concept_templates_vulkan_classify_range(VkBuffer buffer) {
   return concept_template_score_resource__buffer_range(&range);
 }
 
-int32_t concept_concept_templates_vulkan_double_range_score(VkBuffer first, VkBuffer second) {
-  VkBuffer cv_init_1_01 = first;
+int32_t concept_concept_templates_vulkan_double_range_score(concept_vk_buffer first, concept_vk_buffer second) {
+  concept_vk_buffer cv_init_1_01 = first;
   int32_t cv_init_2_02 = INT32_C(4);
   int32_t cv_init_3_03 = INT32_C(5);
   concept_buffer_range left;
   left.buffer = cv_init_1_01;
   left.offset = cv_init_2_02;
   left.size = cv_init_3_03;
-  VkBuffer cv_init_1_04 = second;
+  concept_vk_buffer cv_init_1_04 = second;
   int32_t cv_init_2_05 = INT32_C(6);
   int32_t cv_init_3_06 = INT32_C(7);
   concept_buffer_range right;
   right.buffer = cv_init_1_04;
   right.offset = cv_init_2_05;
   right.size = cv_init_3_06;
-  return concept_rt_concept_templates_vulkan_i32_add(concept_template_score_resource__buffer_range(&left), concept_template_score_resource__buffer_range(&right), 65, 45);
+  return concept_rt_concept_templates_vulkan_i32_add(concept_template_score_resource__buffer_range(&left), concept_template_score_resource__buffer_range(&right), 70, 45);
 }
 
-bool concept_concept_templates_vulkan_build_and_destroy(VkCommandPool pool) {
-  VkCommandPool cv_init_1_01 = pool;
+bool concept_concept_templates_vulkan_build_and_destroy(concept_vk_command_pool pool) {
+  concept_vk_command_pool cv_init_1_01 = pool;
   bool cv_init_2_02 = false;
   concept_pipeline_state state;
   state.pool = cv_init_1_01;

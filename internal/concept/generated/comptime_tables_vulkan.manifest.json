@@ -3,27 +3,27 @@
   "files": [
     {
       "path": "comptime_tables_vulkan.generated.h",
-      "sha256": "f2a0232ebb732db981ee0a62b4670245ae7759c5dd1e362497e2fb3bbc587e42"
+      "sha256": "f38d91fca45db9a1b19a62ff2cc90e0e4bc735bd02940a7228fec45d556b0602"
     },
     {
       "path": "comptime_tables_vulkan.generated.c",
-      "sha256": "e70142af8a7def7e0bafc3cf4e25e889c95052d16fddf7d3773202391f121d01"
+      "sha256": "35aeaa516069eccbb8aba69a39d29e8f0c9de65c70a2b157138095de7637486a"
     },
     {
       "path": "comptime_tables_vulkan.mir.json",
-      "sha256": "141201be0f57e5e8089eeb0c7dd164f2481442e87f3473c452c74ee3cd1ee5e4"
+      "sha256": "626dece4b87e4f34512871d4f2be1fe7bd67f52eeaa225dbe36b67ff410b0cbd"
     },
     {
       "path": "comptime_tables_vulkan.map.json",
-      "sha256": "38e347336205e5fcc9d8dc9ff3c870e9e426b1f0e754f9a7848b820638b586e2"
+      "sha256": "dee1d81312af84c3ca1534512d92d3ec434b9e5a0e516ff61dfba2a775d8347e"
     }
   ],
   "options": {
     "paths": "repository-relative",
     "timestamps": "forbidden"
   },
-  "profile": "Vulkan",
+  "profile": "Core",
   "schema": "concept-evt1-generation-manifest.v1",
   "source": "examples/evt1/comptime_tables_vulkan.concept",
-  "source_sha256": "7b2ec6d299e7fa374205a0b87a739e80e58c73f6757eca7c528598b1c624ba01"
+  "source_sha256": "b2570618dbc8077f210d4497494970ca120107f60f71b5323e533b436f5ae238"
 }

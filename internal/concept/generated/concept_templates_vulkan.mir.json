@@ -1,7 +1,7 @@
 {
   "schema": "concept-evt1-mir.v1",
   "module": "examples/evt1/concept_templates_vulkan.concept",
-  "profile": "Vulkan",
+  "profile": "Core",
   "structs": [
     {
       "name": "BufferRange",
@@ -15,9 +15,9 @@
           "name": "buffer",
           "type": {
             "name": "VkBuffer",
-            "kind": "builtin",
+            "kind": "handle",
             "span": {
-              "line": 5,
+              "line": 10,
               "column": 5
             }
           }
@@ -28,7 +28,7 @@
             "name": "int",
             "kind": "builtin",
             "span": {
-              "line": 6,
+              "line": 11,
               "column": 5
             }
           }
@@ -39,14 +39,14 @@
             "name": "int",
             "kind": "builtin",
             "span": {
-              "line": 7,
+              "line": 12,
               "column": 5
             }
           }
         }
       ],
       "source_span": {
-        "line": 3,
+        "line": 8,
         "column": 1
       }
     },
@@ -62,9 +62,9 @@
           "name": "pool",
           "type": {
             "name": "VkCommandPool",
-            "kind": "builtin",
+            "kind": "handle",
             "span": {
-              "line": 12,
+              "line": 17,
               "column": 5
             }
           }
@@ -75,14 +75,14 @@
             "name": "bool",
             "kind": "builtin",
             "span": {
-              "line": 13,
+              "line": 18,
               "column": 5
             }
           }
         }
       ],
       "source_span": {
-        "line": 10,
+        "line": 15,
         "column": 1
       }
     }
@@ -99,7 +99,7 @@
             "name": "int",
             "kind": "builtin",
             "span": {
-              "line": 18,
+              "line": 23,
               "column": 14
             }
           },
@@ -112,48 +112,8 @@
                 "ownership": "borrow",
                 "const": true,
                 "span": {
-                  "line": 18,
-                  "column": 26
-                }
-              }
-            }
-          ],
-          "source_span": {
-            "line": 18,
-            "column": 5
-          }
-        }
-      ],
-      "source_span": {
-        "line": 16,
-        "column": 1
-      }
-    },
-    {
-      "name": "Destroyable",
-      "type_param": "T",
-      "requirements": [
-        {
-          "kind": "operation",
-          "name": "Destroy",
-          "return_type": {
-            "name": "void",
-            "kind": "builtin",
-            "span": {
-              "line": 23,
-              "column": 14
-            }
-          },
-          "params": [
-            {
-              "name": "value",
-              "type": {
-                "name": "T",
-                "kind": "concept_param",
-                "ownership": "borrow",
-                "span": {
                   "line": 23,
-                  "column": 27
+                  "column": 26
                 }
               }
             }
@@ -170,6 +130,46 @@
       }
     },
     {
+      "name": "Destroyable",
+      "type_param": "T",
+      "requirements": [
+        {
+          "kind": "operation",
+          "name": "Destroy",
+          "return_type": {
+            "name": "void",
+            "kind": "builtin",
+            "span": {
+              "line": 28,
+              "column": 14
+            }
+          },
+          "params": [
+            {
+              "name": "value",
+              "type": {
+                "name": "T",
+                "kind": "concept_param",
+                "ownership": "borrow",
+                "span": {
+                  "line": 28,
+                  "column": 27
+                }
+              }
+            }
+          ],
+          "source_span": {
+            "line": 28,
+            "column": 5
+          }
+        }
+      ],
+      "source_span": {
+        "line": 26,
+        "column": 1
+      }
+    },
+    {
       "name": "VulkanResource",
       "type_param": "T",
       "requirements": [
@@ -178,7 +178,7 @@
           "name": "Measurable",
           "detail": "T",
           "source_span": {
-            "line": 28,
+            "line": 33,
             "column": 5
           }
         },
@@ -187,13 +187,13 @@
           "name": "Destroyable",
           "detail": "T",
           "source_span": {
-            "line": 29,
+            "line": 34,
             "column": 5
           }
         }
       ],
       "source_span": {
-        "line": 26,
+        "line": 31,
         "column": 1
       }
     }
@@ -205,13 +205,13 @@
         "name": "BufferRange",
         "kind": "struct",
         "span": {
-          "line": 38,
+          "line": 43,
           "column": 25
         }
       },
       "satisfied": true,
       "source_span": {
-        "line": 38,
+        "line": 43,
         "column": 1
       }
     },
@@ -221,13 +221,13 @@
         "name": "PipelineState",
         "kind": "struct",
         "span": {
-          "line": 39,
+          "line": 44,
           "column": 25
         }
       },
       "satisfied": true,
       "source_span": {
-        "line": 39,
+        "line": 44,
         "column": 1
       }
     }
@@ -240,7 +240,7 @@
         "concept_name": "VulkanResource",
         "type_param": "T",
         "source_span": {
-          "line": 42,
+          "line": 47,
           "column": 1
         }
       },
@@ -252,7 +252,7 @@
               "name": "T",
               "kind": "concept_param",
               "span": {
-                "line": 42,
+                "line": 47,
                 "column": 25
               }
             }
@@ -268,7 +268,7 @@
               "name": "T",
               "kind": "concept_param",
               "span": {
-                "line": 28,
+                "line": 33,
                 "column": 25
               }
             }
@@ -285,7 +285,7 @@
               "name": "T",
               "kind": "concept_param",
               "span": {
-                "line": 29,
+                "line": 34,
                 "column": 26
               }
             }
@@ -324,7 +324,7 @@
         "name": "int",
         "kind": "builtin",
         "span": {
-          "line": 43,
+          "line": 48,
           "column": 1
         }
       },
@@ -337,7 +337,7 @@
             "ownership": "borrow",
             "const": true,
             "span": {
-              "line": 43,
+              "line": 48,
               "column": 19
             }
           }
@@ -348,7 +348,7 @@
           "id": "ScoreResource.01",
           "kind": "return",
           "source_span": {
-            "line": 45,
+            "line": 50,
             "column": 5
           }
         },
@@ -357,7 +357,7 @@
           "kind": "requirement_call",
           "detail": "ScoreResource.req.01 -\u003e Measure",
           "source_span": {
-            "line": 45,
+            "line": 50,
             "column": 12
           }
         },
@@ -366,13 +366,13 @@
           "kind": "name",
           "detail": "value",
           "source_span": {
-            "line": 45,
+            "line": 50,
             "column": 20
           }
         }
       ],
       "source_span": {
-        "line": 41,
+        "line": 46,
         "column": 1
       }
     },
@@ -383,7 +383,7 @@
         "concept_name": "VulkanResource",
         "type_param": "T",
         "source_span": {
-          "line": 49,
+          "line": 54,
           "column": 1
         }
       },
@@ -395,7 +395,7 @@
               "name": "T",
               "kind": "concept_param",
               "span": {
-                "line": 49,
+                "line": 54,
                 "column": 25
               }
             }
@@ -411,7 +411,7 @@
               "name": "T",
               "kind": "concept_param",
               "span": {
-                "line": 28,
+                "line": 33,
                 "column": 25
               }
             }
@@ -428,7 +428,7 @@
               "name": "T",
               "kind": "concept_param",
               "span": {
-                "line": 29,
+                "line": 34,
                 "column": 26
               }
             }
@@ -467,7 +467,7 @@
         "name": "void",
         "kind": "builtin",
         "span": {
-          "line": 50,
+          "line": 55,
           "column": 1
         }
       },
@@ -479,7 +479,7 @@
             "kind": "concept_param",
             "ownership": "borrow",
             "span": {
-              "line": 50,
+              "line": 55,
               "column": 22
             }
           }
@@ -490,7 +490,7 @@
           "id": "DestroyResource.01",
           "kind": "expr_stmt",
           "source_span": {
-            "line": 52,
+            "line": 57,
             "column": 5
           }
         },
@@ -499,7 +499,7 @@
           "kind": "requirement_call",
           "detail": "DestroyResource.req.02 -\u003e Destroy",
           "source_span": {
-            "line": 52,
+            "line": 57,
             "column": 5
           }
         },
@@ -508,13 +508,13 @@
           "kind": "name",
           "detail": "value",
           "source_span": {
-            "line": 52,
+            "line": 57,
             "column": 13
           }
         }
       ],
       "source_span": {
-        "line": 48,
+        "line": 53,
         "column": 1
       }
     }
@@ -527,7 +527,7 @@
         "name": "BufferRange",
         "kind": "struct",
         "span": {
-          "line": 58,
+          "line": 63,
           "column": 26
         }
       },
@@ -541,7 +541,7 @@
               "name": "BufferRange",
               "kind": "struct",
               "span": {
-                "line": 42,
+                "line": 47,
                 "column": 25
               }
             }
@@ -557,7 +557,7 @@
               "name": "BufferRange",
               "kind": "struct",
               "span": {
-                "line": 28,
+                "line": 33,
                 "column": 25
               }
             }
@@ -574,7 +574,7 @@
               "name": "BufferRange",
               "kind": "struct",
               "span": {
-                "line": 29,
+                "line": 34,
                 "column": 26
               }
             }
@@ -613,7 +613,7 @@
         "name": "int",
         "kind": "builtin",
         "span": {
-          "line": 43,
+          "line": 48,
           "column": 1
         }
       },
@@ -626,7 +626,7 @@
             "ownership": "borrow",
             "const": true,
             "span": {
-              "line": 43,
+              "line": 48,
               "column": 19
             }
           }
@@ -637,7 +637,7 @@
           "id": "concept_template_score_resource__buffer_range.01",
           "kind": "return",
           "source_span": {
-            "line": 45,
+            "line": 50,
             "column": 5
           }
         },
@@ -646,7 +646,7 @@
           "kind": "call",
           "detail": "Measure",
           "source_span": {
-            "line": 45,
+            "line": 50,
             "column": 12
           }
         },
@@ -655,27 +655,27 @@
           "kind": "name",
           "detail": "value",
           "source_span": {
-            "line": 45,
+            "line": 50,
             "column": 20
           }
         }
       ],
       "invocation_spans": [
         {
-          "line": 58,
+          "line": 63,
           "column": 12
         },
         {
-          "line": 65,
+          "line": 70,
           "column": 12
         },
         {
-          "line": 65,
+          "line": 70,
           "column": 47
         }
       ],
       "source_span": {
-        "line": 41,
+        "line": 46,
         "column": 1
       }
     },
@@ -686,7 +686,7 @@
         "name": "PipelineState",
         "kind": "struct",
         "span": {
-          "line": 73,
+          "line": 78,
           "column": 26
         }
       },
@@ -700,7 +700,7 @@
               "name": "PipelineState",
               "kind": "struct",
               "span": {
-                "line": 42,
+                "line": 47,
                 "column": 25
               }
             }
@@ -716,7 +716,7 @@
               "name": "PipelineState",
               "kind": "struct",
               "span": {
-                "line": 28,
+                "line": 33,
                 "column": 25
               }
             }
@@ -733,7 +733,7 @@
               "name": "PipelineState",
               "kind": "struct",
               "span": {
-                "line": 29,
+                "line": 34,
                 "column": 26
               }
             }
@@ -772,7 +772,7 @@
         "name": "int",
         "kind": "builtin",
         "span": {
-          "line": 43,
+          "line": 48,
           "column": 1
         }
       },
@@ -785,7 +785,7 @@
             "ownership": "borrow",
             "const": true,
             "span": {
-              "line": 43,
+              "line": 48,
               "column": 19
             }
           }
@@ -796,7 +796,7 @@
           "id": "concept_template_score_resource__pipeline_state.01",
           "kind": "return",
           "source_span": {
-            "line": 45,
+            "line": 50,
             "column": 5
           }
         },
@@ -805,7 +805,7 @@
           "kind": "call",
           "detail": "Measure",
           "source_span": {
-            "line": 45,
+            "line": 50,
             "column": 12
           }
         },
@@ -814,19 +814,19 @@
           "kind": "name",
           "detail": "value",
           "source_span": {
-            "line": 45,
+            "line": 50,
             "column": 20
           }
         }
       ],
       "invocation_spans": [
         {
-          "line": 73,
+          "line": 78,
           "column": 12
         }
       ],
       "source_span": {
-        "line": 41,
+        "line": 46,
         "column": 1
       }
     },
@@ -837,7 +837,7 @@
         "name": "PipelineState",
         "kind": "struct",
         "span": {
-          "line": 72,
+          "line": 77,
           "column": 21
         }
       },
@@ -851,7 +851,7 @@
               "name": "PipelineState",
               "kind": "struct",
               "span": {
-                "line": 49,
+                "line": 54,
                 "column": 25
               }
             }
@@ -867,7 +867,7 @@
               "name": "PipelineState",
               "kind": "struct",
               "span": {
-                "line": 28,
+                "line": 33,
                 "column": 25
               }
             }
@@ -884,7 +884,7 @@
               "name": "PipelineState",
               "kind": "struct",
               "span": {
-                "line": 29,
+                "line": 34,
                 "column": 26
               }
             }
@@ -923,7 +923,7 @@
         "name": "void",
         "kind": "builtin",
         "span": {
-          "line": 50,
+          "line": 55,
           "column": 1
         }
       },
@@ -935,7 +935,7 @@
             "kind": "struct",
             "ownership": "borrow",
             "span": {
-              "line": 50,
+              "line": 55,
               "column": 22
             }
           }
@@ -946,7 +946,7 @@
           "id": "concept_template_destroy_resource__pipeline_state.01",
           "kind": "expr_stmt",
           "source_span": {
-            "line": 52,
+            "line": 57,
             "column": 5
           }
         },
@@ -955,7 +955,7 @@
           "kind": "call",
           "detail": "Destroy",
           "source_span": {
-            "line": 52,
+            "line": 57,
             "column": 5
           }
         },
@@ -964,19 +964,19 @@
           "kind": "name",
           "detail": "value",
           "source_span": {
-            "line": 52,
+            "line": 57,
             "column": 13
           }
         }
       ],
       "invocation_spans": [
         {
-          "line": 72,
+          "line": 77,
           "column": 5
         }
       ],
       "source_span": {
-        "line": 48,
+        "line": 53,
         "column": 1
       }
     }
@@ -988,7 +988,7 @@
         "name": "int",
         "kind": "builtin",
         "span": {
-          "line": 32,
+          "line": 37,
           "column": 1
         }
       },
@@ -1001,7 +1001,7 @@
             "ownership": "borrow",
             "const": true,
             "span": {
-              "line": 32,
+              "line": 37,
               "column": 13
             }
           }
@@ -1009,7 +1009,7 @@
       ],
       "operations": null,
       "source_span": {
-        "line": 32,
+        "line": 37,
         "column": 5
       }
     },
@@ -1019,7 +1019,7 @@
         "name": "int",
         "kind": "builtin",
         "span": {
-          "line": 33,
+          "line": 38,
           "column": 1
         }
       },
@@ -1032,7 +1032,7 @@
             "ownership": "borrow",
             "const": true,
             "span": {
-              "line": 33,
+              "line": 38,
               "column": 13
             }
           }
@@ -1040,7 +1040,7 @@
       ],
       "operations": null,
       "source_span": {
-        "line": 33,
+        "line": 38,
         "column": 5
       }
     },
@@ -1050,7 +1050,7 @@
         "name": "void",
         "kind": "builtin",
         "span": {
-          "line": 34,
+          "line": 39,
           "column": 1
         }
       },
@@ -1062,7 +1062,7 @@
             "kind": "struct",
             "ownership": "borrow",
             "span": {
-              "line": 34,
+              "line": 39,
               "column": 14
             }
           }
@@ -1070,7 +1070,7 @@
       ],
       "operations": null,
       "source_span": {
-        "line": 34,
+        "line": 39,
         "column": 6
       }
     },
@@ -1080,7 +1080,7 @@
         "name": "void",
         "kind": "builtin",
         "span": {
-          "line": 35,
+          "line": 40,
           "column": 1
         }
       },
@@ -1092,7 +1092,7 @@
             "kind": "struct",
             "ownership": "borrow",
             "span": {
-              "line": 35,
+              "line": 40,
               "column": 14
             }
           }
@@ -1100,7 +1100,7 @@
       ],
       "operations": null,
       "source_span": {
-        "line": 35,
+        "line": 40,
         "column": 6
       }
     },
@@ -1110,7 +1110,7 @@
         "name": "void",
         "kind": "builtin",
         "span": {
-          "line": 36,
+          "line": 41,
           "column": 1
         }
       },
@@ -1122,7 +1122,7 @@
             "kind": "struct",
             "ownership": "borrow",
             "span": {
-              "line": 36,
+              "line": 41,
               "column": 15
             }
           }
@@ -1130,7 +1130,7 @@
       ],
       "operations": null,
       "source_span": {
-        "line": 36,
+        "line": 41,
         "column": 6
       }
     },
@@ -1140,7 +1140,7 @@
         "name": "int",
         "kind": "builtin",
         "span": {
-          "line": 55,
+          "line": 60,
           "column": 1
         }
       },
@@ -1149,9 +1149,9 @@
           "name": "buffer",
           "type": {
             "name": "VkBuffer",
-            "kind": "builtin",
+            "kind": "handle",
             "span": {
-              "line": 55,
+              "line": 60,
               "column": 19
             }
           }
@@ -1164,7 +1164,7 @@
           "type": "BufferRange",
           "detail": "range",
           "source_span": {
-            "line": 57,
+            "line": 62,
             "column": 17
           }
         },
@@ -1173,7 +1173,7 @@
           "kind": "struct_construct",
           "detail": "BufferRange",
           "source_span": {
-            "line": 57,
+            "line": 62,
             "column": 25
           }
         },
@@ -1182,7 +1182,7 @@
           "kind": "name",
           "detail": "buffer",
           "source_span": {
-            "line": 57,
+            "line": 62,
             "column": 37
           }
         },
@@ -1191,7 +1191,7 @@
           "kind": "literal",
           "detail": "2",
           "source_span": {
-            "line": 57,
+            "line": 62,
             "column": 45
           }
         },
@@ -1200,7 +1200,7 @@
           "kind": "literal",
           "detail": "3",
           "source_span": {
-            "line": 57,
+            "line": 62,
             "column": 48
           }
         },
@@ -1209,7 +1209,7 @@
           "kind": "return",
           "type": "int",
           "source_span": {
-            "line": 58,
+            "line": 63,
             "column": 5
           }
         },
@@ -1218,7 +1218,7 @@
           "kind": "template_call",
           "detail": "ScoreResource\u003cBufferRange\u003e",
           "source_span": {
-            "line": 58,
+            "line": 63,
             "column": 12
           }
         },
@@ -1227,13 +1227,13 @@
           "kind": "name",
           "detail": "range",
           "source_span": {
-            "line": 58,
+            "line": 63,
             "column": 39
           }
         }
       ],
       "source_span": {
-        "line": 55,
+        "line": 60,
         "column": 5
       }
     },
@@ -1243,7 +1243,7 @@
         "name": "int",
         "kind": "builtin",
         "span": {
-          "line": 61,
+          "line": 66,
           "column": 1
         }
       },
@@ -1252,9 +1252,9 @@
           "name": "first",
           "type": {
             "name": "VkBuffer",
-            "kind": "builtin",
+            "kind": "handle",
             "span": {
-              "line": 61,
+              "line": 66,
               "column": 22
             }
           }
@@ -1263,9 +1263,9 @@
           "name": "second",
           "type": {
             "name": "VkBuffer",
-            "kind": "builtin",
+            "kind": "handle",
             "span": {
-              "line": 61,
+              "line": 66,
               "column": 38
             }
           }
@@ -1278,7 +1278,7 @@
           "type": "BufferRange",
           "detail": "left",
           "source_span": {
-            "line": 63,
+            "line": 68,
             "column": 17
           }
         },
@@ -1287,7 +1287,7 @@
           "kind": "struct_construct",
           "detail": "BufferRange",
           "source_span": {
-            "line": 63,
+            "line": 68,
             "column": 24
           }
         },
@@ -1296,7 +1296,7 @@
           "kind": "name",
           "detail": "first",
           "source_span": {
-            "line": 63,
+            "line": 68,
             "column": 36
           }
         },
@@ -1305,7 +1305,7 @@
           "kind": "literal",
           "detail": "4",
           "source_span": {
-            "line": 63,
+            "line": 68,
             "column": 43
           }
         },
@@ -1314,7 +1314,7 @@
           "kind": "literal",
           "detail": "5",
           "source_span": {
-            "line": 63,
+            "line": 68,
             "column": 46
           }
         },
@@ -1324,7 +1324,7 @@
           "type": "BufferRange",
           "detail": "right",
           "source_span": {
-            "line": 64,
+            "line": 69,
             "column": 17
           }
         },
@@ -1333,7 +1333,7 @@
           "kind": "struct_construct",
           "detail": "BufferRange",
           "source_span": {
-            "line": 64,
+            "line": 69,
             "column": 25
           }
         },
@@ -1342,7 +1342,7 @@
           "kind": "name",
           "detail": "second",
           "source_span": {
-            "line": 64,
+            "line": 69,
             "column": 37
           }
         },
@@ -1351,7 +1351,7 @@
           "kind": "literal",
           "detail": "6",
           "source_span": {
-            "line": 64,
+            "line": 69,
             "column": 45
           }
         },
@@ -1360,7 +1360,7 @@
           "kind": "literal",
           "detail": "7",
           "source_span": {
-            "line": 64,
+            "line": 69,
             "column": 48
           }
         },
@@ -1369,7 +1369,7 @@
           "kind": "return",
           "type": "int",
           "source_span": {
-            "line": 65,
+            "line": 70,
             "column": 5
           }
         },
@@ -1378,7 +1378,7 @@
           "kind": "binary",
           "detail": "+",
           "source_span": {
-            "line": 65,
+            "line": 70,
             "column": 45
           }
         },
@@ -1387,7 +1387,7 @@
           "kind": "template_call",
           "detail": "ScoreResource\u003cBufferRange\u003e",
           "source_span": {
-            "line": 65,
+            "line": 70,
             "column": 12
           }
         },
@@ -1396,7 +1396,7 @@
           "kind": "name",
           "detail": "left",
           "source_span": {
-            "line": 65,
+            "line": 70,
             "column": 39
           }
         },
@@ -1405,7 +1405,7 @@
           "kind": "template_call",
           "detail": "ScoreResource\u003cBufferRange\u003e",
           "source_span": {
-            "line": 65,
+            "line": 70,
             "column": 47
           }
         },
@@ -1414,13 +1414,13 @@
           "kind": "name",
           "detail": "right",
           "source_span": {
-            "line": 65,
+            "line": 70,
             "column": 74
           }
         }
       ],
       "source_span": {
-        "line": 61,
+        "line": 66,
         "column": 5
       }
     },
@@ -1430,7 +1430,7 @@
         "name": "bool",
         "kind": "builtin",
         "span": {
-          "line": 68,
+          "line": 73,
           "column": 1
         }
       },
@@ -1439,9 +1439,9 @@
           "name": "pool",
           "type": {
             "name": "VkCommandPool",
-            "kind": "builtin",
+            "kind": "handle",
             "span": {
-              "line": 68,
+              "line": 73,
               "column": 22
             }
           }
@@ -1454,7 +1454,7 @@
           "type": "PipelineState",
           "detail": "state",
           "source_span": {
-            "line": 70,
+            "line": 75,
             "column": 19
           }
         },
@@ -1463,7 +1463,7 @@
           "kind": "noncopyable_struct_construct",
           "detail": "PipelineState",
           "source_span": {
-            "line": 70,
+            "line": 75,
             "column": 27
           }
         },
@@ -1472,7 +1472,7 @@
           "kind": "name",
           "detail": "pool",
           "source_span": {
-            "line": 70,
+            "line": 75,
             "column": 41
           }
         },
@@ -1481,7 +1481,7 @@
           "kind": "bool_literal",
           "detail": "false",
           "source_span": {
-            "line": 70,
+            "line": 75,
             "column": 47
           }
         },
@@ -1489,7 +1489,7 @@
           "id": "BuildAndDestroy.05",
           "kind": "expr_stmt",
           "source_span": {
-            "line": 71,
+            "line": 76,
             "column": 5
           }
         },
@@ -1498,7 +1498,7 @@
           "kind": "call",
           "detail": "SetAlive",
           "source_span": {
-            "line": 71,
+            "line": 76,
             "column": 5
           }
         },
@@ -1507,7 +1507,7 @@
           "kind": "name",
           "detail": "state",
           "source_span": {
-            "line": 71,
+            "line": 76,
             "column": 14
           }
         },
@@ -1515,7 +1515,7 @@
           "id": "BuildAndDestroy.08",
           "kind": "expr_stmt",
           "source_span": {
-            "line": 72,
+            "line": 77,
             "column": 5
           }
         },
@@ -1524,7 +1524,7 @@
           "kind": "template_call",
           "detail": "DestroyResource\u003cPipelineState\u003e",
           "source_span": {
-            "line": 72,
+            "line": 77,
             "column": 5
           }
         },
@@ -1533,7 +1533,7 @@
           "kind": "name",
           "detail": "state",
           "source_span": {
-            "line": 72,
+            "line": 77,
             "column": 36
           }
         },
@@ -1542,7 +1542,7 @@
           "kind": "return",
           "type": "bool",
           "source_span": {
-            "line": 73,
+            "line": 78,
             "column": 5
           }
         },
@@ -1551,7 +1551,7 @@
           "kind": "binary",
           "detail": "\u003e",
           "source_span": {
-            "line": 73,
+            "line": 78,
             "column": 48
           }
         },
@@ -1560,7 +1560,7 @@
           "kind": "template_call",
           "detail": "ScoreResource\u003cPipelineState\u003e",
           "source_span": {
-            "line": 73,
+            "line": 78,
             "column": 12
           }
         },
@@ -1569,7 +1569,7 @@
           "kind": "name",
           "detail": "state",
           "source_span": {
-            "line": 73,
+            "line": 78,
             "column": 41
           }
         },
@@ -1578,13 +1578,13 @@
           "kind": "literal",
           "detail": "0",
           "source_span": {
-            "line": 73,
+            "line": 78,
             "column": 50
           }
         }
       ],
       "source_span": {
-        "line": 68,
+        "line": 73,
         "column": 6
       }
     }

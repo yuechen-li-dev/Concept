@@ -1,4 +1,9 @@
-profile Vulkan;
+profile Core;
+
+// Vulkan object handles are ordinary foreign handles.
+extern "C" handle VkBuffer;
+extern "C" handle VkCommandPool;
+
 
 struct RangeConfig
 {

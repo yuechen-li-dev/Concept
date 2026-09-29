@@ -707,6 +707,7 @@ func appendSemanticDeclarations(target *Module, source Module) {
 	target.Streams = append(target.Streams, source.Streams...)
 	target.Enums = append(target.Enums, source.Enums...)
 	target.Automata = append(target.Automata, source.Automata...)
+	target.Handles = append(target.Handles, source.Handles...)
 	target.Concepts = append(target.Concepts, source.Concepts...)
 	target.ComptimeDecls = append(target.ComptimeDecls, source.ComptimeDecls...)
 	target.Templates = append(target.Templates, source.Templates...)

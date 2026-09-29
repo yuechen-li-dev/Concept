@@ -609,6 +609,18 @@ func (p *parser) parseModule() (Module, error) {
 				return module, evt1Diagnostic("EXTERN_ABI_INVALID", "extern requires the supported ABI string \"C\"", abi.Span)
 			}
 			p.next()
+			if p.peekLexeme() == "handle" {
+				start := p.next()
+				name, err := p.expectIdentifier("HANDLE_DECL_INVALID", "expected a handle type name after `extern \"C\" handle`")
+				if err != nil {
+					return module, err
+				}
+				if _, err := p.expect(";"); err != nil {
+					return module, err
+				}
+				module.Handles = append(module.Handles, HandleDecl{Name: name.Lexeme, Module: module.Name, Span: start.Span})
+				continue
+			}
 			fn, err := p.parseFunctionDecl("", false)
 			if err != nil {
 				return module, err

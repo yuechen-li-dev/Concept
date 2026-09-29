@@ -8,13 +8,13 @@
         "name": "int",
         "kind": "builtin",
         "span": {
-          "line": 9,
+          "line": 14,
           "column": 10
         }
       },
       "value": "3",
       "source_span": {
-        "line": 9,
+        "line": 14,
         "column": 1
       }
     },
@@ -24,13 +24,13 @@
         "name": "string",
         "kind": "builtin",
         "span": {
-          "line": 10,
+          "line": 15,
           "column": 10
         }
       },
       "value": "\"kernel-54-default\"",
       "source_span": {
-        "line": 10,
+        "line": 15,
         "column": 1
       }
     },
@@ -40,13 +40,13 @@
         "name": "RangeConfig",
         "kind": "struct",
         "span": {
-          "line": 11,
+          "line": 16,
           "column": 10
         }
       },
       "value": "RangeConfig{active=true, step=2}",
       "source_span": {
-        "line": 11,
+        "line": 16,
         "column": 1
       }
     }
@@ -56,7 +56,7 @@
     {
       "name": "ClassifyRange",
       "span": {
-        "line": 24,
+        "line": 29,
         "column": 5
       },
       "symbol": "concept_comptime_values_vulkan_classify_range"
@@ -64,7 +64,7 @@
     {
       "name": "PoolReady",
       "span": {
-        "line": 37,
+        "line": 42,
         "column": 6
       },
       "symbol": "concept_comptime_values_vulkan_pool_ready"
@@ -78,7 +78,7 @@
         "name": "int",
         "kind": "builtin",
         "span": {
-          "line": 24,
+          "line": 29,
           "column": 1
         }
       },
@@ -87,9 +87,9 @@
           "name": "buffer",
           "type": {
             "name": "VkBuffer",
-            "kind": "builtin",
+            "kind": "handle",
             "span": {
-              "line": 24,
+              "line": 29,
               "column": 19
             }
           }
@@ -126,7 +126,7 @@
           "type": "int",
           "detail": "LocalBound",
           "source_span": {
-            "line": 26,
+            "line": 31,
             "column": 5
           }
         },
@@ -135,7 +135,7 @@
           "kind": "call",
           "detail": "ClampIterations",
           "source_span": {
-            "line": 26,
+            "line": 31,
             "column": 31
           }
         },
@@ -144,7 +144,7 @@
           "kind": "literal",
           "detail": "5",
           "source_span": {
-            "line": 26,
+            "line": 31,
             "column": 47
           }
         },
@@ -154,7 +154,7 @@
           "type": "int",
           "detail": "total",
           "source_span": {
-            "line": 27,
+            "line": 32,
             "column": 9
           }
         },
@@ -163,7 +163,7 @@
           "kind": "literal",
           "detail": "0",
           "source_span": {
-            "line": 27,
+            "line": 32,
             "column": 17
           }
         },
@@ -173,7 +173,7 @@
           "type": "int",
           "detail": "cursor",
           "source_span": {
-            "line": 28,
+            "line": 33,
             "column": 9
           }
         },
@@ -182,7 +182,7 @@
           "kind": "literal",
           "detail": "0",
           "source_span": {
-            "line": 28,
+            "line": 33,
             "column": 18
           }
         },
@@ -190,7 +190,7 @@
           "id": "ClassifyRange.08",
           "kind": "bounded_while",
           "source_span": {
-            "line": 29,
+            "line": 34,
             "column": 5
           }
         },
@@ -199,7 +199,7 @@
           "kind": "binary",
           "detail": "\u003c",
           "source_span": {
-            "line": 29,
+            "line": 34,
             "column": 19
           }
         },
@@ -208,7 +208,7 @@
           "kind": "name",
           "detail": "cursor",
           "source_span": {
-            "line": 29,
+            "line": 34,
             "column": 12
           }
         },
@@ -217,7 +217,7 @@
           "kind": "name",
           "detail": "LocalBound",
           "source_span": {
-            "line": 29,
+            "line": 34,
             "column": 21
           }
         },
@@ -226,7 +226,7 @@
           "kind": "binary",
           "detail": "+",
           "source_span": {
-            "line": 29,
+            "line": 34,
             "column": 60
           }
         },
@@ -235,7 +235,7 @@
           "kind": "field_access",
           "detail": "step",
           "source_span": {
-            "line": 29,
+            "line": 34,
             "column": 55
           }
         },
@@ -244,7 +244,7 @@
           "kind": "name",
           "detail": "DefaultConfig",
           "source_span": {
-            "line": 29,
+            "line": 34,
             "column": 41
           }
         },
@@ -253,7 +253,7 @@
           "kind": "literal",
           "detail": "1",
           "source_span": {
-            "line": 29,
+            "line": 34,
             "column": 62
           }
         },
@@ -263,7 +263,7 @@
           "type": "total",
           "detail": "total",
           "source_span": {
-            "line": 31,
+            "line": 36,
             "column": 9
           }
         },
@@ -272,7 +272,7 @@
           "kind": "name",
           "detail": "total",
           "source_span": {
-            "line": 31,
+            "line": 36,
             "column": 9
           }
         },
@@ -281,7 +281,7 @@
           "kind": "binary",
           "detail": "+",
           "source_span": {
-            "line": 31,
+            "line": 36,
             "column": 23
           }
         },
@@ -290,7 +290,7 @@
           "kind": "name",
           "detail": "total",
           "source_span": {
-            "line": 31,
+            "line": 36,
             "column": 17
           }
         },
@@ -299,7 +299,7 @@
           "kind": "literal",
           "detail": "1",
           "source_span": {
-            "line": 31,
+            "line": 36,
             "column": 25
           }
         },
@@ -309,7 +309,7 @@
           "type": "cursor",
           "detail": "cursor",
           "source_span": {
-            "line": 32,
+            "line": 37,
             "column": 9
           }
         },
@@ -318,7 +318,7 @@
           "kind": "name",
           "detail": "cursor",
           "source_span": {
-            "line": 32,
+            "line": 37,
             "column": 9
           }
         },
@@ -327,7 +327,7 @@
           "kind": "binary",
           "detail": "+",
           "source_span": {
-            "line": 32,
+            "line": 37,
             "column": 25
           }
         },
@@ -336,7 +336,7 @@
           "kind": "name",
           "detail": "cursor",
           "source_span": {
-            "line": 32,
+            "line": 37,
             "column": 18
           }
         },
@@ -345,7 +345,7 @@
           "kind": "literal",
           "detail": "1",
           "source_span": {
-            "line": 32,
+            "line": 37,
             "column": 27
           }
         },
@@ -354,7 +354,7 @@
           "kind": "return",
           "type": "int",
           "source_span": {
-            "line": 34,
+            "line": 39,
             "column": 5
           }
         },
@@ -362,7 +362,7 @@
           "id": "ClassifyRange.27",
           "kind": "if_expr",
           "source_span": {
-            "line": 34,
+            "line": 39,
             "column": 12
           }
         },
@@ -371,7 +371,7 @@
           "kind": "field_access",
           "detail": "active",
           "source_span": {
-            "line": 34,
+            "line": 39,
             "column": 30
           }
         },
@@ -380,7 +380,7 @@
           "kind": "name",
           "detail": "DefaultConfig",
           "source_span": {
-            "line": 34,
+            "line": 39,
             "column": 16
           }
         },
@@ -389,7 +389,7 @@
           "kind": "name",
           "detail": "total",
           "source_span": {
-            "line": 34,
+            "line": 39,
             "column": 38
           }
         },
@@ -398,13 +398,13 @@
           "kind": "literal",
           "detail": "0",
           "source_span": {
-            "line": 34,
+            "line": 39,
             "column": 49
           }
         }
       ],
       "source_span": {
-        "line": 24,
+        "line": 29,
         "column": 5
       }
     },
@@ -414,7 +414,7 @@
         "name": "bool",
         "kind": "builtin",
         "span": {
-          "line": 37,
+          "line": 42,
           "column": 1
         }
       },
@@ -423,9 +423,9 @@
           "name": "pool",
           "type": {
             "name": "VkCommandPool",
-            "kind": "builtin",
+            "kind": "handle",
             "span": {
-              "line": 37,
+              "line": 42,
               "column": 16
             }
           }
@@ -436,7 +436,7 @@
             "name": "bool",
             "kind": "builtin",
             "span": {
-              "line": 37,
+              "line": 42,
               "column": 36
             }
           }
@@ -449,7 +449,7 @@
           "type": "int",
           "detail": "count",
           "source_span": {
-            "line": 39,
+            "line": 44,
             "column": 9
           }
         },
@@ -458,7 +458,7 @@
           "kind": "literal",
           "detail": "0",
           "source_span": {
-            "line": 39,
+            "line": 44,
             "column": 17
           }
         },
@@ -466,7 +466,7 @@
           "id": "PoolReady.03",
           "kind": "while",
           "source_span": {
-            "line": 40,
+            "line": 45,
             "column": 5
           }
         },
@@ -475,7 +475,7 @@
           "kind": "binary",
           "detail": "\u003c",
           "source_span": {
-            "line": 40,
+            "line": 45,
             "column": 18
           }
         },
@@ -484,7 +484,7 @@
           "kind": "name",
           "detail": "count",
           "source_span": {
-            "line": 40,
+            "line": 45,
             "column": 12
           }
         },
@@ -493,7 +493,7 @@
           "kind": "literal",
           "detail": "2",
           "source_span": {
-            "line": 40,
+            "line": 45,
             "column": 20
           }
         },
@@ -503,7 +503,7 @@
           "type": "count",
           "detail": "count",
           "source_span": {
-            "line": 42,
+            "line": 47,
             "column": 9
           }
         },
@@ -512,7 +512,7 @@
           "kind": "name",
           "detail": "count",
           "source_span": {
-            "line": 42,
+            "line": 47,
             "column": 9
           }
         },
@@ -521,7 +521,7 @@
           "kind": "binary",
           "detail": "+",
           "source_span": {
-            "line": 42,
+            "line": 47,
             "column": 23
           }
         },
@@ -530,7 +530,7 @@
           "kind": "name",
           "detail": "count",
           "source_span": {
-            "line": 42,
+            "line": 47,
             "column": 17
           }
         },
@@ -539,7 +539,7 @@
           "kind": "literal",
           "detail": "1",
           "source_span": {
-            "line": 42,
+            "line": 47,
             "column": 25
           }
         },
@@ -548,7 +548,7 @@
           "kind": "return",
           "type": "bool",
           "source_span": {
-            "line": 44,
+            "line": 49,
             "column": 5
           }
         },
@@ -556,7 +556,7 @@
           "id": "PoolReady.13",
           "kind": "if_expr",
           "source_span": {
-            "line": 44,
+            "line": 49,
             "column": 12
           }
         },
@@ -565,7 +565,7 @@
           "kind": "name",
           "detail": "ready",
           "source_span": {
-            "line": 44,
+            "line": 49,
             "column": 16
           }
         },
@@ -574,7 +574,7 @@
           "kind": "binary",
           "detail": "\u003e",
           "source_span": {
-            "line": 44,
+            "line": 49,
             "column": 29
           }
         },
@@ -583,7 +583,7 @@
           "kind": "name",
           "detail": "count",
           "source_span": {
-            "line": 44,
+            "line": 49,
             "column": 23
           }
         },
@@ -592,7 +592,7 @@
           "kind": "literal",
           "detail": "0",
           "source_span": {
-            "line": 44,
+            "line": 49,
             "column": 31
           }
         },
@@ -601,13 +601,13 @@
           "kind": "bool_literal",
           "detail": "false",
           "source_span": {
-            "line": 44,
+            "line": 49,
             "column": 38
           }
         }
       ],
       "source_span": {
-        "line": 37,
+        "line": 42,
         "column": 6
       }
     }
@@ -619,7 +619,7 @@
       "condition": "expression",
       "satisfied": true,
       "source_span": {
-        "line": 13,
+        "line": 18,
         "column": 1
       }
     },
@@ -627,7 +627,7 @@
       "condition": "expression",
       "satisfied": true,
       "source_span": {
-        "line": 14,
+        "line": 19,
         "column": 1
       }
     },
@@ -636,7 +636,7 @@
       "message": "\"step mismatch\"",
       "satisfied": true,
       "source_span": {
-        "line": 15,
+        "line": 20,
         "column": 1
       }
     },
@@ -644,7 +644,7 @@
       "condition": "expression",
       "satisfied": true,
       "source_span": {
-        "line": 22,
+        "line": 27,
         "column": 1
       }
     }
@@ -664,7 +664,7 @@
             "name": "int",
             "kind": "builtin",
             "span": {
-              "line": 5,
+              "line": 10,
               "column": 5
             }
           }
@@ -675,14 +675,14 @@
             "name": "bool",
             "kind": "builtin",
             "span": {
-              "line": 6,
+              "line": 11,
               "column": 5
             }
           }
         }
       ],
       "source_span": {
-        "line": 3,
+        "line": 8,
         "column": 1
       }
     }

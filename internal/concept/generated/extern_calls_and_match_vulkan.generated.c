@@ -15,14 +15,14 @@ static concept_pipeline_state concept_pipeline_state_make_empty(void) {
   return out;
 }
 
-static concept_pipeline_state concept_pipeline_state_make_layout_created(VkPipelineLayout layout) {
+static concept_pipeline_state concept_pipeline_state_make_layout_created(concept_vk_pipeline_layout layout) {
   concept_pipeline_state out;
   out.tag = CONCEPT_PIPELINE_STATE_LAYOUT_CREATED;
   out.payload.layout_created.layout = layout;
   return out;
 }
 
-static concept_pipeline_state concept_pipeline_state_make_ready(VkPipelineLayout layout, VkPipeline pipeline) {
+static concept_pipeline_state concept_pipeline_state_make_ready(concept_vk_pipeline_layout layout, concept_vk_pipeline pipeline) {
   concept_pipeline_state out;
   out.tag = CONCEPT_PIPELINE_STATE_READY;
   out.payload.ready.layout = layout;
@@ -41,14 +41,14 @@ concept_pipeline_state concept_extern_calls_and_match_vulkan_make_empty_state(vo
   return concept_pipeline_state_make_empty();
 }
 
-concept_pipeline_state concept_extern_calls_and_match_vulkan_make_layout_created_state(VkPipelineLayout layout) {
-  VkPipelineLayout cv_payload_01 = layout;
+concept_pipeline_state concept_extern_calls_and_match_vulkan_make_layout_created_state(concept_vk_pipeline_layout layout) {
+  concept_vk_pipeline_layout cv_payload_01 = layout;
   return concept_pipeline_state_make_layout_created(cv_payload_01);
 }
 
-concept_pipeline_state concept_extern_calls_and_match_vulkan_make_ready_state(VkPipelineLayout layout, VkPipeline pipeline) {
-  VkPipelineLayout cv_payload_01 = layout;
-  VkPipeline cv_payload_02 = pipeline;
+concept_pipeline_state concept_extern_calls_and_match_vulkan_make_ready_state(concept_vk_pipeline_layout layout, concept_vk_pipeline pipeline) {
+  concept_vk_pipeline_layout cv_payload_01 = layout;
+  concept_vk_pipeline cv_payload_02 = pipeline;
   return concept_pipeline_state_make_ready(cv_payload_01, cv_payload_02);
 }
 
@@ -68,16 +68,16 @@ int32_t concept_extern_calls_and_match_vulkan_get_status_code(concept_pipeline_s
     }
   case CONCEPT_PIPELINE_STATE_LAYOUT_CREATED:
     {
-      VkPipelineLayout layout = cv_match_subject_01.payload.layout_created.layout;
+      concept_vk_pipeline_layout layout = cv_match_subject_01.payload.layout_created.layout;
       (void)layout;
       cv_match_result_02 = INT32_C(1);
       break;
     }
   case CONCEPT_PIPELINE_STATE_READY:
     {
-      VkPipelineLayout layout = cv_match_subject_01.payload.ready.layout;
+      concept_vk_pipeline_layout layout = cv_match_subject_01.payload.ready.layout;
       (void)layout;
-      VkPipeline pipeline = cv_match_subject_01.payload.ready.pipeline;
+      concept_vk_pipeline pipeline = cv_match_subject_01.payload.ready.pipeline;
       (void)pipeline;
       cv_match_result_02 = INT32_C(2);
       break;
@@ -104,21 +104,21 @@ void concept_extern_calls_and_match_vulkan_destroy_pipeline_state(concept_pipeli
     }
   case CONCEPT_PIPELINE_STATE_LAYOUT_CREATED:
     {
-      VkPipelineLayout layout = cv_subject_01.payload.layout_created.layout;
+      concept_vk_pipeline_layout layout = cv_subject_01.payload.layout_created.layout;
       (void)layout;
-      VkPipelineLayout cv_arg_02 = layout;
+      concept_vk_pipeline_layout cv_arg_02 = layout;
       concept_extern_calls_and_match_vulkan_destroy_pipeline_layout(cv_arg_02);
       break;
     }
   case CONCEPT_PIPELINE_STATE_READY:
     {
-      VkPipelineLayout layout = cv_subject_01.payload.ready.layout;
+      concept_vk_pipeline_layout layout = cv_subject_01.payload.ready.layout;
       (void)layout;
-      VkPipeline pipeline = cv_subject_01.payload.ready.pipeline;
+      concept_vk_pipeline pipeline = cv_subject_01.payload.ready.pipeline;
       (void)pipeline;
-      VkPipeline cv_arg_03 = pipeline;
+      concept_vk_pipeline cv_arg_03 = pipeline;
       concept_extern_calls_and_match_vulkan_destroy_pipeline(cv_arg_03);
-      VkPipelineLayout cv_arg_04 = layout;
+      concept_vk_pipeline_layout cv_arg_04 = layout;
       concept_extern_calls_and_match_vulkan_destroy_pipeline_layout(cv_arg_04);
       break;
     }

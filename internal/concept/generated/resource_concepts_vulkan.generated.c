@@ -18,7 +18,7 @@ int32_t concept_rt_resource_concepts_vulkan_i32_add(int32_t left, int32_t right,
   if (result < INT32_MIN || result > INT32_MAX) { concept_panic("int32 addition overflow", line, column); }
   return (int32_t)result;
 }
-static concept_buffer_range concept_buffer_range_make(VkBuffer buffer, int32_t offset, int32_t size) {
+static concept_buffer_range concept_buffer_range_make(concept_vk_buffer buffer, int32_t offset, int32_t size) {
   concept_buffer_range out;
   out.buffer = buffer;
   out.offset = offset;
@@ -47,8 +47,8 @@ static concept_resource_event concept_resource_event_make_failed(int32_t code) {
   return out;
 }
 
-concept_buffer_range concept_resource_concepts_vulkan_make_range(VkBuffer buffer, int32_t offset, int32_t size) {
-  VkBuffer cv_init_1_01 = buffer;
+concept_buffer_range concept_resource_concepts_vulkan_make_range(concept_vk_buffer buffer, int32_t offset, int32_t size) {
+  concept_vk_buffer cv_init_1_01 = buffer;
   int32_t cv_init_2_02 = offset;
   int32_t cv_init_3_03 = size;
   concept_buffer_range range;
@@ -62,8 +62,8 @@ void concept_resource_concepts_vulkan_mark_initialized(concept_command_pool_stat
   state->initialized = true;
 }
 
-bool concept_resource_concepts_vulkan_build_and_validate(VkCommandPool pool) {
-  VkCommandPool cv_init_1_01 = pool;
+bool concept_resource_concepts_vulkan_build_and_validate(concept_vk_command_pool pool) {
+  concept_vk_command_pool cv_init_1_01 = pool;
   bool cv_init_2_02 = false;
   concept_command_pool_state state;
   state.pool = cv_init_1_01;
@@ -85,7 +85,7 @@ int32_t concept_resource_concepts_vulkan_describe_event(concept_resource_event e
     {
       concept_buffer_range range = cv_match_subject_01.payload.range.range;
       (void)range;
-      cv_match_result_02 = concept_rt_resource_concepts_vulkan_i32_add(range.offset, range.size, 67, 53);
+      cv_match_result_02 = concept_rt_resource_concepts_vulkan_i32_add(range.offset, range.size, 72, 53);
       break;
     }
   case CONCEPT_RESOURCE_EVENT_FAILED:
@@ -101,8 +101,8 @@ int32_t concept_resource_concepts_vulkan_describe_event(concept_resource_event e
   return cv_match_result_02;
 }
 
-int32_t concept_resource_concepts_vulkan_classify_range(VkBuffer buffer) {
-  VkBuffer cv_init_1_01 = buffer;
+int32_t concept_resource_concepts_vulkan_classify_range(concept_vk_buffer buffer) {
+  concept_vk_buffer cv_init_1_01 = buffer;
   int32_t cv_init_2_02 = INT32_C(2);
   int32_t cv_init_3_03 = INT32_C(3);
   concept_buffer_range range;
@@ -115,8 +115,8 @@ int32_t concept_resource_concepts_vulkan_classify_range(VkBuffer buffer) {
   return concept_resource_concepts_vulkan_describe_event(cv_arg_05);
 }
 
-void concept_resource_concepts_vulkan_cleanup_state(VkCommandPool pool) {
-  VkCommandPool cv_init_1_01 = pool;
+void concept_resource_concepts_vulkan_cleanup_state(concept_vk_command_pool pool) {
+  concept_vk_command_pool cv_init_1_01 = pool;
   bool cv_init_2_02 = false;
   concept_command_pool_state state;
   state.pool = cv_init_1_01;

@@ -1888,6 +1888,9 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 			header.WriteString(builtin.CDeclaration + "\n")
 		}
 	}
+	for _, handle := range l.module.Handles {
+		header.WriteString(evt1HandleCDeclaration(handle))
+	}
 	spanStructs := map[string]bool{}
 	for _, spanType := range spanTypes {
 		spanStructs[evt1SpanElement(spanType).Name] = true

@@ -909,6 +909,17 @@ fixtures.
 not a finalized Concept C ABI. Export naming, layout guarantees, header
 contracts, and FFI-safe type derivation require explicit EVT1 decisions.
 
+**Opaque foreign handles.** `extern "C" handle Name;` declares a
+pointer-sized opaque type for a foreign object, such as a Vulkan `VkBuffer`.
+Handles are copyable, pass across `extern "C"`, may be fields (including of
+`[[repr(C)]]` records), and compare with `==` and `!=` against the same
+handle type. Arithmetic, ordering, casts, construction, and integer literals
+are rejected (`HANDLE_OPERATION_INVALID` and the ordinary type errors).
+Absence is `Option<Name>`, never a null sentinel. The generated C is
+`typedef struct Name_T* <c-name>;`, the same underlying type as the usual C
+header convention, so a foreign header's typedef and the generated one can be
+in scope together.
+
 ## 22. Automata, machines, states, and persistent capture
 
 **Canonical EVT1 automata state semantics.** `automata` is the outer persistent composition unit;
@@ -1330,14 +1341,17 @@ same explicit allocation-free semantics.
 
 ## 23. Effects, actuators, and profiles
 
-**Profile-specific.** foundation admits `effect`, ordered emitted-effect batches, and
-`actuator` mappings only under `profile Vulkan;`. The Vulkan profile owns
-mechanism types, Prometheus imports, mapping admissibility, and Vulkan C
-bindings.
+**Removed.** The M-era `effect`, `effects` batches, `emit`, `actuator`,
+`actuation`/`actuate`, and signal `dispatch` were removed in the Concept
+Vulkan reconciliation (VK5); each spelling is rejected with a `REMOVED_*`
+diagnostic that names its replacement. Effects are ordinary data: declare an
+enum of effects, push them to a `Standard.Collection.Outbox`, and carry them
+out with an ordinary function that matches exhaustively over the enum. There
+is no general effect system (see §22 for step machines with input).
 
-**Deferred reconciliation.** PoC3 discusses broader effect/default-profile
-laws, but foundation does not promote the Vulkan spelling or implementation to core.
-Any general effect system requires a separate cross-line decision.
+**Profiles.** `profile Vulkan;` still admits the `Prometheus.Vulkan` import
+and the builtin `VulkanError`; Vulkan object handles are ordinary
+`extern "C" handle` declarations (§21).
 
 ## 24. Testing
 

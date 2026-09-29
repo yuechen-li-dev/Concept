@@ -17,15 +17,15 @@ static concept_binding_summary concept_binding_summary_make(concept_array_2_int 
   return out;
 }
 
-int32_t concept_comptime_tables_vulkan_classify_range(VkBuffer buffer) {
+int32_t concept_comptime_tables_vulkan_classify_range(concept_vk_buffer buffer) {
   return 5;
 }
 
-int32_t concept_comptime_tables_vulkan_pipeline_stride(VkBuffer buffer) {
+int32_t concept_comptime_tables_vulkan_pipeline_stride(concept_vk_buffer buffer) {
   return 4;
 }
 
-bool concept_comptime_tables_vulkan_pool_ready(VkCommandPool pool, bool ready) {
+bool concept_comptime_tables_vulkan_pool_ready(concept_vk_command_pool pool, bool ready) {
   bool cv_if_result_01;
   if (ready) {
     cv_if_result_01 = true;

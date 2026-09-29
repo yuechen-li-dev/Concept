@@ -1,0 +1,6 @@
+profile Core;
+
+extern "C" handle Buffer;
+extern "C" handle Memory;
+
+bool Same(Buffer a, Memory b) { return a == b; }

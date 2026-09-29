@@ -33,6 +33,7 @@ const (
 	TypeCallback      TypeKind = "callback"
 	TypeAddress       TypeKind = "address"
 	TypeTypedStorage  TypeKind = "typed_storage"
+	TypeHandle        TypeKind = "handle"
 )
 
 type StorageKind string
@@ -605,6 +606,7 @@ type Module struct {
 	ComptimeFns      []FunctionDecl        `json:"comptime_functions,omitempty"`
 	OperationEffects []OperationEffectDecl `json:"operation_effects,omitempty"`
 	ForeignContracts []ForeignContractDecl `json:"foreign_contracts,omitempty"`
+	Handles          []HandleDecl          `json:"handles,omitempty"`
 	// ImportedFactSummaries are compiler-derived value-result contracts loaded
 	// from concept-module.v1. They are not source syntax and are never lowered
 	// into runtime storage.
@@ -1844,6 +1846,7 @@ type MIRAsmOperand struct {
 }
 
 type semanticEnv struct {
+	handles                 map[string]HandleDecl
 	sourcePath              string
 	moduleName              string
 	profile                 *ProfileDefinition
@@ -1914,6 +1917,7 @@ func newSemanticEnv(profile *ProfileDefinition) *semanticEnv {
 		layouts:                 map[string]LayoutDecl{},
 		streams:                 map[string]StreamDecl{},
 		automata:                map[string]AutomataDecl{},
+		handles:                 map[string]HandleDecl{},
 		automataInfo:            map[string]*evt1AutomataInfo{},
 		functions:               map[string][]FunctionDecl{},
 		comptimeFunctions:       map[string]FunctionDecl{},

@@ -2,8 +2,8 @@
   "schema": "concept-evt1-semantic-corpus-v1",
   "compiler_id": "concept-evt1-stage0-go",
   "totals": {
-    "valid": 414,
-    "static_invalid": 302,
+    "valid": 415,
+    "static_invalid": 309,
     "runtime_negative": 14,
     "compatibility": 5,
     "expected_divergence": 4
@@ -26,6 +26,7 @@
     { "subsystem": "Planner", "path": "planner", "valid": 13, "static_invalid": 0, "runtime_negative": [], "historical_milestones": ["R4l"] },
     { "subsystem": "Automata state", "path": "automata/state", "valid": 12, "static_invalid": 8, "runtime_negative": [], "historical_milestones": ["R5a"] },
     { "subsystem": "Automata input reactions", "path": "automata/reactions", "valid": 2, "static_invalid": 14, "runtime_negative": [], "historical_milestones": ["VK2"] },
+    { "subsystem": "Foreign handles", "path": "handles", "valid": 1, "static_invalid": 7, "runtime_negative": [], "historical_milestones": ["VK6"] },
     { "subsystem": "Automata terminal states", "path": "automata/terminal", "valid": 3, "static_invalid": 2, "runtime_negative": [], "historical_milestones": ["VK3"] },
     { "subsystem": "Automata transitions", "path": "automata/transitions", "valid": 15, "static_invalid": 13, "runtime_negative": ["transition_decide_nan_runtime.concept", "transition_decide_no_enabled_runtime.concept"], "historical_milestones": ["R5b"] },
     { "subsystem": "Inference", "path": "inference", "valid": 17, "static_invalid": 10, "runtime_negative": ["infer_no_enabled_runtime.concept", "infer_nan_runtime.concept", "infer_all_negative_infinity_runtime.concept"], "historical_milestones": ["R5c"] },

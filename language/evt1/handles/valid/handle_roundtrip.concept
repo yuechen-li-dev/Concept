@@ -1,0 +1,55 @@
+profile Core;
+
+// Opaque foreign handles: copied, stored, passed across extern "C", and
+// compared with == and !=. Absence is Option<Buffer>.
+
+extern "C" handle Buffer;
+extern "C" handle Memory;
+
+extern "C" Buffer CreateBuffer(int size);
+extern "C" void DestroyBuffer(Buffer buffer);
+
+[[repr(C)]]
+record struct Binding
+{
+    Buffer buffer;
+    int offset;
+};
+
+struct Holder
+{
+    Buffer buffer;
+    int size;
+};
+
+bool Same(Buffer a, Buffer b)
+{
+    return a == b;
+}
+
+Option<Buffer> Find(Buffer a, bool present)
+{
+    if (present)
+    {
+        return Option::Some(a);
+    }
+    return Option::None;
+}
+
+int Main()
+{
+    Buffer first = CreateBuffer(4);
+    Buffer second = CreateBuffer(8);
+    Holder holder = Holder{first, 4};
+    int score = 0;
+    if (Same(holder.buffer, first)) { score = score + 1; }
+    if (first != second) { score = score + 10; }
+    match (Find(second, false))
+    {
+        Option::Some(found) => { score = score + 1000; }
+        Option::None => { score = score + 100; }
+    }
+    DestroyBuffer(first);
+    DestroyBuffer(second);
+    return score;
+}

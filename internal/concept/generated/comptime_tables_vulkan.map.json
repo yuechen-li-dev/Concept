@@ -11,7 +11,7 @@
           "name": "DescriptorBinding",
           "kind": "struct",
           "span": {
-            "line": 15,
+            "line": 20,
             "column": 10
           }
         },
@@ -26,13 +26,13 @@
         "contiguous": true,
         "layout": "row-major",
         "span": {
-          "line": 15,
+          "line": 20,
           "column": 10
         }
       },
       "value": "[DescriptorBinding{binding=0, set=0, write=false}, DescriptorBinding{binding=1, set=0, write=true}, DescriptorBinding{binding=0, set=1, write=true}]",
       "source_span": {
-        "line": 15,
+        "line": 20,
         "column": 1
       }
     },
@@ -42,13 +42,13 @@
         "name": "BindingSummary",
         "kind": "struct",
         "span": {
-          "line": 21,
+          "line": 26,
           "column": 10
         }
       },
       "value": "BindingSummary{slots=[3, 0]}",
       "source_span": {
-        "line": 21,
+        "line": 26,
         "column": 1
       }
     },
@@ -64,7 +64,7 @@
             "name": "int",
             "kind": "builtin",
             "span": {
-              "line": 22,
+              "line": 27,
               "column": 10
             }
           },
@@ -79,7 +79,7 @@
           "contiguous": true,
           "layout": "row-major",
           "span": {
-            "line": 22,
+            "line": 27,
             "column": 10
           }
         },
@@ -94,13 +94,13 @@
         "contiguous": true,
         "layout": "row-major",
         "span": {
-          "line": 22,
+          "line": 27,
           "column": 10
         }
       },
       "value": "[[1, 2], [3, 4]]",
       "source_span": {
-        "line": 22,
+        "line": 27,
         "column": 1
       }
     },
@@ -110,13 +110,13 @@
         "name": "int",
         "kind": "builtin",
         "span": {
-          "line": 23,
+          "line": 28,
           "column": 10
         }
       },
       "value": "2",
       "source_span": {
-        "line": 23,
+        "line": 28,
         "column": 1
       }
     }
@@ -126,7 +126,7 @@
     {
       "name": "ClassifyRange",
       "span": {
-        "line": 62,
+        "line": 67,
         "column": 5
       },
       "symbol": "concept_comptime_tables_vulkan_classify_range"
@@ -134,7 +134,7 @@
     {
       "name": "PipelineStride",
       "span": {
-        "line": 67,
+        "line": 72,
         "column": 5
       },
       "symbol": "concept_comptime_tables_vulkan_pipeline_stride"
@@ -142,7 +142,7 @@
     {
       "name": "PoolReady",
       "span": {
-        "line": 72,
+        "line": 77,
         "column": 6
       },
       "symbol": "concept_comptime_tables_vulkan_pool_ready"
@@ -156,7 +156,7 @@
         "name": "int",
         "kind": "builtin",
         "span": {
-          "line": 62,
+          "line": 67,
           "column": 1
         }
       },
@@ -165,9 +165,9 @@
           "name": "buffer",
           "type": {
             "name": "VkBuffer",
-            "kind": "builtin",
+            "kind": "handle",
             "span": {
-              "line": 62,
+              "line": 67,
               "column": 19
             }
           }
@@ -179,7 +179,7 @@
           "kind": "return",
           "type": "int",
           "source_span": {
-            "line": 64,
+            "line": 69,
             "column": 5
           }
         },
@@ -188,7 +188,7 @@
           "kind": "binary",
           "detail": "+",
           "source_span": {
-            "line": 64,
+            "line": 69,
             "column": 29
           }
         },
@@ -197,7 +197,7 @@
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
-            "line": 64,
+            "line": 69,
             "column": 12
           }
         },
@@ -206,7 +206,7 @@
           "kind": "field_access",
           "detail": "slots",
           "source_span": {
-            "line": 64,
+            "line": 69,
             "column": 20
           }
         },
@@ -215,7 +215,7 @@
           "kind": "name",
           "detail": "Summary",
           "source_span": {
-            "line": 64,
+            "line": 69,
             "column": 12
           }
         },
@@ -224,7 +224,7 @@
           "kind": "literal",
           "detail": "0",
           "source_span": {
-            "line": 64,
+            "line": 69,
             "column": 26
           }
         },
@@ -233,13 +233,13 @@
           "kind": "name",
           "detail": "WriteCount",
           "source_span": {
-            "line": 64,
+            "line": 69,
             "column": 31
           }
         }
       ],
       "source_span": {
-        "line": 62,
+        "line": 67,
         "column": 5
       }
     },
@@ -249,7 +249,7 @@
         "name": "int",
         "kind": "builtin",
         "span": {
-          "line": 67,
+          "line": 72,
           "column": 1
         }
       },
@@ -258,9 +258,9 @@
           "name": "buffer",
           "type": {
             "name": "VkBuffer",
-            "kind": "builtin",
+            "kind": "handle",
             "span": {
-              "line": 67,
+              "line": 72,
               "column": 20
             }
           }
@@ -272,7 +272,7 @@
           "kind": "return",
           "type": "int",
           "source_span": {
-            "line": 69,
+            "line": 74,
             "column": 5
           }
         },
@@ -281,7 +281,7 @@
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
-            "line": 69,
+            "line": 74,
             "column": 12
           }
         },
@@ -290,7 +290,7 @@
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
-            "line": 69,
+            "line": 74,
             "column": 12
           }
         },
@@ -299,7 +299,7 @@
           "kind": "name",
           "detail": "StageMatrix",
           "source_span": {
-            "line": 69,
+            "line": 74,
             "column": 12
           }
         },
@@ -308,7 +308,7 @@
           "kind": "literal",
           "detail": "1",
           "source_span": {
-            "line": 69,
+            "line": 74,
             "column": 24
           }
         },
@@ -317,13 +317,13 @@
           "kind": "literal",
           "detail": "1",
           "source_span": {
-            "line": 69,
+            "line": 74,
             "column": 27
           }
         }
       ],
       "source_span": {
-        "line": 67,
+        "line": 72,
         "column": 5
       }
     },
@@ -333,7 +333,7 @@
         "name": "bool",
         "kind": "builtin",
         "span": {
-          "line": 72,
+          "line": 77,
           "column": 1
         }
       },
@@ -342,9 +342,9 @@
           "name": "pool",
           "type": {
             "name": "VkCommandPool",
-            "kind": "builtin",
+            "kind": "handle",
             "span": {
-              "line": 72,
+              "line": 77,
               "column": 16
             }
           }
@@ -355,7 +355,7 @@
             "name": "bool",
             "kind": "builtin",
             "span": {
-              "line": 72,
+              "line": 77,
               "column": 36
             }
           }
@@ -367,7 +367,7 @@
           "kind": "return",
           "type": "bool",
           "source_span": {
-            "line": 74,
+            "line": 79,
             "column": 5
           }
         },
@@ -375,7 +375,7 @@
           "id": "PoolReady.02",
           "kind": "if_expr",
           "source_span": {
-            "line": 74,
+            "line": 79,
             "column": 12
           }
         },
@@ -384,7 +384,7 @@
           "kind": "name",
           "detail": "ready",
           "source_span": {
-            "line": 74,
+            "line": 79,
             "column": 16
           }
         },
@@ -393,7 +393,7 @@
           "kind": "field_access",
           "detail": "write",
           "source_span": {
-            "line": 74,
+            "line": 79,
             "column": 35
           }
         },
@@ -402,7 +402,7 @@
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
-            "line": 74,
+            "line": 79,
             "column": 23
           }
         },
@@ -411,7 +411,7 @@
           "kind": "name",
           "detail": "Bindings",
           "source_span": {
-            "line": 74,
+            "line": 79,
             "column": 23
           }
         },
@@ -420,7 +420,7 @@
           "kind": "literal",
           "detail": "1",
           "source_span": {
-            "line": 74,
+            "line": 79,
             "column": 32
           }
         },
@@ -429,13 +429,13 @@
           "kind": "bool_literal",
           "detail": "false",
           "source_span": {
-            "line": 74,
+            "line": 79,
             "column": 46
           }
         }
       ],
       "source_span": {
-        "line": 72,
+        "line": 77,
         "column": 6
       }
     }
@@ -443,66 +443,7 @@
   "schema": "concept-evt1-source-map.v1",
   "semantic_facts": [
     {
-      "id": "fact-53f52f3ff4f584b8",
-      "kind": "Aligned",
-      "subjects": [
-        {
-          "kind": "type",
-          "name": "int\u003carray\u003e[2]",
-          "type": "int\u003carray\u003e[2]"
-        }
-      ],
-      "parameters": [
-        64
-      ],
-      "outcome": "proven",
-      "origin": "DerivedFromType",
-      "evidence": {
-        "alignment": 64,
-        "rank": 1,
-        "shape": [
-          {
-            "extent": 2,
-            "expression": "2"
-          }
-        ],
-        "detail": "contiguous row-major storage type"
-      },
-      "source_span": {
-        "line": 12,
-        "column": 5
-      }
-    },
-    {
-      "id": "fact-9a12247d8f5f60c7",
-      "kind": "FixedShape",
-      "subjects": [
-        {
-          "kind": "type",
-          "name": "int\u003carray\u003e[2]",
-          "type": "int\u003carray\u003e[2]"
-        }
-      ],
-      "outcome": "proven",
-      "origin": "DerivedFromType",
-      "evidence": {
-        "alignment": 64,
-        "rank": 1,
-        "shape": [
-          {
-            "extent": 2,
-            "expression": "2"
-          }
-        ],
-        "detail": "contiguous row-major storage type"
-      },
-      "source_span": {
-        "line": 12,
-        "column": 5
-      }
-    },
-    {
-      "id": "fact-ae26d7b5923ddb33",
+      "id": "fact-1ca00342ce929e35",
       "kind": "NoAllocation",
       "subjects": [
         {
@@ -525,40 +466,12 @@
         "detail": "contiguous row-major storage type"
       },
       "source_span": {
-        "line": 12,
+        "line": 17,
         "column": 5
       }
     },
     {
-      "id": "fact-b2b6fba7779fe569",
-      "kind": "Contiguous",
-      "subjects": [
-        {
-          "kind": "type",
-          "name": "int\u003carray\u003e[2]",
-          "type": "int\u003carray\u003e[2]"
-        }
-      ],
-      "outcome": "proven",
-      "origin": "DerivedFromType",
-      "evidence": {
-        "alignment": 64,
-        "rank": 1,
-        "shape": [
-          {
-            "extent": 2,
-            "expression": "2"
-          }
-        ],
-        "detail": "contiguous row-major storage type"
-      },
-      "source_span": {
-        "line": 12,
-        "column": 5
-      }
-    },
-    {
-      "id": "fact-b2f0262245a785bd",
+      "id": "fact-325b7b78ff021f51",
       "kind": "Bounded",
       "subjects": [
         {
@@ -581,12 +494,40 @@
         "detail": "contiguous row-major storage type"
       },
       "source_span": {
-        "line": 12,
+        "line": 17,
         "column": 5
       }
     },
     {
-      "id": "fact-c1d0228e2370b8c0",
+      "id": "fact-77509b28a77998be",
+      "kind": "Shape",
+      "subjects": [
+        {
+          "kind": "type",
+          "name": "int\u003carray\u003e[2]",
+          "type": "int\u003carray\u003e[2]"
+        }
+      ],
+      "outcome": "proven",
+      "origin": "DerivedFromType",
+      "evidence": {
+        "alignment": 64,
+        "rank": 1,
+        "shape": [
+          {
+            "extent": 2,
+            "expression": "2"
+          }
+        ],
+        "detail": "contiguous row-major storage type"
+      },
+      "source_span": {
+        "line": 17,
+        "column": 5
+      }
+    },
+    {
+      "id": "fact-796276eb6944c417",
       "kind": "Rank",
       "subjects": [
         {
@@ -612,13 +553,44 @@
         "detail": "contiguous row-major storage type"
       },
       "source_span": {
-        "line": 12,
+        "line": 17,
         "column": 5
       }
     },
     {
-      "id": "fact-e0426b5366155d21",
-      "kind": "Shape",
+      "id": "fact-83f66aa0405b729d",
+      "kind": "Aligned",
+      "subjects": [
+        {
+          "kind": "type",
+          "name": "int\u003carray\u003e[2]",
+          "type": "int\u003carray\u003e[2]"
+        }
+      ],
+      "parameters": [
+        64
+      ],
+      "outcome": "proven",
+      "origin": "DerivedFromType",
+      "evidence": {
+        "alignment": 64,
+        "rank": 1,
+        "shape": [
+          {
+            "extent": 2,
+            "expression": "2"
+          }
+        ],
+        "detail": "contiguous row-major storage type"
+      },
+      "source_span": {
+        "line": 17,
+        "column": 5
+      }
+    },
+    {
+      "id": "fact-b1ce52d11792127a",
+      "kind": "FixedShape",
       "subjects": [
         {
           "kind": "type",
@@ -640,7 +612,35 @@
         "detail": "contiguous row-major storage type"
       },
       "source_span": {
-        "line": 12,
+        "line": 17,
+        "column": 5
+      }
+    },
+    {
+      "id": "fact-b441037908ffec0f",
+      "kind": "Contiguous",
+      "subjects": [
+        {
+          "kind": "type",
+          "name": "int\u003carray\u003e[2]",
+          "type": "int\u003carray\u003e[2]"
+        }
+      ],
+      "outcome": "proven",
+      "origin": "DerivedFromType",
+      "evidence": {
+        "alignment": 64,
+        "rank": 1,
+        "shape": [
+          {
+            "extent": 2,
+            "expression": "2"
+          }
+        ],
+        "detail": "contiguous row-major storage type"
+      },
+      "source_span": {
+        "line": 17,
         "column": 5
       }
     }
@@ -652,7 +652,7 @@
       "message": "\"duplicate binding key\"",
       "satisfied": true,
       "source_span": {
-        "line": 56,
+        "line": 61,
         "column": 1
       }
     },
@@ -660,7 +660,7 @@
       "condition": "expression",
       "satisfied": true,
       "source_span": {
-        "line": 57,
+        "line": 62,
         "column": 1
       }
     },
@@ -668,7 +668,7 @@
       "condition": "expression",
       "satisfied": true,
       "source_span": {
-        "line": 58,
+        "line": 63,
         "column": 1
       }
     },
@@ -676,7 +676,7 @@
       "condition": "expression",
       "satisfied": true,
       "source_span": {
-        "line": 59,
+        "line": 64,
         "column": 1
       }
     },
@@ -684,7 +684,7 @@
       "condition": "expression",
       "satisfied": true,
       "source_span": {
-        "line": 60,
+        "line": 65,
         "column": 1
       }
     }
@@ -704,7 +704,7 @@
             "name": "int",
             "kind": "builtin",
             "span": {
-              "line": 5,
+              "line": 10,
               "column": 5
             }
           }
@@ -715,7 +715,7 @@
             "name": "int",
             "kind": "builtin",
             "span": {
-              "line": 6,
+              "line": 11,
               "column": 5
             }
           }
@@ -726,14 +726,14 @@
             "name": "bool",
             "kind": "builtin",
             "span": {
-              "line": 7,
+              "line": 12,
               "column": 5
             }
           }
         }
       ],
       "source_span": {
-        "line": 3,
+        "line": 8,
         "column": 1
       }
     },
@@ -754,7 +754,7 @@
               "name": "int",
               "kind": "builtin",
               "span": {
-                "line": 12,
+                "line": 17,
                 "column": 5
               }
             },
@@ -769,14 +769,14 @@
             "contiguous": true,
             "layout": "row-major",
             "span": {
-              "line": 12,
+              "line": 17,
               "column": 5
             }
           }
         }
       ],
       "source_span": {
-        "line": 10,
+        "line": 15,
         "column": 1
       }
     }

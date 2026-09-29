@@ -2,26 +2,6 @@ package concept
 
 func evt1NewVulkanProfileDefinition() ProfileDefinition {
 	builtinTypes := evt1CoreBuiltinDefinitions()
-	builtinTypes["PipelineLayout"] = BuiltinTypeDefinition{
-		Name:         "PipelineLayout",
-		CType:        "VkPipelineLayout",
-		NeedsHeaders: []string{"<vulkan/vulkan.h>"},
-	}
-	builtinTypes["Pipeline"] = BuiltinTypeDefinition{
-		Name:         "Pipeline",
-		CType:        "VkPipeline",
-		NeedsHeaders: []string{"<vulkan/vulkan.h>"},
-	}
-	builtinTypes["VkBuffer"] = BuiltinTypeDefinition{
-		Name:         "VkBuffer",
-		CType:        "VkBuffer",
-		NeedsHeaders: []string{"<vulkan/vulkan.h>"},
-	}
-	builtinTypes["VkCommandPool"] = BuiltinTypeDefinition{
-		Name:         "VkCommandPool",
-		CType:        "VkCommandPool",
-		NeedsHeaders: []string{"<vulkan/vulkan.h>"},
-	}
 	builtinTypes["VulkanError"] = BuiltinTypeDefinition{
 		Name:         "VulkanError",
 		CType:        "concept_vulkan_error",

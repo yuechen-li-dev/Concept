@@ -1,0 +1,6 @@
+profile Core;
+
+extern "C" handle Buffer;
+extern "C" handle Memory;
+
+int Address(Buffer a) { return a as int; }

@@ -1,7 +1,7 @@
 {
   "schema": "concept-evt1-mir.v1",
   "module": "examples/evt1/comptime_tables_vulkan.concept",
-  "profile": "Vulkan",
+  "profile": "Core",
   "structs": [
     {
       "name": "DescriptorBinding",
@@ -17,7 +17,7 @@
             "name": "int",
             "kind": "builtin",
             "span": {
-              "line": 5,
+              "line": 10,
               "column": 5
             }
           }
@@ -28,7 +28,7 @@
             "name": "int",
             "kind": "builtin",
             "span": {
-              "line": 6,
+              "line": 11,
               "column": 5
             }
           }
@@ -39,14 +39,14 @@
             "name": "bool",
             "kind": "builtin",
             "span": {
-              "line": 7,
+              "line": 12,
               "column": 5
             }
           }
         }
       ],
       "source_span": {
-        "line": 3,
+        "line": 8,
         "column": 1
       }
     },
@@ -67,7 +67,7 @@
               "name": "int",
               "kind": "builtin",
               "span": {
-                "line": 12,
+                "line": 17,
                 "column": 5
               }
             },
@@ -82,14 +82,14 @@
             "contiguous": true,
             "layout": "row-major",
             "span": {
-              "line": 12,
+              "line": 17,
               "column": 5
             }
           }
         }
       ],
       "source_span": {
-        "line": 10,
+        "line": 15,
         "column": 1
       }
     }
@@ -104,7 +104,7 @@
           "name": "DescriptorBinding",
           "kind": "struct",
           "span": {
-            "line": 15,
+            "line": 20,
             "column": 10
           }
         },
@@ -119,13 +119,13 @@
         "contiguous": true,
         "layout": "row-major",
         "span": {
-          "line": 15,
+          "line": 20,
           "column": 10
         }
       },
       "value": "[DescriptorBinding{binding=0, set=0, write=false}, DescriptorBinding{binding=1, set=0, write=true}, DescriptorBinding{binding=0, set=1, write=true}]",
       "source_span": {
-        "line": 15,
+        "line": 20,
         "column": 1
       }
     },
@@ -135,13 +135,13 @@
         "name": "BindingSummary",
         "kind": "struct",
         "span": {
-          "line": 21,
+          "line": 26,
           "column": 10
         }
       },
       "value": "BindingSummary{slots=[3, 0]}",
       "source_span": {
-        "line": 21,
+        "line": 26,
         "column": 1
       }
     },
@@ -157,7 +157,7 @@
             "name": "int",
             "kind": "builtin",
             "span": {
-              "line": 22,
+              "line": 27,
               "column": 10
             }
           },
@@ -172,7 +172,7 @@
           "contiguous": true,
           "layout": "row-major",
           "span": {
-            "line": 22,
+            "line": 27,
             "column": 10
           }
         },
@@ -187,13 +187,13 @@
         "contiguous": true,
         "layout": "row-major",
         "span": {
-          "line": 22,
+          "line": 27,
           "column": 10
         }
       },
       "value": "[[1, 2], [3, 4]]",
       "source_span": {
-        "line": 22,
+        "line": 27,
         "column": 1
       }
     },
@@ -203,13 +203,13 @@
         "name": "int",
         "kind": "builtin",
         "span": {
-          "line": 23,
+          "line": 28,
           "column": 10
         }
       },
       "value": "2",
       "source_span": {
-        "line": 23,
+        "line": 28,
         "column": 1
       }
     }
@@ -220,7 +220,7 @@
       "message": "\"duplicate binding key\"",
       "satisfied": true,
       "source_span": {
-        "line": 56,
+        "line": 61,
         "column": 1
       }
     },
@@ -228,7 +228,7 @@
       "condition": "expression",
       "satisfied": true,
       "source_span": {
-        "line": 57,
+        "line": 62,
         "column": 1
       }
     },
@@ -236,7 +236,7 @@
       "condition": "expression",
       "satisfied": true,
       "source_span": {
-        "line": 58,
+        "line": 63,
         "column": 1
       }
     },
@@ -244,7 +244,7 @@
       "condition": "expression",
       "satisfied": true,
       "source_span": {
-        "line": 59,
+        "line": 64,
         "column": 1
       }
     },
@@ -252,7 +252,7 @@
       "condition": "expression",
       "satisfied": true,
       "source_span": {
-        "line": 60,
+        "line": 65,
         "column": 1
       }
     }
@@ -260,99 +260,6 @@
   "functions": [
     {
       "name": "ClassifyRange",
-      "return_type": {
-        "name": "int",
-        "kind": "builtin",
-        "span": {
-          "line": 62,
-          "column": 1
-        }
-      },
-      "params": [
-        {
-          "name": "buffer",
-          "type": {
-            "name": "VkBuffer",
-            "kind": "builtin",
-            "span": {
-              "line": 62,
-              "column": 19
-            }
-          }
-        }
-      ],
-      "operations": [
-        {
-          "id": "ClassifyRange.01",
-          "kind": "return",
-          "type": "int",
-          "source_span": {
-            "line": 64,
-            "column": 5
-          }
-        },
-        {
-          "id": "ClassifyRange.02",
-          "kind": "binary",
-          "detail": "+",
-          "source_span": {
-            "line": 64,
-            "column": 29
-          }
-        },
-        {
-          "id": "ClassifyRange.03",
-          "kind": "array_index",
-          "detail": "rank=1 bounds=checked layout=row-major",
-          "source_span": {
-            "line": 64,
-            "column": 12
-          }
-        },
-        {
-          "id": "ClassifyRange.04",
-          "kind": "field_access",
-          "detail": "slots",
-          "source_span": {
-            "line": 64,
-            "column": 20
-          }
-        },
-        {
-          "id": "ClassifyRange.05",
-          "kind": "name",
-          "detail": "Summary",
-          "source_span": {
-            "line": 64,
-            "column": 12
-          }
-        },
-        {
-          "id": "ClassifyRange.06",
-          "kind": "literal",
-          "detail": "0",
-          "source_span": {
-            "line": 64,
-            "column": 26
-          }
-        },
-        {
-          "id": "ClassifyRange.07",
-          "kind": "name",
-          "detail": "WriteCount",
-          "source_span": {
-            "line": 64,
-            "column": 31
-          }
-        }
-      ],
-      "source_span": {
-        "line": 62,
-        "column": 5
-      }
-    },
-    {
-      "name": "PipelineStride",
       "return_type": {
         "name": "int",
         "kind": "builtin",
@@ -366,9 +273,102 @@
           "name": "buffer",
           "type": {
             "name": "VkBuffer",
-            "kind": "builtin",
+            "kind": "handle",
             "span": {
               "line": 67,
+              "column": 19
+            }
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "ClassifyRange.01",
+          "kind": "return",
+          "type": "int",
+          "source_span": {
+            "line": 69,
+            "column": 5
+          }
+        },
+        {
+          "id": "ClassifyRange.02",
+          "kind": "binary",
+          "detail": "+",
+          "source_span": {
+            "line": 69,
+            "column": 29
+          }
+        },
+        {
+          "id": "ClassifyRange.03",
+          "kind": "array_index",
+          "detail": "rank=1 bounds=checked layout=row-major",
+          "source_span": {
+            "line": 69,
+            "column": 12
+          }
+        },
+        {
+          "id": "ClassifyRange.04",
+          "kind": "field_access",
+          "detail": "slots",
+          "source_span": {
+            "line": 69,
+            "column": 20
+          }
+        },
+        {
+          "id": "ClassifyRange.05",
+          "kind": "name",
+          "detail": "Summary",
+          "source_span": {
+            "line": 69,
+            "column": 12
+          }
+        },
+        {
+          "id": "ClassifyRange.06",
+          "kind": "literal",
+          "detail": "0",
+          "source_span": {
+            "line": 69,
+            "column": 26
+          }
+        },
+        {
+          "id": "ClassifyRange.07",
+          "kind": "name",
+          "detail": "WriteCount",
+          "source_span": {
+            "line": 69,
+            "column": 31
+          }
+        }
+      ],
+      "source_span": {
+        "line": 67,
+        "column": 5
+      }
+    },
+    {
+      "name": "PipelineStride",
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 72,
+          "column": 1
+        }
+      },
+      "params": [
+        {
+          "name": "buffer",
+          "type": {
+            "name": "VkBuffer",
+            "kind": "handle",
+            "span": {
+              "line": 72,
               "column": 20
             }
           }
@@ -380,7 +380,7 @@
           "kind": "return",
           "type": "int",
           "source_span": {
-            "line": 69,
+            "line": 74,
             "column": 5
           }
         },
@@ -389,7 +389,7 @@
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
-            "line": 69,
+            "line": 74,
             "column": 12
           }
         },
@@ -398,7 +398,7 @@
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
-            "line": 69,
+            "line": 74,
             "column": 12
           }
         },
@@ -407,7 +407,7 @@
           "kind": "name",
           "detail": "StageMatrix",
           "source_span": {
-            "line": 69,
+            "line": 74,
             "column": 12
           }
         },
@@ -416,7 +416,7 @@
           "kind": "literal",
           "detail": "1",
           "source_span": {
-            "line": 69,
+            "line": 74,
             "column": 24
           }
         },
@@ -425,13 +425,13 @@
           "kind": "literal",
           "detail": "1",
           "source_span": {
-            "line": 69,
+            "line": 74,
             "column": 27
           }
         }
       ],
       "source_span": {
-        "line": 67,
+        "line": 72,
         "column": 5
       }
     },
@@ -441,7 +441,7 @@
         "name": "bool",
         "kind": "builtin",
         "span": {
-          "line": 72,
+          "line": 77,
           "column": 1
         }
       },
@@ -450,9 +450,9 @@
           "name": "pool",
           "type": {
             "name": "VkCommandPool",
-            "kind": "builtin",
+            "kind": "handle",
             "span": {
-              "line": 72,
+              "line": 77,
               "column": 16
             }
           }
@@ -463,7 +463,7 @@
             "name": "bool",
             "kind": "builtin",
             "span": {
-              "line": 72,
+              "line": 77,
               "column": 36
             }
           }
@@ -475,7 +475,7 @@
           "kind": "return",
           "type": "bool",
           "source_span": {
-            "line": 74,
+            "line": 79,
             "column": 5
           }
         },
@@ -483,7 +483,7 @@
           "id": "PoolReady.02",
           "kind": "if_expr",
           "source_span": {
-            "line": 74,
+            "line": 79,
             "column": 12
           }
         },
@@ -492,7 +492,7 @@
           "kind": "name",
           "detail": "ready",
           "source_span": {
-            "line": 74,
+            "line": 79,
             "column": 16
           }
         },
@@ -501,7 +501,7 @@
           "kind": "field_access",
           "detail": "write",
           "source_span": {
-            "line": 74,
+            "line": 79,
             "column": 35
           }
         },
@@ -510,7 +510,7 @@
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
-            "line": 74,
+            "line": 79,
             "column": 23
           }
         },
@@ -519,7 +519,7 @@
           "kind": "name",
           "detail": "Bindings",
           "source_span": {
-            "line": 74,
+            "line": 79,
             "column": 23
           }
         },
@@ -528,7 +528,7 @@
           "kind": "literal",
           "detail": "1",
           "source_span": {
-            "line": 74,
+            "line": 79,
             "column": 32
           }
         },
@@ -537,13 +537,13 @@
           "kind": "bool_literal",
           "detail": "false",
           "source_span": {
-            "line": 74,
+            "line": 79,
             "column": 46
           }
         }
       ],
       "source_span": {
-        "line": 72,
+        "line": 77,
         "column": 6
       }
     }
@@ -555,7 +555,7 @@
         "name": "bool",
         "kind": "builtin",
         "span": {
-          "line": 25,
+          "line": 30,
           "column": 10
         }
       },
@@ -569,7 +569,7 @@
               "name": "DescriptorBinding",
               "kind": "struct",
               "span": {
-                "line": 25,
+                "line": 30,
                 "column": 36
               }
             },
@@ -584,7 +584,7 @@
             "contiguous": true,
             "layout": "row-major",
             "span": {
-              "line": 25,
+              "line": 30,
               "column": 36
             }
           }
@@ -597,7 +597,7 @@
           "type": "int",
           "detail": "outer",
           "source_span": {
-            "line": 27,
+            "line": 32,
             "column": 9
           }
         },
@@ -606,7 +606,7 @@
           "kind": "literal",
           "detail": "0",
           "source_span": {
-            "line": 27,
+            "line": 32,
             "column": 17
           }
         },
@@ -616,7 +616,7 @@
           "type": "bool",
           "detail": "duplicate",
           "source_span": {
-            "line": 28,
+            "line": 33,
             "column": 10
           }
         },
@@ -625,7 +625,7 @@
           "kind": "bool_literal",
           "detail": "false",
           "source_span": {
-            "line": 28,
+            "line": 33,
             "column": 22
           }
         },
@@ -633,7 +633,7 @@
           "id": "HasDuplicateBindings.05",
           "kind": "bounded_while",
           "source_span": {
-            "line": 29,
+            "line": 34,
             "column": 5
           }
         },
@@ -642,7 +642,7 @@
           "kind": "binary",
           "detail": "\u003c",
           "source_span": {
-            "line": 29,
+            "line": 34,
             "column": 18
           }
         },
@@ -651,7 +651,7 @@
           "kind": "name",
           "detail": "outer",
           "source_span": {
-            "line": 29,
+            "line": 34,
             "column": 12
           }
         },
@@ -660,7 +660,7 @@
           "kind": "array_len",
           "detail": "Len",
           "source_span": {
-            "line": 29,
+            "line": 34,
             "column": 20
           }
         },
@@ -669,7 +669,7 @@
           "kind": "name",
           "detail": "values",
           "source_span": {
-            "line": 29,
+            "line": 34,
             "column": 24
           }
         },
@@ -678,7 +678,7 @@
           "kind": "literal",
           "detail": "16",
           "source_span": {
-            "line": 29,
+            "line": 34,
             "column": 41
           }
         },
@@ -688,7 +688,7 @@
           "type": "int",
           "detail": "inner",
           "source_span": {
-            "line": 31,
+            "line": 36,
             "column": 13
           }
         },
@@ -697,7 +697,7 @@
           "kind": "binary",
           "detail": "+",
           "source_span": {
-            "line": 31,
+            "line": 36,
             "column": 27
           }
         },
@@ -706,7 +706,7 @@
           "kind": "name",
           "detail": "outer",
           "source_span": {
-            "line": 31,
+            "line": 36,
             "column": 21
           }
         },
@@ -715,7 +715,7 @@
           "kind": "literal",
           "detail": "1",
           "source_span": {
-            "line": 31,
+            "line": 36,
             "column": 29
           }
         },
@@ -723,7 +723,7 @@
           "id": "HasDuplicateBindings.15",
           "kind": "bounded_while",
           "source_span": {
-            "line": 32,
+            "line": 37,
             "column": 9
           }
         },
@@ -732,7 +732,7 @@
           "kind": "binary",
           "detail": "\u003c",
           "source_span": {
-            "line": 32,
+            "line": 37,
             "column": 22
           }
         },
@@ -741,7 +741,7 @@
           "kind": "name",
           "detail": "inner",
           "source_span": {
-            "line": 32,
+            "line": 37,
             "column": 16
           }
         },
@@ -750,7 +750,7 @@
           "kind": "array_len",
           "detail": "Len",
           "source_span": {
-            "line": 32,
+            "line": 37,
             "column": 24
           }
         },
@@ -759,7 +759,7 @@
           "kind": "name",
           "detail": "values",
           "source_span": {
-            "line": 32,
+            "line": 37,
             "column": 28
           }
         },
@@ -768,7 +768,7 @@
           "kind": "literal",
           "detail": "16",
           "source_span": {
-            "line": 32,
+            "line": 37,
             "column": 45
           }
         },
@@ -778,7 +778,7 @@
           "type": "bool",
           "detail": "sameSet",
           "source_span": {
-            "line": 34,
+            "line": 39,
             "column": 18
           }
         },
@@ -787,7 +787,7 @@
           "kind": "binary",
           "detail": "==",
           "source_span": {
-            "line": 34,
+            "line": 39,
             "column": 46
           }
         },
@@ -796,7 +796,7 @@
           "kind": "field_access",
           "detail": "set",
           "source_span": {
-            "line": 34,
+            "line": 39,
             "column": 42
           }
         },
@@ -805,7 +805,7 @@
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
-            "line": 34,
+            "line": 39,
             "column": 28
           }
         },
@@ -814,7 +814,7 @@
           "kind": "name",
           "detail": "values",
           "source_span": {
-            "line": 34,
+            "line": 39,
             "column": 28
           }
         },
@@ -823,7 +823,7 @@
           "kind": "name",
           "detail": "outer",
           "source_span": {
-            "line": 34,
+            "line": 39,
             "column": 35
           }
         },
@@ -832,7 +832,7 @@
           "kind": "field_access",
           "detail": "set",
           "source_span": {
-            "line": 34,
+            "line": 39,
             "column": 63
           }
         },
@@ -841,7 +841,7 @@
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
-            "line": 34,
+            "line": 39,
             "column": 49
           }
         },
@@ -850,7 +850,7 @@
           "kind": "name",
           "detail": "values",
           "source_span": {
-            "line": 34,
+            "line": 39,
             "column": 49
           }
         },
@@ -859,7 +859,7 @@
           "kind": "name",
           "detail": "inner",
           "source_span": {
-            "line": 34,
+            "line": 39,
             "column": 56
           }
         },
@@ -869,7 +869,7 @@
           "type": "bool",
           "detail": "sameBinding",
           "source_span": {
-            "line": 35,
+            "line": 40,
             "column": 18
           }
         },
@@ -878,7 +878,7 @@
           "kind": "binary",
           "detail": "==",
           "source_span": {
-            "line": 35,
+            "line": 40,
             "column": 54
           }
         },
@@ -887,7 +887,7 @@
           "kind": "field_access",
           "detail": "binding",
           "source_span": {
-            "line": 35,
+            "line": 40,
             "column": 46
           }
         },
@@ -896,7 +896,7 @@
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
-            "line": 35,
+            "line": 40,
             "column": 32
           }
         },
@@ -905,7 +905,7 @@
           "kind": "name",
           "detail": "values",
           "source_span": {
-            "line": 35,
+            "line": 40,
             "column": 32
           }
         },
@@ -914,7 +914,7 @@
           "kind": "name",
           "detail": "outer",
           "source_span": {
-            "line": 35,
+            "line": 40,
             "column": 39
           }
         },
@@ -923,7 +923,7 @@
           "kind": "field_access",
           "detail": "binding",
           "source_span": {
-            "line": 35,
+            "line": 40,
             "column": 71
           }
         },
@@ -932,7 +932,7 @@
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
-            "line": 35,
+            "line": 40,
             "column": 57
           }
         },
@@ -941,7 +941,7 @@
           "kind": "name",
           "detail": "values",
           "source_span": {
-            "line": 35,
+            "line": 40,
             "column": 57
           }
         },
@@ -950,7 +950,7 @@
           "kind": "name",
           "detail": "inner",
           "source_span": {
-            "line": 35,
+            "line": 40,
             "column": 64
           }
         },
@@ -960,7 +960,7 @@
           "type": "duplicate",
           "detail": "duplicate",
           "source_span": {
-            "line": 36,
+            "line": 41,
             "column": 13
           }
         },
@@ -969,7 +969,7 @@
           "kind": "name",
           "detail": "duplicate",
           "source_span": {
-            "line": 36,
+            "line": 41,
             "column": 13
           }
         },
@@ -978,7 +978,7 @@
           "kind": "binary",
           "detail": "or",
           "source_span": {
-            "line": 36,
+            "line": 41,
             "column": 35
           }
         },
@@ -987,7 +987,7 @@
           "kind": "name",
           "detail": "duplicate",
           "source_span": {
-            "line": 36,
+            "line": 41,
             "column": 25
           }
         },
@@ -996,7 +996,7 @@
           "kind": "binary",
           "detail": "and",
           "source_span": {
-            "line": 36,
+            "line": 41,
             "column": 47
           }
         },
@@ -1005,7 +1005,7 @@
           "kind": "name",
           "detail": "sameSet",
           "source_span": {
-            "line": 36,
+            "line": 41,
             "column": 39
           }
         },
@@ -1014,7 +1014,7 @@
           "kind": "name",
           "detail": "sameBinding",
           "source_span": {
-            "line": 36,
+            "line": 41,
             "column": 51
           }
         },
@@ -1024,7 +1024,7 @@
           "type": "inner",
           "detail": "inner",
           "source_span": {
-            "line": 37,
+            "line": 42,
             "column": 13
           }
         },
@@ -1033,7 +1033,7 @@
           "kind": "name",
           "detail": "inner",
           "source_span": {
-            "line": 37,
+            "line": 42,
             "column": 13
           }
         },
@@ -1042,7 +1042,7 @@
           "kind": "binary",
           "detail": "+",
           "source_span": {
-            "line": 37,
+            "line": 42,
             "column": 27
           }
         },
@@ -1051,7 +1051,7 @@
           "kind": "name",
           "detail": "inner",
           "source_span": {
-            "line": 37,
+            "line": 42,
             "column": 21
           }
         },
@@ -1060,7 +1060,7 @@
           "kind": "literal",
           "detail": "1",
           "source_span": {
-            "line": 37,
+            "line": 42,
             "column": 29
           }
         },
@@ -1070,7 +1070,7 @@
           "type": "outer",
           "detail": "outer",
           "source_span": {
-            "line": 39,
+            "line": 44,
             "column": 9
           }
         },
@@ -1079,7 +1079,7 @@
           "kind": "name",
           "detail": "outer",
           "source_span": {
-            "line": 39,
+            "line": 44,
             "column": 9
           }
         },
@@ -1088,7 +1088,7 @@
           "kind": "binary",
           "detail": "+",
           "source_span": {
-            "line": 39,
+            "line": 44,
             "column": 23
           }
         },
@@ -1097,7 +1097,7 @@
           "kind": "name",
           "detail": "outer",
           "source_span": {
-            "line": 39,
+            "line": 44,
             "column": 17
           }
         },
@@ -1106,7 +1106,7 @@
           "kind": "literal",
           "detail": "1",
           "source_span": {
-            "line": 39,
+            "line": 44,
             "column": 25
           }
         },
@@ -1115,7 +1115,7 @@
           "kind": "return",
           "type": "bool",
           "source_span": {
-            "line": 41,
+            "line": 46,
             "column": 5
           }
         },
@@ -1124,13 +1124,13 @@
           "kind": "name",
           "detail": "duplicate",
           "source_span": {
-            "line": 41,
+            "line": 46,
             "column": 12
           }
         }
       ],
       "source_span": {
-        "line": 25,
+        "line": 30,
         "column": 15
       }
     },
@@ -1140,7 +1140,7 @@
         "name": "int",
         "kind": "builtin",
         "span": {
-          "line": 44,
+          "line": 49,
           "column": 10
         }
       },
@@ -1154,7 +1154,7 @@
               "name": "DescriptorBinding",
               "kind": "struct",
               "span": {
-                "line": 44,
+                "line": 49,
                 "column": 31
               }
             },
@@ -1169,7 +1169,7 @@
             "contiguous": true,
             "layout": "row-major",
             "span": {
-              "line": 44,
+              "line": 49,
               "column": 31
             }
           }
@@ -1182,7 +1182,7 @@
           "type": "int",
           "detail": "cursor",
           "source_span": {
-            "line": 46,
+            "line": 51,
             "column": 9
           }
         },
@@ -1191,7 +1191,7 @@
           "kind": "literal",
           "detail": "0",
           "source_span": {
-            "line": 46,
+            "line": 51,
             "column": 18
           }
         },
@@ -1201,7 +1201,7 @@
           "type": "int",
           "detail": "total",
           "source_span": {
-            "line": 47,
+            "line": 52,
             "column": 9
           }
         },
@@ -1210,7 +1210,7 @@
           "kind": "literal",
           "detail": "0",
           "source_span": {
-            "line": 47,
+            "line": 52,
             "column": 17
           }
         },
@@ -1218,7 +1218,7 @@
           "id": "ActiveWriteCount.05",
           "kind": "bounded_while",
           "source_span": {
-            "line": 48,
+            "line": 53,
             "column": 5
           }
         },
@@ -1227,7 +1227,7 @@
           "kind": "binary",
           "detail": "\u003c",
           "source_span": {
-            "line": 48,
+            "line": 53,
             "column": 19
           }
         },
@@ -1236,7 +1236,7 @@
           "kind": "name",
           "detail": "cursor",
           "source_span": {
-            "line": 48,
+            "line": 53,
             "column": 12
           }
         },
@@ -1245,7 +1245,7 @@
           "kind": "array_len",
           "detail": "Len",
           "source_span": {
-            "line": 48,
+            "line": 53,
             "column": 21
           }
         },
@@ -1254,7 +1254,7 @@
           "kind": "name",
           "detail": "values",
           "source_span": {
-            "line": 48,
+            "line": 53,
             "column": 25
           }
         },
@@ -1263,7 +1263,7 @@
           "kind": "literal",
           "detail": "16",
           "source_span": {
-            "line": 48,
+            "line": 53,
             "column": 42
           }
         },
@@ -1273,7 +1273,7 @@
           "type": "total",
           "detail": "total",
           "source_span": {
-            "line": 50,
+            "line": 55,
             "column": 9
           }
         },
@@ -1282,7 +1282,7 @@
           "kind": "name",
           "detail": "total",
           "source_span": {
-            "line": 50,
+            "line": 55,
             "column": 9
           }
         },
@@ -1291,7 +1291,7 @@
           "kind": "binary",
           "detail": "+",
           "source_span": {
-            "line": 50,
+            "line": 55,
             "column": 23
           }
         },
@@ -1300,7 +1300,7 @@
           "kind": "name",
           "detail": "total",
           "source_span": {
-            "line": 50,
+            "line": 55,
             "column": 17
           }
         },
@@ -1308,7 +1308,7 @@
           "id": "ActiveWriteCount.15",
           "kind": "if_expr",
           "source_span": {
-            "line": 50,
+            "line": 55,
             "column": 25
           }
         },
@@ -1317,7 +1317,7 @@
           "kind": "field_access",
           "detail": "write",
           "source_span": {
-            "line": 50,
+            "line": 55,
             "column": 44
           }
         },
@@ -1326,7 +1326,7 @@
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
           "source_span": {
-            "line": 50,
+            "line": 55,
             "column": 29
           }
         },
@@ -1335,7 +1335,7 @@
           "kind": "name",
           "detail": "values",
           "source_span": {
-            "line": 50,
+            "line": 55,
             "column": 29
           }
         },
@@ -1344,7 +1344,7 @@
           "kind": "name",
           "detail": "cursor",
           "source_span": {
-            "line": 50,
+            "line": 55,
             "column": 36
           }
         },
@@ -1353,7 +1353,7 @@
           "kind": "literal",
           "detail": "1",
           "source_span": {
-            "line": 50,
+            "line": 55,
             "column": 51
           }
         },
@@ -1362,7 +1362,7 @@
           "kind": "literal",
           "detail": "0",
           "source_span": {
-            "line": 50,
+            "line": 55,
             "column": 58
           }
         },
@@ -1372,7 +1372,7 @@
           "type": "cursor",
           "detail": "cursor",
           "source_span": {
-            "line": 51,
+            "line": 56,
             "column": 9
           }
         },
@@ -1381,7 +1381,7 @@
           "kind": "name",
           "detail": "cursor",
           "source_span": {
-            "line": 51,
+            "line": 56,
             "column": 9
           }
         },
@@ -1390,7 +1390,7 @@
           "kind": "binary",
           "detail": "+",
           "source_span": {
-            "line": 51,
+            "line": 56,
             "column": 25
           }
         },
@@ -1399,7 +1399,7 @@
           "kind": "name",
           "detail": "cursor",
           "source_span": {
-            "line": 51,
+            "line": 56,
             "column": 18
           }
         },
@@ -1408,7 +1408,7 @@
           "kind": "literal",
           "detail": "1",
           "source_span": {
-            "line": 51,
+            "line": 56,
             "column": 27
           }
         },
@@ -1417,7 +1417,7 @@
           "kind": "return",
           "type": "int",
           "source_span": {
-            "line": 53,
+            "line": 58,
             "column": 5
           }
         },
@@ -1426,79 +1426,20 @@
           "kind": "name",
           "detail": "total",
           "source_span": {
-            "line": 53,
+            "line": 58,
             "column": 12
           }
         }
       ],
       "source_span": {
-        "line": 44,
+        "line": 49,
         "column": 14
       }
     }
   ],
   "semantic_facts": [
     {
-      "id": "fact-53f52f3ff4f584b8",
-      "kind": "Aligned",
-      "subjects": [
-        {
-          "kind": "type",
-          "name": "int\u003carray\u003e[2]",
-          "type": "int\u003carray\u003e[2]"
-        }
-      ],
-      "parameters": [
-        64
-      ],
-      "outcome": "proven",
-      "origin": "DerivedFromType",
-      "evidence": {
-        "alignment": 64,
-        "rank": 1,
-        "shape": [
-          {
-            "extent": 2,
-            "expression": "2"
-          }
-        ],
-        "detail": "contiguous row-major storage type"
-      },
-      "source_span": {
-        "line": 12,
-        "column": 5
-      }
-    },
-    {
-      "id": "fact-9a12247d8f5f60c7",
-      "kind": "FixedShape",
-      "subjects": [
-        {
-          "kind": "type",
-          "name": "int\u003carray\u003e[2]",
-          "type": "int\u003carray\u003e[2]"
-        }
-      ],
-      "outcome": "proven",
-      "origin": "DerivedFromType",
-      "evidence": {
-        "alignment": 64,
-        "rank": 1,
-        "shape": [
-          {
-            "extent": 2,
-            "expression": "2"
-          }
-        ],
-        "detail": "contiguous row-major storage type"
-      },
-      "source_span": {
-        "line": 12,
-        "column": 5
-      }
-    },
-    {
-      "id": "fact-ae26d7b5923ddb33",
+      "id": "fact-1ca00342ce929e35",
       "kind": "NoAllocation",
       "subjects": [
         {
@@ -1521,40 +1462,12 @@
         "detail": "contiguous row-major storage type"
       },
       "source_span": {
-        "line": 12,
+        "line": 17,
         "column": 5
       }
     },
     {
-      "id": "fact-b2b6fba7779fe569",
-      "kind": "Contiguous",
-      "subjects": [
-        {
-          "kind": "type",
-          "name": "int\u003carray\u003e[2]",
-          "type": "int\u003carray\u003e[2]"
-        }
-      ],
-      "outcome": "proven",
-      "origin": "DerivedFromType",
-      "evidence": {
-        "alignment": 64,
-        "rank": 1,
-        "shape": [
-          {
-            "extent": 2,
-            "expression": "2"
-          }
-        ],
-        "detail": "contiguous row-major storage type"
-      },
-      "source_span": {
-        "line": 12,
-        "column": 5
-      }
-    },
-    {
-      "id": "fact-b2f0262245a785bd",
+      "id": "fact-325b7b78ff021f51",
       "kind": "Bounded",
       "subjects": [
         {
@@ -1577,12 +1490,40 @@
         "detail": "contiguous row-major storage type"
       },
       "source_span": {
-        "line": 12,
+        "line": 17,
         "column": 5
       }
     },
     {
-      "id": "fact-c1d0228e2370b8c0",
+      "id": "fact-77509b28a77998be",
+      "kind": "Shape",
+      "subjects": [
+        {
+          "kind": "type",
+          "name": "int\u003carray\u003e[2]",
+          "type": "int\u003carray\u003e[2]"
+        }
+      ],
+      "outcome": "proven",
+      "origin": "DerivedFromType",
+      "evidence": {
+        "alignment": 64,
+        "rank": 1,
+        "shape": [
+          {
+            "extent": 2,
+            "expression": "2"
+          }
+        ],
+        "detail": "contiguous row-major storage type"
+      },
+      "source_span": {
+        "line": 17,
+        "column": 5
+      }
+    },
+    {
+      "id": "fact-796276eb6944c417",
       "kind": "Rank",
       "subjects": [
         {
@@ -1608,13 +1549,44 @@
         "detail": "contiguous row-major storage type"
       },
       "source_span": {
-        "line": 12,
+        "line": 17,
         "column": 5
       }
     },
     {
-      "id": "fact-e0426b5366155d21",
-      "kind": "Shape",
+      "id": "fact-83f66aa0405b729d",
+      "kind": "Aligned",
+      "subjects": [
+        {
+          "kind": "type",
+          "name": "int\u003carray\u003e[2]",
+          "type": "int\u003carray\u003e[2]"
+        }
+      ],
+      "parameters": [
+        64
+      ],
+      "outcome": "proven",
+      "origin": "DerivedFromType",
+      "evidence": {
+        "alignment": 64,
+        "rank": 1,
+        "shape": [
+          {
+            "extent": 2,
+            "expression": "2"
+          }
+        ],
+        "detail": "contiguous row-major storage type"
+      },
+      "source_span": {
+        "line": 17,
+        "column": 5
+      }
+    },
+    {
+      "id": "fact-b1ce52d11792127a",
+      "kind": "FixedShape",
       "subjects": [
         {
           "kind": "type",
@@ -1636,7 +1608,35 @@
         "detail": "contiguous row-major storage type"
       },
       "source_span": {
-        "line": 12,
+        "line": 17,
+        "column": 5
+      }
+    },
+    {
+      "id": "fact-b441037908ffec0f",
+      "kind": "Contiguous",
+      "subjects": [
+        {
+          "kind": "type",
+          "name": "int\u003carray\u003e[2]",
+          "type": "int\u003carray\u003e[2]"
+        }
+      ],
+      "outcome": "proven",
+      "origin": "DerivedFromType",
+      "evidence": {
+        "alignment": 64,
+        "rank": 1,
+        "shape": [
+          {
+            "extent": 2,
+            "expression": "2"
+          }
+        ],
+        "detail": "contiguous row-major storage type"
+      },
+      "source_span": {
+        "line": 17,
         "column": 5
       }
     }
@@ -1650,7 +1650,7 @@
           "name": "int",
           "kind": "builtin",
           "span": {
-            "line": 12,
+            "line": 17,
             "column": 5
           }
         },
@@ -1665,7 +1665,7 @@
         "contiguous": true,
         "layout": "row-major",
         "span": {
-          "line": 12,
+          "line": 17,
           "column": 5
         }
       },
@@ -1673,7 +1673,7 @@
         "name": "int",
         "kind": "builtin",
         "span": {
-          "line": 12,
+          "line": 17,
           "column": 5
         }
       },

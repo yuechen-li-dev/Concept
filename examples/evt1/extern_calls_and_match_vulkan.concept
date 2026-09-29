@@ -1,15 +1,20 @@
 profile Vulkan;
 
+// Vulkan object handles are ordinary foreign handles.
+extern "C" handle VkPipelineLayout;
+extern "C" handle VkPipeline;
+
+
 enum PipelineState
 {
     Empty,
-    LayoutCreated(PipelineLayout layout),
-    Ready(PipelineLayout layout, Pipeline pipeline),
+    LayoutCreated(VkPipelineLayout layout),
+    Ready(VkPipelineLayout layout, VkPipeline pipeline),
     Failed(VulkanError error)
 }
 
-void DestroyPipeline(Pipeline pipeline);
-void DestroyPipelineLayout(PipelineLayout layout);
+void DestroyPipeline(VkPipeline pipeline);
+void DestroyPipelineLayout(VkPipelineLayout layout);
 void RecordFailure(VulkanError error);
 
 PipelineState MakeEmptyState()
@@ -17,12 +22,12 @@ PipelineState MakeEmptyState()
     return PipelineState::Empty;
 }
 
-PipelineState MakeLayoutCreatedState(PipelineLayout layout)
+PipelineState MakeLayoutCreatedState(VkPipelineLayout layout)
 {
     return PipelineState::LayoutCreated(layout);
 }
 
-PipelineState MakeReadyState(PipelineLayout layout, Pipeline pipeline)
+PipelineState MakeReadyState(VkPipelineLayout layout, VkPipeline pipeline)
 {
     return PipelineState::Ready(layout, pipeline);
 }

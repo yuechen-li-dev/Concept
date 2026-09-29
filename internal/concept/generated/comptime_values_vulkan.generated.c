@@ -20,7 +20,7 @@ static concept_range_config concept_range_config_make(int32_t step, bool active)
   return out;
 }
 
-int32_t concept_comptime_values_vulkan_classify_range(VkBuffer buffer) {
+int32_t concept_comptime_values_vulkan_classify_range(concept_vk_buffer buffer) {
   int32_t total = INT32_C(0);
   int32_t cursor = INT32_C(0);
   int cv_iter_01 = 0;
@@ -30,8 +30,8 @@ int32_t concept_comptime_values_vulkan_classify_range(VkBuffer buffer) {
       break;
     }
     cv_iter_01 = cv_iter_01 + 1;
-    total = concept_rt_comptime_values_vulkan_i32_add(total, INT32_C(1), 31, 23);
-    cursor = concept_rt_comptime_values_vulkan_i32_add(cursor, INT32_C(1), 32, 25);
+    total = concept_rt_comptime_values_vulkan_i32_add(total, INT32_C(1), 36, 23);
+    cursor = concept_rt_comptime_values_vulkan_i32_add(cursor, INT32_C(1), 37, 25);
   }
   int32_t cv_if_result_02;
   if (true) {
@@ -42,11 +42,11 @@ int32_t concept_comptime_values_vulkan_classify_range(VkBuffer buffer) {
   return cv_if_result_02;
 }
 
-bool concept_comptime_values_vulkan_pool_ready(VkCommandPool pool, bool ready) {
+bool concept_comptime_values_vulkan_pool_ready(concept_vk_command_pool pool, bool ready) {
   int32_t count = INT32_C(0);
   while (1) {
     if (!((count < INT32_C(2)))) { break; }
-    count = concept_rt_comptime_values_vulkan_i32_add(count, INT32_C(1), 42, 23);
+    count = concept_rt_comptime_values_vulkan_i32_add(count, INT32_C(1), 47, 23);
   }
   bool cv_if_result_01;
   if (ready) {

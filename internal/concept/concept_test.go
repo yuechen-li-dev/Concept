@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -246,7 +245,7 @@ func TestEVT1DiagnosticsAreStable(t *testing.T) {
 		},
 		{
 			name: "ownership illegal copy",
-			src:  "profile Vulkan;\nstruct HandleBox { owned Pipeline pipeline; };\nPipeline Acquire();\nvoid Use() { HandleBox first = HandleBox{Acquire()}; HandleBox second = first; }\n",
+			src:  "profile Core;\nextern \"C\" handle Pipeline;\nstruct HandleBox { owned Pipeline pipeline; };\nPipeline Acquire();\nvoid Use() { HandleBox first = HandleBox{Acquire()}; HandleBox second = first; }\n",
 			code: "CV4133",
 		},
 		{
@@ -638,9 +637,6 @@ func TestEVT1TemplateInstancesAreDeterministicAndDeduplicated(t *testing.T) {
 }
 
 func TestEVT1LanguageSpecimenNativeC11(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("native C11 harness is only configured for Windows in this repository")
-	}
 	src := readEVT1Fixture(t, "resource_concepts.concept")
 	module, err := Parse("examples/evt1/resource_concepts.concept", src)
 	if err != nil {
@@ -684,9 +680,6 @@ int main(void) {
 }
 
 func TestEVT1VulkanSpecimenNativeC11(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("native C11 harness is only configured for Windows in this repository")
-	}
 	src := readEVT1Fixture(t, "resource_concepts_vulkan.concept")
 	module, err := Parse("examples/evt1/resource_concepts_vulkan.concept", src)
 	if err != nil {
@@ -710,8 +703,8 @@ void concept_resource_concepts_vulkan_destroy(concept_command_pool_state* value)
 }
 
 int main(void) {
-  VkBuffer buffer = (VkBuffer)(uintptr_t)0x10u;
-  VkCommandPool pool = (VkCommandPool)(uintptr_t)0x20u;
+  concept_vk_buffer buffer = (concept_vk_buffer)(uintptr_t)0x10u;
+  concept_vk_command_pool pool = (concept_vk_command_pool)(uintptr_t)0x20u;
   if (concept_resource_concepts_vulkan_classify_range(buffer) != 5) return 1;
   if (!concept_resource_concepts_vulkan_build_and_validate(pool)) return 2;
   concept_resource_concepts_vulkan_cleanup_state(pool);
@@ -723,9 +716,6 @@ int main(void) {
 }
 
 func TestEVT1TemplateLanguageSpecimenNativeC11(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("native C11 harness is only configured for Windows in this repository")
-	}
 	src := readEVT1Fixture(t, "concept_templates.concept")
 	module, err := Parse("examples/evt1/concept_templates.concept", src)
 	if err != nil {
@@ -741,16 +731,16 @@ func TestEVT1TemplateLanguageSpecimenNativeC11(t *testing.T) {
 static int g_destroy_count = 0;
 static int g_destroy_codes[4] = {0, 0, 0, 0};
 
-int concept_concept_templates_measure__buffer_range(const concept_buffer_range* value) {
+int concept_concept_templates_measure__borrow_const_buffer_range(const concept_buffer_range* value) {
   return value->offset + value->size;
 }
-int concept_concept_templates_measure__pipeline_state(const concept_pipeline_state* value) {
+int concept_concept_templates_measure__borrow_const_pipeline_state(const concept_pipeline_state* value) {
   return value->handle + (value->alive ? 1 : 0);
 }
-void concept_concept_templates_destroy__buffer_range(concept_buffer_range* value) {
+void concept_concept_templates_destroy__borrow_buffer_range(concept_buffer_range* value) {
   g_destroy_codes[g_destroy_count++] = value->offset;
 }
-void concept_concept_templates_destroy__pipeline_state(concept_pipeline_state* value) {
+void concept_concept_templates_destroy__borrow_pipeline_state(concept_pipeline_state* value) {
   g_destroy_codes[g_destroy_count++] = value->handle;
 }
 void concept_concept_templates_set_alive(concept_pipeline_state* value) {
@@ -774,9 +764,6 @@ int main(void) {
 }
 
 func TestEVT1TemplateVulkanSpecimenNativeC11(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("native C11 harness is only configured for Windows in this repository")
-	}
 	src := readEVT1Fixture(t, "concept_templates_vulkan.concept")
 	module, err := Parse("examples/evt1/concept_templates_vulkan.concept", src)
 	if err != nil {
@@ -791,16 +778,16 @@ func TestEVT1TemplateVulkanSpecimenNativeC11(t *testing.T) {
 
 static int g_destroy_calls = 0;
 
-int concept_concept_templates_vulkan_measure__buffer_range(const concept_buffer_range* value) {
+int concept_concept_templates_vulkan_measure__borrow_const_buffer_range(const concept_buffer_range* value) {
   return value->offset + value->size;
 }
-int concept_concept_templates_vulkan_measure__pipeline_state(const concept_pipeline_state* value) {
+int concept_concept_templates_vulkan_measure__borrow_const_pipeline_state(const concept_pipeline_state* value) {
   return value->alive ? 100 : 0;
 }
-void concept_concept_templates_vulkan_destroy__buffer_range(concept_buffer_range* value) {
+void concept_concept_templates_vulkan_destroy__borrow_buffer_range(concept_buffer_range* value) {
   (void)value;
 }
-void concept_concept_templates_vulkan_destroy__pipeline_state(concept_pipeline_state* value) {
+void concept_concept_templates_vulkan_destroy__borrow_pipeline_state(concept_pipeline_state* value) {
   (void)value;
   g_destroy_calls += 1;
 }
@@ -809,9 +796,9 @@ void concept_concept_templates_vulkan_set_alive(concept_pipeline_state* value) {
 }
 
 int main(void) {
-  VkBuffer first = (VkBuffer)(uintptr_t)0x10u;
-  VkBuffer second = (VkBuffer)(uintptr_t)0x20u;
-  VkCommandPool pool = (VkCommandPool)(uintptr_t)0x30u;
+  concept_vk_buffer first = (concept_vk_buffer)(uintptr_t)0x10u;
+  concept_vk_buffer second = (concept_vk_buffer)(uintptr_t)0x20u;
+  concept_vk_command_pool pool = (concept_vk_command_pool)(uintptr_t)0x30u;
   if (concept_concept_templates_vulkan_classify_range(first) != 5) return 1;
   if (concept_concept_templates_vulkan_double_range_score(first, second) != 22) return 2;
   if (!concept_concept_templates_vulkan_build_and_destroy(pool)) return 3;
@@ -823,9 +810,6 @@ int main(void) {
 }
 
 func TestEVT1M1BCLanguageSpecimenNativeC11(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("native C11 harness is only configured for Windows in this repository")
-	}
 	src := readEVT1Fixture(t, "comptime_values.concept")
 	module, err := Parse("examples/evt1/comptime_values.concept", src)
 	if err != nil {
@@ -851,9 +835,6 @@ int main(void) {
 }
 
 func TestEVT1M1BCVulkanSpecimenNativeC11(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("native C11 harness is only configured for Windows in this repository")
-	}
 	src := readEVT1Fixture(t, "comptime_values_vulkan.concept")
 	module, err := Parse("examples/evt1/comptime_values_vulkan.concept", src)
 	if err != nil {
@@ -867,8 +848,8 @@ func TestEVT1M1BCVulkanSpecimenNativeC11(t *testing.T) {
 #include <stdint.h>
 
 int main(void) {
-  VkBuffer buffer = (VkBuffer)(uintptr_t)0x10u;
-  VkCommandPool pool = (VkCommandPool)(uintptr_t)0x20u;
+  concept_vk_buffer buffer = (concept_vk_buffer)(uintptr_t)0x10u;
+  concept_vk_command_pool pool = (concept_vk_command_pool)(uintptr_t)0x20u;
   if (concept_comptime_values_vulkan_classify_range(buffer) != 3) return 1;
   if (!concept_comptime_values_vulkan_pool_ready(pool, true)) return 2;
   if (concept_comptime_values_vulkan_pool_ready(pool, false)) return 3;
@@ -879,9 +860,6 @@ int main(void) {
 }
 
 func TestEVT1M1BDLanguageSpecimenNativeC11(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("native C11 harness is only configured for Windows in this repository")
-	}
 	src := readEVT1Fixture(t, "comptime_tables.concept")
 	module, err := Parse("examples/evt1/comptime_tables.concept", src)
 	if err != nil {
@@ -906,9 +884,6 @@ int main(void) {
 }
 
 func TestEVT1M1BDVulkanSpecimenNativeC11(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("native C11 harness is only configured for Windows in this repository")
-	}
 	src := readEVT1Fixture(t, "comptime_tables_vulkan.concept")
 	module, err := Parse("examples/evt1/comptime_tables_vulkan.concept", src)
 	if err != nil {
@@ -922,8 +897,8 @@ func TestEVT1M1BDVulkanSpecimenNativeC11(t *testing.T) {
 #include <stdint.h>
 
 int main(void) {
-  VkBuffer buffer = (VkBuffer)(uintptr_t)0x10u;
-  VkCommandPool pool = (VkCommandPool)(uintptr_t)0x20u;
+  concept_vk_buffer buffer = (concept_vk_buffer)(uintptr_t)0x10u;
+  concept_vk_command_pool pool = (concept_vk_command_pool)(uintptr_t)0x20u;
   if (concept_comptime_tables_vulkan_classify_range(buffer) != 5) return 1;
   if (concept_comptime_tables_vulkan_pipeline_stride(buffer) != 4) return 2;
   if (!concept_comptime_tables_vulkan_pool_ready(pool, true)) return 3;
@@ -937,7 +912,9 @@ int main(void) {
 func runNativeHarness(t *testing.T, outputs Outputs, harnessName, harnessSource string, extraArgs []string) {
 	t.Helper()
 	if _, err := exec.LookPath("cl"); err != nil {
-		t.Skip("cl not found on PATH")
+		// Off Windows, the same harness runs through gcc or clang.
+		runFoundationNativeHarness(t, outputs, harnessName, harnessSource)
+		return
 	}
 	dir := t.TempDir()
 	if err := Write(dir, outputs); err != nil {

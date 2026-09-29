@@ -631,6 +631,9 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		typeNames[streamDecl.Name] = streamDecl.Span
 		env.streams[streamDecl.Name] = streamDecl
 	}
+	if err := evt1RegisterHandles(env, module, typeNames); err != nil {
+		return nil, err
+	}
 	for _, automataDecl := range module.Automata {
 		if profile.compilerOwnedType(automataDecl.Name) {
 			return nil, evt1Diagnostic("CV4267", fmt.Sprintf("%s is a compiler-owned runtime type and cannot be redeclared", automataDecl.Name), automataDecl.Span)
@@ -1772,6 +1775,9 @@ func evt1CABIValue(env *semanticEnv, t Type, visiting map[string]bool) (bool, st
 	}
 	switch t.Name {
 	case "int", "uint", "uint8", "uint16", "uint32", "byte", "uint64", "usize", "isize", "float", "double":
+		return true, ""
+	}
+	if evt1IsHandle(env, t) {
 		return true, ""
 	}
 	decl, ok := env.structs[t.Name]
@@ -3055,6 +3061,9 @@ func evt1TypeEqualityAvailable(env *semanticEnv, t Type) bool {
 	if _, ok := env.profile.builtinType(t.Name, t.Span); ok {
 		return t.Name == "int" || t.Name == "bool" || t.Name == "string"
 	}
+	if evt1IsHandle(env, t) {
+		return true
+	}
 	if _, ok := env.enums[t.Name]; ok {
 		return true
 	}
@@ -3453,6 +3462,9 @@ func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string,
 		return evt1Diagnostic("CV4102", fmt.Sprintf("unknown type application %s", t.String()), span)
 	}
 	if _, ok := env.profile.builtinType(t.Name, span); ok {
+		return nil
+	}
+	if _, ok := env.handles[t.Name]; ok {
 		return nil
 	}
 	if _, ok := env.enums[t.Name]; ok {
@@ -4699,6 +4711,16 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 				return out, nil
 			}
 			return leftType, nil
+		}
+		if evt1IsHandle(env, leftType) || evt1IsHandle(env, rightType) {
+			if leftType.Name != rightType.Name || !evt1IsHandle(env, leftType) || !evt1IsHandle(env, rightType) {
+				return Type{}, evt1Diagnostic("HANDLE_OPERATION_INVALID", fmt.Sprintf("handles compare only with the same handle type, got %s and %s", leftType.String(), rightType.String()), e.Span)
+			}
+			if e.Op != "==" && e.Op != "!=" {
+				return Type{}, evt1Diagnostic("HANDLE_OPERATION_INVALID", fmt.Sprintf("handle %s supports only == and !=; `%s` has no meaning for an opaque handle", leftType.Name, e.Op), e.Span)
+			}
+			out, _ := evt1BuiltinType("bool", e.Span)
+			return out, nil
 		}
 		return Type{}, evt1Diagnostic("CV4028", "only identical scalar arithmetic and comparison operands are supported in EVT1", e.Span)
 	case *ConstructExpr:
@@ -6240,6 +6262,9 @@ func evt1TypeCopyable(env *semanticEnv, t Type) bool {
 	if _, ok := env.profile.builtinType(t.Name, t.Span); ok {
 		return true
 	}
+	if evt1IsHandle(env, t) {
+		return true
+	}
 	if cached, ok := env.copyableCache[t.Name]; ok {
 		return cached
 	}
@@ -7234,6 +7259,10 @@ func evt1CanonicalType(env *semanticEnv, t Type) Type {
 	}
 	if _, ok := env.profile.builtinType(t.Name, t.Span); ok {
 		t.Kind = TypeBuiltin
+		return t
+	}
+	if _, ok := env.handles[t.Name]; ok {
+		t.Kind = TypeHandle
 		return t
 	}
 	if _, ok := env.enums[t.Name]; ok {

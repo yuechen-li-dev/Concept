@@ -14,7 +14,7 @@ func TestProfileDefinitionsOwnBuiltinAdmissions(t *testing.T) {
 	if !ok {
 		t.Fatal("Vulkan profile is not registered")
 	}
-	for _, name := range []string{"PipelineLayout", "Pipeline", "VulkanError", "VkBuffer", "VkCommandPool"} {
+	for _, name := range []string{"VulkanError"} {
 		if _, admitted := core.BuiltinTypes[name]; admitted {
 			t.Fatalf("Core profile admits Vulkan type %s", name)
 		}
@@ -42,12 +42,11 @@ func TestVulkanProfileBuiltinLoweringUsesRegistration(t *testing.T) {
 	source := `profile Vulkan;
 import Prometheus.Vulkan;
 
+extern "C" handle VkBuffer;
+
 struct Handles
 {
-    PipelineLayout layout;
-    Pipeline pipeline;
     VkBuffer buffer;
-    VkCommandPool pool;
     VulkanError error;
 };
 
@@ -70,7 +69,7 @@ int Read(VulkanError error)
 			header = string(body)
 		}
 	}
-	for _, required := range []string{"#include <vulkan/vulkan.h>", "VkPipelineLayout", "VkPipeline", "VkBuffer", "VkCommandPool", "concept_vulkan_error"} {
+	for _, required := range []string{"typedef struct VkBuffer_T* concept_vk_buffer;", "concept_vulkan_error"} {
 		if !strings.Contains(header, required) {
 			t.Fatalf("registered Vulkan header is missing %q", required)
 		}

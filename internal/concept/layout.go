@@ -97,6 +97,9 @@ func evt1TypeGeometry(env *semanticEnv, t Type) (int, int, error) {
 	case "usize", "isize":
 		return 8, 8, nil
 	}
+	if evt1IsHandle(env, resolved) {
+		return 8, 8, nil // one pointer on the supported 64-bit targets
+	}
 	if decl, ok := env.enums[resolved.Name]; ok {
 		for _, variant := range decl.Variants {
 			if len(variant.Payload) != 0 {
