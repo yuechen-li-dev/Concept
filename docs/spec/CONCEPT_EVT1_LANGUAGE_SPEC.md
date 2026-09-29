@@ -1349,9 +1349,12 @@ enum of effects, push them to a `Standard.Collection.Outbox`, and carry them
 out with an ordinary function that matches exhaustively over the enum. There
 is no general effect system (see §22 for step machines with input).
 
-**Profiles.** `profile Vulkan;` still admits the `Prometheus.Vulkan` import
-and the builtin `VulkanError`; Vulkan object handles are ordinary
-`extern "C" handle` declarations (§21).
+**Profiles.** `profile Vulkan;` has Core semantics and adds no builtins. It
+automates Vulkan setup: `import Vulkan;` (libraries/Vulkan) is implied, and
+`concept test` compiles and links the Vulkan runtime behind the library's C
+boundary: the GPU-free test device by default, or the loader-backed runtime
+with `CONCEPT_VULKAN_RUNTIME=device` (headers and library from `VULKAN_SDK`).
+Vulkan object handles are ordinary `extern "C" handle` declarations (§21).
 
 ## 24. Testing
 

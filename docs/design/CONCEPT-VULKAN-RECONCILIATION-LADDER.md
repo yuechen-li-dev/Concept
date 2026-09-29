@@ -247,6 +247,10 @@ clang. A device run is attempted where hardware exists.
 
 ### VK9: shrink the profile and write the docs
 
+*(Amended at VK9b: by decision, `profile Vulkan` is kept as setup automation:
+implied `import Vulkan;` and the runtime linked by `concept test`; it adds no
+semantics or builtins.)*
+
 - Apply D7: reduce `profile Vulkan` to import, policy and link settings, or
   delete it. `profile_vulkan.go` and `profile_vulkan_definition.go` go away.
   `internal/concept/profile/vulkan` becomes a thin driver or is removed.

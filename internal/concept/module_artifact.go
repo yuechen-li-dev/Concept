@@ -433,8 +433,19 @@ func CompileSemanticModuleWithRoots(path, source string, roots []string) ([]byte
 // built first, and the consuming test still imports artifacts rather than
 // textually including or reparsing their source during its own sema pass.
 func BuildSemanticModuleArtifactsFromSources(roots []string, imports []string) (map[string][]byte, error) {
+	return buildSemanticModuleArtifactsFromSources(roots, imports, nil, nil)
+}
+
+// buildSemanticModuleArtifactsFromSources starts from `preset` artifacts
+// (already built, e.g. a native companion) and compiles the rest against
+// them, with `identity` when native ABI evidence is involved.
+func buildSemanticModuleArtifactsFromSources(roots []string, imports []string, preset map[string][]byte, identity *NativeABIIdentity) (map[string][]byte, error) {
 	artifacts := map[string][]byte{}
 	states := map[string]int{}
+	for name, body := range preset {
+		artifacts[name] = body
+		states[name] = 2
+	}
 	var build func(string) error
 	build = func(name string) error {
 		if states[name] == 1 {
@@ -482,7 +493,7 @@ func BuildSemanticModuleArtifactsFromSources(roots []string, imports []string) (
 				return err
 			}
 		}
-		body, err := CompileSemanticModule(filepath.ToSlash(matches[0]), string(source), artifacts)
+		body, err := compileSemanticModule(filepath.ToSlash(matches[0]), string(source), artifacts, identity, nil)
 		if err != nil {
 			return err
 		}

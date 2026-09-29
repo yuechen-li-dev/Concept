@@ -372,6 +372,11 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 		if err != nil {
 			return Value{}, err
 		}
+		if decl, ok := state.env.structs[base.StructName]; ok && decl.BitsRepresentation != "" {
+			// Bit fields live inside `raw`; replacing a named field here
+			// would silently drop the update, so bits updates stay runtime.
+			return Value{}, evt1Diagnostic("CV4200", "bits field updates are evaluated at runtime", e.Span)
+		}
 		fields := make(map[string]Value, len(base.Fields))
 		for name, value := range base.Fields {
 			fields[name] = value

@@ -1,0 +1,14 @@
+module BufferLifetimeTests;
+profile Vulkan;
+import BufferLifetime;
+
+// Observers exported by the GPU-free test device that `concept test` links.
+extern "C" VkDevice ConceptVkTestDevice();
+extern "C" int ConceptVkTestLiveBuffers();
+
+[[fact]]
+void TheStagingBufferIsReleasedWhenTheFunctionReturns()
+{
+    Assert.Equal(StagingBytes(ConceptVkTestDevice())!, 4096, "the size crosses back");
+    Assert.Equal(ConceptVkTestLiveBuffers(), 0, "and the buffer is gone");
+}

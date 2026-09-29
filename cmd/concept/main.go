@@ -170,7 +170,12 @@ func main() {
 		_, _ = os.Stdout.Write(output)
 		return
 	}
-	module, err := concept.ParseWithSemanticModuleRoots(filepath.ToSlash(sourcePath), string(body), roots)
+	var module concept.Module
+	if concept.UsesVulkanProfile(filepath.ToSlash(sourcePath), string(body)) {
+		module, err = concept.ParseWithModuleRootsForProfile(filepath.ToSlash(sourcePath), string(body), roots)
+	} else {
+		module, err = concept.ParseWithSemanticModuleRoots(filepath.ToSlash(sourcePath), string(body), roots)
+	}
 	if err != nil {
 		fail(err)
 	}

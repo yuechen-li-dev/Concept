@@ -1,9 +1,8 @@
 package concept
 
-// The Vulkan profile no longer adds builtins: Vulkan handles are
-// `extern "C" handle` declarations and VkResult mapping lives in
-// libraries/Vulkan. What remains is the domain-import admission, pending
-// the VK9 decision on the profile itself.
+// The Vulkan profile adds no builtins or semantics to Core. It automates
+// setup instead (vulkan_profile.go): `import Vulkan;` is implied, and
+// `concept test` links the Vulkan runtime.
 func evt1NewVulkanProfileDefinition() ProfileDefinition {
 	return ProfileDefinition{
 		Name:         "Vulkan",

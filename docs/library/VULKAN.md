@@ -17,6 +17,22 @@ Vulkan builtin types) was reconciled into Core and removed. See
 | Effects a machine decides on | an enum pushed to `Standard.Collection.Outbox`, carried out by an exhaustive `match` |
 | C structs | `[[repr(C)]]` records with measured layout (`concept check` on a native project) |
 
+## profile Vulkan
+
+`profile Vulkan;` is Core semantics plus setup you would otherwise write by
+hand:
+
+- `import Vulkan;` is implied;
+- `concept check` and `concept test` find `libraries/Vulkan` (or
+  `CONCEPT_VULKAN_LIBRARY`) and its measured C layouts;
+- `concept test` compiles and links the Vulkan runtime: the GPU-free test
+  device by default, the loader-backed runtime with
+  `CONCEPT_VULKAN_RUNTIME=device` (include and library paths from
+  `VULKAN_SDK`).
+
+You never write the C header, a native manifest, or link flags.
+`examples/vulkan` shows the result.
+
 ## libraries/Vulkan
 
 `module Vulkan` over a flat C boundary (`native/concept_vulkan.h`):

@@ -204,7 +204,7 @@ func discoverTests(root string, nativeArtifacts map[string][]byte, nativeIdentit
 		if nativeIdentity != nil {
 			module, parseErr = ParseWithSemanticModulesForNative(filepath.ToSlash(path), string(body), nativeArtifacts, *nativeIdentity)
 		} else {
-			module, parseErr = ParseWithBuiltSemanticModuleRoots(filepath.ToSlash(path), string(body), moduleRoots)
+			module, parseErr = ParseWithModuleRootsForProfile(filepath.ToSlash(path), string(body), moduleRoots)
 		}
 		if parseErr != nil {
 			return TestManifest{}, fmt.Errorf("%s: %w", filepath.ToSlash(path), parseErr)
@@ -291,6 +291,9 @@ func evt1TestModuleRoots(selectionRoot, sourceDir string) []string {
 		if parent := filepath.Dir(dir); parent == dir {
 			break
 		}
+	}
+	if vulkan := VulkanModuleRoot(filepath.Join(sourceDir, "x")); vulkan != "" {
+		roots = append(roots, vulkan)
 	}
 	if repoRoot != "" {
 		for dir := selectionRoot; ; dir = filepath.Dir(dir) {
@@ -544,6 +547,17 @@ func runOneTest(test TestDeclaration, values []any, caseIndex int, options TestR
 		compiler, args, err := evt1TestCompiler(temp, filepath.Join(temp, base+".generated.c"), harnessPath, executable)
 		if err != nil {
 			return failedTestResult(result, start, "compiler-unavailable", err.Error(), test)
+		}
+		if test.module.Profile == evt1VulkanProfileName {
+			vulkan, vulkanErr := evt1SelectVulkanRuntime(test.sourcePath)
+			if vulkanErr != nil {
+				return failedTestResult(result, start, "vulkan-runtime", vulkanErr.Error(), test)
+			}
+			// The runtime sources join the compile; its libraries follow it.
+			head := append([]string{}, vulkan.CFlags...)
+			head = append(head, vulkan.Sources...)
+			args = append(append(head, args...), vulkan.LDFlags...)
+			result.TargetIdentity += "/vulkan-" + vulkan.Name
 		}
 		if machineHelper != "" {
 			args = append(args[:len(args)-2], append([]string{machineHelper}, args[len(args)-2:]...)...)

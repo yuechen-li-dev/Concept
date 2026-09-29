@@ -309,6 +309,17 @@ func (p *parser) parseModule() (Module, error) {
 		}
 		module.Imports = append(module.Imports, strings.Join(parts, "."))
 	}
+	if module.Profile == evt1VulkanProfileName && module.Name != "Vulkan" {
+		implied := true
+		for _, name := range module.Imports {
+			if name == "Vulkan" {
+				implied = false
+			}
+		}
+		if implied {
+			module.Imports = append(module.Imports, "Vulkan")
+		}
+	}
 	for !p.done() {
 		if p.peekLexeme() == "[" && p.peekLexemeN(1) == "[" {
 			attributes, err := p.parseAttributes()
