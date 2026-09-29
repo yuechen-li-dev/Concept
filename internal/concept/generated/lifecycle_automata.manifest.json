@@ -1,0 +1,29 @@
+{
+  "compiler": "concept-evt1-stage0-go",
+  "files": [
+    {
+      "path": "lifecycle_automata.generated.h",
+      "sha256": "e5f17588b38fdef8768df4489f3ba1685e82d297d16ac2694566aaff53564a0b"
+    },
+    {
+      "path": "lifecycle_automata.generated.c",
+      "sha256": "af3d80f2534e95ba645855710da0a4c631d989d5da1ae3cc96f8e23b90adbb7a"
+    },
+    {
+      "path": "lifecycle_automata.mir.json",
+      "sha256": "4ecdf61d8f6f9318aed5efc6beb58da50ee3b05965c4de9c4ca7d29642dbe27a"
+    },
+    {
+      "path": "lifecycle_automata.map.json",
+      "sha256": "d2d302cc5d55127646c003f76ab6a2df5921fb8e7cd7def2d2bad6e6fdd744c8"
+    }
+  ],
+  "options": {
+    "paths": "repository-relative",
+    "timestamps": "forbidden"
+  },
+  "profile": "Core",
+  "schema": "concept-evt1-generation-manifest.v1",
+  "source": "examples/evt1/lifecycle_automata.concept",
+  "source_sha256": "22fd61c12a65d14161bd76e545280ea9c26bf8506321b95442ab808eb9accb63"
+}

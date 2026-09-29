@@ -1,0 +1,29 @@
+{
+  "compiler": "concept-evt1-stage0-go",
+  "files": [
+    {
+      "path": "automata_dispatch_vulkan.generated.h",
+      "sha256": "4a52c43719f758f0db833bdf3c988cf7986c80a1a6f5e74b1427c0720b838ad9"
+    },
+    {
+      "path": "automata_dispatch_vulkan.generated.c",
+      "sha256": "432ff9756b70158980694922389b0af43824e9f34be7cdececb583c886bf051d"
+    },
+    {
+      "path": "automata_dispatch_vulkan.mir.json",
+      "sha256": "a15a803a2536f7dff8cde52ed310750658c8e202e67cd6c3223bffb89ed8379e"
+    },
+    {
+      "path": "automata_dispatch_vulkan.map.json",
+      "sha256": "9e28e229d1872decabf2b30c93b3a8c18e1f5dbd283bbd1e34fbbce35060be86"
+    }
+  ],
+  "options": {
+    "paths": "repository-relative",
+    "timestamps": "forbidden"
+  },
+  "profile": "Vulkan",
+  "schema": "concept-evt1-generation-manifest.v1",
+  "source": "Examples/Concept-Vulkan/automata_dispatch_vulkan.concept",
+  "source_sha256": "0bfcc0e6e57cbbeb755a158037d58e8ecbbfe6a5808ca07df3b8c9104510da00"
+}

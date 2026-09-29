@@ -7,6 +7,7 @@ active Go compiler.
 | Directory | What it is |
 | --- | --- |
 | `poc3-zig/` | The PoC3 Zig compiler at the R0 cutover commit, laid out as its original repository: `src/`, `build.zig`, `language/phase*` (1,296 fixtures), `tests/` (corpus and scaffolding), `examples/phase*`, and `docs/` (phase designs, the PoC3 journal, coverage). Run with `zig build test` here or at the repository root. |
+| `evt1-specimens/` | The M-era Concept Vulkan specimens (signal automata with `dispatch`, `effect`, `actuator`) and their checked EVT1 outputs, frozen before the Vulkan reconciliation (VK0). See its README. |
 | `dragon-god-poc/` | The earlier DragonGod proof of concept and its Phase 20 blueprint and friction log (`docs/`). The active kernel is `libraries/DragonGod`. |
 
 Fixture text is never rewritten in place. Current counterparts are authored

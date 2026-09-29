@@ -614,7 +614,7 @@
     }
   ],
   "schema": "concept-evt1-source-map.v1",
-  "source": "Examples/Concept-Vulkan/comptime_values_vulkan.concept",
+  "source": "examples/evt1/comptime_values_vulkan.concept",
   "static_asserts": [
     {
       "condition": "expression",

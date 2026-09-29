@@ -1,6 +1,6 @@
 {
   "schema": "concept-evt1-mir.v1",
-  "module": "Examples/Concept-Vulkan/extern_calls_and_match_vulkan.concept",
+  "module": "examples/evt1/extern_calls_and_match_vulkan.concept",
   "profile": "Vulkan",
   "enums": [
     {

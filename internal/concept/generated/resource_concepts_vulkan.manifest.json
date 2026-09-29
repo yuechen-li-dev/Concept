@@ -7,15 +7,15 @@
     },
     {
       "path": "resource_concepts_vulkan.generated.c",
-      "sha256": "67c746abb0e5a0b5b4b8fe590a874d8cb31372239f9797c4851a6b267e83b47b"
+      "sha256": "04b1e6998d5059d43bf6d09528392ce09de05847ca8f85b2c1e7aa02538990b9"
     },
     {
       "path": "resource_concepts_vulkan.mir.json",
-      "sha256": "bf6dc33bcc23c45c925a2220102801fe7fb389b707b9f30ddfffdec2eecfc06c"
+      "sha256": "146679f039555f994974f2c9c1b9ea3c2612760940115afb5aac5a956e2f4d25"
     },
     {
       "path": "resource_concepts_vulkan.map.json",
-      "sha256": "df522eab6a37dde081ea14ebe47a448fa4f236fcaa8b6fb6743c1aed02834d52"
+      "sha256": "57c3374944e323dd23ffe4e13a3ae5927434d3cf86de3b7dd7f48cabeb6440d9"
     }
   ],
   "options": {
@@ -24,6 +24,6 @@
   },
   "profile": "Vulkan",
   "schema": "concept-evt1-generation-manifest.v1",
-  "source": "Examples/Concept-Vulkan/resource_concepts_vulkan.concept",
+  "source": "examples/evt1/resource_concepts_vulkan.concept",
   "source_sha256": "4919d64f59cda603ea878707ee9bb8f2e9423afb709dc3f0a13c8e902bfcba94"
 }

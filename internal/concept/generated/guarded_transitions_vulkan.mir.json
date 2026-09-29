@@ -1,6 +1,6 @@
 {
   "schema": "concept-evt1-mir.v1",
-  "module": "Examples/Concept-Vulkan/guarded_transitions_vulkan.concept",
+  "module": "examples/evt1/guarded_transitions_vulkan.concept",
   "profile": "Vulkan",
   "structs": [
     {

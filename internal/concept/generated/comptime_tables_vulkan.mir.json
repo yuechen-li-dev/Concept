@@ -1,6 +1,6 @@
 {
   "schema": "concept-evt1-mir.v1",
-  "module": "Examples/Concept-Vulkan/comptime_tables_vulkan.concept",
+  "module": "examples/evt1/comptime_tables_vulkan.concept",
   "profile": "Vulkan",
   "structs": [
     {

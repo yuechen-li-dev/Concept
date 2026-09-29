@@ -7,15 +7,15 @@
     },
     {
       "path": "guarded_transitions_vulkan.generated.c",
-      "sha256": "42c67f8182524df7527095d8b9d0d1f284b391b615f87cdd4b0194737a3a6257"
+      "sha256": "e2478ecd9ef113dddc344706331686e553521d33d85029bc7c1a3cb144a046f7"
     },
     {
       "path": "guarded_transitions_vulkan.mir.json",
-      "sha256": "f21ca0ce143126a1a1cd1f5074908314ec6d1674aaf17c41da7c8f68118cd3ac"
+      "sha256": "d10701dc06385121bc72d6c7afe5a657036a246bab3815878d8d88e60ae2c9de"
     },
     {
       "path": "guarded_transitions_vulkan.map.json",
-      "sha256": "0ab08f27f251b810a64e5c84b4c41b07bfe9eb616bd1c39d6ea4c8baabefc3b0"
+      "sha256": "455f2189008c34f38e9eece8f157823bd304c5f54d0be7fc3e08e67f4a401a68"
     }
   ],
   "options": {
@@ -24,6 +24,6 @@
   },
   "profile": "Vulkan",
   "schema": "concept-evt1-generation-manifest.v1",
-  "source": "Examples/Concept-Vulkan/guarded_transitions_vulkan.concept",
+  "source": "examples/evt1/guarded_transitions_vulkan.concept",
   "source_sha256": "2427f146775ab5afb861150d24dae9c97f06d9d11445bc5c519a563fc7cb4e34"
 }

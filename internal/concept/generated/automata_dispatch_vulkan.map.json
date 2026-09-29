@@ -1483,7 +1483,7 @@
     }
   ],
   "schema": "concept-evt1-source-map.v1",
-  "source": "Examples/Concept-Vulkan/automata_dispatch_vulkan.concept",
+  "source": "examples/evt1/automata_dispatch_vulkan.concept",
   "static_asserts": null,
   "structs": null,
   "templates": null

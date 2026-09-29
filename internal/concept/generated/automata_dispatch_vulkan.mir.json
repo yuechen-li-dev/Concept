@@ -1,6 +1,6 @@
 {
   "schema": "concept-evt1-mir.v1",
-  "module": "Examples/Concept-Vulkan/automata_dispatch_vulkan.concept",
+  "module": "examples/evt1/automata_dispatch_vulkan.concept",
   "profile": "Vulkan",
   "enums": [
     {

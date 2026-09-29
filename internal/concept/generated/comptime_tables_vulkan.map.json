@@ -646,7 +646,7 @@
       }
     }
   ],
-  "source": "Examples/Concept-Vulkan/comptime_tables_vulkan.concept",
+  "source": "examples/evt1/comptime_tables_vulkan.concept",
   "static_asserts": [
     {
       "condition": "expression",

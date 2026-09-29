@@ -79,10 +79,11 @@ libraries/                      Standard, DragonGod, and the Golden programs
 language/evt1/                  semantic corpus, one directory per subsystem
                                 (manifest.json records historical milestones)
 examples/tour/                  current-syntax introduction, one subject per file
-examples/evt1/                  Core/Vulkan specimens with checked-in outputs
+examples/evt1/                  specimens with checked-in outputs (plain = Core, _vulkan = Vulkan)
 tests/                          dogfood, goldens, interop, verify, fixtures
 docs/                           language, library, spec, tooling, design, examples
 docs/history/                   milestone conformance logs and migration records
+legacy/evt1-specimens/          frozen M-era Concept Vulkan specimens and outputs
 legacy/poc3-zig/                retired Zig compiler with its fixtures, corpus,
                                 examples, and design documents
 legacy/dragon-god-poc/          earlier DragonGod proof of concept

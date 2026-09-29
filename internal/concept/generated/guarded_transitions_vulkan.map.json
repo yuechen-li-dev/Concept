@@ -1421,7 +1421,7 @@
     }
   ],
   "schema": "concept-evt1-source-map.v1",
-  "source": "Examples/Concept-Vulkan/guarded_transitions_vulkan.concept",
+  "source": "examples/evt1/guarded_transitions_vulkan.concept",
   "static_asserts": null,
   "structs": [
     {

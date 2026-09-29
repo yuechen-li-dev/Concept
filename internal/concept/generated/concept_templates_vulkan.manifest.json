@@ -7,15 +7,15 @@
     },
     {
       "path": "concept_templates_vulkan.generated.c",
-      "sha256": "8848b6abc3dc56ea865dfbabcb922817fe552b89bd82a6abd2afeb082f08acb1"
+      "sha256": "2d73992d716c7fdf3aed4e8274f2e346d27ddf1f0c45a2a37457eba7063fcdcd"
     },
     {
       "path": "concept_templates_vulkan.mir.json",
-      "sha256": "144303b629e7d5de114fc97af4ce6d5d82c423fe9b74e7634be168821d7bde3d"
+      "sha256": "d6e702714212c6e569990d40799dabd216bb0949276391d494111bb2d890ee51"
     },
     {
       "path": "concept_templates_vulkan.map.json",
-      "sha256": "969674eab4066f63918b9d4452c2f42bd803b5da8beeaa8a76052a855ad1cba6"
+      "sha256": "b79499ad7431d02a7784d273f062bab580dfd7829b692a26c98a38e746cce189"
     }
   ],
   "options": {
@@ -24,6 +24,6 @@
   },
   "profile": "Vulkan",
   "schema": "concept-evt1-generation-manifest.v1",
-  "source": "Examples/Concept-Vulkan/concept_templates_vulkan.concept",
+  "source": "examples/evt1/concept_templates_vulkan.concept",
   "source_sha256": "d2b96acd7f70c1dada5834dd5b6da9b1ef3006a4e27cd399347238ba42529b7e"
 }

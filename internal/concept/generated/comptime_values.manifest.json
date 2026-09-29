@@ -1,0 +1,29 @@
+{
+  "compiler": "concept-evt1-stage0-go",
+  "files": [
+    {
+      "path": "comptime_values.generated.h",
+      "sha256": "a6b8c448d80c49d3234dc64c3bd6419a90a19e8107c4d0cac5e94bde24631ad3"
+    },
+    {
+      "path": "comptime_values.generated.c",
+      "sha256": "14aeb4a30ff0ca5c0549fe7d4bfd5298fbb0a95837df1b1e090c7f137b791db2"
+    },
+    {
+      "path": "comptime_values.mir.json",
+      "sha256": "f05bd5686fb0bd5953acc6e0929ecac8ab79481838586c574afb7149ae5101f4"
+    },
+    {
+      "path": "comptime_values.map.json",
+      "sha256": "d047d2e777ba3cd9a3b419859a21bc26a37c2b653e15a8d8b26f59307e7373ab"
+    }
+  ],
+  "options": {
+    "paths": "repository-relative",
+    "timestamps": "forbidden"
+  },
+  "profile": "Core",
+  "schema": "concept-evt1-generation-manifest.v1",
+  "source": "examples/evt1/comptime_values.concept",
+  "source_sha256": "f75bd194ca1e45e51015117609f60e749204467a47b56ea9a97f4ad36506fdb9"
+}

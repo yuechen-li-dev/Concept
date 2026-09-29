@@ -886,7 +886,7 @@
     }
   ],
   "schema": "concept-evt1-source-map.v1",
-  "source": "Examples/Concept-Vulkan/lifecycle_effects_vulkan.concept",
+  "source": "examples/evt1/lifecycle_effects_vulkan.concept",
   "static_asserts": null,
   "structs": [
     {

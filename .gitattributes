@@ -1,4 +1,4 @@
 tests/fixtures/octagon/*.octagon text eol=lf
 internal/concept/generated/* text eol=lf
 language/evt1/tooling/proofs/golden/*.txt text eol=lf
-examples/evt1/evt1_*.concept text eol=lf
+examples/evt1/*.concept text eol=lf

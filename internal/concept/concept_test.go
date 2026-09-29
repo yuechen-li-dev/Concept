@@ -20,30 +20,43 @@ func readEVT1Fixture(t *testing.T, name string) string {
 	return string(b)
 }
 
+// specimenMIROps names the MIR operation each specimen subject exists to
+// exercise; both the Core specimen and its _vulkan counterpart must emit it.
+var specimenMIROps = map[string][]string{
+	"extern_calls_and_match": {"match_expr"},
+	"resource_concepts":      {"struct_construct"},
+	"concept_templates":      {"requirement_call"},
+	"comptime_tables":        {"array_index"},
+	"lifecycle_automata":     {"automata"},
+	"automata_dispatch":      {"automata"},
+	"guarded_transitions":    {"automata"},
+	"lifecycle_effects":      {"automata"},
+}
+
 func TestParseSpecimensAndGenerateDeterministically(t *testing.T) {
 	for _, name := range []string{
-		"extern_calls_and_match_core.concept",
+		"extern_calls_and_match.concept",
 		"extern_calls_and_match_vulkan.concept",
-		"resource_concepts_core.concept",
+		"resource_concepts.concept",
 		"resource_concepts_vulkan.concept",
-		"concept_templates_core.concept",
+		"concept_templates.concept",
 		"concept_templates_vulkan.concept",
-		"comptime_values_core.concept",
+		"comptime_values.concept",
 		"comptime_values_vulkan.concept",
-		"comptime_tables_core.concept",
+		"comptime_tables.concept",
 		"comptime_tables_vulkan.concept",
-		"lifecycle_automata_core.concept",
+		"lifecycle_automata.concept",
 		"lifecycle_automata_vulkan.concept",
-		"automata_dispatch_core.concept",
+		"automata_dispatch.concept",
 		"automata_dispatch_vulkan.concept",
-		"guarded_transitions_core.concept",
+		"guarded_transitions.concept",
 		"guarded_transitions_vulkan.concept",
-		"lifecycle_effects_core.concept",
+		"lifecycle_effects.concept",
 		"lifecycle_effects_vulkan.concept",
 	} {
 		t.Run(name, func(t *testing.T) {
 			src := readEVT1Fixture(t, name)
-			module, err := Parse(filepath.ToSlash(filepath.Join("Examples", "Concept-Vulkan", name)), src)
+			module, err := Parse(filepath.ToSlash(filepath.Join("examples", "evt1", name)), src)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -68,20 +81,11 @@ func TestParseSpecimensAndGenerateDeterministically(t *testing.T) {
 				t.Fatal(err)
 			}
 			mirText := MIRText(buildMIR(module, env))
-			if strings.Contains(name, "m1a") && !strings.Contains(mirText, "match_expr") {
-				t.Fatal("MIR text omitted match_expr")
-			}
-			if strings.Contains(name, "m1b_a") && !strings.Contains(mirText, "struct_construct") {
-				t.Fatal("MIR text omitted struct_construct")
-			}
-			if strings.Contains(name, "m1b_b") && !strings.Contains(mirText, "requirement_call") {
-				t.Fatal("MIR text omitted requirement_call")
-			}
-			if strings.Contains(name, "m1b_d") && !strings.Contains(mirText, "array_index") {
-				t.Fatal("MIR text omitted array_index")
-			}
-			if strings.Contains(name, "dragongod") && !strings.Contains(mirText, "automata") {
-				t.Fatal("MIR text omitted automata")
+			subject := strings.TrimSuffix(strings.TrimSuffix(name, ".concept"), "_vulkan")
+			for _, op := range specimenMIROps[subject] {
+				if !strings.Contains(mirText, op) {
+					t.Fatalf("MIR text omitted %s", op)
+				}
 			}
 			for _, suffix := range []string{".mir.json", ".map.json", ".manifest.json"} {
 				found := false
@@ -105,28 +109,28 @@ func TestParseSpecimensAndGenerateDeterministically(t *testing.T) {
 func TestEVT1CheckedOutputsMatch(t *testing.T) {
 	t.Parallel()
 	for _, name := range []string{
-		"extern_calls_and_match_core.concept",
+		"extern_calls_and_match.concept",
 		"extern_calls_and_match_vulkan.concept",
-		"resource_concepts_core.concept",
+		"resource_concepts.concept",
 		"resource_concepts_vulkan.concept",
-		"concept_templates_core.concept",
+		"concept_templates.concept",
 		"concept_templates_vulkan.concept",
-		"comptime_values_core.concept",
+		"comptime_values.concept",
 		"comptime_values_vulkan.concept",
-		"comptime_tables_core.concept",
+		"comptime_tables.concept",
 		"comptime_tables_vulkan.concept",
-		"lifecycle_automata_core.concept",
+		"lifecycle_automata.concept",
 		"lifecycle_automata_vulkan.concept",
-		"automata_dispatch_core.concept",
+		"automata_dispatch.concept",
 		"automata_dispatch_vulkan.concept",
-		"guarded_transitions_core.concept",
+		"guarded_transitions.concept",
 		"guarded_transitions_vulkan.concept",
-		"lifecycle_effects_core.concept",
+		"lifecycle_effects.concept",
 		"lifecycle_effects_vulkan.concept",
 	} {
 		t.Run(name, func(t *testing.T) {
 			src := readEVT1Fixture(t, name)
-			module, err := Parse(filepath.ToSlash(filepath.Join("Examples", "Concept-Vulkan", name)), src)
+			module, err := Parse(filepath.ToSlash(filepath.Join("examples", "evt1", name)), src)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -149,7 +153,7 @@ func TestEVT1CheckedOutputsMatch(t *testing.T) {
 
 func TestEVT1DoubleGenerationMatchesAcrossDirectories(t *testing.T) {
 	src := readEVT1Fixture(t, "concept_templates_vulkan.concept")
-	module, err := Parse("Examples/Concept-Vulkan/concept_templates_vulkan.concept", src)
+	module, err := Parse("examples/evt1/concept_templates_vulkan.concept", src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,8 +189,8 @@ func TestEVT1DoubleGenerationMatchesAcrossDirectories(t *testing.T) {
 }
 
 func TestEVT1CGenerationUsesTransparentStructsAndNoConceptRuntime(t *testing.T) {
-	src := readEVT1Fixture(t, "concept_templates_core.concept")
-	module, err := Parse("Examples/Concept-Vulkan/concept_templates_core.concept", src)
+	src := readEVT1Fixture(t, "concept_templates.concept")
+	module, err := Parse("examples/evt1/concept_templates.concept", src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,8 +198,8 @@ func TestEVT1CGenerationUsesTransparentStructsAndNoConceptRuntime(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	header := string(outputs["concept_templates_core.generated.h"])
-	body := string(outputs["concept_templates_core.generated.c"])
+	header := string(outputs["concept_templates.generated.h"])
+	body := string(outputs["concept_templates.generated.c"])
 	for _, needle := range []string{
 		"typedef struct concept_buffer_range {\n  int32_t bufferId;\n  int32_t offset;\n  int32_t size;\n}",
 		"typedef struct concept_pipeline_state {\n  int32_t handle;\n  bool alive;\n}",
@@ -207,7 +211,7 @@ func TestEVT1CGenerationUsesTransparentStructsAndNoConceptRuntime(t *testing.T) 
 	for _, needle := range []string{
 		"static int32_t concept_template_score_resource__buffer_range(",
 		"static void concept_template_destroy_resource__pipeline_state(",
-		"concept_concept_templates_core_measure__borrow_const_buffer_range",
+		"concept_concept_templates_measure__borrow_const_buffer_range",
 	} {
 		if !strings.Contains(body, needle) {
 			t.Fatalf("body missing %q\n%s", needle, body)
@@ -543,8 +547,8 @@ func TestEVT1M1BDDiagnosticsAreStable(t *testing.T) {
 }
 
 func TestEVT1M1BCGenerationErasesComptimeRuntime(t *testing.T) {
-	src := readEVT1Fixture(t, "comptime_values_core.concept")
-	module, err := Parse("Examples/Concept-Vulkan/comptime_values_core.concept", src)
+	src := readEVT1Fixture(t, "comptime_values.concept")
+	module, err := Parse("examples/evt1/comptime_values.concept", src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -552,8 +556,8 @@ func TestEVT1M1BCGenerationErasesComptimeRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	header := string(outputs["comptime_values_core.generated.h"])
-	body := string(outputs["comptime_values_core.generated.c"])
+	header := string(outputs["comptime_values.generated.h"])
+	body := string(outputs["comptime_values.generated.c"])
 	if strings.Contains(header, "ClampCount") || strings.Contains(body, "ClampCount(") || strings.Contains(body, "SumTo(") {
 		t.Fatalf("comptime functions leaked into generated runtime output:\n%s", body)
 	}
@@ -565,8 +569,8 @@ func TestEVT1M1BCGenerationErasesComptimeRuntime(t *testing.T) {
 }
 
 func TestEVT1M1BDGenerationErasesComptimeRuntime(t *testing.T) {
-	src := readEVT1Fixture(t, "comptime_tables_core.concept")
-	module, err := Parse("Examples/Concept-Vulkan/comptime_tables_core.concept", src)
+	src := readEVT1Fixture(t, "comptime_tables.concept")
+	module, err := Parse("examples/evt1/comptime_tables.concept", src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -574,8 +578,8 @@ func TestEVT1M1BDGenerationErasesComptimeRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	header := string(outputs["comptime_tables_core.generated.h"])
-	body := string(outputs["comptime_tables_core.generated.c"])
+	header := string(outputs["comptime_tables.generated.h"])
+	body := string(outputs["comptime_tables.generated.c"])
 	for _, forbidden := range []string{"CanonicalRetryBudgets(", "SumBudgets(", "HasDuplicateTransitionKeys(", "Len("} {
 		if strings.Contains(header, forbidden) || strings.Contains(body, forbidden) {
 			t.Fatalf("comptime array helper leaked into generated runtime output: %s", forbidden)
@@ -589,8 +593,8 @@ func TestEVT1M1BDGenerationErasesComptimeRuntime(t *testing.T) {
 }
 
 func TestDragonGodM0GenerationErasesAutomataRuntime(t *testing.T) {
-	src := readEVT1Fixture(t, "lifecycle_automata_core.concept")
-	module, err := Parse("Examples/Concept-Vulkan/lifecycle_automata_core.concept", src)
+	src := readEVT1Fixture(t, "lifecycle_automata.concept")
+	module, err := Parse("examples/evt1/lifecycle_automata.concept", src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -598,8 +602,8 @@ func TestDragonGodM0GenerationErasesAutomataRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	header := string(outputs["lifecycle_automata_core.generated.h"])
-	body := string(outputs["lifecycle_automata_core.generated.c"])
+	header := string(outputs["lifecycle_automata.generated.h"])
+	body := string(outputs["lifecycle_automata.generated.c"])
 	for _, forbidden := range []string{"ResourceLifecycle", "SweepMachine", "AwaitingResume", "Cleanup", "LifecycleSignal"} {
 		if strings.Contains(header, forbidden) || strings.Contains(body, forbidden) {
 			t.Fatalf("automata-only symbol leaked into generated runtime output: %s", forbidden)
@@ -608,8 +612,8 @@ func TestDragonGodM0GenerationErasesAutomataRuntime(t *testing.T) {
 }
 
 func TestDragonGodM1GenerationIncludesRuntimeDispatch(t *testing.T) {
-	src := readEVT1Fixture(t, "automata_dispatch_core.concept")
-	module, err := Parse("Examples/Concept-Vulkan/automata_dispatch_core.concept", src)
+	src := readEVT1Fixture(t, "automata_dispatch.concept")
+	module, err := Parse("examples/evt1/automata_dispatch.concept", src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -617,8 +621,8 @@ func TestDragonGodM1GenerationIncludesRuntimeDispatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	header := string(outputs["automata_dispatch_core.generated.h"])
-	body := string(outputs["automata_dispatch_core.generated.c"])
+	header := string(outputs["automata_dispatch.generated.h"])
+	body := string(outputs["automata_dispatch.generated.c"])
 	for _, needle := range []string{
 		"concept_automata_dispatch_outcome",
 		"concept_resource_lifecycle_instance",
@@ -633,8 +637,8 @@ func TestDragonGodM1GenerationIncludesRuntimeDispatch(t *testing.T) {
 }
 
 func TestDragonGodM2GenerationIncludesGuardedDispatch(t *testing.T) {
-	src := readEVT1Fixture(t, "guarded_transitions_core.concept")
-	module, err := Parse("Examples/Concept-Vulkan/guarded_transitions_core.concept", src)
+	src := readEVT1Fixture(t, "guarded_transitions.concept")
+	module, err := Parse("examples/evt1/guarded_transitions.concept", src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -642,8 +646,8 @@ func TestDragonGodM2GenerationIncludesGuardedDispatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	header := string(outputs["guarded_transitions_core.generated.h"])
-	body := string(outputs["guarded_transitions_core.generated.c"])
+	header := string(outputs["guarded_transitions.generated.h"])
+	body := string(outputs["guarded_transitions.generated.c"])
 	for _, needle := range []string{
 		"concept_guarded_lifecycle_instance",
 		"eligible_count",
@@ -658,8 +662,8 @@ func TestDragonGodM2GenerationIncludesGuardedDispatch(t *testing.T) {
 }
 
 func TestDragonGodM3GenerationIncludesEffectBatchStaging(t *testing.T) {
-	src := readEVT1Fixture(t, "lifecycle_effects_core.concept")
-	module, err := Parse("Examples/Concept-Vulkan/lifecycle_effects_core.concept", src)
+	src := readEVT1Fixture(t, "lifecycle_effects.concept")
+	module, err := Parse("examples/evt1/lifecycle_effects.concept", src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -667,7 +671,7 @@ func TestDragonGodM3GenerationIncludesEffectBatchStaging(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := string(outputs["lifecycle_effects_core.generated.c"])
+	body := string(outputs["lifecycle_effects.generated.c"])
 	for _, needle := range []string{
 		"concept_resource_lifecycle_effects",
 		"staged_batch = {0};",
@@ -687,12 +691,12 @@ func TestDragonGodM3GenerationIncludesEffectBatchStaging(t *testing.T) {
 
 func TestDragonGodM4SpecimensParseAndGenerate(t *testing.T) {
 	for _, fixture := range []string{
-		"lifecycle_actuators_core.concept",
+		"lifecycle_actuators.concept",
 		"lifecycle_actuators_vulkan.concept",
 	} {
 		t.Run(fixture, func(t *testing.T) {
 			src := readEVT1Fixture(t, fixture)
-			module, err := Parse("Examples/Concept-Vulkan/"+fixture, src)
+			module, err := Parse("examples/evt1/"+fixture, src)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1085,8 +1089,8 @@ func TestDragonGodM3DiagnosticsAreStable(t *testing.T) {
 }
 
 func TestEVT1CheckRejectsHandEdit(t *testing.T) {
-	src := readEVT1Fixture(t, "resource_concepts_core.concept")
-	module, err := Parse("Examples/Concept-Vulkan/resource_concepts_core.concept", src)
+	src := readEVT1Fixture(t, "resource_concepts.concept")
+	module, err := Parse("examples/evt1/resource_concepts.concept", src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1098,7 +1102,7 @@ func TestEVT1CheckRejectsHandEdit(t *testing.T) {
 	if err := Write(dir, outputs); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "resource_concepts_core.generated.c"), []byte("edited"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "resource_concepts.generated.c"), []byte("edited"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	if err := Check(dir, outputs); err == nil || !strings.Contains(err.Error(), "CV3001") {
@@ -1107,8 +1111,8 @@ func TestEVT1CheckRejectsHandEdit(t *testing.T) {
 }
 
 func TestEVT1TemplateInstancesAreDeterministicAndDeduplicated(t *testing.T) {
-	src := readEVT1Fixture(t, "concept_templates_core.concept")
-	module, err := Parse("Examples/Concept-Vulkan/concept_templates_core.concept", src)
+	src := readEVT1Fixture(t, "concept_templates.concept")
+	module, err := Parse("examples/evt1/concept_templates.concept", src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1116,7 +1120,7 @@ func TestEVT1TemplateInstancesAreDeterministicAndDeduplicated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := string(outputs["concept_templates_core.generated.c"])
+	body := string(outputs["concept_templates.generated.c"])
 	for _, needle := range []string{
 		"static int32_t concept_template_score_resource__buffer_range(",
 		"static int32_t concept_template_score_resource__pipeline_state(",
@@ -1144,8 +1148,8 @@ func TestEVT1LanguageSpecimenNativeC11(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("native C11 harness is only configured for Windows in this repository")
 	}
-	src := readEVT1Fixture(t, "resource_concepts_core.concept")
-	module, err := Parse("Examples/Concept-Vulkan/resource_concepts_core.concept", src)
+	src := readEVT1Fixture(t, "resource_concepts.concept")
+	module, err := Parse("examples/evt1/resource_concepts.concept", src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1153,37 +1157,37 @@ func TestEVT1LanguageSpecimenNativeC11(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	harness := `#include "resource_concepts_core.generated.h"
+	harness := `#include "resource_concepts.generated.h"
 #include <stdint.h>
 
 static int g_next_value = 0;
 
-bool concept_resource_concepts_core_is_valid(const concept_command_pool_state* value) {
+bool concept_resource_concepts_is_valid(const concept_command_pool_state* value) {
   return value->initialized;
 }
-void concept_resource_concepts_core_destroy(concept_command_pool_state* value) {
+void concept_resource_concepts_destroy(concept_command_pool_state* value) {
   (void)value;
 }
-int concept_resource_concepts_core_next_value(void) {
+int concept_resource_concepts_next_value(void) {
   g_next_value += 1;
   return g_next_value;
 }
-int concept_resource_concepts_core_add(int left, int right) {
+int concept_resource_concepts_add(int left, int right) {
   return left + right;
 }
 
 int main(void) {
-  concept_observed_values observed = concept_resource_concepts_core_observe_construction();
-  concept_copy_result copy = concept_resource_concepts_core_copy_and_mutate();
+  concept_observed_values observed = concept_resource_concepts_observe_construction();
+  concept_copy_result copy = concept_resource_concepts_copy_and_mutate();
   if (observed.first != 1 || observed.second != 2 || observed.third != 3) return 1;
   if (g_next_value != 3) return 2;
   if (copy.firstOffset != 1 || copy.secondOffset != 9) return 3;
-  if (concept_resource_concepts_core_match_allocation() != 18) return 4;
-  if (!concept_resource_concepts_core_use_immovable()) return 5;
+  if (concept_resource_concepts_match_allocation() != 18) return 4;
+  if (!concept_resource_concepts_use_immovable()) return 5;
   return 0;
 }
 `
-	runNativeHarness(t, outputs, "resource_concepts_core_harness.c", harness, nil)
+	runNativeHarness(t, outputs, "resource_concepts_harness.c", harness, nil)
 }
 
 func TestEVT1VulkanSpecimenNativeC11(t *testing.T) {
@@ -1191,7 +1195,7 @@ func TestEVT1VulkanSpecimenNativeC11(t *testing.T) {
 		t.Skip("native C11 harness is only configured for Windows in this repository")
 	}
 	src := readEVT1Fixture(t, "resource_concepts_vulkan.concept")
-	module, err := Parse("Examples/Concept-Vulkan/resource_concepts_vulkan.concept", src)
+	module, err := Parse("examples/evt1/resource_concepts_vulkan.concept", src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1229,8 +1233,8 @@ func TestEVT1TemplateLanguageSpecimenNativeC11(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("native C11 harness is only configured for Windows in this repository")
 	}
-	src := readEVT1Fixture(t, "concept_templates_core.concept")
-	module, err := Parse("Examples/Concept-Vulkan/concept_templates_core.concept", src)
+	src := readEVT1Fixture(t, "concept_templates.concept")
+	module, err := Parse("examples/evt1/concept_templates.concept", src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1238,42 +1242,42 @@ func TestEVT1TemplateLanguageSpecimenNativeC11(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	harness := `#include "concept_templates_core.generated.h"
+	harness := `#include "concept_templates.generated.h"
 #include <stdint.h>
 
 static int g_destroy_count = 0;
 static int g_destroy_codes[4] = {0, 0, 0, 0};
 
-int concept_concept_templates_core_measure__buffer_range(const concept_buffer_range* value) {
+int concept_concept_templates_measure__buffer_range(const concept_buffer_range* value) {
   return value->offset + value->size;
 }
-int concept_concept_templates_core_measure__pipeline_state(const concept_pipeline_state* value) {
+int concept_concept_templates_measure__pipeline_state(const concept_pipeline_state* value) {
   return value->handle + (value->alive ? 1 : 0);
 }
-void concept_concept_templates_core_destroy__buffer_range(concept_buffer_range* value) {
+void concept_concept_templates_destroy__buffer_range(concept_buffer_range* value) {
   g_destroy_codes[g_destroy_count++] = value->offset;
 }
-void concept_concept_templates_core_destroy__pipeline_state(concept_pipeline_state* value) {
+void concept_concept_templates_destroy__pipeline_state(concept_pipeline_state* value) {
   g_destroy_codes[g_destroy_count++] = value->handle;
 }
-void concept_concept_templates_core_set_alive(concept_pipeline_state* value) {
+void concept_concept_templates_set_alive(concept_pipeline_state* value) {
   value->alive = true;
 }
 
 int main(void) {
   concept_destroy_audit audit;
-  if (concept_concept_templates_core_repeated_score() != 14) return 1;
-  if (concept_concept_templates_core_score_pipeline() != 12) return 2;
-  audit = concept_concept_templates_core_use_destroyers();
+  if (concept_concept_templates_repeated_score() != 14) return 1;
+  if (concept_concept_templates_score_pipeline() != 12) return 2;
+  audit = concept_concept_templates_use_destroyers();
   if (audit.first != 1 || audit.second != 13 || !audit.third) return 3;
-  if (!concept_concept_templates_core_use_immovable()) return 4;
-  if (!concept_concept_templates_core_compare_template_score()) return 5;
+  if (!concept_concept_templates_use_immovable()) return 4;
+  if (!concept_concept_templates_compare_template_score()) return 5;
   if (g_destroy_count != 4) return 6;
   if (g_destroy_codes[0] != 1 || g_destroy_codes[1] != 13 || g_destroy_codes[2] != 13 || g_destroy_codes[3] != 5) return 7;
   return 0;
 }
 `
-	runNativeHarness(t, outputs, "concept_templates_core_harness.c", harness, nil)
+	runNativeHarness(t, outputs, "concept_templates_harness.c", harness, nil)
 }
 
 func TestEVT1TemplateVulkanSpecimenNativeC11(t *testing.T) {
@@ -1281,7 +1285,7 @@ func TestEVT1TemplateVulkanSpecimenNativeC11(t *testing.T) {
 		t.Skip("native C11 harness is only configured for Windows in this repository")
 	}
 	src := readEVT1Fixture(t, "concept_templates_vulkan.concept")
-	module, err := Parse("Examples/Concept-Vulkan/concept_templates_vulkan.concept", src)
+	module, err := Parse("examples/evt1/concept_templates_vulkan.concept", src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1329,8 +1333,8 @@ func TestEVT1M1BCLanguageSpecimenNativeC11(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("native C11 harness is only configured for Windows in this repository")
 	}
-	src := readEVT1Fixture(t, "comptime_values_core.concept")
-	module, err := Parse("Examples/Concept-Vulkan/comptime_values_core.concept", src)
+	src := readEVT1Fixture(t, "comptime_values.concept")
+	module, err := Parse("examples/evt1/comptime_values.concept", src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1338,19 +1342,19 @@ func TestEVT1M1BCLanguageSpecimenNativeC11(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	harness := `#include "comptime_values_core.generated.h"
+	harness := `#include "comptime_values.generated.h"
 
 int main(void) {
-  if (concept_comptime_values_core_selected_arm(true, 7, 3) != 7) return 1;
-  if (concept_comptime_values_core_selected_arm(false, 7, 3) != 3) return 2;
-  if (concept_comptime_values_core_count_up(2) != 4) return 3;
-  if (concept_comptime_values_core_count_up(10) != 6) return 4;
-  if (concept_comptime_values_core_zero_bound(5) != 99) return 5;
-  if (concept_comptime_values_core_default_bound() != 3) return 6;
+  if (concept_comptime_values_selected_arm(true, 7, 3) != 7) return 1;
+  if (concept_comptime_values_selected_arm(false, 7, 3) != 3) return 2;
+  if (concept_comptime_values_count_up(2) != 4) return 3;
+  if (concept_comptime_values_count_up(10) != 6) return 4;
+  if (concept_comptime_values_zero_bound(5) != 99) return 5;
+  if (concept_comptime_values_default_bound() != 3) return 6;
   return 0;
 }
 `
-	runNativeHarness(t, outputs, "comptime_values_core_harness.c", harness, nil)
+	runNativeHarness(t, outputs, "comptime_values_harness.c", harness, nil)
 }
 
 func TestEVT1M1BCVulkanSpecimenNativeC11(t *testing.T) {
@@ -1358,7 +1362,7 @@ func TestEVT1M1BCVulkanSpecimenNativeC11(t *testing.T) {
 		t.Skip("native C11 harness is only configured for Windows in this repository")
 	}
 	src := readEVT1Fixture(t, "comptime_values_vulkan.concept")
-	module, err := Parse("Examples/Concept-Vulkan/comptime_values_vulkan.concept", src)
+	module, err := Parse("examples/evt1/comptime_values_vulkan.concept", src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1385,8 +1389,8 @@ func TestEVT1M1BDLanguageSpecimenNativeC11(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("native C11 harness is only configured for Windows in this repository")
 	}
-	src := readEVT1Fixture(t, "comptime_tables_core.concept")
-	module, err := Parse("Examples/Concept-Vulkan/comptime_tables_core.concept", src)
+	src := readEVT1Fixture(t, "comptime_tables.concept")
+	module, err := Parse("examples/evt1/comptime_tables.concept", src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1394,18 +1398,18 @@ func TestEVT1M1BDLanguageSpecimenNativeC11(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	harness := `#include "comptime_tables_core.generated.h"
+	harness := `#include "comptime_tables.generated.h"
 
 int main(void) {
-  if (concept_comptime_tables_core_default_retry_budget() != 2) return 1;
-  if (concept_comptime_tables_core_matrix_corner() != 6) return 2;
-  if (concept_comptime_tables_core_summary_value() != 7) return 3;
-  if (!concept_comptime_tables_core_transition_table_stable()) return 4;
-  if (concept_comptime_tables_core_total_retry_budget() != 7) return 5;
+  if (concept_comptime_tables_default_retry_budget() != 2) return 1;
+  if (concept_comptime_tables_matrix_corner() != 6) return 2;
+  if (concept_comptime_tables_summary_value() != 7) return 3;
+  if (!concept_comptime_tables_transition_table_stable()) return 4;
+  if (concept_comptime_tables_total_retry_budget() != 7) return 5;
   return 0;
 }
 `
-	runNativeHarness(t, outputs, "comptime_tables_core_harness.c", harness, nil)
+	runNativeHarness(t, outputs, "comptime_tables_harness.c", harness, nil)
 }
 
 func TestEVT1M1BDVulkanSpecimenNativeC11(t *testing.T) {
@@ -1413,7 +1417,7 @@ func TestEVT1M1BDVulkanSpecimenNativeC11(t *testing.T) {
 		t.Skip("native C11 harness is only configured for Windows in this repository")
 	}
 	src := readEVT1Fixture(t, "comptime_tables_vulkan.concept")
-	module, err := Parse("Examples/Concept-Vulkan/comptime_tables_vulkan.concept", src)
+	module, err := Parse("examples/evt1/comptime_tables_vulkan.concept", src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1441,8 +1445,8 @@ func TestDragonGodM0LanguageSpecimenNativeC11(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("native C11 harness is only configured for Windows in this repository")
 	}
-	src := readEVT1Fixture(t, "lifecycle_automata_core.concept")
-	module, err := Parse("Examples/Concept-Vulkan/lifecycle_automata_core.concept", src)
+	src := readEVT1Fixture(t, "lifecycle_automata.concept")
+	module, err := Parse("examples/evt1/lifecycle_automata.concept", src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1450,16 +1454,16 @@ func TestDragonGodM0LanguageSpecimenNativeC11(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	harness := `#include "lifecycle_automata_core.generated.h"
+	harness := `#include "lifecycle_automata.generated.h"
 
 int main(void) {
-  if (concept_lifecycle_automata_core_root_retry_budget() != 2) return 1;
-  if (concept_lifecycle_automata_core_derived_stack_depth() != 3) return 2;
-  if (!concept_lifecycle_automata_core_finish_is_explicit()) return 3;
+  if (concept_lifecycle_automata_root_retry_budget() != 2) return 1;
+  if (concept_lifecycle_automata_derived_stack_depth() != 3) return 2;
+  if (!concept_lifecycle_automata_finish_is_explicit()) return 3;
   return 0;
 }
 `
-	runNativeHarness(t, outputs, "lifecycle_automata_core_harness.c", harness, nil)
+	runNativeHarness(t, outputs, "lifecycle_automata_harness.c", harness, nil)
 }
 
 func TestDragonGodM0VulkanSpecimenNativeC11(t *testing.T) {
@@ -1467,7 +1471,7 @@ func TestDragonGodM0VulkanSpecimenNativeC11(t *testing.T) {
 		t.Skip("native C11 harness is only configured for Windows in this repository")
 	}
 	src := readEVT1Fixture(t, "lifecycle_automata_vulkan.concept")
-	module, err := Parse("Examples/Concept-Vulkan/lifecycle_automata_vulkan.concept", src)
+	module, err := Parse("examples/evt1/lifecycle_automata_vulkan.concept", src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1494,8 +1498,8 @@ func TestDragonGodM1LanguageSpecimenNativeC11(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("native C11 harness is only configured for Windows in this repository")
 	}
-	src := readEVT1Fixture(t, "automata_dispatch_core.concept")
-	module, err := Parse("Examples/Concept-Vulkan/automata_dispatch_core.concept", src)
+	src := readEVT1Fixture(t, "automata_dispatch.concept")
+	module, err := Parse("examples/evt1/automata_dispatch.concept", src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1503,20 +1507,20 @@ func TestDragonGodM1LanguageSpecimenNativeC11(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	harness := `#include "automata_dispatch_core.generated.h"
+	harness := `#include "automata_dispatch.generated.h"
 
 int main(void) {
-  if (concept_automata_dispatch_core_initial_terminal_outcome_code() != 4) return 1;
-  if (concept_automata_dispatch_core_zero_capacity_outcome_code() != 3) return 2;
-  if (concept_automata_dispatch_core_unhandled_preserves_state_code() != 21) return 3;
-  if (concept_automata_dispatch_core_nested_push_resumes_caller_code() != 111113) return 4;
-  if (concept_automata_dispatch_core_root_terminal_continuation_finishes_immediately_code() != 1111134) return 5;
-  if (concept_automata_dispatch_core_non_root_finish_terminates_whole_instance_code() != 111134) return 6;
-  if (concept_automata_dispatch_core_independent_instances_stay_independent_code() != 1121) return 7;
+  if (concept_automata_dispatch_initial_terminal_outcome_code() != 4) return 1;
+  if (concept_automata_dispatch_zero_capacity_outcome_code() != 3) return 2;
+  if (concept_automata_dispatch_unhandled_preserves_state_code() != 21) return 3;
+  if (concept_automata_dispatch_nested_push_resumes_caller_code() != 111113) return 4;
+  if (concept_automata_dispatch_root_terminal_continuation_finishes_immediately_code() != 1111134) return 5;
+  if (concept_automata_dispatch_non_root_finish_terminates_whole_instance_code() != 111134) return 6;
+  if (concept_automata_dispatch_independent_instances_stay_independent_code() != 1121) return 7;
   return 0;
 }
 `
-	runNativeHarness(t, outputs, "automata_dispatch_core_harness.c", harness, nil)
+	runNativeHarness(t, outputs, "automata_dispatch_harness.c", harness, nil)
 }
 
 func TestDragonGodM1VulkanSpecimenNativeC11(t *testing.T) {
@@ -1524,7 +1528,7 @@ func TestDragonGodM1VulkanSpecimenNativeC11(t *testing.T) {
 		t.Skip("native C11 harness is only configured for Windows in this repository")
 	}
 	src := readEVT1Fixture(t, "automata_dispatch_vulkan.concept")
-	module, err := Parse("Examples/Concept-Vulkan/automata_dispatch_vulkan.concept", src)
+	module, err := Parse("examples/evt1/automata_dispatch_vulkan.concept", src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1552,8 +1556,8 @@ func TestDragonGodM2LanguageSpecimenNativeC11(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("native C11 harness is only configured for Windows in this repository")
 	}
-	src := readEVT1Fixture(t, "guarded_transitions_core.concept")
-	module, err := Parse("Examples/Concept-Vulkan/guarded_transitions_core.concept", src)
+	src := readEVT1Fixture(t, "guarded_transitions.concept")
+	module, err := Parse("examples/evt1/guarded_transitions.concept", src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1561,22 +1565,22 @@ func TestDragonGodM2LanguageSpecimenNativeC11(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	harness := `#include "guarded_transitions_core.generated.h"
+	harness := `#include "guarded_transitions.generated.h"
 
 int main(void) {
   concept_lifecycle_context unique = {true, false};
   concept_lifecycle_context fallback = {false, false};
   concept_lifecycle_context ambiguous = {true, true};
-  if (concept_guarded_transitions_core_unique_guard_selection_code(unique) != 13) return 1;
-  if (concept_guarded_transitions_core_fallback_selection_code(fallback) != 113) return 2;
-  if (concept_guarded_transitions_core_guarded_unhandled_preserves_state_code(fallback) != 1213) return 3;
-  if (concept_guarded_transitions_core_ambiguous_preserves_state_code(ambiguous) != 51513) return 4;
-  if (concept_guarded_transitions_core_already_finished_skips_guard_selection_code(unique) != 4) return 5;
-  if (concept_guarded_transitions_core_contextless_compatibility_code() != 3) return 6;
+  if (concept_guarded_transitions_unique_guard_selection_code(unique) != 13) return 1;
+  if (concept_guarded_transitions_fallback_selection_code(fallback) != 113) return 2;
+  if (concept_guarded_transitions_guarded_unhandled_preserves_state_code(fallback) != 1213) return 3;
+  if (concept_guarded_transitions_ambiguous_preserves_state_code(ambiguous) != 51513) return 4;
+  if (concept_guarded_transitions_already_finished_skips_guard_selection_code(unique) != 4) return 5;
+  if (concept_guarded_transitions_contextless_compatibility_code() != 3) return 6;
   return 0;
 }
 `
-	runNativeHarness(t, outputs, "guarded_transitions_core_harness.c", harness, nil)
+	runNativeHarness(t, outputs, "guarded_transitions_harness.c", harness, nil)
 }
 
 func TestDragonGodM2VulkanSpecimenNativeC11(t *testing.T) {
@@ -1584,7 +1588,7 @@ func TestDragonGodM2VulkanSpecimenNativeC11(t *testing.T) {
 		t.Skip("native C11 harness is only configured for Windows in this repository")
 	}
 	src := readEVT1Fixture(t, "guarded_transitions_vulkan.concept")
-	module, err := Parse("Examples/Concept-Vulkan/guarded_transitions_vulkan.concept", src)
+	module, err := Parse("examples/evt1/guarded_transitions_vulkan.concept", src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1614,8 +1618,8 @@ func TestDragonGodM3LanguageSpecimenNativeC11(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("native C11 harness is only configured for Windows in this repository")
 	}
-	src := readEVT1Fixture(t, "lifecycle_effects_core.concept")
-	module, err := Parse("Examples/Concept-Vulkan/lifecycle_effects_core.concept", src)
+	src := readEVT1Fixture(t, "lifecycle_effects.concept")
+	module, err := Parse("examples/evt1/lifecycle_effects.concept", src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1623,7 +1627,7 @@ func TestDragonGodM3LanguageSpecimenNativeC11(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	harness := `#include "lifecycle_effects_core.generated.c"
+	harness := `#include "lifecycle_effects.generated.c"
 
 int main(void) {
   concept_lifecycle_context unique = {true, false, 41, concept_queue_class_make_graphics(), 7};
@@ -1677,11 +1681,11 @@ int main(void) {
   if (f.tag != CONCEPT_AUTOMATA_DISPATCH_OUTCOME_ALREADY_FINISHED) return 19;
   if (ambiguousBatch.count != 0) return 20;
 
-  if (concept_lifecycle_effects_core_contextless_compatibility_code() != 3) return 21;
+  if (concept_lifecycle_effects_contextless_compatibility_code() != 3) return 21;
   return 0;
 }
 `
-	runNativeHarnessIncludingGeneratedC(t, outputs, "lifecycle_effects_core_harness.c", harness, nil)
+	runNativeHarnessIncludingGeneratedC(t, outputs, "lifecycle_effects_harness.c", harness, nil)
 }
 
 func TestDragonGodM3VulkanSpecimenNativeC11(t *testing.T) {
@@ -1689,7 +1693,7 @@ func TestDragonGodM3VulkanSpecimenNativeC11(t *testing.T) {
 		t.Skip("native C11 harness is only configured for Windows in this repository")
 	}
 	src := readEVT1Fixture(t, "lifecycle_effects_vulkan.concept")
-	module, err := Parse("Examples/Concept-Vulkan/lifecycle_effects_vulkan.concept", src)
+	module, err := Parse("examples/evt1/lifecycle_effects_vulkan.concept", src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1745,8 +1749,8 @@ func TestDragonGodM4LanguageSpecimenNativeC11(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("native C11 harness is only configured for Windows in this repository")
 	}
-	src := readEVT1Fixture(t, "lifecycle_actuators_core.concept")
-	module, err := Parse("Examples/Concept-Vulkan/lifecycle_actuators_core.concept", src)
+	src := readEVT1Fixture(t, "lifecycle_actuators.concept")
+	module, err := Parse("examples/evt1/lifecycle_actuators.concept", src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1754,7 +1758,7 @@ func TestDragonGodM4LanguageSpecimenNativeC11(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	harness := `#include "lifecycle_actuators_core.generated.c"
+	harness := `#include "lifecycle_actuators.generated.c"
 
 static concept_result_void_resource_actuation_error ok_result(void) {
   concept_result_void_resource_actuation_error out = {0};
@@ -1769,21 +1773,21 @@ static concept_result_void_resource_actuation_error err_result(concept_resource_
   return out;
 }
 
-concept_result_void_resource_actuation_error concept_lifecycle_actuators_core_execute_record_submission(concept_resource_mechanism* mechanism, int submission) {
+concept_result_void_resource_actuation_error concept_lifecycle_actuators_execute_record_submission(concept_resource_mechanism* mechanism, int submission) {
   mechanism->observed0 = submission;
   mechanism->count = mechanism->count + 1;
   if (mechanism->failAt == 0) return err_result(concept_resource_actuation_error_make_record_failed());
   return ok_result();
 }
 
-concept_result_void_resource_actuation_error concept_lifecycle_actuators_core_execute_begin_submission(concept_resource_mechanism* mechanism, int submission, concept_queue_class queue) {
+concept_result_void_resource_actuation_error concept_lifecycle_actuators_execute_begin_submission(concept_resource_mechanism* mechanism, int submission, concept_queue_class queue) {
   mechanism->observed1 = submission + queue.tag;
   mechanism->count = mechanism->count + 1;
   if (mechanism->failAt == 1) return err_result(concept_resource_actuation_error_make_begin_failed());
   return ok_result();
 }
 
-concept_result_void_resource_actuation_error concept_lifecycle_actuators_core_execute_finalize_ticket(concept_resource_mechanism* mechanism, int ticket) {
+concept_result_void_resource_actuation_error concept_lifecycle_actuators_execute_finalize_ticket(concept_resource_mechanism* mechanism, int ticket) {
   mechanism->observed2 = ticket;
   mechanism->count = mechanism->count + 1;
   if (mechanism->failAt == 2) return err_result(concept_resource_actuation_error_make_finalize_failed());
@@ -1824,8 +1828,8 @@ int main(void) {
 
   concept_resource_lifecycle_effects_discard(&emitted);
   if (emitted.state != CONCEPT_RESOURCE_LIFECYCLE_EFFECT_BATCH_VACANT) return 9;
-  if (concept_lifecycle_actuators_core_busy_dispatch_code(ready) != 6) return 10;
-  if (concept_lifecycle_actuators_core_no_batch_actuation_code(&mechanism) != 3) return 11;
+  if (concept_lifecycle_actuators_busy_dispatch_code(ready) != 6) return 10;
+  if (concept_lifecycle_actuators_no_batch_actuation_code(&mechanism) != 3) return 11;
 
   concept_resource_lifecycle_init(&lifecycle, &ready);
   concept_resource_lifecycle_dispatch(&lifecycle, concept_lifecycle_signal_make_submit(), &failedBatch);
@@ -1837,11 +1841,11 @@ int main(void) {
   if (failedBatch.cursor != 1) return 15;
   if (failureMechanism.count != 2) return 16;
 
-  if (concept_lifecycle_actuators_core_discard_and_reuse_code(fallback, &mechanism) <= 0) return 17;
+  if (concept_lifecycle_actuators_discard_and_reuse_code(fallback, &mechanism) <= 0) return 17;
   return 0;
 }
 `
-	runNativeHarnessIncludingGeneratedC(t, outputs, "lifecycle_actuators_core_harness.c", harness, nil)
+	runNativeHarnessIncludingGeneratedC(t, outputs, "lifecycle_actuators_harness.c", harness, nil)
 }
 
 func runNativeHarness(t *testing.T, outputs Outputs, harnessName, harnessSource string, extraArgs []string) {

@@ -1284,7 +1284,7 @@
     }
   ],
   "schema": "concept-evt1-source-map.v1",
-  "source": "Examples/Concept-Vulkan/concept_templates_vulkan.concept",
+  "source": "examples/evt1/concept_templates_vulkan.concept",
   "static_asserts": null,
   "structs": [
     {
