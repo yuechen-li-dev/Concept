@@ -2,8 +2,8 @@
   "schema": "concept-evt1-semantic-corpus-v1",
   "compiler_id": "concept-evt1-stage0-go",
   "totals": {
-    "valid": 408,
-    "static_invalid": 283,
+    "valid": 409,
+    "static_invalid": 286,
     "runtime_negative": 14,
     "compatibility": 5,
     "expected_divergence": 4
@@ -25,7 +25,7 @@
     { "subsystem": "Interfaces and dyn", "path": "interface", "valid": 17, "static_invalid": 14, "runtime_negative": [], "historical_milestones": ["R4k"] },
     { "subsystem": "Planner", "path": "planner", "valid": 13, "static_invalid": 0, "runtime_negative": [], "historical_milestones": ["R4l"] },
     { "subsystem": "Automata state", "path": "automata/state", "valid": 12, "static_invalid": 8, "runtime_negative": [], "historical_milestones": ["R5a"] },
-    { "subsystem": "Automata transitions", "path": "automata/transitions", "valid": 14, "static_invalid": 10, "runtime_negative": ["transition_decide_nan_runtime.concept", "transition_decide_no_enabled_runtime.concept"], "historical_milestones": ["R5b"] },
+    { "subsystem": "Automata transitions", "path": "automata/transitions", "valid": 15, "static_invalid": 13, "runtime_negative": ["transition_decide_nan_runtime.concept", "transition_decide_no_enabled_runtime.concept"], "historical_milestones": ["R5b"] },
     { "subsystem": "Inference", "path": "inference", "valid": 17, "static_invalid": 10, "runtime_negative": ["infer_no_enabled_runtime.concept", "infer_nan_runtime.concept", "infer_all_negative_infinity_runtime.concept"], "historical_milestones": ["R5c"] },
     { "subsystem": "Value decision", "path": "decision", "valid": 2, "static_invalid": 4, "runtime_negative": ["decide_no_enabled_runtime.concept"], "historical_milestones": ["EVT2d"] },
     { "subsystem": "Iteration and yield", "path": "iteration", "valid": 19, "static_invalid": 8, "runtime_negative": [], "historical_milestones": ["R5d", "R7x"] },

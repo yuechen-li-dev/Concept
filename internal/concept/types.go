@@ -780,8 +780,12 @@ type TransitionMatchStmt struct {
 	Span    Span                 `json:"span"`
 }
 
+// TransitionMatchArm is one arm of a transition match. Arms are tried in
+// declaration order: a guarded arm is taken only when its pattern matches and
+// its guard is true, so every variant needs a final unguarded arm.
 type TransitionMatchArm struct {
 	Pattern Pattern `json:"pattern"`
+	Guard   Expr    `json:"guard,omitempty"`
 	Target  string  `json:"target"`
 	Span    Span    `json:"span"`
 }

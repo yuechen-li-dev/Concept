@@ -211,6 +211,7 @@ type MIRTransitionMatch struct {
 type MIRTransitionMatchArm struct {
 	Pattern          string   `json:"pattern"`
 	PayloadBindings  []string `json:"payload_bindings,omitempty"`
+	Guard            string   `json:"guard,omitempty"`
 	TargetState      string   `json:"target_state"`
 	DeclarationOrder int      `json:"declaration_order"`
 	SourceSpan       Span     `json:"source_span"`

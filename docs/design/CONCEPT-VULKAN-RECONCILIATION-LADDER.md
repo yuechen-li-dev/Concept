@@ -102,7 +102,9 @@ itself.
   CV4020 case. Type-check the guard as `bool`, with no effects.
 - Semantics: ordered first-match (D1). The exhaustiveness check ignores
   guarded arms, as `match` does.
-- Lower in both EVT1 C generation and EVT2 LIR (`lir_machine.go`).
+- Lower in EVT1 C generation. *(Amended at VK1: EVT2 LIR has no enum values yet, so
+  `transition match` of any kind stays behind its existing
+  `EVT2_UNSUPPORTED_STATEMENT` boundary; EVT2 parity waits for EVT2 enums.)*
 
 *New tests:*
 
@@ -112,8 +114,7 @@ itself.
 - a Normal/Verify `.concept_test` with a Golden-style theory over guard
   inputs
 
-*Exit:* standing gates, plus EVT1 and EVT2 producing identical results on
-the new theory.
+*Exit:* standing gates.
 
 ### VK2: `with input` and `on`
 
@@ -126,8 +127,7 @@ the new theory.
 - An automaton `with input` may still use internal `transition` in states
   that have no `on` clauses. Mixing both in one state is an error, which
   keeps the style rule enforceable.
-- Lower in EVT1 and EVT2, which removes the need for
-  `EVT2_UNSUPPORTED_SIGNAL_AUTOMATA` for the new form.
+- Lower in EVT1. EVT2 support follows EVT2 enum support (see VK1).
 
 *New tests:*
 

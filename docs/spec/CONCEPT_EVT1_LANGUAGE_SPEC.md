@@ -996,6 +996,24 @@ cleanup, updates the current-state tag, and returns from the current `Step`.
 There is no arm fallthrough, scoring, or ranking. The stable defensive runtime
 failure is `machine transition match found no matching case`.
 
+An arm may carry a guard, `Pattern when condition => Target;`. The guard is a
+`bool` expression that sees the arm's payload bindings and the machine state.
+Arms are tried in declaration order, and the first arm whose pattern matches and
+whose guard holds is taken (guards of later arms are not evaluated). Guarded arms
+do not count toward exhaustiveness, so each variant with guarded arms must end in
+an unguarded arm (`TRANSITION_MATCH_NONEXHAUSTIVE`); a guarded arm after the
+unguarded arm for its variant is rejected as unreachable
+(`TRANSITION_MATCH_UNREACHABLE_ARM`).
+
+```concept
+transition match (Sample(now))
+{
+    Reading::Level(value) when value > limit => Alarm;
+    Reading::Level(value) => Watching;
+    Reading::Quiet => Watching;
+}
+```
+
 **Canonical EVT1 transition semantics transition decide.** The canonical non-redundant candidate
 syntax is:
 

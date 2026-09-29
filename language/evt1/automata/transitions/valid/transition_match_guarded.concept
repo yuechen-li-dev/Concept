@@ -1,0 +1,88 @@
+profile Core;
+
+// Guarded transition match arms are tried in declaration order: the first
+// arm whose pattern matches and whose guard holds wins. Guards see payload
+// bindings and machine state; every variant ends in an unguarded arm.
+enum Reading
+{
+    Quiet,
+    Level(int value),
+    Fault(int code),
+}
+
+struct Probe
+{
+    int handle;
+}
+
+void Drop(owned Probe probe)
+{
+    return;
+}
+
+Reading Sample(int tick)
+{
+    if (tick == 0)
+    {
+        return Reading::Quiet;
+    }
+    if (tick == 1)
+    {
+        return Reading::Level(3);
+    }
+    if (tick == 2)
+    {
+        return Reading::Level(40);
+    }
+    return Reading::Fault(9);
+}
+
+automata Monitor
+with state
+{
+    int tick;
+    int limit;
+    int trail;
+}
+{
+    machine Run
+    {
+        state Watching
+        {
+            owned Probe probe = Probe{1};
+            int now = tick;
+            tick = tick + 1;
+            trail = trail * 10 + 1;
+            transition match (Sample(now))
+            {
+                Reading::Level(value) when value > limit => Alarm;
+                Reading::Level(value) when value > 0 => Watching;
+                Reading::Level(value) => Watching;
+                Reading::Fault(code) when code == 9 => Failed;
+                Reading::Fault(code) => Alarm;
+                Reading::Quiet => Watching;
+            }
+        }
+
+        state Alarm
+        {
+            trail = trail * 10 + 2;
+            transition Watching;
+        }
+
+        state Failed
+        {
+        }
+    }
+}
+
+int Main()
+{
+    instance Monitor monitor(0, 10, 0);
+    Step(monitor, Run);
+    Step(monitor, Run);
+    Step(monitor, Run);
+    Step(monitor, Run);
+    Step(monitor, Run);
+    return monitor.state.trail * 10 + State(monitor, Run);
+}

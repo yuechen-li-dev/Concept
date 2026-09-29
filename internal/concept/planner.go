@@ -879,6 +879,10 @@ func planAutomata(mir *MIR) []AutomataPlan {
 					planned := TransitionMatchPlan{State: state.Name, Strategy: "CategoricalSwitch", EvaluationOrder: "ScrutineeOnceThenSelectedTarget", NoMatchPolicy: match.NoMatchPolicy, CleanupEdge: match.CleanupEdge}
 					for _, arm := range match.Arms {
 						planned.Targets = append(planned.Targets, arm.TargetState)
+						if arm.Guard != "" {
+							planned.Strategy = "GuardedCategoricalSwitch"
+							planned.EvaluationOrder = "ScrutineeOnceThenArmGuardsInDeclarationOrder"
+						}
 					}
 					mp.TransitionMatches = append(mp.TransitionMatches, planned)
 				}

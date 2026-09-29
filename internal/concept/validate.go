@@ -6040,18 +6040,48 @@ func validateTransitionMatchStmt(env *semanticEnv, scope *evt1Scope, stmt *Trans
 	if evt1IntegralRepresentation(subjectType) && subjectType.Quantity == nil {
 		return evt1Diagnostic("TRANSITION_MATCH_REQUIRES_MATCHABLE", "machine transition match requires an enum signal", stmt.Subject.exprSpan())
 	}
+	// seen holds variants closed by an unguarded arm; guarded holds variants
+	// that so far have only guarded arms.
 	seen := map[string]bool{}
+	guarded := map[string]bool{}
 	for _, arm := range stmt.Arms {
 		key := arm.Pattern.EnumName + "::" + arm.Pattern.VariantName
 		if seen[key] {
+			if arm.Guard != nil {
+				return evt1Diagnostic("TRANSITION_MATCH_UNREACHABLE_ARM", fmt.Sprintf("guarded transition match arm %s follows an unguarded arm for the same variant and can never be taken", key), arm.Pattern.Span)
+			}
 			return evt1Diagnostic("TRANSITION_MATCH_DUPLICATE_ARM", fmt.Sprintf("duplicate transition match arm %s", key), arm.Pattern.Span)
 		}
-		if _, _, err := validatePattern(env, scope, subjectType, enumDecl, arm.Pattern, seen); err != nil {
+		// Enum payloads are always copyable (CV4133), so guards may read
+		// payload bindings without affecting ownership of the subject.
+		armScope, _, err := validatePattern(env, scope, subjectType, enumDecl, arm.Pattern, map[string]bool{})
+		if err != nil {
 			return err
+		}
+		if arm.Guard != nil {
+			guardType, err := validateExpr(env, armScope, arm.Guard, templateInfo, inComptimeFn)
+			if err != nil {
+				return err
+			}
+			if guardType.Name != "bool" {
+				return evt1Diagnostic("TRANSITION_MATCH_GUARD_REQUIRES_BOOL", fmt.Sprintf("transition match guard must be bool, got %s", guardType.String()), arm.Guard.exprSpan())
+			}
+			guarded[key] = true
+		} else {
+			seen[key] = true
+			delete(guarded, key)
 		}
 		if !scope.transitionTargets[arm.Target] {
 			return evt1Diagnostic("TRANSITION_MATCH_UNKNOWN_TARGET", fmt.Sprintf("unknown transition match target %s in current machine", arm.Target), arm.Span)
 		}
+	}
+	if len(guarded) > 0 {
+		keys := make([]string, 0, len(guarded))
+		for key := range guarded {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		return evt1Diagnostic("TRANSITION_MATCH_NONEXHAUSTIVE", "non-exhaustive transition match, guarded variants need a final unguarded arm: "+strings.Join(keys, ", "), stmt.Span)
 	}
 	if missing := evt1MissingVariants(enumDecl, seen); len(missing) > 0 {
 		return evt1Diagnostic("TRANSITION_MATCH_NONEXHAUSTIVE", "non-exhaustive transition match, missing variants: "+strings.Join(missing, ", "), stmt.Span)

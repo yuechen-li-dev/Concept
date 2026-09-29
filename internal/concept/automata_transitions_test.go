@@ -16,6 +16,7 @@ var automataTransitionValidFixtures = []string{
 	"transition_match_payload_enum.concept",
 	"transition_match_result.concept",
 	"transition_match_updates_state.concept",
+	"transition_match_guarded.concept",
 	"transition_decide_int_scores.concept",
 	"transition_decide_float_scores.concept",
 	"transition_decide_guarded.concept",
@@ -34,6 +35,9 @@ var automataTransitionInvalidFixtures = map[string]string{
 	"transition_match_unknown_target.concept":     "TRANSITION_MATCH_UNKNOWN_TARGET",
 	"transition_match_requires_matchable.concept": "TRANSITION_MATCH_REQUIRES_MATCHABLE",
 	"transition_match_invalid_pattern.concept":    "CV4110",
+	"transition_match_guard_not_bool.concept":     "TRANSITION_MATCH_GUARD_REQUIRES_BOOL",
+	"transition_match_guarded_only.concept":       "TRANSITION_MATCH_NONEXHAUSTIVE",
+	"transition_match_unreachable_guard.concept":  "TRANSITION_MATCH_UNREACHABLE_ARM",
 	"transition_decide_empty.concept":             "TRANSITION_DECIDE_EMPTY",
 	"transition_decide_bad_guard.concept":         "TRANSITION_DECIDE_GUARD_REQUIRES_BOOL",
 	"transition_decide_bad_score_type.concept":    "TRANSITION_DECIDE_SCORE_TYPE_INVALID",
@@ -92,6 +96,8 @@ func TestAutomataTransitionsNativeC11(t *testing.T) {
 		{"transition_match_payload_enum.concept", 2},
 		{"transition_match_result.concept", 1},
 		{"transition_match_updates_state.concept", 11},
+		// Quiet, Level(3), Level(40) -> Alarm, Alarm -> Watching, Fault(9) -> Failed.
+		{"transition_match_guarded.concept", 111212},
 		{"transition_decide_int_scores.concept", 2},
 		{"transition_decide_float_scores.concept", 2},
 		{"transition_decide_guarded.concept", 2},
@@ -256,5 +262,93 @@ func TestAutomataTransitionsTerminalPanicPaths(t *testing.T) {
 				t.Fatalf("deterministic panic evidence missing: err=%v output=%s", err, out)
 			}
 		})
+	}
+}
+
+// Guarded arms are ordered first-match: MIR keeps each guard with its arm in
+// declaration order, the plan names the guarded strategy, and a MIR that
+// repeats a pattern after its unguarded arm is rejected.
+func TestTransitionMatchGuardsMIRPlanAndVerify(t *testing.T) {
+	outputs := automataTransitionFixture(t, "valid", "transition_match_guarded.concept")
+	var mir MIR
+	if err := json.Unmarshal(outputs["transition_match_guarded.mir.json"], &mir); err != nil {
+		t.Fatal(err)
+	}
+	match := mir.Automata[0].Machines[0].States[0].TransitionMatches[0]
+	var got []string
+	for _, arm := range match.Arms {
+		got = append(got, arm.Pattern+"|"+arm.Guard+"|"+arm.TargetState)
+	}
+	want := []string{
+		"Reading::Level|(value > limit)|Alarm",
+		"Reading::Level|(value > 0)|Watching",
+		"Reading::Level||Watching",
+		"Reading::Fault|(code == 9)|Failed",
+		"Reading::Fault||Alarm",
+		"Reading::Quiet||Watching",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("guarded arms drifted:\n%s", strings.Join(got, "\n"))
+	}
+	path := filepath.Join("..", "..", "language", "evt1", "automata", "transitions", "valid", "transition_match_guarded.concept")
+	source, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	module, err := Parse(filepath.ToSlash(path), string(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	planBytes, err := GeneratePlan(module, GenericC11Target())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var plan LoweringPlan
+	if err := json.Unmarshal(planBytes, &plan); err != nil {
+		t.Fatal(err)
+	}
+	matchPlan := plan.Automata[0].Machines[0].TransitionMatches[0]
+	if matchPlan.Strategy != "GuardedCategoricalSwitch" || matchPlan.EvaluationOrder != "ScrutineeOnceThenArmGuardsInDeclarationOrder" {
+		t.Fatalf("guarded match plan drift: %+v", matchPlan)
+	}
+	malformed := mir
+	malformed.Automata[0].Machines[0].States[0].TransitionMatches[0].Arms[1].Guard = ""
+	malformed.Automata[0].Machines[0].States[0].TransitionMatches[0].Arms[0].Guard = ""
+	if err := evt1ValidateMIR(malformed); diagnosticCode(err) != "TRANSITION_MATCH_MIR_INVALID" {
+		t.Fatalf("repeated unguarded pattern MIR diagnostic = %v", err)
+	}
+
+	if _, err := exec.LookPath("gcc"); err != nil {
+		t.Skip("gcc unavailable")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "Monitor.concept"), []byte(strings.Replace(string(source), "profile Core;", "module Monitor;\nprofile Core;", 1)), 0644); err != nil {
+		t.Fatal(err)
+	}
+	facts := `module MonitorTests;
+profile Core;
+import Monitor;
+
+[[fact]]
+void FirstTrueGuardWinsAndFallbackCatchesTheRest()
+{
+    Assert.Equal(Main(), 111212, "guard order decides each reading");
+}
+`
+	if err := os.WriteFile(filepath.Join(dir, "monitor.concept_test"), []byte(facts), 0644); err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := DiscoverTests(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, verify := range []bool{false, true} {
+		run, err := RunTests(manifest, TestRunOptions{Verify: verify, ResultsDir: filepath.Join(dir, ".test-results")})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if run.Failed != 0 || run.Passed != 1 {
+			t.Fatalf("verify=%v: %+v", verify, run.Results)
+		}
 	}
 }

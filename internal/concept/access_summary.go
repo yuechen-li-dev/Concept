@@ -592,6 +592,9 @@ func evt1AccessBlock(env *semanticEnv, state *evt1AccessFunction, block Block) {
 			evt1AccessExpr(env, state, s.Value)
 		case *TransitionMatchStmt:
 			evt1AccessExpr(env, state, s.Subject)
+			for _, arm := range s.Arms {
+				evt1AccessExpr(env, state, arm.Guard)
+			}
 		case *TransitionDecideStmt:
 			for _, c := range s.Candidates {
 				evt1AccessExpr(env, state, c.Guard)

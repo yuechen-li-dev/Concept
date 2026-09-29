@@ -3428,6 +3428,14 @@ func (p *parser) parseTransitionMatchStmt(start Span) (Statement, error) {
 		if err != nil {
 			return nil, err
 		}
+		var guard Expr
+		if p.peekLexeme() == "when" {
+			p.next()
+			guard, err = p.parseExpr()
+			if err != nil {
+				return nil, err
+			}
+		}
 		if _, err := p.expect("=>"); err != nil {
 			return nil, err
 		}
@@ -3438,7 +3446,7 @@ func (p *parser) parseTransitionMatchStmt(start Span) (Statement, error) {
 		if _, err := p.expect(";"); err != nil {
 			return nil, err
 		}
-		stmt.Arms = append(stmt.Arms, TransitionMatchArm{Pattern: pattern, Target: target.Lexeme, Span: pattern.Span})
+		stmt.Arms = append(stmt.Arms, TransitionMatchArm{Pattern: pattern, Guard: guard, Target: target.Lexeme, Span: pattern.Span})
 	}
 	if _, err := p.expect("}"); err != nil {
 		return nil, err

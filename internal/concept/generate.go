@@ -839,10 +839,13 @@ func evt1ValidateMIR(mir MIR) error {
 					}
 					seenPatterns := map[string]bool{}
 					for i, arm := range match.Arms {
+						// A pattern may repeat only while earlier arms for it are guarded.
 						if arm.Pattern == "" || seenPatterns[arm.Pattern] || arm.DeclarationOrder != i || !stateNames[arm.TargetState] {
 							return evt1Diagnostic("TRANSITION_MATCH_MIR_INVALID", "transition match MIR contains an invalid arm, order, or local target", arm.SourceSpan)
 						}
-						seenPatterns[arm.Pattern] = true
+						if arm.Guard == "" {
+							seenPatterns[arm.Pattern] = true
+						}
 					}
 				}
 				for _, decision := range state.TransitionDecisions {
@@ -1185,6 +1188,11 @@ func collectMIROps(env *semanticEnv, block *Block, fn *MIRFunction, templateInfo
 		case *TransitionMatchStmt:
 			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "transition_match", Detail: fmt.Sprintf("%d exhaustive arm(s)", len(s.Arms)), SourceSpan: s.Span})
 			collectExprMIROps(env, s.Subject, fn, templateInfo)
+			for _, arm := range s.Arms {
+				if arm.Guard != nil {
+					collectExprMIROps(env, arm.Guard, fn, templateInfo)
+				}
+			}
 		case *TransitionDecideStmt:
 			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "transition_decide", Type: s.ScoreType.String(), Detail: fmt.Sprintf("%d declaration-order candidate(s)", len(s.Candidates)), SourceSpan: s.Span})
 			for _, candidate := range s.Candidates {
@@ -1310,7 +1318,11 @@ func collectTransitionMIR(block *Block, state *MIRState) {
 		case *TransitionMatchStmt:
 			entry := MIRTransitionMatch{Scrutinee: evt1ExprIdentity(s.Subject), Exhaustive: true, NoMatchPolicy: "Panic", CleanupEdge: "TransientBeforeStateUpdate", SourceSpan: s.Span}
 			for i, arm := range s.Arms {
-				entry.Arms = append(entry.Arms, MIRTransitionMatchArm{Pattern: arm.Pattern.EnumName + "::" + arm.Pattern.VariantName, PayloadBindings: append([]string{}, arm.Pattern.Bindings...), TargetState: arm.Target, DeclarationOrder: i, SourceSpan: arm.Span})
+				guard := ""
+				if arm.Guard != nil {
+					guard = evt1ExprIdentity(arm.Guard)
+				}
+				entry.Arms = append(entry.Arms, MIRTransitionMatchArm{Pattern: arm.Pattern.EnumName + "::" + arm.Pattern.VariantName, PayloadBindings: append([]string{}, arm.Pattern.Bindings...), Guard: guard, TargetState: arm.Target, DeclarationOrder: i, SourceSpan: arm.Span})
 			}
 			state.TransitionMatches = append(state.TransitionMatches, entry)
 		case *TransitionDecideStmt:
@@ -4524,21 +4536,65 @@ func (f *evt1FunctionLowerer) lowerTransitionMatchStmt(stmt TransitionMatchStmt,
 	b.WriteString(subPrelude)
 	b.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(subjectType), subjectTemp, subjectExpr))
 	b.WriteString(ind(indent) + fmt.Sprintf("switch (%s.tag) {\n", subjectTemp))
+	statePlace := fmt.Sprintf("instance->%s.current_state", evt1PayloadFieldName(f.machineStepName))
+	if f.frameIndexName != "" {
+		statePlace = fmt.Sprintf("instance->%s[%s].current_state", evt1MachineFramesCName(f.machineStepName), f.frameIndexName)
+	}
+	// Arms for one variant share a case and are tried in declaration order;
+	// validation guarantees each variant ends in an unguarded arm.
+	var order []string
+	arms := map[string][]TransitionMatchArm{}
 	for _, arm := range stmt.Arms {
-		variant, _ := evt1LookupVariant(enumDecl, arm.Pattern.VariantName)
+		if _, ok := arms[arm.Pattern.VariantName]; !ok {
+			order = append(order, arm.Pattern.VariantName)
+		}
+		arms[arm.Pattern.VariantName] = append(arms[arm.Pattern.VariantName], arm)
+	}
+	for _, variantName := range order {
+		variant, _ := evt1LookupVariant(enumDecl, variantName)
 		tag := evt1TagName(enumDecl.Name, variant.Name)
 		if evt1IsFailureType(subjectType) {
 			tag = fmt.Sprintf("%d", variant.Tag)
 		}
-		f.liveOwners = f.cloneOwnerState(before)
 		b.WriteString(ind(indent) + fmt.Sprintf("case %s:\n", tag))
-		b.WriteString(f.lowerAllScopeDrops(indent + 1))
-		statePlace := fmt.Sprintf("instance->%s.current_state", evt1PayloadFieldName(f.machineStepName))
-		if f.frameIndexName != "" {
-			statePlace = fmt.Sprintf("instance->%s[%s].current_state", evt1MachineFramesCName(f.machineStepName), f.frameIndexName)
+		group := arms[variantName]
+		if len(group) == 1 && group[0].Guard == nil {
+			f.liveOwners = f.cloneOwnerState(before)
+			b.WriteString(f.lowerAllScopeDrops(indent + 1))
+			b.WriteString(ind(indent+1) + fmt.Sprintf("%s = %s;\n", statePlace, evt1AutomataStateConstName(f.automataStepName, f.machineStepName, group[0].Target)))
+			b.WriteString(ind(indent+1) + "return;\n")
+			continue
 		}
-		b.WriteString(ind(indent+1) + fmt.Sprintf("%s = %s;\n", statePlace, evt1AutomataStateConstName(f.automataStepName, f.machineStepName, arm.Target)))
-		b.WriteString(ind(indent+1) + "return;\n")
+		b.WriteString(ind(indent+1) + "{\n")
+		for _, arm := range group {
+			f.liveOwners = f.cloneOwnerState(before)
+			f.pushScope()
+			b.WriteString(ind(indent+2) + "{\n")
+			armIndent := indent + 3
+			for i, binding := range arm.Pattern.Bindings {
+				field := variant.Payload[i]
+				cName := f.bindName(binding, field.Type)
+				b.WriteString(ind(armIndent) + fmt.Sprintf("%s %s = %s.payload.%s.%s;\n", evt1CType(field.Type), cName, subjectTemp, evt1PayloadFieldName(variant.Name), field.Name))
+				b.WriteString(ind(armIndent) + fmt.Sprintf("(void)%s;\n", cName))
+			}
+			if arm.Guard != nil {
+				guardPrelude, guardExpr, _ := f.lowerExpr(arm.Guard, armIndent)
+				guardTemp := f.nextTemp("transition_guard")
+				b.WriteString(guardPrelude)
+				b.WriteString(ind(armIndent) + fmt.Sprintf("bool %s = %s;\n", guardTemp, guardExpr))
+				b.WriteString(ind(armIndent) + fmt.Sprintf("if (%s) {\n", guardTemp))
+				armIndent++
+			}
+			f.popScope()
+			b.WriteString(f.lowerAllScopeDrops(armIndent))
+			b.WriteString(ind(armIndent) + fmt.Sprintf("%s = %s;\n", statePlace, evt1AutomataStateConstName(f.automataStepName, f.machineStepName, arm.Target)))
+			b.WriteString(ind(armIndent) + "return;\n")
+			if arm.Guard != nil {
+				b.WriteString(ind(armIndent-1) + "}\n")
+			}
+			b.WriteString(ind(indent+2) + "}\n")
+		}
+		b.WriteString(ind(indent+1) + "}\n")
 	}
 	f.liveOwners = before
 	b.WriteString(ind(indent) + "default:\n")
