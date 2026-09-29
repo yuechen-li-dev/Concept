@@ -12,10 +12,14 @@ import (
 )
 
 func TestR7j1TinyXML2ArtifactABIChainAndIdentity(t *testing.T) {
+	if _, err := exec.LookPath("clang++"); err != nil {
+		t.Skip("clang++ unavailable")
+	}
 	project, err := LoadNativeProject(filepath.Join("..", "..", "tests", "dogfood", "tinyxml2"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	requireTinyXML2Submodule(t, project.Root)
 	a, err := CompileNativeSemanticModule(project, "concept/Native.concept", nil)
 	if err != nil {
 		t.Fatal(err)

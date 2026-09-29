@@ -971,7 +971,7 @@ ref ByteWriter writer, ref const Allocation allocation,
 int opcode, Register reg, MachineOperand memory, int width)
 {
     if (memory.kind != OperandKind::Memory or memory.base < 0 or
-    memory.baseSlot >= 0 or(width != 4 and width != 8))
+    memory.baseSlot >= 0 or(width != 1 and width != 4 and width != 8))
     { return Result::Error(BackendError::UnsupportedInstruction); }
     if (memory.base >= 128 or not allocation.assigned[memory.base])
     { return Result::Error(BackendError::BridgeInvalid); }
@@ -1230,6 +1230,7 @@ MachineInstruction instruction)
         int opcode = 141;
         if (instruction.op == Opcode::Load) {
             opcode = 139;
+            if (instruction.width == 1) { opcode = 138; }
         }
         if (instruction.source0.kind == OperandKind::Slot)
         {
@@ -1242,12 +1243,14 @@ MachineInstruction instruction)
     if (instruction.op == Opcode::Store)
     {
         Register source = ResolveRegister(ref const allocation, instruction.source0) ?;
+        int opcode = 137;
+        if (instruction.width == 1) { opcode = 136; }
         if (instruction.destination.kind == OperandKind::Slot)
         {
-            return WriteStackReg(ref writer, ref const frame, 137,
+            return WriteStackReg(ref writer, ref const frame, opcode,
             source, instruction.destination, instruction.width);
         }
-        return WriteMemoryReg(ref writer, ref const allocation, 137,
+        return WriteMemoryReg(ref writer, ref const allocation, opcode,
         source, instruction.destination, instruction.width);
     }
     if (instruction.op == Opcode::Mov)

@@ -152,6 +152,9 @@ func Win64Return(typ LIRType) (MachineReg, int, error) {
 	return RAX, w, nil
 }
 func machineABIWidth(t LIRType) (int, bool, error) {
+	if strings.HasPrefix(string(t), "ptr<") && strings.HasSuffix(string(t), ">") {
+		return 8, false, nil
+	}
 	if w := machineScalarWidth(t); w != 0 {
 		return w, false, nil
 	}
@@ -167,6 +170,9 @@ func machineABIWidth(t LIRType) (int, bool, error) {
 	return 0, false, fmt.Errorf("MIR_UNSUPPORTED_ABI_TYPE %s", t)
 }
 func machineScalarWidth(t LIRType) int {
+	if strings.HasPrefix(string(t), "ptr<") && strings.HasSuffix(string(t), ">") {
+		return 8
+	}
 	if t == "bool" {
 		return 1
 	}
