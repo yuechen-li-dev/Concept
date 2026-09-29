@@ -73,3 +73,32 @@ qualified.
 Explicit state structure may later support profiled transition traces. EVT2x
 does not implement a scheduler, EventBus, async lowering, JIT, state optimizer,
 or trace specialization.
+
+## EVT2x5 native address capability
+
+For a guarded pointer index, LIR now records the semantic byte stride and
+fixed offset. MachineIR uses an AMD64 scale directly for 1, 2, 4, or 8;
+otherwise it materializes the stride, multiplies the index, and uses a
+scale-one LEA. The 12-byte Parent/Child activation slot therefore remains
+12 bytes. A direct LIR/backend probe loads depth from the caller-owned frame,
+computes `top = depth - 1`, checks the capacity, and reads slot tags at depths
+1, 2, and 3 in native AMD64. A second probe writes those slots and checks
+surrounding sentinels. These are backend capability tests; source pushdown
+Step remains unsupported.
+
+Activation layout is semantic and independent of target addressing modes.
+Non-power-of-two activation strides are legalized during MachineIR lowering;
+AMD64 SIB scale restrictions do not affect frame layout.
+
+Push must construct a complete typed child activation before publishing
+increased depth. Pop must destroy the live child activation before publishing
+reduced depth. `machineTag` identifies the live machine-frame type in an
+activation slot. The slot is raw storage when inactive, typed live storage
+while active, and is never used as union-style type punning. These are
+contracts for the remaining source Step lowering, not claims of native
+push/pop execution.
+
+By the target MachineIR boundary, pushdown semantics must have become ordinary
+memory and control-flow operations. The Concept-written AMD64 backend is
+unaware that the code originated from automata; it remains unchanged by the
+address legalization work.

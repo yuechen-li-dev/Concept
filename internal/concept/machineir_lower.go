@@ -206,15 +206,46 @@ func LowerLirToAmd64Machine(lir LIRModule) (MachineModule, error) {
 					b.emit(current, ctx)
 					current = b.failureEdge(current, lb.ID, ctx.FlagsDef, "AE", "bounds", in.Source)
 				case "index_address":
-					idx, e := get(0)
+					indexArg := 0
+					baseID := -1
+					region := ""
+					disp := in.FrameOffset
+					if in.Slot == -1 {
+						base, e := get(0)
+						if e != nil {
+							return MachineModule{}, e
+						}
+						baseID = base.ID
+						indexArg = 1
+						region = b.regions[in.Args[0]]
+						disp += b.frameOffsets[in.Args[0]]
+					} else {
+						slot := b.fn.Slots[in.Slot]
+						if !slot.IncomingIndirect {
+							return MachineModule{}, fmt.Errorf("MIR_UNSUPPORTED_ARRAY_BASE s%d", in.Slot)
+						}
+						baseID = slot.BaseVReg
+						region = fmt.Sprintf("s%d", in.Slot)
+					}
+					idx, e := get(indexArg)
 					if e != nil {
 						return MachineModule{}, e
 					}
-					slot := b.fn.Slots[in.Slot]
-					if !slot.IncomingIndirect {
-						return MachineModule{}, fmt.Errorf("MIR_UNSUPPORTED_ARRAY_BASE s%d", in.Slot)
+					scale := in.Stride
+					if scale != 1 && scale != 2 && scale != 4 && scale != 8 {
+						factor := b.vreg(idx.Width, false)
+						imm, e := machineImmediate(fmt.Sprint(scale), idx.Width, false)
+						if e != nil {
+							return MachineModule{}, e
+						}
+						b.emit(current, MachineInstruction{Op: "MOV", Dst: mv(factor.ID, idx.Width), Src: []MachineOperand{imm}, Width: idx.Width, LIRBlock: lb.ID, LIRInstruction: ii, FlagsDef: -1, FlagsUse: -1})
+						product := b.vreg(idx.Width, false)
+						b.emit(current, MachineInstruction{Op: "MOV", Dst: mv(product.ID, idx.Width), Src: []MachineOperand{idx}, Width: idx.Width, LIRBlock: lb.ID, LIRInstruction: ii, FlagsDef: -1, FlagsUse: -1})
+						b.emit(current, MachineInstruction{Op: "IMUL", Dst: mv(product.ID, idx.Width), Src: []MachineOperand{mv(factor.ID, idx.Width)}, Width: idx.Width, LIRBlock: lb.ID, LIRInstruction: ii, FlagsDef: b.flag(), FlagsUse: -1})
+						idx = mv(product.ID, idx.Width)
+						scale = 1
 					}
-					mem := MachineOperand{Kind: "mem", Base: slot.BaseVReg, BaseSlot: -1, Index: idx.ID, Scale: in.Stride, Width: 8, Region: fmt.Sprintf("s%d", in.Slot)}
+					mem := MachineOperand{Kind: "mem", Base: baseID, BaseSlot: -1, Index: idx.ID, Scale: scale, Disp: disp, Width: 8, Region: region}
 					v := b.vreg(8, true)
 					ctx.Op = "LEA"
 					ctx.Dst = mv(v.ID, 8)

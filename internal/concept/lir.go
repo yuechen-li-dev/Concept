@@ -37,7 +37,7 @@ type LIRInstruction struct {
 	Extent      int
 	Stride      int
 	FrameField  int // -1 unless this is a caller-owned machine-frame address
-	FrameOffset int
+	FrameOffset int // fixed byte displacement for frame or pointer-index address
 	Source      Span
 	Decision    string
 	Facts       []string
@@ -185,6 +185,9 @@ func (m LIRModule) String() string {
 				}
 				if in.Stride > 0 {
 					fmt.Fprintf(&out, " stride=%d", in.Stride)
+				}
+				if in.Op == "index_address" && in.FrameOffset != 0 {
+					fmt.Fprintf(&out, " offset=%d", in.FrameOffset)
 				}
 				if in.Op == "frame_field_address" || in.Op == "activation_address" {
 					fmt.Fprintf(&out, " field=%d offset=%d", in.FrameField, in.FrameOffset)
@@ -351,10 +354,19 @@ func VerifyLIR(m LIRModule) error {
 					}
 					guards[[2]int{in.Args[0], in.Extent}] = true
 				case "index_address":
-					if !hasSlot || s.Extent <= 0 || s.Extent != in.Extent || in.Stride != lirWidth(s.Element) || len(in.Args) != 1 || !lirInteger(argType(0)) || in.Type != LIRType("ptr<"+string(s.Element)+">") || in.Result < 0 {
+					indexArg := 0
+					if in.Slot == -1 {
+						indexArg = 1
+						if len(in.Args) != 2 || !strings.HasPrefix(string(argType(0)), "ptr<") || !strings.HasPrefix(string(in.Type), "ptr<") || in.FrameOffset < 0 {
+							return fmt.Errorf("LIR_BAD_INDEX_ADDRESS b%d", b.ID)
+						}
+					} else if !hasSlot || s.Extent <= 0 || s.Extent != in.Extent || in.Stride != lirWidth(s.Element) || len(in.Args) != 1 || in.Type != LIRType("ptr<"+string(s.Element)+">") || in.FrameOffset != 0 {
 						return fmt.Errorf("LIR_BAD_INDEX_ADDRESS b%d", b.ID)
 					}
-					if !guards[[2]int{in.Args[0], in.Extent}] {
+					if in.Result < 0 || !lirInteger(argType(indexArg)) || in.Extent <= 0 || in.Stride <= 0 || in.Stride > 2147483647 || in.FrameOffset > 2147483647 || in.Extent > 1 && in.Stride > (2147483647-in.FrameOffset)/(in.Extent-1) {
+						return fmt.Errorf("LIR_BAD_INDEX_ADDRESS b%d", b.ID)
+					}
+					if !guards[[2]int{in.Args[indexArg], in.Extent}] {
 						return fmt.Errorf("LIR_MISSING_INDEX_GUARD b%d", b.ID)
 					}
 				case "load":

@@ -30,13 +30,35 @@ bridge is unchanged, and a native Windows AMD64 harness calls the encoded
 Init against the 108-byte parent/child frame. This establishes root storage
 geometry and initialization, not native push/pop execution.
 
-The next lowering step is a dynamic top-slot address and two-level tag/state
-dispatch, followed by guarded child construction and typed destruction on
-pop. Current `GenerateLIR` still rejects push with
+LIR `index_address` now also accepts a guarded pointer base, an arbitrary
+positive constant byte stride, and a fixed byte offset. Its verifier requires
+the matching index guard and bounds the largest displacement before MachineIR.
+The AMD64 MachineIR lowerer emits a multiply and scale-one LEA for stride 12;
+the Concept allocator and encoder still see only ordinary operations. A native
+test calculates `top = depth - 1`, guards it, and loads tags from slots zero,
+one, and two with the real 12-byte stride. A second native test writes those
+slots while checking surrounding sentinels. These are direct LIR/backend
+probes, not a source `Step` implementation.
+
+Activation layout is semantic and independent of target addressing modes.
+Non-power-of-two activation strides are legalized during MachineIR lowering;
+AMD64 SIB scale restrictions do not affect frame layout.
+
+The next lowering step is to connect this address path to generated Step,
+dispatch machine tags and states, then lower guarded child construction and
+typed destruction on pop. Current `GenerateLIR` still rejects push with
 `EVT2_UNSUPPORTED_AUTOMATA_PUSH_POP`. In particular, scalar root stores do
 not establish general `Storage<T>` lifetime semantics for owned child frames;
 those remain an explicit native boundary. The existing C backend is the
 pushdown behavior oracle and already uses fixed specialized frame arrays.
+
+The required publication contract is: push constructs a complete typed child
+activation before publishing increased depth; pop destroys the live child
+activation before publishing reduced depth. `machineTag` identifies the live
+machine-frame type in an activation slot. The slot is raw storage when
+inactive, typed live storage while active, and is never used as union-style
+type punning. These push/pop contracts remain to be established in generated
+native Step.
 
 The intended activation stack is fixed-capacity caller-owned storage. It has
 no heap fallback at overflow. Before MachineIR, push/pop must become ordinary

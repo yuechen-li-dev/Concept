@@ -11,7 +11,7 @@ import (
 
 // Exercise the emitted bytes through the same Win64 executable-memory path as
 // EVT2d. The frame is caller-owned and its layout is pinned by the LIR test.
-func TestEVT2x3FiniteNativeStep(t *testing.T) {
+func TestEVT2x3FiniteNativeStepAndEVT2x5DynamicAddressing(t *testing.T) {
 	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
 		t.Skip("native executable-memory test requires Windows AMD64")
 	}
@@ -79,6 +79,30 @@ int main(int argc, char** argv) {
     memcpy(&tag, instance + 12, 4); memcpy(&state, instance + 16, 4);
     memcpy(&preserved, instance + 20, 4);
     if (depth != 1 || instance[4] != 0 || shared != 13 || tag != 0 || state != 0 || preserved != 7) return 111;
+    VirtualFree(initCode, 0, MEM_RELEASE); free(bytes); return 0;
+  }
+  if (scenario == 4) {
+    typedef void (*indexed_store_fn)(void*, uint32_t, uint32_t);
+    indexed_store_fn store = NULL; memcpy(&store, &initCode, sizeof store);
+    uint32_t protected_slots[11];
+    for (int i = 0; i < 11; ++i) protected_slots[i] = 0xA5A5A5A5u;
+    for (uint32_t i = 0; i < 3; ++i) store(&protected_slots[1], i, 101u + i);
+    for (int i = 0; i < 11; ++i) {
+      uint32_t expected = i == 2 ? 101u : i == 5 ? 102u : i == 8 ? 103u : 0xA5A5A5A5u;
+      if (protected_slots[i] != expected) return 112;
+    }
+    VirtualFree(initCode, 0, MEM_RELEASE); free(bytes); return 0;
+  }
+  if (scenario == 5) {
+    typedef uint32_t (*top_tag_fn)(void*);
+    top_tag_fn topTag = NULL; memcpy(&topTag, &initCode, sizeof topTag);
+    uint32_t protected_slots[29];
+    for (int i = 0; i < 29; ++i) protected_slots[i] = 0xA5A5A5A5u;
+    protected_slots[4] = 17u; protected_slots[7] = 19u; protected_slots[10] = 23u;
+    protected_slots[1] = 1u; if (topTag(&protected_slots[1]) != 17u) return 113;
+    protected_slots[1] = 2u; if (topTag(&protected_slots[1]) != 19u) return 113;
+    protected_slots[1] = 3u; if (topTag(&protected_slots[1]) != 23u) return 113;
+    if (protected_slots[0] != 0xA5A5A5A5u || protected_slots[28] != 0xA5A5A5A5u) return 114;
     VirtualFree(initCode, 0, MEM_RELEASE); free(bytes); return 0;
   }
   void* stepCode = make_code(bridge, 1); if (!stepCode) return 96;
@@ -179,5 +203,70 @@ int main(int argc, char** argv) {
 	}
 	if out, err := nativeCommand(t, executable, artifact, "3").CombinedOutput(); err != nil {
 		t.Fatalf("activation root Init native execution: %v\n%s", err, strings.TrimSpace(string(out)))
+	}
+	stride := LIRFunction{
+		Identity: "StoreStride12", Name: "StoreStride12",
+		Params: []LIRValue{{ID: 0, Type: "ptr<u32>"}, {ID: 1, Type: "u32"}, {ID: 2, Type: "u32"}}, Result: "void",
+		Blocks: []LIRBlock{{ID: 0, Instructions: []LIRInstruction{
+			{Op: "check_index", Result: -1, Type: "void", Args: []int{1}, Slot: -1, Extent: 3},
+			{Op: "index_address", Result: 3, Type: "ptr<u32>", Args: []int{0, 1}, Slot: -1, Extent: 3, Stride: layout.SlotSize, FrameOffset: layout.SlotDataOffset},
+			{Op: "store", Result: -1, Type: "u32", Args: []int{3, 2}, Slot: -1},
+		}, Term: LIRTerminator{Op: "return"}}},
+	}
+	machine, err = LowerLirToAmd64Machine(LIRModule{Functions: []LIRFunction{stride}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bridge, err = EncodeMachineBridge(machine)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact = filepath.Join(dir, "stride12.cmir")
+	if err := os.WriteFile(artifact, bridge, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := nativeCommand(t, executable, artifact, "4").CombinedOutput(); err != nil {
+		t.Fatalf("12-byte indexed native store: %v\n%s", err, strings.TrimSpace(string(out)))
+	}
+	top := LIRFunction{
+		Identity: "TopTagStride12", Name: "TopTagStride12",
+		Params: []LIRValue{{ID: 0, Type: "ptr<u32>"}}, Result: "u32",
+		Blocks: []LIRBlock{{ID: 0, Instructions: []LIRInstruction{
+			{Op: "load", Result: 1, Type: "u32", Args: []int{0}, Slot: -1},
+			{Op: "const", Result: 2, Type: "u32", Literal: "1", Slot: -1},
+			{Op: "sub", Result: 3, Type: "u32", Args: []int{1, 2}, Slot: -1},
+			{Op: "check_index", Result: -1, Type: "void", Args: []int{3}, Slot: -1, Extent: layout.Capacity},
+			{Op: "index_address", Result: 4, Type: "ptr<u32>", Args: []int{0, 3}, Slot: -1, Extent: layout.Capacity, Stride: layout.SlotSize, FrameOffset: layout.SlotsOffset + layout.SlotTagOffset},
+			{Op: "load", Result: 5, Type: "u32", Args: []int{4}, Slot: -1},
+		}, Term: LIRTerminator{Op: "return", Value: 5}}},
+	}
+	machine, err = LowerLirToAmd64Machine(LIRModule{Functions: []LIRFunction{top}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	multiply, legalAddress := false, false
+	for _, block := range machine.Functions[0].Blocks {
+		for _, in := range block.Instructions {
+			if in.Op == "IMUL" {
+				multiply = true
+			}
+			if in.Op == "LEA" && len(in.Src) == 1 && in.Src[0].Kind == "mem" && in.Src[0].Scale == 1 && in.Src[0].Disp == layout.SlotsOffset+layout.SlotTagOffset {
+				legalAddress = true
+			}
+		}
+	}
+	if !multiply || !legalAddress {
+		t.Fatal("stride 12 was not legalized to multiply and scale-one address")
+	}
+	bridge, err = EncodeMachineBridge(machine)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact = filepath.Join(dir, "top-tag-stride12.cmir")
+	if err := os.WriteFile(artifact, bridge, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := nativeCommand(t, executable, artifact, "5").CombinedOutput(); err != nil {
+		t.Fatalf("dynamic top tag native load: %v\n%s", err, strings.TrimSpace(string(out)))
 	}
 }

@@ -120,3 +120,19 @@ func TestEVT2VerifierRequiresIndexedGuardAndCoherentLayout(t *testing.T) {
 		t.Fatalf("bad stride accepted: %v", err)
 	}
 }
+
+func TestEVT2x5PointerIndexedAddressRequiresGuardAndBoundedStride(t *testing.T) {
+	address := LIRInstruction{Op: "index_address", Result: 2, Type: "ptr<u32>", Args: []int{0, 1}, Slot: -1, Extent: 8, Stride: 12, FrameOffset: 4}
+	f := LIRFunction{Identity: "PointerStride", Name: "PointerStride", Params: []LIRValue{{ID: 0, Type: "ptr<u32>"}, {ID: 1, Type: "u32"}}, Result: "ptr<u32>", Blocks: []LIRBlock{{ID: 0, Instructions: []LIRInstruction{address}, Term: LIRTerminator{Op: "return", Value: 2}}}}
+	if err := VerifyLIR(LIRModule{Functions: []LIRFunction{f}}); err == nil || !strings.Contains(err.Error(), "LIR_MISSING_INDEX_GUARD") {
+		t.Fatalf("missing dynamic pointer guard accepted: %v", err)
+	}
+	f.Blocks[0].Instructions = append([]LIRInstruction{{Op: "check_index", Result: -1, Type: "void", Args: []int{1}, Slot: -1, Extent: 8}}, f.Blocks[0].Instructions...)
+	if err := VerifyLIR(LIRModule{Functions: []LIRFunction{f}}); err != nil {
+		t.Fatal(err)
+	}
+	f.Blocks[0].Instructions[1].Stride = 1 << 30
+	if err := VerifyLIR(LIRModule{Functions: []LIRFunction{f}}); err == nil || !strings.Contains(err.Error(), "LIR_BAD_INDEX_ADDRESS") {
+		t.Fatalf("offset overflow accepted: %v", err)
+	}
+}
