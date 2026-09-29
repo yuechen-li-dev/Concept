@@ -4,8 +4,10 @@ import Vulkan;
 
 // Observers exported by native/test_device.c.
 extern "C" int ConceptVkTestLiveBuffers();
+extern "C" int ConceptVkTestLivePipelines();
+extern "C" int ConceptVkTestLiveContexts();
+extern "C" int ConceptVkTestPendingSubmissions();
 extern "C" int ConceptVkTestDoubleDestroys();
-extern "C" VkDevice ConceptVkTestDevice();
 
 // Keeps only the status of a creation, dropping a created buffer.
 Result<void, VulkanError> Discarded(Result<Buffer, VulkanError> created)
@@ -77,9 +79,9 @@ void FlagWordsMatchTheVulkanBits()
     Assert.True(HostVisible().raw == 6, "HOST_VISIBLE (0x2) | HOST_COHERENT (0x4)");
 }
 
-int LiveWhileHeld(VkDevice device)
+int LiveWhileHeld(ref const Context context)
 {
-    owned Buffer buffer = CreateBuffer(device, 256, StorageTransfer(), HostVisible())!;
+    owned Buffer buffer = CreateBuffer(ref const context, 256, StorageTransfer(), HostVisible())!;
     return ConceptVkTestLiveBuffers();
 }
 
@@ -90,10 +92,10 @@ void Consume(owned Buffer buffer)
 [[fact]]
 void DroppingABufferDestroysItOnce()
 {
-    VkDevice device = ConceptVkTestDevice();
-    Assert.Equal(LiveWhileHeld(device), 1, "the buffer is live while owned");
+    owned Context context = CreateComputeContext()!;
+    Assert.Equal(LiveWhileHeld(ref const context), 1, "the buffer is live while owned");
     Assert.Equal(ConceptVkTestLiveBuffers(), 0, "leaving scope destroyed it");
-    owned Buffer moved = CreateBuffer(device, 64, StorageTransfer(), HostVisible())!;
+    owned Buffer moved = CreateBuffer(ref const context, 64, StorageTransfer(), HostVisible())!;
     Consume(move moved);
     Assert.Equal(ConceptVkTestLiveBuffers(), 0, "moving hands destruction to the new owner");
     Assert.Equal(ConceptVkTestDoubleDestroys(), 0, "nothing was destroyed twice");
@@ -102,8 +104,48 @@ void DroppingABufferDestroysItOnce()
 [[fact]]
 void FailedCreationOwnsNothing()
 {
-    VkDevice device = ConceptVkTestDevice();
+    owned Context context = CreateComputeContext()!;
     BufferUsage none = BufferUsage{0};
-    Assert.Equal(FailureCode(Discarded(CreateBuffer(device, 64, none, HostVisible()))), -3, "no usage is VK_ERROR_INITIALIZATION_FAILED");
+    Assert.Equal(FailureCode(Discarded(CreateBuffer(ref const context, 64, none, HostVisible()))), -3, "no usage is VK_ERROR_INITIALIZATION_FAILED");
     Assert.Equal(ConceptVkTestLiveBuffers(), 0, "a failed creation leaves nothing live");
+}
+
+int RunAndCount(ref const Context context)
+{
+    owned ComputePipeline pipeline = CreateComputePipeline(ref const context, "kernels/double.spv", 2)!;
+    owned Buffer input = CreateBuffer(ref const context, 16, StorageTransfer(), HostVisible())!;
+    owned Buffer output = CreateBuffer(ref const context, 16, StorageTransfer(), HostVisible())!;
+    WriteInt(ref const input, 2, 21)!;
+    BindStorage(ref const pipeline, 0, ref const input);
+    BindStorage(ref const pipeline, 1, ref const output);
+    owned Submission work = Dispatch(ref const context, ref const pipeline, 1)!;
+    Wait(move work)!;
+    return ReadInt(ref const output, 2)! * 10 + ConceptVkTestPendingSubmissions();
+}
+
+[[fact]]
+void ADispatchIsWaitedAndEverythingIsReleased()
+{
+    owned Context context = CreateComputeContext()!;
+    Assert.Equal(RunAndCount(ref const context), 420, "the test device ran double.spv; nothing is pending");
+    Assert.Equal(ConceptVkTestLivePipelines() + ConceptVkTestLiveBuffers(), 0, "pipeline and buffers were released");
+}
+
+int DropWithoutWaiting(ref const Context context)
+{
+    owned ComputePipeline pipeline = CreateComputePipeline(ref const context, "kernels/double.spv", 2)!;
+    owned Buffer input = CreateBuffer(ref const context, 16, StorageTransfer(), HostVisible())!;
+    owned Buffer output = CreateBuffer(ref const context, 16, StorageTransfer(), HostVisible())!;
+    BindStorage(ref const pipeline, 0, ref const input);
+    BindStorage(ref const pipeline, 1, ref const output);
+    owned Submission work = Dispatch(ref const context, ref const pipeline, 1)!;
+    return ConceptVkTestPendingSubmissions();
+}
+
+[[fact]]
+void AnUnwaitedSubmissionIsWaitedWhenDropped()
+{
+    owned Context context = CreateComputeContext()!;
+    Assert.Equal(DropWithoutWaiting(ref const context), 1, "in flight inside the function");
+    Assert.Equal(ConceptVkTestPendingSubmissions(), 0, "Drop waited for it");
 }

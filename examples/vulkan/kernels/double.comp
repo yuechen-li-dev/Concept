@@ -1,0 +1,11 @@
+#version 450
+// output[i] = 2 * input[i], one invocation per int.
+layout(local_size_x = 64) in;
+layout(std430, set = 0, binding = 0) readonly buffer Input { int values[]; } inputs;
+layout(std430, set = 0, binding = 1) writeonly buffer Output { int values[]; } outputs;
+
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    outputs.values[i] = 2 * inputs.values[i];
+}

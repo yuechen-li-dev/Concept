@@ -6,9 +6,21 @@ profile Core;
 // object is an owned value whose Drop releases it. The C boundary is
 // native/concept_vulkan.h.
 
+extern "C" handle VkInstance;
+extern "C" handle VkPhysicalDevice;
 extern "C" handle VkDevice;
+extern "C" handle VkQueue;
+extern "C" handle VkCommandPool;
+extern "C" handle VkCommandBuffer;
+extern "C" handle VkFence;
 extern "C" handle VkBuffer;
 extern "C" handle VkDeviceMemory;
+extern "C" handle VkShaderModule;
+extern "C" handle VkDescriptorSetLayout;
+extern "C" handle VkPipelineLayout;
+extern "C" handle VkPipeline;
+extern "C" handle VkDescriptorPool;
+extern "C" handle VkDescriptorSet;
 
 // The failing VkResult codes (negative in C).
 enum VulkanError
@@ -80,6 +92,20 @@ bits MemoryProperty : uint32
     lazilyAllocated: 4;
 }
 
+// ---- The C boundary (native/concept_vulkan.h) ----
+
+[[repr(C)]]
+record struct ComputeContext
+{
+    int code;
+    uint32 queueFamily;
+    VkInstance instance;
+    VkPhysicalDevice physical;
+    VkDevice device;
+    VkQueue queue;
+    VkCommandPool commands;
+};
+
 [[repr(C)]]
 record struct BufferCreation
 {
@@ -88,8 +114,76 @@ record struct BufferCreation
     VkDeviceMemory memory;
 };
 
-extern "C" BufferCreation ConceptVkCreateBuffer(VkDevice device, usize size, uint32 usage, uint32 properties);
+[[repr(C)]]
+record struct IntRead
+{
+    int code;
+    int value;
+};
+
+[[repr(C)]]
+record struct PipelineCreation
+{
+    int code;
+    uint32 storageBuffers;
+    VkShaderModule shader;
+    VkDescriptorSetLayout setLayout;
+    VkPipelineLayout layout;
+    VkPipeline pipeline;
+    VkDescriptorPool descriptors;
+    VkDescriptorSet set;
+};
+
+[[repr(C)]]
+record struct SubmissionRecord
+{
+    int code;
+    uint32 groups;
+    VkCommandBuffer commands;
+    VkFence fence;
+};
+
+extern "C" ComputeContext ConceptVkCreateComputeContext();
+extern "C" void ConceptVkDestroyComputeContext(VkInstance instance, VkDevice device, VkCommandPool commands);
+extern "C" BufferCreation ConceptVkCreateBuffer(VkPhysicalDevice physical, VkDevice device, usize size, uint32 usage, uint32 properties);
 extern "C" void ConceptVkDestroyBuffer(VkDevice device, VkBuffer buffer, VkDeviceMemory memory);
+extern "C" int ConceptVkWriteInt(VkDevice device, VkDeviceMemory memory, usize index, int value);
+extern "C" IntRead ConceptVkReadInt(VkDevice device, VkDeviceMemory memory, usize index);
+extern "C" PipelineCreation ConceptVkCreateComputePipeline(VkDevice device, string spirvPath, uint32 storageBuffers);
+extern "C" void ConceptVkDestroyComputePipeline(VkDevice device, VkShaderModule shader, VkDescriptorSetLayout setLayout, VkPipelineLayout layout, VkPipeline pipeline, VkDescriptorPool descriptors);
+extern "C" void ConceptVkBindStorageBuffer(VkDevice device, VkDescriptorSet set, uint32 binding, VkBuffer buffer, usize size);
+extern "C" SubmissionRecord ConceptVkSubmitDispatch(VkDevice device, VkQueue queue, VkCommandPool commands, VkPipeline pipeline, VkPipelineLayout layout, VkDescriptorSet set, uint32 groups);
+extern "C" int ConceptVkWait(VkDevice device, VkCommandPool commands, VkCommandBuffer submitted, VkFence fence);
+
+// ---- Owned Vulkan objects ----
+// Each owned value releases its Vulkan objects in Drop, exactly once. Locals
+// drop in reverse declaration order, so objects created from a Context are
+// released before it.
+
+// An instance, the first device with a compute queue, that queue, and a
+// command pool for it.
+class Context
+{
+public:
+    VkInstance instance;
+    VkPhysicalDevice physical;
+    VkDevice device;
+    VkQueue queue;
+    VkCommandPool commands;
+};
+
+void Drop(owned Context context)
+{
+    ConceptVkDestroyComputeContext(context.instance, context.device, context.commands);
+}
+
+Result<Context, VulkanError> CreateComputeContext()
+{
+    ComputeContext created = ConceptVkCreateComputeContext();
+    Check(created.code)?;
+    owned Context context = Context{created.instance, created.physical, created.device, created.queue, created.commands};
+    return Result::Ok(move context);
+}
 
 // A buffer and the memory bound to it. Dropping it destroys both, exactly
 // once; moving it transfers that duty.
@@ -107,10 +201,89 @@ void Drop(owned Buffer buffer)
     ConceptVkDestroyBuffer(buffer.device, buffer.buffer, buffer.memory);
 }
 
-Result<Buffer, VulkanError> CreateBuffer(VkDevice device, usize<byte> size, BufferUsage usage, MemoryProperty properties)
+Result<Buffer, VulkanError> CreateBuffer(ref const Context context, usize<byte> size, BufferUsage usage, MemoryProperty properties)
 {
-    BufferCreation created = ConceptVkCreateBuffer(device, Magnitude(size), usage.raw, properties.raw);
+    BufferCreation created = ConceptVkCreateBuffer(context.physical, context.device, Magnitude(size), usage.raw, properties.raw);
     Check(created.code)?;
-    owned Buffer buffer = Buffer{device, created.buffer, created.memory, size};
+    owned Buffer buffer = Buffer{context.device, created.buffer, created.memory, size};
     return Result::Ok(move buffer);
+}
+
+// Host access to a host-visible buffer, one int at a time.
+Result<void, VulkanError> WriteInt(ref const Buffer buffer, usize index, int value)
+{
+    return Check(ConceptVkWriteInt(buffer.device, buffer.memory, index, value));
+}
+
+Result<int, VulkanError> ReadInt(ref const Buffer buffer, usize index)
+{
+    IntRead read = ConceptVkReadInt(buffer.device, buffer.memory, index);
+    Check(read.code)?;
+    return Result::Ok(read.value);
+}
+
+// A compute pipeline over storage-buffer bindings 0..n-1 of set 0, with one
+// descriptor set allocated for it.
+class ComputePipeline
+{
+public:
+    VkDevice device;
+    VkShaderModule shader;
+    VkDescriptorSetLayout setLayout;
+    VkPipelineLayout layout;
+    VkPipeline pipeline;
+    VkDescriptorPool descriptors;
+    VkDescriptorSet set;
+};
+
+void Drop(owned ComputePipeline pipeline)
+{
+    ConceptVkDestroyComputePipeline(pipeline.device, pipeline.shader, pipeline.setLayout, pipeline.layout, pipeline.pipeline, pipeline.descriptors);
+}
+
+Result<ComputePipeline, VulkanError> CreateComputePipeline(ref const Context context, string spirvPath, uint32 storageBuffers)
+{
+    PipelineCreation created = ConceptVkCreateComputePipeline(context.device, spirvPath, storageBuffers);
+    Check(created.code)?;
+    owned ComputePipeline pipeline = ComputePipeline{context.device, created.shader, created.setLayout, created.layout, created.pipeline, created.descriptors, created.set};
+    return Result::Ok(move pipeline);
+}
+
+void BindStorage(ref const ComputePipeline pipeline, uint32 binding, ref const Buffer buffer)
+{
+    ConceptVkBindStorageBuffer(pipeline.device, pipeline.set, binding, buffer.buffer, Magnitude(buffer.size));
+}
+
+// Work in flight. Wait consumes it; dropping it unwaited waits too, so a
+// command buffer is never freed while the GPU may still use it.
+class Submission
+{
+public:
+    VkDevice device;
+    VkCommandPool commands;
+    VkCommandBuffer submitted;
+    VkFence fence;
+    bool waited;
+};
+
+void Drop(owned Submission submission)
+{
+    if (not submission.waited)
+    {
+        discard ConceptVkWait(submission.device, submission.commands, submission.submitted, submission.fence);
+    }
+}
+
+Result<Submission, VulkanError> Dispatch(ref const Context context, ref const ComputePipeline pipeline, uint32 groups)
+{
+    SubmissionRecord submitted = ConceptVkSubmitDispatch(context.device, context.queue, context.commands, pipeline.pipeline, pipeline.layout, pipeline.set, groups);
+    Check(submitted.code)?;
+    owned Submission submission = Submission{context.device, context.commands, submitted.commands, submitted.fence, false};
+    return Result::Ok(move submission);
+}
+
+Result<void, VulkanError> Wait(owned Submission submission)
+{
+    submission.waited = true;
+    return Check(ConceptVkWait(submission.device, submission.commands, submission.submitted, submission.fence));
 }

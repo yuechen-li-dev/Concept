@@ -52,8 +52,8 @@ record struct NativeAbiClaim
     string companion;
     int size;
     int alignment;
-    string<array>[3] fields;
-    int<array>[3] offsets;
+    string<array>[8] fields;
+    int<array>[8] offsets;
 };
 record struct NativeVersion { int major; int minor; int patch; }
 record struct NativeProjectManifest
@@ -66,7 +66,7 @@ record struct NativeProjectManifest
     NativeTarget<array>[1] targets;
     string<array>[1] companions;
     string<array>[1] tests;
-    NativeAbiClaim<array>[1] abi;
+    NativeAbiClaim<array>[5] abi;
 };
 
 // Package tests link the GPU-free test device. A real loader-backed
@@ -82,8 +82,21 @@ comptime NativeProjectManifest Native = NativeProjectManifest{
         [NativeDefine{"CONCEPT_VULKAN_TEST_DEVICE", "1", true}], [""]
     }],
     ["concept/Vulkan.concept"], ["tests/vulkan.concept_test"],
+    // Claims share one array width; unused trailing slots are "".
     [NativeAbiClaim{
+        "native/concept_vulkan.h", "ComputeContext", "concept/Vulkan.concept",
+        48, 8, ["code", "queueFamily", "instance", "physical", "device", "queue", "commands", ""], [0, 4, 8, 16, 24, 32, 40, 0]
+    }, NativeAbiClaim{
         "native/concept_vulkan.h", "BufferCreation", "concept/Vulkan.concept",
-        24, 8, ["code", "buffer", "memory"], [0, 8, 16]
+        24, 8, ["code", "buffer", "memory", "", "", "", "", ""], [0, 8, 16, 0, 0, 0, 0, 0]
+    }, NativeAbiClaim{
+        "native/concept_vulkan.h", "IntRead", "concept/Vulkan.concept",
+        8, 4, ["code", "value", "", "", "", "", "", ""], [0, 4, 0, 0, 0, 0, 0, 0]
+    }, NativeAbiClaim{
+        "native/concept_vulkan.h", "PipelineCreation", "concept/Vulkan.concept",
+        56, 8, ["code", "storageBuffers", "shader", "setLayout", "layout", "pipeline", "descriptors", "set"], [0, 4, 8, 16, 24, 32, 40, 48]
+    }, NativeAbiClaim{
+        "native/concept_vulkan.h", "SubmissionRecord", "concept/Vulkan.concept",
+        24, 8, ["code", "groups", "commands", "fence", "", "", "", ""], [0, 4, 8, 16, 0, 0, 0, 0]
     }]
 };

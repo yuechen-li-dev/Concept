@@ -4,10 +4,10 @@ profile Vulkan;
 // profile Vulkan brings the Vulkan library (no import line) and, under
 // `concept test`, links the Vulkan runtime. Nothing here is a C header,
 // a manifest, or a link setting.
-Result<int, VulkanError> StagingBytes(VkDevice device)
+Result<int, VulkanError> StagingBytes(ref const Context context)
 {
     BufferUsage usage = BufferUsage{0} with { transferSource = true; };
     MemoryProperty memory = MemoryProperty{0} with { hostVisible = true; hostCoherent = true; };
-    owned Buffer staging = CreateBuffer(device, 4096, usage, memory)?;
+    owned Buffer staging = CreateBuffer(ref const context, 4096, usage, memory)?;
     return Result::Ok(Magnitude(staging.size) as int);
 }

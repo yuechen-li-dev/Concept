@@ -382,6 +382,10 @@ func LoadNativeProject(root string) (NativeProject, error) {
 		if a.Offsets, err = nativeInts(f[6]); err != nil {
 			return NativeProject{}, err
 		}
+		// Claims share one fixed array width; trailing "" slots are unused.
+		for len(a.Fields) > 0 && len(a.Fields) == len(a.Offsets) && a.Fields[len(a.Fields)-1] == "" {
+			a.Fields, a.Offsets = a.Fields[:len(a.Fields)-1], a.Offsets[:len(a.Offsets)-1]
+		}
 		if err := nativeValidatePath(root, a.Header); err != nil {
 			return NativeProject{}, err
 		}

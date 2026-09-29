@@ -1,0 +1,33 @@
+module ComputeDispatch;
+profile Vulkan;
+
+// The compute-dispatch vertical: create buffers, a pipeline, record and
+// submit a dispatch, wait, and read back. Every Vulkan object is owned and
+// released in reverse order; every failure is a VulkanError.
+// reference/compute_dispatch.c is the same program in plain C.
+
+Result<int, VulkanError> DoubleAndSum(string kernel)
+{
+    owned Context context = CreateComputeContext()?;
+    BufferUsage storage = BufferUsage{0} with { storage = true; };
+    MemoryProperty shared = MemoryProperty{0} with { hostVisible = true; hostCoherent = true; };
+    owned Buffer input = CreateBuffer(ref const context, 256, storage, shared)?;
+    owned Buffer output = CreateBuffer(ref const context, 256, storage, shared)?;
+    for (i in 0..64)
+    {
+        WriteInt(ref const input, i as usize, i)?;
+    }
+
+    owned ComputePipeline pipeline = CreateComputePipeline(ref const context, kernel, 2)?;
+    BindStorage(ref const pipeline, 0, ref const input);
+    BindStorage(ref const pipeline, 1, ref const output);
+    owned Submission work = Dispatch(ref const context, ref const pipeline, 1)?;
+    Wait(move work)?;
+
+    int sum = 0;
+    for (i in 0..64)
+    {
+        sum = sum + ReadInt(ref const output, i as usize)?;
+    }
+    return Result::Ok(sum);
+}

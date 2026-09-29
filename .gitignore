@@ -5,3 +5,5 @@ zig-out/
 .octmake/
 artifacts/
 .native-build/
+tools/vk8/out/
+*.spv

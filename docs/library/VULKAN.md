@@ -37,15 +37,20 @@ You never write the C header, a native manifest, or link flags.
 
 `module Vulkan` over a flat C boundary (`native/concept_vulkan.h`):
 
-- `VkDevice`, `VkBuffer`, `VkDeviceMemory` handles;
+- handles for the objects below;
 - `VulkanError` (the failing `VkResult` codes, `Unknown(code)` otherwise) and
   `Check(code)`; non-negative codes are success or status;
 - `BufferUsage` and `MemoryProperty` flag words;
-- `Buffer`, an owned buffer plus its memory, and
-  `CreateBuffer(device, size, usage, properties) -> Result<Buffer, VulkanError>`.
+- owned `Context` (instance, compute-capable device, queue, command pool),
+  `Buffer` (with `WriteInt`/`ReadInt` for host-visible memory),
+  `ComputePipeline` (storage-buffer bindings, one descriptor set,
+  `BindStorage`), and `Submission` (`Dispatch` returns it; `Wait` consumes
+  it; dropping it unwaited waits).
 
-Package tests link `native/test_device.c`, a GPU-free implementation of the C
-boundary, and run in Normal and Verify:
+Two runtimes implement the boundary: `native/test_device.c` (no GPU; it runs
+the host equivalent of the kernels it knows, such as `double.spv`) and
+`native/device_runtime.c` (the Vulkan loader). Package tests run in Normal
+and Verify:
 
 ```text
 go run ./cmd/concept test libraries/Vulkan --verify
@@ -57,8 +62,17 @@ Use `on` for reactions to external input and `transition` for a next state
 the machine computes itself. Keep the C boundary flat: handles, integers,
 and `[[repr(C)]]` records, so the Concept side needs no raw pointers.
 
+## Compute dispatch
+
+`examples/vulkan/ComputeDispatch.concept` is the vertical: buffers, a
+pipeline, a dispatch, a wait, and a readback in 33 lines, with every object
+owned and every failure a `VulkanError`. `reference/compute_dispatch.c` is
+the same program against Vulkan directly (about 200 lines); the mechanics it
+spells out live once in `device_runtime.c`. `tools/vk8/run_vk8.ps1` runs
+both on a machine with a GPU and the Vulkan SDK.
+
 ## Not yet
 
-The loader-backed implementation of `concept_vulkan.h`, command recording,
-descriptors, pipelines, and the compute-dispatch vertical against an
-equivalent C program are VK8. Barrier and access derivation follow it.
+Access and barrier derivation (the constitution's typed buffers and derived
+synchronization), more than one context per process in the device runtime,
+and non-int buffer access.

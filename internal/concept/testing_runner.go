@@ -568,9 +568,14 @@ func runOneTest(test TestDeclaration, values []any, caseIndex int, options TestR
 		}
 		result.TargetIdentity += "/" + filepath.Base(compiler)
 	}
+	var processEnv []string
+	if test.module.Profile == evt1VulkanProfileName {
+		// Kernel paths in a Vulkan test are relative to its source file.
+		processEnv = append(processEnv, "CONCEPT_VULKAN_KERNELS="+filepath.Dir(test.sourcePath))
+	}
 	if test.Kind == TestBenchmark {
 		for i := 0; i < options.BenchmarkWarmup; i++ {
-			stdout, stderr, code, _ := runTestProcess(executable, options.Timeout)
+			stdout, stderr, code, _ := runTestProcess(executable, options.Timeout, processEnv)
 			if code != 0 {
 				result.Stdout, result.Stderr = stdout, stderr
 				result.ProcessExitCode = &code
@@ -579,7 +584,7 @@ func runOneTest(test TestDeclaration, values []any, caseIndex int, options TestR
 		}
 		durations := make([]int64, 0, options.BenchmarkIterations)
 		for i := 0; i < options.BenchmarkIterations; i++ {
-			stdout, stderr, code, duration := runTestProcess(executable, options.Timeout)
+			stdout, stderr, code, duration := runTestProcess(executable, options.Timeout, processEnv)
 			if code != 0 {
 				result.Stdout, result.Stderr = stdout, stderr
 				result.ProcessExitCode = &code
@@ -591,7 +596,7 @@ func runOneTest(test TestDeclaration, values []any, caseIndex int, options TestR
 		result.DurationNanos = time.Since(start).Nanoseconds()
 		return result
 	}
-	stdout, stderr, exitCode, duration := runTestProcess(executable, options.Timeout)
+	stdout, stderr, exitCode, duration := runTestProcess(executable, options.Timeout, processEnv)
 	result.Stdout, result.Stderr, result.DurationNanos = stdout, stderr, duration.Nanoseconds()
 	result.Verifications = parseForeignVerificationObservations(stderr)
 	result.ProcessExitCode = &exitCode
@@ -738,10 +743,13 @@ func evt1TestCLiteral(t Type, value any) (string, error) {
 	}
 }
 
-func runTestProcess(executable string, timeout time.Duration) (string, string, int, time.Duration) {
+func runTestProcess(executable string, timeout time.Duration, env []string) (string, string, int, time.Duration) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, executable)
+	if len(env) != 0 {
+		cmd.Env = append(os.Environ(), env...)
+	}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	start := time.Now()
