@@ -1,0 +1,25 @@
+profile Core;
+
+automata Counter
+with state
+{
+    int count;
+}
+{
+    machine Run
+    {
+        state Counting
+        {
+            state.count = state.count + 1;
+            if (state.count == 3)
+            {
+                transition Done;
+            }
+            transition Counting;
+        }
+
+        terminal state Done
+        {
+        }
+    }
+}

@@ -202,9 +202,18 @@ func (l *lowering) canonicalAutomataStackRuntimeSupport(info *evt1AutomataInfo) 
 	}
 
 	topStep := evt1CName(automata) + "_step_top"
+	settle := ""
+	if evt1AutomataHasTerminalStates(info.Decl) {
+		settle = evt1CName(automata) + "_settle_terminal"
+		b.WriteString(l.terminalSettleSupport(info, settle, instanceType))
+	}
 	b.WriteString(fmt.Sprintf("static void %s(%s* instance) {\n", topStep, instanceType))
 	b.WriteString(fmt.Sprintf("  if (instance->completed || instance->depth == 0u) return;\n  switch (instance->machine_tags[instance->depth - 1u]) {\n"))
 	for _, machine := range info.Decl.Machines {
+		if settle != "" {
+			b.WriteString(fmt.Sprintf("    case %d: %s(instance); %s(instance); return;\n", info.MachineOrdinal[machine.Name], evt1MachineExecuteCName(automata, machine.Name), settle))
+			continue
+		}
 		b.WriteString(fmt.Sprintf("    case %d: %s(instance); return;\n", info.MachineOrdinal[machine.Name], evt1MachineExecuteCName(automata, machine.Name)))
 	}
 	b.WriteString(fmt.Sprintf("    default: concept_abort_automata_stack(\"%s\", \"invalid machine state reached\");\n  }\n}\n\n", automata))
@@ -325,5 +334,43 @@ func (f *evt1FunctionLowerer) lowerMachineCompletion(stmt MachineCompleteStmt, i
 	b.WriteString(ind(indent) + "instance->depth = (uint8_t)(instance->depth - 1u);\n")
 	b.WriteString(ind(indent) + "if (instance->depth == 0u) instance->completed = true;\n")
 	b.WriteString(ind(indent) + "return; /* CONCEPT_STEP_CHILD_OR_ROOT_COMPLETED */\n")
+	return b.String()
+}
+
+func evt1AutomataHasTerminalStates(decl AutomataDecl) bool {
+	for _, machine := range decl.Machines {
+		for _, state := range machine.States {
+			if state.Terminal {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// terminalSettleSupport completes, after each Step, every top frame whose
+// current state is terminal, exactly as a neutral `complete;` would. A
+// parent resumed into a terminal state completes in the same Step.
+func (l *lowering) terminalSettleSupport(info *evt1AutomataInfo, name, instanceType string) string {
+	automata := info.Decl.Name
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("static void %s(%s* instance) {\n", name, instanceType))
+	b.WriteString("  while (instance->depth > 0u) {\n    uint8_t slot = (uint8_t)(instance->depth - 1u);\n    bool terminal = false;\n    switch (instance->machine_tags[slot]) {\n")
+	for _, machine := range info.Decl.Machines {
+		var terminals []string
+		for _, state := range machine.States {
+			if state.Terminal {
+				terminals = append(terminals, fmt.Sprintf("instance->%s[slot].current_state == %s", evt1MachineFramesCName(machine.Name), evt1AutomataStateConstName(automata, machine.Name, state.Name)))
+			}
+		}
+		if len(terminals) == 0 {
+			continue
+		}
+		b.WriteString(fmt.Sprintf("      case %d:\n", info.MachineOrdinal[machine.Name]))
+		b.WriteString(fmt.Sprintf("        if (%s) {\n", strings.Join(terminals, " || ")))
+		b.WriteString(fmt.Sprintf("          terminal = true;\n          instance->%s.tag = 1u;\n          %s(instance, slot);\n        }\n        break;\n", evt1MachineLastOutcomeField(machine.Name), evt1MachineDropFrameCName(automata, machine.Name)))
+	}
+	b.WriteString("      default:\n        break;\n    }\n")
+	b.WriteString("    if (!terminal) return;\n    instance->depth = slot;\n    if (instance->depth == 0u) instance->completed = true;\n  }\n}\n\n")
 	return b.String()
 }

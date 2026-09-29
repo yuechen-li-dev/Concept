@@ -157,6 +157,12 @@ func lowerMachineInit(a MIRAutomata, machine MIRMachine, frame *LIRMachineFuncti
 
 func lowerMachineStep(a MIRAutomata, machine MIRMachine, frame *LIRMachineFunction) (LIRFunction, error) {
 	b := machineBuilderFor(a, machine, frame, "step")
+	b.terminalStates = map[string]bool{}
+	for _, state := range machine.States {
+		if state.Terminal {
+			b.terminalStates[state.Name] = true
+		}
+	}
 	b.fn.Result = "machine_step_result"
 	completedBlock := b.newBlock()
 	dispatch := make([]int, len(machine.States))

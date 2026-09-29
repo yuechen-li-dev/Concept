@@ -617,6 +617,16 @@ func evt1ValidateCanonicalAutomata(env *semanticEnv, decl AutomataDecl) (*evt1Au
 			if state.Body == nil {
 				return nil, evt1Diagnostic("MACHINE_MIR_INVALID", fmt.Sprintf("state %s.%s requires a body", machine.Name, state.Name), state.Span)
 			}
+			if state.Terminal {
+				// Entering a terminal state completes the machine neutrally in
+				// the same Step, so it can never run a body.
+				if si == 0 {
+					return nil, evt1Diagnostic("TERMINAL_STATE_INITIAL", fmt.Sprintf("terminal state %s.%s cannot be the machine's first (initial) state", machine.Name, state.Name), state.Span)
+				}
+				if len(state.Body.Statements) != 0 {
+					return nil, evt1Diagnostic("TERMINAL_STATE_BODY", fmt.Sprintf("terminal state %s.%s must have an empty body: entering it completes machine %s", machine.Name, state.Name, machine.Name), state.Body.Statements[0].statementSpan())
+				}
+			}
 			if err := evt1ValidateMachineControlFlow(state.Body); err != nil {
 				return nil, err
 			}

@@ -167,7 +167,9 @@ type lirBuilder struct {
 	frameParam    int
 	machineFields map[string]int
 	machineStates map[string]int
-	activeState   int
+	// terminalStates marks states whose entry completes the machine.
+	terminalStates map[string]bool
+	activeState    int
 }
 
 func (b *lirBuilder) value() int { n := b.nextValue; b.nextValue++; return n }
@@ -361,6 +363,11 @@ func (b *lirBuilder) statement(stmt Statement) error {
 			return fmt.Errorf("EVT2_MACHINE_UNKNOWN_STATE %s", s.Target)
 		}
 		b.storeMachineState(id, s.Span)
+		if b.terminalStates[s.Target] {
+			b.storeMachineCompleted(true, s.Span)
+			b.returnMachineResult("Completed", s.Span)
+			return nil
+		}
 		b.returnMachineResult("Active", s.Span)
 	case *YieldStmt:
 		if b.machine == nil {

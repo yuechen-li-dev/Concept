@@ -32,6 +32,7 @@ func TestEVT2x2MachineFrameStepLIR(t *testing.T) {
 		{"finite.concept", 16, []string{"Start", "Middle", "Done"}, 0},
 		{"yield_resume.concept", 12, []string{"Work"}, 1},
 		{"multi_yield.concept", 12, []string{"Work"}, 2},
+		{"terminal.concept", 12, []string{"Counting", "Done"}, 0},
 	}
 	for _, tc := range cases {
 		t.Run(tc.file, func(t *testing.T) {
@@ -216,6 +217,17 @@ func TestEVT2x2MachineCOracle(t *testing.T) {
     if (a.state.count != 3) { return 3; }
     Step(a, Run);
     if (a.state.count != 3) { return 4; }
+    return 0;
+}`},
+		{"terminal.concept", `int Main() {
+    instance Counter a(0);
+    Step(a, Run);
+    Step(a, Run);
+    if (State(a, Run) != 0) { return 1; }
+    Step(a, Run);
+    if (a.state.count != 3 or State(a, Run) != 1 or Result(a, Run).tag != 1) { return 2; }
+    Step(a, Run);
+    if (a.state.count != 3) { return 3; }
     return 0;
 }`},
 	}

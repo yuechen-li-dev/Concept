@@ -1,0 +1,58 @@
+profile Core;
+
+// Entering a terminal state completes the machine in the same Step: the
+// Step reports Finished, and every later Step reports AlreadyFinished.
+enum Job
+{
+    Start,
+    Poke,
+    Finish,
+}
+
+automata Worker
+with input Job
+with state
+{
+    int work;
+}
+{
+    machine Run
+    {
+        state Idle
+        {
+            on Job::Start => Busy;
+        }
+
+        state Busy
+        {
+            on Job::Poke => { work = work + 1; }
+            on Job::Finish => Done;
+        }
+
+        terminal state Done
+        {
+        }
+    }
+}
+
+int Code(StepOutcome outcome)
+{
+    return match (outcome)
+    {
+        StepOutcome::Transitioned => 1,
+        StepOutcome::Unhandled => 2,
+        StepOutcome::Ambiguous => 3,
+        StepOutcome::Finished => 4,
+        StepOutcome::AlreadyFinished => 5,
+    };
+}
+
+int Main()
+{
+    instance Worker worker(0);
+    int trail = Code(Step(worker, Run, Job::Start));
+    trail = trail * 10 + Code(Step(worker, Run, Job::Poke));
+    trail = trail * 10 + Code(Step(worker, Run, Job::Finish));
+    trail = trail * 10 + Code(Step(worker, Run, Job::Poke));
+    return trail * 10 + worker.state.work;
+}

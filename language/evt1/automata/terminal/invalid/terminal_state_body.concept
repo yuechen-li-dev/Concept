@@ -1,0 +1,21 @@
+profile Core;
+
+automata Bad
+with state
+{
+    int count;
+}
+{
+    machine Run
+    {
+        state Start
+        {
+            transition Done;
+        }
+
+        terminal state Done
+        {
+            count = count + 1;
+        }
+    }
+}

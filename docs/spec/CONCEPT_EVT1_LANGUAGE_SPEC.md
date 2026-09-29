@@ -1078,6 +1078,14 @@ reports `Finished`; a step on a completed instance reports `AlreadyFinished`.
 Style: use `on` for reactions to external input and `transition` for a next
 state the machine computes itself.
 
+**Terminal states.** `terminal state Done { }` marks a state whose entry
+completes its machine in the same `Step`, exactly as a neutral `complete;`
+would: a child machine pops to its parent, and a root machine completes the
+instance (an input `Step` then reports `Finished`, and later ones
+`AlreadyFinished`). A parent resumed into a terminal state completes in the
+same `Step`. A terminal state has an empty body (`TERMINAL_STATE_BODY`) and
+cannot be the first state (`TERMINAL_STATE_INITIAL`).
+
 **Canonical EVT1 transition semantics transition decide.** The canonical non-redundant candidate
 syntax is:
 

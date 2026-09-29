@@ -1,0 +1,16 @@
+profile Core;
+
+automata Bad
+{
+    machine Run
+    {
+        terminal state Done
+        {
+        }
+
+        state Later
+        {
+            transition Done;
+        }
+    }
+}

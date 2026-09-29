@@ -1,0 +1,62 @@
+profile Core;
+
+// A child entering its terminal state pops to the parent; a parent resumed
+// into a terminal state completes in the same Step.
+enum Tick
+{
+    Tick,
+}
+
+automata Nested
+with input Tick
+with state
+{
+    int value;
+}
+{
+    machine Parent
+    {
+        state Start
+        {
+            push Child goto Finished;
+        }
+
+        terminal state Finished
+        {
+        }
+    }
+
+    machine Child
+    {
+        state Work
+        {
+            state.value = state.value + 1;
+            transition End;
+        }
+
+        terminal state End
+        {
+        }
+    }
+}
+
+int Code(StepOutcome outcome)
+{
+    return match (outcome)
+    {
+        StepOutcome::Transitioned => 1,
+        StepOutcome::Unhandled => 2,
+        StepOutcome::Ambiguous => 3,
+        StepOutcome::Finished => 4,
+        StepOutcome::AlreadyFinished => 5,
+    };
+}
+
+int Main()
+{
+    instance Nested nested(0);
+    int trail = Code(Step(nested, Parent, Tick::Tick));
+    trail = trail * 10 + Code(Step(nested, Parent, Tick::Tick));
+    trail = trail * 10 + Code(Step(nested, Parent, Tick::Tick));
+    return trail * 10 + nested.state.value;
+}

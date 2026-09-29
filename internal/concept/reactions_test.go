@@ -185,3 +185,59 @@ void AmbiguousLeavesTheStateUnchanged()
 		}
 	}
 }
+
+// Terminal states: entering one completes the machine in the same Step.
+var terminalValidFixtures = map[string]int{
+	// Start 1, Poke 1, Finish 4 Finished, Poke 5 AlreadyFinished, then work.
+	"terminal_outcomes.concept": 11451,
+	// Push 1, child End pops and parent resumes into Finished 4, then 5.
+	"terminal_child_pops.concept": 1451,
+	// Neutral outcome tag 1, and the fourth Step no longer counts.
+	"terminal_without_input.concept": 13,
+}
+
+var terminalInvalidFixtures = map[string]string{
+	"terminal_state_body.concept":    "TERMINAL_STATE_BODY",
+	"terminal_state_initial.concept": "TERMINAL_STATE_INITIAL",
+}
+
+func TestTerminalStates(t *testing.T) {
+	root := filepath.Join("..", "..", "language", "evt1", "automata", "terminal")
+	for file, want := range terminalValidFixtures {
+		t.Run("valid/"+file, func(t *testing.T) {
+			path := filepath.Join(root, "valid", file)
+			source, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			module, err := Parse(filepath.ToSlash(path), string(source))
+			if err != nil {
+				t.Fatal(err)
+			}
+			outputs, err := Generate(module, source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			base := strings.TrimSuffix(file, ".concept")
+			harness := fmt.Sprintf("#include \"%s.generated.h\"\nint main(void) { return concept_%s_main() == %d ? 0 : 1; }\n", base, base, want)
+			runFoundationNativeHarness(t, outputs, "terminal_harness.c", harness)
+		})
+	}
+	for file, code := range terminalInvalidFixtures {
+		t.Run("invalid/"+file, func(t *testing.T) {
+			path := filepath.Join(root, "invalid", file)
+			source, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			module, err := Parse(filepath.ToSlash(path), string(source))
+			if err == nil {
+				_, err = Generate(module, source)
+			}
+			var diagnostic Diagnostic
+			if !errors.As(err, &diagnostic) || diagnostic.Code != code {
+				t.Fatalf("diagnostic = %v, want %s", err, code)
+			}
+		})
+	}
+}

@@ -1,0 +1,36 @@
+profile Core;
+
+// Without input, completion is observable through Result.
+automata Counter
+with state
+{
+    int count;
+}
+{
+    machine Run
+    {
+        state Counting
+        {
+            count = count + 1;
+            if (count == 3)
+            {
+                transition Done;
+            }
+            transition Counting;
+        }
+
+        terminal state Done
+        {
+        }
+    }
+}
+
+int Main()
+{
+    instance Counter counter(0);
+    Step(counter, Run);
+    Step(counter, Run);
+    Step(counter, Run);
+    Step(counter, Run);
+    return Result(counter, Run).tag * 10 + counter.state.count;
+}
