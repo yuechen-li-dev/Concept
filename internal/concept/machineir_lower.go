@@ -103,7 +103,7 @@ func LowerLirToAmd64Machine(lir LIRModule) (MachineModule, error) {
 					ctx.Op, ctx.Dst, ctx.Src, ctx.Width = "MOV", mv(v.ID, 4), []MachineOperand{imm}, 4
 					b.emit(current, ctx)
 					b.bind(in.Result, in.Type, ctx.Dst)
-				case "frame_field_address":
+				case "frame_field_address", "activation_address":
 					base, e := get(0)
 					if e != nil {
 						return MachineModule{}, e

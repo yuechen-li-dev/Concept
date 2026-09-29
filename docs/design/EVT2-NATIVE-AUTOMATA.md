@@ -1,17 +1,17 @@
 # EVT2x native automata lowering
 
 EVT2x is a sequence break after EVT2d and before EVT2e. This document records
-the existing semantic authority and the first native-lowering boundary. It does
-not claim that native machine execution is implemented.
+the existing semantic authority and native-lowering boundary. Finite machine
+Init and Step execute natively; pushdown Step does not yet execute natively.
 
-> Concept automata/machines lower to an explicit bounded pushdown state-machine
-> frame. The native representation contains explicit state identity, bounded
-> state-stack storage, persistent state, transitions, yield/resume, and terminal
-> status. It does not require a hidden coroutine runtime.
+> Concept pushdown automata execute as a bounded stack of independently live,
+> machine-specific activations. Each activation has a stable machine tag and
+> its own typed persistent frame storage.
 
-The quotation is the overall EVT2x target. EVT2x2 establishes a finite-state
-MachineFrame and verified Step LIR for one canonical machine. Pushdown storage
-and AMD64 machine execution remain outside this stage.
+This remains the overall EVT2x target. EVT2x2 established the finite-state
+MachineFrame and verified Step LIR. EVT2x3 executed that subset in AMD64.
+EVT2x4 has a closed activation inventory, exact bounded storage layout, and
+native root Init, while dynamic Step push/pop remains unsupported.
 
 ## Existing semantics to preserve
 
@@ -53,8 +53,10 @@ field addresses, loads/stores, compare/branch dispatch, explicit returns, and
 an invalid-state trap. The generated function and state blocks carry stable
 closed-machine provenance. See `EVT2-MACHINE-FRAME.md` for exact geometry and
 Step results. Push/pop and multiple-machine execution diagnose explicitly.
-`concept machineir` stops at `EVT2_MACHINEIR_MACHINE_STEP_DEFERRED`; no bridge,
-allocator, or encoder change is claimed. No permanent extra IR was added.
+`concept machineir` lowers this finite subset through CMIRAMD1 and the
+Concept-written allocator and encoder. The pushdown case still diagnoses
+`EVT2_UNSUPPORTED_AUTOMATA_PUSH_POP` at LIR entry. See
+`EVT2-ACTIVATION-STACK.md` for the exact new layout and native root Init.
 
 The existing fixed capacity is a storage bound, not a per-step execution
 bound. A proven static push depth may permit a Planner-authorized omitted

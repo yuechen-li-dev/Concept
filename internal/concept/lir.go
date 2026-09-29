@@ -57,16 +57,25 @@ type LIRBlock struct {
 	Term         LIRTerminator
 }
 type LIRFunction struct {
-	Identity  string
-	Name      string
-	Params    []LIRValue
-	Result    LIRType
-	Slots     []LIRSlot
-	Blocks    []LIRBlock
-	Source    Span
-	Facts     []string
-	Decisions []string
-	Machine   *LIRMachineFunction
+	Identity   string
+	Name       string
+	Params     []LIRValue
+	Result     LIRType
+	Slots      []LIRSlot
+	Blocks     []LIRBlock
+	Source     Span
+	Facts      []string
+	Decisions  []string
+	Machine    *LIRMachineFunction
+	Activation *LIRActivationFunction
+}
+
+// LIRActivationFunction records the typed scalar subobjects initialized by a
+// generated automata root Init. Only the tag-selected root frame becomes live.
+type LIRActivationFunction struct {
+	Role       string
+	Layout     ActivationStackLayout
+	InitFields []LIRMachineField
 }
 
 // LIRMachineFunction describes a closed caller-owned frame shared by its
@@ -124,6 +133,15 @@ func (m LIRModule) String() string {
 				fmt.Fprintf(&out, "  state %d %s -> b%d\n", state.ID, state.Name, state.Block)
 			}
 		}
+		if f.Activation != nil {
+			fmt.Fprintf(&out, "  activation %s %s capacity=%d slot=%d frame=%d\n", f.Activation.Role, f.Activation.Layout.Identity, f.Activation.Layout.Capacity, f.Activation.Layout.SlotSize, f.Activation.Layout.Size)
+			for _, machine := range f.Activation.Layout.Machines {
+				fmt.Fprintf(&out, "  activation-machine tag=%d %s [%s] size=%d align=%d states=%d\n", machine.Tag, machine.Name, machine.Identity, machine.Size, machine.Alignment, len(machine.States))
+			}
+			for _, field := range f.Activation.InitFields {
+				fmt.Fprintf(&out, "  activation-field %d %s: %s offset=%d\n", field.ID, field.Name, field.Type, field.Offset)
+			}
+		}
 		for _, fact := range f.Facts {
 			fmt.Fprintf(&out, "  fact %s\n", fact)
 		}
@@ -168,7 +186,7 @@ func (m LIRModule) String() string {
 				if in.Stride > 0 {
 					fmt.Fprintf(&out, " stride=%d", in.Stride)
 				}
-				if in.Op == "frame_field_address" {
+				if in.Op == "frame_field_address" || in.Op == "activation_address" {
 					fmt.Fprintf(&out, " field=%d offset=%d", in.FrameField, in.FrameOffset)
 				}
 				if in.Decision != "" {
@@ -209,6 +227,9 @@ func VerifyLIR(m LIRModule) error {
 	}
 	for _, f := range m.Functions {
 		if err := verifyLIRMachineFunction(f); err != nil {
+			return err
+		}
+		if err := verifyLIRActivationFunction(f); err != nil {
 			return err
 		}
 		for _, id := range f.Facts {
@@ -299,6 +320,14 @@ func VerifyLIR(m LIRModule) error {
 					field := f.Machine.Fields[in.FrameField]
 					if in.FrameOffset != field.Offset || in.Type != LIRType("ptr<"+string(field.Type)+">") {
 						return fmt.Errorf("LIR_BAD_FRAME_OFFSET b%d", b.ID)
+					}
+				case "activation_address":
+					if f.Activation == nil || in.FrameField < 0 || in.FrameField >= len(f.Activation.InitFields) || in.Result < 0 || len(in.Args) != 1 || in.Args[0] != f.Params[0].ID {
+						return fmt.Errorf("LIR_BAD_ACTIVATION_ADDRESS b%d", b.ID)
+					}
+					field := f.Activation.InitFields[in.FrameField]
+					if in.FrameOffset != field.Offset || in.Type != LIRType("ptr<"+string(field.Type)+">") {
+						return fmt.Errorf("LIR_BAD_ACTIVATION_OFFSET b%d", b.ID)
 					}
 				case "load_slot":
 					if !hasSlot || s.Extent > 0 || in.Type != s.Type || len(in.Args) != 0 || in.Result < 0 {

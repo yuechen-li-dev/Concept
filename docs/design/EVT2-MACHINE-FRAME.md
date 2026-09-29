@@ -42,16 +42,17 @@ splitting into after-yield continuation states would change it.
 enum geometry and symbolic `Active`, `Yielded`, and `Completed` members.
 `Active` means a transition or ordinary state step ended while the machine
 remains live. `Failed` is not materialized: the existing invalid-state
-behavior is a trap. LIR keeps `machine_result` symbolic and has no ABI or
-native bytes for it yet.
+behavior is a trap. EVT2x3 maps the symbolic LIR results to 0/1/2 in EAX
+and executes finite Init/Step through the Concept-written AMD64 backend.
 
 The verifier checks frame pointer identity, field geometry and offsets,
 closed state IDs and dispatch targets, frame initialization, saved state on
 live returns, completion status before completed returns, and an invalid-state
 trap. The Init/Step body uses ordinary LIR address, load, store, arithmetic,
 branch, and return operations. The two new LIR operations are
-`frame_field_address` and symbolic `machine_result`. MachineIR lowering
-rejects them explicitly in EVT2x2.
+`frame_field_address` and symbolic `machine_result`. MachineIR now folds
+fixed frame-field offsets into ordinary memory operands and lowers the result
+to an integer return; CMIRAMD1 remains unchanged.
 
 The supported LIR has no heap operation. A generated Step is compiler-internal,
 so `Assert.Concept` cannot currently address it; a formal NoAllocation proof
@@ -62,9 +63,10 @@ including state bodies and persistent initializers. A test decodes a real
 artifact and lowers its closed machine to the same Init/Step LIR. Import
 composition into a separate consumer is not yet part of this fixture lane.
 
-> EVT2x3 extends this frame with bounded state-stack storage and lowers
-> push/pop. The finite-state/yield substrate established here remains
-> unchanged.
+> Pushdown needs tagged, independently live machine activations. EVT2x4 now
+> computes their closed inventory and exact bounded storage layout and lowers
+> root Init; dynamic Step, push, and pop remain pending. See
+> `EVT2-ACTIVATION-STACK.md`.
 
 > Future async lowering should reuse the persistent-frame/state mechanism
 > where semantically compatible.

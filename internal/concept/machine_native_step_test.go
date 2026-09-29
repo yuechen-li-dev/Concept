@@ -68,6 +68,19 @@ int main(int argc, char** argv) {
   fclose(file);
   concept_readonly_span_byte bridge = {bytes, (size_t)n};
   void* initCode = make_code(bridge, 0); if (!initCode) return 95;
+  int scenario = atoi(argv[2]);
+  if (scenario == 3) {
+    typedef void (*activation_init_fn)(void*, int32_t);
+    activation_init_fn rootInit = NULL; memcpy(&rootInit, &initCode, sizeof rootInit);
+    unsigned char instance[108] = {0};
+    rootInit(instance, 13);
+    uint32_t depth = 0, tag = 99, state = 99; int32_t shared = 0, preserved = 0;
+    memcpy(&depth, instance + 0, 4); memcpy(&shared, instance + 8, 4);
+    memcpy(&tag, instance + 12, 4); memcpy(&state, instance + 16, 4);
+    memcpy(&preserved, instance + 20, 4);
+    if (depth != 1 || instance[4] != 0 || shared != 13 || tag != 0 || state != 0 || preserved != 7) return 111;
+    VirtualFree(initCode, 0, MEM_RELEASE); free(bytes); return 0;
+  }
   void* stepCode = make_code(bridge, 1); if (!stepCode) return 96;
   typedef void (*init_fn)(frame*, int32_t);
   typedef uint32_t (*step_fn)(frame*);
@@ -76,7 +89,6 @@ int main(int argc, char** argv) {
   frame a = {0}, b = {0};
   init(&a, 0); init(&b, 10);
   if (a.state != 0 || a.completed || a.count != 0) return 97;
-  int scenario = atoi(argv[2]);
   if (scenario == 0) {
     if (a.increment != 2) return 97;
     if (step(&a) != 0 || a.state != 1 || a.count != 2) return 98;
@@ -130,5 +142,42 @@ int main(int argc, char** argv) {
 		if out, err := nativeCommand(t, executable, artifact, string(rune('0'+scenario))).CombinedOutput(); err != nil {
 			t.Fatalf("%s native execution: %v\n%s", file, err, strings.TrimSpace(string(out)))
 		}
+	}
+	path := filepath.Join("..", "..", "language", "evt1", "machine-stack", "valid", "machine_parent_resume.concept")
+	source, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	module, err := Parse(filepath.ToSlash(path), string(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	env, err := analyzeModule(module)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := buildMIR(module, env).Automata[0]
+	layout, err := planActivationStack(a, env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	init, err := lowerActivationRootInit(a, layout)
+	if err != nil {
+		t.Fatal(err)
+	}
+	machine, err := LowerLirToAmd64Machine(LIRModule{Functions: []LIRFunction{init}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bridge, err := EncodeMachineBridge(machine)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact := filepath.Join(dir, "activation-init.cmir")
+	if err := os.WriteFile(artifact, bridge, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := nativeCommand(t, executable, artifact, "3").CombinedOutput(); err != nil {
+		t.Fatalf("activation root Init native execution: %v\n%s", err, strings.TrimSpace(string(out)))
 	}
 }
