@@ -1,5 +1,8 @@
 profile Core;
 
+// A nested lifecycle declared as step machines with input. Declaring an
+// automata costs nothing until an instance is stepped: none of these names
+// reach the generated C.
 enum LifecycleSignal
 {
     Create,
@@ -12,74 +15,69 @@ enum LifecycleSignal
     Tick
 }
 
-automata ResourceLifecycle(LifecycleSignal)
+automata ResourceLifecycle
+with input LifecycleSignal
 {
-    initial machine Main
+    machine Main
     {
-        initial state Empty
+        state Empty
         {
-            on LifecycleSignal::Create goto Ready;
+            on LifecycleSignal::Create => Ready;
         }
 
         state Ready
         {
-            on LifecycleSignal::Tick goto Ready;
-            on LifecycleSignal::Begin goto Running;
-            on LifecycleSignal::Clean push Cleanup goto AwaitingResume;
-            on LifecycleSignal::Stop goto Finished;
+            on LifecycleSignal::Tick => Ready;
+            on LifecycleSignal::Begin => Running;
+            on LifecycleSignal::Clean => { push Cleanup goto AwaitingResume; }
+            on LifecycleSignal::Stop => Finished;
         }
 
         state Running
         {
-            on LifecycleSignal::Clean push Cleanup goto Finished;
+            on LifecycleSignal::Clean => { push Cleanup goto Finished; }
         }
 
         state AwaitingResume
         {
-            on LifecycleSignal::Stop goto Finished;
+            on LifecycleSignal::Stop => Finished;
         }
 
         terminal state Finished
         {
-            finish;
         }
     }
 
-    machine Cleanup
+    // A child cannot finish its parent; it completes or fails, and the
+    // parent decides what that means.
+    machine Cleanup fails int
     {
-        initial state Begin
+        state Begin
         {
-            on LifecycleSignal::Release push SweepMachine goto Resume;
+            on LifecycleSignal::Release => { push SweepMachine goto Resume; }
         }
 
         state Resume
         {
-            on LifecycleSignal::Tick goto Resume;
-            on LifecycleSignal::Confirm goto Complete;
-            on LifecycleSignal::Stop goto AbortAll;
+            on LifecycleSignal::Tick => Resume;
+            on LifecycleSignal::Confirm => Complete;
+            on LifecycleSignal::Stop => { fail 1; }
         }
 
         terminal state Complete
         {
-            pop;
-        }
-
-        terminal state AbortAll
-        {
-            finish;
         }
     }
 
     machine SweepMachine
     {
-        initial state Begin
+        state Begin
         {
-            on LifecycleSignal::Sweep goto Complete;
+            on LifecycleSignal::Sweep => Complete;
         }
 
         terminal state Complete
         {
-            pop;
         }
     }
 }

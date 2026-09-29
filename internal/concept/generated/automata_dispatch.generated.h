@@ -20,24 +20,21 @@ typedef struct concept_lifecycle_signal {
   uint32_t tag;
 } concept_lifecycle_signal;
 
-typedef enum concept_automata_dispatch_outcome_tag {
-  CONCEPT_AUTOMATA_DISPATCH_OUTCOME_TRANSITIONED = 0,
-  CONCEPT_AUTOMATA_DISPATCH_OUTCOME_UNHANDLED = 1,
-  CONCEPT_AUTOMATA_DISPATCH_OUTCOME_AMBIGUOUS = 2,
-  CONCEPT_AUTOMATA_DISPATCH_OUTCOME_FINISHED = 3,
-  CONCEPT_AUTOMATA_DISPATCH_OUTCOME_ALREADY_FINISHED = 4,
-  CONCEPT_AUTOMATA_DISPATCH_OUTCOME_EFFECT_BATCH_OCCUPIED = 5,
-} concept_automata_dispatch_outcome_tag;
+typedef enum concept_step_outcome_tag {
+  CONCEPT_STEP_OUTCOME_TRANSITIONED = 0,
+  CONCEPT_STEP_OUTCOME_UNHANDLED = 1,
+  CONCEPT_STEP_OUTCOME_AMBIGUOUS = 2,
+  CONCEPT_STEP_OUTCOME_FINISHED = 3,
+  CONCEPT_STEP_OUTCOME_ALREADY_FINISHED = 4,
+} concept_step_outcome_tag;
 
-typedef struct concept_automata_dispatch_outcome {
+typedef struct concept_step_outcome {
   uint32_t tag;
-} concept_automata_dispatch_outcome;
+} concept_step_outcome;
 
-int32_t concept_automata_dispatch_outcome_code(concept_automata_dispatch_outcome outcome);
+int32_t concept_automata_dispatch_outcome_code(concept_step_outcome outcome);
 
-int32_t concept_automata_dispatch_initial_terminal_outcome_code(void);
-
-int32_t concept_automata_dispatch_zero_capacity_outcome_code(void);
+int32_t concept_automata_dispatch_single_step_finish_code(void);
 
 int32_t concept_automata_dispatch_unhandled_preserves_state_code(void);
 
@@ -45,7 +42,7 @@ int32_t concept_automata_dispatch_nested_push_resumes_caller_code(void);
 
 int32_t concept_automata_dispatch_root_terminal_continuation_finishes_immediately_code(void);
 
-int32_t concept_automata_dispatch_non_root_finish_terminates_whole_instance_code(void);
+int32_t concept_automata_dispatch_child_failure_returns_to_parent_code(void);
 
 int32_t concept_automata_dispatch_independent_instances_stay_independent_code(void);
 

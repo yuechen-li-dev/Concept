@@ -20,28 +20,23 @@ typedef struct concept_lifecycle_signal {
   uint32_t tag;
 } concept_lifecycle_signal;
 
-typedef enum concept_automata_dispatch_outcome_tag {
-  CONCEPT_AUTOMATA_DISPATCH_OUTCOME_TRANSITIONED = 0,
-  CONCEPT_AUTOMATA_DISPATCH_OUTCOME_UNHANDLED = 1,
-  CONCEPT_AUTOMATA_DISPATCH_OUTCOME_AMBIGUOUS = 2,
-  CONCEPT_AUTOMATA_DISPATCH_OUTCOME_FINISHED = 3,
-  CONCEPT_AUTOMATA_DISPATCH_OUTCOME_ALREADY_FINISHED = 4,
-  CONCEPT_AUTOMATA_DISPATCH_OUTCOME_EFFECT_BATCH_OCCUPIED = 5,
-} concept_automata_dispatch_outcome_tag;
+typedef enum concept_step_outcome_tag {
+  CONCEPT_STEP_OUTCOME_TRANSITIONED = 0,
+  CONCEPT_STEP_OUTCOME_UNHANDLED = 1,
+  CONCEPT_STEP_OUTCOME_AMBIGUOUS = 2,
+  CONCEPT_STEP_OUTCOME_FINISHED = 3,
+  CONCEPT_STEP_OUTCOME_ALREADY_FINISHED = 4,
+} concept_step_outcome_tag;
 
-typedef struct concept_automata_dispatch_outcome {
+typedef struct concept_step_outcome {
   uint32_t tag;
-} concept_automata_dispatch_outcome;
+} concept_step_outcome;
 
-bool concept_guarded_transitions_queue_open(const concept_lifecycle_context* context);
+bool concept_guarded_transitions_can_submit(concept_lifecycle_context context);
 
-bool concept_guarded_transitions_release_requested(const concept_lifecycle_context* context);
+bool concept_guarded_transitions_must_release(concept_lifecycle_context context);
 
-bool concept_guarded_transitions_can_submit(const concept_lifecycle_context* context);
-
-bool concept_guarded_transitions_must_release(const concept_lifecycle_context* context);
-
-int32_t concept_guarded_transitions_outcome_code(concept_automata_dispatch_outcome outcome);
+int32_t concept_guarded_transitions_outcome_code(concept_step_outcome outcome);
 
 int32_t concept_guarded_transitions_unique_guard_selection_code(concept_lifecycle_context context);
 
@@ -52,8 +47,6 @@ int32_t concept_guarded_transitions_guarded_unhandled_preserves_state_code(conce
 int32_t concept_guarded_transitions_ambiguous_preserves_state_code(concept_lifecycle_context context);
 
 int32_t concept_guarded_transitions_already_finished_skips_guard_selection_code(concept_lifecycle_context context);
-
-int32_t concept_guarded_transitions_contextless_compatibility_code(void);
 
 
 #endif

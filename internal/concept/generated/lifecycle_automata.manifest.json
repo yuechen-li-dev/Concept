@@ -11,11 +11,11 @@
     },
     {
       "path": "lifecycle_automata.mir.json",
-      "sha256": "4ecdf61d8f6f9318aed5efc6beb58da50ee3b05965c4de9c4ca7d29642dbe27a"
+      "sha256": "9ae03cdc20b24fe1b345d33426e99f64f968701d558d4beeaba234cb0d086fee"
     },
     {
       "path": "lifecycle_automata.map.json",
-      "sha256": "d2d302cc5d55127646c003f76ab6a2df5921fb8e7cd7def2d2bad6e6fdd744c8"
+      "sha256": "a4cd9511ed269b9ac530078e500a9d7b92f4fd4e42ceeb5c55d1ca4cf1a0b22a"
     }
   ],
   "options": {
@@ -25,5 +25,5 @@
   "profile": "Core",
   "schema": "concept-evt1-generation-manifest.v1",
   "source": "examples/evt1/lifecycle_automata.concept",
-  "source_sha256": "22fd61c12a65d14161bd76e545280ea9c26bf8506321b95442ab808eb9accb63"
+  "source_sha256": "f4b71c2027c74481a5c34fac8cc08bf70d31a65fa95cae0baf4afee8cf7c81fd"
 }

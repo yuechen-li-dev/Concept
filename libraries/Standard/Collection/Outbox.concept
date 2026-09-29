@@ -1,0 +1,58 @@
+module Standard.Collection.Outbox;
+profile Core;
+
+// An outbox is a bounded, ordered queue of values a producer hands to a
+// consumer: typically the effects a state machine decides on during a Step,
+// which the caller then carries out and clears. It never allocates.
+//
+// Size the capacity for the most a producer can push before the consumer
+// drains it; `Push(...)!` then treats overflow as the programming error it is.
+enum OutboxError
+{
+    Full,
+}
+
+template <typename T, usize Capacity>
+struct Outbox
+{
+    T<array>[Capacity] entries;
+    int count;
+};
+
+// `filler` initializes unused slots; it is never observed through Count/At.
+template <typename T, usize Capacity>
+Outbox<T, Capacity> MakeOutbox(T filler)
+{
+    T<array>[Capacity] entries = [filler ...];
+    Outbox<T, Capacity> outbox = Outbox<T, Capacity>{entries, 0};
+    return move outbox;
+}
+
+template <typename T, usize Capacity>
+Result<void, OutboxError> Push(ref Outbox<T, Capacity> outbox, T value)
+{
+    if (outbox.count >= Len(outbox.entries))
+    { return Result::Error(OutboxError::Full); }
+    outbox.entries[outbox.count] = value;
+    outbox.count = outbox.count + 1;
+    return Result::Ok();
+}
+
+template <typename T, usize Capacity>
+int Count(ref const Outbox<T, Capacity> outbox)
+{
+    return outbox.count;
+}
+
+// Entries are read in push order for 0 <= index < Count(outbox).
+template <typename T, usize Capacity>
+T At(ref const Outbox<T, Capacity> outbox, int index)
+{
+    return outbox.entries[index];
+}
+
+template <typename T, usize Capacity>
+void Clear(ref Outbox<T, Capacity> outbox)
+{
+    outbox.count = 0;
+}

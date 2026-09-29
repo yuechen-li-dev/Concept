@@ -7,7 +7,7 @@
       "name": "LifecycleSignal",
       "c_name": "concept_lifecycle_signal",
       "source_span": {
-        "line": 3,
+        "line": 5,
         "column": 1
       },
       "variants": [
@@ -16,7 +16,7 @@
           "tag_name": "CONCEPT_LIFECYCLE_SIGNAL_CREATE",
           "tag": 0,
           "source_span": {
-            "line": 5,
+            "line": 7,
             "column": 5
           }
         },
@@ -25,7 +25,7 @@
           "tag_name": "CONCEPT_LIFECYCLE_SIGNAL_BEGIN",
           "tag": 1,
           "source_span": {
-            "line": 6,
+            "line": 8,
             "column": 5
           }
         },
@@ -34,7 +34,7 @@
           "tag_name": "CONCEPT_LIFECYCLE_SIGNAL_CLEAN",
           "tag": 2,
           "source_span": {
-            "line": 7,
+            "line": 9,
             "column": 5
           }
         },
@@ -43,7 +43,7 @@
           "tag_name": "CONCEPT_LIFECYCLE_SIGNAL_RELEASE",
           "tag": 3,
           "source_span": {
-            "line": 8,
+            "line": 10,
             "column": 5
           }
         },
@@ -52,7 +52,7 @@
           "tag_name": "CONCEPT_LIFECYCLE_SIGNAL_SWEEP",
           "tag": 4,
           "source_span": {
-            "line": 9,
+            "line": 11,
             "column": 5
           }
         },
@@ -61,7 +61,7 @@
           "tag_name": "CONCEPT_LIFECYCLE_SIGNAL_CONFIRM",
           "tag": 5,
           "source_span": {
-            "line": 10,
+            "line": 12,
             "column": 5
           }
         },
@@ -70,7 +70,7 @@
           "tag_name": "CONCEPT_LIFECYCLE_SIGNAL_STOP",
           "tag": 6,
           "source_span": {
-            "line": 11,
+            "line": 13,
             "column": 5
           }
         },
@@ -79,7 +79,7 @@
           "tag_name": "CONCEPT_LIFECYCLE_SIGNAL_TICK",
           "tag": 7,
           "source_span": {
-            "line": 12,
+            "line": 14,
             "column": 5
           }
         }
@@ -89,19 +89,28 @@
   "automata": [
     {
       "name": "ResourceLifecycle",
-      "signal_enum": "LifecycleSignal",
+      "signal_enum": "",
+      "input_type": "LifecycleSignal",
       "root_machine": "Main",
-      "max_active_depth": 3,
-      "continuation_capacity": 2,
-      "completion_step_bound": 3,
-      "graph_identity": "f193cab7c15eb7312425719b8ed962e2527cf12b731931579f7be2e9e17efd79",
-      "topology_identity": "49baf8a27a2b603e08e0f472860c27c69405673fd5c1e6b6b84b2bb6a317cd82",
-      "guard_identity": "ea8cce3cb0981dd32667ac9b3dbf11f30666582c7c5be671472a1fbff8c40ee6",
-      "effect_identity": "9d98c58990e3946db21d84845e9212ecdf0082a7cee28ce9055fcb48fc4f3d3f",
-      "runtime_identity": "262f0b4f877bc5eaf3c8c8e9f09da49e30c56af133be8f2b93b0715ede65de5d",
+      "max_active_depth": 1,
+      "continuation_capacity": 0,
+      "completion_step_bound": 1,
+      "graph_identity": "automata-62839b89a5c314e8",
+      "topology_identity": "automata-62839b89a5c314e8",
+      "runtime_identity": "runtime-6742cbdfcae66f7b",
       "source_span": {
-        "line": 15,
+        "line": 17,
         "column": 1
+      },
+      "state_environment": {
+        "identity": "ResourceLifecycle#state",
+        "fields": null,
+        "shared": true,
+        "explicit": true,
+        "source_span": {
+          "line": 17,
+          "column": 1
+        }
       },
       "machines": [
         {
@@ -110,7 +119,7 @@
           "runtime_ordinal": 0,
           "reachable": true,
           "source_span": {
-            "line": 17,
+            "line": 20,
             "column": 5
           },
           "states": [
@@ -120,16 +129,36 @@
               "runtime_ordinal": 0,
               "reachable": true,
               "source_span": {
-                "line": 19,
+                "line": 22,
                 "column": 9
               },
-              "handlers": [
+              "operations": [
                 {
-                  "signal": "LifecycleSignal::Create",
-                  "kind": "goto",
-                  "target_state": "Ready",
+                  "id": "ResourceLifecycle.Main.Empty.01",
+                  "kind": "input_reaction",
+                  "detail": "LifecycleSignal::Create",
                   "source_span": {
-                    "line": 21,
+                    "line": 24,
+                    "column": 13
+                  }
+                },
+                {
+                  "id": "ResourceLifecycle.Main.Empty.02",
+                  "kind": "state_transition",
+                  "detail": "Ready",
+                  "source_span": {
+                    "line": 24,
+                    "column": 43
+                  }
+                }
+              ],
+              "reactions": [
+                {
+                  "pattern": "LifecycleSignal::Create",
+                  "target": "Ready",
+                  "declaration_order": 0,
+                  "source_span": {
+                    "line": 24,
                     "column": 13
                   }
                 }
@@ -140,44 +169,131 @@
               "runtime_ordinal": 1,
               "reachable": true,
               "source_span": {
-                "line": 24,
+                "line": 27,
                 "column": 9
               },
-              "handlers": [
+              "operations": [
                 {
-                  "signal": "LifecycleSignal::Tick",
-                  "kind": "goto",
-                  "target_state": "Ready",
-                  "source_span": {
-                    "line": 26,
-                    "column": 13
-                  }
-                },
-                {
-                  "signal": "LifecycleSignal::Begin",
-                  "kind": "goto",
-                  "target_state": "Running",
-                  "source_span": {
-                    "line": 27,
-                    "column": 13
-                  }
-                },
-                {
-                  "signal": "LifecycleSignal::Clean",
-                  "kind": "push",
-                  "push_machine": "Cleanup",
-                  "continuation_state": "AwaitingResume",
-                  "source_span": {
-                    "line": 28,
-                    "column": 13
-                  }
-                },
-                {
-                  "signal": "LifecycleSignal::Stop",
-                  "kind": "goto",
-                  "target_state": "Finished",
+                  "id": "ResourceLifecycle.Main.Ready.01",
+                  "kind": "input_reaction",
+                  "detail": "LifecycleSignal::Tick",
                   "source_span": {
                     "line": 29,
+                    "column": 13
+                  }
+                },
+                {
+                  "id": "ResourceLifecycle.Main.Ready.02",
+                  "kind": "state_transition",
+                  "detail": "Ready",
+                  "source_span": {
+                    "line": 29,
+                    "column": 41
+                  }
+                },
+                {
+                  "id": "ResourceLifecycle.Main.Ready.03",
+                  "kind": "input_reaction",
+                  "detail": "LifecycleSignal::Begin",
+                  "source_span": {
+                    "line": 30,
+                    "column": 13
+                  }
+                },
+                {
+                  "id": "ResourceLifecycle.Main.Ready.04",
+                  "kind": "state_transition",
+                  "detail": "Running",
+                  "source_span": {
+                    "line": 30,
+                    "column": 42
+                  }
+                },
+                {
+                  "id": "ResourceLifecycle.Main.Ready.05",
+                  "kind": "input_reaction",
+                  "detail": "LifecycleSignal::Clean",
+                  "source_span": {
+                    "line": 31,
+                    "column": 13
+                  }
+                },
+                {
+                  "id": "ResourceLifecycle.Main.Ready.06",
+                  "kind": "push_machine",
+                  "detail": "Cleanup goto AwaitingResume",
+                  "no_copy": true,
+                  "no_allocation": true,
+                  "no_ownership_transfer": true,
+                  "source_span": {
+                    "line": 31,
+                    "column": 44
+                  }
+                },
+                {
+                  "id": "ResourceLifecycle.Main.Ready.07",
+                  "kind": "input_reaction",
+                  "detail": "LifecycleSignal::Stop",
+                  "source_span": {
+                    "line": 32,
+                    "column": 13
+                  }
+                },
+                {
+                  "id": "ResourceLifecycle.Main.Ready.08",
+                  "kind": "state_transition",
+                  "detail": "Finished",
+                  "source_span": {
+                    "line": 32,
+                    "column": 41
+                  }
+                }
+              ],
+              "machine_control": [
+                {
+                  "kind": "push_machine",
+                  "machine": "Cleanup",
+                  "resume_state": "AwaitingResume",
+                  "cleanup_edge": "TransientBeforeFramePush",
+                  "source_span": {
+                    "line": 31,
+                    "column": 44
+                  }
+                }
+              ],
+              "reactions": [
+                {
+                  "pattern": "LifecycleSignal::Tick",
+                  "target": "Ready",
+                  "declaration_order": 0,
+                  "source_span": {
+                    "line": 29,
+                    "column": 13
+                  }
+                },
+                {
+                  "pattern": "LifecycleSignal::Begin",
+                  "target": "Running",
+                  "declaration_order": 1,
+                  "source_span": {
+                    "line": 30,
+                    "column": 13
+                  }
+                },
+                {
+                  "pattern": "LifecycleSignal::Clean",
+                  "declaration_order": 2,
+                  "source_span": {
+                    "line": 31,
+                    "column": 13
+                  }
+                },
+                {
+                  "pattern": "LifecycleSignal::Stop",
+                  "target": "Finished",
+                  "declaration_order": 3,
+                  "source_span": {
+                    "line": 32,
                     "column": 13
                   }
                 }
@@ -188,17 +304,50 @@
               "runtime_ordinal": 2,
               "reachable": true,
               "source_span": {
-                "line": 32,
+                "line": 35,
                 "column": 9
               },
-              "handlers": [
+              "operations": [
                 {
-                  "signal": "LifecycleSignal::Clean",
-                  "kind": "push",
-                  "push_machine": "Cleanup",
-                  "continuation_state": "Finished",
+                  "id": "ResourceLifecycle.Main.Running.01",
+                  "kind": "input_reaction",
+                  "detail": "LifecycleSignal::Clean",
                   "source_span": {
-                    "line": 34,
+                    "line": 37,
+                    "column": 13
+                  }
+                },
+                {
+                  "id": "ResourceLifecycle.Main.Running.02",
+                  "kind": "push_machine",
+                  "detail": "Cleanup goto Finished",
+                  "no_copy": true,
+                  "no_allocation": true,
+                  "no_ownership_transfer": true,
+                  "source_span": {
+                    "line": 37,
+                    "column": 44
+                  }
+                }
+              ],
+              "machine_control": [
+                {
+                  "kind": "push_machine",
+                  "machine": "Cleanup",
+                  "resume_state": "Finished",
+                  "cleanup_edge": "TransientBeforeFramePush",
+                  "source_span": {
+                    "line": 37,
+                    "column": 44
+                  }
+                }
+              ],
+              "reactions": [
+                {
+                  "pattern": "LifecycleSignal::Clean",
+                  "declaration_order": 0,
+                  "source_span": {
+                    "line": 37,
                     "column": 13
                   }
                 }
@@ -209,16 +358,36 @@
               "runtime_ordinal": 3,
               "reachable": true,
               "source_span": {
-                "line": 37,
+                "line": 40,
                 "column": 9
               },
-              "handlers": [
+              "operations": [
                 {
-                  "signal": "LifecycleSignal::Stop",
-                  "kind": "goto",
-                  "target_state": "Finished",
+                  "id": "ResourceLifecycle.Main.AwaitingResume.01",
+                  "kind": "input_reaction",
+                  "detail": "LifecycleSignal::Stop",
                   "source_span": {
-                    "line": 39,
+                    "line": 42,
+                    "column": 13
+                  }
+                },
+                {
+                  "id": "ResourceLifecycle.Main.AwaitingResume.02",
+                  "kind": "state_transition",
+                  "detail": "Finished",
+                  "source_span": {
+                    "line": 42,
+                    "column": 41
+                  }
+                }
+              ],
+              "reactions": [
+                {
+                  "pattern": "LifecycleSignal::Stop",
+                  "target": "Finished",
+                  "declaration_order": 0,
+                  "source_span": {
+                    "line": 42,
                     "column": 13
                   }
                 }
@@ -229,20 +398,35 @@
               "terminal": true,
               "runtime_ordinal": 4,
               "reachable": true,
-              "completion": "finish",
               "source_span": {
-                "line": 42,
+                "line": 45,
                 "column": 9
               }
             }
-          ]
+          ],
+          "result_type": {
+            "name": "void",
+            "kind": "builtin",
+            "span": {
+              "line": 20,
+              "column": 13
+            }
+          },
+          "error_type": {
+            "name": "void",
+            "kind": "builtin",
+            "span": {
+              "line": 20,
+              "column": 13
+            }
+          }
         },
         {
           "name": "Cleanup",
           "runtime_ordinal": 1,
           "reachable": true,
           "source_span": {
-            "line": 48,
+            "line": 50,
             "column": 5
           },
           "states": [
@@ -252,17 +436,50 @@
               "runtime_ordinal": 0,
               "reachable": true,
               "source_span": {
-                "line": 50,
+                "line": 52,
                 "column": 9
               },
-              "handlers": [
+              "operations": [
                 {
-                  "signal": "LifecycleSignal::Release",
-                  "kind": "push",
-                  "push_machine": "SweepMachine",
-                  "continuation_state": "Resume",
+                  "id": "ResourceLifecycle.Cleanup.Begin.01",
+                  "kind": "input_reaction",
+                  "detail": "LifecycleSignal::Release",
                   "source_span": {
-                    "line": 52,
+                    "line": 54,
+                    "column": 13
+                  }
+                },
+                {
+                  "id": "ResourceLifecycle.Cleanup.Begin.02",
+                  "kind": "push_machine",
+                  "detail": "SweepMachine goto Resume",
+                  "no_copy": true,
+                  "no_allocation": true,
+                  "no_ownership_transfer": true,
+                  "source_span": {
+                    "line": 54,
+                    "column": 46
+                  }
+                }
+              ],
+              "machine_control": [
+                {
+                  "kind": "push_machine",
+                  "machine": "SweepMachine",
+                  "resume_state": "Resume",
+                  "cleanup_edge": "TransientBeforeFramePush",
+                  "source_span": {
+                    "line": 54,
+                    "column": 46
+                  }
+                }
+              ],
+              "reactions": [
+                {
+                  "pattern": "LifecycleSignal::Release",
+                  "declaration_order": 0,
+                  "source_span": {
+                    "line": 54,
                     "column": 13
                   }
                 }
@@ -273,34 +490,111 @@
               "runtime_ordinal": 1,
               "reachable": true,
               "source_span": {
-                "line": 55,
+                "line": 57,
                 "column": 9
               },
-              "handlers": [
+              "operations": [
                 {
-                  "signal": "LifecycleSignal::Tick",
-                  "kind": "goto",
-                  "target_state": "Resume",
-                  "source_span": {
-                    "line": 57,
-                    "column": 13
-                  }
-                },
-                {
-                  "signal": "LifecycleSignal::Confirm",
-                  "kind": "goto",
-                  "target_state": "Complete",
-                  "source_span": {
-                    "line": 58,
-                    "column": 13
-                  }
-                },
-                {
-                  "signal": "LifecycleSignal::Stop",
-                  "kind": "goto",
-                  "target_state": "AbortAll",
+                  "id": "ResourceLifecycle.Cleanup.Resume.01",
+                  "kind": "input_reaction",
+                  "detail": "LifecycleSignal::Tick",
                   "source_span": {
                     "line": 59,
+                    "column": 13
+                  }
+                },
+                {
+                  "id": "ResourceLifecycle.Cleanup.Resume.02",
+                  "kind": "state_transition",
+                  "detail": "Resume",
+                  "source_span": {
+                    "line": 59,
+                    "column": 41
+                  }
+                },
+                {
+                  "id": "ResourceLifecycle.Cleanup.Resume.03",
+                  "kind": "input_reaction",
+                  "detail": "LifecycleSignal::Confirm",
+                  "source_span": {
+                    "line": 60,
+                    "column": 13
+                  }
+                },
+                {
+                  "id": "ResourceLifecycle.Cleanup.Resume.04",
+                  "kind": "state_transition",
+                  "detail": "Complete",
+                  "source_span": {
+                    "line": 60,
+                    "column": 44
+                  }
+                },
+                {
+                  "id": "ResourceLifecycle.Cleanup.Resume.05",
+                  "kind": "input_reaction",
+                  "detail": "LifecycleSignal::Stop",
+                  "source_span": {
+                    "line": 61,
+                    "column": 13
+                  }
+                },
+                {
+                  "id": "ResourceLifecycle.Cleanup.Resume.06",
+                  "kind": "complete_failure",
+                  "detail": "semantic-pop",
+                  "no_allocation": true,
+                  "source_span": {
+                    "line": 61,
+                    "column": 43
+                  }
+                },
+                {
+                  "id": "ResourceLifecycle.Cleanup.Resume.07",
+                  "kind": "literal",
+                  "detail": "7",
+                  "source_span": {
+                    "line": 61,
+                    "column": 48
+                  }
+                }
+              ],
+              "machine_control": [
+                {
+                  "kind": "pop_machine",
+                  "outcome": "Failure",
+                  "payload_type": "int",
+                  "cleanup_edge": "TransientThenFrameBeforePop",
+                  "source_span": {
+                    "line": 61,
+                    "column": 43
+                  }
+                }
+              ],
+              "reactions": [
+                {
+                  "pattern": "LifecycleSignal::Tick",
+                  "target": "Resume",
+                  "declaration_order": 0,
+                  "source_span": {
+                    "line": 59,
+                    "column": 13
+                  }
+                },
+                {
+                  "pattern": "LifecycleSignal::Confirm",
+                  "target": "Complete",
+                  "declaration_order": 1,
+                  "source_span": {
+                    "line": 60,
+                    "column": 13
+                  }
+                },
+                {
+                  "pattern": "LifecycleSignal::Stop",
+                  "declaration_order": 2,
+                  "source_span": {
+                    "line": 61,
                     "column": 13
                   }
                 }
@@ -311,31 +605,35 @@
               "terminal": true,
               "runtime_ordinal": 2,
               "reachable": true,
-              "completion": "pop",
               "source_span": {
-                "line": 62,
-                "column": 9
-              }
-            },
-            {
-              "name": "AbortAll",
-              "terminal": true,
-              "runtime_ordinal": 3,
-              "reachable": true,
-              "completion": "finish",
-              "source_span": {
-                "line": 67,
+                "line": 64,
                 "column": 9
               }
             }
-          ]
+          ],
+          "result_type": {
+            "name": "void",
+            "kind": "builtin",
+            "span": {
+              "line": 50,
+              "column": 13
+            }
+          },
+          "error_type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 50,
+              "column": 27
+            }
+          }
         },
         {
           "name": "SweepMachine",
           "runtime_ordinal": 2,
           "reachable": true,
           "source_span": {
-            "line": 73,
+            "line": 69,
             "column": 5
           },
           "states": [
@@ -345,16 +643,36 @@
               "runtime_ordinal": 0,
               "reachable": true,
               "source_span": {
-                "line": 75,
+                "line": 71,
                 "column": 9
               },
-              "handlers": [
+              "operations": [
                 {
-                  "signal": "LifecycleSignal::Sweep",
-                  "kind": "goto",
-                  "target_state": "Complete",
+                  "id": "ResourceLifecycle.SweepMachine.Begin.01",
+                  "kind": "input_reaction",
+                  "detail": "LifecycleSignal::Sweep",
                   "source_span": {
-                    "line": 77,
+                    "line": 73,
+                    "column": 13
+                  }
+                },
+                {
+                  "id": "ResourceLifecycle.SweepMachine.Begin.02",
+                  "kind": "state_transition",
+                  "detail": "Complete",
+                  "source_span": {
+                    "line": 73,
+                    "column": 42
+                  }
+                }
+              ],
+              "reactions": [
+                {
+                  "pattern": "LifecycleSignal::Sweep",
+                  "target": "Complete",
+                  "declaration_order": 0,
+                  "source_span": {
+                    "line": 73,
                     "column": 13
                   }
                 }
@@ -365,74 +683,62 @@
               "terminal": true,
               "runtime_ordinal": 1,
               "reachable": true,
-              "completion": "pop",
               "source_span": {
-                "line": 80,
+                "line": 76,
                 "column": 9
               }
             }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "ImmediateLifecycle",
-      "signal_enum": "LifecycleSignal",
-      "root_machine": "Main",
-      "max_active_depth": 1,
-      "continuation_capacity": 0,
-      "completion_step_bound": 1,
-      "graph_identity": "5034b410d6bef9d6734ba1e08d2618905642f730ea2e6c85459364e21fbed6d0",
-      "topology_identity": "a88218545d8741d8108105d9621e18ac0443a00155d5700dacca561af28e495d",
-      "guard_identity": "bb20ef6b500c1379a9ffa73716a4b3b6ee5b7f877f6cfe1babc1fa99058496df",
-      "effect_identity": "13717c19f9a14e45ee08934ea218117057c38b0ea3ffd25f15312549d9530aaa",
-      "runtime_identity": "295354206477da9124e3a6b54cf8caf2a2a39af340d01fa0446e5404c1052316",
-      "source_span": {
-        "line": 87,
-        "column": 1
-      },
-      "machines": [
-        {
-          "name": "Main",
-          "initial": true,
-          "runtime_ordinal": 0,
-          "reachable": true,
-          "source_span": {
-            "line": 89,
-            "column": 5
+          ],
+          "result_type": {
+            "name": "void",
+            "kind": "builtin",
+            "span": {
+              "line": 69,
+              "column": 13
+            }
           },
-          "states": [
-            {
-              "name": "Finished",
-              "initial": true,
-              "terminal": true,
-              "runtime_ordinal": 0,
-              "reachable": true,
-              "completion": "finish",
-              "source_span": {
-                "line": 91,
-                "column": 9
-              }
+          "error_type": {
+            "name": "void",
+            "kind": "builtin",
+            "span": {
+              "line": 69,
+              "column": 13
             }
-          ]
+          }
         }
-      ]
+      ],
+      "machine_stack": {
+        "capacity": 8,
+        "storage": "InlineBoundedSpecializedFrames",
+        "scheduler": "None",
+        "continuation": "ExplicitState",
+        "shared_state": "ResourceLifecycle#state"
+      }
     },
     {
       "name": "SingleStepLifecycle",
-      "signal_enum": "LifecycleSignal",
+      "signal_enum": "",
+      "input_type": "LifecycleSignal",
       "root_machine": "Main",
       "max_active_depth": 1,
       "continuation_capacity": 0,
       "completion_step_bound": 1,
-      "graph_identity": "f877b9b39ebf7a1f8fab0de4bbe2ef05a9092a3dac4d7fe13d13ba43827e365e",
-      "topology_identity": "e5cca3cb76d6ad575392c51b6c8b1737cec7a8113b4b40c1a3155adf501a6ca9",
-      "guard_identity": "fbf84e7ac7e1bb6054e533545088da5c576390eaa7e5b7e58f82264bdf1d7e80",
-      "effect_identity": "1770dc5b1049b4346206b576386d8489a3061a1bd6f255fc545fab68d5aed55f",
-      "runtime_identity": "fb264611f22aa6a58cf8a6ea1f86016c66a2b2a3ff626b0b7c430c54cf4be9d7",
+      "graph_identity": "automata-1383b9daf89ce5a0",
+      "topology_identity": "automata-1383b9daf89ce5a0",
+      "runtime_identity": "runtime-51a91c9cd4e8a7c4",
       "source_span": {
-        "line": 98,
+        "line": 82,
         "column": 1
+      },
+      "state_environment": {
+        "identity": "SingleStepLifecycle#state",
+        "fields": null,
+        "shared": true,
+        "explicit": true,
+        "source_span": {
+          "line": 82,
+          "column": 1
+        }
       },
       "machines": [
         {
@@ -441,7 +747,7 @@
           "runtime_ordinal": 0,
           "reachable": true,
           "source_span": {
-            "line": 100,
+            "line": 85,
             "column": 5
           },
           "states": [
@@ -451,16 +757,36 @@
               "runtime_ordinal": 0,
               "reachable": true,
               "source_span": {
-                "line": 102,
+                "line": 87,
                 "column": 9
               },
-              "handlers": [
+              "operations": [
                 {
-                  "signal": "LifecycleSignal::Create",
-                  "kind": "goto",
-                  "target_state": "Finished",
+                  "id": "SingleStepLifecycle.Main.Idle.01",
+                  "kind": "input_reaction",
+                  "detail": "LifecycleSignal::Create",
                   "source_span": {
-                    "line": 104,
+                    "line": 89,
+                    "column": 13
+                  }
+                },
+                {
+                  "id": "SingleStepLifecycle.Main.Idle.02",
+                  "kind": "state_transition",
+                  "detail": "Finished",
+                  "source_span": {
+                    "line": 89,
+                    "column": 43
+                  }
+                }
+              ],
+              "reactions": [
+                {
+                  "pattern": "LifecycleSignal::Create",
+                  "target": "Finished",
+                  "declaration_order": 0,
+                  "source_span": {
+                    "line": 89,
                     "column": 13
                   }
                 }
@@ -471,15 +797,37 @@
               "terminal": true,
               "runtime_ordinal": 1,
               "reachable": true,
-              "completion": "finish",
               "source_span": {
-                "line": 107,
+                "line": 92,
                 "column": 9
               }
             }
-          ]
+          ],
+          "result_type": {
+            "name": "void",
+            "kind": "builtin",
+            "span": {
+              "line": 85,
+              "column": 13
+            }
+          },
+          "error_type": {
+            "name": "void",
+            "kind": "builtin",
+            "span": {
+              "line": 85,
+              "column": 13
+            }
+          }
         }
-      ]
+      ],
+      "machine_stack": {
+        "capacity": 8,
+        "storage": "InlineBoundedSpecializedFrames",
+        "scheduler": "None",
+        "continuation": "ExplicitState",
+        "shared_state": "SingleStepLifecycle#state"
+      }
     }
   ],
   "functions": [
@@ -489,7 +837,7 @@
         "name": "int",
         "kind": "builtin",
         "span": {
-          "line": 114,
+          "line": 98,
           "column": 1
         }
       },
@@ -497,10 +845,10 @@
         {
           "name": "outcome",
           "type": {
-            "name": "AutomataDispatchOutcome",
+            "name": "StepOutcome",
             "kind": "enum",
             "span": {
-              "line": 114,
+              "line": 98,
               "column": 17
             }
           }
@@ -512,16 +860,16 @@
           "kind": "return",
           "type": "int",
           "source_span": {
-            "line": 116,
+            "line": 100,
             "column": 5
           }
         },
         {
           "id": "OutcomeCode.02",
           "kind": "match_expr",
-          "detail": "6 arms",
+          "detail": "5 arms",
           "source_span": {
-            "line": 116,
+            "line": 100,
             "column": 12
           }
         },
@@ -530,16 +878,16 @@
           "kind": "name",
           "detail": "outcome",
           "source_span": {
-            "line": 116,
+            "line": 100,
             "column": 19
           }
         },
         {
           "id": "OutcomeCode.04",
           "kind": "pattern",
-          "detail": "AutomataDispatchOutcome::Transitioned",
+          "detail": "StepOutcome::Transitioned",
           "source_span": {
-            "line": 117,
+            "line": 101,
             "column": 9
           }
         },
@@ -548,16 +896,16 @@
           "kind": "literal",
           "detail": "1",
           "source_span": {
-            "line": 117,
-            "column": 50
+            "line": 101,
+            "column": 38
           }
         },
         {
           "id": "OutcomeCode.06",
           "kind": "pattern",
-          "detail": "AutomataDispatchOutcome::Unhandled",
+          "detail": "StepOutcome::Unhandled",
           "source_span": {
-            "line": 118,
+            "line": 102,
             "column": 9
           }
         },
@@ -566,16 +914,16 @@
           "kind": "literal",
           "detail": "2",
           "source_span": {
-            "line": 118,
-            "column": 47
+            "line": 102,
+            "column": 35
           }
         },
         {
           "id": "OutcomeCode.08",
           "kind": "pattern",
-          "detail": "AutomataDispatchOutcome::Ambiguous",
+          "detail": "StepOutcome::Ambiguous",
           "source_span": {
-            "line": 119,
+            "line": 103,
             "column": 9
           }
         },
@@ -584,16 +932,16 @@
           "kind": "literal",
           "detail": "5",
           "source_span": {
-            "line": 119,
-            "column": 47
+            "line": 103,
+            "column": 35
           }
         },
         {
           "id": "OutcomeCode.10",
           "kind": "pattern",
-          "detail": "AutomataDispatchOutcome::Finished",
+          "detail": "StepOutcome::Finished",
           "source_span": {
-            "line": 120,
+            "line": 104,
             "column": 9
           }
         },
@@ -602,16 +950,16 @@
           "kind": "literal",
           "detail": "3",
           "source_span": {
-            "line": 120,
-            "column": 46
+            "line": 104,
+            "column": 34
           }
         },
         {
           "id": "OutcomeCode.12",
           "kind": "pattern",
-          "detail": "AutomataDispatchOutcome::AlreadyFinished",
+          "detail": "StepOutcome::AlreadyFinished",
           "source_span": {
-            "line": 121,
+            "line": 105,
             "column": 9
           }
         },
@@ -620,155 +968,184 @@
           "kind": "literal",
           "detail": "4",
           "source_span": {
-            "line": 121,
-            "column": 53
+            "line": 105,
+            "column": 41
+          }
+        }
+      ],
+      "source_span": {
+        "line": 98,
+        "column": 5
+      }
+    },
+    {
+      "name": "SingleStepFinishCode",
+      "return_type": {
+        "name": "int",
+        "kind": "builtin",
+        "span": {
+          "line": 109,
+          "column": 1
+        }
+      },
+      "operations": [
+        {
+          "id": "SingleStepFinishCode.01",
+          "kind": "instance_decl",
+          "detail": "SingleStepLifecycle lifecycle",
+          "source_span": {
+            "line": 111,
+            "column": 5
           }
         },
         {
-          "id": "OutcomeCode.14",
-          "kind": "pattern",
-          "detail": "AutomataDispatchOutcome::EffectBatchOccupied",
+          "id": "SingleStepFinishCode.02",
+          "kind": "var_decl",
+          "type": "int",
+          "detail": "first",
           "source_span": {
-            "line": 122,
+            "line": 112,
             "column": 9
           }
         },
         {
-          "id": "OutcomeCode.15",
+          "id": "SingleStepFinishCode.03",
+          "kind": "call",
+          "detail": "OutcomeCode",
+          "source_span": {
+            "line": 112,
+            "column": 17
+          }
+        },
+        {
+          "id": "SingleStepFinishCode.04",
+          "kind": "step_machine_input",
+          "detail": "lifecycle.Main",
+          "source_span": {
+            "line": 112,
+            "column": 29
+          }
+        },
+        {
+          "id": "SingleStepFinishCode.05",
+          "kind": "name",
+          "detail": "lifecycle",
+          "source_span": {
+            "line": 112,
+            "column": 34
+          }
+        },
+        {
+          "id": "SingleStepFinishCode.06",
+          "kind": "name",
+          "detail": "Main",
+          "source_span": {
+            "line": 112,
+            "column": 45
+          }
+        },
+        {
+          "id": "SingleStepFinishCode.07",
+          "kind": "enum_construct",
+          "detail": "LifecycleSignal::Create",
+          "source_span": {
+            "line": 112,
+            "column": 51
+          }
+        },
+        {
+          "id": "SingleStepFinishCode.08",
+          "kind": "return",
+          "type": "int",
+          "source_span": {
+            "line": 113,
+            "column": 5
+          }
+        },
+        {
+          "id": "SingleStepFinishCode.09",
+          "kind": "binary",
+          "detail": "+",
+          "source_span": {
+            "line": 113,
+            "column": 23
+          }
+        },
+        {
+          "id": "SingleStepFinishCode.10",
+          "kind": "binary",
+          "detail": "*",
+          "source_span": {
+            "line": 113,
+            "column": 18
+          }
+        },
+        {
+          "id": "SingleStepFinishCode.11",
+          "kind": "name",
+          "detail": "first",
+          "source_span": {
+            "line": 113,
+            "column": 12
+          }
+        },
+        {
+          "id": "SingleStepFinishCode.12",
           "kind": "literal",
-          "detail": "6",
+          "detail": "10",
           "source_span": {
-            "line": 122,
-            "column": 57
-          }
-        }
-      ],
-      "source_span": {
-        "line": 114,
-        "column": 5
-      }
-    },
-    {
-      "name": "InitialTerminalOutcomeCode",
-      "return_type": {
-        "name": "int",
-        "kind": "builtin",
-        "span": {
-          "line": 126,
-          "column": 1
-        }
-      },
-      "operations": [
-        {
-          "id": "InitialTerminalOutcomeCode.01",
-          "kind": "instance_decl",
-          "detail": "ImmediateLifecycle lifecycle",
-          "source_span": {
-            "line": 128,
-            "column": 5
+            "line": 113,
+            "column": 20
           }
         },
         {
-          "id": "InitialTerminalOutcomeCode.02",
-          "kind": "return",
-          "type": "int",
-          "source_span": {
-            "line": 129,
-            "column": 5
-          }
-        },
-        {
-          "id": "InitialTerminalOutcomeCode.03",
+          "id": "SingleStepFinishCode.13",
           "kind": "call",
           "detail": "OutcomeCode",
           "source_span": {
-            "line": 129,
-            "column": 12
+            "line": 113,
+            "column": 25
           }
         },
         {
-          "id": "InitialTerminalOutcomeCode.04",
-          "kind": "dispatch",
+          "id": "SingleStepFinishCode.14",
+          "kind": "step_machine_input",
+          "detail": "lifecycle.Main",
+          "source_span": {
+            "line": 113,
+            "column": 37
+          }
+        },
+        {
+          "id": "SingleStepFinishCode.15",
+          "kind": "name",
           "detail": "lifecycle",
           "source_span": {
-            "line": 129,
-            "column": 24
+            "line": 113,
+            "column": 42
           }
         },
         {
-          "id": "InitialTerminalOutcomeCode.05",
+          "id": "SingleStepFinishCode.16",
+          "kind": "name",
+          "detail": "Main",
+          "source_span": {
+            "line": 113,
+            "column": 53
+          }
+        },
+        {
+          "id": "SingleStepFinishCode.17",
           "kind": "enum_construct",
           "detail": "LifecycleSignal::Create",
           "source_span": {
-            "line": 129,
-            "column": 44
+            "line": 113,
+            "column": 59
           }
         }
       ],
       "source_span": {
-        "line": 126,
-        "column": 5
-      }
-    },
-    {
-      "name": "ZeroCapacityOutcomeCode",
-      "return_type": {
-        "name": "int",
-        "kind": "builtin",
-        "span": {
-          "line": 132,
-          "column": 1
-        }
-      },
-      "operations": [
-        {
-          "id": "ZeroCapacityOutcomeCode.01",
-          "kind": "instance_decl",
-          "detail": "SingleStepLifecycle lifecycle",
-          "source_span": {
-            "line": 134,
-            "column": 5
-          }
-        },
-        {
-          "id": "ZeroCapacityOutcomeCode.02",
-          "kind": "return",
-          "type": "int",
-          "source_span": {
-            "line": 135,
-            "column": 5
-          }
-        },
-        {
-          "id": "ZeroCapacityOutcomeCode.03",
-          "kind": "call",
-          "detail": "OutcomeCode",
-          "source_span": {
-            "line": 135,
-            "column": 12
-          }
-        },
-        {
-          "id": "ZeroCapacityOutcomeCode.04",
-          "kind": "dispatch",
-          "detail": "lifecycle",
-          "source_span": {
-            "line": 135,
-            "column": 24
-          }
-        },
-        {
-          "id": "ZeroCapacityOutcomeCode.05",
-          "kind": "enum_construct",
-          "detail": "LifecycleSignal::Create",
-          "source_span": {
-            "line": 135,
-            "column": 44
-          }
-        }
-      ],
-      "source_span": {
-        "line": 132,
+        "line": 109,
         "column": 5
       }
     },
@@ -778,7 +1155,7 @@
         "name": "int",
         "kind": "builtin",
         "span": {
-          "line": 138,
+          "line": 116,
           "column": 1
         }
       },
@@ -788,141 +1165,177 @@
           "kind": "instance_decl",
           "detail": "ResourceLifecycle lifecycle",
           "source_span": {
-            "line": 140,
+            "line": 118,
             "column": 5
           }
         },
         {
           "id": "UnhandledPreservesStateCode.02",
           "kind": "var_decl",
-          "type": "AutomataDispatchOutcome",
+          "type": "StepOutcome",
           "detail": "first",
           "source_span": {
-            "line": 141,
-            "column": 29
+            "line": 119,
+            "column": 17
           }
         },
         {
           "id": "UnhandledPreservesStateCode.03",
-          "kind": "dispatch",
-          "detail": "lifecycle",
+          "kind": "step_machine_input",
+          "detail": "lifecycle.Main",
           "source_span": {
-            "line": 141,
-            "column": 37
+            "line": 119,
+            "column": 25
           }
         },
         {
           "id": "UnhandledPreservesStateCode.04",
-          "kind": "enum_construct",
-          "detail": "LifecycleSignal::Stop",
+          "kind": "name",
+          "detail": "lifecycle",
           "source_span": {
-            "line": 141,
-            "column": 57
+            "line": 119,
+            "column": 30
           }
         },
         {
           "id": "UnhandledPreservesStateCode.05",
-          "kind": "var_decl",
-          "type": "AutomataDispatchOutcome",
-          "detail": "second",
+          "kind": "name",
+          "detail": "Main",
           "source_span": {
-            "line": 142,
-            "column": 29
+            "line": 119,
+            "column": 41
           }
         },
         {
           "id": "UnhandledPreservesStateCode.06",
-          "kind": "dispatch",
-          "detail": "lifecycle",
+          "kind": "enum_construct",
+          "detail": "LifecycleSignal::Stop",
           "source_span": {
-            "line": 142,
-            "column": 38
+            "line": 119,
+            "column": 47
           }
         },
         {
           "id": "UnhandledPreservesStateCode.07",
-          "kind": "enum_construct",
-          "detail": "LifecycleSignal::Create",
+          "kind": "var_decl",
+          "type": "StepOutcome",
+          "detail": "second",
           "source_span": {
-            "line": 142,
-            "column": 58
+            "line": 120,
+            "column": 17
           }
         },
         {
           "id": "UnhandledPreservesStateCode.08",
-          "kind": "return",
-          "type": "int",
+          "kind": "step_machine_input",
+          "detail": "lifecycle.Main",
           "source_span": {
-            "line": 143,
-            "column": 5
+            "line": 120,
+            "column": 26
           }
         },
         {
           "id": "UnhandledPreservesStateCode.09",
-          "kind": "binary",
-          "detail": "+",
+          "kind": "name",
+          "detail": "lifecycle",
           "source_span": {
-            "line": 143,
-            "column": 36
-          }
-        },
-        {
-          "id": "UnhandledPreservesStateCode.10",
-          "kind": "binary",
-          "detail": "*",
-          "source_span": {
-            "line": 143,
+            "line": 120,
             "column": 31
           }
         },
         {
-          "id": "UnhandledPreservesStateCode.11",
-          "kind": "call",
-          "detail": "OutcomeCode",
+          "id": "UnhandledPreservesStateCode.10",
+          "kind": "name",
+          "detail": "Main",
           "source_span": {
-            "line": 143,
-            "column": 12
+            "line": 120,
+            "column": 42
+          }
+        },
+        {
+          "id": "UnhandledPreservesStateCode.11",
+          "kind": "enum_construct",
+          "detail": "LifecycleSignal::Create",
+          "source_span": {
+            "line": 120,
+            "column": 48
           }
         },
         {
           "id": "UnhandledPreservesStateCode.12",
-          "kind": "name",
-          "detail": "first",
+          "kind": "return",
+          "type": "int",
           "source_span": {
-            "line": 143,
-            "column": 24
+            "line": 121,
+            "column": 5
           }
         },
         {
           "id": "UnhandledPreservesStateCode.13",
-          "kind": "literal",
-          "detail": "10",
+          "kind": "binary",
+          "detail": "+",
           "source_span": {
-            "line": 143,
-            "column": 33
+            "line": 121,
+            "column": 36
           }
         },
         {
           "id": "UnhandledPreservesStateCode.14",
-          "kind": "call",
-          "detail": "OutcomeCode",
+          "kind": "binary",
+          "detail": "*",
           "source_span": {
-            "line": 143,
-            "column": 38
+            "line": 121,
+            "column": 31
           }
         },
         {
           "id": "UnhandledPreservesStateCode.15",
+          "kind": "call",
+          "detail": "OutcomeCode",
+          "source_span": {
+            "line": 121,
+            "column": 12
+          }
+        },
+        {
+          "id": "UnhandledPreservesStateCode.16",
+          "kind": "name",
+          "detail": "first",
+          "source_span": {
+            "line": 121,
+            "column": 24
+          }
+        },
+        {
+          "id": "UnhandledPreservesStateCode.17",
+          "kind": "literal",
+          "detail": "10",
+          "source_span": {
+            "line": 121,
+            "column": 33
+          }
+        },
+        {
+          "id": "UnhandledPreservesStateCode.18",
+          "kind": "call",
+          "detail": "OutcomeCode",
+          "source_span": {
+            "line": 121,
+            "column": 38
+          }
+        },
+        {
+          "id": "UnhandledPreservesStateCode.19",
           "kind": "name",
           "detail": "second",
           "source_span": {
-            "line": 143,
+            "line": 121,
             "column": 50
           }
         }
       ],
       "source_span": {
-        "line": 138,
+        "line": 116,
         "column": 5
       }
     },
@@ -932,7 +1345,7 @@
         "name": "int",
         "kind": "builtin",
         "span": {
-          "line": 146,
+          "line": 124,
           "column": 1
         }
       },
@@ -942,338 +1355,338 @@
           "kind": "instance_decl",
           "detail": "ResourceLifecycle lifecycle",
           "source_span": {
-            "line": 148,
+            "line": 126,
             "column": 5
           }
         },
         {
           "id": "NestedPushResumesCallerCode.02",
           "kind": "var_decl",
-          "type": "AutomataDispatchOutcome",
+          "type": "StepOutcome",
           "detail": "a",
           "source_span": {
-            "line": 149,
-            "column": 29
+            "line": 127,
+            "column": 17
           }
         },
         {
           "id": "NestedPushResumesCallerCode.03",
-          "kind": "dispatch",
-          "detail": "lifecycle",
+          "kind": "step_machine_input",
+          "detail": "lifecycle.Main",
           "source_span": {
-            "line": 149,
-            "column": 33
+            "line": 127,
+            "column": 21
           }
         },
         {
           "id": "NestedPushResumesCallerCode.04",
-          "kind": "enum_construct",
-          "detail": "LifecycleSignal::Create",
+          "kind": "name",
+          "detail": "lifecycle",
           "source_span": {
-            "line": 149,
-            "column": 53
+            "line": 127,
+            "column": 26
           }
         },
         {
           "id": "NestedPushResumesCallerCode.05",
-          "kind": "var_decl",
-          "type": "AutomataDispatchOutcome",
-          "detail": "b",
+          "kind": "name",
+          "detail": "Main",
           "source_span": {
-            "line": 150,
-            "column": 29
+            "line": 127,
+            "column": 37
           }
         },
         {
           "id": "NestedPushResumesCallerCode.06",
-          "kind": "dispatch",
-          "detail": "lifecycle",
+          "kind": "enum_construct",
+          "detail": "LifecycleSignal::Create",
           "source_span": {
-            "line": 150,
-            "column": 33
+            "line": 127,
+            "column": 43
           }
         },
         {
           "id": "NestedPushResumesCallerCode.07",
-          "kind": "enum_construct",
-          "detail": "LifecycleSignal::Clean",
+          "kind": "var_decl",
+          "type": "StepOutcome",
+          "detail": "b",
           "source_span": {
-            "line": 150,
-            "column": 53
+            "line": 128,
+            "column": 17
           }
         },
         {
           "id": "NestedPushResumesCallerCode.08",
-          "kind": "var_decl",
-          "type": "AutomataDispatchOutcome",
-          "detail": "c",
+          "kind": "step_machine_input",
+          "detail": "lifecycle.Main",
           "source_span": {
-            "line": 151,
-            "column": 29
+            "line": 128,
+            "column": 21
           }
         },
         {
           "id": "NestedPushResumesCallerCode.09",
-          "kind": "dispatch",
+          "kind": "name",
           "detail": "lifecycle",
           "source_span": {
-            "line": 151,
-            "column": 33
+            "line": 128,
+            "column": 26
           }
         },
         {
           "id": "NestedPushResumesCallerCode.10",
-          "kind": "enum_construct",
-          "detail": "LifecycleSignal::Release",
+          "kind": "name",
+          "detail": "Main",
           "source_span": {
-            "line": 151,
-            "column": 53
+            "line": 128,
+            "column": 37
           }
         },
         {
           "id": "NestedPushResumesCallerCode.11",
-          "kind": "var_decl",
-          "type": "AutomataDispatchOutcome",
-          "detail": "d",
+          "kind": "enum_construct",
+          "detail": "LifecycleSignal::Clean",
           "source_span": {
-            "line": 152,
-            "column": 29
+            "line": 128,
+            "column": 43
           }
         },
         {
           "id": "NestedPushResumesCallerCode.12",
-          "kind": "dispatch",
-          "detail": "lifecycle",
+          "kind": "var_decl",
+          "type": "StepOutcome",
+          "detail": "c",
           "source_span": {
-            "line": 152,
-            "column": 33
+            "line": 129,
+            "column": 17
           }
         },
         {
           "id": "NestedPushResumesCallerCode.13",
-          "kind": "enum_construct",
-          "detail": "LifecycleSignal::Sweep",
+          "kind": "step_machine_input",
+          "detail": "lifecycle.Main",
           "source_span": {
-            "line": 152,
-            "column": 53
+            "line": 129,
+            "column": 21
           }
         },
         {
           "id": "NestedPushResumesCallerCode.14",
-          "kind": "var_decl",
-          "type": "AutomataDispatchOutcome",
-          "detail": "e",
+          "kind": "name",
+          "detail": "lifecycle",
           "source_span": {
-            "line": 153,
-            "column": 29
+            "line": 129,
+            "column": 26
           }
         },
         {
           "id": "NestedPushResumesCallerCode.15",
-          "kind": "dispatch",
-          "detail": "lifecycle",
+          "kind": "name",
+          "detail": "Main",
           "source_span": {
-            "line": 153,
-            "column": 33
+            "line": 129,
+            "column": 37
           }
         },
         {
           "id": "NestedPushResumesCallerCode.16",
           "kind": "enum_construct",
-          "detail": "LifecycleSignal::Confirm",
+          "detail": "LifecycleSignal::Release",
           "source_span": {
-            "line": 153,
-            "column": 53
+            "line": 129,
+            "column": 43
           }
         },
         {
           "id": "NestedPushResumesCallerCode.17",
           "kind": "var_decl",
-          "type": "AutomataDispatchOutcome",
-          "detail": "f",
+          "type": "StepOutcome",
+          "detail": "d",
           "source_span": {
-            "line": 154,
-            "column": 29
+            "line": 130,
+            "column": 17
           }
         },
         {
           "id": "NestedPushResumesCallerCode.18",
-          "kind": "dispatch",
-          "detail": "lifecycle",
+          "kind": "step_machine_input",
+          "detail": "lifecycle.Main",
           "source_span": {
-            "line": 154,
-            "column": 33
-          }
-        },
-        {
-          "id": "NestedPushResumesCallerCode.19",
-          "kind": "enum_construct",
-          "detail": "LifecycleSignal::Stop",
-          "source_span": {
-            "line": 154,
-            "column": 53
-          }
-        },
-        {
-          "id": "NestedPushResumesCallerCode.20",
-          "kind": "return",
-          "type": "int",
-          "source_span": {
-            "line": 155,
-            "column": 5
-          }
-        },
-        {
-          "id": "NestedPushResumesCallerCode.21",
-          "kind": "binary",
-          "detail": "+",
-          "source_span": {
-            "line": 159,
-            "column": 29
-          }
-        },
-        {
-          "id": "NestedPushResumesCallerCode.22",
-          "kind": "binary",
-          "detail": "+",
-          "source_span": {
-            "line": 158,
-            "column": 30
-          }
-        },
-        {
-          "id": "NestedPushResumesCallerCode.23",
-          "kind": "binary",
-          "detail": "+",
-          "source_span": {
-            "line": 157,
-            "column": 31
-          }
-        },
-        {
-          "id": "NestedPushResumesCallerCode.24",
-          "kind": "binary",
-          "detail": "+",
-          "source_span": {
-            "line": 156,
-            "column": 32
-          }
-        },
-        {
-          "id": "NestedPushResumesCallerCode.25",
-          "kind": "binary",
-          "detail": "+",
-          "source_span": {
-            "line": 155,
-            "column": 36
-          }
-        },
-        {
-          "id": "NestedPushResumesCallerCode.26",
-          "kind": "binary",
-          "detail": "*",
-          "source_span": {
-            "line": 155,
-            "column": 27
-          }
-        },
-        {
-          "id": "NestedPushResumesCallerCode.27",
-          "kind": "call",
-          "detail": "OutcomeCode",
-          "source_span": {
-            "line": 155,
-            "column": 12
-          }
-        },
-        {
-          "id": "NestedPushResumesCallerCode.28",
-          "kind": "name",
-          "detail": "a",
-          "source_span": {
-            "line": 155,
-            "column": 24
-          }
-        },
-        {
-          "id": "NestedPushResumesCallerCode.29",
-          "kind": "literal",
-          "detail": "100000",
-          "source_span": {
-            "line": 155,
-            "column": 29
-          }
-        },
-        {
-          "id": "NestedPushResumesCallerCode.30",
-          "kind": "binary",
-          "detail": "*",
-          "source_span": {
-            "line": 156,
-            "column": 24
-          }
-        },
-        {
-          "id": "NestedPushResumesCallerCode.31",
-          "kind": "call",
-          "detail": "OutcomeCode",
-          "source_span": {
-            "line": 156,
-            "column": 9
-          }
-        },
-        {
-          "id": "NestedPushResumesCallerCode.32",
-          "kind": "name",
-          "detail": "b",
-          "source_span": {
-            "line": 156,
+            "line": 130,
             "column": 21
           }
         },
         {
-          "id": "NestedPushResumesCallerCode.33",
-          "kind": "literal",
-          "detail": "10000",
+          "id": "NestedPushResumesCallerCode.19",
+          "kind": "name",
+          "detail": "lifecycle",
           "source_span": {
-            "line": 156,
+            "line": 130,
             "column": 26
+          }
+        },
+        {
+          "id": "NestedPushResumesCallerCode.20",
+          "kind": "name",
+          "detail": "Main",
+          "source_span": {
+            "line": 130,
+            "column": 37
+          }
+        },
+        {
+          "id": "NestedPushResumesCallerCode.21",
+          "kind": "enum_construct",
+          "detail": "LifecycleSignal::Sweep",
+          "source_span": {
+            "line": 130,
+            "column": 43
+          }
+        },
+        {
+          "id": "NestedPushResumesCallerCode.22",
+          "kind": "var_decl",
+          "type": "StepOutcome",
+          "detail": "e",
+          "source_span": {
+            "line": 131,
+            "column": 17
+          }
+        },
+        {
+          "id": "NestedPushResumesCallerCode.23",
+          "kind": "step_machine_input",
+          "detail": "lifecycle.Main",
+          "source_span": {
+            "line": 131,
+            "column": 21
+          }
+        },
+        {
+          "id": "NestedPushResumesCallerCode.24",
+          "kind": "name",
+          "detail": "lifecycle",
+          "source_span": {
+            "line": 131,
+            "column": 26
+          }
+        },
+        {
+          "id": "NestedPushResumesCallerCode.25",
+          "kind": "name",
+          "detail": "Main",
+          "source_span": {
+            "line": 131,
+            "column": 37
+          }
+        },
+        {
+          "id": "NestedPushResumesCallerCode.26",
+          "kind": "enum_construct",
+          "detail": "LifecycleSignal::Confirm",
+          "source_span": {
+            "line": 131,
+            "column": 43
+          }
+        },
+        {
+          "id": "NestedPushResumesCallerCode.27",
+          "kind": "var_decl",
+          "type": "StepOutcome",
+          "detail": "f",
+          "source_span": {
+            "line": 132,
+            "column": 17
+          }
+        },
+        {
+          "id": "NestedPushResumesCallerCode.28",
+          "kind": "step_machine_input",
+          "detail": "lifecycle.Main",
+          "source_span": {
+            "line": 132,
+            "column": 21
+          }
+        },
+        {
+          "id": "NestedPushResumesCallerCode.29",
+          "kind": "name",
+          "detail": "lifecycle",
+          "source_span": {
+            "line": 132,
+            "column": 26
+          }
+        },
+        {
+          "id": "NestedPushResumesCallerCode.30",
+          "kind": "name",
+          "detail": "Main",
+          "source_span": {
+            "line": 132,
+            "column": 37
+          }
+        },
+        {
+          "id": "NestedPushResumesCallerCode.31",
+          "kind": "enum_construct",
+          "detail": "LifecycleSignal::Stop",
+          "source_span": {
+            "line": 132,
+            "column": 43
+          }
+        },
+        {
+          "id": "NestedPushResumesCallerCode.32",
+          "kind": "return",
+          "type": "int",
+          "source_span": {
+            "line": 133,
+            "column": 5
+          }
+        },
+        {
+          "id": "NestedPushResumesCallerCode.33",
+          "kind": "binary",
+          "detail": "+",
+          "source_span": {
+            "line": 137,
+            "column": 29
           }
         },
         {
           "id": "NestedPushResumesCallerCode.34",
           "kind": "binary",
-          "detail": "*",
+          "detail": "+",
           "source_span": {
-            "line": 157,
-            "column": 24
+            "line": 136,
+            "column": 30
           }
         },
         {
           "id": "NestedPushResumesCallerCode.35",
-          "kind": "call",
-          "detail": "OutcomeCode",
+          "kind": "binary",
+          "detail": "+",
           "source_span": {
-            "line": 157,
-            "column": 9
+            "line": 135,
+            "column": 31
           }
         },
         {
           "id": "NestedPushResumesCallerCode.36",
-          "kind": "name",
-          "detail": "c",
+          "kind": "binary",
+          "detail": "+",
           "source_span": {
-            "line": 157,
-            "column": 21
+            "line": 134,
+            "column": 32
           }
         },
         {
           "id": "NestedPushResumesCallerCode.37",
-          "kind": "literal",
-          "detail": "1000",
+          "kind": "binary",
+          "detail": "+",
           "source_span": {
-            "line": 157,
-            "column": 26
+            "line": 133,
+            "column": 36
           }
         },
         {
@@ -1281,8 +1694,8 @@
           "kind": "binary",
           "detail": "*",
           "source_span": {
-            "line": 158,
-            "column": 24
+            "line": 133,
+            "column": 27
           }
         },
         {
@@ -1290,26 +1703,26 @@
           "kind": "call",
           "detail": "OutcomeCode",
           "source_span": {
-            "line": 158,
-            "column": 9
+            "line": 133,
+            "column": 12
           }
         },
         {
           "id": "NestedPushResumesCallerCode.40",
           "kind": "name",
-          "detail": "d",
+          "detail": "a",
           "source_span": {
-            "line": 158,
-            "column": 21
+            "line": 133,
+            "column": 24
           }
         },
         {
           "id": "NestedPushResumesCallerCode.41",
           "kind": "literal",
-          "detail": "100",
+          "detail": "100000",
           "source_span": {
-            "line": 158,
-            "column": 26
+            "line": 133,
+            "column": 29
           }
         },
         {
@@ -1317,7 +1730,7 @@
           "kind": "binary",
           "detail": "*",
           "source_span": {
-            "line": 159,
+            "line": 134,
             "column": 24
           }
         },
@@ -1326,49 +1739,157 @@
           "kind": "call",
           "detail": "OutcomeCode",
           "source_span": {
-            "line": 159,
+            "line": 134,
             "column": 9
           }
         },
         {
           "id": "NestedPushResumesCallerCode.44",
           "kind": "name",
-          "detail": "e",
+          "detail": "b",
           "source_span": {
-            "line": 159,
+            "line": 134,
             "column": 21
           }
         },
         {
           "id": "NestedPushResumesCallerCode.45",
           "kind": "literal",
-          "detail": "10",
+          "detail": "10000",
           "source_span": {
-            "line": 159,
+            "line": 134,
             "column": 26
           }
         },
         {
           "id": "NestedPushResumesCallerCode.46",
-          "kind": "call",
-          "detail": "OutcomeCode",
+          "kind": "binary",
+          "detail": "*",
           "source_span": {
-            "line": 160,
-            "column": 9
+            "line": 135,
+            "column": 24
           }
         },
         {
           "id": "NestedPushResumesCallerCode.47",
+          "kind": "call",
+          "detail": "OutcomeCode",
+          "source_span": {
+            "line": 135,
+            "column": 9
+          }
+        },
+        {
+          "id": "NestedPushResumesCallerCode.48",
+          "kind": "name",
+          "detail": "c",
+          "source_span": {
+            "line": 135,
+            "column": 21
+          }
+        },
+        {
+          "id": "NestedPushResumesCallerCode.49",
+          "kind": "literal",
+          "detail": "1000",
+          "source_span": {
+            "line": 135,
+            "column": 26
+          }
+        },
+        {
+          "id": "NestedPushResumesCallerCode.50",
+          "kind": "binary",
+          "detail": "*",
+          "source_span": {
+            "line": 136,
+            "column": 24
+          }
+        },
+        {
+          "id": "NestedPushResumesCallerCode.51",
+          "kind": "call",
+          "detail": "OutcomeCode",
+          "source_span": {
+            "line": 136,
+            "column": 9
+          }
+        },
+        {
+          "id": "NestedPushResumesCallerCode.52",
+          "kind": "name",
+          "detail": "d",
+          "source_span": {
+            "line": 136,
+            "column": 21
+          }
+        },
+        {
+          "id": "NestedPushResumesCallerCode.53",
+          "kind": "literal",
+          "detail": "100",
+          "source_span": {
+            "line": 136,
+            "column": 26
+          }
+        },
+        {
+          "id": "NestedPushResumesCallerCode.54",
+          "kind": "binary",
+          "detail": "*",
+          "source_span": {
+            "line": 137,
+            "column": 24
+          }
+        },
+        {
+          "id": "NestedPushResumesCallerCode.55",
+          "kind": "call",
+          "detail": "OutcomeCode",
+          "source_span": {
+            "line": 137,
+            "column": 9
+          }
+        },
+        {
+          "id": "NestedPushResumesCallerCode.56",
+          "kind": "name",
+          "detail": "e",
+          "source_span": {
+            "line": 137,
+            "column": 21
+          }
+        },
+        {
+          "id": "NestedPushResumesCallerCode.57",
+          "kind": "literal",
+          "detail": "10",
+          "source_span": {
+            "line": 137,
+            "column": 26
+          }
+        },
+        {
+          "id": "NestedPushResumesCallerCode.58",
+          "kind": "call",
+          "detail": "OutcomeCode",
+          "source_span": {
+            "line": 138,
+            "column": 9
+          }
+        },
+        {
+          "id": "NestedPushResumesCallerCode.59",
           "kind": "name",
           "detail": "f",
           "source_span": {
-            "line": 160,
+            "line": 138,
             "column": 21
           }
         }
       ],
       "source_span": {
-        "line": 146,
+        "line": 124,
         "column": 5
       }
     },
@@ -1378,7 +1899,7 @@
         "name": "int",
         "kind": "builtin",
         "span": {
-          "line": 163,
+          "line": 141,
           "column": 1
         }
       },
@@ -1388,952 +1909,1249 @@
           "kind": "instance_decl",
           "detail": "ResourceLifecycle lifecycle",
           "source_span": {
-            "line": 165,
+            "line": 143,
             "column": 5
           }
         },
         {
           "id": "RootTerminalContinuationFinishesImmediatelyCode.02",
           "kind": "var_decl",
-          "type": "AutomataDispatchOutcome",
+          "type": "StepOutcome",
           "detail": "a",
           "source_span": {
-            "line": 166,
-            "column": 29
+            "line": 144,
+            "column": 17
           }
         },
         {
           "id": "RootTerminalContinuationFinishesImmediatelyCode.03",
-          "kind": "dispatch",
-          "detail": "lifecycle",
+          "kind": "step_machine_input",
+          "detail": "lifecycle.Main",
           "source_span": {
-            "line": 166,
-            "column": 33
+            "line": 144,
+            "column": 21
           }
         },
         {
           "id": "RootTerminalContinuationFinishesImmediatelyCode.04",
-          "kind": "enum_construct",
-          "detail": "LifecycleSignal::Create",
+          "kind": "name",
+          "detail": "lifecycle",
           "source_span": {
-            "line": 166,
-            "column": 53
+            "line": 144,
+            "column": 26
           }
         },
         {
           "id": "RootTerminalContinuationFinishesImmediatelyCode.05",
-          "kind": "var_decl",
-          "type": "AutomataDispatchOutcome",
-          "detail": "b",
+          "kind": "name",
+          "detail": "Main",
           "source_span": {
-            "line": 167,
-            "column": 29
+            "line": 144,
+            "column": 37
           }
         },
         {
           "id": "RootTerminalContinuationFinishesImmediatelyCode.06",
-          "kind": "dispatch",
-          "detail": "lifecycle",
+          "kind": "enum_construct",
+          "detail": "LifecycleSignal::Create",
           "source_span": {
-            "line": 167,
-            "column": 33
+            "line": 144,
+            "column": 43
           }
         },
         {
           "id": "RootTerminalContinuationFinishesImmediatelyCode.07",
-          "kind": "enum_construct",
-          "detail": "LifecycleSignal::Begin",
+          "kind": "var_decl",
+          "type": "StepOutcome",
+          "detail": "b",
           "source_span": {
-            "line": 167,
-            "column": 53
+            "line": 145,
+            "column": 17
           }
         },
         {
           "id": "RootTerminalContinuationFinishesImmediatelyCode.08",
-          "kind": "var_decl",
-          "type": "AutomataDispatchOutcome",
-          "detail": "c",
+          "kind": "step_machine_input",
+          "detail": "lifecycle.Main",
           "source_span": {
-            "line": 168,
-            "column": 29
+            "line": 145,
+            "column": 21
           }
         },
         {
           "id": "RootTerminalContinuationFinishesImmediatelyCode.09",
-          "kind": "dispatch",
+          "kind": "name",
           "detail": "lifecycle",
           "source_span": {
-            "line": 168,
-            "column": 33
+            "line": 145,
+            "column": 26
           }
         },
         {
           "id": "RootTerminalContinuationFinishesImmediatelyCode.10",
-          "kind": "enum_construct",
-          "detail": "LifecycleSignal::Clean",
+          "kind": "name",
+          "detail": "Main",
           "source_span": {
-            "line": 168,
-            "column": 53
+            "line": 145,
+            "column": 37
           }
         },
         {
           "id": "RootTerminalContinuationFinishesImmediatelyCode.11",
-          "kind": "var_decl",
-          "type": "AutomataDispatchOutcome",
-          "detail": "d",
+          "kind": "enum_construct",
+          "detail": "LifecycleSignal::Begin",
           "source_span": {
-            "line": 169,
-            "column": 29
+            "line": 145,
+            "column": 43
           }
         },
         {
           "id": "RootTerminalContinuationFinishesImmediatelyCode.12",
-          "kind": "dispatch",
-          "detail": "lifecycle",
+          "kind": "var_decl",
+          "type": "StepOutcome",
+          "detail": "c",
           "source_span": {
-            "line": 169,
-            "column": 33
+            "line": 146,
+            "column": 17
           }
         },
         {
           "id": "RootTerminalContinuationFinishesImmediatelyCode.13",
-          "kind": "enum_construct",
-          "detail": "LifecycleSignal::Release",
+          "kind": "step_machine_input",
+          "detail": "lifecycle.Main",
           "source_span": {
-            "line": 169,
-            "column": 53
+            "line": 146,
+            "column": 21
           }
         },
         {
           "id": "RootTerminalContinuationFinishesImmediatelyCode.14",
-          "kind": "var_decl",
-          "type": "AutomataDispatchOutcome",
-          "detail": "e",
+          "kind": "name",
+          "detail": "lifecycle",
           "source_span": {
-            "line": 170,
-            "column": 29
+            "line": 146,
+            "column": 26
           }
         },
         {
           "id": "RootTerminalContinuationFinishesImmediatelyCode.15",
-          "kind": "dispatch",
-          "detail": "lifecycle",
+          "kind": "name",
+          "detail": "Main",
           "source_span": {
-            "line": 170,
-            "column": 33
+            "line": 146,
+            "column": 37
           }
         },
         {
           "id": "RootTerminalContinuationFinishesImmediatelyCode.16",
           "kind": "enum_construct",
-          "detail": "LifecycleSignal::Sweep",
+          "detail": "LifecycleSignal::Clean",
           "source_span": {
-            "line": 170,
-            "column": 53
+            "line": 146,
+            "column": 43
           }
         },
         {
           "id": "RootTerminalContinuationFinishesImmediatelyCode.17",
           "kind": "var_decl",
-          "type": "AutomataDispatchOutcome",
-          "detail": "f",
+          "type": "StepOutcome",
+          "detail": "d",
           "source_span": {
-            "line": 171,
-            "column": 29
+            "line": 147,
+            "column": 17
           }
         },
         {
           "id": "RootTerminalContinuationFinishesImmediatelyCode.18",
-          "kind": "dispatch",
-          "detail": "lifecycle",
+          "kind": "step_machine_input",
+          "detail": "lifecycle.Main",
           "source_span": {
-            "line": 171,
-            "column": 33
-          }
-        },
-        {
-          "id": "RootTerminalContinuationFinishesImmediatelyCode.19",
-          "kind": "enum_construct",
-          "detail": "LifecycleSignal::Confirm",
-          "source_span": {
-            "line": 171,
-            "column": 53
-          }
-        },
-        {
-          "id": "RootTerminalContinuationFinishesImmediatelyCode.20",
-          "kind": "var_decl",
-          "type": "AutomataDispatchOutcome",
-          "detail": "g",
-          "source_span": {
-            "line": 172,
-            "column": 29
-          }
-        },
-        {
-          "id": "RootTerminalContinuationFinishesImmediatelyCode.21",
-          "kind": "dispatch",
-          "detail": "lifecycle",
-          "source_span": {
-            "line": 172,
-            "column": 33
-          }
-        },
-        {
-          "id": "RootTerminalContinuationFinishesImmediatelyCode.22",
-          "kind": "enum_construct",
-          "detail": "LifecycleSignal::Tick",
-          "source_span": {
-            "line": 172,
-            "column": 53
-          }
-        },
-        {
-          "id": "RootTerminalContinuationFinishesImmediatelyCode.23",
-          "kind": "return",
-          "type": "int",
-          "source_span": {
-            "line": 173,
-            "column": 5
-          }
-        },
-        {
-          "id": "RootTerminalContinuationFinishesImmediatelyCode.24",
-          "kind": "binary",
-          "detail": "+",
-          "source_span": {
-            "line": 178,
-            "column": 29
-          }
-        },
-        {
-          "id": "RootTerminalContinuationFinishesImmediatelyCode.25",
-          "kind": "binary",
-          "detail": "+",
-          "source_span": {
-            "line": 177,
-            "column": 30
-          }
-        },
-        {
-          "id": "RootTerminalContinuationFinishesImmediatelyCode.26",
-          "kind": "binary",
-          "detail": "+",
-          "source_span": {
-            "line": 176,
-            "column": 31
-          }
-        },
-        {
-          "id": "RootTerminalContinuationFinishesImmediatelyCode.27",
-          "kind": "binary",
-          "detail": "+",
-          "source_span": {
-            "line": 175,
-            "column": 32
-          }
-        },
-        {
-          "id": "RootTerminalContinuationFinishesImmediatelyCode.28",
-          "kind": "binary",
-          "detail": "+",
-          "source_span": {
-            "line": 174,
-            "column": 33
-          }
-        },
-        {
-          "id": "RootTerminalContinuationFinishesImmediatelyCode.29",
-          "kind": "binary",
-          "detail": "+",
-          "source_span": {
-            "line": 173,
-            "column": 37
-          }
-        },
-        {
-          "id": "RootTerminalContinuationFinishesImmediatelyCode.30",
-          "kind": "binary",
-          "detail": "*",
-          "source_span": {
-            "line": 173,
-            "column": 27
-          }
-        },
-        {
-          "id": "RootTerminalContinuationFinishesImmediatelyCode.31",
-          "kind": "call",
-          "detail": "OutcomeCode",
-          "source_span": {
-            "line": 173,
-            "column": 12
-          }
-        },
-        {
-          "id": "RootTerminalContinuationFinishesImmediatelyCode.32",
-          "kind": "name",
-          "detail": "a",
-          "source_span": {
-            "line": 173,
-            "column": 24
-          }
-        },
-        {
-          "id": "RootTerminalContinuationFinishesImmediatelyCode.33",
-          "kind": "literal",
-          "detail": "1000000",
-          "source_span": {
-            "line": 173,
-            "column": 29
-          }
-        },
-        {
-          "id": "RootTerminalContinuationFinishesImmediatelyCode.34",
-          "kind": "binary",
-          "detail": "*",
-          "source_span": {
-            "line": 174,
-            "column": 24
-          }
-        },
-        {
-          "id": "RootTerminalContinuationFinishesImmediatelyCode.35",
-          "kind": "call",
-          "detail": "OutcomeCode",
-          "source_span": {
-            "line": 174,
-            "column": 9
-          }
-        },
-        {
-          "id": "RootTerminalContinuationFinishesImmediatelyCode.36",
-          "kind": "name",
-          "detail": "b",
-          "source_span": {
-            "line": 174,
+            "line": 147,
             "column": 21
           }
         },
         {
-          "id": "RootTerminalContinuationFinishesImmediatelyCode.37",
-          "kind": "literal",
-          "detail": "100000",
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.19",
+          "kind": "name",
+          "detail": "lifecycle",
           "source_span": {
-            "line": 174,
+            "line": 147,
             "column": 26
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.20",
+          "kind": "name",
+          "detail": "Main",
+          "source_span": {
+            "line": 147,
+            "column": 37
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.21",
+          "kind": "enum_construct",
+          "detail": "LifecycleSignal::Release",
+          "source_span": {
+            "line": 147,
+            "column": 43
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.22",
+          "kind": "var_decl",
+          "type": "StepOutcome",
+          "detail": "e",
+          "source_span": {
+            "line": 148,
+            "column": 17
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.23",
+          "kind": "step_machine_input",
+          "detail": "lifecycle.Main",
+          "source_span": {
+            "line": 148,
+            "column": 21
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.24",
+          "kind": "name",
+          "detail": "lifecycle",
+          "source_span": {
+            "line": 148,
+            "column": 26
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.25",
+          "kind": "name",
+          "detail": "Main",
+          "source_span": {
+            "line": 148,
+            "column": 37
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.26",
+          "kind": "enum_construct",
+          "detail": "LifecycleSignal::Sweep",
+          "source_span": {
+            "line": 148,
+            "column": 43
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.27",
+          "kind": "var_decl",
+          "type": "StepOutcome",
+          "detail": "f",
+          "source_span": {
+            "line": 149,
+            "column": 17
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.28",
+          "kind": "step_machine_input",
+          "detail": "lifecycle.Main",
+          "source_span": {
+            "line": 149,
+            "column": 21
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.29",
+          "kind": "name",
+          "detail": "lifecycle",
+          "source_span": {
+            "line": 149,
+            "column": 26
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.30",
+          "kind": "name",
+          "detail": "Main",
+          "source_span": {
+            "line": 149,
+            "column": 37
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.31",
+          "kind": "enum_construct",
+          "detail": "LifecycleSignal::Confirm",
+          "source_span": {
+            "line": 149,
+            "column": 43
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.32",
+          "kind": "var_decl",
+          "type": "StepOutcome",
+          "detail": "g",
+          "source_span": {
+            "line": 150,
+            "column": 17
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.33",
+          "kind": "step_machine_input",
+          "detail": "lifecycle.Main",
+          "source_span": {
+            "line": 150,
+            "column": 21
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.34",
+          "kind": "name",
+          "detail": "lifecycle",
+          "source_span": {
+            "line": 150,
+            "column": 26
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.35",
+          "kind": "name",
+          "detail": "Main",
+          "source_span": {
+            "line": 150,
+            "column": 37
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.36",
+          "kind": "enum_construct",
+          "detail": "LifecycleSignal::Tick",
+          "source_span": {
+            "line": 150,
+            "column": 43
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.37",
+          "kind": "return",
+          "type": "int",
+          "source_span": {
+            "line": 151,
+            "column": 5
           }
         },
         {
           "id": "RootTerminalContinuationFinishesImmediatelyCode.38",
           "kind": "binary",
-          "detail": "*",
+          "detail": "+",
           "source_span": {
-            "line": 175,
-            "column": 24
+            "line": 156,
+            "column": 29
           }
         },
         {
           "id": "RootTerminalContinuationFinishesImmediatelyCode.39",
-          "kind": "call",
-          "detail": "OutcomeCode",
+          "kind": "binary",
+          "detail": "+",
           "source_span": {
-            "line": 175,
-            "column": 9
+            "line": 155,
+            "column": 30
           }
         },
         {
           "id": "RootTerminalContinuationFinishesImmediatelyCode.40",
-          "kind": "name",
-          "detail": "c",
+          "kind": "binary",
+          "detail": "+",
           "source_span": {
-            "line": 175,
-            "column": 21
+            "line": 154,
+            "column": 31
           }
         },
         {
           "id": "RootTerminalContinuationFinishesImmediatelyCode.41",
-          "kind": "literal",
-          "detail": "10000",
+          "kind": "binary",
+          "detail": "+",
           "source_span": {
-            "line": 175,
-            "column": 26
+            "line": 153,
+            "column": 32
           }
         },
         {
           "id": "RootTerminalContinuationFinishesImmediatelyCode.42",
           "kind": "binary",
-          "detail": "*",
+          "detail": "+",
           "source_span": {
-            "line": 176,
-            "column": 24
+            "line": 152,
+            "column": 33
           }
         },
         {
           "id": "RootTerminalContinuationFinishesImmediatelyCode.43",
-          "kind": "call",
-          "detail": "OutcomeCode",
+          "kind": "binary",
+          "detail": "+",
           "source_span": {
-            "line": 176,
-            "column": 9
+            "line": 151,
+            "column": 37
           }
         },
         {
           "id": "RootTerminalContinuationFinishesImmediatelyCode.44",
-          "kind": "name",
-          "detail": "d",
+          "kind": "binary",
+          "detail": "*",
           "source_span": {
-            "line": 176,
-            "column": 21
+            "line": 151,
+            "column": 27
           }
         },
         {
           "id": "RootTerminalContinuationFinishesImmediatelyCode.45",
-          "kind": "literal",
-          "detail": "1000",
+          "kind": "call",
+          "detail": "OutcomeCode",
           "source_span": {
-            "line": 176,
-            "column": 26
+            "line": 151,
+            "column": 12
           }
         },
         {
           "id": "RootTerminalContinuationFinishesImmediatelyCode.46",
-          "kind": "binary",
-          "detail": "*",
+          "kind": "name",
+          "detail": "a",
           "source_span": {
-            "line": 177,
+            "line": 151,
             "column": 24
           }
         },
         {
           "id": "RootTerminalContinuationFinishesImmediatelyCode.47",
-          "kind": "call",
-          "detail": "OutcomeCode",
+          "kind": "literal",
+          "detail": "1000000",
           "source_span": {
-            "line": 177,
-            "column": 9
+            "line": 151,
+            "column": 29
           }
         },
         {
           "id": "RootTerminalContinuationFinishesImmediatelyCode.48",
-          "kind": "name",
-          "detail": "e",
-          "source_span": {
-            "line": 177,
-            "column": 21
-          }
-        },
-        {
-          "id": "RootTerminalContinuationFinishesImmediatelyCode.49",
-          "kind": "literal",
-          "detail": "100",
-          "source_span": {
-            "line": 177,
-            "column": 26
-          }
-        },
-        {
-          "id": "RootTerminalContinuationFinishesImmediatelyCode.50",
           "kind": "binary",
           "detail": "*",
           "source_span": {
-            "line": 178,
+            "line": 152,
             "column": 24
           }
         },
         {
-          "id": "RootTerminalContinuationFinishesImmediatelyCode.51",
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.49",
           "kind": "call",
           "detail": "OutcomeCode",
           "source_span": {
-            "line": 178,
+            "line": 152,
             "column": 9
           }
         },
         {
-          "id": "RootTerminalContinuationFinishesImmediatelyCode.52",
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.50",
           "kind": "name",
-          "detail": "f",
+          "detail": "b",
           "source_span": {
-            "line": 178,
+            "line": 152,
             "column": 21
           }
         },
         {
-          "id": "RootTerminalContinuationFinishesImmediatelyCode.53",
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.51",
           "kind": "literal",
-          "detail": "10",
+          "detail": "100000",
           "source_span": {
-            "line": 178,
+            "line": 152,
             "column": 26
           }
         },
         {
-          "id": "RootTerminalContinuationFinishesImmediatelyCode.54",
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.52",
+          "kind": "binary",
+          "detail": "*",
+          "source_span": {
+            "line": 153,
+            "column": 24
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.53",
           "kind": "call",
           "detail": "OutcomeCode",
           "source_span": {
-            "line": 179,
+            "line": 153,
             "column": 9
           }
         },
         {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.54",
+          "kind": "name",
+          "detail": "c",
+          "source_span": {
+            "line": 153,
+            "column": 21
+          }
+        },
+        {
           "id": "RootTerminalContinuationFinishesImmediatelyCode.55",
+          "kind": "literal",
+          "detail": "10000",
+          "source_span": {
+            "line": 153,
+            "column": 26
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.56",
+          "kind": "binary",
+          "detail": "*",
+          "source_span": {
+            "line": 154,
+            "column": 24
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.57",
+          "kind": "call",
+          "detail": "OutcomeCode",
+          "source_span": {
+            "line": 154,
+            "column": 9
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.58",
+          "kind": "name",
+          "detail": "d",
+          "source_span": {
+            "line": 154,
+            "column": 21
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.59",
+          "kind": "literal",
+          "detail": "1000",
+          "source_span": {
+            "line": 154,
+            "column": 26
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.60",
+          "kind": "binary",
+          "detail": "*",
+          "source_span": {
+            "line": 155,
+            "column": 24
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.61",
+          "kind": "call",
+          "detail": "OutcomeCode",
+          "source_span": {
+            "line": 155,
+            "column": 9
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.62",
+          "kind": "name",
+          "detail": "e",
+          "source_span": {
+            "line": 155,
+            "column": 21
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.63",
+          "kind": "literal",
+          "detail": "100",
+          "source_span": {
+            "line": 155,
+            "column": 26
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.64",
+          "kind": "binary",
+          "detail": "*",
+          "source_span": {
+            "line": 156,
+            "column": 24
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.65",
+          "kind": "call",
+          "detail": "OutcomeCode",
+          "source_span": {
+            "line": 156,
+            "column": 9
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.66",
+          "kind": "name",
+          "detail": "f",
+          "source_span": {
+            "line": 156,
+            "column": 21
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.67",
+          "kind": "literal",
+          "detail": "10",
+          "source_span": {
+            "line": 156,
+            "column": 26
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.68",
+          "kind": "call",
+          "detail": "OutcomeCode",
+          "source_span": {
+            "line": 157,
+            "column": 9
+          }
+        },
+        {
+          "id": "RootTerminalContinuationFinishesImmediatelyCode.69",
           "kind": "name",
           "detail": "g",
           "source_span": {
-            "line": 179,
+            "line": 157,
             "column": 21
           }
         }
       ],
       "source_span": {
-        "line": 163,
+        "line": 141,
         "column": 5
       }
     },
     {
-      "name": "NonRootFinishTerminatesWholeInstanceCode",
+      "name": "ChildFailureReturnsToParentCode",
       "return_type": {
         "name": "int",
         "kind": "builtin",
         "span": {
-          "line": 182,
+          "line": 161,
           "column": 1
         }
       },
       "operations": [
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.01",
+          "id": "ChildFailureReturnsToParentCode.01",
           "kind": "instance_decl",
           "detail": "ResourceLifecycle lifecycle",
           "source_span": {
-            "line": 184,
+            "line": 163,
             "column": 5
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.02",
+          "id": "ChildFailureReturnsToParentCode.02",
           "kind": "var_decl",
-          "type": "AutomataDispatchOutcome",
+          "type": "StepOutcome",
           "detail": "a",
           "source_span": {
-            "line": 185,
-            "column": 29
+            "line": 164,
+            "column": 17
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.03",
-          "kind": "dispatch",
+          "id": "ChildFailureReturnsToParentCode.03",
+          "kind": "step_machine_input",
+          "detail": "lifecycle.Main",
+          "source_span": {
+            "line": 164,
+            "column": 21
+          }
+        },
+        {
+          "id": "ChildFailureReturnsToParentCode.04",
+          "kind": "name",
           "detail": "lifecycle",
           "source_span": {
-            "line": 185,
-            "column": 33
+            "line": 164,
+            "column": 26
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.04",
+          "id": "ChildFailureReturnsToParentCode.05",
+          "kind": "name",
+          "detail": "Main",
+          "source_span": {
+            "line": 164,
+            "column": 37
+          }
+        },
+        {
+          "id": "ChildFailureReturnsToParentCode.06",
           "kind": "enum_construct",
           "detail": "LifecycleSignal::Create",
           "source_span": {
-            "line": 185,
-            "column": 53
+            "line": 164,
+            "column": 43
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.05",
+          "id": "ChildFailureReturnsToParentCode.07",
           "kind": "var_decl",
-          "type": "AutomataDispatchOutcome",
+          "type": "StepOutcome",
           "detail": "b",
           "source_span": {
-            "line": 186,
-            "column": 29
+            "line": 165,
+            "column": 17
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.06",
-          "kind": "dispatch",
+          "id": "ChildFailureReturnsToParentCode.08",
+          "kind": "step_machine_input",
+          "detail": "lifecycle.Main",
+          "source_span": {
+            "line": 165,
+            "column": 21
+          }
+        },
+        {
+          "id": "ChildFailureReturnsToParentCode.09",
+          "kind": "name",
           "detail": "lifecycle",
           "source_span": {
-            "line": 186,
-            "column": 33
+            "line": 165,
+            "column": 26
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.07",
+          "id": "ChildFailureReturnsToParentCode.10",
+          "kind": "name",
+          "detail": "Main",
+          "source_span": {
+            "line": 165,
+            "column": 37
+          }
+        },
+        {
+          "id": "ChildFailureReturnsToParentCode.11",
           "kind": "enum_construct",
           "detail": "LifecycleSignal::Clean",
           "source_span": {
-            "line": 186,
-            "column": 53
+            "line": 165,
+            "column": 43
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.08",
+          "id": "ChildFailureReturnsToParentCode.12",
           "kind": "var_decl",
-          "type": "AutomataDispatchOutcome",
+          "type": "StepOutcome",
           "detail": "c",
           "source_span": {
-            "line": 187,
-            "column": 29
+            "line": 166,
+            "column": 17
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.09",
-          "kind": "dispatch",
+          "id": "ChildFailureReturnsToParentCode.13",
+          "kind": "step_machine_input",
+          "detail": "lifecycle.Main",
+          "source_span": {
+            "line": 166,
+            "column": 21
+          }
+        },
+        {
+          "id": "ChildFailureReturnsToParentCode.14",
+          "kind": "name",
           "detail": "lifecycle",
           "source_span": {
-            "line": 187,
-            "column": 33
+            "line": 166,
+            "column": 26
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.10",
+          "id": "ChildFailureReturnsToParentCode.15",
+          "kind": "name",
+          "detail": "Main",
+          "source_span": {
+            "line": 166,
+            "column": 37
+          }
+        },
+        {
+          "id": "ChildFailureReturnsToParentCode.16",
           "kind": "enum_construct",
           "detail": "LifecycleSignal::Release",
           "source_span": {
-            "line": 187,
-            "column": 53
+            "line": 166,
+            "column": 43
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.11",
+          "id": "ChildFailureReturnsToParentCode.17",
           "kind": "var_decl",
-          "type": "AutomataDispatchOutcome",
+          "type": "StepOutcome",
           "detail": "d",
           "source_span": {
-            "line": 188,
-            "column": 29
+            "line": 167,
+            "column": 17
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.12",
-          "kind": "dispatch",
+          "id": "ChildFailureReturnsToParentCode.18",
+          "kind": "step_machine_input",
+          "detail": "lifecycle.Main",
+          "source_span": {
+            "line": 167,
+            "column": 21
+          }
+        },
+        {
+          "id": "ChildFailureReturnsToParentCode.19",
+          "kind": "name",
           "detail": "lifecycle",
           "source_span": {
-            "line": 188,
-            "column": 33
+            "line": 167,
+            "column": 26
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.13",
+          "id": "ChildFailureReturnsToParentCode.20",
+          "kind": "name",
+          "detail": "Main",
+          "source_span": {
+            "line": 167,
+            "column": 37
+          }
+        },
+        {
+          "id": "ChildFailureReturnsToParentCode.21",
           "kind": "enum_construct",
           "detail": "LifecycleSignal::Sweep",
           "source_span": {
-            "line": 188,
-            "column": 53
+            "line": 167,
+            "column": 43
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.14",
+          "id": "ChildFailureReturnsToParentCode.22",
           "kind": "var_decl",
-          "type": "AutomataDispatchOutcome",
+          "type": "StepOutcome",
           "detail": "e",
           "source_span": {
-            "line": 189,
-            "column": 29
+            "line": 168,
+            "column": 17
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.15",
-          "kind": "dispatch",
+          "id": "ChildFailureReturnsToParentCode.23",
+          "kind": "step_machine_input",
+          "detail": "lifecycle.Main",
+          "source_span": {
+            "line": 168,
+            "column": 21
+          }
+        },
+        {
+          "id": "ChildFailureReturnsToParentCode.24",
+          "kind": "name",
           "detail": "lifecycle",
           "source_span": {
-            "line": 189,
-            "column": 33
+            "line": 168,
+            "column": 26
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.16",
+          "id": "ChildFailureReturnsToParentCode.25",
+          "kind": "name",
+          "detail": "Main",
+          "source_span": {
+            "line": 168,
+            "column": 37
+          }
+        },
+        {
+          "id": "ChildFailureReturnsToParentCode.26",
           "kind": "enum_construct",
           "detail": "LifecycleSignal::Stop",
           "source_span": {
-            "line": 189,
-            "column": 53
+            "line": 168,
+            "column": 43
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.17",
+          "id": "ChildFailureReturnsToParentCode.27",
           "kind": "var_decl",
-          "type": "AutomataDispatchOutcome",
+          "type": "StepOutcome",
           "detail": "f",
           "source_span": {
-            "line": 190,
-            "column": 29
+            "line": 169,
+            "column": 17
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.18",
-          "kind": "dispatch",
+          "id": "ChildFailureReturnsToParentCode.28",
+          "kind": "step_machine_input",
+          "detail": "lifecycle.Main",
+          "source_span": {
+            "line": 169,
+            "column": 21
+          }
+        },
+        {
+          "id": "ChildFailureReturnsToParentCode.29",
+          "kind": "name",
           "detail": "lifecycle",
           "source_span": {
-            "line": 190,
-            "column": 33
+            "line": 169,
+            "column": 26
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.19",
-          "kind": "enum_construct",
-          "detail": "LifecycleSignal::Tick",
+          "id": "ChildFailureReturnsToParentCode.30",
+          "kind": "name",
+          "detail": "Main",
           "source_span": {
-            "line": 190,
-            "column": 53
+            "line": 169,
+            "column": 37
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.20",
+          "id": "ChildFailureReturnsToParentCode.31",
+          "kind": "enum_construct",
+          "detail": "LifecycleSignal::Stop",
+          "source_span": {
+            "line": 169,
+            "column": 43
+          }
+        },
+        {
+          "id": "ChildFailureReturnsToParentCode.32",
           "kind": "return",
           "type": "int",
           "source_span": {
-            "line": 191,
+            "line": 170,
             "column": 5
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.21",
+          "id": "ChildFailureReturnsToParentCode.33",
           "kind": "binary",
           "detail": "+",
           "source_span": {
-            "line": 195,
+            "line": 175,
             "column": 29
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.22",
+          "id": "ChildFailureReturnsToParentCode.34",
           "kind": "binary",
           "detail": "+",
           "source_span": {
-            "line": 194,
+            "line": 174,
             "column": 30
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.23",
+          "id": "ChildFailureReturnsToParentCode.35",
           "kind": "binary",
           "detail": "+",
           "source_span": {
-            "line": 193,
+            "line": 173,
             "column": 31
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.24",
+          "id": "ChildFailureReturnsToParentCode.36",
           "kind": "binary",
           "detail": "+",
           "source_span": {
-            "line": 192,
+            "line": 172,
             "column": 32
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.25",
+          "id": "ChildFailureReturnsToParentCode.37",
           "kind": "binary",
           "detail": "+",
           "source_span": {
-            "line": 191,
-            "column": 36
+            "line": 171,
+            "column": 33
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.26",
+          "id": "ChildFailureReturnsToParentCode.38",
+          "kind": "binary",
+          "detail": "+",
+          "source_span": {
+            "line": 170,
+            "column": 37
+          }
+        },
+        {
+          "id": "ChildFailureReturnsToParentCode.39",
           "kind": "binary",
           "detail": "*",
           "source_span": {
-            "line": 191,
+            "line": 170,
             "column": 27
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.27",
+          "id": "ChildFailureReturnsToParentCode.40",
           "kind": "call",
           "detail": "OutcomeCode",
           "source_span": {
-            "line": 191,
+            "line": 170,
             "column": 12
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.28",
+          "id": "ChildFailureReturnsToParentCode.41",
           "kind": "name",
           "detail": "a",
           "source_span": {
-            "line": 191,
+            "line": 170,
             "column": 24
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.29",
+          "id": "ChildFailureReturnsToParentCode.42",
           "kind": "literal",
-          "detail": "100000",
+          "detail": "1000000",
           "source_span": {
-            "line": 191,
+            "line": 170,
             "column": 29
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.30",
+          "id": "ChildFailureReturnsToParentCode.43",
           "kind": "binary",
           "detail": "*",
           "source_span": {
-            "line": 192,
+            "line": 171,
             "column": 24
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.31",
+          "id": "ChildFailureReturnsToParentCode.44",
           "kind": "call",
           "detail": "OutcomeCode",
           "source_span": {
-            "line": 192,
+            "line": 171,
             "column": 9
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.32",
+          "id": "ChildFailureReturnsToParentCode.45",
           "kind": "name",
           "detail": "b",
           "source_span": {
-            "line": 192,
+            "line": 171,
             "column": 21
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.33",
+          "id": "ChildFailureReturnsToParentCode.46",
           "kind": "literal",
-          "detail": "10000",
+          "detail": "100000",
           "source_span": {
-            "line": 192,
+            "line": 171,
             "column": 26
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.34",
+          "id": "ChildFailureReturnsToParentCode.47",
           "kind": "binary",
           "detail": "*",
           "source_span": {
-            "line": 193,
+            "line": 172,
             "column": 24
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.35",
+          "id": "ChildFailureReturnsToParentCode.48",
           "kind": "call",
           "detail": "OutcomeCode",
           "source_span": {
-            "line": 193,
+            "line": 172,
             "column": 9
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.36",
+          "id": "ChildFailureReturnsToParentCode.49",
           "kind": "name",
           "detail": "c",
           "source_span": {
-            "line": 193,
+            "line": 172,
             "column": 21
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.37",
+          "id": "ChildFailureReturnsToParentCode.50",
           "kind": "literal",
-          "detail": "1000",
+          "detail": "10000",
           "source_span": {
-            "line": 193,
+            "line": 172,
             "column": 26
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.38",
+          "id": "ChildFailureReturnsToParentCode.51",
           "kind": "binary",
           "detail": "*",
           "source_span": {
-            "line": 194,
+            "line": 173,
             "column": 24
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.39",
+          "id": "ChildFailureReturnsToParentCode.52",
           "kind": "call",
           "detail": "OutcomeCode",
           "source_span": {
-            "line": 194,
+            "line": 173,
             "column": 9
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.40",
+          "id": "ChildFailureReturnsToParentCode.53",
           "kind": "name",
           "detail": "d",
           "source_span": {
-            "line": 194,
+            "line": 173,
             "column": 21
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.41",
+          "id": "ChildFailureReturnsToParentCode.54",
           "kind": "literal",
-          "detail": "100",
+          "detail": "1000",
           "source_span": {
-            "line": 194,
+            "line": 173,
             "column": 26
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.42",
+          "id": "ChildFailureReturnsToParentCode.55",
           "kind": "binary",
           "detail": "*",
           "source_span": {
-            "line": 195,
+            "line": 174,
             "column": 24
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.43",
+          "id": "ChildFailureReturnsToParentCode.56",
           "kind": "call",
           "detail": "OutcomeCode",
           "source_span": {
-            "line": 195,
+            "line": 174,
             "column": 9
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.44",
+          "id": "ChildFailureReturnsToParentCode.57",
           "kind": "name",
           "detail": "e",
           "source_span": {
-            "line": 195,
+            "line": 174,
             "column": 21
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.45",
+          "id": "ChildFailureReturnsToParentCode.58",
           "kind": "literal",
-          "detail": "10",
+          "detail": "100",
           "source_span": {
-            "line": 195,
+            "line": 174,
             "column": 26
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.46",
+          "id": "ChildFailureReturnsToParentCode.59",
+          "kind": "binary",
+          "detail": "*",
+          "source_span": {
+            "line": 175,
+            "column": 24
+          }
+        },
+        {
+          "id": "ChildFailureReturnsToParentCode.60",
           "kind": "call",
           "detail": "OutcomeCode",
           "source_span": {
-            "line": 196,
+            "line": 175,
             "column": 9
           }
         },
         {
-          "id": "NonRootFinishTerminatesWholeInstanceCode.47",
+          "id": "ChildFailureReturnsToParentCode.61",
           "kind": "name",
           "detail": "f",
           "source_span": {
-            "line": 196,
+            "line": 175,
             "column": 21
+          }
+        },
+        {
+          "id": "ChildFailureReturnsToParentCode.62",
+          "kind": "literal",
+          "detail": "10",
+          "source_span": {
+            "line": 175,
+            "column": 26
+          }
+        },
+        {
+          "id": "ChildFailureReturnsToParentCode.63",
+          "kind": "field_access",
+          "detail": "failure",
+          "source_span": {
+            "line": 176,
+            "column": 36
+          }
+        },
+        {
+          "id": "ChildFailureReturnsToParentCode.64",
+          "kind": "call",
+          "detail": "Result",
+          "source_span": {
+            "line": 176,
+            "column": 9
+          }
+        },
+        {
+          "id": "ChildFailureReturnsToParentCode.65",
+          "kind": "name",
+          "detail": "lifecycle",
+          "source_span": {
+            "line": 176,
+            "column": 16
+          }
+        },
+        {
+          "id": "ChildFailureReturnsToParentCode.66",
+          "kind": "name",
+          "detail": "Cleanup",
+          "source_span": {
+            "line": 176,
+            "column": 27
           }
         }
       ],
       "source_span": {
-        "line": 182,
+        "line": 161,
         "column": 5
       }
     },
@@ -2343,7 +3161,7 @@
         "name": "int",
         "kind": "builtin",
         "span": {
-          "line": 199,
+          "line": 179,
           "column": 1
         }
       },
@@ -2353,7 +3171,7 @@
           "kind": "instance_decl",
           "detail": "ResourceLifecycle left",
           "source_span": {
-            "line": 201,
+            "line": 181,
             "column": 5
           }
         },
@@ -2362,228 +3180,228 @@
           "kind": "instance_decl",
           "detail": "ResourceLifecycle right",
           "source_span": {
-            "line": 202,
+            "line": 182,
             "column": 5
           }
         },
         {
           "id": "IndependentInstancesStayIndependentCode.03",
           "kind": "var_decl",
-          "type": "AutomataDispatchOutcome",
+          "type": "StepOutcome",
           "detail": "a",
           "source_span": {
-            "line": 203,
-            "column": 29
+            "line": 183,
+            "column": 17
           }
         },
         {
           "id": "IndependentInstancesStayIndependentCode.04",
-          "kind": "dispatch",
-          "detail": "left",
+          "kind": "step_machine_input",
+          "detail": "left.Main",
           "source_span": {
-            "line": 203,
-            "column": 33
+            "line": 183,
+            "column": 21
           }
         },
         {
           "id": "IndependentInstancesStayIndependentCode.05",
-          "kind": "enum_construct",
-          "detail": "LifecycleSignal::Create",
+          "kind": "name",
+          "detail": "left",
           "source_span": {
-            "line": 203,
-            "column": 48
+            "line": 183,
+            "column": 26
           }
         },
         {
           "id": "IndependentInstancesStayIndependentCode.06",
-          "kind": "var_decl",
-          "type": "AutomataDispatchOutcome",
-          "detail": "b",
+          "kind": "name",
+          "detail": "Main",
           "source_span": {
-            "line": 204,
-            "column": 29
+            "line": 183,
+            "column": 32
           }
         },
         {
           "id": "IndependentInstancesStayIndependentCode.07",
-          "kind": "dispatch",
-          "detail": "left",
+          "kind": "enum_construct",
+          "detail": "LifecycleSignal::Create",
           "source_span": {
-            "line": 204,
-            "column": 33
+            "line": 183,
+            "column": 38
           }
         },
         {
           "id": "IndependentInstancesStayIndependentCode.08",
-          "kind": "enum_construct",
-          "detail": "LifecycleSignal::Tick",
+          "kind": "var_decl",
+          "type": "StepOutcome",
+          "detail": "b",
           "source_span": {
-            "line": 204,
-            "column": 48
+            "line": 184,
+            "column": 17
           }
         },
         {
           "id": "IndependentInstancesStayIndependentCode.09",
-          "kind": "var_decl",
-          "type": "AutomataDispatchOutcome",
-          "detail": "c",
+          "kind": "step_machine_input",
+          "detail": "left.Main",
           "source_span": {
-            "line": 205,
-            "column": 29
+            "line": 184,
+            "column": 21
           }
         },
         {
           "id": "IndependentInstancesStayIndependentCode.10",
-          "kind": "dispatch",
-          "detail": "right",
+          "kind": "name",
+          "detail": "left",
           "source_span": {
-            "line": 205,
-            "column": 33
+            "line": 184,
+            "column": 26
           }
         },
         {
           "id": "IndependentInstancesStayIndependentCode.11",
-          "kind": "enum_construct",
-          "detail": "LifecycleSignal::Stop",
+          "kind": "name",
+          "detail": "Main",
           "source_span": {
-            "line": 205,
-            "column": 49
+            "line": 184,
+            "column": 32
           }
         },
         {
           "id": "IndependentInstancesStayIndependentCode.12",
-          "kind": "var_decl",
-          "type": "AutomataDispatchOutcome",
-          "detail": "d",
+          "kind": "enum_construct",
+          "detail": "LifecycleSignal::Tick",
           "source_span": {
-            "line": 206,
-            "column": 29
+            "line": 184,
+            "column": 38
           }
         },
         {
           "id": "IndependentInstancesStayIndependentCode.13",
-          "kind": "dispatch",
-          "detail": "right",
+          "kind": "var_decl",
+          "type": "StepOutcome",
+          "detail": "c",
           "source_span": {
-            "line": 206,
-            "column": 33
+            "line": 185,
+            "column": 17
           }
         },
         {
           "id": "IndependentInstancesStayIndependentCode.14",
-          "kind": "enum_construct",
-          "detail": "LifecycleSignal::Create",
+          "kind": "step_machine_input",
+          "detail": "right.Main",
           "source_span": {
-            "line": 206,
-            "column": 49
+            "line": 185,
+            "column": 21
           }
         },
         {
           "id": "IndependentInstancesStayIndependentCode.15",
-          "kind": "return",
-          "type": "int",
+          "kind": "name",
+          "detail": "right",
           "source_span": {
-            "line": 207,
-            "column": 5
+            "line": 185,
+            "column": 26
           }
         },
         {
           "id": "IndependentInstancesStayIndependentCode.16",
-          "kind": "binary",
-          "detail": "+",
+          "kind": "name",
+          "detail": "Main",
           "source_span": {
-            "line": 209,
-            "column": 29
+            "line": 185,
+            "column": 33
           }
         },
         {
           "id": "IndependentInstancesStayIndependentCode.17",
-          "kind": "binary",
-          "detail": "+",
+          "kind": "enum_construct",
+          "detail": "LifecycleSignal::Stop",
           "source_span": {
-            "line": 208,
-            "column": 30
+            "line": 185,
+            "column": 39
           }
         },
         {
           "id": "IndependentInstancesStayIndependentCode.18",
-          "kind": "binary",
-          "detail": "+",
+          "kind": "var_decl",
+          "type": "StepOutcome",
+          "detail": "d",
           "source_span": {
-            "line": 207,
-            "column": 34
+            "line": 186,
+            "column": 17
           }
         },
         {
           "id": "IndependentInstancesStayIndependentCode.19",
-          "kind": "binary",
-          "detail": "*",
+          "kind": "step_machine_input",
+          "detail": "right.Main",
           "source_span": {
-            "line": 207,
-            "column": 27
+            "line": 186,
+            "column": 21
           }
         },
         {
           "id": "IndependentInstancesStayIndependentCode.20",
-          "kind": "call",
-          "detail": "OutcomeCode",
+          "kind": "name",
+          "detail": "right",
           "source_span": {
-            "line": 207,
-            "column": 12
+            "line": 186,
+            "column": 26
           }
         },
         {
           "id": "IndependentInstancesStayIndependentCode.21",
           "kind": "name",
-          "detail": "a",
+          "detail": "Main",
           "source_span": {
-            "line": 207,
-            "column": 24
+            "line": 186,
+            "column": 33
           }
         },
         {
           "id": "IndependentInstancesStayIndependentCode.22",
-          "kind": "literal",
-          "detail": "1000",
+          "kind": "enum_construct",
+          "detail": "LifecycleSignal::Create",
           "source_span": {
-            "line": 207,
-            "column": 29
+            "line": 186,
+            "column": 39
           }
         },
         {
           "id": "IndependentInstancesStayIndependentCode.23",
-          "kind": "binary",
-          "detail": "*",
+          "kind": "return",
+          "type": "int",
           "source_span": {
-            "line": 208,
-            "column": 24
+            "line": 187,
+            "column": 5
           }
         },
         {
           "id": "IndependentInstancesStayIndependentCode.24",
-          "kind": "call",
-          "detail": "OutcomeCode",
+          "kind": "binary",
+          "detail": "+",
           "source_span": {
-            "line": 208,
-            "column": 9
+            "line": 189,
+            "column": 29
           }
         },
         {
           "id": "IndependentInstancesStayIndependentCode.25",
-          "kind": "name",
-          "detail": "b",
+          "kind": "binary",
+          "detail": "+",
           "source_span": {
-            "line": 208,
-            "column": 21
+            "line": 188,
+            "column": 30
           }
         },
         {
           "id": "IndependentInstancesStayIndependentCode.26",
-          "kind": "literal",
-          "detail": "100",
+          "kind": "binary",
+          "detail": "+",
           "source_span": {
-            "line": 208,
-            "column": 26
+            "line": 187,
+            "column": 34
           }
         },
         {
@@ -2591,8 +3409,8 @@
           "kind": "binary",
           "detail": "*",
           "source_span": {
-            "line": 209,
-            "column": 24
+            "line": 187,
+            "column": 27
           }
         },
         {
@@ -2600,49 +3418,121 @@
           "kind": "call",
           "detail": "OutcomeCode",
           "source_span": {
-            "line": 209,
-            "column": 9
+            "line": 187,
+            "column": 12
           }
         },
         {
           "id": "IndependentInstancesStayIndependentCode.29",
           "kind": "name",
-          "detail": "c",
+          "detail": "a",
           "source_span": {
-            "line": 209,
-            "column": 21
+            "line": 187,
+            "column": 24
           }
         },
         {
           "id": "IndependentInstancesStayIndependentCode.30",
           "kind": "literal",
-          "detail": "10",
+          "detail": "1000",
           "source_span": {
-            "line": 209,
-            "column": 26
+            "line": 187,
+            "column": 29
           }
         },
         {
           "id": "IndependentInstancesStayIndependentCode.31",
-          "kind": "call",
-          "detail": "OutcomeCode",
+          "kind": "binary",
+          "detail": "*",
           "source_span": {
-            "line": 210,
-            "column": 9
+            "line": 188,
+            "column": 24
           }
         },
         {
           "id": "IndependentInstancesStayIndependentCode.32",
+          "kind": "call",
+          "detail": "OutcomeCode",
+          "source_span": {
+            "line": 188,
+            "column": 9
+          }
+        },
+        {
+          "id": "IndependentInstancesStayIndependentCode.33",
+          "kind": "name",
+          "detail": "b",
+          "source_span": {
+            "line": 188,
+            "column": 21
+          }
+        },
+        {
+          "id": "IndependentInstancesStayIndependentCode.34",
+          "kind": "literal",
+          "detail": "100",
+          "source_span": {
+            "line": 188,
+            "column": 26
+          }
+        },
+        {
+          "id": "IndependentInstancesStayIndependentCode.35",
+          "kind": "binary",
+          "detail": "*",
+          "source_span": {
+            "line": 189,
+            "column": 24
+          }
+        },
+        {
+          "id": "IndependentInstancesStayIndependentCode.36",
+          "kind": "call",
+          "detail": "OutcomeCode",
+          "source_span": {
+            "line": 189,
+            "column": 9
+          }
+        },
+        {
+          "id": "IndependentInstancesStayIndependentCode.37",
+          "kind": "name",
+          "detail": "c",
+          "source_span": {
+            "line": 189,
+            "column": 21
+          }
+        },
+        {
+          "id": "IndependentInstancesStayIndependentCode.38",
+          "kind": "literal",
+          "detail": "10",
+          "source_span": {
+            "line": 189,
+            "column": 26
+          }
+        },
+        {
+          "id": "IndependentInstancesStayIndependentCode.39",
+          "kind": "call",
+          "detail": "OutcomeCode",
+          "source_span": {
+            "line": 190,
+            "column": 9
+          }
+        },
+        {
+          "id": "IndependentInstancesStayIndependentCode.40",
           "kind": "name",
           "detail": "d",
           "source_span": {
-            "line": 210,
+            "line": 190,
             "column": 21
           }
         }
       ],
       "source_span": {
-        "line": 199,
+        "line": 179,
         "column": 5
       }
     }

@@ -166,8 +166,9 @@ func evt1ReactionSummary(on *OnStmt) string {
 }
 
 func evt1ModuleUsesStepOutcome(module Module) bool {
+	used := evt1RuntimeAutomataUsage(module)
 	for _, decl := range module.Automata {
-		if decl.InputType.Name != "" {
+		if decl.InputType.Name != "" && used[decl.Name] {
 			return true
 		}
 	}

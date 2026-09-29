@@ -16,32 +16,33 @@ record struct TestConfiguration { int identity; };
 
 enum BehaviorSignal { Evaluate, Finish, }
 record struct BehaviorContext { int eventValue; };
-bool EventAccepted(borrow const BehaviorContext context) { return context.eventValue == 7; }
-bool TransitionOccurred(AutomataDispatchOutcome outcome)
+bool EventAccepted(BehaviorContext context) { return context.eventValue == 7; }
+bool TransitionOccurred(StepOutcome outcome)
 {
     return match (outcome)
     {
-        AutomataDispatchOutcome::Transitioned => true,
-        AutomataDispatchOutcome::Finished => true,
-        AutomataDispatchOutcome::Unhandled => false,
-        AutomataDispatchOutcome::Ambiguous => false,
-        AutomataDispatchOutcome::AlreadyFinished => false,
-        AutomataDispatchOutcome::EffectBatchOccupied => false
+        StepOutcome::Transitioned => true,
+        StepOutcome::Finished => true,
+        StepOutcome::Unhandled => false,
+        StepOutcome::Ambiguous => false,
+        StepOutcome::AlreadyFinished => false
     };
 }
 
-automata HistoricalDominatusBehavior(BehaviorSignal, borrow context: BehaviorContext)
+automata HistoricalDominatusBehavior
+with input BehaviorSignal
+with state { BehaviorContext context; }
 {
-    initial machine Main
+    machine Main
     {
-        initial state Observe
+        state Observe
         {
-            on BehaviorSignal::Evaluate when EventAccepted(context) => goto Accepted;
-            on BehaviorSignal::Evaluate otherwise => goto Rejected;
+            on BehaviorSignal::Evaluate when EventAccepted(context) => Accepted;
+            on BehaviorSignal::Evaluate otherwise => Rejected;
         }
-        state Accepted { on BehaviorSignal::Finish goto Finished; }
-        state Rejected { on BehaviorSignal::Finish goto Finished; }
-        terminal state Finished { finish; }
+        state Accepted { on BehaviorSignal::Finish => Finished; }
+        state Rejected { on BehaviorSignal::Finish => Finished; }
+        terminal state Finished { }
     }
 }
 
@@ -116,8 +117,9 @@ void AgenticKernelRunsHistoricalDominatusShape()
     context.mind.trace.Record(TraceEntry{TraceKind::ActuationDispatch, StateId{10}, StateId{10}, Reason{receipt.id.value}, 0})!;
     BehaviorContext behaviorContext = BehaviorContext{input.payload.value};
     instance HistoricalDominatusBehavior behavior(behaviorContext);
-    Assert.True(TransitionOccurred(dispatch(behavior, BehaviorSignal::Evaluate)), "the application behavior transitions through a native automaton");
-    Assert.True(TransitionOccurred(dispatch(behavior, BehaviorSignal::Finish)), "the application behavior reaches its terminal state");
+    Assert.True(TransitionOccurred(Step(behavior, Main, BehaviorSignal::Evaluate)), "the application behavior transitions through a native automaton");
+    Assert.True(State(behavior, Main) == 1, "the accepted event selected Accepted");
+    Assert.True(Step(behavior, Main, BehaviorSignal::Finish) == StepOutcome::Finished, "the application behavior reaches its terminal state");
     StateId behaviorTarget = StateId{30};
     MindSignal emptySignal = MindSignal::None;
     MindSignal<array>[16] work = [MindSignal::TransitionTo(StateId{20}, Reason{100}), MindSignal::AwaitActuation(receipt.id), MindSignal::TransitionTo(behaviorTarget, Reason{101}), MindSignal::Succeed(Reason{102}), emptySignal ...];

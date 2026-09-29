@@ -12,12 +12,13 @@ signals, Mind, Decision, Actuation, Events, Graph, Trace, Replay, and checkpoint
 experiments. Its source used obsolete syntax and encoded scheduler-adjacent agent
 policy. It now lives only at `legacy/dragon-god-poc` and no active build reads it.
 
-Implementation B was the EVT1 Concept/Vulkan DragonGod lineage in
-`examples/evt1/` (`lifecycle_automata`, `automata_dispatch`, `guarded_transitions`,
-`lifecycle_effects`, and `lifecycle_actuators`, each as a plain specimen and a `_vulkan` counterpart; the M-era originals are frozen in `legacy/evt1-specimens/`).
-It contributed current automata/effect semantics, runtime/platform boundary
-evidence, and strict generated artifacts. Those files remain conformance examples,
-not production authority. Vulkan lifecycle and device policy remain consumers;
+Implementation B was the EVT1 Concept/Vulkan DragonGod lineage (signal automata
+with `dispatch`, `effect`, and `actuator`), frozen in `legacy/evt1-specimens/`.
+Its useful semantics now live in Core step machines: `with input`, `on`
+reactions, `terminal state`, and `StepOutcome` (see `examples/evt1/`
+`lifecycle_automata`, `automata_dispatch`, `guarded_transitions`), with effects
+as an ordinary `Standard.Collection.Outbox` (`libraries/Standard/outbox.concept_test`).
+These remain conformance examples, not production authority. Vulkan lifecycle and device policy remain consumers;
 no Vulkan name appears in canonical kernel APIs.
 
 | Historical capability | Decision | R7a disposition |

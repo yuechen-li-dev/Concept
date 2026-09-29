@@ -64,45 +64,39 @@ static concept_lifecycle_signal concept_lifecycle_signal_make_stop(void) {
   return out;
 }
 
-static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_transitioned(void) {
-  concept_automata_dispatch_outcome out;
-  out.tag = CONCEPT_AUTOMATA_DISPATCH_OUTCOME_TRANSITIONED;
+static concept_step_outcome concept_step_outcome_make_transitioned(void) {
+  concept_step_outcome out;
+  out.tag = CONCEPT_STEP_OUTCOME_TRANSITIONED;
   return out;
 }
 
-static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_unhandled(void) {
-  concept_automata_dispatch_outcome out;
-  out.tag = CONCEPT_AUTOMATA_DISPATCH_OUTCOME_UNHANDLED;
+static concept_step_outcome concept_step_outcome_make_unhandled(void) {
+  concept_step_outcome out;
+  out.tag = CONCEPT_STEP_OUTCOME_UNHANDLED;
   return out;
 }
 
-static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_ambiguous(void) {
-  concept_automata_dispatch_outcome out;
-  out.tag = CONCEPT_AUTOMATA_DISPATCH_OUTCOME_AMBIGUOUS;
+static concept_step_outcome concept_step_outcome_make_ambiguous(void) {
+  concept_step_outcome out;
+  out.tag = CONCEPT_STEP_OUTCOME_AMBIGUOUS;
   return out;
 }
 
-static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_finished(void) {
-  concept_automata_dispatch_outcome out;
-  out.tag = CONCEPT_AUTOMATA_DISPATCH_OUTCOME_FINISHED;
+static concept_step_outcome concept_step_outcome_make_finished(void) {
+  concept_step_outcome out;
+  out.tag = CONCEPT_STEP_OUTCOME_FINISHED;
   return out;
 }
 
-static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_already_finished(void) {
-  concept_automata_dispatch_outcome out;
-  out.tag = CONCEPT_AUTOMATA_DISPATCH_OUTCOME_ALREADY_FINISHED;
+static concept_step_outcome concept_step_outcome_make_already_finished(void) {
+  concept_step_outcome out;
+  out.tag = CONCEPT_STEP_OUTCOME_ALREADY_FINISHED;
   return out;
 }
 
-static concept_automata_dispatch_outcome concept_automata_dispatch_outcome_make_effect_batch_occupied(void) {
-  concept_automata_dispatch_outcome out;
-  out.tag = CONCEPT_AUTOMATA_DISPATCH_OUTCOME_EFFECT_BATCH_OCCUPIED;
-  return out;
-}
-
-enum {
-  concept_guarded_lifecycle_machine_main = 0,
-};
+typedef struct concept_guarded_lifecycle_state {
+  concept_lifecycle_context context;
+} concept_guarded_lifecycle_state;
 
 enum {
   concept_guarded_lifecycle_state_main_idle = 0,
@@ -113,443 +107,402 @@ enum {
   concept_guarded_lifecycle_state_main_resolved = 5,
   concept_guarded_lifecycle_state_main_finished = 6,
 };
+typedef struct concept_guarded_lifecycle_main_machine {
+  uint8_t current_state;
+} concept_guarded_lifecycle_main_machine;
+
+typedef struct concept_guarded_lifecycle_main_machine_outcome {
+  uint8_t tag; /* 0 unavailable, 1 neutral, 2 success, 3 failure */
+} concept_guarded_lifecycle_main_machine_outcome;
 
 typedef struct concept_guarded_lifecycle_instance {
-  bool finished;
-  uint8_t current_machine;
-  uint8_t current_state;
-  uint8_t continuation_count;
-  const concept_lifecycle_context* context;
+  concept_guarded_lifecycle_state shared;
+  uint8_t depth;
+  uint8_t machine_tags[8];
+  bool completed;
+  concept_lifecycle_signal input;
+  concept_step_outcome step_outcome;
+  concept_guarded_lifecycle_main_machine main_frames[8];
+  concept_guarded_lifecycle_main_machine_outcome last_main_outcome;
 } concept_guarded_lifecycle_instance;
 
-static void concept_guarded_lifecycle_normalize(concept_guarded_lifecycle_instance* instance) {
-  int steps = 0;
-  while (!instance->finished) {
-    steps = steps + 1;
-    if (steps > 1) {
-      concept_abort_automata_completion("GuardedLifecycle", steps);
-    }
-    switch (instance->current_machine) {
-      case concept_guarded_lifecycle_machine_main:
-        switch (instance->current_state) {
-          case concept_guarded_lifecycle_state_main_idle:
+static concept_guarded_lifecycle_main_machine_outcome concept_guarded_lifecycle_result_main(concept_guarded_lifecycle_instance* instance);
+
+static void concept_guarded_lifecycle_init_main_frame(concept_guarded_lifecycle_instance* instance, uint8_t slot) {
+  instance->main_frames[slot].current_state=concept_guarded_lifecycle_state_main_idle; /* frame initialization */
+}
+
+static void concept_guarded_lifecycle_drop_main_frame(concept_guarded_lifecycle_instance* instance, uint8_t slot) {
+}
+
+static void concept_guarded_lifecycle_step_main_frame(concept_guarded_lifecycle_instance* instance) {
+  uint8_t frame_index = (uint8_t)(instance->depth - 1u);
+  switch (instance->main_frames[frame_index].current_state) {
+    case concept_guarded_lifecycle_state_main_idle:
+      {
+        concept_lifecycle_signal cv_input_01 = instance->input;
+        switch (cv_input_01.tag) {
+        case CONCEPT_LIFECYCLE_SIGNAL_SUBMIT:
+          {
+            int cv_reaction_hits_02 = 0;
+            bool cv_reaction_guard_03;
+            {
+              concept_lifecycle_context cv_arg_04 = instance->shared.context;
+              cv_reaction_guard_03 = concept_guarded_transitions_can_submit(cv_arg_04);
+            }
+            if (cv_reaction_guard_03) cv_reaction_hits_02++;
+            bool cv_reaction_guard_05;
+            {
+              concept_lifecycle_context cv_arg_06 = instance->shared.context;
+              cv_reaction_guard_05 = concept_guarded_transitions_must_release(cv_arg_06);
+            }
+            if (cv_reaction_guard_05) cv_reaction_hits_02++;
+            if (cv_reaction_hits_02 > 1) {
+              instance->step_outcome = concept_step_outcome_make_ambiguous();
+              return;
+            }
+            if (cv_reaction_guard_03) {
+              {
+                instance->main_frames[frame_index].current_state = concept_guarded_lifecycle_state_main_submitted;
+                return;
+                return;
+              }
+            }
+            if (cv_reaction_guard_05) {
+              {
+                instance->main_frames[frame_index].current_state = concept_guarded_lifecycle_state_main_released;
+                return;
+                return;
+              }
+            }
+            {
+              instance->main_frames[frame_index].current_state = concept_guarded_lifecycle_state_main_deferred;
+              return;
+              return;
+            }
+          }
+        case CONCEPT_LIFECYCLE_SIGNAL_RESOLVE:
+          {
+            instance->main_frames[frame_index].current_state = concept_guarded_lifecycle_state_main_guard_only;
             return;
-          case concept_guarded_lifecycle_state_main_guard_only:
             return;
-          case concept_guarded_lifecycle_state_main_deferred:
+          }
+        default:
+          {
+            instance->step_outcome = concept_step_outcome_make_unhandled();
             return;
-          case concept_guarded_lifecycle_state_main_submitted:
+          }
+        }
+        break;
+      }
+    case concept_guarded_lifecycle_state_main_guard_only:
+      {
+        concept_lifecycle_signal cv_input_01 = instance->input;
+        switch (cv_input_01.tag) {
+        case CONCEPT_LIFECYCLE_SIGNAL_SUBMIT:
+          {
+            int cv_reaction_hits_02 = 0;
+            bool cv_reaction_guard_03;
+            {
+              concept_lifecycle_context cv_arg_04 = instance->shared.context;
+              cv_reaction_guard_03 = concept_guarded_transitions_can_submit(cv_arg_04);
+            }
+            if (cv_reaction_guard_03) cv_reaction_hits_02++;
+            bool cv_reaction_guard_05;
+            {
+              concept_lifecycle_context cv_arg_06 = instance->shared.context;
+              cv_reaction_guard_05 = concept_guarded_transitions_must_release(cv_arg_06);
+            }
+            if (cv_reaction_guard_05) cv_reaction_hits_02++;
+            if (cv_reaction_hits_02 > 1) {
+              instance->step_outcome = concept_step_outcome_make_ambiguous();
+              return;
+            }
+            if (cv_reaction_guard_03) {
+              {
+                instance->main_frames[frame_index].current_state = concept_guarded_lifecycle_state_main_submitted;
+                return;
+                return;
+              }
+            }
+            if (cv_reaction_guard_05) {
+              {
+                instance->main_frames[frame_index].current_state = concept_guarded_lifecycle_state_main_released;
+                return;
+                return;
+              }
+            }
+            instance->step_outcome = concept_step_outcome_make_unhandled();
             return;
-          case concept_guarded_lifecycle_state_main_released:
+          }
+        case CONCEPT_LIFECYCLE_SIGNAL_RESOLVE:
+          {
+            instance->main_frames[frame_index].current_state = concept_guarded_lifecycle_state_main_resolved;
             return;
-          case concept_guarded_lifecycle_state_main_resolved:
             return;
-          case concept_guarded_lifecycle_state_main_finished:
-            instance->finished = true;
-            instance->continuation_count = 0;
+          }
+        default:
+          {
+            instance->step_outcome = concept_step_outcome_make_unhandled();
             return;
-          default:
-            concept_abort_invalid_automata_state("GuardedLifecycle", instance->current_machine, instance->current_state);
+          }
+        }
+        break;
+      }
+    case concept_guarded_lifecycle_state_main_deferred:
+      {
+        concept_lifecycle_signal cv_input_01 = instance->input;
+        switch (cv_input_01.tag) {
+        case CONCEPT_LIFECYCLE_SIGNAL_RESOLVE:
+          {
+            instance->main_frames[frame_index].current_state = concept_guarded_lifecycle_state_main_resolved;
             return;
+            return;
+          }
+        default:
+          {
+            instance->step_outcome = concept_step_outcome_make_unhandled();
+            return;
+          }
+        }
+        break;
+      }
+    case concept_guarded_lifecycle_state_main_submitted:
+      {
+        concept_lifecycle_signal cv_input_01 = instance->input;
+        switch (cv_input_01.tag) {
+        case CONCEPT_LIFECYCLE_SIGNAL_STOP:
+          {
+            instance->main_frames[frame_index].current_state = concept_guarded_lifecycle_state_main_finished;
+            return;
+            return;
+          }
+        default:
+          {
+            instance->step_outcome = concept_step_outcome_make_unhandled();
+            return;
+          }
+        }
+        break;
+      }
+    case concept_guarded_lifecycle_state_main_released:
+      {
+        concept_lifecycle_signal cv_input_01 = instance->input;
+        switch (cv_input_01.tag) {
+        case CONCEPT_LIFECYCLE_SIGNAL_STOP:
+          {
+            instance->main_frames[frame_index].current_state = concept_guarded_lifecycle_state_main_finished;
+            return;
+            return;
+          }
+        default:
+          {
+            instance->step_outcome = concept_step_outcome_make_unhandled();
+            return;
+          }
+        }
+        break;
+      }
+    case concept_guarded_lifecycle_state_main_resolved:
+      {
+        concept_lifecycle_signal cv_input_01 = instance->input;
+        switch (cv_input_01.tag) {
+        case CONCEPT_LIFECYCLE_SIGNAL_STOP:
+          {
+            instance->main_frames[frame_index].current_state = concept_guarded_lifecycle_state_main_finished;
+            return;
+            return;
+          }
+        default:
+          {
+            instance->step_outcome = concept_step_outcome_make_unhandled();
+            return;
+          }
+        }
+        break;
+      }
+    case concept_guarded_lifecycle_state_main_finished:
+      {
+        break;
+      }
+    default: concept_abort_invalid_automata_state("GuardedLifecycle", 0, instance->main_frames[frame_index].current_state);
+  }
+}
+
+static void concept_guarded_lifecycle_settle_terminal(concept_guarded_lifecycle_instance* instance) {
+  while (instance->depth > 0u) {
+    uint8_t slot = (uint8_t)(instance->depth - 1u);
+    bool terminal = false;
+    switch (instance->machine_tags[slot]) {
+      case 0:
+        if (instance->main_frames[slot].current_state == concept_guarded_lifecycle_state_main_finished) {
+          terminal = true;
+          instance->last_main_outcome.tag = 1u;
+          concept_guarded_lifecycle_drop_main_frame(instance, slot);
         }
         break;
       default:
-        concept_abort_invalid_automata_state("GuardedLifecycle", instance->current_machine, instance->current_state);
-        return;
-    }
-  }
-}
-
-static void concept_guarded_lifecycle_init(concept_guarded_lifecycle_instance* instance, const concept_lifecycle_context* context) {
-  instance->finished = false;
-  instance->current_machine = concept_guarded_lifecycle_machine_main;
-  instance->current_state = concept_guarded_lifecycle_state_main_idle;
-  instance->continuation_count = 0;
-  instance->context = context;
-  concept_guarded_lifecycle_normalize(instance);
-}
-
-static concept_automata_dispatch_outcome concept_guarded_lifecycle_dispatch(concept_guarded_lifecycle_instance* instance, concept_lifecycle_signal signal) {
-  if (instance->finished) {
-    return concept_automata_dispatch_outcome_make_already_finished();
-  }
-  switch (instance->current_machine) {
-    case concept_guarded_lifecycle_machine_main:
-      switch (instance->current_state) {
-        case concept_guarded_lifecycle_state_main_idle:
-          switch (signal.tag) {
-            case CONCEPT_LIFECYCLE_SIGNAL_SUBMIT: ;
-              uint8_t eligible_count = 0;
-              uint8_t selected_candidate = 0;
-              if (concept_guarded_transitions_can_submit(instance->context)) {
-                eligible_count = (uint8_t)(eligible_count + 1);
-                selected_candidate = 1;
-              }
-              if (concept_guarded_transitions_must_release(instance->context)) {
-                eligible_count = (uint8_t)(eligible_count + 1);
-                selected_candidate = 2;
-              }
-              if (eligible_count > 1) {
-                return concept_automata_dispatch_outcome_make_ambiguous();
-              }
-              if (eligible_count == 0) {
-                selected_candidate = 3;
-              }
-              switch (selected_candidate) {
-                case 1:
-                  instance->current_state = concept_guarded_lifecycle_state_main_submitted;
-                  break;
-                case 2:
-                  instance->current_state = concept_guarded_lifecycle_state_main_released;
-                  break;
-                case 3:
-                  instance->current_state = concept_guarded_lifecycle_state_main_deferred;
-                  break;
-                default:
-                  return concept_automata_dispatch_outcome_make_unhandled();
-              }
-              concept_guarded_lifecycle_normalize(instance);
-              if (instance->finished) {
-                return concept_automata_dispatch_outcome_make_finished();
-              }
-              return concept_automata_dispatch_outcome_make_transitioned();
-            case CONCEPT_LIFECYCLE_SIGNAL_RESOLVE: ;
-              instance->current_state = concept_guarded_lifecycle_state_main_guard_only;
-              concept_guarded_lifecycle_normalize(instance);
-              if (instance->finished) {
-                return concept_automata_dispatch_outcome_make_finished();
-              }
-              return concept_automata_dispatch_outcome_make_transitioned();
-            default:
-              return concept_automata_dispatch_outcome_make_unhandled();
-          }
-        case concept_guarded_lifecycle_state_main_guard_only:
-          switch (signal.tag) {
-            case CONCEPT_LIFECYCLE_SIGNAL_SUBMIT: ;
-              uint8_t eligible_count = 0;
-              uint8_t selected_candidate = 0;
-              if (concept_guarded_transitions_can_submit(instance->context)) {
-                eligible_count = (uint8_t)(eligible_count + 1);
-                selected_candidate = 1;
-              }
-              if (concept_guarded_transitions_must_release(instance->context)) {
-                eligible_count = (uint8_t)(eligible_count + 1);
-                selected_candidate = 2;
-              }
-              if (eligible_count > 1) {
-                return concept_automata_dispatch_outcome_make_ambiguous();
-              }
-              if (eligible_count == 0) {
-                return concept_automata_dispatch_outcome_make_unhandled();
-              }
-              switch (selected_candidate) {
-                case 1:
-                  instance->current_state = concept_guarded_lifecycle_state_main_submitted;
-                  break;
-                case 2:
-                  instance->current_state = concept_guarded_lifecycle_state_main_released;
-                  break;
-                default:
-                  return concept_automata_dispatch_outcome_make_unhandled();
-              }
-              concept_guarded_lifecycle_normalize(instance);
-              if (instance->finished) {
-                return concept_automata_dispatch_outcome_make_finished();
-              }
-              return concept_automata_dispatch_outcome_make_transitioned();
-            case CONCEPT_LIFECYCLE_SIGNAL_RESOLVE: ;
-              instance->current_state = concept_guarded_lifecycle_state_main_resolved;
-              concept_guarded_lifecycle_normalize(instance);
-              if (instance->finished) {
-                return concept_automata_dispatch_outcome_make_finished();
-              }
-              return concept_automata_dispatch_outcome_make_transitioned();
-            default:
-              return concept_automata_dispatch_outcome_make_unhandled();
-          }
-        case concept_guarded_lifecycle_state_main_deferred:
-          switch (signal.tag) {
-            case CONCEPT_LIFECYCLE_SIGNAL_RESOLVE: ;
-              instance->current_state = concept_guarded_lifecycle_state_main_resolved;
-              concept_guarded_lifecycle_normalize(instance);
-              if (instance->finished) {
-                return concept_automata_dispatch_outcome_make_finished();
-              }
-              return concept_automata_dispatch_outcome_make_transitioned();
-            default:
-              return concept_automata_dispatch_outcome_make_unhandled();
-          }
-        case concept_guarded_lifecycle_state_main_submitted:
-          switch (signal.tag) {
-            case CONCEPT_LIFECYCLE_SIGNAL_STOP: ;
-              instance->current_state = concept_guarded_lifecycle_state_main_finished;
-              concept_guarded_lifecycle_normalize(instance);
-              if (instance->finished) {
-                return concept_automata_dispatch_outcome_make_finished();
-              }
-              return concept_automata_dispatch_outcome_make_transitioned();
-            default:
-              return concept_automata_dispatch_outcome_make_unhandled();
-          }
-        case concept_guarded_lifecycle_state_main_released:
-          switch (signal.tag) {
-            case CONCEPT_LIFECYCLE_SIGNAL_STOP: ;
-              instance->current_state = concept_guarded_lifecycle_state_main_finished;
-              concept_guarded_lifecycle_normalize(instance);
-              if (instance->finished) {
-                return concept_automata_dispatch_outcome_make_finished();
-              }
-              return concept_automata_dispatch_outcome_make_transitioned();
-            default:
-              return concept_automata_dispatch_outcome_make_unhandled();
-          }
-        case concept_guarded_lifecycle_state_main_resolved:
-          switch (signal.tag) {
-            case CONCEPT_LIFECYCLE_SIGNAL_STOP: ;
-              instance->current_state = concept_guarded_lifecycle_state_main_finished;
-              concept_guarded_lifecycle_normalize(instance);
-              if (instance->finished) {
-                return concept_automata_dispatch_outcome_make_finished();
-              }
-              return concept_automata_dispatch_outcome_make_transitioned();
-            default:
-              return concept_automata_dispatch_outcome_make_unhandled();
-          }
-        case concept_guarded_lifecycle_state_main_finished:
-          concept_abort_invalid_automata_state("GuardedLifecycle", instance->current_machine, instance->current_state);
-          return concept_automata_dispatch_outcome_make_already_finished();
-        default:
-          concept_abort_invalid_automata_state("GuardedLifecycle", instance->current_machine, instance->current_state);
-          return concept_automata_dispatch_outcome_make_already_finished();
-      }
-    default:
-      concept_abort_invalid_automata_state("GuardedLifecycle", instance->current_machine, instance->current_state);
-      return concept_automata_dispatch_outcome_make_already_finished();
-  }
-}
-
-enum {
-  concept_immediate_lifecycle_machine_main = 0,
-};
-
-enum {
-  concept_immediate_lifecycle_state_main_idle = 0,
-  concept_immediate_lifecycle_state_main_finished = 1,
-};
-
-typedef struct concept_immediate_lifecycle_instance {
-  bool finished;
-  uint8_t current_machine;
-  uint8_t current_state;
-  uint8_t continuation_count;
-} concept_immediate_lifecycle_instance;
-
-static void concept_immediate_lifecycle_normalize(concept_immediate_lifecycle_instance* instance) {
-  int steps = 0;
-  while (!instance->finished) {
-    steps = steps + 1;
-    if (steps > 1) {
-      concept_abort_automata_completion("ImmediateLifecycle", steps);
-    }
-    switch (instance->current_machine) {
-      case concept_immediate_lifecycle_machine_main:
-        switch (instance->current_state) {
-          case concept_immediate_lifecycle_state_main_idle:
-            return;
-          case concept_immediate_lifecycle_state_main_finished:
-            instance->finished = true;
-            instance->continuation_count = 0;
-            return;
-          default:
-            concept_abort_invalid_automata_state("ImmediateLifecycle", instance->current_machine, instance->current_state);
-            return;
-        }
         break;
-      default:
-        concept_abort_invalid_automata_state("ImmediateLifecycle", instance->current_machine, instance->current_state);
-        return;
     }
+    if (!terminal) return;
+    instance->depth = slot;
+    if (instance->depth == 0u) instance->completed = true;
   }
 }
 
-static void concept_immediate_lifecycle_init(concept_immediate_lifecycle_instance* instance) {
-  instance->finished = false;
-  instance->current_machine = concept_immediate_lifecycle_machine_main;
-  instance->current_state = concept_immediate_lifecycle_state_main_idle;
-  instance->continuation_count = 0;
-  concept_immediate_lifecycle_normalize(instance);
-}
-
-static concept_automata_dispatch_outcome concept_immediate_lifecycle_dispatch(concept_immediate_lifecycle_instance* instance, concept_lifecycle_signal signal) {
-  if (instance->finished) {
-    return concept_automata_dispatch_outcome_make_already_finished();
-  }
-  switch (instance->current_machine) {
-    case concept_immediate_lifecycle_machine_main:
-      switch (instance->current_state) {
-        case concept_immediate_lifecycle_state_main_idle:
-          switch (signal.tag) {
-            case CONCEPT_LIFECYCLE_SIGNAL_STOP: ;
-              instance->current_state = concept_immediate_lifecycle_state_main_finished;
-              concept_immediate_lifecycle_normalize(instance);
-              if (instance->finished) {
-                return concept_automata_dispatch_outcome_make_finished();
-              }
-              return concept_automata_dispatch_outcome_make_transitioned();
-            default:
-              return concept_automata_dispatch_outcome_make_unhandled();
-          }
-        case concept_immediate_lifecycle_state_main_finished:
-          concept_abort_invalid_automata_state("ImmediateLifecycle", instance->current_machine, instance->current_state);
-          return concept_automata_dispatch_outcome_make_already_finished();
-        default:
-          concept_abort_invalid_automata_state("ImmediateLifecycle", instance->current_machine, instance->current_state);
-          return concept_automata_dispatch_outcome_make_already_finished();
-      }
-    default:
-      concept_abort_invalid_automata_state("ImmediateLifecycle", instance->current_machine, instance->current_state);
-      return concept_automata_dispatch_outcome_make_already_finished();
+static void concept_guarded_lifecycle_step_top(concept_guarded_lifecycle_instance* instance) {
+  if (instance->completed || instance->depth == 0u) return;
+  switch (instance->machine_tags[instance->depth - 1u]) {
+    case 0: concept_guarded_lifecycle_step_main_frame(instance); concept_guarded_lifecycle_settle_terminal(instance); return;
+    default: concept_abort_automata_stack("GuardedLifecycle", "invalid machine state reached");
   }
 }
 
-bool concept_guarded_transitions_queue_open(const concept_lifecycle_context* context) {
-  return context->queueAvailable;
+static void concept_guarded_lifecycle_step_main(concept_guarded_lifecycle_instance* instance) { if (instance->depth == 1u) instance->machine_tags[0] = 0; concept_guarded_lifecycle_step_top(instance); }
+static concept_step_outcome concept_guarded_lifecycle_step_main_input(concept_guarded_lifecycle_instance* instance, concept_lifecycle_signal input) {
+  if (instance->completed || instance->depth == 0u) return concept_step_outcome_make_already_finished();
+  instance->input = input;
+  instance->step_outcome = concept_step_outcome_make_transitioned();
+  concept_guarded_lifecycle_step_main(instance);
+  if (instance->completed) return concept_step_outcome_make_finished();
+  return instance->step_outcome;
 }
 
-bool concept_guarded_transitions_release_requested(const concept_lifecycle_context* context) {
-  return context->releaseRequested;
+static void concept_guarded_lifecycle_init(concept_guarded_lifecycle_instance* instance, concept_lifecycle_context state_0) {
+  instance->shared.context = state_0;
+  instance->depth = 1u;
+  instance->completed = false;
+  instance->machine_tags[0] = 0;
+  concept_guarded_lifecycle_init_main_frame(instance, 0u);
+  instance->last_main_outcome.tag = 0u;
 }
 
-bool concept_guarded_transitions_can_submit(const concept_lifecycle_context* context) {
-  return concept_guarded_transitions_queue_open(context);
+static concept_guarded_lifecycle_main_machine_outcome concept_guarded_lifecycle_result_main(concept_guarded_lifecycle_instance* instance) {
+  if (instance->last_main_outcome.tag == 0u) concept_abort_automata_stack("GuardedLifecycle", "machine result cannot be read before completion");
+  return instance->last_main_outcome;
 }
 
-bool concept_guarded_transitions_must_release(const concept_lifecycle_context* context) {
-  return concept_guarded_transitions_release_requested(context);
+static void concept_guarded_lifecycle_drop(concept_guarded_lifecycle_instance* instance) {
+  while (instance->depth > 0u) {
+    uint8_t slot = (uint8_t)(instance->depth - 1u);
+    switch (instance->machine_tags[slot]) {
+      case 0: concept_guarded_lifecycle_drop_main_frame(instance, slot); break;
+      default: break;
+    }
+    instance->depth = slot;
+  }
 }
 
-int32_t concept_guarded_transitions_outcome_code(concept_automata_dispatch_outcome outcome) {
-  concept_automata_dispatch_outcome cv_match_subject_01 = outcome;
+bool concept_guarded_transitions_can_submit(concept_lifecycle_context context) {
+  return context.queueAvailable;
+}
+
+bool concept_guarded_transitions_must_release(concept_lifecycle_context context) {
+  return context.releaseRequested;
+}
+
+int32_t concept_guarded_transitions_outcome_code(concept_step_outcome outcome) {
+  concept_step_outcome cv_match_subject_01 = outcome;
   int32_t cv_match_result_02;
   switch (cv_match_subject_01.tag) {
-  case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_TRANSITIONED:
+  case CONCEPT_STEP_OUTCOME_TRANSITIONED:
     {
       cv_match_result_02 = INT32_C(1);
       break;
     }
-  case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_UNHANDLED:
+  case CONCEPT_STEP_OUTCOME_UNHANDLED:
     {
       cv_match_result_02 = INT32_C(2);
       break;
     }
-  case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_AMBIGUOUS:
+  case CONCEPT_STEP_OUTCOME_AMBIGUOUS:
     {
       cv_match_result_02 = INT32_C(5);
       break;
     }
-  case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_FINISHED:
+  case CONCEPT_STEP_OUTCOME_FINISHED:
     {
       cv_match_result_02 = INT32_C(3);
       break;
     }
-  case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_ALREADY_FINISHED:
+  case CONCEPT_STEP_OUTCOME_ALREADY_FINISHED:
     {
       cv_match_result_02 = INT32_C(4);
       break;
     }
-  case CONCEPT_AUTOMATA_DISPATCH_OUTCOME_EFFECT_BATCH_OCCUPIED:
-    {
-      cv_match_result_02 = INT32_C(6);
-      break;
-    }
   default:
-    concept_abort_invalid_tag("AutomataDispatchOutcome");
+    concept_abort_invalid_tag("StepOutcome");
   }
   return cv_match_result_02;
 }
 
 int32_t concept_guarded_transitions_unique_guard_selection_code(concept_lifecycle_context context) {
   concept_guarded_lifecycle_instance lifecycle;
-  concept_guarded_lifecycle_init(&lifecycle, &context);
-  concept_lifecycle_signal cv_signal_01 = concept_lifecycle_signal_make_submit();
-  concept_automata_dispatch_outcome a = concept_guarded_lifecycle_dispatch(&lifecycle, cv_signal_01);
-  concept_lifecycle_signal cv_signal_02 = concept_lifecycle_signal_make_stop();
-  concept_automata_dispatch_outcome b = concept_guarded_lifecycle_dispatch(&lifecycle, cv_signal_02);
-  concept_automata_dispatch_outcome cv_arg_03 = a;
-  concept_automata_dispatch_outcome cv_arg_04 = b;
-  return concept_rt_guarded_transitions_i32_add(concept_rt_guarded_transitions_i32_mul(concept_guarded_transitions_outcome_code(cv_arg_03), INT32_C(10), 117, 27), concept_guarded_transitions_outcome_code(cv_arg_04), 117, 32);
+  concept_guarded_lifecycle_init(&lifecycle, context);
+  concept_step_outcome a = concept_guarded_lifecycle_step_main_input(&lifecycle, concept_lifecycle_signal_make_submit());
+  concept_step_outcome b = concept_guarded_lifecycle_step_main_input(&lifecycle, concept_lifecycle_signal_make_stop());
+  concept_step_outcome cv_arg_01 = a;
+  concept_step_outcome cv_arg_02 = b;
+  int32_t cv_return_03 = concept_rt_guarded_transitions_i32_add(concept_rt_guarded_transitions_i32_mul(concept_guarded_transitions_outcome_code(cv_arg_01), INT32_C(10), 95, 27), concept_guarded_transitions_outcome_code(cv_arg_02), 95, 32);
+  concept_guarded_lifecycle_drop(&lifecycle);
+  return cv_return_03;
 }
 
 int32_t concept_guarded_transitions_fallback_selection_code(concept_lifecycle_context context) {
   concept_guarded_lifecycle_instance lifecycle;
-  concept_guarded_lifecycle_init(&lifecycle, &context);
-  concept_lifecycle_signal cv_signal_01 = concept_lifecycle_signal_make_submit();
-  concept_automata_dispatch_outcome a = concept_guarded_lifecycle_dispatch(&lifecycle, cv_signal_01);
-  concept_lifecycle_signal cv_signal_02 = concept_lifecycle_signal_make_resolve();
-  concept_automata_dispatch_outcome b = concept_guarded_lifecycle_dispatch(&lifecycle, cv_signal_02);
-  concept_lifecycle_signal cv_signal_03 = concept_lifecycle_signal_make_stop();
-  concept_automata_dispatch_outcome c = concept_guarded_lifecycle_dispatch(&lifecycle, cv_signal_03);
-  concept_automata_dispatch_outcome cv_arg_04 = a;
-  concept_automata_dispatch_outcome cv_arg_05 = b;
-  concept_automata_dispatch_outcome cv_arg_06 = c;
-  return concept_rt_guarded_transitions_i32_add(concept_rt_guarded_transitions_i32_add(concept_rt_guarded_transitions_i32_mul(concept_guarded_transitions_outcome_code(cv_arg_04), INT32_C(100), 126, 27), concept_rt_guarded_transitions_i32_mul(concept_guarded_transitions_outcome_code(cv_arg_05), INT32_C(10), 127, 24), 126, 33), concept_guarded_transitions_outcome_code(cv_arg_06), 127, 29);
+  concept_guarded_lifecycle_init(&lifecycle, context);
+  concept_step_outcome a = concept_guarded_lifecycle_step_main_input(&lifecycle, concept_lifecycle_signal_make_submit());
+  concept_step_outcome b = concept_guarded_lifecycle_step_main_input(&lifecycle, concept_lifecycle_signal_make_resolve());
+  concept_step_outcome c = concept_guarded_lifecycle_step_main_input(&lifecycle, concept_lifecycle_signal_make_stop());
+  concept_step_outcome cv_arg_01 = a;
+  concept_step_outcome cv_arg_02 = b;
+  concept_step_outcome cv_arg_03 = c;
+  int32_t cv_return_04 = concept_rt_guarded_transitions_i32_add(concept_rt_guarded_transitions_i32_add(concept_rt_guarded_transitions_i32_mul(concept_guarded_transitions_outcome_code(cv_arg_01), INT32_C(100), 104, 27), concept_rt_guarded_transitions_i32_mul(concept_guarded_transitions_outcome_code(cv_arg_02), INT32_C(10), 105, 24), 104, 33), concept_guarded_transitions_outcome_code(cv_arg_03), 105, 29);
+  concept_guarded_lifecycle_drop(&lifecycle);
+  return cv_return_04;
 }
 
 int32_t concept_guarded_transitions_guarded_unhandled_preserves_state_code(concept_lifecycle_context context) {
   concept_guarded_lifecycle_instance lifecycle;
-  concept_guarded_lifecycle_init(&lifecycle, &context);
-  concept_lifecycle_signal cv_signal_01 = concept_lifecycle_signal_make_resolve();
-  concept_automata_dispatch_outcome a = concept_guarded_lifecycle_dispatch(&lifecycle, cv_signal_01);
-  concept_lifecycle_signal cv_signal_02 = concept_lifecycle_signal_make_submit();
-  concept_automata_dispatch_outcome b = concept_guarded_lifecycle_dispatch(&lifecycle, cv_signal_02);
-  concept_lifecycle_signal cv_signal_03 = concept_lifecycle_signal_make_resolve();
-  concept_automata_dispatch_outcome c = concept_guarded_lifecycle_dispatch(&lifecycle, cv_signal_03);
-  concept_lifecycle_signal cv_signal_04 = concept_lifecycle_signal_make_stop();
-  concept_automata_dispatch_outcome d = concept_guarded_lifecycle_dispatch(&lifecycle, cv_signal_04);
-  concept_automata_dispatch_outcome cv_arg_05 = a;
-  concept_automata_dispatch_outcome cv_arg_06 = b;
-  concept_automata_dispatch_outcome cv_arg_07 = c;
-  concept_automata_dispatch_outcome cv_arg_08 = d;
-  return concept_rt_guarded_transitions_i32_add(concept_rt_guarded_transitions_i32_add(concept_rt_guarded_transitions_i32_add(concept_rt_guarded_transitions_i32_mul(concept_guarded_transitions_outcome_code(cv_arg_05), INT32_C(1000), 138, 27), concept_rt_guarded_transitions_i32_mul(concept_guarded_transitions_outcome_code(cv_arg_06), INT32_C(100), 139, 24), 138, 34), concept_rt_guarded_transitions_i32_mul(concept_guarded_transitions_outcome_code(cv_arg_07), INT32_C(10), 140, 24), 139, 30), concept_guarded_transitions_outcome_code(cv_arg_08), 140, 29);
+  concept_guarded_lifecycle_init(&lifecycle, context);
+  concept_step_outcome a = concept_guarded_lifecycle_step_main_input(&lifecycle, concept_lifecycle_signal_make_resolve());
+  concept_step_outcome b = concept_guarded_lifecycle_step_main_input(&lifecycle, concept_lifecycle_signal_make_submit());
+  concept_step_outcome c = concept_guarded_lifecycle_step_main_input(&lifecycle, concept_lifecycle_signal_make_resolve());
+  concept_step_outcome d = concept_guarded_lifecycle_step_main_input(&lifecycle, concept_lifecycle_signal_make_stop());
+  concept_step_outcome cv_arg_01 = a;
+  concept_step_outcome cv_arg_02 = b;
+  concept_step_outcome cv_arg_03 = c;
+  concept_step_outcome cv_arg_04 = d;
+  int32_t cv_return_05 = concept_rt_guarded_transitions_i32_add(concept_rt_guarded_transitions_i32_add(concept_rt_guarded_transitions_i32_add(concept_rt_guarded_transitions_i32_mul(concept_guarded_transitions_outcome_code(cv_arg_01), INT32_C(1000), 116, 27), concept_rt_guarded_transitions_i32_mul(concept_guarded_transitions_outcome_code(cv_arg_02), INT32_C(100), 117, 24), 116, 34), concept_rt_guarded_transitions_i32_mul(concept_guarded_transitions_outcome_code(cv_arg_03), INT32_C(10), 118, 24), 117, 30), concept_guarded_transitions_outcome_code(cv_arg_04), 118, 29);
+  concept_guarded_lifecycle_drop(&lifecycle);
+  return cv_return_05;
 }
 
 int32_t concept_guarded_transitions_ambiguous_preserves_state_code(concept_lifecycle_context context) {
   concept_guarded_lifecycle_instance lifecycle;
-  concept_guarded_lifecycle_init(&lifecycle, &context);
-  concept_lifecycle_signal cv_signal_01 = concept_lifecycle_signal_make_submit();
-  concept_automata_dispatch_outcome a = concept_guarded_lifecycle_dispatch(&lifecycle, cv_signal_01);
-  concept_lifecycle_signal cv_signal_02 = concept_lifecycle_signal_make_resolve();
-  concept_automata_dispatch_outcome b = concept_guarded_lifecycle_dispatch(&lifecycle, cv_signal_02);
-  concept_lifecycle_signal cv_signal_03 = concept_lifecycle_signal_make_submit();
-  concept_automata_dispatch_outcome c = concept_guarded_lifecycle_dispatch(&lifecycle, cv_signal_03);
-  concept_lifecycle_signal cv_signal_04 = concept_lifecycle_signal_make_resolve();
-  concept_automata_dispatch_outcome d = concept_guarded_lifecycle_dispatch(&lifecycle, cv_signal_04);
-  concept_lifecycle_signal cv_signal_05 = concept_lifecycle_signal_make_stop();
-  concept_automata_dispatch_outcome e = concept_guarded_lifecycle_dispatch(&lifecycle, cv_signal_05);
-  concept_automata_dispatch_outcome cv_arg_06 = a;
-  concept_automata_dispatch_outcome cv_arg_07 = b;
-  concept_automata_dispatch_outcome cv_arg_08 = c;
-  concept_automata_dispatch_outcome cv_arg_09 = d;
-  concept_automata_dispatch_outcome cv_arg_10 = e;
-  return concept_rt_guarded_transitions_i32_add(concept_rt_guarded_transitions_i32_add(concept_rt_guarded_transitions_i32_add(concept_rt_guarded_transitions_i32_add(concept_rt_guarded_transitions_i32_mul(concept_guarded_transitions_outcome_code(cv_arg_06), INT32_C(10000), 152, 27), concept_rt_guarded_transitions_i32_mul(concept_guarded_transitions_outcome_code(cv_arg_07), INT32_C(1000), 153, 24), 152, 35), concept_rt_guarded_transitions_i32_mul(concept_guarded_transitions_outcome_code(cv_arg_08), INT32_C(100), 154, 24), 153, 31), concept_rt_guarded_transitions_i32_mul(concept_guarded_transitions_outcome_code(cv_arg_09), INT32_C(10), 155, 24), 154, 30), concept_guarded_transitions_outcome_code(cv_arg_10), 155, 29);
+  concept_guarded_lifecycle_init(&lifecycle, context);
+  concept_step_outcome a = concept_guarded_lifecycle_step_main_input(&lifecycle, concept_lifecycle_signal_make_submit());
+  concept_step_outcome b = concept_guarded_lifecycle_step_main_input(&lifecycle, concept_lifecycle_signal_make_resolve());
+  concept_step_outcome c = concept_guarded_lifecycle_step_main_input(&lifecycle, concept_lifecycle_signal_make_submit());
+  concept_step_outcome d = concept_guarded_lifecycle_step_main_input(&lifecycle, concept_lifecycle_signal_make_resolve());
+  concept_step_outcome e = concept_guarded_lifecycle_step_main_input(&lifecycle, concept_lifecycle_signal_make_stop());
+  concept_step_outcome cv_arg_01 = a;
+  concept_step_outcome cv_arg_02 = b;
+  concept_step_outcome cv_arg_03 = c;
+  concept_step_outcome cv_arg_04 = d;
+  concept_step_outcome cv_arg_05 = e;
+  int32_t cv_return_06 = concept_rt_guarded_transitions_i32_add(concept_rt_guarded_transitions_i32_add(concept_rt_guarded_transitions_i32_add(concept_rt_guarded_transitions_i32_add(concept_rt_guarded_transitions_i32_mul(concept_guarded_transitions_outcome_code(cv_arg_01), INT32_C(10000), 130, 27), concept_rt_guarded_transitions_i32_mul(concept_guarded_transitions_outcome_code(cv_arg_02), INT32_C(1000), 131, 24), 130, 35), concept_rt_guarded_transitions_i32_mul(concept_guarded_transitions_outcome_code(cv_arg_03), INT32_C(100), 132, 24), 131, 31), concept_rt_guarded_transitions_i32_mul(concept_guarded_transitions_outcome_code(cv_arg_04), INT32_C(10), 133, 24), 132, 30), concept_guarded_transitions_outcome_code(cv_arg_05), 133, 29);
+  concept_guarded_lifecycle_drop(&lifecycle);
+  return cv_return_06;
 }
 
 int32_t concept_guarded_transitions_already_finished_skips_guard_selection_code(concept_lifecycle_context context) {
   concept_guarded_lifecycle_instance lifecycle;
-  concept_guarded_lifecycle_init(&lifecycle, &context);
-  concept_lifecycle_signal cv_signal_01 = concept_lifecycle_signal_make_submit();
-  (void)concept_guarded_lifecycle_dispatch(&lifecycle, cv_signal_01);
-  concept_lifecycle_signal cv_signal_02 = concept_lifecycle_signal_make_stop();
-  (void)concept_guarded_lifecycle_dispatch(&lifecycle, cv_signal_02);
-  concept_lifecycle_signal cv_signal_03 = concept_lifecycle_signal_make_submit();
-  concept_automata_dispatch_outcome cv_arg_04 = concept_guarded_lifecycle_dispatch(&lifecycle, cv_signal_03);
-  return concept_guarded_transitions_outcome_code(cv_arg_04);
-}
-
-int32_t concept_guarded_transitions_contextless_compatibility_code(void) {
-  concept_immediate_lifecycle_instance lifecycle;
-  concept_immediate_lifecycle_init(&lifecycle);
-  concept_lifecycle_signal cv_signal_01 = concept_lifecycle_signal_make_stop();
-  concept_automata_dispatch_outcome cv_arg_02 = concept_immediate_lifecycle_dispatch(&lifecycle, cv_signal_01);
-  return concept_guarded_transitions_outcome_code(cv_arg_02);
+  concept_guarded_lifecycle_init(&lifecycle, context);
+  (void)concept_guarded_lifecycle_step_main_input(&lifecycle, concept_lifecycle_signal_make_submit());
+  (void)concept_guarded_lifecycle_step_main_input(&lifecycle, concept_lifecycle_signal_make_stop());
+  concept_step_outcome cv_arg_01 = concept_guarded_lifecycle_step_main_input(&lifecycle, concept_lifecycle_signal_make_submit());
+  int32_t cv_return_02 = concept_guarded_transitions_outcome_code(cv_arg_01);
+  concept_guarded_lifecycle_drop(&lifecycle);
+  return cv_return_02;
 }

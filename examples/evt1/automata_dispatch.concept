@@ -1,5 +1,7 @@
 profile Core;
 
+// Stepping nested machines with input. Each Step returns a StepOutcome;
+// pushes, pops, and terminal states settle within the Step that causes them.
 enum LifecycleSignal
 {
     Create,
@@ -12,146 +14,122 @@ enum LifecycleSignal
     Tick
 }
 
-automata ResourceLifecycle(LifecycleSignal)
+automata ResourceLifecycle
+with input LifecycleSignal
 {
-    initial machine Main
+    machine Main
     {
-        initial state Empty
+        state Empty
         {
-            on LifecycleSignal::Create goto Ready;
+            on LifecycleSignal::Create => Ready;
         }
 
         state Ready
         {
-            on LifecycleSignal::Tick goto Ready;
-            on LifecycleSignal::Begin goto Running;
-            on LifecycleSignal::Clean push Cleanup goto AwaitingResume;
-            on LifecycleSignal::Stop goto Finished;
+            on LifecycleSignal::Tick => Ready;
+            on LifecycleSignal::Begin => Running;
+            on LifecycleSignal::Clean => { push Cleanup goto AwaitingResume; }
+            on LifecycleSignal::Stop => Finished;
         }
 
         state Running
         {
-            on LifecycleSignal::Clean push Cleanup goto Finished;
+            on LifecycleSignal::Clean => { push Cleanup goto Finished; }
         }
 
         state AwaitingResume
         {
-            on LifecycleSignal::Stop goto Finished;
+            on LifecycleSignal::Stop => Finished;
         }
 
         terminal state Finished
         {
-            finish;
         }
     }
 
-    machine Cleanup
+    machine Cleanup fails int
     {
-        initial state Begin
+        state Begin
         {
-            on LifecycleSignal::Release push SweepMachine goto Resume;
+            on LifecycleSignal::Release => { push SweepMachine goto Resume; }
         }
 
         state Resume
         {
-            on LifecycleSignal::Tick goto Resume;
-            on LifecycleSignal::Confirm goto Complete;
-            on LifecycleSignal::Stop goto AbortAll;
+            on LifecycleSignal::Tick => Resume;
+            on LifecycleSignal::Confirm => Complete;
+            on LifecycleSignal::Stop => { fail 7; }
         }
 
         terminal state Complete
         {
-            pop;
-        }
-
-        terminal state AbortAll
-        {
-            finish;
         }
     }
 
     machine SweepMachine
     {
-        initial state Begin
+        state Begin
         {
-            on LifecycleSignal::Sweep goto Complete;
+            on LifecycleSignal::Sweep => Complete;
         }
 
         terminal state Complete
         {
-            pop;
         }
     }
 }
 
-automata ImmediateLifecycle(LifecycleSignal)
+automata SingleStepLifecycle
+with input LifecycleSignal
 {
-    initial machine Main
+    machine Main
     {
-        initial terminal state Finished
+        state Idle
         {
-            finish;
-        }
-    }
-}
-
-automata SingleStepLifecycle(LifecycleSignal)
-{
-    initial machine Main
-    {
-        initial state Idle
-        {
-            on LifecycleSignal::Create goto Finished;
+            on LifecycleSignal::Create => Finished;
         }
 
         terminal state Finished
         {
-            finish;
         }
     }
 }
 
-int OutcomeCode(AutomataDispatchOutcome outcome)
+int OutcomeCode(StepOutcome outcome)
 {
     return match (outcome) {
-        AutomataDispatchOutcome::Transitioned => 1,
-        AutomataDispatchOutcome::Unhandled => 2,
-        AutomataDispatchOutcome::Ambiguous => 5,
-        AutomataDispatchOutcome::Finished => 3,
-        AutomataDispatchOutcome::AlreadyFinished => 4,
-        AutomataDispatchOutcome::EffectBatchOccupied => 6
+        StepOutcome::Transitioned => 1,
+        StepOutcome::Unhandled => 2,
+        StepOutcome::Ambiguous => 5,
+        StepOutcome::Finished => 3,
+        StepOutcome::AlreadyFinished => 4
     };
 }
 
-int InitialTerminalOutcomeCode()
+int SingleStepFinishCode()
 {
-    instance ImmediateLifecycle lifecycle;
-    return OutcomeCode(dispatch(lifecycle, LifecycleSignal::Create));
-}
-
-int ZeroCapacityOutcomeCode()
-{
-    instance SingleStepLifecycle lifecycle;
-    return OutcomeCode(dispatch(lifecycle, LifecycleSignal::Create));
+    instance SingleStepLifecycle lifecycle();
+    int first = OutcomeCode(Step(lifecycle, Main, LifecycleSignal::Create));
+    return first * 10 + OutcomeCode(Step(lifecycle, Main, LifecycleSignal::Create));
 }
 
 int UnhandledPreservesStateCode()
 {
-    instance ResourceLifecycle lifecycle;
-    AutomataDispatchOutcome first = dispatch(lifecycle, LifecycleSignal::Stop);
-    AutomataDispatchOutcome second = dispatch(lifecycle, LifecycleSignal::Create);
+    instance ResourceLifecycle lifecycle();
+    StepOutcome first = Step(lifecycle, Main, LifecycleSignal::Stop);
+    StepOutcome second = Step(lifecycle, Main, LifecycleSignal::Create);
     return OutcomeCode(first) * 10 + OutcomeCode(second);
 }
 
 int NestedPushResumesCallerCode()
 {
-    instance ResourceLifecycle lifecycle;
-    AutomataDispatchOutcome a = dispatch(lifecycle, LifecycleSignal::Create);
-    AutomataDispatchOutcome b = dispatch(lifecycle, LifecycleSignal::Clean);
-    AutomataDispatchOutcome c = dispatch(lifecycle, LifecycleSignal::Release);
-    AutomataDispatchOutcome d = dispatch(lifecycle, LifecycleSignal::Sweep);
-    AutomataDispatchOutcome e = dispatch(lifecycle, LifecycleSignal::Confirm);
-    AutomataDispatchOutcome f = dispatch(lifecycle, LifecycleSignal::Stop);
+    instance ResourceLifecycle lifecycle();
+    StepOutcome a = Step(lifecycle, Main, LifecycleSignal::Create);
+    StepOutcome b = Step(lifecycle, Main, LifecycleSignal::Clean);
+    StepOutcome c = Step(lifecycle, Main, LifecycleSignal::Release);
+    StepOutcome d = Step(lifecycle, Main, LifecycleSignal::Sweep);
+    StepOutcome e = Step(lifecycle, Main, LifecycleSignal::Confirm);
+    StepOutcome f = Step(lifecycle, Main, LifecycleSignal::Stop);
     return OutcomeCode(a) * 100000 +
         OutcomeCode(b) * 10000 +
         OutcomeCode(c) * 1000 +
@@ -162,14 +140,14 @@ int NestedPushResumesCallerCode()
 
 int RootTerminalContinuationFinishesImmediatelyCode()
 {
-    instance ResourceLifecycle lifecycle;
-    AutomataDispatchOutcome a = dispatch(lifecycle, LifecycleSignal::Create);
-    AutomataDispatchOutcome b = dispatch(lifecycle, LifecycleSignal::Begin);
-    AutomataDispatchOutcome c = dispatch(lifecycle, LifecycleSignal::Clean);
-    AutomataDispatchOutcome d = dispatch(lifecycle, LifecycleSignal::Release);
-    AutomataDispatchOutcome e = dispatch(lifecycle, LifecycleSignal::Sweep);
-    AutomataDispatchOutcome f = dispatch(lifecycle, LifecycleSignal::Confirm);
-    AutomataDispatchOutcome g = dispatch(lifecycle, LifecycleSignal::Tick);
+    instance ResourceLifecycle lifecycle();
+    StepOutcome a = Step(lifecycle, Main, LifecycleSignal::Create);
+    StepOutcome b = Step(lifecycle, Main, LifecycleSignal::Begin);
+    StepOutcome c = Step(lifecycle, Main, LifecycleSignal::Clean);
+    StepOutcome d = Step(lifecycle, Main, LifecycleSignal::Release);
+    StepOutcome e = Step(lifecycle, Main, LifecycleSignal::Sweep);
+    StepOutcome f = Step(lifecycle, Main, LifecycleSignal::Confirm);
+    StepOutcome g = Step(lifecycle, Main, LifecycleSignal::Tick);
     return OutcomeCode(a) * 1000000 +
         OutcomeCode(b) * 100000 +
         OutcomeCode(c) * 10000 +
@@ -179,31 +157,33 @@ int RootTerminalContinuationFinishesImmediatelyCode()
         OutcomeCode(g);
 }
 
-int NonRootFinishTerminatesWholeInstanceCode()
+// The child fails; its parent resumes and can read why.
+int ChildFailureReturnsToParentCode()
 {
-    instance ResourceLifecycle lifecycle;
-    AutomataDispatchOutcome a = dispatch(lifecycle, LifecycleSignal::Create);
-    AutomataDispatchOutcome b = dispatch(lifecycle, LifecycleSignal::Clean);
-    AutomataDispatchOutcome c = dispatch(lifecycle, LifecycleSignal::Release);
-    AutomataDispatchOutcome d = dispatch(lifecycle, LifecycleSignal::Sweep);
-    AutomataDispatchOutcome e = dispatch(lifecycle, LifecycleSignal::Stop);
-    AutomataDispatchOutcome f = dispatch(lifecycle, LifecycleSignal::Tick);
-    return OutcomeCode(a) * 100000 +
-        OutcomeCode(b) * 10000 +
-        OutcomeCode(c) * 1000 +
-        OutcomeCode(d) * 100 +
-        OutcomeCode(e) * 10 +
-        OutcomeCode(f);
+    instance ResourceLifecycle lifecycle();
+    StepOutcome a = Step(lifecycle, Main, LifecycleSignal::Create);
+    StepOutcome b = Step(lifecycle, Main, LifecycleSignal::Clean);
+    StepOutcome c = Step(lifecycle, Main, LifecycleSignal::Release);
+    StepOutcome d = Step(lifecycle, Main, LifecycleSignal::Sweep);
+    StepOutcome e = Step(lifecycle, Main, LifecycleSignal::Stop);
+    StepOutcome f = Step(lifecycle, Main, LifecycleSignal::Stop);
+    return OutcomeCode(a) * 1000000 +
+        OutcomeCode(b) * 100000 +
+        OutcomeCode(c) * 10000 +
+        OutcomeCode(d) * 1000 +
+        OutcomeCode(e) * 100 +
+        OutcomeCode(f) * 10 +
+        Result(lifecycle, Cleanup).failure;
 }
 
 int IndependentInstancesStayIndependentCode()
 {
-    instance ResourceLifecycle left;
-    instance ResourceLifecycle right;
-    AutomataDispatchOutcome a = dispatch(left, LifecycleSignal::Create);
-    AutomataDispatchOutcome b = dispatch(left, LifecycleSignal::Tick);
-    AutomataDispatchOutcome c = dispatch(right, LifecycleSignal::Stop);
-    AutomataDispatchOutcome d = dispatch(right, LifecycleSignal::Create);
+    instance ResourceLifecycle left();
+    instance ResourceLifecycle right();
+    StepOutcome a = Step(left, Main, LifecycleSignal::Create);
+    StepOutcome b = Step(left, Main, LifecycleSignal::Tick);
+    StepOutcome c = Step(right, Main, LifecycleSignal::Stop);
+    StepOutcome d = Step(right, Main, LifecycleSignal::Create);
     return OutcomeCode(a) * 1000 +
         OutcomeCode(b) * 100 +
         OutcomeCode(c) * 10 +

@@ -1,0 +1,222 @@
+profile Core;
+import Standard.Collection.Outbox;
+
+// A step machine decides on effects; the caller carries them out. This is
+// the Core replacement for the retired `effect`/`emit`/`actuator` surface:
+// effects are an enum, the machine pushes them to an Outbox it owns, and an
+// actuator is an exhaustive match in ordinary code.
+
+enum QueueClass
+{
+    Graphics,
+    Compute,
+}
+
+enum LifecycleSignal
+{
+    Submit,
+    Submitted,
+    SubmitFailed,
+    FinishNow,
+    Stop,
+}
+
+enum LifecycleEffect
+{
+    RecordSubmission(int submission),
+    BeginSubmission(int submission, QueueClass queue),
+    FinalizeTicket(int ticket),
+}
+
+enum ActuationError
+{
+    RecordFailed,
+    BeginFailed,
+    FinalizeFailed,
+}
+
+void Emit(ref Outbox<LifecycleEffect, 4> effects, LifecycleEffect effect)
+{
+    Push<LifecycleEffect, 4>(ref effects, effect)!;
+}
+
+automata ResourceLifecycle
+with input LifecycleSignal
+with state
+{
+    bool queueAvailable;
+    bool failRequested;
+    int submission;
+    QueueClass queue;
+    int ticket;
+    scoped ref Outbox<LifecycleEffect, 4> effects;
+}
+{
+    machine Main
+    {
+        state Ready
+        {
+            on LifecycleSignal::Submit when queueAvailable =>
+            {
+                Emit(ref effects, LifecycleEffect::RecordSubmission(submission));
+                Emit(ref effects, LifecycleEffect::BeginSubmission(submission, queue));
+                transition Submitting;
+            }
+            on LifecycleSignal::Submit when failRequested =>
+            {
+                Emit(ref effects, LifecycleEffect::FinalizeTicket(ticket));
+                transition Failed;
+            }
+            on LifecycleSignal::Submit otherwise =>
+            {
+                Emit(ref effects, LifecycleEffect::FinalizeTicket(ticket));
+                transition Deferred;
+            }
+            on LifecycleSignal::FinishNow =>
+            {
+                Emit(ref effects, LifecycleEffect::FinalizeTicket(ticket));
+                transition Finished;
+            }
+        }
+
+        state Deferred
+        {
+            on LifecycleSignal::Stop => Finished;
+        }
+
+        state Submitting
+        {
+            on LifecycleSignal::Submitted => Active;
+            on LifecycleSignal::SubmitFailed => Failed;
+        }
+
+        state Active
+        {
+            on LifecycleSignal::Stop => Finished;
+        }
+
+        state Failed
+        {
+            on LifecycleSignal::Stop => Finished;
+        }
+
+        terminal state Finished
+        {
+        }
+    }
+}
+
+// The mechanism an actuator drives; failAt selects which effect fails.
+struct Mechanism
+{
+    int failAt;
+    int observed;
+    int count;
+};
+
+Result<void, ActuationError> Actuate(ref Mechanism mechanism, LifecycleEffect effect)
+{
+    int index = mechanism.count;
+    mechanism.count = mechanism.count + 1;
+    match (effect)
+    {
+        LifecycleEffect::RecordSubmission(submission) =>
+        {
+            mechanism.observed = mechanism.observed * 100 + submission;
+            if (index == mechanism.failAt) { return Result::Error(ActuationError::RecordFailed); }
+        }
+        LifecycleEffect::BeginSubmission(submission, queue) =>
+        {
+            mechanism.observed = mechanism.observed * 100 + submission + 1;
+            if (index == mechanism.failAt) { return Result::Error(ActuationError::BeginFailed); }
+        }
+        LifecycleEffect::FinalizeTicket(ticket) =>
+        {
+            mechanism.observed = mechanism.observed * 100 + ticket;
+            if (index == mechanism.failAt) { return Result::Error(ActuationError::FinalizeFailed); }
+        }
+    }
+    return Result::Ok();
+}
+
+// Carries out pending effects in order and stops at the first failure.
+Result<void, ActuationError> Drain(ref Outbox<LifecycleEffect, 4> effects, ref Mechanism mechanism)
+{
+    for (i in 0..Count<LifecycleEffect, 4>(ref const effects))
+    {
+        Actuate(ref mechanism, At<LifecycleEffect, 4>(ref const effects, i))?;
+    }
+    Clear<LifecycleEffect, 4>(ref effects);
+    return Result::Ok();
+}
+
+int FinalizedTicket(LifecycleEffect effect)
+{
+    return match (effect)
+    {
+        LifecycleEffect::FinalizeTicket(ticket) => ticket,
+        LifecycleEffect::RecordSubmission(submission) => -1,
+        LifecycleEffect::BeginSubmission(submission, queue) => -1,
+    };
+}
+
+Outbox<LifecycleEffect, 4> NoEffects()
+{
+    return MakeOutbox<LifecycleEffect, 4>(LifecycleEffect::FinalizeTicket(0));
+}
+
+[[fact]]
+void PushedValuesKeepTheirOrderUntilCleared()
+{
+    Outbox<int, 2> outbox = MakeOutbox<int, 2>(0);
+    Assert.LGTM(Push<int, 2>(ref outbox, 4), "first");
+    Assert.LGTM(Push<int, 2>(ref outbox, 9), "second");
+    Assert.FailsWith(Push<int, 2>(ref outbox, 1), OutboxError::Full, "capacity is a hard bound");
+    Assert.Equal(At<int, 2>(ref const outbox, 0) * 10 + At<int, 2>(ref const outbox, 1), 49, "push order");
+    Clear<int, 2>(ref outbox);
+    Assert.Equal(Count<int, 2>(ref const outbox), 0, "cleared");
+}
+
+[[fact]]
+void OpenQueueEmitsRecordThenBegin()
+{
+    Outbox<LifecycleEffect, 4> lifecycleEffects = NoEffects();
+    instance ResourceLifecycle lifecycle(true, false, 41, QueueClass::Graphics, 7, ref lifecycleEffects);
+    Assert.True(Step(lifecycle, Main, LifecycleSignal::Submit) == StepOutcome::Transitioned, "submit");
+    Assert.Equal(Count<LifecycleEffect, 4>(ref const lifecycleEffects), 2, "two effects");
+    Mechanism mechanism = Mechanism{-1, 0, 0};
+    Assert.LGTM(Drain(ref lifecycleEffects, ref mechanism), "both actuated");
+    Assert.Equal(mechanism.observed, 4142, "record 41 then begin 41+1");
+    Assert.Equal(Count<LifecycleEffect, 4>(ref const lifecycleEffects), 0, "drained");
+    Assert.True(Step(lifecycle, Main, LifecycleSignal::Submitted) == StepOutcome::Transitioned, "a step without effects");
+    Assert.Equal(Count<LifecycleEffect, 4>(ref const lifecycleEffects), 0, "nothing new");
+}
+
+[[fact]]
+void FallbackAndAmbiguityAreVisibleInTheOutbox()
+{
+    Outbox<LifecycleEffect, 4> deferredEffects = NoEffects();
+    instance ResourceLifecycle deferred(false, false, 12, QueueClass::Compute, 99, ref deferredEffects);
+    Assert.True(Step(deferred, Main, LifecycleSignal::Submit) == StepOutcome::Transitioned, "otherwise");
+    Assert.Equal(FinalizedTicket(At<LifecycleEffect, 4>(ref const deferredEffects, 0)), 99, "finalize the ticket");
+
+    Outbox<LifecycleEffect, 4> ambiguousEffects = NoEffects();
+    instance ResourceLifecycle ambiguous(true, true, 8, QueueClass::Graphics, 55, ref ambiguousEffects);
+    Assert.True(Step(ambiguous, Main, LifecycleSignal::Submit) == StepOutcome::Ambiguous, "both guards hold");
+    Assert.Equal(Count<LifecycleEffect, 4>(ref const ambiguousEffects), 0, "an ambiguous step emits nothing");
+    Assert.True(Step(ambiguous, Main, LifecycleSignal::FinishNow) == StepOutcome::Finished, "finish now");
+    Assert.Equal(Count<LifecycleEffect, 4>(ref const ambiguousEffects), 1, "the finishing step still emits");
+    Assert.True(Step(ambiguous, Main, LifecycleSignal::Submit) == StepOutcome::AlreadyFinished, "finished");
+}
+
+[[fact]]
+void ActuationStopsAtTheFirstFailure()
+{
+    Outbox<LifecycleEffect, 4> lifecycleEffects = NoEffects();
+    instance ResourceLifecycle lifecycle(true, false, 41, QueueClass::Graphics, 7, ref lifecycleEffects);
+    discard Step(lifecycle, Main, LifecycleSignal::Submit);
+    Mechanism mechanism = Mechanism{0, 0, 0};
+    Assert.FailsWith(Drain(ref lifecycleEffects, ref mechanism), ActuationError::RecordFailed, "first effect fails");
+    Assert.Equal(mechanism.count, 1, "the second effect never ran");
+    Assert.Equal(Count<LifecycleEffect, 4>(ref const lifecycleEffects), 2, "failed effects stay pending");
+}
